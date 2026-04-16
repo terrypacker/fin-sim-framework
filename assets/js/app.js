@@ -32,7 +32,8 @@ import { PRIORITY } from './simulation-framework/reducers.js';
 //Visualization FDG
 const nodes = new Map(); // id -> { x, y, vx, vy, data }
 const edges = [];        // { from, to }
-
+let simStart = null;
+let simEnd = null;
 let running = true;
 
 function step() {
@@ -126,8 +127,23 @@ function diffState(prev, next) {
   return diff;
 }
 
-export function attachGraphDebugger(bus) {
-  bus.subscribe('DEBUG_ACTION', ({ payload }) => {
+export function attachGraphDebugger(sim) {
+  simStart = new Date();
+  simEnd = null
+
+  sim.bus.subscribe('DEBUG_ACTION', ({ payload }) => {
+    const date = new Date(payload.date);
+
+    if (!simEnd || date > simEnd) {
+      simEnd = date;
+      //Set slider value and min/max
+      const stepPerValue = ((simEnd.getTime() - simStart.getTime())/100);
+      const currentStep = (date.getTime() - simStart.getTime())/stepPerValue;
+      const slider = document.getElementById("timeSlider");
+      slider.value = currentStep;
+      updateSliderRange();
+    }
+
     const n = payload;
 
     if (!nodes.has(n.id)) {
@@ -143,9 +159,16 @@ export function attachGraphDebugger(bus) {
     if (n.parent !== null) {
       edges.push({ from: n.parent, to: n.id });
     }
+
+    if(playing) {
+      console.log(`Testing`);
+    }
   });
 
+  initScrubber(sim);
   startSimulation();
+  sim.stepTo(new Date(2028, 0, 1));
+
 }
 
 let canvas, ctx;
@@ -159,6 +182,74 @@ function initCanvas() {
   ctx = canvas.getContext("2d");
 
   canvas.addEventListener("click", onClick);
+}
+
+function updateSliderRange() {
+  //const slider = document.getElementById("timeSlider");
+  //slider.min = simStart;
+  //slider.max = simEnd;
+}
+
+function initScrubber(sim) {
+  const slider = document.getElementById("timeSlider");
+  const label = document.getElementById("timeLabel");
+
+  //TODO Support debouncing
+  let rewindTimeout;
+
+  slider.addEventListener("input", () => {
+    const t = slider.value / 100;
+
+    const targetTime = new Date(
+        simStart.getTime() +
+        t * (simEnd.getTime() - simStart.getTime())
+    );
+
+    label.textContent = targetTime.toDateString();
+
+    // Reset graph
+    resetGraph();
+    // Rewind sim
+    sim.rewindToDate(targetTime);
+  });
+}
+
+let playing = false;
+
+document.getElementById("play").onclick = () => {
+  playing = true;
+  animate();
+};
+
+document.getElementById("pause").onclick = () => {
+  playing = false;
+};
+
+function animate() {
+  if (!playing) return;
+
+  const slider = document.getElementById("timeSlider");
+  slider.value = Math.min(100, Number(slider.value) + 1);
+
+  //This will reset sim:
+  // slider.dispatchEvent(new Event("input"));
+  const t = slider.value / 100;
+  const targetTime = new Date(
+      simStart.getTime() +
+      t * (simEnd.getTime() - simStart.getTime())
+  );
+  sim.stepTo(targetTime);
+
+  if(slider.value < 100) {
+    requestAnimationFrame(animate);
+  }else {
+    playing = false;
+  }
+}
+
+function resetGraph() {
+  nodes.clear();
+  edges.length = 0;
 }
 
 function onClick(e) {
@@ -241,7 +332,9 @@ function drawArrow(ctx, x1, y1, x2, y2) {
 }
 
 function loop() {
-  if (!running) return;
+  if (!running) {
+    return;
+  }
 
   step();
   draw();
@@ -418,8 +511,4 @@ function createSim() {
   return sim;
 }
 const sim = createSim();
-attachGraphDebugger(sim.bus);
-
-//Simulat to some time in the future
-sim.stepTo(new Date(2028, 0, 1));
-
+attachGraphDebugger(sim);
