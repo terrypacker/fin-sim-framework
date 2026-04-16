@@ -15,7 +15,14 @@ Handle specific event types
 ### Reducers
 Reduce operations with chaining result processing by type.  Allows priorities.
 
-
+### Graph Layer
+```
+Event
+└── Action A (_id=1)
+    ├── Action B (_id=2)
+    │     └── Action D (_id=4)
+    └── Action C (_id=3)
+```
 ## Testing
 
 Tests live in `tests/` and use the Node.js built-in `node:test` runner — no npm, no external dependencies. Test files use the `.mjs` extension to enable ES6 modules without a `package.json`.

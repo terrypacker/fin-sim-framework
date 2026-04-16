@@ -17,21 +17,70 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 -->
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SimTimer - Example</title>
+  <meta charset="UTF-8" />
+  <title>Simulation Graph Debugger</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: monospace;
+      display: flex;
+      height: 100vh;
+    }
+
+    #graph {
+      flex: 2;
+      position: relative;
+      background: #0f172a;
+      overflow: auto;
+    }
+
+    #panel {
+      flex: 1;
+      background: #111827;
+      color: #e5e7eb;
+      padding: 10px;
+      overflow: auto;
+      border-left: 1px solid #333;
+    }
+
+    .node {
+      position: absolute;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: #1e293b;
+      color: #93c5fd;
+      cursor: pointer;
+      border: 1px solid #334155;
+      font-size: 12px;
+    }
+
+    .node:hover {
+      background: #334155;
+    }
+
+    .edge {
+      position: absolute;
+      background: #475569;
+      height: 2px;
+      transform-origin: left center;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      font-size: 12px;
+    }
+  </style>
 </head>
 <body>
+<div id="graph"></div>
+<div id="panel">
+  <h3>Node Details</h3>
+  <pre id="details">Click a node...</pre>
+</div>
 
-<!-- ══════════════════ SCRIPTS ══════════════════ -->
-<!-- ES module entry point — imports the full module graph -->
-<script type="module">
-  import { App } from './assets/js/app.js';
-  document.addEventListener('DOMContentLoaded', () => {
-    App.run();
-  });
-</script>
+<script type="module" src="./assets/js/app.js"></script>
 </body>
 </html>

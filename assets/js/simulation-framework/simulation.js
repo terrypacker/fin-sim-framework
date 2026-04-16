@@ -62,6 +62,9 @@ export class Simulation {
     this.journal = [];
     this.enableJournal = true;
 
+    this.nextActionId = 0;
+    this.actionGraph = new Map(); // actionId -> node
+
     this.eventCounter = 0;
   }
 
@@ -170,7 +173,7 @@ export class Simulation {
   applyActions(actions, sourceEventType) {
     if (!actions) return;
 
-    const queue = Array.isArray(actions) ? [...actions] : [actions].map(a => this.tagAction(a));
+    const queue = (Array.isArray(actions) ? [...actions] : [actions]).map(a => this.tagAction(a));
 
     const MAX_ACTIONS = 10000;
     let processed = 0;
@@ -196,7 +199,7 @@ export class Simulation {
         // Support multiple reducer return styles
         if (!result) continue;
 
-        let nextState = this.state;
+        let nextState;
         let emitted = [];
 
         // Normalize result
@@ -207,15 +210,25 @@ export class Simulation {
         }
 
         if (result.next) {
-          emitted = Array.isArray(result.next)
+          emitted = (Array.isArray(result.next)
               ? result.next
-              : [result.next];
+              : [result.next]).map(a => this.tagAction(a, action));
 
           queue.push(...emitted);
         }
 
         // Apply state
         this.state = nextState;
+
+        const parentId = action._parent ?? null;
+        // Add to graph
+        this.addActionNode({
+          action,
+          parentId: parentId,
+          reducerName: name,
+          prevState,
+          nextState
+        });
 
         // Journal entry
         if (this.enableJournal) {
@@ -389,4 +402,97 @@ export class Simulation {
     );
   }
 
+  /** Action Graph **/
+  addActionNode({
+                  action,
+                  parentId,
+                  reducerName,
+                  prevState,
+                  nextState
+                }) {
+    const node = {
+      id: action._id,
+      type: action.type,
+      date: new Date(this.currentDate),
+
+      parent: parentId,
+      children: [],
+
+      action: structuredClone(action),
+      reducer: reducerName,
+
+      stateBefore: prevState,
+      stateAfter: structuredClone(nextState)
+    };
+
+    this.actionGraph.set(action._id, node);
+
+    // Link to parent
+    if (parentId !== null && this.actionGraph.has(parentId)) {
+      this.actionGraph.get(parentId).children.push(action._id);
+    }
+
+    //Emit debug actions to track nodes
+    this.bus.publish({
+      type: 'DEBUG_ACTION',
+      payload: node
+    });
+  }
+
+  getNode(id) {
+    return this.actionGraph.get(id);
+  }
+
+  /**
+   * Go from root to leaves
+   * @param rootId
+   * @returns {*[]}
+   */
+  traceChain(rootId) {
+    const result = [];
+
+    function dfs(sim, id) {
+      const node = sim.actionGraph.get(id);
+      if (!node) return;
+
+      result.push(node);
+
+      for (const child of node.children) {
+        dfs(sim, child);
+      }
+    }
+
+    dfs(this, rootId);
+
+    return result;
+  }
+
+  /**
+   * Trace upstream to find cause
+   * @param id
+   * @returns {*[]}
+   */
+  traceUp(id) {
+    const chain = [];
+
+    let current = this.actionGraph.get(id);
+
+    while (current) {
+      chain.push(current);
+      current = current.parent
+          ? this.actionGraph.get(current.parent)
+          : null;
+    }
+
+    return chain.reverse();
+  }
+
+  /**
+   * Get all roots
+   * @returns {any[]}
+   */
+  getRootActions() {
+    return [...this.actionGraph.values()]
+        .filter(n => n.parent === null);
+  }
 }
