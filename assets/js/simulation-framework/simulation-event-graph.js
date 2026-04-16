@@ -90,7 +90,7 @@ export class SimulationEventGraph {
 
     while (current) {
       chain.push(current);
-      current = current.parent
+      current = current.parent !== null
           ? this.actionGraph.get(current.parent)
           : null;
     }

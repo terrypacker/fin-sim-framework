@@ -38,13 +38,13 @@ export class AccountService {
         amount: amount,
         date: date
       });
-      account.balance = account.balance + amount;
+
     }else if(amount < 0){
       account.debits.push({
         amount: amount,
         date: date
       });
-      account.balance = account.balance - amount;
     }
+    account.balance = account.balance + amount;
   }
 }

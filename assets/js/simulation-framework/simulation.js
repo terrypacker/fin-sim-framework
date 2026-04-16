@@ -192,9 +192,7 @@ export class Simulation {
       if (!reducers || reducers.length === 0) continue;
 
       for (const { fn, name } of reducers) {
-        const prevState = this.enableJournal
-            ? structuredClone(this.state)
-            : null;
+        const prevState = structuredClone(this.state);
 
         const result = fn(this.state, action);
 
@@ -418,6 +416,7 @@ export class Simulation {
 
     //Emit debug actions to track nodes
     this.bus.publish({
+      date: new Date(this.currentDate),
       type: 'DEBUG_ACTION',
       payload: node
     });
