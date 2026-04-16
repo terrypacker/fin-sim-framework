@@ -19,6 +19,8 @@
 
 import { MinHeap } from './min-heap.js';
 import { EventBus }  from './event-bus.js';
+import { ActionNode, SimulationEventGraph } from './simulation-event-graph.js'
+import { JournalEntry, Journal } from './journal.js'
 import { ReducerPipeline } from './reducers.js'
 import { DateUtils } from "./date-utils.js";
 
@@ -59,11 +61,10 @@ export class Simulation {
     this.enableSnapshots = opts.enableSnapshots ?? true;
     this.snapshotInterval = opts.snapshotInterval ?? 1; // every N events
 
-    this.journal = [];
-    this.enableJournal = true;
+    this.journal = new Journal({enabled: true});
 
     this.nextActionId = 0;
-    this.actionGraph = new Map(); // actionId -> node
+    this.actionGraph = new SimulationEventGraph();
 
     this.eventCounter = 0;
   }
@@ -156,7 +157,7 @@ export class Simulation {
         state: this.state
       });
 
-      this.applyActions(actions, event.type);
+      this.applyActions(actions, event);
 
       // snapshot logic
       this.eventCounter++;
@@ -170,9 +171,10 @@ export class Simulation {
     }
   }
 
-  applyActions(actions, sourceEventType) {
+  applyActions(actions, sourceEvent) {
     if (!actions) return;
 
+    const sourceEventType = sourceEvent.type;
     const queue = (Array.isArray(actions) ? [...actions] : [actions]).map(a => this.tagAction(a));
 
     const MAX_ACTIONS = 10000;
@@ -227,20 +229,22 @@ export class Simulation {
           parentId: parentId,
           reducerName: name,
           prevState,
-          nextState
+          nextState,
+          sourceEvent
         });
 
         // Journal entry
-        if (this.enableJournal) {
-          this.journal.push({
+        if (this.journal.enabled) {
+          this.journal.addEntry(new JournalEntry({
             date: new Date(this.currentDate),
             eventType: sourceEventType,
             action: structuredClone(action),
             reducer: name,
-            prevState,
+            prevState: prevState,
             nextState: structuredClone(this.state),
-            emittedActions: structuredClone(emitted)
-          });
+            emittedActions: structuredClone(emitted),
+            sourceEvent: sourceEvent
+          }));
         }
       }
 
@@ -371,7 +375,12 @@ export class Simulation {
     return clone;
   }
 
-  /*  Journal API */
+  /**
+   * Tagging for Action Graph
+   * @param action
+   * @param parent
+   * @returns {*&{_id: number, _parent, _root}}
+   */
   tagAction(action, parent = null) {
     return {
       ...action,
@@ -381,36 +390,16 @@ export class Simulation {
     };
   }
 
-  getActions(type) {
-    return this.journal.filter(j => j.action.type === type);
-  }
-  getStateTimeline(field) {
-    return this.journal.map(j => ({
-      date: j.date,
-      value: j.nextState[field]
-    }));
-  }
-
-  /**
-   * Trace a single event on a date
-   * @param date
-   * @returns {*[]}
-   */
-  traceEvent(date) {
-    return this.journal.filter(j =>
-        j.date.getTime() === date.getTime()
-    );
-  }
-
   /** Action Graph **/
   addActionNode({
                   action,
                   parentId,
                   reducerName,
                   prevState,
-                  nextState
+                  nextState,
+                  sourceEvent
                 }) {
-    const node = {
+    const node = new ActionNode({
       id: action._id,
       type: action.type,
       date: new Date(this.currentDate),
@@ -422,77 +411,15 @@ export class Simulation {
       reducer: reducerName,
 
       stateBefore: prevState,
-      stateAfter: structuredClone(nextState)
-    };
-
-    this.actionGraph.set(action._id, node);
-
-    // Link to parent
-    if (parentId !== null && this.actionGraph.has(parentId)) {
-      this.actionGraph.get(parentId).children.push(action._id);
-    }
+      stateAfter: structuredClone(nextState),
+      sourceEvent: sourceEvent
+    });
+    this.actionGraph.addActionNode(node);
 
     //Emit debug actions to track nodes
     this.bus.publish({
       type: 'DEBUG_ACTION',
       payload: node
     });
-  }
-
-  getNode(id) {
-    return this.actionGraph.get(id);
-  }
-
-  /**
-   * Go from root to leaves
-   * @param rootId
-   * @returns {*[]}
-   */
-  traceChain(rootId) {
-    const result = [];
-
-    function dfs(sim, id) {
-      const node = sim.actionGraph.get(id);
-      if (!node) return;
-
-      result.push(node);
-
-      for (const child of node.children) {
-        dfs(sim, child);
-      }
-    }
-
-    dfs(this, rootId);
-
-    return result;
-  }
-
-  /**
-   * Trace upstream to find cause
-   * @param id
-   * @returns {*[]}
-   */
-  traceUp(id) {
-    const chain = [];
-
-    let current = this.actionGraph.get(id);
-
-    while (current) {
-      chain.push(current);
-      current = current.parent
-          ? this.actionGraph.get(current.parent)
-          : null;
-    }
-
-    return chain.reverse();
-  }
-
-  /**
-   * Get all roots
-   * @returns {any[]}
-   */
-  getRootActions() {
-    return [...this.actionGraph.values()]
-        .filter(n => n.parent === null);
   }
 }
