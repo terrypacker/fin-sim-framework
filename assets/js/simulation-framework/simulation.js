@@ -24,6 +24,7 @@ import { JournalEntry, Journal } from './journal.js'
 import { ReducerPipeline } from './reducers.js'
 import { HandlerRegistry } from './handlers.js'
 import { DateUtils } from "./date-utils.js";
+import { SimulationBusMessage, DebugActionBusMessage } from "./bus-messages.js";
 
 /**
  *
@@ -140,13 +141,13 @@ export class Simulation {
     const handlers = this.handlers.get(event.type) || [];
 
     //Send out on the bus
-    this.bus.publish({
-      sim: this,
-      date: this.currentDate,
+    this.bus.publish(new SimulationBusMessage({
       type: event.type,
+      date: this.currentDate,
+      sim: this,
       payload: event,
       stateSnapshot: this.state
-    });
+    }));
 
     for (const entry of handlers) {
       const actions = entry.call({
@@ -254,13 +255,13 @@ export class Simulation {
       }
 
       // Publish to bus after full pipeline
-      this.bus.publish({
-        sim: this,
-        date: this.currentDate,
+      this.bus.publish(new SimulationBusMessage({
         type: sourceEventType,
+        date: this.currentDate,
+        sim: this,
         payload: action,
         stateSnapshot: this.state
-      });
+      }));
     }
   }
 
@@ -422,10 +423,9 @@ export class Simulation {
     this.actionGraph.addActionNode(node);
 
     //Emit debug actions to track nodes
-    this.bus.publish({
+    this.bus.publish(new DebugActionBusMessage({
       date: new Date(this.currentDate),
-      type: 'DEBUG_ACTION',
       payload: node
-    });
+    }));
   }
 }
