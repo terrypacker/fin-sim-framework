@@ -22,6 +22,7 @@ import { EventBus }  from './event-bus.js';
 import { ActionNode, SimulationEventGraph } from './simulation-event-graph.js'
 import { JournalEntry, Journal } from './journal.js'
 import { ReducerPipeline } from './reducers.js'
+import { HandlerRegistry } from './handlers.js'
 import { DateUtils } from "./date-utils.js";
 
 /**
@@ -48,7 +49,7 @@ export class Simulation {
     this.queue = new MinHeap((a, b) => a.date - b.date);
     this.bus = new EventBus();
 
-    this.handlers = new Map();   // eventType -> [handlers]
+    this.handlers = new HandlerRegistry();   // eventType -> [HandlerEntry]
     this.reducers = new ReducerPipeline();   // actionType -> reducer
 
     this.state = structuredClone(initialState);
@@ -131,9 +132,8 @@ export class Simulation {
     };
   }
 
-  register(type, handler) {
-    if (!this.handlers.has(type)) this.handlers.set(type, []);
-    this.handlers.get(type).push(handler);
+  register(type, handlerOrEntry) {
+    this.handlers.register(type, handlerOrEntry);
   }
 
   execute(event) {
@@ -148,8 +148,8 @@ export class Simulation {
       stateSnapshot: this.state
     });
 
-    for (const handler of handlers) {
-      const actions = handler({
+    for (const entry of handlers) {
+      const actions = entry.call({
         sim: this,
         date: this.currentDate,
         data: event.data,

@@ -21,6 +21,7 @@ import { Account, AccountService } from '../finance/account.js';
 import { Asset }                   from '../finance/asset.js';
 import { Simulation }              from '../simulation-framework/simulation.js';
 import { PRIORITY }                from '../simulation-framework/reducers.js';
+import { HandlerEntry }            from '../simulation-framework/handlers.js';
 import { BaseScenario }            from './base-scenario.js';
 import { EventSeries }             from './event-series.js';
 
@@ -128,7 +129,7 @@ export class ProfitLossScenario extends BaseScenario {
   }
 
   _registerHandlers(p) {
-    this.sim.register('SELL_ASSET', (ctx) => {
+    this.sim.register('SELL_ASSET', new HandlerEntry((ctx) => {
       const toSell = ctx.state.assets.pop();
       if (!toSell) return [];
       const realizedGain = toSell.value - toSell.costBasis;
@@ -138,24 +139,24 @@ export class ProfitLossScenario extends BaseScenario {
         { type: 'RECORD_METRIC', name: 'assets_sold', value: toSell.name },
         { type: 'RECORD_BALANCE' }
       ];
-    });
+    }, 'Sell Asset'));
 
-    this.sim.register('QUARTERLY_PL', ({ sim }) => {
+    this.sim.register('QUARTERLY_PL', new HandlerEntry(({ sim }) => {
       const profit = sim.rng() * 10000;
       return [
         { type: 'ADD_CASH', amount: profit },
         { type: 'RECORD_METRIC', name: 'quarterly_profit', value: profit },
         { type: 'RECORD_BALANCE' }
       ];
-    });
+    }, 'Quarterly P/L'));
 
-    this.sim.register('ANNUAL_TAX', (ctx) => {
+    this.sim.register('ANNUAL_TAX', new HandlerEntry((ctx) => {
       const tax = -(ctx.state.savingsAccount.balance * p.incomeTaxRate);
       return [
         { type: 'REMOVE_CASH', amount: tax },
         { type: 'RECORD_METRIC', name: 'annual_tax', value: tax },
         { type: 'RECORD_BALANCE' }
       ];
-    });
+    }, 'Annual Tax'));
   }
 }
