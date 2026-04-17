@@ -133,6 +133,7 @@ export class BaseApp {
         null, 2
     );
 
+
     const diffRows = changes.length === 0
         ? '<tr><td colspan="3" style="text-align:center;color:#64748b;padding:8px">No scalar state changes</td></tr>'
         : changes.map(c => {
@@ -153,6 +154,23 @@ export class BaseApp {
         </tr>`;
         }).join('');
 
+    let stateInfo;
+    if(changes.length > 0) {
+      stateInfo = `        
+        <div class="modal-section-title">State Changes</div>
+        <table class="diff-table">
+          <thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead>
+          <tbody>${diffRows}</tbody>
+        </table>
+    `;
+    }else {
+      stateInfo = `
+      <div class="modal-section-title">State (No Change)</div>
+      <pre class="modal-code">${JSON.stringify(entry.prevState,null, 2)}</pre>
+      `;
+    }
+
+
     const overlay = document.createElement('div');
     overlay.id    = 'detailModal';
     overlay.className = 'modal-overlay';
@@ -172,12 +190,7 @@ export class BaseApp {
 
         <div class="modal-section-title">Action Payload</div>
         <pre class="modal-code">${actionPayload}</pre>
-
-        <div class="modal-section-title">State Changes</div>
-        <table class="diff-table">
-          <thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead>
-          <tbody>${diffRows}</tbody>
-        </table>
+        ${stateInfo}
       </div>
     </div>`;
 
