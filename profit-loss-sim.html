@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<!--
+-- Copyright (c) 2026 Terry Packer.
+--
+-- This file is part of Terry Packer's Work.
+-- See www.terrypacker.com for further info.
+--
+-- Licensed under the Apache License, Version 2.0 (the "License");
+-- you may not use this file except in compliance with the License.
+-- You may obtain a copy of the License at
+--
+--     http://www.apache.org/licenses/LICENSE-2.0
+--
+-- Unless required by applicable law or agreed to in writing, software
+-- distributed under the License is distributed on an "AS IS" BASIS,
+-- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-- See the License for the specific language governing permissions and
+-- limitations under the License.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Profit / Loss Simulation</title>
+  <link rel="stylesheet" href="./assets/css/app.css">
+</head>
+<body class="app-financial">
+<!-- ── Top bar ──────────────────────────────────────────────────────────────── -->
+<div id="topbar">
+  <h1>Profit / Loss Simulation</h1>
+  <div>
+    <button class="tab-btn active" data-tab="graph">Action Graph</button>
+    <button class="tab-btn"        data-tab="timeline">Timeline</button>
+  </div>
+</div>
+
+<!-- ── Main ─────────────────────────────────────────────────────────────────── -->
+<div id="main">
+
+  <!-- ── Side panel ─────────────────────────────────────────────────────────── -->
+  <div id="panel">
+  </div>
+
+  <!-- ── Content (tab panels) ───────────────────────────────────────────────── -->
+  <div id="content">
+    <!-- Action graph tab -->
+    <div id="graphTab" class="tab-panel">
+      <canvas id="graphCanvas"></canvas>
+      <div id="nodeDetailPanel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <h4>Node Detail</h4>
+          <div class="nd-tab-bar" style="margin-bottom:0">
+            <button class="nd-tab-btn active" data-ndtab="nodeDetailFormatted">Formatted</button>
+            <button class="nd-tab-btn" data-ndtab="nodeDetailJson">JSON</button>
+          </div>
+        </div>
+        <div id="nodeDetailFormatted" class="nd-tab-panel">Click a node…</div>
+        <div id="nodeDetailJson" class="nd-tab-panel hidden"><pre id="nodeDetail">Click a node…</pre></div>
+      </div>
+    </div>
+
+    <!-- Timeline tab -->
+    <div id="timelineTab" class="tab-panel hidden">
+      <div id="timelineContainer"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Time controls ─────────────────────────────────────────────────────────── -->
+<div id="controls">
+  <button id="resetBtn" title="Reset to start">↩</button>
+  <button id="stepBackward" title="Step backward">←</button>
+  <button id="playPause" title="Play / Pause">▶</button>
+  <button id="stepForward" title="Step forward">→</button>
+  <input  id="timeSlider" type="range" min="0" max="100" value="0">
+  <span   id="timeLabel">2025-01-01</span>
+</div>
+
+<script type="module" src="assets/js/profit-loss.js"></script>
+</body>
+</html>

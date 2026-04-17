@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<!--
+  Copyright (c) 2026 Terry Packer.
+  Licensed under the Apache License, Version 2.0.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Financial Simulation</title>
+  <link rel="stylesheet" href="./assets/css/app.css">
+</head>
+<body class="app-financial">
+
+<!-- ── Top bar ──────────────────────────────────────────────────────────────── -->
+<div id="topbar">
+  <h1>Financial Simulation</h1>
+  <div>
+    <button class="tab-btn active" data-tab="graph">Action Graph</button>
+    <button class="tab-btn"        data-tab="timeline">Timeline</button>
+    <button class="tab-btn"        data-tab="charts">Balance Charts</button>
+  </div>
+</div>
+
+<!-- ── Main ─────────────────────────────────────────────────────────────────── -->
+<div id="main">
+
+  <!-- ── Side panel ─────────────────────────────────────────────────────────── -->
+  <div id="panel">
+
+    <!-- Parameters -->
+    <div>
+      <div class="section-title">Parameters</div>
+
+      <div class="field">
+        <label>Monthly Salary ($)</label>
+        <input type="number" id="salaryMonthly" value="8000" min="0" step="500">
+      </div>
+      <div class="field">
+        <label>Savings Interest Rate (%)</label>
+        <input type="number" id="savingsInterestRate" value="4" min="0" max="100" step="0.5">
+      </div>
+      <div class="field">
+        <label>Income Tax Rate (%)</label>
+        <input type="number" id="incomeTaxRate" value="25" min="0" max="100" step="1">
+      </div>
+      <div class="field">
+        <label>Short-Term CGT Rate (%) ≤ 1yr hold</label>
+        <input type="number" id="shortTermCgtRate" value="22" min="0" max="100" step="1">
+      </div>
+      <div class="field">
+        <label>Long-Term CGT Rate (%) &gt; 1yr hold</label>
+        <input type="number" id="longTermCgtRate" value="15" min="0" max="100" step="1">
+      </div>
+      <div class="field">
+        <label>Initial Checking Balance ($)</label>
+        <input type="number" id="initialChecking" value="5000" min="0" step="1000">
+      </div>
+      <div class="field">
+        <label>Initial Savings Balance ($)</label>
+        <input type="number" id="initialSavings" value="10000" min="0" step="1000">
+      </div>
+
+      <button class="action-btn" id="rebuildBtn">↺ Rebuild Simulation</button>
+    </div>
+
+    <!-- Recurring event series -->
+    <div>
+      <div class="section-title">Recurring Events</div>
+      <div id="eventList"></div>
+
+      <button class="secondary-btn" id="addEventBtn" style="margin-top:8px; width:100%;">
+        + Add One-Off Event
+      </button>
+
+      <!-- Add event inline form -->
+      <div id="addEventForm" class="hidden">
+        <div class="field">
+          <label>Event Type</label>
+          <select id="newEventType" style="background:#0f172a; color:#e5e7eb; border:1px solid #334155; padding:4px; font-family:monospace; font-size:12px; border-radius:3px; width:100%;">
+            <option value="MONTHLY_SALARY">MONTHLY_SALARY — salary deposit</option>
+            <option value="ANNUAL_INTEREST">ANNUAL_INTEREST — savings interest</option>
+            <option value="SELL_ASSET">SELL_ASSET — sell next asset</option>
+            <option value="ANNUAL_TAX">ANNUAL_TAX — income tax filing</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Date</label>
+          <input type="date" id="newEventDate" min="2025-01-01" max="2029-12-31"
+                 style="background:#0f172a; color:#e5e7eb; border:1px solid #334155; padding:4px; font-family:monospace; font-size:12px; border-radius:3px; width:100%;">
+        </div>
+        <div class="field">
+          <label>Amount Override (optional)</label>
+          <input type="number" id="newEventAmount" placeholder="leave blank for default" min="0" step="100">
+        </div>
+        <div class="form-row">
+          <button class="action-btn" id="submitEventBtn">Add</button>
+          <button class="secondary-btn" id="cancelEventBtn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live state -->
+    <div>
+      <div class="section-title">Current State</div>
+      <div class="stat-row"><span class="stat-label">Checking</span>   <span class="stat-value pos" id="stateChecking">$0.00</span></div>
+      <div class="stat-row"><span class="stat-label">Savings</span>    <span class="stat-value pos" id="stateSavings">$0.00</span></div>
+      <div class="stat-row"><span class="stat-label">Total</span>      <span class="stat-value" id="stateTotal">$0.00</span></div>
+      <div class="stat-row"><span class="stat-label">Income YTD</span> <span class="stat-value" id="stateIncomeYTD">$0.00</span></div>
+      <div class="stat-row"><span class="stat-label">Interest YTD</span><span class="stat-value" id="stateInterestYTD">$0.00</span></div>
+      <div class="stat-row"><span class="stat-label">Assets Left</span><span class="stat-value" id="stateAssets">4</span></div>
+    </div>
+
+    <!-- Cumulative metrics -->
+    <div>
+      <div class="section-title">Cumulative Metrics</div>
+      <div class="stat-row"><span class="stat-label">Salary Paid</span>      <span class="stat-value pos" id="metricSalary">$0.00</span></div>
+      <div class="stat-row"><span class="stat-label">Interest Earned</span>  <span class="stat-value pos" id="metricInterest">$0.00</span></div>
+      <div class="stat-row"><span class="stat-label">LT CGT Paid</span>      <span class="stat-value neg" id="metricLtCgt">$0.00</span></div>
+      <div class="stat-row"><span class="stat-label">ST CGT Paid</span>      <span class="stat-value neg" id="metricStCgt">$0.00</span></div>
+      <div class="stat-row"><span class="stat-label">Income Tax Paid</span>  <span class="stat-value neg" id="metricIncomeTax">$0.00</span></div>
+    </div>
+
+  </div><!-- end #panel -->
+
+  <!-- ── Content (tab panels) ───────────────────────────────────────────────── -->
+  <div id="content">
+
+    <!-- Action graph tab -->
+    <div id="graphTab" class="tab-panel">
+      <canvas id="graphCanvas"></canvas>
+      <div id="nodeDetailPanel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <h4>Node Detail</h4>
+          <div class="nd-tab-bar" style="margin-bottom:0">
+            <button class="nd-tab-btn active" data-ndtab="nodeDetailFormatted">Formatted</button>
+            <button class="nd-tab-btn" data-ndtab="nodeDetailJson">JSON</button>
+          </div>
+        </div>
+        <div id="nodeDetailFormatted" class="nd-tab-panel">Click a node…</div>
+        <div id="nodeDetailJson" class="nd-tab-panel hidden"><pre id="nodeDetail">Click a node…</pre></div>
+      </div>
+    </div>
+
+    <!-- Balance chart tab -->
+    <div id="chartsTab" class="tab-panel hidden">
+      <canvas id="chartCanvas"></canvas>
+    </div>
+
+    <!-- Timeline tab -->
+    <div id="timelineTab" class="tab-panel hidden">
+      <div id="timelineContainer"></div>
+    </div>
+
+  </div><!-- end #content -->
+
+</div><!-- end #main -->
+
+<!-- ── Time controls ─────────────────────────────────────────────────────────── -->
+<div id="controls">
+  <button id="resetBtn" title="Reset to start">↩</button>
+  <button id="stepBackward" title="Step backward">←</button>
+  <button id="playPause" title="Play / Pause">▶</button>
+  <button id="stepForward" title="Step forward">→</button>
+  <input  id="timeSlider" type="range" min="0" max="100" value="0">
+  <span   id="timeLabel">2025-01-01</span>
+</div>
+
+<script type="module" src="./assets/js/financial-app.js"></script>
+</body>
+</html>

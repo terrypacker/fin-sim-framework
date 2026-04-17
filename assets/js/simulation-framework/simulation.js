@@ -175,7 +175,14 @@ export class Simulation {
     if (!actions) return;
 
     const sourceEventType = sourceEvent.type;
-    const queue = (Array.isArray(actions) ? [...actions] : [actions]).map(a => this.tagAction(a));
+    const rawActions = Array.isArray(actions) ? [...actions] : [actions];
+    const queue = [];
+    let prev = null;
+    for (const a of rawActions) {
+      const tagged = this.tagAction(a, prev);
+      queue.push(tagged);
+      prev = tagged;
+    }
 
     const MAX_ACTIONS = 10000;
     let processed = 0;

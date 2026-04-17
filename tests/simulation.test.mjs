@@ -708,9 +708,10 @@ test('actionGraph.getRootActions returns actions with no parent', () => {
   const roots     = sim.actionGraph.getRootActions();
   const rootTypes = roots.map(n => n.type);
 
-  // REALIZE_GAIN, ADD_CASH, and RECORD_METRIC(assets_sold) are returned directly by the handler
+  // Handler returns [REALIZE_GAIN, ADD_CASH, RECORD_METRIC]; actions are chained so only
+  // the first action (REALIZE_GAIN) is a root — subsequent ones are children of their predecessor.
   assert.ok(rootTypes.includes('REALIZE_GAIN'),  'REALIZE_GAIN should be a root action');
-  assert.ok(rootTypes.includes('ADD_CASH'),       'ADD_CASH should be a root action');
+  assert.ok(!rootTypes.includes('ADD_CASH'),      'ADD_CASH should not be a root — it is chained under REALIZE_GAIN');
   assert.ok(roots.every(n => n.parent === null),  'all roots should have parent === null');
 });
 

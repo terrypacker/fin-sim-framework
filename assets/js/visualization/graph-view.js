@@ -30,7 +30,13 @@ export class GraphView {
     this.simEnd = simEnd;
     this.running = false;
 
-    this.canvas.addEventListener("click", (evt) => this.onClick(evt));
+    this.dragNode   = null;
+    this.hasDragged = false;
+
+    this.canvas.addEventListener("mousedown",  (evt) => this.onMouseDown(evt));
+    this.canvas.addEventListener("mousemove",  (evt) => this.onMouseMove(evt));
+    this.canvas.addEventListener("mouseup",    (evt) => this.onMouseUp(evt));
+    this.canvas.addEventListener("mouseleave", ()    => this.onMouseUp(null));
 
     this.sim.bus.subscribe('DEBUG_ACTION', ({ payload }) => {
       this.messageHandler(payload);
@@ -52,8 +58,8 @@ export class GraphView {
     if (!this.nodes.has(n.id)) {
       this.nodes.set(n.id, {
         ...n,
-        x: Math.random() * 800,
-        y: Math.random() * 600,
+        x: 40 + Math.random() * (this.canvas.width - 80),
+        y: 40 + Math.random() * (this.canvas.height - 80),
         vx: 0,
         vy: 0
       });
@@ -166,13 +172,33 @@ export class GraphView {
       b.vy -= dy * force;
     }
 
+    // --- Boundary forces ---
+    const margin = 40;
+    const boundaryStrength = 0.5;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+
+    for (const n of nodeList) {
+      if (n.x < margin) n.vx += boundaryStrength * (margin - n.x);
+      if (n.x > w - margin) n.vx -= boundaryStrength * (n.x - (w - margin));
+      if (n.y < margin) n.vy += boundaryStrength * (margin - n.y);
+      if (n.y > h - margin) n.vy -= boundaryStrength * (n.y - (h - margin));
+    }
+
     // --- Integrate ---
     for (const n of nodeList) {
+      // Pinned while being dragged — skip physics update
+      if (n === this.dragNode) continue;
+
       n.vx *= 0.85; // damping
       n.vy *= 0.85;
 
       n.x += n.vx;
       n.y += n.vy;
+
+      // Hard clamp as a safety net
+      n.x = Math.max(margin, Math.min(w - margin, n.x));
+      n.y = Math.max(margin, Math.min(h - margin, n.y));
     }
   }
 
@@ -194,9 +220,19 @@ export class GraphView {
 
     // nodes
     for (const n of this.nodes.values()) {
+      const isDragging = n === this.dragNode;
+
+      if (isDragging) {
+        // Outer glow ring
+        this.ctx.beginPath();
+        this.ctx.arc(n.x, n.y, 12, 0, Math.PI * 2);
+        this.ctx.fillStyle = "rgba(96,165,250,0.25)";
+        this.ctx.fill();
+      }
+
       this.ctx.beginPath();
       this.ctx.arc(n.x, n.y, 8, 0, Math.PI * 2);
-      this.ctx.fillStyle = "#60a5fa";
+      this.ctx.fillStyle = isDragging ? "#93c5fd" : "#60a5fa";
       this.ctx.fill();
 
       this.ctx.fillStyle = "#e5e7eb";
@@ -239,20 +275,50 @@ export class GraphView {
     ctx.fill();
   }
 
-  onClick(e) {
+  getCanvasPos(e) {
     const rect = this.canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
 
+  nodeAt(x, y) {
     for (const n of this.nodes.values()) {
       const dx = n.x - x;
       const dy = n.y - y;
-
-      if (dx * dx + dy * dy < 100) {
-        this.nodeClicked(n);
-        break;
-      }
+      if (dx * dx + dy * dy < 100) return n;
     }
+    return null;
+  }
+
+  onMouseDown(e) {
+    const { x, y } = this.getCanvasPos(e);
+    const n = this.nodeAt(x, y);
+    if (n) {
+      this.dragNode   = n;
+      this.hasDragged = false;
+      this.canvas.style.cursor = 'grabbing';
+    }
+  }
+
+  onMouseMove(e) {
+    const { x, y } = this.getCanvasPos(e);
+    if (this.dragNode) {
+      this.dragNode.x  = x;
+      this.dragNode.y  = y;
+      this.dragNode.vx = 0;
+      this.dragNode.vy = 0;
+      this.hasDragged  = true;
+    } else {
+      this.canvas.style.cursor = this.nodeAt(x, y) ? 'grab' : 'default';
+    }
+  }
+
+  onMouseUp(e) {
+    if (this.dragNode && !this.hasDragged) {
+      this.nodeClicked(this.dragNode);
+    }
+    this.dragNode   = null;
+    this.hasDragged = false;
+    this.canvas.style.cursor = 'default';
   }
 
   /**
