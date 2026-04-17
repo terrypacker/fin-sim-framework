@@ -20,7 +20,7 @@
 import { Account, AccountService } from '../finance/account.js';
 import { Asset }                   from '../finance/asset.js';
 import { Simulation }              from '../simulation-framework/simulation.js';
-import { PRIORITY }                from '../simulation-framework/reducers.js';
+import { PRIORITY, MetricReducer, NoOpReducer, AccountTransactionReducer } from '../simulation-framework/reducers.js';
 import { HandlerEntry }            from '../simulation-framework/handlers.js';
 import { AmountAction, RecordMetricAction, RecordBalanceAction } from '../simulation-framework/actions.js';
 import { BaseScenario }            from './base-scenario.js';
@@ -106,27 +106,21 @@ export class ProfitLossScenario extends BaseScenario {
           };
         }, PRIORITY.TAX_CALC, 'CGT Computer');
 
-    this.sim.reducers.register('RECORD_METRIC', (state, action) => ({
-      ...state,
-      metrics: {
-        ...state.metrics,
-        [action.name]: [...(state.metrics[action.name] || []), action.value]
-      }
-    }), PRIORITY.METRICS, 'Metric Logger');
+    new MetricReducer().registerWith(this.sim.reducers, 'RECORD_METRIC');
 
-    this.sim.reducers.register('ADD_CASH', (state, action, date) => {
-      accountService.transaction(state.savingsAccount, action.amount, date);
-      return { ...state };
-    }, PRIORITY.CASH_FLOW, 'Account Credit');
+    new AccountTransactionReducer(
+      { accountService, accountKey: 'savingsAccount' },
+      'Account Credit'
+    ).registerWith(this.sim.reducers, 'ADD_CASH');
 
-    this.sim.reducers.register('REMOVE_CASH', (state, action, date) => {
-      accountService.transaction(state.savingsAccount, action.amount, date);
-      return { ...state };
-    }, PRIORITY.CASH_FLOW, 'Account Debit');
+    new AccountTransactionReducer(
+      { accountService, accountKey: 'savingsAccount' },
+      'Account Debit'
+    ).registerWith(this.sim.reducers, 'REMOVE_CASH');
 
     // No-op reducer used as a "balance snapshot" marker — runs last so
     // its stateAfter on the DEBUG_ACTION node reflects the fully-updated state
-    this.sim.reducers.register('RECORD_BALANCE', (state) => state, PRIORITY.LOGGING + 5, 'Balance Snapshot');
+    new NoOpReducer('Balance Snapshot').registerWith(this.sim.reducers, 'RECORD_BALANCE');
   }
 
   _registerHandlers(p) {

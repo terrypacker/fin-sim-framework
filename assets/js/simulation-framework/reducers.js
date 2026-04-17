@@ -56,3 +56,88 @@ export const PRIORITY = {
   METRICS: 90,
   LOGGING: 100
 };
+
+// ─── Base Reducer class ────────────────────────────────────────────────────────
+
+/**
+ * Base class for all reducer implementations.
+ * Subclasses override reduce(state, action, date) and are registered via
+ * registerWith(pipeline, actionType).
+ */
+export class Reducer {
+  constructor(name = 'anonymous', priority = PRIORITY.LOGGING) {
+    this.name     = name;
+    this.priority = priority;
+  }
+
+  /** @abstract */
+  reduce(state, _action, _date) {
+    throw new Error(`${this.constructor.name}.reduce() not implemented`);
+  }
+
+  /**
+   * Convenience: register this reducer instance with a ReducerPipeline.
+   */
+  registerWith(pipeline, actionType) {
+    pipeline.register(actionType, (s, a, d) => this.reduce(s, a, d), this.priority, this.name);
+  }
+}
+
+// ─── Common reducer subclasses ─────────────────────────────────────────────────
+
+/**
+ * A no-op reducer that returns state unchanged.
+ * Used as a pipeline marker (e.g. RECORD_BALANCE) so that the resulting
+ * ActionNode captures the fully-updated stateAfter for that event.
+ */
+export class NoOpReducer extends Reducer {
+  constructor(name = 'No-Op', priority = PRIORITY.LOGGING + 5) {
+    super(name, priority);
+  }
+
+  reduce(state) {
+    return state;
+  }
+}
+
+/**
+ * Appends a value to the metrics array at state.metrics[action.name].
+ * Works with any action that carries `name` and `value` fields —
+ * e.g. actions produced by RecordMetricAction.
+ */
+export class MetricReducer extends Reducer {
+  constructor(name = 'Metric Logger', priority = PRIORITY.METRICS) {
+    super(name, priority);
+  }
+
+  reduce(state, action) {
+    const list = state.metrics[action.name] || [];
+    return {
+      ...state,
+      metrics: { ...state.metrics, [action.name]: [...list, action.value] }
+    };
+  }
+}
+
+/**
+ * Applies an AccountService transaction to a named account in state,
+ * then returns the updated state.
+ *
+ * @param {object}         opts
+ * @param {AccountService} opts.accountService - Service used to apply the transaction
+ * @param {string}         opts.accountKey     - Key into state, e.g. 'savingsAccount'
+ * @param {Function}       [opts.getAmount]    - Maps action → amount (default: a => a.amount)
+ */
+export class AccountTransactionReducer extends Reducer {
+  constructor({ accountService, accountKey, getAmount = a => a.amount }, name = 'Account Transaction', priority = PRIORITY.CASH_FLOW) {
+    super(name, priority);
+    this.accountService = accountService;
+    this.accountKey     = accountKey;
+    this.getAmount      = getAmount;
+  }
+
+  reduce(state, action, date) {
+    this.accountService.transaction(state[this.accountKey], this.getAmount(action), date);
+    return { ...state };
+  }
+}

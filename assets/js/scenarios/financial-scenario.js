@@ -11,7 +11,7 @@
 import { Account, AccountService } from '../finance/account.js';
 import { Asset }                   from '../finance/asset.js';
 import { Simulation }              from '../simulation-framework/simulation.js';
-import { PRIORITY }                from '../simulation-framework/reducers.js';
+import { PRIORITY, MetricReducer, NoOpReducer, AccountTransactionReducer } from '../simulation-framework/reducers.js';
 import { HandlerEntry }            from '../simulation-framework/handlers.js';
 import { AmountAction, RecordMetricAction, RecordBalanceAction } from '../simulation-framework/actions.js';
 import { BaseScenario }            from './base-scenario.js';
@@ -100,10 +100,10 @@ export class FinancialScenario extends BaseScenario {
     }, PRIORITY.CASH_FLOW, 'Interest Credit');
 
     // Asset sale proceeds → checking account
-    this.sim.reducers.register('ASSET_PROCEEDS', (state, action) => {
-      accountService.transaction(state.checkingAccount, action.amount, null);
-      return { ...state };
-    }, PRIORITY.CASH_FLOW, 'Asset Proceeds');
+    new AccountTransactionReducer(
+      { accountService, accountKey: 'checkingAccount' },
+      'Asset Proceeds'
+    ).registerWith(this.sim.reducers, 'ASSET_PROCEEDS');
 
     // CGT tax payment → debit checking; record metric by ST/LT bucket
     this.sim.reducers.register('CGT_PAYMENT', (state, action) => {
@@ -129,17 +129,11 @@ export class FinancialScenario extends BaseScenario {
     }, PRIORITY.TAX_APPLY, 'Income Tax Payment');
 
     // Generic metric appender
-    this.sim.reducers.register('RECORD_METRIC', (state, action) => {
-      const list = state.metrics[action.name] || [];
-      return {
-        ...state,
-        metrics: { ...state.metrics, [action.name]: [...list, action.value] }
-      };
-    }, PRIORITY.METRICS, 'Metric Logger');
+    new MetricReducer().registerWith(this.sim.reducers, 'RECORD_METRIC');
 
     // No-op reducer used as a "balance snapshot" marker — runs last so
     // its stateAfter on the DEBUG_ACTION node reflects the fully-updated state
-    this.sim.reducers.register('RECORD_BALANCE', (state) => state, PRIORITY.LOGGING + 5, 'Balance Snapshot');
+    new NoOpReducer('Balance Snapshot').registerWith(this.sim.reducers, 'RECORD_BALANCE');
   }
 
   _registerHandlers(p) {
