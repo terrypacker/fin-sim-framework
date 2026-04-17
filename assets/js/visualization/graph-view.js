@@ -18,9 +18,8 @@
  */
 
 export class GraphView {
-  constructor({ simulator, canvas, dateChanged, nodeClicked, simStart, simEnd}) {
+  constructor({ simulator, canvas, nodeClicked, simStart, simEnd}) {
     this.sim = simulator;
-    this.dateChanged = dateChanged;
     this.nodeClicked = nodeClicked;
     this.canvas = canvas;
     this.ctx = this.canvas.getContext("2d");
@@ -43,20 +42,14 @@ export class GraphView {
     this.canvas.addEventListener("mouseup",    (evt) => this.onMouseUp(evt));
     this.canvas.addEventListener("mouseleave", ()    => this.onMouseUp(null));
 
-    this.sim.bus.subscribe('DEBUG_ACTION', ({ payload }) => {
-      this.messageHandler(payload);
-    });
   }
 
-  messageHandler(payload) {
+  updateView(payload) {
     const date = new Date(payload.date);
 
     if (!this.simEnd || date > this.simEnd) {
       this.simEnd = date;
     }
-
-    //Nofity date listeners
-    this.dateChanged(date, this.simStart, this.simEnd);
 
     const n = payload;
 
@@ -73,26 +66,6 @@ export class GraphView {
     if (n.parent !== null) {
       this.edges.push({ from: n.parent, to: n.id });
     }
-  }
-
-  stepTo(percentComplete) {
-    const targetTime = new Date(
-        this.simStart.getTime() +
-        percentComplete * (this.simEnd.getTime() - this.simStart.getTime())
-    );
-    this.sim.stepTo(targetTime);
-    return targetTime;
-  }
-
-  rewindTo(percentageComplete) {
-    const targetTime = new Date(
-        this.simStart.getTime() +
-        percentageComplete * (this.simEnd.getTime() - this.simStart.getTime())
-    );
-    this.resetGraph();
-    this.sim.rewindToStart();
-    this.sim.stepTo(targetTime);
-    return targetTime;
   }
 
   /**
@@ -326,40 +299,4 @@ export class GraphView {
     this.hasDragged = false;
     this.canvas.style.cursor = 'default';
   }
-
-  /**
-   * Get the details for a node
-   * @param node
-   * @returns {string}
-   */
-  getNodeDetail(node) {
-    const diff = this.diffState(node.stateBefore, node.stateAfter);
-
-    return JSON.stringify({
-      ...node,
-      stateDiff: diff
-    }, null, 2);
-  }
-
-  /**
-   * Compute the difference in state between 2 nodes
-   * @param prev
-   * @param next
-   * @returns {{}}
-   */
-  diffState(prev, next) {
-    const diff = {};
-
-    for (const key in next) {
-      if (JSON.stringify(prev[key]) !== JSON.stringify(next[key])) {
-        diff[key] = {
-          before: prev[key],
-          after: next[key]
-        };
-      }
-    }
-
-    return diff;
-  }
-
 }

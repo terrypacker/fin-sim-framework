@@ -37,7 +37,6 @@ const app = new BaseApp({
   readParams: () => readParams(),
 });
 
-
 /* Currently no params */
 function readParams() {
   return {  };

@@ -55,7 +55,6 @@ export class BaseApp {
     this.graphView = new GraphView({
       simulator:   this.scenario.sim,
       canvas:      graphCanvas,
-      dateChanged: (date) => this.timeControls.onDateChanged(date),
       nodeClicked: (node) => this.showNodeDetail(node),
       simStart:    this.scenario.simStart,
       simEnd:      this.scenario.simEnd
@@ -74,7 +73,7 @@ export class BaseApp {
     // Timeline view
     this.timelineView = new TimelineView({
       container: $('timelineContainer'),
-      onDetail:  this.showDetailModal
+      onDetail:  (node) => this.showDetailModal(node)
     });
     this.timelineView.attach(this.scenario.sim.journal);
 
@@ -91,6 +90,12 @@ export class BaseApp {
 
     // Subscribe to RECORD_BALANCE DEBUG_ACTION events to capture balance snapshots
     this.scenario.sim.bus.subscribe('DEBUG_ACTION', ({ payload }) => {
+
+      //Fire the date changed listeners
+      const date = new Date(payload.date);
+      this.timeControls.onDateChanged(date);
+      this.graphView.updateView(payload);
+
       if (payload.type === 'RECORD_BALANCE') {
         this.chartView.addSnapshot(
             payload.date,
@@ -112,7 +117,7 @@ export class BaseApp {
     const existing = document.getElementById('detailModal');
     if (existing) existing.remove();
 
-    const changes  = this.customDiffStates ? this.customDiffStates(entry.prevState, entry.nextState) : this.graphView.diffStates(entry.prevState, entry.nextState);
+    const changes  = this.customDiffStates ? this.customDiffStates(entry.prevState, entry.nextState) : this.diffStates(entry.prevState, entry.nextState);
     const emitted  = entry.emittedActions?.length
         ? entry.emittedActions.map(a => a.type).join(', ')
         : '(none)';
@@ -125,7 +130,13 @@ export class BaseApp {
     const diffRows = changes.length === 0
         ? '<tr><td colspan="3" style="text-align:center;color:#64748b;padding:8px">No scalar state changes</td></tr>'
         : changes.map(c => {
-          const fmtVal = v => typeof v === 'number' ? fmt(v) : String(v);
+          const fmtVal = v => {
+            if (v == null) return '—';
+            if (typeof v === 'number') return fmt(v);
+            if (Array.isArray(v)) return v.map(x => typeof x === 'object' && x !== null ? JSON.stringify(x) : String(x)).join(', ') || '—';
+            if (typeof v === 'object') return JSON.stringify(v);
+            return String(v);
+          };
           const deltaHtml = c.delta != null
               ? `<span class="${c.delta >= 0 ? 'diff-pos' : 'diff-neg'}">${c.delta >= 0 ? '+' : ''}${fmt(c.delta)}</span>`
               : '';
@@ -178,8 +189,7 @@ export class BaseApp {
 
   // Node Detail
   formatNodeDetailHtml(node) {
-    const diff = this.customDiffStates ? this.customDiffStates(node.stateBefore, node.stateAfter) : this.graphView.diffState(node.stateBefore, node.stateAfter);
-    const diffEntries = Object.entries(diff);
+    const diff = this.customDiffStates ? this.customDiffStates(node.stateBefore, node.stateAfter) : this.diffStates(node.stateBefore, node.stateAfter);
 
     const fmtVal = v => {
       if (typeof v === 'number') return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -194,15 +204,14 @@ export class BaseApp {
     </tr>`)
     .join('');
 
-    const diffRows = diffEntries.length === 0
+    const diffRows = diff.length === 0
         ? '<tr><td colspan="3" style="color:#64748b;padding:4px;text-align:center">No state changes</td></tr>'
-        : diffEntries.map(([key, { before, after }]) => {
-          const delta = typeof after === 'number' && typeof before === 'number' ? after - before : null;
+        : diff.map(({ field, before, after, delta }) => {
           const deltaHtml = delta != null
               ? ` <span style="color:${delta >= 0 ? '#34d399' : '#f87171'}">${delta >= 0 ? '+' : ''}${fmtVal(delta)}</span>`
               : '';
           return `<tr>
-          <td style="color:#94a3b8;padding:2px 4px">${key}</td>
+          <td style="color:#94a3b8;padding:2px 4px">${field}</td>
           <td style="color:#64748b;padding:2px 4px">${fmtVal(before)}</td>
           <td style="color:#e5e7eb;padding:2px 4px">${fmtVal(after)}${deltaHtml}</td>
         </tr>`;
@@ -233,7 +242,54 @@ export class BaseApp {
 
   showNodeDetail(node) {
     $('nodeDetailFormatted').innerHTML = this.customFormatNodeDetailHtml ? this.customFormatNodeDetailHtml(node) : this.formatNodeDetailHtml(node);
-    $('nodeDetail').textContent = this.graphView.getNodeDetail(node);
+    $('nodeDetail').textContent = this.getNodeDetail(node);
+  }
+
+  /**
+   * Get the details for a node
+   * @param node
+   * @returns {string}
+   */
+  getNodeDetail(node) {
+    const diff = this.diffStates(node.stateBefore, node.stateAfter);
+
+    return JSON.stringify({
+      ...node,
+      stateDiff: diff
+    }, null, 2);
+  }
+
+  /**
+   * Compute the difference in state between 2 state snapshots.
+   * Recursively walks plain objects; treats arrays and scalars as leaves.
+   * Returns an array of { field, before, after, delta } records, where
+   * delta is the numeric difference (or null for non-numeric changes).
+   * @param {object} prev
+   * @param {object} next
+   * @returns {{ field: string, before: *, after: *, delta: number|null }[]}
+   */
+  diffStates(prev, next) {
+    const changes = [];
+    if (!prev || !next) return changes;
+
+    const walk = (b, a, prefix) => {
+      const bIsObj = typeof b === 'object' && b !== null && !Array.isArray(b);
+      const aIsObj = typeof a === 'object' && a !== null && !Array.isArray(a);
+      if (bIsObj && aIsObj) {
+        for (const key of new Set([...Object.keys(b), ...Object.keys(a)])) {
+          walk(b[key], a[key], prefix ? `${prefix}.${key}` : key);
+        }
+      } else if (JSON.stringify(b) !== JSON.stringify(a)) {
+        const delta = typeof a === 'number' && typeof b === 'number' ? a - b : null;
+        changes.push({ field: prefix, before: b ?? null, after: a ?? null, delta });
+      }
+    };
+
+    for (const key of new Set([...Object.keys(prev), ...Object.keys(next)])) {
+      walk(prev[key], next[key], key);
+    }
+
+    return changes;
   }
 
   updateStatePanel(date, state) {
