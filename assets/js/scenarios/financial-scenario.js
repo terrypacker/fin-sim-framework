@@ -13,6 +13,7 @@ import { Asset }                   from '../finance/asset.js';
 import { Simulation }              from '../simulation-framework/simulation.js';
 import { PRIORITY }                from '../simulation-framework/reducers.js';
 import { HandlerEntry }            from '../simulation-framework/handlers.js';
+import { AmountAction, RecordMetricAction, RecordBalanceAction } from '../simulation-framework/actions.js';
 import { BaseScenario }            from './base-scenario.js';
 import { EventSeries }             from './event-series.js';
 
@@ -146,9 +147,9 @@ export class FinancialScenario extends BaseScenario {
     this.sim.register('MONTHLY_SALARY', new HandlerEntry(({ data }) => {
       const amount = data?.amount ?? p.salaryMonthly;
       return [
-        { type: 'SALARY_CREDIT', amount },
-        { type: 'RECORD_METRIC', name: 'salary', value: amount },
-        { type: 'RECORD_BALANCE' }
+        new AmountAction('SALARY_CREDIT', amount),
+        new RecordMetricAction('salary', amount),
+        new RecordBalanceAction()
       ];
     }, 'Monthly Salary'));
 
@@ -156,16 +157,16 @@ export class FinancialScenario extends BaseScenario {
     this.sim.register('ANNUAL_INTEREST', new HandlerEntry(({ state }) => {
       const interest = +((state.savingsAccount.balance * p.savingsInterestRate).toFixed(2));
       return [
-        { type: 'INTEREST_CREDIT', amount: interest },
-        { type: 'RECORD_METRIC', name: 'interest_income', value: interest },
-        { type: 'RECORD_BALANCE' }
+        new AmountAction('INTEREST_CREDIT', interest),
+        new RecordMetricAction('interest_income', interest),
+        new RecordBalanceAction()
       ];
     }, 'Annual Interest'));
 
     // Quarterly asset sale — pops the last asset, determines ST vs LT hold
     this.sim.register('SELL_ASSET', new HandlerEntry(({ state, date }) => {
       const asset = state.assets.pop();
-      if (!asset) return [{ type: 'RECORD_BALANCE' }];
+      if (!asset) return [new RecordBalanceAction()];
 
       const gain       = asset.value - asset.costBasis;
       const holdMs     = date.getTime() - asset.purchaseDate.getTime();
@@ -174,11 +175,11 @@ export class FinancialScenario extends BaseScenario {
       const tax        = +(Math.max(0, gain) * rate).toFixed(2);
 
       return [
-        { type: 'ASSET_PROCEEDS', amount: asset.value },
+        new AmountAction('ASSET_PROCEEDS', asset.value),
         { type: 'CGT_PAYMENT', tax, isLongTerm },
-        { type: 'RECORD_METRIC', name: 'assets_sold',                          value: asset.name },
-        { type: 'RECORD_METRIC', name: isLongTerm ? 'lt_gains' : 'st_gains',   value: gain },
-        { type: 'RECORD_BALANCE' }
+        new RecordMetricAction('assets_sold', asset.name),
+        new RecordMetricAction(isLongTerm ? 'lt_gains' : 'st_gains', gain),
+        new RecordBalanceAction()
       ];
     }, 'Sell Asset'));
 
@@ -186,9 +187,9 @@ export class FinancialScenario extends BaseScenario {
     this.sim.register('ANNUAL_TAX', new HandlerEntry(({ state }) => {
       const tax = +(state.incomeYTD * p.incomeTaxRate).toFixed(2);
       return [
-        { type: 'INCOME_TAX_PAYMENT', amount: tax },
-        { type: 'RECORD_METRIC', name: 'annual_tax', value: tax },
-        { type: 'RECORD_BALANCE' }
+        new AmountAction('INCOME_TAX_PAYMENT', tax),
+        new RecordMetricAction('annual_tax', tax),
+        new RecordBalanceAction()
       ];
     }, 'Annual Tax'));
   }

@@ -22,6 +22,7 @@ import { Asset }                   from '../finance/asset.js';
 import { Simulation }              from '../simulation-framework/simulation.js';
 import { PRIORITY }                from '../simulation-framework/reducers.js';
 import { HandlerEntry }            from '../simulation-framework/handlers.js';
+import { AmountAction, RecordMetricAction, RecordBalanceAction } from '../simulation-framework/actions.js';
 import { BaseScenario }            from './base-scenario.js';
 import { EventSeries }             from './event-series.js';
 
@@ -89,7 +90,7 @@ export class ProfitLossScenario extends BaseScenario {
         'REALIZE_GAIN',
         (state, action) => ({
           state: { ...state, realizedGains: state.realizedGains + action.amount },
-          next:  [{ type: 'CALCULATE_CAPITAL_GAINS_TAX', amount: action.amount }]
+          next:  [new AmountAction('CALCULATE_CAPITAL_GAINS_TAX', action.amount)]
         }),
         PRIORITY.COST_BASIS, 'Gain Realizer'
     );
@@ -101,7 +102,7 @@ export class ProfitLossScenario extends BaseScenario {
           capitalGainsTax.push(transactionTax);
           return {
             state: { ...state, capitalGainsTax },
-            next:  [{ type: 'RECORD_METRIC', name: 'capital_gains_tax', value: transactionTax }]
+            next:  [new RecordMetricAction('capital_gains_tax', transactionTax)]
           };
         }, PRIORITY.TAX_CALC, 'CGT Computer');
 
@@ -134,28 +135,28 @@ export class ProfitLossScenario extends BaseScenario {
       if (!toSell) return [];
       const realizedGain = toSell.value - toSell.costBasis;
       return [
-        { type: 'REALIZE_GAIN', amount: realizedGain },
-        { type: 'ADD_CASH', amount: toSell.value },
-        { type: 'RECORD_METRIC', name: 'assets_sold', value: toSell.name },
-        { type: 'RECORD_BALANCE' }
+        new AmountAction('REALIZE_GAIN', realizedGain),
+        new AmountAction('ADD_CASH', toSell.value),
+        new RecordMetricAction('assets_sold', toSell.name),
+        new RecordBalanceAction()
       ];
     }, 'Sell Asset'));
 
     this.sim.register('QUARTERLY_PL', new HandlerEntry(({ sim }) => {
       const profit = sim.rng() * 10000;
       return [
-        { type: 'ADD_CASH', amount: profit },
-        { type: 'RECORD_METRIC', name: 'quarterly_profit', value: profit },
-        { type: 'RECORD_BALANCE' }
+        new AmountAction('ADD_CASH', profit),
+        new RecordMetricAction('quarterly_profit', profit),
+        new RecordBalanceAction()
       ];
     }, 'Quarterly P/L'));
 
     this.sim.register('ANNUAL_TAX', new HandlerEntry((ctx) => {
       const tax = -(ctx.state.savingsAccount.balance * p.incomeTaxRate);
       return [
-        { type: 'REMOVE_CASH', amount: tax },
-        { type: 'RECORD_METRIC', name: 'annual_tax', value: tax },
-        { type: 'RECORD_BALANCE' }
+        new AmountAction('REMOVE_CASH', tax),
+        new RecordMetricAction('annual_tax', tax),
+        new RecordBalanceAction()
       ];
     }, 'Annual Tax'));
   }
