@@ -335,6 +335,7 @@ canvas { display: block; }
   font-size: 11px;
 }
 
+#nodeDetailPanel.hidden { display: none; }
 #nodeDetailPanel h4 { color: #93c5fd; font-size: 11px; margin: 0; }
 #nodeDetail { white-space: pre-wrap; font-size: 10px; color: #94a3b8; }
 

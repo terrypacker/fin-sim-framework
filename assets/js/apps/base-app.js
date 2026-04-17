@@ -243,6 +243,11 @@ export class BaseApp {
   showNodeDetail(node) {
     $('nodeDetailFormatted').innerHTML = this.customFormatNodeDetailHtml ? this.customFormatNodeDetailHtml(node) : this.formatNodeDetailHtml(node);
     $('nodeDetail').textContent = this.getNodeDetail(node);
+    $('nodeDetailPanel').classList.remove('hidden');
+  }
+
+  hideNodeDetail() {
+    $('nodeDetailPanel').classList.add('hidden');
   }
 
   /**
@@ -385,6 +390,9 @@ export class BaseApp {
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
     });
+
+    // Node detail close button
+    $('nodeDetailClose').addEventListener('click', () => this.hideNodeDetail());
 
     // Node detail tabs
     document.querySelectorAll('[data-ndtab]').forEach(btn => {
