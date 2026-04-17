@@ -11,13 +11,14 @@
 const fmt = n => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export class TimelineView {
-  constructor({ container, onDetail }) {
-    this.container = container;
-    this.onDetail  = onDetail;
-    this.journal   = null;
-    this.expanded  = new Set(); // 'dateStr' or 'dateStr::eventType'
-    this._lastLen  = 0;
-    this._lastDate = null;     // date string of last entry seen, for auto-expand
+  constructor({ container, onDetail, eventColors = new Map() }) {
+    this.container   = container;
+    this.onDetail    = onDetail;
+    this.eventColors = eventColors;
+    this.journal     = null;
+    this.expanded    = new Set(); // 'dateStr' or 'dateStr::eventType'
+    this._lastLen    = 0;
+    this._lastDate   = null;     // date string of last entry seen, for auto-expand
   }
 
   attach(journal) {
@@ -102,12 +103,14 @@ export class TimelineView {
           const evKey   = `${dateStr}::${evType}`;
           const evOpen  = this.expanded.has(evKey);
 
+          const evColor = this.eventColors.get(evType);
+          const evTypeStyle = evColor ? ` style="color:${evColor}"` : '';
           html.push(`<div class="tl-ev-row">
             <span class="tl-pipe">${lastEv ? '└' : '├'}</span>
             <div class="tl-ev-inner">
               <div class="tl-ev-hdr" data-tgl="${evKey}">
                 <span class="tl-chev">${evOpen ? '▼' : '▶'}</span>
-                <span class="tl-ev-type">${evType}</span>
+                <span class="tl-ev-type"${evTypeStyle}>${evType}</span>
                 <span class="tl-badge">${items.length} action${items.length !== 1 ? 's' : ''}</span>
               </div>`);
 

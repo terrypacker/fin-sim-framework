@@ -12,7 +12,8 @@ import { Account, AccountService } from '../finance/account.js';
 import { Asset }                   from '../finance/asset.js';
 import { Simulation }              from '../simulation-framework/simulation.js';
 import { PRIORITY }                from '../simulation-framework/reducers.js';
-import { DateUtils }               from '../simulation-framework/date-utils.js';
+import { BaseScenario }            from './base-scenario.js';
+import { EventSeries }             from './event-series.js';
 
 export const DEFAULT_PARAMS = {
   salaryMonthly:       8000,
@@ -26,23 +27,22 @@ export const DEFAULT_PARAMS = {
 
 // Built-in recurring event series definitions
 export const DEFAULT_EVENT_SERIES = [
-  { id: 'salary',   label: 'Monthly Salary',          type: 'MONTHLY_SALARY',  interval: 'monthly',   enabled: true },
-  { id: 'interest', label: 'Annual Savings Interest',  type: 'ANNUAL_INTEREST', interval: 'annually',  enabled: true, startOffset: 1 },
-  { id: 'assets',   label: 'Quarterly Asset Sales',    type: 'SELL_ASSET',      interval: 'quarterly', enabled: true },
-  { id: 'tax',      label: 'Annual Income Tax Filing', type: 'ANNUAL_TAX',      interval: 'annually',  enabled: true, startOffset: 1 },
+  new EventSeries({ id: 'salary',   label: 'Monthly Salary',          type: 'MONTHLY_SALARY',  interval: 'monthly',   enabled: true,                color: '#4CAF50' }),
+  new EventSeries({ id: 'interest', label: 'Annual Savings Interest',  type: 'ANNUAL_INTEREST', interval: 'annually',  enabled: true, startOffset: 1, color: '#2196F3' }),
+  new EventSeries({ id: 'assets',   label: 'Quarterly Asset Sales',    type: 'SELL_ASSET',      interval: 'quarterly', enabled: true,                color: '#FF9800' }),
+  new EventSeries({ id: 'tax',      label: 'Annual Income Tax Filing', type: 'ANNUAL_TAX',      interval: 'annually',  enabled: true, startOffset: 1, color: '#F44336' }),
 ];
 
-export class FinancialScenario {
+export class FinancialScenario extends BaseScenario {
   /**
-   * @param {object} opts
-   * @param {object} opts.params        - Override DEFAULT_PARAMS
-   * @param {Array}  opts.eventSeries   - Array of series configs (copy of DEFAULT_EVENT_SERIES, may be filtered)
-   * @param {Array}  opts.customEvents  - One-off extra events [{type, date, amount?}]
+   * @param {object}       opts
+   * @param {object}       opts.params        - Override DEFAULT_PARAMS
+   * @param {EventSeries[]} opts.eventSeries  - Array of series configs (copy of DEFAULT_EVENT_SERIES, may be filtered)
+   * @param {Array}        opts.customEvents  - One-off extra events [{type, date, amount?}]
    */
   constructor({ params = {}, eventSeries = DEFAULT_EVENT_SERIES, customEvents = [] } = {}) {
-    this.params       = { ...DEFAULT_PARAMS, ...params };
-    this.eventSeries  = eventSeries;
-    this.customEvents = customEvents;
+    super({ eventSeries, customEvents });
+    this.params = { ...DEFAULT_PARAMS, ...params };
 
     this.accountService = new AccountService();
     this.simStart = new Date(2025, 0, 1);
@@ -190,35 +190,5 @@ export class FinancialScenario {
         { type: 'RECORD_BALANCE' }
       ];
     });
-  }
-
-  _scheduleEvents() {
-    const enabled = new Set(this.eventSeries.filter(s => s.enabled).map(s => s.id));
-    const intervalFns = {
-      monthly:   d => DateUtils.addMonths(d, 1),
-      quarterly: d => DateUtils.addMonths(d, 3),
-      annually:  d => DateUtils.addYears(d, 1)
-    };
-
-    for (const series of this.eventSeries) {
-      if (!enabled.has(series.id)) continue;
-      const start = series.startOffset
-          ? DateUtils.addYears(this.simStart, series.startOffset)
-          : this.simStart;
-      this.sim.scheduleRecurring({
-        startDate:  start,
-        type:       series.type,
-        intervalFn: intervalFns[series.interval]
-      });
-    }
-
-    // One-off custom events — handled by the already-registered handlers above
-    for (const ev of this.customEvents) {
-      this.sim.schedule({
-        date: new Date(ev.date),
-        type: ev.type,
-        data: ev.amount != null ? { amount: ev.amount } : {}
-      });
-    }
   }
 }

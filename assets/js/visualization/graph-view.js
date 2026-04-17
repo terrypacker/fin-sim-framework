@@ -18,7 +18,7 @@
  */
 
 export class GraphView {
-  constructor({ simulator, canvas, nodeClicked, simStart, simEnd}) {
+  constructor({ simulator, canvas, nodeClicked, simStart, simEnd, eventColors = new Map() }) {
     this.sim = simulator;
     this.nodeClicked = nodeClicked;
     this.canvas = canvas;
@@ -27,6 +27,7 @@ export class GraphView {
     this.edges = [];// { from, to }
     this.simStart = simStart;
     this.simEnd = simEnd;
+    this.eventColors = eventColors;
     this.running = false;
 
     this.dragNode   = null;
@@ -208,9 +209,10 @@ export class GraphView {
         this.ctx.fill();
       }
 
+      const nodeColor = this.eventColors.get(n.sourceEvent?.type) ?? '#60a5fa';
       this.ctx.beginPath();
       this.ctx.arc(n.x, n.y, 8, 0, Math.PI * 2);
-      this.ctx.fillStyle = isDragging ? "#93c5fd" : "#60a5fa";
+      this.ctx.fillStyle = isDragging ? '#93c5fd' : nodeColor;
       this.ctx.fill();
 
       this.ctx.fillStyle = "#e5e7eb";

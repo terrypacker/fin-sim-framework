@@ -51,13 +51,18 @@ export class BaseApp {
 
     this.scenario = this.newScenario(params);
 
+    const eventColors = new Map(
+      (this.scenario.eventSeries ?? []).map(s => [s.type, s.color]).filter(([, c]) => c)
+    );
+
     const graphCanvas = $('graphCanvas');
     this.graphView = new GraphView({
       simulator:   this.scenario.sim,
       canvas:      graphCanvas,
       nodeClicked: (node) => this.showNodeDetail(node),
       simStart:    this.scenario.simStart,
-      simEnd:      this.scenario.simEnd
+      simEnd:      this.scenario.simEnd,
+      eventColors
     });
     this.graphView.startViz();
 
@@ -72,8 +77,9 @@ export class BaseApp {
 
     // Timeline view
     this.timelineView = new TimelineView({
-      container: $('timelineContainer'),
-      onDetail:  (node) => this.showDetailModal(node)
+      container:   $('timelineContainer'),
+      onDetail:    (node) => this.showDetailModal(node),
+      eventColors
     });
     this.timelineView.attach(this.scenario.sim.journal);
 
