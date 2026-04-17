@@ -233,7 +233,7 @@ const gain = asset.value - asset.costBasis;      // realized gain on sale
 
 ## Visualization (`index.html`)
 
-`index.html` loads `profit-loss.js` which wires up a `GraphView` over the `SimpleProfitLoss` simulation. The UI shows:
+`index.html` loads `profit-loss-app.js` which wires up a `GraphView` over the `SimpleProfitLoss` simulation. The UI shows:
 
 - A canvas rendering action nodes and edges as an animated DAG.
 - A right-hand panel with node details on click.

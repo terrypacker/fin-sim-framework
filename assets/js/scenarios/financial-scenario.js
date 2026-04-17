@@ -53,7 +53,7 @@ export class FinancialScenario {
 
   _buildSim() {
     const p   = this.params;
-    const svc = this.accountService;
+    const accountService = this.accountService;
 
     // Assets with purchaseDates — mix of long-term and short-term holds
     // relative to simStart (2025-01-01)
@@ -75,21 +75,21 @@ export class FinancialScenario {
 
     this.sim = new Simulation(this.simStart, { initialState });
 
-    this._registerReducers(svc);
+    this._registerReducers(accountService);
     this._registerHandlers(p);
     this._scheduleEvents();
   }
 
-  _registerReducers(svc) {
+  _registerReducers(accountService) {
     // Salary → checking account + YTD tracking
     this.sim.reducers.register('SALARY_CREDIT', (state, action) => {
-      svc.transaction(state.checkingAccount, action.amount, null);
+      accountService.transaction(state.checkingAccount, action.amount, null);
       return { ...state, incomeYTD: state.incomeYTD + action.amount };
     }, PRIORITY.CASH_FLOW, 'Salary Credit');
 
     // Interest → savings account + interest YTD (ordinary income)
     this.sim.reducers.register('INTEREST_CREDIT', (state, action) => {
-      svc.transaction(state.savingsAccount, action.amount, null);
+      accountService.transaction(state.savingsAccount, action.amount, null);
       return {
         ...state,
         incomeYTD:   state.incomeYTD   + action.amount,
@@ -99,13 +99,13 @@ export class FinancialScenario {
 
     // Asset sale proceeds → checking account
     this.sim.reducers.register('ASSET_PROCEEDS', (state, action) => {
-      svc.transaction(state.checkingAccount, action.amount, null);
+      accountService.transaction(state.checkingAccount, action.amount, null);
       return { ...state };
     }, PRIORITY.CASH_FLOW, 'Asset Proceeds');
 
     // CGT tax payment → debit checking; record metric by ST/LT bucket
     this.sim.reducers.register('CGT_PAYMENT', (state, action) => {
-      svc.transaction(state.checkingAccount, -action.tax, null);
+      accountService.transaction(state.checkingAccount, -action.tax, null);
       const key  = action.isLongTerm ? 'lt_cgt_paid' : 'st_cgt_paid';
       const list = state.metrics[key] || [];
       return {
@@ -116,7 +116,7 @@ export class FinancialScenario {
 
     // Income tax payment → debit checking; reset YTD counters
     this.sim.reducers.register('INCOME_TAX_PAYMENT', (state, action) => {
-      svc.transaction(state.checkingAccount, -action.amount, null);
+      accountService.transaction(state.checkingAccount, -action.amount, null);
       const list = state.metrics['income_tax_paid'] || [];
       return {
         ...state,

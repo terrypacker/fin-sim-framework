@@ -30,6 +30,7 @@
   <div>
     <button class="tab-btn active" data-tab="graph">Action Graph</button>
     <button class="tab-btn"        data-tab="timeline">Timeline</button>
+    <button class="tab-btn"        data-tab="charts">Balance Charts</button>
   </div>
 </div>
 
@@ -38,6 +39,18 @@
 
   <!-- ── Side panel ─────────────────────────────────────────────────────────── -->
   <div id="panel">
+    <button class="action-btn" id="rebuildBtn">↺ Rebuild Simulation</button>
+    <!-- Live state -->
+    <div id="currentState">
+      <div class="section-title">Current State</div>
+      <div id="currentStateContent"></div>
+    </div>
+
+    <!-- Cumulative metrics -->
+    <div id="cumulativeMetrics">
+      <div class="section-title">Cumulative Metrics</div>
+      <div id="cumulativeMetricsContent"></div>
+    </div>
   </div>
 
   <!-- ── Content (tab panels) ───────────────────────────────────────────────── -->
@@ -58,6 +71,11 @@
       </div>
     </div>
 
+    <!-- Balance chart tab -->
+    <div id="chartsTab" class="tab-panel hidden">
+      <canvas id="chartCanvas"></canvas>
+    </div>
+
     <!-- Timeline tab -->
     <div id="timelineTab" class="tab-panel hidden">
       <div id="timelineContainer"></div>
@@ -76,6 +94,6 @@
   <span   id="timeLabel">2025-01-01</span>
 </div>
 
-<script type="module" src="assets/js/profit-loss.js"></script>
+<script type="module" src="assets/js/apps/profit-loss-app.js"></script>
 </body>
 </html>

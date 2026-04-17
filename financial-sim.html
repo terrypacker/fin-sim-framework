@@ -100,24 +100,15 @@
     </div>
 
     <!-- Live state -->
-    <div>
+    <div id="currentState">
       <div class="section-title">Current State</div>
-      <div class="stat-row"><span class="stat-label">Checking</span>   <span class="stat-value pos" id="stateChecking">$0.00</span></div>
-      <div class="stat-row"><span class="stat-label">Savings</span>    <span class="stat-value pos" id="stateSavings">$0.00</span></div>
-      <div class="stat-row"><span class="stat-label">Total</span>      <span class="stat-value" id="stateTotal">$0.00</span></div>
-      <div class="stat-row"><span class="stat-label">Income YTD</span> <span class="stat-value" id="stateIncomeYTD">$0.00</span></div>
-      <div class="stat-row"><span class="stat-label">Interest YTD</span><span class="stat-value" id="stateInterestYTD">$0.00</span></div>
-      <div class="stat-row"><span class="stat-label">Assets Left</span><span class="stat-value" id="stateAssets">4</span></div>
+      <div id="currentStateContent"></div>
     </div>
 
     <!-- Cumulative metrics -->
-    <div>
+    <div id="cumulativeMetrics">
       <div class="section-title">Cumulative Metrics</div>
-      <div class="stat-row"><span class="stat-label">Salary Paid</span>      <span class="stat-value pos" id="metricSalary">$0.00</span></div>
-      <div class="stat-row"><span class="stat-label">Interest Earned</span>  <span class="stat-value pos" id="metricInterest">$0.00</span></div>
-      <div class="stat-row"><span class="stat-label">LT CGT Paid</span>      <span class="stat-value neg" id="metricLtCgt">$0.00</span></div>
-      <div class="stat-row"><span class="stat-label">ST CGT Paid</span>      <span class="stat-value neg" id="metricStCgt">$0.00</span></div>
-      <div class="stat-row"><span class="stat-label">Income Tax Paid</span>  <span class="stat-value neg" id="metricIncomeTax">$0.00</span></div>
+      <div id="cumulativeMetricsContent"></div>
     </div>
 
   </div><!-- end #panel -->
@@ -165,6 +156,6 @@
   <span   id="timeLabel">2025-01-01</span>
 </div>
 
-<script type="module" src="./assets/js/financial-app.js"></script>
+<script type="module" src="./assets/js/apps/financial-app.js"></script>
 </body>
 </html>

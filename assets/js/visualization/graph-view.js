@@ -32,6 +32,11 @@ export class GraphView {
 
     this.dragNode   = null;
     this.hasDragged = false;
+    this.dateFormat = new Intl.DateTimeFormat('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: '2-digit'
+    });
 
     this.canvas.addEventListener("mousedown",  (evt) => this.onMouseDown(evt));
     this.canvas.addEventListener("mousemove",  (evt) => this.onMouseMove(evt));
@@ -237,7 +242,8 @@ export class GraphView {
 
       this.ctx.fillStyle = "#e5e7eb";
       this.ctx.font = "10px monospace";
-      this.ctx.fillText(n.type, n.x + 10, n.y);
+      const nodeText = n.sourceEvent.type + '-->' + n.type + ' ('+ this.dateFormat.format(n.date) + ')';
+      this.ctx.fillText(nodeText, n.x + 10, n.y);
     }
   }
 
