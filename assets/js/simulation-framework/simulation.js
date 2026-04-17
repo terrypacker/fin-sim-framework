@@ -25,6 +25,7 @@ import { ReducerPipeline } from './reducers.js'
 import { HandlerRegistry } from './handlers.js'
 import { DateUtils } from "./date-utils.js";
 import { SimulationBusMessage, DebugActionBusMessage } from "./bus-messages.js";
+import { SimulationHistory } from "./simulation-history.js";
 
 /**
  *
@@ -57,19 +58,26 @@ export class Simulation {
 
     this.rng = this.createRNG(seed);
 
-    this.snapshots = [];
-    this.snapshotCursor = -1;
-
-    this.enableSnapshots = opts.enableSnapshots ?? true;
-    this.snapshotInterval = opts.snapshotInterval ?? 1; // every N events
+    this.history = new SimulationHistory(this);
+    this.history.enableSnapshots = opts.enableSnapshots ?? true;
+    this.history.snapshotInterval = opts.snapshotInterval ?? 1; // every N events
 
     this.journal = new Journal({enabled: true});
 
     this.nextActionId = 0;
     this.actionGraph = new SimulationEventGraph();
-
-    this.eventCounter = 0;
   }
+
+  // Backward-compat accessors so existing code and tests can still use sim.snapshots etc.
+  get snapshots()        { return this.history.snapshots; }
+  get snapshotCursor()   { return this.history.snapshotCursor; }
+  set snapshotCursor(v)  { this.history.snapshotCursor = v; }
+  get enableSnapshots()  { return this.history.enableSnapshots; }
+  set enableSnapshots(v) { this.history.enableSnapshots = v; }
+  get snapshotInterval() { return this.history.snapshotInterval; }
+  set snapshotInterval(v){ this.history.snapshotInterval = v; }
+  get eventCounter()     { return this.history.eventCounter; }
+  set eventCounter(v)    { this.history.eventCounter = v; }
 
   deepClone(obj) {
     return structuredClone(obj);
@@ -161,13 +169,13 @@ export class Simulation {
       this.applyActions(actions, event);
 
       // snapshot logic
-      this.eventCounter++;
+      this.history.eventCounter++;
 
       if (
-          this.enableSnapshots &&
-          this.eventCounter % this.snapshotInterval === 0
+          this.history.enableSnapshots &&
+          this.history.eventCounter % this.history.snapshotInterval === 0
       ) {
-        this.takeSnapshot();
+        this.history.takeSnapshot();
       }
     }
   }
@@ -265,68 +273,14 @@ export class Simulation {
     }
   }
 
-  /*  SNAPSHOT SUPPORT */
-  takeSnapshot() {
-    const snapshot = {
-      date: new Date(this.currentDate),
-      state: this.deepClone(this.state),
-
-      // capture RNG state (important!)
-      rngState: this.rngState,
-
-      // optional but powerful:
-      queue: this.cloneQueue()
-    };
-
-    this.snapshots.push(snapshot);
-    this.snapshotCursor = this.snapshots.length - 1;
-  }
-
-  cloneQueue() {
-    return this.queue.data.map(e => ({
-      ...e,
-      date: new Date(e.date)
-    }));
-  }
-
-  restoreSnapshot(index) {
-    const snap = this.snapshots[index];
-    if (!snap) return;
-
-    this.currentDate = new Date(snap.date);
-    this.state = this.deepClone(snap.state);
-    this.rngState = snap.rngState;
-
-    // restore queue
-    this.queue.data = snap.queue.map(e => ({
-      ...e,
-      date: new Date(e.date)
-    }));
-
-    this.snapshotCursor = index;
-  }
-
-  rewind(steps = 1) {
-    const target = Math.max(0, this.snapshotCursor - steps);
-    this.restoreSnapshot(target);
-  }
-
-  rewindToStart() {
-    this.restoreSnapshot(0);
-  }
-
-  rewindToDate(targetDate) {
-    const target = this.normalizeDate(targetDate);
-
-    const index = this.findSnapshotIndex(target);
-
-    this.restoreSnapshot(index);
-    this.stepTo(target);
-  }
-
-  replayTo(targetDate) {
-    this.stepTo(targetDate);
-  }
+  /*  SNAPSHOT SUPPORT — delegated to SimulationHistory */
+  takeSnapshot()            { return this.history.takeSnapshot(); }
+  cloneQueue()              { return this.queue.data.map(e => ({ ...e, date: new Date(e.date) })); }
+  restoreSnapshot(i)        { return this.history.restoreSnapshot(i); }
+  rewind(steps)             { return this.history.rewind(steps); }
+  rewindToStart()           { return this.history.rewindToStart(); }
+  rewindToDate(date)        { return this.history.rewindToDate(date); }
+  replayTo(date)            { return this.history.replayTo(date); }
 
   stepTo(targetDate) {
     const end = this.normalizeDate(targetDate);
@@ -334,6 +288,12 @@ export class Simulation {
     while (this.queue.size() > 0) {
       const next = this.queue.peek();
       if (next.date > end) break;
+
+      // Take the initial snapshot before the first event fires so that
+      // rewindToStart() + stepTo() replays ALL events (queue still contains this event).
+      if (this.history.enableSnapshots && this.history.snapshots.length === 0) {
+        this.history.takeSnapshot();
+      }
 
       this.queue.pop();
       this.currentDate = next.date;
@@ -344,30 +304,12 @@ export class Simulation {
     this.currentDate = end;
   }
 
-  findSnapshotIndex(target) {
-    let lo = 0;
-    let hi = this.snapshots.length - 1;
-    let best = 0;
-
-    while (lo <= hi) {
-      const mid = Math.floor((lo + hi) / 2);
-      const d = this.snapshots[mid].date;
-
-      if (d <= target) {
-        best = mid;
-        lo = mid + 1;
-      } else {
-        hi = mid - 1;
-      }
-    }
-
-    return best;
-  }
+  findSnapshotIndex(target) { return this.history.findSnapshotIndex(target); }
 
   branch() {
     const clone = new Simulation(this.currentDate);
 
-    const snap = this.snapshots[this.snapshotCursor];
+    const snap = this.history.snapshots[this.history.snapshotCursor];
 
     clone.currentDate = new Date(snap.date);
     clone.state = this.deepClone(snap.state);

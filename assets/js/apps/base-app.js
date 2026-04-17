@@ -45,6 +45,12 @@ export class BaseApp {
   }
 
   buildScenario() {
+
+    //Clear out state and metrics
+    $('currentStateContent').innerHTML = '';
+    $('cumulativeMetricsContent').innerHTML = '';
+
+    //Setup the scenario
     const params = this.readParams();
     if (this.graphView)    this.graphView.stopViz();
     if (this.chartView)    this.chartView.stopViz();
@@ -91,7 +97,6 @@ export class BaseApp {
       chartView: this.chartView,
       timeLabel: $('timeLabel'),
       timeSlider: $('timeSlider'),
-      stepCallback: (date, s) => { this.customUpdateStatePanel ? this.customUpdateStatePanel(date, s) : this.updateStatePanel(date, s); }
     });
 
     // Subscribe to RECORD_BALANCE DEBUG_ACTION events to capture balance snapshots
@@ -101,7 +106,7 @@ export class BaseApp {
       const date = new Date(payload.date);
       this.timeControls.onDateChanged(date);
       this.graphView.updateView(payload);
-
+      this.customUpdateStatePanel ? this.customUpdateStatePanel(date, payload.stateAfter) : this.updateStatePanel(date, payload.stateAfter);
       if (payload.type === 'RECORD_BALANCE') {
         this.chartView.addSnapshot(
             payload.date,
@@ -427,10 +432,7 @@ export class BaseApp {
     $('playPause').addEventListener('click', () => this.playing ? this.stopPlaying() : this.startPlaying());
 
     $('stepForward').addEventListener('click', () => {
-      const slider = $('timeSlider');
-      if (+slider.value >= 100) return;
-      slider.value = +slider.value + 1;
-      this.timeControls.stepTo(+slider.value / 100);
+      this.timeControls.stepForward();
     });
 
     $('stepBackward').addEventListener('click', () => {
@@ -442,7 +444,7 @@ export class BaseApp {
 
     // True reset: rebuild the scenario from scratch so the sim queue and state
     // are pristine (rewindToStart only restores to snapshot 0, not time 0).
-    $('resetBtn').addEventListener('click', () => this.buildScenario);
+    $('resetBtn').addEventListener('click', () => this.buildScenario());
 
     let sliderTimeout;
     $('timeSlider').addEventListener('input', () => {
