@@ -1,6 +1,6 @@
 # Financial Simulator Framework (fin-sim-framework)
 
-A deterministic, event-driven simulation framework for modelling and replaying complex financial workflows over time. Supports recurring and one-off scheduled events, prioritized action chains, state snapshots for rewind/replay, Monte Carlo scenario runs, and an interactive graph visualization.
+A deterministic, event-driven simulation framework for modeling and replaying complex financial workflows over time. Supports recurring and one-off scheduled events, prioritized action chains, state snapshots for rewind/replay and branching, Monte Carlo scenario runs, and an interactive graph visualization.
 
 ---
 

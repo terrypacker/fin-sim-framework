@@ -42,6 +42,9 @@ body.app-home h1 {
   letter-spacing: 0.05em;
 }
 
+.app-summary {
+  width: 500px
+}
 .card-grid {
   display: flex;
   gap: 24px;
