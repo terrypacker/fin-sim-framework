@@ -82,14 +82,15 @@ This system builds on:
 * Period-aware accounting using **Time Period**
 
 ---
+### Temporal Query Language
+Temporal query language design — a DSL for querying “state across time, branches, and periods” in one unified way.
 
-### Simulation
-* Handlers and Reducers need first class access to the simulation date, should be passed in
-
-### Monte Carlo Improvements
+---
+### Scenario Monte Carlo Improvements
 * implementing a worker pool for parallel Monte Carlo
 * Checkpoint-based Monte Carlo
 
+--- 
 ### Journal System
 * upgrade journaling to delta-based + compressed storage
 
