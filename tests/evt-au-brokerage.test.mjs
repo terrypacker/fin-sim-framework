@@ -26,10 +26,9 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Account, AccountService } from '../assets/js/finance/account.js';
-import { Simulation }              from '../assets/js/simulation-framework/simulation.js';
-import { PRIORITY, MetricReducer, NoOpReducer } from '../assets/js/simulation-framework/reducers.js';
-import { RecordBalanceAction } from '../assets/js/simulation-framework/actions.js';
+import { Account } from '../assets/js/finance/account.js';
+import { Simulation } from '../assets/js/simulation-framework/simulation.js';
+import { TaxService } from '../assets/js/finance/tax-service.js';
 
 function buildAuBrokerageSim({
   initialChecking        = 20000,
@@ -38,8 +37,6 @@ function buildAuBrokerageSim({
   auStockEarningsBasis   = 0,
   isAuResident           = true,
 } = {}) {
-  const svc = new AccountService();
-
   const initialState = {
     checkingAccount: new Account(initialChecking),
     auStockAccount: {
@@ -59,173 +56,7 @@ function buildAuBrokerageSim({
   };
 
   const sim = new Simulation(new Date(2026, 0, 1), { initialState });
-
-  // ── Dividend reducers ──────────────────────────────────────────────────────
-
-  // EVT-26: Franked dividend as AU resident — AU franking credit, US ordinary income, FTC
-  sim.reducers.register('AU_DIVIDEND_FRANKED_RESIDENT_APPLY', (state, action) => {
-    const { amount } = action;
-    const sa = state.auStockAccount;
-    return {
-      ...state,
-      auStockAccount: {
-        ...sa,
-        balance:           sa.balance           + amount,
-        contributionBasis: sa.contributionBasis + amount,
-        earningsBasis:     sa.earningsBasis     + amount,
-      },
-      usOrdinaryIncomeYTD:  state.usOrdinaryIncomeYTD  + amount,
-      auFrankingCreditYTD:  state.auFrankingCreditYTD  + amount,
-      ftcYTD:               state.ftcYTD               + amount,
-    };
-  }, PRIORITY.CASH_FLOW, 'AU Franked Dividend Resident');
-
-  // EVT-27: Franked dividend as non-resident — AU no tax; US treatment is unresolved (TODO)
-  sim.reducers.register('AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY', (state, action) => {
-    const { amount } = action;
-    const sa = state.auStockAccount;
-    return {
-      ...state,
-      auStockAccount: {
-        ...sa,
-        balance:           sa.balance           + amount,
-        contributionBasis: sa.contributionBasis + amount,
-        earningsBasis:     sa.earningsBasis     + amount,
-      },
-      // TODO (EVT-27): US tax treatment unclear — CSV has "Ordinary Income??"
-      // For now we do not credit usOrdinaryIncomeYTD until clarified.
-      // No AU tax for non-residents on franked dividends.
-    };
-  }, PRIORITY.CASH_FLOW, 'AU Franked Dividend Non-Resident');
-
-  // EVT-28: Unfranked dividend as AU resident — US ordinary income, AU ordinary income, FTC
-  sim.reducers.register('AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY', (state, action) => {
-    const { amount } = action;
-    const sa = state.auStockAccount;
-    return {
-      ...state,
-      auStockAccount: {
-        ...sa,
-        balance:           sa.balance           + amount,
-        contributionBasis: sa.contributionBasis + amount,
-        earningsBasis:     sa.earningsBasis     + amount,
-      },
-      usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount,
-      auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
-      ftcYTD:              state.ftcYTD              + amount,
-    };
-  }, PRIORITY.CASH_FLOW, 'AU Unfranked Dividend Resident');
-
-  // EVT-29: Unfranked dividend as non-resident — US ordinary income, AU NR withholding, FTC
-  sim.reducers.register('AU_DIVIDEND_UNFRANKED_NONRESIDENT_APPLY', (state, action) => {
-    const { amount } = action;
-    const sa = state.auStockAccount;
-    return {
-      ...state,
-      auStockAccount: {
-        ...sa,
-        balance:           sa.balance           + amount,
-        contributionBasis: sa.contributionBasis + amount,
-        earningsBasis:     sa.earningsBasis     + amount,
-      },
-      usOrdinaryIncomeYTD:         state.usOrdinaryIncomeYTD         + amount,
-      auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + amount,
-      ftcYTD:                      state.ftcYTD                      + amount,
-    };
-  }, PRIORITY.CASH_FLOW, 'AU Unfranked Dividend Non-Resident');
-
-  // EVT-30: unrealized earnings — stays in account, no tax
-  sim.reducers.register('AU_STOCK_EARNINGS_APPLY', (state, action) => {
-    const sa = state.auStockAccount;
-    return {
-      ...state,
-      auStockAccount: {
-        ...sa,
-        balance:       sa.balance       + action.amount,
-        earningsBasis: sa.earningsBasis + action.amount,
-      },
-    };
-  }, PRIORITY.CASH_FLOW, 'AU Stock Earnings (Unrealized)');
-
-  // EVT-31/32: sale — gain = sale price - cost basis
-  sim.reducers.register('AU_STOCK_WITHDRAWAL_APPLY', (state, action) => {
-    const { salePrice, costBasis, isAuResident: resident } = action;
-    const gain = Math.max(0, salePrice - costBasis);
-    svc.transaction(state.checkingAccount, salePrice, null);
-
-    const sa = state.auStockAccount;
-    const newBalance  = sa.balance - salePrice;
-    const newEarnings = Math.max(0, sa.earningsBasis - gain);
-    const newContrib  = newBalance - newEarnings;
-
-    let newState = {
-      ...state,
-      auStockAccount: {
-        ...sa,
-        balance:           newBalance,
-        earningsBasis:     newEarnings,
-        contributionBasis: newContrib,
-      },
-      usCapitalGainsYTD: state.usCapitalGainsYTD + gain,
-    };
-
-    if (resident) {
-      // EVT-31: resident pays AU capital gains too
-      newState = {
-        ...newState,
-        auCapitalGainsYTD: state.auCapitalGainsYTD + gain,
-        ftcYTD:            state.ftcYTD            + gain,
-      };
-    }
-    // EVT-32: non-resident — no AU tax
-
-    return newState;
-  }, PRIORITY.CASH_FLOW, 'AU Stock Withdrawal');
-
-  new MetricReducer().registerWith(sim.reducers, 'RECORD_METRIC');
-  new NoOpReducer('Balance Snapshot').registerWith(sim.reducers, 'RECORD_BALANCE');
-
-  // ── Handlers ────────────────────────────────────────────────────────────────
-
-  // EVT-26
-  sim.register('AU_DIVIDEND_FRANKED_RESIDENT', ({ data }) => [
-    { type: 'AU_DIVIDEND_FRANKED_RESIDENT_APPLY', amount: data.amount },
-    new RecordBalanceAction(),
-  ]);
-
-  // EVT-27
-  sim.register('AU_DIVIDEND_FRANKED_NONRESIDENT', ({ data }) => [
-    { type: 'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY', amount: data.amount },
-    new RecordBalanceAction(),
-  ]);
-
-  // EVT-28
-  sim.register('AU_DIVIDEND_UNFRANKED_RESIDENT', ({ data }) => [
-    { type: 'AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY', amount: data.amount },
-    new RecordBalanceAction(),
-  ]);
-
-  // EVT-29
-  sim.register('AU_DIVIDEND_UNFRANKED_NONRESIDENT', ({ data }) => [
-    { type: 'AU_DIVIDEND_UNFRANKED_NONRESIDENT_APPLY', amount: data.amount },
-    new RecordBalanceAction(),
-  ]);
-
-  // EVT-30
-  sim.register('AU_STOCK_EARNINGS', ({ data }) => [
-    { type: 'AU_STOCK_EARNINGS_APPLY', amount: data.amount },
-    new RecordBalanceAction(),
-  ]);
-
-  // EVT-31/32 — handler passes residency flag from state
-  sim.register('AU_STOCK_WITHDRAWAL', ({ data, state }) => [
-    { type: 'AU_STOCK_WITHDRAWAL_APPLY',
-      salePrice: data.salePrice,
-      costBasis: data.costBasis,
-      isAuResident: state.isAuResident,
-    },
-    new RecordBalanceAction(),
-  ]);
+  const svc = new TaxService().registerWith(sim, ['AU'], 2026);
 
   return { sim, svc };
 }

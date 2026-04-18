@@ -27,16 +27,9 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Account, AccountService } from '../assets/js/finance/account.js';
-import { Simulation }              from '../assets/js/simulation-framework/simulation.js';
-import { PRIORITY, MetricReducer, NoOpReducer } from '../assets/js/simulation-framework/reducers.js';
-import { RecordBalanceAction } from '../assets/js/simulation-framework/actions.js';
-
-/** Returns age as a decimal (years + fractional months) for the 59.5 threshold. */
-function getAgeDecimal(birthDate, asOfDate) {
-  const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
-  return (asOfDate - birthDate) / msPerYear;
-}
+import { Account } from '../assets/js/finance/account.js';
+import { Simulation } from '../assets/js/simulation-framework/simulation.js';
+import { TaxService } from '../assets/js/finance/tax-service.js';
 
 function build401kSim({
   initialChecking     = 20000,
@@ -45,8 +38,6 @@ function build401kSim({
   k401EarningsBasis   = 0,
   personBirthDate     = new Date(1966, 0, 1), // turns 60 on 2026-01-01
 } = {}) {
-  const svc = new AccountService();
-
   const initialState = {
     checkingAccount: new Account(initialChecking),
     k401Account: {
@@ -62,80 +53,7 @@ function build401kSim({
   };
 
   const sim = new Simulation(new Date(2026, 0, 1), { initialState });
-
-  // EVT-24: contribution — debit checking, credit contributionBasis, US negative income
-  sim.reducers.register('K401_CONTRIBUTION_APPLY', (state, action) => {
-    svc.transaction(state.checkingAccount, -action.amount, null);
-    const ka = state.k401Account;
-    return {
-      ...state,
-      k401Account: {
-        ...ka,
-        balance:           ka.balance           + action.amount,
-        contributionBasis: ka.contributionBasis + action.amount,
-      },
-      usNegativeIncomeYTD: state.usNegativeIncomeYTD + action.amount,
-    };
-  }, PRIORITY.CASH_FLOW, '401K Contribution Apply');
-
-  // EVT-25 (earnings accrual) — stays in account, no immediate tax (deferred until withdrawal)
-  sim.reducers.register('K401_EARNINGS_APPLY', (state, action) => {
-    const ka = state.k401Account;
-    return {
-      ...state,
-      k401Account: {
-        ...ka,
-        balance:       ka.balance       + action.amount,
-        earningsBasis: ka.earningsBasis + action.amount,
-      },
-      // No immediate US tax — deferred until withdrawal
-    };
-  }, PRIORITY.CASH_FLOW, '401K Earnings Apply');
-
-  // EVT-25 (withdrawal) — US ordinary income on full amount, 10% penalty if under 59.5
-  sim.reducers.register('K401_WITHDRAWAL_APPLY', (state, action) => {
-    const { amount, penaltyAmount } = action;
-    const netToChecking = amount - penaltyAmount;
-    svc.transaction(state.checkingAccount, netToChecking, null);
-    const ka = state.k401Account;
-    // Simplified: withdraw from earningsBasis first, then contributions
-    const fromEarnings = Math.min(amount, ka.earningsBasis);
-    const fromContrib  = amount - fromEarnings;
-    return {
-      ...state,
-      k401Account: {
-        ...ka,
-        balance:           ka.balance           - amount,
-        earningsBasis:     ka.earningsBasis     - fromEarnings,
-        contributionBasis: ka.contributionBasis - fromContrib,
-      },
-      usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount,
-      usPenaltyYTD:        state.usPenaltyYTD        + penaltyAmount,
-    };
-  }, PRIORITY.CASH_FLOW, '401K Withdrawal Apply');
-
-  new MetricReducer().registerWith(sim.reducers, 'RECORD_METRIC');
-  new NoOpReducer('Balance Snapshot').registerWith(sim.reducers, 'RECORD_BALANCE');
-
-  sim.register('K401_CONTRIBUTION', ({ data }) => [
-    { type: 'K401_CONTRIBUTION_APPLY', amount: data.amount },
-    new RecordBalanceAction(),
-  ]);
-
-  sim.register('K401_EARNINGS', ({ data }) => [
-    { type: 'K401_EARNINGS_APPLY', amount: data.amount },
-    new RecordBalanceAction(),
-  ]);
-
-  // EVT-25 withdrawal — 10% penalty if under 59.5 per US IRS rules
-  sim.register('K401_WITHDRAWAL', ({ date, state, data }) => {
-    const age     = getAgeDecimal(state.personBirthDate, date);
-    const penalty = age < 59.5 ? data.amount * 0.10 : 0;
-    return [
-      { type: 'K401_WITHDRAWAL_APPLY', amount: data.amount, penaltyAmount: penalty },
-      new RecordBalanceAction(),
-    ];
-  });
+  const svc = new TaxService().registerWith(sim, ['US'], 2026);
 
   return { sim, svc };
 }

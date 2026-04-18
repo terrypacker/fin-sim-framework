@@ -60,3 +60,57 @@ test('Asset: negative gain (loss) is representable', () => {
   const a = new Asset('LOSS', 500, 1000);
   assert.strictEqual(a.value - a.costBasis, -500);
 });
+
+// ─── Asset opts (ownership, drawdown, residency, loan) ───────────────────────
+
+test('Asset: default ownershipType is sole', () => {
+  assert.strictEqual(new Asset('X', 1000, 500).ownershipType, 'sole');
+});
+
+test('Asset: opts.ownershipType sets joint ownership', () => {
+  const a = new Asset('X', 1000, 500, { ownershipType: 'joint' });
+  assert.strictEqual(a.ownershipType, 'joint');
+});
+
+test('Asset: default ownerId is null', () => {
+  assert.strictEqual(new Asset().ownerId, null);
+});
+
+test('Asset: default drawdownPriority is null', () => {
+  assert.strictEqual(new Asset().drawdownPriority, null);
+});
+
+test('Asset: opts.drawdownPriority is set correctly', () => {
+  const a = new Asset('House', 800000, 300000, { drawdownPriority: 10 });
+  assert.strictEqual(a.drawdownPriority, 10);
+});
+
+test('Asset: default balanceAtResidencyChange is null', () => {
+  assert.strictEqual(new Asset().balanceAtResidencyChange, null);
+});
+
+test('Asset: default loanBalance is 0', () => {
+  assert.strictEqual(new Asset().loanBalance, 0);
+});
+
+test('Asset: opts.loanBalance is set correctly', () => {
+  const a = new Asset('House', 800000, 300000, { loanBalance: 200000 });
+  assert.strictEqual(a.loanBalance, 200000);
+});
+
+test('Asset: is structuredClone-safe with all opts fields', () => {
+  const a  = new Asset('House', 800000, 300000, {
+    ownershipType: 'joint',
+    ownerId: 'p1',
+    drawdownPriority: 10,
+    loanBalance: 150000,
+  });
+  const a2 = structuredClone(a);
+  assert.strictEqual(a2.name,             'House');
+  assert.strictEqual(a2.value,            800000);
+  assert.strictEqual(a2.costBasis,        300000);
+  assert.strictEqual(a2.ownershipType,    'joint');
+  assert.strictEqual(a2.drawdownPriority, 10);
+  assert.strictEqual(a2.loanBalance,      150000);
+  assert.strictEqual(a2.balanceAtResidencyChange, null);
+});

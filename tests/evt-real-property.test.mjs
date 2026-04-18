@@ -22,87 +22,27 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Account, AccountService } from '../assets/js/finance/account.js';
-import { Simulation }              from '../assets/js/simulation-framework/simulation.js';
-import { PRIORITY, MetricReducer, NoOpReducer } from '../assets/js/simulation-framework/reducers.js';
-import { RecordBalanceAction } from '../assets/js/simulation-framework/actions.js';
-
-const US_PRIMARY_HOME_EXEMPTION = 500_000;
+import { Account } from '../assets/js/finance/account.js';
+import { Simulation } from '../assets/js/simulation-framework/simulation.js';
+import { TaxService } from '../assets/js/finance/tax-service.js';
 
 function buildRealPropertySim({
   initialChecking  = 5000,
   isAuResident     = false,
 } = {}) {
-  const svc = new AccountService();
-
   const initialState = {
     checkingAccount: new Account(initialChecking),
     isAuResident,
-    usCapitalGainsYTD:             0,
-    auCapitalGainsYTD:             0,
-    auNonResidentWithholdingYTD:   0,
-    ftcYTD:                        0,
+    usCapitalGainsYTD:           0,
+    auCapitalGainsYTD:           0,
+    auNonResidentWithholdingYTD: 0,
+    ftcYTD:                      0,
     metrics: {},
   };
 
   const sim = new Simulation(new Date(2026, 0, 1), { initialState });
-
-  // EVT-33: AU house sale — US capital gain, AU always NR withholding rate, FTC
-  sim.reducers.register('AU_HOUSE_SALE_APPLY', (state, action) => {
-    const { salePrice, costBasis } = action;
-    const gain = Math.max(0, salePrice - costBasis);
-
-    svc.transaction(state.checkingAccount, salePrice, null);
-
-    return {
-      ...state,
-      usCapitalGainsYTD:           state.usCapitalGainsYTD           + gain,
-      auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + gain, // always NR withholding
-      ftcYTD:                      state.ftcYTD                      + gain,
-    };
-  }, PRIORITY.CASH_FLOW, 'AU House Sale');
-
-  // EVT-34: US house sale — US capital gain after $500K primary residence exemption,
-  //         AU tax treatment is unresolved (TODO: CSV has "??")
-  sim.reducers.register('US_HOUSE_SALE_APPLY', (state, action) => {
-    const { salePrice, costBasis, isAuResident: resident } = action;
-    const rawGain     = Math.max(0, salePrice - costBasis);
-    const taxableGain = Math.max(0, rawGain - US_PRIMARY_HOME_EXEMPTION);
-
-    svc.transaction(state.checkingAccount, salePrice, null);
-
-    const newState = {
-      ...state,
-      usCapitalGainsYTD: state.usCapitalGainsYTD + taxableGain,
-    };
-
-    if (resident) {
-      // TODO (EVT-34): AU tax treatment for non-resident on US house sale is unclear (CSV: "??").
-      // Placeholder: no AU tax credited until treatment is confirmed.
-      return newState;
-    }
-
-    return newState;
-  }, PRIORITY.CASH_FLOW, 'US House Sale');
-
-  new MetricReducer().registerWith(sim.reducers, 'RECORD_METRIC');
-  new NoOpReducer('Balance Snapshot').registerWith(sim.reducers, 'RECORD_BALANCE');
-
-  // EVT-33 handler
-  sim.register('AU_HOUSE_SALE', ({ data }) => [
-    { type: 'AU_HOUSE_SALE_APPLY', salePrice: data.salePrice, costBasis: data.costBasis },
-    new RecordBalanceAction(),
-  ]);
-
-  // EVT-34 handler
-  sim.register('US_HOUSE_SALE', ({ data, state }) => [
-    { type: 'US_HOUSE_SALE_APPLY',
-      salePrice: data.salePrice,
-      costBasis: data.costBasis,
-      isAuResident: state.isAuResident,
-    },
-    new RecordBalanceAction(),
-  ]);
+  // EVT-33 (AU house) + EVT-34 (US house) — needs both country modules
+  const svc = new TaxService().registerWith(sim, ['AU', 'US'], 2026);
 
   return { sim, svc };
 }

@@ -24,21 +24,9 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Account, AccountService } from '../assets/js/finance/account.js';
-import { Simulation }              from '../assets/js/simulation-framework/simulation.js';
-import { PRIORITY, MetricReducer, NoOpReducer } from '../assets/js/simulation-framework/reducers.js';
-import { RecordMetricAction, RecordBalanceAction } from '../assets/js/simulation-framework/actions.js';
-
-// ── Shared helpers ─────────────────────────────────────────────────────────────
-
-/** Returns age in whole years as of asOfDate. */
-function getAge(birthDate, asOfDate) {
-  const years = asOfDate.getFullYear() - birthDate.getFullYear();
-  const hadBirthday =
-    asOfDate.getMonth() > birthDate.getMonth() ||
-    (asOfDate.getMonth() === birthDate.getMonth() && asOfDate.getDate() >= birthDate.getDate());
-  return hadBirthday ? years : years - 1;
-}
+import { Account } from '../assets/js/finance/account.js';
+import { Simulation } from '../assets/js/simulation-framework/simulation.js';
+import { TaxService } from '../assets/js/finance/tax-service.js';
 
 /**
  * Build a minimal Roth simulation.
@@ -58,18 +46,15 @@ function buildRothSim({
   isAuResident      = false,
   personBirthDate   = new Date(1966, 0, 1),   // turns 60 on 2026-01-01
 } = {}) {
-  const svc = new AccountService();
-
   const initialState = {
     checkingAccount:  new Account(initialChecking),
     rothAccount: {
-      balance:          rothBalance,
+      balance:           rothBalance,
       contributionBasis: rothContribBasis,
-      earningsBasis:    rothEarningsBasis,
+      earningsBasis:     rothEarningsBasis,
     },
     isAuResident,
     personBirthDate,
-    // Tax YTD buckets
     usOrdinaryIncomeYTD: 0,
     usNegativeIncomeYTD: 0,
     usCapitalGainsYTD:   0,
@@ -80,122 +65,7 @@ function buildRothSim({
   };
 
   const sim = new Simulation(new Date(2026, 0, 1), { initialState });
-
-  // ── Reducers ────────────────────────────────────────────────────────────────
-
-  // EVT-1: credit Roth contributionBasis, debit checking
-  sim.reducers.register('ROTH_CONTRIBUTION_APPLY', (state, action) => {
-    svc.transaction(state.checkingAccount, -action.amount, null);
-    const ra = state.rothAccount;
-    return {
-      ...state,
-      rothAccount: {
-        ...ra,
-        balance:           ra.balance           + action.amount,
-        contributionBasis: ra.contributionBasis + action.amount,
-      },
-    };
-  }, PRIORITY.CASH_FLOW, 'Roth Contribution Apply');
-
-  // EVT-2: debit Roth contributionBasis, credit checking (no tax)
-  sim.reducers.register('ROTH_WITHDRAWAL_CONTRIB_APPLY', (state, action) => {
-    svc.transaction(state.checkingAccount, action.amount, null);
-    const ra = state.rothAccount;
-    return {
-      ...state,
-      rothAccount: {
-        ...ra,
-        balance:           ra.balance           - action.amount,
-        contributionBasis: ra.contributionBasis - action.amount,
-      },
-    };
-  }, PRIORITY.CASH_FLOW, 'Roth Contribution Withdrawal Apply');
-
-  // EVT-3: debit Roth earningsBasis, credit checking (minus penalty), apply AU tax if resident
-  sim.reducers.register('ROTH_WITHDRAWAL_EARNINGS_APPLY', (state, action) => {
-    const { amount, penaltyAmount, isAuResident: resident } = action;
-    const netToChecking = amount - penaltyAmount;
-
-    svc.transaction(state.checkingAccount, netToChecking, null);
-
-    const ra = state.rothAccount;
-    let newState = {
-      ...state,
-      rothAccount: {
-        ...ra,
-        balance:      ra.balance      - amount,
-        earningsBasis: ra.earningsBasis - amount,
-      },
-      usPenaltyYTD: state.usPenaltyYTD + penaltyAmount,
-      // EVT-3: NOT a US income taxable event
-    };
-
-    if (resident) {
-      // AU: ordinary income if AU resident; FTC applies
-      newState = {
-        ...newState,
-        auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
-        ftcYTD: state.ftcYTD + amount,   // simplified: full amount eligible for FTC
-      };
-    }
-
-    return newState;
-  }, PRIORITY.CASH_FLOW, 'Roth Earnings Withdrawal Apply');
-
-  // EVT-4: credit Roth earningsBasis (stays in account, no cash flow, no tax)
-  sim.reducers.register('ROTH_EARNINGS_APPLY', (state, action) => {
-    const ra = state.rothAccount;
-    return {
-      ...state,
-      rothAccount: {
-        ...ra,
-        balance:       ra.balance       + action.amount,
-        earningsBasis: ra.earningsBasis + action.amount,
-      },
-    };
-  }, PRIORITY.CASH_FLOW, 'Roth Earnings Apply');
-
-  new MetricReducer().registerWith(sim.reducers, 'RECORD_METRIC');
-  new NoOpReducer('Balance Snapshot').registerWith(sim.reducers, 'RECORD_BALANCE');
-
-  // ── Handlers ────────────────────────────────────────────────────────────────
-
-  // EVT-1: Roth contribution — no tax event
-  sim.register('ROTH_CONTRIBUTION', ({ data }) => [
-    { type: 'ROTH_CONTRIBUTION_APPLY', amount: data.amount },
-    new RecordMetricAction('roth_contribution', data.amount),
-    new RecordBalanceAction(),
-  ]);
-
-  // EVT-2: Roth withdrawal of contributions — no age gate, no tax
-  sim.register('ROTH_WITHDRAWAL_CONTRIBUTIONS', ({ data }) => [
-    { type: 'ROTH_WITHDRAWAL_CONTRIB_APPLY', amount: data.amount },
-    new RecordMetricAction('roth_withdrawal_contributions', data.amount),
-    new RecordBalanceAction(),
-  ]);
-
-  // EVT-3: Roth withdrawal of earnings — age 60 gate, 10% penalty if before 60
-  sim.register('ROTH_WITHDRAWAL_EARNINGS', ({ date, state, data }) => {
-    const age       = getAge(state.personBirthDate, date);
-    const penalized = age < 60;
-    const penalty   = penalized ? data.amount * 0.10 : 0;
-    return [
-      { type: 'ROTH_WITHDRAWAL_EARNINGS_APPLY',
-        amount: data.amount,
-        penaltyAmount: penalty,
-        isAuResident: state.isAuResident,
-      },
-      new RecordMetricAction('roth_withdrawal_earnings', data.amount),
-      new RecordBalanceAction(),
-    ];
-  });
-
-  // EVT-4: Roth earnings — stays in account, no tax
-  sim.register('ROTH_EARNINGS', ({ data }) => [
-    { type: 'ROTH_EARNINGS_APPLY', amount: data.amount },
-    new RecordMetricAction('roth_earnings', data.amount),
-    new RecordBalanceAction(),
-  ]);
+  const svc = new TaxService().registerWith(sim, ['US'], 2026);
 
   return { sim, svc };
 }

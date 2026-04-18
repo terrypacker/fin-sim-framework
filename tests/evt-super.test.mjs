@@ -25,20 +25,9 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Account, AccountService } from '../assets/js/finance/account.js';
-import { Simulation }              from '../assets/js/simulation-framework/simulation.js';
-import { PRIORITY, MetricReducer, NoOpReducer } from '../assets/js/simulation-framework/reducers.js';
-import { RecordBalanceAction } from '../assets/js/simulation-framework/actions.js';
-
-const SUPER_CONTRIBUTIONS_TAX_RATE = 0.15;
-
-function getAge(birthDate, asOfDate) {
-  const years = asOfDate.getFullYear() - birthDate.getFullYear();
-  const hadBirthday =
-    asOfDate.getMonth() > birthDate.getMonth() ||
-    (asOfDate.getMonth() === birthDate.getMonth() && asOfDate.getDate() >= birthDate.getDate());
-  return hadBirthday ? years : years - 1;
-}
+import { Account } from '../assets/js/finance/account.js';
+import { Simulation } from '../assets/js/simulation-framework/simulation.js';
+import { TaxService } from '../assets/js/finance/tax-service.js';
 
 function buildSuperSim({
   initialChecking    = 20000,
@@ -47,8 +36,6 @@ function buildSuperSim({
   superEarningsBasis = 0,
   personBirthDate    = new Date(1966, 0, 1), // turns 60 on 2026-01-01
 } = {}) {
-  const svc = new AccountService();
-
   const initialState = {
     checkingAccount: new Account(initialChecking),
     superAccount: {
@@ -57,121 +44,14 @@ function buildSuperSim({
       earningsBasis:     superEarningsBasis,
     },
     personBirthDate,
-    usOrdinaryIncomeYTD:  0,
-    auSuperTaxYTD:        0,
-    // Tracks whether a withdrawal was blocked due to age restriction
+    usOrdinaryIncomeYTD:    0,
+    auSuperTaxYTD:          0,
     superWithdrawalBlocked: false,
     metrics: {},
   };
 
   const sim = new Simulation(new Date(2026, 0, 1), { initialState });
-
-  // EVT-20: contribution — debit checking, credit superContribBasis, AU super tax (15%)
-  sim.reducers.register('SUPER_CONTRIBUTION_APPLY', (state, action) => {
-    const { amount } = action;
-    const superTax = amount * SUPER_CONTRIBUTIONS_TAX_RATE;
-    svc.transaction(state.checkingAccount, -amount, null);
-    const sa = state.superAccount;
-    return {
-      ...state,
-      superAccount: {
-        ...sa,
-        balance:           sa.balance           + amount,
-        contributionBasis: sa.contributionBasis + amount,
-      },
-      auSuperTaxYTD: state.auSuperTaxYTD + superTax,
-    };
-  }, PRIORITY.CASH_FLOW, 'Super Contribution Apply');
-
-  // EVT-21: withdrawal of contributions — age-gated (no penalty; withdrawal simply blocked before 60)
-  sim.reducers.register('SUPER_WITHDRAWAL_CONTRIB_APPLY', (state, action) => {
-    const { amount, blocked } = action;
-    if (blocked) {
-      return { ...state, superWithdrawalBlocked: true };
-    }
-    svc.transaction(state.checkingAccount, amount, null);
-    const sa = state.superAccount;
-    return {
-      ...state,
-      superWithdrawalBlocked: false,
-      superAccount: {
-        ...sa,
-        balance:           sa.balance           - amount,
-        contributionBasis: sa.contributionBasis - amount,
-      },
-      // No US tax, no AU tax
-    };
-  }, PRIORITY.CASH_FLOW, 'Super Contribution Withdrawal Apply');
-
-  // EVT-22: withdrawal of earnings — age-gated, US ordinary income
-  sim.reducers.register('SUPER_WITHDRAWAL_EARNINGS_APPLY', (state, action) => {
-    const { amount, blocked } = action;
-    if (blocked) {
-      return { ...state, superWithdrawalBlocked: true };
-    }
-    svc.transaction(state.checkingAccount, amount, null);
-    const sa = state.superAccount;
-    return {
-      ...state,
-      superWithdrawalBlocked: false,
-      superAccount: {
-        ...sa,
-        balance:       sa.balance       - amount,
-        earningsBasis: sa.earningsBasis - amount,
-      },
-      usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount,
-      // No AU tax
-    };
-  }, PRIORITY.CASH_FLOW, 'Super Earnings Withdrawal Apply');
-
-  // EVT-23: earnings — stays in account, AU super tax, no US tax
-  sim.reducers.register('SUPER_EARNINGS_APPLY', (state, action) => {
-    const { amount } = action;
-    const superTax = amount * SUPER_CONTRIBUTIONS_TAX_RATE;
-    const sa = state.superAccount;
-    return {
-      ...state,
-      superAccount: {
-        ...sa,
-        balance:       sa.balance       + amount,
-        earningsBasis: sa.earningsBasis + amount,
-      },
-      auSuperTaxYTD: state.auSuperTaxYTD + superTax,
-    };
-  }, PRIORITY.CASH_FLOW, 'Super Earnings Apply');
-
-  new MetricReducer().registerWith(sim.reducers, 'RECORD_METRIC');
-  new NoOpReducer('Balance Snapshot').registerWith(sim.reducers, 'RECORD_BALANCE');
-
-  sim.register('SUPER_CONTRIBUTION', ({ data }) => [
-    { type: 'SUPER_CONTRIBUTION_APPLY', amount: data.amount },
-    new RecordBalanceAction(),
-  ]);
-
-  // EVT-21 handler — enforces age 60 gate (no penalty amount, just blocked)
-  sim.register('SUPER_WITHDRAWAL_CONTRIBUTIONS', ({ date, state, data }) => {
-    const age     = getAge(state.personBirthDate, date);
-    const blocked = age < 60;
-    return [
-      { type: 'SUPER_WITHDRAWAL_CONTRIB_APPLY', amount: data.amount, blocked },
-      new RecordBalanceAction(),
-    ];
-  });
-
-  // EVT-22 handler — enforces age 60 gate
-  sim.register('SUPER_WITHDRAWAL_EARNINGS', ({ date, state, data }) => {
-    const age     = getAge(state.personBirthDate, date);
-    const blocked = age < 60;
-    return [
-      { type: 'SUPER_WITHDRAWAL_EARNINGS_APPLY', amount: data.amount, blocked },
-      new RecordBalanceAction(),
-    ];
-  });
-
-  sim.register('SUPER_EARNINGS', ({ data }) => [
-    { type: 'SUPER_EARNINGS_APPLY', amount: data.amount },
-    new RecordBalanceAction(),
-  ]);
+  const svc = new TaxService().registerWith(sim, ['AU'], 2026);
 
   return { sim, svc };
 }

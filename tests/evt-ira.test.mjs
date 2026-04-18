@@ -25,18 +25,9 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Account, AccountService } from '../assets/js/finance/account.js';
-import { Simulation }              from '../assets/js/simulation-framework/simulation.js';
-import { PRIORITY, MetricReducer, NoOpReducer } from '../assets/js/simulation-framework/reducers.js';
-import { RecordMetricAction, RecordBalanceAction } from '../assets/js/simulation-framework/actions.js';
-
-function getAge(birthDate, asOfDate) {
-  const years = asOfDate.getFullYear() - birthDate.getFullYear();
-  const hadBirthday =
-    asOfDate.getMonth() > birthDate.getMonth() ||
-    (asOfDate.getMonth() === birthDate.getMonth() && asOfDate.getDate() >= birthDate.getDate());
-  return hadBirthday ? years : years - 1;
-}
+import { Account } from '../assets/js/finance/account.js';
+import { Simulation } from '../assets/js/simulation-framework/simulation.js';
+import { TaxService } from '../assets/js/finance/tax-service.js';
 
 function buildIraSim({
   initialChecking   = 20000,
@@ -46,14 +37,12 @@ function buildIraSim({
   isAuResident      = false,
   personBirthDate   = new Date(1966, 0, 1), // turns 60 on 2026-01-01
 } = {}) {
-  const svc = new AccountService();
-
   const initialState = {
     checkingAccount: new Account(initialChecking),
     iraAccount: {
-      balance:          iraBalance,
+      balance:           iraBalance,
       contributionBasis: iraContribBasis,
-      earningsBasis:    iraEarningsBasis,
+      earningsBasis:     iraEarningsBasis,
     },
     isAuResident,
     personBirthDate,
@@ -67,122 +56,7 @@ function buildIraSim({
   };
 
   const sim = new Simulation(new Date(2026, 0, 1), { initialState });
-
-  // EVT-5: IRA contribution — debit checking, credit iraContribBasis, US negative income
-  sim.reducers.register('IRA_CONTRIBUTION_APPLY', (state, action) => {
-    svc.transaction(state.checkingAccount, -action.amount, null);
-    const ia = state.iraAccount;
-    return {
-      ...state,
-      iraAccount: {
-        ...ia,
-        balance:           ia.balance           + action.amount,
-        contributionBasis: ia.contributionBasis + action.amount,
-      },
-      usNegativeIncomeYTD: state.usNegativeIncomeYTD + action.amount,
-    };
-  }, PRIORITY.CASH_FLOW, 'IRA Contribution Apply');
-
-  // EVT-6: IRA withdrawal-contributions — credit checking, debit iraContribBasis, US ordinary income, optional penalty
-  sim.reducers.register('IRA_WITHDRAWAL_CONTRIB_APPLY', (state, action) => {
-    const { amount, penaltyAmount } = action;
-    const netToChecking = amount - penaltyAmount;
-    svc.transaction(state.checkingAccount, netToChecking, null);
-    const ia = state.iraAccount;
-    return {
-      ...state,
-      iraAccount: {
-        ...ia,
-        balance:           ia.balance           - amount,
-        contributionBasis: ia.contributionBasis - amount,
-      },
-      usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount,
-      usPenaltyYTD:        state.usPenaltyYTD        + penaltyAmount,
-    };
-  }, PRIORITY.CASH_FLOW, 'IRA Contribution Withdrawal Apply');
-
-  // EVT-7: IRA withdrawal-earnings — credit checking, debit iraEarningsBasis, US ordinary income,
-  //        AU ordinary income if resident, FTC
-  sim.reducers.register('IRA_WITHDRAWAL_EARNINGS_APPLY', (state, action) => {
-    const { amount, penaltyAmount, isAuResident: resident } = action;
-    const netToChecking = amount - penaltyAmount;
-    svc.transaction(state.checkingAccount, netToChecking, null);
-    const ia = state.iraAccount;
-    let newState = {
-      ...state,
-      iraAccount: {
-        ...ia,
-        balance:      ia.balance      - amount,
-        earningsBasis: ia.earningsBasis - amount,
-      },
-      usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount,
-      usPenaltyYTD:        state.usPenaltyYTD        + penaltyAmount,
-    };
-    if (resident) {
-      newState = {
-        ...newState,
-        auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
-        ftcYTD: state.ftcYTD + amount,
-      };
-    }
-    return newState;
-  }, PRIORITY.CASH_FLOW, 'IRA Earnings Withdrawal Apply');
-
-  // EVT-8: IRA earnings — credit iraEarningsBasis, stays in account, no tax
-  sim.reducers.register('IRA_EARNINGS_APPLY', (state, action) => {
-    const ia = state.iraAccount;
-    return {
-      ...state,
-      iraAccount: {
-        ...ia,
-        balance:       ia.balance       + action.amount,
-        earningsBasis: ia.earningsBasis + action.amount,
-      },
-    };
-  }, PRIORITY.CASH_FLOW, 'IRA Earnings Apply');
-
-  new MetricReducer().registerWith(sim.reducers, 'RECORD_METRIC');
-  new NoOpReducer('Balance Snapshot').registerWith(sim.reducers, 'RECORD_BALANCE');
-
-  // EVT-5 handler
-  sim.register('IRA_CONTRIBUTION', ({ data }) => [
-    { type: 'IRA_CONTRIBUTION_APPLY', amount: data.amount },
-    new RecordMetricAction('ira_contribution', data.amount),
-    new RecordBalanceAction(),
-  ]);
-
-  // EVT-6 handler — age 60 gate, 10% penalty
-  sim.register('IRA_WITHDRAWAL_CONTRIBUTIONS', ({ date, state, data }) => {
-    const age     = getAge(state.personBirthDate, date);
-    const penalty = age < 60 ? data.amount * 0.10 : 0;
-    return [
-      { type: 'IRA_WITHDRAWAL_CONTRIB_APPLY', amount: data.amount, penaltyAmount: penalty },
-      new RecordMetricAction('ira_withdrawal_contributions', data.amount),
-      new RecordBalanceAction(),
-    ];
-  });
-
-  // EVT-7 handler — age 60 gate, 10% penalty
-  sim.register('IRA_WITHDRAWAL_EARNINGS', ({ date, state, data }) => {
-    const age     = getAge(state.personBirthDate, date);
-    const penalty = age < 60 ? data.amount * 0.10 : 0;
-    return [
-      { type: 'IRA_WITHDRAWAL_EARNINGS_APPLY',
-        amount: data.amount,
-        penaltyAmount: penalty,
-        isAuResident: state.isAuResident,
-      },
-      new RecordMetricAction('ira_withdrawal_earnings', data.amount),
-      new RecordBalanceAction(),
-    ];
-  });
-
-  // EVT-8 handler
-  sim.register('IRA_EARNINGS', ({ data }) => [
-    { type: 'IRA_EARNINGS_APPLY', amount: data.amount },
-    new RecordMetricAction('ira_earnings', data.amount),
-    new RecordBalanceAction(),
-  ]);
+  const svc = new TaxService().registerWith(sim, ['US'], 2026);
 
   return { sim, svc };
 }

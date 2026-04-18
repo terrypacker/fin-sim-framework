@@ -17,10 +17,32 @@
  * limitations under the License.
  */
 
+/**
+ * Asset — named holding with a current value and cost basis.
+ * Used for non-ledger assets such as real property.
+ * No methods; safe for structuredClone snapshots.
+ * Logic lives in AssetService.
+ */
 export class Asset {
-  constructor(name = '', value = 0, costBasis = 0) {
-    this.name = name;
-    this.value = value;
-    this.costBasis = costBasis;
+  /**
+   * @param {string} name      - Asset identifier (e.g. 'Primary Residence')
+   * @param {number} value     - Current market value (default 0)
+   * @param {number} costBasis - Original purchase cost (default 0)
+   * @param {object} [opts]
+   * @param {string}      [opts.ownershipType='sole']          - 'sole' | 'joint'
+   * @param {string}      [opts.ownerId=null]                  - Person id of primary owner
+   * @param {number|null} [opts.drawdownPriority=null]         - Liquidation order (1 = first)
+   * @param {number|null} [opts.balanceAtResidencyChange=null] - Snapshot on residency change
+   * @param {number}      [opts.loanBalance=0]                 - Outstanding loan (AR-9)
+   */
+  constructor(name = '', value = 0, costBasis = 0, opts = {}) {
+    this.name                     = name;
+    this.value                    = value;
+    this.costBasis                = costBasis;
+    this.ownershipType            = opts.ownershipType            ?? 'sole';
+    this.ownerId                  = opts.ownerId                  ?? null;
+    this.drawdownPriority         = opts.drawdownPriority         ?? null;
+    this.balanceAtResidencyChange = opts.balanceAtResidencyChange ?? null;
+    this.loanBalance              = opts.loanBalance              ?? 0;
   }
 }
