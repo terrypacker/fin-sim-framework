@@ -43,7 +43,8 @@ export class BaseApp {
     this.timeControls = null;
     this.playing = false;
     this.lastSliderValue = 0;
-    this.activeTab = 'graph';
+    this.activeTab = 'timeline';
+
   }
 
   buildScenario() {
@@ -474,6 +475,7 @@ export class BaseApp {
 
     window.addEventListener('resize', () => this.resizeCanvases());
     this.resizeCanvases();
+    this.switchTab(this.activeTab);
   }
 
   resizeCanvases() {
