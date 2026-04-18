@@ -230,7 +230,7 @@ export class Simulation {
               ? result.next
               : [result.next]).map(a => this.tagAction(a, action));
 
-          queue.push(...emitted);
+          queue.unshift(...emitted);
         }
 
         // Apply state

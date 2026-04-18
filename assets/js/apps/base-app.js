@@ -27,12 +27,14 @@ export const $  = id => document.getElementById(id);
 export const fmt = n  => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export class BaseApp {
-  constructor({ newScenario, readParams, updateStatePanel, diffStates }) {
+  constructor({ newScenario, readParams, updateStatePanel, diffStates, onChartSnapshot, chartSeries }) {
 
     this.newScenario = newScenario
     this.readParams = readParams;
     this.customUpdateStatePanel = updateStatePanel;
     this.customDiffStates = diffStates;
+    this.onChartSnapshot = onChartSnapshot ?? null;
+    this.chartSeries = chartSeries ?? null;
 
     this.scenario = null;
     this.graphView = null;
@@ -77,7 +79,8 @@ export class BaseApp {
     this.chartView = new BalanceChartView({
       canvas:   chartCanvas,
       simStart: this.scenario.simStart,
-      simEnd:   this.scenario.simEnd
+      simEnd:   this.scenario.simEnd,
+      series:   this.chartSeries ?? undefined
     });
     this.chartView.startViz();
 
@@ -108,11 +111,15 @@ export class BaseApp {
       this.graphView.updateView(payload);
       this.customUpdateStatePanel ? this.customUpdateStatePanel(date, payload.stateAfter) : this.updateStatePanel(date, payload.stateAfter);
       if (payload.type === 'RECORD_BALANCE') {
-        this.chartView.addSnapshot(
-            payload.date,
-            payload.stateAfter.checkingAccount.balance,
-            payload.stateAfter.savingsAccount.balance
-        );
+        if (this.onChartSnapshot) {
+          this.onChartSnapshot(this.chartView, payload.date, payload.stateAfter);
+        } else {
+          this.chartView.addSnapshot(
+              payload.date,
+              payload.stateAfter.checkingAccount.balance,
+              payload.stateAfter.savingsAccount.balance
+          );
+        }
       }
     });
 

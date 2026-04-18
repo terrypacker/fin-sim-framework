@@ -8,19 +8,42 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+const DEFAULT_SERIES = [
+  { key: 'checking', color: '#60a5fa', label: 'Checking' },
+  { key: 'savings',  color: '#34d399', label: 'Savings'  }
+];
+
 export class BalanceChartView {
-  constructor({ canvas, simStart, simEnd }) {
+  /**
+   * @param {object}   opts
+   * @param {object}   opts.canvas
+   * @param {Date}     opts.simStart
+   * @param {Date}     opts.simEnd
+   * @param {Array}    [opts.series] - [{key, color, label}] — defaults to checking + savings
+   */
+  constructor({ canvas, simStart, simEnd, series }) {
     this.canvas   = canvas;
     this.ctx      = canvas.getContext('2d');
     this.simStart = simStart;
     this.simEnd   = simEnd;
-    this.history  = []; // [{date, checking, savings}]
+    this.series   = series ?? DEFAULT_SERIES;
+    this.history  = []; // [{date, ...seriesKeys}]
     this.pad      = { top: 30, right: 20, bottom: 55, left: 90 };
     this.running  = false;
   }
 
-  addSnapshot(date, checking, savings) {
-    this.history.push({ date: new Date(date), checking, savings });
+  /**
+   * Record a balance snapshot.
+   * Accepts either:
+   *   addSnapshot(date, dataObj)            — { checking: N, savings: N, ... }
+   *   addSnapshot(date, checking, savings)  — legacy two-argument form
+   */
+  addSnapshot(date, checkingOrData, savings) {
+    if (typeof checkingOrData === 'object' && checkingOrData !== null) {
+      this.history.push({ date: new Date(date), ...checkingOrData });
+    } else {
+      this.history.push({ date: new Date(date), checking: checkingOrData, savings });
+    }
   }
 
   resetHistory() {
@@ -66,7 +89,7 @@ export class BalanceChartView {
     const minDate = Math.min(...dates);
     const maxDate = Math.max(...dates);
 
-    const allVals = this.history.flatMap(d => [d.checking, d.savings]);
+    const allVals = this.history.flatMap(d => this.series.map(s => d[s.key] ?? 0));
     const minVal  = Math.min(0, ...allVals);
     const rawMax  = Math.max(...allVals);
     const maxVal  = rawMax * 1.1 || 10000;
@@ -120,14 +143,15 @@ export class BalanceChartView {
     }
 
     // ── Draw series lines ─────────────────────────────────────────────────────
-    const drawLine = (key, color, label) => {
+    const drawLine = ({ key, color }) => {
       ctx.beginPath();
       ctx.strokeStyle = color;
       ctx.lineWidth   = 2;
       let first = true;
       for (const d of this.history) {
+        const v = d[key] ?? 0;
         const x = xScale(d.date.getTime());
-        const y = yScale(d[key]);
+        const y = yScale(v);
         if (first) { ctx.moveTo(x, y); first = false; }
         else        ctx.lineTo(x, y);
       }
@@ -136,24 +160,26 @@ export class BalanceChartView {
       // Last-value label at right edge
       const last = this.history[this.history.length - 1];
       if (last) {
+        const v  = last[key] ?? 0;
         const lx = xScale(last.date.getTime()) + 4;
-        const ly = yScale(last[key]);
+        const ly = yScale(v);
         ctx.fillStyle = color;
         ctx.textAlign = 'left';
         ctx.font      = '10px monospace';
-        ctx.fillText('$' + Math.round(last[key]).toLocaleString(), lx, ly + 4);
+        ctx.fillText('$' + Math.round(v).toLocaleString(), lx, ly + 4);
       }
     };
 
-    drawLine('checking', '#60a5fa', 'Checking');
-    drawLine('savings',  '#34d399', 'Savings');
+    for (const s of this.series) drawLine(s);
 
     // ── Legend ────────────────────────────────────────────────────────────────
     ctx.font      = '11px monospace';
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#60a5fa';
-    ctx.fillText('— Checking', pad.left + 10, pad.top + 16);
-    ctx.fillStyle = '#34d399';
-    ctx.fillText('— Savings',  pad.left + 120, pad.top + 16);
+    let legendX   = pad.left + 10;
+    for (const s of this.series) {
+      ctx.fillStyle = s.color;
+      ctx.fillText('— ' + s.label, legendX, pad.top + 16);
+      legendX += 110;
+    }
   }
 }
