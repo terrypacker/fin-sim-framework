@@ -177,7 +177,7 @@ Requirements:
 
 ---
 
-### 5.4 Create Period
+### 5.2 Create Period
 
 ```ts id="a3l9x2"
 function createPeriod(input: {
@@ -429,7 +429,7 @@ Two modes:
 
 ---
 
-### 15.2 Audit Trail
+### 15.1 Audit Trail
 
 All transitions MUST emit events:
 
