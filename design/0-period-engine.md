@@ -74,15 +74,12 @@ Where:
 Each period MUST have:
 
 ```ts id="y8f7t3"
-type PeriodStatus = 'open' | 'closed' | 'locked';
 
 interface Period {
   id: string;
 
   start: number; // inclusive (UTC ms)
   end: number;   // exclusive (UTC ms)
-
-  status: PeriodStatus;
 
   // Optional hierarchy
   parentPeriodId?: string;
@@ -180,40 +177,6 @@ Requirements:
 
 ---
 
-### 5.2 Validate Write
-
-```ts id="q4t2fi"
-function assertWritable(ts: number): void;
-```
-
-Logic:
-
-```ts id="j4rqrs"
-const period = getPeriodForTimestamp(ts);
-
-if (period.status !== 'open') {
-  throw Error('Period is not writable');
-}
-```
-
----
-
-### 5.3 Transition Period
-
-```ts id="lht7hx"
-function transitionPeriod(
-  periodId: string,
-  newStatus: PeriodStatus
-): void;
-```
-
-Rules:
-
-* `open → closed → locked`
-* No backward transitions
-
----
-
 ### 5.4 Create Period
 
 ```ts id="a3l9x2"
@@ -242,7 +205,6 @@ periods(
   id,
   start,
   end,
-  status,
   parent_period_id
 )
 ```
@@ -301,8 +263,7 @@ event.periodId = getPeriodForTimestamp(event.eventTime).id;
 
 On write:
 
-* MUST validate period is `open`
-* MUST reject if `closed` or `locked`
+* None required
 
 ---
 
@@ -310,22 +271,7 @@ On write:
 
 ---
 
-### 8.1 Rule
-
-Adjustments MUST:
-
-* Use current open period
-* NOT modify original period
-
----
-
-### 8.2 Enforcement
-
-```ts id="7t5s6x"
-if (targetPeriod.status !== 'open') {
-  createAdjustmentIn(currentOpenPeriod);
-}
-```
+* No adjustment system required
 
 ---
 
@@ -483,15 +429,6 @@ Two modes:
 
 ---
 
-### 15.1 Period Closure Permissions
-
-* Only authorized actors can:
-
-    * close
-    * lock
-
----
-
 ### 15.2 Audit Trail
 
 All transitions MUST emit events:
@@ -502,35 +439,8 @@ type: 'period.transitioned'
 
 ---
 
-## 16. API Design
 
----
-
-### 16.1 Get Period
-
-```http
-GET /periods?timestamp=...
-```
-
----
-
-### 16.2 Create Period
-
-```http
-POST /periods
-```
-
----
-
-### 16.3 Transition Period
-
-```http
-POST /periods/:id/transition
-```
-
----
-
-## 17. Anti-Patterns
+## 16. Anti-Patterns
 
 ---
 
@@ -541,7 +451,7 @@ POST /periods/:id/transition
 
 ---
 
-## 18. Acceptance Criteria
+## 17. Acceptance Criteria
 
 ---
 
@@ -549,13 +459,12 @@ System is complete when:
 
 * Periods can be created and queried deterministically
 * Events correctly map to periods
-* Closed/locked enforcement works
 * No overlaps occur
 * Performance meets requirements
 
 ---
 
-## 19. Summary
+## 18. Summary
 
 This Period Engine provides:
 
@@ -572,7 +481,7 @@ It serves as the **temporal backbone** of your entire architecture.
 
 ---
 
-## 20. Future Extensions
+## 19. Future Extensions
 
 * Timezone projection layer (view-only)
 * Dynamic period generation (on-demand)
