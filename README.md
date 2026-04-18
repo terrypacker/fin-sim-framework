@@ -9,7 +9,7 @@ A deterministic, event-driven simulation framework for modeling and replaying co
 ```
 ┌──────────────────────────────────────────────────────┐
 │                     Simulation                        │
-│  currentDate  queue(MinHeap)  state  rng  snapshots  │
+│  currentDate  queue(MinHeap)  state  rng              │
 │                                                       │
 │  scheduleAnnually / scheduleQuarterly / schedule      │
 │  ──▶  queue.push(event)                               │
@@ -17,30 +17,70 @@ A deterministic, event-driven simulation framework for modeling and replaying co
 │  stepTo(targetDate)                                   │
 │    └─ dequeue events in date order                    │
 │         └─ execute(event)                             │
-│              ├─ EventBus.publish  ◀── subscribers     │
-│              └─ Handlers ──▶ Actions                  │
+│              ├─ EventBus.publish(SimulationBusMessage)│
+│              │       ◀── subscribers                  │
+│              └─ HandlerRegistry ──▶ Actions           │
 │                   └─ ReducerPipeline                  │
 │                        ├─ state mutation              │
 │                        ├─ chained actions (next:[])   │
 │                        ├─ Journal entry               │
 │                        └─ ActionGraph node            │
+│                             └─ EventBus.publish       │
+│                               (DebugActionBusMessage) │
+│                                                       │
+│  ┌────────────────────────────────────────────────┐   │
+│  │             SimulationHistory                  │   │
+│  │  snapshots  snapshotCursor  eventCounter       │   │
+│  │  takeSnapshot / rewind / rewindToDate          │   │
+│  │  restoreSnapshot / replayTo / resetForReplay   │   │
+│  └────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────┘
 ```
 
 ### Core modules
 
+#### Simulation Framework
+
 | Module | File | Responsibility |
 |---|---|---|
-| `Simulation` | `simulation-framework/simulation.js` | Orchestrator. Owns the event queue, handlers, reducer pipeline, state, snapshots, journal and action graph. |
-| `EventBus` | `simulation-framework/event-bus.js` | Pub/sub with wildcard support. Keeps a full history for replay/debug. |
-| `ReducerPipeline` | `simulation-framework/reducers.js` | Prioritized chain of pure reducer functions that mutate state and optionally emit child actions. |
+| `Simulation` | `simulation-framework/simulation.js` | Orchestrator. Owns the event queue, handler registry, reducer pipeline, state, journal and action graph. Delegates snapshot/rewind to `SimulationHistory`. |
+| `SimulationHistory` | `simulation-framework/simulation-history.js` | Manages snapshots array and all rewind/replay/branching navigation. Holds `snapshotCursor` and `eventCounter`. |
+| `EventBus` | `simulation-framework/event-bus.js` | Pub/sub with wildcard support. Keeps a full history for replay/debug. Receives typed `BusMessage` objects. |
+| `BusMessage` / `SimulationBusMessage` / `DebugActionBusMessage` | `simulation-framework/bus-messages.js` | Typed message wrappers published to the `EventBus`. `SimulationBusMessage` carries the event or action payload; `DebugActionBusMessage` carries an `ActionNode` for the graph visualizer. |
+| `Action` / `AmountAction` / `RecordMetricAction` / `RecordBalanceAction` | `simulation-framework/actions.js` | Base and concrete action classes returned by handlers and emitted via `next:[]`. |
+| `HandlerEntry` / `HandlerRegistry` | `simulation-framework/handlers.js` | `HandlerEntry` wraps a handler function with a name. `HandlerRegistry` maps event types to ordered lists of `HandlerEntry` instances (`sim.handlers`). |
+| `ReducerPipeline` | `simulation-framework/reducers.js` | Prioritized chain of pure reducer functions that mutate state and optionally emit child actions. Also exports reusable reducers: `MetricReducer`, `NoOpReducer`, `AccountTransactionReducer`. |
 | `Journal` | `simulation-framework/journal.js` | Append-only log of every `(action, prevState, nextState)` tuple for audit and timeline queries. |
 | `SimulationEventGraph` | `simulation-framework/simulation-event-graph.js` | Directed acyclic graph of all `ActionNode`s produced during a run, enabling causal tracing. |
 | `MinHeap` | `simulation-framework/min-heap.js` | Priority queue keyed on event date. |
 | `DateUtils` | `simulation-framework/date-utils.js` | Stateless date arithmetic (addDays, addMonths, addYears). |
 | `ScenarioRunner` | `simulation-framework/scenario.js` | Batch and Monte Carlo runner plus a `summarize` helper (mean, p10/p50/p90). |
+
+#### Finance Domain
+
+| Module | File | Responsibility |
+|---|---|---|
 | `Account` / `AccountService` | `finance/account.js` | Simple ledger with credit/debit history. |
 | `Asset` | `finance/asset.js` | Named asset with value and costBasis. |
+
+#### Scenario Layer
+
+| Module | File | Responsibility |
+|---|---|---|
+| `EventSeries` | `scenarios/event-series.js` | Configuration object for a recurring event series: id, label, event type, interval, enabled flag, startOffset, and color. |
+| `BaseScenario` | `scenarios/base-scenario.js` | Base class for scenarios. Provides `_scheduleEvents()` which iterates `eventSeries` and calls `sim.scheduleRecurring` for each enabled series plus any one-off `customEvents`. |
+| `FinancialScenario` | `scenarios/financial-scenario.js` | Concrete scenario wiring a salary/interest/asset-sale/tax simulation. Extends `BaseScenario`; registers all reducers and handlers against a `Simulation` instance. |
+| `RetirementDrawdownScenario` | `scenarios/retirement-drawdown-scenario.js` | Concrete scenario modeling retirement drawdown cash flows. |
+
+#### Application / Visualization Layer
+
+| Module | File | Responsibility |
+|---|---|---|
+| `BaseApp` | `apps/base-app.js` | Base class for browser apps. Wires up `GraphView`, `BalanceChartView`, `TimelineView`, and `TimeControls`; handles tab switching, node detail panel, state diff display, and play/pause/slider animation. |
+| `GraphView` | `visualization/graph-view.js` | Canvas renderer for the action DAG. |
+| `BalanceChartView` | `visualization/balance-chart-view.js` | Canvas line chart of account balances over time. |
+| `TimelineView` | `visualization/timeline-view.js` | Scrollable journal timeline rendered in a DOM container. |
+| `TimeControls` | `visualization/time-controls.js` | Bridges the slider / step buttons to `sim.stepTo` and `sim.rewindToStart` + replay. Coordinates resets across `GraphView`, `BalanceChartView`, `TimelineView`, and the journal. |
 
 ---
 
@@ -66,19 +106,37 @@ sim.scheduleRecurring({ startDate, type, intervalFn: d => DateUtils.addMonths(d,
 
 ### Handlers
 
-Handlers are registered per event type and receive a context object:
+Handlers are registered per event type via `sim.register(type, fn)` or `sim.register(type, new HandlerEntry(fn, name))`. They receive a context object and must return an array of action objects (or `null`/empty for no-ops). Multiple handlers can be registered for the same event type and all will be called.
 
 ```js
+import { HandlerEntry } from './simulation-framework/handlers.js';
+import { AmountAction, RecordMetricAction, RecordBalanceAction } from './simulation-framework/actions.js';
+
+// Anonymous function style
 sim.register('QUARTERLY_PL', ({ sim, date, data, meta, state }) => {
   const profit = sim.rng() * 10000;
   return [
-    { type: 'ADD_CASH', amount: profit },
-    { type: 'RECORD_METRIC', name: 'quarterly_profit', value: profit }
+    new AmountAction('ADD_CASH', profit),
+    new RecordMetricAction('quarterly_profit', profit),
+    new RecordBalanceAction()
   ];
 });
+
+// Named HandlerEntry style (name appears in debug output)
+sim.register('MONTHLY_SALARY', new HandlerEntry(({ data }) => {
+  return [new AmountAction('SALARY_CREDIT', data.amount)];
+}, 'Monthly Salary'));
 ```
 
-Handlers **must return** an array of action objects (or `null`/empty array for no-ops). Multiple handlers can be registered for the same event type and all will be called.
+### Actions
+
+`Action` is the base class for all objects returned by handlers and emitted via `next:[]`. Use the concrete subclasses where they fit, or return plain objects `{ type, ...fields }` for custom action shapes.
+
+```js
+new AmountAction('SALARY_CREDIT', 8000)       // { type, amount }
+new RecordMetricAction('salary', 8000)         // { type: 'RECORD_METRIC', name, value }
+new RecordBalanceAction()                      // { type: 'RECORD_BALANCE' } — no-op marker
+```
 
 ### Reducers
 
@@ -130,7 +188,7 @@ Graph traversal methods:
 
 ### Snapshots, Rewind & Replay
 
-The simulation snapshots state (including RNG state and queue) after every N events (`snapshotInterval`, default 1). This allows:
+Snapshot/rewind logic lives in `SimulationHistory` (`sim.history`). The simulation snapshots state (including RNG state and queue) after every N events (`snapshotInterval`, default 1). Convenience methods are forwarded from `Simulation` for backward compatibility.
 
 ```js
 sim.stepTo(new Date(2030, 0, 1));   // run forward
@@ -140,6 +198,8 @@ sim.stepTo(new Date(2032, 0, 1));   // continue from rewound point
 ```
 
 Other rewind methods: `rewind(steps)`, `rewindToStart()`, `restoreSnapshot(index)`.
+
+`sim.history.resetForReplay()` clears the action graph and resets the action ID counter — called by `TimeControls` before replaying so the visualizer starts clean.
 
 **Branching** clones state from the current snapshot cursor so two simulations can diverge from a common checkpoint:
 
@@ -163,7 +223,7 @@ sim.journal.traceEvent(new Date(2026, 0, 1)); // all entries on that date
 
 ### EventBus
 
-Supports typed subscriptions and a wildcard:
+Supports typed subscriptions and a wildcard. Published messages are typed `BusMessage` objects.
 
 ```js
 sim.bus.subscribe('ANNUAL_TAX', handler);  // specific type
@@ -171,9 +231,9 @@ sim.bus.subscribe('*', handler);            // all events
 sim.bus.getHistory();                       // full event log (for replay / debug)
 ```
 
-**Important**: the bus receives two kinds of publishes:
-1. The **event** itself (type = event type, e.g. `QUARTERLY_PL`) — always has `date`.
-2. **`DEBUG_ACTION`** events emitted per reducer execution — used by the graph visualizer. These have `payload` as an `ActionNode` but may lack `date`. Wildcard subscribers should handle this gracefully.
+**Two kinds of publishes** reach the bus:
+1. **`SimulationBusMessage`** — published when a scheduled event fires (`execute()`) and after each action completes its reducer pipeline (`applyActions()`). Carries `{ type, date, sim, payload, stateSnapshot }`.
+2. **`DebugActionBusMessage`** — published once per `ActionNode` added to the graph. Always has `type: 'DEBUG_ACTION'`. Carries `{ date, payload: ActionNode }`. Used by the graph visualizer. Wildcard subscribers should handle the absence of a standard `type` gracefully.
 
 ---
 
@@ -231,15 +291,18 @@ const gain = asset.value - asset.costBasis;      // realized gain on sale
 
 ---
 
-## Visualization (`index.html`)
+## Visualization
 
-`index.html` loads `profit-loss-app.js` which wires up a `GraphView` over the `SimpleProfitLoss` simulation. The UI shows:
+`index.html` is the home page listing available simulations. Each simulation has its own HTML file (e.g. `retirement-sim.html`).
 
-- A canvas rendering action nodes and edges as an animated DAG.
-- A right-hand panel with node details on click.
-- Time controls: play/pause, step forward, step back, reset, and a slider.
+Each app extends `BaseApp` (`apps/base-app.js`), which provides:
+- A canvas-based action DAG via `GraphView`
+- A canvas line chart of account balances over time via `BalanceChartView`
+- A scrollable journal timeline via `TimelineView`
+- Play/pause, step forward/back, reset, and a time slider wired through `TimeControls`
+- A node detail panel showing action payload and state diff on click
 
-`GraphView` calls `sim.stepTo(...)` and `sim.rewindToDate(...)` to drive the visualizer forward and backward through the simulation's snapshot chain.
+`TimeControls` drives the simulation forward with `sim.stepTo(...)` and backward by calling `sim.history.resetForReplay()`, `sim.rewindToStart()`, then replaying to the target date.
 
 ---
 
@@ -281,5 +344,6 @@ Follow the existing pattern — import from `node:test` and `node:assert/strict`
 - **State must be plain data.** No class instances with methods in `initialState` — `structuredClone` is used for snapshots. Use service objects (e.g. `AccountService`) outside state to operate on plain state data.
 - **Handlers return actions; reducers return state.** Handlers are the bridge between events and the reducer pipeline. Reducers are pure (no side effects beyond state).
 - **Chaining is via `next:[]`.** Reducers that need to trigger further state changes emit child actions through `next`, not by calling other reducers directly.
+- **Use `Action` subclasses for typed actions.** Prefer `new AmountAction(...)`, `new RecordMetricAction(...)`, etc. over raw plain objects where a concrete class exists.
 - **Imports are relative ES module paths.** No bundler; all files must use `.js` extensions in import statements (even from `.mjs` test files).
 - **No external dependencies.** The framework and tests rely only on browser/Node built-ins.
