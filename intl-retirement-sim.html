@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<!--
+  Copyright (c) 2026 Terry Packer.
+  Licensed under the Apache License, Version 2.0.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>International Retirement Simulation</title>
+  <link rel="stylesheet" href="./assets/css/app.css">
+</head>
+<body class="app-financial">
+
+<!-- ── Top bar ──────────────────────────────────────────────────────────────── -->
+<div id="topbar">
+  <h1>International Retirement Simulation</h1>
+  <div>
+    <button class="tab-btn active" data-tab="graph">Action Graph</button>
+    <button class="tab-btn"        data-tab="timeline">Timeline</button>
+    <button class="tab-btn"        data-tab="charts">Balance Charts</button>
+  </div>
+</div>
+
+<!-- ── Main ─────────────────────────────────────────────────────────────────── -->
+<div id="main">
+
+  <!-- ── Side panel ─────────────────────────────────────────────────────────── -->
+  <div id="panel">
+
+    <!-- People -->
+    <div class="section-title">People</div>
+
+    <div class="field">
+      <label>Primary Birth Year</label>
+      <input type="number" id="primaryBirthYear" value="1970" min="1940" max="2000" step="1">
+    </div>
+    <div class="field">
+      <label>Spouse Birth Year</label>
+      <input type="number" id="spouseBirthYear" value="1972" min="1940" max="2000" step="1">
+    </div>
+    <div class="field">
+      <label>Move to AU Year</label>
+      <input type="number" id="moveYear" value="2031" min="2026" max="2040" step="1">
+    </div>
+
+    <!-- Checking -->
+    <div class="section-title" style="margin-top:10px">Checking Account</div>
+
+    <div class="field">
+      <label>Initial Balance ($)</label>
+      <input type="number" id="initialChecking" value="30000" min="0" step="1000">
+    </div>
+    <div class="field">
+      <label>Min Balance ($)</label>
+      <input type="number" id="checkingMinBalance" value="3000" min="0" step="500">
+    </div>
+    <div class="field">
+      <label>Interest Rate (%)</label>
+      <input type="number" id="checkingInterestRate" value="3" min="0" max="20" step="0.25">
+    </div>
+
+    <!-- US Accounts -->
+    <div class="section-title" style="margin-top:10px">Roth IRA</div>
+    <div class="field">
+      <label>Balance ($)</label>
+      <input type="number" id="rothBalance" value="80000" min="0" step="1000">
+    </div>
+    <div class="field">
+      <label>Cost Basis ($)</label>
+      <input type="number" id="rothBasis" value="60000" min="0" step="1000">
+    </div>
+
+    <div class="section-title" style="margin-top:10px">Traditional IRA</div>
+    <div class="field">
+      <label>Balance ($)</label>
+      <input type="number" id="iraBalance" value="200000" min="0" step="1000">
+    </div>
+    <div class="field">
+      <label>Cost Basis ($)</label>
+      <input type="number" id="iraBasis" value="150000" min="0" step="1000">
+    </div>
+
+    <div class="section-title" style="margin-top:10px">401k</div>
+    <div class="field">
+      <label>Balance ($)</label>
+      <input type="number" id="k401Balance" value="300000" min="0" step="1000">
+    </div>
+    <div class="field">
+      <label>Cost Basis ($)</label>
+      <input type="number" id="k401Basis" value="200000" min="0" step="1000">
+    </div>
+
+    <div class="section-title" style="margin-top:10px">US Stocks</div>
+    <div class="field">
+      <label>Balance ($)</label>
+      <input type="number" id="stockBalance" value="150000" min="0" step="1000">
+    </div>
+    <div class="field">
+      <label>Cost Basis ($)</label>
+      <input type="number" id="stockBasis" value="90000" min="0" step="1000">
+    </div>
+    <div class="field">
+      <label>Dividend Rate (%)</label>
+      <input type="number" id="stockDividendRate" value="2" min="0" max="20" step="0.25">
+    </div>
+    <div class="field">
+      <label>
+        <input type="checkbox" id="stockDividendReinvest">
+        Reinvest dividends (uncheck = cash payout)
+      </label>
+    </div>
+
+    <div class="section-title" style="margin-top:10px">Fixed Income</div>
+    <div class="field">
+      <label>Balance ($)</label>
+      <input type="number" id="fixedIncomeBalance" value="80000" min="0" step="1000">
+    </div>
+    <div class="field">
+      <label>Interest Rate (%)</label>
+      <input type="number" id="fixedIncomeInterestRate" value="4" min="0" max="20" step="0.25">
+    </div>
+
+    <!-- AU Accounts -->
+    <div class="section-title" style="margin-top:10px">AU Savings</div>
+    <div class="field">
+      <label>Balance ($)</label>
+      <input type="number" id="auSavingsBalance" value="50000" min="0" step="1000">
+    </div>
+    <div class="field">
+      <label>Interest Rate (%)</label>
+      <input type="number" id="auSavingsInterestRate" value="4.5" min="0" max="20" step="0.25">
+    </div>
+
+    <div class="section-title" style="margin-top:10px">Superannuation</div>
+    <div class="field">
+      <label>Balance ($)</label>
+      <input type="number" id="superBalance" value="250000" min="0" step="1000">
+    </div>
+    <div class="field">
+      <label>Cost Basis ($)</label>
+      <input type="number" id="superBasis" value="180000" min="0" step="1000">
+    </div>
+
+    <div class="section-title" style="margin-top:10px">AU Stocks</div>
+    <div class="field">
+      <label>Balance ($)</label>
+      <input type="number" id="auStockBalance" value="60000" min="0" step="1000">
+    </div>
+    <div class="field">
+      <label>Cost Basis ($)</label>
+      <input type="number" id="auStockBasis" value="40000" min="0" step="1000">
+    </div>
+
+    <!-- Expenses -->
+    <div class="section-title" style="margin-top:10px">Expenses</div>
+    <div class="field">
+      <label>Monthly Expenses ($)</label>
+      <input type="number" id="monthlyExpenses" value="6000" min="0" step="100">
+    </div>
+
+    <button class="action-btn" id="rebuildBtn" style="margin-top:10px">↺ Rebuild Simulation</button>
+
+    <!-- Recurring event series -->
+    <div style="margin-top:12px">
+      <div class="section-title">Recurring Events</div>
+      <div id="eventList"></div>
+
+      <button class="secondary-btn" id="addEventBtn" style="margin-top:8px; width:100%;">
+        + Add One-Off Event
+      </button>
+
+      <div id="addEventForm" class="hidden">
+        <div class="field">
+          <label>Event Type</label>
+          <select id="newEventType" style="background:#0f172a; color:#e5e7eb; border:1px solid #334155; padding:4px; font-family:monospace; font-size:12px; border-radius:3px; width:100%;">
+            <option value="MONTHLY_EXPENSES">MONTHLY_EXPENSES — monthly expenses</option>
+            <option value="ROTH_CONTRIBUTION">ROTH_CONTRIBUTION — Roth IRA contribution</option>
+            <option value="ROTH_WITHDRAWAL_CONTRIBUTIONS">ROTH_WITHDRAWAL_CONTRIBUTIONS</option>
+            <option value="ROTH_WITHDRAWAL_EARNINGS">ROTH_WITHDRAWAL_EARNINGS</option>
+            <option value="IRA_WITHDRAWAL_CONTRIBUTIONS">IRA_WITHDRAWAL_CONTRIBUTIONS</option>
+            <option value="IRA_WITHDRAWAL_EARNINGS">IRA_WITHDRAWAL_EARNINGS</option>
+            <option value="K401_WITHDRAWAL">K401_WITHDRAWAL — 401k withdrawal</option>
+            <option value="SUPER_CONTRIBUTION">SUPER_CONTRIBUTION — super contribution</option>
+            <option value="SUPER_WITHDRAWAL_CONTRIBUTIONS">SUPER_WITHDRAWAL_CONTRIBUTIONS</option>
+            <option value="SUPER_WITHDRAWAL_EARNINGS">SUPER_WITHDRAWAL_EARNINGS</option>
+            <option value="AU_SAVINGS_WITHDRAWAL">AU_SAVINGS_WITHDRAWAL</option>
+            <option value="US_HOUSE_SALE">US_HOUSE_SALE — sell US property</option>
+            <option value="AU_HOUSE_SALE">AU_HOUSE_SALE — sell AU property</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Date</label>
+          <input type="date" id="newEventDate" min="2026-01-01" max="2040-12-31"
+                 style="background:#0f172a; color:#e5e7eb; border:1px solid #334155; padding:4px; font-family:monospace; font-size:12px; border-radius:3px; width:100%;">
+        </div>
+        <div class="field">
+          <label>Amount (optional)</label>
+          <input type="number" id="newEventAmount" placeholder="leave blank for default" min="0" step="100">
+        </div>
+        <div class="form-row">
+          <button class="action-btn"    id="submitEventBtn">Add</button>
+          <button class="secondary-btn" id="cancelEventBtn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live state -->
+    <div id="currentState">
+      <div class="section-title">Current State</div>
+      <div id="currentStateContent"></div>
+    </div>
+
+    <!-- Cumulative metrics -->
+    <div id="cumulativeMetrics">
+      <div class="section-title">Cumulative Metrics</div>
+      <div id="cumulativeMetricsContent"></div>
+    </div>
+
+  </div><!-- end #panel -->
+
+  <!-- ── Content (tab panels) ───────────────────────────────────────────────── -->
+  <div id="content">
+
+    <!-- Action graph tab -->
+    <div id="graphTab" class="tab-panel">
+      <canvas id="graphCanvas"></canvas>
+      <div id="nodeDetailPanel" class="hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <h4>Node Detail</h4>
+          <div style="display:flex;align-items:center;gap:6px">
+            <div class="nd-tab-bar" style="margin-bottom:0">
+              <button class="nd-tab-btn active" data-ndtab="nodeDetailFormatted">Formatted</button>
+              <button class="nd-tab-btn"        data-ndtab="nodeDetailJson">JSON</button>
+            </div>
+            <button id="nodeDetailClose" class="modal-close" title="Close">✕</button>
+          </div>
+        </div>
+        <div id="nodeDetailFormatted" class="nd-tab-panel">Click a node…</div>
+        <div id="nodeDetailJson"      class="nd-tab-panel hidden"><pre id="nodeDetail">Click a node…</pre></div>
+      </div>
+    </div>
+
+    <!-- Balance chart tab -->
+    <div id="chartsTab" class="tab-panel hidden">
+      <canvas id="chartCanvas"></canvas>
+    </div>
+
+    <!-- Timeline tab -->
+    <div id="timelineTab" class="tab-panel hidden">
+      <div id="timelineContainer"></div>
+    </div>
+
+  </div><!-- end #content -->
+
+</div><!-- end #main -->
+
+<!-- ── Time controls ─────────────────────────────────────────────────────────── -->
+<div id="controls">
+  <button id="resetBtn"     title="Reset to start">↩</button>
+  <button id="stepBackward" title="Step backward">←</button>
+  <button id="playPause"    title="Play / Pause">▶</button>
+  <button id="stepForward"  title="Step forward">→</button>
+  <input  id="timeSlider" type="range" min="0" max="100" value="0">
+  <span   id="timeLabel">2026-01-01</span>
+</div>
+
+<script type="module" src="./assets/js/apps/intl-retirement-app.js"></script>
+</body>
+</html>

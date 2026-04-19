@@ -12,14 +12,19 @@ import { TaxEngine }             from './tax/tax-engine.js';
 import { AccountRulesEngine }    from './account-rules/account-rules-engine.js';
 import { AccountService }        from './account.js';
 import { MetricReducer, NoOpReducer, PRIORITY } from '../simulation-framework/reducers.js';
+import { TaxSettleService }      from './tax-settle-service.js';
 
+import { UsTaxModule2024 }       from './tax/us/us-tax-module-2024.js';
 import { UsTaxModule2025 }       from './tax/us/us-tax-module-2025.js';
 import { UsTaxModule2026 }       from './tax/us/us-tax-module-2026.js';
+import { AuTaxModule2024 }       from './tax/au/au-tax-module-2024.js';
 import { AuTaxModule2025 }       from './tax/au/au-tax-module-2025.js';
 import { AuTaxModule2026 }       from './tax/au/au-tax-module-2026.js';
 
+import { UsAccountModule2024 }   from './account-rules/us/us-account-module-2024.js';
 import { UsAccountModule2025 }   from './account-rules/us/us-account-module-2025.js';
 import { UsAccountModule2026 }   from './account-rules/us/us-account-module-2026.js';
+import { AuAccountModule2024 }   from './account-rules/au/au-account-module-2024.js';
 import { AuAccountModule2025 }   from './account-rules/au/au-account-module-2025.js';
 import { AuAccountModule2026 }   from './account-rules/au/au-account-module-2026.js';
 
@@ -58,14 +63,18 @@ export class TaxService {
     this._accountService     = new AccountService();
 
     // Register all known tax modules
+    this._taxEngine.register(new UsTaxModule2024());
     this._taxEngine.register(new UsTaxModule2025());
     this._taxEngine.register(new UsTaxModule2026());
+    this._taxEngine.register(new AuTaxModule2024());
     this._taxEngine.register(new AuTaxModule2025());
     this._taxEngine.register(new AuTaxModule2026());
 
     // Register all known account modules
+    this._accountRulesEngine.register(new UsAccountModule2024());
     this._accountRulesEngine.register(new UsAccountModule2025());
     this._accountRulesEngine.register(new UsAccountModule2026());
+    this._accountRulesEngine.register(new AuAccountModule2024());
     this._accountRulesEngine.register(new AuAccountModule2025());
     this._accountRulesEngine.register(new AuAccountModule2026());
   }
@@ -154,7 +163,69 @@ export class TaxService {
     // ── Step 5: register dynamic tax reducers ──────────────────────────────────
     this._taxEngine.registerDynamic(sim.reducers, countryCodes);
 
-    // ── Step 6: register metric/balance reducers ───────────────────────────────
+    // ── Step 6: schedule TAX_SETTLE events at each period end ──────────────────
+    const settleService = new TaxSettleService();
+    const _computeTax = (state, cc) =>
+      cc === 'AU' ? settleService.computeAuTax(state) : settleService.computeUsTax(state);
+
+    // YTD fields to reset after settlement, keyed by country code
+    const _ytdFields = {
+      US: ['usOrdinaryIncomeYTD', 'usNegativeIncomeYTD', 'usCapitalGainsYTD', 'usPenaltyYTD', 'ftcYTD'],
+      AU: ['auOrdinaryIncomeYTD', 'auCapitalGainsYTD', 'auNonResidentWithholdingYTD', 'auSuperTaxYTD', 'auFrankingCreditYTD'],
+    };
+
+    for (const cc of countryCodes) {
+      const periodType = _periodTypeFor(cc);
+      for (const period of periodService.getAllPeriods()) {
+        if (period.type === periodType && period.endMs > startTs) {
+          // Schedule on the last day of the period (endMs is exclusive midnight UTC)
+          const d       = new Date(period.endMs);
+          const lastDay = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - 1);
+          sim.schedule({ date: lastDay, type: 'TAX_SETTLE', data: { cc } });
+        }
+      }
+    }
+
+    // TAX_SETTLE handler: compute → emit TAX_SETTLE_APPLY + RECORD_BALANCE
+    sim.register('TAX_SETTLE', ({ data, state }) => {
+      const { cc } = data;
+      const tax = _computeTax(state, cc);
+      return [
+        { type: 'TAX_SETTLE_APPLY', cc, tax },
+        { type: 'RECORD_BALANCE' },
+      ];
+    });
+
+    // TAX_SETTLE_APPLY reducer: reset YTD fields, emit TAX_PAYMENT_DEBIT if tax > 0
+    sim.reducers.register('TAX_SETTLE_APPLY', (state, action) => {
+      const { cc, tax } = action;
+      const resets = {};
+      for (const field of (_ytdFields[cc] || [])) {
+        if (field in state) resets[field] = 0;
+      }
+      const nextState = { ...state, ...resets };
+      if (tax > 0) {
+        return { state: nextState, next: [{ type: 'TAX_PAYMENT_DEBIT', amount: tax, cc }] };
+      }
+      return nextState;
+    }, PRIORITY.TAX_APPLY, 'Tax Settle Apply');
+
+    // TAX_PAYMENT_DEBIT reducer: debit checking (capped at available balance)
+    sim.reducers.register('TAX_PAYMENT_DEBIT', (state, action) => {
+      const { amount, cc } = action;
+      const debit     = Math.min(amount, Math.max(0, state.checkingAccount.balance));
+      if (debit > 0) {
+        this._accountService.transaction(state.checkingAccount, -debit, null);
+      }
+      const metricKey = cc === 'AU' ? 'tax_paid_au' : 'tax_paid_us';
+      const list      = state.metrics[metricKey] || [];
+      return {
+        ...state,
+        metrics: { ...state.metrics, [metricKey]: [...list, debit] },
+      };
+    }, PRIORITY.TAX_APPLY + 1, 'Tax Payment Debit');
+
+    // ── Step 7: register metric/balance reducers ───────────────────────────────
     new MetricReducer().registerWith(sim.reducers, 'RECORD_METRIC');
     new NoOpReducer('Balance Snapshot').registerWith(sim.reducers, 'RECORD_BALANCE');
 
