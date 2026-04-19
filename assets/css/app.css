@@ -319,7 +319,8 @@ button.secondary-btn:hover { background: #334155; }
   overflow: hidden;
 }
 
-.tab-panel, .sidebar-tab-panel { inset: 0; }
+.tab-panel { position: absolute; inset: 0; }
+.sidebar-tab-panel { inset: 0; }
 .tab-panel.hidden, .sidebar-tab-panel.hidden { display: none; }
 
 canvas { display: block; }
