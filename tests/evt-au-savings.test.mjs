@@ -31,6 +31,15 @@ import assert   from 'node:assert/strict';
 import { Account } from '../assets/js/finance/account.js';
 import { Simulation } from '../assets/js/simulation-framework/simulation.js';
 import { TaxService } from '../assets/js/finance/tax-service.js';
+import { PeriodService } from '../assets/js/finance/period/period-service.js';
+import { buildAuFiscalYear, applyTo } from '../assets/js/finance/period/period-builder.js';
+
+// Jan 1 2026 falls within AU fiscal year starting Jul 1 2025 (FY2025-26).
+function buildAuPeriodService() {
+  const ps = new PeriodService();
+  applyTo(ps, buildAuFiscalYear(2025));
+  return ps;
+}
 
 function buildAuSavingsSim({
   initialChecking    = 20000,
@@ -49,7 +58,7 @@ function buildAuSavingsSim({
   };
 
   const sim = new Simulation(new Date(2026, 0, 1), { initialState });
-  const svc = new TaxService().registerWith(sim, ['AU'], 2026);
+  const svc = new TaxService().registerWith(sim, ['AU'], buildAuPeriodService());
 
   return { sim, svc };
 }

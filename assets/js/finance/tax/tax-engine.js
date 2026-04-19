@@ -9,6 +9,7 @@
  */
 
 import { BaseTaxModule } from './base-tax-module.js';
+import { PRIORITY } from '../../simulation-framework/reducers.js';
 
 /**
  * TaxEngine — registry for BaseTaxModule instances keyed by countryCode + year.
@@ -78,5 +79,58 @@ export class TaxEngine {
    */
   hasModule(countryCode) {
     return Object.keys(this._modules).some(k => k.startsWith(countryCode + '_'));
+  }
+
+  /**
+   * Register dynamic per-year tax reducers for the given country codes.
+   *
+   * Instead of fixing a module at setup time, each registered reducer reads
+   * state.currentPeriods[cc] at runtime to determine which year's module to
+   * delegate to.  This supports multi-year simulations where tax rules change
+   * year over year.
+   *
+   * state.currentPeriods[cc] must be set before any events are processed —
+   * TaxService.registerWith() injects it automatically.
+   *
+   * @param {import('../../simulation-framework/reducers.js').ReducerPipeline} pipeline
+   * @param {string[]} countryCodes  e.g. ['US'] or ['AU', 'US']
+   */
+  registerDynamic(pipeline, countryCodes) {
+    for (const cc of countryCodes) {
+      const allModules = Object.keys(this._modules)
+        .filter(k => k.startsWith(cc + '_'))
+        .map(k => this._modules[k]);
+
+      if (allModules.length === 0) {
+        throw new Error(`[TaxEngine] No tax modules registered for country: ${cc}`);
+      }
+
+      // Collect the union of all action types across every registered year for this country.
+      const actionTypes = new Set();
+      for (const module of allModules) {
+        for (const [type] of module.getReducerFns()) {
+          actionTypes.add(type);
+        }
+      }
+
+      for (const actionType of actionTypes) {
+        const engine = this;
+        pipeline.register(actionType, (state, action, date) => {
+          const period = state.currentPeriods?.[cc];
+          if (!period) {
+            throw new Error(
+              `[TaxEngine] state.currentPeriods.${cc} is not set for action '${actionType}'. ` +
+              `Ensure TaxService.registerWith() is called before running the simulation.`
+            );
+          }
+          const taxYear = new Date(period.startMs).getUTCFullYear();
+          const module  = engine.get(cc, taxYear);
+          const fn      = module.getReducerFns().get(actionType);
+          // A future year's module may not handle every action type from an older module.
+          if (!fn) return state;
+          return fn(state, action, date);
+        }, PRIORITY.TAX_CALC, `dynamic:${cc}:${actionType}`);
+      }
+    }
   }
 }

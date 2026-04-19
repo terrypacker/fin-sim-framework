@@ -11,7 +11,7 @@
 import { TaxEngine }             from './tax/tax-engine.js';
 import { AccountRulesEngine }    from './account-rules/account-rules-engine.js';
 import { AccountService }        from './account.js';
-import { MetricReducer, NoOpReducer } from '../simulation-framework/reducers.js';
+import { MetricReducer, NoOpReducer, PRIORITY } from '../simulation-framework/reducers.js';
 
 import { UsTaxModule2025 }       from './tax/us/us-tax-module-2025.js';
 import { UsTaxModule2026 }       from './tax/us/us-tax-module-2026.js';
@@ -27,20 +27,29 @@ import { AuAccountModule2026 }   from './account-rules/au/au-account-module-2026
  * TaxService — coordinates TaxEngine and AccountRulesEngine.
  *
  * Pre-registers all known country+year modules and exposes a single
- * registerWith() entry point that wires the correct account and tax
- * rules into a Simulation instance for the requested countries and year.
+ * registerWith() entry point that wires account and tax rules into a
+ * Simulation instance for the requested countries.
+ *
+ * Tax module selection is now dynamic: rather than fixing a single year at
+ * setup time, TaxEngine.registerDynamic() registers per-action dispatchers
+ * that read state.currentPeriods[cc] at runtime to resolve the correct year
+ * module.  TaxService injects state.currentPeriods on startup and schedules
+ * PERIOD_ADVANCE events at each year boundary so the state stays current as
+ * the simulation advances through multiple tax years.
+ *
+ * Account module selection remains static (using the year that contains the
+ * simulation start date) because CASH_FLOW mechanics are currently identical
+ * across years.  Full dynamic dispatch for account modules is a follow-on
+ * when contribution limits or age gates diverge between years.
  *
  * Usage:
+ *   const ps = new PeriodService();
+ *   applyTo(ps, buildUsCalendarYear(2025));
+ *   applyTo(ps, buildUsCalendarYear(2026));
+ *
  *   const taxService = new TaxService();
- *   const svc = taxService.registerWith(sim, ['US', 'AU'], 2026);
+ *   const svc = taxService.registerWith(sim, ['US'], ps);
  *   // svc is the shared AccountService instance
- *
- * Registration order per country:
- *   1. AccountModule.registerWith(sim, svc)   — handlers + CASH_FLOW reducers
- *   2. TaxModule.registerReducers(sim.reducers) — TAX_CALC reducers
- *
- * The MetricReducer and NoOpReducer for RECORD_METRIC / RECORD_BALANCE are
- * also registered here so callers do not need to wire them separately.
  */
 export class TaxService {
   constructor() {
@@ -62,30 +71,90 @@ export class TaxService {
   }
 
   /**
-   * Wire up all reducers and handlers for the given country codes and year.
+   * Wire up all reducers and handlers for the given country codes.
    *
-   * For each country code:
-   *   - AccountModule.registerWith(sim, svc) registers event handlers and
-   *     CASH_FLOW-priority account mechanics reducers (with next:[] tax chains)
-   *   - TaxModule.registerReducers(sim.reducers) registers TAX_CALC-priority
-   *     tax classification reducers
+   * What this does per country:
+   *   1. Finds the annual Period in periodService that contains the simulation
+   *      start date and records it in state.currentPeriods[cc].
+   *   2. Schedules PERIOD_ADVANCE events at every future year boundary found
+   *      in periodService so state.currentPeriods[cc] stays current.
+   *   3. Registers the AccountModule for the start year (CASH_FLOW handlers +
+   *      reducers — static for now, same mechanics across years).
+   *   4. Calls TaxEngine.registerDynamic() which registers one runtime
+   *      dispatcher per action type; each dispatcher reads
+   *      state.currentPeriods[cc] to pick the correct year's module.
    *
    * Also registers MetricReducer (RECORD_METRIC) and NoOpReducer (RECORD_BALANCE).
    *
+   * The periodService must contain at least one annual period (YEAR_US for US,
+   * YEAR_AU for AU) that spans the simulation start date.  Populate it with
+   * buildUsCalendarYear() / buildAuFiscalYear() from period-builder.js.
+   *
    * @param {import('../simulation-framework/simulation.js').Simulation} sim
    * @param {string[]} countryCodes  e.g. ['US'] or ['AU'] or ['US', 'AU']
-   * @param {number}   year          e.g. 2026
+   * @param {import('./period/period-service.js').PeriodService} periodService
    * @returns {AccountService}  shared AccountService instance for use in tests / scenarios
    */
-  registerWith(sim, countryCodes, year) {
-    for (const cc of countryCodes) {
-      const accountModule = this._accountRulesEngine.get(cc, year);
-      accountModule.registerWith(sim, this._accountService);
+  registerWith(sim, countryCodes, periodService) {
+    const startTs = sim.currentDate.getTime();
 
-      const taxModule = this._taxEngine.get(cc, year);
-      taxModule.registerReducers(sim.reducers);
+    // ── Step 1: resolve the starting period for each country ──────────────────
+    const currentPeriods = {};
+
+    for (const cc of countryCodes) {
+      const periodType = _periodTypeFor(cc);
+      const current = periodService.getAllPeriods()
+        .find(p => p.type === periodType && p.startMs <= startTs && startTs < p.endMs);
+
+      if (!current) {
+        throw new Error(
+          `TaxService.registerWith: no '${periodType}' period found for start date ` +
+          `${sim.currentDate.toISOString()} in PeriodService. ` +
+          `Add the appropriate year via buildUsCalendarYear() or buildAuFiscalYear().`
+        );
+      }
+      currentPeriods[cc] = current;
     }
 
+    // Inject currentPeriods into simulation state before any events run.
+    sim.state = { ...sim.state, currentPeriods };
+
+    // ── Step 2: register PERIOD_ADVANCE reducer ────────────────────────────────
+    sim.reducers.register('PERIOD_ADVANCE', (state, action) => ({
+      ...state,
+      currentPeriods: { ...state.currentPeriods, [action.cc]: action.period },
+    }), PRIORITY.PRE_PROCESS, 'Period Advance');
+
+    // ── Step 3: schedule PERIOD_ADVANCE events for future year boundaries ──────
+    for (const cc of countryCodes) {
+      const periodType = _periodTypeFor(cc);
+
+      for (const period of periodService.getAllPeriods()) {
+        if (period.type === periodType && period.startMs > startTs) {
+          // Extract UTC date parts and build a local-midnight Date to avoid
+          // timezone skew when normalizeDate() strips the time component.
+          const d = new Date(period.startMs);
+          const schedDate = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+          sim.schedule({
+            date: schedDate,
+            type: 'PERIOD_ADVANCE',
+            data: { cc, period },
+          });
+        }
+      }
+    }
+
+    // ── Step 4: register account modules (static, start-year mechanics) ────────
+    for (const cc of countryCodes) {
+      const startYear     = new Date(currentPeriods[cc].startMs).getUTCFullYear();
+      const accountModule = this._accountRulesEngine.get(cc, startYear);
+      accountModule.registerWith(sim, this._accountService);
+    }
+
+    // ── Step 5: register dynamic tax reducers ──────────────────────────────────
+    this._taxEngine.registerDynamic(sim.reducers, countryCodes);
+
+    // ── Step 6: register metric/balance reducers ───────────────────────────────
     new MetricReducer().registerWith(sim.reducers, 'RECORD_METRIC');
     new NoOpReducer('Balance Snapshot').registerWith(sim.reducers, 'RECORD_BALANCE');
 
@@ -97,4 +166,17 @@ export class TaxService {
 
   /** @returns {AccountRulesEngine} */
   get accountRulesEngine() { return this._accountRulesEngine; }
+}
+
+// ---------------------------------------------------------------------------
+// Private helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps a country code to the PeriodType used for its annual tax year.
+ * @param {string} cc
+ * @returns {string}
+ */
+function _periodTypeFor(cc) {
+  return cc === 'AU' ? 'YEAR_AU' : 'YEAR_US';
 }

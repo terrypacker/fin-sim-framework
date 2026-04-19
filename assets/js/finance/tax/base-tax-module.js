@@ -8,12 +8,17 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { PRIORITY } from '../../simulation-framework/reducers.js';
+
 /**
  * BaseTaxModule — abstract base for country+year tax classification modules.
  *
- * Subclasses register Stage-2 (TAX_CALC priority) reducers via registerReducers().
- * These reducers consume _TAX child actions emitted by Stage-1 account reducers
- * and update YTD tax tracking fields (usOrdinaryIncomeYTD, auCapitalGainsYTD, etc.)
+ * Subclasses implement getReducerFns() returning a Map of actionType → reducer
+ * function.  registerReducers() is a default implementation that iterates that
+ * map and registers each entry — used for static (single-year) wiring.
+ *
+ * TaxEngine.registerDynamic() uses getReducerFns() directly to build per-year
+ * runtime dispatchers, which is the preferred path for multi-year simulations.
  */
 export class BaseTaxModule {
   /** @returns {string}  e.g. 'US' or 'AU' */
@@ -27,11 +32,28 @@ export class BaseTaxModule {
   }
 
   /**
+   * Returns a Map of actionType → reducer function for this country+year module.
+   * Each function has signature: (state, action, date) => newState
+   *
+   * This is the primary extension point for subclasses.
+   *
+   * @returns {Map<string, function(object, object, Date): object>}
+   */
+  getReducerFns() {
+    throw new Error(`${this.constructor.name}: getReducerFns() not implemented`);
+  }
+
+  /**
    * Register all Stage-2 (TAX_CALC priority) reducers with the simulation's
-   * ReducerPipeline.  Called by TaxService during sim wiring.
+   * ReducerPipeline.  Default implementation delegates to getReducerFns().
+   * Used for static single-year wiring; prefer TaxEngine.registerDynamic()
+   * for multi-year simulations.
+   *
    * @param {import('../../simulation-framework/reducers.js').ReducerPipeline} pipeline
    */
   registerReducers(pipeline) {
-    throw new Error(`${this.constructor.name}: registerReducers not implemented`);
+    for (const [type, fn] of this.getReducerFns()) {
+      pipeline.register(type, fn, PRIORITY.TAX_CALC, `${type}@${this.countryCode}${this.year}`);
+    }
   }
 }

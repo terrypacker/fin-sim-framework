@@ -210,7 +210,7 @@ export class Simulation {
       for (const { fn, name } of reducers) {
         const prevState = structuredClone(this.state);
 
-        const result = fn(this.state, action);
+        const result = fn(this.state, action, this.currentDate);
 
         // Support multiple reducer return styles
         if (!result) continue;

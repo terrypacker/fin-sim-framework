@@ -25,6 +25,16 @@ import assert   from 'node:assert/strict';
 import { Account } from '../assets/js/finance/account.js';
 import { Simulation } from '../assets/js/simulation-framework/simulation.js';
 import { TaxService } from '../assets/js/finance/tax-service.js';
+import { PeriodService } from '../assets/js/finance/period/period-service.js';
+import { buildUsCalendarYear, buildAuFiscalYear, applyTo } from '../assets/js/finance/period/period-builder.js';
+
+// Jan 1 2026: US calendar year 2026, AU fiscal year starting Jul 1 2025 (FY2025-26).
+function buildMixedPeriodService() {
+  const ps = new PeriodService();
+  applyTo(ps, buildUsCalendarYear(2026));
+  applyTo(ps, buildAuFiscalYear(2025));
+  return ps;
+}
 
 function buildRealPropertySim({
   initialChecking  = 5000,
@@ -42,7 +52,7 @@ function buildRealPropertySim({
 
   const sim = new Simulation(new Date(2026, 0, 1), { initialState });
   // EVT-33 (AU house) + EVT-34 (US house) — needs both country modules
-  const svc = new TaxService().registerWith(sim, ['AU', 'US'], 2026);
+  const svc = new TaxService().registerWith(sim, ['AU', 'US'], buildMixedPeriodService());
 
   return { sim, svc };
 }

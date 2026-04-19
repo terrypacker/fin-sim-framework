@@ -29,6 +29,14 @@ import assert   from 'node:assert/strict';
 import { Account } from '../assets/js/finance/account.js';
 import { Simulation } from '../assets/js/simulation-framework/simulation.js';
 import { TaxService } from '../assets/js/finance/tax-service.js';
+import { PeriodService } from '../assets/js/finance/period/period-service.js';
+import { buildUsCalendarYear, applyTo } from '../assets/js/finance/period/period-builder.js';
+
+function buildUsPeriodService(year) {
+  const ps = new PeriodService();
+  applyTo(ps, buildUsCalendarYear(year));
+  return ps;
+}
 
 function buildBrokerageSim({
   initialChecking        = 20000,
@@ -57,7 +65,7 @@ function buildBrokerageSim({
   };
 
   const sim = new Simulation(new Date(2026, 0, 1), { initialState });
-  const svc = new TaxService().registerWith(sim, ['US'], 2026);
+  const svc = new TaxService().registerWith(sim, ['US'], buildUsPeriodService(2026));
 
   return { sim, svc };
 }
