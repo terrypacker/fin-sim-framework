@@ -41,7 +41,7 @@ export class BaseApp {
     this.playing = false;
     this.lastSliderValue = 0;
     this.activeTab = 'timeline';
-
+    this.activeSidebarTab = 'settings';
   }
 
   buildScenario() {
@@ -216,10 +216,16 @@ export class BaseApp {
   }
 
   // ─── Tab switching ────────────────────────────────────────────────────────────
-  switchTab(tab) {
-    this.activeTab = tab;
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('hidden', p.id !== tab + 'Tab'));
+  switchTab(tab, sidebar) {
+    if(sidebar) {
+      this.activeSidebarTab = tab;
+      document.querySelectorAll('.sidebar-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      document.querySelectorAll('.sidebar-tab-panel').forEach(p => p.classList.toggle('hidden', p.id !== tab + 'Tab'));
+    }else {
+      this.activeTab = tab;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('hidden', p.id !== tab + 'Tab'));
+    }
   }
 
   // Node Detail
@@ -335,22 +341,34 @@ export class BaseApp {
       .replace(/\b\w/g, c => c.toUpperCase())
       .trim();
 
-    const renderVal = v => {
+    const renderVal = (v) => {
+      if (typeof v === 'number') return fmt(v);
+      return String(v);
+    };
+
+    const renderObj = (v) => {
       if (v == null) return '—';
       if (Array.isArray(v)) {
         if (v.length === 0) return '—';
         if (v.every(x => typeof x === 'number'))
           return fmt(v.reduce((a, b) => a + b, 0));
-        return v.map(x => (typeof x === 'object' ? JSON.stringify(x) : String(x))).join(', ');
+        return v.map(x => (typeof x === 'object' ? renderObj(x) : String(x))).join(', ');
       }
-      if (typeof v === 'number') return fmt(v);
+      if(typeof v === 'object') {
+        if (v instanceof Date) return v.toDateString();
+        let result = '<br>';
+        for(let f in v) {
+          result += f + ': ' + renderObj(v[f]) + '<br>';
+        }
+        return result;
+      }
       return String(v);
-    };
+    }
 
     const statRow = (k, v, indent) =>
       `<div class="stat-row"${indent ? ' style="padding-left:12px"' : ''}>` +
       `<span class="stat-label">${toLabel(k)}</span>` +
-      `<span class="stat-value">${renderVal(v)}</span></div>`;
+      `<span class="stat-value">${typeof v === 'object' ? renderObj(v) : renderVal(v)}</span></div>`;
 
     const renderSection = obj => {
       let html = '';
@@ -414,6 +432,10 @@ export class BaseApp {
     // Main tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
+    });
+
+    document.querySelectorAll('.sidebar-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => this.switchTab(btn.dataset.tab, true));
     });
 
     // Time controls
