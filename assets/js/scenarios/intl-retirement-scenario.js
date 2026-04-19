@@ -145,6 +145,7 @@ export class IntlRetirementScenario extends BaseScenario {
         'rothAccount',
         'auSavingsAccount',
         'auStockAccount',
+        'superAccount'
       ],
 
       // YTD tax accumulators
