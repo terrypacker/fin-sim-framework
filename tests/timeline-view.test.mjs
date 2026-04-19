@@ -17,7 +17,7 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { TimelineView } from '../assets/js/visualization/timeline-view.js';
+import { TimelineView } from '../src/visualization/timeline-view.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

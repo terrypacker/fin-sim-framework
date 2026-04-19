@@ -17,7 +17,7 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Person, PersonService } from '../assets/js/finance/person.js';
+import { Person, PersonService } from '../src/finance/person.js';
 
 const svc = new PersonService();
 

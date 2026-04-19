@@ -22,11 +22,11 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Account } from '../assets/js/finance/account.js';
-import { Simulation } from '../assets/js/simulation-framework/simulation.js';
-import { TaxService } from '../assets/js/finance/tax-service.js';
-import { PeriodService } from '../assets/js/finance/period/period-service.js';
-import { buildUsCalendarYear, buildAuFiscalYear, applyTo } from '../assets/js/finance/period/period-builder.js';
+import { Account } from '../src/finance/account.js';
+import { Simulation } from '../src/simulation-framework/simulation.js';
+import { TaxService } from '../src/finance/tax-service.js';
+import { PeriodService } from '../src/finance/period/period-service.js';
+import { buildUsCalendarYear, buildAuFiscalYear, applyTo } from '../src/finance/period/period-builder.js';
 
 // Jan 1 2026: US calendar year 2026, AU fiscal year starting Jul 1 2025 (FY2025-26).
 function buildMixedPeriodService() {

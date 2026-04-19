@@ -25,15 +25,14 @@
  * This is a basic example of how to use the framework.
  */
 
-import { ProfitLossScenario, DEFAULT_EVENT_SERIES } from "../scenarios/profit-loss-scenario.js";
-import { BaseApp } from "./base-app.js";
+import { ProfitLossScenario, DEFAULT_EVENT_SERIES } from "./scenarios/profit-loss-scenario.js";
 
 // Editable event series list (copy of defaults so user can toggle)
 let eventSeries  = DEFAULT_EVENT_SERIES.map(s => ({ ...s }));
 // One-off custom events added via form
 let customEvents = [];
 
-const app = new BaseApp({
+const app = new FinSimLib.Misc.BaseApp({
   newScenario: (params) =>  new ProfitLossScenario({ params, eventSeries, customEvents }),
   readParams: () => readParams(),
 });

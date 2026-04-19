@@ -17,7 +17,7 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { MinHeap } from '../assets/js/simulation-framework/min-heap.js';
+import { MinHeap } from '../src/simulation-framework/min-heap.js';
 
 // Numeric comparator — the same style used by Simulation's event queue
 const numCmp = (a, b) => a - b;

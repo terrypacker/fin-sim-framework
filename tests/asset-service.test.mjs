@@ -17,8 +17,8 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Asset }        from '../assets/js/finance/asset.js';
-import { AssetService } from '../assets/js/finance/asset-service.js';
+import { Asset }        from '../src/finance/asset.js';
+import { AssetService } from '../src/finance/asset-service.js';
 
 const svc = new AssetService();
 

@@ -306,6 +306,18 @@ Each app extends `BaseApp` (`apps/base-app.js`), which provides:
 
 ---
 
+## Building ESM
+
+```text
+npm install --save-dev rollup @rollup/plugin-terser
+npm install --save-dev @babel/parser
+```
+
+```text
+npm run build
+```
+---
+
 ## Testing
 
 Tests are in `tests/` using the Node.js built-in `node:test` runner. No npm or build step required.

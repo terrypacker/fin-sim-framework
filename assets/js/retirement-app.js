@@ -8,9 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { $, fmt } from '../visualization/ui-utils.js'
-import { RetirementDrawdownScenario, DEFAULT_EVENT_SERIES } from '../scenarios/retirement-drawdown-scenario.js';
-import { BaseApp } from './base-app.js';
+import { RetirementDrawdownScenario, DEFAULT_EVENT_SERIES } from './scenarios/retirement-drawdown-scenario.js';
+const $ = FinSimLib.Visualization.$;
 
 // ── Chart series: three account lines ────────────────────────────────────────
 const CHART_SERIES = [
@@ -35,7 +34,7 @@ function chartSnapshot(chartView, date, state) {
 let eventSeries  = DEFAULT_EVENT_SERIES.map(s => ({ ...s }));
 let customEvents = [];
 
-const app = new BaseApp({
+const app = new FinSimLib.Misc.BaseApp({
   newScenario:     (params) => new RetirementDrawdownScenario({ params, eventSeries, customEvents }),
   readParams:      () => readParams(),
   onChartSnapshot: chartSnapshot,

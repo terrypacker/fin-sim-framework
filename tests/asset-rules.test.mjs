@@ -32,14 +32,14 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Account, AccountService }  from '../assets/js/finance/account.js';
-import { InvestmentAccount }        from '../assets/js/finance/investment-account.js';
-import { Asset }                    from '../assets/js/finance/asset.js';
-import { AssetService }             from '../assets/js/finance/asset-service.js';
-import { Person }                   from '../assets/js/finance/person.js';
-import { Simulation }               from '../assets/js/simulation-framework/simulation.js';
-import { PRIORITY, MetricReducer, NoOpReducer } from '../assets/js/simulation-framework/reducers.js';
-import { RecordBalanceAction } from '../assets/js/simulation-framework/actions.js';
+import { Account, AccountService }  from '../src/finance/account.js';
+import { InvestmentAccount }        from '../src/finance/investment-account.js';
+import { Asset }                    from '../src/finance/asset.js';
+import { AssetService }             from '../src/finance/asset-service.js';
+import { Person }                   from '../src/finance/person.js';
+import { Simulation }               from '../src/simulation-framework/simulation.js';
+import { PRIORITY, MetricReducer, NoOpReducer } from '../src/simulation-framework/reducers.js';
+import { RecordBalanceAction } from '../src/simulation-framework/actions.js';
 
 const svc     = new AccountService();
 const assetSvc = new AssetService();

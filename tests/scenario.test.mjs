@@ -26,9 +26,9 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { ScenarioRunner } from '../assets/js/simulation-framework/scenario.js';
-import { Simulation }     from '../assets/js/simulation-framework/simulation.js';
-import { DateUtils }      from '../assets/js/simulation-framework/date-utils.js';
+import { ScenarioRunner } from '../src/simulation-framework/scenario.js';
+import { Simulation }     from '../src/simulation-framework/simulation.js';
+import { DateUtils }      from '../src/simulation-framework/date-utils.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

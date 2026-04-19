@@ -17,7 +17,7 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { BalanceChartView } from '../assets/js/visualization/balance-chart-view.js';
+import { BalanceChartView } from '../src/visualization/balance-chart-view.js';
 
 // ─── Stub requestAnimationFrame (not available in Node.js) ───────────────────
 global.requestAnimationFrame = () => {};

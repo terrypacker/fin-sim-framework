@@ -20,20 +20,24 @@
  *   - Stock dividends: cash payout or reinvestment toggle
  *   - CHANGE_RESIDENCY event closes the partial US year before the move
  */
-
-import { Account, AccountService }  from '../finance/account.js';
-import { InvestmentAccount }        from '../finance/investment-account.js';
-import { Person }                   from '../finance/person.js';
-import { Simulation }               from '../simulation-framework/simulation.js';
-import { PRIORITY, MetricReducer }  from '../simulation-framework/reducers.js';
-import { HandlerEntry }             from '../simulation-framework/handlers.js';
-import { RecordMetricAction, RecordBalanceAction } from '../simulation-framework/actions.js';
-import { BaseScenario }             from './base-scenario.js';
-import { EventSeries }              from './event-series.js';
-import { TaxService }               from '../finance/tax-service.js';
-import { TaxSettleService }         from '../finance/tax-settle-service.js';
-import { PeriodService }            from '../finance/period/period-service.js';
-import { buildUsCalendarYear, buildAuFiscalYear, applyTo } from '../finance/period/period-builder.js';
+const {
+  Account,
+  InvestmentAccount,
+  Person,
+  Simulation,
+  PRIORITY,
+  HandlerEntry,
+  RecordMetricAction,
+  RecordBalanceAction,
+  BaseScenario,
+  EventSeries,
+  TaxService,
+  TaxSettleService,
+  PeriodService,
+  buildUsCalendarYear,
+  buildAuFiscalYear,
+  applyTo
+} = FinSimLib;
 
 // ─── Default parameters ────────────────────────────────────────────────────────
 

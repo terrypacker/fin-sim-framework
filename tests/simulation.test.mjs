@@ -27,10 +27,10 @@ import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 import { Assert } from './helpers/assert.js';
 
-import { Account, AccountService } from '../assets/js/finance/account.js';
-import { Asset } from '../assets/js/finance/asset.js';
-import { Simulation } from '../assets/js/simulation-framework/simulation.js';
-import { PRIORITY } from '../assets/js/simulation-framework/reducers.js';
+import { Account, AccountService } from '../src/finance/account.js';
+import { Asset } from '../src/finance/asset.js';
+import { Simulation } from '../src/simulation-framework/simulation.js';
+import { PRIORITY } from '../src/simulation-framework/reducers.js';
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 //

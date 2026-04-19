@@ -8,9 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { $, fmt } from '../visualization/ui-utils.js'
-import { FinancialScenario, DEFAULT_EVENT_SERIES } from '../scenarios/financial-scenario.js';
-import { BaseApp } from "./base-app.js";
+import { FinancialScenario, DEFAULT_EVENT_SERIES } from './scenarios/financial-scenario.js';
+const $ = FinSimLib.Visualization.$;
 
 // ─── Action Detail Modal ──────────────────────────────────────────────────────
 function diffStates(prev, next) {
@@ -57,7 +56,7 @@ let eventSeries  = DEFAULT_EVENT_SERIES.map(s => ({ ...s }));
 // One-off custom events added via form
 let customEvents = [];
 
-const app = new BaseApp({
+const app = new FinSimLib.Misc.BaseApp({
     newScenario: (params) =>  new FinancialScenario({ params, eventSeries, customEvents }),
     readParams: () => readParams(),
     diffStates: (prev, next) => diffStates(prev, next)

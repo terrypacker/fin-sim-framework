@@ -17,7 +17,7 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { DateUtils } from '../assets/js/simulation-framework/date-utils.js';
+import { DateUtils } from '../src/simulation-framework/date-utils.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

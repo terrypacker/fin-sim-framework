@@ -17,7 +17,7 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Asset } from '../assets/js/finance/asset.js';
+import { Asset } from '../src/finance/asset.js';
 
 test('Asset: constructor assigns name, value, and costBasis', () => {
   const a = new Asset('AAPL', 15000, 10000);

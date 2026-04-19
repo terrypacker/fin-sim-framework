@@ -8,9 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { IntlRetirementScenario, DEFAULT_EVENT_SERIES } from '../scenarios/intl-retirement-scenario.js';
-import { $, fmt } from '../visualization/ui-utils.js'
-import { BaseApp } from './base-app.js';
+import { IntlRetirementScenario, DEFAULT_EVENT_SERIES } from './scenarios/intl-retirement-scenario.js';
+const { $, BaseApp } = FinSimLib;
 
 // ── Chart series ──────────────────────────────────────────────────────────────
 const CHART_SERIES = [

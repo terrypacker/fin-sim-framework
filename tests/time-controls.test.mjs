@@ -17,7 +17,7 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { TimeControls } from '../assets/js/visualization/time-controls.js';
+import { TimeControls } from '../src/visualization/time-controls.js';
 
 // ─── Minimal requestAnimationFrame shim ──────────────────────────────────────
 // Collect callbacks so tests can flush them synchronously.

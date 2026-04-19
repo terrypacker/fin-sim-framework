@@ -17,7 +17,7 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { InvestmentAccount } from '../assets/js/finance/investment-account.js';
+import { InvestmentAccount } from '../src/finance/investment-account.js';
 
 // ── Construction ──────────────────────────────────────────────────────────────
 

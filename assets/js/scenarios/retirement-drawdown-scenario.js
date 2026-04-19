@@ -8,13 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Account, AccountService }  from '../finance/account.js';
-import { Simulation }               from '../simulation-framework/simulation.js';
-import { PRIORITY, MetricReducer, NoOpReducer } from '../simulation-framework/reducers.js';
-import { HandlerEntry }             from '../simulation-framework/handlers.js';
-import { RecordMetricAction, RecordBalanceAction } from '../simulation-framework/actions.js';
-import { BaseScenario }             from './base-scenario.js';
-import { EventSeries }              from './event-series.js';
+import {Scenarios} from "../../../src/index.js";
 
 export const DEFAULT_PARAMS = {
   monthlyExpenses:        5000,
@@ -33,11 +27,11 @@ export const DEFAULT_PARAMS = {
 };
 
 export const DEFAULT_EVENT_SERIES = [
-  new EventSeries({ id: 'expenses',        label: 'Monthly Expenses',          type: 'MONTHLY_EXPENSES',         interval: 'monthly',  enabled: true,                color: '#F44336' }),
-  new EventSeries({ id: 'dividends',       label: 'Annual Stock Dividends',    type: 'ANNUAL_DIVIDENDS',         interval: 'annually', enabled: true, startOffset: 1, color: '#4CAF50' }),
-  new EventSeries({ id: 'bondInterest',    label: 'Annual Bond Interest',      type: 'ANNUAL_BOND_INTEREST',     interval: 'annually', enabled: true, startOffset: 1, color: '#2196F3' }),
-  new EventSeries({ id: 'checkingInterest',label: 'Annual Checking Interest',  type: 'ANNUAL_CHECKING_INTEREST', interval: 'annually', enabled: true, startOffset: 1, color: '#00BCD4' }),
-  new EventSeries({ id: 'tax',             label: 'Annual Tax Filing',         type: 'ANNUAL_TAX',               interval: 'annually', enabled: true, startOffset: 1, color: '#FF5722' }),
+  new FinSimLib.Scenarios.EventSeries({ id: 'expenses',        label: 'Monthly Expenses',          type: 'MONTHLY_EXPENSES',         interval: 'monthly',  enabled: true,                color: '#F44336' }),
+  new FinSimLib.Scenarios.EventSeries({ id: 'dividends',       label: 'Annual Stock Dividends',    type: 'ANNUAL_DIVIDENDS',         interval: 'annually', enabled: true, startOffset: 1, color: '#4CAF50' }),
+  new FinSimLib.Scenarios.EventSeries({ id: 'bondInterest',    label: 'Annual Bond Interest',      type: 'ANNUAL_BOND_INTEREST',     interval: 'annually', enabled: true, startOffset: 1, color: '#2196F3' }),
+  new FinSimLib.Scenarios.EventSeries({ id: 'checkingInterest',label: 'Annual Checking Interest',  type: 'ANNUAL_CHECKING_INTEREST', interval: 'annually', enabled: true, startOffset: 1, color: '#00BCD4' }),
+  new FinSimLib.Scenarios.EventSeries({ id: 'tax',             label: 'Annual Tax Filing',         type: 'ANNUAL_TAX',               interval: 'annually', enabled: true, startOffset: 1, color: '#FF5722' }),
 ];
 
 export class RetirementDrawdownScenario extends BaseScenario {
@@ -50,7 +44,7 @@ export class RetirementDrawdownScenario extends BaseScenario {
   constructor({ params = {}, eventSeries = DEFAULT_EVENT_SERIES, customEvents = [] } = {}) {
     super({ eventSeries, customEvents });
     this.params   = { ...DEFAULT_PARAMS, ...params };
-    this.accountService = new AccountService();
+    this.accountService = new FinSimLib.Finance.AccountService();
     this.simStart = new Date(2026, 0, 1);
     this.simEnd   = new Date(2041, 0, 1);
     this._buildSim();
@@ -63,8 +57,8 @@ export class RetirementDrawdownScenario extends BaseScenario {
 
     const initialState = {
       metrics: {},
-      checkingAccount:   new Account(p.initialChecking),
-      retirementAccount: new Account(p.initialRetirement),
+      checkingAccount:   new FinSimLib.Finance.Account(p.initialChecking),
+      retirementAccount: new FinSimLib.Finance.Account(p.initialRetirement),
       brokerageAccount: {
         stocks: [
           { name: 'US Total Market ETF', value: p.initialStocksValue * 0.6, costBasis: p.initialStocksCostBasis * 0.6, purchaseDate: new Date(2022, 0, 1), dividendRate: p.stockDividendRate },
@@ -79,7 +73,7 @@ export class RetirementDrawdownScenario extends BaseScenario {
       ordinaryIncomeYTD: 0,
     };
 
-    this.sim = new Simulation(this.simStart, { initialState });
+    this.sim = new FinSimLib.Core.Simulation(this.simStart, { initialState });
     this._registerReducers(svc, p, retirementAccessDate);
     this._registerHandlers(p);
     this._scheduleEvents();
@@ -95,7 +89,7 @@ export class RetirementDrawdownScenario extends BaseScenario {
       const debit = Math.min(action.amount, Math.max(0, state.checkingAccount.balance));
       if (debit > 0) svc.transaction(state.checkingAccount, -debit, null);
       return { ...state };
-    }, PRIORITY.CASH_FLOW, 'Expense Debit');
+    }, FinSimLib.Core.PRIORITY.CASH_FLOW, 'Expense Debit');
 
     // ── Replenishment decision ───────────────────────────────────────────────────
     // Priority order: retirement (if accessible) → bonds → stocks.
@@ -126,7 +120,7 @@ export class RetirementDrawdownScenario extends BaseScenario {
 
       // No funds available — checking remains below minimum
       return { ...state };
-    }, PRIORITY.PRE_PROCESS, 'Replenish Checking');
+    }, FinSimLib.Core.PRIORITY.PRE_PROCESS, 'Replenish Checking');
 
     // ── Retirement withdrawal ────────────────────────────────────────────────────
     this.sim.reducers.register('RETIREMENT_WITHDRAWAL', (state, action) => {
@@ -145,7 +139,7 @@ export class RetirementDrawdownScenario extends BaseScenario {
         }
       }
       return newState;
-    }, PRIORITY.CASH_FLOW, 'Retirement Withdrawal');
+    }, FinSimLib.Core.PRIORITY.CASH_FLOW, 'Retirement Withdrawal');
 
     // ── Sell bond (partial if one position covers the deficit) ──────────────────
     this.sim.reducers.register('SELL_BOND', (state, action) => {
@@ -180,7 +174,7 @@ export class RetirementDrawdownScenario extends BaseScenario {
         if (state.brokerageAccount.stocks.length > 0)  return { state: newState, next: [{ type: 'SELL_STOCK', deficit: remaining }] };
       }
       return newState;
-    }, PRIORITY.POSITION_UPDATE, 'Sell Bond');
+    }, FinSimLib.Core.PRIORITY.POSITION_UPDATE, 'Sell Bond');
 
     // ── Sell stock (partial if one position covers the deficit) ─────────────────
     this.sim.reducers.register('SELL_STOCK', (state, action) => {
@@ -212,23 +206,23 @@ export class RetirementDrawdownScenario extends BaseScenario {
         return { state: newState, next: [{ type: 'SELL_STOCK', deficit: remaining }] };
       }
       return newState;
-    }, PRIORITY.POSITION_UPDATE, 'Sell Stock');
+    }, FinSimLib.Core.PRIORITY.POSITION_UPDATE, 'Sell Stock');
 
     // ── Income credits (all flow to checking as ordinary income) ────────────────
     this.sim.reducers.register('DIVIDEND_CREDIT', (state, action) => {
       svc.transaction(state.checkingAccount, action.amount, null);
       return { ...state, ordinaryIncomeYTD: state.ordinaryIncomeYTD + action.amount };
-    }, PRIORITY.CASH_FLOW, 'Dividend Credit');
+    }, FinSimLib.Core.PRIORITY.CASH_FLOW, 'Dividend Credit');
 
     this.sim.reducers.register('BOND_INTEREST_CREDIT', (state, action) => {
       svc.transaction(state.checkingAccount, action.amount, null);
       return { ...state, ordinaryIncomeYTD: state.ordinaryIncomeYTD + action.amount };
-    }, PRIORITY.CASH_FLOW, 'Bond Interest Credit');
+    }, FinSimLib.Core.PRIORITY.CASH_FLOW, 'Bond Interest Credit');
 
     this.sim.reducers.register('CHECKING_INTEREST_CREDIT', (state, action) => {
       svc.transaction(state.checkingAccount, action.amount, null);
       return { ...state, ordinaryIncomeYTD: state.ordinaryIncomeYTD + action.amount };
-    }, PRIORITY.CASH_FLOW, 'Checking Interest Credit');
+    }, FinSimLib.Core.PRIORITY.CASH_FLOW, 'Checking Interest Credit');
 
     // ── Annual tax payments ──────────────────────────────────────────────────────
     // Capped at available balance in case all funding sources are exhausted.
@@ -241,7 +235,7 @@ export class RetirementDrawdownScenario extends BaseScenario {
         capitalGainsYTD: 0,
         metrics: { ...state.metrics, capital_gains_tax: [...list, action.amount] }
       };
-    }, PRIORITY.TAX_APPLY, 'Capital Gains Tax');
+    }, FinSimLib.Core.PRIORITY.TAX_APPLY, 'Capital Gains Tax');
 
     this.sim.reducers.register('INCOME_TAX', (state, action) => {
       const debit = Math.min(action.amount, Math.max(0, state.checkingAccount.balance));
@@ -255,8 +249,8 @@ export class RetirementDrawdownScenario extends BaseScenario {
     }, PRIORITY.TAX_APPLY, 'Income Tax');
 
     // ── Generic metric + balance marker ─────────────────────────────────────────
-    new MetricReducer().registerWith(this.sim.reducers, 'RECORD_METRIC');
-    new NoOpReducer('Balance Snapshot').registerWith(this.sim.reducers, 'RECORD_BALANCE');
+    new FinSimLib.Core.MetricReducer().registerWith(this.sim.reducers, 'RECORD_METRIC');
+    new FinSimLib.Core.NoOpReducer('Balance Snapshot').registerWith(this.sim.reducers, 'RECORD_BALANCE');
   }
 
   _registerHandlers(p) {
@@ -266,7 +260,7 @@ export class RetirementDrawdownScenario extends BaseScenario {
     // action queue uses DFS (children unshifted before siblings), the full
     // replenishment chain completes before EXPENSE_DEBIT runs, guaranteeing
     // checking never drops below checkingMinBalance due to a monthly debit.
-    this.sim.register('MONTHLY_EXPENSES', new HandlerEntry(({ data, date, state }) => {
+    this.sim.register('MONTHLY_EXPENSES', new FinSimLib.Core.HandlerEntry(({ data, date, state }) => {
       const amount          = data?.amount ?? p.monthlyExpenses;
       const postDebitBal    = state.checkingAccount.balance - amount;
       const deficit         = p.checkingMinBalance - postDebitBal;
@@ -276,23 +270,23 @@ export class RetirementDrawdownScenario extends BaseScenario {
       }
       actions.push(
         { type: 'EXPENSE_DEBIT', amount },
-        new RecordMetricAction('monthly_expenses', amount),
-        new RecordBalanceAction()
+        new FinSimLib.Core.RecordMetricAction('monthly_expenses', amount),
+        new FinSimLib.Core.RecordBalanceAction()
       );
       return actions;
     }, 'Monthly Expenses'));
 
     // Annual dividends on stock holdings (ordinary income)
-    this.sim.register('ANNUAL_DIVIDENDS', new HandlerEntry(({ state }) => {
+    this.sim.register('ANNUAL_DIVIDENDS', new FinSimLib.Core.HandlerEntry(({ state }) => {
       const stocks      = state.brokerageAccount.stocks;
       const totalValue  = stocks.reduce((sum, s) => sum + s.value, 0);
       const rate        = stocks.length > 0 ? stocks[0].dividendRate : p.stockDividendRate;
       const amount      = +(totalValue * rate).toFixed(2);
-      if (amount <= 0) return [new RecordBalanceAction()];
+      if (amount <= 0) return [new FinSimLib.Core.RecordBalanceAction()];
       return [
         { type: 'DIVIDEND_CREDIT', amount },
-        new RecordMetricAction('dividends', amount),
-        new RecordBalanceAction()
+        new FinSimLib.Core.RecordMetricAction('dividends', amount),
+        new FinSimLib.Core.RecordBalanceAction()
       ];
     }, 'Annual Dividends'));
 
@@ -302,25 +296,25 @@ export class RetirementDrawdownScenario extends BaseScenario {
       if (amount <= 0) return [new RecordBalanceAction()];
       return [
         { type: 'BOND_INTEREST_CREDIT', amount },
-        new RecordMetricAction('bond_interest', amount),
-        new RecordBalanceAction()
+        new FinSimLib.Core.RecordMetricAction('bond_interest', amount),
+        new FinSimLib.Core.RecordBalanceAction()
       ];
     }, 'Annual Bond Interest'));
 
     // Annual checking interest (ordinary income)
-    this.sim.register('ANNUAL_CHECKING_INTEREST', new HandlerEntry(({ state }) => {
+    this.sim.register('ANNUAL_CHECKING_INTEREST', new FinSimLib.Core.HandlerEntry(({ state }) => {
       const amount = +(state.checkingAccount.balance * p.checkingInterestRate).toFixed(2);
-      if (amount <= 0) return [new RecordBalanceAction()];
+      if (amount <= 0) return [new FinSimLib.Core.RecordBalanceAction()];
       return [
         { type: 'CHECKING_INTEREST_CREDIT', amount },
-        new RecordMetricAction('checking_interest', amount),
-        new RecordBalanceAction()
+        new FinSimLib.Core.RecordMetricAction('checking_interest', amount),
+        new FinSimLib.Core.RecordBalanceAction()
       ];
     }, 'Annual Checking Interest'));
 
     // Annual tax — pre-checks whether the combined tax bill would overdraft checking.
     // If so, replenishment runs first (same DFS guarantee as monthly expenses).
-    this.sim.register('ANNUAL_TAX', new HandlerEntry(({ state, date }) => {
+    this.sim.register('ANNUAL_TAX', new FinSimLib.Core.HandlerEntry(({ state, date }) => {
       const cgTax      = +(state.capitalGainsYTD  * p.capitalGainsTaxRate).toFixed(2);
       const incomeTax  = +(state.ordinaryIncomeYTD * p.incomeTaxRate).toFixed(2);
       const totalTax   = cgTax + incomeTax;
@@ -337,9 +331,9 @@ export class RetirementDrawdownScenario extends BaseScenario {
       if (cgTax > 0)     actions.push({ type: 'CAPITAL_GAINS_TAX', amount: cgTax });
       if (incomeTax > 0) actions.push({ type: 'INCOME_TAX',        amount: incomeTax });
       actions.push(
-        new RecordMetricAction('capital_gains_tax_annual', cgTax),
-        new RecordMetricAction('income_tax_annual', incomeTax),
-        new RecordBalanceAction()
+        new FinSimLib.Core.RecordMetricAction('capital_gains_tax_annual', cgTax),
+        new FinSimLib.Core.RecordMetricAction('income_tax_annual', incomeTax),
+        new FinSimLib.Core.RecordBalanceAction()
       );
       return actions;
     }, 'Annual Tax'));

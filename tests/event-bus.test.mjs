@@ -17,7 +17,7 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { EventBus } from '../assets/js/simulation-framework/event-bus.js';
+import { EventBus } from '../src/simulation-framework/event-bus.js';
 
 // ─── Subscribe & publish ──────────────────────────────────────────────────────
 

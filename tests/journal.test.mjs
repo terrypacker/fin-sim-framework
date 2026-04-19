@@ -17,7 +17,7 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Journal, JournalEntry } from '../assets/js/simulation-framework/journal.js';
+import { Journal, JournalEntry } from '../src/simulation-framework/journal.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

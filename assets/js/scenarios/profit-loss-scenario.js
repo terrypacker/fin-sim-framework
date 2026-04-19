@@ -17,14 +17,7 @@
  * limitations under the License.
  */
 
-import { Account, AccountService } from '../finance/account.js';
-import { Asset }                   from '../finance/asset.js';
-import { Simulation }              from '../simulation-framework/simulation.js';
-import { PRIORITY, MetricReducer, NoOpReducer, AccountTransactionReducer } from '../simulation-framework/reducers.js';
-import { HandlerEntry }            from '../simulation-framework/handlers.js';
-import { AmountAction, RecordMetricAction, RecordBalanceAction } from '../simulation-framework/actions.js';
-import { BaseScenario }            from './base-scenario.js';
-import { EventSeries }             from './event-series.js';
+import {Core, Finance, Scenarios} from "../../../src/index.js";
 
 export const DEFAULT_PARAMS = {
   salaryMonthly:       8000,
@@ -38,18 +31,18 @@ export const DEFAULT_PARAMS = {
 
 // Built-in recurring event series definitions
 export const DEFAULT_EVENT_SERIES = [
-  new EventSeries({ id: 'sell_asset',   label: 'Quarterly Asset Sales', type: 'SELL_ASSET',   interval: 'quarterly', enabled: true,                color: '#FF9800' }),
-  new EventSeries({ id: 'quarterly_pl', label: 'Quarterly Profit/Loss', type: 'QUARTERLY_PL', interval: 'quarterly', enabled: true,                color: '#9C27B0' }),
-  new EventSeries({ id: 'annual_tax',   label: 'Annual Tax Filing',     type: 'ANNUAL_TAX',   interval: 'annually',  enabled: true, startOffset: 1, color: '#F44336' }),
+  new FinSimLib.Scenarios.EventSeries({ id: 'sell_asset',   label: 'Quarterly Asset Sales', type: 'SELL_ASSET',   interval: 'quarterly', enabled: true,                color: '#FF9800' }),
+  new FinSimLib.Scenarios.EventSeries({ id: 'quarterly_pl', label: 'Quarterly Profit/Loss', type: 'QUARTERLY_PL', interval: 'quarterly', enabled: true,                color: '#9C27B0' }),
+  new FinSimLib.Scenarios.EventSeries({ id: 'annual_tax',   label: 'Annual Tax Filing',     type: 'ANNUAL_TAX',   interval: 'annually',  enabled: true, startOffset: 1, color: '#F44336' }),
 ];
 
-export class ProfitLossScenario extends BaseScenario {
+export class ProfitLossScenario extends FinSimLib.Scenarios.BaseScenario {
 
   constructor({ params = {}, eventSeries = DEFAULT_EVENT_SERIES, customEvents = [] } = {}) {
     super({ eventSeries, customEvents });
     this.params = { ...DEFAULT_PARAMS, ...params };
 
-    this.accountService = new AccountService();
+    this.accountService = new FinSimLib.Finance.AccountService();
     this.simStart = new Date(2025, 0, 1);
     this.simEnd   = new Date(2028, 0, 1);
 
@@ -63,21 +56,21 @@ export class ProfitLossScenario extends BaseScenario {
     // Assets with purchaseDates — mix of long-term and short-term holds
     // relative to simStart (2025-01-01)
     const assets = [
-      Object.assign(new Asset('Tech Stock',   15000, 10000), { purchaseDate: new Date(2022, 0, 1) }), // LT (3+ yr)
-      Object.assign(new Asset('Growth Fund',   8000,  6000), { purchaseDate: new Date(2023, 6, 1) }), // LT (1.5 yr)
-      Object.assign(new Asset('REIT',          5000,  4500), { purchaseDate: new Date(2024, 9, 1) }), // ~LT by Oct 2025
-      Object.assign(new Asset('Startup ETF',   3000,  2000), { purchaseDate: new Date(2025, 2, 1) }), // ST until Mar 2026
+      Object.assign(new FinSimLib.Finance.Asset('Tech Stock',   15000, 10000), { purchaseDate: new Date(2022, 0, 1) }), // LT (3+ yr)
+      Object.assign(new FinSimLib.Finance.Asset('Growth Fund',   8000,  6000), { purchaseDate: new Date(2023, 6, 1) }), // LT (1.5 yr)
+      Object.assign(new FinSimLib.Finance.Asset('REIT',          5000,  4500), { purchaseDate: new Date(2024, 9, 1) }), // ~LT by Oct 2025
+      Object.assign(new FinSimLib.Finance.Asset('Startup ETF',   3000,  2000), { purchaseDate: new Date(2025, 2, 1) }), // ST until Mar 2026
     ];
 
     const initialState = {
       metrics:         {},
-      savingsAccount:  new Account(p.initialSavings),
-      checkingAccount: new Account(p.initialChecking),
+      savingsAccount:  new FinSimLib.Account(p.initialSavings),
+      checkingAccount: new FinSimLib.Account(p.initialChecking),
       assets,
       realizedGains:   0
     };
 
-    this.sim = new Simulation(this.simStart, { initialState });
+    this.sim = new FinSimLib.Simulation(this.simStart, { initialState });
 
     this._registerReducers(svc);
     this._registerHandlers(p);
@@ -90,9 +83,9 @@ export class ProfitLossScenario extends BaseScenario {
         'REALIZE_GAIN',
         (state, action) => ({
           state: { ...state, realizedGains: state.realizedGains + action.amount },
-          next:  [new AmountAction('CALCULATE_CAPITAL_GAINS_TAX', action.amount)]
+          next:  [new FinSimLib.Core.AmountAction('CALCULATE_CAPITAL_GAINS_TAX', action.amount)]
         }),
-        PRIORITY.COST_BASIS, 'Gain Realizer'
+        FinSimLib.Core.PRIORITY.COST_BASIS, 'Gain Realizer'
     );
 
     this.sim.reducers.register('CALCULATE_CAPITAL_GAINS_TAX',
@@ -102,55 +95,55 @@ export class ProfitLossScenario extends BaseScenario {
           capitalGainsTax.push(transactionTax);
           return {
             state: { ...state, capitalGainsTax },
-            next:  [new RecordMetricAction('capital_gains_tax', transactionTax)]
+            next:  [new FinSimLib.Core.RecordMetricAction('capital_gains_tax', transactionTax)]
           };
-        }, PRIORITY.TAX_CALC, 'CGT Computer');
+        }, FinSimLib.Core.PRIORITY.TAX_CALC, 'CGT Computer');
 
-    new MetricReducer().registerWith(this.sim.reducers, 'RECORD_METRIC');
+    new FinSimLib.Core.MetricReducer().registerWith(this.sim.reducers, 'RECORD_METRIC');
 
-    new AccountTransactionReducer(
+    new FinSimLib.Core.AccountTransactionReducer(
       { accountService, accountKey: 'savingsAccount' },
       'Account Credit'
     ).registerWith(this.sim.reducers, 'ADD_CASH');
 
-    new AccountTransactionReducer(
+    new FinSimLib.Core.AccountTransactionReducer(
       { accountService, accountKey: 'savingsAccount' },
       'Account Debit'
     ).registerWith(this.sim.reducers, 'REMOVE_CASH');
 
     // No-op reducer used as a "balance snapshot" marker — runs last so
     // its stateAfter on the DEBUG_ACTION node reflects the fully-updated state
-    new NoOpReducer('Balance Snapshot').registerWith(this.sim.reducers, 'RECORD_BALANCE');
+    new FinSimLib.Core.NoOpReducer('Balance Snapshot').registerWith(this.sim.reducers, 'RECORD_BALANCE');
   }
 
   _registerHandlers(p) {
-    this.sim.register('SELL_ASSET', new HandlerEntry((ctx) => {
+    this.sim.register('SELL_ASSET', new FinSimLib.Core.HandlerEntry((ctx) => {
       const toSell = ctx.state.assets.pop();
       if (!toSell) return [];
       const realizedGain = toSell.value - toSell.costBasis;
       return [
-        new AmountAction('REALIZE_GAIN', realizedGain),
-        new AmountAction('ADD_CASH', toSell.value),
-        new RecordMetricAction('assets_sold', toSell.name),
-        new RecordBalanceAction()
+        new FinSimLib.Core.AmountAction('REALIZE_GAIN', realizedGain),
+        new FinSimLib.Core.AmountAction('ADD_CASH', toSell.value),
+        new FinSimLib.Core.RecordMetricAction('assets_sold', toSell.name),
+        new FinSimLib.Core.RecordBalanceAction()
       ];
     }, 'Sell Asset'));
 
-    this.sim.register('QUARTERLY_PL', new HandlerEntry(({ sim }) => {
+    this.sim.register('QUARTERLY_PL', new FinSimLib.Core.HandlerEntry(({ sim }) => {
       const profit = sim.rng() * 10000;
       return [
-        new AmountAction('ADD_CASH', profit),
-        new RecordMetricAction('quarterly_profit', profit),
-        new RecordBalanceAction()
+        new FinSimLib.Core.AmountAction('ADD_CASH', profit),
+        new FinSimLib.Core.RecordMetricAction('quarterly_profit', profit),
+        new FinSimLib.Core.RecordBalanceAction()
       ];
     }, 'Quarterly P/L'));
 
-    this.sim.register('ANNUAL_TAX', new HandlerEntry((ctx) => {
+    this.sim.register('ANNUAL_TAX', new FinSimLib.Core.HandlerEntry((ctx) => {
       const tax = -(ctx.state.savingsAccount.balance * p.incomeTaxRate);
       return [
-        new AmountAction('REMOVE_CASH', tax),
-        new RecordMetricAction('annual_tax', tax),
-        new RecordBalanceAction()
+        new FinSimLib.Core.AmountAction('REMOVE_CASH', tax),
+        new FinSimLib.Core.RecordMetricAction('annual_tax', tax),
+        new FinSimLib.Core.RecordBalanceAction()
       ];
     }, 'Annual Tax'));
   }

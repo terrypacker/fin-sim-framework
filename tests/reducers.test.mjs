@@ -17,7 +17,7 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { ReducerPipeline, PRIORITY } from '../assets/js/simulation-framework/reducers.js';
+import { ReducerPipeline, PRIORITY } from '../src/simulation-framework/reducers.js';
 
 // ─── Registration & retrieval ─────────────────────────────────────────────────
 

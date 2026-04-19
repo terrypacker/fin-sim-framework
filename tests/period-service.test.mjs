@@ -18,13 +18,13 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Period, PeriodRelationship, PeriodService } from '../assets/js/finance/period/period-service.js';
+import { Period, PeriodRelationship, PeriodService } from '../src/finance/period/period-service.js';
 import {
   buildMonthPeriod,
   buildUsCalendarYear,
   buildAuFiscalYear,
   applyTo,
-} from '../assets/js/finance/period/period-builder.js';
+} from '../src/finance/period/period-builder.js';
 
 // ---------------------------------------------------------------------------
 // Helpers

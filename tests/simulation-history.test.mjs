@@ -17,7 +17,7 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Simulation } from '../assets/js/simulation-framework/simulation.js';
+import { Simulation } from '../src/simulation-framework/simulation.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

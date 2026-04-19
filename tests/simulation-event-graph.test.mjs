@@ -20,7 +20,7 @@ import assert   from 'node:assert/strict';
 import {
   SimulationEventGraph,
   ActionNode
-} from '../assets/js/simulation-framework/simulation-event-graph.js';
+} from '../src/simulation-framework/simulation-event-graph.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
