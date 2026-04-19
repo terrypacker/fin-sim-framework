@@ -2,6 +2,8 @@
 
 A deterministic, event-driven simulation framework for modeling and replaying complex financial workflows over time. Supports recurring and one-off scheduled events, prioritized action chains, state snapshots for rewind/replay and branching, Monte Carlo scenario runs, and an interactive graph visualization.
 
+The library is packaged as **FinSimLib** (`financial-sim` on npm) and ships three build formats — ESM, CJS, and UMD — built with Rollup into the `dist/` directory. The demo web apps are bundled into `dist/` alongside the library so the same directory can be deployed as a static site.
+
 ---
 
 ## Architecture Overview
@@ -61,7 +63,20 @@ A deterministic, event-driven simulation framework for modeling and replaying co
 | Module | File | Responsibility |
 |---|---|---|
 | `Account` / `AccountService` | `finance/account.js` | Simple ledger with credit/debit history. |
-| `Asset` | `finance/asset.js` | Named asset with value and costBasis. |
+| `InvestmentAccount` | `finance/investment-account.js` | Investment account with holdings and cost-basis tracking. |
+| `Asset` / `AssetService` | `finance/asset.js`, `finance/asset-service.js` | Named asset with value and costBasis; service for asset transactions. |
+| `Person` / `PersonService` | `finance/person.js` | Person model (age, income, filing status) used by tax and account modules. |
+| `Period` / `PeriodService` / builders | `finance/period/period-service.js`, `finance/period/period-builder.js` | Fiscal/calendar period definitions and period arithmetic (`buildMonthPeriod`, `buildUsCalendarYear`, `buildAuFiscalYear`). |
+| `TaxEngine` | `finance/tax/tax-engine.js` | Registry that maps year → jurisdiction-specific `TaxModule`. Resolves the correct module for a given date and delegates tax calculations. |
+| `BaseTaxModule` / `BaseTaxRatesModule` | `finance/tax/base-tax-module.js`, `finance/tax/base-tax-rates-module.js` | Abstract base classes for tax modules and tax-rate tables. |
+| `UsTaxModule{year}` / `UsTaxRates{year}` | `finance/tax/us/` | US federal income tax modules and rate tables for 2024–2026. |
+| `AuTaxModule{year}` / `AuTaxRates{year}` | `finance/tax/au/` | Australian income tax modules and rate tables for 2024–2026. |
+| `TaxService` | `finance/tax-service.js` | High-level service for computing tax liability against the `TaxEngine`. |
+| `TaxSettleService` | `finance/tax-settle-service.js` | Settles accumulated tax obligations at period end (e.g., annual tax payment action). |
+| `AccountRulesEngine` | `finance/account-rules/account-rules-engine.js` | Registry that maps year → jurisdiction-specific `AccountModule`. Resolves contribution limits, eligibility rules, and account-type constraints for a given date. |
+| `BaseAccountModule` | `finance/account-rules/base-account-module.js` | Abstract base class for account rule modules. |
+| `UsAccountModule{year}` | `finance/account-rules/us/` | US account rules (401k, IRA, Roth IRA limits) for 2024–2026. |
+| `AuAccountModule{year}` | `finance/account-rules/au/` | Australian account rules (Super, offset accounts) for 2024–2026. |
 
 #### Scenario Layer
 
@@ -282,12 +297,40 @@ svc.transaction(account, 500, date);   // credit (+) or debit (-)
 
 **Note**: `Account` instances held in simulation state must remain plain data objects — no methods — so that `structuredClone` (used for snapshots) works correctly.
 
-### `Asset`
+### `Asset` / `AssetService`
 
 ```js
 const asset = new Asset('AAPL', 15000, 10000); // name, value, costBasis
 const gain = asset.value - asset.costBasis;      // realized gain on sale
 ```
+
+### `TaxEngine` / Tax Modules
+
+`TaxEngine` is a year-keyed registry. Register one module per jurisdiction per year; the engine resolves the right module for any date:
+
+```js
+const taxEngine = new TaxEngine();
+taxEngine.register(2026, new UsTaxModule2026(UsTaxRates2026));
+
+const taxResult = taxEngine.calculate(person, income, date);
+```
+
+Tax modules (`UsTaxModule*`, `AuTaxModule*`) extend `BaseTaxModule` and implement jurisdiction-specific bracket logic. Rate tables (`UsTaxRates*`, `AuTaxRates*`) extend `BaseTaxRatesModule`.
+
+`TaxService` and `TaxSettleService` integrate the `TaxEngine` into the simulation's action/reducer pipeline.
+
+### `AccountRulesEngine` / Account Modules
+
+`AccountRulesEngine` follows the same registry pattern as `TaxEngine`, keyed by year. Account modules encode jurisdiction-specific rules such as contribution limits, eligibility ages, and account-type constraints:
+
+```js
+const rulesEngine = new AccountRulesEngine();
+rulesEngine.register(2026, new UsAccountModule2026());
+
+const limit = rulesEngine.getContributionLimit('401k', person, date);
+```
+
+US modules (`UsAccountModule*`) cover 401(k), IRA, and Roth IRA limits. Australian modules (`AuAccountModule*`) cover Superannuation and offset accounts.
 
 ---
 
@@ -306,18 +349,58 @@ Each app extends `BaseApp` (`apps/base-app.js`), which provides:
 
 ---
 
-## Building ESM
+## Library Packaging
 
-```text
-npm install --save-dev rollup @rollup/plugin-terser
-npm install --save-dev @babel/parser
+The library entry point is `src/index.js` (auto-generated — do not edit by hand). It is built by Rollup into three formats in `dist/`:
+
+| Output file | Format | Use case |
+|---|---|---|
+| `dist/index.esm.js` | ESM | Modern bundlers (Vite, Webpack, Rollup) |
+| `dist/index.cjs.js` | CJS | Node.js `require()` |
+| `dist/index.umd.min.js` | UMD (minified) | `<script>` tag in browser (`window.FinSimLib`) |
+
+The `package.json` `"module"`, `"main"`, and `"browser"` fields point to these outputs so bundlers and Node.js automatically pick the right format.
+
+The UMD build also copies all HTML demo files and the `assets/` directory into `dist/`, making the directory self-contained for static site deployment.
+
+### Exports
+
+`src/index.js` exposes everything through named namespace objects so consumers can cherry-pick:
+
+```js
+// ESM / bundler
+import { Simulation, Finance, Core, Scenarios, Visualization } from 'financial-sim';
+
+// Browser UMD
+const { Simulation, Finance } = window.FinSimLib;
 ```
 
-```text
-npm run build # build into ./dist
-npm run dev # To build and watch files, serve from ./dist folder on :8080
-npm start # Run live server :8080
+| Export | Contents |
+|---|---|
+| `Simulation`, `Account`, `InvestmentAccount`, `Person`, `BaseScenario` | Top-level named exports (most commonly used classes) |
+| `Finance` | All finance-domain classes: accounts, assets, person, period builders, `TaxEngine`, `AccountRulesEngine`, jurisdiction modules and rate tables |
+| `Core` | Simulation framework internals: `Action` subclasses, `EventBus`, `Journal`, `ReducerPipeline`, `PRIORITY`, `ScenarioRunner`, `SimulationHistory`, etc. |
+| `Scenarios` | `BaseScenario`, `EventSeries` |
+| `Visualization` | `GraphView`, `BalanceChartView`, `TimelineView`, `TimeControls`, `$`, `fmt` |
+| `Misc` | `BaseApp` |
+
+### Regenerating `src/index.js`
+
+`src/index.js` is auto-generated from the source tree. Regenerate it when you add or remove exported modules:
+
+```sh
+npm run build:index
 ```
+
+### Build commands
+
+```sh
+npm install          # install devDependencies (rollup, terser, live-server, concurrently)
+npm run build        # one-shot build → dist/
+npm run dev          # build + watch + live-server on :8080
+npm start            # live-server only (dist/ must already be built)
+```
+
 ---
 
 ## Testing
@@ -359,5 +442,6 @@ Follow the existing pattern — import from `node:test` and `node:assert/strict`
 - **Handlers return actions; reducers return state.** Handlers are the bridge between events and the reducer pipeline. Reducers are pure (no side effects beyond state).
 - **Chaining is via `next:[]`.** Reducers that need to trigger further state changes emit child actions through `next`, not by calling other reducers directly.
 - **Use `Action` subclasses for typed actions.** Prefer `new AmountAction(...)`, `new RecordMetricAction(...)`, etc. over raw plain objects where a concrete class exists.
-- **Imports are relative ES module paths.** No bundler; all files must use `.js` extensions in import statements (even from `.mjs` test files).
-- **No external dependencies.** The framework and tests rely only on browser/Node built-ins.
+- **Imports are relative ES module paths.** All `src/` files must use `.js` extensions in import statements (even from `.mjs` test files). Tests import directly from `src/` — they do not go through `dist/`.
+- **`src/index.js` is auto-generated.** Run `npm run build:index` after adding or removing exported classes; do not edit the file manually.
+- **No external runtime dependencies.** The framework and tests rely only on browser/Node built-ins. Dev tools (Rollup, live-server, concurrently) are `devDependencies` only.
