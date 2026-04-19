@@ -128,11 +128,18 @@ export class TaxService {
     // Inject currentPeriods into simulation state before any events run.
     sim.state = { ...sim.state, currentPeriods };
 
-    // ── Step 2: register PERIOD_ADVANCE reducer ────────────────────────────────
+    // ── Step 2: register PERIOD_ADVANCE reducer + handler ─────────────────────
+    // The reducer updates currentPeriods; the handler dispatches the scheduled
+    // event as an action so the reducer actually fires (events → handlers →
+    // actions → reducers; without a handler the reducer would never run).
     sim.reducers.register('PERIOD_ADVANCE', (state, action) => ({
       ...state,
       currentPeriods: { ...state.currentPeriods, [action.cc]: action.period },
     }), PRIORITY.PRE_PROCESS, 'Period Advance');
+
+    sim.register('PERIOD_ADVANCE', ({ data }) => [
+      { type: 'PERIOD_ADVANCE', cc: data.cc, period: data.period },
+    ]);
 
     // ── Step 3: schedule PERIOD_ADVANCE events for future year boundaries ──────
     for (const cc of countryCodes) {
