@@ -39,8 +39,8 @@ import { buildUsCalendarYear, buildAuFiscalYear, applyTo } from '../finance/peri
 
 export const DEFAULT_PARAMS = {
   // People
-  primaryBirthDate: new Date(1970, 3, 15),
-  spouseBirthDate:  new Date(1972, 8, 22),
+  primaryBirthDate: new Date(Date.UTC(1970, 3, 15)),
+  spouseBirthDate:  new Date(Date.UTC(1972, 8, 22)),
   moveYear:         2031,            // calendar year of US→AU move (Jul 1)
 
   // Checking
@@ -95,8 +95,8 @@ export class IntlRetirementScenario extends BaseScenario {
   constructor({ params = {}, eventSeries = DEFAULT_EVENT_SERIES, customEvents = [] } = {}) {
     super({ eventSeries, customEvents });
     this.params   = { ...DEFAULT_PARAMS, ...params };
-    this.simStart = new Date(2026, 0, 1);
-    this.simEnd   = new Date(2041, 0, 1);
+    this.simStart = new Date(Date.UTC(2026, 0, 1));
+    this.simEnd   = new Date(Date.UTC(2041, 0, 1));
     this._buildSim();
   }
 
@@ -177,7 +177,7 @@ export class IntlRetirementScenario extends BaseScenario {
 
     // ── Schedule CHANGE_RESIDENCY (Jul 1 of moveYear)
     this.sim.schedule({
-      date: new Date(p.moveYear, 6, 1),
+      date: new Date(Date.UTC(p.moveYear, 6, 1)),
       type: 'CHANGE_RESIDENCY',
       data: {},
     });
