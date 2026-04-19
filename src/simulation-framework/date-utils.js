@@ -19,14 +19,14 @@
 
 export class DateUtils {
   static addDays(d, n) {
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + n));
   }
 
   static addMonths(d, n) {
-    return new Date(d.getFullYear(), d.getMonth() + n, d.getDate());
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, d.getUTCDate()));
   }
 
   static addYears(d, n) {
-    return new Date(d.getFullYear() + n, d.getMonth(), d.getDate());
+    return new Date(Date.UTC(d.getUTCFullYear() + n, d.getUTCMonth(), d.getUTCDate()));
   }
 }

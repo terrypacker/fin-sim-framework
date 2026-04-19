@@ -44,11 +44,11 @@ export class PersonService {
    * @returns {number}
    */
   getAge(person, asOfDate) {
-    const years = asOfDate.getFullYear() - person.birthDate.getFullYear();
+    const years = asOfDate.getUTCFullYear() - person.birthDate.getUTCFullYear();
     const hadBirthday =
-      asOfDate.getMonth() > person.birthDate.getMonth() ||
-      (asOfDate.getMonth() === person.birthDate.getMonth() &&
-       asOfDate.getDate()  >= person.birthDate.getDate());
+      asOfDate.getUTCMonth() > person.birthDate.getUTCMonth() ||
+      (asOfDate.getUTCMonth() === person.birthDate.getUTCMonth() &&
+       asOfDate.getUTCDate()  >= person.birthDate.getUTCDate());
     return hadBirthday ? years : years - 1;
   }
 

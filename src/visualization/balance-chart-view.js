@@ -131,10 +131,10 @@ export class BalanceChartView {
     ctx.textAlign = 'center';
     const yearsShown = new Set();
     for (const { date } of this.history) {
-      const yr = date.getFullYear();
+      const yr = date.getUTCFullYear();
       if (!yearsShown.has(yr)) {
         yearsShown.add(yr);
-        const t = new Date(yr, 0, 1).getTime();
+        const t = Date.UTC(yr, 0, 1);
         if (t >= minDate && t <= maxDate) {
           const x = xScale(t);
           ctx.fillText(String(yr), x, pad.top + plotH + 18);

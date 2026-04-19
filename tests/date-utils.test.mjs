@@ -22,7 +22,7 @@ import { DateUtils } from '../src/simulation-framework/date-utils.js';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function ymd(d) {
-  return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() };
+  return { y: d.getUTCFullYear(), m: d.getUTCMonth(), d: d.getUTCDate() };
 }
 
 function assertDate(actual, expectedYear, expectedMonth, expectedDay) {

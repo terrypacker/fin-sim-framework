@@ -21,8 +21,8 @@ import assert   from 'node:assert/strict';
 
 export const Assert = {
   datesEqual: (d1, d2) => {
-    assert.ok(d1.getFullYear() === d2.getFullYear(), `Years do not match, expected ${d1.getFullYear()} but was ${d2.getFullYear()}`);
-    assert.ok(d1.getMonth() === d2.getMonth(), `Months do not match, expected ${d1.getMonth()} but was ${d2.getMonth()}`);
-    assert.ok(d1.getDay() === d2.getDay(), `Days do not match, expected ${d1.getDay()} but was ${d2.getDay()}`);
+    assert.ok(d1.getUTCFullYear() === d2.getUTCFullYear(), `Years do not match, expected ${d1.getUTCFullYear()} but was ${d2.getUTCFullYear()}`);
+    assert.ok(d1.getUTCMonth() === d2.getUTCMonth(), `Months do not match, expected ${d1.getUTCMonth()} but was ${d2.getUTCMonth()}`);
+    assert.ok(d1.getUTCDate() === d2.getUTCDate(), `Days do not match, expected ${d1.getUTCDate()} but was ${d2.getUTCDate()}`);
   }
 };

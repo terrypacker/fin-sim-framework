@@ -14,11 +14,11 @@ import { RecordMetricAction, RecordBalanceAction } from '../../../simulation-fra
 
 /** Returns age in whole years as of asOfDate. */
 function getAge(birthDate, asOfDate) {
-  const years = asOfDate.getFullYear() - birthDate.getFullYear();
+  const years = asOfDate.getUTCFullYear() - birthDate.getUTCFullYear();
   const hadBirthday =
-    asOfDate.getMonth() > birthDate.getMonth() ||
-    (asOfDate.getMonth() === birthDate.getMonth() &&
-     asOfDate.getDate() >= birthDate.getDate());
+    asOfDate.getUTCMonth() > birthDate.getUTCMonth() ||
+    (asOfDate.getUTCMonth() === birthDate.getUTCMonth() &&
+     asOfDate.getUTCDate() >= birthDate.getUTCDate());
   return hadBirthday ? years : years - 1;
 }
 
