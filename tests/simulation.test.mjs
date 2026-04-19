@@ -86,13 +86,13 @@ function buildFinancialSim({ seed = 1, assets } = {}) {
     }
   }), PRIORITY.METRICS, 'Metric Logger');
 
-  sim.reducers.register('ADD_CASH', (state, action) => {
-    accountService.transaction(state.savingsAccount, action.amount, null);
+  sim.reducers.register('ADD_CASH', (state, action, date) => {
+    accountService.transaction(state.savingsAccount, action.amount, date);
     return { ...state };
   }, PRIORITY.CASH_FLOW, 'Account Credit');
 
-  sim.reducers.register('REMOVE_CASH', (state, action) => {
-    accountService.transaction(state.savingsAccount, action.amount, null);
+  sim.reducers.register('REMOVE_CASH', (state, action, date) => {
+    accountService.transaction(state.savingsAccount, action.amount, date);
     return { ...state };
   }, PRIORITY.CASH_FLOW, 'Account Debit');
 

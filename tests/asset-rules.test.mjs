@@ -345,29 +345,29 @@ function buildLoanSim({
   const sim = new Simulation(new Date(2026, 0, 1), { initialState });
 
   // AR-5: Take loan against AU brokerage stocks
-  sim.reducers.register('AU_STOCK_LOAN_APPLY', (state, action) => {
-    svc.transaction(state.checkingAccount, action.amount, null);
+  sim.reducers.register('AU_STOCK_LOAN_APPLY', (state, action, date) => {
+    svc.transaction(state.checkingAccount, action.amount, date);
     assetSvc.takeLoan(state.auStockAccount, action.amount);
     return { ...state };
   }, PRIORITY.CASH_FLOW, 'AU Stock Loan');
 
   // AR-5: Repay loan against AU brokerage stocks
-  sim.reducers.register('AU_STOCK_LOAN_REPAY_APPLY', (state, action) => {
-    svc.transaction(state.checkingAccount, -action.amount, null);
+  sim.reducers.register('AU_STOCK_LOAN_REPAY_APPLY', (state, action, date) => {
+    svc.transaction(state.checkingAccount, -action.amount, date);
     assetSvc.repayLoan(state.auStockAccount, action.amount);
     return { ...state };
   }, PRIORITY.CASH_FLOW, 'AU Stock Loan Repayment');
 
   // AR-9: Take loan against real property (mortgage / HELOC)
-  sim.reducers.register('PROPERTY_LOAN_APPLY', (state, action) => {
-    svc.transaction(state.checkingAccount, action.amount, null);
+  sim.reducers.register('PROPERTY_LOAN_APPLY', (state, action, date) => {
+    svc.transaction(state.checkingAccount, action.amount, date);
     assetSvc.takeLoan(state.realProperty, action.amount);
     return { ...state };
   }, PRIORITY.CASH_FLOW, 'Property Loan');
 
   // AR-9: Repay loan against real property
-  sim.reducers.register('PROPERTY_LOAN_REPAY_APPLY', (state, action) => {
-    svc.transaction(state.checkingAccount, -action.amount, null);
+  sim.reducers.register('PROPERTY_LOAN_REPAY_APPLY', (state, action, date) => {
+    svc.transaction(state.checkingAccount, -action.amount, date);
     assetSvc.repayLoan(state.realProperty, action.amount);
     return { ...state };
   }, PRIORITY.CASH_FLOW, 'Property Loan Repayment');

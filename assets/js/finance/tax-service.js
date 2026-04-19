@@ -211,11 +211,11 @@ export class TaxService {
     }, PRIORITY.TAX_APPLY, 'Tax Settle Apply');
 
     // TAX_PAYMENT_DEBIT reducer: debit checking (capped at available balance)
-    sim.reducers.register('TAX_PAYMENT_DEBIT', (state, action) => {
+    sim.reducers.register('TAX_PAYMENT_DEBIT', (state, action, date) => {
       const { amount, cc } = action;
       const debit     = Math.min(amount, Math.max(0, state.checkingAccount.balance));
       if (debit > 0) {
-        this._accountService.transaction(state.checkingAccount, -debit, null);
+        this._accountService.transaction(state.checkingAccount, -debit, date);
       }
       const metricKey = cc === 'AU' ? 'tax_paid_au' : 'tax_paid_us';
       const list      = state.metrics[metricKey] || [];

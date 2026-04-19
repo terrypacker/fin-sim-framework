@@ -190,9 +190,9 @@ export class IntlRetirementScenario extends BaseScenario {
     const svc = this._accountService;
 
     // ── EXPENSE_DEBIT — capped at available balance ────────────────────────────
-    this.sim.reducers.register('EXPENSE_DEBIT', (state, action) => {
+    this.sim.reducers.register('EXPENSE_DEBIT', (state, action, date) => {
       const debit = Math.min(action.amount, Math.max(0, state.checkingAccount.balance));
-      if (debit > 0) svc.transaction(state.checkingAccount, -debit, null);
+      if (debit > 0) svc.transaction(state.checkingAccount, -debit, date);
       return { ...state };
     }, PRIORITY.CASH_FLOW, 'Expense Debit');
 
@@ -202,7 +202,7 @@ export class IntlRetirementScenario extends BaseScenario {
     // Note: some accounts (e.g. fixedIncomeAccount after FIXED_INCOME_EARNINGS_APPLY)
     // are plain { balance } objects, not full Account instances, so we mutate
     // balance directly instead of using svc.transaction.
-    this.sim.reducers.register('REPLENISH_CHECKING', (state, action) => {
+    this.sim.reducers.register('REPLENISH_CHECKING', (state, action, date) => {
       const { deficit, orderIndex = 0 } = action;
 
       for (let i = orderIndex; i < state.drawdownOrder.length; i++) {
@@ -213,7 +213,7 @@ export class IntlRetirementScenario extends BaseScenario {
         const withdraw  = Math.min(deficit, account.balance);
         const remaining = deficit - withdraw;
 
-        svc.transaction(state.checkingAccount, withdraw, null);
+        svc.transaction(state.checkingAccount, withdraw, date);
         account.balance -= withdraw;   // direct mutation; works for full Account and bare { balance }
 
         const newState = { ...state };
@@ -230,8 +230,8 @@ export class IntlRetirementScenario extends BaseScenario {
     }, PRIORITY.PRE_PROCESS, 'Replenish Checking');
 
     // ── CHECKING_INTEREST_CREDIT — monthly interest, US (and AU after move) ───
-    this.sim.reducers.register('CHECKING_INTEREST_CREDIT', (state, action) => {
-      svc.transaction(state.checkingAccount, action.amount, null);
+    this.sim.reducers.register('CHECKING_INTEREST_CREDIT', (state, action, date) => {
+      svc.transaction(state.checkingAccount, action.amount, date);
       const usNext = state.usOrdinaryIncomeYTD + action.amount;
       const base   = { ...state, usOrdinaryIncomeYTD: usNext };
       if (state.isAuResident) {
@@ -246,9 +246,9 @@ export class IntlRetirementScenario extends BaseScenario {
 
     // ── STOCK_DIVIDEND_CASH_APPLY — cash payout path ──────────────────────────
     // Credits checking + chains STOCK_DIVIDEND_TAX (same tax as reinvest path)
-    this.sim.reducers.register('STOCK_DIVIDEND_CASH_APPLY', (state, action) => {
+    this.sim.reducers.register('STOCK_DIVIDEND_CASH_APPLY', (state, action, date) => {
       const { amount, isAuResident } = action;
-      svc.transaction(state.checkingAccount, amount, null);
+      svc.transaction(state.checkingAccount, amount, date);
       return {
         state: { ...state },
         next: [{ type: 'STOCK_DIVIDEND_TAX', amount, isAuResident }],
