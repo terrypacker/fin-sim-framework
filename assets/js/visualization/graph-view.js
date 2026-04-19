@@ -17,10 +17,14 @@
  * limitations under the License.
  */
 
+import { $, fmt } from '../visualization/ui-utils.js'
+
 export class GraphView {
-  constructor({ simulator, canvas, nodeClicked, simStart, simEnd, eventColors = new Map() }) {
+  constructor({ simulator, canvas, nodeClicked, getNodeDetail, formatNodeDetailHtml, simStart, simEnd, eventColors = new Map() }) {
     this.sim = simulator;
-    this.nodeClicked = nodeClicked;
+    this.nodeClickedCallabck = nodeClicked;
+    this.getNodeDetail = getNodeDetail;
+    this.formatNodeDetailHtml = formatNodeDetailHtml;
     this.canvas = canvas;
     this.ctx = this.canvas.getContext("2d");
     this.nodes = new Map(); // id -> { x, y, vx, vy, data }
@@ -43,6 +47,40 @@ export class GraphView {
     this.canvas.addEventListener("mouseup",    (evt) => this.onMouseUp(evt));
     this.canvas.addEventListener("mouseleave", ()    => this.onMouseUp(null));
 
+  }
+
+  initView() {
+    // Node detail tabs
+    document.querySelectorAll('[data-ndtab]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.ndtab;
+        document.querySelectorAll('[data-ndtab]').forEach(b => b.classList.toggle('active', b === btn));
+        $('nodeDetailFormatted').classList.toggle('hidden', target !== 'nodeDetailFormatted');
+        $('nodeDetailJson').classList.toggle('hidden', target !== 'nodeDetailJson');
+      });
+    });
+
+    // Node detail close button on Graph
+    $('nodeDetailClose').addEventListener('click', () => this.hideNodeDetail());
+  }
+
+  showNodeDetail(node) {
+    $('nodeDetailFormatted').innerHTML = this.formatNodeDetailHtml(node);
+    $('nodeDetail').textContent = this.getNodeDetail(node);
+    $('nodeDetailPanel').classList.remove('hidden');
+    if(typeof this.nodeClickedCallabck === 'function') {
+      this.nodeClickedCallabck(node);
+    }
+
+  }
+
+  hideNodeDetail() {
+    $('nodeDetailPanel').classList.add('hidden');
+  }
+
+  resizeCanvas(h,w) {
+    $('graphCanvas').width  = w;
+    $('graphCanvas').height = h;
   }
 
   updateView(payload) {
@@ -295,7 +333,7 @@ export class GraphView {
 
   onMouseUp(e) {
     if (this.dragNode && !this.hasDragged) {
-      this.nodeClicked(this.dragNode);
+      this.showNodeDetail(this.dragNode);
     }
     this.dragNode   = null;
     this.hasDragged = false;

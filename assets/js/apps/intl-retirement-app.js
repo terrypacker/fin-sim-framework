@@ -9,7 +9,8 @@
  */
 
 import { IntlRetirementScenario, DEFAULT_EVENT_SERIES } from '../scenarios/intl-retirement-scenario.js';
-import { $, BaseApp } from './base-app.js';
+import { $, fmt } from '../visualization/ui-utils.js'
+import { BaseApp } from './base-app.js';
 
 // ── Chart series ──────────────────────────────────────────────────────────────
 const CHART_SERIES = [

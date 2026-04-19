@@ -24,8 +24,9 @@
  *
  * This is a basic example of how to use the framework.
  */
+
 import { ProfitLossScenario, DEFAULT_EVENT_SERIES } from "../scenarios/profit-loss-scenario.js";
-import { $, fmt, BaseApp } from "./base-app.js";
+import { BaseApp } from "./base-app.js";
 
 // Editable event series list (copy of defaults so user can toggle)
 let eventSeries  = DEFAULT_EVENT_SERIES.map(s => ({ ...s }));

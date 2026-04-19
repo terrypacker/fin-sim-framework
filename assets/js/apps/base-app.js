@@ -17,14 +17,11 @@
  * limitations under the License.
  */
 
+import { $, fmt } from '../visualization/ui-utils.js'
 import { GraphView } from '../visualization/graph-view.js';
 import { BalanceChartView } from '../visualization/balance-chart-view.js';
 import { TimelineView } from '../visualization/timeline-view.js';
 import { TimeControls } from '../visualization/time-controls.js';
-
-// ─── DOM helpers ─────────────────────────────────────────────────────────────
-export const $  = id => document.getElementById(id);
-export const fmt = n  => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export class BaseApp {
   constructor({ newScenario, readParams, updateStatePanel, diffStates, onChartSnapshot, chartSeries }) {
@@ -65,15 +62,19 @@ export class BaseApp {
     );
 
     const graphCanvas = $('graphCanvas');
-    this.graphView = new GraphView({
-      simulator:   this.scenario.sim,
-      canvas:      graphCanvas,
-      nodeClicked: (node) => this.showNodeDetail(node),
-      simStart:    this.scenario.simStart,
-      simEnd:      this.scenario.simEnd,
-      eventColors
-    });
-    this.graphView.startViz();
+    if(graphCanvas) {
+      this.graphView = new GraphView({
+        simulator: this.scenario.sim,
+        canvas: graphCanvas,
+        getNodeDetail: (n) => this.getNodeDetail(n),
+        formatNodeDetailHtml: (n) => this.formatNodeDetailHtml(n),
+        simStart: this.scenario.simStart,
+        simEnd: this.scenario.simEnd,
+        eventColors
+      });
+      this.graphView.initView();
+      this.graphView.startViz();
+    }
 
     // ── Balance chart view ────────────────────────────────────────────────────
     const chartCanvas = $('chartCanvas');
@@ -109,7 +110,9 @@ export class BaseApp {
       //Fire the date changed listeners
       const date = new Date(payload.date);
       this.timeControls.onDateChanged(date);
-      this.graphView.updateView(payload);
+      if(this.graphView) {
+        this.graphView.updateView(payload);
+      }
       this.customUpdateStatePanel ? this.customUpdateStatePanel(date, payload.stateAfter) : this.updateStatePanel(date, payload.stateAfter);
       if (payload.type === 'RECORD_BALANCE') {
         if (this.onChartSnapshot) {
@@ -272,16 +275,6 @@ export class BaseApp {
     </div>`;
   }
 
-  showNodeDetail(node) {
-    $('nodeDetailFormatted').innerHTML = this.customFormatNodeDetailHtml ? this.customFormatNodeDetailHtml(node) : this.formatNodeDetailHtml(node);
-    $('nodeDetail').textContent = this.getNodeDetail(node);
-    $('nodeDetailPanel').classList.remove('hidden');
-  }
-
-  hideNodeDetail() {
-    $('nodeDetailPanel').classList.add('hidden');
-  }
-
   /**
    * Get the details for a node
    * @param node
@@ -423,19 +416,6 @@ export class BaseApp {
       btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
     });
 
-    // Node detail close button
-    $('nodeDetailClose').addEventListener('click', () => this.hideNodeDetail());
-
-    // Node detail tabs
-    document.querySelectorAll('[data-ndtab]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const target = btn.dataset.ndtab;
-        document.querySelectorAll('[data-ndtab]').forEach(b => b.classList.toggle('active', b === btn));
-        $('nodeDetailFormatted').classList.toggle('hidden', target !== 'nodeDetailFormatted');
-        $('nodeDetailJson').classList.toggle('hidden', target !== 'nodeDetailJson');
-      });
-    });
-
     // Time controls
     $('playPause').addEventListener('click', () => this.playing ? this.stopPlaying() : this.startPlaying());
 
@@ -482,8 +462,9 @@ export class BaseApp {
     const contentEl = $('content');
     const w = contentEl.clientWidth;
     const h = contentEl.clientHeight;
-    $('graphCanvas').width  = w;
-    $('graphCanvas').height = h;
+    if(this.graphView) {
+      this.graphView.resizeCanvas(h, w);
+    }
     $('chartCanvas').width  = w;
     $('chartCanvas').height = h;
   }

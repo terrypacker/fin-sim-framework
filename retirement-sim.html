@@ -15,8 +15,7 @@
 <div id="topbar">
   <h1>Retirement Drawdown Simulation</h1>
   <div>
-    <button class="tab-btn active" data-tab="graph">Action Graph</button>
-    <button class="tab-btn"        data-tab="timeline">Timeline</button>
+    <button class="tab-btn active"        data-tab="timeline">Timeline</button>
     <button class="tab-btn"        data-tab="charts">Balance Charts</button>
   </div>
 </div>
@@ -147,25 +146,6 @@
 
   <!-- ── Content (tab panels) ───────────────────────────────────────────────── -->
   <div id="content">
-
-    <!-- Action graph tab -->
-    <div id="graphTab" class="tab-panel">
-      <canvas id="graphCanvas"></canvas>
-      <div id="nodeDetailPanel" class="hidden">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <h4>Node Detail</h4>
-          <div style="display:flex;align-items:center;gap:6px">
-            <div class="nd-tab-bar" style="margin-bottom:0">
-              <button class="nd-tab-btn active" data-ndtab="nodeDetailFormatted">Formatted</button>
-              <button class="nd-tab-btn"        data-ndtab="nodeDetailJson">JSON</button>
-            </div>
-            <button id="nodeDetailClose" class="modal-close" title="Close">✕</button>
-          </div>
-        </div>
-        <div id="nodeDetailFormatted" class="nd-tab-panel">Click a node…</div>
-        <div id="nodeDetailJson"      class="nd-tab-panel hidden"><pre id="nodeDetail">Click a node…</pre></div>
-      </div>
-    </div>
 
     <!-- Balance chart tab -->
     <div id="chartsTab" class="tab-panel hidden">

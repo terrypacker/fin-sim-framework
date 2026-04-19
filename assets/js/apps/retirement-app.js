@@ -8,8 +8,9 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { $, fmt } from '../visualization/ui-utils.js'
 import { RetirementDrawdownScenario, DEFAULT_EVENT_SERIES } from '../scenarios/retirement-drawdown-scenario.js';
-import { $, BaseApp } from './base-app.js';
+import { BaseApp } from './base-app.js';
 
 // ── Chart series: three account lines ────────────────────────────────────────
 const CHART_SERIES = [

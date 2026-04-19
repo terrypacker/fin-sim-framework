@@ -8,8 +8,9 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { $, fmt } from '../visualization/ui-utils.js'
 import { FinancialScenario, DEFAULT_EVENT_SERIES } from '../scenarios/financial-scenario.js';
-import { $, fmt, BaseApp } from "./base-app.js";
+import { BaseApp } from "./base-app.js";
 
 // ─── Action Detail Modal ──────────────────────────────────────────────────────
 function diffStates(prev, next) {
