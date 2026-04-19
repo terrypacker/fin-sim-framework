@@ -9,7 +9,7 @@
  */
 
 import { IntlRetirementScenario, DEFAULT_EVENT_SERIES } from './scenarios/intl-retirement-scenario.js';
-const { $, BaseApp } = FinSimLib;
+const $ = FinSimLib.Visualization.$;
 
 // ── Chart series ──────────────────────────────────────────────────────────────
 const CHART_SERIES = [
@@ -43,7 +43,7 @@ function chartSnapshot(chartView, date, state) {
 let eventSeries  = DEFAULT_EVENT_SERIES.map(s => ({ ...s }));
 let customEvents = [];
 
-const app = new BaseApp({
+const app = new FinSimLib.Misc.BaseApp({
   newScenario:     (params) => new IntlRetirementScenario({ params, eventSeries, customEvents }),
   readParams,
   onChartSnapshot: chartSnapshot,

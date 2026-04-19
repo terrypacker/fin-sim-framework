@@ -20,24 +20,6 @@
  *   - Stock dividends: cash payout or reinvestment toggle
  *   - CHANGE_RESIDENCY event closes the partial US year before the move
  */
-const {
-  Account,
-  InvestmentAccount,
-  Person,
-  Simulation,
-  PRIORITY,
-  HandlerEntry,
-  RecordMetricAction,
-  RecordBalanceAction,
-  BaseScenario,
-  EventSeries,
-  TaxService,
-  TaxSettleService,
-  PeriodService,
-  buildUsCalendarYear,
-  buildAuFiscalYear,
-  applyTo
-} = FinSimLib;
 
 // ─── Default parameters ────────────────────────────────────────────────────────
 
@@ -79,17 +61,17 @@ export const DEFAULT_PARAMS = {
 // account module handlers (which also register for AU_SAVINGS_EARNINGS etc.
 // and expect data.amount to be provided).
 export const DEFAULT_EVENT_SERIES = [
-  new EventSeries({ id: 'expenses',         label: 'Monthly Expenses',          type: 'MONTHLY_EXPENSES',                 interval: 'monthly',  enabled: true,                color: '#F44336' }),
-  new EventSeries({ id: 'checkingInterest', label: 'Monthly Checking Interest', type: 'CHECKING_INTEREST_MONTHLY',        interval: 'monthly',  enabled: true,                color: '#00BCD4' }),
-  new EventSeries({ id: 'usDividends',      label: 'US Stock Dividends',        type: 'DIVIDEND_SCHEDULED',               interval: 'annually', enabled: true, startOffset: 1, color: '#4CAF50' }),
-  new EventSeries({ id: 'fixedIncome',      label: 'Fixed Income Interest',     type: 'INTL_FIXED_INCOME_INTEREST',       interval: 'annually', enabled: true, startOffset: 1, color: '#2196F3' }),
-  new EventSeries({ id: 'auSavings',        label: 'AU Savings Interest',       type: 'INTL_AU_SAVINGS_INTEREST',         interval: 'annually', enabled: true, startOffset: 1, color: '#FF9800' }),
-  new EventSeries({ id: 'superEarnings',    label: 'Super Earnings',            type: 'INTL_SUPER_EARNINGS',              interval: 'annually', enabled: true, startOffset: 1, color: '#9C27B0' }),
+  new FinSimLib.Scenarios.EventSeries({ id: 'expenses',         label: 'Monthly Expenses',          type: 'MONTHLY_EXPENSES',                 interval: 'monthly',  enabled: true,                color: '#F44336' }),
+  new FinSimLib.Scenarios.EventSeries({ id: 'checkingInterest', label: 'Monthly Checking Interest', type: 'CHECKING_INTEREST_MONTHLY',        interval: 'monthly',  enabled: true,                color: '#00BCD4' }),
+  new FinSimLib.Scenarios.EventSeries({ id: 'usDividends',      label: 'US Stock Dividends',        type: 'DIVIDEND_SCHEDULED',               interval: 'annually', enabled: true, startOffset: 1, color: '#4CAF50' }),
+  new FinSimLib.Scenarios.EventSeries({ id: 'fixedIncome',      label: 'Fixed Income Interest',     type: 'INTL_FIXED_INCOME_INTEREST',       interval: 'annually', enabled: true, startOffset: 1, color: '#2196F3' }),
+  new FinSimLib.Scenarios.EventSeries({ id: 'auSavings',        label: 'AU Savings Interest',       type: 'INTL_AU_SAVINGS_INTEREST',         interval: 'annually', enabled: true, startOffset: 1, color: '#FF9800' }),
+  new FinSimLib.Scenarios.EventSeries({ id: 'superEarnings',    label: 'Super Earnings',            type: 'INTL_SUPER_EARNINGS',              interval: 'annually', enabled: true, startOffset: 1, color: '#9C27B0' }),
 ];
 
 // ─── Scenario class ────────────────────────────────────────────────────────────
 
-export class IntlRetirementScenario extends BaseScenario {
+export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
   /**
    * @param {object} [opts]
    * @param {object}        [opts.params]       - Override DEFAULT_PARAMS
@@ -108,9 +90,9 @@ export class IntlRetirementScenario extends BaseScenario {
     const p = this.params;
 
     // ── PeriodService: US calendar years 2026-2040, AU fiscal years 2025-2040
-    const periodService = new PeriodService();
-    for (let y = 2026; y <= 2040; y++) applyTo(periodService, buildUsCalendarYear(y));
-    for (let y = 2025; y <= 2040; y++) applyTo(periodService, buildAuFiscalYear(y));
+    const periodService = new FinSimLib.Finance.PeriodService();
+    for (let y = 2026; y <= 2040; y++) FinSimLib.Finance.applyTo(periodService, FinSimLib.Finance.buildUsCalendarYear(y));
+    for (let y = 2025; y <= 2040; y++) FinSimLib.Finance.applyTo(periodService, FinSimLib.Finance.buildAuFiscalYear(y));
 
     // ── Initial state
     const initialState = {
@@ -118,27 +100,27 @@ export class IntlRetirementScenario extends BaseScenario {
 
       // Canonical person records
       people: {
-        primary: new Person('primary', p.primaryBirthDate, { name: 'Primary', isAuResident: false }),
-        spouse:  new Person('spouse',  p.spouseBirthDate,  { name: 'Spouse',  isAuResident: false }),
+        primary: new FinSimLib.Finance.Person('primary', p.primaryBirthDate, { name: 'Primary', isAuResident: false }),
+        spouse:  new FinSimLib.Finance.Person('spouse',  p.spouseBirthDate,  { name: 'Spouse',  isAuResident: false }),
       },
       // Flat compat fields read by account module handlers (kept in sync by CHANGE_RESIDENCY_APPLY)
       personBirthDate: p.primaryBirthDate,
       isAuResident:    false,
 
       // Checking (joint)
-      checkingAccount: new Account(p.initialChecking, { ownershipType: 'joint', minimumBalance: p.checkingMinBalance }),
+      checkingAccount: new FinSimLib.Finance.Account(p.initialChecking, { ownershipType: 'joint', minimumBalance: p.checkingMinBalance }),
 
       // US accounts
-      rothAccount:        new InvestmentAccount(p.rothBalance,         { contributionBasis: p.rothBasis  }),
-      iraAccount:         new InvestmentAccount(p.iraBalance,          { contributionBasis: p.iraBasis   }),
-      k401Account:        new InvestmentAccount(p.k401Balance,         { contributionBasis: p.k401Basis  }),
-      stockAccount:       new InvestmentAccount(p.stockBalance,        { contributionBasis: p.stockBasis }),
-      fixedIncomeAccount: new Account(p.fixedIncomeBalance),
+      rothAccount:        new FinSimLib.Finance.InvestmentAccount(p.rothBalance,         { contributionBasis: p.rothBasis  }),
+      iraAccount:         new FinSimLib.Finance.InvestmentAccount(p.iraBalance,          { contributionBasis: p.iraBasis   }),
+      k401Account:        new FinSimLib.Finance.InvestmentAccount(p.k401Balance,         { contributionBasis: p.k401Basis  }),
+      stockAccount:       new FinSimLib.Finance.InvestmentAccount(p.stockBalance,        { contributionBasis: p.stockBasis }),
+      fixedIncomeAccount: new FinSimLib.Finance.Account(p.fixedIncomeBalance),
 
       // AU accounts
-      auSavingsAccount: new Account(p.auSavingsBalance),
-      superAccount:     new InvestmentAccount(p.superBalance, { contributionBasis: p.superBasis }),
-      auStockAccount:   new InvestmentAccount(p.auStockBalance, { contributionBasis: p.auStockBasis }),
+      auSavingsAccount: new FinSimLib.Finance.Account(p.auSavingsBalance),
+      superAccount:     new FinSimLib.Finance.InvestmentAccount(p.superBalance, { contributionBasis: p.superBasis }),
+      auStockAccount:   new FinSimLib.Finance.InvestmentAccount(p.auStockBalance, { contributionBasis: p.auStockBasis }),
 
       // Drawdown order — ordered list of account keys for REPLENISH_CHECKING cascade
       drawdownOrder: [
@@ -168,10 +150,10 @@ export class IntlRetirementScenario extends BaseScenario {
       superWithdrawalBlocked: false,
     };
 
-    this.sim = new Simulation(this.simStart, { initialState });
+    this.sim = new FinSimLib.Core.Simulation(this.simStart, { initialState });
 
     // ── Register TaxService (injects currentPeriods, schedules PERIOD_ADVANCE + TAX_SETTLE)
-    this._accountService = new TaxService().registerWith(this.sim, ['US', 'AU'], periodService);
+    this._accountService = new FinSimLib.Finance.TaxService().registerWith(this.sim, ['US', 'AU'], periodService);
 
     // ── Register scenario-level reducers
     this._registerReducers(p);
@@ -198,7 +180,7 @@ export class IntlRetirementScenario extends BaseScenario {
       const debit = Math.min(action.amount, Math.max(0, state.checkingAccount.balance));
       if (debit > 0) svc.transaction(state.checkingAccount, -debit, date);
       return { ...state };
-    }, PRIORITY.CASH_FLOW, 'Expense Debit');
+    }, FinSimLib.Core.PRIORITY.CASH_FLOW, 'Expense Debit');
 
     // ── REPLENISH_CHECKING — DFS cascade through drawdownOrder ────────────────
     // Withdraws from the first account in drawdownOrder that has a balance,
@@ -231,7 +213,7 @@ export class IntlRetirementScenario extends BaseScenario {
       }
       // No funds available — checking remains where it is
       return { ...state };
-    }, PRIORITY.PRE_PROCESS, 'Replenish Checking');
+    }, FinSimLib.Core.PRIORITY.PRE_PROCESS, 'Replenish Checking');
 
     // ── CHECKING_INTEREST_CREDIT — monthly interest, US (and AU after move) ───
     this.sim.reducers.register('CHECKING_INTEREST_CREDIT', (state, action, date) => {
@@ -246,7 +228,7 @@ export class IntlRetirementScenario extends BaseScenario {
         };
       }
       return base;
-    }, PRIORITY.CASH_FLOW, 'Checking Interest Credit');
+    }, FinSimLib.Core.PRIORITY.CASH_FLOW, 'Checking Interest Credit');
 
     // ── STOCK_DIVIDEND_CASH_APPLY — cash payout path ──────────────────────────
     // Credits checking + chains STOCK_DIVIDEND_TAX (same tax as reinvest path)
@@ -257,7 +239,7 @@ export class IntlRetirementScenario extends BaseScenario {
         state: { ...state },
         next: [{ type: 'STOCK_DIVIDEND_TAX', amount, isAuResident }],
       };
-    }, PRIORITY.CASH_FLOW, 'Stock Dividend Cash Apply');
+    }, FinSimLib.Core.PRIORITY.CASH_FLOW, 'Stock Dividend Cash Apply');
 
     // ── CHANGE_RESIDENCY_APPLY — flip residency flags ─────────────────────────
     this.sim.reducers.register('CHANGE_RESIDENCY_APPLY', (state) => {
@@ -281,12 +263,12 @@ export class IntlRetirementScenario extends BaseScenario {
         people: { primary, spouse },
         isAuResident: true,
       };
-    }, PRIORITY.PRE_PROCESS, 'Change Residency Apply');
+    }, FinSimLib.Core.PRIORITY.PRE_PROCESS, 'Change Residency Apply');
   }
 
   _registerHandlers(p) {
     // ── MONTHLY_EXPENSES ───────────────────────────────────────────────────────
-    this.sim.register('MONTHLY_EXPENSES', new HandlerEntry(({ data, date, state }) => {
+    this.sim.register('MONTHLY_EXPENSES', new FinSimLib.Core.HandlerEntry(({ data, date, state }) => {
       const amount       = data?.amount ?? p.monthlyExpenses;
       const postDebitBal = state.checkingAccount.balance - amount;
       const deficit      = (state.checkingAccount.minimumBalance ?? 0) - postDebitBal;
@@ -296,28 +278,28 @@ export class IntlRetirementScenario extends BaseScenario {
       }
       actions.push(
         { type: 'EXPENSE_DEBIT', amount },
-        new RecordMetricAction('monthly_expenses', amount),
-        new RecordBalanceAction(),
+        new FinSimLib.Core.RecordMetricAction('monthly_expenses', amount),
+        new FinSimLib.Core.RecordBalanceAction(),
       );
       return actions;
     }, 'Monthly Expenses'));
 
     // ── CHECKING_INTEREST_MONTHLY ──────────────────────────────────────────────
-    this.sim.register('CHECKING_INTEREST_MONTHLY', new HandlerEntry(({ state }) => {
+    this.sim.register('CHECKING_INTEREST_MONTHLY', new FinSimLib.Core.HandlerEntry(({ state }) => {
       const amount = +(state.checkingAccount.balance * p.checkingInterestRate / 12).toFixed(2);
-      if (amount <= 0) return [new RecordBalanceAction()];
+      if (amount <= 0) return [new FinSimLib.Core.RecordBalanceAction()];
       return [
         { type: 'CHECKING_INTEREST_CREDIT', amount },
-        new RecordMetricAction('checking_interest', amount),
-        new RecordBalanceAction(),
+        new FinSimLib.Core.RecordMetricAction('checking_interest', amount),
+        new FinSimLib.Core.RecordBalanceAction(),
       ];
     }, 'Monthly Checking Interest'));
 
     // ── DIVIDEND_SCHEDULED — bypass STOCK_DIVIDEND handler for payout toggle ──
-    this.sim.register('DIVIDEND_SCHEDULED', new HandlerEntry(({ state, data }) => {
+    this.sim.register('DIVIDEND_SCHEDULED', new FinSimLib.Core.HandlerEntry(({ state, data }) => {
       const stockVal = state.stockAccount?.balance ?? 0;
       const amount   = +(stockVal * p.stockDividendRate).toFixed(2);
-      if (amount <= 0) return [new RecordBalanceAction()];
+      if (amount <= 0) return [new FinSimLib.Core.RecordBalanceAction()];
 
       const reinvest    = data?.reinvest ?? p.stockDividendReinvest;
       const isAuResident = state.isAuResident;
@@ -325,62 +307,62 @@ export class IntlRetirementScenario extends BaseScenario {
       if (reinvest) {
         return [
           { type: 'STOCK_DIVIDEND_APPLY', amount, isAuResident },
-          new RecordMetricAction('dividends', amount),
-          new RecordBalanceAction(),
+          new FinSimLib.Core.RecordMetricAction('dividends', amount),
+          new FinSimLib.Core.RecordBalanceAction(),
         ];
       } else {
         return [
           { type: 'STOCK_DIVIDEND_CASH_APPLY', amount, isAuResident },
-          new RecordMetricAction('dividends', amount),
-          new RecordBalanceAction(),
+          new FinSimLib.Core.RecordMetricAction('dividends', amount),
+          new FinSimLib.Core.RecordBalanceAction(),
         ];
       }
     }, 'Dividend Scheduled'));
 
     // ── INTL_AU_SAVINGS_INTEREST — compute from balance × rate, emit APPLY ────
-    this.sim.register('INTL_AU_SAVINGS_INTEREST', new HandlerEntry(({ state }) => {
+    this.sim.register('INTL_AU_SAVINGS_INTEREST', new FinSimLib.Core.HandlerEntry(({ state }) => {
       const amount = +(state.auSavingsAccount.balance * p.auSavingsInterestRate).toFixed(2);
-      if (amount <= 0) return [new RecordBalanceAction()];
+      if (amount <= 0) return [new FinSimLib.Core.RecordBalanceAction()];
       return [
         { type: 'AU_SAVINGS_EARNINGS_APPLY', amount, isAuResident: state.isAuResident },
-        new RecordMetricAction('au_savings_interest', amount),
-        new RecordBalanceAction(),
+        new FinSimLib.Core.RecordMetricAction('au_savings_interest', amount),
+        new FinSimLib.Core.RecordBalanceAction(),
       ];
     }, 'AU Savings Interest'));
 
     // ── INTL_FIXED_INCOME_INTEREST — compute from balance × rate, emit APPLY ─
-    this.sim.register('INTL_FIXED_INCOME_INTEREST', new HandlerEntry(({ state }) => {
+    this.sim.register('INTL_FIXED_INCOME_INTEREST', new FinSimLib.Core.HandlerEntry(({ state }) => {
       const amount = +(state.fixedIncomeAccount.balance * p.fixedIncomeInterestRate).toFixed(2);
-      if (amount <= 0) return [new RecordBalanceAction()];
+      if (amount <= 0) return [new FinSimLib.Core.RecordBalanceAction()];
       return [
         { type: 'FIXED_INCOME_EARNINGS_APPLY', amount, isAuResident: state.isAuResident },
-        new RecordMetricAction('fixed_income_interest', amount),
-        new RecordBalanceAction(),
+        new FinSimLib.Core.RecordMetricAction('fixed_income_interest', amount),
+        new FinSimLib.Core.RecordBalanceAction(),
       ];
     }, 'Fixed Income Interest'));
 
     // ── INTL_SUPER_EARNINGS — compute from balance × rate, emit APPLY ─────────
-    this.sim.register('INTL_SUPER_EARNINGS', new HandlerEntry(({ state, data }) => {
+    this.sim.register('INTL_SUPER_EARNINGS', new FinSimLib.Core.HandlerEntry(({ state, data }) => {
       const rate   = data?.rate ?? 0.07;
       const amount = +(state.superAccount.balance * rate).toFixed(2);
-      if (amount <= 0) return [new RecordBalanceAction()];
+      if (amount <= 0) return [new FinSimLib.Core.RecordBalanceAction()];
       return [
         { type: 'SUPER_EARNINGS_APPLY', amount },
-        new RecordMetricAction('super_earnings', amount),
-        new RecordBalanceAction(),
+        new FinSimLib.Core.RecordMetricAction('super_earnings', amount),
+        new FinSimLib.Core.RecordBalanceAction(),
       ];
     }, 'Super Earnings'));
 
     // ── CHANGE_RESIDENCY — flip flags, close partial US year, log balance ─────
     // TAX_SETTLE_APPLY is a reducer (not a handler), so we emit it directly here
     // after computing the US tax from the pre-residency state.
-    const _settleService = new TaxSettleService();
-    this.sim.register('CHANGE_RESIDENCY', new HandlerEntry(({ state }) => {
+    const _settleService = new FinSimLib.Finance.TaxSettleService();
+    this.sim.register('CHANGE_RESIDENCY', new FinSimLib.Core.HandlerEntry(({ state }) => {
       const usTax = _settleService.computeUsTax(state);
       return [
         { type: 'CHANGE_RESIDENCY_APPLY' },
         { type: 'TAX_SETTLE_APPLY', cc: 'US', tax: usTax },
-        new RecordBalanceAction(),
+        new FinSimLib.Core.RecordBalanceAction(),
       ];
     }, 'Change Residency'));
   }

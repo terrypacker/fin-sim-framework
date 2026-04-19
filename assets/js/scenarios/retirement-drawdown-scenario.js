@@ -8,8 +8,6 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import {Scenarios} from "../../../src/index.js";
-
 export const DEFAULT_PARAMS = {
   monthlyExpenses:        5000,
   checkingMinBalance:     2000,
@@ -34,7 +32,7 @@ export const DEFAULT_EVENT_SERIES = [
   new FinSimLib.Scenarios.EventSeries({ id: 'tax',             label: 'Annual Tax Filing',         type: 'ANNUAL_TAX',               interval: 'annually', enabled: true, startOffset: 1, color: '#FF5722' }),
 ];
 
-export class RetirementDrawdownScenario extends BaseScenario {
+export class RetirementDrawdownScenario extends FinSimLib.Scenarios.BaseScenario {
   /**
    * @param {object}        opts
    * @param {object}        opts.params       - Override DEFAULT_PARAMS
@@ -246,7 +244,7 @@ export class RetirementDrawdownScenario extends BaseScenario {
         ordinaryIncomeYTD: 0,
         metrics: { ...state.metrics, income_tax: [...list, action.amount] }
       };
-    }, PRIORITY.TAX_APPLY, 'Income Tax');
+    }, FinSimLib.Core.PRIORITY.TAX_APPLY, 'Income Tax');
 
     // ── Generic metric + balance marker ─────────────────────────────────────────
     new FinSimLib.Core.MetricReducer().registerWith(this.sim.reducers, 'RECORD_METRIC');
@@ -291,7 +289,7 @@ export class RetirementDrawdownScenario extends BaseScenario {
     }, 'Annual Dividends'));
 
     // Annual bond interest — sum across all bond positions (ordinary income)
-    this.sim.register('ANNUAL_BOND_INTEREST', new HandlerEntry(({ state }) => {
+    this.sim.register('ANNUAL_BOND_INTEREST', new FinSimLib.Core.HandlerEntry(({ state }) => {
       const amount = +(state.brokerageAccount.bonds.reduce((s, b) => s + b.value * b.interestRate, 0)).toFixed(2);
       if (amount <= 0) return [new RecordBalanceAction()];
       return [

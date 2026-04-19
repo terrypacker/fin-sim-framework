@@ -314,7 +314,9 @@ npm install --save-dev @babel/parser
 ```
 
 ```text
-npm run build
+npm run build # build into ./dist
+npm run dev # To build and watch files, serve from ./dist folder on :8080
+npm start # Run live server :8080
 ```
 ---
 

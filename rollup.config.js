@@ -1,4 +1,6 @@
 import terser from '@rollup/plugin-terser'
+import copy from 'rollup-plugin-copy-watch';
+const isWatching = process.env.ROLLUP_WATCH === 'true';
 
 export default [
   // ESM
@@ -30,6 +32,21 @@ export default [
       name: 'FinSimLib',
       sourcemap: true
     },
-    plugins: [terser()]
+    plugins: [
+        terser(),
+        !isWatching && copy({
+          targets: [
+            { src: 'assets/**/*', dest: 'dist/assets' },
+            { src: '*.html', dest: 'dist' }
+          ]
+        }),
+        isWatching && copy({
+          watch: ['assets', '*.html'],
+          targets: [
+            { src: 'assets/**/*', dest: 'dist/assets' },
+            { src: '*.html', dest: 'dist' }
+          ]
+        })
+    ].filter(Boolean)
   }
 ];

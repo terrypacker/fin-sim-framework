@@ -7,11 +7,18 @@
   "browser": "dist/index.umd.js",
   "scripts": {
     "build:index": "node scripts/build-index.js",
-    "build": "rollup -c"
+    "build": "rollup -c",
+    "start": "live-server dist --no-browser",
+    "build:watch": "rollup -c -w",
+    "dev": "concurrently \"npm run build:watch\" \"npm run start\""
   },
   "devDependencies": {
     "@babel/parser": "^7.29.2",
     "@rollup/plugin-terser": "^1.0.0",
-    "rollup": "^4.60.2"
+    "concurrently": "^9.2.1",
+    "live-server": "^1.2.2",
+    "rollup": "^4.60.2",
+    "rollup-plugin-copy": "^3.5.0",
+    "rollup-plugin-copy-watch": "^0.0.1"
   }
 }

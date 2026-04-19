@@ -17,8 +17,6 @@
  * limitations under the License.
  */
 
-import {Core, Finance, Scenarios} from "../../../src/index.js";
-
 export const DEFAULT_PARAMS = {
   salaryMonthly:       8000,
   savingsInterestRate: 0.04,
