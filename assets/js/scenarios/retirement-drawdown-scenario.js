@@ -291,7 +291,7 @@ export class RetirementDrawdownScenario extends FinSimLib.Scenarios.BaseScenario
     // Annual bond interest — sum across all bond positions (ordinary income)
     this.sim.register('ANNUAL_BOND_INTEREST', new FinSimLib.Core.HandlerEntry(({ state }) => {
       const amount = +(state.brokerageAccount.bonds.reduce((s, b) => s + b.value * b.interestRate, 0)).toFixed(2);
-      if (amount <= 0) return [new RecordBalanceAction()];
+      if (amount <= 0) return [new FinSimLib.Core.RecordBalanceAction()];
       return [
         { type: 'BOND_INTEREST_CREDIT', amount },
         new FinSimLib.Core.RecordMetricAction('bond_interest', amount),
