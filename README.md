@@ -397,6 +397,7 @@ npm run build:index
 ```sh
 npm install          # install devDependencies (rollup, terser, live-server, concurrently)
 npm run build        # one-shot build → dist/
+npm run test         # run all tests
 npm run dev          # build + watch + live-server on :8080
 npm start            # live-server only (dist/ must already be built)
 ```
