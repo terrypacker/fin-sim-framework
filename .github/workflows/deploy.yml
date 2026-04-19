@@ -17,7 +17,7 @@ jobs:
       - name: Setup Node.js ⚙️
         uses: actions/setup-node@v4
         with:
-          node-version: '25.9.0' # Specify your preferred version
+          node-version: '24' # Specify your preferred version
           cache: 'npm'
 
       - name: Install and Build 🔧
