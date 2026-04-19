@@ -5,7 +5,9 @@
 * Time should be tracked as UTC ms since epoch
 * Time should be converted to a global timezone, which is selectable by the user and defaults to current timezone
 
-## Enhancement Specifications (Not Yet Implemented)
+
+## Implemented Features 
+Not all features are listed here yet, just those added later.
 
 ---
 ### [Period Engine](0-period-engine.md)
@@ -19,6 +21,10 @@ This document defines a **general-purpose Period Engine** that:
     * Branching timelines
     * Adjustment system
     * Time scrubber UI
+
+---
+## Unimplemented Features
+
 ---
 ### [Adjustment Entry System](1-adjustment-entry-system.md)
 This document defines the architecture, data model, invariants, APIs, and UI integration requirements for implementing an **Adjustment Entry System** within a time-aware, event-sourced financial + simulation platform.

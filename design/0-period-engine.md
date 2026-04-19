@@ -4,486 +4,476 @@
 
 ---
 
-## 1. Purpose
+## 1. Overview
 
-This document defines a **general-purpose Period Engine** that:
+The Period Engine is a **general-purpose temporal abstraction system** that:
 
-* Operates on **UTC-based milliseconds since epoch**
-* Supports financial, simulation, and system-wide temporal partitioning
-* Integrates with:
-
-    * Event-sourced architecture
-    * Branching timelines
-    * Adjustment system
-    * Time scrubber UI
-
-The engine formalizes **Time Period** as a first-class system primitive.
+- Represents time using **UTC epoch milliseconds**
+- Supports **multiple overlapping calendar hierarchies**
+- Enables **deterministic period resolution and aggregation**
+- Serves as a foundational layer for finance, simulation, and analytics systems
 
 ---
 
-## 2. Design Goals
+## 2. Core Design Principles
+
+### 2.1 Time is Absolute
+
+All periods are defined as:
+
+```ts
+startMs <= ts < endMs
+````
+
+* UTC only
+* No timezone ambiguity
+* No implicit calendar assumptions
 
 ---
 
-### 2.1 Functional Goals
+### 2.2 Periods Form a DAG (Not a Tree)
 
-* Deterministic mapping: `timestamp → period`
-* Support arbitrary period definitions:
+The system models time as a:
 
-    * Fixed (monthly, daily)
-    * Custom (user-defined ranges)
-* Period lifecycle management:
-
-    * `open → closed → locked`
-* Enforce write constraints based on period state
-* Enable efficient querying and partitioning
-
----
-
-### 2.2 Non-Functional Goals
-
-* Timezone-agnostic (strict UTC)
-* O(log n) lookup for period resolution
-* Immutable period boundaries once created
-* High performance for large datasets
-
----
-
-## 3. Core Concepts
-
----
-
-### 3.1 Period Definition
-
-A Period is a **half-open interval**:
-
-```text
-[start, end)
-```
+> **Directed Acyclic Graph (DAG)**
 
 Where:
 
-* `start` is inclusive
-* `end` is exclusive
-* Both are UTC epoch milliseconds
+* A period can have **multiple parents**
+* A period can belong to **multiple hierarchies simultaneously**
 
----
+Example:
 
-### 3.2 Period Identity
-
-Each period MUST have:
-
-```ts id="y8f7t3"
-
-interface Period {
-  id: string;
-
-  start: number; // inclusive (UTC ms)
-  end: number;   // exclusive (UTC ms)
-
-  // Optional hierarchy
-  parentPeriodId?: string;
-
-  // Metadata
-  label?: string;
-  metadata?: Record<string, any>;
-}
+```
+Jan 2024
+ ├── US Year 2024
+ └── AU Year 2023-2024
 ```
 
 ---
 
-### 3.3 Invariants
+### 2.3 Hierarchy is Explicit
+
+No relationships are inferred.
+
+All parent-child relationships must be explicitly defined.
 
 ---
 
-#### Non-overlapping
+## 3. Data Model
 
-```ts id="n0w2lq"
-∀ P1, P2:
-  P1.id !== P2.id ⇒
-  P1.end <= P2.start OR P2.end <= P1.start
-```
-
----
-
-#### Full coverage (optional mode)
-
-System MAY enforce:
-
-```ts id="9o7wra"
-∀ t ∈ timeline:
-  ∃ exactly one period P such that t ∈ P
-```
-
----
-
-#### Immutability
-
-* `start` and `end` MUST NOT change after creation
-
----
-
-## 4. Period Types
-
----
-
-### 4.1 Fixed Interval Periods
-
-Generated automatically:
-
-* Daily: 86400000 ms
-* Monthly: variable length
-* Custom cadence
-
----
-
-### 4.2 Custom Periods
-
-Manually defined arbitrary ranges
-
----
-
-### 4.3 Hierarchical Periods
-
-```text
-Year
- ├─ Quarter
- │   ├─ Month
- │   │   ├─ Day
-```
-
----
-
-```ts id="3i3k3d"
-parentPeriodId: string | null
-```
-
----
-
-## 5. Core APIs
-
----
-
-### 5.1 Resolve Period
-
-```ts id="9j0x6k"
-function getPeriodForTimestamp(ts: number): Period;
-```
-
-Requirements:
-
-* O(log n) lookup
-* MUST return exactly one period (if full coverage enabled)
-
----
-
-### 5.2 Create Period
-
-```ts id="a3l9x2"
-function createPeriod(input: {
-  start: number;
-  end: number;
-  parentPeriodId?: string;
-}): Period;
-```
-
-Validation:
-
-* No overlap
-* Valid interval (`start < end`)
-
----
-
-## 6. Data Structures
-
----
-
-### 6.1 Storage Model
-
-```text
-periods(
-  id,
-  start,
-  end,
-  parent_period_id
-)
-```
-
----
-
-### 6.2 Indexing
-
-Required indexes:
-
-```ts id="8xz7oz"
-// Sorted by start
-BTree<start, Period>
-
-// Optional:
-Map<id, Period>
-```
-
----
-
-### 6.3 Lookup Optimization
-
-Binary search:
-
-```ts id="y1s7sp"
-function findPeriod(ts) {
-  // binary search over sorted start times
-}
-```
-
----
-
-## 7. Integration with Event System
-
----
-
-### 7.1 Event Contract
-
-All events MUST include:
-
-```ts id="r41g1g"
-event.periodId: string;
-```
-
----
-
-### 7.2 Assignment Rule
-
-```ts id="n1d9a4"
-event.periodId = getPeriodForTimestamp(event.eventTime).id;
-```
-
----
-
-### 7.3 Validation
-
-On write:
-
-* None required
-
----
-
-## 8. Adjustment System Integration
-
----
-
-* No adjustment system required
-
----
-
-## 9. Branching Integration
-
----
-
-### 9.1 Shared Periods
-
-* Period definitions are **global**
-* Not branch-specific
-
----
-
-### 9.2 Branch Behavior
-
-* Events in different branches reference same period IDs
-* Period status applies across all branches
-
----
-
-## 10. Time Scrubber Integration
-
----
-
-### 10.1 Behavior
-
-* Cursor maps to:
+### 3.1 Period
 
 ```ts
-(time) → period
-```
+type PeriodType = 'MONTH' | 'YEAR_US' | 'YEAR_AU'
 
----
-
-### 10.2 UI Requirements
-
-* Highlight active period
-* Display status (open/closed/locked)
-* Snap-to-boundary capability
-
----
-
-## 11. Snapshot Integration
-
----
-
-### 11.1 Snapshot Trigger
-
-* At period boundaries
-* On period close
-
----
-
-### 11.2 Snapshot Schema
-
-```ts id="p8y4ht"
-interface Snapshot {
-  periodId: string;
-  timestamp: number;
-  state: SerializedState;
+type Period = {
+  id: string
+  type: PeriodType
+  name: string
+  startMs: number   // inclusive
+  endMs: number     // exclusive
+  metaData?: {} //Optional auxilary data
 }
 ```
 
 ---
 
-## 12. Performance Requirements
+### 3.2 PeriodRelationship
 
----
-
-### 12.1 Lookup
-
-* Period resolution: O(log n)
-
----
-
-### 12.2 Creation
-
-* Period insertion: O(log n)
-
----
-
-### 12.3 Validation
-
-* Write validation: O(log n)
-
----
-
-## 13. Edge Cases
-
----
-
-### 13.1 Gaps in Periods
-
-Two modes:
-
-* Strict: no gaps allowed
-* Flexible: allow undefined time
-
----
-
-### 13.2 Overlapping Definitions
-
-* MUST reject at creation time
-
----
-
-### 13.3 Large Time Ranges
-
-* Support full epoch range (±2^53 ms safe range)
-
----
-
-### 13.4 Backfilled Events
-
-* Allowed
-* Assigned to correct historical period
-* May require adjustment logic
-
----
-
-## 14. Testing Requirements
-
----
-
-### 14.1 Deterministic Mapping
-
-* Same timestamp → same period always
-
----
-
-### 14.2 Boundary Conditions
-
-* Test:
-
-    * exact `start`
-    * exact `end - 1`
-    * exact `end`
-
----
-
-### 14.3 Transition Enforcement
-
-* Cannot write to closed/locked periods
-
----
-
-### 14.4 Overlap Prevention
-
-* No two periods overlap
-
----
-
-## 15. Security / Governance
-
----
-
-### 15.1 Audit Trail
-
-All transitions MUST emit events:
-
-```ts id="z9h6kw"
-type: 'period.transitioned'
+```ts
+type PeriodRelationship = {
+  parentId: string
+  childId: string
+  ordinal?: number   // ordering within parent (e.g., month 1–12)
+}
 ```
 
 ---
 
+## 4. Concrete Dataset (Derived from CSV)
 
-## 16. Anti-Patterns
+### 4.1 Atomic Periods (Months)
 
----
+Example:
 
-* Using local timezones internally ❌
-* Inclusive end boundaries ❌
-* Allowing period mutation ❌
-* Implicit period assignment ❌
-
----
-
-## 17. Acceptance Criteria
-
----
-
-System is complete when:
-
-* Periods can be created and queried deterministically
-* Events correctly map to periods
-* No overlaps occur
-* Performance meets requirements
+```ts
+{
+  id: 'M-2024-01',
+  type: 'MONTH',
+  name: 'Jan/2024',
+  startMs: 1704067200000,
+  endMs: 1706745600000
+}
+```
 
 ---
 
-## 18. Summary
+### 4.2 Composite Periods
 
-This Period Engine provides:
+#### US Calendar Year
 
-* A universal temporal partitioning system
-* Deterministic time-to-period mapping
-* Enforcement of temporal constraints
-* Foundation for:
+```ts
+{
+  id: 'US-2024',
+  type: 'YEAR_US',
+  name: '2024',
+  startMs: 1704067200000,
+  endMs: 1735689600000
+}
+```
 
-    * accounting correctness
-    * simulation consistency
-    * time-based reasoning
+#### AU Fiscal Year
 
-It serves as the **temporal backbone** of your entire architecture.
+```ts
+{
+  id: 'AU-2023-2024',
+  type: 'YEAR_AU',
+  name: '2023-2024',
+  startMs: 1688169600000,
+  endMs: 1719792000000
+}
+```
 
 ---
 
-## 19. Future Extensions
+### 4.3 Relationships
 
-* Timezone projection layer (view-only)
-* Dynamic period generation (on-demand)
-* Period versioning (rare cases)
-* Multi-calendar support
+```ts
+{ parentId: 'US-2024', childId: 'M-2024-01', ordinal: 1 }
+
+{ parentId: 'AU-2023-2024', childId: 'M-2024-01', ordinal: 7 }
+```
+
+---
+
+## 5. Indexing Strategy
+
+### 5.1 Core Indexes
+
+```ts
+periodById: Map<string, Period>
+
+childrenByParent: Map<string, PeriodRelationship[]>
+
+parentsByChild: Map<string, PeriodRelationship[]>
+```
+
+---
+
+### 5.2 Time Index
+
+```ts
+periodsByStart: Period[] // sorted by startMs
+```
+
+---
+
+### 5.3 Optional (Scale Optimization)
+
+* Interval tree for time queries
+* Precomputed rollup caches
+
+---
+
+## 6. Core APIs
+
+---
+
+### 6.1 `getPeriodsAt(ts)`
+
+#### Purpose
+
+Return all periods containing a timestamp.
+
+#### Signature
+
+```ts
+function getPeriodsAt(ts: number): Period[]
+```
+
+#### Example
+
+```ts
+getPeriodsAt(Date.parse('2024-01-15'))
+```
+
+Returns:
+
+```ts
+[
+  M-2024-01,
+  US-2024,
+  AU-2023-2024
+]
+```
+
+#### Implementation
+
+```ts
+function getPeriodsAt(ts: number): Period[] {
+  const result: Period[] = []
+
+  for (const p of periodsByStart) {
+    if (p.startMs <= ts && ts < p.endMs) {
+      result.push(p)
+    }
+  }
+
+  return result
+}
+```
+
+---
+
+### 6.2 `rollup(periodId)`
+
+#### Purpose
+
+Return all **leaf descendant periods** under a given period.
+
+#### Signature
+
+```ts
+function rollup(periodId: string): Period[]
+```
+
+#### Example
+
+```ts
+rollup('US-2024')
+```
+
+Returns:
+
+```ts
+[ M-2024-01 ... M-2024-12 ]
+```
+
+#### Implementation
+
+```ts
+function rollup(periodId: string): Period[] {
+  const result: Period[] = []
+  const stack = [periodId]
+
+  while (stack.length) {
+    const current = stack.pop()!
+    const children = childrenByParent.get(current) || []
+
+    if (children.length === 0) {
+      result.push(periodById.get(current)!)
+    } else {
+      for (const rel of children) {
+        stack.push(rel.childId)
+      }
+    }
+  }
+
+  return result
+}
+```
+
+---
+
+### 6.3 `aggregate(periodId, metricFn)`
+
+#### Purpose
+
+Aggregate values across all leaf periods under a parent.
+
+#### Signature
+
+```ts
+function aggregate(
+  periodId: string,
+  metricFn: (period: Period) => number
+): number
+```
+
+#### Behavior
+
+* Expands period via `rollup`
+* Applies metric function
+* Returns aggregated result
+
+#### Example
+
+```ts
+aggregate('US-2024', (p) => revenueByPeriod[p.id])
+```
+
+#### Implementation
+
+```ts
+function aggregate(
+  periodId: string,
+  metricFn: (period: Period) => number
+): number {
+  const leaves = rollup(periodId)
+
+  let total = 0
+  for (const p of leaves) {
+    total += metricFn(p)
+  }
+
+  return total
+}
+```
+
+#### Variants
+
+* Weighted aggregation:
+
+```ts
+metricFn(period) => value * weight
+```
+
+* Multi-metric aggregation (return object instead of number)
+
+---
+
+### 6.4 `getParents(periodId)`
+
+```ts
+function getParents(periodId: string): Period[] {
+  return (parentsByChild.get(periodId) || [])
+    .map(rel => periodById.get(rel.parentId)!)
+}
+```
+
+---
+
+### 6.5 `getPath(periodId, targetType)`
+
+#### Purpose
+
+Traverse upward to a specific hierarchy.
+
+#### Example
+
+```ts
+getPath('M-2024-01', 'YEAR_AU')
+// → AU-2023-2024
+```
+
+---
+
+## 7. Engine Behavior
+
+### 7.1 Multi-Hierarchy Support
+
+A single timestamp maps to multiple valid period contexts.
+
+---
+
+### 7.2 Deterministic Resolution
+
+All queries are:
+
+* Pure functions
+* Deterministic
+* Based solely on time + graph
+
+---
+
+### 7.3 No Implicit Logic
+
+The engine must never infer:
+
+* Calendar membership
+* Period grouping
+
+Everything must come from data.
+
+---
+
+## 8. Validation Rules
+
+### 8.1 No Cycles
+
+Graph must remain acyclic.
+
+---
+
+### 8.2 Time Consistency
+
+For every relationship:
+
+```ts
+child.startMs >= parent.startMs
+child.endMs <= parent.endMs
+```
+
+---
+
+### 8.3 Full Coverage (Optional)
+
+Ensure no gaps in required hierarchies.
+
+---
+
+## 9. Extension Points
+
+### 9.1 Additional Period Types
+
+* QUARTER
+* WEEK (ISO)
+* CUSTOM_FISCAL
+
+---
+
+### 9.2 Alternative Calendars
+
+* Retail 4-5-4
+* Academic calendars
+* Simulation timelines
+
+---
+
+### 9.3 Precomputed Aggregates
+
+* Cached rollups
+* Incremental updates
+* Event-driven recomputation
+
+---
+
+## 10. Integration Considerations
+
+### 10.1 With Simulation Systems
+
+* Time scrubbing maps directly to `getPeriodsAt`
+* Branching timelines reuse same structure
+
+---
+
+### 10.2 With Financial Systems
+
+* Multi-calendar reporting (US vs AU)
+* Consistent aggregation across hierarchies
+
+---
+
+### 10.3 With Analytics
+
+* Period slicing
+* Multi-dimensional rollups
+
+---
+
+## 11. Key Insight
+
+This system is not just a calendar.
+
+It is:
+
+> A **time-indexed, multi-hierarchy aggregation graph**
+
+That cleanly separates:
+
+* **Time (intervals)**
+* **Structure (relationships)**
+* **Computation (aggregation)**
+
+---
