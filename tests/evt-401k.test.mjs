@@ -28,6 +28,7 @@ import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
 import { Account } from '../src/finance/account.js';
+import { FinancialState } from '../src/finance/financial-state.js';
 import { Simulation } from '../src/simulation-framework/simulation.js';
 import { TaxService } from '../src/finance/tax-service.js';
 import { PeriodService } from '../src/finance/period/period-service.js';
@@ -46,7 +47,7 @@ function build401kSim({
   k401EarningsBasis   = 0,
   personBirthDate     = new Date(1966, 0, 1), // turns 60 on 2026-01-01
 } = {}) {
-  const initialState = {
+  const sim = new Simulation(new Date(2026, 0, 1), { initialState: new FinancialState({
     checkingAccount: new Account(initialChecking),
     k401Account: {
       balance:           k401Balance,
@@ -57,10 +58,7 @@ function build401kSim({
     usOrdinaryIncomeYTD: 0,
     usNegativeIncomeYTD: 0,
     usPenaltyYTD:        0,
-    metrics: {},
-  };
-
-  const sim = new Simulation(new Date(2026, 0, 1), { initialState });
+  }) });
   const svc = new TaxService().registerWith(sim, ['US'], buildUsPeriodService(2026));
 
   return { sim, svc };

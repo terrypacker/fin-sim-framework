@@ -27,6 +27,7 @@ import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
 import { Account } from '../src/finance/account.js';
+import { FinancialState } from '../src/finance/financial-state.js';
 import { Simulation } from '../src/simulation-framework/simulation.js';
 import { TaxService } from '../src/finance/tax-service.js';
 import { PeriodService } from '../src/finance/period/period-service.js';
@@ -46,7 +47,7 @@ function buildBrokerageSim({
   stockEarningsBasis     = 0,
   isAuResident           = false,
 } = {}) {
-  const initialState = {
+  const sim = new Simulation(new Date(2026, 0, 1), { initialState: new FinancialState({
     checkingAccount: new Account(initialChecking),
     fixedIncomeAccount: { balance: fixedIncomeBalance },
     stockAccount: {
@@ -61,10 +62,7 @@ function buildBrokerageSim({
     auOrdinaryIncomeYTD: 0,
     auCapitalGainsYTD:   0,
     ftcYTD:              0,
-    metrics: {},
-  };
-
-  const sim = new Simulation(new Date(2026, 0, 1), { initialState });
+  }) });
   const svc = new TaxService().registerWith(sim, ['US'], buildUsPeriodService(2026));
 
   return { sim, svc };

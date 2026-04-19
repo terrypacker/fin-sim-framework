@@ -26,6 +26,7 @@ import { HandlerRegistry } from './handlers.js'
 import { DateUtils } from "./date-utils.js";
 import { SimulationBusMessage, DebugActionBusMessage } from "./bus-messages.js";
 import { SimulationHistory } from "./simulation-history.js";
+import { SimulationState } from "./simulation-state.js";
 
 /**
  *
@@ -54,7 +55,9 @@ export class Simulation {
     this.handlers = new HandlerRegistry();   // eventType -> [HandlerEntry]
     this.reducers = new ReducerPipeline();   // actionType -> reducer
 
-    this.state = structuredClone(initialState);
+    this.state = structuredClone(
+      initialState instanceof SimulationState ? initialState.toPlain() : initialState
+    );
 
     this.rng = this.createRNG(seed);
 

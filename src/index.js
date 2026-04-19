@@ -15,6 +15,7 @@ import { UsAccountModule2026 } from './finance/account-rules/us/us-account-modul
 import { Account, AccountService } from './finance/account.js';
 import { AssetService } from './finance/asset-service.js';
 import { Asset } from './finance/asset.js';
+import { FinancialState } from './finance/financial-state.js';
 import { InvestmentAccount } from './finance/investment-account.js';
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
@@ -49,6 +50,7 @@ import { ReducerPipeline, PRIORITY, Reducer, NoOpReducer, MetricReducer, Account
 import { ScenarioRunner } from './simulation-framework/scenario.js';
 import { ActionNode, SimulationEventGraph } from './simulation-framework/simulation-event-graph.js';
 import { SimulationHistory } from './simulation-framework/simulation-history.js';
+import { SimulationState } from './simulation-framework/simulation-state.js';
 import { Simulation } from './simulation-framework/simulation.js';
 import { BalanceChartView } from './visualization/balance-chart-view.js';
 import { GraphView } from './visualization/graph-view.js';
@@ -89,6 +91,7 @@ export const Finance = {
   AccountService,
   AssetService,
   Asset,
+  FinancialState,
   InvestmentAccount,
   buildMonthPeriod,
   buildUsCalendarYear,
@@ -148,6 +151,7 @@ export const Core = {
   ActionNode,
   SimulationEventGraph,
   SimulationHistory,
+  SimulationState,
   Simulation,
 };
 

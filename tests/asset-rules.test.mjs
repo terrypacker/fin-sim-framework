@@ -33,11 +33,13 @@ import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
 import { Account, AccountService }  from '../src/finance/account.js';
+import { FinancialState }           from '../src/finance/financial-state.js';
 import { InvestmentAccount }        from '../src/finance/investment-account.js';
 import { Asset }                    from '../src/finance/asset.js';
 import { AssetService }             from '../src/finance/asset-service.js';
 import { Person }                   from '../src/finance/person.js';
 import { Simulation }               from '../src/simulation-framework/simulation.js';
+import { SimulationState }          from '../src/simulation-framework/simulation-state.js';
 import { PRIORITY, MetricReducer, NoOpReducer } from '../src/simulation-framework/reducers.js';
 import { RecordBalanceAction } from '../src/simulation-framework/actions.js';
 
@@ -95,11 +97,9 @@ test('AR-10: Superannuation sole ownership — person has 100% of balance', () =
 // ══════════════════════════════════════════════════════════════════════════════
 
 function buildMinBalanceSim({ initialBalance = 1000, minimumBalance = 500 } = {}) {
-  const initialState = {
+  const sim = new Simulation(new Date(2026, 0, 1), { initialState: new FinancialState({
     checkingAccount: new Account(initialBalance, { minimumBalance }),
-  };
-
-  const sim = new Simulation(new Date(2026, 0, 1), { initialState });
+  }) });
 
   // Debit reducer delegates to AccountService.safeDebit
   sim.reducers.register('CHECKING_DEBIT', (state, action) => {
@@ -179,7 +179,7 @@ function buildResidencyTrackingSim({
   checkingBalance = 10000,
   superBalance    = 200000,
 } = {}) {
-  const initialState = {
+  const sim = new Simulation(new Date(2026, 0, 1), { initialState: new FinancialState({
     person: new Person('primary', new Date(1966, 0, 1), { isAuResident: false }),
 
     // AR-1: NO residency tracking — plain Account (no balanceAtResidencyChange field)
@@ -205,11 +205,7 @@ function buildResidencyTrackingSim({
 
     // AR-10: NO — Superannuation; is an InvestmentAccount but residency NOT recorded
     superAccount: new InvestmentAccount(superBalance, { minimumAge: 60 }),
-
-    metrics: {},
-  };
-
-  const sim = new Simulation(new Date(2026, 0, 1), { initialState });
+  }) });
 
   sim.reducers.register('RESIDENCY_CHANGE_APPLY', (state, action) => {
     // Update person residency
@@ -335,14 +331,11 @@ function buildLoanSim({
   auStockBalance  = 100000,
   propertyValue   = 800000,
 } = {}) {
-  const initialState = {
+  const sim = new Simulation(new Date(2026, 0, 1), { initialState: new FinancialState({
     checkingAccount: new Account(initialChecking),
     auStockAccount:  new InvestmentAccount(auStockBalance, { loanBalance: 0 }),
     realProperty:    new Asset('Primary Residence', propertyValue, 300000, { loanBalance: 0 }),
-    metrics: {},
-  };
-
-  const sim = new Simulation(new Date(2026, 0, 1), { initialState });
+  }) });
 
   // AR-5: Take loan against AU brokerage stocks
   sim.reducers.register('AU_STOCK_LOAN_APPLY', (state, action, date) => {
@@ -488,7 +481,7 @@ test('AR: Drawdown priority order is correct for all assets', () => {
 });
 
 function buildDrawdownSim() {
-  const initialState = {
+  const sim = new Simulation(new Date(2026, 0, 1), { initialState: new SimulationState({
     // Each asset carries its own drawdownPriority so reducers can sort without external config
     assets: [
       { key: 'checkingAccount',    balance: 1000,  drawdownPriority: 1 },
@@ -497,9 +490,7 @@ function buildDrawdownSim() {
       { key: 'stockAccount',       balance: 20000, drawdownPriority: 4 },
     ],
     totalDrawn: 0,
-  };
-
-  const sim = new Simulation(new Date(2026, 0, 1), { initialState });
+  }) });
 
   // Drawdown reducer: liquidate assets in ascending priority order until amount is met
   sim.reducers.register('DRAWDOWN_APPLY', (state, action) => {

@@ -31,6 +31,7 @@ import { Account, AccountService } from '../src/finance/account.js';
 import { Asset } from '../src/finance/asset.js';
 import { Simulation } from '../src/simulation-framework/simulation.js';
 import { PRIORITY } from '../src/simulation-framework/reducers.js';
+import { SimulationState } from '../src/simulation-framework/simulation-state.js';
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 //
@@ -54,14 +55,11 @@ function buildFinancialSim({ seed = 1, assets } = {}) {
     new Asset('item4', 9200,  1200),
   ];
 
-  const initialState = {
-    metrics:       {},
+  const sim = new Simulation(new Date(2025, 0, 1), { seed, initialState: new SimulationState({
     realizedGains: 0,
     savingsAccount: new Account(0),
     assets: assets ?? defaultAssets,
-  };
-
-  const sim = new Simulation(new Date(2025, 0, 1), { seed, initialState });
+  }) });
 
   // ── Reducers ────────────────────────────────────────────────────────────
   sim.reducers.register('REALIZE_GAIN', (state, action) => ({

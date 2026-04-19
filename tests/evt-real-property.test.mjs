@@ -23,6 +23,7 @@ import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
 import { Account } from '../src/finance/account.js';
+import { FinancialState } from '../src/finance/financial-state.js';
 import { Simulation } from '../src/simulation-framework/simulation.js';
 import { TaxService } from '../src/finance/tax-service.js';
 import { PeriodService } from '../src/finance/period/period-service.js';
@@ -40,17 +41,14 @@ function buildRealPropertySim({
   initialChecking  = 5000,
   isAuResident     = false,
 } = {}) {
-  const initialState = {
+  const sim = new Simulation(new Date(2026, 0, 1), { initialState: new FinancialState({
     checkingAccount: new Account(initialChecking),
     isAuResident,
     usCapitalGainsYTD:           0,
     auCapitalGainsYTD:           0,
     auNonResidentWithholdingYTD: 0,
     ftcYTD:                      0,
-    metrics: {},
-  };
-
-  const sim = new Simulation(new Date(2026, 0, 1), { initialState });
+  }) });
   // EVT-33 (AU house) + EVT-34 (US house) — needs both country modules
   const svc = new TaxService().registerWith(sim, ['AU', 'US'], buildMixedPeriodService());
 
