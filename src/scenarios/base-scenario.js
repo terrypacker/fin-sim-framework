@@ -28,16 +28,26 @@ export class BaseScenario {
    */
   _scheduleEvents() {
     const intervalFns = {
-      monthly:   d => DateUtils.addMonths(d, 1),
-      quarterly: d => DateUtils.addMonths(d, 3),
-      annually:  d => DateUtils.addYears(d, 1)
+      monthly:    d => DateUtils.addMonths(d, 1),
+      quarterly:  d => DateUtils.addMonths(d, 3),
+      annually:   d => DateUtils.addYears(d, 1),
+      'month-end': d => DateUtils.endOfMonth(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))),
+      'year-end':  d => DateUtils.endOfYear(DateUtils.addYears(d, 1)),
+    };
+
+    // Snap the start date to the end of the period for period-end intervals
+    const startSnapFns = {
+      'month-end': d => DateUtils.endOfMonth(d),
+      'year-end':  d => DateUtils.endOfYear(d),
     };
 
     for (const series of this.eventSeries) {
       if (!series.enabled) continue;
-      const start = series.startOffset
+      let start = series.startOffset
           ? DateUtils.addYears(this.simStart, series.startOffset)
           : this.simStart;
+      const snapFn = startSnapFns[series.interval];
+      if (snapFn) start = snapFn(start);
       this.sim.scheduleRecurring({
         startDate:  start,
         type:       series.type,

@@ -29,4 +29,15 @@ export class DateUtils {
   static addYears(d, n) {
     return new Date(Date.UTC(d.getUTCFullYear() + n, d.getUTCMonth(), d.getUTCDate()));
   }
+
+  /** Returns the last day of the month containing `d`. */
+  static endOfMonth(d) {
+    // Day 0 of the next month is the last day of the current month
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+  }
+
+  /** Returns Dec 31 of the year containing `d`. */
+  static endOfYear(d) {
+    return new Date(Date.UTC(d.getUTCFullYear(), 11, 31));
+  }
 }

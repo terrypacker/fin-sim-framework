@@ -33,7 +33,7 @@ export default [
       sourcemap: true
     },
     plugins: [
-        terser(),
+        !isWatching && terser(),
         !isWatching && copy({
           targets: [
             { src: 'assets/**/*', dest: 'dist/assets' },

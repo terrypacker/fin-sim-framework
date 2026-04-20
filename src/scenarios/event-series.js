@@ -14,7 +14,7 @@
  * @property {string}  id          - Unique identifier for this series
  * @property {string}  label       - Human-readable display name
  * @property {string}  type        - Simulation event type string (e.g. 'MONTHLY_SALARY')
- * @property {string}  interval    - Recurrence interval: 'monthly' | 'quarterly' | 'annually'
+ * @property {string}  interval    - Recurrence interval: 'monthly' | 'quarterly' | 'annually' | 'month-end' | 'year-end'
  * @property {boolean} enabled     - Whether this series is active
  * @property {number}  startOffset - Years after simStart to begin (0 = start immediately)
  * @property {string}  color       - CSS color used for visualization
