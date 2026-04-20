@@ -10,7 +10,7 @@
 
 import { TaxEngine }             from './tax/tax-engine.js';
 import { AccountRulesEngine }    from './account-rules/account-rules-engine.js';
-import { AccountService }        from './account.js';
+import { AccountService, InsufficientFundsError } from './account.js';
 import { MetricReducer, NoOpReducer, PRIORITY } from '../simulation-framework/reducers.js';
 import { TaxSettleService }      from './tax-settle-service.js';
 
@@ -218,21 +218,20 @@ export class TaxService {
     }, PRIORITY.TAX_APPLY, 'Tax Settle Apply');
 
     // TAX_PAYMENT_DEBIT reducer: debit the appropriate country's cash account.
-    // If the account is short, chain REPLENISH_SAVINGS then retry with replenished:true
-    // to prevent a second replenishment attempt (same pattern as INTL_TRANSFER_APPLY).
+    // If the account is short, replenish from domestic investment accounts first.
+    // Partial payment is accepted if all domestic sources are exhausted.
     sim.reducers.register('TAX_PAYMENT_DEBIT', (state, action, date) => {
-      const { amount, cc, replenished = false } = action;
+      const { amount, cc } = action;
       const accountKey  = cc === 'AU' ? 'auSavingsAccount' : 'usSavingsAccount';
       const cashAccount = state[accountKey];
       const shortfall   = amount - Math.max(0, cashAccount.balance);
-      if (!replenished && shortfall > 0) {
-        return {
-          state: { ...state },
-          next: [
-            { type: 'REPLENISH_SAVINGS', deficit: shortfall, targetKey: accountKey, orderIndex: 0 },
-            { type: 'TAX_PAYMENT_DEBIT', amount, cc, replenished: true },
-          ],
-        };
+      if (shortfall > 0) {
+        try {
+          this._accountService.replenishSavings(state, accountKey, shortfall, date);
+        } catch (e) {
+          if (!(e instanceof InsufficientFundsError)) throw e;
+          // Proceed with partial payment — pay what's available
+        }
       }
       const debit = Math.min(amount, Math.max(0, cashAccount.balance));
       if (debit > 0) {

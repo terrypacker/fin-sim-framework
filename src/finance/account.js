@@ -29,6 +29,28 @@ export const USD = { code: 'USD', symbol: '$' };
 export const AUD = { code: 'AUD', symbol: 'A$' };
 
 /**
+ * Thrown by AccountService.replenishSavings when all eligible accounts in a
+ * country are exhausted and the requested deficit could not be fully covered.
+ */
+export class InsufficientFundsError extends Error {
+  /**
+   * @param {string} country   - ISO country code (e.g. 'US', 'AU')
+   * @param {string} currency  - Currency code (e.g. 'USD', 'AUD')
+   * @param {number} remaining - Amount still unmet after exhausting all accounts
+   */
+  constructor(country, currency, remaining) {
+    super(
+      `Insufficient funds: ${remaining.toFixed(2)} ${currency} still needed ` +
+      `after exhausting all eligible ${country} accounts`
+    );
+    this.name      = 'InsufficientFundsError';
+    this.country   = country;
+    this.currency  = currency;
+    this.remaining = remaining;
+  }
+}
+
+/**
  * Account — plain ledger with balance, credits, and debits.
  * No methods; safe for structuredClone snapshots.
  * Logic lives in AccountService.
@@ -134,5 +156,64 @@ export class AccountService {
     const msPerYear  = 365.25 * 24 * 60 * 60 * 1000;
     const ageDecimal = (asOfDate - person.birthDate) / msPerYear;
     return ageDecimal >= account.minimumAge;
+  }
+
+  /**
+   * Draws down investment accounts in the same country as the target savings
+   * account to cover a deficit, crediting the savings account as each source
+   * account is debited.
+   *
+   * Discovery: iterates all values in `state` that are plain objects with a
+   * numeric `balance`, share the target account's `country`, and have a
+   * non-null `drawdownPriority`.  Accounts are processed in ascending priority
+   * order.  Age-gated accounts (those with a `minimumAge` field) are skipped
+   * when the person has not yet reached that age (decimal-year check).
+   *
+   * Throws InsufficientFundsError if the deficit cannot be fully covered after
+   * exhausting all eligible accounts.  State is partially mutated up to the
+   * point of exhaustion — callers should proceed with whatever was deposited.
+   *
+   * @param {object} state      - Current simulation state
+   * @param {string} targetKey  - State key for the savings account to credit
+   * @param {number} deficit    - Amount that must be deposited into targetKey
+   * @param {Date}   date       - As-of date (used for age-gate checks)
+   * @throws {InsufficientFundsError}
+   */
+  replenishSavings(state, targetKey, deficit, date) {
+    const targetAccount = state[targetKey];
+    const country       = targetAccount.country;
+    const currency      = targetAccount.currency?.code ?? country;
+    const person        = { birthDate: state.personBirthDate };
+
+    // Discover all drawdown sources: objects in state with a drawdownPriority,
+    // belonging to the same country, excluding the target account itself.
+    const sources = Object.entries(state)
+      .filter(([k, v]) =>
+        k !== targetKey &&
+        v !== null &&
+        typeof v === 'object' &&
+        !Array.isArray(v) &&
+        'balance' in v &&
+        'drawdownPriority' in v &&
+        v.drawdownPriority !== null &&
+        v.country === country
+      )
+      .sort(([, a], [, b]) => a.drawdownPriority - b.drawdownPriority);
+
+    let remaining = deficit;
+    for (const [, account] of sources) {
+      if (account.balance <= 0) continue;
+      if (!this.isWithdrawalEligible(account, person, date)) continue;
+
+      const withdraw = Math.min(remaining, account.balance);
+      this.transaction(targetAccount, +withdraw, date);
+      this.transaction(account,       -withdraw, date);
+      remaining -= withdraw;
+      if (remaining < 1e-9) { remaining = 0; break; }
+    }
+
+    if (remaining > 1e-9) {
+      throw new InsufficientFundsError(country, currency, remaining);
+    }
   }
 }

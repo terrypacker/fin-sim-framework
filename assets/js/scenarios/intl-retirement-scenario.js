@@ -121,35 +121,21 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
         currency: USD,
       }),
 
-      // US investment accounts
-      rothAccount:        new FinSimLib.Finance.InvestmentAccount(p.rothBalance,         { contributionBasis: p.rothBasis,  country: 'US', currency: USD }),
-      iraAccount:         new FinSimLib.Finance.InvestmentAccount(p.iraBalance,          { contributionBasis: p.iraBasis,   country: 'US', currency: USD }),
-      k401Account:        new FinSimLib.Finance.InvestmentAccount(p.k401Balance,         { contributionBasis: p.k401Basis,  country: 'US', currency: USD }),
-      stockAccount:       new FinSimLib.Finance.InvestmentAccount(p.stockBalance,        { contributionBasis: p.stockBasis, country: 'US', currency: USD }),
-      fixedIncomeAccount: new FinSimLib.Finance.Account(p.fixedIncomeBalance,            { country: 'US', currency: USD }),
+      // US investment accounts — drawdownPriority drives AccountService.replenishSavings order.
+      // minimumAge (decimal years) is enforced via AccountService.isWithdrawalEligible.
+      fixedIncomeAccount: new FinSimLib.Finance.Account(p.fixedIncomeBalance,     { country: 'US', currency: USD, drawdownPriority: 1 }),
+      stockAccount:       new FinSimLib.Finance.InvestmentAccount(p.stockBalance, { contributionBasis: p.stockBasis, country: 'US', currency: USD, drawdownPriority: 2 }),
+      iraAccount:         new FinSimLib.Finance.InvestmentAccount(p.iraBalance,   { contributionBasis: p.iraBasis,   country: 'US', currency: USD, drawdownPriority: 3, minimumAge: 59.5 }),
+      k401Account:        new FinSimLib.Finance.InvestmentAccount(p.k401Balance,  { contributionBasis: p.k401Basis,  country: 'US', currency: USD, drawdownPriority: 4, minimumAge: 59.5 }),
+      rothAccount:        new FinSimLib.Finance.InvestmentAccount(p.rothBalance,  { contributionBasis: p.rothBasis,  country: 'US', currency: USD, drawdownPriority: 5, minimumAge: 59.5 }),
 
-      // AU accounts — auSavingsAccount is the primary AUD cash pool
+      // AU accounts — auSavingsAccount is the primary AUD cash pool (no drawdownPriority).
       auSavingsAccount: new FinSimLib.Finance.Account(p.auSavingsBalance, {
         country:  'AU',
         currency: AUD,
       }),
-      superAccount:   new FinSimLib.Finance.InvestmentAccount(p.superBalance,   { contributionBasis: p.superBasis,   country: 'AU', currency: AUD }),
-      auStockAccount: new FinSimLib.Finance.InvestmentAccount(p.auStockBalance, { contributionBasis: p.auStockBasis, country: 'AU', currency: AUD }),
-
-      // Drawdown orders — domestic investment accounts only (not the savings accounts themselves).
-      // Each entry is either a plain string key or { key, minAge } where minAge (in years)
-      // gates early withdrawal; REPLENISH_SAVINGS skips the account until the age is met.
-      usDrawdownOrder: [
-        { key: 'fixedIncomeAccount' },
-        { key: 'stockAccount' },
-        { key: 'iraAccount',  minAge: 59.5 },
-        { key: 'k401Account', minAge: 59.5 },
-        { key: 'rothAccount', minAge: 59.5 },
-      ],
-      auDrawdownOrder: [
-        { key: 'auStockAccount' },
-        { key: 'superAccount', minAge: 60 },
-      ],
+      auStockAccount: new FinSimLib.Finance.InvestmentAccount(p.auStockBalance, { contributionBasis: p.auStockBasis, country: 'AU', currency: AUD, drawdownPriority: 1 }),
+      superAccount:   new FinSimLib.Finance.InvestmentAccount(p.superBalance,   { contributionBasis: p.superBasis,   country: 'AU', currency: AUD, drawdownPriority: 2, minimumAge: 60 }),
 
       // Exchange rate and transfer fee
       exchangeRateUsdToAud: p.exchangeRateUsdToAud,   // 1 USD = N AUD
@@ -169,6 +155,9 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
 
       // Blocked flags (may be set by handlers)
       superWithdrawalBlocked: false,
+
+      // Set to the first date an OUT_OF_FUNDS event occurs; null if funds never ran out.
+      outOfFundsDate: null,
     };
 
     this.sim = new FinSimLib.Core.Simulation(this.simStart, { initialState });
@@ -204,59 +193,31 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
       return { ...state };
     }, FinSimLib.Core.PRIORITY.CASH_FLOW, 'Expense Debit');
 
-    // ── REPLENISH_SAVINGS — cascades through the domestic drawdown order,
-    //    then crosses to the other country via INTL_TRANSFER_APPLY if exhausted.
+    // ── REPLENISH_SAVINGS — delegates to AccountService which walks the domestic
+    //    drawdown order (driven by drawdownPriority on each account) and applies
+    //    decimal-age eligibility checks.  If domestic accounts are exhausted,
+    //    InsufficientFundsError is thrown and caught here; we then cross to the
+    //    other country via INTL_TRANSFER_APPLY with the remaining amount.
     //    targetKey: 'usSavingsAccount' | 'auSavingsAccount'
     this.sim.reducers.register('REPLENISH_SAVINGS', (state, action, date) => {
-      const { deficit, targetKey, orderIndex = 0 } = action;
-      const isAu        = targetKey === 'auSavingsAccount';
-      const drawdown    = isAu ? state.auDrawdownOrder : state.usDrawdownOrder;
-
-      // Compute person's age in whole years as of this date for minAge checks.
-      const bd  = state.personBirthDate;
-      const yrs = date.getUTCFullYear() - bd.getUTCFullYear();
-      const hadBirthday = date.getUTCMonth() > bd.getUTCMonth() ||
-        (date.getUTCMonth() === bd.getUTCMonth() && date.getUTCDate() >= bd.getUTCDate());
-      const personAge = hadBirthday ? yrs : yrs - 1;
-
-      for (let i = orderIndex; i < drawdown.length; i++) {
-        const entry   = drawdown[i];
-        const key     = typeof entry === 'string' ? entry : entry.key;
-        const minAge  = typeof entry === 'string' ? 0    : (entry.minAge ?? 0);
-        const account = state[key];
-        if (!account || account.balance <= 0) continue;
-        if (minAge > 0 && personAge < minAge) continue;
-
-        const withdraw  = Math.min(deficit, account.balance);
-        const remaining = deficit - withdraw;
-
-        svc.transaction(state[targetKey], withdraw, date);
-        account.balance -= withdraw;
-
-        const newState = { ...state };
-        if (remaining > 0) {
-          return {
-            state: newState,
-            next: [{ type: 'REPLENISH_SAVINGS', deficit: remaining, targetKey, orderIndex: i + 1 }],
-          };
-        }
-        return newState;
-      }
-
-      // Domestic accounts exhausted — trigger international transfer
-      if (deficit > 0) {
+      const { deficit, targetKey } = action;
+      const isAu = targetKey === 'auSavingsAccount';
+      try {
+        svc.replenishSavings(state, targetKey, deficit, date);
+        return { ...state };
+      } catch (e) {
+        if (!(e instanceof FinSimLib.Finance.InsufficientFundsError)) throw e;
+        // Domestic accounts exhausted — request an international transfer for
+        // whatever could not be covered (e.remaining).
         return {
           state: { ...state },
           next: [{
-            type:      'INTL_TRANSFER_APPLY',
-            direction: isAu ? 'US_TO_AU' : 'AU_TO_US',
-            // For AU_TO_US: we need `deficit` USD net of fee; compute AUD to withdraw
-            // For US_TO_AU: we need `deficit` AUD net of fee; compute USD to withdraw
-            targetDeficit: deficit,
+            type:          'INTL_TRANSFER_APPLY',
+            direction:     isAu ? 'US_TO_AU' : 'AU_TO_US',
+            targetDeficit: e.remaining,
           }],
         };
       }
-      return { ...state };
     }, FinSimLib.Core.PRIORITY.PRE_PROCESS, 'Replenish Savings');
 
     // ── INTL_TRANSFER_APPLY — cross-currency transfer with exchange rate + fee ─
@@ -271,26 +232,27 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
     //    USD needed = targetDeficitAud / usdToAud + feeUsd
     //    AUD received = (usdWithdrawn - feeUsd) * usdToAud
     //
-    //  If the source savings account is short, a REPLENISH_SAVINGS is chained on
-    //  the source account first, then this action retries (replenished: true).
-    //  The replenished flag prevents a second replenishment attempt so the transfer
-    //  proceeds with whatever is available after the domestic drawdown.
+    //  If the source savings account is short, AccountService.replenishSavings is
+    //  called directly (synchronous service call, NOT a chained action).  This
+    //  breaks the AU↔US action-chaining loop: replenishSavings either fills the
+    //  source account from domestic investment accounts or throws InsufficientFundsError,
+    //  which is caught here.  A partial transfer proceeds with whatever is available.
+    //  If the target deficit is still not met, OUT_OF_FUNDS is fired.
     this.sim.reducers.register('INTL_TRANSFER_APPLY', (state, action, date) => {
-      const { direction, targetDeficit, replenished = false } = action;
+      const { direction, targetDeficit } = action;
       const rate = state.exchangeRateUsdToAud;
       const fee  = state.intlTransferFeeUsd;
 
       if (direction === 'AU_TO_US') {
-        const audNeeded  = (targetDeficit + fee) * rate;
-        const shortfall  = audNeeded - state.auSavingsAccount.balance;
-        if (!replenished && shortfall > 0) {
-          return {
-            state: { ...state },
-            next: [
-              { type: 'REPLENISH_SAVINGS', deficit: shortfall, targetKey: 'auSavingsAccount', orderIndex: 0 },
-              { type: 'INTL_TRANSFER_APPLY', direction, targetDeficit, replenished: true },
-            ],
-          };
+        const audNeeded = (targetDeficit + fee) * rate;
+        const shortfall = audNeeded - state.auSavingsAccount.balance;
+        if (shortfall > 0) {
+          try {
+            svc.replenishSavings(state, 'auSavingsAccount', shortfall, date);
+          } catch (e) {
+            if (!(e instanceof FinSimLib.Finance.InsufficientFundsError)) throw e;
+            // AU sources exhausted — transfer whatever AUD is available
+          }
         }
         const audActual   = Math.min(audNeeded, state.auSavingsAccount.balance);
         const usdReceived = Math.max(0, audActual / rate - fee);
@@ -298,24 +260,37 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
           svc.transaction(state.auSavingsAccount, -audActual,   date);
           svc.transaction(state.usSavingsAccount, +usdReceived, date);
         }
-      } else {
-        // US_TO_AU
-        const usdNeeded  = targetDeficit / rate + fee;
-        const shortfall  = usdNeeded - state.usSavingsAccount.balance;
-        if (!replenished && shortfall > 0) {
+        const usdShortfall = targetDeficit - usdReceived;
+        if (usdShortfall > 0.01) {
           return {
             state: { ...state },
-            next: [
-              { type: 'REPLENISH_SAVINGS', deficit: shortfall, targetKey: 'usSavingsAccount', orderIndex: 0 },
-              { type: 'INTL_TRANSFER_APPLY', direction, targetDeficit, replenished: true },
-            ],
+            next: [{ type: 'OUT_OF_FUNDS', deficit: usdShortfall, currency: 'USD' }],
           };
+        }
+      } else {
+        // US_TO_AU
+        const usdNeeded = targetDeficit / rate + fee;
+        const shortfall = usdNeeded - state.usSavingsAccount.balance;
+        if (shortfall > 0) {
+          try {
+            svc.replenishSavings(state, 'usSavingsAccount', shortfall, date);
+          } catch (e) {
+            if (!(e instanceof FinSimLib.Finance.InsufficientFundsError)) throw e;
+            // US sources exhausted — transfer whatever USD is available
+          }
         }
         const usdActual   = Math.min(usdNeeded, state.usSavingsAccount.balance);
         const audReceived = Math.max(0, (usdActual - fee) * rate);
         if (usdActual > 0) {
           svc.transaction(state.usSavingsAccount, -usdActual,   date);
           svc.transaction(state.auSavingsAccount, +audReceived, date);
+        }
+        const audShortfall = targetDeficit - audReceived;
+        if (audShortfall > 0.01) {
+          return {
+            state: { ...state },
+            next: [{ type: 'OUT_OF_FUNDS', deficit: audShortfall, currency: 'AUD' }],
+          };
         }
       }
       return { ...state };
@@ -382,7 +357,7 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
       const deficit     = (account.minimumBalance ?? 0) - postDebitBal;
       const actions     = [];
       if (deficit > 0) {
-        actions.push({ type: 'REPLENISH_SAVINGS', deficit, targetKey, orderIndex: 0 });
+        actions.push({ type: 'REPLENISH_SAVINGS', deficit, targetKey });
       }
       actions.push(
         { type: 'EXPENSE_DEBIT', amount },
@@ -490,6 +465,27 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
         new FinSimLib.Core.RecordBalanceAction(),
       ];
     }, 'International Transfer to AU'));
+
+    // ── OUT_OF_FUNDS — fired when both domestic and international sources are
+    //    exhausted and a deficit could not be covered.  Records a metric and
+    //    stamps outOfFundsDate (first occurrence only) so the UI can surface it.
+    this.sim.register('OUT_OF_FUNDS', new FinSimLib.Core.HandlerEntry(({ data, date, state }) => {
+      console.warn(
+        `[OUT_OF_FUNDS] ${data.deficit.toFixed(2)} ${data.currency} deficit on ` +
+        date.toISOString().slice(0, 10)
+      );
+      const actions = [new FinSimLib.Core.RecordMetricAction('out_of_funds', data.deficit)];
+      if (!state.outOfFundsDate) {
+        actions.push({ type: 'SET_OUT_OF_FUNDS_DATE', date });
+      }
+      actions.push(new FinSimLib.Core.RecordBalanceAction());
+      return actions;
+    }, 'Out of Funds'));
+
+    this.sim.reducers.register('SET_OUT_OF_FUNDS_DATE', (state, action) => ({
+      ...state,
+      outOfFundsDate: action.date,
+    }), FinSimLib.Core.PRIORITY.PRE_PROCESS, 'Set Out of Funds Date');
 
     // ── CHANGE_RESIDENCY — flip flags, close partial US year, log balance ─────
     const _settleService = new FinSimLib.Finance.TaxSettleService();
