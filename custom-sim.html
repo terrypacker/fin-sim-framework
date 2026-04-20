@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<!--
+-- Copyright (c) 2026 Terry Packer.
+--
+-- This file is part of Terry Packer's Work.
+-- See www.terrypacker.com for further info.
+--
+-- Licensed under the Apache License, Version 2.0 (the "License");
+-- you may not use this file except in compliance with the License.
+-- You may obtain a copy of the License at
+--
+--     http://www.apache.org/licenses/LICENSE-2.0
+--
+-- Unless required by applicable law or agreed to in writing, software
+-- distributed under the License is distributed on an "AS IS" BASIS,
+-- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-- See the License for the specific language governing permissions and
+-- limitations under the License.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Profit / Loss Simulation</title>
+  <link rel="stylesheet" href="./assets/css/app.css">
+</head>
+<body class="app-financial">
+<!-- ── Top bar ──────────────────────────────────────────────────────────────── -->
+<div id="topbar">
+  <h1>Custom Simulation</h1>
+  <div>
+    <button class="tab-btn active"        data-tab="timeline">Timeline</button>
+    <button class="tab-btn"        data-tab="charts">Balance Charts</button>
+  </div>
+</div>
+
+<!-- ── Main ─────────────────────────────────────────────────────────────────── -->
+<div id="main">
+
+  <!-- ── Side panel ─────────────────────────────────────────────────────────── -->
+  <div id="panel">
+    <div>
+      <button class="sidebar-tab-btn active"     data-tab="settings">Settings</button>
+      <button class="sidebar-tab-btn"        data-tab="status">Status</button>
+    </div>
+    <button class="action-btn" id="rebuildBtn">↺ Rebuild Simulation</button>
+
+    <div id="settingsTab" class="sidebar-tab-panel">
+      <div style="margin-top:12px">
+        <div class="section-title">Recurring Events</div>
+        <div id="eventList"></div>
+
+        <button class="secondary-btn" id="addEventBtn" style="margin-top:8px; width:100%;">
+          + Add One-Off Event
+        </button>
+
+        <div id="addEventForm" class="hidden">
+          <div class="field">
+            <label>Event Type</label>
+            <select id="newEventType" style="background:#0f172a; color:#e5e7eb; border:1px solid #334155; padding:4px; font-family:monospace; font-size:12px; border-radius:3px; width:100%;">
+              <option value="MONTHLY_EXPENSES">MONTHLY_EXPENSES — monthly expenses</option>
+              <option value="ROTH_CONTRIBUTION">ROTH_CONTRIBUTION — Roth IRA contribution</option>
+              <option value="ROTH_WITHDRAWAL_CONTRIBUTIONS">ROTH_WITHDRAWAL_CONTRIBUTIONS</option>
+              <option value="ROTH_WITHDRAWAL_EARNINGS">ROTH_WITHDRAWAL_EARNINGS</option>
+              <option value="IRA_WITHDRAWAL_CONTRIBUTIONS">IRA_WITHDRAWAL_CONTRIBUTIONS</option>
+              <option value="IRA_WITHDRAWAL_EARNINGS">IRA_WITHDRAWAL_EARNINGS</option>
+              <option value="K401_WITHDRAWAL">K401_WITHDRAWAL — 401k withdrawal</option>
+              <option value="SUPER_CONTRIBUTION">SUPER_CONTRIBUTION — super contribution</option>
+              <option value="SUPER_WITHDRAWAL_CONTRIBUTIONS">SUPER_WITHDRAWAL_CONTRIBUTIONS</option>
+              <option value="SUPER_WITHDRAWAL_EARNINGS">SUPER_WITHDRAWAL_EARNINGS</option>
+              <option value="AU_SAVINGS_WITHDRAWAL">AU_SAVINGS_WITHDRAWAL</option>
+              <option value="INTL_TRANSFER_TO_US">INTL_TRANSFER_TO_US — transfer AUD→USD (enter AUD amount)</option>
+              <option value="INTL_TRANSFER_TO_AU">INTL_TRANSFER_TO_AU — transfer USD→AUD (enter USD amount)</option>
+              <option value="US_HOUSE_SALE">US_HOUSE_SALE — sell US property</option>
+              <option value="AU_HOUSE_SALE">AU_HOUSE_SALE — sell AU property</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Date</label>
+            <input type="date" id="newEventDate" min="2026-01-01" max="2040-12-31"
+                   style="background:#0f172a; color:#e5e7eb; border:1px solid #334155; padding:4px; font-family:monospace; font-size:12px; border-radius:3px; width:100%;">
+          </div>
+          <div class="field">
+            <label>Amount (optional)</label>
+            <input type="number" id="newEventAmount" placeholder="leave blank for default" min="0" step="100">
+          </div>
+          <div class="form-row">
+            <button class="action-btn"    id="submitEventBtn">Add</button>
+            <button class="secondary-btn" id="cancelEventBtn">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="statusTab" class="sidebar-tab-panel hidden" >
+      <!-- Live state -->
+      <div id="currentState">
+        <div class="section-title">Current State</div>
+        <div id="currentStateContent"></div>
+      </div>
+
+      <!-- Cumulative metrics -->
+      <div id="cumulativeMetrics">
+        <div class="section-title">Cumulative Metrics</div>
+        <div id="cumulativeMetricsContent"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Content (tab panels) ───────────────────────────────────────────────── -->
+  <div id="content">
+
+    <!-- Balance chart tab -->
+    <div id="chartsTab" class="tab-panel">
+      <canvas id="chartCanvas"></canvas>
+    </div>
+
+    <!-- Timeline tab -->
+    <div id="timelineTab" class="tab-panel hidden">
+      <div id="timelineContainer"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Time controls ─────────────────────────────────────────────────────────── -->
+<!-- ── Time controls ─────────────────────────────────────────────────────────── -->
+<div id="controls">
+  <button id="resetBtn"     title="Reset to start">↩</button>
+  <button id="stepBackward" title="Step backward">←</button>
+  <button id="playPause"    title="Play / Pause">▶</button>
+  <button id="stepForward"  title="Step forward">→</button>
+  <input  id="timeSlider" type="range" min="0" max="100" value="0">
+  <span   id="timeLabel">2026-01-01</span>
+  <select id="tzSelect" title="Date display timezone" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; padding:2px 6px; font-family:monospace; font-size:12px; border-radius:3px; margin-left:8px;">
+    <option value="utc"   selected>UTC</option>
+    <option value="local">Local</option>
+  </select>
+  <select id="displayCurrency" title="Display currency" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; padding:2px 6px; font-family:monospace; font-size:12px; border-radius:3px; margin-left:8px;">
+    <option value="USD" selected>USD</option>
+    <option value="AUD">AUD</option>
+  </select>
+</div>
+
+<script type="module" src="./index.umd.min.js"></script>
+<script type="module" src="./assets/js/custom-app.js"></script>
+</body>
+</html>
