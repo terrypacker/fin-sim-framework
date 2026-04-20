@@ -27,8 +27,8 @@
 
 export const DEFAULT_PARAMS = {
   // People
-  primaryBirthDate: new Date(Date.UTC(1970, 3, 15)),
-  spouseBirthDate:  new Date(Date.UTC(1972, 8, 22)),
+  primaryBirthDate: new Date(Date.UTC(1978, 3, 15)),
+  spouseBirthDate:  new Date(Date.UTC(1983, 8, 22)),
   moveYear:         2031,            // calendar year of US→AU move (Jul 1)
 
   // US Savings (primary USD cash pool)
@@ -136,17 +136,19 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
       superAccount:   new FinSimLib.Finance.InvestmentAccount(p.superBalance,   { contributionBasis: p.superBasis,   country: 'AU', currency: AUD }),
       auStockAccount: new FinSimLib.Finance.InvestmentAccount(p.auStockBalance, { contributionBasis: p.auStockBasis, country: 'AU', currency: AUD }),
 
-      // Drawdown orders — domestic investment accounts only (not the savings accounts themselves)
+      // Drawdown orders — domestic investment accounts only (not the savings accounts themselves).
+      // Each entry is either a plain string key or { key, minAge } where minAge (in years)
+      // gates early withdrawal; REPLENISH_SAVINGS skips the account until the age is met.
       usDrawdownOrder: [
-        'fixedIncomeAccount',
-        'stockAccount',
-        'iraAccount',
-        'k401Account',
-        'rothAccount',
+        { key: 'fixedIncomeAccount' },
+        { key: 'stockAccount' },
+        { key: 'iraAccount',  minAge: 59.5 },
+        { key: 'k401Account', minAge: 59.5 },
+        { key: 'rothAccount', minAge: 59.5 },
       ],
       auDrawdownOrder: [
-        'auStockAccount',
-        'superAccount',
+        { key: 'auStockAccount' },
+        { key: 'superAccount', minAge: 60 },
       ],
 
       // Exchange rate and transfer fee
@@ -210,10 +212,20 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
       const isAu        = targetKey === 'auSavingsAccount';
       const drawdown    = isAu ? state.auDrawdownOrder : state.usDrawdownOrder;
 
+      // Compute person's age in whole years as of this date for minAge checks.
+      const bd  = state.personBirthDate;
+      const yrs = date.getUTCFullYear() - bd.getUTCFullYear();
+      const hadBirthday = date.getUTCMonth() > bd.getUTCMonth() ||
+        (date.getUTCMonth() === bd.getUTCMonth() && date.getUTCDate() >= bd.getUTCDate());
+      const personAge = hadBirthday ? yrs : yrs - 1;
+
       for (let i = orderIndex; i < drawdown.length; i++) {
-        const key     = drawdown[i];
+        const entry   = drawdown[i];
+        const key     = typeof entry === 'string' ? entry : entry.key;
+        const minAge  = typeof entry === 'string' ? 0    : (entry.minAge ?? 0);
         const account = state[key];
         if (!account || account.balance <= 0) continue;
+        if (minAge > 0 && personAge < minAge) continue;
 
         const withdraw  = Math.min(deficit, account.balance);
         const remaining = deficit - withdraw;
