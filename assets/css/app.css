@@ -97,7 +97,6 @@ body.app-home h1 {
 body.app-financial {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 /* ─── Graph debugger layout (index.html) ─────────────────────────────────── */
@@ -106,15 +105,6 @@ body.app-financial {
   position: relative;
   background: #0f172a;
   overflow: auto;
-}
-
-body.app-debugger #panel {
-  flex: 1;
-  background: #111827;
-  color: #e5e7eb;
-  padding: 10px;
-  overflow: auto;
-  border-left: 1px solid #333;
 }
 
 .node {
