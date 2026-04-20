@@ -10,6 +10,8 @@
 
 const fmt = n => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+let _tlViewCounter = 0;
+
 export class TimelineView {
   constructor({ container, onDetail, onRewind, eventColors = new Map(), formatDate }) {
     this.container   = container;
@@ -21,6 +23,11 @@ export class TimelineView {
     this.expanded    = new Set(); // 'dateStr' or 'dateStr::eventType'
     this._lastLen    = 0;
     this._lastDate   = null;     // date string of last entry seen, for auto-expand
+    this.filterEvent  = '';
+    this.filterAction = '';
+    this._listEl      = null;
+    this._filterBarEl = null;
+    this._uid         = ++_tlViewCounter;
   }
 
   attach(journal) {
@@ -57,9 +64,30 @@ export class TimelineView {
     this._render();
   }
 
+  // Collect all unique event types and action types from the full (unfiltered) journal
+  _allOptions() {
+    const events  = new Set();
+    const actions = new Set();
+    if (this.journal) {
+      for (const entry of this.journal.journal) {
+        events.add(entry.eventType);
+        actions.add(entry.action.type);
+      }
+    }
+    return { events: [...events].sort(), actions: [...actions].sort() };
+  }
+
   _groups() {
+    const evFilter  = this.filterEvent.trim().toLowerCase();
+    const actFilter = this.filterAction.trim().toLowerCase();
+
     const map = new Map(); // dateStr → Map(eventType → [{entry, idx}])
     this.journal.journal.forEach((entry, idx) => {
+      // Apply event-type filter
+      if (evFilter && !entry.eventType.toLowerCase().includes(evFilter)) return;
+      // Apply action-type filter
+      if (actFilter && !entry.action.type.toLowerCase().includes(actFilter)) return;
+
       const d = this.formatDate(entry.date);
       if (!map.has(d)) map.set(d, new Map());
       const byEv = map.get(d);
@@ -69,17 +97,91 @@ export class TimelineView {
     return map;
   }
 
+  _ensureStructure() {
+    if (this._listEl) return;
+
+    const uid = this._uid;
+    this._filterBarEl = document.createElement('div');
+    this._filterBarEl.className = 'tl-filter-bar';
+    this._filterBarEl.innerHTML = `
+      <div class="tl-filter-group">
+        <input class="tl-filter-input" id="tl-ev-input-${uid}" placeholder="Filter by Event…"
+               list="tl-ev-opts-${uid}" autocomplete="off" value="${this.filterEvent}">
+        <datalist id="tl-ev-opts-${uid}"></datalist>
+      </div>
+      <div class="tl-filter-group">
+        <input class="tl-filter-input" id="tl-act-input-${uid}" placeholder="Filter by Action…"
+               list="tl-act-opts-${uid}" autocomplete="off" value="${this.filterAction}">
+        <datalist id="tl-act-opts-${uid}"></datalist>
+      </div>
+      <button class="tl-filter-clear" id="tl-filter-clear-${uid}" title="Clear filters">✕</button>
+    `;
+
+    this._listEl = document.createElement('div');
+    this._listEl.className = 'tl-list';
+
+    this.container.innerHTML = '';
+    this.container.appendChild(this._filterBarEl);
+    this.container.appendChild(this._listEl);
+
+    const evInput  = this._filterBarEl.querySelector(`#tl-ev-input-${uid}`);
+    const actInput = this._filterBarEl.querySelector(`#tl-act-input-${uid}`);
+    const clearBtn = this._filterBarEl.querySelector(`#tl-filter-clear-${uid}`);
+
+    evInput.addEventListener('input', () => {
+      this.filterEvent = evInput.value;
+      this._renderList();
+    });
+    actInput.addEventListener('input', () => {
+      this.filterAction = actInput.value;
+      this._renderList();
+    });
+    clearBtn.addEventListener('click', () => {
+      this.filterEvent  = '';
+      this.filterAction = '';
+      evInput.value  = '';
+      actInput.value = '';
+      this._renderList();
+    });
+  }
+
+  _updateDataLists() {
+    const uid = this._uid;
+    const { events, actions } = this._allOptions();
+
+    const evDl  = this._filterBarEl.querySelector(`#tl-ev-opts-${uid}`);
+    const actDl = this._filterBarEl.querySelector(`#tl-act-opts-${uid}`);
+
+    evDl.innerHTML  = events.map(v => `<option value="${v}">`).join('');
+    actDl.innerHTML = actions.map(v => `<option value="${v}">`).join('');
+
+    // Show/hide clear button based on active filters
+    const clearBtn = this._filterBarEl.querySelector(`#tl-filter-clear-${uid}`);
+    clearBtn.style.display = (this.filterEvent || this.filterAction) ? '' : 'none';
+  }
+
   _render() {
     if (!this.journal) return;
+    this._ensureStructure();
+    this._updateDataLists();
+    this._renderList();
+  }
+
+  _renderList() {
+    if (!this._listEl) return;
 
     const atBottom = this.container.scrollHeight - this.container.scrollTop
                      - this.container.clientHeight < 80;
 
     const groups = this._groups();
 
-    if (groups.size === 0) {
-      this.container.innerHTML =
-        '<div class="tl-empty">Step the simulation forward to see the event timeline.</div>';
+    if (!this.journal || groups.size === 0) {
+      const hasFilter = this.filterEvent || this.filterAction;
+      this._listEl.innerHTML = `<div class="tl-empty">${
+        hasFilter
+          ? 'No entries match the current filters.'
+          : 'Step the simulation forward to see the event timeline.'
+      }</div>`;
       return;
     }
 
@@ -145,19 +247,19 @@ export class TimelineView {
       html.push('</div>'); // tl-date-group
     }
 
-    this.container.innerHTML = html.join('');
+    this._listEl.innerHTML = html.join('');
 
     // Toggle expand/collapse on date headers and event headers
-    this.container.querySelectorAll('[data-tgl]').forEach(el => {
+    this._listEl.querySelectorAll('[data-tgl]').forEach(el => {
       el.addEventListener('click', () => {
         const k = el.dataset.tgl;
         this.expanded.has(k) ? this.expanded.delete(k) : this.expanded.add(k);
-        this._render();
+        this._renderList();
       });
     });
 
     // Detail buttons
-    this.container.querySelectorAll('.tl-det').forEach(btn => {
+    this._listEl.querySelectorAll('.tl-det').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
         this.onDetail(this.journal.journal[+btn.dataset.idx]);
@@ -166,7 +268,7 @@ export class TimelineView {
 
     // Rewind buttons
     if (this.onRewind) {
-      this.container.querySelectorAll('.tl-rewind').forEach(btn => {
+      this._listEl.querySelectorAll('.tl-rewind').forEach(btn => {
         btn.addEventListener('click', e => {
           e.stopPropagation();
           this.onRewind(new Date(+btn.dataset.date));

@@ -403,6 +403,60 @@ canvas { display: block; }
   font-size: 12px;
 }
 
+.tl-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #0f172a;
+  padding: 6px 0 8px;
+  border-bottom: 1px solid #1e293b;
+  margin-bottom: 6px;
+}
+
+.tl-filter-group {
+  flex: 1;
+  min-width: 0;
+}
+
+.tl-filter-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #cbd5e1;
+  font-size: 11px;
+  font-family: monospace;
+  padding: 3px 7px;
+  border-radius: 4px;
+  outline: none;
+}
+
+.tl-filter-input::placeholder { color: #475569; }
+
+.tl-filter-input:focus {
+  border-color: #3b82f6;
+  color: #e2e8f0;
+}
+
+.tl-filter-clear {
+  background: none;
+  border: 1px solid #334155;
+  color: #475569;
+  font-size: 11px;
+  padding: 3px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.tl-filter-clear:hover { color: #f87171; border-color: #f87171; }
+
+.tl-list { /* scrollable content lives here */ }
+
 .tl-empty {
   color: #64748b;
   text-align: center;
