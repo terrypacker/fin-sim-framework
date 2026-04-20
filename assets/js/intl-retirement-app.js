@@ -11,6 +11,10 @@
 import { IntlRetirementScenario, DEFAULT_EVENT_SERIES } from './scenarios/intl-retirement-scenario.js';
 const $ = FinSimLib.Visualization.$;
 
+// ── Date formatters ───────────────────────────────────────────────────────────
+const fmtUTC   = d => `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+const fmtLocal = d => d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
+
 // ── Chart series ──────────────────────────────────────────────────────────────
 const CHART_SERIES = [
   { key: 'checking',     color: '#60a5fa', label: 'Checking'       },
@@ -48,6 +52,7 @@ const app = new FinSimLib.Misc.BaseApp({
   readParams,
   onChartSnapshot: chartSnapshot,
   chartSeries:     CHART_SERIES,
+  formatDate:      fmtUTC,
 });
 
 // ── Params form ───────────────────────────────────────────────────────────────
@@ -105,7 +110,7 @@ function renderEventList() {
     const row = document.createElement('div');
     row.className = 'event-row custom-event';
     row.innerHTML = `
-      <span>${ev.type} on ${new Date(ev.date).toLocaleDateString()}${ev.amount != null ? ' ($' + ev.amount.toLocaleString() + ')' : ''}</span>
+      <span>${ev.type} on ${app._formatDate(new Date(ev.date))}${ev.amount != null ? ' ($' + ev.amount.toLocaleString() + ')' : ''}</span>
       <button class="remove-custom" data-idx="${i}" title="Remove">✕</button>`;
     list.appendChild(row);
   });
@@ -139,6 +144,12 @@ document.addEventListener('DOMContentLoaded', () => {
   $('addEventBtn').addEventListener('click',    () => $('addEventForm').classList.toggle('hidden'));
   $('submitEventBtn').addEventListener('click', submitAddEvent);
   $('cancelEventBtn').addEventListener('click', () => $('addEventForm').classList.add('hidden'));
+
+  $('tzSelect').addEventListener('change', () => {
+    app.setFormatDate($('tzSelect').value === 'utc' ? fmtUTC : fmtLocal);
+    renderEventList(); // refresh custom event dates
+  });
+
   renderEventList();
   app.buildScenario();
 });

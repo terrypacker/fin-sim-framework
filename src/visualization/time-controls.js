@@ -9,13 +9,14 @@
  */
 
 export class TimeControls {
-  constructor({scenario, timelineView, graphView, chartView, timeLabel, timeSlider}) {
+  constructor({scenario, timelineView, graphView, chartView, timeLabel, timeSlider, formatDate}) {
     this.scenario = scenario;
     this.timelineView = timelineView;
     this.graphView = graphView;
     this.chartView = chartView;
     this.timeLabel = timeLabel;
     this.timeSlider = timeSlider;
+    this.formatDate = formatDate ?? (d => d.toDateString());
     this._dateChangedRaf = null;
   }
 
@@ -34,7 +35,7 @@ export class TimeControls {
     );
     this.scenario.sim.stepTo(targetTime);
     this.timelineView?.update();
-    this.timeLabel.textContent = targetTime.toDateString();
+    this.timeLabel.textContent = this.formatDate(targetTime);
     return targetTime;
   }
 
@@ -68,7 +69,7 @@ export class TimeControls {
       const pct = (d.getTime() - this.scenario.simStart.getTime()) /
           (this.scenario.simEnd.getTime() - this.scenario.simStart.getTime());
       this.timeSlider.value = Math.round(pct * 100);
-      this.timeLabel.textContent = d.toDateString();
+      this.timeLabel.textContent = this.formatDate(d);
     });
   }
 

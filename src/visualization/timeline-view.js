@@ -11,10 +11,11 @@
 const fmt = n => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export class TimelineView {
-  constructor({ container, onDetail, eventColors = new Map() }) {
+  constructor({ container, onDetail, eventColors = new Map(), formatDate }) {
     this.container   = container;
     this.onDetail    = onDetail;
     this.eventColors = eventColors;
+    this.formatDate  = formatDate ?? (d => d.toDateString());
     this.journal     = null;
     this.expanded    = new Set(); // 'dateStr' or 'dateStr::eventType'
     this._lastLen    = 0;
@@ -45,7 +46,7 @@ export class TimelineView {
     // Auto-expand the latest date group so new activity is always visible
     if (len > 0) {
       const latest  = this.journal.journal[len - 1];
-      const dateStr = latest.date.toDateString();
+      const dateStr = this.formatDate(latest.date);
       if (dateStr !== this._lastDate) {
         this._lastDate = dateStr;
         this.expanded.add(dateStr);
@@ -58,7 +59,7 @@ export class TimelineView {
   _groups() {
     const map = new Map(); // dateStr → Map(eventType → [{entry, idx}])
     this.journal.journal.forEach((entry, idx) => {
-      const d = entry.date.toDateString();
+      const d = this.formatDate(entry.date);
       if (!map.has(d)) map.set(d, new Map());
       const byEv = map.get(d);
       if (!byEv.has(entry.eventType)) byEv.set(entry.eventType, []);

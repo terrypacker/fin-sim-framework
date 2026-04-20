@@ -24,7 +24,7 @@ import { TimelineView } from '../visualization/timeline-view.js';
 import { TimeControls } from '../visualization/time-controls.js';
 
 export class BaseApp {
-  constructor({ newScenario, readParams, updateStatePanel, diffStates, onChartSnapshot, chartSeries }) {
+  constructor({ newScenario, readParams, updateStatePanel, diffStates, onChartSnapshot, chartSeries, formatDate }) {
 
     this.newScenario = newScenario
     this.readParams = readParams;
@@ -32,6 +32,7 @@ export class BaseApp {
     this.customDiffStates = diffStates;
     this.onChartSnapshot = onChartSnapshot ?? null;
     this.chartSeries = chartSeries ?? null;
+    this._formatDate = formatDate ?? (d => d.toDateString());
 
     this.scenario = null;
     this.graphView = null;
@@ -40,8 +41,29 @@ export class BaseApp {
     this.timeControls = null;
     this.playing = false;
     this.lastSliderValue = 0;
+    this._currentDate = null;
     this.activeTab = 'timeline';
     this.activeSidebarTab = 'settings';
+  }
+
+  /**
+   * Update the date formatter used by all views. Takes effect immediately
+   * without requiring a simulation rebuild.
+   * @param {function(Date): string} fn
+   */
+  setFormatDate(fn) {
+    this._formatDate = fn;
+    if (this.timeControls) this.timeControls.formatDate = fn;
+    if (this.timelineView) {
+      this.timelineView.formatDate = fn;
+      // Rebuilt groups use new format — clear expand state so keys stay consistent
+      this.timelineView.expanded.clear();
+      this.timelineView._lastDate = null;
+      this.timelineView._render();
+    }
+    if (this._currentDate) {
+      $('timeLabel').textContent = fn(this._currentDate);
+    }
   }
 
   buildScenario() {
@@ -90,7 +112,8 @@ export class BaseApp {
     this.timelineView = new TimelineView({
       container:   $('timelineContainer'),
       onDetail:    (node) => this.showDetailModal(node),
-      eventColors
+      eventColors,
+      formatDate:  this._formatDate,
     });
     this.timelineView.attach(this.scenario.sim.journal);
 
@@ -102,6 +125,7 @@ export class BaseApp {
       chartView: this.chartView,
       timeLabel: $('timeLabel'),
       timeSlider: $('timeSlider'),
+      formatDate: this._formatDate,
     });
 
     // Subscribe to RECORD_BALANCE DEBUG_ACTION events to capture balance snapshots
@@ -109,6 +133,7 @@ export class BaseApp {
 
       //Fire the date changed listeners
       const date = new Date(payload.date);
+      this._currentDate = date;
       this.timeControls.onDateChanged(date);
       if(this.graphView) {
         this.graphView.updateView(payload);
@@ -130,7 +155,8 @@ export class BaseApp {
     // Reset slider and direction tracker
     $('timeSlider').value = 0;
     this.lastSliderValue = 0;
-    $('timeLabel').textContent = this.scenario.simStart.toDateString();
+    this._currentDate = this.scenario.simStart;
+    $('timeLabel').textContent = this._formatDate(this.scenario.simStart);
 
     this.updateStatePanel();
   }
@@ -198,7 +224,7 @@ export class BaseApp {
       </div>
       <div class="modal-body">
         <table class="modal-meta">
-          <tr><td>Date</td>         <td>${entry.date.toDateString()}</td></tr>
+          <tr><td>Date</td>         <td>${this._formatDate(entry.date)}</td></tr>
           <tr><td>Source event</td> <td>${entry.eventType}</td></tr>
           <tr><td>Reducer</td>      <td>${entry.reducer}</td></tr>
           <tr><td>Emitted</td>      <td>${emitted}</td></tr>
@@ -262,7 +288,7 @@ export class BaseApp {
     <div style="font-size:11px;line-height:1.5">
       <div style="color:#a5b4fc;font-size:13px;font-weight:bold;margin-bottom:4px">${node.type}</div>
       <div style="color:#64748b;margin-bottom:8px;font-size:10px">
-        Date: <span style="color:#e5e7eb">${new Date(node.date).toDateString()}</span>
+        Date: <span style="color:#e5e7eb">${this._formatDate(new Date(node.date))}</span>
         &nbsp;|&nbsp; Reducer: <span style="color:#e5e7eb">${node.reducer || '—'}</span>
       </div>
       ${actionFields ? `
@@ -355,7 +381,7 @@ export class BaseApp {
         return v.map(x => (typeof x === 'object' ? renderObj(x) : String(x))).join(', ');
       }
       if(typeof v === 'object') {
-        if (v instanceof Date) return v.toDateString();
+        if (v instanceof Date) return this._formatDate(v);
         let result = '<br>';
         for(let f in v) {
           result += f + ': ' + renderObj(v[f]) + '<br>';

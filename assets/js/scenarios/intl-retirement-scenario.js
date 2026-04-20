@@ -67,6 +67,8 @@ export const DEFAULT_EVENT_SERIES = [
   new FinSimLib.Scenarios.EventSeries({ id: 'fixedIncome',      label: 'Fixed Income Interest',     type: 'INTL_FIXED_INCOME_INTEREST',       interval: 'annually', enabled: true, startOffset: 1, color: '#2196F3' }),
   new FinSimLib.Scenarios.EventSeries({ id: 'auSavings',        label: 'AU Savings Interest',       type: 'INTL_AU_SAVINGS_INTEREST',         interval: 'annually', enabled: true, startOffset: 1, color: '#FF9800' }),
   new FinSimLib.Scenarios.EventSeries({ id: 'superEarnings',    label: 'Super Earnings',            type: 'INTL_SUPER_EARNINGS',              interval: 'annually', enabled: true, startOffset: 1, color: '#9C27B0' }),
+  new FinSimLib.Scenarios.EventSeries({ id: 'tax',              label: 'Annual Tax Filing',         type: 'ANNUAL_TAX',                       interval: 'annually', enabled: true, startOffset: 1, color: '#FF5722' }),
+
 ];
 
 // ─── Scenario class ────────────────────────────────────────────────────────────
@@ -365,5 +367,32 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
         new FinSimLib.Core.RecordBalanceAction(),
       ];
     }, 'Change Residency'));
+
+    // Annual tax — pre-checks whether the combined tax bill would overdraft checking.
+    // If so, replenishment runs first (same DFS guarantee as monthly expenses).
+    this.sim.register('ANNUAL_TAX', new FinSimLib.Core.HandlerEntry(({ state, date }) => {
+      const cgTax      = +(state.capitalGainsYTD  * p.capitalGainsTaxRate).toFixed(2);
+      const incomeTax  = +(state.ordinaryIncomeYTD * p.incomeTaxRate).toFixed(2);
+      const totalTax   = cgTax + incomeTax;
+      const actions    = [];
+
+      if (totalTax > 0) {
+        const postPayBal = state.checkingAccount.balance - totalTax;
+        const deficit    = p.checkingMinBalance - postPayBal;
+        if (deficit > 0) {
+          actions.push({ type: 'REPLENISH_CHECKING', deficit, skipRetirement: false, date });
+        }
+      }
+
+      if (cgTax > 0)     actions.push({ type: 'CAPITAL_GAINS_TAX', amount: cgTax });
+      if (incomeTax > 0) actions.push({ type: 'INCOME_TAX',        amount: incomeTax });
+      actions.push(
+          new FinSimLib.Core.RecordMetricAction('capital_gains_tax_annual', cgTax),
+          new FinSimLib.Core.RecordMetricAction('income_tax_annual', incomeTax),
+          new FinSimLib.Core.RecordBalanceAction()
+      );
+      return actions;
+    }, 'Annual Tax'));
+
   }
 }
