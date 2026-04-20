@@ -62,7 +62,7 @@ export class Account {
    * @param {string}  [opts.ownershipType='sole']  - 'sole' | 'joint'
    * @param {string}  [opts.ownerId=null]          - Person id of the primary owner
    * @param {number}  [opts.minimumBalance=0]      - Lowest allowed balance (AR-1, AR-2)
-   * @param {number|null} [opts.drawdownPriority=null] - Liquidation order (1 = first)
+   * @param {number|null} [opts.drawdownPriority=null] - Liquidation order (1 = first), null is don't use for drawdown
    * @param {string|null} [opts.country=null]      - ISO country code (e.g. 'US', 'AU')
    * @param {Currency|null} [opts.currency=null]   - Currency descriptor (e.g. USD, AUD)
    */

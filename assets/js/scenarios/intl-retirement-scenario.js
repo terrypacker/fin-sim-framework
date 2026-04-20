@@ -100,14 +100,16 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
     for (let y = 2026; y <= 2040; y++) FinSimLib.Finance.applyTo(periodService, FinSimLib.Finance.buildUsCalendarYear(y));
     for (let y = 2025; y <= 2040; y++) FinSimLib.Finance.applyTo(periodService, FinSimLib.Finance.buildAuFiscalYear(y));
 
+    const primary = new FinSimLib.Finance.Person('primary', p.primaryBirthDate, { name: 'Primary', isAuResident: false });
+    const spouse =  new FinSimLib.Finance.Person('spouse',  p.spouseBirthDate,  { name: 'Spouse',  isAuResident: false });
     // ── Initial state
     const initialState = {
       metrics: {},
 
       // Canonical person records
       people: {
-        primary: new FinSimLib.Finance.Person('primary', p.primaryBirthDate, { name: 'Primary', isAuResident: false }),
-        spouse:  new FinSimLib.Finance.Person('spouse',  p.spouseBirthDate,  { name: 'Spouse',  isAuResident: false }),
+        primary: primary,
+        spouse: spouse,
       },
       // Flat compat fields read by account module handlers (kept in sync by CHANGE_RESIDENCY_APPLY)
       personBirthDate: p.primaryBirthDate,
@@ -123,19 +125,19 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
 
       // US investment accounts — drawdownPriority drives AccountService.replenishSavings order.
       // minimumAge (decimal years) is enforced via AccountService.isWithdrawalEligible.
-      fixedIncomeAccount: new FinSimLib.Finance.Account(p.fixedIncomeBalance,     { country: 'US', currency: USD, drawdownPriority: 1 }),
-      stockAccount:       new FinSimLib.Finance.InvestmentAccount(p.stockBalance, { contributionBasis: p.stockBasis, country: 'US', currency: USD, drawdownPriority: 2 }),
-      iraAccount:         new FinSimLib.Finance.InvestmentAccount(p.iraBalance,   { contributionBasis: p.iraBasis,   country: 'US', currency: USD, drawdownPriority: 3, minimumAge: 59.5 }),
-      k401Account:        new FinSimLib.Finance.InvestmentAccount(p.k401Balance,  { contributionBasis: p.k401Basis,  country: 'US', currency: USD, drawdownPriority: 4, minimumAge: 59.5 }),
-      rothAccount:        new FinSimLib.Finance.InvestmentAccount(p.rothBalance,  { contributionBasis: p.rothBasis,  country: 'US', currency: USD, drawdownPriority: 5, minimumAge: 59.5 }),
+      fixedIncomeAccount: new FinSimLib.Finance.Account(p.fixedIncomeBalance,     { country: 'US', currency: USD, ownerId: primary.id, drawdownPriority: 1 }),
+      stockAccount:       new FinSimLib.Finance.InvestmentAccount(p.stockBalance, { contributionBasis: p.stockBasis, country: 'US', currency: USD, ownerId: primary.id, drawdownPriority: 2 }),
+      iraAccount:         new FinSimLib.Finance.InvestmentAccount(p.iraBalance,   { contributionBasis: p.iraBasis,   country: 'US', currency: USD, ownerId: primary.id, drawdownPriority: 3, minimumAge: 59.5 }),
+      k401Account:        new FinSimLib.Finance.InvestmentAccount(p.k401Balance,  { contributionBasis: p.k401Basis,  country: 'US', currency: USD, ownerId: primary.id, drawdownPriority: 4, minimumAge: 59.5 }),
+      rothAccount:        new FinSimLib.Finance.InvestmentAccount(p.rothBalance,  { contributionBasis: p.rothBasis,  country: 'US', currency: USD, ownerId: primary.id, drawdownPriority: 5, minimumAge: 59.5 }),
 
       // AU accounts — auSavingsAccount is the primary AUD cash pool (no drawdownPriority).
       auSavingsAccount: new FinSimLib.Finance.Account(p.auSavingsBalance, {
         country:  'AU',
         currency: AUD,
       }),
-      auStockAccount: new FinSimLib.Finance.InvestmentAccount(p.auStockBalance, { contributionBasis: p.auStockBasis, country: 'AU', currency: AUD, drawdownPriority: 1 }),
-      superAccount:   new FinSimLib.Finance.InvestmentAccount(p.superBalance,   { contributionBasis: p.superBasis,   country: 'AU', currency: AUD, drawdownPriority: 2, minimumAge: 60 }),
+      auStockAccount: new FinSimLib.Finance.InvestmentAccount(p.auStockBalance, { contributionBasis: p.auStockBasis, country: 'AU', currency: AUD, ownerId: primary.id, drawdownPriority: 1 }),
+      superAccount:   new FinSimLib.Finance.InvestmentAccount(p.superBalance,   { contributionBasis: p.superBasis,   country: 'AU', currency: AUD, ownerId: primary.id, drawdownPriority: 2, minimumAge: 60 }),
 
       // Exchange rate and transfer fee
       exchangeRateUsdToAud: p.exchangeRateUsdToAud,   // 1 USD = N AUD
