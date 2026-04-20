@@ -261,6 +261,7 @@ export class BaseApp {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('hidden', p.id !== tab + 'Tab'));
     }
+    this.resizeCanvases();
   }
 
   // Node Detail
@@ -516,8 +517,8 @@ export class BaseApp {
     $('rebuildBtn').addEventListener('click', () => this.buildScenario());
 
     window.addEventListener('resize', () => this.resizeCanvases());
-    this.resizeCanvases();
     this.switchTab(this.activeTab);
+    this.resizeCanvases();
   }
 
   resizeCanvases() {
