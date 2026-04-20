@@ -517,6 +517,20 @@ canvas { display: block; }
 
 .tl-det:hover { color: #93c5fd; border-color: #3b82f6; }
 
+.tl-rewind {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #64748b;
+  padding: 1px 5px;
+  font-size: 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.tl-rewind:hover { color: #fbbf24; border-color: #f59e0b; }
+
 /* ─── Modal ──────────────────────────────────────────────────────────────── */
 .modal-overlay {
   position: fixed;

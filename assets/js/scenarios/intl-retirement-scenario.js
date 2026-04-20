@@ -14,9 +14,11 @@
  * International two-person retirement simulation:
  *   - Two people (primary + spouse), US and AU citizens
  *   - Begin residing in the US; move to AU on Jul 1 of moveYear
- *   - Full account access regardless of residency status
+ *   - US expenses come from usSavingsAccount (USD); AU expenses from auSavingsAccount (AUD)
+ *   - Domestic drawdown cascade exhausts local investment accounts before triggering
+ *     an international transfer with exchange rate conversion and fixed fee
  *   - Tax events computed at END of period (Dec 31 US / Jun 30 AU) via TAX_SETTLE
- *   - Monthly checking interest
+ *   - Monthly US savings interest
  *   - Stock dividends: cash payout or reinvestment toggle
  *   - CHANGE_RESIDENCY event closes the partial US year before the move
  */
@@ -29,12 +31,12 @@ export const DEFAULT_PARAMS = {
   spouseBirthDate:  new Date(Date.UTC(1972, 8, 22)),
   moveYear:         2031,            // calendar year of US→AU move (Jul 1)
 
-  // Checking
-  initialChecking:      30_000,
-  checkingMinBalance:    3_000,
-  checkingInterestRate:  0.03,
+  // US Savings (primary USD cash pool)
+  initialUsSavings:      30_000,
+  usSavingsMinBalance:    3_000,
+  usSavingsInterestRate:  0.03,
 
-  // US accounts
+  // US investment accounts
   rothBalance:    80_000,  rothBasis:    60_000,
   iraBalance:    200_000,  iraBasis:    150_000,
   k401Balance:   300_000,  k401Basis:   200_000,
@@ -48,10 +50,11 @@ export const DEFAULT_PARAMS = {
   superBalance:     250_000,  superBasis:            180_000,
   auStockBalance:    60_000,  auStockBasis:           40_000,
 
-  // Assets (not yet tracked as Asset objects — stored as plain balance fields)
-  // Real property events can be scheduled manually for EVT-33/34.
+  // International transfer
+  exchangeRateUsdToAud: 1.55,   // 1 USD = 1.55 AUD
+  intlTransferFeeUsd:   15,     // fixed fee per transfer, in USD
 
-  // Expenses
+  // Expenses (in local currency: USD pre-move, AUD post-move)
   monthlyExpenses: 6_000,
 };
 
@@ -62,13 +65,12 @@ export const DEFAULT_PARAMS = {
 // and expect data.amount to be provided).
 export const DEFAULT_EVENT_SERIES = [
   new FinSimLib.Scenarios.EventSeries({ id: 'expenses',         label: 'Monthly Expenses',          type: 'MONTHLY_EXPENSES',                 interval: 'month-end', enabled: true,                color: '#F44336' }),
-  new FinSimLib.Scenarios.EventSeries({ id: 'checkingInterest', label: 'Monthly Checking Interest', type: 'CHECKING_INTEREST_MONTHLY',        interval: 'month-end', enabled: true,                color: '#00BCD4' }),
+  new FinSimLib.Scenarios.EventSeries({ id: 'usSavingsInt',     label: 'Monthly US Savings Interest',type: 'US_SAVINGS_INTEREST_MONTHLY',      interval: 'month-end', enabled: true,                color: '#00BCD4' }),
   new FinSimLib.Scenarios.EventSeries({ id: 'usDividends',      label: 'US Stock Dividends',        type: 'DIVIDEND_SCHEDULED',               interval: 'year-end',  enabled: true, startOffset: 1, color: '#4CAF50' }),
   new FinSimLib.Scenarios.EventSeries({ id: 'fixedIncome',      label: 'Fixed Income Interest',     type: 'INTL_FIXED_INCOME_INTEREST',       interval: 'year-end',  enabled: true, startOffset: 1, color: '#2196F3' }),
   new FinSimLib.Scenarios.EventSeries({ id: 'auSavings',        label: 'AU Savings Interest',       type: 'INTL_AU_SAVINGS_INTEREST',         interval: 'year-end',  enabled: true, startOffset: 1, color: '#FF9800' }),
   new FinSimLib.Scenarios.EventSeries({ id: 'superEarnings',    label: 'Super Earnings',            type: 'INTL_SUPER_EARNINGS',              interval: 'year-end',  enabled: true, startOffset: 1, color: '#9C27B0' }),
   new FinSimLib.Scenarios.EventSeries({ id: 'tax',              label: 'Annual Tax Filing',         type: 'ANNUAL_TAX',                       interval: 'year-end',  enabled: true, startOffset: 1, color: '#FF5722' }),
-
 ];
 
 // ─── Scenario class ────────────────────────────────────────────────────────────
@@ -89,7 +91,9 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
   }
 
   _buildSim() {
-    const p = this.params;
+    const p   = this.params;
+    const USD = FinSimLib.Finance.USD;
+    const AUD = FinSimLib.Finance.AUD;
 
     // ── PeriodService: US calendar years 2026-2040, AU fiscal years 2025-2040
     const periodService = new FinSimLib.Finance.PeriodService();
@@ -109,32 +113,45 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
       personBirthDate: p.primaryBirthDate,
       isAuResident:    false,
 
-      // Checking (joint)
-      checkingAccount: new FinSimLib.Finance.Account(p.initialChecking, { ownershipType: 'joint', minimumBalance: p.checkingMinBalance }),
+      // US Savings — primary USD cash pool (replaces checkingAccount)
+      usSavingsAccount: new FinSimLib.Finance.Account(p.initialUsSavings, {
+        ownershipType: 'joint',
+        minimumBalance: p.usSavingsMinBalance,
+        country:  'US',
+        currency: USD,
+      }),
 
-      // US accounts
-      rothAccount:        new FinSimLib.Finance.InvestmentAccount(p.rothBalance,         { contributionBasis: p.rothBasis  }),
-      iraAccount:         new FinSimLib.Finance.InvestmentAccount(p.iraBalance,          { contributionBasis: p.iraBasis   }),
-      k401Account:        new FinSimLib.Finance.InvestmentAccount(p.k401Balance,         { contributionBasis: p.k401Basis  }),
-      stockAccount:       new FinSimLib.Finance.InvestmentAccount(p.stockBalance,        { contributionBasis: p.stockBasis }),
-      fixedIncomeAccount: new FinSimLib.Finance.Account(p.fixedIncomeBalance),
+      // US investment accounts
+      rothAccount:        new FinSimLib.Finance.InvestmentAccount(p.rothBalance,         { contributionBasis: p.rothBasis,  country: 'US', currency: USD }),
+      iraAccount:         new FinSimLib.Finance.InvestmentAccount(p.iraBalance,          { contributionBasis: p.iraBasis,   country: 'US', currency: USD }),
+      k401Account:        new FinSimLib.Finance.InvestmentAccount(p.k401Balance,         { contributionBasis: p.k401Basis,  country: 'US', currency: USD }),
+      stockAccount:       new FinSimLib.Finance.InvestmentAccount(p.stockBalance,        { contributionBasis: p.stockBasis, country: 'US', currency: USD }),
+      fixedIncomeAccount: new FinSimLib.Finance.Account(p.fixedIncomeBalance,            { country: 'US', currency: USD }),
 
-      // AU accounts
-      auSavingsAccount: new FinSimLib.Finance.Account(p.auSavingsBalance),
-      superAccount:     new FinSimLib.Finance.InvestmentAccount(p.superBalance, { contributionBasis: p.superBasis }),
-      auStockAccount:   new FinSimLib.Finance.InvestmentAccount(p.auStockBalance, { contributionBasis: p.auStockBasis }),
+      // AU accounts — auSavingsAccount is the primary AUD cash pool
+      auSavingsAccount: new FinSimLib.Finance.Account(p.auSavingsBalance, {
+        country:  'AU',
+        currency: AUD,
+      }),
+      superAccount:   new FinSimLib.Finance.InvestmentAccount(p.superBalance,   { contributionBasis: p.superBasis,   country: 'AU', currency: AUD }),
+      auStockAccount: new FinSimLib.Finance.InvestmentAccount(p.auStockBalance, { contributionBasis: p.auStockBasis, country: 'AU', currency: AUD }),
 
-      // Drawdown order — ordered list of account keys for REPLENISH_CHECKING cascade
-      drawdownOrder: [
+      // Drawdown orders — domestic investment accounts only (not the savings accounts themselves)
+      usDrawdownOrder: [
         'fixedIncomeAccount',
         'stockAccount',
         'iraAccount',
         'k401Account',
         'rothAccount',
-        'auSavingsAccount',
-        'auStockAccount',
-        'superAccount'
       ],
+      auDrawdownOrder: [
+        'auStockAccount',
+        'superAccount',
+      ],
+
+      // Exchange rate and transfer fee
+      exchangeRateUsdToAud: p.exchangeRateUsdToAud,   // 1 USD = N AUD
+      intlTransferFeeUsd:   p.intlTransferFeeUsd,      // fixed fee in USD
 
       // YTD tax accumulators
       usOrdinaryIncomeYTD:         0,
@@ -177,49 +194,124 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
   _registerReducers(p) {
     const svc = this._accountService;
 
-    // ── EXPENSE_DEBIT — capped at available balance ────────────────────────────
+    // ── EXPENSE_DEBIT — residence-aware: USD pre-move, AUD post-move ───────────
     this.sim.reducers.register('EXPENSE_DEBIT', (state, action, date) => {
-      const debit = Math.min(action.amount, Math.max(0, state.checkingAccount.balance));
-      if (debit > 0) svc.transaction(state.checkingAccount, -debit, date);
+      const account = state.isAuResident ? state.auSavingsAccount : state.usSavingsAccount;
+      const debit   = Math.min(action.amount, Math.max(0, account.balance));
+      if (debit > 0) svc.transaction(account, -debit, date);
       return { ...state };
     }, FinSimLib.Core.PRIORITY.CASH_FLOW, 'Expense Debit');
 
-    // ── REPLENISH_CHECKING — DFS cascade through drawdownOrder ────────────────
-    // Withdraws from the first account in drawdownOrder that has a balance,
-    // then chains to the next if still in deficit.
-    // Note: some accounts (e.g. fixedIncomeAccount after FIXED_INCOME_EARNINGS_APPLY)
-    // are plain { balance } objects, not full Account instances, so we mutate
-    // balance directly instead of using svc.transaction.
-    this.sim.reducers.register('REPLENISH_CHECKING', (state, action, date) => {
-      const { deficit, orderIndex = 0 } = action;
+    // ── REPLENISH_SAVINGS — cascades through the domestic drawdown order,
+    //    then crosses to the other country via INTL_TRANSFER_APPLY if exhausted.
+    //    targetKey: 'usSavingsAccount' | 'auSavingsAccount'
+    this.sim.reducers.register('REPLENISH_SAVINGS', (state, action, date) => {
+      const { deficit, targetKey, orderIndex = 0 } = action;
+      const isAu        = targetKey === 'auSavingsAccount';
+      const drawdown    = isAu ? state.auDrawdownOrder : state.usDrawdownOrder;
 
-      for (let i = orderIndex; i < state.drawdownOrder.length; i++) {
-        const key     = state.drawdownOrder[i];
+      for (let i = orderIndex; i < drawdown.length; i++) {
+        const key     = drawdown[i];
         const account = state[key];
         if (!account || account.balance <= 0) continue;
 
         const withdraw  = Math.min(deficit, account.balance);
         const remaining = deficit - withdraw;
 
-        svc.transaction(state.checkingAccount, withdraw, date);
-        account.balance -= withdraw;   // direct mutation; works for full Account and bare { balance }
+        svc.transaction(state[targetKey], withdraw, date);
+        account.balance -= withdraw;
 
         const newState = { ...state };
         if (remaining > 0) {
           return {
             state: newState,
-            next: [{ type: 'REPLENISH_CHECKING', deficit: remaining, orderIndex: i + 1 }],
+            next: [{ type: 'REPLENISH_SAVINGS', deficit: remaining, targetKey, orderIndex: i + 1 }],
           };
         }
         return newState;
       }
-      // No funds available — checking remains where it is
-      return { ...state };
-    }, FinSimLib.Core.PRIORITY.PRE_PROCESS, 'Replenish Checking');
 
-    // ── CHECKING_INTEREST_CREDIT — monthly interest, US (and AU after move) ───
-    this.sim.reducers.register('CHECKING_INTEREST_CREDIT', (state, action, date) => {
-      svc.transaction(state.checkingAccount, action.amount, date);
+      // Domestic accounts exhausted — trigger international transfer
+      if (deficit > 0) {
+        return {
+          state: { ...state },
+          next: [{
+            type:      'INTL_TRANSFER_APPLY',
+            direction: isAu ? 'US_TO_AU' : 'AU_TO_US',
+            // For AU_TO_US: we need `deficit` USD net of fee; compute AUD to withdraw
+            // For US_TO_AU: we need `deficit` AUD net of fee; compute USD to withdraw
+            targetDeficit: deficit,
+          }],
+        };
+      }
+      return { ...state };
+    }, FinSimLib.Core.PRIORITY.PRE_PROCESS, 'Replenish Savings');
+
+    // ── INTL_TRANSFER_APPLY — cross-currency transfer with exchange rate + fee ─
+    //
+    //  AU_TO_US: withdraw AUD from auSavingsAccount, convert to USD, subtract fee,
+    //            credit usSavingsAccount.
+    //    AUD needed = (targetDeficitUsd + feeUsd) * usdToAud
+    //    USD received = audWithdrawn / usdToAud - feeUsd
+    //
+    //  US_TO_AU: withdraw USD from usSavingsAccount, subtract fee, convert to AUD,
+    //            credit auSavingsAccount.
+    //    USD needed = targetDeficitAud / usdToAud + feeUsd
+    //    AUD received = (usdWithdrawn - feeUsd) * usdToAud
+    //
+    //  If the source savings account is short, a REPLENISH_SAVINGS is chained on
+    //  the source account first, then this action retries (replenished: true).
+    //  The replenished flag prevents a second replenishment attempt so the transfer
+    //  proceeds with whatever is available after the domestic drawdown.
+    this.sim.reducers.register('INTL_TRANSFER_APPLY', (state, action, date) => {
+      const { direction, targetDeficit, replenished = false } = action;
+      const rate = state.exchangeRateUsdToAud;
+      const fee  = state.intlTransferFeeUsd;
+
+      if (direction === 'AU_TO_US') {
+        const audNeeded  = (targetDeficit + fee) * rate;
+        const shortfall  = audNeeded - state.auSavingsAccount.balance;
+        if (!replenished && shortfall > 0) {
+          return {
+            state: { ...state },
+            next: [
+              { type: 'REPLENISH_SAVINGS', deficit: shortfall, targetKey: 'auSavingsAccount', orderIndex: 0 },
+              { type: 'INTL_TRANSFER_APPLY', direction, targetDeficit, replenished: true },
+            ],
+          };
+        }
+        const audActual   = Math.min(audNeeded, state.auSavingsAccount.balance);
+        const usdReceived = Math.max(0, audActual / rate - fee);
+        if (audActual > 0) {
+          svc.transaction(state.auSavingsAccount, -audActual,   date);
+          svc.transaction(state.usSavingsAccount, +usdReceived, date);
+        }
+      } else {
+        // US_TO_AU
+        const usdNeeded  = targetDeficit / rate + fee;
+        const shortfall  = usdNeeded - state.usSavingsAccount.balance;
+        if (!replenished && shortfall > 0) {
+          return {
+            state: { ...state },
+            next: [
+              { type: 'REPLENISH_SAVINGS', deficit: shortfall, targetKey: 'usSavingsAccount', orderIndex: 0 },
+              { type: 'INTL_TRANSFER_APPLY', direction, targetDeficit, replenished: true },
+            ],
+          };
+        }
+        const usdActual   = Math.min(usdNeeded, state.usSavingsAccount.balance);
+        const audReceived = Math.max(0, (usdActual - fee) * rate);
+        if (usdActual > 0) {
+          svc.transaction(state.usSavingsAccount, -usdActual,   date);
+          svc.transaction(state.auSavingsAccount, +audReceived, date);
+        }
+      }
+      return { ...state };
+    }, FinSimLib.Core.PRIORITY.PRE_PROCESS, 'International Transfer Apply');
+
+    // ── US_SAVINGS_INTEREST_CREDIT — monthly interest on US savings ────────────
+    this.sim.reducers.register('US_SAVINGS_INTEREST_CREDIT', (state, action, date) => {
+      svc.transaction(state.usSavingsAccount, action.amount, date);
       const usNext = state.usOrdinaryIncomeYTD + action.amount;
       const base   = { ...state, usOrdinaryIncomeYTD: usNext };
       if (state.isAuResident) {
@@ -230,13 +322,12 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
         };
       }
       return base;
-    }, FinSimLib.Core.PRIORITY.CASH_FLOW, 'Checking Interest Credit');
+    }, FinSimLib.Core.PRIORITY.CASH_FLOW, 'US Savings Interest Credit');
 
-    // ── STOCK_DIVIDEND_CASH_APPLY — cash payout path ──────────────────────────
-    // Credits checking + chains STOCK_DIVIDEND_TAX (same tax as reinvest path)
+    // ── STOCK_DIVIDEND_CASH_APPLY — cash payout path, credits usSavingsAccount ─
     this.sim.reducers.register('STOCK_DIVIDEND_CASH_APPLY', (state, action, date) => {
       const { amount, isAuResident } = action;
-      svc.transaction(state.checkingAccount, amount, date);
+      svc.transaction(state.usSavingsAccount, amount, date);
       return {
         state: { ...state },
         next: [{ type: 'STOCK_DIVIDEND_TAX', amount, isAuResident }],
@@ -271,12 +362,15 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
   _registerHandlers(p) {
     // ── MONTHLY_EXPENSES ───────────────────────────────────────────────────────
     this.sim.register('MONTHLY_EXPENSES', new FinSimLib.Core.HandlerEntry(({ data, date, state }) => {
-      const amount       = data?.amount ?? p.monthlyExpenses;
-      const postDebitBal = state.checkingAccount.balance - amount;
-      const deficit      = (state.checkingAccount.minimumBalance ?? 0) - postDebitBal;
-      const actions      = [];
+      const amount      = data?.amount ?? p.monthlyExpenses;
+      const isAu        = state.isAuResident;
+      const targetKey   = isAu ? 'auSavingsAccount' : 'usSavingsAccount';
+      const account     = state[targetKey];
+      const postDebitBal = account.balance - amount;
+      const deficit     = (account.minimumBalance ?? 0) - postDebitBal;
+      const actions     = [];
       if (deficit > 0) {
-        actions.push({ type: 'REPLENISH_CHECKING', deficit, orderIndex: 0 });
+        actions.push({ type: 'REPLENISH_SAVINGS', deficit, targetKey, orderIndex: 0 });
       }
       actions.push(
         { type: 'EXPENSE_DEBIT', amount },
@@ -286,16 +380,16 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
       return actions;
     }, 'Monthly Expenses'));
 
-    // ── CHECKING_INTEREST_MONTHLY ──────────────────────────────────────────────
-    this.sim.register('CHECKING_INTEREST_MONTHLY', new FinSimLib.Core.HandlerEntry(({ state }) => {
-      const amount = +(state.checkingAccount.balance * p.checkingInterestRate / 12).toFixed(2);
+    // ── US_SAVINGS_INTEREST_MONTHLY ────────────────────────────────────────────
+    this.sim.register('US_SAVINGS_INTEREST_MONTHLY', new FinSimLib.Core.HandlerEntry(({ state }) => {
+      const amount = +(state.usSavingsAccount.balance * p.usSavingsInterestRate / 12).toFixed(2);
       if (amount <= 0) return [new FinSimLib.Core.RecordBalanceAction()];
       return [
-        { type: 'CHECKING_INTEREST_CREDIT', amount },
-        new FinSimLib.Core.RecordMetricAction('checking_interest', amount),
+        { type: 'US_SAVINGS_INTEREST_CREDIT', amount },
+        new FinSimLib.Core.RecordMetricAction('us_savings_interest', amount),
         new FinSimLib.Core.RecordBalanceAction(),
       ];
-    }, 'Monthly Checking Interest'));
+    }, 'Monthly US Savings Interest'));
 
     // ── DIVIDEND_SCHEDULED — bypass STOCK_DIVIDEND handler for payout toggle ──
     this.sim.register('DIVIDEND_SCHEDULED', new FinSimLib.Core.HandlerEntry(({ state, data }) => {
@@ -303,7 +397,7 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
       const amount   = +(stockVal * p.stockDividendRate).toFixed(2);
       if (amount <= 0) return [new FinSimLib.Core.RecordBalanceAction()];
 
-      const reinvest    = data?.reinvest ?? p.stockDividendReinvest;
+      const reinvest     = data?.reinvest ?? p.stockDividendReinvest;
       const isAuResident = state.isAuResident;
 
       if (reinvest) {
@@ -355,9 +449,37 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
       ];
     }, 'Super Earnings'));
 
+    // ── INTL_TRANSFER_TO_US — user-triggered AUD→USD transfer ────────────────
+    //    data.amount: AUD amount to send from auSavingsAccount
+    this.sim.register('INTL_TRANSFER_TO_US', new FinSimLib.Core.HandlerEntry(({ state, data }) => {
+      const amount  = data?.amount ?? 0;
+      const rate    = state.exchangeRateUsdToAud;
+      const fee     = state.intlTransferFeeUsd;
+      const audActual     = Math.min(amount, state.auSavingsAccount.balance);
+      const targetDeficit = Math.max(0, audActual / rate - fee);
+      return [
+        { type: 'INTL_TRANSFER_APPLY', direction: 'AU_TO_US', targetDeficit },
+        new FinSimLib.Core.RecordMetricAction('intl_transfer_to_us', targetDeficit),
+        new FinSimLib.Core.RecordBalanceAction(),
+      ];
+    }, 'International Transfer to US'));
+
+    // ── INTL_TRANSFER_TO_AU — user-triggered USD→AUD transfer ────────────────
+    //    data.amount: USD amount to send from usSavingsAccount
+    this.sim.register('INTL_TRANSFER_TO_AU', new FinSimLib.Core.HandlerEntry(({ state, data }) => {
+      const amount  = data?.amount ?? 0;
+      const rate    = state.exchangeRateUsdToAud;
+      const fee     = state.intlTransferFeeUsd;
+      const usdActual     = Math.min(amount, state.usSavingsAccount.balance);
+      const targetDeficit = Math.max(0, (usdActual - fee) * rate);
+      return [
+        { type: 'INTL_TRANSFER_APPLY', direction: 'US_TO_AU', targetDeficit },
+        new FinSimLib.Core.RecordMetricAction('intl_transfer_to_au', targetDeficit),
+        new FinSimLib.Core.RecordBalanceAction(),
+      ];
+    }, 'International Transfer to AU'));
+
     // ── CHANGE_RESIDENCY — flip flags, close partial US year, log balance ─────
-    // TAX_SETTLE_APPLY is a reducer (not a handler), so we emit it directly here
-    // after computing the US tax from the pre-residency state.
     const _settleService = new FinSimLib.Finance.TaxSettleService();
     this.sim.register('CHANGE_RESIDENCY', new FinSimLib.Core.HandlerEntry(({ state }) => {
       const usTax = _settleService.computeUsTax(state);
@@ -367,6 +489,5 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
         new FinSimLib.Core.RecordBalanceAction(),
       ];
     }, 'Change Residency'));
-
   }
 }

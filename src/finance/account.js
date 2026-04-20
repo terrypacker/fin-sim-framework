@@ -18,6 +18,17 @@
  */
 
 /**
+ * Currency descriptor — code and display symbol.
+ * @typedef {{ code: string, symbol: string }} Currency
+ */
+
+/** US Dollar */
+export const USD = { code: 'USD', symbol: '$' };
+
+/** Australian Dollar */
+export const AUD = { code: 'AUD', symbol: 'A$' };
+
+/**
  * Account — plain ledger with balance, credits, and debits.
  * No methods; safe for structuredClone snapshots.
  * Logic lives in AccountService.
@@ -30,6 +41,8 @@ export class Account {
    * @param {string}  [opts.ownerId=null]          - Person id of the primary owner
    * @param {number}  [opts.minimumBalance=0]      - Lowest allowed balance (AR-1, AR-2)
    * @param {number|null} [opts.drawdownPriority=null] - Liquidation order (1 = first)
+   * @param {string|null} [opts.country=null]      - ISO country code (e.g. 'US', 'AU')
+   * @param {Currency|null} [opts.currency=null]   - Currency descriptor (e.g. USD, AUD)
    */
   constructor(initialValue = 0, opts = {}) {
     this.balance          = initialValue;
@@ -39,6 +52,8 @@ export class Account {
     this.ownerId          = opts.ownerId          ?? null;
     this.minimumBalance   = opts.minimumBalance   ?? 0;
     this.drawdownPriority = opts.drawdownPriority ?? null;
+    this.country          = opts.country          ?? null;
+    this.currency         = opts.currency         ?? null;
   }
 }
 

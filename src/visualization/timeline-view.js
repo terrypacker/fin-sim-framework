@@ -11,9 +11,10 @@
 const fmt = n => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export class TimelineView {
-  constructor({ container, onDetail, eventColors = new Map(), formatDate }) {
+  constructor({ container, onDetail, onRewind, eventColors = new Map(), formatDate }) {
     this.container   = container;
     this.onDetail    = onDetail;
+    this.onRewind    = onRewind ?? null;
     this.eventColors = eventColors;
     this.formatDate  = formatDate ?? (d => d.toDateString());
     this.journal     = null;
@@ -88,12 +89,17 @@ export class TimelineView {
       const dateOpen   = this.expanded.has(dateStr);
       const totalActs  = [...byEvent.values()].reduce((s, a) => s + a.length, 0);
       const evCount    = byEvent.size;
+      const firstDate  = [...byEvent.values()][0][0].entry.date;
+      const rewindBtn  = this.onRewind
+        ? `<button class="tl-rewind" data-date="${firstDate.getTime()}" title="Rewind to ${dateStr}">⏮</button>`
+        : '';
 
       html.push(`<div class="tl-date-group">
         <div class="tl-date-hdr" data-tgl="${dateStr}">
           <span class="tl-chev">${dateOpen ? '▼' : '▶'}</span>
           <span class="tl-date-str">${dateStr}</span>
           <span class="tl-badge">${evCount} event${evCount > 1 ? 's' : ''} · ${totalActs} actions</span>
+          ${rewindBtn}
         </div>`);
 
       if (dateOpen) {
@@ -157,6 +163,16 @@ export class TimelineView {
         this.onDetail(this.journal.journal[+btn.dataset.idx]);
       });
     });
+
+    // Rewind buttons
+    if (this.onRewind) {
+      this.container.querySelectorAll('.tl-rewind').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          this.onRewind(new Date(+btn.dataset.date));
+        });
+      });
+    }
 
     // Keep scroll near the bottom as new events arrive
     if (atBottom) this.container.scrollTop = this.container.scrollHeight;

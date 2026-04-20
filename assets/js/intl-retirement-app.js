@@ -17,13 +17,31 @@ const fmtLocal = d => d.toLocaleDateString('en-US', { year: 'numeric', month: 's
 
 // ── Chart series ──────────────────────────────────────────────────────────────
 const CHART_SERIES = [
-  { key: 'checking',     color: '#60a5fa', label: 'Checking'       },
-  { key: 'usAccounts',   color: '#34d399', label: 'US Accounts'    },
-  { key: 'auAccounts',   color: '#f59e0b', label: 'AU Accounts'    },
-  { key: 'superAccount', color: '#fb923c', label: 'Superannuation' },
+  { key: 'usSavings',    color: '#60a5fa', label: 'US Savings (USD)'   },
+  { key: 'usAccounts',   color: '#34d399', label: 'US Accounts (USD)'  },
+  { key: 'auSavings',    color: '#f59e0b', label: 'AU Savings (AUD)'   },
+  { key: 'auAccounts',   color: '#fbbf24', label: 'AU Accounts (AUD)'  },
+  { key: 'superAccount', color: '#fb923c', label: 'Superannuation (AUD)' },
 ];
 
+// Current display currency — 'USD' or 'AUD'.  Updated by the selector.
+let displayCurrency = 'USD';
+
+/**
+ * Convert a value from one currency to the display currency.
+ * @param {number} value       - Amount in the account's native currency
+ * @param {'USD'|'AUD'} native - The account's native currency
+ * @param {number} rate        - exchangeRateUsdToAud (1 USD = N AUD)
+ */
+function toDisplay(value, native, rate) {
+  if (native === displayCurrency) return value;
+  if (displayCurrency === 'AUD') return value * rate;   // USD → AUD
+  return value / rate;                                   // AUD → USD
+}
+
 function chartSnapshot(chartView, date, state) {
+  const rate = state.exchangeRateUsdToAud ?? 1;
+
   const usAccounts =
     (state.rothAccount?.balance        ?? 0) +
     (state.iraAccount?.balance         ?? 0) +
@@ -32,14 +50,14 @@ function chartSnapshot(chartView, date, state) {
     (state.fixedIncomeAccount?.balance ?? 0);
 
   const auAccounts =
-    (state.auSavingsAccount?.balance ?? 0) +
-    (state.auStockAccount?.balance   ?? 0);
+    (state.auStockAccount?.balance ?? 0);
 
   chartView.addSnapshot(date, {
-    checking:     state.checkingAccount?.balance ?? 0,
-    usAccounts,
-    auAccounts,
-    superAccount: state.superAccount?.balance ?? 0,
+    usSavings:    toDisplay(state.usSavingsAccount?.balance  ?? 0, 'USD', rate),
+    usAccounts:   toDisplay(usAccounts,                            'USD', rate),
+    auSavings:    toDisplay(state.auSavingsAccount?.balance  ?? 0, 'AUD', rate),
+    auAccounts:   toDisplay(auAccounts,                            'AUD', rate),
+    superAccount: toDisplay(state.superAccount?.balance      ?? 0, 'AUD', rate),
   });
 }
 
@@ -63,16 +81,16 @@ function readParams() {
     spouseBirthDate:  new Date(+$('spouseBirthYear').value,  8, 22),
     moveYear:         +$('moveYear').value,
 
-    // Checking
-    initialChecking:      +$('initialChecking').value,
-    checkingMinBalance:   +$('checkingMinBalance').value,
-    checkingInterestRate: +$('checkingInterestRate').value / 100,
+    // US Savings
+    initialUsSavings:      +$('initialUsSavings').value,
+    usSavingsMinBalance:   +$('usSavingsMinBalance').value,
+    usSavingsInterestRate: +$('usSavingsInterestRate').value / 100,
 
-    // US accounts
+    // US investment accounts
     rothBalance:   +$('rothBalance').value,   rothBasis:   +$('rothBasis').value,
-    iraBalance:    +$('iraBalance').value,    iraBasis:    +$('iraBasis').value,
-    k401Balance:   +$('k401Balance').value,   k401Basis:   +$('k401Basis').value,
-    stockBalance:  +$('stockBalance').value,  stockBasis:  +$('stockBasis').value,
+    iraBalance:    +$('iraBalance').value,     iraBasis:    +$('iraBasis').value,
+    k401Balance:   +$('k401Balance').value,    k401Basis:   +$('k401Basis').value,
+    stockBalance:  +$('stockBalance').value,   stockBasis:  +$('stockBasis').value,
     stockDividendRate:    +$('stockDividendRate').value / 100,
     stockDividendReinvest: $('stockDividendReinvest').checked,
     fixedIncomeBalance:      +$('fixedIncomeBalance').value,
@@ -81,8 +99,12 @@ function readParams() {
     // AU accounts
     auSavingsBalance:     +$('auSavingsBalance').value,
     auSavingsInterestRate: +$('auSavingsInterestRate').value / 100,
-    superBalance:  +$('superBalance').value,  superBasis:  +$('superBasis').value,
+    superBalance:  +$('superBalance').value,   superBasis:  +$('superBasis').value,
     auStockBalance: +$('auStockBalance').value, auStockBasis: +$('auStockBasis').value,
+
+    // International transfer
+    exchangeRateUsdToAud: +$('exchangeRateUsdToAud').value,
+    intlTransferFeeUsd:   +$('intlTransferFeeUsd').value,
 
     // Expenses
     monthlyExpenses: +$('monthlyExpenses').value,
@@ -147,7 +169,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('tzSelect').addEventListener('change', () => {
     app.setFormatDate($('tzSelect').value === 'utc' ? fmtUTC : fmtLocal);
-    renderEventList(); // refresh custom event dates
+    renderEventList();
+  });
+
+  $('displayCurrency').addEventListener('change', () => {
+    displayCurrency = $('displayCurrency').value;
+    app.buildScenario();
   });
 
   renderEventList();

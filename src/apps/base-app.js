@@ -112,6 +112,15 @@ export class BaseApp {
     this.timelineView = new TimelineView({
       container:   $('timelineContainer'),
       onDetail:    (node) => this.showDetailModal(node),
+      onRewind:    (date) => {
+        const pct = (date.getTime() - this.scenario.simStart.getTime()) /
+                    (this.scenario.simEnd.getTime() - this.scenario.simStart.getTime());
+        const clamped = Math.max(0, Math.min(1, pct));
+        this.timeControls.rewindTo(clamped);
+        const sliderVal = Math.round(clamped * 100);
+        $('timeSlider').value = sliderVal;
+        this.lastSliderValue = sliderVal;
+      },
       eventColors,
       formatDate:  this._formatDate,
     });
@@ -334,7 +343,12 @@ export class BaseApp {
     const changes = [];
     if (!prev || !next) return changes;
 
+    // Ledger arrays grow on every transaction — skip them to keep diffs readable.
+    const SKIP_KEYS = new Set(['credits', 'debits']);
+
     const walk = (b, a, prefix) => {
+      const leafKey = prefix.split('.').pop();
+      if (SKIP_KEYS.has(leafKey)) return;
       const bIsObj = typeof b === 'object' && b !== null && !Array.isArray(b);
       const aIsObj = typeof a === 'object' && a !== null && !Array.isArray(a);
       if (bIsObj && aIsObj) {

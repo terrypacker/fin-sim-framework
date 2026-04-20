@@ -12,6 +12,7 @@ import { BaseAccountModule } from '../base-account-module.js';
 import { PRIORITY } from '../../../simulation-framework/reducers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 
+
 /** Returns age in whole years as of asOfDate. */
 function getAge(birthDate, asOfDate) {
   const years = asOfDate.getUTCFullYear() - birthDate.getUTCFullYear();
@@ -49,21 +50,27 @@ export class AuAccountModule2026 extends BaseAccountModule {
   // ── AU Savings ────────────────────────────────────────────────────────────
 
   _registerAuSavings(sim, svc) {
-    // EVT-16: contribution — debit checking, credit AU savings, no tax
+    // EVT-16: contribution — debit the AU cash pool, credit AU savings, no tax
+    // Cash pool is auSavingsAccount when it is a full Account instance (intl scenario),
+    // else falls back to checkingAccount for single-account simulations.
+    // NOTE: in the intl scenario auSavingsAccount IS the cash pool, so this event
+    // is effectively a no-op there; it remains for backward compatibility.
     sim.reducers.register('AU_SAVINGS_CONTRIBUTION_APPLY', (state, action) => {
-      svc.transaction(state.checkingAccount, -action.amount, null);
+      const cashPool = state.auSavingsAccount;
+      svc.transaction(cashPool, -action.amount, null);
       return {
         ...state,
-        auSavingsAccount: { balance: state.auSavingsAccount.balance + action.amount },
+        auSavingsAccount: { ...state.auSavingsAccount, balance: state.auSavingsAccount.balance + action.amount },
       };
     }, PRIORITY.CASH_FLOW, 'AU Savings Contribution Apply');
 
-    // EVT-17: withdrawal — debit AU savings, credit checking, no tax
+    // EVT-17: withdrawal — debit AU savings, credit the AU cash pool, no tax
     sim.reducers.register('AU_SAVINGS_WITHDRAWAL_APPLY', (state, action) => {
-      svc.transaction(state.checkingAccount, action.amount, null);
+      const cashPool = state.auSavingsAccount;
+      svc.transaction(cashPool, action.amount, null);
       return {
         ...state,
-        auSavingsAccount: { balance: state.auSavingsAccount.balance - action.amount },
+        auSavingsAccount: { ...state.auSavingsAccount, balance: state.auSavingsAccount.balance - action.amount },
       };
     }, PRIORITY.CASH_FLOW, 'AU Savings Withdrawal Apply');
 
@@ -74,7 +81,7 @@ export class AuAccountModule2026 extends BaseAccountModule {
       return {
         state: {
           ...state,
-          auSavingsAccount: { balance: state.auSavingsAccount.balance + amount },
+          auSavingsAccount: { ...state.auSavingsAccount, balance: state.auSavingsAccount.balance + amount },
         },
         next: [{ type: 'AU_SAVINGS_EARNINGS_TAX', amount, isAuResident }],
       };
@@ -103,7 +110,7 @@ export class AuAccountModule2026 extends BaseAccountModule {
     // EVT-20: contribution — debit checking, credit contributionBasis
     //         chains SUPER_CONTRIBUTION_TAX (AU super tax at 15%)
     sim.reducers.register('SUPER_CONTRIBUTION_APPLY', (state, action) => {
-      svc.transaction(state.checkingAccount, -action.amount, null);
+      svc.transaction(state.auSavingsAccount, -action.amount, null);
       const sa = state.superAccount;
       return {
         state: {
@@ -125,7 +132,7 @@ export class AuAccountModule2026 extends BaseAccountModule {
       if (blocked) {
         return { ...state, superWithdrawalBlocked: true };
       }
-      svc.transaction(state.checkingAccount, amount, null);
+      svc.transaction(state.auSavingsAccount, amount, null);
       const sa = state.superAccount;
       return {
         ...state,
@@ -145,7 +152,7 @@ export class AuAccountModule2026 extends BaseAccountModule {
       if (blocked) {
         return { ...state, superWithdrawalBlocked: true };
       }
-      svc.transaction(state.checkingAccount, amount, null);
+      svc.transaction(state.auSavingsAccount, amount, null);
       const sa = state.superAccount;
       return {
         state: {
@@ -298,7 +305,7 @@ export class AuAccountModule2026 extends BaseAccountModule {
     sim.reducers.register('AU_STOCK_WITHDRAWAL_APPLY', (state, action) => {
       const { salePrice, costBasis, isAuResident } = action;
       const gain = Math.max(0, salePrice - costBasis);
-      svc.transaction(state.checkingAccount, salePrice, null);
+      svc.transaction(state.auSavingsAccount, salePrice, null);
       const sa = state.auStockAccount;
       const newBalance  = sa.balance - salePrice;
       const newEarnings = Math.max(0, sa.earningsBasis - gain);
@@ -360,7 +367,7 @@ export class AuAccountModule2026 extends BaseAccountModule {
     sim.reducers.register('AU_HOUSE_SALE_APPLY', (state, action) => {
       const { salePrice, costBasis } = action;
       const gain = Math.max(0, salePrice - costBasis);
-      svc.transaction(state.checkingAccount, salePrice, null);
+      svc.transaction(state.auSavingsAccount, salePrice, null);
       return {
         state: { ...state },
         next: [{ type: 'AU_HOUSE_SALE_TAX', gain }],

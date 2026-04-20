@@ -46,20 +46,20 @@
         <input type="number" id="moveYear" value="2031" min="2026" max="2040" step="1">
       </div>
 
-      <!-- Checking -->
-      <div class="section-title" style="margin-top:10px">Checking Account</div>
+      <!-- US Savings Account -->
+      <div class="section-title" style="margin-top:10px">US Savings Account (USD)</div>
 
       <div class="field">
         <label>Initial Balance ($)</label>
-        <input type="number" id="initialChecking" value="30000" min="0" step="1000">
+        <input type="number" id="initialUsSavings" value="30000" min="0" step="1000">
       </div>
       <div class="field">
         <label>Min Balance ($)</label>
-        <input type="number" id="checkingMinBalance" value="3000" min="0" step="500">
+        <input type="number" id="usSavingsMinBalance" value="3000" min="0" step="500">
       </div>
       <div class="field">
         <label>Interest Rate (%)</label>
-        <input type="number" id="checkingInterestRate" value="3" min="0" max="20" step="0.25">
+        <input type="number" id="usSavingsInterestRate" value="3" min="0" max="20" step="0.25">
       </div>
 
       <!-- US Accounts -->
@@ -123,10 +123,10 @@
         <input type="number" id="fixedIncomeInterestRate" value="4" min="0" max="20" step="0.25">
       </div>
 
-      <!-- AU Accounts -->
-      <div class="section-title" style="margin-top:10px">AU Savings</div>
+      <!-- AU Savings Account -->
+      <div class="section-title" style="margin-top:10px">AU Savings Account (AUD)</div>
       <div class="field">
-        <label>Balance ($)</label>
+        <label>Balance (A$)</label>
         <input type="number" id="auSavingsBalance" value="50000" min="0" step="1000">
       </div>
       <div class="field">
@@ -136,28 +136,39 @@
 
       <div class="section-title" style="margin-top:10px">Superannuation</div>
       <div class="field">
-        <label>Balance ($)</label>
+        <label>Balance (A$)</label>
         <input type="number" id="superBalance" value="250000" min="0" step="1000">
       </div>
       <div class="field">
-        <label>Cost Basis ($)</label>
+        <label>Cost Basis (A$)</label>
         <input type="number" id="superBasis" value="180000" min="0" step="1000">
       </div>
 
       <div class="section-title" style="margin-top:10px">AU Stocks</div>
       <div class="field">
-        <label>Balance ($)</label>
+        <label>Balance (A$)</label>
         <input type="number" id="auStockBalance" value="60000" min="0" step="1000">
       </div>
       <div class="field">
-        <label>Cost Basis ($)</label>
+        <label>Cost Basis (A$)</label>
         <input type="number" id="auStockBasis" value="40000" min="0" step="1000">
+      </div>
+
+      <!-- International Transfer -->
+      <div class="section-title" style="margin-top:10px">International Transfer</div>
+      <div class="field">
+        <label>Exchange Rate (1 USD = ? AUD)</label>
+        <input type="number" id="exchangeRateUsdToAud" value="1.55" min="0.5" max="5" step="0.01">
+      </div>
+      <div class="field">
+        <label>Transfer Fee (USD)</label>
+        <input type="number" id="intlTransferFeeUsd" value="15" min="0" step="1">
       </div>
 
       <!-- Expenses -->
       <div class="section-title" style="margin-top:10px">Expenses</div>
       <div class="field">
-        <label>Monthly Expenses ($)</label>
+        <label>Monthly Expenses (local currency)</label>
         <input type="number" id="monthlyExpenses" value="6000" min="0" step="100">
       </div>
 
@@ -187,6 +198,8 @@
               <option value="SUPER_WITHDRAWAL_CONTRIBUTIONS">SUPER_WITHDRAWAL_CONTRIBUTIONS</option>
               <option value="SUPER_WITHDRAWAL_EARNINGS">SUPER_WITHDRAWAL_EARNINGS</option>
               <option value="AU_SAVINGS_WITHDRAWAL">AU_SAVINGS_WITHDRAWAL</option>
+              <option value="INTL_TRANSFER_TO_US">INTL_TRANSFER_TO_US — transfer AUD→USD (enter AUD amount)</option>
+              <option value="INTL_TRANSFER_TO_AU">INTL_TRANSFER_TO_AU — transfer USD→AUD (enter USD amount)</option>
               <option value="US_HOUSE_SALE">US_HOUSE_SALE — sell US property</option>
               <option value="AU_HOUSE_SALE">AU_HOUSE_SALE — sell AU property</option>
             </select>
@@ -251,6 +264,10 @@
   <select id="tzSelect" title="Date display timezone" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; padding:2px 6px; font-family:monospace; font-size:12px; border-radius:3px; margin-left:8px;">
     <option value="utc"   selected>UTC</option>
     <option value="local">Local</option>
+  </select>
+  <select id="displayCurrency" title="Display currency" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; padding:2px 6px; font-family:monospace; font-size:12px; border-radius:3px; margin-left:8px;">
+    <option value="USD" selected>USD</option>
+    <option value="AUD">AUD</option>
   </select>
 </div>
 

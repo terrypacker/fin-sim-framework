@@ -217,17 +217,32 @@ export class TaxService {
       return nextState;
     }, PRIORITY.TAX_APPLY, 'Tax Settle Apply');
 
-    // TAX_PAYMENT_DEBIT reducer: debit checking (capped at available balance)
+    // TAX_PAYMENT_DEBIT reducer: debit the appropriate country's cash account.
+    // If the account is short, chain REPLENISH_SAVINGS then retry with replenished:true
+    // to prevent a second replenishment attempt (same pattern as INTL_TRANSFER_APPLY).
     sim.reducers.register('TAX_PAYMENT_DEBIT', (state, action, date) => {
-      const { amount, cc } = action;
-      const debit     = Math.min(amount, Math.max(0, state.checkingAccount.balance));
+      const { amount, cc, replenished = false } = action;
+      const accountKey  = cc === 'AU' ? 'auSavingsAccount' : 'usSavingsAccount';
+      const cashAccount = state[accountKey];
+      const shortfall   = amount - Math.max(0, cashAccount.balance);
+      if (!replenished && shortfall > 0) {
+        return {
+          state: { ...state },
+          next: [
+            { type: 'REPLENISH_SAVINGS', deficit: shortfall, targetKey: accountKey, orderIndex: 0 },
+            { type: 'TAX_PAYMENT_DEBIT', amount, cc, replenished: true },
+          ],
+        };
+      }
+      const debit = Math.min(amount, Math.max(0, cashAccount.balance));
       if (debit > 0) {
-        this._accountService.transaction(state.checkingAccount, -debit, date);
+        this._accountService.transaction(cashAccount, -debit, date);
       }
       const metricKey = cc === 'AU' ? 'tax_paid_au' : 'tax_paid_us';
       const list      = state.metrics[metricKey] || [];
       return {
         ...state,
+        [accountKey]: { ...cashAccount },   // explicit new reference so the balance change is visible in state diffs
         metrics: { ...state.metrics, [metricKey]: [...list, debit] },
       };
     }, PRIORITY.TAX_APPLY + 1, 'Tax Payment Debit');

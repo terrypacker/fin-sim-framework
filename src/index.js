@@ -12,7 +12,7 @@ import { BaseAccountModule } from './finance/account-rules/base-account-module.j
 import { UsAccountModule2024 } from './finance/account-rules/us/us-account-module-2024.js';
 import { UsAccountModule2025 } from './finance/account-rules/us/us-account-module-2025.js';
 import { UsAccountModule2026 } from './finance/account-rules/us/us-account-module-2026.js';
-import { Account, AccountService } from './finance/account.js';
+import { Account, AccountService, USD, AUD } from './finance/account.js';
 import { AssetService } from './finance/asset-service.js';
 import { Asset } from './finance/asset.js';
 import { FinancialState } from './finance/financial-state.js';
@@ -89,6 +89,8 @@ export const Finance = {
   UsAccountModule2026,
   Account,
   AccountService,
+  USD,
+  AUD,
   AssetService,
   Asset,
   FinancialState,

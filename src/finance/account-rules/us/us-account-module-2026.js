@@ -12,6 +12,7 @@ import { BaseAccountModule } from '../base-account-module.js';
 import { PRIORITY } from '../../../simulation-framework/reducers.js';
 import { RecordMetricAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 
+
 /** Returns age in whole years as of asOfDate. */
 function getAge(birthDate, asOfDate) {
   const years = asOfDate.getUTCFullYear() - birthDate.getUTCFullYear();
@@ -61,7 +62,7 @@ export class UsAccountModule2026 extends BaseAccountModule {
   _registerRoth(sim, svc) {
     // EVT-1: contribution — debit checking, credit contributionBasis, no tax
     sim.reducers.register('ROTH_CONTRIBUTION_APPLY', (state, action) => {
-      svc.transaction(state.checkingAccount, -action.amount, null);
+      svc.transaction(state.usSavingsAccount, -action.amount, null);
       const ra = state.rothAccount;
       return {
         ...state,
@@ -75,7 +76,7 @@ export class UsAccountModule2026 extends BaseAccountModule {
 
     // EVT-2: withdrawal of contributions — credit checking, debit contributionBasis, no tax
     sim.reducers.register('ROTH_WITHDRAWAL_CONTRIB_APPLY', (state, action) => {
-      svc.transaction(state.checkingAccount, action.amount, null);
+      svc.transaction(state.usSavingsAccount, action.amount, null);
       const ra = state.rothAccount;
       return {
         ...state,
@@ -91,7 +92,7 @@ export class UsAccountModule2026 extends BaseAccountModule {
     //        chains ROTH_WITHDRAWAL_EARNINGS_TAX for penalty + optional AU tax
     sim.reducers.register('ROTH_WITHDRAWAL_EARNINGS_APPLY', (state, action) => {
       const { amount, penaltyAmount, isAuResident } = action;
-      svc.transaction(state.checkingAccount, amount - penaltyAmount, null);
+      svc.transaction(state.usSavingsAccount, amount - penaltyAmount, null);
       const ra = state.rothAccount;
       return {
         state: {
@@ -158,7 +159,7 @@ export class UsAccountModule2026 extends BaseAccountModule {
     // EVT-5: contribution — debit checking, credit contributionBasis
     //        chains IRA_CONTRIBUTION_TAX (US negative income)
     sim.reducers.register('IRA_CONTRIBUTION_APPLY', (state, action) => {
-      svc.transaction(state.checkingAccount, -action.amount, null);
+      svc.transaction(state.usSavingsAccount, -action.amount, null);
       const ia = state.iraAccount;
       return {
         state: {
@@ -177,7 +178,7 @@ export class UsAccountModule2026 extends BaseAccountModule {
     //        chains IRA_WITHDRAWAL_CONTRIB_TAX (US ordinary income + penalty)
     sim.reducers.register('IRA_WITHDRAWAL_CONTRIB_APPLY', (state, action) => {
       const { amount, penaltyAmount } = action;
-      svc.transaction(state.checkingAccount, amount - penaltyAmount, null);
+      svc.transaction(state.usSavingsAccount, amount - penaltyAmount, null);
       const ia = state.iraAccount;
       return {
         state: {
@@ -196,7 +197,7 @@ export class UsAccountModule2026 extends BaseAccountModule {
     //        chains IRA_WITHDRAWAL_EARNINGS_TAX (US ordinary income + penalty + optional AU)
     sim.reducers.register('IRA_WITHDRAWAL_EARNINGS_APPLY', (state, action) => {
       const { amount, penaltyAmount, isAuResident } = action;
-      svc.transaction(state.checkingAccount, amount - penaltyAmount, null);
+      svc.transaction(state.usSavingsAccount, amount - penaltyAmount, null);
       const ia = state.iraAccount;
       return {
         state: {
@@ -267,7 +268,7 @@ export class UsAccountModule2026 extends BaseAccountModule {
     // EVT-24: contribution — debit checking, credit contributionBasis
     //         chains K401_CONTRIBUTION_TAX (US negative income)
     sim.reducers.register('K401_CONTRIBUTION_APPLY', (state, action) => {
-      svc.transaction(state.checkingAccount, -action.amount, null);
+      svc.transaction(state.usSavingsAccount, -action.amount, null);
       const ka = state.k401Account;
       return {
         state: {
@@ -299,7 +300,7 @@ export class UsAccountModule2026 extends BaseAccountModule {
     //                      chains K401_WITHDRAWAL_TAX (US ordinary income + penalty)
     sim.reducers.register('K401_WITHDRAWAL_APPLY', (state, action) => {
       const { amount, penaltyAmount } = action;
-      svc.transaction(state.checkingAccount, amount - penaltyAmount, null);
+      svc.transaction(state.usSavingsAccount, amount - penaltyAmount, null);
       const ka = state.k401Account;
       const fromEarnings = Math.min(amount, ka.earningsBasis);
       const fromContrib  = amount - fromEarnings;
@@ -343,19 +344,19 @@ export class UsAccountModule2026 extends BaseAccountModule {
   _registerUsBrokerage(sim, svc) {
     // EVT-9: fixed income contribution — debit checking, credit account, no tax
     sim.reducers.register('FIXED_INCOME_CONTRIBUTION_APPLY', (state, action) => {
-      svc.transaction(state.checkingAccount, -action.amount, null);
+      svc.transaction(state.usSavingsAccount, -action.amount, null);
       return {
         ...state,
-        fixedIncomeAccount: { balance: state.fixedIncomeAccount.balance + action.amount },
+        fixedIncomeAccount: { ...state.fixedIncomeAccount, balance: state.fixedIncomeAccount.balance + action.amount },
       };
     }, PRIORITY.CASH_FLOW, 'Fixed Income Contribution Apply');
 
     // EVT-10: fixed income withdrawal — debit account, credit checking, no tax
     sim.reducers.register('FIXED_INCOME_WITHDRAWAL_APPLY', (state, action) => {
-      svc.transaction(state.checkingAccount, action.amount, null);
+      svc.transaction(state.usSavingsAccount, action.amount, null);
       return {
         ...state,
-        fixedIncomeAccount: { balance: state.fixedIncomeAccount.balance - action.amount },
+        fixedIncomeAccount: { ...state.fixedIncomeAccount, balance: state.fixedIncomeAccount.balance - action.amount },
       };
     }, PRIORITY.CASH_FLOW, 'Fixed Income Withdrawal Apply');
 
@@ -366,7 +367,7 @@ export class UsAccountModule2026 extends BaseAccountModule {
       return {
         state: {
           ...state,
-          fixedIncomeAccount: { balance: state.fixedIncomeAccount.balance + amount },
+          fixedIncomeAccount: { ...state.fixedIncomeAccount, balance: state.fixedIncomeAccount.balance + amount },
         },
         next: [{ type: 'FIXED_INCOME_EARNINGS_TAX', amount, isAuResident }],
       };
@@ -374,7 +375,7 @@ export class UsAccountModule2026 extends BaseAccountModule {
 
     // EVT-12: stock contribution — debit checking, credit contributionBasis, no tax
     sim.reducers.register('STOCK_CONTRIBUTION_APPLY', (state, action) => {
-      svc.transaction(state.checkingAccount, -action.amount, null);
+      svc.transaction(state.usSavingsAccount, -action.amount, null);
       const sa = state.stockAccount;
       return {
         ...state,
@@ -423,7 +424,7 @@ export class UsAccountModule2026 extends BaseAccountModule {
     sim.reducers.register('STOCK_WITHDRAWAL_APPLY', (state, action) => {
       const { salePrice, costBasis, isAuResident } = action;
       const gain = Math.max(0, salePrice - costBasis);
-      svc.transaction(state.checkingAccount, salePrice, null);
+      svc.transaction(state.usSavingsAccount, salePrice, null);
       const sa = state.stockAccount;
       const newBalance  = sa.balance - salePrice;
       const newEarnings = Math.max(0, sa.earningsBasis - gain);
@@ -492,7 +493,7 @@ export class UsAccountModule2026 extends BaseAccountModule {
       const { salePrice, costBasis } = action;
       const rawGain     = Math.max(0, salePrice - costBasis);
       const taxableGain = Math.max(0, rawGain - US_PRIMARY_HOME_EXEMPTION);
-      svc.transaction(state.checkingAccount, salePrice, null);
+      svc.transaction(state.usSavingsAccount, salePrice, null);
       return {
         state: { ...state },
         next: [{ type: 'US_HOUSE_SALE_TAX', taxableGain }],
