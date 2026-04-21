@@ -24,12 +24,13 @@ import { TimelineView } from '../visualization/timeline-view.js';
 import { TimeControls } from '../visualization/time-controls.js';
 
 export class BaseApp {
-  constructor({ newScenario, readParams, updateStatePanel, diffStates, onChartSnapshot, chartSeries, formatDate }) {
+  constructor({ newScenario, readParams, updateStatePanel, diffStates, showNodeDetail, onChartSnapshot, chartSeries, formatDate }) {
 
     this.newScenario = newScenario
     this.readParams = readParams;
     this.customUpdateStatePanel = updateStatePanel;
     this.customDiffStates = diffStates;
+    this.customShowNodeDetail = showNodeDetail;
     this.onChartSnapshot = onChartSnapshot ?? null;
     this.chartSeries = chartSeries ?? null;
     this._formatDate = formatDate ?? (d => d.toDateString());
@@ -111,7 +112,7 @@ export class BaseApp {
     // Timeline view
     this.timelineView = new TimelineView({
       container:   $('timelineContainer'),
-      onDetail:    (node) => this.showDetailModal(node),
+      onDetail:    (node) => this.customShowNodeDetail ?  this.customShowNodeDetail(node) : this.showDetailModal(node),
       onRewind:    (date) => {
         const pct = (date.getTime() - this.scenario.simStart.getTime()) /
                     (this.scenario.simEnd.getTime() - this.scenario.simStart.getTime());
@@ -170,10 +171,7 @@ export class BaseApp {
     this.updateStatePanel();
   }
 
-  showDetailModal(entry) {
-    const existing = document.getElementById('detailModal');
-    if (existing) existing.remove();
-
+  buildActionDetail(entry) {
     const changes  = this.customDiffStates ? this.customDiffStates(entry.prevState, entry.nextState) : this.diffStates(entry.prevState, entry.nextState);
     const emitted  = entry.emittedActions?.length
         ? entry.emittedActions.map(a => a.type).join(', ')
@@ -184,6 +182,22 @@ export class BaseApp {
         null, 2
     );
 
+    return {
+      changes: changes,
+      emitted: emitted,
+      actionPayload: actionPayload
+    }
+  }
+
+  showDetailModal(entry) {
+    const existing = document.getElementById('detailModal');
+    if (existing) existing.remove();
+
+    const actionDetail = this.buildActionDetail(entry);
+
+    const changes = actionDetail.changes;
+    const emitted= actionDetail.emitted;
+    const actionPayload = actionDetail.actionPayload;
 
     const diffRows = changes.length === 0
         ? '<tr><td colspan="3" style="text-align:center;color:#64748b;padding:8px">No scalar state changes</td></tr>'

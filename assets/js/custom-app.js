@@ -9,6 +9,7 @@
  */
 import { CustomScenario, DEFAULT_EVENT_SERIES } from './scenarios/custom-scenario.js';
 const $ = FinSimLib.Visualization.$;
+const fmt = FinSimLib.Visualization.fmt;
 
 // ── Date formatters ───────────────────────────────────────────────────────────
 const fmtUTC   = d => `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
@@ -20,6 +21,7 @@ const CHART_SERIES = [
   { key: 'yearCounter',   color: '#34d399', label: 'Year Count'  },
 ];
 
+//TODO MOVE CURRENCY WORK TO BASE APP
 // Current display currency — 'USD' or 'AUD'.  Updated by the selector.
 let displayCurrency = 'USD';
 
@@ -51,6 +53,7 @@ const app = new FinSimLib.Misc.BaseApp({
   newScenario:     (params) => new CustomScenario({ params, eventSeries, customEvents }),
   readParams,
   onChartSnapshot: chartSnapshot,
+  showNodeDetail: showNodeDetail,
   chartSeries:     CHART_SERIES,
   formatDate:      fmtUTC
 });
@@ -61,6 +64,94 @@ function readParams() {
 
   };
 }
+
+//TODO Move to base app to share
+function showNodeDetail(entry) {
+  const actionDetail = app.buildActionDetail(entry);
+  const changes = actionDetail.changes;
+  const emitted= actionDetail.emitted;
+  const actionPayload = actionDetail.actionPayload;
+
+  const diffRows = changes.length === 0
+      ? '<tr><td colspan="3" style="text-align:center;color:#64748b;padding:8px">No scalar state changes</td></tr>'
+      : changes.map(c => {
+        const fmtVal = v => {
+          if (v == null) return '—';
+          if (typeof v === 'number') return fmt(v);
+          if (Array.isArray(v)) return v.map(x => typeof x === 'object' && x !== null ? JSON.stringify(x) : String(x)).join(', ') || '—';
+          if (typeof v === 'object') return JSON.stringify(v);
+          return String(v);
+        };
+        const deltaHtml = c.delta != null
+            ? `<span class="${c.delta >= 0 ? 'diff-pos' : 'diff-neg'}">${c.delta >= 0 ? '+' : ''}${fmt(c.delta)}</span>`
+            : '';
+        return `<tr>
+          <td class="diff-field">${c.field}</td>
+          <td class="diff-before">${fmtVal(c.before)}</td>
+          <td class="diff-after">${fmtVal(c.after)} ${deltaHtml}</td>
+        </tr>`;
+      }).join('');
+
+  let stateInfo;
+  if(changes.length > 0) {
+    stateInfo = `        
+        <div class="modal-section-title">State Changes</div>
+        <table class="diff-table">
+          <thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead>
+          <tbody>${diffRows}</tbody>
+        </table>
+    `;
+  }else {
+    stateInfo = `
+      <div class="modal-section-title">State (No Change)</div>
+      <pre class="modal-code">${JSON.stringify(entry.prevState,null, 2)}</pre>
+      `;
+  }
+
+  const result = `
+    <div class="modal-hdr">
+      <span>${entry.action.type}</span>
+      <button class="modal-close" title="Close">✕</button>
+    </div>
+    <div class="field-row">
+      <div class="field-group">
+        <label>Date</label>
+        <span>${app._formatDate(entry.date)}</span>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field-group">
+        <label>Source event</label>
+        <span>${entry.eventType}</span>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field-group">
+        <label>Reducer</label>
+        <span>${entry.reducer}</span>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field-group">
+        <label>Emitted</label>
+        <span>${emitted}</span>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field-group">
+        <label>Action Payload</label>
+        <span>${actionPayload}</span>
+      </div>
+    </div>
+    <div class="field-row">
+      ${stateInfo}
+    </div>`;
+  const nodeDetail = $('nodeDetail');
+  nodeDetail.innerHTML = result;
+  nodeDetail.style.display = 'block';
+}
+
+
 
 // ── Event list UI ─────────────────────────────────────────────────────────────
 function renderEventList() {
@@ -111,18 +202,55 @@ function submitAddEvent() {
   renderEventList();
 }
 
+//TODO Move to base app
+function openTab(evt, tabName, tabGroup) {
+  // Hide content
+  document.querySelectorAll(`.tab-content[data-tab-group=${tabGroup}]`).forEach(el => el.style.display = "none");
+
+  // Remove active class from the tab headers
+  document.querySelectorAll(`.tab-header[data-tab-group=${tabGroup}]`).forEach(el => el.classList.remove("active"));
+
+  //Get tab content and display it
+  const tab = document.querySelector(`.tab-content[data-tab-group=${tabGroup}][data-tab=${tabName}]`);
+  tab.style.display = "block";
+
+  //Active to clicke tab header
+  evt.currentTarget.classList.add("active");
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+
+  //Setup the tabs TODO Move this to base app
+  document.querySelectorAll('.tab-header').forEach(el => {
+    el.addEventListener('click', (evt) => {
+      const tabName = el.dataset.destTab;
+      const tabGroup = el.dataset.tabGroup;
+      openTab(evt, tabName, tabGroup);
+    });
+  });
+
+  $('handlerFunction').value = `({ data, date, state }) => {
+     const actions = [];
+     actions.push(
+       { type: 'MONTH_END_COUNT', date },
+       new FinSimLib.Core.RecordMetricAction('monthEnd', date)
+     );
+     return actions;
+   }
+  `;
   app.initView();
   $('addEventBtn').addEventListener('click',    () => $('addEventForm').classList.toggle('hidden'));
   $('submitEventBtn').addEventListener('click', submitAddEvent);
   $('cancelEventBtn').addEventListener('click', () => $('addEventForm').classList.add('hidden'));
 
+  //TODO Add to Base APP
   $('tzSelect').addEventListener('change', () => {
     app.setFormatDate($('tzSelect').value === 'utc' ? fmtUTC : fmtLocal);
     renderEventList();
   });
 
+  //TODO Add to Base app
   $('displayCurrency').addEventListener('change', () => {
     displayCurrency = $('displayCurrency').value;
     app.buildScenario();
@@ -130,6 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   renderEventList();
   app.buildScenario();
+
   //TODO This only happens on RECORD_BALANCE in the base-app, need to fix
   app.scenario.sim.bus.subscribe('DEBUG_ACTION', ({ payload }) => {
     chartSnapshot(app.chartView, payload.date, payload.stateAfter);

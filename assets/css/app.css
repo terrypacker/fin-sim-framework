@@ -682,5 +682,31 @@ canvas { display: block; }
 .diff-pos    { color: #34d399; margin-left: 6px; }
 .diff-neg    { color: #f87171; margin-left: 6px; }
 
+/* ── CODE EDITOR (gene function) ── */
+.code-editor {
+  width: 100%;
+  background: #060910;
+  border: 1px solid var(--border-hi);
+  border-radius: var(--radius);
+  color: #abb2c0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  padding: 10px 12px;
+  resize: vertical;
+  outline: none;
+  tab-size: 2;
+  min-height: 160px;
+}
+.code-editor:focus { border-color: var(--amber-dim); }
+.code-error {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--red);
+  margin-top: 4px;
+  min-height: 14px;
+  line-height: 1.4;
+}
+
 /* ─── Utility ────────────────────────────────────────────────────────────── */
 .hidden { display: none !important; }
