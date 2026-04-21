@@ -121,6 +121,7 @@ export class BaseApp {
         const sliderVal = Math.round(clamped * 100);
         $('timeSlider').value = sliderVal;
         this.lastSliderValue = sliderVal;
+        this.updateStatePanel();
       },
       eventColors,
       formatDate:  this._formatDate,
