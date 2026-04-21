@@ -38,6 +38,8 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
     this.params   = { ...DEFAULT_PARAMS, ...params };
     this.simStart = new Date(Date.UTC(2026, 0, 1));
     this.simEnd   = new Date(Date.UTC(2041, 0, 1));
+    this.handlerLogic = params.handlerLogic;
+    this.reducerLogic = params.reducerLogic;
     this._buildSim();
   }
 
@@ -80,9 +82,12 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
         }
       };
     }, FinSimLib.Core.PRIORITY.PRE_PROCESS, 'Count Month');
+
+    this.sim.reducers.register('CUSTOM_EVENT', this.reducerLogic, FinSimLib.Core.PRIORITY.PRE_PROCESS, 'Custom Reducer');
   }
 
   _registerHandlers(p) {
+    this.sim.register('MONTH_END', new FinSimLib.Core.HandlerEntry(this.handlerLogic), 'Custom Handler');
     this.sim.register('MONTH_END', new FinSimLib.Core.HandlerEntry(({ data, date, state }) => {
       const actions = [];
       actions.push(

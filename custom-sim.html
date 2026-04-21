@@ -84,12 +84,31 @@
         <div class="panel settings-panel">
           <div class="field-row">
             <div class="field-group">
-              <label >
+              <label>
                 Event Function
               </label>
-                <textarea class="code-editor" id="handlerFunction" rows="9" spellcheck="false"></textarea>
-                <button class="btn btn-sm">Test</button>
-                <div class="code-error" id="handlerFunctionError"></div>
+              <span style="color:var(--text-muted);font-size:8px;margin-left:6px">
+                  body of: <code style="color:var(--cyan)">function({data, date, state}) { ... }</code>
+               </span>
+               <textarea class="code-editor" id="handlerFunction" rows="9" spellcheck="false"></textarea>
+               <button id="testHandlerLogic" class="btn btn-sm">Test</button>
+               <div class="code-error" id="handlerFunctionError"></div>
+              <div class="code-test-result" id="handlerLogicTestOut" style="display:none"></div>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field-group">
+              <label>
+                Reducer Function
+              </label>
+              <span style="color:var(--text-muted);font-size:8px;margin-left:6px">
+                  body of: <code style="color:var(--cyan)">function({state, action, date}) { ... }</code>
+               </span>
+              <textarea class="code-editor" id="reducerFunction" rows="9" spellcheck="false"></textarea>
+              <button id="testReducerLogic" class="btn btn-sm">Test</button>
+              <div class="code-error" id="reducerFunctionError"></div>
+              <div class="code-test-result" id="reducerLogicTestOut" style="display:none"></div>
             </div>
           </div>
         </div>

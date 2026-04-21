@@ -203,6 +203,14 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   min-height: 14px;
   line-height: 1.4;
 }
+.code-test-result {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  min-height: 14px;
+  line-height: 1.4;
+}
 
 /* ── TIMELINE ── */
 .tl-filter-bar {

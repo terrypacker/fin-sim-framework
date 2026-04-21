@@ -60,8 +60,11 @@ const app = new FinSimLib.Misc.BaseApp({
 
 // ── Params form ───────────────────────────────────────────────────────────────
 function readParams() {
+  const handlerLogic = $('handlerFunction').value;
+  const reducerLogic = $('reducerFunction').value;
   return {
-
+    handlerLogic: new Function('{data, date, state}', handlerLogic),
+    reducerLogic: new Function('state,action,date', reducerLogic)
   };
 }
 
@@ -230,15 +233,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  $('handlerFunction').value = `({ data, date, state }) => {
-     const actions = [];
-     actions.push(
-       { type: 'MONTH_END_COUNT', date },
-       new FinSimLib.Core.RecordMetricAction('monthEnd', date)
-     );
-     return actions;
-   }
-  `;
+  $('handlerFunction').value = `return [{ type: 'CUSTOM_EVENT', data}];`;
+  $('reducerFunction').value = `return { state: { ...state, customItem: 'customReducerFired'}};`;
+
   app.initView();
   $('addEventBtn').addEventListener('click',    () => $('addEventForm').classList.toggle('hidden'));
   $('submitEventBtn').addEventListener('click', submitAddEvent);
@@ -254,6 +251,53 @@ document.addEventListener('DOMContentLoaded', () => {
   $('displayCurrency').addEventListener('change', () => {
     displayCurrency = $('displayCurrency').value;
     app.buildScenario();
+  });
+
+  $('testHandlerLogic').addEventListener('click', () => {
+    const errEl = $('handlerFunctionError');
+    const outEl = $('handlerLogicTestOut');
+    const logic = $('handlerFunction').value;
+    const fn     = new Function('{data, date, state}', logic);
+    const data = {};
+    const date = new Date();
+    const state = { ...initialState };
+    const testIn = { data, date, state};
+    try {
+      const result = fn(testIn);
+      if (!Array.isArray(result))
+        throw new Error('Return value must be an Array');
+      outEl.style.display = 'block';
+      outEl.innerHTML = `
+        <div class="test-in">IN: ${JSON.stringify(testIn)}</div>
+        <div class="test-out">OUT: ${JSON.stringify(result)}</div>
+      `;
+    }catch (e) {
+      errEl.innerHTML = `&#x2717; ${e.message}`;
+    }
+  });
+
+  $('testReducerLogic').addEventListener('click', () => {
+    const errEl = $('reducerFunctionError');
+    const outEl = $('reducerLogicTestOut');
+    const logic = $('reducerFunction').value;
+    const fn     = new Function('state,action,date', logic);
+    const state = { ...initialState };
+    const action = {type: 'CUSTOM_EVENT', state};
+    const date = new Date();
+    const testIn = { state, action, date};
+    try {
+      const result = fn(testIn);
+      const isPlainObject = (val) => Object.prototype.toString.call(val) === '[object Object]';
+      if (!isPlainObject(result))
+        throw new Error('Return value must be an Object');
+      outEl.style.display = 'block';
+      outEl.innerHTML = `
+        <div class="test-in">IN: ${JSON.stringify(testIn)}</div>
+        <div class="test-out">OUT: ${JSON.stringify(result)}</div>
+      `;
+    }catch (e) {
+      errEl.innerHTML = `&#x2717; ${e.message}`;
+    }
   });
 
   renderEventList();
