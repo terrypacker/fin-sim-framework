@@ -230,30 +230,31 @@
       </div>
     </div>
 
-    <!-- ── RIGHT COLUMN: population + events ──────────────── -->
+    <!-- ── RIGHT COLUMN ──────────────── -->
     <div class="right-col">
       <div class="panel" style="flex:1;min-height:0;">
         <div class="panel-header">
-          <span class="panel-tag">ND</span>
-          <span class="panel-title">DETAIL</span>
+          <span class="panel-tag">AD</span>
+          <span class="panel-title">ACTION DETAIL</span>
           <span class="badge-purple" style="margin-left:auto" id="popBadge">CLICK</span>
         </div>
         <div id="nodeDetail"></div>
       </div>
 
+      <!-- Current State -->
       <div class="panel" style="flex:1;min-height:0">
         <div class="panel-header">
           <span class="panel-tag">ST</span>
           <span class="panel-title">LIVE STATE</span>
           <span class="badge-green" style="margin-left:auto" id="popBadge">LIVE</span>
         </div>
-        <div style="display:grid;grid-template-columns:80px 1fr;gap:4px;padding:4px 14px;font-size:9px;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;border-bottom:1px solid var(--border)">
-          <span>NAME</span><span>VALUE</span>
+        <div style="display:block">
+          <div id="currentStateContent" class="data-list-wrap data-grid data-grid-2">
         </div>
-        <div id="currentStateContent"></div>
+        </div>
       </div>
 
-      <!-- Current State -->
+      <!-- Current Metrics -->
       <div class="panel" style="flex:0 0 220px;min-height:0">
         <div class="panel-header">
           <span class="panel-tag">MET</span>

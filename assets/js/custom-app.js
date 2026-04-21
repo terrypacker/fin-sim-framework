@@ -12,6 +12,7 @@ const $ = FinSimLib.Visualization.$;
 const fmt = FinSimLib.Visualization.fmt;
 
 // ── Date formatters ───────────────────────────────────────────────────────────
+//TODO Move into Base App
 const fmtUTC   = d => `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
 const fmtLocal = d => d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
 
@@ -52,6 +53,7 @@ let initialState = {};
 const app = new FinSimLib.Misc.BaseApp({
   newScenario:     (params) => new CustomScenario({ params, eventSeries, customEvents }),
   readParams,
+  updateStatePanel: updateStatePanel,
   onChartSnapshot: chartSnapshot,
   showNodeDetail: showNodeDetail,
   chartSeries:     CHART_SERIES,
@@ -69,6 +71,77 @@ function readParams() {
 }
 
 //TODO Move to base app to share
+function updateStatePanel(date, state) {
+  if (!state) return;
+
+  const toLabel = key => key
+  .replace(/([A-Z])/g, ' $1')
+  .replace(/_/g, ' ')
+  .replace(/\b\w/g, c => c.toUpperCase())
+  .trim();
+
+  const renderVal = (v) => {
+    if (typeof v === 'number') return fmt(v);
+    return String(v);
+  };
+
+  const renderObj = (v) => {
+    if (v == null) return '—';
+    if (Array.isArray(v)) {
+      if (v.length === 0) return '—';
+      if (v.every(x => typeof x === 'number'))
+        return fmt(v.reduce((a, b) => a + b, 0));
+      return v.map(x => (typeof x === 'object' ? renderObj(x) : String(x))).join(', ');
+    }
+    if(typeof v === 'object') {
+      if (v instanceof Date) return this._formatDate(v);
+      let result = '<br>';
+      for(let f in v) {
+        result += f + ': ' + renderObj(v[f]) + '<br>';
+      }
+      return result;
+    }
+    return String(v);
+  }
+
+  const statRow = (k, v, indent) =>
+      `<div class="data-row"${indent ? ' style="padding-left:12px"' : ''}>` +
+      `<span class="stat-label">${toLabel(k)}</span>` +
+      `<span class="stat-value">${typeof v === 'object' ? renderObj(v) : renderVal(v)}</span></div>`;
+
+  const renderSection = obj => {
+    let html = '';
+    for (const [k, v] of Object.entries(obj)) {
+      if (Array.isArray(v) && v.length > 0 && v[0] !== null && typeof v[0] === 'object') {
+        html += `<div class="data-row"><span class="stat-label">${toLabel(k)}</span>` +
+            `<span class="stat-value">${v.length}</span></div>`;
+        for (const item of v) {
+          const name  = item.name ?? JSON.stringify(item);
+          const value = item.value != null ? fmt(item.value) : '';
+          html += `<div class="data-row" style="padding-left:12px">` +
+              `<span class="stat-label">${name}</span>` +
+              `<span class="stat-value">${value}</span></div>`;
+        }
+      } else if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+        html += `<div class="data-section-title" style="font-size:10px;margin-top:6px">${toLabel(k)}</div>`;
+        for (const [sk, sv] of Object.entries(v)) {
+          if (Array.isArray(sv) && sv.length > 0 && typeof sv[0] === 'object') continue;
+          html += statRow(sk, sv, true);
+        }
+      } else {
+        html += statRow(k, v, false);
+      }
+    }
+    return html;
+  };
+
+  const { metrics, ...rest } = state;
+  const header = `<div class="data-row"><span>NAME</span><span>VALUE</span></div>`;
+  $('currentStateContent').innerHTML = header + renderSection(rest);
+  $('cumulativeMetricsContent').innerHTML = metrics ? renderSection(metrics) : '—';
+}
+
+//TODO Move to base app to share
 function showNodeDetail(entry) {
   const actionDetail = app.buildActionDetail(entry);
   const changes = actionDetail.changes;
@@ -76,7 +149,7 @@ function showNodeDetail(entry) {
   const actionPayload = actionDetail.actionPayload;
 
   const diffRows = changes.length === 0
-      ? '<tr><td colspan="3" style="text-align:center;color:#64748b;padding:8px">No scalar state changes</td></tr>'
+      ? '<div class="data-row"><span style="grid-column: 1 / -1">No scalar state changes</span></div>'
       : changes.map(c => {
         const fmtVal = v => {
           if (v == null) return '—';
@@ -88,67 +161,63 @@ function showNodeDetail(entry) {
         const deltaHtml = c.delta != null
             ? `<span class="${c.delta >= 0 ? 'diff-pos' : 'diff-neg'}">${c.delta >= 0 ? '+' : ''}${fmt(c.delta)}</span>`
             : '';
-        return `<tr>
-          <td class="diff-field">${c.field}</td>
-          <td class="diff-before">${fmtVal(c.before)}</td>
-          <td class="diff-after">${fmtVal(c.after)} ${deltaHtml}</td>
-        </tr>`;
+        return `<div class="data-row">
+          <span class="diff-field">${c.field}</span>
+          <span class="diff-before">${fmtVal(c.before)}</span>
+          <span class="diff-after">${fmtVal(c.after)} ${deltaHtml}</span>
+        </div>`;
       }).join('');
 
   let stateInfo;
   if(changes.length > 0) {
     stateInfo = `        
-        <div class="modal-section-title">State Changes</div>
-        <table class="diff-table">
-          <thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead>
-          <tbody>${diffRows}</tbody>
-        </table>
+        <div class="data-section-title">State Changes</div>
+        <div class="data-grid-center data-grid-3">
+          <div class="data-row">
+            <span>Field</span>
+            <span>Before</span>
+            <span>After</span>
+          </div>
+          ${diffRows}
+        </div>
     `;
   }else {
     stateInfo = `
-      <div class="modal-section-title">State (No Change)</div>
+      <div class="data-section-title">State (No Change)</div>
       <pre class="modal-code">${JSON.stringify(entry.prevState,null, 2)}</pre>
       `;
   }
 
   const result = `
-    <div class="modal-hdr">
-      <span>${entry.action.type}</span>
-      <button class="modal-close" title="Close">✕</button>
-    </div>
-    <div class="field-row">
-      <div class="field-group">
+    <div class="data-section-title">Action</div>
+    <div class="data-list-wrap data-grid data-grid-2">
+      <div class="data-row">
+        <label>Type</label>
+        <span>${entry.action.type}</span>
+      </div>
+      <div class="data-row">
         <label>Date</label>
         <span>${app._formatDate(entry.date)}</span>
       </div>
-    </div>
-    <div class="field-row">
-      <div class="field-group">
+      <div class="data-row">
         <label>Source event</label>
         <span>${entry.eventType}</span>
       </div>
-    </div>
-    <div class="field-row">
-      <div class="field-group">
+      <div class="data-row">
         <label>Reducer</label>
         <span>${entry.reducer}</span>
       </div>
-    </div>
-    <div class="field-row">
-      <div class="field-group">
+      <div class="data-row">
         <label>Emitted</label>
         <span>${emitted}</span>
       </div>
-    </div>
-    <div class="field-row">
-      <div class="field-group">
+      <div class="data-row">
         <label>Action Payload</label>
         <span>${actionPayload}</span>
       </div>
-    </div>
-    <div class="field-row">
-      ${stateInfo}
-    </div>`;
+    </div>  
+    ${stateInfo} 
+ `;
   const nodeDetail = $('nodeDetail');
   nodeDetail.innerHTML = result;
   nodeDetail.style.display = 'block';

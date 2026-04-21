@@ -36,14 +36,14 @@ export default [
         !isWatching && terser(),
         !isWatching && copy({
           targets: [
-            { src: 'assets/**/*', dest: 'dist/assets' },
+            { src: 'assets/**/*', dest: 'dist/assets', flatten: false },
             { src: '*.html', dest: 'dist' }
           ]
         }),
         isWatching && copy({
           watch: ['assets', '*.html'],
           targets: [
-            { src: 'assets/**/*', dest: 'dist/assets' },
+            { src: 'assets/**/*', dest: 'dist/assets', flatten: false },
             { src: '*.html', dest: 'dist' }
           ]
         })
