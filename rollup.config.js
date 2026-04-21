@@ -1,5 +1,8 @@
 import terser from '@rollup/plugin-terser'
 import copy from 'rollup-plugin-copy-watch';
+import serve from 'rollup-plugin-serve'
+import livereload from 'rollup-plugin-livereload';
+
 const isWatching = process.env.ROLLUP_WATCH === 'true';
 
 export default [
@@ -40,12 +43,10 @@ export default [
             { src: '*.html', dest: 'dist' }
           ]
         }),
-        isWatching && copy({
-          watch: ['assets', '*.html'],
-          targets: [
-            { src: 'assets/**/*', dest: 'dist/assets', flatten: false },
-            { src: '*.html', dest: 'dist' }
-          ]
+        isWatching && serve({
+          contentBase: ['.', 'dist']
+        }),
+        isWatching && livereload({
         })
     ].filter(Boolean)
   }

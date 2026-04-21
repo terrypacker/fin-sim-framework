@@ -166,6 +166,7 @@
       <!-- post tab section -->
       <button class="btn" id="rebuildBtn">↺ Rebuild Simulation</button>
     </div>
+
     <!-- ── CENTER COLUMN: viz + charts ──────────────────────── -->
     <div class="center-col">
 
@@ -238,7 +239,7 @@
           <span class="panel-title">ACTION DETAIL</span>
           <span class="badge-purple" style="margin-left:auto" id="popBadge">CLICK</span>
         </div>
-        <div id="nodeDetail"></div>
+        <div id="actionPanelDetails" style="display:block"></div>
       </div>
 
       <!-- Current State -->
@@ -248,23 +249,11 @@
           <span class="panel-title">LIVE STATE</span>
           <span class="badge-green" style="margin-left:auto" id="popBadge">LIVE</span>
         </div>
-        <div style="display:block">
-          <div id="currentStateContent" class="data-list-wrap data-grid data-grid-2">
+        <div class="data-section-title">State</div>
+        <div id="currentStateContent" class="data-list-wrap" style="display:block"></div>
+        <div class="data-section-title">Metrics</div>
+        <div id="cumulativeMetricsContent" class="data-list-wrap" style="display:block"></div>
         </div>
-        </div>
-      </div>
-
-      <!-- Current Metrics -->
-      <div class="panel" style="flex:0 0 220px;min-height:0">
-        <div class="panel-header">
-          <span class="panel-tag">MET</span>
-          <span class="panel-title">LIVE METRICS</span>
-          <span class="badge-green" style="margin-left:auto" id="popBadge">LIVE</span>
-        </div>
-        <div style="display:grid;grid-template-columns:80px 1fr;gap:4px;padding:4px 14px;font-size:9px;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase;border-bottom:1px solid var(--border)">
-          <span>NAME</span><span>VALUE</span>
-        </div>
-        <div id="cumulativeMetricsContent"></div>
       </div>
     </div>
   </div>
@@ -278,7 +267,65 @@
   </div>
 </div>
 
+<!-- ══ TEMPLATES  ══════════════════════════════════════════ -->
+<template id="actionTemplate">
+  <div class="data-section-title">Action</div>
+  <div class="data-list-wrap">
+    <div class="data-grid data-grid-2" data-overview-grid>
+      <div class="data-row">
+        <label>Type</label>
+        <span data-id="entry.action.type"></span>
+      </div>
+      <div class="data-row">
+        <label>Date</label>
+        <span data-id="entry.date"></span>
+      </div>
+      <div class="data-row">
+        <label>Source event</label>
+        <span data-id="entry.eventType"></span>
+      </div>
+      <div class="data-row">
+        <label>Reducer</label>
+        <span data-id="entry.reducer"></span>
+      </div>
+      <div class="data-row">
+        <label>Emitted</label>
+        <span data-id="emitted"></span>
+      </div>
+      <div class="data-row">
+        <label class="single-row">Action payload</label>
+        <span class="single-row field-code" data-id="actionPayload"></span>
+      </div>
+    </div>
+    <div class="data-section-title">State Changes</div>
+    <div class="data-grid-center data-grid-3" data-state-change-grid>
+      <div class="data-row" data-id="stateHeaderRow" style="display:none">
+        <span>Field</span>
+        <span>Before</span>
+        <span>After</span>
+      </div>
+      <div class="data-row" data-state-change-row style="display:none">
+        <span class="diff-field" data-id="field"></span>
+        <span class="diff-before" data-id="before"></span>
+        <span class="diff-after" data-id="after"></span>
+      </div>
+      <div class="data-row" data-id="noChangeRow" style="display:none">
+        <label class="single-row" data-id="noChangeTitle" >(No Change - Previous State)</label>
+        <pre class="field-code single-row" data-id="noChangeState"></pre>
+      </div>
 
+    </div>
+  </div>
+</template>
+<template id="stateDetailsTemplate">
+  <div class="data-grid data-grid-2" data-stat-grid>
+    <div class="data-row-header"><span>NAME</span><span>VALUE</span></div>
+    <div class="data-row" data-stat-row style="display:none">
+      <span class="stat-label"></span>
+      <span class="stat-value"></span>
+    </div>
+  </div>
+</template>
 <script type="module" src="./index.umd.min.js"></script>
 <script type="module" src="./assets/js/custom-app.js"></script>
 </body>

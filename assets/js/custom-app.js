@@ -8,13 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 import { CustomScenario, DEFAULT_EVENT_SERIES } from './scenarios/custom-scenario.js';
-const $ = FinSimLib.Visualization.$;
-const fmt = FinSimLib.Visualization.fmt;
 
 // ── Date formatters ───────────────────────────────────────────────────────────
-//TODO Move into Base App
-const fmtUTC   = d => `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
-const fmtLocal = d => d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
 
 // ── Chart series ──────────────────────────────────────────────────────────────
 const CHART_SERIES = [
@@ -57,88 +52,185 @@ const app = new FinSimLib.Misc.BaseApp({
   onChartSnapshot: chartSnapshot,
   showNodeDetail: showNodeDetail,
   chartSeries:     CHART_SERIES,
-  formatDate:      fmtUTC
+  formatDate:      FinSimLib.Visualization.fmtUTC
 });
 
 // ── Params form ───────────────────────────────────────────────────────────────
 function readParams() {
-  const handlerLogic = $('handlerFunction').value;
-  const reducerLogic = $('reducerFunction').value;
+  const handlerLogic = FinSimLib.Visualization.$('handlerFunction').value;
+  const reducerLogic = FinSimLib.Visualization.$('reducerFunction').value;
   return {
     handlerLogic: new Function('{data, date, state}', handlerLogic),
     reducerLogic: new Function('state,action,date', reducerLogic)
   };
 }
 
+//TODO Move to BaseApp
+const getNestedProperty = (obj, path) => {
+  return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+};
+//TODO Move to BaseApp
+const isDateValid = (d) => d instanceof Date && !isNaN(d.getTime());
+//TODO Move to BaseApp
+const isDate = (obj) => Object.prototype.toString.call(obj) === '[object Date]';
+//TODO Move to BaseApp
+const fmtVal = v => {
+  if (v == null) return '—';
+  if (typeof v === 'number') return v; //TODO Format as $?
+  if (Array.isArray(v)) return v.map(x => typeof x === 'object' && x !== null ? JSON.stringify(x) : String(x)).join(', ') || '—';
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+};
+//TODO Move to BaseApp
+export function createActionDetail(templateId, content = { entry, changes, emitted, actionPayload }) {
+  const templateContent = document.querySelector(`#${templateId}`);
+  const clone = document.importNode(templateContent, true).content;
+
+  //Populate overview
+  const overviewGrid = clone.querySelector('[data-overview-grid]');
+  const fields = overviewGrid.querySelectorAll('[data-id]');
+  for(const field of fields) {
+    const value = getNestedProperty(content, field.getAttribute('data-id'));
+    if(isDate(value)) {
+      field.innerText = app._formatDate(value);
+    }else {
+      field.innerText = value;
+    }
+  }
+
+  //Populate state changes
+  const stateChangesGrid = clone.querySelector('[data-state-change-grid]');
+  if(content.changes.length > 0) {
+    //Compute the changes
+    for(const change of content.changes) {
+      const stateChangeRow = document.importNode(stateChangesGrid.querySelector('[data-state-change-row]'), true);
+      stateChangeRow.style = '';
+      stateChangeRow.querySelector('[data-id="field"]').innerText = change.field;
+      stateChangeRow.querySelector('[data-id="before"]').innerText = fmtVal(change.before);
+      if(change.delta != null) {
+        const after = stateChangeRow.querySelector('[data-id="after"]');
+        const delta = document.createElement('span');
+        if(change.delta > 0) {
+          delta.classList.add('diff-pos');
+          delta.innerText = '+' + change.delta;
+        }else {
+          delta.classList.add('diff-neg');
+          delta.innerText = '-' + change.delta;
+        }
+        after.innerText = fmtVal(change.after);
+        after.appendChild(delta);
+      }else {
+        stateChangeRow.querySelector('[data-id="after"]').innerText = fmtVal(change.after);
+      }
+      stateChangesGrid.appendChild(stateChangeRow);
+    }
+  }else {
+    stateChangesGrid.querySelector('[data-id="noChangeRow"]').style = '';
+    const noChangeState = stateChangesGrid.querySelector('[data-id="noChangeState"]');
+    noChangeState.style = '';
+    noChangeState.innerText = JSON.stringify(content.entry.prevState,null, 2);
+  }
+  return clone;
+}
+
+//TODO Move to BaseApp
+const toLabel = key => key
+.replace(/([A-Z])/g, ' $1')
+.replace(/_/g, ' ')
+.replace(/\b\w/g, c => c.toUpperCase())
+.trim();
+
+//TODO Move to BaseApp
+const renderObj = (v) => {
+  if (v == null) return '—';
+  if (Array.isArray(v)) {
+    if (v.length === 0) return '—';
+    if (v.every(x => typeof x === 'number'))
+      return v.reduce((a, b) => a + b, 0);
+    return v.map(x => (typeof x === 'object' ? renderObj(x) : String(x))).join(', ');
+  }
+  if(typeof v === 'object') {
+    if (v instanceof Date) return app._formatDate(v);
+    let result = '{ ';
+    for(let f in v) {
+      result += f + ': ' + renderObj(v[f]) + ' }';
+    }
+    return result;
+  }
+  return String(v);
+}
+
+//TODO Move to BaseApp
+const renderState = (obj, statGrid) => {
+  for (const [k, v] of Object.entries(obj)) {
+    if (Array.isArray(v) && v.length > 0 && v[0] !== null && typeof v[0] === 'object') {
+      const statRow = document.importNode(statGrid.querySelector('[data-stat-row]'), true);
+      statRow.style = '';
+      const label = statRow.querySelector('.stat-label');
+      label.innerHTML = toLabel(k);
+      const value = statRow.querySelector('.stat-value');
+      value.innerText = v.length;
+      statGrid.appendChild(statRow);
+
+      for (const item of v) {
+        const name  = item.name ?? JSON.stringify(item);
+        const value = item.value != null ? item.value : '';
+        const arrayRow = document.importNode(statGrid.querySelector('[data-stat-row]'), true);
+        arrayRow.style = '';
+        arrayRow.querySelector('.stat-label').innerText = name;
+        arrayRow.querySelector('.stat-value').innerText = value;
+        statGrid.appendChild(arrayRow);
+      }
+    }else if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+      const objectHeaderRow = document.createElement('div');
+      objectHeaderRow.classList.add('data-row-header');
+      const objectHeader = document.createElement('span');
+      objectHeader.classList.add('single-row');
+      objectHeader.classList.add('single-row');
+      objectHeader.innerText = toLabel(k);
+      objectHeaderRow.appendChild(objectHeader);
+      statGrid.appendChild(objectHeaderRow);
+      for (const [sk, sv] of Object.entries(v)) {
+        if (Array.isArray(sv) && sv.length > 0 && typeof sv[0] === 'object') continue;
+        const statRow = document.importNode(statGrid.querySelector('[data-stat-row]'), true);
+        statRow.style = '';
+        statRow.querySelector('.stat-label').innerText = toLabel(sk);
+        statRow.querySelector('.stat-value').innerText = typeof sv === 'object' ? renderObj(sv) : sv;
+        statGrid.appendChild(statRow);
+      }
+    } else {
+      const statRow = document.importNode(statGrid.querySelector('[data-stat-row]'), true);
+      statRow.style = '';
+      statRow.querySelector('.stat-label').innerText = toLabel(k);
+      statRow.querySelector('.stat-value').innerText = typeof k === 'object' ? renderObj(v) : v;
+      statGrid.appendChild(statRow);
+    }
+  }
+};
+
+//TODO Move to BaseApp
+function createStateDetails(templateId, date, state) {
+  if (!state) return;
+  const templateContent = document.querySelector(`#${templateId}`);
+  const clone = document.importNode(templateContent, true).content;
+  const statGrid = clone.querySelector('[data-stat-grid]');
+  renderState(state, statGrid);
+  return clone;
+}
+
 //TODO Move to base app to share
 function updateStatePanel(date, state) {
   if (!state) return;
 
-  const toLabel = key => key
-  .replace(/([A-Z])/g, ' $1')
-  .replace(/_/g, ' ')
-  .replace(/\b\w/g, c => c.toUpperCase())
-  .trim();
-
-  const renderVal = (v) => {
-    if (typeof v === 'number') return fmt(v);
-    return String(v);
-  };
-
-  const renderObj = (v) => {
-    if (v == null) return '—';
-    if (Array.isArray(v)) {
-      if (v.length === 0) return '—';
-      if (v.every(x => typeof x === 'number'))
-        return fmt(v.reduce((a, b) => a + b, 0));
-      return v.map(x => (typeof x === 'object' ? renderObj(x) : String(x))).join(', ');
-    }
-    if(typeof v === 'object') {
-      if (v instanceof Date) return this._formatDate(v);
-      let result = '<br>';
-      for(let f in v) {
-        result += f + ': ' + renderObj(v[f]) + '<br>';
-      }
-      return result;
-    }
-    return String(v);
-  }
-
-  const statRow = (k, v, indent) =>
-      `<div class="data-row"${indent ? ' style="padding-left:12px"' : ''}>` +
-      `<span class="stat-label">${toLabel(k)}</span>` +
-      `<span class="stat-value">${typeof v === 'object' ? renderObj(v) : renderVal(v)}</span></div>`;
-
-  const renderSection = obj => {
-    let html = '';
-    for (const [k, v] of Object.entries(obj)) {
-      if (Array.isArray(v) && v.length > 0 && v[0] !== null && typeof v[0] === 'object') {
-        html += `<div class="data-row"><span class="stat-label">${toLabel(k)}</span>` +
-            `<span class="stat-value">${v.length}</span></div>`;
-        for (const item of v) {
-          const name  = item.name ?? JSON.stringify(item);
-          const value = item.value != null ? fmt(item.value) : '';
-          html += `<div class="data-row" style="padding-left:12px">` +
-              `<span class="stat-label">${name}</span>` +
-              `<span class="stat-value">${value}</span></div>`;
-        }
-      } else if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
-        html += `<div class="data-section-title" style="font-size:10px;margin-top:6px">${toLabel(k)}</div>`;
-        for (const [sk, sv] of Object.entries(v)) {
-          if (Array.isArray(sv) && sv.length > 0 && typeof sv[0] === 'object') continue;
-          html += statRow(sk, sv, true);
-        }
-      } else {
-        html += statRow(k, v, false);
-      }
-    }
-    return html;
-  };
-
   const { metrics, ...rest } = state;
-  const header = `<div class="data-row"><span>NAME</span><span>VALUE</span></div>`;
-  $('currentStateContent').innerHTML = header + renderSection(rest);
-  $('cumulativeMetricsContent').innerHTML = metrics ? renderSection(metrics) : '—';
+  const newStateDetails = createStateDetails('stateDetailsTemplate', date, rest);
+  const stateDetails = FinSimLib.Visualization.$('currentStateContent');
+  stateDetails.replaceChildren(newStateDetails);
+
+  const newMetricDetails = createStateDetails('stateDetailsTemplate', date, rest);
+  const metricDetails = FinSimLib.Visualization.$('cumulativeMetricsContent');
+  metricDetails.replaceChildren(newMetricDetails);
+
 }
 
 //TODO Move to base app to share
@@ -147,87 +239,14 @@ function showNodeDetail(entry) {
   const changes = actionDetail.changes;
   const emitted= actionDetail.emitted;
   const actionPayload = actionDetail.actionPayload;
-
-  const diffRows = changes.length === 0
-      ? '<div class="data-row"><span style="grid-column: 1 / -1">No scalar state changes</span></div>'
-      : changes.map(c => {
-        const fmtVal = v => {
-          if (v == null) return '—';
-          if (typeof v === 'number') return fmt(v);
-          if (Array.isArray(v)) return v.map(x => typeof x === 'object' && x !== null ? JSON.stringify(x) : String(x)).join(', ') || '—';
-          if (typeof v === 'object') return JSON.stringify(v);
-          return String(v);
-        };
-        const deltaHtml = c.delta != null
-            ? `<span class="${c.delta >= 0 ? 'diff-pos' : 'diff-neg'}">${c.delta >= 0 ? '+' : ''}${fmt(c.delta)}</span>`
-            : '';
-        return `<div class="data-row">
-          <span class="diff-field">${c.field}</span>
-          <span class="diff-before">${fmtVal(c.before)}</span>
-          <span class="diff-after">${fmtVal(c.after)} ${deltaHtml}</span>
-        </div>`;
-      }).join('');
-
-  let stateInfo;
-  if(changes.length > 0) {
-    stateInfo = `        
-        <div class="data-section-title">State Changes</div>
-        <div class="data-grid-center data-grid-3">
-          <div class="data-row">
-            <span>Field</span>
-            <span>Before</span>
-            <span>After</span>
-          </div>
-          ${diffRows}
-        </div>
-    `;
-  }else {
-    stateInfo = `
-      <div class="data-section-title">State (No Change)</div>
-      <pre class="modal-code">${JSON.stringify(entry.prevState,null, 2)}</pre>
-      `;
-  }
-
-  const result = `
-    <div class="data-section-title">Action</div>
-    <div class="data-list-wrap data-grid data-grid-2">
-      <div class="data-row">
-        <label>Type</label>
-        <span>${entry.action.type}</span>
-      </div>
-      <div class="data-row">
-        <label>Date</label>
-        <span>${app._formatDate(entry.date)}</span>
-      </div>
-      <div class="data-row">
-        <label>Source event</label>
-        <span>${entry.eventType}</span>
-      </div>
-      <div class="data-row">
-        <label>Reducer</label>
-        <span>${entry.reducer}</span>
-      </div>
-      <div class="data-row">
-        <label>Emitted</label>
-        <span>${emitted}</span>
-      </div>
-      <div class="data-row">
-        <label>Action Payload</label>
-        <span>${actionPayload}</span>
-      </div>
-    </div>  
-    ${stateInfo} 
- `;
-  const nodeDetail = $('nodeDetail');
-  nodeDetail.innerHTML = result;
-  nodeDetail.style.display = 'block';
+  const newActionDetails = createActionDetail('actionTemplate', {entry, changes, emitted, actionPayload});
+  const actionDetails = FinSimLib.Visualization.$('actionPanelDetails');
+  actionDetails.replaceChildren(newActionDetails);
 }
-
-
 
 // ── Event list UI ─────────────────────────────────────────────────────────────
 function renderEventList() {
-  const list = $('eventList');
+  const list = FinSimLib.Visualization.$('eventList');
   list.innerHTML = '';
 
   eventSeries.forEach((series, i) => {
@@ -263,14 +282,14 @@ function renderEventList() {
 }
 
 function submitAddEvent() {
-  const type   = $('newEventType').value;
-  const date   = $('newEventDate').value;
-  const amount = $('newEventAmount').value;
+  const type   = FinSimLib.Visualization.$('newEventType').value;
+  const date   = FinSimLib.Visualization.$('newEventDate').value;
+  const amount = FinSimLib.Visualization.$('newEventAmount').value;
   if (!date) { alert('Please pick a date.'); return; }
   customEvents.push({ type, date: new Date(date + 'T00:00:00'), amount: amount ? +amount : null });
-  $('newEventDate').value   = '';
-  $('newEventAmount').value = '';
-  $('addEventForm').classList.add('hidden');
+  FinSimLib.Visualization.$('newEventDate').value   = '';
+  FinSimLib.Visualization.$('newEventAmount').value = '';
+  FinSimLib.Visualization.$('addEventForm').classList.add('hidden');
   renderEventList();
 }
 
@@ -302,27 +321,27 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  $('handlerFunction').value = `return [{ type: 'CUSTOM_EVENT', data}];`;
-  $('reducerFunction').value = `return { state: { ...state, customItem: 'customReducerFired'}};`;
+  FinSimLib.Visualization.$('handlerFunction').value = `return [{ type: 'CUSTOM_EVENT', data}];`;
+  FinSimLib.Visualization.$('reducerFunction').value = `return { state: { ...state, customString: 'customReducerFired', customList: [1,2,3], customObject: {one: 1, two:2, three: {one: 1, two: {one: 1}}}}};`;
 
   app.initView();
-  $('addEventBtn').addEventListener('click',    () => $('addEventForm').classList.toggle('hidden'));
-  $('submitEventBtn').addEventListener('click', submitAddEvent);
-  $('cancelEventBtn').addEventListener('click', () => $('addEventForm').classList.add('hidden'));
+  FinSimLib.Visualization.$('addEventBtn').addEventListener('click',    () => $('addEventForm').classList.toggle('hidden'));
+  FinSimLib.Visualization.$('submitEventBtn').addEventListener('click', submitAddEvent);
+  FinSimLib.Visualization.$('cancelEventBtn').addEventListener('click', () => $('addEventForm').classList.add('hidden'));
 
   //TODO Add to Base APP
-  $('tzSelect').addEventListener('change', () => {
+  FinSimLib.Visualization.$('tzSelect').addEventListener('change', () => {
     app.setFormatDate($('tzSelect').value === 'utc' ? fmtUTC : fmtLocal);
     renderEventList();
   });
 
   //TODO Add to Base app
-  $('displayCurrency').addEventListener('change', () => {
+  FinSimLib.Visualization.$('displayCurrency').addEventListener('change', () => {
     displayCurrency = $('displayCurrency').value;
     app.buildScenario();
   });
 
-  $('testHandlerLogic').addEventListener('click', () => {
+  FinSimLib.Visualization.$('testHandlerLogic').addEventListener('click', () => {
     const errEl = $('handlerFunctionError');
     const outEl = $('handlerLogicTestOut');
     const logic = $('handlerFunction').value;
@@ -345,16 +364,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  $('testReducerLogic').addEventListener('click', () => {
-    const errEl = $('reducerFunctionError');
-    const outEl = $('reducerLogicTestOut');
-    const logic = $('reducerFunction').value;
-    const fn     = new Function('state,action,date', logic);
-    const state = { ...initialState };
-    const action = {type: 'CUSTOM_EVENT', state};
-    const date = new Date();
-    const testIn = { state, action, date};
+  FinSimLib.Visualization.$('testReducerLogic').addEventListener('click', () => {
+    const errEl = FinSimLib.Visualization.$('reducerFunctionError');
+    const outEl = FinSimLib.Visualization.$('reducerLogicTestOut');
+    const logic = FinSimLib.Visualization.$('reducerFunction').value;
     try {
+      const fn     = new Function('state,action,date', logic);
+      const state = { ...initialState };
+      const action = {type: 'CUSTOM_EVENT', state};
+      const date = new Date();
+      const testIn = { state, action, date};
       const result = fn(testIn);
       const isPlainObject = (val) => Object.prototype.toString.call(val) === '[object Object]';
       if (!isPlainObject(result))

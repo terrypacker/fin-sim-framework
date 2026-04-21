@@ -12,7 +12,7 @@ import { BaseAccountModule } from './finance/account-rules/base-account-module.j
 import { UsAccountModule2024 } from './finance/account-rules/us/us-account-module-2024.js';
 import { UsAccountModule2025 } from './finance/account-rules/us/us-account-module-2025.js';
 import { UsAccountModule2026 } from './finance/account-rules/us/us-account-module-2026.js';
-import { Account, AccountService, InsufficientFundsError, USD, AUD } from './finance/account.js';
+import { USD, AUD, InsufficientFundsError, Account, AccountService } from './finance/account.js';
 import { AssetService } from './finance/asset-service.js';
 import { Asset } from './finance/asset.js';
 import { FinancialState } from './finance/financial-state.js';
@@ -56,7 +56,7 @@ import { BalanceChartView } from './visualization/balance-chart-view.js';
 import { GraphView } from './visualization/graph-view.js';
 import { TimeControls } from './visualization/time-controls.js';
 import { TimelineView } from './visualization/timeline-view.js';
-import { $, fmt } from './visualization/ui-utils.js';
+import { $, fmt, fmtUTC, fmtLocal } from './visualization/ui-utils.js';
 
 // =========================================================
 // TOP-LEVEL EXPORTS
@@ -87,11 +87,11 @@ export const Finance = {
   UsAccountModule2024,
   UsAccountModule2025,
   UsAccountModule2026,
-  Account,
-  AccountService,
-  InsufficientFundsError,
   USD,
   AUD,
+  InsufficientFundsError,
+  Account,
+  AccountService,
   AssetService,
   Asset,
   FinancialState,
@@ -165,6 +165,8 @@ export const Visualization = {
   TimelineView,
   $,
   fmt,
+  fmtUTC,
+  fmtLocal,
 };
 
 // =========================================================
