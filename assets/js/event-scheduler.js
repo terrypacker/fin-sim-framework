@@ -7,15 +7,21 @@ export class EventScheduler {
     this.graph.registerNodeClickListener((event, node) => this._editNode(event, node));
     this.selectedNode = null;
 
-    this.series = [];
-    this.oneOff = [];
-
-    this.seriesList = document.getElementById('eventSeriesList');
-    this.oneOffList = document.getElementById('eventOneOffList');
-
     this.seriesTemplate = document.getElementById('eventSeriesTemplate');
     this.oneOffTemplate = document.getElementById('eventOneOffTemplate');
 
+    this.EVENT_TYPES = [
+      'Series',
+      'OneOff'
+    ];
+
+    this.EVENT_SERIES_TYPES = [
+      'monthly',
+      'quarterly',
+      'annually',
+      'month-end',
+      'year-end'
+    ];
     this.REDUCER_TYPES = [
       'MetricReducer',
       'ArrayMetricReducer',
@@ -32,14 +38,13 @@ export class EventScheduler {
   /* ───────────────────────────── INIT ───────────────────────────── */
 
   initDemo() {
-    const nodes = [
-      { id: 'e1', kind: 'event', x: 50, y: 80, name: 'Salary' },
-      { id: 'h1', kind: 'handler', x: 260, y: 80, name: 'Handler' },
-      { id: 'r1', kind: 'reducer', x: 470, y: 80, name: 'Reducer', reducerType: 'MetricReducer' }
-    ];
-    this.graph.addNode({ id: 'e1', kind: 'event', x: 50, y: 80, name: 'Salary' });
+    const buyLambo = new Date();
+    buyLambo.setMonth(buyLambo.getMonth() + 3);
+
+    this.graph.addNode({ id: 'e1', kind: 'event', x: 50, y: 80, name: 'Salary', eventType: 'Series', interval: 'month-end', enabled: true });
+    this.graph.addNode({ id: 'e2', kind: 'event', x: 50, y: 180, name: 'Buy Lamborghini', eventType: 'OneOff', date: buyLambo, enabled: true });
     this.graph.addNode({ id: 'h1', kind: 'handler', x: 260, y: 80, name: 'Handler' });
-    this.graph.addNode({ id: 'r1', kind: 'reducer', x: 470, y: 80, name: 'Reducer', reducerType: 'MetricReducer' });
+    this.graph.addNode({ id: 'r1', kind: 'reducer', x: 470, y: 80, name: 'Record Salary', reducerType: 'MetricReducer', metric: 'amount' });
 
     this.graph.addEdge({ from: 'e1', to: 'h1' });
     this.graph.addEdge({ from: 'h1', to: 'r1' });
@@ -55,6 +60,11 @@ export class EventScheduler {
     //TODO Bind to add Hanzdler and Reducer Buttons
 
     setInterval(() => this._refreshHandlers(), 1000);
+  }
+
+  _getTemplate(templateId) {
+    const tmpl = document.getElementById(templateId);
+    return tmpl.content.cloneNode(true);
   }
 
   _handlers() {
@@ -73,56 +83,10 @@ export class EventScheduler {
     });
   }
 
+  //TODO REMOVE?
   _refreshHandlers() {
     document.querySelectorAll('.es-handler,.eo-handler')
     .forEach(s => this._fill(s, s.value));
-  }
-
-  addSeries() {
-    const item = { type:'', interval:'monthly', handlerId:null };
-    this.series.push(item);
-
-    const el = document.importNode(this.seriesTemplate.content, true);
-    const root = el.querySelector('.event-card');
-
-    const handler = root.querySelector('.es-handler');
-    this._fill(handler);
-
-    handler.onchange = () => item.handlerId = handler.value;
-
-    this.seriesList.appendChild(root);
-  }
-
-  addOneOff() {
-    const item = { type:'', date:'', handlerId:null };
-    this.oneOff.push(item);
-
-    const el = document.importNode(this.oneOffTemplate.content, true);
-    const root = el.querySelector('.event-card');
-
-    const handler = root.querySelector('.eo-handler');
-    this._fill(handler);
-
-    handler.onchange = () => item.handlerId = handler.value;
-
-    this.oneOffList.appendChild(root);
-  }
-
-  build(graphConfig) {
-    const handlerNames = graphConfig.handlers;
-
-    return {
-      eventSeries: this.series.map(s => ({
-        type: s.type,
-        interval: s.interval,
-        handler: handlerNames[s.handlerId]
-      })),
-      customEvents: this.oneOff.map(e => ({
-        type: e.type,
-        date: e.date,
-        handler: handlerNames[e.handlerId]
-      }))
-    };
   }
 
   _editNode(event, node) {
@@ -136,9 +100,21 @@ export class EventScheduler {
 
     if (node.kind === 'reducer') {
       this._renderReducerEditor(node);
-    } else {
+    } else if (node.kind === 'event') {
+      this._renderEventEditor(node);
+    }else if (node.kind === 'handler') {
+      this._renderHandlerEditor(node);
+    }else {
       this.builderCanvas.innerHTML = `<div class="tl-empty">${node.kind} editor coming next</div>`;
     }
+  }
+
+  addSeries() {
+
+  }
+
+  addOneOff() {
+
   }
 
   addHandler() {
@@ -149,14 +125,112 @@ export class EventScheduler {
 
   }
 
+  /* ─────────────────────────────  HANDLER EDITOR  ───────────────────────────── */
+
+  _renderHandlerEditor(node) {
+    const el = this._getTemplate('tpl-handler-editor');
+    const name = el.querySelector('[data-id="name"]');
+    name.value = node.name || '';
+    name.addEventListener('input', () => {
+      node.name = name.value;
+    });
+
+    this.builderCanvas.appendChild(el);
+  }
+
+  /* ─────────────────────────────  EVENT EDITOR  ───────────────────────────── */
+
+  _renderEventEditor(node) {
+    const el = this._getTemplate('tpl-event-editor');
+    const typeSelect = el.querySelector('[data-id="type"]');
+    const configWrap = el.querySelector('[data-id="config"]');
+
+    const name = el.querySelector('[data-id="name"]');
+    name.value = node.name || '';
+    name.addEventListener('input', () => {
+      node.name = name.value;
+    });
+
+    // populate dropdown
+    this.EVENT_TYPES.forEach(type => {
+      const opt = document.createElement('option');
+      opt.value = type;
+      opt.textContent = type;
+      typeSelect.appendChild(opt);
+    });
+
+    typeSelect.value = node.eventType || 'Series';
+    typeSelect.onchange = () => {
+      node.eventType = typeSelect.value;
+      this._renderEventConfig(node, configWrap);
+    };
+
+    const seriesEnabled = el.querySelector('[data-field="enabled"]');
+    seriesEnabled.checked = node.enabled || false;
+    seriesEnabled.addEventListener('input', () => {
+      node[seriesEnabled.dataset.field] = seriesEnabled.checked;
+    });
+
+    this._renderEventConfig(node, configWrap);
+
+    this.builderCanvas.appendChild(el);
+  }
+
+  _renderEventConfig(node, container) {
+    container.innerHTML = '';
+
+    let wrap;
+    switch (node.eventType) {
+      case 'Series':
+        wrap = this._getTemplate('tpl-event-series-editor');
+        const seriesTypeSelect = wrap.querySelector('[data-field="interval"]');
+        this.EVENT_SERIES_TYPES.forEach(type => {
+          const opt = document.createElement('option');
+          opt.value = type;
+          opt.textContent = type;
+          seriesTypeSelect.appendChild(opt);
+        });
+        seriesTypeSelect.value = node.interval || '';
+        break;
+      case 'OneOff':
+        wrap = this._getTemplate('tpl-event-one-off-editor');
+        const dateInput = wrap.querySelector('[data-field="date"]');
+        dateInput.valueAsDate = node.date || new Date();
+        break;
+      default:
+        wrap.innerHTML = `<div class="tl-empty">No config</div>`;
+    }
+
+    // bind inputs → node
+    wrap.querySelectorAll('input, select').forEach(input => {
+      input.addEventListener('input', () => {
+        if(input.type === 'checkbox') {
+          node[input.dataset.field] = input.checked;
+        }else if(input.type === 'date') {
+          //TODO HANDLE TIMEZONE of APP
+          node[input.dataset.field] = input.valueAsDate;
+        }else {
+          node[input.dataset.field] = input.value;
+        }
+      });
+    });
+
+    container.appendChild(wrap);
+  }
+
   /* ───────────────────────────── REDUCER EDITOR ───────────────────────────── */
 
   _renderReducerEditor(node) {
-    const tpl = document.getElementById('tpl-reducer-editor');
-    const el = tpl.content.cloneNode(true);
+    const el = this._getTemplate('tpl-reducer-editor');
 
     const typeSelect = el.querySelector('[data-id="type"]');
     const configWrap = el.querySelector('[data-id="config"]');
+
+    const name = el.querySelector('[data-id="name"]');
+    name.value = node.name || '';
+    name.addEventListener('input', () => {
+      node.name = name.value;
+    });
 
     // populate dropdown
     this.REDUCER_TYPES.forEach(type => {
@@ -181,35 +255,18 @@ export class EventScheduler {
   _renderReducerConfig(node, container) {
     container.innerHTML = '';
 
-    const wrap = document.createElement('div');
-
+    let wrap;
     switch (node.reducerType) {
-
-      case 'MetricReducer':
-        wrap.innerHTML = `
-          <div class="node-field">
-            <label>Metric Name</label>
-            <input data-field="metric" value="${node.metric || ''}">
-          </div>
-        `;
-        break;
-
       case 'NumericSumMetricReducer':
-        wrap.innerHTML = `
-          <div class="node-field">
-            <label>Metric</label>
-            <input data-field="metric" value="${node.metric || ''}">
-          </div>
-        `;
+      case 'MetricReducer':
+        wrap = this._getTemplate('tpl-metric-reducer-editor');
+        const metricInput = wrap.querySelector('[data-field="metric"]');
+        metricInput.value = node.metric || '';
         break;
-
       case 'AccountTransactionReducer':
-        wrap.innerHTML = `
-          <div class="node-field">
-            <label>Account Key</label>
-            <input data-field="accountKey" value="${node.accountKey || ''}">
-          </div>
-        `;
+        wrap = this._getTemplate('tpl-account-transaction-reducer-editor');
+        const accountKeyInput = wrap.querySelector('[data-field="accountKey"]');
+        accountKeyInput.value = node.accountKey || '';
         break;
 
       default:
@@ -225,4 +282,5 @@ export class EventScheduler {
 
     container.appendChild(wrap);
   }
+
 }

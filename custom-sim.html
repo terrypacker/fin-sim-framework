@@ -211,59 +211,60 @@
 
 <!-- ══ TEMPLATES  ══════════════════════════════════════════ -->
 
-<!-- ── EVENT TEMPLATES ───────────────────────── -->
-
-<template id="eventSeriesTemplate">
-  <div class="event-card">
-    <input class="es-type" placeholder="TYPE" />
-    <select class="es-interval">
-      <option value="monthly">monthly</option>
-      <option value="quarterly">quarterly</option>
-      <option value="annually">annually</option>
-      <option value="month-end">month-end</option>
-      <option value="year-end">year-end</option>
-    </select>
-
-    <input class="es-offset" type="number" value="0" />
-    <label><input type="checkbox" class="es-enabled" checked /> Enabled</label>
-
-    <select class="es-handler"></select>
-
-    <button class="es-delete">Remove</button>
-  </div>
-</template>
-
-<template id="eventOneOffTemplate">
-  <div class="event-card">
-    <input class="eo-type" placeholder="TYPE" />
-    <input class="eo-date" type="date" />
-    <input class="eo-amount" type="number" placeholder="Amount" />
-
-    <select class="eo-handler"></select>
-
-    <button class="eo-delete">Remove</button>
-  </div>
-</template>
-
-<template id="graphNodeTemplate">
-  <div class="g-node">
-    <div class="g-header"></div>
-    <input class="g-title" />
-    <div class="g-port in"></div>
-    <div class="g-port out"></div>
-  </div>
-</template>
-
+<!-- NODE TEMPLATES -->
 <template id="tpl-empty">
   <div class="tl-empty">Select a node</div>
 </template>
 
+<!-- ── EVENT TEMPLATES ───────────────────────── -->
+<template id="tpl-event-editor">
+  <div class="node">
+    <div class="node-header">
+      <span>EVENT</span>
+    </div>
+    <div class="node-body">
+      <div class="node-field">
+        <label>Name</label>
+        <input data-id="name"></input>
+      </div>
+      <div class="node-field">
+        <label>Event Type</label>
+        <select data-id="type"></select>
+      </div>
+      <div data-id="config"></div>
+      <div class="node-field">
+        <label>Enabled</label>
+        <input class="field-checkbox" type="checkbox" data-field="enabled" checked />
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="tpl-event-series-editor">
+  <div class="node-field">
+    <label>Type</label>
+    <select data-field="interval"></select>
+  </div>
+</template>
+
+<template id="tpl-event-one-off-editor">
+  <div class="node-field">
+    <label>Date</label>
+    <input data-field="date" type="date" />
+  </div>
+</template>
+
+<!-- ── REDUCER TEMPLATES ───────────────────────── -->
 <template id="tpl-reducer-editor">
   <div class="node">
     <div class="node-header">
       <span>REDUCER</span>
     </div>
     <div class="node-body">
+      <div class="node-field">
+        <label>Name</label>
+        <input data-id="name"></input>
+      </div>
       <div class="node-field">
         <label>Reducer Type</label>
         <select data-id="type"></select>
@@ -273,6 +274,36 @@
   </div>
 </template>
 
+<template id="tpl-metric-reducer-editor">
+  <div class="node-field">
+    <label>Metric Name</label>
+    <input data-field="metric">
+  </div>
+</template>
+
+<template id="tpl-account-transaction-reducer-editor">
+  <div class="node-field">
+    <label>Account Key</label>
+    <input data-field="accountKey">
+  </div>
+</template>
+
+<!-- ── HANDLER TEMPLATES ───────────────────────── -->
+<template id="tpl-handler-editor">
+  <div class="node">
+    <div class="node-header">
+      <span>HANDLER</span>
+    </div>
+    <div class="node-body">
+      <div class="node-field">
+        <label>Name</label>
+        <input data-id="name"></input>
+      </div>
+    </div>
+  </div>
+</template>
+
+<!-- VIEW ACTION TEMPLATE -->
 <template id="actionTemplate">
   <div class="data-section-title">Action</div>
   <div class="data-list-wrap">
