@@ -78,7 +78,12 @@ const isDate = (obj) => Object.prototype.toString.call(obj) === '[object Date]';
 const fmtVal = v => {
   if (v == null) return '—';
   if (typeof v === 'number') return v.toFixed(2); //TODO Format as $?
-  if (Array.isArray(v)) return v.map(x => typeof x === 'object' && x !== null ? fmtVal(x) : String(x)).join(', ') || '—';
+  if (Array.isArray(v)) {
+    if(v.length > 10) {
+      return '[...]'; //TODO suppor opening a modal and rendering the whole array :)
+    }
+    return v.map(x => typeof x === 'object' && x !== null ? fmtVal(x) : String(x)).join(', ') || '—';
+  }
   if(isDate(v)) return app._formatDate(v);
   if (typeof v === 'object') return JSON.stringify(v);
   return String(v);
