@@ -14,8 +14,7 @@
  * Run with: node --test tests/balance-chart-view.test.mjs
  */
 
-import { test } from 'node:test';
-import assert   from 'node:assert/strict';
+import assert from 'node:assert/strict';
 
 import { BalanceChartView } from '../src/visualization/balance-chart-view.js';
 

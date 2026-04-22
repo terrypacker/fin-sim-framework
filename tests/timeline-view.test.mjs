@@ -14,25 +14,21 @@
  * Run with: node --test tests/timeline-view.test.mjs
  */
 
-import { test } from 'node:test';
-import assert   from 'node:assert/strict';
+import assert from 'node:assert/strict';
 
 import { TimelineView } from '../src/visualization/timeline-view.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Returns a real DOM div with mocked scroll geometry so the jsdom environment
+// supplies document.createElement / appendChild / querySelector while tests
+// retain full control over scrollHeight / scrollTop / clientHeight.
 function makeContainer({ scrollHeight = 400, scrollTop = 320, clientHeight = 100 } = {}) {
-  let _html      = '';
-  let _scrollTop = scrollTop;
-  return {
-    get innerHTML()  { return _html; },
-    set innerHTML(v) { _html = v; },
-    scrollHeight,
-    get scrollTop()  { return _scrollTop; },
-    set scrollTop(v) { _scrollTop = v; },
-    clientHeight,
-    querySelectorAll: () => []      // returns empty iterable — event listeners not attached
-  };
+  const el = document.createElement('div');
+  Object.defineProperty(el, 'scrollHeight', { configurable: true, get: () => scrollHeight });
+  Object.defineProperty(el, 'clientHeight', { configurable: true, get: () => clientHeight });
+  el.scrollTop = scrollTop;
+  return el;
 }
 
 function makeEntry({

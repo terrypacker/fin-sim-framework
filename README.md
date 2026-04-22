@@ -409,16 +409,20 @@ npm start            # live-server only (dist/ must already be built)
 Tests are in `tests/` using the Node.js built-in `node:test` runner. No npm or build step required.
 
 ```sh
-make setup   # once — installs Node.js via nvm or Homebrew
-make test    # run all *.test.mjs files
+npm run test #Run the tests that don't require dom
+npm run test:viz #Run tests with jest browser base
 ```
 
-Or directly:
+When working on vizualization tests see: 
+`jest.config.cjs`
+
+Or run tests directly:
 
 ```sh
 node --test tests/simulation.test.mjs
 node --test tests/scenario.test.mjs
 ```
+
 
 ### Test helper: `Assert`
 
