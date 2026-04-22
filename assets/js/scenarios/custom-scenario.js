@@ -12,6 +12,7 @@
 import {
   RecordArrayMetricAction, RecordMultiplicativeMetricAction
 } from "../../../src/simulation-framework/actions.js";
+import {PRIORITY} from "../../../src/simulation-framework/reducers.js";
 
 export const DEFAULT_PARAMS = {
 
@@ -101,6 +102,7 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
           monthCount: monthCounter
         },
         next: [
+          new FinSimLib.Core.AmountAction('PURCHASE_EVENT', 'purchases', 5),
           new FinSimLib.Core.RecordMetricAction('monthCount', monthCounter),
           new FinSimLib.Core.RecordMetricAction('monthGains', gains),
           new FinSimLib.Core.RecordNumericSumMetricAction('totalGains', gains),
@@ -116,6 +118,13 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
     new FinSimLib.Core.MetricReducer().registerWith(this.sim.reducers, 'RECORD_METRIC');
     new FinSimLib.Core.NumericSumMetricReducer().registerWith(this.sim.reducers, 'RECORD_NUMERIC_SUM_METRIC');
     FinSimLib.Core.MultiplicativeMetricReducer.fromMetric('monthGains').registerWith(this.sim.reducers, 'RECORD_MULTIPLICATIVE_METRIC');
+
+    const purchase = new FinSimLib.Core.StateFieldReducer('Purchaser', PRIORITY.POSITION_UPDATE,
+        'purchase', (state, action, date) => {
+      return this.sim.rng() * 1000;
+    });
+    const recordPurchase = FinSimLib.Core.ArrayMetricReducer.fromField('purchase');
+    FinSimLib.Core.RepeatingReducer.fromReducer([purchase, recordPurchase], 'amount').registerWith(this.sim.reducers, 'PURCHASE_EVENT');
   }
 
 }

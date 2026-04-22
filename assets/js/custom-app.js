@@ -82,7 +82,7 @@ const fmtVal = v => {
     if(v.length > 10) {
       return '[...]'; //TODO suppor opening a modal and rendering the whole array :)
     }
-    return v.map(x => typeof x === 'object' && x !== null ? fmtVal(x) : String(x)).join(', ') || '—';
+    return v.map(x => typeof x === 'object' && x !== null ? fmtVal(x) : fmtVal(x)).join(', ') || '—';
   }
   if(isDate(v)) return app._formatDate(v);
   if (typeof v === 'object') return JSON.stringify(v);

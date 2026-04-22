@@ -101,20 +101,44 @@ export class NoOpReducer extends Reducer {
 }
 
 /**
+ * Produce a field for the state
+ */
+export class StateFieldReducer extends Reducer {
+  constructor(name = 'State Field', priority = PRIORITY.POSITION_UPDATE, fieldName = null, generate = (state, action, date) => 0) {
+    super(name, priority);
+    this.fieldName = fieldName;
+    this.generate = generate;
+  }
+
+  reduce(state, action, date) {
+    return {
+      ... state,
+      [this.fieldName]: this.generate(state, action, date)
+    };
+  }
+}
+
+/**
  * Appends a value to the metrics array at state.metrics[action.name].
  * Works with any action that carries `name` and `value` fields —
  * e.g. actions produced by RecordArrayMetricAction.
  */
 export class ArrayMetricReducer extends Reducer {
-  constructor(name = 'Array Metric Logger', priority = PRIORITY.METRICS) {
+
+  static fromField(fieldName = null) {
+    return new ArrayMetricReducer(name = 'Array Metric Logger', PRIORITY.METRICS, fieldName);
+  }
+  constructor(name = 'Array Metric Logger', priority = PRIORITY.METRICS, fieldName = null) {
     super(name, priority);
+    this.fieldName = fieldName;
   }
 
   reduce(state, action) {
     const list = state.metrics[action.name] || [];
+    const value = this.fieldName == null ? action.value : state[this.fieldName];
     return {
       ...state,
-      metrics: { ...state.metrics, [action.name]: [...list, action.value] }
+      metrics: { ...state.metrics, [action.name]: [...list, value] }
     };
   }
 }
@@ -223,3 +247,47 @@ export class AccountTransactionReducer extends Reducer {
     return { ...state };
   }
 }
+
+/**
+ * A reducer that repeats another reducer,
+ * reducer - what to repeat
+ * countField state field . separated to get the count to repeat
+ * count - number of times to repeat
+ */
+export class RepeatingReducer extends Reducer {
+
+  static fromReducer(reducers = [], countField = 'value', count = null) {
+    return new RepeatingReducer(`Repeating reducer: ${reducers.map(v => v.name).join('-->')}`, PRIORITY.METRICS, reducers, countField, count);
+  }
+
+  constructor(name = 'Repeating Reducer', priority = PRIORITY.METRICS,
+      reducers, countField = 'value', count = null) {
+    super(name, priority);
+    this.reducers = reducers;
+    this.countField = countField;
+    this.count = count;
+  }
+
+  reduce(state, action, date) {
+    const count = typeof action._repeaterCounter === 'undefined' ? this.count == null ? this.countField == null ? 0 : action[this.countField] : this.count : action._repeaterCounter;
+    if( count <= 0) {
+      return {... state};
+    }
+    let newState = { ...state }
+    for(let i=0; i<this.reducers.length; i++) {
+      newState = this.reducers[i].reduce(newState, action, date);
+    }
+
+    return {
+      state: newState,
+      next: [
+        {
+          ...action, //TODO Need to strip out the _ base fields
+          _repeaterCounter: count - 1
+        }
+      ]
+    };
+  }
+}
+
+

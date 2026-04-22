@@ -46,7 +46,7 @@ import { EventBus } from './simulation-framework/event-bus.js';
 import { HandlerEntry, HandlerRegistry } from './simulation-framework/handlers.js';
 import { JournalEntry, Journal } from './simulation-framework/journal.js';
 import { MinHeap } from './simulation-framework/min-heap.js';
-import { ReducerPipeline, PRIORITY, Reducer, NoOpReducer, ArrayMetricReducer, NumericSumMetricReducer, MultiplicativeMetricReducer, MetricReducer, AccountTransactionReducer } from './simulation-framework/reducers.js';
+import { ReducerPipeline, PRIORITY, Reducer, NoOpReducer, StateFieldReducer, ArrayMetricReducer, NumericSumMetricReducer, MultiplicativeMetricReducer, MetricReducer, AccountTransactionReducer, RepeatingReducer } from './simulation-framework/reducers.js';
 import { ScenarioRunner } from './simulation-framework/scenario.js';
 import { ActionNode, SimulationEventGraph } from './simulation-framework/simulation-event-graph.js';
 import { SimulationHistory } from './simulation-framework/simulation-history.js';
@@ -151,11 +151,13 @@ export const Core = {
   PRIORITY,
   Reducer,
   NoOpReducer,
+  StateFieldReducer,
   ArrayMetricReducer,
   NumericSumMetricReducer,
   MultiplicativeMetricReducer,
   MetricReducer,
   AccountTransactionReducer,
+  RepeatingReducer,
   ScenarioRunner,
   ActionNode,
   SimulationEventGraph,

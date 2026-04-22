@@ -30,14 +30,16 @@ export class Action {
 /**
  * Action carrying a monetary or numeric amount.
  * Covers cash credits/debits, gain realizations, tax computations, etc.
+ * provide a name if you want to reference a metric in the reducer
  *
  * Examples: ADD_CASH, REMOVE_CASH, SALARY_CREDIT, INTEREST_CREDIT,
  *           ASSET_PROCEEDS, INCOME_TAX_PAYMENT, REALIZE_GAIN,
  *           CALCULATE_CAPITAL_GAINS_TAX
  */
 export class AmountAction extends Action {
-  constructor(type, amount) {
+  constructor(type, name, amount) {
     super(type);
+    this.name = name;
     this.amount = amount;
   }
 }
