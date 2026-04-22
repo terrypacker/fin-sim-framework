@@ -140,6 +140,37 @@ export class NumericSumMetricReducer extends Reducer {
 }
 
 /**
+ * Take multiply a metric by the action value and places at state.metrics[action.name].
+ *
+ * state.metrics[action.name] * action.value
+ *
+ * Works with any action that carries `name` and `value` fields —
+ * e.g. actions produced by RecordMultiplicativeMetricAction.
+ *
+ * You can optionally supply another metric name to use as the multiplier
+ */
+export class MultiplicativeMetricReducer extends Reducer {
+
+  static fromMetric(metricName = null) {
+    return new MultiplicativeMetricReducer('Multiplicative Metric Logger', PRIORITY.METRICS, metricName);
+  }
+
+  constructor(name = 'Multiplicative Metric Logger', priority = PRIORITY.METRICS, mulitplierMetric = null) {
+    super(name, priority);
+    this.mulitplierMetric = mulitplierMetric;
+  }
+
+  reduce(state, action) {
+    const metricValue = this.mulitplierMetric == null ? state.metrics[action.name] || 0 : state.metrics[this.mulitplierMetric];
+    const actionValue = Number(action.value || 0);
+    return {
+      ...state,
+      metrics: { ...state.metrics, [action.name]: metricValue * actionValue }
+    };
+  }
+}
+
+/**
  * Saves a value to the metric at state.metrics[action.name].
  * Works with any action that carries `name` and `value` fields —
  * e.g. actions produced by RecordArrayMetricAction.
@@ -150,8 +181,6 @@ export class MetricReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const sum = state.metrics[action.name] || 0;
-    const value = Number(action.value || 0);
     return {
       ...state,
       metrics: { ...state.metrics, [action.name]: action.value }

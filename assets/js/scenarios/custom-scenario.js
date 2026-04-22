@@ -10,7 +10,7 @@
 
 // ─── Default parameters ────────────────────────────────────────────────────────
 import {
-  RecordArrayMetricAction
+  RecordArrayMetricAction, RecordMultiplicativeMetricAction
 } from "../../../src/simulation-framework/actions.js";
 
 export const DEFAULT_PARAMS = {
@@ -60,7 +60,7 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
     const initialState = {
       metrics: {},
       monthCount: 0,
-      yearCount: 0
+      yearCount: 0,
     };
 
     this.sim = new FinSimLib.Core.Simulation(this.simStart, { initialState });
@@ -82,8 +82,8 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
     this.sim.register('MONTH_END', new FinSimLib.Core.HandlerEntry(({ data, date, state }) => {
       const actions = [];
       actions.push(
-          { type: 'MONTH_END_COUNT', date },
-          new FinSimLib.Core.RecordArrayMetricAction('monthEnd', date)
+          { type: 'MONTH_END_PROCESS', date },
+          new FinSimLib.Core.RecordArrayMetricAction('monthEnd', date),
       );
       return actions;
     }, 'Month End Handler'));
@@ -91,15 +91,21 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
 
   _registerReducers(p) {
     //MONTH END COUNT
-    this.sim.reducers.register('MONTH_END_COUNT', (state, action, date) => {
+    this.sim.reducers.register('MONTH_END_PROCESS', (state, action, date) => {
       const monthCounter = state.monthCount + 1;
-      console.log('running month end cout')
+      const gains = this.sim.rng() * 1000;
+      const taxRate = 0.10; //TODO Make variable by month
       return {
         state: {
           ...state,
           monthCount: monthCounter
         },
-        next: [new FinSimLib.Core.RecordMetricAction('monthCount', monthCounter)]
+        next: [
+          new FinSimLib.Core.RecordMetricAction('monthCount', monthCounter),
+          new FinSimLib.Core.RecordMetricAction('monthGains', gains),
+          new FinSimLib.Core.RecordNumericSumMetricAction('totalGains', gains),
+          new FinSimLib.Core.RecordMultiplicativeMetricAction('monthTax', taxRate),
+        ]
       };
     }, FinSimLib.Core.PRIORITY.PRE_PROCESS, 'Month Counter');
 
@@ -108,6 +114,8 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
     //Metric Recorder
     new FinSimLib.Core.ArrayMetricReducer().registerWith(this.sim.reducers, 'RECORD_ARRAY_METRIC');
     new FinSimLib.Core.MetricReducer().registerWith(this.sim.reducers, 'RECORD_METRIC');
+    new FinSimLib.Core.NumericSumMetricReducer().registerWith(this.sim.reducers, 'RECORD_NUMERIC_SUM_METRIC');
+    FinSimLib.Core.MultiplicativeMetricReducer.fromMetric('monthGains').registerWith(this.sim.reducers, 'RECORD_MULTIPLICATIVE_METRIC');
   }
 
 }

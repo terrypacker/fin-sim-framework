@@ -77,7 +77,7 @@ const isDate = (obj) => Object.prototype.toString.call(obj) === '[object Date]';
 //TODO Move to BaseApp
 const fmtVal = v => {
   if (v == null) return '—';
-  if (typeof v === 'number') return v; //TODO Format as $?
+  if (typeof v === 'number') return v.toFixed(2); //TODO Format as $?
   if (Array.isArray(v)) return v.map(x => typeof x === 'object' && x !== null ? JSON.stringify(x) : String(x)).join(', ') || '—';
   if (typeof v === 'object') return JSON.stringify(v);
   return String(v);
@@ -216,7 +216,7 @@ const renderState = (obj, statGrid) => {
       const statRow = document.importNode(statGrid.querySelector('[data-stat-row]'), true);
       statRow.style = '';
       statRow.querySelector('.stat-label').innerText = toLabel(k);
-      statRow.querySelector('.stat-value').innerText = typeof k === 'object' ? renderObj(v) : v;
+      statRow.querySelector('.stat-value').innerText = typeof k === 'object' ? renderObj(v) : fmtVal(v);
       statGrid.appendChild(statRow);
     }
   }

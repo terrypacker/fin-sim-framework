@@ -78,6 +78,18 @@ export class RecordNumericSumMetricAction extends Action {
   }
 }
 
+/**
+ * Multiplies the current metric by this value and replaces it in state.metrics.
+ * Used by the generic RECORD_MULTIPLICATIVE_METRIC reducer.
+ */
+export class RecordMultiplicativeMetricAction extends Action {
+  constructor(name, value) {
+    super('RECORD_MULTIPLICATIVE_METRIC');
+    this.name  = name;
+    this.value = value;
+  }
+}
+
 
 /**
  * Marker action that triggers the RECORD_BALANCE no-op reducer.
