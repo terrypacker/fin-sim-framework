@@ -21,6 +21,7 @@ const CHART_SERIES = [
 // Current display currency — 'USD' or 'AUD'.  Updated by the selector.
 let displayCurrency = 'USD';
 
+//TODO MOVE CURRENCY WORK TO BASE APP
 /**
  * Convert a value from one currency to the display currency.
  * @param {number} value       - Amount in the account's native currency
@@ -160,35 +161,48 @@ const renderObj = (v) => {
   return String(v);
 }
 
+//TODO Move to base app
+const renderHeaderRow = (label) => {
+  const headerRow = document.createElement('div');
+  headerRow.classList.add('data-row-header');
+  const header = document.createElement('span');
+  header.classList.add('single-row');
+  header.classList.add('single-row');
+  header.innerText = toLabel(label);
+  headerRow.appendChild(header);
+  return headerRow;
+};
+
 //TODO Move to BaseApp
 const renderState = (obj, statGrid) => {
   for (const [k, v] of Object.entries(obj)) {
-    if (Array.isArray(v) && v.length > 0 && v[0] !== null && typeof v[0] === 'object') {
-      const statRow = document.importNode(statGrid.querySelector('[data-stat-row]'), true);
-      statRow.style = '';
-      const label = statRow.querySelector('.stat-label');
-      label.innerHTML = toLabel(k);
-      const value = statRow.querySelector('.stat-value');
-      value.innerText = v.length;
-      statGrid.appendChild(statRow);
 
+    if (Array.isArray(v) && v.length > 0 && v[0] !== null && typeof v[0] === 'object') {
+      //Process an array of objects?
+      const arrayHeaderRow = renderHeaderRow(k);
+      statGrid.appendChild(arrayHeaderRow);
+
+      //Array of Objects
+      let index = 0;
       for (const item of v) {
-        const name  = item.name ?? JSON.stringify(item);
-        const value = item.value != null ? item.value : '';
+        let name,value;
+        if(isDate(item)) {
+          name = '[' + index + ']';
+          value = app._formatDate(item);
+        }else {
+          name  = item.name ?? JSON.stringify(item);
+          value = item.value != null ? item.value : '';
+        }
+
         const arrayRow = document.importNode(statGrid.querySelector('[data-stat-row]'), true);
         arrayRow.style = '';
         arrayRow.querySelector('.stat-label').innerText = name;
         arrayRow.querySelector('.stat-value').innerText = value;
         statGrid.appendChild(arrayRow);
+        index++;
       }
     }else if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
-      const objectHeaderRow = document.createElement('div');
-      objectHeaderRow.classList.add('data-row-header');
-      const objectHeader = document.createElement('span');
-      objectHeader.classList.add('single-row');
-      objectHeader.classList.add('single-row');
-      objectHeader.innerText = toLabel(k);
-      objectHeaderRow.appendChild(objectHeader);
+      const objectHeaderRow = renderHeaderRow(k);
       statGrid.appendChild(objectHeaderRow);
       for (const [sk, sv] of Object.entries(v)) {
         if (Array.isArray(sv) && sv.length > 0 && typeof sv[0] === 'object') continue;
@@ -227,7 +241,7 @@ function updateStatePanel(date, state) {
   const stateDetails = FinSimLib.Visualization.$('currentStateContent');
   stateDetails.replaceChildren(newStateDetails);
 
-  const newMetricDetails = createStateDetails('stateDetailsTemplate', date, rest);
+  const newMetricDetails = createStateDetails('stateDetailsTemplate', date, metrics);
   const metricDetails = FinSimLib.Visualization.$('cumulativeMetricsContent');
   metricDetails.replaceChildren(newMetricDetails);
 

@@ -43,8 +43,20 @@ export class AmountAction extends Action {
 }
 
 /**
- * Records a named metric value into state.metrics.
- * Used by the generic RECORD_METRIC reducer registered in every scenario.
+ * Pushes a named metric value into an array within state.metrics.
+ * Used by the generic RECORD_ARRAY_METRIC reducer registered in every financial scenario.
+ */
+export class RecordArrayMetricAction extends Action {
+  constructor(name, value) {
+    super('RECORD_ARRAY_METRIC');
+    this.name  = name;
+    this.value = value;
+  }
+}
+
+/**
+ * Replaces a metric value into state.metrics.
+ * Used by the generic RECORD_METRIC reducer.
  */
 export class RecordMetricAction extends Action {
   constructor(name, value) {
@@ -53,6 +65,19 @@ export class RecordMetricAction extends Action {
     this.value = value;
   }
 }
+
+/**
+ * Records a named metric value into state.metrics.
+ * Used by the generic RECORD_NUMERIC_SUM_METRIC.
+ */
+export class RecordNumericSumMetricAction extends Action {
+  constructor(name, value) {
+    super('RECORD_NUMERIC_SUM_METRIC');
+    this.name  = name;
+    this.value = value;
+  }
+}
+
 
 /**
  * Marker action that triggers the RECORD_BALANCE no-op reducer.

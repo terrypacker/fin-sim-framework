@@ -40,7 +40,7 @@ import { AssetService }             from '../src/finance/asset-service.js';
 import { Person }                   from '../src/finance/person.js';
 import { Simulation }               from '../src/simulation-framework/simulation.js';
 import { SimulationState }          from '../src/simulation-framework/simulation-state.js';
-import { PRIORITY, MetricReducer, NoOpReducer } from '../src/simulation-framework/reducers.js';
+import { PRIORITY, ArrayMetricReducer, NoOpReducer } from '../src/simulation-framework/reducers.js';
 import { RecordBalanceAction } from '../src/simulation-framework/actions.js';
 
 const svc     = new AccountService();
@@ -226,7 +226,7 @@ function buildResidencyTrackingSim({
     return { ...state, person: newPerson };
   }, PRIORITY.CASH_FLOW, 'Residency Change Apply');
 
-  new MetricReducer().registerWith(sim.reducers, 'RECORD_METRIC');
+  new ArrayMetricReducer().registerWith(sim.reducers, 'RECORD_METRIC');
   new NoOpReducer('Balance Snapshot').registerWith(sim.reducers, 'RECORD_BALANCE');
 
   sim.register('RESIDENCY_CHANGE', ({ data }) => [
@@ -365,7 +365,7 @@ function buildLoanSim({
     return { ...state };
   }, PRIORITY.CASH_FLOW, 'Property Loan Repayment');
 
-  new MetricReducer().registerWith(sim.reducers, 'RECORD_METRIC');
+  new ArrayMetricReducer().registerWith(sim.reducers, 'RECORD_METRIC');
   new NoOpReducer('Balance Snapshot').registerWith(sim.reducers, 'RECORD_BALANCE');
 
   sim.register('AU_STOCK_TAKE_LOAN',  ({ data }) => [{ type: 'AU_STOCK_LOAN_APPLY',       amount: data.amount }, new RecordBalanceAction()]);

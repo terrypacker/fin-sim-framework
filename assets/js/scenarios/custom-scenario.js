@@ -9,6 +9,9 @@
  */
 
 // ─── Default parameters ────────────────────────────────────────────────────────
+import {
+  RecordArrayMetricAction
+} from "../../../src/simulation-framework/actions.js";
 
 export const DEFAULT_PARAMS = {
 
@@ -62,39 +65,49 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
 
     this.sim = new FinSimLib.Core.Simulation(this.simStart, { initialState });
 
-    // ── Register scenario-level reducers
-    this._registerReducers(p);
+    // ── Schedule all recurring event series
+    this._scheduleEvents();
 
     // ── Register scenario-level handlers
     this._registerHandlers(p);
 
-    // ── Schedule all recurring event series
-    this._scheduleEvents();
+    // ── Register scenario-level reducers
+    this._registerReducers(p);
+
+  }
+
+  _registerHandlers(p) {
+    this.sim.register('MONTH_END', new FinSimLib.Core.HandlerEntry(this.handlerLogic), 'Custom Handler');
+
+    this.sim.register('MONTH_END', new FinSimLib.Core.HandlerEntry(({ data, date, state }) => {
+      const actions = [];
+      actions.push(
+          { type: 'MONTH_END_COUNT', date },
+          new FinSimLib.Core.RecordArrayMetricAction('monthEnd', date)
+      );
+      return actions;
+    }, 'Month End Handler'));
   }
 
   _registerReducers(p) {
     //MONTH END COUNT
     this.sim.reducers.register('MONTH_END_COUNT', (state, action, date) => {
       const monthCounter = state.monthCount + 1;
+      console.log('running month end cout')
       return {
-        state: { ...state,
-        monthCount: monthCounter
-        }
+        state: {
+          ...state,
+          monthCount: monthCounter
+        },
+        next: [new FinSimLib.Core.RecordMetricAction('monthCount', monthCounter)]
       };
-    }, FinSimLib.Core.PRIORITY.PRE_PROCESS, 'Count Month');
+    }, FinSimLib.Core.PRIORITY.PRE_PROCESS, 'Month Counter');
 
     this.sim.reducers.register('CUSTOM_EVENT', this.reducerLogic, FinSimLib.Core.PRIORITY.PRE_PROCESS, 'Custom Reducer');
+
+    //Metric Recorder
+    new FinSimLib.Core.ArrayMetricReducer().registerWith(this.sim.reducers, 'RECORD_ARRAY_METRIC');
+    new FinSimLib.Core.MetricReducer().registerWith(this.sim.reducers, 'RECORD_METRIC');
   }
 
-  _registerHandlers(p) {
-    this.sim.register('MONTH_END', new FinSimLib.Core.HandlerEntry(this.handlerLogic), 'Custom Handler');
-    this.sim.register('MONTH_END', new FinSimLib.Core.HandlerEntry(({ data, date, state }) => {
-      const actions = [];
-      actions.push(
-          { type: 'MONTH_END_COUNT', date },
-          new FinSimLib.Core.RecordMetricAction('monthEnd', date),
-      );
-      return actions;
-    }, 'Month End Event'));
-  }
 }

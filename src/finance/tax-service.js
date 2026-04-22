@@ -11,7 +11,7 @@
 import { TaxEngine }             from './tax/tax-engine.js';
 import { AccountRulesEngine }    from './account-rules/account-rules-engine.js';
 import { AccountService, InsufficientFundsError } from './account.js';
-import { MetricReducer, NoOpReducer, PRIORITY } from '../simulation-framework/reducers.js';
+import { ArrayMetricReducer, NoOpReducer, PRIORITY } from '../simulation-framework/reducers.js';
 import { TaxSettleService }      from './tax-settle-service.js';
 
 import { UsTaxModule2024 }       from './tax/us/us-tax-module-2024.js';
@@ -93,7 +93,7 @@ export class TaxService {
    *      dispatcher per action type; each dispatcher reads
    *      state.currentPeriods[cc] to pick the correct year's module.
    *
-   * Also registers MetricReducer (RECORD_METRIC) and NoOpReducer (RECORD_BALANCE).
+   * Also registers MetricReducer (RECORD_ARRAY_METRIC) and NoOpReducer (RECORD_BALANCE).
    *
    * The periodService must contain at least one annual period (YEAR_US for US,
    * YEAR_AU for AU) that spans the simulation start date.  Populate it with
@@ -247,7 +247,7 @@ export class TaxService {
     }, PRIORITY.TAX_APPLY + 1, 'Tax Payment Debit');
 
     // ── Step 7: register metric/balance reducers ───────────────────────────────
-    new MetricReducer().registerWith(sim.reducers, 'RECORD_METRIC');
+    new ArrayMetricReducer().registerWith(sim.reducers, 'RECORD_ARRAY_METRIC');
     new NoOpReducer('Balance Snapshot').registerWith(sim.reducers, 'RECORD_BALANCE');
 
     return this._accountService;

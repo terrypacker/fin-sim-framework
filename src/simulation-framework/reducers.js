@@ -103,10 +103,10 @@ export class NoOpReducer extends Reducer {
 /**
  * Appends a value to the metrics array at state.metrics[action.name].
  * Works with any action that carries `name` and `value` fields —
- * e.g. actions produced by RecordMetricAction.
+ * e.g. actions produced by RecordArrayMetricAction.
  */
-export class MetricReducer extends Reducer {
-  constructor(name = 'Metric Logger', priority = PRIORITY.METRICS) {
+export class ArrayMetricReducer extends Reducer {
+  constructor(name = 'Array Metric Logger', priority = PRIORITY.METRICS) {
     super(name, priority);
   }
 
@@ -115,6 +115,46 @@ export class MetricReducer extends Reducer {
     return {
       ...state,
       metrics: { ...state.metrics, [action.name]: [...list, action.value] }
+    };
+  }
+}
+
+/**
+ * Sums a value to the metric sum at state.metrics[action.name].
+ * Works with any action that carries `name` and `value` fields —
+ * e.g. actions produced by RecordArrayMetricAction.
+ */
+export class NumericSumMetricReducer extends Reducer {
+  constructor(name = 'Sum Metric Logger', priority = PRIORITY.METRICS) {
+    super(name, priority);
+  }
+
+  reduce(state, action) {
+    const sum = state.metrics[action.name] || 0;
+    const value = Number(action.value || 0);
+    return {
+      ...state,
+      metrics: { ...state.metrics, [action.name]: sum + value }
+    };
+  }
+}
+
+/**
+ * Saves a value to the metric at state.metrics[action.name].
+ * Works with any action that carries `name` and `value` fields —
+ * e.g. actions produced by RecordArrayMetricAction.
+ */
+export class MetricReducer extends Reducer {
+  constructor(name = 'Metric Logger', priority = PRIORITY.METRICS) {
+    super(name, priority);
+  }
+
+  reduce(state, action) {
+    const sum = state.metrics[action.name] || 0;
+    const value = Number(action.value || 0);
+    return {
+      ...state,
+      metrics: { ...state.metrics, [action.name]: action.value }
     };
   }
 }

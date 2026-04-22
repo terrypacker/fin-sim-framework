@@ -39,14 +39,14 @@ import { TaxService } from './finance/tax-service.js';
 import { TaxSettleService } from './finance/tax-settle-service.js';
 import { BaseScenario } from './scenarios/base-scenario.js';
 import { EventSeries } from './scenarios/event-series.js';
-import { Action, AmountAction, RecordMetricAction, RecordBalanceAction } from './simulation-framework/actions.js';
+import { Action, AmountAction, RecordArrayMetricAction, RecordMetricAction, RecordNumericSumMetricAction, RecordBalanceAction } from './simulation-framework/actions.js';
 import { BusMessage, SimulationBusMessage, DebugActionBusMessage } from './simulation-framework/bus-messages.js';
 import { DateUtils } from './simulation-framework/date-utils.js';
 import { EventBus } from './simulation-framework/event-bus.js';
 import { HandlerEntry, HandlerRegistry } from './simulation-framework/handlers.js';
 import { JournalEntry, Journal } from './simulation-framework/journal.js';
 import { MinHeap } from './simulation-framework/min-heap.js';
-import { ReducerPipeline, PRIORITY, Reducer, NoOpReducer, MetricReducer, AccountTransactionReducer } from './simulation-framework/reducers.js';
+import { ReducerPipeline, PRIORITY, Reducer, NoOpReducer, ArrayMetricReducer, NumericSumMetricReducer, MetricReducer, AccountTransactionReducer } from './simulation-framework/reducers.js';
 import { ScenarioRunner } from './simulation-framework/scenario.js';
 import { ActionNode, SimulationEventGraph } from './simulation-framework/simulation-event-graph.js';
 import { SimulationHistory } from './simulation-framework/simulation-history.js';
@@ -132,7 +132,9 @@ export const Scenarios = {
 export const Core = {
   Action,
   AmountAction,
+  RecordArrayMetricAction,
   RecordMetricAction,
+  RecordNumericSumMetricAction,
   RecordBalanceAction,
   BusMessage,
   SimulationBusMessage,
@@ -148,6 +150,8 @@ export const Core = {
   PRIORITY,
   Reducer,
   NoOpReducer,
+  ArrayMetricReducer,
+  NumericSumMetricReducer,
   MetricReducer,
   AccountTransactionReducer,
   ScenarioRunner,

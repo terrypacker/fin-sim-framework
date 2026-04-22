@@ -49,7 +49,7 @@ The library is packaged as **FinSimLib** (`financial-sim` on npm) and ships thre
 | `SimulationHistory` | `simulation-framework/simulation-history.js` | Manages snapshots array and all rewind/replay/branching navigation. Holds `snapshotCursor` and `eventCounter`. |
 | `EventBus` | `simulation-framework/event-bus.js` | Pub/sub with wildcard support. Keeps a full history for replay/debug. Receives typed `BusMessage` objects. |
 | `BusMessage` / `SimulationBusMessage` / `DebugActionBusMessage` | `simulation-framework/bus-messages.js` | Typed message wrappers published to the `EventBus`. `SimulationBusMessage` carries the event or action payload; `DebugActionBusMessage` carries an `ActionNode` for the graph visualizer. |
-| `Action` / `AmountAction` / `RecordMetricAction` / `RecordBalanceAction` | `simulation-framework/actions.js` | Base and concrete action classes returned by handlers and emitted via `next:[]`. |
+| `Action` / `AmountAction` / `RecordArrayMetricAction` / `RecordBalanceAction` | `simulation-framework/actions.js` | Base and concrete action classes returned by handlers and emitted via `next:[]`. |
 | `HandlerEntry` / `HandlerRegistry` | `simulation-framework/handlers.js` | `HandlerEntry` wraps a handler function with a name. `HandlerRegistry` maps event types to ordered lists of `HandlerEntry` instances (`sim.handlers`). |
 | `ReducerPipeline` | `simulation-framework/reducers.js` | Prioritized chain of pure reducer functions that mutate state and optionally emit child actions. Also exports reusable reducers: `MetricReducer`, `NoOpReducer`, `AccountTransactionReducer`. |
 | `Journal` | `simulation-framework/journal.js` | Append-only log of every `(action, prevState, nextState)` tuple for audit and timeline queries. |
@@ -125,14 +125,14 @@ Handlers are registered per event type via `sim.register(type, fn)` or `sim.regi
 
 ```js
 import { HandlerEntry } from './simulation-framework/handlers.js';
-import { AmountAction, RecordMetricAction, RecordBalanceAction } from './simulation-framework/actions.js';
+import { AmountAction, RecordArrayMetricAction, RecordBalanceAction } from './simulation-framework/actions.js';
 
 // Anonymous function style
 sim.register('QUARTERLY_PL', ({ sim, date, data, meta, state }) => {
   const profit = sim.rng() * 10000;
   return [
     new AmountAction('ADD_CASH', profit),
-    new RecordMetricAction('quarterly_profit', profit),
+    new RecordArrayMetricAction('quarterly_profit', profit),
     new RecordBalanceAction()
   ];
 });
@@ -149,7 +149,7 @@ sim.register('MONTHLY_SALARY', new HandlerEntry(({ data }) => {
 
 ```js
 new AmountAction('SALARY_CREDIT', 8000)       // { type, amount }
-new RecordMetricAction('salary', 8000)         // { type: 'RECORD_METRIC', name, value }
+new RecordArrayMetricAction('salary', 8000)         // { type: 'RECORD_METRIC', name, value }
 new RecordBalanceAction()                      // { type: 'RECORD_BALANCE' } — no-op marker
 ```
 
@@ -442,7 +442,7 @@ Follow the existing pattern — import from `node:test` and `node:assert/strict`
 - **State must be plain data.** No class instances with methods in `initialState` — `structuredClone` is used for snapshots. Use service objects (e.g. `AccountService`) outside state to operate on plain state data.
 - **Handlers return actions; reducers return state.** Handlers are the bridge between events and the reducer pipeline. Reducers are pure (no side effects beyond state).
 - **Chaining is via `next:[]`.** Reducers that need to trigger further state changes emit child actions through `next`, not by calling other reducers directly.
-- **Use `Action` subclasses for typed actions.** Prefer `new AmountAction(...)`, `new RecordMetricAction(...)`, etc. over raw plain objects where a concrete class exists.
+- **Use `Action` subclasses for typed actions.** Prefer `new AmountAction(...)`, `new RecordArrayMetricAction(...)`, etc. over raw plain objects where a concrete class exists.
 - **Imports are relative ES module paths.** All `src/` files must use `.js` extensions in import statements (even from `.mjs` test files). Tests import directly from `src/` — they do not go through `dist/`.
 - **`src/index.js` is auto-generated.** Run `npm run build:index` after adding or removing exported classes; do not edit the file manually.
 - **No external runtime dependencies.** The framework and tests rely only on browser/Node built-ins. Dev tools (Rollup, live-server, concurrently) are `devDependencies` only.
