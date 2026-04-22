@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 import { CustomScenario, DEFAULT_EVENT_SERIES } from './scenarios/custom-scenario.js';
+import {EventScheduler} from "./event-scheduler.js";
+import { GraphBuilder } from "./graph-builder.js";
 
 // ── Date formatters ───────────────────────────────────────────────────────────
 
@@ -58,12 +60,7 @@ const app = new FinSimLib.Misc.BaseApp({
 
 // ── Params form ───────────────────────────────────────────────────────────────
 function readParams() {
-  const handlerLogic = FinSimLib.Visualization.$('handlerFunction').value;
-  const reducerLogic = FinSimLib.Visualization.$('reducerFunction').value;
-  return {
-    handlerLogic: new Function('{data, date, state}', handlerLogic),
-    reducerLogic: new Function('state,action,date', reducerLogic)
-  };
+
 }
 
 //TODO Move to BaseApp
@@ -261,55 +258,6 @@ function showNodeDetail(entry) {
   actionDetails.replaceChildren(newActionDetails);
 }
 
-// ── Event list UI ─────────────────────────────────────────────────────────────
-function renderEventList() {
-  const list = FinSimLib.Visualization.$('eventList');
-  list.innerHTML = '';
-
-  eventSeries.forEach((series, i) => {
-    const row = document.createElement('div');
-    row.className = 'event-row';
-    row.innerHTML = `
-      <label>
-        <input type="checkbox" data-idx="${i}" ${series.enabled ? 'checked' : ''}>
-        ${series.label}
-      </label>
-      <button class="remove-event" data-idx="${i}" title="Remove">✕</button>`;
-    list.appendChild(row);
-  });
-
-  customEvents.forEach((ev, i) => {
-    const row = document.createElement('div');
-    row.className = 'event-row custom-event';
-    row.innerHTML = `
-      <span>${ev.type} on ${app._formatDate(new Date(ev.date))}${ev.amount != null ? ' ($' + ev.amount.toLocaleString() + ')' : ''}</span>
-      <button class="remove-custom" data-idx="${i}" title="Remove">✕</button>`;
-    list.appendChild(row);
-  });
-
-  list.querySelectorAll('input[type=checkbox]').forEach(cb => {
-    cb.addEventListener('change', () => { eventSeries[+cb.dataset.idx].enabled = cb.checked; });
-  });
-  list.querySelectorAll('.remove-event').forEach(btn => {
-    btn.addEventListener('click', () => { eventSeries.splice(+btn.dataset.idx, 1); renderEventList(); });
-  });
-  list.querySelectorAll('.remove-custom').forEach(btn => {
-    btn.addEventListener('click', () => { customEvents.splice(+btn.dataset.idx, 1); renderEventList(); });
-  });
-}
-
-function submitAddEvent() {
-  const type   = FinSimLib.Visualization.$('newEventType').value;
-  const date   = FinSimLib.Visualization.$('newEventDate').value;
-  const amount = FinSimLib.Visualization.$('newEventAmount').value;
-  if (!date) { alert('Please pick a date.'); return; }
-  customEvents.push({ type, date: new Date(date + 'T00:00:00'), amount: amount ? +amount : null });
-  FinSimLib.Visualization.$('newEventDate').value   = '';
-  FinSimLib.Visualization.$('newEventAmount').value = '';
-  FinSimLib.Visualization.$('addEventForm').classList.add('hidden');
-  renderEventList();
-}
-
 //TODO Move to base app
 function openTab(evt, tabName, tabGroup) {
   // Hide content
@@ -320,7 +268,7 @@ function openTab(evt, tabName, tabGroup) {
 
   //Get tab content and display it
   const tab = document.querySelector(`.tab-content[data-tab-group=${tabGroup}][data-tab=${tabName}]`);
-  tab.style.display = "block";
+  tab.style.display = "";
 
   //Active to clicke tab header
   evt.currentTarget.classList.add("active");
@@ -338,13 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  FinSimLib.Visualization.$('handlerFunction').value = `return [{ type: 'CUSTOM_EVENT', data}];`;
-  FinSimLib.Visualization.$('reducerFunction').value = `return { state: { ...state, customString: 'customReducerFired', customList: [1,2,3], customObject: {one: 1, two:2, three: {one: 1, two: {one: 1}}}}};`;
-
   app.initView();
-  FinSimLib.Visualization.$('addEventBtn').addEventListener('click',    () => $('addEventForm').classList.toggle('hidden'));
-  FinSimLib.Visualization.$('submitEventBtn').addEventListener('click', submitAddEvent);
-  FinSimLib.Visualization.$('cancelEventBtn').addEventListener('click', () => $('addEventForm').classList.add('hidden'));
 
   //TODO Add to Base APP
   FinSimLib.Visualization.$('tzSelect').addEventListener('change', () => {
@@ -358,55 +300,28 @@ document.addEventListener('DOMContentLoaded', () => {
     app.buildScenario();
   });
 
-  FinSimLib.Visualization.$('testHandlerLogic').addEventListener('click', () => {
-    const errEl = $('handlerFunctionError');
-    const outEl = $('handlerLogicTestOut');
-    const logic = $('handlerFunction').value;
-    const fn     = new Function('{data, date, state}', logic);
-    const data = {};
-    const date = new Date();
-    const state = { ...initialState };
-    const testIn = { data, date, state};
-    try {
-      const result = fn(testIn);
-      if (!Array.isArray(result))
-        throw new Error('Return value must be an Array');
-      outEl.style.display = 'block';
-      outEl.innerHTML = `
-        <div class="test-in">IN: ${JSON.stringify(testIn)}</div>
-        <div class="test-out">OUT: ${JSON.stringify(result)}</div>
-      `;
-    }catch (e) {
-      errEl.innerHTML = `&#x2717; ${e.message}`;
-    }
+  //Setup Panel
+  const graphBuilder = new GraphBuilder({
+    graphRoot: document.getElementById('graphRoot'),
+    graphNodes: document.getElementById('graphNodes'),
+    graphEdges: document.getElementById('graphEdges')
   });
-
-  FinSimLib.Visualization.$('testReducerLogic').addEventListener('click', () => {
-    const errEl = FinSimLib.Visualization.$('reducerFunctionError');
-    const outEl = FinSimLib.Visualization.$('reducerLogicTestOut');
-    const logic = FinSimLib.Visualization.$('reducerFunction').value;
-    try {
-      const fn     = new Function('state,action,date', logic);
-      const state = { ...initialState };
-      const action = {type: 'CUSTOM_EVENT', state};
-      const date = new Date();
-      const testIn = { state, action, date};
-      const result = fn(testIn);
-      const isPlainObject = (val) => Object.prototype.toString.call(val) === '[object Object]';
-      if (!isPlainObject(result))
-        throw new Error('Return value must be an Object');
-      outEl.style.display = 'block';
-      outEl.innerHTML = `
-        <div class="test-in">IN: ${JSON.stringify(testIn)}</div>
-        <div class="test-out">OUT: ${JSON.stringify(result)}</div>
-      `;
-    }catch (e) {
-      errEl.innerHTML = `&#x2717; ${e.message}`;
-    }
+  const scheduler = new EventScheduler({
+    builderCanvas: document.getElementById('builderCanvas'),
+    graph: graphBuilder
   });
+  scheduler.initDemo();
 
-  renderEventList();
   app.buildScenario();
+
+  //TODO REBUILD CONFIG
+  /**
+   * const graphConfig = graph.buildConfig();
+   *   const eventConfig = scheduler.build(graphConfig);
+   *
+   *   console.log('GRAPH:', graphConfig);
+   *   console.log('EVENTS:', eventConfig);
+   */
 
   //TODO This only happens on RECORD_BALANCE in the base-app, need to fix
   app.scenario.sim.bus.subscribe('DEBUG_ACTION', ({ payload }) => {

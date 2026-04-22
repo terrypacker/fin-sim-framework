@@ -70,101 +70,29 @@
   <div id="mainGrid">
     <!-- ── LEFT COLUMN: config ────────────────────────────── -->
     <div class="left-col">
-      <div class="tab">
-        <div id="settingsTabHeader" class="panel-header tab-header active" data-dest-tab="settings-tab" data-tab-group="left-col">
-          <span class="panel-tag">CONFIG</span>
+      <!-- ── EVENT SCHEDULER ───────────────────────── -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-tag">EV</span>
+          <span class="panel-title">EVENTS</span>
         </div>
-        <div id="stateTabHeader" class="panel-header tab-header" data-dest-tab="event-setup-tab" data-tab-group="left-col">
-          <span class="panel-tag">STATE</span>
-        </div>
-      </div>
+        <div class="node-header">Edit Node</div>
+        <div id="builderCanvas"></div>
 
-      <!-- Settings Tab -->
-      <div class="tab-content settings-tab" data-tab="settings-tab" data-tab-group="left-col">
-        <div class="panel settings-panel">
-          <div class="field-row">
-            <div class="field-group">
-              <label>
-                Event Function
-              </label>
-              <span style="color:var(--text-muted);font-size:8px;margin-left:6px">
-                  body of: <code style="color:var(--cyan)">function({data, date, state}) { ... }</code>
-               </span>
-               <textarea class="code-editor" id="handlerFunction" rows="9" spellcheck="false"></textarea>
-               <button id="testHandlerLogic" class="btn btn-sm">Test</button>
-               <div class="code-error" id="handlerFunctionError"></div>
-              <div class="code-test-result" id="handlerLogicTestOut" style="display:none"></div>
-            </div>
-          </div>
-
-          <div class="field-row">
-            <div class="field-group">
-              <label>
-                Reducer Function
-              </label>
-              <span style="color:var(--text-muted);font-size:8px;margin-left:6px">
-                  body of: <code style="color:var(--cyan)">function({state, action, date}) { ... }</code>
-               </span>
-              <textarea class="code-editor" id="reducerFunction" rows="9" spellcheck="false"></textarea>
-              <button id="testReducerLogic" class="btn btn-sm">Test</button>
-              <div class="code-error" id="reducerFunctionError"></div>
-              <div class="code-test-result" id="reducerLogicTestOut" style="display:none"></div>
+        <div class="node-header">Events</div>
+        <div class="node-field">
+          <button class="btn btn-sm" id="addSeriesBtn">+ Series</button>
+          <button class="btn btn-sm" id="addOneOffBtn">+ One-Off</button>
+          <div class="node-field">
+            <div class="node-header">Actions</div>
+            <div class="node-field">
+              <button class="btn btn-sm" id="addHandlerNode">+ Handler</button>
+              <button class="btn btn-sm" id="addReducerNode">+ Reducer</button>
             </div>
           </div>
         </div>
       </div>
-
-      <!-- Event Setup Tab -->
-      <div class="tab-content" style="display:none" data-tab="event-setup-tab" data-tab-group="left-col">
-        <div class="panel settings-panel">
-          <div style="margin-top:12px">
-            <div class="section-title">Recurring Events</div>
-            <div id="eventList"></div>
-
-            <button class="btn" id="addEventBtn">
-              + Add One-Off Event
-            </button>
-
-            <div id="addEventForm" class="hidden">
-              <div class="field">
-                <label>Event Type</label>
-                <select id="newEventType" style="background:#0f172a; color:#e5e7eb; border:1px solid #334155; padding:4px; font-family:monospace; font-size:12px; border-radius:3px; width:100%;">
-                  <option value="MONTHLY_EXPENSES">MONTHLY_EXPENSES — monthly expenses</option>
-                  <option value="ROTH_CONTRIBUTION">ROTH_CONTRIBUTION — Roth IRA contribution</option>
-                  <option value="ROTH_WITHDRAWAL_CONTRIBUTIONS">ROTH_WITHDRAWAL_CONTRIBUTIONS</option>
-                  <option value="ROTH_WITHDRAWAL_EARNINGS">ROTH_WITHDRAWAL_EARNINGS</option>
-                  <option value="IRA_WITHDRAWAL_CONTRIBUTIONS">IRA_WITHDRAWAL_CONTRIBUTIONS</option>
-                  <option value="IRA_WITHDRAWAL_EARNINGS">IRA_WITHDRAWAL_EARNINGS</option>
-                  <option value="K401_WITHDRAWAL">K401_WITHDRAWAL — 401k withdrawal</option>
-                  <option value="SUPER_CONTRIBUTION">SUPER_CONTRIBUTION — super contribution</option>
-                  <option value="SUPER_WITHDRAWAL_CONTRIBUTIONS">SUPER_WITHDRAWAL_CONTRIBUTIONS</option>
-                  <option value="SUPER_WITHDRAWAL_EARNINGS">SUPER_WITHDRAWAL_EARNINGS</option>
-                  <option value="AU_SAVINGS_WITHDRAWAL">AU_SAVINGS_WITHDRAWAL</option>
-                  <option value="INTL_TRANSFER_TO_US">INTL_TRANSFER_TO_US — transfer AUD→USD (enter AUD amount)</option>
-                  <option value="INTL_TRANSFER_TO_AU">INTL_TRANSFER_TO_AU — transfer USD→AUD (enter USD amount)</option>
-                  <option value="US_HOUSE_SALE">US_HOUSE_SALE — sell US property</option>
-                  <option value="AU_HOUSE_SALE">AU_HOUSE_SALE — sell AU property</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>Date</label>
-                <input type="date" id="newEventDate" min="2026-01-01" max="2040-12-31"
-                       style="background:#0f172a; color:#e5e7eb; border:1px solid #334155; padding:4px; font-family:monospace; font-size:12px; border-radius:3px; width:100%;">
-              </div>
-              <div class="field">
-                <label>Amount (optional)</label>
-                <input type="number" id="newEventAmount" placeholder="leave blank for default" min="0" step="100">
-              </div>
-              <div class="form-row">
-                <button class="action-btn"    id="submitEventBtn">Add</button>
-                <button class="secondary-btn" id="cancelEventBtn">Cancel</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- post tab section -->
-      <button class="btn" id="rebuildBtn">↺ Rebuild Simulation</button>
+     <button class="btn" id="rebuildBtn">↺ Rebuild Simulation</button>
     </div>
 
     <!-- ── CENTER COLUMN: viz + charts ──────────────────────── -->
@@ -203,7 +131,11 @@
       <!-- Center viz tabs -->
       <div id="content" class="viz-container">
         <div class="tab">
-          <div class="panel-header tab-header active" data-dest-tab="timeline-tab" data-tab-group="center-col">
+          <div class="panel-header tab-header active" data-dest-tab="config-graph-tab" data-tab-group="center-col">
+            <span class="panel-tag">CFG</span>
+            <span class="panel-title">CONFIG GRAPH</span>
+          </div>
+          <div class="panel-header tab-header" data-dest-tab="timeline-tab" data-tab-group="center-col">
             <span class="panel-tag">TL</span>
             <span class="panel-title">TIMELINE</span>
           </div>
@@ -213,8 +145,18 @@
           </div>
         </div>
 
+        <!-- Config Graph View -->
+        <div class="tab-content config-graph-tab" data-tab="config-graph-tab" data-tab-group="center-col">
+          <div class="panel" style="flex:1;min-height:0">
+            <div id="graphRoot">
+              <svg id="graphEdges"></svg>
+              <div id="graphNodes"></div>
+            </div>
+          </div>
+        </div>
+
         <!-- Timeline Tab -->
-        <div class="tab-content timeline-tab" data-tab="timeline-tab" data-tab-group="center-col">
+        <div class="tab-content timeline-tab" style="display:none" data-tab="timeline-tab" data-tab-group="center-col">
           <div class="panel" style="flex:1;min-height:0">
             <div id="timelineContainer" class="tl-container"></div>
           </div>
@@ -268,6 +210,69 @@
 </div>
 
 <!-- ══ TEMPLATES  ══════════════════════════════════════════ -->
+
+<!-- ── EVENT TEMPLATES ───────────────────────── -->
+
+<template id="eventSeriesTemplate">
+  <div class="event-card">
+    <input class="es-type" placeholder="TYPE" />
+    <select class="es-interval">
+      <option value="monthly">monthly</option>
+      <option value="quarterly">quarterly</option>
+      <option value="annually">annually</option>
+      <option value="month-end">month-end</option>
+      <option value="year-end">year-end</option>
+    </select>
+
+    <input class="es-offset" type="number" value="0" />
+    <label><input type="checkbox" class="es-enabled" checked /> Enabled</label>
+
+    <select class="es-handler"></select>
+
+    <button class="es-delete">Remove</button>
+  </div>
+</template>
+
+<template id="eventOneOffTemplate">
+  <div class="event-card">
+    <input class="eo-type" placeholder="TYPE" />
+    <input class="eo-date" type="date" />
+    <input class="eo-amount" type="number" placeholder="Amount" />
+
+    <select class="eo-handler"></select>
+
+    <button class="eo-delete">Remove</button>
+  </div>
+</template>
+
+<template id="graphNodeTemplate">
+  <div class="g-node">
+    <div class="g-header"></div>
+    <input class="g-title" />
+    <div class="g-port in"></div>
+    <div class="g-port out"></div>
+  </div>
+</template>
+
+<template id="tpl-empty">
+  <div class="tl-empty">Select a node</div>
+</template>
+
+<template id="tpl-reducer-editor">
+  <div class="node">
+    <div class="node-header">
+      <span>REDUCER</span>
+    </div>
+    <div class="node-body">
+      <div class="node-field">
+        <label>Reducer Type</label>
+        <select data-id="type"></select>
+      </div>
+      <div data-id="config"></div>
+    </div>
+  </div>
+</template>
+
 <template id="actionTemplate">
   <div class="data-section-title">Action</div>
   <div class="data-list-wrap">
