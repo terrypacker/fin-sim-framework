@@ -41,10 +41,27 @@ export class EventScheduler {
     const buyLambo = new Date();
     buyLambo.setMonth(buyLambo.getMonth() + 3);
 
+    const recordSalaryReducerNode = {
+      id: 'r1',
+      name: 'Record Salary',
+      kind: 'reducer',
+      x: 470, y: 80,
+      reducerType: 'MetricReducer',
+      metric: 'amount'
+    };
+
+    const salaryPaymentHandler = {
+      id: 'h1',
+      name: 'Handler',
+      kind: 'handler',
+      x: 260, y: 80,
+      reducers: [recordSalaryReducerNode]
+    }
+
     this.graph.addNode({ id: 'e1', kind: 'event', x: 50, y: 80, name: 'Salary', eventType: 'Series', interval: 'month-end', enabled: true });
     this.graph.addNode({ id: 'e2', kind: 'event', x: 50, y: 180, name: 'Buy Lamborghini', eventType: 'OneOff', date: buyLambo, enabled: true });
-    this.graph.addNode({ id: 'h1', kind: 'handler', x: 260, y: 80, name: 'Handler' });
-    this.graph.addNode({ id: 'r1', kind: 'reducer', x: 470, y: 80, name: 'Record Salary', reducerType: 'MetricReducer', metric: 'amount' });
+    this.graph.addNode(salaryPaymentHandler);
+    this.graph.addNode(recordSalaryReducerNode);
 
     this.graph.addEdge({ from: 'e1', to: 'h1' });
     this.graph.addEdge({ from: 'h1', to: 'r1' });
@@ -56,37 +73,11 @@ export class EventScheduler {
 
     document.getElementById('addOneOffBtn')
         .onclick = () => this.addOneOff();
-
-    //TODO Bind to add Hanzdler and Reducer Buttons
-
-    setInterval(() => this._refreshHandlers(), 1000);
   }
 
   _getTemplate(templateId) {
     const tmpl = document.getElementById(templateId);
     return tmpl.content.cloneNode(true);
-  }
-
-  _handlers() {
-    return Array.from(this.graph.nodes.values())
-    .filter(n => n.type === 'handler');
-  }
-
-  _fill(select, val) {
-    select.innerHTML = '';
-    this._handlers().forEach(h => {
-      const o = document.createElement('option');
-      o.value = h.id;
-      o.textContent = h.input.value;
-      if (h.id === val) o.selected = true;
-      select.appendChild(o);
-    });
-  }
-
-  //TODO REMOVE?
-  _refreshHandlers() {
-    document.querySelectorAll('.es-handler,.eo-handler')
-    .forEach(s => this._fill(s, s.value));
   }
 
   _editNode(event, node) {
@@ -133,6 +124,46 @@ export class EventScheduler {
     name.value = node.name || '';
     name.addEventListener('input', () => {
       node.name = name.value;
+    });
+
+    //Build out the chips
+    const handlerReducerCount = el.querySelector('#handler-reducer-count');
+    handlerReducerCount.innerText = `${node.reducers.length} selected`;
+
+    const handlerReducersGrid = el.querySelector('#handler-reducers');
+    const allAvailableReducers = this.graph.getReducers();
+    allAvailableReducers.forEach(available => {
+      const reducer = document.createElement('div');
+      reducer.classList.add('reducer-chip');
+      reducer.dataset.reducerId = available.id;
+      if(node.reducers.some(r => r.reducerType === available.reducerType)) {
+        reducer.classList.add('reducer-chip-on');
+      }
+      const nameSpan = document.createElement('span');
+      nameSpan.classList.add('reducer-chip-name');
+      nameSpan.innerText = available.name;
+      nameSpan.title = available.name;
+      reducer.appendChild(nameSpan);
+      const checkSpan = document.createElement('span');
+      checkSpan.classList.add('reducer-chip-check');
+      checkSpan.innerHTML = '&#x2713';
+      handlerReducersGrid.appendChild(reducer);
+    });
+
+    handlerReducersGrid.addEventListener('click', (e) => {
+      const chip = e.target.closest('.reducer-chip[data-reducer-id]');
+      if (!chip) return;
+      const reducer = this.graph.getNode(chip.dataset.reducerId);
+      //Toggle behavior, if we have it remove it, if we don't add it.
+      const index = node.reducers.findIndex(n => n.id == reducer.id);
+      if(index < 0) {
+        node.reducers.push(reducer);
+        chip.classList.toggle('reducer-chip-on', true);
+      }else {
+        node.reducers.splice(index, 1);
+        chip.classList.toggle('reducer-chip-on', false);
+      }
+      handlerReducerCount.innerText = `${node.reducers.length} selected`;
     });
 
     this.builderCanvas.appendChild(el);

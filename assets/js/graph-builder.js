@@ -147,4 +147,11 @@ export class GraphBuilder {
     this.edges.push(edge);
     this.render();
   }
+  getHandlers() {
+    return Array.from(this.nodes.values()).filter(n => n.kind === 'handler');
+  }
+  getReducers() {
+    return Array.from(this.nodes.values()).filter(n => n.kind === 'reducer');
+    return Array.from(this.nodes.values()).filter(n => n.kind === 'reducer');
+  }
 }

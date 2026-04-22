@@ -710,3 +710,45 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   stroke: var(--amber);
   opacity: 1;
 }
+
+/* Reducer Chips */
+.reducer-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+.reducer-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 3px;
+  border: 1px solid var(--border-hi);
+  background: var(--bg-input);
+  cursor: pointer;
+  transition: all 0.12s;
+  user-select: none;
+}
+.reducer-chip:hover { border-color: var(--amber-dim); background: var(--bg-panel2); }
+.reducer-chip-name  { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
+.reducer-chip-check { font-size: 10px; color: var(--amber); opacity: 0; transition: opacity 0.12s; }
+
+.reducer-chip.reducer-chip-on {
+  background: var(--amber-glow);
+  border-color: var(--amber-dim);
+}
+.reducer-chip.reducer-chip-on .reducer-chip-name  { color: var(--amber); }
+.reducer-chip.reducer-chip-on .reducer-chip-check { opacity: 1; }
+/* ── REDUCER SELECTOR COUNT BADGE ── */
+.reducer-sel-count {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--amber);
+  background: var(--amber-glow);
+  border: 1px solid var(--amber-dim);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
