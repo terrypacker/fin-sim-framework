@@ -78,10 +78,12 @@ const isDate = (obj) => Object.prototype.toString.call(obj) === '[object Date]';
 const fmtVal = v => {
   if (v == null) return '—';
   if (typeof v === 'number') return v.toFixed(2); //TODO Format as $?
-  if (Array.isArray(v)) return v.map(x => typeof x === 'object' && x !== null ? JSON.stringify(x) : String(x)).join(', ') || '—';
+  if (Array.isArray(v)) return v.map(x => typeof x === 'object' && x !== null ? fmtVal(x) : String(x)).join(', ') || '—';
+  if(isDate(v)) return app._formatDate(v);
   if (typeof v === 'object') return JSON.stringify(v);
   return String(v);
 };
+
 //TODO Move to BaseApp
 export function createActionDetail(templateId, content = { entry, changes, emitted, actionPayload }) {
   const templateContent = document.querySelector(`#${templateId}`);
@@ -92,11 +94,7 @@ export function createActionDetail(templateId, content = { entry, changes, emitt
   const fields = overviewGrid.querySelectorAll('[data-id]');
   for(const field of fields) {
     const value = getNestedProperty(content, field.getAttribute('data-id'));
-    if(isDate(value)) {
-      field.innerText = app._formatDate(value);
-    }else {
-      field.innerText = value;
-    }
+    field.innerText = fmtVal(value);
   }
 
   //Populate state changes
@@ -113,10 +111,10 @@ export function createActionDetail(templateId, content = { entry, changes, emitt
         const delta = document.createElement('span');
         if(change.delta > 0) {
           delta.classList.add('diff-pos');
-          delta.innerText = '+' + change.delta;
+          delta.innerText = '+' + fmtVal(change.delta);
         }else {
           delta.classList.add('diff-neg');
-          delta.innerText = '-' + change.delta;
+          delta.innerText = '-' + fmtVal(change.delta);
         }
         after.innerText = fmtVal(change.after);
         after.appendChild(delta);
