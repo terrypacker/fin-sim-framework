@@ -17,6 +17,8 @@
  * limitations under the License.
  */
 
+import {FieldValueAction} from "./actions.js";
+
 export class ReducerPipeline {
   constructor() {
     this.map = new Map(); // actionType -> [{priority, fn}]
@@ -68,6 +70,8 @@ export class Reducer {
   constructor(name = 'anonymous', priority = PRIORITY.LOGGING) {
     this.name     = name;
     this.priority = priority;
+    this.generatedActions = [];
+    this.reducedActions = [];
   }
 
   /** @abstract */
@@ -76,10 +80,38 @@ export class Reducer {
   }
 
   /**
+   * Helper to create a copy of the current state and ensure we have any next actions ready
+   *
+   * @param currentState
+   * @param toAdd
+   * @param next
+   * @returns {*&{next: *[]}}
+   */
+  newState(currentState, toAdd, next) {
+    const nextArray = next ? [...next, ...this.generatedActions] : [...this.generatedActions];
+    return {
+      ...currentState,
+      ...toAdd,
+      next: nextArray
+    }
+  }
+
+  reduceAction(action) {
+    this.reducedActions.push(action);
+    return this;
+  }
+
+  generateAction(action) {
+    this.generatedActions.push(action);
+    return this;
+  }
+
+  /**
    * Convenience: register this reducer instance with a ReducerPipeline.
    */
   registerWith(pipeline, actionType) {
     pipeline.register(actionType, (s, a, d) => this.reduce(s, a, d), this.priority, this.name);
+    return this;
   }
 }
 
@@ -101,127 +133,153 @@ export class NoOpReducer extends Reducer {
 }
 
 /**
+ * Reducer that is places a field in the state
+ */
+export class FieldReducer extends Reducer {
+  constructor(name, priority, fieldName = null) {
+    super(`${name} for ${fieldName}`, priority);
+    if (fieldName == null) {
+      // Executes if variable is null or undefined
+      throw new Error('Must have field name defined for Field Reducer');
+    }
+    this.fieldName = fieldName;
+  }
+
+  static fromField(fieldName) {
+    return new FieldReducer(`Field Logger`, PRIORITY.METRICS, fieldName);
+  }
+
+  getStateValue(state, action) {
+    return action.value ? action.value :
+        action.fieldName ? this.getValueByPath(state, action.fieldName) : this.getValueByPath(state, this.fieldName);
+  }
+
+  getValueByPath(obj, path) {
+    return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+  }
+
+  setValueByPath(obj, path, value) {
+    const parts = path.split('.');
+    const last = parts.pop();
+
+    // Traverse and build the path
+    const deepObj = parts.reduce((acc, part) => {
+      if (!acc[part]) acc[part] = {};
+      return acc[part];
+    }, obj);
+
+    deepObj[last] = value;
+  }
+
+  reduce(state, action, date) {
+    const newState = this.newState(state);
+    this.setValueByPath(newState, this.fieldName, this.getStateValue(state, action))
+    return newState;
+  }
+
+}
+
+/**
  * Produce a field for the state
  */
-export class StateFieldReducer extends Reducer {
-  constructor(name = 'State Field', priority = PRIORITY.POSITION_UPDATE, fieldName = null, generate = (state, action, date) => 0) {
-    super(name, priority);
-    this.fieldName = fieldName;
+export class StateFieldReducer extends FieldReducer {
+  constructor(name = 'State Field', priority = PRIORITY.POSITION_UPDATE, fieldName,
+      generate = (state, action, date) => 0) {
+    super(name, priority, fieldName);
     this.generate = generate;
   }
 
   reduce(state, action, date) {
-    return {
-      ... state,
-      [this.fieldName]: this.generate(state, action, date)
-    };
+    const value = this.generate(state, action, date);
+    const newState = this.newState(state);
+    this.setValueByPath(newState, this.fieldName, value);
+    return newState;
   }
 }
 
 /**
- * Appends a value to the metrics array at state.metrics[action.name].
- * Works with any action that carries `name` and `value` fields —
- * e.g. actions produced by RecordArrayMetricAction.
+ * Produce a field in state.metrics[this.fieldName] get the value for the metric by:
+ * action.value if defined or state.metrics[this.fieldName]
  */
-export class ArrayMetricReducer extends Reducer {
-
-  static fromField(fieldName = null) {
-    return new ArrayMetricReducer(name = 'Array Metric Logger', PRIORITY.METRICS, fieldName);
+export class MetricReducer extends FieldReducer {
+  constructor(name = 'Metric Logger', priority = PRIORITY.METRICS, metricName) {
+    super(name, priority, 'metrics.' + metricName);
   }
-  constructor(name = 'Array Metric Logger', priority = PRIORITY.METRICS, fieldName = null) {
-    super(name, priority);
-    this.fieldName = fieldName;
+
+  static fromMetric(metricName = null) {
+    return new MetricReducer(`Metric Logger`, PRIORITY.METRICS, metricName);
   }
 
   reduce(state, action) {
-    const list = state.metrics[action.name] || [];
-    const value = this.fieldName == null ? action.value : state[this.fieldName];
-    return {
-      ...state,
-      metrics: { ...state.metrics, [action.name]: [...list, value] }
-    };
+    const metricValue = this.getStateValue(state, action);
+    const newState = this.newState(state);
+    this.setValueByPath(newState, this.fieldName, metricValue);
+    return newState;
   }
 }
 
 /**
- * Sums a value to the metric sum at state.metrics[action.name].
- *
- * state.metrics[action.name] = state.metrics[action.name] + action.value
- *
- * Works with any action that carries `name` and `value` fields —
- * e.g. actions produced by RecordArrayMetricAction.
- *
- * You can optionally supply another metric name to use as the metric addend:
- * state.metrics[action.name] = state.metrics[metricName] + action.value
+ * Append a value to an array field in state.metrics[this.fieldName] get the value for the metric by:
+ * action.value if defined or state.metrics[this.fieldName]
  */
-export class NumericSumMetricReducer extends Reducer {
+export class ArrayMetricReducer extends MetricReducer {
+
+  static fromField(fieldName) {
+    return new ArrayMetricReducer(name = 'Array Metric Logger', PRIORITY.METRICS, fieldName);
+  }
+  constructor(name = 'Array Metric Logger', priority = PRIORITY.METRICS,
+     fieldName) {
+    super(name, priority, 'metrics.' + fieldName);
+  }
+
+  reduce(state, action) {
+    const list = this.getValueByPath(state, this.fieldName) || [];
+    const value = this.getStateValue(state, action);
+    const newList = [...list, value];
+    const newState = this.newState(state);
+    this.setValueByPath(newState, this.fieldName, newList);
+    return newState;
+  }
+}
+
+
+export class NumericSumMetricReducer extends MetricReducer {
 
   static fromMetric(metricName = null) {
     return new NumericSumMetricReducer('Sum Metric Logger', PRIORITY.METRICS, metricName);
   }
 
-  constructor(name = 'Sum Metric Logger', priority = PRIORITY.METRICS, metricName = null) {
-    super(name, priority);
-    this.metricName = metricName;
+  constructor(name = 'Sum Metric Logger', priority = PRIORITY.METRICS,
+      metricName = null) {
+    super(name, priority, metricName);
   }
 
   reduce(state, action) {
-    const sum = this.metricName == null ? state.metrics[action.name] || 0 : state.metrics[this.metricName];
-    const value = Number(action.value || 0);
-    return {
-      ...state,
-      metrics: { ...state.metrics, [action.name]: sum + value }
-    };
+    const initialValue = this.getValueByPath(state, this.fieldName) || 0;
+    const value = this.getStateValue(state, action) || 0;
+    const newState = this.newState(state);
+    this.setValueByPath(newState, this.fieldName, initialValue + value);
+    return newState;
   }
 }
 
-/**
- * Multiply a metric by the action value and places at state.metrics[action.name].
- *
- * state.metrics[action.name] = state.metrics[action.name] * action.value
- *
- * Works with any action that carries `name` and `value` fields —
- * e.g. actions produced by RecordMultiplicativeMetricAction.
- *
- * You can optionally supply another metric name to use as the multiplier:
- * state.metrics[action.name] = state.metrics[metricName] * action.value
- */
-export class MultiplicativeMetricReducer extends Reducer {
+export class MultiplicativeMetricReducer extends FieldReducer {
 
   static fromMetric(metricName = null) {
     return new MultiplicativeMetricReducer('Multiplicative Metric Logger', PRIORITY.METRICS, metricName);
   }
 
-  constructor(name = 'Multiplicative Metric Logger', priority = PRIORITY.METRICS, mulitplierMetric = null) {
-    super(name, priority);
-    this.mulitplierMetric = mulitplierMetric;
+  constructor(name = 'Multiplicative Metric Logger', priority = PRIORITY.METRICS,
+      mulitplierMetric = null) {
+    super(name, priority, mulitplierMetric);
   }
 
   reduce(state, action) {
-    const metricValue = this.mulitplierMetric == null ? state.metrics[action.name] || 0 : state.metrics[this.mulitplierMetric];
-    const actionValue = Number(action.value || 0);
-    return {
-      ...state,
-      metrics: { ...state.metrics, [action.name]: metricValue * actionValue }
-    };
-  }
-}
-
-/**
- * Saves a value to the metric at state.metrics[action.name].
- * Works with any action that carries `name` and `value` fields —
- * e.g. actions produced by RecordArrayMetricAction.
- */
-export class MetricReducer extends Reducer {
-  constructor(name = 'Metric Logger', priority = PRIORITY.METRICS) {
-    super(name, priority);
-  }
-
-  reduce(state, action) {
-    return {
-      ...state,
-      metrics: { ...state.metrics, [action.name]: action.value }
-    };
+    const initialValue = this.getValueByPath(state, this.fieldName) || 0;
+    const value = this.getStateValue(state, action);
+    const newState = this.newState(state);
+    this.setValueByPath(newState, this.fieldName, initialValue * value);
+    return newState;
   }
 }
 
@@ -235,7 +293,8 @@ export class MetricReducer extends Reducer {
  * @param {Function}       [opts.getAmount]    - Maps action → amount (default: a => a.amount)
  */
 export class AccountTransactionReducer extends Reducer {
-  constructor({ accountService, accountKey, getAmount = a => a.amount }, name = 'Account Transaction', priority = PRIORITY.CASH_FLOW) {
+  constructor({ accountService, accountKey, getAmount = a => a.amount }, name = 'Account Transaction',
+      priority = PRIORITY.CASH_FLOW) {
     super(name, priority);
     this.accountService = accountService;
     this.accountKey     = accountKey;
@@ -257,7 +316,7 @@ export class AccountTransactionReducer extends Reducer {
 export class RepeatingReducer extends Reducer {
 
   static fromReducer(reducers = [], countField = 'value', count = null) {
-    return new RepeatingReducer(`Repeating reducer: ${reducers.map(v => v.name).join('-->')}`, PRIORITY.METRICS, reducers, countField, count);
+    return new RepeatingReducer(`Repeating reducer: ${reducers.map(v => v.name).join('-->')}`, PRIORITY.METRICS, [], reducers, countField, count);
   }
 
   constructor(name = 'Repeating Reducer', priority = PRIORITY.METRICS,
@@ -289,5 +348,3 @@ export class RepeatingReducer extends Reducer {
     };
   }
 }
-
-

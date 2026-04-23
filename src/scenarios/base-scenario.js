@@ -43,7 +43,6 @@ export class BaseScenario {
     this.simStart = simStart;
     this.simEnd = simEnd;
     //ID used for all things to be unique
-    this._nextEventId = 1;
     this._nextHandlerId = 1;
     this._nextReducerId = 1;
   }
@@ -53,9 +52,8 @@ export class BaseScenario {
    * any one-off custom events. Relies on `this.sim` and `this.simStart` being set.
    */
   _scheduleEvents() {
-
     for (const series of this.eventSeries) {
-      this._scheduleEvent(series);
+      this._scheduleEventSeries(series);
     }
 
     for (const ev of this.customEvents) {
@@ -69,8 +67,6 @@ export class BaseScenario {
    * @private
    */
   _scheduleEventSeries(series) {
-    //Set a unique id
-    series.id = 'e' + this._nextEventId++;
     if(series.enabled) {
       //Prep the series for schedule
       let start = series.startOffset
@@ -87,7 +83,6 @@ export class BaseScenario {
   }
 
   _scheduleOneOffEvent(event) {
-    event.id = 'e' + this._nextEventId;
     if (event.enabled) {
       this.sim.schedule({
         date: new Date(event.date),
@@ -96,16 +91,18 @@ export class BaseScenario {
     }
   }
 
-  _registerReducer(handler, reducer) {
+  _registerReducer(reducer) {
     //Set a unique id
     reducer.id = 'r' + this._nextReducerId++;
-    handler.actions.forEach(action => {
+    reducer.reducedActions.forEach(action => {
       reducer.registerWith(this.sim.reducers, action.type);
     });
   }
 
-  _registerHandler(event, handler) {
+  _registerHandler(handler) {
     handler.id = 'h' + this._nextHandlerId;
-    this.sim.register(event.type, handler, handler.name);
+    handler.handledEvents.forEach(e => {
+      this.sim.register(e.type, handler, handler.name);
+    })
   }
 }

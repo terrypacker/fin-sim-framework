@@ -22,8 +22,23 @@
  * Every action has a type discriminator consumed by the ReducerPipeline.
  */
 export class Action {
-  constructor(type) {
+  constructor(type, name) {
     this.type = type;
+    this.name = name;
+  }
+}
+
+export class FieldAction extends Action {
+  constructor(type, name, fieldName) {
+    super(type, name);
+    this.fieldName  = fieldName;
+  }
+}
+
+export class FieldValueAction extends FieldAction {
+  constructor(type, name, fieldName, value) {
+    super(type, name, fieldName);
+    this.value  = value;
   }
 }
 
@@ -36,23 +51,9 @@ export class Action {
  *           ASSET_PROCEEDS, INCOME_TAX_PAYMENT, REALIZE_GAIN,
  *           CALCULATE_CAPITAL_GAINS_TAX
  */
-export class AmountAction extends Action {
+export class AmountAction extends FieldValueAction {
   constructor(type, name, amount) {
-    super(type);
-    this.name = name;
-    this.amount = amount;
-  }
-}
-
-/**
- * Pushes a named metric value into an array within state.metrics.
- * Used by the generic RECORD_ARRAY_METRIC reducer registered in every financial scenario.
- */
-export class RecordArrayMetricAction extends Action {
-  constructor(name, value) {
-    super('RECORD_ARRAY_METRIC');
-    this.name  = name;
-    this.value = value;
+    super(type, name, 'amount', amount);
   }
 }
 
@@ -60,11 +61,19 @@ export class RecordArrayMetricAction extends Action {
  * Replaces a metric value into state.metrics.
  * Used by the generic RECORD_METRIC reducer.
  */
-export class RecordMetricAction extends Action {
-  constructor(name, value) {
-    super('RECORD_METRIC');
-    this.name  = name;
-    this.value = value;
+export class RecordMetricAction extends FieldValueAction {
+  constructor(type = 'RECORD_METRIC', name, fieldName, value) {
+    super(type, name, 'metrics.' + fieldName, value);
+  }
+}
+
+/**
+ * Pushes a named metric value into an array within state.metrics.
+ * Used by the generic RECORD_ARRAY_METRIC reducer registered in every financial scenario.
+ */
+export class RecordArrayMetricAction extends RecordMetricAction {
+  constructor(name, fieldName, value) {
+    super('RECORD_ARRAY_METRIC', name, fieldName, value);
   }
 }
 
@@ -72,11 +81,9 @@ export class RecordMetricAction extends Action {
  * Records a named metric value into state.metrics.
  * Used by the generic RECORD_NUMERIC_SUM_METRIC.
  */
-export class RecordNumericSumMetricAction extends Action {
-  constructor(name, value) {
-    super('RECORD_NUMERIC_SUM_METRIC');
-    this.name  = name;
-    this.value = value;
+export class RecordNumericSumMetricAction extends RecordMetricAction {
+  constructor(name, fieldName, value) {
+    super('RECORD_NUMERIC_SUM_METRIC', name, fieldName, value);
   }
 }
 
@@ -84,11 +91,9 @@ export class RecordNumericSumMetricAction extends Action {
  * Multiplies the current metric by this value and replaces it in state.metrics.
  * Used by the generic RECORD_MULTIPLICATIVE_METRIC reducer.
  */
-export class RecordMultiplicativeMetricAction extends Action {
-  constructor(name, value) {
-    super('RECORD_MULTIPLICATIVE_METRIC');
-    this.name  = name;
-    this.value = value;
+export class RecordMultiplicativeMetricAction extends RecordMetricAction {
+  constructor(name, fieldName, value) {
+    super('RECORD_MULTIPLICATIVE_METRIC', name, fieldName, value);
   }
 }
 

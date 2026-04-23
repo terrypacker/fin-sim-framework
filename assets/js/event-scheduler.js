@@ -78,6 +78,11 @@ export class EventScheduler {
    */
   addEvent(event) {
     //Decorate the event
+    event.id = event.type;
+    const existing = this.graph.getNode(event.id);
+    if(existing) {
+      throw new Error(`Event already exists in graph ${event.type}`);
+    }
     event.kind = 'event';
     event.name = event.label; //TODO Fix upper framework to be consistent
     if(event instanceof FinSimLib.Scenarios.EventSeries) {
@@ -85,9 +90,7 @@ export class EventScheduler {
     }else {
       event.eventType = 'OneOff';
     }
-
     this.graph.addNode(event);
-    //TODO add child edges
   }
 
   /**
@@ -95,16 +98,23 @@ export class EventScheduler {
    * @param event
    * @param handler
    */
-  addHandler(event, handler) {
+  addHandler(handler) {
     //Decorate the handler
     handler.kind = 'handler';
     this.graph.addNode(handler);
 
-    //Add an edge from event --> handler
-    this.graph.addEdge({from: event.id, to: handler.id});
+    handler.handledEvents.forEach(e => {
+      //Add an edge from event --> handler
+      this.graph.addEdge({from: e.id, to: handler.id});
+    })
+    //Add the actions
+    handler.generatedActions.forEach(a => {
+      this.addAction(a)
+      this.graph.addEdge({from: handler.id, to: a.id});
+    })
   }
 
-  addReducer(handler, reducer) {
+  addReducer(reducer) {
     //Decorate the reducer
     reducer.kind = 'reducer';
     if(reducer instanceof FinSimLib.Core.MetricReducer) {
@@ -112,8 +122,26 @@ export class EventScheduler {
     }
     this.graph.addNode(reducer);
 
-    //Add edges from handler --> reducer
-    this.graph.addEdge({from: handler.id, to: reducer.id});
+    //Add the actions
+    reducer.reducedActions.forEach(a => {
+      this.addAction(a);
+      this.graph.addEdge({from: a.id, to: reducer.id});
+    })
+    reducer.generatedActions.forEach(a => {
+      this.addAction(a);
+      this.graph.addEdge({from: reducer.id, to: a.id});
+    })
+  }
+
+  addAction(action) {
+    //Does this action exist
+    action.id = action.type;
+    const existing = this.graph.getNode(action.id);
+    if(existing === undefined) {
+      //Decorate the action
+      action.kind = 'action';
+      this.graph.addNode(action);
+    }
   }
 
   /* ─────────────────────────────  HANDLER EDITOR  ───────────────────────────── */

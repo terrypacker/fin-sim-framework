@@ -152,6 +152,13 @@ export class ConfigGraphBuilder {
   }
 
   addNode(node) {
+    if(!node.id) {
+      throw new Error(`Node requires id ${node}`);
+    }
+    const existing = this.getNode(node.id);
+    if(existing) {
+      throw new Error(`Node already added ${node}`);
+    }
     //Need to ensure we have a good x,y
     this._computeNodePlacement(node);
     this.nodes.push(node);
@@ -280,7 +287,7 @@ export class ConfigGraphBuilder {
   }
 
   getNode(nodeId) {
-    return this.nodes.find(n => n.id === nodeId);
+    return this.nodes.find(n => n.id == nodeId);
   }
 
   addEdge(edge) {

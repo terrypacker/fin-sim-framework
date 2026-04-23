@@ -67,24 +67,27 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
 
     // ── Initial state
     const initialState = {
-      metrics: {},
+      metrics: {
+        amount: 0,
+        salary: 0
+      },
       monthCount: 0,
-      yearCount: 0,
+      yearCount: 0
     };
 
     this.sim = new FinSimLib.Core.Simulation(this.simStart, { initialState });
 
     //Setup Events
-    const salaryEventSeries = new FinSimLib.Scenarios.EventSeries({
-      label: 'Monthly Salary',
+    const monthEndEventSeries = new FinSimLib.Scenarios.EventSeries({
+      label: 'Month End',
       type: 'MONTH_END',
       interval: 'month-end',
       enabled: true,
       color: '#F44336'
     });
-    this._scheduleEventSeries(salaryEventSeries);
+    this._scheduleEventSeries(monthEndEventSeries);
 
-
+    /* Not rendering right on config graph
     const buyLambo = new Date();
     buyLambo.setMonth(buyLambo.getMonth() + 3);
     this._scheduleOneOffEvent({
@@ -94,67 +97,64 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
       enabled: true,
       color: '#4CAF50'
     });
+    */
 
+    //Handle Month End
+    const recordSalaryPaymentAction = new FinSimLib.Core.AmountAction('RECORD_METRIC', 'Record Payment', 1200);
+    const sumSalaryPaymentAction = new FinSimLib.Core.RecordNumericSumMetricAction('Sum Payments', 'amount');
 
-    const salaryPaymentHandler = new FinSimLib.Core.HandlerEntry(({ data, date, state }) => {
-      const actions = [];
-      actions.push(
-          { type: 'MONTH_END_PROCESS', date },
-          new FinSimLib.Core.RecordArrayMetricAction('monthEnd', date),
-      );
+    const monthEndHandler = new FinSimLib.Core.HandlerEntry(function ({ data, date, state }) {
+      const actions = [...this.generatedActions];
       return actions;
-    }, 'Salary Payment Handler');
-    this._registerHandler(salaryEventSeries, salaryPaymentHandler);
-
+    }, 'Month End Handler');
     //TODO need to put the action types that we can produce on the handler so we can link them in the UI
     // for now this hack will suffice
-    salaryPaymentHandler.actions = [new FinSimLib.Core.Action('MONTH_END_PROCESS')]
-    //Setup Reducers
-    const metricReducer = new FinSimLib.Core.MetricReducer('Record Salary');
-    this._registerReducer(salaryPaymentHandler, metricReducer);
+    monthEndHandler.handledEvents = [ monthEndEventSeries ];
+    monthEndHandler.generatedActions = [ recordSalaryPaymentAction ];
+    this._registerHandler(monthEndHandler);
 
-    //Setup Handlers
-    const recordSalaryReducerNode = {
-      id: 'r1',
-      name: 'Record Salary',
-      kind: 'reducer',
-      x: 470, y: 80,
-      reducerType: 'MetricReducer',
-      metric: 'amount'
-    };
+    //Record Salary Reducer
+    const recordSalaryPaymentReducer = FinSimLib.Core.MetricReducer
+      .fromMetric('amount')
+      .reduceAction(recordSalaryPaymentAction)
+      .generateAction(sumSalaryPaymentAction);
+    this._registerReducer(recordSalaryPaymentReducer);
 
-//    this.configGraphBuilder.addEdge({ from: 'e1', to: 'h1' });
-//    this.configGraphBuilder.addEdge({ from: 'h1', to: 'r1' });
+    //Sum all salaries
+    const sumSalaryPaymentReducer = FinSimLib.Core.NumericSumMetricReducer
+      .fromMetric('salary')
+      .reduceAction(sumSalaryPaymentAction);
+    this._registerReducer(sumSalaryPaymentReducer);
 
-    // ── Schedule all recurring event series
-    //this._scheduleEvents();
-
-    // ── Register scenario-level handlers
-    //this._registerHandlers(p);
-
-    // ── Register scenario-level reducers
-    //this._registerReducers(p);
-
+    //Sum all salaries
+    const stateFieldReducer = FinSimLib.Core.FieldReducer
+    .fromField('metrics.newMetric')
+    .reduceAction(recordSalaryPaymentAction);
+    this._registerReducer(stateFieldReducer);
   }
 
+  //TODO Move to BaseApp
   _scheduleEventSeries(event) {
     super._scheduleEventSeries(event);
     this.schedulerUI.addEvent(event);
   }
 
+  //TODO Move to BaseApp
   _scheduleOneOffEvent(event) {
     super._scheduleOneOffEvent(event);
     this.schedulerUI.addEvent(event);
   }
 
-  _registerReducer(handler, reducer) {
-    super._registerReducer(handler, reducer);
-    this.schedulerUI.addReducer(handler, reducer);
+  //TODO Move to BaseApp
+  _registerReducer(reducer) {
+    super._registerReducer(reducer);
+    this.schedulerUI.addReducer(reducer);
   }
 
-  _registerHandler(event, handler) {
-    super._registerHandler(event, handler);
-    this.schedulerUI.addHandler(event, handler);
+  //TODO Move to BaseApp
+  _registerHandler(handler) {
+    super._registerHandler(handler);
+    this.schedulerUI.addHandler(handler);
   }
 
 
