@@ -9,10 +9,8 @@
  */
 
 // ─── Default parameters ────────────────────────────────────────────────────────
-import {
-  RecordArrayMetricAction, RecordMultiplicativeMetricAction
-} from "../../../src/simulation-framework/actions.js";
-import {PRIORITY} from "../../../src/simulation-framework/reducers.js";
+import { EventScheduler } from "../event-scheduler.js";
+import { ConfigGraphBuilder } from "../graph-builder.js";
 
 export const DEFAULT_PARAMS = {
 
@@ -37,13 +35,23 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
    * @param {EventSeries[]} [opts.eventSeries]  - Recurring event series
    * @param {Array}         [opts.customEvents] - One-off events [{type, date, data?}]
    */
-  constructor({ params = {}, eventSeries = DEFAULT_EVENT_SERIES, customEvents = [] } = {}) {
+  constructor({ params = {}, eventSeries = [], customEvents = [] } = {}) {
     super({ eventSeries, customEvents });
     this.params   = { ...DEFAULT_PARAMS, ...params };
-    this.simStart = new Date(Date.UTC(2026, 0, 1));
-    this.simEnd   = new Date(Date.UTC(2041, 0, 1));
     this.handlerLogic = params.handlerLogic;
     this.reducerLogic = params.reducerLogic;
+
+    //Setup Panel
+    this.configGraphBuilder = new ConfigGraphBuilder({
+      graphRoot: document.getElementById('graphRoot'),
+      graphNodes: document.getElementById('graphNodes'),
+      graphEdges: document.getElementById('graphEdges')
+    });
+    this.schedulerUI = new EventScheduler({
+      builderCanvas: document.getElementById('builderCanvas'),
+      graph: this.configGraphBuilder
+    });
+
     this._buildSim();
   }
 
@@ -66,16 +74,89 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
 
     this.sim = new FinSimLib.Core.Simulation(this.simStart, { initialState });
 
+    //Setup Events
+    const salaryEventSeries = new FinSimLib.Scenarios.EventSeries({
+      label: 'Monthly Salary',
+      type: 'MONTH_END',
+      interval: 'month-end',
+      enabled: true,
+      color: '#F44336'
+    });
+    this._scheduleEventSeries(salaryEventSeries);
+
+
+    const buyLambo = new Date();
+    buyLambo.setMonth(buyLambo.getMonth() + 3);
+    this._scheduleOneOffEvent({
+      label: 'Buy Lamborghini',
+      type: 'BUY_LAMBO',
+      date: buyLambo,
+      enabled: true,
+      color: '#4CAF50'
+    });
+
+
+    const salaryPaymentHandler = new FinSimLib.Core.HandlerEntry(({ data, date, state }) => {
+      const actions = [];
+      actions.push(
+          { type: 'MONTH_END_PROCESS', date },
+          new FinSimLib.Core.RecordArrayMetricAction('monthEnd', date),
+      );
+      return actions;
+    }, 'Salary Payment Handler');
+    this._registerHandler(salaryEventSeries, salaryPaymentHandler);
+
+    //TODO need to put the action types that we can produce on the handler so we can link them in the UI
+    // for now this hack will suffice
+    salaryPaymentHandler.actions = [new FinSimLib.Core.Action('MONTH_END_PROCESS')]
+    //Setup Reducers
+    const metricReducer = new FinSimLib.Core.MetricReducer('Record Salary');
+    this._registerReducer(salaryPaymentHandler, metricReducer);
+
+    //Setup Handlers
+    const recordSalaryReducerNode = {
+      id: 'r1',
+      name: 'Record Salary',
+      kind: 'reducer',
+      x: 470, y: 80,
+      reducerType: 'MetricReducer',
+      metric: 'amount'
+    };
+
+//    this.configGraphBuilder.addEdge({ from: 'e1', to: 'h1' });
+//    this.configGraphBuilder.addEdge({ from: 'h1', to: 'r1' });
+
     // ── Schedule all recurring event series
-    this._scheduleEvents();
+    //this._scheduleEvents();
 
     // ── Register scenario-level handlers
-    this._registerHandlers(p);
+    //this._registerHandlers(p);
 
     // ── Register scenario-level reducers
-    this._registerReducers(p);
+    //this._registerReducers(p);
 
   }
+
+  _scheduleEventSeries(event) {
+    super._scheduleEventSeries(event);
+    this.schedulerUI.addEvent(event);
+  }
+
+  _scheduleOneOffEvent(event) {
+    super._scheduleOneOffEvent(event);
+    this.schedulerUI.addEvent(event);
+  }
+
+  _registerReducer(handler, reducer) {
+    super._registerReducer(handler, reducer);
+    this.schedulerUI.addReducer(handler, reducer);
+  }
+
+  _registerHandler(event, handler) {
+    super._registerHandler(event, handler);
+    this.schedulerUI.addHandler(event, handler);
+  }
+
 
   _registerHandlers(p) {
     this.sim.register('MONTH_END', new FinSimLib.Core.HandlerEntry(this.handlerLogic), 'Custom Handler');

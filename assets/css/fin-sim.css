@@ -619,6 +619,8 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 #graphEdges {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
 }
 
@@ -632,6 +634,7 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 .g-node {
   position: absolute;
   width: 180px;
+  height: 40px;
   background: var(--bg-panel2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -695,7 +698,7 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 /* Output port */
 .g-port.out {
   right: -6px;
-  background: var(--blue);
+  background: var(--purple);
 }
 
 /* ── EDGES ── */

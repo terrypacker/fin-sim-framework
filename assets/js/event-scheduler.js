@@ -1,14 +1,18 @@
+/*
+ * Copyright (c) 2026 Terry Packer.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ */
 export class EventScheduler {
 
   constructor({ graph , builderCanvas}) {
     this.graph = graph;
     this.builderCanvas = builderCanvas;
-
     this.graph.registerNodeClickListener((event, node) => this._editNode(event, node));
-    this.selectedNode = null;
-
-    this.seriesTemplate = document.getElementById('eventSeriesTemplate');
-    this.oneOffTemplate = document.getElementById('eventOneOffTemplate');
 
     this.EVENT_TYPES = [
       'Series',
@@ -33,38 +37,6 @@ export class EventScheduler {
     ];
 
     this._bind();
-  }
-
-  /* ───────────────────────────── INIT ───────────────────────────── */
-
-  initDemo() {
-    const buyLambo = new Date();
-    buyLambo.setMonth(buyLambo.getMonth() + 3);
-
-    const recordSalaryReducerNode = {
-      id: 'r1',
-      name: 'Record Salary',
-      kind: 'reducer',
-      x: 470, y: 80,
-      reducerType: 'MetricReducer',
-      metric: 'amount'
-    };
-
-    const salaryPaymentHandler = {
-      id: 'h1',
-      name: 'Handler',
-      kind: 'handler',
-      x: 260, y: 80,
-      reducers: [recordSalaryReducerNode]
-    }
-
-    this.graph.addNode({ id: 'e1', kind: 'event', x: 50, y: 80, name: 'Salary', eventType: 'Series', interval: 'month-end', enabled: true });
-    this.graph.addNode({ id: 'e2', kind: 'event', x: 50, y: 180, name: 'Buy Lamborghini', eventType: 'OneOff', date: buyLambo, enabled: true });
-    this.graph.addNode(salaryPaymentHandler);
-    this.graph.addNode(recordSalaryReducerNode);
-
-    this.graph.addEdge({ from: 'e1', to: 'h1' });
-    this.graph.addEdge({ from: 'h1', to: 'r1' });
   }
 
   _bind() {
@@ -100,20 +72,48 @@ export class EventScheduler {
     }
   }
 
-  addSeries() {
+  /**
+   * Add an event to the graph
+   * @param event
+   */
+  addEvent(event) {
+    //Decorate the event
+    event.kind = 'event';
+    event.name = event.label; //TODO Fix upper framework to be consistent
+    if(event instanceof FinSimLib.Scenarios.EventSeries) {
+      event.eventType = 'Series';
+    }else {
+      event.eventType = 'OneOff';
+    }
 
+    this.graph.addNode(event);
+    //TODO add child edges
   }
 
-  addOneOff() {
+  /**
+   * Add a handler to an event
+   * @param event
+   * @param handler
+   */
+  addHandler(event, handler) {
+    //Decorate the handler
+    handler.kind = 'handler';
+    this.graph.addNode(handler);
 
+    //Add an edge from event --> handler
+    this.graph.addEdge({from: event.id, to: handler.id});
   }
 
-  addHandler() {
+  addReducer(handler, reducer) {
+    //Decorate the reducer
+    reducer.kind = 'reducer';
+    if(reducer instanceof FinSimLib.Core.MetricReducer) {
+      reducer.reducerType = 'MetricReducer';
+    }
+    this.graph.addNode(reducer);
 
-  }
-
-  addReducer() {
-
+    //Add edges from handler --> reducer
+    this.graph.addEdge({from: handler.id, to: reducer.id});
   }
 
   /* ─────────────────────────────  HANDLER EDITOR  ───────────────────────────── */
@@ -126,17 +126,19 @@ export class EventScheduler {
       node.name = name.value;
     });
 
+    const myReducers = this.graph.getNodesToKindFromMe(node, 'reducer');
+
     //Build out the chips
     const handlerReducerCount = el.querySelector('#handler-reducer-count');
-    handlerReducerCount.innerText = `${node.reducers.length} selected`;
+    handlerReducerCount.innerText = `${myReducers.length} selected`;
 
     const handlerReducersGrid = el.querySelector('#handler-reducers');
-    const allAvailableReducers = this.graph.getReducers();
+    const allAvailableReducers = this.graph.getKind('reducer');
     allAvailableReducers.forEach(available => {
       const reducer = document.createElement('div');
       reducer.classList.add('reducer-chip');
       reducer.dataset.reducerId = available.id;
-      if(node.reducers.some(r => r.reducerType === available.reducerType)) {
+      if(myReducers.some(r => r.reducerType === available.reducerType)) {
         reducer.classList.add('reducer-chip-on');
       }
       const nameSpan = document.createElement('span');
@@ -155,15 +157,19 @@ export class EventScheduler {
       if (!chip) return;
       const reducer = this.graph.getNode(chip.dataset.reducerId);
       //Toggle behavior, if we have it remove it, if we don't add it.
-      const index = node.reducers.findIndex(n => n.id == reducer.id);
+      const index = myReducers.findIndex(n => n.id == reducer.id);
       if(index < 0) {
-        node.reducers.push(reducer);
+        myReducers.push(reducer);
+        //Add edge
+        this.graph.addEdge({from: node.id, to: reducer.id})
         chip.classList.toggle('reducer-chip-on', true);
       }else {
-        node.reducers.splice(index, 1);
+        myReducers.splice(index, 1);
+        //Remove Edge
+        this.graph.removeEdge({from: node.id, to: reducer.id});
         chip.classList.toggle('reducer-chip-on', false);
       }
-      handlerReducerCount.innerText = `${node.reducers.length} selected`;
+      handlerReducerCount.innerText = `${myReducers.length} selected`;
     });
 
     this.builderCanvas.appendChild(el);
@@ -176,10 +182,10 @@ export class EventScheduler {
     const typeSelect = el.querySelector('[data-id="type"]');
     const configWrap = el.querySelector('[data-id="config"]');
 
-    const name = el.querySelector('[data-id="name"]');
-    name.value = node.name || '';
-    name.addEventListener('input', () => {
-      node.name = name.value;
+    const label = el.querySelector('[data-id="label"]');
+    label.value = node.label || '';
+    label.addEventListener('input', () => {
+      node.label = label.value;
     });
 
     // populate dropdown
@@ -202,8 +208,52 @@ export class EventScheduler {
       node[seriesEnabled.dataset.field] = seriesEnabled.checked;
     });
 
-    this._renderEventConfig(node, configWrap);
+    //Build out the chips
+    const myHandlers = this.graph.getNodesToKindFromMe(node, 'handler');
+    const eventHandlerCount = el.querySelector('#event-handler-count');
+    eventHandlerCount.innerText = `${myHandlers.length} selected`;
 
+    const eventHandlersGrid = el.querySelector('#event-handlers');
+    const allAvailableHandlers = this.graph.getKind('handler');
+    allAvailableHandlers.forEach(available => {
+      const handler = document.createElement('div');
+      handler.classList.add('reducer-chip');
+      handler.dataset.handlerId = available.id;
+      if(myHandlers.some(r => r.name === available.name)) {
+        handler.classList.add('reducer-chip-on');
+      }
+      const nameSpan = document.createElement('span');
+      nameSpan.classList.add('reducer-chip-name');
+      nameSpan.innerText = available.name;
+      nameSpan.title = available.name;
+      handler.appendChild(nameSpan);
+      const checkSpan = document.createElement('span');
+      checkSpan.classList.add('reducer-chip-check');
+      checkSpan.innerHTML = '&#x2713';
+      eventHandlersGrid.appendChild(handler);
+    });
+
+    eventHandlersGrid.addEventListener('click', (e) => {
+      const chip = e.target.closest('.reducer-chip[data-handler-id]');
+      if (!chip) return;
+      const handler = this.graph.getNode(chip.dataset.handlerId);
+      //Toggle behavior, if we have it remove it, if we don't add it.
+      const index = myHandlers.findIndex(n => n.id == handler.id);
+      if(index < 0) {
+        myHandlers.push(handler);
+        //Add edge
+        this.graph.addEdge({from: node.id, to: handler.id})
+        chip.classList.toggle('reducer-chip-on', true);
+      }else {
+        myHandlers.splice(index, 1);
+        //Remove Edge
+        this.graph.removeEdge({from: node.id, to: handler.id});
+        chip.classList.toggle('reducer-chip-on', false);
+      }
+      eventHandlerCount.innerText = `${myHandlers.length} selected`;
+    });
+
+    this._renderEventConfig(node, configWrap);
     this.builderCanvas.appendChild(el);
   }
 

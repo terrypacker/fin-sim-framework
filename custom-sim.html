@@ -224,8 +224,8 @@
     </div>
     <div class="node-body">
       <div class="node-field">
-        <label>Name</label>
-        <input data-id="name"></input>
+        <label>Label</label>
+        <input data-id="label"></input>
       </div>
       <div class="node-field">
         <label>Event Type</label>
@@ -236,6 +236,13 @@
         <label>Enabled</label>
         <input class="field-checkbox" type="checkbox" data-field="enabled" checked />
       </div>
+    </div>
+    <div class="node-field">
+      <label>
+        Reducers
+        <span class="reducer-sel-count" id="event-handler-count"></span>
+      </label>
+      <div class="reducer-chip-grid" id="event-handlers"></div>
     </div>
   </div>
 </template>
@@ -262,7 +269,7 @@
     </div>
     <div class="node-body">
       <div class="node-field">
-        <label>Name</label>
+        <label>Label</label>
         <input data-id="name"></input>
       </div>
       <div class="node-field">
@@ -296,7 +303,7 @@
     </div>
     <div class="node-body">
       <div class="node-field">
-        <label>Name</label>
+        <label>Label</label>
         <input data-id="name"></input>
       </div>
       <div class="node-field">

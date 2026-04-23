@@ -10,6 +10,20 @@
 
 import { DateUtils } from '../simulation-framework/date-utils.js';
 
+export const intervalFns = {
+  monthly:    d => DateUtils.addMonths(d, 1),
+  quarterly:  d => DateUtils.addMonths(d, 3),
+  annually:   d => DateUtils.addYears(d, 1),
+  'month-end': d => DateUtils.endOfMonth(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))),
+  'year-end':  d => DateUtils.endOfYear(DateUtils.addYears(d, 1)),
+};
+
+// Snap the start date to the end of the period for period-end intervals
+export const startSnapFns = {
+  'month-end': d => DateUtils.endOfMonth(d),
+  'year-end':  d => DateUtils.endOfYear(d),
+};
+
 /**
  * Base class for simulation scenarios.
  *
@@ -17,9 +31,21 @@ import { DateUtils } from '../simulation-framework/date-utils.js';
  * They must also set `this.customEvents` (default []) if they want one-off event support.
  */
 export class BaseScenario {
-  constructor({ eventSeries, customEvents = [] } = {}) {
+  constructor({ eventSeries, customEvents = [],
+      simStart =  new Date(Date.UTC(2026, 0, 1)),
+      simEnd = new Date(Date.UTC(2041, 0, 1))} = {}) {
+
     this.eventSeries  = eventSeries;
     this.customEvents = customEvents;
+
+    //TODO need to move these from the superclasses into here
+    this.sim = null;
+    this.simStart = simStart;
+    this.simEnd = simEnd;
+    //ID used for all things to be unique
+    this._nextEventId = 1;
+    this._nextHandlerId = 1;
+    this._nextReducerId = 1;
   }
 
   /**
@@ -27,40 +53,59 @@ export class BaseScenario {
    * any one-off custom events. Relies on `this.sim` and `this.simStart` being set.
    */
   _scheduleEvents() {
-    const intervalFns = {
-      monthly:    d => DateUtils.addMonths(d, 1),
-      quarterly:  d => DateUtils.addMonths(d, 3),
-      annually:   d => DateUtils.addYears(d, 1),
-      'month-end': d => DateUtils.endOfMonth(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))),
-      'year-end':  d => DateUtils.endOfYear(DateUtils.addYears(d, 1)),
-    };
-
-    // Snap the start date to the end of the period for period-end intervals
-    const startSnapFns = {
-      'month-end': d => DateUtils.endOfMonth(d),
-      'year-end':  d => DateUtils.endOfYear(d),
-    };
 
     for (const series of this.eventSeries) {
-      if (!series.enabled) continue;
+      this._scheduleEvent(series);
+    }
+
+    for (const ev of this.customEvents) {
+      this._scheduleOneOffEvent(ev);
+    }
+  }
+
+  /**
+   * Schedule a single event series
+   * @param series
+   * @private
+   */
+  _scheduleEventSeries(series) {
+    //Set a unique id
+    series.id = 'e' + this._nextEventId++;
+    if(series.enabled) {
+      //Prep the series for schedule
       let start = series.startOffset
           ? DateUtils.addYears(this.simStart, series.startOffset)
           : this.simStart;
       const snapFn = startSnapFns[series.interval];
       if (snapFn) start = snapFn(start);
       this.sim.scheduleRecurring({
-        startDate:  start,
-        type:       series.type,
+        startDate: start,
+        type: series.type,
         intervalFn: intervalFns[series.interval]
       });
     }
+  }
 
-    for (const ev of this.customEvents) {
+  _scheduleOneOffEvent(event) {
+    event.id = 'e' + this._nextEventId;
+    if (event.enabled) {
       this.sim.schedule({
-        date: new Date(ev.date),
-        type: ev.type,
-        data: ev.amount != null ? { amount: ev.amount } : {}
+        date: new Date(event.date),
+        type: event.type
       });
     }
+  }
+
+  _registerReducer(handler, reducer) {
+    //Set a unique id
+    reducer.id = 'r' + this._nextReducerId++;
+    handler.actions.forEach(action => {
+      reducer.registerWith(this.sim.reducers, action.type);
+    });
+  }
+
+  _registerHandler(event, handler) {
+    handler.id = 'h' + this._nextHandlerId;
+    this.sim.register(event.type, handler, handler.name);
   }
 }

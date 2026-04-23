@@ -8,8 +8,6 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 import { CustomScenario, DEFAULT_EVENT_SERIES } from './scenarios/custom-scenario.js';
-import {EventScheduler} from "./event-scheduler.js";
-import { GraphBuilder } from "./graph-builder.js";
 
 // ── Date formatters ───────────────────────────────────────────────────────────
 
@@ -299,18 +297,6 @@ document.addEventListener('DOMContentLoaded', () => {
     displayCurrency = $('displayCurrency').value;
     app.buildScenario();
   });
-
-  //Setup Panel
-  const graphBuilder = new GraphBuilder({
-    graphRoot: document.getElementById('graphRoot'),
-    graphNodes: document.getElementById('graphNodes'),
-    graphEdges: document.getElementById('graphEdges')
-  });
-  const scheduler = new EventScheduler({
-    builderCanvas: document.getElementById('builderCanvas'),
-    graph: graphBuilder
-  });
-  scheduler.initDemo();
 
   app.buildScenario();
 
