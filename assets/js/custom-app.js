@@ -70,24 +70,30 @@ const isDateValid = (d) => d instanceof Date && !isNaN(d.getTime());
 //TODO Move to BaseApp
 const isDate = (obj) => Object.prototype.toString.call(obj) === '[object Date]';
 //TODO Move to BaseApp
-const fmtVal = v => {
+const fmtVal = (v, objAsCode = false) => {
   if (v == null) return '—';
   if (typeof v === 'number') return v.toFixed(2); //TODO Format as $?
   if (Array.isArray(v)) {
     if(v.length > 10) {
-      return fmtArray(v);
+      return fmtArray(v, objAsCode);
     }
-    return v.map(x => typeof x === 'object' && x !== null ? fmtVal(x) : fmtVal(x)).join(', ') || '—';
+    return v.map(x => typeof x === 'object' && x !== null ? fmtVal(x, objAsCode) : fmtVal(x, objAsCode)).join(', ') || '—';
   }
   if(isDate(v)) return app._formatDate(v);
-  if (typeof v === 'object') return JSON.stringify(v);
+  if (typeof v === 'object') {
+    if(objAsCode) {
+      return `<pre class="text-wrap:auto">${JSON.stringify(v, null, 2)}</pre>`;
+    }else {
+      return JSON.stringify(v);
+    }
+  }
   return String(v);
 };
 
-const fmtArray = v => {
+const fmtArray = (v, objAsCode = false) => {
   if (!Array.isArray(v)) return '';
   const limit = 10;
-  const sliced = v.slice(0, limit).map(x => fmtVal(x)).join(', ');
+  const sliced = v.slice(0, limit).map(x => fmtVal(x, objAsCode)).join(', ');
   return v.length > limit ? `${sliced}, ...` : sliced;
 };
 
@@ -112,7 +118,7 @@ export function createActionDetail(templateId, content = { entry, changes, emitt
       const stateChangeRow = document.importNode(stateChangesGrid.querySelector('[data-state-change-row]'), true);
       stateChangeRow.style = '';
       stateChangeRow.querySelector('[data-id="field"]').innerText = change.field;
-      stateChangeRow.querySelector('[data-id="before"]').innerText = fmtVal(change.before);
+      stateChangeRow.querySelector('[data-id="before"]').innerHTML = fmtVal(change.before, true);
       if(change.delta != null) {
         const after = stateChangeRow.querySelector('[data-id="after"]');
         const delta = document.createElement('span');
@@ -123,10 +129,10 @@ export function createActionDetail(templateId, content = { entry, changes, emitt
           delta.classList.add('diff-neg');
           delta.innerText = '-' + fmtVal(change.delta);
         }
-        after.innerText = fmtVal(change.after);
+        after.innerHTML = fmtVal(change.after, true);
         after.appendChild(delta);
       }else {
-        stateChangeRow.querySelector('[data-id="after"]').innerText = fmtVal(change.after);
+        stateChangeRow.querySelector('[data-id="after"]').innerHTML = fmtVal(change.after, true);
       }
       stateChangesGrid.appendChild(stateChangeRow);
     }
@@ -134,7 +140,7 @@ export function createActionDetail(templateId, content = { entry, changes, emitt
     stateChangesGrid.querySelector('[data-id="noChangeRow"]').style = '';
     const noChangeState = stateChangesGrid.querySelector('[data-id="noChangeState"]');
     noChangeState.style = '';
-    noChangeState.innerText = JSON.stringify(content.entry.prevState,null, 2);
+    noChangeState.innerHTML = `<pre>${JSON.stringify(content.entry.prevState,null, 2)}</pre>`;
   }
   return clone;
 }

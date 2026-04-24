@@ -495,10 +495,16 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 }
 .data-row:hover { background: var(--bg-panel2); }
 
+/* ── STATE CHANGE GRID ── */
+[data-state-change-grid] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  overflow-x: auto;
+}
+
 /* ── DATA DIFF ── */
 .diff-field  { color: #94a3b8; font-size: 10px; }
-.diff-before { color: #64748b; }
-.diff-after  { color: #e5e7eb; }
+.diff-before { color: #64748b; word-break: break-word; overflow-wrap: break-word; }
+.diff-after  { color: #e5e7eb; word-break: break-word; overflow-wrap: break-word; }
 .diff-pos    { color: #34d399; margin-left: 6px; }
 .diff-neg    { color: #f87171; margin-left: 6px; }
 
