@@ -11,6 +11,9 @@
 // ─── Default parameters ────────────────────────────────────────────────────────
 import { EventScheduler } from "../event-scheduler.js";
 import { ConfigGraphBuilder } from "../graph-builder.js";
+import {
+  ArrayMetricReducer
+} from "../../../src/simulation-framework/reducers.js";
 
 export const DEFAULT_PARAMS = {
 
@@ -79,7 +82,7 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
 
     //Setup Events
     const monthEndEventSeries = new FinSimLib.Scenarios.EventSeries({
-      label: 'Month End',
+      name: 'Month End',
       type: 'MONTH_END',
       interval: 'month-end',
       enabled: true,
@@ -91,7 +94,7 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
     const buyLambo = new Date();
     buyLambo.setMonth(buyLambo.getMonth() + 3);
     this._scheduleOneOffEvent({
-      label: 'Buy Lamborghini',
+      name: 'Buy Lamborghini',
       type: 'BUY_LAMBO',
       date: buyLambo,
       enabled: true,
@@ -107,10 +110,7 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
       const actions = [...this.generatedActions];
       return actions;
     }, 'Month End Handler');
-    //TODO need to put the action types that we can produce on the handler so we can link them in the UI
-    // for now this hack will suffice
-    monthEndHandler.handledEvents = [ monthEndEventSeries ];
-    monthEndHandler.generatedActions = [ recordSalaryPaymentAction ];
+    monthEndHandler.forEvent(monthEndEventSeries).generateAction(recordSalaryPaymentAction);
     this._registerHandler(monthEndHandler);
 
     //Record Salary Reducer
@@ -127,10 +127,10 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
     this._registerReducer(sumSalaryPaymentReducer);
 
     //Sum all salaries
-    const stateFieldReducer = FinSimLib.Core.FieldReducer
-    .fromField('metrics.newMetric')
+    const depositReducer = FinSimLib.Core.ArrayMetricReducer
+    .fromMetric('deposits')
     .reduceAction(recordSalaryPaymentAction);
-    this._registerReducer(stateFieldReducer);
+    this._registerReducer(depositReducer);
   }
 
   //TODO Move to BaseApp

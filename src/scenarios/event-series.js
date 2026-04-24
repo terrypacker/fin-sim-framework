@@ -12,7 +12,7 @@
  * Represents a recurring event series configuration for a scenario.
  *
  * @property {string}  id          - Unique identifier for this series
- * @property {string}  label       - Human-readable display name
+ * @property {string}  name       - Human-readable display name
  * @property {string}  type        - Simulation event type string (e.g. 'MONTHLY_SALARY')
  * @property {string}  interval    - Recurrence interval: 'monthly' | 'quarterly' | 'annually' | 'month-end' | 'year-end'
  * @property {boolean} enabled     - Whether this series is active
@@ -20,9 +20,9 @@
  * @property {string}  color       - CSS color used for visualization
  */
 export class EventSeries {
-  constructor({ id, label, type, interval, enabled = true, startOffset = 0, color = '#888888' } = {}) {
+  constructor({ id, name, type, interval, enabled = true, startOffset = 0, color = '#888888' } = {}) {
     this.id          = id;
-    this.label       = label;
+    this.name       = name;
     this.type        = type;
     this.interval    = interval;
     this.enabled     = enabled;

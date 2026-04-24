@@ -674,7 +674,7 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   background: transparent;
   color: var(--text);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10px;
   outline: none;
 }
 

@@ -61,7 +61,7 @@ function readParams() {
 
 }
 
-//TODO Move to BaseApp
+//TODO Move to BaseApp, Also use in reducers.js
 const getNestedProperty = (obj, path) => {
   return path.split('.').reduce((acc, part) => acc && acc[part], obj);
 };
@@ -75,13 +75,20 @@ const fmtVal = v => {
   if (typeof v === 'number') return v.toFixed(2); //TODO Format as $?
   if (Array.isArray(v)) {
     if(v.length > 10) {
-      return '[...]'; //TODO suppor opening a modal and rendering the whole array :)
+      return fmtArray(v);
     }
     return v.map(x => typeof x === 'object' && x !== null ? fmtVal(x) : fmtVal(x)).join(', ') || '—';
   }
   if(isDate(v)) return app._formatDate(v);
   if (typeof v === 'object') return JSON.stringify(v);
   return String(v);
+};
+
+const fmtArray = v => {
+  if (!Array.isArray(v)) return '';
+  const limit = 10;
+  const sliced = v.slice(0, limit).map(x => fmtVal(x)).join(', ');
+  return v.length > limit ? `${sliced}, ...` : sliced;
 };
 
 //TODO Move to BaseApp
@@ -144,8 +151,9 @@ const renderObj = (v) => {
   if (v == null) return '—';
   if (Array.isArray(v)) {
     if (v.length === 0) return '—';
-    if (v.every(x => typeof x === 'number'))
-      return v.reduce((a, b) => a + b, 0);
+    if (v.every(x => typeof x === 'number')) {
+      return fmtArray(v);
+    }
     return v.map(x => (typeof x === 'object' ? renderObj(x) : String(x))).join(', ');
   }
   if(typeof v === 'object') {

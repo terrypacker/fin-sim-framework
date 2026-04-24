@@ -24,6 +24,18 @@ export class HandlerEntry {
   constructor(fn, name = 'anonymous') {
     this.fn   = fn;
     this.name = name;
+    this.handledEvents = [];
+    this.generatedActions = [];
+  }
+
+  forEvent(event) {
+    this.handledEvents.push(event);
+    return this;
+  }
+
+  generateAction(action) {
+    this.generatedActions.push(action);
+    return this;
   }
 
   call(ctx) {

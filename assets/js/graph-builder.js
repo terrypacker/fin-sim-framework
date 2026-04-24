@@ -308,7 +308,7 @@ export class ConfigGraphBuilder {
   getNodesFromKindToMe(node, kind) {
     const myEdges = Array.from(this.edges.values().filter(e => e.to === node.id));
     return Array.from(this.nodes.values()).filter(n => {
-      return n.kind === kind && n.from === node.id;
+      return n.kind === kind && myEdges.some( e => e.from === n.id);
     });
   }
 

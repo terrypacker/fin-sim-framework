@@ -158,23 +158,60 @@ export class FieldReducer extends Reducer {
     return path.split('.').reduce((acc, part) => acc && acc[part], obj);
   }
 
+  /**
+   * Set the value at the path and return a new full copy of  obj, for immutable state
+   * @param obj
+   * @param path
+   * @param value
+   * @returns {{}}
+   */
   setValueByPath(obj, path, value) {
-    const parts = path.split('.');
-    const last = parts.pop();
+    const parts = Array.isArray(path) ? path : path.split('.');
 
-    // Traverse and build the path
-    const deepObj = parts.reduce((acc, part) => {
-      if (!acc[part]) acc[part] = {};
-      return acc[part];
-    }, obj);
+    const isIndex = (key) => {
+      return typeof key === 'number' || String(Number(key)) === key;
+    };
 
-    deepObj[last] = value;
+    const setRecursive = (current, i) => {
+      const key = parts[i];
+      const last = i === parts.length - 1;
+
+      // Determine existing value
+      const existing = current ?? (isIndex(key) ? [] : {});
+
+      // Clone container (array or object)
+      let clone;
+      if (Array.isArray(existing)) {
+        clone = [...existing];
+      } else {
+        clone = { ...existing };
+      }
+
+      if (last) {
+        clone[key] = value;
+        return clone;
+      }
+
+      const nextKey = parts[i + 1];
+      const nextIsIndex = isIndex(nextKey);
+
+      clone[key] = setRecursive(
+          existing[key] !== undefined
+              ? existing[key]
+              : nextIsIndex
+                  ? []
+                  : {},
+          i + 1
+      );
+
+      return clone;
+    };
+
+    return setRecursive(obj, 0);
   }
 
   reduce(state, action, date) {
-    const newState = this.newState(state);
-    this.setValueByPath(newState, this.fieldName, this.getStateValue(state, action))
-    return newState;
+    return this.setValueByPath(state, this.fieldName, this.getStateValue(state, action))
   }
 
 }
@@ -191,9 +228,7 @@ export class StateFieldReducer extends FieldReducer {
 
   reduce(state, action, date) {
     const value = this.generate(state, action, date);
-    const newState = this.newState(state);
-    this.setValueByPath(newState, this.fieldName, value);
-    return newState;
+    return this.setValueByPath(state, this.fieldName, value);
   }
 }
 
@@ -212,9 +247,7 @@ export class MetricReducer extends FieldReducer {
 
   reduce(state, action) {
     const metricValue = this.getStateValue(state, action);
-    const newState = this.newState(state);
-    this.setValueByPath(newState, this.fieldName, metricValue);
-    return newState;
+    return this.setValueByPath(state, this.fieldName, metricValue);
   }
 }
 
@@ -224,21 +257,19 @@ export class MetricReducer extends FieldReducer {
  */
 export class ArrayMetricReducer extends MetricReducer {
 
-  static fromField(fieldName) {
+  static fromMetric(fieldName) {
     return new ArrayMetricReducer(name = 'Array Metric Logger', PRIORITY.METRICS, fieldName);
   }
   constructor(name = 'Array Metric Logger', priority = PRIORITY.METRICS,
      fieldName) {
-    super(name, priority, 'metrics.' + fieldName);
+    super(name, priority, fieldName);
   }
 
   reduce(state, action) {
     const list = this.getValueByPath(state, this.fieldName) || [];
     const value = this.getStateValue(state, action);
     const newList = [...list, value];
-    const newState = this.newState(state);
-    this.setValueByPath(newState, this.fieldName, newList);
-    return newState;
+    return this.setValueByPath(state, this.fieldName, newList);
   }
 }
 
@@ -257,9 +288,7 @@ export class NumericSumMetricReducer extends MetricReducer {
   reduce(state, action) {
     const initialValue = this.getValueByPath(state, this.fieldName) || 0;
     const value = this.getStateValue(state, action) || 0;
-    const newState = this.newState(state);
-    this.setValueByPath(newState, this.fieldName, initialValue + value);
-    return newState;
+    return this.setValueByPath(state, this.fieldName, initialValue + value);
   }
 }
 
@@ -277,9 +306,7 @@ export class MultiplicativeMetricReducer extends FieldReducer {
   reduce(state, action) {
     const initialValue = this.getValueByPath(state, this.fieldName) || 0;
     const value = this.getStateValue(state, action);
-    const newState = this.newState(state);
-    this.setValueByPath(newState, this.fieldName, initialValue * value);
-    return newState;
+    return this.setValueByPath(state, this.fieldName, initialValue * value);
   }
 }
 
