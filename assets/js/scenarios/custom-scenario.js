@@ -54,6 +54,10 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
       builderCanvas: document.getElementById('builderCanvas'),
       graph: this.configGraphBuilder
     });
+    this.schedulerUI.registerEventChangeListener(e => this.eventChanged(e));
+    this.schedulerUI.registerHandlerChangeListener(h => this.handlerChanged(h));
+    this.schedulerUI.registerActionChangeListener(a => this.actionChanged(a));
+    this.schedulerUI.registerReducerChangeListener(r => this.reducerChanged(r));
 
     this._buildSim();
   }
@@ -88,7 +92,7 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
       enabled: true,
       color: '#F44336'
     });
-    this._scheduleEventSeries(monthEndEventSeries);
+    this.scheduleEvent(monthEndEventSeries);
 
     /* Not rendering right on config graph
     const buyLambo = new Date();
@@ -133,15 +137,31 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
     this._registerReducer(depositReducer);
   }
 
-  //TODO Move to BaseApp
-  _scheduleEventSeries(event) {
-    super._scheduleEventSeries(event);
-    this.schedulerUI.addEvent(event);
+  eventChanged(event) {
+    //Remove from sim
+    super.unscheduleEvent(event);
+    if(event.enabled) {
+      //Don't add to graph 2x so call super
+      super.scheduleEvent(event);
+    }
+  }
+
+  handlerChanged(handler) {
+
+  }
+
+  actionChanged(action) {
+
+  }
+
+  reducerChanged(reducer) {
+
   }
 
   //TODO Move to BaseApp
-  _scheduleOneOffEvent(event) {
-    super._scheduleOneOffEvent(event);
+  scheduleEvent(event) {
+    super.scheduleEvent(event);
+    //TODO this will be an issue with un-schedule, probably need to keep a list of these around?
     this.schedulerUI.addEvent(event);
   }
 

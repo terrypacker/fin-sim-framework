@@ -45,6 +45,7 @@ export class BaseScenario {
     //ID used for all things to be unique
     this._nextHandlerId = 1;
     this._nextReducerId = 1;
+    this._nextEventId = 1;
   }
 
   /**
@@ -61,6 +62,24 @@ export class BaseScenario {
     }
   }
 
+  scheduleEvent(event) {
+    if(!event.enabled) {
+      throw new Error('Do not schedule a disabled event');
+    }
+    if(!event.id) {
+      event.id = 'e' + this._nextEventId++;
+    }
+    //TODO Better way to test type
+    if(event.date) {
+      this._scheduleOneOffEvent(event);
+    }else {
+      this._scheduleEventSeries(event);
+    }
+  }
+
+  unscheduleEvent(event) {
+    this.sim.unschedule(event.type);
+  }
   /**
    * Schedule a single event series
    * @param series
@@ -75,6 +94,7 @@ export class BaseScenario {
       const snapFn = startSnapFns[series.interval];
       if (snapFn) start = snapFn(start);
       this.sim.scheduleRecurring({
+        id: series.id,
         startDate: start,
         type: series.type,
         intervalFn: intervalFns[series.interval]
@@ -85,6 +105,7 @@ export class BaseScenario {
   _scheduleOneOffEvent(event) {
     if (event.enabled) {
       this.sim.schedule({
+        id: event.id,
         date: new Date(event.date),
         type: event.type
       });

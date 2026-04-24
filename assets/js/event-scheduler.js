@@ -13,6 +13,11 @@ export class EventScheduler {
     this.graph = graph;
     this.builderCanvas = builderCanvas;
     this.graph.registerNodeClickListener((event, node) => this._editNode(event, node));
+    this.eventNodeChangeListeners = [];
+    this.handlerNodeChangeListeners = [];
+    this.actionNodeChangeListeners = [];
+    this.reducerNodeChangeListeners = [];
+
 
     this.EVENT_TYPES = [
       'Series',
@@ -79,8 +84,6 @@ export class EventScheduler {
    * @param event
    */
   addEvent(event) {
-    //Decorate the event
-    event.id = event.type;
     const existing = this.graph.getNode(event.id);
     if(existing) {
       throw new Error(`Event already exists in graph ${event.type}`);
@@ -145,6 +148,38 @@ export class EventScheduler {
     }
   }
 
+  registerEventChangeListener(listener) {
+    this.eventNodeChangeListeners.push(listener);
+  }
+
+  registerHandlerChangeListener(listener) {
+    this.handlerNodeChangeListeners.push(listener);
+  }
+
+  registerActionChangeListener(listener) {
+    this.actionNodeChangeListeners.push(listener);
+  }
+
+  registerReducerChangeListener(listener) {
+    this.reducerNodeChangeListeners.push(listener);
+  }
+
+  _nodeChanged(node) {
+    if (node.kind === 'reducer') {
+      this.reducerNodeChangeListeners.forEach(l => l(node));
+    } else if (node.kind === 'event') {
+      this.eventNodeChangeListeners.forEach(l => l(node));
+    }else if (node.kind === 'handler') {
+      this.handlerNodeChangeListeners.forEach(l => l(node));
+    }else if (node.kind === 'action') {
+      this.actionNodeChangeListeners.forEach(l => l(node));
+    }else {
+      throw new Error(`Unsupported node kind: ${node.kind}`)
+    }
+
+    this.graph.render();
+  }
+
   /* ─────────────────────────────  EVENT EDITOR  ───────────────────────────── */
   _renderEventEditor(node) {
     const el = this._getTemplate('tpl-event-editor');
@@ -155,6 +190,7 @@ export class EventScheduler {
     label.value = node.name || '';
     label.addEventListener('input', () => {
       node.name = label.value;
+      this._nodeChanged(node);
     });
 
     // populate dropdown
@@ -169,12 +205,14 @@ export class EventScheduler {
     typeSelect.onchange = () => {
       node.eventType = typeSelect.value;
       this._renderEventConfig(node, configWrap);
+      this._nodeChanged(node);
     };
 
     const seriesEnabled = el.querySelector('[data-field="enabled"]');
     seriesEnabled.checked = node.enabled || false;
     seriesEnabled.addEventListener('input', () => {
       node[seriesEnabled.dataset.field] = seriesEnabled.checked;
+      this._nodeChanged(node);
     });
 
     //Build out the chips for the handlers

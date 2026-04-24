@@ -44,6 +44,7 @@ import { BusMessage, SimulationBusMessage, DebugActionBusMessage } from './simul
 import { DateUtils } from './simulation-framework/date-utils.js';
 import { EventBus } from './simulation-framework/event-bus.js';
 import { HandlerEntry, HandlerRegistry } from './simulation-framework/handlers.js';
+import { IndexedMinHeap } from './simulation-framework/indexed-min-heap.js';
 import { JournalEntry, Journal } from './simulation-framework/journal.js';
 import { MinHeap } from './simulation-framework/min-heap.js';
 import { ReducerPipeline, PRIORITY, Reducer, NoOpReducer, FieldReducer, StateFieldReducer, MetricReducer, ArrayMetricReducer, NumericSumMetricReducer, MultiplicativeMetricReducer, AccountTransactionReducer, RepeatingReducer } from './simulation-framework/reducers.js';
@@ -148,6 +149,7 @@ export const Core = {
   EventBus,
   HandlerEntry,
   HandlerRegistry,
+  IndexedMinHeap,
   JournalEntry,
   Journal,
   MinHeap,

@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-import { MinHeap } from './min-heap.js';
+import { IndexedMinHeap } from './indexed-min-heap.js';
 import { EventBus }  from './event-bus.js';
 import { ActionNode, SimulationEventGraph } from './simulation-event-graph.js'
 import { JournalEntry, Journal } from './journal.js'
@@ -49,7 +49,8 @@ export class Simulation {
   constructor(startDate, { seed = 1, initialState = {}, opts = {} } = {}) {
     this.currentDate = this.normalizeDate(startDate);
 
-    this.queue = new MinHeap((a, b) => a.date - b.date);
+    this.queue = new IndexedMinHeap((a, b) => a.date - b.date,
+            item => item.instanceId, item => item.type);
     this.bus = new EventBus();
 
     this.handlers = new HandlerRegistry();   // eventType -> [HandlerEntry]
@@ -68,6 +69,7 @@ export class Simulation {
     this.journal = new Journal({enabled: true});
 
     this.nextActionId = 0;
+    this.nextEventInstanceId = 0;
     this.actionGraph = new SimulationEventGraph();
   }
 
@@ -86,8 +88,13 @@ export class Simulation {
     return structuredClone(obj);
   }
 
-  schedule({ date, type, data = {}, meta = {} }) {
+  unschedule(type) {
+    return this.queue.removeAllByType(type);
+  }
+
+  schedule({date, type, data = {}, meta = {} }) {
     this.queue.push({
+      instanceId: this.nextEventInstanceId++,
       date: this.normalizeDate(date),
       type,
       data,
@@ -95,7 +102,7 @@ export class Simulation {
     });
   }
 
-  scheduleRecurring({ startDate, type, intervalFn, data, meta }) {
+  scheduleRecurring({startDate, type, intervalFn, data, meta }) {
     this.register(type, ({ sim, date, data, meta }) => {
       const nextDate = intervalFn(date);
 

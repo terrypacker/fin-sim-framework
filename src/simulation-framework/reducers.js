@@ -128,7 +128,7 @@ export class NoOpReducer extends Reducer {
   }
 
   reduce(state) {
-    return state;
+    return this.newState(state);  //Pickup next actions
   }
 }
 
@@ -211,7 +211,8 @@ export class FieldReducer extends Reducer {
   }
 
   reduce(state, action, date) {
-    return this.setValueByPath(state, this.fieldName, this.getStateValue(state, action))
+    const newState = this.newState(state);  //Pickup next actions
+    return this.setValueByPath(newState, this.fieldName, this.getStateValue(state, action))
   }
 
 }
@@ -228,7 +229,8 @@ export class StateFieldReducer extends FieldReducer {
 
   reduce(state, action, date) {
     const value = this.generate(state, action, date);
-    return this.setValueByPath(state, this.fieldName, value);
+    const newState = this.newState(state);  //Pickup next actions
+    return this.setValueByPath(newState, this.fieldName, value);
   }
 }
 
@@ -247,7 +249,8 @@ export class MetricReducer extends FieldReducer {
 
   reduce(state, action) {
     const metricValue = this.getStateValue(state, action);
-    return this.setValueByPath(state, this.fieldName, metricValue);
+    const newState = this.newState(state);  //Pickup next actions
+    return this.setValueByPath(newState, this.fieldName, metricValue);
   }
 }
 
@@ -269,7 +272,8 @@ export class ArrayMetricReducer extends MetricReducer {
     const list = this.getValueByPath(state, this.fieldName) || [];
     const value = this.getStateValue(state, action);
     const newList = [...list, value];
-    return this.setValueByPath(state, this.fieldName, newList);
+    const newState = this.newState(state);  //Pickup next actions
+    return this.setValueByPath(newState, this.fieldName, newList);
   }
 }
 
@@ -288,7 +292,8 @@ export class NumericSumMetricReducer extends MetricReducer {
   reduce(state, action) {
     const initialValue = this.getValueByPath(state, this.fieldName) || 0;
     const value = this.getStateValue(state, action) || 0;
-    return this.setValueByPath(state, this.fieldName, initialValue + value);
+    const newState = this.newState(state);  //Pickup next actions
+    return this.setValueByPath(newState, this.fieldName, initialValue + value);
   }
 }
 
@@ -306,7 +311,8 @@ export class MultiplicativeMetricReducer extends FieldReducer {
   reduce(state, action) {
     const initialValue = this.getValueByPath(state, this.fieldName) || 0;
     const value = this.getStateValue(state, action);
-    return this.setValueByPath(state, this.fieldName, initialValue * value);
+    const newState = this.newState(state);  //Pickup next actions
+    return this.setValueByPath(newState, this.fieldName, initialValue * value);
   }
 }
 
@@ -330,7 +336,7 @@ export class AccountTransactionReducer extends Reducer {
 
   reduce(state, action, date) {
     this.accountService.transaction(state[this.accountKey], this.getAmount(action), date);
-    return { ...state };
+    return this.newState(state);  //Pickup next actions
   }
 }
 
