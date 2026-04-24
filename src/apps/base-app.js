@@ -24,7 +24,8 @@ import { TimelineView } from '../visualization/timeline-view.js';
 import { TimeControls } from '../visualization/time-controls.js';
 
 export class BaseApp {
-  constructor({ newScenario, readParams, updateStatePanel, diffStates, showNodeDetail, onChartSnapshot, chartSeries, formatDate }) {
+  constructor({ newScenario, readParams, updateStatePanel, diffStates, showNodeDetail,
+    onChartSnapshot, updateDashCards, chartSeries, formatDate }) {
 
     this.newScenario = newScenario
     this.readParams = readParams;
@@ -32,6 +33,7 @@ export class BaseApp {
     this.customDiffStates = diffStates;
     this.customShowNodeDetail = showNodeDetail;
     this.onChartSnapshot = onChartSnapshot ?? null;
+    this.updateDashCards = updateDashCards ?? null;
     this.chartSeries = chartSeries ?? null;
     this._formatDate = formatDate ?? (d => d.toDateString());
 
@@ -161,6 +163,8 @@ export class BaseApp {
           );
         }
       }
+      if(this.updateDashCards)
+        this.updateDashCards(payload);
     });
 
     // Reset slider and direction tracker
@@ -456,6 +460,7 @@ export class BaseApp {
     currentEl.innerHTML = renderSection(rest);
     metricsEl.innerHTML = metrics ? renderSection(metrics) : '—';
   }
+
   // ─── Animate ──────────────────────────────────────────────────────────────────
 
   animate() {

@@ -8,6 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 import { CustomScenario, DEFAULT_EVENT_SERIES } from './scenarios/custom-scenario.js';
+import {$} from "../../src/visualization/ui-utils.js";
 
 // ── Date formatters ───────────────────────────────────────────────────────────
 
@@ -52,6 +53,7 @@ const app = new FinSimLib.Misc.BaseApp({
   updateStatePanel: updateStatePanel,
   onChartSnapshot: chartSnapshot,
   showNodeDetail: showNodeDetail,
+  updateDashCards: updateDashCards,
   chartSeries:     CHART_SERIES,
   formatDate:      FinSimLib.Visualization.fmtUTC
 });
@@ -152,7 +154,7 @@ const toLabel = key => key
 .replace(/\b\w/g, c => c.toUpperCase())
 .trim();
 
-//TODO Move to BaseApp
+//TODO Move to BaseApp, combing with fmtVal?
 const renderObj = (v) => {
   if (v == null) return '—';
   if (Array.isArray(v)) {
@@ -268,6 +270,12 @@ function showNodeDetail(entry) {
   const newActionDetails = createActionDetail('actionTemplate', {entry, changes, emitted, actionPayload});
   const actionDetails = FinSimLib.Visualization.$('actionPanelDetails');
   actionDetails.replaceChildren(newActionDetails);
+}
+
+//TODO Move to base app
+function updateDashCards(payload) {
+  $('cardCurrentDate').innerText = fmtVal(payload.date);
+  $('cardActionCount').innerText = payload.id;
 }
 
 //TODO Move to base app
