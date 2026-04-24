@@ -22,13 +22,15 @@ import { GraphView } from '../visualization/graph-view.js';
 import { BalanceChartView } from '../visualization/balance-chart-view.js';
 import { TimelineView } from '../visualization/timeline-view.js';
 import { TimeControls } from '../visualization/time-controls.js';
+import { EventScheduler } from '../visualization/event-scheduler.js';
+import { ConfigGraphBuilder } from "../visualization/graph-builder.js";
 
 export class BaseApp {
-  constructor({ newScenario, readParams, updateStatePanel, diffStates, showNodeDetail,
+  constructor({ newScenario,
+    updateStatePanel, diffStates, showNodeDetail,
     onChartSnapshot, updateDashCards, chartSeries, formatDate }) {
 
     this.newScenario = newScenario
-    this.readParams = readParams;
     this.customUpdateStatePanel = updateStatePanel;
     this.customDiffStates = diffStates;
     this.customShowNodeDetail = showNodeDetail;
@@ -38,15 +40,36 @@ export class BaseApp {
     this._formatDate = formatDate ?? (d => d.toDateString());
 
     this.scenario = null;
+
+    //UI
+    this.configGraphBuilder = null;
+    this.schedulerUI = null;
     this.graphView = null;
     this.chartView = null;
     this.timelineView = null;
     this.timeControls = null;
+
+    //State
     this.playing = false;
     this.lastSliderValue = 0;
     this._currentDate = null;
     this.activeTab = 'timeline';
     this.activeSidebarTab = 'settings';
+
+    // ── PeriodService: US calendar years 2026-2040, AU fiscal years 2025-2040
+    const periodService = new FinSimLib.Finance.PeriodService();
+    for (let y = 2026; y <= 2040; y++) FinSimLib.Finance.applyTo(periodService, FinSimLib.Finance.buildUsCalendarYear(y));
+    for (let y = 2025; y <= 2040; y++) FinSimLib.Finance.applyTo(periodService, FinSimLib.Finance.buildAuFiscalYear(y));
+
+  }
+
+  // ── Params form ───────────────────────────────────────────────────────────────
+  getParams() {
+    return {};
+  }
+
+  getInitialState() {
+    return {};
   }
 
   /**
@@ -75,17 +98,36 @@ export class BaseApp {
     $('currentStateContent').innerHTML = '';
     $('cumulativeMetricsContent').innerHTML = '';
 
-    //Setup the scenario
-    const params = this.readParams();
+    //Stop Viz
     if (this.graphView)    this.graphView.stopViz();
     if (this.chartView)    this.chartView.stopViz();
+    //TODO Need to stop other UI VIZ?
+    //if(this.schedulerUI) this.schedulerUI.stopViz();
 
-    this.scenario = this.newScenario(params);
+    //Setup the Configuration vizuals
+    this.configGraphBuilder = new ConfigGraphBuilder({
+      graphRoot: document.getElementById('graphRoot'),
+      graphNodes: document.getElementById('graphNodes'),
+      graphEdges: document.getElementById('graphEdges')
+    });
 
+    this.schedulerUI = new EventScheduler({
+      builderCanvas: document.getElementById('builderCanvas'),
+      graph: this.configGraphBuilder
+    });
+
+    //Setup the scenario
+    this.scenario = this.newScenario(this.getParams(), this.getInitialState(), this.schedulerUI);
+
+    //Recreate the simulator and configuration
+    this.scenario.buildSim(this.getParams(), this.getInitialState());
+
+    //TODO Share these across the app, color registry or something?
     const eventColors = new Map(
-      (this.scenario.eventSeries ?? []).map(s => [s.type, s.color]).filter(([, c]) => c)
+        (this.scenario.getRegisteredRecurringEvents() ?? []).map(s => [s.type, s.color]).filter(([, c]) => c)
     );
 
+    /* Event Graph View */
     const graphCanvas = $('graphCanvas');
     if(graphCanvas) {
       this.graphView = new GraphView({

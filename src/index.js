@@ -54,6 +54,8 @@ import { SimulationHistory } from './simulation-framework/simulation-history.js'
 import { SimulationState } from './simulation-framework/simulation-state.js';
 import { Simulation } from './simulation-framework/simulation.js';
 import { BalanceChartView } from './visualization/balance-chart-view.js';
+import { EventScheduler } from './visualization/event-scheduler.js';
+import { ConfigGraphBuilder } from './visualization/graph-builder.js';
 import { GraphView } from './visualization/graph-view.js';
 import { TimeControls } from './visualization/time-controls.js';
 import { TimelineView } from './visualization/timeline-view.js';
@@ -175,6 +177,8 @@ export const Core = {
 
 export const Visualization = {
   BalanceChartView,
+  EventScheduler,
+  ConfigGraphBuilder,
   GraphView,
   TimeControls,
   TimelineView,

@@ -31,38 +31,33 @@ export const startSnapFns = {
  * They must also set `this.customEvents` (default []) if they want one-off event support.
  */
 export class BaseScenario {
-  constructor({ eventSeries, customEvents = [],
+  constructor({
+      eventSchedulerUI,
       simStart =  new Date(Date.UTC(2026, 0, 1)),
       simEnd = new Date(Date.UTC(2041, 0, 1))} = {}) {
 
-    this.eventSeries  = eventSeries;
-    this.customEvents = customEvents;
-
-    //TODO need to move these from the superclasses into here
+    this.eventSchedulerUI = eventSchedulerUI;
     this.sim = null;
     this.simStart = simStart;
     this.simEnd = simEnd;
+
     //ID used for all things to be unique
     this._nextHandlerId = 1;
     this._nextReducerId = 1;
     this._nextEventId = 1;
     // Tracks which event types already have a recurring auto-rescheduling handler
     // registered, so we never register a second one on re-enable.
-    this._registeredRecurringTypes = new Set();
+    this._registeredRecurringTypes = new Map();
+
+    //Register the scenario
+    this.eventSchedulerUI.registerEventChangeListener(e => this.eventChanged(e));
+    this.eventSchedulerUI.registerHandlerChangeListener(h => this.handlerChanged(h));
+    this.eventSchedulerUI.registerActionChangeListener(a => this.actionChanged(a));
+    this.eventSchedulerUI.registerReducerChangeListener(r => this.reducerChanged(r));
   }
 
-  /**
-   * Schedules all enabled recurring event series onto `this.sim`, then schedules
-   * any one-off custom events. Relies on `this.sim` and `this.simStart` being set.
-   */
-  _scheduleEvents() {
-    for (const series of this.eventSeries) {
-      this._scheduleEventSeries(series);
-    }
-
-    for (const ev of this.customEvents) {
-      this._scheduleOneOffEvent(ev);
-    }
+  buildSim(params, initialState) {
+    this.sim = new FinSimLib.Core.Simulation(this.simStart, { initialState });
   }
 
   scheduleEvent(event) {
@@ -78,10 +73,15 @@ export class BaseScenario {
     }else {
       this._scheduleEventSeries(event);
     }
+    this.eventSchedulerUI.addEvent(event);
   }
 
   unscheduleEvent(event) {
     this.sim.unschedule(event.type);
+  }
+
+  getRegisteredRecurringEvents() {
+    return [ ...this._registeredRecurringTypes.values()];
   }
   /**
    * Schedule a single event series.
@@ -105,7 +105,7 @@ export class BaseScenario {
       this.sim.register(series.type, ({ sim, date, data, meta }) => {
         sim.schedule({ date: intervalFn(date), type: series.type, data, meta });
       });
-      this._registeredRecurringTypes.add(series.type);
+      this._registeredRecurringTypes.put(series.type, series);
     }
 
     // Compute the nominal first occurrence from simStart
@@ -135,7 +135,11 @@ export class BaseScenario {
     }
   }
 
-  _registerReducer(reducer) {
+  /**
+   * Remove all pipeline entries for this reducer then re-register it.
+   * Called after a UI-driven property change (priority, action type, etc.).
+   */
+  registerReducer(reducer) {
     // Assign a stable id only on first registration
     if (!reducer.id) {
       reducer.id = 'r' + this._nextReducerId++;
@@ -143,21 +147,69 @@ export class BaseScenario {
     reducer.reducedActions.forEach(action => {
       reducer.registerWith(this.sim.reducers, action.type);
     });
+    this.eventSchedulerUI.addReducer(reducer);
   }
 
-  /**
-   * Remove all pipeline entries for this reducer then re-register it.
-   * Called after a UI-driven property change (priority, action type, etc.).
-   */
-  _reregisterReducer(reducer) {
+
+  reregisterReducer(reducer) {
     this.sim.reducers.unregisterAllForReducer(reducer);
-    this._registerReducer(reducer);
+    this.registerReducer(reducer);
   }
 
-  _registerHandler(handler) {
+  registerHandler(handler) {
     handler.id = 'h' + this._nextHandlerId;
     handler.handledEvents.forEach(e => {
       this.sim.register(e.type, handler, handler.name);
     })
+    this.eventSchedulerUI.addHandler(handler);
+  }
+
+  //Change listeners
+  eventChanged(event) {
+    //Remove from sim
+    this.unscheduleEvent(event);
+    if(event.enabled) {
+      //Don't add to graph 2x so call super
+      this.scheduleEvent(event);
+    }
+  }
+
+  handlerChanged(handler) {
+    // The HandlerEntry object is registered by reference, so name and
+    // generatedActions mutations are already live in the sim.
+    // Re-sync only the event-type → handler mapping, which changes when the
+    // user links or unlinks events via the chip UI.
+    this.sim.handlers.unregisterFromAll(handler);
+    handler.handledEvents.forEach(e => {
+      this.sim.register(e.type, handler);
+    });
+  }
+
+  actionChanged(action) {
+    // Action properties (name, value, fieldName) are on the shared object so
+    // they are already live everywhere that references the action.
+    // If action.type changed, any reducer registered for the old type key will
+    // no longer fire. Find every reducer that holds this action in its
+    // reducedActions list and re-register it so it picks up the current type.
+    const affected = new Set();
+    for (const entries of this.sim.reducers.map.values()) {
+      for (const entry of entries) {
+        if (entry.reducer?.reducedActions.includes(action)) {
+          affected.add(entry.reducer);
+        }
+      }
+    }
+    for (const reducer of affected) {
+      this.reregisterReducer(reducer);
+    }
+  }
+
+  reducerChanged(reducer) {
+    // Priority is captured in the pipeline entry at registration time and
+    // does not update automatically — re-registration picks up the current
+    // value. fieldName, name, and other properties are accessed via closure
+    // so they are already live, but re-registering is harmless and keeps the
+    // pipeline consistent.
+    this.reregisterReducer(reducer);
   }
 }

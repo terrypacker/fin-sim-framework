@@ -42,14 +42,40 @@ function chartSnapshot(chartView, date, state) {
   });
 }
 
+class CustomApp extends FinSimLib.Misc.BaseApp {
+   constructor() {
+     super({
+       newScenario: (params = {}, initialState = {}, eventSchedulerUI) => new CustomScenario({
+         params,
+         initialState,
+         eventSeries, eventSchedulerUI }),
+       updateStatePanel: updateStatePanel,
+       onChartSnapshot: chartSnapshot,
+       showNodeDetail: showNodeDetail,
+       updateDashCards: updateDashCards,
+       chartSeries:     CHART_SERIES,
+       formatDate:      FinSimLib.Visualization.fmtUTC
+     });
+   }
+
+  getInitialState() {
+    return {
+      metrics: {
+        amount: 0,
+        salary: 0
+      }
+    };
+  }
+}
+
 // Editable event series list (copy so user toggles don't mutate the default)
 let eventSeries  = DEFAULT_EVENT_SERIES.map(s => ({ ...s }));
 let customEvents = [];
 let initialState = {};
 
 const app = new FinSimLib.Misc.BaseApp({
-  newScenario:     (params) => new CustomScenario({ params, eventSeries, customEvents }),
-  readParams,
+  newScenario:     (params = getParams(), initialState = getInitialState(), eventSchedulerUI) => new CustomScenario({
+    eventSchedulerUI }),
   updateStatePanel: updateStatePanel,
   onChartSnapshot: chartSnapshot,
   showNodeDetail: showNodeDetail,
@@ -59,8 +85,17 @@ const app = new FinSimLib.Misc.BaseApp({
 });
 
 // ── Params form ───────────────────────────────────────────────────────────────
-function readParams() {
+function getParams() {
+  return {};
+}
 
+function getInitialState() {
+  return {
+    metrics: {
+      amount: 0,
+      salary: 0
+    }
+  };
 }
 
 //TODO Move to BaseApp, Also use in reducers.js

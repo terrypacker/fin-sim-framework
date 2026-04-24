@@ -18,7 +18,6 @@ export class EventScheduler {
     this.actionNodeChangeListeners = [];
     this.reducerNodeChangeListeners = [];
 
-
     this.EVENT_TYPES = [
       'Series',
       'OneOff'

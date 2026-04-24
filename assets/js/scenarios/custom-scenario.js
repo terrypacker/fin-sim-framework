@@ -8,19 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-// ─── Default parameters ────────────────────────────────────────────────────────
-import { EventScheduler } from "../event-scheduler.js";
-import { ConfigGraphBuilder } from "../graph-builder.js";
-import {
-  ArrayMetricReducer
-} from "../../../src/simulation-framework/reducers.js";
-
-export const DEFAULT_PARAMS = {
-
-};
 
 // ─── Recurring event series ────────────────────────────────────────────────────
-
 // NOTE: earnings event types use INTL_ prefix to avoid colliding with the
 // account module handlers (which also register for AU_SAVINGS_EARNINGS etc.
 // and expect data.amount to be provided).
@@ -32,57 +21,12 @@ export const DEFAULT_EVENT_SERIES = [
 // ─── Scenario class ────────────────────────────────────────────────────────────
 
 export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
-  /**
-   * @param {object} [opts]
-   * @param {object}        [opts.params]       - Override DEFAULT_PARAMS
-   * @param {EventSeries[]} [opts.eventSeries]  - Recurring event series
-   * @param {Array}         [opts.customEvents] - One-off events [{type, date, data?}]
-   */
-  constructor({ params = {}, eventSeries = [], customEvents = [] } = {}) {
-    super({ eventSeries, customEvents });
-    this.params   = { ...DEFAULT_PARAMS, ...params };
-    this.handlerLogic = params.handlerLogic;
-    this.reducerLogic = params.reducerLogic;
-
-    //Setup Panel
-    this.configGraphBuilder = new ConfigGraphBuilder({
-      graphRoot: document.getElementById('graphRoot'),
-      graphNodes: document.getElementById('graphNodes'),
-      graphEdges: document.getElementById('graphEdges')
-    });
-    this.schedulerUI = new EventScheduler({
-      builderCanvas: document.getElementById('builderCanvas'),
-      graph: this.configGraphBuilder
-    });
-    this.schedulerUI.registerEventChangeListener(e => this.eventChanged(e));
-    this.schedulerUI.registerHandlerChangeListener(h => this.handlerChanged(h));
-    this.schedulerUI.registerActionChangeListener(a => this.actionChanged(a));
-    this.schedulerUI.registerReducerChangeListener(r => this.reducerChanged(r));
-
-    this._buildSim();
+  constructor({ eventSchedulerUI } = {}) {
+    super({ eventSchedulerUI });
   }
 
-  _buildSim() {
-    const p   = this.params;
-    const USD = FinSimLib.Finance.USD;
-    const AUD = FinSimLib.Finance.AUD;
-
-    // ── PeriodService: US calendar years 2026-2040, AU fiscal years 2025-2040
-    const periodService = new FinSimLib.Finance.PeriodService();
-    for (let y = 2026; y <= 2040; y++) FinSimLib.Finance.applyTo(periodService, FinSimLib.Finance.buildUsCalendarYear(y));
-    for (let y = 2025; y <= 2040; y++) FinSimLib.Finance.applyTo(periodService, FinSimLib.Finance.buildAuFiscalYear(y));
-
-    // ── Initial state
-    const initialState = {
-      metrics: {
-        amount: 0,
-        salary: 0
-      },
-      monthCount: 0,
-      yearCount: 0
-    };
-
-    this.sim = new FinSimLib.Core.Simulation(this.simStart, { initialState });
+  buildSim(params, initialState) {
+    super.buildSim(params, initialState);
 
     //Setup Events
     const monthEndEventSeries = new FinSimLib.Scenarios.EventSeries({
@@ -115,96 +59,30 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
       return actions;
     }, 'Month End Handler');
     monthEndHandler.forEvent(monthEndEventSeries).generateAction(recordSalaryPaymentAction);
-    this._registerHandler(monthEndHandler);
+    this.registerHandler(monthEndHandler);
 
     //Record Salary Reducer
     const recordSalaryPaymentReducer = FinSimLib.Core.MetricReducer
       .fromMetric('amount')
       .reduceAction(recordSalaryPaymentAction)
       .generateAction(sumSalaryPaymentAction);
-    this._registerReducer(recordSalaryPaymentReducer);
+    this.registerReducer(recordSalaryPaymentReducer);
 
     //Sum all salaries
     const sumSalaryPaymentReducer = FinSimLib.Core.NumericSumMetricReducer
       .fromMetric('salary')
       .reduceAction(sumSalaryPaymentAction);
-    this._registerReducer(sumSalaryPaymentReducer);
+    this.registerReducer(sumSalaryPaymentReducer);
 
     //Sum all salaries
     const depositReducer = FinSimLib.Core.ArrayMetricReducer
     .fromMetric('deposits')
     .reduceAction(recordSalaryPaymentAction);
-    this._registerReducer(depositReducer);
-  }
-
-  eventChanged(event) {
-    //Remove from sim
-    super.unscheduleEvent(event);
-    if(event.enabled) {
-      //Don't add to graph 2x so call super
-      super.scheduleEvent(event);
-    }
-  }
-
-  handlerChanged(handler) {
-    // The HandlerEntry object is registered by reference, so name and
-    // generatedActions mutations are already live in the sim.
-    // Re-sync only the event-type → handler mapping, which changes when the
-    // user links or unlinks events via the chip UI.
-    this.sim.handlers.unregisterFromAll(handler);
-    handler.handledEvents.forEach(e => {
-      this.sim.register(e.type, handler);
-    });
-  }
-
-  actionChanged(action) {
-    // Action properties (name, value, fieldName) are on the shared object so
-    // they are already live everywhere that references the action.
-    // If action.type changed, any reducer registered for the old type key will
-    // no longer fire. Find every reducer that holds this action in its
-    // reducedActions list and re-register it so it picks up the current type.
-    const affected = new Set();
-    for (const entries of this.sim.reducers.map.values()) {
-      for (const entry of entries) {
-        if (entry.reducer?.reducedActions.includes(action)) {
-          affected.add(entry.reducer);
-        }
-      }
-    }
-    for (const reducer of affected) {
-      this._reregisterReducer(reducer);
-    }
-  }
-
-  reducerChanged(reducer) {
-    // Priority is captured in the pipeline entry at registration time and
-    // does not update automatically — re-registration picks up the current
-    // value. fieldName, name, and other properties are accessed via closure
-    // so they are already live, but re-registering is harmless and keeps the
-    // pipeline consistent.
-    this._reregisterReducer(reducer);
-  }
-
-  //TODO Move to BaseApp
-  scheduleEvent(event) {
-    super.scheduleEvent(event);
-    //TODO this will be an issue with un-schedule, probably need to keep a list of these around?
-    this.schedulerUI.addEvent(event);
-  }
-
-  //TODO Move to BaseApp
-  _registerReducer(reducer) {
-    super._registerReducer(reducer);
-    this.schedulerUI.addReducer(reducer);
-  }
-
-  //TODO Move to BaseApp
-  _registerHandler(handler) {
-    super._registerHandler(handler);
-    this.schedulerUI.addHandler(handler);
+    this.registerReducer(depositReducer);
   }
 
 
+  //TODO REMOVE
   _registerHandlers(p) {
     this.sim.register('MONTH_END', new FinSimLib.Core.HandlerEntry(this.handlerLogic), 'Custom Handler');
 
@@ -218,6 +96,7 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
     }, 'Month End Handler'));
   }
 
+  //TODO REMOVE
   _registerReducers(p) {
     //MONTH END COUNT
     this.sim.reducers.register('MONTH_END_PROCESS', (state, action, date) => {

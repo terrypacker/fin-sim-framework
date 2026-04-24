@@ -27,7 +27,6 @@ export class ConfigGraphBuilder {
     this.xSpacing = NODE_WIDTH + PADDING;
     this.ySpacing = NODE_HEIGHT + PADDING;
 
-
     this._bindEvents();
   }
 
