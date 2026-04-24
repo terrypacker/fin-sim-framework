@@ -179,6 +179,28 @@ export class IndexedMinHeap {
     }
   }
 
+  /**
+   * Replace the heap contents and rebuild indexMap + typeMap from scratch.
+   * Use this whenever restoring data from a snapshot or branch, instead of
+   * assigning to .data directly (which leaves the maps stale).
+   */
+  restoreData(items) {
+    this.data = items.slice();
+    this.indexMap = new Map();
+    this.typeMap  = new Map();
+
+    for (let i = 0; i < this.data.length; i++) {
+      const item = this.data[i];
+      const key  = this.keyFn(item);
+      const type = this.typeFn(item);
+
+      this.indexMap.set(key, i);
+
+      if (!this.typeMap.has(type)) this.typeMap.set(type, new Set());
+      this.typeMap.get(type).add(key);
+    }
+  }
+
   removeAllByType(type) {
     const set = this.typeMap.get(type);
     if (!set) return 0;

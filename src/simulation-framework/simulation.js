@@ -325,10 +325,10 @@ export class Simulation {
     clone.state = this.deepClone(snap.state);
     clone.rngState = snap.rngState;
 
-    clone.queue.data = snap.queue.map(e => ({
+    clone.queue.restoreData(snap.queue.map(e => ({
       ...e,
       date: new Date(e.date)
-    }));
+    })));
 
     return clone;
   }

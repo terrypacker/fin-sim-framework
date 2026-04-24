@@ -46,6 +46,9 @@ export class BaseScenario {
     this._nextHandlerId = 1;
     this._nextReducerId = 1;
     this._nextEventId = 1;
+    // Tracks which event types already have a recurring auto-rescheduling handler
+    // registered, so we never register a second one on re-enable.
+    this._registeredRecurringTypes = new Set();
   }
 
   /**
@@ -81,25 +84,45 @@ export class BaseScenario {
     this.sim.unschedule(event.type);
   }
   /**
-   * Schedule a single event series
+   * Schedule a single event series.
+   *
+   * Safe to call multiple times for the same type (e.g. after unschedule +
+   * re-enable): the auto-rescheduling handler is registered only once, and
+   * the start date is advanced past the simulation's current date so no
+   * already-processed dates are re-fired.
    * @param series
    * @private
    */
   _scheduleEventSeries(series) {
-    if(series.enabled) {
-      //Prep the series for schedule
-      let start = series.startOffset
-          ? DateUtils.addYears(this.simStart, series.startOffset)
-          : this.simStart;
-      const snapFn = startSnapFns[series.interval];
-      if (snapFn) start = snapFn(start);
-      this.sim.scheduleRecurring({
-        id: series.id,
-        startDate: start,
-        type: series.type,
-        intervalFn: intervalFns[series.interval]
+    if (!series.enabled) return;
+
+    const intervalFn = intervalFns[series.interval];
+
+    // Register the auto-rescheduling handler exactly once per event type.
+    // scheduleRecurring() would register a new one on every call, causing
+    // duplicate events after re-enable.
+    if (!this._registeredRecurringTypes.has(series.type)) {
+      this.sim.register(series.type, ({ sim, date, data, meta }) => {
+        sim.schedule({ date: intervalFn(date), type: series.type, data, meta });
       });
+      this._registeredRecurringTypes.add(series.type);
     }
+
+    // Compute the nominal first occurrence from simStart
+    let start = series.startOffset
+        ? DateUtils.addYears(this.simStart, series.startOffset)
+        : this.simStart;
+    const snapFn = startSnapFns[series.interval];
+    if (snapFn) start = snapFn(start);
+
+    // After a rewind + re-enable, currentDate may be ahead of simStart.
+    // Advance start until it is strictly after currentDate so we don't
+    // re-fire dates that have already been processed.
+    while (start <= this.sim.currentDate) {
+      start = intervalFn(start);
+    }
+
+    this.sim.schedule({ date: start, type: series.type });
   }
 
   _scheduleOneOffEvent(event) {

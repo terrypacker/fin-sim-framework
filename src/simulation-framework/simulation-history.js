@@ -45,7 +45,7 @@ export class SimulationHistory {
     this._sim.currentDate = new Date(snap.date);
     this._sim.state = structuredClone(snap.state);
     this._sim.rngState = snap.rngState;
-    this._sim.queue.data = snap.queue.map(e => ({ ...e, date: new Date(e.date) }));
+    this._sim.queue.restoreData(snap.queue.map(e => ({ ...e, date: new Date(e.date) })));
     this.snapshotCursor = index;
   }
 
