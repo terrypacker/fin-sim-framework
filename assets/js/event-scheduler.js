@@ -422,27 +422,92 @@ export class EventScheduler {
       const index = myChildren.findIndex(n => n.id == chipNode.id);
       if(index < 0) {
         myChildren.push(chipNode);
-        //Add edge
         if(linkTo) {
           this.graph.addEdge({from: node.id, to: chipNode.id});
         }else {
           this.graph.addEdge({from: chipNode.id, to: node.id});
         }
         chip.classList.toggle('reducer-chip-on', true);
-        //TODO Callback to simulator
+        this._syncCanonicalArrays(node, chipNode, kind, linkTo, 'add');
       }else {
         myChildren.splice(index, 1);
-        //Remove Edge
         if(linkTo) {
           this.graph.removeEdge({from: node.id, to: chipNode.id});
         }else {
           this.graph.removeEdge({from: chipNode.id, to: node.id});
         }
         chip.classList.toggle('reducer-chip-on', false);
-        //TODO Callback to simulator
+        this._syncCanonicalArrays(node, chipNode, kind, linkTo, 'remove');
       }
       countSpan.innerText = `${myChildren.length} selected`;
     });
+  }
+
+  /**
+   * After a chip toggle, update the canonical array on the correct object and
+   * fire _nodeChanged on the node that owns the sim registration.
+   *
+   * The graph edges are the UI representation; the arrays on the domain objects
+   * (handledEvents, generatedActions, reducedActions) are the sim representation.
+   * These must be kept in sync, but the direction of ownership varies:
+   *
+   *   Handler editor → event chips   : node = handler,  owns handledEvents
+   *   Handler editor → action chips  : node = handler,  owns generatedActions
+   *   Reducer editor → action chips  : node = reducer,  owns reducedActions / generatedActions
+   *   Event editor   → handler chips : chipNode = handler, owns handledEvents
+   *   Action editor  → handler chips : chipNode = handler, owns generatedActions
+   *   Action editor  → reducer chips : chipNode = reducer, owns reducedActions
+   */
+  _syncCanonicalArrays(node, chipNode, kind, linkTo, op) {
+    const add = op === 'add';
+
+    const syncArr = (arr, item) => {
+      if (add) {
+        if (!arr.some(n => n.id === item.id)) arr.push(item);
+      } else {
+        const i = arr.findIndex(n => n.id === item.id);
+        if (i !== -1) arr.splice(i, 1);
+      }
+    };
+
+    // Cases where node owns the canonical array → notify node
+    if (node.kind === 'handler' && kind === 'event' && !linkTo) {
+      syncArr(node.handledEvents, chipNode);
+      this._nodeChanged(node);
+      return;
+    }
+    if (node.kind === 'handler' && kind === 'action' && linkTo) {
+      syncArr(node.generatedActions, chipNode);
+      this._nodeChanged(node);
+      return;
+    }
+    if (node.kind === 'reducer' && kind === 'action' && !linkTo) {
+      syncArr(node.reducedActions, chipNode);
+      this._nodeChanged(node);
+      return;
+    }
+    if (node.kind === 'reducer' && kind === 'action' && linkTo) {
+      syncArr(node.generatedActions, chipNode);
+      this._nodeChanged(node);
+      return;
+    }
+
+    // Cases where chipNode owns the canonical array → notify chipNode
+    if (node.kind === 'event' && kind === 'handler' && linkTo) {
+      syncArr(chipNode.handledEvents, node);
+      this._nodeChanged(chipNode);
+      return;
+    }
+    if (node.kind === 'action' && kind === 'handler' && !linkTo) {
+      syncArr(chipNode.generatedActions, node);
+      this._nodeChanged(chipNode);
+      return;
+    }
+    if (node.kind === 'action' && kind === 'reducer' && linkTo) {
+      syncArr(chipNode.reducedActions, node);
+      this._nodeChanged(chipNode);
+      return;
+    }
   }
 
 }

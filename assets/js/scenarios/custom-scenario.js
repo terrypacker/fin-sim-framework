@@ -147,15 +147,42 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
   }
 
   handlerChanged(handler) {
-
+    // The HandlerEntry object is registered by reference, so name and
+    // generatedActions mutations are already live in the sim.
+    // Re-sync only the event-type → handler mapping, which changes when the
+    // user links or unlinks events via the chip UI.
+    this.sim.handlers.unregisterFromAll(handler);
+    handler.handledEvents.forEach(e => {
+      this.sim.register(e.type, handler);
+    });
   }
 
   actionChanged(action) {
-
+    // Action properties (name, value, fieldName) are on the shared object so
+    // they are already live everywhere that references the action.
+    // If action.type changed, any reducer registered for the old type key will
+    // no longer fire. Find every reducer that holds this action in its
+    // reducedActions list and re-register it so it picks up the current type.
+    const affected = new Set();
+    for (const entries of this.sim.reducers.map.values()) {
+      for (const entry of entries) {
+        if (entry.reducer?.reducedActions.includes(action)) {
+          affected.add(entry.reducer);
+        }
+      }
+    }
+    for (const reducer of affected) {
+      this._reregisterReducer(reducer);
+    }
   }
 
   reducerChanged(reducer) {
-
+    // Priority is captured in the pipeline entry at registration time and
+    // does not update automatically — re-registration picks up the current
+    // value. fieldName, name, and other properties are accessed via closure
+    // so they are already live, but re-registering is harmless and keeps the
+    // pipeline consistent.
+    this._reregisterReducer(reducer);
   }
 
   //TODO Move to BaseApp

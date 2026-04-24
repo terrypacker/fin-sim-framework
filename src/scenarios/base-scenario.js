@@ -136,11 +136,22 @@ export class BaseScenario {
   }
 
   _registerReducer(reducer) {
-    //Set a unique id
-    reducer.id = 'r' + this._nextReducerId++;
+    // Assign a stable id only on first registration
+    if (!reducer.id) {
+      reducer.id = 'r' + this._nextReducerId++;
+    }
     reducer.reducedActions.forEach(action => {
       reducer.registerWith(this.sim.reducers, action.type);
     });
+  }
+
+  /**
+   * Remove all pipeline entries for this reducer then re-register it.
+   * Called after a UI-driven property change (priority, action type, etc.).
+   */
+  _reregisterReducer(reducer) {
+    this.sim.reducers.unregisterAllForReducer(reducer);
+    this._registerReducer(reducer);
   }
 
   _registerHandler(handler) {

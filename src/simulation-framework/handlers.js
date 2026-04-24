@@ -67,4 +67,18 @@ export class HandlerRegistry {
   has(type) {
     return this.map.has(type);
   }
+
+  /**
+   * Remove a HandlerEntry from every event-type list it appears in.
+   * Used when re-syncing a handler's handledEvents after a UI edit.
+   */
+  unregisterFromAll(handler) {
+    for (const [type, entries] of this.map) {
+      const idx = entries.indexOf(handler);
+      if (idx !== -1) {
+        entries.splice(idx, 1);
+        if (entries.length === 0) this.map.delete(type);
+      }
+    }
+  }
 }

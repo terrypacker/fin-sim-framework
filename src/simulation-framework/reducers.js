@@ -37,6 +37,39 @@ export class ReducerPipeline {
     list.sort((a, b) => a.priority - b.priority);
   }
 
+  /**
+   * Register a Reducer instance, storing a back-reference so it can be found
+   * and removed later (e.g. on priority or action-type change).
+   */
+  registerReducer(actionType, reducer) {
+    if (!this.map.has(actionType)) this.map.set(actionType, []);
+    const list = this.map.get(actionType);
+    list.push({
+      fn:      (s, a, d) => reducer.reduce(s, a, d),
+      priority: reducer.priority,
+      name:     reducer.name,
+      reducer               // back-reference for unregisterAllForReducer
+    });
+    list.sort((a, b) => a.priority - b.priority);
+  }
+
+  /**
+   * Remove every pipeline entry that was registered from the given Reducer
+   * instance. Used before re-registering after a UI-driven property change.
+   */
+  unregisterAllForReducer(reducer) {
+    for (const [actionType, entries] of this.map) {
+      const filtered = entries.filter(e => e.reducer !== reducer);
+      if (filtered.length < entries.length) {
+        if (filtered.length === 0) {
+          this.map.delete(actionType);
+        } else {
+          this.map.set(actionType, filtered);
+        }
+      }
+    }
+  }
+
   get(actionType) {
     return this.map.get(actionType) || [];
   }
@@ -108,9 +141,11 @@ export class Reducer {
 
   /**
    * Convenience: register this reducer instance with a ReducerPipeline.
+   * Uses registerReducer so a back-reference is stored, enabling
+   * unregisterAllForReducer to find and remove this entry later.
    */
   registerWith(pipeline, actionType) {
-    pipeline.register(actionType, (s, a, d) => this.reduce(s, a, d), this.priority, this.name);
+    pipeline.registerReducer(actionType, this);
     return this;
   }
 }
