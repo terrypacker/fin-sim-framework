@@ -43,6 +43,13 @@ export default [
             { src: '*.html', dest: 'dist' }
           ]
         }),
+        isWatching && copy({
+          watch: 'assets',
+          targets: [
+            { src: 'assets/**/*', dest: 'dist/assets', flatten: false },
+            { src: '*.html', dest: 'dist' }
+          ]
+        }),
         isWatching && serve({
           contentBase: ['.', 'dist']
         }),
