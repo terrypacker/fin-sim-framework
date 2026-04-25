@@ -9,7 +9,7 @@
     "clean": "rm -rf dist",
     "build:index": "node scripts/build-index.js",
     "build": "rollup -c",
-    "test": "node --test $(find tests -name '*.test.mjs' ! -name 'timeline-view.test.mjs' ! -name 'balance-chart-view.test.mjs' ! -name 'time-controls.test.mjs')",
+    "test": "node --test $(find tests -name '*.test.mjs' ! -name 'timeline-view.test.mjs' ! -name 'balance-chart-view.test.mjs' ! -name 'time-controls.test.mjs' ! -name 'base-app.test.mjs')",
     "test:viz": "node --experimental-vm-modules node_modules/.bin/jest --config jest.config.cjs",
     "test:all": "npm run test && npm run test:viz",
     "build:watch": "rollup -c -w",
