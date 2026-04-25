@@ -517,7 +517,7 @@ export class BaseApp {
   //UI Format HELPERS
   fmtVal(v, objAsCode = false) {
     if (v == null) return '—';
-    if (typeof v === 'number') return v.toFixed(2); //TODO Format as $?
+    if (typeof v === 'number') return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); //TODO Format as $?
     if (Array.isArray(v)) {
       return this.fmtArray(v, objAsCode)
     }
