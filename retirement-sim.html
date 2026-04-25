@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<!--
+  Copyright (c) 2026 Terry Packer.
+  Licensed under the Apache License, Version 2.0.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Retirement Drawdown Simulation</title>
+  <link rel="stylesheet" href="./assets/css/app.css">
+</head>
+<body class="app-financial">
+
+<!-- ── Top bar ──────────────────────────────────────────────────────────────── -->
+<div id="topbar">
+  <h1>Retirement Drawdown Simulation</h1>
+  <div>
+    <button class="tab-btn active"        data-tab="timeline">Timeline</button>
+    <button class="tab-btn"        data-tab="charts">Balance Charts</button>
+  </div>
+</div>
+
+<!-- ── Main ─────────────────────────────────────────────────────────────────── -->
+<div id="main">
+
+  <!-- ── Side panel ─────────────────────────────────────────────────────────── -->
+  <div id="panel">
+
+    <!-- Parameters -->
+    <div>
+      <div class="section-title">Expenses &amp; Accounts</div>
+
+      <div class="field">
+        <label>Monthly Expenses ($)</label>
+        <input type="number" id="monthlyExpenses" value="5000" min="0" step="100">
+      </div>
+      <div class="field">
+        <label>Checking Min Balance ($)</label>
+        <input type="number" id="checkingMinBalance" value="2000" min="0" step="500">
+      </div>
+      <div class="field">
+        <label>Initial Checking Balance ($)</label>
+        <input type="number" id="initialChecking" value="20000" min="0" step="1000">
+      </div>
+      <div class="field">
+        <label>Checking Interest Rate (%)</label>
+        <input type="number" id="checkingInterestRate" value="2" min="0" max="20" step="0.25">
+      </div>
+
+      <div class="section-title" style="margin-top:10px">Brokerage — Stocks</div>
+      <div class="field">
+        <label>Initial Stocks Value ($)</label>
+        <input type="number" id="initialStocksValue" value="200000" min="0" step="5000">
+      </div>
+      <div class="field">
+        <label>Stocks Cost Basis ($)</label>
+        <input type="number" id="initialStocksCostBasis" value="100000" min="0" step="5000">
+      </div>
+      <div class="field">
+        <label>Annual Dividend Rate (%)</label>
+        <input type="number" id="stockDividendRate" value="2" min="0" max="20" step="0.25">
+      </div>
+
+      <div class="section-title" style="margin-top:10px">Brokerage — Bonds</div>
+      <div class="field">
+        <label>Initial Bonds Value ($)</label>
+        <input type="number" id="initialBondsValue" value="100000" min="0" step="5000">
+      </div>
+      <div class="field">
+        <label>Annual Bond Interest Rate (%)</label>
+        <input type="number" id="bondInterestRate" value="4" min="0" max="20" step="0.25">
+      </div>
+
+      <div class="section-title" style="margin-top:10px">Retirement Account</div>
+      <div class="field">
+        <label>Initial Retirement Balance ($)</label>
+        <input type="number" id="initialRetirement" value="500000" min="0" step="10000">
+      </div>
+      <div class="field">
+        <label>Retirement Access Year</label>
+        <input type="number" id="retirementAccessYear" value="2030" min="2026" max="2041" step="1">
+      </div>
+
+      <div class="section-title" style="margin-top:10px">Taxes</div>
+      <div class="field">
+        <label>Capital Gains Tax Rate (%)</label>
+        <input type="number" id="capitalGainsTaxRate" value="15" min="0" max="40" step="1">
+      </div>
+      <div class="field">
+        <label>Ordinary Income Tax Rate (%)</label>
+        <input type="number" id="incomeTaxRate" value="22" min="0" max="50" step="1">
+      </div>
+
+      <button class="action-btn" id="rebuildBtn" style="margin-top:10px">↺ Rebuild Simulation</button>
+    </div>
+
+    <!-- Recurring event series -->
+    <div>
+      <div class="section-title">Recurring Events</div>
+      <div id="eventList"></div>
+
+      <button class="secondary-btn" id="addEventBtn" style="margin-top:8px; width:100%;">
+        + Add One-Off Event
+      </button>
+
+      <div id="addEventForm" class="hidden">
+        <div class="field">
+          <label>Event Type</label>
+          <select id="newEventType" style="background:#0f172a; color:#e5e7eb; border:1px solid #334155; padding:4px; font-family:monospace; font-size:12px; border-radius:3px; width:100%;">
+            <option value="MONTHLY_EXPENSES">MONTHLY_EXPENSES — monthly expense</option>
+            <option value="ANNUAL_DIVIDENDS">ANNUAL_DIVIDENDS — stock dividends</option>
+            <option value="ANNUAL_BOND_INTEREST">ANNUAL_BOND_INTEREST — bond interest</option>
+            <option value="ANNUAL_CHECKING_INTEREST">ANNUAL_CHECKING_INTEREST — checking interest</option>
+            <option value="ANNUAL_TAX">ANNUAL_TAX — annual tax filing</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Date</label>
+          <input type="date" id="newEventDate" min="2026-01-01" max="2040-12-31"
+                 style="background:#0f172a; color:#e5e7eb; border:1px solid #334155; padding:4px; font-family:monospace; font-size:12px; border-radius:3px; width:100%;">
+        </div>
+        <div class="field">
+          <label>Amount Override (optional)</label>
+          <input type="number" id="newEventAmount" placeholder="leave blank for default" min="0" step="100">
+        </div>
+        <div class="form-row">
+          <button class="action-btn"   id="submitEventBtn">Add</button>
+          <button class="secondary-btn" id="cancelEventBtn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live state -->
+    <div id="currentState">
+      <div class="section-title">Current State</div>
+      <div id="currentStateContent"></div>
+    </div>
+
+    <!-- Cumulative metrics -->
+    <div id="cumulativeMetrics">
+      <div class="section-title">Cumulative Metrics</div>
+      <div id="cumulativeMetricsContent"></div>
+    </div>
+
+  </div><!-- end #panel -->
+
+  <!-- ── Content (tab panels) ───────────────────────────────────────────────── -->
+  <div id="content">
+
+    <!-- Balance chart tab -->
+    <div id="chartsTab" class="tab-panel hidden">
+      <canvas id="chartCanvas"></canvas>
+    </div>
+
+    <!-- Timeline tab -->
+    <div id="timelineTab" class="tab-panel hidden">
+      <div id="timelineContainer"></div>
+    </div>
+
+  </div><!-- end #content -->
+
+</div><!-- end #main -->
+
+<!-- ── Time controls ─────────────────────────────────────────────────────────── -->
+<div id="controls">
+  <button id="resetBtn"     title="Reset to start">↩</button>
+  <button id="stepBackward" title="Step backward">←</button>
+  <button id="playPause"    title="Play / Pause">▶</button>
+  <button id="stepForward"  title="Step forward">→</button>
+  <input  id="timeSlider" type="range" min="0" max="100" value="0">
+  <span   id="timeLabel">2026-01-01</span>
+</div>
+<script type="module" src="./index.umd.min.js"></script>
+<script type="module" src="./assets/js/retirement-app.js"></script>
+</body>
+</html>
