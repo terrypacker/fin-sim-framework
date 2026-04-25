@@ -170,7 +170,6 @@ export class BaseApp {
         $('timeSlider').value = sliderVal;
         this.lastSliderValue = sliderVal;
       },
-      eventColors,
       formatDate:  this._formatDate,
     });
     this.timelineView.attach(this.scenario.sim.journal);
@@ -424,6 +423,9 @@ export class BaseApp {
 
   startPlaying() {
     this.playing = true;
+    // Playback drives the slider continuously, not event-by-event, so
+    // clear the step-forward history.  stepBack() will use snapshot scanning.
+    this.timeControls.clearStepHistory();
     $('playPause').textContent = '⏸';
     this.animate();
   }
@@ -461,10 +463,7 @@ export class BaseApp {
     });
 
     $('stepBackward').addEventListener('click', () => {
-      const slider = $('timeSlider');
-      if (+slider.value <= 0) return;
-      slider.value = +slider.value - 1;
-      this.timeControls.rewindTo(+slider.value / 100);
+      this.timeControls.stepBack();
     });
 
     // True reset: rebuild the scenario from scratch so the sim queue and state

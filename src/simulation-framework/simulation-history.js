@@ -50,6 +50,15 @@ export class SimulationHistory {
   }
 
   rewindToStart() {
+    if (!this.snapshots[0]) {
+      // No valid initial snapshot yet (stepTo has not been called, or was called
+      // to a date before the first event).  Reset counters so the next stepTo
+      // creates a fresh snap0 before the first event fires.
+      this.snapshots.length = 0;
+      this.snapshotCursor = -1;
+      this.eventCounter = 0;
+      return;
+    }
     this.restoreSnapshot(0);
     this.eventCounter = 0;
     this.snapshots.length = 1;   // prevent unbounded growth on repeated rewinds

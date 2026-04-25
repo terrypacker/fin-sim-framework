@@ -115,8 +115,8 @@ export class BaseScenario {
     // scheduleRecurring() would register a new one on every call, causing
     // duplicate events after re-enable.
     if (!this._registeredRecurringTypes.has(series.type)) {
-      this.sim.register(series.type, ({ sim, date, data, meta }) => {
-        sim.schedule({ date: intervalFn(date), type: series.type, data, meta });
+      this.sim.register(series.type, ({ sim, date }) => {
+        sim.schedule({ ...series, date: intervalFn(date) });
       });
       this._registeredRecurringTypes.set(series.type, series);
     }
@@ -135,16 +135,12 @@ export class BaseScenario {
       start = intervalFn(start);
     }
 
-    this.sim.schedule({ date: start, type: series.type });
+    this.sim.schedule({ ...series, date: start });
   }
 
   _scheduleOneOffEvent(event) {
     if (event.enabled) {
-      this.sim.schedule({
-        id: event.id,
-        date: new Date(event.date),
-        type: event.type
-      });
+      this.sim.schedule({ ...event, date: new Date(event.date) });
     }
   }
 

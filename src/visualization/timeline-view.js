@@ -13,12 +13,11 @@ const fmt = n => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, max
 let _tlViewCounter = 0;
 
 export class TimelineView {
-  constructor({ container, onDetail, onRewind, eventColors = new Map(), formatDate }) {
-    this.container   = container;
-    this.onDetail    = onDetail;
-    this.onRewind    = onRewind ?? null;
-    this.eventColors = eventColors;
-    this.formatDate  = formatDate ?? (d => d.toDateString());
+  constructor({ container, onDetail, onRewind, formatDate }) {
+    this.container  = container;
+    this.onDetail   = onDetail;
+    this.onRewind   = onRewind ?? null;
+    this.formatDate = formatDate ?? (d => d.toDateString());
     this.journal     = null;
     this.expanded    = new Set(); // 'dateStr' or 'dateStr::eventType'
     this._lastLen    = 0;
@@ -212,7 +211,7 @@ export class TimelineView {
           const evKey   = `${dateStr}::${evType}`;
           const evOpen  = this.expanded.has(evKey);
 
-          const evColor = this.eventColors.get(evType);
+          const evColor = items[0]?.entry?.sourceEvent?.color;
           const evTypeStyle = evColor ? ` style="color:${evColor}"` : '';
           html.push(`<div class="tl-ev-row">
             <span class="tl-pipe">${lastEv ? '└' : '├'}</span>
