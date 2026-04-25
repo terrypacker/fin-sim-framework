@@ -39,6 +39,7 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 }
 
 .time-controls { display: flex; align-items: center; gap: 8px; }
+.time-control-label { width: 300px; }
 
 /* ── MAIN GRID ── */
 #mainGrid {
