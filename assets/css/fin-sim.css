@@ -497,7 +497,7 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 
 /* ── STATE CHANGE GRID ── */
 [data-state-change-grid] {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.5fr) minmax(0, 1fr);
   overflow-x: auto;
 }
 

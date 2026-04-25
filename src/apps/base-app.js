@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-import { $, fmt } from '../visualization/ui-utils.js'
+import { $, fmt, fmtUTC, fmtLocal} from '../visualization/ui-utils.js'
 import { GraphView } from '../visualization/graph-view.js';
 import { BalanceChartView } from '../visualization/balance-chart-view.js';
 import { TimelineView } from '../visualization/timeline-view.js';
@@ -26,18 +26,14 @@ import { EventScheduler } from '../visualization/event-scheduler.js';
 import { ConfigGraphBuilder } from "../visualization/graph-builder.js";
 
 export class BaseApp {
-  constructor({ newScenario,
-    updateStatePanel, diffStates, showNodeDetail,
-    onChartSnapshot, updateDashCards, chartSeries, formatDate }) {
+  constructor({ newScenario, updateChart = null, chartSeries }) {
 
     this.newScenario = newScenario
-    this.customUpdateStatePanel = updateStatePanel;
-    this.customDiffStates = diffStates;
-    this.customShowNodeDetail = showNodeDetail;
-    this.onChartSnapshot = onChartSnapshot ?? null;
-    this.updateDashCards = updateDashCards ?? null;
+    if(updateChart != null) {
+      this.updateChart = updateChart;
+    }
     this.chartSeries = chartSeries ?? null;
-    this._formatDate = formatDate ?? (d => d.toDateString());
+    this._formatDate = (d) => d.toDateString();
 
     this.scenario = null;
 
@@ -53,8 +49,15 @@ export class BaseApp {
     this.playing = false;
     this.lastSliderValue = 0;
     this._currentDate = null;
+    // Current display currency — 'USD' or 'AUD'.  Updated by the selector.
+    this.displayCurrency = 'USD';
+
+    //TODO REMOVE?
     this.activeTab = 'timeline';
+
+    //TODO REMOVE ?
     this.activeSidebarTab = 'settings';
+
 
     // ── PeriodService: US calendar years 2026-2040, AU fiscal years 2025-2040
     const periodService = new FinSimLib.Finance.PeriodService();
@@ -70,6 +73,10 @@ export class BaseApp {
 
   getInitialState() {
     return {};
+  }
+
+  updateChart(chartView, date, state) {
+    chartView.addSnapshot(date, state.metrics ? {...state.metrics} : {});
   }
 
   /**
@@ -156,7 +163,7 @@ export class BaseApp {
     // Timeline view
     this.timelineView = new TimelineView({
       container:   $('timelineContainer'),
-      onDetail:    (node) => this.customShowNodeDetail ?  this.customShowNodeDetail(node) : this.showDetailModal(node),
+      onDetail:    (node) => this.showNodeDetail(node),
       onRewind:    (date) => {
         const pct = (date.getTime() - this.scenario.simStart.getTime()) /
                     (this.scenario.simEnd.getTime() - this.scenario.simStart.getTime());
@@ -165,7 +172,6 @@ export class BaseApp {
         const sliderVal = Math.round(clamped * 100);
         $('timeSlider').value = sliderVal;
         this.lastSliderValue = sliderVal;
-        this.updateStatePanel();
       },
       eventColors,
       formatDate:  this._formatDate,
@@ -193,18 +199,8 @@ export class BaseApp {
       if(this.graphView) {
         this.graphView.updateView(payload);
       }
-      this.customUpdateStatePanel ? this.customUpdateStatePanel(date, payload.stateAfter) : this.updateStatePanel(date, payload.stateAfter);
-      if (payload.type === 'RECORD_BALANCE') {
-        if (this.onChartSnapshot) {
-          this.onChartSnapshot(this.chartView, payload.date, payload.stateAfter);
-        } else {
-          this.chartView.addSnapshot(
-              payload.date,
-              payload.stateAfter.checkingAccount.balance,
-              payload.stateAfter.savingsAccount.balance
-          );
-        }
-      }
+      this.updateStatePanel(date, payload.stateAfter);
+      this.updateChart(this.chartView, payload.type, payload.date, payload.stateAfter);
       if(this.updateDashCards)
         this.updateDashCards(payload);
     });
@@ -214,12 +210,10 @@ export class BaseApp {
     this.lastSliderValue = 0;
     this._currentDate = this.scenario.simStart;
     $('timeLabel').textContent = this._formatDate(this.scenario.simStart);
-
-    this.updateStatePanel();
   }
 
   buildActionDetail(entry) {
-    const changes  = this.customDiffStates ? this.customDiffStates(entry.prevState, entry.nextState) : this.diffStates(entry.prevState, entry.nextState);
+    const changes  = this.diffStates(entry.prevState, entry.nextState);
     const emitted  = entry.emittedActions?.length
         ? entry.emittedActions.map(a => a.type).join(', ')
         : '(none)';
@@ -236,146 +230,130 @@ export class BaseApp {
     }
   }
 
-  showDetailModal(entry) {
-    const existing = document.getElementById('detailModal');
-    if (existing) existing.remove();
+  updateStatePanel(date, state) {
+    if (!state) return;
 
+    const { metrics, ...rest } = state;
+    const newStateDetails = this.createStateDetails('stateDetailsTemplate', date, rest);
+    const stateDetails = $('currentStateContent');
+    stateDetails.replaceChildren(newStateDetails);
+
+    const newMetricDetails = this.createStateDetails('stateDetailsTemplate', date, metrics);
+    const metricDetails = $('cumulativeMetricsContent');
+    metricDetails.replaceChildren(newMetricDetails);
+  }
+
+  createStateDetails(templateId, date, state) {
+    if (!state) return;
+    const templateContent = document.querySelector(`#${templateId}`);
+    const clone = document.importNode(templateContent, true).content;
+    const statGrid = clone.querySelector('[data-stat-grid]');
+    this.renderState(state, statGrid);
+    return clone;
+  }
+
+  renderState(obj, statGrid){
+    for (const [k, v] of Object.entries(obj)) {
+      if (Array.isArray(v) && v.length > 0 && v[0] !== null && typeof v[0] === 'object') {
+        //Process an array of objects?
+        const arrayHeaderRow = this.renderHeaderRow(k);
+        statGrid.appendChild(arrayHeaderRow);
+
+        //Array of Objects
+        let index = 0;
+        for (const item of v) {
+          let name,value;
+          if(this.isDate(item)) {
+            name = '[' + index + ']';
+            value = this._formatDate(item);
+          }else {
+            name  = item.name ?? JSON.stringify(item);
+            value = item.value != null ? item.value : '';
+          }
+
+          const arrayRow = document.importNode(statGrid.querySelector('[data-stat-row]'), true);
+          arrayRow.style = '';
+          arrayRow.querySelector('.stat-label').innerText = name;
+          arrayRow.querySelector('.stat-value').innerText = value;
+          statGrid.appendChild(arrayRow);
+          index++;
+        }
+      }else if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+        const objectHeaderRow = this.renderHeaderRow(k);
+        statGrid.appendChild(objectHeaderRow);
+        for (const [sk, sv] of Object.entries(v)) {
+          if (Array.isArray(sv) && sv.length > 0 && typeof sv[0] === 'object') continue;
+          const statRow = document.importNode(statGrid.querySelector('[data-stat-row]'), true);
+          statRow.style = '';
+          statRow.querySelector('.stat-label').innerText = this.toLabel(sk);
+          statRow.querySelector('.stat-value').innerText = typeof sv === 'object' ? this.renderObj(sv) : sv;
+          statGrid.appendChild(statRow);
+        }
+      } else {
+        const statRow = document.importNode(statGrid.querySelector('[data-stat-row]'), true);
+        statRow.style = '';
+        statRow.querySelector('.stat-label').innerText = this.toLabel(k);
+        statRow.querySelector('.stat-value').innerText = typeof v === 'object' ? this.renderObj(v) : this.fmtVal(v);
+        statGrid.appendChild(statRow);
+      }
+    }
+  }
+
+  showNodeDetail(entry) {
     const actionDetail = this.buildActionDetail(entry);
-
     const changes = actionDetail.changes;
     const emitted= actionDetail.emitted;
     const actionPayload = actionDetail.actionPayload;
-
-    const diffRows = changes.length === 0
-        ? '<tr><td colspan="3" style="text-align:center;color:#64748b;padding:8px">No scalar state changes</td></tr>'
-        : changes.map(c => {
-          const fmtVal = v => {
-            if (v == null) return '—';
-            if (typeof v === 'number') return fmt(v);
-            if (Array.isArray(v)) return v.map(x => typeof x === 'object' && x !== null ? JSON.stringify(x) : String(x)).join(', ') || '—';
-            if (typeof v === 'object') return JSON.stringify(v);
-            return String(v);
-          };
-          const deltaHtml = c.delta != null
-              ? `<span class="${c.delta >= 0 ? 'diff-pos' : 'diff-neg'}">${c.delta >= 0 ? '+' : ''}${fmt(c.delta)}</span>`
-              : '';
-          return `<tr>
-          <td class="diff-field">${c.field}</td>
-          <td class="diff-before">${fmtVal(c.before)}</td>
-          <td class="diff-after">${fmtVal(c.after)} ${deltaHtml}</td>
-        </tr>`;
-        }).join('');
-
-    let stateInfo;
-    if(changes.length > 0) {
-      stateInfo = `        
-        <div class="modal-section-title">State Changes</div>
-        <table class="diff-table">
-          <thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead>
-          <tbody>${diffRows}</tbody>
-        </table>
-    `;
-    }else {
-      stateInfo = `
-      <div class="modal-section-title">State (No Change)</div>
-      <pre class="modal-code">${JSON.stringify(entry.prevState,null, 2)}</pre>
-      `;
-    }
-
-
-    const overlay = document.createElement('div');
-    overlay.id    = 'detailModal';
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML = `
-    <div class="modal-box">
-      <div class="modal-hdr">
-        <span>${entry.action.type}</span>
-        <button class="modal-close" title="Close">✕</button>
-      </div>
-      <div class="modal-body">
-        <table class="modal-meta">
-          <tr><td>Date</td>         <td>${this._formatDate(entry.date)}</td></tr>
-          <tr><td>Source event</td> <td>${entry.eventType}</td></tr>
-          <tr><td>Reducer</td>      <td>${entry.reducer}</td></tr>
-          <tr><td>Emitted</td>      <td>${emitted}</td></tr>
-        </table>
-
-        <div class="modal-section-title">Action Payload</div>
-        <pre class="modal-code">${actionPayload}</pre>
-        ${stateInfo}
-      </div>
-    </div>`;
-
-    overlay.querySelector('.modal-close').addEventListener('click', () => overlay.remove());
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-    document.body.appendChild(overlay);
+    const newActionDetails = this.createActionDetail('actionTemplate', {entry, changes, emitted, actionPayload});
+    const actionDetails =$('actionPanelDetails');
+    actionDetails.replaceChildren(newActionDetails);
   }
 
-  // ─── Tab switching ────────────────────────────────────────────────────────────
-  switchTab(tab, sidebar) {
-    if(sidebar) {
-      this.activeSidebarTab = tab;
-      document.querySelectorAll('.sidebar-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-      document.querySelectorAll('.sidebar-tab-panel').forEach(p => p.classList.toggle('hidden', p.id !== tab + 'Tab'));
-    }else {
-      this.activeTab = tab;
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-      document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('hidden', p.id !== tab + 'Tab'));
+  createActionDetail(templateId, content) {
+    const templateContent = document.querySelector(`#${templateId}`);
+    const clone = document.importNode(templateContent, true).content;
+
+    //Populate overview
+    const overviewGrid = clone.querySelector('[data-overview-grid]');
+    const fields = overviewGrid.querySelectorAll('[data-id]');
+    for(const field of fields) {
+      const value = this.getNestedProperty(content, field.getAttribute('data-id'));
+      field.innerText = this.fmtVal(value);
     }
-    this.resizeCanvases();
-  }
 
-  // Node Detail
-  formatNodeDetailHtml(node) {
-    const diff = this.customDiffStates ? this.customDiffStates(node.stateBefore, node.stateAfter) : this.diffStates(node.stateBefore, node.stateAfter);
-
-    const fmtVal = v => {
-      if (typeof v === 'number') return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      return JSON.stringify(v);
-    };
-
-    const actionFields = Object.entries(node.action || {})
-    .filter(([k]) => !k.startsWith('_'))
-    .map(([k, v]) => `<tr>
-      <td style="color:#64748b;padding:2px 4px">${k}</td>
-      <td style="color:#e5e7eb;padding:2px 4px">${typeof v === 'number' ? fmtVal(v) : JSON.stringify(v)}</td>
-    </tr>`)
-    .join('');
-
-    const diffRows = diff.length === 0
-        ? '<tr><td colspan="3" style="color:#64748b;padding:4px;text-align:center">No state changes</td></tr>'
-        : diff.map(({ field, before, after, delta }) => {
-          const deltaHtml = delta != null
-              ? ` <span style="color:${delta >= 0 ? '#34d399' : '#f87171'}">${delta >= 0 ? '+' : ''}${fmtVal(delta)}</span>`
-              : '';
-          return `<tr>
-          <td style="color:#94a3b8;padding:2px 4px">${field}</td>
-          <td style="color:#64748b;padding:2px 4px">${fmtVal(before)}</td>
-          <td style="color:#e5e7eb;padding:2px 4px">${fmtVal(after)}${deltaHtml}</td>
-        </tr>`;
-        }).join('');
-
-    return `
-    <div style="font-size:11px;line-height:1.5">
-      <div style="color:#a5b4fc;font-size:13px;font-weight:bold;margin-bottom:4px">${node.type}</div>
-      <div style="color:#64748b;margin-bottom:8px;font-size:10px">
-        Date: <span style="color:#e5e7eb">${this._formatDate(new Date(node.date))}</span>
-        &nbsp;|&nbsp; Reducer: <span style="color:#e5e7eb">${node.reducer || '—'}</span>
-      </div>
-      ${actionFields ? `
-        <div style="font-size:10px;text-transform:uppercase;color:#64748b;border-bottom:1px solid #333;padding-bottom:3px;margin-bottom:5px">Action Payload</div>
-        <table style="width:100%;border-collapse:collapse;font-size:10px;margin-bottom:8px"><tbody>${actionFields}</tbody></table>
-      ` : ''}
-      <div style="font-size:10px;text-transform:uppercase;color:#64748b;border-bottom:1px solid #333;padding-bottom:3px;margin-bottom:5px">State Changes</div>
-      <table style="width:100%;border-collapse:collapse;font-size:10px">
-        <thead><tr>
-          <th style="text-align:left;color:#64748b;padding:2px 4px;font-weight:normal">Field</th>
-          <th style="text-align:left;color:#64748b;padding:2px 4px;font-weight:normal">Before</th>
-          <th style="text-align:left;color:#64748b;padding:2px 4px;font-weight:normal">After</th>
-        </tr></thead>
-        <tbody>${diffRows}</tbody>
-      </table>
-    </div>`;
+    //Populate state changes
+    const stateChangesGrid = clone.querySelector('[data-state-change-grid]');
+    if(content.changes.length > 0) {
+      //Compute the changes
+      for(const change of content.changes) {
+        const stateChangeRow = document.importNode(stateChangesGrid.querySelector('[data-state-change-row]'), true);
+        stateChangeRow.style = '';
+        stateChangeRow.querySelector('[data-id="field"]').innerText = change.field;
+        stateChangeRow.querySelector('[data-id="before"]').innerHTML = this.fmtVal(change.before, true);
+        if(change.delta != null) {
+          const after = stateChangeRow.querySelector('[data-id="after"]');
+          const delta = document.createElement('span');
+          if(change.delta > 0) {
+            delta.classList.add('diff-pos');
+            delta.innerText = '+' + this.fmtVal(change.delta);
+          }else {
+            delta.classList.add('diff-neg');
+            delta.innerText = '-' + this.fmtVal(change.delta);
+          }
+          after.innerHTML = this.fmtVal(change.after, true);
+          after.appendChild(delta);
+        }else {
+          stateChangeRow.querySelector('[data-id="after"]').innerHTML = this.fmtVal(change.after, true);
+        }
+        stateChangesGrid.appendChild(stateChangeRow);
+      }
+    }else {
+      stateChangesGrid.querySelector('[data-id="noChangeRow"]').style = '';
+      const noChangeState = stateChangesGrid.querySelector('[data-id="noChangeState"]');
+      noChangeState.style = '';
+      noChangeState.innerHTML = `<pre>${JSON.stringify(content.entry.prevState,null, 2)}</pre>`;
+    }
+    return clone;
   }
 
   /**
@@ -430,79 +408,6 @@ export class BaseApp {
     return changes;
   }
 
-  updateStatePanel(date, state) {
-    if (!state) return;
-
-    const currentEl  = $('currentStateContent');
-    const metricsEl  = $('cumulativeMetricsContent');
-    if (!currentEl || !metricsEl) return;
-
-    const toLabel = key => key
-      .replace(/([A-Z])/g, ' $1')
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, c => c.toUpperCase())
-      .trim();
-
-    const renderVal = (v) => {
-      if (typeof v === 'number') return fmt(v);
-      return String(v);
-    };
-
-    const renderObj = (v) => {
-      if (v == null) return '—';
-      if (Array.isArray(v)) {
-        if (v.length === 0) return '—';
-        if (v.every(x => typeof x === 'number'))
-          return fmt(v.reduce((a, b) => a + b, 0));
-        return v.map(x => (typeof x === 'object' ? renderObj(x) : String(x))).join(', ');
-      }
-      if(typeof v === 'object') {
-        if (v instanceof Date) return this._formatDate(v);
-        let result = '<br>';
-        for(let f in v) {
-          result += f + ': ' + renderObj(v[f]) + '<br>';
-        }
-        return result;
-      }
-      return String(v);
-    }
-
-    const statRow = (k, v, indent) =>
-      `<div class="stat-row"${indent ? ' style="padding-left:12px"' : ''}>` +
-      `<span class="stat-label">${toLabel(k)}</span>` +
-      `<span class="stat-value">${typeof v === 'object' ? renderObj(v) : renderVal(v)}</span></div>`;
-
-    const renderSection = obj => {
-      let html = '';
-      for (const [k, v] of Object.entries(obj)) {
-        if (Array.isArray(v) && v.length > 0 && v[0] !== null && typeof v[0] === 'object') {
-          html += `<div class="stat-row"><span class="stat-label">${toLabel(k)}</span>` +
-                  `<span class="stat-value">${v.length}</span></div>`;
-          for (const item of v) {
-            const name  = item.name ?? JSON.stringify(item);
-            const value = item.value != null ? fmt(item.value) : '';
-            html += `<div class="stat-row" style="padding-left:12px">` +
-                    `<span class="stat-label">${name}</span>` +
-                    `<span class="stat-value">${value}</span></div>`;
-          }
-        } else if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
-          html += `<div class="section-title" style="font-size:10px;margin-top:6px">${toLabel(k)}</div>`;
-          for (const [sk, sv] of Object.entries(v)) {
-            if (Array.isArray(sv) && sv.length > 0 && typeof sv[0] === 'object') continue;
-            html += statRow(sk, sv, true);
-          }
-        } else {
-          html += statRow(k, v, false);
-        }
-      }
-      return html;
-    };
-
-    const { metrics, ...rest } = state;
-    currentEl.innerHTML = renderSection(rest);
-    metricsEl.innerHTML = metrics ? renderSection(metrics) : '—';
-  }
-
   // ─── Animate ──────────────────────────────────────────────────────────────────
 
   animate() {
@@ -532,13 +437,23 @@ export class BaseApp {
   }
 
   initView() {
-    // Main tabs
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
+    //Setup the tabs
+    document.querySelectorAll('.tab-header').forEach(el => {
+      el.addEventListener('click', (evt) => {
+        const tabName = el.dataset.destTab;
+        const tabGroup = el.dataset.tabGroup;
+        this.openTab(evt, tabName, tabGroup);
+      });
     });
 
-    document.querySelectorAll('.sidebar-tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => this.switchTab(btn.dataset.tab, true));
+    $('displayCurrency').addEventListener('change', () => {
+      this.displayCurrency = $('displayCurrency').value;
+      this.buildScenario();
+    });
+
+    $('tzSelect').addEventListener('change', () => {
+      this.setFormatDate($('tzSelect').value === 'utc' ? fmtUTC : fmtLocal);
+      this.renderEventList();
     });
 
     // Time controls
@@ -578,8 +493,13 @@ export class BaseApp {
     // Params form
     $('rebuildBtn').addEventListener('click', () => this.buildScenario());
 
+    $('tzSelect').addEventListener('change', () => {
+      app.setFormatDate($('tzSelect').value === 'utc' ? fmtUTC : fmtLocal);
+      renderEventList();
+    });
+
+
     window.addEventListener('resize', () => this.resizeCanvases());
-    this.switchTab(this.activeTab);
     this.resizeCanvases();
   }
 
@@ -593,4 +513,109 @@ export class BaseApp {
     $('chartCanvas').width  = w;
     $('chartCanvas').height = h;
   }
+
+  //UI Format HELPERS
+  fmtVal(v, objAsCode = false) {
+    if (v == null) return '—';
+    if (typeof v === 'number') return v.toFixed(2); //TODO Format as $?
+    if (Array.isArray(v)) {
+      return this.fmtArray(v, objAsCode)
+    }
+    if(this.isDate(v)) return this._formatDate(v);
+    if (typeof v === 'object') {
+      if(objAsCode) {
+        return `<pre class="text-wrap:auto">${JSON.stringify(v, null, 2)}</pre>`;
+      }else {
+        return JSON.stringify(v);
+      }
+    }
+    return String(v);
+  }
+
+  fmtArray(v, objAsCode = false){
+    if (!Array.isArray(v)) return '';
+    const limit = 10;
+    const sliced = v.slice(0, limit).map(x => this.fmtVal(x, objAsCode)).join(', ') || '—';
+    return v.length > limit ? `${sliced}, ...` : sliced;
+  };
+
+  getNestedProperty(obj, path) {
+    return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+  }
+
+  isDate(obj){
+    //TODO: instanceof Date && !isNaN(d.getTime());
+    return Object.prototype.toString.call(obj) === '[object Date]';
+  }
+
+  toLabel(key) {
+    return key.replace(/([A-Z])/g, ' $1')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase())
+    .trim();
+  }
+
+  renderObj(v) {
+    if (v == null) return '—';
+    if (Array.isArray(v)) {
+      if (v.length === 0) return '—';
+      if (v.every(x => typeof x === 'number')) {
+        return this.fmtArray(v);
+      }
+      return v.map(x => (typeof x === 'object' ? this.renderObj(x) : String(x))).join(', ');
+    }
+    if(typeof v === 'object') {
+      if (v instanceof Date) return this._formatDate(v);
+      let result = '{ ';
+      for(let f in v) {
+        result += f + ': ' + this.renderObj(v[f]) + ' }';
+      }
+      return result;
+    }
+    return String(v);
+  }
+
+  renderHeaderRow(label){
+    const headerRow = document.createElement('div');
+    headerRow.classList.add('data-row-header');
+    const header = document.createElement('span');
+    header.classList.add('single-row');
+    header.classList.add('single-row');
+    header.innerText = this.toLabel(label);
+    headerRow.appendChild(header);
+    return headerRow;
+  };
+
+  openTab(evt, tabName, tabGroup) {
+    // Hide content
+    document.querySelectorAll(`.tab-content[data-tab-group=${tabGroup}]`).forEach(el => el.style.display = "none");
+
+    // Remove active class from the tab headers
+    document.querySelectorAll(`.tab-header[data-tab-group=${tabGroup}]`).forEach(el => el.classList.remove("active"));
+
+    //Get tab content and display it
+    const tab = document.querySelector(`.tab-content[data-tab-group=${tabGroup}][data-tab=${tabName}]`);
+    tab.style.display = "";
+
+    //Active to clicke tab header
+    evt.currentTarget.classList.add("active");
+  }
+
+  updateDashCards(payload) {
+    $('cardCurrentDate').innerText = this.fmtVal(payload.date);
+    $('cardActionCount').innerText = payload.id;
+  }
+
+  /**
+   * Convert a value from one currency to the display currency.
+   * @param {number} value       - Amount in the account's native currency
+   * @param {'USD'|'AUD'} native - The account's native currency
+   * @param {number} rate        - exchangeRateUsdToAud (1 USD = N AUD)
+   */
+  toDisplayCurrency(value, native, rate) {
+    if (native === this.displayCurrency) return value;
+    if (this.displayCurrency === 'AUD') return value * rate;   // USD → AUD
+    return value / rate;                                   // AUD → USD
+  }
+
 }

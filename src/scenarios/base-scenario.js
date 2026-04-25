@@ -105,7 +105,7 @@ export class BaseScenario {
       this.sim.register(series.type, ({ sim, date, data, meta }) => {
         sim.schedule({ date: intervalFn(date), type: series.type, data, meta });
       });
-      this._registeredRecurringTypes.put(series.type, series);
+      this._registeredRecurringTypes.set(series.type, series);
     }
 
     // Compute the nominal first occurrence from simStart
