@@ -19,19 +19,16 @@
 
 import { $, fmt, fmtUTC, fmtLocal} from '../visualization/ui-utils.js'
 import { GraphView } from '../visualization/graph-view.js';
-import { BalanceChartView } from '../visualization/balance-chart-view.js';
+import { ChartView } from '../visualization/chart-view.js';
 import { TimelineView } from '../visualization/timeline-view.js';
 import { TimeControls } from '../visualization/time-controls.js';
 import { EventScheduler } from '../visualization/event-scheduler.js';
 import { ConfigGraphBuilder } from "../visualization/graph-builder.js";
 
 export class BaseApp {
-  constructor({ newScenario, updateChart = null, chartSeries }) {
+  constructor({ newScenario, chartSeries }) {
 
     this.newScenario = newScenario
-    if(updateChart != null) {
-      this.updateChart = updateChart;
-    }
     this.chartSeries = chartSeries ?? null;
     this._formatDate = (d) => d.toDateString();
 
@@ -75,8 +72,8 @@ export class BaseApp {
     return {};
   }
 
-  updateChart(chartView, date, state) {
-    chartView.addSnapshot(date, state.metrics ? {...state.metrics} : {});
+  updateChart(chartView, type, date, state) {
+    chartView.addSnapshot(type, date, state.metrics ? {...state.metrics} : {});
   }
 
   /**
@@ -150,9 +147,9 @@ export class BaseApp {
       this.graphView.startViz();
     }
 
-    // ── Balance chart view ────────────────────────────────────────────────────
+    // ── Chart view ────────────────────────────────────────────────────
     const chartCanvas = $('chartCanvas');
-    this.chartView = new BalanceChartView({
+    this.chartView = new ChartView({
       canvas:   chartCanvas,
       simStart: this.scenario.simStart,
       simEnd:   this.scenario.simEnd,

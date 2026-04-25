@@ -158,7 +158,7 @@ export class Simulation {
   execute(event) {
     const handlers = this.handlers.get(event.type) || [];
 
-    //Send out on the bus
+    //Send event out on the bus
     this.bus.publish(new SimulationBusMessage({
       type: event.type,
       date: this.currentDate,
