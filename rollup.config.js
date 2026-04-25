@@ -1,6 +1,6 @@
 import terser from '@rollup/plugin-terser'
 import copy from 'rollup-plugin-copy-watch';
-import serve from 'rollup-plugin-serve'
+import dev from 'rollup-plugin-dev'
 import livereload from 'rollup-plugin-livereload';
 import nodeResolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
@@ -46,18 +46,21 @@ export default [
     plugins: [
         nodeResolve({ browser: true }),
         commonjs(),
-        !isWatching && terser(), //minify when not debugging
-        !isWatching && copy({
+        copy({
           targets: [
             { src: 'assets/**/*', dest: 'dist/assets', flatten: false },
             { src: '*.html', dest: 'dist' }
           ]
         }),  //copy assets when not debugging
-        isWatching && serve({
-          contentBase: ['.', 'dist']
+        isWatching && dev({
+          dirs: ['dist'],
+          port: 10001,
         }),
         isWatching && livereload({
-        })
+          watch: 'dist',
+          delay: 500
+        }),
+       !isWatching && terser() //minify when not debugging
     ].filter(Boolean)
   }
 ];
