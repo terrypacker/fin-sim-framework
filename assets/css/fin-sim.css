@@ -435,6 +435,14 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 
 .tl-rewind:hover { color: #fbbf24; border-color: #f59e0b; }
 
+/* ── CHART ── */
+.chart-tab { /* the element was .tab-content */
+  display: flex;
+  flex-direction: column;
+  min-height: 0px;
+  flex: 1 1 0%;
+}
+
 /* ── DATA DISPLAY ── */
 .data-section-title {
   color: var(--text-dim);

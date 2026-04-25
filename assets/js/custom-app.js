@@ -20,14 +20,6 @@ class CustomApp extends FinSimLib.Misc.BaseApp {
      super({
        newScenario: (params, initialState, eventSchedulerUI) => new CustomScenario({
          eventSchedulerUI }),
-       updateChart: (chartView, type, date, state) => {
-         if (type === 'RECORD_BALANCE') {
-           chartView.addSnapshot(date, {
-             monthCounter: state.monthCount,
-             yearCounter: state.yearCount,
-           });
-         }
-       },
        chartSeries:     CHART_SERIES,
      });
    }
