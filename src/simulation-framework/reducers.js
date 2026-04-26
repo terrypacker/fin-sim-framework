@@ -247,7 +247,7 @@ export class StateFieldReducer extends FieldReducer {
       generate = null) {
     super(name, priority, fieldName);
     if(!generate) {
-      this.generate = (state, action, date) => this.getStateValue(action, state);
+      this.generate = (state, action, date) => this.getStateValue(state, action);
     }else {
       this.generate = generate;
     }
