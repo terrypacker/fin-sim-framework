@@ -25,6 +25,7 @@ const NAMESPACE_MAP = [
   { match: 'simulation-framework', name: 'Core' },
   { match: 'finance', name: 'Finance' },
   { match: 'scenarios', name: 'Scenarios' },
+  { match: 'services', name: 'Services' },
   { match: 'visualization', name: 'Visualization' }
 ];
 
