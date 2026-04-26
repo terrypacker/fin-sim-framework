@@ -50,6 +50,16 @@ export class EventScheduler {
       'NoOpReducer'
     ];
 
+    // Ordered from most-specific to least-specific so instanceof checks work correctly.
+    this.ACTION_TYPES = [
+      'AmountAction',
+      'RecordMetricAction',
+      'RecordArrayMetricAction',
+      'RecordNumericSumMetricAction',
+      'RecordMultiplicativeMetricAction',
+      'RecordBalanceAction',
+    ];
+
     this._bind();
   }
 
@@ -232,6 +242,15 @@ export class EventScheduler {
     if(existing === undefined) {
       //Decorate the action
       action.kind = 'action';
+      // Tag the action class so the editor knows which config template to show.
+      // Check subclasses before superclasses (same ordering as ScenarioSerializer).
+      const C = FinSimLib.Core;
+      if      (action instanceof C.RecordNumericSumMetricAction)    action.actionClass = 'RecordNumericSumMetricAction';
+      else if (action instanceof C.RecordArrayMetricAction)          action.actionClass = 'RecordArrayMetricAction';
+      else if (action instanceof C.RecordMultiplicativeMetricAction) action.actionClass = 'RecordMultiplicativeMetricAction';
+      else if (action instanceof C.RecordBalanceAction)              action.actionClass = 'RecordBalanceAction';
+      else if (action instanceof C.RecordMetricAction)               action.actionClass = 'RecordMetricAction';
+      else                                                           action.actionClass = 'AmountAction';
       this.graph.addNode(action);
     }
   }
@@ -392,14 +411,35 @@ export class EventScheduler {
     this.builderCanvas.appendChild(this._createDeleteButton(node));
   }
 
-  /* ─────────────────────────────  HANDLER EDITOR  ───────────────────────────── */
+  /* ─────────────────────────────  ACTION EDITOR  ───────────────────────────── */
   _renderActionEditor(node) {
     const el = this._getTemplate('tpl-action-editor');
+
     const name = el.querySelector('[data-id="name"]');
     name.value = node.name || '';
     name.addEventListener('input', () => {
       node.name = name.value;
+      this._nodeChanged(node);
     });
+
+    const typeSelect = el.querySelector('[data-id="type"]');
+    const configWrap = el.querySelector('[data-id="config"]');
+
+    this.ACTION_TYPES.forEach(type => {
+      const opt = document.createElement('option');
+      opt.value = type;
+      opt.textContent = type;
+      typeSelect.appendChild(opt);
+    });
+
+    typeSelect.value = node.actionClass || 'AmountAction';
+    typeSelect.onchange = () => {
+      node.actionClass = typeSelect.value;
+      this._renderActionConfig(node, configWrap);
+      this._nodeChanged(node);
+    };
+
+    this._renderActionConfig(node, configWrap);
 
     //Build out the handler chips
     const actionHandlerCount = el.querySelector('#action-handler-count');
@@ -415,6 +455,58 @@ export class EventScheduler {
 
     this.builderCanvas.appendChild(el);
     this.builderCanvas.appendChild(this._createDeleteButton(node));
+  }
+
+  /* ───────────────────── ACTION CONFIG EDITOR ─────────────────────── */
+  _renderActionConfig(node, container) {
+    container.innerHTML = '';
+
+    // Strip the 'metrics.' storage prefix for user-facing display.
+    const displayField = (fn) => fn?.startsWith('metrics.') ? fn.slice(8) : (fn ?? '');
+
+    let wrap = null;
+    switch (node.actionClass) {
+      case 'AmountAction':
+        wrap = this._getTemplate('tpl-amount-action-editor');
+        wrap.querySelector('[data-field="type"]').value  = node.type  || '';
+        wrap.querySelector('[data-field="value"]').value = node.value ?? 0;
+        break;
+      case 'RecordMetricAction':
+        wrap = this._getTemplate('tpl-record-metric-action-editor');
+        wrap.querySelector('[data-field="type"]').value      = node.type  || '';
+        wrap.querySelector('[data-field="fieldName"]').value = displayField(node.fieldName);
+        wrap.querySelector('[data-field="value"]').value     = node.value ?? 0;
+        break;
+      case 'RecordArrayMetricAction':
+      case 'RecordNumericSumMetricAction':
+      case 'RecordMultiplicativeMetricAction':
+        wrap = this._getTemplate('tpl-fixed-type-metric-action-editor');
+        wrap.querySelector('[data-field="fieldName"]').value = displayField(node.fieldName);
+        wrap.querySelector('[data-field="value"]').value     = node.value ?? 0;
+        break;
+      case 'RecordBalanceAction':
+      default:
+        break; // no extra config for this class
+    }
+
+    if (wrap) {
+      wrap.querySelectorAll('input, select').forEach(input => {
+        input.addEventListener('input', () => {
+          const field = input.dataset.field;
+          if (input.type === 'number') {
+            node[field] = parseFloat(input.value) || 0;
+          } else if (field === 'fieldName') {
+            // Normalise: strip any user-typed 'metrics.' prefix then re-add it.
+            const stripped = input.value.startsWith('metrics.') ? input.value.slice(8) : input.value;
+            node[field] = 'metrics.' + stripped;
+          } else {
+            node[field] = input.value;
+          }
+          this._nodeChanged(node);
+        });
+      });
+      container.appendChild(wrap);
+    }
   }
 
 
