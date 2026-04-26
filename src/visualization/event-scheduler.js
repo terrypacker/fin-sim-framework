@@ -498,6 +498,14 @@ export class EventScheduler {
 
     this._renderReducerConfig(node, configWrap);
 
+    const reducerReducedActionCount = el.querySelector('#reducer-reduced-actions-count');
+    const reducerReducedActions = el.querySelector('#reducer-reduced-actions');
+    this._renderLinkableNodeChips(node, 'action', reducerReducedActionCount, reducerReducedActions, false);
+
+    const reducerGeneratedActionsCount = el.querySelector('#reducer-generated-actions-count');
+    const reducerGeneratedActions = el.querySelector('#reducer-generated-actions');
+    this._renderLinkableNodeChips(node, 'action', reducerGeneratedActionsCount, reducerGeneratedActions, true);
+
     this.builderCanvas.appendChild(el);
     this.builderCanvas.appendChild(this._createDeleteButton(node));
   }
@@ -516,6 +524,10 @@ export class EventScheduler {
       case 'AccountTransactionReducer':
         wrap = this._getTemplate('tpl-account-transaction-reducer-editor');
         wrap.querySelector('[data-field="accountKey"]').value = node.accountKey || '';
+        break;
+      case 'StateFieldReducer':
+        wrap = this._getTemplate('tpl-state-field-reducer-editor');
+        wrap.querySelector('[data-field="stateField"]').value = node.stateField || '';
         break;
       default:
         container.innerHTML = '<div class="tl-empty">No config</div>';

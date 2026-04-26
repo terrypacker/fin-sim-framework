@@ -178,16 +178,19 @@ export class ScenarioSerializer {
         enabled: d.enabled ?? false,
         color:   d.color ?? '#888888',
       });
+    }else if(d.__type == 'EventSeries') {
+      return new FinSimLib.Core.EventSeries({
+        id: d.id,
+        name: d.name,
+        type: d.type,
+        interval: d.interval ?? 'month-end',
+        startOffset: d.startOffset ?? 0,
+        enabled: d.enabled ?? false,
+        color: d.color ?? '#888888',
+      });
+    }else {
+      throw new Error(`Add support for deserialization of event type ${d.__type}.`);
     }
-    return new FinSimLib.Core.EventSeries({
-      id:          d.id,
-      name:        d.name,
-      type:        d.type,
-      interval:    d.interval ?? 'month-end',
-      startOffset: d.startOffset ?? 0,
-      enabled:     d.enabled ?? false,
-      color:       d.color ?? '#888888',
-    });
   }
 
   static _makeAction(d) {
@@ -203,8 +206,11 @@ export class ScenarioSerializer {
         return new C.RecordBalanceAction();
       case 'RecordMetricAction':
         return new C.RecordMetricAction(d.type, d.name, d.fieldName, d.value);
-      default: // AmountAction or unknown
+      case 'AmountAction':
         return new C.AmountAction(d.type, d.name, d.value ?? 0);
+        break;
+      default: // AmountAction or unknown
+        throw new Error(`Add support for deserialization of action type ${d.__type}.`);
     }
   }
 
@@ -226,8 +232,11 @@ export class ScenarioSerializer {
         return C.ReducerBuilder.multiplicative(fieldName).name(d.name).build();
       case 'NoOpReducer':
         return C.ReducerBuilder.noOp().name(d.name).build();
+      case 'StateFieldReducer':
+        return C.ReducerBuilder.stateField().name(d.name).fieldName(d.fieldName).build();
+        break;
       default:
-        return C.ReducerBuilder.metric(metricName || '').name(d.name).build();
+        throw new Error(`Add support for deserialization of reducer type ${d.__type}.`);
     }
   }
 }
