@@ -9,7 +9,7 @@
  */
 
 import { BaseService } from './base-service.js';
-import { ActionFactory } from '../scenarios/action-factory.js';
+import { ActionFactory } from './action-factory.js';
 
 /**
  * Service for managing Action instances throughout their lifecycle.

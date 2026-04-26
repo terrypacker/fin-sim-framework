@@ -13,6 +13,7 @@
 // NOTE: earnings event types use INTL_ prefix to avoid colliding with the
 // account module handlers (which also register for AU_SAVINGS_EARNINGS etc.
 // and expect data.amount to be provided).
+
 export const DEFAULT_EVENT_SERIES = [
   new FinSimLib.Core.EventSeries({ id: 'month-end',     label: 'Month End Event',       type: 'MONTH_END',              interval: 'month-end', enabled: true,                 color: '#F44336' }),
   new FinSimLib.Core.EventSeries({ id: 'year-end',      label: 'Year End Event',        type: 'YEAR_END',               interval: 'year-end',  enabled: true, startOffset: 1, color: '#4CAF50' }),
@@ -51,10 +52,10 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
       color: '#F44336'
     });
     this.scheduleEvent(monthEndEventSeries);
-
+    const { actionService } = FinSimLib.Services.ServiceRegistry.getInstance();
     // ── Actions ───────────────────────────────────────────────────────────────
-    const recordSalaryPaymentAction = this.actionFactory.amountAction('RECORD_METRIC', 'Pay Salary', 1200);
-    const sumSalaryPaymentAction = this.actionFactory.recordNumericSumMetricAction('Sum Payments', 'amount');
+    const recordSalaryPaymentAction = actionService.getFactory().amountAction('RECORD_METRIC', 'Pay Salary', 1200);
+    const sumSalaryPaymentAction = actionService.getFactory().recordNumericSumMetricAction('Sum Payments', 'amount');
 
     // ── Handlers ──────────────────────────────────────────────────────────────
     const monthEndHandler = new FinSimLib.Core.HandlerEntry(null, 'Month End Handler');

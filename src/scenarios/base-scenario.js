@@ -9,7 +9,6 @@
  */
 
 import { DateUtils } from '../simulation-framework/date-utils.js';
-import { ActionFactory } from './action-factory.js';
 import { ServiceRegistry } from '../services/service-registry.js';
 
 export const intervalFns = {
@@ -49,9 +48,6 @@ export class BaseScenario {
     this._nextEventId = 1;
     this._nextActionId = 1;
 
-    // Centralized factory for creating action instances in subclasses.
-    // Also accessible via ServiceRegistry.getInstance().actionService.factory.
-    this.actionFactory = new ActionFactory();
     // Tracks which event types already have a recurring auto-rescheduling handler
     // registered, so we never register a second one on re-enable.
     this._registeredRecurringTypes = new Map();
