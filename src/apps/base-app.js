@@ -53,16 +53,14 @@ export class BaseApp {
     this.displayCurrency = 'USD';
 
     this._scenarioData = ScenarioStorage.load();
-    this._activeIdx = null; // null → use default CustomScenario
+    // Auto-select the first saved scenario on load; fall back to default if none exist.
+    this._activeIdx = this._scenarioData.scenarios.length > 0 ? 0 : null;
 
     //TODO REMOVE?
     this.activeTab = 'timeline';
 
     //TODO REMOVE ?
     this.activeSidebarTab = 'settings';
-
-    this._scenarioData = ScenarioStorage.load();
-    this._activeIdx = null; // null → use default CustomScenario
 
     // ── PeriodService: US calendar years 2026-2040, AU fiscal years 2025-2040
     const periodService = new FinSimLib.Finance.PeriodService();
