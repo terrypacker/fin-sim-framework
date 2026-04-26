@@ -98,13 +98,20 @@ class TrackingUI {
       throw new Error(`Event already in graph: ${e.id}`);
     }
     e.kind = 'event';
+    // Mirror EventScheduler.addEvent: stamp eventType so _serializeEvent works.
+    if (e instanceof OneOffEvent) {
+      e.eventType = 'OneOff';
+    } else {
+      e.eventType = 'Series';
+    }
     this.nodes.push(e);
   }
 
   addAction(a) {
-    // EventScheduler.addAction sets action.id = action.type
-    a.id = a.type;
+    // Mirror EventScheduler.addAction: load into service (id already = type from constructor).
     if (!this.nodes.find(n => n.id === a.id)) {
+      const { actionService } = ServiceRegistry.getInstance();
+      if (!actionService.get(a.id)) actionService.load(a);
       a.kind = 'action';
       this.nodes.push(a);
     }
@@ -119,6 +126,13 @@ class TrackingUI {
 
   addReducer(r) {
     r.kind = 'reducer';
+    // Mirror EventScheduler.addReducer: stamp reducerType so _serializeReducer works.
+    if      (r instanceof NumericSumMetricReducer)    r.reducerType = 'NumericSumMetricReducer';
+    else if (r instanceof ArrayMetricReducer)          r.reducerType = 'ArrayMetricReducer';
+    else if (r instanceof MultiplicativeMetricReducer) r.reducerType = 'MultiplicativeMetricReducer';
+    else if (r instanceof MetricReducer)               r.reducerType = 'MetricReducer';
+    else if (r instanceof NoOpReducer)                 r.reducerType = 'NoOpReducer';
+    else                                               r.reducerType = 'MetricReducer';
     this.nodes.push(r);
     // EventScheduler.addReducer calls addAction for reduced and generated actions
     (r.reducedActions   ?? []).forEach(a => this.addAction(a));
@@ -335,20 +349,22 @@ test('deserialize extended: each reducer node has kind "reducer"', () => {
 
 // ─── ID counter advancement ───────────────────────────────────────────────────
 
-test('deserialize advances _nextEventId past the highest event id', () => {
+test('deserialize advances eventService _nextId past the highest event id', () => {
   const { ui, scenario } = makeScenario();
   ScenarioSerializer.deserialize(EXTENDED_CONFIG, scenario);
-  // config has e1, e2 → counter must be at least 3
-  assert.ok(scenario._nextEventId >= 3,
-    `_nextEventId should be ≥ 3, got ${scenario._nextEventId}`);
+  // config has e1, e2 → service counter must be at least 3
+  const nextId = ServiceRegistry.getInstance().eventService._nextId;
+  assert.ok(nextId >= 3,
+    `eventService._nextId should be ≥ 3, got ${nextId}`);
 });
 
-test('deserialize advances _nextReducerId past the highest reducer id', () => {
+test('deserialize advances reducerService _nextId past the highest reducer id', () => {
   const { ui, scenario } = makeScenario();
   ScenarioSerializer.deserialize(EXTENDED_CONFIG, scenario);
-  // config has r1..r4 → counter must be at least 5
-  assert.ok(scenario._nextReducerId >= 5,
-    `_nextReducerId should be ≥ 5, got ${scenario._nextReducerId}`);
+  // config has r1..r4 → service counter must be at least 5
+  const nextId = ServiceRegistry.getInstance().reducerService._nextId;
+  assert.ok(nextId >= 5,
+    `reducerService._nextId should be ≥ 5, got ${nextId}`);
 });
 
 // ─── Disabled events ──────────────────────────────────────────────────────────
@@ -369,4 +385,153 @@ test('deserialize: disabled event is added to UI without being scheduled', () =>
   // It must not be scheduled in the sim
   assert.ok(!scenario._registeredRecurringTypes.has('OFF_EVT'),
     'disabled event should not be in _registeredRecurringTypes');
+});
+
+// ─── serialize: basic correctness ─────────────────────────────────────────────
+
+/** Helper: serialize the current ServiceRegistry state into a config object. */
+function serializeNow(name = 'Test', initialState = {}) {
+  return ScenarioSerializer.serialize(
+    ServiceRegistry.getInstance(),
+    name,
+    '2026-01-01',
+    '2041-01-01',
+    initialState,
+    [],
+  );
+}
+
+test('serialize: returns arrays for events, handlers, actions, reducers', () => {
+  const { ui, scenario } = makeScenario();
+  ScenarioSerializer.deserialize(MINIMAL_CONFIG, scenario);
+  const cfg = serializeNow();
+  assert.ok(Array.isArray(cfg.events),   'events should be an array');
+  assert.ok(Array.isArray(cfg.handlers), 'handlers should be an array');
+  assert.ok(Array.isArray(cfg.actions),  'actions should be an array');
+  assert.ok(Array.isArray(cfg.reducers), 'reducers should be an array');
+});
+
+test('serialize: minimal config produces correct node counts', () => {
+  const { ui, scenario } = makeScenario();
+  ScenarioSerializer.deserialize(MINIMAL_CONFIG, scenario);
+  const cfg = serializeNow();
+  assert.strictEqual(cfg.events.length,   1, 'one event');
+  assert.strictEqual(cfg.handlers.length, 1, 'one handler');
+  assert.strictEqual(cfg.reducers.length, 1, 'one reducer');
+});
+
+test('serialize: event __type is EventSeries for a recurring event', () => {
+  const { ui, scenario } = makeScenario();
+  ScenarioSerializer.deserialize(MINIMAL_CONFIG, scenario);
+  const cfg = serializeNow();
+  assert.strictEqual(cfg.events[0].__type, 'EventSeries');
+});
+
+test('serialize: reducer __type matches the class set during registration', () => {
+  const { ui, scenario } = makeScenario();
+  ScenarioSerializer.deserialize(MINIMAL_CONFIG, scenario);
+  const cfg = serializeNow();
+  const r = cfg.reducers.find(r => r.id === 'r1');
+  assert.strictEqual(r.__type, 'MetricReducer');
+});
+
+test('serialize: extended config produces correct node counts', () => {
+  const { ui, scenario } = makeScenario();
+  ScenarioSerializer.deserialize(EXTENDED_CONFIG, scenario);
+  const cfg = serializeNow();
+  assert.strictEqual(cfg.events.length,   2);
+  assert.strictEqual(cfg.handlers.length, 2);
+  assert.strictEqual(cfg.reducers.length, 4);
+});
+
+// ─── serialize: regression — name/type edits survive a save ──────────────────
+//
+// These tests cover the reported bug: changes made via service.updateX() were
+// not reflected in the serialized output when the serializer read from graph
+// nodes instead of the service maps.
+
+test('serialize regression: reducer name change is captured in saved config', () => {
+  const { ui, scenario } = makeScenario();
+  ScenarioSerializer.deserialize(MINIMAL_CONFIG, scenario);
+
+  // Simulate what the UI reducer editor does when user types a new name
+  ServiceRegistry.getInstance().reducerService.updateReducer('r1', { name: 'Renamed Reducer' });
+
+  const cfg = serializeNow();
+  const r = cfg.reducers.find(r => r.id === 'r1');
+  assert.ok(r, 'r1 must be present in serialized output');
+  assert.strictEqual(r.name, 'Renamed Reducer',
+    'serialized name must match the value set via updateReducer');
+});
+
+test('serialize regression: reducer type change is captured in saved config', () => {
+  const { ui, scenario } = makeScenario();
+  ScenarioSerializer.deserialize(MINIMAL_CONFIG, scenario);
+
+  // Simulate what the UI type-select does when user picks a different reducer type
+  ServiceRegistry.getInstance().reducerService.updateReducer('r1', { reducerType: 'NumericSumMetricReducer' });
+
+  const cfg = serializeNow();
+  const r = cfg.reducers.find(r => r.id === 'r1');
+  assert.ok(r, 'r1 must be present in serialized output');
+  assert.strictEqual(r.__type, 'NumericSumMetricReducer',
+    'serialized __type must reflect the reducerType set via updateReducer');
+});
+
+test('serialize regression: event name change is captured in saved config', () => {
+  const { ui, scenario } = makeScenario();
+  ScenarioSerializer.deserialize(MINIMAL_CONFIG, scenario);
+
+  ServiceRegistry.getInstance().eventService.updateEvent('e1', { name: 'Renamed Event' });
+
+  const cfg = serializeNow();
+  const e = cfg.events.find(e => e.id === 'e1');
+  assert.ok(e, 'e1 must be present in serialized output');
+  assert.strictEqual(e.name, 'Renamed Event',
+    'serialized event name must match the value set via updateEvent');
+});
+
+test('serialize regression: event type string change is captured in saved config', () => {
+  const { ui, scenario } = makeScenario();
+  ScenarioSerializer.deserialize(MINIMAL_CONFIG, scenario);
+
+  ServiceRegistry.getInstance().eventService.updateEvent('e1', { type: 'CUSTOM_EVENT_TYPE' });
+
+  const cfg = serializeNow();
+  const e = cfg.events.find(e => e.id === 'e1');
+  assert.strictEqual(e.type, 'CUSTOM_EVENT_TYPE',
+    'serialized event type string must reflect the update');
+});
+
+test('serialize regression: handler name change is captured in saved config', () => {
+  const { ui, scenario } = makeScenario();
+  ScenarioSerializer.deserialize(MINIMAL_CONFIG, scenario);
+
+  ServiceRegistry.getInstance().handlerService.updateHandler('h1', { name: 'Renamed Handler' });
+
+  const cfg = serializeNow();
+  const h = cfg.handlers.find(h => h.id === 'h1');
+  assert.ok(h, 'h1 must be present in serialized output');
+  assert.strictEqual(h.name, 'Renamed Handler',
+    'serialized handler name must match the value set via updateHandler');
+});
+
+// ─── serialize: round-trip correctness ───────────────────────────────────────
+
+test('serialize round-trip: serialize then deserialize into fresh scenario has same node IDs', () => {
+  // First scenario: deserialize EXTENDED_CONFIG
+  const { ui: ui1, scenario: s1 } = makeScenario();
+  ScenarioSerializer.deserialize(EXTENDED_CONFIG, s1);
+  const firstIds = ui1.nodeIds().sort();
+
+  // Serialize the first scenario's services to a config
+  const roundTripCfg = serializeNow('Round-Trip', EXTENDED_CONFIG.initialState);
+
+  // Second scenario: deserialize the round-trip config
+  const { ui: ui2, scenario: s2 } = makeScenario();
+  ScenarioSerializer.deserialize(roundTripCfg, s2);
+  const secondIds = ui2.nodeIds().sort();
+
+  assert.deepStrictEqual(secondIds, firstIds,
+    'round-tripped scenario must have the same node IDs as the original');
 });

@@ -26,12 +26,14 @@ import { ServiceActionEvent } from '../simulation-framework/bus-messages.js';
 export class BaseService {
   /**
    * @param {import('../simulation-framework/event-bus.js').EventBus} bus
+   * @param {string} idPrefix  - Prefix used when auto-generating IDs (e.g. 'e', 'h', 'r', 'a')
    */
-  constructor(bus) {
+  constructor(bus, idPrefix = 'item') {
     this.bus = bus;
     /** @type {Map<string, *>} */
     this._items = new Map();
-    this._nextId = 1;
+    this._nextId   = 1;
+    this._idPrefix = idPrefix;
   }
 
   // ─── Public query API ─────────────────────────────────────────────────────
@@ -99,16 +101,21 @@ export class BaseService {
 
   /**
    * Register an existing item in the map without publishing a bus event.
-   * Used when items are created outside the service (deserialization,
+   * Used when items are created outside the service (builders, deserialization,
    * programmatic setup) but still need to be findable via get(id) for
    * subsequent update calls.
    *
+   * If the item has no id (null / undefined) one is generated using the
+   * service's `_idPrefix` so that BaseScenario no longer needs its own
+   * `_nextXxxId` counters.
+   *
    * Advances the ID counter so future _generateId() calls don't collide.
    *
-   * @param {*} item - must have an `id` property
+   * @param {*} item - must have an `id` property (may be null before this call)
    * @returns {*} the item
    */
   load(item) {
+    if (item.id == null) item.id = this._generateId(this._idPrefix);
     this._items.set(item.id, item);
     this._advanceCounter(item.id);
     return item;

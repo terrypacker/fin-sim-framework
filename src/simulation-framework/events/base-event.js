@@ -18,7 +18,7 @@
  * @property {string}  color   - CSS color used for visualization (e.g. '#888888')
  */
 export class BaseEvent {
-  constructor({ id, name, type, enabled = true, color = '#888888', data = {}, meta = {} } = {}) {
+  constructor({ id = null, name, type, enabled = true, color = '#888888', data = {}, meta = {} } = {}) {
     this.id      = id;
     this.name    = name;
     this.type    = type;

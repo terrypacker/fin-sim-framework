@@ -18,6 +18,7 @@ import { HandlerEntry } from '../simulation-framework/handlers.js';
  * into a simulation's HandlerRegistry is the caller's responsibility.
  */
 export class HandlerService extends BaseService {
+  constructor(bus) { super(bus, 'h'); }
 
   // ─── Create ───────────────────────────────────────────────────────────────
 

@@ -238,7 +238,6 @@ export class EventScheduler {
   }
 
   addAction(action) {
-    action.id = action.type;
     const existing = this.graph.getNode(action.id);
     if (existing === undefined) {
       // Ensure the item is in the service map

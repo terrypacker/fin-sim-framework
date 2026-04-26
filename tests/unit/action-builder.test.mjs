@@ -154,3 +154,47 @@ test('ActionBuilder.recordBalance: each build() returns a new instance', () => {
   const b = ActionBuilder.recordBalance();
   assert.notStrictEqual(b.build(), b.build());
 });
+
+// ─── id === type invariant ────────────────────────────────────────────────────
+// Action constructor sets id = type so services don't need to do it separately.
+
+test('AmountAction: id equals type after construction', () => {
+  const a = ActionBuilder.amount().type('MY_ACTION').name('Test').build();
+  assert.strictEqual(a.id, a.type);
+  assert.strictEqual(a.id, 'MY_ACTION');
+});
+
+test('RecordMetricAction: id equals type after construction', () => {
+  const a = ActionBuilder.recordMetric().type('CUSTOM').name('M').fieldName('f').build();
+  assert.strictEqual(a.id, a.type);
+  assert.strictEqual(a.id, 'CUSTOM');
+});
+
+test('RecordMetricAction: id equals default type RECORD_METRIC when type not overridden', () => {
+  const a = ActionBuilder.recordMetric().name('M').fieldName('f').build();
+  assert.strictEqual(a.id, 'RECORD_METRIC');
+});
+
+test('RecordArrayMetricAction: id equals type after construction', () => {
+  const a = ActionBuilder.recordArrayMetric().name('A').fieldName('f').build();
+  assert.strictEqual(a.id, a.type);
+  assert.strictEqual(a.id, 'RECORD_ARRAY_METRIC');
+});
+
+test('RecordNumericSumMetricAction: id equals type after construction', () => {
+  const a = ActionBuilder.recordNumericSum().name('S').fieldName('f').build();
+  assert.strictEqual(a.id, a.type);
+  assert.strictEqual(a.id, 'RECORD_NUMERIC_SUM_METRIC');
+});
+
+test('RecordMultiplicativeMetricAction: id equals type after construction', () => {
+  const a = ActionBuilder.recordMultiplicative().name('M').fieldName('f').build();
+  assert.strictEqual(a.id, a.type);
+  assert.strictEqual(a.id, 'RECORD_MULTIPLICATIVE_METRIC');
+});
+
+test('RecordBalanceAction: id equals type after construction', () => {
+  const a = ActionBuilder.recordBalance().build();
+  assert.strictEqual(a.id, a.type);
+  assert.strictEqual(a.id, 'RECORD_BALANCE');
+});

@@ -861,9 +861,12 @@ export class BaseApp {
 
     const cfg = this._activeScenario();
 
-    // Serialize graph state + current form values into the config
+    // Serialize service state + current form values into the config.
+    // Services are the authoritative source of truth — all UI edits flow
+    // through service.updateX() calls, so getAll() always reflects the
+    // latest values regardless of graph-node decoration state.
     const serialized = ScenarioSerializer.serialize(
-        this.configGraphBuilder,
+        ServiceRegistry.getInstance(),
         cfg.name,
         cfg.simStart,
         cfg.simEnd,
