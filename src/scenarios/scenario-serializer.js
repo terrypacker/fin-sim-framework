@@ -216,18 +216,18 @@ export class ScenarioSerializer {
 
     switch (d.__type) {
       case 'MetricReducer':
-        return C.MetricReducer.fromMetric(metricName).withName(d.name);
+        return C.ReducerBuilder.metric(metricName).name(d.name).build();
       case 'ArrayMetricReducer':
-        return C.ArrayMetricReducer.fromMetric(metricName).withName(d.name);
+        return C.ReducerBuilder.arrayMetric(metricName).name(d.name).build();
       case 'NumericSumMetricReducer':
-        return C.NumericSumMetricReducer.fromMetric(metricName).withName(d.name);
+        return C.ReducerBuilder.numericSum(metricName).name(d.name).build();
       case 'MultiplicativeMetricReducer':
         // MultiplicativeMetricReducer extends FieldReducer (no metrics. prefix)
-        return C.MultiplicativeMetricReducer.fromMetric(fieldName).withName(d.name);
+        return C.ReducerBuilder.multiplicative(fieldName).name(d.name).build();
       case 'NoOpReducer':
-        return new C.NoOpReducer(d.name);
+        return C.ReducerBuilder.noOp().name(d.name).build();
       default:
-        return C.MetricReducer.fromMetric(metricName || '').withName(d.name);
+        return C.ReducerBuilder.metric(metricName || '').name(d.name).build();
     }
   }
 }

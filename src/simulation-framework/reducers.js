@@ -129,21 +129,6 @@ export class Reducer {
     }
   }
 
-  withName(name) {
-    this.name = name;
-    return this;
-  }
-
-  reduceAction(action) {
-    this.reducedActions.push(action);
-    return this;
-  }
-
-  generateAction(action) {
-    this.generatedActions.push(action);
-    return this;
-  }
-
   /**
    * Convenience: register this reducer instance with a ReducerPipeline.
    * Uses registerReducer so a back-reference is stored, enabling
@@ -183,10 +168,6 @@ export class FieldReducer extends Reducer {
       throw new Error('Must have field name defined for Field Reducer');
     }
     this.fieldName = fieldName;
-  }
-
-  static fromField(fieldName) {
-    return new FieldReducer(`Field Logger`, PRIORITY.METRICS, fieldName);
   }
 
   getStateValue(state, action) {
@@ -283,10 +264,6 @@ export class MetricReducer extends FieldReducer {
     super(name, priority, 'metrics.' + metricName);
   }
 
-  static fromMetric(metricName = null) {
-    return new MetricReducer(`Metric Logger`, PRIORITY.METRICS, metricName);
-  }
-
   reduce(state, action) {
     const metricValue = this.getStateValue(state, action);
     const newState = this.newState(state);  //Pickup next actions
@@ -300,9 +277,6 @@ export class MetricReducer extends FieldReducer {
  */
 export class ArrayMetricReducer extends MetricReducer {
 
-  static fromMetric(fieldName) {
-    return new ArrayMetricReducer('Array Metric Logger', PRIORITY.METRICS, fieldName);
-  }
   constructor(name = 'Array Metric Logger', priority = PRIORITY.METRICS,
      fieldName) {
     super(name, priority, fieldName);
@@ -320,10 +294,6 @@ export class ArrayMetricReducer extends MetricReducer {
 
 export class NumericSumMetricReducer extends MetricReducer {
 
-  static fromMetric(metricName = null) {
-    return new NumericSumMetricReducer('Sum Metric Logger', PRIORITY.METRICS, metricName);
-  }
-
   constructor(name = 'Sum Metric Logger', priority = PRIORITY.METRICS,
       metricName = null) {
     super(name, priority, metricName);
@@ -338,10 +308,6 @@ export class NumericSumMetricReducer extends MetricReducer {
 }
 
 export class MultiplicativeMetricReducer extends FieldReducer {
-
-  static fromMetric(metricName = null) {
-    return new MultiplicativeMetricReducer('Multiplicative Metric Logger', PRIORITY.METRICS, metricName);
-  }
 
   constructor(name = 'Multiplicative Metric Logger', priority = PRIORITY.METRICS,
       mulitplierMetric = null) {
@@ -387,10 +353,6 @@ export class AccountTransactionReducer extends Reducer {
  * count - number of times to repeat
  */
 export class RepeatingReducer extends Reducer {
-
-  static fromReducer(reducers = [], countField = 'value', count = null) {
-    return new RepeatingReducer(`Repeating reducer: ${reducers.map(v => v.name).join('-->')}`, PRIORITY.METRICS, [], reducers, countField, count);
-  }
 
   constructor(name = 'Repeating Reducer', priority = PRIORITY.METRICS,
       reducers, countField = 'value', count = null) {

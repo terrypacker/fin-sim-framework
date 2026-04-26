@@ -17,8 +17,8 @@ import { BaseEvent } from './base-event.js';
  * @property {number} startOffset - Years after simStart to begin (0 = start immediately)
  */
 export class EventSeries extends BaseEvent {
-  constructor({ id, name, type, enabled = true, color = '#888888', interval, startOffset = 0 } = {}) {
-    super({ id, name, type, enabled, color });
+  constructor({ id, name, type, enabled = true, color = '#888888', interval, startOffset = 0, data = {}, meta = {} } = {}) {
+    super({ id, name, type, enabled, color, data, meta });
     this.interval    = interval;
     this.startOffset = startOffset;
   }
