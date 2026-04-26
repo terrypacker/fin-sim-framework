@@ -90,11 +90,15 @@ export class BaseApp {
     return null;
   }
 
-  /** Hook called after scenario.buildSim(). Override in subclasses to load from config. */
+  /** Hook called after scenario.buildSim(). Loads saved config or falls back to defaults. */
   afterBuildSim() {
     const cfg = this._activeScenario();
     if (cfg) {
+      // Restore a previously saved scenario — do not call loadDefaults().
       ScenarioSerializer.deserialize(cfg, this.scenario);
+    } else if (typeof this.scenario.loadDefaults === 'function') {
+      // No saved config: populate the scenario with its default configuration.
+      this.scenario.loadDefaults();
     }
   }
 
