@@ -14,12 +14,11 @@ import { ActionFactory } from './action-factory.js';
 /**
  * Service for managing Action instances throughout their lifecycle.
  *
- * Owns a singleton ActionFactory and wraps each factory method with a CREATE
- * event published to the shared EventBus.  updateAction and deleteAction
- * publish UPDATE and DELETE events respectively.
+ * Actions use their `type` string as their stable identity (id = type) so that
+ * the same action object is shared between handlers and reducers that reference
+ * the same event type.
  *
- * All methods return the affected Action so callers can chain or register it
- * immediately.
+ * Owns an internal Map<id, item> as the source of truth.
  */
 export class ActionService extends BaseService {
   constructor(bus) {
@@ -36,36 +35,48 @@ export class ActionService extends BaseService {
 
   createAmountAction(type, name, value = 0) {
     const item = this._factory.amountAction(type, name, value);
+    item.id = type;
+    this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
   }
 
   createRecordMetricAction(type, name, fieldName, value) {
     const item = this._factory.recordMetricAction(type, name, fieldName, value);
+    item.id = type;
+    this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
   }
 
   createRecordArrayMetricAction(name, fieldName, value) {
     const item = this._factory.recordArrayMetricAction(name, fieldName, value);
+    item.id = item.type;
+    this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
   }
 
   createRecordNumericSumMetricAction(name, fieldName, value) {
     const item = this._factory.recordNumericSumMetricAction(name, fieldName, value);
+    item.id = item.type;
+    this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
   }
 
   createRecordMultiplicativeMetricAction(name, fieldName, value) {
     const item = this._factory.recordMultiplicativeMetricAction(name, fieldName, value);
+    item.id = item.type;
+    this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
   }
 
   createRecordBalanceAction() {
     const item = this._factory.recordBalanceAction();
+    item.id = item.type;
+    this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
   }
@@ -73,18 +84,19 @@ export class ActionService extends BaseService {
   // ─── Update ───────────────────────────────────────────────────────────────
 
   /**
-   * Apply `changes` to an existing action in-place, then publish an UPDATE event.
-   * A shallow clone of the action is captured as `originalItem` before applying changes.
+   * Apply `changes` to an existing action and publish an UPDATE event.
    *
-   * @param {import('../simulation-framework/actions.js').Action} action
-   * @param {object} changes - Key/value pairs to assign onto the action
-   * @returns {import('../simulation-framework/actions.js').Action} the mutated action
+   * Accepts either the item's ID (= its type string) or the action object.
+   * The item is resolved from the internal map so the originalItem snapshot is
+   * taken before the mutation is applied.
+   *
+   * @param {string|import('../simulation-framework/actions.js').Action} idOrAction
+   * @param {object} changes
+   * @returns {import('../simulation-framework/actions.js').Action}
    */
-  updateAction(action, changes = {}) {
-    const originalItem = Object.assign(
-      Object.create(Object.getPrototypeOf(action)),
-      action
-    );
+  updateAction(idOrAction, changes = {}) {
+    const action = this._resolve(idOrAction);
+    const originalItem = Object.assign(Object.create(Object.getPrototypeOf(action)), action);
     Object.assign(action, changes);
     this._publish('UPDATE', action.constructor.name, action, originalItem);
     return action;
@@ -93,13 +105,15 @@ export class ActionService extends BaseService {
   // ─── Delete ───────────────────────────────────────────────────────────────
 
   /**
-   * Publish a DELETE event for the given action.
+   * Remove the action from the service map and publish a DELETE event.
    * The caller is responsible for removing the action from handlers/reducers.
    *
-   * @param {import('../simulation-framework/actions.js').Action} action
-   * @returns {import('../simulation-framework/actions.js').Action} the deleted action
+   * @param {string|import('../simulation-framework/actions.js').Action} idOrAction
+   * @returns {import('../simulation-framework/actions.js').Action}
    */
-  deleteAction(action) {
+  deleteAction(idOrAction) {
+    const action = this._resolve(idOrAction);
+    this._unregister(action.id);
     this._publish('DELETE', action.constructor.name, action, action);
     return action;
   }

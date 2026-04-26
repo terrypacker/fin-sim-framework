@@ -39,12 +39,12 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
   /**
    * Populate the scenario with its default event series, handlers, and reducers.
    * Called by BaseApp.afterBuildSim() when there is no saved config to load.
-   * Uses this.actionFactory so action construction follows the same path as
-   * deserialization.
    */
   loadDefaults() {
+    const { eventService, handlerService, actionService } = FinSimLib.Services.ServiceRegistry.getInstance();
+
     // ── Events ────────────────────────────────────────────────────────────────
-    const monthEndEventSeries = new FinSimLib.Core.EventSeries({
+    const monthEndEventSeries = eventService.createEventSeries({
       name: 'Month End',
       type: 'MONTH_END',
       interval: 'month-end',
@@ -52,13 +52,16 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
       color: '#F44336'
     });
     this.scheduleEvent(monthEndEventSeries);
-    const { actionService } = FinSimLib.Services.ServiceRegistry.getInstance();
+
     // ── Actions ───────────────────────────────────────────────────────────────
-    const recordSalaryPaymentAction = actionService.getFactory().amountAction('RECORD_METRIC', 'Pay Salary', 1200);
-    const sumSalaryPaymentAction = actionService.getFactory().recordNumericSumMetricAction('Sum Payments', 'amount');
+    const recordSalaryPaymentAction = actionService.createAmountAction('RECORD_METRIC', 'Pay Salary', 1200);
+    const sumSalaryPaymentAction    = actionService.createRecordNumericSumMetricAction('Sum Payments', 'amount');
 
     // ── Handlers ──────────────────────────────────────────────────────────────
-    const monthEndHandler = new FinSimLib.Core.HandlerEntry(null, 'Month End Handler');
+    const monthEndHandler = handlerService.createHandler(
+      function({ data, date, state }) { return [...this.generatedActions]; },
+      'Month End Handler'
+    );
     monthEndHandler.forEvent(monthEndEventSeries).generateAction(recordSalaryPaymentAction);
     this.registerHandler(monthEndHandler);
 

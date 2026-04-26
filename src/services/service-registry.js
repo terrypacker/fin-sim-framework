@@ -13,29 +13,30 @@ import { ActionService } from './action-service.js';
 import { EventService } from './event-service.js';
 import { HandlerService } from './handler-service.js';
 import { ReducerService } from './reducer-service.js';
+import { SimulationRegistry } from './simulation-registry.js';
 
 /**
- * Central singleton registry for all application services and the shared
- * EventBus.
+ * Central singleton registry for all application services, the shared
+ * EventBus, and the SimulationRegistry.
  *
  * Usage:
- *   const registry = ServiceRegistry.getInstance();
- *   const action = registry.actionService.createAmountAction('MY_TYPE', 'Salary', 5000);
- *   registry.bus.subscribe('SERVICE_ACTION', e => console.log(e));
+ *   const { eventService, simulationRegistry } = ServiceRegistry.getInstance();
  *
- * For tests, call ServiceRegistry.reset() between cases to get a fresh
- * instance with clean bus history and empty service state.
+ * Call ServiceRegistry.reset() before rebuilding a scenario to get a fresh
+ * instance with a clean bus, empty service maps, and an empty SimulationRegistry.
+ * This is also called automatically by BaseApp.buildScenario().
  */
 export class ServiceRegistry {
   /** @type {ServiceRegistry|null} */
   static _instance = null;
 
   constructor() {
-    this.bus            = new EventBus();
-    this.actionService  = new ActionService(this.bus);
-    this.eventService   = new EventService(this.bus);
-    this.handlerService = new HandlerService(this.bus);
-    this.reducerService = new ReducerService(this.bus);
+    this.bus                = new EventBus();
+    this.actionService      = new ActionService(this.bus);
+    this.eventService       = new EventService(this.bus);
+    this.handlerService     = new HandlerService(this.bus);
+    this.reducerService     = new ReducerService(this.bus);
+    this.simulationRegistry = new SimulationRegistry();
   }
 
   /**
@@ -50,8 +51,9 @@ export class ServiceRegistry {
   }
 
   /**
-   * Destroy the current singleton instance.
-   * Intended for test isolation — call before each test that needs a clean state.
+   * Destroy the current singleton and create a fresh one.
+   * All service item maps, the bus, and the SimulationRegistry are cleared.
+   * Intended to be called at the start of every scenario rebuild.
    */
   static reset() {
     ServiceRegistry._instance = null;

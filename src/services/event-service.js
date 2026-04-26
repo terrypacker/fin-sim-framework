@@ -16,7 +16,9 @@ import { OneOffEvent } from '../simulation-framework/events/one-off-event.js';
  * Service for managing simulation event configuration items (EventSeries and
  * OneOffEvent) throughout their lifecycle.
  *
- * Each mutating method publishes a ServiceActionEvent to the shared EventBus.
+ * Owns an internal Map<id, item> as the source of truth.  Each mutating method
+ * resolves the item from the map before applying changes so that the
+ * originalItem snapshot is always taken before mutation.
  */
 export class EventService extends BaseService {
 
@@ -27,7 +29,9 @@ export class EventService extends BaseService {
    * @returns {EventSeries}
    */
   createEventSeries(params) {
+    if (!params.id) params = { ...params, id: this._generateId('e') };
     const item = new EventSeries(params);
+    this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
   }
@@ -37,7 +41,9 @@ export class EventService extends BaseService {
    * @returns {OneOffEvent}
    */
   createOneOffEvent(params) {
+    if (!params.id) params = { ...params, id: this._generateId('e') };
     const item = new OneOffEvent(params);
+    this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
   }
@@ -45,17 +51,19 @@ export class EventService extends BaseService {
   // ─── Update ───────────────────────────────────────────────────────────────
 
   /**
-   * Apply `changes` to an existing event in-place, then publish an UPDATE event.
+   * Apply `changes` to an existing event and publish an UPDATE event.
    *
-   * @param {import('../simulation-framework/events/base-event.js').BaseEvent} event
+   * Accepts either the item's string ID or the item object itself.  The item
+   * is resolved from the internal map so the originalItem snapshot is taken
+   * before the mutation is applied.
+   *
+   * @param {string|import('../simulation-framework/events/base-event.js').BaseEvent} idOrEvent
    * @param {object} changes
    * @returns {import('../simulation-framework/events/base-event.js').BaseEvent}
    */
-  updateEvent(event, changes = {}) {
-    const originalItem = Object.assign(
-      Object.create(Object.getPrototypeOf(event)),
-      event
-    );
+  updateEvent(idOrEvent, changes = {}) {
+    const event = this._resolve(idOrEvent);
+    const originalItem = Object.assign(Object.create(Object.getPrototypeOf(event)), event);
     Object.assign(event, changes);
     this._publish('UPDATE', event.constructor.name, event, originalItem);
     return event;
@@ -64,13 +72,15 @@ export class EventService extends BaseService {
   // ─── Delete ───────────────────────────────────────────────────────────────
 
   /**
-   * Publish a DELETE event for the given event config.
+   * Remove the event from the service map and publish a DELETE event.
    * The caller is responsible for unscheduling it from the simulation.
    *
-   * @param {import('../simulation-framework/events/base-event.js').BaseEvent} event
+   * @param {string|import('../simulation-framework/events/base-event.js').BaseEvent} idOrEvent
    * @returns {import('../simulation-framework/events/base-event.js').BaseEvent}
    */
-  deleteEvent(event) {
+  deleteEvent(idOrEvent) {
+    const event = this._resolve(idOrEvent);
+    this._unregister(event.id);
     this._publish('DELETE', event.constructor.name, event, event);
     return event;
   }
