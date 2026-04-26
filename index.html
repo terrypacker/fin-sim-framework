@@ -70,18 +70,79 @@
   <div id="mainGrid">
     <!-- ── LEFT COLUMN: config ────────────────────────────── -->
     <div class="left-col">
-      <!-- ── EVENT SCHEDULER ───────────────────────── -->
-      <div class="panel">
-        <div class="panel-header">
+
+      <!-- ── Tab headers ───────────────────────────────── -->
+      <div class="tab">
+        <div class="panel-header tab-header active" data-dest-tab="left-events" data-tab-group="left-col">
           <span class="panel-tag">EV</span>
           <span class="panel-title">EVENTS</span>
         </div>
+        <div class="panel-header tab-header" data-dest-tab="left-scenario" data-tab-group="left-col">
+          <span class="panel-tag">SC</span>
+          <span class="panel-title">SCENARIO</span>
+        </div>
       </div>
-      <div class="node-header">Edit</div>
-      <div id="builderCanvas"></div>
-      <div class="node-header">Rebuild</div>
-     <button class="btn" id="rebuildBtn">↺ Rebuild Simulation</button>
-    </div>
+
+      <!-- ── EVENTS tab ────────────────────────────────── -->
+      <div class="tab-content left-events-tab" data-tab="left-events" data-tab-group="left-col">
+        <div class="node-header">Edit</div>
+        <div id="builderCanvas"></div>
+        <div class="node-header">Rebuild</div>
+        <button class="btn" id="rebuildBtn">↺ Rebuild Simulation</button>
+      </div>
+
+      <!-- ── SCENARIO tab ──────────────────────────────── -->
+      <div class="tab-content left-scenario-tab" style="display:none" data-tab="left-scenario" data-tab-group="left-col">
+
+        <div class="node-header">Scenario</div>
+        <div class="node-field">
+          <select id="scenarioSelect" style="width:100%"></select>
+        </div>
+        <div style="display:flex;gap:4px;padding:4px">
+          <button class="btn btn-sm" id="loadScenarioBtn" style="flex:1">Load</button>
+          <button class="btn btn-sm" id="newScenarioBtn"  style="flex:1">+ New</button>
+          <button class="btn btn-sm btn-warn" id="deleteScenarioBtn" style="flex:1">Delete</button>
+        </div>
+
+        <div class="node-header">Name</div>
+        <div class="node-field">
+          <input id="scenarioName" placeholder="Scenario name" style="width:100%" />
+        </div>
+
+        <div class="node-header">Simulation Period</div>
+        <div class="node-field" style="display:flex;align-items:center;gap:6px">
+          <label style="flex:0 0 auto">Start</label>
+          <input type="date" id="simStartInput" style="flex:1" />
+        </div>
+        <div class="node-field" style="display:flex;align-items:center;gap:6px">
+          <label style="flex:0 0 auto">End</label>
+          <input type="date" id="simEndInput" style="flex:1" />
+        </div>
+
+        <div class="node-header">Initial State (JSON)</div>
+        <div class="node-field">
+          <textarea id="initialStateJson" rows="5"
+            style="width:100%;box-sizing:border-box;font-family:monospace;font-size:11px;resize:vertical"></textarea>
+        </div>
+
+        <div class="node-header">Parameters</div>
+        <div id="paramsList"></div>
+        <div style="padding:4px">
+          <button class="btn btn-sm" id="addParamBtn" style="width:100%">+ Add Parameter</button>
+        </div>
+
+        <div class="node-header">Storage</div>
+        <div style="display:flex;flex-direction:column;gap:4px;padding:4px">
+          <button class="btn btn-sm" id="saveScenarioBtn">Save to Browser</button>
+          <button class="btn btn-sm" id="downloadJsonBtn">Download JSON</button>
+          <label class="btn btn-sm" style="text-align:center;cursor:pointer;margin:0">
+            Upload JSON
+            <input type="file" id="uploadJsonFileInput" accept=".json" style="display:none" />
+          </label>
+        </div>
+
+      </div><!-- /left-scenario -->
+    </div><!-- /left-col -->
 
     <!-- ── CENTER COLUMN: dash + viz + charts ──────────────────────── -->
     <div class="center-col">

@@ -7,33 +7,46 @@
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
-import { CustomScenario, DEFAULT_EVENT_SERIES } from './scenarios/custom-scenario.js';
+import { CustomScenario } from './scenarios/custom-scenario.js';
 
-//TODO IS RELEVANT? ── Chart series ──────────────────────────────────────────────────────────────
+// ── Chart series ──────────────────────────────────────────────────────────────
 const CHART_SERIES = [
-  { key: 'monthCounter',  color: '#60a5fa', label: 'Month Count'   },
-  { key: 'yearCounter',   color: '#34d399', label: 'Year Count'  },
+  { key: 'monthCounter', color: '#60a5fa', label: 'Month Count' },
+  { key: 'yearCounter',  color: '#34d399', label: 'Year Count'  },
 ];
 
 class CustomApp extends FinSimLib.Misc.BaseApp {
-   constructor() {
-     super({
-       newScenario: (params, initialState, eventSchedulerUI) => new CustomScenario({
-         eventSchedulerUI }),
-       chartSeries:     CHART_SERIES,
-     });
-   }
+  constructor() {
+    super({
+      newScenario: (params, initialState, eventSchedulerUI) => {
+        const cfg = this._activeScenario();
+        if (cfg) {
+          return new FinSimLib.Scenarios.BaseScenario({
+            eventSchedulerUI,
+            simStart: cfg.simStart ? new Date(cfg.simStart) : new Date(Date.UTC(2026, 0, 1)),
+            simEnd:   cfg.simEnd   ? new Date(cfg.simEnd)   : new Date(Date.UTC(2041, 0, 1)),
+          });
+        }
+        return new CustomScenario({ eventSchedulerUI });
+      },
+      chartSeries: CHART_SERIES,
+    });
+  }
 
   getInitialState() {
-    return {
-      metrics: {
-        amount: 0,
-        salary: 0
-      }
-    };
+    const activeScenario = super._activeScenario();
+    if(activeScenario) {
+      return activeScenario.initialState;
+    }else {
+      return {
+        metrics: {
+          amount: 0,
+          salary: 0
+        }
+      };
+    }
   }
 }
-
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {

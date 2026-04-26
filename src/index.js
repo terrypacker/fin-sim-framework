@@ -38,6 +38,8 @@ import { UsTaxRatesBase } from './finance/tax/us/us-tax-rates-base.js';
 import { TaxService } from './finance/tax-service.js';
 import { TaxSettleService } from './finance/tax-settle-service.js';
 import { intervalFns, startSnapFns, BaseScenario } from './scenarios/base-scenario.js';
+import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
+import { ScenarioStorage } from './scenarios/scenario-storage.js';
 import { Action, FieldAction, FieldValueAction, AmountAction, RecordMetricAction, RecordArrayMetricAction, RecordNumericSumMetricAction, RecordMultiplicativeMetricAction, RecordBalanceAction } from './simulation-framework/actions.js';
 import { BusMessage, SimulationBusMessage, DebugActionBusMessage } from './simulation-framework/bus-messages.js';
 import { DateUtils } from './simulation-framework/date-utils.js';
@@ -134,6 +136,8 @@ export const Scenarios = {
   intervalFns,
   startSnapFns,
   BaseScenario,
+  ScenarioSerializer,
+  ScenarioStorage,
 };
 
 export const Core = {
