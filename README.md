@@ -435,6 +435,12 @@ Regenerate `src/index.js` after adding or removing exported modules:
 npm run build:index
 ```
 
+### Minification and class names
+
+`Action.actionClass` and `Reducer.reducerType` both return `this.constructor.name`. These values are used by `ScenarioSerializer` (to record which concrete class to reconstruct on deserialize) and by `EventScheduler` (for type-based dispatch). Minifiers mangle class names by default, which breaks both features silently.
+
+The Rollup/terser config preserves class names matching `/Reducer$|Action$/` via `mangle: { keep_classnames: /Reducer$|Action$/ }`. **If you switch to a different minifier** (esbuild, swc, uglify-js, closure compiler, etc.) you must apply the equivalent option for that tool before shipping a minified build. The symptom of a missing fix is that save/load stops working and action type dispatch returns wrong types at runtime.
+
 ### Build commands
 
 ```sh
