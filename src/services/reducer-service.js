@@ -13,6 +13,7 @@ import {
   NoOpReducer,
   FieldReducer,
   StateFieldReducer,
+  ScriptedReducer,
   MetricReducer,
   ArrayMetricReducer,
   NumericSumMetricReducer,
@@ -82,6 +83,14 @@ export class ReducerService extends BaseService {
 
   createMultiplicativeMetricReducer(metricName, name = 'Multiplicative Metric Reducer', priority = PRIORITY.METRICS) {
     const item = new MultiplicativeMetricReducer(name, priority, metricName);
+    item.id = this._generateId('r');
+    this._register(item);
+    this._publish('CREATE', item.constructor.name, item);
+    return item;
+  }
+
+  createScriptedReducer(fieldName = '', script = '// return value (fieldName set) or partial state object\nreturn {};', name = 'Scripted Reducer', priority = PRIORITY.POSITION_UPDATE) {
+    const item = new ScriptedReducer(name, priority, fieldName, script);
     item.id = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);

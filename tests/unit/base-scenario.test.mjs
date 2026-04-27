@@ -62,10 +62,10 @@ class StubSchedulerUI {
   registerActionDeletedListener(l)  { this._listeners.actionDeleted.push(l); }
   registerReducerDeletedListener(l) { this._listeners.reducerDeleted.push(l); }
 
-  addEvent(e)   { e.kind = 'event';   this.nodes.push(e); }
-  addHandler(h) { h.kind = 'handler'; this.nodes.push(h); }
-  addAction(a)  { a.kind = 'action';  this.nodes.push(a); }
-  addReducer(r) { r.kind = 'reducer'; this.nodes.push(r); }
+  addEvent(e)   { e.kind = 'event'; this.nodes.push(e); }
+  addHandler(h) { this.nodes.push(h); }
+  addAction(a)  { this.nodes.push(a); }
+  addReducer(r) { this.nodes.push(r); }
   editNode(n)   { this.editedNodes.push(n); }
 
   triggerCreate(kind, subtype) {

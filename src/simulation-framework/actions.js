@@ -146,6 +146,55 @@ export class RecordBalanceAction extends Action {
   }
 }
 
+/**
+ * An action whose value is computed at reduce-time by a user-supplied JS script.
+ * Intended for rapid prototyping before promoting logic into a dedicated class.
+ *
+ * Script signature:
+ *   (state, date) => value
+ *   The returned value becomes this action's effective value when getValue() is called.
+ *
+ * Reducers that are script-aware (e.g. ScriptedReducer) call action.getValue(state, date)
+ * instead of reading action.value directly.
+ *
+ * The compiled function is cached in _fn and intentionally NOT serialized,
+ * so deserialization triggers a clean recompile — making replays safe.
+ */
+export class ScriptedAction extends FieldValueAction {
+  static description = 'Prototype action: supply a JS script to compute the value at reduce-time. Script receives (state, date).';
+
+  constructor(type, name, fieldName = '', script = '// return computed value\nreturn 0;') {
+    super(type, name, fieldName, null);
+    this._script = script;
+    this._fn = null;  // not serialized — recompiled on first getValue() call
+  }
+
+  get script() { return this._script; }
+  set script(v) { this._script = v; this._fn = null; }  // invalidate cache on edit
+
+  _compile() {
+    if (!this._fn) {
+      try {
+        // eslint-disable-next-line no-new-func
+        this._fn = new Function('state', 'date', this.script);
+      } catch (e) {
+        console.error('ScriptedAction compile error:', e);
+        this._fn = () => null;
+      }
+    }
+    return this._fn;
+  }
+
+  getValue(state, date) {
+    try {
+      return this._compile()(state, date);
+    } catch (e) {
+      console.error('ScriptedAction runtime error:', e);
+      return null;
+    }
+  }
+}
+
 // ─── Class registry ────────────────────────────────────────────────────────────
 
 /**
@@ -161,4 +210,5 @@ export const ACTION_CLASSES = {
   RecordMultiplicativeMetricAction,
   RecordBalanceAction,
   FieldValueAction,
+  ScriptedAction,
 };
