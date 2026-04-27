@@ -347,7 +347,11 @@
       </div>
       <div class="node-field">
         <label>Action Class</label>
-        <select data-id="type"></select>
+        <select data-id="actionClass"></select>
+      </div>
+      <div class="node-field">
+        <label>Type (Discriminator)</label>
+        <input data-id="type" placeholder="e.g. RECORD_METRIC" />
       </div>
       <div data-id="config"></div>
       <div class="node-field">
@@ -371,10 +375,6 @@
 <!-- AmountAction config: editable type discriminator + numeric amount -->
 <template id="tpl-amount-action-editor">
   <div class="node-field">
-    <label>Type (Discriminator)</label>
-    <input data-field="type" placeholder="e.g. ADD_CASH" />
-  </div>
-  <div class="node-field">
     <label>Field name</label>
     <input type="text" disabled data-field="fieldName" value="amount" />
   </div>
@@ -386,10 +386,6 @@
 
 <!-- RecordMetricAction config: editable type + field name + value -->
 <template id="tpl-record-metric-action-editor">
-  <div class="node-field">
-    <label>Type (Discriminator)</label>
-    <input data-field="type" placeholder="e.g. RECORD_METRIC" />
-  </div>
   <div class="node-field">
     <label>Field Name</label>
     <input data-field="fieldName" placeholder="e.g. salary" />
