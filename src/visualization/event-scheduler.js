@@ -41,11 +41,23 @@ export class EventScheduler {
       'RecordBalanceAction', 'ScriptedAction', 'FieldValueAction'
     ];
 
-    // Subscribe to service bus: re-render graph on any service mutation.
-    // This replaces the _nodeChanged → changeListener → service → graph.render()
-    // chain.  All editors now call service.updateX(id, changes) directly, and
-    // the bus subscriber here triggers the visual refresh.
-    ServiceRegistry.getInstance().bus.subscribe('SERVICE_ACTION', () => {
+    // Subscribe to service bus.
+    // CREATE — add the new node to the graph (mirrors what BaseScenario does
+    //          for the simulation side of the same event).
+    // Any mutation — re-render the graph so labels / edges stay in sync.
+    ServiceRegistry.getInstance().bus.subscribe('SERVICE_ACTION', (msg) => {
+      const { actionType, classType, item } = msg;
+      if (actionType === 'CREATE') {
+        if (classType === 'EventSeries' || classType === 'OneOffEvent') {
+          this.addEvent(item);
+        } else if (classType === 'HandlerEntry') {
+          this.addHandler(item);
+        } else if (this._isActionClass(classType)) {
+          this.addAction(item);
+        } else if (this._isReducerClass(classType)) {
+          this.addReducer(item);
+        }
+      }
       this.graph.render();
     });
 
@@ -91,6 +103,18 @@ export class EventScheduler {
   }
 
   editNode(node) { this._editNode(null, node); }
+
+  _isActionClass(classType) {
+    return ['AmountAction', 'RecordMetricAction', 'RecordArrayMetricAction',
+            'RecordNumericSumMetricAction', 'RecordMultiplicativeMetricAction',
+            'RecordBalanceAction', 'ScriptedAction', 'FieldValueAction'].includes(classType);
+  }
+
+  _isReducerClass(classType) {
+    return ['MetricReducer', 'ArrayMetricReducer', 'NumericSumMetricReducer',
+            'MultiplicativeMetricReducer', 'NoOpReducer', 'FieldReducer',
+            'StateFieldReducer', 'AccountTransactionReducer', 'ScriptedReducer'].includes(classType);
+  }
 
   registerEventCreatedListener(listener)   { this.eventNodeCreatedListeners.push(listener); }
   registerHandlerCreatedListener(listener) { this.handlerNodeCreatedListeners.push(listener); }
@@ -179,13 +203,12 @@ export class EventScheduler {
 
   /**
    * Add an event node to the graph.  Also loads the event into the service map
-   * if it was created outside the service (e.g. ScenarioSerializer).
+   * if it was created outside the service.  Idempotent — silently skips if the
+   * node is already present (the bus may fire before an explicit call).
    */
   addEvent(event) {
     const existing = this.graph.getNode(event.id);
-    if (existing) {
-      throw new Error(`Event already exists in graph ${event.type}`);
-    }
+    if (existing) return;
 
     // Ensure the item is in the service map for editor update calls
     const { eventService } = ServiceRegistry.getInstance();

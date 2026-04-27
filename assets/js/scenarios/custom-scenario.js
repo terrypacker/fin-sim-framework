@@ -8,27 +8,28 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-
-// ─── Recurring event series ────────────────────────────────────────────────────
-// NOTE: earnings event types use INTL_ prefix to avoid colliding with the
-// account module handlers (which also register for AU_SAVINGS_EARNINGS etc.
-// and expect data.amount to be provided).
-
-export const DEFAULT_EVENT_SERIES = [
-  new FinSimLib.Core.EventSeries({ id: 'month-end',     label: 'Month End Event',       type: 'MONTH_END',              interval: 'month-end', enabled: true,                 color: '#F44336' }),
-  new FinSimLib.Core.EventSeries({ id: 'year-end',      label: 'Year End Event',        type: 'YEAR_END',               interval: 'year-end',  enabled: true, startOffset: 1, color: '#4CAF50' }),
-];
-
-// ─── Scenario class ────────────────────────────────────────────────────────────
-
+/**
+ * CustomScenario — demonstrates the service-as-entry-point pattern.
+ *
+ * Items are created and inserted directly into the services.  Publishing a
+ * CREATE event on the shared bus is handled automatically by service.register()
+ * and service.create*().  Two bus subscribers react to each CREATE:
+ *
+ *   SimulationSync  → wires the item into the active Simulation
+ *   EventScheduler  → adds the node to the configuration graph
+ *
+ * loadDefaults() does NOT call any BaseScenario helpers (scheduleEvent,
+ * registerHandler, etc.) — those have been removed.  All you need is the
+ * ServiceRegistry and the domain objects.
+ */
 export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
   constructor({ eventSchedulerUI } = {}) {
     super({ eventSchedulerUI });
   }
 
   /**
-   * Build the bare Simulation instance. No events, handlers, or reducers are
-   * registered here. Call loadDefaults() to populate the default configuration,
+   * Build the bare Simulation instance.
+   * Events, handlers, and reducers are NOT registered here — call loadDefaults()
    * or let BaseApp call ScenarioSerializer.deserialize() when loading from a
    * saved config.
    */
@@ -39,11 +40,21 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
   /**
    * Populate the scenario with its default event series, handlers, and reducers.
    * Called by BaseApp.afterBuildSim() when there is no saved config to load.
+   *
+   * Pattern:
+   *   1. Build the domain object (EventSeries, HandlerEntry, reducer, action).
+   *   2. Set any cross-references (handledEvents, generatedActions, reducedActions).
+   *   3. Call service.register(item) — this publishes CREATE on the bus,
+   *      which SimulationSync and EventScheduler handle automatically.
    */
   loadDefaults() {
     const { EventBuilder, ActionBuilder, HandlerBuilder, ReducerBuilder } = FinSimLib.Core;
+    const { eventService, actionService, handlerService, reducerService } =
+      FinSimLib.Services.ServiceRegistry.getInstance();
 
     // ── Events ────────────────────────────────────────────────────────────────
+    // Build the event, then register it.  SimulationSync schedules it in the
+    // sim; EventScheduler adds the graph node.
     const monthEndEventSeries = EventBuilder
       .eventSeries()
       .name('Month End')
@@ -52,32 +63,32 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
       .enabled(true)
       .color('#F44336')
       .build();
-    this.scheduleEvent(monthEndEventSeries);
+    eventService.register(monthEndEventSeries);
 
     // ── Actions ───────────────────────────────────────────────────────────────
-    const recordSalaryPaymentAction = this.registerAction(
-      ActionBuilder.amount()
-        .type('RECORD_METRIC')
-        .name('Pay Salary')
-        .value(1200)
-        .build()
-    );
+    const recordSalaryPaymentAction = ActionBuilder.amount()
+      .type('RECORD_METRIC')
+      .name('Pay Salary')
+      .value(1200)
+      .build();
+    actionService.register(recordSalaryPaymentAction);
 
-    const sumSalaryPaymentAction = this.registerAction(
-      ActionBuilder.recordNumericSum()
-        .name('Sum Payments')
-        .fieldName('amount')
-        .build()
-    );
+    const sumSalaryPaymentAction = ActionBuilder.recordNumericSum()
+      .name('Sum Payments')
+      .fieldName('amount')
+      .build();
+    actionService.register(sumSalaryPaymentAction);
 
     // ── Handlers ──────────────────────────────────────────────────────────────
+    // Build the handler with its connections populated before calling register()
+    // so that SimulationSync wires it fully into the sim on the first CREATE.
     const monthEndHandler = HandlerBuilder
       .handler(function({ data, date, state }) { return [...this.generatedActions]; })
       .name('Month End Handler')
       .forEvent(monthEndEventSeries)
       .generateAction(recordSalaryPaymentAction)
       .build();
-    this.registerHandler(monthEndHandler);
+    handlerService.register(monthEndHandler);
 
     // ── Reducers ──────────────────────────────────────────────────────────────
     const recordSalaryPaymentReducer = ReducerBuilder
@@ -86,20 +97,20 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
       .reduceAction(recordSalaryPaymentAction)
       .generateAction(sumSalaryPaymentAction)
       .build();
-    this.registerReducer(recordSalaryPaymentReducer);
+    reducerService.register(recordSalaryPaymentReducer);
 
     const sumSalaryPaymentReducer = ReducerBuilder
       .numericSum('salary')
       .name('Update Total Salary')
       .reduceAction(sumSalaryPaymentAction)
       .build();
-    this.registerReducer(sumSalaryPaymentReducer);
+    reducerService.register(sumSalaryPaymentReducer);
 
     const depositReducer = ReducerBuilder
       .arrayMetric('deposits')
       .name('Deposit Payment')
       .reduceAction(recordSalaryPaymentAction)
       .build();
-    this.registerReducer(depositReducer);
+    reducerService.register(depositReducer);
   }
 }

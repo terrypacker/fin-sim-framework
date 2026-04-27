@@ -50,31 +50,47 @@ export class ScenarioSerializer {
   }
 
   /**
-   * Reconstruct scenario nodes from a saved config and register them with the scenario.
-   * Call this after scenario.buildSim() so this.sim exists.
+   * Reconstruct scenario nodes from a saved config and register them with the
+   * services.  Call this after scenario.buildSim() so the simulation exists.
+   *
+   * Each service.register() call publishes a CREATE event on the shared bus,
+   * which is picked up by:
+   *   - BaseScenario's subscriber → wires the item into the simulation
+   *   - EventScheduler's subscriber → adds the node to the graph
+   *
+   * Items are registered in dependency order so that references are already
+   * in the service maps when CREATE fires:
+   *   actions → events → handlers → reducers
+   *
+   * @param {object} config - serialized scenario config
+   * @param {{ eventService, handlerService, actionService, reducerService }} services
+   *   Pass ServiceRegistry.getInstance() or any object exposing the four service
+   *   properties.
    */
-  static deserialize(config, scenario) {
-    // Build action instances indexed by their id
+  static deserialize(config, services) {
+    const { eventService, handlerService, actionService, reducerService } = services;
+
+    // 1. Actions first — handlers and reducers hold references to them.
     const actionMap = new Map();
     for (const d of (config.actions ?? [])) {
-      actionMap.set(d.id, ScenarioSerializer._makeAction(d));
+      const action = ScenarioSerializer._makeAction(d);
+      actionService.register(action);   // publishes CREATE → graph node added
+      actionMap.set(d.id, action);
     }
 
-    // Build event instances and register/add them
+    // 2. Events
     const eventMap = new Map();
     for (const d of (config.events ?? [])) {
       const event = ScenarioSerializer._makeEvent(d);
+      eventService.register(event);     // publishes CREATE → sim schedules (if enabled) + graph node added
       eventMap.set(d.id, event);
-      if (event.enabled) {
-        scenario.scheduleEvent(event);
-      } else {
-        scenario.eventSchedulerUI.addEvent(event);
-      }
     }
 
-    // Reconstruct handlers
+    // 3. Handlers — resolve references before registering so the CREATE
+    //    subscriber sees the fully-wired handler.
     for (const d of (config.handlers ?? [])) {
       const handler = new FinSimLib.Core.HandlerEntry(null, d.name);
+      handler.id = d.id;
       for (const eid of (d.handledEventIds ?? [])) {
         const ev = eventMap.get(eid);
         if (ev) handler.handledEvents.push(ev);
@@ -83,14 +99,12 @@ export class ScenarioSerializer {
         const action = actionMap.get(aid);
         if (action) handler.generatedActions.push(action);
       }
-      // registerHandler assigns handler.id and wires to sim + graph
-      scenario.registerHandler(handler);
+      handlerService.register(handler); // publishes CREATE → sim registers handlers + graph node added
     }
 
-    // Reconstruct reducers
+    // 4. Reducers — resolve references before registering.
     for (const d of (config.reducers ?? [])) {
       const reducer = ScenarioSerializer._makeReducer(d);
-      // Pre-assign the saved id; registerReducer only assigns if !reducer.id
       reducer.id = d.id;
       for (const aid of (d.reducedActionIds ?? [])) {
         const action = actionMap.get(aid);
@@ -100,9 +114,8 @@ export class ScenarioSerializer {
         const action = actionMap.get(aid);
         if (action) reducer.generatedActions.push(action);
       }
-      scenario.registerReducer(reducer);
+      reducerService.register(reducer); // publishes CREATE → sim wires reducers + graph node added
     }
-
   }
 
   // ─── Serializers ──────────────────────────────────────────────────────────────
