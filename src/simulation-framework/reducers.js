@@ -98,6 +98,8 @@ export const PRIORITY = {
  * registerWith(pipeline, actionType).
  */
 export class Reducer {
+  static description = 'Abstract base class for all reducers; subclasses implement reduce(state, action, date) and register against an action type.';
+
   constructor(name = 'anonymous', priority = PRIORITY.LOGGING) {
     this.id       = null;
     this.name     = name;
@@ -137,6 +139,20 @@ export class Reducer {
     pipeline.registerReducer(actionType, this);
     return this;
   }
+
+  get kind() { return 'reducer'; }
+
+  /** Always matches constructor.name — can never drift from the actual class. */
+  get reducerType() { return this.constructor.name; }
+
+  static getDescription() {
+    return this.description;
+  }
+
+  getDescription() {
+    return this.constructor.getDescription();
+  }
+
 }
 
 // ─── Common reducer subclasses ─────────────────────────────────────────────────
@@ -147,6 +163,8 @@ export class Reducer {
  * ActionNode captures the fully-updated stateAfter for that event.
  */
 export class NoOpReducer extends Reducer {
+  static description = 'Returns state unchanged.';
+
   constructor(name = 'No-Op', priority = PRIORITY.LOGGING + 5) {
     super(name, priority);
   }
@@ -160,12 +178,10 @@ export class NoOpReducer extends Reducer {
  * Reducer that is places a field in the state
  */
 export class FieldReducer extends Reducer {
+  static description = 'Place fieldName into the state using the value of the action.';
+
   constructor(name = 'Field Reducer', priority, fieldName = null) {
     super(name, priority);
-    if (fieldName == null) {
-      // Executes if variable is null or undefined
-      throw new Error('Must have field name defined for Field Reducer');
-    }
     this.fieldName = fieldName;
   }
 
@@ -241,11 +257,13 @@ export class FieldReducer extends Reducer {
  * Produce a field for the state
  */
 export class StateFieldReducer extends FieldReducer {
+  static description = 'Writes a computed or action-derived value into an arbitrary state field using a configurable generator function.';
+
   constructor(name = 'State Field', priority = PRIORITY.POSITION_UPDATE, fieldName,
       generate = null) {
     super(name, priority, fieldName);
     if(!generate) {
-      this.generate = (state, action, date) => this.getStateValue(state, action);
+      this.generate = (state, action) => this.getStateValue(state, action);
     }else {
       this.generate = generate;
     }
@@ -263,6 +281,8 @@ export class StateFieldReducer extends FieldReducer {
  * action.value if defined or state.metrics[this.fieldName]
  */
 export class MetricReducer extends FieldReducer {
+  static description = 'Replaces the value at state.metrics[metricName] with the action value or the existing state value.';
+
   constructor(name = 'Metric Logger', priority = PRIORITY.METRICS, metricName) {
     super(name, priority, 'metrics.' + metricName);
   }
@@ -279,6 +299,7 @@ export class MetricReducer extends FieldReducer {
  * action.value if defined or state.metrics[this.fieldName]
  */
 export class ArrayMetricReducer extends MetricReducer {
+  static description = 'Appends the action value to the array at state.metrics[metricName], initialising the array if absent.';
 
   constructor(name = 'Array Metric Logger', priority = PRIORITY.METRICS,
      fieldName) {
@@ -296,6 +317,7 @@ export class ArrayMetricReducer extends MetricReducer {
 
 
 export class NumericSumMetricReducer extends MetricReducer {
+  static description = 'Accumulates a running numeric total at state.metrics[metricName] by adding each action value to the existing sum.';
 
   constructor(name = 'Sum Metric Logger', priority = PRIORITY.METRICS,
       metricName = null) {
@@ -311,6 +333,7 @@ export class NumericSumMetricReducer extends MetricReducer {
 }
 
 export class MultiplicativeMetricReducer extends FieldReducer {
+  static description = 'Multiplies the current value at state.metrics[metricName] by the action value, accumulating a compounding product over time.';
 
   constructor(name = 'Multiplicative Metric Logger', priority = PRIORITY.METRICS,
       mulitplierMetric = null) {
@@ -335,6 +358,8 @@ export class MultiplicativeMetricReducer extends FieldReducer {
  * @param {Function}       [opts.getAmount]    - Maps action → amount (default: a => a.amount)
  */
 export class AccountTransactionReducer extends Reducer {
+  static description = 'Applies a debit or credit transaction to a named account in state via AccountService, then returns the updated state.';
+
   constructor({ accountService, accountKey, getAmount = a => a.amount }, name = 'Account Transaction',
       priority = PRIORITY.CASH_FLOW) {
     super(name, priority);
@@ -355,7 +380,17 @@ export class AccountTransactionReducer extends Reducer {
  * countField state field . separated to get the count to repeat
  * count - number of times to repeat
  */
+// ─── Class registry ────────────────────────────────────────────────────────────
+
+/**
+ * Maps reducerType string → class.
+ * Used by ReducerService.replaceReducer to instantiate the correct subclass
+ * when the user changes the type of an existing reducer in the UI.
+ */
+export const REDUCER_CLASSES = {};  // populated after class declarations below
+
 export class RepeatingReducer extends Reducer {
+  static description = 'Runs a set of child reducers N times in sequence (N from the action or a fixed count), re-emitting the action each iteration via next[].';
 
   constructor(name = 'Repeating Reducer', priority = PRIORITY.METRICS,
       reducers, countField = 'value', count = null) {
@@ -386,3 +421,16 @@ export class RepeatingReducer extends Reducer {
     };
   }
 }
+
+// Populate registry after all classes are declared
+Object.assign(REDUCER_CLASSES, {
+  NoOpReducer,
+  FieldReducer,
+  StateFieldReducer,
+  MetricReducer,
+  ArrayMetricReducer,
+  NumericSumMetricReducer,
+  MultiplicativeMetricReducer,
+  AccountTransactionReducer,
+  RepeatingReducer,
+});

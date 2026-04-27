@@ -203,7 +203,6 @@ export class EventScheduler {
   }
 
   addHandler(handler) {
-    handler.kind = 'handler';
     this.graph.addNode(handler);
 
     handler.handledEvents.forEach(e => {
@@ -216,15 +215,6 @@ export class EventScheduler {
   }
 
   addReducer(reducer) {
-    reducer.kind = 'reducer';
-    const C = FinSimLib.Core;
-    if      (reducer instanceof C.NumericSumMetricReducer)      reducer.reducerType = 'NumericSumMetricReducer';
-    else if (reducer instanceof C.ArrayMetricReducer)            reducer.reducerType = 'ArrayMetricReducer';
-    else if (reducer instanceof C.MultiplicativeMetricReducer)   reducer.reducerType = 'MultiplicativeMetricReducer';
-    else if (reducer instanceof C.MetricReducer)                 reducer.reducerType = 'MetricReducer';
-    else if (reducer instanceof C.NoOpReducer)                   reducer.reducerType = 'NoOpReducer';
-    else if (reducer instanceof C.AccountTransactionReducer)     reducer.reducerType = 'AccountTransactionReducer';
-    else if (reducer instanceof C.StateFieldReducer)             reducer.reducerType = 'StateFieldReducer';
     this.graph.addNode(reducer);
 
     reducer.reducedActions.forEach(a => {
@@ -246,16 +236,6 @@ export class EventScheduler {
         actionService.load(action);
       }
 
-      action.kind = 'action';
-      const C = FinSimLib.Core;
-      if      (action instanceof C.RecordNumericSumMetricAction)    action.actionClass = 'RecordNumericSumMetricAction';
-      else if (action instanceof C.RecordArrayMetricAction)          action.actionClass = 'RecordArrayMetricAction';
-      else if (action instanceof C.RecordMultiplicativeMetricAction) action.actionClass = 'RecordMultiplicativeMetricAction';
-      else if (action instanceof C.RecordBalanceAction)              action.actionClass = 'RecordBalanceAction';
-      else if (action instanceof C.RecordMetricAction)               action.actionClass = 'RecordMetricAction';
-      else if (action instanceof C.AmountAction) action.actionClass = 'AmountAction';
-      else if (action instanceof C.FieldValueAction) action.actionClass = 'FieldValueAction';
-      else throw new Error(`Unsupported action type ${ action }`);
       this.graph.addNode(action);
     }
   }
@@ -360,6 +340,10 @@ export class EventScheduler {
   /* ─────────────────────────────  HANDLER EDITOR  ───────────────────────────── */
   _renderHandlerEditor(node) {
     const el = this._getTemplate('tpl-handler-editor');
+
+    const description = el.querySelector('[data-id="description"]');
+    description.innerText = node.getDescription();
+
     const name = el.querySelector('[data-id="name"]');
     name.value = node.name || '';
     name.addEventListener('input', () => {
@@ -383,6 +367,9 @@ export class EventScheduler {
   _renderActionEditor(node) {
     const el = this._getTemplate('tpl-action-editor');
 
+    const description = el.querySelector('[data-id="description"]');
+    description.innerText = node.getDescription();
+
     const name = el.querySelector('[data-id="name"]');
     name.value = node.name || '';
     name.addEventListener('input', () => {
@@ -402,9 +389,11 @@ export class EventScheduler {
 
     actionClassSelect.value = node.actionClass || 'AmountAction';
     actionClassSelect.onchange = () => {
-      ServiceRegistry.getInstance().actionService.updateAction(node.id,
-          {actionClass: actionClassSelect.value});
-      this._renderActionConfig(node, configWrap);
+      // Replace the instance so constructor, getDescription(), and any
+      // class-specific behaviour reflect the new class immediately.
+      const updated = ServiceRegistry.getInstance().actionService
+          .replaceAction(node.id, actionClassSelect.value);
+      this._editNode(null, updated);
     };
 
     const type = el.querySelector('[data-id="type"]');
@@ -484,6 +473,9 @@ export class EventScheduler {
   _renderReducerEditor(node) {
     const el = this._getTemplate('tpl-reducer-editor');
 
+    const description = el.querySelector('[data-id="description"]');
+    description.innerText = node.getDescription();
+
     const typeSelect = el.querySelector('[data-id="type"]');
     const configWrap = el.querySelector('[data-id="config"]');
 
@@ -503,8 +495,12 @@ export class EventScheduler {
 
     typeSelect.value = node.reducerType || 'MetricReducer';
     typeSelect.onchange = () => {
-      ServiceRegistry.getInstance().reducerService.updateReducer(node.id, { reducerType: typeSelect.value });
-      this._renderReducerConfig(node, configWrap);
+      // Replace the instance so constructor, reduce(), and getDescription() all
+      // reflect the new type — mutating reducerType alone would leave them stale.
+      const updated = ServiceRegistry.getInstance().reducerService
+          .replaceReducer(node.id, typeSelect.value);
+      // Re-render the full editor panel pointing at the new instance
+      this._editNode(null, updated);
     };
 
     this._renderReducerConfig(node, configWrap);
@@ -528,15 +524,23 @@ export class EventScheduler {
     let wrap;
     switch (node.reducerType) {
       case 'NumericSumMetricReducer':
+      case 'ArrayMetricReducer':
+      case 'MultiplicativeMetricReducer':
       case 'MetricReducer':
         wrap = this._getTemplate('tpl-metric-reducer-editor');
         wrap.querySelector('[data-field="metric"]').value = node.metric || '';
+        wrap = this._getTemplate('tpl-state-field-reducer-editor');
+        wrap.querySelector('[data-field="fieldName"]').value = node.fieldName || '';
         break;
       case 'AccountTransactionReducer':
         wrap = this._getTemplate('tpl-account-transaction-reducer-editor');
         wrap.querySelector('[data-field="accountKey"]').value = node.accountKey || '';
         break;
       case 'StateFieldReducer':
+        wrap = this._getTemplate('tpl-state-field-reducer-editor');
+        wrap.querySelector('[data-field="fieldName"]').value = node.fieldName || '';
+        break;
+      case 'FieldReducer':
         wrap = this._getTemplate('tpl-state-field-reducer-editor');
         wrap.querySelector('[data-field="fieldName"]').value = node.fieldName || '';
         break;

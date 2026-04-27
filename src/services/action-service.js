@@ -13,7 +13,8 @@ import { BaseService } from './base-service.js';
 import {
   AmountAction, RecordArrayMetricAction, RecordBalanceAction,
   RecordMetricAction,
-  RecordMultiplicativeMetricAction, RecordNumericSumMetricAction
+  RecordMultiplicativeMetricAction, RecordNumericSumMetricAction,
+  ACTION_CLASSES,
 } from "../simulation-framework/actions.js";
 
 /**
@@ -99,6 +100,38 @@ export class ActionService extends BaseService {
     Object.assign(action, changes);
     this._publish('UPDATE', action.constructor.name, action, originalItem);
     return action;
+  }
+
+  /**
+   * Replace an existing action with a new instance of the given class,
+   * preserving id, name, type, fieldName, and value.
+   *
+   * Action subclasses have incompatible constructor signatures, so we bypass
+   * the constructor via Object.create and restore all relevant properties
+   * explicitly. This keeps constructor.name, getDescription(), and any
+   * class-specific behaviour in sync with the stored actionClass string.
+   *
+   * @param {string|Action} idOrAction
+   * @param {string}        newClass   - key in ACTION_CLASSES
+   * @param {object}        [extraProps]
+   * @returns {Action}
+   */
+  replaceAction(idOrAction, newClass, extraProps = {}) {
+    const old = this._resolve(idOrAction);
+    const Cls = ACTION_CLASSES[newClass];
+    if (!Cls) throw new Error(`ActionService: unknown action class "${newClass}"`);
+
+    const fresh = Object.create(Cls.prototype);
+    fresh.id        = old.id;
+    fresh.name      = old.name;
+    fresh.type      = old.type;
+    fresh.fieldName = old.fieldName;
+    fresh.value     = old.value;
+    Object.assign(fresh, extraProps);
+
+    this._items.set(fresh.id, fresh);
+    this._publish('UPDATE', newClass, fresh, old);
+    return fresh;
   }
 
   // ─── Delete ───────────────────────────────────────────────────────────────

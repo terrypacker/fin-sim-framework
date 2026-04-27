@@ -18,6 +18,7 @@ import {
   NumericSumMetricReducer,
   MultiplicativeMetricReducer,
   PRIORITY,
+  REDUCER_CLASSES,
 } from '../simulation-framework/reducers.js';
 
 /**
@@ -106,6 +107,36 @@ export class ReducerService extends BaseService {
     Object.assign(reducer, changes);
     this._publish('UPDATE', reducer.constructor.name, reducer, originalItem);
     return reducer;
+  }
+
+  /**
+   * Replace an existing reducer with a new instance of the given type,
+   * preserving id, name, priority, reducedActions, and generatedActions.
+   * Extra properties (e.g. fieldName, metricName) can be supplied via extraProps.
+   *
+   * This is the correct way to change a reducer's type: swapping the instance
+   * keeps constructor.name, getDescription(), and reduce() all in sync with
+   * the stored reducerType string.
+   *
+   * @param {string|Reducer} idOrReducer
+   * @param {string}         newType    - key in REDUCER_CLASSES
+   * @param {object}         [extraProps]
+   * @returns {Reducer}
+   */
+  replaceReducer(idOrReducer, newType, extraProps = {}) {
+    const old = this._resolve(idOrReducer);
+    const Cls = REDUCER_CLASSES[newType];
+    if (!Cls) throw new Error(`ReducerService: unknown reducer type "${newType}"`);
+
+    const fresh = new Cls(old.name, old.priority);
+    fresh.id               = old.id;
+    fresh.reducedActions   = old.reducedActions;
+    fresh.generatedActions = old.generatedActions;
+    Object.assign(fresh, extraProps);
+
+    this._items.set(fresh.id, fresh);
+    this._publish('UPDATE', newType, fresh, old);
+    return fresh;
   }
 
   // ─── Delete ───────────────────────────────────────────────────────────────
