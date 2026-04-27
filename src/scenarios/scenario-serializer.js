@@ -54,7 +54,7 @@ export class ScenarioSerializer {
    * Call this after scenario.buildSim() so this.sim exists.
    */
   static deserialize(config, scenario) {
-    // Build action instances indexed by their type (= id)
+    // Build action instances indexed by their id
     const actionMap = new Map();
     for (const d of (config.actions ?? [])) {
       actionMap.set(d.id, ScenarioSerializer._makeAction(d));
@@ -137,14 +137,15 @@ export class ScenarioSerializer {
 
   static _serializeAction(node) {
     const C = FinSimLib.Core;
-    let typeName = 'AmountAction';
-    // Check subclasses before superclasses
-    if (node instanceof C.RecordNumericSumMetricAction)     typeName = 'RecordNumericSumMetricAction';
-    else if (node instanceof C.RecordArrayMetricAction)     typeName = 'RecordArrayMetricAction';
+    let typeName;
+    // Check subclasses before superclasses (order matters for instanceof).
+    // AmountAction must be checked before FieldValueAction since it extends it.
+    if      (node instanceof C.RecordNumericSumMetricAction)     typeName = 'RecordNumericSumMetricAction';
+    else if (node instanceof C.RecordArrayMetricAction)          typeName = 'RecordArrayMetricAction';
     else if (node instanceof C.RecordMultiplicativeMetricAction) typeName = 'RecordMultiplicativeMetricAction';
-    else if (node instanceof C.RecordBalanceAction)         typeName = 'RecordBalanceAction';
-    else if (node instanceof C.RecordMetricAction)          typeName = 'RecordMetricAction';
-    else if (node instanceof C.FieldValueAction)          typeName = 'FieldValueAction';
+    else if (node instanceof C.RecordBalanceAction)              typeName = 'RecordBalanceAction';
+    else if (node instanceof C.RecordMetricAction)               typeName = 'RecordMetricAction';
+    else if (node instanceof C.AmountAction)                     typeName = 'AmountAction';
     else throw new Error(`Unsupported action type ${node}`);
 
     // fieldName on RecordMetricAction subclasses includes 'metrics.' prefix — strip it
@@ -153,9 +154,9 @@ export class ScenarioSerializer {
 
     return {
       __type:    typeName,
-      id:        node.type,   // action id = type (convention from EventScheduler.addAction)
+      id:        node.id,    // unique service-assigned id (separate from type)
       name:      node.name,
-      type:      node.type,
+      type:      node.type,  // category discriminator for ReducerPipeline lookup
       value:     node.value,
       fieldName,
     };
@@ -202,25 +203,34 @@ export class ScenarioSerializer {
 
   static _makeAction(d) {
     const C = FinSimLib.Core;
+    let action;
     switch (d.__type) {
       case 'RecordNumericSumMetricAction':
-        return new C.RecordNumericSumMetricAction(d.name, d.fieldName, d.value);
-      case 'RecordArrayMetricAction':
-        return new C.RecordArrayMetricAction(d.name, d.fieldName, d.value);
-      case 'RecordMultiplicativeMetricAction':
-        return new C.RecordMultiplicativeMetricAction(d.name, d.fieldName, d.value);
-      case 'RecordBalanceAction':
-        return new C.RecordBalanceAction();
-      case 'RecordMetricAction':
-        return new C.RecordMetricAction(d.type, d.name, d.fieldName, d.value);
-      case 'FieldValueAction':
-        return new C.FieldValueAction(d.type, d.name, d.fieldName, d.value);
-      case 'AmountAction':
-        return new C.AmountAction(d.type, d.name, d.value ?? 0);
+        action = new C.RecordNumericSumMetricAction(d.name, d.fieldName, d.value);
         break;
-      default: // AmountAction or unknown
+      case 'RecordArrayMetricAction':
+        action = new C.RecordArrayMetricAction(d.name, d.fieldName, d.value);
+        break;
+      case 'RecordMultiplicativeMetricAction':
+        action = new C.RecordMultiplicativeMetricAction(d.name, d.fieldName, d.value);
+        break;
+      case 'RecordBalanceAction':
+        action = new C.RecordBalanceAction();
+        break;
+      case 'RecordMetricAction':
+        action = new C.RecordMetricAction(d.type, d.name, d.fieldName, d.value);
+        break;
+      case 'FieldValueAction':
+        action = new C.FieldValueAction(d.type, d.name, d.fieldName, d.value);
+        break;
+      case 'AmountAction':
+        action = new C.AmountAction(d.type, d.name, d.value ?? 0);
+        break;
+      default:
         throw new Error(`Add support for deserialization of action type ${d.__type}.`);
     }
+    action.id = d.id;  // restore the saved id (separate from type since action id != type)
+    return action;
   }
 
   static _makeReducer(d) {

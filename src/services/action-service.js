@@ -19,9 +19,9 @@ import {
 /**
  * Service for managing Action instances throughout their lifecycle.
  *
- * Actions use their `type` string as their stable identity (id = type) so that
- * the same action object is shared between handlers and reducers that reference
- * the same event type.
+ * Action.id is a service-generated unique identifier (e.g. 'a1', 'a2').
+ * Action.type is the category discriminator used by the ReducerPipeline for
+ * reducer lookup — it is set by the caller and is independent of id.
  *
  * Owns an internal Map<id, item> as the source of truth.
  */
@@ -34,7 +34,7 @@ export class ActionService extends BaseService {
 
   createAmountAction(type, name, value = 0) {
     const item = new AmountAction(type, name, value);
-    // item.id is set to type in the Action constructor
+    item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
@@ -42,6 +42,7 @@ export class ActionService extends BaseService {
 
   createRecordMetricAction(type, name, fieldName, value) {
     const item = new RecordMetricAction(type, name, fieldName, value);
+    item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
@@ -49,6 +50,7 @@ export class ActionService extends BaseService {
 
   createRecordArrayMetricAction(name, fieldName, value) {
     const item = new RecordArrayMetricAction(name, fieldName, value);
+    item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
@@ -56,6 +58,7 @@ export class ActionService extends BaseService {
 
   createRecordNumericSumMetricAction(name, fieldName, value) {
     const item = new RecordNumericSumMetricAction(name, fieldName, value);
+    item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
@@ -63,6 +66,7 @@ export class ActionService extends BaseService {
 
   createRecordMultiplicativeMetricAction(name, fieldName, value) {
     const item = new RecordMultiplicativeMetricAction(name, fieldName, value);
+    item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
@@ -70,6 +74,7 @@ export class ActionService extends BaseService {
 
   createRecordBalanceAction() {
     const item = new RecordBalanceAction();
+    item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
