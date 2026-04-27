@@ -144,6 +144,8 @@ export class ScenarioSerializer {
     else if (node instanceof C.RecordMultiplicativeMetricAction) typeName = 'RecordMultiplicativeMetricAction';
     else if (node instanceof C.RecordBalanceAction)         typeName = 'RecordBalanceAction';
     else if (node instanceof C.RecordMetricAction)          typeName = 'RecordMetricAction';
+    else if (node instanceof C.FieldValueAction)          typeName = 'FieldValueAction';
+    else throw new Error(`Unsupported action type ${node}`);
 
     // fieldName on RecordMetricAction subclasses includes 'metrics.' prefix — strip it
     const rawField = node.fieldName;
@@ -211,6 +213,8 @@ export class ScenarioSerializer {
         return new C.RecordBalanceAction();
       case 'RecordMetricAction':
         return new C.RecordMetricAction(d.type, d.name, d.fieldName, d.value);
+      case 'FieldValueAction':
+        return new C.FieldValueAction(d.type, d.name, d.fieldName, d.value);
       case 'AmountAction':
         return new C.AmountAction(d.type, d.name, d.value ?? 0);
         break;

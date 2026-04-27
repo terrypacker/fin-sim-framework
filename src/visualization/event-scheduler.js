@@ -38,7 +38,7 @@ export class EventScheduler {
     this.ACTION_TYPES = [
       'AmountAction', 'RecordMetricAction', 'RecordArrayMetricAction',
       'RecordNumericSumMetricAction', 'RecordMultiplicativeMetricAction',
-      'RecordBalanceAction',
+      'RecordBalanceAction', 'FieldValueAction'
     ];
 
     // Subscribe to service bus: re-render graph on any service mutation.
@@ -253,7 +253,9 @@ export class EventScheduler {
       else if (action instanceof C.RecordMultiplicativeMetricAction) action.actionClass = 'RecordMultiplicativeMetricAction';
       else if (action instanceof C.RecordBalanceAction)              action.actionClass = 'RecordBalanceAction';
       else if (action instanceof C.RecordMetricAction)               action.actionClass = 'RecordMetricAction';
-      else                                                           action.actionClass = 'AmountAction';
+      else if (action instanceof C.AmountAction) action.actionClass = 'AmountAction';
+      else if (action instanceof C.FieldValueAction) action.actionClass = 'FieldValueAction';
+      else throw new Error(`Unsupported action type ${ action }`);
       this.graph.addNode(action);
     }
   }
@@ -439,6 +441,7 @@ export class EventScheduler {
       case 'RecordArrayMetricAction':
       case 'RecordNumericSumMetricAction':
       case 'RecordMultiplicativeMetricAction':
+      case 'FieldValueAction':
         wrap = this._getTemplate('tpl-fixed-type-metric-action-editor');
         wrap.querySelector('[data-field="fieldName"]').value = displayField(node.fieldName);
         wrap.querySelector('[data-field="value"]').value     = node.value ?? 0;
