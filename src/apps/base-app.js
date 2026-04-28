@@ -105,7 +105,31 @@ export class BaseApp {
     chartView.addSnapshot(type, date, state.metrics ? {...state.metrics} : {});
   }
 
+  updateConfigGraph(payload) {
+    const stateBefore = payload.stateBefore;
+    const stateAfter = payload.stateAfter;
+    const action = payload.action;
+    const sourceEvent = payload.sourceEvent;
 
+    const diff = this.diffStates(stateBefore, stateAfter);
+    //Reset all node statuses
+    this.configGraphBuilder.applyToAllNodes('fired', false);
+
+    //Set Event node to fired
+    const eventNode = this.configGraphBuilder.getNode(sourceEvent.id);
+    eventNode.fired = true;
+
+    //Set Handler node to fired
+    //TODO Need handler in message
+
+    //Set Reducer node to fired
+    //TODO Need Reducer in message
+
+    //Set Action node to fired
+    const actionNode = this.configGraphBuilder.getNode(action.id);
+    actionNode.fired = true;
+    this.configGraphBuilder.render();
+  }
 
   /**
    * Update the date formatter used by all views. Takes effect immediately
@@ -246,6 +270,7 @@ export class BaseApp {
       }
       this.updateStatePanel(date, payload.stateAfter);
       this.updateChart(this.chartView, payload.type, payload.date, payload.stateAfter);
+      this.updateConfigGraph(payload);
       if(this.updateDashCards)
         this.updateDashCards(payload);
     });

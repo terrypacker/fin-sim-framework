@@ -24,7 +24,7 @@ export class ConfigGraphBuilder {
     this.nodeClickListeners = [];
     this.selectedNodeId = null;
     this.dragState = null;
-
+    this.nodeTemplate = document.getElementById('tpl-node-details');
     this._bindEvents();
   }
 
@@ -86,8 +86,8 @@ export class ConfigGraphBuilder {
     this.graphNodesEl.innerHTML = '';
 
     for (const node of this.nodes) {
-      const el = document.createElement('div');
-      el.className = 'g-node';
+      const el = this.nodeTemplate.content.firstElementChild.cloneNode(true);
+      el.classList.add('g-node');
       el.dataset.id = node.id;
 
       if (node.id === this.selectedNodeId) {
@@ -97,12 +97,22 @@ export class ConfigGraphBuilder {
       el.style.left = node.x + 'px';
       el.style.top  = node.y + 'px';
 
-      el.innerHTML = `
-        <div class="g-header">${node.kind.toUpperCase()}</div>
-        <input class="g-title" value="${node.name || ''}">
-        <div class="g-port in"></div>
-        <div class="g-port out"></div>
-      `;
+      const header = el.querySelector('div.g-header');
+      header.innerText = node.kind.toUpperCase();
+      const title = el.querySelector('div.g-title');
+      title.innerText = node.name;
+
+      //Update the fired status
+      const firedIndicator = el.querySelector('[data-id="firedIndicator"]');
+      firedIndicator.classList.toggle('badge-green', node.fired);
+      firedIndicator.classList.toggle('badge-cyan', !node.fired);
+
+      if(node.fired) {
+        firedIndicator.innerText = 'Fired';
+      }else {
+        firedIndicator.innerText = 'Idle';
+      }
+
 
       el.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -162,10 +172,15 @@ export class ConfigGraphBuilder {
     if(!node.id) {
       throw new Error(`Node requires id ${node}`);
     }
+
     const existing = this.getNode(node.id);
     if(existing) {
       throw new Error(`Node already added ${node.id} kind: ${node.kind}`);
     }
+
+    //Decorate for viz
+    node.fired = false;
+
     this.nodes.push(node);
     this._relayoutAll();
     this.render();
@@ -208,6 +223,10 @@ export class ConfigGraphBuilder {
 
   getNode(nodeId) {
     return this.nodes.find(n => n.id == nodeId);
+  }
+
+  applyToAllNodes(field, value) {
+    this.nodes.forEach(n => n[field] = value);
   }
 
   removeNode(nodeId) {
