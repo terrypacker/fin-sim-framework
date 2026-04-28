@@ -159,13 +159,14 @@ export class Simulation {
     const handlers = this.handlers.get(event.type) || [];
 
     //Publish the event occurred message
+    const stateBefore = structuredClone(this.state);
     this.bus.publish(new EventStartBusMessage({
       date: new Date(this.currentDate),
       sim: this,
-      stateSnapshot: structuredClone(this.state),
       payload: {
         event: event,
-      }
+      },
+      stateSnapshot: stateBefore
     }));
 
     for (const entry of handlers) {
@@ -179,7 +180,15 @@ export class Simulation {
 
       //Publish the handled event message for non event re-schedule handlers
       if(entry.name !== 'INTERNAL_SCHEDULING_HANDLER_NAME') {
-        this.bus.publish(new EventHandledMessage({date: this.currentDate, payload: {handler: entry, event: event}}));
+        this.bus.publish(new EventHandledMessage({
+          date: new Date(this.currentDate),
+          sim: this,
+          stateSnapshot: stateBefore,
+          payload: {
+            handler: entry,
+            event: event
+          }
+        }));
       }
 
       this.applyActions(actions, event);
@@ -196,12 +205,16 @@ export class Simulation {
     }
 
     //Publish the EVENT_OCCURRENCE_END message
+    const stateSnapshot = structuredClone(this.state);
     this.bus.publish(new EventEndBusMessage({
       date: new Date(this.currentDate),
       sim: this,
-      stateSnapshot: structuredClone(this.state),
+      stateSnapshot: stateSnapshot,
       payload: {
         event: event,
+        stateBefore: stateBefore,
+        stateAfter: stateSnapshot,
+        sourceEvent: event
       }
     }));
   }
@@ -252,7 +265,10 @@ export class Simulation {
           sim: this,
           stateSnapshot: stateSnapshot,
           payload: {
-            reducer: reducerWrapper.reducer
+            reducer: reducerWrapper.reducer,
+            stateBefore: prevState,
+            stateAfter: stateSnapshot,
+            sourceEvent: sourceEvent
           }
         }));
 
