@@ -79,6 +79,14 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
       .build();
     actionService.register(sumSalaryPaymentAction);
 
+    //TODO When we fix the classes for Actions we can make this a field metric
+    const sumTaxAction = ActionBuilder.recordMetric()
+    .type('SUM_TAX')
+    .name('Sum Salary Tax')
+    .fieldName('taxAmount')
+    .build();
+    actionService.register(sumTaxAction);
+
     // ── Handlers ──────────────────────────────────────────────────────────────
     // Build the handler with its connections populated before calling register()
     // so that SimulationSync wires it fully into the sim on the first CREATE.
@@ -99,12 +107,28 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
       .build();
     reducerService.register(recordSalaryPaymentReducer);
 
+    const recordSalaryTaxReducer = ReducerBuilder
+    .multiplicative('metrics.taxAmount')
+    .name('Process Salary Tax')
+    .value(0.15)
+    .reduceAction(recordSalaryPaymentAction)
+    .generateAction(sumTaxAction)
+    .build();
+    reducerService.register(recordSalaryTaxReducer);
+
     const sumSalaryPaymentReducer = ReducerBuilder
       .numericSum('metrics.salary')
       .name('Update Total Salary')
       .reduceAction(sumSalaryPaymentAction)
       .build();
     reducerService.register(sumSalaryPaymentReducer);
+
+    const sumSalaryTaxReducer = ReducerBuilder
+    .numericSum('metrics.totalTax')
+    .name('Update Total Tax')
+    .reduceAction(sumTaxAction)
+    .build();
+    reducerService.register(sumSalaryTaxReducer);
 
     const depositReducer = ReducerBuilder
       .array('metrics.deposits')
