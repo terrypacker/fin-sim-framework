@@ -13,10 +13,11 @@ const NODE_HEIGHT = 40;
 const PADDING = 20;
 
 export class ConfigGraphBuilder {
-  constructor({ graphRoot, graphNodes, graphEdges, nodeTemplate}) {
+  constructor({ graphRoot, graphNodes, graphEdges, nodeTemplate, displayNodeStateChanges}) {
     this.graphRoot = graphRoot;
     this.graphNodesEl = graphNodes;
     this.graphEdgesEl = graphEdges;
+    this.displayNodeStateChanges = displayNodeStateChanges ? displayNodeStateChanges : (c) => {};
 
     this.nodes = [];
     this.edges = [];
@@ -97,9 +98,9 @@ export class ConfigGraphBuilder {
       el.style.left = node.x + 'px';
       el.style.top  = node.y + 'px';
 
-      const header = el.querySelector('div.g-header');
-      header.innerText = node.kind.toUpperCase();
-      const title = el.querySelector('div.g-title');
+      const header = el.querySelector('span.g-header-text');
+      header.innerText = node.kind;
+      const title = el.querySelector('span.g-title');
       title.innerText = node.name;
 
       //Update the fired status
@@ -107,6 +108,16 @@ export class ConfigGraphBuilder {
       firedIndicator.classList.toggle('badge-green', node.fired);
       firedIndicator.classList.toggle('badge-cyan', !node.fired);
 
+      const stateChangedIndicator = el.querySelector('[data-id="stateChangeIndicator"]');
+      if(node.stateChanged) {
+        stateChangedIndicator.innerText = 'State Change';
+        stateChangedIndicator.style = '';
+        stateChangedIndicator.addEventListener('click', (evt) => {
+          this.displayNodeStateChanges(node.stateChanges);
+        });
+      }else {
+        stateChangedIndicator.style = 'display:none';
+      }
       if(node.fired) {
         firedIndicator.innerText = 'Fired';
       }else {
@@ -225,15 +236,8 @@ export class ConfigGraphBuilder {
     return this.nodes.find(n => n.id == nodeId);
   }
 
-  applyToAllNodes(field, value) {
-    this.nodes.forEach(n => n[field] = value);
-  }
-
-  applyToNodes(filter, field, value) {
-    this.nodes.forEach(n => {
-      if(filter(n))
-        n[field] = value;
-    });
+  applyToAllNodes(changer, value) {
+    this.nodes.forEach(n => changer(n));
   }
 
   removeNode(nodeId) {

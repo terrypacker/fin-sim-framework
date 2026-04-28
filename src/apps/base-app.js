@@ -109,7 +109,11 @@ export class BaseApp {
     const event = payload.event;
     if(start) {
       //Event start
-      this.configGraphBuilder.applyToAllNodes('fired', false);
+      this.configGraphBuilder.applyToAllNodes(n => {
+        n.fired = false;
+        n.stateChanged = false;
+        n.stateChanges = [];
+      }, false);
 
       //Set Event node to fired (no state change available)
       const eventNode = this.configGraphBuilder.getNode(event.id);
@@ -153,6 +157,13 @@ export class BaseApp {
     //Set node to fired
     const node = this.configGraphBuilder.getNode(id);
     node.fired = true;
+    if(diff.length > 0) {
+      node.stateChanged = true;
+      node.stateChanges = diff;
+    }else {
+      node.stateChanged = false;
+      node.stateChanges = [];
+    }
     this.configGraphBuilder.render();
   }
 
@@ -199,7 +210,8 @@ export class BaseApp {
       graphRoot: document.getElementById('graphRoot'),
       graphNodes: document.getElementById('graphNodes'),
       graphEdges: document.getElementById('graphEdges'),
-      nodeTemplate: document.getElementById('tpl-node-details')
+      nodeTemplate: document.getElementById('tpl-node-details'),
+      displayNodeStateChanges: (changes) => this.showNodeStateChanges(changes)
     });
 
     this.schedulerUI = new EventScheduler({
@@ -318,7 +330,7 @@ export class BaseApp {
       this.updateChart(this.chartView, payload.type, payload.date, payload.stateAfter);
       this.updateConfigGraphActions(payload);
       if(this.updateDashCards)
-        this.updateDashCards(dae);
+        this.updateDashCards(date);
     });
 
     // Subscribe to REDUCER_RESULT events
@@ -423,6 +435,16 @@ export class BaseApp {
     }
   }
 
+  showNodeStateChanges(changes) {
+    const templateContent = document.querySelector(`#tpl-node-state-changes`);
+    const clone = templateContent.content.firstElementChild.cloneNode(true);
+    const stateChangesGrid = clone.querySelector('[data-state-change-grid]');
+    this._populateStateChanges(stateChangesGrid, changes);
+    const actionDetails = $('actionPanelDetails');
+    clone.appendChild(stateChangesGrid);
+    actionDetails.replaceChildren(clone);
+  }
+
   showNodeDetail(entry) {
     const actionDetail = this.buildActionDetail(entry);
     const changes = actionDetail.changes;
@@ -447,9 +469,15 @@ export class BaseApp {
 
     //Populate state changes
     const stateChangesGrid = clone.querySelector('[data-state-change-grid]');
-    if(content.changes.length > 0) {
+    const prevState = JSON.stringify(content.entry.prevState,null, 2);
+    this._populateStateChanges(stateChangesGrid, content.changes, prevState);
+    return clone;
+  }
+
+  _populateStateChanges(stateChangesGrid, changes, prevState = null) {
+    if(changes.length > 0) {
       //Compute the changes
-      for(const change of content.changes) {
+      for(const change of changes) {
         const stateChangeRow = document.importNode(stateChangesGrid.querySelector('[data-state-change-row]'), true);
         stateChangeRow.style = '';
         stateChangeRow.querySelector('[data-id="field"]').innerText = change.field;
@@ -475,9 +503,12 @@ export class BaseApp {
       stateChangesGrid.querySelector('[data-id="noChangeRow"]').style = '';
       const noChangeState = stateChangesGrid.querySelector('[data-id="noChangeState"]');
       noChangeState.style = '';
-      noChangeState.innerHTML = `<pre>${JSON.stringify(content.entry.prevState,null, 2)}</pre>`;
+      if(prevState != null) {
+        noChangeState.innerHTML = `<pre>${prevState}</pre>`;
+      }else {
+        noChangeState.innerText = 'No changes';
+      }
     }
-    return clone;
   }
 
   /**
