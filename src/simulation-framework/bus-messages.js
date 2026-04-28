@@ -17,6 +17,13 @@
  * limitations under the License.
  */
 
+export const SIMULATION_BUS_MESSAGES = {
+  EVENT_OCCURRENCE_START: 'EVENT_OCCURRENCE_START',
+  EVENT_OCCURRENCE_END: 'EVENT_OCCURRENCE_END',
+  HANDLED_EVENT: 'HANDLED_EVENT',
+  ACTION_RESULT: 'ACTION_RESULT',
+  REDUCER_RESULT: 'REDUCER_RESULT'
+}
 /**
  * Base class for all messages published to the EventBus.
  * Every message has a type discriminator and an optional date.
@@ -41,6 +48,61 @@ export class SimulationBusMessage extends BusMessage {
     this.sim = sim;
     this.payload = payload;
     this.stateSnapshot = stateSnapshot;
+  }
+}
+
+/**
+ * Published once per Event occurrence at the start.
+ * Always has type 'EVENT_OCCURRENCE_START'.
+ */
+export class EventStartBusMessage extends BusMessage {
+  constructor({ date, payload }) {
+    super({ type: SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START, date });
+    this.payload = payload;
+  }
+}
+
+/**
+ * Published once per Event occurrence at the end after the event is complete.
+ * Always has type 'EVENT_OCCURRENCE_END'.
+ */
+export class EventEndBusMessage extends BusMessage {
+  constructor({ date, payload }) {
+    super({ type: SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_END, date });
+    this.payload = payload;
+  }
+}
+
+/**
+ * Published once per each Action processed an event occurrence.
+ * Always has type 'HANDLED_EVENT'.
+ */
+export class EventHandledMessage extends BusMessage {
+  constructor({ date, payload }) {
+    super({ type: SIMULATION_BUS_MESSAGES.HANDLED_EVENT, date });
+    this.payload = payload;
+  }
+}
+
+/**
+ * Published once per Action occurrence.
+ * Always has type 'ACTION_RESULT'.
+ */
+export class ActionResultMessage extends BusMessage {
+  constructor({ date, payload }) {
+    super({ type: SIMULATION_BUS_MESSAGES.ACTION_RESULT, date });
+    this.payload = payload;
+  }
+}
+
+/**
+ * Published once per Reducer execution.
+ * Always has type 'REDUCER_RESULT'.
+ */
+export class ReducerResultMessage extends BusMessage {
+  constructor({ date, payload }) {
+    super({ type: SIMULATION_BUS_MESSAGES.REDUCER_RESULT, date });
+    this.payload = payload;
   }
 }
 

@@ -55,6 +55,17 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
     // ── Events ────────────────────────────────────────────────────────────────
     // Build the event, then register it.  SimulationSync schedules it in the
     // sim; EventScheduler adds the graph node.
+
+    const monthStartEventSeries = EventBuilder
+    .eventSeries()
+    .name('Month Start')
+    .type('MONTH_START')
+    .interval('monthly')
+    .enabled(true)
+    .color('#0206f5')
+    .build();
+    eventService.register(monthStartEventSeries);
+
     const monthEndEventSeries = EventBuilder
       .eventSeries()
       .name('Month End')
@@ -79,6 +90,12 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
       .build();
     actionService.register(sumSalaryPaymentAction);
 
+    const monthStartAction = ActionBuilder.action('MONTH_START')
+    .name('Month started')
+    .build();
+    actionService.register(monthStartAction);
+
+
     //TODO When we fix the classes for Actions we can make this a field metric
     const sumTaxAction = ActionBuilder.fieldValueAction('SUM_TAX')
     .name('Sum Salary Tax')
@@ -89,6 +106,14 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
     // ── Handlers ──────────────────────────────────────────────────────────────
     // Build the handler with its connections populated before calling register()
     // so that SimulationSync wires it fully into the sim on the first CREATE.
+    const monthStartHandler = HandlerBuilder
+    .handler(function({ data, date, state }) { return [...this.generatedActions]; })
+    .name('Month Start Handler')
+    .forEvent(monthStartEventSeries)
+    .generateAction(monthStartAction)
+    .build();
+    handlerService.register(monthStartHandler);
+
     const monthEndHandler = HandlerBuilder
       .handler(function({ data, date, state }) { return [...this.generatedActions]; })
       .name('Month End Handler')
