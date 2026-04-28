@@ -451,6 +451,10 @@
         <label>Reducer Type</label>
         <select data-id="type"></select>
       </div>
+      <div class="node-field">
+        <label>Priority</label>
+        <select data-id="priority"></select>
+      </div>
       <div data-id="config"></div>
       <div class="node-field">
         <label>
@@ -488,6 +492,17 @@
   <div class="node-field">
     <label>State field</label>
     <input data-field="fieldName">
+  </div>
+</template>
+
+<template id="tpl-field-value-reducer-editor">
+  <div class="node-field">
+    <label>State field</label>
+    <input data-field="fieldName">
+  </div>
+  <div class="node-field">
+    <label>Fixed value <small style="font-weight:normal;opacity:.7">(leave blank to use action/state value)</small></label>
+    <input type="number" data-field="value" placeholder="auto">
   </div>
 </template>
 

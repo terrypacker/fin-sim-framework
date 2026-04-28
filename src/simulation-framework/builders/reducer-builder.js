@@ -76,11 +76,11 @@ class FieldReducerBuilder extends BaseFieldReducerBuilder {
   build() { return this._apply(new FieldReducer(this._name, this._priority, this._fieldName)); }
 }
 
-class ArrayReducerBuilder extends BaseFieldReducerBuilder {
+class ArrayReducerBuilder extends BaseFieldValueReducerBuilder {
   constructor(fieldName) {
-    super('Array Reducer', PRIORITY.METRICS, fieldName);
+    super('Array Reducer', PRIORITY.METRICS, fieldName, null);
   }
-  build() { return this._apply(new ArrayReducer(this._name, this._priority, this._fieldName)); }
+  build() { return this._apply(new ArrayReducer(this._name, this._priority, this._fieldName, this._value)); }
 }
 
 class NumericSumReducerBuilder extends BaseFieldValueReducerBuilder {
