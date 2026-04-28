@@ -48,9 +48,8 @@ export class EventScheduler {
 
     // Ordered most-specific to least-specific for instanceof checks.
     this.ACTION_TYPES = [
-      'AmountAction', 'RecordMetricAction', 'RecordArrayMetricAction',
-      'RecordNumericSumMetricAction', 'RecordMultiplicativeMetricAction',
-      'RecordBalanceAction', 'ScriptedAction', 'FieldValueAction'
+      'AmountAction', 'RecordBalanceAction', 'ScriptedAction',
+      'FieldValueAction', 'FieldAction', 'Action'
     ];
 
     // Subscribe to service bus.
@@ -117,14 +116,13 @@ export class EventScheduler {
   editNode(node) { this._editNode(null, node); }
 
   _isActionClass(classType) {
-    return ['AmountAction', 'RecordMetricAction', 'RecordArrayMetricAction',
-            'RecordNumericSumMetricAction', 'RecordMultiplicativeMetricAction',
-            'RecordBalanceAction', 'ScriptedAction', 'FieldValueAction'].includes(classType);
+    return ['AmountAction', 'RecordBalanceAction', 'ScriptedAction',
+      'FieldValueAction', 'FieldAction', 'Action'].includes(classType);
   }
 
   _isReducerClass(classType) {
     return ['ArrayReducer', 'NumericSumReducer',
-            'MultiplicativeReducer', 'NoOpReducer', 'FieldReducer',
+            'MultiplicativeReducer', 'NoOpReducer', 'FieldReducer', 'FieldValueReducer',
             'AccountTransactionReducer', 'ScriptedReducer', 'RepeatingReducer'].includes(classType);
   }
 
@@ -466,16 +464,14 @@ export class EventScheduler {
         wrap = this._getTemplate('tpl-amount-action-editor');
         wrap.querySelector('[data-field="value"]').value = node.value ?? 0;
         break;
-      case 'RecordMetricAction':
-        wrap = this._getTemplate('tpl-record-metric-action-editor');
-        wrap.querySelector('[data-field="fieldName"]').value = displayField(node.fieldName);
-        wrap.querySelector('[data-field="value"]').value     = node.value ?? 0;
+      case 'Action':
         break;
-      case 'RecordArrayMetricAction':
-      case 'RecordNumericSumMetricAction':
-      case 'RecordMultiplicativeMetricAction':
+      case 'FieldAction':
+        wrap = this._getTemplate('tpl-field-action-editor');
+        wrap.querySelector('[data-field="fieldName"]').value = displayField(node.fieldName);
+        break;
       case 'FieldValueAction':
-        wrap = this._getTemplate('tpl-fixed-type-metric-action-editor');
+        wrap = this._getTemplate('tpl-field-value-action-editor');
         wrap.querySelector('[data-field="fieldName"]').value = displayField(node.fieldName);
         wrap.querySelector('[data-field="value"]').value     = node.value ?? 0;
         break;

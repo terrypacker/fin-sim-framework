@@ -490,6 +490,7 @@ export class ScriptedReducer extends FieldReducer {
 Object.assign(REDUCER_CLASSES, {
   NoOpReducer,
   FieldReducer,
+  FieldValueReducer,
   ScriptedReducer,
   ArrayReducer,
   NumericSumReducer,

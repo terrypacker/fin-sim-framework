@@ -9,11 +9,10 @@
  */
 
 import {
+  Action,
+  FieldAction,
+  FieldValueAction,
   AmountAction,
-  RecordMetricAction,
-  RecordArrayMetricAction,
-  RecordNumericSumMetricAction,
-  RecordMultiplicativeMetricAction,
   RecordBalanceAction,
 } from '../actions.js';
 
@@ -33,69 +32,42 @@ class AmountActionBuilder {
   }
 }
 
-class RecordMetricActionBuilder {
-  constructor() {
-    this._type      = 'RECORD_METRIC';
-    this._name      = undefined;
-    this._fieldName = undefined;
-    this._value     = undefined;
+class SimpleActionBuilder {
+  constructor(type, defaultName) {
+    this._type = type;
+    this._name = defaultName;
   }
 
   type(v)      { this._type = v;      return this; }
   name(v)      { this._name = v;      return this; }
-  fieldName(v) { this._fieldName = v; return this; }
-  value(v)     { this._value = v;     return this; }
 
   build() {
-    return new RecordMetricAction(this._type, this._name, this._fieldName, this._value);
+    return new Action(this._type, this._name);
+  }
+}
+class FieldActionBuilder extends SimpleActionBuilder {
+  constructor(type, defaultName, defaultFieldName) {
+    super(type, defaultName)
+    this._fieldName = defaultFieldName;
+  }
+
+  fieldName(v) { this._fieldName = v; return this; }
+
+  build() {
+    return new FieldAction(this._type, this._name, this._fieldName);
   }
 }
 
-class RecordArrayMetricActionBuilder {
-  constructor() {
-    this._name      = undefined;
-    this._fieldName = undefined;
-    this._value     = undefined;
+class FieldValueActionBuilder extends FieldActionBuilder {
+  constructor(type, defaultName, defaultField, defaultValue) {
+    super(type, defaultName, defaultField)
+    this._value = defaultValue;
   }
 
-  name(v)      { this._name = v;      return this; }
-  fieldName(v) { this._fieldName = v; return this; }
-  value(v)     { this._value = v;     return this; }
+  value(v) { this._value = v; return this; }
 
   build() {
-    return new RecordArrayMetricAction(this._name, this._fieldName, this._value);
-  }
-}
-
-class RecordNumericSumMetricActionBuilder {
-  constructor() {
-    this._name      = undefined;
-    this._fieldName = undefined;
-    this._value     = undefined;
-  }
-
-  name(v)      { this._name = v;      return this; }
-  fieldName(v) { this._fieldName = v; return this; }
-  value(v)     { this._value = v;     return this; }
-
-  build() {
-    return new RecordNumericSumMetricAction(this._name, this._fieldName, this._value);
-  }
-}
-
-class RecordMultiplicativeMetricActionBuilder {
-  constructor() {
-    this._name      = undefined;
-    this._fieldName = undefined;
-    this._value     = undefined;
-  }
-
-  name(v)      { this._name = v;      return this; }
-  fieldName(v) { this._fieldName = v; return this; }
-  value(v)     { this._value = v;     return this; }
-
-  build() {
-    return new RecordMultiplicativeMetricAction(this._name, this._fieldName, this._value);
+    return new FieldValueAction(this._type, this._name, this._fieldName, this._value);
   }
 }
 
@@ -107,9 +79,8 @@ class RecordBalanceActionBuilder {
 
 export class ActionBuilder {
   static amount()              { return new AmountActionBuilder(); }
-  static recordMetric()        { return new RecordMetricActionBuilder(); }
-  static recordArrayMetric()   { return new RecordArrayMetricActionBuilder(); }
-  static recordNumericSum()    { return new RecordNumericSumMetricActionBuilder(); }
-  static recordMultiplicative(){ return new RecordMultiplicativeMetricActionBuilder(); }
+  static action(type) { return new SimpleActionBuilder(type); }
+  static fieldAction(type, fieldName) { return new FieldActionBuilder(type, fieldName); }
+  static fieldValueAction(type, fieldName, value) { return new FieldValueActionBuilder(type, fieldName, value); }
   static recordBalance()       { return new RecordBalanceActionBuilder(); }
 }

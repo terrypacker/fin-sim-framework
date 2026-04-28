@@ -19,11 +19,10 @@ import assert   from 'node:assert/strict';
 import { ActionBuilder } from '../../src/simulation-framework/builders/action-builder.js';
 import {
   AmountAction,
-  RecordMetricAction,
-  RecordArrayMetricAction,
-  RecordNumericSumMetricAction,
-  RecordMultiplicativeMetricAction,
-  RecordBalanceAction,
+  Action,
+  FieldAction,
+  FieldValueAction,
+  RecordBalanceAction, DEFAULT_ACTIONS,
 } from '../../src/simulation-framework/actions.js';
 
 // ─── AmountAction builder ─────────────────────────────────────────────────────
@@ -65,77 +64,86 @@ test('ActionBuilder.amount: builder is chainable', () => {
   assert.strictEqual(b.value(0), b);
 });
 
-// ─── RecordMetricAction builder ───────────────────────────────────────────────
+// ─── Action builder ───────────────────────────────────────────────
 
-test('ActionBuilder.recordMetric: build() returns a RecordMetricAction', () => {
-  const a = ActionBuilder.recordMetric().name('Metric').fieldName('foo').build();
-  assert.ok(a instanceof RecordMetricAction);
+test('ActionBuilder.action: build() returns a Action', () => {
+  const a = ActionBuilder.action(DEFAULT_ACTIONS.RECORD_METRIC).name('Metric').build();
+  assert.ok(a instanceof Action);
 });
 
-test('ActionBuilder.recordMetric: type defaults to RECORD_METRIC', () => {
-  const a = ActionBuilder.recordMetric().name('M').fieldName('f').build();
+test('ActionBuilder.action: type is set correctly', () => {
+  const a = ActionBuilder.fieldAction(DEFAULT_ACTIONS.RECORD_METRIC).name('M').build();
   assert.strictEqual(a.type, 'RECORD_METRIC');
 });
 
-test('ActionBuilder.recordMetric: type can be overridden', () => {
-  const a = ActionBuilder.recordMetric().type('CUSTOM').name('M').fieldName('f').build();
+test('ActionBuilder.action: type can be overridden', () => {
+  const a = ActionBuilder.action(DEFAULT_ACTIONS.RECORD_METRIC).type('CUSTOM').name('M').build();
   assert.strictEqual(a.type, 'CUSTOM');
 });
 
-test('ActionBuilder.recordMetric: fieldName is prefixed with metrics.', () => {
-  const a = ActionBuilder.recordMetric().name('M').fieldName('myMetric').build();
-  assert.strictEqual(a.fieldName, 'metrics.myMetric');
+test('ActionBuilder.action: name is set correctly', () => {
+  const a = ActionBuilder.fieldAction(DEFAULT_ACTIONS.RECORD_METRIC).name('M').build();
+  assert.strictEqual(a.name, 'M');
 });
 
-test('ActionBuilder.recordMetric: value is set', () => {
-  const a = ActionBuilder.recordMetric().name('M').fieldName('f').value(42).build();
+// ─── FieldAction builder ───────────────────────────────────────────────
+
+test('ActionBuilder.fieldAction: build() returns a FieldAction', () => {
+  const a = ActionBuilder.fieldAction(DEFAULT_ACTIONS.RECORD_METRIC).name('Metric').fieldName('foo').build();
+  assert.ok(a instanceof FieldAction);
+});
+
+test('ActionBuilder.fieldAction: type is set correctly', () => {
+  const a = ActionBuilder.fieldAction(DEFAULT_ACTIONS.RECORD_METRIC).name('M').fieldName('f').build();
+  assert.strictEqual(a.type, 'RECORD_METRIC');
+});
+
+test('ActionBuilder.fieldAction: type can be overridden', () => {
+  const a = ActionBuilder.fieldAction(DEFAULT_ACTIONS.RECORD_METRIC).type('CUSTOM').name('M').fieldName('f').build();
+  assert.strictEqual(a.type, 'CUSTOM');
+});
+
+test('ActionBuilder.fieldAction: name is set', () => {
+  const a = ActionBuilder.fieldAction(DEFAULT_ACTIONS.RECORD_METRIC).name('M').fieldName('f').build();
+  assert.strictEqual(a.name, 'M');
+});
+
+
+test('ActionBuilder.fieldAction: fieldName is set', () => {
+  const a = ActionBuilder.fieldAction(DEFAULT_ACTIONS.RECORD_METRIC).name('M').fieldName('f').build();
+  assert.strictEqual(a.fieldName, 'f');
+});
+
+// ─── FieldValueAction builder ───────────────────────────────────────────────
+
+test('ActionBuilder.fieldValueAction: build() returns a FieldValueAction', () => {
+  const a = ActionBuilder.fieldValueAction(DEFAULT_ACTIONS.RECORD_METRIC).name('Metric').fieldName('foo').build();
+  assert.ok(a instanceof FieldValueAction);
+});
+
+test('ActionBuilder.fieldValueAction: type is set correctly', () => {
+  const a = ActionBuilder.fieldValueAction(DEFAULT_ACTIONS.RECORD_METRIC).name('M').fieldName('f').build();
+  assert.strictEqual(a.type, 'RECORD_METRIC');
+});
+
+test('ActionBuilder.fieldValueAction: type can be overridden', () => {
+  const a = ActionBuilder.fieldValueAction(DEFAULT_ACTIONS.RECORD_METRIC).type('CUSTOM').name('M').fieldName('f').build();
+  assert.strictEqual(a.type, 'CUSTOM');
+});
+
+test('ActionBuilder.fieldValueAction: name is set', () => {
+  const a = ActionBuilder.fieldValueAction(DEFAULT_ACTIONS.RECORD_METRIC).name('M').fieldName('f').value(42).build();
+  assert.strictEqual(a.name, 'M');
+});
+
+test('ActionBuilder.fieldValueAction: fieldName is set', () => {
+  const a = ActionBuilder.fieldValueAction(DEFAULT_ACTIONS.RECORD_METRIC).name('M').fieldName('f').value(42).build();
+  assert.strictEqual(a.fieldName, 'f');
+});
+
+test('ActionBuilder.fieldValueAction: value is set', () => {
+  const a = ActionBuilder.fieldValueAction(DEFAULT_ACTIONS.RECORD_METRIC).name('M').fieldName('f').value(42).build();
   assert.strictEqual(a.value, 42);
-});
-
-// ─── RecordArrayMetricAction builder ─────────────────────────────────────────
-
-test('ActionBuilder.recordArrayMetric: build() returns a RecordArrayMetricAction', () => {
-  const a = ActionBuilder.recordArrayMetric().name('Arr').fieldName('deposits').build();
-  assert.ok(a instanceof RecordArrayMetricAction);
-});
-
-test('ActionBuilder.recordArrayMetric: type is RECORD_ARRAY_METRIC', () => {
-  const a = ActionBuilder.recordArrayMetric().name('A').fieldName('f').build();
-  assert.strictEqual(a.type, 'RECORD_ARRAY_METRIC');
-});
-
-test('ActionBuilder.recordArrayMetric: name is set', () => {
-  const a = ActionBuilder.recordArrayMetric().name('My Array').fieldName('f').build();
-  assert.strictEqual(a.name, 'My Array');
-});
-
-// ─── RecordNumericSumMetricAction builder ─────────────────────────────────────
-
-test('ActionBuilder.recordNumericSum: build() returns a RecordNumericSumMetricAction', () => {
-  const a = ActionBuilder.recordNumericSum().name('Sum').fieldName('salary').build();
-  assert.ok(a instanceof RecordNumericSumMetricAction);
-});
-
-test('ActionBuilder.recordNumericSum: type is RECORD_NUMERIC_SUM_METRIC', () => {
-  const a = ActionBuilder.recordNumericSum().name('S').fieldName('f').build();
-  assert.strictEqual(a.type, 'RECORD_NUMERIC_SUM_METRIC');
-});
-
-test('ActionBuilder.recordNumericSum: fieldName is prefixed with metrics.', () => {
-  const a = ActionBuilder.recordNumericSum().name('S').fieldName('salary').build();
-  assert.strictEqual(a.fieldName, 'metrics.salary');
-});
-
-// ─── RecordMultiplicativeMetricAction builder ─────────────────────────────────
-
-test('ActionBuilder.recordMultiplicative: build() returns a RecordMultiplicativeMetricAction', () => {
-  const a = ActionBuilder.recordMultiplicative().name('Mult').fieldName('growth').build();
-  assert.ok(a instanceof RecordMultiplicativeMetricAction);
-});
-
-test('ActionBuilder.recordMultiplicative: type is RECORD_MULTIPLICATIVE_METRIC', () => {
-  const a = ActionBuilder.recordMultiplicative().name('M').fieldName('f').build();
-  assert.strictEqual(a.type, 'RECORD_MULTIPLICATIVE_METRIC');
 });
 
 // ─── RecordBalanceAction builder ──────────────────────────────────────────────
@@ -165,38 +173,14 @@ test('AmountAction: id is null after construction', () => {
   assert.strictEqual(a.type, 'MY_ACTION');
 });
 
-test('RecordMetricAction: id is null after construction', () => {
-  const a = ActionBuilder.recordMetric().type('CUSTOM').name('M').fieldName('f').build();
+test('FieldValueAction: id is null after construction', () => {
+  const a = ActionBuilder.fieldValueAction(DEFAULT_ACTIONS.RECORD_METRIC).type('CUSTOM').name('M').fieldName('f').build();
   assert.strictEqual(a.id, null);
   assert.strictEqual(a.type, 'CUSTOM');
 });
 
-test('RecordMetricAction: id is null with default type', () => {
-  const a = ActionBuilder.recordMetric().name('M').fieldName('f').build();
+test('FieldValueAction: id is null with default type', () => {
+  const a = ActionBuilder.fieldValueAction(DEFAULT_ACTIONS.RECORD_METRIC).name('M').fieldName('f').build();
   assert.strictEqual(a.id, null);
   assert.strictEqual(a.type, 'RECORD_METRIC');
-});
-
-test('RecordArrayMetricAction: id is null after construction', () => {
-  const a = ActionBuilder.recordArrayMetric().name('A').fieldName('f').build();
-  assert.strictEqual(a.id, null);
-  assert.strictEqual(a.type, 'RECORD_ARRAY_METRIC');
-});
-
-test('RecordNumericSumMetricAction: id is null after construction', () => {
-  const a = ActionBuilder.recordNumericSum().name('S').fieldName('f').build();
-  assert.strictEqual(a.id, null);
-  assert.strictEqual(a.type, 'RECORD_NUMERIC_SUM_METRIC');
-});
-
-test('RecordMultiplicativeMetricAction: id is null after construction', () => {
-  const a = ActionBuilder.recordMultiplicative().name('M').fieldName('f').build();
-  assert.strictEqual(a.id, null);
-  assert.strictEqual(a.type, 'RECORD_MULTIPLICATIVE_METRIC');
-});
-
-test('RecordBalanceAction: id is null after construction', () => {
-  const a = ActionBuilder.recordBalance().build();
-  assert.strictEqual(a.id, null);
-  assert.strictEqual(a.type, 'RECORD_BALANCE');
 });

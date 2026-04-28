@@ -33,11 +33,11 @@ import { OneOffEvent }        from '../../src/simulation-framework/events/one-of
 import { HandlerEntry }       from '../../src/simulation-framework/handlers.js';
 import {
   AmountAction,
-  RecordNumericSumMetricAction,
-  RecordArrayMetricAction,
-  RecordMetricAction,
-  RecordMultiplicativeMetricAction,
+  Action,
+  FieldAction,
+  FieldValueAction,
   RecordBalanceAction,
+  ScriptedAction,
 } from '../../src/simulation-framework/actions.js';
 import {
   NumericSumReducer,
@@ -54,11 +54,11 @@ globalThis.FinSimLib = {
     Simulation,
     HandlerEntry,
     AmountAction,
-    RecordMetricAction,
-    RecordNumericSumMetricAction,
-    RecordArrayMetricAction,
-    RecordMultiplicativeMetricAction,
+    Action,
+    FieldAction,
+    FieldValueAction,
     RecordBalanceAction,
+    ScriptedAction,
     NumericSumReducer,
     ArrayReducer,
     MultiplicativeReducer,
@@ -76,14 +76,13 @@ globalThis.FinSimLib = {
 // no longer needs to know about the UI — nodes arrive via the bus.
 
 const ACTION_CLASSES = new Set([
-  'AmountAction','RecordMetricAction','RecordArrayMetricAction',
-  'RecordNumericSumMetricAction','RecordMultiplicativeMetricAction',
-  'RecordBalanceAction','ScriptedAction','FieldValueAction',
+  'AmountAction', 'RecordBalanceAction','ScriptedAction',
+  'FieldValueAction', 'FieldAction', 'Action',
 ]);
 const REDUCER_CLASSES = new Set([
   ,'ArrayReducer','NumericSumReducer',
-  'MultiplicativeReducer','NoOpReducer','FieldReducer',
-  'AccountTransactionReducer','ScriptedReducer',
+  'MultiplicativeReducer','NoOpReducer',
+  'AccountTransactionReducer','ScriptedReducer', 'FieldValueReducer', 'FieldReducer'
 ]);
 
 class TrackingUI {
@@ -177,7 +176,7 @@ const MINIMAL_CONFIG = {
   ],
   actions: [
     { __type: 'AmountAction', id: 'RECORD_METRIC', name: 'Pay Salary',
-      type: 'RECORD_METRIC', value: 1200, fieldName: 'amount' },
+      type: 'RECORD_METRIC', value: 1200, fieldName: 'metrics.amount' },
   ],
   reducers: [
     { __type: 'FieldReducer', id: 'r1', name: 'Process Payment',
@@ -207,9 +206,9 @@ const EXTENDED_CONFIG = {
   ],
   actions: [
     { __type: 'AmountAction', id: 'RECORD_METRIC', name: 'Pay Salary',
-      type: 'RECORD_METRIC', value: 1200, fieldName: 'amount' },
-    { __type: 'RecordNumericSumMetricAction', id: 'RECORD_NUMERIC_SUM_METRIC',
-      name: 'Sum Payments', type: 'RECORD_NUMERIC_SUM_METRIC', fieldName: 'amount' },
+      type: 'RECORD_METRIC', value: 1200, fieldName: 'metrics.amount' },
+    { __type: 'FieldAction', id: 'RECORD_NUMERIC_SUM_METRIC',
+      name: 'Sum Payments', type: 'RECORD_NUMERIC_SUM_METRIC', fieldName: 'metrics.amount' },
     { __type: 'AmountAction', id: 'NEW_ACTION_a1', name: 'Pay Taxes',
       type: 'NEW_ACTION_a1', value: 0, fieldName: 'salary' },
   ],
