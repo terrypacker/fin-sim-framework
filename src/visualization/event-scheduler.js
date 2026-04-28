@@ -456,8 +456,6 @@ export class EventScheduler {
   _renderActionConfig(node, container) {
     container.innerHTML = '';
 
-    const displayField = (fn) => fn?.startsWith('metrics.') ? fn.slice(8) : (fn ?? '');
-
     let wrap = null;
     switch (node.actionClass) {
       case 'AmountAction':
@@ -468,12 +466,12 @@ export class EventScheduler {
         break;
       case 'FieldAction':
         wrap = this._getTemplate('tpl-field-action-editor');
-        wrap.querySelector('[data-field="fieldName"]').value = displayField(node.fieldName);
+        wrap.querySelector('[data-field="fieldName"]').value = node.fieldName;
         break;
       case 'FieldValueAction':
         wrap = this._getTemplate('tpl-field-value-action-editor');
-        wrap.querySelector('[data-field="fieldName"]').value = displayField(node.fieldName);
-        wrap.querySelector('[data-field="value"]').value     = node.value ?? 0;
+        wrap.querySelector('[data-field="fieldName"]').value = node.fieldName;
+        wrap.querySelector('[data-field="value"]').value     = node.value;
         break;
       case 'RecordBalanceAction':
       default:
@@ -487,18 +485,15 @@ export class EventScheduler {
 
     if (wrap) {
       const isScripted = node.actionClass === 'ScriptedAction';
-      wrap.querySelectorAll('input, select, textarea').forEach(input => {
-        input.addEventListener('input', () => {
-          const field = input.dataset.field;
+      wrap.querySelectorAll('input, select, textarea').forEach(el => {
+        el.addEventListener('input', () => {
+          const field = el.dataset.field;
           let value;
-          if (input.type === 'number') {
-            value = parseFloat(input.value) || 0;
-          } else if (field === 'fieldName' && !isScripted) {
-            // Metric actions store fieldName with 'metrics.' prefix
-            const stripped = input.value.startsWith('metrics.') ? input.value.slice(8) : input.value;
-            value = 'metrics.' + stripped;
+          if (el.dataset.field === 'value') {
+            // Empty string → null so the reducer ignores the field and reads from state
+            value = el.value === '' ? null : parseFloat(el.value);
           } else {
-            value = input.value;
+            value = el.value;
           }
           ServiceRegistry.getInstance().actionService.updateAction(node.id, { [field]: value });
         });
@@ -587,7 +582,7 @@ export class EventScheduler {
         break;
       case 'StateFieldReducer':
       case 'FieldReducer':
-        wrap = this._getTemplate('tpl-state-field-reducer-editor');
+        wrap = this._getTemplate('tpl-field-reducer-editor');
         wrap.querySelector('[data-field="fieldName"]').value = node.fieldName || '';
         break;
       case 'ScriptedReducer':

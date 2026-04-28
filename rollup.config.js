@@ -68,7 +68,7 @@ export default [
        // (EventScheduler). Minification mangles class names, breaking both. If you switch
        // to a different minifier (esbuild, swc, uglify-js, etc.) you must apply the
        // equivalent option there — see the "Minification and class names" note in README.md.
-       //isWatching && terser({ mangle: { keep_classnames: /Reducer$|Action$/ } })
+       //!isWatching && terser({ mangle: { keep_classnames: /Reducer$|Action$|Handler$/ } })
     ].filter(Boolean)
   }
 ];

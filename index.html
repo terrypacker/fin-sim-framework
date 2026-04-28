@@ -407,8 +407,8 @@
     <input data-field="fieldName" placeholder="e.g. salary" />
   </div>
   <div class="node-field">
-    <label>Value</label>
-    <input type="number" data-field="value" value="0" />
+    <label>Fixed value <small style="font-weight:normal;opacity:.7">(leave blank to use value from state)</small></label>
+    <input type="number" data-field="value" placeholder="auto">
   </div>
 </template>
 
@@ -483,7 +483,7 @@
   </div>
 </template>
 
-<template id="tpl-state-field-reducer-editor">
+<template id="tpl-field-reducer-editor">
   <div class="node-field">
     <label>State field</label>
     <input data-field="fieldName">
