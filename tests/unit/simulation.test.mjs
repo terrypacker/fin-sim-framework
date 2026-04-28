@@ -147,7 +147,7 @@ test('Simulate annual event for 2 years', () => {
 
   const event0 = sim.bus.getHistory()[0];
   Assert.datesEqual(event0.date, new Date(2025, 0, 1));
-  assert.strictEqual(event0.payload.sim, sim);
+  assert.strictEqual(event0.sim, sim);
   assert.strictEqual(event0.type, SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START);
   assert.strictEqual(event0.payload.event.type, 'ANNUAL_EVENT');
   assert.strictEqual(event0.payload.event.data.test, 'testing');
@@ -155,7 +155,7 @@ test('Simulate annual event for 2 years', () => {
 
   const event1 = sim.bus.getHistory()[1];
   Assert.datesEqual(event1.date, new Date(2025, 0, 1));
-  assert.strictEqual(event1.payload.sim, sim);
+  assert.strictEqual(event1.sim, sim);
   assert.strictEqual(event1.type, SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_END);
   assert.strictEqual(event1.payload.event.type, 'ANNUAL_EVENT');
   assert.strictEqual(event1.payload.event.data.test, 'testing');
@@ -163,7 +163,7 @@ test('Simulate annual event for 2 years', () => {
 
   const event2 = sim.bus.getHistory()[2];
   Assert.datesEqual(event2.date, new Date(2026, 0, 1));
-  assert.strictEqual(event2.payload.sim, sim);
+  assert.strictEqual(event2.sim, sim);
   assert.strictEqual(event2.type, SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START);
   assert.strictEqual(event2.payload.event.type, 'ANNUAL_EVENT');
   assert.strictEqual(event2.payload.event.data.test, 'testing');
@@ -171,7 +171,7 @@ test('Simulate annual event for 2 years', () => {
 
   const event3 = sim.bus.getHistory()[3];
   Assert.datesEqual(event3.date, new Date(2026, 0, 1));
-  assert.strictEqual(event3.payload.sim, sim);
+  assert.strictEqual(event3.sim, sim);
   assert.strictEqual(event3.type, SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_END);
   assert.strictEqual(event3.payload.event.type, 'ANNUAL_EVENT');
   assert.strictEqual(event3.payload.event.data.test, 'testing');
@@ -200,7 +200,7 @@ test('Simulate annual event for 2 years wildcard subscriber', () => {
 
   const event0 = sim.bus.getHistory()[0];
   Assert.datesEqual(event0.date, new Date(2025, 0, 1));
-  assert.strictEqual(event0.payload.sim, sim);
+  assert.strictEqual(event0.sim, sim);
   assert.strictEqual(event0.type, SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START);
   assert.strictEqual(event0.payload.event.type, 'ANNUAL_EVENT');
   assert.strictEqual(event0.payload.event.data.test, 'testing');
@@ -208,7 +208,7 @@ test('Simulate annual event for 2 years wildcard subscriber', () => {
 
   const event1 = sim.bus.getHistory()[1];
   Assert.datesEqual(event1.date, new Date(2025, 0, 1));
-  assert.strictEqual(event1.payload.sim, sim);
+  assert.strictEqual(event1.sim, sim);
   assert.strictEqual(event1.type, SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_END);
   assert.strictEqual(event1.payload.event.type, 'ANNUAL_EVENT');
   assert.strictEqual(event1.payload.event.data.test, 'testing');
@@ -216,7 +216,7 @@ test('Simulate annual event for 2 years wildcard subscriber', () => {
 
   const event2 = sim.bus.getHistory()[2];
   Assert.datesEqual(event2.date, new Date(2026, 0, 1));
-  assert.strictEqual(event2.payload.sim, sim);
+  assert.strictEqual(event2.sim, sim);
   assert.strictEqual(event2.type, SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START);
   assert.strictEqual(event2.payload.event.type, 'ANNUAL_EVENT');
   assert.strictEqual(event2.payload.event.data.test, 'testing');
@@ -224,7 +224,7 @@ test('Simulate annual event for 2 years wildcard subscriber', () => {
 
   const event3 = sim.bus.getHistory()[3];
   Assert.datesEqual(event3.date, new Date(2026, 0, 1));
-  assert.strictEqual(event3.payload.sim, sim);
+  assert.strictEqual(event3.sim, sim);
   assert.strictEqual(event3.type, SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_END);
   assert.strictEqual(event3.payload.event.type, 'ANNUAL_EVENT');
   assert.strictEqual(event3.payload.event.data.test, 'testing');
@@ -260,7 +260,7 @@ test('Simulate annual event for 2 years specific subscriber', () => {
   assert.ok(events.length === 2, `Expected 2 events in listener, got ${events.length}`);
 
   const event0 = events[0];
-  assert.strictEqual(event0.payload.sim, sim);
+  assert.strictEqual(event0.sim, sim);
   Assert.datesEqual(event0.date, new Date(2025, 0, 1));
   assert.strictEqual(event0.type, SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START);
   assert.strictEqual(event0.payload.event.type, 'ANNUAL_EVENT');
@@ -268,7 +268,7 @@ test('Simulate annual event for 2 years specific subscriber', () => {
   assert.strictEqual(event0.payload.event.meta.metaFlag, true);
 
   const event1 = events[1];
-  assert.strictEqual(event1.payload.sim, sim);
+  assert.strictEqual(event1.sim, sim);
   Assert.datesEqual(event1.date, new Date(2026, 0, 1));
   assert.strictEqual(event1.type, SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START);
   assert.strictEqual(event1.payload.event.type, 'ANNUAL_EVENT');
@@ -300,14 +300,14 @@ test('Simulate annual event for two years with handler', () => {
   //Ensure the bus events internally are as expected
   const event0 = sim.bus.getHistory()[0];
   Assert.datesEqual(event0.date, new Date(2025, 0, 1));
-  assert.strictEqual(event0.payload.sim, sim);
+  assert.strictEqual(event0.sim, sim);
   assert.strictEqual(event0.type, SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START);
   assert.strictEqual(event0.payload.event.type, 'ANNUAL_EVENT');
   assert.strictEqual(event0.payload.event.data.test, 'testing');
   assert.strictEqual(event0.payload.event.meta.metaFlag, true);
 
   const event1 = sim.bus.getHistory()[1];
-  assert.strictEqual(event1.payload.sim, sim);
+  assert.strictEqual(event1.sim, sim);
   Assert.datesEqual(event1.date, new Date(2025, 0, 1));
   assert.strictEqual(event1.type, SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_END);
   assert.strictEqual(event1.payload.event.type, 'ANNUAL_EVENT');
@@ -316,14 +316,14 @@ test('Simulate annual event for two years with handler', () => {
 
   const event2 = sim.bus.getHistory()[2];
   Assert.datesEqual(event2.date, new Date(2026, 0, 1));
-  assert.strictEqual(event2.payload.sim, sim);
+  assert.strictEqual(event2.sim, sim);
   assert.strictEqual(event2.type, SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START);
   assert.strictEqual(event2.payload.event.type, 'ANNUAL_EVENT');
   assert.strictEqual(event2.payload.event.data.test, 'testing');
   assert.strictEqual(event2.payload.event.meta.metaFlag, true);
 
   const event3 = sim.bus.getHistory()[3];
-  assert.strictEqual(event3.payload.sim, sim);
+  assert.strictEqual(event3.sim, sim);
   Assert.datesEqual(event3.date, new Date(2026, 0, 1));
   assert.strictEqual(event3.type, SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_END);
   assert.strictEqual(event3.payload.event.type, 'ANNUAL_EVENT');
