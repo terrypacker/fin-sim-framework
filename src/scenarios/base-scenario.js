@@ -155,7 +155,7 @@ export class BaseScenario {
 
   reducerCreationRequested() {
     const { reducerService } = ServiceRegistry.getInstance();
-    const reducer = reducerService.createMetricReducer('', 'New Reducer');
+    const reducer = reducerService.createFieldReducer('', 'New Reducer');
     this.eventSchedulerUI.editNode(reducer);
   }
 }

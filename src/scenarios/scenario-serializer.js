@@ -180,7 +180,7 @@ export class ScenarioSerializer {
 
   static _serializeReducer(node) {
     return {
-      __type:             node.reducerType ?? 'MetricReducer',
+      __type:             node.reducerType ?? 'FieldReducer',
       id:                 node.id,
       name:               node.name,
       priority:           node.priority,
@@ -255,26 +255,22 @@ export class ScenarioSerializer {
 
   static _makeReducer(d) {
     const C = FinSimLib.Core;
-    // For metric-based reducers fieldName is stored as 'metrics.X'; fromMetric takes 'X'
-    const fieldName = d.fieldName ?? '';
-    const metricName = fieldName.startsWith('metrics.') ? fieldName.slice(8) : fieldName;
 
+    const fieldName = d.fieldName ?? '';
     switch (d.__type) {
-      case 'MetricReducer':
-        return C.ReducerBuilder.metric(metricName).name(d.name).build();
-      case 'ArrayMetricReducer':
-        return C.ReducerBuilder.arrayMetric(metricName).name(d.name).build();
-      case 'NumericSumMetricReducer':
-        return C.ReducerBuilder.numericSum(metricName).name(d.name).build();
-      case 'MultiplicativeMetricReducer':
-        // MultiplicativeMetricReducer extends FieldReducer (no metrics. prefix)
+      case 'ArrayReducer':
+        return C.ReducerBuilder.array(fieldName).name(d.name).build();
+      case 'NumericSumReducer':
+        return C.ReducerBuilder.numericSum(fieldName).name(d.name).build();
+      case 'MultiplicativeReducer':
+        // MultiplicativeReducer extends FieldReducer (no metrics. prefix)
         return C.ReducerBuilder.multiplicative(fieldName).name(d.name).build();
       case 'NoOpReducer':
         return C.ReducerBuilder.noOp().name(d.name).build();
-      case 'StateFieldReducer':
-        return C.ReducerBuilder.stateField().name(d.name).fieldName(d.fieldName).build();
       case 'ScriptedReducer':
         return new C.ScriptedReducer(d.name, d.priority, d.fieldName ?? '', d.script ?? '');
+      case 'FieldReducer':
+        return C.ReducerBuilder.field(fieldName).name(d.name).build();
       default:
         throw new Error(`Add support for deserialization of reducer type ${d.__type}.`);
     }

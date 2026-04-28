@@ -227,7 +227,7 @@ function buildResidencyTrackingSim({
     return { ...state, person: newPerson };
   }, PRIORITY.CASH_FLOW, 'Residency Change Apply');
 
-  ReducerBuilder.arrayMetric().build().registerWith(sim.reducers, 'RECORD_METRIC');
+  ReducerBuilder.array().build().registerWith(sim.reducers, 'RECORD_METRIC');
   ReducerBuilder.noOp().name('Balance Snapshot').build().registerWith(sim.reducers, 'RECORD_BALANCE');
 
   sim.register('RESIDENCY_CHANGE', ({ data }) => [
@@ -366,7 +366,7 @@ function buildLoanSim({
     return { ...state };
   }, PRIORITY.CASH_FLOW, 'Property Loan Repayment');
 
-  ReducerBuilder.arrayMetric().build().registerWith(sim.reducers, 'RECORD_METRIC');
+  ReducerBuilder.array().build().registerWith(sim.reducers, 'RECORD_METRIC');
   ReducerBuilder.noOp().name('Balance Snapshot').build().registerWith(sim.reducers, 'RECORD_BALANCE');
 
   sim.register('AU_STOCK_TAKE_LOAN',  ({ data }) => [{ type: 'AU_STOCK_LOAN_APPLY',       amount: data.amount }, new RecordBalanceAction()]);

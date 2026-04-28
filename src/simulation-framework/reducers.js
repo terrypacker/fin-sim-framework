@@ -178,11 +178,23 @@ export class NoOpReducer extends Reducer {
  * Reducer that is places a field in the state
  */
 export class FieldReducer extends Reducer {
-  static description = 'Place fieldName into the state using the value of the action.';
+  static description = 'Replaces the value at state[fieldName] with the action value or the existing state value.  If no field name it uses the fieldName field value of the action';
 
   constructor(name = 'Field Reducer', priority, fieldName = null) {
     super(name, priority);
     this.fieldName = fieldName;
+  }
+
+  /**
+   * Get the path to the field, priority giving to our field name
+   * @param action
+   */
+  getFieldPath(action) {
+    if(this.fieldName == null) {
+      return action.fieldName;
+    }else {
+      return this.fieldName;
+    }
   }
 
   getStateValue(state, action) {
@@ -247,104 +259,63 @@ export class FieldReducer extends Reducer {
   }
 
   reduce(state, action, date) {
-    const newState = this.newState(state);  //Pickup next actions
-    return this.setValueByPath(newState, this.fieldName, this.getStateValue(state, action))
-  }
-
-}
-
-/**
- * Produce a field for the state
- */
-export class StateFieldReducer extends FieldReducer {
-  static description = 'Writes a computed or action-derived value into an arbitrary state field using a configurable generator function.';
-
-  constructor(name = 'State Field', priority = PRIORITY.POSITION_UPDATE, fieldName,
-      generate = null) {
-    super(name, priority, fieldName);
-    if(!generate) {
-      this.generate = (state, action) => this.getStateValue(state, action);
-    }else {
-      this.generate = generate;
-    }
-  }
-
-  reduce(state, action, date) {
-    const value = this.generate(state, action, date);
-    const newState = this.newState(state);  //Pickup next actions
-    return this.setValueByPath(newState, this.fieldName, value);
-  }
-}
-
-/**
- * Produce a field in state.metrics[this.fieldName] get the value for the metric by:
- * action.value if defined or state.metrics[this.fieldName]
- */
-export class MetricReducer extends FieldReducer {
-  static description = 'Replaces the value at state.metrics[metricName] with the action value or the existing state value.';
-
-  constructor(name = 'Metric Logger', priority = PRIORITY.METRICS, metricName) {
-    super(name, priority, 'metrics.' + metricName);
-  }
-
-  reduce(state, action) {
     const metricValue = this.getStateValue(state, action);
     const newState = this.newState(state);  //Pickup next actions
-    return this.setValueByPath(newState, this.fieldName, metricValue);
+    return this.setValueByPath(newState, this.getFieldPath(action), this.getStateValue(state, action))
   }
+
 }
 
 /**
- * Append a value to an array field in state.metrics[this.fieldName] get the value for the metric by:
- * action.value if defined or state.metrics[this.fieldName]
+ * Append a value to an array field in state[this.fieldName] get the value for the metric by:
+ * action.value if defined or state[this.fieldName]
  */
-export class ArrayMetricReducer extends MetricReducer {
-  static description = 'Appends the action value to the array at state.metrics[metricName], initialising the array if absent.';
+export class ArrayReducer extends FieldReducer {
+  static description = 'Appends the action value to the array at state[fieldName], initialising the array if absent.';
 
-  constructor(name = 'Array Metric Logger', priority = PRIORITY.METRICS,
+  constructor(name = 'Array Reducer', priority = PRIORITY.METRICS,
      fieldName) {
     super(name, priority, fieldName);
   }
 
   reduce(state, action) {
-    const list = this.getValueByPath(state, this.fieldName) || [];
+    const list = this.getValueByPath(state, this.getFieldPath(action)) || [];
     const value = this.getStateValue(state, action);
     const newList = [...list, value];
     const newState = this.newState(state);  //Pickup next actions
-    return this.setValueByPath(newState, this.fieldName, newList);
+    return this.setValueByPath(newState, this.getFieldPath(action), newList);
   }
 }
 
+export class NumericSumReducer extends FieldReducer {
+  static description = 'Accumulates a running numeric total at state[fieldName] by adding each action value to the existing sum.';
 
-export class NumericSumMetricReducer extends MetricReducer {
-  static description = 'Accumulates a running numeric total at state.metrics[metricName] by adding each action value to the existing sum.';
-
-  constructor(name = 'Sum Metric Logger', priority = PRIORITY.METRICS,
-      metricName = null) {
-    super(name, priority, metricName);
+  constructor(name = 'Sum Reducer', priority = PRIORITY.METRICS,
+      fieldName = null) {
+    super(name, priority, fieldName);
   }
 
   reduce(state, action) {
-    const initialValue = this.getValueByPath(state, this.fieldName) || 0;
+    const initialValue = this.getValueByPath(state, this.getFieldPath(action)) || 0;
     const value = this.getStateValue(state, action) || 0;
     const newState = this.newState(state);  //Pickup next actions
-    return this.setValueByPath(newState, this.fieldName, initialValue + value);
+    return this.setValueByPath(newState, this.getFieldPath(action), initialValue + value);
   }
 }
 
-export class MultiplicativeMetricReducer extends FieldReducer {
-  static description = 'Multiplies the current value at state.metrics[metricName] by the action value, accumulating a compounding product over time.';
+export class MultiplicativeReducer extends FieldReducer {
+  static description = 'Multiplies the current value at state[fieldName] by the action value, accumulating a compounding product over time.';
 
-  constructor(name = 'Multiplicative Metric Logger', priority = PRIORITY.METRICS,
-      mulitplierMetric = null) {
-    super(name, priority, mulitplierMetric);
+  constructor(name = 'Multiplicative Reducer', priority = PRIORITY.METRICS,
+      fieldName = null) {
+    super(name, priority, fieldName);
   }
 
   reduce(state, action) {
-    const initialValue = this.getValueByPath(state, this.fieldName) || 0;
+    const initialValue = this.getValueByPath(state, this.getFieldPath(action)) || 0;
     const value = this.getStateValue(state, action);
     const newState = this.newState(state);  //Pickup next actions
-    return this.setValueByPath(newState, this.fieldName, initialValue * value);
+    return this.setValueByPath(newState, this.getFieldPath(action), initialValue * value);
   }
 }
 
@@ -389,19 +360,18 @@ export class AccountTransactionReducer extends Reducer {
  */
 export const REDUCER_CLASSES = {};  // populated after class declarations below
 
-export class RepeatingReducer extends Reducer {
+export class RepeatingReducer extends FieldReducer {
   static description = 'Runs a set of child reducers N times in sequence (N from the action or a fixed count), re-emitting the action each iteration via next[].';
 
   constructor(name = 'Repeating Reducer', priority = PRIORITY.METRICS,
-      reducers, countField = 'value', count = null) {
-    super(name, priority);
+      reducers, fieldName = 'value', count = null) {
+    super(name, priority, fieldName);
     this.reducers = reducers;
-    this.countField = countField;
     this.count = count;
   }
 
   reduce(state, action, date) {
-    const count = typeof action._repeaterCounter === 'undefined' ? this.count == null ? this.countField == null ? 0 : action[this.countField] : this.count : action._repeaterCounter;
+    const count = typeof action._repeaterCounter === 'undefined' ? this.count == null ? this.fieldName == null ? 0 : action[this.fieldName] : this.count : action._repeaterCounter;
     if( count <= 0) {
       return {... state};
     }
@@ -475,8 +445,10 @@ export class ScriptedReducer extends FieldReducer {
       return this.newState(state);
     }
     const base = this.newState(state);
-    if (this.fieldName) {
-      return this.setValueByPath(base, this.fieldName, result);
+    //TODO is this ok?
+    const path = this.getFieldPath(action);
+    if (path) {
+      return this.setValueByPath(base, path, result);
     }
     return { ...base, ...(result ?? {}) };
   }
@@ -486,12 +458,10 @@ export class ScriptedReducer extends FieldReducer {
 Object.assign(REDUCER_CLASSES, {
   NoOpReducer,
   FieldReducer,
-  StateFieldReducer,
   ScriptedReducer,
-  MetricReducer,
-  ArrayMetricReducer,
-  NumericSumMetricReducer,
-  MultiplicativeMetricReducer,
+  ArrayReducer,
+  NumericSumReducer,
+  MultiplicativeReducer,
   AccountTransactionReducer,
   RepeatingReducer,
 });

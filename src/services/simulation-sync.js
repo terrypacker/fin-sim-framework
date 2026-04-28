@@ -257,8 +257,8 @@ export class SimulationSync {
   }
 
   _isReducerClass(classType) {
-    return ['MetricReducer', 'ArrayMetricReducer', 'NumericSumMetricReducer',
-            'MultiplicativeMetricReducer', 'NoOpReducer', 'FieldReducer',
+    return ['MetricReducer', 'ArrayReducer', 'NumericSumReducer',
+            'MultiplicativeReducer', 'NoOpReducer', 'FieldReducer',
             'StateFieldReducer', 'AccountTransactionReducer', 'ScriptedReducer'].includes(classType);
   }
 }

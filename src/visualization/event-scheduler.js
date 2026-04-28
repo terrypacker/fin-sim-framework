@@ -29,9 +29,9 @@ export class EventScheduler {
     ];
 
     this.REDUCER_TYPES = [
-      'MetricReducer', 'ArrayMetricReducer', 'NumericSumMetricReducer',
-      'MultiplicativeMetricReducer', 'AccountTransactionReducer',
-      'StateFieldReducer', 'ScriptedReducer', 'NoOpReducer'
+      'ArrayReducer', 'NumericSumReducer',
+      'MultiplicativeReducer', 'AccountTransactionReducer',
+      'FieldReducer', 'ScriptedReducer', 'NoOpReducer', 'RepeatingReducer'
     ];
 
     // Ordered most-specific to least-specific for instanceof checks.
@@ -111,9 +111,9 @@ export class EventScheduler {
   }
 
   _isReducerClass(classType) {
-    return ['MetricReducer', 'ArrayMetricReducer', 'NumericSumMetricReducer',
-            'MultiplicativeMetricReducer', 'NoOpReducer', 'FieldReducer',
-            'StateFieldReducer', 'AccountTransactionReducer', 'ScriptedReducer'].includes(classType);
+    return ['ArrayReducer', 'NumericSumReducer',
+            'MultiplicativeReducer', 'NoOpReducer', 'FieldReducer',
+            'AccountTransactionReducer', 'ScriptedReducer', 'RepeatingReducer'].includes(classType);
   }
 
   registerEventCreatedListener(listener)   { this.eventNodeCreatedListeners.push(listener); }
@@ -553,9 +553,9 @@ export class EventScheduler {
 
     let wrap;
     switch (node.reducerType) {
-      case 'NumericSumMetricReducer':
-      case 'ArrayMetricReducer':
-      case 'MultiplicativeMetricReducer':
+      case 'NumericSumReducer':
+      case 'ArrayReducer':
+      case 'MultiplicativeReducer':
       case 'MetricReducer':
         wrap = this._getTemplate('tpl-metric-reducer-editor');
         wrap.querySelector('[data-field="metric"]').value = node.metric || '';

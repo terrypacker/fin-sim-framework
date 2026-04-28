@@ -40,10 +40,9 @@ import {
   RecordBalanceAction,
 } from '../../src/simulation-framework/actions.js';
 import {
-  MetricReducer,
-  NumericSumMetricReducer,
-  ArrayMetricReducer,
-  MultiplicativeMetricReducer,
+  NumericSumReducer,
+  ArrayReducer,
+  MultiplicativeReducer,
   NoOpReducer,
 } from '../../src/simulation-framework/reducers.js';
 import { ReducerBuilder } from '../../src/simulation-framework/builders/reducer-builder.js';
@@ -60,10 +59,9 @@ globalThis.FinSimLib = {
     RecordArrayMetricAction,
     RecordMultiplicativeMetricAction,
     RecordBalanceAction,
-    MetricReducer,
-    NumericSumMetricReducer,
-    ArrayMetricReducer,
-    MultiplicativeMetricReducer,
+    NumericSumReducer,
+    ArrayReducer,
+    MultiplicativeReducer,
     NoOpReducer,
     ReducerBuilder,
     EventSeries,
@@ -83,9 +81,9 @@ const ACTION_CLASSES = new Set([
   'RecordBalanceAction','ScriptedAction','FieldValueAction',
 ]);
 const REDUCER_CLASSES = new Set([
-  'MetricReducer','ArrayMetricReducer','NumericSumMetricReducer',
-  'MultiplicativeMetricReducer','NoOpReducer','FieldReducer',
-  'StateFieldReducer','AccountTransactionReducer','ScriptedReducer',
+  ,'ArrayReducer','NumericSumReducer',
+  'MultiplicativeReducer','NoOpReducer','FieldReducer',
+  'AccountTransactionReducer','ScriptedReducer',
 ]);
 
 class TrackingUI {
@@ -182,7 +180,7 @@ const MINIMAL_CONFIG = {
       type: 'RECORD_METRIC', value: 1200, fieldName: 'amount' },
   ],
   reducers: [
-    { __type: 'MetricReducer', id: 'r1', name: 'Process Payment',
+    { __type: 'FieldReducer', id: 'r1', name: 'Process Payment',
       priority: 90, fieldName: 'metrics.amount',
       reducedActionIds: ['RECORD_METRIC'], generatedActionIds: [] },
   ],
@@ -216,16 +214,16 @@ const EXTENDED_CONFIG = {
       type: 'NEW_ACTION_a1', value: 0, fieldName: 'salary' },
   ],
   reducers: [
-    { __type: 'MetricReducer', id: 'r1', name: 'Process Salary Payment Amount',
+    { __type: 'FieldReducer', id: 'r1', name: 'Process Salary Payment Amount',
       priority: 90, fieldName: 'metrics.amount',
       reducedActionIds: ['RECORD_METRIC'], generatedActionIds: ['RECORD_NUMERIC_SUM_METRIC'] },
-    { __type: 'NumericSumMetricReducer', id: 'r2', name: 'Update Total Salary',
+    { __type: 'NumericSumReducer', id: 'r2', name: 'Update Total Salary',
       priority: 90, fieldName: 'metrics.salary',
       reducedActionIds: ['RECORD_NUMERIC_SUM_METRIC'], generatedActionIds: [] },
-    { __type: 'ArrayMetricReducer', id: 'r3', name: 'Deposit Payment',
+    { __type: 'ArrayReducer', id: 'r3', name: 'Deposit Payment',
       priority: 90, fieldName: 'metrics.deposits',
       reducedActionIds: ['RECORD_METRIC'], generatedActionIds: [] },
-    { __type: 'MetricReducer', id: 'r4', name: 'Tax Owed',
+    { __type: 'FieldReducer', id: 'r4', name: 'Tax Owed',
       priority: 90, fieldName: 'metrics.',
       reducedActionIds: ['NEW_ACTION_a1'], generatedActionIds: [] },
   ],
@@ -440,7 +438,7 @@ test('serialize: reducer __type matches the class set during registration', () =
   ScenarioSerializer.deserialize(MINIMAL_CONFIG, ServiceRegistry.getInstance());
   const cfg = serializeNow();
   const r = cfg.reducers.find(r => r.id === 'r1');
-  assert.strictEqual(r.__type, 'MetricReducer');
+  assert.strictEqual(r.__type, 'FieldReducer');
 });
 
 test('serialize: extended config produces correct node counts', () => {
@@ -477,12 +475,12 @@ test('serialize regression: reducer type change is captured in saved config', ()
   ScenarioSerializer.deserialize(MINIMAL_CONFIG, ServiceRegistry.getInstance());
 
   // Simulate what the UI type-select does when user picks a different reducer type
-  ServiceRegistry.getInstance().reducerService.replaceReducer('r1', 'NumericSumMetricReducer');
+  ServiceRegistry.getInstance().reducerService.replaceReducer('r1', 'NumericSumReducer');
 
   const cfg = serializeNow();
   const r = cfg.reducers.find(r => r.id === 'r1');
   assert.ok(r, 'r1 must be present in serialized output');
-  assert.strictEqual(r.__type, 'NumericSumMetricReducer',
+  assert.strictEqual(r.__type, 'NumericSumReducer',
     'serialized __type must reflect the reducerType set via updateReducer');
 });
 
