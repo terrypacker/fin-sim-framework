@@ -44,10 +44,20 @@ function makeElements() {
   const graphRoot  = document.createElement('div');
   const graphNodes = document.createElement('div');
   const graphEdges = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const nodeTemplate = document.createElement('template');
   document.body.appendChild(graphRoot);
   graphRoot.appendChild(graphNodes);
   graphRoot.appendChild(graphEdges);
-  return { graphRoot, graphNodes, graphEdges };
+
+  nodeTemplate.innerHTML = '  <div class="g-node">\n'
+      + '    <div class="g-header"></div>\n'
+      + '    <div class="g-title"></div>\n'
+      + '    <div class="node-badge badge-green" data-id="firedIndicator"></div>\n'
+      + '    <div class="g-port in"></div>\n'
+      + '    <div class="g-port out"></div>\n'
+      + '  </div>'
+  document.body.appendChild(nodeTemplate);
+  return { graphRoot, graphNodes, graphEdges , nodeTemplate};
 }
 
 function makeBuilder(elements) {

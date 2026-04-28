@@ -183,6 +183,10 @@ export class EventScheduler {
   // ─── Template helpers ─────────────────────────────────────────────────────
 
   _getTemplate(templateId) {
+    //TODO Note here that since we don't have a single root node in all our templates
+    // we are actually working with a Fragment here, so you can't set css classlist or id fields
+    // to fix this we need to wrap everything in a root node for all the templates and then
+    // use tmpl.content.firstElementChild.cloneNode(true);
     const tmpl = document.getElementById(templateId);
     return tmpl.content.cloneNode(true);
   }
