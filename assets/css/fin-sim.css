@@ -191,6 +191,7 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   border: 1px solid var(--green-dim);
   padding: 1px 6px;
   border-radius: 2px;
+  text-align: center;
 }
 .badge-purple {
   font-family: var(--font-mono);
@@ -200,6 +201,7 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   border: 1px solid #604090;
   padding: 1px 6px;
   border-radius: 2px;
+  text-align: center;
 }
 .badge-cyan {
   font-family: var(--font-mono);
@@ -209,6 +211,18 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   border: 1px solid var(--cyan-dim);
   padding: 1px 6px;
   border-radius: 2px;
+  text-align: center;
+}
+
+.badge-amber {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--amber);
+  background: rgba(57, 224, 128, 0.1);
+  border: 1px solid var(--amber-dim);
+  padding: 1px 6px;
+  border-radius: 2px;
+  text-align: center;
 }
 
 /* ── SCROLLBARS IN PANELS ── */
@@ -693,10 +707,12 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 
 /* ── NODE BADGE ── */
 .node-fired-badge {
+  flex: 0.5;
   margin-left: 2px;
 }
 
 .node-state-badge {
+  flex: 0.5;
   margin-left: 2px;
 }
 

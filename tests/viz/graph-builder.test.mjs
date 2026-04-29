@@ -44,20 +44,26 @@ function makeElements() {
   const graphRoot  = document.createElement('div');
   const graphNodes = document.createElement('div');
   const graphEdges = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  const nodeTemplate = document.createElement('template');
+  const nodeDetailsTemplate = document.createElement('template');
   document.body.appendChild(graphRoot);
   graphRoot.appendChild(graphNodes);
   graphRoot.appendChild(graphEdges);
 
-  nodeTemplate.innerHTML = '  <div class="g-node">\n'
-      + '    <div class="g-header"></div>\n'
-      + '    <div class="g-title"></div>\n'
-      + '    <div class="node-badge badge-green" data-id="firedIndicator"></div>\n'
+  nodeDetailsTemplate.innerHTML = '<div class="g-node">\n'
+      + '    <div class="g-header">\n'
+      + '      <span class="g-header-text"></span>\n'
+      + '      <span class="node-state-badge badge-green" data-id="stateChangeIndicator" style="display:none"></span>\n'
+      + '      <span class="node-fired-badge badge-green" data-id="firedIndicator"></span>\n'
+      + '    </div>\n'
+      + '    <div class="g-title">\n'
+      + '      <span class="g-title-text"></span>\n'
+      + '    </div>\n'
+      + '\n'
       + '    <div class="g-port in"></div>\n'
       + '    <div class="g-port out"></div>\n'
       + '  </div>'
-  document.body.appendChild(nodeTemplate);
-  return { graphRoot, graphNodes, graphEdges , nodeTemplate};
+  document.body.appendChild(nodeDetailsTemplate);
+  return { graphRoot, graphNodes, graphEdges , nodeDetailsTemplate};
 }
 
 function makeBuilder(elements) {

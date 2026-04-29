@@ -13,7 +13,7 @@ const NODE_HEIGHT = 40;
 const PADDING = 20;
 
 export class ConfigGraphBuilder {
-  constructor({ graphRoot, graphNodes, graphEdges, nodeTemplate, displayNodeStateChanges}) {
+  constructor({ graphRoot, graphNodes, graphEdges, nodeDetailsTemplate, displayNodeStateChanges}) {
     this.graphRoot = graphRoot;
     this.graphNodesEl = graphNodes;
     this.graphEdgesEl = graphEdges;
@@ -25,7 +25,7 @@ export class ConfigGraphBuilder {
     this.nodeClickListeners = [];
     this.selectedNodeId = null;
     this.dragState = null;
-    this.nodeTemplate = nodeTemplate;
+    this.nodeTemplate = nodeDetailsTemplate;
     this._bindEvents();
   }
 
@@ -124,7 +124,6 @@ export class ConfigGraphBuilder {
 
       const stateChangedIndicator = el.querySelector('[data-id="stateChangeIndicator"]');
       if(node.stateChanged) {
-        stateChangedIndicator.innerText = 'State Change';
         stateChangedIndicator.style = '';
         stateChangedIndicator.addEventListener('click', (evt) => {
           this.displayNodeStateChanges(node.stateChanges);
