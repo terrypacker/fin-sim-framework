@@ -740,14 +740,14 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 
 .g-header-text {
   flex: 1;
-  text-transform: uppercase;
   font-size: 9px;
   letter-spacing: 0.08em;
   color: var(--text-muted);
 }
 
-/* Title input */
+/* Node Title */
 .g-title {
+  display: flex;
   width: 100%;
   border: none;
   padding-left: 10px;
@@ -756,6 +756,12 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   color: var(--text);
   font-size: 10px;
   outline: none;
+}
+.g-title-text {
+  flex: 1;
+}
+.g-type-text {
+  flex: .25;
 }
 
 /* ── PORTS ── */
