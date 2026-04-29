@@ -72,27 +72,18 @@
 
       <!-- ── Tab headers ───────────────────────────────── -->
       <div class="tab">
-        <div class="panel-header tab-header active" data-dest-tab="left-events" data-tab-group="left-col">
-          <span class="panel-tag">EV</span>
-          <span class="panel-title">EVENTS</span>
-        </div>
-        <div class="panel-header tab-header" data-dest-tab="left-scenario" data-tab-group="left-col">
+        <div class="panel-header tab-header active" data-dest-tab="left-scenario" data-tab-group="left-col">
           <span class="panel-tag">SC</span>
           <span class="panel-title">SCENARIO</span>
         </div>
-      </div>
-
-      <!-- ── EVENTS tab ────────────────────────────────── -->
-      <div class="tab-content left-events-tab" data-tab="left-events" data-tab-group="left-col">
-        <div class="node-header">Edit</div>
-        <div id="builderCanvas"></div>
-        <div class="node-header">Rebuild</div>
-        <button class="btn" id="rebuildBtn">↺ Rebuild Simulation</button>
+        <div class="panel-header tab-header" data-dest-tab="left-events" data-tab-group="left-col">
+          <span class="panel-tag">LG</span>
+          <span class="panel-title">LOGIC</span>
+        </div>
       </div>
 
       <!-- ── SCENARIO tab ──────────────────────────────── -->
-      <div class="tab-content left-scenario-tab" style="display:none" data-tab="left-scenario" data-tab-group="left-col">
-
+      <div class="tab-content left-scenario-tab" data-tab="left-scenario" data-tab-group="left-col">
         <div class="node-header">Scenario</div>
         <div class="node-field">
           <select id="scenarioSelect" style="width:100%"></select>
@@ -141,6 +132,14 @@
         </div>
 
       </div><!-- /left-scenario -->
+
+      <!-- ── EVENTS tab ────────────────────────────────── -->
+      <div class="tab-content left-events-tab" data-tab="left-events" data-tab-group="left-col" style="display:none">
+        <div class="node-header">Edit</div>
+        <div id="builderCanvas"></div>
+        <div class="node-header">Rebuild</div>
+        <button class="btn" id="rebuildBtn">↺ Rebuild Simulation</button>
+      </div>
     </div><!-- /left-col -->
 
     <!-- ── CENTER COLUMN: dash + viz + charts ──────────────────────── -->
