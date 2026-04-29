@@ -43,7 +43,7 @@ export class EventScheduler {
     this.REDUCER_TYPES = [
       'ArrayReducer', 'NumericSumReducer',
       'MultiplicativeReducer', 'AccountTransactionReducer',
-      'FieldReducer', 'ScriptedReducer', 'NoOpReducer', 'RepeatingReducer'
+      'FieldReducer', 'FieldValueReducer', 'ScriptedReducer', 'NoOpReducer', 'RepeatingReducer'
     ];
 
     // Ordered most-specific to least-specific for instanceof checks.
@@ -51,26 +51,6 @@ export class EventScheduler {
       'AmountAction', 'RecordBalanceAction', 'ScriptedAction',
       'FieldValueAction', 'FieldAction', 'Action'
     ];
-
-    // Subscribe to service bus.
-    // CREATE — add the new node to the graph (mirrors what BaseScenario does
-    //          for the simulation side of the same event).
-    // Any mutation — re-render the graph so labels / edges stay in sync.
-    ServiceRegistry.getInstance().bus.subscribe('SERVICE_ACTION', (msg) => {
-      const { actionType, classType, item } = msg;
-      if (actionType === 'CREATE') {
-        if (classType === 'EventSeries' || classType === 'OneOffEvent') {
-          this.addEvent(item);
-        } else if (classType === 'HandlerEntry') {
-          this.addHandler(item);
-        } else if (this._isActionClass(classType)) {
-          this.addAction(item);
-        } else if (this._isReducerClass(classType)) {
-          this.addReducer(item);
-        }
-      }
-      this.graph.render();
-    });
 
     this._bind();
   }
@@ -115,17 +95,6 @@ export class EventScheduler {
 
   editNode(node) { this._editNode(null, node); }
 
-  _isActionClass(classType) {
-    return ['AmountAction', 'RecordBalanceAction', 'ScriptedAction',
-      'FieldValueAction', 'FieldAction', 'Action'].includes(classType);
-  }
-
-  _isReducerClass(classType) {
-    return ['ArrayReducer', 'NumericSumReducer',
-            'MultiplicativeReducer', 'NoOpReducer', 'FieldReducer', 'FieldValueReducer',
-            'AccountTransactionReducer', 'ScriptedReducer', 'RepeatingReducer'].includes(classType);
-  }
-
   registerEventCreatedListener(listener)   { this.eventNodeCreatedListeners.push(listener); }
   registerHandlerCreatedListener(listener) { this.handlerNodeCreatedListeners.push(listener); }
   registerActionCreatedListener(listener)  { this.actionNodeCreatedListeners.push(listener); }
@@ -146,15 +115,14 @@ export class EventScheduler {
   }
 
   deleteNode(node) {
-    // Call the appropriate service: fires DELETE on bus → BaseScenario
-    // subscriber cleans up the sim.  Graph removal follows synchronously.
+    // Calling the service fires DELETE on bus → SimulationSync cleans up the
+    // sim; GraphSync removes the node from the graph.
     const { eventService, handlerService, actionService, reducerService } = ServiceRegistry.getInstance();
     if (node.kind === 'event')        eventService.deleteEvent(node.id);
     else if (node.kind === 'handler') handlerService.deleteHandler(node.id);
     else if (node.kind === 'action')  actionService.deleteAction(node.id);
     else if (node.kind === 'reducer') reducerService.deleteReducer(node.id);
 
-    this.graph.removeNode(node.id);
     this._editNode(null, null);
   }
 
@@ -210,70 +178,6 @@ export class EventScheduler {
       this._renderActionEditor(node);
     } else {
       this.builderCanvas.innerHTML = `<div class="tl-empty">${node.kind} editor coming next</div>`;
-    }
-  }
-
-  // ─── Graph management ──────────────────────────────────────────────────────
-
-  /**
-   * Add an event node to the graph.  Also loads the event into the service map
-   * if it was created outside the service.  Idempotent — silently skips if the
-   * node is already present (the bus may fire before an explicit call).
-   */
-  addEvent(event) {
-    const existing = this.graph.getNode(event.id);
-    if (existing) return;
-
-    // Ensure the item is in the service map for editor update calls
-    const { eventService } = ServiceRegistry.getInstance();
-    if (!eventService.get(event.id)) {
-      eventService.load(event);
-    }
-
-    event.kind = 'event';
-    if (event instanceof FinSimLib.Core.EventSeries) {
-      event.eventType = 'Series';
-    } else {
-      event.eventType = 'OneOff';
-    }
-    this.graph.addNode(event);
-  }
-
-  addHandler(handler) {
-    this.graph.addNode(handler);
-
-    handler.handledEvents.forEach(e => {
-      this.graph.addEdge({ from: e.id, to: handler.id });
-    });
-    handler.generatedActions.forEach(a => {
-      this.addAction(a);
-      this.graph.addEdge({ from: handler.id, to: a.id });
-    });
-  }
-
-  addReducer(reducer) {
-    this.graph.addNode(reducer);
-
-    reducer.reducedActions.forEach(a => {
-      this.addAction(a);
-      this.graph.addEdge({ from: a.id, to: reducer.id });
-    });
-    reducer.generatedActions.forEach(a => {
-      this.addAction(a);
-      this.graph.addEdge({ from: reducer.id, to: a.id });
-    });
-  }
-
-  addAction(action) {
-    const existing = this.graph.getNode(action.id);
-    if (existing === undefined) {
-      // Ensure the item is in the service map
-      const { actionService } = ServiceRegistry.getInstance();
-      if (!actionService.get(action.id)) {
-        actionService.load(action);
-      }
-
-      this.graph.addNode(action);
     }
   }
 
@@ -576,6 +480,7 @@ export class EventScheduler {
       case 'NumericSumReducer':
       case 'ArrayReducer':
       case 'MultiplicativeReducer':
+      case 'FieldValueReducer':
         wrap = this._getTemplate('tpl-field-value-reducer-editor');
         wrap.querySelector('[data-field="fieldName"]').value = node.fieldName || '';
         wrap.querySelector('[data-field="value"]').value     = node.value ?? '';
@@ -584,7 +489,6 @@ export class EventScheduler {
         wrap = this._getTemplate('tpl-account-transaction-reducer-editor');
         wrap.querySelector('[data-field="accountKey"]').value = node.accountKey || '';
         break;
-      case 'StateFieldReducer':
       case 'FieldReducer':
         wrap = this._getTemplate('tpl-field-reducer-editor');
         wrap.querySelector('[data-field="fieldName"]').value = node.fieldName || '';
@@ -594,6 +498,8 @@ export class EventScheduler {
         wrap.querySelector('[data-field="fieldName"]').value = node.fieldName || '';
         wrap.querySelector('[data-field="script"]').value    = node.script || '';
         break;
+      case 'RepeatingReducer':
+        //TODO Need UI
       default:
         container.innerHTML = '<div class="tl-empty">No config</div>';
         return;

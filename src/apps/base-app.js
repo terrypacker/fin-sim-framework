@@ -23,6 +23,7 @@ import { ChartView } from '../visualization/chart-view.js';
 import { TimelineView } from '../visualization/timeline-view.js';
 import { TimeControls } from '../visualization/time-controls.js';
 import { EventScheduler } from '../visualization/event-scheduler.js';
+import { GraphSync } from '../visualization/graph-sync.js';
 import { ConfigGraphBuilder } from "../visualization/graph-builder.js";
 import { ScenarioStorage } from "../scenarios/scenario-storage.js";
 import { ScenarioSerializer } from "../scenarios/scenario-serializer.js";
@@ -230,6 +231,11 @@ export class BaseApp {
       builderCanvas: document.getElementById('builderCanvas'),
       graph: this.configGraphBuilder
     });
+
+    // GraphSync keeps the ConfigGraphBuilder in sync with service bus events.
+    // Must be created after the ServiceRegistry is reset (above) so it
+    // subscribes to the fresh bus instance.
+    new GraphSync({ graph: this.configGraphBuilder, registry: ServiceRegistry.getInstance() });
 
     //Setup the scenario
     this.scenario = this.newScenario(this.getParams(), this.getInitialState(), this.schedulerUI);

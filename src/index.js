@@ -73,6 +73,7 @@ import { BalanceChartView } from './visualization/balance-chart-view.js';
 import { ChartView } from './visualization/chart-view.js';
 import { EventScheduler } from './visualization/event-scheduler.js';
 import { ConfigGraphBuilder } from './visualization/graph-builder.js';
+import { GraphSync } from './visualization/graph-sync.js';
 import { GraphView } from './visualization/graph-view.js';
 import { TimeControls } from './visualization/time-controls.js';
 import { TimelineView } from './visualization/timeline-view.js';
@@ -224,6 +225,7 @@ export const Visualization = {
   ChartView,
   EventScheduler,
   ConfigGraphBuilder,
+  GraphSync,
   GraphView,
   TimeControls,
   TimelineView,
