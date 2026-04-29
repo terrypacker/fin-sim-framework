@@ -101,7 +101,19 @@ export class TimeControls {
     this.scenario.sim.history.resetForReplay();
     this.timelineView?.reset();
     this.scenario.sim.rewindToStart();
+
+    // Disable breakpoints during replay so they don't halt the rewind.
+    const ctrl = this.scenario.sim.control;
+    if (ctrl) {
+      ctrl.breakpointsEnabled = false;
+      ctrl.pendingExecution = null; // mid-event state is invalid after a rewind
+      ctrl.paused = false;
+    }
     const t = this.stepTo(pct);  // stepTo calls timelineView.update()
+    if (ctrl) {
+      ctrl.breakpointsEnabled = true;
+      ctrl.paused = false;
+    }
     return t;
   }
 

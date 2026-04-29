@@ -23,6 +23,7 @@ export class ConfigGraphBuilder {
     this.edges = [];
 
     this.nodeClickListeners = [];
+    this.breakpointChangeListeners = [];
     this.selectedNodeId = null;
     this.dragState = null;
     this.nodeTemplate = nodeDetailsTemplate;
@@ -138,6 +139,27 @@ export class ConfigGraphBuilder {
       }
 
 
+      // ── Breakpoint indicator ─────────────────────────────────────────
+      const bpIndicator = el.querySelector('[data-id="breakpointIndicator"]');
+      if (bpIndicator) {
+        if (node.breakpoint) {
+          bpIndicator.style.display = '';
+          el.classList.add('has-breakpoint');
+        } else {
+          bpIndicator.style.display = 'none';
+          el.classList.remove('has-breakpoint');
+        }
+      }
+
+      // Right-click toggles the breakpoint on this node
+      el.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        node.breakpoint = !node.breakpoint;
+        this.breakpointChangeListeners.forEach(l => l(node));
+        this.render();
+      });
+
       el.addEventListener('click', (e) => {
         e.stopPropagation();
         this.selectNode(node.id);
@@ -199,6 +221,15 @@ export class ConfigGraphBuilder {
     this.nodeClickListeners.push(listener);
   }
 
+  /**
+   * Register a listener called with (node) whenever a node's breakpoint
+   * flag is toggled via right-click.
+   * @param {function} listener
+   */
+  registerBreakpointChangeListener(listener) {
+    this.breakpointChangeListeners.push(listener);
+  }
+
   addNode(node) {
     if(!node.id) {
       throw new Error(`Node requires id ${node}`);
@@ -211,6 +242,7 @@ export class ConfigGraphBuilder {
 
     //Decorate for viz
     node.fired = false;
+    node.breakpoint = node.breakpoint ?? false;
 
     this.nodes.push(node);
     this._relayoutAll();
