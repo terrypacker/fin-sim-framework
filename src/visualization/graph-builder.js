@@ -169,6 +169,13 @@ export class ConfigGraphBuilder {
     this._renderGraph();
   }
 
+  resizeCanvas(h,w) {
+    this.graphRoot.height = h;
+    this.graphRoot.width = w;
+    this._relayoutAll();
+    this.render();
+  }
+
   /* ────────────────── External Node Operations ────────────────────────*/
   /**
    * Register a listener to accept (event, node)

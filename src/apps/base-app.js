@@ -49,7 +49,7 @@ export class BaseApp {
     //References to UI elements
     this.eventsTabHeader = null;
     this.scenarioTabHeader = null;
-    
+
     //State
     this.playing = false;
     this.lastSliderValue = 0;
@@ -679,6 +679,9 @@ export class BaseApp {
     const h = contentEl.clientHeight;
     if(this.graphView) {
       this.graphView.resizeCanvas(h, w);
+    }
+    if(this.configGraphBuilder) {
+      this.configGraphBuilder.resizeCanvas(h, w);
     }
     $('chartCanvas').width  = w;
     $('chartCanvas').height = h;
