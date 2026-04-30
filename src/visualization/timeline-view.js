@@ -231,7 +231,7 @@ export class TimelineView {
                 <span class="tl-pipe" style="color:#1e3a5f">${lastA ? '└' : '├'}</span>
                 <span class="tl-act-type">${entry.action.type}</span>
                 ${sum ? `<span class="tl-act-val">${sum}</span>` : ''}
-                <span class="tl-act-reducer">${entry.reducer}</span>
+                <span class="tl-act-reducer">${entry.reducer.name}</span>
                 <button class="tl-det" data-idx="${idx}">detail ↗</button>
               </div>`);
             });
