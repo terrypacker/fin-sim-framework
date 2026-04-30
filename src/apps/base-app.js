@@ -454,9 +454,14 @@ export class BaseApp {
     }
 
     //Populate state changes
-    const stateChangesGrid = clone.querySelector('[data-state-change-grid]');
+    const stateChangeGridTemplate = document.querySelector(`#tpl-node-state-changes`);
+    const stateChangesGrid = stateChangeGridTemplate.content.firstElementChild.cloneNode(true);
     const prevState = JSON.stringify(content.entry.prevState,null, 2);
     this._populateStateChanges(stateChangesGrid, content.changes, prevState);
+
+    //Replace div in outer template
+    const stateChangesPlaceholder = clone.querySelector('[data-state-change-grid]');
+    stateChangesPlaceholder.replaceWith(stateChangesGrid);
     return clone;
   }
 
@@ -464,12 +469,20 @@ export class BaseApp {
     if(changes.length > 0) {
       //Compute the changes
       for(const change of changes) {
-        const stateChangeRow = document.importNode(stateChangesGrid.querySelector('[data-state-change-row]'), true);
-        stateChangeRow.style = '';
-        stateChangeRow.querySelector('[data-id="field"]').innerText = change.field;
-        stateChangeRow.querySelector('[data-id="before"]').innerHTML = this.fmtVal(change.before, true);
+        const stateChangeFieldRow = document.importNode(stateChangesGrid.querySelector('[data-state-change-field-row]'), true);
+        stateChangeFieldRow.style = '';
+        stateChangeFieldRow.querySelector('[data-id="field"]').innerText = change.field;
+        stateChangesGrid.appendChild(stateChangeFieldRow);
+
+        const stateChangeBeforedRow = document.importNode(stateChangesGrid.querySelector('[data-state-change-before-row]'), true);
+        stateChangeBeforedRow.style = '';
+        stateChangeBeforedRow.querySelector('[data-id="before"]').innerHTML = this.fmtVal(change.before, true);
+        stateChangesGrid.appendChild(stateChangeBeforedRow);
+
+        const stateChangeAfterRow = document.importNode(stateChangesGrid.querySelector('[data-state-change-after-row]'), true);
+        stateChangeAfterRow.style = '';
         if(change.delta != null) {
-          const after = stateChangeRow.querySelector('[data-id="after"]');
+          const after = stateChangeAfterRow.querySelector('[data-id="after"]');
           const delta = document.createElement('span');
           if(change.delta > 0) {
             delta.classList.add('diff-pos');
@@ -481,9 +494,9 @@ export class BaseApp {
           after.innerHTML = this.fmtVal(change.after, true);
           after.appendChild(delta);
         }else {
-          stateChangeRow.querySelector('[data-id="after"]').innerHTML = this.fmtVal(change.after, true);
+          stateChangeAfterRow.querySelector('[data-id="after"]').innerHTML = this.fmtVal(change.after, true);
         }
-        stateChangesGrid.appendChild(stateChangeRow);
+        stateChangesGrid.appendChild(stateChangeAfterRow);
       }
     }else {
       stateChangesGrid.querySelector('[data-id="noChangeRow"]').style = '';

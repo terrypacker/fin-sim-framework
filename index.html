@@ -305,9 +305,9 @@
           <span class="badge-green" style="margin-left:auto" id="popBadge">LIVE</span>
         </div>
         <div class="data-section-title">State</div>
-        <div id="currentStateContent" class="data-list-wrap" style="display:block"></div>
+        <div id="currentStateContent" style="display:block"></div>
         <div class="data-section-title">Metrics</div>
-        <div id="cumulativeMetricsContent" class="data-list-wrap" style="display:block"></div>
+        <div id="cumulativeMetricsContent" style="display:block"></div>
         </div>
       </div>
     </div>
@@ -625,22 +625,7 @@
       </div>
     </div>
     <div class="data-section-title">State Changes</div>
-    <div class="data-grid-center data-grid-3" data-state-change-grid>
-      <div class="data-row" data-id="stateHeaderRow" style="display:none">
-        <span>Field</span>
-        <span>Before</span>
-        <span>After</span>
-      </div>
-      <div class="data-row" data-state-change-row style="display:none">
-        <span class="diff-field" data-id="field"></span>
-        <span class="diff-before" data-id="before"></span>
-        <span class="diff-after" data-id="after"></span>
-      </div>
-      <div class="data-row" data-id="noChangeRow" style="display:none">
-        <label class="single-row" data-id="noChangeTitle" >(No Change - Previous State)</label>
-        <pre class="field-code single-row" data-id="noChangeState"></pre>
-      </div>
-    </div>
+    <div data-state-change-grid></div>
   </div>
 </template>
 
@@ -648,15 +633,17 @@
 <template id="tpl-node-state-changes">
   <div id="node-state-changes">
     <div class="data-section-title">State Changes</div>
-    <div class="data-grid-center data-grid-3" data-state-change-grid>
-      <div class="data-row" data-id="stateHeaderRow" style="display:none">
-        <span>Field</span>
-        <span>Before</span>
-        <span>After</span>
-      </div>
-      <div class="data-row" data-state-change-row style="display:none">
+    <div class="data-grid data-grid-2" data-state-change-grid>
+      <div class="data-row data-row-header" data-state-change-field-row style="display:none">
+        <span class="diff-label">Field</span>
         <span class="diff-field" data-id="field"></span>
+      </div>
+      <div class="data-row" data-state-change-before-row style="display:none">
+        <span class="diff-label">Before</span>
         <span class="diff-before" data-id="before"></span>
+      </div>
+      <div class="data-row" data-state-change-after-row style="display:none">
+        <span class="diff-label">After</span>
         <span class="diff-after" data-id="after"></span>
       </div>
       <div class="data-row" data-id="noChangeRow" style="display:none">
