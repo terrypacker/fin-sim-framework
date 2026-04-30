@@ -62,11 +62,6 @@ export class BaseApp {
     // Auto-select the first saved scenario on load; fall back to default if none exist.
     this._activeIdx = this._scenarioData.scenarios.length > 0 ? 0 : null;
 
-    this._eventExecutions = 0;
-    this._handlerExecutions = 0;
-    this._actionExecutions = 0;
-    this._reducerExecutions = 0;
-
     // ── PeriodService: US calendar years 2026-2040, AU fiscal years 2025-2040
     const periodService = new FinSimLib.Finance.PeriodService();
     for (let y = 2026; y <= 2040; y++) FinSimLib.Finance.applyTo(periodService, FinSimLib.Finance.buildUsCalendarYear(y));
@@ -224,12 +219,6 @@ export class BaseApp {
     this.scenario.buildSim(this.getParams(), this.getInitialState());
     this.afterBuildSim();
 
-    //Clear out the dashcards
-    this._eventExecutions = 0;
-    this._handlerExecutions = 0;
-    this._actionExecutions = 0;
-    this._reducerExecutions = 0;
-
     if(this.updateDashCards) {
       this.updateDashCards(this.scenario.simStart);
     }
@@ -294,6 +283,10 @@ export class BaseApp {
       timeLabel: $('timeLabel'),
       timeSlider: $('timeSlider'),
       formatDate: this._formatDate,
+      onReset: (date, state) => {
+        this.updateDashCards(date);
+        this.updateStatePanel(date, state);
+      },
     });
 
     // Wire event-level breakpoints: called by the sim before each event executes.
@@ -301,7 +294,6 @@ export class BaseApp {
 
     // Subscribe to EVENT_OCCURRENCE events
     this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START, ({ date, payload, stateSnapshot }) => {
-      this._eventExecutions++;
 
       //Fire the date changed listeners as this is the only time the date will change
       const actionDate = new Date(date);
@@ -316,7 +308,6 @@ export class BaseApp {
 
     // Subscribe to HANDLED_EVENT events
     this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.HANDLED_EVENT, ({ date, payload, stateSnapshot }) => {
-      this._handlerExecutions++;
 
       if(this.updateDashCards)
         this.updateDashCards(date);
@@ -326,7 +317,6 @@ export class BaseApp {
 
     // Subscribe to ACTION_RESULT events
     this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.ACTION_RESULT, ({ date, payload, stateSnapshot}) => {
-      this._actionExecutions++;
 
       this.updateStatePanel(date, stateSnapshot);
 
@@ -338,7 +328,6 @@ export class BaseApp {
 
     // Subscribe to REDUCER_RESULT events
     this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.REDUCER_RESULT, ({ date, payload, stateSnapshot }) => {
-      this._reducerExecutions++;
 
       if(this.graphView) {
         this.graphView.updateView(payload);
@@ -867,11 +856,12 @@ export class BaseApp {
   }
 
   updateDashCards(date) {
+    const sim = this.scenario?.sim;
     $('cardCurrentDate').innerText = this.fmtVal(date);
-    $('cardEventExecutions').innerText =  this._eventExecutions;
-    $('cardHandlerExecutions').innerText = this._handlerExecutions;
-    $('cardActionExecutions').innerText = this._actionExecutions;
-    $('cardReducerExecutions').innerText = this._reducerExecutions;
+    $('cardEventExecutions').innerText =  sim?.eventExecutions ?? 0;
+    $('cardHandlerExecutions').innerText = sim?.handlerExecutions ?? 0;
+    $('cardActionExecutions').innerText = sim?.actionExecutions ?? 0;
+    $('cardReducerExecutions').innerText = sim?.reducerExecutions ?? 0;
   }
 
   /**

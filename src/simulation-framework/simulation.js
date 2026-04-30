@@ -92,6 +92,12 @@ export class Simulation {
     this.nextEventInstanceId = 0;
     this.actionGraph = new SimulationEventGraph();
 
+    // Execution counters — incremented by the sim, reset on rewind.
+    this.eventExecutions = 0;
+    this.handlerExecutions = 0;
+    this.actionExecutions = 0;
+    this.reducerExecutions = 0;
+
     // ── Breakpoint / pause control ─────────────────────────────────────────
     //
     // paused:             true when execution has stopped at a breakpoint
@@ -223,10 +229,11 @@ export class Simulation {
     const stateBefore = savedStateBefore ?? structuredClone(this.state);
 
     if (startHandlerIdx === 0) {
+      this.eventExecutions++;
       this.bus.publish(new EventStartBusMessage({
         date: new Date(this.currentDate),
         sim: this,
-        payload: { event },
+        payload: { event, eventCount: this.eventExecutions },
         stateSnapshot: stateBefore
       }));
     }
@@ -259,11 +266,12 @@ export class Simulation {
       });
 
       if (entry.name !== INTERNAL_SCHEDULING_HANDLER_NAME) {
+        this.handlerExecutions++;
         this.bus.publish(new EventHandledMessage({
           date: new Date(this.currentDate),
           sim: this,
           stateSnapshot: stateBefore,
-          payload: { handler: entry, event }
+          payload: { handler: entry, event, handlerCount: this.handlerExecutions }
         }));
       }
 
@@ -380,13 +388,15 @@ export class Simulation {
       }
 
       const prevState = structuredClone(this.state);
+      this.actionExecutions++;
       this.bus.publish(new ActionResultMessage({
         date: new Date(this.currentDate),
         sim: this,
         payload: {
           action: action,
           reducers: unwrappedReducers,
-          sourceEvent: sourceEvent
+          sourceEvent: sourceEvent,
+          actionCount: this.actionExecutions
         },
         stateSnapshot: prevState
       }));
@@ -447,6 +457,7 @@ export class Simulation {
         stateSnapshot = structuredClone(result);
       }
 
+      this.reducerExecutions++;
       this.bus.publish(new ReducerResultMessage({
         date: new Date(this.currentDate),
         sim: this,
@@ -455,7 +466,8 @@ export class Simulation {
           reducer: reducerWrapper.reducer,
           action: action,
           stateBefore: prevState,
-          sourceEvent: sourceEvent
+          sourceEvent: sourceEvent,
+          reducerCount: this.reducerExecutions
         }
       }));
 

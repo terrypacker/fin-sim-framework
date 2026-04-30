@@ -63,6 +63,7 @@ export class SimulationHistory {
     this.eventCounter = 0;
     this.snapshots.length = 1;   // prevent unbounded growth on repeated rewinds
     this.snapshotCursor = 0;
+    this._resetExecutionCounters();
   }
 
   rewind(steps = 1) {
@@ -98,11 +99,19 @@ export class SimulationHistory {
   }
 
   /**
-   * Reset the action graph and action ID counter before a replay.
+   * Reset the action graph, action ID counter, and execution counters before a replay.
    * Called by TimeControls.rewindTo() alongside journal and view resets.
    */
   resetForReplay() {
     this._sim.actionGraph = new SimulationEventGraph();
     this._sim.nextActionId = 0;
+    this._resetExecutionCounters();
+  }
+
+  _resetExecutionCounters() {
+    this._sim.eventExecutions = 0;
+    this._sim.handlerExecutions = 0;
+    this._sim.actionExecutions = 0;
+    this._sim.reducerExecutions = 0;
   }
 }
