@@ -16,7 +16,7 @@
  * and service.create*().  Two bus subscribers react to each CREATE:
  *
  *   SimulationSync  → wires the item into the active Simulation
- *   EventScheduler  → adds the node to the configuration graph
+ *   ConfigBuilder  → adds the node to the configuration graph
  *
  * loadDefaults() does NOT call any BaseScenario helpers (scheduleEvent,
  * registerHandler, etc.) — those have been removed.  All you need is the
@@ -45,7 +45,7 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
    *   1. Build the domain object (EventSeries, HandlerEntry, reducer, action).
    *   2. Set any cross-references (handledEvents, generatedActions, reducedActions).
    *   3. Call service.register(item) — this publishes CREATE on the bus,
-   *      which SimulationSync and EventScheduler handle automatically.
+   *      which SimulationSync and ConfigBuilder handle automatically.
    */
   loadDefaults() {
     const { EventBuilder, ActionBuilder, HandlerBuilder, ReducerBuilder } = FinSimLib.Core;
@@ -54,7 +54,7 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
 
     // ── Events ────────────────────────────────────────────────────────────────
     // Build the event, then register it.  SimulationSync schedules it in the
-    // sim; EventScheduler adds the graph node.
+    // sim; ConfigBuilder adds the graph node.
 
     const monthStartEventSeries = EventBuilder
     .eventSeries()

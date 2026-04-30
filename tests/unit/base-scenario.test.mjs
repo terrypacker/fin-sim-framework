@@ -75,7 +75,7 @@ function makeScenario() {
   const ui       = new StubSchedulerUI();
 
   // Subscribe to bus so the stub UI reacts to CREATE events — mirrors what
-  // EventScheduler does in production.
+  // ConfigBuilder does in production.
   ServiceRegistry.getInstance().bus.subscribe('SERVICE_ACTION', (msg) => {
     if (msg.actionType !== 'CREATE') return;
     const { classType, item } = msg;

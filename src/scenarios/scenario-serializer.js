@@ -16,7 +16,7 @@ export class ScenarioSerializer {
    * Serialize the current scenario state into a config object.
    *
    * Reads directly from the service maps so that in-flight UI edits (name,
-   * type, field values) are captured without relying on the ConfigGraphBuilder's
+   * type, field values) are captured without relying on the ConfigGraph's
    * internal node structure.
    *
    * @param {{ eventService, handlerService, actionService, reducerService }} services
@@ -58,7 +58,7 @@ export class ScenarioSerializer {
    * Each service.register() call publishes a CREATE event on the shared bus,
    * which is picked up by:
    *   - BaseScenario's subscriber → wires the item into the simulation
-   *   - EventScheduler's subscriber → adds the node to the graph
+   *   - ConfigBuilder's subscriber → adds the node to the graph
    *
    * Items are registered in dependency order so that references are already
    * in the service maps when CREATE fires:

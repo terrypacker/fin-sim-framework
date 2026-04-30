@@ -11,14 +11,14 @@
 /**
  * graph-builder.test.mjs
  *
- * Tests for ConfigGraphBuilder: node management, edge management, and — critically
+ * Tests for ConfigGraph: node management, edge management, and — critically
  * — the destroy() / listener-cleanup contract that prevents stale event listeners
  * from accumulating across multiple buildScenario() calls.
  *
  * ──────────────────────────────────────────────────────────────────────────────
  * Bug regression covered here:
  *
- *   Every call to buildScenario() created a NEW ConfigGraphBuilder and called
+ *   Every call to buildScenario() created a NEW ConfigGraph and called
  *   _bindEvents(), adding fresh mousedown/mousemove/mouseup listeners to the
  *   SAME DOM elements.  The OLD builder's listeners were never removed.
  *
@@ -28,7 +28,7 @@
  *   received undefined, and crashed: "Cannot set properties of undefined
  *   (setting 'x')".
  *
- *   Fix: ConfigGraphBuilder.destroy() removes all three listeners.
+ *   Fix: ConfigGraph.destroy() removes all three listeners.
  *   BaseApp.buildScenario() now calls destroy() on the previous builder before
  *   creating a new one.
  * ──────────────────────────────────────────────────────────────────────────────
@@ -36,7 +36,7 @@
  * Run with: npm run test:viz
  */
 
-import { ConfigGraphBuilder } from '../../src/visualization/graph-builder.js';
+import { ConfigGraph } from '../../src/visualization/config-graph.js';
 
 // ─── DOM helpers ──────────────────────────────────────────────────────────────
 
@@ -67,7 +67,7 @@ function makeElements() {
 }
 
 function makeBuilder(elements) {
-  return new ConfigGraphBuilder(elements ?? makeElements());
+  return new ConfigGraph(elements ?? makeElements());
 }
 
 function node(id, kind = 'event') {

@@ -10,7 +10,7 @@
 import { ServiceRegistry } from '../services/service-registry.js';
 import { PRIORITY } from '../simulation-framework/reducers.js';
 
-export class EventScheduler {
+export class ConfigBuilder {
 
   constructor({ graph, builderCanvas }) {
     this.graph = graph;

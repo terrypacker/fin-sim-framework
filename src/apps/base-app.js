@@ -22,9 +22,9 @@ import { GraphView } from '../visualization/graph-view.js';
 import { ChartView } from '../visualization/chart-view.js';
 import { TimelineView } from '../visualization/timeline-view.js';
 import { TimeControls } from '../visualization/time-controls.js';
-import { EventScheduler } from '../visualization/event-scheduler.js';
+import { ConfigBuilder } from '../visualization/config-builder.js';
 import { GraphSync } from '../visualization/graph-sync.js';
-import { ConfigGraphBuilder } from "../visualization/graph-builder.js";
+import { ConfigGraph } from "../visualization/config-graph.js";
 import { ScenarioStorage } from "../scenarios/scenario-storage.js";
 import { ScenarioSerializer } from "../scenarios/scenario-serializer.js";
 import { ServiceRegistry } from "../services/service-registry.js";
@@ -147,7 +147,7 @@ export class BaseApp {
 
     // Reset all services, the shared bus, and the SimulationRegistry so every
     // rebuild starts with a clean slate.  All stale bus subscriptions from the
-    // previous scenario/EventScheduler are discarded with the old instance.
+    // previous scenario/ConfigBuilder are discarded with the old instance.
     ServiceRegistry.reset();
 
     //Clear out state and metrics
@@ -162,7 +162,7 @@ export class BaseApp {
 
     //Setup the Configuration visuals
     if (this.configGraphBuilder) this.configGraphBuilder.destroy();
-    this.configGraphBuilder = new ConfigGraphBuilder({
+    this.configGraphBuilder = new ConfigGraph({
       graphRoot: document.getElementById('graphRoot'),
       graphNodes: document.getElementById('graphNodes'),
       graphEdges: document.getElementById('graphEdges'),
@@ -178,12 +178,12 @@ export class BaseApp {
       this._syncBreakpointsToSim();
     });
 
-    this.schedulerUI = new EventScheduler({
+    this.schedulerUI = new ConfigBuilder({
       builderCanvas: document.getElementById('builderCanvas'),
       graph: this.configGraphBuilder
     });
 
-    // GraphSync keeps the ConfigGraphBuilder in sync with service bus events.
+    // GraphSync keeps the ConfigGraph in sync with service bus events.
     // Must be created after the ServiceRegistry is reset (above) so it
     // subscribes to the fresh bus instance.
     new GraphSync({ graph: this.configGraphBuilder, registry: ServiceRegistry.getInstance() });

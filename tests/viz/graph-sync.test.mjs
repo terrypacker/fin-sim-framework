@@ -11,10 +11,10 @@
 /**
  * graph-sync.test.mjs
  *
- * Tests for GraphSync — the bus subscriber that keeps ConfigGraphBuilder in
+ * Tests for GraphSync — the bus subscriber that keeps ConfigGraph in
  * sync with SERVICE_ACTION events.
  *
- * Uses a lightweight graph stub instead of a real ConfigGraphBuilder so these
+ * Uses a lightweight graph stub instead of a real ConfigGraph so these
  * tests have no DOM dependency.
  *
  * Run with: npm run test:viz
@@ -31,7 +31,7 @@ function makeBus() {
 }
 
 /**
- * Lightweight graph stub that mirrors the ConfigGraphBuilder surface used by
+ * Lightweight graph stub that mirrors the ConfigGraph surface used by
  * GraphSync.  replaceNode updates in-place by index so tests can assert on
  * object identity without worrying about array replacement.
  */
