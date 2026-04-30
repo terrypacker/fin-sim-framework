@@ -171,7 +171,7 @@ export class BaseApp {
     });
 
     this.configGraphBuilder.registerNodeClickListener((event, node) => this.openTab(
-        { currentTarget: this.eventsTabHeader }, 'left-events', 'left-col'));
+        { currentTarget: this.eventsTabHeader }, 'left-events', 'left-col-sim'));
 
     // Sync breakpoints to the sim whenever the user toggles one on the graph.
     this.configGraphBuilder.registerBreakpointChangeListener(() => {
@@ -653,8 +653,8 @@ export class BaseApp {
   initView() {
 
     //Keep a reference to this
-    this.eventsTabHeader = document.querySelector(`.tab-header[data-dest-tab=left-events][data-tab-group=left-col]`);
-    this.scenarioTabHeader = document.querySelector(`.tab-header[data-dest-tab=left-scenario][data-tab-group=left-col]`);
+    this.eventsTabHeader = document.querySelector(`.tab-header[data-dest-tab=left-events][data-tab-group=left-col-sim]`);
+    this.scenarioTabHeader = document.querySelector(`.tab-header[data-dest-tab=left-scenario][data-tab-group=left-col-sim]`);
 
     //Setup the tabs
     document.querySelectorAll('.tab-header').forEach(el => {
@@ -723,7 +723,7 @@ export class BaseApp {
     $('rebuildBtn').addEventListener('click', () => this.buildScenario());
 
     this._initScenarioTab();
-    this.openTab({ currentTarget: this.scenarioTabHeader }, 'left-scenario', 'left-col');
+    this.openTab({ currentTarget: this.scenarioTabHeader }, 'left-scenario', 'left-col-sim');
 
     window.addEventListener('resize', () => this.resizeCanvases());
     this.resizeCanvases();

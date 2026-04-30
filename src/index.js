@@ -15,11 +15,13 @@ import { UsAccountModule2026 } from './finance/account-rules/us/us-account-modul
 import { USD, AUD, InsufficientFundsError, Account, AccountService } from './finance/account.js';
 import { AssetService } from './finance/asset-service.js';
 import { Asset } from './finance/asset.js';
+import { PersonBuilder } from './finance/builders/person-builder.js';
 import { FinancialState } from './finance/financial-state.js';
 import { InvestmentAccount } from './finance/investment-account.js';
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
-import { Person, PersonService } from './finance/person.js';
+import { Person } from './finance/person.js';
+import { PersonService } from './finance/services/person-service.js';
 import { AuTaxModule2024 } from './finance/tax/au/au-tax-module-2024.js';
 import { AuTaxModule2025 } from './finance/tax/au/au-tax-module-2025.js';
 import { AuTaxModule2026 } from './finance/tax/au/au-tax-module-2026.js';
@@ -115,6 +117,7 @@ export const Finance = {
   AccountService,
   AssetService,
   Asset,
+  PersonBuilder,
   FinancialState,
   InvestmentAccount,
   buildMonthPeriod,

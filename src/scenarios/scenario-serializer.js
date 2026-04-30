@@ -19,9 +19,9 @@ export class ScenarioSerializer {
    * type, field values) are captured without relying on the ConfigGraph's
    * internal node structure.
    *
-   * @param {{ eventService, handlerService, actionService, reducerService }} services
-   *   The ServiceRegistry instance (or any object exposing the four service
-   *   properties).  Pass `ServiceRegistry.getInstance()` from the save handler.
+   * @param {{ eventService, handlerService, actionService, reducerService, personService }} services
+   *   The ServiceRegistry instance (or any object exposing the service properties).
+   *   Pass `ServiceRegistry.getInstance()` from the save handler.
    * @param {string} name
    * @param {string|Date} simStart
    * @param {string|Date} simEnd
@@ -30,7 +30,7 @@ export class ScenarioSerializer {
    * @returns {object} serialized scenario config
    */
   static serialize(services, name, simStart, simEnd, initialState, params) {
-    const { eventService, handlerService, actionService, reducerService } = services;
+    const { eventService, handlerService, actionService, reducerService, personService } = services;
 
     const toDateStr = (d) => {
       if (!d) return null;
@@ -42,6 +42,7 @@ export class ScenarioSerializer {
       name,
       simStart: toDateStr(simStart),
       simEnd:   toDateStr(simEnd),
+      persons:  (personService?.getAll() ?? []).map(n => ScenarioSerializer._serializePerson(n)),
       events:   eventService.getAll().map(n => ScenarioSerializer._serializeEvent(n)),
       handlers: handlerService.getAll().map(n => ScenarioSerializer._serializeHandler(n)),
       actions:  actionService.getAll().map(n => ScenarioSerializer._serializeAction(n)),
@@ -62,15 +63,22 @@ export class ScenarioSerializer {
    *
    * Items are registered in dependency order so that references are already
    * in the service maps when CREATE fires:
-   *   actions → events → handlers → reducers
+   *   persons → actions → events → handlers → reducers
    *
    * @param {object} config - serialized scenario config
-   * @param {{ eventService, handlerService, actionService, reducerService }} services
-   *   Pass ServiceRegistry.getInstance() or any object exposing the four service
-   *   properties.
+   * @param {{ eventService, handlerService, actionService, reducerService, personService }} services
+   *   Pass ServiceRegistry.getInstance() or any object exposing the service properties.
    */
   static deserialize(config, services) {
-    const { eventService, handlerService, actionService, reducerService } = services;
+    const { eventService, handlerService, actionService, reducerService, personService } = services;
+
+    // 0. Persons — no dependencies; register before actions so they're available first.
+    if (personService) {
+      for (const d of (config.persons ?? [])) {
+        const person = ScenarioSerializer._makePerson(d);
+        personService.register(person);
+      }
+    }
 
     // 1. Actions first — handlers and reducers hold references to them.
     const actionMap = new Map();
@@ -121,6 +129,20 @@ export class ScenarioSerializer {
   }
 
   // ─── Serializers ──────────────────────────────────────────────────────────────
+
+  static _serializePerson(person) {
+    return {
+      __type:                'Person',
+      id:                    person.id,
+      name:                  person.name,
+      birthDate:             person.birthDate instanceof Date
+                               ? person.birthDate.toISOString().slice(0, 10)
+                               : person.birthDate,
+      citizen:               person.citizen ?? ['US'],
+      lifeExpectancy:        person.lifeExpectancy ?? 90,
+      socialSecurityMonthly: person.socialSecurityMonthly ?? 2800,
+    };
+  }
 
   static _serializeEvent(node) {
     const d = {
@@ -188,6 +210,17 @@ export class ScenarioSerializer {
   }
 
   // ─── Constructors ─────────────────────────────────────────────────────────────
+
+  static _makePerson(d) {
+    const { Person } = FinSimLib.Finance;
+    const person = new Person(d.id, new Date(d.birthDate), {
+      name:                  d.name ?? '',
+      citizen:               d.citizen ?? ['US'],
+      lifeExpectancy:        d.lifeExpectancy ?? 90,
+      socialSecurityMonthly: d.socialSecurityMonthly ?? 2800,
+    });
+    return person;
+  }
 
   static _makeEvent(d) {
     if (d.__type === 'OneOffEvent') {

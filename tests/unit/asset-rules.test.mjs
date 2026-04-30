@@ -181,7 +181,7 @@ function buildResidencyTrackingSim({
   superBalance    = 200000,
 } = {}) {
   const sim = new Simulation(new Date(2026, 0, 1), { initialState: new FinancialState({
-    person: new Person('primary', new Date(1966, 0, 1), { isAuResident: false }),
+    person: new Person('primary', new Date(1966, 0, 1), { citizen: ['US'] }),
 
     // AR-1: NO residency tracking — plain Account (no balanceAtResidencyChange field)
     checkingAccount: new Account(checkingBalance),
@@ -209,8 +209,11 @@ function buildResidencyTrackingSim({
   }) });
 
   sim.reducers.register('RESIDENCY_CHANGE_APPLY', (state, action) => {
-    // Update person residency
-    const newPerson = { ...state.person, isAuResident: action.isAuResident };
+    // Update person citizen array to reflect new tax residency
+    const newCitizen = action.isAuResident
+      ? [...new Set([...state.person.citizen, 'AUS'])]
+      : state.person.citizen.filter(c => c !== 'AUS');
+    const newPerson = { ...state.person, citizen: newCitizen };
 
     // Snapshot applicable accounts (AR-4, AR-5, AR-6, AR-7, AR-8)
     svc.recordResidencyChange(state.stockAccount);
@@ -244,7 +247,7 @@ test('AR-4: US Brokerage Stocks records balance at residency change', () => {
   sim.stepTo(new Date(2026, 3, 30));
 
   assert.strictEqual(sim.state.stockAccount.balanceAtResidencyChange, 50000);
-  assert.strictEqual(sim.state.person.isAuResident, true);
+  assert.ok(sim.state.person.citizen.includes('AUS'), 'person should be marked as AU tax resident');
 });
 
 test('AR-5: AU Brokerage Stocks records balance at residency change', () => {

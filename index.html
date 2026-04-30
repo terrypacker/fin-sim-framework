@@ -70,20 +70,28 @@
     <!-- ── LEFT COLUMN: config ────────────────────────────── -->
     <div class="left-col">
 
-      <!-- ── Tab headers ───────────────────────────────── -->
-      <div class="tab">
-        <div class="panel-header tab-header active" data-dest-tab="left-scenario" data-tab-group="left-col">
-          <span class="panel-tag">SC</span>
-          <span class="panel-title">SCENARIO</span>
-        </div>
-        <div class="panel-header tab-header" data-dest-tab="left-events" data-tab-group="left-col">
-          <span class="panel-tag">LG</span>
-          <span class="panel-title">LOGIC</span>
-        </div>
+      <!-- ── Panel group selector ──────────────────────── -->
+      <div class="left-group-selector">
+        <button class="left-group-btn active" data-group="simulation">⚙ Simulation</button>
+        <button class="left-group-btn" data-group="finance">$ Finance</button>
       </div>
 
+      <!-- ── SIMULATION group ──────────────────────────── -->
+      <div class="left-group" data-group="simulation">
+        <!-- ── Tab headers ─────────────────────────────── -->
+        <div class="tab">
+          <div class="panel-header tab-header active" data-dest-tab="left-scenario" data-tab-group="left-col-sim">
+            <span class="panel-tag">SC</span>
+            <span class="panel-title">SCENARIO</span>
+          </div>
+          <div class="panel-header tab-header" data-dest-tab="left-events" data-tab-group="left-col-sim">
+            <span class="panel-tag">LG</span>
+            <span class="panel-title">LOGIC</span>
+          </div>
+        </div>
+
       <!-- ── SCENARIO tab ──────────────────────────────── -->
-      <div class="tab-content left-scenario-tab" data-tab="left-scenario" data-tab-group="left-col">
+      <div class="tab-content left-scenario-tab" data-tab="left-scenario" data-tab-group="left-col-sim">
         <div class="node-header">Scenario</div>
         <div class="node-field">
           <select id="scenarioSelect" style="width:100%"></select>
@@ -134,12 +142,70 @@
       </div><!-- /left-scenario -->
 
       <!-- ── EVENTS tab ────────────────────────────────── -->
-      <div class="tab-content left-events-tab" data-tab="left-events" data-tab-group="left-col" style="display:none">
+      <div class="tab-content left-events-tab" data-tab="left-events" data-tab-group="left-col-sim" style="display:none">
         <div class="node-header">Edit</div>
         <div id="builderCanvas"></div>
         <div class="node-header">Rebuild</div>
         <button class="btn" id="rebuildBtn">↺ Rebuild Simulation</button>
       </div>
+
+      </div><!-- /left-group simulation -->
+
+      <!-- ── FINANCE group ─────────────────────────────── -->
+      <div class="left-group" data-group="finance" style="display:none">
+
+        <!-- ── Finance tab headers ─────────────────────── -->
+        <div class="tab">
+          <div class="panel-header tab-header active" data-dest-tab="left-people" data-tab-group="left-col-fin">
+            <span class="panel-tag">PE</span>
+            <span class="panel-title">PEOPLE</span>
+          </div>
+        </div>
+
+        <!-- ── PEOPLE tab ──────────────────────────────── -->
+        <div class="tab-content left-people-tab" data-tab="left-people" data-tab-group="left-col-fin">
+          <div class="node-header">People</div>
+          <div id="peopleList" style="display:flex;flex-direction:column;gap:2px;padding:4px"></div>
+          <div style="padding:4px">
+            <button class="btn btn-sm" id="addPersonBtn" style="width:100%">+ Add Person</button>
+          </div>
+
+          <!-- Inline add/edit form (hidden until Add or Edit clicked) -->
+          <div id="personForm" style="display:none">
+            <div class="node-header" id="personFormTitle">New Person</div>
+            <input type="hidden" id="personFormId" value="" />
+            <div class="node-field" style="display:flex;align-items:center;gap:6px">
+              <label style="flex:0 0 60px">Name</label>
+              <input id="personFormName" placeholder="e.g. Alice" style="flex:1" />
+            </div>
+            <div class="node-field" style="display:flex;align-items:center;gap:6px">
+              <label style="flex:0 0 60px">Birth Date</label>
+              <input type="date" id="personFormBirthDate" style="flex:1" />
+            </div>
+            <div class="node-field" style="display:flex;align-items:center;gap:6px">
+              <label style="flex:0 0 60px">Citizen</label>
+              <select id="personFormCitizen" multiple style="flex:1;height:52px">
+                <option value="US" selected>US</option>
+                <option value="AUS">AUS</option>
+              </select>
+            </div>
+            <div class="node-field" style="display:flex;align-items:center;gap:6px">
+              <label style="flex:0 0 60px">Life Exp.</label>
+              <input type="number" id="personFormLifeExp" value="90" style="flex:1" />
+            </div>
+            <div class="node-field" style="display:flex;align-items:center;gap:6px">
+              <label style="flex:0 0 60px">SS $/mo</label>
+              <input type="number" id="personFormSS" value="2800" style="flex:1" />
+            </div>
+            <div style="display:flex;gap:4px;padding:4px">
+              <button class="btn btn-sm btn-primary" id="savePersonBtn" style="flex:1">Save</button>
+              <button class="btn btn-sm" id="cancelPersonBtn" style="flex:1">Cancel</button>
+            </div>
+          </div>
+        </div><!-- /left-people -->
+
+      </div><!-- /left-group finance -->
+
     </div><!-- /left-col -->
 
     <!-- ── CENTER COLUMN: dash + viz + charts ──────────────────────── -->

@@ -100,8 +100,8 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
     for (let y = 2026; y <= 2040; y++) FinSimLib.Finance.applyTo(periodService, FinSimLib.Finance.buildUsCalendarYear(y));
     for (let y = 2025; y <= 2040; y++) FinSimLib.Finance.applyTo(periodService, FinSimLib.Finance.buildAuFiscalYear(y));
 
-    const primary = new FinSimLib.Finance.Person('primary', p.primaryBirthDate, { name: 'Primary', isAuResident: false });
-    const spouse =  new FinSimLib.Finance.Person('spouse',  p.spouseBirthDate,  { name: 'Spouse',  isAuResident: false });
+    const primary = new FinSimLib.Finance.Person('primary', p.primaryBirthDate, { name: 'Primary', citizen: ['US'] });
+    const spouse =  new FinSimLib.Finance.Person('spouse',  p.spouseBirthDate,  { name: 'Spouse',  citizen: ['US'] });
     // ── Initial state
     const initialState = {
       metrics: {},
@@ -334,10 +334,10 @@ export class IntlRetirementScenario extends FinSimLib.Scenarios.BaseScenario {
 
       // Update canonical person records + flat compat fields
       const primary = state.people?.primary
-        ? { ...state.people.primary, isAuResident: true }
+        ? { ...state.people.primary, citizen: [...new Set([...state.people.primary.citizen, 'AUS'])] }
         : state.people?.primary;
       const spouse  = state.people?.spouse
-        ? { ...state.people.spouse,  isAuResident: true }
+        ? { ...state.people.spouse,  citizen: [...new Set([...state.people.spouse.citizen,  'AUS'])] }
         : state.people?.spouse;
 
       return {
