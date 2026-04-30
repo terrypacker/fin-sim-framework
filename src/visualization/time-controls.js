@@ -9,7 +9,7 @@
  */
 
 export class TimeControls {
-  constructor({scenario, timelineView, graphView, chartView, timeLabel, timeSlider, formatDate, onReset}) {
+  constructor({scenario, timelineView, graphView, chartView, timeLabel, timeSlider, formatDate, displayCurrency, onReset}) {
     this.scenario = scenario;
     this.timelineView = timelineView;
     this.graphView = graphView;
@@ -17,11 +17,31 @@ export class TimeControls {
     this.timeLabel = timeLabel;
     this.timeSlider = timeSlider;
     this.formatDate = formatDate ?? (d => d.toDateString());
+    this.displayCurrency = displayCurrency ?? 'USD';
     this.onReset = onReset ?? null;
     this._dateChangedRaf = null;
     // Stack of fractional positions (0–1) visited by stepForward(),
     // so stepBack() can return to exactly the previous event's position.
     this._stepHistory = [];
+  }
+
+  /**
+   * Update the date formatter used across all views.
+   * Takes effect immediately without requiring a simulation rebuild.
+   * @param {function(Date): string} fn
+   */
+  setFormatDate(fn) {
+    this.formatDate = fn;
+    if (this.timelineView) {
+      this.timelineView.formatDate = fn;
+      this.timelineView.expanded.clear();
+      this.timelineView._lastDate = null;
+      this.timelineView._render();
+    }
+    const current = this.scenario?.sim?.currentDate;
+    if (current) {
+      this.timeLabel.textContent = fn(current);
+    }
   }
 
   stepForward() {
