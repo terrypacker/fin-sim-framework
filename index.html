@@ -431,10 +431,10 @@
     <input data-field="fieldName" placeholder="e.g. salary or leave blank">
   </div>
   <div class="node-field">
-    <label>Script <small style="font-weight:normal;opacity:.7">(state, date) =&gt; value</small></label>
+    <label>Script <small style="font-weight:normal;opacity:.7">(state, reducers, date, me)</small></label>
     <textarea data-field="script" rows="6"
       style="width:100%;box-sizing:border-box;font-family:monospace;font-size:11px;resize:vertical"
-      placeholder="// return the computed value for this action&#10;return 0;"></textarea>
+      placeholder="// Set my value to 4&#10;me.value = 4; "></textarea>
   </div>
 </template>
 
