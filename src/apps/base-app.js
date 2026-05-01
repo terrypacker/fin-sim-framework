@@ -705,7 +705,8 @@ export class BaseApp {
     // Time controls
     $('playPause').addEventListener('click', () => this.playing ? this.stopPlaying() : this.startPlaying());
 
-    $('stepForward').addEventListener('click', () => {
+    const stepForwardButton = $('stepForward')
+    stepForwardButton.addEventListener('click', () => {
       const ctrl = this.scenario?.sim?.control;
       if (ctrl?.paused) {
         // Mid-event pause: _resumeFromPendingExecution will set resuming internally.
@@ -715,31 +716,33 @@ export class BaseApp {
         ctrl.breakpointHit = null;
         this._clearBreakpointStatus();
       }
-      this.timeControls.stepForward();
+      this.showBusyInputOverlay(stepBackButton, () => this.timeControls.stepForward());
       // Check whether we landed on another breakpoint.
       if (ctrl?.paused) {
         this._showBreakpointPaused(ctrl.breakpointHit);
       }
     });
 
-    $('stepBackward').addEventListener('click', () => {
-      this.timeControls.stepBack();
+    const stepBackButton = $('stepBackward');
+    stepBackButton.addEventListener('click', () => {
+      this.showBusyInputOverlay(stepBackButton, () => this.timeControls.stepBack());
     });
 
     // True reset: ensure the sim queue and state are pristine (rewindToStart only restores to snapshot 0, not time 0).
     let sliderTimeout;
     $('resetBtn').addEventListener('click', () => this.timeControls.reset());
 
-    $('timeSlider').addEventListener('input', () => {
+    const slider = $('timeSlider')
+    slider.addEventListener('input', () => {
       clearTimeout(sliderTimeout);
       sliderTimeout = setTimeout(() => {
         const val = +$('timeSlider').value;
         if (val >= this.lastSliderValue) {
           // Moving forward — step incrementally, no rewind needed
-          this.timeControls.stepTo(val / 100);
+          this.showBusyInputOverlay(stepBackButton, () => this.timeControls.stepTo(val / 100));
         } else {
           // Moving backward — must rewind and replay
-          this.timeControls.rewindTo(val / 100);
+          this.showBusyInputOverlay(stepBackButton, () => this.timeControls.rewindTo(val / 100));
         }
         this.lastSliderValue = val;
       }, 60);
@@ -754,6 +757,26 @@ export class BaseApp {
     window.addEventListener('resize', () => this.resizeCanvases());
     this.resizeCanvases();
 
+  }
+
+  showBusyInputOverlay(input, action, message) {
+    const tmpl = document.getElementById('tpl-time-control-slider-overlay');
+    const node = tmpl.content.firstElementChild.cloneNode(true);
+    const destinationDiv = $('sliderWrapper');
+    if(message) {
+      node.innerText = message;
+    }
+    destinationDiv.appendChild(node);
+    const removeMe = () => node.remove(); // cleanup function
+
+    input.disabled = true;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        action();
+        removeMe();
+        input.disabled = false;
+      });
+    });
   }
 
   resizeCanvases() {
