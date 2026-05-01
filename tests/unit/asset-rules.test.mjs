@@ -32,7 +32,8 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Account, AccountService }  from '../../src/finance/account.js';
+import { Account }                  from '../../src/finance/account.js';
+import { AccountService }           from '../../src/finance/services/account-service.js';
 import { FinancialState }           from '../../src/finance/financial-state.js';
 import { InvestmentAccount }        from '../../src/finance/investment-account.js';
 import { Asset }                    from '../../src/finance/asset.js';
