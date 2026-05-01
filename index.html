@@ -130,25 +130,12 @@
         <div style="padding:4px">
           <button class="btn btn-sm" id="addParamBtn" style="width:100%">+ Add Parameter</button>
         </div>
-
-        <div class="node-header">Storage</div>
-        <div style="display:flex;flex-direction:column;gap:4px;padding:4px">
-          <button class="btn btn-sm" id="saveScenarioBtn">Save to Browser</button>
-          <button class="btn btn-sm" id="downloadJsonBtn">Download JSON</button>
-          <label class="btn btn-sm" style="text-align:center;cursor:pointer;margin:0">
-            Upload JSON
-            <input type="file" id="uploadJsonFileInput" accept=".json" style="display:none" />
-          </label>
-        </div>
-
       </div><!-- /left-scenario -->
 
       <!-- ── EVENTS tab ────────────────────────────────── -->
       <div class="tab-content left-events-tab" data-tab="left-events" data-tab-group="left-col-sim" style="display:none">
         <div class="node-header">Edit</div>
         <div id="builderCanvas"></div>
-        <div class="node-header">Rebuild</div>
-        <button class="btn" id="rebuildBtn">↺ Rebuild Simulation</button>
       </div>
 
       </div><!-- /left-group simulation -->
@@ -207,7 +194,16 @@
         </div><!-- /left-people -->
 
       </div><!-- /left-group finance -->
-
+      <div class="node-header">Storage</div>
+      <div style="display:flex;flex-direction:column;gap:4px;padding:4px">
+        <button class="btn" id="rebuildBtn">↺ Rebuild Simulation</button>
+        <button class="btn btn-sm" id="saveScenarioBtn">Save to Browser</button>
+        <button class="btn btn-sm" id="downloadJsonBtn">Download JSON</button>
+        <label class="btn btn-sm" style="text-align:center;cursor:pointer;margin:0">
+          Upload JSON
+          <input type="file" id="uploadJsonFileInput" accept=".json" style="display:none" />
+        </label>
+      </div>
     </div><!-- /left-col -->
 
     <!-- ── CENTER COLUMN: dash + viz + charts ──────────────────────── -->
