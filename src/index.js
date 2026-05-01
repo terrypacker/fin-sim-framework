@@ -19,7 +19,7 @@ import { AssetService } from './finance/asset-service.js';
 import { Asset } from './finance/asset.js';
 import { PersonBuilder } from './finance/builders/person-builder.js';
 import { FinancialState } from './finance/financial-state.js';
-import { InvestmentAccount } from './finance/investment-account.js';
+import { InvestmentAccount, BrokerageAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from './finance/investment-account.js';
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
 import { Person } from './finance/person.js';
@@ -112,16 +112,25 @@ export const Finance = {
   UsAccountModule2024,
   UsAccountModule2025,
   UsAccountModule2026,
+  ACCOUNT_TYPE,
   USD,
   AUD,
   InsufficientFundsError,
   Account,
+  CheckingAccount,
+  SavingsAccount,
   AccountService,
+  AccountBuilder,
   AssetService,
   Asset,
   PersonBuilder,
   FinancialState,
   InvestmentAccount,
+  BrokerageAccount,
+  FourOhOneKAccount,
+  RothAccount,
+  TraditionalIRAAccount,
+  SuperannuationAccount,
   buildMonthPeriod,
   buildUsCalendarYear,
   buildAuFiscalYear,
