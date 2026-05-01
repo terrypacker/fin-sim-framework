@@ -9,7 +9,7 @@
  */
 
 /**
- * graph-builder.test.mjs
+ * config-graph.test.mjs
  *
  * Tests for ConfigGraph: node management, edge management, and — critically
  * — the destroy() / listener-cleanup contract that prevents stale event listeners
