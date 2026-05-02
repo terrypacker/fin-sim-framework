@@ -88,9 +88,12 @@ export class SimulationSync {
           item.date ? this._scheduleOneOffEvent(item) : this._scheduleEventSeries(item);
         }
       } else if (item instanceof HandlerEntry) {
-        item.handledEvents.forEach(e => this.sim.register(e.type, item, item.name));
+        this._wireHandler(item);
+        this._ensureActionTypes(item.generatedActionTypes);
       } else if (item instanceof Reducer) {
         this._wireReducer(item);
+        this._ensureActionTypes(item.reducedActionTypes);
+        this._ensureActionTypes(item.generatedActionTypes);
       }
       // Actions: no sim wiring needed on CREATE
 
@@ -171,7 +174,7 @@ export class SimulationSync {
   /** @private */
   _applyHandlerChange(handler) {
     this.sim.handlers.unregisterFromAll(handler);
-    handler.handledEvents.forEach(e => this.sim.register(e.type, handler));
+    this._wireHandler(handler);
   }
 
   /** @private */
@@ -211,6 +214,50 @@ export class SimulationSync {
   }
 
   // ─── Public helpers ───────────────────────────────────────────────────────
+
+  /**
+   * Wire a handler into the simulation's HandlerRegistry.
+   *
+   * Supports two registration styles:
+   *   1. Event-linked style: handler.handledEvents[] holds EventSeries objects;
+   *      each series.type is used as the registry key.
+   *   2. Direct-wired style: handler class declares a static eventType string;
+   *      used for finance-domain handlers whose event type is fixed by design
+   *      (e.g. CHANGE_RESIDENCY, OUT_OF_FUNDS, INTL_TRANSFER_TO_US/AU).
+   *
+   * @private
+   */
+  _wireHandler(handler) {
+    if (handler.handledEvents.length > 0) {
+      handler.handledEvents.forEach(e => this.sim.register(e.type, handler, handler.name));
+    } else if (handler.constructor.eventType) {
+      this.sim.register(handler.constructor.eventType, handler, handler.name);
+    }
+  }
+
+  /**
+   * Ensure each action type string has at least one stub Action registered in
+   * ActionService. Skips types that already have a registered action, so this
+   * is safe to call for every handler/reducer CREATE without producing duplicates.
+   *
+   * Stubs allow the config graph to show action nodes for finance-domain
+   * handlers/reducers that emit plain objects rather than service-registered
+   * Action instances.
+   *
+   * @param {string[]} types
+   * @private
+   */
+  _ensureActionTypes(types) {
+    if (!types || types.length === 0) return;
+    const svc      = this._registry.actionService;
+    const existing = new Set(svc.getAll().map(a => a.type));
+    for (const type of types) {
+      if (!existing.has(type)) {
+        svc.register(new Action(type, type));
+        existing.add(type); // prevent duplicates within the same call
+      }
+    }
+  }
 
   /**
    * Wire a reducer into the simulation pipeline.

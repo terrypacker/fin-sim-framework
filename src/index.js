@@ -72,8 +72,8 @@ import { ReducerService } from './services/reducer-service.js';
 import { ServiceRegistry } from './services/service-registry.js';
 import { SimulationRegistry } from './services/simulation-registry.js';
 import { SimulationSync } from './services/simulation-sync.js';
-import { DEFAULT_ACTIONS, Action, FieldAction, FieldValueAction, AmountAction, RecordBalanceAction, RecordMetricAction, ScriptedAction, ACTION_CLASSES, ActionDefinition, generateActionId } from './simulation-framework/actions.js';
 import { ACTION_TEMPLATES } from './simulation-framework/action-templates.js';
+import { DEFAULT_ACTIONS, Action, FieldAction, FieldValueAction, AmountAction, RecordBalanceAction, RecordMetricAction, ScriptedAction, ACTION_CLASSES, generateActionId, ActionDefinition } from './simulation-framework/actions.js';
 import { ActionBuilder } from './simulation-framework/builders/action-builder.js';
 import { EventBuilder } from './simulation-framework/builders/event-builder.js';
 import { HandlerBuilder } from './simulation-framework/builders/handler-builder.js';
@@ -232,6 +232,7 @@ export const Services = {
 };
 
 export const Core = {
+  ACTION_TEMPLATES,
   DEFAULT_ACTIONS,
   Action,
   FieldAction,
@@ -241,9 +242,8 @@ export const Core = {
   RecordMetricAction,
   ScriptedAction,
   ACTION_CLASSES,
-  ACTION_TEMPLATES,
-  ActionDefinition,
   generateActionId,
+  ActionDefinition,
   ActionBuilder,
   EventBuilder,
   HandlerBuilder,

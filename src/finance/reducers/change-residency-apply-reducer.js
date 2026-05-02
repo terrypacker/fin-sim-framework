@@ -48,6 +48,7 @@ export class ChangeResidencyApplyReducer extends Reducer {
     super('Change Residency Apply', PRIORITY.PRE_PROCESS);
     this.accountService  = accountService;
     this.investmentKeys  = investmentKeys;
+    this.reducedActionTypes = ['CHANGE_RESIDENCY_APPLY'];
   }
 
   reduce(state) {

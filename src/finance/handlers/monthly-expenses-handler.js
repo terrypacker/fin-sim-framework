@@ -41,6 +41,7 @@ export class MonthlyExpensesHandler extends HandlerEntry {
     this.monthlyExpenses = monthlyExpenses;
     this.usAccountKey    = usAccountKey;
     this.auAccountKey    = auAccountKey;
+    this.generatedActionTypes = ['REPLENISH_SAVINGS', 'EXPENSE_DEBIT', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ data, state }) {

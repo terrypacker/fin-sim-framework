@@ -33,6 +33,7 @@ export class UsSavingsInterestMonthlyHandler extends HandlerEntry {
     super(null, 'Monthly US Savings Interest');
     this.accountKey   = accountKey;
     this.interestRate = interestRate;
+    this.generatedActionTypes = ['US_SAVINGS_INTEREST_CREDIT', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ state }) {

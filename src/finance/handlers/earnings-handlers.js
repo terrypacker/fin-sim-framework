@@ -35,6 +35,7 @@ export class AuSavingsInterestHandler extends HandlerEntry {
     super(null, 'AU Savings Interest');
     this.accountKey   = accountKey;
     this.interestRate = interestRate;
+    this.generatedActionTypes = ['AU_SAVINGS_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ state }) {
@@ -72,6 +73,7 @@ export class FixedIncomeInterestHandler extends HandlerEntry {
     super(null, 'Fixed Income Interest');
     this.accountKey   = accountKey;
     this.interestRate = interestRate;
+    this.generatedActionTypes = ['FIXED_INCOME_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ state }) {
@@ -110,6 +112,7 @@ export class SuperEarningsHandler extends HandlerEntry {
     super(null, 'Super Earnings');
     this.accountKey  = accountKey;
     this.defaultRate = defaultRate;
+    this.generatedActionTypes = ['SUPER_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ data, state }) {

@@ -230,6 +230,7 @@ export class BaseApp {
       statePanelView: this._statePanelView,
       graphView:      this.graphView,
       chartView:      this.chartView,
+      actionService:  registry.actionService,
     });
 
     this._animator.syncBreakpoints();
