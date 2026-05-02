@@ -19,6 +19,11 @@
 
 /**
  * A single registered handler for an event type.
+ *
+ * generatedActionTypes    — string[] of action type discriminators this handler
+ *                           may emit (used by the config graph to draw edges).
+ * generatedActionDefinitions — ActionDefinition[] used by defaultFunction to
+ *                           instantiate concrete Action objects at runtime.
  */
 export class HandlerEntry {
   static description = 'Returns generated actions.';
@@ -27,17 +32,17 @@ export class HandlerEntry {
     this.id   = null;
     this.fn   = fn ?? this.defaultFunction;
     this.name = name;
-    this.handledEvents = [];
-    this.generatedActions = [];
+    this.handledEvents             = [];
+    this.generatedActionTypes      = [];   // string[] — declared types for graph edges
+    this.generatedActionDefinitions = [];  // ActionDefinition[] — runtime instantiation
   }
 
   call(ctx) {
     return this.fn(ctx);
   }
 
-  defaultFunction ({ data, date, state }) {
-    const actions = [...this.generatedActions];
-    return actions;
+  defaultFunction(ctx) {
+    return this.generatedActionDefinitions.map(def => def.instantiate(ctx));
   }
 
   get kind() { return 'handler'; }

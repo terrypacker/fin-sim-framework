@@ -169,37 +169,37 @@ test('ReducerBuilder.repeating: name is set', () => {
   assert.ok(r.name.includes('My Repeater'));
 });
 
-// ─── reducedActions / generatedActions ───────────────────────────────────────
+// ─── reducedActionTypes / generatedActionTypes ────────────────────────────────
 
-test('ReducerBuilder: reduceAction adds to reducedActions', () => {
-  const action = { type: 'ADD_CASH' };
-  const r = ReducerBuilder.field('x').reduceAction(action).build();
-  assert.strictEqual(r.reducedActions.length, 1);
-  assert.strictEqual(r.reducedActions[0], action);
+test('ReducerBuilder: reduceActionType adds a type string to reducedActionTypes', () => {
+  const r = ReducerBuilder.field('x').reduceActionType('ADD_CASH').build();
+  assert.strictEqual(r.reducedActionTypes.length, 1);
+  assert.strictEqual(r.reducedActionTypes[0], 'ADD_CASH');
 });
 
-test('ReducerBuilder: multiple reduceAction calls accumulate', () => {
-  const a1 = { type: 'A' };
-  const a2 = { type: 'B' };
-  const r = ReducerBuilder.field('x').reduceAction(a1).reduceAction(a2).build();
-  assert.strictEqual(r.reducedActions.length, 2);
+test('ReducerBuilder: multiple reduceActionType calls accumulate', () => {
+  const r = ReducerBuilder.field('x').reduceActionType('A').reduceActionType('B').build();
+  assert.strictEqual(r.reducedActionTypes.length, 2);
 });
 
-test('ReducerBuilder: generateAction adds to generatedActions', () => {
-  const action = { type: 'NEXT' };
-  const r = ReducerBuilder.field('x').generateAction(action).build();
-  assert.strictEqual(r.generatedActions.length, 1);
-  assert.strictEqual(r.generatedActions[0], action);
+test('ReducerBuilder: reduceActionType deduplicates type strings', () => {
+  const r = ReducerBuilder.field('x').reduceActionType('A').reduceActionType('A').build();
+  assert.strictEqual(r.reducedActionTypes.length, 1);
 });
 
-test('ReducerBuilder: built reducedActions is a copy of builder state', () => {
-  const a1 = { type: 'A' };
-  const builder = ReducerBuilder.field('x').reduceAction(a1);
+test('ReducerBuilder: generateActionType adds to generatedActionTypes', () => {
+  const r = ReducerBuilder.field('x').generateActionType('NEXT').build();
+  assert.strictEqual(r.generatedActionTypes.length, 1);
+  assert.strictEqual(r.generatedActionTypes[0], 'NEXT');
+});
+
+test('ReducerBuilder: built reducedActionTypes is a copy of builder state', () => {
+  const builder = ReducerBuilder.field('x').reduceActionType('A');
   const r1 = builder.build();
-  builder.reduceAction({ type: 'B' });
+  builder.reduceActionType('B');
   const r2 = builder.build();
-  assert.strictEqual(r1.reducedActions.length, 1, 'first build should not be affected');
-  assert.strictEqual(r2.reducedActions.length, 2);
+  assert.strictEqual(r1.reducedActionTypes.length, 1, 'first build should not be affected');
+  assert.strictEqual(r2.reducedActionTypes.length, 2);
 });
 
 // ─── Builder chaining ─────────────────────────────────────────────────────────
@@ -208,8 +208,8 @@ test('ReducerBuilder: all methods are chainable', () => {
   const b = ReducerBuilder.field('m');
   assert.strictEqual(b.name('N'), b);
   assert.strictEqual(b.priority(10), b);
-  assert.strictEqual(b.reduceAction({ type: 'A' }), b);
-  assert.strictEqual(b.generateAction({ type: 'B' }), b);
+  assert.strictEqual(b.reduceActionType('A'), b);
+  assert.strictEqual(b.generateActionType('B'), b);
 });
 
 // ─── registerWith still works on built reducers ───────────────────────────────

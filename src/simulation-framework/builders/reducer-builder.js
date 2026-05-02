@@ -1,11 +1,20 @@
 /*
  * Copyright (c) 2026 Terry Packer.
  *
+ * This file is part of Terry Packer's Work.
+ * See www.terrypacker.com for further info.
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 import {
@@ -20,20 +29,51 @@ import {
 
 class BaseReducerBuilder {
   constructor(defaultName, defaultPriority) {
-    this._name             = defaultName;
-    this._priority         = defaultPriority;
-    this._reducedActions   = [];
-    this._generatedActions = [];
+    this._name                = defaultName;
+    this._priority            = defaultPriority;
+    this._reducedActionTypes  = [];  // string[] — types this reducer handles
+    this._generatedActionTypes = []; // string[] — declared types for graph edges
+    this._generatedActionDefs  = []; // ActionDefinition[] — runtime instantiation
   }
 
-  name(v)           { this._name = v;             return this; }
-  priority(v)       { this._priority = v;          return this; }
-  reduceAction(a)   { this._reducedActions.push(a);   return this; }
-  generateAction(a) { this._generatedActions.push(a); return this; }
+  name(v)     { this._name = v;     return this; }
+  priority(v) { this._priority = v; return this; }
+
+  /** Declare an action type this reducer handles (pipeline routing key). */
+  reduceActionType(type) {
+    if (!this._reducedActionTypes.includes(type)) {
+      this._reducedActionTypes.push(type);
+    }
+    return this;
+  }
+
+  /**
+   * Declare a type string this reducer may emit (graph edge metadata).
+   * Use when you want to document an output type without a full definition.
+   */
+  generateActionType(type) {
+    if (!this._generatedActionTypes.includes(type)) {
+      this._generatedActionTypes.push(type);
+    }
+    return this;
+  }
+
+  /**
+   * Add an ActionDefinition for runtime emission via newState().
+   * Also registers the definition's type in generatedActionTypes automatically.
+   */
+  generateActionDef(def) {
+    this._generatedActionDefs.push(def);
+    if (!this._generatedActionTypes.includes(def.type)) {
+      this._generatedActionTypes.push(def.type);
+    }
+    return this;
+  }
 
   _apply(reducer) {
-    reducer.reducedActions   = [...this._reducedActions];
-    reducer.generatedActions = [...this._generatedActions];
+    reducer.reducedActionTypes       = [...this._reducedActionTypes];
+    reducer.generatedActionTypes     = [...this._generatedActionTypes];
+    reducer.generatedActionDefinitions = [...this._generatedActionDefs];
     return reducer;
   }
 }

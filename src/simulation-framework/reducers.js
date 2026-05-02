@@ -104,8 +104,9 @@ export class Reducer {
     this.id       = null;
     this.name     = name;
     this.priority = priority;
-    this.generatedActions = [];
-    this.reducedActions = [];
+    this.reducedActionTypes        = [];   // string[] — action types this reducer handles
+    this.generatedActionTypes      = [];   // string[] — action types this reducer may emit
+    this.generatedActionDefinitions = [];  // ActionDefinition[] — runtime instantiation
   }
 
   /** @abstract */
@@ -122,7 +123,8 @@ export class Reducer {
    * @returns {*&{next: *[]}}
    */
   newState(currentState, toAdd, next) {
-    const nextArray = next ? [...next, ...this.generatedActions] : [...this.generatedActions];
+    const emitted = this.generatedActionDefinitions.map(def => def.instantiate({}));
+    const nextArray = next ? [...next, ...emitted] : [...emitted];
     return {
       ...currentState,
       ...toAdd,

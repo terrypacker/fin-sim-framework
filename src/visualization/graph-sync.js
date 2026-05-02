@@ -18,9 +18,9 @@ import {Reducer} from "../simulation-framework/reducers.js";
  * keeps the ConfigGraph in sync with the service maps:
  *
  *   CREATE  — adds the new node to the graph with the correct kind/eventType
- *             decoration, then adds edges for handler.handledEvents,
- *             handler.generatedActions, reducer.reducedActions, and
- *             reducer.generatedActions.
+ *             decoration, then adds edges for handler.handledEvents.
+ *             NOTE: edges for generatedActionTypes / reducedActionTypes are
+ *             deferred to Phase 3 (graph will look up nodes by type string).
  *   UPDATE  — merges position and visualization state from the existing node
  *             into the updated item, then replaces the node.  This preserves
  *             x/y, fired indicators, breakpoint flags, and state-change badges
@@ -77,10 +77,7 @@ export class GraphSync {
           this._graph.addEdge({ from: e.id, to: item.id });
         }
       });
-      item.generatedActions.forEach(a => {
-        this._ensureActionNode(a);
-        this._graph.addEdge({ from: item.id, to: a.id });
-      });
+      // Phase 3: edges from handler → action nodes will be wired by type string lookup
 
     } else if (item instanceof Action) {
       this._ensureActionNode(item);
@@ -90,16 +87,8 @@ export class GraphSync {
       if (!this._graph.getNode(item.id)) {
         this._graph.addNode(item);
       }
-      item.reducedActions.forEach(a => {
-        this._ensureActionNode(a);
-        this._graph.addEdge({ from: a.id, to: item.id });
-      });
-      if (item.generatedActions) {
-        item.generatedActions.forEach(a => {
-          this._ensureActionNode(a);
-          this._graph.addEdge({ from: item.id, to: a.id });
-        });
-      }
+      // Phase 3: edges from action nodes → reducer and reducer → action nodes
+      // will be wired by type string lookup
     }
   }
 

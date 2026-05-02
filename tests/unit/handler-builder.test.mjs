@@ -18,6 +18,7 @@ import assert   from 'node:assert/strict';
 
 import { HandlerBuilder } from '../../src/simulation-framework/builders/handler-builder.js';
 import { HandlerEntry }   from '../../src/simulation-framework/handlers.js';
+import { ActionDefinition } from '../../src/simulation-framework/actions.js';
 
 // ─── Basic construction ───────────────────────────────────────────────────────
 
@@ -84,25 +85,47 @@ test('HandlerBuilder.handler: built handledEvents is a copy, not the builder int
   assert.strictEqual(h2.handledEvents.length, 2);
 });
 
-// ─── generatedActions ─────────────────────────────────────────────────────────
+// ─── generatedActionTypes ─────────────────────────────────────────────────────
 
-test('HandlerBuilder.handler: generatedActions defaults to empty array', () => {
+test('HandlerBuilder.handler: generatedActionTypes defaults to empty array', () => {
   const h = HandlerBuilder.handler().build();
-  assert.deepStrictEqual(h.generatedActions, []);
+  assert.deepStrictEqual(h.generatedActionTypes, []);
 });
 
-test('HandlerBuilder.handler: generateAction adds an action', () => {
-  const action = { type: 'ADD_CASH', name: 'Credit' };
-  const h = HandlerBuilder.handler().generateAction(action).build();
-  assert.strictEqual(h.generatedActions.length, 1);
-  assert.strictEqual(h.generatedActions[0], action);
+test('HandlerBuilder.handler: generateActionType adds a type string', () => {
+  const h = HandlerBuilder.handler().generateActionType('ADD_CASH').build();
+  assert.strictEqual(h.generatedActionTypes.length, 1);
+  assert.strictEqual(h.generatedActionTypes[0], 'ADD_CASH');
 });
 
-test('HandlerBuilder.handler: multiple generateAction calls accumulate actions', () => {
-  const a1 = { type: 'A' };
-  const a2 = { type: 'B' };
-  const h = HandlerBuilder.handler().generateAction(a1).generateAction(a2).build();
-  assert.strictEqual(h.generatedActions.length, 2);
+test('HandlerBuilder.handler: multiple generateActionType calls accumulate', () => {
+  const h = HandlerBuilder.handler().generateActionType('A').generateActionType('B').build();
+  assert.strictEqual(h.generatedActionTypes.length, 2);
+});
+
+test('HandlerBuilder.handler: generateActionType deduplicates type strings', () => {
+  const h = HandlerBuilder.handler().generateActionType('A').generateActionType('A').build();
+  assert.strictEqual(h.generatedActionTypes.length, 1);
+});
+
+// ─── generatedActionDefinitions ──────────────────────────────────────────────
+
+test('HandlerBuilder.handler: generatedActionDefinitions defaults to empty array', () => {
+  const h = HandlerBuilder.handler().build();
+  assert.deepStrictEqual(h.generatedActionDefinitions, []);
+});
+
+test('HandlerBuilder.handler: generateActionDef adds a definition', () => {
+  const def = new ActionDefinition({ type: 'ADD_CASH', config: { actionClass: 'AmountAction', name: 'Credit' } });
+  const h = HandlerBuilder.handler().generateActionDef(def).build();
+  assert.strictEqual(h.generatedActionDefinitions.length, 1);
+  assert.strictEqual(h.generatedActionDefinitions[0], def);
+});
+
+test('HandlerBuilder.handler: generateActionDef also registers the type string', () => {
+  const def = new ActionDefinition({ type: 'ADD_CASH', config: { actionClass: 'AmountAction' } });
+  const h = HandlerBuilder.handler().generateActionDef(def).build();
+  assert.ok(h.generatedActionTypes.includes('ADD_CASH'));
 });
 
 // ─── Chaining ─────────────────────────────────────────────────────────────────
@@ -112,7 +135,7 @@ test('HandlerBuilder.handler: builder methods are chainable', () => {
   assert.strictEqual(b.fn(() => []), b);
   assert.strictEqual(b.name('X'), b);
   assert.strictEqual(b.forEvent({ type: 'T' }), b);
-  assert.strictEqual(b.generateAction({ type: 'A' }), b);
+  assert.strictEqual(b.generateActionType('A'), b);
 });
 
 // ─── HandlerEntry.call still works ───────────────────────────────────────────

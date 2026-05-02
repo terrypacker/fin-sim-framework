@@ -10,6 +10,8 @@
 
 
 
+import { ActionDefinition } from '../simulation-framework/actions.js';
+
 export class ScenarioSerializer {
 
   /**
@@ -113,9 +115,9 @@ export class ScenarioSerializer {
         const ev = eventMap.get(eid);
         if (ev) handler.handledEvents.push(ev);
       }
-      for (const aid of (d.generatedActionIds ?? [])) {
-        const action = actionMap.get(aid);
-        if (action) handler.generatedActions.push(action);
+      handler.generatedActionTypes = [...(d.generatedActionTypes ?? [])];
+      for (const defData of (d.generatedActionDefinitions ?? [])) {
+        handler.generatedActionDefinitions.push(new ActionDefinition(defData));
       }
       handlerService.register(handler); // publishes CREATE → sim registers handlers + graph node added
     }
@@ -124,13 +126,10 @@ export class ScenarioSerializer {
     for (const d of (config.reducers ?? [])) {
       const reducer = ScenarioSerializer._makeReducer(d, services);
       reducer.id = d.id;
-      for (const aid of (d.reducedActionIds ?? [])) {
-        const action = actionMap.get(aid);
-        if (action) reducer.reducedActions.push(action);
-      }
-      for (const aid of (d.generatedActionIds ?? [])) {
-        const action = actionMap.get(aid);
-        if (action) reducer.generatedActions.push(action);
+      reducer.reducedActionTypes   = [...(d.reducedActionTypes ?? [])];
+      reducer.generatedActionTypes = [...(d.generatedActionTypes ?? [])];
+      for (const defData of (d.generatedActionDefinitions ?? [])) {
+        reducer.generatedActionDefinitions.push(new ActionDefinition(defData));
       }
       reducerService.register(reducer); // publishes CREATE → sim wires reducers + graph node added
     }
@@ -208,11 +207,14 @@ export class ScenarioSerializer {
 
   static _serializeHandler(node) {
     const d = {
-      __type:             node.handlerClass ?? 'HandlerEntry',
-      id:                 node.id,
-      name:               node.name,
-      handledEventIds:    (node.handledEvents    ?? []).map(e => e.id),
-      generatedActionIds: (node.generatedActions ?? []).map(a => a.id),
+      __type:                    node.handlerClass ?? 'HandlerEntry',
+      id:                        node.id,
+      name:                      node.name,
+      handledEventIds:           (node.handledEvents ?? []).map(e => e.id),
+      generatedActionTypes:      [...(node.generatedActionTypes ?? [])],
+      generatedActionDefinitions: (node.generatedActionDefinitions ?? []).map(
+        def => ({ type: def.type, config: def.config })
+      ),
     };
     // Subclass-specific params
     switch (d.__type) {
@@ -287,8 +289,11 @@ export class ScenarioSerializer {
       fieldName:          node.fieldName,
       value:              node.value ?? null,  // FieldValueReducer subclasses only; null for others
       script:             node.script,  // ScriptedReducer only; undefined for all other types
-      reducedActionIds:   (node.reducedActions   ?? []).map(a => a.id),
-      generatedActionIds: (node.generatedActions ?? []).map(a => a.id),
+      reducedActionTypes:         [...(node.reducedActionTypes ?? [])],
+      generatedActionTypes:       [...(node.generatedActionTypes ?? [])],
+      generatedActionDefinitions: (node.generatedActionDefinitions ?? []).map(
+        def => ({ type: def.type, config: def.config })
+      ),
     };
     // Subclass-specific params
     switch (d.__type) {

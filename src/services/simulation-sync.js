@@ -176,19 +176,9 @@ export class SimulationSync {
 
   /** @private */
   _applyActionChange(action) {
-    // If action.type changed, reducers registered under the old type key will
-    // no longer fire.  Re-register all reducers that reference this action.
-    const affected = new Set();
-    for (const entries of this.sim.reducers.map.values()) {
-      for (const entry of entries) {
-        if (entry.reducer?.reducedActions.includes(action)) {
-          affected.add(entry.reducer);
-        }
-      }
-    }
-    for (const reducer of affected) {
-      this.reregisterReducer(reducer);
-    }
+    // With reducedActionTypes as explicit type strings, changing an Action's type
+    // does not automatically propagate to reducer registrations — reducers declare
+    // their handled types independently.  No re-wiring needed here.
   }
 
   /** @private */
@@ -211,27 +201,8 @@ export class SimulationSync {
 
   /** @private */
   _applyActionDelete(action) {
-    const { handlerService, reducerService } = this._registry;
-
-    // Remove from any handler's generatedActions
-    for (const handler of handlerService.getAll()) {
-      if (handler.generatedActions) {
-        const i = handler.generatedActions.findIndex(a => a.id === action.id);
-        if (i >= 0) handler.generatedActions.splice(i, 1);
-      }
-    }
-
-    // Remove from any reducer's reducedActions / generatedActions and re-wire
-    for (const reducer of reducerService.getAll()) {
-      let changed = false;
-      for (const arr of ['reducedActions', 'generatedActions']) {
-        if (reducer[arr]) {
-          const i = reducer[arr].findIndex(a => a.id === action.id);
-          if (i >= 0) { reducer[arr].splice(i, 1); changed = true; }
-        }
-      }
-      if (changed) this.reregisterReducer(reducer);
-    }
+    // handlers and reducers now hold type strings (not Action references),
+    // so no cross-reference cleanup is needed when an Action service item is deleted.
   }
 
   /** @private */
@@ -245,16 +216,16 @@ export class SimulationSync {
    * Wire a reducer into the simulation pipeline.
    *
    * Supports two registration styles:
-   *   1. Service-graph style: reducer.reducedActions[] holds Action references;
-   *      each action's type is the pipeline key.
+   *   1. Service-graph style: reducer.reducedActionTypes[] holds type strings;
+   *      each string is used directly as the pipeline key.
    *   2. Direct-wired style: reducer class declares a static actionType string;
    *      used for finance-domain reducers whose action type is fixed by design.
    *
    * @private
    */
   _wireReducer(reducer) {
-    if (reducer.reducedActions.length > 0) {
-      reducer.reducedActions.forEach(a => reducer.registerWith(this.sim.reducers, a.type));
+    if (reducer.reducedActionTypes.length > 0) {
+      reducer.reducedActionTypes.forEach(type => reducer.registerWith(this.sim.reducers, type));
     } else if (reducer.constructor.actionType) {
       reducer.registerWith(this.sim.reducers, reducer.constructor.actionType);
     }
@@ -262,8 +233,8 @@ export class SimulationSync {
 
   /**
    * Remove all sim registrations for a reducer then re-wire it based on its
-   * current reducedActions array (or static actionType).
-   * Called after type changes or action deletes.
+   * current reducedActionTypes array (or static actionType).
+   * Called after type changes.
    */
   reregisterReducer(reducer) {
     this.sim.reducers.unregisterAllForReducer(reducer);

@@ -16,7 +16,7 @@ import { ServiceRegistry } from '../../services/service-registry.js';
  * Owns:
  *  - ServiceRegistry calls (CRUD, replaceAction, replaceReducer)
  *  - Graph edge mutations (addEdge / removeEdge)
- *  - Canonical array sync (handledEvents, generatedActions, reducedActions)
+ *  - Canonical array sync (handledEvents, generatedActionTypes, reducedActionTypes)
  *  - Creation-listener arrays registered by BaseScenario
  *
  * No DOM.  Receives the graph for queries and mutations.
@@ -133,16 +133,16 @@ export class GraphBuilderController {
 
   /**
    * Update the canonical relationship array on the domain object and notify
-   * via notifyChanged() so the bus fires and BaseScenario re-wires the sim.
+   * via notifyChanged() so the bus fires and SimulationSync re-wires the sim.
    *
-   * Guards against double-mutation: the View's chip click handler may have
-   * already pushed/spliced the item into the live array (which is the same
-   * reference returned by the graph), so the add/remove here is idempotent.
+   * handler ↔ event edges:   use object arrays (HandlerEntry.handledEvents holds event objects)
+   * handler/reducer ↔ action: use type string arrays (generatedActionTypes / reducedActionTypes)
    */
   _syncCanonicalArrays(node, chipNode, kind, linkTo, op) {
     const add = op === 'add';
 
-    const syncArr = (arr, item) => {
+    // Object arrays (hold domain objects, keyed by .id)
+    const syncObjArr = (arr, item) => {
       if (add) {
         if (!arr.some(n => n.id === item.id)) arr.push(item);
       } else {
@@ -151,12 +151,22 @@ export class GraphBuilderController {
       }
     };
 
-    if (node.kind === 'handler' && kind === 'event'   && !linkTo) { syncArr(node.handledEvents,     chipNode); this.notifyChanged(node);     return; }
-    if (node.kind === 'handler' && kind === 'action'  &&  linkTo) { syncArr(node.generatedActions,  chipNode); this.notifyChanged(node);     return; }
-    if (node.kind === 'reducer' && kind === 'action'  && !linkTo) { syncArr(node.reducedActions,    chipNode); this.notifyChanged(node);     return; }
-    if (node.kind === 'reducer' && kind === 'action'  &&  linkTo) { syncArr(node.generatedActions,  chipNode); this.notifyChanged(node);     return; }
-    if (node.kind === 'event'   && kind === 'handler' &&  linkTo) { syncArr(chipNode.handledEvents,    node);  this.notifyChanged(chipNode); return; }
-    if (node.kind === 'action'  && kind === 'handler' && !linkTo) { syncArr(chipNode.generatedActions, node);  this.notifyChanged(chipNode); return; }
-    if (node.kind === 'action'  && kind === 'reducer' &&  linkTo) { syncArr(chipNode.reducedActions,   node);  this.notifyChanged(chipNode); return; }
+    // Type string arrays (hold action type discriminators)
+    const syncTypeArr = (arr, type) => {
+      if (add) {
+        if (!arr.includes(type)) arr.push(type);
+      } else {
+        const i = arr.indexOf(type);
+        if (i !== -1) arr.splice(i, 1);
+      }
+    };
+
+    if (node.kind === 'handler' && kind === 'event'   && !linkTo) { syncObjArr(node.handledEvents,          chipNode);       this.notifyChanged(node);     return; }
+    if (node.kind === 'handler' && kind === 'action'  &&  linkTo) { syncTypeArr(node.generatedActionTypes,  chipNode.type);  this.notifyChanged(node);     return; }
+    if (node.kind === 'reducer' && kind === 'action'  && !linkTo) { syncTypeArr(node.reducedActionTypes,    chipNode.type);  this.notifyChanged(node);     return; }
+    if (node.kind === 'reducer' && kind === 'action'  &&  linkTo) { syncTypeArr(node.generatedActionTypes,  chipNode.type);  this.notifyChanged(node);     return; }
+    if (node.kind === 'event'   && kind === 'handler' &&  linkTo) { syncObjArr(chipNode.handledEvents,      node);           this.notifyChanged(chipNode); return; }
+    if (node.kind === 'action'  && kind === 'handler' && !linkTo) { syncTypeArr(chipNode.generatedActionTypes, node.type);   this.notifyChanged(chipNode); return; }
+    if (node.kind === 'action'  && kind === 'reducer' &&  linkTo) { syncTypeArr(chipNode.reducedActionTypes,   node.type);   this.notifyChanged(chipNode); return; }
   }
 }

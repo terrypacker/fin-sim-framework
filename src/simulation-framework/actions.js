@@ -182,6 +182,7 @@ export class ScriptedAction extends FieldValueAction {
  * Maps actionClass string → class.
  * Used by ActionService.replaceAction to instantiate the correct subclass
  * when the user changes the type of an existing action in the UI.
+ * Also used by ActionDefinition.instantiate() to construct Action instances.
  */
 export const ACTION_CLASSES = {
   AmountAction,
@@ -192,3 +193,78 @@ export const ACTION_CLASSES = {
   RecordMetricAction,
   ScriptedAction
 };
+
+// ─── UUID helper ───────────────────────────────────────────────────────────────
+
+const _generateDefinitionId = () =>
+  (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+// ─── ActionDefinition ──────────────────────────────────────────────────────────
+
+/**
+ * Represents a configured action to be emitted at runtime.
+ *
+ * Separates the declaration (what type of action, with what config)
+ * from the instantiation (the actual Action object created during simulation).
+ *
+ * Used by HandlerEntry.generatedActionDefinitions and
+ * Reducer.generatedActionDefinitions to produce Action instances at runtime
+ * without holding direct references to Action configuration objects.
+ *
+ * @property {string} id      - Stable identity for graph referencing (UUID)
+ * @property {string} type    - Action type discriminator (routes to reducers)
+ * @property {object} config  - Plain data describing how to construct the Action.
+ *                              Values may be functions: (context) => value,
+ *                              resolved at instantiate() time.
+ *                              Must include actionClass (e.g. 'AmountAction').
+ */
+export class ActionDefinition {
+  constructor({ type, config = {} }) {
+    this.id     = _generateDefinitionId();
+    this.type   = type;
+    this.config = config;
+  }
+
+  /**
+   * Create an ActionDefinition from an existing Action instance,
+   * capturing its class and properties as static config.
+   *
+   * @param {Action} action
+   * @returns {ActionDefinition}
+   */
+  static fromAction(action) {
+    const config = { actionClass: action.actionClass };
+    if (action.name      !== undefined) config.name      = action.name;
+    if (action.fieldName !== undefined) config.fieldName = action.fieldName;
+    if (action.value     !== undefined) config.value     = action.value;
+    if (action._script   !== undefined) config.script    = action._script;
+    if (action.key       !== undefined) config.key       = action.key;
+    return new ActionDefinition({ type: action.type, config });
+  }
+
+  /**
+   * Instantiate a concrete Action from this definition.
+   *
+   * Function values in config are resolved by calling them with the provided
+   * context before the instance is constructed.
+   *
+   * @param {object} [context] - Runtime context ({ date, state, data, sim, ... })
+   * @returns {Action}
+   */
+  instantiate(context = {}) {
+    const resolved = {};
+    for (const [k, v] of Object.entries(this.config)) {
+      resolved[k] = typeof v === 'function' ? v(context) : v;
+    }
+    const { actionClass, ...props } = resolved;
+    const Cls = ACTION_CLASSES[actionClass ?? 'Action'];
+    if (!Cls) throw new Error(`ActionDefinition: unknown actionClass "${actionClass ?? 'Action'}"`);
+    const instance = Object.create(Cls.prototype);
+    instance.id = null;
+    Object.assign(instance, props);
+    instance.type = this.type;  // definition's type discriminator always wins
+    return instance;
+  }
+}

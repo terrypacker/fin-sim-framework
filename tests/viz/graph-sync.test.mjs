@@ -124,7 +124,7 @@ test('CREATE HandlerEntry: adds node to graph', () => {
   const graph = makeGraph();
   new GraphSync({ graph, registry: makeRegistry(bus) });
 
-  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [], generatedActions: [] };
+  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [], generatedActionTypes: [] };
   publish(bus, 'CREATE', 'HandlerEntry', handler);
 
   expect(graph.getNode('h1')).toBeDefined();
@@ -138,7 +138,7 @@ test('CREATE HandlerEntry: adds edge from existing event to handler', () => {
   const event = { id: 'e1', kind: 'event', eventType: 'Series', name: 'Evt' };
   graph.addNode(event);
 
-  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [event], generatedActions: [] };
+  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [event], generatedActionTypes: [] };
   publish(bus, 'CREATE', 'HandlerEntry', handler);
 
   expect(graph.edges).toContainEqual({ from: 'e1', to: 'h1' });
@@ -150,38 +150,14 @@ test('CREATE HandlerEntry: no edge added for event not yet in graph', () => {
   new GraphSync({ graph, registry: makeRegistry(bus) });
 
   const event = { id: 'e1' }; // NOT added to graph
-  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [event], generatedActions: [] };
+  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [event], generatedActionTypes: [] };
   publish(bus, 'CREATE', 'HandlerEntry', handler);
 
   expect(graph.edges.length).toBe(0);
 });
 
-test('CREATE HandlerEntry: adds edge from handler to generatedAction', () => {
-  const bus = makeBus();
-  const graph = makeGraph();
-  new GraphSync({ graph, registry: makeRegistry(bus) });
-
-  const action = { id: 'a1', kind: 'action', name: 'Act' };
-  graph.addNode(action); // already in graph
-
-  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [], generatedActions: [action] };
-  publish(bus, 'CREATE', 'HandlerEntry', handler);
-
-  expect(graph.edges).toContainEqual({ from: 'h1', to: 'a1' });
-});
-
-test('CREATE HandlerEntry: auto-adds generatedAction node if not already in graph', () => {
-  const bus = makeBus();
-  const graph = makeGraph();
-  new GraphSync({ graph, registry: makeRegistry(bus) });
-
-  const action = { id: 'a1', kind: 'action', name: 'Act' };
-  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [], generatedActions: [action] };
-  publish(bus, 'CREATE', 'HandlerEntry', handler);
-
-  expect(graph.getNode('a1')).toBeDefined();
-  expect(graph.edges).toContainEqual({ from: 'h1', to: 'a1' });
-});
+// Note: handler→action edges are wired in Phase 3 (by type-string lookup).
+// Phase 1 removed auto-edge creation from generatedActionTypes on handler CREATE.
 
 // ─── CREATE: actions ──────────────────────────────────────────────────────────
 
@@ -214,37 +190,14 @@ test('CREATE reducer: adds reducer node', () => {
   const graph = makeGraph();
   new GraphSync({ graph, registry: makeRegistry(bus) });
 
-  const reducer = { id: 'r1', kind: 'reducer', name: 'R', reducedActions: [], generatedActions: [] };
+  const reducer = { id: 'r1', kind: 'reducer', name: 'R', reducedActionTypes: [], generatedActionTypes: [] };
   publish(bus, 'CREATE', 'NumericSumReducer', reducer);
 
   expect(graph.getNode('r1')).toBeDefined();
 });
 
-test('CREATE reducer: adds edge from reducedAction to reducer', () => {
-  const bus = makeBus();
-  const graph = makeGraph();
-  new GraphSync({ graph, registry: makeRegistry(bus) });
-
-  const action = { id: 'a1', kind: 'action', name: 'Act' };
-  graph.addNode(action);
-
-  const reducer = { id: 'r1', kind: 'reducer', name: 'R', reducedActions: [action], generatedActions: [] };
-  publish(bus, 'CREATE', 'NumericSumReducer', reducer);
-
-  expect(graph.edges).toContainEqual({ from: 'a1', to: 'r1' });
-});
-
-test('CREATE reducer: auto-adds reducedAction node if not already in graph', () => {
-  const bus = makeBus();
-  const graph = makeGraph();
-  new GraphSync({ graph, registry: makeRegistry(bus) });
-
-  const action = { id: 'a1', kind: 'action', name: 'Act' };
-  const reducer = { id: 'r1', kind: 'reducer', name: 'R', reducedActions: [action], generatedActions: [] };
-  publish(bus, 'CREATE', 'NumericSumReducer', reducer);
-
-  expect(graph.getNode('a1')).toBeDefined();
-});
+// Note: reducer↔action edges are wired in Phase 3 (by type-string lookup).
+// Phase 1 removed auto-edge creation from reducedActionTypes/generatedActionTypes on reducer CREATE.
 
 // ─── UPDATE ───────────────────────────────────────────────────────────────────
 
