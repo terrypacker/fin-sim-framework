@@ -22,7 +22,7 @@ import { GraphView } from '../visualization/graph-view.js';
 import { ChartView } from '../visualization/chart-view.js';
 import { TimelineView } from '../visualization/timeline-view.js';
 import { TimeControls } from '../visualization/time-controls.js';
-import { ConfigBuilder } from '../visualization/config-builder.js';
+import { GraphBuilderPresenter } from '../visualization/graph-builder/graph-builder-presenter.js';
 import { GraphSync } from '../visualization/graph-sync.js';
 import { ConfigGraph } from "../visualization/config-graph.js";
 import { ScenarioStorage } from "../scenarios/scenario-storage.js";
@@ -44,7 +44,7 @@ export class BaseApp {
     this.scenario = null;
 
     //UI
-    this.configGraphBuilder = null;
+    this.graphBuilderPresenter = null;
     this.schedulerUI = null;
     this.graphView = null;
     this.chartView = null;
@@ -111,16 +111,16 @@ export class BaseApp {
   updateConfigGraphEvents(event, stateBefore, stateAfter, start = true) {
     if(start) {
       //Event start
-      this.configGraphBuilder.applyToAllNodes(n => {
+      this.graphBuilderPresenter.applyToAllNodes(n => {
         n.fired = false;
         n.stateChanged = false;
         n.stateChanges = [];
       }, false);
 
       //Set Event node to fired (no state change available)
-      const eventNode = this.configGraphBuilder.getNode(event.id);
+      const eventNode = this.graphBuilderPresenter.getNode(event.id);
       eventNode.fired = true;
-      this.configGraphBuilder.render();
+      this.graphBuilderPresenter.render();
     }else {
       this._renderNodeFired(event.id, stateBefore, stateAfter);
     }
@@ -142,7 +142,7 @@ export class BaseApp {
     const diff = this.diffStates(stateBefore, stateAfter);
 
     //Set node to fired
-    const node = this.configGraphBuilder.getNode(id);
+    const node = this.graphBuilderPresenter.getNode(id);
     node.fired = true;
     if(diff.length > 0) {
       node.stateChanged = true;
@@ -151,7 +151,7 @@ export class BaseApp {
       node.stateChanged = false;
       node.stateChanges = [];
     }
-    this.configGraphBuilder.render();
+    this.graphBuilderPresenter.render();
   }
 
 
@@ -159,7 +159,7 @@ export class BaseApp {
 
     // Reset all services, the shared bus, and the SimulationRegistry so every
     // rebuild starts with a clean slate.  All stale bus subscriptions from the
-    // previous scenario/ConfigBuilder are discarded with the old instance.
+    // previous scenario/GraphBuilderPresenter are discarded with the old instance.
     ServiceRegistry.reset();
 
     //Clear out state and metrics
@@ -173,8 +173,8 @@ export class BaseApp {
     //if(this.schedulerUI) this.schedulerUI.stopViz();
 
     //Setup the Configuration visuals
-    if (this.configGraphBuilder) this.configGraphBuilder.destroy();
-    this.configGraphBuilder = new ConfigGraph({
+    if (this.graphBuilderPresenter) this.graphBuilderPresenter.destroy();
+    this.graphBuilderPresenter = new ConfigGraph({
       graphRoot: document.getElementById('graphRoot'),
       graphNodes: document.getElementById('graphNodes'),
       graphEdges: document.getElementById('graphEdges'),
@@ -182,24 +182,24 @@ export class BaseApp {
       displayNodeStateChanges: (changes) => this.showNodeStateChanges(changes)
     });
 
-    this.configGraphBuilder.registerNodeClickListener((event, node) => this.openTab(
+    this.graphBuilderPresenter.registerNodeClickListener((event, node) => this.openTab(
         { currentTarget: this.eventsTabHeader }, 'left-events', 'left-col-sim'));
 
     // Sync breakpoints to the sim whenever the user toggles one on the graph.
-    this.configGraphBuilder.registerBreakpointChangeListener(() => {
+    this.graphBuilderPresenter.registerBreakpointChangeListener(() => {
       this._syncBreakpointsToSim();
     });
 
-    this.schedulerUI = new ConfigBuilder({
+    this.schedulerUI = new GraphBuilderPresenter({
       builderCanvas: document.getElementById('builderCanvas'),
-      graph: this.configGraphBuilder
+      graph: this.graphBuilderPresenter
     });
 
     // GraphSync keeps the ConfigGraph in sync with service bus events.
     // Must be created after the ServiceRegistry is reset (above) so it
     // subscribes to the fresh bus instance.
     const registry = ServiceRegistry.getInstance();
-    new GraphSync({ graph: this.configGraphBuilder, registry });
+    new GraphSync({ graph: this.graphBuilderPresenter, registry });
 
     // ── People / Accounts MVP modules ────────────────────────────────────────
     // Controllers and presenters are re-created each rebuild to bind to the
@@ -653,7 +653,7 @@ export class BaseApp {
   _syncBreakpointsToSim() {
     if (!this.scenario?.sim) return;
     const ids = new Set(
-      this.configGraphBuilder.nodes
+      this.graphBuilderPresenter.nodes
         .filter(n => n.breakpoint)
         .map(n => n.id)
     );
@@ -683,15 +683,15 @@ export class BaseApp {
 
     //Flash the node so we know where the breakpoint is
     if(hit.event) {
-      this.configGraphBuilder.flashNode(hit.event.id);
+      this.graphBuilderPresenter.flashNode(hit.event.id);
     }else if(hit.action) {
-      this.configGraphBuilder.flashNode(hit.action.id);
+      this.graphBuilderPresenter.flashNode(hit.action.id);
     }else if(hit.handler) {
-      this.configGraphBuilder.flashNode(hit.handler.id);
+      this.graphBuilderPresenter.flashNode(hit.handler.id);
     }else if(hit.reducer) {
-      this.configGraphBuilder.flashNode(hit.reducer.id);
+      this.graphBuilderPresenter.flashNode(hit.reducer.id);
     }
-    this.configGraphBuilder.render();
+    this.graphBuilderPresenter.render();
   }
 
   _clearBreakpointStatus() {
@@ -699,7 +699,7 @@ export class BaseApp {
     const label = $('simStatus');
     if (dot) dot.className = this.playing ? 'status-dot running' : 'status-dot stopped';
     if (label) label.textContent = this.playing ? 'RUNNING' : 'STOPPED';
-    this.configGraphBuilder.applyToAllNodes(n => n.flashing = false);
+    this.graphBuilderPresenter.applyToAllNodes(n => n.flashing = false);
   }
 
   initView() {
@@ -812,8 +812,8 @@ export class BaseApp {
     if(this.graphView) {
       this.graphView.resizeCanvas(h, w);
     }
-    if(this.configGraphBuilder) {
-      this.configGraphBuilder.resizeCanvas(h, w);
+    if(this.graphBuilderPresenter) {
+      this.graphBuilderPresenter.resizeCanvas(h, w);
     }
     $('chartCanvas').width  = w;
     $('chartCanvas').height = h;

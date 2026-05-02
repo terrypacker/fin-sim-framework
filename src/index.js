@@ -13,16 +13,16 @@ import { UsAccountModule2024 } from './finance/account-rules/us/us-account-modul
 import { UsAccountModule2025 } from './finance/account-rules/us/us-account-module-2025.js';
 import { UsAccountModule2026 } from './finance/account-rules/us/us-account-module-2026.js';
 import { USD, AUD, ACCOUNT_TYPE, InsufficientFundsError, Account, CheckingAccount, SavingsAccount } from './finance/account.js';
-import { AccountService } from './finance/services/account-service.js';
-import { AccountBuilder } from './finance/builders/account-builder.js';
 import { AssetService } from './finance/asset-service.js';
 import { Asset } from './finance/asset.js';
+import { AccountBuilder } from './finance/builders/account-builder.js';
 import { PersonBuilder } from './finance/builders/person-builder.js';
 import { FinancialState } from './finance/financial-state.js';
 import { InvestmentAccount, BrokerageAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from './finance/investment-account.js';
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
 import { Person } from './finance/person.js';
+import { AccountService } from './finance/services/account-service.js';
 import { PersonService } from './finance/services/person-service.js';
 import { AuTaxModule2024 } from './finance/tax/au/au-tax-module-2024.js';
 import { AuTaxModule2025 } from './finance/tax/au/au-tax-module-2025.js';
@@ -73,12 +73,20 @@ import { ActionNode, SimulationEventGraph } from './simulation-framework/simulat
 import { SimulationHistory } from './simulation-framework/simulation-history.js';
 import { SimulationState } from './simulation-framework/simulation-state.js';
 import { BreakpointSignal, Simulation } from './simulation-framework/simulation.js';
+import { AccountsController } from './visualization/accounts/accounts-controller.js';
+import { AccountsPresenter } from './visualization/accounts/accounts-presenter.js';
+import { AccountsView } from './visualization/accounts/accounts-view.js';
 import { BalanceChartView } from './visualization/balance-chart-view.js';
 import { ChartView } from './visualization/chart-view.js';
-import { ConfigBuilder } from './visualization/config-builder.js';
 import { ConfigGraph } from './visualization/config-graph.js';
+import { GraphBuilderController } from './visualization/graph-builder/graph-builder-controller.js';
+import { GraphBuilderPresenter } from './visualization/graph-builder/graph-builder-presenter.js';
+import { GraphBuilderView } from './visualization/graph-builder/graph-builder-view.js';
 import { GraphSync } from './visualization/graph-sync.js';
 import { GraphView } from './visualization/graph-view.js';
+import { PeopleController } from './visualization/people/people-controller.js';
+import { PeoplePresenter } from './visualization/people/people-presenter.js';
+import { PeopleView } from './visualization/people/people-view.js';
 import { TimeControls } from './visualization/time-controls.js';
 import { TimelineView } from './visualization/timeline-view.js';
 import { $, fmt, fmtUTC, fmtLocal } from './visualization/ui-utils.js';
@@ -112,17 +120,16 @@ export const Finance = {
   UsAccountModule2024,
   UsAccountModule2025,
   UsAccountModule2026,
-  ACCOUNT_TYPE,
   USD,
   AUD,
+  ACCOUNT_TYPE,
   InsufficientFundsError,
   Account,
   CheckingAccount,
   SavingsAccount,
-  AccountService,
-  AccountBuilder,
   AssetService,
   Asset,
+  AccountBuilder,
   PersonBuilder,
   FinancialState,
   InvestmentAccount,
@@ -139,6 +146,7 @@ export const Finance = {
   PeriodRelationship,
   PeriodService,
   Person,
+  AccountService,
   PersonService,
   AuTaxModule2024,
   AuTaxModule2025,
@@ -235,12 +243,20 @@ export const Core = {
 };
 
 export const Visualization = {
+  AccountsController,
+  AccountsPresenter,
+  AccountsView,
   BalanceChartView,
   ChartView,
-  ConfigBuilder,
   ConfigGraph,
+  GraphBuilderController,
+  GraphBuilderPresenter,
+  GraphBuilderView,
   GraphSync,
   GraphView,
+  PeopleController,
+  PeoplePresenter,
+  PeopleView,
   TimeControls,
   TimelineView,
   $,

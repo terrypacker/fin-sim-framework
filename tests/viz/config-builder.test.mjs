@@ -24,7 +24,7 @@
  * --experimental-vm-modules; all call tracking uses plain closures.
  */
 
-import { ConfigBuilder } from '../../src/visualization/config-builder.js';
+import { GraphBuilderPresenter } from '../../src/visualization/graph-builder/graph-builder-presenter.js';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
 
 // ─── Graph stub ───────────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ function makeBuilderCanvas() {
 
 function makeScheduler(graph, canvas) {
   ServiceRegistry.reset();
-  return new ConfigBuilder({
+  return new GraphBuilderPresenter({
     graph:         graph  ?? makeGraph(),
     builderCanvas: canvas ?? makeBuilderCanvas(),
   });
@@ -74,11 +74,11 @@ function makeScheduler(graph, canvas) {
 
 // ─── Construction ─────────────────────────────────────────────────────────────
 
-test('ConfigBuilder: constructs without error', () => {
+test('GraphBuilderPresenter: constructs without error', () => {
   expect(() => makeScheduler()).not.toThrow();
 });
 
-test('ConfigBuilder: listener arrays initialize empty', () => {
+test('GraphBuilderPresenter: listener arrays initialize empty', () => {
   const s = makeScheduler();
   expect(s.eventNodeCreatedListeners).toHaveLength(0);
   expect(s.handlerNodeCreatedListeners).toHaveLength(0);
@@ -240,18 +240,18 @@ test('deleteNode: does NOT call graph.removeNode (GraphSync handles removal)', (
   expect(removeNodeCalled).toBe(false);
 });
 
-// ─── ConfigBuilder does NOT subscribe to SERVICE_ACTION ─────────────────────
+// ─── GraphBuilderPresenter does NOT subscribe to SERVICE_ACTION ─────────────────────
 //
 // Graph synchronization is now exclusively GraphSync's responsibility.
 // Verifying there are no SERVICE_ACTION subscriptions on the bus after
-// constructing ConfigBuilder ensures the bus is not double-handled.
+// constructing GraphBuilderPresenter ensures the bus is not double-handled.
 
-test('ConfigBuilder does not add SERVICE_ACTION subscription to the bus', () => {
+test('GraphBuilderPresenter does not add SERVICE_ACTION subscription to the bus', () => {
   ServiceRegistry.reset();
   const { bus } = ServiceRegistry.getInstance();
   const before = (bus.listeners.get('SERVICE_ACTION') ?? []).length;
 
-  makeScheduler(); // constructs ConfigBuilder
+  makeScheduler(); // constructs GraphBuilderPresenter
 
   const after = (bus.listeners.get('SERVICE_ACTION') ?? []).length;
   expect(after).toBe(before);

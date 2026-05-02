@@ -240,15 +240,15 @@ _saveCurrentScenario()
 
 ### Visualization Layer (`src/visualization/`)
 
-| Module | File | Responsibility |
-|---|---|---|
-| `ConfigBuilder` | `config-builder.js` | **UI only.** Renders node editors (event / handler / action / reducer) in a side panel; exposes `+` creation buttons. All editor inputs call `service.updateX(id, changes)` directly. Does **not** subscribe to the bus — graph updates are handled by `GraphSync`. |
-| `GraphSync` | `graph-sync.js` | **Bus subscriber.** Subscribes to `SERVICE_ACTION` events and keeps `ConfigGraph` in sync: CREATE adds nodes with `kind`/`eventType` decoration and edges; UPDATE merges position and visual state (x, y, fired, breakpoint) from the old node before replacing — preserving them across `replaceReducer`/`replaceAction` type changes; DELETE removes nodes and incident edges. Analogous to `SimulationSync` for the graph layer. |
-| `ConfigGraph` | `config-graph.js` | SVG drag-and-drop node/edge canvas. **Display only** — not a source of truth. Nodes are keyed by domain object `id`. Right-clicking any node toggles a breakpoint; a red `⏸` badge appears and the border turns red. |
-| `ChartView` | `chart-view.js` | Chart.js-backed time-series chart. Series discovered automatically from data snapshot keys. Supports `chartjs-plugin-annotation` and `chartjs-plugin-zoom`. |
-| `TimelineView` | `timeline-view.js` | Scrollable DOM journal timeline. |
-| `TimeControls` | `time-controls.js` | Bridges the play/pause/step/slider UI to `sim.stepTo`, `sim.rewindToStart`, and replay. |
-| `GraphView` | `graph-view.js` | Canvas renderer for the simulation action DAG (runtime execution graph). |
+| Module | File                         | Responsibility |
+|---|------------------------------|---|
+| `GraphBuilderPresenter` | `graph-builder-presenter.js` | **UI only.** Renders node editors (event / handler / action / reducer) in a side panel; exposes `+` creation buttons. All editor inputs call `service.updateX(id, changes)` directly. Does **not** subscribe to the bus — graph updates are handled by `GraphSync`. |
+| `GraphSync` | `graph-sync.js`              | **Bus subscriber.** Subscribes to `SERVICE_ACTION` events and keeps `ConfigGraph` in sync: CREATE adds nodes with `kind`/`eventType` decoration and edges; UPDATE merges position and visual state (x, y, fired, breakpoint) from the old node before replacing — preserving them across `replaceReducer`/`replaceAction` type changes; DELETE removes nodes and incident edges. Analogous to `SimulationSync` for the graph layer. |
+| `ConfigGraph` | `config-graph.js`            | SVG drag-and-drop node/edge canvas. **Display only** — not a source of truth. Nodes are keyed by domain object `id`. Right-clicking any node toggles a breakpoint; a red `⏸` badge appears and the border turns red. |
+| `ChartView` | `chart-view.js`              | Chart.js-backed time-series chart. Series discovered automatically from data snapshot keys. Supports `chartjs-plugin-annotation` and `chartjs-plugin-zoom`. |
+| `TimelineView` | `timeline-view.js`           | Scrollable DOM journal timeline. |
+| `TimeControls` | `time-controls.js`           | Bridges the play/pause/step/slider UI to `sim.stepTo`, `sim.rewindToStart`, and replay. |
+| `GraphView` | `graph-view.js`              | Canvas renderer for the simulation action DAG (runtime execution graph). |
 
 ---
 
