@@ -254,16 +254,39 @@ export class ActionDefinition {
   /**
    * Instantiate a concrete Action from this definition.
    *
-   * Function values in config are resolved by calling them with the provided
-   * context before the instance is constructed.
+   * Config values are resolved in order of precedence:
+   *   1. Function  — called with `context`
+   *   2. Expression string starting with `$` — compiled and evaluated with
+   *      ($data, $state, $meta, $date, $sim) bound from context.
+   *      e.g. `$data.amount`, `$state.salary * 0.3`
+   *   3. Any other value — used as-is
    *
-   * @param {object} [context] - Runtime context ({ date, state, data, sim, ... })
+   * @param {object} [context] - Runtime context ({ date, state, data, meta, sim, ... })
    * @returns {Action}
    */
   instantiate(context = {}) {
     const resolved = {};
     for (const [k, v] of Object.entries(this.config)) {
-      resolved[k] = typeof v === 'function' ? v(context) : v;
+      if (typeof v === 'function') {
+        resolved[k] = v(context);
+      } else if (typeof v === 'string' && v.startsWith('$')) {
+        try {
+          // eslint-disable-next-line no-new-func
+          const fn = new Function('$data', '$state', '$meta', '$date', '$sim', `return ${v}`);
+          resolved[k] = fn(
+            context.data  ?? {},
+            context.state ?? {},
+            context.meta  ?? {},
+            context.date  ?? null,
+            context.sim   ?? null,
+          );
+        } catch (e) {
+          console.warn(`ActionDefinition: expression error for field "${k}" = "${v}":`, e.message);
+          resolved[k] = v; // fall back to raw string
+        }
+      } else {
+        resolved[k] = v;
+      }
     }
     const { actionClass, ...props } = resolved;
     const Cls = ACTION_CLASSES[actionClass ?? 'Action'];

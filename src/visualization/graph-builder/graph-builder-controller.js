@@ -9,6 +9,7 @@
  */
 
 import { ServiceRegistry } from '../../services/service-registry.js';
+import { ActionDefinition } from '../../simulation-framework/actions.js';
 
 /**
  * GraphBuilderController — pure domain + graph-mutation layer.
@@ -104,6 +105,97 @@ export class GraphBuilderController {
    */
   replaceReducer(nodeId, reducerType) {
     return ServiceRegistry.getInstance().reducerService.replaceReducer(nodeId, reducerType);
+  }
+
+  // ── ActionDefinition management ───────────────────────────────────────────
+
+  /**
+   * Add a new ActionDefinition to a handler or reducer.
+   * Creates the definition from defData, pushes it into generatedActionDefinitions,
+   * registers the type in generatedActionTypes, and wires the graph edge if the
+   * corresponding action node already exists.
+   *
+   * @param {object} node     - Handler or reducer graph node
+   * @param {object} defData  - { type, config: { actionClass, ...fields } }
+   * @returns {ActionDefinition}
+   */
+  addActionDefinition(node, defData) {
+    const def = new ActionDefinition({ type: defData.type, config: defData.config });
+    node.generatedActionDefinitions.push(def);
+
+    if (!node.generatedActionTypes.includes(def.type)) {
+      node.generatedActionTypes.push(def.type);
+      const actionNode = this._graph.getNodeByType('action', def.type);
+      if (actionNode) this._graph.addEdge({ from: node.id, to: actionNode.id });
+    }
+
+    this.notifyChanged(node);
+    return def;
+  }
+
+  /**
+   * Remove an ActionDefinition from a handler or reducer by its id.
+   * Cleans up generatedActionTypes and the graph edge when no other definition
+   * in this node still uses that type.
+   *
+   * @param {object} node
+   * @param {string} defId - ActionDefinition.id (UUID)
+   */
+  removeActionDefinition(node, defId) {
+    const idx = node.generatedActionDefinitions.findIndex(d => d.id === defId);
+    if (idx < 0) return;
+    const [def] = node.generatedActionDefinitions.splice(idx, 1);
+
+    const typeStillUsed = node.generatedActionDefinitions.some(d => d.type === def.type);
+    if (!typeStillUsed) {
+      const ti = node.generatedActionTypes.indexOf(def.type);
+      if (ti >= 0) node.generatedActionTypes.splice(ti, 1);
+      const actionNode = this._graph.getNodeByType('action', def.type);
+      if (actionNode) this._graph.removeEdge({ from: node.id, to: actionNode.id });
+    }
+
+    this.notifyChanged(node);
+  }
+
+  /**
+   * Update a single field on an ActionDefinition belonging to this node.
+   *
+   * When `field === 'type'`, the type discriminator is updated and
+   * generatedActionTypes + graph edges are re-synced accordingly.
+   * For all other fields, the value is written into def.config.
+   *
+   * @param {object} node
+   * @param {string} defId
+   * @param {string} field  - 'type' or a config key
+   * @param {*}      value
+   */
+  updateActionDefinition(node, defId, field, value) {
+    const def = node.generatedActionDefinitions.find(d => d.id === defId);
+    if (!def) return;
+
+    if (field === 'type') {
+      const oldType = def.type;
+      def.type = value;
+
+      // Remove old type if no sibling def still uses it
+      if (!node.generatedActionDefinitions.some(d => d !== def && d.type === oldType)) {
+        const i = node.generatedActionTypes.indexOf(oldType);
+        if (i >= 0) node.generatedActionTypes.splice(i, 1);
+        const oldNode = this._graph.getNodeByType('action', oldType);
+        if (oldNode) this._graph.removeEdge({ from: node.id, to: oldNode.id });
+      }
+
+      // Register new type if not already present
+      if (!node.generatedActionTypes.includes(value)) {
+        node.generatedActionTypes.push(value);
+        const newNode = this._graph.getNodeByType('action', value);
+        if (newNode) this._graph.addEdge({ from: node.id, to: newNode.id });
+      }
+    } else {
+      def.config[field] = value;
+    }
+
+    this.notifyChanged(node);
   }
 
   // ── Graph edge mutations ───────────────────────────────────────────────────
