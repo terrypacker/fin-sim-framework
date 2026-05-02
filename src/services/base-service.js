@@ -55,6 +55,30 @@ export class BaseService {
     return [...this._items.values()];
   }
 
+  query() {
+    let results = [...this._items.values()];
+
+    return {
+      where: (predicate) => {
+        results = results.filter(predicate);
+        return this.queryFrom(results);
+      },
+      toArray: () => results
+    };
+  }
+
+  queryFrom(seed) {
+    let results = seed;
+
+    return {
+      where: (predicate) => {
+        results = results.filter(predicate);
+        return this.queryFrom(results);
+      },
+      toArray: () => results
+    };
+  }
+
   // ─── Internal helpers ─────────────────────────────────────────────────────
 
   /**
