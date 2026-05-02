@@ -72,12 +72,12 @@ import { ReducerService } from './services/reducer-service.js';
 import { ServiceRegistry } from './services/service-registry.js';
 import { SimulationRegistry } from './services/simulation-registry.js';
 import { SimulationSync } from './services/simulation-sync.js';
-import { DEFAULT_ACTIONS, Action, FieldAction, FieldValueAction, AmountAction, RecordBalanceAction, RecordMetricAction, ScriptedAction, ACTION_CLASSES, ActionDefinition } from './simulation-framework/actions.js';
+import { DEFAULT_ACTIONS, Action, FieldAction, FieldValueAction, AmountAction, RecordBalanceAction, RecordMetricAction, ScriptedAction, ACTION_CLASSES, ActionDefinition, generateActionId } from './simulation-framework/actions.js';
 import { ActionBuilder } from './simulation-framework/builders/action-builder.js';
 import { EventBuilder } from './simulation-framework/builders/event-builder.js';
 import { HandlerBuilder } from './simulation-framework/builders/handler-builder.js';
 import { ReducerBuilder } from './simulation-framework/builders/reducer-builder.js';
-import { SIMULATION_BUS_MESSAGES, BusMessage, SimulationBusMessage, EventStartBusMessage, EventEndBusMessage, EventHandledMessage, ActionResultMessage, ReducerResultMessage, ServiceActionEvent } from './simulation-framework/bus-messages.js';
+import { SIMULATION_BUS_MESSAGES, BusMessage, SimulationBusMessage, EventStartBusMessage, EventEndBusMessage, EventHandledMessage, ActionInstanceMessage, ActionResultMessage, ReducerResultMessage, ServiceActionEvent } from './simulation-framework/bus-messages.js';
 import { DateUtils } from './simulation-framework/date-utils.js';
 import { EventBus } from './simulation-framework/event-bus.js';
 import { BaseEvent } from './simulation-framework/events/base-event.js';
@@ -241,6 +241,7 @@ export const Core = {
   ScriptedAction,
   ACTION_CLASSES,
   ActionDefinition,
+  generateActionId,
   ActionBuilder,
   EventBuilder,
   HandlerBuilder,
@@ -251,6 +252,7 @@ export const Core = {
   EventStartBusMessage,
   EventEndBusMessage,
   EventHandledMessage,
+  ActionInstanceMessage,
   ActionResultMessage,
   ReducerResultMessage,
   ServiceActionEvent,

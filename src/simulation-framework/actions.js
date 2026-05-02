@@ -26,16 +26,23 @@ export const DEFAULT_ACTIONS = {
  * Base class for all actions returned by Handlers and emitted via next:[].
  * Every action has a type discriminator consumed by the ReducerPipeline.
  *
- * id is null until assigned by ActionService._generateId().
+ * id is null until assigned by ActionService._generateId() (config objects) or
+ * ActionDefinition.instantiate() (runtime instances — gets a UUID).
  * type is the category discriminator used as the ReducerPipeline lookup key.
- * These are intentionally separate: id uniquely identifies the action instance;
- * type identifies which reducers should process it.
+ *
+ * Runtime-only parentage fields (set by Simulation.decorateAction):
+ *   instanceId       — UUID assigned when the instance enters the action queue
+ *   parentInstanceId — instanceId of the action that emitted this one (null = top-level)
+ *   rootInstanceId   — instanceId of the originating root action (null = this is root)
  */
 export class Action {
   static description = 'Base action carrying only a type discriminator and optional name.';
 
   constructor(type, name) {
-    this.id   = null;  // Assigned by ActionService after construction
+    this.id              = null;  // Assigned by ActionService (config) or instantiate() (runtime UUID)
+    this.instanceId      = null;  // UUID — assigned by instantiate() or decorateAction()
+    this.parentInstanceId = null; // UUID of parent action (null = top-level)
+    this.rootInstanceId  = null;  // UUID of root action (null = this is the root)
     this.type = type;
     this.name = name;
   }
@@ -196,7 +203,7 @@ export const ACTION_CLASSES = {
 
 // ─── UUID helper ───────────────────────────────────────────────────────────────
 
-const _generateDefinitionId = () =>
+export const generateActionId = () =>
   (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -222,7 +229,7 @@ const _generateDefinitionId = () =>
  */
 export class ActionDefinition {
   constructor({ type, config = {} }) {
-    this.id     = _generateDefinitionId();
+    this.id     = generateActionId();
     this.type   = type;
     this.config = config;
   }
@@ -262,7 +269,10 @@ export class ActionDefinition {
     const Cls = ACTION_CLASSES[actionClass ?? 'Action'];
     if (!Cls) throw new Error(`ActionDefinition: unknown actionClass "${actionClass ?? 'Action'}"`);
     const instance = Object.create(Cls.prototype);
-    instance.id = null;
+    instance.id              = null;             // no service-registered config ID
+    instance.instanceId      = generateActionId(); // UUID for runtime tracking
+    instance.parentInstanceId = null;
+    instance.rootInstanceId  = null;
     Object.assign(instance, props);
     instance.type = this.type;  // definition's type discriminator always wins
     return instance;

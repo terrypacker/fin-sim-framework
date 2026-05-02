@@ -28,9 +28,11 @@ import {
   EventStartBusMessage,
   EventEndBusMessage,
   EventHandledMessage,
+  ActionInstanceMessage,
   ActionResultMessage,
   ReducerResultMessage
 } from "./bus-messages.js";
+import { generateActionId } from "./actions.js";
 import { SimulationHistory } from "./simulation-history.js";
 import { SimulationState } from "./simulation-state.js";
 
@@ -88,7 +90,6 @@ export class Simulation {
 
     this.journal = new Journal({enabled: true});
 
-    this.nextActionId = 0;
     this.nextEventInstanceId = 0;
     this.actionGraph = new SimulationEventGraph();
 
@@ -504,7 +505,7 @@ export class Simulation {
 
       this.state = nextState;
 
-      const parentId = action._parent ?? null;
+      const parentId = action.parentInstanceId ?? null;
       const actionClone = this.cloneObjectFields(action);
       const reducerClone = this.cloneObjectFields(reducerWrapper.reducer);
       this.addActionNode({
@@ -672,21 +673,30 @@ export class Simulation {
   }
 
   /**
-   * Decorate the Action use in the Action Graph but keep
-   * the physical class structure of the object as we will need it
-   * before we insert it into the graph
-   * @param action
-   * @param parent
-   * @returns {*&{_id: number, _parent, _root}}
+   * Prepare an Action instance for the queue: assign a UUID instanceId if not
+   * already set (e.g. legacy manually-constructed actions), then record
+   * parentage and broadcast the instance on the simulation bus.
+   *
+   * @param {Action} action
+   * @param {Action|null} parent
+   * @returns {Action}
    */
   decorateAction(action, parent = null) {
     const clone = Object.create(Object.getPrototypeOf(action));
+    Object.assign(clone, action);
 
-    return Object.assign(clone, action, {
-      _id: this.nextActionId++,
-      _parent: parent?._id ?? null,
-      _root: parent?._root ?? parent?._id ?? null
-    });
+    if (!clone.instanceId) {
+      clone.instanceId = generateActionId();
+    }
+    clone.parentInstanceId = parent?.instanceId ?? null;
+    clone.rootInstanceId   = parent?.rootInstanceId ?? parent?.instanceId ?? null;
+
+    this.bus.publish(new ActionInstanceMessage({
+      date: new Date(this.currentDate),
+      action: clone,
+    }));
+
+    return clone;
   }
 
   /**
@@ -710,7 +720,7 @@ export class Simulation {
                 }) {
     const stateSnapshot = structuredClone(nextState);
     const node = new ActionNode({
-      id: actionClone._id,
+      id: actionClone.instanceId,
       type: actionClone.type,
       date: new Date(this.currentDate),
 

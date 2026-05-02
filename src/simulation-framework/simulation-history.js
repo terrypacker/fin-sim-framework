@@ -16,7 +16,7 @@ import { SimulationEventGraph } from './simulation-event-graph.js';
  * Holds the snapshots array and all navigation logic, keeping it separate
  * from the event/action processing in Simulation. Requires a reference to
  * the owning sim in order to read and write currentDate, state, rngState,
- * queue, actionGraph, and nextActionId.
+ * queue and actionGraph.
  */
 export class SimulationHistory {
   constructor(sim) {
@@ -99,12 +99,11 @@ export class SimulationHistory {
   }
 
   /**
-   * Reset the action graph, action ID counter, and execution counters before a replay.
+   * Reset the action graph and execution counters before a replay.
    * Called by TimeControls.rewindTo() alongside journal and view resets.
    */
   resetForReplay() {
     this._sim.actionGraph = new SimulationEventGraph();
-    this._sim.nextActionId = 0;
     this._resetExecutionCounters();
   }
 
