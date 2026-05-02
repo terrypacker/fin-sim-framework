@@ -1,0 +1,53 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Grep",
+      "LS",
+      "WebSearch",
+      "Bash(make test:*)",
+      "Bash(node --test tests/simulation.test.mjs)",
+      "Bash(node:*)",
+      "Bash(ls -lah /Users/tpacker/IdeaProjects/fin-sim-framework/tests/*.test.mjs)",
+      "Bash(awk '{print $NF}')",
+      "Bash(xargs -I {} sh -c 'echo \"=== {} ===\" && head -50 {}')",
+      "Bash(head -80 /Users/tpacker/IdeaProjects/fin-sim-framework/design/*.md)",
+      "Bash(find:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run:*)",
+      "Bash(ls /Users/tpacker/IdeaProjects/fin-sim-framework/*.umd.min.js)",
+      "Bash(ls -la /Users/tpacker/IdeaProjects/fin-sim-framework/*.html)",
+      "Bash(git stash:*)",
+      "Bash(grep:*)",
+      "Bash(curl -s https://terrypacker.com/assets/css/base.css)",
+      "Bash(curl -s https://terrypacker.com/assets/css/theme-amber.css)",
+      "Bash(ls /Users/tpacker/IdeaProjects/fin-sim-framework/*.html)",
+      "Bash(ls /Users/tpacker/IdeaProjects/fin-sim-framework/src/*.html)",
+      "Bash(npx:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/read-once/hook.sh"
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/read-once/compact.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
