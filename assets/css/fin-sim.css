@@ -8,6 +8,16 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 }
 
 /* ── HEADER ── */
+.tab-content {
+  /* Override from base css to get rid of the display:none, our code handles that */
+  display: flex;
+  flex-direction: column;
+  min-height: 0px;
+  flex: 1 1 0%;
+  overflow-y: auto;
+}
+
+/* ── HEADER ── */
 #header { padding: 0 20px; height: 52px; }
 .header-left { display: flex; align-items: center; gap: 12px; }
 .logo-mark { font-size: 24px; filter: drop-shadow(0 0 8px var(--amber)); }
@@ -168,37 +178,28 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 
 /* related resource: theme-amber.css:127:1 */
 .settings-tab {
-  display: flex;
-  flex: 1;
-  min-height: 0;
+
 }
 .settings-panel { /* the element was .panel.settings-panel */
   min-height: 0px;
   overflow-y: scroll;
 }
 
-.left-events-tab { /* the element was .tab-content */
-  display: flex;
-  flex-direction: column;
-  min-height: 0px;
-  flex: 1 1 0%;
+.left-events-tab {
+
 }
 
-.left-scenario-tab { /* the element was .tab-content */
-  display: flex;
-  flex-direction: column;
-  min-height: 0px;
-  flex: 1 1 0%;
+.left-scenario-tab {
+
 }
 
-.left-people-tab { /* the element was .tab-content */
-  display: flex;
-  flex-direction: column;
-  min-height: 0px;
-  flex: 1 1 0%;
-  overflow-y: auto;
+.left-people-tab {
+
 }
 
+.left-accounts-tab {
+
+}
 
 
 /* ── CENTER COL ── */
@@ -419,11 +420,8 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 }
 
 /* ── TIMELINE ── */
-.timeline-tab { /* the element was .tab-content */
-  display: flex;
-  flex-direction: column;
-  min-height: 0px;
-  flex: 1 1 0%;
+.timeline-tab {
+
 }
 
 .tl-container {
@@ -612,11 +610,8 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 .tl-rewind:hover { color: #fbbf24; border-color: #f59e0b; }
 
 /* ── CHART ── */
-.chart-tab { /* the element was .tab-content */
-  display: flex;
-  flex-direction: column;
-  min-height: 0px;
-  flex: 1 1 0%;
+.chart-tab {
+
 }
 
 /* ── DATA DISPLAY ── */
@@ -752,6 +747,12 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   color: var(--text-dim);
 }
 
+.node-buttons {
+  display:flex;
+  gap:4px;
+  padding:4px
+}
+
 .node-body {
   padding: 6px;
   display: flex;
@@ -803,16 +804,19 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   cursor: not-allowed;
 }
 
+.node-field select:disabled  {
+  background-color:var(--bg-muted);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
 .node-flash {
   animation: bp-pulse 1s ease-in-out infinite;
 }
 
 /* ── GRAPH AREA ── */
-.config-graph-tab { /* the element was .tab-content */
-  display: flex;
-  flex-direction: column;
-  min-height: 0px;
-  flex: 1 1 0%;
+.config-graph-tab {
+
 }
 
 #graphRoot {

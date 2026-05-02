@@ -149,6 +149,10 @@
             <span class="panel-tag">PE</span>
             <span class="panel-title">PEOPLE</span>
           </div>
+          <div class="panel-header tab-header" data-dest-tab="left-accounts" data-tab-group="left-col-fin">
+            <span class="panel-tag">AC</span>
+            <span class="panel-title">ACCOUNTS</span>
+          </div>
         </div>
 
         <!-- ── PEOPLE tab ──────────────────────────────── -->
@@ -163,27 +167,27 @@
           <div id="personForm" style="display:none">
             <div class="node-header" id="personFormTitle">New Person</div>
             <input type="hidden" id="personFormId" value="" />
-            <div class="node-field" style="display:flex;align-items:center;gap:6px">
-              <label style="flex:0 0 60px">Name</label>
-              <input id="personFormName" placeholder="e.g. Alice" style="flex:1" />
+            <div class="node-field">
+              <label>Name</label>
+              <input id="personFormName" placeholder="e.g. Alice"/>
             </div>
-            <div class="node-field" style="display:flex;align-items:center;gap:6px">
-              <label style="flex:0 0 60px">Birth Date</label>
-              <input type="date" id="personFormBirthDate" style="flex:1" />
+            <div class="node-field">
+              <label>Birth Date</label>
+              <input type="date" id="personFormBirthDate"/>
             </div>
-            <div class="node-field" style="display:flex;align-items:center;gap:6px">
-              <label style="flex:0 0 60px">Citizen</label>
+            <div class="node-field" >
+              <label >Citizen</label>
               <select id="personFormCitizen" multiple style="flex:1;height:52px">
                 <option value="US" selected>US</option>
                 <option value="AUS">AUS</option>
               </select>
             </div>
-            <div class="node-field" style="display:flex;align-items:center;gap:6px">
-              <label style="flex:0 0 60px">Life Exp.</label>
+            <div class="node-field" >
+              <label >Life Exp.</label>
               <input type="number" id="personFormLifeExp" value="90" style="flex:1" />
             </div>
-            <div class="node-field" style="display:flex;align-items:center;gap:6px">
-              <label style="flex:0 0 60px">SS $/mo</label>
+            <div class="node-field" >
+              <label >SS $/mo</label>
               <input type="number" id="personFormSS" value="2800" style="flex:1" />
             </div>
             <div style="display:flex;gap:4px;padding:4px">
@@ -193,9 +197,90 @@
           </div>
         </div><!-- /left-people -->
 
+        <!-- ── ACCOUNTS tab ──────────────────────────────── -->
+        <div class="tab-content left-accounts-tab" data-tab="left-accounts" data-tab-group="left-col-fin" style="display:none">
+          <div class="node-header">Accounts</div>
+          <div id="accountsList" style="display:flex;flex-direction:column;gap:2px;padding:4px"></div>
+          <div style="padding:4px">
+            <button class="btn btn-sm" id="addAccountBtn" style="width:100%">+ Add Account</button>
+          </div>
+
+          <!-- Inline add/edit form (hidden until Add or Edit clicked) -->
+          <div id="accountForm" style="display:none">
+            <div class="node-header" id="accountFormTitle">New Account</div>
+            <input type="hidden" id="accountFormId" value="" />
+            <div class="node-field" >
+              <label >Name</label>
+              <input id="accountFormName" placeholder="e.g. Primary Checking" />
+            </div>
+            <!-- Type selector (new accounts only) -->
+            <div class="node-field" >
+              <label >Type</label>
+              <select id="accountFormType">
+                <option value="checking">Checking</option>
+                <option value="savings">Savings</option>
+                <option value="brokerage">Brokerage</option>
+                <option value="401k">401(k)</option>
+                <option value="roth">Roth IRA</option>
+                <option value="ira">Traditional IRA</option>
+                <option value="super">Superannuation</option>
+              </select>
+            </div>
+
+            <div class="node-field" >
+              <label >Balance</label>
+              <input type="number" id="accountFormBalance" value="0"  />
+            </div>
+            <!-- Country row (hidden for fixed-country types: 401k, roth, ira, super) -->
+            <div id="accountFormCountryRow" class="node-field" >
+              <label >Country</label>
+              <select id="accountFormCountry" >
+                <option value="US">US</option>
+                <option value="AU">AU</option>
+              </select>
+            </div>
+            <div class="node-field" >
+              <label >Ownership</label>
+              <select id="accountFormOwnership" >
+                <option value="sole">Sole</option>
+                <option value="joint">Joint</option>
+              </select>
+            </div>
+            <div class="node-field" >
+              <label >Owner</label>
+              <select id="accountFormOwnerId" >
+                <option value="">— none —</option>
+              </select>
+            </div>
+            <div class="node-field" >
+              <label >Min Bal.</label>
+              <input type="number" id="accountFormMinBalance" value="0"  />
+            </div>
+            <div class="node-field" >
+              <label >Drawdown</label>
+              <input type="number" id="accountFormDrawdown" placeholder="blank = exclude"  />
+            </div>
+            <!-- Investment-only fields (brokerage, 401k, roth, ira, super) -->
+            <div id="accountFormInvestmentFields" style="display:none">
+              <div class="node-field" >
+                <label >C.Basis</label>
+                <input type="number" id="accountFormContribBasis" value="0"  />
+              </div>
+              <div class="node-field" >
+                <label >E.Basis</label>
+                <input type="number" id="accountFormEarnBasis" value="0"  />
+              </div>
+            </div>
+            <div class="node-buttons">
+              <button class="btn btn-sm btn-primary" id="saveAccountBtn" style="flex:1">Save</button>
+              <button class="btn btn-sm" id="cancelAccountBtn" style="flex:1">Cancel</button>
+            </div>
+          </div>
+        </div><!-- /left-accounts -->
+
       </div><!-- /left-group finance -->
       <div class="node-header">Storage</div>
-      <div style="display:flex;flex-direction:column;gap:4px;padding:4px">
+      <div class="node-body">
         <button class="btn" id="rebuildBtn">↺ Rebuild Simulation</button>
         <button class="btn btn-sm" id="saveScenarioBtn">Save to Browser</button>
         <button class="btn btn-sm" id="downloadJsonBtn">Download JSON</button>
