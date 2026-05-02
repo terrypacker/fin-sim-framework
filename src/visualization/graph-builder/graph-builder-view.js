@@ -10,6 +10,7 @@
 
 import { PRIORITY, ScriptedReducer } from '../../simulation-framework/reducers.js';
 import { FieldValueAction, ScriptedAction } from '../../simulation-framework/actions.js';
+import { OneOffEvent } from "../../simulation-framework/events/one-off-event.js";
 
 /**
  * GraphBuilderView — pure DOM / template layer for the event-graph editor panel.
@@ -340,9 +341,22 @@ export class GraphBuilderView {
               wrap.querySelector('[data-field="fieldName"]').value,
               wrap.querySelector('[data-field="script"]').value,
             );
-            const state = {}, reducers = [];
-            scriptAction.mutate(state, reducers, new Date());
-            resultDiv.innerText = JSON.stringify({ state, reducers, action: scriptAction }, null, 2);
+            const state = {};
+            const now = new Date();
+            const sourceEvent = new OneOffEvent({
+              id: 'id',
+              name: 'event name',
+              type: 'ONE_OFF_TYPE',
+              enabled: true,
+              date: now
+            });
+            const handlerContext = {
+              event: sourceEvent,
+              handlerIdx: 'h1',
+              stateBefore: {}
+            };
+            const result = scriptAction.transform(state, { date: now, sourceEvent, handlerContext});
+            resultDiv.innerText = JSON.stringify({ actionsReturned: result, action: scriptAction, handlerContext: handlerContext }, null, 2);
           } catch (e) {
             resultDiv.innerText = `Error: ${e.message}`;
           }

@@ -54,13 +54,15 @@ export class Action {
   }
 
   /**
-   * Optionally mutate our self or the state
-   * @param state - current sim state
-   * @param reducers - list of reducers that will act on this state
-   * @param date - date of mutation
-   * @param me - the instance of the Action calling the method
+   * Optionally transform the action by generating more actions
+   * @param state
+   * @param date
+   * @param sourceEvent
+   * @param handlerContext
+   * @param me - this action
+   * @return [] of next actions after the scheduled actions
    */
-  mutate(state, reducers, date, me) {
+  transform(state, {date, sourceEvent, handlerContext, me}) {
     //No Op by default
   }
 }
@@ -141,7 +143,7 @@ export class ScriptedAction extends FieldValueAction {
     if (!this._fn) {
       try {
         // eslint-disable-next-line no-new-func
-        this._fn = new Function('state', 'reducers', 'date', 'me', this.script);
+        this._fn = new Function('state', 'date', 'sourceEvent', 'handlerContext', 'me', this.script);
       } catch (e) {
         console.error('ScriptedAction compile error:', e);
         this._fn = () => null;
@@ -150,9 +152,9 @@ export class ScriptedAction extends FieldValueAction {
     return this._fn;
   }
 
-  mutate(state, reducers, date) {
+  transform(state, {date, sourceEvent, handlerContext, me}) {
     try {
-      this._compile()(state, reducers, date, this);
+      this._compile()(state, date, sourceEvent, handlerContext, this);
     } catch (e) {
       console.error('ScriptedAction runtime error:', e);
     }

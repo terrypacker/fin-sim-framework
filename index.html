@@ -589,7 +589,11 @@
 </template>
 
 <!-- ScriptedAction: target state field + JS script body that computes value -->
-<!-- Script signature: (state, date) => value                                -->
+<!-- Script signature: stateClone, {
+          date: this.currentDate,
+          sourceEvent,
+          handlerContext, me
+        } => value                                -->
 <template id="tpl-scripted-action-editor">
   <div data-scripted-action-editor>
     <div class="node-field">
@@ -597,7 +601,7 @@
       <input data-field="fieldName" placeholder="e.g. salary or leave blank">
     </div>
     <div class="node-field">
-      <label>Script <small style="font-weight:normal;opacity:.7">(state, reducers, date, me)</small></label>
+      <label>Script <small style="font-weight:normal;opacity:.7">(state, {date, sourceEvent, handlerContext, me})</small></label>
       <textarea data-field="script" rows="6"
                 style="width:100%;box-sizing:border-box;font-family:monospace;font-size:11px;resize:vertical"
                 placeholder="// Set my value to 4&#10;me.value = 4; "></textarea>
