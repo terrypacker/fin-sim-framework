@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { Account } from "../../finance/account.js";
+
 /**
  * AccountsPresenter — wires AccountsView callbacks to AccountsController and
  * keeps the list in sync with the service bus.
@@ -56,7 +58,7 @@ export class AccountsPresenter {
 
     // ── React to service bus (deserialization, programmatic changes) ────────
     bus.subscribe('SERVICE_ACTION', (msg) => {
-      if (msg.classType === 'Account') this._refresh();
+      if (msg.item instanceof Account) this._refresh();
     });
 
     // Initial render.

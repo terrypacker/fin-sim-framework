@@ -803,6 +803,13 @@
 </template>
 
 <script type="module" src="./index.umd.min.js"></script>
-<script type="module" src="./assets/js/custom-app.js"></script>
+<script type="module">
+  // ── Init ──────────────────────────────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', () => {
+    const app = new FinSimLib.Misc.SimulationWorkbench();
+    app.initView();
+    app.buildScenario();
+  });
+</script>
 </body>
 </html>

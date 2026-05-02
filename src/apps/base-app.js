@@ -17,735 +17,278 @@
  * limitations under the License.
  */
 
-import { $, fmt, fmtUTC, fmtLocal} from '../visualization/ui-utils.js'
-import { GraphView } from '../visualization/graph-view.js';
-import { ChartView } from '../visualization/chart-view.js';
-import { TimelineView } from '../visualization/timeline-view.js';
-import { TimeControls } from '../visualization/time-controls.js';
-import { GraphBuilderPresenter } from '../visualization/graph-builder/graph-builder-presenter.js';
-import { GraphSync } from '../visualization/graph-sync.js';
-import { ConfigGraph } from "../visualization/config-graph.js";
-import { ScenarioStorage } from "../scenarios/scenario-storage.js";
-import { ScenarioSerializer } from "../scenarios/scenario-serializer.js";
-import { ServiceRegistry } from "../services/service-registry.js";
-import {SIMULATION_BUS_MESSAGES} from "../simulation-framework/bus-messages.js";
-import { PeopleController }  from '../visualization/people/people-controller.js';
-import { PeopleView }        from '../visualization/people/people-view.js';
-import { PeoplePresenter }   from '../visualization/people/people-presenter.js';
-import { AccountsController }from '../visualization/accounts/accounts-controller.js';
-import { AccountsView }      from '../visualization/accounts/accounts-view.js';
-import { AccountsPresenter } from '../visualization/accounts/accounts-presenter.js';
+import { $, fmtUTC, fmtLocal }     from '../visualization/ui-utils.js';
+import { GraphView }                from '../visualization/graph-view.js';
+import { ChartView }                from '../visualization/chart-view.js';
+import { TimelineView }             from '../visualization/timeline-view.js';
+import { TimeControls }             from '../visualization/time-controls.js';
+import { GraphBuilderPresenter }    from '../visualization/graph-builder/graph-builder-presenter.js';
+import { GraphSync }                from '../visualization/graph-sync.js';
+import { ConfigGraph }              from '../visualization/config-graph.js';
+import { ServiceRegistry }          from '../services/service-registry.js';
+import { SIMULATION_BUS_MESSAGES }  from '../simulation-framework/bus-messages.js';
+import { PeopleController }         from '../visualization/people/people-controller.js';
+import { PeopleView }               from '../visualization/people/people-view.js';
+import { PeoplePresenter }          from '../visualization/people/people-presenter.js';
+import { AccountsController }       from '../visualization/accounts/accounts-controller.js';
+import { AccountsView }             from '../visualization/accounts/accounts-view.js';
+import { AccountsPresenter }        from '../visualization/accounts/accounts-presenter.js';
+import { ScenarioTabPresenter }     from './scenario-tab-presenter.js';
+import { StatePanelView }           from './state-panel-view.js';
+import { SimulationAnimator }       from './simulation-animator.js';
 
+/**
+ * BaseApp — composition root.
+ *
+ * Instantiates and wires all sub-modules.  Contains no domain logic,
+ * no DOM-rendering logic, and no state-management logic.
+ *
+ * Sub-modules:
+ *   ScenarioTabPresenter  — scenario CRUD UI and data
+ *   StatePanelView        — state/metrics panels and value formatting
+ *   SimulationAnimator    — playback, config-graph highlighting, dashboard cards
+ *   PeoplePresenter       — people sidebar MVP (recreated per buildScenario)
+ *   AccountsPresenter     — accounts sidebar MVP (recreated per buildScenario)
+ *   GraphBuilderPresenter — event-graph editor (recreated per buildScenario)
+ */
 export class BaseApp {
   constructor({ newScenario, chartSeries }) {
 
-    this.newScenario = newScenario
+    this.newScenario = newScenario;
     this.chartSeries = chartSeries ?? null;
-    this.scenario = null;
+    this.scenario    = null;
 
-    //UI
+    // UI handles (recreated each buildScenario)
     this.graphBuilderPresenter = null;
-    this.schedulerUI = null;
-    this.graphView = null;
-    this.chartView = null;
-    this.timelineView = null;
-    this.timeControls = null;
-    this.peoplePresenter   = null;
-    this.accountsPresenter = null;
+    this.schedulerUI           = null;
+    this.graphView             = null;
+    this.chartView             = null;
+    this.timelineView          = null;
+    this.timeControls          = null;
+    this.peoplePresenter       = null;
+    this.accountsPresenter     = null;
+    this._animator             = null;
 
-    // Views are created once so their DOM listeners are only wired once.
-    this._peopleView   = new PeopleView();
-    this._accountsView = new AccountsView();
+    // Views created once — their DOM listeners are wired only once.
+    this._peopleView      = new PeopleView();
+    this._accountsView    = new AccountsView();
+    this._statePanelView  = new StatePanelView();
 
-    //References to UI elements
-    this.eventsTabHeader = null;
+    // Scenario tab owns _scenarioData / _activeIdx.
+    this._scenarioTab = new ScenarioTabPresenter();
+
+    // Tab header references set by initView()
+    this.eventsTabHeader   = null;
     this.scenarioTabHeader = null;
 
-    //State
-    this.playing = false;
+    // Playback/slider state
     this.lastSliderValue = 0;
-    this._currentDate = null;
-    this._scenarioData = ScenarioStorage.load();
-    // Auto-select the first saved scenario on load; fall back to default if none exist.
-    this._activeIdx = this._scenarioData.scenarios.length > 0 ? 0 : null;
+    this._currentDate    = null;
 
-    // ── PeriodService: US calendar years 2026-2040, AU fiscal years 2025-2040
+    // ── PeriodService ─────────────────────────────────────────────────────────
     const periodService = new FinSimLib.Finance.PeriodService();
     for (let y = 2026; y <= 2040; y++) FinSimLib.Finance.applyTo(periodService, FinSimLib.Finance.buildUsCalendarYear(y));
     for (let y = 2025; y <= 2040; y++) FinSimLib.Finance.applyTo(periodService, FinSimLib.Finance.buildAuFiscalYear(y));
-
   }
 
-  // ── Params form ───────────────────────────────────────────────────────────────
-  getParams() {
-    const params = this._activeScenario()?.params;
-    if (!params?.length) return {};
-    return Object.fromEntries(params.map(p => [p.name, p.value]));
-  }
+  // ── Delegators for scenario data (subclasses may call these) ─────────────
 
-  getInitialState() {
-    return this._activeScenario()?.initialState ?? {};
-  }
+  getParams()       { return this._scenarioTab.getParams(); }
+  getInitialState() { return this._scenarioTab.getInitialState(); }
 
-  // ── Active scenario helpers ───────────────────────────────────────────────
+  afterBuildSim() { this._scenarioTab.afterBuildSim(this.scenario); }
 
-  _activeScenario() {
-    if (this._activeIdx !== null) {
-      return this._scenarioData.scenarios[this._activeIdx] ?? null;
-    }
-    return null;
-  }
-
-  /** Hook called after scenario.buildSim(). Loads saved config or falls back to defaults. */
-  afterBuildSim() {
-    const cfg = this._activeScenario();
-    if (cfg) {
-      // Restore a previously saved scenario — do not call loadDefaults().
-      ScenarioSerializer.deserialize(cfg, ServiceRegistry.getInstance());
-    } else if (typeof this.scenario.loadDefaults === 'function') {
-      // No saved config: populate the scenario with its default configuration.
-      this.scenario.loadDefaults();
-    }
-  }
-
-  updateConfigGraphEvents(event, stateBefore, stateAfter, start = true) {
-    if(start) {
-      //Event start
-      this.graphBuilderPresenter.applyToAllNodes(n => {
-        n.fired = false;
-        n.stateChanged = false;
-        n.stateChanges = [];
-      }, false);
-
-      //Set Event node to fired (no state change available)
-      const eventNode = this.graphBuilderPresenter.getNode(event.id);
-      eventNode.fired = true;
-      this.graphBuilderPresenter.render();
-    }else {
-      this._renderNodeFired(event.id, stateBefore, stateAfter);
-    }
-  }
-
-  updateConfigGraphHandlers(handler, stateBefore, stateAfter) {
-    this._renderNodeFired(handler.id, stateBefore, stateAfter);
-  }
-
-  updateConfigGraphActions(action, stateBefore, stateAfter) {
-    this._renderNodeFired(action.id, stateBefore, stateAfter);
-  }
-
-  updateConfigGraphReducers(reducer, stateBefore, stateAfter) {
-    this._renderNodeFired(reducer.id, stateBefore, stateAfter);
-  }
-
-  _renderNodeFired(id, stateBefore, stateAfter) {
-    const diff = this.diffStates(stateBefore, stateAfter);
-
-    //Set node to fired
-    const node = this.graphBuilderPresenter.getNode(id);
-    node.fired = true;
-    if(diff.length > 0) {
-      node.stateChanged = true;
-      node.stateChanges = diff;
-    }else {
-      node.stateChanged = false;
-      node.stateChanges = [];
-    }
-    this.graphBuilderPresenter.render();
-  }
-
+  // ── Core lifecycle ────────────────────────────────────────────────────────
 
   buildScenario() {
 
-    // Reset all services, the shared bus, and the SimulationRegistry so every
-    // rebuild starts with a clean slate.  All stale bus subscriptions from the
-    // previous scenario/GraphBuilderPresenter are discarded with the old instance.
+    // Reset all services, bus, and SimulationRegistry so every rebuild starts clean.
     ServiceRegistry.reset();
 
-    //Clear out state and metrics
-    $('currentStateContent').innerHTML = '';
+    $('currentStateContent').innerHTML  = '';
     $('cumulativeMetricsContent').innerHTML = '';
 
-    //Stop Viz
-    if (this.graphView)    this.graphView.stopViz();
-    if (this.chartView)    this.chartView.stopViz();
-    //TODO Need to stop other UI VIZ?
-    //if(this.schedulerUI) this.schedulerUI.stopViz();
+    if (this.graphView)  this.graphView.stopViz();
+    if (this.chartView)  this.chartView.stopViz();
 
-    //Setup the Configuration visuals
+    // ── Config graph (visual node canvas) ─────────────────────────────────────
     if (this.graphBuilderPresenter) this.graphBuilderPresenter.destroy();
     this.graphBuilderPresenter = new ConfigGraph({
-      graphRoot: document.getElementById('graphRoot'),
-      graphNodes: document.getElementById('graphNodes'),
-      graphEdges: document.getElementById('graphEdges'),
-      nodeDetailsTemplate: document.getElementById('tpl-node-details'),
-      displayNodeStateChanges: (changes) => this.showNodeStateChanges(changes)
+      graphRoot:               document.getElementById('graphRoot'),
+      graphNodes:              document.getElementById('graphNodes'),
+      graphEdges:              document.getElementById('graphEdges'),
+      nodeDetailsTemplate:     document.getElementById('tpl-node-details'),
+      displayNodeStateChanges: (changes) => this._statePanelView.showNodeStateChanges(changes),
     });
 
-    this.graphBuilderPresenter.registerNodeClickListener((event, node) => this.openTab(
-        { currentTarget: this.eventsTabHeader }, 'left-events', 'left-col-sim'));
+    this.graphBuilderPresenter.registerNodeClickListener(() =>
+      this.openTab({ currentTarget: this.eventsTabHeader }, 'left-events', 'left-col-sim')
+    );
 
-    // Sync breakpoints to the sim whenever the user toggles one on the graph.
+    // Breakpoint listener: delegate to animator once it is created.
     this.graphBuilderPresenter.registerBreakpointChangeListener(() => {
-      this._syncBreakpointsToSim();
+      this._animator?.syncBreakpoints();
     });
 
+    // ── Event-graph editor (scheduler UI) ─────────────────────────────────────
     this.schedulerUI = new GraphBuilderPresenter({
       builderCanvas: document.getElementById('builderCanvas'),
-      graph: this.graphBuilderPresenter
+      graph:         this.graphBuilderPresenter,
     });
 
-    // GraphSync keeps the ConfigGraph in sync with service bus events.
-    // Must be created after the ServiceRegistry is reset (above) so it
-    // subscribes to the fresh bus instance.
     const registry = ServiceRegistry.getInstance();
     new GraphSync({ graph: this.graphBuilderPresenter, registry });
 
-    // ── People / Accounts MVP modules ────────────────────────────────────────
-    // Controllers and presenters are re-created each rebuild to bind to the
-    // fresh registry bus.  Views are created once (in the constructor) so
-    // their DOM event listeners are only wired once.
+    // ── People / Accounts MVP ─────────────────────────────────────────────────
+    // Controllers and presenters are recreated each rebuild to bind to the fresh bus.
     const peopleController = new PeopleController({ personService: registry.personService });
     this.peoplePresenter   = new PeoplePresenter({ controller: peopleController, view: this._peopleView, bus: registry.bus });
 
     const accountsController = new AccountsController({ accountService: registry.accountService });
     this.accountsPresenter   = new AccountsPresenter({ controller: accountsController, view: this._accountsView, bus: registry.bus });
 
-    // Keep the accounts owner dropdown in sync when people change.
     this.peoplePresenter.onPeopleChanged = (people) => this.accountsPresenter.setPeople(people);
 
-    //Setup the scenario
+    // ── Build scenario ────────────────────────────────────────────────────────
     this.scenario = this.newScenario(this.getParams(), this.getInitialState(), this.schedulerUI);
-
-    //Recreate the simulator and configuration
     this.scenario.buildSim(this.getParams(), this.getInitialState());
     this.afterBuildSim();
 
-    if(this.updateDashCards) {
-      this.updateDashCards(this.scenario.simStart);
-    }
+    // Derive display settings from DOM so rebuilds preserve user selections.
+    const currentFmt      = $('tzSelect')?.value === 'utc' ? fmtUTC : fmtLocal;
+    const currentCurrency = $('displayCurrency')?.value ?? 'USD';
 
-    // Build a color map from all enabled recurring events in the service.
+    this._statePanelView.formatDate = currentFmt;
+
+    // ── Visualization views ───────────────────────────────────────────────────
     const eventColors = new Map(
-      ServiceRegistry.getInstance().eventService.getAll()
+      registry.eventService.getAll()
         .filter(e => e.enabled && e.interval)
         .map(e => [e.type, e.color])
         .filter(([, c]) => c)
     );
 
-    /* Event Graph View */
     const graphCanvas = $('graphCanvas');
-    if(graphCanvas) {
+    if (graphCanvas) {
       this.graphView = new GraphView({
-        simulator: this.scenario.sim,
-        canvas: graphCanvas,
-        getNodeDetail: (n) => this.getNodeDetail(n),
+        simulator:            this.scenario.sim,
+        canvas:               graphCanvas,
+        getNodeDetail:        (n) => this._statePanelView.getNodeDetail(n),
         formatNodeDetailHtml: (n) => this.formatNodeDetailHtml(n),
-        simStart: this.scenario.simStart,
-        simEnd: this.scenario.simEnd,
-        eventColors
+        simStart:             this.scenario.simStart,
+        simEnd:               this.scenario.simEnd,
+        eventColors,
       });
       this.graphView.initView();
       this.graphView.startViz();
     }
 
-    // ── Chart view ────────────────────────────────────────────────────
-    const chartCanvas = $('chartCanvas');
     this.chartView = new ChartView({
-      canvas:   chartCanvas,
+      canvas:   $('chartCanvas'),
       simStart: this.scenario.simStart,
       simEnd:   this.scenario.simEnd,
-      series:   this.chartSeries ?? undefined
+      series:   this.chartSeries ?? undefined,
     });
     this.chartView.startViz();
 
-    // Derive current display settings from DOM so rebuilds preserve user selections.
-    const currentFmt = $('tzSelect')?.value === 'utc' ? fmtUTC : fmtLocal;
-    const currentCurrency = $('displayCurrency')?.value ?? 'USD';
-
-    // Timeline view
     this.timelineView = new TimelineView({
-      container:   $('timelineContainer'),
-      onDetail:    (node) => this.showNodeDetail(node),
-      onRewind:    (date) => {
-        const pct = (date.getTime() - this.scenario.simStart.getTime()) /
-                    (this.scenario.simEnd.getTime() - this.scenario.simStart.getTime());
+      container:  $('timelineContainer'),
+      onDetail:   (node) => this._statePanelView.showNodeDetail(node),
+      onRewind:   (date) => {
+        const pct     = (date.getTime() - this.scenario.simStart.getTime()) /
+                        (this.scenario.simEnd.getTime() - this.scenario.simStart.getTime());
         const clamped = Math.max(0, Math.min(1, pct));
         this.timeControls.rewindTo(clamped);
-        const sliderVal = Math.round(clamped * 100);
+        const sliderVal    = Math.round(clamped * 100);
         $('timeSlider').value = sliderVal;
-        this.lastSliderValue = sliderVal;
+        this.lastSliderValue  = sliderVal;
       },
       formatDate: currentFmt,
     });
     this.timelineView.attach(this.scenario.sim.journal);
 
-    // ─── Time controls ────────────────────────────────────────────────────────────
     this.timeControls = new TimeControls({
-      scenario: this.scenario,
-      timelineView: this.timelineView,
-      graphView: this.graphView,
-      chartView: this.chartView,
-      timeLabel: $('timeLabel'),
-      timeSlider: $('timeSlider'),
-      formatDate: currentFmt,
+      scenario:        this.scenario,
+      timelineView:    this.timelineView,
+      graphView:       this.graphView,
+      chartView:       this.chartView,
+      timeLabel:       $('timeLabel'),
+      timeSlider:      $('timeSlider'),
+      formatDate:      currentFmt,
       displayCurrency: currentCurrency,
       onReset: (date, state) => {
-        this.updateDashCards(date);
-        this.updateStatePanel(date, state);
+        this._animator?.updateDashCards(date);
+        this._statePanelView.updateStatePanel(date, state);
       },
     });
 
-    // Wire event-level breakpoints: called by the sim before each event executes.
-    this._syncBreakpointsToSim();
-
-    // Subscribe to EVENT_OCCURRENCE events
-    this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START, ({ date, payload, stateSnapshot }) => {
-
-      //Fire the date changed listeners as this is the only time the date will change
-      const actionDate = new Date(date);
-      this._currentDate = actionDate;
-      this.timeControls.onDateChanged(actionDate);
-
-      if(this.updateDashCards)
-        this.updateDashCards(date);
-
-      this.updateConfigGraphEvents(payload.event, payload.stateBefore, stateSnapshot,true);
+    // ── Simulation animator ───────────────────────────────────────────────────
+    this._animator = new SimulationAnimator({
+      configGraph:    this.graphBuilderPresenter,
+      scenario:       this.scenario,
+      timeControls:   this.timeControls,
+      statePanelView: this._statePanelView,
+      graphView:      this.graphView,
+      chartView:      this.chartView,
     });
 
-    // Subscribe to HANDLED_EVENT events
-    this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.HANDLED_EVENT, ({ date, payload, stateSnapshot }) => {
+    this._animator.syncBreakpoints();
+    this._animator.wireSimBus(this.scenario.sim.bus);
 
-      if(this.updateDashCards)
-        this.updateDashCards(date);
-
-      this.updateConfigGraphHandlers(payload.handler, payload.stateBefore, stateSnapshot);
+    // Track _currentDate for subclass access.
+    this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START, ({ date }) => {
+      this._currentDate = new Date(date);
     });
 
-    // Subscribe to ACTION_RESULT events
-    this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.ACTION_RESULT, ({ date, payload, stateSnapshot}) => {
+    this._animator.updateDashCards(this.scenario.simStart);
 
-      this.updateStatePanel(date, stateSnapshot);
-
-      if(this.updateDashCards)
-        this.updateDashCards(date);
-
-      this.updateConfigGraphActions(payload.action, payload.stateBefore, stateSnapshot);
-    });
-
-    // Subscribe to REDUCER_RESULT events
-    this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.REDUCER_RESULT, ({ date, payload, stateSnapshot }) => {
-
-      if(this.graphView) {
-        this.graphView.updateView(payload);
-      }
-
-      //Update the chart with a reduction of an action
-      const type = payload.action.type;
-      const metrics = stateSnapshot.metrics ? {...stateSnapshot.metrics} : {};
-      this.chartView.addSnapshot(type, date, metrics);
-
-      this.updateStatePanel(date, stateSnapshot);
-
-      if(this.updateDashCards)
-        this.updateDashCards(date);
-
-      this.updateConfigGraphReducers(payload.reducer, payload.stateBefore, stateSnapshot);
-    });
-
-    // Reset slider and direction tracker
-    $('timeSlider').value = 0;
-    this.lastSliderValue = 0;
-    this._currentDate = this.scenario.simStart;
+    $('timeSlider').value      = 0;
+    this.lastSliderValue       = 0;
+    this._currentDate          = this.scenario.simStart;
     $('timeLabel').textContent = this.timeControls.formatDate(this.scenario.simStart);
   }
 
-  buildActionDetail(entry) {
-    const changes  = this.diffStates(entry.prevState, entry.nextState);
-    const emitted  = entry.emittedActions?.length
-        ? entry.emittedActions.map(a => a.type).join(', ')
-        : '(none)';
-
-    const actionPayload = JSON.stringify(
-        Object.fromEntries(Object.entries(entry.action).filter(([k]) => !k.startsWith('_'))),
-        null, 2
-    );
-
-    return {
-      changes: changes,
-      emitted: emitted,
-      actionPayload: actionPayload
-    }
-  }
-
-  updateStatePanel(date, state) {
-    if (!state) return;
-
-    const { metrics, ...rest } = state;
-    const newStateDetails = this.createStateDetails('tpl-state-details', date, rest);
-    const stateDetails = $('currentStateContent');
-    stateDetails.replaceChildren(newStateDetails);
-
-    const newMetricDetails = this.createStateDetails('tpl-state-details', date, metrics);
-    const metricDetails = $('cumulativeMetricsContent');
-    metricDetails.replaceChildren(newMetricDetails);
-  }
-
-  createStateDetails(templateId, date, state) {
-    if (!state) return;
-    const templateContent = document.querySelector(`#${templateId}`);
-    const clone = document.importNode(templateContent, true).content;
-    const statGrid = clone.querySelector('[data-stat-grid]');
-    this.renderState(state, statGrid);
-    return clone;
-  }
-
-  renderState(obj, statGrid){
-    for (const [k, v] of Object.entries(obj)) {
-      if (Array.isArray(v) && v.length > 0 && v[0] !== null && typeof v[0] === 'object') {
-        //Process an array of objects?
-        const arrayHeaderRow = this.renderHeaderRow(k);
-        statGrid.appendChild(arrayHeaderRow);
-
-        //Array of Objects
-        let index = 0;
-        for (const item of v) {
-          let name,value;
-          if(this.isDate(item)) {
-            name = '[' + index + ']';
-            value = (this.timeControls?.formatDate ?? (d => d.toDateString()))(item);
-          }else {
-            name  = item.name ?? JSON.stringify(item);
-            value = item.value != null ? item.value : '';
-          }
-
-          const arrayRow = document.importNode(statGrid.querySelector('[data-stat-row]'), true);
-          arrayRow.style = '';
-          arrayRow.querySelector('.stat-label').innerText = name;
-          arrayRow.querySelector('.stat-value').innerText = value;
-          statGrid.appendChild(arrayRow);
-          index++;
-        }
-      }else if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
-        const objectHeaderRow = this.renderHeaderRow(k);
-        statGrid.appendChild(objectHeaderRow);
-        for (const [sk, sv] of Object.entries(v)) {
-          if (Array.isArray(sv) && sv.length > 0 && typeof sv[0] === 'object') continue;
-          const statRow = document.importNode(statGrid.querySelector('[data-stat-row]'), true);
-          statRow.style = '';
-          statRow.querySelector('.stat-label').innerText = this.toLabel(sk);
-          statRow.querySelector('.stat-value').innerText = typeof sv === 'object' ? this.renderObj(sv) : sv;
-          statGrid.appendChild(statRow);
-        }
-      } else {
-        const statRow = document.importNode(statGrid.querySelector('[data-stat-row]'), true);
-        statRow.style = '';
-        statRow.querySelector('.stat-label').innerText = this.toLabel(k);
-        statRow.querySelector('.stat-value').innerText = typeof v === 'object' ? this.renderObj(v) : this.fmtVal(v);
-        statGrid.appendChild(statRow);
-      }
-    }
-  }
-
-  showNodeStateChanges(changes) {
-    const templateContent = document.querySelector(`#tpl-node-state-changes`);
-    const clone = templateContent.content.firstElementChild.cloneNode(true);
-    const stateChangesGrid = clone.querySelector('[data-state-change-grid]');
-    this._populateStateChanges(stateChangesGrid, changes);
-    const actionDetails = $('actionPanelDetails');
-    clone.appendChild(stateChangesGrid);
-    actionDetails.replaceChildren(clone);
-  }
-
-  showNodeDetail(entry) {
-    const actionDetail = this.buildActionDetail(entry);
-    const changes = actionDetail.changes;
-    const emitted= actionDetail.emitted;
-    const actionPayload = actionDetail.actionPayload;
-    const newActionDetails = this.createActionDetail('tpl-action-template', {entry, changes, emitted, actionPayload});
-    const actionDetails =$('actionPanelDetails');
-    actionDetails.replaceChildren(newActionDetails);
-  }
-
-  createActionDetail(templateId, content) {
-    const templateContent = document.querySelector(`#${templateId}`);
-    const clone = document.importNode(templateContent, true).content;
-
-    //Populate overview
-    const overviewGrid = clone.querySelector('[data-overview-grid]');
-    const fields = overviewGrid.querySelectorAll('[data-id]');
-    for(const field of fields) {
-      const value = this.getNestedProperty(content, field.getAttribute('data-id'));
-      field.innerText = this.fmtVal(value);
-    }
-
-    //Populate state changes
-    const stateChangeGridTemplate = document.querySelector(`#tpl-node-state-changes`);
-    const stateChangesGrid = stateChangeGridTemplate.content.firstElementChild.cloneNode(true);
-    const prevState = JSON.stringify(content.entry.prevState,null, 2);
-    this._populateStateChanges(stateChangesGrid, content.changes, prevState);
-
-    //Replace div in outer template
-    const stateChangesPlaceholder = clone.querySelector('[data-state-change-grid]');
-    stateChangesPlaceholder.replaceWith(stateChangesGrid);
-    return clone;
-  }
-
-  _populateStateChanges(stateChangesGrid, changes, prevState = null) {
-    if(changes.length > 0) {
-      //Compute the changes
-      for(const change of changes) {
-        const stateChangeFieldRow = document.importNode(stateChangesGrid.querySelector('[data-state-change-field-row]'), true);
-        stateChangeFieldRow.style = '';
-        stateChangeFieldRow.querySelector('[data-id="field"]').innerText = change.field;
-        stateChangesGrid.appendChild(stateChangeFieldRow);
-
-        const stateChangeBeforedRow = document.importNode(stateChangesGrid.querySelector('[data-state-change-before-row]'), true);
-        stateChangeBeforedRow.style = '';
-        stateChangeBeforedRow.querySelector('[data-id="before"]').innerHTML = this.fmtVal(change.before, true);
-        stateChangesGrid.appendChild(stateChangeBeforedRow);
-
-        const stateChangeAfterRow = document.importNode(stateChangesGrid.querySelector('[data-state-change-after-row]'), true);
-        stateChangeAfterRow.style = '';
-        if(change.delta != null) {
-          const after = stateChangeAfterRow.querySelector('[data-id="after"]');
-          const delta = document.createElement('span');
-          if(change.delta > 0) {
-            delta.classList.add('diff-pos');
-            delta.innerText = '+' + this.fmtVal(change.delta);
-          }else {
-            delta.classList.add('diff-neg');
-            delta.innerText = '-' + this.fmtVal(change.delta);
-          }
-          after.innerHTML = this.fmtVal(change.after, true);
-          after.appendChild(delta);
-        }else {
-          stateChangeAfterRow.querySelector('[data-id="after"]').innerHTML = this.fmtVal(change.after, true);
-        }
-        stateChangesGrid.appendChild(stateChangeAfterRow);
-      }
-    }else {
-      stateChangesGrid.querySelector('[data-id="noChangeRow"]').style = '';
-      const noChangeState = stateChangesGrid.querySelector('[data-id="noChangeState"]');
-      noChangeState.style = '';
-      if(prevState != null) {
-        noChangeState.innerHTML = `<pre>${prevState}</pre>`;
-      }else {
-        noChangeState.innerText = 'No changes';
-      }
-    }
-  }
-
-  /**
-   * Get the details for a node
-   * @param node
-   * @returns {string}
-   */
-  getNodeDetail(node) {
-    const diff = this.diffStates(node.stateBefore, node.stateAfter);
-
-    return JSON.stringify({
-      ...node,
-      stateDiff: diff
-    }, null, 2);
-  }
-
-  /**
-   * Compute the difference in state between 2 state snapshots.
-   * Recursively walks plain objects; treats arrays and scalars as leaves.
-   * Returns an array of { field, before, after, delta } records, where
-   * delta is the numeric difference (or null for non-numeric changes).
-   * @param {object} prev
-   * @param {object} next
-   * @returns {{ field: string, before: *, after: *, delta: number|null }[]}
-   */
-  diffStates(prev, next) {
-    const changes = [];
-    if (!prev || !next) return changes;
-
-    // Ledger arrays grow on every transaction — skip them to keep diffs readable.
-    const SKIP_KEYS = new Set(['credits', 'debits']);
-
-    const walk = (b, a, prefix) => {
-      const leafKey = prefix.split('.').pop();
-      if (SKIP_KEYS.has(leafKey)) return;
-      const bIsObj = typeof b === 'object' && b !== null && !Array.isArray(b);
-      const aIsObj = typeof a === 'object' && a !== null && !Array.isArray(a);
-      if (bIsObj && aIsObj) {
-        for (const key of new Set([...Object.keys(b), ...Object.keys(a)])) {
-          walk(b[key], a[key], prefix ? `${prefix}.${key}` : key);
-        }
-      } else if (JSON.stringify(b) !== JSON.stringify(a)) {
-        const delta = typeof a === 'number' && typeof b === 'number' ? a - b : null;
-        changes.push({ field: prefix, before: b ?? null, after: a ?? null, delta });
-      }
-    };
-
-    for (const key of new Set([...Object.keys(prev), ...Object.keys(next)])) {
-      walk(prev[key], next[key], key);
-    }
-
-    return changes;
-  }
-
-  // ─── Animate ──────────────────────────────────────────────────────────────────
-
-  animate() {
-    if (!this.playing) return;
-
-    const slider = $('timeSlider');
-    slider.value = Math.min(100, +slider.value + 1);
-
-    this.timeControls.stepTo(+slider.value / 100);
-
-    // Check whether the simulation paused at a breakpoint during stepTo.
-    if (this.scenario?.sim?.control?.paused) {
-      this.stopPlaying();
-      this._showBreakpointPaused(this.scenario.sim.control.breakpointHit);
-      return;
-    }
-
-    if (+slider.value < 100) {
-      requestAnimationFrame(() => this.animate());
-    } else {
-      this.stopPlaying();
-    }
-  }
-
-  startPlaying() {
-    // Clear the paused flag so stepTo() proceeds.  If pendingExecution is set
-    // (mid-event pause), _resumeFromPendingExecution() will handle the resume
-    // with resuming=true to skip past the breakpoint node.
-    // For event-level pauses (no pendingExecution), set resuming so the
-    // event-level check is skipped on the next stepTo() call.
-    const ctrl = this.scenario?.sim?.control;
-    if (ctrl?.paused) {
-      if (!ctrl.pendingExecution) ctrl.resuming = true; // event-level pause
-      ctrl.paused = false;
-      ctrl.breakpointHit = null;
-    }
-
-    this.playing = true;
-    // Playback drives the slider continuously, not event-by-event, so
-    // clear the step-forward history.  stepBack() will use snapshot scanning.
-    this.timeControls.clearStepHistory();
-    $('playPause').textContent = '⏸';
-    this._clearBreakpointStatus();
-    this.animate();
-  }
-
-  stopPlaying() {
-    this.playing = false;
-    $('playPause').textContent = '▶';
-    // Only update status if we're not in a breakpoint pause (that has its own display).
-    if (!this.scenario?.sim?.control?.paused) {
-      this._clearBreakpointStatus();
-    }
-  }
-
-  // ── Breakpoint status display ────────────────────────────────────────────────
-
-  /**
-   * Sync the set of breakpointed node IDs from the config graph into the
-   * simulation's control.breakpointNodeIds.  Called when any node's breakpoint
-   * flag is toggled and when the scenario is first built.
-   */
-  _syncBreakpointsToSim() {
-    if (!this.scenario?.sim) return;
-    const ids = new Set(
-      this.graphBuilderPresenter.nodes
-        .filter(n => n.breakpoint)
-        .map(n => n.id)
-    );
-    this.scenario.sim.control.breakpointNodeIds = ids;
-  }
-
-  /**
-   * Update the status row to show that the simulation is paused at a breakpoint.
-   * @param {{ stage: string, event?: object, handler?: object, action?: object, reducer?: object, node?: object }} hit
-   */
-  _showBreakpointPaused(hit) {
-    const dot = $('statusDot');
-    const label = $('simStatus');
-    if (dot) dot.className = 'status-dot breakpoint';
-    if (label && hit) {
-      const name =
-        hit.node?.name ??
-        hit.event?.type ??
-        hit.handler?.name ??
-        hit.action?.type ??
-        hit.reducer?.name ??
-        '?';
-      label.textContent = `PAUSED @ ${name} [${hit.stage}]`;
-    } else if (label) {
-      label.textContent = 'PAUSED';
-    }
-
-    //Flash the node so we know where the breakpoint is
-    if(hit.event) {
-      this.graphBuilderPresenter.flashNode(hit.event.id);
-    }else if(hit.action) {
-      this.graphBuilderPresenter.flashNode(hit.action.id);
-    }else if(hit.handler) {
-      this.graphBuilderPresenter.flashNode(hit.handler.id);
-    }else if(hit.reducer) {
-      this.graphBuilderPresenter.flashNode(hit.reducer.id);
-    }
-    this.graphBuilderPresenter.render();
-  }
-
-  _clearBreakpointStatus() {
-    const dot = $('statusDot');
-    const label = $('simStatus');
-    if (dot) dot.className = this.playing ? 'status-dot running' : 'status-dot stopped';
-    if (label) label.textContent = this.playing ? 'RUNNING' : 'STOPPED';
-    this.graphBuilderPresenter.applyToAllNodes(n => n.flashing = false);
-  }
-
   initView() {
+    this._initGroupSelector(); //Init left-panel group selector
 
-    //Keep a reference to this
-    this.eventsTabHeader = document.querySelector(`.tab-header[data-dest-tab=left-events][data-tab-group=left-col-sim]`);
-    this.scenarioTabHeader = document.querySelector(`.tab-header[data-dest-tab=left-scenario][data-tab-group=left-col-sim]`);
+    this.eventsTabHeader   = document.querySelector('.tab-header[data-dest-tab=left-events][data-tab-group=left-col-sim]');
+    this.scenarioTabHeader = document.querySelector('.tab-header[data-dest-tab=left-scenario][data-tab-group=left-col-sim]');
 
-    //Setup the tabs
     document.querySelectorAll('.tab-header').forEach(el => {
-      el.addEventListener('click', (evt) => {
-        const tabName = el.dataset.destTab;
-        const tabGroup = el.dataset.tabGroup;
-        this.openTab(evt, tabName, tabGroup);
-      });
+      el.addEventListener('click', (evt) => this.openTab(evt, el.dataset.destTab, el.dataset.tabGroup));
     });
 
     $('displayCurrency').addEventListener('change', () => {
       if (this.timeControls) this.timeControls.displayCurrency = $('displayCurrency').value;
+      //TODO Really build scenario?
       this.buildScenario();
     });
 
     $('tzSelect').addEventListener('change', () => {
       const fmt = $('tzSelect').value === 'utc' ? fmtUTC : fmtLocal;
       if (this.timeControls) this.timeControls.setFormatDate(fmt);
+      this._statePanelView.formatDate = fmt;
+      //TODO Need to reload views with new dates
       this.renderEventList();
     });
 
-    // Time controls
-    $('playPause').addEventListener('click', () => this.playing ? this.stopPlaying() : this.startPlaying());
+    $('playPause').addEventListener('click', () => {
+      if (this._animator?.playing) this._animator.stopPlaying();
+      else                         this._animator?.startPlaying();
+    });
 
-    const stepForwardButton = $('stepForward')
+    const stepForwardButton = $('stepForward');
     stepForwardButton.addEventListener('click', () => {
       const ctrl = this.scenario?.sim?.control;
       if (ctrl?.paused) {
-        // Mid-event pause: _resumeFromPendingExecution will set resuming internally.
-        // Event-level pause: set resuming now so the event-level check is skipped.
         if (!ctrl.pendingExecution) ctrl.resuming = true;
-        ctrl.paused = false;
+        ctrl.paused        = false;
         ctrl.breakpointHit = null;
-        this._clearBreakpointStatus();
+        this._animator?.clearBreakpointStatus();
       }
       this.showBusyInputOverlay(stepBackButton, () => this.timeControls.stepForward());
-      // Check whether we landed on another breakpoint.
       if (ctrl?.paused) {
-        this._showBreakpointPaused(ctrl.breakpointHit);
+        this._animator?.showBreakpointPaused(ctrl.breakpointHit);
       }
     });
 
@@ -754,47 +297,60 @@ export class BaseApp {
       this.showBusyInputOverlay(stepBackButton, () => this.timeControls.stepBack());
     });
 
-    // True reset: ensure the sim queue and state are pristine (rewindToStart only restores to snapshot 0, not time 0).
-    let sliderTimeout;
     $('resetBtn').addEventListener('click', () => this.timeControls.reset());
 
-    const slider = $('timeSlider')
-    slider.addEventListener('input', () => {
+    let sliderTimeout;
+    $('timeSlider').addEventListener('input', () => {
       clearTimeout(sliderTimeout);
       sliderTimeout = setTimeout(() => {
         const val = +$('timeSlider').value;
         if (val >= this.lastSliderValue) {
-          // Moving forward — step incrementally, no rewind needed
           this.showBusyInputOverlay(stepBackButton, () => this.timeControls.stepTo(val / 100));
         } else {
-          // Moving backward — must rewind and replay
           this.showBusyInputOverlay(stepBackButton, () => this.timeControls.rewindTo(val / 100));
         }
         this.lastSliderValue = val;
       }, 60);
     });
 
-    // Params form
     $('rebuildBtn').addEventListener('click', () => this.buildScenario());
 
-    this._initScenarioTab();
+    this._scenarioTab.init(() => this.buildScenario());
     this.openTab({ currentTarget: this.scenarioTabHeader }, 'left-scenario', 'left-col-sim');
 
     window.addEventListener('resize', () => this.resizeCanvases());
     this.resizeCanvases();
+  }
 
+  _initGroupSelector() {
+    document.querySelectorAll('.left-group-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const group = btn.dataset.group;
+        document.querySelectorAll('.left-group-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('.left-group').forEach(g => {
+          g.style.display = g.dataset.group === group ? '' : 'none';
+        });
+      });
+    });
+  }
+
+  // ── UI utilities ──────────────────────────────────────────────────────────
+
+  openTab(evt, tabName, tabGroup) {
+    document.querySelectorAll(`.tab-content[data-tab-group=${tabGroup}]`).forEach(el => el.style.display = 'none');
+    document.querySelectorAll(`.tab-header[data-tab-group=${tabGroup}]`).forEach(el => el.classList.remove('active'));
+    document.querySelector(`.tab-content[data-tab-group=${tabGroup}][data-tab=${tabName}]`).style.display = '';
+    evt.currentTarget.classList.add('active');
   }
 
   showBusyInputOverlay(input, action, message) {
-    const tmpl = document.getElementById('tpl-time-control-slider-overlay');
-    const node = tmpl.content.firstElementChild.cloneNode(true);
-    const destinationDiv = $('sliderWrapper');
-    if(message) {
-      node.innerText = message;
-    }
-    destinationDiv.appendChild(node);
-    const removeMe = () => node.remove(); // cleanup function
-
+    const tmpl  = document.getElementById('tpl-time-control-slider-overlay');
+    const node  = tmpl.content.firstElementChild.cloneNode(true);
+    const dest  = $('sliderWrapper');
+    if (message) node.innerText = message;
+    dest.appendChild(node);
+    const removeMe = () => node.remove();
     input.disabled = true;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -809,111 +365,10 @@ export class BaseApp {
     const contentEl = $('content');
     const w = contentEl.clientWidth;
     const h = contentEl.clientHeight;
-    if(this.graphView) {
-      this.graphView.resizeCanvas(h, w);
-    }
-    if(this.graphBuilderPresenter) {
-      this.graphBuilderPresenter.resizeCanvas(h, w);
-    }
+    if (this.graphView)            this.graphView.resizeCanvas(h, w);
+    if (this.graphBuilderPresenter) this.graphBuilderPresenter.resizeCanvas(h, w);
     $('chartCanvas').width  = w;
     $('chartCanvas').height = h;
-  }
-
-  //UI Format HELPERS
-  fmtVal(v, objAsCode = false) {
-    if (v == null) return '—';
-    if (typeof v === 'number') return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); //TODO Format as $?
-    if (Array.isArray(v)) {
-      return this.fmtArray(v, objAsCode)
-    }
-    if(this.isDate(v)) return (this.timeControls?.formatDate ?? (d => d.toDateString()))(v);
-    if (typeof v === 'object') {
-      if(objAsCode) {
-        return `<pre class="text-wrap:auto">${JSON.stringify(v, null, 2)}</pre>`;
-      }else {
-        return JSON.stringify(v);
-      }
-    }
-    return String(v);
-  }
-
-  fmtArray(v, objAsCode = false){
-    if (!Array.isArray(v)) return '';
-    const limit = 10;
-    const sliced = v.slice(0, limit).map(x => this.fmtVal(x, objAsCode)).join(', ') || '—';
-    return v.length > limit ? `${sliced}, ...` : sliced;
-  };
-
-  getNestedProperty(obj, path) {
-    return path.split('.').reduce((acc, part) => acc && acc[part], obj);
-  }
-
-  isDate(obj){
-    //TODO: instanceof Date && !isNaN(d.getTime());
-    return Object.prototype.toString.call(obj) === '[object Date]';
-  }
-
-  toLabel(key) {
-    return key.replace(/([A-Z])/g, ' $1')
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, c => c.toUpperCase())
-    .trim();
-  }
-
-  renderObj(v) {
-    if (v == null) return '—';
-    if (Array.isArray(v)) {
-      if (v.length === 0) return '—';
-      if (v.every(x => typeof x === 'number')) {
-        return this.fmtArray(v);
-      }
-      return v.map(x => (typeof x === 'object' ? this.renderObj(x) : String(x))).join(', ');
-    }
-    if(typeof v === 'object') {
-      if (v instanceof Date) return (this.timeControls?.formatDate ?? (d => d.toDateString()))(v);
-      let result = '{ ';
-      for(let f in v) {
-        result += f + ': ' + this.renderObj(v[f]) + ' }';
-      }
-      return result;
-    }
-    return String(v);
-  }
-
-  renderHeaderRow(label){
-    const headerRow = document.createElement('div');
-    headerRow.classList.add('data-row-header');
-    const header = document.createElement('span');
-    header.classList.add('single-row');
-    header.classList.add('single-row');
-    header.innerText = this.toLabel(label);
-    headerRow.appendChild(header);
-    return headerRow;
-  };
-
-  openTab(evt, tabName, tabGroup) {
-    //TODO in the base.css .tab-content is display: none so every tab has to override display: css setting for this to work
-    // Hide content
-    document.querySelectorAll(`.tab-content[data-tab-group=${tabGroup}]`).forEach(el => el.style.display = "none");
-
-    // Remove active class from the tab headers
-    document.querySelectorAll(`.tab-header[data-tab-group=${tabGroup}]`).forEach(el => el.classList.remove("active"));
-
-    //Get tab content and display it
-    const tab = document.querySelector(`.tab-content[data-tab-group=${tabGroup}][data-tab=${tabName}]`);
-    tab.style.display = "";
-
-    //Active to click tab header
-    evt.currentTarget.classList.add("active");
-  }
-
-  updateDashCards(date) {
-    const sim = this.scenario?.sim;
-    $('cardCurrentDate').innerText = this.fmtVal(date);
-    $('cardEventExecutions').innerText =  sim?.eventExecutions ?? 0;
-    $('cardHandlerExecutions').innerText = sim?.handlerExecutions ?? 0;
-    $('cardActionExecutions').innerText = sim?.actionExecutions ?? 0;
-    $('cardReducerExecutions').innerText = sim?.reducerExecutions ?? 0;
   }
 
   /**
@@ -925,228 +380,41 @@ export class BaseApp {
   toDisplayCurrency(value, native, rate) {
     const currency = this.timeControls?.displayCurrency ?? 'USD';
     if (native === currency) return value;
-    if (currency === 'AUD') return value * rate;   // USD → AUD
-    return value / rate;                           // AUD → USD
+    if (currency === 'AUD') return value * rate;
+    return value / rate;
   }
 
-  // ── Active scenario helpers ───────────────────────────────────────────────
-  // ── Scenario tab wiring ──────────────────────────────────────────────────
-  _initScenarioTab() {
-    this._refreshScenarioSelect();
+  // ── Backwards-compat delegators for subclasses ────────────────────────────
 
-    document.getElementById('scenarioSelect').addEventListener('change', (e) => {
-      const val = e.target.value;
-      this._activeIdx = val === '' ? null : parseInt(val, 10);
-      this._populateScenarioForm();
-    });
+  /** Playback state — delegated to animator (false before first buildScenario). */
+  get playing()    { return this._animator?.playing ?? false; }
+  set playing(val) { if (this._animator) this._animator.playing = val; }
 
-    document.getElementById('loadScenarioBtn').addEventListener('click', () => {
-      this.buildScenario();
-    });
-
-    document.getElementById('newScenarioBtn').addEventListener('click', () => {
-      const newCfg = {
-        name:         'New Scenario',
-        simStart:     '2026-01-01',
-        simEnd:       '2041-01-01',
-        events:       [],
-        handlers:     [],
-        actions:      [],
-        reducers:     [],
-        initialState: { metrics: { amount: 0, salary: 0 } },
-        params:       [],
-      };
-      this._scenarioData.scenarios.push(newCfg);
-      this._activeIdx = this._scenarioData.scenarios.length - 1;
-      this._refreshScenarioSelect();
-      this._populateScenarioForm();
-    });
-
-    document.getElementById('deleteScenarioBtn').addEventListener('click', () => {
-      if (this._activeIdx === null) return;
-      this._scenarioData.scenarios.splice(this._activeIdx, 1);
-      this._activeIdx = null;
-      ScenarioStorage.save(this._scenarioData);
-      this._refreshScenarioSelect();
-      this._populateScenarioForm();
-    });
-
-    document.getElementById('scenarioName').addEventListener('input', (e) => {
-      const cfg = this._activeScenario();
-      if (!cfg) return;
-      cfg.name = e.target.value;
-      const sel = document.getElementById('scenarioSelect');
-      if (sel.selectedIndex >= 0) sel.options[sel.selectedIndex].textContent = cfg.name || 'Unnamed';
-    });
-
-    document.getElementById('simStartInput').addEventListener('change', (e) => {
-      const cfg = this._activeScenario();
-      if (cfg) cfg.simStart = e.target.value;
-    });
-
-    document.getElementById('simEndInput').addEventListener('change', (e) => {
-      const cfg = this._activeScenario();
-      if (cfg) cfg.simEnd = e.target.value;
-    });
-
-    document.getElementById('initialStateJson').addEventListener('blur', (e) => {
-      const cfg = this._activeScenario();
-      if (!cfg) return;
-      try {
-        cfg.initialState = JSON.parse(e.target.value);
-        e.target.style.borderColor = '';
-      } catch {
-        e.target.style.borderColor = 'red';
-      }
-    });
-
-    document.getElementById('addParamBtn').addEventListener('click', () => {
-      const cfg = this._activeScenario();
-      if (!cfg) return;
-      cfg.params.push({ name: '', type: 'Number', value: 0 });
-      this._renderParamsList();
-    });
-
-    document.getElementById('saveScenarioBtn').addEventListener('click', () => {
-      this._saveCurrentScenario();
-    });
-
-    document.getElementById('downloadJsonBtn').addEventListener('click', () => {
-      ScenarioStorage.downloadJson(this._scenarioData);
-    });
-
-    document.getElementById('uploadJsonFileInput').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      try {
-        const data = await ScenarioStorage.readUploadedJson(file);
-        if (Array.isArray(data.scenarios)) {
-          const existing = new Set(this._scenarioData.scenarios.map(s => s.name));
-          for (const s of data.scenarios) {
-            if (!existing.has(s.name)) {
-              this._scenarioData.scenarios.push(s);
-              existing.add(s.name);
-            }
-          }
-        }
-        ScenarioStorage.save(this._scenarioData);
-        this._refreshScenarioSelect();
-      } catch (err) {
-        alert('Failed to parse JSON file: ' + err.message);
-      }
-      e.target.value = '';
-    });
+  /**
+   * TODO Refactor to remove these, they should be in the views.
+   * Formatting helpers — subclasses and custom scenarios may call these.
+   * fmtVal syncs timeControls.formatDate into StatePanelView so that tests
+   * which stub timeControls directly continue to work.
+   */
+  fmtVal(v, objAsCode = false) {
+    if (this.timeControls?.formatDate) this._statePanelView.formatDate = this.timeControls.formatDate;
+    return this._statePanelView.fmtVal(v, objAsCode);
   }
+  fmtArray(v, objAsCode = false){ return this._statePanelView.fmtArray(v, objAsCode); }
+  diffStates(prev, next)        { return this._statePanelView.diffStates(prev, next); }
+  toLabel(key)                  { return this._statePanelView.toLabel(key); }
+  isDate(obj)                   { return this._statePanelView.isDate(obj); }
+  renderObj(v)                  { return this._statePanelView.renderObj(v); }
+  renderHeaderRow(label)        { return this._statePanelView.renderHeaderRow(label); }
+  getNestedProperty(obj, path)  { return this._statePanelView.getNestedProperty(obj, path); }
+  buildActionDetail(entry)      { return this._statePanelView.buildActionDetail(entry); }
+  getNodeDetail(node)           { return this._statePanelView.getNodeDetail(node); }
 
-  _refreshScenarioSelect() {
-    const sel = document.getElementById('scenarioSelect');
-    sel.innerHTML = '<option value="">— Default Scenario —</option>';
-    this._scenarioData.scenarios.forEach((s, i) => {
-      const opt = document.createElement('option');
-      opt.value = i;
-      opt.textContent = s.name || `Scenario ${i + 1}`;
-      sel.appendChild(opt);
-    });
-    sel.value = this._activeIdx !== null ? String(this._activeIdx) : '';
-    this._populateScenarioForm();
-  }
+  /** State panel — subclasses may call these to push custom content. */
+  updateStatePanel(date, state)   { return this._statePanelView.updateStatePanel(date, state); }
+  showNodeStateChanges(changes)   { return this._statePanelView.showNodeStateChanges(changes); }
+  showNodeDetail(entry)           { return this._statePanelView.showNodeDetail(entry); }
 
-  _populateScenarioForm() {
-    const cfg = this._activeScenario();
-    document.getElementById('scenarioName').value       = cfg?.name     ?? '';
-    document.getElementById('simStartInput').value      = cfg?.simStart ?? '2026-01-01';
-    document.getElementById('simEndInput').value        = cfg?.simEnd   ?? '2041-01-01';
-    document.getElementById('initialStateJson').value   = JSON.stringify(
-        cfg?.initialState ?? { metrics: { amount: 0, salary: 0 } }, null, 2
-    );
-    this._renderParamsList();
-  }
-
-  _renderParamsList() {
-    const cfg = this._activeScenario();
-    const container = document.getElementById('paramsList');
-    container.innerHTML = '';
-    if (!cfg?.params?.length) return;
-
-    cfg.params.forEach((param, i) => {
-      const row = document.createElement('div');
-      row.className = 'param-row';
-
-      const nameInput = document.createElement('input');
-      nameInput.placeholder = 'name';
-      nameInput.value = param.name;
-      nameInput.addEventListener('input', () => { param.name = nameInput.value; });
-
-      const typeSelect = document.createElement('select');
-      ['Number', 'String', 'Boolean'].forEach(t => {
-        const opt = document.createElement('option');
-        opt.value = t; opt.textContent = t;
-        typeSelect.appendChild(opt);
-      });
-      typeSelect.value = param.type ?? 'Number';
-      typeSelect.addEventListener('change', () => { param.type = typeSelect.value; });
-
-      const valueInput = document.createElement('input');
-      valueInput.placeholder = 'value';
-      valueInput.value = String(param.value ?? '');
-      valueInput.addEventListener('input', () => {
-        const raw = valueInput.value;
-        if (param.type === 'Number')  param.value = parseFloat(raw);
-        else if (param.type === 'Boolean') param.value = raw === 'true';
-        else param.value = raw;
-      });
-
-      const delBtn = document.createElement('button');
-      delBtn.className = 'btn btn-warn btn-sm';
-      delBtn.textContent = '✕';
-      delBtn.addEventListener('click', () => {
-        cfg.params.splice(i, 1);
-        this._renderParamsList();
-      });
-
-      row.appendChild(nameInput);
-      row.appendChild(typeSelect);
-      row.appendChild(valueInput);
-      row.appendChild(delBtn);
-      container.appendChild(row);
-    });
-  }
-
-  _saveCurrentScenario() {
-    if (this._activeIdx === null) {
-      // Create a new slot for the current default scenario
-      const name = document.getElementById('scenarioName').value || 'Saved Scenario';
-      let initialState = { metrics: { amount: 0, salary: 0 } };
-      try { initialState = JSON.parse(document.getElementById('initialStateJson').value); } catch {}
-      this._scenarioData.scenarios.push({
-        name,
-        simStart:     document.getElementById('simStartInput').value || '2026-01-01',
-        simEnd:       document.getElementById('simEndInput').value   || '2041-01-01',
-        events: [], handlers: [], actions: [], reducers: [],
-        initialState,
-        params: [],
-      });
-      this._activeIdx = this._scenarioData.scenarios.length - 1;
-    }
-
-    const cfg = this._activeScenario();
-
-    // Serialize service state + current form values into the config.
-    // Services are the authoritative source of truth — all UI edits flow
-    // through service.updateX() calls, so getAll() always reflects the
-    // latest values regardless of graph-node decoration state.
-    const serialized = ScenarioSerializer.serialize(
-        ServiceRegistry.getInstance(),
-        cfg.name,
-        cfg.simStart,
-        cfg.simEnd,
-        cfg.initialState,
-        cfg.params,
-    );
-    Object.assign(cfg, serialized);
-
-    ScenarioStorage.save(this._scenarioData);
-    this._refreshScenarioSelect();
-  }
-
+  /** Dashboard cards — subclasses may call to force a refresh. */
+  updateDashCards(date) { return this._animator?.updateDashCards(date); }
 }
