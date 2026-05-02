@@ -59,36 +59,35 @@ export class GraphSync {
 
   /** @private */
   _handleCreate(classType, item) {
-    if (item instanceof BaseEvent) {
-      // Events have no `get kind()` — set it as an own property
+    // Dispatch by classType for events (plain stubs carry no `kind` yet),
+    // then by item.kind (own-property on stubs, prototype getter on real instances).
+    if (classType === 'EventSeries' || classType === 'OneOffEvent') {
       if (!item.kind) item.kind = 'event';
       item.eventType = classType === 'EventSeries' ? 'Series' : 'OneOff';
       if (!this._graph.getNode(item.id)) {
         this._graph.addNode(item);
       }
 
-    } else if (item instanceof HandlerEntry) {
-      // HandlerEntry has get kind() { return 'handler'; }
+    } else if (item.kind === 'handler' || item instanceof HandlerEntry) {
       if (!this._graph.getNode(item.id)) {
         this._graph.addNode(item);
       }
-      item.handledEvents.forEach(e => {
+      (item.handledEvents ?? []).forEach(e => {
         if (this._graph.getNode(e.id)) {
-          this._graph.addEdge({ from: e.id, to: item.id });
+          this._addEdgeIfNew(e.id, item.id);
         }
       });
-      // Phase 3: edges from handler → action nodes will be wired by type string lookup
+      this._wireHandlerActionEdges(item);
 
-    } else if (item instanceof Action) {
+    } else if (item.kind === 'action' || item instanceof Action) {
       this._ensureActionNode(item);
+      this._wireActionEdgesOnCreate(item);
 
-    } else if (item instanceof Reducer) {
-      // Reducer has get kind() { return 'reducer'; }
+    } else if (item.kind === 'reducer' || item instanceof Reducer) {
       if (!this._graph.getNode(item.id)) {
         this._graph.addNode(item);
       }
-      // Phase 3: edges from action nodes → reducer and reducer → action nodes
-      // will be wired by type string lookup
+      this._wireReducerActionEdges(item);
     }
   }
 
@@ -101,6 +100,72 @@ export class GraphSync {
     if (!this._graph.getNode(action.id)) {
       this._graph.addNode(action);
     }
+  }
+
+  /** Add an edge only if an identical one does not already exist. @private */
+  _addEdgeIfNew(from, to) {
+    if (!this._graph.edges.some(e => e.from === from && e.to === to)) {
+      this._graph.addEdge({ from, to });
+    }
+  }
+
+  /**
+   * Wire handler → action edges for each type in handler.generatedActionTypes,
+   * connecting to any action node already in the graph with that type.
+   * @private
+   */
+  _wireHandlerActionEdges(handler) {
+    (handler.generatedActionTypes ?? []).forEach(type => {
+      const actionNode = this._graph.getNodeByType('action', type);
+      if (actionNode) {
+        this._addEdgeIfNew(handler.id, actionNode.id);
+      }
+    });
+  }
+
+  /**
+   * Wire action→reducer edges from reducedActionTypes and
+   * reducer→action edges from generatedActionTypes, connecting to any action
+   * nodes already in the graph with those types.
+   * @private
+   */
+  _wireReducerActionEdges(reducer) {
+    (reducer.reducedActionTypes ?? []).forEach(type => {
+      const actionNode = this._graph.getNodeByType('action', type);
+      if (actionNode) {
+        this._addEdgeIfNew(actionNode.id, reducer.id);
+      }
+    });
+    (reducer.generatedActionTypes ?? []).forEach(type => {
+      const actionNode = this._graph.getNodeByType('action', type);
+      if (actionNode) {
+        this._addEdgeIfNew(reducer.id, actionNode.id);
+      }
+    });
+  }
+
+  /**
+   * When an action node is added, reverse-wire edges from any handler or
+   * reducer already in the graph that declares this action's type.
+   * @private
+   */
+  _wireActionEdgesOnCreate(action) {
+    const { type } = action;
+
+    this._graph.getKind('handler').forEach(handler => {
+      if ((handler.generatedActionTypes ?? []).includes(type)) {
+        this._addEdgeIfNew(handler.id, action.id);
+      }
+    });
+
+    this._graph.getKind('reducer').forEach(reducer => {
+      if ((reducer.reducedActionTypes ?? []).includes(type)) {
+        this._addEdgeIfNew(action.id, reducer.id);
+      }
+      if ((reducer.generatedActionTypes ?? []).includes(type)) {
+        this._addEdgeIfNew(reducer.id, action.id);
+      }
+    });
   }
 
   // ─── UPDATE ───────────────────────────────────────────────────────────────

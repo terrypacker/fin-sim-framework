@@ -126,6 +126,7 @@ export class GraphBuilderController {
 
   getNode(id)                      { return this._graph.getNode(id); }
   getKind(kind)                    { return this._graph.getKind(kind); }
+  getNodeByType(kind, type)        { return this._graph.getNodeByType(kind, type); }
   getNodesToKindFromMe(node, kind) { return this._graph.getNodesToKindFromMe(node, kind); }
   getNodesFromKindToMe(node, kind) { return this._graph.getNodesFromKindToMe(node, kind); }
 
