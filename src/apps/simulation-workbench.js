@@ -18,21 +18,20 @@
  */
 
 import {BaseApp} from "./base-app.js";
-import {
-  SimulationWorkbenchDefaultScenario
-} from "../scenarios/simulation-workbench-default-scenario.js";
+import { IntlRetirementScenario } from "../scenarios/intl-retirement-scenario.js";
 
-// ── TODO Kill ME Chart series ──────────────────────────────────────────────────────────────
 const CHART_SERIES = [
-  { key: 'monthCounter', color: '#60a5fa', label: 'Month Count' },
-  { key: 'yearCounter',  color: '#34d399', label: 'Year Count'  },
+  { key: 'usSavingsAccount.balance', color: '#60a5fa', label: 'US Savings'    },
+  { key: 'auSavingsAccount.balance', color: '#34d399', label: 'AU Savings'    },
+  { key: 'superAccount.balance',     color: '#f59e0b', label: 'Super'         },
+  { key: 'stockAccount.balance',     color: '#a78bfa', label: 'US Stock'      },
 ];
 
 export class SimulationWorkbench extends BaseApp {
   constructor() {
     super({
       newScenario: (params, initialState, eventSchedulerUI) => {
-        return new SimulationWorkbenchDefaultScenario({ eventSchedulerUI });
+        return new IntlRetirementScenario({ eventSchedulerUI });
       },
       chartSeries: CHART_SERIES,
     });

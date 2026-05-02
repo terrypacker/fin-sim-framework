@@ -22,10 +22,24 @@ import { Asset } from './finance/asset.js';
 import { AccountBuilder } from './finance/builders/account-builder.js';
 import { PersonBuilder } from './finance/builders/person-builder.js';
 import { FinancialState } from './finance/financial-state.js';
+import { ChangeResidencyHandler } from './finance/handlers/change-residency-handler.js';
+import { DividendScheduledHandler } from './finance/handlers/dividend-scheduled-handler.js';
+import { AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler } from './finance/handlers/earnings-handlers.js';
+import { IntlTransferToUsHandler, IntlTransferToAuHandler } from './finance/handlers/intl-transfer-handlers.js';
+import { MonthlyExpensesHandler } from './finance/handlers/monthly-expenses-handler.js';
+import { OutOfFundsHandler } from './finance/handlers/out-of-funds-handler.js';
+import { UsSavingsInterestMonthlyHandler } from './finance/handlers/us-savings-interest-handler.js';
 import { InvestmentAccount, BrokerageAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from './finance/investment-account.js';
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
 import { Person } from './finance/person.js';
+import { ChangeResidencyApplyReducer } from './finance/reducers/change-residency-apply-reducer.js';
+import { ExpenseDebitReducer } from './finance/reducers/expense-debit-reducer.js';
+import { IntlTransferApplyReducer } from './finance/reducers/intl-transfer-apply-reducer.js';
+import { ReplenishSavingsReducer } from './finance/reducers/replenish-savings-reducer.js';
+import { SetOutOfFundsDateReducer } from './finance/reducers/set-out-of-funds-date-reducer.js';
+import { StockDividendCashApplyReducer } from './finance/reducers/stock-dividend-cash-apply-reducer.js';
+import { UsSavingsInterestCreditReducer } from './finance/reducers/us-savings-interest-credit-reducer.js';
 import { AccountService } from './finance/services/account-service.js';
 import { PersonService } from './finance/services/person-service.js';
 import { AuTaxModule2024 } from './finance/tax/au/au-tax-module-2024.js';
@@ -46,6 +60,7 @@ import { UsTaxRatesBase } from './finance/tax/us/us-tax-rates-base.js';
 import { TaxService } from './finance/tax-service.js';
 import { TaxSettleService } from './finance/tax-settle-service.js';
 import { intervalFns, startSnapFns, BaseScenario } from './scenarios/base-scenario.js';
+import { INTL_RETIREMENT_DEFAULTS, IntlRetirementScenario } from './scenarios/intl-retirement-scenario.js';
 import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
 import { ScenarioStorage } from './scenarios/scenario-storage.js';
 import { SimulationWorkbenchDefaultScenario } from './scenarios/simulation-workbench-default-scenario.js';
@@ -57,7 +72,7 @@ import { ReducerService } from './services/reducer-service.js';
 import { ServiceRegistry } from './services/service-registry.js';
 import { SimulationRegistry } from './services/simulation-registry.js';
 import { SimulationSync } from './services/simulation-sync.js';
-import { DEFAULT_ACTIONS, Action, FieldAction, FieldValueAction, AmountAction, RecordBalanceAction, ScriptedAction, ACTION_CLASSES } from './simulation-framework/actions.js';
+import { DEFAULT_ACTIONS, Action, FieldAction, FieldValueAction, AmountAction, RecordBalanceAction, RecordMetricAction, ScriptedAction, ACTION_CLASSES } from './simulation-framework/actions.js';
 import { ActionBuilder } from './simulation-framework/builders/action-builder.js';
 import { EventBuilder } from './simulation-framework/builders/event-builder.js';
 import { HandlerBuilder } from './simulation-framework/builders/handler-builder.js';
@@ -141,6 +156,16 @@ export const Finance = {
   AccountBuilder,
   PersonBuilder,
   FinancialState,
+  ChangeResidencyHandler,
+  DividendScheduledHandler,
+  AuSavingsInterestHandler,
+  FixedIncomeInterestHandler,
+  SuperEarningsHandler,
+  IntlTransferToUsHandler,
+  IntlTransferToAuHandler,
+  MonthlyExpensesHandler,
+  OutOfFundsHandler,
+  UsSavingsInterestMonthlyHandler,
   InvestmentAccount,
   BrokerageAccount,
   FourOhOneKAccount,
@@ -155,6 +180,13 @@ export const Finance = {
   PeriodRelationship,
   PeriodService,
   Person,
+  ChangeResidencyApplyReducer,
+  ExpenseDebitReducer,
+  IntlTransferApplyReducer,
+  ReplenishSavingsReducer,
+  SetOutOfFundsDateReducer,
+  StockDividendCashApplyReducer,
+  UsSavingsInterestCreditReducer,
   AccountService,
   PersonService,
   AuTaxModule2024,
@@ -180,6 +212,8 @@ export const Scenarios = {
   intervalFns,
   startSnapFns,
   BaseScenario,
+  INTL_RETIREMENT_DEFAULTS,
+  IntlRetirementScenario,
   ScenarioSerializer,
   ScenarioStorage,
   SimulationWorkbenchDefaultScenario,
@@ -203,6 +237,7 @@ export const Core = {
   FieldValueAction,
   AmountAction,
   RecordBalanceAction,
+  RecordMetricAction,
   ScriptedAction,
   ACTION_CLASSES,
   ActionBuilder,

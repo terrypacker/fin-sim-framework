@@ -108,8 +108,7 @@ export class ScenarioSerializer {
     // 3. Handlers — resolve references before registering so the CREATE
     //    subscriber sees the fully-wired handler.
     for (const d of (config.handlers ?? [])) {
-      const handler = new FinSimLib.Core.HandlerEntry(null, d.name);
-      handler.id = d.id;
+      const handler = ScenarioSerializer._makeHandler(d);
       for (const eid of (d.handledEventIds ?? [])) {
         const ev = eventMap.get(eid);
         if (ev) handler.handledEvents.push(ev);
@@ -123,7 +122,7 @@ export class ScenarioSerializer {
 
     // 4. Reducers — resolve references before registering.
     for (const d of (config.reducers ?? [])) {
-      const reducer = ScenarioSerializer._makeReducer(d);
+      const reducer = ScenarioSerializer._makeReducer(d, services);
       reducer.id = d.id;
       for (const aid of (d.reducedActionIds ?? [])) {
         const action = actionMap.get(aid);
@@ -208,13 +207,52 @@ export class ScenarioSerializer {
   }
 
   static _serializeHandler(node) {
-    return {
-      __type:             'HandlerEntry',
+    const d = {
+      __type:             node.handlerClass ?? 'HandlerEntry',
       id:                 node.id,
       name:               node.name,
       handledEventIds:    (node.handledEvents    ?? []).map(e => e.id),
       generatedActionIds: (node.generatedActions ?? []).map(a => a.id),
     };
+    // Subclass-specific params
+    switch (d.__type) {
+      case 'UsSavingsInterestMonthlyHandler':
+        d.accountKey   = node.accountKey;
+        d.interestRate = node.interestRate;
+        break;
+      case 'MonthlyExpensesHandler':
+        d.monthlyExpenses = node.monthlyExpenses;
+        d.usAccountKey    = node.usAccountKey;
+        d.auAccountKey    = node.auAccountKey;
+        break;
+      case 'IntlTransferToUsHandler':
+        d.auAccountKey = node.auAccountKey;
+        d.usAccountKey = node.usAccountKey;
+        break;
+      case 'IntlTransferToAuHandler':
+        d.usAccountKey = node.usAccountKey;
+        d.auAccountKey = node.auAccountKey;
+        break;
+      case 'AuSavingsInterestHandler':
+        d.accountKey   = node.accountKey;
+        d.interestRate = node.interestRate;
+        break;
+      case 'FixedIncomeInterestHandler':
+        d.accountKey   = node.accountKey;
+        d.interestRate = node.interestRate;
+        break;
+      case 'SuperEarningsHandler':
+        d.accountKey   = node.accountKey;
+        d.defaultRate  = node.defaultRate;
+        break;
+      case 'DividendScheduledHandler':
+        d.accountKey   = node.accountKey;
+        d.dividendRate = node.dividendRate;
+        d.reinvest     = node.reinvest;
+        break;
+      // ChangeResidencyHandler and OutOfFundsHandler have no serializable config params
+    }
+    return d;
   }
 
   static _serializeAction(node) {
@@ -241,7 +279,7 @@ export class ScenarioSerializer {
   }
 
   static _serializeReducer(node) {
-    return {
+    const d = {
       __type:             node.reducerType ?? 'FieldReducer',
       id:                 node.id,
       name:               node.name,
@@ -252,9 +290,104 @@ export class ScenarioSerializer {
       reducedActionIds:   (node.reducedActions   ?? []).map(a => a.id),
       generatedActionIds: (node.generatedActions ?? []).map(a => a.id),
     };
+    // Subclass-specific params
+    switch (d.__type) {
+      case 'UsSavingsInterestCreditReducer':
+        d.accountKey = node.accountKey;
+        break;
+      case 'ExpenseDebitReducer':
+        d.usAccountKey = node.usAccountKey;
+        d.auAccountKey = node.auAccountKey;
+        break;
+      // ReplenishSavingsReducer has no serializable params beyond name/priority
+      case 'IntlTransferApplyReducer':
+        d.usSavingsKey = node.usSavingsKey;
+        d.auSavingsKey = node.auSavingsKey;
+        break;
+      case 'StockDividendCashApplyReducer':
+        d.accountKey = node.accountKey;
+        break;
+      case 'ChangeResidencyApplyReducer':
+        d.investmentKeys = node.investmentKeys;
+        break;
+      // SetOutOfFundsDateReducer has no serializable config params
+    }
+    return d;
   }
 
   // ─── Constructors ─────────────────────────────────────────────────────────────
+
+  /**
+   * Reconstruct a HandlerEntry or subclass from its serialized descriptor.
+   * Subclass-specific params (e.g. interestRate, accountKey) are stored on the
+   * descriptor and forwarded to the constructor.
+   */
+  static _makeHandler(d) {
+    let handler;
+    switch (d.__type) {
+      case 'UsSavingsInterestMonthlyHandler':
+        handler = new FinSimLib.Finance.UsSavingsInterestMonthlyHandler({
+          accountKey:   d.accountKey   ?? 'usSavingsAccount',
+          interestRate: d.interestRate ?? 0.03,
+        });
+        break;
+      case 'MonthlyExpensesHandler':
+        handler = new FinSimLib.Finance.MonthlyExpensesHandler({
+          monthlyExpenses: d.monthlyExpenses ?? 6000,
+          usAccountKey:    d.usAccountKey    ?? 'usSavingsAccount',
+          auAccountKey:    d.auAccountKey    ?? 'auSavingsAccount',
+        });
+        break;
+      case 'IntlTransferToUsHandler':
+        handler = new FinSimLib.Finance.IntlTransferToUsHandler({
+          auAccountKey: d.auAccountKey ?? 'auSavingsAccount',
+          usAccountKey: d.usAccountKey ?? 'usSavingsAccount',
+        });
+        break;
+      case 'IntlTransferToAuHandler':
+        handler = new FinSimLib.Finance.IntlTransferToAuHandler({
+          usAccountKey: d.usAccountKey ?? 'usSavingsAccount',
+          auAccountKey: d.auAccountKey ?? 'auSavingsAccount',
+        });
+        break;
+      case 'AuSavingsInterestHandler':
+        handler = new FinSimLib.Finance.AuSavingsInterestHandler({
+          accountKey:   d.accountKey   ?? 'auSavingsAccount',
+          interestRate: d.interestRate ?? 0.045,
+        });
+        break;
+      case 'FixedIncomeInterestHandler':
+        handler = new FinSimLib.Finance.FixedIncomeInterestHandler({
+          accountKey:   d.accountKey   ?? 'fixedIncomeAccount',
+          interestRate: d.interestRate ?? 0.04,
+        });
+        break;
+      case 'SuperEarningsHandler':
+        handler = new FinSimLib.Finance.SuperEarningsHandler({
+          accountKey:  d.accountKey  ?? 'superAccount',
+          defaultRate: d.defaultRate ?? 0.07,
+        });
+        break;
+      case 'DividendScheduledHandler':
+        handler = new FinSimLib.Finance.DividendScheduledHandler({
+          accountKey:   d.accountKey   ?? 'stockAccount',
+          dividendRate: d.dividendRate ?? 0.02,
+          reinvest:     d.reinvest     ?? false,
+        });
+        break;
+      case 'ChangeResidencyHandler':
+        handler = new FinSimLib.Finance.ChangeResidencyHandler();
+        break;
+      case 'OutOfFundsHandler':
+        handler = new FinSimLib.Finance.OutOfFundsHandler();
+        break;
+      default:
+        handler = new FinSimLib.Core.HandlerEntry(null, d.name);
+        break;
+    }
+    handler.id = d.id;
+    return handler;
+  }
 
   static _makeAccount(d) {
     const F = FinSimLib.Finance;
@@ -349,7 +482,7 @@ export class ScenarioSerializer {
     return action;
   }
 
-  static _makeReducer(d) {
+  static _makeReducer(d, services) {
     const C = FinSimLib.Core;
 
     const fieldName = d.fieldName ?? '';
@@ -366,6 +499,40 @@ export class ScenarioSerializer {
         return new C.ScriptedReducer(d.name, d.priority, d.fieldName ?? '', d.script ?? '');
       case 'FieldReducer':
         return C.ReducerBuilder.field(fieldName).name(d.name).priority(d.priority).build();
+      // ── Finance domain reducers ───────────────────────────────────────────
+      case 'UsSavingsInterestCreditReducer':
+        return new FinSimLib.Finance.UsSavingsInterestCreditReducer({
+          accountService: services?.accountService,
+          accountKey:     d.accountKey ?? 'usSavingsAccount',
+        });
+      case 'ExpenseDebitReducer':
+        return new FinSimLib.Finance.ExpenseDebitReducer({
+          accountService: services?.accountService,
+          usAccountKey:   d.usAccountKey ?? 'usSavingsAccount',
+          auAccountKey:   d.auAccountKey ?? 'auSavingsAccount',
+        });
+      case 'ReplenishSavingsReducer':
+        return new FinSimLib.Finance.ReplenishSavingsReducer({
+          accountService: services?.accountService,
+        });
+      case 'IntlTransferApplyReducer':
+        return new FinSimLib.Finance.IntlTransferApplyReducer({
+          accountService: services?.accountService,
+          usSavingsKey:   d.usSavingsKey ?? 'usSavingsAccount',
+          auSavingsKey:   d.auSavingsKey ?? 'auSavingsAccount',
+        });
+      case 'StockDividendCashApplyReducer':
+        return new FinSimLib.Finance.StockDividendCashApplyReducer({
+          accountService: services?.accountService,
+          accountKey:     d.accountKey ?? 'usSavingsAccount',
+        });
+      case 'ChangeResidencyApplyReducer':
+        return new FinSimLib.Finance.ChangeResidencyApplyReducer({
+          accountService:  services?.accountService,
+          ...(d.investmentKeys ? { investmentKeys: d.investmentKeys } : {}),
+        });
+      case 'SetOutOfFundsDateReducer':
+        return new FinSimLib.Finance.SetOutOfFundsDateReducer();
       default:
         throw new Error(`Add support for deserialization of reducer type ${d.__type}.`);
     }

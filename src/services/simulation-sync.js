@@ -83,32 +83,32 @@ export class SimulationSync {
         if (item.enabled) {
           item.date ? this._scheduleOneOffEvent(item) : this._scheduleEventSeries(item);
         }
-      } else if (classType === 'HandlerEntry') {
+      } else if (item.kind === 'handler') {
         item.handledEvents.forEach(e => this.sim.register(e.type, item, item.name));
-      } else if (this._isReducerClass(classType)) {
-        item.reducedActions.forEach(a => item.registerWith(this.sim.reducers, a.type));
+      } else if (item.kind === 'reducer') {
+        this._wireReducer(item);
       }
       // Actions: no sim wiring needed on CREATE
 
     } else if (actionType === 'UPDATE') {
       if (classType === 'EventSeries' || classType === 'OneOffEvent') {
         this._applyEventChange(item);
-      } else if (classType === 'HandlerEntry') {
+      } else if (item.kind === 'handler') {
         this._applyHandlerChange(item);
-      } else if (this._isActionClass(classType)) {
+      } else if (item.kind === 'action') {
         this._applyActionChange(item);
-      } else if (this._isReducerClass(classType)) {
+      } else if (item.kind === 'reducer') {
         this._applyReducerChange(item);
       }
 
     } else if (actionType === 'DELETE') {
       if (classType === 'EventSeries' || classType === 'OneOffEvent') {
         this._applyEventDelete(item);
-      } else if (classType === 'HandlerEntry') {
+      } else if (item.kind === 'handler') {
         this._applyHandlerDelete(item);
-      } else if (this._isActionClass(classType)) {
+      } else if (item.kind === 'action') {
         this._applyActionDelete(item);
-      } else if (this._isReducerClass(classType)) {
+      } else if (item.kind === 'reducer') {
         this._applyReducerDelete(item);
       }
     }
@@ -238,26 +238,31 @@ export class SimulationSync {
   // ─── Public helpers ───────────────────────────────────────────────────────
 
   /**
+   * Wire a reducer into the simulation pipeline.
+   *
+   * Supports two registration styles:
+   *   1. Service-graph style: reducer.reducedActions[] holds Action references;
+   *      each action's type is the pipeline key.
+   *   2. Direct-wired style: reducer class declares a static actionType string;
+   *      used for finance-domain reducers whose action type is fixed by design.
+   *
+   * @private
+   */
+  _wireReducer(reducer) {
+    if (reducer.reducedActions.length > 0) {
+      reducer.reducedActions.forEach(a => reducer.registerWith(this.sim.reducers, a.type));
+    } else if (reducer.constructor.actionType) {
+      reducer.registerWith(this.sim.reducers, reducer.constructor.actionType);
+    }
+  }
+
+  /**
    * Remove all sim registrations for a reducer then re-wire it based on its
-   * current reducedActions array.  Called after type changes or action deletes.
+   * current reducedActions array (or static actionType).
+   * Called after type changes or action deletes.
    */
   reregisterReducer(reducer) {
     this.sim.reducers.unregisterAllForReducer(reducer);
-    reducer.reducedActions.forEach(action => {
-      reducer.registerWith(this.sim.reducers, action.type);
-    });
-  }
-
-  // ─── Type guards ──────────────────────────────────────────────────────────
-
-  _isActionClass(classType) {
-    return ['AmountAction', 'Action', 'FieldAction',
-            'RecordBalanceAction', 'ScriptedAction', 'FieldValueAction'].includes(classType);
-  }
-
-  _isReducerClass(classType) {
-    return ['ArrayReducer', 'NumericSumReducer',
-            'MultiplicativeReducer', 'NoOpReducer', 'FieldReducer',
-            'FieldValueReducer', 'AccountTransactionReducer', 'ScriptedReducer'].includes(classType);
+    this._wireReducer(reducer);
   }
 }
