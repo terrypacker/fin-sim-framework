@@ -163,7 +163,7 @@ export class SimulationAnimator {
   }
 
   updateConfigGraphActions(action, stateBefore, stateAfter) {
-    this._renderNodeFired(action.id, stateBefore, stateAfter);
+    this._renderNodeFired(action.actionId, stateBefore, stateAfter);
   }
 
   updateConfigGraphReducers(reducer, stateBefore, stateAfter) {

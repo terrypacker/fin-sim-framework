@@ -243,6 +243,7 @@ export class ActionDefinition {
    */
   static fromAction(action) {
     const config = { actionClass: action.actionClass };
+    if (action.id        !== undefined) config.actionId  = action.id;
     if (action.name      !== undefined) config.name      = action.name;
     if (action.fieldName !== undefined) config.fieldName = action.fieldName;
     if (action.value     !== undefined) config.value     = action.value;
