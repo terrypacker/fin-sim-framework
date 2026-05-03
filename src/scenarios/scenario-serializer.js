@@ -12,6 +12,75 @@
 
 import { ActionDefinition } from '../simulation-framework/actions.js';
 
+// ─── Lookup sets for fast-path constructor dispatch ───────────────────────────
+
+/**
+ * Account-module reducers all take a single `{ accountService }` argument.
+ * Registering a new reducer class only requires adding its name here.
+ */
+const _ACCOUNT_SERVICE_REDUCERS = new Set([
+  // US — Roth IRA
+  'RothContributionApplyReducer', 'RothWithdrawalContribApplyReducer',
+  'RothWithdrawalEarningsApplyReducer', 'RothEarningsApplyReducer',
+  // US — Traditional IRA
+  'IraContributionApplyReducer', 'IraWithdrawalContribApplyReducer',
+  'IraWithdrawalEarningsApplyReducer', 'IraEarningsApplyReducer',
+  // US — 401k
+  'K401ContributionApplyReducer', 'K401EarningsApplyReducer', 'K401WithdrawalApplyReducer',
+  // US — Brokerage (Fixed Income + Stock)
+  'FixedIncomeContributionApplyReducer', 'FixedIncomeWithdrawalApplyReducer',
+  'FixedIncomeEarningsApplyReducer',
+  'StockContributionApplyReducer', 'StockDividendApplyReducer',
+  'StockEarningsApplyReducer', 'StockWithdrawalApplyReducer',
+  // US — Real Property
+  'UsHouseSaleApplyReducer',
+  // AU — Savings
+  'AuSavingsContributionApplyReducer', 'AuSavingsWithdrawalApplyReducer',
+  'AuSavingsEarningsApplyReducer',
+  // AU — Superannuation
+  'SuperContributionApplyReducer', 'SuperWithdrawalContribApplyReducer',
+  'SuperWithdrawalEarningsApplyReducer', 'SuperEarningsApplyReducer',
+  // AU — Brokerage
+  'AuDividendFrankedResidentApplyReducer', 'AuDividendFrankedNonResidentApplyReducer',
+  'AuDividendUnfrankedResidentApplyReducer', 'AuDividendUnfrankedNonResidentApplyReducer',
+  'AuStockEarningsApplyReducer', 'AuStockWithdrawalApplyReducer',
+  // AU — Real Property
+  'AuHouseSaleApplyReducer',
+]);
+
+/**
+ * Account-module and tax-infrastructure handlers that take no constructor arguments.
+ * Registering a new handler class only requires adding its name here.
+ */
+const _NO_ARG_HANDLERS = new Set([
+  // Tax infrastructure
+  'PeriodAdvanceHandler', 'TaxSettleHandler',
+  // US — Roth IRA
+  'RothContributionHandler', 'RothWithdrawalContributionsHandler',
+  'RothWithdrawalEarningsHandler', 'RothEarningsHandler',
+  // US — Traditional IRA
+  'IraContributionHandler', 'IraWithdrawalContributionsHandler',
+  'IraWithdrawalEarningsHandler', 'IraEarningsHandler',
+  // US — 401k
+  'K401ContributionHandler', 'K401EarningsHandler', 'K401WithdrawalHandler',
+  // US — Brokerage
+  'FixedIncomeContributionHandler', 'FixedIncomeWithdrawalHandler', 'FixedIncomeEarningsHandler',
+  'StockContributionHandler', 'StockDividendHandler', 'StockEarningsHandler', 'StockWithdrawalHandler',
+  // US — Real Property
+  'UsHouseSaleHandler',
+  // AU — Savings
+  'AuSavingsContributionHandler', 'AuSavingsWithdrawalHandler', 'AuSavingsEarningsHandler',
+  // AU — Superannuation
+  'SuperContributionHandler', 'SuperWithdrawalContributionsHandler',
+  'SuperWithdrawalEarningsHandler', 'SuperEarningsDirectHandler',
+  // AU — Brokerage
+  'AuDividendFrankedResidentHandler', 'AuDividendFrankedNonResidentHandler',
+  'AuDividendUnfrankedResidentHandler', 'AuDividendUnfrankedNonResidentHandler',
+  'AuStockEarningsHandler', 'AuStockWithdrawalHandler',
+  // AU — Real Property
+  'AuHouseSaleHandler',
+]);
+
 export class ScenarioSerializer {
 
   /**
@@ -316,6 +385,10 @@ export class ScenarioSerializer {
         d.investmentKeys = node.investmentKeys;
         break;
       // SetOutOfFundsDateReducer has no serializable config params
+      case 'DynamicTaxReducer':
+        d.cc = node.cc;
+        break;
+      // All other TaxService / account-module reducers have no extra serializable params
     }
     return d;
   }
@@ -328,6 +401,13 @@ export class ScenarioSerializer {
    * descriptor and forwarded to the constructor.
    */
   static _makeHandler(d) {
+    // ── No-arg account-module and tax-infrastructure handlers ─────────────────
+    if (_NO_ARG_HANDLERS.has(d.__type)) {
+      const handler = new FinSimLib.Finance[d.__type]();
+      handler.id = d.id;
+      return handler;
+    }
+
     let handler;
     switch (d.__type) {
       case 'UsSavingsInterestMonthlyHandler':
@@ -489,9 +569,37 @@ export class ScenarioSerializer {
 
   static _makeReducer(d, services) {
     const C = FinSimLib.Core;
+    const F = FinSimLib.Finance;
+
+    // ── Account-module reducers — all constructed with { accountService } ──────
+    // Adding a new account-module reducer class only requires adding it here.
+    if (_ACCOUNT_SERVICE_REDUCERS.has(d.__type)) {
+      return new F[d.__type]({ accountService: services?.accountService });
+    }
+
+    // ── Tax-infrastructure reducers ────────────────────────────────────────────
+    switch (d.__type) {
+      case 'PeriodAdvanceReducer':
+        return new F.PeriodAdvanceReducer();
+      case 'TaxSettleApplyReducer':
+        return new F.TaxSettleApplyReducer();
+      case 'TaxPaymentDebitReducer':
+        return new F.TaxPaymentDebitReducer({ accountService: services?.accountService });
+      case 'DynamicTaxReducer': {
+        // TaxEngine is reconstructed from a fresh TaxService — all year modules are pre-registered.
+        const taxEngine  = new F.TaxService().taxEngine;
+        const cc         = d.cc ?? d.name.split(':')[1];
+        const actionType = (d.reducedActionTypes ?? [])[0];
+        return new F.DynamicTaxReducer(taxEngine, cc, actionType);
+      }
+    }
 
     const fieldName = d.fieldName ?? '';
     switch (d.__type) {
+      case 'MetricReducer':
+        // Preserve null — MetricReducer(null) delegates write path to action.fieldName at runtime.
+        // Using fieldName (which coerces null→'') would write to metrics.'' (broken path).
+        return C.ReducerBuilder.metric(d.fieldName).name(d.name).priority(d.priority).build();
       case 'ArrayReducer':
         return C.ReducerBuilder.array(fieldName).name(d.name).priority(d.priority).value(d.value ?? null).build();
       case 'NumericSumReducer':
