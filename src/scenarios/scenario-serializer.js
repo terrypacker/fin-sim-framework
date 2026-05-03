@@ -608,6 +608,8 @@ export class ScenarioSerializer {
         return C.ReducerBuilder.multiplicative(fieldName).name(d.name).priority(d.priority).value(d.value ?? null).build();
       case 'NoOpReducer':
         return C.ReducerBuilder.noOp().name(d.name).priority(d.priority).build();
+      case 'BalanceSnapshotReducer':
+        return C.ReducerBuilder.balanceSnapshot().name(d.name).priority(d.priority).build();
       case 'ScriptedReducer':
         return new C.ScriptedReducer(d.name, d.priority, d.fieldName ?? '', d.script ?? '');
       case 'FieldReducer':

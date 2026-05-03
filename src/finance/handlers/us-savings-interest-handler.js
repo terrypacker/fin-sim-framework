@@ -39,11 +39,11 @@ export class UsSavingsInterestMonthlyHandler extends HandlerEntry {
   call({ state }) {
     const balance = state[this.accountKey]?.balance ?? 0;
     const amount  = +(balance * this.interestRate / 12).toFixed(2);
-    if (amount <= 0) return [new RecordBalanceAction()];
+    if (amount <= 0) return [new RecordBalanceAction(`${this.accountKey}.balance`, `${this.accountKey}`)];
     return [
       { type: 'US_SAVINGS_INTEREST_CREDIT', amount },
       new RecordMetricAction('us_savings_interest', amount),
-      new RecordBalanceAction(),
+      new RecordBalanceAction(`${this.accountKey}.balance`, `${this.accountKey}`),
     ];
   }
 }

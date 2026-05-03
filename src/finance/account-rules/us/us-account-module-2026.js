@@ -59,7 +59,8 @@ function getAgeDecimal(birthDate, asOfDate) {
 const US_PRIMARY_HOME_EXEMPTION = 500_000;
 
 /** Resolve the US cash pool: usSavingsAccount in intl scenarios, checkingAccount in single-account tests. */
-const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
+const usCash    = (state) => state.usSavingsAccount ?? state.checkingAccount;
+const usCashKey = (state) => state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
 
 /**
  * UsAccountModule2026 — US account mechanics rules for 2026.
@@ -211,13 +212,13 @@ export class UsAccountModule2026 extends BaseAccountModule {
     sim.register('ROTH_CONTRIBUTION', ({ data }) => [
       { type: 'ROTH_CONTRIBUTION_APPLY', amount: data.amount },
       new FieldValueAction('roth_contribution', 'Roth Contribution', data.amount),
-      new RecordBalanceAction(),
+      new RecordBalanceAction('rothAccount.balance', 'rothAccount'),
     ]);
 
     sim.register('ROTH_WITHDRAWAL_CONTRIBUTIONS', ({ data }) => [
       { type: 'ROTH_WITHDRAWAL_CONTRIB_APPLY', amount: data.amount },
       new FieldValueAction( 'roth_withdrawal_contributions', 'Roth Withdrawal', data.amount),
-      new RecordBalanceAction(),
+      new RecordBalanceAction('rothAccount.balance', 'rothAccount'),
     ]);
 
     sim.register('ROTH_WITHDRAWAL_EARNINGS', ({ date, state, data }) => {
@@ -230,14 +231,14 @@ export class UsAccountModule2026 extends BaseAccountModule {
           isAuResident: state.isAuResident,
         },
         new FieldValueAction('roth_withdrawal_earnings', 'Roth Withdrawal Earnings', data.amount),
-        new RecordBalanceAction(),
+        new RecordBalanceAction('rothAccount.balance', 'rothAccount'),
       ];
     });
 
     sim.register('ROTH_EARNINGS', ({ data }) => [
       { type: 'ROTH_EARNINGS_APPLY', amount: data.amount },
       new FieldValueAction( 'roth_earnings', 'Roth Earnings', data.amount),
-      new RecordBalanceAction(),
+      new RecordBalanceAction('rothAccount.balance', 'rothAccount'),
     ]);
   }
 
@@ -316,7 +317,7 @@ export class UsAccountModule2026 extends BaseAccountModule {
     sim.register('IRA_CONTRIBUTION', ({ data }) => [
       { type: 'IRA_CONTRIBUTION_APPLY', amount: data.amount },
       new FieldValueAction( 'ira_contribution', 'IRA Contribution', data.amount),
-      new RecordBalanceAction(),
+      new RecordBalanceAction('iraAccount.balance', 'iraAccount'),
     ]);
 
     sim.register('IRA_WITHDRAWAL_CONTRIBUTIONS', ({ date, state, data }) => {
@@ -325,7 +326,7 @@ export class UsAccountModule2026 extends BaseAccountModule {
       return [
         { type: 'IRA_WITHDRAWAL_CONTRIB_APPLY', amount: data.amount, penaltyAmount: penalty },
         new FieldValueAction( 'ira_withdrawal_contributions', 'IRA Withdrawal', data.amount),
-        new RecordBalanceAction(),
+        new RecordBalanceAction('iraAccount.balance', 'iraAccount'),
       ];
     });
 
@@ -339,14 +340,14 @@ export class UsAccountModule2026 extends BaseAccountModule {
           isAuResident: state.isAuResident,
         },
         new FieldValueAction('ira_withdrawal_earnings', 'IRA Withdrawal Earnings', data.amount),
-        new RecordBalanceAction(),
+        new RecordBalanceAction('iraAccount.balance', 'iraAccount'),
       ];
     });
 
     sim.register('IRA_EARNINGS', ({ data }) => [
       { type: 'IRA_EARNINGS_APPLY', amount: data.amount },
       new FieldValueAction('ira_earnings', 'IRA Earnings', data.amount),
-      new RecordBalanceAction(),
+      new RecordBalanceAction('iraAccount.balance', 'iraAccount'),
     ]);
   }
 
@@ -408,12 +409,12 @@ export class UsAccountModule2026 extends BaseAccountModule {
 
     sim.register('K401_CONTRIBUTION', ({ data }) => [
       { type: 'K401_CONTRIBUTION_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('k401Account.balance', 'k401Account'),
     ]);
 
     sim.register('K401_EARNINGS', ({ data }) => [
       { type: 'K401_EARNINGS_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('k401Account.balance', 'k401Account'),
     ]);
 
     // EVT-25 withdrawal handler — 10% penalty if under age 59.5
@@ -422,7 +423,7 @@ export class UsAccountModule2026 extends BaseAccountModule {
       const penalty = age < 59.5 ? data.amount * 0.10 : 0;
       return [
         { type: 'K401_WITHDRAWAL_APPLY', amount: data.amount, penaltyAmount: penalty },
-        new RecordBalanceAction(),
+        new RecordBalanceAction('k401Account.balance', 'k401Account'),
       ];
     });
   }
@@ -533,32 +534,32 @@ export class UsAccountModule2026 extends BaseAccountModule {
 
     sim.register('FIXED_INCOME_CONTRIBUTION', ({ data }) => [
       { type: 'FIXED_INCOME_CONTRIBUTION_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('fixedIncomeAccount.balance', 'fixedIncomeAccount'),
     ]);
 
     sim.register('FIXED_INCOME_WITHDRAWAL', ({ data }) => [
       { type: 'FIXED_INCOME_WITHDRAWAL_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('fixedIncomeAccount.balance', 'fixedIncomeAccount'),
     ]);
 
     sim.register('FIXED_INCOME_EARNINGS', ({ data, state }) => [
       { type: 'FIXED_INCOME_EARNINGS_APPLY', amount: data.amount, isAuResident: state.isAuResident },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('fixedIncomeAccount.balance', 'fixedIncomeAccount'),
     ]);
 
     sim.register('STOCK_CONTRIBUTION', ({ data }) => [
       { type: 'STOCK_CONTRIBUTION_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('stockAccount.balance', 'stockAccount'),
     ]);
 
     sim.register('STOCK_DIVIDEND', ({ data, state }) => [
       { type: 'STOCK_DIVIDEND_APPLY', amount: data.amount, isAuResident: state.isAuResident },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('stockAccount.balance', 'stockAccount'),
     ]);
 
     sim.register('STOCK_EARNINGS', ({ data }) => [
       { type: 'STOCK_EARNINGS_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('stockAccount.balance', 'stockAccount'),
     ]);
 
     sim.register('STOCK_WITHDRAWAL', ({ data, state }) => [
@@ -567,7 +568,7 @@ export class UsAccountModule2026 extends BaseAccountModule {
         costBasis:    data.costBasis,
         isAuResident: state.isAuResident,
       },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('stockAccount.balance', 'stockAccount'),
     ]);
   }
 
@@ -594,7 +595,7 @@ export class UsAccountModule2026 extends BaseAccountModule {
         costBasis:    data.costBasis,
         isAuResident: state.isAuResident,
       },
-      new RecordBalanceAction(),
+      new RecordBalanceAction(`${usCashKey(state)}.balance`, `${usCashKey(state)}`),
     ]);
   }
 }

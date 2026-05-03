@@ -295,6 +295,31 @@ export class MetricReducer extends FieldReducer {
   }
 }
 
+/**
+ * Reducer for RECORD_BALANCE actions.
+ * When the action carries a fieldPath, reads that dot-separated path from
+ * state and writes the value into state.metrics[metricKey] so the chart
+ * picks it up automatically.  When fieldPath is absent the reducer is a
+ * pure no-op (pipeline-flush only), preserving backward compatibility with
+ * all existing new RecordBalanceAction() call sites.
+ */
+export class BalanceSnapshotReducer extends FieldReducer {
+  static description = 'Reads state[action.fieldPath] and writes the value to state.metrics[action.metricKey]; no-op when fieldPath is absent.';
+
+  constructor(name = 'Balance Snapshot', priority = PRIORITY.METRICS) {
+    super(name, priority, null);
+  }
+
+  reduce(state, action) {
+    if (!action.fieldPath) {
+      return this.newState(state);
+    }
+    const value = this.getValueByPath(state, action.fieldPath);
+    const newState = this.newState(state);
+    return this.setValueByPath(newState, `metrics.${action.metricKey}`, value);
+  }
+}
+
 export class FieldValueReducer extends FieldReducer {
   constructor(name = 'Field Value Reducer', priority = PRIORITY.CASH_FLOW, fieldName = null, value = null) {
     super(name, priority, fieldName);
@@ -508,6 +533,7 @@ export class ScriptedReducer extends FieldReducer {
 // Populate registry after all classes are declared
 Object.assign(REDUCER_CLASSES, {
   NoOpReducer,
+  BalanceSnapshotReducer,
   FieldReducer,
   FieldValueReducer,
   ScriptedReducer,

@@ -110,14 +110,21 @@ export class AmountAction extends FieldValueAction {
 }
 
 /**
- * Marker action that triggers the RECORD_BALANCE no-op reducer.
- * Runs last in the pipeline so the resulting ActionNode stateAfter
- * reflects the fully-updated state for that event.
+ * Captures a state field value into state.metrics so the chart can track it.
+ * When called with no arguments it behaves as a pure pipeline-flush marker
+ * (the BalanceSnapshotReducer is a no-op in that case).
+ *
+ * @param {string|null} [fieldPath]  Dot-separated path into state to read
+ *                                   (e.g. 'accounts.usSavings.balance').
+ * @param {string|null} [metricKey]  Key under state.metrics to write to.
+ *                                   Defaults to fieldPath when omitted.
  */
 export class RecordBalanceAction extends Action {
-  static description = 'Marker action that triggers a no-op pipeline flush, capturing a fully-updated stateAfter snapshot for the current event.';
-  constructor() {
+  static description = 'Captures a state field value into state.metrics[metricKey] for charting; with no args, acts as a no-op pipeline-flush marker.';
+  constructor(fieldPath = null, metricKey = null) {
     super('RECORD_BALANCE');
+    this.fieldPath = fieldPath;
+    this.metricKey = metricKey ?? fieldPath;
   }
 }
 
@@ -247,6 +254,8 @@ export class ActionDefinition {
     if (action.value     !== undefined) config.value     = action.value;
     if (action._script   !== undefined) config.script    = action._script;
     if (action.key       !== undefined) config.key       = action.key;
+    if (action.fieldPath !== undefined) config.fieldPath = action.fieldPath;
+    if (action.metricKey !== undefined) config.metricKey = action.metricKey;
     return new ActionDefinition({ type: action.type, config });
   }
 
