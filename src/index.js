@@ -74,6 +74,7 @@ import { TaxService } from './finance/tax-service.js';
 import { TaxSettleService } from './finance/tax-settle-service.js';
 import { intervalFns, startSnapFns, BaseScenario } from './scenarios/base-scenario.js';
 import { INTL_RETIREMENT_DEFAULTS, IntlRetirementScenario } from './scenarios/intl-retirement-scenario.js';
+import { PrebuiltScenario } from './scenarios/prebuilt-scenario.js';
 import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
 import { ScenarioStorage } from './scenarios/scenario-storage.js';
 import { SimulationWorkbenchDefaultScenario } from './scenarios/simulation-workbench-default-scenario.js';
@@ -301,6 +302,7 @@ export const Scenarios = {
   BaseScenario,
   INTL_RETIREMENT_DEFAULTS,
   IntlRetirementScenario,
+  PrebuiltScenario,
   ScenarioSerializer,
   ScenarioStorage,
   SimulationWorkbenchDefaultScenario,

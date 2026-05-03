@@ -52,9 +52,16 @@ import { SimulationAnimator }       from './simulation-animator.js';
  *   GraphBuilderPresenter — event-graph editor (recreated per buildScenario)
  */
 export class BaseApp {
-  constructor({ newScenario, chartSeries }) {
+  /**
+   * @param {object}            opts
+   * @param {PrebuiltScenario[]} [opts.prebuiltScenarios=[]] - Pre-built scenario descriptors.
+   * @param {Function}          [opts.newScenario]  - Legacy single-factory fallback.
+   * @param {Array|null}        [opts.chartSeries]  - Chart series config.
+   */
+  constructor({ newScenario, chartSeries, prebuiltScenarios = [] }) {
 
-    this.newScenario = newScenario;
+    // Kept for backward-compat (used as fallback in createScenario when no prebuiltScenarios).
+    this.newScenario = newScenario ?? null;
     this.chartSeries = chartSeries ?? null;
     this.scenario    = null;
 
@@ -74,8 +81,8 @@ export class BaseApp {
     this._accountsView    = new AccountsView();
     this._statePanelView  = new StatePanelView();
 
-    // Scenario tab owns _scenarioData / _activeIdx.
-    this._scenarioTab = new ScenarioTabPresenter();
+    // Scenario tab owns _scenarioData / _activeValue.
+    this._scenarioTab = new ScenarioTabPresenter({ prebuiltScenarios });
 
     // Tab header references set by initView()
     this.eventsTabHeader   = null;
@@ -150,7 +157,9 @@ export class BaseApp {
     this.peoplePresenter.onPeopleChanged = (people) => this.accountsPresenter.setPeople(people);
 
     // ── Build scenario ────────────────────────────────────────────────────────
-    this.scenario = this.newScenario(this.getParams(), this.getInitialState(), this.schedulerUI);
+    this.scenario = this._scenarioTab.createScenario(
+      this.getParams(), this.getInitialState(), this.schedulerUI, this.newScenario
+    );
     this.scenario.buildSim(this.getParams(), this.getInitialState());
     this.afterBuildSim();
 
