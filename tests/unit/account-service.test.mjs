@@ -501,3 +501,57 @@ test('US+AU types have no default country (caller sets)', () => {
     assert.strictEqual(acct.country, null, `${acct.type} should have null country by default`);
   }
 });
+
+// ─── AccountService.replenishSavings ──────────────────────────────────────────
+
+test('replenishSavings: returns keys of accounts drawn from', () => {
+  const svc   = new AccountService();
+  const date  = new Date(2026, 0, 1);
+  const savings  = new CheckingAccount(0, { country: 'US', currency: USD });
+  const brokerage = new BrokerageAccount(50000, { country: 'US', currency: USD, drawdownPriority: 1 });
+  const state = {
+    savingsAccount:   savings,
+    brokerageAccount: brokerage,
+    personBirthDate:  new Date(1970, 0, 1),
+  };
+
+  const drawn = svc.replenishSavings(state, 'savingsAccount', 10000, date);
+  assert.deepStrictEqual(drawn, ['brokerageAccount']);
+  assert.strictEqual(savings.balance,   10000);
+  assert.strictEqual(brokerage.balance, 40000);
+});
+
+test('replenishSavings: returns multiple keys when deficit spans accounts', () => {
+  const svc  = new AccountService();
+  const date = new Date(2026, 0, 1);
+  const savings    = new CheckingAccount(0, { country: 'US', currency: USD });
+  const accountA   = new BrokerageAccount(3000,  { country: 'US', currency: USD, drawdownPriority: 1 });
+  const accountB   = new BrokerageAccount(20000, { country: 'US', currency: USD, drawdownPriority: 2 });
+  const state = {
+    savingsAccount: savings,
+    accountA,
+    accountB,
+    personBirthDate: new Date(1970, 0, 1),
+  };
+
+  const drawn = svc.replenishSavings(state, 'savingsAccount', 5000, date);
+  assert.deepStrictEqual(drawn, ['accountA', 'accountB']);
+});
+
+test('replenishSavings: skips age-ineligible accounts and does not return them', () => {
+  const svc  = new AccountService();
+  const date = new Date(2026, 0, 1);
+  const savings  = new CheckingAccount(0, { country: 'US', currency: USD });
+  const locked   = new FourOhOneKAccount(50000, { country: 'US', currency: USD, drawdownPriority: 1 });
+  const eligible = new BrokerageAccount(20000,   { country: 'US', currency: USD, drawdownPriority: 2 });
+  const state = {
+    savingsAccount: savings,
+    lockedAccount:  locked,
+    eligibleAccount: eligible,
+    personBirthDate: new Date(1990, 0, 1), // too young for 401k
+  };
+
+  const drawn = svc.replenishSavings(state, 'savingsAccount', 5000, date);
+  assert.deepStrictEqual(drawn, ['eligibleAccount']);
+  assert.strictEqual(locked.balance, 50000); // untouched
+});

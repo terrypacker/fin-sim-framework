@@ -10,6 +10,7 @@
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { InsufficientFundsError } from '../account.js';
+import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 
 /**
  * Handles the REPLENISH_SAVINGS action.
@@ -38,7 +39,7 @@ export class ReplenishSavingsReducer extends Reducer {
     super('Replenish Savings', PRIORITY.PRE_PROCESS);
     this.accountService = accountService;
     this.reducedActionTypes  = ['REPLENISH_SAVINGS'];
-    this.generatedActionTypes = ['INTL_TRANSFER_APPLY'];
+    this.generatedActionTypes = ['INTL_TRANSFER_APPLY', 'RECORD_BALANCE'];
   }
 
   reduce(state, action, date) {
@@ -46,8 +47,9 @@ export class ReplenishSavingsReducer extends Reducer {
     const isAu = targetKey === 'auSavingsAccount';
 
     try {
-      this.accountService.replenishSavings(state, targetKey, deficit, date);
-      return this.newState(state);
+      const drawnKeys = this.accountService.replenishSavings(state, targetKey, deficit, date);
+      const balanceActions = drawnKeys.map(k => new RecordBalanceAction(`${k}.balance`, k));
+      return this.newState(state, {}, balanceActions);
     } catch (e) {
       if (!(e instanceof InsufficientFundsError)) throw e;
       // Domestic accounts exhausted — request an international transfer for

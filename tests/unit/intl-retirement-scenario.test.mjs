@@ -367,6 +367,41 @@ test('serialize → deserialize round-trip reconstructs all TaxService handlers'
   assert.ok(handlerTypes.includes('AuHouseSaleHandler'),                'AuHouseSaleHandler missing');
 });
 
+// ═════════════════════════════════════════════════════════════════════════════
+// Metrics: investment account balances captured in state.metrics
+// ═════════════════════════════════════════════════════════════════════════════
+
+test('DIVIDEND_SCHEDULED: state.metrics.stockAccount is set after year-end dividend', () => {
+  // dividendsEvent has startOffset(1), so first DIVIDEND_SCHEDULED fires Dec 31 2027
+  const { sim } = buildScenario();
+  sim.stepTo(new Date(Date.UTC(2027, 11, 31)));
+
+  assert.ok(
+    sim.state.metrics?.stockAccount != null,
+    `state.metrics.stockAccount should be set after DIVIDEND_SCHEDULED; got ${JSON.stringify(sim.state.metrics)}`
+  );
+  assert.ok(
+    typeof sim.state.metrics.stockAccount === 'number' && sim.state.metrics.stockAccount > 0,
+    `state.metrics.stockAccount should be a positive number, got ${sim.state.metrics.stockAccount}`
+  );
+});
+
+test('REPLENISH_SAVINGS: state.metrics captures balance of each drawn account', () => {
+  // Low savings forces immediate drawdown from fixedIncomeAccount (drawdownPriority 1)
+  // on the first month-end expense.
+  const { sim } = buildScenario({ initialUsSavings: 3000 });
+  sim.stepTo(new Date(Date.UTC(2026, 0, 31)));  // Jan 31 2026 — first MONTHLY_EXPENSES
+
+  assert.ok(
+    sim.state.metrics?.fixedIncomeAccount != null,
+    `state.metrics.fixedIncomeAccount should be set after drawdown; got ${JSON.stringify(sim.state.metrics)}`
+  );
+  assert.ok(
+    typeof sim.state.metrics.fixedIncomeAccount === 'number',
+    `state.metrics.fixedIncomeAccount should be a number, got ${sim.state.metrics.fixedIncomeAccount}`
+  );
+});
+
 test('DynamicTaxReducer round-trip preserves cc and actionType', () => {
   const { scenario } = buildScenario();
   const services = ServiceRegistry.getInstance();
