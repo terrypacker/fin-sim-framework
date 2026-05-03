@@ -845,12 +845,23 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   width: 100%;
   height: 100%;
   pointer-events: none;
+  overflow: visible;
 }
 
 /* Node layer */
 #graphNodes {
   position: absolute;
   inset: 0;
+}
+
+.selection-box {
+  position: absolute;
+  border: 1px dashed #4da3ff;
+  background: rgba(77,163,255,0.15);
+  pointer-events: none;
+  display: none;
+  box-sizing: border-box;
+  transform: translate(0, 0); /* ensure no inherited transforms */
 }
 
 /* ── NODE BADGE ── */
