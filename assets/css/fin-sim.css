@@ -838,6 +838,12 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   overflow: hidden;
 }
 
+#graphViewport{
+  height: 100%;
+  flex: 1;
+  position: relative;
+}
+
 /* SVG edges layer */
 #graphEdges {
   position: absolute;
@@ -862,6 +868,7 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   display: none;
   box-sizing: border-box;
   transform: translate(0, 0); /* ensure no inherited transforms */
+  z-index: 100;
 }
 
 /* ── NODE BADGE ── */

@@ -53,6 +53,7 @@ export class ConfigGraph {
     this.viewport.style.transform =
         `translate(${x}px, ${y}px) scale(${scale})`;
     this.viewport.style.transformOrigin = '0 0';
+    this._drawEdges();
   }
 
   fitToView(padding = 40) {
@@ -272,7 +273,6 @@ export class ConfigGraph {
         x: e.clientX - this.view.x,
         y: e.clientY - this.view.y
       };
-      this._drawEdges();
     };
 
     this._onPanMove = (e) => {
@@ -423,11 +423,11 @@ export class ConfigGraph {
     //Setup Node Select and Move
     this._setupNodeSelectAndMove();
     //Setup Pan
-    //this._setupPan();
+    this._setupPan();
     //Setup Zoom
-    //this._setupZoom();
+    this._setupZoom();
     //Setup Select box
-    //this._setupSelection();
+    this._setupSelection();
   }
 
   destroy() {
