@@ -74,6 +74,11 @@ export class GraphBuilderPresenter {
       this._view.editNode(updated);
     };
 
+    this._view.onHandlerClassChange = (nodeId, newClass) => {
+      const updated = this._controller.replaceHandler(nodeId, newClass);
+      this._view.editNode(updated);
+    };
+
     this._view.onActionDefinitionAdd = (node, defData) => {
       this._controller.addActionDefinition(node, defData);
       this._view.editNode(node);

@@ -8,8 +8,9 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { PRIORITY, ScriptedReducer } from '../../simulation-framework/reducers.js';
-import { FieldValueAction, ScriptedAction } from '../../simulation-framework/actions.js';
+import { PRIORITY, REDUCER_CLASSES, ScriptedReducer } from '../../simulation-framework/reducers.js';
+import { ACTION_CLASSES, FieldValueAction, ScriptedAction } from '../../simulation-framework/actions.js';
+import { HANDLER_CLASSES } from '../../simulation-framework/handlers.js';
 import { OneOffEvent } from "../../simulation-framework/events/one-off-event.js";
 import { ACTION_TEMPLATES } from '../../simulation-framework/action-templates.js';
 
@@ -28,6 +29,7 @@ import { ACTION_TEMPLATES } from '../../simulation-framework/action-templates.js
  *   onLinkToggle(node, chipNode, kind, linkTo, isAdd) — chip toggled
  *   onActionClassChange(nodeId, newClass)   — action class dropdown changed
  *   onReducerTypeChange(nodeId, newType)    — reducer type dropdown changed
+ *   onHandlerClassChange(nodeId, newClass)  — handler class dropdown changed
  *
  * `editNode(node)` is the primary entry point called by the Presenter to
  * (re-)render the editor panel for a node.
@@ -60,17 +62,13 @@ export class GraphBuilderView {
       { label: 'Logging',         value: PRIORITY.LOGGING },
     ];
 
-    this.REDUCER_TYPES = [
-      'ArrayReducer', 'NumericSumReducer', 'MultiplicativeReducer',
-      'AccountTransactionReducer', 'FieldReducer', 'FieldValueReducer',
-      'ScriptedReducer', 'NoOpReducer', 'RepeatingReducer',
-    ];
-
-    // Ordered most-specific to least-specific for instanceof checks.
-    this.ACTION_TYPES = [
-      'AmountAction', 'RecordBalanceAction', 'ScriptedAction',
-      'FieldValueAction', 'FieldAction', 'Action',
-    ];
+    // Derived dynamically from class registries so the UI never drifts from
+    // what the services actually support.  HANDLER_CLASSES is augmented by
+    // HandlerService at module load time, so it is complete before any render.
+    // (See handler-service.js Object.assign block.)
+    this.REDUCER_TYPES  = Object.keys(REDUCER_CLASSES);
+    this.ACTION_TYPES   = Object.keys(ACTION_CLASSES);
+    this.HANDLER_TYPES  = Object.keys(HANDLER_CLASSES);
 
     // ── Mutation callbacks (set by Presenter) ─────────────────────────────
 
@@ -86,6 +84,8 @@ export class GraphBuilderView {
     this.onActionClassChange = null;
     /** @type {function(nodeId: string, newType: string)|null} */
     this.onReducerTypeChange = null;
+    /** @type {function(nodeId: string, newClass: string)|null} */
+    this.onHandlerClassChange = null;
     /** @type {function(node, defData: {type, config})|null} */
     this.onActionDefinitionAdd = null;
     /** @type {function(node, defId: string)|null} */
@@ -116,6 +116,42 @@ export class GraphBuilderView {
     else if (node.kind === 'handler') this._renderHandlerEditor(node);
     else if (node.kind === 'action')  this._renderActionEditor(node);
     else this._canvas.innerHTML = `<div class="tl-empty">${node.kind} editor coming next</div>`;
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  /**
+   * Populate a <select> with the known registered types and wire its onchange.
+   *
+   * If `currentValue` is not in `knownTypes` (a domain subclass not in the
+   * registry), the select is replaced with a read-only <span> that shows the
+   * class name and a "domain type" badge — changing that type via the UI is
+   * not meaningful because the instance was constructed with specific
+   * dependencies and business logic.
+   *
+   * @param {HTMLSelectElement} selectEl  - The <select> to populate or replace
+   * @param {string[]}          knownTypes
+   * @param {string}            currentValue
+   * @param {function(string):void} onChange  - Called with the new value when changed
+   */
+  _renderTypeSelect(selectEl, knownTypes, currentValue, onChange) {
+    if (!knownTypes.includes(currentValue)) {
+      // Domain type not in the registry — show read-only badge instead of select
+      const span = document.createElement('span');
+      span.className = 'type-badge type-badge--domain';
+      span.title = 'Domain type — not editable via the graph builder';
+      span.textContent = currentValue || '(unknown)';
+      selectEl.replaceWith(span);
+      return;
+    }
+
+    knownTypes.forEach(type => {
+      const opt = document.createElement('option');
+      opt.value = type; opt.textContent = type;
+      selectEl.appendChild(opt);
+    });
+    selectEl.value    = currentValue;
+    selectEl.onchange = () => onChange(selectEl.value);
   }
 
   // ── Toolbar ───────────────────────────────────────────────────────────────
@@ -266,6 +302,13 @@ export class GraphBuilderView {
     const el = this._getTemplate('tpl-handler-editor');
 
     el.querySelector('[data-id="description"]').innerText = node.getDescription();
+
+    this._renderTypeSelect(
+      el.querySelector('[data-id="handlerClass"]'),
+      this.HANDLER_TYPES,
+      node.handlerClass || 'HandlerEntry',
+      newClass => { if (this.onHandlerClassChange) this.onHandlerClassChange(node.id, newClass); },
+    );
 
     const name = el.querySelector('[data-id="name"]');
     name.value = node.name || '';
@@ -425,15 +468,12 @@ export class GraphBuilderView {
       if (this.onFieldChange) this.onFieldChange(node, 'name', name.value);
     });
 
-    this.REDUCER_TYPES.forEach(type => {
-      const opt = document.createElement('option');
-      opt.value = type; opt.textContent = type;
-      typeSelect.appendChild(opt);
-    });
-    typeSelect.value = node.reducerType || 'MetricReducer';
-    typeSelect.onchange = () => {
-      if (this.onReducerTypeChange) this.onReducerTypeChange(node.id, typeSelect.value);
-    };
+    this._renderTypeSelect(
+      typeSelect,
+      this.REDUCER_TYPES,
+      node.reducerType || 'NoOpReducer',
+      newType => { if (this.onReducerTypeChange) this.onReducerTypeChange(node.id, newType); },
+    );
 
     this.PRIORITY_OPTIONS.forEach(({ label, value }) => {
       const opt = document.createElement('option');

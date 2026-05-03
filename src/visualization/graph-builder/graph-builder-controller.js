@@ -107,6 +107,14 @@ export class GraphBuilderController {
     return ServiceRegistry.getInstance().reducerService.replaceReducer(nodeId, reducerType);
   }
 
+  /**
+   * Replace a handler with a new instance of the given class.
+   * Returns the new node so callers can re-render.
+   */
+  replaceHandler(nodeId, handlerClass) {
+    return ServiceRegistry.getInstance().handlerService.replaceHandler(nodeId, handlerClass);
+  }
+
   // ── ActionDefinition management ───────────────────────────────────────────
 
   /**
