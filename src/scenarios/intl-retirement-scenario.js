@@ -37,6 +37,9 @@ import {
 import {
   ReducerBuilder
 } from "../simulation-framework/builders/reducer-builder.js";
+import {
+  InternationalRetirementFinancialState
+} from "../finance/state/intl-retirement-state.js";
 
 /**
  * Default parameters for the International Retirement scenario.
@@ -202,39 +205,17 @@ export class IntlRetirementScenario extends BaseScenario {
     };
 
     // ── Initial state ─────────────────────────────────────────────────────────
-    const initialState = {
-      metrics: {},
-      people:  { primary, spouse },
-      personBirthDate: p.primaryBirthDate,
-      isAuResident:    false,
-
-      // Accounts
+    const retirementInitialState = new InternationalRetirementFinancialState({
+      primary, spouse,
       usSavingsAccount, fixedIncomeAccount, stockAccount,
       iraAccount, k401Account, rothAccount,
       auSavingsAccount, auStockAccount, superAccount,
-
-      // Exchange rate / transfer fee
       exchangeRateUsdToAud: p.exchangeRateUsdToAud,
-      intlTransferFeeUsd:   p.intlTransferFeeUsd,
-
-      // YTD tax accumulators
-      usOrdinaryIncomeYTD:         0,
-      usNegativeIncomeYTD:         0,
-      usCapitalGainsYTD:           0,
-      usPenaltyYTD:                0,
-      auOrdinaryIncomeYTD:         0,
-      auCapitalGainsYTD:           0,
-      auNonResidentWithholdingYTD: 0,
-      auSuperTaxYTD:               0,
-      auFrankingCreditYTD:         0,
-      ftcYTD:                      0,
-
-      superWithdrawalBlocked: false,
-      outOfFundsDate:         null,
-    };
+      intlTransferFeeUsd: p.intlTransferFeeUsd,
+    });
 
     // ── Register simulation ───────────────────────────────────────────────────
-    super.buildSim(params, initialState);
+    super.buildSim(params, retirementInitialState);
 
     // ── Wire TaxService through the service layer (registers PERIOD_ADVANCE,
     //    TAX_SETTLE, account module reducers/handlers, and dynamic tax reducers
