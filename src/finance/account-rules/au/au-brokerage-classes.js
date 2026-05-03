@@ -210,7 +210,7 @@ export class AuDividendFrankedResidentHandler extends HandlerEntry {
   call({ data }) {
     return [
       { type: 'AU_DIVIDEND_FRANKED_RESIDENT_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('auStockAccount.balance', 'auStockAccount'),
     ];
   }
 }
@@ -227,7 +227,7 @@ export class AuDividendFrankedNonResidentHandler extends HandlerEntry {
   call({ data }) {
     return [
       { type: 'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('auStockAccount.balance', 'auStockAccount'),
     ];
   }
 }
@@ -244,7 +244,7 @@ export class AuDividendUnfrankedResidentHandler extends HandlerEntry {
   call({ data }) {
     return [
       { type: 'AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('auStockAccount.balance', 'auStockAccount'),
     ];
   }
 }
@@ -261,7 +261,7 @@ export class AuDividendUnfrankedNonResidentHandler extends HandlerEntry {
   call({ data }) {
     return [
       { type: 'AU_DIVIDEND_UNFRANKED_NONRESIDENT_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('auStockAccount.balance', 'auStockAccount'),
     ];
   }
 }
@@ -278,7 +278,7 @@ export class AuStockEarningsHandler extends HandlerEntry {
   call({ data }) {
     return [
       { type: 'AU_STOCK_EARNINGS_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('auStockAccount.balance', 'auStockAccount'),
     ];
   }
 }
@@ -300,7 +300,7 @@ export class AuStockWithdrawalHandler extends HandlerEntry {
         costBasis:    data.costBasis,
         isAuResident: state.isAuResident,
       },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('auStockAccount.balance', 'auStockAccount'),
     ];
   }
 }

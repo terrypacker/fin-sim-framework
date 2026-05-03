@@ -172,7 +172,7 @@ export class SuperContributionHandler extends HandlerEntry {
   call({ data }) {
     return [
       { type: 'SUPER_CONTRIBUTION_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('superAccount.balance', 'superAccount'),
     ];
   }
 }
@@ -191,7 +191,7 @@ export class SuperWithdrawalContributionsHandler extends HandlerEntry {
     const blocked = age < 60;
     return [
       { type: 'SUPER_WITHDRAWAL_CONTRIB_APPLY', amount: data.amount, blocked },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('superAccount.balance', 'superAccount'),
     ];
   }
 }
@@ -210,7 +210,7 @@ export class SuperWithdrawalEarningsHandler extends HandlerEntry {
     const blocked = age < 60;
     return [
       { type: 'SUPER_WITHDRAWAL_EARNINGS_APPLY', amount: data.amount, blocked },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('superAccount.balance', 'superAccount'),
     ];
   }
 }
@@ -227,7 +227,7 @@ export class SuperEarningsDirectHandler extends HandlerEntry {
   call({ data }) {
     return [
       { type: 'SUPER_EARNINGS_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('superAccount.balance', 'superAccount'),
     ];
   }
 }

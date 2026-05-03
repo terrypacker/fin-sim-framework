@@ -23,21 +23,26 @@
  * Run with: node --test tests/evt-us-brokerage.test.mjs
  */
 
-import { test } from 'node:test';
+import { test, beforeEach } from 'node:test';
 import assert   from 'node:assert/strict';
 
 import { Account } from '../../src/finance/account.js';
 import { FinancialState } from '../../src/finance/state/financial-state.js';
 import { Simulation } from '../../src/simulation-framework/simulation.js';
 import { TaxService } from '../../src/finance/tax-service.js';
+import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { PeriodService } from '../../src/finance/period/period-service.js';
 import { buildUsCalendarYear, applyTo } from '../../src/finance/period/period-builder.js';
+
+beforeEach(() => ServiceRegistry.reset());
 
 function buildUsPeriodService(year) {
   const ps = new PeriodService();
   applyTo(ps, buildUsCalendarYear(year));
   return ps;
 }
+
+const START_DATE = new Date(2026, 0, 1);
 
 function buildBrokerageSim({
   initialChecking        = 20000,
@@ -47,7 +52,8 @@ function buildBrokerageSim({
   stockEarningsBasis     = 0,
   isAuResident           = false,
 } = {}) {
-  const sim = new Simulation(new Date(2026, 0, 1), { initialState: new FinancialState({
+  const registry = ServiceRegistry.getInstance();
+  const sim = new Simulation(START_DATE, { initialState: new FinancialState({
     checkingAccount: new Account(initialChecking),
     fixedIncomeAccount: { balance: fixedIncomeBalance },
     stockAccount: {
@@ -63,9 +69,13 @@ function buildBrokerageSim({
     auCapitalGainsYTD:   0,
     ftcYTD:              0,
   }) });
-  const svc = new TaxService().registerWith(sim, ['US'], buildUsPeriodService(2026));
+  registry.simulationRegistry.register('primary', sim);
+  registry.simulationSync.setSimStart(START_DATE);
+  const taxService = new TaxService();
+  taxService.setup(sim, ['US'], buildUsPeriodService(2026));
+  taxService.registerHandlersAndReducers(registry, ['US']);
 
-  return { sim, svc };
+  return { sim };
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

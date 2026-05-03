@@ -164,7 +164,7 @@ export class IraContributionHandler extends HandlerEntry {
     return [
       { type: 'IRA_CONTRIBUTION_APPLY', amount: data.amount },
       new FieldValueAction('ira_contribution', 'IRA Contribution', data.amount),
-      new RecordBalanceAction(),
+      new RecordBalanceAction('iraAccount.balance', 'iraAccount'),
     ];
   }
 }
@@ -184,7 +184,7 @@ export class IraWithdrawalContributionsHandler extends HandlerEntry {
     return [
       { type: 'IRA_WITHDRAWAL_CONTRIB_APPLY', amount: data.amount, penaltyAmount: penalty },
       new FieldValueAction('ira_withdrawal_contributions', 'IRA Withdrawal', data.amount),
-      new RecordBalanceAction(),
+      new RecordBalanceAction('iraAccount.balance', 'iraAccount'),
     ];
   }
 }
@@ -209,7 +209,7 @@ export class IraWithdrawalEarningsHandler extends HandlerEntry {
         isAuResident:  state.isAuResident,
       },
       new FieldValueAction('ira_withdrawal_earnings', 'IRA Withdrawal Earnings', data.amount),
-      new RecordBalanceAction(),
+      new RecordBalanceAction('iraAccount.balance', 'iraAccount'),
     ];
   }
 }
@@ -227,7 +227,7 @@ export class IraEarningsHandler extends HandlerEntry {
     return [
       { type: 'IRA_EARNINGS_APPLY', amount: data.amount },
       new FieldValueAction('ira_earnings', 'IRA Earnings', data.amount),
-      new RecordBalanceAction(),
+      new RecordBalanceAction('iraAccount.balance', 'iraAccount'),
     ];
   }
 }

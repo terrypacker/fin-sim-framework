@@ -222,7 +222,7 @@ export class FixedIncomeContributionHandler extends HandlerEntry {
   call({ data }) {
     return [
       { type: 'FIXED_INCOME_CONTRIBUTION_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('fixedIncomeAccount.balance', 'fixedIncomeAccount'),
     ];
   }
 }
@@ -239,7 +239,7 @@ export class FixedIncomeWithdrawalHandler extends HandlerEntry {
   call({ data }) {
     return [
       { type: 'FIXED_INCOME_WITHDRAWAL_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('fixedIncomeAccount.balance', 'fixedIncomeAccount'),
     ];
   }
 }
@@ -256,7 +256,7 @@ export class FixedIncomeEarningsHandler extends HandlerEntry {
   call({ data, state }) {
     return [
       { type: 'FIXED_INCOME_EARNINGS_APPLY', amount: data.amount, isAuResident: state.isAuResident },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('fixedIncomeAccount.balance', 'fixedIncomeAccount'),
     ];
   }
 }
@@ -273,7 +273,7 @@ export class StockContributionHandler extends HandlerEntry {
   call({ data }) {
     return [
       { type: 'STOCK_CONTRIBUTION_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('stockAccount.balance', 'stockAccount'),
     ];
   }
 }
@@ -290,7 +290,7 @@ export class StockDividendHandler extends HandlerEntry {
   call({ data, state }) {
     return [
       { type: 'STOCK_DIVIDEND_APPLY', amount: data.amount, isAuResident: state.isAuResident },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('stockAccount.balance', 'stockAccount'),
     ];
   }
 }
@@ -307,7 +307,7 @@ export class StockEarningsHandler extends HandlerEntry {
   call({ data }) {
     return [
       { type: 'STOCK_EARNINGS_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('stockAccount.balance', 'stockAccount'),
     ];
   }
 }
@@ -329,7 +329,7 @@ export class StockWithdrawalHandler extends HandlerEntry {
         costBasis:    data.costBasis,
         isAuResident: state.isAuResident,
       },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('stockAccount.balance', 'stockAccount'),
     ];
   }
 }

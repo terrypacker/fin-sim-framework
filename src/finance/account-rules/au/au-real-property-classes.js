@@ -54,10 +54,11 @@ export class AuHouseSaleHandler extends HandlerEntry {
     this.generatedActionTypes = ['AU_HOUSE_SALE_APPLY', 'RECORD_BALANCE'];
   }
 
-  call({ data }) {
+  call({ data, state }) {
+    const cashKey = state.auSavingsAccount != null ? 'auSavingsAccount' : 'checkingAccount';
     return [
       { type: 'AU_HOUSE_SALE_APPLY', salePrice: data.salePrice, costBasis: data.costBasis },
-      new RecordBalanceAction(),
+      new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];
   }
 }

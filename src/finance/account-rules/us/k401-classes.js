@@ -129,7 +129,7 @@ export class K401ContributionHandler extends HandlerEntry {
   call({ data }) {
     return [
       { type: 'K401_CONTRIBUTION_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('k401Account.balance', 'k401Account'),
     ];
   }
 }
@@ -146,7 +146,7 @@ export class K401EarningsHandler extends HandlerEntry {
   call({ data }) {
     return [
       { type: 'K401_EARNINGS_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('k401Account.balance', 'k401Account'),
     ];
   }
 }
@@ -166,7 +166,7 @@ export class K401WithdrawalHandler extends HandlerEntry {
     const penalty   = age < 59.5 ? data.amount * 0.10 : 0;
     return [
       { type: 'K401_WITHDRAWAL_APPLY', amount: data.amount, penaltyAmount: penalty },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('k401Account.balance', 'k401Account'),
     ];
   }
 }
