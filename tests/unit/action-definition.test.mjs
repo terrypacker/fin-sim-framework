@@ -63,7 +63,7 @@ describe('ActionDefinition.fromAction', () => {
     const def = ActionDefinition.fromAction(action);
     assert.equal(def.type, 'RECORD_METRIC');
     assert.equal(def.config.actionClass, 'RecordMetricAction');
-    assert.equal(def.config.key, 'savings_rate');
+    assert.equal(def.config.fieldName, 'savings_rate');
     assert.equal(def.config.value, 0.05);
   });
 });

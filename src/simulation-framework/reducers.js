@@ -278,6 +278,23 @@ export class FieldReducer extends Reducer {
 
 }
 
+/**
+ * Put a state field or action value into state.metrics
+ */
+export class MetricReducer extends FieldReducer {
+  constructor(name = 'Metric Reducer', priority = PRIORITY.METRICS, fieldName = null) {
+    super(name, priority, fieldName);
+  }
+
+  /**
+   * Get the path to the field, priority giving to our field name
+   * @param action
+   */
+  getWriteFieldPath(action) {
+    return `metrics.${super.getWriteFieldPath(action)}`;
+  }
+}
+
 export class FieldValueReducer extends FieldReducer {
   constructor(name = 'Field Value Reducer', priority = PRIORITY.CASH_FLOW, fieldName = null, value = null) {
     super(name, priority, fieldName);

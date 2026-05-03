@@ -31,6 +31,12 @@ import { IntlTransferApplyReducer } from '../finance/reducers/intl-transfer-appl
 import { StockDividendCashApplyReducer } from '../finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { ChangeResidencyApplyReducer } from '../finance/reducers/change-residency-apply-reducer.js';
 import { SetOutOfFundsDateReducer } from '../finance/reducers/set-out-of-funds-date-reducer.js';
+import {
+  ActionBuilder
+} from "../simulation-framework/builders/action-builder.js";
+import {
+  ReducerBuilder
+} from "../simulation-framework/builders/reducer-builder.js";
 
 /**
  * Default parameters for the International Retirement scenario.
@@ -356,6 +362,9 @@ export class IntlRetirementScenario extends BaseScenario {
 
     // ── Reducers ──────────────────────────────────────────────────────────────
     const { accountService: svc } = ServiceRegistry.getInstance();
+
+    const recordMetricReducer = ReducerBuilder.metric(null).reduceActionType('RECORD_METRIC').build();
+    reducerService.register(recordMetricReducer);
 
     const expenseDebitReducer = new ExpenseDebitReducer({ accountService: svc });
     reducerService.register(expenseDebitReducer);

@@ -127,12 +127,10 @@ export class RecordBalanceAction extends Action {
  * key — metric name (e.g. 'us_savings_interest')
  * value — numeric amount to record
  */
-export class RecordMetricAction extends Action {
+export class RecordMetricAction extends FieldValueAction {
   static description = 'Records a named metric value for reporting; consumed by reducers registered for RECORD_METRIC.';
   constructor(key, value) {
-    super('RECORD_METRIC');
-    this.key   = key;
-    this.value = value;
+    super('RECORD_METRIC', `Record Metric for ${key}`, key, value);
   }
 }
 

@@ -24,7 +24,7 @@ import {
   NumericSumReducer,
   MultiplicativeReducer,
   RepeatingReducer,
-  PRIORITY,
+  PRIORITY, MetricReducer,
 } from '../reducers.js';
 
 class BaseReducerBuilder {
@@ -116,6 +116,11 @@ class FieldReducerBuilder extends BaseFieldReducerBuilder {
   build() { return this._apply(new FieldReducer(this._name, this._priority, this._fieldName)); }
 }
 
+class MetricReducerBuilder extends BaseFieldReducerBuilder {
+  constructor(fieldName) { super('Metric Logger', PRIORITY.METRICS, fieldName); }
+  build() { return this._apply(new MetricReducer(this._name, this._priority, this._fieldName)); }
+}
+
 class ArrayReducerBuilder extends BaseFieldValueReducerBuilder {
   constructor(fieldName) {
     super('Array Reducer', PRIORITY.METRICS, fieldName, null);
@@ -156,6 +161,7 @@ class RepeatingReducerBuilder extends BaseFieldReducerBuilder {
 export class ReducerBuilder {
   static noOp()                   { return new NoOpReducerBuilder(); }
   static field(fieldName)                  { return new FieldReducerBuilder(fieldName); }
+  static metric(fieldName)  {return new MetricReducerBuilder(fieldName); }
   static array(fieldName)   { return new ArrayReducerBuilder(fieldName); }
   static numericSum(fieldName)   { return new NumericSumReducerBuilder(fieldName); }
   static multiplicative(fieldName) { return new MultiplicativeReducerBuilder(fieldName); }
