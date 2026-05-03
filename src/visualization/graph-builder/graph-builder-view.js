@@ -11,6 +11,7 @@
 import { PRIORITY, ScriptedReducer } from '../../simulation-framework/reducers.js';
 import { FieldValueAction, ScriptedAction } from '../../simulation-framework/actions.js';
 import { OneOffEvent } from "../../simulation-framework/events/one-off-event.js";
+import { ACTION_TEMPLATES } from '../../simulation-framework/action-templates.js';
 
 /**
  * GraphBuilderView — pure DOM / template layer for the event-graph editor panel.
@@ -85,6 +86,12 @@ export class GraphBuilderView {
     this.onActionClassChange = null;
     /** @type {function(nodeId: string, newType: string)|null} */
     this.onReducerTypeChange = null;
+    /** @type {function(node, defData: {type, config})|null} */
+    this.onActionDefinitionAdd = null;
+    /** @type {function(node, defId: string)|null} */
+    this.onActionDefinitionRemove = null;
+    /** @type {function(node, defId: string, field: string, value)|null} */
+    this.onActionDefinitionUpdate = null;
 
     this._buildControls();
   }
@@ -123,7 +130,6 @@ export class GraphBuilderView {
       ['+ Series',  'event',   'Series'],
       ['+ One-Off', 'event',   'OneOff'],
       ['+ Handler', 'handler', null],
-      ['+ Action',  'action',  null],
       ['+ Reducer', 'reducer', null],
     ].forEach(([label, kind, subtype]) => {
       const btn = document.createElement('button');
@@ -259,8 +265,16 @@ export class GraphBuilderView {
       if (this.onFieldChange) this.onFieldChange(node, 'name', name.value);
     });
 
-    this._renderLinkableNodeChips(node, 'event',  el.querySelector('#handler-event-count'),  el.querySelector('#handler-events'),  false);
-    this._renderLinkableNodeChips(node, 'action', el.querySelector('#handler-action-count'), el.querySelector('#handler-actions'), true);
+    this._renderLinkableNodeChips(node, 'event', el.querySelector('#handler-event-count'), el.querySelector('#handler-events'), false);
+
+    // Action Definitions — inline list with template picker
+    const defContainer = el.querySelector('#handler-actions');
+    if (defContainer) {
+      defContainer.innerHTML = '';
+      this._renderActionDefinitionList(node, defContainer);
+      const countSpan = el.querySelector('#handler-action-count');
+      if (countSpan) countSpan.innerText = `${(node.generatedActionDefinitions ?? []).length} defined`;
+    }
 
     this._canvas.appendChild(el);
     this._canvas.appendChild(this._createDeleteButton(node));
@@ -419,8 +433,17 @@ export class GraphBuilderView {
 
     this._renderReducerConfig(node, configWrap, el);
 
-    this._renderLinkableNodeChips(node, 'action', el.querySelector('#reducer-reduced-actions-count'),    el.querySelector('#reducer-reduced-actions'),    false);
-    this._renderLinkableNodeChips(node, 'action', el.querySelector('#reducer-generated-actions-count'), el.querySelector('#reducer-generated-actions'), true);
+    // Reduced-action chips — which action types trigger this reducer
+    this._renderLinkableNodeChips(node, 'action', el.querySelector('#reducer-reduced-actions-count'), el.querySelector('#reducer-reduced-actions'), false);
+
+    // Generated Action Definitions — inline list with template picker
+    const genContainer = el.querySelector('#reducer-generated-actions');
+    if (genContainer) {
+      genContainer.innerHTML = '';
+      this._renderActionDefinitionList(node, genContainer);
+      const countSpan = el.querySelector('#reducer-generated-actions-count');
+      if (countSpan) countSpan.innerText = `${(node.generatedActionDefinitions ?? []).length} defined`;
+    }
 
     this._canvas.appendChild(el);
     this._canvas.appendChild(this._createDeleteButton(node));
@@ -488,6 +511,152 @@ export class GraphBuilderView {
     });
 
     container.appendChild(wrap);
+  }
+
+  // ── ACTION DEFINITION LIST ────────────────────────────────────────────────
+
+  /**
+   * Render the full ActionDefinition list (existing rows + add form) into container.
+   */
+  _renderActionDefinitionList(node, container) {
+    (node.generatedActionDefinitions ?? []).forEach(def => {
+      container.appendChild(this._renderActionDefinitionItem(node, def));
+    });
+    container.appendChild(this._renderAddActionDefinitionForm(node));
+  }
+
+  /**
+   * Render one ActionDefinition row: [class label] [type input] [config fields] [remove btn].
+   */
+  _renderActionDefinitionItem(node, def) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;align-items:flex-start;margin-bottom:6px;padding:6px;border:1px solid var(--border,#ccc);border-radius:4px;';
+
+    // Class label (human-readable, from ACTION_TEMPLATES)
+    const cls = def.config?.actionClass;
+    const clsLabel = document.createElement('span');
+    clsLabel.textContent = this._actionClassLabel(cls);
+    clsLabel.style.cssText = 'font-size:10px;color:var(--muted,#888);align-self:center;flex:0 0 auto;min-width:90px;';
+    row.appendChild(clsLabel);
+
+    // Type discriminator input
+    const typeInput = document.createElement('input');
+    typeInput.type        = 'text';
+    typeInput.className   = 'form-control form-control-sm';
+    typeInput.placeholder = 'action type';
+    typeInput.title       = 'Action type discriminator (e.g. SALARY_CREDIT)';
+    typeInput.value       = def.type || '';
+    typeInput.style.cssText = 'width:130px;flex:0 0 auto;';
+    typeInput.addEventListener('input', () => {
+      if (this.onActionDefinitionUpdate) this.onActionDefinitionUpdate(node, def.id, 'type', typeInput.value);
+    });
+    row.appendChild(typeInput);
+
+    // Config fields (class-specific)
+    this._actionDefinitionConfigFields(cls).forEach(({ field, placeholder, isTextarea }) => {
+      const inp = isTextarea ? document.createElement('textarea') : document.createElement('input');
+      if (!isTextarea) inp.type = 'text';
+      inp.className   = 'form-control form-control-sm';
+      inp.placeholder = placeholder;
+      inp.value       = def.config[field] ?? '';
+      inp.style.cssText = isTextarea
+        ? 'width:100%;flex:1 1 100%;font-family:monospace;font-size:11px;'
+        : 'flex:1 1 80px;min-width:60px;';
+      if (isTextarea) inp.rows = 3;
+      inp.addEventListener('input', () => {
+        if (this.onActionDefinitionUpdate) this.onActionDefinitionUpdate(node, def.id, field, inp.value);
+      });
+      row.appendChild(inp);
+    });
+
+    // Remove button
+    const removeBtn = document.createElement('button');
+    removeBtn.className   = 'btn btn-warn btn-sm';
+    removeBtn.textContent = '✕';
+    removeBtn.title       = 'Remove this action definition';
+    removeBtn.style.cssText = 'flex:0 0 auto;';
+    removeBtn.addEventListener('click', () => {
+      if (this.onActionDefinitionRemove) this.onActionDefinitionRemove(node, def.id);
+    });
+    row.appendChild(removeBtn);
+
+    return row;
+  }
+
+  /** Resolve a human-readable label for an actionClass string. */
+  _actionClassLabel(cls) {
+    const tpl = ACTION_TEMPLATES.find(t => t.actionClass === cls);
+    return tpl ? tpl.label : (cls || 'Action');
+  }
+
+  /**
+   * Return editable field descriptors for an actionClass.
+   * Each entry: { field, placeholder, isTextarea? }
+   */
+  _actionDefinitionConfigFields(cls) {
+    switch (cls) {
+      case 'RecordMetricAction':
+        return [{ field: 'key',       placeholder: 'metric key'    },
+                { field: 'value',     placeholder: 'value / $expr' }];
+      case 'AmountAction':
+        return [{ field: 'name',      placeholder: 'name (opt)'    },
+                { field: 'value',     placeholder: 'amount / $expr' }];
+      case 'FieldValueAction':
+      case 'FieldAction':
+        return [{ field: 'fieldName', placeholder: 'field name'    },
+                { field: 'value',     placeholder: 'value / $expr' }];
+      case 'ScriptedAction':
+        return [{ field: 'fieldName', placeholder: 'field name'    },
+                { field: 'script',    placeholder: '// script', isTextarea: true }];
+      case 'RecordBalanceAction':
+      case 'Action':
+      default:
+        return [];
+    }
+  }
+
+  /**
+   * Render the "add new ActionDefinition" form:
+   * [template select] [type input] [+ Add button]
+   */
+  _renderAddActionDefinitionForm(node) {
+    const form = document.createElement('div');
+    form.style.cssText = 'display:flex;gap:4px;align-items:center;margin-top:4px;';
+
+    const select = document.createElement('select');
+    select.className    = 'form-select form-select-sm';
+    select.style.cssText = 'flex:1 1 auto;';
+    ACTION_TEMPLATES.forEach(tpl => {
+      const opt = document.createElement('option');
+      opt.value       = tpl.id;
+      opt.textContent = tpl.label;
+      select.appendChild(opt);
+    });
+
+    const typeInput = document.createElement('input');
+    typeInput.type        = 'text';
+    typeInput.className   = 'form-control form-control-sm';
+    typeInput.placeholder = 'action type';
+    typeInput.style.cssText = 'flex:1 1 110px;';
+
+    const addBtn = document.createElement('button');
+    addBtn.className   = 'btn btn-sm';
+    addBtn.textContent = '+ Add';
+    addBtn.addEventListener('click', () => {
+      const tpl = ACTION_TEMPLATES.find(t => t.id === select.value);
+      if (!tpl || !typeInput.value.trim()) return;
+      const defData = {
+        type:   typeInput.value.trim().toUpperCase().replace(/\s+/g, '_'),
+        config: { actionClass: tpl.actionClass, ...tpl.defaultConfig },
+      };
+      if (this.onActionDefinitionAdd) this.onActionDefinitionAdd(node, defData);
+      typeInput.value = '';
+    });
+
+    form.appendChild(select);
+    form.appendChild(typeInput);
+    form.appendChild(addBtn);
+    return form;
   }
 
   // ── CHIP HELPER ───────────────────────────────────────────────────────────

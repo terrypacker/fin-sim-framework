@@ -19,6 +19,9 @@
 
 import {BaseApp} from "./base-app.js";
 import { IntlRetirementScenario } from "../scenarios/intl-retirement-scenario.js";
+import {
+  SimulationWorkbenchDefaultScenario
+} from "../scenarios/simulation-workbench-default-scenario.js";
 
 const CHART_SERIES = [
   { key: 'usSavingsAccount.balance', color: '#60a5fa', label: 'US Savings'    },
@@ -31,7 +34,9 @@ export class SimulationWorkbench extends BaseApp {
   constructor() {
     super({
       newScenario: (params, initialState, eventSchedulerUI) => {
-        return new IntlRetirementScenario({ eventSchedulerUI });
+        const intlRetirementScenario = new IntlRetirementScenario({ eventSchedulerUI });
+        //TODO When we support selecting from a few default scenarios: const defaultScenario = new SimulationWorkbenchDefaultScenario({ eventSchedulerUI });
+        return intlRetirementScenario;
       },
       chartSeries: CHART_SERIES,
     });

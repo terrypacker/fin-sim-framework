@@ -20,6 +20,7 @@ import {
 import {
   ReducerBuilder
 } from "../simulation-framework/builders/reducer-builder.js";
+import { ActionDefinition } from "../simulation-framework/actions.js";
 import {SimulationState} from "../simulation-framework/simulation-state.js";
 
 /**
@@ -48,7 +49,7 @@ export class SimulationWorkbenchDefaultScenario extends BaseScenario {
    *
    * Pattern:
    *   1. Build the domain object (EventSeries, HandlerEntry, reducer, action).
-   *   2. Set any cross-references (handledEvents, generatedActions, reducedActions).
+   *   2. Set any cross-references (handledEvents, generatedActionTypes/Definitions, reducedActionTypes).
    *   3. Call service.register(item) — this publishes CREATE on the bus,
    *      which SimulationSync and ConfigBuilder handle automatically.
    */
@@ -109,19 +110,20 @@ export class SimulationWorkbenchDefaultScenario extends BaseScenario {
     // ── Handlers ──────────────────────────────────────────────────────────────
     // Build the handler with its connections populated before calling register()
     // so that SimulationSync wires it fully into the sim on the first CREATE.
+    // null fn → uses HandlerEntry.defaultFunction which instantiates from generatedActionDefinitions.
     const monthStartHandler = HandlerBuilder
-    .handler(function({ data, date, state }) { return [...this.generatedActions]; })
+    .handler(null)
     .name('Month Start Handler')
     .forEvent(monthStartEventSeries)
-    .generateAction(monthStartAction)
+    .generateActionDef(ActionDefinition.fromAction(monthStartAction))
     .build();
     handlerService.register(monthStartHandler);
 
     const monthEndHandler = HandlerBuilder
-    .handler(function({ data, date, state }) { return [...this.generatedActions]; })
+    .handler(null)
     .name('Month End Handler')
     .forEvent(monthEndEventSeries)
-    .generateAction(recordSalaryPaymentAction)
+    .generateActionDef(ActionDefinition.fromAction(recordSalaryPaymentAction))
     .build();
     handlerService.register(monthEndHandler);
 
@@ -129,8 +131,8 @@ export class SimulationWorkbenchDefaultScenario extends BaseScenario {
     const recordSalaryPaymentReducer = ReducerBuilder
     .field('metrics.amount')
     .name('Process Salary Payment Amount')
-    .reduceAction(recordSalaryPaymentAction)
-    .generateAction(sumSalaryPaymentAction)
+    .reduceActionType(recordSalaryPaymentAction.type)
+    .generateActionDef(ActionDefinition.fromAction(sumSalaryPaymentAction))
     .build();
     reducerService.register(recordSalaryPaymentReducer);
 
@@ -138,29 +140,29 @@ export class SimulationWorkbenchDefaultScenario extends BaseScenario {
     .multiplicative('metrics.taxAmount')
     .name('Process Salary Tax')
     .value(0.15)
-    .reduceAction(recordSalaryPaymentAction)
-    .generateAction(sumTaxAction)
+    .reduceActionType(recordSalaryPaymentAction.type)
+    .generateActionDef(ActionDefinition.fromAction(sumTaxAction))
     .build();
     reducerService.register(recordSalaryTaxReducer);
 
     const sumSalaryPaymentReducer = ReducerBuilder
     .numericSum('metrics.salary')
     .name('Update Total Salary')
-    .reduceAction(sumSalaryPaymentAction)
+    .reduceActionType(sumSalaryPaymentAction.type)
     .build();
     reducerService.register(sumSalaryPaymentReducer);
 
     const sumSalaryTaxReducer = ReducerBuilder
     .numericSum('metrics.totalTax')
     .name('Update Total Tax')
-    .reduceAction(sumTaxAction)
+    .reduceActionType(sumTaxAction.type)
     .build();
     reducerService.register(sumSalaryTaxReducer);
 
     const depositReducer = ReducerBuilder
     .array('metrics.deposits')
     .name('Deposit Payment')
-    .reduceAction(recordSalaryPaymentAction)
+    .reduceActionType(recordSalaryPaymentAction.type)
     .build();
     reducerService.register(depositReducer);
   }

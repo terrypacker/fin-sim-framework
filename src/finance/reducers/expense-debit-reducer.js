@@ -36,6 +36,7 @@ export class ExpenseDebitReducer extends Reducer {
     this.accountService = accountService;
     this.usAccountKey   = usAccountKey;
     this.auAccountKey   = auAccountKey;
+    this.reducedActionTypes = ['EXPENSE_DEBIT'];
   }
 
   reduce(state, action, date) {

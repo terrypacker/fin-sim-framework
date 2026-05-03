@@ -33,6 +33,7 @@ export class OutOfFundsHandler extends HandlerEntry {
 
   constructor() {
     super(null, 'Out of Funds');
+    this.generatedActionTypes = ['SET_OUT_OF_FUNDS_DATE', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ data, date, state }) {

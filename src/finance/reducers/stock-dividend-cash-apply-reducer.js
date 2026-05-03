@@ -35,6 +35,8 @@ export class StockDividendCashApplyReducer extends Reducer {
     super('Stock Dividend Cash Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
     this.accountKey     = accountKey;
+    this.reducedActionTypes  = ['STOCK_DIVIDEND_CASH_APPLY'];
+    this.generatedActionTypes = ['STOCK_DIVIDEND_TAX'];
   }
 
   reduce(state, action, date) {

@@ -38,6 +38,7 @@ export class ChangeResidencyHandler extends HandlerEntry {
   constructor() {
     super(null, 'Change Residency');
     this._settleService = new TaxSettleService();
+    this.generatedActionTypes = ['CHANGE_RESIDENCY_APPLY', 'TAX_SETTLE_APPLY', 'RECORD_BALANCE'];
   }
 
   call({ state }) {

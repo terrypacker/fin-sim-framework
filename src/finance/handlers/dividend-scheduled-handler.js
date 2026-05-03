@@ -45,6 +45,8 @@ export class DividendScheduledHandler extends HandlerEntry {
     this.accountKey   = accountKey;
     this.dividendRate = dividendRate;
     this.reinvest     = reinvest;
+    // Declares both branches; actual type chosen at runtime based on reinvest flag
+    this.generatedActionTypes = ['STOCK_DIVIDEND_APPLY', 'STOCK_DIVIDEND_CASH_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ data, state }) {

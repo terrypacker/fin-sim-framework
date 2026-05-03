@@ -39,15 +39,17 @@ export class SimulationAnimator {
    *   statePanelView: import('./state-panel-view.js').StatePanelView,
    *   graphView?:     import('../visualization/graph-view.js').GraphView,
    *   chartView:      import('../visualization/chart-view.js').ChartView,
+   *   actionService:  import('../services/action-service.js').ActionService,
    * }}
    */
-  constructor({ configGraph, scenario, timeControls, statePanelView, graphView, chartView }) {
+  constructor({ configGraph, scenario, timeControls, statePanelView, graphView, chartView, actionService }) {
     this._configGraph    = configGraph;
     this._scenario       = scenario;
     this._timeControls   = timeControls;
     this._statePanelView = statePanelView;
     this._graphView      = graphView ?? null;
     this._chartView      = chartView;
+    this._actionService  = actionService;
 
     this.playing = false;
   }
@@ -163,7 +165,20 @@ export class SimulationAnimator {
   }
 
   updateConfigGraphActions(action, stateBefore, stateAfter) {
-    this._renderNodeFired(action.id, stateBefore, stateAfter);
+    const nodeId = action.actionId ?? this._resolveActionNodeId(action.type);
+    if (nodeId) this._renderNodeFired(nodeId, stateBefore, stateAfter);
+  }
+
+  /**
+   * Look up the config-graph node ID for an action type.
+   * Used as a fallback when the runtime action was created as a plain object
+   * (e.g. from a domain handler's call() method) and therefore has no actionId.
+   * @param {string} type
+   * @returns {string|null}
+   * @private
+   */
+  _resolveActionNodeId(type) {
+    return this._actionService?.getAll().find(a => a.type === type)?.id ?? null;
   }
 
   updateConfigGraphReducers(reducer, stateBefore, stateAfter) {

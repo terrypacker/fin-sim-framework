@@ -21,6 +21,7 @@ export const SIMULATION_BUS_MESSAGES = {
   EVENT_OCCURRENCE_START: 'EVENT_OCCURRENCE_START',
   EVENT_OCCURRENCE_END: 'EVENT_OCCURRENCE_END',
   HANDLED_EVENT: 'HANDLED_EVENT',
+  ACTION_INSTANCE: 'ACTION_INSTANCE',
   ACTION_RESULT: 'ACTION_RESULT',
   REDUCER_RESULT: 'REDUCER_RESULT'
 }
@@ -78,6 +79,18 @@ export class EventEndBusMessage extends SimulationBusMessage {
 export class EventHandledMessage extends SimulationBusMessage {
   constructor({ date, sim, payload, stateSnapshot }) {
     super({ type: SIMULATION_BUS_MESSAGES.HANDLED_EVENT, date, sim, payload, stateSnapshot });
+  }
+}
+
+/**
+ * Published when an Action instance enters the simulation queue (after decoration).
+ * Carries the fully-decorated instance so observers (e.g. service layer) can store it.
+ * Always has type 'ACTION_INSTANCE'.
+ */
+export class ActionInstanceMessage extends BusMessage {
+  constructor({ date, action }) {
+    super({ type: SIMULATION_BUS_MESSAGES.ACTION_INSTANCE, date });
+    this.action = action;
   }
 }
 

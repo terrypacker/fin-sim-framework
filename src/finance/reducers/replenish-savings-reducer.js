@@ -37,6 +37,8 @@ export class ReplenishSavingsReducer extends Reducer {
   constructor({ accountService } = {}) {
     super('Replenish Savings', PRIORITY.PRE_PROCESS);
     this.accountService = accountService;
+    this.reducedActionTypes  = ['REPLENISH_SAVINGS'];
+    this.generatedActionTypes = ['INTL_TRANSFER_APPLY'];
   }
 
   reduce(state, action, date) {

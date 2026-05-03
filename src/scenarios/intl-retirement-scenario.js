@@ -31,6 +31,12 @@ import { IntlTransferApplyReducer } from '../finance/reducers/intl-transfer-appl
 import { StockDividendCashApplyReducer } from '../finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { ChangeResidencyApplyReducer } from '../finance/reducers/change-residency-apply-reducer.js';
 import { SetOutOfFundsDateReducer } from '../finance/reducers/set-out-of-funds-date-reducer.js';
+import {
+  ActionBuilder
+} from "../simulation-framework/builders/action-builder.js";
+import {
+  ReducerBuilder
+} from "../simulation-framework/builders/reducer-builder.js";
 
 /**
  * Default parameters for the International Retirement scenario.
@@ -230,18 +236,22 @@ export class IntlRetirementScenario extends BaseScenario {
     // ── Register simulation ───────────────────────────────────────────────────
     super.buildSim(params, initialState);
 
-    // ── Wire TaxService (registers PERIOD_ADVANCE, TAX_SETTLE, account modules)
+    // ── Wire TaxService through the service layer (registers PERIOD_ADVANCE,
+    //    TAX_SETTLE, account module reducers/handlers, and dynamic tax reducers
+    //    as named class instances visible in the config graph).
     const periodService = new PeriodService();
     for (let y = 2026; y <= 2041; y++) applyTo(periodService, buildUsCalendarYear(y));
     for (let y = 2025; y <= 2041; y++) applyTo(periodService, buildAuFiscalYear(y));
-    new TaxService().registerWith(this.sim, ['US', 'AU'], periodService);
+    new TaxService().registerWithServices(this.sim, ['US', 'AU'], periodService, ServiceRegistry.getInstance());
 
     // ── Schedule one-off CHANGE_RESIDENCY (Jul 1 of moveYear) ────────────────
-    // This is wired via the sim directly; its handler is created in loadDefaults().
-    this.sim.schedule({
-      date: new Date(Date.UTC(p.moveYear, 6, 1)),
-      type: 'CHANGE_RESIDENCY',
-      data: {},
+    // Registered through EventService so it gets an ID visible in the config graph.
+    ServiceRegistry.getInstance().eventService.createOneOffEvent({
+      name:    'Change Residency',
+      type:    'CHANGE_RESIDENCY',
+      date:    new Date(Date.UTC(p.moveYear, 6, 1)),
+      data:    {},
+      enabled: true,
     });
   }
 
@@ -352,6 +362,9 @@ export class IntlRetirementScenario extends BaseScenario {
 
     // ── Reducers ──────────────────────────────────────────────────────────────
     const { accountService: svc } = ServiceRegistry.getInstance();
+
+    const recordMetricReducer = ReducerBuilder.metric(null).reduceActionType('RECORD_METRIC').build();
+    reducerService.register(recordMetricReducer);
 
     const expenseDebitReducer = new ExpenseDebitReducer({ accountService: svc });
     reducerService.register(expenseDebitReducer);

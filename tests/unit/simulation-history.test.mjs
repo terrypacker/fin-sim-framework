@@ -130,7 +130,7 @@ test('Bug 3: rewind + replay does not double the snapshot count', () => {
     'snapshot count after rewind+replay must match first-run count, not double it');
 });
 
-// ─── Bug 2 regression: actionGraph and nextActionId reset on rewind ───────────
+// ─── Bug 2 regression: actionGraph reset on rewind ───────────────────────────
 
 test('Bug 2: resetForReplay() replaces actionGraph with a fresh instance', () => {
   const sim = makeCounterSim();
@@ -145,18 +145,18 @@ test('Bug 2: resetForReplay() replaces actionGraph with a fresh instance', () =>
     'new actionGraph must be empty');
 });
 
-test('Bug 2: resetForReplay() resets nextActionId to 0', () => {
+test('Bug 2: resetForReplay() resets execution counters to 0', () => {
   const sim = makeCounterSim();
   sim.stepTo(new Date(2025, 0, 1));
-  assert.ok(sim.nextActionId > 0, 'nextActionId must be > 0 after stepping');
+  assert.ok(sim.actionExecutions > 0, 'actionExecutions must be > 0 after stepping');
 
   sim.history.resetForReplay();
 
-  assert.strictEqual(sim.nextActionId, 0,
-    'nextActionId must reset to 0 after resetForReplay()');
+  assert.strictEqual(sim.actionExecutions, 0, 'actionExecutions must reset to 0');
+  assert.strictEqual(sim.reducerExecutions, 0, 'reducerExecutions must reset to 0');
 });
 
-test('Bug 2: after resetForReplay + replay, action node IDs start from 0', () => {
+test('Bug 2: after resetForReplay + replay, action nodes have UUID instanceIds', () => {
   const sim = makeCounterSim();
   sim.stepTo(new Date(2025, 0, 1));
 
@@ -167,9 +167,11 @@ test('Bug 2: after resetForReplay + replay, action node IDs start from 0', () =>
 
   const nodes = [...sim.actionGraph.actionGraph.values()];
   assert.ok(nodes.length > 0, 'action graph must have nodes after replay');
-  const minId = Math.min(...nodes.map(n => n.id));
-  assert.strictEqual(minId, 0,
-    'first action node ID after replay must be 0');
+  // Node IDs are now UUIDs — verify they are non-null strings
+  for (const node of nodes) {
+    assert.ok(typeof node.id === 'string' && node.id.length > 0,
+      'action node id must be a non-empty string (UUID)');
+  }
 });
 
 // ─── RNG reproducibility across rewind ───────────────────────────────────────

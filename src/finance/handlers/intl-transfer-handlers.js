@@ -40,6 +40,7 @@ export class IntlTransferToUsHandler extends HandlerEntry {
     super(null, 'International Transfer to US');
     this.auAccountKey = auAccountKey;
     this.usAccountKey = usAccountKey;
+    this.generatedActionTypes = ['INTL_TRANSFER_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ state, data }) {
@@ -82,6 +83,7 @@ export class IntlTransferToAuHandler extends HandlerEntry {
     super(null, 'International Transfer to AU');
     this.usAccountKey = usAccountKey;
     this.auAccountKey = auAccountKey;
+    this.generatedActionTypes = ['INTL_TRANSFER_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ state, data }) {

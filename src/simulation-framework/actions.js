@@ -26,16 +26,23 @@ export const DEFAULT_ACTIONS = {
  * Base class for all actions returned by Handlers and emitted via next:[].
  * Every action has a type discriminator consumed by the ReducerPipeline.
  *
- * id is null until assigned by ActionService._generateId().
+ * id is null until assigned by ActionService._generateId() (config objects) or
+ * ActionDefinition.instantiate() (runtime instances — gets a UUID).
  * type is the category discriminator used as the ReducerPipeline lookup key.
- * These are intentionally separate: id uniquely identifies the action instance;
- * type identifies which reducers should process it.
+ *
+ * Runtime-only parentage fields (set by Simulation.decorateAction):
+ *   instanceId       — UUID assigned when the instance enters the action queue
+ *   parentInstanceId — instanceId of the action that emitted this one (null = top-level)
+ *   rootInstanceId   — instanceId of the originating root action (null = this is root)
  */
 export class Action {
   static description = 'Base action carrying only a type discriminator and optional name.';
 
   constructor(type, name) {
-    this.id   = null;  // Assigned by ActionService after construction
+    this.id              = null;  // Assigned by ActionService (config) or instantiate() (runtime UUID)
+    this.instanceId      = null;  // UUID — assigned by instantiate() or decorateAction()
+    this.parentInstanceId = null; // UUID of parent action (null = top-level)
+    this.rootInstanceId  = null;  // UUID of root action (null = this is the root)
     this.type = type;
     this.name = name;
   }
@@ -120,12 +127,10 @@ export class RecordBalanceAction extends Action {
  * key — metric name (e.g. 'us_savings_interest')
  * value — numeric amount to record
  */
-export class RecordMetricAction extends Action {
+export class RecordMetricAction extends FieldValueAction {
   static description = 'Records a named metric value for reporting; consumed by reducers registered for RECORD_METRIC.';
   constructor(key, value) {
-    super('RECORD_METRIC');
-    this.key   = key;
-    this.value = value;
+    super('RECORD_METRIC', `Record Metric for ${key}`, key, value);
   }
 }
 
@@ -182,6 +187,7 @@ export class ScriptedAction extends FieldValueAction {
  * Maps actionClass string → class.
  * Used by ActionService.replaceAction to instantiate the correct subclass
  * when the user changes the type of an existing action in the UI.
+ * Also used by ActionDefinition.instantiate() to construct Action instances.
  */
 export const ACTION_CLASSES = {
   AmountAction,
@@ -192,3 +198,105 @@ export const ACTION_CLASSES = {
   RecordMetricAction,
   ScriptedAction
 };
+
+// ─── UUID helper ───────────────────────────────────────────────────────────────
+
+export const generateActionId = () =>
+  (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+// ─── ActionDefinition ──────────────────────────────────────────────────────────
+
+/**
+ * Represents a configured action to be emitted at runtime.
+ *
+ * Separates the declaration (what type of action, with what config)
+ * from the instantiation (the actual Action object created during simulation).
+ *
+ * Used by HandlerEntry.generatedActionDefinitions and
+ * Reducer.generatedActionDefinitions to produce Action instances at runtime
+ * without holding direct references to Action configuration objects.
+ *
+ * @property {string} id      - Stable identity for graph referencing (UUID)
+ * @property {string} type    - Action type discriminator (routes to reducers)
+ * @property {object} config  - Plain data describing how to construct the Action.
+ *                              Values may be functions: (context) => value,
+ *                              resolved at instantiate() time.
+ *                              Must include actionClass (e.g. 'AmountAction').
+ */
+export class ActionDefinition {
+  constructor({ type, config = {} }) {
+    this.id     = generateActionId();
+    this.type   = type;
+    this.config = config;
+  }
+
+  /**
+   * Create an ActionDefinition from an existing Action instance,
+   * capturing its class and properties as static config.
+   *
+   * @param {Action} action
+   * @returns {ActionDefinition}
+   */
+  static fromAction(action) {
+    const config = { actionClass: action.actionClass };
+    if (action.id        !== undefined) config.actionId  = action.id;
+    if (action.name      !== undefined) config.name      = action.name;
+    if (action.fieldName !== undefined) config.fieldName = action.fieldName;
+    if (action.value     !== undefined) config.value     = action.value;
+    if (action._script   !== undefined) config.script    = action._script;
+    if (action.key       !== undefined) config.key       = action.key;
+    return new ActionDefinition({ type: action.type, config });
+  }
+
+  /**
+   * Instantiate a concrete Action from this definition.
+   *
+   * Config values are resolved in order of precedence:
+   *   1. Function  — called with `context`
+   *   2. Expression string starting with `$` — compiled and evaluated with
+   *      ($data, $state, $meta, $date, $sim) bound from context.
+   *      e.g. `$data.amount`, `$state.salary * 0.3`
+   *   3. Any other value — used as-is
+   *
+   * @param {object} [context] - Runtime context ({ date, state, data, meta, sim, ... })
+   * @returns {Action}
+   */
+  instantiate(context = {}) {
+    const resolved = {};
+    for (const [k, v] of Object.entries(this.config)) {
+      if (typeof v === 'function') {
+        resolved[k] = v(context);
+      } else if (typeof v === 'string' && v.startsWith('$')) {
+        try {
+          // eslint-disable-next-line no-new-func
+          const fn = new Function('$data', '$state', '$meta', '$date', '$sim', `return ${v}`);
+          resolved[k] = fn(
+            context.data  ?? {},
+            context.state ?? {},
+            context.meta  ?? {},
+            context.date  ?? null,
+            context.sim   ?? null,
+          );
+        } catch (e) {
+          console.warn(`ActionDefinition: expression error for field "${k}" = "${v}":`, e.message);
+          resolved[k] = v; // fall back to raw string
+        }
+      } else {
+        resolved[k] = v;
+      }
+    }
+    const { actionClass, ...props } = resolved;
+    const Cls = ACTION_CLASSES[actionClass ?? 'Action'];
+    if (!Cls) throw new Error(`ActionDefinition: unknown actionClass "${actionClass ?? 'Action'}"`);
+    const instance = Object.create(Cls.prototype);
+    instance.id              = null;             // no service-registered config ID
+    instance.instanceId      = generateActionId(); // UUID for runtime tracking
+    instance.parentInstanceId = null;
+    instance.rootInstanceId  = null;
+    Object.assign(instance, props);
+    instance.type = this.type;  // definition's type discriminator always wins
+    return instance;
+  }
+}

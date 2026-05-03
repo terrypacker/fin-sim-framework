@@ -334,6 +334,11 @@ export class ConfigGraph {
     return Array.from(this.nodes.values()).filter(n => n.kind === kind);
   }
 
+  /** Find the first node of the given kind whose type string matches. */
+  getNodeByType(kind, type) {
+    return this.nodes.find(n => n.kind === kind && n.type === type);
+  }
+
   getNodesFromKindToMe(node, kind) {
     const myEdges = Array.from(this.edges.values().filter(e => e.to === node.id));
     return Array.from(this.nodes.values()).filter(n => {

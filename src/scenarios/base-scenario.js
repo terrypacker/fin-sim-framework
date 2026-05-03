@@ -65,7 +65,8 @@ export const startSnapFns = {
  *
  *     const handler = new HandlerEntry(fn, 'Month Handler');
  *     handler.handledEvents.push(event);
- *     handler.generatedActions.push(action);
+ *     handler.generatedActionTypes.push(action.type);
+ *     handler.generatedActionDefinitions.push(ActionDefinition.fromAction(action));
  *     sr.handlerService.register(handler); // → sim wired + graph node added
  *   }
  */
@@ -140,10 +141,8 @@ export class BaseScenario {
 
   handlerCreationRequested() {
     const { handlerService } = ServiceRegistry.getInstance();
-    const handler = handlerService.createHandler(
-      function({ data, date, state }) { return [...this.generatedActions]; },
-      'New Handler'
-    );
+    // null fn → uses HandlerEntry.defaultFunction which instantiates from generatedActionDefinitions
+    const handler = handlerService.createHandler(null, 'New Handler');
     this.eventSchedulerUI.editNode(handler);
   }
 

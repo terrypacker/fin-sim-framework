@@ -44,6 +44,8 @@ function makeGraph() {
     edges,
     renderCalls,
     getNode(id) { return nodes.find(n => n.id === id); },
+    getNodeByType(kind, type) { return nodes.find(n => n.kind === kind && n.type === type); },
+    getKind(kind) { return nodes.filter(n => n.kind === kind); },
     addNode(node) {
       if (nodes.find(n => n.id === node.id)) throw new Error(`Duplicate node: ${node.id}`);
       nodes.push(node);
@@ -124,7 +126,7 @@ test('CREATE HandlerEntry: adds node to graph', () => {
   const graph = makeGraph();
   new GraphSync({ graph, registry: makeRegistry(bus) });
 
-  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [], generatedActions: [] };
+  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [], generatedActionTypes: [] };
   publish(bus, 'CREATE', 'HandlerEntry', handler);
 
   expect(graph.getNode('h1')).toBeDefined();
@@ -138,7 +140,7 @@ test('CREATE HandlerEntry: adds edge from existing event to handler', () => {
   const event = { id: 'e1', kind: 'event', eventType: 'Series', name: 'Evt' };
   graph.addNode(event);
 
-  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [event], generatedActions: [] };
+  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [event], generatedActionTypes: [] };
   publish(bus, 'CREATE', 'HandlerEntry', handler);
 
   expect(graph.edges).toContainEqual({ from: 'e1', to: 'h1' });
@@ -150,37 +152,52 @@ test('CREATE HandlerEntry: no edge added for event not yet in graph', () => {
   new GraphSync({ graph, registry: makeRegistry(bus) });
 
   const event = { id: 'e1' }; // NOT added to graph
-  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [event], generatedActions: [] };
+  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [event], generatedActionTypes: [] };
   publish(bus, 'CREATE', 'HandlerEntry', handler);
 
   expect(graph.edges.length).toBe(0);
 });
 
-test('CREATE HandlerEntry: adds edge from handler to generatedAction', () => {
+// ─── CREATE: handler→action edges (Phase 3) ──────────────────────────────────
+
+test('CREATE HandlerEntry: adds edge to action node matching generatedActionType', () => {
   const bus = makeBus();
   const graph = makeGraph();
   new GraphSync({ graph, registry: makeRegistry(bus) });
 
-  const action = { id: 'a1', kind: 'action', name: 'Act' };
-  graph.addNode(action); // already in graph
+  const action = { id: 'a1', kind: 'action', name: 'Pay', type: 'PAY' };
+  graph.addNode(action);
 
-  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [], generatedActions: [action] };
+  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [], generatedActionTypes: ['PAY'] };
   publish(bus, 'CREATE', 'HandlerEntry', handler);
 
   expect(graph.edges).toContainEqual({ from: 'h1', to: 'a1' });
 });
 
-test('CREATE HandlerEntry: auto-adds generatedAction node if not already in graph', () => {
+test('CREATE HandlerEntry: no edge added for action type not yet in graph', () => {
   const bus = makeBus();
   const graph = makeGraph();
   new GraphSync({ graph, registry: makeRegistry(bus) });
 
-  const action = { id: 'a1', kind: 'action', name: 'Act' };
-  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [], generatedActions: [action] };
+  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [], generatedActionTypes: ['MISSING'] };
   publish(bus, 'CREATE', 'HandlerEntry', handler);
 
-  expect(graph.getNode('a1')).toBeDefined();
-  expect(graph.edges).toContainEqual({ from: 'h1', to: 'a1' });
+  expect(graph.edges.length).toBe(0);
+});
+
+test('CREATE HandlerEntry: no duplicate edge when action already linked', () => {
+  const bus = makeBus();
+  const graph = makeGraph();
+  new GraphSync({ graph, registry: makeRegistry(bus) });
+
+  const action = { id: 'a1', kind: 'action', name: 'Pay', type: 'PAY' };
+  graph.addNode(action);
+  graph.addEdge({ from: 'h1', to: 'a1' }); // pre-existing edge
+
+  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [], generatedActionTypes: ['PAY'] };
+  publish(bus, 'CREATE', 'HandlerEntry', handler);
+
+  expect(graph.edges.filter(e => e.from === 'h1' && e.to === 'a1').length).toBe(1);
 });
 
 // ─── CREATE: actions ──────────────────────────────────────────────────────────
@@ -214,36 +231,116 @@ test('CREATE reducer: adds reducer node', () => {
   const graph = makeGraph();
   new GraphSync({ graph, registry: makeRegistry(bus) });
 
-  const reducer = { id: 'r1', kind: 'reducer', name: 'R', reducedActions: [], generatedActions: [] };
+  const reducer = { id: 'r1', kind: 'reducer', name: 'R', reducedActionTypes: [], generatedActionTypes: [] };
   publish(bus, 'CREATE', 'NumericSumReducer', reducer);
 
   expect(graph.getNode('r1')).toBeDefined();
 });
 
-test('CREATE reducer: adds edge from reducedAction to reducer', () => {
+// ─── CREATE: reducer↔action edges (Phase 3) ──────────────────────────────────
+
+test('CREATE reducer: adds edge from action node to reducer for reducedActionType', () => {
   const bus = makeBus();
   const graph = makeGraph();
   new GraphSync({ graph, registry: makeRegistry(bus) });
 
-  const action = { id: 'a1', kind: 'action', name: 'Act' };
+  const action = { id: 'a1', kind: 'action', name: 'Pay', type: 'PAY' };
   graph.addNode(action);
 
-  const reducer = { id: 'r1', kind: 'reducer', name: 'R', reducedActions: [action], generatedActions: [] };
+  const reducer = { id: 'r1', kind: 'reducer', name: 'R', reducedActionTypes: ['PAY'], generatedActionTypes: [] };
   publish(bus, 'CREATE', 'NumericSumReducer', reducer);
 
   expect(graph.edges).toContainEqual({ from: 'a1', to: 'r1' });
 });
 
-test('CREATE reducer: auto-adds reducedAction node if not already in graph', () => {
+test('CREATE reducer: adds edge from reducer to action node for generatedActionType', () => {
   const bus = makeBus();
   const graph = makeGraph();
   new GraphSync({ graph, registry: makeRegistry(bus) });
 
-  const action = { id: 'a1', kind: 'action', name: 'Act' };
-  const reducer = { id: 'r1', kind: 'reducer', name: 'R', reducedActions: [action], generatedActions: [] };
+  const action = { id: 'a1', kind: 'action', name: 'Next', type: 'NEXT' };
+  graph.addNode(action);
+
+  const reducer = { id: 'r1', kind: 'reducer', name: 'R', reducedActionTypes: [], generatedActionTypes: ['NEXT'] };
   publish(bus, 'CREATE', 'NumericSumReducer', reducer);
 
-  expect(graph.getNode('a1')).toBeDefined();
+  expect(graph.edges).toContainEqual({ from: 'r1', to: 'a1' });
+});
+
+test('CREATE reducer: no edge for action type not yet in graph', () => {
+  const bus = makeBus();
+  const graph = makeGraph();
+  new GraphSync({ graph, registry: makeRegistry(bus) });
+
+  const reducer = { id: 'r1', kind: 'reducer', name: 'R', reducedActionTypes: ['MISSING'], generatedActionTypes: [] };
+  publish(bus, 'CREATE', 'NumericSumReducer', reducer);
+
+  expect(graph.edges.length).toBe(0);
+});
+
+// ─── CREATE action: reverse-wire existing handler/reducer edges (Phase 3) ─────
+
+test('CREATE action: wires edge from handler that already declared this type', () => {
+  const bus = makeBus();
+  const graph = makeGraph();
+  new GraphSync({ graph, registry: makeRegistry(bus) });
+
+  // Handler in graph first
+  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [], generatedActionTypes: ['PAY'] };
+  graph.addNode(handler);
+
+  // Action created second — should pick up the handler
+  const action = { id: 'a1', kind: 'action', name: 'Pay', type: 'PAY' };
+  publish(bus, 'CREATE', 'AmountAction', action);
+
+  expect(graph.edges).toContainEqual({ from: 'h1', to: 'a1' });
+});
+
+test('CREATE action: wires edge to reducer that already declared this type as reducedActionType', () => {
+  const bus = makeBus();
+  const graph = makeGraph();
+  new GraphSync({ graph, registry: makeRegistry(bus) });
+
+  // Reducer in graph first
+  const reducer = { id: 'r1', kind: 'reducer', name: 'R', reducedActionTypes: ['PAY'], generatedActionTypes: [] };
+  graph.addNode(reducer);
+
+  // Action created second
+  const action = { id: 'a1', kind: 'action', name: 'Pay', type: 'PAY' };
+  publish(bus, 'CREATE', 'AmountAction', action);
+
+  expect(graph.edges).toContainEqual({ from: 'a1', to: 'r1' });
+});
+
+test('CREATE action: wires edge from reducer that declared this type as generatedActionType', () => {
+  const bus = makeBus();
+  const graph = makeGraph();
+  new GraphSync({ graph, registry: makeRegistry(bus) });
+
+  const reducer = { id: 'r1', kind: 'reducer', name: 'R', reducedActionTypes: [], generatedActionTypes: ['NEXT'] };
+  graph.addNode(reducer);
+
+  const action = { id: 'a1', kind: 'action', name: 'Next', type: 'NEXT' };
+  publish(bus, 'CREATE', 'AmountAction', action);
+
+  expect(graph.edges).toContainEqual({ from: 'r1', to: 'a1' });
+});
+
+test('CREATE action then handler: same edge wired regardless of order', () => {
+  const bus = makeBus();
+  const graph = makeGraph();
+  new GraphSync({ graph, registry: makeRegistry(bus) });
+
+  // Action first, then handler — handler CREATE should wire the edge
+  const action = { id: 'a1', kind: 'action', name: 'Pay', type: 'PAY' };
+  publish(bus, 'CREATE', 'AmountAction', action);
+
+  const handler = { id: 'h1', kind: 'handler', name: 'H', handledEvents: [], generatedActionTypes: ['PAY'] };
+  publish(bus, 'CREATE', 'HandlerEntry', handler);
+
+  expect(graph.edges).toContainEqual({ from: 'h1', to: 'a1' });
+  // Verify no duplicate
+  expect(graph.edges.filter(e => e.from === 'h1' && e.to === 'a1').length).toBe(1);
 });
 
 // ─── UPDATE ───────────────────────────────────────────────────────────────────

@@ -104,8 +104,9 @@ export class Reducer {
     this.id       = null;
     this.name     = name;
     this.priority = priority;
-    this.generatedActions = [];
-    this.reducedActions = [];
+    this.reducedActionTypes        = [];   // string[] — action types this reducer handles
+    this.generatedActionTypes      = [];   // string[] — action types this reducer may emit
+    this.generatedActionDefinitions = [];  // ActionDefinition[] — runtime instantiation
   }
 
   /** @abstract */
@@ -122,7 +123,8 @@ export class Reducer {
    * @returns {*&{next: *[]}}
    */
   newState(currentState, toAdd, next) {
-    const nextArray = next ? [...next, ...this.generatedActions] : [...this.generatedActions];
+    const emitted = this.generatedActionDefinitions.map(def => def.instantiate({}));
+    const nextArray = next ? [...next, ...emitted] : [...emitted];
     return {
       ...currentState,
       ...toAdd,
@@ -274,6 +276,23 @@ export class FieldReducer extends Reducer {
     return this.setValueByPath(newState, this.getWriteFieldPath(action), this.getStateValue(state, action))
   }
 
+}
+
+/**
+ * Put a state field or action value into state.metrics
+ */
+export class MetricReducer extends FieldReducer {
+  constructor(name = 'Metric Reducer', priority = PRIORITY.METRICS, fieldName = null) {
+    super(name, priority, fieldName);
+  }
+
+  /**
+   * Get the path to the field, priority giving to our field name
+   * @param action
+   */
+  getWriteFieldPath(action) {
+    return `metrics.${super.getWriteFieldPath(action)}`;
+  }
 }
 
 export class FieldValueReducer extends FieldReducer {

@@ -1,0 +1,221 @@
+/*
+ * Copyright (c) 2026 Terry Packer.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ */
+
+import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
+import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
+import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
+
+/** Resolve the US cash pool. */
+const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
+
+/** Returns age in whole years as of asOfDate. */
+function getAge(birthDate, asOfDate) {
+  const years = asOfDate.getUTCFullYear() - birthDate.getUTCFullYear();
+  const hadBirthday =
+    asOfDate.getUTCMonth() > birthDate.getUTCMonth() ||
+    (asOfDate.getUTCMonth() === birthDate.getUTCMonth() &&
+     asOfDate.getUTCDate() >= birthDate.getUTCDate());
+  return hadBirthday ? years : years - 1;
+}
+
+// ─── Reducers ─────────────────────────────────────────────────────────────────
+
+/**
+ * EVT-1: Roth contribution — debit US cash pool, credit contributionBasis.
+ * No tax effect.
+ */
+export class RothContributionApplyReducer extends Reducer {
+  static description = 'Debits the US cash pool and credits Roth contributionBasis; no tax effect.';
+  static actionType  = 'ROTH_CONTRIBUTION_APPLY';
+
+  constructor({ accountService }) {
+    super('Roth Contribution Apply', PRIORITY.CASH_FLOW);
+    this.accountService = accountService;
+    this.reducedActionTypes = ['ROTH_CONTRIBUTION_APPLY'];
+  }
+
+  reduce(state, action) {
+    this.accountService.transaction(usCash(state), -action.amount, null);
+    const ra = state.rothAccount;
+    return this.newState(state, {
+      rothAccount: {
+        ...ra,
+        balance:           ra.balance           + action.amount,
+        contributionBasis: ra.contributionBasis + action.amount,
+      },
+    });
+  }
+}
+
+/**
+ * EVT-2: Roth contribution withdrawal — credit US cash pool, debit contributionBasis.
+ * No tax effect.
+ */
+export class RothWithdrawalContribApplyReducer extends Reducer {
+  static description = 'Credits the US cash pool and debits Roth contributionBasis; no tax effect.';
+  static actionType  = 'ROTH_WITHDRAWAL_CONTRIB_APPLY';
+
+  constructor({ accountService }) {
+    super('Roth Contribution Withdrawal Apply', PRIORITY.CASH_FLOW);
+    this.accountService = accountService;
+    this.reducedActionTypes = ['ROTH_WITHDRAWAL_CONTRIB_APPLY'];
+  }
+
+  reduce(state, action) {
+    this.accountService.transaction(usCash(state), action.amount, null);
+    const ra = state.rothAccount;
+    return this.newState(state, {
+      rothAccount: {
+        ...ra,
+        balance:           ra.balance           - action.amount,
+        contributionBasis: ra.contributionBasis - action.amount,
+      },
+    });
+  }
+}
+
+/**
+ * EVT-3: Roth earnings withdrawal — credit US cash pool (net of penalty),
+ * debit earningsBasis.  Chains ROTH_WITHDRAWAL_EARNINGS_TAX for penalty +
+ * optional AU tax.
+ */
+export class RothWithdrawalEarningsApplyReducer extends Reducer {
+  static description = 'Credits the US cash pool net of penalty and debits Roth earningsBasis; chains ROTH_WITHDRAWAL_EARNINGS_TAX.';
+  static actionType  = 'ROTH_WITHDRAWAL_EARNINGS_APPLY';
+
+  constructor({ accountService }) {
+    super('Roth Withdrawal Earnings Apply', PRIORITY.CASH_FLOW);
+    this.accountService = accountService;
+    this.reducedActionTypes   = ['ROTH_WITHDRAWAL_EARNINGS_APPLY'];
+    this.generatedActionTypes = ['ROTH_WITHDRAWAL_EARNINGS_TAX'];
+  }
+
+  reduce(state, action) {
+    const { amount, penaltyAmount, isAuResident } = action;
+    this.accountService.transaction(usCash(state), amount - penaltyAmount, null);
+    const ra = state.rothAccount;
+    return this.newState(
+      state,
+      {
+        rothAccount: {
+          ...ra,
+          balance:       ra.balance       - amount,
+          earningsBasis: ra.earningsBasis - amount,
+        },
+      },
+      [{ type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount, penaltyAmount, isAuResident }]
+    );
+  }
+}
+
+/**
+ * EVT-4: Roth earnings accrual — stays in account, no tax.
+ */
+export class RothEarningsApplyReducer extends Reducer {
+  static description = 'Adds earnings to Roth balance and earningsBasis; no tax effect.';
+  static actionType  = 'ROTH_EARNINGS_APPLY';
+
+  constructor({ accountService }) {  // accountService unused but accepted for API symmetry
+    super('Roth Earnings Apply', PRIORITY.CASH_FLOW);
+    this.reducedActionTypes = ['ROTH_EARNINGS_APPLY'];
+  }
+
+  reduce(state, action) {
+    const ra = state.rothAccount;
+    return this.newState(state, {
+      rothAccount: {
+        ...ra,
+        balance:       ra.balance       + action.amount,
+        earningsBasis: ra.earningsBasis + action.amount,
+      },
+    });
+  }
+}
+
+// ─── Handlers ─────────────────────────────────────────────────────────────────
+
+export class RothContributionHandler extends HandlerEntry {
+  static description = 'Dispatches ROTH_CONTRIBUTION_APPLY and records the contribution metric.';
+  static eventType   = 'ROTH_CONTRIBUTION';
+
+  constructor() {
+    super(null, 'Roth Contribution');
+    this.generatedActionTypes = ['ROTH_CONTRIBUTION_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
+  }
+
+  call({ data }) {
+    return [
+      { type: 'ROTH_CONTRIBUTION_APPLY', amount: data.amount },
+      new FieldValueAction('roth_contribution', 'Roth Contribution', data.amount),
+      new RecordBalanceAction(),
+    ];
+  }
+}
+
+export class RothWithdrawalContributionsHandler extends HandlerEntry {
+  static description = 'Dispatches ROTH_WITHDRAWAL_CONTRIB_APPLY and records the withdrawal metric.';
+  static eventType   = 'ROTH_WITHDRAWAL_CONTRIBUTIONS';
+
+  constructor() {
+    super(null, 'Roth Withdrawal Contributions');
+    this.generatedActionTypes = ['ROTH_WITHDRAWAL_CONTRIB_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
+  }
+
+  call({ data }) {
+    return [
+      { type: 'ROTH_WITHDRAWAL_CONTRIB_APPLY', amount: data.amount },
+      new FieldValueAction('roth_withdrawal_contributions', 'Roth Withdrawal', data.amount),
+      new RecordBalanceAction(),
+    ];
+  }
+}
+
+export class RothWithdrawalEarningsHandler extends HandlerEntry {
+  static description = 'Applies 10% penalty for under-60 withdrawals and dispatches ROTH_WITHDRAWAL_EARNINGS_APPLY.';
+  static eventType   = 'ROTH_WITHDRAWAL_EARNINGS';
+
+  constructor() {
+    super(null, 'Roth Withdrawal Earnings');
+    this.generatedActionTypes = ['ROTH_WITHDRAWAL_EARNINGS_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
+  }
+
+  call({ date, state, data }) {
+    const age     = getAge(state.personBirthDate, date);
+    const penalty = age < 60 ? data.amount * 0.10 : 0;
+    return [
+      {
+        type: 'ROTH_WITHDRAWAL_EARNINGS_APPLY',
+        amount:        data.amount,
+        penaltyAmount: penalty,
+        isAuResident:  state.isAuResident,
+      },
+      new FieldValueAction('roth_withdrawal_earnings', 'Roth Withdrawal Earnings', data.amount),
+      new RecordBalanceAction(),
+    ];
+  }
+}
+
+export class RothEarningsHandler extends HandlerEntry {
+  static description = 'Dispatches ROTH_EARNINGS_APPLY and records the earnings metric.';
+  static eventType   = 'ROTH_EARNINGS';
+
+  constructor() {
+    super(null, 'Roth Earnings');
+    this.generatedActionTypes = ['ROTH_EARNINGS_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
+  }
+
+  call({ data }) {
+    return [
+      { type: 'ROTH_EARNINGS_APPLY', amount: data.amount },
+      new FieldValueAction('roth_earnings', 'Roth Earnings', data.amount),
+      new RecordBalanceAction(),
+    ];
+  }
+}
