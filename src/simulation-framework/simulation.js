@@ -503,6 +503,16 @@ export class Simulation {
         actionQueue.unshift(...emitted);
       }
 
+      // Strip the `next` key so it never pollutes this.state.  When
+      // Reducer.newState() is used it embeds `next:[...]` directly into the
+      // flat state object; downstream tax-module reducers do `{...state,...}`
+      // which would re-spread that key back into their result, causing the
+      // same chained action to be re-queued on every reducer call (infinite loop).
+      if ('next' in nextState) {
+        const { next: _discarded, ...cleanState } = nextState;
+        nextState = cleanState;
+      }
+
       this.state = nextState;
 
       const parentId = action.parentInstanceId ?? null;
