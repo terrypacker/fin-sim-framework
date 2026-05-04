@@ -104,12 +104,35 @@ export class BaseScenario {
    * Create a fresh Simulation and register it as 'primary'.
    * Also configures SimulationSync with simStart so recurring events are
    * scheduled from the correct date.
+   *
+   * If `initialState` is absent or empty, calls `buildDefaultInitialState(params)`
+   * so subclasses can supply a scenario-specific default without overriding this
+   * method.  The resolved state (as a plain object) is stored on `this.initialState`
+   * so it can be captured for serialization.
    */
   buildSim(params, initialState) {
+    const isEmpty = !initialState || Object.keys(initialState).length === 0;
+    const resolved = isEmpty ? (this.buildDefaultInitialState(params) ?? {}) : initialState;
+
+    // Persist as a plain object so ScenarioTabPresenter can serialize it.
+    this.initialState = typeof resolved?.toPlain === 'function' ? resolved.toPlain() : resolved;
+
     const sr = ServiceRegistry.getInstance();
     sr.simulationRegistry.unregister('primary');
-    sr.simulationRegistry.register('primary', new FinSimLib.Core.Simulation(this.simStart, { initialState }));
+    sr.simulationRegistry.register('primary', new FinSimLib.Core.Simulation(this.simStart, { initialState: resolved }));
     sr.simulationSync.setSimStart(this.simStart);
+  }
+
+  /**
+   * Override to supply a scenario-specific default initial state.
+   * Called from buildSim() when no saved initialState is provided.
+   * Return a SimulationState instance (with toPlain()) or a plain object.
+   * @param {object} _params - Merged scenario params.
+   * @returns {object|null}
+   */
+  // eslint-disable-next-line no-unused-vars
+  buildDefaultInitialState(_params) {
+    return null;
   }
 
   // ─── Creation handlers (called via ConfigBuilder "+" buttons) ───────────

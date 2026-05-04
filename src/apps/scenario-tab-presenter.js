@@ -112,6 +112,9 @@ export class ScenarioTabPresenter {
 
   /** Restore saved config or call loadDefaults(). Called after scenario.buildSim(). */
   afterBuildSim(scenario) {
+    // Store so _saveCurrentScenario() can capture the resolved initialState.
+    this._scenario = scenario;
+
     const cfg = this._activeScenario();
     if (cfg) {
       ScenarioSerializer.deserialize(cfg, ServiceRegistry.getInstance());
@@ -384,8 +387,16 @@ export class ScenarioTabPresenter {
     if (pb || !this._activeValue?.startsWith('u:')) {
       // Saving from a pre-built baseline → create a new user scenario.
       const name = document.getElementById('scenarioName')?.value || pb?.label || 'Saved Scenario';
-      let initialState = {};
-      try { initialState = JSON.parse(document.getElementById('initialStateJson')?.value); } catch {}
+
+      // Prefer the scenario's resolved initialState (set by buildSim / buildDefaultInitialState)
+      // so that the full default state is captured in the config rather than an empty object.
+      // Fall back to the UI textarea only if the scenario hasn't been built yet.
+      const scenarioInitialState = this._scenario?.initialState ?? {};
+      let initialState = Object.keys(scenarioInitialState).length > 0 ? scenarioInitialState : {};
+      if (Object.keys(initialState).length === 0) {
+        try { initialState = JSON.parse(document.getElementById('initialStateJson')?.value); } catch {}
+      }
+
       this._scenarioData.scenarios.push({
         name,
         scenarioId:   pb?.id ?? null,
