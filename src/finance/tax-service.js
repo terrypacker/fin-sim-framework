@@ -118,26 +118,30 @@ export class TaxService {
     sim.state = { ...sim.state, currentPeriods };
     this._currentPeriods = currentPeriods;  // retained for registerHandlersAndReducers()
 
-    // Schedule PERIOD_ADVANCE events directly on sim (no service layer).
+    // Accumulate PERIOD_ADVANCE event data for registerHandlersAndReducers().
+    // Events are created through the service layer there so they appear in the
+    // config graph; SimulationSync handles scheduling them on the simulation.
+    this._pendingPeriodAdvances = [];
     for (const cc of countryCodes) {
       const periodType = _periodTypeFor(cc);
       for (const period of periodService.getAllPeriods()) {
         if (period.type === periodType && period.startMs > startTs) {
           const d = new Date(period.startMs);
-          const schedDate = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-          sim.schedule({ date: schedDate, type: 'PERIOD_ADVANCE', data: { cc, period } });
+          const date = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+          this._pendingPeriodAdvances.push({ cc, period, date });
         }
       }
     }
 
-    // Schedule TAX_SETTLE events directly on sim (no service layer).
+    // Accumulate TAX_SETTLE event data for registerHandlersAndReducers().
+    this._pendingTaxSettles = [];
     for (const cc of countryCodes) {
       const periodType = _periodTypeFor(cc);
       for (const period of periodService.getAllPeriods()) {
         if (period.type === periodType && period.endMs > startTs) {
           const d = new Date(period.endMs);
-          const lastDay = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - 1);
-          sim.schedule({ date: lastDay, type: 'TAX_SETTLE', data: { cc } });
+          const date = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - 1);
+          this._pendingTaxSettles.push({ cc, period, date });
         }
       }
     }
@@ -156,11 +160,46 @@ export class TaxService {
    * @param {string[]} countryCodes
    */
   registerHandlersAndReducers(serviceRegistry, countryCodes) {
-    const { reducerService, handlerService, accountService } = serviceRegistry;
+    const { reducerService, handlerService, accountService, eventService } = serviceRegistry;
+
+    const periodAdvanceHandler = new PeriodAdvanceHandler();
+
+
+    // Register PERIOD_ADVANCE events through the service layer so they appear
+    // in the config graph (SimulationSync will schedule them on the simulation).
+    for (const { cc, period, date } of this._pendingPeriodAdvances) {
+      const year = new Date(period.startMs).getUTCFullYear();
+      const periodAdvance = eventService.createOneOffEvent({
+        name: `${cc} Period Advance ${year}`,
+        type: 'PERIOD_ADVANCE',
+        date,
+        data: { cc, period },
+        enabled: true,
+        color: '#78909C',
+      });
+      periodAdvanceHandler.handledEvents.push(periodAdvance);
+    }
+
+    const taxSettleHandler = new TaxSettleHandler();
+    // Register TAX_SETTLE events through the service layer.
+    for (const { cc, period, date } of this._pendingTaxSettles) {
+      const startYear = new Date(period.startMs).getUTCFullYear();
+      const endYear   = new Date(period.endMs).getUTCFullYear();
+      const label = startYear === endYear ? `${startYear}` : `${startYear}-${endYear}`;
+      const taxSettleEvent = eventService.createOneOffEvent({
+        name: `${cc} Tax Settle ${label}`,
+        type: 'TAX_SETTLE',
+        date,
+        data: { cc },
+        enabled: true,
+        color: '#FF7043',
+      });
+      taxSettleHandler.handledEvents.push(taxSettleEvent);
+    }
 
     // PERIOD_ADVANCE reducer + handler
+    handlerService.register(periodAdvanceHandler);
     reducerService.register(new PeriodAdvanceReducer());
-    handlerService.register(new PeriodAdvanceHandler());
 
     // Account module reducers + handlers (static, start-year mechanics)
     for (const cc of countryCodes) {
@@ -186,7 +225,7 @@ export class TaxService {
     }
 
     // TAX_SETTLE handler + reducers
-    handlerService.register(new TaxSettleHandler());
+    handlerService.register(taxSettleHandler);
     reducerService.register(new TaxSettleApplyReducer());
     reducerService.register(new TaxPaymentDebitReducer({ accountService }));
 
