@@ -72,6 +72,8 @@ import { UsTaxRates2025 } from './finance/tax/us/us-tax-rates-2025.js';
 import { UsTaxRatesBase } from './finance/tax/us/us-tax-rates-base.js';
 import { TaxService } from './finance/tax-service.js';
 import { TaxSettleService } from './finance/tax-settle-service.js';
+import { GraphQueryApi } from './graph/graph-query-api.js';
+import { QueryApi } from './query/query-api.js';
 import { intervalFns, startSnapFns, BaseScenario } from './scenarios/base-scenario.js';
 import { INTL_RETIREMENT_DEFAULTS, IntlRetirementScenario } from './scenarios/intl-retirement-scenario.js';
 import { PrebuiltScenario } from './scenarios/prebuilt-scenario.js';
@@ -113,6 +115,8 @@ import { AccountsPresenter } from './visualization/accounts/accounts-presenter.j
 import { AccountsView } from './visualization/accounts/accounts-view.js';
 import { BalanceChartView } from './visualization/balance-chart-view.js';
 import { ChartView } from './visualization/chart-view.js';
+import { BaseComponent } from './visualization/components/base-component.js';
+import { GraphNodeFilterMultiSelect } from './visualization/components/graph-node-filter-multi-select.js';
 import { ConfigGraph } from './visualization/config-graph.js';
 import { GraphBuilderController } from './visualization/graph-builder/graph-builder-controller.js';
 import { GraphBuilderPresenter } from './visualization/graph-builder/graph-builder-presenter.js';
@@ -148,6 +152,8 @@ export const Misc = {
   SimulationAnimator,
   SimulationWorkbench,
   StatePanelView,
+  GraphQueryApi,
+  QueryApi,
 };
 
 export const Finance = {
@@ -394,6 +400,8 @@ export const Visualization = {
   AccountsView,
   BalanceChartView,
   ChartView,
+  BaseComponent,
+  GraphNodeFilterMultiSelect,
   ConfigGraph,
   GraphBuilderController,
   GraphBuilderPresenter,

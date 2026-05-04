@@ -57,9 +57,9 @@ export class GraphBuilderPresenter {
       this._controller.updateNode(node, { [field]: value });
     };
 
-    this._view.onLinkToggle = (node, chipNode, kind, linkTo, isAdd) => {
-      if (isAdd) this._controller.linkNodes(node, chipNode, kind, linkTo);
-      else       this._controller.unlinkNodes(node, chipNode, kind, linkTo);
+    this._view.onLinkToggle = (node, selectedNode, kind, linkTo, isAdd) => {
+      if (isAdd) this._controller.linkNodes(node, selectedNode, kind, linkTo);
+      else       this._controller.unlinkNodes(node, selectedNode, kind, linkTo);
     };
 
     // For replaceAction/replaceReducer the node instance changes, so re-render

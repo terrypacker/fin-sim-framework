@@ -1043,7 +1043,50 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   opacity: 1;
 }
 
-/* Reducer Chips */
+/* Multi Select */
+.multi-select {
+  position: relative;
+}
+
+.multi-select-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-hi);
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.multi-select-dropdown {
+  position: fixed;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 180px;
+  overflow-y: auto;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-hi);
+  z-index: 10;
+}
+
+.multi-select-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.multi-select-item:hover {
+  background: var(--bg-panel2);
+}
+
+.multi-select-item.selected {
+  background: var(--amber-glow);
+  color: var(--amber);
+}
+
+/* TODO Get rid of this once we remove chips entirely Reducer Chips */
 .reducer-chip-grid {
   display: flex;
   flex-wrap: wrap;

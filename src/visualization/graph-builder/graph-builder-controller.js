@@ -209,17 +209,17 @@ export class GraphBuilderController {
   // ── Graph edge mutations ───────────────────────────────────────────────────
 
   /** Add a graph edge and sync the canonical relationship array. */
-  linkNodes(node, chipNode, kind, linkTo) {
-    if (linkTo) this._graph.addEdge({ from: node.id, to: chipNode.id });
-    else        this._graph.addEdge({ from: chipNode.id, to: node.id });
-    this._syncCanonicalArrays(node, chipNode, kind, linkTo, 'add');
+  linkNodes(node, selectedNode, kind, linkTo) {
+    if (linkTo) this._graph.addEdge({ from: node.id, to: selectedNode.id });
+    else        this._graph.addEdge({ from: selectedNode.id, to: node.id });
+    this._syncCanonicalArrays(node, selectedNode, kind, linkTo, 'add');
   }
 
   /** Remove a graph edge and sync the canonical relationship array. */
-  unlinkNodes(node, chipNode, kind, linkTo) {
-    if (linkTo) this._graph.removeEdge({ from: node.id, to: chipNode.id });
-    else        this._graph.removeEdge({ from: chipNode.id, to: node.id });
-    this._syncCanonicalArrays(node, chipNode, kind, linkTo, 'remove');
+  unlinkNodes(node, selectedNode, kind, linkTo) {
+    if (linkTo) this._graph.removeEdge({ from: node.id, to: selectedNode.id });
+    else        this._graph.removeEdge({ from: selectedNode.id, to: node.id });
+    this._syncCanonicalArrays(node, selectedNode, kind, linkTo, 'remove');
   }
 
   // ── Graph read queries (proxied for view use) ─────────────────────────────
@@ -239,7 +239,7 @@ export class GraphBuilderController {
    * handler ↔ event edges:   use object arrays (HandlerEntry.handledEvents holds event objects)
    * handler/reducer ↔ action: use type string arrays (generatedActionTypes / reducedActionTypes)
    */
-  _syncCanonicalArrays(node, chipNode, kind, linkTo, op) {
+  _syncCanonicalArrays(node, selectedNode, kind, linkTo, op) {
     const add = op === 'add';
 
     // Object arrays (hold domain objects, keyed by .id)
@@ -262,12 +262,12 @@ export class GraphBuilderController {
       }
     };
 
-    if (node.kind === 'handler' && kind === 'event'   && !linkTo) { syncObjArr(node.handledEvents,          chipNode);       this.notifyChanged(node);     return; }
-    if (node.kind === 'handler' && kind === 'action'  &&  linkTo) { syncTypeArr(node.generatedActionTypes,  chipNode.type);  this.notifyChanged(node);     return; }
-    if (node.kind === 'reducer' && kind === 'action'  && !linkTo) { syncTypeArr(node.reducedActionTypes,    chipNode.type);  this.notifyChanged(node);     return; }
-    if (node.kind === 'reducer' && kind === 'action'  &&  linkTo) { syncTypeArr(node.generatedActionTypes,  chipNode.type);  this.notifyChanged(node);     return; }
-    if (node.kind === 'event'   && kind === 'handler' &&  linkTo) { syncObjArr(chipNode.handledEvents,      node);           this.notifyChanged(chipNode); return; }
-    if (node.kind === 'action'  && kind === 'handler' && !linkTo) { syncTypeArr(chipNode.generatedActionTypes, node.type);   this.notifyChanged(chipNode); return; }
-    if (node.kind === 'action'  && kind === 'reducer' &&  linkTo) { syncTypeArr(chipNode.reducedActionTypes,   node.type);   this.notifyChanged(chipNode); return; }
+    if (node.kind === 'handler' && kind === 'event'   && !linkTo) { syncObjArr(node.handledEvents,          selectedNode);       this.notifyChanged(node);     return; }
+    if (node.kind === 'handler' && kind === 'action'  &&  linkTo) { syncTypeArr(node.generatedActionTypes,  selectedNode.type);  this.notifyChanged(node);     return; }
+    if (node.kind === 'reducer' && kind === 'action'  && !linkTo) { syncTypeArr(node.reducedActionTypes,    selectedNode.type);  this.notifyChanged(node);     return; }
+    if (node.kind === 'reducer' && kind === 'action'  &&  linkTo) { syncTypeArr(node.generatedActionTypes,  selectedNode.type);  this.notifyChanged(node);     return; }
+    if (node.kind === 'event'   && kind === 'handler' &&  linkTo) { syncObjArr(selectedNode.handledEvents,      node);           this.notifyChanged(chipNode); return; }
+    if (node.kind === 'action'  && kind === 'handler' && !linkTo) { syncTypeArr(selectedNode.generatedActionTypes, node.type);   this.notifyChanged(chipNode); return; }
+    if (node.kind === 'action'  && kind === 'reducer' &&  linkTo) { syncTypeArr(selectedNode.reducedActionTypes,   node.type);   this.notifyChanged(chipNode); return; }
   }
 }

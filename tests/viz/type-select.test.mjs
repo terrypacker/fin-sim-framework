@@ -47,6 +47,7 @@ function makeMinimalGraph() {
     getNodesToKindFromMe()  { return []; },
     getNodesFromKindToMe()  { return []; },
     getKind()               { return []; },
+    getAll() { return []; }
   };
 }
 
@@ -215,6 +216,7 @@ function makeGraph() {
     render()           {},
     registerNodeClickListener() {},
     selectNode()       {},
+    getAll() { return nodes; }
   };
 }
 

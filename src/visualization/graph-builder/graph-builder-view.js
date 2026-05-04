@@ -13,6 +13,9 @@ import { ACTION_CLASSES, FieldValueAction, ScriptedAction } from '../../simulati
 import { HANDLER_CLASSES } from '../../simulation-framework/handlers.js';
 import { OneOffEvent } from "../../simulation-framework/events/one-off-event.js";
 import { ACTION_TEMPLATES } from '../../simulation-framework/action-templates.js';
+import {GraphNodeFilterMultiSelect} from "../components/graph-node-filter-multi-select.js";
+import {GraphQueryApi} from "../../graph/graph-query-api.js";
+import {BaseComponent} from "../components/base-component.js";
 
 /**
  * GraphBuilderView — pure DOM / template layer for the event-graph editor panel.
@@ -26,7 +29,7 @@ import { ACTION_TEMPLATES } from '../../simulation-framework/action-templates.js
  *   onFieldChange(node, field, value)       — any input changed
  *   onDelete(node)                          — Delete Node button
  *   onCreationRequested(kind, subtype)      — toolbar "+" button
- *   onLinkToggle(node, chipNode, kind, linkTo, isAdd) — chip toggled
+ *   onLinkToggle(node, selectedItem, kind, linkTo, isAdd) — node link toggled
  *   onActionClassChange(nodeId, newClass)   — action class dropdown changed
  *   onReducerTypeChange(nodeId, newType)    — reducer type dropdown changed
  *   onHandlerClassChange(nodeId, newClass)  — handler class dropdown changed
@@ -34,7 +37,7 @@ import { ACTION_TEMPLATES } from '../../simulation-framework/action-templates.js
  * `editNode(node)` is the primary entry point called by the Presenter to
  * (re-)render the editor panel for a node.
  */
-export class GraphBuilderView {
+export class GraphBuilderView extends BaseComponent {
 
   /**
    * @param {{
@@ -43,6 +46,7 @@ export class GraphBuilderView {
    * }}
    */
   constructor({ builderCanvas, graph }) {
+    super(); //I am the root component here
     this._canvas = builderCanvas;
     this._graph  = graph;
 
@@ -103,6 +107,7 @@ export class GraphBuilderView {
    * when node is null.  Called by the Presenter.
    */
   editNode(node) {
+    this.destroy();   // Destroy and children that have been created
     this._canvas.innerHTML = '';
 
     if (!node) {
@@ -246,9 +251,9 @@ export class GraphBuilderView {
       if (this.onFieldChange) this.onFieldChange(node, 'enabled', enabledCb.checked);
     });
 
-    const eventHandlerCount = el.querySelector('#event-handler-count');
-    const eventHandlersGrid = el.querySelector('#event-handlers');
-    this._renderLinkableNodeChips(node, 'handler', eventHandlerCount, eventHandlersGrid, true);
+    this._renderLinkableMultiSelect(node, 'handler',
+        el.querySelector('#event-handler-count'),
+        el.querySelector('#event-handlers'), true);
 
     this._renderEventConfig(node, configWrap);
     this._canvas.appendChild(el);
@@ -316,7 +321,7 @@ export class GraphBuilderView {
       if (this.onFieldChange) this.onFieldChange(node, 'name', name.value);
     });
 
-    this._renderLinkableNodeChips(node, 'event', el.querySelector('#handler-event-count'), el.querySelector('#handler-events'), false);
+    this._renderLinkableMultiSelect(node, 'event', el.querySelector('#handler-event-count'), el.querySelector('#handler-events'), false);
 
     // Action Definitions — inline list with template picker
     const defContainer = el.querySelector('#handler-actions');
@@ -370,8 +375,12 @@ export class GraphBuilderView {
 
     this._renderActionConfig(node, configWrap, el);
 
-    this._renderLinkableNodeChips(node, 'handler', el.querySelector('#action-handler-count'), el.querySelector('#action-handlers'), false);
-    this._renderLinkableNodeChips(node, 'reducer', el.querySelector('#action-reducer-count'), el.querySelector('#action-reducers'), true);
+    this._renderLinkableMultiSelect(node, 'handler',
+        el.querySelector('#action-handler-count'),
+        el.querySelector('#action-handlers'), false);
+    this._renderLinkableMultiSelect(node, 'reducer',
+        el.querySelector('#action-reducer-count'),
+        el.querySelector('#action-reducers'), true);
 
     this._canvas.appendChild(el);
     this._canvas.appendChild(this._createDeleteButton(node));
@@ -487,8 +496,10 @@ export class GraphBuilderView {
 
     this._renderReducerConfig(node, configWrap, el);
 
-    // Reduced-action chips — which action types trigger this reducer
-    this._renderLinkableNodeChips(node, 'action', el.querySelector('#reducer-reduced-actions-count'), el.querySelector('#reducer-reduced-actions'), false);
+    // Which action types trigger this reducer
+    this._renderLinkableMultiSelect(node, 'action',
+        el.querySelector('#reducer-reduced-actions-count'),
+        el.querySelector('#reducer-reduced-actions'), false);
 
     // Generated Action Definitions — inline list with template picker
     const genContainer = el.querySelector('#reducer-generated-actions');
@@ -518,6 +529,7 @@ export class GraphBuilderView {
       case 'ArrayReducer':
       case 'MultiplicativeReducer':
       case 'FieldValueReducer':
+      case 'MetricReducer':
         wrap = this._getTemplate('tpl-field-value-reducer-editor');
         wrap.querySelector('[data-field="fieldName"]').value = node.fieldName || '';
         wrap.querySelector('[data-field="value"]').value     = node.value ?? '';
@@ -767,60 +779,24 @@ export class GraphBuilderView {
     return form;
   }
 
-  // ── CHIP HELPER ───────────────────────────────────────────────────────────
-
-  /**
-   * Render linkable-node chips for a relationship panel.
-   *
-   * The view maintains a local `myChildren` reference (a live reference to the
-   * node's canonical array) for immediate DOM feedback.  The actual domain
-   * mutation is delegated to the Presenter via `onLinkToggle`.
-   */
-  _renderLinkableNodeChips(node, kind, countSpan, chipGrid, linkTo) {
+  //── MULTI SELECT HELPER ───────────────────────────────────────────────────────────
+  _renderLinkableMultiSelect(node, kind, countSpan, container, linkTo) {
     const myChildren = linkTo
-      ? this._graph.getNodesToKindFromMe(node, kind)
-      : this._graph.getNodesFromKindToMe(node, kind);
+        ? this._graph.getNodesToKindFromMe(node, kind)
+        : this._graph.getNodesFromKindToMe(node, kind);
 
-    countSpan.innerText = `${myChildren.length} selected`;
-
-    this._graph.getKind(kind).forEach(available => {
-      const nodeDiv = document.createElement('div');
-      nodeDiv.classList.add('reducer-chip');
-      nodeDiv.dataset.nodeId = available.id;
-      if (myChildren.some(r => r.id === available.id)) nodeDiv.classList.add('reducer-chip-on');
-
-      const nameSpan = document.createElement('span');
-      nameSpan.classList.add('reducer-chip-name');
-      nameSpan.innerText = available.name;
-      nameSpan.title = available.name;
-      nodeDiv.appendChild(nameSpan);
-
-      const checkSpan = document.createElement('span');
-      checkSpan.classList.add('reducer-chip-check');
-      checkSpan.innerHTML = '&#x2713';
-      nodeDiv.appendChild(checkSpan);
-
-      chipGrid.appendChild(nodeDiv);
-    });
-
-    chipGrid.addEventListener('click', (e) => {
-      const chip = e.target.closest('.reducer-chip[data-node-id]');
-      if (!chip) return;
-
-      const chipNode = this._graph.getNode(chip.dataset.nodeId);
-      const index    = myChildren.findIndex(n => n.id === chipNode.id);
-      const isAdd    = index < 0;
-
-      if (isAdd) {
-        myChildren.push(chipNode);
-        chip.classList.toggle('reducer-chip-on', true);
-      } else {
-        myChildren.splice(index, 1);
-        chip.classList.toggle('reducer-chip-on', false);
-      }
-      countSpan.innerText = `${myChildren.length} selected`;
-
-      if (this.onLinkToggle) this.onLinkToggle(node, chipNode, kind, linkTo, isAdd);
+    new GraphNodeFilterMultiSelect({
+      parent: this,
+      container,
+      countEl: countSpan,
+      selectedItems: myChildren,
+      onToggle: (selectedItem, toggleOn) => {
+        if (this.onLinkToggle) {
+          this.onLinkToggle(node, selectedItem, kind, linkTo, toggleOn);
+        }
+      },
+      graphQueryApi: new GraphQueryApi(this._graph),
+      defaultCondition: `kind=${kind}`
     });
   }
 }
