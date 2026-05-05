@@ -26,6 +26,7 @@ import { IntlTransferApplyReducer } from '../finance/reducers/intl-transfer-appl
 import { StockDividendCashApplyReducer } from '../finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { ChangeResidencyApplyReducer } from '../finance/reducers/change-residency-apply-reducer.js';
 import { SetOutOfFundsDateReducer } from '../finance/reducers/set-out-of-funds-date-reducer.js';
+import {EDGE_TYPES} from "../graph/edge.js";
 
 /**
  * Service for managing Reducer instances throughout their lifecycle.
@@ -36,6 +37,41 @@ import { SetOutOfFundsDateReducer } from '../finance/reducers/set-out-of-funds-d
 export class ReducerService extends BaseService {
   constructor(graph, bus) { super(graph, bus, 'reducer'); }
 
+  // ─── Edges ───────────────────────────────────────────────────────────────
+  _wireNodeEdges(item) {
+    (item.reducedActionTypes ?? []).forEach(a => {
+      const action = this._query.getOneByKind('action', 'type', a);
+      if(action == null) {
+        throw Error(`Action for type ${a} missing.`)
+      }
+      this.linkActionToReducer(action.id, item.id);
+    });
+
+    (item.generatedActionTypes ?? []).forEach(a => {
+      const action = this._query.getOneByKind('action', 'type', a);
+      if(action == null) {
+        throw Error(`Action for type ${a} missing.`)
+      }
+      this.linkReducerToAction(item.id, action.id);
+    });
+  }
+
+  linkActionToReducer(actionId, reducerId) {
+    this._addEdge(actionId, reducerId, EDGE_TYPES.REDUCES_ACTION);
+  }
+
+  unlinkActionToReducer(actionId, reducerId) {
+    this._removeEdge(actionId, reducerId, EDGE_TYPES.REDUCES_ACTION);
+  }
+
+  linkReducerToAction(reducerId, actionId) {
+    this._addEdge(reducerId, actionId, EDGE_TYPES.GENERATES_ACTION);
+  }
+
+  unlinkReducerFromAction(reducerId, actionId) {
+    this._removeEdge(reducerId, actionId, EDGE_TYPES.GENERATES_ACTION);
+  }
+
   // ─── Create ───────────────────────────────────────────────────────────────
 
   createNoOpReducer(name = 'No-Op', priority = PRIORITY.LOGGING + 5) {
@@ -43,6 +79,7 @@ export class ReducerService extends BaseService {
     item.id = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -51,6 +88,7 @@ export class ReducerService extends BaseService {
     item.id = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -59,6 +97,7 @@ export class ReducerService extends BaseService {
     item.id = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -67,6 +106,7 @@ export class ReducerService extends BaseService {
     item.id = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -75,6 +115,7 @@ export class ReducerService extends BaseService {
     item.id = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -83,6 +124,7 @@ export class ReducerService extends BaseService {
     item.id = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -101,6 +143,7 @@ export class ReducerService extends BaseService {
     item.id   = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -118,6 +161,7 @@ export class ReducerService extends BaseService {
     item.id   = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -133,6 +177,7 @@ export class ReducerService extends BaseService {
     item.id   = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -150,6 +195,7 @@ export class ReducerService extends BaseService {
     item.id   = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -166,6 +212,7 @@ export class ReducerService extends BaseService {
     item.id   = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -182,6 +229,7 @@ export class ReducerService extends BaseService {
     item.id   = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -196,6 +244,7 @@ export class ReducerService extends BaseService {
     item.id   = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -216,7 +265,9 @@ export class ReducerService extends BaseService {
     const reducer = this._resolve(idOrReducer);
     const originalItem = Object.assign(Object.create(Object.getPrototypeOf(reducer)), reducer);
     Object.assign(reducer, changes);
+    this._query._invalidateIndexes();
     this._publish('UPDATE', reducer.constructor.name, reducer, originalItem);
+    this._rewireEdges(reducer);
     return reducer;
   }
 

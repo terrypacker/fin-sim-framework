@@ -18,12 +18,15 @@
  */
 
 import { QueryApi } from "../query/query-api.js";
+import {createEdgeId} from "./edge.js";
 
 
 export class GraphQueryApi extends QueryApi {
   constructor(graph) {
     super(graph);
     this._graph = graph;
+    this._graph.addNodeModifcationWatcher(() => this._invalidateIndexes());
+    this._kindIndex = new Map();   // lower(name) -> [items]
   }
 
   /**
@@ -42,12 +45,158 @@ export class GraphQueryApi extends QueryApi {
   // =========================================================
   // Public API
   // =========================================================
-  //TODO Implement graph edge queries
+
+  getByKind(kind) {
+    if(this.rebuildIndexes) this._buildIndexes();
+    return this._kindIndex.get(kind) || [];
+  }
+
+  getOneByKind(kind, field, value) {
+    const items = this.getByKind(kind);
+    return items.find(n => n[field] === value) || null;
+  }
+
+  getOneBy(field, value) {
+    if (this.rebuildIndexes) this._buildIndexes();
+
+    // Fast path for indexed fields
+    if (field === 'id') {
+      return this._idIndex.get(String(value)) || null;
+    }
+
+    if (field === 'name') {
+      const bucket = this._nameIndex.get(String(value).toLowerCase());
+      return bucket ? bucket[0] : null;
+    }
+
+    // Fallback scan
+    for (const item of this._dataSource.getAll()) {
+      if (item[field] === value) return item;
+    }
+
+    return null;
+  }
+
+  getManyBy(field, value) {
+    if (this.rebuildIndexes) this._buildIndexes();
+
+    // Fast path for indexed fields
+    if (field === 'id') {
+      const item = this._idIndex.get(String(value));
+      return item ? [item] : [];
+    }
+
+    if (field === 'name') {
+      return this._nameIndex.get(String(value).toLowerCase()) || [];
+    }
+
+    // Fallback scan
+    const results = [];
+    for (const item of this._dataSource.getAll()) {
+      if (item[field] === value) results.push(item);
+    }
+
+    return results;
+  }
+
+  getManyByKind(kind, field, value) {
+    const items = this.getByKind(kind);
+    if (!items || !items.length) return [];
+
+    const results = [];
+    for (const item of items) {
+      if (item[field] === value) results.push(item);
+    }
+
+    return results;
+  }
+
+  getOutgoing(nodeId, type = null) {
+    return this._graph.getOutgoing(nodeId, type);
+  }
+  getIncoming(nodeId, type = null) {
+    return this._graph.getIncoming(nodeId, type);
+  }
+
+  // outgoing → nodes
+  getTargets(nodeId, type = null) {
+    return this._graph
+      .getOutgoing(nodeId, type)
+      .map(e => this._graph.getNode(e.to));
+  }
+
+  // incoming → node
+  getSources(nodeId, type = null) {
+    return this._graph
+    .getIncoming(nodeId, type)
+    .map(e => this._graph.getNode(e.from));
+  }
+
+  getRelated(nodeId, {
+    edgeType = null,
+    direction = 'out',
+    where = null   // predicate function, NOT DSL
+  }) {
+    const nodes =
+        direction === 'in'
+            ? this.getSources(nodeId, edgeType)
+            : this.getTargets(nodeId, edgeType);
+
+    return where ? nodes.filter(where) : nodes;
+  }
+
+  existsBy(field, value) {
+    if (this.rebuildIndexes) this._buildIndexes();
+
+    // Fast path
+    if (field === 'id') {
+      return this._idIndex.has(String(value));
+    }
+
+    if (field === 'name') {
+      return this._nameIndex.has(String(value).toLowerCase());
+    }
+
+    // Fallback
+    for (const item of this._dataSource.getAll()) {
+      if (item[field] === value) return true;
+    }
+
+    return false;
+  }
+  existsEdge(from, to, type) {
+    // Use edge ID directly (fastest possible path)
+    const edgeId = createEdgeId(from, type, to);
+    return this._graph.getEdge(edgeId) != null;
+  }
+
+  getEdgesFrom(nodeId, type = null) {
+    return this._graph.getEdges({from: nodeId, type: type})
+  }
+
+  getEdgesTo(nodeId, type = null) {
+    return this._graph.getEdges({to: nodeId, type: type})
+  }
 
   // =========================================================
   // Optimization
   // =========================================================
 
+  _buildIndexes() {
+    const all = this.getAll();
+
+    for (const item of all) {
+      if (item.name != null) {
+        const key = String(item.kind);
+        if (!this._kindIndex.has(key)) {
+          this._kindIndex.set(key, []);
+        }
+        this._kindIndex.get(key).push(item);
+      }
+
+    }
+    super._buildIndexes();
+  }
   _extractKind(node) {
     if (!node) return null;
 

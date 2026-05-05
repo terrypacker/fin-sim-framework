@@ -138,7 +138,13 @@ export class QueryApi {
   // =========================================================
 
   getById(id) {
+    if(this.rebuildIndexes) this._buildIndexes();
     return this._idIndex.get(String(id)) || null;
+  }
+
+  getByName(name) {
+    if(this.rebuildIndexes) this._buildIndexes();
+    return this._nameIndex.get(name) || null;
   }
 
   getAll() {
@@ -161,6 +167,8 @@ export class QueryApi {
    * @return {Promise<{items: *, total: *}>}
    */
   async search({ query, sort = [], offset = 0, limit = 50 }) {
+    if(this.rebuildIndexes) this._buildIndexes();
+
     const where = typeof query === 'string'
         ? this._parse(query)
         : query;
@@ -206,7 +214,7 @@ export class QueryApi {
   // Optimization hook for subclasses
   // =========================================================
   _createDataSource(where) {
-        return this._dataSource.getAll();
+    return this._dataSource.getAll();
   }
 
   // =========================================================
@@ -463,6 +471,9 @@ export class QueryApi {
   // =========================================================
   // Optimization
   // =========================================================
+  _invalidateIndexes() {
+    this.rebuildIndexes = true;
+  }
 
   _buildIndexes() {
     const all = this.getAll();
@@ -480,6 +491,7 @@ export class QueryApi {
         this._nameIndex.get(key).push(item);
       }
     }
+    this.rebuildIndexes = false;
   }
 
   _extractIndexCandidates(node) {

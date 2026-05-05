@@ -7,12 +7,21 @@
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
+export const EDGE_TYPES = {
+  HANDLES: 'HANDLES',
+  GENERATES_ACTION: 'GENERATES_ACTION',
+  REDUCES_ACTION: 'REDUCES_ACTION'
+}
+
+export const createEdgeId = (from, to, type) => {
+  return `${from}|${type}|${to}`;
+};
+
 export class Edge {
   constructor({ from, to, type }) {
+    this.id = createEdgeId(from, to, type);
     this.from = from;
     this.to = to;
-
-    this.type =
-        type; // 'config' | 'triggers' | 'causes' | 'instance-of'
+    this.type = type; //One Of EDGE_TYPES
   }
 }

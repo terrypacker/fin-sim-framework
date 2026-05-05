@@ -36,6 +36,8 @@ import { SimulationState } from '../../src/simulation-framework/simulation-state
 import {
   SIMULATION_BUS_MESSAGES
 } from "../../src/simulation-framework/bus-messages.js";
+import {EventBus} from "../../src/simulation-framework/event-bus.js";
+import {Graph} from "../../src/graph/graph.js";
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 //
@@ -50,7 +52,7 @@ import {
 //   index 0 → item1  value=1200  costBasis=200   gain=1000
 //
 function buildFinancialSim({ seed = 1, assets } = {}) {
-  const accountService = new AccountService();
+  const accountService = new AccountService(new Graph(), new EventBus());
 
   const defaultAssets = [
     new Asset('item1', 1200,  200),

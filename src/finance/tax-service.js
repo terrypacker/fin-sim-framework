@@ -30,6 +30,7 @@ import { UsAccountModule2026 }   from './account-rules/us/us-account-module-2026
 import { AuAccountModule2024 }   from './account-rules/au/au-account-module-2024.js';
 import { AuAccountModule2025 }   from './account-rules/au/au-account-module-2025.js';
 import { AuAccountModule2026 }   from './account-rules/au/au-account-module-2026.js';
+import {ServiceRegistry} from "../services/service-registry.js";
 
 /**
  * TaxService — coordinates TaxEngine and AccountRulesEngine.
@@ -63,7 +64,7 @@ export class TaxService {
   constructor() {
     this._taxEngine          = new TaxEngine();
     this._accountRulesEngine = new AccountRulesEngine();
-    this._accountService     = new AccountService();
+    this._accountService     = ServiceRegistry.getInstance().accountService;
 
     // Register all known tax modules
     this._taxEngine.register(new UsTaxModule2024());

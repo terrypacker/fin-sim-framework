@@ -9,6 +9,8 @@
  */
 
 import { ServiceActionEvent } from '../simulation-framework/bus-messages.js';
+import {createEdgeId, Edge, EDGE_TYPES} from "../graph/edge.js";
+import {GraphQueryApi} from "../graph/graph-query-api.js";
 
 /**
  * Base class for all configuration-item services.
@@ -23,9 +25,7 @@ import { ServiceActionEvent } from '../simulation-framework/bus-messages.js';
  * ID, preventing collisions between programmatic IDs and service-generated ones.
  */
 export class BaseService {
-  /**
 
-   */
   /**
    *
    * @param {import('../graph/graph.js')} graph
@@ -35,6 +35,7 @@ export class BaseService {
   constructor(graph, bus, kind, prefixLength = 1) {
     this.bus = bus;
     this._graph = graph;
+    this._query = new GraphQueryApi(graph);
     this._kind = kind;
     this._layer = 'config';
     this._nextId   = 1;
@@ -123,6 +124,7 @@ export class BaseService {
   load(item) {
     if (item.id == null) item.id = this._generateId(this._idPrefix);
     this._graph.addNode(item);
+    this._wireNodeEdges(item);
     this._advanceCounter(item.id);
     return item;
   }
@@ -150,6 +152,7 @@ export class BaseService {
     this._graph.addNode(item);
     this._advanceCounter(item.id);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -187,4 +190,27 @@ export class BaseService {
   _serviceFilter(node) {
     return node.kind === this._kind && node.layer === this._layer;
   }
+
+  _wireNodeEdges(item) {
+      //Override in subclasses
+  }
+
+  _addEdge(from, to, type) {
+    this._graph.addEdge(new Edge({from, to, type}));
+  }
+
+  _rewireEdges(item) {
+    this._removeEdgesForNode(item.id);
+    this._wireNodeEdges(item);
+  }
+
+  _removeEdgesForNode(nodeId) {
+    this._graph.removeEdges({ from: nodeId });
+    this._graph.removeEdges({ to: nodeId });
+  }
+
+  _removeEdge(from, to, type) {
+    this._graph.removeEdge(createEdgeId(from, type, to));
+  }
+
 }

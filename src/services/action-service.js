@@ -50,6 +50,7 @@ export class ActionService extends BaseService {
     item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -58,6 +59,7 @@ export class ActionService extends BaseService {
     item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -66,6 +68,7 @@ export class ActionService extends BaseService {
     item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -74,6 +77,7 @@ export class ActionService extends BaseService {
     item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -82,6 +86,7 @@ export class ActionService extends BaseService {
     item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -90,6 +95,7 @@ export class ActionService extends BaseService {
     item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -111,6 +117,7 @@ export class ActionService extends BaseService {
     const originalItem = Object.assign(Object.create(Object.getPrototypeOf(action)), action);
     Object.assign(action, changes);
     this._publish('UPDATE', action.constructor.name, action, originalItem);
+    this._rewireEdges(action);
     return action;
   }
 

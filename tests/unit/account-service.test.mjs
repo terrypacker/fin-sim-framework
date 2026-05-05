@@ -501,7 +501,7 @@ test('US+AU types have no default country (caller sets)', () => {
 // ─── AccountService.replenishSavings ──────────────────────────────────────────
 
 test('replenishSavings: returns keys of accounts drawn from', () => {
-  const svc   = new AccountService();
+  const svc   = new AccountService(new Graph(), new EventBus());
   const date  = new Date(2026, 0, 1);
   const savings  = new CheckingAccount(0, { country: 'US', currency: USD });
   const brokerage = new BrokerageAccount(50000, { country: 'US', currency: USD, drawdownPriority: 1 });
@@ -518,7 +518,7 @@ test('replenishSavings: returns keys of accounts drawn from', () => {
 });
 
 test('replenishSavings: returns multiple keys when deficit spans accounts', () => {
-  const svc  = new AccountService();
+  const svc  = new AccountService(new Graph(), new EventBus());
   const date = new Date(2026, 0, 1);
   const savings    = new CheckingAccount(0, { country: 'US', currency: USD });
   const accountA   = new BrokerageAccount(3000,  { country: 'US', currency: USD, drawdownPriority: 1 });
@@ -535,7 +535,7 @@ test('replenishSavings: returns multiple keys when deficit spans accounts', () =
 });
 
 test('replenishSavings: skips age-ineligible accounts and does not return them', () => {
-  const svc  = new AccountService();
+  const svc  = new AccountService(new Graph(), new EventBus());
   const date = new Date(2026, 0, 1);
   const savings  = new CheckingAccount(0, { country: 'US', currency: USD });
   const locked   = new FourOhOneKAccount(50000, { country: 'US', currency: USD, drawdownPriority: 1 });

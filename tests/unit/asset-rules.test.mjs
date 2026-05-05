@@ -44,8 +44,10 @@ import { SimulationState }          from '../../src/simulation-framework/simulat
 import { PRIORITY } from '../../src/simulation-framework/reducers.js';
 import { RecordBalanceAction } from '../../src/simulation-framework/actions.js';
 import { ReducerBuilder } from '../../src/simulation-framework/builders/reducer-builder.js';
+import {Graph} from "../../src/graph/graph.js";
+import {EventBus} from "../../src/simulation-framework/event-bus.js";
 
-const svc     = new AccountService();
+const svc     = new AccountService(new Graph(), new EventBus());
 const assetSvc = new AssetService();
 
 // ══════════════════════════════════════════════════════════════════════════════

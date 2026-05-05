@@ -72,7 +72,7 @@ import { UsTaxRates2025 } from './finance/tax/us/us-tax-rates-2025.js';
 import { UsTaxRatesBase } from './finance/tax/us/us-tax-rates-base.js';
 import { TaxService } from './finance/tax-service.js';
 import { TaxSettleService } from './finance/tax-settle-service.js';
-import { Edge } from './graph/edge.js';
+import { EDGE_TYPES, createEdgeId, Edge } from './graph/edge.js';
 import { GraphQueryApi } from './graph/graph-query-api.js';
 import { Graph } from './graph/graph.js';
 import { SimGraphNode } from './graph/sim-graph-node.js';
@@ -156,6 +156,8 @@ export const Misc = {
   SimulationAnimator,
   SimulationWorkbench,
   StatePanelView,
+  EDGE_TYPES,
+  createEdgeId,
   Edge,
   GraphQueryApi,
   Graph,
