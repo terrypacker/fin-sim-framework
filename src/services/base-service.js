@@ -13,8 +13,7 @@ import { ServiceActionEvent } from '../simulation-framework/bus-messages.js';
 /**
  * Base class for all configuration-item services.
  *
- * Each service owns an internal Map<id, item> that is the single source of
- * truth for the items it manages.  Callers retrieve items via get(id) /
+ * Each service shares its data with the global graph instance.  Callers retrieve items via get(id) /
  * getAll() and mutate them only through the service's update* methods, which
  * snapshot the item before applying changes and publish a ServiceActionEvent
  * to the shared bus.
@@ -25,15 +24,21 @@ import { ServiceActionEvent } from '../simulation-framework/bus-messages.js';
  */
 export class BaseService {
   /**
-   * @param {import('../simulation-framework/event-bus.js').EventBus} bus
-   * @param {string} idPrefix  - Prefix used when auto-generating IDs (e.g. 'e', 'h', 'r', 'a')
+
    */
-  constructor(bus, idPrefix = 'item') {
+  /**
+   *
+   * @param {import('../graph/graph.js')} graph
+   * @param {import('../simulation-framework/event-bus.js').EventBus} bus
+   * @param {string} kind  - kind of node [event, handler, action, reducer]
+   */
+  constructor(graph, bus, kind, prefixLength = 1) {
     this.bus = bus;
-    /** @type {Map<string, *>} */
-    this._items = new Map();
+    this._graph = graph;
+    this._kind = kind;
+    this._layer = 'config';
     this._nextId   = 1;
-    this._idPrefix = idPrefix;
+    this._idPrefix = this._kind.substring(0, prefixLength);
   }
 
   // ─── Public query API ─────────────────────────────────────────────────────
@@ -44,52 +49,16 @@ export class BaseService {
    * @returns {*|null}
    */
   get(id) {
-    return this._items.get(id) ?? null;
+    return this._graph.getNode(id) ?? null;
   }
+
 
   /**
    * Return all items managed by this service.
    * @returns {Array}
    */
   getAll() {
-    return [...this._items.values()];
-  }
-
-  /**
-   * actionService
-   *   .query()
-   *   .where(a => a.type === type)
-   *   .where(a => a.enabled)
-   *   .toArray();
-   * @return {any}
-   */
-  query() {
-    let results = [...this._items.values()];
-
-    return {
-      where: (predicate) => {
-        results = results.filter(predicate);
-        return this.queryFrom(results);
-      },
-      orWhere: (predicate) => {
-        const orResults = [...this._items.values()].filter(predicate);
-        results = [...new Set([...results, ...orResults])];
-        return this;
-      },
-      toArray: () => results
-    };
-  }
-
-  queryFrom(seed) {
-    let results = seed;
-
-    return {
-      where: (predicate) => {
-        results = results.filter(predicate);
-        return this.queryFrom(results);
-      },
-      toArray: () => results
-    };
+    return [...this._graph.getNodes().filter((n) => this._serviceFilter(n))];
   }
 
   // ─── Internal helpers ─────────────────────────────────────────────────────
@@ -110,7 +79,7 @@ export class BaseService {
    * @param {*} item - must have an `id` property
    */
   _register(item) {
-    this._items.set(item.id, item);
+    this._graph.addNode(item);
     this._advanceCounter(item.id);
   }
 
@@ -119,7 +88,7 @@ export class BaseService {
    * @param {string} id
    */
   _unregister(id) {
-    this._items.delete(id);
+    this._graph.removeNode(id);
   }
 
   /**
@@ -131,7 +100,7 @@ export class BaseService {
    */
   _resolve(idOrItem) {
     const id = typeof idOrItem === 'string' ? idOrItem : idOrItem?.id;
-    const item = this._items.get(id);
+    const item = this._graph.getNode(id);
     if (!item) throw new Error(`${this.constructor.name}: item not found: ${id}`);
     return item;
   }
@@ -153,7 +122,7 @@ export class BaseService {
    */
   load(item) {
     if (item.id == null) item.id = this._generateId(this._idPrefix);
-    this._items.set(item.id, item);
+    this._graph.addNode(item);
     this._advanceCounter(item.id);
     return item;
   }
@@ -178,7 +147,7 @@ export class BaseService {
    */
   register(item) {
     if (item.id == null) item.id = this._generateId(this._idPrefix);
-    this._items.set(item.id, item);
+    this._graph.addNode(item);
     this._advanceCounter(item.id);
     this._publish('CREATE', item.constructor.name, item);
     return item;
@@ -207,5 +176,15 @@ export class BaseService {
    */
   _publish(actionType, classType, item, originalItem = null) {
     this.bus.publish(new ServiceActionEvent({ actionType, classType, item, originalItem }));
+  }
+
+  /**
+   * Filter out nodes for my service
+   * @param node
+   * @return {boolean}
+   * @private
+   */
+  _serviceFilter(node) {
+    return node.kind === this._kind && node.layer === this._layer;
   }
 }

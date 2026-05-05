@@ -21,7 +21,8 @@ import { OneOffEvent } from '../simulation-framework/events/one-off-event.js';
  * originalItem snapshot is always taken before mutation.
  */
 export class EventService extends BaseService {
-  constructor(bus) { super(bus, 'e'); }
+  constructor(graph, bus) { super(graph, bus, 'event');
+  }
 
   // ─── Create ───────────────────────────────────────────────────────────────
 

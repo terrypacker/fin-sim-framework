@@ -34,7 +34,7 @@ import { SetOutOfFundsDateReducer } from '../finance/reducers/set-out-of-funds-d
  * into a ReducerPipeline is the caller's responsibility.
  */
 export class ReducerService extends BaseService {
-  constructor(bus) { super(bus, 'r'); }
+  constructor(graph, bus) { super(graph, bus, 'reducer'); }
 
   // ─── Create ───────────────────────────────────────────────────────────────
 
@@ -247,7 +247,7 @@ export class ReducerService extends BaseService {
     fresh.generatedActionDefinitions = old.generatedActionDefinitions;
     Object.assign(fresh, extraProps);
 
-    this._items.set(fresh.id, fresh);
+    this._graph.updateNode(fresh.id, fresh);
     this._publish('UPDATE', newType, fresh, old);
     return fresh;
   }

@@ -17,6 +17,7 @@ import { PersonService } from '../finance/services/person-service.js';
 import { ReducerService } from './reducer-service.js';
 import { SimulationRegistry } from './simulation-registry.js';
 import { SimulationSync } from './simulation-sync.js';
+import {Graph} from "../graph/graph.js";
 
 /**
  * Central singleton registry for all application services, the shared
@@ -35,12 +36,13 @@ export class ServiceRegistry {
 
   constructor() {
     this.bus                = new EventBus();
-    this.accountService     = new AccountService(this.bus);
-    this.actionService      = new ActionService(this.bus);
-    this.eventService       = new EventService(this.bus);
-    this.handlerService     = new HandlerService(this.bus);
-    this.personService      = new PersonService(this.bus);
-    this.reducerService     = new ReducerService(this.bus);
+    this.graph              = new Graph();
+    this.accountService     = new AccountService(this.graph, this.bus);
+    this.actionService      = new ActionService(this.graph, this.bus);
+    this.eventService       = new EventService(this.graph, this.bus);
+    this.handlerService     = new HandlerService(this.graph, this.bus);
+    this.personService      = new PersonService(this.graph, this.bus);
+    this.reducerService     = new ReducerService(this.graph, this.bus);
     this.simulationRegistry = new SimulationRegistry();
 
     //The

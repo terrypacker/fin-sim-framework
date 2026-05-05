@@ -32,8 +32,8 @@ import {Reducer} from "../simulation-framework/reducers.js";
  * Owns an internal Map<id, item> as the source of truth.
  */
 export class ActionService extends BaseService {
-  constructor(bus) {
-    super(bus, 'a');
+  constructor(graph, bus) {
+    super(graph, bus, 'action');
 
     //TODO Could move out to ActionTypeEnsurer class if we want to decouple this,
     //  we want to ensure HandlerEntry and Reducer classes have their actions registered
@@ -141,7 +141,7 @@ export class ActionService extends BaseService {
     fresh.value     = old.value;
     Object.assign(fresh, extraProps);
 
-    this._items.set(fresh.id, fresh);
+    this._graph.updateNode(fresh.id, fresh);
     this._publish('UPDATE', newClass, fresh, old);
     return fresh;
   }

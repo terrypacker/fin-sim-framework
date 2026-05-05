@@ -42,7 +42,9 @@ Object.assign(HANDLER_CLASSES, {
  * into a simulation's HandlerRegistry is the caller's responsibility.
  */
 export class HandlerService extends BaseService {
-  constructor(bus) { super(bus, 'h'); }
+  constructor(graph, bus) {
+    super(graph, bus, 'handler');
+  }
 
   // ─── Create ───────────────────────────────────────────────────────────────
 
@@ -110,7 +112,7 @@ export class HandlerService extends BaseService {
     fresh.generatedActionDefinitions = old.generatedActionDefinitions;
     Object.assign(fresh, extraProps);
 
-    this._items.set(fresh.id, fresh);
+    this._graph.updateNode(fresh.id, fresh);
     this._publish('UPDATE', newClass, fresh, old);
     return fresh;
   }

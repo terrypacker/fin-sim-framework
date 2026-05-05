@@ -17,6 +17,8 @@
  * limitations under the License.
  */
 
+import {SimGraphNode} from "../graph/sim-graph-node.js";
+
 export class ReducerPipeline {
   constructor() {
     this.map = new Map(); // actionType -> [{priority, fn}]
@@ -97,12 +99,11 @@ export const PRIORITY = {
  * Subclasses override reduce(state, action, date) and are registered via
  * registerWith(pipeline, actionType).
  */
-export class Reducer {
+export class Reducer extends SimGraphNode {
   static description = 'Abstract base class for all reducers; subclasses implement reduce(state, action, date) and register against an action type.';
 
   constructor(name = 'anonymous', priority = PRIORITY.LOGGING) {
-    this.id       = null;
-    this.name     = name;
+    super({id: null, kind: 'reducer', layer: 'config', name})
     this.priority = priority;
     this.reducedActionTypes        = [];   // string[] — action types this reducer handles
     this.generatedActionTypes      = [];   // string[] — action types this reducer may emit
@@ -141,8 +142,6 @@ export class Reducer {
     pipeline.registerReducer(actionType, this);
     return this;
   }
-
-  get kind() { return 'reducer'; }
 
   /** Always matches constructor.name — can never drift from the actual class. Don't let minification strip this out! */
   get reducerType() { return this.constructor.name; }

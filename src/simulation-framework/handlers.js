@@ -17,6 +17,8 @@
  * limitations under the License.
  */
 
+import {SimGraphNode} from "../graph/sim-graph-node.js";
+
 /**
  * A single registered handler for an event type.
  *
@@ -25,13 +27,12 @@
  * generatedActionDefinitions — ActionDefinition[] used by defaultFunction to
  *                           instantiate concrete Action objects at runtime.
  */
-export class HandlerEntry {
+export class HandlerEntry extends SimGraphNode {
   static description = 'Returns generated actions.';
 
   constructor(fn, name = 'anonymous') {
-    this.id   = null;
+    super({id: null, kind: 'handler', layer: 'config', name})
     this.fn   = fn ?? this.defaultFunction;
-    this.name = name;
     this.handledEvents             = [];
     this.generatedActionTypes      = [];   // string[] — declared types for graph edges
     this.generatedActionDefinitions = [];  // ActionDefinition[] — runtime instantiation
@@ -44,8 +45,6 @@ export class HandlerEntry {
   defaultFunction(ctx) {
     return this.generatedActionDefinitions.map(def => def.instantiate(ctx));
   }
-
-  get kind() { return 'handler'; }
 
   /** Always matches constructor.name — can never drift from the actual class. */
   get handlerClass() { return this.constructor.name; }
