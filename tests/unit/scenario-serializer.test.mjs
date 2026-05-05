@@ -157,7 +157,10 @@ class TrackingUI {
 function makeScenario() {
   ServiceRegistry.reset();
   const ui       = new TrackingUI();
-  const scenario = new BaseScenario({ eventSchedulerUI: ui });
+  const scenario = new BaseScenario({
+    eventSchedulerUI: ui,
+    context: ServiceRegistry.getInstance().simulationContext
+  });
   scenario.buildSim({}, { metrics: { amount: 0, salary: 0 } });
   return { ui, scenario };
 }
@@ -398,7 +401,7 @@ test('deserialize: disabled event is added to UI without being scheduled', () =>
   ScenarioSerializer.deserialize(cfg, ServiceRegistry.getInstance());
   assert.ok(ui.nodeIds().includes('e-off'), 'disabled event should still appear in the UI');
   // It must not be scheduled in the sim
-  assert.ok(!ServiceRegistry.getInstance().simulationSync._registeredRecurringTypes.has('OFF_EVT'),
+  assert.ok(!ServiceRegistry.getInstance().simulationSync.adapter._registeredRecurringTypes.has('OFF_EVT'),
     'disabled event should not be in _registeredRecurringTypes');
 });
 

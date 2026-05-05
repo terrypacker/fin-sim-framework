@@ -64,6 +64,9 @@ import { UsSavingsInterestCreditReducer }                                       
 import { Account, CheckingAccount, SavingsAccount }                                  from '../../src/finance/account.js';
 import { InvestmentAccount, BrokerageAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from '../../src/finance/investment-account.js';
 import { Person }                                                                    from '../../src/finance/person.js';
+import {
+  SIMULATION_BUS_MESSAGES
+} from "../../src/simulation-framework/bus-messages.js";
 
 // ─── Provide the FinSimLib global that BaseScenario.buildSim() needs ──────────
 
@@ -157,7 +160,10 @@ function makeStubUI() {
 function buildScenario(params = {}) {
   ServiceRegistry.reset();
   const ui       = makeStubUI();
-  const scenario = new IntlRetirementScenario({ eventSchedulerUI: ui });
+  const scenario = new IntlRetirementScenario({
+    eventSchedulerUI: ui,
+    context: ServiceRegistry.getInstance().simulationContext
+  });
   scenario.buildSim(params);
   scenario.loadDefaults();
   const sim = scenario.sim;
@@ -299,7 +305,10 @@ test('serialize → deserialize round-trip reconstructs all TaxService reducers'
 
   // Rebuild the sim (phase 1 only) then deserialize the saved config.
   ServiceRegistry.reset();
-  const scenario2 = new IntlRetirementScenario({ eventSchedulerUI: makeStubUI() });
+  const scenario2 = new IntlRetirementScenario({
+    eventSchedulerUI: makeStubUI(),
+    context: ServiceRegistry.getInstance().simulationContext
+  });
   scenario2.buildSim();
   assert.doesNotThrow(
     () => ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance()),
@@ -342,7 +351,10 @@ test('serialize → deserialize round-trip reconstructs all TaxService handlers'
   );
 
   ServiceRegistry.reset();
-  const scenario2 = new IntlRetirementScenario({ eventSchedulerUI: makeStubUI() });
+  const scenario2 = new IntlRetirementScenario({
+    eventSchedulerUI: makeStubUI(),
+    context: ServiceRegistry.getInstance().simulationContext
+  });
   scenario2.buildSim();
   ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance());
 
@@ -413,7 +425,10 @@ test('DynamicTaxReducer round-trip preserves cc and actionType', () => {
   );
 
   ServiceRegistry.reset();
-  const scenario2 = new IntlRetirementScenario({ eventSchedulerUI: makeStubUI() });
+  const scenario2 = new IntlRetirementScenario({
+    eventSchedulerUI: makeStubUI(),
+    context: ServiceRegistry.getInstance().simulationContext
+  });
   scenario2.buildSim();
   ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance());
 

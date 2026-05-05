@@ -88,7 +88,10 @@ function makeScenario() {
               ,'AccountTransactionReducer','ScriptedReducer'].includes(classType)) ui.nodes.push(item);
   });
 
-  const scenario = new BaseScenario({ eventSchedulerUI: ui });
+  const scenario = new BaseScenario({
+    eventSchedulerUI: ui,
+    context: ServiceRegistry.getInstance().simulationContext
+  });
   scenario.buildSim({}, { metrics: {} });
   return { ui, scenario };
 }
@@ -128,7 +131,7 @@ test('eventService.register: enabled EventSeries is scheduled in sim', () => {
     name: 'Monthly', type: 'MONTHLY_TEST', interval: 'month-end', enabled: true, color: '#fff'
   });
   ServiceRegistry.getInstance().eventService.register(event);
-  assert.ok(ServiceRegistry.getInstance().simulationSync._registeredRecurringTypes.has('MONTHLY_TEST'),
+  assert.ok(ServiceRegistry.getInstance().simulationSync.adapter._registeredRecurringTypes.has('MONTHLY_TEST'),
     'enabled series should be in _registeredRecurringTypes after register');
 });
 
@@ -138,7 +141,7 @@ test('eventService.register: disabled EventSeries is not scheduled in sim', () =
     name: 'Monthly', type: 'MONTHLY_DISABLED', interval: 'month-end', enabled: false, color: '#fff'
   });
   ServiceRegistry.getInstance().eventService.register(event);
-  assert.ok(!ServiceRegistry.getInstance().simulationSync._registeredRecurringTypes.has('MONTHLY_DISABLED'),
+  assert.ok(!ServiceRegistry.getInstance().simulationSync.adapter._registeredRecurringTypes.has('MONTHLY_DISABLED'),
     'disabled series should not be scheduled');
 });
 
@@ -283,7 +286,7 @@ test('enabling a registered event via service update schedules it in sim', () =>
   assert.doesNotThrow(() => {
     ServiceRegistry.getInstance().eventService.updateEvent(event.id, { enabled: true });
   });
-  assert.ok(ServiceRegistry.getInstance().simulationSync._registeredRecurringTypes.has(event.type));
+  assert.ok(ServiceRegistry.getInstance().simulationSync.adapter._registeredRecurringTypes.has(event.type));
 });
 
 test('disabling an enabled event via service update unschedules it from sim', () => {
@@ -292,7 +295,7 @@ test('disabling an enabled event via service update unschedules it from sim', ()
     name: 'Test', type: 'TEST_EVT', interval: 'month-end', enabled: true, color: '#fff'
   });
   ServiceRegistry.getInstance().eventService.register(event);
-  assert.ok(ServiceRegistry.getInstance().simulationSync._registeredRecurringTypes.has('TEST_EVT'));
+  assert.ok(ServiceRegistry.getInstance().simulationSync.adapter._registeredRecurringTypes.has('TEST_EVT'));
 
   assert.doesNotThrow(() => {
     ServiceRegistry.getInstance().eventService.updateEvent(event.id, { enabled: false });
@@ -307,10 +310,10 @@ test('eventDeleted: removes event from _registeredRecurringTypes', () => {
     name: 'Test', type: 'DELETE_EVT', interval: 'month-end', enabled: true, color: '#fff'
   });
   ServiceRegistry.getInstance().eventService.register(event);
-  assert.ok(ServiceRegistry.getInstance().simulationSync._registeredRecurringTypes.has('DELETE_EVT'));
+  assert.ok(ServiceRegistry.getInstance().simulationSync.adapter._registeredRecurringTypes.has('DELETE_EVT'));
 
   ServiceRegistry.getInstance().eventService.deleteEvent(event.id);
-  assert.ok(!ServiceRegistry.getInstance().simulationSync._registeredRecurringTypes.has('DELETE_EVT'));
+  assert.ok(!ServiceRegistry.getInstance().simulationSync.adapter._registeredRecurringTypes.has('DELETE_EVT'));
 });
 
 test('eventDeleted: disabled event can be deleted without error', () => {
