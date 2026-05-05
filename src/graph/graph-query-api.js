@@ -24,9 +24,10 @@ import {createEdgeId} from "./edge.js";
 export class GraphQueryApi extends QueryApi {
   constructor(graph) {
     super(graph);
-    this._graph = graph;
+    this._graph = graph; //TODO This is also in the parent as _dataSource
     this._graph.addNodeModifcationWatcher(() => this._invalidateIndexes());
-    this._kindIndex = new Map();   // lower(name) -> [items]
+    this._kindIndex = new Map();   // kind -> [items]
+    this._layerIndex = new Map(); // layer -> [items]
   }
 
   /**
@@ -38,8 +39,8 @@ export class GraphQueryApi extends QueryApi {
   _createDataSource(where) {
     const kind = this._extractKind(where);
     return kind
-        ? this._graph.getKind(kind)
-        : this._graph.getAll();
+        ? this.getByKind(kind)
+        : this.getAll();
   }
 
   // =========================================================
@@ -49,6 +50,11 @@ export class GraphQueryApi extends QueryApi {
   getByKind(kind) {
     if(this.rebuildIndexes) this._buildIndexes();
     return this._kindIndex.get(kind) || [];
+  }
+
+  getByLayer(layer) {
+    if(this.rebuildIndexes) this._buildIndexes();
+    return this._layerIndex.get(layer) || [];
   }
 
   getOneByKind(kind, field, value) {
@@ -164,6 +170,7 @@ export class GraphQueryApi extends QueryApi {
 
     return false;
   }
+
   existsEdge(from, to, type) {
     // Use edge ID directly (fastest possible path)
     const edgeId = createEdgeId(from, type, to);
@@ -179,6 +186,29 @@ export class GraphQueryApi extends QueryApi {
   }
 
   // =========================================================
+  // Graph View
+  // =========================================================
+
+  getGraphView(layer) {
+    const nodes = this.getByLayer(layer);
+
+    const nodeIds = new Set(nodes.map(n => n.id));
+
+    const edges = [];
+
+    for (const node of nodes) {
+      const outgoing = this.getOutgoing(node.id);
+
+      for (const edge of outgoing) {
+        if (!nodeIds.has(edge.to)) continue;
+        edges.push(edge);
+      }
+    }
+
+    return { nodes, edges };
+  }
+
+  // =========================================================
   // Optimization
   // =========================================================
 
@@ -186,7 +216,7 @@ export class GraphQueryApi extends QueryApi {
     const all = this.getAll();
 
     for (const item of all) {
-      if (item.name != null) {
+      if (item.kind != null) {
         const key = String(item.kind);
         if (!this._kindIndex.has(key)) {
           this._kindIndex.set(key, []);
@@ -194,9 +224,18 @@ export class GraphQueryApi extends QueryApi {
         this._kindIndex.get(key).push(item);
       }
 
+      if (item.layer != null) {
+        const key = String(item.layer);
+        if (!this._layerIndex.has(key)) {
+          this._layerIndex.set(key, []);
+        }
+        this._layerIndex.get(key).push(item);
+      }
+
     }
     super._buildIndexes();
   }
+
   _extractKind(node) {
     if (!node) return null;
 

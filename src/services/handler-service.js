@@ -63,11 +63,11 @@ export class HandlerService extends BaseService {
   }
 
   linkHandlerToEvent(handlerId, eventId) {
-    this._addEdge(handlerId, eventId, EDGE_TYPES.HANDLES);
+    this._addEdge(eventId, handlerId, EDGE_TYPES.HANDLES);
   }
 
   unlinkHandlerFromEvent(handlerId, eventId) {
-    this._removeEdge(handlerId, eventId, EDGE_TYPES.HANDLES);
+    this._removeEdge(eventId, handlerId, EDGE_TYPES.HANDLES);
   }
 
   linkHandlerToAction(handlerId, actionId) {
@@ -112,6 +112,7 @@ export class HandlerService extends BaseService {
     const handler = this._resolve(idOrHandler);
     const originalItem = Object.assign(Object.create(Object.getPrototypeOf(handler)), handler);
     Object.assign(handler, changes);
+    this._graph.notifyNodeWatchers(); //Notify that the content in the graph changed
     this._publish('UPDATE', handler.constructor.name, handler, originalItem);
     this._rewireEdges(handler);
     return handler;

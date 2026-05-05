@@ -116,6 +116,7 @@ export class ActionService extends BaseService {
     const action = this._resolve(idOrAction);
     const originalItem = Object.assign(Object.create(Object.getPrototypeOf(action)), action);
     Object.assign(action, changes);
+    this._graph.notifyNodeWatchers(); //Notify that the content in the graph changed
     this._publish('UPDATE', action.constructor.name, action, originalItem);
     this._rewireEdges(action);
     return action;

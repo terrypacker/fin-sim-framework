@@ -29,8 +29,13 @@ import {
  * created (i.e., from BaseScenario.buildSim()).
  */
 export class SimulationSync {
-  constructor({ bus, simulationRegistry }) {
+  constructor({ bus, simulationRegistry, eventService, handlerService, actionService, reducerService }) {
     this.simulationRegistry = simulationRegistry;
+
+    this.eventService = eventService;
+    this.handlerService = handlerService;
+    this.actionService = actionService;
+    this.reducerService = reducerService;
 
     this.adapter = new SimulationAdapter({
       sim: null,
@@ -40,6 +45,10 @@ export class SimulationSync {
     bus.subscribe('SERVICE_ACTION', msg => {
       this._handle(msg);
     });
+
+    bus.subscribe('NODE_DATA_CHANGED', msg => {
+      this._handleNodeDataMessage(msg);
+    })
   }
 
   setSimStart(simStart) {
@@ -64,6 +73,35 @@ export class SimulationSync {
       this.adapter.onUpdate(item);
     } else if (actionType === 'DELETE') {
       this.adapter.onDelete(item);
+    }
+  }
+
+  _handleNodeDataMessage(msg) {
+    switch(msg.kind) {
+      case 'event':
+        this.eventService.updateEvent(msg.nodeId, {
+          data: msg.data,
+          meta: msg.meta
+        })
+        break;
+      case 'handler':
+        this.handlerService.updateHandler(msg.nodeId, {
+          data: msg.data,
+          meta: msg.meta
+        })
+        break;
+      case 'action':
+        this.actionService.updateAction(msg.nodeId, {
+          data: msg.data,
+          meta: msg.meta
+        })
+        break;
+      case 'reducer':
+        this.reducerService.updateReducer(msg.nodeId, {
+          data: msg.data,
+          meta: msg.meta
+        })
+        break;
     }
   }
 }

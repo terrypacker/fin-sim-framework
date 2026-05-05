@@ -26,7 +26,11 @@ import { GraphBuilderPresenter }    from '../visualization/graph-builder/graph-b
 import { GraphSync }                from '../visualization/graph-sync.js';
 import { ConfigGraph }              from '../visualization/config-graph.js';
 import { ServiceRegistry }          from '../services/service-registry.js';
-import { SIMULATION_BUS_MESSAGES }  from '../simulation-framework/bus-messages.js';
+import {
+  BusMessage,
+  SIMULATION_BUS_MESSAGES,
+  SimulationBusMessage
+} from '../simulation-framework/bus-messages.js';
 import { PeopleController }         from '../visualization/people/people-controller.js';
 import { PeopleView }               from '../visualization/people/people-view.js';
 import { PeoplePresenter }          from '../visualization/people/people-presenter.js';
@@ -36,6 +40,8 @@ import { AccountsPresenter }        from '../visualization/accounts/accounts-pre
 import { ScenarioTabPresenter }     from './scenario-tab-presenter.js';
 import { StatePanelView }           from './state-panel-view.js';
 import { SimulationAnimator }       from './simulation-animator.js';
+import {GraphRenderer} from "../visualization/components/graph-renderer.js";
+import {BaseComponent} from "../visualization/components/base-component.js";
 
 /**
  * BaseApp — composition root.
@@ -51,7 +57,7 @@ import { SimulationAnimator }       from './simulation-animator.js';
  *   AccountsPresenter     — accounts sidebar MVP (recreated per buildScenario)
  *   GraphBuilderPresenter — event-graph editor (recreated per buildScenario)
  */
-export class BaseApp {
+export class BaseApp extends BaseComponent {
   /**
    * @param {object}            opts
    * @param {PrebuiltScenario[]} [opts.prebuiltScenarios=[]] - Pre-built scenario descriptors.
@@ -59,7 +65,7 @@ export class BaseApp {
    * @param {Array|null}        [opts.chartSeries]  - Chart series config.
    */
   constructor({ newScenario, chartSeries, prebuiltScenarios = [] }) {
-
+    super(  )
     // Kept for backward-compat (used as fallback in createScenario when no prebuiltScenarios).
     this.newScenario = newScenario ?? null;
     this.chartSeries = chartSeries ?? null;
@@ -103,7 +109,9 @@ export class BaseApp {
   getParams()       { return this._scenarioTab.getParams(); }
   getInitialState() { return this._scenarioTab.getInitialState(); }
 
-  afterBuildSim() { this._scenarioTab.afterBuildSim(this.scenario); }
+  afterBuildSim() {
+    this._scenarioTab.afterBuildSim(this.scenario);
+  }
 
   // ── Core lifecycle ────────────────────────────────────────────────────────
 
@@ -118,9 +126,14 @@ export class BaseApp {
     if (this.graphView)  this.graphView.stopViz();
     if (this.chartView)  this.chartView.stopViz();
 
+    const registry = ServiceRegistry.getInstance();
+
     // ── Config graph (visual node canvas) ─────────────────────────────────────
     if (this.graphBuilderPresenter) this.graphBuilderPresenter.destroy();
-    this.graphBuilderPresenter = new ConfigGraph({
+    this.graphBuilderPresenter = new GraphRenderer({
+      parent: this,
+      graph: registry.graph,
+      graphQueryApi: registry.graphQueryApi,
       graphRoot:               document.getElementById('graphRoot'),
       graphNodes:              document.getElementById('graphNodes'),
       graphEdges:              document.getElementById('graphEdges'),
@@ -133,8 +146,8 @@ export class BaseApp {
     );
 
     // Breakpoint listener: delegate to animator once it is created.
-    this.graphBuilderPresenter.registerBreakpointChangeListener(() => {
-      this._animator?.syncBreakpoints();
+    this.graphBuilderPresenter.registerBreakpointChangeListener((node) => {
+      this._animator?.toggleBreakpoint(node);
     });
 
     // ── Event-graph editor (scheduler UI) ─────────────────────────────────────
@@ -143,8 +156,7 @@ export class BaseApp {
       graph:         this.graphBuilderPresenter,
     });
 
-    const registry = ServiceRegistry.getInstance();
-    new GraphSync({ graph: this.graphBuilderPresenter, registry });
+   //TODO Removed new GraphSync({ graph: this.graphBuilderPresenter, registry });
 
     // ── People / Accounts MVP ─────────────────────────────────────────────────
     // Controllers and presenters are recreated each rebuild to bind to the fresh bus.
@@ -242,7 +254,7 @@ export class BaseApp {
       actionService:  registry.actionService,
     });
 
-    this._animator.syncBreakpoints();
+    this._animator.toggleBreakpoint();
     this._animator.wireSimBus(this.scenario.sim.bus);
 
     // Track _currentDate for subclass access.
@@ -256,6 +268,13 @@ export class BaseApp {
     this.lastSliderValue       = 0;
     this._currentDate          = this.scenario.simStart;
     $('timeLabel').textContent = this.timeControls.formatDate(this.scenario.simStart);
+
+
+    //Send Scenario Build Message
+    this.graphBuilderPresenter._renderGraph();// Hack to force nodes to be set in this._currentNodes
+    this.graphBuilderPresenter._relayoutAll();
+    this.graphBuilderPresenter.render();//TODO could wire this into the bus? Ensure it re-renders
+    registry.bus.publish(new BusMessage({ type: SIMULATION_BUS_MESSAGES.SCENARIO_READY, date: this.scenario.simStart}));
   }
 
   initView() {

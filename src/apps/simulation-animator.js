@@ -101,14 +101,32 @@ export class SimulationAnimator {
   // ── Breakpoints ───────────────────────────────────────────────────────────
 
   /** Sync breakpointed node IDs from the config graph into sim control. */
-  syncBreakpoints() {
+  toggleBreakpoint(node) {
     if (!this._scenario?.sim) return;
-    const ids = new Set(
-      this._configGraph.nodes
-        .filter(n => n.breakpoint)
-        .map(n => n.id)
-    );
-    this._scenario.sim.control.breakpointNodeIds = ids;
+    if(!node) {
+      this._scenario.sim.control.breakpointNodeIds.clear();
+    }else {
+      //TODO This should replace node in the graph
+      /*
+      const node = this.graph.getNode(nodeId);
+
+      const next = {
+        ...node,
+        meta: {
+          ...node.meta,
+          breakpoint: !node.meta?.breakpoint
+        }
+      };
+
+      this.graph.replaceNode(nodeId, next);
+       */
+      if (this._scenario.sim.control.breakpointNodeIds.has(node.id)) {
+        this._scenario.sim.control.breakpointNodeIds.delete(node.id); // Item exists, so remove it
+      } else {
+        this._scenario.sim.control.breakpointNodeIds.add(node.id);    // Item doesn't exist, so add it
+      }
+    }
+
   }
 
   clearBreakpointStatus() {
@@ -116,7 +134,9 @@ export class SimulationAnimator {
     const label = $('simStatus');
     if (dot)   dot.className    = this.playing ? 'status-dot running' : 'status-dot stopped';
     if (label) label.textContent = this.playing ? 'RUNNING' : 'STOPPED';
+    /* TODO Don't do this ?  Will be a simulation bus message
     this._configGraph.applyToAllNodes(n => n.flashing = false);
+     */
   }
 
   showBreakpointPaused(hit) {
@@ -146,6 +166,7 @@ export class SimulationAnimator {
   // ── Config graph highlighting ─────────────────────────────────────────────
 
   updateConfigGraphEvents(event, stateBefore, stateAfter, start = true) {
+    /*  TODO not needed, going to send this out over bus messages to be handled by the SimulationSync
     if (start) {
       this._configGraph.applyToAllNodes(n => {
         n.fired        = false;
@@ -160,6 +181,7 @@ export class SimulationAnimator {
     } else {
       this._renderNodeFired(event.id, stateBefore, stateAfter);
     }
+     */
   }
 
   updateConfigGraphHandlers(handler, stateBefore, stateAfter) {
@@ -218,21 +240,23 @@ export class SimulationAnimator {
 
   /** Subscribe to all simulation bus messages. Call once after scenario.buildSim(). */
   wireSimBus(bus) {
+
     bus.subscribe(SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START, ({ date, payload, stateSnapshot }) => {
       this._timeControls.onDateChanged(new Date(date));
       this.updateDashCards(date);
-      this.updateConfigGraphEvents(payload.event, payload.stateBefore, stateSnapshot, true);
+
+      // TODO This should be done via graph this.updateConfigGraphEvents(payload.event, payload.stateBefore, stateSnapshot, true);
     });
 
     bus.subscribe(SIMULATION_BUS_MESSAGES.HANDLED_EVENT, ({ date, payload, stateSnapshot }) => {
       this.updateDashCards(date);
-      this.updateConfigGraphHandlers(payload.handler, payload.stateBefore, stateSnapshot);
+      // TODO This should be done via graph this.updateConfigGraphHandlers(payload.handler, payload.stateBefore, stateSnapshot);
     });
 
     bus.subscribe(SIMULATION_BUS_MESSAGES.ACTION_RESULT, ({ date, payload, stateSnapshot }) => {
       this._statePanelView.updateStatePanel(date, stateSnapshot);
       this.updateDashCards(date);
-      this.updateConfigGraphActions(payload.action, payload.stateBefore, stateSnapshot);
+      // TODO This should be done via graph this.updateConfigGraphActions(payload.action, payload.stateBefore, stateSnapshot);
     });
 
     bus.subscribe(SIMULATION_BUS_MESSAGES.REDUCER_RESULT, ({ date, payload, stateSnapshot }) => {
@@ -242,7 +266,7 @@ export class SimulationAnimator {
       this._chartView.addSnapshot(type, date, metrics);
       this._statePanelView.updateStatePanel(date, stateSnapshot);
       this.updateDashCards(date);
-      this.updateConfigGraphReducers(payload.reducer, payload.stateBefore, stateSnapshot);
-    });
+      // TODO This should be done via graph this.updateConfigGraphReducers(payload.reducer, payload.stateBefore, stateSnapshot);
+    })
   }
 }

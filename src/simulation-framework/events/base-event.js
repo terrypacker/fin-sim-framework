@@ -28,4 +28,7 @@ export class BaseEvent extends SimGraphNode {
     this.data    = data;
     this.meta    = meta;
   }
+
+  /** Always matches constructor.name — can never drift from the actual class. */
+  get eventType() { return this.constructor.name; }
 }

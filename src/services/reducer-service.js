@@ -265,7 +265,7 @@ export class ReducerService extends BaseService {
     const reducer = this._resolve(idOrReducer);
     const originalItem = Object.assign(Object.create(Object.getPrototypeOf(reducer)), reducer);
     Object.assign(reducer, changes);
-    this._query._invalidateIndexes();
+    this._graph.notifyNodeWatchers(); //Notify that the content in the graph changed
     this._publish('UPDATE', reducer.constructor.name, reducer, originalItem);
     this._rewireEdges(reducer);
     return reducer;

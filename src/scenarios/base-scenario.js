@@ -9,6 +9,7 @@
  */
 
 import {Simulation} from "../simulation-framework/simulation.js";
+import {ServiceRegistry} from "../services/service-registry.js";
 
 /**
  * Base class for simulation scenarios.
@@ -104,6 +105,7 @@ export class BaseScenario {
     simulationRegistry.unregister('primary');
 
     const sim = new Simulation(this.simStart, {
+      bus: ServiceRegistry.getInstance().bus,
       initialState: resolved,
     });
 

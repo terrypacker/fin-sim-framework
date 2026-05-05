@@ -21,7 +21,8 @@ import { OneOffEvent } from '../simulation-framework/events/one-off-event.js';
  * originalItem snapshot is always taken before mutation.
  */
 export class EventService extends BaseService {
-  constructor(graph, bus) { super(graph, bus, 'event');
+  constructor(graph, bus) {
+    super(graph, bus, 'event');
   }
 
   // ─── Create ───────────────────────────────────────────────────────────────
@@ -67,6 +68,7 @@ export class EventService extends BaseService {
     const event = this._resolve(idOrEvent);
     const originalItem = Object.assign(Object.create(Object.getPrototypeOf(event)), event);
     Object.assign(event, changes);
+    this._graph.notifyNodeWatchers(); //Notify that the content in the graph changed
     this._publish('UPDATE', event.constructor.name, event, originalItem);
     return event;
   }

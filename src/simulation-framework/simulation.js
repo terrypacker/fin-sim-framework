@@ -30,7 +30,7 @@ import {
   EventHandledMessage,
   ActionInstanceMessage,
   ActionResultMessage,
-  ReducerResultMessage
+  ReducerResultMessage, NodeDataBusMessage
 } from "./bus-messages.js";
 import { generateActionId } from "./actions.js";
 import { SimulationHistory } from "./simulation-history.js";
@@ -68,11 +68,14 @@ export class BreakpointSignal extends Error {
  *
  */
 export class Simulation {
-  constructor(startDate, { seed = 1, initialState = {}, opts = {} } = {}) {
+  constructor(startDate, { bus = new EventBus(), seed = 1, initialState = {}, opts = {} } = {}) {
     this.currentDate = this.normalizeDate(startDate);
 
     this.queue = new IndexedMinHeap((a, b) => a.date - b.date,
             item => item.instanceId, item => item.type);
+
+    //TODO Replace bus when ready
+    this.serviceBus = bus;
     this.bus = new EventBus();
 
     this.handlers = new HandlerRegistry();   // eventType -> [HandlerEntry]
@@ -231,8 +234,20 @@ export class Simulation {
 
     if (startHandlerIdx === 0) {
       this.eventExecutions++;
+      const now = new Date(this.currentDate);
+      if(event.id) {
+        this.serviceBus.publish(new NodeDataBusMessage({
+          date: now,
+          sim: this,
+          stateSnapshot: stateBefore,
+          nodeId: event.id,
+          kind: 'event',
+          meta: {reason: 'execution'},
+          data: {fired: true}
+        }));
+      }
       this.bus.publish(new EventStartBusMessage({
-        date: new Date(this.currentDate),
+        date: now,
         sim: this,
         payload: { event, eventCount: this.eventExecutions },
         stateSnapshot: stateBefore
@@ -268,8 +283,20 @@ export class Simulation {
 
       if (entry.name !== INTERNAL_SCHEDULING_HANDLER_NAME) {
         this.handlerExecutions++;
+        const now = new Date(this.currentDate);
+        if(entry.id) {
+          this.serviceBus.publish(new NodeDataBusMessage({
+            date: now,
+            sim: this,
+            stateSnapshot: stateBefore,
+            nodeId: entry.id,
+            kind: 'handler',
+            meta: {reason: 'execution'},
+            data: {fired: true}
+          }));
+        }
         this.bus.publish(new EventHandledMessage({
-          date: new Date(this.currentDate),
+          date: now,
           sim: this,
           stateSnapshot: stateBefore,
           payload: { handler: entry, event, handlerCount: this.handlerExecutions }
@@ -294,8 +321,21 @@ export class Simulation {
 
     // Publish the EVENT_OCCURRENCE_END message.
     const stateSnapshot = structuredClone(this.state);
+    const now = new Date(this.currentDate);
+    if(event.id) {
+      this.serviceBus.publish(new NodeDataBusMessage({
+        date: now,
+        sim: this,
+        stateSnapshot: stateSnapshot,
+        nodeId: event.id,
+        kind: 'event',
+        meta: {reason: 'execution'},
+        data: {fired: false}
+      }));
+    }
+
     this.bus.publish(new EventEndBusMessage({
-      date: new Date(this.currentDate),
+      date: now,
       sim: this,
       stateSnapshot: stateSnapshot,
       payload: {
@@ -401,8 +441,20 @@ export class Simulation {
 
       const prevState = structuredClone(this.state);
       this.actionExecutions++;
+      const now = new Date(this.currentDate);
+      if(action.id) {
+        this.serviceBus.publish(new NodeDataBusMessage({
+          date: now,
+          sim: this,
+          stateSnapshot: prevState,
+          nodeId: action.id,
+          kind: 'action',
+          meta: {reason: 'execution'},
+          data: {fired: true}
+        }));
+      }
       this.bus.publish(new ActionResultMessage({
-        date: new Date(this.currentDate),
+        date: now,
         sim: this,
         payload: {
           action: action,
@@ -470,8 +522,20 @@ export class Simulation {
       }
 
       this.reducerExecutions++;
+      const now = new Date(this.currentDate);
+      if(reducerWrapper.reducer.id) {
+        this.serviceBus.publish(new NodeDataBusMessage({
+          date: now,
+          sim: this,
+          stateSnapshot: stateSnapshot,
+          nodeId: reducerWrapper.reducer,
+          kind: 'reducer',
+          meta: {reason: 'execution'},
+          data: {fired: true}
+        }));
+      }
       this.bus.publish(new ReducerResultMessage({
-        date: new Date(this.currentDate),
+        date: now,
         sim: this,
         stateSnapshot: stateSnapshot,
         payload: {

@@ -18,6 +18,7 @@ import { ReducerService } from './reducer-service.js';
 import { SimulationRegistry } from './simulation-registry.js';
 import { SimulationSync } from './simulation-sync.js';
 import {Graph} from "../graph/graph.js";
+import {GraphQueryApi} from "../graph/graph-query-api.js";
 
 /**
  * Central singleton registry for all application services, the shared
@@ -37,6 +38,7 @@ export class ServiceRegistry {
   constructor() {
     this.bus                = new EventBus();
     this.graph              = new Graph();
+    this.graphQueryApi      = new GraphQueryApi(this.graph);
     this.accountService     = new AccountService(this.graph, this.bus);
     this.actionService      = new ActionService(this.graph, this.bus);
     this.eventService       = new EventService(this.graph, this.bus);
@@ -48,7 +50,11 @@ export class ServiceRegistry {
     //The
     this.simulationSync     = new SimulationSync({
       bus: this.bus,
-      simulationRegistry: this.simulationRegistry
+      simulationRegistry: this.simulationRegistry,
+      eventService: this.eventService,
+      handlerService: this.handlerService,
+      actionService: this.actionService,
+      reducerService: this.reducerService
     });
 
     //Context for a simulation

@@ -97,7 +97,7 @@ import { ActionBuilder } from './simulation-framework/builders/action-builder.js
 import { EventBuilder } from './simulation-framework/builders/event-builder.js';
 import { HandlerBuilder } from './simulation-framework/builders/handler-builder.js';
 import { ReducerBuilder } from './simulation-framework/builders/reducer-builder.js';
-import { SIMULATION_BUS_MESSAGES, BusMessage, SimulationBusMessage, EventStartBusMessage, EventEndBusMessage, EventHandledMessage, ActionInstanceMessage, ActionResultMessage, ReducerResultMessage, ServiceActionEvent } from './simulation-framework/bus-messages.js';
+import { SIMULATION_BUS_MESSAGES, BusMessage, SimulationBusMessage, NodeDataBusMessage, EventStartBusMessage, EventEndBusMessage, EventHandledMessage, ActionInstanceMessage, ActionResultMessage, ReducerResultMessage, ServiceActionEvent } from './simulation-framework/bus-messages.js';
 import { DateUtils } from './simulation-framework/date-utils.js';
 import { EventBus } from './simulation-framework/event-bus.js';
 import { BaseEvent } from './simulation-framework/events/base-event.js';
@@ -121,6 +121,7 @@ import { BalanceChartView } from './visualization/balance-chart-view.js';
 import { ChartView } from './visualization/chart-view.js';
 import { BaseComponent } from './visualization/components/base-component.js';
 import { GraphNodeFilterMultiSelect } from './visualization/components/graph-node-filter-multi-select.js';
+import { GraphRenderer } from './visualization/components/graph-renderer.js';
 import { ConfigGraph } from './visualization/config-graph.js';
 import { GraphBuilderController } from './visualization/graph-builder/graph-builder-controller.js';
 import { GraphBuilderPresenter } from './visualization/graph-builder/graph-builder-presenter.js';
@@ -358,6 +359,7 @@ export const Core = {
   SIMULATION_BUS_MESSAGES,
   BusMessage,
   SimulationBusMessage,
+  NodeDataBusMessage,
   EventStartBusMessage,
   EventEndBusMessage,
   EventHandledMessage,
@@ -412,6 +414,7 @@ export const Visualization = {
   ChartView,
   BaseComponent,
   GraphNodeFilterMultiSelect,
+  GraphRenderer,
   ConfigGraph,
   GraphBuilderController,
   GraphBuilderPresenter,
