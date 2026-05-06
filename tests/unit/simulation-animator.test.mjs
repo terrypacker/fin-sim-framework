@@ -11,7 +11,7 @@
 /**
  * simulation-animator.test.mjs
  *
- * Unit tests for SimulationAnimator.updateConfigGraphEvents / _renderNodeFired.
+ * Unit tests for SimulationAnimator.
  *
  * Regression test for the "infrastructure events have no id" bug:
  * PERIOD_ADVANCE and TAX_SETTLE events are scheduled directly via sim.schedule()
@@ -29,28 +29,6 @@ import {EventBus} from "../../src/simulation-framework/event-bus.js";
 
 // ─── Minimal stubs ────────────────────────────────────────────────────────────
 
-function makeConfigGraph(knownNodes = {}) {
-  return {
-    getNode(id) { return knownNodes[id] ?? null; },
-    applyToAllNodes(fn) { Object.values(knownNodes).forEach(fn); },
-    render() {},
-  };
-}
-
-function makeStatePanelView(diff = []) {
-  return { diffStates() { return diff; } };
-}
-
-function makeAnimator(knownNodes = {}, diff = []) {
-  return new SimulationAnimator({
-    configGraph:    makeConfigGraph(knownNodes),
-    scenario:       null,
-    timeControls:   { onDateChanged() {}, stepTo() {} },
-    statePanelView: makeStatePanelView(diff),
-    chartView:      null,
-    actionService:  null,
-    bus: new EventBus()
-  });
-}
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
+//TODO Need new tests

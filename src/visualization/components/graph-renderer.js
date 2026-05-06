@@ -267,8 +267,19 @@ export class GraphRenderer extends BaseComponent {
     if (el) el.remove();
     this._nodeEls.delete(id);
   }
+
+  /**
+   * Because we mutate our changes, node is prevNode always unless a new
+   * node is being added.
+   *
+   * @param node
+   * @param prevNode
+   * @private
+   */
   _updateNode(node, prevNode) {
     const el = this._nodeEls.get(node.id);
+
+    //Track the previously rendered state
     const prev = this._nodeRenderState.get(node.id);
     const renderedState = {};
 
@@ -282,26 +293,28 @@ export class GraphRenderer extends BaseComponent {
     el.classList.toggle('node-flash', !!node.data?.breakpointHit);
 
     // ── position ─────────────────────────
-    const { x, y } = this._getPos(prevNode ? prevNode.id : null);
+    const { x, y } = this._getPos(node.id);
     el.style.left = x + 'px';
     el.style.top = y + 'px';
 
     // ── header text ─────────────────────────
     const header = el.querySelector('span.g-header-text');
 
-    if (!prevNode || node.kind !== prevNode.kind) {
+    if (node.kind !== prev?.kind) {
       switch(node.kind) {
         case 'event':   header.innerText = node.eventType; break;
         case 'handler': header.innerText = node.handlerClass; break;
         case 'action':  header.innerText = node.actionClass; break;
         case 'reducer': header.innerText = node.reducerType; break;
       }
+      renderedState.kind = node.kind;
     }
 
     // ── title ─────────────────────────
     const title = el.querySelector('span.g-title-text');
-    if (!prevNode || node.name !== prevNode.name) {
+    if (node.name !== prev?.name) {
       title.innerText = node.name;
+      renderedState.name = node.name;
     }
 
     // ── fired indicator ─────────────────────────
