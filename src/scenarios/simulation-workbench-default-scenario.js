@@ -38,8 +38,8 @@ import {SimulationState} from "../simulation-framework/simulation-state.js";
  * ServiceRegistry and the domain objects.
  */
 export class SimulationWorkbenchDefaultScenario extends BaseScenario {
-  constructor({eventSchedulerUI, context} = {}) {
-    super({ eventSchedulerUI, context });
+  constructor({configPresenter, context} = {}) {
+    super({ configPresenter, context });
     this.initialState = new SimulationState();
   }
 

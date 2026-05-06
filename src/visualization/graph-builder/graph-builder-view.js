@@ -45,10 +45,10 @@ export class GraphBuilderView extends BaseComponent {
    *   graph: import('../config-graph.js').ConfigGraph
    * }}
    */
-  constructor({ builderCanvas, graph }) {
+  constructor({ builderCanvas, graphRenderer }) {
     super(); //I am the root component here
     this._canvas = builderCanvas;
-    this._graph  = graph;
+    this._graphRenderer  = graphRenderer;
 
     // ── Type/option constants ─────────────────────────────────────────────
 
@@ -162,7 +162,7 @@ export class GraphBuilderView extends BaseComponent {
   // ── Toolbar ───────────────────────────────────────────────────────────────
 
   _buildControls() {
-    const wrapper = this._graph.graphRoot.parentElement;
+    const wrapper = this._graphRenderer.graphRoot.parentElement;
     if (!wrapper || this._controlsEl) return;
     wrapper.style.position = 'relative';
     this._controlsEl = document.createElement('div');
@@ -185,7 +185,7 @@ export class GraphBuilderView extends BaseComponent {
     btn.className = 'btn btn-sm';
     btn.textContent = 'Fit';
     btn.addEventListener('click', () => {
-      this._graph.fitToView();
+      this._graphRenderer.fitToView();
     });
     this._controlsEl.appendChild(btn);
 
@@ -786,12 +786,12 @@ export class GraphBuilderView extends BaseComponent {
   //── MULTI SELECT HELPER ───────────────────────────────────────────────────────────
   _renderLinkableMultiSelect(node, kind, countSpan, container, linkTo, edgeType) {
     const myChildren = linkTo
-        ? this._graph._graphQueryApi.getRelated(node.id, {
+        ? this._graphRenderer._graphQueryApi.getRelated(node.id, {
           edgeType: edgeType,
           direction: 'in',
           where: (n) => n.kind === kind
         })
-        : this._graph._graphQueryApi.getRelated(node.id, node.id, {
+        : this._graphRenderer._graphQueryApi.getRelated(node.id, node.id, {
           edgeType: edgeType,
           direction: 'out',
           where: (n) => n.kind === kind
@@ -807,7 +807,7 @@ export class GraphBuilderView extends BaseComponent {
           this.onLinkToggle(node, selectedItem, kind, linkTo, toggleOn);
         }
       },
-      graphQueryApi: this._graph._graphQueryApi,
+      graphQueryApi: this._graphRenderer._graphQueryApi,
       defaultCondition: `kind=${kind}`
     });
   }

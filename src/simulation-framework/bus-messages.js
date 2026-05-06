@@ -152,3 +152,11 @@ export class ServiceActionEvent extends BusMessage {
     this.originalItem = originalItem;
   }
 }
+
+export class ServiceBulkActionEvent extends BusMessage {
+  constructor({ actionType, changes }) {
+    super({ type: 'SERVICE_BULK_ACTION' });
+    this.actionType   = actionType;
+    this.changes = changes;
+  }
+}

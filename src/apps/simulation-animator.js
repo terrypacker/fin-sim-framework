@@ -42,14 +42,12 @@ export class SimulationAnimator {
    *   actionService:  import('../services/action-service.js').ActionService,
    * }}
    */
-  constructor({ configGraph, scenario, timeControls, statePanelView, graphView, chartView, actionService, bus }) {
-    this._configGraph    = configGraph;
+  constructor({ configPresenter, scenario, timeControls, statePanelView, chartView, bus }) {
+    this._configPresenter = configPresenter;
     this._scenario       = scenario;
     this._timeControls   = timeControls;
     this._statePanelView = statePanelView;
-    this._graphView      = graphView ?? null;
     this._chartView      = chartView;
-    this._actionService  = actionService;
     this._bus = bus;
 
     this.playing = false;
@@ -157,13 +155,14 @@ export class SimulationAnimator {
       if (!this._dashCardsdirty) return;
 
       this._dashCardsdirty = false;
-      this.updateDashCards(date);
+      this._updateDashCards(date);
     });
   }
 
   updateDashCards(date) {
     this._scheduleDashCardFrame(date);
   }
+
   _updateDashCards(date) {
     const sim = this._scenario?.sim;
     $('cardCurrentDate').innerText       = this._statePanelView.fmtVal(date);

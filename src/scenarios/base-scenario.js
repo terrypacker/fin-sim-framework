@@ -54,21 +54,21 @@ import {ServiceRegistry} from "../services/service-registry.js";
  */
 export class BaseScenario {
   constructor({
-      eventSchedulerUI,
+    configPresenter,
       context,
       simStart =  new Date(Date.UTC(2026, 0, 1)),
       simEnd = new Date(Date.UTC(2041, 0, 1))} = {}) {
 
-    this.eventSchedulerUI = eventSchedulerUI;
+    this.configPresenter = configPresenter;
     this.context = context;
     this.simStart = simStart;
     this.simEnd = simEnd;
 
     // ── Wire up the "+" creation buttons in ConfigBuilder ────────────────────
-    this.eventSchedulerUI.registerEventCreatedListener(subtype => this.eventCreationRequested(subtype));
-    this.eventSchedulerUI.registerHandlerCreatedListener(() => this.handlerCreationRequested());
-    this.eventSchedulerUI.registerActionCreatedListener(() => this.actionCreationRequested());
-    this.eventSchedulerUI.registerReducerCreatedListener(() => this.reducerCreationRequested());
+    this.configPresenter.registerEventCreatedListener(subtype => this.eventCreationRequested(subtype));
+    this.configPresenter.registerHandlerCreatedListener(() => this.handlerCreationRequested());
+    this.configPresenter.registerActionCreatedListener(() => this.actionCreationRequested());
+    this.configPresenter.registerReducerCreatedListener(() => this.reducerCreationRequested());
   }
 
   // ─── Simulation accessor ──────────────────────────────────────────────────
@@ -154,25 +154,25 @@ export class BaseScenario {
         color: '#60a5fa'
       });
     }
-    this.eventSchedulerUI.editNode(event);
+    this.configPresenter.editNode(event);
   }
 
   handlerCreationRequested() {
     const { handlerService } = this.context;
     // null fn → uses HandlerEntry.defaultFunction which instantiates from generatedActionDefinitions
     const handler = handlerService.createHandler(null, 'New Handler');
-    this.eventSchedulerUI.editNode(handler);
+    this.configPresenter.editNode(handler);
   }
 
   actionCreationRequested() {
     const { actionService } = this.context;
     const action = actionService.createAmountAction('NEW_ACTION', 'New Action', 0);
-    this.eventSchedulerUI.editNode(action);
+    this.configPresenter.editNode(action);
   }
 
   reducerCreationRequested() {
     const { reducerService } = this.context;
     const reducer = reducerService.createFieldReducer('', 'New Reducer');
-    this.eventSchedulerUI.editNode(reducer);
+    this.configPresenter.editNode(reducer);
   }
 }

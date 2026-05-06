@@ -72,9 +72,7 @@ export class BaseApp extends BaseComponent {
     this.scenario    = null;
 
     // UI handles (recreated each buildScenario)
-    this.graphBuilderPresenter = null;
-    this.schedulerUI           = null;
-    this.graphView             = null;
+    this.configPresenter = null;
     this.chartView             = null;
     this.timelineView          = null;
     this.timeControls          = null;
@@ -123,42 +121,41 @@ export class BaseApp extends BaseComponent {
     $('currentStateContent').innerHTML  = '';
     $('cumulativeMetricsContent').innerHTML = '';
 
-    if (this.graphView)  this.graphView.stopViz();
     if (this.chartView)  this.chartView.stopViz();
 
     const registry = ServiceRegistry.getInstance();
 
     // ── Config graph (visual node canvas) ─────────────────────────────────────
-    if (this.graphBuilderPresenter) this.graphBuilderPresenter.destroy();
-    this.graphBuilderPresenter = new GraphRenderer({
-      parent: this,
-      graph: registry.graph,
-      graphQueryApi: registry.graphQueryApi,
-      graphRoot:               document.getElementById('graphRoot'),
-      graphNodes:              document.getElementById('graphNodes'),
-      graphEdges:              document.getElementById('graphEdges'),
-      nodeDetailsTemplate:     document.getElementById('tpl-node-details'),
-      displayNodeStateChanges: (changes) => this._statePanelView.showNodeStateChanges(changes),
-    });
-
-    this.graphBuilderPresenter.registerNodeClickListener(() =>
-      this.openTab({ currentTarget: this.eventsTabHeader }, 'left-events', 'left-col-sim')
-    );
-
-    // Breakpoint listener: delegate to animator once it is created.
-    this.graphBuilderPresenter.registerBreakpointChangeListener((node) => {
-      this._animator?.toggleBreakpoint(node);
-    });
-
     // ── Event-graph editor (scheduler UI) ─────────────────────────────────────
-    this.schedulerUI = new GraphBuilderPresenter({
+    if(this.configPresenter) this.configPresenter.destroy();
+    this.configPresenter = new GraphBuilderPresenter({
       builderCanvas: document.getElementById('builderCanvas'),
-      graph:         this.graphBuilderPresenter,
+      //TODO Move into GraphBuilderPresenter._view entirely
+      graphRenderer: new GraphRenderer({
+        parent: this,
+        graph: registry.graph,
+        graphQueryApi: registry.graphQueryApi,
+        graphRoot:               document.getElementById('graphRoot'),
+        graphNodes:              document.getElementById('graphNodes'),
+        graphEdges:              document.getElementById('graphEdges'),
+        nodeDetailsTemplate:     document.getElementById('tpl-node-details'),
+        displayNodeStateChanges: (changes) => this._statePanelView.showNodeStateChanges(changes),
+      }),
       eventService: registry.eventService,
       handlerService: registry.handlerService,
       actionService: registry.actionService,
       reducerService: registry.reducerService
     });
+    //TODO This should be put into the builder-presenter too
+    this.configPresenter._graphRenderer.registerNodeClickListener(() =>
+        this.openTab({ currentTarget: this.eventsTabHeader }, 'left-events', 'left-col-sim')
+    );
+    //TODO This should be put into the builder-presenter too
+    // Breakpoint listener: delegate to animator once it is created.
+    this.configPresenter._graphRenderer.registerBreakpointChangeListener((node) => {
+      this._animator?.toggleBreakpoint(node);
+    });
+
 
    //TODO Removed new GraphSync({ graph: this.graphBuilderPresenter, registry });
 
@@ -174,7 +171,7 @@ export class BaseApp extends BaseComponent {
 
     // ── Build scenario ────────────────────────────────────────────────────────
     this.scenario = this._scenarioTab.createScenario(
-      this.getParams(), this.getInitialState(), this.schedulerUI, this.newScenario
+      this.getParams(), this.getInitialState(), this.configPresenter, this.newScenario
     );
     this.scenario.buildSim(this.getParams(), this.getInitialState());
     this.afterBuildSim();
@@ -192,21 +189,6 @@ export class BaseApp extends BaseComponent {
         .map(e => [e.type, e.color])
         .filter(([, c]) => c)
     );
-
-    const graphCanvas = $('graphCanvas');
-    if (graphCanvas) {
-      this.graphView = new GraphView({
-        simulator:            this.scenario.sim,
-        canvas:               graphCanvas,
-        getNodeDetail:        (n) => this._statePanelView.getNodeDetail(n),
-        formatNodeDetailHtml: (n) => this.formatNodeDetailHtml(n),
-        simStart:             this.scenario.simStart,
-        simEnd:               this.scenario.simEnd,
-        eventColors,
-      });
-      this.graphView.initView();
-      this.graphView.startViz();
-    }
 
     this.chartView = new ChartView({
       canvas:   $('chartCanvas'),
@@ -234,8 +216,8 @@ export class BaseApp extends BaseComponent {
 
     this.timeControls = new TimeControls({
       scenario:        this.scenario,
+      configPresenter: this.configPresenter,
       timelineView:    this.timelineView,
-      graphView:       this.graphView,
       chartView:       this.chartView,
       timeLabel:       $('timeLabel'),
       timeSlider:      $('timeSlider'),
@@ -249,13 +231,11 @@ export class BaseApp extends BaseComponent {
 
     // ── Simulation animator ───────────────────────────────────────────────────
     this._animator = new SimulationAnimator({
-      configGraph:    this.graphBuilderPresenter,
+      configPresenter: this.configPresenter,
       scenario:       this.scenario,
       timeControls:   this.timeControls,
       statePanelView: this._statePanelView,
-      graphView:      this.graphView,
       chartView:      this.chartView,
-      actionService:  registry.actionService,
       bus: registry.bus
     });
 
@@ -276,9 +256,10 @@ export class BaseApp extends BaseComponent {
 
 
     //Send Scenario Build Message
-    this.graphBuilderPresenter._renderGraph();// Hack to force nodes to be set in this._currentNodes
-    this.graphBuilderPresenter._relayoutAll();
-    this.graphBuilderPresenter.render();//TODO could wire this into the bus? Ensure it re-renders
+    //TODO these render calls are a hack to get the graph to layout properly
+    this.configPresenter._graphRenderer._renderGraph();// Hack to force nodes to be set in this._currentNodes
+    this.configPresenter._graphRenderer._relayoutAll();
+    this.configPresenter._graphRenderer.render();
     registry.bus.publish(new BusMessage({ type: SIMULATION_BUS_MESSAGES.SCENARIO_READY, date: this.scenario.simStart}));
   }
 

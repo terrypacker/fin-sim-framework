@@ -35,13 +35,13 @@ export class GraphBuilderPresenter {
    *   builderCanvas: HTMLElement
    * }}
    */
-  constructor({ graph, builderCanvas, eventService, handlerService, actionService, reducerService }) {
+  constructor({ graphRenderer, builderCanvas, eventService, handlerService, actionService, reducerService }) {
     this._controller = new GraphBuilderController({
-      graph, eventService, handlerService, actionService, reducerService });
-    this._view       = new GraphBuilderView({ builderCanvas, graph });
-
+      graphRenderer, eventService, handlerService, actionService, reducerService });
+    this._view       = new GraphBuilderView({ builderCanvas, graphRenderer });
+    this._graphRenderer = graphRenderer;
     // Register the graph node-click listener so clicking a node opens its editor.
-    graph.registerNodeClickListener((event, node) => this._view.editNode(node));
+    this._graphRenderer.registerNodeClickListener((event, node) => this._view.editNode(node));
 
     // ── Wire view mutation callbacks → controller ─────────────────────────
 
@@ -106,6 +106,12 @@ export class GraphBuilderPresenter {
   /** Open the editor panel for a node.  Called by BaseScenario after creation. */
   editNode(node) { this._view.editNode(node); }
 
+  //Clear out meta data from nodes?
+  resetForReplay() {
+    //Clear out the fired, state changed and
+    this._controller.resetForReplay();
+  }
+
   // ── Delegating accessors (preserve backwards-compatibility for tests) ──────
 
   /** Direct access to the listener arrays for test assertions. */
@@ -123,5 +129,10 @@ export class GraphBuilderPresenter {
   deleteNode(node) {
     this._controller.deleteNode(node);
     this._view.editNode(null);
+  }
+
+  destroy() {
+    this._view.destroy();
+    this._graphRenderer.destroy();
   }
 }

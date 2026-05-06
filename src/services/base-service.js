@@ -8,7 +8,10 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { ServiceActionEvent } from '../simulation-framework/bus-messages.js';
+import {
+  ServiceActionEvent,
+  ServiceBulkActionEvent
+} from '../simulation-framework/bus-messages.js';
 import {createEdgeId, Edge, EDGE_TYPES} from "../graph/edge.js";
 import {GraphQueryApi} from "../graph/graph-query-api.js";
 
@@ -62,49 +65,7 @@ export class BaseService {
     return [...this._graph.getNodes().filter((n) => this._serviceFilter(n))];
   }
 
-  // ─── Internal helpers ─────────────────────────────────────────────────────
-
-  /**
-   * Generate a unique string ID with the given prefix (e.g. 'e', 'h', 'r').
-   * @param {string} prefix
-   * @returns {string}
-   */
-  _generateId(prefix = 'item') {
-    return prefix + this._nextId++;
-  }
-
-  /**
-   * Store an item in the internal map using item.id as the key.
-   * Automatically advances the ID counter when the item's id has the pattern
-   * <letters><digits> so programmatic loading never collides with generated IDs.
-   * @param {*} item - must have an `id` property
-   */
-  _register(item) {
-    this._graph.addNode(item);
-    this._advanceCounter(item.id);
-  }
-
-  /**
-   * Remove an item from the internal map by ID.
-   * @param {string} id
-   */
-  _unregister(id) {
-    this._graph.removeNode(id);
-  }
-
-  /**
-   * Resolve an item from the map.  Accepts either the item's string ID or the
-   * item object itself (which must have an `id` property).
-   * Throws if the item is not found.
-   * @param {string|object} idOrItem
-   * @returns {*}
-   */
-  _resolve(idOrItem) {
-    const id = typeof idOrItem === 'string' ? idOrItem : idOrItem?.id;
-    const item = this._graph.getNode(id);
-    if (!item) throw new Error(`${this.constructor.name}: item not found: ${id}`);
-    return item;
-  }
+  // ─── Public Modification API ──────────────────────────────────────────────
 
   /**
    * Register an existing item in the map without publishing a bus event.
@@ -182,6 +143,88 @@ export class BaseService {
     }
     return item;
   }
+
+  /**
+   * Merge this data into our data and replace all nodes
+   * @param data
+   */
+  updateAllData(data) {
+    this.updateAllMetaData({}, data);
+  }
+
+  /**
+   * Merge this meta into our meta and replace all nodes
+   * @param data
+   */
+  updateAllMeta(meta) {
+    this.updateAllMetaData(meta, {});
+  }
+
+  updateAllMetaData(meta, data) {
+    //Array of {originalItem: x, item: y} for bulk message
+    const updated = [];
+    const changes = {
+      data: data ?? {},
+      meta: meta ?? {}
+    };
+    this.getAll().forEach(item => {
+      const originalItem = Object.assign(Object.create(Object.getPrototypeOf(item)), item);
+      this.mergeChanges(item, changes);
+      updated.push({
+        originalItem: originalItem,
+        item: item
+      })
+    });
+
+    this._graph.notifyNodeWatchers();
+    this._publishBulkMessage('UPDATE', updated);
+  }
+
+
+  // ─── Internal helpers ─────────────────────────────────────────────────────
+
+  /**
+   * Generate a unique string ID with the given prefix (e.g. 'e', 'h', 'r').
+   * @param {string} prefix
+   * @returns {string}
+   */
+  _generateId(prefix = 'item') {
+    return prefix + this._nextId++;
+  }
+
+  /**
+   * Store an item in the internal map using item.id as the key.
+   * Automatically advances the ID counter when the item's id has the pattern
+   * <letters><digits> so programmatic loading never collides with generated IDs.
+   * @param {*} item - must have an `id` property
+   */
+  _register(item) {
+    this._graph.addNode(item);
+    this._advanceCounter(item.id);
+  }
+
+  /**
+   * Remove an item from the internal map by ID.
+   * @param {string} id
+   */
+  _unregister(id) {
+    this._graph.removeNode(id);
+  }
+
+  /**
+   * Resolve an item from the map.  Accepts either the item's string ID or the
+   * item object itself (which must have an `id` property).
+   * Throws if the item is not found.
+   * @param {string|object} idOrItem
+   * @returns {*}
+   */
+  _resolve(idOrItem) {
+    const id = typeof idOrItem === 'string' ? idOrItem : idOrItem?.id;
+    const item = this._graph.getNode(id);
+    if (!item) throw new Error(`${this.constructor.name}: item not found: ${id}`);
+    return item;
+  }
+
   /**
    * Advance _nextId if the given id has a trailing numeric suffix higher than
    * the current counter.
@@ -205,6 +248,10 @@ export class BaseService {
    */
   _publish(actionType, classType, item, originalItem = null) {
     this.bus.publish(new ServiceActionEvent({ actionType, classType, item, originalItem }));
+  }
+
+  _publishBulkMessage(actionType, changes) {
+    this.bus.publish(new ServiceBulkActionEvent({ actionType, changes }));
   }
 
   /**

@@ -27,8 +27,8 @@ import { ActionDefinition } from '../../simulation-framework/actions.js';
 export class GraphBuilderController {
 
   /** @param {{ graph: import('../config-graph.js').ConfigGraph }} */
-  constructor({ graph, eventService, handlerService, actionService, reducerService}) {
-    this._graph = graph;
+  constructor({ graphRenderer, eventService, handlerService, actionService, reducerService}) {
+    this._graphRenderer = graphRenderer;
     this.eventService = eventService;
     this.handlerService = handlerService;
     this.actionService = actionService;
@@ -68,7 +68,7 @@ export class GraphBuilderController {
     else if (node.kind === 'handler') this.handlerService.deleteHandler(node.id);
     else if (node.kind === 'action')  this.actionService.deleteAction(node.id);
     else if (node.kind === 'reducer') this.reducerService.deleteReducer(node.id);
-    this._graph.render();
+    this._graphRenderer.render();
   }
 
   /**
@@ -80,7 +80,7 @@ export class GraphBuilderController {
     else if (node.kind === 'handler') this.handlerService.updateHandler(node.id, changes);
     else if (node.kind === 'action')  this.actionService.updateAction(node.id, changes);
     else if (node.kind === 'reducer') this.reducerService.updateReducer(node.id, changes);
-    this._graph.render();
+    this._graphRenderer.render();
   }
 
   /**
@@ -137,8 +137,8 @@ export class GraphBuilderController {
 
     if (!node.generatedActionTypes.includes(def.type)) {
       node.generatedActionTypes.push(def.type);
-      const actionNode = this._graph.getNodeByType('action', def.type);
-      if (actionNode) this._graph.addEdge({ from: node.id, to: actionNode.id });
+      const actionNode = this._graphRenderer.getNodeByType('action', def.type);
+      if (actionNode) this._graphRenderer.addEdge({ from: node.id, to: actionNode.id });
     }
 
     this.notifyChanged(node);
@@ -162,8 +162,8 @@ export class GraphBuilderController {
     if (!typeStillUsed) {
       const ti = node.generatedActionTypes.indexOf(def.type);
       if (ti >= 0) node.generatedActionTypes.splice(ti, 1);
-      const actionNode = this._graph.getNodeByType('action', def.type);
-      if (actionNode) this._graph.removeEdge({ from: node.id, to: actionNode.id });
+      const actionNode = this._graphRenderer.getNodeByType('action', def.type);
+      if (actionNode) this._graphRenderer.removeEdge({ from: node.id, to: actionNode.id });
     }
 
     this.notifyChanged(node);
@@ -193,15 +193,15 @@ export class GraphBuilderController {
       if (!node.generatedActionDefinitions.some(d => d !== def && d.type === oldType)) {
         const i = node.generatedActionTypes.indexOf(oldType);
         if (i >= 0) node.generatedActionTypes.splice(i, 1);
-        const oldNode = this._graph.getNodeByType('action', oldType);
-        if (oldNode) this._graph.removeEdge({ from: node.id, to: oldNode.id });
+        const oldNode = this._graphRenderer.getNodeByType('action', oldType);
+        if (oldNode) this._graphRenderer.removeEdge({ from: node.id, to: oldNode.id });
       }
 
       // Register new type if not already present
       if (!node.generatedActionTypes.includes(value)) {
         node.generatedActionTypes.push(value);
-        const newNode = this._graph.getNodeByType('action', value);
-        if (newNode) this._graph.addEdge({ from: node.id, to: newNode.id });
+        const newNode = this._graphRenderer.getNodeByType('action', value);
+        if (newNode) this._graphRenderer.addEdge({ from: node.id, to: newNode.id });
       }
     } else {
       def.config[field] = value;
@@ -278,13 +278,32 @@ export class GraphBuilderController {
   }
 
   // ── Graph read queries (proxied for view use) ─────────────────────────────
+  //TODO Get rid of these..???
+  getNode(id)                      { return this._graphRenderer.getNode(id); }
+  getKind(kind)                    { return this._graphRenderer.getKind(kind); }
+  getNodeByType(kind, type)        { return this._graphRenderer.getNodeByType(kind, type); }
+  getNodesToKindFromMe(node, kind) { return this._graphRenderer.getNodesToKindFromMe(node, kind); }
+  getNodesFromKindToMe(node, kind) { return this._graphRenderer.getNodesFromKindToMe(node, kind); }
 
-  getNode(id)                      { return this._graph.getNode(id); }
-  getKind(kind)                    { return this._graph.getKind(kind); }
-  getNodeByType(kind, type)        { return this._graph.getNodeByType(kind, type); }
-  getNodesToKindFromMe(node, kind) { return this._graph.getNodesToKindFromMe(node, kind); }
-  getNodesFromKindToMe(node, kind) { return this._graph.getNodesFromKindToMe(node, kind); }
 
+  // ── Configuration Lifecycle ─────────────────────────────
+  /**
+   * Clear out any used meta and data from our nodes
+   * - data.breakpointHit
+   * - data.fired
+   * - data.breakpoint
+   */
+  resetForReplay() {
+    const data = {
+      breakPointHit: false,
+      fired: false,
+      breakpoint: false
+    };
+    this.eventService.updateAllData(data);
+    this.handlerService.updateAllData(data);
+    this.actionService.updateAllData(data);
+    this.reducerService.updateAllData(data);
+  }
   // ── Private ───────────────────────────────────────────────────────────────
 
   /**
