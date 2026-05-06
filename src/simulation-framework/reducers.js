@@ -73,6 +73,17 @@ export class ReducerPipeline {
   get(actionType) {
     return this.map.get(actionType) || [];
   }
+
+  /**
+   * Top count of n reducer entries
+   * @return {{}}
+   */
+  getStats(n) {
+    return [...this.map]
+    .map(([key, value]) => ({type: key, count: value.length}))
+    .sort((a, b) => b.count - a.count)
+    .splice(0, n);
+  }
 }
 
 export const PRIORITY = {

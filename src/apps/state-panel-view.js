@@ -27,6 +27,7 @@ export class StatePanelView {
 
   constructor() {
     this._formatDate = d => d.toDateString();
+    this._dirty = false;
   }
 
   /** Update the active date-format function (UTC vs local). */
@@ -34,9 +35,33 @@ export class StatePanelView {
     this._formatDate = fn ?? (d => d.toDateString());
   }
 
+  /* ───────────────────────── CORE RENDERING ───────────────────────────── */
+
+  _scheduleFrame(date, state) {
+    if (this._frameScheduled) return;
+
+    this._frameScheduled = true;
+
+    requestAnimationFrame(() => {
+      this._frameScheduled = false;
+
+      if (!this._dirty) return;
+
+      this._dirty = false;
+      this._renderStatePanel(date, state);
+    });
+  }
+
   // ── State panel rendering ─────────────────────────────────────────────────
 
   updateStatePanel(date, state) {
+    //TODO change this method name to render
+    if (this._dirty) return; // already scheduled
+    this._dirty = true;
+    this._scheduleFrame(date, state);
+  }
+
+  _renderStatePanel(date, state) {
     if (!state) return;
     const { metrics, ...rest } = state;
     const newStateDetails = this.createStateDetails('tpl-state-details', date, rest);

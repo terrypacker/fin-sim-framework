@@ -75,6 +75,7 @@ export class Simulation {
             item => item.instanceId, item => item.type);
 
     //TODO Replace bus when ready
+    this.debug = true;
     this.serviceBus = bus;
     this.bus = new EventBus();
 
@@ -345,6 +346,22 @@ export class Simulation {
         sourceEvent: event
       }
     }));
+
+    //Spit out some stats
+    //TODO Make this a bus message
+    if(this.debug) {
+      console.log(`
+         Date: ${this.currentDate}
+         Queue: ${this.queue.size()}
+         Journal: ${this.journal.journal.length}
+         EventGraph: ${this.actionGraph.actionGraph.size}
+         History Snapshots: ${this.history.enableSnapshots}
+         History Size: ${this.history.snapshots.length}
+         Bus History: ${this.bus.history.length}
+         Handler Registry: (${this.handlers.map.size}): ${this.handlers.getStats(5).map(e => `${e.type}: ${e.count}`).join(' ')}
+         Reducer Pipeline: (${this.reducers.map.size}): ${this.reducers.getStats(5).map(e => `${e.type}: ${e.count}`).join(' ')}
+      `)
+    }
 
     this.control.pendingExecution = null; // Completed cleanly
   }

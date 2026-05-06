@@ -43,6 +43,14 @@ export class SimulationSync {
     });
 
     bus.subscribe('SERVICE_ACTION', msg => {
+      const { actionType, item } = msg;
+      const { reason } = item.meta || {};
+      if (reason === 'execution') {
+        //TODO Simulation fired event during execution
+        //  we don't want to process this back into the sim
+        return;
+      }
+
       this._handle(msg);
     });
 

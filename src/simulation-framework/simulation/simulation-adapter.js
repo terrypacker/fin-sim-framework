@@ -145,12 +145,6 @@ export class SimulationAdapter {
   }
 
   _applyEventChange(event) {
-    const { reason } = event.meta || {};
-    if (reason === 'execution') {
-      //TODO Apply change to data only
-      return;
-    }
-
     this.sim.unschedule(event.type);
     if (event.enabled) {
       event.date

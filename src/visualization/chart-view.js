@@ -76,7 +76,7 @@ export class ChartView {
    * @param {Date|number}  date
    * @param {object}       data - flat map of { seriesKey: number }
    */
-  addSnapshot(type, date, data) {
+  addSnapshot(date, data) {
     if (!data || typeof data !== 'object') return;
     const t = new Date(date).getTime();
     let didAdd = false;

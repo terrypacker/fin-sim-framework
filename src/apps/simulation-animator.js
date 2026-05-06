@@ -52,6 +52,7 @@ export class SimulationAnimator {
     this._actionService  = actionService;
 
     this.playing = false;
+    this._dashCardsdirty = false;
   }
 
   // ── Playback ──────────────────────────────────────────────────────────────
@@ -227,7 +228,25 @@ export class SimulationAnimator {
 
   // ── Dashboard cards ───────────────────────────────────────────────────────
 
+  _scheduleDashCardFrame(date) {
+    if (this._dashCardFrameScheduled) return;
+
+    this._dashCardFrameScheduled = true;
+
+    requestAnimationFrame((date) => {
+      this._dashCardFrameScheduled = false;
+
+      if (!this._dashCardsdirty) return;
+
+      this._dashCardsdirty = false;
+      this.updateDashCards(date);
+    });
+  }
+
   updateDashCards(date) {
+    this._scheduleDashCardFrame(date);
+  }
+  _updateDashCards(date) {
     const sim = this._scenario?.sim;
     $('cardCurrentDate').innerText       = this._statePanelView.fmtVal(date);
     $('cardEventExecutions').innerText   = sim?.eventExecutions   ?? 0;
@@ -248,6 +267,8 @@ export class SimulationAnimator {
       // TODO This should be done via graph this.updateConfigGraphEvents(payload.event, payload.stateBefore, stateSnapshot, true);
     });
 
+    //TODO This is too much UI churn
+    /*
     bus.subscribe(SIMULATION_BUS_MESSAGES.HANDLED_EVENT, ({ date, payload, stateSnapshot }) => {
       this.updateDashCards(date);
       // TODO This should be done via graph this.updateConfigGraphHandlers(payload.handler, payload.stateBefore, stateSnapshot);
@@ -264,6 +285,15 @@ export class SimulationAnimator {
       const type    = payload.action.type;
       const metrics = stateSnapshot.metrics ? { ...stateSnapshot.metrics } : {};
       this._chartView.addSnapshot(type, date, metrics);
+      this._statePanelView.updateStatePanel(date, stateSnapshot);
+      this.updateDashCards(date);
+      // TODO This should be done via graph this.updateConfigGraphReducers(payload.reducer, payload.stateBefore, stateSnapshot);
+    })
+    */
+    //Once after each event
+    bus.subscribe(SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_END, ({ date, payload, stateSnapshot }) => {
+      const metrics = stateSnapshot.metrics ? { ...stateSnapshot.metrics } : {};
+      this._chartView.addSnapshot(date, metrics);
       this._statePanelView.updateStatePanel(date, stateSnapshot);
       this.updateDashCards(date);
       // TODO This should be done via graph this.updateConfigGraphReducers(payload.reducer, payload.stateBefore, stateSnapshot);
