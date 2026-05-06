@@ -581,7 +581,7 @@ export class Simulation {
 
       this.reducerExecutions++;
       const now = new Date(this.currentDate);
-      if(reducerWrapper.reducer.id) {
+      if(reducerWrapper.reducer?.id) {
         this.serviceBus.publish(new NodeDataBusMessage({
           date: now,
           sim: this,

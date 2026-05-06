@@ -43,11 +43,8 @@ function makeMinimalGraph() {
   return {
     // graphRoot without a parentElement → _buildControls() returns early (no error)
     graphRoot: document.createElement('div'),
-    registerNodeClickListener() {},
-    getNodesToKindFromMe()  { return []; },
-    getNodesFromKindToMe()  { return []; },
-    getKind()               { return []; },
-    getAll() { return []; }
+    _graph: ServiceRegistry.getInstance().graph,
+    _graphQueryApi: ServiceRegistry.getInstance().graphQueryApi
   };
 }
 

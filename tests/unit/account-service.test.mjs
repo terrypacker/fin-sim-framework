@@ -46,6 +46,7 @@ import { AccountBuilder } from '../../src/finance/builders/account-builder.js';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { EventBus } from '../../src/simulation-framework/event-bus.js';
 import {Graph} from "../../src/graph/graph.js";
+import {GraphQueryApi} from "../../src/graph/graph-query-api.js";
 
 // ─── ACCOUNT_TYPE constants ────────────────────────────────────────────────────
 
@@ -256,14 +257,16 @@ test('AccountBuilder: pre-assigned id is preserved', () => {
 // ─── AccountService CRUD ──────────────────────────────────────────────────────
 
 test('AccountService.createAccount: assigns ac-prefixed id', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), new EventBus());
   const a = new CheckingAccount(1000);
   svc.createAccount(a);
   assert.ok(a.id.startsWith('ac'), `expected id to start with 'ac', got ${a.id}`);
 });
 
 test('AccountService.createAccount: registers in service map', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), new EventBus());
   const a = new SavingsAccount(5000, { name: 'AU Savings' });
   svc.createAccount(a);
   assert.strictEqual(svc.get(a.id), a);
@@ -271,7 +274,8 @@ test('AccountService.createAccount: registers in service map', () => {
 
 test('AccountService.createAccount: publishes CREATE event', () => {
   const bus = new EventBus();
-  const svc = new AccountService(new Graph(), bus);
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   let fired = false;
   bus.subscribe('SERVICE_ACTION', msg => {
     if (msg.actionType === 'CREATE' && msg.classType === 'Account') fired = true;
@@ -281,7 +285,8 @@ test('AccountService.createAccount: publishes CREATE event', () => {
 });
 
 test('AccountService.getAll: returns all registered accounts', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), new EventBus());
   svc.createAccount(new CheckingAccount(1000));
   svc.createAccount(new SavingsAccount(2000));
   svc.createAccount(new RothAccount(50000));
@@ -290,7 +295,8 @@ test('AccountService.getAll: returns all registered accounts', () => {
 
 test('AccountService.updateAccount: applies changes and publishes UPDATE', () => {
   const bus = new EventBus();
-  const svc = new AccountService(new Graph(), bus);
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const a = new CheckingAccount(1000, { name: 'Old Name' });
   svc.createAccount(a);
 
@@ -307,7 +313,8 @@ test('AccountService.updateAccount: applies changes and publishes UPDATE', () =>
 
 test('AccountService.deleteAccount: removes from map and publishes DELETE', () => {
   const bus = new EventBus();
-  const svc = new AccountService(new Graph(), bus);
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const a = new SavingsAccount(3000);
   svc.createAccount(a);
 
@@ -322,7 +329,9 @@ test('AccountService.deleteAccount: removes from map and publishes DELETE', () =
 });
 
 test('AccountService: id counter advances so multiple creates get unique ids', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const a1 = new CheckingAccount(0);
   const a2 = new SavingsAccount(0);
   svc.createAccount(a1);
@@ -331,7 +340,9 @@ test('AccountService: id counter advances so multiple creates get unique ids', (
 });
 
 test('AccountService.register: accepts pre-built account and preserves id', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const a = new FourOhOneKAccount(100000);
   a.id = 'ac-401k-primary';
   svc.register(a);
@@ -341,7 +352,9 @@ test('AccountService.register: accepts pre-built account and preserves id', () =
 // ─── AccountService domain methods ────────────────────────────────────────────
 
 test('AccountService.transaction: positive amount credits the account', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const a = new CheckingAccount(0);
   svc.transaction(a, 500, new Date());
   assert.strictEqual(a.balance, 500);
@@ -349,7 +362,9 @@ test('AccountService.transaction: positive amount credits the account', () => {
 });
 
 test('AccountService.transaction: negative amount debits the account', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const a = new CheckingAccount(1000);
   svc.transaction(a, -300, new Date());
   assert.strictEqual(a.balance, 700);
@@ -357,19 +372,25 @@ test('AccountService.transaction: negative amount debits the account', () => {
 });
 
 test('AccountService.canDebit: true when above minimum after debit', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const a = new CheckingAccount(1000, { minimumBalance: 500 });
   assert.ok(svc.canDebit(a, 400));
 });
 
 test('AccountService.canDebit: false when debit would breach minimum', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const a = new CheckingAccount(1000, { minimumBalance: 500 });
   assert.ok(!svc.canDebit(a, 600));
 });
 
 test('AccountService.safeDebit: applies debit and returns true when allowed', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const a = new SavingsAccount(5000, { minimumBalance: 1000 });
   const ok = svc.safeDebit(a, 3000, new Date());
   assert.ok(ok);
@@ -377,7 +398,9 @@ test('AccountService.safeDebit: applies debit and returns true when allowed', ()
 });
 
 test('AccountService.safeDebit: rejects and returns false when breach minimum', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const a = new SavingsAccount(5000, { minimumBalance: 1000 });
   const ok = svc.safeDebit(a, 4500, new Date());
   assert.ok(!ok);
@@ -385,21 +408,27 @@ test('AccountService.safeDebit: rejects and returns false when breach minimum', 
 });
 
 test('AccountService.recordResidencyChange: snapshots InvestmentAccount balance', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const a = new BrokerageAccount(75000);
   svc.recordResidencyChange(a);
   assert.strictEqual(a.balanceAtResidencyChange, 75000);
 });
 
 test('AccountService.recordResidencyChange: no-op on plain Account', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const a = new CheckingAccount(5000);
   svc.recordResidencyChange(a); // should not throw
   assert.strictEqual(a.balanceAtResidencyChange, undefined);
 });
 
 test('AccountService.recordResidencyChange: second call does not overwrite first snapshot', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const a = new RothAccount(80000);
   svc.recordResidencyChange(a);
   svc.transaction(a, 10000, new Date());  // balance now 90000
@@ -408,48 +437,62 @@ test('AccountService.recordResidencyChange: second call does not overwrite first
 });
 
 test('AccountService.isWithdrawalEligible: true for account with no minimumAge', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const a = new BrokerageAccount(50000);
   const person = { birthDate: new Date(1990, 0, 1) };
   assert.ok(svc.isWithdrawalEligible(a, person, new Date(2026, 0, 1)));
 });
 
 test('AccountService.isWithdrawalEligible: false for FourOhOneKAccount below 59.5', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const a = new FourOhOneKAccount(100000);
   const person = { birthDate: new Date(1990, 0, 1) }; // age ~36 in 2026
   assert.ok(!svc.isWithdrawalEligible(a, person, new Date(2026, 0, 15)));
 });
 
 test('AccountService.isWithdrawalEligible: true for FourOhOneKAccount at 59.5+', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const a = new FourOhOneKAccount(100000);
   const person = { birthDate: new Date(1966, 6, 1) }; // age ~60 in 2026
   assert.ok(svc.isWithdrawalEligible(a, person, new Date(2026, 6, 1)));
 });
 
 test('AccountService.isWithdrawalEligible: false for RothAccount below 60', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const a = new RothAccount(80000);
   const person = { birthDate: new Date(1990, 0, 1) }; // age ~36
   assert.ok(!svc.isWithdrawalEligible(a, person, new Date(2026, 0, 1)));
 });
 
 test('AccountService.isWithdrawalEligible: true for SuperannuationAccount at 60', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const a = new SuperannuationAccount(200000);
   const person = { birthDate: new Date(1966, 0, 1) }; // turns 60 in 2026
   assert.ok(svc.isWithdrawalEligible(a, person, new Date(2026, 6, 1)));
 });
 
 test('AccountService.getPersonShare: sole returns full balance', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const a = new CheckingAccount(10000);
   assert.strictEqual(svc.getPersonShare(a), 10000);
 });
 
 test('AccountService.getPersonShare: joint returns half balance', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const a = new CheckingAccount(10000, { ownershipType: 'joint' });
   assert.strictEqual(svc.getPersonShare(a), 5000);
 });
@@ -501,7 +544,9 @@ test('US+AU types have no default country (caller sets)', () => {
 // ─── AccountService.replenishSavings ──────────────────────────────────────────
 
 test('replenishSavings: returns keys of accounts drawn from', () => {
-  const svc   = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const date  = new Date(2026, 0, 1);
   const savings  = new CheckingAccount(0, { country: 'US', currency: USD });
   const brokerage = new BrokerageAccount(50000, { country: 'US', currency: USD, drawdownPriority: 1 });
@@ -518,7 +563,9 @@ test('replenishSavings: returns keys of accounts drawn from', () => {
 });
 
 test('replenishSavings: returns multiple keys when deficit spans accounts', () => {
-  const svc  = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const date = new Date(2026, 0, 1);
   const savings    = new CheckingAccount(0, { country: 'US', currency: USD });
   const accountA   = new BrokerageAccount(3000,  { country: 'US', currency: USD, drawdownPriority: 1 });
@@ -535,7 +582,9 @@ test('replenishSavings: returns multiple keys when deficit spans accounts', () =
 });
 
 test('replenishSavings: skips age-ineligible accounts and does not return them', () => {
-  const svc  = new AccountService(new Graph(), new EventBus());
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const date = new Date(2026, 0, 1);
   const savings  = new CheckingAccount(0, { country: 'US', currency: USD });
   const locked   = new FourOhOneKAccount(50000, { country: 'US', currency: USD, drawdownPriority: 1 });

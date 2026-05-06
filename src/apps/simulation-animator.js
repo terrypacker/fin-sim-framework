@@ -144,68 +144,6 @@ export class SimulationAnimator {
     }
   }
 
-  // ── Config graph highlighting ─────────────────────────────────────────────
-
-  updateConfigGraphEvents(event, stateBefore, stateAfter, start = true) {
-    /*  TODO not needed, going to send this out over bus messages to be handled by the SimulationSync
-    if (start) {
-      this._configGraph.applyToAllNodes(n => {
-        n.fired        = false;
-        n.stateChanged = false;
-        n.stateChanges = [];
-      }, false);
-      if (!event.id) return;  // infrastructure event scheduled directly — no graph node
-      const eventNode = this._configGraph.getNode(event.id);
-      if (!eventNode) throw new Error(`Config graph node not found for event id '${event.id}'`);
-      eventNode.fired = true;
-      this._configGraph.render();
-    } else {
-      this._renderNodeFired(event.id, stateBefore, stateAfter);
-    }
-     */
-  }
-
-  updateConfigGraphHandlers(handler, stateBefore, stateAfter) {
-    this._renderNodeFired(handler.id, stateBefore, stateAfter);
-  }
-
-  updateConfigGraphActions(action, stateBefore, stateAfter) {
-    const nodeId = action.actionId ?? this._resolveActionNodeId(action.type);
-    if (nodeId) this._renderNodeFired(nodeId, stateBefore, stateAfter);
-  }
-
-  /**
-   * Look up the config-graph node ID for an action type.
-   * Used as a fallback when the runtime action was created as a plain object
-   * (e.g. from a domain handler's call() method) and therefore has no actionId.
-   * @param {string} type
-   * @returns {string|null}
-   * @private
-   */
-  _resolveActionNodeId(type) {
-    return this._actionService?.getAll().find(a => a.type === type)?.id ?? null;
-  }
-
-  updateConfigGraphReducers(reducer, stateBefore, stateAfter) {
-    this._renderNodeFired(reducer.id, stateBefore, stateAfter);
-  }
-
-  _renderNodeFired(id, stateBefore, stateAfter) {
-    if (!id) return;  // infrastructure event — no graph node
-    const diff = this._statePanelView.diffStates(stateBefore, stateAfter);
-    const node = this._configGraph.getNode(id);
-    if (!node) throw new Error(`Config graph node not found for id '${id}'`);
-    node.fired = true;
-    if (diff.length > 0) {
-      node.stateChanged = true;
-      node.stateChanges = diff;
-    } else {
-      node.stateChanged = false;
-      node.stateChanges = [];
-    }
-    this._configGraph.render();
-  }
-
   // ── Dashboard cards ───────────────────────────────────────────────────────
 
   _scheduleDashCardFrame(date) {

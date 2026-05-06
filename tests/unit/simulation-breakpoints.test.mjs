@@ -73,21 +73,22 @@ function stepForward(sim) {
 
 test('event breakpoint: control.paused is true when event node has a breakpoint', () => {
   const sim = makeSim();
-  sim.schedule({ type: 'TICK', date: START, id: 'evt-1' });
-  sim.control.breakpointNodeIds.add('evt-1');
-
+  const evt = { type: 'TICK', date: START, id: 'evt-1' };
+  sim.schedule(evt);
+  sim.toggleNodeBreakpoint(evt);
   const paused = play(sim);
 
   assert.ok(paused, 'simulation should be paused');
   assert.strictEqual(sim.control.breakpointHit.stage, 'event:start');
-  assert.strictEqual(sim.control.breakpointHit.event.id, 'evt-1');
+  assert.strictEqual(sim.control.breakpointHit.node.id, 'evt-1');
 });
 
 test('event breakpoint: the event has NOT executed when paused (no bus messages)', () => {
   const sim = new Simulation(START);
   const evtId = 'my-event';
-  sim.schedule({ type: 'TICK', date: START, id: evtId });
-  sim.control.breakpointNodeIds.add(evtId);
+  const evt = { type: 'TICK', date: START, id: evtId };
+  sim.schedule(evt);
+  sim.toggleNodeBreakpoint(evt);
 
   const busHistory = [];
   sim.bus.subscribe('*', m => busHistory.push(m));
@@ -100,9 +101,10 @@ test('event breakpoint: the event has NOT executed when paused (no bus messages)
 test('event breakpoint: resuming executes the event and continues', () => {
   const sim = new Simulation(START);
   let handlerCalled = false;
-  sim.schedule({ type: 'TICK', date: START, id: 'e1' });
+  const evt = { type: 'TICK', date: START, id: 'e1' };
+  sim.schedule(evt);
   sim.register('TICK', () => { handlerCalled = true; return []; });
-  sim.control.breakpointNodeIds.add('e1');
+  sim.toggleNodeBreakpoint(evt);
 
   play(sim);
   assert.ok(!handlerCalled, 'handler should not have run before resume');
@@ -114,13 +116,15 @@ test('event breakpoint: resuming executes the event and continues', () => {
 test('event breakpoint: only fires for the matching node id', () => {
   const sim = new Simulation(START);
   const fired = [];
-  sim.schedule({ type: 'A', date: START,                          id: 'evt-a' });
-  sim.schedule({ type: 'B', date: new Date(Date.UTC(2026, 1, 1)), id: 'evt-b' });
+  const evta = { type: 'A', date: START, id: 'evt-a' };
+  sim.schedule(evta);
+  const evtb = { type: 'B', date: new Date(Date.UTC(2026, 1, 1)), id: 'evt-b' };
+  sim.schedule(evtb);
 
   sim.register('A', () => { fired.push('A'); return []; });
   sim.register('B', () => { fired.push('B'); return []; });
 
-  sim.control.breakpointNodeIds.add('evt-b');  // only break on B
+  sim.toggleNodeBreakpoint(evtb);  // only break on B
 
   play(sim);
 
@@ -139,13 +143,13 @@ test('handler breakpoint: control.paused is true when handler node has a breakpo
   handler.id = 'h-1';
   sim.handlers.register('TICK', handler);
   sim.schedule({ type: 'TICK', date: START });
-  sim.control.breakpointNodeIds.add('h-1');
+  sim.toggleNodeBreakpoint(handler);
 
   const paused = play(sim);
 
   assert.ok(paused, 'simulation should be paused at handler breakpoint');
   assert.strictEqual(sim.control.breakpointHit.stage, 'handler:before');
-  assert.strictEqual(sim.control.breakpointHit.handler.id, 'h-1');
+  assert.strictEqual(sim.control.breakpointHit.node.id, 'h-1');
 });
 
 test('handler breakpoint: handler fn has NOT been called when paused', () => {
@@ -155,7 +159,7 @@ test('handler breakpoint: handler fn has NOT been called when paused', () => {
   handler.id = 'h-track';
   sim.handlers.register('TICK', handler);
   sim.schedule({ type: 'TICK', date: START });
-  sim.control.breakpointNodeIds.add('h-track');
+  sim.toggleNodeBreakpoint(handler);
 
   play(sim);
 
@@ -172,7 +176,7 @@ test('handler breakpoint: resuming calls the handler and completes the event', (
   sim.handlers.register('TICK', h1);
   sim.handlers.register('TICK', h2);
   sim.schedule({ type: 'TICK', date: START });
-  sim.control.breakpointNodeIds.add('h1-id');
+  sim.toggleNodeBreakpoint(h1);
 
   play(sim);
   assert.deepEqual(log, [], 'neither handler should have run before first resume');
@@ -191,16 +195,16 @@ test('handler breakpoint: second handler breakpoint fires after first is resumed
   sim.handlers.register('TICK', h1);
   sim.handlers.register('TICK', h2);
   sim.schedule({ type: 'TICK', date: START });
-  sim.control.breakpointNodeIds.add('h1-id');
-  sim.control.breakpointNodeIds.add('h2-id');
+  sim.toggleNodeBreakpoint(h1);
+  sim.toggleNodeBreakpoint(h2);
 
   play(sim);
   assert.ok(sim.control.paused);
-  assert.strictEqual(sim.control.breakpointHit.handler.id, 'h1-id');
+  assert.strictEqual(sim.control.breakpointHit.node.id, 'h1-id');
 
   resume(sim);  // run h1, pause before h2
   assert.ok(sim.control.paused, 'should pause again before h2');
-  assert.strictEqual(sim.control.breakpointHit.handler.id, 'h2-id');
+  assert.strictEqual(sim.control.breakpointHit.node.id, 'h2-id');
   assert.deepEqual(log, ['h1'], 'only h1 should have run');
 
   resume(sim);  // run h2
@@ -214,16 +218,17 @@ test('action breakpoint: control.paused is true when action node has a breakpoin
   const sim = new Simulation(START);
   let reducerCalled = false;
 
-  sim.register('TICK', () => [{ type: 'DO_WORK', id: 'act-1' }]);
+  const action =  { type: 'DO_WORK', id: 'act-1' };
+  sim.register('TICK', () => [action]);
   sim.reducers.register('DO_WORK', (s) => { reducerCalled = true; return s; }, 10, 'R1');
   sim.schedule({ type: 'TICK', date: START });
-  sim.control.breakpointNodeIds.add('act-1');
+  sim.toggleNodeBreakpoint(action);
 
   const paused = play(sim);
 
   assert.ok(paused, 'should pause at action breakpoint');
   assert.strictEqual(sim.control.breakpointHit.stage, 'action');
-  assert.strictEqual(sim.control.breakpointHit.action.id, 'act-1');
+  assert.strictEqual(sim.control.breakpointHit.node.id, 'act-1');
   assert.ok(!reducerCalled, 'reducer should not have run yet');
 });
 
@@ -231,14 +236,16 @@ test('action breakpoint: resuming runs the action reducer and continues', () => 
   const sim = new Simulation(START);
   const log = [];
 
+  const action1 = { type: 'FIRST',  id: 'act-first' };
+  const action2 = { type: 'SECOND', id: 'act-second' };
   sim.register('TICK', () => [
-    { type: 'FIRST',  id: 'act-first' },
-    { type: 'SECOND', id: 'act-second' },
+    action1,
+    action2,
   ]);
   sim.reducers.register('FIRST',  (s) => { log.push('first');  return s; }, 10, 'R-first');
   sim.reducers.register('SECOND', (s) => { log.push('second'); return s; }, 10, 'R-second');
   sim.schedule({ type: 'TICK', date: START });
-  sim.control.breakpointNodeIds.add('act-first');
+  sim.toggleNodeBreakpoint(action1);
 
   play(sim);
   assert.deepEqual(log, [], 'no reducers should have run before first resume');
@@ -252,23 +259,25 @@ test('action breakpoint: second action breakpoint fires after first is resumed',
   const sim = new Simulation(START);
   const log = [];
 
+  const action1 = { type: 'FIRST',  id: 'act-first' };
+  const action2 = { type: 'SECOND', id: 'act-second' };
   sim.register('TICK', () => [
-    { type: 'FIRST',  id: 'act-first' },
-    { type: 'SECOND', id: 'act-second' },
+    action1,
+    action2,
   ]);
   sim.reducers.register('FIRST',  (s) => { log.push('first');  return s; }, 10, 'R-first');
   sim.reducers.register('SECOND', (s) => { log.push('second'); return s; }, 10, 'R-second');
   sim.schedule({ type: 'TICK', date: START });
-  sim.control.breakpointNodeIds.add('act-first');
-  sim.control.breakpointNodeIds.add('act-second');
+  sim.toggleNodeBreakpoint(action1);
+  sim.toggleNodeBreakpoint(action2);
 
   play(sim);
   assert.ok(sim.control.paused);
-  assert.strictEqual(sim.control.breakpointHit.action.id, 'act-first');
+  assert.strictEqual(sim.control.breakpointHit.node.id, 'act-first');
 
   resume(sim);  // run first, pause before second
   assert.ok(sim.control.paused, 'should pause before second action');
-  assert.strictEqual(sim.control.breakpointHit.action.id, 'act-second');
+  assert.strictEqual(sim.control.breakpointHit.node.id, 'act-second');
   assert.deepEqual(log, ['first']);
 
   resume(sim);  // run second
@@ -286,13 +295,13 @@ test('reducer breakpoint: control.paused is true when reducer node has a breakpo
   sim.register('TICK', () => [{ type: 'DO_WORK' }]);
   sim.reducers.registerReducer('DO_WORK', reducerObj);
   sim.schedule({ type: 'TICK', date: START });
-  sim.control.breakpointNodeIds.add('red-1');
+  sim.toggleNodeBreakpoint(reducerObj);
 
   const paused = play(sim);
 
   assert.ok(paused, 'should pause at reducer breakpoint');
   assert.strictEqual(sim.control.breakpointHit.stage, 'reducer:before');
-  assert.strictEqual(sim.control.breakpointHit.reducer.id, 'red-1');
+  assert.strictEqual(sim.control.breakpointHit.node.id, 'red-1');
 });
 
 test('reducer breakpoint: reducer fn has NOT been called when paused', () => {
@@ -304,7 +313,7 @@ test('reducer breakpoint: reducer fn has NOT been called when paused', () => {
   sim.register('TICK', () => [{ type: 'WORK' }]);
   sim.reducers.registerReducer('WORK', reducerObj);
   sim.schedule({ type: 'TICK', date: START });
-  sim.control.breakpointNodeIds.add('red-track');
+  sim.toggleNodeBreakpoint(reducerObj);
 
   play(sim);
 
@@ -321,7 +330,7 @@ test('reducer breakpoint: resuming runs the reducer and completes', () => {
   sim.reducers.registerReducer('WORK', r1);
   sim.reducers.registerReducer('WORK', r2);
   sim.schedule({ type: 'TICK', date: START });
-  sim.control.breakpointNodeIds.add('r1');
+  sim.toggleNodeBreakpoint(r1);
 
   play(sim);
   assert.deepEqual(log, []);
@@ -341,16 +350,16 @@ test('reducer breakpoint: second reducer breakpoint fires after first is resumed
   sim.reducers.registerReducer('WORK', r1);
   sim.reducers.registerReducer('WORK', r2);
   sim.schedule({ type: 'TICK', date: START });
-  sim.control.breakpointNodeIds.add('r1');
-  sim.control.breakpointNodeIds.add('r2');
+  sim.toggleNodeBreakpoint(r1);
+  sim.toggleNodeBreakpoint(r2);
 
   play(sim);
   assert.ok(sim.control.paused);
-  assert.strictEqual(sim.control.breakpointHit.reducer.id, 'r1');
+  assert.strictEqual(sim.control.breakpointHit.node.id, 'r1');
 
   resume(sim);  // run r1, pause before r2
   assert.ok(sim.control.paused);
-  assert.strictEqual(sim.control.breakpointHit.reducer.id, 'r2');
+  assert.strictEqual(sim.control.breakpointHit.node.id, 'r2');
   assert.deepEqual(log, ['r1']);
 
   resume(sim);  // run r2
@@ -364,8 +373,9 @@ test('mixed: event → handler → action → reducer breakpoints fire in order'
   const sim = new Simulation(START);
   const log = [];
 
+  const action = { type: 'WORK', id: 'act-id' };
   const handler = new HandlerEntry(
-    () => { log.push('handler'); return [{ type: 'WORK', id: 'act-id' }]; },
+    () => { log.push('handler'); return [action]; },
     'H1'
   );
   handler.id = 'h-id';
@@ -377,12 +387,13 @@ test('mixed: event → handler → action → reducer breakpoints fire in order'
 
   sim.handlers.register('TICK', handler);
   sim.reducers.registerReducer('WORK', reducerObj);
-  sim.schedule({ type: 'TICK', date: START, id: 'evt-id' });
+  const evt = { type: 'TICK', date: START, id: 'evt-id' };
+  sim.schedule(evt);
 
-  sim.control.breakpointNodeIds.add('evt-id');
-  sim.control.breakpointNodeIds.add('h-id');
-  sim.control.breakpointNodeIds.add('act-id');
-  sim.control.breakpointNodeIds.add('r-id');
+  sim.toggleNodeBreakpoint(evt);
+  sim.toggleNodeBreakpoint(handler);
+  sim.toggleNodeBreakpoint(action);
+  sim.toggleNodeBreakpoint(reducerObj);
 
   // 1. Event breakpoint
   play(sim);
@@ -423,7 +434,7 @@ test('state is unchanged at handler breakpoint (reducer has not mutated it)', ()
   sim.handlers.register('TICK', handler);
   sim.reducers.register('INCREMENT', (s) => ({ ...s, count: s.count + 1 }), 10, 'R');
   sim.schedule({ type: 'TICK', date: START });
-  sim.control.breakpointNodeIds.add('h-inc');
+  sim.toggleNodeBreakpoint(handler);
 
   play(sim);
   assert.strictEqual(sim.state.count, 0, 'state should not have changed before handler runs');
@@ -441,7 +452,7 @@ test('state is unchanged at reducer breakpoint', () => {
   sim.register('TICK', () => [{ type: 'INCREMENT' }]);
   sim.reducers.registerReducer('INCREMENT', reducerObj);
   sim.schedule({ type: 'TICK', date: START });
-  sim.control.breakpointNodeIds.add('r-inc');
+  sim.toggleNodeBreakpoint(reducerObj);
 
   play(sim);
   assert.strictEqual(sim.state.count, 0, 'state should be 0 before reducer runs');
@@ -465,7 +476,7 @@ test('action emitted by reducer runs after resume from reducer breakpoint', () =
   sim.reducers.registerReducer('PRIMARY', r1);
   sim.reducers.register('SECONDARY', (s) => { log.push('secondary'); return { ...s, b: s.b + 1 }; }, 10, 'R2');
   sim.schedule({ type: 'TICK', date: START });
-  sim.control.breakpointNodeIds.add('r1');
+  sim.toggleNodeBreakpoint(r1);
 
   play(sim);
   assert.ok(sim.control.paused);
@@ -483,8 +494,9 @@ test('action emitted by reducer runs after resume from reducer breakpoint', () =
 test('breakpoints do not fire when breakpointsEnabled is false', () => {
   const sim = new Simulation(START);
   sim.register('TICK', () => []);
-  sim.schedule({ type: 'TICK', date: START, id: 'evt-x' });
-  sim.control.breakpointNodeIds.add('evt-x');
+  const evt = { type: 'TICK', date: START, id: 'evt-x' };
+  sim.schedule(evt);
+  sim.toggleNodeBreakpoint(evt);
   sim.control.breakpointsEnabled = false;
 
   const paused = play(sim);
@@ -497,8 +509,9 @@ test('breakpoints disabled in rewind re-enable afterwards', () => {
   const sim = new Simulation(START);
   let calls = 0;
   sim.register('TICK', () => { calls++; return []; });
-  sim.schedule({ type: 'TICK', date: START, id: 'evt-y' });
-  sim.control.breakpointNodeIds.add('evt-y');
+  const evt = { type: 'TICK', date: START, id: 'evt-y' };
+  sim.schedule(evt);
+  sim.toggleNodeBreakpoint(evt);
 
   // Simulate what time-controls._doRewindTo does
   sim.control.breakpointsEnabled = false;
@@ -531,7 +544,7 @@ test('pendingExecution.type is "handler" when paused at a handler', () => {
   h.id = 'h-pe';
   sim.handlers.register('TICK', h);
   sim.schedule({ type: 'TICK', date: START });
-  sim.control.breakpointNodeIds.add('h-pe');
+  sim.toggleNodeBreakpoint(h);
 
   play(sim);
 
@@ -542,10 +555,11 @@ test('pendingExecution.type is "handler" when paused at a handler', () => {
 
 test('pendingExecution.type is "action" when paused at an action', () => {
   const sim = new Simulation(START);
-  sim.register('TICK', () => [{ type: 'WORK', id: 'a-pe' }]);
+  const action = { type: 'WORK', id: 'a-pe' };
+  sim.register('TICK', () => [action]);
   sim.reducers.register('WORK', (s) => s, 10, 'R');
   sim.schedule({ type: 'TICK', date: START });
-  sim.control.breakpointNodeIds.add('a-pe');
+  sim.toggleNodeBreakpoint(action);
 
   play(sim);
 
@@ -560,7 +574,7 @@ test('pendingExecution.type is "reducer" when paused at a reducer', () => {
   sim.register('TICK', () => [{ type: 'WORK' }]);
   sim.reducers.registerReducer('WORK', rObj);
   sim.schedule({ type: 'TICK', date: START });
-  sim.control.breakpointNodeIds.add('r-pe');
+  sim.toggleNodeBreakpoint(rObj);
 
   play(sim);
 
@@ -574,9 +588,10 @@ test('pendingExecution.type is "reducer" when paused at a reducer', () => {
 test('breakpoint fires on each matching event occurrence', () => {
   const sim = new Simulation(START);
   let count = 0;
-  sim.scheduleAnnually({ startDate: START, type: 'TICK', id: 'annual' });
+  const evt = { startDate: START, type: 'TICK', id: 'annual' };
+  sim.scheduleAnnually(evt);
   sim.register('TICK', () => { count++; return []; });
-  sim.control.breakpointNodeIds.add('annual');
+  sim.toggleNodeBreakpoint(evt);
 
   const END2 = new Date(Date.UTC(2027, 11, 31));
 
