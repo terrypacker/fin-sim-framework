@@ -9,7 +9,6 @@
  */
 
 import { HandlerEntry } from "../simulation-framework/handlers.js";
-import {BaseEvent} from "../simulation-framework/events/base-event.js";
 import {Action} from "../simulation-framework/actions.js";
 import {Reducer} from "../simulation-framework/reducers.js";
 

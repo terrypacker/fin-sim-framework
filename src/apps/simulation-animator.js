@@ -42,7 +42,7 @@ export class SimulationAnimator {
    *   actionService:  import('../services/action-service.js').ActionService,
    * }}
    */
-  constructor({ configGraph, scenario, timeControls, statePanelView, graphView, chartView, actionService }) {
+  constructor({ configGraph, scenario, timeControls, statePanelView, graphView, chartView, actionService, bus }) {
     this._configGraph    = configGraph;
     this._scenario       = scenario;
     this._timeControls   = timeControls;
@@ -50,9 +50,22 @@ export class SimulationAnimator {
     this._graphView      = graphView ?? null;
     this._chartView      = chartView;
     this._actionService  = actionService;
+    this._bus = bus;
 
     this.playing = false;
     this._dashCardsdirty = false;
+    this._init();
+  }
+
+  _init() {
+    //Register for the message we want
+    this._bus.subscribe(SIMULATION_BUS_MESSAGES.NODE_DATA_CHANGED, msg => {
+      const { reason } = msg.meta || {};
+      if(reason === 'breakpoint') {
+        const { breakpointContext } = msg.data || {};
+        this.showBreakpointPaused(breakpointContext);
+      }
+    });
   }
 
   // ── Playback ──────────────────────────────────────────────────────────────
@@ -124,23 +137,11 @@ export class SimulationAnimator {
     const label = $('simStatus');
     if (dot) dot.className = 'status-dot breakpoint';
     if (label && hit) {
-      const name =
-        hit.node?.name    ??
-        hit.event?.type   ??
-        hit.handler?.name ??
-        hit.action?.type  ??
-        hit.reducer?.name ??
-        '?';
+      const name = hit.node?.name ?? '?';
       label.textContent = `PAUSED @ ${name} [${hit.stage}]`;
     } else if (label) {
       label.textContent = 'PAUSED';
     }
-
-    if      (hit?.event)   this._configGraph.flashNode(hit.event.id);
-    else if (hit?.action)  this._configGraph.flashNode(hit.action.id);
-    else if (hit?.handler) this._configGraph.flashNode(hit.handler.id);
-    else if (hit?.reducer) this._configGraph.flashNode(hit.reducer.id);
-    this._configGraph.render();
   }
 
   // ── Config graph highlighting ─────────────────────────────────────────────

@@ -11,6 +11,7 @@
 import {
   SimulationAdapter
 } from "../simulation-framework/simulation/simulation-adapter.js";
+import {SIMULATION_BUS_MESSAGES} from "../simulation-framework/bus-messages.js";
 
 /**
  * Bridges the service layer (configuration) and the Simulation (execution).
@@ -54,7 +55,7 @@ export class SimulationSync {
       this._handle(msg);
     });
 
-    bus.subscribe('NODE_DATA_CHANGED', msg => {
+    bus.subscribe(SIMULATION_BUS_MESSAGES.NODE_DATA_CHANGED, msg => {
       this._handleNodeDataMessage(msg);
     })
   }

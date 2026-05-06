@@ -67,7 +67,7 @@ export class EventService extends BaseService {
   updateEvent(idOrEvent, changes = {}) {
     const event = this._resolve(idOrEvent);
     const originalItem = Object.assign(Object.create(Object.getPrototypeOf(event)), event);
-    Object.assign(event, changes);
+    this.mergeChanges(event, changes);
     this._graph.notifyNodeWatchers(); //Notify that the content in the graph changed
     this._publish('UPDATE', event.constructor.name, event, originalItem);
     return event;

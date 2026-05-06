@@ -252,6 +252,7 @@ export class BaseApp extends BaseComponent {
       graphView:      this.graphView,
       chartView:      this.chartView,
       actionService:  registry.actionService,
+      bus: registry.bus
     });
 
     this._animator.toggleBreakpoint();

@@ -63,7 +63,7 @@ export class AccountService extends BaseService {
   updateAccount(idOrAccount, changes = {}) {
     const account = this._resolve(idOrAccount);
     const original = { ...account };
-    Object.assign(account, changes);
+    this.mergeChanges(account, changes);
     this._publish('UPDATE', 'Account', account, original);
     this._wireNodeEdges(account);
     return account;

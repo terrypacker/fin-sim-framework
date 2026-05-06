@@ -25,7 +25,8 @@ export const SIMULATION_BUS_MESSAGES = {
   ACTION_INSTANCE: 'ACTION_INSTANCE',
   ACTION_RESULT: 'ACTION_RESULT',
   REDUCER_RESULT: 'REDUCER_RESULT',
-  NODE_DATA_CHANGED: 'NODE_DATA_CHANGED' //The service can store the node's new data
+  NODE_DATA_CHANGED: 'NODE_DATA_CHANGED', //The service can store the node's new data
+  BREAKPOINT_HIT: 'BREAKPOINT_HIT'
 }
 /**
  * Base class for all messages published to the EventBus.
@@ -57,10 +58,17 @@ export class SimulationBusMessage extends BusMessage {
 export class NodeDataBusMessage extends SimulationBusMessage {
   constructor({ date, sim, payload, stateSnapshot, nodeId, kind, meta, data }) {
     super({ type: SIMULATION_BUS_MESSAGES.NODE_DATA_CHANGED, date, sim, payload, stateSnapshot });
+    //TODO Move to payload?
     this.nodeId = nodeId;
     this.kind = kind;
     this.meta = meta;
     this.data = data;
+  }
+}
+
+export class BreakpointHitBusMessage extends SimulationBusMessage {
+  constructor({ date, sim, payload, stateSnapshot }) {
+    super({ type: SIMULATION_BUS_MESSAGES.BREAKPOINT_HIT, date, sim, payload, stateSnapshot });
   }
 }
 

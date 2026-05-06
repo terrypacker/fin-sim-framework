@@ -111,7 +111,7 @@ export class HandlerService extends BaseService {
   updateHandler(idOrHandler, changes = {}) {
     const handler = this._resolve(idOrHandler);
     const originalItem = Object.assign(Object.create(Object.getPrototypeOf(handler)), handler);
-    Object.assign(handler, changes);
+    this.mergeChanges(handler, changes);
     this._graph.notifyNodeWatchers(); //Notify that the content in the graph changed
     this._publish('UPDATE', handler.constructor.name, handler, originalItem);
     this._rewireEdges(handler);

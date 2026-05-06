@@ -274,7 +274,7 @@ export class GraphRenderer extends BaseComponent {
     el.classList.toggle('selected', node.id === this.selectedNodeId);
 
     // flashing
-    el.classList.toggle('node-flash', !!node.flashing);
+    el.classList.toggle('node-flash', !!node.data?.breakpointHit);
 
     // ── position ─────────────────────────
     const { x, y } = this._getPos(prevNode ? prevNode.id : null);

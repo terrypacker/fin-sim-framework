@@ -157,6 +157,32 @@ export class BaseService {
   }
 
   /**
+   * Copy high level properties and dive into meta and data
+   * @param item
+   * @param changes
+   * @return {*}
+   */
+  mergeChanges(item, changes) {
+    const { data, meta, ...rest } = changes;
+    Object.assign(item, rest);
+
+    // Controlled nested merges
+    if (data) {
+      item.data = {
+        ...item.data,
+        ...data
+      };
+    }
+
+    if (meta) {
+      item.meta = {
+        ...item.meta,
+        ...meta
+      };
+    }
+    return item;
+  }
+  /**
    * Advance _nextId if the given id has a trailing numeric suffix higher than
    * the current counter.
    * @param {string} id

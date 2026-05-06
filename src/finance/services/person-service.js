@@ -55,7 +55,7 @@ export class PersonService extends BaseService {
   updatePerson(idOrPerson, changes = {}) {
     const person = this._resolve(idOrPerson);
     const originalItem = { ...person };
-    Object.assign(person, changes);
+    this.mergeChanges(person, changes);
     this._publish('UPDATE', 'Person', person, originalItem);
     this._rewireEdges(person);
     return person;

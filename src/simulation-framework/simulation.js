@@ -30,7 +30,7 @@ import {
   EventHandledMessage,
   ActionInstanceMessage,
   ActionResultMessage,
-  ReducerResultMessage, NodeDataBusMessage
+  ReducerResultMessage, NodeDataBusMessage, BreakpointHitBusMessage
 } from "./bus-messages.js";
 import { generateActionId } from "./actions.js";
 import { SimulationHistory } from "./simulation-history.js";
@@ -75,7 +75,6 @@ export class Simulation {
             item => item.instanceId, item => item.type);
 
     //TODO Replace bus when ready
-    this.debug = true;
     this.serviceBus = bus;
     this.bus = new EventBus();
 
@@ -91,7 +90,7 @@ export class Simulation {
     this.history = new SimulationHistory(this);
     this.history.enableSnapshots = opts.enableSnapshots ?? true;
     this.history.snapshotInterval = opts.snapshotInterval ?? 1; // every N events
-
+    this.debug = opts.debug ?? false;
     this.journal = new Journal({enabled: true});
 
     this.nextEventInstanceId = 0;
@@ -112,7 +111,7 @@ export class Simulation {
     // breakpointsEnabled: disabled during rewind/replay to avoid false triggers
     // pendingExecution:   saved mid-event state so stepTo() can resume exactly
     //                     where it paused (handler/action/reducer level)
-    // breakpointNodeIds:  Set of config-graph node IDs that have breakpoints;
+    // breakpointNodes:  Map of config-graph node IDs that have breakpoints;
     //                     managed by the UI layer (base-app._syncBreakpointsToSim)
     this.control = {
       paused: false,
@@ -120,7 +119,7 @@ export class Simulation {
       resuming: false,
       breakpointsEnabled: true,
       pendingExecution: null,
-      breakpointNodeIds: new Set(),
+      breakpointNodes: new Map(),
     };
   }
 
@@ -145,20 +144,32 @@ export class Simulation {
   }
 
   clearAllBreakpoints() {
-    const breakpoints = [...this.control.breakpointNodeIds];
-    this.control.breakpointNodeIds.clear();
-    breakpoints.forEach(bp => {
-      //TODO Would need kind to send message?
+    const breakpoints = [...this.control.breakpointNodes.entries()];
+    this.control.breakpointNodes.clear();
+    const now = new Date(this.currentDate);
+    breakpoints.forEach(([id, node]) => {
+      this.serviceBus.publish(new NodeDataBusMessage({
+        date: now,
+        sim: this,
+        stateSnapshot: null, //TODO Do we want this?
+        nodeId: node.id,
+        kind: node.kind,
+        meta: { reason: 'control' },
+        data: {
+          breakpoint: false,
+          breakpointHit: false,
+        }
+      }));
     });
   }
 
   toggleNodeBreakpoint(node) {
     const data = { };
-    if (this.control.breakpointNodeIds.has(node.id)) {
-      this.control.breakpointNodeIds.delete(node.id); // Item exists, so remove it
+    if (this.control.breakpointNodes.has(node.id)) {
+      this.control.breakpointNodes.delete(node.id); // Item exists, so remove it
       data.breakpoint = false;
     } else {
-      this.control.breakpointNodeIds.add(node.id);    // Item doesn't exist, so add it
+      this.control.breakpointNodes.set(node.id, node);    // Item doesn't exist, so add it
       data.breakpoint = true;
     }
     const now = new Date(this.currentDate);
@@ -239,7 +250,7 @@ export class Simulation {
     if (!this.control.breakpointsEnabled) return false;
     if (this.control.resuming) return false;
     if (id == null) return false;
-    return this.control.breakpointNodeIds.has(id);
+    return this.control.breakpointNodes.has(id);
   }
 
   // ── Core execution ─────────────────────────────────────────────────────────
@@ -296,9 +307,9 @@ export class Simulation {
           handlerIdx: i,
           stateBefore
         };
-        this.control.breakpointHit = { stage: 'handler:before', handler: entry };
+        this.control.breakpointHit = { stage: 'handler:before', node: entry };
         this.control.paused = true;
-        throw new BreakpointSignal({ stage: 'handler:before', handler: entry });
+        throw new BreakpointSignal({ stage: 'handler:before', node: entry });
       }
       // Past this handler's breakpoint check — clear resuming flag so subsequent
       // handlers (and their nested action/reducer loops) get checked normally.
@@ -454,9 +465,9 @@ export class Simulation {
           sourceEvent,
           handlerContext
         };
-        this.control.breakpointHit = { stage: 'action', action };
+        this.control.breakpointHit = { stage: 'action', node: action };
         this.control.paused = true;
-        throw new BreakpointSignal({ stage: 'action', action });
+        throw new BreakpointSignal({ stage: 'action', node: action });
       }
       this.control.resuming = false;
 
@@ -549,9 +560,9 @@ export class Simulation {
           sourceEventType,
           handlerContext
         };
-        this.control.breakpointHit = { stage: 'reducer:before', reducer: reducerWrapper.reducer };
+        this.control.breakpointHit = { stage: 'reducer:before', node: reducerWrapper.reducer };
         this.control.paused = true;
-        throw new BreakpointSignal({ stage: 'reducer:before', reducer: reducerWrapper.reducer });
+        throw new BreakpointSignal({ stage: 'reducer:before', node: reducerWrapper.reducer });
       }
       this.control.resuming = false;
 
@@ -750,10 +761,24 @@ export class Simulation {
       if (
         this.control.breakpointsEnabled &&
         !this.control.resuming &&
-        this.control.breakpointNodeIds.has(next.id ?? '')
+        this.control.breakpointNodes.has(next.id ?? '')
       ) {
         this.control.paused = true;
-        this.control.breakpointHit = { stage: 'event:start', event: next };
+        this.control.breakpointHit = { stage: 'event:start', node: next };
+        this.serviceBus.publish(new NodeDataBusMessage({
+          date: new Date(this.currentDate),
+          sim: this,
+          stateSnapshot: null, //TODO Do we want this?
+          nodeId: next.id,
+          kind: next.kind,
+          meta: {
+            reason: 'breakpoint'
+          },
+          data: {
+            breakpointHit: true,
+            breakpointContext: { stage: 'event:start', node: next }
+          }
+        }));
         return; // Leave event in the queue — resume will execute it
       }
 
@@ -766,7 +791,25 @@ export class Simulation {
       try {
         this.execute(next);
       } catch (e) {
-        if (e instanceof BreakpointSignal) return; // control.paused set by _shouldPause path
+        if (e instanceof BreakpointSignal) {
+          //Send message to update node data
+          const node = e.context.node;
+          this.serviceBus.publish(new NodeDataBusMessage({
+            date: new Date(this.currentDate),
+            sim: this,
+            stateSnapshot: null, //TODO Do we want this?
+            nodeId: node.id,
+            kind: node.kind,
+            meta: {
+              reason: 'breakpoint'
+            },
+            data: {
+              breakpointHit: true,
+              breakpointContext: e.context
+            }
+          }));
+          return; // control.paused set by _shouldPause path
+        }
         throw e;
       }
     }
