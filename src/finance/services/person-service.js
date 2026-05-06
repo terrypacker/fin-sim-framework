@@ -21,8 +21,8 @@ import { Person } from '../person.js';
  * are referenced by tax / account rules at scenario build time.
  */
 export class PersonService extends BaseService {
-  constructor(graph, bus) {
-    super(graph, bus, 'person');
+  constructor(graph, query, bus) {
+    super(graph, query, bus, 'person');
   }
 
   // ─── Create ───────────────────────────────────────────────────────────────

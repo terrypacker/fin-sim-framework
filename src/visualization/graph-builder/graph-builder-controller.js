@@ -68,6 +68,7 @@ export class GraphBuilderController {
     else if (node.kind === 'handler') this.handlerService.deleteHandler(node.id);
     else if (node.kind === 'action')  this.actionService.deleteAction(node.id);
     else if (node.kind === 'reducer') this.reducerService.deleteReducer(node.id);
+    this._graph.render();
   }
 
   /**
@@ -79,6 +80,7 @@ export class GraphBuilderController {
     else if (node.kind === 'handler') this.handlerService.updateHandler(node.id, changes);
     else if (node.kind === 'action')  this.actionService.updateAction(node.id, changes);
     else if (node.kind === 'reducer') this.reducerService.updateReducer(node.id, changes);
+    this._graph.render();
   }
 
   /**

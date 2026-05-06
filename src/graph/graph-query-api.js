@@ -25,7 +25,7 @@ export class GraphQueryApi extends QueryApi {
   constructor(graph) {
     super(graph);
     this._graph = graph; //TODO This is also in the parent as _dataSource
-    this._graph.addNodeModifcationWatcher(() => this._invalidateIndexes());
+    this._graph.addNodeModifcationWatcher(this.constructor.name, () => this._invalidateIndexes());
     this._kindIndex = new Map();   // kind -> [items]
     this._layerIndex = new Map(); // layer -> [items]
   }
@@ -215,6 +215,10 @@ export class GraphQueryApi extends QueryApi {
   _buildIndexes() {
     const all = this.getAll();
 
+    // Clear BEFORE populating
+    this._kindIndex.clear();
+    this._layerIndex.clear();
+
     for (const item of all) {
       if (item.kind != null) {
         const key = String(item.kind);
@@ -233,7 +237,7 @@ export class GraphQueryApi extends QueryApi {
       }
 
     }
-    super._buildIndexes();
+    super._buildIndexesFrom(all);
   }
 
   _extractKind(node) {

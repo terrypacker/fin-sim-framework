@@ -43,8 +43,8 @@ Object.assign(HANDLER_CLASSES, {
  * into a simulation's HandlerRegistry is the caller's responsibility.
  */
 export class HandlerService extends BaseService {
-  constructor(graph, bus) {
-    super(graph, bus, 'handler');
+  constructor(graph, query, bus) {
+    super(graph, query, bus, 'handler');
   }
 
   // ─── Edges ───────────────────────────────────────────────────────────────

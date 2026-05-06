@@ -21,7 +21,8 @@ const createEdgeId = (edge) => {
 
 export class GraphRenderer extends BaseComponent {
 
-  constructor({ parent, graph, graphQueryApi, graphRoot, graphNodes, graphEdges, nodeDetailsTemplate, displayNodeStateChanges}) {
+  constructor({ parent, graph, graphQueryApi, graphRoot, graphNodes,
+    graphEdges, nodeDetailsTemplate, displayNodeStateChanges}) {
     super({ parent });
     this._graph = graph;
     this._graphQueryApi = graphQueryApi;
@@ -84,8 +85,8 @@ export class GraphRenderer extends BaseComponent {
   }
 
   _mount() {
-    this._graph.addNodeModifcationWatcher(this._nodeModificationWatcher);
-    this._graph.addEdgeModifcationWatcher(this._edgeModificationWatcher);
+    this._graph.addNodeModifcationWatcher('graph-renderer', this._nodeModificationWatcher);
+    this._graph.addEdgeModifcationWatcher('graph-renderer', this._edgeModificationWatcher);
     this.graphNodesEl.innerHTML = '';
     this.graphEdgesEl.innerHTML = '';
     //TODO Build out the component parts dynamically
@@ -798,8 +799,8 @@ export class GraphRenderer extends BaseComponent {
   }
 
   destroy() {
-    this._graph.removeNodeModificationWatcher(this._nodeModificationWatcher);
-    this._graph.removeEdgeModificationWatcher(this._edgeModificationWatcher);
+    this._graph.removeNodeModificationWatcher('graph-renderer', this._nodeModificationWatcher);
+    this._graph.removeEdgeModificationWatcher('graph-renderer', this._edgeModificationWatcher);
     super.destroy();
   }
 }

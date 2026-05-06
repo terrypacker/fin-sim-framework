@@ -32,10 +32,10 @@ export class BaseService {
    * @param {import('../simulation-framework/event-bus.js').EventBus} bus
    * @param {string} kind  - kind of node [event, handler, action, reducer]
    */
-  constructor(graph, bus, kind, prefixLength = 1) {
+  constructor(graph, query, bus, kind, prefixLength = 1) {
     this.bus = bus;
     this._graph = graph;
-    this._query = new GraphQueryApi(graph);
+    this._query = query;
     this._kind = kind;
     this._layer = 'config';
     this._nextId   = 1;

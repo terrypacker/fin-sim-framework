@@ -32,8 +32,8 @@ import {Reducer} from "../simulation-framework/reducers.js";
  * Owns an internal Map<id, item> as the source of truth.
  */
 export class ActionService extends BaseService {
-  constructor(graph, bus) {
-    super(graph, bus, 'action');
+  constructor(graph, query, bus) {
+    super(graph, query, bus, 'action');
 
     //TODO Could move out to ActionTypeEnsurer class if we want to decouple this,
     //  we want to ensure HandlerEntry and Reducer classes have their actions registered

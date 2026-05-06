@@ -35,7 +35,9 @@ import {EDGE_TYPES} from "../graph/edge.js";
  * into a ReducerPipeline is the caller's responsibility.
  */
 export class ReducerService extends BaseService {
-  constructor(graph, bus) { super(graph, bus, 'reducer'); }
+  constructor(graph, query, bus) {
+    super(graph, query, bus, 'reducer');
+  }
 
   // ─── Edges ───────────────────────────────────────────────────────────────
   _wireNodeEdges(item) {

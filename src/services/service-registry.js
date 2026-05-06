@@ -39,12 +39,12 @@ export class ServiceRegistry {
     this.bus                = new EventBus();
     this.graph              = new Graph();
     this.graphQueryApi      = new GraphQueryApi(this.graph);
-    this.accountService     = new AccountService(this.graph, this.bus);
-    this.actionService      = new ActionService(this.graph, this.bus);
-    this.eventService       = new EventService(this.graph, this.bus);
-    this.handlerService     = new HandlerService(this.graph, this.bus);
-    this.personService      = new PersonService(this.graph, this.bus);
-    this.reducerService     = new ReducerService(this.graph, this.bus);
+    this.accountService     = new AccountService(this.graph, this.graphQueryApi, this.bus);
+    this.actionService      = new ActionService(this.graph, this.graphQueryApi, this.bus);
+    this.eventService       = new EventService(this.graph, this.graphQueryApi, this.bus);
+    this.handlerService     = new HandlerService(this.graph, this.graphQueryApi, this.bus);
+    this.personService      = new PersonService(this.graph, this.graphQueryApi, this.bus);
+    this.reducerService     = new ReducerService(this.graph, this.graphQueryApi, this.bus);
     this.simulationRegistry = new SimulationRegistry();
 
     //The

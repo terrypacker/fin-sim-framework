@@ -23,8 +23,8 @@ export class Graph {
    * TODO could be a bus message later
    * @param watcher
    */
-  addNodeModifcationWatcher(watcher) {
-    this.nodeModifcationWatchers.push(watcher);
+  addNodeModifcationWatcher(name, watcher) {
+    this.nodeModifcationWatchers.push({name: name, fn: watcher});
   }
 
   removeNodeModificationWatcher(watcher) {
@@ -35,7 +35,7 @@ export class Graph {
   }
 
   notifyNodeWatchers() {
-    this.nodeModifcationWatchers.forEach(w => w.call());
+    this.nodeModifcationWatchers.forEach(w => w.fn.call());
   }
 
   /**
@@ -43,8 +43,8 @@ export class Graph {
    * TODO could be a bus message later
    * @param watcher
    */
-  addEdgeModifcationWatcher(watcher) {
-    this.edgeModifcationWatchers.push(watcher);
+  addEdgeModifcationWatcher(name, watcher) {
+    this.edgeModifcationWatchers.push({name: name, fn: watcher});
   }
 
   removeEdgeModificationWatcher(watcher) {
@@ -55,7 +55,7 @@ export class Graph {
   }
 
   notifyEdgeWatchers() {
-    this.edgeModifcationWatchers.forEach(w => w.call());
+    this.edgeModifcationWatchers.forEach(w => w.fn.call());
   }
 
   addNode(node) {

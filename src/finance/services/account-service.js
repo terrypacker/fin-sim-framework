@@ -29,10 +29,11 @@ import { InsufficientFundsError } from '../account.js';
 export class AccountService extends BaseService {
   /**
    * @param {import('../../graph/graph.js').Graph} [graph]
+   * @param query - graph query api
    * @param {import('../../simulation-framework/event-bus.js').EventBus} [bus]
    */
-  constructor(graph, bus) {
-    super(graph, bus, 'account', 2);
+  constructor(graph, query, bus) {
+    super(graph, query, bus, 'account', 2);
   }
 
   // ─── Create ───────────────────────────────────────────────────────────────

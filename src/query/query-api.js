@@ -128,8 +128,7 @@ export class QueryApi {
     this._dataSource = dataSource;
     this._idIndex = new Map();     // id -> item
     this._nameIndex = new Map();   // lower(name) -> [items]
-
-    this._buildIndexes();
+    this.rebuildIndexes = true;
   }
 
 
@@ -476,7 +475,12 @@ export class QueryApi {
   }
 
   _buildIndexes() {
-    const all = this.getAll();
+    this._buildIndexesFrom(this.getAll());
+  }
+  _buildIndexesFrom(all) {
+    // Clear before rebuilding
+    this._idIndex.clear();
+    this._nameIndex.clear();
 
     for (const item of all) {
       if (item.id != null) {
