@@ -105,29 +105,10 @@ export class SimulationAnimator {
   toggleBreakpoint(node) {
     if (!this._scenario?.sim) return;
     if(!node) {
-      this._scenario.sim.control.breakpointNodeIds.clear();
+      this._scenario.sim.clearAllBreakpoints();
     }else {
-      //TODO This should replace node in the graph
-      /*
-      const node = this.graph.getNode(nodeId);
-
-      const next = {
-        ...node,
-        meta: {
-          ...node.meta,
-          breakpoint: !node.meta?.breakpoint
-        }
-      };
-
-      this.graph.replaceNode(nodeId, next);
-       */
-      if (this._scenario.sim.control.breakpointNodeIds.has(node.id)) {
-        this._scenario.sim.control.breakpointNodeIds.delete(node.id); // Item exists, so remove it
-      } else {
-        this._scenario.sim.control.breakpointNodeIds.add(node.id);    // Item doesn't exist, so add it
-      }
+      this._scenario.sim.toggleNodeBreakpoint(node);
     }
-
   }
 
   clearBreakpointStatus() {
@@ -135,9 +116,7 @@ export class SimulationAnimator {
     const label = $('simStatus');
     if (dot)   dot.className    = this.playing ? 'status-dot running' : 'status-dot stopped';
     if (label) label.textContent = this.playing ? 'RUNNING' : 'STOPPED';
-    /* TODO Don't do this ?  Will be a simulation bus message
-    this._configGraph.applyToAllNodes(n => n.flashing = false);
-     */
+    this._scenario.sim.clearAllBreakpoints();
   }
 
   showBreakpointPaused(hit) {

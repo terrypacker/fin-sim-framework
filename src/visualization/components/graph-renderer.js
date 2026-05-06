@@ -34,9 +34,9 @@ export class GraphRenderer extends BaseComponent {
     //TODO ??? Graph has been modified
     //TODO Remove on Destroy
     //TODO This should live outside the component I think
-    this._graph.addNodeModifcationWatcher(() => {
+    this._nodeModificationWatcher = () => {
       this.render();
-    });
+    };
 
     //Current view tracking
     this._currentNodes = [];
@@ -81,6 +81,9 @@ export class GraphRenderer extends BaseComponent {
   }
 
   _mount() {
+    this._graph.addNodeModifcationWatcher(this._nodeModificationWatcher);
+    this.graphNodesEl.innerHTML = '';
+    this.graphEdgesEl.innerHTML = '';
     //TODO Build out the component parts dynamically
     this._bindEvents();
   }
@@ -314,7 +317,7 @@ export class GraphRenderer extends BaseComponent {
 
     // ── breakpoint indicator ─────────────────────────
     const bpIndicator = el.querySelector('[data-id="breakpointIndicator"]');
-    const hasBreakpoint = !!node.breakpoint;
+    const hasBreakpoint = !!node.data?.breakpoint;
 
     bpIndicator.style.display = hasBreakpoint ? '' : 'none';
     el.classList.toggle('has-breakpoint', hasBreakpoint);
@@ -788,5 +791,10 @@ export class GraphRenderer extends BaseComponent {
     this.listen(this.graphNodesEl, 'mousedown', (e) => this._onMouseDown(e))
     this.listen(window, 'mousemove', (e) => this._onMouseMove(e))
     this.listen(window, 'mouseup', (e) => this._onMouseUp(e))
+  }
+
+  destroy() {
+    this._graph.removeNodeModificationWatcher(this._nodeModificationWatcher);
+    super.destroy();
   }
 }

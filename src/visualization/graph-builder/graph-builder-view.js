@@ -52,7 +52,7 @@ export class GraphBuilderView extends BaseComponent {
 
     // ── Type/option constants ─────────────────────────────────────────────
 
-    this.EVENT_TYPES        = ['EventSeries', 'OneOff'];
+    this.EVENT_TYPES        = ['EventSeries', 'OneOffEvent'];
     this.EVENT_SERIES_TYPES = ['monthly', 'quarterly', 'annually', 'month-end', 'year-end'];
 
     this.PRIORITY_OPTIONS = [
@@ -277,7 +277,7 @@ export class GraphBuilderView extends BaseComponent {
         wrap.querySelector('[data-field="startOffset"]').value = node.startOffset ?? 0;
         break;
       }
-      case 'OneOff': {
+      case 'OneOffEvent': {
         wrap = this._getTemplate('tpl-event-one-off-editor');
         wrap.querySelector('[data-field="date"]').valueAsDate = node.date || new Date();
         break;

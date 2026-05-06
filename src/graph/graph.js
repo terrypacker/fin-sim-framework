@@ -26,6 +26,13 @@ export class Graph {
     this.nodeModifcationWatchers.push(watcher);
   }
 
+  removeNodeModificationWatcher(watcher) {
+    const index = this.nodeModifcationWatchers.indexOf(watcher);
+    if (index > -1) {
+      this.nodeModifcationWatchers.splice(index, 1);
+    }
+  }
+
   notifyNodeWatchers() {
     this.nodeModifcationWatchers.forEach(w => w.call());
   }

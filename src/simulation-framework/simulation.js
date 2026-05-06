@@ -124,6 +124,7 @@ export class Simulation {
     };
   }
 
+  //TODO Remove these and fix the tests
   // Backward-compat accessors so existing code and tests can still use sim.snapshots etc.
   get snapshots()        { return this.history.snapshots; }
   get snapshotCursor()   { return this.history.snapshotCursor; }
@@ -141,6 +142,35 @@ export class Simulation {
 
   unschedule(type) {
     return this.queue.removeAllByType(type);
+  }
+
+  clearAllBreakpoints() {
+    const breakpoints = [...this.control.breakpointNodeIds];
+    this.control.breakpointNodeIds.clear();
+    breakpoints.forEach(bp => {
+      //TODO Would need kind to send message?
+    });
+  }
+
+  toggleNodeBreakpoint(node) {
+    const data = { };
+    if (this.control.breakpointNodeIds.has(node.id)) {
+      this.control.breakpointNodeIds.delete(node.id); // Item exists, so remove it
+      data.breakpoint = false;
+    } else {
+      this.control.breakpointNodeIds.add(node.id);    // Item doesn't exist, so add it
+      data.breakpoint = true;
+    }
+    const now = new Date(this.currentDate);
+    this.serviceBus.publish(new NodeDataBusMessage({
+      date: now,
+      sim: this,
+      stateSnapshot: null, //TODO Do we want this?
+      nodeId: node.id,
+      kind: node.kind,
+      meta: { reason: 'control' },
+      data: data
+    }));
   }
 
   schedule(event) {
