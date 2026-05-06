@@ -15,6 +15,7 @@ export class Graph {
     this.in    = new Map();           // nodeId -> Set<edgeId>
 
     this.nodeModifcationWatchers = []; //Notify listeners to rebuild indexes
+    this.edgeModifcationWatchers = []; //Notify listeners to rebuild indexes
   }
 
   /**
@@ -35,6 +36,26 @@ export class Graph {
 
   notifyNodeWatchers() {
     this.nodeModifcationWatchers.forEach(w => w.call());
+  }
+
+  /**
+   * Add a callback for when the edges are modified
+   * TODO could be a bus message later
+   * @param watcher
+   */
+  addEdgeModifcationWatcher(watcher) {
+    this.edgeModifcationWatchers.push(watcher);
+  }
+
+  removeEdgeModificationWatcher(watcher) {
+    const index = this.edgeModifcationWatchers.indexOf(watcher);
+    if (index > -1) {
+      this.edgeModifcationWatchers.splice(index, 1);
+    }
+  }
+
+  notifyEdgeWatchers() {
+    this.edgeModifcationWatchers.forEach(w => w.call());
   }
 
   addNode(node) {
@@ -70,19 +91,6 @@ export class Graph {
     return this.getNodes();
   }
 
-  addEdge(edge) {
-    if (!edge.type) throw new Error("Edge must have type");
-    if (edge.from === edge.to) throw new Error("Self edges not allowed"); // optional
-
-    if (!this.nodes.has(edge.from) || !this.nodes.has(edge.to)) {
-      throw new Error("Edge references missing nodes");
-    }
-
-    this.edges.add(edge);
-    this.out.get(edge.from).add(edge);
-    this.in.get(edge.to).add(edge);
-  }
-
   getOutgoing(id, type = null) {
     const edges = this.out.get(id) || [];
     return type ? [...edges].filter(e => e.type === type) : [...edges];
@@ -104,6 +112,22 @@ export class Graph {
   }
 
 // ─── Edges ────────────────────────────────────────────────────────────────
+  /*
+  TODO This was  a duplicate method
+  addEdge(edge) {
+    if (!edge.type) throw new Error("Edge must have type");
+    if (edge.from === edge.to) throw new Error("Self edges not allowed"); // optional
+
+    if (!this.nodes.has(edge.from) || !this.nodes.has(edge.to)) {
+      throw new Error("Edge references missing nodes");
+    }
+
+    this.edges.add(edge);
+    this.out.get(edge.from).add(edge);
+    this.in.get(edge.to).add(edge);
+    this.notifyEdgeWatchers();
+  }
+   */
 
   addEdge(edge) {
     if (!edge?.id) throw new Error("Edge must have id");
@@ -119,6 +143,8 @@ export class Graph {
     this.out.get(edge.from).add(edge.id);
     this.in.get(edge.to).add(edge.id);
 
+    this.notifyEdgeWatchers();
+
     return edge;
   }
 
@@ -133,6 +159,7 @@ export class Graph {
     this.out.get(edge.from)?.delete(edgeId);
     this.in.get(edge.to)?.delete(edgeId);
     this.edges.delete(edgeId);
+    this.notifyEdgeWatchers();
   }
 
   // ─── Edge Queries ─────────────────────────────────────────────────────────

@@ -236,7 +236,7 @@ export class BaseService {
   }
 
   _removeEdge(from, to, type) {
-    this._graph.removeEdge(createEdgeId(from, type, to));
+    this._graph.removeEdge(createEdgeId(from, to, type));
   }
 
 }

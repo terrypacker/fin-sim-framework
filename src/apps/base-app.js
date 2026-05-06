@@ -154,6 +154,10 @@ export class BaseApp extends BaseComponent {
     this.schedulerUI = new GraphBuilderPresenter({
       builderCanvas: document.getElementById('builderCanvas'),
       graph:         this.graphBuilderPresenter,
+      eventService: registry.eventService,
+      handlerService: registry.handlerService,
+      actionService: registry.actionService,
+      reducerService: registry.reducerService
     });
 
    //TODO Removed new GraphSync({ graph: this.graphBuilderPresenter, registry });

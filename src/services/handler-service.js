@@ -50,7 +50,7 @@ export class HandlerService extends BaseService {
   // ─── Edges ───────────────────────────────────────────────────────────────
   _wireNodeEdges(item) {
     (item.handledEvents ?? []).forEach(e => {
-      this.linkHandlerToEvent(item.id, e.id);
+      this.linkEventToHandler(e.id, item.id);
     });
 
     (item.generatedActionTypes ?? []).forEach(a => {
@@ -62,12 +62,12 @@ export class HandlerService extends BaseService {
     });
   }
 
-  linkHandlerToEvent(handlerId, eventId) {
-    this._addEdge(eventId, handlerId, EDGE_TYPES.HANDLES);
+  linkEventToHandler(eventId, handlerId) {
+    this._addEdge(eventId, handlerId, EDGE_TYPES.HANDLED_BY);
   }
 
-  unlinkHandlerFromEvent(handlerId, eventId) {
-    this._removeEdge(eventId, handlerId, EDGE_TYPES.HANDLES);
+  unlinkEventFromHandler(eventId, handlerId) {
+    this._removeEdge(eventId, handlerId, EDGE_TYPES.HANDLED_BY);
   }
 
   linkHandlerToAction(handlerId, actionId) {

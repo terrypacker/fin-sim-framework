@@ -226,9 +226,14 @@ function makePresenter() {
   tpl.innerHTML = '<div class="tl-empty">Select a node</div>';
   document.body.appendChild(tpl);
   ServiceRegistry.reset();
+  const registry = ServiceRegistry.getInstance();
   return new GraphBuilderPresenter({
     graph:         makeGraph(),
     builderCanvas: document.createElement('div'),
+    eventService: registry.eventService,
+    handlerService: registry.handlerService,
+    actionService: registry.actionService,
+    reducerService: registry.reducerService
   });
 }
 

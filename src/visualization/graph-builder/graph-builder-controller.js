@@ -27,8 +27,12 @@ import { ActionDefinition } from '../../simulation-framework/actions.js';
 export class GraphBuilderController {
 
   /** @param {{ graph: import('../config-graph.js').ConfigGraph }} */
-  constructor({ graph }) {
+  constructor({ graph, eventService, handlerService, actionService, reducerService}) {
     this._graph = graph;
+    this.eventService = eventService;
+    this.handlerService = handlerService;
+    this.actionService = actionService;
+    this.reducerService = reducerService;
 
     // Creation listener arrays — BaseScenario registers here so it can react
     // to the "+" toolbar buttons.
@@ -60,11 +64,10 @@ export class GraphBuilderController {
    * SimulationSync + GraphSync clean up automatically.
    */
   deleteNode(node) {
-    const { eventService, handlerService, actionService, reducerService } = ServiceRegistry.getInstance();
-    if      (node.kind === 'event')   eventService.deleteEvent(node.id);
-    else if (node.kind === 'handler') handlerService.deleteHandler(node.id);
-    else if (node.kind === 'action')  actionService.deleteAction(node.id);
-    else if (node.kind === 'reducer') reducerService.deleteReducer(node.id);
+    if      (node.kind === 'event')   this.eventService.deleteEvent(node.id);
+    else if (node.kind === 'handler') this.handlerService.deleteHandler(node.id);
+    else if (node.kind === 'action')  this.actionService.deleteAction(node.id);
+    else if (node.kind === 'reducer') this.reducerService.deleteReducer(node.id);
   }
 
   /**
@@ -72,11 +75,10 @@ export class GraphBuilderController {
    * bus fires and the simulation is re-wired.
    */
   updateNode(node, changes) {
-    const { eventService, handlerService, actionService, reducerService } = ServiceRegistry.getInstance();
-    if      (node.kind === 'event')   eventService.updateEvent(node.id, changes);
-    else if (node.kind === 'handler') handlerService.updateHandler(node.id, changes);
-    else if (node.kind === 'action')  actionService.updateAction(node.id, changes);
-    else if (node.kind === 'reducer') reducerService.updateReducer(node.id, changes);
+    if      (node.kind === 'event')   this.eventService.updateEvent(node.id, changes);
+    else if (node.kind === 'handler') this.handlerService.updateHandler(node.id, changes);
+    else if (node.kind === 'action')  this.actionService.updateAction(node.id, changes);
+    else if (node.kind === 'reducer') this.reducerService.updateReducer(node.id, changes);
   }
 
   /**
@@ -96,7 +98,7 @@ export class GraphBuilderController {
    * Returns the new node so callers can re-render.
    */
   replaceAction(nodeId, actionClass) {
-    return ServiceRegistry.getInstance().actionService.replaceAction(nodeId, actionClass);
+    return this.actionService.replaceAction(nodeId, actionClass);
   }
 
   /**
@@ -104,7 +106,7 @@ export class GraphBuilderController {
    * Returns the new node so callers can re-render.
    */
   replaceReducer(nodeId, reducerType) {
-    return ServiceRegistry.getInstance().reducerService.replaceReducer(nodeId, reducerType);
+    return this.reducerService.replaceReducer(nodeId, reducerType);
   }
 
   /**
@@ -112,7 +114,7 @@ export class GraphBuilderController {
    * Returns the new node so callers can re-render.
    */
   replaceHandler(nodeId, handlerClass) {
-    return ServiceRegistry.getInstance().handlerService.replaceHandler(nodeId, handlerClass);
+    return this.handlerService.replaceHandler(nodeId, handlerClass);
   }
 
   // ── ActionDefinition management ───────────────────────────────────────────
@@ -210,16 +212,67 @@ export class GraphBuilderController {
 
   /** Add a graph edge and sync the canonical relationship array. */
   linkNodes(node, selectedNode, kind, linkTo) {
-    if (linkTo) this._graph.addEdge({ from: node.id, to: selectedNode.id });
-    else        this._graph.addEdge({ from: selectedNode.id, to: node.id });
-    this._syncCanonicalArrays(node, selectedNode, kind, linkTo, 'add');
+    switch(node.kind) {
+      case 'event':
+        if(selectedNode.kind === 'handler') {
+          this.handlerService.linkEventToHandler(node.id, selectedNode.id);
+        }
+      break;
+       case 'handler':
+         if(selectedNode.kind === 'event'){
+           this.handlerService.linkEventToHandler(selectedNode.id, node.id);
+         }else if(selectedNode.kind === 'action') {
+          this.handlerService.linkHandlerToAction(node.id, selectedNode.id);
+        }
+        break;
+      case 'action':
+        if(selectedNode.kind === 'handler'){
+          this.handlerService.linkHandlerToAction(selectedNode.id, node.id);
+        }else if(selectedNode.kind === 'reducer') {
+          this.reducerService.linkReducesAction(node.id, selectedNode.id);
+        }
+        break;
+      case 'reducer':
+        if(selectedNode.kind === 'action') {
+          this.reducerService.linkReducesAction(selectedNode.id, node.id);
+        }
+        break;
+    }
   }
 
   /** Remove a graph edge and sync the canonical relationship array. */
   unlinkNodes(node, selectedNode, kind, linkTo) {
-    if (linkTo) this._graph.removeEdge({ from: node.id, to: selectedNode.id });
-    else        this._graph.removeEdge({ from: selectedNode.id, to: node.id });
-    this._syncCanonicalArrays(node, selectedNode, kind, linkTo, 'remove');
+    switch(node.kind) {
+      case 'event':
+        if(selectedNode.kind === 'handler') {
+          //Unlink event from handler
+          this.handlerService.unlinkEventFromHandler(node.id, selectedNode.id);
+        }
+        break;
+      case 'handler':
+        if(selectedNode.kind === 'action') {
+          //Unlink action from handler
+          this.handlerService.unlinkHandlerFromAction(node.id, selectedNode.id);
+        }else if(selectedNode.kind === 'event') {
+          this.handlerService.unlinkEventFromHandler(selectedNode.id, node.id);
+        }
+        break;
+      case 'action':
+        if(selectedNode.kind === 'handler'){
+          this.handlerService.unlinkHandlerFromAction(selectedNode.id, node.id);
+        }else if(selectedNode.kind === 'reducer') {
+          this.reducerService.unlinkReducesAction(node.id, selectedNode.id);
+        }
+        break;
+      case 'reducer':
+        if(selectedNode.kind === 'action') {
+          this.reducerService.unlinkReducesAction(selectedNode.id, node.id);
+        }
+        break;
+    }
+
+    //TODO Doubt we nee this anymore
+    //this._syncCanonicalArrays(node, selectedNode, kind, linkTo, 'remove');
   }
 
   // ── Graph read queries (proxied for view use) ─────────────────────────────

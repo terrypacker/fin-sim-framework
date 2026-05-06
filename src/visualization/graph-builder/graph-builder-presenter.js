@@ -35,8 +35,9 @@ export class GraphBuilderPresenter {
    *   builderCanvas: HTMLElement
    * }}
    */
-  constructor({ graph, builderCanvas }) {
-    this._controller = new GraphBuilderController({ graph });
+  constructor({ graph, builderCanvas, eventService, handlerService, actionService, reducerService }) {
+    this._controller = new GraphBuilderController({
+      graph, eventService, handlerService, actionService, reducerService });
     this._view       = new GraphBuilderView({ builderCanvas, graph });
 
     // Register the graph node-click listener so clicking a node opens its editor.

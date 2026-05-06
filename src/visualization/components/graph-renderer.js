@@ -37,6 +37,9 @@ export class GraphRenderer extends BaseComponent {
     this._nodeModificationWatcher = () => {
       this.render();
     };
+    this._edgeModificationWatcher = () => {
+      this.render();
+    };
 
     //Current view tracking
     this._currentNodes = [];
@@ -82,6 +85,7 @@ export class GraphRenderer extends BaseComponent {
 
   _mount() {
     this._graph.addNodeModifcationWatcher(this._nodeModificationWatcher);
+    this._graph.addEdgeModifcationWatcher(this._edgeModificationWatcher);
     this.graphNodesEl.innerHTML = '';
     this.graphEdgesEl.innerHTML = '';
     //TODO Build out the component parts dynamically
@@ -795,6 +799,7 @@ export class GraphRenderer extends BaseComponent {
 
   destroy() {
     this._graph.removeNodeModificationWatcher(this._nodeModificationWatcher);
+    this._graph.removeEdgeModificationWatcher(this._edgeModificationWatcher);
     super.destroy();
   }
 }

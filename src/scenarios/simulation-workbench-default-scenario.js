@@ -68,7 +68,7 @@ export class SimulationWorkbenchDefaultScenario extends BaseScenario {
     .enabled(true)
     .color('#0206f5')
     .build();
-    eventService.register(monthStartEventSeries);
+    //eventService.register(monthStartEventSeries);
 
     const monthEndEventSeries = EventBuilder
     .eventSeries()
@@ -97,15 +97,13 @@ export class SimulationWorkbenchDefaultScenario extends BaseScenario {
     const monthStartAction = ActionBuilder.action('MONTH_START')
     .name('Month started')
     .build();
-    actionService.register(monthStartAction);
+    //actionService.register(monthStartAction);
 
-
-    //TODO When we fix the classes for Actions we can make this a field metric
     const sumTaxAction = ActionBuilder.fieldValueAction('SUM_TAX')
     .name('Sum Salary Tax')
     .fieldName('metrics.taxAmount')
     .build();
-    actionService.register(sumTaxAction);
+    //actionService.register(sumTaxAction);
 
     // ── Handlers ──────────────────────────────────────────────────────────────
     // Build the handler with its connections populated before calling register()
@@ -117,7 +115,7 @@ export class SimulationWorkbenchDefaultScenario extends BaseScenario {
     .forEvent(monthStartEventSeries)
     .generateActionDef(ActionDefinition.fromAction(monthStartAction))
     .build();
-    handlerService.register(monthStartHandler);
+    //handlerService.register(monthStartHandler);
 
     const monthEndHandler = HandlerBuilder
     .handler(null)
@@ -143,27 +141,27 @@ export class SimulationWorkbenchDefaultScenario extends BaseScenario {
     .reduceActionType(recordSalaryPaymentAction.type)
     .generateActionDef(ActionDefinition.fromAction(sumTaxAction))
     .build();
-    reducerService.register(recordSalaryTaxReducer);
+    //reducerService.register(recordSalaryTaxReducer);
 
     const sumSalaryPaymentReducer = ReducerBuilder
     .numericSum('metrics.salary')
     .name('Update Total Salary')
     .reduceActionType(sumSalaryPaymentAction.type)
     .build();
-    reducerService.register(sumSalaryPaymentReducer);
+    //reducerService.register(sumSalaryPaymentReducer);
 
     const sumSalaryTaxReducer = ReducerBuilder
     .numericSum('metrics.totalTax')
     .name('Update Total Tax')
     .reduceActionType(sumTaxAction.type)
     .build();
-    reducerService.register(sumSalaryTaxReducer);
+    //reducerService.register(sumSalaryTaxReducer);
 
     const depositReducer = ReducerBuilder
     .array('metrics.deposits')
     .name('Deposit Payment')
     .reduceActionType(recordSalaryPaymentAction.type)
     .build();
-    reducerService.register(depositReducer);
+    //reducerService.register(depositReducer);
   }
 }

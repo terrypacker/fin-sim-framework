@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 export const EDGE_TYPES = {
-  HANDLES: 'HANDLES',
+  HANDLED_BY: 'HANDLED_BY',
   GENERATES_ACTION: 'GENERATES_ACTION',
   REDUCES_ACTION: 'REDUCES_ACTION'
 }

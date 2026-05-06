@@ -253,7 +253,7 @@ export class GraphBuilderView extends BaseComponent {
 
     this._renderLinkableMultiSelect(node, 'handler',
         el.querySelector('#event-handler-count'),
-        el.querySelector('#event-handlers'), true, EDGE_TYPES.HANDLES);
+        el.querySelector('#event-handlers'), false, EDGE_TYPES.HANDLED_BY);
 
     this._renderEventConfig(node, configWrap);
     this._canvas.appendChild(el);
@@ -323,7 +323,7 @@ export class GraphBuilderView extends BaseComponent {
 
     this._renderLinkableMultiSelect(node, 'event',
         el.querySelector('#handler-event-count'),
-        el.querySelector('#handler-events'), false, EDGE_TYPES.HANDLES);
+        el.querySelector('#handler-events'), true, EDGE_TYPES.HANDLED_BY);
 
     // Action Definitions — inline list with template picker
     const defContainer = el.querySelector('#handler-actions');
@@ -379,10 +379,12 @@ export class GraphBuilderView extends BaseComponent {
 
     this._renderLinkableMultiSelect(node, 'handler',
         el.querySelector('#action-handler-count'),
-        el.querySelector('#action-handlers'), false, EDGE_TYPES.GENERATES_ACTION);
+        el.querySelector('#action-handlers'), true, EDGE_TYPES.GENERATES_ACTION);
+
+    //TODO Reduced BY
     this._renderLinkableMultiSelect(node, 'reducer',
         el.querySelector('#action-reducer-count'),
-        el.querySelector('#action-reducers'), true, EDGE_TYPES.REDUCES_ACTION);
+        el.querySelector('#action-reducers'), false, EDGE_TYPES.REDUCES_ACTION);
 
     this._canvas.appendChild(el);
     this._canvas.appendChild(this._createDeleteButton(node));
@@ -501,7 +503,7 @@ export class GraphBuilderView extends BaseComponent {
     // Which action types trigger this reducer
     this._renderLinkableMultiSelect(node, 'action',
         el.querySelector('#reducer-reduced-actions-count'),
-        el.querySelector('#reducer-reduced-actions'), false, EDGE_TYPES.REDUCES_ACTION);
+        el.querySelector('#reducer-reduced-actions'), true, EDGE_TYPES.REDUCES_ACTION);
 
     // Generated Action Definitions — inline list with template picker
     const genContainer = el.querySelector('#reducer-generated-actions');
@@ -785,12 +787,12 @@ export class GraphBuilderView extends BaseComponent {
   _renderLinkableMultiSelect(node, kind, countSpan, container, linkTo, edgeType) {
     const myChildren = linkTo
         ? this._graph._graphQueryApi.getRelated(node.id, {
-          edgeType: null, //TODO Could use this here
+          edgeType: edgeType,
           direction: 'in',
           where: (n) => n.kind === kind
         })
         : this._graph._graphQueryApi.getRelated(node.id, node.id, {
-          edgeType: null, //TODO Could use this here
+          edgeType: edgeType,
           direction: 'out',
           where: (n) => n.kind === kind
         });

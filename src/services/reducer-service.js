@@ -44,7 +44,7 @@ export class ReducerService extends BaseService {
       if(action == null) {
         throw Error(`Action for type ${a} missing.`)
       }
-      this.linkActionToReducer(action.id, item.id);
+      this.linkReducesAction(action.id, item.id);
     });
 
     (item.generatedActionTypes ?? []).forEach(a => {
@@ -52,24 +52,24 @@ export class ReducerService extends BaseService {
       if(action == null) {
         throw Error(`Action for type ${a} missing.`)
       }
-      this.linkReducerToAction(item.id, action.id);
+      this.linkGeneratesAction(item.id, action.id);
     });
   }
 
-  linkActionToReducer(actionId, reducerId) {
+  linkGeneratesAction(nodeId, actionId) {
+    this._addEdge(nodeId, actionId, EDGE_TYPES.GENERATES_ACTION);
+  }
+
+  unlinkGeneratesAction(nodeId, actionId) {
+    this._removeEdge(nodeId, actionId, EDGE_TYPES.GENERATES_ACTION);
+  }
+
+  linkReducesAction(actionId, reducerId) {
     this._addEdge(actionId, reducerId, EDGE_TYPES.REDUCES_ACTION);
   }
 
-  unlinkActionToReducer(actionId, reducerId) {
+  unlinkReducesAction(actionId, reducerId) {
     this._removeEdge(actionId, reducerId, EDGE_TYPES.REDUCES_ACTION);
-  }
-
-  linkReducerToAction(reducerId, actionId) {
-    this._addEdge(reducerId, actionId, EDGE_TYPES.GENERATES_ACTION);
-  }
-
-  unlinkReducerFromAction(reducerId, actionId) {
-    this._removeEdge(reducerId, actionId, EDGE_TYPES.GENERATES_ACTION);
   }
 
   // ─── Create ───────────────────────────────────────────────────────────────

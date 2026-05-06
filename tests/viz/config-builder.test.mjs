@@ -66,9 +66,14 @@ function makeBuilderCanvas() {
 
 function makeScheduler(graph, canvas) {
   ServiceRegistry.reset();
+  const registry = ServiceRegistry.getInstance();
   return new GraphBuilderPresenter({
     graph:         graph  ?? makeGraph(),
     builderCanvas: canvas ?? makeBuilderCanvas(),
+    eventService: registry.eventService,
+    handlerService: registry.handlerService,
+    actionService: registry.actionService,
+    reducerService: registry.reducerService
   });
 }
 
