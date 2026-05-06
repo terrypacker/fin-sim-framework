@@ -40,7 +40,20 @@ import {SimulationState} from "../simulation-framework/simulation-state.js";
 export class SimulationWorkbenchDefaultScenario extends BaseScenario {
   constructor({configPresenter, context} = {}) {
     super({ configPresenter, context });
-    this.initialState = new SimulationState();
+  }
+
+  /**
+   * Build the scenario-specific default initial state.
+   * Called by BaseScenario.buildSim() when no saved initialState is provided.
+   * Constructs all domain objects (people, accounts) from params and stores
+   * them on `this._people` / `this._accounts` so loadDefaults() can use them.
+   */
+  buildDefaultInitialState(params) {
+    return new SimulationState({
+      metrics: {
+        salary: 0,
+        amount: 0,
+      }});
   }
 
   /**

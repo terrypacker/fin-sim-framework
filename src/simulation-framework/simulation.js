@@ -285,7 +285,10 @@ export class Simulation {
           nodeId: event.id,
           kind: 'event',
           meta: {reason: 'execution'},
-          data: {fired: true}
+          data: {
+            fired: true,
+            stateChanges: []
+          }
         }));
       }
       this.bus.publish(new EventStartBusMessage({
@@ -314,6 +317,7 @@ export class Simulation {
       // Past this handler's breakpoint check — clear resuming flag so subsequent
       // handlers (and their nested action/reducer loops) get checked normally.
       this.control.resuming = false;
+      const prevState = structuredClone(this.state);
 
       const actions = entry.call({
         sim: this,
@@ -323,24 +327,30 @@ export class Simulation {
         state: this.state
       });
 
+      //TODO Review if we really want to skip these
       if (entry.name !== INTERNAL_SCHEDULING_HANDLER_NAME) {
         this.handlerExecutions++;
         const now = new Date(this.currentDate);
+        const stateSnapshot = structuredClone(this.state);
         if(entry.id) {
           this.serviceBus.publish(new NodeDataBusMessage({
             date: now,
             sim: this,
-            stateSnapshot: stateBefore,
+            stateSnapshot: stateSnapshot,
             nodeId: entry.id,
-            kind: 'handler',
+            kind: entry.kind,
             meta: {reason: 'execution'},
-            data: {fired: true}
+            data: {
+              fired: true,
+              stateChanges: this.diffStates(stateBefore, stateSnapshot)
+            },
+            stateBefore: prevState
           }));
         }
         this.bus.publish(new EventHandledMessage({
           date: now,
           sim: this,
-          stateSnapshot: stateBefore,
+          stateSnapshot: stateSnapshot,
           payload: { handler: entry, event, handlerCount: this.handlerExecutions }
         }));
       }
@@ -482,6 +492,7 @@ export class Simulation {
       }
 
       //Execute action transform if it can be
+      const prevState = structuredClone(this.state);
       const stateClone = structuredClone(this.state);
       if (action.transform) {
         const newActions = action.transform(stateClone, {
@@ -496,19 +507,22 @@ export class Simulation {
           queue.unshift(...emitted);
         }
       }
-
-      const prevState = structuredClone(this.state);
       this.actionExecutions++;
       const now = new Date(this.currentDate);
+      const stateSnapshot = structuredClone(this.state);
       if(action.id) {
         this.serviceBus.publish(new NodeDataBusMessage({
           date: now,
           sim: this,
           stateSnapshot: prevState,
           nodeId: action.id,
-          kind: 'action',
+          kind: action.kind,
           meta: {reason: 'execution'},
-          data: {fired: true}
+          data: {
+            fired: true,
+            stateChanges: this.diffStates(prevState, stateSnapshot)
+          },
+          stateBefore: prevState
         }));
       }
       this.bus.publish(new ActionResultMessage({
@@ -520,7 +534,7 @@ export class Simulation {
           sourceEvent: sourceEvent,
           actionCount: this.actionExecutions
         },
-        stateSnapshot: prevState
+        stateSnapshot: stateSnapshot
       }));
 
       if (!reducers || reducers.length === 0) continue;
@@ -589,7 +603,10 @@ export class Simulation {
           nodeId: reducerWrapper.reducer,
           kind: 'reducer',
           meta: {reason: 'execution'},
-          data: {fired: true}
+          data: {
+            fired: true,
+            stateChanges: this.diffStates(prevState, stateSnapshot)
+          },
         }));
       }
       this.bus.publish(new ReducerResultMessage({
@@ -899,5 +916,38 @@ export class Simulation {
       sourceEvent: sourceEvent
     });
     this.actionGraph.addActionNode(node);
+  }
+
+  /**
+   * Compute the difference between two state snapshots.
+   * Returns an array of { field, before, after, delta } records.
+   */
+  diffStates(prev, next) {
+    const changes = [];
+    if (!prev || !next) return changes;
+
+    // Ledger arrays grow on every transaction — skip them to keep diffs readable.
+    const SKIP_KEYS = new Set(['credits', 'debits']);
+
+    const walk = (b, a, prefix) => {
+      const leafKey = prefix.split('.').pop();
+      if (SKIP_KEYS.has(leafKey)) return;
+      const bIsObj = typeof b === 'object' && b !== null && !Array.isArray(b);
+      const aIsObj = typeof a === 'object' && a !== null && !Array.isArray(a);
+      if (bIsObj && aIsObj) {
+        for (const key of new Set([...Object.keys(b), ...Object.keys(a)])) {
+          walk(b[key], a[key], prefix ? `${prefix}.${key}` : key);
+        }
+      } else if (JSON.stringify(b) !== JSON.stringify(a)) {
+        const delta = typeof a === 'number' && typeof b === 'number' ? a - b : null;
+        changes.push({ field: prefix, before: b ?? null, after: a ?? null, delta });
+      }
+    };
+
+    for (const key of new Set([...Object.keys(prev), ...Object.keys(next)])) {
+      walk(prev[key], next[key], key);
+    }
+
+    return changes;
   }
 }

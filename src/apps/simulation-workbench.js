@@ -44,7 +44,7 @@ const PREBUILT_SCENARIOS = [
     simStart: '2026-01-01',
     simEnd:   '2041-01-01',
     factory:  (_params, _initialState, ui) => new IntlRetirementScenario({
-      eventSchedulerUI: ui,
+      configPresenter: ui,
       context: ServiceRegistry.getInstance().simulationContext
     }),
   }),

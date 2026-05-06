@@ -106,9 +106,9 @@ export const INTL_RETIREMENT_DEFAULTS = {
  *                     so every item appears in the config graph and UI.
  */
 export class IntlRetirementScenario extends BaseScenario {
-  constructor({ eventSchedulerUI, context } = {}) {
+  constructor({ configPresenter, context } = {}) {
     super({
-      eventSchedulerUI,
+      configPresenter,
       context,
       simStart: new Date(Date.UTC(2026, 0, 1)),
       simEnd:   new Date(Date.UTC(2041, 0, 1)),

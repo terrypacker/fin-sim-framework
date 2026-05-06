@@ -250,8 +250,8 @@ export class GraphRenderer extends BaseComponent {
     if (stateChangedIndicator) {
       stateChangedIndicator.addEventListener('click', () => {
         const current = this._currentNodeMap.get(node.id);
-        if (current?.stateChanges) {
-          this.displayNodeStateChanges(current.stateChanges);
+        if (current.data?.stateChanges) {
+          this.displayNodeStateChanges(current.data?.stateChanges);
         }
       });
     }
@@ -273,7 +273,7 @@ export class GraphRenderer extends BaseComponent {
    * node is being added.
    *
    * @param node
-   * @param prevNode
+   * @param prevNode (Not used since we mutate in place)
    * @private
    */
   _updateNode(node, prevNode) {
@@ -330,7 +330,7 @@ export class GraphRenderer extends BaseComponent {
     const stateChangedIndicator = el.querySelector('[data-id="stateChangeIndicator"]');
 
     if (stateChangedIndicator) {
-      stateChangedIndicator.style.display = node.stateChanged ? '' : 'none';
+      stateChangedIndicator.style.display = node.data?.stateChanges?.length > 0 ? '' : 'none';
     }
 
     // ── breakpoint indicator ─────────────────────────
