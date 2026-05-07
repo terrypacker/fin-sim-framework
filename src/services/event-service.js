@@ -22,7 +22,7 @@ import { OneOffEvent } from '../simulation-framework/events/one-off-event.js';
  */
 export class EventService extends BaseService {
   constructor(graph, query, bus) {
-    super(graph, query, bus, 'event');
+    super(graph, query, bus, 'event', 1, false);
   }
 
   // ─── Create ───────────────────────────────────────────────────────────────

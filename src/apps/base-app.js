@@ -18,13 +18,10 @@
  */
 
 import { $, fmtUTC, fmtLocal }     from '../visualization/ui-utils.js';
-import { GraphView }                from '../visualization/graph-view.js';
 import { ChartView }                from '../visualization/chart-view.js';
 import { TimelineView }             from '../visualization/timeline-view.js';
 import { TimeControls }             from '../visualization/time-controls.js';
 import { GraphBuilderPresenter }    from '../visualization/graph-builder/graph-builder-presenter.js';
-import { GraphSync }                from '../visualization/graph-sync.js';
-import { ConfigGraph }              from '../visualization/config-graph.js';
 import { ServiceRegistry }          from '../services/service-registry.js';
 import {
   BusMessage,
@@ -155,9 +152,6 @@ export class BaseApp extends BaseComponent {
     this.configPresenter._graphRenderer.registerBreakpointChangeListener((node) => {
       this._animator?.toggleBreakpoint(node);
     });
-
-
-   //TODO Removed new GraphSync({ graph: this.graphBuilderPresenter, registry });
 
     // ── People / Accounts MVP ─────────────────────────────────────────────────
     // Controllers and presenters are recreated each rebuild to bind to the fresh bus.

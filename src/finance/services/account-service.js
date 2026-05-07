@@ -33,7 +33,7 @@ export class AccountService extends BaseService {
    * @param {import('../../simulation-framework/event-bus.js').EventBus} [bus]
    */
   constructor(graph, query, bus) {
-    super(graph, query, bus, 'account', 2);
+    super(graph, query, bus, 'account', 2, false);
   }
 
   // ─── Create ───────────────────────────────────────────────────────────────

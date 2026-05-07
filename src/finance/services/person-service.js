@@ -22,7 +22,7 @@ import { Person } from '../person.js';
  */
 export class PersonService extends BaseService {
   constructor(graph, query, bus) {
-    super(graph, query, bus, 'person');
+    super(graph, query, bus, 'person', 1, false);
   }
 
   // ─── Create ───────────────────────────────────────────────────────────────

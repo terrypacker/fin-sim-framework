@@ -33,7 +33,7 @@ import {Reducer} from "../simulation-framework/reducers.js";
  */
 export class ActionService extends BaseService {
   constructor(graph, query, bus) {
-    super(graph, query, bus, 'action');
+    super(graph, query, bus, 'action', 1, false);
 
     //TODO Could move out to ActionTypeEnsurer class if we want to decouple this,
     //  we want to ensure HandlerEntry and Reducer classes have their actions registered
@@ -41,6 +41,12 @@ export class ActionService extends BaseService {
     bus.subscribe('SERVICE_ACTION', msg => {
       this._handle(msg);
     });
+  }
+
+  // ─── Query API ───────────────────────────────────────────────────────────────
+  //TODO Need a type index for this
+  getByType(type) {
+    return this._query.getOneByKind('action', 'type', type);
   }
 
   // ─── Create ───────────────────────────────────────────────────────────────

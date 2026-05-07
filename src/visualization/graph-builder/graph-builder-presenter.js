@@ -93,8 +93,9 @@ export class GraphBuilderPresenter {
     };
 
     this._view.onActionDefinitionUpdate = (node, defId, field, value) => {
-      this._controller.updateActionDefinition(node, defId, field, value);
-      this._view.editNode(node);
+      if(this._controller.updateActionDefinition(node, defId, field, value)) {
+        this._view.editNode(node);
+      }
     };
   }
 

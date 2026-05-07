@@ -56,6 +56,7 @@ export class SimulationAnimator {
   }
 
   _init() {
+    //TODO See this.wireSimBus below??? and remove bus from constructor
     //Register for the message we want
     this._bus.subscribe(SIMULATION_BUS_MESSAGES.NODE_DATA_CHANGED, msg => {
       const { reason } = msg.meta || {};

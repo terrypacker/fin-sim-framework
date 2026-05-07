@@ -184,15 +184,20 @@ export class GraphBuilderController {
    */
   addActionDefinition(node, defData) {
     const def = new ActionDefinition({ type: defData.type, config: defData.config });
-    node.generatedActionDefinitions.push(def);
+    const generatedActionDefinitions = [...node.generatedActionDefinitions];
+    generatedActionDefinitions.push(def);
 
-    if (!node.generatedActionTypes.includes(def.type)) {
-      node.generatedActionTypes.push(def.type);
-      const actionNode = this._graphRenderer.getNodeByType('action', def.type);
-      if (actionNode) this._graphRenderer.addEdge({ from: node.id, to: actionNode.id });
+    const generatedActionTypes = [...node.generatedActionTypes];
+    if (!generatedActionTypes.includes(def.type)) {
+      const actionNode = this.actionService.getByType(def.type);
+      if (actionNode) {
+        generatedActionTypes.push(def.type);
+      }
     }
-
-    this.notifyChanged(node);
+    this.updateNode(node, {
+      generatedActionDefinitions: generatedActionDefinitions,
+      generatedActionTypes: generatedActionTypes
+    });
     return def;
   }
 
@@ -208,16 +213,17 @@ export class GraphBuilderController {
     const idx = node.generatedActionDefinitions.findIndex(d => d.id === defId);
     if (idx < 0) return;
     const [def] = node.generatedActionDefinitions.splice(idx, 1);
-
     const typeStillUsed = node.generatedActionDefinitions.some(d => d.type === def.type);
     if (!typeStillUsed) {
-      const ti = node.generatedActionTypes.indexOf(def.type);
-      if (ti >= 0) node.generatedActionTypes.splice(ti, 1);
-      const actionNode = this._graphRenderer.getNodeByType('action', def.type);
-      if (actionNode) this._graphRenderer.removeEdge({ from: node.id, to: actionNode.id });
+      const actionNode = this.actionService.getByType(def.type);
+      if (actionNode) {
+        //Update the item
+        const generatedActionTypes = [...node.generatedActionTypes];
+        const ti = generatedActionTypes.indexOf(def.type);
+        if (ti >= 0) generatedActionTypes.splice(ti, 1);
+        this.updateNode(node, {generatedActionTypes: generatedActionTypes});
+      }
     }
-
-    this.notifyChanged(node);
   }
 
   /**
@@ -231,34 +237,35 @@ export class GraphBuilderController {
    * @param {string} defId
    * @param {string} field  - 'type' or a config key
    * @param {*}      value
+   * @return {boolean} true to reload edit window
    */
   updateActionDefinition(node, defId, field, value) {
     const def = node.generatedActionDefinitions.find(d => d.id === defId);
-    if (!def) return;
+    if (!def) return false;
 
     if (field === 'type') {
       const oldType = def.type;
-      def.type = value;
-
       // Remove old type if no sibling def still uses it
       if (!node.generatedActionDefinitions.some(d => d !== def && d.type === oldType)) {
-        const i = node.generatedActionTypes.indexOf(oldType);
-        if (i >= 0) node.generatedActionTypes.splice(i, 1);
-        const oldNode = this._graphRenderer.getNodeByType('action', oldType);
-        if (oldNode) this._graphRenderer.removeEdge({ from: node.id, to: oldNode.id });
+        this.removeActionDefinition(node, oldType);
       }
 
       // Register new type if not already present
       if (!node.generatedActionTypes.includes(value)) {
-        node.generatedActionTypes.push(value);
-        const newNode = this._graphRenderer.getNodeByType('action', value);
-        if (newNode) this._graphRenderer.addEdge({ from: node.id, to: newNode.id });
+        this.addActionDefinition(node, value);
       }
+      return false;
     } else {
+      //We have no choice but to modify the definition in place, we
+      // can't structured clone the def... but we want to notify everyone
+      // that it was modified so we pass it through the service layer
       def.config[field] = value;
+      const changes = {
+        generatedActionDefinitions: node.generatedActionDefinitions
+      };
+      this.updateNode(node, changes);
+      return false;
     }
-
-    this.notifyChanged(node);
   }
 
   // ── Graph edge mutations ───────────────────────────────────────────────────
@@ -323,9 +330,6 @@ export class GraphBuilderController {
         }
         break;
     }
-
-    //TODO Doubt we nee this anymore
-    //this._syncCanonicalArrays(node, selectedNode, kind, linkTo, 'remove');
   }
 
   // ── Graph read queries (proxied for view use) ─────────────────────────────

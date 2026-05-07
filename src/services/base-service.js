@@ -35,7 +35,7 @@ export class BaseService {
    * @param {import('../simulation-framework/event-bus.js').EventBus} bus
    * @param {string} kind  - kind of node [event, handler, action, reducer]
    */
-  constructor(graph, query, bus, kind, prefixLength = 1) {
+  constructor(graph, query, bus, kind, prefixLength = 1, hasEdges = true) {
     this.bus = bus;
     this._graph = graph;
     this._query = query;
@@ -43,6 +43,7 @@ export class BaseService {
     this._layer = 'config';
     this._nextId   = 1;
     this._idPrefix = this._kind.substring(0, prefixLength);
+    this.hasEdges = hasEdges;
   }
 
   // ─── Public query API ─────────────────────────────────────────────────────
@@ -265,7 +266,9 @@ export class BaseService {
   }
 
   _wireNodeEdges(item) {
-      //Override in subclasses
+    if(this.hasEdges) {
+      throw new Error('Implement wire edges for nodes with edges');
+    }
   }
 
   _addEdge(from, to, type) {
@@ -273,8 +276,10 @@ export class BaseService {
   }
 
   _rewireEdges(item) {
-    this._removeEdgesForNode(item.id);
-    this._wireNodeEdges(item);
+    if(this.hasEdges) {
+      this._removeEdgesForNode(item.id);
+      this._wireNodeEdges(item);
+    }
   }
 
   _removeEdgesForNode(nodeId) {
