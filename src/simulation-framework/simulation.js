@@ -468,7 +468,9 @@ export class Simulation {
       const action = queue.shift();
 
       // ── Action breakpoint ─────────────────────────────────────────────
-      if (this._shouldPause(action.id)) {
+      //The only way we will get a registered action is if it came from a ActionDefinition
+      //  See #134
+      if (this._shouldPause(action.actionId)) {
         this.control.pendingExecution = {
           type: 'action',
           actionQueue: [action, ...queue],  // put action back so it runs on resume
@@ -811,11 +813,18 @@ export class Simulation {
         if (e instanceof BreakpointSignal) {
           //Send message to update node data
           const node = e.context.node;
+          //Hack for ActionDefinition generated actions See #134
+          let nodeId;
+          if(node.kind === 'action') {
+            nodeId = node.actionId;
+          }else {
+            nodeId = node.id;
+          }
           this.serviceBus.publish(new NodeDataBusMessage({
             date: new Date(this.currentDate),
             sim: this,
             stateSnapshot: null, //TODO Do we want this?
-            nodeId: node.id,
+            nodeId: nodeId,
             kind: node.kind,
             meta: {
               reason: 'breakpoint'

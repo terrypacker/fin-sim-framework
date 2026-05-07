@@ -128,10 +128,6 @@ export class GraphRenderer extends BaseComponent {
 
   /* ───────────────────────── PUBLIC API ───────────────────────────── */
   //TODO Consider need for these
-  selectNode(id) {
-    this.selectedNodeId = id;
-    this.render();
-  }
 
   /* ───────────────────────── CORE RENDERING ───────────────────────────── */
 
@@ -238,7 +234,7 @@ export class GraphRenderer extends BaseComponent {
     el.addEventListener('click', (e) => {
       e.stopPropagation();
 
-      this.selectNode(node.id);
+      this._selectNode(node.id);
       this.nodeClickListeners.forEach((l) =>
           l(e, this._prevNodes.get(node.id))
       );
@@ -341,6 +337,11 @@ export class GraphRenderer extends BaseComponent {
     el.classList.toggle('has-breakpoint', hasBreakpoint);
 
     this._nodeRenderState.set(node.id, renderedState);
+  }
+
+  _selectNode(id) {
+    this.selectedNodeId = id;
+    this.render();
   }
 
   _getNodesByIds(ids) {

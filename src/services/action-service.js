@@ -118,7 +118,6 @@ export class ActionService extends BaseService {
     this.mergeChanges(action, changes);
     this._graph.notifyNodeWatchers(); //Notify that the content in the graph changed
     this._publish('UPDATE', action.constructor.name, action, originalItem);
-    this._rewireEdges(action);
     return action;
   }
 
