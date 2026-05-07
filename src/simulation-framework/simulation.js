@@ -512,12 +512,13 @@ export class Simulation {
       this.actionExecutions++;
       const now = new Date(this.currentDate);
       const stateSnapshot = structuredClone(this.state);
-      if(action.id) {
+      //Special handling for ActionDefinition  see #134
+      if(action.actionId) {
         this.serviceBus.publish(new NodeDataBusMessage({
           date: now,
           sim: this,
           stateSnapshot: prevState,
-          nodeId: action.id,
+          nodeId: action.actionId,
           kind: action.kind,
           meta: {reason: 'execution'},
           data: {
