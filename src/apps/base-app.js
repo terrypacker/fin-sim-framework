@@ -312,6 +312,7 @@ export class BaseApp extends BaseComponent {
       this.showBusyInputOverlay(stepBackButton, () => this.timeControls.stepBack());
     });
 
+    //TODO Need to have a central location to reset the sim  See #135
     $('resetBtn').addEventListener('click', () => this.timeControls.reset());
 
     let sliderTimeout;

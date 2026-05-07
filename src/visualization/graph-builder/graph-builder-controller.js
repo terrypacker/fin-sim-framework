@@ -288,6 +288,7 @@ export class GraphBuilderController {
 
   // ── Configuration Lifecycle ─────────────────────────────
   /**
+   * TODO Need to have a central location to reset the sim  See #135
    * Clear out any used meta and data from our nodes
    * - data.breakpointHit
    * - data.fired
@@ -297,7 +298,9 @@ export class GraphBuilderController {
     const data = {
       breakPointHit: false,
       fired: false,
-      breakpoint: false
+      breakpoint: false,
+      breakpointContext: null,
+      stateChanges: []
     };
     this.eventService.updateAllData(data);
     this.handlerService.updateAllData(data);
