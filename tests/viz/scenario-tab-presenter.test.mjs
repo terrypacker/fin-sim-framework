@@ -193,50 +193,66 @@ test('getInitialState: returns initialState for user scenario', () => {
 test('createScenario: calls prebuilt factory when prebuilt is selected', () => {
   const pb = makePrebuilt('alpha');
   const p  = new ScenarioTabPresenter({ prebuiltScenarios: [pb] });
-  const ui = makeStubUI();
-  p.createScenario({}, {}, ui);
-  expect(pb.factory).toHaveBeenCalledWith({}, {}, ui);
+
+  p.createScenario({}, {});
+  expect(pb.factory).toHaveBeenCalledWith({}, {}, new Date(pb.simStart), new Date(pb.simEnd));
 });
 
 test('createScenario: uses matching prebuilt factory for user scenario with scenarioId', () => {
   const pbA = makePrebuilt('alpha', 1);
   const pbB = makePrebuilt('beta',  2);
+  //Set start/end dates
+  const expectedStartDateString = '2025-01-01';
+  const expectedEndDateString = '2026-01-01';
+
   setStorageData({
     lastUsed:  'u:0',
-    scenarios: [{ name: 'S', scenarioId: 'beta', params: [], initialState: {} }],
+    scenarios: [{ name: 'S', scenarioId: 'beta', params: [], initialState: {},
+      simStart: expectedStartDateString, simEnd: expectedEndDateString }],
   });
   const p  = new ScenarioTabPresenter({ prebuiltScenarios: [pbA, pbB] });
-  const ui = makeStubUI();
-  p.createScenario({}, {}, ui);
+  p.createScenario({}, {});
   expect(pbA.factory).not.toHaveBeenCalled();
-  expect(pbB.factory).toHaveBeenCalledWith({}, {}, ui);
+  expect(pbB.factory).toHaveBeenCalledWith({}, {}, new Date(expectedStartDateString), new Date(expectedEndDateString));
 });
 
 test('createScenario: falls back to first prebuilt for user scenario without scenarioId', () => {
   const pbA = makePrebuilt('alpha', 1);
   const pbB = makePrebuilt('beta',  2);
+
+  const expectedStartDateString = '2025-01-01';
+  const expectedEndDateString = '2026-01-01';
   setStorageData({
     lastUsed:  'u:0',
-    scenarios: [{ name: 'S', params: [], initialState: {} }], // no scenarioId
+    scenarios: [{ name: 'S', params: [], initialState: {},
+      simStart: expectedStartDateString, simEnd: expectedEndDateString }], // no scenarioId
   });
   const p  = new ScenarioTabPresenter({ prebuiltScenarios: [pbA, pbB] });
-  const ui = makeStubUI();
-  p.createScenario({}, {}, ui);
-  expect(pbA.factory).toHaveBeenCalledWith({}, {}, ui);
+  p.createScenario({}, {});
+  expect(pbA.factory).toHaveBeenCalledWith({}, {}, new Date(expectedStartDateString), new Date(expectedEndDateString));
 });
 
 test('createScenario: uses fallbackFactory when no prebuilt scenarios are registered', () => {
   const fallback = jest.fn(() => ({ buildSim: jest.fn() }));
   const p  = new ScenarioTabPresenter();   // no prebuilts
-  const ui = makeStubUI();
-  p.createScenario({}, {}, ui, fallback);
-  expect(fallback).toHaveBeenCalledWith({}, {}, ui);
+
+  //Set start/end dates
+  const startDateInput = document.body.querySelector('#simStartInput');
+  const expectedStartDateString = '2025-01-01';
+  startDateInput.value = expectedStartDateString;
+
+  const endDateInput = document.body.querySelector('#simEndInput');
+  const expectedEndDateString = '2026-01-01';
+  endDateInput.value = expectedEndDateString;
+
+  p.createScenario({}, {}, fallback);
+  expect(fallback).toHaveBeenCalledWith({}, {}, new Date(expectedStartDateString), new Date(expectedEndDateString));
 });
 
 test('createScenario: throws when no factory is available at all', () => {
   const p = new ScenarioTabPresenter();   // no prebuilts, no fallback
   assert.throws(
-    () => p.createScenario({}, {}, makeStubUI()),
+    () => p.createScenario({}, {}),
     /no scenario factory/i
   );
 });

@@ -92,8 +92,8 @@ export class ScenarioTabPresenter {
    */
   createScenario(params, initialState, fallbackFactory) {
     const pb = this._activePrebuilt();
-    const simStart = this._getSimStart();
-    const simEnd = this._getSimEnd();
+    const simStart = pb == null ? this._getSimStart() : new Date(pb.simStart);
+    const simEnd = pb == null ? this._getSimEnd() : new Date(pb.simEnd);
 
     if (pb) return pb.factory(params, initialState, simStart, simEnd);
 
@@ -104,7 +104,9 @@ export class ScenarioTabPresenter {
         ? this._prebuiltScenarios.find(p => p.id === cfg.scenarioId)
         : null;
       const factory = (matchedPb ?? this._prebuiltScenarios[0])?.factory;
-      if (factory) return factory(params, initialState, simStart, simEnd);
+      if (factory) return factory(params, initialState,
+          (cfg.simStart) ? new Date(cfg.simStart) : undefined,
+          (cfg.simEnd) ? new Date(cfg.simEnd) : undefined);
     }
 
     if (fallbackFactory) return fallbackFactory(params, initialState, simStart, simEnd);
