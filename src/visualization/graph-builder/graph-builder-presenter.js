@@ -47,6 +47,8 @@ export class GraphBuilderPresenter {
 
     this._view.onCreationRequested = (kind, subtype) => {
       this._controller.notifyCreationRequested(kind, subtype);
+      const newNode = this._controller.createNewNode(kind, subtype);
+      this.editNode(newNode);
     };
 
     this._view.onDelete = (node) => {

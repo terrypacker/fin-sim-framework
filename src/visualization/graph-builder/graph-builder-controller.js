@@ -51,10 +51,61 @@ export class GraphBuilderController {
 
   /** Dispatch a toolbar "+" click to the relevant listener array. */
   notifyCreationRequested(kind, subtype) {
-    if      (kind === 'event')   this.eventNodeCreatedListeners.forEach(l => l(subtype));
+    if (kind === 'event') this.eventNodeCreatedListeners.forEach(l => l(subtype));
     else if (kind === 'handler') this.handlerNodeCreatedListeners.forEach(l => l());
     else if (kind === 'action')  this.actionNodeCreatedListeners.forEach(l => l());
     else if (kind === 'reducer') this.reducerNodeCreatedListeners.forEach(l => l());
+  }
+
+  // ─── Creation handlers (called via ConfigBuilder "+" buttons) ───────────
+  //
+  // Each service create* call publishes CREATE on the bus.
+  // SimulationSync's subscriber wires it into the sim.
+  // ConfigBuilder's subscriber adds the node to the graph.
+  // The only thing these handlers do explicitly is open the editor panel.
+
+  createNewNode(kind, subtype) {
+    if (kind === 'event') return this.eventCreationRequested(subtype);
+    else if (kind === 'handler') return this.handlerCreationRequested(subtype)
+    else if (kind === 'action')  return this.actionCreationRequested(subtype)
+    else if (kind === 'reducer') return this.reducerCreationRequested(subtype);
+  }
+
+  eventCreationRequested(subtype) {
+    //TODO need a better way to generate unique names and ids outside of the EventService...
+    const id = this.eventService._generateId('e');
+    let event;
+    if (subtype === 'OneOff') {
+      event = this.eventService.createOneOffEvent({
+        id: id,
+        name: 'New One-Off Event',
+        type: 'NEW_ONEOFF_' + id,
+        date: new Date(), enabled: false,
+        color: '#f87171'
+      });
+    } else {
+      event = this.eventService.createEventSeries({
+        id: id,
+        name: 'New Event Series',
+        type: 'NEW_SERIES_' + id,
+        interval: 'month-end', enabled: false,
+        color: '#60a5fa'
+      });
+    }
+    return event;
+  }
+
+  handlerCreationRequested() {
+    // null fn → uses HandlerEntry.defaultFunction which instantiates from generatedActionDefinitions
+    return this.handlerService.createHandler(null, 'New Handler');
+  }
+
+  actionCreationRequested() {
+    return this.actionService.createAmountAction('NEW_ACTION', 'New Action', 0);
+  }
+
+  reducerCreationRequested() {
+    return this.reducerService.createFieldReducer('', 'New Reducer');
   }
 
   // ── Domain mutations ───────────────────────────────────────────────────────

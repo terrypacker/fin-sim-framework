@@ -9,14 +9,8 @@
  */
 
 /**
- * config-builder.test.mjs
  *
- * Tests for ConfigBuilder:
- *   - Construction and button wiring
- *   - Creation listener registration and notification
- *   - deleteNode: calls the right service and clears the editor panel
- *   - _nodeChanged: calls the right service with no-change update
- *   - No longer subscribes to the service bus (GraphSync is responsible)
+ * TODO Skeleton test to be filled out in #136
  *
  * Run with: npm run test:viz
  *
@@ -26,50 +20,73 @@
 
 import { GraphBuilderPresenter } from '../../src/visualization/graph-builder/graph-builder-presenter.js';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
+import {
+  GraphRenderer
+} from "../../src/visualization/components/graph-renderer.js";
 
-// ─── Graph stub ───────────────────────────────────────────────────────────────
 
-function makeGraph() {
-  const nodes = [];
-  return {
-    graphRoot: document.createElement('div'),
-    nodes,
-    getNode(id)        { return nodes.find(n => n.id === id); },
-    getKind(kind)      { return nodes.filter(n => n.kind === kind); },
-    addNode(n)         { nodes.push(n); },
-    replaceNode(id, n) {
-      const i = nodes.findIndex(x => x.id === id);
-      if (i >= 0) nodes[i] = n;
-    },
-    removeNode(id) {
-      const i = nodes.findIndex(x => x.id === id);
-      if (i >= 0) nodes.splice(i, 1);
-    },
-    addEdge()         {},
-    removeEdge()      {},
-    getNodesToKindFromMe() { return []; },
-    getNodesFromKindToMe() { return []; },
-    render()          {},
-    registerNodeClickListener() {},
-    selectNode()      {},
-  };
+// ─── DOM helpers ──────────────────────────────────────────────────────────────
+function makeElements() {
+  const builderCanvas = document.createElement('div');
+  const graphRoot  = document.createElement('div');
+  graphRoot.id = 'graphRoot';
+  const graphViewPort = document.createElement('div');
+  graphViewPort.id = 'graphViewport';
+  const graphEdges = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  graphEdges.id = 'graphEdges';
+  const graphNodes = document.createElement('div');
+  graphNodes.id = 'graphNodes';
+  const selectionBox = document.createElement('div');
+  selectionBox.classList.add('selection-box');
+
+  const nodeDetailsTemplate = document.createElement('template');
+
+  document.body.appendChild(graphRoot);
+  graphRoot.appendChild(graphViewPort);
+  graphViewPort.appendChild(graphEdges);
+  graphViewPort.appendChild(graphNodes);
+  graphViewPort.appendChild(selectionBox);
+
+  nodeDetailsTemplate.innerHTML = '<div class="g-node">\n'
+      + '    <div class="g-header">\n'
+      + '      <span class="g-header-text"></span>\n'
+      + '      <span class="node-state-badge badge-green" data-id="stateChangeIndicator" style="display:none"></span>\n'
+      + '      <span class="node-fired-badge badge-green" data-id="firedIndicator"></span>\n'
+      + '    </div>\n'
+      + '    <div class="g-title">\n'
+      + '      <span class="g-title-text"></span>\n'
+      + '    </div>\n'
+      + '\n'
+      + '    <div class="g-port in"></div>\n'
+      + '    <div class="g-port out"></div>\n'
+      + '  </div>'
+  document.body.appendChild(nodeDetailsTemplate);
+  return { builderCanvas, graphRoot, graphNodes, graphEdges , nodeDetailsTemplate};
 }
 
-function makeBuilderCanvas() {
-  const el = document.createElement('div');
-  const tpl = document.createElement('template');
-  tpl.id = 'tpl-empty';
-  tpl.innerHTML = '<div class="tl-empty">Select a node</div>';
-  document.body.appendChild(tpl);
-  return el;
+// ─── Graph Renderer stub ───────────────────────────────────────────────────────────────
+function makeGraphRenderer(elements = makeElements()) {
+  const registry = ServiceRegistry.getInstance();
+  return new GraphRenderer({
+    parent: null,
+    graph: registry.graph,
+    graphQueryApi: registry.graphQueryApi,
+    graphRoot: elements.graphRoot,
+    graphNodes: elements.graphNodes,
+    graphEdges: elements.graphEdges,
+    nodeDetailsTemplate: elements.nodeDetailsTemplate,
+    displayNodeStateChanges: (changes) => {}
+  });
 }
 
-function makeScheduler(graph, canvas) {
+function makeBuilderPresenter(graphRenderer = makeGraphRenderer(), elements = makeElements()) {
+  const resolvedElements = elements ?? makeElements();
+
   ServiceRegistry.reset();
   const registry = ServiceRegistry.getInstance();
   return new GraphBuilderPresenter({
-    graph:         graph  ?? makeGraph(),
-    builderCanvas: canvas ?? makeBuilderCanvas(),
+    graphRenderer:         graphRenderer,
+    builderCanvas: elements.builderCanvas,
     eventService: registry.eventService,
     handlerService: registry.handlerService,
     actionService: registry.actionService,
@@ -77,14 +94,22 @@ function makeScheduler(graph, canvas) {
   });
 }
 
+function makeEmptyTemplate() {
+  const tpl = document.createElement('template');
+  tpl.id = 'tpl-empty';
+  tpl.innerHTML = `
+    <div class="tl-empty">Select a node</div>`;
+  return tpl;
+}
+
 // ─── Construction ─────────────────────────────────────────────────────────────
 
 test('GraphBuilderPresenter: constructs without error', () => {
-  expect(() => makeScheduler()).not.toThrow();
+  expect(() => makeBuilderPresenter()).not.toThrow();
 });
 
 test('GraphBuilderPresenter: listener arrays initialize empty', () => {
-  const s = makeScheduler();
+  const s = makeBuilderPresenter();
   expect(s.eventNodeCreatedListeners).toHaveLength(0);
   expect(s.handlerNodeCreatedListeners).toHaveLength(0);
   expect(s.actionNodeCreatedListeners).toHaveLength(0);
@@ -94,28 +119,28 @@ test('GraphBuilderPresenter: listener arrays initialize empty', () => {
 // ─── Creation listener registration ───────────────────────────────────────────
 
 test('registerEventCreatedListener: adds listener', () => {
-  const s  = makeScheduler();
+  const s  = makeBuilderPresenter();
   const fn = () => {};
   s.registerEventCreatedListener(fn);
   expect(s.eventNodeCreatedListeners).toContain(fn);
 });
 
 test('registerHandlerCreatedListener: adds listener', () => {
-  const s  = makeScheduler();
+  const s  = makeBuilderPresenter();
   const fn = () => {};
   s.registerHandlerCreatedListener(fn);
   expect(s.handlerNodeCreatedListeners).toContain(fn);
 });
 
 test('registerActionCreatedListener: adds listener', () => {
-  const s  = makeScheduler();
+  const s  = makeBuilderPresenter();
   const fn = () => {};
   s.registerActionCreatedListener(fn);
   expect(s.actionNodeCreatedListeners).toContain(fn);
 });
 
 test('registerReducerCreatedListener: adds listener', () => {
-  const s  = makeScheduler();
+  const s  = makeBuilderPresenter();
   const fn = () => {};
   s.registerReducerCreatedListener(fn);
   expect(s.reducerNodeCreatedListeners).toContain(fn);
@@ -124,7 +149,7 @@ test('registerReducerCreatedListener: adds listener', () => {
 // ─── _notifyNodeCreationRequested ─────────────────────────────────────────────
 
 test('_notifyNodeCreationRequested event: calls event listeners with subtype', () => {
-  const s = makeScheduler();
+  const s = makeBuilderPresenter();
   let received = null;
   s.registerEventCreatedListener(st => { received = st; });
   s._notifyNodeCreationRequested('event', 'Series');
@@ -132,7 +157,7 @@ test('_notifyNodeCreationRequested event: calls event listeners with subtype', (
 });
 
 test('_notifyNodeCreationRequested handler: calls handler listeners', () => {
-  const s = makeScheduler();
+  const s = makeBuilderPresenter();
   let called = false;
   s.registerHandlerCreatedListener(() => { called = true; });
   s._notifyNodeCreationRequested('handler', null);
@@ -140,7 +165,7 @@ test('_notifyNodeCreationRequested handler: calls handler listeners', () => {
 });
 
 test('_notifyNodeCreationRequested action: calls action listeners', () => {
-  const s = makeScheduler();
+  const s = makeBuilderPresenter();
   let called = false;
   s.registerActionCreatedListener(() => { called = true; });
   s._notifyNodeCreationRequested('action', null);
@@ -148,7 +173,7 @@ test('_notifyNodeCreationRequested action: calls action listeners', () => {
 });
 
 test('_notifyNodeCreationRequested reducer: calls reducer listeners', () => {
-  const s = makeScheduler();
+  const s = makeBuilderPresenter();
   let called = false;
   s.registerReducerCreatedListener(() => { called = true; });
   s._notifyNodeCreationRequested('reducer', null);
@@ -158,8 +183,9 @@ test('_notifyNodeCreationRequested reducer: calls reducer listeners', () => {
 // ─── deleteNode: delegates to service, clears editor ─────────────────────────
 
 test('deleteNode event: calls eventService.deleteEvent', () => {
-  const s = makeScheduler();
+  const s = makeBuilderPresenter();
   const { eventService } = ServiceRegistry.getInstance();
+  document.body.appendChild(makeEmptyTemplate());
 
   let deletedId = null;
   const orig = eventService.deleteEvent.bind(eventService);
@@ -172,8 +198,9 @@ test('deleteNode event: calls eventService.deleteEvent', () => {
 });
 
 test('deleteNode handler: calls handlerService.deleteHandler', () => {
-  const s = makeScheduler();
+  const s = makeBuilderPresenter();
   const { handlerService } = ServiceRegistry.getInstance();
+  document.body.appendChild(makeEmptyTemplate());
 
   let deletedId = null;
   const orig = handlerService.deleteHandler.bind(handlerService);
@@ -186,8 +213,9 @@ test('deleteNode handler: calls handlerService.deleteHandler', () => {
 });
 
 test('deleteNode action: calls actionService.deleteAction', () => {
-  const s = makeScheduler();
+  const s = makeBuilderPresenter();
   const { actionService } = ServiceRegistry.getInstance();
+  document.body.appendChild(makeEmptyTemplate());
 
   let deletedId = null;
   const orig = actionService.deleteAction.bind(actionService);
@@ -200,8 +228,9 @@ test('deleteNode action: calls actionService.deleteAction', () => {
 });
 
 test('deleteNode reducer: calls reducerService.deleteReducer', () => {
-  const s = makeScheduler();
+  const s = makeBuilderPresenter();
   const { reducerService } = ServiceRegistry.getInstance();
+  document.body.appendChild(makeEmptyTemplate())
 
   let deletedId = null;
   const orig = reducerService.deleteReducer.bind(reducerService);
@@ -214,9 +243,8 @@ test('deleteNode reducer: calls reducerService.deleteReducer', () => {
 });
 
 test('deleteNode: clears the editor panel', () => {
-  const canvas = makeBuilderCanvas();
-  const s = makeScheduler(undefined, canvas);
-  canvas.innerHTML = '<div>editor content</div>';
+  const s = makeBuilderPresenter();
+  s._view._canvas.innerHTML = '<div>editor content</div>';
 
   const { eventService } = ServiceRegistry.getInstance();
   const orig = eventService.deleteEvent.bind(eventService);
@@ -225,16 +253,17 @@ test('deleteNode: clears the editor panel', () => {
   s.deleteNode({ id: 'e1', kind: 'event' });
 
   eventService.deleteEvent = orig;
-  expect(canvas.innerHTML).not.toContain('editor content');
+  expect(s._view._canvas.innerHTML).not.toContain('editor content');
 });
 
 test('deleteNode: does NOT call graph.removeNode (GraphSync handles removal)', () => {
-  const graph = makeGraph();
+  const graph = makeGraphRenderer();
+  document.body.appendChild(makeEmptyTemplate());
   let removeNodeCalled = false;
-  const origRemoveNode = graph.removeNode.bind(graph);
-  graph.removeNode = (id) => { removeNodeCalled = true; origRemoveNode(id); };
+  const origRemoveNode = graph._removeNode.bind(graph);
+  graph._removeNode = (id) => { removeNodeCalled = true; origRemoveNode(id); };
 
-  const s = makeScheduler(graph);
+  const s = makeBuilderPresenter(graph);
   const { eventService } = ServiceRegistry.getInstance();
   const orig = eventService.deleteEvent.bind(eventService);
   eventService.deleteEvent = () => {};
@@ -256,7 +285,7 @@ test('GraphBuilderPresenter does not add SERVICE_ACTION subscription to the bus'
   const { bus } = ServiceRegistry.getInstance();
   const before = (bus.listeners.get('SERVICE_ACTION') ?? []).length;
 
-  makeScheduler(); // constructs GraphBuilderPresenter
+  makeBuilderPresenter(); // constructs GraphBuilderPresenter
 
   const after = (bus.listeners.get('SERVICE_ACTION') ?? []).length;
   expect(after).toBe(before);
