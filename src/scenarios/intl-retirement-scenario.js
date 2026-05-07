@@ -106,11 +106,11 @@ export const INTL_RETIREMENT_DEFAULTS = {
  *                     so every item appears in the config graph and UI.
  */
 export class IntlRetirementScenario extends BaseScenario {
-  constructor({ context } = {}) {
+  constructor({ context, simStart, simEnd } = {}) {
     super({
       context,
-      simStart: new Date(Date.UTC(2026, 0, 1)),
-      simEnd:   new Date(Date.UTC(2041, 0, 1)),
+      simStart: simStart ?? new Date(Date.UTC(2026, 0, 1)),
+      simEnd:   simEnd ?? new Date(Date.UTC(2041, 0, 1)),
     });
     // Populated in buildSim(); consumed in loadDefaults().
     this._people      = null;
@@ -247,9 +247,12 @@ export class IntlRetirementScenario extends BaseScenario {
     //    Handlers/reducers are registered in loadDefaults() (phase 2) so that
     //    loading a saved config restores the serialized items instead of
     //    creating a duplicate set here.
+    const startYear = this.simStart.getFullYear();
+    const endYear = this.simEnd.getFullYear();
     const periodService = new PeriodService();
-    for (let y = 2026; y <= 2041; y++) applyTo(periodService, buildUsCalendarYear(y));
-    for (let y = 2025; y <= 2041; y++) applyTo(periodService, buildAuFiscalYear(y));
+    for (let y = startYear; y <= endYear; y++) applyTo(periodService, buildUsCalendarYear(y));
+    //Start AU the year before so 1st period ends in first year
+    for (let y = startYear - 1; y <= endYear; y++) applyTo(periodService, buildAuFiscalYear(y));
     this._taxService = new TaxService();
     this._taxService.setup(this.sim, ['US', 'AU'], periodService);
   }

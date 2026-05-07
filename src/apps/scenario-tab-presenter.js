@@ -87,13 +87,15 @@ export class ScenarioTabPresenter {
    *
    * @param {object}   params        - Scenario params (from getParams())
    * @param {object}   initialState  - Initial state (from getInitialState())
-   * @param {object}   configPresenter - GraphBuilderPresenter instance
    * @param {Function} [fallbackFactory] - Legacy factory for apps that don't supply prebuiltScenarios
    * @returns {BaseScenario}
    */
-  createScenario(params, initialState, configPresenter, fallbackFactory) {
+  createScenario(params, initialState, fallbackFactory) {
     const pb = this._activePrebuilt();
-    if (pb) return pb.factory(params, initialState, configPresenter);
+    const simStart = this._getSimStart();
+    const simEnd = this._getSimEnd();
+
+    if (pb) return pb.factory(params, initialState, simStart, simEnd);
 
     const cfg = this._activeScenario();
     if (cfg) {
@@ -102,10 +104,10 @@ export class ScenarioTabPresenter {
         ? this._prebuiltScenarios.find(p => p.id === cfg.scenarioId)
         : null;
       const factory = (matchedPb ?? this._prebuiltScenarios[0])?.factory;
-      if (factory) return factory(params, initialState, configPresenter);
+      if (factory) return factory(params, initialState, simStart, simEnd);
     }
 
-    if (fallbackFactory) return fallbackFactory(params, initialState, configPresenter);
+    if (fallbackFactory) return fallbackFactory(params, initialState, simStart, simEnd);
 
     throw new Error('ScenarioTabPresenter: no scenario factory available');
   }
@@ -249,6 +251,16 @@ export class ScenarioTabPresenter {
   }
 
   // ── Private ────────────────────────────────────────────────────────────────
+
+  _getSimStart() {
+    const simStartString = document.getElementById('simStartInput')?.value; //this.getSimulationStartDate();
+    return (simStartString) ? new Date(simStartString) : undefined;
+  }
+
+  _getSimEnd() {
+    const simEndString = document.getElementById('simEndInput')?.value; //this.getSimulationEndDate();
+    return (simEndString) ? new Date(simEndString) : undefined;
+  }
 
   /** Returns the active PrebuiltScenario, or null if a user scenario (or nothing) is selected. */
   _activePrebuilt() {

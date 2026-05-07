@@ -171,7 +171,7 @@ export class BaseApp extends BaseComponent {
 
     // ── Build scenario ────────────────────────────────────────────────────────
     this.scenario = this._scenarioTab.createScenario(
-      this.getParams(), this.getInitialState(), this.configPresenter, this.newScenario
+      this.getParams(), this.getInitialState(), this.newScenario
     );
     this.scenario.buildSim(this.getParams(), this.getInitialState());
     this.afterBuildSim();
