@@ -137,12 +137,12 @@ export class HandlerService extends BaseService {
     const Cls = HANDLER_CLASSES[newClass];
     if (!Cls) throw new Error(`HandlerService: unknown handler class "${newClass}"`);
 
-    const fresh = Object.create(Cls.prototype);
-    fresh.id                       = old.id;
-    fresh.name                     = old.name;
-    fresh.fn                       = old.fn;
-    fresh.handledEvents             = old.handledEvents;
-    fresh.generatedActionTypes      = old.generatedActionTypes;
+    const fresh = new Cls(old.fn, old.name);
+    fresh.id                        = old.id;
+    fresh.name                      = old.name;
+    fresh.fn                        = old.fn;
+    fresh.handledEvents              = old.handledEvents;
+    fresh.generatedActionTypes       = old.generatedActionTypes;
     fresh.generatedActionDefinitions = old.generatedActionDefinitions;
     Object.assign(fresh, extraProps);
 

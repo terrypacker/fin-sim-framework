@@ -135,6 +135,14 @@ export class GraphBuilderController {
   }
 
   /**
+   * Replace an event with a new instance of the given class.
+   * Returns the new node so callers can re-render.
+   */
+  replaceEvent(nodeId, eventClass) {
+    return this.eventService.replaceEvent(nodeId, eventClass);
+  }
+
+  /**
    * Replace an action with a new instance of the given class.
    * Returns the new node so callers can re-render.
    */

@@ -146,7 +146,7 @@ export class ActionService extends BaseService {
     const Cls = ACTION_CLASSES[newClass];
     if (!Cls) throw new Error(`ActionService: unknown action class "${newClass}"`);
 
-    const fresh = Object.create(Cls.prototype);
+    const fresh = new Cls(old.type, old.name);
     fresh.id        = old.id;
     fresh.name      = old.name;
     fresh.type      = old.type;

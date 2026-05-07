@@ -233,10 +233,7 @@ export class GraphBuilderView extends BaseComponent {
     });
     typeSelect.value = node.eventType || 'Series';
     typeSelect.onchange = () => {
-      if (this.onFieldChange) this.onFieldChange(node, 'eventType', typeSelect.value);
-      // node.eventType is mutated synchronously by the service; re-render the
-      // config sub-panel without touching the rest of the editor.
-      this._renderEventConfig(node, configWrap);
+      if (this.onEventTypeChange) this.onEventTypeChange(node.id, typeSelect.value);
     };
 
     const colorInput = el.querySelector('[data-field="color"]');

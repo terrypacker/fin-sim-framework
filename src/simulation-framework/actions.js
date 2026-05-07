@@ -76,7 +76,7 @@ export class Action extends SimGraphNode {
 export class FieldAction extends Action {
   static description = 'Extends Action with a fieldName targeting a specific state field.';
 
-  constructor(type, name, fieldName) {
+  constructor(type, name, fieldName = '') {
     super(type, name);
     this.fieldName  = fieldName;
   }
@@ -85,7 +85,7 @@ export class FieldAction extends Action {
 export class FieldValueAction extends FieldAction {
   static description = 'Extends FieldAction with a value to write into the targeted state field.';
 
-  constructor(type, name, fieldName, value) {
+  constructor(type, name, fieldName = '', value = null) {
     super(type, name, fieldName);
     this.value  = value;
   }
@@ -103,7 +103,7 @@ export class FieldValueAction extends FieldAction {
 export class AmountAction extends FieldValueAction {
   static description = 'Carries a monetary or numeric amount (fieldName fixed to "amount"); used for cash flows, gains, and tax payments.';
 
-  constructor(type, name, amount) {
+  constructor(type, name, amount = 0) {
     super(type, name, 'amount', amount);
   }
 }

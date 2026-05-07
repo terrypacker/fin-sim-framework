@@ -85,7 +85,7 @@ import { ScenarioStorage } from './scenarios/scenario-storage.js';
 import { SimulationWorkbenchDefaultScenario } from './scenarios/simulation-workbench-default-scenario.js';
 import { ActionService } from './services/action-service.js';
 import { BaseService } from './services/base-service.js';
-import { EventService } from './services/event-service.js';
+import { EVENT_CLASSES, EventService } from './services/event-service.js';
 import { HandlerService } from './services/handler-service.js';
 import { ReducerService } from './services/reducer-service.js';
 import { ServiceRegistry } from './services/service-registry.js';
@@ -331,6 +331,7 @@ export const Scenarios = {
 export const Services = {
   ActionService,
   BaseService,
+  EVENT_CLASSES,
   EventService,
   HandlerService,
   ReducerService,

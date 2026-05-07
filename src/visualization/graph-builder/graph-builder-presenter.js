@@ -65,8 +65,13 @@ export class GraphBuilderPresenter {
       else       this._controller.unlinkNodes(node, selectedNode, kind, linkTo);
     };
 
-    // For replaceAction/replaceReducer the node instance changes, so re-render
+    // For replace* operations the node instance changes, so re-render
     // the full editor with the returned replacement node.
+    this._view.onEventTypeChange = (nodeId, newClass) => {
+      const updated = this._controller.replaceEvent(nodeId, newClass);
+      this._view.editNode(updated);
+    };
+
     this._view.onActionClassChange = (nodeId, newClass) => {
       const updated = this._controller.replaceAction(nodeId, newClass);
       this._view.editNode(updated);

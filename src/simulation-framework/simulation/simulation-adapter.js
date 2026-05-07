@@ -12,6 +12,8 @@ import {BaseEvent} from "../events/base-event.js";
 import {HandlerEntry} from "../handlers.js";
 import {Reducer} from "../reducers.js";
 import {DateUtils} from "../date-utils.js";
+import {OneOffEvent} from "../events/one-off-event.js";
+import {EventSeries} from "../events/event-series.js";
 
 /**
  * Interval functions used by SimulationSync to advance recurring event dates.
@@ -147,9 +149,13 @@ export class SimulationAdapter {
   _applyEventChange(event) {
     this.sim.unschedule(event.type);
     if (event.enabled) {
-      event.date
-          ? this._scheduleOneOffEvent(event)
-          : this._scheduleEventSeries(event);
+      if(event instanceof OneOffEvent) {
+        this._scheduleOneOffEvent(event)
+      }else if(event instanceof EventSeries) {
+        this._scheduleEventSeries(event);
+      }else {
+        throw new Error(`Unsupported event type ${event.prototype.constructor}`);
+      }
     }
   }
 
