@@ -135,18 +135,6 @@ export class GraphBuilderController {
   }
 
   /**
-   * Fire a no-op service update to notify the bus after a canonical array has
-   * already been mutated in-place (chip toggle path).
-   *
-   * NOTE: The arrays are mutated before this call, so originalItem in the
-   * ServiceActionEvent captures the post-mutation state.  This is preserved
-   * behaviour from the original ConfigBuilder.
-   */
-  notifyChanged(node) {
-    this.updateNode(node, {});
-  }
-
-  /**
    * Replace an action with a new instance of the given class.
    * Returns the new node so callers can re-render.
    */
@@ -332,15 +320,6 @@ export class GraphBuilderController {
     }
   }
 
-  // ── Graph read queries (proxied for view use) ─────────────────────────────
-  //TODO Get rid of these..???
-  getNode(id)                      { return this._graphRenderer.getNode(id); }
-  getKind(kind)                    { return this._graphRenderer.getKind(kind); }
-  getNodeByType(kind, type)        { return this._graphRenderer.getNodeByType(kind, type); }
-  getNodesToKindFromMe(node, kind) { return this._graphRenderer.getNodesToKindFromMe(node, kind); }
-  getNodesFromKindToMe(node, kind) { return this._graphRenderer.getNodesFromKindToMe(node, kind); }
-
-
   // ── Configuration Lifecycle ─────────────────────────────
   /**
    * TODO Need to have a central location to reset the sim  See #135
@@ -361,45 +340,5 @@ export class GraphBuilderController {
     this.handlerService.updateAllData(data);
     this.actionService.updateAllData(data);
     this.reducerService.updateAllData(data);
-  }
-  // ── Private ───────────────────────────────────────────────────────────────
-
-  /**
-   * Update the canonical relationship array on the domain object and notify
-   * via notifyChanged() so the bus fires and SimulationSync re-wires the sim.
-   *
-   * handler ↔ event edges:   use object arrays (HandlerEntry.handledEvents holds event objects)
-   * handler/reducer ↔ action: use type string arrays (generatedActionTypes / reducedActionTypes)
-   */
-  _syncCanonicalArrays(node, selectedNode, kind, linkTo, op) {
-    const add = op === 'add';
-
-    // Object arrays (hold domain objects, keyed by .id)
-    const syncObjArr = (arr, item) => {
-      if (add) {
-        if (!arr.some(n => n.id === item.id)) arr.push(item);
-      } else {
-        const i = arr.findIndex(n => n.id === item.id);
-        if (i !== -1) arr.splice(i, 1);
-      }
-    };
-
-    // Type string arrays (hold action type discriminators)
-    const syncTypeArr = (arr, type) => {
-      if (add) {
-        if (!arr.includes(type)) arr.push(type);
-      } else {
-        const i = arr.indexOf(type);
-        if (i !== -1) arr.splice(i, 1);
-      }
-    };
-
-    if (node.kind === 'handler' && kind === 'event'   && !linkTo) { syncObjArr(node.handledEvents,          selectedNode);       this.notifyChanged(node);     return; }
-    if (node.kind === 'handler' && kind === 'action'  &&  linkTo) { syncTypeArr(node.generatedActionTypes,  selectedNode.type);  this.notifyChanged(node);     return; }
-    if (node.kind === 'reducer' && kind === 'action'  && !linkTo) { syncTypeArr(node.reducedActionTypes,    selectedNode.type);  this.notifyChanged(node);     return; }
-    if (node.kind === 'reducer' && kind === 'action'  &&  linkTo) { syncTypeArr(node.generatedActionTypes,  selectedNode.type);  this.notifyChanged(node);     return; }
-    if (node.kind === 'event'   && kind === 'handler' &&  linkTo) { syncObjArr(selectedNode.handledEvents,      node);           this.notifyChanged(chipNode); return; }
-    if (node.kind === 'action'  && kind === 'handler' && !linkTo) { syncTypeArr(selectedNode.generatedActionTypes, node.type);   this.notifyChanged(chipNode); return; }
-    if (node.kind === 'action'  && kind === 'reducer' &&  linkTo) { syncTypeArr(selectedNode.reducedActionTypes,   node.type);   this.notifyChanged(chipNode); return; }
   }
 }
