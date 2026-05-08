@@ -129,10 +129,8 @@ export class SimulationAnimator {
 
   _scheduleDashCardFrame(date) {
     if (this._dashCardFrameScheduled) return;
-
     this._dashCardFrameScheduled = true;
-
-    requestAnimationFrame((date) => {
+    requestAnimationFrame(() => {
       this._dashCardFrameScheduled = false;
 
       if (!this._dashCardsdirty) return;
@@ -143,6 +141,8 @@ export class SimulationAnimator {
   }
 
   updateDashCards(date) {
+    if(this._dashCardsdirty) return;
+    this._dashCardsdirty = true;
     this._scheduleDashCardFrame(date);
   }
 

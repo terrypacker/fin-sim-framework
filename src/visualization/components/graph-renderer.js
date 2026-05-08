@@ -33,9 +33,11 @@ export class GraphRenderer extends BaseComponent {
     this.displayNodeStateChanges = displayNodeStateChanges ? displayNodeStateChanges : (c) => {};
 
     //TODO ??? Graph has been modified
-    //TODO Remove on Destroy
     //TODO This should live outside the component I think
     this._nodeModificationWatcher = () => {
+      //TODO this will break when we implement #79 and persist x and y
+      this._refreshGraphState();
+      this._relayoutAll();
       this.render();
     };
     this._edgeModificationWatcher = () => {
@@ -159,11 +161,17 @@ export class GraphRenderer extends BaseComponent {
     this.render();
   }
 
-  _renderGraph() {
-
+  _refreshGraphState() {
     const { nodes, edges } = this._graphQueryApi.getGraphView('config');
+
     this._currentNodes = nodes;
     this._currentNodeMap = new Map(nodes.map(n => [n.id, n]));
+
+    return { nodes, edges };
+  }
+
+  _renderGraph() {
+    const { nodes, edges } = this._refreshGraphState();
 
     const nextNodes = new Map(nodes.map(n => [n.id, n]));
     const nodeFrag = document.createDocumentFragment();
@@ -253,9 +261,9 @@ export class GraphRenderer extends BaseComponent {
     }
 
     this._nodeEls.set(node.id, el);
+    frag.appendChild(el);
 
     this._updateNode(node);
-    frag.appendChild(el);
   }
 
   _removeNode(id) {
@@ -360,7 +368,6 @@ export class GraphRenderer extends BaseComponent {
     frag.appendChild(path);
 
     this._updateEdge(edge);
-
   }
 
   _removeEdge(id) {
@@ -404,6 +411,8 @@ export class GraphRenderer extends BaseComponent {
    * @private
    */
   _relayoutAll() {
+    this._refreshGraphState();
+
     const rect = this.graphRoot.getBoundingClientRect();
     const W = rect.width  || 800;
     const H = rect.height || 400;

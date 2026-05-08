@@ -246,12 +246,7 @@ export class BaseApp extends BaseComponent {
     this._currentDate          = this.scenario.simStart;
     $('timeLabel').textContent = this.timeControls.formatDate(this.scenario.simStart);
 
-
-    //Send Scenario Build Message
-    //TODO these render calls are a hack to get the graph to layout properly
-    this.configPresenter._graphRenderer._renderGraph();// Hack to force nodes to be set in this._currentNodes
-    this.configPresenter._graphRenderer._relayoutAll();
-    this.configPresenter._graphRenderer.render();
+    //Send Scenario Ready Message
     registry.bus.publish(new BusMessage({ type: SIMULATION_BUS_MESSAGES.SCENARIO_READY, date: this.scenario.simStart}));
   }
 
