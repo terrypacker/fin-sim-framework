@@ -123,12 +123,9 @@ import { ChartView } from './visualization/chart-view.js';
 import { BaseComponent } from './visualization/components/base-component.js';
 import { GraphNodeFilterMultiSelect } from './visualization/components/graph-node-filter-multi-select.js';
 import { GraphRenderer } from './visualization/components/graph-renderer.js';
-import { ConfigGraph } from './visualization/config-graph.js';
 import { GraphBuilderController } from './visualization/graph-builder/graph-builder-controller.js';
 import { GraphBuilderPresenter } from './visualization/graph-builder/graph-builder-presenter.js';
 import { GraphBuilderView } from './visualization/graph-builder/graph-builder-view.js';
-import { GraphSync } from './visualization/graph-sync.js';
-import { GraphView } from './visualization/graph-view.js';
 import { PeopleController } from './visualization/people/people-controller.js';
 import { PeoplePresenter } from './visualization/people/people-presenter.js';
 import { PeopleView } from './visualization/people/people-view.js';
@@ -420,12 +417,9 @@ export const Visualization = {
   BaseComponent,
   GraphNodeFilterMultiSelect,
   GraphRenderer,
-  ConfigGraph,
   GraphBuilderController,
   GraphBuilderPresenter,
   GraphBuilderView,
-  GraphSync,
-  GraphView,
   PeopleController,
   PeoplePresenter,
   PeopleView,

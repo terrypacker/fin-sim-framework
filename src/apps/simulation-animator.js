@@ -36,7 +36,6 @@ export class SimulationAnimator {
    *   scenario:        object,
    *   timeControls:   import('../visualization/time-controls.js').TimeControls,
    *   statePanelView: import('./state-panel-view.js').StatePanelView,
-   *   graphView?:     import('../visualization/graph-view.js').GraphView,
    *   chartView:      import('../visualization/chart-view.js').ChartView,
    * }}
    */
