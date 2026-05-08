@@ -92,15 +92,10 @@ export class BaseApp extends BaseComponent {
     // Playback/slider state
     this.lastSliderValue = 0;
     this._currentDate    = null;
-
-    // ── PeriodService ─────────────────────────────────────────────────────────
-    const periodService = new FinSimLib.Finance.PeriodService();
-    for (let y = 2026; y <= 2040; y++) FinSimLib.Finance.applyTo(periodService, FinSimLib.Finance.buildUsCalendarYear(y));
-    for (let y = 2025; y <= 2040; y++) FinSimLib.Finance.applyTo(periodService, FinSimLib.Finance.buildAuFiscalYear(y));
   }
 
   // ── Delegators for scenario data (subclasses may call these) ─────────────
-
+  //TODO Should remove these for #143
   getParams()       { return this._scenarioTab.getParams(); }
   getInitialState() { return this._scenarioTab.getInitialState(); }
 
