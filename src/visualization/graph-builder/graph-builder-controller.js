@@ -26,9 +26,7 @@ import { ActionDefinition } from '../../simulation-framework/actions.js';
  */
 export class GraphBuilderController {
 
-  /** @param {{ graph: import('../config-graph.js').ConfigGraph }} */
-  constructor({ graphRenderer, eventService, handlerService, actionService, reducerService}) {
-    this._graphRenderer = graphRenderer;
+  constructor({ eventService, handlerService, actionService, reducerService}) {
     this.eventService = eventService;
     this.handlerService = handlerService;
     this.actionService = actionService;
@@ -119,7 +117,6 @@ export class GraphBuilderController {
     else if (node.kind === 'handler') this.handlerService.deleteHandler(node.id);
     else if (node.kind === 'action')  this.actionService.deleteAction(node.id);
     else if (node.kind === 'reducer') this.reducerService.deleteReducer(node.id);
-    this._graphRenderer.render();
   }
 
   /**
@@ -131,7 +128,6 @@ export class GraphBuilderController {
     else if (node.kind === 'handler') this.handlerService.updateHandler(node.id, changes);
     else if (node.kind === 'action')  this.actionService.updateAction(node.id, changes);
     else if (node.kind === 'reducer') this.reducerService.updateReducer(node.id, changes);
-    this._graphRenderer.render();
   }
 
   /**
