@@ -40,5 +40,8 @@
     "rollup-plugin-dev": "^2.1.0",
     "rollup-plugin-livereload": "^2.0.5",
     "rollup-plugin-watch-assets": "^1.0.1"
+  },
+  "dependencies": {
+    "chartjs-adapter-date-fns": "^3.0.0"
   }
 }
