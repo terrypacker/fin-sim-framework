@@ -9,6 +9,7 @@
  */
 
 import { $ } from '../visualization/ui-utils.js';
+import { diffStates } from "../simulation-framework/state-utils.js";
 
 /**
  * StatePanelView — pure DOM layer for state/metrics panels and node detail.
@@ -16,8 +17,6 @@ import { $ } from '../visualization/ui-utils.js';
  * Owns:
  *  - State panel rendering (updateStatePanel, renderState, createStateDetails)
  *  - Node detail panel (showNodeDetail, showNodeStateChanges, createActionDetail)
- *  - diffStates computation
- *  - All value-formatting helpers (fmtVal, fmtArray, toLabel, isDate, renderObj, renderHeaderRow)
  *
  * formatDate is injected via the setter and defaults to Date.toDateString().
  * BaseApp calls `this._statePanelView.formatDate = currentFmt` on each buildScenario()
@@ -56,6 +55,7 @@ export class StatePanelView {
 
   updateStatePanel(date, state) {
     //TODO change this method name to render
+    //TODO #140 render diffs only, we can get them from SimulationAnimator whos is calling this already
     if (this._dirty) return; // already scheduled
     this._dirty = true;
     this._scheduleFrame(date, state);
@@ -211,7 +211,7 @@ export class StatePanelView {
   }
 
   buildActionDetail(entry) {
-    const changes = this.diffStates(entry.prevState, entry.nextState);
+    const changes = diffStates(entry.prevState, entry.nextState);
     const emitted = entry.emittedActions?.length
       ? entry.emittedActions.map(a => a.type).join(', ')
       : '(none)';
@@ -223,46 +223,12 @@ export class StatePanelView {
   }
 
   getNodeDetail(node) {
-    const diff = this.diffStates(node.stateBefore, node.stateAfter);
+    const diff = diffStates(node.stateBefore, node.stateAfter);
     return JSON.stringify({ ...node, stateDiff: diff }, null, 2);
   }
 
-  // ── Diff ──────────────────────────────────────────────────────────────────
-
-  /**
-   * Compute the difference between two state snapshots.
-   * Returns an array of { field, before, after, delta } records.
-   */
-  diffStates(prev, next) {
-    const changes = [];
-    if (!prev || !next) return changes;
-
-    // Ledger arrays grow on every transaction — skip them to keep diffs readable.
-    const SKIP_KEYS = new Set(['credits', 'debits']);
-
-    const walk = (b, a, prefix) => {
-      const leafKey = prefix.split('.').pop();
-      if (SKIP_KEYS.has(leafKey)) return;
-      const bIsObj = typeof b === 'object' && b !== null && !Array.isArray(b);
-      const aIsObj = typeof a === 'object' && a !== null && !Array.isArray(a);
-      if (bIsObj && aIsObj) {
-        for (const key of new Set([...Object.keys(b), ...Object.keys(a)])) {
-          walk(b[key], a[key], prefix ? `${prefix}.${key}` : key);
-        }
-      } else if (JSON.stringify(b) !== JSON.stringify(a)) {
-        const delta = typeof a === 'number' && typeof b === 'number' ? a - b : null;
-        changes.push({ field: prefix, before: b ?? null, after: a ?? null, delta });
-      }
-    };
-
-    for (const key of new Set([...Object.keys(prev), ...Object.keys(next)])) {
-      walk(prev[key], next[key], key);
-    }
-
-    return changes;
-  }
-
   // ── Formatting helpers ────────────────────────────────────────────────────
+  //TODO Extract to shared UI class #139
 
   fmtVal(v, objAsCode = false) {
     if (v == null) return '—';

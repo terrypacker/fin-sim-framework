@@ -35,6 +35,7 @@ import {
 import { generateActionId } from "./actions.js";
 import { SimulationHistory } from "./simulation-history.js";
 import { SimulationState } from "./simulation-state.js";
+import {diffStates} from "./state-utils.js";
 
 const INTERNAL_SCHEDULING_HANDLER_NAME = 'INTERNAL_SCHEDULING_HANDLER_NAME';
 
@@ -342,7 +343,7 @@ export class Simulation {
             meta: {reason: 'execution'},
             data: {
               fired: true,
-              stateChanges: this.diffStates(stateBefore, stateSnapshot)
+              stateChanges: diffStates(stateBefore, stateSnapshot)
             },
             stateBefore: prevState
           }));
@@ -523,7 +524,7 @@ export class Simulation {
           meta: {reason: 'execution'},
           data: {
             fired: true,
-            stateChanges: this.diffStates(prevState, stateSnapshot)
+            stateChanges: diffStates(prevState, stateSnapshot)
           },
           stateBefore: prevState
         }));
@@ -608,7 +609,7 @@ export class Simulation {
           meta: {reason: 'execution'},
           data: {
             fired: true,
-            stateChanges: this.diffStates(prevState, stateSnapshot)
+            stateChanges: diffStates(prevState, stateSnapshot)
           },
         }));
       }
@@ -926,38 +927,5 @@ export class Simulation {
       sourceEvent: sourceEvent
     });
     this.actionGraph.addActionNode(node);
-  }
-
-  /**
-   * Compute the difference between two state snapshots.
-   * Returns an array of { field, before, after, delta } records.
-   */
-  diffStates(prev, next) {
-    const changes = [];
-    if (!prev || !next) return changes;
-
-    // Ledger arrays grow on every transaction — skip them to keep diffs readable.
-    const SKIP_KEYS = new Set(['credits', 'debits']);
-
-    const walk = (b, a, prefix) => {
-      const leafKey = prefix.split('.').pop();
-      if (SKIP_KEYS.has(leafKey)) return;
-      const bIsObj = typeof b === 'object' && b !== null && !Array.isArray(b);
-      const aIsObj = typeof a === 'object' && a !== null && !Array.isArray(a);
-      if (bIsObj && aIsObj) {
-        for (const key of new Set([...Object.keys(b), ...Object.keys(a)])) {
-          walk(b[key], a[key], prefix ? `${prefix}.${key}` : key);
-        }
-      } else if (JSON.stringify(b) !== JSON.stringify(a)) {
-        const delta = typeof a === 'number' && typeof b === 'number' ? a - b : null;
-        changes.push({ field: prefix, before: b ?? null, after: a ?? null, delta });
-      }
-    };
-
-    for (const key of new Set([...Object.keys(prev), ...Object.keys(next)])) {
-      walk(prev[key], next[key], key);
-    }
-
-    return changes;
   }
 }

@@ -114,6 +114,7 @@ import { ActionNode, SimulationEventGraph } from './simulation-framework/simulat
 import { SimulationHistory } from './simulation-framework/simulation-history.js';
 import { SimulationState } from './simulation-framework/simulation-state.js';
 import { BreakpointSignal, Simulation } from './simulation-framework/simulation.js';
+import { diffStates } from './simulation-framework/state-utils.js';
 import { AccountsController } from './visualization/accounts/accounts-controller.js';
 import { AccountsPresenter } from './visualization/accounts/accounts-presenter.js';
 import { AccountsView } from './visualization/accounts/accounts-view.js';
@@ -407,6 +408,7 @@ export const Core = {
   SimulationState,
   BreakpointSignal,
   Simulation,
+  diffStates,
 };
 
 export const Visualization = {

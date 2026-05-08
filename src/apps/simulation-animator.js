@@ -33,38 +33,21 @@ export class SimulationAnimator {
 
   /**
    * @param {{
-   *   configGraph:    import('../visualization/config-graph.js').ConfigGraph,
-   *   scenario:       object,
+   *   scenario:        object,
    *   timeControls:   import('../visualization/time-controls.js').TimeControls,
    *   statePanelView: import('./state-panel-view.js').StatePanelView,
    *   graphView?:     import('../visualization/graph-view.js').GraphView,
    *   chartView:      import('../visualization/chart-view.js').ChartView,
-   *   actionService:  import('../services/action-service.js').ActionService,
    * }}
    */
-  constructor({ configPresenter, scenario, timeControls, statePanelView, chartView, bus }) {
-    this._configPresenter = configPresenter;
+  constructor({ scenario, timeControls, statePanelView, chartView }) {
     this._scenario       = scenario;
     this._timeControls   = timeControls;
     this._statePanelView = statePanelView;
     this._chartView      = chartView;
-    this._bus = bus;
 
     this.playing = false;
     this._dashCardsdirty = false;
-    this._init();
-  }
-
-  _init() {
-    //TODO See this.wireSimBus below??? and remove bus from constructor
-    //Register for the message we want
-    this._bus.subscribe(SIMULATION_BUS_MESSAGES.NODE_DATA_CHANGED, msg => {
-      const { reason } = msg.meta || {};
-      if(reason === 'breakpoint') {
-        const { breakpointContext } = msg.data || {};
-        this.showBreakpointPaused(breakpointContext);
-      }
-    });
   }
 
   // ── Playback ──────────────────────────────────────────────────────────────
@@ -181,40 +164,22 @@ export class SimulationAnimator {
     bus.subscribe(SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START, ({ date, payload, stateSnapshot }) => {
       this._timeControls.onDateChanged(new Date(date));
       this.updateDashCards(date);
-
-      // TODO This should be done via graph this.updateConfigGraphEvents(payload.event, payload.stateBefore, stateSnapshot, true);
     });
 
-    //TODO This is too much UI churn
-    /*
-    bus.subscribe(SIMULATION_BUS_MESSAGES.HANDLED_EVENT, ({ date, payload, stateSnapshot }) => {
-      this.updateDashCards(date);
-      // TODO This should be done via graph this.updateConfigGraphHandlers(payload.handler, payload.stateBefore, stateSnapshot);
+    bus.subscribe(SIMULATION_BUS_MESSAGES.NODE_DATA_CHANGED, msg => {
+      const { reason } = msg.meta || {};
+      if(reason === 'breakpoint') {
+        const { breakpointContext } = msg.data || {};
+        this.showBreakpointPaused(breakpointContext);
+      }
     });
 
-    bus.subscribe(SIMULATION_BUS_MESSAGES.ACTION_RESULT, ({ date, payload, stateSnapshot }) => {
-      this._statePanelView.updateStatePanel(date, stateSnapshot);
-      this.updateDashCards(date);
-      // TODO This should be done via graph this.updateConfigGraphActions(payload.action, payload.stateBefore, stateSnapshot);
-    });
-
-    bus.subscribe(SIMULATION_BUS_MESSAGES.REDUCER_RESULT, ({ date, payload, stateSnapshot }) => {
-      if (this._graphView) this._graphView.updateView(payload);
-      const type    = payload.action.type;
-      const metrics = stateSnapshot.metrics ? { ...stateSnapshot.metrics } : {};
-      this._chartView.addSnapshot(type, date, metrics);
-      this._statePanelView.updateStatePanel(date, stateSnapshot);
-      this.updateDashCards(date);
-      // TODO This should be done via graph this.updateConfigGraphReducers(payload.reducer, payload.stateBefore, stateSnapshot);
-    })
-    */
     //Once after each event
     bus.subscribe(SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_END, ({ date, payload, stateSnapshot }) => {
       const metrics = stateSnapshot.metrics ? { ...stateSnapshot.metrics } : {};
       this._chartView.addSnapshot(date, metrics);
       this._statePanelView.updateStatePanel(date, stateSnapshot);
       this.updateDashCards(date);
-      // TODO This should be done via graph this.updateConfigGraphReducers(payload.reducer, payload.stateBefore, stateSnapshot);
     })
   }
 }

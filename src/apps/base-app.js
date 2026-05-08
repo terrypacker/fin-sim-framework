@@ -225,12 +225,10 @@ export class BaseApp extends BaseComponent {
 
     // ── Simulation animator ───────────────────────────────────────────────────
     this._animator = new SimulationAnimator({
-      configPresenter: this.configPresenter,
       scenario:       this.scenario,
       timeControls:   this.timeControls,
       statePanelView: this._statePanelView,
       chartView:      this.chartView,
-      bus: registry.bus
     });
 
     this._animator.toggleBreakpoint();
@@ -402,6 +400,7 @@ export class BaseApp extends BaseComponent {
 
   /**
    * TODO Refactor to remove these, they should be in the views.
+   * TODO Extract to shared UI class #139
    * Formatting helpers — subclasses and custom scenarios may call these.
    * fmtVal syncs timeControls.formatDate into StatePanelView so that tests
    * which stub timeControls directly continue to work.
@@ -410,21 +409,4 @@ export class BaseApp extends BaseComponent {
     if (this.timeControls?.formatDate) this._statePanelView.formatDate = this.timeControls.formatDate;
     return this._statePanelView.fmtVal(v, objAsCode);
   }
-  fmtArray(v, objAsCode = false){ return this._statePanelView.fmtArray(v, objAsCode); }
-  diffStates(prev, next)        { return this._statePanelView.diffStates(prev, next); }
-  toLabel(key)                  { return this._statePanelView.toLabel(key); }
-  isDate(obj)                   { return this._statePanelView.isDate(obj); }
-  renderObj(v)                  { return this._statePanelView.renderObj(v); }
-  renderHeaderRow(label)        { return this._statePanelView.renderHeaderRow(label); }
-  getNestedProperty(obj, path)  { return this._statePanelView.getNestedProperty(obj, path); }
-  buildActionDetail(entry)      { return this._statePanelView.buildActionDetail(entry); }
-  getNodeDetail(node)           { return this._statePanelView.getNodeDetail(node); }
-
-  /** State panel — subclasses may call these to push custom content. */
-  updateStatePanel(date, state)   { return this._statePanelView.updateStatePanel(date, state); }
-  showNodeStateChanges(changes)   { return this._statePanelView.showNodeStateChanges(changes); }
-  showNodeDetail(entry)           { return this._statePanelView.showNodeDetail(entry); }
-
-  /** Dashboard cards — subclasses may call to force a refresh. */
-  updateDashCards(date) { return this._animator?.updateDashCards(date); }
 }
