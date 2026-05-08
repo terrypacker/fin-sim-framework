@@ -10,7 +10,7 @@ const isWatching = process.env.ROLLUP_WATCH === 'true';
 
 // Chart.js and its plugins are bundled into the UMD browser build.
 // For ESM/CJS library builds they are left as external peer dependencies.
-const CHART_EXTERNALS = ['chart.js', 'chartjs-plugin-annotation', 'chartjs-plugin-zoom', 'hammerjs'];
+const CHART_EXTERNALS = ['chart.js', 'chartjs-plugin-annotation', 'chartjs-plugin-zoom', 'chartjs-adapter-date-fns', 'hammerjs'];
 
 export default [
   // ESM

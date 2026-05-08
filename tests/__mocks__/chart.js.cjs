@@ -8,4 +8,12 @@ const Chart = class {
   update() {}
 };
 const registerables = [];
-module.exports = { Chart, registerables };
+
+// Needed by chartjs-adapter-date-fns
+const _adapters = {
+  _date: {
+    override: jest.fn()
+  }
+};
+
+module.exports = { Chart, registerables, _adapters };
