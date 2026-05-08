@@ -26,6 +26,7 @@ import { IntlTransferApplyReducer } from '../finance/reducers/intl-transfer-appl
 import { StockDividendCashApplyReducer } from '../finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { ChangeResidencyApplyReducer } from '../finance/reducers/change-residency-apply-reducer.js';
 import { SetOutOfFundsDateReducer } from '../finance/reducers/set-out-of-funds-date-reducer.js';
+import {EDGE_TYPES} from "../graph/edge.js";
 
 /**
  * Service for managing Reducer instances throughout their lifecycle.
@@ -34,7 +35,44 @@ import { SetOutOfFundsDateReducer } from '../finance/reducers/set-out-of-funds-d
  * into a ReducerPipeline is the caller's responsibility.
  */
 export class ReducerService extends BaseService {
-  constructor(bus) { super(bus, 'r'); }
+  constructor(graph, query, bus) {
+    super(graph, query, bus, 'reducer');
+  }
+
+  // ─── Edges ───────────────────────────────────────────────────────────────
+  _wireNodeEdges(item) {
+    (item.reducedActionTypes ?? []).forEach(a => {
+      const action = this._query.getOneByKind('action', 'type', a);
+      if(action == null) {
+        throw Error(`Action for type ${a} missing.`)
+      }
+      this.linkReducesAction(action.id, item.id);
+    });
+
+    (item.generatedActionTypes ?? []).forEach(a => {
+      const action = this._query.getOneByKind('action', 'type', a);
+      if(action == null) {
+        throw Error(`Action for type ${a} missing.`)
+      }
+      this.linkGeneratesAction(item.id, action.id);
+    });
+  }
+
+  linkGeneratesAction(nodeId, actionId) {
+    this._addEdge(nodeId, actionId, EDGE_TYPES.GENERATES_ACTION);
+  }
+
+  unlinkGeneratesAction(nodeId, actionId) {
+    this._removeEdge(nodeId, actionId, EDGE_TYPES.GENERATES_ACTION);
+  }
+
+  linkReducesAction(actionId, reducerId) {
+    this._addEdge(actionId, reducerId, EDGE_TYPES.REDUCES_ACTION);
+  }
+
+  unlinkReducesAction(actionId, reducerId) {
+    this._removeEdge(actionId, reducerId, EDGE_TYPES.REDUCES_ACTION);
+  }
 
   // ─── Create ───────────────────────────────────────────────────────────────
 
@@ -43,6 +81,7 @@ export class ReducerService extends BaseService {
     item.id = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -51,6 +90,7 @@ export class ReducerService extends BaseService {
     item.id = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -59,6 +99,7 @@ export class ReducerService extends BaseService {
     item.id = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -67,6 +108,7 @@ export class ReducerService extends BaseService {
     item.id = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -75,6 +117,7 @@ export class ReducerService extends BaseService {
     item.id = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -83,6 +126,7 @@ export class ReducerService extends BaseService {
     item.id = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -101,6 +145,7 @@ export class ReducerService extends BaseService {
     item.id   = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -118,6 +163,7 @@ export class ReducerService extends BaseService {
     item.id   = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -133,6 +179,7 @@ export class ReducerService extends BaseService {
     item.id   = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -150,6 +197,7 @@ export class ReducerService extends BaseService {
     item.id   = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -166,6 +214,7 @@ export class ReducerService extends BaseService {
     item.id   = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -182,6 +231,7 @@ export class ReducerService extends BaseService {
     item.id   = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -196,6 +246,7 @@ export class ReducerService extends BaseService {
     item.id   = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -215,8 +266,10 @@ export class ReducerService extends BaseService {
   updateReducer(idOrReducer, changes = {}) {
     const reducer = this._resolve(idOrReducer);
     const originalItem = Object.assign(Object.create(Object.getPrototypeOf(reducer)), reducer);
-    Object.assign(reducer, changes);
+    this.mergeChanges(reducer, changes);
+    this._graph.notifyNodeWatchers(); //Notify that the content in the graph changed
     this._publish('UPDATE', reducer.constructor.name, reducer, originalItem);
+    this._rewireEdges(reducer);
     return reducer;
   }
 
@@ -247,7 +300,7 @@ export class ReducerService extends BaseService {
     fresh.generatedActionDefinitions = old.generatedActionDefinitions;
     Object.assign(fresh, extraProps);
 
-    this._items.set(fresh.id, fresh);
+    this._graph.updateNode(fresh.id, fresh);
     this._publish('UPDATE', newType, fresh, old);
     return fresh;
   }

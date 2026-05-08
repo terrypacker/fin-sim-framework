@@ -11,6 +11,7 @@
 import { Chart, registerables } from 'chart.js';
 import annotationPlugin from 'chartjs-plugin-annotation';
 import zoomPlugin from 'chartjs-plugin-zoom';
+import 'chartjs-adapter-date-fns';
 
 Chart.register(...registerables, annotationPlugin, zoomPlugin);
 
@@ -76,7 +77,7 @@ export class ChartView {
    * @param {Date|number}  date
    * @param {object}       data - flat map of { seriesKey: number }
    */
-  addSnapshot(type, date, data) {
+  addSnapshot(date, data) {
     if (!data || typeof data !== 'object') return;
     const t = new Date(date).getTime();
     let didAdd = false;
@@ -209,12 +210,18 @@ export class ChartView {
     this._chart.data.datasets.push({
       label:           this._labelFor(key),
       data:            dataArr,          // same array reference — push updates it live
+      parsing: false,
+      normalized: true,
       borderColor:     color,
       backgroundColor: color + '22',
-      borderWidth:     2,
-      pointRadius:     0,
-      tension:         0.1,
-      fill:            false,
+      borderWidth: 2.5,
+      pointRadius: 0,
+      pointHitRadius: 12,
+      tension: 0.35,
+      cubicInterpolationMode: 'monotone',
+      borderCapStyle: 'round',
+      borderJoinStyle: 'round',
+      fill: false,
       _seriesKey:      key
     });
   }
@@ -257,22 +264,24 @@ export class ChartView {
       type: 'line',
       data: { datasets: [] },
       options: {
+        devicePixelRatio: window.devicePixelRatio || 1,
         responsive:          true,
         maintainAspectRatio: false,
-        animation:           true,
+        animation: false,
+        transitions: {
+          active: {
+            animation: {
+              duration: 0
+            }
+          }
+        },
         layout: { padding: { top: 10, right: 30, bottom: 10, left: 10 } },
         scales: {
           x: {
-            type: 'linear',
-            min:  minX,
-            max:  maxX,
-            ticks: {
-              color:        '#94a3b8',
-              maxTicksLimit: 10,
-              font:         { family: 'monospace', size: 11 },
-              callback:     (val) => this._fmtDateTick(val)
-            },
-            grid: { color: '#1e293b' }
+            type: 'time',
+            time: {
+              unit: 'month'
+            }
           },
           y: {
             ticks: {
@@ -280,14 +289,21 @@ export class ChartView {
               font:  { family: 'monospace', size: 11 },
               callback: (val) => Number(val).toLocaleString()
             },
-            grid: { color: '#1e293b' }
+            grid: {
+              color: 'rgba(148,163,184,0.08)',
+              lineWidth: 1,
+              drawBorder: false
+            }
           }
         },
         plugins: {
           legend: {
             labels: {
               color: '#94a3b8',
-              font:  { family: 'monospace', size: 11 }
+              font: {
+                family: 'Inter, system-ui, sans-serif',
+                size: 11
+              }
             }
           },
           tooltip: {
@@ -299,6 +315,11 @@ export class ChartView {
           },
           annotation: {
             annotations: this._annotations
+          },
+          decimation: {
+            enabled: true,
+            algorithm: 'lttb',
+            samples: 500
           },
           zoom: {
             zoom: {

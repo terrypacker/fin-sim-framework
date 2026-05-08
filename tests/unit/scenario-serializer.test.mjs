@@ -119,12 +119,6 @@ class TrackingUI {
   _addEvent(e) {
     if (this.nodes.find(n => n.id === e.id)) return; // idempotent
     e.kind = 'event';
-    // Stamp eventType so _serializeEvent works.
-    if (e instanceof OneOffEvent) {
-      e.eventType = 'OneOff';
-    } else {
-      e.eventType = 'Series';
-    }
     this.nodes.push(e);
   }
 

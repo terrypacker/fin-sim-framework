@@ -14,8 +14,8 @@ import { HANDLER_CLASSES } from '../../simulation-framework/handlers.js';
 import { OneOffEvent } from "../../simulation-framework/events/one-off-event.js";
 import { ACTION_TEMPLATES } from '../../simulation-framework/action-templates.js';
 import {GraphNodeFilterMultiSelect} from "../components/graph-node-filter-multi-select.js";
-import {GraphQueryApi} from "../../graph/graph-query-api.js";
 import {BaseComponent} from "../components/base-component.js";
+import {EDGE_TYPES} from "../../graph/edge.js";
 
 /**
  * GraphBuilderView — pure DOM / template layer for the event-graph editor panel.
@@ -45,14 +45,14 @@ export class GraphBuilderView extends BaseComponent {
    *   graph: import('../config-graph.js').ConfigGraph
    * }}
    */
-  constructor({ builderCanvas, graph }) {
+  constructor({ builderCanvas, graphRenderer }) {
     super(); //I am the root component here
     this._canvas = builderCanvas;
-    this._graph  = graph;
+    this._graphRenderer  = graphRenderer;
 
     // ── Type/option constants ─────────────────────────────────────────────
 
-    this.EVENT_TYPES        = ['Series', 'OneOff'];
+    this.EVENT_TYPES        = ['EventSeries', 'OneOffEvent'];
     this.EVENT_SERIES_TYPES = ['monthly', 'quarterly', 'annually', 'month-end', 'year-end'];
 
     this.PRIORITY_OPTIONS = [
@@ -162,7 +162,7 @@ export class GraphBuilderView extends BaseComponent {
   // ── Toolbar ───────────────────────────────────────────────────────────────
 
   _buildControls() {
-    const wrapper = this._graph.graphRoot.parentElement;
+    const wrapper = this._graphRenderer.graphRoot.parentElement;
     if (!wrapper || this._controlsEl) return;
     wrapper.style.position = 'relative';
     this._controlsEl = document.createElement('div');
@@ -185,7 +185,7 @@ export class GraphBuilderView extends BaseComponent {
     btn.className = 'btn btn-sm';
     btn.textContent = 'Fit';
     btn.addEventListener('click', () => {
-      this._graph.fitToView();
+      this._graphRenderer.fitToView();
     });
     this._controlsEl.appendChild(btn);
 
@@ -233,10 +233,7 @@ export class GraphBuilderView extends BaseComponent {
     });
     typeSelect.value = node.eventType || 'Series';
     typeSelect.onchange = () => {
-      if (this.onFieldChange) this.onFieldChange(node, 'eventType', typeSelect.value);
-      // node.eventType is mutated synchronously by the service; re-render the
-      // config sub-panel without touching the rest of the editor.
-      this._renderEventConfig(node, configWrap);
+      if (this.onEventTypeChange) this.onEventTypeChange(node.id, typeSelect.value);
     };
 
     const colorInput = el.querySelector('[data-field="color"]');
@@ -253,7 +250,7 @@ export class GraphBuilderView extends BaseComponent {
 
     this._renderLinkableMultiSelect(node, 'handler',
         el.querySelector('#event-handler-count'),
-        el.querySelector('#event-handlers'), true);
+        el.querySelector('#event-handlers'), false, EDGE_TYPES.HANDLED_BY);
 
     this._renderEventConfig(node, configWrap);
     this._canvas.appendChild(el);
@@ -265,7 +262,7 @@ export class GraphBuilderView extends BaseComponent {
 
     let wrap;
     switch (node.eventType) {
-      case 'Series': {
+      case 'EventSeries': {
         wrap = this._getTemplate('tpl-event-series-editor');
         const seriesTypeSelect = wrap.querySelector('[data-field="interval"]');
         this.EVENT_SERIES_TYPES.forEach(type => {
@@ -277,7 +274,7 @@ export class GraphBuilderView extends BaseComponent {
         wrap.querySelector('[data-field="startOffset"]').value = node.startOffset ?? 0;
         break;
       }
-      case 'OneOff': {
+      case 'OneOffEvent': {
         wrap = this._getTemplate('tpl-event-one-off-editor');
         wrap.querySelector('[data-field="date"]').valueAsDate = node.date || new Date();
         break;
@@ -321,7 +318,9 @@ export class GraphBuilderView extends BaseComponent {
       if (this.onFieldChange) this.onFieldChange(node, 'name', name.value);
     });
 
-    this._renderLinkableMultiSelect(node, 'event', el.querySelector('#handler-event-count'), el.querySelector('#handler-events'), false);
+    this._renderLinkableMultiSelect(node, 'event',
+        el.querySelector('#handler-event-count'),
+        el.querySelector('#handler-events'), true, EDGE_TYPES.HANDLED_BY);
 
     // Action Definitions — inline list with template picker
     const defContainer = el.querySelector('#handler-actions');
@@ -377,10 +376,12 @@ export class GraphBuilderView extends BaseComponent {
 
     this._renderLinkableMultiSelect(node, 'handler',
         el.querySelector('#action-handler-count'),
-        el.querySelector('#action-handlers'), false);
+        el.querySelector('#action-handlers'), true, EDGE_TYPES.GENERATES_ACTION);
+
+    //TODO Reduced BY
     this._renderLinkableMultiSelect(node, 'reducer',
         el.querySelector('#action-reducer-count'),
-        el.querySelector('#action-reducers'), true);
+        el.querySelector('#action-reducers'), false, EDGE_TYPES.REDUCES_ACTION);
 
     this._canvas.appendChild(el);
     this._canvas.appendChild(this._createDeleteButton(node));
@@ -499,7 +500,7 @@ export class GraphBuilderView extends BaseComponent {
     // Which action types trigger this reducer
     this._renderLinkableMultiSelect(node, 'action',
         el.querySelector('#reducer-reduced-actions-count'),
-        el.querySelector('#reducer-reduced-actions'), false);
+        el.querySelector('#reducer-reduced-actions'), true, EDGE_TYPES.REDUCES_ACTION);
 
     // Generated Action Definitions — inline list with template picker
     const genContainer = el.querySelector('#reducer-generated-actions');
@@ -780,10 +781,18 @@ export class GraphBuilderView extends BaseComponent {
   }
 
   //── MULTI SELECT HELPER ───────────────────────────────────────────────────────────
-  _renderLinkableMultiSelect(node, kind, countSpan, container, linkTo) {
+  _renderLinkableMultiSelect(node, kind, countSpan, container, linkTo, edgeType) {
     const myChildren = linkTo
-        ? this._graph.getNodesToKindFromMe(node, kind)
-        : this._graph.getNodesFromKindToMe(node, kind);
+        ? this._graphRenderer._graphQueryApi.getRelated(node.id, {
+          edgeType: edgeType,
+          direction: 'in',
+          where: (n) => n.kind === kind
+        })
+        : this._graphRenderer._graphQueryApi.getRelated(node.id, node.id, {
+          edgeType: edgeType,
+          direction: 'out',
+          where: (n) => n.kind === kind
+        });
 
     new GraphNodeFilterMultiSelect({
       parent: this,
@@ -795,7 +804,7 @@ export class GraphBuilderView extends BaseComponent {
           this.onLinkToggle(node, selectedItem, kind, linkTo, toggleOn);
         }
       },
-      graphQueryApi: new GraphQueryApi(this._graph),
+      graphQueryApi: this._graphRenderer._graphQueryApi,
       defaultCondition: `kind=${kind}`
     });
   }

@@ -26,9 +26,11 @@ import { ActionDefinition } from '../../simulation-framework/actions.js';
  */
 export class GraphBuilderController {
 
-  /** @param {{ graph: import('../config-graph.js').ConfigGraph }} */
-  constructor({ graph }) {
-    this._graph = graph;
+  constructor({ eventService, handlerService, actionService, reducerService}) {
+    this.eventService = eventService;
+    this.handlerService = handlerService;
+    this.actionService = actionService;
+    this.reducerService = reducerService;
 
     // Creation listener arrays — BaseScenario registers here so it can react
     // to the "+" toolbar buttons.
@@ -47,10 +49,61 @@ export class GraphBuilderController {
 
   /** Dispatch a toolbar "+" click to the relevant listener array. */
   notifyCreationRequested(kind, subtype) {
-    if      (kind === 'event')   this.eventNodeCreatedListeners.forEach(l => l(subtype));
+    if (kind === 'event') this.eventNodeCreatedListeners.forEach(l => l(subtype));
     else if (kind === 'handler') this.handlerNodeCreatedListeners.forEach(l => l());
     else if (kind === 'action')  this.actionNodeCreatedListeners.forEach(l => l());
     else if (kind === 'reducer') this.reducerNodeCreatedListeners.forEach(l => l());
+  }
+
+  // ─── Creation handlers (called via ConfigBuilder "+" buttons) ───────────
+  //
+  // Each service create* call publishes CREATE on the bus.
+  // SimulationSync's subscriber wires it into the sim.
+  // ConfigBuilder's subscriber adds the node to the graph.
+  // The only thing these handlers do explicitly is open the editor panel.
+
+  createNewNode(kind, subtype) {
+    if (kind === 'event') return this.eventCreationRequested(subtype);
+    else if (kind === 'handler') return this.handlerCreationRequested(subtype)
+    else if (kind === 'action')  return this.actionCreationRequested(subtype)
+    else if (kind === 'reducer') return this.reducerCreationRequested(subtype);
+  }
+
+  eventCreationRequested(subtype) {
+    //TODO need a better way to generate unique names and ids outside of the EventService...
+    const id = this.eventService._generateId('e');
+    let event;
+    if (subtype === 'OneOff') {
+      event = this.eventService.createOneOffEvent({
+        id: id,
+        name: 'New One-Off Event',
+        type: 'NEW_ONEOFF_' + id,
+        date: new Date(), enabled: false,
+        color: '#f87171'
+      });
+    } else {
+      event = this.eventService.createEventSeries({
+        id: id,
+        name: 'New Event Series',
+        type: 'NEW_SERIES_' + id,
+        interval: 'month-end', enabled: false,
+        color: '#60a5fa'
+      });
+    }
+    return event;
+  }
+
+  handlerCreationRequested() {
+    // null fn → uses HandlerEntry.defaultFunction which instantiates from generatedActionDefinitions
+    return this.handlerService.createHandler(null, 'New Handler');
+  }
+
+  actionCreationRequested() {
+    return this.actionService.createAmountAction('NEW_ACTION', 'New Action', 0);
+  }
+
+  reducerCreationRequested() {
+    return this.reducerService.createFieldReducer('', 'New Reducer');
   }
 
   // ── Domain mutations ───────────────────────────────────────────────────────
@@ -60,11 +113,10 @@ export class GraphBuilderController {
    * SimulationSync + GraphSync clean up automatically.
    */
   deleteNode(node) {
-    const { eventService, handlerService, actionService, reducerService } = ServiceRegistry.getInstance();
-    if      (node.kind === 'event')   eventService.deleteEvent(node.id);
-    else if (node.kind === 'handler') handlerService.deleteHandler(node.id);
-    else if (node.kind === 'action')  actionService.deleteAction(node.id);
-    else if (node.kind === 'reducer') reducerService.deleteReducer(node.id);
+    if      (node.kind === 'event')   this.eventService.deleteEvent(node.id);
+    else if (node.kind === 'handler') this.handlerService.deleteHandler(node.id);
+    else if (node.kind === 'action')  this.actionService.deleteAction(node.id);
+    else if (node.kind === 'reducer') this.reducerService.deleteReducer(node.id);
   }
 
   /**
@@ -72,23 +124,18 @@ export class GraphBuilderController {
    * bus fires and the simulation is re-wired.
    */
   updateNode(node, changes) {
-    const { eventService, handlerService, actionService, reducerService } = ServiceRegistry.getInstance();
-    if      (node.kind === 'event')   eventService.updateEvent(node.id, changes);
-    else if (node.kind === 'handler') handlerService.updateHandler(node.id, changes);
-    else if (node.kind === 'action')  actionService.updateAction(node.id, changes);
-    else if (node.kind === 'reducer') reducerService.updateReducer(node.id, changes);
+    if      (node.kind === 'event')   this.eventService.updateEvent(node.id, changes);
+    else if (node.kind === 'handler') this.handlerService.updateHandler(node.id, changes);
+    else if (node.kind === 'action')  this.actionService.updateAction(node.id, changes);
+    else if (node.kind === 'reducer') this.reducerService.updateReducer(node.id, changes);
   }
 
   /**
-   * Fire a no-op service update to notify the bus after a canonical array has
-   * already been mutated in-place (chip toggle path).
-   *
-   * NOTE: The arrays are mutated before this call, so originalItem in the
-   * ServiceActionEvent captures the post-mutation state.  This is preserved
-   * behaviour from the original ConfigBuilder.
+   * Replace an event with a new instance of the given class.
+   * Returns the new node so callers can re-render.
    */
-  notifyChanged(node) {
-    this.updateNode(node, {});
+  replaceEvent(nodeId, eventClass) {
+    return this.eventService.replaceEvent(nodeId, eventClass);
   }
 
   /**
@@ -96,7 +143,7 @@ export class GraphBuilderController {
    * Returns the new node so callers can re-render.
    */
   replaceAction(nodeId, actionClass) {
-    return ServiceRegistry.getInstance().actionService.replaceAction(nodeId, actionClass);
+    return this.actionService.replaceAction(nodeId, actionClass);
   }
 
   /**
@@ -104,7 +151,7 @@ export class GraphBuilderController {
    * Returns the new node so callers can re-render.
    */
   replaceReducer(nodeId, reducerType) {
-    return ServiceRegistry.getInstance().reducerService.replaceReducer(nodeId, reducerType);
+    return this.reducerService.replaceReducer(nodeId, reducerType);
   }
 
   /**
@@ -112,7 +159,7 @@ export class GraphBuilderController {
    * Returns the new node so callers can re-render.
    */
   replaceHandler(nodeId, handlerClass) {
-    return ServiceRegistry.getInstance().handlerService.replaceHandler(nodeId, handlerClass);
+    return this.handlerService.replaceHandler(nodeId, handlerClass);
   }
 
   // ── ActionDefinition management ───────────────────────────────────────────
@@ -129,15 +176,20 @@ export class GraphBuilderController {
    */
   addActionDefinition(node, defData) {
     const def = new ActionDefinition({ type: defData.type, config: defData.config });
-    node.generatedActionDefinitions.push(def);
+    const generatedActionDefinitions = [...node.generatedActionDefinitions];
+    generatedActionDefinitions.push(def);
 
-    if (!node.generatedActionTypes.includes(def.type)) {
-      node.generatedActionTypes.push(def.type);
-      const actionNode = this._graph.getNodeByType('action', def.type);
-      if (actionNode) this._graph.addEdge({ from: node.id, to: actionNode.id });
+    const generatedActionTypes = [...node.generatedActionTypes];
+    if (!generatedActionTypes.includes(def.type)) {
+      const actionNode = this.actionService.getByType(def.type);
+      if (actionNode) {
+        generatedActionTypes.push(def.type);
+      }
     }
-
-    this.notifyChanged(node);
+    this.updateNode(node, {
+      generatedActionDefinitions: generatedActionDefinitions,
+      generatedActionTypes: generatedActionTypes
+    });
     return def;
   }
 
@@ -153,16 +205,17 @@ export class GraphBuilderController {
     const idx = node.generatedActionDefinitions.findIndex(d => d.id === defId);
     if (idx < 0) return;
     const [def] = node.generatedActionDefinitions.splice(idx, 1);
-
     const typeStillUsed = node.generatedActionDefinitions.some(d => d.type === def.type);
     if (!typeStillUsed) {
-      const ti = node.generatedActionTypes.indexOf(def.type);
-      if (ti >= 0) node.generatedActionTypes.splice(ti, 1);
-      const actionNode = this._graph.getNodeByType('action', def.type);
-      if (actionNode) this._graph.removeEdge({ from: node.id, to: actionNode.id });
+      const actionNode = this.actionService.getByType(def.type);
+      if (actionNode) {
+        //Update the item
+        const generatedActionTypes = [...node.generatedActionTypes];
+        const ti = generatedActionTypes.indexOf(def.type);
+        if (ti >= 0) generatedActionTypes.splice(ti, 1);
+        this.updateNode(node, {generatedActionTypes: generatedActionTypes});
+      }
     }
-
-    this.notifyChanged(node);
   }
 
   /**
@@ -176,98 +229,120 @@ export class GraphBuilderController {
    * @param {string} defId
    * @param {string} field  - 'type' or a config key
    * @param {*}      value
+   * @return {boolean} true to reload edit window
    */
   updateActionDefinition(node, defId, field, value) {
     const def = node.generatedActionDefinitions.find(d => d.id === defId);
-    if (!def) return;
+    if (!def) return false;
 
     if (field === 'type') {
       const oldType = def.type;
-      def.type = value;
-
       // Remove old type if no sibling def still uses it
       if (!node.generatedActionDefinitions.some(d => d !== def && d.type === oldType)) {
-        const i = node.generatedActionTypes.indexOf(oldType);
-        if (i >= 0) node.generatedActionTypes.splice(i, 1);
-        const oldNode = this._graph.getNodeByType('action', oldType);
-        if (oldNode) this._graph.removeEdge({ from: node.id, to: oldNode.id });
+        this.removeActionDefinition(node, oldType);
       }
 
       // Register new type if not already present
       if (!node.generatedActionTypes.includes(value)) {
-        node.generatedActionTypes.push(value);
-        const newNode = this._graph.getNodeByType('action', value);
-        if (newNode) this._graph.addEdge({ from: node.id, to: newNode.id });
+        this.addActionDefinition(node, value);
       }
+      return false;
     } else {
+      //We have no choice but to modify the definition in place, we
+      // can't structured clone the def... but we want to notify everyone
+      // that it was modified so we pass it through the service layer
       def.config[field] = value;
+      const changes = {
+        generatedActionDefinitions: node.generatedActionDefinitions
+      };
+      this.updateNode(node, changes);
+      return false;
     }
-
-    this.notifyChanged(node);
   }
 
   // ── Graph edge mutations ───────────────────────────────────────────────────
 
   /** Add a graph edge and sync the canonical relationship array. */
   linkNodes(node, selectedNode, kind, linkTo) {
-    if (linkTo) this._graph.addEdge({ from: node.id, to: selectedNode.id });
-    else        this._graph.addEdge({ from: selectedNode.id, to: node.id });
-    this._syncCanonicalArrays(node, selectedNode, kind, linkTo, 'add');
+    switch(node.kind) {
+      case 'event':
+        if(selectedNode.kind === 'handler') {
+          this.handlerService.linkEventToHandler(node.id, selectedNode.id);
+        }
+      break;
+       case 'handler':
+         if(selectedNode.kind === 'event'){
+           this.handlerService.linkEventToHandler(selectedNode.id, node.id);
+         }else if(selectedNode.kind === 'action') {
+          this.handlerService.linkHandlerToAction(node.id, selectedNode.id);
+        }
+        break;
+      case 'action':
+        if(selectedNode.kind === 'handler'){
+          this.handlerService.linkHandlerToAction(selectedNode.id, node.id);
+        }else if(selectedNode.kind === 'reducer') {
+          this.reducerService.linkReducesAction(node.id, selectedNode.id);
+        }
+        break;
+      case 'reducer':
+        if(selectedNode.kind === 'action') {
+          this.reducerService.linkReducesAction(selectedNode.id, node.id);
+        }
+        break;
+    }
   }
 
   /** Remove a graph edge and sync the canonical relationship array. */
   unlinkNodes(node, selectedNode, kind, linkTo) {
-    if (linkTo) this._graph.removeEdge({ from: node.id, to: selectedNode.id });
-    else        this._graph.removeEdge({ from: selectedNode.id, to: node.id });
-    this._syncCanonicalArrays(node, selectedNode, kind, linkTo, 'remove');
+    switch(node.kind) {
+      case 'event':
+        if(selectedNode.kind === 'handler') {
+          //Unlink event from handler
+          this.handlerService.unlinkEventFromHandler(node.id, selectedNode.id);
+        }
+        break;
+      case 'handler':
+        if(selectedNode.kind === 'action') {
+          //Unlink action from handler
+          this.handlerService.unlinkHandlerFromAction(node.id, selectedNode.id);
+        }else if(selectedNode.kind === 'event') {
+          this.handlerService.unlinkEventFromHandler(selectedNode.id, node.id);
+        }
+        break;
+      case 'action':
+        if(selectedNode.kind === 'handler'){
+          this.handlerService.unlinkHandlerFromAction(selectedNode.id, node.id);
+        }else if(selectedNode.kind === 'reducer') {
+          this.reducerService.unlinkReducesAction(node.id, selectedNode.id);
+        }
+        break;
+      case 'reducer':
+        if(selectedNode.kind === 'action') {
+          this.reducerService.unlinkReducesAction(selectedNode.id, node.id);
+        }
+        break;
+    }
   }
 
-  // ── Graph read queries (proxied for view use) ─────────────────────────────
-
-  getNode(id)                      { return this._graph.getNode(id); }
-  getKind(kind)                    { return this._graph.getKind(kind); }
-  getNodeByType(kind, type)        { return this._graph.getNodeByType(kind, type); }
-  getNodesToKindFromMe(node, kind) { return this._graph.getNodesToKindFromMe(node, kind); }
-  getNodesFromKindToMe(node, kind) { return this._graph.getNodesFromKindToMe(node, kind); }
-
-  // ── Private ───────────────────────────────────────────────────────────────
-
+  // ── Configuration Lifecycle ─────────────────────────────
   /**
-   * Update the canonical relationship array on the domain object and notify
-   * via notifyChanged() so the bus fires and SimulationSync re-wires the sim.
-   *
-   * handler ↔ event edges:   use object arrays (HandlerEntry.handledEvents holds event objects)
-   * handler/reducer ↔ action: use type string arrays (generatedActionTypes / reducedActionTypes)
+   * TODO Need to have a central location to reset the sim  See #135
+   * Clear out any used meta and data from our nodes
+   * - data.breakpointHit
+   * - data.fired
+   * - data.breakpoint
    */
-  _syncCanonicalArrays(node, selectedNode, kind, linkTo, op) {
-    const add = op === 'add';
-
-    // Object arrays (hold domain objects, keyed by .id)
-    const syncObjArr = (arr, item) => {
-      if (add) {
-        if (!arr.some(n => n.id === item.id)) arr.push(item);
-      } else {
-        const i = arr.findIndex(n => n.id === item.id);
-        if (i !== -1) arr.splice(i, 1);
-      }
+  resetForReplay() {
+    const data = {
+      breakPointHit: false,
+      fired: false,
+      breakpoint: false,
+      breakpointContext: null,
+      stateChanges: []
     };
-
-    // Type string arrays (hold action type discriminators)
-    const syncTypeArr = (arr, type) => {
-      if (add) {
-        if (!arr.includes(type)) arr.push(type);
-      } else {
-        const i = arr.indexOf(type);
-        if (i !== -1) arr.splice(i, 1);
-      }
-    };
-
-    if (node.kind === 'handler' && kind === 'event'   && !linkTo) { syncObjArr(node.handledEvents,          selectedNode);       this.notifyChanged(node);     return; }
-    if (node.kind === 'handler' && kind === 'action'  &&  linkTo) { syncTypeArr(node.generatedActionTypes,  selectedNode.type);  this.notifyChanged(node);     return; }
-    if (node.kind === 'reducer' && kind === 'action'  && !linkTo) { syncTypeArr(node.reducedActionTypes,    selectedNode.type);  this.notifyChanged(node);     return; }
-    if (node.kind === 'reducer' && kind === 'action'  &&  linkTo) { syncTypeArr(node.generatedActionTypes,  selectedNode.type);  this.notifyChanged(node);     return; }
-    if (node.kind === 'event'   && kind === 'handler' &&  linkTo) { syncObjArr(selectedNode.handledEvents,      node);           this.notifyChanged(chipNode); return; }
-    if (node.kind === 'action'  && kind === 'handler' && !linkTo) { syncTypeArr(selectedNode.generatedActionTypes, node.type);   this.notifyChanged(chipNode); return; }
-    if (node.kind === 'action'  && kind === 'reducer' &&  linkTo) { syncTypeArr(selectedNode.reducedActionTypes,   node.type);   this.notifyChanged(chipNode); return; }
+    this.eventService.updateAllData(data);
+    this.handlerService.updateAllData(data);
+    this.actionService.updateAllData(data);
+    this.reducerService.updateAllData(data);
   }
 }

@@ -22,6 +22,8 @@
  * @typedef {{ code: string, symbol: string }} Currency
  */
 
+import {SimGraphNode} from "../graph/sim-graph-node.js";
+
 /** US Dollar */
 export const USD = { code: 'USD', symbol: '$' };
 
@@ -80,7 +82,7 @@ export class InsufficientFundsError extends Error {
  * They share some opts (ownershipType, ownerId, drawdownPriority) but their
  * mechanics and service methods are fundamentally different.
  */
-export class Account {
+export class Account extends SimGraphNode {
   /**
    * @param {number} initialValue - Starting balance (default 0)
    * @param {object} [opts]
@@ -95,8 +97,7 @@ export class Account {
    * @param {Currency|null} [opts.currency=null]        - Currency descriptor (e.g. USD, AUD)
    */
   constructor(initialValue = 0, opts = {}) {
-    this.id               = opts.id               ?? null;
-    this.name             = opts.name             ?? '';
+    super({id: opts.id ?? null, kind: 'account', layer: 'config', name: opts.name ?? ''});
     this.type             = opts.type             ?? null;
     this.balance          = initialValue;
     this.credits          = [];

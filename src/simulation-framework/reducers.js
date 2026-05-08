@@ -17,6 +17,8 @@
  * limitations under the License.
  */
 
+import {SimGraphNode} from "../graph/sim-graph-node.js";
+
 export class ReducerPipeline {
   constructor() {
     this.map = new Map(); // actionType -> [{priority, fn}]
@@ -71,6 +73,17 @@ export class ReducerPipeline {
   get(actionType) {
     return this.map.get(actionType) || [];
   }
+
+  /**
+   * Top count of n reducer entries
+   * @return {{}}
+   */
+  getStats(n) {
+    return [...this.map]
+    .map(([key, value]) => ({type: key, count: value.length}))
+    .sort((a, b) => b.count - a.count)
+    .splice(0, n);
+  }
 }
 
 export const PRIORITY = {
@@ -97,12 +110,11 @@ export const PRIORITY = {
  * Subclasses override reduce(state, action, date) and are registered via
  * registerWith(pipeline, actionType).
  */
-export class Reducer {
+export class Reducer extends SimGraphNode {
   static description = 'Abstract base class for all reducers; subclasses implement reduce(state, action, date) and register against an action type.';
 
   constructor(name = 'anonymous', priority = PRIORITY.LOGGING) {
-    this.id       = null;
-    this.name     = name;
+    super({id: null, kind: 'reducer', layer: 'config', name})
     this.priority = priority;
     this.reducedActionTypes        = [];   // string[] — action types this reducer handles
     this.generatedActionTypes      = [];   // string[] — action types this reducer may emit
@@ -141,8 +153,6 @@ export class Reducer {
     pipeline.registerReducer(actionType, this);
     return this;
   }
-
-  get kind() { return 'reducer'; }
 
   /** Always matches constructor.name — can never drift from the actual class. Don't let minification strip this out! */
   get reducerType() { return this.constructor.name; }
@@ -399,20 +409,22 @@ export class MultiplicativeReducer extends FieldValueReducer {
  * Applies an AccountService transaction to a named account in state,
  * then returns the updated state.
  *
- * @param {object}         opts
- * @param {AccountService} opts.accountService - Service used to apply the transaction
- * @param {string}         opts.accountKey     - Key into state, e.g. 'savingsAccount'
- * @param {Function}       [opts.getAmount]    - Maps action → amount (default: a => a.amount)
+ * @param {string}         [name]
+ * @param {number}         [priority]
+ * @param {object}         [opts]
+ * @param {AccountService} [opts.accountService] - Service used to apply the transaction
+ * @param {string}         [opts.accountKey]     - Key into state, e.g. 'savingsAccount'
+ * @param {Function}       [opts.getAmount]      - Maps action → amount (default: a => a.amount)
  */
 export class AccountTransactionReducer extends Reducer {
   static description = 'Applies a debit or credit transaction to a named account in state via AccountService, then returns the updated state.';
 
-  constructor({ accountService, accountKey, getAmount = a => a.amount }, name = 'Account Transaction',
-      priority = PRIORITY.CASH_FLOW) {
+  constructor(name = 'Account Transaction', priority = PRIORITY.CASH_FLOW,
+      { accountService, accountKey, getAmount = a => a.amount } = {}) {
     super(name, priority);
     this.accountService = accountService;
     this.accountKey     = accountKey;
-    this.getAmount      = getAmount;
+    this.getAmount      = getAmount ?? (a => a.amount);
   }
 
   reduce(state, action, date) {

@@ -127,7 +127,7 @@ export class GraphNodeFilterMultiSelect extends BaseComponent {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         this._position();
-        this._fetchPage().then(r => this._renderVisible());
+        this._fetchPage(true).then(r => this._renderVisible());
       });
     });
   }

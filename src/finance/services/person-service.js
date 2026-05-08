@@ -21,8 +21,8 @@ import { Person } from '../person.js';
  * are referenced by tax / account rules at scenario build time.
  */
 export class PersonService extends BaseService {
-  constructor(bus) {
-    super(bus, 'p');
+  constructor(graph, query, bus) {
+    super(graph, query, bus, 'person', 1, false);
   }
 
   // ─── Create ───────────────────────────────────────────────────────────────
@@ -39,6 +39,7 @@ export class PersonService extends BaseService {
     item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', 'Person', item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -54,8 +55,9 @@ export class PersonService extends BaseService {
   updatePerson(idOrPerson, changes = {}) {
     const person = this._resolve(idOrPerson);
     const originalItem = { ...person };
-    Object.assign(person, changes);
+    this.mergeChanges(person, changes);
     this._publish('UPDATE', 'Person', person, originalItem);
+    this._rewireEdges(person);
     return person;
   }
 

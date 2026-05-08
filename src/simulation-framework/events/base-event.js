@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import {SimGraphNode} from "../../graph/sim-graph-node.js";
+
 /**
  * Base class for all simulation event configurations.
  *
@@ -17,14 +19,16 @@
  * @property {boolean} enabled - Whether this event is active
  * @property {string}  color   - CSS color used for visualization (e.g. '#888888')
  */
-export class BaseEvent {
+export class BaseEvent extends SimGraphNode {
   constructor({ id = null, name, type, enabled = true, color = '#888888', data = {}, meta = {} } = {}) {
-    this.id      = id;
-    this.name    = name;
+    super({id: id, kind: 'event', layer: 'config', name})
     this.type    = type;
     this.enabled = enabled;
     this.color   = color;
     this.data    = data;
     this.meta    = meta;
   }
+
+  /** Always matches constructor.name — can never drift from the actual class. */
+  get eventType() { return this.constructor.name; }
 }
