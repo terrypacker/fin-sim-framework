@@ -19,6 +19,9 @@ import { SimulationRegistry } from './simulation-registry.js';
 import { SimulationSync } from './simulation-sync.js';
 import {Graph} from "../graph/graph.js";
 import {GraphQueryApi} from "../graph/graph-query-api.js";
+import {ScenarioService} from "./scenario-service.js";
+import {ScenarioStorage} from "../scenarios/scenario-storage.js";
+import {ScenarioRegistry} from "../scenarios/scenario-registry.js";
 
 /**
  * Central singleton registry for all application services, the shared
@@ -45,6 +48,9 @@ export class ServiceRegistry {
     this.handlerService     = new HandlerService(this.graph, this.graphQueryApi, this.bus);
     this.personService      = new PersonService(this.graph, this.graphQueryApi, this.bus);
     this.reducerService     = new ReducerService(this.graph, this.graphQueryApi, this.bus);
+
+    this.scenarioRegistry   = new ScenarioRegistry(new ScenarioStorage());
+    this.scenarioService    = new ScenarioService(this.bus, this.scenarioRegistry);
     this.simulationRegistry = new SimulationRegistry();
 
     //The
@@ -65,6 +71,8 @@ export class ServiceRegistry {
       handlerService: this.handlerService,
       actionService: this.actionService,
       reducerService: this.reducerService,
+      scenarioService: this.scenarioService,
+      scenarioRegistry: this.scenarioRegistry
     };
   }
 

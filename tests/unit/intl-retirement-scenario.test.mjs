@@ -162,9 +162,10 @@ function buildScenario(params = {}) {
   const ui       = makeStubUI();
   const scenario = new IntlRetirementScenario({
     eventSchedulerUI: ui,
-    context: ServiceRegistry.getInstance().simulationContext
+    context: ServiceRegistry.getInstance().simulationContext,
+    params: params
   });
-  scenario.buildSim(params);
+  scenario.buildSim();
   scenario.loadDefaults();
   const sim = scenario.sim;
   return { scenario, sim };

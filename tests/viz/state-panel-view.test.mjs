@@ -9,7 +9,7 @@
  */
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
-import {StatePanelView} from "../../src/apps/state-panel-view.js";
+import {StatePanelView} from "../../src/visualization/simulation/state-panel-view.js";
 import assert   from 'node:assert/strict';
 
 function makePanel() {

@@ -8,8 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { $ }                       from '../visualization/ui-utils.js';
-import { SIMULATION_BUS_MESSAGES } from '../simulation-framework/bus-messages.js';
+import { $ }                       from '../ui-utils.js';
+import { SIMULATION_BUS_MESSAGES } from '../../simulation-framework/bus-messages.js';
 
 /**
  * SimulationAnimator — owns playback, config-graph highlighting, breakpoints,
@@ -34,7 +34,7 @@ export class SimulationAnimator {
   /**
    * @param {{
    *   scenario:        object,
-   *   timeControls:   import('../visualization/time-controls.js').TimeControls,
+   *   timeControls:   import('../time-controls.js').TimeControls,
    *   statePanelView: import('./state-panel-view.js').StatePanelView,
    *   chartView:      import('../visualization/chart-view.js').ChartView,
    * }}
