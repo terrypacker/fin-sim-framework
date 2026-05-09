@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+import {BaseScenario} from "./base-scenario.js";
+
 /**
  * PrebuiltScenario — descriptor for a scenario that ships with the application.
  *
@@ -24,7 +26,7 @@
  *   - Calls `factory` to instantiate the correct scenario class whenever the
  *     prebuilt (or a user scenario derived from it) is loaded.
  */
-export class PrebuiltScenario {
+export class PrebuiltScenario extends BaseScenario {
   /**
    * @param {object}   opts
    * @param {string}   opts.id        - Unique stable identifier (e.g. 'intl-retirement').
@@ -37,13 +39,13 @@ export class PrebuiltScenario {
    * @param {Function} opts.factory   - (params, initialState, eventSchedulerUI) => BaseScenario
    */
   constructor({ id, label, order, simStart = '2026-01-01', simEnd = '2041-01-01', factory, active = false }) {
-    this.id       = id;
+    super({
+      id, order, context: {}, simStart, simEnd
+    })
     this.label    = label;
-    this.order    = order;
     this.prebuilt = true;
     this.active   = active;
-    this.simStart = simStart;
-    this.simEnd   = simEnd;
     this.factory  = factory;
+    this.params   = {};
   }
 }

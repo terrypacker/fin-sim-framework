@@ -51,7 +51,8 @@ beforeEach(() => { localStorage.clear(); });
 
 test('getParams: returns {} when prebuilt is active', () => {
   const { service } = makeStack({ prebuiltScenarios: [makePrebuilt('alpha')] });
-  assert.deepStrictEqual(service.getParams(), {});
+  const active = service.getActive();
+  assert.deepStrictEqual(active.params, {});
 });
 
 test('getParams: returns mapped params for user scenario', () => {
@@ -60,13 +61,15 @@ test('getParams: returns mapped params for user scenario', () => {
     scenarios: [{ name: 'S', params: [{ name: 'drift', type: 'Number', value: 0.05 }] }],
   });
   const { service } = makeStack({ prebuiltScenarios: [makePrebuilt('alpha')] });
-  assert.deepStrictEqual(service.getParams(), { drift: 0.05 });
+  const active = service.getActive();
+  assert.deepStrictEqual(active.params, [{ name: 'drift', type: 'Number', value: 0.05 }]);
 });
 
-test('getParams: returns {} for user scenario with no params', () => {
+test('getParams: returns [] for user scenario with no params', () => {
   setStorageData({ lastUsed: 'u:0', scenarios: [{ name: 'S', params: [] }] });
   const { service } = makeStack({ prebuiltScenarios: [makePrebuilt('alpha')] });
-  assert.deepStrictEqual(service.getParams(), {});
+  const active = service.getActive();
+  assert.deepStrictEqual(active.params, []);
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -75,28 +78,30 @@ test('getParams: returns {} for user scenario with no params', () => {
 
 test('getInitialState: returns {} when prebuilt is active', () => {
   const { service } = makeStack({ prebuiltScenarios: [makePrebuilt('alpha')] });
-  assert.deepStrictEqual(service.getInitialState(), {});
+  const active = service.getActive();
+  assert.deepStrictEqual(active.initialState, {});
 });
 
 test('getInitialState: returns initialState for user scenario', () => {
   const state = { metrics: { amount: 99 } };
   setStorageData({ lastUsed: 'u:0', scenarios: [{ name: 'S', initialState: state }] });
   const { service } = makeStack({ prebuiltScenarios: [makePrebuilt('alpha')] });
-  assert.deepStrictEqual(service.getInitialState(), state);
+  const active = service.getActive();
+  assert.deepStrictEqual(active.initialState, state);
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-// createScenario()
+// createActiveScenario()
 // ═════════════════════════════════════════════════════════════════════════════
 
-test('createScenario: calls prebuilt factory when prebuilt is active', () => {
+test('createActiveScenario: calls prebuilt factory when prebuilt is active', () => {
   const pb = makePrebuilt('alpha');
   const { service } = makeStack({ prebuiltScenarios: [pb] });
-  service.createScenario();
+  service.createActiveScenario();
   expect(pb.factory).toHaveBeenCalledWith({}, {}, new Date(pb.simStart), new Date(pb.simEnd));
 });
 
-test('createScenario: uses scenarioId to find matching prebuilt factory', () => {
+test('createActiveScenario: uses scenarioId to find matching prebuilt factory', () => {
   const pbA = makePrebuilt('alpha', 1);
   const pbB = makePrebuilt('beta',  2);
   const expectedStart = '2025-01-01';
@@ -109,12 +114,12 @@ test('createScenario: uses scenarioId to find matching prebuilt factory', () => 
     }],
   });
   const { service } = makeStack({ prebuiltScenarios: [pbA, pbB] });
-  service.createScenario();
+  service.createActiveScenario();
   expect(pbA.factory).not.toHaveBeenCalled();
   expect(pbB.factory).toHaveBeenCalledWith({}, {}, new Date(expectedStart), new Date(expectedEnd));
 });
 
-test('createScenario: falls back to first prebuilt for user scenario without scenarioId match', () => {
+test('createActiveScenario: falls back to first prebuilt for user scenario without scenarioId match', () => {
   const pbA = makePrebuilt('alpha', 1);
   const pbB = makePrebuilt('beta',  2);
   const expectedStart = '2025-01-01';
@@ -124,15 +129,15 @@ test('createScenario: falls back to first prebuilt for user scenario without sce
     scenarios: [{ name: 'S', params: [], initialState: {}, simStart: expectedStart, simEnd: expectedEnd }],
   });
   const { service } = makeStack({ prebuiltScenarios: [pbA, pbB] });
-  service.createScenario();
-  expect(pbA.factory).toHaveBeenCalledWith({}, {}, new Date(expectedStart), new Date(expectedEnd));
+  service.createActiveScenario();
+  expect(pbA.factory).toHaveBeenCalledWith({}, {});
 });
 
-test('createScenario: throws when no factory available', () => {
+test('createActiveScenario: throws when no factory available', () => {
   const registry = new ScenarioRegistry(new ScenarioStorage());
   registry.loadPrebuilt([]);
   const service = new ScenarioService({}, registry);
-  assert.throws(() => service.createScenario(), /no scenario factory/i);
+  assert.throws(() => service.createActiveScenario(), /no scenario factory/i);
 });
 
 // ═════════════════════════════════════════════════════════════════════════════

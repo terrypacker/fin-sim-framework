@@ -156,8 +156,8 @@ export class BaseApp extends BaseComponent {
 
     // ── Build scenario ────────────────────────────────────────────────────────
     //This will create the active scenario
-    this.scenario = registry.scenarioService.createScenario(this.scenarioTabPresenter.getSimStart(), this.scenarioTabPresenter.getSimEnd());
-    this.scenario.buildSim(registry.scenarioService.getParams(), registry.scenarioService.getInitialState());
+    this.scenario = registry.scenarioService.createActiveScenario();
+    this.scenario.buildSim();
     this.scenario.loadDefaults();
 
     // Derive display settings from DOM so rebuilds preserve user selections.

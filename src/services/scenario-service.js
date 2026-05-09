@@ -83,49 +83,37 @@ export class ScenarioService {
    *  2. Active user scenario with a scenarioId → use the matching prebuilt factory.
    *  3. Active user scenario without scenarioId → use the first prebuilt factory.
    */
-  createScenario(simStartIn, simEndIn) {
+  createActiveScenario() {
     const active = this.getActive();
-    const simStart = active == null ? simStartIn : new Date(active.simStart);
-    const simEnd   = active == null ? simEndIn   : new Date(active.simEnd);
 
-    if (active?.prebuilt) return active.factory(this.getParams(), this.getInitialState(), simStart, simEnd);
+    if (active?.prebuilt) return active.factory(
+        this._getParams(active),
+        this._getInitialState(active),
+        new Date(active.simStart), new Date(active.simEnd));
 
     if (active) {
       const preBuiltParent = this._registry.get(active.scenarioId);
       const factory = preBuiltParent?.factory;
       if (factory) return factory(
-        this.getParams(), this.getInitialState(),
-        active.simStart ? new Date(active.simStart) : undefined,
-        active.simEnd   ? new Date(active.simEnd)   : undefined
+        this._getParams(active), this._getInitialState(active),
+          new Date(active.simStart), new Date(active.simEnd)
       );
 
       const firstPrebuilt = this._registry.getPrebuiltScenarios()[0];
       if (firstPrebuilt?.factory) return firstPrebuilt.factory(
-        this.getParams(), this.getInitialState(),
-        active.simStart ? new Date(active.simStart) : undefined,
-        active.simEnd   ? new Date(active.simEnd)   : undefined
-      );
+        this._getParams(active), this._getInitialState(active));
     }
     throw new Error('No scenario factory available');
   }
 
-  getParams() {
-    const params = this._activeUserScenario()?.params;
+  _getParams(scenario) {
+    const params = scenario?.params;
     if (!params?.length) return {};
     return Object.fromEntries(params.map(p => [p.name, p.value]));
   }
 
-  getInitialState() {
-    return this.getActive()?.initialState ?? {};
+   _getInitialState(scenario) {
+    return scenario?.initialState ?? {};
   }
 
-  _activePrebuilt() {
-    const active = this.getActive();
-    return active?.prebuilt ? active : null;
-  }
-
-  _activeUserScenario() {
-    const active = this.getActive();
-    return active && !active.prebuilt ? active : null;
-  }
 }
