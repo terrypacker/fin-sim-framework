@@ -135,7 +135,9 @@ import { ScenarioTabView } from './visualization/scenario/scenario-tab-view.js';
 import { SimulationAnimator } from './visualization/simulation/simulation-animator.js';
 import { StatePanelView } from './visualization/simulation/state-panel-view.js';
 import { TimeControls } from './visualization/time-controls.js';
-import { TimelineView } from './visualization/timeline-view.js';
+import { TimelineController } from './visualization/timeline/timeline-controller.js';
+import { TimelinePresenter } from './visualization/timeline/timeline-presenter.js';
+import { TimelineView } from './visualization/timeline/timeline-view.js';
 import { $, fmt, fmtUTC, fmtLocal } from './visualization/ui-utils.js';
 
 // =========================================================
@@ -434,6 +436,8 @@ export const Visualization = {
   SimulationAnimator,
   StatePanelView,
   TimeControls,
+  TimelineController,
+  TimelinePresenter,
   TimelineView,
   $,
   fmt,
