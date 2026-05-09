@@ -4,10 +4,7 @@
  */
 
 import { BaseApp } from './apps/base-app.js';
-import { ScenarioTabPresenter } from './apps/scenario-tab-presenter.js';
-import { SimulationAnimator } from './apps/simulation-animator.js';
 import { SimulationWorkbench } from './apps/simulation-workbench.js';
-import { StatePanelView } from './apps/state-panel-view.js';
 import { AccountRulesEngine } from './finance/account-rules/account-rules-engine.js';
 import { AuAccountModule2024 } from './finance/account-rules/au/au-account-module-2024.js';
 import { AuAccountModule2025 } from './finance/account-rules/au/au-account-module-2025.js';
@@ -80,6 +77,7 @@ import { QueryApi } from './query/query-api.js';
 import { BaseScenario } from './scenarios/base-scenario.js';
 import { INTL_RETIREMENT_DEFAULTS, IntlRetirementScenario } from './scenarios/intl-retirement-scenario.js';
 import { PrebuiltScenario } from './scenarios/prebuilt-scenario.js';
+import { ScenarioRegistry } from './scenarios/scenario-registry.js';
 import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
 import { ScenarioStorage } from './scenarios/scenario-storage.js';
 import { SimulationWorkbenchDefaultScenario } from './scenarios/simulation-workbench-default-scenario.js';
@@ -88,6 +86,7 @@ import { BaseService } from './services/base-service.js';
 import { EVENT_CLASSES, EventService } from './services/event-service.js';
 import { HandlerService } from './services/handler-service.js';
 import { ReducerService } from './services/reducer-service.js';
+import { ScenarioService } from './services/scenario-service.js';
 import { ServiceRegistry } from './services/service-registry.js';
 import { SimulationRegistry } from './services/simulation-registry.js';
 import { SimulationSync } from './services/simulation-sync.js';
@@ -115,6 +114,7 @@ import { SimulationHistory } from './simulation-framework/simulation-history.js'
 import { SimulationState } from './simulation-framework/simulation-state.js';
 import { BreakpointSignal, Simulation } from './simulation-framework/simulation.js';
 import { diffStates } from './simulation-framework/state-utils.js';
+import { InMemoryStorage } from './storage/in-memory-storage.js';
 import { AccountsController } from './visualization/accounts/accounts-controller.js';
 import { AccountsPresenter } from './visualization/accounts/accounts-presenter.js';
 import { AccountsView } from './visualization/accounts/accounts-view.js';
@@ -129,6 +129,11 @@ import { GraphBuilderView } from './visualization/graph-builder/graph-builder-vi
 import { PeopleController } from './visualization/people/people-controller.js';
 import { PeoplePresenter } from './visualization/people/people-presenter.js';
 import { PeopleView } from './visualization/people/people-view.js';
+import { ScenarioTabController } from './visualization/scenario/scenario-tab-controller.js';
+import { ScenarioTabPresenter } from './visualization/scenario/scenario-tab-presenter.js';
+import { ScenarioTabView } from './visualization/scenario/scenario-tab-view.js';
+import { SimulationAnimator } from './visualization/simulation/simulation-animator.js';
+import { StatePanelView } from './visualization/simulation/state-panel-view.js';
 import { TimeControls } from './visualization/time-controls.js';
 import { TimelineView } from './visualization/timeline-view.js';
 import { $, fmt, fmtUTC, fmtLocal } from './visualization/ui-utils.js';
@@ -151,10 +156,7 @@ export {
 
 export const Misc = {
   BaseApp,
-  ScenarioTabPresenter,
-  SimulationAnimator,
   SimulationWorkbench,
-  StatePanelView,
   EDGE_TYPES,
   createEdgeId,
   Edge,
@@ -162,6 +164,7 @@ export const Misc = {
   Graph,
   SimGraphNode,
   QueryApi,
+  InMemoryStorage,
 };
 
 export const Finance = {
@@ -321,6 +324,7 @@ export const Scenarios = {
   INTL_RETIREMENT_DEFAULTS,
   IntlRetirementScenario,
   PrebuiltScenario,
+  ScenarioRegistry,
   ScenarioSerializer,
   ScenarioStorage,
   SimulationWorkbenchDefaultScenario,
@@ -333,6 +337,7 @@ export const Services = {
   EventService,
   HandlerService,
   ReducerService,
+  ScenarioService,
   ServiceRegistry,
   SimulationRegistry,
   SimulationSync,
@@ -423,6 +428,11 @@ export const Visualization = {
   PeopleController,
   PeoplePresenter,
   PeopleView,
+  ScenarioTabController,
+  ScenarioTabPresenter,
+  ScenarioTabView,
+  SimulationAnimator,
+  StatePanelView,
   TimeControls,
   TimelineView,
   $,

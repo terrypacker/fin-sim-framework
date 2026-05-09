@@ -8,8 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { $ } from '../visualization/ui-utils.js';
-import { diffStates } from "../simulation-framework/state-utils.js";
+import { $ } from '../ui-utils.js';
+import { diffStates } from "../../simulation-framework/state-utils.js";
 
 /**
  * StatePanelView — pure DOM layer for state/metrics panels and node detail.

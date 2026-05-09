@@ -21,7 +21,7 @@
 
 import assert from 'node:assert/strict';
 import { jest }                 from '@jest/globals';
-import { ScenarioTabPresenter } from '../../src/apps/scenario-tab-presenter.js';
+import { ScenarioTabPresenter } from '../../src/visualization/scenario/scenario-tab-presenter.js';
 import { PrebuiltScenario }     from '../../src/scenarios/prebuilt-scenario.js';
 import { ScenarioStorage }      from '../../src/scenarios/scenario-storage.js';
 
@@ -127,7 +127,7 @@ test('constructor: lastUsed persisted as user scenario → restores it', () => {
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-// _activePrebuilt() / _activeScenario()
+// _activePrebuilt() / _activeUserScenario()
 // ═════════════════════════════════════════════════════════════════════════════
 
 test('_activePrebuilt: returns prebuilt when p: is selected', () => {
@@ -143,14 +143,14 @@ test('_activePrebuilt: returns null when user scenario is selected', () => {
   assert.strictEqual(p._activePrebuilt(), null);
 });
 
-test('_activeScenario: returns scenario when u: is selected', () => {
+test('_activeUserScenario: returns scenario when u: is selected', () => {
   const saved = { name: 'MySaved', simStart: '2026-01-01', simEnd: '2041-01-01', params: [] };
   setStorageData({ lastUsed: 'u:0', scenarios: [saved] });
   const p = new ScenarioTabPresenter();
   assert.deepStrictEqual(p._activeScenario(), saved);
 });
 
-test('_activeScenario: returns null when prebuilt is selected', () => {
+test('_activeUserScenario: returns null when prebuilt is selected', () => {
   const pb = makePrebuilt('alpha');
   const p  = new ScenarioTabPresenter({ prebuiltScenarios: [pb] });
   assert.strictEqual(p._activeScenario(), null);
@@ -194,7 +194,7 @@ test('createScenario: calls prebuilt factory when prebuilt is selected', () => {
   const pb = makePrebuilt('alpha');
   const p  = new ScenarioTabPresenter({ prebuiltScenarios: [pb] });
 
-  p.createScenario({}, {});
+  p.createScenario();
   expect(pb.factory).toHaveBeenCalledWith({}, {}, new Date(pb.simStart), new Date(pb.simEnd));
 });
 
@@ -211,7 +211,7 @@ test('createScenario: uses matching prebuilt factory for user scenario with scen
       simStart: expectedStartDateString, simEnd: expectedEndDateString }],
   });
   const p  = new ScenarioTabPresenter({ prebuiltScenarios: [pbA, pbB] });
-  p.createScenario({}, {});
+  p.createScenario();
   expect(pbA.factory).not.toHaveBeenCalled();
   expect(pbB.factory).toHaveBeenCalledWith({}, {}, new Date(expectedStartDateString), new Date(expectedEndDateString));
 });
@@ -228,31 +228,14 @@ test('createScenario: falls back to first prebuilt for user scenario without sce
       simStart: expectedStartDateString, simEnd: expectedEndDateString }], // no scenarioId
   });
   const p  = new ScenarioTabPresenter({ prebuiltScenarios: [pbA, pbB] });
-  p.createScenario({}, {});
+  p.createScenario();
   expect(pbA.factory).toHaveBeenCalledWith({}, {}, new Date(expectedStartDateString), new Date(expectedEndDateString));
-});
-
-test('createScenario: uses fallbackFactory when no prebuilt scenarios are registered', () => {
-  const fallback = jest.fn(() => ({ buildSim: jest.fn() }));
-  const p  = new ScenarioTabPresenter();   // no prebuilts
-
-  //Set start/end dates
-  const startDateInput = document.body.querySelector('#simStartInput');
-  const expectedStartDateString = '2025-01-01';
-  startDateInput.value = expectedStartDateString;
-
-  const endDateInput = document.body.querySelector('#simEndInput');
-  const expectedEndDateString = '2026-01-01';
-  endDateInput.value = expectedEndDateString;
-
-  p.createScenario({}, {}, fallback);
-  expect(fallback).toHaveBeenCalledWith({}, {}, new Date(expectedStartDateString), new Date(expectedEndDateString));
 });
 
 test('createScenario: throws when no factory is available at all', () => {
   const p = new ScenarioTabPresenter();   // no prebuilts, no fallback
   assert.throws(
-    () => p.createScenario({}, {}),
+    () => p.createScenario(),
     /no scenario factory/i
   );
 });

@@ -34,11 +34,15 @@ import { PeoplePresenter }          from '../visualization/people/people-present
 import { AccountsController }       from '../visualization/accounts/accounts-controller.js';
 import { AccountsView }             from '../visualization/accounts/accounts-view.js';
 import { AccountsPresenter }        from '../visualization/accounts/accounts-presenter.js';
-import { ScenarioTabPresenter }     from './scenario-tab-presenter.js';
-import { StatePanelView }           from './state-panel-view.js';
-import { SimulationAnimator }       from './simulation-animator.js';
+import { ScenarioTabPresenter }     from '../visualization/scenario/scenario-tab-presenter.js';
+import { StatePanelView }           from '../visualization/simulation/state-panel-view.js';
+import { SimulationAnimator }       from '../visualization/simulation/simulation-animator.js';
 import {GraphRenderer} from "../visualization/components/graph-renderer.js";
 import {BaseComponent} from "../visualization/components/base-component.js";
+import {ScenarioTabView} from "../visualization/scenario/scenario-tab-view.js";
+import {
+  ScenarioTabController
+} from "../visualization/scenario/scenario-tab-controller.js";
 
 /**
  * BaseApp — composition root.
@@ -61,12 +65,11 @@ export class BaseApp extends BaseComponent {
    * @param {Function}          [opts.newScenario]  - Legacy single-factory fallback.
    * @param {Array|null}        [opts.chartSeries]  - Chart series config.
    */
-  constructor({ newScenario, chartSeries, prebuiltScenarios = [] }) {
+  constructor({ chartSeries, prebuiltScenarios = [] }) {
     super(  )
-    // Kept for backward-compat (used as fallback in createScenario when no prebuiltScenarios).
-    this.newScenario = newScenario ?? null;
     this.chartSeries = chartSeries ?? null;
-    this.scenario    = null;
+    this._prebuiltScenarios = prebuiltScenarios;
+    this.scenario    = null; //TODO Remove for #146
 
     // UI handles (recreated each buildScenario)
     this.configPresenter = null;
@@ -75,15 +78,14 @@ export class BaseApp extends BaseComponent {
     this.timeControls          = null;
     this.peoplePresenter       = null;
     this.accountsPresenter     = null;
+    this.scenarioTabPresenter  = null;
     this._animator             = null;
 
     // Views created once — their DOM listeners are wired only once.
     this._peopleView      = new PeopleView();
     this._accountsView    = new AccountsView();
     this._statePanelView  = new StatePanelView();
-
-    // Scenario tab owns _scenarioData / _activeValue.
-    this._scenarioTab = new ScenarioTabPresenter({ prebuiltScenarios });
+    this._scenarioTabView = new ScenarioTabView();
 
     // Tab header references set by initView()
     this.eventsTabHeader   = null;
@@ -94,32 +96,17 @@ export class BaseApp extends BaseComponent {
     this._currentDate    = null;
   }
 
-  // ── Delegators for scenario data (subclasses may call these) ─────────────
-  //TODO Should remove these for #143
-  getParams()       { return this._scenarioTab.getParams(); }
-  getInitialState() { return this._scenarioTab.getInitialState(); }
-
-  afterBuildSim() {
-    this._scenarioTab.afterBuildSim(this.scenario);
-  }
-
   // ── Core lifecycle ────────────────────────────────────────────────────────
 
-  buildScenario() {
-
-    // Reset all services, bus, and SimulationRegistry so every rebuild starts clean.
-    ServiceRegistry.reset();
-
-    $('currentStateContent').innerHTML  = '';
-    $('cumulativeMetricsContent').innerHTML = '';
-
-    if (this.chartView)  this.chartView.stopViz();
-
+  /**
+   * Load in currently selected scenario
+   */
+  initScenario() {
+    //TODO Clean up for #146
     const registry = ServiceRegistry.getInstance();
+    registry.scenarioRegistry.loadPrebuilt(this._prebuiltScenarios);
 
     // ── Config graph (visual node canvas) ─────────────────────────────────────
-    // ── Event-graph editor (scheduler UI) ─────────────────────────────────────
-    if(this.configPresenter) this.configPresenter.destroy();
     this.configPresenter = new GraphBuilderPresenter({
       builderCanvas: document.getElementById('builderCanvas'),
       //TODO Move into GraphBuilderPresenter._view entirely
@@ -158,12 +145,19 @@ export class BaseApp extends BaseComponent {
 
     this.peoplePresenter.onPeopleChanged = (people) => this.accountsPresenter.setPeople(people);
 
+    // Scenario Tab
+    const scenarioTabController = new ScenarioTabController({ scenarioService: registry.scenarioService })
+    this.scenarioTabPresenter = new ScenarioTabPresenter({
+      controller: scenarioTabController,
+      view: this._scenarioTabView,
+      bus: registry.bus,
+      initScenario: () => this.initScenario()});
+
     // ── Build scenario ────────────────────────────────────────────────────────
-    this.scenario = this._scenarioTab.createScenario(
-      this.getParams(), this.getInitialState(), this.newScenario
-    );
-    this.scenario.buildSim(this.getParams(), this.getInitialState());
-    this.afterBuildSim();
+    //TODO Don't you want to pass in the scenario id here?
+    this.scenario = registry.scenarioService.createScenario(this.scenarioTabPresenter.getSimStart(), this.scenarioTabPresenter.getSimEnd());
+    this.scenario.buildSim(registry.scenarioService.getParams(), registry.scenarioService.getInitialState());
+    registry.scenarioService.afterBuildSim(this.scenario);
 
     // Derive display settings from DOM so rebuilds preserve user selections.
     const currentFmt      = $('tzSelect')?.value === 'utc' ? fmtUTC : fmtLocal;
@@ -173,7 +167,7 @@ export class BaseApp extends BaseComponent {
 
     // ── Visualization views ───────────────────────────────────────────────────
     const eventColors = new Map(
-      registry.eventService.getAll()
+        registry.eventService.getAll()
         .filter(e => e.enabled && e.interval)
         .map(e => [e.type, e.color])
         .filter(([, c]) => c)
@@ -192,7 +186,7 @@ export class BaseApp extends BaseComponent {
       onDetail:   (node) => this._statePanelView.showNodeDetail(node),
       onRewind:   (date) => {
         const pct     = (date.getTime() - this.scenario.simStart.getTime()) /
-                        (this.scenario.simEnd.getTime() - this.scenario.simStart.getTime());
+            (this.scenario.simEnd.getTime() - this.scenario.simStart.getTime());
         const clamped = Math.max(0, Math.min(1, pct));
         this.timeControls.rewindTo(clamped);
         const sliderVal    = Math.round(clamped * 100);
@@ -244,6 +238,20 @@ export class BaseApp extends BaseComponent {
     //Send Scenario Ready Message
     registry.bus.publish(new BusMessage({ type: SIMULATION_BUS_MESSAGES.SCENARIO_READY, date: this.scenario.simStart}));
   }
+  /**
+   * Destroy all existing data, prepare for init()
+   */
+  destroyScenario() {
+    // Reset all services, bus, and SimulationRegistry so every rebuild starts clean.
+    ServiceRegistry.reset();
+
+    $('currentStateContent').innerHTML  = '';
+    $('cumulativeMetricsContent').innerHTML = '';
+
+    if (this.chartView)  this.chartView.stopViz();
+    if (this.configPresenter) this.configPresenter.destroy();
+
+  }
 
   initView() {
     this._initGroupSelector(); //Init left-panel group selector
@@ -258,15 +266,17 @@ export class BaseApp extends BaseComponent {
     $('displayCurrency').addEventListener('change', () => {
       if (this.timeControls) this.timeControls.displayCurrency = $('displayCurrency').value;
       //TODO Really build scenario?
-      this.buildScenario();
+      this.destroyScenario();
+      this.initScenario();
     });
 
     $('tzSelect').addEventListener('change', () => {
       const fmt = $('tzSelect').value === 'utc' ? fmtUTC : fmtLocal;
       if (this.timeControls) this.timeControls.setFormatDate(fmt);
       this._statePanelView.formatDate = fmt;
-      //TODO Need to reload views with new dates
-      this.renderEventList();
+      //TODO Really build scenario?
+      this.destroyScenario();
+      this.initScenario();
     });
 
     $('playPause').addEventListener('click', () => {
@@ -311,26 +321,19 @@ export class BaseApp extends BaseComponent {
       }, 60);
     });
 
-    $('rebuildBtn').addEventListener('click', () => this.buildScenario());
+    $('rebuildBtn').addEventListener('click', () => {
+      this.destroyScenario();
+      this.initScenario();
+    });
 
-    this._scenarioTab.init(() => this.buildScenario());
+    this.scenarioTabPresenter.init(() => {
+      this.destroyScenario();
+      this.initScenario();
+    });
     this.openTab({ currentTarget: this.scenarioTabHeader }, 'left-scenario', 'left-col-sim');
 
     window.addEventListener('resize', () => this.resizeCanvases());
     this.resizeCanvases();
-  }
-
-  _initGroupSelector() {
-    document.querySelectorAll('.left-group-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const group = btn.dataset.group;
-        document.querySelectorAll('.left-group-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        document.querySelectorAll('.left-group').forEach(g => {
-          g.style.display = g.dataset.group === group ? '' : 'none';
-        });
-      });
-    });
   }
 
   // ── UI utilities ──────────────────────────────────────────────────────────
@@ -382,6 +385,18 @@ export class BaseApp extends BaseComponent {
     return value / rate;
   }
 
+  _initGroupSelector() {
+    document.querySelectorAll('.left-group-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const group = btn.dataset.group;
+        document.querySelectorAll('.left-group-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('.left-group').forEach(g => {
+          g.style.display = g.dataset.group === group ? '' : 'none';
+        });
+      });
+    });
+  }
   // ── Backwards-compat delegators for subclasses ────────────────────────────
 
   /** Playback state — delegated to animator (false before first buildScenario). */

@@ -93,14 +93,17 @@ export class ScenarioSerializer {
    * @param {{ eventService, handlerService, actionService, reducerService, personService }} services
    *   The ServiceRegistry instance (or any object exposing the service properties).
    *   Pass `ServiceRegistry.getInstance()` from the save handler.
+   * @param {string} id
    * @param {string} name
+   * @param {number} order
+   * @param {boolean} active
    * @param {string|Date} simStart
    * @param {string|Date} simEnd
    * @param {object} initialState
    * @param {Array}  params
    * @returns {object} serialized scenario config
    */
-  static serialize(services, name, simStart, simEnd, initialState, params) {
+  static serialize(services, id, name, order, active, simStart, simEnd, initialState, params) {
     const { eventService, handlerService, actionService, reducerService, personService, accountService } = services;
 
     const toDateStr = (d) => {
@@ -110,7 +113,11 @@ export class ScenarioSerializer {
     };
 
     return {
+      id,
       name,
+      order,
+      active: active,
+      prebuilt: false,
       simStart: toDateStr(simStart),
       simEnd:   toDateStr(simEnd),
       persons:  (personService?.getAll()  ?? []).map(n => ScenarioSerializer._serializePerson(n)),

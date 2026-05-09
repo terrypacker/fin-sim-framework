@@ -17,19 +17,9 @@
 import assert from 'node:assert/strict';
 import { BaseApp } from '../../src/apps/base-app.js';
 
-// ─── FinSimLib stub (constructor-only dependency) ─────────────────────────────
-global.FinSimLib = {
-  Finance: {
-    PeriodService:        class { constructor() {} },
-    applyTo:              () => {},
-    buildUsCalendarYear:  () => ({}),
-    buildAuFiscalYear:    () => ({}),
-  },
-};
-
 // ─── Helper ───────────────────────────────────────────────────────────────────
 function makeApp() {
-  return new BaseApp({ newScenario: () => {}, chartSeries: null });
+  return new BaseApp({chartSeries: null });
 }
 
 // ─── Constructor ──────────────────────────────────────────────────────────────
@@ -54,12 +44,12 @@ test('BaseApp: lastSliderValue initializes to 0', () => {
 
 test('BaseApp: chartSeries stores the provided value', () => {
   const series = [{ key: 'cash', color: '#fff', label: 'Cash' }];
-  const app = new BaseApp({ newScenario: () => {}, chartSeries: series });
+  const app = new BaseApp({ chartSeries: series });
   assert.strictEqual(app.chartSeries, series);
 });
 
 test('BaseApp: chartSeries defaults to null when omitted', () => {
-  const app = new BaseApp({ newScenario: () => {} });
+  const app = new BaseApp({ });
   assert.strictEqual(app.chartSeries, null);
 });
 

@@ -40,6 +40,7 @@ export class PrebuiltScenario {
     this.id       = id;
     this.label    = label;
     this.order    = order;
+    this.prebuilt = true;
     this.simStart = simStart;
     this.simEnd   = simEnd;
     this.factory  = factory;

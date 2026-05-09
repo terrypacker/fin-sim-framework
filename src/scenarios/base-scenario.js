@@ -54,10 +54,15 @@ import {ServiceRegistry} from "../services/service-registry.js";
  */
 export class BaseScenario {
   constructor({
+      id,
+      order = 100,
+      prebuilt =  false,
       context,
       simStart =  new Date(Date.UTC(2026, 0, 1)),
       simEnd = new Date(Date.UTC(2041, 0, 1))} = {}) {
-
+    this.id = id;
+    this.order = 100;
+    this.prebuilt = prebuilt;
     this.context = context;
     this.simStart = simStart;
     this.simEnd = simEnd;
