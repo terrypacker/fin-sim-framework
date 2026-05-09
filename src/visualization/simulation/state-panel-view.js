@@ -9,7 +9,6 @@
  */
 
 import { $ } from '../ui-utils.js';
-import { diffStates } from "../../simulation-framework/state-utils.js";
 import { BaseComponent } from '../components/base-component.js';
 
 /**
@@ -142,8 +141,7 @@ export class StatePanelView extends BaseComponent {
 
     const stateChangeGridTemplate = document.querySelector('#tpl-node-state-changes');
     const stateChangesGrid = stateChangeGridTemplate.content.firstElementChild.cloneNode(true);
-    const prevState = JSON.stringify(content.entry.prevState, null, 2);
-    this._populateStateChanges(stateChangesGrid, content.changes, prevState);
+    this._populateStateChanges(stateChangesGrid, content.changes);
 
     const stateChangesPlaceholder = clone.querySelector('[data-state-change-grid]');
     stateChangesPlaceholder.replaceWith(stateChangesGrid);
@@ -195,7 +193,7 @@ export class StatePanelView extends BaseComponent {
   }
 
   buildActionDetail(entry) {
-    const changes = diffStates(entry.prevState, entry.nextState);
+    const changes = entry.stateDiff ?? [];
     const emitted = entry.emittedActions?.length
       ? entry.emittedActions.map(a => a.type).join(', ')
       : '(none)';

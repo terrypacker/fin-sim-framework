@@ -20,14 +20,13 @@
 export class JournalEntry {
   constructor({
     date, eventType, action,
-    reducer, prevState, nextState, emittedActions, sourceEvent
+    reducer, stateDiff, emittedActions, sourceEvent
   }) {
     this.date = date;
     this.eventType = eventType;
     this.action = action;
     this.reducer = reducer;
-    this.prevState = prevState;
-    this.nextState = nextState;
+    this.stateDiff = stateDiff;
     this.emittedActions = emittedActions;
     this.sourceEvent = sourceEvent;
   }
@@ -48,10 +47,10 @@ export class Journal {
   }
 
   getStateTimeline(field) {
-    return this.journal.map(j => ({
-      date: j.date,
-      value: j.nextState[field]
-    }));
+    return this.journal
+      .map(j => ({ date: j.date, diff: j.stateDiff?.find(d => d.field === field) }))
+      .filter(({ diff }) => diff != null)
+      .map(({ date, diff }) => ({ date, value: diff.after }));
   }
 
   /**
