@@ -51,9 +51,17 @@ function makeGroups(entries, formatDate = d => d.toDateString()) {
 
 const emptyOptions = { events: [], actions: [] };
 
-function renderView(view, { entries = [], expanded = new Set(), filterEvent = '', filterAction = '', hasRewind = false } = {}) {
+function renderView(view, {
+  entries        = [],
+  expanded       = new Set(),
+  filterEvents   = new Set(),
+  filterActions  = new Set(),
+  filterDateStart = null,
+  filterDateEnd   = null,
+  hasRewind      = false,
+} = {}) {
   const groups = makeGroups(entries);
-  view.render({ groups, options: emptyOptions, filterEvent, filterAction, expanded, hasRewind });
+  view.render({ groups, options: emptyOptions, filterEvents, filterActions, filterDateStart, filterDateEnd, expanded, hasRewind });
 }
 
 // ─── Constructor ──────────────────────────────────────────────────────────────
@@ -74,12 +82,14 @@ test('TimelineView: constructor initialises _filterBarEl to null', () => {
 
 test('TimelineView: constructor initialises all callbacks to null', () => {
   const view = makeView();
-  assert.strictEqual(view.onFilterEvent,  null);
-  assert.strictEqual(view.onFilterAction, null);
-  assert.strictEqual(view.onClearFilters, null);
-  assert.strictEqual(view.onToggle,       null);
-  assert.strictEqual(view.onDetail,       null);
-  assert.strictEqual(view.onRewind,       null);
+  assert.strictEqual(view.onFilterEvents,    null);
+  assert.strictEqual(view.onFilterActions,   null);
+  assert.strictEqual(view.onFilterDateStart, null);
+  assert.strictEqual(view.onFilterDateEnd,   null);
+  assert.strictEqual(view.onClearFilters,    null);
+  assert.strictEqual(view.onToggle,          null);
+  assert.strictEqual(view.onDetail,          null);
+  assert.strictEqual(view.onRewind,          null);
 });
 
 test('TimelineView: _uid increments across instances', () => {
@@ -97,7 +107,7 @@ test('TimelineView.render: creates filter bar and list elements', () => {
   assert.ok(view._listEl      !== null, '_listEl should be set after render');
 });
 
-test('TimelineView.render: does not recreate DOM on second call (_ensureStructure guard)', () => {
+test('TimelineView.render: does not recreate DOM on second call', () => {
   const view = makeView();
   renderView(view);
   const firstListEl = view._listEl;
@@ -105,12 +115,109 @@ test('TimelineView.render: does not recreate DOM on second call (_ensureStructur
   assert.strictEqual(view._listEl, firstListEl, '_listEl should be the same element');
 });
 
-test('TimelineView.render: empty groups shows empty-state element', () => {
+test('TimelineView.render: filter bar contains multi-select for events and actions', () => {
   const view = makeView();
-  renderView(view, { entries: [] });
-  assert.ok(view.container.innerHTML.includes('tl-empty'),
-    'should render tl-empty for an empty groups map');
+  renderView(view);
+  const uid = view._uid;
+  assert.ok(view._filterBarEl.querySelector(`#tl-ev-select-${uid}`)  !== null, 'event select should exist');
+  assert.ok(view._filterBarEl.querySelector(`#tl-act-select-${uid}`) !== null, 'action select should exist');
 });
+
+test('TimelineView.render: filter bar contains date range inputs', () => {
+  const view = makeView();
+  renderView(view);
+  const uid = view._uid;
+  assert.ok(view._filterBarEl.querySelector(`#tl-date-start-${uid}`) !== null, 'start date input should exist');
+  assert.ok(view._filterBarEl.querySelector(`#tl-date-end-${uid}`)   !== null, 'end date input should exist');
+});
+
+// ─── render: filter bar options ───────────────────────────────────────────────
+
+test('TimelineView.render: event select is populated with options', () => {
+  const view    = makeView();
+  const entries = [makeEntry({ eventType: 'SELL_ASSET' }), makeEntry({ eventType: 'SALARY' })];
+  const groups  = makeGroups(entries);
+  view.render({
+    groups,
+    options:         { events: ['SALARY', 'SELL_ASSET'], actions: [] },
+    filterEvents:    new Set(),
+    filterActions:   new Set(),
+    filterDateStart: null,
+    filterDateEnd:   null,
+    expanded:        new Set(),
+    hasRewind:       false,
+  });
+  const uid = view._uid;
+  const evSel = view._filterBarEl.querySelector(`#tl-ev-select-${uid}`);
+  assert.strictEqual(evSel.options.length, 2);
+});
+
+test('TimelineView.render: previously selected event options are marked selected', () => {
+  const view = makeView();
+  const groups = makeGroups([makeEntry({ eventType: 'SELL_ASSET' })]);
+  view.render({
+    groups,
+    options:         { events: ['SALARY', 'SELL_ASSET'], actions: [] },
+    filterEvents:    new Set(['SELL_ASSET']),
+    filterActions:   new Set(),
+    filterDateStart: null,
+    filterDateEnd:   null,
+    expanded:        new Set(),
+    hasRewind:       false,
+  });
+  const uid    = view._uid;
+  const evSel  = view._filterBarEl.querySelector(`#tl-ev-select-${uid}`);
+  const selected = [...evSel.selectedOptions].map(o => o.value);
+  assert.ok(selected.includes('SELL_ASSET'), 'SELL_ASSET should be selected');
+  assert.ok(!selected.includes('SALARY'),    'SALARY should not be selected');
+});
+
+test('TimelineView.render: date inputs reflect filterDateStart and filterDateEnd', () => {
+  const view = makeView();
+  const start = new Date(2025, 0, 15);  // Jan 15
+  const end   = new Date(2025, 5, 30);  // Jun 30
+  view.render({
+    groups:          new Map(),
+    options:         emptyOptions,
+    filterEvents:    new Set(),
+    filterActions:   new Set(),
+    filterDateStart: start,
+    filterDateEnd:   end,
+    expanded:        new Set(),
+    hasRewind:       false,
+  });
+  const uid      = view._uid;
+  const startIn  = view._filterBarEl.querySelector(`#tl-date-start-${uid}`);
+  const endIn    = view._filterBarEl.querySelector(`#tl-date-end-${uid}`);
+  assert.strictEqual(startIn.value, '2025-01-15');
+  assert.strictEqual(endIn.value,   '2025-06-30');
+});
+
+test('TimelineView.render: clear button hidden when no filters are active', () => {
+  const view = makeView();
+  renderView(view, { filterEvents: new Set(), filterActions: new Set() });
+  const uid      = view._uid;
+  const clearBtn = view._filterBarEl.querySelector(`#tl-filter-clear-${uid}`);
+  assert.strictEqual(clearBtn.style.display, 'none');
+});
+
+test('TimelineView.render: clear button visible when event filter is active', () => {
+  const view = makeView();
+  renderView(view, { filterEvents: new Set(['SELL_ASSET']) });
+  const uid      = view._uid;
+  const clearBtn = view._filterBarEl.querySelector(`#tl-filter-clear-${uid}`);
+  assert.notStrictEqual(clearBtn.style.display, 'none');
+});
+
+test('TimelineView.render: clear button visible when date filter is active', () => {
+  const view = makeView();
+  renderView(view, { filterDateStart: new Date(2025, 0, 1) });
+  const uid      = view._uid;
+  const clearBtn = view._filterBarEl.querySelector(`#tl-filter-clear-${uid}`);
+  assert.notStrictEqual(clearBtn.style.display, 'none');
+});
+
+// ─── render: empty state ──────────────────────────────────────────────────────
 
 test('TimelineView.render: empty groups with no filter shows "step forward" message', () => {
   const view = makeView();
@@ -118,27 +225,27 @@ test('TimelineView.render: empty groups with no filter shows "step forward" mess
   assert.ok(view.container.innerHTML.includes('Step the simulation forward'));
 });
 
-test('TimelineView.render: empty groups with active filter shows "no match" message', () => {
+test('TimelineView.render: empty groups with active event filter shows "no match" message', () => {
   const view = makeView();
-  renderView(view, { entries: [], filterEvent: 'SELL' });
+  renderView(view, { entries: [], filterEvents: new Set(['SELL']) });
   assert.ok(view.container.innerHTML.includes('No entries match'));
 });
 
-test('TimelineView.render: non-empty groups sets a non-empty innerHTML', () => {
+test('TimelineView.render: empty groups with active date filter shows "no match" message', () => {
   const view = makeView();
-  renderView(view, { entries: [makeEntry({ date: new Date(2025, 0, 1) })] });
-  assert.ok(view.container.innerHTML.length > 0);
-  assert.ok(!view.container.innerHTML.includes('tl-empty'));
+  renderView(view, { entries: [], filterDateStart: new Date(2025, 0, 1) });
+  assert.ok(view.container.innerHTML.includes('No entries match'));
 });
 
-test('TimelineView.render: date header includes the date string', () => {
+// ─── render: list content ─────────────────────────────────────────────────────
+
+test('TimelineView.render: non-empty groups renders date header', () => {
   const view = makeView();
   const d    = new Date(2025, 0, 1);
   renderView(view, { entries: [makeEntry({ date: d })] });
   assert.ok(view.container.innerHTML.includes(d.toDateString()));
+  assert.ok(!view.container.innerHTML.includes('tl-empty'));
 });
-
-// ─── render: badge counts ─────────────────────────────────────────────────────
 
 test('TimelineView.render: badge shows correct event and action counts', () => {
   const view = makeView();
@@ -149,19 +256,13 @@ test('TimelineView.render: badge shows correct event and action counts', () => {
       makeEntry({ date: d, eventType: 'MONTHLY_SALARY', actionType: 'SALARY_CREDIT' }),
     ],
   });
-  assert.ok(view.container.innerHTML.includes('2 events'),  'badge should say "2 events"');
-  assert.ok(view.container.innerHTML.includes('2 actions'), 'badge should say "2 actions"');
+  assert.ok(view.container.innerHTML.includes('2 events'));
+  assert.ok(view.container.innerHTML.includes('2 actions'));
 });
-
-// ─── render: expand/collapse ──────────────────────────────────────────────────
 
 test('TimelineView.render: collapsed date group does not show event rows', () => {
   const view = makeView();
-  const d    = new Date(2025, 0, 1);
-  renderView(view, {
-    entries:  [makeEntry({ date: d, eventType: 'SELL_ASSET' })],
-    expanded: new Set(), // collapsed
-  });
+  renderView(view, { entries: [makeEntry()], expanded: new Set() });
   assert.ok(!view.container.innerHTML.includes('tl-ev-hdr'));
 });
 
@@ -180,10 +281,9 @@ test('TimelineView.render: expanded event group shows action rows with detail bu
   const view    = makeView();
   const d       = new Date(2025, 0, 1);
   const dateKey = d.toDateString();
-  const evKey   = `${dateKey}::SELL_ASSET`;
   renderView(view, {
     entries:  [makeEntry({ date: d, eventType: 'SELL_ASSET', actionType: 'REALIZE_GAIN' })],
-    expanded: new Set([dateKey, evKey]),
+    expanded: new Set([dateKey, `${dateKey}::SELL_ASSET`]),
   });
   assert.ok(view.container.innerHTML.includes('REALIZE_GAIN'));
   assert.ok(view.container.innerHTML.includes('tl-det'));
@@ -191,17 +291,14 @@ test('TimelineView.render: expanded event group shows action rows with detail bu
 
 test('TimelineView.render: right-pointing chevron for collapsed group', () => {
   const view = makeView();
-  renderView(view, { entries: [makeEntry({ date: new Date(2025, 0, 1) })], expanded: new Set() });
+  renderView(view, { entries: [makeEntry()], expanded: new Set() });
   assert.ok(view.container.innerHTML.includes('▶'));
 });
 
 test('TimelineView.render: down-pointing chevron for expanded group', () => {
   const view = makeView();
   const d    = new Date(2025, 0, 1);
-  renderView(view, {
-    entries:  [makeEntry({ date: d })],
-    expanded: new Set([d.toDateString()]),
-  });
+  renderView(view, { entries: [makeEntry({ date: d })], expanded: new Set([d.toDateString()]) });
   assert.ok(view.container.innerHTML.includes('▼'));
 });
 
@@ -223,7 +320,7 @@ test('TimelineView.render: does not scroll when not near the bottom', () => {
 
 // ─── render: rewind button ────────────────────────────────────────────────────
 
-test('TimelineView.render: rewind button not present when hasRewind is false', () => {
+test('TimelineView.render: rewind button absent when hasRewind is false', () => {
   const view = makeView();
   renderView(view, { entries: [makeEntry()], hasRewind: false });
   assert.ok(!view.container.innerHTML.includes('tl-rewind'));
