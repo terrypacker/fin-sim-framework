@@ -29,6 +29,8 @@ import { SIMULATION_BUS_MESSAGES } from '../../simulation-framework/bus-messages
  *   updateDashCards(date)   — update the four execution-count cards
  *   wireSimBus(bus)         — subscribe to all SIMULATION_BUS_MESSAGES
  */
+const PLAYBACK_THROTTLE_MS = 1000;
+
 export class SimulationAnimator {
 
   /**
@@ -39,11 +41,12 @@ export class SimulationAnimator {
    *   chartView:      import('../visualization/chart-view.js').ChartView,
    * }}
    */
-  constructor({ scenario, timeControls, statePanelView, chartView }) {
+  constructor({ scenario, timeControls, statePanelView, chartView, graphRenderer }) {
     this._scenario       = scenario;
     this._timeControls   = timeControls;
     this._statePanelView = statePanelView;
     this._chartView      = chartView;
+    this._graphRenderer  = graphRenderer ?? null;
 
     this.playing = false;
     this._dashCardsdirty = false;
@@ -82,12 +85,18 @@ export class SimulationAnimator {
     this._timeControls.clearStepHistory();
     $('playPause').textContent = '⏸';
     this.clearBreakpointStatus();
+    this._graphRenderer?.setRenderThrottle(PLAYBACK_THROTTLE_MS);
+    this._statePanelView?.setRenderThrottle(PLAYBACK_THROTTLE_MS);
+    this._chartView?.setRenderThrottle(PLAYBACK_THROTTLE_MS);
     this.animate();
   }
 
   stopPlaying() {
     this.playing = false;
     $('playPause').textContent = '▶';
+    this._graphRenderer?.setRenderThrottle(0);
+    this._statePanelView?.setRenderThrottle(0);
+    this._chartView?.setRenderThrottle(0);
     if (!this._scenario?.sim?.control?.paused) {
       this.clearBreakpointStatus();
     }

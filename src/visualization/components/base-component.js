@@ -142,4 +142,40 @@ export class BaseComponent {
     return child;
   }
 
+  // ── Throttled rendering ───────────────────────────────────────────────────
+
+  /**
+   * Set the minimum ms between renders. 0 (default) uses requestAnimationFrame.
+   * Call with a positive value (e.g. 1000) during playback to reduce paint pressure.
+   */
+  setRenderThrottle(ms) {
+    this._renderThrottleMs = ms ?? 0;
+  }
+
+  /**
+   * Schedule fn to run at the next render opportunity, coalescing rapid calls
+   * into a single paint. Respects _renderThrottleMs: 0 → RAF, >0 → setTimeout.
+   */
+  scheduleRender(fn) {
+    this._renderDirty = true;
+    if (this._renderPending) return;
+    this._renderPending = true;
+
+    const fire = () => {
+      this._renderPending = false;
+      if (!this._renderDirty) return;
+      this._renderDirty = false;
+      this._renderLastTime = performance.now();
+      fn();
+    };
+
+    const throttle = this._renderThrottleMs ?? 0;
+    if (throttle > 0) {
+      const elapsed = performance.now() - (this._renderLastTime ?? 0);
+      setTimeout(fire, Math.max(0, throttle - elapsed));
+    } else {
+      requestAnimationFrame(fire);
+    }
+  }
+
 }

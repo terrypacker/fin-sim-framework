@@ -51,6 +51,38 @@ export class ChartView {
 
     // Optional pre-configured color/label overrides keyed by series key
     this._seriesConfig = new Map((series ?? []).map(s => [s.key, s]));
+
+    this._renderThrottleMs  = 0;
+    this._chartDirty        = false;
+    this._chartPending      = false;
+    this._chartLastRender   = 0;
+  }
+
+  // ── Throttle ──────────────────────────────────────────────────────────────────
+
+  setRenderThrottle(ms) {
+    this._renderThrottleMs = ms ?? 0;
+  }
+
+  _scheduleChartUpdate() {
+    this._chartDirty = true;
+    if (this._chartPending) return;
+    this._chartPending = true;
+
+    const fire = () => {
+      this._chartPending = false;
+      if (!this._chartDirty) return;
+      this._chartDirty = false;
+      this._chartLastRender = performance.now();
+      this._chart?.update('none');
+    };
+
+    if (this._renderThrottleMs > 0) {
+      const elapsed = performance.now() - this._chartLastRender;
+      setTimeout(fire, Math.max(0, this._renderThrottleMs - elapsed));
+    } else {
+      requestAnimationFrame(fire);
+    }
   }
 
   // ── Hook ─────────────────────────────────────────────────────────────────────
@@ -101,7 +133,7 @@ export class ChartView {
     }
 
     if (didAdd && this._chart) {
-      this._chart.update('none');
+      this._scheduleChartUpdate();
     }
   }
 

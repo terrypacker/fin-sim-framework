@@ -56,9 +56,7 @@ export class GraphRenderer extends BaseComponent {
     this._edgeEls = new Map(); // id -> element
     this._nodeRenderState = new Map(); // id -> { fired, ... }
 
-    //DOM Batching
-    this._dirty = false;
-    this._frameScheduled = false;
+    //DOM Batching — scheduling delegated to BaseComponent.scheduleRender
 
     //Pan/Zoom
     this.viewport = this.graphRoot.querySelector('#graphViewport');
@@ -134,24 +132,7 @@ export class GraphRenderer extends BaseComponent {
   /* ───────────────────────── CORE RENDERING ───────────────────────────── */
 
   render() {
-    if (this._dirty) return; // already scheduled
-    this._dirty = true;
-    this._scheduleFrame();
-  }
-
-  _scheduleFrame() {
-    if (this._frameScheduled) return;
-
-    this._frameScheduled = true;
-
-    requestAnimationFrame(() => {
-      this._frameScheduled = false;
-
-      if (!this._dirty) return;
-
-      this._dirty = false;
-      this._renderGraph();
-    });
+    this.scheduleRender(() => this._renderGraph());
   }
 
   resizeCanvas(h,w) {
