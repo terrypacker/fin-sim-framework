@@ -31,18 +31,12 @@ export class ScenarioTabView {
     this.onInitialStateChange = null;
     /** @type {function({})|null} */
     this.onAddParameter = null;
-    /** @type {function({id,name,birthDate,citizen,lifeExpectancy,socialSecurityMonthly})|null} */
+    /** @type {function({scenario} */
     this.onSave   = null;
-
     /** @type {function()|null} */
     this.onDownloadJson = null;
     /** @type {function(file)|null} */
     this.onUploadJson = null;
-
-    /** @type {function(import('../../finance/person.js').Person)|null} */
-    this.onEdit   = null;
-    /** @type {function()|null} */
-    this.onCancel = null;
 
     this._init();
   }
@@ -111,10 +105,6 @@ export class ScenarioTabView {
         }
         e.target.value = '';
       }
-    });
-
-    document.getElementById('rebuildScenarioBtn')?.addEventListener('click', () => {
-      //TODO Implement me maybe?
     });
   }
 

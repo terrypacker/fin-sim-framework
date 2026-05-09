@@ -98,7 +98,6 @@ export class ScenarioTabPresenter {
      * @param scenario
      */
     this._view.onSave = () => {
-      //TODO Deal with saving the prebuilt scenarios with a new id?
       this._controller.save(this._activeScenario);
       this._view._refreshScenarioSelect(this._controller.getAll(), this._activeScenario);
     };
