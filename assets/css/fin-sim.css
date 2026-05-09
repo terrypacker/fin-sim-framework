@@ -460,37 +460,51 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 
 .tl-filter-input {
   width: 100%;
-  box-sizing: border-box;
-  background: #1e293b;
-  border: 1px solid #334155;
-  color: #cbd5e1;
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 4px 6px;
+  font-family: var(--font-mono);
   font-size: 11px;
-  font-family: monospace;
-  padding: 3px 7px;
-  border-radius: 4px;
-  outline: none;
+  color: var(--text);
+}
+
+.tl-filter-select {
+  width: 100%;
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 4px 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+}
+
+.tl-filter-date {
+  width: 100%;
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 4px 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
 }
 
 .tl-filter-input::placeholder { color: #475569; }
 
 .tl-filter-input:focus {
-  border-color: #3b82f6;
-  color: #e2e8f0;
-}
-
-.tl-filter-clear {
-  background: none;
-  border: 1px solid #334155;
-  color: #475569;
-  font-size: 11px;
-  padding: 3px 7px;
-  border-radius: 4px;
-  cursor: pointer;
-  flex-shrink: 0;
-  white-space: nowrap;
+  border-color: var(--amber-dim);
+  outline: none;
 }
 
 .tl-filter-clear:hover { color: #f87171; border-color: #f87171; }
+
+.tl-filter-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+}
 
 .tl-list {
   flex: 1;
