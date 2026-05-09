@@ -39,17 +39,17 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.isAuResident = false;
 
     //US Accounts
-    this.usSavingsAccount = usSavingsAccount;
-    this.fixedIncomeAccount = fixedIncomeAccount;
-    this.stockAccount = stockAccount;
-    this.iraAccount = iraAccount;
-    this.k401Account = k401Account;
-    this.rothAccount = rothAccount;
+    this._assignAccount('usSavingsAccount', usSavingsAccount);
+    this._assignAccount('fixedIncomeAccount', fixedIncomeAccount);
+    this._assignAccount('stockAccount', stockAccount);
+    this._assignAccount('iraAccount', iraAccount);
+    this._assignAccount('k401Account', k401Account);
+    this._assignAccount('rothAccount', rothAccount);
 
     //AU Accounts
-    this.auSavingsAccount = auSavingsAccount;
-    this.auStockAccount = auStockAccount;
-    this.superAccount = superAccount;
+    this._assignAccount('auSavingsAccount', auSavingsAccount);
+    this._assignAccount('auStockAccount', auStockAccount);
+    this._assignAccount('superAccount', superAccount);
 
     //TODO Move to FX When available.
     this.exchangeRateUsdToAud = exchangeRateUsdToAud;

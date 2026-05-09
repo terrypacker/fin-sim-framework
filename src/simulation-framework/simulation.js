@@ -909,7 +909,6 @@ export class Simulation {
                   nextState,
                   sourceEvent
                 }) {
-    const stateSnapshot = structuredClone(nextState);
     const node = new ActionNode({
       id: actionClone.instanceId,
       type: actionClone.type,
@@ -921,8 +920,7 @@ export class Simulation {
       action: actionClone,
       reducer: reducerClone,
 
-      stateBefore: prevState,
-      stateAfter: stateSnapshot,
+      stateDiff: diffStates(prevState, nextState),
       sourceEvent: sourceEvent
     });
     this.actionGraph.addActionNode(node);

@@ -20,7 +20,7 @@
 export class ActionNode {
   constructor({
     id, type, date, parent, children, action,
-    reducer, stateBefore, stateAfter, sourceEvent
+    reducer, stateDiff, sourceEvent
   }) {
     this.id = id;
     this.type = type;
@@ -29,8 +29,7 @@ export class ActionNode {
     this.children = children;
     this.action = action;
     this.reducer = reducer;
-    this.stateBefore = stateBefore;
-    this.stateAfter = stateAfter;
+    this.stateDiff = stateDiff;
     this.sourceEvent = sourceEvent;
   }
 }

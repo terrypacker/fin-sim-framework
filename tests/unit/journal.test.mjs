@@ -27,8 +27,7 @@ function makeEntry(overrides = {}) {
     eventType:      overrides.eventType  ?? 'TICK',
     action:         overrides.action     ?? { type: 'INCREMENT', amount: 10 },
     reducer:        overrides.reducer    ?? 'MyReducer',
-    prevState:      overrides.prevState  ?? { counter: 0 },
-    nextState:      overrides.nextState  ?? { counter: 10 },
+    stateDiff:      overrides.stateDiff  ?? [],
     emittedActions: overrides.emitted    ?? [],
     sourceEvent:    overrides.src        ?? {}
   });
@@ -39,14 +38,13 @@ function makeEntry(overrides = {}) {
 test('JournalEntry: all fields are assigned correctly', () => {
   const date    = new Date(2025, 5, 15);
   const action  = { type: 'FOO', amount: 99 };
-  const prev    = { x: 0 };
-  const next    = { x: 99 };
+  const diff    = [{ field: 'x', before: 0, after: 99, delta: 99 }];
   const emitted = [{ type: 'BAR' }];
   const src     = { type: 'SOURCE_EVENT' };
 
   const entry = new JournalEntry({
     date, eventType: 'SOURCE_EVENT', action,
-    reducer: 'R1', prevState: prev, nextState: next,
+    reducer: 'R1', stateDiff: diff,
     emittedActions: emitted, sourceEvent: src
   });
 
@@ -54,8 +52,7 @@ test('JournalEntry: all fields are assigned correctly', () => {
   assert.strictEqual(entry.eventType,      'SOURCE_EVENT');
   assert.strictEqual(entry.action,         action);
   assert.strictEqual(entry.reducer,        'R1');
-  assert.strictEqual(entry.prevState,      prev);
-  assert.strictEqual(entry.nextState,      next);
+  assert.strictEqual(entry.stateDiff,      diff);
   assert.strictEqual(entry.emittedActions, emitted);
   assert.strictEqual(entry.sourceEvent,    src);
 });
@@ -132,8 +129,8 @@ test('Journal.getStateTimeline: returns array of {date, value} for each entry', 
   const d1 = new Date(2025, 0, 1);
   const d2 = new Date(2026, 0, 1);
 
-  j.addEntry(makeEntry({ date: d1, nextState: { counter: 10, other: 'x' } }));
-  j.addEntry(makeEntry({ date: d2, nextState: { counter: 20, other: 'y' } }));
+  j.addEntry(makeEntry({ date: d1, stateDiff: [{ field: 'counter', before: 0,  after: 10, delta: 10 }] }));
+  j.addEntry(makeEntry({ date: d2, stateDiff: [{ field: 'counter', before: 10, after: 20, delta: 10 }] }));
 
   const timeline = j.getStateTimeline('counter');
   assert.strictEqual(timeline.length, 2);
@@ -143,13 +140,12 @@ test('Journal.getStateTimeline: returns array of {date, value} for each entry', 
   assert.strictEqual(timeline[1].value, 20);
 });
 
-test('Journal.getStateTimeline: returns undefined for missing field (not an error)', () => {
+test('Journal.getStateTimeline: returns empty array when field has no diffs', () => {
   const j = new Journal({ enabled: true });
-  j.addEntry(makeEntry({ nextState: { counter: 5 } }));
+  j.addEntry(makeEntry({ stateDiff: [{ field: 'counter', before: 0, after: 5, delta: 5 }] }));
 
   const timeline = j.getStateTimeline('nonexistent');
-  assert.strictEqual(timeline.length, 1);
-  assert.strictEqual(timeline[0].value, undefined);
+  assert.strictEqual(timeline.length, 0);
 });
 
 // ─── traceEvent ───────────────────────────────────────────────────────────────

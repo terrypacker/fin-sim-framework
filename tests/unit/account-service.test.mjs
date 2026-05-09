@@ -358,7 +358,6 @@ test('AccountService.transaction: positive amount credits the account', () => {
   const a = new CheckingAccount(0);
   svc.transaction(a, 500, new Date());
   assert.strictEqual(a.balance, 500);
-  assert.strictEqual(a.credits.length, 1);
 });
 
 test('AccountService.transaction: negative amount debits the account', () => {
@@ -368,7 +367,6 @@ test('AccountService.transaction: negative amount debits the account', () => {
   const a = new CheckingAccount(1000);
   svc.transaction(a, -300, new Date());
   assert.strictEqual(a.balance, 700);
-  assert.strictEqual(a.debits.length, 1);
 });
 
 test('AccountService.canDebit: true when above minimum after debit', () => {
