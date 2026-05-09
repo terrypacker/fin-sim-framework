@@ -8,10 +8,6 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { ScenarioStorage }    from '../../scenarios/scenario-storage.js';
-import { ScenarioSerializer } from '../../scenarios/scenario-serializer.js';
-import { ServiceRegistry }    from '../../services/service-registry.js';
-import {PrebuiltScenario} from "../../scenarios/prebuilt-scenario.js";
 
 /**
  * ScenarioTabPresenter — owns all scenario-tab UI and scenario CRUD.
@@ -54,10 +50,10 @@ export class ScenarioTabPresenter {
     this._activeScenario = null;
 
     this._view.onOpen = (id) => {
-      this._activeScenario = this._controller.get(id);
       this._controller.setActiveById(id);
-      this._controller._persistLastUsed();
+      this._activeScenario = this._controller.getActiveScenario();
       this._view._populateScenarioForm(this._activeScenario);
+
     };
 
     this._view.onRebuild = () => {
@@ -65,11 +61,12 @@ export class ScenarioTabPresenter {
     };
 
     this._view.onNew = () => {
-      this._activeScenario = this._controller.newScenario();
+      this._activeScenario = this._controller.newScenario(this._activeScenario);
       this._view._refreshScenarioSelect(this._controller.getAll(), this._activeScenario);
     };
 
     this._view.onDelete = () => {
+      if (!this._activeScenario || this._activeScenario.prebuilt) return;
       this._activeScenario = this._controller.delete(this._activeScenario);
       this._view._refreshScenarioSelect(this._controller.getAll(), this._activeScenario);
     };

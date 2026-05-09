@@ -42,6 +42,7 @@ const PREBUILT_SCENARIOS = [
     label:    'International Retirement',
     order:    1,
     prebuilt: true,
+    active:   true,
     simStart: '2026-01-01',
     simEnd:   '2041-01-01',
     factory:  (_params, _initialState, simStart, simEnd) => new IntlRetirementScenario({

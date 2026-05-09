@@ -13,20 +13,34 @@ export class ScenarioTabController {
     this._service = scenarioService;
   }
 
+  get(id) {
+    return this._service.get(id);
+  }
+
+  getActiveScenario() {
+    return this._service.getActive();
+  }
+
+  getAll() {
+    return this._service.getAll();
+  }
+
   /**
-   * Create a new scenario from this scenario, it will be a user scenario and the new active
-   *  scenario
-   * @param fromScenario
-   * @return {*|null}
+   * Set the scenario with the given id as active (persists lastUsed via save).
+   */
+  setActiveById(id) {
+    this._service.setActiveById(id);
+  }
+
+  /**
+   * Create a new user scenario based on fromScenario.
    */
   newScenario(fromScenario) {
     return this._service.newScenario(fromScenario);
   }
 
   /**
-   * Delete this scenario
-   * @param scenario
-   * @return the active scenario, in case we deleted it
+   * Delete this scenario; returns the new active scenario.
    */
   delete(scenario) {
     this._service.delete(scenario.id);
@@ -34,15 +48,10 @@ export class ScenarioTabController {
   }
 
   /**
-   * Save the scenario, it is now the active one
-   * @param scenario
+   * Save the scenario, making it the active one.
    */
   save(scenario) {
     this._service.save(scenario, true);
-  }
-
-  getAll() {
-    return this._service.getAll();
   }
 
   getUserScenarios() {
@@ -51,7 +60,6 @@ export class ScenarioTabController {
 
   replaceUserScenarios(data) {
     this._service.replaceUserScenarios(data);
-    this._service.getActive();
+    return this._service.getActive();
   }
-
 }

@@ -151,13 +151,14 @@ export class BaseApp extends BaseComponent {
       controller: scenarioTabController,
       view: this._scenarioTabView,
       bus: registry.bus,
-      initScenario: () => this.initScenario()});
+      initScenario: () => { this.destroyScenario(); this.initScenario(); },
+    });
 
     // ── Build scenario ────────────────────────────────────────────────────────
-    //TODO Don't you want to pass in the scenario id here?
+    //This will create the active scenario
     this.scenario = registry.scenarioService.createScenario(this.scenarioTabPresenter.getSimStart(), this.scenarioTabPresenter.getSimEnd());
     this.scenario.buildSim(registry.scenarioService.getParams(), registry.scenarioService.getInitialState());
-    registry.scenarioService.afterBuildSim(this.scenario);
+    this.scenario.loadDefaults();
 
     // Derive display settings from DOM so rebuilds preserve user selections.
     const currentFmt      = $('tzSelect')?.value === 'utc' ? fmtUTC : fmtLocal;
@@ -326,10 +327,6 @@ export class BaseApp extends BaseComponent {
       this.initScenario();
     });
 
-    this.scenarioTabPresenter.init(() => {
-      this.destroyScenario();
-      this.initScenario();
-    });
     this.openTab({ currentTarget: this.scenarioTabHeader }, 'left-scenario', 'left-col-sim');
 
     window.addEventListener('resize', () => this.resizeCanvases());

@@ -8,12 +8,10 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import {ScenarioSerializer} from "../scenarios/scenario-serializer.js";
-
 /**
  * Scenario id format:
- *   `'<id>'`  — a pre-built scenario (shipped with the app, not in localStorage)
- *   `'u:<N>'`   — a user-saved scenario at index N in `_scenarios`
+ *   'p:<id>'  — a pre-built scenario
+ *   'u:<N>'   — a user-saved scenario at index N
  */
 export class ScenarioService {
   constructor(bus = {}, scenarioRegistry = {}) {
@@ -24,10 +22,7 @@ export class ScenarioService {
   getAll() {
     return this._registry.getAll();
   }
-  /**
-   * Instantiate the correct scenario class for the current selection.
-   * @returns {BaseScenario}
-   */
+
   get(id) {
     return this._registry.get(id);
   }
@@ -40,25 +35,24 @@ export class ScenarioService {
     this._registry.delete(id);
   }
 
-  /**
-   * Get the active scenario
-   */
   getActive() {
     return this._registry.getActive();
   }
 
+  setActiveById(id) {
+    this._registry.setActiveById(id);
+  }
+
   /**
-   * Base the new scenario on whatever prebuilt is currently active (or the first one).
-   * @return {*|null}
+   * Create a new user scenario based on fromScenario (copies dates and scenarioId).
    */
   newScenario(fromScenario) {
     const newId = `u:${this._registry.getNextUserScenarioId()}`;
-    //TODO Use BaseScenario here
     const scenario = {
-      id: newId,
+      id:           newId,
       name:         'New Scenario',
-      order: 100,
-      prebuilt: false,
+      order:        100,
+      prebuilt:     false,
       scenarioId:   fromScenario?.id ?? null,
       simStart:     fromScenario?.simStart ?? '2026-01-01',
       simEnd:       fromScenario?.simEnd   ?? '2041-01-01',
@@ -70,10 +64,15 @@ export class ScenarioService {
       params:       [],
     };
     this._registry.save(scenario, true);
+    return scenario;
   }
 
   getUserScenarios() {
     return this._registry.getUserScenarios();
+  }
+
+  replaceUserScenarios(data) {
+    this._registry.replaceUserScenarios(data);
   }
 
   /**
@@ -81,44 +80,33 @@ export class ScenarioService {
    *
    * Resolution order:
    *  1. Active pre-built → use its factory directly.
-   *  2. Active user scenario with a `scenarioId` → use the matching prebuilt factory.
-   *  3. Active user scenario without `scenarioId` → use the first prebuilt factory.
-   *
+   *  2. Active user scenario with a scenarioId → use the matching prebuilt factory.
+   *  3. Active user scenario without scenarioId → use the first prebuilt factory.
    */
   createScenario(simStartIn, simEndIn) {
-
     const active = this.getActive();
     const simStart = active == null ? simStartIn : new Date(active.simStart);
-    const simEnd = active == null ? simEndIn : new Date(active.simEnd);
+    const simEnd   = active == null ? simEndIn   : new Date(active.simEnd);
 
-    if (active.prebuilt) return active.factory(this.getParams(), this.getInitialState(), simStart, simEnd);
+    if (active?.prebuilt) return active.factory(this.getParams(), this.getInitialState(), simStart, simEnd);
 
     if (active) {
-      // Try to find the prebuilt this user scenario was derived from.
-      const preBuiltParent = this.get(active.scenarioId);
+      const preBuiltParent = this._registry.get(active.scenarioId);
       const factory = preBuiltParent?.factory;
-      if (factory) return factory(this.getParams(), this.getInitialState(),
-          (active.simStart) ? new Date(active.simStart) : undefined,
-          (active.simEnd) ? new Date(active.simEnd) : undefined);
+      if (factory) return factory(
+        this.getParams(), this.getInitialState(),
+        active.simStart ? new Date(active.simStart) : undefined,
+        active.simEnd   ? new Date(active.simEnd)   : undefined
+      );
+
+      const firstPrebuilt = this._registry.getPrebuiltScenarios()[0];
+      if (firstPrebuilt?.factory) return firstPrebuilt.factory(
+        this.getParams(), this.getInitialState(),
+        active.simStart ? new Date(active.simStart) : undefined,
+        active.simEnd   ? new Date(active.simEnd)   : undefined
+      );
     }
-    throw new Error('ScenarioTabPresenter: no scenario factory available');
-  }
-
-  replaceUserScenarios(data) {
-    this._registry.replaceUserScenarios(data);
-  }
-
-  /** Restore saved config or call loadDefaults(). Called after scenario.buildSim(). */
-  afterBuildSim(scenario) {
-    // Store so _saveCurrentScenario() can capture the resolved initialState.
-    //TODO Was this important?  this._scenario = scenario;
-
-    const cfg = this.getActive();
-    if (cfg) {
-      ScenarioSerializer.deserialize(cfg, ServiceRegistry.getInstance());
-    } else if (typeof scenario.loadDefaults === 'function') {
-      scenario.loadDefaults();
-    }
+    throw new Error('No scenario factory available');
   }
 
   getParams() {
@@ -131,54 +119,13 @@ export class ScenarioService {
     return this.getActive()?.initialState ?? {};
   }
 
-  _saveCurrentScenario(name, uiInitialState, simStart, simEnd) {
-    const pb = this._activePrebuilt();
-
-    if (pb || !this._activeValue?.startsWith('u:')) {
-      // Saving from a pre-built baseline → create a new user scenario.
-
-
-      // Prefer the scenario's resolved initialState (set by buildSim / buildDefaultInitialState)
-      // so that the full default state is captured in the config rather than an empty object.
-      // Fall back to the UI textarea only if the scenario hasn't been built yet.
-      const scenarioInitialState = this._scenario?.initialState ?? {};
-      let initialState = Object.keys(scenarioInitialState).length > 0 ? scenarioInitialState : {};
-      if (Object.keys(initialState).length === 0) {
-        initialState = uiInitialState;
-      }
-      const usersScenarios = this.getUserScenarios();
-      const newId = `u:${usersScenarios.length}`;
-      const newScenario = {
-        id: newId,
-        name,
-        scenarioId:   pb?.id ?? null,
-        order: 100,
-        prebuilt: false,
-        simStart:     simStart,
-        simEnd:       simEnd,
-        events: [], handlers: [], actions: [], reducers: [],
-        initialState,
-        params: [],
-      };
-      this._scenarios.set(newId, newScenario);
-      this._activeValue = newId;
-    }
-
-    const cfg = this._activeUserScenario();
-    const serialized = ScenarioSerializer.serialize(
-        ServiceRegistry.getInstance(),
-        cfg.id,
-        cfg.name,
-        cfg.order,
-        cfg.active,
-        cfg.simStart,
-        cfg.simEnd,
-        cfg.initialState,
-        cfg.params,
-    );
-    Object.assign(cfg, serialized);
-    this._persistUserScenarios();
-    this._persistLastUsed();
+  _activePrebuilt() {
+    const active = this.getActive();
+    return active?.prebuilt ? active : null;
   }
 
+  _activeUserScenario() {
+    const active = this.getActive();
+    return active && !active.prebuilt ? active : null;
+  }
 }

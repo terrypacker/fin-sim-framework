@@ -9,112 +9,127 @@
  */
 
 /**
- * Storage to track and manage our Scenarios, including the current active one
+ * Storage to track and manage Scenarios, including the current active one.
+ *
+ * ID scheme:
+ *   'p:<id>'  — prebuilt scenario (e.g. 'p:intl-retirement')
+ *   'u:<N>'   — user-saved scenario at index N
  */
 export class ScenarioRegistry {
   constructor(scenarioStorage) {
     this._scenarioStorage = scenarioStorage;
     this._scenarios = new Map();
-
-    /**
-     * Loaded data for our scenarios configuation
-     * - scenarios[] list of all user defined scenarios
-     * - last...
-     * - ...
-     * @type {object}
-     * @private
-     */
     this._scenarioData = {};
-
     this._init();
   }
 
   /**
-   * Load scenarios in from ScenarioStorage
+   * Load user scenarios from storage and assign u:<N> IDs.
+   * If lastUsed refers to a user scenario, mark it active immediately.
    */
   _init() {
     this._scenarioData = this._scenarioStorage.load();
-    this._scenarioData.scenarios.forEach(s => {
+    this._scenarioData.scenarios.forEach((s, i) => {
+      s.id = 'u:' + i;
+      s.prebuilt = false;
       this._scenarios.set(s.id, s);
     });
+    const lastUsed = this._scenarioData.lastUsed;
+    if (lastUsed?.startsWith('u:') && this._scenarios.has(lastUsed)) {
+      this._scenarios.get(lastUsed).active = true;
+    }
   }
 
   /**
-   * Load in prebuilt scenarios, replacing existing
-   * @param prebuiltScenarios
+   * Load prebuilt scenarios, storing them under 'p:<id>' keys.
+   * After adding all prebuilts, sets the active scenario if not already set:
+   *   1. lastUsed from storage (if it maps to a loaded prebuilt)
+   *   2. The prebuilt with active: true (designated by the caller, e.g. SimulationWorkbench)
+   *   3. The first prebuilt by order
    */
   loadPrebuilt(prebuiltScenarios = []) {
+    const active = this.getActive();
     prebuiltScenarios.forEach(pb => {
-      this._scenarios.set(pb.id, pb);
-    })
+      const id = 'p:' + pb.id;
+      if(active && active.id !== pb.id) {
+        pb.active = false;
+      }
+      this._scenarios.set(id, { ...pb, id, factory: pb.factory });
+    });
+
+    if (active) return;
+
+    const lastUsed = this._scenarioData.lastUsed;
+    if (lastUsed?.startsWith('p:') && this._scenarios.has(lastUsed)) {
+      this.save(this._scenarios.get(lastUsed), true);
+      return;
+    }
+    const prebuilts = this.getPrebuiltScenarios();
+    const defaultActive = prebuilts.find(p => p.active) ?? prebuilts[0];
+    if (defaultActive) this.save(defaultActive, true);
   }
 
   /**
-   * Get all scenarios ordered by priority (ascending)
-   * Sort scenarios by order (ascending) so index 0 is the default.
-   * @return {any[]}
+   * Get all scenarios ordered by order (ascending).
    */
   getAll() {
     return [...this._scenarios.values()].sort((a, b) => a.order - b.order);
   }
 
-  /**
-   * Instantiate the correct scenario class for the current selection.
-   * @returns {BaseScenario}
-   */
   get(id) {
     return this._scenarios.get(id);
   }
 
   /**
-   *
-   * @param scenario
-   * @param active - is the the new active scenario
+   * Save a scenario. When active=true, marks it as the sole active scenario
+   * and persists lastUsed. When active=false, just updates storage.
    */
   save(scenario, active) {
-    if(active) {
-      //Make sure we are the only active scenario in storage
-      this._scenarios.entries().forEach(e => e.active = false);
+    if (active) {
+      this._scenarios.forEach(s => { s.active = false; });
       scenario.active = true;
-    }else {
+      this._scenarios.set(scenario.id, scenario);
+      this._persistUserScenarios();
+      this._persistLastUsed(scenario.id);
+    } else {
       scenario.active = false;
+      this._scenarios.set(scenario.id, scenario);
+      this._persistUserScenarios();
     }
-    this._scenarios.set(scenario.id, scenario);
-    this._persistUserScenarios();
-    this._persistLastUsed(scenario.id);
   }
 
+  /**
+   * Delete a scenario by id. Falls back to getAll()[0] as the new active.
+   */
   delete(id) {
-    let deletingActive = null;
-    const active = this.getActive();
     this._scenarios.delete(id);
-
-    if(active.id == id) {
-
-    }
     const newActive = this.getAll()[0];
-    newActive.active = true;
-    this.save(newActive, true);
-    this._persistUserScenarios();
-    this._persistLastUsed(newActive.id);
+    if (newActive) this.save(newActive, true);
     return this.getActive();
   }
 
   /**
-   * Get the one active scenario in the application
+   * Set the scenario with the given id as the sole active one.
    */
+  setActiveById(id) {
+    const s = this._scenarios.get(id);
+    if (s) this.save(s, true);
+  }
+
   getActive() {
     return this.getAll().find(s => s.active);
   }
 
   getPrebuiltScenarios() {
-    // Sort pre-built scenarios by order (ascending) so index 0 is the default.
-    return [...this._scenarios.values()].filter(s => s.prebuilt === true).sort((a, b) => a.order - b.order);
+    return [...this._scenarios.values()]
+      .filter(s => s.prebuilt === true)
+      .sort((a, b) => a.order - b.order);
   }
 
   getUserScenarios() {
-    // Sort scenarios by order (ascending) so index 0 is the default.
-    return [...this._scenarios.values()].filter(s => s.prebuilt === false).sort((a, b) => a.order - b.order);
+    return [...this._scenarios.values()]
+      .filter(s => s.prebuilt === false)
+      .sort((a, b) => a.order - b.order);
   }
 
   getNextUserScenarioId() {
@@ -122,42 +137,23 @@ export class ScenarioRegistry {
   }
 
   replaceUserScenarios(data) {
+    [...this._scenarios.keys()].filter(k => k.startsWith('u:')).forEach(k => this._scenarios.delete(k));
     if (Array.isArray(data.scenarios)) {
-      for (const s of data.scenarios) {
+      data.scenarios.forEach((s, i) => {
+        s.id = 'u:' + i;
         this._scenarios.set(s.id, s);
-      }
+      });
     }
     this._persistUserScenarios();
   }
 
-  deleteActiveScenario() {
-    if (!this._activeValue?.startsWith('u:')) return;
-    this._scenarios.delete(this._activeValue);
-
-    // After deletion, fall back to first prebuilt, then first user scenario, then empty.
-    const prebuilt = this.getPrebuiltScenarios();
-    const user = this.getUserScenarios();
-    if (prebuilt.length > 0) {
-      this._activeValue = prebuilt.id;
-    } else if (user.length > 0) {
-      this._activeValue = user[0].id;
-    } else {
-      this._activeValue = '';
-    }
-    this._persistUserScenarios();
-    this._persistLastUsed();
-  }
-
-  /** Write the current active value as lastUsed and flush to localStorage. */
   _persistLastUsed(id) {
     this._scenarioData.lastUsed = id;
     this._scenarioStorage.save(this._scenarioData);
   }
 
   _persistUserScenarios() {
-    //Ensure our scenarios are up-to-date
     this._scenarioData.scenarios = this.getUserScenarios();
     this._scenarioStorage.save(this._scenarioData);
   }
-
 }

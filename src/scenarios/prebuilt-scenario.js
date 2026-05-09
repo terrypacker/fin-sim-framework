@@ -36,11 +36,12 @@ export class PrebuiltScenario {
    * @param {string}   [opts.simEnd='2041-01-01']   - ISO date for the default sim end.
    * @param {Function} opts.factory   - (params, initialState, eventSchedulerUI) => BaseScenario
    */
-  constructor({ id, label, order, simStart = '2026-01-01', simEnd = '2041-01-01', factory }) {
+  constructor({ id, label, order, simStart = '2026-01-01', simEnd = '2041-01-01', factory, active = false }) {
     this.id       = id;
     this.label    = label;
     this.order    = order;
     this.prebuilt = true;
+    this.active   = active;
     this.simStart = simStart;
     this.simEnd   = simEnd;
     this.factory  = factory;

@@ -8,9 +8,6 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import {ScenarioStorage} from "../../scenarios/scenario-storage.js";
-import {ServiceRegistry} from "../../services/service-registry.js";
-
 export class ScenarioTabView {
   constructor() {
 
@@ -53,8 +50,6 @@ export class ScenarioTabView {
   // ─── DOM wiring ───────────────────────────────────────────────────────────
 
   _init() {
-    this._refreshScenarioSelect();
-
     document.getElementById('scenarioSelect')?.addEventListener('change', (e) => {
       if(this.onOpen) this.onOpen(e.target.value || '')
     });
@@ -170,7 +165,7 @@ export class ScenarioTabView {
   _populateScenarioForm(scenario) {
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
 
-    set('scenarioName',     scenario?.name     ?? '');
+    set('scenarioName',     scenario?.name ?? scenario?.label ?? '');
     set('simStartInput',    scenario?.simStart ?? '2026-01-01');
     set('simEndInput',      scenario?.simEnd   ?? '2041-01-01');
     set('initialStateJson', JSON.stringify(scenario?.initialState ?? { metrics: { } }, null, 2));
@@ -215,8 +210,8 @@ export class ScenarioTabView {
       delBtn.className   = 'btn btn-warn btn-sm';
       delBtn.textContent = '✕';
       delBtn.addEventListener('click', () => {
-        cfg.params.splice(i, 1);
-        this._renderParamsList();
+        scenario.params.splice(i, 1);
+        this._renderParamsList(scenario);
       });
 
       row.appendChild(nameInput);
