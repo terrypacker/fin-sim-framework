@@ -95,6 +95,15 @@ export class AccountsController {
     return this._service.getAll();
   }
 
+  /**
+   * Return the transaction history for an account from the simulation journal.
+   * @param {string} accountId
+   * @param {import('../../simulation-framework/journal.js').Journal} journal
+   */
+  getHistory(accountId, journal) {
+    return this._service.getAccountHistory(accountId, journal);
+  }
+
   // ─── Private ──────────────────────────────────────────────────────────────
 
   _builderFor(type) {

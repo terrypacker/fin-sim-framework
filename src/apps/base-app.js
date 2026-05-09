@@ -161,6 +161,9 @@ export class BaseApp extends BaseComponent {
     this.scenario = registry.scenarioService.createActiveScenario();
     this.scenario.buildSim();
     this.scenario.loadDefaults();
+    this.accountsPresenter.setJournal(this.scenario.sim.journal);
+    this.accountsPresenter.attachSimBus(this.scenario.sim.bus);
+    this.accountsPresenter.setSimStateGetter(() => this.scenario.sim.state);
 
     // Derive display settings from DOM so rebuilds preserve user selections.
     const currentFmt      = $('tzSelect')?.value === 'utc' ? fmtUTC : fmtLocal;
@@ -218,11 +221,12 @@ export class BaseApp extends BaseComponent {
 
     // ── Simulation animator ───────────────────────────────────────────────────
     this._animator = new SimulationAnimator({
-      scenario:       this.scenario,
-      timeControls:   this.timeControls,
-      statePanelView: this._statePanelView,
-      chartView:      this.chartView,
-      graphRenderer:  this.configPresenter._graphRenderer,
+      scenario:           this.scenario,
+      timeControls:       this.timeControls,
+      statePanelView:     this._statePanelView,
+      chartView:          this.chartView,
+      graphRenderer:      this.configPresenter._graphRenderer,
+      accountsPresenter:  this.accountsPresenter,
     });
 
     this._animator.toggleBreakpoint();

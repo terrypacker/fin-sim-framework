@@ -41,12 +41,13 @@ export class SimulationAnimator {
    *   chartView:      import('../visualization/chart-view.js').ChartView,
    * }}
    */
-  constructor({ scenario, timeControls, statePanelView, chartView, graphRenderer }) {
-    this._scenario       = scenario;
-    this._timeControls   = timeControls;
-    this._statePanelView = statePanelView;
-    this._chartView      = chartView;
-    this._graphRenderer  = graphRenderer ?? null;
+  constructor({ scenario, timeControls, statePanelView, chartView, graphRenderer, accountsPresenter }) {
+    this._scenario          = scenario;
+    this._timeControls      = timeControls;
+    this._statePanelView    = statePanelView;
+    this._chartView         = chartView;
+    this._graphRenderer     = graphRenderer ?? null;
+    this._accountsPresenter = accountsPresenter ?? null;
 
     this.playing = false;
     this._dashCardsdirty = false;
@@ -88,6 +89,7 @@ export class SimulationAnimator {
     this._graphRenderer?.setRenderThrottle(PLAYBACK_THROTTLE_MS);
     this._statePanelView?.setRenderThrottle(PLAYBACK_THROTTLE_MS);
     this._chartView?.setRenderThrottle(PLAYBACK_THROTTLE_MS);
+    this._accountsPresenter?.setRenderThrottle(PLAYBACK_THROTTLE_MS);
     this.animate();
   }
 
@@ -97,6 +99,7 @@ export class SimulationAnimator {
     this._graphRenderer?.setRenderThrottle(0);
     this._statePanelView?.setRenderThrottle(0);
     this._chartView?.setRenderThrottle(0);
+    this._accountsPresenter?.setRenderThrottle(0);
     if (!this._scenario?.sim?.control?.paused) {
       this.clearBreakpointStatus();
     }
