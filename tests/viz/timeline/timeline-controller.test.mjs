@@ -453,3 +453,189 @@ test('TimelineController.toggleExpanded: removes a key that is already present',
   ctrl.toggleExpanded('2025-01-01');
   assert.ok(!ctrl.expanded.has('2025-01-01'));
 });
+
+// ─── generateCsv ─────────────────────────────────────────────────────────────
+
+test('TimelineController.generateCsv: returns empty string when journal is null', () => {
+  assert.strictEqual(makeController().generateCsv(fmtDate), '');
+});
+
+test('TimelineController.generateCsv: returns empty string when no entries pass filter', () => {
+  const ctrl = makeController();
+  ctrl.setJournal(makeJournal([makeEntry({ eventType: 'SALARY' })]));
+  ctrl.filterEvents = new Set(['SELL_ASSET']); // nothing matches
+  assert.strictEqual(ctrl.generateCsv(fmtDate), '');
+});
+
+test('TimelineController.generateCsv: returns non-empty string for a single entry', () => {
+  const ctrl = makeController();
+  ctrl.setJournal(makeJournal([makeEntry()]));
+  const csv = ctrl.generateCsv(fmtDate);
+  assert.ok(csv.length > 0);
+});
+
+test('TimelineController.generateCsv: first line is the header row', () => {
+  const ctrl = makeController();
+  ctrl.setJournal(makeJournal([makeEntry({ date: new Date(2025, 0, 1) })]));
+  const header = ctrl.generateCsv(fmtDate).split('\n')[0];
+  assert.ok(header.includes('date'),      'header should include date column');
+  assert.ok(header.includes('eventType'), 'header should include eventType column');
+  assert.ok(header.includes('action.type'), 'header should include action.type column');
+});
+
+test('TimelineController.generateCsv: second line is the data row', () => {
+  const ctrl  = makeController();
+  const d     = new Date(2025, 0, 1);
+  ctrl.setJournal(makeJournal([makeEntry({ date: d, eventType: 'SELL_ASSET', actionType: 'REALIZE_GAIN' })]));
+  const lines = ctrl.generateCsv(fmtDate).split('\n');
+  assert.strictEqual(lines.length, 2, 'one header + one data row');
+  assert.ok(lines[1].includes('SELL_ASSET'),   'data row should contain eventType');
+  assert.ok(lines[1].includes('REALIZE_GAIN'), 'data row should contain action type');
+  assert.ok(lines[1].includes(fmtDate(d)),     'data row should contain formatted date');
+});
+
+test('TimelineController.generateCsv: nested fields use parent.field naming', () => {
+  const ctrl = makeController();
+  ctrl.setJournal(makeJournal([makeEntry()]));
+  const header = ctrl.generateCsv(fmtDate).split('\n')[0];
+  assert.ok(header.includes('action.type'),  'action fields should be prefixed with action.');
+  assert.ok(header.includes('reducer.name'), 'reducer fields should be prefixed with reducer.');
+});
+
+test('TimelineController.generateCsv: action.amount column appears when entry has amount', () => {
+  const ctrl  = makeController();
+  const entry = makeEntry();
+  entry.action.amount = 5000;
+  ctrl.setJournal(makeJournal([entry]));
+  const csv = ctrl.generateCsv(fmtDate);
+  assert.ok(csv.includes('action.amount'), 'action.amount column should appear');
+  assert.ok(csv.includes('5000'),          'amount value should appear');
+});
+
+test('TimelineController.generateCsv: columns span the union of all entry fields', () => {
+  const ctrl   = makeController();
+  const entry1 = makeEntry({ date: new Date(2025, 0, 1), actionType: 'ACT_A' });
+  const entry2 = makeEntry({ date: new Date(2025, 0, 2), actionType: 'ACT_B' });
+  entry1.action.amount = 100;
+  entry2.action.tax    = 15;
+  ctrl.setJournal(makeJournal([entry1, entry2]));
+  const header = ctrl.generateCsv(fmtDate).split('\n')[0];
+  assert.ok(header.includes('action.amount'), 'amount column from entry1 should appear');
+  assert.ok(header.includes('action.tax'),    'tax column from entry2 should appear');
+});
+
+test('TimelineController.generateCsv: missing fields produce empty values in data rows', () => {
+  const ctrl   = makeController();
+  const entry1 = makeEntry({ date: new Date(2025, 0, 1) });
+  const entry2 = makeEntry({ date: new Date(2025, 0, 2) });
+  entry1.action.amount = 100; // only entry1 has amount
+  ctrl.setJournal(makeJournal([entry1, entry2]));
+  const lines = ctrl.generateCsv(fmtDate).split('\n');
+  const header = lines[0].split(',');
+  const amtIdx = header.indexOf('action.amount');
+  const row2   = lines[2].split(',');
+  assert.strictEqual(row2[amtIdx], '', 'missing amount should be empty in entry2 row');
+});
+
+test('TimelineController.generateCsv: respects active filterEvents', () => {
+  const ctrl = makeController();
+  ctrl.setJournal(makeJournal([
+    makeEntry({ eventType: 'SELL_ASSET' }),
+    makeEntry({ eventType: 'SALARY'     }),
+  ]));
+  ctrl.filterEvents = new Set(['SELL_ASSET']);
+  const lines = ctrl.generateCsv(fmtDate).split('\n');
+  assert.strictEqual(lines.length, 2, 'only one data row should be generated');
+  assert.ok(lines[1].includes('SELL_ASSET'));
+});
+
+test('TimelineController.generateCsv: respects active date range filter', () => {
+  const ctrl = makeController();
+  ctrl.setJournal(makeJournal([
+    makeEntry({ date: new Date(2025, 0, 1) }),
+    makeEntry({ date: new Date(2025, 5, 1) }),
+    makeEntry({ date: new Date(2025, 11, 1) }),
+  ]));
+  ctrl.filterDateEnd = new Date(2025, 5, 1, 23, 59, 59, 999); // up to June 1
+  const lines = ctrl.generateCsv(fmtDate).split('\n');
+  assert.strictEqual(lines.length, 3, 'two data rows for January and June');
+});
+
+test('TimelineController.generateCsv: escapes values containing commas', () => {
+  const ctrl  = makeController();
+  const entry = makeEntry();
+  entry.action.name = 'stocks, bonds';
+  ctrl.setJournal(makeJournal([entry]));
+  const csv = ctrl.generateCsv(fmtDate);
+  assert.ok(csv.includes('"stocks, bonds"'), 'comma-containing values should be quoted');
+});
+
+test('TimelineController.generateCsv: escapes values containing double quotes', () => {
+  const ctrl  = makeController();
+  const entry = makeEntry();
+  entry.action.name = 'He said "sell"';
+  ctrl.setJournal(makeJournal([entry]));
+  const csv = ctrl.generateCsv(fmtDate);
+  assert.ok(csv.includes('"He said ""sell"""'), 'double quotes should be escaped');
+});
+
+// ─── generateCsv / _flattenObject: circular reference handling ───────────────
+
+test('TimelineController.generateCsv: does not throw when action has a self-reference', () => {
+  const ctrl  = makeController();
+  const entry = makeEntry();
+  entry.action.self = entry.action; // action.self → action (direct cycle)
+  ctrl.setJournal(makeJournal([entry]));
+  assert.doesNotThrow(() => ctrl.generateCsv(fmtDate));
+});
+
+test('TimelineController.generateCsv: does not throw when action references its parent entry', () => {
+  const ctrl  = makeController();
+  const entry = makeEntry();
+  entry.action.parent = entry; // entry → action → entry (mutual cycle)
+  ctrl.setJournal(makeJournal([entry]));
+  assert.doesNotThrow(() => ctrl.generateCsv(fmtDate));
+});
+
+test('TimelineController.generateCsv: does not throw when an array field contains a circular object', () => {
+  const ctrl  = makeController();
+  const entry = makeEntry();
+  const circ  = {};
+  circ.self   = circ;           // self-referencing object inside an array
+  entry.action.items = [circ];
+  ctrl.setJournal(makeJournal([entry]));
+  assert.doesNotThrow(() => ctrl.generateCsv(fmtDate));
+});
+
+test('TimelineController.generateCsv: circular array field renders as [circular]', () => {
+  const ctrl  = makeController();
+  const entry = makeEntry();
+  const circ  = {};
+  circ.self   = circ;
+  entry.action.items = [circ];
+  ctrl.setJournal(makeJournal([entry]));
+  const csv = ctrl.generateCsv(fmtDate);
+  assert.ok(csv.includes('[circular]'), 'circular array value should render as [circular]');
+});
+
+test('TimelineController.generateCsv: primitive fields still appear alongside circular references', () => {
+  const ctrl  = makeController();
+  const entry = makeEntry({ eventType: 'SELL_ASSET', actionType: 'REALIZE_GAIN' });
+  entry.action.self = entry.action; // circular on action
+  entry.action.amount = 9999;       // primitive alongside the cycle
+  ctrl.setJournal(makeJournal([entry]));
+  const csv = ctrl.generateCsv(fmtDate);
+  assert.ok(csv.includes('SELL_ASSET'),   'eventType should still appear');
+  assert.ok(csv.includes('REALIZE_GAIN'), 'action.type should still appear');
+  assert.ok(csv.includes('9999'),         'action.amount should still appear');
+});
+
+test('TimelineController._flattenObject: diamond reference flattens correctly on both paths', () => {
+  // shared is reachable via two paths; with backtracking it should appear on both
+  const ctrl   = makeController();
+  const shared = { x: 42 };
+  const obj    = { a: shared, b: shared };
+  const result = ctrl._flattenObject(obj);
+  assert.strictEqual(result['a.x'], 42, 'first path to shared should be flattened');
+  assert.strictEqual(result['b.x'], 42, 'second path to shared should also be flattened');
+});

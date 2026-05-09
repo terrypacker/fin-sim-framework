@@ -265,3 +265,38 @@ test('TimelinePresenter._render: does nothing when journal is null', () => {
   assert.doesNotThrow(() => presenter._render());
   assert.strictEqual(container.innerHTML, '');
 });
+
+// ─── CSV download wiring ──────────────────────────────────────────────────────
+
+// jsdom stubs needed for _triggerDownload
+if (!global.URL.createObjectURL) global.URL.createObjectURL = () => 'blob:mock';
+if (!global.URL.revokeObjectURL) global.URL.revokeObjectURL = () => {};
+
+test('TimelinePresenter: onDownloadCsv is wired on the view', () => {
+  const { view } = makePresenter();
+  assert.ok(typeof view.onDownloadCsv === 'function', 'onDownloadCsv should be wired');
+});
+
+test('TimelinePresenter: onDownloadCsv calls controller.generateCsv', () => {
+  const { presenter, controller, view } = makePresenter();
+  presenter.attach(makeJournal([makeEntry()]));
+
+  let generateCalled = false;
+  const orig = controller.generateCsv.bind(controller);
+  controller.generateCsv = (...args) => { generateCalled = true; return orig(...args); };
+
+  view.onDownloadCsv();
+  assert.ok(generateCalled, 'generateCsv should be called when download is triggered');
+});
+
+test('TimelinePresenter: onDownloadCsv does not trigger download when CSV is empty', () => {
+  // Empty journal → generateCsv returns '' → _triggerDownload should NOT be called
+  const { presenter, view } = makePresenter();
+  presenter.attach(makeJournal([]));
+
+  let triggerCalled = false;
+  presenter._triggerDownload = () => { triggerCalled = true; };
+
+  view.onDownloadCsv();
+  assert.ok(!triggerCalled, '_triggerDownload should not be called for empty CSV');
+});

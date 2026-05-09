@@ -331,3 +331,30 @@ test('TimelineView.render: rewind button present when hasRewind is true', () => 
   renderView(view, { entries: [makeEntry()], hasRewind: true });
   assert.ok(view.container.innerHTML.includes('tl-rewind'));
 });
+
+// ─── render: CSV download button ──────────────────────────────────────────────
+
+test('TimelineView: onDownloadCsv callback initialises to null', () => {
+  assert.strictEqual(makeView().onDownloadCsv, null);
+});
+
+test('TimelineView.render: CSV download button is present in the filter bar', () => {
+  const view = makeView();
+  renderView(view);
+  const uid = view._uid;
+  assert.ok(
+    view._filterBarEl.querySelector(`#tl-download-csv-${uid}`) !== null,
+    'download CSV button should exist in the filter bar',
+  );
+});
+
+test('TimelineView: clicking download CSV button fires onDownloadCsv', () => {
+  let called = false;
+  const view = makeView();
+  renderView(view);
+  view.onDownloadCsv = () => { called = true; };
+  const uid    = view._uid;
+  const csvBtn = view._filterBarEl.querySelector(`#tl-download-csv-${uid}`);
+  csvBtn.click();
+  assert.ok(called, 'onDownloadCsv should be called when the button is clicked');
+});

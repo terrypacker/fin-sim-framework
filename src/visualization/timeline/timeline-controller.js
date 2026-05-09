@@ -97,4 +97,80 @@ export class TimelineController {
   toggleExpanded(key) {
     this.expanded.has(key) ? this.expanded.delete(key) : this.expanded.add(key);
   }
+
+  // Returns a CSV string of currently-visible rows, or '' if nothing is visible.
+  generateCsv(formatDate) {
+    const groups = this.groups(formatDate);
+    const rows = [];
+    for (const byEvent of groups.values()) {
+      for (const items of byEvent.values()) {
+        for (const { entry } of items) {
+          rows.push(this._flattenEntry(entry, formatDate));
+        }
+      }
+    }
+    if (rows.length === 0) return '';
+
+    // Collect columns in insertion order (first-seen wins for ordering)
+    const colMap = new Map();
+    for (const row of rows) {
+      for (const k of Object.keys(row)) {
+        if (!colMap.has(k)) colMap.set(k, true);
+      }
+    }
+    const cols = [...colMap.keys()];
+
+    const esc = v => {
+      if (v == null) return '';
+      const s = String(v);
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    return [
+      cols.join(','),
+      ...rows.map(row => cols.map(c => esc(row[c])).join(',')),
+    ].join('\n');
+  }
+
+  _flattenEntry(entry, formatDate) {
+    const obj = {
+      date:      entry.date,
+      eventType: entry.eventType,
+      action:    entry.action,
+      reducer:   entry.reducer,
+    };
+    if (entry.sourceEvent) obj.sourceEvent = entry.sourceEvent;
+    return this._flattenObject(obj, '', formatDate);
+  }
+
+  // Recursively flattens obj into { 'parent.child': value } pairs.
+  // Dates are formatted with dateFormatter; functions and null/undefined are skipped.
+  // seen tracks in-progress ancestors so circular references are skipped rather
+  // than causing infinite recursion or a JSON.stringify crash. Backtracking after
+  // each object allows diamond references (two paths to the same object) to be
+  // flattened correctly under both paths.
+  _flattenObject(obj, prefix = '', dateFormatter = d => d.toISOString(), seen = new Set()) {
+    if (seen.has(obj)) return {};
+    seen.add(obj);
+    const result = {};
+    for (const [k, v] of Object.entries(obj)) {
+      const key = prefix ? `${prefix}.${k}` : k;
+      if (v == null || typeof v === 'function') continue;
+      if (v instanceof Date) {
+        result[key] = dateFormatter(v);
+      } else if (Array.isArray(v)) {
+        try {
+          result[key] = JSON.stringify(v);
+        } catch {
+          result[key] = '[circular]';
+        }
+      } else if (typeof v === 'object') {
+        Object.assign(result, this._flattenObject(v, key, dateFormatter, seen));
+      } else {
+        result[key] = v;
+      }
+    }
+    seen.delete(obj); // backtrack so diamond references still flatten on both paths
+    return result;
+  }
 }
