@@ -133,6 +133,7 @@ import { ChartView } from './visualization/chart-view.js';
 import { BaseComponent } from './visualization/components/base-component.js';
 import { GraphNodeFilterMultiSelect } from './visualization/components/graph-node-filter-multi-select.js';
 import { GraphRenderer } from './visualization/components/graph-renderer.js';
+import { MapFilterMultiSelect } from './visualization/components/map-filter-multi-select.js';
 import { GraphBuilderController } from './visualization/graph-builder/graph-builder-controller.js';
 import { GraphBuilderPresenter } from './visualization/graph-builder/graph-builder-presenter.js';
 import { GraphBuilderView } from './visualization/graph-builder/graph-builder-view.js';
@@ -469,6 +470,7 @@ export const Visualization = {
   BaseComponent,
   GraphNodeFilterMultiSelect,
   GraphRenderer,
+  MapFilterMultiSelect,
   GraphBuilderController,
   GraphBuilderPresenter,
   GraphBuilderView,

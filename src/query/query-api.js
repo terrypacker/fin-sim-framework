@@ -277,6 +277,11 @@ export class QueryApi {
   _parse(input) {
     this._tokens = this._tokenize(input);
     this._pos = 0;
+    if(this._tokens.length == 0) {
+      return {
+        op: 'identity'
+      }
+    }
     return this._parseExpression();
   }
 
@@ -391,9 +396,10 @@ export class QueryApi {
   // =========================================================
   // Predicate Builder
   // =========================================================
-
   _buildPredicate(node) {
     if (!node) return () => true;
+
+    if(node.op === 'identity') return () => true;
 
     if (node.op === 'and') {
       const preds = node.conditions.map(c => this._buildPredicate(c));

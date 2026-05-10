@@ -52,6 +52,13 @@ export class BaseComponent {
   // ─────────────────────────────────────────────
   // Helpers
   // ─────────────────────────────────────────────
+
+
+  _getTemplate(templateId) {
+    const tmpl = document.getElementById(templateId);
+    return tmpl.content.firstElementChild.cloneNode(true);
+  }
+
   /**
    * Usage:
    *   this._debouncedSearch = this.debounce(() => this._searchChanged(), 200);

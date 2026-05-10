@@ -15,6 +15,32 @@ import { TimelineView }       from '../../../src/visualization/timeline/timeline
 import { TimelinePresenter }  from '../../../src/visualization/timeline/timeline-presenter.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+function makeFilterTemplate() {
+  //Setup Template
+  const timelineFilterTemplate = document.createElement('template');
+  timelineFilterTemplate.id = 'tpl-timeline-filter-bar';
+  timelineFilterTemplate.innerHTML = `<div class = "tl-filter-bar">
+    <div class="tl-filter-group">
+      <label class="tl-filter-label" for="tl-ev-select">Event</label>
+      <div class="reducer-chip-grid" id="tl-ev-select"></div>
+    </div>
+    <div class="tl-filter-group">
+      <label class="tl-filter-label" for="tl-act-select">Action</label>
+      <div class="reducer-chip-grid" id="tl-act-select"></div>
+    </div>
+    <div class="tl-filter-group">
+      <label class="tl-filter-label" for="tl-date-start">From</label>
+      <input class="tl-filter-date" type="date" id="tl-date-start">
+    </div>
+    <div class="tl-filter-group">
+      <label class="tl-filter-label" for="tl-date-end">To</label>
+      <input class="tl-filter-date" type="date" id="tl-date-end">
+    </div>
+    <button class="btn btn-sm"    id="tl-filter-clear"    title="Clear all filters">✕</button>
+    <button class="btn btn-sm"   id="tl-download-csv"   title="Download visible rows as CSV">⬇ CSV</button>
+  </div>`;
+  document.body.appendChild(timelineFilterTemplate);
+}
 
 function makeContainer({ scrollHeight = 400, scrollTop = 0, clientHeight = 100 } = {}) {
   const el = document.createElement('div');
@@ -38,6 +64,7 @@ function makeJournal(entries = []) {
 }
 
 function makePresenter({ onDetail = () => {}, onRewind = null, containerOpts = {} } = {}) {
+  makeFilterTemplate();
   const container  = makeContainer(containerOpts);
   const controller = new TimelineController();
   const view       = new TimelineView({ container });
