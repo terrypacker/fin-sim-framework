@@ -54,9 +54,9 @@ export class WagesIncomeApplyReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const { amount, isAuResident } = action;
+    const { amount, isAuResident, personKey } = action;
     this.accountService.transaction(usCash(state), amount, null);
-    return this.newState(state, {}, [{ type: 'WAGES_INCOME_TAX', amount, isAuResident }]);
+    return this.newState(state, {}, [{ type: 'WAGES_INCOME_TAX', amount, isAuResident, personKey }]);
   }
 }
 

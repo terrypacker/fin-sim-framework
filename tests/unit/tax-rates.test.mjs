@@ -29,6 +29,7 @@ import { UsTaxRates2025 } from '../../src/finance/tax/us/us-tax-rates-2025.js';
 import { AuTaxRates2025 } from '../../src/finance/tax/au/au-tax-rates-2025.js';
 import { UsTaxModule2026 } from '../../src/finance/tax/us/us-tax-module-2026.js';
 import { AuTaxModule2026 } from '../../src/finance/tax/au/au-tax-module-2026.js';
+import { TaxSettleService } from '../../src/finance/tax-settle-service.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -322,4 +323,110 @@ test('TE-8: only 85% of SS benefit flows to US taxable income (not 100%)', () =>
   // Verify it's not 100% (full $1000) or 0% (exempt)
   assert.strictEqual(s1.usOrdinaryIncomeYTD, 850);
   assert.notEqual(s1.usOrdinaryIncomeYTD, 1000);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Per-person AU wages tracking
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('WAGES_INCOME_TAX with personKey updates auPersonOrdinaryIncomeYTD, not auOrdinaryIncomeYTD', () => {
+  const usModule = new UsTaxModule2026();
+  const fn = getFn(usModule, 'WAGES_INCOME_TAX');
+  const s0 = {
+    usOrdinaryIncomeYTD: 0,
+    auOrdinaryIncomeYTD: 0,
+    auPersonOrdinaryIncomeYTD: { primary: 0, spouse: 0 },
+    ftcYTD: 0,
+  };
+  const s1 = fn(s0, { amount: 8000, isAuResident: true, personKey: 'primary' });
+  assert.strictEqual(s1.usOrdinaryIncomeYTD, 8000);
+  assert.strictEqual(s1.auPersonOrdinaryIncomeYTD.primary, 8000);
+  assert.strictEqual(s1.auPersonOrdinaryIncomeYTD.spouse, 0);
+  assert.strictEqual(s1.auOrdinaryIncomeYTD, 0);  // not updated when personKey present
+  assert.ok(s1.ftcYTD > 0);
+});
+
+test('WAGES_INCOME_TAX without personKey still updates auOrdinaryIncomeYTD (backward compat)', () => {
+  const usModule = new UsTaxModule2026();
+  const fn = getFn(usModule, 'WAGES_INCOME_TAX');
+  const s0 = { usOrdinaryIncomeYTD: 0, auOrdinaryIncomeYTD: 0, ftcYTD: 0 };
+  const s1 = fn(s0, { amount: 5000, isAuResident: true });
+  assert.strictEqual(s1.auOrdinaryIncomeYTD, 5000);
+});
+
+test('WAGES_INCOME_TAX accumulates per person across multiple calls', () => {
+  const usModule = new UsTaxModule2026();
+  const fn = getFn(usModule, 'WAGES_INCOME_TAX');
+  const s0 = {
+    usOrdinaryIncomeYTD: 0,
+    auOrdinaryIncomeYTD: 0,
+    auPersonOrdinaryIncomeYTD: { primary: 0, spouse: 0 },
+    ftcYTD: 0,
+  };
+  const s1 = fn(s0, { amount: 6000, isAuResident: true, personKey: 'primary' });
+  const s2 = fn(s1, { amount: 4000, isAuResident: true, personKey: 'spouse' });
+  const s3 = fn(s2, { amount: 6000, isAuResident: true, personKey: 'primary' });
+  assert.strictEqual(s3.auPersonOrdinaryIncomeYTD.primary, 12000);
+  assert.strictEqual(s3.auPersonOrdinaryIncomeYTD.spouse, 4000);
+  assert.strictEqual(s3.auOrdinaryIncomeYTD, 0);
+});
+
+test('computeAuTaxPerPerson computes separate tax for each AU resident', () => {
+  const service = new TaxSettleService();
+  const state = {
+    isAuResident: true,
+    people: {
+      primary: { name: 'Alice' },
+      spouse:  { name: 'Bob' },
+    },
+    auPersonOrdinaryIncomeYTD: { primary: 90000, spouse: 40000 },
+    auOrdinaryIncomeYTD:         0,
+    auCapitalGainsYTD:           0,
+    auNonResidentWithholdingYTD: 0,
+    auSuperTaxYTD:               0,
+    auFrankingCreditYTD:         0,
+    inflationAccumulator:        { AU: 1.0 },
+    currentPeriods:              { AU: { startMs: Date.UTC(2025, 6, 1) } },
+  };
+
+  const results = service.computeAuTaxPerPerson(state);
+  assert.strictEqual(results.length, 2);
+
+  const alice = results.find(r => r.personKey === 'primary');
+  const bob   = results.find(r => r.personKey === 'spouse');
+
+  assert.ok(alice, 'primary result missing');
+  assert.ok(bob,   'spouse result missing');
+  assert.strictEqual(alice.personName, 'Alice');
+  assert.strictEqual(bob.personName,   'Bob');
+  // Alice earns more so pays more tax
+  assert.ok(alice.taxDetail.netLiability > bob.taxDetail.netLiability,
+    `Alice ($${alice.taxDetail.netLiability}) should pay more tax than Bob ($${bob.taxDetail.netLiability})`);
+});
+
+test('computeAuTaxPerPerson splits shared passive income equally', () => {
+  const service = new TaxSettleService();
+  const state = {
+    isAuResident: true,
+    people: {
+      primary: { name: 'Alice' },
+      spouse:  { name: 'Bob' },
+    },
+    auPersonOrdinaryIncomeYTD: { primary: 0, spouse: 0 },
+    auOrdinaryIncomeYTD:         20000,  // shared passive income
+    auCapitalGainsYTD:           0,
+    auNonResidentWithholdingYTD: 0,
+    auSuperTaxYTD:               0,
+    auFrankingCreditYTD:         0,
+    inflationAccumulator:        { AU: 1.0 },
+    currentPeriods:              { AU: { startMs: Date.UTC(2025, 6, 1) } },
+  };
+
+  const results = service.computeAuTaxPerPerson(state);
+  const alice = results.find(r => r.personKey === 'primary');
+  const bob   = results.find(r => r.personKey === 'spouse');
+
+  // Each should see $10k AU income (shared $20k / 2 residents)
+  assert.strictEqual(alice.taxDetail.inputs.ordinaryIncome, 10000);
+  assert.strictEqual(bob.taxDetail.inputs.ordinaryIncome,   10000);
 });

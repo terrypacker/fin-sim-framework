@@ -187,16 +187,19 @@ export class UsTaxModule2026 extends BaseTaxModule {
         return next;
       }],
 
-      // EVT-38: wages — US ordinary income; AU ordinary income if resident
+      // EVT-38: wages — US ordinary income; AU per-person income if resident + personKey,
+      //         otherwise AU shared income (backward compat for non-monthly-wages events)
       ['WAGES_INCOME_TAX', (state, action) => {
-        const { amount, isAuResident } = action;
+        const { amount, isAuResident, personKey } = action;
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
-          next = {
-            ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
-            ftcYTD:              state.ftcYTD              + amount,
-          };
+          if (personKey && state.auPersonOrdinaryIncomeYTD) {
+            const personMap = { ...state.auPersonOrdinaryIncomeYTD };
+            personMap[personKey] = (personMap[personKey] ?? 0) + amount;
+            next = { ...next, auPersonOrdinaryIncomeYTD: personMap, ftcYTD: state.ftcYTD + amount };
+          } else {
+            next = { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount, ftcYTD: state.ftcYTD + amount };
+          }
         }
         return next;
       }],

@@ -1321,3 +1321,34 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   cursor: pointer;
 }
 .tax-doc-close-btn:hover { color: #e2e8f0; border-color: #64748b; }
+
+.tax-doc-tab-bar {
+  display: flex;
+  border-bottom: 1px solid #1e293b;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 8px 16px 0;
+  background: #0a0f1a;
+}
+.tax-doc-tab {
+  background: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 10px;
+  font-family: 'Courier New', monospace;
+  padding: 5px 14px;
+  border-radius: 3px 3px 0 0;
+  margin-bottom: -1px;
+}
+.tax-doc-tab:hover { color: #94a3b8; background: #111e30; }
+.tax-doc-tab--active {
+  background: black;
+  border-color: #334155;
+  border-bottom-color: black;
+  color: #93c5fd;
+}
+.tax-doc-tab-content { flex: 1; overflow: hidden; display: flex; }
+.tax-doc-panel { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.tax-doc-panel--hidden { display: none; }

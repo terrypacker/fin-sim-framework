@@ -19,37 +19,25 @@ export class TimelineController {
     this.filterDateEnd   = null;      // Date (end of day, inclusive)   | null
     this.expanded        = new Set();
     this._lastLen        = 0;
-    this._lastDate       = null;
   }
 
   setJournal(journal) {
     this.journal   = journal;
     this._lastLen  = 0;
-    this._lastDate = null;
     this.expanded.clear();
   }
 
   reset() {
     this._lastLen  = 0;
-    this._lastDate = null;
     this.expanded.clear();
   }
 
-  // Returns true if new entries arrived; auto-expands the latest date group.
-  update(formatDate) {
+  // Returns true if new entries arrived since the last call.
+  update(_formatDate) {
     if (!this.journal) return false;
     const len = this.journal.journal.length;
     if (len === this._lastLen) return false;
     this._lastLen = len;
-
-    if (len > 0) {
-      const latest  = this.journal.journal[len - 1];
-      const dateStr = formatDate(latest.date);
-      if (dateStr !== this._lastDate) {
-        this._lastDate = dateStr;
-        this.expanded.add(dateStr);
-      }
-    }
     return true;
   }
 

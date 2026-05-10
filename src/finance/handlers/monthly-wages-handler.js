@@ -41,7 +41,7 @@ export class MonthlyWagesHandler extends HandlerEntry {
       if (retDate && date >= retDate) continue;
 
       actions.push(
-        { type: 'WAGES_INCOME_APPLY', amount: wage, isAuResident: state.isAuResident },
+        { type: 'WAGES_INCOME_APPLY', amount: wage, isAuResident: state.isAuResident, personKey: key },
         new FieldValueAction(`wages_${key}`, `${person.name || key} Wages`, wage),
       );
     }

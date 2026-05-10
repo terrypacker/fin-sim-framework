@@ -66,12 +66,20 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.usNegativeIncomeYTD = 0;
     this.usCapitalGainsYTD = 0;
     this.usPenaltyYTD = 0;
-    this.auOrdinaryIncomeYTD = 0;
+    this.auOrdinaryIncomeYTD = 0;  // shared/passive income (dividends, savings interest, etc.)
     this.auCapitalGainsYTD = 0;
     this.auNonResidentWithholdingYTD = 0;
     this.auSuperTaxYTD = 0;
     this.auFrankingCreditYTD = 0;
     this.ftcYTD = 0;
+
+    // Per-person AU ordinary income (wages and other individually-attributed income).
+    // Keys mirror state.people. At AU tax settlement, each person's total AU ordinary
+    // income = auPersonOrdinaryIncomeYTD[key] + auOrdinaryIncomeYTD / numResidents.
+    this.auPersonOrdinaryIncomeYTD = {};
+    for (const [key, person] of Object.entries(this.people)) {
+      if (person != null) this.auPersonOrdinaryIncomeYTD[key] = 0;
+    }
 
     this.superWithdrawalBlocked = false;
     this.outOfFundsDate = null;

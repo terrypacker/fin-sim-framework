@@ -250,6 +250,42 @@ test('TaxDocumentRegistry: uses taxDetail.taxYear over entry date when both pres
   assert.strictEqual(doc.taxYear, 2024);
 });
 
+test('TaxDocumentRegistry: returns array of documents for per-person AU settlement', () => {
+  const registry = new TaxDocumentRegistry();
+  const aliceDetail = { ...auResidentDetail({ auOrdinaryIncomeYTD: 90000 }), taxYear: 2025 };
+  const bobDetail   = { ...auResidentDetail({ auOrdinaryIncomeYTD: 40000 }), taxYear: 2025 };
+  const entry = {
+    date:   new Date(Date.UTC(2026, 0, 1)),
+    action: {
+      type: 'TAX_SETTLE_APPLY',
+      cc:   'AU',
+      taxDetail: null,
+      personTaxDetails: [
+        { personKey: 'primary', personName: 'Alice', taxDetail: aliceDetail },
+        { personKey: 'spouse',  personName: 'Bob',   taxDetail: bobDetail },
+      ],
+    },
+  };
+  const docs = registry.generate(entry);
+  assert.ok(Array.isArray(docs), 'should return an array');
+  assert.strictEqual(docs.length, 2);
+  assert.strictEqual(docs[0].personKey,  'primary');
+  assert.strictEqual(docs[0].personName, 'Alice');
+  assert.strictEqual(docs[1].personKey,  'spouse');
+  assert.strictEqual(docs[1].personName, 'Bob');
+  assert.strictEqual(docs[0].country, 'AU');
+  assert.strictEqual(docs[1].country, 'AU');
+});
+
+test('TaxDocumentRegistry: single-document AU entry still returns non-array', () => {
+  const registry = new TaxDocumentRegistry();
+  const detail   = { ...auResidentDetail(), taxYear: 2025 };
+  const entry    = makeEntry('AU', detail);
+  const doc      = registry.generate(entry);
+  assert.ok(!Array.isArray(doc), 'single AU entry should not return array');
+  assert.strictEqual(doc.country, 'AU');
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 // JournalReportingService
 // ══════════════════════════════════════════════════════════════════════════════

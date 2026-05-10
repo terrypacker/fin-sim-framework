@@ -44,18 +44,30 @@ export class TaxDocumentRegistry {
   }
 
   /**
-   * Generate a TaxDocument from a TAX_SETTLE_APPLY journal entry.
+   * Generate a TaxDocument (or array of TaxDocuments) from a TAX_SETTLE_APPLY entry.
    *
-   * Returns null when the entry has no taxDetail (e.g. entries recorded
-   * before Phase 1 enrichment was deployed).
+   * Returns null when the entry has no taxDetail and no personTaxDetails.
+   * Returns TaxDocument[] when personTaxDetails is present (per-person AU filing).
+   * Returns TaxDocument for single-filer or US entries.
    *
    * @param {object} journalEntry
-   * @returns {TaxDocument|null}
+   * @returns {TaxDocument|TaxDocument[]|null}
    */
   generate(journalEntry) {
-    const { cc, taxDetail } = journalEntry.action;
-    if (!taxDetail) return null;
+    const { cc, taxDetail, personTaxDetails } = journalEntry.action;
 
+    if (personTaxDetails?.length > 0) {
+      const taxYear = personTaxDetails[0]?.taxDetail?.taxYear ?? new Date(journalEntry.date).getUTCFullYear();
+      const module  = this._get(cc, taxYear);
+      return personTaxDetails.map(({ personKey, personName, taxDetail: pd }) => {
+        const doc = module.generate(pd, taxYear);
+        doc.personKey  = personKey;
+        doc.personName = personName;
+        return doc;
+      });
+    }
+
+    if (!taxDetail) return null;
     const taxYear = taxDetail.taxYear ?? new Date(journalEntry.date).getUTCFullYear();
     const module  = this._get(cc, taxYear);
     return module.generate(taxDetail, taxYear);
