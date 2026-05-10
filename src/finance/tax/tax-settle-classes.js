@@ -19,6 +19,15 @@ const YTD_FIELDS = {
   AU: ['auOrdinaryIncomeYTD', 'auCapitalGainsYTD', 'auNonResidentWithholdingYTD', 'auSuperTaxYTD', 'auFrankingCreditYTD'],
 };
 
+// Per-person AU accumulator maps reset to zero after each AU settlement.
+const PER_PERSON_AU_FIELDS = [
+  'auPersonOrdinaryIncomeYTD',
+  'auPersonCapitalGainsYTD',
+  'auPersonFrankingCreditYTD',
+  'auPersonNonResidentWithholdingYTD',
+  'auPersonSuperTaxYTD',
+];
+
 // ─── TAX_SETTLE handler ────────────────────────────────────────────────────────
 
 /**
@@ -88,10 +97,12 @@ export class TaxSettleApplyReducer extends Reducer {
     for (const field of (YTD_FIELDS[cc] || [])) {
       if (field in state) resets[field] = 0;
     }
-    if (cc === 'AU' && state.auPersonOrdinaryIncomeYTD) {
-      const personResets = {};
-      for (const k of Object.keys(state.auPersonOrdinaryIncomeYTD)) personResets[k] = 0;
-      resets.auPersonOrdinaryIncomeYTD = personResets;
+    if (cc === 'AU') {
+      for (const field of PER_PERSON_AU_FIELDS) {
+        if (state[field]) {
+          resets[field] = Object.fromEntries(Object.keys(state[field]).map(k => [k, 0]));
+        }
+      }
     }
     if (tax > 0) {
       return this.newState({ ...state, ...resets }, {}, [{ type: 'TAX_PAYMENT_DEBIT', amount: tax, cc }]);

@@ -87,11 +87,12 @@ export class TaxSettleService {
   /**
    * Compute AU tax separately for each person in state.people.
    *
-   * Each person's AU ordinary income = their individual wages/SE income
-   * (from auPersonOrdinaryIncomeYTD) plus an equal share of any shared
-   * passive income (auOrdinaryIncomeYTD / numResidents).  All other AU
-   * fields (capital gains, super tax, franking credits, withholding) are
-   * also split evenly across residents.
+   * Each AU YTD field is resolved as:
+   *   personValue = auPersonXYTD[key] + auXYTD / numResidents
+   *
+   * This lets each income type migrate incrementally: once an event writes
+   * directly to the per-person map its shared-pool contribution drops to 0,
+   * while un-migrated types continue to split evenly from the shared pool.
    *
    * Used when state.auPersonOrdinaryIncomeYTD is populated (i.e. the
    * InternationalRetirementFinancialState is in use).
@@ -108,16 +109,16 @@ export class TaxSettleService {
     const taxYear  = period ? new Date(period.startMs).getUTCFullYear() : undefined;
 
     return residents.map(([key, person]) => {
-      const personalOrdinary = state.auPersonOrdinaryIncomeYTD?.[key] ?? 0;
-      const sharedOrdinary   = (state.auOrdinaryIncomeYTD ?? 0) / numResidents;
+      const perPersonShare = (map, shared) =>
+        (map?.[key] ?? 0) + (shared ?? 0) / numResidents;
 
       const personState = {
         ...state,
-        auOrdinaryIncomeYTD:         personalOrdinary + sharedOrdinary,
-        auCapitalGainsYTD:           (state.auCapitalGainsYTD ?? 0) / numResidents,
-        auNonResidentWithholdingYTD: (state.auNonResidentWithholdingYTD ?? 0) / numResidents,
-        auSuperTaxYTD:               (state.auSuperTaxYTD ?? 0) / numResidents,
-        auFrankingCreditYTD:         (state.auFrankingCreditYTD ?? 0) / numResidents,
+        auOrdinaryIncomeYTD:         perPersonShare(state.auPersonOrdinaryIncomeYTD,         state.auOrdinaryIncomeYTD),
+        auCapitalGainsYTD:           perPersonShare(state.auPersonCapitalGainsYTD,            state.auCapitalGainsYTD),
+        auNonResidentWithholdingYTD: perPersonShare(state.auPersonNonResidentWithholdingYTD,  state.auNonResidentWithholdingYTD),
+        auSuperTaxYTD:               perPersonShare(state.auPersonSuperTaxYTD,                state.auSuperTaxYTD),
+        auFrankingCreditYTD:         perPersonShare(state.auPersonFrankingCreditYTD,          state.auFrankingCreditYTD),
       };
 
       const taxDetail = auModule.computeTax(personState);

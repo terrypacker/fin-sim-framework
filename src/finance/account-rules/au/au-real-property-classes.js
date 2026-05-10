@@ -32,13 +32,13 @@ export class AuHouseSaleApplyReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const { salePrice, costBasis } = action;
+    const { salePrice, costBasis, isAuResident, ownershipType, ownerId, owners } = action;
     const gain = Math.max(0, salePrice - costBasis);
     this.accountService.transaction(auCash(state), salePrice, null);
     return this.newState(
       state,
       {},
-      [{ type: 'AU_HOUSE_SALE_TAX', gain }]
+      [{ type: 'AU_HOUSE_SALE_TAX', gain, isAuResident, ownershipType, ownerId, owners }]
     );
   }
 }
@@ -57,7 +57,15 @@ export class AuHouseSaleHandler extends HandlerEntry {
   call({ data, state }) {
     const cashKey = state.auSavingsAccount != null ? 'auSavingsAccount' : 'checkingAccount';
     return [
-      { type: 'AU_HOUSE_SALE_APPLY', salePrice: data.salePrice, costBasis: data.costBasis },
+      {
+        type: 'AU_HOUSE_SALE_APPLY',
+        salePrice:     data.salePrice,
+        costBasis:     data.costBasis,
+        isAuResident:  state.isAuResident,
+        ownershipType: data.ownershipType,
+        ownerId:       data.ownerId,
+        owners:        data.owners,
+      },
       new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];
   }
