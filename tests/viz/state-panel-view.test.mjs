@@ -22,8 +22,7 @@ function makePanel() {
 test('StatePanelView.getNodeDetail: returns a JSON string', () => {
   const panel  = makePanel();
   const node = {
-    stateBefore: { cash: 100 },
-    stateAfter:  { cash: 250 },
+    stateDiff: [{ field: 'cash', before: 100, after: 250, delta: 150 }],
     type:        'ADD_CASH',
   };
   const result = panel.getNodeDetail(node);
@@ -34,8 +33,7 @@ test('StatePanelView.getNodeDetail: returns a JSON string', () => {
 test('StatePanelView.getNodeDetail: includes stateDiff in the result', () => {
   const panel  = makePanel();
   const node = {
-    stateBefore: { cash: 100 },
-    stateAfter:  { cash: 250 },
+    stateDiff: [{ field: 'cash', before: 100, after: 250, delta: 150 }],
   };
   const parsed = JSON.parse(panel.getNodeDetail(node));
   assert.ok('stateDiff' in parsed, 'result should include "stateDiff"');
@@ -48,8 +46,7 @@ test('StatePanelView.getNodeDetail: includes stateDiff in the result', () => {
 test('StatePanelView.buildActionDetail: returns changes array', () => {
   const panel  = makePanel();
   const entry = {
-    prevState:      { cash: 100 },
-    nextState:      { cash: 200 },
+    stateDiff: [{ field: 'cash', before: 100, after: 200, delta: 100 }],
     emittedActions: [],
     action:         { type: 'ADD_CASH', amount: 100 },
   };
@@ -62,8 +59,7 @@ test('StatePanelView.buildActionDetail: returns changes array', () => {
 test('StatePanelView.buildActionDetail: emitted is "(none)" when emittedActions is empty', () => {
   const panel  = makePanel();
   const entry = {
-    prevState:      { cash: 100 },
-    nextState:      { cash: 100 },
+    stateDiff: [],
     emittedActions: [],
     action:         { type: 'NOOP' },
   };
@@ -73,8 +69,7 @@ test('StatePanelView.buildActionDetail: emitted is "(none)" when emittedActions 
 test('StatePanelView.buildActionDetail: emitted lists action types when actions were emitted', () => {
   const panel  = makePanel();
   const entry = {
-    prevState:      { cash: 100 },
-    nextState:      { cash: 100 },
+    stateDiff: [],
     emittedActions: [{ type: 'TAX_DUE' }, { type: 'NOTIFY' }],
     action:         { type: 'SELL' },
   };
@@ -86,8 +81,7 @@ test('StatePanelView.buildActionDetail: emitted lists action types when actions 
 test('StatePanelView.buildActionDetail: actionPayload excludes underscore-prefixed keys', () => {
   const panel  = makePanel();
   const entry = {
-    prevState:      {},
-    nextState:      {},
+    stateDiff: [],
     emittedActions: [],
     action:         { type: 'FOO', amount: 50, _internal: 'hidden' },
   };
