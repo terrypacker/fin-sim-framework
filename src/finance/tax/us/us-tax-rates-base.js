@@ -39,11 +39,12 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
 
   computeTax(state) {
     const {
-      usOrdinaryIncomeYTD = 0,
-      usNegativeIncomeYTD = 0,
-      usCapitalGainsYTD   = 0,
-      usPenaltyYTD        = 0,
-      ftcYTD              = 0,
+      usOrdinaryIncomeYTD    = 0,
+      usNegativeIncomeYTD    = 0,
+      usCapitalGainsYTD      = 0,
+      usCollectibleGainsYTD  = 0,
+      usPenaltyYTD           = 0,
+      ftcYTD                 = 0,
     } = state;
 
     // Step 1: taxable ordinary income after pre-tax deductions and standard deduction
@@ -58,10 +59,13 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // Step 3: long-term capital gains tax
     const cgTax = _applyBrackets(Math.max(0, usCapitalGainsYTD), this._ltcg_mfj);
 
-    // Step 4: gross liability including early-withdrawal penalties
-    const gross = ordinaryTax + cgTax + usPenaltyYTD;
+    // Step 4: collectibles taxed at flat 28% rate (IRS §1(h)(4))
+    const collectibleTax = Math.max(0, usCollectibleGainsYTD) * 0.28;
 
-    // Step 5: Foreign Tax Credit (capped at gross liability)
+    // Step 5: gross liability including early-withdrawal penalties
+    const gross = ordinaryTax + cgTax + collectibleTax + usPenaltyYTD;
+
+    // Step 6: Foreign Tax Credit (capped at gross liability)
     const ftcCredit = Math.min(ftcYTD, gross);
 
     return Math.max(0, gross - ftcCredit);
