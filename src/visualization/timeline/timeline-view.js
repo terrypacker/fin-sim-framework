@@ -9,8 +9,6 @@
  */
 
 import {BaseComponent} from "../components/base-component.js";
-import {MapFilterMultiSelect} from "../components/map-filter-multi-select.js";
-import {QueryApi} from "../../query/query-api.js";
 
 let _tlViewCounter = 0;
 
@@ -30,10 +28,6 @@ export class TimelineView extends BaseComponent {
     this.container    = container;
     this._listEl      = null;
     this._filterBarEl = null;
-    this._eventSelectFilter = null;
-    this._actionSelectFilter = null;
-    this._availableEvents = [];
-    this._availableActions = [];
     // Callbacks wired by presenter
     this.onFilterEvents    = null;
     this.onFilterActions   = null;
@@ -47,10 +41,10 @@ export class TimelineView extends BaseComponent {
     this.onRewind          = null;
   }
 
-  // @param {{ groups, options, filterEvents, filterActions, filterDateStart, filterDateEnd, expanded, hasRewind }}
-  render({ groups, options, filterEvents, filterActions, filterDateStart, filterDateEnd, expanded, hasRewind }) {
+  // @param {{ groups, filterEvents, filterActions, filterDateStart, filterDateEnd, expanded, hasRewind }}
+  render({ groups, filterEvents, filterActions, filterDateStart, filterDateEnd, expanded, hasRewind }) {
     this._ensureStructure();
-    this._syncFilters(options, filterEvents, filterActions, filterDateStart, filterDateEnd);
+    this._syncFilters(filterEvents, filterActions, filterDateStart, filterDateEnd);
     this._renderList({ groups, expanded, filterEvents, filterActions, filterDateStart, filterDateEnd, hasRewind });
   }
 
@@ -65,35 +59,9 @@ export class TimelineView extends BaseComponent {
     this.container.appendChild(this._filterBarEl);
     this.container.appendChild(this._listEl);
 
-    const evSel    = this._filterBarEl.querySelector(`#tl-ev-select`);
-    const actSel   = this._filterBarEl.querySelector(`#tl-act-select`);
     const startIn  = this._filterBarEl.querySelector(`#tl-date-start`);
     const endIn    = this._filterBarEl.querySelector(`#tl-date-end`);
     const clearBtn = this._filterBarEl.querySelector(`#tl-filter-clear`);
-
-    this._eventSelectFilter = new MapFilterMultiSelect({
-      parent: this,
-      container: evSel,
-      selectedItems: [],
-      onToggle: (item, added, selectedItems) => {
-        this.onFilterEvents?.(new Set([...selectedItems].map(o => o.name)));
-      },
-      queryApi: new QueryApi({
-        getAll: () => this._availableEvents
-      })
-    });
-
-    this._actionSelectFilter = new MapFilterMultiSelect({
-      parent: this,
-      container: actSel,
-      selectedItems: [],
-      onToggle: (item, added, selectedItems) => {
-        this.onFilterActions?.(new Set([...selectedItems].map(o => o.name)));
-      },
-      queryApi: new QueryApi({
-        getAll: () => this._availableActions
-      })
-    });
 
     startIn.addEventListener('change', () => this.onFilterDateStart?.(startIn.value));
     endIn.addEventListener('change',   () => this.onFilterDateEnd?.(endIn.value));
@@ -103,18 +71,10 @@ export class TimelineView extends BaseComponent {
     csvBtn.addEventListener('click', () => this.onDownloadCsv?.());
   }
 
-  _syncFilters(options, filterEvents, filterActions, filterDateStart, filterDateEnd) {
-    const evSel    = this._filterBarEl.querySelector(`#tl-ev-select`);
+  _syncFilters(filterEvents, filterActions, filterDateStart, filterDateEnd) {
     const startIn  = this._filterBarEl.querySelector(`#tl-date-start`);
     const endIn    = this._filterBarEl.querySelector(`#tl-date-end`);
     const clearBtn = this._filterBarEl.querySelector(`#tl-filter-clear`);
-
-    // Repopulate options, restoring current selections from controller state
-    this._availableEvents.length = 0;
-    this._availableEvents.push(...options.events);
-
-    this._availableActions.length = 0;
-    this._availableActions.push(...options.actions);
 
     const startStr = toDateInput(filterDateStart);
     const endStr   = toDateInput(filterDateEnd);

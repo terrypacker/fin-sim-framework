@@ -41,7 +41,8 @@
       "Bash(sort -t- -k2 -n)",
       "Bash(xargs ls *)",
       "Bash(xargs cat *)",
-      "mcp__chrome-devtools__navigate_page"
+      "mcp__chrome-devtools__navigate_page",
+      "Bash(git *)"
     ]
   },
   "hooks": {

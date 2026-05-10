@@ -19,16 +19,19 @@ export class TimelineController {
     this.filterDateEnd   = null;      // Date (end of day, inclusive)   | null
     this.expanded        = new Set();
     this._lastLen        = 0;
+    this._lastDate       = null;
   }
 
   setJournal(journal) {
     this.journal   = journal;
     this._lastLen  = 0;
+    this._lastDate = null;
     this.expanded.clear();
   }
 
   reset() {
     this._lastLen  = 0;
+    this._lastDate = null;
     this.expanded.clear();
   }
 

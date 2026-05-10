@@ -8,6 +8,9 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { MapFilterMultiSelect } from '../components/map-filter-multi-select.js';
+import { QueryApi }             from '../../query/query-api.js';
+
 export class TimelinePresenter {
   constructor({ controller, view, onDetail, onTaxDocument, onRewind, formatDate }) {
     this._controller = controller;
@@ -16,8 +19,13 @@ export class TimelinePresenter {
     this._onRewind   = onRewind ?? null;
     this._formatDate = formatDate ?? (d => d.toDateString());
 
-    view.onFilterEvents  = set => { controller.filterEvents  = set; this._render(); };
-    view.onFilterActions = set => { controller.filterActions = set; this._render(); };
+    this._eventSelectFilter  = null;
+    this._actionSelectFilter = null;
+    this._availableEvents    = [];
+    this._availableActions   = [];
+
+    view.onFilterEvents    = set => { controller.filterEvents  = set; this._render(); };
+    view.onFilterActions   = set => { controller.filterActions = set; this._render(); };
     view.onFilterDateStart = dateStr => {
       controller.filterDateStart = dateStr ? this._parseStart(dateStr) : null;
       this._render();
@@ -31,14 +39,16 @@ export class TimelinePresenter {
       controller.filterActions   = new Set();
       controller.filterDateStart = null;
       controller.filterDateEnd   = null;
+      this._eventSelectFilter?.clearSelectedItems();
+      this._actionSelectFilter?.clearSelectedItems();
       this._render();
     };
     view.onDownloadCsv = () => {
       const csv = controller.generateCsv(this._formatDate);
       if (csv) this._triggerDownload(csv);
     };
-    view.onToggle      = key => { controller.toggleExpanded(key); this._render(); };
-    view.onDetail      = idx => onDetail(controller.journal.journal[idx]);
+    view.onToggle  = key => { controller.toggleExpanded(key); this._render(); };
+    view.onDetail  = idx => onDetail(controller.journal.journal[idx]);
     if (onTaxDocument) {
       view.onTaxDocument = idx => onTaxDocument(controller.journal.journal[idx]);
     }
@@ -58,16 +68,30 @@ export class TimelinePresenter {
   }
 
   update() {
+    if (!this._controller.journal) return;
     const changed = this._controller.update(this._formatDate);
-    if (changed) this._render();
+    if (!changed) return;
+
+    // Auto-expand the latest date group when new entries arrive
+    const groups = this._controller.groups(this._formatDate);
+    if (groups.size > 0) {
+      const lastDateKey = [...groups.keys()].at(-1);
+      if (lastDateKey && lastDateKey !== this._controller._lastDate) {
+        this._controller.expanded.add(lastDateKey);
+        this._controller._lastDate = lastDateKey;
+      }
+    }
+
+    this._render();
   }
 
   _render() {
     if (!this._controller.journal) return;
-    const ctrl = this._controller;
+    const ctrl    = this._controller;
+    const options = ctrl.allOptions();
+
     this._view.render({
       groups:          ctrl.groups(this._formatDate),
-      options:         ctrl.allOptions(),
       filterEvents:    ctrl.filterEvents,
       filterActions:   ctrl.filterActions,
       filterDateStart: ctrl.filterDateStart,
@@ -75,6 +99,44 @@ export class TimelinePresenter {
       expanded:        ctrl.expanded,
       hasRewind:       !!this._onRewind,
     });
+
+    // Create multi-selects once the filter bar DOM exists (after first render)
+    this._ensureMultiSelects();
+
+    // Update options arrays; multi-selects query these lazily on next open
+    this._availableEvents.length  = 0;
+    this._availableEvents.push(...options.events);
+    this._availableActions.length = 0;
+    this._availableActions.push(...options.actions);
+  }
+
+  _ensureMultiSelects() {
+    const filterBarEl = this._view._filterBarEl;
+    if (!filterBarEl) return;
+
+    if (!this._eventSelectFilter) {
+      this._eventSelectFilter = new MapFilterMultiSelect({
+        parent:        this._view,
+        container:     filterBarEl.querySelector('#tl-ev-select'),
+        selectedItems: [],
+        onToggle:      (item, added, selectedItems) => {
+          this._view.onFilterEvents?.(new Set([...selectedItems].map(o => o.name)));
+        },
+        queryApi: new QueryApi({ getAll: () => this._availableEvents }),
+      });
+    }
+
+    if (!this._actionSelectFilter) {
+      this._actionSelectFilter = new MapFilterMultiSelect({
+        parent:        this._view,
+        container:     filterBarEl.querySelector('#tl-act-select'),
+        selectedItems: [],
+        onToggle:      (item, added, selectedItems) => {
+          this._view.onFilterActions?.(new Set([...selectedItems].map(o => o.name)));
+        },
+        queryApi: new QueryApi({ getAll: () => this._availableActions }),
+      });
+    }
   }
 
   _triggerDownload(csv) {
