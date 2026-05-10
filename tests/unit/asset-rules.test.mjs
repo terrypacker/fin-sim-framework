@@ -32,12 +32,11 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Account }                  from '../../src/finance/account.js';
+import { Account }                  from '../../src/finance/assets/account.js';
 import { AccountService }           from '../../src/finance/services/account-service.js';
 import { FinancialState }           from '../../src/finance/state/financial-state.js';
-import { InvestmentAccount }        from '../../src/finance/investment-account.js';
-import { Asset }                    from '../../src/finance/asset.js';
-import { AssetService }             from '../../src/finance/asset-service.js';
+import { InvestmentAccount }        from '../../src/finance/assets/investment-account.js';
+import { AssetService }             from '../../src/finance/services/asset-service.js';
 import { Person }                   from '../../src/finance/person.js';
 import { Simulation }               from '../../src/simulation-framework/simulation.js';
 import { SimulationState }          from '../../src/simulation-framework/simulation-state.js';
@@ -84,7 +83,9 @@ test('AR-6: Roth sole ownership — person has 100% of balance', () => {
 });
 
 test('AR-9: Real Property joint ownership — each person has 50% of value', () => {
-  const property = new Asset('Primary Residence', 800000, 300000, { ownershipType: 'joint' });
+  // Real Property carries value/costBasis directly (future RealProperty subclass);
+  // for now use a plain object duck-typed for AssetService.getPersonShare
+  const property = { value: 800000, costBasis: 300000, ownershipType: 'joint' };
   assert.strictEqual(assetSvc.getPersonShare(property), 400000);
 });
 
@@ -204,8 +205,8 @@ function buildResidencyTrackingSim({
     // AR-8: YES — 401k
     k401Account: new InvestmentAccount(k401Balance, { minimumAge: 59.5 }),
 
-    // AR-9: YES — Real Property (Asset, not InvestmentAccount)
-    realProperty: new Asset('Primary Residence', propertyValue, 300000),
+    // AR-9: YES — Real Property (plain object; future RealProperty subclass carries value/costBasis)
+    realProperty: { name: 'Primary Residence', value: propertyValue, costBasis: 300000, balanceAtResidencyChange: null },
 
     // AR-10: NO — Superannuation; is an InvestmentAccount but residency NOT recorded
     superAccount: new InvestmentAccount(superBalance, { minimumAge: 60 }),
@@ -341,7 +342,7 @@ function buildLoanSim({
   const sim = new Simulation(new Date(2026, 0, 1), { initialState: new FinancialState({
     checkingAccount: new Account(initialChecking),
     auStockAccount:  new InvestmentAccount(auStockBalance, { loanBalance: 0 }),
-    realProperty:    new Asset('Primary Residence', propertyValue, 300000, { loanBalance: 0 }),
+    realProperty:    { name: 'Primary Residence', value: propertyValue, costBasis: 300000, loanBalance: 0 },
   }) });
 
   // AR-5: Take loan against AU brokerage stocks

@@ -9,7 +9,7 @@
  */
 
 import { AccountBuilder } from '../../finance/builders/account-builder.js';
-import { USD, AUD }       from '../../finance/account.js';
+import { USD, AUD }       from '../../finance/assets/account.js';
 
 // Account types whose country/currency are variable (US or AU).
 const VARIABLE_COUNTRY = new Set(['checking', 'savings', 'brokerage']);

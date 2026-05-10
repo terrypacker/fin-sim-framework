@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Account }                    from "../../finance/account.js";
+import { Account }                    from "../../finance/assets/account.js";
 import { SIMULATION_BUS_MESSAGES }    from "../../simulation-framework/bus-messages.js";
 
 /**

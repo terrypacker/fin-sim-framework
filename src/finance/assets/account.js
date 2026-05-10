@@ -22,7 +22,7 @@
  * @typedef {{ code: string, symbol: string }} Currency
  */
 
-import {SimGraphNode} from "../graph/sim-graph-node.js";
+import { Asset } from './asset.js';
 
 /** US Dollar */
 export const USD = { code: 'USD', symbol: '$' };
@@ -72,40 +72,33 @@ export class InsufficientFundsError extends Error {
 }
 
 /**
- * Account — plain ledger with balance, credits, and debits.
+ * Account — ledger-based Asset with balance, credits, and debits.
+ * Extends Asset (SimGraphNode → Asset → Account).
  * No methods; safe for structuredClone snapshots.
  * Logic lives in AccountService (src/finance/services/account-service.js).
- *
- * Design note: Account intentionally does NOT extend Asset.
- * Asset models a non-ledger market-value holding (real property, value/costBasis).
- * Account models a balance holder; transaction history is derived from the Journal.
- * They share some opts (ownershipType, ownerId, drawdownPriority) but their
- * mechanics and service methods are fundamentally different.
+ * Ownership fields (ownershipType, ownerId, drawdownPriority) are inherited from Asset.
  */
-export class Account extends SimGraphNode {
+export class Account extends Asset {
   /**
    * @param {number} initialValue - Starting balance (default 0)
    * @param {object} [opts]
-   * @param {string|null}   [opts.id=null]              - Assigned by AccountService; null until registered
-   * @param {string}        [opts.name='']              - Display name for UI
-   * @param {string|null}   [opts.type=null]            - Account type discriminator (ACCOUNT_TYPE value)
-   * @param {string}        [opts.ownershipType='sole'] - 'sole' | 'joint'
-   * @param {string|null}   [opts.ownerId=null]         - Person id of primary owner
-   * @param {number}        [opts.minimumBalance=0]     - Lowest allowed balance
-   * @param {number|null}   [opts.drawdownPriority=null] - Liquidation order (1 = first), null = exclude from drawdown
-   * @param {string|null}   [opts.country=null]         - ISO country code (e.g. 'US', 'AU')
-   * @param {Currency|null} [opts.currency=null]        - Currency descriptor (e.g. USD, AUD)
+   * @param {string|null}   [opts.id=null]               - Assigned by AccountService; null until registered
+   * @param {string}        [opts.name='']               - Display name for UI
+   * @param {string|null}   [opts.type=null]             - Account type discriminator (ACCOUNT_TYPE value)
+   * @param {string}        [opts.ownershipType='sole']  - 'sole' | 'joint' (inherited from Asset)
+   * @param {string|null}   [opts.ownerId=null]          - Person id of primary owner (inherited from Asset)
+   * @param {number}        [opts.minimumBalance=0]      - Lowest allowed balance
+   * @param {number|null}   [opts.drawdownPriority=null] - Liquidation order; null = exclude from drawdown (inherited from Asset)
+   * @param {string|null}   [opts.country=null]          - ISO country code (e.g. 'US', 'AU')
+   * @param {Currency|null} [opts.currency=null]         - Currency descriptor (e.g. USD, AUD)
    */
   constructor(initialValue = 0, opts = {}) {
-    super({id: opts.id ?? null, kind: 'account', layer: 'config', name: opts.name ?? ''});
-    this.type             = opts.type             ?? null;
-    this.balance          = initialValue;
-    this.ownershipType    = opts.ownershipType    ?? 'sole';
-    this.ownerId          = opts.ownerId          ?? null;
-    this.minimumBalance   = opts.minimumBalance   ?? 0;
-    this.drawdownPriority = opts.drawdownPriority ?? null;
-    this.country          = opts.country          ?? null;
-    this.currency         = opts.currency         ?? null;
+    super(opts.name ?? '', { ...opts, kind: 'account' });
+    this.type           = opts.type           ?? null;
+    this.balance        = initialValue;
+    this.minimumBalance = opts.minimumBalance ?? 0;
+    this.country        = opts.country        ?? null;
+    this.currency       = opts.currency       ?? null;
   }
 }
 
