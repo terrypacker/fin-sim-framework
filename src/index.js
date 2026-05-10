@@ -50,6 +50,7 @@ import { ExpenseDebitReducer } from './finance/reducers/expense-debit-reducer.js
 import { IntlTransferApplyReducer } from './finance/reducers/intl-transfer-apply-reducer.js';
 import { ReplenishSavingsReducer } from './finance/reducers/replenish-savings-reducer.js';
 import { SetOutOfFundsDateReducer } from './finance/reducers/set-out-of-funds-date-reducer.js';
+import { InflationAdjustReducer } from './finance/reducers/inflation-adjust-reducer.js';
 import { StockDividendCashApplyReducer } from './finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { UsSavingsInterestCreditReducer } from './finance/reducers/us-savings-interest-credit-reducer.js';
 import { AccountService } from './finance/services/account-service.js';
@@ -333,6 +334,7 @@ export const Finance = {
   IntlTransferApplyReducer,
   ReplenishSavingsReducer,
   SetOutOfFundsDateReducer,
+  InflationAdjustReducer,
   StockDividendCashApplyReducer,
   UsSavingsInterestCreditReducer,
   AccountService,
