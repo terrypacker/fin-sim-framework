@@ -37,6 +37,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
       ...this._realPropertyReducerFns(),
       ...this._incomeReducerFns(),
       ...this._collectibleReducerFns(),
+      ...this._iraRolloverReducerFns(),
+      ...this._rothRolloverReducerFns(),
     ]);
   }
 
@@ -260,6 +262,54 @@ export class UsTaxModule2026 extends BaseTaxModule {
           };
         }
         return next;
+      }],
+    ];
+  }
+
+  _iraRolloverReducerFns() {
+    return [
+      // EVT-35: IRA rollover withdrawal — US ordinary income (no penalty); AU ordinary income if resident
+      ['IRA_ROLLOVER_WITHDRAWAL_TAX', (state, action) => {
+        const { amount, isAuResident } = action;
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        if (isAuResident) {
+          next = {
+            ...next,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            ftcYTD:              state.ftcYTD              + amount,
+          };
+        }
+        return next;
+      }],
+
+      // EVT-40: IRA RMD — US ordinary income (no penalty); AU ordinary income if resident
+      ['IRA_RMD_TAX', (state, action) => {
+        const { amount, isAuResident } = action;
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        if (isAuResident) {
+          next = {
+            ...next,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            ftcYTD:              state.ftcYTD              + amount,
+          };
+        }
+        return next;
+      }],
+    ];
+  }
+
+  _rothRolloverReducerFns() {
+    return [
+      // EVT-44: Roth rollover earnings withdrawal — no US tax or penalty;
+      //         AU ordinary income if resident
+      ['ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX', (state, action) => {
+        const { amount, isAuResident } = action;
+        if (!isAuResident) return state;
+        return {
+          ...state,
+          auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+          ftcYTD:              state.ftcYTD              + amount,
+        };
       }],
     ];
   }

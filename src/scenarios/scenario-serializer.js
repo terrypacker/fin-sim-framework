@@ -39,6 +39,11 @@ const _ACCOUNT_SERVICE_REDUCERS = new Set([
   'SeIncomeUsApplyReducer', 'BonusApplyReducer', 'CompanySaleApplyReducer',
   // US — Collectibles
   'CollectibleSaleApplyReducer', 'CollectibleValueChangeApplyReducer',
+  // US — IRA Rollover + RMD
+  'IraRolloverWithdrawalApplyReducer', 'IraRmdApplyReducer',
+  // US — Roth Rollover
+  'RothRolloverContributionApplyReducer', 'RothRolloverEarningsApplyReducer',
+  'RothRolloverWithdrawalContribApplyReducer', 'RothRolloverWithdrawalEarningsApplyReducer',
   // AU — Savings
   'AuSavingsContributionApplyReducer', 'AuSavingsWithdrawalApplyReducer',
   'AuSavingsEarningsApplyReducer',
@@ -80,6 +85,11 @@ const _NO_ARG_HANDLERS = new Set([
   'SeIncomeUsHandler', 'BonusHandler', 'CompanySaleHandler',
   // US — Collectibles
   'CollectibleSaleHandler', 'CollectibleValueChangeHandler',
+  // US — IRA Rollover + RMD
+  'IraRolloverWithdrawalHandler', 'IraRmdHandler',
+  // US — Roth Rollover
+  'RothRolloverContributionHandler', 'RothRolloverEarningsHandler',
+  'RothRolloverWithdrawalContributionsHandler', 'RothRolloverWithdrawalEarningsHandler',
   // AU — Savings
   'AuSavingsContributionHandler', 'AuSavingsWithdrawalHandler', 'AuSavingsEarningsHandler',
   // AU — Superannuation

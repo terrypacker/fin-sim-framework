@@ -45,6 +45,8 @@ import { FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer,
 import { UsHouseSaleApplyReducer, UsHouseSaleHandler }                               from '../../src/finance/account-rules/us/us-real-property-classes.js';
 import { SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer, SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer, SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler, SeIncomeUsHandler, BonusHandler, CompanySaleHandler } from '../../src/finance/account-rules/us/us-income-classes.js';
 import { CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer, CollectibleSaleHandler, CollectibleValueChangeHandler } from '../../src/finance/account-rules/us/us-collectible-classes.js';
+import { IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer, IraRolloverWithdrawalHandler, IraRmdHandler } from '../../src/finance/account-rules/us/ira-rollover-classes.js';
+import { RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer, RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer, RothRolloverContributionHandler, RothRolloverEarningsHandler, RothRolloverWithdrawalContributionsHandler, RothRolloverWithdrawalEarningsHandler } from '../../src/finance/account-rules/us/roth-rollover-classes.js';
 import { AuSeIncomeApplyReducer, AuSeIncomeHandler }                                 from '../../src/finance/account-rules/au/au-income-classes.js';
 import { AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer, AuSavingsContributionHandler, AuSavingsWithdrawalHandler, AuSavingsEarningsHandler }                                                                     from '../../src/finance/account-rules/au/au-savings-classes.js';
 import { SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer, SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperContributionHandler, SuperWithdrawalContributionsHandler, SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler } from '../../src/finance/account-rules/au/au-super-classes.js';
@@ -112,6 +114,14 @@ globalThis.FinSimLib = {
     // US — Collectibles
     CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer,
     CollectibleSaleHandler, CollectibleValueChangeHandler,
+    // US — IRA Rollover + RMD
+    IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
+    IraRolloverWithdrawalHandler, IraRmdHandler,
+    // US — Roth Rollover
+    RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
+    RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer,
+    RothRolloverContributionHandler, RothRolloverEarningsHandler,
+    RothRolloverWithdrawalContributionsHandler, RothRolloverWithdrawalEarningsHandler,
     // AU account module
     AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer,
     AuSavingsEarningsApplyReducer,

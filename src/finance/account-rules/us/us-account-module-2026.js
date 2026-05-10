@@ -46,6 +46,16 @@ import {
   CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer,
   CollectibleSaleHandler, CollectibleValueChangeHandler,
 } from './us-collectible-classes.js';
+import {
+  IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
+  IraRolloverWithdrawalHandler, IraRmdHandler,
+} from './ira-rollover-classes.js';
+import {
+  RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
+  RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer,
+  RothRolloverContributionHandler, RothRolloverEarningsHandler,
+  RothRolloverWithdrawalContributionsHandler, RothRolloverWithdrawalEarningsHandler,
+} from './roth-rollover-classes.js';
 
 
 /**
@@ -69,6 +79,12 @@ import {
  *   EVT-48       Self-Employment Income (US)
  *   EVT-50       Bonus
  *   EVT-51       Company Sale
+ *   EVT-35       IRA Rollover Withdrawal
+ *   EVT-40       IRA RMD (Required Minimum Distribution)
+ *   EVT-41       Roth Rollover Contribution
+ *   EVT-42       Roth Rollover Earnings
+ *   EVT-43       Roth Rollover Withdrawal – Contributions
+ *   EVT-44       Roth Rollover Withdrawal – Earnings
  */
 export class UsAccountModule2026 extends BaseAccountModule {
   get countryCode() { return 'US'; }
@@ -110,6 +126,14 @@ export class UsAccountModule2026 extends BaseAccountModule {
       // Collectibles
       new CollectibleSaleApplyReducer({ accountService }),
       new CollectibleValueChangeApplyReducer({ accountService }),
+      // IRA Rollover + RMD
+      new IraRolloverWithdrawalApplyReducer({ accountService }),
+      new IraRmdApplyReducer({ accountService }),
+      // Roth Rollover
+      new RothRolloverContributionApplyReducer({ accountService }),
+      new RothRolloverEarningsApplyReducer({ accountService }),
+      new RothRolloverWithdrawalContribApplyReducer({ accountService }),
+      new RothRolloverWithdrawalEarningsApplyReducer({ accountService }),
     ];
   }
 
@@ -149,6 +173,14 @@ export class UsAccountModule2026 extends BaseAccountModule {
       // Collectibles
       new CollectibleSaleHandler(),
       new CollectibleValueChangeHandler(),
+      // IRA Rollover + RMD
+      new IraRolloverWithdrawalHandler(),
+      new IraRmdHandler(),
+      // Roth Rollover
+      new RothRolloverContributionHandler(),
+      new RothRolloverEarningsHandler(),
+      new RothRolloverWithdrawalContributionsHandler(),
+      new RothRolloverWithdrawalEarningsHandler(),
     ];
   }
 }

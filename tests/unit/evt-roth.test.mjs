@@ -10,7 +10,7 @@
 
 /**
  * evt-roth.test.mjs
- * Tests for Roth IRA events: EVT-1 through EVT-4
+ * Tests for Roth IRA events: EVT-1 through EVT-4, EVT-41 through EVT-44
  *
  * EVT-1  Roth Contribution             +contribution  out of checking  no tax
  * EVT-2  Roth Withdrawal-Contributions -contribution  into checking    no tax, no age gate
@@ -53,20 +53,24 @@ const START_DATE = new Date(2026, 0, 1);
  * @param {Date}    opts.personBirthDate   - Birth date for age checks
  */
 function buildRothSim({
-  initialChecking   = 20000,
-  rothBalance       = 0,
-  rothContribBasis  = 0,
-  rothEarningsBasis = 0,
-  isAuResident      = false,
-  personBirthDate   = new Date(1966, 0, 1),   // turns 60 on 2026-01-01
+  initialChecking        = 20000,
+  rothBalance            = 0,
+  rothContribBasis       = 0,
+  rothEarningsBasis      = 0,
+  rolloverContribBasis   = 0,
+  rolloverEarningsBasis  = 0,
+  isAuResident           = false,
+  personBirthDate        = new Date(1966, 0, 1),   // turns 60 on 2026-01-01
 } = {}) {
   const registry = ServiceRegistry.getInstance();
   const sim = new Simulation(START_DATE, { initialState: new FinancialState({
     checkingAccount:  new Account(initialChecking),
     rothAccount: {
-      balance:           rothBalance,
-      contributionBasis: rothContribBasis,
-      earningsBasis:     rothEarningsBasis,
+      balance:               rothBalance,
+      contributionBasis:     rothContribBasis,
+      earningsBasis:         rothEarningsBasis,
+      rolloverContribBasis,
+      rolloverEarningsBasis,
     },
     isAuResident,
     personBirthDate,
@@ -285,4 +289,166 @@ test('EVT-4: Roth earnings are not a US or AU taxable event', () => {
 
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0);
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EVT-41: Roth Rollover Contribution
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('EVT-41: Roth rollover contribution increases balance and rolloverContribBasis', () => {
+  const { sim } = buildRothSim({ initialChecking: 20000 });
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_CONTRIBUTION', data: { amount: 10000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.rothAccount.balance, 10000);
+  assert.strictEqual(sim.state.rothAccount.rolloverContribBasis, 10000);
+  assert.strictEqual(sim.state.rothAccount.contributionBasis, 0); // regular basis unaffected
+});
+
+test('EVT-41: Roth rollover contribution debits checking account', () => {
+  const { sim } = buildRothSim({ initialChecking: 20000 });
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_CONTRIBUTION', data: { amount: 10000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.checkingAccount.balance, 10000);
+});
+
+test('EVT-41: Roth rollover contribution is not a US or AU taxable event', () => {
+  const { sim } = buildRothSim({ initialChecking: 20000, isAuResident: true });
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_CONTRIBUTION', data: { amount: 10000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0);
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EVT-42: Roth Rollover Earnings
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('EVT-42: Roth rollover earnings increase balance and rolloverEarningsBasis', () => {
+  const { sim } = buildRothSim({
+    rothBalance: 10000,
+    rolloverContribBasis: 10000,
+  });
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_EARNINGS', data: { amount: 500 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.rothAccount.balance, 10500);
+  assert.strictEqual(sim.state.rothAccount.rolloverEarningsBasis, 500);
+  assert.strictEqual(sim.state.rothAccount.earningsBasis, 0); // regular earnings unaffected
+});
+
+test('EVT-42: Roth rollover earnings stay in account — no checking transaction', () => {
+  const { sim } = buildRothSim({ initialChecking: 5000, rothBalance: 10000, rolloverContribBasis: 10000 });
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_EARNINGS', data: { amount: 500 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.checkingAccount.balance, 5000);
+});
+
+test('EVT-42: Roth rollover earnings are not a US or AU taxable event', () => {
+  const { sim } = buildRothSim({
+    rothBalance: 10000,
+    rolloverContribBasis: 10000,
+    isAuResident: true,
+  });
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_EARNINGS', data: { amount: 500 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0);
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EVT-43: Roth Rollover Withdrawal – Contributions
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('EVT-43: Roth rollover contribution withdrawal credits checking and reduces rolloverContribBasis', () => {
+  const { sim } = buildRothSim({
+    initialChecking: 5000,
+    rothBalance: 10000,
+    rolloverContribBasis: 10000,
+  });
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIBUTIONS', data: { amount: 4000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.checkingAccount.balance, 9000); // 5000 + 4000
+  assert.strictEqual(sim.state.rothAccount.balance, 6000);
+  assert.strictEqual(sim.state.rothAccount.rolloverContribBasis, 6000);
+});
+
+test('EVT-43: Roth rollover contribution withdrawal is not a US or AU taxable event', () => {
+  const { sim } = buildRothSim({
+    initialChecking: 5000,
+    rothBalance: 10000,
+    rolloverContribBasis: 10000,
+    isAuResident: true,
+  });
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIBUTIONS', data: { amount: 4000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0);
+  assert.strictEqual(sim.state.usPenaltyYTD, 0);
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EVT-44: Roth Rollover Withdrawal – Earnings
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('EVT-44: Roth rollover earnings withdrawal credits checking and reduces rolloverEarningsBasis', () => {
+  const { sim } = buildRothSim({
+    initialChecking: 5000,
+    rothBalance: 10000,
+    rolloverEarningsBasis: 10000,
+  });
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS', data: { amount: 3000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.checkingAccount.balance, 8000); // 5000 + 3000
+  assert.strictEqual(sim.state.rothAccount.balance, 7000);
+  assert.strictEqual(sim.state.rothAccount.rolloverEarningsBasis, 7000);
+});
+
+test('EVT-44: Roth rollover earnings withdrawal has no US ordinary income or penalty', () => {
+  const { sim } = buildRothSim({
+    initialChecking: 5000,
+    rothBalance: 10000,
+    rolloverEarningsBasis: 10000,
+    personBirthDate: new Date(1990, 0, 1), // under 60
+  });
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS', data: { amount: 3000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0);
+  assert.strictEqual(sim.state.usPenaltyYTD, 0);
+});
+
+test('EVT-44: Roth rollover earnings withdrawal IS AU ordinary income if AU resident', () => {
+  const { sim } = buildRothSim({
+    initialChecking: 5000,
+    rothBalance: 10000,
+    rolloverEarningsBasis: 10000,
+    isAuResident: true,
+  });
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS', data: { amount: 3000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 3000);
+  assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded for AU resident');
+});
+
+test('EVT-44: Roth rollover earnings withdrawal is NOT AU taxable if not AU resident', () => {
+  const { sim } = buildRothSim({
+    initialChecking: 5000,
+    rothBalance: 10000,
+    rolloverEarningsBasis: 10000,
+    isAuResident: false,
+  });
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS', data: { amount: 3000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
+  assert.strictEqual(sim.state.ftcYTD, 0);
 });
