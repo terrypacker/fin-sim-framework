@@ -178,7 +178,8 @@ export class SimulationAdapter {
    */
   _wireHandler(handler) {
     if (handler.handledEvents.length > 0) {
-      handler.handledEvents.forEach(e => this.sim.register(e.type, handler, handler.name));
+      const types = new Set(handler.handledEvents.map(e => e.type));
+      types.forEach(type => this.sim.register(type, handler, handler.name));
     } else if (handler.constructor.eventType) {
       this.sim.register(handler.constructor.eventType, handler, handler.name);
     }
