@@ -43,11 +43,11 @@ export class TaxSettleHandler extends HandlerEntry {
 
   call({ data, state }) {
     const { cc } = data;
-    const tax = cc === 'AU'
+    const taxDetail = cc === 'AU'
       ? this._settleService.computeAuTax(state)
       : this._settleService.computeUsTax(state);
     return [
-      { type: 'TAX_SETTLE_APPLY', cc, tax },
+      { type: 'TAX_SETTLE_APPLY', cc, tax: taxDetail.netLiability, taxDetail },
       { type: 'RECORD_BALANCE' },
     ];
   }

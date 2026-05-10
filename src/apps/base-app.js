@@ -42,6 +42,8 @@ import { SimulationAnimator }       from '../visualization/simulation/simulation
 import {GraphRenderer} from "../visualization/components/graph-renderer.js";
 import {BaseComponent} from "../visualization/components/base-component.js";
 import {ScenarioTabView} from "../visualization/scenario/scenario-tab-view.js";
+import { JournalReportingService } from '../finance/journal-reporting-service.js';
+import { TaxDocumentModal }        from '../visualization/timeline/tax-document-modal.js';
 import {
   ScenarioTabController
 } from "../visualization/scenario/scenario-tab-controller.js";
@@ -88,6 +90,8 @@ export class BaseApp extends BaseComponent {
     this._accountsView    = new AccountsView();
     this._statePanelView  = new StatePanelView();
     this._scenarioTabView = new ScenarioTabView();
+    this._reportingService = new JournalReportingService();
+    this._taxDocModal      = new TaxDocumentModal();
 
     // Tab header references set by initView()
     this.eventsTabHeader   = null;
@@ -188,10 +192,14 @@ export class BaseApp extends BaseComponent {
     this.chartView.startViz();
 
     this.timelineView = new TimelinePresenter({
-      controller: new TimelineController(),
-      view:       new TimelineView({ container: $('timelineContainer') }),
-      onDetail:   (node) => this._statePanelView.showNodeDetail(node),
-      onRewind:   (date) => {
+      controller:    new TimelineController(),
+      view:          new TimelineView({ container: $('timelineContainer') }),
+      onDetail:      (entry) => this._statePanelView.showNodeDetail(entry),
+      onTaxDocument: (entry) => {
+        const doc = this._reportingService.generate(entry);
+        if (doc) this._taxDocModal.open(doc);
+      },
+      onRewind: (date) => {
         const pct     = (date.getTime() - this.scenario.simStart.getTime()) /
             (this.scenario.simEnd.getTime() - this.scenario.simStart.getTime());
         const clamped = Math.max(0, Math.min(1, pct));

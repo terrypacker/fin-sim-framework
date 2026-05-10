@@ -618,6 +618,20 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 
 .tl-det:hover { color: #93c5fd; border-color: #3b82f6; }
 
+.tl-taxdoc {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #a16207;
+  padding: 1px 6px;
+  font-family: monospace;
+  font-size: 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.tl-taxdoc:hover { color: #fbbf24; border-color: #f59e0b; }
+
 .tl-rewind {
   background: #1e293b;
   border: 1px solid #334155;
@@ -1149,6 +1163,15 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 .param-row select { flex: 0 0 72px; }
 .param-row .btn-warn { flex: 0 0 auto; }
 
+.sim-modal-overlay {
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.55);
+  z-index:1000;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
 
 .sim-modal {
   background: black;
@@ -1162,3 +1185,139 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   gap:8px;
   font-size:11px;
 }
+
+/* ── Tax Document Modal ── */
+.tax-doc-modal-overlay {
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.55);
+  z-index:1000;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.tax-doc-modal {
+  background: black;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 0;
+  width: 540px;
+  max-height: 82vh;
+  color: #e2e8f0;
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.tax-doc-modal::backdrop { background: rgba(0,0,0,0.72); }
+
+.tax-doc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid #1e293b;
+  flex-shrink: 0;
+}
+.tax-doc-title {
+  color: #93c5fd;
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 0.02em;
+}
+.tax-doc-subtitle { color: #64748b; font-size: 10px; margin-top: 3px; }
+.tax-doc-close-x {
+  background: none;
+  border: none;
+  color: #475569;
+  cursor: pointer;
+  font-size: 15px;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.tax-doc-close-x:hover { color: #f87171; }
+
+.tax-doc-body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px 16px 12px;
+}
+
+.tax-doc-section { margin-top: 14px; }
+.tax-doc-section-hdr {
+  color: #475569;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border-bottom: 1px solid #1e293b;
+  padding-bottom: 3px;
+  margin-bottom: 5px;
+}
+
+.tax-doc-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 2px 0;
+  gap: 12px;
+}
+.tax-doc-line-label { color: var(--text); flex: 1; }
+.tax-doc-line-amount {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 100px;
+  text-align: right;
+}
+.tax-doc-line--neg .tax-doc-line-amount { var(--red, #f87171); }
+.tax-doc-line--zero .tax-doc-line-amount { color: #6d7c93; }
+
+.tax-doc-summary {
+  margin-top: 18px;
+  background: #111e30;
+  border: 1px solid #1e3a5f;
+  border-radius: 5px;
+  padding: 12px 14px;
+}
+.tax-doc-net-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+.tax-doc-net-label { color: #93c5fd; font-size: 12px; font-weight: bold; }
+.tax-doc-net-amount {
+  color: #fbbf24;
+  font-size: 15px;
+  font-weight: bold;
+  font-variant-numeric: tabular-nums;
+}
+.tax-doc-summary-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+}
+.tax-doc-summary-item { display: flex; flex-direction: column; gap: 1px; }
+.tax-doc-summary-key { color: var(--text-muted); font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; }
+.tax-doc-summary-val { color: #94a3b8; font-size: 11px; font-variant-numeric: tabular-nums; }
+
+.tax-doc-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 16px 12px;
+  border-top: 1px solid #1e293b;
+  flex-shrink: 0;
+}
+.tax-doc-close-btn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  padding: 4px 16px;
+  font-size: 11px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.tax-doc-close-btn:hover { color: #e2e8f0; border-color: #64748b; }

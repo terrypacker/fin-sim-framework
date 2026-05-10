@@ -47,28 +47,69 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       ftcYTD                 = 0,
     } = state;
 
-    // Step 1: taxable ordinary income after pre-tax deductions and standard deduction
-    const taxableOrdinary = Math.max(
-      0,
-      usOrdinaryIncomeYTD - usNegativeIncomeYTD - this._stdDeduction_mfj,
-    );
+    // Step 1: AGI and taxable ordinary income
+    const agi             = usOrdinaryIncomeYTD - usNegativeIncomeYTD;
+    const taxableOrdinary = Math.max(0, agi - this._stdDeduction_mfj);
 
     // Step 2: ordinary income tax via marginal brackets
-    const ordinaryTax = _applyBrackets(taxableOrdinary, this._brackets_mfj);
+    const ordinaryTax    = _applyBrackets(taxableOrdinary, this._brackets_mfj);
 
     // Step 3: long-term capital gains tax
-    const cgTax = _applyBrackets(Math.max(0, usCapitalGainsYTD), this._ltcg_mfj);
+    const cg             = Math.max(0, usCapitalGainsYTD);
+    const capitalGainsTax = _applyBrackets(cg, this._ltcg_mfj);
 
     // Step 4: collectibles taxed at flat 28% rate (IRS §1(h)(4))
-    const collectibleTax = Math.max(0, usCollectibleGainsYTD) * 0.28;
+    const collectibles    = Math.max(0, usCollectibleGainsYTD);
+    const collectiblesTax = collectibles * 0.28;
 
     // Step 5: gross liability including early-withdrawal penalties
-    const gross = ordinaryTax + cgTax + collectibleTax + usPenaltyYTD;
+    const penaltyTax = Math.max(0, usPenaltyYTD);
+    const grossTax   = ordinaryTax + capitalGainsTax + collectiblesTax + penaltyTax;
 
     // Step 6: Foreign Tax Credit (capped at gross liability)
-    const ftcCredit = Math.min(ftcYTD, gross);
+    const credits      = Math.min(ftcYTD, grossTax);
+    const netLiability = Math.max(0, grossTax - credits);
 
-    return Math.max(0, gross - ftcCredit);
+    const totalGrossIncome = usOrdinaryIncomeYTD + cg + collectibles;
+    const effectiveRate    = totalGrossIncome > 0 ? netLiability / totalGrossIncome : 0;
+    const marginalRate     = _marginalBracketRate(taxableOrdinary, this._brackets_mfj);
+
+    return {
+      inputs: {
+        grossOrdinaryIncome: usOrdinaryIncomeYTD,
+        adjustments:         usNegativeIncomeYTD,
+        capitalGains:        usCapitalGainsYTD,
+        collectibleGains:    usCollectibleGainsYTD,
+        penalties:           usPenaltyYTD,
+        foreignTaxCredit:    ftcYTD,
+        standardDeduction:   this._stdDeduction_mfj,
+      },
+      adjustedGrossIncome: agi,
+      taxableIncome:       taxableOrdinary,
+      ordinaryTax,
+      capitalGainsTax,
+      collectiblesTax,
+      penaltyTax,
+      grossTax,
+      credits,
+      netLiability,
+      effectiveRate,
+      marginalRate,
+      lineItems: [
+        { label: 'Gross Ordinary Income',               amount:  usOrdinaryIncomeYTD },
+        { label: 'Adjustments (Pre-tax Contributions)', amount: -usNegativeIncomeYTD },
+        { label: 'Adjusted Gross Income',               amount:  agi },
+        { label: 'Standard Deduction',                  amount: -this._stdDeduction_mfj },
+        { label: 'Taxable Ordinary Income',             amount:  taxableOrdinary },
+        { label: 'Tax on Ordinary Income',              amount:  ordinaryTax },
+        { label: 'Long-Term Capital Gains Tax',         amount:  capitalGainsTax },
+        { label: 'Collectibles Tax (28%)',              amount:  collectiblesTax },
+        { label: 'Early Withdrawal Penalties',          amount:  penaltyTax },
+        { label: 'Gross Tax',                           amount:  grossTax },
+        { label: 'Foreign Tax Credit',                  amount: -credits },
+        { label: 'Net Tax Liability',                   amount:  netLiability },
+      ],
+    };
   }
 }
 
@@ -88,4 +129,14 @@ function _applyBrackets(income, brackets) {
     tax += (Math.min(income, hi) - lo) * rate;
   }
   return tax;
+}
+
+/** Return the marginal rate of the highest bracket reached by income. */
+function _marginalBracketRate(income, brackets) {
+  if (income <= 0 || brackets.length === 0) return 0;
+  let rate = 0;
+  for (const [lo, r] of brackets) {
+    if (income > lo) rate = r;
+  }
+  return rate;
 }

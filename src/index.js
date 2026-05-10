@@ -42,15 +42,16 @@ import { MonthlyExpensesHandler } from './finance/handlers/monthly-expenses-hand
 import { MonthlyWagesHandler } from './finance/handlers/monthly-wages-handler.js';
 import { OutOfFundsHandler } from './finance/handlers/out-of-funds-handler.js';
 import { UsSavingsInterestMonthlyHandler } from './finance/handlers/us-savings-interest-handler.js';
+import { JournalReportingService } from './finance/journal-reporting-service.js';
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
 import { Person } from './finance/person.js';
 import { ChangeResidencyApplyReducer } from './finance/reducers/change-residency-apply-reducer.js';
 import { ExpenseDebitReducer } from './finance/reducers/expense-debit-reducer.js';
+import { InflationAdjustReducer } from './finance/reducers/inflation-adjust-reducer.js';
 import { IntlTransferApplyReducer } from './finance/reducers/intl-transfer-apply-reducer.js';
 import { ReplenishSavingsReducer } from './finance/reducers/replenish-savings-reducer.js';
 import { SetOutOfFundsDateReducer } from './finance/reducers/set-out-of-funds-date-reducer.js';
-import { InflationAdjustReducer } from './finance/reducers/inflation-adjust-reducer.js';
 import { StockDividendCashApplyReducer } from './finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { UsSavingsInterestCreditReducer } from './finance/reducers/us-savings-interest-credit-reducer.js';
 import { AccountService } from './finance/services/account-service.js';
@@ -60,18 +61,27 @@ import { PersonService } from './finance/services/person-service.js';
 import { RealPropertyService } from './finance/services/real-property-service.js';
 import { FinancialState } from './finance/state/financial-state.js';
 import { InternationalRetirementFinancialState } from './finance/state/intl-retirement-state.js';
+import { AuTaxDocument2024 } from './finance/tax/au/au-tax-document-2024.js';
+import { AuTaxDocument2025 } from './finance/tax/au/au-tax-document-2025.js';
+import { AuTaxDocument2026 } from './finance/tax/au/au-tax-document-2026.js';
 import { AuTaxModule2024 } from './finance/tax/au/au-tax-module-2024.js';
 import { AuTaxModule2025 } from './finance/tax/au/au-tax-module-2025.js';
 import { AuTaxModule2026 } from './finance/tax/au/au-tax-module-2026.js';
 import { AuTaxRates2024 } from './finance/tax/au/au-tax-rates-2024.js';
 import { AuTaxRates2025 } from './finance/tax/au/au-tax-rates-2025.js';
 import { AuTaxRatesBase } from './finance/tax/au/au-tax-rates-base.js';
+import { BaseTaxDocumentModule } from './finance/tax/base-tax-document-module.js';
 import { BaseTaxModule } from './finance/tax/base-tax-module.js';
 import { BaseTaxRatesModule } from './finance/tax/base-tax-rates-module.js';
 import { DynamicTaxReducer } from './finance/tax/dynamic-tax-reducer.js';
+import { InflationAdjustedUsTaxRates, InflationAdjustedAuTaxRates } from './finance/tax/inflation-adjusted-tax-rates.js';
 import { PeriodAdvanceReducer, PeriodAdvanceHandler } from './finance/tax/period-advance-classes.js';
+import { TaxDocumentRegistry } from './finance/tax/tax-document-registry.js';
 import { TaxEngine } from './finance/tax/tax-engine.js';
 import { TaxSettleHandler, TaxSettleApplyReducer, TaxPaymentDebitReducer } from './finance/tax/tax-settle-classes.js';
+import { UsTaxDocument2024 } from './finance/tax/us/us-tax-document-2024.js';
+import { UsTaxDocument2025 } from './finance/tax/us/us-tax-document-2025.js';
+import { UsTaxDocument2026 } from './finance/tax/us/us-tax-document-2026.js';
 import { UsTaxModule2024 } from './finance/tax/us/us-tax-module-2024.js';
 import { UsTaxModule2025 } from './finance/tax/us/us-tax-module-2025.js';
 import { UsTaxModule2026 } from './finance/tax/us/us-tax-module-2026.js';
@@ -147,6 +157,7 @@ import { ScenarioTabView } from './visualization/scenario/scenario-tab-view.js';
 import { SimulationAnimator } from './visualization/simulation/simulation-animator.js';
 import { StatePanelView } from './visualization/simulation/state-panel-view.js';
 import { TimeControls } from './visualization/time-controls.js';
+import { TaxDocumentModal } from './visualization/timeline/tax-document-modal.js';
 import { TimelineController } from './visualization/timeline/timeline-controller.js';
 import { TimelinePresenter } from './visualization/timeline/timeline-presenter.js';
 import { TimelineView } from './visualization/timeline/timeline-view.js';
@@ -321,6 +332,7 @@ export const Finance = {
   MonthlyWagesHandler,
   OutOfFundsHandler,
   UsSavingsInterestMonthlyHandler,
+  JournalReportingService,
   buildMonthPeriod,
   buildUsCalendarYear,
   buildAuFiscalYear,
@@ -331,10 +343,10 @@ export const Finance = {
   Person,
   ChangeResidencyApplyReducer,
   ExpenseDebitReducer,
+  InflationAdjustReducer,
   IntlTransferApplyReducer,
   ReplenishSavingsReducer,
   SetOutOfFundsDateReducer,
-  InflationAdjustReducer,
   StockDividendCashApplyReducer,
   UsSavingsInterestCreditReducer,
   AccountService,
@@ -344,21 +356,31 @@ export const Finance = {
   RealPropertyService,
   FinancialState,
   InternationalRetirementFinancialState,
+  AuTaxDocument2024,
+  AuTaxDocument2025,
+  AuTaxDocument2026,
   AuTaxModule2024,
   AuTaxModule2025,
   AuTaxModule2026,
   AuTaxRates2024,
   AuTaxRates2025,
   AuTaxRatesBase,
+  BaseTaxDocumentModule,
   BaseTaxModule,
   BaseTaxRatesModule,
   DynamicTaxReducer,
+  InflationAdjustedUsTaxRates,
+  InflationAdjustedAuTaxRates,
   PeriodAdvanceReducer,
   PeriodAdvanceHandler,
+  TaxDocumentRegistry,
   TaxEngine,
   TaxSettleHandler,
   TaxSettleApplyReducer,
   TaxPaymentDebitReducer,
+  UsTaxDocument2024,
+  UsTaxDocument2025,
+  UsTaxDocument2026,
   UsTaxModule2024,
   UsTaxModule2025,
   UsTaxModule2026,
@@ -485,6 +507,7 @@ export const Visualization = {
   SimulationAnimator,
   StatePanelView,
   TimeControls,
+  TaxDocumentModal,
   TimelineController,
   TimelinePresenter,
   TimelineView,

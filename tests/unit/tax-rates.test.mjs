@@ -88,14 +88,14 @@ test('TE-1: super earnings classifier sets auSuperTaxYTD at 15% flat rate', () =
 
 test('TE-1: rates module adds auSuperTaxYTD directly to AU tax result', () => {
   // auSuperTaxYTD is the pre-computed flat tax dollar amount
-  const tax = auRates.computeTax(auState({ auSuperTaxYTD: 1500 }));
-  assert.strictEqual(tax, 1500);
+  const { netLiability } = auRates.computeTax(auState({ auSuperTaxYTD: 1500 }));
+  assert.strictEqual(netLiability, 1500);
 });
 
 test('TE-1: super tax stacks on top of ordinary income tax', () => {
   // $50k ordinary income + $1500 pre-computed super tax
-  const withSuper    = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 50000, auSuperTaxYTD: 1500 }));
-  const withoutSuper = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 50000, auSuperTaxYTD: 0 }));
+  const withSuper    = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 50000, auSuperTaxYTD: 1500 })).netLiability;
+  const withoutSuper = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 50000, auSuperTaxYTD: 0 })).netLiability;
   assert.strictEqual(withSuper - withoutSuper, 1500);
 });
 
@@ -112,16 +112,16 @@ test('TE-2: NR savings earnings classifier sets auNonResidentWithholdingYTD to g
 });
 
 test('TE-2: rates module applies 15% to auNonResidentWithholdingYTD', () => {
-  const tax = auRates.computeTax(auState({
+  const { netLiability } = auRates.computeTax(auState({
     isAuResident:               false,
     auNonResidentWithholdingYTD: 10000,
   }));
-  assert.strictEqual(tax, 1500); // 10000 * 0.15
+  assert.strictEqual(netLiability, 1500); // 10000 * 0.15
 });
 
 test('TE-2: NR withholding rate is exactly 15%', () => {
-  const tax1000 = auRates.computeTax(auState({ isAuResident: false, auNonResidentWithholdingYTD: 1000 }));
-  const tax5000 = auRates.computeTax(auState({ isAuResident: false, auNonResidentWithholdingYTD: 5000 }));
+  const tax1000 = auRates.computeTax(auState({ isAuResident: false, auNonResidentWithholdingYTD: 1000 })).netLiability;
+  const tax5000 = auRates.computeTax(auState({ isAuResident: false, auNonResidentWithholdingYTD: 5000 })).netLiability;
   assert.strictEqual(tax1000, 150);
   assert.strictEqual(tax5000, 750);
 });
@@ -132,28 +132,28 @@ test('TE-2: NR withholding rate is exactly 15%', () => {
 
 test('TE-3: US ordinary income below standard deduction produces zero tax', () => {
   // MFJ standard deduction 2025 = $30,000
-  const tax = usRates.computeTax(usState({ usOrdinaryIncomeYTD: 20000 }));
-  assert.strictEqual(tax, 0);
+  const { netLiability } = usRates.computeTax(usState({ usOrdinaryIncomeYTD: 20000 }));
+  assert.strictEqual(netLiability, 0);
 });
 
 test('TE-3: US ordinary income applies marginal brackets after standard deduction', () => {
   // Taxable income: 100000 - 30000 = 70000
   // [0, 23850] @ 10% = 2385 | [23850, 70000] @ 12% = 46150 * 0.12 = 5538 → total 7923
-  const tax = usRates.computeTax(usState({ usOrdinaryIncomeYTD: 100000 }));
-  assert.strictEqual(tax, 7923);
+  const { netLiability } = usRates.computeTax(usState({ usOrdinaryIncomeYTD: 100000 }));
+  assert.strictEqual(netLiability, 7923);
 });
 
 test('TE-3: US negative income (pre-tax deductions) reduces taxable base', () => {
   // 401k contribution reduces taxable income: 100000 - 20000 - 30000 = 50000
   // [0, 23850] @ 10% = 2385 | [23850, 50000] @ 12% = 26150 * 0.12 = 3138 → 5523
-  const tax = usRates.computeTax(usState({ usOrdinaryIncomeYTD: 100000, usNegativeIncomeYTD: 20000 }));
-  assert.strictEqual(tax, 5523);
+  const { netLiability } = usRates.computeTax(usState({ usOrdinaryIncomeYTD: 100000, usNegativeIncomeYTD: 20000 }));
+  assert.strictEqual(netLiability, 5523);
 });
 
 test('TE-3: AU ordinary income zero below tax-free threshold', () => {
   // Tax-free threshold = $18,200
-  const tax = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 15000 }));
-  assert.strictEqual(tax, 0);
+  const { netLiability } = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 15000 }));
+  assert.strictEqual(netLiability, 0);
 });
 
 test('TE-3: AU ordinary income uses progressive brackets with Medicare levy', () => {
@@ -162,8 +162,8 @@ test('TE-3: AU ordinary income uses progressive brackets with Medicare levy', ()
   //   [45000, 50000] @ 30% = 5000 * 0.30  = 1500  → baseTax = 6592
   // Medicare: 50000 > 32500 upper threshold → 50000 * 0.02 = 1000
   // Total = 7592
-  const tax = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 50000 }));
-  assert.strictEqual(tax, 7592);
+  const { netLiability } = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 50000 }));
+  assert.strictEqual(netLiability, 7592);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -172,26 +172,26 @@ test('TE-3: AU ordinary income uses progressive brackets with Medicare levy', ()
 
 test('TE-4: US LTCG uses preferred rate brackets (0%/15%/20%), not ordinary income brackets', () => {
   // $200k CG: [0, 96700] @ 0% = 0 | [96700, 200000] @ 15% = 103300 * 0.15 = 15495
-  const tax = usRates.computeTax(usState({ usCapitalGainsYTD: 200000 }));
-  assert.strictEqual(tax, 15495);
+  const { netLiability } = usRates.computeTax(usState({ usCapitalGainsYTD: 200000 }));
+  assert.strictEqual(netLiability, 15495);
 });
 
 test('TE-4: US LTCG up to $96,700 is taxed at 0%', () => {
-  const tax = usRates.computeTax(usState({ usCapitalGainsYTD: 50000 }));
-  assert.strictEqual(tax, 0);
+  const { netLiability } = usRates.computeTax(usState({ usCapitalGainsYTD: 50000 }));
+  assert.strictEqual(netLiability, 0);
 });
 
 test('TE-4: AU capital gains for resident apply 50% CGT discount', () => {
   // $100k CG → discounted income = $50k
   // [18200, 45000] @ 19% = 5092 | [45000, 50000] @ 30% = 1500 → baseTax = 6592
   // Medicare: 50000 > 32500 → 50000 * 0.02 = 1000  → total = 7592
-  const tax = auRates.computeTax(auState({ auCapitalGainsYTD: 100000 }));
-  assert.strictEqual(tax, 7592);
+  const { netLiability } = auRates.computeTax(auState({ auCapitalGainsYTD: 100000 }));
+  assert.strictEqual(netLiability, 7592);
 });
 
 test('TE-4: AU CGT discount is exactly 50% (half the gain is taxable)', () => {
-  const taxWithDiscount    = auRates.computeTax(auState({ auCapitalGainsYTD: 100000 }));
-  const taxWithoutDiscount = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 50000 }));
+  const taxWithDiscount    = auRates.computeTax(auState({ auCapitalGainsYTD: 100000 })).netLiability;
+  const taxWithoutDiscount = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 50000 })).netLiability;
   // $100k CG with 50% discount should equal $50k ordinary income (same bracket math)
   assert.strictEqual(taxWithDiscount, taxWithoutDiscount);
 });
@@ -202,21 +202,21 @@ test('TE-4: AU CGT discount is exactly 50% (half the gain is taxable)', () => {
 
 test('TE-5: AU NR uses flat 32.5% bracket starting from $0 (no tax-free threshold)', () => {
   // $50k income: no tax-free threshold → 50000 * 0.325 = 16250
-  const tax = auRates.computeTax(auState({ isAuResident: false, auOrdinaryIncomeYTD: 50000 }));
-  assert.strictEqual(tax, 16250);
+  const { netLiability } = auRates.computeTax(auState({ isAuResident: false, auOrdinaryIncomeYTD: 50000 }));
+  assert.strictEqual(netLiability, 16250);
 });
 
 test('TE-5: AU NR capital gains are NOT discounted (full gain taxed via NR brackets)', () => {
   // $100k CG, non-resident: no 50% discount → full 100000 * 0.325 = 32500
-  const taxNR       = auRates.computeTax(auState({ isAuResident: false, auCapitalGainsYTD: 100000 }));
-  const taxResident = auRates.computeTax(auState({ isAuResident: true,  auCapitalGainsYTD: 100000 }));
+  const taxNR       = auRates.computeTax(auState({ isAuResident: false, auCapitalGainsYTD: 100000 })).netLiability;
+  const taxResident = auRates.computeTax(auState({ isAuResident: true,  auCapitalGainsYTD: 100000 })).netLiability;
   assert.strictEqual(taxNR, 32500);
   assert.ok(taxNR > taxResident, 'NR rate should exceed resident (discounted) rate');
 });
 
 test('TE-5: AU NR brackets differ from resident brackets at same income', () => {
-  const taxResident = auRates.computeTax(auState({ isAuResident: true,  auOrdinaryIncomeYTD: 50000 }));
-  const taxNR       = auRates.computeTax(auState({ isAuResident: false, auOrdinaryIncomeYTD: 50000 }));
+  const taxResident = auRates.computeTax(auState({ isAuResident: true,  auOrdinaryIncomeYTD: 50000 })).netLiability;
+  const taxNR       = auRates.computeTax(auState({ isAuResident: false, auOrdinaryIncomeYTD: 50000 })).netLiability;
   // Resident 7592 (bracket + Medicare) vs NR 16250 (flat 32.5%)
   assert.ok(taxNR > taxResident, 'NR brackets produce higher tax on the same income');
 });
@@ -231,8 +231,8 @@ test('TE-6: franking credit offsets AU ordinary income tax', () => {
   //   Medicare: 100000 * 0.02 = 2000
   //   franking offset: min(10000, 21592) = 10000
   //   net = (21592 - 10000) + 2000 = 13592
-  const tax = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 100000, auFrankingCreditYTD: 10000 }));
-  assert.strictEqual(tax, 13592);
+  const { netLiability } = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 100000, auFrankingCreditYTD: 10000 }));
+  assert.strictEqual(netLiability, 13592);
 });
 
 test('TE-6: franking credit is capped at base tax (cannot reduce Medicare levy)', () => {
@@ -240,8 +240,8 @@ test('TE-6: franking credit is capped at base tax (cannot reduce Medicare levy)'
   // Medicare phase-in: (30000 - 26000) * 0.10 = 400
   // Oversized franking credit: min(100000, 2242) = 2242 offsets all base tax
   // Net = (2242 - 2242) + 400 = 400
-  const tax = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 30000, auFrankingCreditYTD: 100000 }));
-  assert.strictEqual(tax, 400);
+  const { netLiability } = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 30000, auFrankingCreditYTD: 100000 }));
+  assert.strictEqual(netLiability, 400);
 });
 
 test('TE-6: franking credit classifier populates auFrankingCreditYTD', () => {
@@ -267,13 +267,13 @@ test('TE-7: US collectible sale classifier populates usCollectibleGainsYTD', () 
 
 test('TE-7: US rates module applies 28% to collectible gains', () => {
   // $10k collectible gain → 10000 * 0.28 = 2800
-  const tax = usRates.computeTax(usState({ usCollectibleGainsYTD: 10000 }));
-  assert.strictEqual(Math.round(tax * 100) / 100, 2800);
+  const { netLiability } = usRates.computeTax(usState({ usCollectibleGainsYTD: 10000 }));
+  assert.strictEqual(Math.round(netLiability * 100) / 100, 2800);
 });
 
 test('TE-7: US collectible rate is distinct from LTCG rate (28% vs 15%)', () => {
-  const collectibleTax = usRates.computeTax(usState({ usCollectibleGainsYTD: 100000 }));
-  const ltcgTax        = usRates.computeTax(usState({ usCapitalGainsYTD:      100000 }));
+  const collectibleTax = usRates.computeTax(usState({ usCollectibleGainsYTD: 100000 })).netLiability;
+  const ltcgTax        = usRates.computeTax(usState({ usCapitalGainsYTD:      100000 })).netLiability;
   // 100k collectibles: 28000 | 100k LTCG: [0,96700] @ 0% + [96700,100000] @ 15% = 495
   assert.strictEqual(Math.round(collectibleTax * 100) / 100, 28000);
   assert.ok(collectibleTax > ltcgTax, 'collectible 28% rate exceeds LTCG 0%/15% on same amount');
@@ -282,8 +282,8 @@ test('TE-7: US collectible rate is distinct from LTCG rate (28% vs 15%)', () => 
 test('TE-7: AU collectible gains use capital gains treatment (50% CGT discount)', () => {
   // AU treats collectibles as capital gains — auCapitalGainsYTD is the vehicle
   // $100k AU CG → discounted $50k → same as TE-4 resident test → 7592
-  const tax = auRates.computeTax(auState({ auCapitalGainsYTD: 100000 }));
-  assert.strictEqual(tax, 7592);
+  const { netLiability } = auRates.computeTax(auState({ auCapitalGainsYTD: 100000 }));
+  assert.strictEqual(netLiability, 7592);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -310,8 +310,8 @@ test('TE-8: SS income classifier adds full amount to AU ordinary income for AU r
 test('TE-8: US rates module taxes SS income at ordinary brackets on the 85% taxable portion', () => {
   // $100k SS → taxable US income = $85k; std deduction = $30k; taxable = $55k
   // [0, 23850] @ 10% = 2385 | [23850, 55000] @ 12% = 31150 * 0.12 = 3738 → 6123
-  const tax = usRates.computeTax(usState({ usOrdinaryIncomeYTD: 85000 }));
-  assert.strictEqual(tax, 6123);
+  const { netLiability } = usRates.computeTax(usState({ usOrdinaryIncomeYTD: 85000 }));
+  assert.strictEqual(netLiability, 6123);
 });
 
 test('TE-8: only 85% of SS benefit flows to US taxable income (not 100%)', () => {
