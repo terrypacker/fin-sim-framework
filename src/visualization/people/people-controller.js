@@ -20,7 +20,8 @@ export class PeopleController {
 
   /**
    * @param {{ name: string, birthDate: string, citizen: string[],
-   *           lifeExpectancy: number, socialSecurityMonthly: number }} data
+   *           lifeExpectancy: number, socialSecurityMonthly: number,
+   *           monthlyWage: number, retirementDate: string }} data
    * @returns {import('../../finance/person.js').Person}
    */
   create(data) {
@@ -29,6 +30,8 @@ export class PeopleController {
       citizen:               data.citizen,
       lifeExpectancy:        Number(data.lifeExpectancy),
       socialSecurityMonthly: Number(data.socialSecurityMonthly),
+      monthlyWage:           Number(data.monthlyWage ?? 0),
+      retirementDate:        data.retirementDate ? new Date(data.retirementDate) : new Date(Date.UTC(2040, 0, 1)),
     });
   }
 
@@ -38,9 +41,11 @@ export class PeopleController {
    */
   update(id, changes) {
     const normalized = { ...changes };
-    if (normalized.birthDate)             normalized.birthDate             = new Date(normalized.birthDate);
+    if (normalized.birthDate)                     normalized.birthDate             = new Date(normalized.birthDate);
     if (normalized.lifeExpectancy        != null) normalized.lifeExpectancy        = Number(normalized.lifeExpectancy);
     if (normalized.socialSecurityMonthly != null) normalized.socialSecurityMonthly = Number(normalized.socialSecurityMonthly);
+    if (normalized.monthlyWage           != null) normalized.monthlyWage           = Number(normalized.monthlyWage);
+    if (normalized.retirementDate)                normalized.retirementDate        = new Date(normalized.retirementDate);
     return this._service.updatePerson(id, normalized);
   }
 

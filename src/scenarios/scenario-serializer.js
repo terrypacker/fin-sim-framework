@@ -284,6 +284,10 @@ export class ScenarioSerializer {
       citizen:               person.citizen ?? ['US'],
       lifeExpectancy:        person.lifeExpectancy ?? 90,
       socialSecurityMonthly: person.socialSecurityMonthly ?? 2800,
+      monthlyWage:           person.monthlyWage ?? 0,
+      retirementDate:        person.retirementDate instanceof Date
+                               ? person.retirementDate.toISOString().slice(0, 10)
+                               : (person.retirementDate ?? '2040-01-01'),
     };
   }
 
@@ -544,6 +548,8 @@ export class ScenarioSerializer {
       citizen:               d.citizen ?? ['US'],
       lifeExpectancy:        d.lifeExpectancy ?? 90,
       socialSecurityMonthly: d.socialSecurityMonthly ?? 2800,
+      monthlyWage:           d.monthlyWage ?? 0,
+      retirementDate:        d.retirementDate ? new Date(d.retirementDate) : new Date(Date.UTC(2040, 0, 1)),
     });
     return person;
   }

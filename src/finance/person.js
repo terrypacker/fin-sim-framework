@@ -25,6 +25,8 @@ export class Person extends SimGraphNode {
    * @param {boolean}     [opts.isAuResident]   - AU tax-resident flag; defaults to citizen.includes('AUS')
    * @param {number}      [opts.lifeExpectancy=90]         - Expected years to live
    * @param {number}      [opts.socialSecurityMonthly=2800] - USD/month of SS at full retirement age
+   * @param {number}      [opts.monthlyWage=0]             - USD/month gross wages (0 = not employed)
+   * @param {Date}        [opts.retirementDate]            - Date wages stop; defaults to 2040-01-01
    */
   constructor(id = null, birthDate, opts = {}) {
     super({id: id, kind: 'person', layer: 'config', name: opts.name ?? ''});
@@ -33,5 +35,7 @@ export class Person extends SimGraphNode {
     this.isAuResident          = opts.isAuResident          ?? this.citizen.includes('AUS');
     this.lifeExpectancy        = opts.lifeExpectancy        ?? 90;
     this.socialSecurityMonthly = opts.socialSecurityMonthly ?? 2800;
+    this.monthlyWage           = opts.monthlyWage           ?? 0;
+    this.retirementDate        = opts.retirementDate        ?? new Date(Date.UTC(2040, 0, 1));
   }
 }

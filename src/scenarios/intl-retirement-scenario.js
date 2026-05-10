@@ -28,6 +28,7 @@ import {
 import { DividendScheduledHandler } from '../finance/handlers/dividend-scheduled-handler.js';
 import { ChangeResidencyHandler } from '../finance/handlers/change-residency-handler.js';
 import { OutOfFundsHandler } from '../finance/handlers/out-of-funds-handler.js';
+import { MonthlyWagesHandler } from '../finance/handlers/monthly-wages-handler.js';
 import { UsSavingsInterestCreditReducer } from '../finance/reducers/us-savings-interest-credit-reducer.js';
 import { ExpenseDebitReducer } from '../finance/reducers/expense-debit-reducer.js';
 import { ReplenishSavingsReducer } from '../finance/reducers/replenish-savings-reducer.js';
@@ -48,9 +49,13 @@ import {
  */
 export const INTL_RETIREMENT_DEFAULTS = {
   // People
-  primaryBirthDate: new Date(Date.UTC(1978, 3, 15)),
-  spouseBirthDate:  new Date(Date.UTC(1983, 8, 22)),
-  moveYear:         2031,  // calendar year of US→AU move (Jul 1)
+  primaryBirthDate:     new Date(Date.UTC(1978, 3, 15)),
+  spouseBirthDate:      new Date(Date.UTC(1983, 8, 22)),
+  primaryMonthlyWage:   8_000,
+  spouseMonthlyWage:    4_000,
+  primaryRetirementDate: new Date(Date.UTC(2040, 0, 1)),
+  spouseRetirementDate:  new Date(Date.UTC(2040, 0, 1)),
+  moveYear:             2031,  // calendar year of US→AU move (Jul 1)
 
   // US Savings (primary USD cash pool)
   initialUsSavings:     30_000,
@@ -132,8 +137,16 @@ export class IntlRetirementScenario extends BaseScenario {
     this._params = p;
 
     // ── People ────────────────────────────────────────────────────────────────
-    const primary = new Person('primary', p.primaryBirthDate, { name: 'Primary', citizen: ['US'] });
-    const spouse  = new Person('spouse',  p.spouseBirthDate,  { name: 'Spouse',  citizen: ['US'] });
+    const primary = new Person('primary', p.primaryBirthDate, {
+      name: 'Primary', citizen: ['US'],
+      monthlyWage:    p.primaryMonthlyWage,
+      retirementDate: p.primaryRetirementDate,
+    });
+    const spouse  = new Person('spouse',  p.spouseBirthDate,  {
+      name: 'Spouse',  citizen: ['US'],
+      monthlyWage:    p.spouseMonthlyWage,
+      retirementDate: p.spouseRetirementDate,
+    });
 
     // ── US accounts ───────────────────────────────────────────────────────────
     const usSavingsAccount = new Account(p.initialUsSavings, {
@@ -296,6 +309,11 @@ export class IntlRetirementScenario extends BaseScenario {
       .interval('month-end').enabled(true).color('#F44336').build();
     eventService.register(expensesEvent);
 
+    const wagesEvent = EventBuilder.eventSeries()
+      .name('Monthly Wages').type('MONTHLY_WAGES')
+      .interval('month-end').enabled(true).color('#4CAF50').build();
+    eventService.register(wagesEvent);
+
     const usSavingsIntEvent = EventBuilder.eventSeries()
       .name('Monthly US Savings Interest').type('US_SAVINGS_INTEREST_MONTHLY')
       .interval('month-end').enabled(true).color('#00BCD4').build();
@@ -358,6 +376,10 @@ export class IntlRetirementScenario extends BaseScenario {
     });
     expensesHandler.handledEvents.push(expensesEvent);
     handlerService.register(expensesHandler);
+
+    const wagesHandler = new MonthlyWagesHandler();
+    wagesHandler.handledEvents.push(wagesEvent);
+    handlerService.register(wagesHandler);
 
     const usSavingsIntHandler = new UsSavingsInterestMonthlyHandler({
       interestRate: p.usSavingsInterestRate,
