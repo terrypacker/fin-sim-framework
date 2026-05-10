@@ -35,6 +35,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
       ...this._superReducerFns(),
       ...this._auBrokerageReducerFns(),
       ...this._realPropertyReducerFns(),
+      ...this._auIncomeReducerFns(),
     ]);
   }
 
@@ -137,6 +138,24 @@ export class AuTaxModule2026 extends BaseTaxModule {
         auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + action.gain,
         ftcYTD:                      state.ftcYTD                      + action.gain,
       })],
+    ];
+  }
+
+  _auIncomeReducerFns() {
+    return [
+      // EVT-49: AU self-employment income — always US ordinary income; AU ordinary income if resident
+      ['AU_SE_INCOME_TAX', (state, action) => {
+        const { amount, isAuResident } = action;
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        if (isAuResident) {
+          next = {
+            ...next,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            ftcYTD:              state.ftcYTD              + amount,
+          };
+        }
+        return next;
+      }],
     ];
   }
 }

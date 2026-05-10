@@ -43,6 +43,9 @@ import { IraContributionApplyReducer, IraWithdrawalContribApplyReducer, IraWithd
 import { K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer, K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler }                                                                                                     from '../../src/finance/account-rules/us/k401-classes.js';
 import { FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer, FixedIncomeEarningsApplyReducer, StockContributionApplyReducer, StockDividendApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer, FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler, StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler } from '../../src/finance/account-rules/us/us-brokerage-classes.js';
 import { UsHouseSaleApplyReducer, UsHouseSaleHandler }                               from '../../src/finance/account-rules/us/us-real-property-classes.js';
+import { SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer, SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer, SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler, SeIncomeUsHandler, BonusHandler, CompanySaleHandler } from '../../src/finance/account-rules/us/us-income-classes.js';
+import { CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer, CollectibleSaleHandler, CollectibleValueChangeHandler } from '../../src/finance/account-rules/us/us-collectible-classes.js';
+import { AuSeIncomeApplyReducer, AuSeIncomeHandler }                                 from '../../src/finance/account-rules/au/au-income-classes.js';
 import { AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer, AuSavingsContributionHandler, AuSavingsWithdrawalHandler, AuSavingsEarningsHandler }                                                                     from '../../src/finance/account-rules/au/au-savings-classes.js';
 import { SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer, SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperContributionHandler, SuperWithdrawalContributionsHandler, SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler } from '../../src/finance/account-rules/au/au-super-classes.js';
 import { AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer, AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer, AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer, AuDividendFrankedResidentHandler, AuDividendFrankedNonResidentHandler, AuDividendUnfrankedResidentHandler, AuDividendUnfrankedNonResidentHandler, AuStockEarningsHandler, AuStockWithdrawalHandler } from '../../src/finance/account-rules/au/au-brokerage-classes.js';
@@ -101,6 +104,14 @@ globalThis.FinSimLib = {
     FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler,
     StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler,
     UsHouseSaleApplyReducer, UsHouseSaleHandler,
+    // US — Income
+    SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer,
+    SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer,
+    SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler,
+    SeIncomeUsHandler, BonusHandler, CompanySaleHandler,
+    // US — Collectibles
+    CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer,
+    CollectibleSaleHandler, CollectibleValueChangeHandler,
     // AU account module
     AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer,
     AuSavingsEarningsApplyReducer,
@@ -116,6 +127,8 @@ globalThis.FinSimLib = {
     AuDividendUnfrankedResidentHandler, AuDividendUnfrankedNonResidentHandler,
     AuStockEarningsHandler, AuStockWithdrawalHandler,
     AuHouseSaleApplyReducer, AuHouseSaleHandler,
+    // AU — Income
+    AuSeIncomeApplyReducer, AuSeIncomeHandler,
     // Scenario-level handlers and reducers
     UsSavingsInterestMonthlyHandler, MonthlyExpensesHandler,
     IntlTransferToUsHandler, IntlTransferToAuHandler,

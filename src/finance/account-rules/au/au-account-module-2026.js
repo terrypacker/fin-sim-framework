@@ -32,6 +32,9 @@ import {
 import {
   AuHouseSaleApplyReducer, AuHouseSaleHandler,
 } from './au-real-property-classes.js';
+import {
+  AuSeIncomeApplyReducer, AuSeIncomeHandler,
+} from './au-income-classes.js';
 
 
 /**
@@ -46,6 +49,7 @@ import {
  *   EVT-20 to 23  Superannuation
  *   EVT-26 to 32  AU Brokerage
  *   EVT-33        AU House Sale
+ *   EVT-49        AU Self-Employment Income
  */
 export class AuAccountModule2026 extends BaseAccountModule {
   get countryCode() { return 'AU'; }
@@ -71,6 +75,8 @@ export class AuAccountModule2026 extends BaseAccountModule {
       new AuStockWithdrawalApplyReducer({ accountService }),
       // Real Property
       new AuHouseSaleApplyReducer({ accountService }),
+      // AU Income
+      new AuSeIncomeApplyReducer({ accountService }),
     ];
   }
 
@@ -94,6 +100,8 @@ export class AuAccountModule2026 extends BaseAccountModule {
       new AuStockWithdrawalHandler(),
       // Real Property
       new AuHouseSaleHandler(),
+      // AU Income
+      new AuSeIncomeHandler(),
     ];
   }
 }

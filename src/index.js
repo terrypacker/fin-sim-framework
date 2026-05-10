@@ -22,6 +22,9 @@ import { UsAccountModule2025 } from './finance/account-rules/us/us-account-modul
 import { UsAccountModule2026 } from './finance/account-rules/us/us-account-module-2026.js';
 import { FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer, FixedIncomeEarningsApplyReducer, StockContributionApplyReducer, StockDividendApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer, FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler, StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler } from './finance/account-rules/us/us-brokerage-classes.js';
 import { UsHouseSaleApplyReducer, UsHouseSaleHandler } from './finance/account-rules/us/us-real-property-classes.js';
+import { SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer, SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer, SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler, SeIncomeUsHandler, BonusHandler, CompanySaleHandler } from './finance/account-rules/us/us-income-classes.js';
+import { CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer, CollectibleSaleHandler, CollectibleValueChangeHandler } from './finance/account-rules/us/us-collectible-classes.js';
+import { AuSeIncomeApplyReducer, AuSeIncomeHandler } from './finance/account-rules/au/au-income-classes.js';
 import { USD, AUD, ACCOUNT_TYPE, InsufficientFundsError, Account, CheckingAccount, SavingsAccount } from './finance/assets/account.js';
 import { AssetService } from './finance/services/asset-service.js';
 import { Asset } from './finance/assets/asset.js';
@@ -248,6 +251,24 @@ export const Finance = {
   StockWithdrawalHandler,
   UsHouseSaleApplyReducer,
   UsHouseSaleHandler,
+  SsIncomeApplyReducer,
+  WagesIncomeApplyReducer,
+  WagesWithheldApplyReducer,
+  SeIncomeUsApplyReducer,
+  BonusApplyReducer,
+  CompanySaleApplyReducer,
+  SsIncomeHandler,
+  WagesIncomeHandler,
+  WagesWithheldHandler,
+  SeIncomeUsHandler,
+  BonusHandler,
+  CompanySaleHandler,
+  CollectibleSaleApplyReducer,
+  CollectibleValueChangeApplyReducer,
+  CollectibleSaleHandler,
+  CollectibleValueChangeHandler,
+  AuSeIncomeApplyReducer,
+  AuSeIncomeHandler,
   USD,
   AUD,
   ACCOUNT_TYPE,
