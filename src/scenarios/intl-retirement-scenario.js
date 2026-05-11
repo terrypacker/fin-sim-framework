@@ -13,7 +13,7 @@ import { ServiceRegistry } from '../services/service-registry.js';
 import { EventBuilder } from '../simulation-framework/builders/event-builder.js';
 import { Person } from '../finance/person.js';
 import { Account, USD, AUD } from '../finance/assets/account.js';
-import { InvestmentAccount } from '../finance/assets/investment-account.js';
+import { InvestmentAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount } from '../finance/assets/investment-account.js';
 import { TaxService } from '../finance/tax-service.js';
 import { PeriodService } from '../finance/period/period-service.js';
 import { buildUsCalendarYear, buildAuFiscalYear, applyTo } from '../finance/period/period-builder.js';
@@ -406,32 +406,29 @@ export class IntlRetirementScenario extends BaseScenario {
       ownerId:          primary.id,
       drawdownPriority: 2,
     });
-    const iraAccount = new InvestmentAccount(p.iraBalance, {
+    const iraAccount = new TraditionalIRAAccount(p.iraBalance, {
       name:             'Traditional IRA',
       contributionBasis: p.iraBasis,
       country:          'US',
       currency:         USD,
       ownerId:          primary.id,
       drawdownPriority: 3,
-      minimumAge:       59.5,
     });
-    const k401Account = new InvestmentAccount(p.k401Balance, {
+    const k401Account = new FourOhOneKAccount(p.k401Balance, {
       name:             '401(k)',
       contributionBasis: p.k401Basis,
       country:          'US',
       currency:         USD,
       ownerId:          primary.id,
       drawdownPriority: 4,
-      minimumAge:       59.5,
     });
-    const rothAccount = new InvestmentAccount(p.rothBalance, {
+    const rothAccount = new RothAccount(p.rothBalance, {
       name:             'Roth IRA',
       contributionBasis: p.rothBasis,
       country:          'US',
       currency:         USD,
       ownerId:          primary.id,
       drawdownPriority: 5,
-      minimumAge:       59.5,
     });
 
     // ── AU accounts ───────────────────────────────────────────────────────────
