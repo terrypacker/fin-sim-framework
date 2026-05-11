@@ -24,7 +24,7 @@ export class InternationalRetirementFinancialState extends SimulationState {
       //People
     primary, spouse,
       //Accounts
-    usSavingsAccount, fixedIncomeAccount, stockAccount,
+    usSavingsAccount, fixedIncomeAccount, usStockAccount,
     iraAccount, k401Account, rothAccount,
     auSavingsAccount, auStockAccount, superAccount,
     exchangeRateUsdToAud,
@@ -43,7 +43,7 @@ export class InternationalRetirementFinancialState extends SimulationState {
     //US Accounts
     this._assignAccount('usSavingsAccount', usSavingsAccount);
     this._assignAccount('fixedIncomeAccount', fixedIncomeAccount);
-    this._assignAccount('stockAccount', stockAccount);
+    this._assignAccount('usStockAccount', usStockAccount);
     this._assignAccount('iraAccount', iraAccount);
     this._assignAccount('k401Account', k401Account);
     this._assignAccount('rothAccount', rothAccount);

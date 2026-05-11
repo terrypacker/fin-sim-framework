@@ -490,7 +490,7 @@ export class ScenarioSerializer {
         break;
       case 'DividendScheduledHandler':
         handler = new FinSimLib.Finance.DividendScheduledHandler({
-          accountKey:   d.accountKey   ?? 'stockAccount',
+          accountKey:   d.accountKey   ?? 'usStockAccount',
           dividendRate: d.dividendRate ?? 0.02,
           reinvest:     d.reinvest     ?? false,
         });

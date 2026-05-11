@@ -43,6 +43,7 @@ import {
 import {
   InternationalRetirementFinancialState
 } from "../finance/state/intl-retirement-state.js";
+import { ACCOUNT_ROLES } from '../finance/state/account-roles.js';
 
 /**
  * Default parameters for the International Retirement scenario.
@@ -386,20 +387,24 @@ export class IntlRetirementScenario extends BaseScenario {
     // ── US accounts ───────────────────────────────────────────────────────────
     const usSavingsAccount = new Account(p.initialUsSavings, {
       name:          'US Savings',
+      role:          ACCOUNT_ROLES.US_SAVINGS,
       ownershipType: 'joint',
+      ownerId:       primary.id,
       minimumBalance: p.usSavingsMinBalance,
       country:       'US',
       currency:      USD,
     });
     const fixedIncomeAccount = new Account(p.fixedIncomeBalance, {
       name:             'Fixed Income',
+      role:             ACCOUNT_ROLES.FIXED_INCOME,
       country:          'US',
       currency:         USD,
       ownerId:          primary.id,
       drawdownPriority: 1,
     });
-    const stockAccount = new InvestmentAccount(p.stockBalance, {
+    const usStockAccount = new InvestmentAccount(p.stockBalance, {
       name:             'US Stock',
+      role:             ACCOUNT_ROLES.US_STOCK,
       contributionBasis: p.stockBasis,
       country:          'US',
       currency:         USD,
@@ -408,6 +413,7 @@ export class IntlRetirementScenario extends BaseScenario {
     });
     const iraAccount = new TraditionalIRAAccount(p.iraBalance, {
       name:             'Traditional IRA',
+      role:             ACCOUNT_ROLES.IRA,
       contributionBasis: p.iraBasis,
       country:          'US',
       currency:         USD,
@@ -416,6 +422,7 @@ export class IntlRetirementScenario extends BaseScenario {
     });
     const k401Account = new FourOhOneKAccount(p.k401Balance, {
       name:             '401(k)',
+      role:             ACCOUNT_ROLES.K401,
       contributionBasis: p.k401Basis,
       country:          'US',
       currency:         USD,
@@ -424,6 +431,7 @@ export class IntlRetirementScenario extends BaseScenario {
     });
     const rothAccount = new RothAccount(p.rothBalance, {
       name:             'Roth IRA',
+      role:             ACCOUNT_ROLES.ROTH,
       contributionBasis: p.rothBasis,
       country:          'US',
       currency:         USD,
@@ -433,13 +441,17 @@ export class IntlRetirementScenario extends BaseScenario {
 
     // ── AU accounts ───────────────────────────────────────────────────────────
     const auSavingsAccount = new Account(p.auSavingsBalance, {
-      name:     'AU Savings',
-      country:  'AU',
+      name:          'AU Savings',
+      role:          ACCOUNT_ROLES.AU_SAVINGS,
+      ownershipType: 'joint',
+      ownerId:       primary.id,
+      country:       'AU',
       minimumBalance: p.auSavingsMinBalance,
-      currency: AUD,
+      currency:      AUD,
     });
     const auStockAccount = new InvestmentAccount(p.auStockBalance, {
       name:             'AU Stock',
+      role:             ACCOUNT_ROLES.AU_STOCK,
       contributionBasis: p.auStockBasis,
       country:          'AU',
       currency:         AUD,
@@ -448,6 +460,7 @@ export class IntlRetirementScenario extends BaseScenario {
     });
     const superAccount = new InvestmentAccount(p.superBalance, {
       name:             'Superannuation',
+      role:             ACCOUNT_ROLES.SUPER,
       contributionBasis: p.superBasis,
       country:          'AU',
       currency:         AUD,
@@ -459,14 +472,14 @@ export class IntlRetirementScenario extends BaseScenario {
     // ── Store for loadDefaults() ──────────────────────────────────────────────
     this._people = { primary, spouse };
     this._accounts = {
-      usSavingsAccount, fixedIncomeAccount, stockAccount,
+      usSavingsAccount, fixedIncomeAccount, usStockAccount,
       iraAccount, k401Account, rothAccount,
       auSavingsAccount, auStockAccount, superAccount,
     };
 
     return new InternationalRetirementFinancialState({
       primary, spouse,
-      usSavingsAccount, fixedIncomeAccount, stockAccount,
+      usSavingsAccount, fixedIncomeAccount, usStockAccount,
       iraAccount, k401Account, rothAccount,
       auSavingsAccount, auStockAccount, superAccount,
       exchangeRateUsdToAud: p.exchangeRateUsdToAud,

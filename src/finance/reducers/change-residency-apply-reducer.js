@@ -41,7 +41,7 @@ export class ChangeResidencyApplyReducer extends Reducer {
 
   static DEFAULT_INVESTMENT_KEYS = [
     'rothAccount', 'iraAccount', 'k401Account',
-    'stockAccount', 'superAccount', 'auStockAccount',
+    'usStockAccount', 'superAccount', 'auStockAccount',
   ];
 
   constructor({ accountService, investmentKeys = ChangeResidencyApplyReducer.DEFAULT_INVESTMENT_KEYS } = {}) {

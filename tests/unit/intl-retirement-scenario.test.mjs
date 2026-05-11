@@ -409,18 +409,18 @@ test('serialize → deserialize round-trip reconstructs all TaxService handlers'
 // Metrics: investment account balances captured in state.metrics
 // ═════════════════════════════════════════════════════════════════════════════
 
-test('DIVIDEND_SCHEDULED: state.metrics.stockAccount is set after year-end dividend', () => {
+test('DIVIDEND_SCHEDULED: state.metrics.usStockAccount is set after year-end dividend', () => {
   // dividendsEvent has startOffset(1), so first DIVIDEND_SCHEDULED fires Dec 31 2027
   const { sim } = buildScenario();
   sim.stepTo(new Date(Date.UTC(2027, 11, 31)));
 
   assert.ok(
-    sim.state.metrics?.stockAccount != null,
-    `state.metrics.stockAccount should be set after DIVIDEND_SCHEDULED; got ${JSON.stringify(sim.state.metrics)}`
+    sim.state.metrics?.usStockAccount != null,
+    `state.metrics.usStockAccount should be set after DIVIDEND_SCHEDULED; got ${JSON.stringify(sim.state.metrics)}`
   );
   assert.ok(
-    typeof sim.state.metrics.stockAccount === 'number' && sim.state.metrics.stockAccount > 0,
-    `state.metrics.stockAccount should be a positive number, got ${sim.state.metrics.stockAccount}`
+    typeof sim.state.metrics.usStockAccount === 'number' && sim.state.metrics.usStockAccount > 0,
+    `state.metrics.usStockAccount should be a positive number, got ${sim.state.metrics.usStockAccount}`
   );
 });
 

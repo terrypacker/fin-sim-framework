@@ -286,7 +286,7 @@ export class HandlerService extends BaseService {
    * @param {boolean} [opts.reinvest=false]
    * @param {string}  [opts.name='Dividend Scheduled']
    */
-  createDividendScheduledHandler({ accountKey = 'stockAccount', dividendRate = 0.02, reinvest = false, name = 'Dividend Scheduled' } = {}) {
+  createDividendScheduledHandler({ accountKey = 'usStockAccount', dividendRate = 0.02, reinvest = false, name = 'Dividend Scheduled' } = {}) {
     const item = new DividendScheduledHandler({ accountKey, dividendRate, reinvest });
     item.name = name;
     item.id   = this._generateId('h');

@@ -28,7 +28,7 @@ import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framew
  * data.reinvest overrides the configured reinvest param for one-off events.
  *
  * @param {object} [opts]
- * @param {string} [opts.accountKey='stockAccount']
+ * @param {string} [opts.accountKey='usStockAccount']
  *   State key for the stock account whose balance drives the calculation.
  * @param {number} [opts.dividendRate=0.02]
  *   Annual dividend yield (e.g. 0.02 = 2%).
@@ -40,7 +40,7 @@ export class DividendScheduledHandler extends HandlerEntry {
 
   static eventType = 'DIVIDEND_SCHEDULED';
 
-  constructor({ accountKey = 'stockAccount', dividendRate = 0.02, reinvest = false } = {}) {
+  constructor({ accountKey = 'usStockAccount', dividendRate = 0.02, reinvest = false } = {}) {
     super(null, 'Dividend Scheduled');
     this.accountKey   = accountKey;
     this.dividendRate = dividendRate;

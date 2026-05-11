@@ -101,7 +101,7 @@ export class IntlUsStockEarningsHandler extends HandlerEntry {
   static description = 'Computes annual unrealized appreciation on the US stock account (balance × growthRate) and dispatches STOCK_EARNINGS_APPLY.';
   static eventType = 'INTL_STOCK_EARNINGS';
 
-  constructor({ accountKey = 'stockAccount', growthRate = 0.05 } = {}) {
+  constructor({ accountKey = 'usStockAccount', growthRate = 0.05 } = {}) {
     super(null, 'US Stock Earnings');
     this.accountKey = accountKey;
     this.growthRate = growthRate;

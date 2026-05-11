@@ -56,7 +56,7 @@ function buildBrokerageSim({
   const sim = new Simulation(START_DATE, { initialState: new FinancialState({
     checkingAccount: new Account(initialChecking),
     fixedIncomeAccount: { balance: fixedIncomeBalance },
-    stockAccount: {
+    usStockAccount: {
       balance:           stockBalance,
       contributionBasis: stockContribBasis,
       earningsBasis:     stockEarningsBasis,
@@ -149,14 +149,14 @@ test('EVT-11: Fixed income earnings are NOT AU taxable if person is not AU resid
 // EVT-12: Stock Contribution
 // ══════════════════════════════════════════════════════════════════════════════
 
-test('EVT-12: Stock contribution increases stockAccount contributionBasis and debits checking', () => {
+test('EVT-12: Stock contribution increases usStockAccount contributionBasis and debits checking', () => {
   const { sim } = buildBrokerageSim({ initialChecking: 10000 });
   sim.schedule({ date: new Date(2026, 0, 15), type: 'STOCK_CONTRIBUTION', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.stockAccount.balance, 5000);
-  assert.strictEqual(sim.state.stockAccount.contributionBasis, 5000);
-  assert.strictEqual(sim.state.stockAccount.earningsBasis, 0);
+  assert.strictEqual(sim.state.usStockAccount.balance, 5000);
+  assert.strictEqual(sim.state.usStockAccount.contributionBasis, 5000);
+  assert.strictEqual(sim.state.usStockAccount.earningsBasis, 0);
   assert.strictEqual(sim.state.checkingAccount.balance, 5000);
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0);
 });
@@ -174,9 +174,9 @@ test('EVT-13: Stock dividend stays in account and increases both basis fields', 
   sim.schedule({ date: new Date(2026, 0, 15), type: 'STOCK_DIVIDEND', data: { amount: 1000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.stockAccount.balance, 51000);
-  assert.strictEqual(sim.state.stockAccount.contributionBasis, 51000);
-  assert.strictEqual(sim.state.stockAccount.earningsBasis, 1000);
+  assert.strictEqual(sim.state.usStockAccount.balance, 51000);
+  assert.strictEqual(sim.state.usStockAccount.contributionBasis, 51000);
+  assert.strictEqual(sim.state.usStockAccount.earningsBasis, 1000);
   assert.strictEqual(sim.state.checkingAccount.balance, 5000); // unchanged
 });
 
@@ -219,8 +219,8 @@ test('EVT-14: Stock earnings stay in account, increase earningsBasis, no tax', (
   sim.schedule({ date: new Date(2026, 0, 15), type: 'STOCK_EARNINGS', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.stockAccount.balance, 55000);
-  assert.strictEqual(sim.state.stockAccount.earningsBasis, 5000);
+  assert.strictEqual(sim.state.usStockAccount.balance, 55000);
+  assert.strictEqual(sim.state.usStockAccount.earningsBasis, 5000);
   assert.strictEqual(sim.state.checkingAccount.balance, 5000);    // unchanged
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0);
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
