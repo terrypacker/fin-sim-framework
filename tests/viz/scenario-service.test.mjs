@@ -162,3 +162,93 @@ test('newScenario: copies simStart and simEnd from fromScenario', () => {
   assert.strictEqual(created.simStart, fromScenario.simStart);
   assert.strictEqual(created.simEnd,   fromScenario.simEnd);
 });
+
+test('newScenario: params is empty array when fromScenario has no getParamSchema', () => {
+  const pb = makePrebuilt('alpha');  // no scenarioClass → getParamSchema() returns []
+  const { registry, service } = makeStack({ prebuiltScenarios: [pb] });
+  const created = service.newScenario(registry.getActive());
+  assert.ok(Array.isArray(created.params));
+  assert.strictEqual(created.params.length, 0);
+});
+
+test('newScenario: pre-populates params from scenarioClass.getParamSchema()', () => {
+  const fakeSchema = [
+    { key: 'monthlyExpenses', label: 'Monthly Expenses', type: 'Number', group: 'Expenses', defaultValue: 6000 },
+    { key: 'retirementDate',  label: 'Retirement Date',  type: 'Date',   group: 'People',   defaultValue: '2040-01-01' },
+    { key: 'reinvest',        label: 'Reinvest',         type: 'Boolean', group: 'People',  defaultValue: false },
+  ];
+  const scenarioClass = { getParamSchema: () => fakeSchema };
+  const pb = new PrebuiltScenario({
+    id: 'test', label: 'Test', order: 1, factory: jest.fn(), scenarioClass,
+  });
+  const { registry, service } = makeStack({ prebuiltScenarios: [pb] });
+  const created = service.newScenario(registry.getActive());
+  assert.strictEqual(created.params.length, 3);
+  assert.deepStrictEqual(created.params[0], { name: 'monthlyExpenses', label: 'Monthly Expenses', type: 'Number', group: 'Expenses', value: 6000 });
+  assert.deepStrictEqual(created.params[1], { name: 'retirementDate',  label: 'Retirement Date',  type: 'Date',   group: 'People',  value: '2040-01-01' });
+  assert.deepStrictEqual(created.params[2], { name: 'reinvest',        label: 'Reinvest',         type: 'Boolean', group: 'People', value: false });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// _getParams() — typed param conversion
+// ═════════════════════════════════════════════════════════════════════════════
+
+test('_getParams: converts Number params to flat object', () => {
+  setStorageData({
+    lastUsed: 'u:0',
+    scenarios: [{ name: 'S', params: [{ name: 'drift', type: 'Number', value: 0.07 }] }],
+  });
+  const { service } = makeStack({ prebuiltScenarios: [makePrebuilt('alpha')] });
+  // Access via createActiveScenario to observe what the factory receives
+  const pb = service._registry.get('p:alpha');
+  service.createActiveScenario();
+  const callArgs = pb.factory.mock.calls[0][0];
+  assert.strictEqual(callArgs.drift, 0.07);
+});
+
+test('_getParams: converts Date params to Date objects', () => {
+  setStorageData({
+    lastUsed: 'u:0',
+    scenarios: [{
+      name: 'S', scenarioId: 'p:alpha',
+      params: [{ name: 'primaryRetirementDate', type: 'Date', value: '2040-01-01' }],
+    }],
+  });
+  const pb = makePrebuilt('alpha');
+  const { service } = makeStack({ prebuiltScenarios: [pb] });
+  service.createActiveScenario();
+  const callArgs = pb.factory.mock.calls[0][0];
+  assert.ok(callArgs.primaryRetirementDate instanceof Date, 'Date param should be converted to Date');
+  assert.strictEqual(callArgs.primaryRetirementDate.toISOString().slice(0, 10), '2040-01-01');
+});
+
+test('_getParams: Boolean params remain as boolean values', () => {
+  setStorageData({
+    lastUsed: 'u:0',
+    scenarios: [{
+      name: 'S', scenarioId: 'p:alpha',
+      params: [{ name: 'reinvest', type: 'Boolean', value: true }],
+    }],
+  });
+  const pb = makePrebuilt('alpha');
+  const { service } = makeStack({ prebuiltScenarios: [pb] });
+  service.createActiveScenario();
+  const callArgs = pb.factory.mock.calls[0][0];
+  assert.strictEqual(callArgs.reinvest, true);
+});
+
+test('_getParams: empty Date value does not produce an Invalid Date', () => {
+  setStorageData({
+    lastUsed: 'u:0',
+    scenarios: [{
+      name: 'S', scenarioId: 'p:alpha',
+      params: [{ name: 'retirementDate', type: 'Date', value: '' }],
+    }],
+  });
+  const pb = makePrebuilt('alpha');
+  const { service } = makeStack({ prebuiltScenarios: [pb] });
+  service.createActiveScenario();
+  const callArgs = pb.factory.mock.calls[0][0];
+  // Empty date value should pass through as empty string (falsy guard in _getParams)
+  assert.strictEqual(callArgs.retirementDate, '');
+});

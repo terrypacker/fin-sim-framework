@@ -45,9 +45,14 @@ export class ScenarioService {
 
   /**
    * Create a new user scenario based on fromScenario (copies dates and scenarioId).
+   * If the parent prebuilt scenario exposes a param schema, the new scenario's
+   * params array is pre-populated with schema defaults so they are immediately
+   * available for editing, saving, and MonteCarlo use.
    */
   newScenario(fromScenario) {
     const newId = `u:${this._registry.getNextUserScenarioId()}`;
+    const schema = fromScenario?.scenarioClass?.getParamSchema?.() ?? [];
+    const params = schema.map(s => ({ name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue }));
     const scenario = {
       id:           newId,
       name:         'New Scenario',
@@ -61,7 +66,7 @@ export class ScenarioService {
       actions:      [],
       reducers:     [],
       initialState: {},
-      params:       [],
+      params,
     };
     this._registry.save(scenario, true);
     return scenario;
@@ -109,7 +114,10 @@ export class ScenarioService {
   _getParams(scenario) {
     const params = scenario?.params;
     if (!params?.length) return {};
-    return Object.fromEntries(params.map(p => [p.name, p.value]));
+    return Object.fromEntries(params.map(p => {
+      const value = p.type === 'Date' && p.value ? new Date(p.value) : p.value;
+      return [p.name, value];
+    }));
   }
 
    _getInitialState(scenario) {

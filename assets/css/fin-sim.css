@@ -1158,10 +1158,51 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 
 
 /* ── SCENARIO TAB: param rows ── */
-.param-row { display: flex; gap: 4px; align-items: center; padding: 2px 4px; }
-.param-row input  { flex: 1; min-width: 0; }
-.param-row select { flex: 0 0 72px; }
-.param-row .btn-warn { flex: 0 0 auto; }
+.param-row { display: flex; gap: 4px; align-items: flex-end; padding: 2px 4px; }
+.param-field { flex: 1; min-width: 0; }
+.param-type-select { flex: 0 0 72px; align-self: flex-end; }
+.param-row .btn-warn { flex: 0 0 auto; align-self: flex-end; margin-bottom: 1px; }
+.param-group-header { font-size: 0.75em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent, #60a5fa); padding: 6px 4px 2px; border-top: 1px solid var(--border, #333); margin-top: 4px; }
+.param-group-header:first-child { border-top: none; margin-top: 0; }
+
+.param-row input,
+.param-row select,
+.param-row textarea {
+  flex: .5;
+  width: 100%;
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 4px 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+}
+
+.param-row textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.param-row input:focus,
+.param-row select:focus,
+.param-row textarea:focus {
+  border-color: var(--amber-dim);
+  outline: none;
+}
+
+.param-row input:disabled  {
+  background-color:var(--bg-muted);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.param-row select:disabled  {
+  background-color:var(--bg-muted);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
 
 .sim-modal-overlay {
   position:fixed;

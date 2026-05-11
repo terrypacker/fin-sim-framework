@@ -43,6 +43,7 @@ import { MonthlyWagesHandler } from './finance/handlers/monthly-wages-handler.js
 import { OutOfFundsHandler } from './finance/handlers/out-of-funds-handler.js';
 import { UsSavingsInterestMonthlyHandler } from './finance/handlers/us-savings-interest-handler.js';
 import { JournalReportingService } from './finance/journal-reporting-service.js';
+import { ownershipFractions, splitByOwnership, accumulateByOwnership } from './finance/ownership-utils.js';
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
 import { Person } from './finance/person.js';
@@ -96,7 +97,7 @@ import { Graph } from './graph/graph.js';
 import { SimGraphNode } from './graph/sim-graph-node.js';
 import { QueryApi } from './query/query-api.js';
 import { BaseScenario } from './scenarios/base-scenario.js';
-import { INTL_RETIREMENT_DEFAULTS, IntlRetirementScenario } from './scenarios/intl-retirement-scenario.js';
+import { INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, IntlRetirementScenario } from './scenarios/intl-retirement-scenario.js';
 import { PrebuiltScenario } from './scenarios/prebuilt-scenario.js';
 import { ScenarioRegistry } from './scenarios/scenario-registry.js';
 import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
@@ -333,6 +334,9 @@ export const Finance = {
   OutOfFundsHandler,
   UsSavingsInterestMonthlyHandler,
   JournalReportingService,
+  ownershipFractions,
+  splitByOwnership,
+  accumulateByOwnership,
   buildMonthPeriod,
   buildUsCalendarYear,
   buildAuFiscalYear,
@@ -394,6 +398,7 @@ export const Finance = {
 export const Scenarios = {
   BaseScenario,
   INTL_RETIREMENT_DEFAULTS,
+  INTL_RETIREMENT_PARAM_SCHEMA,
   IntlRetirementScenario,
   PrebuiltScenario,
   ScenarioRegistry,

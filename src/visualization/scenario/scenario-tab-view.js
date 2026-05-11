@@ -168,34 +168,88 @@ export class ScenarioTabView {
     container.innerHTML = '';
     if (!scenario?.params?.length) return;
 
+    let currentGroup = null;
+
     scenario.params.forEach((param, i) => {
+      // ── Group header ──────────────────────────────────────────────────────
+      if (param.group && param.group !== currentGroup) {
+        currentGroup = param.group;
+        const header = document.createElement('div');
+        header.className = 'param-group-header';
+        header.textContent = param.group;
+        container.appendChild(header);
+      }
+
       const row = document.createElement('div');
       row.className = 'param-row';
 
-      const nameInput = document.createElement('input');
-      nameInput.placeholder = 'name';
-      nameInput.value = param.name;
-      nameInput.addEventListener('input', () => { param.name = nameInput.value; });
+      // ── node-field: label + value input ───────────────────────────────────
+      const field = document.createElement('div');
+      field.className = 'node-field param-field';
 
+      const labelEl = document.createElement('label');
+      labelEl.textContent = param.label ?? param.name;
+      if (param.label) labelEl.title = param.name;
+      field.appendChild(labelEl);
+
+      // For user-defined params (no label), also provide an editable name input above the value
+      if (!param.label) {
+        const nameInput = document.createElement('input');
+        nameInput.placeholder = 'key';
+        nameInput.value = param.name;
+        nameInput.addEventListener('input', () => {
+          param.name = nameInput.value;
+          labelEl.textContent = nameInput.value;
+        });
+        field.appendChild(nameInput);
+      }
+
+      // ── Value input — type-appropriate control ────────────────────────────
+      let valueInput;
+      if (param.type === 'Boolean') {
+        valueInput = document.createElement('select');
+        ['true', 'false'].forEach(v => {
+          const opt = document.createElement('option');
+          opt.value = v; opt.textContent = v;
+          valueInput.appendChild(opt);
+        });
+        valueInput.value = String(param.value ?? 'false');
+        valueInput.addEventListener('change', () => { param.value = valueInput.value === 'true'; });
+      } else if (param.type === 'Date') {
+        valueInput = document.createElement('input');
+        valueInput.type = 'date';
+        const iso = param.value instanceof Date
+          ? param.value.toISOString().slice(0, 10)
+          : String(param.value ?? '').slice(0, 10);
+        valueInput.value = iso;
+        valueInput.addEventListener('change', () => { param.value = valueInput.value; });
+      } else {
+        valueInput = document.createElement('input');
+        valueInput.placeholder = 'value';
+        valueInput.value = String(param.value ?? '');
+        valueInput.addEventListener('input', () => {
+          const raw = valueInput.value;
+          param.value = param.type === 'Number' ? parseFloat(raw) : raw;
+        });
+      }
+      field.appendChild(valueInput);
+      row.appendChild(field);
+
+      // ── Type select ───────────────────────────────────────────────────────
       const typeSelect = document.createElement('select');
-      ['Number', 'String', 'Boolean'].forEach(t => {
+      ['Number', 'String', 'Boolean', 'Date'].forEach(t => {
         const opt = document.createElement('option');
         opt.value = t; opt.textContent = t;
         typeSelect.appendChild(opt);
       });
       typeSelect.value = param.type ?? 'Number';
-      typeSelect.addEventListener('change', () => { param.type = typeSelect.value; });
-
-      const valueInput = document.createElement('input');
-      valueInput.placeholder = 'value';
-      valueInput.value = String(param.value ?? '');
-      valueInput.addEventListener('input', () => {
-        const raw = valueInput.value;
-        if      (param.type === 'Number')  param.value = parseFloat(raw);
-        else if (param.type === 'Boolean') param.value = raw === 'true';
-        else                               param.value = raw;
+      typeSelect.addEventListener('change', () => {
+        param.type = typeSelect.value;
+        this._renderParamsList(scenario);
       });
+      row.appendChild(typeSelect);
 
+      // ── Delete button ─────────────────────────────────────────────────────
       const delBtn = document.createElement('button');
       delBtn.className   = 'btn btn-warn btn-sm';
       delBtn.textContent = '✕';
@@ -203,11 +257,8 @@ export class ScenarioTabView {
         scenario.params.splice(i, 1);
         this._renderParamsList(scenario);
       });
-
-      row.appendChild(nameInput);
-      row.appendChild(typeSelect);
-      row.appendChild(valueInput);
       row.appendChild(delBtn);
+
       container.appendChild(row);
     });
   }

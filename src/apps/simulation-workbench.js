@@ -38,17 +38,19 @@ const CHART_SERIES = [
  */
 const PREBUILT_SCENARIOS = [
   new PrebuiltScenario({
-    id:       'intl-retirement',
-    label:    'International Retirement',
-    order:    1,
-    prebuilt: true,
-    active:   true,
-    simStart: '2026-01-01',
-    simEnd:   '2041-01-01',
-    factory:  (_params, _initialState, simStart, simEnd) => new IntlRetirementScenario({
+    id:            'intl-retirement',
+    label:         'International Retirement',
+    order:         1,
+    prebuilt:      true,
+    active:        true,
+    simStart:      '2026-01-01',
+    simEnd:        '2041-01-01',
+    scenarioClass: IntlRetirementScenario,
+    factory:  (params, _initialState, simStart, simEnd) => new IntlRetirementScenario({
       context: ServiceRegistry.getInstance().simulationContext,
-      simStart: simStart,
-      simEnd: simEnd
+      params,
+      simStart,
+      simEnd,
     }),
   }),
   new PrebuiltScenario({

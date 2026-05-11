@@ -187,3 +187,139 @@ test('updateSelectOption: updates the text of the currently selected option', ()
   const sel = document.getElementById('scenarioSelect');
   assert.strictEqual(sel.options[sel.selectedIndex].textContent, 'Renamed');
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// _renderParamsList — typed param rendering
+// ═════════════════════════════════════════════════════════════════════════════
+
+test('_renderParamsList: renders nothing when params is empty', () => {
+  const view = new ScenarioTabView();
+  view._renderParamsList({ params: [] });
+  assert.strictEqual(document.getElementById('paramsList').innerHTML, '');
+});
+
+test('_renderParamsList: Number param renders a text input with numeric value', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'monthlyExpenses', type: 'Number', value: 6000 }] };
+  view._renderParamsList(scenario);
+  const inputs = document.querySelectorAll('#paramsList input');
+  assert.ok(inputs.length >= 1);
+  const valueInput = [...inputs].find(el => el.value === '6000');
+  assert.ok(valueInput, 'expected an input with value 6000');
+});
+
+test('_renderParamsList: editing Number input updates param.value as a number', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'drift', type: 'Number', value: 0.05 }] };
+  view._renderParamsList(scenario);
+  const valueInput = [...document.querySelectorAll('#paramsList input')].find(el => el.value === '0.05');
+  assert.ok(valueInput);
+  valueInput.value = '0.07';
+  valueInput.dispatchEvent(new Event('input'));
+  assert.strictEqual(scenario.params[0].value, 0.07);
+});
+
+test('_renderParamsList: Date param renders an <input type="date">', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'primaryRetirementDate', type: 'Date', value: '2040-01-01' }] };
+  view._renderParamsList(scenario);
+  const dateInputs = document.querySelectorAll('#paramsList input[type="date"]');
+  assert.strictEqual(dateInputs.length, 1);
+  assert.strictEqual(dateInputs[0].value, '2040-01-01');
+});
+
+test('_renderParamsList: editing Date input stores ISO string in param.value', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'primaryRetirementDate', type: 'Date', value: '2040-01-01' }] };
+  view._renderParamsList(scenario);
+  const dateInput = document.querySelector('#paramsList input[type="date"]');
+  dateInput.value = '2038-06-15';
+  dateInput.dispatchEvent(new Event('change'));
+  assert.strictEqual(scenario.params[0].value, '2038-06-15');
+});
+
+test('_renderParamsList: Boolean param renders a select with true/false options', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'reinvest', type: 'Boolean', value: false }] };
+  view._renderParamsList(scenario);
+  const rows = document.querySelectorAll('#paramsList .param-row');
+  assert.strictEqual(rows.length, 1);
+  // Should have two selects: type select + boolean value select
+  const selects = rows[0].querySelectorAll('select');
+  const boolSelect = [...selects].find(s => [...s.options].some(o => o.value === 'true'));
+  assert.ok(boolSelect, 'expected a boolean value select');
+  assert.strictEqual(boolSelect.value, 'false');
+});
+
+test('_renderParamsList: editing Boolean select stores boolean in param.value', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'reinvest', type: 'Boolean', value: false }] };
+  view._renderParamsList(scenario);
+  const rows = document.querySelectorAll('#paramsList .param-row');
+  const selects = rows[0].querySelectorAll('select');
+  const boolSelect = [...selects].find(s => [...s.options].some(o => o.value === 'true'));
+  boolSelect.value = 'true';
+  boolSelect.dispatchEvent(new Event('change'));
+  assert.strictEqual(scenario.params[0].value, true);
+});
+
+test('_renderParamsList: schema param with label shows a <label> with the label text and key as title', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'monthlyExpenses', label: 'Monthly Expenses', type: 'Number', value: 6000 }] };
+  view._renderParamsList(scenario);
+  const label = document.querySelector('#paramsList .node-field label');
+  assert.ok(label, 'expected a <label> inside .node-field');
+  assert.strictEqual(label.textContent, 'Monthly Expenses');
+  assert.strictEqual(label.title, 'monthlyExpenses');
+});
+
+test('_renderParamsList: schema param without label shows editable name input', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'customParam', type: 'Number', value: 42 }] };
+  view._renderParamsList(scenario);
+  const nameInput = [...document.querySelectorAll('#paramsList input')].find(el => el.value === 'customParam');
+  assert.ok(nameInput, 'expected an editable name input');
+});
+
+test('_renderParamsList: group headers appear once per group', () => {
+  const view = new ScenarioTabView();
+  const scenario = {
+    params: [
+      { name: 'a', type: 'Number', group: 'People', value: 1 },
+      { name: 'b', type: 'Number', group: 'People', value: 2 },
+      { name: 'c', type: 'Number', group: 'Rates',  value: 3 },
+    ],
+  };
+  view._renderParamsList(scenario);
+  const headers = document.querySelectorAll('#paramsList .param-group-header');
+  assert.strictEqual(headers.length, 2);
+  assert.strictEqual(headers[0].textContent, 'People');
+  assert.strictEqual(headers[1].textContent, 'Rates');
+});
+
+test('_renderParamsList: delete button removes param and re-renders', () => {
+  const view = new ScenarioTabView();
+  const scenario = {
+    params: [
+      { name: 'a', type: 'Number', value: 1 },
+      { name: 'b', type: 'Number', value: 2 },
+    ],
+  };
+  view._renderParamsList(scenario);
+  const delBtns = document.querySelectorAll('#paramsList .btn-warn');
+  assert.strictEqual(delBtns.length, 2);
+  delBtns[0].click();
+  assert.strictEqual(scenario.params.length, 1);
+  assert.strictEqual(scenario.params[0].name, 'b');
+  assert.strictEqual(document.querySelectorAll('#paramsList .param-row').length, 1);
+});
+
+test('_renderParamsList: type dropdown includes Date as an option', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'x', type: 'Number', value: 0 }] };
+  view._renderParamsList(scenario);
+  const typeSelect = document.querySelector('#paramsList .param-row select');
+  const options = [...typeSelect.options].map(o => o.value);
+  assert.ok(options.includes('Date'), 'Date should be a type option');
+  assert.ok(options.includes('Boolean'), 'Boolean should be a type option');
+});

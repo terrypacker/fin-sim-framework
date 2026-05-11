@@ -53,6 +53,19 @@ import {ServiceRegistry} from "../services/service-registry.js";
  *   }
  */
 export class BaseScenario {
+  /**
+   * Declare the typed parameters this scenario exposes for UI editing,
+   * MonteCarlo sampling, and optimization.
+   *
+   * Each entry: { key, label, type, group, defaultValue, description }
+   *   type: 'Number' | 'Date' | 'Boolean' | 'String'
+   *
+   * Subclasses override this to describe their specific param surface.
+   * @returns {Array<{key:string, label:string, type:string, group:string, defaultValue:*, description:string}>}
+   */
+  static getParamSchema() { return []; }
+  getParamSchema() { return this.constructor.getParamSchema(); }
+
   constructor({
       id,
       order = 100,
