@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { InsufficientFundsError } from '../assets/account.js';
 import { RecordBalanceAction } from '../../simulation-framework/actions.js';
+import { getUsEarlyWithdrawalRules } from '../account-rules/us/us-early-withdrawal-rules.js';
 
 /**
  * Handles the REPLENISH_SAVINGS action.
@@ -18,7 +19,8 @@ import { RecordBalanceAction } from '../../simulation-framework/actions.js';
  * Delegates to AccountService.replenishSavings, which walks accounts in the
  * same country as the target savings account (sorted by drawdownPriority) and
  * draws from each until the deficit is covered or all eligible accounts are
- * exhausted.
+ * exhausted.  Early-withdrawal-eligible accounts (Roth, IRA, 401k) are drawn
+ * in a second phase when normal sources are insufficient.
  *
  * On InsufficientFundsError (domestic accounts exhausted), chains an
  * INTL_TRANSFER_APPLY action for the remaining amount so the international
@@ -27,19 +29,21 @@ import { RecordBalanceAction } from '../../simulation-framework/actions.js';
  * Runs at PRIORITY.PRE_PROCESS so it always fires before EXPENSE_DEBIT
  * (PRIORITY.CASH_FLOW).
  *
- * @param {object} opts
+ * @param {object}   opts
  * @param {import('../../finance/services/account-service.js').AccountService} opts.accountService
+ * @param {Function} [opts.earlyWithdrawalRulesFn] - (accountType) → rules | null
  */
 export class ReplenishSavingsReducer extends Reducer {
-  static description = 'Draws from domestic investment accounts (by drawdownPriority) to cover a savings deficit; on exhaustion chains INTL_TRANSFER_APPLY for the remaining shortfall.';
+  static description = 'Draws from domestic investment accounts (by drawdownPriority) to cover a savings deficit; includes early-withdrawal-eligible accounts (with penalty) before escalating to INTL_TRANSFER_APPLY.';
 
   static actionType = 'REPLENISH_SAVINGS';
 
-  constructor({ accountService } = {}) {
+  constructor({ accountService, earlyWithdrawalRulesFn = getUsEarlyWithdrawalRules } = {}) {
     super('Replenish Savings', PRIORITY.PRE_PROCESS);
-    this.accountService = accountService;
-    this.reducedActionTypes  = ['REPLENISH_SAVINGS'];
-    this.generatedActionTypes = ['INTL_TRANSFER_APPLY', 'RECORD_BALANCE'];
+    this.accountService          = accountService;
+    this.earlyWithdrawalRulesFn  = earlyWithdrawalRulesFn;
+    this.reducedActionTypes      = ['REPLENISH_SAVINGS'];
+    this.generatedActionTypes    = ['INTL_TRANSFER_APPLY', 'RECORD_BALANCE'];
   }
 
   reduce(state, action, date) {
@@ -47,13 +51,13 @@ export class ReplenishSavingsReducer extends Reducer {
     const isAu = targetKey === 'auSavingsAccount';
 
     try {
-      const drawnKeys = this.accountService.replenishSavings(state, targetKey, deficit, date);
+      const { drawnKeys, pendingTaxActions } = this.accountService.replenishSavings(
+        state, targetKey, deficit, date, this.earlyWithdrawalRulesFn
+      );
       const balanceActions = drawnKeys.map(k => new RecordBalanceAction(`${k}.balance`, k));
-      return this.newState(state, {}, balanceActions);
+      return this.newState(state, {}, [...balanceActions, ...pendingTaxActions]);
     } catch (e) {
       if (!(e instanceof InsufficientFundsError)) throw e;
-      // Domestic accounts exhausted — request an international transfer for
-      // whatever could not be covered (e.remaining).
       return this.newState(state, {}, [{
         type:          'INTL_TRANSFER_APPLY',
         direction:     isAu ? 'US_TO_AU' : 'AU_TO_US',

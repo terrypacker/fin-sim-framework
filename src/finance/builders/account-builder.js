@@ -91,16 +91,18 @@ class SavingsAccountBuilder extends BaseAccountBuilder {
 class BaseInvestmentBuilder extends BaseAccountBuilder {
   constructor() {
     super();
-    this._contributionBasis = null; // defaults to initialValue in InvestmentAccount
-    this._earningsBasis     = 0;
-    this._loanBalance       = 0;
-    this._minimumAge        = null;
+    this._contributionBasis     = null; // defaults to initialValue in InvestmentAccount
+    this._earningsBasis         = 0;
+    this._loanBalance           = 0;
+    this._minimumAge            = null;
+    this._allowsEarlyWithdrawal = null; // null = defer to account class default
   }
 
-  contributionBasis(v) { this._contributionBasis = v; return this; }
-  earningsBasis(v)     { this._earningsBasis     = v; return this; }
-  loanBalance(v)       { this._loanBalance       = v; return this; }
-  minimumAge(v)        { this._minimumAge        = v; return this; }
+  contributionBasis(v)       { this._contributionBasis       = v; return this; }
+  earningsBasis(v)           { this._earningsBasis           = v; return this; }
+  loanBalance(v)             { this._loanBalance             = v; return this; }
+  minimumAge(v)              { this._minimumAge              = v; return this; }
+  allowsEarlyWithdrawal(v)   { this._allowsEarlyWithdrawal   = v; return this; }
 
   _investmentOpts() {
     const opts = this._baseOpts();
@@ -108,6 +110,7 @@ class BaseInvestmentBuilder extends BaseAccountBuilder {
     opts.earningsBasis = this._earningsBasis;
     opts.loanBalance   = this._loanBalance;
     if (this._minimumAge !== null) opts.minimumAge = this._minimumAge;
+    if (this._allowsEarlyWithdrawal !== null) opts.allowsEarlyWithdrawal = this._allowsEarlyWithdrawal;
     return opts;
   }
 }
@@ -142,7 +145,7 @@ class RothAccountBuilder extends BaseInvestmentBuilder {
     super();
     this._country    = 'US';
     this._currency   = USD;
-    this._minimumAge = 60;
+    this._minimumAge = 59.5;
   }
 
   build() {
@@ -211,7 +214,7 @@ export class AccountBuilder {
   /** US 401(k) employer-sponsored retirement account (minimumAge 59.5). */
   static fourOhOneK()     { return new FourOhOneKAccountBuilder();     }
 
-  /** US Roth IRA after-tax retirement account (minimumAge 60). */
+  /** US Roth IRA after-tax retirement account (minimumAge 59.5). */
   static roth()           { return new RothAccountBuilder();           }
 
   /** US Traditional IRA pre-tax retirement account (minimumAge 60). */

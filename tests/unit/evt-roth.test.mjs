@@ -14,7 +14,7 @@
  *
  * EVT-1  Roth Contribution             +contribution  out of checking  no tax
  * EVT-2  Roth Withdrawal-Contributions -contribution  into checking    no tax, no age gate
- * EVT-3  Roth Withdrawal-Earnings      -earnings      into checking    age 60 gate, 10% penalty before 60,
+ * EVT-3  Roth Withdrawal-Earnings      -earnings      into checking    age 59.5 gate, 10% penalty before 59.5,
  *                                                                       no US income tax, AU ordinary income if resident, FTC
  * EVT-4  Roth Earnings                 +earnings      stays in account no tax
  *
@@ -60,7 +60,7 @@ function buildRothSim({
   rolloverContribBasis   = 0,
   rolloverEarningsBasis  = 0,
   isAuResident           = false,
-  personBirthDate        = new Date(1966, 0, 1),   // turns 60 on 2026-01-01
+  personBirthDate        = new Date(1966, 0, 1),   // age 60 on 2026-01-01 (>= 59.5, no penalty)
 } = {}) {
   const registry = ServiceRegistry.getInstance();
   const sim = new Simulation(START_DATE, { initialState: new FinancialState({
@@ -140,7 +140,7 @@ test('EVT-2: Roth contribution withdrawal credits checking and reduces contribut
   assert.strictEqual(sim.state.rothAccount.contributionBasis, 7000);
 });
 
-test('EVT-2: Roth contribution withdrawal has no age restriction (person under 60)', () => {
+test('EVT-2: Roth contribution withdrawal has no age restriction (person under 59.5)', () => {
   // Person born 1990 — only 36 years old in 2026
   const { sim } = buildRothSim({
     initialChecking: 5000,
@@ -175,8 +175,8 @@ test('EVT-2: Roth contribution withdrawal is not a US or AU taxable event', () =
 // EVT-3: Roth Withdrawal — Earnings
 // ══════════════════════════════════════════════════════════════════════════════
 
-test('EVT-3: Roth earnings withdrawal at age 60+ has no penalty', () => {
-  // personBirthDate default = 1966-01-01, simulation date = 2026-01-15 → age 60
+test('EVT-3: Roth earnings withdrawal at age 59.5+ has no penalty', () => {
+  // personBirthDate = 1966-01-01, event date = 2026-02-01 → age 60 (>= 59.5)
   const { sim } = buildRothSim({
     initialChecking: 5000,
     rothBalance: 10000,
@@ -191,7 +191,7 @@ test('EVT-3: Roth earnings withdrawal at age 60+ has no penalty', () => {
   assert.strictEqual(sim.state.rothAccount.balance, 6000);
 });
 
-test('EVT-3: Roth earnings withdrawal before age 60 incurs 10% penalty', () => {
+test('EVT-3: Roth earnings withdrawal before age 59.5 incurs 10% penalty', () => {
   // Person born 1990 — age 36 in 2026
   const { sim } = buildRothSim({
     initialChecking: 5000,
@@ -203,6 +203,36 @@ test('EVT-3: Roth earnings withdrawal before age 60 incurs 10% penalty', () => {
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.usPenaltyYTD, 400);       // 10% of 4000
+  assert.strictEqual(sim.state.checkingAccount.balance, 8600); // 5000 + 3600 net
+});
+
+test('EVT-3: Roth earnings withdrawal at exactly age 59.5 has no penalty', () => {
+  // Born 1966-07-01: decimal age on 2026-01-01 ≈ 59.50 (>= 59.5 → no penalty)
+  const { sim } = buildRothSim({
+    initialChecking: 5000,
+    rothBalance: 10000,
+    rothEarningsBasis: 10000,
+    personBirthDate: new Date(1966, 6, 1),
+  });
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_WITHDRAWAL_EARNINGS', data: { amount: 4000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.usPenaltyYTD, 0);
+  assert.strictEqual(sim.state.checkingAccount.balance, 9000); // full amount credited
+});
+
+test('EVT-3: Roth earnings withdrawal just before age 59.5 incurs 10% penalty', () => {
+  // Born 1966-08-01: decimal age on 2026-01-01 ≈ 59.42 (< 59.5 → penalty)
+  const { sim } = buildRothSim({
+    initialChecking: 5000,
+    rothBalance: 10000,
+    rothEarningsBasis: 10000,
+    personBirthDate: new Date(1966, 7, 1),
+  });
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_WITHDRAWAL_EARNINGS', data: { amount: 4000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.usPenaltyYTD, 400);        // 10% of 4000
   assert.strictEqual(sim.state.checkingAccount.balance, 8600); // 5000 + 3600 net
 });
 

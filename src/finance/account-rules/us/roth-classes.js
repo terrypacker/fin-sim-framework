@@ -15,14 +15,10 @@ import { FieldValueAction, RecordBalanceAction } from '../../../simulation-frame
 /** Resolve the US cash pool. */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
 
-/** Returns age in whole years as of asOfDate. */
-function getAge(birthDate, asOfDate) {
-  const years = asOfDate.getUTCFullYear() - birthDate.getUTCFullYear();
-  const hadBirthday =
-    asOfDate.getUTCMonth() > birthDate.getUTCMonth() ||
-    (asOfDate.getUTCMonth() === birthDate.getUTCMonth() &&
-     asOfDate.getUTCDate() >= birthDate.getUTCDate());
-  return hadBirthday ? years : years - 1;
+/** Returns age as a decimal (years + fractional months) for the 59.5 threshold. */
+function getAgeDecimal(birthDate, asOfDate) {
+  const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
+  return (asOfDate - birthDate) / msPerYear;
 }
 
 // ─── Reducers ─────────────────────────────────────────────────────────────────
@@ -187,8 +183,8 @@ export class RothWithdrawalEarningsHandler extends HandlerEntry {
   }
 
   call({ date, state, data }) {
-    const age     = getAge(state.personBirthDate, date);
-    const penalty = age < 60 ? data.amount * 0.10 : 0;
+    const age     = getAgeDecimal(state.personBirthDate, date);
+    const penalty = age < 59.5 ? data.amount * 0.10 : 0;
     return [
       {
         type: 'ROTH_WITHDRAWAL_EARNINGS_APPLY',

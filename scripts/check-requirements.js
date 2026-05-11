@@ -27,6 +27,7 @@ const ALL_REQUIREMENTS = {
   TE:   [1,2,3,4,5,6,7,8],
   AR:   [1,2,3,4,5,6,7,8,9,10,11],
   INFL: [1,2,3,4,5],
+  EW:   [1,2,3,4,5,6,7,8,9],
 };
 
 // Collect all test-file content
@@ -49,7 +50,7 @@ function collectTestContent() {
 // Pattern:  test('EVT-3: ...')  or  test("AR-11: ...")
 function extractCoveredIds(content) {
   const covered = new Map(); // "EVT-3" -> count
-  const re = /test\s*\(\s*['"`](EVT|TE|AR|INFL)-(\d+)\s*:/g;
+  const re = /test\s*\(\s*['"`](EVT|TE|AR|INFL|EW)-(\d+)\s*:/g;
   let m;
   while ((m = re.exec(content)) !== null) {
     const key = `${m[1]}-${m[2]}`;
