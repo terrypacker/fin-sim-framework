@@ -144,10 +144,16 @@ import { AccountsView } from './visualization/accounts/accounts-view.js';
 import { ChartController } from './visualization/chart/chart-controller.js';
 import { ChartPresenter } from './visualization/chart/chart-presenter.js';
 import { ChartView } from './visualization/chart/chart-view.js';
+import { ActionDefinitionList } from './visualization/components/action-definition-list.js';
+import { ActionEditor } from './visualization/components/action-editor.js';
 import { BaseComponent } from './visualization/components/base-component.js';
+import { BaseNodeEditor } from './visualization/components/base-node-editor.js';
+import { EventEditor } from './visualization/components/event-editor.js';
 import { GraphNodeFilterMultiSelect } from './visualization/components/graph-node-filter-multi-select.js';
 import { GraphRenderer } from './visualization/components/graph-renderer.js';
+import { HandlerEditor } from './visualization/components/handler-editor.js';
 import { MapFilterMultiSelect } from './visualization/components/map-filter-multi-select.js';
+import { ReducerEditor } from './visualization/components/reducer-editor.js';
 import { GraphBuilderController } from './visualization/graph-builder/graph-builder-controller.js';
 import { GraphBuilderPresenter } from './visualization/graph-builder/graph-builder-presenter.js';
 import { GraphBuilderView } from './visualization/graph-builder/graph-builder-view.js';
@@ -500,10 +506,16 @@ export const Visualization = {
   ChartController,
   ChartPresenter,
   ChartView,
+  ActionDefinitionList,
+  ActionEditor,
   BaseComponent,
+  BaseNodeEditor,
+  EventEditor,
   GraphNodeFilterMultiSelect,
   GraphRenderer,
+  HandlerEditor,
   MapFilterMultiSelect,
+  ReducerEditor,
   GraphBuilderController,
   GraphBuilderPresenter,
   GraphBuilderView,
