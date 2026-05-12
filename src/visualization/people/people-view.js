@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import {BaseComponent} from "../components/base-component.js";
+
 /**
  * PeopleView — pure DOM layer for the People sidebar panel.
  *
@@ -18,8 +20,9 @@
  * No business logic.  Communicates outward via callback properties set by
  * PeoplePresenter: onSave, onDelete, onEdit, onCancel.
  */
-export class PeopleView {
+export class PeopleView extends BaseComponent {
   constructor() {
+    super(); //I am the root component here
     /** @type {function({id,name,birthDate,citizen,lifeExpectancy,socialSecurityMonthly,monthlyWage,retirementDate})|null} */
     this.onSave   = null;
     /** @type {function(string)|null} */

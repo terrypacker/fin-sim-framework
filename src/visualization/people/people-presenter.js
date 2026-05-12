@@ -76,4 +76,8 @@ export class PeoplePresenter {
     this._view.renderList(people);
     if (this.onPeopleChanged) this.onPeopleChanged(people);
   }
+
+  destroy() {
+    this._view.destroy();
+  }
 }
