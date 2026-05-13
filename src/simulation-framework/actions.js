@@ -178,9 +178,13 @@ export class ScriptedAction extends FieldValueAction {
     return this._fn;
   }
 
+  _compileExecute(state, date, sourceEvent, handlerContext) {
+    return this._compile()(state, date, sourceEvent, handlerContext, this);
+  }
+
   transform(state, {date, sourceEvent, handlerContext, me}) {
     try {
-      return this._compile()(state, date, sourceEvent, handlerContext, this);
+      return this._compileExecute(state, date, sourceEvent, handlerContext);
     } catch (e) {
       console.error('ScriptedAction runtime error:', e);
     }

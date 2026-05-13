@@ -524,10 +524,14 @@ export class ScriptedReducer extends FieldReducer {
     return this._fn;
   }
 
+  _compileAndExecute(state, action, date) {
+    return this._compile()(state, action, date);
+  }
+
   reduce(state, action, date) {
     let result;
     try {
-      result = this._compile()(state, action, date);
+      result = this._compileAndExecute(state, action, date);
     } catch (e) {
       console.error('ScriptedReducer runtime error:', e);
       return this.newState(state);

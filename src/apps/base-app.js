@@ -136,12 +136,7 @@ export class BaseApp extends BaseComponent {
         this.openTab({ currentTarget: this.eventsTabHeader }, 'left-events', 'left-col-sim');
       }
     });
-    /*
-    //TODO This should be put into the builder-presenter too
-    this.configPresenter._graphRenderer.registerNodeClickListener(() =>
-        this.openTab({ currentTarget: this.eventsTabHeader }, 'left-events', 'left-col-sim')
-    );
-    */
+
     //TODO This should be put into the builder-presenter too
     // Breakpoint listener: delegate to animator once it is created.
     this.configPresenter._graphRenderer.registerBreakpointChangeListener((node) => {

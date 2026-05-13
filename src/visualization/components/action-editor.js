@@ -138,18 +138,15 @@ export class ActionEditor extends BaseNodeEditor {
               stateBefore: {},
             };
 
-            //First compile it, collect the error message
-            new Function('state', 'date', 'sourceEvent', 'handlerContext', 'me', scriptAction.script);
-
-            const result = scriptAction.transform(state, {
-              date: now,
+            const result = scriptAction._compileExecute(state,
+              now,
               sourceEvent,
-              handlerContext,
-            });
-
+              handlerContext);
+            resultDiv.classList.remove('code-error');
             resultDiv.innerText = JSON.stringify(result, null, 2);
           } catch (e) {
             resultDiv.innerText = `Error: ${e.message}`;
+            resultDiv.classList.add('code-error');
           }
 
           resultDiv.style.display = 'block';

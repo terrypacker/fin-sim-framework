@@ -73,7 +73,7 @@ export class GraphBuilderView extends BaseComponent {
   }
 
   editNode(node) {
-    this.destroy();
+    //TODO You don't want to destroy the view, just the editor this.destroy();
     this._canvas.innerHTML = '';
 
     if (!node) {

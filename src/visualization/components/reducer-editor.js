@@ -149,14 +149,12 @@ export class ReducerEditor extends BaseNodeEditor {
             const state = {};
             const action = new FieldValueAction('TEST', 'test action', 'field', 10);
 
-            //Ensure the script compiles:
-            new Function('state', 'action', 'date', reducer._script);
-
-            const result = reducer.reduce(state, action, new Date());
-
+            const result = reducer._compileAndExecute(state, action, new Date());
+            resultDiv.classList.remove('code-error');
             resultDiv.innerText = JSON.stringify(result, null, 2);
           } catch (e) {
             resultDiv.innerText = `Error: ${e.message}`;
+            resultDiv.classList.add('code-error');
           }
 
           resultDiv.style.display = 'block';
