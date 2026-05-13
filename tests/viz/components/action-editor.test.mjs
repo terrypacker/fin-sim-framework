@@ -11,33 +11,15 @@
 import { jest } from '@jest/globals';
 
 import { ActionEditor } from '../../../src/visualization/components/action-editor.js';
-import { loadHtml } from '../../helpers/viz-utils.js';
+import { loadHtml, makeMockGraphRenderer, makeMockContainer } from '../../helpers/viz-utils.js';
+import {
+  ActionBuilder
+} from "../../../src/simulation-framework/builders/action-builder.js";
+import {
+  DEFAULT_ACTIONS,
+  ScriptedAction
+} from "../../../src/simulation-framework/actions.js";
 
-function makeMockGraphRenderer() {
-  return {
-    relayoutAll: jest.fn(),
-    _graphQueryApi: {
-      getRelated: jest.fn(() => []),
-    },
-  };
-}
-
-function makeMockActionNode(overrides = {}) {
-  return {
-    id: 'action1',
-    name: 'Deposit Funds',
-    type: 'ACCOUNT_DEPOSIT',
-    actionClass: 'Action',
-    getDescription: jest.fn(() => 'Test description'),
-    ...overrides,
-  };
-}
-
-function makeMockContainer() {
-  const container = document.createElement('div');
-  document.body.appendChild(container);
-  return container;
-}
 
 describe('ActionEditor', () => {
 
@@ -45,15 +27,22 @@ describe('ActionEditor', () => {
     loadHtml('../../index.html');
   });
 
-  function makeEditor(nodeOverrides = {}) {
-
+  function makeEditor(actionNode = makeAmountAction()) {
     return new ActionEditor({
       parent: null,
       container: makeMockContainer(),
       graphRenderer: makeMockGraphRenderer(),
-      node: makeMockActionNode(nodeOverrides),
+      node: actionNode,
     });
   }
+
+  function makeAmountAction() {
+    return ActionBuilder.amount()
+    .type('ADD_CASH')
+    .name('Credit')
+    .value(500).build();
+  }
+
 
   test('constructs without error', () => {
     expect(() => makeEditor()).not.toThrow();
@@ -66,11 +55,11 @@ describe('ActionEditor', () => {
 
     expect(
         editor._container.querySelector('[data-id="name"]').value,
-    ).toBe('Deposit Funds');
+    ).toBe('Credit');
 
     expect(
         editor._container.querySelector('[data-id="type"]').value,
-    ).toBe('ACCOUNT_DEPOSIT');
+    ).toBe('ADD_CASH');
   });
 
   test('renders action class select options', () => {
@@ -86,9 +75,10 @@ describe('ActionEditor', () => {
   });
 
   test('renders selected action class', () => {
-    const editor = makeEditor({
-      actionClass: 'FieldAction',
-    });
+    const fieldAction = ActionBuilder.fieldAction(DEFAULT_ACTIONS.RECORD_METRIC)
+    .name('test name')
+    .fieldName('balance').build()
+    const editor = makeEditor(fieldAction);
 
     editor.render();
 
@@ -101,6 +91,7 @@ describe('ActionEditor', () => {
 
   test('calls onActionClassChange when class changes', () => {
     const editor = makeEditor();
+    editor._node.id = 'action1';
 
     editor.onActionClassChange = jest.fn();
 
@@ -123,10 +114,7 @@ describe('ActionEditor', () => {
   });
 
   test('renders AmountAction config', () => {
-    const editor = makeEditor({
-      actionClass: 'AmountAction',
-      value: 42,
-    });
+    const editor = makeEditor();
 
     editor.render();
 
@@ -135,14 +123,14 @@ describe('ActionEditor', () => {
     );
 
     expect(valueInput).not.toBeNull();
-    expect(valueInput.value).toBe('42');
+    expect(valueInput.value).toBe('500');
   });
 
   test('renders FieldAction config', () => {
-    const editor = makeEditor({
-      actionClass: 'FieldAction',
-      fieldName: 'balance',
-    });
+    const fieldAction = ActionBuilder.fieldAction(DEFAULT_ACTIONS.RECORD_METRIC)
+      .name('test name')
+      .fieldName('balance').build()
+    const editor = makeEditor(fieldAction);
 
     editor.render();
 
@@ -155,11 +143,11 @@ describe('ActionEditor', () => {
   });
 
   test('renders FieldValueAction config', () => {
-    const editor = makeEditor({
-      actionClass: 'FieldValueAction',
-      fieldName: 'balance',
-      value: 100,
-    });
+    const fieldValueAction = ActionBuilder.fieldValueAction(DEFAULT_ACTIONS.RECORD_METRIC)
+      .name('Metric')
+      .fieldName('balance')
+      .value(100).build();
+    const editor = makeEditor(fieldValueAction);
 
     editor.render();
 
@@ -176,11 +164,12 @@ describe('ActionEditor', () => {
   });
 
   test('renders ScriptedAction config', () => {
-    const editor = makeEditor({
-      actionClass: 'ScriptedAction',
-      fieldName: 'balance',
-      script: 'return 123;',
-    });
+    const scriptedAction = new ScriptedAction(
+        'SCRIPTED', 'scripted name',
+        'balance',
+        'return 123;'
+    );
+    const editor = makeEditor(scriptedAction);
 
     editor.render();
 
@@ -194,6 +183,7 @@ describe('ActionEditor', () => {
   });
 
   test('calls onFieldChange for text fields', () => {
+
     const editor = makeEditor({
       actionClass: 'FieldAction',
       fieldName: 'balance',
@@ -219,10 +209,7 @@ describe('ActionEditor', () => {
   });
 
   test('parses numeric value fields', () => {
-    const editor = makeEditor({
-      actionClass: 'AmountAction',
-      value: 1,
-    });
+    const editor = makeEditor();
 
     editor.onFieldChange = jest.fn();
 
@@ -244,10 +231,8 @@ describe('ActionEditor', () => {
   });
 
   test('sets numeric value to null when empty', () => {
-    const editor = makeEditor({
-      actionClass: 'AmountAction',
-      value: 1,
-    });
+
+    const editor = makeEditor();
 
     editor.onFieldChange = jest.fn();
 

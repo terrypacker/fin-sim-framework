@@ -139,7 +139,7 @@ export class ActionEditor extends BaseNodeEditor {
             };
 
             //First compile it, collect the error message
-            const _fn = new Function('state', 'date', 'sourceEvent', 'handlerContext', 'me', scriptAction.script);
+            new Function('state', 'date', 'sourceEvent', 'handlerContext', 'me', scriptAction.script);
 
             const result = scriptAction.transform(state, {
               date: now,

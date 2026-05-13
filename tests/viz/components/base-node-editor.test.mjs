@@ -9,18 +9,23 @@
  */
 import { jest }            from '@jest/globals';
 import { BaseNodeEditor } from "../../../src/visualization/components/base-node-editor.js";
+import { makeMockContainer } from '../../helpers/viz-utils.js';
 
 describe('BaseNodeEditor', () => {
 
   class TestEditor extends BaseNodeEditor {
-    render() {}
+    render() {
+      const div = document.createElement('div');
+      this.mount(div);
+    }
   }
 
   function makeEditor() {
-    const root = document.createElement('div');
+    const container = makeMockContainer();
 
     return new TestEditor({
-      root,
+      parent: null,
+      container: container,
       graphRenderer: {
         relayoutAll: jest.fn()
       }
@@ -34,15 +39,17 @@ describe('BaseNodeEditor', () => {
   test('cleanup removes listeners', () => {
     const editor = makeEditor();
 
+    editor.render();
+
     const button = document.createElement('button');
     const handler = jest.fn();
 
-    editor.addDisposableListener(button, 'click', handler);
+    editor.listen(button, 'click', handler);
 
     button.click();
     expect(handler).toHaveBeenCalledTimes(1);
 
-    editor.cleanup();
+    editor.destroy();
 
     button.click();
     expect(handler).toHaveBeenCalledTimes(1);

@@ -38,7 +38,7 @@ export class BaseNodeEditor extends BaseComponent {
   }
 
   mount(el) {
-    this.unmount();
+    this.destroy();
 
     this._rootEl = el;
 
@@ -46,12 +46,13 @@ export class BaseNodeEditor extends BaseComponent {
     this.decorate(el);
   }
 
-  unmount() {
+  destroy() {
     if (this._rootEl) {
-      this.destroy();
+      super.destroy();
       this._rootEl = null;
     }
   }
+
 
   renderRoot(el) {
     this._container.replaceChildren(el);
