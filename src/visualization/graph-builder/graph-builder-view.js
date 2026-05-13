@@ -158,6 +158,7 @@ export class GraphBuilderView extends BaseComponent {
       ['+ Series', 'event', 'Series'],
       ['+ One-Off', 'event', 'OneOff'],
       ['+ Handler', 'handler', null],
+      ['+ Action', 'action', null],
       ['+ Reducer', 'reducer', null],
     ].forEach(([label, kind, subtype]) => {
       const btn = document.createElement('button');

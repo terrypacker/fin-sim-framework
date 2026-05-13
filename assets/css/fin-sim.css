@@ -851,6 +851,22 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   animation: bp-pulse 1s ease-in-out infinite;
 }
 
+.action-definition-row {
+  display:flex;
+  flex-wrap:wrap;
+  gap:4px;
+  align-items:flex-start;
+  margin-bottom:6px;
+  padding:6px;
+  border:1px solid var(--border,#ccc);
+  border-radius:4px;
+}
+
+.form-control-med {
+  width: auto;
+  flex: 0.9;
+}
+
 /* Domain-type badge — replaces the <select> when the node's class is not in
    the registered registry (e.g. SuperContributionApplyReducer).  Read-only. */
 .type-badge {

@@ -87,6 +87,7 @@ export class ReducerEditor extends BaseNodeEditor {
 
     const list = new ActionDefinitionList({
       parent: this,
+      countSpan: el.querySelector('#reducer-generated-actions-count'),
       container: el.querySelector('#reducer-generated-actions'),
       node,
     });

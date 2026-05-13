@@ -56,6 +56,7 @@ export class HandlerEditor extends BaseNodeEditor {
 
     const list = new ActionDefinitionList({
       parent: this,
+      countSpan: el.querySelector('#handler-action-count'),
       container: el.querySelector('#handler-actions'),
       node,
     });
