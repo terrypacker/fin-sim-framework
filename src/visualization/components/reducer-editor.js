@@ -148,6 +148,9 @@ export class ReducerEditor extends BaseNodeEditor {
             const state = {};
             const action = new FieldValueAction('TEST', 'test action', 'field', 10);
 
+            //Ensure the script compiles:
+            new Function('state', 'action', 'date', reducer._script);
+
             const result = reducer.reduce(state, action, new Date());
 
             resultDiv.innerText = JSON.stringify(result, null, 2);
