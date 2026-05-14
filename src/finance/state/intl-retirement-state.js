@@ -24,9 +24,11 @@ export class InternationalRetirementFinancialState extends SimulationState {
       //People
     primary, spouse,
       //Accounts
-    usSavingsAccount, fixedIncomeAccount, stockAccount,
+    usSavingsAccount, fixedIncomeAccount, usStockAccount,
     iraAccount, k401Account, rothAccount,
     auSavingsAccount, auStockAccount, superAccount,
+      // Spouse retirement accounts
+    spouseRothAccount, spouseIraAccount, spouseK401Account, spouseSuperAccount,
     exchangeRateUsdToAud,
     intlTransferFeeUsd,
     inflationRates,
@@ -43,7 +45,7 @@ export class InternationalRetirementFinancialState extends SimulationState {
     //US Accounts
     this._assignAccount('usSavingsAccount', usSavingsAccount);
     this._assignAccount('fixedIncomeAccount', fixedIncomeAccount);
-    this._assignAccount('stockAccount', stockAccount);
+    this._assignAccount('usStockAccount', usStockAccount);
     this._assignAccount('iraAccount', iraAccount);
     this._assignAccount('k401Account', k401Account);
     this._assignAccount('rothAccount', rothAccount);
@@ -52,6 +54,12 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this._assignAccount('auSavingsAccount', auSavingsAccount);
     this._assignAccount('auStockAccount', auStockAccount);
     this._assignAccount('superAccount', superAccount);
+
+    // Spouse retirement accounts
+    this._assignAccount('spouseRothAccount', spouseRothAccount);
+    this._assignAccount('spouseIraAccount', spouseIraAccount);
+    this._assignAccount('spouseK401Account', spouseK401Account);
+    this._assignAccount('spouseSuperAccount', spouseSuperAccount);
 
     //TODO Move to FX When available.
     this.exchangeRateUsdToAud = exchangeRateUsdToAud;

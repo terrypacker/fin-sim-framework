@@ -138,9 +138,10 @@ export class IraEarningsApplyReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const ia = state.iraAccount;
+    const key = action.stateKey ?? 'iraAccount';
+    const ia = state[key];
     return this.newState(state, {
-      iraAccount: {
+      [key]: {
         ...ia,
         balance:       ia.balance       + action.amount,
         earningsBasis: ia.earningsBasis + action.amount,

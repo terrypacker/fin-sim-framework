@@ -48,7 +48,7 @@ export class ReplenishSavingsReducer extends Reducer {
 
   reduce(state, action, date) {
     const { deficit, targetKey } = action;
-    const isAu = targetKey === 'auSavingsAccount';
+    const isAu = state[targetKey]?.country === 'AU';
 
     try {
       const { drawnKeys, pendingTaxActions } = this.accountService.replenishSavings(

@@ -84,6 +84,7 @@ export class Account extends Asset {
    * @param {object} [opts]
    * @param {string|null}   [opts.id=null]               - Assigned by AccountService; null until registered
    * @param {string}        [opts.name='']               - Display name for UI
+   * @param {string|null}   [opts.role=null]             - Semantic role (ACCOUNT_ROLES value); used by StateRegistry lookups
    * @param {string|null}   [opts.type=null]             - Account type discriminator (ACCOUNT_TYPE value)
    * @param {string}        [opts.ownershipType='sole']  - 'sole' | 'joint' (inherited from Asset)
    * @param {string|null}   [opts.ownerId=null]          - Person id of primary owner (inherited from Asset)
@@ -94,6 +95,7 @@ export class Account extends Asset {
    */
   constructor(initialValue = 0, opts = {}) {
     super(opts.name ?? '', { ...opts, kind: 'account' });
+    this.role           = opts.role           ?? null;
     this.type           = opts.type           ?? null;
     this.balance        = initialValue;
     this.minimumBalance = opts.minimumBalance ?? 0;

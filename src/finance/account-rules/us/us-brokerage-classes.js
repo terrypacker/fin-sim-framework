@@ -105,9 +105,9 @@ export class StockContributionApplyReducer extends Reducer {
 
   reduce(state, action) {
     this.accountService.transaction(usCash(state), -action.amount, null);
-    const sa = state.stockAccount;
+    const sa = state.usStockAccount;
     return this.newState(state, {
-      stockAccount: {
+      usStockAccount: {
         ...sa,
         balance:           sa.balance           + action.amount,
         contributionBasis: sa.contributionBasis + action.amount,
@@ -132,11 +132,11 @@ export class StockDividendApplyReducer extends Reducer {
 
   reduce(state, action) {
     const { amount, isAuResident } = action;
-    const sa = state.stockAccount;
+    const sa = state.usStockAccount;
     return this.newState(
       state,
       {
-        stockAccount: {
+        usStockAccount: {
           ...sa,
           balance:           sa.balance           + amount,
           contributionBasis: sa.contributionBasis + amount,
@@ -159,9 +159,9 @@ export class StockEarningsApplyReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const sa = state.stockAccount;
+    const sa = state.usStockAccount;
     return this.newState(state, {
-      stockAccount: {
+      usStockAccount: {
         ...sa,
         balance:       sa.balance       + action.amount,
         earningsBasis: sa.earningsBasis + action.amount,
@@ -189,14 +189,14 @@ export class StockWithdrawalApplyReducer extends Reducer {
     const { salePrice, costBasis, isAuResident } = action;
     const gain = Math.max(0, salePrice - costBasis);
     this.accountService.transaction(usCash(state), salePrice, null);
-    const sa = state.stockAccount;
+    const sa = state.usStockAccount;
     const newBalance  = sa.balance - salePrice;
     const newEarnings = Math.max(0, sa.earningsBasis - gain);
     const newContrib  = newBalance - newEarnings;
     return this.newState(
       state,
       {
-        stockAccount: {
+        usStockAccount: {
           ...sa,
           balance:           newBalance,
           contributionBasis: newContrib,
@@ -273,7 +273,7 @@ export class StockContributionHandler extends HandlerEntry {
   call({ data }) {
     return [
       { type: 'STOCK_CONTRIBUTION_APPLY', amount: data.amount },
-      new RecordBalanceAction('stockAccount.balance', 'stockAccount'),
+      new RecordBalanceAction('usStockAccount.balance', 'usStockAccount'),
     ];
   }
 }
@@ -290,7 +290,7 @@ export class StockDividendHandler extends HandlerEntry {
   call({ data, state }) {
     return [
       { type: 'STOCK_DIVIDEND_APPLY', amount: data.amount, isAuResident: state.isAuResident },
-      new RecordBalanceAction('stockAccount.balance', 'stockAccount'),
+      new RecordBalanceAction('usStockAccount.balance', 'usStockAccount'),
     ];
   }
 }
@@ -307,7 +307,7 @@ export class StockEarningsHandler extends HandlerEntry {
   call({ data }) {
     return [
       { type: 'STOCK_EARNINGS_APPLY', amount: data.amount },
-      new RecordBalanceAction('stockAccount.balance', 'stockAccount'),
+      new RecordBalanceAction('usStockAccount.balance', 'usStockAccount'),
     ];
   }
 }
@@ -329,7 +329,7 @@ export class StockWithdrawalHandler extends HandlerEntry {
         costBasis:    data.costBasis,
         isAuResident: state.isAuResident,
       },
-      new RecordBalanceAction('stockAccount.balance', 'stockAccount'),
+      new RecordBalanceAction('usStockAccount.balance', 'usStockAccount'),
     ];
   }
 }

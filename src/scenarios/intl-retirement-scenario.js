@@ -43,6 +43,7 @@ import {
 import {
   InternationalRetirementFinancialState
 } from "../finance/state/intl-retirement-state.js";
+import { ACCOUNT_ROLES } from '../finance/state/account-roles.js';
 
 /**
  * Default parameters for the International Retirement scenario.
@@ -78,6 +79,14 @@ export const INTL_RETIREMENT_DEFAULTS = {
   iraGrowthRate:    0.07,
   k401GrowthRate:   0.07,
   usStockGrowthRate: 0.05,
+
+  // Spouse retirement accounts (US)
+  spouseRothBalance:  40_000,  spouseRothBasis:  30_000,  spouseRothGrowthRate:  0.07,
+  spouseIraBalance:  100_000,  spouseIraBasis:   75_000,  spouseIraGrowthRate:   0.07,
+  spouseK401Balance: 150_000,  spouseK401Basis: 100_000,  spouseK401GrowthRate:  0.07,
+
+  // Spouse retirement account (AU)
+  spouseSuperBalance: 125_000,  spouseSuperBasis: 90_000,  spouseSuperGrowthRate: 0.07,
 
   // AU accounts
   auSavingsBalance:     50_000,
@@ -206,6 +215,58 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     type: 'Number', group: 'AU Account Balances',
     defaultValue: INTL_RETIREMENT_DEFAULTS.auStockBalance,
     description: 'Starting AU brokerage stock balance (MC)',
+  },
+
+  // ── Spouse Account Balances ────────────────────────────────────────────────
+  {
+    key: 'spouseRothBalance', label: 'Spouse Roth IRA Balance (USD)',
+    type: 'Number', group: 'Spouse Account Balances',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseRothBalance,
+    description: 'Starting Roth IRA balance for spouse (MC)',
+  },
+  {
+    key: 'spouseIraBalance', label: 'Spouse Traditional IRA Balance (USD)',
+    type: 'Number', group: 'Spouse Account Balances',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseIraBalance,
+    description: 'Starting Traditional IRA balance for spouse (MC)',
+  },
+  {
+    key: 'spouseK401Balance', label: 'Spouse 401(k) Balance (USD)',
+    type: 'Number', group: 'Spouse Account Balances',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseK401Balance,
+    description: 'Starting 401(k) balance for spouse (MC)',
+  },
+  {
+    key: 'spouseSuperBalance', label: 'Spouse Superannuation Balance (AUD)',
+    type: 'Number', group: 'Spouse Account Balances',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseSuperBalance,
+    description: 'Starting superannuation balance for spouse (MC)',
+  },
+
+  // ── Spouse Account Rates ───────────────────────────────────────────────────
+  {
+    key: 'spouseRothGrowthRate', label: 'Spouse Roth IRA Growth Rate',
+    type: 'Number', group: 'Spouse Account Rates',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseRothGrowthRate,
+    description: 'Annual growth rate for spouse Roth IRA (MC)',
+  },
+  {
+    key: 'spouseIraGrowthRate', label: 'Spouse Traditional IRA Growth Rate',
+    type: 'Number', group: 'Spouse Account Rates',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseIraGrowthRate,
+    description: 'Annual growth rate for spouse Traditional IRA (MC)',
+  },
+  {
+    key: 'spouseK401GrowthRate', label: 'Spouse 401(k) Growth Rate',
+    type: 'Number', group: 'Spouse Account Rates',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseK401GrowthRate,
+    description: 'Annual growth rate for spouse 401(k) (MC)',
+  },
+  {
+    key: 'spouseSuperGrowthRate', label: 'Spouse Super Growth Rate',
+    type: 'Number', group: 'Spouse Account Rates',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseSuperGrowthRate,
+    description: 'Annual growth rate for spouse superannuation (MC)',
   },
 
   // ── US Account Rates ───────────────────────────────────────────────────────
@@ -386,20 +447,24 @@ export class IntlRetirementScenario extends BaseScenario {
     // ── US accounts ───────────────────────────────────────────────────────────
     const usSavingsAccount = new Account(p.initialUsSavings, {
       name:          'US Savings',
+      role:          ACCOUNT_ROLES.US_SAVINGS,
       ownershipType: 'joint',
+      ownerId:       primary.id,
       minimumBalance: p.usSavingsMinBalance,
       country:       'US',
       currency:      USD,
     });
     const fixedIncomeAccount = new Account(p.fixedIncomeBalance, {
       name:             'Fixed Income',
+      role:             ACCOUNT_ROLES.FIXED_INCOME,
       country:          'US',
       currency:         USD,
       ownerId:          primary.id,
       drawdownPriority: 1,
     });
-    const stockAccount = new InvestmentAccount(p.stockBalance, {
+    const usStockAccount = new InvestmentAccount(p.stockBalance, {
       name:             'US Stock',
+      role:             ACCOUNT_ROLES.US_STOCK,
       contributionBasis: p.stockBasis,
       country:          'US',
       currency:         USD,
@@ -408,6 +473,7 @@ export class IntlRetirementScenario extends BaseScenario {
     });
     const iraAccount = new TraditionalIRAAccount(p.iraBalance, {
       name:             'Traditional IRA',
+      role:             ACCOUNT_ROLES.IRA,
       contributionBasis: p.iraBasis,
       country:          'US',
       currency:         USD,
@@ -416,6 +482,7 @@ export class IntlRetirementScenario extends BaseScenario {
     });
     const k401Account = new FourOhOneKAccount(p.k401Balance, {
       name:             '401(k)',
+      role:             ACCOUNT_ROLES.K401,
       contributionBasis: p.k401Basis,
       country:          'US',
       currency:         USD,
@@ -424,6 +491,7 @@ export class IntlRetirementScenario extends BaseScenario {
     });
     const rothAccount = new RothAccount(p.rothBalance, {
       name:             'Roth IRA',
+      role:             ACCOUNT_ROLES.ROTH,
       contributionBasis: p.rothBasis,
       country:          'US',
       currency:         USD,
@@ -433,13 +501,17 @@ export class IntlRetirementScenario extends BaseScenario {
 
     // ── AU accounts ───────────────────────────────────────────────────────────
     const auSavingsAccount = new Account(p.auSavingsBalance, {
-      name:     'AU Savings',
-      country:  'AU',
+      name:          'AU Savings',
+      role:          ACCOUNT_ROLES.AU_SAVINGS,
+      ownershipType: 'joint',
+      ownerId:       primary.id,
+      country:       'AU',
       minimumBalance: p.auSavingsMinBalance,
-      currency: AUD,
+      currency:      AUD,
     });
     const auStockAccount = new InvestmentAccount(p.auStockBalance, {
       name:             'AU Stock',
+      role:             ACCOUNT_ROLES.AU_STOCK,
       contributionBasis: p.auStockBasis,
       country:          'AU',
       currency:         AUD,
@@ -448,6 +520,7 @@ export class IntlRetirementScenario extends BaseScenario {
     });
     const superAccount = new InvestmentAccount(p.superBalance, {
       name:             'Superannuation',
+      role:             ACCOUNT_ROLES.SUPER,
       contributionBasis: p.superBasis,
       country:          'AU',
       currency:         AUD,
@@ -456,19 +529,60 @@ export class IntlRetirementScenario extends BaseScenario {
       minimumAge:       60,
     });
 
+    // ── Spouse retirement accounts ─────────────────────────────────────────────
+    const spouseRothAccount = new RothAccount(p.spouseRothBalance, {
+      name:             'Roth IRA (Spouse)',
+      role:             ACCOUNT_ROLES.ROTH,
+      contributionBasis: p.spouseRothBasis,
+      country:          'US',
+      currency:         USD,
+      ownerId:          spouse.id,
+      drawdownPriority: 8,
+    });
+    const spouseIraAccount = new TraditionalIRAAccount(p.spouseIraBalance, {
+      name:             'Traditional IRA (Spouse)',
+      role:             ACCOUNT_ROLES.IRA,
+      contributionBasis: p.spouseIraBasis,
+      country:          'US',
+      currency:         USD,
+      ownerId:          spouse.id,
+      drawdownPriority: 6,
+    });
+    const spouseK401Account = new FourOhOneKAccount(p.spouseK401Balance, {
+      name:             '401(k) (Spouse)',
+      role:             ACCOUNT_ROLES.K401,
+      contributionBasis: p.spouseK401Basis,
+      country:          'US',
+      currency:         USD,
+      ownerId:          spouse.id,
+      drawdownPriority: 7,
+    });
+    const spouseSuperAccount = new InvestmentAccount(p.spouseSuperBalance, {
+      name:             'Superannuation (Spouse)',
+      role:             ACCOUNT_ROLES.SUPER,
+      contributionBasis: p.spouseSuperBasis,
+      country:          'AU',
+      currency:         AUD,
+      ownerId:          spouse.id,
+      drawdownPriority: 3,
+      minimumAge:       60,
+    });
+
     // ── Store for loadDefaults() ──────────────────────────────────────────────
     this._people = { primary, spouse };
     this._accounts = {
-      usSavingsAccount, fixedIncomeAccount, stockAccount,
+      usSavingsAccount, fixedIncomeAccount, usStockAccount,
       iraAccount, k401Account, rothAccount,
       auSavingsAccount, auStockAccount, superAccount,
+      spouseRothAccount, spouseIraAccount, spouseK401Account, spouseSuperAccount,
     };
 
     return new InternationalRetirementFinancialState({
       primary, spouse,
-      usSavingsAccount, fixedIncomeAccount, stockAccount,
+      usSavingsAccount, fixedIncomeAccount, usStockAccount,
       iraAccount, k401Account, rothAccount,
       auSavingsAccount, auStockAccount, superAccount,
+      spouseRothAccount, spouseIraAccount, spouseK401Account, spouseSuperAccount,
       exchangeRateUsdToAud: p.exchangeRateUsdToAud,
       intlTransferFeeUsd:   p.intlTransferFeeUsd,
       inflationRates:       { US: p.usInflationRate, AU: p.auInflationRate },
@@ -512,8 +626,10 @@ export class IntlRetirementScenario extends BaseScenario {
    * Called by ScenarioTabPresenter.afterBuildSim() when no saved config exists.
    */
   loadDefaults() {
-    const { eventService, handlerService, reducerService, accountService, personService } = ServiceRegistry.getInstance();
+    const { eventService, handlerService, reducerService, accountService, personService, stateRegistry } = ServiceRegistry.getInstance();
     const p = this._params;
+    const primaryId = this._people.primary.id;
+    const spouseId  = this._people.spouse.id;
 
     // ── TaxService phase 2: register handlers/reducers through the service layer
     this._taxService.registerHandlersAndReducers(ServiceRegistry.getInstance(), ['US', 'AU']);
@@ -606,22 +722,31 @@ export class IntlRetirementScenario extends BaseScenario {
     // ── Handlers ──────────────────────────────────────────────────────────────
 
     const expensesHandler = new MonthlyExpensesHandler({
+      stateRegistry,
       monthlyExpenses: p.monthlyExpenses,
+      usRole: ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
+      auRole: ACCOUNT_ROLES.AU_SAVINGS, auOwnerId: primaryId,
     });
     expensesHandler.handledEvents.push(expensesEvent);
     handlerService.register(expensesHandler);
 
-    const wagesHandler = new MonthlyWagesHandler();
+    const wagesHandler = new MonthlyWagesHandler({ stateRegistry });
     wagesHandler.handledEvents.push(wagesEvent);
     handlerService.register(wagesHandler);
 
     const usSavingsIntHandler = new UsSavingsInterestMonthlyHandler({
+      stateRegistry,
+      role:         ACCOUNT_ROLES.US_SAVINGS,
+      ownerId:      primaryId,
       interestRate: p.usSavingsInterestRate,
     });
     usSavingsIntHandler.handledEvents.push(usSavingsIntEvent);
     handlerService.register(usSavingsIntHandler);
 
     const dividendHandler = new DividendScheduledHandler({
+      stateRegistry,
+      role:         ACCOUNT_ROLES.US_STOCK,
+      ownerId:      primaryId,
       dividendRate: p.stockDividendRate,
       reinvest:     p.stockDividendReinvest,
     });
@@ -629,50 +754,135 @@ export class IntlRetirementScenario extends BaseScenario {
     handlerService.register(dividendHandler);
 
     const fixedIncomeHandler = new FixedIncomeInterestHandler({
+      stateRegistry,
+      role:         ACCOUNT_ROLES.FIXED_INCOME,
+      ownerId:      primaryId,
       interestRate: p.fixedIncomeInterestRate,
     });
     fixedIncomeHandler.handledEvents.push(fixedIncomeEvent);
     handlerService.register(fixedIncomeHandler);
 
     const auSavingsHandler = new AuSavingsInterestHandler({
+      stateRegistry,
+      role:         ACCOUNT_ROLES.AU_SAVINGS,
+      ownerId:      primaryId,
       interestRate: p.auSavingsInterestRate,
     });
     auSavingsHandler.handledEvents.push(auSavingsEvent);
     handlerService.register(auSavingsHandler);
 
-    const superHandler = new SuperEarningsHandler();
+    const superHandler = new SuperEarningsHandler({
+      stateRegistry,
+      role:    ACCOUNT_ROLES.SUPER,
+      ownerId: primaryId,
+    });
     superHandler.handledEvents.push(superEvent);
     handlerService.register(superHandler);
 
-    const rothEarningsHandler = new IntlRothEarningsHandler({ growthRate: p.rothGrowthRate });
+    const rothEarningsHandler = new IntlRothEarningsHandler({
+      stateRegistry,
+      role:       ACCOUNT_ROLES.ROTH,
+      ownerId:    primaryId,
+      growthRate: p.rothGrowthRate,
+    });
     rothEarningsHandler.handledEvents.push(rothEarningsEvent);
     handlerService.register(rothEarningsHandler);
 
-    const iraEarningsHandler = new IntlIraEarningsHandler({ growthRate: p.iraGrowthRate });
+    const iraEarningsHandler = new IntlIraEarningsHandler({
+      stateRegistry,
+      role:       ACCOUNT_ROLES.IRA,
+      ownerId:    primaryId,
+      growthRate: p.iraGrowthRate,
+    });
     iraEarningsHandler.handledEvents.push(iraEarningsEvent);
     handlerService.register(iraEarningsHandler);
 
-    const k401EarningsHandler = new IntlK401EarningsHandler({ growthRate: p.k401GrowthRate });
+    const k401EarningsHandler = new IntlK401EarningsHandler({
+      stateRegistry,
+      role:       ACCOUNT_ROLES.K401,
+      ownerId:    primaryId,
+      growthRate: p.k401GrowthRate,
+    });
     k401EarningsHandler.handledEvents.push(k401EarningsEvent);
     handlerService.register(k401EarningsHandler);
 
-    const usStockEarningsHandler = new IntlUsStockEarningsHandler({ growthRate: p.usStockGrowthRate });
+    // ── Spouse retirement account handlers ────────────────────────────────────
+    const spouseSuperHandler = new SuperEarningsHandler({
+      stateRegistry,
+      role:        ACCOUNT_ROLES.SUPER,
+      ownerId:     spouseId,
+      defaultRate: p.spouseSuperGrowthRate,
+    });
+    spouseSuperHandler.handledEvents.push(superEvent);
+    handlerService.register(spouseSuperHandler);
+
+    const spouseRothEarningsHandler = new IntlRothEarningsHandler({
+      stateRegistry,
+      role:       ACCOUNT_ROLES.ROTH,
+      ownerId:    spouseId,
+      growthRate: p.spouseRothGrowthRate,
+    });
+    spouseRothEarningsHandler.handledEvents.push(rothEarningsEvent);
+    handlerService.register(spouseRothEarningsHandler);
+
+    const spouseIraEarningsHandler = new IntlIraEarningsHandler({
+      stateRegistry,
+      role:       ACCOUNT_ROLES.IRA,
+      ownerId:    spouseId,
+      growthRate: p.spouseIraGrowthRate,
+    });
+    spouseIraEarningsHandler.handledEvents.push(iraEarningsEvent);
+    handlerService.register(spouseIraEarningsHandler);
+
+    const spouseK401EarningsHandler = new IntlK401EarningsHandler({
+      stateRegistry,
+      role:       ACCOUNT_ROLES.K401,
+      ownerId:    spouseId,
+      growthRate: p.spouseK401GrowthRate,
+    });
+    spouseK401EarningsHandler.handledEvents.push(k401EarningsEvent);
+    handlerService.register(spouseK401EarningsHandler);
+
+    const usStockEarningsHandler = new IntlUsStockEarningsHandler({
+      stateRegistry,
+      role:       ACCOUNT_ROLES.US_STOCK,
+      ownerId:    primaryId,
+      growthRate: p.usStockGrowthRate,
+    });
     usStockEarningsHandler.handledEvents.push(usStockEarningsEvent);
     handlerService.register(usStockEarningsHandler);
 
-    const auStockEarningsHandler = new IntlAuStockEarningsHandler({ growthRate: p.auStockGrowthRate });
+    const auStockEarningsHandler = new IntlAuStockEarningsHandler({
+      stateRegistry,
+      role:       ACCOUNT_ROLES.AU_STOCK,
+      ownerId:    primaryId,
+      growthRate: p.auStockGrowthRate,
+    });
     auStockEarningsHandler.handledEvents.push(auStockEarningsEvent);
     handlerService.register(auStockEarningsHandler);
 
-    const auStockDividendHandler = new IntlAuStockDividendHandler({ dividendRate: p.auStockDividendRate });
+    const auStockDividendHandler = new IntlAuStockDividendHandler({
+      stateRegistry,
+      role:         ACCOUNT_ROLES.AU_STOCK,
+      ownerId:      primaryId,
+      dividendRate: p.auStockDividendRate,
+    });
     auStockDividendHandler.handledEvents.push(auStockDividendEvent);
     handlerService.register(auStockDividendHandler);
 
     // User-triggered transfer handlers (no event series — fired on-demand)
-    const intlToUsHandler = new IntlTransferToUsHandler();
+    const intlToUsHandler = new IntlTransferToUsHandler({
+      stateRegistry,
+      auRole: ACCOUNT_ROLES.AU_SAVINGS, auOwnerId: primaryId,
+      usRole: ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
+    });
     handlerService.register(intlToUsHandler);
 
-    const intlToAuHandler = new IntlTransferToAuHandler();
+    const intlToAuHandler = new IntlTransferToAuHandler({
+      stateRegistry,
+      usRole: ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
+      auRole: ACCOUNT_ROLES.AU_SAVINGS, auOwnerId: primaryId,
+    });
     handlerService.register(intlToAuHandler);
 
     // CHANGE_RESIDENCY is scheduled directly in buildSim() (one-off)
@@ -699,13 +909,23 @@ export class IntlRetirementScenario extends BaseScenario {
     const intlTransferReducer = new IntlTransferApplyReducer({ accountService: svc });
     reducerService.register(intlTransferReducer);
 
-    const usSavingsIntCreditReducer = new UsSavingsInterestCreditReducer({ accountService: svc });
+    const usSavingsIntCreditReducer = new UsSavingsInterestCreditReducer({
+      accountService: svc,
+      stateRegistry,
+      role:    ACCOUNT_ROLES.US_SAVINGS,
+      ownerId: primaryId,
+    });
     reducerService.register(usSavingsIntCreditReducer);
 
-    const stockDividendCashReducer = new StockDividendCashApplyReducer({ accountService: svc });
+    const stockDividendCashReducer = new StockDividendCashApplyReducer({
+      accountService: svc,
+      stateRegistry,
+      role:    ACCOUNT_ROLES.US_SAVINGS,
+      ownerId: primaryId,
+    });
     reducerService.register(stockDividendCashReducer);
 
-    const changeResidencyApplyReducer = new ChangeResidencyApplyReducer({ accountService: svc });
+    const changeResidencyApplyReducer = new ChangeResidencyApplyReducer({ accountService: svc, stateRegistry });
     reducerService.register(changeResidencyApplyReducer);
 
     const setOutOfFundsDateReducer = new SetOutOfFundsDateReducer();

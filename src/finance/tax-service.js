@@ -161,7 +161,7 @@ export class TaxService {
    * @param {string[]} countryCodes
    */
   registerHandlersAndReducers(serviceRegistry, countryCodes) {
-    const { reducerService, handlerService, accountService, eventService } = serviceRegistry;
+    const { reducerService, handlerService, accountService, eventService, stateRegistry } = serviceRegistry;
 
     const periodAdvanceHandler = new PeriodAdvanceHandler();
 
@@ -228,7 +228,7 @@ export class TaxService {
     // TAX_SETTLE handler + reducers
     handlerService.register(taxSettleHandler);
     reducerService.register(new TaxSettleApplyReducer());
-    reducerService.register(new TaxPaymentDebitReducer({ accountService }));
+    reducerService.register(new TaxPaymentDebitReducer({ accountService, stateRegistry }));
 
     // Metric/balance reducers
     const taxDebitReducer = new ArrayReducer('Tax Debit');
