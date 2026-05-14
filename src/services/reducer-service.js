@@ -136,11 +136,13 @@ export class ReducerService extends BaseService {
    * Create and register a UsSavingsInterestCreditReducer.
    * @param {import('../finance/services/account-service.js').AccountService} accountService
    * @param {object} [opts]
-   * @param {string} [opts.accountKey='usSavingsAccount']
+   * @param {import('../finance/services/state-registry.js').StateRegistry} [opts.stateRegistry]
+   * @param {string} [opts.role]
+   * @param {string|null} [opts.ownerId]
    * @param {string} [opts.name='US Savings Interest Credit']
    */
-  createUsSavingsInterestCreditReducer(accountService, { accountKey = 'usSavingsAccount', name = 'US Savings Interest Credit' } = {}) {
-    const item = new UsSavingsInterestCreditReducer({ accountService, accountKey });
+  createUsSavingsInterestCreditReducer(accountService, { stateRegistry, role, ownerId = null, name = 'US Savings Interest Credit' } = {}) {
+    const item = new UsSavingsInterestCreditReducer({ accountService, stateRegistry, role, ownerId });
     item.name = name;
     item.id   = this._generateId('r');
     this._register(item);
@@ -205,11 +207,13 @@ export class ReducerService extends BaseService {
    * Create and register a StockDividendCashApplyReducer.
    * @param {import('../finance/services/account-service.js').AccountService} accountService
    * @param {object} [opts]
-   * @param {string} [opts.accountKey='usSavingsAccount']
+   * @param {import('../finance/services/state-registry.js').StateRegistry} [opts.stateRegistry]
+   * @param {string} [opts.role]
+   * @param {string|null} [opts.ownerId]
    * @param {string} [opts.name='Stock Dividend Cash Apply']
    */
-  createStockDividendCashApplyReducer(accountService, { accountKey = 'usSavingsAccount', name = 'Stock Dividend Cash Apply' } = {}) {
-    const item = new StockDividendCashApplyReducer({ accountService, accountKey });
+  createStockDividendCashApplyReducer(accountService, { stateRegistry, role, ownerId = null, name = 'Stock Dividend Cash Apply' } = {}) {
+    const item = new StockDividendCashApplyReducer({ accountService, stateRegistry, role, ownerId });
     item.name = name;
     item.id   = this._generateId('r');
     this._register(item);

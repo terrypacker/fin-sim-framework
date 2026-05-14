@@ -445,7 +445,8 @@ export class ScenarioSerializer {
     // Subclass-specific params
     switch (d.__type) {
       case 'UsSavingsInterestCreditReducer':
-        d.accountKey = node.accountKey;
+        d.role    = node.role;
+        d.ownerId = node.ownerId;
         break;
       case 'ExpenseDebitReducer':
         d.usAccountKey = node.usAccountKey;
@@ -457,7 +458,8 @@ export class ScenarioSerializer {
         d.auSavingsKey = node.auSavingsKey;
         break;
       case 'StockDividendCashApplyReducer':
-        d.accountKey = node.accountKey;
+        d.role    = node.role;
+        d.ownerId = node.ownerId;
         break;
       // ChangeResidencyApplyReducer has no extra serializable config params
       case 'ChangeResidencyApplyReducer':
@@ -774,7 +776,9 @@ export class ScenarioSerializer {
       case 'UsSavingsInterestCreditReducer':
         return new FinSimLib.Finance.UsSavingsInterestCreditReducer({
           accountService: services?.accountService,
-          accountKey:     d.accountKey ?? 'usSavingsAccount',
+          stateRegistry:  services?.stateRegistry,
+          role:           d.role    ?? ACCOUNT_ROLES.US_SAVINGS,
+          ownerId:        d.ownerId ?? null,
         });
       case 'ExpenseDebitReducer':
         return new FinSimLib.Finance.ExpenseDebitReducer({
@@ -795,7 +799,9 @@ export class ScenarioSerializer {
       case 'StockDividendCashApplyReducer':
         return new FinSimLib.Finance.StockDividendCashApplyReducer({
           accountService: services?.accountService,
-          accountKey:     d.accountKey ?? 'usSavingsAccount',
+          stateRegistry:  services?.stateRegistry,
+          role:           d.role    ?? ACCOUNT_ROLES.US_SAVINGS,
+          ownerId:        d.ownerId ?? null,
         });
       case 'ChangeResidencyApplyReducer':
         return new FinSimLib.Finance.ChangeResidencyApplyReducer({

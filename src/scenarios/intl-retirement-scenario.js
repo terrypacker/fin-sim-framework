@@ -909,10 +909,20 @@ export class IntlRetirementScenario extends BaseScenario {
     const intlTransferReducer = new IntlTransferApplyReducer({ accountService: svc });
     reducerService.register(intlTransferReducer);
 
-    const usSavingsIntCreditReducer = new UsSavingsInterestCreditReducer({ accountService: svc });
+    const usSavingsIntCreditReducer = new UsSavingsInterestCreditReducer({
+      accountService: svc,
+      stateRegistry,
+      role:    ACCOUNT_ROLES.US_SAVINGS,
+      ownerId: primaryId,
+    });
     reducerService.register(usSavingsIntCreditReducer);
 
-    const stockDividendCashReducer = new StockDividendCashApplyReducer({ accountService: svc });
+    const stockDividendCashReducer = new StockDividendCashApplyReducer({
+      accountService: svc,
+      stateRegistry,
+      role:    ACCOUNT_ROLES.US_SAVINGS,
+      ownerId: primaryId,
+    });
     reducerService.register(stockDividendCashReducer);
 
     const changeResidencyApplyReducer = new ChangeResidencyApplyReducer({ accountService: svc, stateRegistry });
