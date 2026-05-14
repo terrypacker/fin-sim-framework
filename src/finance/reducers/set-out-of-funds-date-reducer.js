@@ -34,6 +34,7 @@ export class SetOutOfFundsDateReducer extends Reducer {
     return this.newState({
       ...state,
       outOfFundsDate: action.date,
+      scenarioFailed: true,
     });
   }
 }

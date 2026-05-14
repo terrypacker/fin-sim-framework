@@ -51,6 +51,8 @@ export class SimulationAnimator {
 
     this.playing = false;
     this._dashCardsdirty = false;
+
+    this._lastOutOfFundsDate = null;
   }
 
   // ── Playback ──────────────────────────────────────────────────────────────
@@ -167,6 +169,40 @@ export class SimulationAnimator {
     $('cardReducerExecutions').innerText = sim?.reducerExecutions ?? 0;
   }
 
+  // ── Failure banner ────────────────────────────────────────────────────────
+
+  _updateFailureState(stateSnapshot) {
+    const oofDate = stateSnapshot?.outOfFundsDate ?? null;
+
+    if (oofDate !== this._lastOutOfFundsDate) {
+      const banner   = $('failureBanner');
+      const dateSpan = $('failureBannerDate');
+
+      if (oofDate && !this._lastOutOfFundsDate) {
+        if (banner)   banner.style.display = '';
+        if (dateSpan) dateSpan.textContent = this._statePanelView.fmtVal(oofDate);
+        this._chartView?.addAnnotation('out_of_funds', {
+          label:    'OUT OF FUNDS',
+          date:     oofDate,
+          color:    '#f87171',
+          position: 'start',
+        });
+      } else if (!oofDate && this._lastOutOfFundsDate) {
+        if (banner) banner.style.display = 'none';
+        this._chartView?.removeAnnotation('out_of_funds');
+      }
+
+      this._lastOutOfFundsDate = oofDate;
+    }
+
+    if (oofDate) {
+      const defSpan    = $('failureBannerDeficit');
+      const monthsSpan = $('failureBannerMonths');
+      if (defSpan)    defSpan.textContent    = '$' + Math.round(stateSnapshot.cumulativeDeficit ?? 0).toLocaleString();
+      if (monthsSpan) monthsSpan.textContent = stateSnapshot.deficitMonths ?? 0;
+    }
+  }
+
   // ── Bus subscriptions ─────────────────────────────────────────────────────
 
   /** Subscribe to all simulation bus messages. Call once after scenario.buildSim(). */
@@ -191,6 +227,7 @@ export class SimulationAnimator {
       this._chartView.addSnapshot(date, metrics);
       this._statePanelView.updateStatePanel(date, stateSnapshot);
       this.updateDashCards(date);
+      this._updateFailureState(stateSnapshot);
     })
   }
 }

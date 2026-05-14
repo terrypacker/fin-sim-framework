@@ -48,10 +48,12 @@ import { ownershipFractions, splitByOwnership, accumulateByOwnership } from './f
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
 import { Person } from './finance/person.js';
+import { AccumulateDeficitReducer } from './finance/reducers/accumulate-deficit-reducer.js';
 import { ChangeResidencyApplyReducer } from './finance/reducers/change-residency-apply-reducer.js';
 import { ExpenseDebitReducer } from './finance/reducers/expense-debit-reducer.js';
 import { InflationAdjustReducer } from './finance/reducers/inflation-adjust-reducer.js';
 import { IntlTransferApplyReducer } from './finance/reducers/intl-transfer-apply-reducer.js';
+import { OutOfFundsReducer } from './finance/reducers/out-of-funds-reducer.js';
 import { ReplenishSavingsReducer } from './finance/reducers/replenish-savings-reducer.js';
 import { SetOutOfFundsDateReducer } from './finance/reducers/set-out-of-funds-date-reducer.js';
 import { StockDividendCashApplyReducer } from './finance/reducers/stock-dividend-cash-apply-reducer.js';
@@ -356,10 +358,12 @@ export const Finance = {
   PeriodRelationship,
   PeriodService,
   Person,
+  AccumulateDeficitReducer,
   ChangeResidencyApplyReducer,
   ExpenseDebitReducer,
   InflationAdjustReducer,
   IntlTransferApplyReducer,
+  OutOfFundsReducer,
   ReplenishSavingsReducer,
   SetOutOfFundsDateReducer,
   StockDividendCashApplyReducer,

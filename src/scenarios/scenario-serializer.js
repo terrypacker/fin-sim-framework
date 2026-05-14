@@ -810,6 +810,10 @@ export class ScenarioSerializer {
         });
       case 'SetOutOfFundsDateReducer':
         return new FinSimLib.Finance.SetOutOfFundsDateReducer();
+      case 'AccumulateDeficitReducer':
+        return new FinSimLib.Finance.AccumulateDeficitReducer();
+      case 'OutOfFundsReducer':
+        return new FinSimLib.Finance.OutOfFundsReducer();
       case 'InflationAdjustReducer':
         return new FinSimLib.Finance.InflationAdjustReducer();
       default:
