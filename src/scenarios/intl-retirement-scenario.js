@@ -80,6 +80,14 @@ export const INTL_RETIREMENT_DEFAULTS = {
   k401GrowthRate:   0.07,
   usStockGrowthRate: 0.05,
 
+  // Spouse retirement accounts (US)
+  spouseRothBalance:  40_000,  spouseRothBasis:  30_000,  spouseRothGrowthRate:  0.07,
+  spouseIraBalance:  100_000,  spouseIraBasis:   75_000,  spouseIraGrowthRate:   0.07,
+  spouseK401Balance: 150_000,  spouseK401Basis: 100_000,  spouseK401GrowthRate:  0.07,
+
+  // Spouse retirement account (AU)
+  spouseSuperBalance: 125_000,  spouseSuperBasis: 90_000,  spouseSuperGrowthRate: 0.07,
+
   // AU accounts
   auSavingsBalance:     50_000,
   auSavingsMinBalance:   3_000,  auSavingsInterestRate: 0.045,
@@ -207,6 +215,58 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     type: 'Number', group: 'AU Account Balances',
     defaultValue: INTL_RETIREMENT_DEFAULTS.auStockBalance,
     description: 'Starting AU brokerage stock balance (MC)',
+  },
+
+  // ── Spouse Account Balances ────────────────────────────────────────────────
+  {
+    key: 'spouseRothBalance', label: 'Spouse Roth IRA Balance (USD)',
+    type: 'Number', group: 'Spouse Account Balances',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseRothBalance,
+    description: 'Starting Roth IRA balance for spouse (MC)',
+  },
+  {
+    key: 'spouseIraBalance', label: 'Spouse Traditional IRA Balance (USD)',
+    type: 'Number', group: 'Spouse Account Balances',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseIraBalance,
+    description: 'Starting Traditional IRA balance for spouse (MC)',
+  },
+  {
+    key: 'spouseK401Balance', label: 'Spouse 401(k) Balance (USD)',
+    type: 'Number', group: 'Spouse Account Balances',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseK401Balance,
+    description: 'Starting 401(k) balance for spouse (MC)',
+  },
+  {
+    key: 'spouseSuperBalance', label: 'Spouse Superannuation Balance (AUD)',
+    type: 'Number', group: 'Spouse Account Balances',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseSuperBalance,
+    description: 'Starting superannuation balance for spouse (MC)',
+  },
+
+  // ── Spouse Account Rates ───────────────────────────────────────────────────
+  {
+    key: 'spouseRothGrowthRate', label: 'Spouse Roth IRA Growth Rate',
+    type: 'Number', group: 'Spouse Account Rates',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseRothGrowthRate,
+    description: 'Annual growth rate for spouse Roth IRA (MC)',
+  },
+  {
+    key: 'spouseIraGrowthRate', label: 'Spouse Traditional IRA Growth Rate',
+    type: 'Number', group: 'Spouse Account Rates',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseIraGrowthRate,
+    description: 'Annual growth rate for spouse Traditional IRA (MC)',
+  },
+  {
+    key: 'spouseK401GrowthRate', label: 'Spouse 401(k) Growth Rate',
+    type: 'Number', group: 'Spouse Account Rates',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseK401GrowthRate,
+    description: 'Annual growth rate for spouse 401(k) (MC)',
+  },
+  {
+    key: 'spouseSuperGrowthRate', label: 'Spouse Super Growth Rate',
+    type: 'Number', group: 'Spouse Account Rates',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseSuperGrowthRate,
+    description: 'Annual growth rate for spouse superannuation (MC)',
   },
 
   // ── US Account Rates ───────────────────────────────────────────────────────
@@ -469,12 +529,52 @@ export class IntlRetirementScenario extends BaseScenario {
       minimumAge:       60,
     });
 
+    // ── Spouse retirement accounts ─────────────────────────────────────────────
+    const spouseRothAccount = new RothAccount(p.spouseRothBalance, {
+      name:             'Roth IRA (Spouse)',
+      role:             ACCOUNT_ROLES.ROTH,
+      contributionBasis: p.spouseRothBasis,
+      country:          'US',
+      currency:         USD,
+      ownerId:          spouse.id,
+      drawdownPriority: 8,
+    });
+    const spouseIraAccount = new TraditionalIRAAccount(p.spouseIraBalance, {
+      name:             'Traditional IRA (Spouse)',
+      role:             ACCOUNT_ROLES.IRA,
+      contributionBasis: p.spouseIraBasis,
+      country:          'US',
+      currency:         USD,
+      ownerId:          spouse.id,
+      drawdownPriority: 6,
+    });
+    const spouseK401Account = new FourOhOneKAccount(p.spouseK401Balance, {
+      name:             '401(k) (Spouse)',
+      role:             ACCOUNT_ROLES.K401,
+      contributionBasis: p.spouseK401Basis,
+      country:          'US',
+      currency:         USD,
+      ownerId:          spouse.id,
+      drawdownPriority: 7,
+    });
+    const spouseSuperAccount = new InvestmentAccount(p.spouseSuperBalance, {
+      name:             'Superannuation (Spouse)',
+      role:             ACCOUNT_ROLES.SUPER,
+      contributionBasis: p.spouseSuperBasis,
+      country:          'AU',
+      currency:         AUD,
+      ownerId:          spouse.id,
+      drawdownPriority: 3,
+      minimumAge:       60,
+    });
+
     // ── Store for loadDefaults() ──────────────────────────────────────────────
     this._people = { primary, spouse };
     this._accounts = {
       usSavingsAccount, fixedIncomeAccount, usStockAccount,
       iraAccount, k401Account, rothAccount,
       auSavingsAccount, auStockAccount, superAccount,
+      spouseRothAccount, spouseIraAccount, spouseK401Account, spouseSuperAccount,
     };
 
     return new InternationalRetirementFinancialState({
@@ -482,6 +582,7 @@ export class IntlRetirementScenario extends BaseScenario {
       usSavingsAccount, fixedIncomeAccount, usStockAccount,
       iraAccount, k401Account, rothAccount,
       auSavingsAccount, auStockAccount, superAccount,
+      spouseRothAccount, spouseIraAccount, spouseK401Account, spouseSuperAccount,
       exchangeRateUsdToAud: p.exchangeRateUsdToAud,
       intlTransferFeeUsd:   p.intlTransferFeeUsd,
       inflationRates:       { US: p.usInflationRate, AU: p.auInflationRate },
@@ -528,6 +629,7 @@ export class IntlRetirementScenario extends BaseScenario {
     const { eventService, handlerService, reducerService, accountService, personService, stateRegistry } = ServiceRegistry.getInstance();
     const p = this._params;
     const primaryId = this._people.primary.id;
+    const spouseId  = this._people.spouse.id;
 
     // ── TaxService phase 2: register handlers/reducers through the service layer
     this._taxService.registerHandlersAndReducers(ServiceRegistry.getInstance(), ['US', 'AU']);
@@ -703,6 +805,43 @@ export class IntlRetirementScenario extends BaseScenario {
     });
     k401EarningsHandler.handledEvents.push(k401EarningsEvent);
     handlerService.register(k401EarningsHandler);
+
+    // ── Spouse retirement account handlers ────────────────────────────────────
+    const spouseSuperHandler = new SuperEarningsHandler({
+      stateRegistry,
+      role:        ACCOUNT_ROLES.SUPER,
+      ownerId:     spouseId,
+      defaultRate: p.spouseSuperGrowthRate,
+    });
+    spouseSuperHandler.handledEvents.push(superEvent);
+    handlerService.register(spouseSuperHandler);
+
+    const spouseRothEarningsHandler = new IntlRothEarningsHandler({
+      stateRegistry,
+      role:       ACCOUNT_ROLES.ROTH,
+      ownerId:    spouseId,
+      growthRate: p.spouseRothGrowthRate,
+    });
+    spouseRothEarningsHandler.handledEvents.push(rothEarningsEvent);
+    handlerService.register(spouseRothEarningsHandler);
+
+    const spouseIraEarningsHandler = new IntlIraEarningsHandler({
+      stateRegistry,
+      role:       ACCOUNT_ROLES.IRA,
+      ownerId:    spouseId,
+      growthRate: p.spouseIraGrowthRate,
+    });
+    spouseIraEarningsHandler.handledEvents.push(iraEarningsEvent);
+    handlerService.register(spouseIraEarningsHandler);
+
+    const spouseK401EarningsHandler = new IntlK401EarningsHandler({
+      stateRegistry,
+      role:       ACCOUNT_ROLES.K401,
+      ownerId:    spouseId,
+      growthRate: p.spouseK401GrowthRate,
+    });
+    spouseK401EarningsHandler.handledEvents.push(k401EarningsEvent);
+    handlerService.register(spouseK401EarningsHandler);
 
     const usStockEarningsHandler = new IntlUsStockEarningsHandler({
       stateRegistry,

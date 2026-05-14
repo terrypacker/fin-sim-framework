@@ -255,6 +255,7 @@ export class ScenarioSerializer {
       id:               account.id,
       name:             account.name             ?? '',
       type:             account.type             ?? null,
+      role:             account.role             ?? null,
       initialValue:     account.balance,
       ownershipType:    account.ownershipType    ?? 'sole',
       ownerId:          account.ownerId          ?? null,
@@ -631,6 +632,7 @@ export class ScenarioSerializer {
     const opts = {
       id:               d.id,
       name:             d.name             ?? '',
+      role:             d.role             ?? null,
       ownershipType:    d.ownershipType    ?? 'sole',
       ownerId:          d.ownerId          ?? null,
       minimumBalance:   d.minimumBalance   ?? 0,

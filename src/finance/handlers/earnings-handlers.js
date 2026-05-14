@@ -34,7 +34,7 @@ export class IntlRothEarningsHandler extends HandlerEntry {
     const amount   = +(balance * this.growthRate).toFixed(2);
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'ROTH_EARNINGS_APPLY', amount },
+      { type: 'ROTH_EARNINGS_APPLY', amount, stateKey },
       new RecordMetricAction('roth_earnings', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
@@ -64,7 +64,7 @@ export class IntlIraEarningsHandler extends HandlerEntry {
     const amount   = +(balance * this.growthRate).toFixed(2);
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'IRA_EARNINGS_APPLY', amount },
+      { type: 'IRA_EARNINGS_APPLY', amount, stateKey },
       new RecordMetricAction('ira_earnings', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
@@ -94,7 +94,7 @@ export class IntlK401EarningsHandler extends HandlerEntry {
     const amount   = +(balance * this.growthRate).toFixed(2);
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'K401_EARNINGS_APPLY', amount },
+      { type: 'K401_EARNINGS_APPLY', amount, stateKey },
       new RecordMetricAction('k401_earnings', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
@@ -318,7 +318,7 @@ export class SuperEarningsHandler extends HandlerEntry {
     const amount   = +(balance * rate).toFixed(2);
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'SUPER_EARNINGS_APPLY', amount },
+      { type: 'SUPER_EARNINGS_APPLY', amount, stateKey },
       new RecordMetricAction('super_earnings', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
