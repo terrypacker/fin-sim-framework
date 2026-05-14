@@ -92,6 +92,7 @@ export class Simulation {
     this.history.enableSnapshots = opts.enableSnapshots ?? true;
     this.history.snapshotInterval = opts.snapshotInterval ?? 1; // every N events
     this.debug = opts.debug ?? false;
+    this.silent = opts.silent ?? false; // when true: skip bus, clones, diffs (MC/batch mode)
     this.journal = new Journal({enabled: true});
 
     this.nextEventInstanceId = 0;
@@ -273,31 +274,33 @@ export class Simulation {
     const handlers = this.handlers.get(event.type) || [];
 
     // Capture state-before once (at true event start, not on resume).
-    const stateBefore = savedStateBefore ?? structuredClone(this.state);
+    const stateBefore = this.silent ? null : (savedStateBefore ?? structuredClone(this.state));
 
     if (startHandlerIdx === 0) {
       this.eventExecutions++;
-      const now = new Date(this.currentDate);
-      if(event.id) {
-        this.serviceBus.publish(new NodeDataBusMessage({
+      if (!this.silent) {
+        const now = new Date(this.currentDate);
+        if(event.id) {
+          this.serviceBus.publish(new NodeDataBusMessage({
+            date: now,
+            sim: this,
+            stateSnapshot: stateBefore,
+            nodeId: event.id,
+            kind: 'event',
+            meta: {reason: 'execution'},
+            data: {
+              fired: true,
+              stateChanges: []
+            }
+          }));
+        }
+        this.bus.publish(new EventStartBusMessage({
           date: now,
           sim: this,
-          stateSnapshot: stateBefore,
-          nodeId: event.id,
-          kind: 'event',
-          meta: {reason: 'execution'},
-          data: {
-            fired: true,
-            stateChanges: []
-          }
+          payload: { event, eventCount: this.eventExecutions },
+          stateSnapshot: stateBefore
         }));
       }
-      this.bus.publish(new EventStartBusMessage({
-        date: now,
-        sim: this,
-        payload: { event, eventCount: this.eventExecutions },
-        stateSnapshot: stateBefore
-      }));
     }
 
     for (let i = startHandlerIdx; i < handlers.length; i++) {
@@ -318,7 +321,7 @@ export class Simulation {
       // Past this handler's breakpoint check — clear resuming flag so subsequent
       // handlers (and their nested action/reducer loops) get checked normally.
       this.control.resuming = false;
-      const prevState = structuredClone(this.state);
+      const prevState = this.silent ? null : structuredClone(this.state);
 
       const actions = entry.call({
         sim: this,
@@ -331,29 +334,31 @@ export class Simulation {
       //TODO Review if we really want to skip these
       if (entry.name !== INTERNAL_SCHEDULING_HANDLER_NAME) {
         this.handlerExecutions++;
-        const now = new Date(this.currentDate);
-        const stateSnapshot = structuredClone(this.state);
-        if(entry.id) {
-          this.serviceBus.publish(new NodeDataBusMessage({
+        if (!this.silent) {
+          const now = new Date(this.currentDate);
+          const stateSnapshot = structuredClone(this.state);
+          if(entry.id) {
+            this.serviceBus.publish(new NodeDataBusMessage({
+              date: now,
+              sim: this,
+              stateSnapshot: stateSnapshot,
+              nodeId: entry.id,
+              kind: entry.kind,
+              meta: {reason: 'execution'},
+              data: {
+                fired: true,
+                stateChanges: diffStates(stateBefore, stateSnapshot)
+              },
+              stateBefore: prevState
+            }));
+          }
+          this.bus.publish(new EventHandledMessage({
             date: now,
             sim: this,
             stateSnapshot: stateSnapshot,
-            nodeId: entry.id,
-            kind: entry.kind,
-            meta: {reason: 'execution'},
-            data: {
-              fired: true,
-              stateChanges: diffStates(stateBefore, stateSnapshot)
-            },
-            stateBefore: prevState
+            payload: { handler: entry, event, handlerCount: this.handlerExecutions }
           }));
         }
-        this.bus.publish(new EventHandledMessage({
-          date: now,
-          sim: this,
-          stateSnapshot: stateSnapshot,
-          payload: { handler: entry, event, handlerCount: this.handlerExecutions }
-        }));
       }
 
       // Pass handlerContext so that if applyActions pauses mid-queue we know
@@ -373,31 +378,33 @@ export class Simulation {
     }
 
     // Publish the EVENT_OCCURRENCE_END message.
-    const stateSnapshot = structuredClone(this.state);
-    const now = new Date(this.currentDate);
-    if(event.id) {
-      this.serviceBus.publish(new NodeDataBusMessage({
+    if (!this.silent) {
+      const stateSnapshot = structuredClone(this.state);
+      const now = new Date(this.currentDate);
+      if(event.id) {
+        this.serviceBus.publish(new NodeDataBusMessage({
+          date: now,
+          sim: this,
+          stateSnapshot: stateSnapshot,
+          nodeId: event.id,
+          kind: 'event',
+          meta: {reason: 'execution'},
+          data: {fired: false}
+        }));
+      }
+
+      this.bus.publish(new EventEndBusMessage({
         date: now,
         sim: this,
         stateSnapshot: stateSnapshot,
-        nodeId: event.id,
-        kind: 'event',
-        meta: {reason: 'execution'},
-        data: {fired: false}
+        payload: {
+          event,
+          stateBefore,
+          stateAfter: stateSnapshot,
+          sourceEvent: event
+        }
       }));
     }
-
-    this.bus.publish(new EventEndBusMessage({
-      date: now,
-      sim: this,
-      stateSnapshot: stateSnapshot,
-      payload: {
-        event,
-        stateBefore,
-        stateAfter: stateSnapshot,
-        sourceEvent: event
-      }
-    }));
 
     //Spit out some stats
     //TODO Make this a bus message
@@ -495,10 +502,8 @@ export class Simulation {
       }
 
       //Execute action transform if it can be
-      const prevState = structuredClone(this.state);
-      const stateClone = structuredClone(this.state);
       if (action.transform) {
-        const newActions = action.transform(stateClone, {
+        const newActions = action.transform(this.state, {
           date: this.currentDate,
           sourceEvent,
           handlerContext
@@ -511,35 +516,38 @@ export class Simulation {
         }
       }
       this.actionExecutions++;
-      const now = new Date(this.currentDate);
-      const stateSnapshot = structuredClone(this.state);
-      //Special handling for ActionDefinition  see #134
-      if(action.actionId) {
-        this.serviceBus.publish(new NodeDataBusMessage({
+      if (!this.silent) {
+        const prevState = structuredClone(this.state);
+        const now = new Date(this.currentDate);
+        const stateSnapshot = structuredClone(this.state);
+        //Special handling for ActionDefinition  see #134
+        if(action.actionId) {
+          this.serviceBus.publish(new NodeDataBusMessage({
+            date: now,
+            sim: this,
+            stateSnapshot: prevState,
+            nodeId: action.actionId,
+            kind: action.kind,
+            meta: {reason: 'execution'},
+            data: {
+              fired: true,
+              stateChanges: diffStates(prevState, stateSnapshot)
+            },
+            stateBefore: prevState
+          }));
+        }
+        this.bus.publish(new ActionResultMessage({
           date: now,
           sim: this,
-          stateSnapshot: prevState,
-          nodeId: action.actionId,
-          kind: action.kind,
-          meta: {reason: 'execution'},
-          data: {
-            fired: true,
-            stateChanges: diffStates(prevState, stateSnapshot)
+          payload: {
+            action: action,
+            reducers: unwrappedReducers,
+            sourceEvent: sourceEvent,
+            actionCount: this.actionExecutions
           },
-          stateBefore: prevState
+          stateSnapshot: stateSnapshot
         }));
       }
-      this.bus.publish(new ActionResultMessage({
-        date: now,
-        sim: this,
-        payload: {
-          action: action,
-          reducers: unwrappedReducers,
-          sourceEvent: sourceEvent,
-          actionCount: this.actionExecutions
-        },
-        stateSnapshot: stateSnapshot
-      }));
 
       if (!reducers || reducers.length === 0) continue;
 
@@ -584,47 +592,49 @@ export class Simulation {
       }
       this.control.resuming = false;
 
-      const prevState = structuredClone(this.state);
+      const prevState = this.silent ? null : structuredClone(this.state);
       const result = reducerWrapper.fn(this.state, action, this.currentDate);
 
-      // Publish the REDUCER_RESULT message.
-      let stateSnapshot;
-      if (!result) {
-        stateSnapshot = prevState;
-      } else if (result.state) {
-        stateSnapshot = structuredClone(result.state);
-      } else {
-        stateSnapshot = structuredClone(result);
-      }
-
       this.reducerExecutions++;
-      const now = new Date(this.currentDate);
-      if(reducerWrapper.reducer?.id) {
-        this.serviceBus.publish(new NodeDataBusMessage({
+      if (!this.silent) {
+        // Publish the REDUCER_RESULT message.
+        let stateSnapshot;
+        if (!result) {
+          stateSnapshot = prevState;
+        } else if (result.state) {
+          stateSnapshot = structuredClone(result.state);
+        } else {
+          stateSnapshot = structuredClone(result);
+        }
+
+        const now = new Date(this.currentDate);
+        if(reducerWrapper.reducer?.id) {
+          this.serviceBus.publish(new NodeDataBusMessage({
+            date: now,
+            sim: this,
+            stateSnapshot: stateSnapshot,
+            nodeId: reducerWrapper.reducer,
+            kind: 'reducer',
+            meta: {reason: 'execution'},
+            data: {
+              fired: true,
+              stateChanges: diffStates(prevState, stateSnapshot)
+            },
+          }));
+        }
+        this.bus.publish(new ReducerResultMessage({
           date: now,
           sim: this,
           stateSnapshot: stateSnapshot,
-          nodeId: reducerWrapper.reducer,
-          kind: 'reducer',
-          meta: {reason: 'execution'},
-          data: {
-            fired: true,
-            stateChanges: diffStates(prevState, stateSnapshot)
-          },
+          payload: {
+            reducer: reducerWrapper.reducer,
+            action: action,
+            stateBefore: prevState,
+            sourceEvent: sourceEvent,
+            reducerCount: this.reducerExecutions
+          }
         }));
       }
-      this.bus.publish(new ReducerResultMessage({
-        date: now,
-        sim: this,
-        stateSnapshot: stateSnapshot,
-        payload: {
-          reducer: reducerWrapper.reducer,
-          action: action,
-          stateBefore: prevState,
-          sourceEvent: sourceEvent,
-          reducerCount: this.reducerExecutions
-        }
-      }));
 
       if (!result) continue;
 
@@ -658,28 +668,30 @@ export class Simulation {
 
       this.state = nextState;
 
-      const parentId = action.parentInstanceId ?? null;
-      const actionClone = this.cloneObjectFields(action);
-      const reducerClone = this.cloneObjectFields(reducerWrapper.reducer);
-      this.addActionNode({
-        actionClone,
-        parentId,
-        reducerClone,
-        prevState,
-        nextState,
-        sourceEvent
-      });
-
-      if (this.journal.enabled) {
-        this.journal.addEntry(new JournalEntry({
-          date: new Date(this.currentDate),
-          eventType: sourceEventType,
-          action: actionClone,
-          reducer: reducerClone,
-          stateDiff: diffStates(prevState, this.state),
-          emittedActions: structuredClone(emitted),
+      if (!this.silent) {
+        const parentId = action.parentInstanceId ?? null;
+        const actionClone = this.cloneObjectFields(action);
+        const reducerClone = this.cloneObjectFields(reducerWrapper.reducer);
+        this.addActionNode({
+          actionClone,
+          parentId,
+          reducerClone,
+          prevState,
+          nextState,
           sourceEvent
-        }));
+        });
+
+        if (this.journal.enabled) {
+          this.journal.addEntry(new JournalEntry({
+            date: new Date(this.currentDate),
+            eventType: sourceEventType,
+            action: actionClone,
+            reducer: reducerClone,
+            stateDiff: diffStates(prevState, this.state),
+            emittedActions: structuredClone(emitted),
+            sourceEvent
+          }));
+        }
       }
     }
   }

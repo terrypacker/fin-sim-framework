@@ -42,7 +42,8 @@
       "Bash(xargs ls *)",
       "Bash(xargs cat *)",
       "mcp__chrome-devtools__navigate_page",
-      "Bash(git *)"
+      "Bash(git *)",
+      "mcp__chrome-devtools__performance_stop_trace"
     ]
   },
   "hooks": {

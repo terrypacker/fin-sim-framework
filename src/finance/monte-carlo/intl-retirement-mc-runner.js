@@ -129,6 +129,7 @@ export class IntlRetirementMcRunner {
         });
         scenario.buildSim();
         scenario.loadDefaults();
+        scenario.sim.silent = true; // skip bus, clones, diffs — not needed in MC
         return scenario.sim;
       },
       evaluate: (sim) => ({
