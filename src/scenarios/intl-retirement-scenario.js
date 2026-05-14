@@ -525,8 +525,9 @@ export class IntlRetirementScenario extends BaseScenario {
    * Called by ScenarioTabPresenter.afterBuildSim() when no saved config exists.
    */
   loadDefaults() {
-    const { eventService, handlerService, reducerService, accountService, personService } = ServiceRegistry.getInstance();
+    const { eventService, handlerService, reducerService, accountService, personService, stateRegistry } = ServiceRegistry.getInstance();
     const p = this._params;
+    const primaryId = this._people.primary.id;
 
     // ── TaxService phase 2: register handlers/reducers through the service layer
     this._taxService.registerHandlersAndReducers(ServiceRegistry.getInstance(), ['US', 'AU']);
@@ -619,22 +620,31 @@ export class IntlRetirementScenario extends BaseScenario {
     // ── Handlers ──────────────────────────────────────────────────────────────
 
     const expensesHandler = new MonthlyExpensesHandler({
+      stateRegistry,
       monthlyExpenses: p.monthlyExpenses,
+      usRole: ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
+      auRole: ACCOUNT_ROLES.AU_SAVINGS, auOwnerId: primaryId,
     });
     expensesHandler.handledEvents.push(expensesEvent);
     handlerService.register(expensesHandler);
 
-    const wagesHandler = new MonthlyWagesHandler();
+    const wagesHandler = new MonthlyWagesHandler({ stateRegistry });
     wagesHandler.handledEvents.push(wagesEvent);
     handlerService.register(wagesHandler);
 
     const usSavingsIntHandler = new UsSavingsInterestMonthlyHandler({
+      stateRegistry,
+      role:         ACCOUNT_ROLES.US_SAVINGS,
+      ownerId:      primaryId,
       interestRate: p.usSavingsInterestRate,
     });
     usSavingsIntHandler.handledEvents.push(usSavingsIntEvent);
     handlerService.register(usSavingsIntHandler);
 
     const dividendHandler = new DividendScheduledHandler({
+      stateRegistry,
+      role:         ACCOUNT_ROLES.US_STOCK,
+      ownerId:      primaryId,
       dividendRate: p.stockDividendRate,
       reinvest:     p.stockDividendReinvest,
     });
@@ -642,50 +652,98 @@ export class IntlRetirementScenario extends BaseScenario {
     handlerService.register(dividendHandler);
 
     const fixedIncomeHandler = new FixedIncomeInterestHandler({
+      stateRegistry,
+      role:         ACCOUNT_ROLES.FIXED_INCOME,
+      ownerId:      primaryId,
       interestRate: p.fixedIncomeInterestRate,
     });
     fixedIncomeHandler.handledEvents.push(fixedIncomeEvent);
     handlerService.register(fixedIncomeHandler);
 
     const auSavingsHandler = new AuSavingsInterestHandler({
+      stateRegistry,
+      role:         ACCOUNT_ROLES.AU_SAVINGS,
+      ownerId:      primaryId,
       interestRate: p.auSavingsInterestRate,
     });
     auSavingsHandler.handledEvents.push(auSavingsEvent);
     handlerService.register(auSavingsHandler);
 
-    const superHandler = new SuperEarningsHandler();
+    const superHandler = new SuperEarningsHandler({
+      stateRegistry,
+      role:    ACCOUNT_ROLES.SUPER,
+      ownerId: primaryId,
+    });
     superHandler.handledEvents.push(superEvent);
     handlerService.register(superHandler);
 
-    const rothEarningsHandler = new IntlRothEarningsHandler({ growthRate: p.rothGrowthRate });
+    const rothEarningsHandler = new IntlRothEarningsHandler({
+      stateRegistry,
+      role:       ACCOUNT_ROLES.ROTH,
+      ownerId:    primaryId,
+      growthRate: p.rothGrowthRate,
+    });
     rothEarningsHandler.handledEvents.push(rothEarningsEvent);
     handlerService.register(rothEarningsHandler);
 
-    const iraEarningsHandler = new IntlIraEarningsHandler({ growthRate: p.iraGrowthRate });
+    const iraEarningsHandler = new IntlIraEarningsHandler({
+      stateRegistry,
+      role:       ACCOUNT_ROLES.IRA,
+      ownerId:    primaryId,
+      growthRate: p.iraGrowthRate,
+    });
     iraEarningsHandler.handledEvents.push(iraEarningsEvent);
     handlerService.register(iraEarningsHandler);
 
-    const k401EarningsHandler = new IntlK401EarningsHandler({ growthRate: p.k401GrowthRate });
+    const k401EarningsHandler = new IntlK401EarningsHandler({
+      stateRegistry,
+      role:       ACCOUNT_ROLES.K401,
+      ownerId:    primaryId,
+      growthRate: p.k401GrowthRate,
+    });
     k401EarningsHandler.handledEvents.push(k401EarningsEvent);
     handlerService.register(k401EarningsHandler);
 
-    const usStockEarningsHandler = new IntlUsStockEarningsHandler({ growthRate: p.usStockGrowthRate });
+    const usStockEarningsHandler = new IntlUsStockEarningsHandler({
+      stateRegistry,
+      role:       ACCOUNT_ROLES.US_STOCK,
+      ownerId:    primaryId,
+      growthRate: p.usStockGrowthRate,
+    });
     usStockEarningsHandler.handledEvents.push(usStockEarningsEvent);
     handlerService.register(usStockEarningsHandler);
 
-    const auStockEarningsHandler = new IntlAuStockEarningsHandler({ growthRate: p.auStockGrowthRate });
+    const auStockEarningsHandler = new IntlAuStockEarningsHandler({
+      stateRegistry,
+      role:       ACCOUNT_ROLES.AU_STOCK,
+      ownerId:    primaryId,
+      growthRate: p.auStockGrowthRate,
+    });
     auStockEarningsHandler.handledEvents.push(auStockEarningsEvent);
     handlerService.register(auStockEarningsHandler);
 
-    const auStockDividendHandler = new IntlAuStockDividendHandler({ dividendRate: p.auStockDividendRate });
+    const auStockDividendHandler = new IntlAuStockDividendHandler({
+      stateRegistry,
+      role:         ACCOUNT_ROLES.AU_STOCK,
+      ownerId:      primaryId,
+      dividendRate: p.auStockDividendRate,
+    });
     auStockDividendHandler.handledEvents.push(auStockDividendEvent);
     handlerService.register(auStockDividendHandler);
 
     // User-triggered transfer handlers (no event series — fired on-demand)
-    const intlToUsHandler = new IntlTransferToUsHandler();
+    const intlToUsHandler = new IntlTransferToUsHandler({
+      stateRegistry,
+      auRole: ACCOUNT_ROLES.AU_SAVINGS, auOwnerId: primaryId,
+      usRole: ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
+    });
     handlerService.register(intlToUsHandler);
 
-    const intlToAuHandler = new IntlTransferToAuHandler();
+    const intlToAuHandler = new IntlTransferToAuHandler({
+      stateRegistry,
+      usRole: ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
+      auRole: ACCOUNT_ROLES.AU_SAVINGS, auOwnerId: primaryId,
+    });
     handlerService.register(intlToAuHandler);
 
     // CHANGE_RESIDENCY is scheduled directly in buildSim() (one-off)

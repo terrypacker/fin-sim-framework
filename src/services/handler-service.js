@@ -157,16 +157,16 @@ export class HandlerService extends BaseService {
 
   /**
    * Create and register a UsSavingsInterestMonthlyHandler.
-   * Wire the handler to an event by adding the EventSeries to handler.handledEvents
-   * before calling this, or call updateHandler(id, { handledEvents: [...] }) after.
    *
-   * @param {object} [opts]
-   * @param {string} [opts.accountKey='usSavingsAccount']
+   * @param {object} opts
+   * @param {import('../finance/services/state-registry.js').StateRegistry} opts.stateRegistry
+   * @param {string} opts.role       - ACCOUNT_ROLES value for the savings account
+   * @param {string} [opts.ownerId]  - Person id (null = any owner)
    * @param {number} [opts.interestRate=0.03]
    * @param {string} [opts.name='Monthly US Savings Interest']
    */
-  createUsSavingsInterestHandler({ accountKey = 'usSavingsAccount', interestRate = 0.03, name = 'Monthly US Savings Interest' } = {}) {
-    const item = new UsSavingsInterestMonthlyHandler({ accountKey, interestRate });
+  createUsSavingsInterestHandler({ stateRegistry, role, ownerId = null, interestRate = 0.03, name = 'Monthly US Savings Interest' } = {}) {
+    const item = new UsSavingsInterestMonthlyHandler({ stateRegistry, role, ownerId, interestRate });
     item.name = name;
     item.id   = this._generateId('h');
     this._register(item);
@@ -177,14 +177,18 @@ export class HandlerService extends BaseService {
 
   /**
    * Create and register a MonthlyExpensesHandler.
-   * @param {object} [opts]
+   *
+   * @param {object} opts
+   * @param {import('../finance/services/state-registry.js').StateRegistry} opts.stateRegistry
    * @param {number} [opts.monthlyExpenses=6000]
-   * @param {string} [opts.usAccountKey='usSavingsAccount']
-   * @param {string} [opts.auAccountKey='auSavingsAccount']
+   * @param {string} opts.usRole      - ACCOUNT_ROLES value for the USD cash pool
+   * @param {string} [opts.usOwnerId]
+   * @param {string} opts.auRole      - ACCOUNT_ROLES value for the AUD cash pool
+   * @param {string} [opts.auOwnerId]
    * @param {string} [opts.name='Monthly Expenses']
    */
-  createMonthlyExpensesHandler({ monthlyExpenses = 6000, usAccountKey = 'usSavingsAccount', auAccountKey = 'auSavingsAccount', name = 'Monthly Expenses' } = {}) {
-    const item = new MonthlyExpensesHandler({ monthlyExpenses, usAccountKey, auAccountKey });
+  createMonthlyExpensesHandler({ stateRegistry, monthlyExpenses = 6000, usRole, usOwnerId = null, auRole, auOwnerId = null, name = 'Monthly Expenses' } = {}) {
+    const item = new MonthlyExpensesHandler({ stateRegistry, monthlyExpenses, usRole, usOwnerId, auRole, auOwnerId });
     item.name = name;
     item.id   = this._generateId('h');
     this._register(item);
@@ -195,13 +199,17 @@ export class HandlerService extends BaseService {
 
   /**
    * Create and register an IntlTransferToUsHandler (AUD → USD, user-triggered).
-   * @param {object} [opts]
-   * @param {string} [opts.auAccountKey='auSavingsAccount']
-   * @param {string} [opts.usAccountKey='usSavingsAccount']
+   *
+   * @param {object} opts
+   * @param {import('../finance/services/state-registry.js').StateRegistry} opts.stateRegistry
+   * @param {string} opts.auRole
+   * @param {string} [opts.auOwnerId]
+   * @param {string} opts.usRole
+   * @param {string} [opts.usOwnerId]
    * @param {string} [opts.name='International Transfer to US']
    */
-  createIntlTransferToUsHandler({ auAccountKey = 'auSavingsAccount', usAccountKey = 'usSavingsAccount', name = 'International Transfer to US' } = {}) {
-    const item = new IntlTransferToUsHandler({ auAccountKey, usAccountKey });
+  createIntlTransferToUsHandler({ stateRegistry, auRole, auOwnerId = null, usRole, usOwnerId = null, name = 'International Transfer to US' } = {}) {
+    const item = new IntlTransferToUsHandler({ stateRegistry, auRole, auOwnerId, usRole, usOwnerId });
     item.name = name;
     item.id   = this._generateId('h');
     this._register(item);
@@ -212,13 +220,17 @@ export class HandlerService extends BaseService {
 
   /**
    * Create and register an IntlTransferToAuHandler (USD → AUD, user-triggered).
-   * @param {object} [opts]
-   * @param {string} [opts.usAccountKey='usSavingsAccount']
-   * @param {string} [opts.auAccountKey='auSavingsAccount']
+   *
+   * @param {object} opts
+   * @param {import('../finance/services/state-registry.js').StateRegistry} opts.stateRegistry
+   * @param {string} opts.usRole
+   * @param {string} [opts.usOwnerId]
+   * @param {string} opts.auRole
+   * @param {string} [opts.auOwnerId]
    * @param {string} [opts.name='International Transfer to AU']
    */
-  createIntlTransferToAuHandler({ usAccountKey = 'usSavingsAccount', auAccountKey = 'auSavingsAccount', name = 'International Transfer to AU' } = {}) {
-    const item = new IntlTransferToAuHandler({ usAccountKey, auAccountKey });
+  createIntlTransferToAuHandler({ stateRegistry, usRole, usOwnerId = null, auRole, auOwnerId = null, name = 'International Transfer to AU' } = {}) {
+    const item = new IntlTransferToAuHandler({ stateRegistry, usRole, usOwnerId, auRole, auOwnerId });
     item.name = name;
     item.id   = this._generateId('h');
     this._register(item);
@@ -229,13 +241,16 @@ export class HandlerService extends BaseService {
 
   /**
    * Create and register an AuSavingsInterestHandler.
-   * @param {object} [opts]
-   * @param {string} [opts.accountKey='auSavingsAccount']
+   *
+   * @param {object} opts
+   * @param {import('../finance/services/state-registry.js').StateRegistry} opts.stateRegistry
+   * @param {string} opts.role
+   * @param {string} [opts.ownerId]
    * @param {number} [opts.interestRate=0.045]
    * @param {string} [opts.name='AU Savings Interest']
    */
-  createAuSavingsInterestHandler({ accountKey = 'auSavingsAccount', interestRate = 0.045, name = 'AU Savings Interest' } = {}) {
-    const item = new AuSavingsInterestHandler({ accountKey, interestRate });
+  createAuSavingsInterestHandler({ stateRegistry, role, ownerId = null, interestRate = 0.045, name = 'AU Savings Interest' } = {}) {
+    const item = new AuSavingsInterestHandler({ stateRegistry, role, ownerId, interestRate });
     item.name = name;
     item.id   = this._generateId('h');
     this._register(item);
@@ -246,13 +261,16 @@ export class HandlerService extends BaseService {
 
   /**
    * Create and register a FixedIncomeInterestHandler.
-   * @param {object} [opts]
-   * @param {string} [opts.accountKey='fixedIncomeAccount']
+   *
+   * @param {object} opts
+   * @param {import('../finance/services/state-registry.js').StateRegistry} opts.stateRegistry
+   * @param {string} opts.role
+   * @param {string} [opts.ownerId]
    * @param {number} [opts.interestRate=0.04]
    * @param {string} [opts.name='Fixed Income Interest']
    */
-  createFixedIncomeInterestHandler({ accountKey = 'fixedIncomeAccount', interestRate = 0.04, name = 'Fixed Income Interest' } = {}) {
-    const item = new FixedIncomeInterestHandler({ accountKey, interestRate });
+  createFixedIncomeInterestHandler({ stateRegistry, role, ownerId = null, interestRate = 0.04, name = 'Fixed Income Interest' } = {}) {
+    const item = new FixedIncomeInterestHandler({ stateRegistry, role, ownerId, interestRate });
     item.name = name;
     item.id   = this._generateId('h');
     this._register(item);
@@ -263,13 +281,16 @@ export class HandlerService extends BaseService {
 
   /**
    * Create and register a SuperEarningsHandler.
-   * @param {object} [opts]
-   * @param {string} [opts.accountKey='superAccount']
+   *
+   * @param {object} opts
+   * @param {import('../finance/services/state-registry.js').StateRegistry} opts.stateRegistry
+   * @param {string} opts.role
+   * @param {string} [opts.ownerId]
    * @param {number} [opts.defaultRate=0.07]
    * @param {string} [opts.name='Super Earnings']
    */
-  createSuperEarningsHandler({ accountKey = 'superAccount', defaultRate = 0.07, name = 'Super Earnings' } = {}) {
-    const item = new SuperEarningsHandler({ accountKey, defaultRate });
+  createSuperEarningsHandler({ stateRegistry, role, ownerId = null, defaultRate = 0.07, name = 'Super Earnings' } = {}) {
+    const item = new SuperEarningsHandler({ stateRegistry, role, ownerId, defaultRate });
     item.name = name;
     item.id   = this._generateId('h');
     this._register(item);
@@ -280,14 +301,17 @@ export class HandlerService extends BaseService {
 
   /**
    * Create and register a DividendScheduledHandler.
-   * @param {object} [opts]
-   * @param {string}  [opts.accountKey='stockAccount']
+   *
+   * @param {object} opts
+   * @param {import('../finance/services/state-registry.js').StateRegistry} opts.stateRegistry
+   * @param {string} opts.role
+   * @param {string} [opts.ownerId]
    * @param {number}  [opts.dividendRate=0.02]
    * @param {boolean} [opts.reinvest=false]
    * @param {string}  [opts.name='Dividend Scheduled']
    */
-  createDividendScheduledHandler({ accountKey = 'usStockAccount', dividendRate = 0.02, reinvest = false, name = 'Dividend Scheduled' } = {}) {
-    const item = new DividendScheduledHandler({ accountKey, dividendRate, reinvest });
+  createDividendScheduledHandler({ stateRegistry, role, ownerId = null, dividendRate = 0.02, reinvest = false, name = 'Dividend Scheduled' } = {}) {
+    const item = new DividendScheduledHandler({ stateRegistry, role, ownerId, dividendRate, reinvest });
     item.name = name;
     item.id   = this._generateId('h');
     this._register(item);

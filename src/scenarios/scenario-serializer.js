@@ -11,6 +11,7 @@
 
 
 import { ActionDefinition } from '../simulation-framework/actions.js';
+import { ACCOUNT_ROLES } from '../finance/state/account-roles.js';
 
 // ─── Lookup sets for fast-path constructor dispatch ───────────────────────────
 
@@ -210,7 +211,7 @@ export class ScenarioSerializer {
     // 3. Handlers — resolve references before registering so the CREATE
     //    subscriber sees the fully-wired handler.
     for (const d of (config.handlers ?? [])) {
-      const handler = ScenarioSerializer._makeHandler(d);
+      const handler = ScenarioSerializer._makeHandler(d, services);
       for (const eid of (d.handledEventIds ?? [])) {
         const ev = eventMap.get(eid);
         if (ev) handler.handledEvents.push(ev);
@@ -323,40 +324,81 @@ export class ScenarioSerializer {
     // Subclass-specific params
     switch (d.__type) {
       case 'UsSavingsInterestMonthlyHandler':
-        d.accountKey   = node.accountKey;
+        d.role         = node.role;
+        d.ownerId      = node.ownerId;
         d.interestRate = node.interestRate;
         break;
       case 'MonthlyExpensesHandler':
         d.monthlyExpenses = node.monthlyExpenses;
-        d.usAccountKey    = node.usAccountKey;
-        d.auAccountKey    = node.auAccountKey;
+        d.usRole          = node.usRole;
+        d.usOwnerId       = node.usOwnerId;
+        d.auRole          = node.auRole;
+        d.auOwnerId       = node.auOwnerId;
         break;
       case 'IntlTransferToUsHandler':
-        d.auAccountKey = node.auAccountKey;
-        d.usAccountKey = node.usAccountKey;
+        d.auRole    = node.auRole;
+        d.auOwnerId = node.auOwnerId;
+        d.usRole    = node.usRole;
+        d.usOwnerId = node.usOwnerId;
         break;
       case 'IntlTransferToAuHandler':
-        d.usAccountKey = node.usAccountKey;
-        d.auAccountKey = node.auAccountKey;
+        d.usRole    = node.usRole;
+        d.usOwnerId = node.usOwnerId;
+        d.auRole    = node.auRole;
+        d.auOwnerId = node.auOwnerId;
         break;
       case 'AuSavingsInterestHandler':
-        d.accountKey   = node.accountKey;
+        d.role         = node.role;
+        d.ownerId      = node.ownerId;
         d.interestRate = node.interestRate;
         break;
       case 'FixedIncomeInterestHandler':
-        d.accountKey   = node.accountKey;
+        d.role         = node.role;
+        d.ownerId      = node.ownerId;
         d.interestRate = node.interestRate;
         break;
       case 'SuperEarningsHandler':
-        d.accountKey   = node.accountKey;
-        d.defaultRate  = node.defaultRate;
+        d.role        = node.role;
+        d.ownerId     = node.ownerId;
+        d.defaultRate = node.defaultRate;
         break;
       case 'DividendScheduledHandler':
-        d.accountKey   = node.accountKey;
+        d.role         = node.role;
+        d.ownerId      = node.ownerId;
         d.dividendRate = node.dividendRate;
         d.reinvest     = node.reinvest;
         break;
-      // ChangeResidencyHandler and OutOfFundsHandler have no serializable config params
+      case 'IntlRothEarningsHandler':
+        d.role      = node.role;
+        d.ownerId   = node.ownerId;
+        d.growthRate = node.growthRate;
+        break;
+      case 'IntlIraEarningsHandler':
+        d.role      = node.role;
+        d.ownerId   = node.ownerId;
+        d.growthRate = node.growthRate;
+        break;
+      case 'IntlK401EarningsHandler':
+        d.role      = node.role;
+        d.ownerId   = node.ownerId;
+        d.growthRate = node.growthRate;
+        break;
+      case 'IntlUsStockEarningsHandler':
+        d.role      = node.role;
+        d.ownerId   = node.ownerId;
+        d.growthRate = node.growthRate;
+        break;
+      case 'IntlAuStockEarningsHandler':
+        d.role      = node.role;
+        d.ownerId   = node.ownerId;
+        d.growthRate = node.growthRate;
+        break;
+      case 'IntlAuStockDividendHandler':
+        d.role         = node.role;
+        d.ownerId      = node.ownerId;
+        d.dividendRate = node.dividendRate;
+        break;
+      // ChangeResidencyHandler, MonthlyWagesHandler, OutOfFundsHandler have no serializable config params
     }
     return d;
   }
@@ -432,10 +474,15 @@ export class ScenarioSerializer {
 
   /**
    * Reconstruct a HandlerEntry or subclass from its serialized descriptor.
-   * Subclass-specific params (e.g. interestRate, accountKey) are stored on the
-   * descriptor and forwarded to the constructor.
+   * Subclass-specific params (role, ownerId, rates) are restored from the
+   * descriptor; stateRegistry is injected from services.
+   *
+   * @param {object} d        - serialized handler descriptor
+   * @param {object} services - ServiceRegistry instance (provides stateRegistry)
    */
-  static _makeHandler(d) {
+  static _makeHandler(d, services) {
+    const stateRegistry = services?.stateRegistry;
+
     // ── No-arg account-module and tax-infrastructure handlers ─────────────────
     if (_NO_ARG_HANDLERS.has(d.__type)) {
       const handler = new FinSimLib.Finance[d.__type]();
@@ -447,52 +494,122 @@ export class ScenarioSerializer {
     switch (d.__type) {
       case 'UsSavingsInterestMonthlyHandler':
         handler = new FinSimLib.Finance.UsSavingsInterestMonthlyHandler({
-          accountKey:   d.accountKey   ?? 'usSavingsAccount',
+          stateRegistry,
+          role:         d.role    ?? ACCOUNT_ROLES.US_SAVINGS,
+          ownerId:      d.ownerId ?? null,
           interestRate: d.interestRate ?? 0.03,
         });
         break;
       case 'MonthlyExpensesHandler':
         handler = new FinSimLib.Finance.MonthlyExpensesHandler({
+          stateRegistry,
           monthlyExpenses: d.monthlyExpenses ?? 6000,
-          usAccountKey:    d.usAccountKey    ?? 'usSavingsAccount',
-          auAccountKey:    d.auAccountKey    ?? 'auSavingsAccount',
+          usRole:    d.usRole    ?? ACCOUNT_ROLES.US_SAVINGS,
+          usOwnerId: d.usOwnerId ?? null,
+          auRole:    d.auRole    ?? ACCOUNT_ROLES.AU_SAVINGS,
+          auOwnerId: d.auOwnerId ?? null,
         });
+        break;
+      case 'MonthlyWagesHandler':
+        handler = new FinSimLib.Finance.MonthlyWagesHandler({ stateRegistry });
         break;
       case 'IntlTransferToUsHandler':
         handler = new FinSimLib.Finance.IntlTransferToUsHandler({
-          auAccountKey: d.auAccountKey ?? 'auSavingsAccount',
-          usAccountKey: d.usAccountKey ?? 'usSavingsAccount',
+          stateRegistry,
+          auRole:    d.auRole    ?? ACCOUNT_ROLES.AU_SAVINGS,
+          auOwnerId: d.auOwnerId ?? null,
+          usRole:    d.usRole    ?? ACCOUNT_ROLES.US_SAVINGS,
+          usOwnerId: d.usOwnerId ?? null,
         });
         break;
       case 'IntlTransferToAuHandler':
         handler = new FinSimLib.Finance.IntlTransferToAuHandler({
-          usAccountKey: d.usAccountKey ?? 'usSavingsAccount',
-          auAccountKey: d.auAccountKey ?? 'auSavingsAccount',
+          stateRegistry,
+          usRole:    d.usRole    ?? ACCOUNT_ROLES.US_SAVINGS,
+          usOwnerId: d.usOwnerId ?? null,
+          auRole:    d.auRole    ?? ACCOUNT_ROLES.AU_SAVINGS,
+          auOwnerId: d.auOwnerId ?? null,
         });
         break;
       case 'AuSavingsInterestHandler':
         handler = new FinSimLib.Finance.AuSavingsInterestHandler({
-          accountKey:   d.accountKey   ?? 'auSavingsAccount',
+          stateRegistry,
+          role:         d.role    ?? ACCOUNT_ROLES.AU_SAVINGS,
+          ownerId:      d.ownerId ?? null,
           interestRate: d.interestRate ?? 0.045,
         });
         break;
       case 'FixedIncomeInterestHandler':
         handler = new FinSimLib.Finance.FixedIncomeInterestHandler({
-          accountKey:   d.accountKey   ?? 'fixedIncomeAccount',
+          stateRegistry,
+          role:         d.role    ?? ACCOUNT_ROLES.FIXED_INCOME,
+          ownerId:      d.ownerId ?? null,
           interestRate: d.interestRate ?? 0.04,
         });
         break;
       case 'SuperEarningsHandler':
         handler = new FinSimLib.Finance.SuperEarningsHandler({
-          accountKey:  d.accountKey  ?? 'superAccount',
+          stateRegistry,
+          role:        d.role    ?? ACCOUNT_ROLES.SUPER,
+          ownerId:     d.ownerId ?? null,
           defaultRate: d.defaultRate ?? 0.07,
         });
         break;
       case 'DividendScheduledHandler':
         handler = new FinSimLib.Finance.DividendScheduledHandler({
-          accountKey:   d.accountKey   ?? 'usStockAccount',
+          stateRegistry,
+          role:         d.role    ?? ACCOUNT_ROLES.US_STOCK,
+          ownerId:      d.ownerId ?? null,
           dividendRate: d.dividendRate ?? 0.02,
           reinvest:     d.reinvest     ?? false,
+        });
+        break;
+      case 'IntlRothEarningsHandler':
+        handler = new FinSimLib.Finance.IntlRothEarningsHandler({
+          stateRegistry,
+          role:       d.role    ?? ACCOUNT_ROLES.ROTH,
+          ownerId:    d.ownerId ?? null,
+          growthRate: d.growthRate ?? 0.07,
+        });
+        break;
+      case 'IntlIraEarningsHandler':
+        handler = new FinSimLib.Finance.IntlIraEarningsHandler({
+          stateRegistry,
+          role:       d.role    ?? ACCOUNT_ROLES.IRA,
+          ownerId:    d.ownerId ?? null,
+          growthRate: d.growthRate ?? 0.07,
+        });
+        break;
+      case 'IntlK401EarningsHandler':
+        handler = new FinSimLib.Finance.IntlK401EarningsHandler({
+          stateRegistry,
+          role:       d.role    ?? ACCOUNT_ROLES.K401,
+          ownerId:    d.ownerId ?? null,
+          growthRate: d.growthRate ?? 0.07,
+        });
+        break;
+      case 'IntlUsStockEarningsHandler':
+        handler = new FinSimLib.Finance.IntlUsStockEarningsHandler({
+          stateRegistry,
+          role:       d.role    ?? ACCOUNT_ROLES.US_STOCK,
+          ownerId:    d.ownerId ?? null,
+          growthRate: d.growthRate ?? 0.05,
+        });
+        break;
+      case 'IntlAuStockEarningsHandler':
+        handler = new FinSimLib.Finance.IntlAuStockEarningsHandler({
+          stateRegistry,
+          role:       d.role    ?? ACCOUNT_ROLES.AU_STOCK,
+          ownerId:    d.ownerId ?? null,
+          growthRate: d.growthRate ?? 0.06,
+        });
+        break;
+      case 'IntlAuStockDividendHandler':
+        handler = new FinSimLib.Finance.IntlAuStockDividendHandler({
+          stateRegistry,
+          role:         d.role    ?? ACCOUNT_ROLES.AU_STOCK,
+          ownerId:      d.ownerId ?? null,
+          dividendRate: d.dividendRate ?? 0.04,
         });
         break;
       case 'ChangeResidencyHandler':

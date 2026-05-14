@@ -28,31 +28,33 @@ import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framew
  * data.reinvest overrides the configured reinvest param for one-off events.
  *
  * @param {object} [opts]
- * @param {string} [opts.accountKey='usStockAccount']
- *   State key for the stock account whose balance drives the calculation.
+ * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry
+ * @param {string} opts.role       - ACCOUNT_ROLES value for the stock account
+ * @param {string} [opts.ownerId]  - Person id (null = any owner)
  * @param {number} [opts.dividendRate=0.02]
- *   Annual dividend yield (e.g. 0.02 = 2%).
  * @param {boolean} [opts.reinvest=false]
- *   Default reinvestment flag; data.reinvest overrides per event.
  */
 export class DividendScheduledHandler extends HandlerEntry {
   static description = 'Computes stock dividends from balance × dividendRate and routes to STOCK_DIVIDEND_APPLY (reinvest) or STOCK_DIVIDEND_CASH_APPLY (cash payout).';
 
   static eventType = 'DIVIDEND_SCHEDULED';
 
-  constructor({ accountKey = 'usStockAccount', dividendRate = 0.02, reinvest = false } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, dividendRate = 0.02, reinvest = false } = {}) {
     super(null, 'Dividend Scheduled');
-    this.accountKey   = accountKey;
-    this.dividendRate = dividendRate;
-    this.reinvest     = reinvest;
+    this.stateRegistry = stateRegistry;
+    this.role          = role;
+    this.ownerId       = ownerId;
+    this.dividendRate  = dividendRate;
+    this.reinvest      = reinvest;
     // Declares both branches; actual type chosen at runtime based on reinvest flag
     this.generatedActionTypes = ['STOCK_DIVIDEND_APPLY', 'STOCK_DIVIDEND_CASH_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ data, state }) {
-    const balance = state[this.accountKey]?.balance ?? 0;
-    const amount  = +(balance * this.dividendRate).toFixed(2);
-    if (amount <= 0) return [new RecordBalanceAction(`${this.accountKey}.balance`, this.accountKey)];
+    const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
+    const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
+    const amount   = +(balance * this.dividendRate).toFixed(2);
+    if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
 
     const reinvest     = data?.reinvest ?? this.reinvest;
     const isAuResident = state.isAuResident;
@@ -61,7 +63,7 @@ export class DividendScheduledHandler extends HandlerEntry {
     return [
       { type: actionType, amount, isAuResident },
       new RecordMetricAction('dividends', amount),
-      new RecordBalanceAction(`${this.accountKey}.balance`, this.accountKey),
+      new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
 }

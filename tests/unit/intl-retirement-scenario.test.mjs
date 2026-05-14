@@ -56,7 +56,11 @@ import { UsSavingsInterestMonthlyHandler }                                      
 import { MonthlyExpensesHandler }                                                    from '../../src/finance/handlers/monthly-expenses-handler.js';
 import { MonthlyWagesHandler }                                                       from '../../src/finance/handlers/monthly-wages-handler.js';
 import { IntlTransferToUsHandler, IntlTransferToAuHandler }                          from '../../src/finance/handlers/intl-transfer-handlers.js';
-import { AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler } from '../../src/finance/handlers/earnings-handlers.js';
+import {
+  AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler,
+  IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,
+  IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
+} from '../../src/finance/handlers/earnings-handlers.js';
 import { DividendScheduledHandler }                                                  from '../../src/finance/handlers/dividend-scheduled-handler.js';
 import { ChangeResidencyHandler }                                                    from '../../src/finance/handlers/change-residency-handler.js';
 import { OutOfFundsHandler }                                                         from '../../src/finance/handlers/out-of-funds-handler.js';
@@ -146,6 +150,8 @@ globalThis.FinSimLib = {
     IntlTransferToUsHandler, IntlTransferToAuHandler,
     AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler,
     DividendScheduledHandler, ChangeResidencyHandler, OutOfFundsHandler,
+    IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,
+    IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
     ChangeResidencyApplyReducer, ExpenseDebitReducer, IntlTransferApplyReducer,
     ReplenishSavingsReducer, SetOutOfFundsDateReducer, InflationAdjustReducer,
     StockDividendCashApplyReducer, UsSavingsInterestCreditReducer,

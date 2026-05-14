@@ -49,6 +49,23 @@ export class StateRegistry {
   }
 
   /**
+   * Returns the stateKey for the first account matching role + ownerId.
+   * Useful for building RecordBalanceAction paths without holding a state reference.
+   *
+   * @param {string}      role    - ACCOUNT_ROLES value
+   * @param {string|null} [ownerId=null] - Person id; null matches any owner
+   * @returns {string|null}
+   */
+  getStateKey(role, ownerId = null) {
+    for (const account of this._accountService.getAll()) {
+      if (account.role !== role) continue;
+      if (ownerId !== null && account.ownerId !== ownerId) continue;
+      return account.stateKey ?? null;
+    }
+    return null;
+  }
+
+  /**
    * Returns all live state account objects matching all provided filters.
    * Omit a filter key to match all values for that field.
    *

@@ -19,31 +19,34 @@ import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framew
  * update YTD accumulators (including AU cross-reporting when resident).
  *
  * @param {object} opts
- * @param {string} [opts.accountKey='usSavingsAccount']
- *   State key for the savings account whose balance drives the calculation.
- * @param {number} [opts.interestRate=0.03]
- *   Annual interest rate (e.g. 0.03 = 3%).
+ * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry
+ * @param {string} opts.role       - ACCOUNT_ROLES value for the savings account
+ * @param {string} [opts.ownerId]  - Person id (null = any owner)
+ * @param {number} [opts.interestRate=0.03] Annual interest rate (e.g. 0.03 = 3%)
  */
 export class UsSavingsInterestMonthlyHandler extends HandlerEntry {
   static description = 'Computes monthly interest on a US savings account and emits US_SAVINGS_INTEREST_CREDIT.';
 
   static eventType = 'US_SAVINGS_INTEREST_MONTHLY';
 
-  constructor({ accountKey = 'usSavingsAccount', interestRate = 0.03 } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, interestRate = 0.03 } = {}) {
     super(null, 'Monthly US Savings Interest');
-    this.accountKey   = accountKey;
-    this.interestRate = interestRate;
+    this.stateRegistry = stateRegistry;
+    this.role          = role;
+    this.ownerId       = ownerId;
+    this.interestRate  = interestRate;
     this.generatedActionTypes = ['US_SAVINGS_INTEREST_CREDIT', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ state }) {
-    const balance = state[this.accountKey]?.balance ?? 0;
-    const amount  = +(balance * this.interestRate / 12).toFixed(2);
-    if (amount <= 0) return [new RecordBalanceAction(`${this.accountKey}.balance`, `${this.accountKey}`)];
+    const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
+    const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
+    const amount   = +(balance * this.interestRate / 12).toFixed(2);
+    if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'US_SAVINGS_INTEREST_CREDIT', amount },
       new RecordMetricAction('us_savings_interest', amount),
-      new RecordBalanceAction(`${this.accountKey}.balance`, `${this.accountKey}`),
+      new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
 }
