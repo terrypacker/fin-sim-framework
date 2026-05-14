@@ -13,6 +13,7 @@ import { jest } from '@jest/globals';
 import { ActionDefinitionList } from '../../../src/visualization/components/action-definition-list.js';
 
 import {
+  makeBodyMockElement,
   makeMockContainer,
 } from '../../helpers/viz-utils.js';
 
@@ -48,6 +49,7 @@ describe('ActionDefinitionList', () => {
     return new ActionDefinitionList({
       parent: null,
       container: makeMockContainer(),
+      countSpan: makeBodyMockElement('span'),
       node,
     });
   }

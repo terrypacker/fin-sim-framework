@@ -21,6 +21,7 @@ import {
 import {
   HANDLER_CLASSES,
 } from '../../../src/simulation-framework/handlers.js';
+import {ServiceRegistry} from "../../../src/services/service-registry.js";
 
 describe('HandlerEditor', () => {
 
@@ -51,6 +52,7 @@ describe('HandlerEditor', () => {
   }
 
   function makeEditor(node = makeHandlerNode()) {
+    ServiceRegistry.getInstance(); //To register the types into the handler editor HANDLER_TYPES
     return new HandlerEditor({
       parent: null,
       container: makeMockContainer(),
@@ -315,6 +317,24 @@ describe('HandlerEditor', () => {
     });
 
     expect(() => editor.render()).not.toThrow();
+  });
+
+  // ─── Type list snapshot matches live registries ───────────────────────────────
+//
+// If HANDLER_CLASSES was not yet augmented when the constructor ran, HANDLER_TYPES
+// would only contain ["HandlerEntry"] instead of the full domain class set.
+
+  test('HandlerEditor.HANDLER_TYPES matches Object.keys(HANDLER_CLASSES) at construction time', () => {
+    const editor = makeEditor();
+    expect(editor.HANDLER_TYPES).toEqual(Object.keys(HANDLER_CLASSES));
+  });
+
+  test('HandlerEditor.HANDLER_TYPES includes domain handler subclasses (not just HandlerEntry)', () => {
+    const editor = makeEditor();
+    expect(editor.HANDLER_TYPES).toContain('UsSavingsInterestMonthlyHandler');
+    expect(editor.HANDLER_TYPES).toContain('MonthlyExpensesHandler');
+    expect(editor.HANDLER_TYPES).toContain('ChangeResidencyHandler');
+    expect(editor.HANDLER_TYPES).toContain('OutOfFundsHandler');
   });
 
 });

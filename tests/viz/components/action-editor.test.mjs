@@ -16,9 +16,11 @@ import {
   ActionBuilder
 } from "../../../src/simulation-framework/builders/action-builder.js";
 import {
+  ACTION_CLASSES,
   DEFAULT_ACTIONS,
   ScriptedAction
 } from "../../../src/simulation-framework/actions.js";
+import {ServiceRegistry} from "../../../src/services/service-registry.js";
 
 
 describe('ActionEditor', () => {
@@ -28,6 +30,7 @@ describe('ActionEditor', () => {
   });
 
   function makeEditor(actionNode = makeAmountAction()) {
+    ServiceRegistry.getInstance(); //To register the types into the handler editor ACTION_TYPES
     return new ActionEditor({
       parent: null,
       container: makeMockContainer(),
@@ -284,12 +287,18 @@ describe('ActionEditor', () => {
     });
 
     editor.render();
-
+    //Mock console.err to be sure we don't show it in the tests
     const btn = editor._container.querySelector(
         '.script-validate-button',
     );
+    let consoleSpy;
+    try {
+      consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      btn.click();
+    }finally {
+      consoleSpy.mockRestore();
+    }
 
-    btn.click();
     const result = editor._container.querySelector(
         '.code-test-result',
     );
@@ -316,6 +325,15 @@ describe('ActionEditor', () => {
     expect(
         editor._container.querySelector('#action-reducers'),
     ).not.toBeNull();
+  });
+
+  // ─── Type list snapshot matches live registries ───────────────────────────────
+  //
+  // If ACTION_CLASSES was not yet augmented when the constructor ran, ACTION_TYPES
+  // would only contain ["Action"] instead of the full domain class set.
+  test('ActionEditor.ACTION_TYPES matches Object.keys(ACTION_CLASSES)', () => {
+    const editor = makeEditor();
+    expect(editor.ACTION_TYPES).toEqual(Object.keys(ACTION_CLASSES));
   });
 
 });

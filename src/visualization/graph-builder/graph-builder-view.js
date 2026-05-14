@@ -73,7 +73,7 @@ export class GraphBuilderView extends BaseComponent {
   }
 
   editNode(node) {
-    //TODO You don't want to destroy the view, just the editor this.destroy();
+    this._editor?.destroy();
     this._canvas.innerHTML = '';
 
     if (!node) {
@@ -83,16 +83,16 @@ export class GraphBuilderView extends BaseComponent {
       return;
     }
 
-    const editor = this._createEditor(node);
+    this._editor = this._createEditor(node);
 
-    if (!editor) {
+    if (!this._editor) {
       this._canvas.innerHTML = `<div class="tl-empty">Unknown node type</div>`;
       return;
     }
 
-    this._wireEditor(editor);
+    this._wireEditor(this._editor);
 
-    editor.render();
+    this._editor.render();
   }
 
   _createEditor(node) {

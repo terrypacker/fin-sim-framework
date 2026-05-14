@@ -22,6 +22,7 @@ import {
   PRIORITY,
   REDUCER_CLASSES,
 } from '../../../src/simulation-framework/reducers.js';
+import {ServiceRegistry} from "../../../src/services/service-registry.js";
 
 describe('ReducerEditor', () => {
 
@@ -56,6 +57,7 @@ describe('ReducerEditor', () => {
   }
 
   function makeEditor(node = makeReducerNode()) {
+    ServiceRegistry.getInstance(); //To register the types into the handler editor REDUCER_TYPES
     return new ReducerEditor({
       parent: null,
       container: makeMockContainer(),
@@ -423,7 +425,13 @@ describe('ReducerEditor', () => {
         '.script-validate-button',
     );
 
-    btn.click();
+    let consoleSpy;
+    try {
+      consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      btn.click();
+    }finally {
+      consoleSpy.mockRestore();
+    }
 
     const result = editor._container.querySelector(
         '.code-test-result',
@@ -553,6 +561,16 @@ describe('ReducerEditor', () => {
         'type',
         'UPDATED_ACTION',
     );
+  });
+
+  // ─── Type list snapshot matches live registries ───────────────────────────────
+  //
+  // If REDUCER_CLASSES was not yet augmented when the constructor ran, REDUCER_TYPES
+  // would only contain ["Reducer"] instead of the full domain class set.
+
+  test('GraphBuilderView.REDUCER_TYPES matches Object.keys(REDUCER_CLASSES)', () => {
+    const editor = makeEditor();
+    expect(editor.REDUCER_TYPES).toEqual(Object.keys(REDUCER_CLASSES));
   });
 
 });
