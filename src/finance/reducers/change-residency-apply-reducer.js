@@ -29,32 +29,24 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  *
  * @param {object} opts
  * @param {import('../../finance/services/account-service.js').AccountService} opts.accountService
- * @param {string[]} [opts.investmentKeys]
- *   State keys of InvestmentAccount instances that should have their
- *   balanceAtResidencyChange snapshotted. Defaults to the standard set used
- *   in the international retirement scenario.
+ * @param {import('../../finance/services/state-registry.js').StateRegistry} opts.stateRegistry
  */
 export class ChangeResidencyApplyReducer extends Reducer {
   static description = 'Flips isAuResident, snapshots investment account balances at residency change, and adds AU citizenship to all people in state.';
 
   static actionType = 'CHANGE_RESIDENCY_APPLY';
 
-  static DEFAULT_INVESTMENT_KEYS = [
-    'rothAccount', 'iraAccount', 'k401Account',
-    'usStockAccount', 'superAccount', 'auStockAccount',
-  ];
-
-  constructor({ accountService, investmentKeys = ChangeResidencyApplyReducer.DEFAULT_INVESTMENT_KEYS } = {}) {
+  constructor({ accountService, stateRegistry } = {}) {
     super('Change Residency Apply', PRIORITY.PRE_PROCESS);
     this.accountService  = accountService;
-    this.investmentKeys  = investmentKeys;
+    this.stateRegistry   = stateRegistry;
     this.reducedActionTypes = ['CHANGE_RESIDENCY_APPLY'];
   }
 
   reduce(state) {
-    // 1. Snapshot balanceAtResidencyChange on investment accounts
-    for (const key of this.investmentKeys) {
-      if (state[key]) this.accountService.recordResidencyChange(state[key]);
+    // 1. Snapshot balanceAtResidencyChange on all registered accounts
+    for (const account of this.stateRegistry.getAccounts(state)) {
+      this.accountService.recordResidencyChange(account);
     }
 
     // 2. Add AU citizenship to every person in state.people

@@ -458,8 +458,8 @@ export class ScenarioSerializer {
       case 'StockDividendCashApplyReducer':
         d.accountKey = node.accountKey;
         break;
+      // ChangeResidencyApplyReducer has no extra serializable config params
       case 'ChangeResidencyApplyReducer':
-        d.investmentKeys = node.investmentKeys;
         break;
       // SetOutOfFundsDateReducer has no serializable config params
       case 'DynamicTaxReducer':
@@ -738,7 +738,7 @@ export class ScenarioSerializer {
       case 'TaxSettleApplyReducer':
         return new F.TaxSettleApplyReducer();
       case 'TaxPaymentDebitReducer':
-        return new F.TaxPaymentDebitReducer({ accountService: services?.accountService });
+        return new F.TaxPaymentDebitReducer({ accountService: services?.accountService, stateRegistry: services?.stateRegistry });
       case 'DynamicTaxReducer': {
         // TaxEngine is reconstructed from a fresh TaxService — all year modules are pre-registered.
         const taxEngine  = new F.TaxService().taxEngine;
@@ -797,8 +797,8 @@ export class ScenarioSerializer {
         });
       case 'ChangeResidencyApplyReducer':
         return new FinSimLib.Finance.ChangeResidencyApplyReducer({
-          accountService:  services?.accountService,
-          ...(d.investmentKeys ? { investmentKeys: d.investmentKeys } : {}),
+          accountService: services?.accountService,
+          stateRegistry:  services?.stateRegistry,
         });
       case 'SetOutOfFundsDateReducer':
         return new FinSimLib.Finance.SetOutOfFundsDateReducer();

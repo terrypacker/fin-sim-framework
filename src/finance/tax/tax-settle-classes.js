@@ -12,6 +12,7 @@ import { Reducer, PRIORITY }  from '../../simulation-framework/reducers.js';
 import { HandlerEntry }        from '../../simulation-framework/handlers.js';
 import { TaxSettleService }    from '../tax-settle-service.js';
 import { InsufficientFundsError } from '../assets/account.js';
+import { ACCOUNT_ROLES } from '../state/account-roles.js';
 
 // YTD fields reset to zero after each annual settlement, keyed by country code.
 const YTD_FIELDS = {
@@ -127,15 +128,17 @@ export class TaxPaymentDebitReducer extends Reducer {
   static description = 'Debits the country savings account for the tax amount; replenishes from investment accounts first when the balance is short.';
   static actionType  = 'TAX_PAYMENT_DEBIT';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('Tax Payment Debit', PRIORITY.TAX_APPLY + 1);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes = ['TAX_PAYMENT_DEBIT'];
   }
 
   reduce(state, action, date) {
     const { amount, cc } = action;
-    const accountKey  = cc === 'AU' ? 'auSavingsAccount' : 'usSavingsAccount';
+    const role       = cc === 'AU' ? ACCOUNT_ROLES.AU_SAVINGS : ACCOUNT_ROLES.US_SAVINGS;
+    const accountKey = this.stateRegistry.getStateKey(role);
     const cashAccount = state[accountKey];
     const shortfall   = amount - Math.max(0, cashAccount.balance);
 

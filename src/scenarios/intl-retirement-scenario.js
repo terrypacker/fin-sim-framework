@@ -776,7 +776,7 @@ export class IntlRetirementScenario extends BaseScenario {
     const stockDividendCashReducer = new StockDividendCashApplyReducer({ accountService: svc });
     reducerService.register(stockDividendCashReducer);
 
-    const changeResidencyApplyReducer = new ChangeResidencyApplyReducer({ accountService: svc });
+    const changeResidencyApplyReducer = new ChangeResidencyApplyReducer({ accountService: svc, stateRegistry });
     reducerService.register(changeResidencyApplyReducer);
 
     const setOutOfFundsDateReducer = new SetOutOfFundsDateReducer();
