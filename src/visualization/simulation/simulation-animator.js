@@ -132,7 +132,7 @@ export class SimulationAnimator {
     const label = $('simStatus');
     if (dot) dot.className = 'status-dot breakpoint';
     if (label && hit) {
-      const name = hit.node?.name ?? '?';
+      const name = hit.node?.name ?? hit.nodeId ?? '?';
       label.textContent = `PAUSED @ ${name} [${hit.stage}]`;
     } else if (label) {
       label.textContent = 'PAUSED';
@@ -213,12 +213,8 @@ export class SimulationAnimator {
       this.updateDashCards(date);
     });
 
-    bus.subscribe(SIMULATION_BUS_MESSAGES.NODE_DATA_CHANGED, msg => {
-      const { reason } = msg.meta || {};
-      if(reason === 'breakpoint') {
-        const { breakpointContext } = msg.data || {};
-        this.showBreakpointPaused(breakpointContext);
-      }
+    bus.subscribe(SIMULATION_BUS_MESSAGES.BREAKPOINT_HIT, (msg) => {
+      this.showBreakpointPaused(msg);
     });
 
     //Once after each event

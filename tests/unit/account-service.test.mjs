@@ -278,7 +278,7 @@ test('AccountService.createAccount: publishes CREATE event', () => {
   const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   let fired = false;
   bus.subscribe('SERVICE_ACTION', msg => {
-    if (msg.actionType === 'CREATE' && msg.classType === 'Account') fired = true;
+    if (msg.actionType === 'CREATE' && msg.item instanceof Account) fired = true;
   });
   svc.createAccount(new CheckingAccount(0));
   assert.ok(fired);
@@ -302,7 +302,7 @@ test('AccountService.updateAccount: applies changes and publishes UPDATE', () =>
 
   let updateFired = false;
   bus.subscribe('SERVICE_ACTION', msg => {
-    if (msg.actionType === 'UPDATE' && msg.classType === 'Account') updateFired = true;
+    if (msg.actionType === 'UPDATE' && msg.item instanceof Account) updateFired = true;
   });
 
   svc.updateAccount(a.id, { name: 'New Name', minimumBalance: 200 });
@@ -320,7 +320,7 @@ test('AccountService.deleteAccount: removes from map and publishes DELETE', () =
 
   let deleteFired = false;
   bus.subscribe('SERVICE_ACTION', msg => {
-    if (msg.actionType === 'DELETE' && msg.classType === 'Account') deleteFired = true;
+    if (msg.actionType === 'DELETE' && msg.item instanceof Account) deleteFired = true;
   });
 
   svc.deleteAccount(a.id);
@@ -513,7 +513,7 @@ test('ServiceRegistry.accountService: shares the same bus as other services', ()
   const a = new CheckingAccount(5000, { name: 'Test' });
   registry.accountService.createAccount(a);
 
-  const created = events.find(e => e.actionType === 'CREATE' && e.classType === 'Account');
+  const created = events.find(e => e.actionType === 'CREATE' && e.item instanceof Account);
   assert.ok(created, 'CREATE event should have been published on the shared bus');
   ServiceRegistry.reset();
 });

@@ -19,6 +19,8 @@
  * Exposes `onPeopleChanged(people[])` for AccountsPresenter to update its
  * owner dropdown whenever the people list changes.
  */
+import { Person } from '../../finance/person.js';
+
 export class PeoplePresenter {
   /**
    * @param {{
@@ -63,9 +65,7 @@ export class PeoplePresenter {
     };
 
     // ── React to service bus (deserialization, programmatic changes) ────────
-    bus.subscribe('SERVICE_ACTION', (msg) => {
-      if (msg.classType === 'Person') this._refresh();
-    });
+    bus.subscribe('SERVICE_ACTION', { instanceOf: Person }, () => this._refresh());
 
     // Initial render (handles the case where people were loaded before mount).
     this._refresh();

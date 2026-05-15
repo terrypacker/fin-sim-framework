@@ -142,17 +142,15 @@ export class BreakpointHitMessage extends BusMessage {
  *
  * subtype      — 'CREATE' | 'UPDATE' | 'DELETE'  (authoritative field)
  * actionType   — alias for subtype; kept for backward compat, removed in Phase 8
- * classType    — constructor name of item; kept for backward compat, removed in Phase 7
- * item         — the item after the operation
+ * item         — the item after the operation; use instanceof to identify type
  * originalItem — the item before the operation (null for CREATE)
  */
 export class ServiceActionEvent extends BusMessage {
-  constructor({ subtype, actionType, classType, item, originalItem = null }) {
+  constructor({ subtype, actionType, item, originalItem = null }) {
     const resolvedSubtype = subtype ?? actionType;
     super({ type: 'SERVICE_ACTION', subtype: resolvedSubtype });
     this.subtype      = resolvedSubtype;
     this.actionType   = resolvedSubtype;  // backward compat — removed in Phase 8
-    this.classType    = classType ?? null; // backward compat — removed in Phase 7
     this.item         = item;
     this.originalItem = originalItem;
   }

@@ -22,7 +22,7 @@ const createEdgeId = (edge) => {
 export class GraphRenderer extends BaseComponent {
 
   constructor({ parent, graph, graphQueryApi, graphRoot, graphNodes,
-    graphEdges, nodeDetailsTemplate, displayNodeStateChanges}) {
+    graphEdges, nodeDetailsTemplate, displayNodeStateChanges, bus}) {
     super({ parent });
     this._graph = graph;
     this._graphQueryApi = graphQueryApi;
@@ -32,17 +32,18 @@ export class GraphRenderer extends BaseComponent {
     this.nodeTemplate = nodeDetailsTemplate;
     this.displayNodeStateChanges = displayNodeStateChanges ? displayNodeStateChanges : (c) => {};
 
-    //TODO ??? Graph has been modified
-    //TODO This should live outside the component I think
-    this._nodeModificationWatcher = () => {
-      //TODO this will break when we implement #79 and persist x and y
-      this._refreshGraphState();
-      this._relayoutAll();
-      this.render();
-    };
-    this._edgeModificationWatcher = () => {
-      this.render();
-    };
+    if (bus) {
+      bus.subscribe('SERVICE_ACTION', () => {
+        this._refreshGraphState();
+        this._relayoutAll();
+        this.render();
+      });
+      bus.subscribe('SERVICE_BULK_ACTION', () => {
+        this._refreshGraphState();
+        this._relayoutAll();
+        this.render();
+      });
+    }
 
     //Current view tracking
     this._currentNodes = [];
@@ -85,11 +86,8 @@ export class GraphRenderer extends BaseComponent {
   }
 
   _mount() {
-    this._graph.addNodeModifcationWatcher('graph-renderer', this._nodeModificationWatcher);
-    this._graph.addEdgeModifcationWatcher('graph-renderer', this._edgeModificationWatcher);
     this.graphNodesEl.innerHTML = '';
     this.graphEdgesEl.innerHTML = '';
-    //TODO Build out the component parts dynamically
     this._bindEvents();
   }
 
@@ -803,8 +801,6 @@ export class GraphRenderer extends BaseComponent {
   }
 
   destroy() {
-    this._graph.removeNodeModificationWatcher('graph-renderer', this._nodeModificationWatcher);
-    this._graph.removeEdgeModificationWatcher('graph-renderer', this._edgeModificationWatcher);
     super.destroy();
   }
 }

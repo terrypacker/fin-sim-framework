@@ -132,6 +132,7 @@ export class BaseApp extends BaseComponent {
         graphEdges:              document.getElementById('graphEdges'),
         nodeDetailsTemplate:     document.getElementById('tpl-node-details'),
         displayNodeStateChanges: (changes) => this._statePanelView.showNodeStateChanges(changes),
+        bus:                     registry.bus,
       }),
       eventService: registry.eventService,
       handlerService: registry.handlerService,

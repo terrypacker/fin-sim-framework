@@ -37,7 +37,7 @@ export class EventService extends BaseService {
     if (!params.id) params = { ...params, id: this._generateId('e') };
     const item = new EventSeries(params);
     this._register(item);
-    this._publish('CREATE', item.constructor.name, item);
+    this._publish('CREATE', item);
     return item;
   }
 
@@ -49,7 +49,7 @@ export class EventService extends BaseService {
     if (!params.id) params = { ...params, id: this._generateId('e') };
     const item = new OneOffEvent(params);
     this._register(item);
-    this._publish('CREATE', item.constructor.name, item);
+    this._publish('CREATE', item);
     return item;
   }
 
@@ -70,8 +70,7 @@ export class EventService extends BaseService {
     const event = this._resolve(idOrEvent);
     const originalItem = Object.assign(Object.create(Object.getPrototypeOf(event)), event);
     this.mergeChanges(event, changes);
-    this._graph.notifyNodeWatchers(); //Notify that the content in the graph changed
-    this._publish('UPDATE', event.constructor.name, event, originalItem);
+    this._publish('UPDATE', event, originalItem);
     return event;
   }
 
@@ -103,7 +102,7 @@ export class EventService extends BaseService {
     });
 
     this._graph.updateNode(fresh.id, fresh);
-    this._publish('UPDATE', newClass, fresh, old);
+    this._publish('UPDATE', fresh, old);
     return fresh;
   }
 
@@ -119,7 +118,7 @@ export class EventService extends BaseService {
   deleteEvent(idOrEvent) {
     const event = this._resolve(idOrEvent);
     this._unregister(event.id);
-    this._publish('DELETE', event.constructor.name, event, event);
+    this._publish('DELETE', event, event);
     return event;
   }
 }

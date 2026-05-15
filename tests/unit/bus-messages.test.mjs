@@ -157,11 +157,6 @@ describe('ServiceActionEvent', () => {
     assert.strictEqual(m.actionType, 'CREATE');
   });
 
-  test('classType defaults to null when omitted', () => {
-    const m = new ServiceActionEvent({ subtype: 'CREATE', item: {} });
-    assert.strictEqual(m.classType, null);
-  });
-
   test('originalItem defaults to null', () => {
     const m = new ServiceActionEvent({ subtype: 'CREATE', item: {} });
     assert.strictEqual(m.originalItem, null);

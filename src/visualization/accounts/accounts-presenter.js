@@ -73,9 +73,7 @@ export class AccountsPresenter {
     };
 
     // ── React to service bus (deserialization, programmatic changes) ────────
-    bus.subscribe('SERVICE_ACTION', (msg) => {
-      if (msg.item instanceof Account) this._refresh();
-    });
+    bus.subscribe('SERVICE_ACTION', { instanceOf: Account }, () => this._refresh());
 
     // Initial render.
     this._refresh();

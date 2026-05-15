@@ -46,7 +46,7 @@ export class RealPropertyService extends AssetService {
   createProperty(property) {
     property.id = this._generateId(this._idPrefix);
     this._register(property);
-    this._publish('CREATE', 'RealProperty', property);
+    this._publish('CREATE', property);
     this._wireNodeEdges(property);
     return property;
   }
@@ -61,7 +61,7 @@ export class RealPropertyService extends AssetService {
     const property = this._resolve(idOrProperty);
     const original = { ...property };
     this.mergeChanges(property, changes);
-    this._publish('UPDATE', 'RealProperty', property, original);
+    this._publish('UPDATE', property, original);
     this._wireNodeEdges(property);
     return property;
   }
@@ -74,7 +74,7 @@ export class RealPropertyService extends AssetService {
   deleteProperty(idOrProperty) {
     const property = this._resolve(idOrProperty);
     this._unregister(property.id);
-    this._publish('DELETE', 'RealProperty', property, property);
+    this._publish('DELETE', property);
     return property;
   }
 
