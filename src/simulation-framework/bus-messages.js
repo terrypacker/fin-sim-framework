@@ -31,19 +31,9 @@ export const EXECUTION_PHASES = {
   END:   'END',
 };
 
-// ─── Legacy simulation bus message type constants ─────────────────────────────
-// Removed in Phase 4 when simulation.js publish sites are rewritten.
-
 export const SIMULATION_BUS_MESSAGES = {
-  SCENARIO_READY:        'SCENARIO_READY',
-  EVENT_OCCURRENCE_START: 'EVENT_OCCURRENCE_START',
-  EVENT_OCCURRENCE_END:   'EVENT_OCCURRENCE_END',
-  HANDLED_EVENT:          'HANDLED_EVENT',
-  ACTION_INSTANCE:        'ACTION_INSTANCE',
-  ACTION_RESULT:          'ACTION_RESULT',
-  REDUCER_RESULT:         'REDUCER_RESULT',
-  NODE_DATA_CHANGED:      'NODE_DATA_CHANGED',
-  BREAKPOINT_HIT:         'BREAKPOINT_HIT',
+  SCENARIO_READY: 'SCENARIO_READY',
+  BREAKPOINT_HIT: 'BREAKPOINT_HIT',
 };
 
 // ─── Base ─────────────────────────────────────────────────────────────────────
@@ -184,58 +174,3 @@ export class ServiceEdgeActionEvent extends BusMessage {
   }
 }
 
-// ─── Legacy execution messages ────────────────────────────────────────────────
-// These remain until Phase 4 rewrites the publish sites in simulation.js.
-
-export class NodeDataBusMessage extends SimulationBusMessage {
-  constructor({ date, sim, payload, stateSnapshot, nodeId, kind, meta, data }) {
-    super({ type: SIMULATION_BUS_MESSAGES.NODE_DATA_CHANGED, date, sim, payload, stateSnapshot });
-    this.nodeId = nodeId;
-    this.kind   = kind;
-    this.meta   = meta;
-    this.data   = data;
-  }
-}
-
-export class BreakpointHitBusMessage extends SimulationBusMessage {
-  constructor({ date, sim, payload, stateSnapshot }) {
-    super({ type: SIMULATION_BUS_MESSAGES.BREAKPOINT_HIT, date, sim, payload, stateSnapshot });
-  }
-}
-
-export class EventStartBusMessage extends SimulationBusMessage {
-  constructor({ date, sim, payload, stateSnapshot }) {
-    super({ type: SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START, date, sim, payload, stateSnapshot });
-  }
-}
-
-export class EventEndBusMessage extends SimulationBusMessage {
-  constructor({ date, sim, payload, stateSnapshot }) {
-    super({ type: SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_END, date, sim, payload, stateSnapshot });
-  }
-}
-
-export class EventHandledMessage extends SimulationBusMessage {
-  constructor({ date, sim, payload, stateSnapshot }) {
-    super({ type: SIMULATION_BUS_MESSAGES.HANDLED_EVENT, date, sim, payload, stateSnapshot });
-  }
-}
-
-export class ActionInstanceMessage extends BusMessage {
-  constructor({ date, action }) {
-    super({ type: SIMULATION_BUS_MESSAGES.ACTION_INSTANCE, date });
-    this.action = action;
-  }
-}
-
-export class ActionResultMessage extends SimulationBusMessage {
-  constructor({ date, sim, payload, stateSnapshot }) {
-    super({ type: SIMULATION_BUS_MESSAGES.ACTION_RESULT, date, sim, payload, stateSnapshot });
-  }
-}
-
-export class ReducerResultMessage extends SimulationBusMessage {
-  constructor({ date, sim, payload, stateSnapshot }) {
-    super({ type: SIMULATION_BUS_MESSAGES.REDUCER_RESULT, date, sim, payload, stateSnapshot });
-  }
-}

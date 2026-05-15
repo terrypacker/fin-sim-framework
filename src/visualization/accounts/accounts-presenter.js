@@ -8,8 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Account }                    from "../../finance/assets/account.js";
-import { SIMULATION_BUS_MESSAGES }    from "../../simulation-framework/bus-messages.js";
+import { Account }          from "../../finance/assets/account.js";
+import { EXECUTION_KINDS }  from "../../simulation-framework/bus-messages.js";
 
 /**
  * AccountsPresenter — wires AccountsView callbacks to AccountsController and
@@ -93,7 +93,7 @@ export class AccountsPresenter {
    * @param {import('../../simulation-framework/event-bus.js').EventBus} simBus
    */
   attachSimBus(simBus) {
-    simBus.subscribe(SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_END, () => {
+    simBus.subscribe('EXECUTION_END', { kind: EXECUTION_KINDS.EVENT }, () => {
       this._scheduleListUpdate();
     });
   }

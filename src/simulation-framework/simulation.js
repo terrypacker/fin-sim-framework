@@ -26,7 +26,6 @@ import { DateUtils } from "./date-utils.js";
 import {
   ExecutionBusMessage, BreakpointHitMessage,
   EXECUTION_KINDS, EXECUTION_PHASES,
-  NodeDataBusMessage
 } from "./bus-messages.js";
 import { generateActionId } from "./actions.js";
 import { SimulationHistory } from "./simulation-history.js";
@@ -156,44 +155,15 @@ export class Simulation {
   }
 
   clearAllBreakpoints() {
-    const breakpoints = [...this.control.breakpointNodes.entries()];
     this.control.breakpointNodes.clear();
-    const now = new Date(this.currentDate);
-    breakpoints.forEach(([id, node]) => {
-      this.serviceBus.publish(new NodeDataBusMessage({
-        date: now,
-        sim: this,
-        stateSnapshot: null, //TODO Do we want this?
-        nodeId: node.id,
-        kind: node.kind,
-        meta: { reason: 'control' },
-        data: {
-          breakpoint: false,
-          breakpointHit: false,
-        }
-      }));
-    });
   }
 
   toggleNodeBreakpoint(node) {
-    const data = { };
     if (this.control.breakpointNodes.has(node.id)) {
-      this.control.breakpointNodes.delete(node.id); // Item exists, so remove it
-      data.breakpoint = false;
+      this.control.breakpointNodes.delete(node.id);
     } else {
-      this.control.breakpointNodes.set(node.id, node);    // Item doesn't exist, so add it
-      data.breakpoint = true;
+      this.control.breakpointNodes.set(node.id, node);
     }
-    const now = new Date(this.currentDate);
-    this.serviceBus.publish(new NodeDataBusMessage({
-      date: now,
-      sim: this,
-      stateSnapshot: null, //TODO Do we want this?
-      nodeId: node.id,
-      kind: node.kind,
-      meta: { reason: 'control' },
-      data: data
-    }));
   }
 
   schedule(event) {

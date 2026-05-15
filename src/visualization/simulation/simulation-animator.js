@@ -9,7 +9,10 @@
  */
 
 import { $ }                       from '../ui-utils.js';
-import { SIMULATION_BUS_MESSAGES } from '../../simulation-framework/bus-messages.js';
+import {
+  EXECUTION_KINDS,
+  EXECUTION_PHASES,
+} from '../../simulation-framework/bus-messages.js';
 
 /**
  * SimulationAnimator — owns playback, config-graph highlighting, breakpoints,
@@ -27,7 +30,7 @@ import { SIMULATION_BUS_MESSAGES } from '../../simulation-framework/bus-messages
  *   clearBreakpointStatus() — reset status row to RUNNING/STOPPED
  *   showBreakpointPaused(hit) — display breakpoint-pause status
  *   updateDashCards(date)   — update the four execution-count cards
- *   wireSimBus(bus)         — subscribe to all SIMULATION_BUS_MESSAGES
+ *   wireSimBus(bus)         — subscribe to simulation bus messages
  */
 const PLAYBACK_THROTTLE_MS = 1000;
 
@@ -208,17 +211,17 @@ export class SimulationAnimator {
   /** Subscribe to all simulation bus messages. Call once after scenario.buildSim(). */
   wireSimBus(bus) {
 
-    bus.subscribe(SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START, ({ date, payload, stateSnapshot }) => {
+    bus.subscribe(`EXECUTION_${EXECUTION_PHASES.BEGIN}`, { kind: EXECUTION_KINDS.EVENT }, ({ date, payload, stateSnapshot }) => {
       this._timeControls.onDateChanged(new Date(date));
       this.updateDashCards(date);
     });
 
-    bus.subscribe(SIMULATION_BUS_MESSAGES.BREAKPOINT_HIT, (msg) => {
+    bus.subscribe('BREAKPOINT_HIT', (msg) => {
       this.showBreakpointPaused(msg);
     });
 
     //Once after each event
-    bus.subscribe(SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_END, ({ date, payload, stateSnapshot }) => {
+    bus.subscribe(`EXECUTION_${EXECUTION_PHASES.END}`, { kind: EXECUTION_KINDS.EVENT }, ({ date, payload, stateSnapshot }) => {
       const metrics = stateSnapshot.metrics ? { ...stateSnapshot.metrics } : {};
       this._chartView.addSnapshot(date, metrics);
       this._statePanelView.updateStatePanel(date, stateSnapshot);

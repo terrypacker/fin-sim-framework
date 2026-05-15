@@ -125,7 +125,7 @@ import { ActionBuilder } from './simulation-framework/builders/action-builder.js
 import { EventBuilder } from './simulation-framework/builders/event-builder.js';
 import { HandlerBuilder } from './simulation-framework/builders/handler-builder.js';
 import { ReducerBuilder } from './simulation-framework/builders/reducer-builder.js';
-import { EXECUTION_KINDS, EXECUTION_PHASES, SIMULATION_BUS_MESSAGES, BusMessage, SimulationBusMessage, ExecutionBusMessage, BreakpointHitMessage, ServiceActionEvent, ServiceBulkActionEvent, ServiceEdgeActionEvent, NodeDataBusMessage, BreakpointHitBusMessage, EventStartBusMessage, EventEndBusMessage, EventHandledMessage, ActionInstanceMessage, ActionResultMessage, ReducerResultMessage } from './simulation-framework/bus-messages.js';
+import { EXECUTION_KINDS, EXECUTION_PHASES, SIMULATION_BUS_MESSAGES, BusMessage, SimulationBusMessage, ExecutionBusMessage, BreakpointHitMessage, ServiceActionEvent, ServiceBulkActionEvent, ServiceEdgeActionEvent } from './simulation-framework/bus-messages.js';
 import { DateUtils } from './simulation-framework/date-utils.js';
 import { ConstantDistribution, UniformDistribution, NormalDistribution, LogNormalDistribution, BernoulliDistribution, DISTRIBUTION_TYPES, createDistribution } from './simulation-framework/distributions.js';
 import { EventBus } from './simulation-framework/event-bus.js';
@@ -479,14 +479,6 @@ export const Core = {
   ServiceActionEvent,
   ServiceBulkActionEvent,
   ServiceEdgeActionEvent,
-  NodeDataBusMessage,
-  BreakpointHitBusMessage,
-  EventStartBusMessage,
-  EventEndBusMessage,
-  EventHandledMessage,
-  ActionInstanceMessage,
-  ActionResultMessage,
-  ReducerResultMessage,
   DateUtils,
   ConstantDistribution,
   UniformDistribution,
