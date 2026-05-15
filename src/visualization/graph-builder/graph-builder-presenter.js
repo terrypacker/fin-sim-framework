@@ -22,40 +22,44 @@ import { GraphBuilderView }       from './graph-builder-view.js';
  *   registerHandlerCreatedListener(fn)
  *   registerActionCreatedListener(fn)
  *   registerReducerCreatedListener(fn)
- *   editNode(node)
+ *   editNode(node)       — open the edit modal for a node
+ *   createNode(kind, subtype) — create a new node and open the edit modal
  *
- * Constructor signature matches the original ConfigBuilder so base-app.js and
- * any custom scenarios do not need to change.
+ * Graph node clicks are routed through `editNode`, which fires `onEditNode(node)`
+ * so that the host (base-app.js) can open the appropriate modal.
  */
 export class GraphBuilderPresenter {
 
   /**
    * @param {{
-   *   graph:         import('../config-graph.js').ConfigGraph,
-   *   builderCanvas: HTMLElement
+   *   graphRenderer:  import('../components/graph-renderer.js').GraphRenderer,
+   *   eventService:   object,
+   *   handlerService: object,
+   *   actionService:  object,
+   *   reducerService: object,
+   *   onEditNode?:    function(node: object): void,
    * }}
    */
-  constructor({ graphRenderer, builderCanvas, eventService, handlerService, actionService, reducerService, onNodeConfigurationView }) {
-    this._controller = new GraphBuilderController({ eventService, handlerService, actionService, reducerService });
-    this._view       = new GraphBuilderView({ builderCanvas, graphRenderer });
+  constructor({ graphRenderer, eventService, handlerService, actionService, reducerService, onEditNode }) {
+    this._controller    = new GraphBuilderController({ eventService, handlerService, actionService, reducerService });
+    this._view          = new GraphBuilderView({ graphRenderer });
     this._graphRenderer = graphRenderer;
+
+    /** Called whenever a node should be opened for editing (graph click or creation). */
+    this.onEditNode = onEditNode ?? null;
+
     // Register the graph node-click listener so clicking a node opens its editor.
     this._graphRenderer.registerNodeClickListener((event, node) => this.editNode(node));
-
-    //When a node is edited, we want to highlight it's editor
-    this._onNodeConfigurationView = onNodeConfigurationView;
 
     // ── Wire view mutation callbacks → controller ─────────────────────────
 
     this._view.onCreationRequested = (kind, subtype) => {
-      this._controller.notifyCreationRequested(kind, subtype);
-      const newNode = this._controller.createNewNode(kind, subtype);
+      const newNode = this.createNode(kind, subtype);
       this.editNode(newNode);
     };
 
     this._view.onDelete = (node) => {
       this._controller.deleteNode(node);
-      this._view.editNode(null);
     };
 
     this._view.onFieldChange = (node, field, value) => {
@@ -67,81 +71,80 @@ export class GraphBuilderPresenter {
       else       this._controller.unlinkNodes(node, selectedNode, kind, linkTo);
     };
 
-    // For replace* operations the node instance changes, so re-render
-    // the full editor with the returned replacement node.
+    // For replace* operations the node instance changes, so re-open the modal
+    // with the returned replacement node.
     this._view.onEventTypeChange = (nodeId, newClass) => {
       const updated = this._controller.replaceEvent(nodeId, newClass);
-      this._view.editNode(updated);
+      this.editNode(updated);
     };
 
     this._view.onActionClassChange = (nodeId, newClass) => {
       const updated = this._controller.replaceAction(nodeId, newClass);
-      this._view.editNode(updated);
+      this.editNode(updated);
     };
 
     this._view.onReducerTypeChange = (nodeId, newType) => {
       const updated = this._controller.replaceReducer(nodeId, newType);
-      this._view.editNode(updated);
+      this.editNode(updated);
     };
 
     this._view.onHandlerClassChange = (nodeId, newClass) => {
       const updated = this._controller.replaceHandler(nodeId, newClass);
-      this._view.editNode(updated);
+      this.editNode(updated);
     };
 
     this._view.onActionDefinitionAdd = (node, defData) => {
       this._controller.addActionDefinition(node, defData);
-      this._view.editNode(node);
+      this.editNode(node);
     };
 
     this._view.onActionDefinitionRemove = (node, defId) => {
       this._controller.removeActionDefinition(node, defId);
-      this._view.editNode(node);
+      this.editNode(node);
     };
 
     this._view.onActionDefinitionUpdate = (node, defId, field, value) => {
-      if(this._controller.updateActionDefinition(node, defId, field, value)) {
-        this._view.editNode(node);
+      if (this._controller.updateActionDefinition(node, defId, field, value)) {
+        this.editNode(node);
       }
     };
   }
 
-  // ── Public API (BaseScenario contract) ────────────────────────────────────
+  // ── Public API ────────────────────────────────────────────────────────────
 
   registerEventCreatedListener(l)   { this._controller.registerEventCreatedListener(l); }
   registerHandlerCreatedListener(l) { this._controller.registerHandlerCreatedListener(l); }
   registerActionCreatedListener(l)  { this._controller.registerActionCreatedListener(l); }
   registerReducerCreatedListener(l) { this._controller.registerReducerCreatedListener(l); }
 
-  /** Open the editor panel for a node.  Called by BaseScenario after creation. */
+  /** Open the edit modal for a node. */
   editNode(node) {
-    this._view.editNode(node);
-    this._onNodeConfigurationView(node);
+    if (this.onEditNode) this.onEditNode(node);
   }
 
-  //Clear out meta data from nodes?
+  /** Create a new node and return it (does NOT open modal — caller decides). */
+  createNode(kind, subtype) {
+    this._controller.notifyCreationRequested(kind, subtype);
+    return this._controller.createNewNode(kind, subtype);
+  }
+
   resetForReplay() {
-    //Clear out the fired, state changed and
     this._controller.resetForReplay();
   }
 
   // ── Delegating accessors (preserve backwards-compatibility for tests) ──────
 
-  /** Direct access to the listener arrays for test assertions. */
   get eventNodeCreatedListeners()   { return this._controller.eventNodeCreatedListeners; }
   get handlerNodeCreatedListeners() { return this._controller.handlerNodeCreatedListeners; }
   get actionNodeCreatedListeners()  { return this._controller.actionNodeCreatedListeners; }
   get reducerNodeCreatedListeners() { return this._controller.reducerNodeCreatedListeners; }
 
-  /** Used by tests that call the old private method name directly. */
   _notifyNodeCreationRequested(kind, subtype) {
     this._controller.notifyCreationRequested(kind, subtype);
   }
 
-  /** Used by tests and custom scenarios that call deleteNode directly. */
   deleteNode(node) {
     this._controller.deleteNode(node);
-    this._view.editNode(null);
   }
 
   destroy() {
