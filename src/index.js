@@ -125,7 +125,7 @@ import { ActionBuilder } from './simulation-framework/builders/action-builder.js
 import { EventBuilder } from './simulation-framework/builders/event-builder.js';
 import { HandlerBuilder } from './simulation-framework/builders/handler-builder.js';
 import { ReducerBuilder } from './simulation-framework/builders/reducer-builder.js';
-import { SIMULATION_BUS_MESSAGES, BusMessage, SimulationBusMessage, NodeDataBusMessage, BreakpointHitBusMessage, EventStartBusMessage, EventEndBusMessage, EventHandledMessage, ActionInstanceMessage, ActionResultMessage, ReducerResultMessage, ServiceActionEvent, ServiceBulkActionEvent } from './simulation-framework/bus-messages.js';
+import { EXECUTION_KINDS, EXECUTION_PHASES, SIMULATION_BUS_MESSAGES, BusMessage, SimulationBusMessage, ExecutionBusMessage, BreakpointHitMessage, NodeDataBusMessage, BreakpointHitBusMessage, EventStartBusMessage, EventEndBusMessage, EventHandledMessage, ActionInstanceMessage, ActionResultMessage, ReducerResultMessage, ServiceActionEvent, ServiceBulkActionEvent, ServiceEdgeActionEvent } from './simulation-framework/bus-messages.js';
 import { DateUtils } from './simulation-framework/date-utils.js';
 import { ConstantDistribution, UniformDistribution, NormalDistribution, LogNormalDistribution, BernoulliDistribution, DISTRIBUTION_TYPES, createDistribution } from './simulation-framework/distributions.js';
 import { EventBus } from './simulation-framework/event-bus.js';
@@ -139,11 +139,13 @@ import { MinHeap } from './simulation-framework/min-heap.js';
 import { ReducerPipeline, PRIORITY, Reducer, NoOpReducer, FieldReducer, MetricReducer, BalanceSnapshotReducer, FieldValueReducer, ArrayReducer, NumericSumReducer, MultiplicativeReducer, AccountTransactionReducer, REDUCER_CLASSES, RepeatingReducer, ScriptedReducer } from './simulation-framework/reducers.js';
 import { ScenarioRunner } from './simulation-framework/scenario.js';
 import { intervalFns, startSnapFns, SimulationAdapter } from './simulation-framework/simulation/simulation-adapter.js';
-import { ActionNode, SimulationEventGraph } from './simulation-framework/simulation-event-graph.js';
+import { ExecutionGraph, EXECUTION_EDGE_TYPES } from './simulation-framework/execution-graph.js';
+import { GraphRecorder } from './simulation-framework/graph-recorder.js';
 import { SimulationHistory } from './simulation-framework/simulation-history.js';
 import { SimulationState } from './simulation-framework/simulation-state.js';
 import { BreakpointSignal, Simulation } from './simulation-framework/simulation.js';
 import { diffStates } from './simulation-framework/state-utils.js';
+import { buildExecutionId, parentIdOf, nodeIdOf, executionIndexOf } from './simulation-framework/execution-utils.js';
 import { InMemoryStorage } from './storage/in-memory-storage.js';
 import { AccountsController } from './visualization/accounts/accounts-controller.js';
 import { AccountsPresenter } from './visualization/accounts/accounts-presenter.js';
@@ -466,9 +468,13 @@ export const Core = {
   EventBuilder,
   HandlerBuilder,
   ReducerBuilder,
+  EXECUTION_KINDS,
+  EXECUTION_PHASES,
   SIMULATION_BUS_MESSAGES,
   BusMessage,
   SimulationBusMessage,
+  ExecutionBusMessage,
+  BreakpointHitMessage,
   NodeDataBusMessage,
   BreakpointHitBusMessage,
   EventStartBusMessage,
@@ -479,6 +485,7 @@ export const Core = {
   ReducerResultMessage,
   ServiceActionEvent,
   ServiceBulkActionEvent,
+  ServiceEdgeActionEvent,
   DateUtils,
   ConstantDistribution,
   UniformDistribution,
@@ -517,13 +524,18 @@ export const Core = {
   intervalFns,
   startSnapFns,
   SimulationAdapter,
-  ActionNode,
-  SimulationEventGraph,
+  ExecutionGraph,
+  EXECUTION_EDGE_TYPES,
+  GraphRecorder,
   SimulationHistory,
   SimulationState,
   BreakpointSignal,
   Simulation,
   diffStates,
+  buildExecutionId,
+  parentIdOf,
+  nodeIdOf,
+  executionIndexOf,
 };
 
 export const Visualization = {

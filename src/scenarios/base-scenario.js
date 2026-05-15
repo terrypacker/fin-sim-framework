@@ -118,7 +118,8 @@ export class BaseScenario {
     simulationRegistry.unregister('primary');
 
     const sim = new Simulation(this.simStart, {
-      bus: ServiceRegistry.getInstance().bus,
+      bus:          ServiceRegistry.getInstance().bus,
+      graph:        ServiceRegistry.getInstance().graph,
       initialState: resolved,
     });
 

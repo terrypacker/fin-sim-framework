@@ -11,7 +11,6 @@
 import {
   SimulationAdapter
 } from "../simulation-framework/simulation/simulation-adapter.js";
-import {SIMULATION_BUS_MESSAGES} from "../simulation-framework/bus-messages.js";
 
 /**
  * Bridges the service layer (configuration) and the Simulation (execution).
@@ -30,13 +29,8 @@ import {SIMULATION_BUS_MESSAGES} from "../simulation-framework/bus-messages.js";
  * created (i.e., from BaseScenario.buildSim()).
  */
 export class SimulationSync {
-  constructor({ bus, simulationRegistry, eventService, handlerService, actionService, reducerService }) {
+  constructor({ bus, simulationRegistry }) {
     this.simulationRegistry = simulationRegistry;
-
-    this.eventService = eventService;
-    this.handlerService = handlerService;
-    this.actionService = actionService;
-    this.reducerService = reducerService;
 
     this.adapter = new SimulationAdapter({
       sim: null,
@@ -44,20 +38,8 @@ export class SimulationSync {
     });
 
     bus.subscribe('SERVICE_ACTION', msg => {
-      const { actionType, item } = msg;
-      const { reason } = item.meta || {};
-      if (reason === 'execution') {
-        //TODO Simulation fired event during execution
-        //  we don't want to process this back into the sim
-        return;
-      }
-
       this._handle(msg);
     });
-
-    bus.subscribe(SIMULATION_BUS_MESSAGES.NODE_DATA_CHANGED, msg => {
-      this._handleNodeDataMessage(msg);
-    })
   }
 
   setSimStart(simStart) {
@@ -85,32 +67,4 @@ export class SimulationSync {
     }
   }
 
-  _handleNodeDataMessage(msg) {
-    switch(msg.kind) {
-      case 'event':
-        this.eventService.updateEvent(msg.nodeId, {
-          data: msg.data,
-          meta: msg.meta
-        })
-        break;
-      case 'handler':
-        this.handlerService.updateHandler(msg.nodeId, {
-          data: msg.data,
-          meta: msg.meta
-        })
-        break;
-      case 'action':
-        this.actionService.updateAction(msg.nodeId, {
-          data: msg.data,
-          meta: msg.meta
-        })
-        break;
-      case 'reducer':
-        this.reducerService.updateReducer(msg.nodeId, {
-          data: msg.data,
-          meta: msg.meta
-        })
-        break;
-    }
-  }
 }

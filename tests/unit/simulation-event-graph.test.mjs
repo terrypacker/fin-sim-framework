@@ -10,251 +10,200 @@
 
 /**
  * simulation-event-graph.test.mjs
- * Tests for SimulationEventGraph and ActionNode
- * Run with: node --test tests/simulation-event-graph.test.mjs
+ * Tests for ExecutionGraph and GraphRecorder (Phase 6)
  */
 
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import {
-  SimulationEventGraph,
-  ActionNode
-} from '../../src/simulation-framework/simulation-event-graph.js';
+import { Graph }          from '../../src/graph/graph.js';
+import { ExecutionGraph, EXECUTION_EDGE_TYPES } from '../../src/simulation-framework/execution-graph.js';
+import { GraphRecorder }  from '../../src/simulation-framework/graph-recorder.js';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-let nextId = 0;
-
-function makeNode(overrides = {}) {
-  const id = overrides.id ?? nextId++;
-  return new ActionNode({
-    id,
-    type:        overrides.type        ?? 'ACTION',
-    date:        overrides.date        ?? new Date(2025, 0, 1),
-    parent:      overrides.parent      ?? null,
-    children:    overrides.children    ?? [],
-    action:      overrides.action      ?? { type: 'ACTION' },
-    reducer:     overrides.reducer     ?? 'anonymous',
-    stateDiff:   overrides.stateDiff   ?? [],
-    sourceEvent: overrides.sourceEvent ?? {}
-  });
+function makeGraph() {
+  return new ExecutionGraph(new Graph());
 }
 
-// ─── ActionNode construction ──────────────────────────────────────────────────
+// ─── ExecutionGraph: addNode / getNode ───────────────────────────────────────
 
-test('ActionNode: all fields are assigned from constructor', () => {
-  const date   = new Date(2025, 3, 1);
-  const action = { type: 'FOO', amount: 5 };
-  const diff   = [{ field: 'counter', before: 0, after: 5, delta: 5 }];
-  const src    = { type: 'SOURCE' };
+test('ExecutionGraph: addNode stores node and getNode retrieves it', () => {
+  const eg   = makeGraph();
+  const node = { id: 'n1', kind: 'event', layer: 'execution', name: 'ANNUAL', definitionId: null };
 
-  const node = new ActionNode({
-    id: 7, type: 'FOO', date,
-    parent: 3, children: [8, 9],
-    action, reducer: 'R', stateDiff: diff, sourceEvent: src
-  });
-
-  assert.strictEqual(node.id,          7);
-  assert.strictEqual(node.type,        'FOO');
-  assert.strictEqual(node.date,        date);
-  assert.strictEqual(node.parent,      3);
-  assert.deepStrictEqual(node.children, [8, 9]);
-  assert.strictEqual(node.action,      action);
-  assert.strictEqual(node.reducer,     'R');
-  assert.strictEqual(node.stateDiff,   diff);
-  assert.strictEqual(node.sourceEvent, src);
+  eg.addNode(node);
+  assert.strictEqual(eg.getNode('n1'), node);
 });
 
-// ─── addActionNode ────────────────────────────────────────────────────────────
+test('ExecutionGraph: getExecutionNodes returns only execution-layer nodes', () => {
+  const eg = makeGraph();
+  eg.addNode({ id: 'cfg', layer: 'config',    kind: 'event', name: 'DEF' });
+  eg.addNode({ id: 'run', layer: 'execution', kind: 'event', name: 'RUN' });
 
-test('SimulationEventGraph: addActionNode stores node by id', () => {
-  const g    = new SimulationEventGraph();
-  const node = makeNode({ id: 0 });
-
-  g.addActionNode(node);
-  assert.strictEqual(g.getNode(0), node);
+  const execNodes = eg.getExecutionNodes();
+  assert.strictEqual(execNodes.length, 1);
+  assert.strictEqual(execNodes[0].id, 'run');
 });
 
-test('SimulationEventGraph: addActionNode with null parent does not crash', () => {
-  const g    = new SimulationEventGraph();
-  const node = makeNode({ id: 0, parent: null });
+// ─── ExecutionGraph: addEdge / getChildren / getParent ───────────────────────
 
-  assert.doesNotThrow(() => g.addActionNode(node));
+test('ExecutionGraph: addEdge links parent→child via EXECUTES', () => {
+  const eg = makeGraph();
+  eg.addNode({ id: 'p', layer: 'execution', kind: 'event',   name: 'P' });
+  eg.addNode({ id: 'c', layer: 'execution', kind: 'handler', name: 'C' });
+
+  eg.addEdge('p', 'c', EXECUTION_EDGE_TYPES.EXECUTES);
+
+  const children = eg.getChildren('p');
+  assert.strictEqual(children.length, 1);
+  assert.strictEqual(children[0].id, 'c');
 });
 
-test('SimulationEventGraph: addActionNode links child id into parent.children', () => {
-  const g      = new SimulationEventGraph();
-  const parent = makeNode({ id: 0 });
-  const child  = makeNode({ id: 1, parent: 0 });
+test('ExecutionGraph: getParent returns parent node via EXECUTES edge', () => {
+  const eg = makeGraph();
+  eg.addNode({ id: 'p', layer: 'execution', kind: 'event',   name: 'P' });
+  eg.addNode({ id: 'c', layer: 'execution', kind: 'handler', name: 'C' });
+  eg.addEdge('p', 'c', EXECUTION_EDGE_TYPES.EXECUTES);
 
-  g.addActionNode(parent);
-  g.addActionNode(child);
-
-  assert.ok(parent.children.includes(1), 'parent.children should contain child id');
+  assert.strictEqual(eg.getParent('c').id, 'p');
+  assert.strictEqual(eg.getParent('p'), null);
 });
 
-test('SimulationEventGraph: child with non-existent parent id does not crash', () => {
-  const g    = new SimulationEventGraph();
-  const node = makeNode({ id: 5, parent: 999 }); // 999 never added
+test('ExecutionGraph: getDefinition returns config node via INSTANCE_OF edge', () => {
+  const eg = makeGraph();
+  eg.addNode({ id: 'def',  layer: 'config',    kind: 'event', name: 'DEF' });
+  eg.addNode({ id: 'inst', layer: 'execution', kind: 'event', name: 'RUN' });
+  eg.addEdge('inst', 'def', EXECUTION_EDGE_TYPES.INSTANCE_OF);
 
-  assert.doesNotThrow(() => g.addActionNode(node));
+  assert.strictEqual(eg.getDefinition('inst').id, 'def');
 });
 
-test('SimulationEventGraph: multiple children are all linked to parent', () => {
-  const g      = new SimulationEventGraph();
-  const parent = makeNode({ id: 0 });
-  const c1     = makeNode({ id: 1, parent: 0 });
-  const c2     = makeNode({ id: 2, parent: 0 });
-  const c3     = makeNode({ id: 3, parent: 0 });
-
-  g.addActionNode(parent);
-  g.addActionNode(c1);
-  g.addActionNode(c2);
-  g.addActionNode(c3);
-
-  assert.deepStrictEqual(parent.children, [1, 2, 3]);
+test('ExecutionGraph: addEdge with missing node returns null (no crash)', () => {
+  const eg = makeGraph();
+  eg.addNode({ id: 'p', layer: 'execution', kind: 'event', name: 'P' });
+  assert.strictEqual(eg.addEdge('p', 'missing', EXECUTION_EDGE_TYPES.EXECUTES), null);
 });
 
-// ─── getNode ──────────────────────────────────────────────────────────────────
+// ─── ExecutionGraph: traceUp ─────────────────────────────────────────────────
 
-test('SimulationEventGraph.getNode: returns correct node for a known id', () => {
-  const g    = new SimulationEventGraph();
-  const node = makeNode({ id: 42, type: 'SPECIAL' });
+test('ExecutionGraph: traceUp returns root-to-leaf ancestry', () => {
+  const eg = makeGraph();
+  eg.addNode({ id: 'e', layer: 'execution', kind: 'event',   name: 'E' });
+  eg.addNode({ id: 'h', layer: 'execution', kind: 'handler', name: 'H' });
+  eg.addNode({ id: 'a', layer: 'execution', kind: 'action',  name: 'A' });
+  eg.addEdge('e', 'h', EXECUTION_EDGE_TYPES.EXECUTES);
+  eg.addEdge('h', 'a', EXECUTION_EDGE_TYPES.EXECUTES);
 
-  g.addActionNode(node);
-  const retrieved = g.getNode(42);
-
-  assert.strictEqual(retrieved, node);
-  assert.strictEqual(retrieved.type, 'SPECIAL');
+  const chain = eg.traceUp('a');
+  assert.deepStrictEqual(chain.map(n => n.id), ['e', 'h', 'a']);
 });
 
-test('SimulationEventGraph.getNode: returns undefined for unknown id', () => {
-  const g = new SimulationEventGraph();
-  assert.strictEqual(g.getNode(999), undefined);
+// ─── GraphRecorder: beginNode / endNode ──────────────────────────────────────
+
+test('GraphRecorder: beginNode returns a UUID and stores the node', () => {
+  const gr  = new GraphRecorder(makeGraph());
+  const id  = gr.beginNode({ kind: 'event', name: 'ANNUAL', definitionId: null, parentNodeId: null, date: new Date() });
+
+  assert.ok(typeof id === 'string' && id.length > 0, 'should return non-empty UUID');
+  assert.ok(gr._eg.getNode(id), 'node should be in graph');
 });
 
-// ─── getRootActions ───────────────────────────────────────────────────────────
+test('GraphRecorder: beginNode with explicit uuid uses it as node id', () => {
+  const gr  = new GraphRecorder(makeGraph());
+  const uuid = crypto.randomUUID();
+  const id   = gr.beginNode({ uuid, kind: 'action', name: 'SELL', definitionId: null, parentNodeId: null, date: new Date() });
 
-test('SimulationEventGraph.getRootActions: returns nodes with parent === null', () => {
-  const g    = new SimulationEventGraph();
-  const root = makeNode({ id: 0, parent: null  });
-  const child = makeNode({ id: 1, parent: 0    });
-
-  g.addActionNode(root);
-  g.addActionNode(child);
-
-  const roots = g.getRootActions();
-  assert.strictEqual(roots.length, 1);
-  assert.strictEqual(roots[0], root);
+  assert.strictEqual(id, uuid);
+  assert.ok(gr._eg.getNode(uuid));
 });
 
-test('SimulationEventGraph.getRootActions: multiple roots when no nodes share parents', () => {
-  const g  = new SimulationEventGraph();
-  const r1 = makeNode({ id: 0, parent: null });
-  const r2 = makeNode({ id: 1, parent: null });
-  const r3 = makeNode({ id: 2, parent: null });
+test('GraphRecorder: beginNode adds EXECUTES edge from parent', () => {
+  const gr     = new GraphRecorder(makeGraph());
+  const evtId  = gr.beginNode({ kind: 'event',   name: 'E', definitionId: null, parentNodeId: null, date: new Date() });
+  const hndId  = gr.beginNode({ kind: 'handler', name: 'H', definitionId: null, parentNodeId: evtId, date: new Date() });
 
-  g.addActionNode(r1);
-  g.addActionNode(r2);
-  g.addActionNode(r3);
-
-  assert.strictEqual(g.getRootActions().length, 3);
+  const children = gr._eg.getChildren(evtId);
+  assert.strictEqual(children.length, 1);
+  assert.strictEqual(children[0].id, hndId);
 });
 
-test('SimulationEventGraph.getRootActions: returns empty array on empty graph', () => {
-  const g = new SimulationEventGraph();
-  assert.deepStrictEqual(g.getRootActions(), []);
+test('GraphRecorder: beginNode adds INSTANCE_OF edge when definitionId exists', () => {
+  const eg  = makeGraph();
+  eg.addNode({ id: 'e1', layer: 'config', kind: 'event', name: 'DEF' });
+  const gr  = new GraphRecorder(eg);
+
+  const runId = gr.beginNode({ kind: 'event', name: 'E', definitionId: 'e1', parentNodeId: null, date: new Date() });
+
+  assert.strictEqual(gr._eg.getDefinition(runId)?.id, 'e1');
 });
 
-// ─── traceActionChain ─────────────────────────────────────────────────────────
+test('GraphRecorder: endNode updates stateDiff on the node', () => {
+  const gr    = new GraphRecorder(makeGraph());
+  const id    = gr.beginNode({ kind: 'reducer', name: 'R', definitionId: null, parentNodeId: null, date: new Date() });
+  const diff  = [{ field: 'cash', before: 100, after: 200, delta: 100 }];
 
-test('SimulationEventGraph.traceActionChain: returns single node for leaf', () => {
-  const g    = new SimulationEventGraph();
-  const node = makeNode({ id: 0 });
+  gr.endNode(id, { stateDiff: diff });
 
-  g.addActionNode(node);
-  const chain = g.traceActionChain(0);
-
-  assert.strictEqual(chain.length, 1);
-  assert.strictEqual(chain[0], node);
+  const node = gr._eg.getNode(id);
+  assert.deepStrictEqual(node.meta.stateDiff, diff);
 });
 
-test('SimulationEventGraph.traceActionChain: returns DFS order for a linear chain', () => {
-  const g  = new SimulationEventGraph();
-  const n0 = makeNode({ id: 0, type: 'ROOT',  parent: null });
-  const n1 = makeNode({ id: 1, type: 'CHILD', parent: 0   });
-  const n2 = makeNode({ id: 2, type: 'LEAF',  parent: 1   });
+// ─── GraphRecorder: getCurrentNodeId / stack ─────────────────────────────────
 
-  g.addActionNode(n0);
-  g.addActionNode(n1);
-  g.addActionNode(n2);
+test('GraphRecorder: getCurrentNodeId returns innermost open node', () => {
+  const gr  = new GraphRecorder(makeGraph());
+  const id1 = gr.beginNode({ kind: 'event',  name: 'E', definitionId: null, parentNodeId: null, date: new Date() });
+  const id2 = gr.beginNode({ kind: 'action', name: 'A', definitionId: null, parentNodeId: id1,  date: new Date() });
 
-  const chain = g.traceActionChain(0);
-  const types = chain.map(n => n.type);
-
-  assert.deepStrictEqual(types, ['ROOT', 'CHILD', 'LEAF']);
+  assert.strictEqual(gr.getCurrentNodeId(), id2);
+  gr.endNode(id2);
+  assert.strictEqual(gr.getCurrentNodeId(), id1);
+  gr.endNode(id1);
+  assert.strictEqual(gr.getCurrentNodeId(), null);
 });
 
-test('SimulationEventGraph.traceActionChain: visits all branches depth-first', () => {
-  //   ROOT
-  //   ├── LEFT
-  //   └── RIGHT
-  const g     = new SimulationEventGraph();
-  const root  = makeNode({ id: 0, type: 'ROOT',  parent: null });
-  const left  = makeNode({ id: 1, type: 'LEFT',  parent: 0   });
-  const right = makeNode({ id: 2, type: 'RIGHT', parent: 0   });
+// ─── GraphRecorder: SCHEDULES deferred resolution ────────────────────────────
 
-  g.addActionNode(root);
-  g.addActionNode(left);
-  g.addActionNode(right);
+test('GraphRecorder: resolvePendingSchedules adds SCHEDULES edge', () => {
+  const gr   = new GraphRecorder(makeGraph());
+  const evtA = gr.beginNode({ kind: 'event', name: 'TRIGGER', definitionId: null, parentNodeId: null, date: new Date() });
+  const hndA = gr.beginNode({ kind: 'handler', name: 'H', definitionId: null, parentNodeId: evtA, date: new Date() });
 
-  const chain = g.traceActionChain(0);
-  const types = chain.map(n => n.type);
+  gr.recordPendingSchedule({ targetDefinitionId: 'NEXT_EVENT', scheduledFor: new Date() });
+  gr.endNode(hndA);
+  gr.endNode(evtA);
 
-  assert.ok(types.includes('ROOT'),  'chain should include ROOT');
-  assert.ok(types.includes('LEFT'),  'chain should include LEFT');
-  assert.ok(types.includes('RIGHT'), 'chain should include RIGHT');
-  assert.strictEqual(chain.length, 3);
-  assert.strictEqual(types[0], 'ROOT', 'ROOT should be first');
+  const evtB = gr.beginNode({ kind: 'event', name: 'NEXT_EVENT', definitionId: null, parentNodeId: null, date: new Date() });
+  gr.resolvePendingSchedules('NEXT_EVENT', evtB);
+
+  const edges = gr._eg._graph.getEdges({ type: EXECUTION_EDGE_TYPES.SCHEDULES });
+  assert.strictEqual(edges.length, 1);
+  assert.strictEqual(edges[0].from, hndA);
+  assert.strictEqual(edges[0].to,   evtB);
 });
 
-test('SimulationEventGraph.traceActionChain: returns empty array for unknown id', () => {
-  const g = new SimulationEventGraph();
-  assert.deepStrictEqual(g.traceActionChain(999), []);
+test('GraphRecorder: unresolved schedule is not dropped on non-matching event', () => {
+  const gr   = new GraphRecorder(makeGraph());
+  const evtA = gr.beginNode({ kind: 'event', name: 'E', definitionId: null, parentNodeId: null, date: new Date() });
+  gr.recordPendingSchedule({ targetDefinitionId: 'FAR_FUTURE', scheduledFor: new Date() });
+  gr.endNode(evtA);
+
+  const evtB = gr.beginNode({ kind: 'event', name: 'OTHER', definitionId: null, parentNodeId: null, date: new Date() });
+  gr.resolvePendingSchedules('OTHER', evtB);
+
+  assert.strictEqual(gr._pendingSchedules.length, 1, 'unmatched schedule should remain pending');
 });
 
-// ─── traceActionsUp ───────────────────────────────────────────────────────────
+// ─── GraphRecorder: EMITS edges ──────────────────────────────────────────────
 
-test('SimulationEventGraph.traceActionsUp: single root returns array with that node', () => {
-  const g    = new SimulationEventGraph();
-  const node = makeNode({ id: 0, parent: null });
+test('GraphRecorder: addEmitsEdge links reducer to emitted action', () => {
+  const gr      = new GraphRecorder(makeGraph());
+  const reducerId = gr.beginNode({ kind: 'reducer', name: 'R', definitionId: null, parentNodeId: null, date: new Date() });
+  const actionId  = gr.beginNode({ kind: 'action',  name: 'A', definitionId: null, parentNodeId: null, date: new Date() });
 
-  g.addActionNode(node);
-  const chain = g.traceActionsUp(0);
+  gr.addEmitsEdge(reducerId, actionId);
 
-  assert.strictEqual(chain.length, 1);
-  assert.strictEqual(chain[0], node);
-});
-
-test('SimulationEventGraph.traceActionsUp: returns root-to-leaf order', () => {
-  const g  = new SimulationEventGraph();
-  const r  = makeNode({ id: 0, type: 'ROOT',  parent: null });
-  const m  = makeNode({ id: 1, type: 'MID',   parent: 0   });
-  const l  = makeNode({ id: 2, type: 'LEAF',  parent: 1   });
-
-  g.addActionNode(r);
-  g.addActionNode(m);
-  g.addActionNode(l);
-
-  // Called on the leaf; should walk up and reverse to root-first
-  const chain = g.traceActionsUp(2);
-  const types = chain.map(n => n.type);
-
-  assert.deepStrictEqual(types, ['ROOT', 'MID', 'LEAF']);
-});
-
-test('SimulationEventGraph.traceActionsUp: returns empty array for unknown id', () => {
-  const g = new SimulationEventGraph();
-  assert.deepStrictEqual(g.traceActionsUp(999), []);
+  const edges = gr._eg._graph.getEdges({ type: EXECUTION_EDGE_TYPES.EMITS });
+  assert.strictEqual(edges.length, 1);
+  assert.strictEqual(edges[0].from, reducerId);
+  assert.strictEqual(edges[0].to,   actionId);
 });
