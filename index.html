@@ -347,6 +347,10 @@
             <span class="panel-tag">CT</span>
             <span class="panel-title">CHART</span>
           </div>
+          <div class="panel-header tab-header" data-dest-tab="mc-tab" data-tab-group="center-col">
+            <span class="panel-tag">MC</span>
+            <span class="panel-title">MONTE CARLO</span>
+          </div>
         </div>
 
         <!-- Config Graph View -->
@@ -386,6 +390,15 @@
             <div class="viz-wrap" style="flex:1;margin:10px;border-radius:4px;overflow:hidden">
               <canvas id="chartCanvas"></canvas>
             </div>
+          </div>
+        </div>
+
+        <!-- Monte Carlo Tab -->
+        <div class="tab-content monte-carlo-tab" style="display:none" data-tab="mc-tab" data-tab-group="center-col">
+          <div style="display:flex;flex:1;min-height:0;gap:4px;padding:4px">
+            <div id="mcConfigPane" style="width:280px;flex-shrink:0;overflow-y:auto;border-right:1px solid #1e293b"></div>
+            <div id="mcResultsPane" style="flex:1;min-width:0;overflow:hidden"></div>
+            <div id="mcRunsPane" style="width:280px;flex-shrink:0;overflow-y:auto;border-left:1px solid #1e293b"></div>
           </div>
         </div>
       </div>

@@ -49,6 +49,9 @@ import { TaxDocumentModal }        from '../visualization/timeline/tax-document-
 import {
   ScenarioTabController
 } from "../visualization/scenario/scenario-tab-controller.js";
+import { MonteCarloView }       from '../visualization/monte-carlo/monte-carlo-view.js';
+import { MonteCarloController } from '../visualization/monte-carlo/monte-carlo-controller.js';
+import { MonteCarloPresenter }  from '../visualization/monte-carlo/monte-carlo-presenter.js';
 
 /**
  * BaseApp — composition root.
@@ -86,6 +89,8 @@ export class BaseApp extends BaseComponent {
     this.accountsPresenter     = null;
     this.scenarioTabPresenter  = null;
     this._animator             = null;
+    this.mcPresenter           = null;
+    this._replayParams         = null;
 
     // Views created once — their DOM listeners are wired only once.
     this._peopleView      = new PeopleView();
@@ -165,6 +170,10 @@ export class BaseApp extends BaseComponent {
     // ── Build scenario ────────────────────────────────────────────────────────
     //This will create the active scenario
     this.scenario = registry.scenarioService.createActiveScenario();
+    if (this._replayParams) {
+      this.scenario.params = this._replayParams;
+      this._replayParams = null;
+    }
     this.scenario.buildSim();
     this.scenario.loadDefaults();
     this.accountsPresenter.setJournal(this.scenario.sim.journal);
@@ -256,6 +265,14 @@ export class BaseApp extends BaseComponent {
     this._currentDate          = this.scenario.simStart;
     $('timeLabel').textContent = this.timeControls.formatDate(this.scenario.simStart);
 
+    // ── Monte Carlo ───────────────────────────────────────────────────────────────
+    this.mcPresenter = new MonteCarloPresenter({
+      controller: new MonteCarloController(),
+      view:       new MonteCarloView(),
+      scenario:   this.scenario,
+    });
+    this.mcPresenter.onReplayRun = (run) => this._replayMcRun(run);
+
     //Send Scenario Ready Message
     registry.bus.publish(new BusMessage({ type: SIMULATION_BUS_MESSAGES.SCENARIO_READY, date: this.scenario.simStart}));
   }
@@ -269,13 +286,25 @@ export class BaseApp extends BaseComponent {
     $('currentStateContent').innerHTML  = '';
     $('cumulativeMetricsContent').innerHTML = '';
 
-    if (this.chartPresenter) this.chartPresenter.stopViz();
-    if (this.configPresenter) this.configPresenter.destroy();
-    if (this.peoplePresenter) this.peoplePresenter.destroy();
+    if (this.chartPresenter)    this.chartPresenter.stopViz();
+    if (this.configPresenter)   this.configPresenter.destroy();
+    if (this.peoplePresenter)   this.peoplePresenter.destroy();
     if (this.accountsPresenter) this.accountsPresenter.destroy();
     if (this.timelinePresenter) this.timelinePresenter.destroy();
+    if (this.mcPresenter)       this.mcPresenter.destroy();
+  }
 
+  /**
+   * Rebuild the scenario using the exact params from a MC run, then switch
+   * to the Timeline tab so the user can step through the replayed simulation.
+   */
+  _replayMcRun(run) {
+    this._replayParams = run.params;
+    this.destroyScenario();
+    this.initScenario();
 
+    const tlHeader = document.querySelector('[data-dest-tab="timeline-tab"][data-tab-group="center-col"]');
+    if (tlHeader) this.openTab({ currentTarget: tlHeader }, 'timeline-tab', 'center-col');
   }
 
   initView() {
