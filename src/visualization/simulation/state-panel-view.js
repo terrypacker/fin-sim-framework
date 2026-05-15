@@ -10,6 +10,7 @@
 
 import { $ } from '../ui-utils.js';
 import { BaseComponent } from '../components/base-component.js';
+import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bus-messages.js';
 
 /**
  * StatePanelView — pure DOM layer for state/metrics panels and node detail.
@@ -26,7 +27,12 @@ export class StatePanelView extends BaseComponent {
 
   constructor() {
     super();
-    this._formatDate = d => d.toDateString();
+    this._formatDate        = d => d.toDateString();
+    this._pendingDate       = null;
+    this._pendingState      = null;
+    this._drainExecEndMsgs  = () => [];
+    this._chartPresenter    = null;
+    this._lastOutOfFundsDate = null;
   }
 
   /** Update the active date-format function (UTC vs local). */
@@ -34,14 +40,83 @@ export class StatePanelView extends BaseComponent {
     this._formatDate = fn ?? (d => d.toDateString());
   }
 
+  // ── Simulation bus ────────────────────────────────────────────────────────────
+
+  /**
+   * Subscribe to EXECUTION_END(EVENT) directly so the state panel and failure
+   * banner update themselves without being driven by SimulationAnimator.
+   * Call once per scenario after scenario.buildSim().
+   * @param {EventBus} simBus
+   * @param {{ chartPresenter?: object }} [opts]
+   */
+  wireSimBus(simBus, { chartPresenter } = {}) {
+    this._chartPresenter = chartPresenter ?? null;
+    this._drainExecEndMsgs = this.busQueue(
+      simBus,
+      `EXECUTION_${EXECUTION_PHASES.END}`,
+      () => this.render(),
+      { kind: EXECUTION_KINDS.EVENT }
+    );
+  }
+
   // ── State panel rendering ─────────────────────────────────────────────────
 
+  /** Public API: direct update (e.g. from reset callback). */
   updateStatePanel(date, state) {
-    //TODO change this method name to render
-    //TODO #140 render diffs only, we can get them from SimulationAnimator whos is calling this already
     this._pendingDate  = date;
     this._pendingState = state;
-    this.scheduleRender(() => this._renderStatePanel(this._pendingDate, this._pendingState));
+    this.render();
+  }
+
+  render() {
+    this.scheduleRender(() => this._doRender());
+  }
+
+  _doRender() {
+    const msgs = this._drainExecEndMsgs();
+    const last = msgs[msgs.length - 1];
+    if (last) {
+      this._pendingDate  = new Date(last.date);
+      this._pendingState = last.stateSnapshot;
+    }
+    if (this._pendingState) {
+      this._renderStatePanel(this._pendingDate, this._pendingState);
+      this._updateFailureBanner(this._pendingState);
+    }
+  }
+
+  // ── Failure banner ────────────────────────────────────────────────────────
+
+  _updateFailureBanner(stateSnapshot) {
+    const oofDate = stateSnapshot?.outOfFundsDate ?? null;
+
+    if (oofDate !== this._lastOutOfFundsDate) {
+      const banner   = $('failureBanner');
+      const dateSpan = $('failureBannerDate');
+
+      if (oofDate && !this._lastOutOfFundsDate) {
+        if (banner)   banner.style.display = '';
+        if (dateSpan) dateSpan.textContent = this.fmtVal(oofDate);
+        this._chartPresenter?.addAnnotation('out_of_funds', {
+          label:    'OUT OF FUNDS',
+          date:     oofDate,
+          color:    '#f87171',
+          position: 'start',
+        });
+      } else if (!oofDate && this._lastOutOfFundsDate) {
+        if (banner) banner.style.display = 'none';
+        this._chartPresenter?.removeAnnotation('out_of_funds');
+      }
+
+      this._lastOutOfFundsDate = oofDate;
+    }
+
+    if (oofDate) {
+      const defSpan    = $('failureBannerDeficit');
+      const monthsSpan = $('failureBannerMonths');
+      if (defSpan)    defSpan.textContent    = '$' + Math.round(stateSnapshot.cumulativeDeficit ?? 0).toLocaleString();
+      if (monthsSpan) monthsSpan.textContent = stateSnapshot.deficitMonths ?? 0;
+    }
   }
 
   _renderStatePanel(date, state) {

@@ -8,42 +8,30 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { $ }                       from '../ui-utils.js';
-import {
-  EXECUTION_KINDS,
-  EXECUTION_PHASES,
-} from '../../simulation-framework/bus-messages.js';
+import { $ }                  from '../ui-utils.js';
+import { DashCardsComponent } from './dash-cards-component.js';
 
 /**
- * SimulationAnimator — owns playback, config-graph highlighting, breakpoints,
- * and dashboard cards.
+ * SimulationAnimator — owns playback, config-graph highlighting, and breakpoints.
  *
  * Created fresh each buildScenario() so it binds to the new scenario/bus.
- *
- * Constructor:
- *   { configGraph, scenario, timeControls, statePanelView, graphView, chartView }
+ * Each sub-component (DashCards, TimeControls, StatePanelView, ChartPresenter,
+ * GraphRenderer) receives the simBus via wireSimBus() and manages its own
+ * subscriptions, render scheduling, and failure-banner display.
  *
  * Public API:
- *   startPlaying()          — begin animation loop
- *   stopPlaying()           — stop animation loop
- *   syncBreakpoints()       — sync breakpoint node IDs → sim control
- *   clearBreakpointStatus() — reset status row to RUNNING/STOPPED
+ *   startPlaying()            — begin animation loop
+ *   stopPlaying()             — stop animation loop
+ *   toggleBreakpoint(node)    — toggle breakpoint on a config-graph node
+ *   clearBreakpointStatus()   — reset status row to RUNNING/STOPPED
  *   showBreakpointPaused(hit) — display breakpoint-pause status
- *   updateDashCards(date)   — update the four execution-count cards
- *   wireSimBus(bus)         — subscribe to simulation bus messages
+ *   updateDashCards(date)     — trigger an immediate dash-card refresh
+ *   wireSimBus(bus)           — wire all sub-components to the simulation bus
  */
 const PLAYBACK_THROTTLE_MS = 1000;
 
 export class SimulationAnimator {
 
-  /**
-   * @param {{
-   *   scenario:        object,
-   *   timeControls:   import('../time-controls.js').TimeControls,
-   *   statePanelView: import('./state-panel-view.js').StatePanelView,
-   *   chartView:      import('../visualization/chart-view.js').ChartView,
-   * }}
-   */
   constructor({ scenario, timeControls, statePanelView, chartView, graphRenderer, accountsPresenter }) {
     this._scenario          = scenario;
     this._timeControls      = timeControls;
@@ -51,11 +39,9 @@ export class SimulationAnimator {
     this._chartView         = chartView;
     this._graphRenderer     = graphRenderer ?? null;
     this._accountsPresenter = accountsPresenter ?? null;
+    this._dashCards         = null;   // created in wireSimBus
 
     this.playing = false;
-    this._dashCardsdirty = false;
-
-    this._lastOutOfFundsDate = null;
   }
 
   // ── Playback ──────────────────────────────────────────────────────────────
@@ -95,6 +81,7 @@ export class SimulationAnimator {
     this._statePanelView?.setRenderThrottle(PLAYBACK_THROTTLE_MS);
     this._chartView?.setRenderThrottle(PLAYBACK_THROTTLE_MS);
     this._accountsPresenter?.setRenderThrottle(PLAYBACK_THROTTLE_MS);
+    this._dashCards?.setRenderThrottle(PLAYBACK_THROTTLE_MS);
     this.animate();
   }
 
@@ -105,6 +92,7 @@ export class SimulationAnimator {
     this._statePanelView?.setRenderThrottle(0);
     this._chartView?.setRenderThrottle(0);
     this._accountsPresenter?.setRenderThrottle(0);
+    this._dashCards?.setRenderThrottle(0);
     if (!this._scenario?.sim?.control?.paused) {
       this.clearBreakpointStatus();
     }
@@ -112,12 +100,11 @@ export class SimulationAnimator {
 
   // ── Breakpoints ───────────────────────────────────────────────────────────
 
-  /** Sync breakpointed node IDs from the config graph into sim control. */
   toggleBreakpoint(node) {
     if (!this._scenario?.sim) return;
-    if(!node) {
+    if (!node) {
       this._scenario.sim.clearAllBreakpoints();
-    }else {
+    } else {
       this._scenario.sim.toggleNodeBreakpoint(node);
     }
   }
@@ -125,7 +112,7 @@ export class SimulationAnimator {
   clearBreakpointStatus() {
     const dot   = $('statusDot');
     const label = $('simStatus');
-    if (dot)   dot.className    = this.playing ? 'status-dot running' : 'status-dot stopped';
+    if (dot)   dot.className     = this.playing ? 'status-dot running' : 'status-dot stopped';
     if (label) label.textContent = this.playing ? 'RUNNING' : 'STOPPED';
     this._scenario.sim.clearAllBreakpoints();
   }
@@ -144,90 +131,30 @@ export class SimulationAnimator {
 
   // ── Dashboard cards ───────────────────────────────────────────────────────
 
-  _scheduleDashCardFrame(date) {
-    if (this._dashCardFrameScheduled) return;
-    this._dashCardFrameScheduled = true;
-    requestAnimationFrame(() => {
-      this._dashCardFrameScheduled = false;
-
-      if (!this._dashCardsdirty) return;
-
-      this._dashCardsdirty = false;
-      this._updateDashCards(date);
-    });
-  }
-
+  /** Trigger an immediate dash-card refresh (initial load, reset). */
   updateDashCards(date) {
-    if(this._dashCardsdirty) return;
-    this._dashCardsdirty = true;
-    this._scheduleDashCardFrame(date);
+    this._dashCards?.update(date);
   }
 
-  _updateDashCards(date) {
-    const sim = this._scenario?.sim;
-    $('cardCurrentDate').innerText       = this._statePanelView.fmtVal(date);
-    $('cardEventExecutions').innerText   = sim?.eventExecutions   ?? 0;
-    $('cardHandlerExecutions').innerText = sim?.handlerExecutions ?? 0;
-    $('cardActionExecutions').innerText  = sim?.actionExecutions  ?? 0;
-    $('cardReducerExecutions').innerText = sim?.reducerExecutions ?? 0;
-  }
+  // ── Bus wiring ────────────────────────────────────────────────────────────
 
-  // ── Failure banner ────────────────────────────────────────────────────────
-
-  _updateFailureState(stateSnapshot) {
-    const oofDate = stateSnapshot?.outOfFundsDate ?? null;
-
-    if (oofDate !== this._lastOutOfFundsDate) {
-      const banner   = $('failureBanner');
-      const dateSpan = $('failureBannerDate');
-
-      if (oofDate && !this._lastOutOfFundsDate) {
-        if (banner)   banner.style.display = '';
-        if (dateSpan) dateSpan.textContent = this._statePanelView.fmtVal(oofDate);
-        this._chartView?.addAnnotation('out_of_funds', {
-          label:    'OUT OF FUNDS',
-          date:     oofDate,
-          color:    '#f87171',
-          position: 'start',
-        });
-      } else if (!oofDate && this._lastOutOfFundsDate) {
-        if (banner) banner.style.display = 'none';
-        this._chartView?.removeAnnotation('out_of_funds');
-      }
-
-      this._lastOutOfFundsDate = oofDate;
-    }
-
-    if (oofDate) {
-      const defSpan    = $('failureBannerDeficit');
-      const monthsSpan = $('failureBannerMonths');
-      if (defSpan)    defSpan.textContent    = '$' + Math.round(stateSnapshot.cumulativeDeficit ?? 0).toLocaleString();
-      if (monthsSpan) monthsSpan.textContent = stateSnapshot.deficitMonths ?? 0;
-    }
-  }
-
-  // ── Bus subscriptions ─────────────────────────────────────────────────────
-
-  /** Subscribe to all simulation bus messages. Call once after scenario.buildSim(). */
+  /**
+   * Wire all sub-components to the simulation bus.
+   * Call once after scenario.buildSim().
+   */
   wireSimBus(bus) {
     this._graphRenderer?.wireSimBus(bus);
+    this._chartView?.wireSimBus(bus);
+    this._statePanelView?.wireSimBus(bus, { chartPresenter: this._chartView });
+    this._timeControls?.wireSimBus(bus);
 
-    bus.subscribe(`EXECUTION_${EXECUTION_PHASES.BEGIN}`, { kind: EXECUTION_KINDS.EVENT }, ({ date, payload, stateSnapshot }) => {
-      this._timeControls.onDateChanged(new Date(date));
-      this.updateDashCards(date);
+    this._dashCards = new DashCardsComponent({
+      formatDate: (d) => this._statePanelView?.fmtVal(d) ?? d?.toDateString?.() ?? '',
     });
+    this._dashCards.wireSimBus(bus, this._scenario?.sim);
 
     bus.subscribe('BREAKPOINT_HIT', (msg) => {
       this.showBreakpointPaused(msg);
     });
-
-    //Once after each event
-    bus.subscribe(`EXECUTION_${EXECUTION_PHASES.END}`, { kind: EXECUTION_KINDS.EVENT }, ({ date, payload, stateSnapshot }) => {
-      const metrics = stateSnapshot.metrics ? { ...stateSnapshot.metrics } : {};
-      this._chartView.addSnapshot(date, metrics);
-      this._statePanelView.updateStatePanel(date, stateSnapshot);
-      this.updateDashCards(date);
-      this._updateFailureState(stateSnapshot);
-    })
   }
 }

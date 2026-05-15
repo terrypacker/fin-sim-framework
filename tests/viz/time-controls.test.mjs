@@ -16,7 +16,9 @@
 
 import assert from 'node:assert/strict';
 
-import { TimeControls } from '../../src/visualization/time-controls.js';
+import { TimeControls }  from '../../src/visualization/time-controls.js';
+import { EventBus }      from '../../src/simulation-framework/event-bus.js';
+import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../src/simulation-framework/bus-messages.js';
 
 // ─── Minimal requestAnimationFrame shim ──────────────────────────────────────
 // Collect callbacks so tests can flush them synchronously.
@@ -598,4 +600,77 @@ test('clearStepHistory: causes stepBack to use snapshot scan instead of history'
                       (simEnd.getTime() - simStart.getTime());
   assert.strictEqual(+slider.value, Math.round(expectedPct * 100),
     'after clearStepHistory, stepBack should use snapshot scan and land on D1');
+});
+
+// ─── wireSimBus ───────────────────────────────────────────────────────────────
+
+test('TimeControls.wireSimBus: EXECUTION_BEGIN(EVENT) triggers onDateChanged', () => {
+  const { tc, slider, scenario } = makeControls();
+  const { simStart, simEnd } = scenario;
+  const bus = new EventBus();
+  tc.wireSimBus(bus);
+
+  const mid = new Date((simStart.getTime() + simEnd.getTime()) / 2);
+  bus.publish({
+    type: `EXECUTION_${EXECUTION_PHASES.BEGIN}`,
+    kind: EXECUTION_KINDS.EVENT,
+    date: mid.toISOString(),
+  });
+
+  flushRaf();
+
+  const expected = Math.round(
+    (mid.getTime() - simStart.getTime()) /
+    (simEnd.getTime() - simStart.getTime()) * 100
+  );
+  assert.strictEqual(+slider.value, expected,
+    'slider should update to the date from the bus message after RAF flush');
+});
+
+test('TimeControls.wireSimBus: ignores non-EVENT-kind EXECUTION_BEGIN messages', () => {
+  const { tc, slider } = makeControls();
+  const bus = new EventBus();
+  tc.wireSimBus(bus);
+
+  const date = new Date(2027, 0, 1);
+  bus.publish({
+    type: `EXECUTION_${EXECUTION_PHASES.BEGIN}`,
+    kind: EXECUTION_KINDS.HANDLER,
+    date: date.toISOString(),
+  });
+
+  flushRaf();
+
+  // slider was never updated from its initial 0
+  assert.strictEqual(+slider.value, 0, 'HANDLER-kind begin should not move the slider');
+});
+
+test('TimeControls.wireSimBus: coalesces rapid messages to the latest date', () => {
+  const { tc, slider, label, scenario } = makeControls();
+  const { simStart, simEnd } = scenario;
+  const bus = new EventBus();
+  tc.wireSimBus(bus);
+
+  const d1 = new Date(2026, 0, 1);
+  const d2 = new Date(2027, 0, 1);
+  const d3 = new Date(2028, 0, 1);
+
+  bus.publish({ type: `EXECUTION_${EXECUTION_PHASES.BEGIN}`, kind: EXECUTION_KINDS.EVENT, date: d1.toISOString() });
+  bus.publish({ type: `EXECUTION_${EXECUTION_PHASES.BEGIN}`, kind: EXECUTION_KINDS.EVENT, date: d2.toISOString() });
+  bus.publish({ type: `EXECUTION_${EXECUTION_PHASES.BEGIN}`, kind: EXECUTION_KINDS.EVENT, date: d3.toISOString() });
+
+  flushRaf();
+
+  const expectedPct = Math.round(
+    (d3.getTime() - simStart.getTime()) /
+    (simEnd.getTime() - simStart.getTime()) * 100
+  );
+  assert.strictEqual(+slider.value, expectedPct, 'slider should show the last date, not the first');
+  assert.strictEqual(label.textContent, d3.toDateString(), 'label should show the last date');
+});
+
+test('TimeControls.setRenderThrottle: delegates to PlaybackProgressComponent', () => {
+  const { tc } = makeControls();
+  tc.setRenderThrottle(1000);
+  assert.strictEqual(tc._progress._renderThrottleMs, 1000);
 });
