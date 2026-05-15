@@ -148,6 +148,35 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   gap: var(--panel-gap);
   flex: 1;
   min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Configuration list rows ── */
+.config-list-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 6px;
+  background: var(--node-bg);
+  border-radius: 3px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.config-list-row:hover {
+  background: var(--border);
+}
+
+.config-list-row__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-list-row__sub {
+  font-size: 9px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
 }
 
 /* ── People list item ── */
@@ -1241,6 +1270,12 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   flex-direction:column;
   gap:8px;
   font-size:11px;
+}
+
+/* ── Node Edit Modal ── */
+.sim-modal--editor {
+  width: 420px;
+  padding: 10px;
 }
 
 /* ── Tax Document Modal ── */

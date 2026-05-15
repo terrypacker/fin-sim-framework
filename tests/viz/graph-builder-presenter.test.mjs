@@ -79,18 +79,15 @@ function makeGraphRenderer(elements = makeElements()) {
   });
 }
 
-function makeBuilderPresenter(graphRenderer = makeGraphRenderer(), elements = makeElements()) {
-  const resolvedElements = elements ?? makeElements();
-
+function makeBuilderPresenter(graphRenderer = makeGraphRenderer()) {
   ServiceRegistry.reset();
   const registry = ServiceRegistry.getInstance();
   return new GraphBuilderPresenter({
-    graphRenderer:         graphRenderer,
-    builderCanvas: elements.builderCanvas,
-    eventService: registry.eventService,
+    graphRenderer,
+    eventService:   registry.eventService,
     handlerService: registry.handlerService,
-    actionService: registry.actionService,
-    reducerService: registry.reducerService
+    actionService:  registry.actionService,
+    reducerService: registry.reducerService,
   });
 }
 
@@ -242,18 +239,18 @@ test('deleteNode reducer: calls reducerService.deleteReducer', () => {
   expect(deletedId).toBe('r1');
 });
 
-test('deleteNode: clears the editor panel', () => {
+test('deleteNode: removes node from service', () => {
   const s = makeBuilderPresenter();
-  s._view._canvas.innerHTML = '<div>editor content</div>';
 
   const { eventService } = ServiceRegistry.getInstance();
+  let deletedId = null;
   const orig = eventService.deleteEvent.bind(eventService);
-  eventService.deleteEvent = () => {};
+  eventService.deleteEvent = (id) => { deletedId = id; };
 
   s.deleteNode({ id: 'e1', kind: 'event' });
 
   eventService.deleteEvent = orig;
-  expect(s._view._canvas.innerHTML).not.toContain('editor content');
+  expect(deletedId).toBe('e1');
 });
 
 test('deleteNode: does NOT call graph.removeNode (GraphSync handles removal)', () => {

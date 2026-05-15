@@ -96,12 +96,11 @@ function makePresenter() {
   ServiceRegistry.reset();
   const registry = ServiceRegistry.getInstance();
   return new GraphBuilderPresenter({
-    graphRenderer:         makeGraphRenderer(),
-    builderCanvas: document.createElement('div'),
-    eventService: registry.eventService,
+    graphRenderer:  makeGraphRenderer(),
+    eventService:   registry.eventService,
     handlerService: registry.handlerService,
-    actionService: registry.actionService,
-    reducerService: registry.reducerService
+    actionService:  registry.actionService,
+    reducerService: registry.reducerService,
   });
 }
 
@@ -121,9 +120,10 @@ function makeHandlerNode(handlerClass = 'HandlerEntry') {
 
 test('handler editor: select is populated with all HANDLER_CLASSES keys', () => {
   const view = makeBuilderView();
-  view.editNode(makeHandlerNode('HandlerEntry'));
+  const container = document.createElement('div');
+  view.createAndRenderEditor(makeHandlerNode('HandlerEntry'), container);
 
-  const select = view._canvas.querySelector('[data-id="handlerClass"]');
+  const select = container.querySelector('[data-id="handlerClass"]');
   const options = Array.from(select.options).map(o => o.value);
 
   expect(options).toEqual(Object.keys(HANDLER_CLASSES));
@@ -131,33 +131,37 @@ test('handler editor: select is populated with all HANDLER_CLASSES keys', () => 
 
 test('handler editor: select value reflects the node handlerClass', () => {
   const view = makeBuilderView();
-  view.editNode(makeHandlerNode('MonthlyExpensesHandler'));
+  const container = document.createElement('div');
+  view.createAndRenderEditor(makeHandlerNode('MonthlyExpensesHandler'), container);
 
-  const select = view._canvas.querySelector('[data-id="handlerClass"]');
+  const select = container.querySelector('[data-id="handlerClass"]');
   expect(select.value).toBe('MonthlyExpensesHandler');
 });
 
 test('handler editor: domain type (not in registry) renders as read-only badge, not select', () => {
   const view = makeBuilderView();
-  view.editNode(makeHandlerNode('SuperContributionHandler'));
+  const container = document.createElement('div');
+  view.createAndRenderEditor(makeHandlerNode('SuperContributionHandler'), container);
 
   // The <select> should have been replaced by a <span> badge
-  expect(view._canvas.querySelector('[data-id="handlerClass"]')).toBeNull();
-  const badge = view._canvas.querySelector('.type-badge--domain');
+  expect(container.querySelector('[data-id="handlerClass"]')).toBeNull();
+  const badge = container.querySelector('.type-badge--domain');
   expect(badge).not.toBeNull();
   expect(badge.textContent).toBe('SuperContributionHandler');
 });
 
 test('handler editor: domain type badge has tooltip hint', () => {
   const view = makeBuilderView();
-  view.editNode(makeHandlerNode('SuperContributionHandler'));
+  const container = document.createElement('div');
+  view.createAndRenderEditor(makeHandlerNode('SuperContributionHandler'), container);
 
-  const badge = view._canvas.querySelector('.type-badge--domain');
+  const badge = container.querySelector('.type-badge--domain');
   expect(badge.title).toMatch(/domain type/i);
 });
 
 test('handler editor: onHandlerClassChange fires when select changes', () => {
   const view = makeBuilderView();
+  const container = document.createElement('div');
 
   let capturedId    = null;
   let capturedClass = null;
@@ -166,9 +170,9 @@ test('handler editor: onHandlerClassChange fires when select changes', () => {
     capturedClass = newClass;
   };
 
-  view.editNode(makeHandlerNode('HandlerEntry'));
+  view.createAndRenderEditor(makeHandlerNode('HandlerEntry'), container);
 
-  const select = view._canvas.querySelector('[data-id="handlerClass"]');
+  const select = container.querySelector('[data-id="handlerClass"]');
   select.value = 'MonthlyExpensesHandler';
   select.dispatchEvent(new Event('change'));
 

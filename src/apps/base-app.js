@@ -32,12 +32,12 @@ import {
   SIMULATION_BUS_MESSAGES,
   SimulationBusMessage
 } from '../simulation-framework/bus-messages.js';
-import { PeopleController }         from '../visualization/people/people-controller.js';
-import { PeopleView }               from '../visualization/people/people-view.js';
-import { PeoplePresenter }          from '../visualization/people/people-presenter.js';
-import { AccountsController }       from '../visualization/accounts/accounts-controller.js';
-import { AccountsView }             from '../visualization/accounts/accounts-view.js';
-import { AccountsPresenter }        from '../visualization/accounts/accounts-presenter.js';
+import { PeopleController }              from '../visualization/people/people-controller.js';
+import { PersonEditor }                  from '../visualization/people/person-editor.js';
+import { AccountsController }            from '../visualization/accounts/accounts-controller.js';
+import { AccountEditor }                 from '../visualization/accounts/account-editor.js';
+import { NodeEditModal }                 from '../visualization/components/node-edit-modal.js';
+import { ConfigurationListComponent }    from '../visualization/configuration/configuration-list.js';
 import { ScenarioTabPresenter }     from '../visualization/scenario/scenario-tab-presenter.js';
 import { StatePanelView }           from '../visualization/simulation/state-panel-view.js';
 import { SimulationAnimator }       from '../visualization/simulation/simulation-animator.js';
@@ -60,12 +60,12 @@ import { MonteCarloPresenter }  from '../visualization/monte-carlo/monte-carlo-p
  * no DOM-rendering logic, and no state-management logic.
  *
  * Sub-modules:
- *   ScenarioTabPresenter  — scenario CRUD UI and data
- *   StatePanelView        — state/metrics panels and value formatting
- *   SimulationAnimator    — playback, config-graph highlighting, dashboard cards
- *   PeoplePresenter       — people sidebar MVP (recreated per buildScenario)
- *   AccountsPresenter     — accounts sidebar MVP (recreated per buildScenario)
- *   GraphBuilderPresenter — event-graph editor (recreated per buildScenario)
+ *   ScenarioTabPresenter       — scenario CRUD UI and data
+ *   StatePanelView             — state/metrics panels and value formatting
+ *   SimulationAnimator         — playback, config-graph highlighting, dashboard cards
+ *   ConfigurationListComponent — unified config list (recreated per buildScenario)
+ *   NodeEditModal              — modal editor for any config node (created once)
+ *   GraphBuilderPresenter      — event-graph editor (recreated per buildScenario)
  */
 export class BaseApp extends BaseComponent {
   /**
@@ -81,27 +81,24 @@ export class BaseApp extends BaseComponent {
     this.scenario    = null; //TODO Remove for #146
 
     // UI handles (recreated each buildScenario)
-    this.configPresenter = null;
+    this.configPresenter       = null;
     this.chartPresenter        = null;
-    this.timelinePresenter          = null;
+    this.timelinePresenter     = null;
     this.timeControls          = null;
-    this.peoplePresenter       = null;
-    this.accountsPresenter     = null;
+    this.configList            = null;
     this.scenarioTabPresenter  = null;
     this._animator             = null;
     this.mcPresenter           = null;
     this._replayParams         = null;
 
-    // Views created once — their DOM listeners are wired only once.
-    this._peopleView      = new PeopleView();
-    this._accountsView    = new AccountsView();
+    // Created once — survive scenario rebuilds.
     this._statePanelView  = new StatePanelView();
     this._scenarioTabView = new ScenarioTabView();
     this._reportingService = new JournalReportingService();
     this._taxDocModal      = new TaxDocumentModal();
+    this._editModal        = new NodeEditModal();
 
     // Tab header references set by initView()
-    this.eventsTabHeader   = null;
     this.scenarioTabHeader = null;
 
     // Playback/slider state
@@ -120,27 +117,25 @@ export class BaseApp extends BaseComponent {
     registry.scenarioRegistry.loadPrebuilt(this._prebuiltScenarios);
 
     // ── Config graph (visual node canvas) ─────────────────────────────────────
+    const graphRenderer = new GraphRenderer({
+      parent: this,
+      graph: registry.graph,
+      graphQueryApi: registry.graphQueryApi,
+      graphRoot:               document.getElementById('graphRoot'),
+      graphNodes:              document.getElementById('graphNodes'),
+      graphEdges:              document.getElementById('graphEdges'),
+      nodeDetailsTemplate:     document.getElementById('tpl-node-details'),
+      displayNodeStateChanges: (changes) => this._statePanelView.showNodeStateChanges(changes),
+      bus:                     registry.bus,
+    });
+
     this.configPresenter = new GraphBuilderPresenter({
-      builderCanvas: document.getElementById('builderCanvas'),
-      //TODO Move into GraphBuilderPresenter._view entirely
-      graphRenderer: new GraphRenderer({
-        parent: this,
-        graph: registry.graph,
-        graphQueryApi: registry.graphQueryApi,
-        graphRoot:               document.getElementById('graphRoot'),
-        graphNodes:              document.getElementById('graphNodes'),
-        graphEdges:              document.getElementById('graphEdges'),
-        nodeDetailsTemplate:     document.getElementById('tpl-node-details'),
-        displayNodeStateChanges: (changes) => this._statePanelView.showNodeStateChanges(changes),
-        bus:                     registry.bus,
-      }),
-      eventService: registry.eventService,
+      graphRenderer,
+      eventService:   registry.eventService,
       handlerService: registry.handlerService,
-      actionService: registry.actionService,
+      actionService:  registry.actionService,
       reducerService: registry.reducerService,
-      onNodeConfigurationView: () =>  {
-        this.openTab({ currentTarget: this.eventsTabHeader }, 'left-events', 'left-col-sim');
-      }
+      onEditNode: (node) => this._editModal.open(node),
     });
 
     //TODO This should be put into the builder-presenter too
@@ -149,15 +144,89 @@ export class BaseApp extends BaseComponent {
       this._animator?.toggleBreakpoint(node);
     });
 
-    // ── People / Accounts MVP ─────────────────────────────────────────────────
-    // Controllers and presenters are recreated each rebuild to bind to the fresh bus.
-    const peopleController = new PeopleController({ personService: registry.personService });
-    this.peoplePresenter   = new PeoplePresenter({ controller: peopleController, view: this._peopleView, bus: registry.bus });
-
+    // ── People / Accounts controllers ────────────────────────────────────────
+    const peopleController   = new PeopleController({ personService: registry.personService });
     const accountsController = new AccountsController({ accountService: registry.accountService });
-    this.accountsPresenter   = new AccountsPresenter({ controller: accountsController, view: this._accountsView, bus: registry.bus });
 
-    this.peoplePresenter.onPeopleChanged = (people) => this.accountsPresenter.setPeople(people);
+    // ── Configuration list (left panel) ──────────────────────────────────────
+    this.configList = new ConfigurationListComponent({
+      parent:        this,
+      container:     document.getElementById('configGroup'),
+      graphQueryApi: registry.graphQueryApi,
+      bus:           registry.bus,
+    });
+
+    this.configList.onItemClick = (node) => this._editModal.open(node);
+
+    this.configList.onAddClick = (kind) => {
+      if (kind === 'person') {
+        this._editModal.open({ kind: 'person', id: null, name: 'New Person' });
+      } else if (kind === 'account') {
+        this._editModal.open({ kind: 'account', id: null, name: 'New Account' });
+      } else {
+        const newNode = this.configPresenter.createNode(kind, null);
+        this._editModal.open(newNode);
+      }
+    };
+
+    // ── Wire modal editor factory ─────────────────────────────────────────────
+    this._editModal.setEditorFactory((node, container) => {
+      if (node?.kind === 'person') {
+        const editor = new PersonEditor({
+          container,
+          node,
+          onSave: (data) => {
+            if (data.id) {
+              const { id, ...changes } = data;
+              peopleController.update(id, changes);
+            } else {
+              peopleController.create(data);
+            }
+            this._editModal.close();
+          },
+          onDelete: (id) => {
+            peopleController.delete(id);
+            this._editModal.close();
+          },
+        });
+        editor.render();
+        return editor;
+      }
+
+      if (node?.kind === 'account') {
+        const people = registry.graphQueryApi.getByKind('person');
+        const editor = new AccountEditor({
+          container,
+          node,
+          people,
+          onSave: (data) => {
+            if (data.id) {
+              const { id, type: _type, ...changes } = data;
+              accountsController.update(id, changes);
+            } else {
+              accountsController.create(data);
+            }
+            this._editModal.close();
+          },
+          onDelete: (id) => {
+            accountsController.delete(id);
+            this._editModal.close();
+          },
+          onHistory: (account) => {
+            const journal = this.scenario?.sim?.journal;
+            const entries = journal
+              ? accountsController.getHistory(account.id, journal)
+              : [];
+            this._showAccountHistory(entries, account.name, account.currency?.symbol ?? '$');
+          },
+        });
+        editor.render();
+        return editor;
+      }
+
+      // Graph nodes: event / handler / action / reducer
+      return this.configPresenter._view.createAndRenderEditor(node, container);
+    });
 
     // Scenario Tab
     const scenarioTabController = new ScenarioTabController({ scenarioService: registry.scenarioService })
@@ -177,10 +246,6 @@ export class BaseApp extends BaseComponent {
     }
     this.scenario.buildSim();
     this.scenario.loadDefaults();
-    this.accountsPresenter.setJournal(this.scenario.sim.journal);
-    this.accountsPresenter.attachSimBus(this.scenario.sim.bus);
-    this.accountsPresenter.setSimStateGetter(() => this.scenario.sim.state);
-
     // Derive display settings from DOM so rebuilds preserve user selections.
     const currentFmt      = $('tzSelect')?.value === 'utc' ? fmtUTC : fmtLocal;
     const currentCurrency = $('displayCurrency')?.value ?? 'USD';
@@ -243,12 +308,11 @@ export class BaseApp extends BaseComponent {
 
     // ── Simulation animator ───────────────────────────────────────────────────
     this._animator = new SimulationAnimator({
-      scenario:           this.scenario,
-      timeControls:       this.timeControls,
-      statePanelView:     this._statePanelView,
-      chartView:          this.chartPresenter,
-      graphRenderer:      this.configPresenter._graphRenderer,
-      accountsPresenter:  this.accountsPresenter,
+      scenario:       this.scenario,
+      timeControls:   this.timeControls,
+      statePanelView: this._statePanelView,
+      chartView:      this.chartPresenter,
+      graphRenderer:  this.configPresenter._graphRenderer,
     });
 
     this._animator.toggleBreakpoint();
@@ -287,12 +351,12 @@ export class BaseApp extends BaseComponent {
     $('currentStateContent').innerHTML  = '';
     $('cumulativeMetricsContent').innerHTML = '';
 
-    if (this.chartPresenter)    this.chartPresenter.stopViz();
-    if (this.configPresenter)   this.configPresenter.destroy();
-    if (this.peoplePresenter)   this.peoplePresenter.destroy();
-    if (this.accountsPresenter) this.accountsPresenter.destroy();
+    this._editModal?.close();
+    if (this.chartPresenter)  this.chartPresenter.stopViz();
+    if (this.configPresenter) this.configPresenter.destroy();
+    if (this.configList)      this.configList.destroy();
     if (this.timelinePresenter) this.timelinePresenter.destroy();
-    if (this.mcPresenter)       this.mcPresenter.destroy();
+    if (this.mcPresenter)     this.mcPresenter.destroy();
   }
 
   /**
@@ -311,7 +375,6 @@ export class BaseApp extends BaseComponent {
   initView() {
     this._initGroupSelector(); //Init left-panel group selector
 
-    this.eventsTabHeader   = document.querySelector('.tab-header[data-dest-tab=left-events][data-tab-group=left-col-sim]');
     this.scenarioTabHeader = document.querySelector('.tab-header[data-dest-tab=left-scenario][data-tab-group=left-col-sim]');
 
     document.querySelectorAll('.tab-header').forEach(el => {
@@ -448,6 +511,79 @@ export class BaseApp extends BaseComponent {
       });
     });
   }
+  // ── Account history modal ─────────────────────────────────────────────────
+
+  _showAccountHistory(entries, accountName, currencySymbol = '$') {
+    document.getElementById('accountHistoryModal')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'accountHistoryModal';
+    overlay.className = 'sim-modal-overlay';
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+    const modal = document.createElement('div');
+    modal.className = 'sim-modal';
+
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
+    const title = document.createElement('span');
+    title.style.cssText = 'font-size:12px;font-weight:600;';
+    title.textContent = `Transaction History — ${accountName}`;
+    const closeBtn = document.createElement('button');
+    closeBtn.className   = 'btn btn-sm';
+    closeBtn.textContent = '✕';
+    closeBtn.addEventListener('click', () => overlay.remove());
+    header.append(title, closeBtn);
+
+    const body = document.createElement('div');
+    body.style.cssText = 'overflow-y:auto;flex:1;';
+
+    if (!entries || entries.length === 0) {
+      const empty = document.createElement('span');
+      empty.style.color   = 'var(--text-muted)';
+      empty.textContent   = 'No transactions recorded. Run a simulation first.';
+      body.appendChild(empty);
+    } else {
+      const table = document.createElement('table');
+      table.style.cssText = 'width:100%;border-collapse:collapse;';
+      const thead = table.createTHead();
+      const hrow  = thead.insertRow();
+      for (const col of ['Date', 'Event', 'Amount', 'Balance']) {
+        const th = document.createElement('th');
+        th.textContent  = col;
+        th.style.cssText = 'text-align:left;padding:2px 6px;font-size:9px;letter-spacing:0.06em;color:var(--text-muted);border-bottom:1px solid var(--border);';
+        hrow.appendChild(th);
+      }
+      const sym   = currencySymbol;
+      const tbody = table.createTBody();
+      for (const entry of entries) {
+        const tr  = tbody.insertRow();
+        tr.style.cssText = 'border-bottom:1px solid var(--border-subtle,var(--border));';
+        const dateStr = entry.date instanceof Date ? fmtUTC(entry.date) : String(entry.date);
+        const amt = entry.amount;
+        const bal = entry.balanceAfter;
+        const amtStr = (amt >= 0 ? '+' + sym : '-' + sym) + Math.abs(amt).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+        const balStr = bal != null ? (bal < 0 ? '-' + sym : sym) + Math.abs(bal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+        const cells = [
+          { text: dateStr, style: '' },
+          { text: entry.eventType ?? entry.reducer ?? '', style: 'color:var(--text-muted);' },
+          { text: amtStr, style: `color:${amt >= 0 ? 'var(--accent-green,#4a8)' : 'var(--accent-red,#e55)'};font-family:var(--font-mono);` },
+          { text: balStr, style: `font-family:var(--font-mono);${bal != null && bal < 0 ? 'color:var(--accent-red,#e55);' : ''}` },
+        ];
+        for (const { text, style } of cells) {
+          const td = tr.insertCell();
+          td.textContent = text;
+          td.style.cssText = 'padding:3px 6px;' + style;
+        }
+      }
+      body.appendChild(table);
+    }
+
+    modal.append(header, body);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  }
+
   // ── Backwards-compat delegators for subclasses ────────────────────────────
 
   /** Playback state — delegated to animator (false before first buildScenario). */
