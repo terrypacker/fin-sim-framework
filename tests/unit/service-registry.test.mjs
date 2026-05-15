@@ -92,19 +92,19 @@ test('ServiceRegistry: all services share the same EventBus instance', () => {
 // ─── ServiceActionEvent shape ─────────────────────────────────────────────────
 
 test('ServiceActionEvent: has bus type SERVICE_ACTION', () => {
-  const evt = new ServiceActionEvent({ actionType: 'CREATE', classType: 'AmountAction', item: {} });
+  const evt = new ServiceActionEvent({ actionType: 'CREATE', item: {} });
   assert.strictEqual(evt.type, 'SERVICE_ACTION');
 });
 
 test('ServiceActionEvent: CREATE has null originalItem by default', () => {
-  const evt = new ServiceActionEvent({ actionType: 'CREATE', classType: 'AmountAction', item: {} });
+  const evt = new ServiceActionEvent({ actionType: 'CREATE', item: {} });
   assert.strictEqual(evt.originalItem, null);
 });
 
 test('ServiceActionEvent: UPDATE carries both item and originalItem', () => {
   const original = { name: 'old' };
   const updated  = { name: 'new' };
-  const evt = new ServiceActionEvent({ actionType: 'UPDATE', classType: 'AmountAction', item: updated, originalItem: original });
+  const evt = new ServiceActionEvent({ actionType: 'UPDATE', item: updated, originalItem: original });
   assert.strictEqual(evt.item, updated);
   assert.strictEqual(evt.originalItem, original);
 });
@@ -128,33 +128,29 @@ test('ActionService: createAmountAction publishes CREATE ServiceActionEvent', ()
   });
   const [evt] = events;
   assert.strictEqual(evt.actionType,  'CREATE');
-  assert.strictEqual(evt.classType,   'AmountAction');
   assert.ok(evt.item instanceof AmountAction);
   assert.strictEqual(evt.originalItem, null);
 });
 
 test('ActionService: createAction returns a Action', () => {
-  const events = captureServiceEvents(({ actionService }) => {
+  captureServiceEvents(({ actionService }) => {
     const a = actionService.createAction('REC', 'Record');
     assert.ok(a instanceof Action);
   });
-  assert.strictEqual(events[0].classType, 'Action');
 });
 
 test('ActionService: createFieldAction returns a FieldAction', () => {
-  const events = captureServiceEvents(({ actionService }) => {
+  captureServiceEvents(({ actionService }) => {
     const a = actionService.createFieldAction('REC', 'Record', 'balance');
     assert.ok(a instanceof FieldAction);
   });
-  assert.strictEqual(events[0].classType, 'FieldAction');
 });
 
 test('ActionService: createFieldValueAction returns a FieldValueAction', () => {
-  const events = captureServiceEvents(({ actionService }) => {
+  captureServiceEvents(({ actionService }) => {
     const a = actionService.createFieldValueAction('REC', 'Record', 'balance', 100);
     assert.ok(a instanceof FieldValueAction);
   });
-  assert.strictEqual(events[0].classType, 'FieldValueAction');
 });
 
 test('ActionService: createRecordBalanceAction returns a RecordBalanceAction', () => {
@@ -174,7 +170,7 @@ test('ActionService: updateAction mutates in-place and publishes UPDATE event', 
   assert.strictEqual(a.value, 6000);
   assert.strictEqual(updateEvents.length, 1);
   assert.strictEqual(updateEvents[0].actionType,         'UPDATE');
-  assert.strictEqual(updateEvents[0].classType,          'AmountAction');
+  assert.ok(updateEvents[0].item instanceof AmountAction);
   assert.strictEqual(updateEvents[0].item.value,         6000);
   assert.strictEqual(updateEvents[0].originalItem.value, 5000);
 });
@@ -198,7 +194,6 @@ test('ActionService: deleteAction publishes DELETE event', () => {
   registry.actionService.deleteAction(a);
   assert.strictEqual(deleteEvents.length, 1);
   assert.strictEqual(deleteEvents[0].actionType, 'DELETE');
-  assert.strictEqual(deleteEvents[0].classType,  'AmountAction');
   assert.ok(deleteEvents[0].item instanceof AmountAction);
 });
 
@@ -214,7 +209,7 @@ test('EventService: createEventSeries returns an EventSeries and publishes CREAT
   });
   assert.strictEqual(events.length, 1);
   assert.strictEqual(events[0].actionType, 'CREATE');
-  assert.strictEqual(events[0].classType,  'EventSeries');
+  assert.ok(events[0].item instanceof EventSeries);
 });
 
 test('EventService: createOneOffEvent returns a OneOffEvent and publishes CREATE', () => {
@@ -224,7 +219,7 @@ test('EventService: createOneOffEvent returns a OneOffEvent and publishes CREATE
     });
     assert.ok(e instanceof OneOffEvent);
   });
-  assert.strictEqual(events[0].classType, 'OneOffEvent');
+  assert.ok(events[0].item instanceof OneOffEvent);
 });
 
 test('EventService: updateEvent mutates in-place and publishes UPDATE', () => {
@@ -248,7 +243,7 @@ test('EventService: deleteEvent publishes DELETE', () => {
   registry.bus.subscribe('SERVICE_ACTION', ev => { if (ev.actionType === 'DELETE') evt = ev; });
   registry.eventService.deleteEvent(e);
   assert.strictEqual(evt.actionType, 'DELETE');
-  assert.strictEqual(evt.classType,  'OneOffEvent');
+  assert.ok(evt.item instanceof OneOffEvent);
 });
 
 // ─── HandlerService ───────────────────────────────────────────────────────────
@@ -260,7 +255,7 @@ test('HandlerService: createHandler returns a HandlerEntry and publishes CREATE'
     assert.strictEqual(h.name, 'My Handler');
   });
   assert.strictEqual(events[0].actionType, 'CREATE');
-  assert.strictEqual(events[0].classType,  'HandlerEntry');
+  assert.ok(events[0].item instanceof HandlerEntry);
 });
 
 test('HandlerService: createHandler with default name', () => {
@@ -291,7 +286,7 @@ test('HandlerService: deleteHandler publishes DELETE', () => {
   registry.bus.subscribe('SERVICE_ACTION', ev => { if (ev.actionType === 'DELETE') evt = ev; });
   registry.handlerService.deleteHandler(h);
   assert.strictEqual(evt.actionType, 'DELETE');
-  assert.strictEqual(evt.classType,  'HandlerEntry');
+  assert.ok(evt.item instanceof HandlerEntry);
 });
 
 // ─── ReducerService ───────────────────────────────────────────────────────────
@@ -302,7 +297,7 @@ test('ReducerService: createFieldReducer returns a FieldReducer and publishes CR
     assert.ok(r instanceof FieldReducer);
   });
   assert.strictEqual(events[0].actionType, 'CREATE');
-  assert.strictEqual(events[0].classType,  'FieldReducer');
+  assert.ok(events[0].item instanceof FieldReducer);
 });
 
 test('ReducerService: createArrayReducer returns an ArrayReducer', () => {
@@ -349,7 +344,7 @@ test('ReducerService: updateReducer mutates in-place and publishes UPDATE', () =
   registry.reducerService.updateReducer(r, { name: 'Renamed' });
   assert.strictEqual(r.name,         'Renamed');
   assert.strictEqual(evt.actionType, 'UPDATE');
-  assert.strictEqual(evt.classType,  'FieldReducer');
+  assert.ok(evt.item instanceof FieldReducer);
   assert.strictEqual(evt.item.name,  'Renamed');
 });
 
@@ -361,7 +356,7 @@ test('ReducerService: deleteReducer publishes DELETE', () => {
   registry.bus.subscribe('SERVICE_ACTION', ev => { if (ev.actionType === 'DELETE') evt = ev; });
   registry.reducerService.deleteReducer(r);
   assert.strictEqual(evt.actionType, 'DELETE');
-  assert.strictEqual(evt.classType,  'FieldReducer');
+  assert.ok(evt.item instanceof FieldReducer);
 });
 
 // ─── Cross-service bus integration ────────────────────────────────────────────
@@ -374,11 +369,10 @@ test('All services publish to the same shared bus', () => {
     reducerService.createFieldReducer('metrics.m');
   });
   assert.strictEqual(events.length, 4);
-  const classTypes = events.map(e => e.classType);
-  assert.ok(classTypes.includes('AmountAction'));
-  assert.ok(classTypes.includes('EventSeries'));
-  assert.ok(classTypes.includes('HandlerEntry'));
-  assert.ok(classTypes.includes('FieldReducer'));
+  assert.ok(events.some(e => e.item instanceof AmountAction));
+  assert.ok(events.some(e => e.item instanceof EventSeries));
+  assert.ok(events.some(e => e.item instanceof HandlerEntry));
+  assert.ok(events.some(e => e.item instanceof FieldReducer));
 });
 
 test('Wildcard bus subscriber receives all SERVICE_ACTION events', () => {

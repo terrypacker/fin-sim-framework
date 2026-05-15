@@ -44,6 +44,7 @@ import {
   ArrayReducer,
   MultiplicativeReducer,
   NoOpReducer,
+  FieldReducer,
 } from '../../src/simulation-framework/reducers.js';
 import { ReducerBuilder } from '../../src/simulation-framework/builders/reducer-builder.js';
 import { Person } from '../../src/finance/person.js';
@@ -77,16 +78,6 @@ globalThis.FinSimLib = {
 // adds nodes to this.nodes on CREATE events.  This means ScenarioSerializer
 // no longer needs to know about the UI — nodes arrive via the bus.
 
-const ACTION_CLASSES = new Set([
-  'AmountAction', 'RecordBalanceAction','ScriptedAction',
-  'FieldValueAction', 'FieldAction', 'Action',
-]);
-const REDUCER_CLASSES = new Set([
-  ,'ArrayReducer','NumericSumReducer',
-  'MultiplicativeReducer','NoOpReducer',
-  'AccountTransactionReducer','ScriptedReducer', 'FieldValueReducer', 'FieldReducer'
-]);
-
 class TrackingUI {
   constructor() {
     this.nodes = [];
@@ -98,14 +89,22 @@ class TrackingUI {
     // React to CREATE events on the bus, mirroring ConfigBuilder behaviour.
     ServiceRegistry.getInstance().bus.subscribe('SERVICE_ACTION', (msg) => {
       if (msg.actionType !== 'CREATE') return;
-      const { classType, item } = msg;
-      if (classType === 'EventSeries' || classType === 'OneOffEvent') {
+      const { item } = msg;
+      if (item instanceof EventSeries || item instanceof OneOffEvent) {
         this._addEvent(item);
-      } else if (classType === 'HandlerEntry') {
+      } else if (item instanceof HandlerEntry) {
         this._addHandler(item);
-      } else if (ACTION_CLASSES.has(classType)) {
+      } else if (
+        item instanceof AmountAction || item instanceof Action ||
+        item instanceof FieldAction  || item instanceof FieldValueAction ||
+        item instanceof RecordBalanceAction || item instanceof ScriptedAction
+      ) {
         this._addAction(item);
-      } else if (REDUCER_CLASSES.has(classType)) {
+      } else if (
+        item instanceof NumericSumReducer || item instanceof ArrayReducer ||
+        item instanceof MultiplicativeReducer || item instanceof NoOpReducer ||
+        item instanceof FieldReducer
+      ) {
         this._addReducer(item);
       }
     });

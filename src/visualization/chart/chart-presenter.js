@@ -8,15 +8,18 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { MapFilterMultiSelect } from '../components/map-filter-multi-select.js';
+import { BaseComponent }               from '../components/base-component.js';
+import { MapFilterMultiSelect }        from '../components/map-filter-multi-select.js';
+import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bus-messages.js';
 
 /**
  * Wires ChartController and ChartView together and owns the metric filter.
  *
  * Exposes the same surface as ChartView so callers (SimulationAnimator,
  * TimeControls, BaseApp) can treat this as a drop-in replacement:
+ *   wireSimBus(simBus)
  *   addSnapshot(date, data)
- *   setRenderThrottle(ms)
+ *   setRenderThrottle(ms)    — inherited from BaseComponent
  *   resetHistory()
  *   startViz()
  *   stopViz()
@@ -26,7 +29,7 @@ import { MapFilterMultiSelect } from '../components/map-filter-multi-select.js';
  * Filter state (which metrics are hidden) survives rewinds, so users can
  * configure the filter after one run and have it apply on replay.
  */
-export class ChartPresenter {
+export class ChartPresenter extends BaseComponent {
   /**
    * @param {{
    *   controller: import('./chart-controller.js').ChartController,
@@ -34,10 +37,12 @@ export class ChartPresenter {
    * }}
    */
   constructor({ controller, view }) {
+    super();
     this._controller    = controller;
     this._view          = view;
     this._processedKeys = new Set();
     this._metricFilter  = null;
+    this._drainExecEndMsgs = () => [];
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────────
@@ -53,13 +58,34 @@ export class ChartPresenter {
     this._view.stopViz();
   }
 
-  // ── Render throttle (called by SimulationAnimator) ────────────────────────────
+  // ── Simulation bus ────────────────────────────────────────────────────────────
 
-  setRenderThrottle(ms) {
-    this._view.setRenderThrottle(ms);
+  /**
+   * Subscribe to EXECUTION_END(EVENT) to receive metric snapshots directly from
+   * the simulation bus. Call once per scenario after scenario.buildSim().
+   * Processes every queued message (no data dropped) at each render frame.
+   */
+  wireSimBus(simBus) {
+    this._drainExecEndMsgs = this.busQueue(
+      simBus,
+      `EXECUTION_${EXECUTION_PHASES.END}`,
+      () => this.render(),
+      { kind: EXECUTION_KINDS.EVENT }
+    );
   }
 
-  // ── Data ingestion (called by SimulationAnimator) ─────────────────────────────
+  render() {
+    this.scheduleRender(() => this._doRender());
+  }
+
+  _doRender() {
+    for (const msg of this._drainExecEndMsgs()) {
+      const metrics = msg.stateSnapshot?.metrics ? { ...msg.stateSnapshot.metrics } : {};
+      this.addSnapshot(msg.date, metrics);
+    }
+  }
+
+  // ── Data ingestion ────────────────────────────────────────────────────────────
 
   /**
    * Forward snapshot to the view and apply current visibility state to any
@@ -106,7 +132,6 @@ export class ChartPresenter {
       queryApi:  this._controller.getQueryApi(),
       onToggle:  (_item, _added, selectedItems) => {
         if (selectedItems.length === 0) {
-          // Empty selection → show all
           this._controller.clearHidden();
           for (const key of this._controller.getAllKeys()) {
             this._view.setDatasetVisible(key, true);

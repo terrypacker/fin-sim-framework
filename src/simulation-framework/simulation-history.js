@@ -8,7 +8,6 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { SimulationEventGraph } from './simulation-event-graph.js';
 
 /**
  * Manages snapshot, replay, and branching state for a Simulation.
@@ -103,14 +102,15 @@ export class SimulationHistory {
    * Called by TimeControls.rewindTo() alongside journal and view resets.
    */
   resetForReplay() {
-    this._sim.actionGraph = new SimulationEventGraph();
     this._resetExecutionCounters();
   }
 
   _resetExecutionCounters() {
-    this._sim.eventExecutions = 0;
+    this._sim.eventExecutions   = 0;
     this._sim.handlerExecutions = 0;
-    this._sim.actionExecutions = 0;
+    this._sim.actionExecutions  = 0;
     this._sim.reducerExecutions = 0;
+    this._sim._executionCounts  = new Map();
+    this._sim._executionStack   = [];
   }
 }

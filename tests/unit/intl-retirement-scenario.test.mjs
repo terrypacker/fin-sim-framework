@@ -77,10 +77,6 @@ import { UsSavingsInterestCreditReducer }                                       
 import { Account, CheckingAccount, SavingsAccount }                                  from '../../src/finance/assets/account.js';
 import { InvestmentAccount, BrokerageAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from '../../src/finance/assets/investment-account.js';
 import { Person }                                                                    from '../../src/finance/person.js';
-import {
-  SIMULATION_BUS_MESSAGES
-} from "../../src/simulation-framework/bus-messages.js";
-
 // ─── Provide the FinSimLib global that BaseScenario.buildSim() needs ──────────
 
 globalThis.FinSimLib = {

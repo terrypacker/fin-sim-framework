@@ -130,20 +130,7 @@ test('Bug 3: rewind + replay does not double the snapshot count', () => {
     'snapshot count after rewind+replay must match first-run count, not double it');
 });
 
-// ─── Bug 2 regression: actionGraph reset on rewind ───────────────────────────
-
-test('Bug 2: resetForReplay() replaces actionGraph with a fresh instance', () => {
-  const sim = makeCounterSim();
-  sim.stepTo(new Date(2025, 0, 1));
-
-  const originalGraph = sim.actionGraph;
-  sim.history.resetForReplay();
-
-  assert.notStrictEqual(sim.actionGraph, originalGraph,
-    'actionGraph must be a new instance after resetForReplay()');
-  assert.strictEqual(sim.actionGraph.actionGraph.size, 0,
-    'new actionGraph must be empty');
-});
+// ─── Bug 2 regression: execution counters reset on rewind ────────────────────
 
 test('Bug 2: resetForReplay() resets execution counters to 0', () => {
   const sim = makeCounterSim();
@@ -156,7 +143,7 @@ test('Bug 2: resetForReplay() resets execution counters to 0', () => {
   assert.strictEqual(sim.reducerExecutions, 0, 'reducerExecutions must reset to 0');
 });
 
-test('Bug 2: after resetForReplay + replay, action nodes have UUID instanceIds', () => {
+test('Bug 2: after resetForReplay + replay, journal has entries', () => {
   const sim = makeCounterSim();
   sim.stepTo(new Date(2025, 0, 1));
 
@@ -165,13 +152,7 @@ test('Bug 2: after resetForReplay + replay, action nodes have UUID instanceIds',
   sim.history.rewindToStart();
   sim.stepTo(new Date(2025, 0, 1));
 
-  const nodes = [...sim.actionGraph.actionGraph.values()];
-  assert.ok(nodes.length > 0, 'action graph must have nodes after replay');
-  // Node IDs are now UUIDs — verify they are non-null strings
-  for (const node of nodes) {
-    assert.ok(typeof node.id === 'string' && node.id.length > 0,
-      'action node id must be a non-empty string (UUID)');
-  }
+  assert.ok(sim.journal.journal.length > 0, 'journal must have entries after replay');
 });
 
 // ─── RNG reproducibility across rewind ───────────────────────────────────────

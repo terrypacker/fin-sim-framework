@@ -55,10 +55,6 @@ export class ChartView extends BaseComponent {
 
     this._seriesConfig = new Map((series ?? []).map(s => [s.key, s]));
 
-    this._renderThrottleMs = 0;
-    this._chartDirty       = false;
-    this._chartPending     = false;
-    this._chartLastRender  = 0;
   }
 
   // ── Filter bar ────────────────────────────────────────────────────────────────
@@ -88,34 +84,7 @@ export class ChartView extends BaseComponent {
     const ds = this._chart.data.datasets.find(d => d._seriesKey === key);
     if (ds && ds.hidden !== !visible) {
       ds.hidden = !visible;
-      this._scheduleChartUpdate();
-    }
-  }
-
-  // ── Throttle ──────────────────────────────────────────────────────────────────
-
-  setRenderThrottle(ms) {
-    this._renderThrottleMs = ms ?? 0;
-  }
-
-  _scheduleChartUpdate() {
-    this._chartDirty = true;
-    if (this._chartPending) return;
-    this._chartPending = true;
-
-    const fire = () => {
-      this._chartPending = false;
-      if (!this._chartDirty) return;
-      this._chartDirty = false;
-      this._chartLastRender = performance.now();
-      this._chart?.update('none');
-    };
-
-    if (this._renderThrottleMs > 0) {
-      const elapsed = performance.now() - this._chartLastRender;
-      setTimeout(fire, Math.max(0, this._renderThrottleMs - elapsed));
-    } else {
-      requestAnimationFrame(fire);
+      this.scheduleRender(() => this._chart?.update('none'));
     }
   }
 
@@ -165,7 +134,7 @@ export class ChartView extends BaseComponent {
     }
 
     if (didAdd && this._chart) {
-      this._scheduleChartUpdate();
+      this.scheduleRender(() => this._chart?.update('none'));
     }
   }
 

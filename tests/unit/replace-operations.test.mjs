@@ -133,7 +133,7 @@ test('replaceReducer: publishes UPDATE ServiceActionEvent', () => {
   registry.reducerService.replaceReducer(original.id, 'NumericSumReducer');
 
   assert.strictEqual(events.length, 1);
-  assert.strictEqual(events[0].classType, 'NumericSumReducer');
+  assert.ok(events[0].item instanceof REDUCER_CLASSES['NumericSumReducer']);
   assert.strictEqual(events[0].originalItem.reducerType, 'FieldReducer');
 });
 
@@ -200,7 +200,7 @@ test('replaceAction: publishes UPDATE ServiceActionEvent', () => {
   registry.actionService.replaceAction(original.id, 'FieldValueAction');
 
   assert.strictEqual(events.length, 1);
-  assert.strictEqual(events[0].classType, 'FieldValueAction');
+  assert.ok(events[0].item instanceof ACTION_CLASSES['FieldValueAction']);
   assert.strictEqual(events[0].originalItem.actionClass, 'AmountAction');
 });
 
@@ -280,6 +280,6 @@ test('replaceHandler: publishes UPDATE ServiceActionEvent', () => {
   registry.handlerService.replaceHandler(original.id, 'MonthlyExpensesHandler');
 
   assert.strictEqual(events.length, 1);
-  assert.strictEqual(events[0].classType, 'MonthlyExpensesHandler');
+  assert.ok(events[0].item instanceof HANDLER_CLASSES['MonthlyExpensesHandler']);
   assert.strictEqual(events[0].originalItem.handlerClass, 'HandlerEntry');
 });

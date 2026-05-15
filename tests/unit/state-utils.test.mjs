@@ -89,3 +89,19 @@ test('diffStates: multiple fields changed returns multiple records', () => {
   const changes = diffStates(prev, next);
   assert.strictEqual(changes.length, 2);
 });
+
+test('diffStates: structural sharing — shared sub-object reference reports no change', () => {
+  const shared = { balance: 1000, transactions: [1, 2, 3] };
+  const prev = { cash: 100, account: shared };
+  const next  = { cash: 200, account: shared };  // same reference
+  const changes = diffStates(prev, next);
+  assert.strictEqual(changes.length, 1, 'only cash should be reported changed');
+  assert.strictEqual(changes[0].field, 'cash');
+});
+
+test('diffStates: structural sharing — same primitive reference short-circuits correctly', () => {
+  const prev = { a: 1, b: 2 };
+  const next  = { a: 1, b: 2 };
+  // identical by value — no changes expected
+  assert.deepEqual(diffStates(prev, next), []);
+});

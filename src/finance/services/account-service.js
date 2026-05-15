@@ -48,7 +48,7 @@ export class AccountService extends AssetService {
   createAccount(account) {
     account.id = this._generateId(this._idPrefix);
     this._register(account);
-    this._publish('CREATE', 'Account', account);
+    this._publish('CREATE', account);
     this._wireNodeEdges(account);
     return account;
   }
@@ -66,7 +66,7 @@ export class AccountService extends AssetService {
     const account = this._resolve(idOrAccount);
     const original = { ...account };
     this.mergeChanges(account, changes);
-    this._publish('UPDATE', 'Account', account, original);
+    this._publish('UPDATE', account, original);
     this._wireNodeEdges(account);
     return account;
   }
@@ -82,7 +82,7 @@ export class AccountService extends AssetService {
   deleteAccount(idOrAccount) {
     const account = this._resolve(idOrAccount);
     this._unregister(account.id);
-    this._publish('DELETE', 'Account', account, account);
+    this._publish('DELETE', account);
     return account;
   }
 

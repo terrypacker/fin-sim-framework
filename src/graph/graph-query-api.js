@@ -22,12 +22,18 @@ import {createEdgeId} from "./edge.js";
 
 
 export class GraphQueryApi extends QueryApi {
+
+  // Always rebuild — the graph mutates on every service operation and the
+  // dataset is small (tens of nodes), so caching indexes is not worth the
+  // complexity of invalidating them.
+  get rebuildIndexes() { return true; }
+  set rebuildIndexes(_) {}
+
   constructor(graph) {
     super(graph);
     this._graph = graph; //TODO This is also in the parent as _dataSource
-    this._graph.addNodeModifcationWatcher(this.constructor.name, () => this._invalidateIndexes());
-    this._kindIndex = new Map();   // kind -> [items]
-    this._layerIndex = new Map(); // layer -> [items]
+    this._kindIndex = new Map();
+    this._layerIndex = new Map();
   }
 
   /**

@@ -125,13 +125,16 @@ import { ActionBuilder } from './simulation-framework/builders/action-builder.js
 import { EventBuilder } from './simulation-framework/builders/event-builder.js';
 import { HandlerBuilder } from './simulation-framework/builders/handler-builder.js';
 import { ReducerBuilder } from './simulation-framework/builders/reducer-builder.js';
-import { SIMULATION_BUS_MESSAGES, BusMessage, SimulationBusMessage, NodeDataBusMessage, BreakpointHitBusMessage, EventStartBusMessage, EventEndBusMessage, EventHandledMessage, ActionInstanceMessage, ActionResultMessage, ReducerResultMessage, ServiceActionEvent, ServiceBulkActionEvent } from './simulation-framework/bus-messages.js';
+import { EXECUTION_KINDS, EXECUTION_PHASES, SIMULATION_BUS_MESSAGES, BusMessage, SimulationBusMessage, ExecutionBusMessage, BreakpointHitMessage, ServiceActionEvent, ServiceBulkActionEvent, ServiceEdgeActionEvent } from './simulation-framework/bus-messages.js';
 import { DateUtils } from './simulation-framework/date-utils.js';
 import { ConstantDistribution, UniformDistribution, NormalDistribution, LogNormalDistribution, BernoulliDistribution, DISTRIBUTION_TYPES, createDistribution } from './simulation-framework/distributions.js';
 import { EventBus } from './simulation-framework/event-bus.js';
 import { BaseEvent } from './simulation-framework/events/base-event.js';
 import { EventSeries } from './simulation-framework/events/event-series.js';
 import { OneOffEvent } from './simulation-framework/events/one-off-event.js';
+import { EXECUTION_EDGE_TYPES, ExecutionGraph } from './simulation-framework/execution-graph.js';
+import { buildExecutionId, parentIdOf, nodeIdOf, executionIndexOf } from './simulation-framework/execution-utils.js';
+import { GraphRecorder } from './simulation-framework/graph-recorder.js';
 import { HandlerEntry, HANDLER_CLASSES, HandlerRegistry } from './simulation-framework/handlers.js';
 import { IndexedMinHeap } from './simulation-framework/indexed-min-heap.js';
 import { JournalEntry, Journal } from './simulation-framework/journal.js';
@@ -176,6 +179,8 @@ import { PeopleView } from './visualization/people/people-view.js';
 import { ScenarioTabController } from './visualization/scenario/scenario-tab-controller.js';
 import { ScenarioTabPresenter } from './visualization/scenario/scenario-tab-presenter.js';
 import { ScenarioTabView } from './visualization/scenario/scenario-tab-view.js';
+import { DashCardsComponent } from './visualization/simulation/dash-cards-component.js';
+import { PlaybackProgressComponent } from './visualization/simulation/playback-progress-component.js';
 import { SimulationAnimator } from './visualization/simulation/simulation-animator.js';
 import { StatePanelView } from './visualization/simulation/state-panel-view.js';
 import { TimeControls } from './visualization/time-controls.js';
@@ -466,19 +471,16 @@ export const Core = {
   EventBuilder,
   HandlerBuilder,
   ReducerBuilder,
+  EXECUTION_KINDS,
+  EXECUTION_PHASES,
   SIMULATION_BUS_MESSAGES,
   BusMessage,
   SimulationBusMessage,
-  NodeDataBusMessage,
-  BreakpointHitBusMessage,
-  EventStartBusMessage,
-  EventEndBusMessage,
-  EventHandledMessage,
-  ActionInstanceMessage,
-  ActionResultMessage,
-  ReducerResultMessage,
+  ExecutionBusMessage,
+  BreakpointHitMessage,
   ServiceActionEvent,
   ServiceBulkActionEvent,
+  ServiceEdgeActionEvent,
   DateUtils,
   ConstantDistribution,
   UniformDistribution,
@@ -491,6 +493,13 @@ export const Core = {
   BaseEvent,
   EventSeries,
   OneOffEvent,
+  EXECUTION_EDGE_TYPES,
+  ExecutionGraph,
+  buildExecutionId,
+  parentIdOf,
+  nodeIdOf,
+  executionIndexOf,
+  GraphRecorder,
   HandlerEntry,
   HANDLER_CLASSES,
   HandlerRegistry,
@@ -558,6 +567,8 @@ export const Visualization = {
   ScenarioTabController,
   ScenarioTabPresenter,
   ScenarioTabView,
+  DashCardsComponent,
+  PlaybackProgressComponent,
   SimulationAnimator,
   StatePanelView,
   TimeControls,
