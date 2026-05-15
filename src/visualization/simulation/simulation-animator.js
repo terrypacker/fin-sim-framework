@@ -210,6 +210,7 @@ export class SimulationAnimator {
 
   /** Subscribe to all simulation bus messages. Call once after scenario.buildSim(). */
   wireSimBus(bus) {
+    this._graphRenderer?.wireSimBus(bus);
 
     bus.subscribe(`EXECUTION_${EXECUTION_PHASES.BEGIN}`, { kind: EXECUTION_KINDS.EVENT }, ({ date, payload, stateSnapshot }) => {
       this._timeControls.onDateChanged(new Date(date));

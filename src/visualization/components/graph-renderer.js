@@ -9,6 +9,7 @@
  */
 
 import { BaseComponent } from "./base-component.js";
+import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bus-messages.js';
 
 //defined by .g-node css
 const NODE_WIDTH = 180;
@@ -32,18 +33,22 @@ export class GraphRenderer extends BaseComponent {
     this.nodeTemplate = nodeDetailsTemplate;
     this.displayNodeStateChanges = displayNodeStateChanges ? displayNodeStateChanges : (c) => {};
 
+    // Per-node execution-time display state (fired, stateChanges, breakpointHit).
+    // Populated from simBus EXECUTION_* messages; cleared on each new event cycle.
+    this._execOverlay = new Map();
+
+    const noop = () => [];
     if (bus) {
-      bus.subscribe('SERVICE_ACTION', () => {
-        this._refreshGraphState();
-        this._relayoutAll();
-        this.render();
-      });
-      bus.subscribe('SERVICE_BULK_ACTION', () => {
-        this._refreshGraphState();
-        this._relayoutAll();
-        this.render();
-      });
+      this._drainServiceMsgs     = this.busQueue(bus, 'SERVICE_ACTION',      () => this.render());
+      this._drainServiceBulkMsgs = this.busQueue(bus, 'SERVICE_BULK_ACTION', () => this.render());
+    } else {
+      this._drainServiceMsgs     = noop;
+      this._drainServiceBulkMsgs = noop;
     }
+    // Execution drains are wired later via wireSimBus()
+    this._drainExecBeginMsgs  = noop;
+    this._drainExecEndMsgs    = noop;
+    this._drainBreakpointMsgs = noop;
 
     //Current view tracking
     this._currentNodes = [];
@@ -140,6 +145,31 @@ export class GraphRenderer extends BaseComponent {
     this.render();
   }
 
+  /**
+   * Subscribe to the simulation bus for execution-layer display state.
+   * Call once per scenario after the sim bus is available.
+   * EXECUTION_BEGIN(EVENT) clears the overlay; EXECUTION_END populates fired/stateChanges;
+   * BREAKPOINT_HIT marks the node for visual flash.
+   */
+  wireSimBus(simBus) {
+    this._drainExecBeginMsgs = this.busQueue(
+      simBus,
+      `EXECUTION_${EXECUTION_PHASES.BEGIN}`,
+      () => this.render(),
+      { kind: EXECUTION_KINDS.EVENT }
+    );
+    this._drainExecEndMsgs = this.busQueue(
+      simBus,
+      `EXECUTION_${EXECUTION_PHASES.END}`,
+      () => this.render()
+    );
+    this._drainBreakpointMsgs = this.busQueue(
+      simBus,
+      'BREAKPOINT_HIT',
+      () => this.render()
+    );
+  }
+
   _refreshGraphState() {
     const { nodes, edges } = this._graphQueryApi.getGraphView('config');
 
@@ -150,6 +180,31 @@ export class GraphRenderer extends BaseComponent {
   }
 
   _renderGraph() {
+    // Drain queued config-bus messages; relayout if the graph structure changed.
+    const serviceChanged =
+      this._drainServiceMsgs().length > 0 ||
+      this._drainServiceBulkMsgs().length > 0;
+    if (serviceChanged) this._relayoutAll();
+
+    // Drain execution messages; update the per-node display overlay.
+    for (const _msg of this._drainExecBeginMsgs()) {
+      // New event cycle — reset all execution-time display state.
+      this._execOverlay.clear();
+    }
+    for (const msg of this._drainExecEndMsgs()) {
+      if (!msg.nodeId) continue;
+      const entry = this._execOverlay.get(msg.nodeId) ?? {};
+      entry.fired = true;
+      if (msg.stateDiff?.length) entry.stateChanges = msg.stateDiff;
+      this._execOverlay.set(msg.nodeId, entry);
+    }
+    for (const msg of this._drainBreakpointMsgs()) {
+      if (!msg.nodeId) continue;
+      const entry = this._execOverlay.get(msg.nodeId) ?? {};
+      entry.breakpointHit = true;
+      this._execOverlay.set(msg.nodeId, entry);
+    }
+
     const { nodes, edges } = this._refreshGraphState();
 
     const nextNodes = new Map(nodes.map(n => [n.id, n]));
@@ -232,10 +287,10 @@ export class GraphRenderer extends BaseComponent {
 
     if (stateChangedIndicator) {
       stateChangedIndicator.addEventListener('click', () => {
+        const exec = this._execOverlay.get(node.id);
         const current = this._currentNodeMap.get(node.id);
-        if (current.data?.stateChanges) {
-          this.displayNodeStateChanges(current.data?.stateChanges);
-        }
+        const stateChanges = exec?.stateChanges ?? current?.data?.stateChanges;
+        if (stateChanges) this.displayNodeStateChanges(stateChanges);
       });
     }
 
@@ -266,6 +321,11 @@ export class GraphRenderer extends BaseComponent {
     const prev = this._nodeRenderState.get(node.id);
     const renderedState = {};
 
+    // Merge execution-time overlay (fired, stateChanges, breakpointHit) into
+    // display data.  Config-level data (breakpoint flag) stays on node.data.
+    const exec = this._execOverlay.get(node.id);
+    const data = exec ? { ...node.data, ...exec } : (node.data ?? {});
+
     // ── base classes ─────────────────────────
     el.classList.add('g-node');
 
@@ -273,7 +333,7 @@ export class GraphRenderer extends BaseComponent {
     el.classList.toggle('selected', node.id === this.selectedNodeId);
 
     // flashing
-    el.classList.toggle('node-flash', !!node.data?.breakpointHit);
+    el.classList.toggle('node-flash', !!data.breakpointHit);
 
     // ── position ─────────────────────────
     const { x, y } = this._getPos(node.id);
@@ -303,17 +363,17 @@ export class GraphRenderer extends BaseComponent {
     // ── fired indicator ─────────────────────────
     const firedIndicator = el.querySelector('[data-id="firedIndicator"]');
 
-    const fired = !!node.data?.fired;
+    const fired = !!data.fired;
     firedIndicator.classList.toggle('badge-green', fired);
     firedIndicator.classList.toggle('badge-cyan', !fired);
     firedIndicator.innerText = fired ? 'Fired' : 'Idle';
     renderedState.fired = fired;
 
-  // ── state change indicator (update only) ─────────────────────────
+    // ── state change indicator (update only) ─────────────────────────
     const stateChangedIndicator = el.querySelector('[data-id="stateChangeIndicator"]');
 
     if (stateChangedIndicator) {
-      stateChangedIndicator.style.display = node.data?.stateChanges?.length > 0 ? '' : 'none';
+      stateChangedIndicator.style.display = data.stateChanges?.length > 0 ? '' : 'none';
     }
 
     // ── breakpoint indicator ─────────────────────────

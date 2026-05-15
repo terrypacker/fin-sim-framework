@@ -8,6 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { BaseComponent }   from '../components/base-component.js';
 import { Account }          from "../../finance/assets/account.js";
 import { EXECUTION_KINDS }  from "../../simulation-framework/bus-messages.js";
 
@@ -18,7 +19,7 @@ import { EXECUTION_KINDS }  from "../../simulation-framework/bus-messages.js";
  * Also accepts a `people` prop that PeoplePresenter updates via its
  * `onPeopleChanged` hook, so the owner dropdown stays current.
  */
-export class AccountsPresenter {
+export class AccountsPresenter extends BaseComponent {
   /**
    * @param {{
    *   controller: import('./accounts-controller.js').AccountsController,
@@ -27,15 +28,16 @@ export class AccountsPresenter {
    * }}
    */
   constructor({ controller, view, bus }) {
-    this._controller       = controller;
-    this._view             = view;
-    this._people           = [];
-    this._journal          = null;
-    this._getSimState      = null;
-    this._renderThrottleMs = 0;
-    this._listDirty        = false;
-    this._listPending      = false;
-    this._listLastRender   = 0;
+    super();
+    this._controller  = controller;
+    this._view        = view;
+    this._people      = [];
+    this._journal     = null;
+    this._getSimState = null;
+
+    const noop = () => [];
+    this._drainServiceMsgs = noop;
+    this._drainExecEndMsgs = noop;
 
     // ── Wire view callbacks → controller ───────────────────────────────────
 
@@ -73,10 +75,18 @@ export class AccountsPresenter {
     };
 
     // ── React to service bus (deserialization, programmatic changes) ────────
-    bus.subscribe('SERVICE_ACTION', { instanceOf: Account }, () => this._refresh());
+    this._drainServiceMsgs = this.busQueue(bus, 'SERVICE_ACTION', () => this.render(), { instanceOf: Account });
 
     // Initial render.
     this._refresh();
+  }
+
+  render() {
+    this.scheduleRender(() => {
+      this._drainServiceMsgs();
+      this._drainExecEndMsgs();
+      this._refresh();
+    });
   }
 
   /**
@@ -89,18 +99,16 @@ export class AccountsPresenter {
 
   /**
    * Subscribe to the simulation bus so the account list re-renders on each
-   * event occurrence using the same throttle used by ChartView / StatePanelView.
+   * event occurrence, coalesced via BaseComponent.scheduleRender.
    * @param {import('../../simulation-framework/event-bus.js').EventBus} simBus
    */
   attachSimBus(simBus) {
-    simBus.subscribe('EXECUTION_END', { kind: EXECUTION_KINDS.EVENT }, () => {
-      this._scheduleListUpdate();
-    });
-  }
-
-  /** Mirror of ChartView.setRenderThrottle — called by SimulationAnimator. */
-  setRenderThrottle(ms) {
-    this._renderThrottleMs = ms ?? 0;
+    this._drainExecEndMsgs = this.busQueue(
+      simBus,
+      'EXECUTION_END',
+      () => this.render(),
+      { kind: EXECUTION_KINDS.EVENT }
+    );
   }
 
   /**
@@ -123,27 +131,6 @@ export class AccountsPresenter {
     this._view.updateOwnerOptions(people);
   }
 
-  _scheduleListUpdate() {
-    this._listDirty = true;
-    if (this._listPending) return;
-    this._listPending = true;
-
-    const fire = () => {
-      this._listPending = false;
-      if (!this._listDirty) return;
-      this._listDirty = false;
-      this._listLastRender = performance.now();
-      this._refresh();
-    };
-
-    if (this._renderThrottleMs > 0) {
-      const elapsed = performance.now() - this._listLastRender;
-      setTimeout(fire, Math.max(0, this._renderThrottleMs - elapsed));
-    } else {
-      requestAnimationFrame(fire);
-    }
-  }
-
   _refresh() {
     const accounts  = this._controller.list();
     const simState  = this._getSimState?.();
@@ -160,6 +147,7 @@ export class AccountsPresenter {
   }
 
   destroy() {
+    super.destroy();
     this._view.destroy();
   }
 }
