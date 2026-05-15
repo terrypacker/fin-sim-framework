@@ -179,6 +179,8 @@ import { PeopleView } from './visualization/people/people-view.js';
 import { ScenarioTabController } from './visualization/scenario/scenario-tab-controller.js';
 import { ScenarioTabPresenter } from './visualization/scenario/scenario-tab-presenter.js';
 import { ScenarioTabView } from './visualization/scenario/scenario-tab-view.js';
+import { DashCardsComponent } from './visualization/simulation/dash-cards-component.js';
+import { PlaybackProgressComponent } from './visualization/simulation/playback-progress-component.js';
 import { SimulationAnimator } from './visualization/simulation/simulation-animator.js';
 import { StatePanelView } from './visualization/simulation/state-panel-view.js';
 import { TimeControls } from './visualization/time-controls.js';
@@ -565,6 +567,8 @@ export const Visualization = {
   ScenarioTabController,
   ScenarioTabPresenter,
   ScenarioTabView,
+  DashCardsComponent,
+  PlaybackProgressComponent,
   SimulationAnimator,
   StatePanelView,
   TimeControls,
