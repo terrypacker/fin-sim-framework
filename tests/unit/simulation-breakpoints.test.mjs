@@ -83,7 +83,7 @@ test('event breakpoint: control.paused is true when event node has a breakpoint'
   assert.strictEqual(sim.control.breakpointHit.node.id, 'evt-1');
 });
 
-test('event breakpoint: the event has NOT executed when paused (no bus messages)', () => {
+test('event breakpoint: the event has NOT executed when paused (no execution messages)', () => {
   const sim = new Simulation(START);
   const evtId = 'my-event';
   const evt = { type: 'TICK', date: START, id: evtId };
@@ -95,7 +95,10 @@ test('event breakpoint: the event has NOT executed when paused (no bus messages)
 
   play(sim);
 
-  assert.strictEqual(busHistory.length, 0, 'no bus messages should have fired before the paused event executes');
+  // With a unified bus, a BREAKPOINT_HIT message fires on pause.
+  // The invariant is that no EXECUTION_BEGIN(EVENT) message fired yet.
+  const executionMessages = busHistory.filter(m => m.type === 'EXECUTION_BEGIN' && m.kind === 'EVENT');
+  assert.strictEqual(executionMessages.length, 0, 'event should not have started executing when paused at event:start breakpoint');
 });
 
 test('event breakpoint: resuming executes the event and continues', () => {

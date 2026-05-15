@@ -22,6 +22,7 @@ export function diffStates(prev, next) {
   const SKIP_KEYS = new Set(['credits', 'debits']);
 
   const walk = (b, a, prefix) => {
+    if (b === a) return;  // structural sharing fast-path — skip identical references
     const leafKey = prefix.split('.').pop();
     if (SKIP_KEYS.has(leafKey)) return;
     const bIsObj = typeof b === 'object' && b !== null && !Array.isArray(b);

@@ -19,23 +19,21 @@
 
 import { IndexedMinHeap } from './indexed-min-heap.js';
 import { EventBus }  from './event-bus.js';
-import { ActionNode, SimulationEventGraph } from './simulation-event-graph.js'
 import { JournalEntry, Journal } from './journal.js'
 import { ReducerPipeline } from './reducers.js'
 import { HandlerRegistry } from './handlers.js'
 import { DateUtils } from "./date-utils.js";
 import {
-  EventStartBusMessage,
-  EventEndBusMessage,
-  EventHandledMessage,
-  ActionInstanceMessage,
-  ActionResultMessage,
-  ReducerResultMessage, NodeDataBusMessage, BreakpointHitBusMessage
+  ExecutionBusMessage, BreakpointHitMessage,
+  EXECUTION_KINDS, EXECUTION_PHASES,
 } from "./bus-messages.js";
 import { generateActionId } from "./actions.js";
 import { SimulationHistory } from "./simulation-history.js";
 import { SimulationState } from "./simulation-state.js";
-import {diffStates} from "./state-utils.js";
+import { diffStates } from "./state-utils.js";
+import { buildExecutionId } from "./execution-utils.js";
+import { ExecutionGraph } from "./execution-graph.js";
+import { GraphRecorder } from "./graph-recorder.js";
 
 const INTERNAL_SCHEDULING_HANDLER_NAME = 'INTERNAL_SCHEDULING_HANDLER_NAME';
 
@@ -69,15 +67,14 @@ export class BreakpointSignal extends Error {
  *
  */
 export class Simulation {
-  constructor(startDate, { bus = new EventBus(), seed = 1, initialState = {}, opts = {} } = {}) {
+  constructor(startDate, { bus = new EventBus(), seed = 1, initialState = {}, opts = {}, graph = null } = {}) {
     this.currentDate = this.normalizeDate(startDate);
 
     this.queue = new IndexedMinHeap((a, b) => a.date - b.date,
             item => item.instanceId, item => item.type);
 
-    //TODO Replace bus when ready
     this.serviceBus = bus;
-    this.bus = new EventBus();
+    this.bus = bus;
 
     this.handlers = new HandlerRegistry();   // eventType -> [HandlerEntry]
     this.reducers = new ReducerPipeline();   // actionType -> reducer
@@ -96,13 +93,25 @@ export class Simulation {
     this.journal = new Journal({enabled: true});
 
     this.nextEventInstanceId = 0;
-    this.actionGraph = new SimulationEventGraph();
 
-    // Execution counters — incremented by the sim, reset on rewind.
+    if (graph && !this.silent) {
+      this.executionGraph = new ExecutionGraph(graph);
+      this.graphRecorder  = new GraphRecorder(this.executionGraph);
+    } else {
+      this.executionGraph = null;
+      this.graphRecorder  = null;
+    }
+
     this.eventExecutions = 0;
     this.handlerExecutions = 0;
     this.actionExecutions = 0;
     this.reducerExecutions = 0;
+
+    // Hierarchical execution ID tracking — reset on rewind.
+    // _executionCounts: configNodeId → number of times that node has executed this run.
+    // _executionStack:  ancestry stack of full executionIds for the current call frame.
+    this._executionCounts = new Map();
+    this._executionStack  = [];
 
     // ── Breakpoint / pause control ─────────────────────────────────────────
     //
@@ -146,47 +155,24 @@ export class Simulation {
   }
 
   clearAllBreakpoints() {
-    const breakpoints = [...this.control.breakpointNodes.entries()];
     this.control.breakpointNodes.clear();
-    const now = new Date(this.currentDate);
-    breakpoints.forEach(([id, node]) => {
-      this.serviceBus.publish(new NodeDataBusMessage({
-        date: now,
-        sim: this,
-        stateSnapshot: null, //TODO Do we want this?
-        nodeId: node.id,
-        kind: node.kind,
-        meta: { reason: 'control' },
-        data: {
-          breakpoint: false,
-          breakpointHit: false,
-        }
-      }));
-    });
   }
 
   toggleNodeBreakpoint(node) {
-    const data = { };
     if (this.control.breakpointNodes.has(node.id)) {
-      this.control.breakpointNodes.delete(node.id); // Item exists, so remove it
-      data.breakpoint = false;
+      this.control.breakpointNodes.delete(node.id);
     } else {
-      this.control.breakpointNodes.set(node.id, node);    // Item doesn't exist, so add it
-      data.breakpoint = true;
+      this.control.breakpointNodes.set(node.id, node);
     }
-    const now = new Date(this.currentDate);
-    this.serviceBus.publish(new NodeDataBusMessage({
-      date: now,
-      sim: this,
-      stateSnapshot: null, //TODO Do we want this?
-      nodeId: node.id,
-      kind: node.kind,
-      meta: { reason: 'control' },
-      data: data
-    }));
   }
 
   schedule(event) {
+    if (this.graphRecorder) {
+      this.graphRecorder.recordPendingSchedule({
+        targetDefinitionId: event.id ?? event.type,
+        scheduledFor: event.date,
+      });
+    }
     this.queue.push({
       data: {},
       meta: {},
@@ -255,52 +241,99 @@ export class Simulation {
     return this.control.breakpointNodes.has(id);
   }
 
+  // ── Hierarchical execution ID helpers ──────────────────────────────────────
+
+  /**
+   * Increment the execution counter for `nodeId`, build the next hierarchical
+   * execution ID using the current stack top as parent, push it onto the stack,
+   * and return it.  Call _popExecutionId() when the node finishes.
+   */
+  _nextExecutionId(nodeId) {
+    const index = (this._executionCounts.get(nodeId) ?? 0) + 1;
+    this._executionCounts.set(nodeId, index);
+    const parentId   = this._executionStack.at(-1) ?? null;
+    const executionId = buildExecutionId(parentId, nodeId, index);
+    this._executionStack.push(executionId);
+    return executionId;
+  }
+
+  /** Pop and return the top execution ID when the current node finishes. */
+  _popExecutionId() {
+    return this._executionStack.pop() ?? null;
+  }
+
+  /** Peek at the current execution ID without removing it. */
+  _currentExecutionId() {
+    return this._executionStack.at(-1) ?? null;
+  }
+
+  /**
+   * Increment the per-node execution counter and return a new hierarchical ID.
+   * Does NOT touch _executionStack — safe to call from breakpoint-resume paths.
+   *
+   * @param {string|null} nodeId    Config-graph node ID (e.g. 'e1', 'h2').
+   * @param {string|null} parentId  Full execution path of the parent, or null.
+   * @returns {string|null}  null when nodeId is falsy (anonymous nodes skipped).
+   */
+  _makeExecutionId(nodeId, parentId) {
+    if (!nodeId) return null;
+    const index = (this._executionCounts.get(nodeId) ?? 0) + 1;
+    this._executionCounts.set(nodeId, index);
+    return buildExecutionId(parentId, nodeId, index);
+  }
+
   // ── Core execution ─────────────────────────────────────────────────────────
 
   /**
    * Execute one event.  Supports mid-event resume by accepting a startHandlerIdx
-   * (skip handlers that already ran) and the original stateBefore snapshot
-   * (needed to publish a correct EVENT_OCCURRENCE_END message).
+   * (skip handlers that already ran) and the original stateBefore snapshot.
    *
    * Throws BreakpointSignal when it hits a handler breakpoint; saves resume
    * context in this.control.pendingExecution before throwing.
    *
    * @param {object}  event
    * @param {object}  [opts]
-   * @param {number}  [opts.startHandlerIdx=0]  Resume from this handler index.
-   * @param {object}  [opts.stateBefore=null]   Pre-event state snapshot (from prior partial run).
+   * @param {number}  [opts.startHandlerIdx=0]   Resume from this handler index.
+   * @param {object}  [opts.stateBefore=null]    Pre-event state snapshot (from prior partial run).
+   * @param {string}  [opts.eventExecId=null]    Saved execution ID for resume paths.
    */
-  execute(event, { startHandlerIdx = 0, stateBefore: savedStateBefore = null } = {}) {
+  execute(event, { startHandlerIdx = 0, stateBefore: savedStateBefore = null, eventExecId: savedEventExecId = null, eventNodeId: savedEventNodeId = null } = {}) {
     const handlers = this.handlers.get(event.type) || [];
 
     // Capture state-before once (at true event start, not on resume).
     const stateBefore = this.silent ? null : (savedStateBefore ?? structuredClone(this.state));
 
+    let eventExecId;
+    let eventNodeId;
     if (startHandlerIdx === 0) {
       this.eventExecutions++;
+      eventExecId = this._makeExecutionId(event.id ?? event.type, null);
       if (!this.silent) {
         const now = new Date(this.currentDate);
-        if(event.id) {
-          this.serviceBus.publish(new NodeDataBusMessage({
-            date: now,
-            sim: this,
-            stateSnapshot: stateBefore,
-            nodeId: event.id,
-            kind: 'event',
-            meta: {reason: 'execution'},
-            data: {
-              fired: true,
-              stateChanges: []
-            }
-          }));
-        }
-        this.bus.publish(new EventStartBusMessage({
-          date: now,
-          sim: this,
-          payload: { event, eventCount: this.eventExecutions },
-          stateSnapshot: stateBefore
+        this.bus.publish(new ExecutionBusMessage({
+          phase:       EXECUTION_PHASES.BEGIN,
+          kind:        EXECUTION_KINDS.EVENT,
+          executionId: eventExecId,
+          parentId:    null,
+          nodeId:      event.id ?? null,
+          date:        now,
+          sim:         this,
+          data:        { event, eventCount: this.eventExecutions }
         }));
+        if (this.graphRecorder) {
+          eventNodeId = this.graphRecorder.beginNode({
+            kind:         'event',
+            name:         event.type,
+            definitionId: event.id ?? null,
+            parentNodeId: null,
+            date:         now,
+          });
+          this.graphRecorder.resolvePendingSchedules(event.id ?? event.type, eventNodeId);
+        }
       }
+    } else {
+      eventExecId  = savedEventExecId;
+      eventNodeId  = savedEventNodeId;
     }
 
     for (let i = startHandlerIdx; i < handlers.length; i++) {
@@ -312,7 +345,9 @@ export class Simulation {
           type: 'handler',
           event,
           handlerIdx: i,
-          stateBefore
+          stateBefore,
+          eventExecId,
+          eventNodeId,
         };
         this.control.breakpointHit = { stage: 'handler:before', node: entry };
         this.control.paused = true;
@@ -321,7 +356,38 @@ export class Simulation {
       // Past this handler's breakpoint check — clear resuming flag so subsequent
       // handlers (and their nested action/reducer loops) get checked normally.
       this.control.resuming = false;
-      const prevState = this.silent ? null : structuredClone(this.state);
+
+      const isInternal = entry.name === INTERNAL_SCHEDULING_HANDLER_NAME;
+      const handlerExecId = isInternal
+        ? null
+        : this._makeExecutionId(entry.id ?? entry.name, eventExecId);
+
+      let handlerNodeId = null;
+      if (!isInternal) {
+        this.handlerExecutions++;
+        if (!this.silent) {
+          const hDate = new Date(this.currentDate);
+          this.bus.publish(new ExecutionBusMessage({
+            phase:       EXECUTION_PHASES.BEGIN,
+            kind:        EXECUTION_KINDS.HANDLER,
+            executionId: handlerExecId,
+            parentId:    eventExecId,
+            nodeId:      entry.id ?? null,
+            date:        hDate,
+            sim:         this,
+            data:        { handler: entry, event }
+          }));
+          if (this.graphRecorder) {
+            handlerNodeId = this.graphRecorder.beginNode({
+              kind:         'handler',
+              name:         entry.name ?? entry.id ?? 'handler',
+              definitionId: entry.id ?? null,
+              parentNodeId: eventNodeId,
+              date:         hDate,
+            });
+          }
+        }
+      }
 
       const actions = entry.call({
         sim: this,
@@ -331,40 +397,29 @@ export class Simulation {
         state: this.state
       });
 
-      //TODO Review if we really want to skip these
-      if (entry.name !== INTERNAL_SCHEDULING_HANDLER_NAME) {
-        this.handlerExecutions++;
-        if (!this.silent) {
-          const now = new Date(this.currentDate);
-          const stateSnapshot = structuredClone(this.state);
-          if(entry.id) {
-            this.serviceBus.publish(new NodeDataBusMessage({
-              date: now,
-              sim: this,
-              stateSnapshot: stateSnapshot,
-              nodeId: entry.id,
-              kind: entry.kind,
-              meta: {reason: 'execution'},
-              data: {
-                fired: true,
-                stateChanges: diffStates(stateBefore, stateSnapshot)
-              },
-              stateBefore: prevState
-            }));
-          }
-          this.bus.publish(new EventHandledMessage({
-            date: now,
-            sim: this,
-            stateSnapshot: stateSnapshot,
-            payload: { handler: entry, event, handlerCount: this.handlerExecutions }
-          }));
+      if (!isInternal && !this.silent) {
+        this.bus.publish(new ExecutionBusMessage({
+          phase:       EXECUTION_PHASES.END,
+          kind:        EXECUTION_KINDS.HANDLER,
+          executionId: handlerExecId,
+          parentId:    eventExecId,
+          nodeId:      entry.id ?? null,
+          date:        new Date(this.currentDate),
+          sim:         this,
+          data:        { handler: entry, event, handlerCount: this.handlerExecutions }
+        }));
+        if (this.graphRecorder && handlerNodeId) {
+          this.graphRecorder.endNode(handlerNodeId);
         }
       }
 
       // Pass handlerContext so that if applyActions pauses mid-queue we know
       // which handler to resume from (the NEXT one: i + 1).
       this.applyActions(actions, event, {
-        handlerContext: { event, handlerIdx: i + 1, stateBefore }
+        handlerContext: { event, handlerIdx: i + 1, stateBefore, eventExecId, eventNodeId },
+        handlerExecId:  handlerExecId ?? eventExecId, // anonymous handlers use event as parent
+        eventNodeId,
+        handlerNodeId,
       });
 
       // snapshot logic
@@ -377,43 +432,34 @@ export class Simulation {
       }
     }
 
-    // Publish the EVENT_OCCURRENCE_END message.
+    // Publish EXECUTION_END(EVENT) with full state snapshot + diff.
     if (!this.silent) {
       const stateSnapshot = structuredClone(this.state);
       const now = new Date(this.currentDate);
-      if(event.id) {
-        this.serviceBus.publish(new NodeDataBusMessage({
-          date: now,
-          sim: this,
-          stateSnapshot: stateSnapshot,
-          nodeId: event.id,
-          kind: 'event',
-          meta: {reason: 'execution'},
-          data: {fired: false}
-        }));
-      }
-
-      this.bus.publish(new EventEndBusMessage({
-        date: now,
-        sim: this,
-        stateSnapshot: stateSnapshot,
-        payload: {
-          event,
-          stateBefore,
-          stateAfter: stateSnapshot,
-          sourceEvent: event
-        }
+      this.bus.publish(new ExecutionBusMessage({
+        phase:         EXECUTION_PHASES.END,
+        kind:          EXECUTION_KINDS.EVENT,
+        executionId:   eventExecId,
+        parentId:      null,
+        nodeId:        event.id ?? null,
+        date:          now,
+        sim:           this,
+        data:          { event, stateBefore, stateAfter: stateSnapshot, sourceEvent: event },
+        stateSnapshot,
+        stateDiff:     stateBefore ? diffStates(stateBefore, stateSnapshot) : null
       }));
+      if (this.graphRecorder && eventNodeId) {
+        this.graphRecorder.endNode(eventNodeId, { stateBefore, stateAfter: stateSnapshot });
+      }
     }
 
-    //Spit out some stats
-    //TODO Make this a bus message
     if(this.debug) {
+      const execNodes = this.executionGraph?.getExecutionNodes().length ?? 0;
       console.log(`
          Date: ${this.currentDate}
          Queue: ${this.queue.size()}
          Journal: ${this.journal.journal.length}
-         EventGraph: ${this.actionGraph.actionGraph.size}
+         ExecutionNodes: ${execNodes}
          History Snapshots: ${this.history.enableSnapshots}
          History Size: ${this.history.snapshots.length}
          Bus History: ${this.bus.history.length}
@@ -428,14 +474,14 @@ export class Simulation {
   /**
    * Apply a list of actions produced by a handler.
    *
-   * @param {Array|object|null} actions       Actions to apply (may be null).
-   * @param {object}            sourceEvent   The originating simulation event.
+   * @param {Array|object|null} actions        Actions to apply (may be null).
+   * @param {object}            sourceEvent    The originating simulation event.
    * @param {object}            [opts]
-   * @param {Array}             [opts.existingQueue]  Pre-built action queue for resume.
-   * @param {object}            [opts.handlerContext] { event, handlerIdx, stateBefore } —
-   *                            saved so a mid-queue pause can resume the right handler.
+   * @param {Array}             [opts.existingQueue]   Pre-built action queue for resume.
+   * @param {object}            [opts.handlerContext]  { event, handlerIdx, stateBefore, eventExecId }.
+   * @param {string|null}       [opts.handlerExecId]   Execution ID of the producing handler.
    */
-  applyActions(actions, sourceEvent, { existingQueue = null, handlerContext = null } = {}) {
+  applyActions(actions, sourceEvent, { existingQueue = null, handlerContext = null, handlerExecId = null, eventNodeId = null, handlerNodeId = null } = {}) {
     if (!actions && !existingQueue) return;
 
     let queue;
@@ -452,18 +498,19 @@ export class Simulation {
       }
     }
 
-    this._processActionQueue(queue, sourceEvent, handlerContext);
+    this._processActionQueue(queue, sourceEvent, handlerContext, handlerExecId, eventNodeId, handlerNodeId);
   }
 
   /**
    * Inner loop: process all actions in `queue`, running their reducers.
    * May throw BreakpointSignal — saves pendingExecution before doing so.
    *
-   * @param {Array}  queue           Mutable action queue (shifted from front).
-   * @param {object} sourceEvent
-   * @param {object} handlerContext  { event, handlerIdx, stateBefore } for resume.
+   * @param {Array}       queue          Mutable action queue (shifted from front).
+   * @param {object}      sourceEvent
+   * @param {object}      handlerContext { event, handlerIdx, stateBefore, eventExecId } for resume.
+   * @param {string|null} handlerExecId  Execution ID of the producing handler.
    */
-  _processActionQueue(queue, sourceEvent, handlerContext) {
+  _processActionQueue(queue, sourceEvent, handlerContext, handlerExecId, eventNodeId = null, handlerNodeId = null) {
     const sourceEventType = sourceEvent.type;
     const MAX_ACTIONS = 10000;
     let processed = 0;
@@ -476,14 +523,15 @@ export class Simulation {
       const action = queue.shift();
 
       // ── Action breakpoint ─────────────────────────────────────────────
-      //The only way we will get a registered action is if it came from a ActionDefinition
-      //  See #134
       if (this._shouldPause(action.actionId)) {
         this.control.pendingExecution = {
           type: 'action',
           actionQueue: [action, ...queue],  // put action back so it runs on resume
           sourceEvent,
-          handlerContext
+          handlerContext,
+          handlerExecId,
+          eventNodeId,
+          handlerNodeId,
         };
         this.control.breakpointHit = { stage: 'action', node: action };
         this.control.paused = true;
@@ -493,67 +541,91 @@ export class Simulation {
 
       const reducers = this.reducers.get(action.type);
 
-      //Emit Action Result Message
       const unwrappedReducers = [];
       if (reducers && reducers.length > 0) {
-        reducers.forEach(r => {
-          unwrappedReducers.push(r.reducer);
-        })
+        reducers.forEach(r => unwrappedReducers.push(r.reducer));
       }
 
-      //Execute action transform if it can be
       if (action.transform) {
         const newActions = action.transform(this.state, {
           date: this.currentDate,
           sourceEvent,
           handlerContext
         });
-
         if (newActions?.length) {
-          //TODO I think this tagging is the correct parent
-          let emitted = newActions.map(a => this.decorateAction(a, action));
-          queue.unshift(...emitted);
+          queue.unshift(...newActions.map(a => this.decorateAction(a, action)));
         }
-      }
-      this.actionExecutions++;
-      if (!this.silent) {
-        const prevState = structuredClone(this.state);
-        const now = new Date(this.currentDate);
-        const stateSnapshot = structuredClone(this.state);
-        //Special handling for ActionDefinition  see #134
-        if(action.actionId) {
-          this.serviceBus.publish(new NodeDataBusMessage({
-            date: now,
-            sim: this,
-            stateSnapshot: prevState,
-            nodeId: action.actionId,
-            kind: action.kind,
-            meta: {reason: 'execution'},
-            data: {
-              fired: true,
-              stateChanges: diffStates(prevState, stateSnapshot)
-            },
-            stateBefore: prevState
-          }));
-        }
-        this.bus.publish(new ActionResultMessage({
-          date: now,
-          sim: this,
-          payload: {
-            action: action,
-            reducers: unwrappedReducers,
-            sourceEvent: sourceEvent,
-            actionCount: this.actionExecutions
-          },
-          stateSnapshot: stateSnapshot
-        }));
       }
 
-      if (!reducers || reducers.length === 0) continue;
+      this.actionExecutions++;
+      const actionExecId = this._makeExecutionId(action.actionId ?? action.type, handlerExecId);
+
+      let actionNodeId = null;
+      if (!this.silent) {
+        const now = new Date(this.currentDate);
+        this.bus.publish(new ExecutionBusMessage({
+          phase:       EXECUTION_PHASES.BEGIN,
+          kind:        EXECUTION_KINDS.ACTION,
+          executionId: actionExecId,
+          parentId:    handlerExecId ?? null,
+          nodeId:      action.actionId ?? null,
+          date:        now,
+          sim:         this,
+          data:        { action, reducers: unwrappedReducers, sourceEvent, actionCount: this.actionExecutions }
+        }));
+        if (this.graphRecorder) {
+          actionNodeId = this.graphRecorder.beginNode({
+            uuid:         action.instanceId,
+            kind:         'action',
+            name:         action.type,
+            definitionId: action.actionId ?? null,
+            parentNodeId: handlerNodeId ?? eventNodeId,
+            date:         now,
+          });
+          if (action._emittedByNodeId) {
+            this.graphRecorder.addEmitsEdge(action._emittedByNodeId, actionNodeId);
+          }
+        }
+      }
+
+      if (!reducers || reducers.length === 0) {
+        if (!this.silent) {
+          this.bus.publish(new ExecutionBusMessage({
+            phase:       EXECUTION_PHASES.END,
+            kind:        EXECUTION_KINDS.ACTION,
+            executionId: actionExecId,
+            parentId:    handlerExecId ?? null,
+            nodeId:      action.actionId ?? null,
+            date:        new Date(this.currentDate),
+            sim:         this,
+            data:        { action, sourceEvent }
+          }));
+          if (this.graphRecorder && actionNodeId) {
+            this.graphRecorder.endNode(actionNodeId);
+          }
+        }
+        continue;
+      }
 
       // Run all reducers for this action.  Emitted actions are unshifted onto
       // `queue` so they execute before the remaining queued actions.
-      this._processReducers(action, 0, reducers, queue, sourceEvent, sourceEventType, handlerContext);
+      this._processReducers(action, 0, reducers, queue, sourceEvent, sourceEventType, handlerContext, actionExecId, handlerExecId, actionNodeId);
+
+      if (!this.silent) {
+        this.bus.publish(new ExecutionBusMessage({
+          phase:       EXECUTION_PHASES.END,
+          kind:        EXECUTION_KINDS.ACTION,
+          executionId: actionExecId,
+          parentId:    handlerExecId ?? null,
+          nodeId:      action.actionId ?? null,
+          date:        new Date(this.currentDate),
+          sim:         this,
+          data:        { action, sourceEvent }
+        }));
+        if (this.graphRecorder && actionNodeId) {
+          this.graphRecorder.endNode(actionNodeId);
+        }
+      }
     }
   }
 
@@ -562,15 +634,17 @@ export class Simulation {
    * Emits new actions by unshifting them onto the shared `actionQueue`.
    * May throw BreakpointSignal — saves pendingExecution before doing so.
    *
-   * @param {object} action
-   * @param {number} startIdx       First reducer index to run.
-   * @param {Array}  reducers       All reducers registered for this action type.
-   * @param {Array}  actionQueue    Shared queue (mutated — emitted actions prepended).
-   * @param {object} sourceEvent
-   * @param {string} sourceEventType
-   * @param {object} handlerContext
+   * @param {object}      action
+   * @param {number}      startIdx        First reducer index to run.
+   * @param {Array}       reducers        All reducers registered for this action type.
+   * @param {Array}       actionQueue     Shared queue (mutated — emitted actions prepended).
+   * @param {object}      sourceEvent
+   * @param {string}      sourceEventType
+   * @param {object}      handlerContext
+   * @param {string|null} actionExecId    Execution ID of the owning action.
+   * @param {string|null} handlerExecId   Execution ID of the owning handler (for resume).
    */
-  _processReducers(action, startIdx, reducers, actionQueue, sourceEvent, sourceEventType, handlerContext) {
+  _processReducers(action, startIdx, reducers, actionQueue, sourceEvent, sourceEventType, handlerContext, actionExecId, handlerExecId, actionNodeId = null) {
     for (let j = startIdx; j < reducers.length; j++) {
       const reducerWrapper = reducers[j];
 
@@ -584,7 +658,10 @@ export class Simulation {
           actionQueue: [...actionQueue],  // snapshot of remaining queue
           sourceEvent,
           sourceEventType,
-          handlerContext
+          handlerContext,
+          actionExecId,
+          handlerExecId,
+          actionNodeId,
         };
         this.control.breakpointHit = { stage: 'reducer:before', node: reducerWrapper.reducer };
         this.control.paused = true;
@@ -593,50 +670,54 @@ export class Simulation {
       this.control.resuming = false;
 
       const prevState = this.silent ? null : structuredClone(this.state);
-      const result = reducerWrapper.fn(this.state, action, this.currentDate);
+      const reducerExecId = this._makeExecutionId(reducerWrapper.reducer?.id ?? null, actionExecId);
 
-      this.reducerExecutions++;
-      if (!this.silent) {
-        // Publish the REDUCER_RESULT message.
-        let stateSnapshot;
-        if (!result) {
-          stateSnapshot = prevState;
-        } else if (result.state) {
-          stateSnapshot = structuredClone(result.state);
-        } else {
-          stateSnapshot = structuredClone(result);
-        }
-
-        const now = new Date(this.currentDate);
-        if(reducerWrapper.reducer?.id) {
-          this.serviceBus.publish(new NodeDataBusMessage({
-            date: now,
-            sim: this,
-            stateSnapshot: stateSnapshot,
-            nodeId: reducerWrapper.reducer,
-            kind: 'reducer',
-            meta: {reason: 'execution'},
-            data: {
-              fired: true,
-              stateChanges: diffStates(prevState, stateSnapshot)
-            },
-          }));
-        }
-        this.bus.publish(new ReducerResultMessage({
-          date: now,
-          sim: this,
-          stateSnapshot: stateSnapshot,
-          payload: {
-            reducer: reducerWrapper.reducer,
-            action: action,
-            stateBefore: prevState,
-            sourceEvent: sourceEvent,
-            reducerCount: this.reducerExecutions
-          }
+      let reducerNodeId = null;
+      const rDate = new Date(this.currentDate);
+      if (!this.silent && reducerExecId) {
+        this.bus.publish(new ExecutionBusMessage({
+          phase:       EXECUTION_PHASES.BEGIN,
+          kind:        EXECUTION_KINDS.REDUCER,
+          executionId: reducerExecId,
+          parentId:    actionExecId ?? null,
+          nodeId:      reducerWrapper.reducer?.id ?? null,
+          date:        rDate,
+          sim:         this,
+          data:        { reducer: reducerWrapper.reducer, action, sourceEvent }
         }));
       }
+      if (!this.silent && this.graphRecorder) {
+        reducerNodeId = this.graphRecorder.beginNode({
+          kind:         'reducer',
+          name:         reducerWrapper.reducer?.id ?? reducerWrapper.name ?? 'reducer',
+          definitionId: reducerWrapper.reducer?.id ?? null,
+          parentNodeId: actionNodeId,
+          date:         rDate,
+        });
+      }
 
-      if (!result) continue;
+      const result = reducerWrapper.fn(this.state, action, this.currentDate);
+      this.reducerExecutions++;
+
+      if (!result) {
+        if (!this.silent && reducerExecId) {
+          this.bus.publish(new ExecutionBusMessage({
+            phase:       EXECUTION_PHASES.END,
+            kind:        EXECUTION_KINDS.REDUCER,
+            executionId: reducerExecId,
+            parentId:    actionExecId ?? null,
+            nodeId:      reducerWrapper.reducer?.id ?? null,
+            date:        new Date(this.currentDate),
+            sim:         this,
+            data:        { reducer: reducerWrapper.reducer, action, stateBefore: prevState, sourceEvent, reducerCount: this.reducerExecutions },
+            stateDiff:   null
+          }));
+        }
+        if (!this.silent && this.graphRecorder && reducerNodeId) {
+          this.graphRecorder.endNode(reducerNodeId);
+        }
+        continue;
+      }
 
       let nextState;
       let emitted = [];
@@ -651,16 +732,15 @@ export class Simulation {
         emitted = (Array.isArray(result.next)
             ? result.next
             : [result.next]).map(a => this.decorateAction(a, action));
-
-        // Prepend emitted actions so they run before remaining queued actions.
+        // Tag each emitted action so _processActionQueue can add the EMITS edge
+        // once the action node exists in the graph.
+        if (reducerNodeId) {
+          for (const a of emitted) { a._emittedByNodeId = reducerNodeId; }
+        }
         actionQueue.unshift(...emitted);
       }
 
-      // Strip the `next` key so it never pollutes this.state.  When
-      // Reducer.newState() is used it embeds `next:[...]` directly into the
-      // flat state object; downstream tax-module reducers do `{...state,...}`
-      // which would re-spread that key back into their result, causing the
-      // same chained action to be re-queued on every reducer call (infinite loop).
+      // Strip the `next` key so it never pollutes this.state.
       if ('next' in nextState) {
         const { next: _discarded, ...cleanState } = nextState;
         nextState = cleanState;
@@ -669,25 +749,33 @@ export class Simulation {
       this.state = nextState;
 
       if (!this.silent) {
-        const parentId = action.parentInstanceId ?? null;
-        const actionClone = this.cloneObjectFields(action);
-        const reducerClone = this.cloneObjectFields(reducerWrapper.reducer);
-        this.addActionNode({
-          actionClone,
-          parentId,
-          reducerClone,
-          prevState,
-          nextState,
-          sourceEvent
-        });
+        const sd = diffStates(prevState, this.state);
+        if (reducerExecId) {
+          this.bus.publish(new ExecutionBusMessage({
+            phase:       EXECUTION_PHASES.END,
+            kind:        EXECUTION_KINDS.REDUCER,
+            executionId: reducerExecId,
+            parentId:    actionExecId ?? null,
+            nodeId:      reducerWrapper.reducer?.id ?? null,
+            date:        new Date(this.currentDate),
+            sim:         this,
+            data:        { reducer: reducerWrapper.reducer, action, stateBefore: prevState, sourceEvent, reducerCount: this.reducerExecutions },
+            stateDiff:   sd
+          }));
+        }
+        if (this.graphRecorder && reducerNodeId) {
+          this.graphRecorder.endNode(reducerNodeId, { stateBefore: prevState, stateAfter: this.state, stateDiff: sd });
+        }
 
         if (this.journal.enabled) {
+          const actionClone  = this.cloneObjectFields(action);
+          const reducerClone = this.cloneObjectFields(reducerWrapper.reducer);
           this.journal.addEntry(new JournalEntry({
             date: new Date(this.currentDate),
             eventType: sourceEventType,
             action: actionClone,
             reducer: reducerClone,
-            stateDiff: diffStates(prevState, this.state),
+            stateDiff: sd,
             emittedActions: structuredClone(emitted),
             sourceEvent
           }));
@@ -722,17 +810,21 @@ export class Simulation {
       // resuming=true skips its breakpoint check, then clears itself.
       this.execute(pe.event, {
         startHandlerIdx: pe.handlerIdx,
-        stateBefore: pe.stateBefore
+        stateBefore:     pe.stateBefore,
+        eventExecId:     pe.eventExecId,
+        eventNodeId:     pe.eventNodeId,
       });
 
     } else if (pe.type === 'action') {
       // Process the action queue (first entry is the one with the breakpoint).
       // After the queue drains, continue the handler loop.
-      this._processActionQueue(pe.actionQueue, pe.sourceEvent, pe.handlerContext);
+      this._processActionQueue(pe.actionQueue, pe.sourceEvent, pe.handlerContext, pe.handlerExecId, pe.eventNodeId, pe.handlerNodeId);
       if (pe.handlerContext) {
         this.execute(pe.handlerContext.event, {
           startHandlerIdx: pe.handlerContext.handlerIdx,
-          stateBefore: pe.handlerContext.stateBefore
+          stateBefore:     pe.handlerContext.stateBefore,
+          eventExecId:     pe.handlerContext.eventExecId,
+          eventNodeId:     pe.handlerContext.eventNodeId,
         });
       }
 
@@ -742,15 +834,34 @@ export class Simulation {
       const liveQueue = [...pe.actionQueue];
       this._processReducers(
         pe.action, pe.reducerIdx, pe.reducers,
-        liveQueue, pe.sourceEvent, pe.sourceEventType, pe.handlerContext
+        liveQueue, pe.sourceEvent, pe.sourceEventType, pe.handlerContext,
+        pe.actionExecId, pe.handlerExecId, pe.actionNodeId
       );
+      // Publish EXECUTION_END(ACTION) now that all its reducers have completed.
+      if (!this.silent) {
+        this.bus.publish(new ExecutionBusMessage({
+          phase:       EXECUTION_PHASES.END,
+          kind:        EXECUTION_KINDS.ACTION,
+          executionId: pe.actionExecId,
+          parentId:    pe.handlerExecId ?? null,
+          nodeId:      pe.action.actionId ?? null,
+          date:        new Date(this.currentDate),
+          sim:         this,
+          data:        { action: pe.action, sourceEvent: pe.sourceEvent }
+        }));
+        if (this.graphRecorder && pe.actionNodeId) {
+          this.graphRecorder.endNode(pe.actionNodeId);
+        }
+      }
       // 2. Process remaining actions (including anything emitted in step 1).
-      this._processActionQueue(liveQueue, pe.sourceEvent, pe.handlerContext);
+      this._processActionQueue(liveQueue, pe.sourceEvent, pe.handlerContext, pe.handlerExecId, pe.eventNodeId, pe.handlerNodeId);
       // 3. Continue remaining handlers.
       if (pe.handlerContext) {
         this.execute(pe.handlerContext.event, {
           startHandlerIdx: pe.handlerContext.handlerIdx,
-          stateBefore: pe.handlerContext.stateBefore
+          stateBefore:     pe.handlerContext.stateBefore,
+          eventExecId:     pe.handlerContext.eventExecId,
+          eventNodeId:     pe.handlerContext.eventNodeId,
         });
       }
     }
@@ -797,19 +908,11 @@ export class Simulation {
       ) {
         this.control.paused = true;
         this.control.breakpointHit = { stage: 'event:start', node: next };
-        this.serviceBus.publish(new NodeDataBusMessage({
-          date: new Date(this.currentDate),
-          sim: this,
-          stateSnapshot: null, //TODO Do we want this?
+        this.bus.publish(new BreakpointHitMessage({
+          date:   new Date(this.currentDate),
           nodeId: next.id,
-          kind: next.kind,
-          meta: {
-            reason: 'breakpoint'
-          },
-          data: {
-            breakpointHit: true,
-            breakpointContext: { stage: 'event:start', node: next }
-          }
+          kind:   next.kind ?? 'event',
+          stage:  'event:start'
         }));
         return; // Leave event in the queue — resume will execute it
       }
@@ -824,28 +927,14 @@ export class Simulation {
         this.execute(next);
       } catch (e) {
         if (e instanceof BreakpointSignal) {
-          //Send message to update node data
           const node = e.context.node;
-          //Hack for ActionDefinition generated actions See #134
-          let nodeId;
-          if(node.kind === 'action') {
-            nodeId = node.actionId;
-          }else {
-            nodeId = node.id;
-          }
-          this.serviceBus.publish(new NodeDataBusMessage({
-            date: new Date(this.currentDate),
-            sim: this,
-            stateSnapshot: null, //TODO Do we want this?
+          // ActionDefinition workaround: actions use actionId, others use id. See #134
+          const nodeId = node.kind === 'action' ? node.actionId : node.id;
+          this.bus.publish(new BreakpointHitMessage({
+            date:   new Date(this.currentDate),
             nodeId: nodeId,
-            kind: node.kind,
-            meta: {
-              reason: 'breakpoint'
-            },
-            data: {
-              breakpointHit: true,
-              breakpointContext: e.context
-            }
+            kind:   node.kind ?? 'unknown',
+            stage:  e.context.stage
           }));
           return; // control.paused set by _shouldPause path
         }
@@ -894,11 +983,6 @@ export class Simulation {
     clone.parentInstanceId = parent?.instanceId ?? null;
     clone.rootInstanceId   = parent?.rootInstanceId ?? parent?.instanceId ?? null;
 
-    this.bus.publish(new ActionInstanceMessage({
-      date: new Date(this.currentDate),
-      action: clone,
-    }));
-
     return clone;
   }
 
@@ -912,29 +996,5 @@ export class Simulation {
     return {...action };
   }
 
-  /** Action Graph **/
-  addActionNode({
-                  actionClone,
-                  parentId,
-                  reducerClone,
-                  prevState,
-                  nextState,
-                  sourceEvent
-                }) {
-    const node = new ActionNode({
-      id: actionClone.instanceId,
-      type: actionClone.type,
-      date: new Date(this.currentDate),
-
-      parent: parentId,
-      children: [],
-
-      action: actionClone,
-      reducer: reducerClone,
-
-      stateDiff: diffStates(prevState, nextState),
-      sourceEvent: sourceEvent
-    });
-    this.actionGraph.addActionNode(node);
-  }
 }
+

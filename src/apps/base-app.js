@@ -28,7 +28,7 @@ import { TimeControls }             from '../visualization/time-controls.js';
 import { GraphBuilderPresenter }    from '../visualization/graph-builder/graph-builder-presenter.js';
 import { ServiceRegistry }          from '../services/service-registry.js';
 import {
-  BusMessage,
+  BusMessage, EXECUTION_KINDS, EXECUTION_PHASES,
   SIMULATION_BUS_MESSAGES,
   SimulationBusMessage
 } from '../simulation-framework/bus-messages.js';
@@ -132,6 +132,7 @@ export class BaseApp extends BaseComponent {
         graphEdges:              document.getElementById('graphEdges'),
         nodeDetailsTemplate:     document.getElementById('tpl-node-details'),
         displayNodeStateChanges: (changes) => this._statePanelView.showNodeStateChanges(changes),
+        bus:                     registry.bus,
       }),
       eventService: registry.eventService,
       handlerService: registry.handlerService,
@@ -254,7 +255,7 @@ export class BaseApp extends BaseComponent {
     this._animator.wireSimBus(this.scenario.sim.bus);
 
     // Track _currentDate for subclass access.
-    this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START, ({ date }) => {
+    this.scenario.sim.bus.subscribe(`EXECUTION_${EXECUTION_PHASES.BEGIN}`, { kind: EXECUTION_KINDS.EVENT }, ({ date }) => {
       this._currentDate = new Date(date);
     });
 

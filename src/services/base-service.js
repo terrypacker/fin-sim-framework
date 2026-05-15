@@ -113,7 +113,7 @@ export class BaseService {
     if (item.id == null) item.id = this._generateId(this._idPrefix);
     this._graph.addNode(item);
     this._advanceCounter(item.id);
-    this._publish('CREATE', item.constructor.name, item);
+    this._publish('CREATE', item);
     this._wireNodeEdges(item);
     return item;
   }
@@ -177,7 +177,6 @@ export class BaseService {
       })
     });
 
-    this._graph.notifyNodeWatchers();
     this._publishBulkMessage('UPDATE', updated);
   }
 
@@ -243,12 +242,11 @@ export class BaseService {
    * Publish a SERVICE_ACTION event on the shared bus.
    *
    * @param {'CREATE'|'UPDATE'|'DELETE'} actionType
-   * @param {string} classType  - constructor name of the managed item
-   * @param {*}      item       - item returned from the service call
-   * @param {*}      [originalItem] - item snapshot before any mutation
+   * @param {*} item            - item returned from the service call
+   * @param {*} [originalItem]  - item snapshot before any mutation
    */
-  _publish(actionType, classType, item, originalItem = null) {
-    this.bus.publish(new ServiceActionEvent({ actionType, classType, item, originalItem }));
+  _publish(actionType, item, originalItem = null) {
+    this.bus.publish(new ServiceActionEvent({ actionType, item, originalItem }));
   }
 
   _publishBulkMessage(actionType, changes) {

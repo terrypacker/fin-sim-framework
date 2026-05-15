@@ -46,7 +46,7 @@ export class CollectibleService extends AssetService {
   createCollectible(collectible) {
     collectible.id = this._generateId(this._idPrefix);
     this._register(collectible);
-    this._publish('CREATE', 'Collectible', collectible);
+    this._publish('CREATE', collectible);
     this._wireNodeEdges(collectible);
     return collectible;
   }
@@ -61,7 +61,7 @@ export class CollectibleService extends AssetService {
     const collectible = this._resolve(idOrCollectible);
     const original    = { ...collectible };
     this.mergeChanges(collectible, changes);
-    this._publish('UPDATE', 'Collectible', collectible, original);
+    this._publish('UPDATE', collectible, original);
     this._wireNodeEdges(collectible);
     return collectible;
   }
@@ -74,7 +74,7 @@ export class CollectibleService extends AssetService {
   deleteCollectible(idOrCollectible) {
     const collectible = this._resolve(idOrCollectible);
     this._unregister(collectible.id);
-    this._publish('DELETE', 'Collectible', collectible, collectible);
+    this._publish('DELETE', collectible);
     return collectible;
   }
 

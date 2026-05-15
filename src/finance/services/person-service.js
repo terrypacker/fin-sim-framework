@@ -38,7 +38,7 @@ export class PersonService extends BaseService {
     const item = new Person(null, birthDate, opts);
     item.id = this._generateId(this._idPrefix);
     this._register(item);
-    this._publish('CREATE', 'Person', item);
+    this._publish('CREATE', item);
     this._wireNodeEdges(item);
     return item;
   }
@@ -56,7 +56,7 @@ export class PersonService extends BaseService {
     const person = this._resolve(idOrPerson);
     const originalItem = { ...person };
     this.mergeChanges(person, changes);
-    this._publish('UPDATE', 'Person', person, originalItem);
+    this._publish('UPDATE', person, originalItem);
     this._rewireEdges(person);
     return person;
   }
@@ -72,7 +72,7 @@ export class PersonService extends BaseService {
   deletePerson(idOrPerson) {
     const person = this._resolve(idOrPerson);
     this._unregister(person.id);
-    this._publish('DELETE', 'Person', person, person);
+    this._publish('DELETE', person);
     return person;
   }
 
