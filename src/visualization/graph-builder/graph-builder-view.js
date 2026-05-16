@@ -47,8 +47,6 @@ export class GraphBuilderView extends BaseComponent {
     this.onFieldChange = null;
     /** @type {function(node)|null} */
     this.onDelete = null;
-    /** @type {function(kind: string, subtype: string|null)|null} */
-    this.onCreationRequested = null;
     /** @type {function(node, chipNode, kind, linkTo: boolean, isAdd: boolean)|null} */
     this.onLinkToggle = null;
     /** @type {function(nodeId: string, newClass: string)|null} */
@@ -64,8 +62,6 @@ export class GraphBuilderView extends BaseComponent {
     /** @type {function(node, defId: string, field: string, value)|null} */
     this.onActionDefinitionUpdate = null;
     this.onEventTypeChange = null;
-
-    this._buildControls();
   }
 
   /**
@@ -114,57 +110,5 @@ export class GraphBuilderView extends BaseComponent {
     editor.onActionDefinitionAdd    = (...args) => this.onActionDefinitionAdd?.(...args);
     editor.onActionDefinitionRemove = (...args) => this.onActionDefinitionRemove?.(...args);
     editor.onActionDefinitionUpdate = (...args) => this.onActionDefinitionUpdate?.(...args);
-  }
-
-  _buildControls() {
-    const wrapper = this._graphRenderer.graphRoot.parentElement;
-
-    if (!wrapper || this._controlsEl) return;
-
-    wrapper.style.position = 'relative';
-
-    this._controlsEl = document.createElement('div');
-
-    this._controlsEl.style.cssText = `
-      position:absolute;
-      top:8px;
-      right:8px;
-      z-index:10;
-      display:flex;
-      gap:6px;
-    `;
-
-    [
-      ['+ Series', 'event', 'Series'],
-      ['+ One-Off', 'event', 'OneOff'],
-      ['+ Handler', 'handler', null],
-      ['+ Action', 'action', null],
-      ['+ Reducer', 'reducer', null],
-    ].forEach(([label, kind, subtype]) => {
-      const btn = document.createElement('button');
-
-      btn.className = 'btn btn-sm';
-      btn.textContent = label;
-
-      this.listen(btn, 'click', () => {
-        if (this.onCreationRequested) {
-          this.onCreationRequested(kind, subtype);
-        }
-      });
-
-      this._controlsEl.appendChild(btn);
-    });
-
-    const fitBtn = document.createElement('button');
-    fitBtn.className = 'btn btn-sm';
-    fitBtn.textContent = 'Fit';
-
-    this.listen(fitBtn, 'click', () => {
-      this._graphRenderer.fitToView();
-    });
-
-    this._controlsEl.appendChild(fitBtn);
-
-    wrapper.appendChild(this._controlsEl);
   }
 }

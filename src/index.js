@@ -165,6 +165,9 @@ import { MapFilterMultiSelect } from './visualization/components/map-filter-mult
 import { NodeEditModal } from './visualization/components/node-edit-modal.js';
 import { ReducerEditor } from './visualization/components/reducer-editor.js';
 import { ConfigurationListComponent } from './visualization/configuration/configuration-list.js';
+import { BaseGraphView } from './visualization/graph-builder/base-graph-view.js';
+import { ColumnLayout } from './visualization/graph-builder/column-layout.js';
+import { ConfigGraphView } from './visualization/graph-builder/config-graph-view.js';
 import { GraphBuilderController } from './visualization/graph-builder/graph-builder-controller.js';
 import { GraphBuilderPresenter } from './visualization/graph-builder/graph-builder-presenter.js';
 import { GraphBuilderView } from './visualization/graph-builder/graph-builder-view.js';
@@ -553,6 +556,9 @@ export const Visualization = {
   NodeEditModal,
   ReducerEditor,
   ConfigurationListComponent,
+  BaseGraphView,
+  ColumnLayout,
+  ConfigGraphView,
   GraphBuilderController,
   GraphBuilderPresenter,
   GraphBuilderView,

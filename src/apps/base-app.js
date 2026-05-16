@@ -26,6 +26,7 @@ import { TimelineView }             from '../visualization/timeline/timeline-vie
 import { TimelinePresenter }        from '../visualization/timeline/timeline-presenter.js';
 import { TimeControls }             from '../visualization/time-controls.js';
 import { GraphBuilderPresenter }    from '../visualization/graph-builder/graph-builder-presenter.js';
+import { ConfigGraphView }          from '../visualization/graph-builder/config-graph-view.js';
 import { ServiceRegistry }          from '../services/service-registry.js';
 import {
   BusMessage, EXECUTION_KINDS, EXECUTION_PHASES,
@@ -41,7 +42,6 @@ import { ConfigurationListComponent }    from '../visualization/configuration/co
 import { ScenarioTabPresenter }     from '../visualization/scenario/scenario-tab-presenter.js';
 import { StatePanelView }           from '../visualization/simulation/state-panel-view.js';
 import { SimulationAnimator }       from '../visualization/simulation/simulation-animator.js';
-import {GraphRenderer} from "../visualization/components/graph-renderer.js";
 import {BaseComponent} from "../visualization/components/base-component.js";
 import {ScenarioTabView} from "../visualization/scenario/scenario-tab-view.js";
 import { JournalReportingService } from '../finance/journal-reporting-service.js';
@@ -116,8 +116,8 @@ export class BaseApp extends BaseComponent {
     const registry = ServiceRegistry.getInstance();
     registry.scenarioRegistry.loadPrebuilt(this._prebuiltScenarios);
 
-    // ── Config graph (visual node canvas) ─────────────────────────────────────
-    const graphRenderer = new GraphRenderer({
+    // ── Config graph (visual node canvas + filter bar) ────────────────────────
+    const configGraphView = new ConfigGraphView({
       parent: this,
       graph: registry.graph,
       graphQueryApi: registry.graphQueryApi,
@@ -130,7 +130,7 @@ export class BaseApp extends BaseComponent {
     });
 
     this.configPresenter = new GraphBuilderPresenter({
-      graphRenderer,
+      graphRenderer: configGraphView.graphRenderer,
       eventService:   registry.eventService,
       handlerService: registry.handlerService,
       actionService:  registry.actionService,

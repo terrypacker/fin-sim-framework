@@ -920,6 +920,20 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 
 }
 
+.graph-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: #0f172a;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.graph-filter-bar .node-field {
+  margin: 0;
+}
+
 #graphRoot {
   position: relative;
   width: 100%;
