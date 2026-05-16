@@ -243,6 +243,17 @@ export class QueryApi {
       if (c === ',') { tokens.push({ type: 'COMMA' }); i++; continue; }
       if (c === '=') { tokens.push({ type: 'EQ' }); i++; continue; }
 
+      // quoted string literal: "Au S" or 'Au S'
+      if (c === '"' || c === "'") {
+        const quote = c;
+        i++;
+        let start = i;
+        while (i < input.length && input[i] !== quote) i++;
+        tokens.push({ type: 'VALUE', value: input.slice(start, i) });
+        if (i < input.length) i++; // skip closing quote
+        continue;
+      }
+
       // identifier
       if (isAlpha(c)) {
         let start = i;
@@ -367,11 +378,17 @@ export class QueryApi {
       };
     }
 
-    // function syntax: contains(name,abc)
+    // function syntax: contains(name,abc) or contains(name,Au S)
     if (this._match('LPAREN')) {
       const field = this._consume('IDENT').value;
       this._consume('COMMA');
-      const value = this._consumeAny(['IDENT', 'VALUE']).value;
+      // Collect all tokens until RPAREN so values with spaces work unquoted
+      const valueParts = [];
+      while (this._peek() && this._peek().type !== 'RPAREN') {
+        const tok = this._tokens[this._pos++];
+        if (tok.value !== undefined) valueParts.push(tok.value);
+      }
+      const value = valueParts.join(' ');
       this._consume('RPAREN');
 
       return {
