@@ -30,6 +30,7 @@ import { ChangeResidencyHandler } from '../finance/handlers/change-residency-han
 import { OutOfFundsHandler } from '../finance/handlers/out-of-funds-handler.js';
 import { MonthlyWagesHandler } from '../finance/handlers/monthly-wages-handler.js';
 import { InflationAdjustReducer } from '../finance/reducers/inflation-adjust-reducer.js';
+import { usBracketGrossIncomeCeiling } from '../finance/tax/us/us-tax-rates-2025.js';
 import { UsSavingsInterestCreditReducer } from '../finance/reducers/us-savings-interest-credit-reducer.js';
 import { ExpenseDebitReducer } from '../finance/reducers/expense-debit-reducer.js';
 import { ReplenishSavingsReducer } from '../finance/reducers/replenish-savings-reducer.js';
@@ -108,6 +109,15 @@ export const INTL_RETIREMENT_DEFAULTS = {
   // Inflation rates (annual, per country)
   usInflationRate: 0.03,
   auInflationRate: 0.03,
+
+  // Roth conversion strategy — bracket-fill policy
+  rothConversionEnabled:    false,     // master switch
+  rothConversionStartYear:  null,      // null = primary retirement year
+  rothConversionEndYear:    null,      // null = year before primary turns 73 (RMD start)
+  rothConversionMaxBracket: 0.22,      // fill up to top of this marginal bracket
+  rothConversionOwner:      'primary', // 'primary' | 'spouse' | 'both'
+  rothConversionMonth:      12,        // month of policy evaluation (1–12)
+  rothConversionDay:        1,         // day of policy evaluation
 };
 
 /**
@@ -381,6 +391,50 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     type: 'Number', group: 'Inflation',
     defaultValue: INTL_RETIREMENT_DEFAULTS.auInflationRate,
     description: 'Annual AU inflation rate applied to AUD expenses (MC)',
+  },
+
+  // ── Roth Conversion ────────────────────────────────────────────────────────
+  {
+    key: 'rothConversionEnabled', label: 'Roth Conversion Enabled',
+    type: 'Boolean', group: 'Roth Conversion',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.rothConversionEnabled,
+    description: 'Enable bracket-fill Roth conversion policy',
+  },
+  {
+    key: 'rothConversionStartYear', label: 'Roth Conversion Start Year',
+    type: 'Number', group: 'Roth Conversion',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.rothConversionStartYear,
+    description: 'First year to convert; null = primary retirement year (Opt)',
+  },
+  {
+    key: 'rothConversionEndYear', label: 'Roth Conversion End Year',
+    type: 'Number', group: 'Roth Conversion',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.rothConversionEndYear,
+    description: 'Last year to convert; null = year before RMD start at age 73 (Opt)',
+  },
+  {
+    key: 'rothConversionMaxBracket', label: 'Roth Conversion Max Bracket Rate',
+    type: 'Number', group: 'Roth Conversion',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.rothConversionMaxBracket,
+    description: 'Fill ordinary income up to top of this marginal bracket (MC, Opt)',
+  },
+  {
+    key: 'rothConversionOwner', label: 'Roth Conversion Owner',
+    type: 'String', group: 'Roth Conversion',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.rothConversionOwner,
+    description: "Whose IRA to convert: 'primary', 'spouse', or 'both'",
+  },
+  {
+    key: 'rothConversionMonth', label: 'Roth Conversion Month',
+    type: 'Number', group: 'Roth Conversion',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.rothConversionMonth,
+    description: 'Month (1–12) when the policy fires each year',
+  },
+  {
+    key: 'rothConversionDay', label: 'Roth Conversion Day',
+    type: 'Number', group: 'Roth Conversion',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.rothConversionDay,
+    description: 'Day of month when the policy fires each year',
   },
 ];
 
@@ -943,5 +997,34 @@ export class IntlRetirementScenario extends BaseScenario {
 
     const inflationAdjustReducer = new InflationAdjustReducer();
     reducerService.register(inflationAdjustReducer);
+
+    // ── Roth Conversion policy events ─────────────────────────────────────────
+    if (p.rothConversionEnabled) {
+      const convStartYear = p.rothConversionStartYear
+        ?? p.primaryRetirementDate.getFullYear();
+      // Default end: year before primary turns 73 (RMD start under SECURE 2.0)
+      const convEndYear = p.rothConversionEndYear
+        ?? (p.primaryBirthDate.getFullYear() + 72);
+      const owners = p.rothConversionOwner === 'both'
+        ? ['primary', 'spouse']
+        : [p.rothConversionOwner];
+
+      for (let year = convStartYear; year <= convEndYear; year++) {
+        const targetIncome = usBracketGrossIncomeCeiling(
+          p.rothConversionMaxBracket, year, p.usInflationRate
+        );
+        for (const owner of owners) {
+          const iraKey  = owner === 'spouse' ? 'spouseIraAccount' : 'iraAccount';
+          const rothKey = owner === 'spouse' ? 'spouseRothAccount' : 'rothAccount';
+          eventService.createOneOffEvent({
+            name:    `Roth Conversion (${owner}, ${year})`,
+            type:    'ROTH_CONVERSION_POLICY_EVALUATE',
+            date:    new Date(Date.UTC(year, p.rothConversionMonth - 1, p.rothConversionDay)),
+            data:    { targetIncome, iraKey, rothKey },
+            enabled: true,
+          });
+        }
+      }
+    }
   }
 }
