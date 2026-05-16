@@ -36,6 +36,8 @@ export class StatePanelView extends BaseComponent {
     this._lastOutOfFundsDate = null;
     this._onOpenNode        = null;
     this._journal           = null;
+    this._metricHistory     = new Map();
+    this._stateCollapsed    = true;
   }
 
   /** Update the active date-format function (UTC vs local). */
@@ -98,9 +100,38 @@ export class StatePanelView extends BaseComponent {
       this._pendingState = last.stateSnapshot;
     }
     if (this._pendingState) {
+      this._bufferMetrics(this._pendingDate, this._pendingState.metrics);
       this._renderStatePanel(this._pendingDate, this._pendingState);
       this._updateFailureBanner(this._pendingState);
     }
+  }
+
+  _bufferMetrics(date, metrics) {
+    if (!metrics || !date) return;
+    for (const [key, value] of Object.entries(metrics)) {
+      if (typeof value !== 'number' || !isFinite(value)) continue;
+      if (!this._metricHistory.has(key)) this._metricHistory.set(key, []);
+      const buf = this._metricHistory.get(key);
+      buf.push({ date: new Date(date), value });
+      if (buf.length > 200) buf.shift();
+    }
+  }
+
+  clearMetricHistory() {
+    this._metricHistory.clear();
+  }
+
+  /** Wire the collapse toggle for the State section. Called once from BaseApp.initView(). */
+  initLiveState() {
+    const header  = document.getElementById('stateSectionHeader');
+    const content = document.getElementById('currentStateContent');
+    if (!header || !content) return;
+    header.addEventListener('click', () => {
+      this._stateCollapsed = !this._stateCollapsed;
+      content.style.display = this._stateCollapsed ? 'none' : '';
+      const icon = header.querySelector('.lsp-collapse-icon');
+      if (icon) icon.textContent = this._stateCollapsed ? '▶' : '▼';
+    });
   }
 
   // ── Failure banner ────────────────────────────────────────────────────────
@@ -140,13 +171,96 @@ export class StatePanelView extends BaseComponent {
   _renderStatePanel(date, state) {
     if (!state) return;
     const { metrics, ...rest } = state;
+
+    this._renderMetricsPanel(metrics, $('cumulativeMetricsContent'));
+
     const newStateDetails = this.createStateDetails('tpl-state-details', date, rest);
     const stateDetails = $('currentStateContent');
     stateDetails.replaceChildren(newStateDetails);
+    stateDetails.style.display = this._stateCollapsed ? 'none' : '';
+  }
 
-    const newMetricDetails = this.createStateDetails('tpl-state-details', date, metrics);
-    const metricDetails = $('cumulativeMetricsContent');
-    metricDetails.replaceChildren(newMetricDetails);
+  _renderMetricsPanel(metrics, container) {
+    if (!metrics) { container.replaceChildren(); return; }
+    const frag = document.createDocumentFragment();
+
+    for (const [k, v] of Object.entries(metrics)) {
+      if (typeof v === 'number' && isFinite(v)) {
+        const row = document.createElement('div');
+        row.className = 'lsp-metric-row';
+
+        const label = document.createElement('span');
+        label.className = 'lsp-metric-label';
+        label.textContent = this.toLabel(k);
+
+        const hist = this._metricHistory.get(k);
+        if (hist && hist.length >= 2) {
+          row.append(label, this._renderMetricSparkline(hist));
+        } else {
+          row.append(label);
+        }
+
+        const val = document.createElement('span');
+        val.className = 'lsp-metric-value';
+        val.textContent = this._fmtChange(k, v);
+        row.append(val);
+
+        const capturedKey = k;
+        row.addEventListener('click', () => {
+          this._showMetricHistoryModal(capturedKey, this._metricHistory.get(capturedKey) ?? []);
+        });
+        frag.appendChild(row);
+      } else {
+        const detail = this.createStateDetails('tpl-state-details', null, { [k]: v });
+        if (detail) frag.appendChild(detail);
+      }
+    }
+    container.replaceChildren(frag);
+  }
+
+  _renderMetricSparkline(history) {
+    const values = history.map(e => e.value);
+    if (values.length < 2) return null;
+
+    const W = 56, H = 14, P = 1;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min || 1;
+
+    const pts = values.map((v, i) => {
+      const x = P + (i / (values.length - 1)) * (W - P * 2);
+      const y = P + (H - P * 2) - ((v - min) / range) * (H - P * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+
+    const trend = values[values.length - 1] - values[0];
+    const color = trend > 0 ? '#34d399' : trend < 0 ? '#f87171' : '#6b7280';
+
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('width', W);
+    svg.setAttribute('height', H);
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.style.cssText = 'flex-shrink:0;vertical-align:middle;';
+
+    const poly = document.createElementNS(NS, 'polyline');
+    poly.setAttribute('points', pts);
+    poly.setAttribute('fill', 'none');
+    poly.setAttribute('stroke', color);
+    poly.setAttribute('stroke-width', '1.5');
+    poly.setAttribute('stroke-linejoin', 'round');
+    poly.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(poly);
+
+    const lastPt = pts.split(' ').at(-1).split(',');
+    const dot = document.createElementNS(NS, 'circle');
+    dot.setAttribute('cx', lastPt[0]);
+    dot.setAttribute('cy', lastPt[1]);
+    dot.setAttribute('r', '2');
+    dot.setAttribute('fill', color);
+    svg.appendChild(dot);
+
+    return svg;
   }
 
   createStateDetails(templateId, date, state) {
@@ -370,6 +484,144 @@ export class StatePanelView extends BaseComponent {
         noChangeState.innerText = 'No changes';
       }
     }
+  }
+
+  _showMetricHistoryModal(key, history) {
+    document.getElementById('metricHistoryModal')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'metricHistoryModal';
+    overlay.className = 'sim-modal-overlay';
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+    const modal = document.createElement('div');
+    modal.className = 'sim-modal';
+    modal.style.width = '520px';
+
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
+    const title = document.createElement('span');
+    title.style.cssText = 'font-size:12px;font-weight:600;';
+    title.textContent = `Metric History — ${this.toLabel(key)}`;
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'btn btn-sm';
+    closeBtn.textContent = '✕';
+    closeBtn.addEventListener('click', () => overlay.remove());
+    hdr.append(title, closeBtn);
+
+    const body = document.createElement('div');
+    body.style.cssText = 'overflow-y:auto;flex:1;';
+
+    if (!history || history.length === 0) {
+      const empty = document.createElement('span');
+      empty.style.color = 'var(--text-muted)';
+      empty.textContent = 'No history recorded yet — run the simulation first.';
+      body.appendChild(empty);
+    } else {
+      const values = history.map(e => e.value);
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const latest = values[values.length - 1];
+      const net = latest - values[0];
+
+      const stats = document.createElement('div');
+      stats.style.cssText = 'display:flex;gap:16px;padding:6px 0 8px;font-size:10px;border-bottom:1px solid var(--border);margin-bottom:8px;flex-wrap:wrap;';
+      const mkStat = (label, val, color) => {
+        const s = document.createElement('span');
+        s.style.cssText = 'display:flex;flex-direction:column;gap:1px;';
+        const l = document.createElement('span');
+        l.style.cssText = 'color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;';
+        l.textContent = label;
+        const v = document.createElement('span');
+        v.style.cssText = `font-family:var(--font-mono);font-size:11px;${color ? 'color:' + color + ';' : ''}`;
+        v.textContent = val;
+        s.append(l, v);
+        return s;
+      };
+      stats.append(
+        mkStat('Points',  String(history.length), ''),
+        mkStat('Current', this._fmtChange(key, latest), ''),
+        mkStat('Min',     this._fmtChange(key, min), '#f87171'),
+        mkStat('Max',     this._fmtChange(key, max), '#34d399'),
+        mkStat('Net Δ',   (net >= 0 ? '+' : '') + this._fmtChange(key, net), net > 0 ? '#34d399' : net < 0 ? '#f87171' : ''),
+      );
+      body.appendChild(stats);
+      body.appendChild(this._renderMetricChartSvg(history, key));
+    }
+
+    modal.append(hdr, body);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  }
+
+  _renderMetricChartSvg(history, key) {
+    const W = 480, H = 110, PL = 8, PR = 8, PT = 8, PB = 20;
+    const values = history.map(e => e.value);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min || 1;
+
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('width', '100%');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.style.cssText = 'display:block;';
+
+    const bg = document.createElementNS(NS, 'rect');
+    bg.setAttribute('width', W); bg.setAttribute('height', H);
+    bg.setAttribute('fill', 'var(--bg-well, #0f172a)');
+    svg.appendChild(bg);
+
+    const toX = i => PL + (i / (values.length - 1)) * (W - PL - PR);
+    const toY = v => PT + (H - PT - PB) - ((v - min) / range) * (H - PT - PB);
+    const pts = values.map((v, i) => `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
+
+    const trend = values[values.length - 1] - values[0];
+    const color = trend > 0 ? '#34d399' : trend < 0 ? '#f87171' : '#6b7280';
+
+    const ptsArr = pts.split(' ');
+    const firstPt = ptsArr[0].split(',');
+    const lastPt  = ptsArr.at(-1).split(',');
+
+    const fill = document.createElementNS(NS, 'polygon');
+    fill.setAttribute('points', `${pts} ${lastPt[0]},${H - PB} ${firstPt[0]},${H - PB}`);
+    fill.setAttribute('fill', color);
+    fill.setAttribute('opacity', '0.1');
+    svg.appendChild(fill);
+
+    const poly = document.createElementNS(NS, 'polyline');
+    poly.setAttribute('points', pts);
+    poly.setAttribute('fill', 'none');
+    poly.setAttribute('stroke', color);
+    poly.setAttribute('stroke-width', '1.5');
+    poly.setAttribute('stroke-linejoin', 'round');
+    poly.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(poly);
+
+    const dot = document.createElementNS(NS, 'circle');
+    dot.setAttribute('cx', lastPt[0]);
+    dot.setAttribute('cy', lastPt[1]);
+    dot.setAttribute('r', '3');
+    dot.setAttribute('fill', color);
+    svg.appendChild(dot);
+
+    if (history.length >= 2) {
+      const mkLabel = (x, text, anchor) => {
+        const t = document.createElementNS(NS, 'text');
+        t.setAttribute('x', x); t.setAttribute('y', H - 4);
+        t.setAttribute('text-anchor', anchor);
+        t.setAttribute('fill', 'var(--text-muted, #64748b)');
+        t.setAttribute('font-size', '9');
+        t.setAttribute('font-family', 'monospace');
+        t.textContent = text;
+        return t;
+      };
+      const fmtD = d => d instanceof Date ? this._formatDate(d) : String(d);
+      svg.appendChild(mkLabel(PL,     fmtD(history[0].date),                 'start'));
+      svg.appendChild(mkLabel(W - PR, fmtD(history[history.length - 1].date), 'end'));
+    }
+
+    return svg;
   }
 
   _showFieldHistory(field, entries) {
