@@ -129,6 +129,32 @@ export class Journal {
       .map(({ date, diff }) => ({ date, value: diff.after }));
   }
 
+  /** Look up a journal entry by action.instanceId. */
+  getByInstanceId(instanceId) {
+    return this.journal.find(e => e.action.instanceId === instanceId) ?? null;
+  }
+
+  /**
+   * Return the change history for a given state field up to (and including) seq.
+   * Each element: { date, seq, eventType, actionType, before, after, delta }.
+   */
+  getStateTimelineUpTo(field, seq) {
+    return this.journal
+      .filter(e => e.seq <= seq && e.stateDiff?.some(d => d.field === field))
+      .map(e => {
+        const diff = e.stateDiff.find(d => d.field === field);
+        return {
+          date:       e.date,
+          seq:        e.seq,
+          eventType:  e.event?.type ?? null,
+          actionType: e.action?.type ?? null,
+          before:     diff.before,
+          after:      diff.after,
+          delta:      diff.delta ?? null,
+        };
+      });
+  }
+
   traceEvent(date) {
     return this.journal.filter(e => e.date.getTime() === date.getTime());
   }

@@ -34,6 +34,8 @@ export class StatePanelView extends BaseComponent {
     this._drainExecEndMsgs  = () => [];
     this._chartPresenter    = null;
     this._lastOutOfFundsDate = null;
+    this._onOpenNode        = null;
+    this._journal           = null;
   }
 
   /** Update the active date-format function (UTC vs local). */
@@ -44,6 +46,16 @@ export class StatePanelView extends BaseComponent {
   /** Inject the StateSchemaRegistry for context-aware value formatting. */
   set schemaRegistry(r) {
     this._schemaRegistry = r ?? null;
+  }
+
+  /** Inject a callback to open a config-graph node in the edit modal. */
+  set onOpenNode(fn) {
+    this._onOpenNode = fn ?? null;
+  }
+
+  /** Inject the current journal for parent lookup and field history. */
+  set journal(j) {
+    this._journal = j ?? null;
   }
 
   // ── Simulation bus ────────────────────────────────────────────────────────────
@@ -203,38 +215,94 @@ export class StatePanelView extends BaseComponent {
   }
 
   showNodeDetail(entry) {
-    const actionDetail = this.buildActionDetail(entry);
-    const { changes, emitted, actionPayload } = actionDetail;
-    const newActionDetails = this.createActionDetail('tpl-action-template', { entry, changes, emitted, actionPayload });
-    $('actionPanelDetails').replaceChildren(newActionDetails);
+    const { changes, emitted, actionPayload } = this.buildActionDetail(entry);
+    const parentInfo = this._getParentInfo(entry);
+    const el = this._buildActionDetailEl({ entry, changes, emitted, actionPayload, parentInfo });
+    $('actionPanelDetails').replaceChildren(el);
+    // Auto-switch right column to the action detail tab.
+    document.querySelector('.tab-header[data-dest-tab="right-action-detail"]')?.click();
   }
 
-  createActionDetail(templateId, content) {
-    const templateContent = document.querySelector(`#${templateId}`);
-    const clone = document.importNode(templateContent, true).content;
+  _buildActionDetailEl({ entry, changes, emitted, actionPayload, parentInfo }) {
+    const tmpl  = document.querySelector('#tpl-action-template');
+    const clone = document.importNode(tmpl, true).content;
 
-    const overviewGrid = clone.querySelector('[data-overview-grid]');
-    const fields = overviewGrid.querySelectorAll('[data-id]');
-    for (const field of fields) {
-      const value = this.getNestedProperty(content, field.getAttribute('data-id'));
-      field.innerText = this.fmtVal(value);
+    // ── Action name / type / edit button ──────────────────────────────────
+    clone.querySelector('[data-id="action-name"]').innerText  = entry.action.name ?? '—';
+    clone.querySelector('[data-id="action-type"]').innerText  = entry.action.type ?? '—';
+
+    const actionBtn = clone.querySelector('[data-action-btn="open-action"]');
+    if (entry.action.nodeId && this._onOpenNode) {
+      actionBtn.style.display = '';
+      this.listen(actionBtn, 'click', () => this._onOpenNode(entry.action.nodeId));
     }
 
-    const stateChangeGridTemplate = document.querySelector('#tpl-node-state-changes');
-    const stateChangesGrid = stateChangeGridTemplate.content.firstElementChild.cloneNode(true);
-    this._populateStateChanges(stateChangesGrid, content.changes);
+    // ── Date / Event / Parent / Reducer / Emitted ─────────────────────────
+    clone.querySelector('[data-id="entry-date"]').innerText   = this.fmtVal(entry.date);
+    clone.querySelector('[data-id="event-name"]').innerText   = entry.event?.name ?? entry.event?.type ?? '—';
+    clone.querySelector('[data-id="parent-info"]').innerText  = parentInfo;
+    clone.querySelector('[data-id="reducer-name"]').innerText = entry.reducer?.name ?? '—';
 
-    const stateChangesPlaceholder = clone.querySelector('[data-state-change-grid]');
-    stateChangesPlaceholder.replaceWith(stateChangesGrid);
+    const reducerBtn = clone.querySelector('[data-action-btn="open-reducer"]');
+    if (entry.reducer?.nodeId && this._onOpenNode) {
+      reducerBtn.style.display = '';
+      this.listen(reducerBtn, 'click', () => this._onOpenNode(entry.reducer.nodeId));
+    }
+
+    clone.querySelector('[data-id="emitted"]').innerText = emitted;
+
+    // ── Payload collapse ──────────────────────────────────────────────────
+    const payloadPre     = clone.querySelector('[data-id="action-payload"]');
+    payloadPre.innerText = actionPayload;
+
+    const collapseHeader  = clone.querySelector('[data-collapse-toggle]');
+    const collapseContent = clone.querySelector('[data-collapse-content]');
+    this.listen(collapseHeader, 'click', () => {
+      const open = collapseContent.style.display !== 'none';
+      collapseContent.style.display = open ? 'none' : '';
+      collapseHeader.querySelector('.ad-collapse-icon').classList.toggle('open', !open);
+    });
+
+    // ── State changes ─────────────────────────────────────────────────────
+    const scTmpl  = document.querySelector('#tpl-node-state-changes');
+    const scClone = scTmpl.content.firstElementChild.cloneNode(true);
+    this._populateStateChanges(scClone, changes, null, entry);
+    clone.querySelector('[data-state-change-grid]').replaceWith(scClone);
+
     return clone;
   }
 
-  _populateStateChanges(stateChangesGrid, changes, prevState = null) {
+  _getParentInfo(entry) {
+    if (!entry.action?.parentId || !this._journal) return '—';
+    const parent = this._journal.getByInstanceId(entry.action.parentId);
+    if (!parent) return `(id: ${entry.action.parentId.slice(0, 8)})`;
+    return `${parent.action.name} (${parent.action.type})`;
+  }
+
+  _populateStateChanges(stateChangesGrid, changes, prevState = null, entry = null) {
     if (changes.length > 0) {
       for (const change of changes) {
         const stateChangeFieldRow = document.importNode(stateChangesGrid.querySelector('[data-state-change-field-row]'), true);
         stateChangeFieldRow.style = '';
-        stateChangeFieldRow.querySelector('[data-id="field"]').innerText = change.field;
+
+        // Field name cell — add History button inline when journal context exists.
+        const fieldCell = stateChangeFieldRow.querySelector('[data-id="field"]');
+        fieldCell.style.cssText = 'display:flex;align-items:center;gap:6px;';
+        const nameSpan = document.createElement('span');
+        nameSpan.innerText = change.field;
+        fieldCell.appendChild(nameSpan);
+        if (entry && this._journal) {
+          const histBtn = document.createElement('button');
+          histBtn.className = 'ad-history-btn';
+          histBtn.textContent = 'History';
+          histBtn.title = `View history for ${change.field}`;
+          this.listen(histBtn, 'click', () => {
+            const timeline = this._journal.getStateTimelineUpTo(change.field, entry.seq);
+            this._showFieldHistory(change.field, timeline);
+          });
+          fieldCell.appendChild(histBtn);
+        }
+
         stateChangesGrid.appendChild(stateChangeFieldRow);
 
         const stateChangeBeforeRow = document.importNode(stateChangesGrid.querySelector('[data-state-change-before-row]'), true);
@@ -252,7 +320,7 @@ export class StatePanelView extends BaseComponent {
             delta.innerText = '+' + this._fmtChange(change.field, change.delta);
           } else {
             delta.classList.add('diff-neg');
-            delta.innerText = '-' + this._fmtChange(change.field, change.delta);
+            delta.innerText = this._fmtChange(change.field, change.delta);
           }
           after.innerHTML = this._fmtChange(change.field, change.after, true);
           after.appendChild(delta);
@@ -271,6 +339,84 @@ export class StatePanelView extends BaseComponent {
         noChangeState.innerText = 'No changes';
       }
     }
+  }
+
+  _showFieldHistory(field, entries) {
+    document.getElementById('stateFieldHistoryModal')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id        = 'stateFieldHistoryModal';
+    overlay.className = 'sim-modal-overlay';
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+    const modal = document.createElement('div');
+    modal.className   = 'sim-modal';
+    modal.style.width = '580px';
+
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
+
+    const title       = document.createElement('span');
+    title.style.cssText = 'font-size:12px;font-weight:600;';
+    title.textContent = `Field History — ${field}`;
+
+    const closeBtn       = document.createElement('button');
+    closeBtn.className   = 'btn btn-sm';
+    closeBtn.textContent = '✕';
+    closeBtn.addEventListener('click', () => overlay.remove());
+    header.append(title, closeBtn);
+
+    const body             = document.createElement('div');
+    body.style.cssText     = 'overflow-y:auto;flex:1;';
+
+    if (!entries || entries.length === 0) {
+      const empty       = document.createElement('span');
+      empty.style.color = 'var(--text-muted)';
+      empty.textContent = 'No changes recorded for this field.';
+      body.appendChild(empty);
+    } else {
+      const table         = document.createElement('table');
+      table.style.cssText = 'width:100%;border-collapse:collapse;';
+      const thead = table.createTHead();
+      const hrow  = thead.insertRow();
+      const thStyle = 'text-align:left;padding:2px 6px;font-size:9px;letter-spacing:0.06em;color:var(--text-muted);border-bottom:1px solid var(--border);';
+      for (const col of ['Date', 'Event', 'Action', 'Before', 'After', 'Δ Delta']) {
+        const th       = document.createElement('th');
+        th.textContent = col;
+        th.style.cssText = thStyle;
+        hrow.appendChild(th);
+      }
+      const tbody = table.createTBody();
+      for (const e of entries) {
+        const tr       = tbody.insertRow();
+        tr.style.cssText = 'border-bottom:1px solid var(--border-subtle,var(--border));';
+        const dateStr  = e.date instanceof Date ? this._formatDate(e.date) : String(e.date);
+        const deltaStr = e.delta != null
+          ? (e.delta > 0 ? '+' : '') + this._fmtChange(field, e.delta)
+          : '—';
+        const deltaColor = e.delta > 0
+          ? 'var(--accent-green,#4a8)'
+          : e.delta < 0 ? 'var(--accent-red,#e55)' : '';
+        const cells = [
+          { text: dateStr,                          style: '' },
+          { text: e.eventType  ?? '—',              style: 'color:var(--text-muted);' },
+          { text: e.actionType ?? '—',              style: 'color:var(--text-muted);' },
+          { text: this._fmtChange(field, e.before), style: 'font-family:var(--font-mono);' },
+          { text: this._fmtChange(field, e.after),  style: 'font-family:var(--font-mono);' },
+          { text: deltaStr, style: `font-family:var(--font-mono);${deltaColor ? 'color:' + deltaColor + ';' : ''}` },
+        ];
+        for (const { text, style } of cells) {
+          const td         = tr.insertCell();
+          td.textContent   = text;
+          td.style.cssText = 'padding:3px 6px;font-size:11px;' + style;
+        }
+      }
+      body.appendChild(table);
+    }
+
+    modal.append(header, body);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
   }
 
   buildActionDetail(entry) {
