@@ -90,6 +90,10 @@
             <span class="panel-tag">MC</span>
             <span class="panel-title">MONTE CARLO</span>
           </div>
+          <div class="panel-header tab-header" data-dest-tab="left-opt" data-tab-group="left-col-sim">
+            <span class="panel-tag">OPT</span>
+            <span class="panel-title">OPTIMIZE</span>
+          </div>
         </div>
 
       <!-- ── SCENARIO tab ──────────────────────────────── -->
@@ -134,6 +138,11 @@
       <!-- ── MONTE CARLO tab ──────────────────────────────── -->
       <div class="tab-content left-mc-tab" data-tab="left-mc" data-tab-group="left-col-sim" style="display:none;flex:1;min-height:0;overflow-y:auto">
         <div id="mcConfigPane"></div>
+      </div>
+
+      <!-- ── OPTIMIZE tab ─────────────────────────────────── -->
+      <div class="tab-content left-opt-tab" data-tab="left-opt" data-tab-group="left-col-sim" style="display:none;flex:1;min-height:0;overflow-y:auto">
+        <div id="optConfigPane"></div>
       </div>
 
       </div><!-- /left-group simulation -->
@@ -205,6 +214,10 @@
             <span class="panel-tag">MC</span>
             <span class="panel-title">MONTE CARLO</span>
           </div>
+          <div class="panel-header tab-header" data-dest-tab="opt-tab" data-tab-group="center-col">
+            <span class="panel-tag">OPT</span>
+            <span class="panel-title">OPTIMIZE</span>
+          </div>
         </div>
 
         <!-- Config Graph View -->
@@ -251,6 +264,11 @@
         <div class="tab-content monte-carlo-tab" style="display:none" data-tab="mc-tab" data-tab-group="center-col">
           <div id="mcResultsPane" style="flex:1;min-width:0;overflow:hidden"></div>
         </div>
+
+        <!-- Optimization Tab -->
+        <div class="tab-content optimization-tab" style="display:none" data-tab="opt-tab" data-tab-group="center-col">
+          <div id="optResultsPane" style="flex:1;min-width:0;overflow:hidden"></div>
+        </div>
       </div>
     </div>
 
@@ -261,6 +279,7 @@
       <div class="right-group-selector">
         <button class="right-group-btn active" data-right-group="sim">▶ SIM</button>
         <button class="right-group-btn" data-right-group="mc">◎ MC</button>
+        <button class="right-group-btn" data-right-group="opt">⚡ OPT</button>
       </div>
 
       <!-- ── SIM group ─────────────────────────────────── -->
@@ -311,6 +330,23 @@
           </div>
         </div>
       </div><!-- /right-group mc -->
+
+      <!-- ── OPT group ────────────────────────────────────── -->
+      <div class="right-group" data-right-group="opt" style="display:none">
+        <div class="panel" style="flex:1;min-height:0;display:flex;flex-direction:column">
+          <!-- Tab headers -->
+          <div class="tab">
+            <div class="panel-header tab-header active" data-dest-tab="right-opt-runs" data-tab-group="right-col-opt">
+              <span class="panel-tag">RN</span>
+              <span class="panel-title">BEST RUNS</span>
+            </div>
+          </div>
+          <!-- Opt Runs Tab -->
+          <div class="tab-content" data-tab="right-opt-runs" data-tab-group="right-col-opt">
+            <div id="optRunsPane" style="overflow-y:auto;height:100%"></div>
+          </div>
+        </div>
+      </div><!-- /right-group opt -->
 
     </div>
   </div>
