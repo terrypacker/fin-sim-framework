@@ -11,6 +11,7 @@
 import { $ } from '../ui-utils.js';
 import { BaseComponent } from '../components/base-component.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bus-messages.js';
+import { EXECUTION_EDGE_TYPES } from '../../simulation-framework/execution-graph.js';
 
 /**
  * StatePanelView — pure DOM layer for state/metrics panels and node detail.
@@ -36,6 +37,7 @@ export class StatePanelView extends BaseComponent {
     this._lastOutOfFundsDate = null;
     this._onOpenNode        = null;
     this._journal           = null;
+    this._executionGraph    = null;
     this._metricHistory     = new Map();
     this._stateCollapsed    = true;
   }
@@ -58,6 +60,11 @@ export class StatePanelView extends BaseComponent {
   /** Inject the current journal for parent lookup and field history. */
   set journal(j) {
     this._journal = j ?? null;
+  }
+
+  /** Inject the ExecutionGraph for the Execution Graph tab in metric modals. */
+  set executionGraph(eg) {
+    this._executionGraph = eg ?? null;
   }
 
   // ── Simulation bus ────────────────────────────────────────────────────────────
@@ -496,7 +503,7 @@ export class StatePanelView extends BaseComponent {
 
     const modal = document.createElement('div');
     modal.className = 'sim-modal';
-    modal.style.width = '520px';
+    modal.style.width = '620px';
 
     const hdr = document.createElement('div');
     hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
@@ -517,41 +524,149 @@ export class StatePanelView extends BaseComponent {
       empty.style.color = 'var(--text-muted)';
       empty.textContent = 'No history recorded yet — run the simulation first.';
       body.appendChild(empty);
-    } else {
-      const values = history.map(e => e.value);
-      const min = Math.min(...values);
-      const max = Math.max(...values);
-      const latest = values[values.length - 1];
-      const net = latest - values[0];
-
-      const stats = document.createElement('div');
-      stats.style.cssText = 'display:flex;gap:16px;padding:6px 0 8px;font-size:10px;border-bottom:1px solid var(--border);margin-bottom:8px;flex-wrap:wrap;';
-      const mkStat = (label, val, color) => {
-        const s = document.createElement('span');
-        s.style.cssText = 'display:flex;flex-direction:column;gap:1px;';
-        const l = document.createElement('span');
-        l.style.cssText = 'color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;';
-        l.textContent = label;
-        const v = document.createElement('span');
-        v.style.cssText = `font-family:var(--font-mono);font-size:11px;${color ? 'color:' + color + ';' : ''}`;
-        v.textContent = val;
-        s.append(l, v);
-        return s;
-      };
-      stats.append(
-        mkStat('Points',  String(history.length), ''),
-        mkStat('Current', this._fmtChange(key, latest), ''),
-        mkStat('Min',     this._fmtChange(key, min), '#f87171'),
-        mkStat('Max',     this._fmtChange(key, max), '#34d399'),
-        mkStat('Net Δ',   (net >= 0 ? '+' : '') + this._fmtChange(key, net), net > 0 ? '#34d399' : net < 0 ? '#f87171' : ''),
-      );
-      body.appendChild(stats);
-      body.appendChild(this._renderMetricChartSvg(history, key));
+      modal.append(hdr, body);
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+      return;
     }
 
+    // ── Shared date-range filter ───────────────────────────────────────────
+    const inputStyle = 'font-size:10px;padding:1px 4px;background:var(--bg-panel2,#111);color:var(--text-primary,#e5e7eb);border:1px solid var(--border);border-radius:2px;';
+    const filterRow = document.createElement('div');
+    filterRow.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:10px;padding:6px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;';
+
+    const fromLbl = document.createElement('span');
+    fromLbl.style.color = 'var(--text-muted)';
+    fromLbl.textContent = 'Range:';
+
+    const fromInput = document.createElement('input');
+    fromInput.type = 'date';
+    fromInput.style.cssText = inputStyle;
+    fromInput.value = this._toDateInputVal(history[0].date);
+
+    const arrow = document.createElement('span');
+    arrow.style.color = 'var(--text-muted)';
+    arrow.textContent = '→';
+
+    const toInput = document.createElement('input');
+    toInput.type = 'date';
+    toInput.style.cssText = inputStyle;
+    toInput.value = this._toDateInputVal(history[history.length - 1].date);
+
+    const ptSpan = document.createElement('span');
+    ptSpan.style.cssText = 'font-family:var(--font-mono);font-size:10px;color:var(--text-muted);margin-left:4px;';
+
+    filterRow.append(fromLbl, fromInput, arrow, toInput, ptSpan);
+
+    const getFiltered = () => {
+      const from = fromInput.value ? new Date(fromInput.value) : null;
+      const to   = toInput.value   ? new Date(new Date(toInput.value).getTime() + 86399999) : null;
+      return history.filter(e => {
+        const d = e.date instanceof Date ? e.date : new Date(e.date);
+        if (from && d < from) return false;
+        if (to   && d > to)   return false;
+        return true;
+      });
+    };
+
+    // ── Tab bar ────────────────────────────────────────────────────────────
+    const tabBar = document.createElement('div');
+    tabBar.style.cssText = 'display:flex;gap:0;border-bottom:1px solid var(--border);margin-top:6px;';
+
+    const mkTabBtn = (label) => {
+      const btn = document.createElement('button');
+      btn.style.cssText = 'font-size:11px;padding:5px 14px;border:none;border-bottom:2px solid transparent;background:none;color:var(--text-muted);cursor:pointer;transition:color 0.1s;';
+      btn.textContent = label;
+      return btn;
+    };
+
+    const chartTabBtn = mkTabBtn('Chart');
+    const execTabBtn  = mkTabBtn('Execution Graph');
+    tabBar.append(chartTabBtn, execTabBtn);
+
+    // ── Chart pane ─────────────────────────────────────────────────────────
+    const chartPane = document.createElement('div');
+    chartPane.style.cssText = 'padding-top:8px;';
+
+    const mkStat = (label, val, color) => {
+      const s = document.createElement('span');
+      s.style.cssText = 'display:flex;flex-direction:column;gap:1px;';
+      const l = document.createElement('span');
+      l.style.cssText = 'color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;';
+      l.textContent = label;
+      const v = document.createElement('span');
+      v.style.cssText = `font-family:var(--font-mono);font-size:11px;${color ? 'color:' + color + ';' : ''}`;
+      v.textContent = val;
+      s.append(l, v);
+      return s;
+    };
+
+    const statsEl = document.createElement('div');
+    statsEl.style.cssText = 'display:flex;gap:16px;padding:6px 0 8px;font-size:10px;border-bottom:1px solid var(--border);margin-bottom:8px;flex-wrap:wrap;';
+    const chartEl = document.createElement('div');
+    chartPane.append(statsEl, chartEl);
+
+    // ── Execution pane ──────────────────────────────────────────────────────
+    const execPane = document.createElement('div');
+    execPane.style.cssText = 'padding-top:8px;display:none;';
+
+    // ── Tab switching ───────────────────────────────────────────────────────
+    let activeTab = 'chart';
+    const activateTab = (tab) => {
+      activeTab = tab;
+      const isChart = tab === 'chart';
+      chartPane.style.display = isChart ? '' : 'none';
+      execPane.style.display  = isChart ? 'none' : '';
+      const active   = 'font-size:11px;padding:5px 14px;border:none;border-bottom:2px solid var(--accent-blue,#60a5fa);background:none;color:var(--accent-blue,#60a5fa);cursor:pointer;';
+      const inactive = 'font-size:11px;padding:5px 14px;border:none;border-bottom:2px solid transparent;background:none;color:var(--text-muted);cursor:pointer;';
+      chartTabBtn.style.cssText = isChart ? active : inactive;
+      execTabBtn.style.cssText  = isChart ? inactive : active;
+      if (!isChart) this._renderExecGraphPane(execPane, getFiltered());
+    };
+
+    chartTabBtn.addEventListener('click', () => activateTab('chart'));
+    execTabBtn.addEventListener('click',  () => activateTab('exec'));
+    activateTab('chart');
+
+    // ── Refresh chart on filter change ──────────────────────────────────────
+    const refreshChart = () => {
+      const filtered = getFiltered();
+      ptSpan.textContent = `${filtered.length} / ${history.length} pts`;
+      statsEl.replaceChildren();
+      chartEl.replaceChildren();
+
+      if (filtered.length === 0) {
+        const empty = document.createElement('span');
+        empty.style.cssText = 'color:var(--text-muted);font-size:11px;';
+        empty.textContent = 'No data in selected range.';
+        chartEl.appendChild(empty);
+      } else {
+        const values = filtered.map(e => e.value);
+        const min    = Math.min(...values);
+        const max    = Math.max(...values);
+        const latest = values[values.length - 1];
+        const net    = latest - values[0];
+        statsEl.append(
+          mkStat('Points',  String(filtered.length), ''),
+          mkStat('Current', this._fmtChange(key, latest), ''),
+          mkStat('Min',     this._fmtChange(key, min), '#f87171'),
+          mkStat('Max',     this._fmtChange(key, max), '#34d399'),
+          mkStat('Net Δ',   (net >= 0 ? '+' : '') + this._fmtChange(key, net), net > 0 ? '#34d399' : net < 0 ? '#f87171' : ''),
+        );
+        chartEl.appendChild(this._renderMetricChartSvg(filtered, key));
+      }
+
+      if (activeTab === 'exec') this._renderExecGraphPane(execPane, filtered);
+    };
+
+    fromInput.addEventListener('change', refreshChart);
+    toInput.addEventListener('change',   refreshChart);
+
+    body.append(filterRow, tabBar, chartPane, execPane);
     modal.append(hdr, body);
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
+    refreshChart();
   }
 
   _renderMetricChartSvg(history, key) {
@@ -572,7 +687,7 @@ export class StatePanelView extends BaseComponent {
     bg.setAttribute('fill', 'var(--bg-well, #0f172a)');
     svg.appendChild(bg);
 
-    const toX = i => PL + (i / (values.length - 1)) * (W - PL - PR);
+    const toX = i => values.length === 1 ? W / 2 : PL + (i / (values.length - 1)) * (W - PL - PR);
     const toY = v => PT + (H - PT - PB) - ((v - min) / range) * (H - PT - PB);
     const pts = values.map((v, i) => `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
 
@@ -622,6 +737,165 @@ export class StatePanelView extends BaseComponent {
     }
 
     return svg;
+  }
+
+  // ── Feature: execution graph pane (metric history modal tab) ─────────────
+
+  _renderExecGraphPane(pane, filteredHistory) {
+    pane.replaceChildren();
+
+    if (!this._executionGraph) {
+      const msg = document.createElement('span');
+      msg.style.cssText = 'color:var(--text-muted);font-size:11px;';
+      msg.textContent = 'Execution graph not available — enable journaling and rerun.';
+      pane.appendChild(msg);
+      return;
+    }
+
+    if (filteredHistory.length === 0) {
+      const msg = document.createElement('span');
+      msg.style.cssText = 'color:var(--text-muted);font-size:11px;';
+      msg.textContent = 'No data in selected range.';
+      pane.appendChild(msg);
+      return;
+    }
+
+    const toMs = d => (d instanceof Date ? d : new Date(d)).getTime();
+    const minT = toMs(filteredHistory[0].date);
+    const maxT = toMs(filteredHistory[filteredHistory.length - 1].date) + 86399999;
+
+    const eg = this._executionGraph;
+
+    // Find root event nodes (kind='event', no EXECUTES parent) in the date range.
+    const eventNodes = eg.getExecutionNodes()
+      .filter(n => n.kind === 'event' && n.timestamp != null)
+      .filter(n => { const t = toMs(n.timestamp); return t >= minT && t <= maxT; })
+      .filter(n => eg.getParent(n.id) == null)
+      .sort((a, b) => toMs(a.timestamp) - toMs(b.timestamp));
+
+    if (eventNodes.length === 0) {
+      const msg = document.createElement('span');
+      msg.style.cssText = 'color:var(--text-muted);font-size:11px;';
+      msg.textContent = 'No execution nodes found in the selected date range.';
+      pane.appendChild(msg);
+      return;
+    }
+
+    const MAX_EVENTS = 30;
+    const shown = eventNodes.length > MAX_EVENTS ? eventNodes.slice(-MAX_EVENTS) : eventNodes;
+
+    const infoBar = document.createElement('div');
+    infoBar.style.cssText = 'font-size:10px;color:var(--text-muted);padding:2px 0 6px;border-bottom:1px solid var(--border);margin-bottom:4px;';
+    infoBar.textContent = eventNodes.length > MAX_EVENTS
+      ? `Showing last ${MAX_EVENTS} of ${eventNodes.length} events in range`
+      : `${eventNodes.length} event${eventNodes.length !== 1 ? 's' : ''} in range`;
+    pane.appendChild(infoBar);
+
+    const seen = new Set();
+    for (const evNode of shown) {
+      this._renderExecTreeNode(pane, evNode, 0, eg, seen);
+    }
+  }
+
+  _renderExecTreeNode(container, node, depth, eg, seen) {
+    if (seen.has(node.id)) return;
+    seen.add(node.id);
+
+    const kindColor = { event: '#a78bfa', handler: '#6b7280', action: '#60a5fa', reducer: '#34d399' };
+    const color  = kindColor[node.kind] ?? 'var(--text-primary)';
+    const isRoot = depth === 0;
+
+    const row = document.createElement('div');
+    row.style.cssText = `display:flex;align-items:flex-start;gap:6px;padding:3px 4px 3px ${isRoot ? 4 : 6 + (depth - 1) * 14}px;border-bottom:1px solid var(--border-subtle,var(--border));`;
+
+    const connector = document.createElement('span');
+    connector.style.cssText = 'font-family:var(--font-mono);font-size:10px;color:var(--text-muted);flex-shrink:0;padding-top:2px;min-width:14px;';
+    connector.textContent = isRoot ? '◆' : '└─';
+
+    const info = document.createElement('div');
+    info.style.cssText = 'flex:1;min-width:0;';
+
+    const nameRow = document.createElement('div');
+    nameRow.style.cssText = 'display:flex;align-items:center;gap:5px;flex-wrap:wrap;';
+
+    const kindBadge = document.createElement('span');
+    kindBadge.style.cssText = `font-size:8px;padding:0 4px;border-radius:2px;background:${color}22;color:${color};font-weight:600;text-transform:uppercase;letter-spacing:0.05em;flex-shrink:0;`;
+    kindBadge.textContent = node.kind;
+
+    const nameSpan = document.createElement('span');
+    nameSpan.style.cssText = `color:${color};font-size:11px;font-weight:${isRoot ? '600' : '400'};`;
+    nameSpan.textContent = node.name;
+
+    nameRow.append(kindBadge, nameSpan);
+
+    if (node.definitionId && this._onOpenNode) {
+      const openBtn = document.createElement('button');
+      openBtn.className = 'ad-history-btn';
+      openBtn.textContent = '↗';
+      openBtn.title = `Open ${node.kind} definition`;
+      openBtn.addEventListener('click', () => this._onOpenNode(node.definitionId));
+      nameRow.appendChild(openBtn);
+    }
+
+    if (node.kind === 'action' && this._journal) {
+      const detailBtn = document.createElement('button');
+      detailBtn.className = 'ad-history-btn';
+      detailBtn.textContent = 'Detail';
+      detailBtn.title = 'Show journal entry detail';
+      detailBtn.addEventListener('click', () => {
+        const entry = this._journal.getByInstanceId(node.id);
+        if (entry) { document.getElementById('metricHistoryModal')?.remove(); this.showNodeDetail(entry); }
+      });
+      nameRow.appendChild(detailBtn);
+    }
+
+    info.appendChild(nameRow);
+
+    // Annotate emitted-by for action nodes (incoming EMITS edge)
+    if (node.kind === 'action') {
+      const emittedByEdges = eg.graph.getIncoming(node.id, EXECUTION_EDGE_TYPES.EMITS);
+      if (emittedByEdges.length > 0) {
+        const emittedFrom = eg.getNode(emittedByEdges[0].from);
+        const meta = document.createElement('div');
+        meta.style.cssText = 'font-size:9px;color:var(--text-muted);margin-top:1px;';
+        meta.textContent = `emitted by: ${emittedFrom?.name ?? '?'}`;
+        info.appendChild(meta);
+      }
+    }
+
+    // Show state-diff summary on reducer nodes
+    if (node.kind === 'reducer' && node.meta?.stateDiff?.length > 0) {
+      const diffRow = document.createElement('div');
+      diffRow.style.cssText = 'font-size:9px;color:#34d399;margin-top:1px;';
+      diffRow.textContent = `${node.meta.stateDiff.length} change${node.meta.stateDiff.length !== 1 ? 's' : ''}: ${node.meta.stateDiff.map(d => d.field).join(', ')}`;
+      info.appendChild(diffRow);
+
+      // Show what was emitted (outgoing EMITS edges)
+      const emitsEdges = eg.graph.getOutgoing(node.id, EXECUTION_EDGE_TYPES.EMITS);
+      if (emitsEdges.length > 0) {
+        const emitRow = document.createElement('div');
+        emitRow.style.cssText = 'font-size:9px;color:var(--text-muted);margin-top:1px;';
+        emitRow.textContent = `→ emits: ${emitsEdges.map(e => eg.getNode(e.to)?.name ?? '?').join(', ')}`;
+        info.appendChild(emitRow);
+      }
+    }
+
+    // Show timestamp on root event nodes
+    if (isRoot && node.timestamp) {
+      const tsRow = document.createElement('div');
+      tsRow.style.cssText = 'font-size:9px;color:var(--text-muted);margin-top:1px;';
+      tsRow.textContent = this._formatDate(node.timestamp instanceof Date ? node.timestamp : new Date(node.timestamp));
+      info.appendChild(tsRow);
+    }
+
+    row.append(connector, info);
+    container.appendChild(row);
+
+    // Recurse into EXECUTES children
+    const children = eg.getChildren(node.id);
+    for (const child of children) {
+      this._renderExecTreeNode(container, child, depth + 1, eg, seen);
+    }
   }
 
   _showFieldHistory(field, entries) {
