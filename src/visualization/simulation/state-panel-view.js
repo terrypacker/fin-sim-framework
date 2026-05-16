@@ -28,6 +28,7 @@ export class StatePanelView extends BaseComponent {
   constructor() {
     super();
     this._formatDate        = d => d.toDateString();
+    this._schemaRegistry    = null;
     this._pendingDate       = null;
     this._pendingState      = null;
     this._drainExecEndMsgs  = () => [];
@@ -38,6 +39,11 @@ export class StatePanelView extends BaseComponent {
   /** Update the active date-format function (UTC vs local). */
   set formatDate(fn) {
     this._formatDate = fn ?? (d => d.toDateString());
+  }
+
+  /** Inject the StateSchemaRegistry for context-aware value formatting. */
+  set schemaRegistry(r) {
+    this._schemaRegistry = r ?? null;
   }
 
   // ── Simulation bus ────────────────────────────────────────────────────────────
@@ -233,7 +239,7 @@ export class StatePanelView extends BaseComponent {
 
         const stateChangeBeforeRow = document.importNode(stateChangesGrid.querySelector('[data-state-change-before-row]'), true);
         stateChangeBeforeRow.style = '';
-        stateChangeBeforeRow.querySelector('[data-id="before"]').innerHTML = this.fmtVal(change.before, true);
+        stateChangeBeforeRow.querySelector('[data-id="before"]').innerHTML = this._fmtChange(change.field, change.before, true);
         stateChangesGrid.appendChild(stateChangeBeforeRow);
 
         const stateChangeAfterRow = document.importNode(stateChangesGrid.querySelector('[data-state-change-after-row]'), true);
@@ -243,15 +249,15 @@ export class StatePanelView extends BaseComponent {
           const delta = document.createElement('span');
           if (change.delta > 0) {
             delta.classList.add('diff-pos');
-            delta.innerText = '+' + this.fmtVal(change.delta);
+            delta.innerText = '+' + this._fmtChange(change.field, change.delta);
           } else {
             delta.classList.add('diff-neg');
-            delta.innerText = '-' + this.fmtVal(change.delta);
+            delta.innerText = '-' + this._fmtChange(change.field, change.delta);
           }
-          after.innerHTML = this.fmtVal(change.after, true);
+          after.innerHTML = this._fmtChange(change.field, change.after, true);
           after.appendChild(delta);
         } else {
-          stateChangeAfterRow.querySelector('[data-id="after"]').innerHTML = this.fmtVal(change.after, true);
+          stateChangeAfterRow.querySelector('[data-id="after"]').innerHTML = this._fmtChange(change.field, change.after, true);
         }
         stateChangesGrid.appendChild(stateChangeAfterRow);
       }
@@ -269,11 +275,11 @@ export class StatePanelView extends BaseComponent {
 
   buildActionDetail(entry) {
     const changes = entry.stateDiff ?? [];
-    const emitted = entry.emittedActions?.length
-      ? entry.emittedActions.map(a => a.type).join(', ')
+    const emitted = entry.emittedTypes?.length
+      ? entry.emittedTypes.join(', ')
       : '(none)';
     const actionPayload = JSON.stringify(
-      Object.fromEntries(Object.entries(entry.action).filter(([k]) => !k.startsWith('_'))),
+      { ...entry.action, data: entry.action.data },
       null, 2
     );
     return { changes, emitted, actionPayload };
@@ -285,6 +291,19 @@ export class StatePanelView extends BaseComponent {
 
   // ── Formatting helpers ────────────────────────────────────────────────────
   //TODO Extract to shared UI class #139
+
+  /**
+   * Format a state-diff value using the schema registry when available,
+   * falling back to fmtVal for types the registry returns null for
+   * (arrays, objects, unregistered non-numeric fields).
+   */
+  _fmtChange(field, value, objAsCode = false) {
+    if (this._schemaRegistry) {
+      const formatted = this._schemaRegistry.format(field, value);
+      if (formatted !== null) return formatted;
+    }
+    return this.fmtVal(value, objAsCode);
+  }
 
   fmtVal(v, objAsCode = false) {
     if (v == null) return '—';

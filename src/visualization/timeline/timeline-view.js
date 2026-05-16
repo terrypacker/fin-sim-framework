@@ -10,8 +10,6 @@
 
 import {BaseComponent} from "../components/base-component.js";
 
-let _tlViewCounter = 0;
-
 // Format a Date to YYYY-MM-DD for <input type="date"> value
 function toDateInput(date) {
   if (!date) return '';
@@ -23,11 +21,13 @@ function toDateInput(date) {
 
 export class TimelineView extends BaseComponent {
   constructor({ container }) {
-    super(); //I am the root component here
+    super();
 
     this.container    = container;
     this._listEl      = null;
     this._filterBarEl = null;
+    this._treeMode    = false; // false = flat timeline, true = causal tree
+
     // Callbacks wired by presenter
     this.onFilterEvents    = null;
     this.onFilterActions   = null;
@@ -39,13 +39,18 @@ export class TimelineView extends BaseComponent {
     this.onDetail          = null;
     this.onTaxDocument     = null;
     this.onRewind          = null;
+    this.onNavigateToNode  = null; // (nodeId: string) => void
   }
 
-  // @param {{ groups, filterEvents, filterActions, filterDateStart, filterDateEnd, expanded, hasRewind }}
-  render({ groups, filterEvents, filterActions, filterDateStart, filterDateEnd, expanded, hasRewind }) {
+  // @param {{ groups, causalGroups, filterEvents, filterActions, filterDateStart, filterDateEnd, expanded, hasRewind }}
+  render({ groups, causalGroups, filterEvents, filterActions, filterDateStart, filterDateEnd, expanded, hasRewind }) {
     this._ensureStructure();
     this._syncFilters(filterEvents, filterActions, filterDateStart, filterDateEnd);
-    this._renderList({ groups, expanded, filterEvents, filterActions, filterDateStart, filterDateEnd, hasRewind });
+    if (this._treeMode) {
+      this._renderList({ groups: causalGroups, expanded, filterEvents, filterActions, filterDateStart, filterDateEnd, hasRewind, treeMode: true });
+    } else {
+      this._renderList({ groups, expanded, filterEvents, filterActions, filterDateStart, filterDateEnd, hasRewind, treeMode: false });
+    }
   }
 
   _ensureStructure() {
@@ -69,6 +74,21 @@ export class TimelineView extends BaseComponent {
 
     const csvBtn = this._filterBarEl.querySelector(`#tl-download-csv`);
     csvBtn.addEventListener('click', () => this.onDownloadCsv?.());
+
+    // Tree/Timeline mode toggle
+    const modeBtn = document.createElement('button');
+    modeBtn.id        = 'tl-mode-toggle';
+    modeBtn.className = 'tl-mode-toggle';
+    modeBtn.title     = 'Switch between flat timeline and causal tree view';
+    modeBtn.textContent = 'Tree';
+    modeBtn.addEventListener('click', () => {
+      this._treeMode = !this._treeMode;
+      modeBtn.textContent = this._treeMode ? 'Timeline' : 'Tree';
+      modeBtn.classList.toggle('tl-mode-toggle--active', this._treeMode);
+      // Trigger a re-render via the toggle callback (null = mode change, not a group key)
+      this.onToggle?.(null);
+    });
+    csvBtn.insertAdjacentElement('afterend', modeBtn);
   }
 
   _syncFilters(filterEvents, filterActions, filterDateStart, filterDateEnd) {
@@ -85,7 +105,7 @@ export class TimelineView extends BaseComponent {
     clearBtn.style.display = hasFilter ? '' : 'none';
   }
 
-  _renderList({ groups, expanded, filterEvents, filterActions, filterDateStart, filterDateEnd, hasRewind }) {
+  _renderList({ groups, expanded, filterEvents, filterActions, filterDateStart, filterDateEnd, hasRewind, treeMode }) {
     if (!this._listEl) return;
 
     const atBottom = this.container.scrollHeight - this.container.scrollTop
@@ -105,11 +125,20 @@ export class TimelineView extends BaseComponent {
 
     for (const [dateStr, byEvent] of groups) {
       const dateOpen  = expanded.has(dateStr);
-      const totalActs = [...byEvent.values()].reduce((s, a) => s + a.length, 0);
+      const evList    = [...byEvent.entries()];
+
+      // Count total items — in tree mode items are nodes, in flat mode they're {entry,idx,sum}
+      const totalActs = treeMode
+        ? evList.reduce((s, [, nodes]) => s + this._countNodes(nodes), 0)
+        : evList.reduce((s, [, items]) => s + items.length, 0);
       const evCount   = byEvent.size;
-      const firstDate = [...byEvent.values()][0][0].entry.date;
-      const rewindBtn = hasRewind
-        ? `<button class="tl-rewind" data-date="${firstDate.getTime()}" title="Rewind to ${dateStr}">⏮</button>`
+
+      // Get the first date for the rewind button
+      const firstEntry = treeMode
+        ? evList[0]?.[1][0]?.entry
+        : evList[0]?.[1][0]?.entry;
+      const rewindBtn = hasRewind && firstEntry
+        ? `<button class="tl-rewind" data-date="${firstEntry.date.getTime()}" title="Rewind to ${dateStr}">⏮</button>`
         : '';
 
       html.push(`<div class="tl-date-group">
@@ -122,38 +151,41 @@ export class TimelineView extends BaseComponent {
 
       if (dateOpen) {
         html.push('<div class="tl-evts">');
-        const evList = [...byEvent.entries()];
         evList.forEach(([evType, items], ei) => {
           const lastEv  = ei === evList.length - 1;
           const evKey   = `${dateStr}::${evType}`;
           const evOpen  = expanded.has(evKey);
 
-          const evColor     = items[0]?.entry?.sourceEvent?.color;
+          // Get event metadata from first item
+          const firstItem   = treeMode ? items[0] : items[0];
+          const firstEntry2 = treeMode ? firstItem?.entry : firstItem?.entry;
+          const evColor     = firstEntry2?.event ? null : firstEntry2?.sourceEvent?.color;
+          const evName      = firstEntry2?.event?.name ?? evType;
+          const evNodeId    = firstEntry2?.event?.nodeId ?? null;
           const evTypeStyle = evColor ? ` style="color:${evColor}"` : '';
+          const evCfgBtn    = evNodeId
+            ? `<button class="tl-cfg-link" data-nodeid="${evNodeId}" title="Open in configuration">⚙</button>`
+            : '';
+
           html.push(`<div class="tl-ev-row">
             <span class="tl-pipe">${lastEv ? '└' : '├'}</span>
             <div class="tl-ev-inner">
               <div class="tl-ev-hdr" data-tgl="${evKey}">
                 <span class="tl-chev">${evOpen ? '▼' : '▶'}</span>
-                <span class="tl-ev-type"${evTypeStyle}>${evType}</span>
-                <span class="tl-badge">${items.length} action${items.length !== 1 ? 's' : ''}</span>
+                <span class="tl-ev-type"${evTypeStyle}>${evName}</span>
+                ${evCfgBtn}
+                <span class="tl-badge">${treeMode ? this._countNodes(items) : items.length} action${(treeMode ? this._countNodes(items) : items.length) !== 1 ? 's' : ''}</span>
               </div>`);
 
           if (evOpen) {
             html.push('<div class="tl-acts">');
-            items.forEach(({ entry, idx, sum }, ai) => {
-              const lastA     = ai === items.length - 1;
-              const hasTaxDoc = entry.action.type === 'TAX_SETTLE_APPLY' &&
-                (entry.action.taxDetail != null || entry.action.personTaxDetails?.length > 0);
-              html.push(`<div class="tl-act">
-                <span class="tl-pipe" style="color:#1e3a5f">${lastA ? '└' : '├'}</span>
-                <span class="tl-act-type">${entry.action.type}</span>
-                ${sum ? `<span class="tl-act-val">${sum}</span>` : ''}
-                <span class="tl-act-reducer">${entry.reducer.name}</span>
-                <button class="tl-det" data-idx="${idx}">detail ↗</button>
-                ${hasTaxDoc ? `<button class="tl-taxdoc" data-idx="${idx}">Tax Doc ↗</button>` : ''}
-              </div>`);
-            });
+            if (treeMode) {
+              html.push(...this._renderTreeNodes(items, 0));
+            } else {
+              items.forEach(({ entry, idx, sum }, ai) => {
+                html.push(...this._renderFlatAction(entry, idx, sum, ai === items.length - 1));
+              });
+            }
             html.push('</div>'); // tl-acts
           }
 
@@ -166,9 +198,74 @@ export class TimelineView extends BaseComponent {
     }
 
     this._listEl.innerHTML = html.join('');
+    this._wireListeners(hasRewind);
 
+    if (atBottom) this.container.scrollTop = this.container.scrollHeight;
+  }
+
+  _renderFlatAction(entry, idx, sum, isLast) {
+    const hasTaxDoc = entry.action.type === 'TAX_SETTLE_APPLY' &&
+      (entry.action.data?.taxDetail != null || entry.action.data?.personTaxDetails?.length > 0);
+    const cfgBtn = entry.action.nodeId
+      ? `<button class="tl-cfg-link" data-nodeid="${entry.action.nodeId}" title="Open in configuration">⚙</button>`
+      : '';
+    return [`<div class="tl-act">
+      <span class="tl-pipe" style="color:#1e3a5f">${isLast ? '└' : '├'}</span>
+      <span class="tl-act-name">${entry.action.name}</span>
+      ${sum ? `<span class="tl-act-val">${sum}</span>` : ''}
+      <span class="tl-act-reducer">${entry.reducer.name}</span>
+      ${cfgBtn}
+      <button class="tl-det" data-idx="${idx}">detail ↗</button>
+      ${hasTaxDoc ? `<button class="tl-taxdoc" data-idx="${idx}">Tax Doc ↗</button>` : ''}
+    </div>`];
+  }
+
+  _renderTreeNodes(nodes, depth) {
+    const html = [];
+    nodes.forEach((node, i) => {
+      const { entry } = node;
+      const isLast    = i === nodes.length - 1;
+      const indent    = depth * 16;
+      const hasTaxDoc = entry.action.type === 'TAX_SETTLE_APPLY' &&
+        (entry.action.data?.taxDetail != null || entry.action.data?.personTaxDetails?.length > 0);
+      const cfgBtn = entry.action.nodeId
+        ? `<button class="tl-cfg-link" data-nodeid="${entry.action.nodeId}" title="Open in configuration">⚙</button>`
+        : '';
+      const childBadge = node.children.length
+        ? ` <span class="tl-badge">${node.children.length}</span>`
+        : '';
+      html.push(`<div class="tl-act tl-act--tree" style="padding-left:${indent}px">
+        <span class="tl-pipe" style="color:#1e3a5f">${isLast ? '└' : '├'}</span>
+        <span class="tl-act-name">${entry.action.name}</span>${childBadge}
+        <span class="tl-act-reducer">${entry.reducer.name}</span>
+        ${cfgBtn}
+        <button class="tl-det" data-idx="${entry.seq}">detail ↗</button>
+        ${hasTaxDoc ? `<button class="tl-taxdoc" data-idx="${entry.seq}">Tax Doc ↗</button>` : ''}
+      </div>`);
+      if (node.children.length) {
+        html.push(...this._renderTreeNodes(node.children, depth + 1));
+      }
+    });
+    return html;
+  }
+
+  _countNodes(nodes) {
+    let count = 0;
+    const stack = [...nodes];
+    while (stack.length) {
+      const n = stack.pop();
+      count++;
+      if (n.children?.length) stack.push(...n.children);
+    }
+    return count;
+  }
+
+  _wireListeners(hasRewind) {
     this._listEl.querySelectorAll('[data-tgl]').forEach(el => {
-      el.addEventListener('click', () => this.onToggle?.(el.dataset.tgl));
+      el.addEventListener('click', e => {
+        e.stopPropagation();
+        this.onToggle?.(el.dataset.tgl);
+      });
     });
 
     this._listEl.querySelectorAll('.tl-det').forEach(btn => {
@@ -185,6 +282,13 @@ export class TimelineView extends BaseComponent {
       });
     });
 
+    this._listEl.querySelectorAll('.tl-cfg-link').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        this.onNavigateToNode?.(btn.dataset.nodeid);
+      });
+    });
+
     if (hasRewind) {
       this._listEl.querySelectorAll('.tl-rewind').forEach(btn => {
         btn.addEventListener('click', e => {
@@ -193,7 +297,5 @@ export class TimelineView extends BaseComponent {
         });
       });
     }
-
-    if (atBottom) this.container.scrollTop = this.container.scrollHeight;
   }
 }

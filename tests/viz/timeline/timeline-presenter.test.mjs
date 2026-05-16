@@ -50,13 +50,25 @@ function makeContainer({ scrollHeight = 400, scrollTop = 0, clientHeight = 100 }
   return el;
 }
 
+let _seq = 0;
 function makeEntry({
   date       = new Date(2025, 0, 1),
   eventType  = 'TEST_EVENT',
   actionType = 'TEST_ACTION',
   reducer    = { name: 'Test Reducer' },
 } = {}) {
-  return { date, eventType, action: { type: actionType }, reducer };
+  const seq = _seq++;
+  return {
+    seq,
+    date,
+    executionId: null,
+    event:  { nodeId: null, type: eventType,  name: eventType,  color: null },
+    action: { instanceId: `inst-${seq}`, parentId: null, rootId: null, siblingIndex: 0, nodeId: null, type: actionType, name: actionType, data: {} },
+    reducer,
+    stateDiff:          [],
+    emittedInstanceIds: [],
+    emittedTypes:       [],
+  };
 }
 
 function makeJournal(entries = []) {
