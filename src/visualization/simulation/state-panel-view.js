@@ -660,7 +660,9 @@ export class StatePanelView extends BaseComponent {
     };
 
     fromInput.addEventListener('change', refreshChart);
+    fromInput.addEventListener('input',  refreshChart);
     toInput.addEventListener('change',   refreshChart);
+    toInput.addEventListener('input',    refreshChart);
 
     body.append(filterRow, tabBar, chartPane, execPane);
     modal.append(hdr, body);
@@ -973,7 +975,9 @@ export class StatePanelView extends BaseComponent {
       };
 
       fromInput.addEventListener('change', updateNet);
-      toInput.addEventListener('change', updateNet);
+      fromInput.addEventListener('input',  updateNet);
+      toInput.addEventListener('change',   updateNet);
+      toInput.addEventListener('input',    updateNet);
       periodRow.append(fromLbl, fromInput, toArrow, toInput, netSpan);
       body.appendChild(periodRow);
       updateNet();
