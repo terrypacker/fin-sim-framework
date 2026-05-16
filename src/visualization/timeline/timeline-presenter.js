@@ -61,6 +61,10 @@ export class TimelinePresenter {
     }
   }
 
+  set schemaRegistry(r) {
+    this._controller.schemaRegistry = r ?? null;
+  }
+
   attach(journal) {
     this._controller.setJournal(journal);
     this._render();

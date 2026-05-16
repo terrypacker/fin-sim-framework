@@ -78,13 +78,13 @@ export class TimelineView extends BaseComponent {
     // Tree/Timeline mode toggle
     const modeBtn = document.createElement('button');
     modeBtn.id        = 'tl-mode-toggle';
-    modeBtn.className = 'tl-mode-toggle';
+    modeBtn.className = 'btn btn-sm';
     modeBtn.title     = 'Switch between flat timeline and causal tree view';
     modeBtn.textContent = 'Tree';
     modeBtn.addEventListener('click', () => {
       this._treeMode = !this._treeMode;
       modeBtn.textContent = this._treeMode ? 'Timeline' : 'Tree';
-      modeBtn.classList.toggle('tl-mode-toggle--active', this._treeMode);
+      modeBtn.classList.toggle('btn-primary', this._treeMode);
       // Trigger a re-render via the toggle callback (null = mode change, not a group key)
       this.onToggle?.(null);
     });
@@ -159,7 +159,7 @@ export class TimelineView extends BaseComponent {
           // Get event metadata from first item
           const firstItem   = treeMode ? items[0] : items[0];
           const firstEntry2 = treeMode ? firstItem?.entry : firstItem?.entry;
-          const evColor     = firstEntry2?.event ? null : firstEntry2?.sourceEvent?.color;
+          const evColor     = firstEntry2?.event?.color ?? null;
           const evName      = firstEntry2?.event?.name ?? evType;
           const evNodeId    = firstEntry2?.event?.nodeId ?? null;
           const evTypeStyle = evColor ? ` style="color:${evColor}"` : '';
