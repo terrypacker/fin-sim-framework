@@ -20,6 +20,12 @@ const KIND_OPTIONS = [
   ['reducer', 'Reducers'],
 ];
 
+const LAYER_OPTIONS = [
+  ['both',      'Config + Execution'],
+  ['config',    'Config Only'],
+  ['execution', 'Execution Only'],
+];
+
 /**
  * ConfigGraphView — outer container for the config-graph panel.
  *
@@ -64,6 +70,7 @@ export class ConfigGraphView extends BaseComponent {
     this._graphQueryApi = graphQueryApi;
     this._selectedKind  = '';
     this._nameFilter    = '';
+    this._layerMode     = 'both';
 
     this._buildFilterBar(graphRoot);
 
@@ -142,7 +149,29 @@ export class ConfigGraphView extends BaseComponent {
     });
     nameField.appendChild(this._nameInput);
 
-    bar.append(kindField, nameField);
+    // ── Layer select ───────────────────────────────────────────────────────
+    const layerField = document.createElement('div');
+    layerField.className = 'node-field';
+    layerField.style.flex = '0 0 auto';
+
+    const layerLabel = document.createElement('label');
+    layerLabel.textContent = 'LAYER';
+    layerField.appendChild(layerLabel);
+
+    this._layerSelect = document.createElement('select');
+    for (const [value, label] of LAYER_OPTIONS) {
+      const opt       = document.createElement('option');
+      opt.value       = value;
+      opt.textContent = label;
+      this._layerSelect.appendChild(opt);
+    }
+    this.listen(this._layerSelect, 'change', () => {
+      this._layerMode = this._layerSelect.value;
+      this.graphRenderer.setLayerMode(this._layerMode);
+    });
+    layerField.appendChild(this._layerSelect);
+
+    bar.append(kindField, nameField, layerField);
     panel.insertBefore(bar, graphRoot);
     this.onCleanup(() => bar.remove());
   }

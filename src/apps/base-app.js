@@ -55,6 +55,8 @@ import { MonteCarloPresenter }  from '../visualization/monte-carlo/monte-carlo-p
 import { OptimizationView }       from '../visualization/optimization/optimization-view.js';
 import { OptimizationController } from '../visualization/optimization/optimization-controller.js';
 import { OptimizationPresenter }  from '../visualization/optimization/optimization-presenter.js';
+import { GraphNodeInspectorPanel } from '../visualization/graph-builder/graph-node-inspector-panel.js';
+import { GraphNodeExecHistory }    from '../visualization/graph-builder/graph-node-exec-history.js';
 
 /**
  * BaseApp — composition root.
@@ -95,6 +97,8 @@ export class BaseApp extends BaseComponent {
     this.mcPresenter           = null;
     this.optPresenter          = null;
     this._replayParams         = null;
+    this._graphNodeInspector   = null;
+    this._graphNodeExecHistory = null;
 
     // Created once — survive scenario rebuilds.
     this._statePanelView  = new StatePanelView();
@@ -105,6 +109,7 @@ export class BaseApp extends BaseComponent {
 
     // Tab header references set by initView()
     this.scenarioTabHeader = null;
+    this._graphEditTabHeader = null;
 
     // Playback/slider state
     this.lastSliderValue = 0;
@@ -140,7 +145,7 @@ export class BaseApp extends BaseComponent {
       handlerService: registry.handlerService,
       actionService:  registry.actionService,
       reducerService: registry.reducerService,
-      onEditNode: (node) => this._editModal.open(node),
+      onEditNode: (node) => this._openNodeInInspector(node),
     });
 
     //TODO This should be put into the builder-presenter too
@@ -156,12 +161,12 @@ export class BaseApp extends BaseComponent {
     // ── Configuration list (left panel) ──────────────────────────────────────
     this.configList = new ConfigurationListComponent({
       parent:        this,
-      container:     document.getElementById('configGroup'),
+      container:     document.getElementById('configGroupNodes'),
       graphQueryApi: registry.graphQueryApi,
       bus:           registry.bus,
     });
 
-    this.configList.onItemClick = (node) => this._editModal.open(node);
+    this.configList.onItemClick = (node) => this._openNodeInInspector(node);
 
     this.configList.onAddClick = (kind) => {
       if (kind === 'person') {
@@ -174,8 +179,8 @@ export class BaseApp extends BaseComponent {
       }
     };
 
-    // ── Wire modal editor factory ─────────────────────────────────────────────
-    this._editModal.setEditorFactory((node, container) => {
+    // ── Shared editor factory (used by modal and inspector panel) ─────────────
+    const editorFactory = (node, container) => {
       if (node?.kind === 'person') {
         const editor = new PersonEditor({
           container,
@@ -231,6 +236,26 @@ export class BaseApp extends BaseComponent {
 
       // Graph nodes: event / handler / action / reducer
       return this.configPresenter._view.createAndRenderEditor(node, container);
+    };
+
+    this._editModal.setEditorFactory(editorFactory);
+
+    // ── Graph node inspector panel (left column EDIT sub-tab) ─────────────────
+    this._graphNodeInspector = new GraphNodeInspectorPanel({
+      container:  document.getElementById('graphNodeEditPane'),
+      onShowTab:  () => this._showGraphEditTab(),
+    });
+    this._graphNodeInspector.setEditorFactory(editorFactory);
+
+    // ── Graph node execution history (right column GRAPH group) ───────────────
+    this._graphNodeExecHistory = new GraphNodeExecHistory({
+      container:     document.getElementById('graphNodeHistoryPane'),
+      graphRenderer: this.configGraphView.graphRenderer,
+    });
+
+    // Wire node click → exec history panel
+    this.configPresenter._graphRenderer.registerNodeClickListener((_evt, node) => {
+      this._graphNodeExecHistory.showNode(node);
     });
 
     // Scenario Tab
@@ -334,6 +359,7 @@ export class BaseApp extends BaseComponent {
 
     this._animator.toggleBreakpoint();
     this._animator.wireSimBus(this.scenario.sim.bus);
+    this._graphNodeExecHistory?.wireSimBus(this.scenario.sim.bus);
 
     // Track _currentDate for subclass access.
     this.scenario.sim.bus.subscribe(`EXECUTION_${EXECUTION_PHASES.BEGIN}`, { kind: EXECUTION_KINDS.EVENT }, ({ date }) => {
@@ -378,6 +404,8 @@ export class BaseApp extends BaseComponent {
     this._statePanelView.clearMetricHistory();
 
     this._editModal?.close();
+    this._graphNodeInspector?.clear();
+    this._graphNodeExecHistory?.showNode(null);
     if (this.chartPresenter)  this.chartPresenter.stopViz();
     if (this.configGraphView)  this.configGraphView.destroy();
     if (this.configPresenter)  this.configPresenter.destroy();
@@ -418,20 +446,30 @@ export class BaseApp extends BaseComponent {
     this._initRightGroupSelector();
     this._statePanelView.initLiveState();
 
-    this.scenarioTabHeader = document.querySelector('.tab-header[data-dest-tab=left-scenario][data-tab-group=left-col-sim]');
+    this.scenarioTabHeader   = document.querySelector('.tab-header[data-dest-tab=left-scenario][data-tab-group=left-col-sim]');
+    this._graphEditTabHeader = document.querySelector('.tab-header[data-dest-tab="left-graph-edit"][data-tab-group="left-col-graph"]');
 
     document.querySelectorAll('.tab-header').forEach(el => {
       el.addEventListener('click', (evt) => this.openTab(evt, el.dataset.destTab, el.dataset.tabGroup));
     });
 
     // Auto-switch left and right column groups when center tab changes.
-    const leftMcHeader  = document.querySelector('.tab-header[data-dest-tab="left-mc"][data-tab-group="left-col-sim"]');
-    const leftOptHeader = document.querySelector('.tab-header[data-dest-tab="left-opt"][data-tab-group="left-col-sim"]');
+    const leftMcHeader    = document.querySelector('.tab-header[data-dest-tab="left-mc"][data-tab-group="left-col-sim"]');
+    const leftOptHeader   = document.querySelector('.tab-header[data-dest-tab="left-opt"][data-tab-group="left-col-sim"]');
+    const leftGraphNodesHeader = document.querySelector('.tab-header[data-dest-tab="left-graph-nodes"][data-tab-group="left-col-graph"]');
     document.querySelectorAll('.tab-header[data-tab-group="center-col"]').forEach(el => {
       el.addEventListener('click', () => {
-        const isOpt = el.dataset.destTab === 'opt-tab';
-        const isMc  = el.dataset.destTab === 'mc-tab';
-        this._openRightGroup(isOpt ? 'opt' : isMc ? 'mc' : 'sim');
+        const isOpt   = el.dataset.destTab === 'opt-tab';
+        const isMc    = el.dataset.destTab === 'mc-tab';
+        const isGraph = el.dataset.destTab === 'config-graph-tab';
+        this._openRightGroup(isOpt ? 'opt' : isMc ? 'mc' : isGraph ? 'graph' : 'sim');
+        if (isGraph) {
+          // Switch left column to Configuration > NODES
+          const configBtn = document.querySelector('.left-group-btn[data-group="configuration"]');
+          if (configBtn && !configBtn.classList.contains('active')) configBtn.click();
+          if (leftGraphNodesHeader) this.openTab({ currentTarget: leftGraphNodesHeader }, 'left-graph-nodes', 'left-col-graph');
+          return;
+        }
         const leftTarget = isOpt ? leftOptHeader : isMc ? leftMcHeader : this.scenarioTabHeader;
         if (leftTarget) this.openTab({ currentTarget: leftTarget }, leftTarget.dataset.destTab, 'left-col-sim');
       });
@@ -501,6 +539,9 @@ export class BaseApp extends BaseComponent {
     });
 
     this.openTab({ currentTarget: this.scenarioTabHeader }, 'left-scenario', 'left-col-sim');
+
+    // Simulate graph tab activation so left/right panels start in the correct state.
+    document.querySelector('.tab-header[data-dest-tab="config-graph-tab"][data-tab-group="center-col"]')?.click();
 
     window.addEventListener('resize', () => this.resizeCanvases());
     this.resizeCanvases();
@@ -582,6 +623,25 @@ export class BaseApp extends BaseComponent {
       g.style.display = g.dataset.rightGroup === group ? '' : 'none';
     });
   }
+
+  /** Open a node in the left-panel inspector tab instead of the modal. */
+  _openNodeInInspector(node) {
+    this._graphNodeInspector?.open(node);
+    this._graphNodeExecHistory?.showNode(node);
+  }
+
+  /** Switch the left column to Configuration > EDIT sub-tab. */
+  _showGraphEditTab() {
+    // Ensure Configuration group is visible
+    const configBtn = document.querySelector('.left-group-btn[data-group="configuration"]');
+    if (configBtn && !configBtn.classList.contains('active')) configBtn.click();
+
+    // Switch to the EDIT sub-tab
+    if (this._graphEditTabHeader) {
+      this.openTab({ currentTarget: this._graphEditTabHeader }, 'left-graph-edit', 'left-col-graph');
+    }
+  }
+
   // ── Account history modal ─────────────────────────────────────────────────
 
   _showAccountHistory(entries, accountName, currencySymbol = '$') {
