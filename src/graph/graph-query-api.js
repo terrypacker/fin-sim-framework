@@ -18,7 +18,8 @@
  */
 
 import { QueryApi } from "../query/query-api.js";
-import {createEdgeId} from "./edge.js";
+import { createEdgeId } from "./edge.js";
+import { EXECUTION_EDGE_TYPES } from '../simulation-framework/execution-graph.js';
 
 
 export class GraphQueryApi extends QueryApi {
@@ -272,34 +273,80 @@ export class GraphQueryApi extends QueryApi {
   }
 
   // ─── Cross-layer queries ──────────────────────────────────────────────────
-  // TODO #126 — these depend on 'instance-of' edges not yet wired in the graph
-
-  /** Returns the config-layer definition node for a runtime instance node. */
-  getDefinition(_nodeId) { return null; }
-
-  /** Returns all runtime instance nodes for a config-layer definition node. */
-  getInstances(_definitionId) { return []; }
-
-  // ─── Domain-specific traversals ───────────────────────────────────────────
-  // TODO #126 — these depend on 'triggers' / 'causes' / 'config' edges
-
-  /** Forward execution chain from nodeId via 'triggers' edges. */
-  traceExecution(nodeId) { return this.traceForward(nodeId, 'triggers'); }
-
-  /** Backward causality chain to nodeId via 'causes' edges. */
-  traceCausality(nodeId) { return this.traceBackward(nodeId, 'causes'); }
-
-  /** Config path forward from definitionId via 'config' edges. */
-  getConfigPath(definitionId) { return this.traceForward(definitionId, 'config'); }
 
   /**
-   * Compare the config path of a definition against the actual execution
-   * trace of a runtime instance.
-   * TODO #126 — instance-of / triggers edges not yet wired
-   * @returns {{ missing: string[], extra: string[] }}
+   * Returns the config-layer definition node for a runtime execution instance.
+   * Walks the INSTANCE_OF out-edge wired by GraphRecorder.
+   * @param {string} nodeId — UUID of an execution-layer node.
    */
-  diffExecution(_definitionId, _instanceId) {
-    return { missing: [], extra: [] };
+  getDefinition(nodeId) {
+    const targets = this.getTargets(nodeId, EXECUTION_EDGE_TYPES.INSTANCE_OF);
+    return targets[0] ?? null;
+  }
+
+  /**
+   * Returns all runtime execution nodes that are instances of a config-layer
+   * definition node.  Walks INSTANCE_OF in-edges.
+   * @param {string} definitionId — id of a config-layer node.
+   */
+  getInstances(definitionId) {
+    return this.getSources(definitionId, EXECUTION_EDGE_TYPES.INSTANCE_OF);
+  }
+
+  // ─── Domain-specific traversals ───────────────────────────────────────────
+
+  /**
+   * Forward execution chain from an execution node via EXECUTES edges.
+   * Returns all descendants in visit order (DFS), including the start node.
+   * @param {string} nodeId — UUID of an execution-layer node.
+   */
+  traceExecution(nodeId) {
+    return this.traceForward(nodeId, EXECUTION_EDGE_TYPES.EXECUTES);
+  }
+
+  /**
+   * Backward causality chain to an execution node via EXECUTES edges.
+   * Returns [rootEvent, ..., node] — root-first order.
+   * @param {string} nodeId — UUID of an execution-layer node.
+   */
+  traceCausality(nodeId) {
+    return this.traceBackward(nodeId, EXECUTION_EDGE_TYPES.EXECUTES);
+  }
+
+  /**
+   * Config path forward from a definition node via config-layer edges
+   * (HANDLED_BY, GENERATES_ACTION, REDUCES_ACTION).  Uses null edge-type
+   * filter which, starting from a config node, only reaches other config
+   * nodes because execution edges are never outgoing from config nodes.
+   * @param {string} definitionId — id of a config-layer node.
+   */
+  getConfigPath(definitionId) {
+    return this.traceForward(definitionId, null);
+  }
+
+  /**
+   * Compare the static config path of a definition against the actual causal
+   * chain of a runtime instance.
+   *
+   * @param {string} definitionId — config-layer node id (e.g. an event node).
+   * @param {string} instanceId   — execution-layer node UUID.
+   * @returns {{ missing: string[], extra: string[] }}
+   *   missing: config-node ids expected in the chain but absent from execution.
+   *   extra:   definition ids that fired but are not in the config path.
+   */
+  diffExecution(definitionId, instanceId) {
+    const configNodes = this.getConfigPath(definitionId);
+    const configIds   = new Set(configNodes.map(n => n.id));
+
+    const execChain  = this.traceCausality(instanceId);
+    const execDefIds = new Set(
+      execChain.map(n => n.definitionId).filter(Boolean)
+    );
+
+    return {
+      missing: [...configIds].filter(id => !execDefIds.has(id)),
+      extra:   [...execDefIds].filter(id => !configIds.has(id)),
+    };
   }
 
   // =========================================================
