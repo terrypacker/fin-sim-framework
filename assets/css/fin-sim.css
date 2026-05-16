@@ -348,6 +348,15 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 }
 .ad-history-btn:hover { border-color: var(--cyan, #67e8f9); background: var(--bg-panel2); }
 
+.ad-analytics-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
 
 #node-state-changes {
   display:flex;
