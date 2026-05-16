@@ -54,8 +54,9 @@
  * });
  */
 export class SimulationState {
-  constructor({ metrics = {}, ...extra } = {}) {
+  constructor({ metrics = {}, schemaRegistry = null, ...extra } = {}) {
     this.metrics = metrics;
+    this._schemaRegistry = schemaRegistry; // not included in toPlain()
     Object.assign(this, extra);
   }
 
@@ -66,15 +67,19 @@ export class SimulationState {
    * @returns {object}
    */
   toPlain() {
-    return { ...this };
+    return Object.fromEntries(Object.entries(this).filter(([k]) => !k.startsWith('_')));
   }
 
   /**
-   * Assign an Account to a named state property and stamp its stateKey so
-   * AccountService.getAccountHistory() can look it up by account ID.
+   * Assign an Account to a named state property, stamp its stateKey so
+   * AccountService.getAccountHistory() can look it up by account ID, and
+   * register its field paths with the StateSchemaRegistry when present.
    */
   _assignAccount(key, account) {
     this[key] = account;
-    if (account != null) account.stateKey = key;
+    if (account != null) {
+      account.stateKey = key;
+      this._schemaRegistry?.registerAccount(key, account);
+    }
   }
 }

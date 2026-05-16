@@ -714,7 +714,7 @@ test('Journal.getActions returns only entries for the requested action type', ()
   const entries = sim.journal.getActions('REALIZE_GAIN');
   assert.strictEqual(entries.length, 1);
   assert.strictEqual(entries[0].action.type, 'REALIZE_GAIN');
-  assert.strictEqual(entries[0].action.amount, 8000);
+  assert.strictEqual(entries[0].action.data.amount, 8000);
 });
 
 test('Journal entry records the source event type that triggered the action', () => {
@@ -723,7 +723,7 @@ test('Journal entry records the source event type that triggered the action', ()
   sim.stepTo(new Date(2025, 0, 1));
 
   const entry = sim.journal.getActions('REALIZE_GAIN')[0];
-  assert.strictEqual(entry.eventType, 'SELL_ASSET');
+  assert.strictEqual(entry.event.type, 'SELL_ASSET');
 });
 
 test('Journal.getStateTimeline tracks a field value across reducer executions', () => {
@@ -972,8 +972,8 @@ test('scheduleRecurring: type propagates correctly to each re-scheduled occurren
   // Each occurrence produces one INC action; sourceEvent.type must be 'ANNUAL' for all
   const entries = sim.journal.getActions('INC');
   assert.strictEqual(entries.length, 3, 'must have 3 INC journal entries (one per ANNUAL)');
-  assert.ok(entries.every(e => e.sourceEvent.type === 'ANNUAL'),
-    'every re-scheduled occurrence must carry sourceEvent.type === "ANNUAL"');
+  assert.ok(entries.every(e => e.event.type === 'ANNUAL'),
+    'every re-scheduled occurrence must carry event.type === "ANNUAL"');
 });
 
 test('scheduleRecurring: data and meta propagate to every re-scheduled occurrence', () => {
@@ -1000,7 +1000,7 @@ test('journal sourceEvent.type matches the scheduled event type', () => {
   sim.stepTo(new Date(2025, 0, 1));
 
   const entry = sim.journal.getActions('INC')[0];
-  assert.strictEqual(entry.sourceEvent.type, 'EV');
+  assert.strictEqual(entry.event.type, 'EV');
 });
 
 test('journal sourceEvent.color matches the color passed to schedule', () => {
@@ -1011,8 +1011,8 @@ test('journal sourceEvent.color matches the color passed to schedule', () => {
   sim.stepTo(new Date(2025, 0, 1));
 
   const entry = sim.journal.getActions('INC')[0];
-  assert.strictEqual(entry.sourceEvent.color, '#ff0000',
-    'color from schedule() must be accessible on sourceEvent in the journal');
+  assert.strictEqual(entry.event.color, '#ff0000',
+    'color from schedule() must be accessible on event in the journal');
 });
 
 // ─── Events with future start dates ──────────────────────────────────────────

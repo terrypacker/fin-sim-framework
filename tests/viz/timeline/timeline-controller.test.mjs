@@ -14,13 +14,25 @@ import { TimelineController } from '../../../src/visualization/timeline/timeline
 
 const fmtDate = d => d.toDateString();
 
+let _seq = 0;
 function makeEntry({
-  date      = new Date(2025, 0, 1),
-  eventType = 'TEST_EVENT',
+  date       = new Date(2025, 0, 1),
+  eventType  = 'TEST_EVENT',
   actionType = 'TEST_ACTION',
-  reducer   = { name: 'Test Reducer' },
+  reducer    = { name: 'Test Reducer' },
 } = {}) {
-  return { date, eventType, action: { type: actionType }, reducer };
+  const seq = _seq++;
+  return {
+    seq,
+    date,
+    executionId: null,
+    event:  { nodeId: null, type: eventType,  name: eventType,  color: null },
+    action: { instanceId: `inst-${seq}`, parentId: null, rootId: null, siblingIndex: 0, nodeId: null, type: actionType, name: actionType, data: {} },
+    reducer,
+    stateDiff:          [],
+    emittedInstanceIds: [],
+    emittedTypes:       [],
+  };
 }
 
 function makeJournal(entries = []) {
@@ -355,52 +367,51 @@ test('TimelineController.sum: returns empty string for action with no known fiel
 });
 
 test('TimelineController.sum: formats amount as a dollar value', () => {
-  const s = makeController().sum({ type: 'ADD_CASH', amount: 1000 });
+  const s = makeController().sum({ type: 'ADD_CASH', data: { amount: 1000 } });
   assert.ok(s.includes('$1,000.00'), `expected '$1,000.00' in "${s}"`);
 });
 
 test('TimelineController.sum: formats tax field with "tax" prefix', () => {
-  const s = makeController().sum({ type: 'CGT', tax: 500 });
+  const s = makeController().sum({ type: 'CGT', data: { tax: 500 } });
   assert.ok(s.includes('tax'),      `expected "tax" in "${s}"`);
   assert.ok(s.includes('$500.00'),  `expected '$500.00' in "${s}"`);
 });
 
 test('TimelineController.sum: includes LT for long-term holds', () => {
-  const s = makeController().sum({ type: 'CGT', isLongTerm: true });
+  const s = makeController().sum({ type: 'CGT', data: { isLongTerm: true } });
   assert.ok(s.includes('LT'), `expected "LT" in "${s}"`);
 });
 
 test('TimelineController.sum: includes ST for short-term holds', () => {
-  const s = makeController().sum({ type: 'CGT', isLongTerm: false });
+  const s = makeController().sum({ type: 'CGT', data: { isLongTerm: false } });
   assert.ok(s.includes('ST'), `expected "ST" in "${s}"`);
 });
 
-test('TimelineController.sum: includes name field directly', () => {
-  const s = makeController().sum({ type: 'RECORD_METRIC', name: 'capital_gains_tax' });
-  assert.ok(s.includes('capital_gains_tax'), `expected name in "${s}"`);
+test('TimelineController.sum: includes string value in quotes', () => {
+  const s = makeController().sum({ type: 'RECORD_METRIC', data: { value: 'capital_gains_tax' } });
+  assert.ok(s.includes('capital_gains_tax'), `expected value in "${s}"`);
 });
 
 test('TimelineController.sum: formats a numeric value as a dollar string', () => {
-  const s = makeController().sum({ type: 'RECORD_METRIC', name: 'salary', value: 8000 });
+  const s = makeController().sum({ type: 'RECORD_METRIC', data: { value: 8000 } });
   assert.ok(s.includes('$8,000.00'), `expected '$8,000.00' in "${s}"`);
 });
 
 test('TimelineController.sum: wraps a string value in double quotes', () => {
-  const s = makeController().sum({ type: 'RECORD_METRIC', name: 'assets_sold', value: 'Tech Stock' });
+  const s = makeController().sum({ type: 'RECORD_METRIC', data: { value: 'Tech Stock' } });
   assert.ok(s.includes('"Tech Stock"'), `expected '"Tech Stock"' in "${s}"`);
 });
 
 test('TimelineController.sum: joins multiple fields with " · "', () => {
-  const s = makeController().sum({ type: 'CGT', amount: 1200, isLongTerm: true });
+  const s = makeController().sum({ type: 'CGT', data: { amount: 1200, isLongTerm: true } });
   assert.ok(s.includes(' · '), `expected " · " separator in "${s}"`);
 });
 
 test('TimelineController.sum: handles action with all supported fields', () => {
-  const s = makeController().sum({ type: 'X', amount: 100, tax: 15, isLongTerm: true, name: 'foo', value: 200 });
+  const s = makeController().sum({ type: 'X', data: { amount: 100, tax: 15, isLongTerm: true, value: 200 } });
   assert.ok(s.includes('$100.00'));
   assert.ok(s.includes('tax'));
   assert.ok(s.includes('LT'));
-  assert.ok(s.includes('foo'));
   assert.ok(s.includes('$200.00'));
 });
 
@@ -443,9 +454,9 @@ test('TimelineController.generateCsv: first line is the header row', () => {
   const ctrl = makeController();
   ctrl.setJournal(makeJournal([makeEntry({ date: new Date(2025, 0, 1) })]));
   const header = ctrl.generateCsv(fmtDate).split('\n')[0];
-  assert.ok(header.includes('date'),      'header should include date column');
-  assert.ok(header.includes('eventType'), 'header should include eventType column');
-  assert.ok(header.includes('action.type'), 'header should include action.type column');
+  assert.ok(header.includes('date'),       'header should include date column');
+  assert.ok(header.includes('eventType'),  'header should include eventType column');
+  assert.ok(header.includes('actionType'), 'header should include actionType column');
 });
 
 test('TimelineController.generateCsv: second line is the data row', () => {
@@ -459,45 +470,45 @@ test('TimelineController.generateCsv: second line is the data row', () => {
   assert.ok(lines[1].includes(fmtDate(d)),     'data row should contain formatted date');
 });
 
-test('TimelineController.generateCsv: nested fields use parent.field naming', () => {
+test('TimelineController.generateCsv: flat action and reducer column names', () => {
   const ctrl = makeController();
   ctrl.setJournal(makeJournal([makeEntry()]));
   const header = ctrl.generateCsv(fmtDate).split('\n')[0];
-  assert.ok(header.includes('action.type'),  'action fields should be prefixed with action.');
-  assert.ok(header.includes('reducer.name'), 'reducer fields should be prefixed with reducer.');
+  assert.ok(header.includes('actionType'),  'action type uses flat actionType column');
+  assert.ok(header.includes('reducerName'), 'reducer name uses flat reducerName column');
 });
 
-test('TimelineController.generateCsv: action.amount column appears when entry has amount', () => {
+test('TimelineController.generateCsv: action.data.amount column appears when entry has amount', () => {
   const ctrl  = makeController();
   const entry = makeEntry();
-  entry.action.amount = 5000;
+  entry.action.data.amount = 5000;
   ctrl.setJournal(makeJournal([entry]));
   const csv = ctrl.generateCsv(fmtDate);
-  assert.ok(csv.includes('action.amount'), 'action.amount column should appear');
-  assert.ok(csv.includes('5000'),          'amount value should appear');
+  assert.ok(csv.includes('action.data.amount'), 'action.data.amount column should appear');
+  assert.ok(csv.includes('5000'),               'amount value should appear');
 });
 
 test('TimelineController.generateCsv: columns span the union of all entry fields', () => {
   const ctrl   = makeController();
   const entry1 = makeEntry({ date: new Date(2025, 0, 1), actionType: 'ACT_A' });
   const entry2 = makeEntry({ date: new Date(2025, 0, 2), actionType: 'ACT_B' });
-  entry1.action.amount = 100;
-  entry2.action.tax    = 15;
+  entry1.action.data.amount = 100;
+  entry2.action.data.tax    = 15;
   ctrl.setJournal(makeJournal([entry1, entry2]));
   const header = ctrl.generateCsv(fmtDate).split('\n')[0];
-  assert.ok(header.includes('action.amount'), 'amount column from entry1 should appear');
-  assert.ok(header.includes('action.tax'),    'tax column from entry2 should appear');
+  assert.ok(header.includes('action.data.amount'), 'amount column from entry1 should appear');
+  assert.ok(header.includes('action.data.tax'),    'tax column from entry2 should appear');
 });
 
 test('TimelineController.generateCsv: missing fields produce empty values in data rows', () => {
   const ctrl   = makeController();
   const entry1 = makeEntry({ date: new Date(2025, 0, 1) });
   const entry2 = makeEntry({ date: new Date(2025, 0, 2) });
-  entry1.action.amount = 100; // only entry1 has amount
+  entry1.action.data.amount = 100; // only entry1 has amount
   ctrl.setJournal(makeJournal([entry1, entry2]));
   const lines = ctrl.generateCsv(fmtDate).split('\n');
   const header = lines[0].split(',');
-  const amtIdx = header.indexOf('action.amount');
+  const amtIdx = header.indexOf('action.data.amount');
   const row2   = lines[2].split(',');
   assert.strictEqual(row2[amtIdx], '', 'missing amount should be empty in entry2 row');
 });
@@ -572,35 +583,24 @@ test('TimelineController.generateCsv: does not throw when an array field contain
   assert.doesNotThrow(() => ctrl.generateCsv(fmtDate));
 });
 
-test('TimelineController.generateCsv: circular array field renders as [circular]', () => {
+test('TimelineController.generateCsv: circular value in action.data renders as [circular]', () => {
   const ctrl  = makeController();
   const entry = makeEntry();
   const circ  = {};
   circ.self   = circ;
-  entry.action.items = [circ];
+  entry.action.data.items = circ; // circular object in data
   ctrl.setJournal(makeJournal([entry]));
   const csv = ctrl.generateCsv(fmtDate);
-  assert.ok(csv.includes('[circular]'), 'circular array value should render as [circular]');
+  assert.ok(csv.includes('[circular]'), 'circular data value should render as [circular]');
 });
 
-test('TimelineController.generateCsv: primitive fields still appear alongside circular references', () => {
+test('TimelineController.generateCsv: primitive data fields appear alongside complex ones', () => {
   const ctrl  = makeController();
   const entry = makeEntry({ eventType: 'SELL_ASSET', actionType: 'REALIZE_GAIN' });
-  entry.action.self = entry.action; // circular on action
-  entry.action.amount = 9999;       // primitive alongside the cycle
+  entry.action.data.amount = 9999;
   ctrl.setJournal(makeJournal([entry]));
   const csv = ctrl.generateCsv(fmtDate);
-  assert.ok(csv.includes('SELL_ASSET'),   'eventType should still appear');
-  assert.ok(csv.includes('REALIZE_GAIN'), 'action.type should still appear');
-  assert.ok(csv.includes('9999'),         'action.amount should still appear');
-});
-
-test('TimelineController._flattenObject: diamond reference flattens correctly on both paths', () => {
-  // shared is reachable via two paths; with backtracking it should appear on both
-  const ctrl   = makeController();
-  const shared = { x: 42 };
-  const obj    = { a: shared, b: shared };
-  const result = ctrl._flattenObject(obj);
-  assert.strictEqual(result['a.x'], 42, 'first path to shared should be flattened');
-  assert.strictEqual(result['b.x'], 42, 'second path to shared should also be flattened');
+  assert.ok(csv.includes('SELL_ASSET'),   'eventType should appear');
+  assert.ok(csv.includes('REALIZE_GAIN'), 'actionType should appear');
+  assert.ok(csv.includes('9999'),         'action.data.amount should appear');
 });

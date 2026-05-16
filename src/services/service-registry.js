@@ -23,6 +23,7 @@ import {ScenarioService} from "./scenario-service.js";
 import {ScenarioStorage} from "../scenarios/scenario-storage.js";
 import {ScenarioRegistry} from "../scenarios/scenario-registry.js";
 import { StateRegistry } from '../finance/services/state-registry.js';
+import { StateSchemaRegistry } from '../finance/services/state-schema-registry.js';
 
 /**
  * Central singleton registry for all application services, the shared
@@ -51,6 +52,7 @@ export class ServiceRegistry {
     this.reducerService     = new ReducerService(this.graph, this.graphQueryApi, this.bus);
 
     this.stateRegistry      = new StateRegistry({ accountService: this.accountService });
+    this.schemaRegistry     = new StateSchemaRegistry();
     this.scenarioRegistry   = new ScenarioRegistry(new ScenarioStorage());
     this.scenarioService    = new ScenarioService(this.bus, this.scenarioRegistry);
     this.simulationRegistry = new SimulationRegistry();

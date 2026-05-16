@@ -38,6 +38,23 @@ import { GraphRecorder } from "./graph-recorder.js";
 const INTERNAL_SCHEDULING_HANDLER_NAME = 'INTERNAL_SCHEDULING_HANDLER_NAME';
 
 /**
+ * Extract only the action-instance fields needed for timeline display and
+ * reporting — avoids deep-cloning the full action object into every journal entry.
+ * Add fields here as new reporters or display features require them.
+ */
+function _pickActionData(action) {
+  const d = {};
+  if (action.amount           != null) d.amount           = action.amount;
+  if (action.tax              != null) d.tax              = action.tax;
+  if (action.isLongTerm       != null) d.isLongTerm       = action.isLongTerm;
+  if (action.value            != null) d.value            = action.value;
+  if (action.cc               != null) d.cc               = action.cc;
+  if (action.taxDetail        != null) d.taxDetail        = action.taxDetail;
+  if (action.personTaxDetails != null) d.personTaxDetails = action.personTaxDetails;
+  return d;
+}
+
+/**
  * Thrown (not as a real error) when the simulation hits a breakpoint.
  * Caught inside stepTo() — never surfaces to user code.
  */
@@ -167,9 +184,14 @@ export class Simulation {
   }
 
   schedule(event) {
+    // Guarantee id and name are always present in the queued event so the
+    // journal and execution graph always have stable references.
+    const id   = event.id   ?? crypto.randomUUID();
+    const name = event.name ?? event.type;
+
     if (this.graphRecorder) {
       this.graphRecorder.recordPendingSchedule({
-        targetDefinitionId: event.id ?? event.type,
+        targetDefinitionId: id,
         scheduledFor: event.date,
       });
     }
@@ -177,6 +199,8 @@ export class Simulation {
       data: {},
       meta: {},
       ...event,
+      id,
+      name,
       instanceId: this.nextEventInstanceId++,
       date: this.normalizeDate(event.date),
     });
@@ -451,6 +475,10 @@ export class Simulation {
       if (this.graphRecorder && eventNodeId) {
         this.graphRecorder.endNode(eventNodeId, { stateBefore, stateAfter: stateSnapshot });
       }
+
+      if (this.journal.enabled) {
+        this.journal.addSnapshot(new Date(this.currentDate), this.state);
+      }
     }
 
     if(this.debug) {
@@ -489,13 +517,13 @@ export class Simulation {
       queue = existingQueue;
     } else {
       const rawActions = Array.isArray(actions) ? [...actions] : [actions];
-      queue = [];
-      let prev = null;
-      for (const a of rawActions) {
-        const decorated = this.decorateAction(a, prev);
-        queue.push(decorated);
-        prev = decorated;
-      }
+      // Handler-generated actions are siblings — they all share parent=null.
+      // (Using the previous action as parent was wrong: it implied A emitted B.)
+      queue = rawActions.map((a, i) => {
+        const decorated = this.decorateAction(a, null);
+        decorated.siblingIndex = i;
+        return decorated;
+      });
     }
 
     this._processActionQueue(queue, sourceEvent, handlerContext, handlerExecId, eventNodeId, handlerNodeId);
@@ -553,7 +581,11 @@ export class Simulation {
           handlerContext
         });
         if (newActions?.length) {
-          queue.unshift(...newActions.map(a => this.decorateAction(a, action)));
+          queue.unshift(...newActions.map((a, i) => {
+            const decorated = this.decorateAction(a, action);
+            decorated.siblingIndex = i;
+            return decorated;
+          }));
         }
       }
 
@@ -729,9 +761,12 @@ export class Simulation {
       }
 
       if (result.next) {
-        emitted = (Array.isArray(result.next)
-            ? result.next
-            : [result.next]).map(a => this.decorateAction(a, action));
+        const nextArr = Array.isArray(result.next) ? result.next : [result.next];
+        emitted = nextArr.map((a, i) => {
+          const decorated = this.decorateAction(a, action);
+          decorated.siblingIndex = i;
+          return decorated;
+        });
         // Tag each emitted action so _processActionQueue can add the EMITS edge
         // once the action node exists in the graph.
         if (reducerNodeId) {
@@ -768,16 +803,35 @@ export class Simulation {
         }
 
         if (this.journal.enabled) {
-          const actionClone  = this.cloneObjectFields(action);
-          const reducerClone = this.cloneObjectFields(reducerWrapper.reducer);
           this.journal.addEntry(new JournalEntry({
-            date: new Date(this.currentDate),
-            eventType: sourceEventType,
-            action: actionClone,
-            reducer: reducerClone,
-            stateDiff: sd,
-            emittedActions: structuredClone(emitted),
-            sourceEvent
+            id:          crypto.randomUUID(),
+            date:        new Date(this.currentDate),
+            executionId: reducerExecId ?? null,
+            event: {
+              nodeId: sourceEvent?.id    ?? null,
+              type:   sourceEventType,
+              name:   sourceEvent?.name  ?? sourceEventType,
+              color:  sourceEvent?.color ?? null,
+            },
+            action: {
+              instanceId:   action.instanceId,
+              parentId:     action.parentInstanceId ?? null,
+              rootId:       action.rootInstanceId   ?? null,
+              siblingIndex: action.siblingIndex     ?? 0,
+              nodeId:       action.actionId         ?? null,
+              type:         action.type,
+              name:         action.name             ?? action.type,
+              // Selective payload fields needed for display and reporting.
+              // Not a full clone — only fields consumed by the UI/reporting layer.
+              data:         _pickActionData(action),
+            },
+            reducer: {
+              nodeId: reducerWrapper.reducer?.id   ?? null,
+              name:   reducerWrapper.reducer?.name ?? reducerWrapper.reducer?.id ?? 'unknown',
+            },
+            stateDiff:          sd,
+            emittedInstanceIds: emitted.map(a => a.instanceId),
+            emittedTypes:       emitted.map(a => a.type),
           }));
         }
       }
