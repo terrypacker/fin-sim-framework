@@ -1000,11 +1000,17 @@ export class IntlRetirementScenario extends BaseScenario {
 
     // ── Roth Conversion policy events ─────────────────────────────────────────
     if (p.rothConversionEnabled) {
-      const convStartYear = p.rothConversionStartYear
-        ?? p.primaryRetirementDate.getFullYear();
+      const toFiniteYear = (v, fallback) =>
+        (typeof v === 'number' && Number.isFinite(v)) ? v : fallback;
+      const convStartYear = toFiniteYear(
+        p.rothConversionStartYear,
+        p.primaryRetirementDate.getFullYear(),
+      );
       // Default end: year before primary turns 73 (RMD start under SECURE 2.0)
-      const convEndYear = p.rothConversionEndYear
-        ?? (p.primaryBirthDate.getFullYear() + 72);
+      const convEndYear = toFiniteYear(
+        p.rothConversionEndYear,
+        p.primaryBirthDate.getFullYear() + 72,
+      );
       const owners = p.rothConversionOwner === 'both'
         ? ['primary', 'spouse']
         : [p.rothConversionOwner];
