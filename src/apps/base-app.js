@@ -81,6 +81,7 @@ export class BaseApp extends BaseComponent {
     this.scenario    = null; //TODO Remove for #146
 
     // UI handles (recreated each buildScenario)
+    this.configGraphView       = null;
     this.configPresenter       = null;
     this.chartPresenter        = null;
     this.timelinePresenter     = null;
@@ -117,8 +118,8 @@ export class BaseApp extends BaseComponent {
     registry.scenarioRegistry.loadPrebuilt(this._prebuiltScenarios);
 
     // ── Config graph (visual node canvas + filter bar) ────────────────────────
-    const configGraphView = new ConfigGraphView({
-      parent: this,
+    this.configGraphView = new ConfigGraphView({
+      parent: null,
       graph: registry.graph,
       graphQueryApi: registry.graphQueryApi,
       graphRoot:               document.getElementById('graphRoot'),
@@ -130,7 +131,7 @@ export class BaseApp extends BaseComponent {
     });
 
     this.configPresenter = new GraphBuilderPresenter({
-      graphRenderer: configGraphView.graphRenderer,
+      graphRenderer: this.configGraphView.graphRenderer,
       eventService:   registry.eventService,
       handlerService: registry.handlerService,
       actionService:  registry.actionService,
@@ -365,7 +366,8 @@ export class BaseApp extends BaseComponent {
 
     this._editModal?.close();
     if (this.chartPresenter)  this.chartPresenter.stopViz();
-    if (this.configPresenter) this.configPresenter.destroy();
+    if (this.configGraphView)  this.configGraphView.destroy();
+    if (this.configPresenter)  this.configPresenter.destroy();
     if (this.configList)      this.configList.destroy();
     if (this.timelinePresenter) this.timelinePresenter.destroy();
     if (this.mcPresenter)     this.mcPresenter.destroy();
