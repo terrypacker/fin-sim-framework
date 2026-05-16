@@ -10,6 +10,7 @@
 
 import { BaseComponent } from "./base-component.js";
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bus-messages.js';
+import { ColumnLayout } from '../graph-builder/column-layout.js';
 
 //defined by .g-node css
 const NODE_WIDTH = 180;
@@ -23,10 +24,12 @@ const createEdgeId = (edge) => {
 export class GraphRenderer extends BaseComponent {
 
   constructor({ parent, graph, graphQueryApi, graphRoot, graphNodes,
-    graphEdges, nodeDetailsTemplate, displayNodeStateChanges, bus}) {
+    graphEdges, nodeDetailsTemplate, displayNodeStateChanges, bus, layout}) {
     super({ parent });
     this._graph = graph;
     this._graphQueryApi = graphQueryApi;
+    this._layout = layout ?? new ColumnLayout();
+    this._graphDataProvider = null;
     this.graphRoot = graphRoot;
     this.graphNodesEl = graphNodes;
     this.graphEdgesEl = graphEdges;
@@ -53,7 +56,7 @@ export class GraphRenderer extends BaseComponent {
     //Current view tracking
     this._currentNodes = [];
     this._currentNodeMap = new Map();
-    this._layout = new Map();
+    this._positions = new Map();
 
     //Diff rendering
     this._prevNodes = new Map(); // id -> node
@@ -130,7 +133,15 @@ export class GraphRenderer extends BaseComponent {
   }
 
   /* ───────────────────────── PUBLIC API ───────────────────────────── */
-  //TODO Consider need for these
+
+  /**
+   * Override the default data source (getGraphView('config')) with a custom
+   * provider. Called by BaseGraphView to inject filtered node/edge sets.
+   * @param {function(): { nodes: object[], edges: object[] }} fn
+   */
+  setGraphDataProvider(fn) {
+    this._graphDataProvider = fn;
+  }
 
   /* ───────────────────────── CORE RENDERING ───────────────────────────── */
 
@@ -171,7 +182,9 @@ export class GraphRenderer extends BaseComponent {
   }
 
   _refreshGraphState() {
-    const { nodes, edges } = this._graphQueryApi.getGraphView('config');
+    const { nodes, edges } = this._graphDataProvider
+      ? this._graphDataProvider()
+      : this._graphQueryApi.getGraphView('config');
 
     this._currentNodes = nodes;
     this._currentNodeMap = new Map(nodes.map(n => [n.id, n]));
@@ -435,11 +448,11 @@ export class GraphRenderer extends BaseComponent {
 
   /* ───────────────────────── Layout Helpers ───────────────────────────── */
   _getPos(id) {
-    return this._layout.get(id) || { x: 0, y: 0 };
+    return this._positions.get(id) || { x: 0, y: 0 };
   }
 
   _setPos(id, x, y) {
-    this._layout.set(id, { x, y });
+    this._positions.set(id, { x, y });
   }
 
   /**
@@ -456,30 +469,10 @@ export class GraphRenderer extends BaseComponent {
     const W = rect.width  || 800;
     const H = rect.height || 400;
 
-    const KIND_ORDER = ['event', 'handler', 'action', 'reducer'];
-
-    const groups = new Map();
-    for (const kind of KIND_ORDER) groups.set(kind, []);
-
-    for (const node of this._currentNodes) {
-      const kind = node.kind ?? 'other';
-      if (!groups.has(kind)) groups.set(kind, []);
-      groups.get(kind).push(node);
+    const positions = this._layout.apply(this._currentNodes, { width: W, height: H });
+    for (const [id, { x, y }] of positions) {
+      this._setPos(id, x, y);
     }
-
-    const activeGroups = [...groups.entries()]
-    .filter(([, nodes]) => nodes.length > 0);
-
-    const numCols = activeGroups.length;
-
-    activeGroups.forEach(([, nodes], colIdx) => {
-      const x = W * (colIdx + 1) / (numCols + 1) - NODE_WIDTH / 2;
-
-      nodes.forEach((node, rowIdx) => {
-        const y = H * (rowIdx + 1) / (nodes.length + 1) - NODE_HEIGHT / 2;
-        this._setPos(node.id, x, y);
-      });
-    });
   }
 
   /* ───────────────────────── PAN / ZOOM ───────────────────────────── */
