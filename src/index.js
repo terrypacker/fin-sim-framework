@@ -47,6 +47,9 @@ import { UsSavingsInterestMonthlyHandler } from './finance/handlers/us-savings-i
 import { JournalReportingService } from './finance/journal-reporting-service.js';
 import { DEFAULT_MC_VARIABLE_CONFIGS } from './finance/monte-carlo/intl-retirement-mc-config.js';
 import { computeNetWorthUsd, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
+import { DEFAULT_OPTIMIZATION_CONFIGS } from './finance/optimization/intl-retirement-opt-config.js';
+import { valuesForConfig, IntlRetirementOptimizer } from './finance/optimization/intl-retirement-optimizer.js';
+import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES } from './finance/optimization/optimization-objectives.js';
 import { ownershipFractions, splitByOwnership, accumulateByOwnership } from './finance/ownership-utils.js';
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
@@ -96,7 +99,7 @@ import { UsTaxModule2024 } from './finance/tax/us/us-tax-module-2024.js';
 import { UsTaxModule2025 } from './finance/tax/us/us-tax-module-2025.js';
 import { UsTaxModule2026 } from './finance/tax/us/us-tax-module-2026.js';
 import { UsTaxRates2024 } from './finance/tax/us/us-tax-rates-2024.js';
-import { UsTaxRates2025 } from './finance/tax/us/us-tax-rates-2025.js';
+import { usBracketGrossIncomeCeiling, UsTaxRates2025 } from './finance/tax/us/us-tax-rates-2025.js';
 import { UsTaxRatesBase } from './finance/tax/us/us-tax-rates-base.js';
 import { TaxService } from './finance/tax-service.js';
 import { TaxSettleService } from './finance/tax-settle-service.js';
@@ -373,6 +376,11 @@ export const Finance = {
   DEFAULT_MC_VARIABLE_CONFIGS,
   computeNetWorthUsd,
   IntlRetirementMcRunner,
+  DEFAULT_OPTIMIZATION_CONFIGS,
+  valuesForConfig,
+  IntlRetirementOptimizer,
+  OPT_PARAM_TYPES,
+  OPTIMIZATION_OBJECTIVES,
   ownershipFractions,
   splitByOwnership,
   accumulateByOwnership,
@@ -434,6 +442,7 @@ export const Finance = {
   UsTaxModule2025,
   UsTaxModule2026,
   UsTaxRates2024,
+  usBracketGrossIncomeCeiling,
   UsTaxRates2025,
   UsTaxRatesBase,
   TaxService,
