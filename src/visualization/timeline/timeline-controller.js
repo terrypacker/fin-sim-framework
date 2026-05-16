@@ -8,11 +8,18 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-const fmt = n => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const COUNTRY_TO_CURRENCY = { AU: 'AUD', US: 'USD' };
+
+function fmtCurrency(n, cc) {
+  const currency = cc ? (COUNTRY_TO_CURRENCY[cc] ?? cc) : null;
+  if (!currency) return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n);
+}
 
 export class TimelineController {
   constructor() {
     this.journal         = null;
+    this.schemaRegistry  = null;      // StateSchemaRegistry | null — for diff formatting in CSV
     this.filterEvents    = new Set(); // selected event types; empty = no filter
     this.filterActions   = new Set(); // selected action types; empty = no filter
     this.filterDateStart = null;      // Date (start of day, inclusive) | null
@@ -131,12 +138,13 @@ export class TimelineController {
   }
 
   sum(action) {
-    const d = action.data ?? {};
+    const d  = action.data ?? {};
+    const cc = d.cc ?? null;
     const parts = [];
-    if (d.amount     != null) parts.push(fmt(d.amount));
-    if (d.tax        != null) parts.push('tax ' + fmt(d.tax));
+    if (d.amount     != null) parts.push(fmtCurrency(d.amount, cc));
+    if (d.tax        != null) parts.push('tax ' + fmtCurrency(d.tax, cc));
     if (d.isLongTerm != null) parts.push(d.isLongTerm ? 'LT' : 'ST');
-    if (d.value      != null && typeof d.value === 'number') parts.push(fmt(d.value));
+    if (d.value      != null && typeof d.value === 'number') parts.push(fmtCurrency(d.value, cc));
     if (d.value      != null && typeof d.value === 'string') parts.push('"' + d.value + '"');
     return parts.join(' · ');
   }
@@ -205,11 +213,12 @@ export class TimelineController {
     }
     if (entry.stateDiff) {
       for (let i = 0; i < entry.stateDiff.length; i++) {
-        const d = entry.stateDiff[i];
+        const d    = entry.stateDiff[i];
+        const fmtD = v => this.schemaRegistry ? (this.schemaRegistry.format(d.field, v) ?? v) : v;
         row[`diff[${i}].field`]  = d.field;
-        row[`diff[${i}].before`] = d.before;
-        row[`diff[${i}].after`]  = d.after;
-        if (d.delta != null) row[`diff[${i}].delta`] = d.delta;
+        row[`diff[${i}].before`] = fmtD(d.before);
+        row[`diff[${i}].after`]  = fmtD(d.after);
+        if (d.delta != null) row[`diff[${i}].delta`] = fmtD(d.delta);
       }
     }
     return row;

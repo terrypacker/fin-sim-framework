@@ -339,3 +339,57 @@ test('TimelinePresenter: onDownloadCsv does not trigger download when CSV is emp
   view.onDownloadCsv();
   assert.ok(!triggerCalled, '_triggerDownload should not be called for empty CSV');
 });
+
+// ─── causalGroups pass-through ────────────────────────────────────────────────
+
+test('TimelinePresenter._render: passes causalGroups to view.render', () => {
+  const { presenter, view } = makePresenter();
+  let captured = undefined;
+  const origRender = view.render.bind(view);
+  view.render = args => { captured = args.causalGroups; origRender(args); };
+  presenter.attach(makeJournal([makeEntry()]));
+  assert.ok(captured instanceof Map, 'causalGroups should be a Map');
+});
+
+test('TimelinePresenter._render: causalGroups is an empty Map when journal is empty', () => {
+  const { presenter, view } = makePresenter();
+  let captured = undefined;
+  const origRender = view.render.bind(view);
+  view.render = args => { captured = args.causalGroups; origRender(args); };
+  presenter.attach(makeJournal([]));
+  assert.ok(captured instanceof Map);
+  assert.equal(captured.size, 0);
+});
+
+// ─── onNavigateToNode wiring ──────────────────────────────────────────────────
+
+test('TimelinePresenter: onNavigateToNode is wired to view when provided', () => {
+  makeFilterTemplate();
+  const container  = makeContainer();
+  const controller = new TimelineController();
+  const view       = new TimelineView({ container });
+  let received     = null;
+  const onNavigateToNode = id => { received = id; };
+  const presenter  = new TimelinePresenter({ controller, view, onDetail: () => {}, onNavigateToNode });
+  assert.strictEqual(view.onNavigateToNode, onNavigateToNode);
+});
+
+test('TimelinePresenter: onNavigateToNode defaults to null on view when not provided', () => {
+  const { view } = makePresenter();
+  assert.strictEqual(view.onNavigateToNode, null);
+});
+
+// ─── schemaRegistry setter ────────────────────────────────────────────────────
+
+test('TimelinePresenter: schemaRegistry setter delegates to controller.schemaRegistry', () => {
+  const { presenter, controller } = makePresenter();
+  const fakeRegistry = { format: () => null };
+  presenter.schemaRegistry = fakeRegistry;
+  assert.strictEqual(controller.schemaRegistry, fakeRegistry);
+});
+
+test('TimelinePresenter: schemaRegistry setter coerces null/undefined to null on controller', () => {
+  const { presenter, controller } = makePresenter();
+  presenter.schemaRegistry = null;
+  assert.strictEqual(controller.schemaRegistry, null);
+});

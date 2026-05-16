@@ -415,6 +415,18 @@ test('TimelineController.sum: handles action with all supported fields', () => {
   assert.ok(s.includes('$200.00'));
 });
 
+test('TimelineController.sum: country code "AU" formats amount as AUD without throwing', () => {
+  assert.doesNotThrow(() => makeController().sum({ type: 'AU_DEPOSIT', data: { amount: 500, cc: 'AU' } }));
+  const s = makeController().sum({ type: 'AU_DEPOSIT', data: { amount: 500, cc: 'AU' } });
+  assert.ok(s.includes('500'), `expected amount in "${s}"`);
+});
+
+test('TimelineController.sum: country code "US" formats amount as USD without throwing', () => {
+  assert.doesNotThrow(() => makeController().sum({ type: 'US_DEPOSIT', data: { amount: 1000, cc: 'US' } }));
+  const s = makeController().sum({ type: 'US_DEPOSIT', data: { amount: 1000, cc: 'US' } });
+  assert.ok(s.includes('1,000'), `expected amount in "${s}"`);
+});
+
 // ─── toggleExpanded ───────────────────────────────────────────────────────────
 
 test('TimelineController.toggleExpanded: adds a key that is not present', () => {
@@ -603,4 +615,117 @@ test('TimelineController.generateCsv: primitive data fields appear alongside com
   assert.ok(csv.includes('SELL_ASSET'),   'eventType should appear');
   assert.ok(csv.includes('REALIZE_GAIN'), 'actionType should appear');
   assert.ok(csv.includes('9999'),         'action.data.amount should appear');
+});
+
+// ─── allOptions ───────────────────────────────────────────────────────────────
+
+test('TimelineController.allOptions: returns empty lists when journal is null', () => {
+  const { events, actions } = makeController().allOptions();
+  assert.deepEqual(events, []);
+  assert.deepEqual(actions, []);
+});
+
+test('TimelineController.allOptions: returns one entry per unique type', () => {
+  const ctrl = makeController();
+  ctrl.setJournal(makeJournal([
+    makeEntry({ eventType: 'EVT_A', actionType: 'ACT_X' }),
+    makeEntry({ eventType: 'EVT_B', actionType: 'ACT_Y' }),
+  ]));
+  const { events, actions } = ctrl.allOptions();
+  assert.equal(events.length, 2);
+  assert.equal(actions.length, 2);
+});
+
+test('TimelineController.allOptions: deduplicates repeated types', () => {
+  const ctrl = makeController();
+  ctrl.setJournal(makeJournal([
+    makeEntry({ eventType: 'EVT_A', actionType: 'ACT_X' }),
+    makeEntry({ eventType: 'EVT_A', actionType: 'ACT_X' }),
+  ]));
+  const { events, actions } = ctrl.allOptions();
+  assert.equal(events.length, 1);
+  assert.equal(actions.length, 1);
+});
+
+test('TimelineController.allOptions: sorts event and action names alphabetically', () => {
+  const ctrl = makeController();
+  ctrl.setJournal(makeJournal([
+    makeEntry({ eventType: 'Z_EVT', actionType: 'Z_ACT' }),
+    makeEntry({ eventType: 'A_EVT', actionType: 'A_ACT' }),
+  ]));
+  const { events, actions } = ctrl.allOptions();
+  assert.equal(events[0].name,  'A_EVT');
+  assert.equal(events[1].name,  'Z_EVT');
+  assert.equal(actions[0].name, 'A_ACT');
+  assert.equal(actions[1].name, 'Z_ACT');
+});
+
+// ─── causalGroups ─────────────────────────────────────────────────────────────
+
+test('TimelineController.causalGroups: returns empty map when journal is null', () => {
+  assert.equal(makeController().causalGroups(fmtDate).size, 0);
+});
+
+test('TimelineController.causalGroups: returns empty map for empty journal', () => {
+  const ctrl = makeController();
+  ctrl.setJournal(makeJournal([]));
+  assert.equal(ctrl.causalGroups(fmtDate).size, 0);
+});
+
+test('TimelineController.causalGroups: root action appears at top level as a node with no children', () => {
+  const ctrl  = makeController();
+  const entry = makeEntry();
+  ctrl.setJournal(makeJournal([entry]));
+  const groups = ctrl.causalGroups(fmtDate);
+  assert.equal(groups.size, 1);
+  const byEv = [...groups.values()][0];
+  const nodes = byEv.get(entry.event.type);
+  assert.ok(nodes, 'event type key should exist');
+  assert.equal(nodes.length, 1);
+  assert.equal(nodes[0].entry, entry);
+  assert.deepEqual(nodes[0].children, []);
+});
+
+test('TimelineController.causalGroups: child action is nested under its parent, not at top level', () => {
+  const ctrl   = makeController();
+  const parent = makeEntry();
+  const child  = makeEntry();
+  child.action.parentId = parent.action.instanceId;
+  ctrl.setJournal(makeJournal([parent, child]));
+  const groups = ctrl.causalGroups(fmtDate);
+  const byEv   = [...groups.values()][0];
+  const roots  = byEv.get(parent.event.type);
+  assert.equal(roots.length, 1,                    'only the parent is a root');
+  assert.equal(roots[0].children.length, 1,        'parent has one child');
+  assert.equal(roots[0].children[0].entry, child,  'child entry matches');
+});
+
+test('TimelineController.causalGroups: children sorted by siblingIndex', () => {
+  const ctrl   = makeController();
+  const parent = makeEntry();
+  const childA = makeEntry();
+  const childB = makeEntry();
+  childA.action.parentId     = parent.action.instanceId;
+  childB.action.parentId     = parent.action.instanceId;
+  childA.action.siblingIndex = 1;
+  childB.action.siblingIndex = 0;
+  ctrl.setJournal(makeJournal([parent, childA, childB]));
+  const groups   = ctrl.causalGroups(fmtDate);
+  const byEv     = [...groups.values()][0];
+  const children = byEv.get(parent.event.type)[0].children;
+  assert.equal(children[0].entry, childB, 'lower siblingIndex first');
+  assert.equal(children[1].entry, childA);
+});
+
+test('TimelineController.causalGroups: filtered entries are excluded', () => {
+  const ctrl = makeController();
+  const keep = makeEntry({ actionType: 'KEEP' });
+  const skip = makeEntry({ actionType: 'SKIP' });
+  ctrl.setJournal(makeJournal([keep, skip]));
+  ctrl.filterActions = new Set(['KEEP']);
+  const groups = ctrl.causalGroups(fmtDate);
+  const byEv   = [...groups.values()][0];
+  const nodes  = [...byEv.values()].flat();
+  assert.equal(nodes.length, 1);
+  assert.equal(nodes[0].entry.action.type, 'KEEP');
 });
