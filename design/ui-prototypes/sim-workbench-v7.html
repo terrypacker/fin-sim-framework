@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Simulation Workbench V7</title>
+
+<style>
+:root{
+  --bg:#0f1217;
+  --panel:#171c23;
+  --panel2:#1f2630;
+  --border:1px solid rgba(255,255,255,.07);
+
+  --text:#e8eef7;
+  --muted:#91a0b4;
+  --accent:#5aa2ff;
+
+  font-family:system-ui,sans-serif;
+}
+
+*{box-sizing:border-box;}
+
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  height:100vh;
+  overflow:hidden;
+}
+
+/* ======================================================
+   APP
+====================================================== */
+
+#app{
+  display:grid;
+  grid-template-rows:48px 1fr;
+  height:100vh;
+}
+
+/* ======================================================
+   TOPBAR
+====================================================== */
+
+.top{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+
+  padding:0 12px;
+
+  background:var(--panel);
+  border-bottom:var(--border);
+}
+
+.controls{
+  display:flex;
+  gap:8px;
+}
+
+button{
+  background:var(--panel2);
+  border:var(--border);
+  color:var(--text);
+
+  border-radius:8px;
+  padding:6px 10px;
+
+  cursor:pointer;
+}
+
+/* ======================================================
+   WORKSPACE
+====================================================== */
+
+#workspace{
+  display:grid;
+  grid-template-columns:260px 1fr 320px;
+  height:100%;
+  overflow:hidden;
+}
+
+.pane{
+  overflow:hidden;
+  border-right:var(--border);
+  background:var(--panel);
+}
+
+.pane:last-child{
+  border-right:none;
+  border-left:var(--border);
+}
+
+/* ======================================================
+   TABGROUP
+====================================================== */
+
+.tabgroup{
+  display:flex;
+  flex-direction:column;
+  height:100%;
+}
+
+.tabs{
+  display:flex;
+  min-height:34px;
+
+  background:var(--panel2);
+  border-bottom:var(--border);
+
+  overflow-x:auto;
+}
+
+.tab{
+  display:flex;
+  align-items:center;
+  gap:6px;
+
+  padding:6px 10px;
+
+  cursor:grab;
+  user-select:none;
+
+  color:var(--muted);
+
+  white-space:nowrap;
+}
+
+.tab.active{
+  background:rgba(90,162,255,.16);
+  color:white;
+}
+
+.close{
+  opacity:.5;
+  cursor:pointer;
+}
+
+.close:hover{
+  opacity:1;
+}
+
+.view{
+  flex:1;
+  overflow:auto;
+  padding:10px;
+}
+
+/* ======================================================
+   DROPZONE
+====================================================== */
+
+.dropzone.dragover{
+  outline:2px dashed var(--accent);
+  outline-offset:-6px;
+}
+
+/* ======================================================
+   COMPONENTS
+====================================================== */
+
+.card{
+  background:var(--panel2);
+  border:var(--border);
+
+  border-radius:10px;
+
+  padding:10px;
+  margin-bottom:10px;
+}
+
+.small{
+  color:var(--muted);
+  font-size:12px;
+}
+
+.metric{
+  font-size:28px;
+  font-weight:700;
+}
+
+/* ======================================================
+   TIMELINE
+====================================================== */
+
+.event{
+  cursor:pointer;
+}
+
+.event.selected{
+  outline:2px solid var(--accent);
+}
+
+/* ======================================================
+   LOG
+====================================================== */
+
+.log{
+  font-family:monospace;
+  font-size:12px;
+}
+
+/* ======================================================
+   GHOST
+====================================================== */
+
+.ghost{
+  position:fixed;
+  pointer-events:none;
+
+  background:var(--panel2);
+  border:var(--border);
+
+  padding:6px 10px;
+  border-radius:8px;
+
+  font-size:12px;
+
+  opacity:.9;
+
+  transform:translate(-50%, -50%);
+}
+</style>
+</head>
+
+<body>
+
+<div id="app">
+
+  <!-- ==================================================
+       TOPBAR
+  =================================================== -->
+
+  <div class="top">
+
+    <div>
+      <b>Simulation Workbench V7</b>
+    </div>
+
+    <div class="controls">
+
+      <button onclick="runtime.play()">
+        ▶ Play
+      </button>
+
+      <button onclick="runtime.step()">
+        Step
+      </button>
+
+      <button onclick="runtime.reset()">
+        Reset
+      </button>
+
+      <button onclick="saveLayout()">
+        Save Layout
+      </button>
+
+      <button onclick="resetLayout()">
+        Reset Layout
+      </button>
+
+    </div>
+
+  </div>
+
+  <!-- ==================================================
+       WORKSPACE
+  =================================================== -->
+
+  <div id="workspace">
+
+    <div id="left" class="pane"></div>
+    <div id="center" class="pane"></div>
+    <div id="right" class="pane"></div>
+
+  </div>
+
+</div>
+
+<script>
+
+/* ======================================================
+   EVENT BUS
+====================================================== */
+
+const bus = {
+
+  map:{},
+
+  on(event, fn){
+    (this.map[event] ??= []).push(fn);
+  },
+
+  emit(event, payload){
+    (this.map[event] || [])
+      .forEach(fn => fn(payload));
+  }
+};
+
+/* ======================================================
+   GLOBAL STATE
+====================================================== */
+
+const state = {
+
+  selection:null,
+
+  sim:{
+    running:false,
+    time:0
+  }
+};
+
+/* ======================================================
+   PLUGIN REGISTRY
+====================================================== */
+
+const plugins = {};
+
+function registerPlugin(plugin){
+  plugins[plugin.id] = plugin;
+}
+
+/* ======================================================
+   COMPONENT BASE
+====================================================== */
+
+class Component {
+
+  constructor(tab){
+    this.tab = tab;
+  }
+
+  mount(container){
+
+    this.el = this.render();
+
+    container.appendChild(this.el);
+
+    this.onMount?.();
+  }
+
+  unmount(){
+
+    this.onUnmount?.();
+
+    this.el?.remove();
+  }
+
+  rerender(){
+
+    if(!this.el) return;
+
+    const parent = this.el.parentNode;
+
+    this.unmount();
+    this.mount(parent);
+  }
+}
+
+/* ======================================================
+   TIMELINE PLUGIN
+====================================================== */
+
+class TimelineComponent extends Component {
+
+  render(){
+
+    const root = document.createElement("div");
+
+    root.innerHTML = `
+      <div class="card">
+        <b>Timeline</b>
+        <div class="small">
+          Runtime Journal View
+        </div>
+      </div>
+    `;
+
+    const events = [
+      {
+        id:"e1",
+        year:"2028",
+        title:"Roth Conversion"
+      },
+      {
+        id:"e2",
+        year:"2029",
+        title:"Semi Retirement"
+      },
+      {
+        id:"e3",
+        year:"2031",
+        title:"FIRE"
+      }
+    ];
+
+    events.forEach(event => {
+
+      const row = document.createElement("div");
+
+      row.className =
+        "card event"
+        +
+        (
+          state.selection === event.id
+            ? " selected"
+            : ""
+        );
+
+      row.innerHTML = `
+        <b>${event.title}</b>
+        <div class="small">${event.year}</div>
+      `;
+
+      row.onclick = () => {
+
+        state.selection = event.id;
+
+        bus.emit(
+          "selection.changed",
+          event
+        );
+      };
+
+      root.appendChild(row);
+    });
+
+    return root;
+  }
+
+  onMount(){
+
+    this.listener = () => this.rerender();
+
+    bus.on(
+      "selection.changed",
+      this.listener
+    );
+  }
+}
+
+/* ======================================================
+   GRAPH PLUGIN
+====================================================== */
+
+class GraphComponent extends Component {
+
+  render(){
+
+    const root = document.createElement("div");
+
+    root.innerHTML = `
+      <div class="card">
+        <b>Execution Graph</b>
+
+        <div class="small">
+          Selected:
+          ${
+            state.selection || "none"
+          }
+        </div>
+      </div>
+    `;
+
+    return root;
+  }
+
+  onMount(){
+
+    this.listener = () => this.rerender();
+
+    bus.on(
+      "selection.changed",
+      this.listener
+    );
+  }
+}
+
+/* ======================================================
+   MONTE CARLO PLUGIN
+====================================================== */
+
+class MonteCarloComponent extends Component {
+
+  render(){
+
+    const root = document.createElement("div");
+
+    root.innerHTML = `
+      <div class="card">
+        <b>Monte Carlo</b>
+      </div>
+
+      <div class="card">
+        <div class="small">
+          Success Rate
+        </div>
+
+        <div class="metric">
+          92%
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="small">
+          Median Net Worth
+        </div>
+
+        <div class="metric">
+          $8.1M
+        </div>
+      </div>
+    `;
+
+    return root;
+  }
+}
+
+/* ======================================================
+   INSPECTOR PLUGIN
+====================================================== */
+
+class InspectorComponent extends Component {
+
+  render(){
+
+    const root = document.createElement("div");
+
+    root.innerHTML = `
+      <div class="card">
+        <b>Inspector</b>
+
+        <div class="small">
+          Current Selection:
+          ${
+            state.selection || "none"
+          }
+        </div>
+      </div>
+    `;
+
+    return root;
+  }
+
+  onMount(){
+
+    this.listener = () => this.rerender();
+
+    bus.on(
+      "selection.changed",
+      this.listener
+    );
+  }
+}
+
+/* ======================================================
+   LOG PLUGIN
+====================================================== */
+
+class LogComponent extends Component {
+
+  render(){
+
+    const root = document.createElement("div");
+
+    root.innerHTML = `
+      <div class="card">
+        <b>Runtime Log</b>
+      </div>
+
+      <div class="log">
+        time=${state.sim.time}
+      </div>
+    `;
+
+    return root;
+  }
+
+  onMount(){
+
+    this.listener = () => this.rerender();
+
+    bus.on(
+      "runtime.tick",
+      this.listener
+    );
+  }
+}
+
+/* ======================================================
+   REGISTER PLUGINS
+====================================================== */
+
+registerPlugin({
+  id:"timeline",
+  title:"Timeline",
+  component:TimelineComponent
+});
+
+registerPlugin({
+  id:"graph",
+  title:"Graph",
+  component:GraphComponent
+});
+
+registerPlugin({
+  id:"montecarlo",
+  title:"Monte Carlo",
+  component:MonteCarloComponent
+});
+
+registerPlugin({
+  id:"inspector",
+  title:"Inspector",
+  component:InspectorComponent
+});
+
+registerPlugin({
+  id:"log",
+  title:"Log",
+  component:LogComponent
+});
+
+/* ======================================================
+   RUNTIME
+====================================================== */
+
+const runtime = {
+
+  interval:null,
+
+  play(){
+
+    if(state.sim.running) return;
+
+    state.sim.running = true;
+
+    this.interval = setInterval(() => {
+
+      state.sim.time++;
+
+      bus.emit(
+        "runtime.tick",
+        state.sim.time
+      );
+
+    }, 1000);
+  },
+
+  step(){
+
+    state.sim.time++;
+
+    bus.emit(
+      "runtime.tick",
+      state.sim.time
+    );
+  },
+
+  reset(){
+
+    clearInterval(this.interval);
+
+    state.sim.running = false;
+
+    state.sim.time = 0;
+
+    bus.emit(
+      "runtime.tick",
+      state.sim.time
+    );
+  }
+};
+
+/* ======================================================
+   LAYOUT MODEL
+====================================================== */
+
+const defaultLayout = {
+
+  left:{
+    tabs:["timeline","graph"],
+    active:"timeline"
+  },
+
+  center:{
+    tabs:["montecarlo","log"],
+    active:"montecarlo"
+  },
+
+  right:{
+    tabs:["inspector"],
+    active:"inspector"
+  }
+};
+
+let layout;
+
+/* ======================================================
+   LOAD/SAVE LAYOUT
+====================================================== */
+
+function loadLayout(){
+
+  const saved =
+    localStorage.getItem(
+      "sim-workbench-layout"
+    );
+
+  if(saved){
+
+    layout = JSON.parse(saved);
+
+  } else {
+
+    layout =
+      structuredClone(defaultLayout);
+  }
+}
+
+function saveLayout(){
+
+  localStorage.setItem(
+    "sim-workbench-layout",
+    JSON.stringify(layout)
+  );
+
+  alert("Layout Saved");
+}
+
+function resetLayout(){
+
+  localStorage.removeItem(
+    "sim-workbench-layout"
+  );
+
+  loadLayout();
+
+  renderAll();
+}
+
+/* ======================================================
+   TABGROUP RENDERING
+====================================================== */
+
+const mounted = {};
+
+function renderPane(name){
+
+  const pane =
+    document.getElementById(name);
+
+  const config =
+    layout[name];
+
+  pane.innerHTML = "";
+
+  const root =
+    document.createElement("div");
+
+  root.className =
+    "tabgroup dropzone";
+
+  root.dataset.pane = name;
+
+  /* tabs */
+
+  const tabs =
+    document.createElement("div");
+
+  tabs.className = "tabs";
+
+  config.tabs.forEach(tabId => {
+
+    const plugin =
+      plugins[tabId];
+
+    const tab =
+      document.createElement("div");
+
+    tab.className =
+      "tab"
+      +
+      (
+        config.active === tabId
+          ? " active"
+          : ""
+      );
+
+    tab.draggable = true;
+
+    tab.dataset.tab = tabId;
+
+    tab.innerHTML = `
+      ${plugin.title}
+      <span class="close">×</span>
+    `;
+
+    /* activate */
+
+    tab.onclick = (event) => {
+
+      if(
+        event.target.classList.contains(
+          "close"
+        )
+      ){
+        closeTab(name, tabId);
+        return;
+      }
+
+      config.active = tabId;
+
+      renderAll();
+    };
+
+    /* drag */
+
+    tab.ondragstart = (event) => {
+
+      event.dataTransfer.setData(
+        "text/plain",
+        JSON.stringify({
+          tab:tabId,
+          from:name
+        })
+      );
+
+      showGhost(plugin.title);
+    };
+
+    tab.ondragend = hideGhost;
+
+    tabs.appendChild(tab);
+  });
+
+  /* view */
+
+  const view =
+    document.createElement("div");
+
+  view.className = "view";
+
+  const activeId =
+    config.active;
+
+  const plugin =
+    plugins[activeId];
+
+  if(plugin){
+
+    mounted[name]?.unmount?.();
+
+    const instance =
+      new plugin.component(activeId);
+
+    mounted[name] = instance;
+
+    instance.mount(view);
+  }
+
+  /* drop */
+
+  root.ondragover = (event) => {
+
+    event.preventDefault();
+
+    root.classList.add("dragover");
+  };
+
+  root.ondragleave = () => {
+    root.classList.remove("dragover");
+  };
+
+  root.ondrop = (event) => {
+
+    event.preventDefault();
+
+    root.classList.remove("dragover");
+
+    const data = JSON.parse(
+      event.dataTransfer.getData(
+        "text/plain"
+      )
+    );
+
+    moveTab(
+      data.tab,
+      data.from,
+      name
+    );
+  };
+
+  root.appendChild(tabs);
+  root.appendChild(view);
+
+  pane.appendChild(root);
+}
+
+/* ======================================================
+   MOVE TAB
+====================================================== */
+
+function moveTab(tab, from, to){
+
+  if(from === to) return;
+
+  layout[from].tabs =
+    layout[from].tabs
+      .filter(x => x !== tab);
+
+  layout[to].tabs.push(tab);
+
+  layout[to].active = tab;
+
+  if(
+    layout[from].active === tab
+  ){
+    layout[from].active =
+      layout[from].tabs[0];
+  }
+
+  renderAll();
+}
+
+/* ======================================================
+   CLOSE TAB
+====================================================== */
+
+function closeTab(pane, tab){
+
+  layout[pane].tabs =
+    layout[pane].tabs
+      .filter(x => x !== tab);
+
+  if(
+    layout[pane].active === tab
+  ){
+    layout[pane].active =
+      layout[pane].tabs[0];
+  }
+
+  renderAll();
+}
+
+/* ======================================================
+   RENDER
+====================================================== */
+
+function renderAll(){
+
+  renderPane("left");
+  renderPane("center");
+  renderPane("right");
+}
+
+/* ======================================================
+   DRAG GHOST
+====================================================== */
+
+let ghost;
+
+function showGhost(text){
+
+  ghost =
+    document.createElement("div");
+
+  ghost.className = "ghost";
+
+  ghost.textContent = text;
+
+  document.body.appendChild(ghost);
+
+  document.onmousemove = (event) => {
+
+    ghost.style.left =
+      event.clientX + "px";
+
+    ghost.style.top =
+      event.clientY + "px";
+  };
+}
+
+function hideGhost(){
+
+  ghost?.remove();
+
+  ghost = null;
+
+  document.onmousemove = null;
+}
+
+/* ======================================================
+   BOOT
+====================================================== */
+
+loadLayout();
+renderAll();
+
+</script>
+
+</body>
+</html>
