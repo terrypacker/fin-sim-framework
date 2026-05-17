@@ -1,4 +1,4 @@
-import { WorkbenchComponent } from '../component.js';
+import { WorkbenchComponent } from '../../component.js';
 
 export class ChartPlugin extends WorkbenchComponent {
   constructor(_runtime) { super(); }

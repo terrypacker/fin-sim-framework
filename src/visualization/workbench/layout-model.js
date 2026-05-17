@@ -147,4 +147,65 @@ export class WorkbenchLayoutModel {
   setBottomCollapsed(collapsed) {
     this._layout.bottomCollapsed = collapsed;
   }
+
+  // ── Template management ─────────────────────────────────────────────────────
+
+  static get _TEMPLATE_PREFIX() { return 'workbench-tpl-'; }
+
+  /**
+   * Save the current layout as a named user template in localStorage.
+   * @param {string} name
+   */
+  saveTemplate(name) {
+    try {
+      localStorage.setItem(
+        WorkbenchLayoutModel._TEMPLATE_PREFIX + name,
+        JSON.stringify(this._layout),
+      );
+    } catch { /* quota exceeded or private mode */ }
+  }
+
+  /**
+   * Load a previously saved user template by name.
+   * @param {string} name
+   * @returns {object | null}
+   */
+  loadTemplate(name) {
+    try {
+      const raw = localStorage.getItem(WorkbenchLayoutModel._TEMPLATE_PREFIX + name);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** @returns {string[]} names of all user-saved templates */
+  listSavedTemplates() {
+    const names = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith(WorkbenchLayoutModel._TEMPLATE_PREFIX)) {
+          names.push(key.slice(WorkbenchLayoutModel._TEMPLATE_PREFIX.length));
+        }
+      }
+    } catch { /* private mode */ }
+    return names.sort();
+  }
+
+  /** Delete a user-saved template. */
+  deleteTemplate(name) {
+    try {
+      localStorage.removeItem(WorkbenchLayoutModel._TEMPLATE_PREFIX + name);
+    } catch { /* private mode */ }
+  }
+
+  /**
+   * Replace the current layout with the given layout object and persist it.
+   * @param {object} layoutObj
+   */
+  applyTemplate(layoutObj) {
+    this._layout = structuredClone(layoutObj);
+    this.save();
+  }
 }

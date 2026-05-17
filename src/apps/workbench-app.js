@@ -1,67 +1,47 @@
 import { WorkbenchShell }    from '../visualization/workbench/workbench-shell.js';
 import { BaseApp }           from './base-app.js';
 import { $, fmtUTC, fmtLocal } from '../visualization/ui-utils.js';
-// Import all plugins
-import { ScenarioPlugin }       from '../visualization/workbench/plugins/scenario-plugin.js';
-import { ConfigGraphPlugin }    from '../visualization/workbench/plugins/config-graph-plugin.js';
-import { ConfigListPlugin }     from '../visualization/workbench/plugins/config-list-plugin.js';
-import { InspectorPlugin }      from '../visualization/workbench/plugins/inspector-plugin.js';
-import { TimelinePlugin }       from '../visualization/workbench/plugins/timeline-plugin.js';
-import { ChartPlugin }          from '../visualization/workbench/plugins/chart-plugin.js';
-import { StatePanelPlugin }     from '../visualization/workbench/plugins/state-panel-plugin.js';
-import { DashboardPlugin }      from '../visualization/workbench/plugins/dashboard-plugin.js';
-import { McConfigPlugin }       from '../visualization/workbench/plugins/mc-config-plugin.js';
-import { McResultsPlugin }      from '../visualization/workbench/plugins/mc-results-plugin.js';
-import { McRunsPlugin }         from '../visualization/workbench/plugins/mc-runs-plugin.js';
-import { OptConfigPlugin }      from '../visualization/workbench/plugins/opt-config-plugin.js';
-import { OptResultsPlugin }     from '../visualization/workbench/plugins/opt-results-plugin.js';
-import { OptRunsPlugin }        from '../visualization/workbench/plugins/opt-runs-plugin.js';
-import { ExecHistoryPlugin }    from '../visualization/workbench/plugins/exec-history-plugin.js';
-import { LineagePlugin }        from '../visualization/workbench/plugins/lineage-plugin.js';
-import { PerfPlugin }           from '../visualization/workbench/plugins/perf-plugin.js';
+import {
+  FINANCE_PLUGINS,
+  FINANCE_DEFAULT_LAYOUT,
+} from '../visualization/workbench/plugins/finance/finance-plugin-package.js';
 
 const STORAGE_KEY = 'sim-workbench-layout-prod';
 
-const PRODUCTION_PLUGINS = [
-  { id: 'scenario',     title: 'Scenario',      component: ScenarioPlugin    },
-  { id: 'mc-config',    title: 'Monte Carlo',   component: McConfigPlugin    },
-  { id: 'opt-config',   title: 'Optimize',      component: OptConfigPlugin   },
-  { id: 'config-list',  title: 'Nodes',         component: ConfigListPlugin  },
-  { id: 'inspector',    title: 'Edit',          component: InspectorPlugin   },
-  { id: 'config-graph', title: 'Graph',         component: ConfigGraphPlugin },
-  { id: 'timeline',     title: 'Timeline',      component: TimelinePlugin    },
-  { id: 'chart',        title: 'Chart',         component: ChartPlugin       },
-  { id: 'mc-results',   title: 'MC Results',    component: McResultsPlugin   },
-  { id: 'opt-results',  title: 'OPT Results',   component: OptResultsPlugin  },
-  { id: 'state-panel',  title: 'State',         component: StatePanelPlugin  },
-  { id: 'mc-runs',      title: 'MC Runs',       component: McRunsPlugin      },
-  { id: 'opt-runs',     title: 'OPT Runs',      component: OptRunsPlugin     },
-  { id: 'exec-history', title: 'Node History',  component: ExecHistoryPlugin },
-  { id: 'lineage',      title: 'Lineage',       component: LineagePlugin     },
-  { id: 'dashboard',    title: 'Dashboard',     component: DashboardPlugin   },
-  { id: 'perf',         title: 'Performance',   component: PerfPlugin        },
-];
+// ── Built-in workspace templates ────────────────────────────────────────────
 
-const PRODUCTION_LAYOUT = {
+const ANALYSIS_LAYOUT = {
   sizes: [1, 2, 1],
-  left: {
-    tabs: ['scenario', 'mc-config', 'opt-config', 'config-list', 'inspector'],
-    active: 'scenario',
-  },
-  center: {
-    tabs: ['config-graph', 'timeline', 'chart', 'mc-results', 'opt-results'],
-    active: 'config-graph',
-  },
-  right: {
-    tabs: ['state-panel', 'mc-runs', 'opt-runs', 'exec-history', 'lineage'],
-    active: 'state-panel',
-  },
-  bottom: {
-    tabs: ['dashboard', 'perf'],
-    active: 'dashboard',
-  },
-  bottomSize: 110,
-  bottomCollapsed: false,
+  left:   { tabs: ['scenario', 'mc-config', 'opt-config'],             active: 'mc-config'  },
+  center: { tabs: ['chart', 'mc-results', 'opt-results', 'timeline'],  active: 'chart'      },
+  right:  { tabs: ['mc-runs', 'opt-runs', 'state-panel'],              active: 'mc-runs'    },
+  bottom: { tabs: ['dashboard', 'perf'],                               active: 'dashboard'  },
+  bottomSize: 110, bottomCollapsed: false,
+};
+
+const DEBUGGING_LAYOUT = {
+  sizes: [1, 3, 1],
+  left:   { tabs: ['config-list', 'scenario'],                                  active: 'config-list' },
+  center: { tabs: ['config-graph', 'timeline'],                                 active: 'config-graph'},
+  right:  { tabs: ['inspector', 'exec-history', 'lineage', 'state-panel'],      active: 'exec-history'},
+  bottom: { tabs: ['perf', 'dashboard'],                                        active: 'perf'        },
+  bottomSize: 110, bottomCollapsed: false,
+};
+
+const REVIEW_LAYOUT = {
+  sizes: [1, 3, 1],
+  left:   { tabs: ['scenario', 'config-list'],                                  active: 'scenario'   },
+  center: { tabs: ['timeline', 'chart'],                                        active: 'timeline'   },
+  right:  { tabs: ['state-panel', 'inspector', 'exec-history', 'lineage'],      active: 'state-panel'},
+  bottom: { tabs: ['dashboard'],                                                active: 'dashboard'  },
+  bottomSize: 110, bottomCollapsed: false,
+};
+
+const BUILTIN_TEMPLATES = {
+  Default:   FINANCE_DEFAULT_LAYOUT,
+  Analysis:  ANALYSIS_LAYOUT,
+  Debugging: DEBUGGING_LAYOUT,
+  Review:    REVIEW_LAYOUT,
 };
 
 export class WorkbenchApp extends BaseApp {
@@ -115,8 +95,8 @@ export class WorkbenchApp extends BaseApp {
     }
 
     this._wbShell = new WorkbenchShell({
-      defaultLayout: PRODUCTION_LAYOUT,
-      plugins:       PRODUCTION_PLUGINS,
+      defaultLayout: FINANCE_DEFAULT_LAYOUT,
+      plugins:       FINANCE_PLUGINS,
       storageKey:    STORAGE_KEY,
       panelUrl:      'workbench-panel-prod.html',
       channelName:   'sim-workbench-prod',
@@ -128,6 +108,9 @@ export class WorkbenchApp extends BaseApp {
 
     // Wire simulation controls (the subset of BaseApp.initView() that still applies)
     this._wireSimControls();
+
+    // Wire workspace template picker
+    this._wireTemplates();
 
     // Initialize the live state DOM now that StatePanelPlugin is mounted
     this._statePanelView.initLiveState();
@@ -195,6 +178,76 @@ export class WorkbenchApp extends BaseApp {
     });
 
     window.addEventListener('resize', () => this.resizeCanvases());
+  }
+
+  _wireTemplates() {
+    const select  = document.getElementById('workbenchTemplate');
+    const saveBtn = document.getElementById('btnSaveTemplate');
+    const delBtn  = document.getElementById('btnDeleteTemplate');
+    if (!select) return;
+
+    const refresh = () => {
+      select.innerHTML = '';
+
+      const builtinGroup = document.createElement('optgroup');
+      builtinGroup.label = 'Built-in';
+      for (const name of Object.keys(BUILTIN_TEMPLATES)) {
+        const opt = document.createElement('option');
+        opt.value = `builtin:${name}`;
+        opt.textContent = name;
+        builtinGroup.appendChild(opt);
+      }
+      select.appendChild(builtinGroup);
+
+      const saved = this._wbShell.layout.listSavedTemplates();
+      if (saved.length > 0) {
+        const savedGroup = document.createElement('optgroup');
+        savedGroup.label = 'Saved';
+        for (const name of saved) {
+          const opt = document.createElement('option');
+          opt.value = `saved:${name}`;
+          opt.textContent = name;
+          savedGroup.appendChild(opt);
+        }
+        select.appendChild(savedGroup);
+      }
+
+      delBtn.disabled = !select.value.startsWith('saved:');
+    };
+
+    refresh();
+
+    select.addEventListener('change', () => {
+      const val = select.value;
+      let layoutObj;
+      if (val.startsWith('builtin:')) {
+        layoutObj = BUILTIN_TEMPLATES[val.slice(8)];
+      } else if (val.startsWith('saved:')) {
+        layoutObj = this._wbShell.layout.loadTemplate(val.slice(6));
+      }
+      if (layoutObj) this._wbShell.applyLayout(layoutObj);
+      delBtn.disabled = !val.startsWith('saved:');
+    });
+
+    saveBtn?.addEventListener('click', () => {
+      const name = prompt('Template name:');
+      if (!name?.trim()) return;
+      this._wbShell.layout.saveTemplate(name.trim());
+      refresh();
+      // Select the newly saved template
+      const opt = [...select.options].find(o => o.value === `saved:${name.trim()}`);
+      if (opt) { select.value = opt.value; delBtn.disabled = false; }
+    });
+
+    delBtn?.addEventListener('click', () => {
+      const val = select.value;
+      if (!val.startsWith('saved:')) return;
+      const name = val.slice(6);
+      if (confirm(`Delete template "${name}"?`)) {
+        this._wbShell.layout.deleteTemplate(name);
+        refresh();
+      }
+    });
   }
 
   // Override resizeCanvases to work without the old static DOM structure

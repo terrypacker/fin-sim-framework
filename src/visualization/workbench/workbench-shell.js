@@ -92,6 +92,7 @@ export class WorkbenchShell {
     }
 
     for (const id of allTabIds) {
+      if (this.instances.has(id)) continue;
       const descriptor = this.registry.getPlugin(id);
       if (!descriptor) {
         console.warn(`WorkbenchShell: no plugin registered for tab '${id}'`);
@@ -318,6 +319,21 @@ export class WorkbenchShell {
     this._outerSplit?.unmount();
 
     this.layout.reset();
+    this._render();
+  }
+
+  /**
+   * Apply an arbitrary layout object (e.g. from a workspace template).
+   * Existing plugin instances are preserved; new ones are created as needed.
+   * @param {object} layoutObj
+   */
+  applyLayout(layoutObj) {
+    for (const tg of this._tabGroups.values()) tg.unmount();
+    this._innerSplit?.unmount();
+    this._outerSplit?.unmount();
+
+    this.layout.applyTemplate(layoutObj);
+    this._instantiatePlugins();
     this._render();
   }
 

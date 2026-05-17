@@ -8,8 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { WorkbenchComponent } from '../component.js';
-import { WB_EVENTS } from '../workbench-runtime.js';
+import { WorkbenchComponent } from '../../component.js';
+import { WB_EVENTS } from '../../workbench-runtime.js';
 
 const MAX_SAMPLES   = 300;
 const HIST_BUCKETS  = 20;

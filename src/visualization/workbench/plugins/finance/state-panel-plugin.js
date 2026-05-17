@@ -1,4 +1,4 @@
-import { WorkbenchComponent } from '../component.js';
+import { WorkbenchComponent } from '../../component.js';
 
 export class StatePanelPlugin extends WorkbenchComponent {
   constructor(_runtime) { super(); }

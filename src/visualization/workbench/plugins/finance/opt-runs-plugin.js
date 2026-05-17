@@ -1,13 +1,12 @@
-import { WorkbenchComponent } from '../component.js';
+import { WorkbenchComponent } from '../../component.js';
 
-export class InspectorPlugin extends WorkbenchComponent {
+export class OptRunsPlugin extends WorkbenchComponent {
   constructor(_runtime) { super(); }
   render() {
     const root = document.createElement('div');
     root.className = 'wb-plugin-fill';
     const inner = document.createElement('div');
-    inner.id = 'graphNodeEditPane';
-    inner.className = 'wb-plugin-fill';
+    inner.id = 'optRunsPane';
     root.appendChild(inner);
     return root;
   }
