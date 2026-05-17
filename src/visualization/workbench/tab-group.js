@@ -15,11 +15,12 @@ import { WorkbenchComponent } from './component.js';
  * @param {HTMLElement}                    [opts.extraControls] — appended right-aligned in tab bar
  * @param {function(string, string): void}  opts.onActivate    — (tab, pane) tab became active
  * @param {function(string, string): void}  opts.onClose       — (tab, pane) tab closed
+ * @param {function(string, string): void}  [opts.onDetach]    — (tab, pane) tab detached to window
  * @param {function(DragEvent, string, string): void} opts.onDragStart — drag started
  * @param {function(DragEvent, string): void}         opts.onDrop      — dropped onto pane
  */
 export class TabGroup extends WorkbenchComponent {
-  constructor({ pane, layout, registry, instances, extraControls, onActivate, onClose, onDragStart, onDrop }) {
+  constructor({ pane, layout, registry, instances, extraControls, onActivate, onClose, onDetach, onDragStart, onDrop }) {
     super();
     this.pane          = pane;
     this.layout        = layout;
@@ -28,6 +29,7 @@ export class TabGroup extends WorkbenchComponent {
     this.extraControls = extraControls ?? null;
     this.onActivate    = onActivate;
     this.onClose       = onClose;
+    this.onDetach      = onDetach ?? null;
     this.onDragStart   = onDragStart;
     this.onDrop        = onDrop;
     this._activeInstance = null;
@@ -102,16 +104,23 @@ export class TabGroup extends WorkbenchComponent {
     titleEl.className = 'wb-tab-title';
     titleEl.textContent = title;
 
+    const detachEl = document.createElement('span');
+    detachEl.className = 'wb-tab-detach';
+    detachEl.textContent = '⤢';
+    detachEl.title = 'Detach to window';
+
     const closeEl = document.createElement('span');
     closeEl.className = 'wb-tab-close';
     closeEl.textContent = '×';
     closeEl.title = 'Close';
 
-    tab.append(titleEl, closeEl);
+    tab.append(titleEl, detachEl, closeEl);
 
     tab.addEventListener('click', (e) => {
       if (e.target === closeEl) {
         this.onClose?.(tabId, this.pane);
+      } else if (e.target === detachEl) {
+        this.onDetach?.(tabId, this.pane);
       } else {
         this.onActivate?.(tabId, this.pane);
       }

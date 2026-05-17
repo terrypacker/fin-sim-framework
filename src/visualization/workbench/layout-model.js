@@ -89,6 +89,17 @@ export class WorkbenchLayoutModel {
   }
 
   /**
+   * Add a tab to a pane (e.g. reattach from detached window).
+   * No-op if the pane doesn't exist or already contains the tab.
+   */
+  addTab(pane, tab) {
+    const cfg = this._layout[pane];
+    if (!cfg || cfg.tabs.includes(tab)) return;
+    cfg.tabs.push(tab);
+    cfg.active = tab;
+  }
+
+  /**
    * Remove a tab from a pane; advances active to next available.
    */
   closeTab(pane, tab) {

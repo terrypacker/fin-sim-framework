@@ -2,7 +2,8 @@ import { WorkbenchLayoutModel } from './layout-model.js';
 import { PluginRegistry }       from './plugin-registry.js';
 import { SplitPane }            from './split-pane.js';
 import { TabGroup }             from './tab-group.js';
-import { WorkbenchRuntime }     from './workbench-runtime.js';
+import { WorkbenchRuntime, WB_EVENTS } from './workbench-runtime.js';
+import { WorkbenchChannel, WB_PANEL }  from './workbench-channel.js';
 
 const STORAGE_KEY = 'sim-workbench-layout';
 const H_PANES  = ['left', 'center', 'right'];
@@ -21,16 +22,19 @@ const ALL_PANES = [...H_PANES, 'bottom'];
  *   shell.init(document.getElementById('workbench-root'));
  *
  * @param {object}       opts
- * @param {object}       opts.defaultLayout — initial layout if no persisted state
+ * @param {object}       opts.defaultLayout  — initial layout if no persisted state
  * @param {Array<{ id, title, component }>} opts.plugins — plugin descriptors to register
- * @param {string}       [opts.storageKey]  — localStorage key for persisted layout
+ * @param {string}       [opts.storageKey]   — localStorage key for persisted layout
+ * @param {string}       [opts.panelUrl]     — URL of the detached-panel HTML page
+ * @param {string}       [opts.channelName]  — BroadcastChannel name for cross-window sync
  */
 export class WorkbenchShell {
-  constructor({ defaultLayout, plugins = [], storageKey }) {
+  constructor({ defaultLayout, plugins = [], storageKey, panelUrl, channelName }) {
     this.runtime  = new WorkbenchRuntime();
     this.registry = new PluginRegistry();
     this.layout   = new WorkbenchLayoutModel(defaultLayout);
     this._storageKey = storageKey ?? STORAGE_KEY;
+    this._panelUrl   = panelUrl ?? null;
 
     /** @type {Map<string, import('./component.js').WorkbenchComponent>} */
     this.instances = new Map();
@@ -42,6 +46,11 @@ export class WorkbenchShell {
     this._dragState  = null;        // { tabId, fromPane }
     this._ghost      = null;
     this._collapseBtn = null;
+
+    /** @type {Map<string, { win: Window, sourcePane: string }>} */
+    this._detachedWindows = new Map();
+
+    this._channel = channelName ? new WorkbenchChannel(channelName) : null;
 
     for (const descriptor of plugins) {
       this.registry.registerPlugin(descriptor);
@@ -55,6 +64,19 @@ export class WorkbenchShell {
   init(container) {
     this._container = container;
     this.layout.load(this._storageKey);
+
+    if (this._channel) {
+      this._channel.attachBus(this.runtime.bus, [
+        WB_EVENTS.SELECTION_CHANGED,
+        WB_EVENTS.RUNTIME_TICK,
+        WB_EVENTS.SCENARIO_READY,
+      ]);
+      this._channel.onControl((msg) => {
+        if (msg?.type === WB_PANEL.CLOSING) {
+          this._reattachTab(msg.tabId, msg.sourcePane);
+        }
+      });
+    }
 
     this._instantiatePlugins();
     this._render();
@@ -110,6 +132,7 @@ export class WorkbenchShell {
       extraControls: this._collapseBtn,
       onActivate:  (tab, p) => this._onActivate(tab, p),
       onClose:     (tab, p) => this._onClose(tab, p),
+      onDetach:    (tab, p) => this._onDetach(tab, p),
       onDragStart: (e, tab, p) => this._onDragStart(e, tab, p),
       onDrop:      (e, p) => this._onDrop(e, p),
     });
@@ -125,6 +148,7 @@ export class WorkbenchShell {
         instances: this.instances,
         onActivate:  (tab, p) => this._onActivate(tab, p),
         onClose:     (tab, p) => this._onClose(tab, p),
+        onDetach:    (tab, p) => this._onDetach(tab, p),
         onDragStart: (e, tab, p) => this._onDragStart(e, tab, p),
         onDrop:      (e, p) => this._onDrop(e, p),
       });
@@ -187,6 +211,32 @@ export class WorkbenchShell {
   _onClose(tab, pane) {
     this.layout.closeTab(pane, tab);
     this._renderPanes(pane);
+  }
+
+  _onDetach(tabId, pane) {
+    if (!this._panelUrl) return;
+
+    this.layout.closeTab(pane, tabId);
+    this._renderPanes(pane);
+
+    const url = `${this._panelUrl}?tab=${encodeURIComponent(tabId)}&source=${encodeURIComponent(pane)}`;
+    const win = window.open(url, `wb-panel-${tabId}`, 'width=800,height=600,menubar=no,toolbar=no,status=no');
+
+    if (win) {
+      this._detachedWindows.set(tabId, { win, sourcePane: pane });
+    } else {
+      // Popup blocked — restore tab immediately
+      this.layout.addTab(pane, tabId);
+      this._renderPanes(pane);
+    }
+  }
+
+  _reattachTab(tabId, sourcePane) {
+    if (!this.instances.has(tabId)) return;
+    const targetPane = (sourcePane && this.layout.layout[sourcePane]) ? sourcePane : H_PANES[0];
+    this.layout.addTab(targetPane, tabId);
+    this._renderPanes(targetPane);
+    this._detachedWindows.delete(tabId);
   }
 
   _onDragStart(e, tabId, fromPane) {
