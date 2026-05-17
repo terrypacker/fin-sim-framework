@@ -124,6 +124,17 @@ export class GraphNodeExecHistory extends BaseComponent {
       `<span style="font-size:12px;font-weight:600">${instances.length}</span>`
     ));
 
+    if (this._graphQueryApi && this._graphRenderer) {
+      parts.push(`
+        <div style="padding:4px 8px">
+          <button data-action="highlight-lineage"
+            style="font-size:10px;padding:2px 8px;border-radius:3px;border:1px solid #f90;
+                   background:rgba(255,153,0,0.12);color:#f90;cursor:pointer;width:100%">
+            ⬡ Highlight Lineage
+          </button>
+        </div>`);
+    }
+
     // ── Most-recent instance state diff ──────────────────────────────────────
     const diff = latest.meta?.stateDiff ?? [];
     if (diff.length) {
@@ -189,6 +200,18 @@ export class GraphNodeExecHistory extends BaseComponent {
     }
 
     this._container.innerHTML = parts.join('');
+
+    const hlBtn = this._container.querySelector('[data-action="highlight-lineage"]');
+    if (hlBtn) {
+      hlBtn.addEventListener('click', () => this._highlightLineage(latest));
+    }
+  }
+
+  _highlightLineage(latest) {
+    if (!this._graphQueryApi || !this._graphRenderer) return;
+    const chain     = this._graphQueryApi.traceCausality(latest.id);
+    const configIds = chain.map(n => n.definitionId).filter(Boolean);
+    this._graphRenderer.setHighlight(configIds);
   }
 
   _field(label, valueHtml) {

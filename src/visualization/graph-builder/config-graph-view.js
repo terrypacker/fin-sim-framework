@@ -71,6 +71,7 @@ export class ConfigGraphView extends BaseComponent {
     this._selectedKind  = '';
     this._nameFilter    = '';
     this._layerMode     = 'both';
+    this._firedOnly     = false;
 
     this._buildFilterBar(graphRoot);
 
@@ -171,23 +172,45 @@ export class ConfigGraphView extends BaseComponent {
     });
     layerField.appendChild(this._layerSelect);
 
-    bar.append(kindField, nameField, layerField);
+    // ── Fired Only toggle ──────────────────────────────────────────────────────
+    const firedField = document.createElement('div');
+    firedField.className = 'node-field';
+    firedField.style.flex = '0 0 auto';
+    firedField.style.gap  = '4px';
+
+    const firedLabel = document.createElement('label');
+    firedLabel.textContent = 'FIRED ONLY';
+    firedField.appendChild(firedLabel);
+
+    this._firedCheck = document.createElement('input');
+    this._firedCheck.type = 'checkbox';
+    this.listen(this._firedCheck, 'change', () => {
+      this._firedOnly = this._firedCheck.checked;
+      this.graphRenderer.setFiredOnly(this._firedOnly);
+      this._applyFilter();
+    });
+    firedField.appendChild(this._firedCheck);
+
+    bar.append(kindField, nameField, layerField, firedField);
     panel.insertBefore(bar, graphRoot);
     this.onCleanup(() => bar.remove());
   }
 
   _applyFilter() {
-    const kind = this._selectedKind;
-    const name = this._nameFilter;
+    const kind      = this._selectedKind;
+    const name      = this._nameFilter;
+    const firedOnly = this._firedOnly;
 
-    if (!kind && !name) {
+    if (!kind && !name && !firedOnly) {
       this._baseGraphView.setFilter(null);
       return;
     }
 
+    const renderer = this.graphRenderer;
     this._baseGraphView.setFilter(node => {
       if (kind && node.kind !== kind) return false;
       if (name && !(node.name ?? '').toLowerCase().includes(name)) return false;
+      if (firedOnly && !renderer.getExecState(node.id)?.fired) return false;
       return true;
     });
   }
