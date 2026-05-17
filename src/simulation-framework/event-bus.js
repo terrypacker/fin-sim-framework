@@ -61,12 +61,13 @@ export class EventBus {
   publish(event) {
     this.history.push(event);
 
-    const entries = this.listeners.get(event.type) || [];
+    // Snapshot before dispatch so subscribers added during delivery don't fire in this pass
+    const entries = (this.listeners.get(event.type) || []).slice();
     for (const { predicate, fn } of entries) {
       if (predicate === null || predicate(event)) fn(event);
     }
 
-    const wildcards = this.listeners.get('*') || [];
+    const wildcards = (this.listeners.get('*') || []).slice();
     for (const { predicate, fn } of wildcards) {
       if (predicate === null || predicate(event)) fn(event);
     }

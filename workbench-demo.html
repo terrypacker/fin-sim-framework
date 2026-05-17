@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<!--
+  Workbench Phase 1 Demo
+  Validates: WorkbenchComponent, PluginRegistry, WorkbenchLayoutModel,
+             TabGroup, SplitPane, drag-and-drop, WorkbenchRuntime, WorkbenchShell
+
+  Dev server: npm run workbench:dev  →  http://localhost:10002/workbench-demo.html
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Workbench Shell Demo</title>
+<link rel="stylesheet" href="./assets/css/workbench.css"/>
+<style>
+  body { margin: 0; }
+  #demo {
+    display: grid;
+    grid-template-rows: 48px 1fr;
+    height: 100vh;
+  }
+  .demo-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    background: var(--wb-surface);
+    border-bottom: 1px solid var(--wb-border);
+    gap: 8px;
+  }
+  .runtime-info {
+    font-size: 12px;
+    color: var(--wb-muted);
+  }
+</style>
+</head>
+<body>
+
+<div id="demo">
+  <div class="demo-topbar">
+    <b>Workbench Shell Demo — Phase 1</b>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="wb-btn" id="btnPlay">▶ Play</button>
+      <button class="wb-btn" id="btnStep">Step</button>
+      <button class="wb-btn" id="btnReset">Reset</button>
+      <span class="runtime-info" id="runtimeInfo">time: 0</span>
+      <button class="wb-btn" id="btnSave">Save Layout</button>
+      <button class="wb-btn" id="btnResetLayout">Reset Layout</button>
+    </div>
+  </div>
+  <div id="workbench-root"></div>
+</div>
+
+<script src="./workbench-demo.bundle.js"></script>
+
+</body>
+</html>

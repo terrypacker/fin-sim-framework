@@ -1,0 +1,244 @@
+/* ============================================================
+   Workbench Shell — dockable panel system
+   ============================================================ */
+
+:root {
+  --wb-bg:       #0f1217;
+  --wb-surface:  #171c23;
+  --wb-surface2: #1f2630;
+  --wb-border:   rgba(255, 255, 255, 0.07);
+  --wb-text:     #e8eef7;
+  --wb-muted:    #91a0b4;
+  --wb-accent:   #5aa2ff;
+  --wb-accent-bg: rgba(90, 162, 255, 0.14);
+  --wb-gutter-w: 5px;
+}
+
+/* ── Shell root ──────────────────────────────────────────── */
+
+.wb-shell {
+  display: grid;
+  grid-template-rows: 48px 1fr;
+  height: 100vh;
+  background: var(--wb-bg);
+  color: var(--wb-text);
+  font-family: system-ui, sans-serif;
+  overflow: hidden;
+}
+
+/* ── Top bar ─────────────────────────────────────────────── */
+
+.wb-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  background: var(--wb-surface);
+  border-bottom: 1px solid var(--wb-border);
+  gap: 8px;
+}
+
+.wb-topbar-title {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.wb-topbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wb-btn {
+  background: var(--wb-surface2);
+  border: 1px solid var(--wb-border);
+  color: var(--wb-text);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.wb-btn:hover {
+  background: var(--wb-accent-bg);
+  border-color: var(--wb-accent);
+}
+
+/* ── Split pane ──────────────────────────────────────────── */
+
+.wb-split {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  overflow: hidden;
+}
+
+.wb-split--v {
+  flex-direction: column;
+}
+
+.wb-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--wb-surface);
+}
+
+.wb-gutter {
+  width: var(--wb-gutter-w);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: col-resize;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.wb-gutter--v {
+  width: 100%;
+  height: var(--wb-gutter-w);
+  cursor: row-resize;
+}
+
+.wb-gutter:hover,
+.wb-gutter:active {
+  background: var(--wb-accent-bg);
+}
+
+/* Bottom panel collapsed — hide the view area, keep tab bar */
+.wb-pane[data-collapsed] .wb-view {
+  display: none;
+}
+
+/* ── Tab group ───────────────────────────────────────────── */
+
+.wb-tabgroup {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.wb-tabgroup.wb-dragover {
+  outline: 2px dashed var(--wb-accent);
+  outline-offset: -4px;
+}
+
+/* ── Tab bar ─────────────────────────────────────────────── */
+
+.wb-tabs {
+  display: flex;
+  flex-shrink: 0;
+  min-height: 34px;
+  background: var(--wb-surface2);
+  border-bottom: 1px solid var(--wb-border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.wb-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.wb-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  color: var(--wb-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  user-select: none;
+  border-right: 1px solid var(--wb-border);
+}
+
+.wb-tab:hover {
+  color: var(--wb-text);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.wb-tab.active {
+  background: var(--wb-accent-bg);
+  color: var(--wb-text);
+}
+
+.wb-tab[draggable]:active {
+  cursor: grabbing;
+}
+
+.wb-tab-title {
+  pointer-events: none;
+}
+
+.wb-tab-close {
+  opacity: 0.45;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.wb-tab-close:hover {
+  opacity: 1;
+  color: #ff7a7a;
+}
+
+/* ── View area ───────────────────────────────────────────── */
+
+.wb-view {
+  flex: 1;
+  overflow: auto;
+  padding: 10px;
+  min-height: 0;
+}
+
+/* ── Drag ghost ──────────────────────────────────────────── */
+
+.wb-ghost {
+  position: fixed;
+  pointer-events: none;
+  background: var(--wb-surface2);
+  border: 1px solid var(--wb-accent);
+  color: var(--wb-text);
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  opacity: 0.9;
+  transform: translate(-50%, -50%);
+  z-index: 9999;
+}
+
+/* ── Generic panel card (used by demo plugins) ───────────── */
+
+.wb-card {
+  background: var(--wb-surface2);
+  border: 1px solid var(--wb-border);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+
+.wb-card b {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.wb-muted {
+  color: var(--wb-muted);
+  font-size: 12px;
+}
+
+.wb-metric {
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.wb-event-row {
+  cursor: pointer;
+}
+
+.wb-event-row.selected {
+  outline: 2px solid var(--wb-accent);
+  outline-offset: -2px;
+}

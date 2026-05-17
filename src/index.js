@@ -206,6 +206,13 @@ import { TimelineController } from './visualization/timeline/timeline-controller
 import { TimelinePresenter } from './visualization/timeline/timeline-presenter.js';
 import { TimelineView } from './visualization/timeline/timeline-view.js';
 import { $, fmt, fmtUTC, fmtLocal } from './visualization/ui-utils.js';
+import { WorkbenchComponent } from './visualization/workbench/component.js';
+import { WorkbenchLayoutModel } from './visualization/workbench/layout-model.js';
+import { PluginRegistry } from './visualization/workbench/plugin-registry.js';
+import { SplitPane } from './visualization/workbench/split-pane.js';
+import { TabGroup } from './visualization/workbench/tab-group.js';
+import { WB_EVENTS, WorkbenchRuntime } from './visualization/workbench/workbench-runtime.js';
+import { WorkbenchShell } from './visualization/workbench/workbench-shell.js';
 
 // =========================================================
 // TOP-LEVEL EXPORTS
@@ -621,6 +628,14 @@ export const Visualization = {
   fmt,
   fmtUTC,
   fmtLocal,
+  WorkbenchComponent,
+  WorkbenchLayoutModel,
+  PluginRegistry,
+  SplitPane,
+  TabGroup,
+  WB_EVENTS,
+  WorkbenchRuntime,
+  WorkbenchShell,
 };
 
 // =========================================================
