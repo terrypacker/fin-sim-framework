@@ -1,6 +1,12 @@
 # Workbench UI Implementation Plan
 
-## Status: PLANNING — 2026-05-17
+## Status: Phase 3 Complete — 2026-05-17
+
+> **Phase 1** ✅ Workbench Shell Infrastructure (P1-T1 through P1-T9)
+> **Phase 2** ✅ Production Panel Migration (16 plugins, WorkbenchApp, index.html)
+> **Phase 3** ✅ Detachable Windows (WorkbenchChannel, detach button, reattach)
+> **Phase 4** ⬜ Performance & Replay Debugger
+> **Phase 5** ⬜ Domain Plugin SDK
 
 ---
 

@@ -203,14 +203,14 @@ Coverage legend: ✅ Implemented · ⬜ Not started · 🚧 In progress
 
 | ID | Requirement | Phase | Status |
 |----|-------------|-------|--------|
-| WB-1 | The workbench renders a 3-pane layout (left / center / right) with resizable gutters between panes | P1 | ⬜ |
-| WB-2 | Each pane contains a tab group that renders a tab bar and the active panel's content area | P1 | ⬜ |
-| WB-3 | Tabs can be closed via a close (×) button; the next tab in the group becomes active | P1 | ⬜ |
-| WB-4 | Tabs can be dragged from one pane and dropped into any other pane | P1 | ⬜ |
-| WB-5 | Pane flex-sizing (gutter position) persists across page reloads via localStorage | P1 | ⬜ |
-| WB-6 | Active tab layout (which tabs are in each pane and which is active) persists via localStorage | P1 | ⬜ |
-| WB-7 | A Save Layout / Reset Layout action is available in the top bar | P1 | ⬜ |
-| WB-8 | The top bar contains: play / step / reset controls, scenario selector, time slider, time label, timezone selector, currency selector | P2 | ⬜ |
+| WB-1 | The workbench renders a 3-pane layout (left / center / right) with resizable gutters between panes | P1 | ✅ |
+| WB-2 | Each pane contains a tab group that renders a tab bar and the active panel's content area | P1 | ✅ |
+| WB-3 | Tabs can be closed via a close (×) button; the next tab in the group becomes active | P1 | ✅ |
+| WB-4 | Tabs can be dragged from one pane and dropped into any other pane | P1 | ✅ |
+| WB-5 | Pane flex-sizing (gutter position) persists across page reloads via localStorage | P1 | ✅ |
+| WB-6 | Active tab layout (which tabs are in each pane and which is active) persists via localStorage | P1 | ✅ |
+| WB-7 | A Save Layout / Reset Layout action is available in the top bar | P1 | ✅ |
+| WB-8 | The top bar contains: play / step / reset controls, scenario selector, time slider, time label, timezone selector, currency selector | P2 | ✅ |
 
 ---
 
@@ -218,10 +218,10 @@ Coverage legend: ✅ Implemented · ⬜ Not started · 🚧 In progress
 
 | ID | Requirement | Phase | Status |
 |----|-------------|-------|--------|
-| WB-9 | A `WorkbenchComponent` base class provides `mount(container)`, `unmount()`, and `rerender()` lifecycle hooks | P1 | ⬜ |
-| WB-10 | A `PluginRegistry` maps plugin IDs to component classes; plugins are registered before the shell renders | P1 | ⬜ |
-| WB-11 | Panels communicate cross-panel state changes (selected node, sim time, breakpoint hit) via a shared `WorkbenchBus`, not direct method calls | P1 | ⬜ |
-| WB-12 | Mounting an inactive (background) tab does not trigger rendering; unmounting an active tab calls `onUnmount()` for cleanup | P1 | ⬜ |
+| WB-9 | A `WorkbenchComponent` base class provides `mount(container)`, `unmount()`, and `rerender()` lifecycle hooks | P1 | ✅ |
+| WB-10 | A `PluginRegistry` maps plugin IDs to component classes; plugins are registered before the shell renders | P1 | ✅ |
+| WB-11 | Panels communicate cross-panel state changes (selected node, sim time, breakpoint hit) via a shared `WorkbenchBus`, not direct method calls | P1 | ✅ |
+| WB-12 | Mounting an inactive (background) tab does not trigger rendering; unmounting an active tab calls `onUnmount()` for cleanup | P1 | ✅ |
 
 ---
 
@@ -231,18 +231,18 @@ Each existing panel becomes a self-contained plugin that renders into any provid
 
 | ID | Plugin | Wraps | Status |
 |----|--------|-------|--------|
-| WB-13 | ScenarioPlugin | ScenarioTabView / ScenarioTabPresenter / ScenarioTabController | ⬜ |
-| WB-14 | TimelinePlugin | TimelineView / TimelinePresenter / TimelineController | ⬜ |
-| WB-15 | ChartPlugin | ChartView / ChartPresenter / ChartController; canvas resizes via ResizeObserver | ⬜ |
-| WB-16 | ConfigGraphPlugin | ConfigGraphView / GraphBuilderPresenter; emits `selection.changed` on node click | ⬜ |
-| WB-17 | ConfigurationListPlugin | ConfigurationListComponent; handles add/edit via NodeEditModal | ⬜ |
-| WB-18 | MonteCarloPlugin | MC config + results panels | ⬜ |
-| WB-19 | OptimizationPlugin | Opt config + results panels | ⬜ |
-| WB-20 | InspectorPlugin | GraphNodeInspectorPanel; auto-loads node on `selection.changed` | ⬜ |
-| WB-21 | ExecHistoryPlugin | GraphNodeExecHistory; updates on `selection.changed` | ⬜ |
-| WB-22 | LineagePlugin | GraphNodeLineage; updates on `selection.changed` | ⬜ |
-| WB-23 | StatePanelPlugin | StatePanelView (live state + cumulative metrics + action detail) | ⬜ |
-| WB-24 | DashboardPlugin | DashCardsComponent; updates on `runtime.tick` | ⬜ |
+| WB-13 | ScenarioPlugin | ScenarioTabView / ScenarioTabPresenter / ScenarioTabController | ✅ |
+| WB-14 | TimelinePlugin | TimelineView / TimelinePresenter / TimelineController | ✅ |
+| WB-15 | ChartPlugin | ChartView / ChartPresenter / ChartController; canvas resizes via ResizeObserver | ✅ |
+| WB-16 | ConfigGraphPlugin | ConfigGraphView / GraphBuilderPresenter; emits `selection.changed` on node click | ✅ |
+| WB-17 | ConfigurationListPlugin | ConfigurationListComponent; handles add/edit via NodeEditModal | ✅ |
+| WB-18 | MonteCarloPlugin | MC config + results panels | ✅ |
+| WB-19 | OptimizationPlugin | Opt config + results panels | ✅ |
+| WB-20 | InspectorPlugin | GraphNodeInspectorPanel; auto-loads node on `selection.changed` | ✅ |
+| WB-21 | ExecHistoryPlugin | GraphNodeExecHistory; updates on `selection.changed` | ✅ |
+| WB-22 | LineagePlugin | GraphNodeLineage; updates on `selection.changed` | ✅ |
+| WB-23 | StatePanelPlugin | StatePanelView (live state + cumulative metrics + action detail) | ✅ |
+| WB-24 | DashboardPlugin | DashCardsComponent; updates on `runtime.tick` | ✅ |
 
 **Migration constraints**: no hardcoded DOM IDs in plugin code; existing simulation behavior unchanged;
 default layout matches current production arrangement (see `design/7-workbench-ui-plan.md`).
@@ -253,9 +253,9 @@ default layout matches current production arrangement (see `design/7-workbench-u
 
 | ID | Requirement | Status |
 |----|-------------|--------|
-| WB-25 | Any panel tab can be detached into a standalone browser window via a detach button (⤢) on the tab | ⬜ |
-| WB-26 | Detached panels synchronize with the main window via `BroadcastChannel`; `selection.changed`, `runtime.tick`, and `scenario.ready` events cross window boundaries | ⬜ |
-| WB-27 | Closing a detached window reattaches the tab to its source pane | ⬜ |
+| WB-25 | Any panel tab can be detached into a standalone browser window via a detach button (⤢) on the tab | ✅ |
+| WB-26 | Detached panels synchronize with the main window via `BroadcastChannel`; `selection.changed`, `runtime.tick`, and `scenario.ready` events cross window boundaries | ✅ |
+| WB-27 | Closing a detached window reattaches the tab to its source pane | ✅ |
 
 ---
 
@@ -284,13 +284,13 @@ default layout matches current production arrangement (see `design/7-workbench-u
 
 | Category | Implemented | Total |
 |----------|-------------|-------|
-| Shell (WB-1–8) | 0 | 8 |
-| Component System (WB-9–12) | 0 | 4 |
-| Panel Plugins (WB-13–24) | 0 | 12 |
-| Detachable Windows (WB-25–27) | 0 | 3 |
+| Shell (WB-1–8) | 8 | 8 |
+| Component System (WB-9–12) | 4 | 4 |
+| Panel Plugins (WB-13–24) | 12 | 12 |
+| Detachable Windows (WB-25–27) | 3 | 3 |
 | Performance / Debugger (WB-28–31) | 0 | 4 |
 | Plugin SDK (WB-32–34) | 0 | 3 |
-| **Total** | **0** | **34** |
+| **Total** | **27** | **34** |
 
 ---
 
