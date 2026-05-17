@@ -82,9 +82,7 @@ export class TabGroup extends WorkbenchComponent {
     }
 
     if (this.extraControls) {
-      this.extraControls.style.marginLeft = 'auto';
-      this.extraControls.style.alignSelf  = 'center';
-      this.extraControls.style.marginRight = '4px';
+      this.extraControls.classList.add('wb-tab-extra');
       bar.appendChild(this.extraControls);
     }
 

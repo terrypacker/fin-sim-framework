@@ -5,6 +5,7 @@
 
 import { BaseApp } from './apps/base-app.js';
 import { SimulationWorkbench } from './apps/simulation-workbench.js';
+import { WorkbenchApp } from './apps/workbench-app.js';
 import { AccountRulesEngine } from './finance/account-rules/account-rules-engine.js';
 import { AuAccountModule2024 } from './finance/account-rules/au/au-account-module-2024.js';
 import { AuAccountModule2025 } from './finance/account-rules/au/au-account-module-2025.js';
@@ -209,6 +210,22 @@ import { $, fmt, fmtUTC, fmtLocal } from './visualization/ui-utils.js';
 import { WorkbenchComponent } from './visualization/workbench/component.js';
 import { WorkbenchLayoutModel } from './visualization/workbench/layout-model.js';
 import { PluginRegistry } from './visualization/workbench/plugin-registry.js';
+import { ChartPlugin } from './visualization/workbench/plugins/chart-plugin.js';
+import { ConfigGraphPlugin } from './visualization/workbench/plugins/config-graph-plugin.js';
+import { ConfigListPlugin } from './visualization/workbench/plugins/config-list-plugin.js';
+import { DashboardPlugin } from './visualization/workbench/plugins/dashboard-plugin.js';
+import { ExecHistoryPlugin } from './visualization/workbench/plugins/exec-history-plugin.js';
+import { InspectorPlugin } from './visualization/workbench/plugins/inspector-plugin.js';
+import { LineagePlugin } from './visualization/workbench/plugins/lineage-plugin.js';
+import { McConfigPlugin } from './visualization/workbench/plugins/mc-config-plugin.js';
+import { McResultsPlugin } from './visualization/workbench/plugins/mc-results-plugin.js';
+import { McRunsPlugin } from './visualization/workbench/plugins/mc-runs-plugin.js';
+import { OptConfigPlugin } from './visualization/workbench/plugins/opt-config-plugin.js';
+import { OptResultsPlugin } from './visualization/workbench/plugins/opt-results-plugin.js';
+import { OptRunsPlugin } from './visualization/workbench/plugins/opt-runs-plugin.js';
+import { ScenarioPlugin } from './visualization/workbench/plugins/scenario-plugin.js';
+import { StatePanelPlugin } from './visualization/workbench/plugins/state-panel-plugin.js';
+import { TimelinePlugin } from './visualization/workbench/plugins/timeline-plugin.js';
 import { SplitPane } from './visualization/workbench/split-pane.js';
 import { TabGroup } from './visualization/workbench/tab-group.js';
 import { WB_EVENTS, WorkbenchRuntime } from './visualization/workbench/workbench-runtime.js';
@@ -233,6 +250,7 @@ export {
 export const Misc = {
   BaseApp,
   SimulationWorkbench,
+  WorkbenchApp,
   EDGE_TYPES,
   createEdgeId,
   Edge,
@@ -631,6 +649,22 @@ export const Visualization = {
   WorkbenchComponent,
   WorkbenchLayoutModel,
   PluginRegistry,
+  ChartPlugin,
+  ConfigGraphPlugin,
+  ConfigListPlugin,
+  DashboardPlugin,
+  ExecHistoryPlugin,
+  InspectorPlugin,
+  LineagePlugin,
+  McConfigPlugin,
+  McResultsPlugin,
+  McRunsPlugin,
+  OptConfigPlugin,
+  OptResultsPlugin,
+  OptRunsPlugin,
+  ScenarioPlugin,
+  StatePanelPlugin,
+  TimelinePlugin,
   SplitPane,
   TabGroup,
   WB_EVENTS,

@@ -121,7 +121,6 @@ export class SplitPane {
       if (i === 0) {
         // Top pane fills all remaining space
         paneEl.style.flex = '1';
-        paneEl.style.minHeight = '0';
       } else {
         // Bottom pane: fixed height (flex: none)
         paneEl.style.flex   = 'none';

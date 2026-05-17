@@ -23,12 +23,14 @@ const ALL_PANES = [...H_PANES, 'bottom'];
  * @param {object}       opts
  * @param {object}       opts.defaultLayout — initial layout if no persisted state
  * @param {Array<{ id, title, component }>} opts.plugins — plugin descriptors to register
+ * @param {string}       [opts.storageKey]  — localStorage key for persisted layout
  */
 export class WorkbenchShell {
-  constructor({ defaultLayout, plugins = [] }) {
+  constructor({ defaultLayout, plugins = [], storageKey }) {
     this.runtime  = new WorkbenchRuntime();
     this.registry = new PluginRegistry();
     this.layout   = new WorkbenchLayoutModel(defaultLayout);
+    this._storageKey = storageKey ?? STORAGE_KEY;
 
     /** @type {Map<string, import('./component.js').WorkbenchComponent>} */
     this.instances = new Map();
@@ -52,7 +54,7 @@ export class WorkbenchShell {
    */
   init(container) {
     this._container = container;
-    this.layout.load(STORAGE_KEY);
+    this.layout.load(this._storageKey);
 
     this._instantiatePlugins();
     this._render();
@@ -94,8 +96,7 @@ export class WorkbenchShell {
 
     // Collapse toggle button — injected into the bottom TabGroup's tab bar
     this._collapseBtn = document.createElement('button');
-    this._collapseBtn.className = 'wb-btn';
-    this._collapseBtn.style.cssText = 'padding:2px 8px;font-size:10px;';
+    this._collapseBtn.className = 'wb-btn wb-btn--collapse';
     this._collapseBtn.title = 'Toggle panel';
     this._collapseBtn.textContent = this.layout.isBottomCollapsed() ? '▲' : '▼';
     this._collapseBtn.addEventListener('click', () => this._toggleBottomCollapse());
@@ -215,6 +216,23 @@ export class WorkbenchShell {
 
   saveLayout() {
     this.layout.save();
+  }
+
+  /**
+   * Activate a plugin by id — makes it the active tab in whichever pane contains it.
+   * @param {string} id
+   * @returns {boolean} true if found and activated
+   */
+  activatePlugin(id) {
+    for (const pane of ALL_PANES) {
+      const cfg = this.layout.layout[pane];
+      if (cfg?.tabs.includes(id)) {
+        this.layout.setActive(pane, id);
+        this._renderPanes(pane);
+        return true;
+      }
+    }
+    return false;
   }
 
   resetLayout() {
