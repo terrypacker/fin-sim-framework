@@ -1,12 +1,12 @@
 # Workbench UI Implementation Plan
 
-## Status: Phase 3 Complete — 2026-05-17
+## Status: Phase 5 In Progress — 2026-05-17
 
 > **Phase 1** ✅ Workbench Shell Infrastructure (P1-T1 through P1-T9)
 > **Phase 2** ✅ Production Panel Migration (16 plugins, WorkbenchApp, index.html)
 > **Phase 3** ✅ Detachable Windows (WorkbenchChannel, detach button, reattach)
-> **Phase 4** ⬜ Performance & Replay Debugger
-> **Phase 5** ⬜ Domain Plugin SDK
+> **Phase 4** ✅ Performance & Replay Debugger
+> **Phase 5** 🔄 CSS Decoupling + Domain Plugin SDK (P5-T0 ✅, P5-T1 ⬜, P5-T2 ⬜, P5-T3 ⬜)
 
 ---
 
@@ -253,15 +253,32 @@ WorkbenchBus { selection.changed, runtime.tick, breakpoint.hit, ... }
 
 ---
 
-### Phase 5 — Domain Plugin SDK
+### Phase 5 — CSS Decoupling + Domain Plugin SDK
 
-> Goal: Enable third-party or domain-specific plugins to register and render
+> Goal: Decouple plugin styles from the legacy monolithic `fin-sim.css`.
+> Enable third-party or domain-specific plugins to register and render
 > within the workbench without modifying core files.
+
+#### P5-T0: CSS Decoupling ✅ Complete — 2026-05-17
+- Discarded legacy monolithic `fin-sim.css` (1688 lines mixing app shell + all plugin styles)
+- New lean `fin-sim.css` (~200 lines): app shell, header, status bar, badge utilities, viz-container, code-editor, scrollbars
+- Created `assets/css/plugins/` directory with per-plugin CSS files:
+  - `timeline.css` — all `.tl-*` classes
+  - `config-builder.css` — `.node`, `.node-field`, `.builder`, `.param-row`, `.person-row`, `.multi-select`, `.reducer-chip`
+  - `config-graph.css` — `#graphRoot`, `.g-node`, `.g-port`, `#graphEdges`, `.selection-box`
+  - `state-panel.css` — `.lsp-*`, `.action-detail`, `.ad-*`, `#liveStatePanel`, `#node-state-changes`
+  - `dashboard.css` — `.fin-dash-cards`, `.dash-card`
+  - `chart.css` — `.failure-banner`
+  - `inspector.css` — `.data-*`, `.diff-*`
+  - `modals.css` — `.sim-modal`, `.tax-doc-modal`, `.sim-modal--editor`
+- `index.html` updated to load all plugin CSS files
+- All 525 tests pass
 
 #### P5-T1: Plugin SDK documentation + API contract
 - Formal `WorkbenchPlugin` interface spec
 - Published as `src/visualization/workbench/plugin-sdk.js`
 - Includes: `id`, `title`, `category`, `component` (WorkbenchComponent subclass), optional `defaultPane`
+- Each plugin ships its own CSS in `assets/css/plugins/{id}.css`
 
 #### P5-T2: Workspace templates
 - Named presets stored in localStorage: `workbench-template-{name}`

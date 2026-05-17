@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<!--
+  Workbench Detached Panel — Production
+  Opened by WorkbenchShell._onDetach() when panelUrl is set.
+  Receives ?tab=<id>&source=<pane> query params.
+  Communicates with the main window via BroadcastChannel('sim-workbench-prod').
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FinSim Panel</title>
+  <link rel="stylesheet" href="https://terrypacker.com/assets/css/base.css">
+  <link rel="stylesheet" href="https://terrypacker.com/assets/css/theme-amber.css">
+  <link rel="stylesheet" href="./assets/css/fin-sim.css">
+  <link rel="stylesheet" href="./assets/css/workbench.css">
+  <link rel="stylesheet" href="./assets/css/plugins/config-builder.css">
+  <link rel="stylesheet" href="./assets/css/plugins/config-graph.css">
+  <link rel="stylesheet" href="./assets/css/plugins/timeline.css">
+  <link rel="stylesheet" href="./assets/css/plugins/state-panel.css">
+  <link rel="stylesheet" href="./assets/css/plugins/dashboard.css">
+  <link rel="stylesheet" href="./assets/css/plugins/chart.css">
+  <link rel="stylesheet" href="./assets/css/plugins/inspector.css">
+  <link rel="stylesheet" href="./assets/css/plugins/modals.css">
+</head>
+<body class="wb-panel-page">
+
+<div class="wb-panel-titlebar">
+  <span id="wb-panel-title">Panel</span>
+</div>
+<div id="wb-panel-root" class="wb-panel-root"></div>
+
+<!-- UMD bundle sets globalThis.FinSimLib -->
+<script src="./index.umd.min.js"></script>
+<script>
+(function () {
+  var V = FinSimLib.Visualization;
+
+  var PLUGINS = {
+    'scenario':     { title: 'Scenario',     component: V.ScenarioPlugin    },
+    'mc-config':    { title: 'Monte Carlo',  component: V.McConfigPlugin    },
+    'opt-config':   { title: 'Optimize',     component: V.OptConfigPlugin   },
+    'config-list':  { title: 'Nodes',        component: V.ConfigListPlugin  },
+    'inspector':    { title: 'Edit',         component: V.InspectorPlugin   },
+    'config-graph': { title: 'Graph',        component: V.ConfigGraphPlugin },
+    'timeline':     { title: 'Timeline',     component: V.TimelinePlugin    },
+    'chart':        { title: 'Chart',        component: V.ChartPlugin       },
+    'mc-results':   { title: 'MC Results',   component: V.McResultsPlugin   },
+    'opt-results':  { title: 'OPT Results',  component: V.OptResultsPlugin  },
+    'state-panel':  { title: 'State',        component: V.StatePanelPlugin  },
+    'mc-runs':      { title: 'MC Runs',      component: V.McRunsPlugin      },
+    'opt-runs':     { title: 'OPT Runs',     component: V.OptRunsPlugin     },
+    'exec-history': { title: 'Node History', component: V.ExecHistoryPlugin },
+    'lineage':      { title: 'Lineage',      component: V.LineagePlugin     },
+    'dashboard':    { title: 'Dashboard',    component: V.DashboardPlugin   },
+    'perf':         { title: 'Performance',  component: V.PerfPlugin        },
+  };
+
+  var CHANNEL_EVENTS = [
+    V.WB_EVENTS.SELECTION_CHANGED,
+    V.WB_EVENTS.RUNTIME_TICK,
+    V.WB_EVENTS.SCENARIO_READY,
+  ];
+
+  var params     = new URLSearchParams(location.search);
+  var tabId      = params.get('tab') || '';
+  var sourcePane = params.get('source') || 'left';
+  var descriptor = PLUGINS[tabId];
+
+  if (!descriptor) {
+    document.body.textContent = 'Unknown panel: "' + tabId + '"';
+    return;
+  }
+
+  document.title = descriptor.title + ' — FinSim Panel';
+  var titleEl = document.getElementById('wb-panel-title');
+  if (titleEl) titleEl.textContent = descriptor.title;
+
+  var runtime = new V.WorkbenchRuntime();
+  var channel = new V.WorkbenchChannel('sim-workbench-prod');
+  channel.attachBus(runtime.bus, CHANNEL_EVENTS);
+
+  var root   = document.getElementById('wb-panel-root');
+  var plugin = new descriptor.component(runtime);
+  plugin.mount(root);
+
+  window.addEventListener('beforeunload', function () {
+    channel.post({ type: V.WB_PANEL.CLOSING, tabId: tabId, sourcePane: sourcePane });
+    channel.close();
+  });
+})();
+</script>
+
+</body>
+</html>

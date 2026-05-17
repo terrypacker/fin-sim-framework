@@ -47,9 +47,12 @@ export class WorkbenchRuntime {
     this.bus.publish({ type: WB_EVENTS.RUNTIME_TICK, time });
   }
 
-  /** Broadcast a breakpoint pause. */
-  breakpointHit(node) {
-    this.bus.publish({ type: WB_EVENTS.BREAKPOINT_HIT, node });
+  /**
+   * Broadcast a breakpoint pause.
+   * @param {{ nodeId, stage, date, kind, node? }} hit — mirrors BreakpointHitMessage fields
+   */
+  breakpointHit(hit) {
+    this.bus.publish({ type: WB_EVENTS.BREAKPOINT_HIT, hit });
   }
 
   /** Broadcast that a scenario is ready for use. */

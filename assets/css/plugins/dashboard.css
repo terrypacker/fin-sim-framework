@@ -1,0 +1,36 @@
+/* ── DASHBOARD PLUGIN ── */
+.fin-dash-cards {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  padding: 10px 14px;
+}
+
+.dash-card {
+  background: var(--bg-panel2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  text-align: center;
+}
+
+.dash-card .dc-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.dash-card .dc-value {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  color: var(--amber);
+  line-height: 1.1;
+}
+
+.dash-card.dc-goal .dc-value { font-size: 11px; }
+.dc-goal:hover {
+  background: var(--bg-panel);
+  cursor: pointer;
+}

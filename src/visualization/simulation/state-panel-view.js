@@ -36,6 +36,7 @@ export class StatePanelView extends BaseComponent {
     this._chartPresenter    = null;
     this._lastOutOfFundsDate = null;
     this._onOpenNode        = null;
+    this._onShowActionDetail = null;
     this._journal           = null;
     this._executionGraph    = null;
     this._metricHistory     = new Map();
@@ -55,6 +56,11 @@ export class StatePanelView extends BaseComponent {
   /** Inject a callback to open a config-graph node in the edit modal. */
   set onOpenNode(fn) {
     this._onOpenNode = fn ?? null;
+  }
+
+  /** Inject a callback to reveal the action-detail panel (e.g. activate a tab). */
+  set onShowActionDetail(fn) {
+    this._onShowActionDetail = fn ?? null;
   }
 
   /** Inject the current journal for parent lookup and field history. */
@@ -340,8 +346,7 @@ export class StatePanelView extends BaseComponent {
     const parentInfo = this._getParentInfo(entry);
     const el = this._buildActionDetailEl({ entry, changes, emitted, actionPayload, parentInfo });
     $('actionPanelDetails').replaceChildren(el);
-    // Auto-switch right column to the action detail tab.
-    document.querySelector('.tab-header[data-dest-tab="right-action-detail"]')?.click();
+    this._onShowActionDetail?.();
   }
 
   _buildActionDetailEl({ entry, changes, emitted, actionPayload, parentInfo }) {

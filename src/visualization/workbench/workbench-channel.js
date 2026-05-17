@@ -48,7 +48,17 @@ export class WorkbenchChannel {
     for (const type of eventTypes) {
       bus.subscribe(type, (msg) => {
         if (this._relaying) return;
-        this._bc.postMessage({ _wbBus: true, _wbEvent: msg });
+        try {
+          this._bc.postMessage({ _wbBus: true, _wbEvent: msg });
+        } catch (e) {
+          if (e instanceof DOMException && e.name === 'DataCloneError') {
+            // Payload contains non-cloneable values (e.g. class instances with functions).
+            // Forward a type-only signal so panel windows still see the event.
+            this._bc.postMessage({ _wbBus: true, _wbEvent: { type: msg.type } });
+          } else {
+            throw e;
+          }
+        }
       });
     }
 

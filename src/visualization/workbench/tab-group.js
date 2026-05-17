@@ -7,6 +7,12 @@ import { WorkbenchComponent } from './component.js';
  * the `instances` map. This means every plugin's bus subscriptions are active
  * at all times, regardless of which tab is currently visible.
  *
+ * Mount strategy: ALL tabs in the pane are mounted when the TabGroup mounts.
+ * Inactive plugins are hidden via display:none. Tab switching is a show/hide
+ * operation — no mount/unmount per switch. This ensures every plugin's DOM
+ * is always in the document, which is required for getElementById() calls in
+ * BaseApp.initScenario() and for plugins that depend on each other's containers.
+ *
  * @param {object} opts
  * @param {string}                         opts.pane           — 'left' | 'center' | 'right' | 'bottom'
  * @param {WorkbenchLayoutModel}           opts.layout         — shared layout model
@@ -63,14 +69,19 @@ export class TabGroup extends WorkbenchComponent {
   }
 
   onMount() {
-    this._mountActive();
+    this._mountAll();
   }
 
   onUnmount() {
-    if (this._activeInstance) {
-      this._activeInstance.unmount();
-      this._activeInstance = null;
+    // Unmount all plugin instances whose DOM lives inside this TabGroup's element.
+    // We cannot rely on paneConfig.tabs here because a tab may have been removed
+    // from the layout before this fires (e.g., _onClose then _renderPanes).
+    for (const [, instance] of this.instances) {
+      if (instance.mounted && this.el?.contains(instance.el)) {
+        instance.unmount();
+      }
     }
+    this._activeInstance = null;
   }
 
   _buildTabBar() {
@@ -139,25 +150,106 @@ export class TabGroup extends WorkbenchComponent {
     return view;
   }
 
-  _mountActive() {
+  /**
+   * Mount all plugins in this pane. Active plugin is shown; others are hidden.
+   * Called on initial mount and after structural layout changes (close/drag).
+   */
+  _mountAll() {
     const paneConfig = this.layout.layout[this.pane];
-    const activeId = paneConfig.active;
-    if (!activeId) return;
-
-    const instance = this.instances.get(activeId);
-    if (!instance) return;
-
-    // Unmount previous if different
-    if (this._activeInstance && this._activeInstance !== instance) {
-      this._activeInstance.unmount();
-    }
-
+    if (!paneConfig) return;
     const view = this.el?.querySelector('.wb-view');
     if (!view) return;
 
-    this._activeInstance = instance;
-    if (!instance.mounted) {
+    const activeId = paneConfig.active;
+
+    for (const tabId of paneConfig.tabs) {
+      const instance = this.instances.get(tabId);
+      if (!instance) continue;
+
+      if (!instance.mounted) {
+        instance.mount(view);
+      }
+
+      // Show active, hide others
+      if (instance.el) {
+        instance.el.style.display = tabId === activeId ? '' : 'none';
+      }
+    }
+
+    this._activeInstance = this.instances.get(activeId) ?? null;
+  }
+
+  // ── Surgical DOM operations ─────────────────────────────────────────────────
+  // These avoid the destroy-and-recreate cycle of rerender() so that plugin
+  // state and external references (e.g. BaseApp holding DOM ids) survive moves.
+
+  /** Remove a tab button from the bar. Does not touch the plugin instance. */
+  removeTabButton(tabId) {
+    this.el?.querySelector(`.wb-tab[data-tab="${tabId}"]`)?.remove();
+  }
+
+  /** Add a tab button for a tab now assigned to this pane by the layout model. */
+  addTabButton(tabId) {
+    const bar = this.el?.querySelector('.wb-tabs');
+    if (!bar) return;
+    const paneConfig = this.layout.layout[this.pane];
+    const tab = this._buildTab(tabId, paneConfig?.active === tabId);
+    const extra = bar.querySelector('.wb-tab-extra');
+    bar.insertBefore(tab, extra ?? null);
+  }
+
+  /**
+   * Move or mount a plugin's DOM element into this pane's view area.
+   * If the instance is already mounted elsewhere, `appendChild` moves its el.
+   * If it was previously unmounted (e.g. after close), it is remounted.
+   */
+  adoptPlugin(tabId) {
+    const instance = this.instances.get(tabId);
+    const view     = this.el?.querySelector('.wb-view');
+    if (!instance || !view) return;
+
+    if (instance.mounted && instance.el) {
+      view.appendChild(instance.el);
+    } else {
       instance.mount(view);
     }
+
+    const paneConfig = this.layout.layout[this.pane];
+    if (instance.el) {
+      instance.el.style.display = (paneConfig?.active === tabId) ? '' : 'none';
+    }
+  }
+
+  /** Unmount a plugin that is being closed, leaving it in the instances map. */
+  closePlugin(tabId) {
+    const instance = this.instances.get(tabId);
+    if (instance?.mounted && this.el?.contains(instance.el)) {
+      instance.unmount();
+    }
+  }
+
+  /**
+   * Switch the visible plugin without unmounting/remounting.
+   * Called by WorkbenchShell when the user clicks a tab.
+   * @param {string} tabId
+   */
+  setActive(tabId) {
+    const paneConfig = this.layout.layout[this.pane];
+    if (!paneConfig) return;
+
+    // Update tab bar highlight
+    this.el?.querySelectorAll('.wb-tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.tab === tabId);
+    });
+
+    // Show / hide plugin panels
+    for (const id of paneConfig.tabs) {
+      const instance = this.instances.get(id);
+      if (instance?.el) {
+        instance.el.style.display = id === tabId ? '' : 'none';
+      }
+    }
+
+    this._activeInstance = this.instances.get(tabId) ?? null;
   }
 }

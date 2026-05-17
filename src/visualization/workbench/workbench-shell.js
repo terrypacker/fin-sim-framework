@@ -205,19 +205,28 @@ export class WorkbenchShell {
 
   _onActivate(tab, pane) {
     this.layout.setActive(pane, tab);
-    this._renderPanes(pane);
+    // Use lightweight show/hide rather than full rerender for tab switches.
+    this._tabGroups.get(pane)?.setActive(tab);
   }
 
   _onClose(tab, pane) {
     this.layout.closeTab(pane, tab);
-    this._renderPanes(pane);
+    const tg = this._tabGroups.get(pane);
+    tg?.removeTabButton(tab);
+    tg?.closePlugin(tab);
+    const newActive = this.layout.layout[pane]?.active;
+    if (newActive) tg?.setActive(newActive);
   }
 
   _onDetach(tabId, pane) {
     if (!this._panelUrl) return;
 
     this.layout.closeTab(pane, tabId);
-    this._renderPanes(pane);
+    const tg = this._tabGroups.get(pane);
+    tg?.removeTabButton(tabId);
+    tg?.closePlugin(tabId);
+    const newActive = this.layout.layout[pane]?.active;
+    if (newActive) tg?.setActive(newActive);
 
     const url = `${this._panelUrl}?tab=${encodeURIComponent(tabId)}&source=${encodeURIComponent(pane)}`;
     const win = window.open(url, `wb-panel-${tabId}`, 'width=800,height=600,menubar=no,toolbar=no,status=no');
@@ -227,7 +236,9 @@ export class WorkbenchShell {
     } else {
       // Popup blocked — restore tab immediately
       this.layout.addTab(pane, tabId);
-      this._renderPanes(pane);
+      tg?.addTabButton(tabId);
+      tg?.adoptPlugin(tabId);
+      tg?.setActive(tabId);
     }
   }
 
@@ -235,7 +246,10 @@ export class WorkbenchShell {
     if (!this.instances.has(tabId)) return;
     const targetPane = (sourcePane && this.layout.layout[sourcePane]) ? sourcePane : H_PANES[0];
     this.layout.addTab(targetPane, tabId);
-    this._renderPanes(targetPane);
+    const tg = this._tabGroups.get(targetPane);
+    tg?.addTabButton(tabId);
+    tg?.adoptPlugin(tabId);
+    tg?.setActive(tabId);
     this._detachedWindows.delete(tabId);
   }
 
@@ -259,7 +273,18 @@ export class WorkbenchShell {
     if (fromPane === toPane) return;
 
     this.layout.moveTab(tabId, fromPane, toPane);
-    this._renderPanes(fromPane, toPane);
+
+    const fromTg = this._tabGroups.get(fromPane);
+    const toTg   = this._tabGroups.get(toPane);
+
+    fromTg?.removeTabButton(tabId);
+    toTg?.addTabButton(tabId);
+    toTg?.adoptPlugin(tabId);   // moves instance.el — appendChild handles cross-parent move
+
+    // Sync tab bar highlights; fromGroup may need to show a different active tab now
+    const fromActive = this.layout.layout[fromPane]?.active;
+    if (fromActive) fromTg?.setActive(fromActive);
+    toTg?.setActive(this.layout.layout[toPane]?.active);
   }
 
   // ── Save / reset layout ─────────────────────────────────────────────────────
@@ -278,7 +303,9 @@ export class WorkbenchShell {
       const cfg = this.layout.layout[pane];
       if (cfg?.tabs.includes(id)) {
         this.layout.setActive(pane, id);
-        this._renderPanes(pane);
+        // Lightweight show/hide — avoids destroying plugin DOM and invalidating
+        // container references held by BaseApp (graphNodeInspector, etc.)
+        this._tabGroups.get(pane)?.setActive(id);
         return true;
       }
     }

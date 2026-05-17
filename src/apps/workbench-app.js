@@ -18,6 +18,7 @@ import { OptResultsPlugin }     from '../visualization/workbench/plugins/opt-res
 import { OptRunsPlugin }        from '../visualization/workbench/plugins/opt-runs-plugin.js';
 import { ExecHistoryPlugin }    from '../visualization/workbench/plugins/exec-history-plugin.js';
 import { LineagePlugin }        from '../visualization/workbench/plugins/lineage-plugin.js';
+import { PerfPlugin }           from '../visualization/workbench/plugins/perf-plugin.js';
 
 const STORAGE_KEY = 'sim-workbench-layout-prod';
 
@@ -38,6 +39,7 @@ const PRODUCTION_PLUGINS = [
   { id: 'exec-history', title: 'Node History',  component: ExecHistoryPlugin },
   { id: 'lineage',      title: 'Lineage',       component: LineagePlugin     },
   { id: 'dashboard',    title: 'Dashboard',     component: DashboardPlugin   },
+  { id: 'perf',         title: 'Performance',   component: PerfPlugin        },
 ];
 
 const PRODUCTION_LAYOUT = {
@@ -55,7 +57,7 @@ const PRODUCTION_LAYOUT = {
     active: 'state-panel',
   },
   bottom: {
-    tabs: ['dashboard'],
+    tabs: ['dashboard', 'perf'],
     active: 'dashboard',
   },
   bottomSize: 110,
@@ -66,6 +68,42 @@ export class WorkbenchApp extends BaseApp {
   constructor(opts) {
     super(opts);
     this._wbShell = null;
+  }
+
+  // Override initScenario to notify the workbench runtime when a scenario is ready.
+  initScenario() {
+    super.initScenario();
+
+    // Override the legacy tab-header click with a workbench-aware handler:
+    // activate the state-panel plugin, then scroll actionPanelDetails into view.
+    this._statePanelView.onShowActionDetail = () => {
+      this._wbShell?.activatePlugin('state-panel');
+      requestAnimationFrame(() => {
+        document.getElementById('actionPanelDetails')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    };
+
+    const runtime = this._wbShell?.runtime;
+    if (!runtime || !this.scenario) return;
+
+    // Publish SCENARIO_READY so PerfPlugin and other bus-aware plugins can wire up.
+    runtime.scenarioReady(this.scenario);
+
+    // Bridge sim-bus BREAKPOINT_HIT → workbench bus so timeline/graph plugins react.
+    this.scenario.sim.bus.subscribe('BREAKPOINT_HIT', (msg) => {
+      runtime.breakpointHit({
+        nodeId: msg.nodeId,
+        stage:  msg.stage,
+        date:   msg.date,
+        kind:   msg.kind,
+      });
+      // Highlight the last journaled action row in the timeline (the entry just before pause).
+      const journal = this.scenario?.sim?.journal?.journal;
+      if (journal?.length > 0) {
+        const lastSeq = journal[journal.length - 1].seq;
+        this.timelinePresenter?._view?.highlightBreakpoint(lastSeq);
+      }
+    });
   }
 
   // Override initView to set up the workbench shell instead of static DOM wiring
@@ -80,8 +118,13 @@ export class WorkbenchApp extends BaseApp {
       defaultLayout: PRODUCTION_LAYOUT,
       plugins:       PRODUCTION_PLUGINS,
       storageKey:    STORAGE_KEY,
+      panelUrl:      'workbench-panel-prod.html',
+      channelName:   'sim-workbench-prod',
     });
     this._wbShell.init(container);
+
+    // Bind scenario tab view now that ScenarioPlugin DOM exists
+    this._scenarioTabView.bind();
 
     // Wire simulation controls (the subset of BaseApp.initView() that still applies)
     this._wireSimControls();

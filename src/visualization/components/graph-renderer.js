@@ -341,6 +341,8 @@ export class GraphRenderer extends BaseComponent {
     for (const edge of edges) {
       this._updateEdge(edge);
     }
+
+    this._applyViewportCull();
   }
 
   /* ───────────────────────── LOCAL NODE OPERATIONS ───────────────────────────── */
@@ -573,6 +575,73 @@ export class GraphRenderer extends BaseComponent {
     this.viewport.style.transform =
         `translate(${x}px, ${y}px) scale(${scale})`;
     this.viewport.style.transformOrigin = '0 0';
+    this._applyViewportCull();
+  }
+
+  /* ───────────────────────── VIEWPORT CULLING ───────────────────────────── */
+
+  /**
+   * Compute the visible region in graph-space coordinates (before pan/zoom transform).
+   * Includes an overscan margin so nodes don't pop in at the exact viewport edge.
+   * @returns {{ left, top, right, bottom }}
+   */
+  _visibleGraphRect() {
+    const rect = this.graphRoot.getBoundingClientRect();
+    const W = rect.width  || 800;
+    const H = rect.height || 400;
+    const { x: tx, y: ty, scale } = this.view;
+    const OVERSCAN_PX = 300 / scale; // overscan in graph units (300 screen-px worth)
+    return {
+      left:   -tx / scale - OVERSCAN_PX,
+      top:    -ty / scale - OVERSCAN_PX,
+      right:  -tx / scale + W / scale + OVERSCAN_PX,
+      bottom: -ty / scale + H / scale + OVERSCAN_PX,
+    };
+  }
+
+  /**
+   * Toggle display:none on node elements that fall entirely outside the visible viewport.
+   * Called after every render and every pan/zoom transform.
+   */
+  _applyViewportCull() {
+    if (!this._nodeEls.size || !this._positions.size) return;
+    const { left, top, right, bottom } = this._visibleGraphRect();
+    for (const [id, el] of this._nodeEls) {
+      const { x, y } = this._getPos(id);
+      const visible = x + NODE_WIDTH > left && x < right &&
+                      y + NODE_HEIGHT > top  && y < bottom;
+      if (visible) {
+        if (el.style.display === 'none') el.style.display = '';
+      } else {
+        el.style.display = 'none';
+      }
+    }
+    this._applyEdgeCull();
+  }
+
+  /**
+   * Hide SVG edge elements whose both endpoints are outside the visible viewport.
+   * Edges that cross the viewport (one endpoint inside, one outside) remain visible.
+   */
+  _applyEdgeCull() {
+    if (!this._edgeEls.size) return;
+    const { left, top, right, bottom } = this._visibleGraphRect();
+
+    const nodeVisible = (id) => {
+      const { x, y } = this._getPos(id);
+      return x + NODE_WIDTH > left && x < right &&
+             y + NODE_HEIGHT > top  && y < bottom;
+    };
+
+    for (const [key, el] of this._edgeEls) {
+      // Edge key format: "fromId->toId"
+      const arrow = key.indexOf('->');
+      if (arrow === -1) continue;
+      const fromId = key.slice(0, arrow);
+      const toId   = key.slice(arrow + 2);
+      const cull   = !nodeVisible(fromId) && !nodeVisible(toId);
+      el.style.display = cull ? 'none' : '';
+    }
   }
 
   fitToView(padding = 40) {

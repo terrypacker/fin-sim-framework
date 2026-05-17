@@ -223,13 +223,20 @@ import { McRunsPlugin } from './visualization/workbench/plugins/mc-runs-plugin.j
 import { OptConfigPlugin } from './visualization/workbench/plugins/opt-config-plugin.js';
 import { OptResultsPlugin } from './visualization/workbench/plugins/opt-results-plugin.js';
 import { OptRunsPlugin } from './visualization/workbench/plugins/opt-runs-plugin.js';
+import { PerfPlugin } from './visualization/workbench/plugins/perf-plugin.js';
 import { ScenarioPlugin } from './visualization/workbench/plugins/scenario-plugin.js';
 import { StatePanelPlugin } from './visualization/workbench/plugins/state-panel-plugin.js';
 import { TimelinePlugin } from './visualization/workbench/plugins/timeline-plugin.js';
 import { SplitPane } from './visualization/workbench/split-pane.js';
 import { TabGroup } from './visualization/workbench/tab-group.js';
+import { WB_PANEL, WorkbenchChannel } from './visualization/workbench/workbench-channel.js';
 import { WB_EVENTS, WorkbenchRuntime } from './visualization/workbench/workbench-runtime.js';
 import { WorkbenchShell } from './visualization/workbench/workbench-shell.js';
+import {
+  GraphPlugin,
+  LogPlugin,
+  MonteCarloPlugin
+} from "./apps/workbench-demo-plugins.js";
 
 // =========================================================
 // TOP-LEVEL EXPORTS
@@ -251,6 +258,11 @@ export const Misc = {
   BaseApp,
   SimulationWorkbench,
   WorkbenchApp,
+  TimelinePlugin,
+  GraphPlugin,
+  MonteCarloPlugin,
+  InspectorPlugin,
+  LogPlugin,
   EDGE_TYPES,
   createEdgeId,
   Edge,
@@ -662,11 +674,14 @@ export const Visualization = {
   OptConfigPlugin,
   OptResultsPlugin,
   OptRunsPlugin,
+  PerfPlugin,
   ScenarioPlugin,
   StatePanelPlugin,
   TimelinePlugin,
   SplitPane,
   TabGroup,
+  WB_PANEL,
+  WorkbenchChannel,
   WB_EVENTS,
   WorkbenchRuntime,
   WorkbenchShell,

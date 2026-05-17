@@ -99,15 +99,6 @@ export class ConfigGraphView extends BaseComponent {
   _buildFilterBar(graphRoot) {
     const panel = graphRoot.parentElement;
 
-    // Make panel a flex column so the filter bar and graph stack vertically.
-    panel.style.display       = 'flex';
-    panel.style.flexDirection = 'column';
-
-    // graphRoot must grow to fill remaining height instead of using 100%.
-    graphRoot.style.height    = '';
-    graphRoot.style.flex      = '1';
-    graphRoot.style.minHeight = '0';
-
     const bar = document.createElement('div');
     bar.className = 'graph-filter-bar';
 

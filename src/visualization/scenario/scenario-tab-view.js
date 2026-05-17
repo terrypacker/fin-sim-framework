@@ -38,10 +38,28 @@ export class ScenarioTabView {
     /** @type {function(file)|null} */
     this.onUploadJson = null;
 
-    this._init();
+    this._bound = false;
+    // Bind immediately when DOM elements already exist (test environment).
+    // In production the ScenarioPlugin hasn't mounted yet, so bind() must be
+    // called explicitly from WorkbenchApp.initView() after the shell mounts.
+    if (document.getElementById('scenarioSelect')) {
+      this._init();
+      this._bound = true;
+    }
   }
 
   // ─── DOM wiring ───────────────────────────────────────────────────────────
+
+  /**
+   * Attach event listeners to the ScenarioPlugin DOM.
+   * Must be called after ScenarioPlugin has mounted (elements exist in DOM).
+   * Safe to call multiple times — wires only once.
+   */
+  bind() {
+    if (this._bound) return;
+    this._bound = true;
+    this._init();
+  }
 
   _init() {
     document.getElementById('scenarioSelect')?.addEventListener('change', (e) => {

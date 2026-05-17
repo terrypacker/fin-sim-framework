@@ -282,15 +282,17 @@
 /* ── Config graph — workbench context overrides ──────────── */
 
 .wb-graph-outer {
-  position: relative;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
   overflow: hidden;
 }
 
 .wb-graph-outer #graphRoot {
-  position: absolute;
-  inset: 0;
+  flex: 1;
+  min-height: 0;
+  position: relative;
 }
 
 .wb-graph-outer #graphViewport {
@@ -399,4 +401,113 @@
 
 .wb-hidden {
   display: none;
+}
+
+/* ── PerfPlugin ──────────────────────────────────────────── */
+
+.perf-plugin {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  gap: 6px;
+  overflow-y: auto;
+  font-size: 12px;
+  color: var(--wb-text);
+}
+
+.perf-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.perf-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.perf-clear {
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+.perf-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.perf-metric {
+  display: flex;
+  flex-direction: column;
+  background: var(--wb-surface2);
+  border: 1px solid var(--wb-border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  min-width: 70px;
+  flex: 1;
+}
+
+.perf-lbl {
+  font-size: 10px;
+  color: var(--wb-muted);
+  white-space: nowrap;
+}
+
+.perf-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--wb-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.perf-section-lbl {
+  font-size: 10px;
+  color: var(--wb-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 4px;
+}
+
+.perf-hist {
+  width: 100%;
+  border-radius: 4px;
+  background: var(--wb-surface2);
+  display: block;
+}
+
+.perf-slow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.perf-slow-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 6px;
+  background: var(--wb-surface2);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.perf-slow-node {
+  color: var(--wb-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.perf-slow-dur {
+  color: var(--wb-accent);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.perf-empty {
+  color: var(--wb-muted);
+  font-style: italic;
+  font-size: 11px;
 }

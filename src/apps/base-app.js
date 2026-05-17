@@ -297,6 +297,9 @@ export class BaseApp extends BaseComponent {
       const node = registry.graph.getNode(nodeId);
       if (node) this._editModal.open(node);
     };
+    this._statePanelView.onShowActionDetail = () => {
+      document.querySelector('.tab-header[data-dest-tab="right-action-detail"]')?.click();
+    };
 
     // ── Visualization views ───────────────────────────────────────────────────
     const eventColors = new Map(

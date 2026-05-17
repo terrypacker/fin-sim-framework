@@ -62,7 +62,7 @@ export default [
           watch: ['.', 'dist']
         }),
         isWatching && watchAssets({
-          assets: ['assets', 'index.html', 'workbench-demo.html'], // Add folders or files
+          assets: ['assets', 'index.html', 'workbench-demo.html', 'workbench-panel-prod.html'], // Add folders or files
         }),
        // keep_classnames is required because Action.actionClass and Reducer.reducerType
        // use `constructor.name` for serialization (ScenarioSerializer) and type dispatch
