@@ -210,33 +210,13 @@ import { $, fmt, fmtUTC, fmtLocal } from './visualization/ui-utils.js';
 import { WorkbenchComponent } from './visualization/workbench/component.js';
 import { WorkbenchLayoutModel } from './visualization/workbench/layout-model.js';
 import { PluginRegistry } from './visualization/workbench/plugin-registry.js';
-import { ChartPlugin } from './visualization/workbench/plugins/chart-plugin.js';
-import { ConfigGraphPlugin } from './visualization/workbench/plugins/config-graph-plugin.js';
-import { ConfigListPlugin } from './visualization/workbench/plugins/config-list-plugin.js';
-import { DashboardPlugin } from './visualization/workbench/plugins/dashboard-plugin.js';
-import { ExecHistoryPlugin } from './visualization/workbench/plugins/exec-history-plugin.js';
-import { InspectorPlugin } from './visualization/workbench/plugins/inspector-plugin.js';
-import { LineagePlugin } from './visualization/workbench/plugins/lineage-plugin.js';
-import { McConfigPlugin } from './visualization/workbench/plugins/mc-config-plugin.js';
-import { McResultsPlugin } from './visualization/workbench/plugins/mc-results-plugin.js';
-import { McRunsPlugin } from './visualization/workbench/plugins/mc-runs-plugin.js';
-import { OptConfigPlugin } from './visualization/workbench/plugins/opt-config-plugin.js';
-import { OptResultsPlugin } from './visualization/workbench/plugins/opt-results-plugin.js';
-import { OptRunsPlugin } from './visualization/workbench/plugins/opt-runs-plugin.js';
-import { PerfPlugin } from './visualization/workbench/plugins/perf-plugin.js';
-import { ScenarioPlugin } from './visualization/workbench/plugins/scenario-plugin.js';
-import { StatePanelPlugin } from './visualization/workbench/plugins/state-panel-plugin.js';
-import { TimelinePlugin } from './visualization/workbench/plugins/timeline-plugin.js';
+import { PLUGIN_CATEGORIES, PLUGIN_PANES, definePlugin } from './visualization/workbench/plugin-sdk.js';
+import { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
 import { SplitPane } from './visualization/workbench/split-pane.js';
 import { TabGroup } from './visualization/workbench/tab-group.js';
 import { WB_PANEL, WorkbenchChannel } from './visualization/workbench/workbench-channel.js';
 import { WB_EVENTS, WorkbenchRuntime } from './visualization/workbench/workbench-runtime.js';
 import { WorkbenchShell } from './visualization/workbench/workbench-shell.js';
-import {
-  GraphPlugin,
-  LogPlugin,
-  MonteCarloPlugin
-} from "./apps/workbench-demo-plugins.js";
 
 // =========================================================
 // TOP-LEVEL EXPORTS
@@ -254,23 +234,10 @@ export {
 // NAMESPACES
 // =========================================================
 
-export const Misc = {
+export const Apps = {
   BaseApp,
   SimulationWorkbench,
   WorkbenchApp,
-  TimelinePlugin,
-  GraphPlugin,
-  MonteCarloPlugin,
-  InspectorPlugin,
-  LogPlugin,
-  EDGE_TYPES,
-  createEdgeId,
-  Edge,
-  GraphQueryApi,
-  Graph,
-  SimGraphNode,
-  QueryApi,
-  InMemoryStorage,
 };
 
 export const Finance = {
@@ -495,32 +462,14 @@ export const Finance = {
   TaxSettleService,
 };
 
-export const Scenarios = {
-  BaseScenario,
-  INTL_RETIREMENT_DEFAULTS,
-  INTL_RETIREMENT_PARAM_SCHEMA,
-  IntlRetirementScenario,
-  PrebuiltScenario,
-  ScenarioRegistry,
-  ScenarioSerializer,
-  ScenarioStorage,
-  SimulationWorkbenchDefaultScenario,
-};
-
-export const Services = {
-  ActionService,
-  BaseService,
-  EVENT_CLASSES,
-  EventService,
-  HandlerService,
-  ReducerService,
-  ScenarioService,
-  ServiceRegistry,
-  SimulationRegistry,
-  SimulationSync,
-};
-
-export const Core = {
+export const Engine = {
+  EDGE_TYPES,
+  createEdgeId,
+  Edge,
+  GraphQueryApi,
+  Graph,
+  SimGraphNode,
+  QueryApi,
   ACTION_TEMPLATES,
   DEFAULT_ACTIONS,
   Action,
@@ -599,6 +548,32 @@ export const Core = {
   BreakpointSignal,
   Simulation,
   diffStates,
+  InMemoryStorage,
+};
+
+export const Scenarios = {
+  BaseScenario,
+  INTL_RETIREMENT_DEFAULTS,
+  INTL_RETIREMENT_PARAM_SCHEMA,
+  IntlRetirementScenario,
+  PrebuiltScenario,
+  ScenarioRegistry,
+  ScenarioSerializer,
+  ScenarioStorage,
+  SimulationWorkbenchDefaultScenario,
+};
+
+export const Services = {
+  ActionService,
+  BaseService,
+  EVENT_CLASSES,
+  EventService,
+  HandlerService,
+  ReducerService,
+  ScenarioService,
+  ServiceRegistry,
+  SimulationRegistry,
+  SimulationSync,
 };
 
 export const Visualization = {
@@ -658,26 +633,15 @@ export const Visualization = {
   fmt,
   fmtUTC,
   fmtLocal,
+};
+
+export const Workbench = {
   WorkbenchComponent,
   WorkbenchLayoutModel,
   PluginRegistry,
-  ChartPlugin,
-  ConfigGraphPlugin,
-  ConfigListPlugin,
-  DashboardPlugin,
-  ExecHistoryPlugin,
-  InspectorPlugin,
-  LineagePlugin,
-  McConfigPlugin,
-  McResultsPlugin,
-  McRunsPlugin,
-  OptConfigPlugin,
-  OptResultsPlugin,
-  OptRunsPlugin,
-  PerfPlugin,
-  ScenarioPlugin,
-  StatePanelPlugin,
-  TimelinePlugin,
+  PLUGIN_CATEGORIES,
+  PLUGIN_PANES,
+  definePlugin,
   SplitPane,
   TabGroup,
   WB_PANEL,
@@ -685,6 +649,28 @@ export const Visualization = {
   WB_EVENTS,
   WorkbenchRuntime,
   WorkbenchShell,
+};
+
+export const FinancePlugins = {
+  ScenarioPlugin,
+  ConfigGraphPlugin,
+  ConfigListPlugin,
+  InspectorPlugin,
+  TimelinePlugin,
+  ChartPlugin,
+  StatePanelPlugin,
+  DashboardPlugin,
+  McConfigPlugin,
+  McResultsPlugin,
+  McRunsPlugin,
+  OptConfigPlugin,
+  OptResultsPlugin,
+  OptRunsPlugin,
+  ExecHistoryPlugin,
+  LineagePlugin,
+  PerfPlugin,
+  FINANCE_PLUGINS,
+  FINANCE_DEFAULT_LAYOUT,
 };
 
 // =========================================================
@@ -697,10 +683,12 @@ export default {
   Person,
   BaseScenario,
   Simulation,
-  Misc,
+  Apps,
   Finance,
+  Engine,
   Scenarios,
   Services,
-  Core,
   Visualization,
+  Workbench,
+  FinancePlugins,
 };

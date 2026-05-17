@@ -15,7 +15,6 @@
     "test:all": "npm run test:unit && npm run test:viz",
     "build:watch": "rollup -c -w",
     "dev": "npm run clean && rollup -c -w",
-    "workbench:dev": "rollup -c rollup.workbench.config.js -w",
     "requirements": "node scripts/check-requirements.js",
     "requirements:missing": "node scripts/check-requirements.js --missing"
   },
