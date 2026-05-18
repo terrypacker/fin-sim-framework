@@ -14,7 +14,6 @@ export class StatePanelPlugin extends WorkbenchComponent {
         </div>
         <div id="currentStateContent" style="display:none"></div>
       </div>
-      <div id="actionPanelDetails" class="actionPanelDetails"></div>
     `;
     return root;
   }

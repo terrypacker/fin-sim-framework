@@ -17,28 +17,28 @@ const CENTER_SPLIT_DEFAULTS = {
 
 const ANALYSIS_LAYOUT = {
   sizes: [1, 2, 1],
-  left:   { tabs: ['scenario', 'mc-config', 'opt-config'],             active: 'mc-config'  },
-  center: { tabs: ['chart', 'mc-results', 'opt-results', 'timeline'],  active: 'chart'      },
-  right:  { tabs: ['mc-runs', 'opt-runs', 'state-panel'],              active: 'mc-runs'    },
-  bottom: { tabs: ['dashboard', 'perf'],                               active: 'dashboard'  },
+  left:   { tabs: ['scenario', 'mc-config', 'opt-config'],                    active: 'mc-config'     },
+  center: { tabs: ['chart', 'mc-results', 'opt-results', 'timeline'],         active: 'chart'         },
+  right:  { tabs: ['mc-runs', 'opt-runs', 'state-panel', 'action-detail'],    active: 'mc-runs'       },
+  bottom: { tabs: ['dashboard', 'perf'],                                      active: 'dashboard'     },
   bottomSize: 110, bottomCollapsed: false, ...CENTER_SPLIT_DEFAULTS,
 };
 
 const DEBUGGING_LAYOUT = {
   sizes: [1, 3, 1],
-  left:   { tabs: ['config-list', 'scenario'],                                  active: 'config-list' },
-  center: { tabs: ['config-graph', 'timeline'],                                 active: 'config-graph'},
-  right:  { tabs: ['inspector', 'exec-history', 'lineage', 'state-panel'],      active: 'exec-history'},
-  bottom: { tabs: ['perf', 'dashboard'],                                        active: 'perf'        },
+  left:   { tabs: ['config-list', 'scenario'],                                        active: 'config-list'  },
+  center: { tabs: ['config-graph', 'timeline'],                                       active: 'config-graph' },
+  right:  { tabs: ['inspector', 'exec-history', 'lineage', 'state-panel', 'action-detail'], active: 'exec-history' },
+  bottom: { tabs: ['perf', 'dashboard'],                                              active: 'perf'         },
   bottomSize: 110, bottomCollapsed: false, ...CENTER_SPLIT_DEFAULTS,
 };
 
 const REVIEW_LAYOUT = {
   sizes: [1, 3, 1],
-  left:   { tabs: ['scenario', 'config-list'],                                  active: 'scenario'   },
-  center: { tabs: ['timeline', 'chart'],                                        active: 'timeline'   },
-  right:  { tabs: ['state-panel', 'inspector', 'exec-history', 'lineage'],      active: 'state-panel'},
-  bottom: { tabs: ['dashboard'],                                                active: 'dashboard'  },
+  left:   { tabs: ['scenario', 'config-list'],                                        active: 'scenario'     },
+  center: { tabs: ['timeline', 'chart'],                                              active: 'timeline'     },
+  right:  { tabs: ['state-panel', 'action-detail', 'inspector', 'exec-history', 'lineage'], active: 'state-panel' },
+  bottom: { tabs: ['dashboard'],                                                      active: 'dashboard'    },
   bottomSize: 110, bottomCollapsed: false, ...CENTER_SPLIT_DEFAULTS,
 };
 
@@ -59,13 +59,8 @@ export class WorkbenchApp extends BaseApp {
   initScenario() {
     super.initScenario();
 
-    // Override the legacy tab-header click with a workbench-aware handler:
-    // activate the state-panel plugin, then scroll actionPanelDetails into view.
     this._statePanelView.onShowActionDetail = () => {
-      this._wbShell?.activatePlugin('state-panel');
-      requestAnimationFrame(() => {
-        document.getElementById('actionPanelDetails')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
+      this._wbShell?.activatePlugin('action-detail');
     };
 
     const runtime = this._wbShell?.runtime;

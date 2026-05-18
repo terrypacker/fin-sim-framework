@@ -163,6 +163,7 @@ import { ActionDefinitionList } from './visualization/components/action-definiti
 import { ActionEditor } from './visualization/components/action-editor.js';
 import { BaseComponent } from './visualization/components/base-component.js';
 import { BaseNodeEditor } from './visualization/components/base-node-editor.js';
+import { EChartsGraphRenderer } from './visualization/components/echarts-graph-renderer.js';
 import { EventEditor } from './visualization/components/event-editor.js';
 import { GraphNodeFilterMultiSelect } from './visualization/components/graph-node-filter-multi-select.js';
 import { GraphRenderer } from './visualization/components/graph-renderer.js';
@@ -211,7 +212,7 @@ import { WorkbenchComponent } from './visualization/workbench/component.js';
 import { WorkbenchLayoutModel } from './visualization/workbench/layout-model.js';
 import { PluginRegistry } from './visualization/workbench/plugin-registry.js';
 import { PLUGIN_CATEGORIES, PLUGIN_PANES, definePlugin } from './visualization/workbench/plugin-sdk.js';
-import { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
+import { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
 import { SplitPane } from './visualization/workbench/split-pane.js';
 import { TabGroup } from './visualization/workbench/tab-group.js';
 import { WB_EVENTS, WorkbenchRuntime } from './visualization/workbench/workbench-runtime.js';
@@ -585,6 +586,7 @@ export const Visualization = {
   ActionEditor,
   BaseComponent,
   BaseNodeEditor,
+  EChartsGraphRenderer,
   EventEditor,
   GraphNodeFilterMultiSelect,
   GraphRenderer,
@@ -666,6 +668,7 @@ export const FinancePlugins = {
   ExecHistoryPlugin,
   LineagePlugin,
   PerfPlugin,
+  ActionDetailPlugin,
   FINANCE_PLUGINS,
   FINANCE_DEFAULT_LAYOUT,
 };

@@ -19,15 +19,16 @@ import { McRunsPlugin }      from './mc-runs-plugin.js';
 import { OptConfigPlugin }   from './opt-config-plugin.js';
 import { OptResultsPlugin }  from './opt-results-plugin.js';
 import { OptRunsPlugin }     from './opt-runs-plugin.js';
-import { ExecHistoryPlugin } from './exec-history-plugin.js';
-import { LineagePlugin }     from './lineage-plugin.js';
-import { PerfPlugin }        from './perf-plugin.js';
+import { ExecHistoryPlugin }   from './exec-history-plugin.js';
+import { LineagePlugin }       from './lineage-plugin.js';
+import { PerfPlugin }          from './perf-plugin.js';
+import { ActionDetailPlugin }  from './action-detail-plugin.js';
 
 export { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin,
          TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin,
          McConfigPlugin, McResultsPlugin, McRunsPlugin,
          OptConfigPlugin, OptResultsPlugin, OptRunsPlugin,
-         ExecHistoryPlugin, LineagePlugin, PerfPlugin };
+         ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin };
 
 /** All finance plugin descriptors — pass directly to WorkbenchShell `plugins` option. */
 export const FINANCE_PLUGINS = [
@@ -44,8 +45,9 @@ export const FINANCE_PLUGINS = [
   { id: 'state-panel',  title: 'State',         component: StatePanelPlugin  },
   { id: 'mc-runs',      title: 'MC Runs',       component: McRunsPlugin      },
   { id: 'opt-runs',     title: 'OPT Runs',      component: OptRunsPlugin     },
-  { id: 'exec-history', title: 'Node History',  component: ExecHistoryPlugin },
-  { id: 'lineage',      title: 'Lineage',       component: LineagePlugin     },
+  { id: 'exec-history',   title: 'Node History',    component: ExecHistoryPlugin  },
+  { id: 'lineage',        title: 'Lineage',         component: LineagePlugin      },
+  { id: 'action-detail',  title: 'Action Detail',   component: ActionDetailPlugin },
   { id: 'dashboard',    title: 'Dashboard',     component: DashboardPlugin   },
   { id: 'perf',         title: 'Performance',   component: PerfPlugin        },
 ];
@@ -62,7 +64,7 @@ export const FINANCE_DEFAULT_LAYOUT = {
     active: 'config-graph',
   },
   right: {
-    tabs: ['state-panel', 'mc-runs', 'opt-runs', 'exec-history', 'lineage'],
+    tabs: ['state-panel', 'action-detail', 'mc-runs', 'opt-runs', 'exec-history', 'lineage'],
     active: 'state-panel',
   },
   bottom: {

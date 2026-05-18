@@ -345,8 +345,8 @@ export class StatePanelView extends BaseComponent {
     const { changes, emitted, actionPayload } = this.buildActionDetail(entry);
     const parentInfo = this._getParentInfo(entry);
     const el = this._buildActionDetailEl({ entry, changes, emitted, actionPayload, parentInfo });
-    $('actionPanelDetails').replaceChildren(el);
     this._onShowActionDetail?.();
+    $('actionPanelDetails')?.replaceChildren(el);
   }
 
   _buildActionDetailEl({ entry, changes, emitted, actionPayload, parentInfo }) {
