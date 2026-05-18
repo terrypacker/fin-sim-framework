@@ -63,6 +63,7 @@ export class OptResultsPanel extends BaseComponent {
     super();
     this._container  = containerEl;
     this._barChart   = null;
+    this._barChartRo = null;
     this._wrapperEl  = null;
 
     this._renderIdle();
@@ -86,8 +87,9 @@ export class OptResultsPanel extends BaseComponent {
   // ── Private ───────────────────────────────────────────────────────────────────
 
   _destroyChart() {
-    if (this._barChart) { this._barChart.dispose(); this._barChart = null; }
-    if (this._wrapperEl) { this._wrapperEl.remove(); this._wrapperEl = null; }
+    if (this._barChartRo) { this._barChartRo.disconnect(); this._barChartRo = null; }
+    if (this._barChart)   { this._barChart.dispose();      this._barChart   = null; }
+    if (this._wrapperEl)  { this._wrapperEl.remove();      this._wrapperEl  = null; }
     this._container.innerHTML = '';
   }
 
@@ -134,7 +136,9 @@ export class OptResultsPanel extends BaseComponent {
     // Append to DOM first so ECharts can measure real container dimensions.
     this._container.appendChild(wrapper);
 
-    this._barChart = this._createBarChart(chartDiv, candidates, objFn);
+    this._barChart   = this._createBarChart(chartDiv, candidates, objFn);
+    this._barChartRo = new ResizeObserver(() => this._barChart?.resize());
+    this._barChartRo.observe(chartDiv);
   }
 
   _buildBadges(candidates, totalRuns, objectiveLabel, objFn) {

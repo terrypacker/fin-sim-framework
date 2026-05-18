@@ -54,7 +54,9 @@ export class McResultsPanel extends BaseComponent {
     super();
     this._container  = containerEl;
     this._fanChart   = null;
+    this._fanChartRo = null;
     this._histChart  = null;
+    this._histChartRo = null;
     this._wrapperEl  = null;
 
     this._renderIdle();
@@ -80,9 +82,11 @@ export class McResultsPanel extends BaseComponent {
   // ── Private ───────────────────────────────────────────────────────────────────
 
   _destroyCharts() {
-    if (this._fanChart)  { this._fanChart.dispose();  this._fanChart  = null; }
-    if (this._histChart) { this._histChart.dispose(); this._histChart = null; }
-    if (this._wrapperEl) { this._wrapperEl.remove();  this._wrapperEl = null; }
+    if (this._fanChartRo)  { this._fanChartRo.disconnect();  this._fanChartRo  = null; }
+    if (this._histChartRo) { this._histChartRo.disconnect(); this._histChartRo = null; }
+    if (this._fanChart)    { this._fanChart.dispose();       this._fanChart    = null; }
+    if (this._histChart)   { this._histChart.dispose();      this._histChart   = null; }
+    if (this._wrapperEl)   { this._wrapperEl.remove();       this._wrapperEl   = null; }
     this._container.innerHTML = '';
   }
 
@@ -139,8 +143,16 @@ export class McResultsPanel extends BaseComponent {
     // Append to DOM first so ECharts can measure real container dimensions.
     this._container.appendChild(wrapper);
 
-    if (fanDiv)  this._fanChart  = this._createFanChart(fanDiv, fanData);
-    if (histDiv) this._histChart = this._createHistChart(histDiv, histData);
+    if (fanDiv) {
+      this._fanChart   = this._createFanChart(fanDiv, fanData);
+      this._fanChartRo = new ResizeObserver(() => this._fanChart?.resize());
+      this._fanChartRo.observe(fanDiv);
+    }
+    if (histDiv) {
+      this._histChart   = this._createHistChart(histDiv, histData);
+      this._histChartRo = new ResizeObserver(() => this._histChart?.resize());
+      this._histChartRo.observe(histDiv);
+    }
   }
 
   _buildBadges(summary, n) {
