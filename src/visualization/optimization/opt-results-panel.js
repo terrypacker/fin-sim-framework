@@ -8,11 +8,9 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Chart, registerables } from 'chart.js';
+import * as echarts from 'echarts';
 import { BaseComponent }        from '../components/base-component.js';
 import { OPTIMIZATION_OBJECTIVES } from '../../finance/optimization/optimization-objectives.js';
-
-Chart.register(...registerables);
 
 const MAX_CHART_BARS = 30;
 
@@ -29,13 +27,11 @@ function fmtK(v) {
   return sign + '$' + (abs / 1000).toFixed(0) + 'k';
 }
 
-/** Format a param value for compact display. */
 function fmtVal(v) {
   if (typeof v === 'number' && v > 0 && v < 1) return `${(v * 100).toFixed(0)}%`;
   return String(v);
 }
 
-/** Build a short label from a candidate's param overrides. */
 function fmtCandidate(candidate) {
   const entries = Object.entries(candidate);
   if (!entries.length) return '(baseline)';
@@ -90,7 +86,7 @@ export class OptResultsPanel extends BaseComponent {
   // ── Private ───────────────────────────────────────────────────────────────────
 
   _destroyChart() {
-    if (this._barChart) { this._barChart.destroy(); this._barChart = null; }
+    if (this._barChart) { this._barChart.dispose(); this._barChart = null; }
     if (this._wrapperEl) { this._wrapperEl.remove(); this._wrapperEl = null; }
     this._container.innerHTML = '';
   }
@@ -114,7 +110,6 @@ export class OptResultsPanel extends BaseComponent {
 
     wrapper.appendChild(this._buildBadges(candidates, totalRuns, objective, objFn));
 
-    // Bar chart
     const chartLabel = document.createElement('div');
     chartLabel.style.cssText =
       'font-size:11px;color:#475569;font-family:monospace;padding:2px 0;flex-shrink:0';
@@ -122,13 +117,12 @@ export class OptResultsPanel extends BaseComponent {
     wrapper.appendChild(chartLabel);
 
     const chartWrap = document.createElement('div');
-    chartWrap.style.cssText = 'position:relative;height:220px;flex-shrink:0';
-    const canvas = document.createElement('canvas');
-    chartWrap.appendChild(canvas);
+    chartWrap.style.cssText = 'height:220px;flex-shrink:0';
+    const chartDiv = document.createElement('div');
+    chartDiv.style.cssText = 'width:100%;height:100%';
+    chartWrap.appendChild(chartDiv);
     wrapper.appendChild(chartWrap);
-    this._barChart = this._createBarChart(canvas, candidates, objFn);
 
-    // Table
     const tableLabel = document.createElement('div');
     tableLabel.style.cssText =
       'font-size:11px;color:#475569;font-family:monospace;padding:2px 0;flex-shrink:0';
@@ -137,7 +131,10 @@ export class OptResultsPanel extends BaseComponent {
 
     wrapper.appendChild(this._buildTable(candidates, objFn));
 
+    // Append to DOM first so ECharts can measure real container dimensions.
     this._container.appendChild(wrapper);
+
+    this._barChart = this._createBarChart(chartDiv, candidates, objFn);
   }
 
   _buildBadges(candidates, totalRuns, objectiveLabel, objFn) {
@@ -146,12 +143,12 @@ export class OptResultsPanel extends BaseComponent {
     const failures = candidates.filter(c => c.result.scenarioFailed).length;
 
     const badges = [
-      { label: 'Best Score',       value: best   ? fmtDollar(objFn(best.result))  : '—', color: '#fbbf24' },
-      { label: 'Worst Score',      value: worst  ? fmtDollar(objFn(worst.result)) : '—', color: '#94a3b8' },
-      { label: 'Candidates',       value: String(totalRuns),                               color: '#a78bfa' },
-      { label: 'Failures',         value: String(failures),                                color: failures ? '#f87171' : '#4ade80' },
-      { label: 'Best Net Worth',   value: best   ? fmtDollar(best.result.finalNetWorthUsd) : '—',   color: '#60a5fa' },
-      { label: 'Best Roth Bal',    value: best   ? fmtDollar(best.result.rothFinalBalance)  : '—',   color: '#34d399' },
+      { label: 'Best Score',     value: best  ? fmtDollar(objFn(best.result))  : '—', color: '#fbbf24' },
+      { label: 'Worst Score',    value: worst ? fmtDollar(objFn(worst.result)) : '—', color: '#94a3b8' },
+      { label: 'Candidates',     value: String(totalRuns),                              color: '#a78bfa' },
+      { label: 'Failures',       value: String(failures),                               color: failures ? '#f87171' : '#4ade80' },
+      { label: 'Best Net Worth', value: best  ? fmtDollar(best.result.finalNetWorthUsd) : '—', color: '#60a5fa' },
+      { label: 'Best Roth Bal',  value: best  ? fmtDollar(best.result.rothFinalBalance)  : '—', color: '#34d399' },
     ];
 
     const header = document.createElement('div');
@@ -181,69 +178,59 @@ export class OptResultsPanel extends BaseComponent {
     return wrap;
   }
 
-  _createBarChart(canvas, candidates, objFn) {
-    const top   = candidates.slice(0, MAX_CHART_BARS);
-    const labels = top.map((c, i) => `#${i + 1} ${fmtCandidate(c.candidate)}`);
-    const data   = top.map(c => objFn(c.result));
+  _createBarChart(container, candidates, objFn) {
+    const top        = candidates.slice(0, MAX_CHART_BARS);
+    const labels     = top.map((_, i) => `#${i + 1}`);
+    const fullLabels = top.map(c => fmtCandidate(c.candidate));
+    const data       = top.map(c => objFn(c.result));
 
-    const colors = top.map((c, i) =>
-      c.result.scenarioFailed ? 'rgba(248,113,113,0.8)'
-      : i === 0               ? 'rgba(251,191,36,0.85)'
-                              : 'rgba(167,139,250,0.7)'
-    );
-    const borderColors = top.map((c, i) =>
-      c.result.scenarioFailed ? 'rgba(248,113,113,1)'
-      : i === 0               ? 'rgba(251,191,36,1)'
-                              : 'rgba(167,139,250,0.9)'
-    );
-
-    return new Chart(canvas, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          label:           'Score',
-          data,
-          backgroundColor: colors,
-          borderColor:     borderColors,
-          borderWidth:     1,
-          borderRadius:    2,
-        }],
+    const chart = echarts.init(container, null, { renderer: 'canvas' });
+    chart.setOption({
+      backgroundColor: 'transparent',
+      animation: false,
+      grid: { top: 10, right: 16, bottom: 50, left: 16, containLabel: true },
+      xAxis: {
+        type: 'category',
+        data: labels,
+        axisLabel: { color: '#475569', fontSize: 9, fontFamily: 'monospace' },
+        splitLine: { show: false },
+        axisLine: { lineStyle: { color: '#1e293b' } },
+        axisTick: { lineStyle: { color: '#1e293b' } },
       },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: ctx => fmtDollar(ctx.parsed.y),
-            },
-          },
-        },
-        scales: {
-          x: {
-            grid: { display: false },
-            ticks: {
-              color: '#475569',
-              font: { size: 9, family: 'monospace' },
-              maxRotation: 45,
-              autoSkip: true,
-              maxTicksLimit: 12,
-            },
-          },
-          y: {
-            grid: { color: '#1e293b' },
-            ticks: {
-              color: '#475569',
-              font: { size: 10, family: 'monospace' },
-              callback: v => fmtK(v),
-            },
-          },
+      yAxis: {
+        type: 'value',
+        axisLabel: { color: '#475569', fontSize: 10, fontFamily: 'monospace', formatter: v => fmtK(v) },
+        splitLine: { lineStyle: { color: '#1e293b' } },
+        axisLine: { show: false },
+        axisTick: { show: false },
+      },
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: '#1e293b',
+        borderColor: '#334155',
+        borderWidth: 1,
+        textStyle: { color: '#e2e8f0', fontSize: 10, fontFamily: 'monospace' },
+        formatter: params => {
+          const idx = params[0]?.dataIndex;
+          if (idx == null) return '';
+          return `${fullLabels[idx]}<br/><b>${fmtDollar(params[0].value)}</b>`;
         },
       },
+      series: [{
+        type: 'bar',
+        data: top.map((c, i) => ({
+          value: data[i],
+          itemStyle: {
+            color: c.result.scenarioFailed ? 'rgba(248,113,113,0.8)'
+              : i === 0                    ? 'rgba(251,191,36,0.85)'
+                                           : 'rgba(167,139,250,0.7)',
+          },
+        })),
+        barMaxWidth: 40,
+        itemStyle: { borderRadius: [2, 2, 0, 0] },
+      }],
     });
+    return chart;
   }
 
   _buildTable(candidates, objFn) {
@@ -251,7 +238,6 @@ export class OptResultsPanel extends BaseComponent {
     table.style.cssText =
       'width:100%;border-collapse:collapse;font-family:monospace;font-size:11px;flex-shrink:0';
 
-    // Header
     const thead = document.createElement('thead');
     thead.innerHTML = `
       <tr style="border-bottom:1px solid #334155">
@@ -266,7 +252,7 @@ export class OptResultsPanel extends BaseComponent {
 
     const tbody = document.createElement('tbody');
     candidates.forEach((c, i) => {
-      const rank  = i + 1;
+      const rank   = i + 1;
       const isBest = rank === 1;
       const failed = c.result.scenarioFailed;
 
@@ -279,15 +265,15 @@ export class OptResultsPanel extends BaseComponent {
       const rankTxt   = isBest ? '🥇' : String(rank);
 
       tr.innerHTML = `
-        <td style="padding:3px 6px;text-align:center;color:${rankColor};font-weight:${isBest?600:400}">${rankTxt}</td>
+        <td style="padding:3px 6px;text-align:center;color:${rankColor};font-weight:${isBest ? 600 : 400}">${rankTxt}</td>
         <td style="padding:3px 6px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;
                    white-space:nowrap;max-width:200px" title="${fmtCandidate(c.candidate)}">
           ${fmtCandidate(c.candidate)}
         </td>
-        <td style="padding:3px 6px;text-align:right;color:${isBest?'#fbbf24':'#a78bfa'}">${fmtDollar(objFn(c.result))}</td>
+        <td style="padding:3px 6px;text-align:right;color:${isBest ? '#fbbf24' : '#a78bfa'}">${fmtDollar(objFn(c.result))}</td>
         <td style="padding:3px 6px;text-align:right;color:#60a5fa">${fmtK(c.result.finalNetWorthUsd)}</td>
         <td style="padding:3px 6px;text-align:right;color:#34d399">${fmtK(c.result.rothFinalBalance)}</td>
-        <td style="padding:3px 6px;text-align:center;color:${failed?'#f87171':'#4ade80'}">${failed?'FAIL':'OK'}</td>`;
+        <td style="padding:3px 6px;text-align:center;color:${failed ? '#f87171' : '#4ade80'}">${failed ? 'FAIL' : 'OK'}</td>`;
 
       tbody.appendChild(tr);
     });

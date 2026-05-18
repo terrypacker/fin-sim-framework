@@ -29,11 +29,9 @@
     "@babel/parser": "^7.29.2",
     "@rollup/plugin-commonjs": "^29.0.2",
     "@rollup/plugin-node-resolve": "^16.0.3",
+    "@rollup/plugin-replace": "^6.0.3",
     "@rollup/plugin-terser": "^1.0.0",
-    "chart.js": "^4.5.1",
-    "chartjs-plugin-annotation": "^3.1.0",
-    "chartjs-plugin-zoom": "^2.2.0",
-    "hammerjs": "^2.0.8",
+    "echarts": "^6.0.0",
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
     "rollup": "^4.60.2",
@@ -42,8 +40,5 @@
     "rollup-plugin-dev": "^2.1.0",
     "rollup-plugin-livereload": "^2.0.5",
     "rollup-plugin-watch-assets": "^1.0.1"
-  },
-  "dependencies": {
-    "chartjs-adapter-date-fns": "^3.0.0"
   }
 }

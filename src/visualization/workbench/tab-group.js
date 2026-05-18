@@ -292,5 +292,6 @@ export class TabGroup extends WorkbenchComponent {
     }
 
     this._activeInstance = this.instances.get(tabId) ?? null;
+    this._activeInstance?.onActivate?.();
   }
 }

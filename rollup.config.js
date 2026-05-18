@@ -4,13 +4,14 @@ import dev from 'rollup-plugin-dev'
 import livereload from 'rollup-plugin-livereload';
 import nodeResolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
+import replace from '@rollup/plugin-replace';
 import watchAssets from 'rollup-plugin-watch-assets';
 
 const isWatching = process.env.ROLLUP_WATCH === 'true';
 
-// Chart.js and its plugins are bundled into the UMD browser build.
-// For ESM/CJS library builds they are left as external peer dependencies.
-const CHART_EXTERNALS = ['chart.js', 'chartjs-plugin-annotation', 'chartjs-plugin-zoom', 'chartjs-adapter-date-fns', 'hammerjs'];
+// ECharts is bundled into the UMD browser build.
+// For ESM/CJS library builds it is left as an external peer dependency.
+const CHART_EXTERNALS = ['echarts'];
 
 export default [
   // ESM
@@ -45,6 +46,10 @@ export default [
       sourcemap: true
     },
     plugins: [
+        replace({
+          preventAssignment: true,
+          'process.env.NODE_ENV': JSON.stringify('production'),
+        }),
         nodeResolve({ browser: true }),
         commonjs(),
         copy({

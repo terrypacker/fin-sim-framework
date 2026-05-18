@@ -24,14 +24,11 @@ export class ChartPlugin extends WorkbenchComponent {
       <span id="failureBannerDate" class="failure-banner-date"></span>
     `;
 
+    // ECharts owns this div — no canvas needed.
     const vizWrap = document.createElement('div');
-    vizWrap.className = 'viz-wrap wb-chart-viz';
+    vizWrap.className = 'wb-chart-viz';
+    vizWrap.id = 'chartContainer';
 
-    const canvas = document.createElement('canvas');
-    canvas.id = 'chartCanvas';
-    canvas.className = 'wb-chart-canvas';
-
-    vizWrap.appendChild(canvas);
     root.appendChild(filterContainer);
     root.appendChild(failureBanner);
     root.appendChild(vizWrap);
@@ -39,24 +36,12 @@ export class ChartPlugin extends WorkbenchComponent {
     return root;
   }
 
-  onMount() {
-    const canvas = this.el?.querySelector('#chartCanvas');
-    const wrap   = canvas?.parentElement;
-    if (!canvas || !wrap) return;
-    this._ro = new ResizeObserver(() => {
-      canvas.width  = wrap.clientWidth;
-      canvas.height = wrap.clientHeight;
-    });
-    this._ro.observe(wrap);
-  }
-
-  onUnmount() {
-    this._ro?.disconnect();
-    this._ro = null;
+  onActivate() {
+    // Safety-net resize in case the ResizeObserver missed the visibility change.
+    window.dispatchEvent(new Event('resize'));
   }
 
   onAdopt(_fromPane, _toPane) {
-    // Notify BaseApp's resize handler so Chart.js redraws in the new container.
     window.dispatchEvent(new Event('resize'));
   }
 }

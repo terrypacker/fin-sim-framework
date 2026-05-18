@@ -8,11 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Chart, registerables } from 'chart.js';
-import 'chartjs-adapter-date-fns';
+import * as echarts from 'echarts';
 import { BaseComponent } from '../components/base-component.js';
-
-Chart.register(...registerables);
 
 const HIST_BUCKETS = 20;
 
@@ -83,8 +80,8 @@ export class McResultsPanel extends BaseComponent {
   // ── Private ───────────────────────────────────────────────────────────────────
 
   _destroyCharts() {
-    if (this._fanChart)  { this._fanChart.destroy();  this._fanChart  = null; }
-    if (this._histChart) { this._histChart.destroy(); this._histChart = null; }
+    if (this._fanChart)  { this._fanChart.dispose();  this._fanChart  = null; }
+    if (this._histChart) { this._histChart.dispose(); this._histChart = null; }
     if (this._wrapperEl) { this._wrapperEl.remove();  this._wrapperEl = null; }
     this._container.innerHTML = '';
   }
@@ -106,6 +103,7 @@ export class McResultsPanel extends BaseComponent {
     wrapper.appendChild(this._buildBadges(summary, runs.length));
 
     const fanData = this._buildFanData(runs);
+    let fanDiv = null;
     if (fanData) {
       const label = document.createElement('div');
       label.style.cssText =
@@ -114,14 +112,15 @@ export class McResultsPanel extends BaseComponent {
       wrapper.appendChild(label);
 
       const fanWrap = document.createElement('div');
-      fanWrap.style.cssText = 'position:relative;height:260px;flex-shrink:0';
-      const fanCanvas = document.createElement('canvas');
-      fanWrap.appendChild(fanCanvas);
+      fanWrap.style.cssText = 'height:260px;flex-shrink:0';
+      fanDiv = document.createElement('div');
+      fanDiv.style.cssText = 'width:100%;height:100%';
+      fanWrap.appendChild(fanDiv);
       wrapper.appendChild(fanWrap);
-      this._fanChart = this._createFanChart(fanCanvas, fanData);
     }
 
     const histData = this._buildHistData(runs);
+    let histDiv = null;
     if (histData.data.length) {
       const label = document.createElement('div');
       label.style.cssText =
@@ -130,24 +129,28 @@ export class McResultsPanel extends BaseComponent {
       wrapper.appendChild(label);
 
       const histWrap = document.createElement('div');
-      histWrap.style.cssText = 'position:relative;height:160px;flex-shrink:0';
-      const histCanvas = document.createElement('canvas');
-      histWrap.appendChild(histCanvas);
+      histWrap.style.cssText = 'height:160px;flex-shrink:0';
+      histDiv = document.createElement('div');
+      histDiv.style.cssText = 'width:100%;height:100%';
+      histWrap.appendChild(histDiv);
       wrapper.appendChild(histWrap);
-      this._histChart = this._createHistChart(histCanvas, histData);
     }
 
+    // Append to DOM first so ECharts can measure real container dimensions.
     this._container.appendChild(wrapper);
+
+    if (fanDiv)  this._fanChart  = this._createFanChart(fanDiv, fanData);
+    if (histDiv) this._histChart = this._createHistChart(histDiv, histData);
   }
 
   _buildBadges(summary, n) {
     const badges = [
-      { label: 'Success Rate',   value: fmtPct(summary.successRate),          color: '#4ade80' },
-      { label: 'Failures',       value: String(summary.failureCount ?? 0),    color: '#f87171' },
+      { label: 'Success Rate',   value: fmtPct(summary.successRate),           color: '#4ade80' },
+      { label: 'Failures',       value: String(summary.failureCount ?? 0),     color: '#f87171' },
       { label: 'Median Failure', value: fmtDate(summary.medianOutOfFundsDate), color: '#fbbf24' },
-      { label: 'P90 Net Worth',  value: fmtDollar(summary.p90),               color: '#94a3b8' },
-      { label: 'P50 Net Worth',  value: fmtDollar(summary.p50),               color: '#94a3b8' },
-      { label: 'P10 Net Worth',  value: fmtDollar(summary.p10),               color: '#94a3b8' },
+      { label: 'P90 Net Worth',  value: fmtDollar(summary.p90),                color: '#94a3b8' },
+      { label: 'P50 Net Worth',  value: fmtDollar(summary.p50),                color: '#94a3b8' },
+      { label: 'P10 Net Worth',  value: fmtDollar(summary.p10),                color: '#94a3b8' },
     ];
 
     const header = document.createElement('div');
@@ -195,12 +198,11 @@ export class McResultsPanel extends BaseComponent {
 
     for (const ts of sortedTs) {
       const vals = dateMap.get(ts).slice().sort((a, b) => a - b);
-      const date = new Date(ts);
-      p10.push({ x: date, y: quantile(vals, 0.10) });
-      p25.push({ x: date, y: quantile(vals, 0.25) });
-      p50.push({ x: date, y: quantile(vals, 0.50) });
-      p75.push({ x: date, y: quantile(vals, 0.75) });
-      p90.push({ x: date, y: quantile(vals, 0.90) });
+      p10.push([ts, quantile(vals, 0.10)]);
+      p25.push([ts, quantile(vals, 0.25)]);
+      p50.push([ts, quantile(vals, 0.50)]);
+      p75.push([ts, quantile(vals, 0.75)]);
+      p90.push([ts, quantile(vals, 0.90)]);
     }
     return { p10, p25, p50, p75, p90 };
   }
@@ -216,7 +218,7 @@ export class McResultsPanel extends BaseComponent {
     const range = max - min || 1;
     const bucketSize = range / HIST_BUCKETS;
 
-    const counts  = new Array(HIST_BUCKETS).fill(0);
+    const counts    = new Array(HIST_BUCKETS).fill(0);
     const bucketMins = counts.map((_, i) => min + i * bucketSize);
     for (const v of values) {
       const idx = Math.min(Math.floor((v - min) / bucketSize), HIST_BUCKETS - 1);
@@ -227,151 +229,136 @@ export class McResultsPanel extends BaseComponent {
       labels:    bucketMins.map(v => fmtK(v)),
       data:      counts,
       bucketMins,
-      min,
-      bucketSize,
     };
   }
 
-  _createFanChart(canvas, { p10, p25, p50, p75, p90 }) {
-    return new Chart(canvas, {
-      type: 'line',
-      data: {
-        datasets: [
-          {
-            label: 'P90',
-            data: p90,
-            fill: 1,
-            borderColor: 'rgba(96,165,250,0.25)',
-            borderWidth: 1,
-            backgroundColor: 'rgba(59,130,246,0.07)',
-            pointRadius: 0,
-            tension: 0.3,
-          },
-          {
-            label: 'P75',
-            data: p75,
-            fill: 2,
-            borderColor: 'rgba(96,165,250,0.35)',
-            borderWidth: 1,
-            backgroundColor: 'rgba(59,130,246,0.12)',
-            pointRadius: 0,
-            tension: 0.3,
-          },
-          {
-            label: 'P25',
-            data: p25,
-            fill: 3,
-            borderColor: 'rgba(96,165,250,0.35)',
-            borderWidth: 1,
-            backgroundColor: 'rgba(59,130,246,0.12)',
-            pointRadius: 0,
-            tension: 0.3,
-          },
-          {
-            label: 'P10',
-            data: p10,
-            fill: false,
-            borderColor: 'rgba(96,165,250,0.25)',
-            borderWidth: 1,
-            pointRadius: 0,
-            tension: 0.3,
-          },
-          {
-            label: 'Median (P50)',
-            data: p50,
-            fill: false,
-            borderColor: '#60a5fa',
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.3,
-          },
-        ],
+  _createFanChart(container, { p10, p25, p50, p75, p90 }) {
+    // Confidence band data uses the stacking trick: base (invisible) + delta fill
+    const outerBase = p10;
+    const outerFill = p10.map(([ts, lo], i) => [ts, p90[i][1] - lo]);
+    const innerBase = p25;
+    const innerFill = p25.map(([ts, lo], i) => [ts, p75[i][1] - lo]);
+
+    // Tooltip lookup by exact timestamp from P50 series
+    const tipMap = new Map(p50.map(([ts, v], i) => [ts, {
+      p10: p10[i][1], p25: p25[i][1], p50: v, p75: p75[i][1], p90: p90[i][1]
+    }]));
+
+    const baseSeriesOpts = {
+      type: 'line', symbol: 'none', smooth: true,
+      lineStyle: { opacity: 0 }, areaStyle: { opacity: 0 },
+      emphasis: { disabled: true }, tooltip: { show: false },
+    };
+
+    const chart = echarts.init(container, null, { renderer: 'canvas' });
+    chart.setOption({
+      backgroundColor: 'transparent',
+      animation: false,
+      grid: { top: 24, right: 16, bottom: 36, left: 16, containLabel: true },
+      xAxis: {
+        type: 'time',
+        axisLabel: { color: '#475569', fontSize: 10, fontFamily: 'monospace' },
+        splitLine: { show: false },
+        axisLine: { lineStyle: { color: '#1e293b' } },
+        axisTick: { lineStyle: { color: '#1e293b' } },
       },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: {
-            labels: { color: '#64748b', font: { size: 10, family: 'monospace' }, boxWidth: 12 },
-          },
-          tooltip: {
-            callbacks: {
-              label: ctx => `${ctx.dataset.label}: ${fmtK(ctx.parsed.y)}`,
-            },
-          },
-        },
-        scales: {
-          x: {
-            type: 'time',
-            time: { unit: 'year', displayFormats: { year: 'yyyy' } },
-            grid: { color: '#1e293b' },
-            ticks: { color: '#475569', font: { size: 10, family: 'monospace' } },
-          },
-          y: {
-            grid: { color: '#1e293b' },
-            ticks: {
-              color: '#475569',
-              font: { size: 10, family: 'monospace' },
-              callback: v => fmtK(v),
-            },
-          },
+      yAxis: {
+        type: 'value',
+        axisLabel: { color: '#475569', fontSize: 10, fontFamily: 'monospace', formatter: v => fmtK(v) },
+        splitLine: { lineStyle: { color: '#1e293b' } },
+        axisLine: { show: false },
+        axisTick: { show: false },
+      },
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: '#1e293b',
+        borderColor: '#334155',
+        borderWidth: 1,
+        textStyle: { color: '#e2e8f0', fontSize: 10, fontFamily: 'monospace' },
+        axisPointer: { lineStyle: { color: 'rgba(148,163,184,0.3)' } },
+        formatter: params => {
+          const p50param = params.find(p => p.seriesId === 'p50');
+          if (!p50param) return '';
+          const pt = tipMap.get(p50param.value[0]);
+          if (!pt) return '';
+          const d  = new Date(p50param.value[0]);
+          const ds = d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0');
+          return `<span style="font-size:10px;color:#64748b">${ds}</span><br/>` +
+            `P90: <b>${fmtK(pt.p90)}</b><br/>P75: <b>${fmtK(pt.p75)}</b><br/>` +
+            `P50: <b>${fmtK(pt.p50)}</b><br/>P25: <b>${fmtK(pt.p25)}</b><br/>` +
+            `P10: <b>${fmtK(pt.p10)}</b>`;
         },
       },
+      series: [
+        // Outer band P10→P90
+        { ...baseSeriesOpts, id: 'outer-base', data: outerBase, stack: 'outer' },
+        { ...baseSeriesOpts, id: 'outer-fill', data: outerFill, stack: 'outer',
+          lineStyle: { opacity: 0 }, areaStyle: { color: 'rgba(59,130,246,0.09)', opacity: 1 } },
+        // Inner band P25→P75
+        { ...baseSeriesOpts, id: 'inner-base', data: innerBase, stack: 'inner' },
+        { ...baseSeriesOpts, id: 'inner-fill', data: innerFill, stack: 'inner',
+          lineStyle: { opacity: 0 }, areaStyle: { color: 'rgba(59,130,246,0.16)', opacity: 1 } },
+        // Outer edge lines
+        { id: 'p90-line', type: 'line', data: p90, symbol: 'none', smooth: true,
+          lineStyle: { color: 'rgba(96,165,250,0.28)', width: 1 }, tooltip: { show: false } },
+        { id: 'p10-line', type: 'line', data: p10, symbol: 'none', smooth: true,
+          lineStyle: { color: 'rgba(96,165,250,0.28)', width: 1 }, tooltip: { show: false } },
+        // P50 median
+        { id: 'p50', name: 'Median (P50)', type: 'line', data: p50, symbol: 'none', smooth: true,
+          lineStyle: { color: '#60a5fa', width: 2.5 } },
+      ],
     });
+    return chart;
   }
 
-  _createHistChart(canvas, { labels, data, bucketMins }) {
-    const colors = bucketMins.map(lo =>
-      lo < 0 ? 'rgba(248,113,113,0.7)' : 'rgba(96,165,250,0.7)'
-    );
-    const borderColors = bucketMins.map(lo =>
-      lo < 0 ? 'rgba(248,113,113,0.9)' : 'rgba(96,165,250,0.9)'
-    );
-
-    return new Chart(canvas, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          label: 'Runs',
-          data,
-          backgroundColor: colors,
-          borderColor:      borderColors,
-          borderWidth: 1,
-          borderRadius: 2,
-        }],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: ctx => `${ctx.parsed.y} run${ctx.parsed.y !== 1 ? 's' : ''}`,
-            },
-          },
+  _createHistChart(container, { labels, data, bucketMins }) {
+    const chart = echarts.init(container, null, { renderer: 'canvas' });
+    chart.setOption({
+      backgroundColor: 'transparent',
+      animation: false,
+      grid: { top: 10, right: 16, bottom: 60, left: 16, containLabel: true },
+      xAxis: {
+        type: 'category',
+        data: labels,
+        axisLabel: {
+          color: '#475569', fontSize: 9, fontFamily: 'monospace',
+          rotate: 45,
+          interval: Math.max(0, Math.floor(labels.length / 10) - 1),
         },
-        scales: {
-          x: {
-            grid: { display: false },
-            ticks: {
-              color: '#475569',
-              font: { size: 9, family: 'monospace' },
-              maxRotation: 45,
-              autoSkip: true,
-              maxTicksLimit: 10,
-            },
-          },
-          y: {
-            grid: { color: '#1e293b' },
-            ticks: { color: '#475569', font: { size: 10, family: 'monospace' } },
-          },
+        splitLine: { show: false },
+        axisLine: { lineStyle: { color: '#1e293b' } },
+        axisTick: { lineStyle: { color: '#1e293b' } },
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: { color: '#475569', fontSize: 10, fontFamily: 'monospace' },
+        splitLine: { lineStyle: { color: '#1e293b' } },
+        axisLine: { show: false },
+        axisTick: { show: false },
+      },
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: '#1e293b',
+        borderColor: '#334155',
+        borderWidth: 1,
+        textStyle: { color: '#e2e8f0', fontSize: 10, fontFamily: 'monospace' },
+        formatter: params => {
+          const n = params[0]?.value;
+          return `${params[0]?.name}: <b>${n} run${n !== 1 ? 's' : ''}</b>`;
         },
       },
+      series: [{
+        type: 'bar',
+        data: data.map((v, i) => ({
+          value: v,
+          itemStyle: {
+            color: bucketMins[i] < 0 ? 'rgba(248,113,113,0.75)' : 'rgba(96,165,250,0.75)',
+          },
+        })),
+        barMaxWidth: 40,
+        itemStyle: { borderRadius: [2, 2, 0, 0] },
+      }],
     });
+    return chart;
   }
 }
