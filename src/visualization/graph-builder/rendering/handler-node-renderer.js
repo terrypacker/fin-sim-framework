@@ -18,8 +18,8 @@ export class HandlerNodeRenderer {
   render(ctx) {
 
     const title =
-        ctx.node.handlerClass
-        ?? ctx.node.name
+        ctx.node.name
+        ?? ctx.node.handlerClass
         ?? 'Handler';
 
     const durationMs =
@@ -31,7 +31,7 @@ export class HandlerNodeRenderer {
         this.renderKit.createCardChrome(ctx),
 
         this.renderKit.createTitleSection(ctx, {
-          icon: '🧠',
+          icon: '🛠️',
           title
         }),
 

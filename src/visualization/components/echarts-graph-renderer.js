@@ -11,7 +11,7 @@
 import * as echarts from 'echarts';
 import { BaseComponent } from './base-component.js';
 import { ColumnLayout } from '../graph-builder/column-layout.js';
-import { routeEdge } from '../graph-builder/orthogonal-edge-router.js';
+import { routeEdge, computeFanOutOffsets, computeLaneOffsets } from '../graph-builder/orthogonal-edge-router.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bus-messages.js';
 import {NodeRendererRegistry} from "../graph-builder/rendering/node-renderer-registry.js";
 
@@ -288,13 +288,28 @@ export class EChartsGraphRenderer extends BaseComponent {
       return { value: [pos.x, pos.y] };
     });
 
-    // Edge data: [srcCenterX, srcCenterY, tgtCenterX, tgtCenterY, highlighted].
+    // Compute fan-out Y offsets (spread anchors when multiple edges share a node)
+    // and lane X offsets (shift midX when multiple edges share the same column pair).
+    const edgesArray = [...this._prevEdges.values()];
+    const { sourceOffsets, targetOffsets } = computeFanOutOffsets(edgesArray, this._positions);
+    const midXOffsets = computeLaneOffsets(edgesArray, this._positions, { nodeWidth: NODE_WIDTH });
+
+    // Edge data: [srcX, srcY, tgtX, tgtY, highlighted, srcYOffset, tgtYOffset, midXOffset].
     const edgeData = [];
     for (const [key, edge] of this._prevEdges) {
       const src = this._positions.get(edge.from);
       const tgt = this._positions.get(edge.to);
       if (!src || !tgt) continue;
-      edgeData.push({ value: [src.x, src.y, tgt.x, tgt.y, this._highlightEdgeSet.has(key) ? 1 : 0] });
+      edgeData.push({
+        value: [
+          src.x, src.y,
+          tgt.x, tgt.y,
+          this._highlightEdgeSet.has(key) ? 1 : 0,
+          sourceOffsets.get(key) ?? 0,
+          targetOffsets.get(key) ?? 0,
+          midXOffsets.get(key)   ?? 0,
+        ],
+      });
     }
 
     if (!this._viewRange) this._resetView();
@@ -497,12 +512,15 @@ export class EChartsGraphRenderer extends BaseComponent {
   _renderEdgeItem(params, api) {
     const [sx, sy] = api.coord([api.value(0), api.value(1)]);
     const [tx, ty] = api.coord([api.value(2), api.value(3)]);
-    const hl = api.value(4) === 1;
+    const hl       = api.value(4) === 1;
+    const srcYOff  = api.value(5) ?? 0;
+    const tgtYOff  = api.value(6) ?? 0;
+    const midXOff  = api.value(7) ?? 0;
 
     const pts = routeEdge(
       { x: sx, y: sy },
       { x: tx, y: ty },
-      { nodeWidth: NODE_WIDTH, nodeHeight: NODE_HEIGHT }
+      { nodeWidth: NODE_WIDTH, nodeHeight: NODE_HEIGHT, sourceYOffset: srcYOff, targetYOffset: tgtYOff, midXOffset: midXOff }
     );
 
     const stroke  = hl ? C.edgeHighlight : C.edge;

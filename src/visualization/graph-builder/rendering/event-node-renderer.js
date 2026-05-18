@@ -18,8 +18,8 @@ export class EventNodeRenderer {
   render(ctx) {
 
     const title =
-        ctx.node.eventType
-        ?? ctx.node.name
+        ctx.node.name
+        ?? ctx.node.eventType
         ?? 'Event';
 
     const emitted =
@@ -30,7 +30,7 @@ export class EventNodeRenderer {
         this.renderKit.createCardChrome(ctx),
 
         this.renderKit.createTitleSection(ctx, {
-          icon: '⚡',
+          icon: '🕔',
           title
         }),
 

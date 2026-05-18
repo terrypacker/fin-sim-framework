@@ -18,8 +18,8 @@ export class ActionNodeRenderer {
   render(ctx) {
 
     const title =
-        ctx.node.actionClass
-        ?? ctx.node.name
+        ctx.node.name
+        ?? ctx.node.actionClass
         ?? 'Action';
 
     const payloadSize =
@@ -31,7 +31,7 @@ export class ActionNodeRenderer {
         this.renderKit.createCardChrome(ctx),
 
         this.renderKit.createTitleSection(ctx, {
-          icon: '📦',
+          icon: '⚡',
           title
         }),
 

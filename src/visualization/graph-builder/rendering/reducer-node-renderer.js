@@ -18,8 +18,8 @@ export class ReducerNodeRenderer {
   render( ctx ) {
 
     const reducerName =
-        ctx.node.reducerType
-        ?? ctx.node.name
+        ctx.node.name
+        ?? ctx.node.reducerType
         ?? 'Reducer';
 
     const mutationCount =
@@ -30,7 +30,7 @@ export class ReducerNodeRenderer {
         this.renderKit.createCardChrome(ctx),
 
         this.renderKit.createTitleSection(ctx, {
-          icon: '🔁',
+          icon: '🧠',
           title: reducerName
         }),
 
