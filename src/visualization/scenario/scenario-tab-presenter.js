@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { ServiceRegistry }    from '../../services/service-registry.js';
+import { ScenarioSerializer } from '../../scenarios/scenario-serializer.js';
 
 /**
  * ScenarioTabPresenter — owns all scenario-tab UI and scenario CRUD.
@@ -42,11 +44,12 @@ export class ScenarioTabPresenter {
    *   bus:        import('../../simulation-framework/event-bus.js').EventBus
    * }}
    */
-  constructor({ controller, view, bus , initScenario}) {
+  constructor({ controller, view, bus, initScenario, getBuiltScenario }) {
     this._controller = controller;
     this._view = view;
     this._bus = bus;
     this._initScenario = initScenario;
+    this._getBuiltScenario = getBuiltScenario ?? null;
     this._activeScenario = null;
 
     this._view.onOpen = (id) => {
@@ -103,7 +106,21 @@ export class ScenarioTabPresenter {
     };
 
     this._view.onDownloadJson = () => {
-      this._view.downloadJson(this._controller.getUserScenarios());
+      const services = ServiceRegistry.getInstance();
+      const active   = this._activeScenario;
+      const built    = this._getBuiltScenario?.();
+      const serialized = ScenarioSerializer.serialize(
+        services,
+        active?.id    ?? 'export',
+        active?.name  ?? 'Exported Scenario',
+        active?.order ?? 100,
+        false,
+        built?.simStart    ?? active?.simStart,
+        built?.simEnd      ?? active?.simEnd,
+        built?.initialState ?? active?.initialState ?? {},
+        active?.params ?? [],
+      );
+      this._view.downloadJson({ scenarios: [serialized] });
     };
 
     this._view.onUploadJson = async (file) => {

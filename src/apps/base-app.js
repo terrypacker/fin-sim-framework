@@ -274,6 +274,7 @@ export class BaseApp extends BaseComponent {
       view: this._scenarioTabView,
       bus: registry.bus,
       initScenario: () => { this.destroyScenario(); this.initScenario(); },
+      getBuiltScenario: () => this.scenario,
     });
 
     // ── Build scenario ────────────────────────────────────────────────────────
