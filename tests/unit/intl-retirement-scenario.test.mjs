@@ -81,7 +81,7 @@ import { Person }                                                               
 // ─── Provide the FinSimLib global that BaseScenario.buildSim() needs ──────────
 
 globalThis.FinSimLib = {
-  Core: {
+  Engine: {
     Simulation, HandlerEntry,
     AmountAction, Action, FieldAction, ScriptedAction, FieldValueAction, RecordBalanceAction,
     FieldReducer, NoOpReducer, ArrayReducer, NumericSumReducer, MultiplicativeReducer, ScriptedReducer,

@@ -53,7 +53,7 @@ import { Person } from '../../src/finance/person.js';
 
 globalThis.FinSimLib = {
   Finance: { Person },
-  Core: {
+  Engine: {
     Simulation,
     HandlerEntry,
     AmountAction,
