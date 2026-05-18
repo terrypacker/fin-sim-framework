@@ -145,6 +145,32 @@
   min-height: 60px;
 }
 
+.node-field input[type="checkbox"] {
+  appearance: none;
+  width: 1.5em;
+  height: 1.5em;
+  border: 2px solid #8b8c89;
+  border-radius: 4px;
+  display: grid;
+  place-content: center;
+  cursor: pointer;
+}
+
+.node-field input[type="checkbox"]::before {
+  content: "";
+  width: 0.65em;
+  height: 0.65em;
+  transform: scale(0);
+  transition: 120ms transform ease-in-out;
+  background-color: #274c77;
+  /* Use clip-path for a checkmark shape */
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+
+.node-field input[type="checkbox"]:checked::before {
+  transform: scale(1);
+}
+
 .node-field input:focus,
 .node-field select:focus,
 .node-field textarea:focus {

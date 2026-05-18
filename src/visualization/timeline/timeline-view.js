@@ -133,8 +133,8 @@ export class TimelineView extends BaseComponent {
   _renderList({ groups, expanded, filterEvents, filterActions, filterDateStart, filterDateEnd, hasRewind, treeMode }) {
     if (!this._listEl) return;
 
-    const atBottom = this.container.scrollHeight - this.container.scrollTop
-                     - this.container.clientHeight < 80;
+    const atBottom = this._listEl.scrollHeight - this._listEl.scrollTop
+                     - this._listEl.clientHeight < 80;
 
     if (groups.size === 0) {
       const hasFilter = filterEvents.size > 0 || filterActions.size > 0 || filterDateStart || filterDateEnd;
@@ -158,12 +158,12 @@ export class TimelineView extends BaseComponent {
     // Attach passive scroll listener once
     if (!this._scrollBound) {
       this._scrollBound = true;
-      this.container.addEventListener('scroll', () => this._virtualRender(), { passive: true });
+      this._listEl.addEventListener('scroll', () => this._virtualRender(), { passive: true });
     }
 
     this._virtualRender();
 
-    if (atBottom) this.container.scrollTop = this.container.scrollHeight;
+    if (atBottom) this._listEl.scrollTop = this._listEl.scrollHeight;
   }
 
   _virtualRender() {
@@ -171,8 +171,8 @@ export class TimelineView extends BaseComponent {
 
     const { expanded, hasRewind, treeMode } = this._virtualParams;
     const groups = this._virtualGroups;
-    const scrollTop     = this.container.scrollTop;
-    const viewportH     = this.container.clientHeight || 400;
+    const scrollTop     = this._listEl.scrollTop;
+    const viewportH     = this._listEl.clientHeight || 400;
 
     // Compute per-group estimated heights and cumulative offsets
     const heights = groups.map(({ dateStr, byEvent }) =>
