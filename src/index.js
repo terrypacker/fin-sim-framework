@@ -178,9 +178,12 @@ import { ConfigGraphView } from './visualization/graph-builder/config-graph-view
 import { GraphBuilderController } from './visualization/graph-builder/graph-builder-controller.js';
 import { GraphBuilderPresenter } from './visualization/graph-builder/graph-builder-presenter.js';
 import { GraphBuilderView } from './visualization/graph-builder/graph-builder-view.js';
+import { nodeBounds, nodeAnchors } from './visualization/graph-builder/graph-geometry.js';
+import { NODE_WIDTH, NODE_HEIGHT, COLUMN_GAP, ROW_GAP, PADDING_X, PADDING_Y, BACKWARD_MARGIN, ARROW_SIZE, ARROW_HALF, EDGE_COLOR, EDGE_COLOR_HIGHLIGHT, EDGE_WIDTH, EDGE_WIDTH_HIGHLIGHT, EDGE_OPACITY, EDGE_OPACITY_HIGHLIGHT } from './visualization/graph-builder/graph-metrics.js';
 import { GraphNodeExecHistory } from './visualization/graph-builder/graph-node-exec-history.js';
 import { GraphNodeInspectorPanel } from './visualization/graph-builder/graph-node-inspector-panel.js';
 import { GraphNodeLineage } from './visualization/graph-builder/graph-node-lineage.js';
+import { routeEdge } from './visualization/graph-builder/orthogonal-edge-router.js';
 import { McConfigPanel } from './visualization/monte-carlo/mc-config-panel.js';
 import { McResultsPanel } from './visualization/monte-carlo/mc-results-panel.js';
 import { McRunsPanel } from './visualization/monte-carlo/mc-runs-panel.js';
@@ -601,9 +604,27 @@ export const Visualization = {
   GraphBuilderController,
   GraphBuilderPresenter,
   GraphBuilderView,
+  nodeBounds,
+  nodeAnchors,
+  NODE_WIDTH,
+  NODE_HEIGHT,
+  COLUMN_GAP,
+  ROW_GAP,
+  PADDING_X,
+  PADDING_Y,
+  BACKWARD_MARGIN,
+  ARROW_SIZE,
+  ARROW_HALF,
+  EDGE_COLOR,
+  EDGE_COLOR_HIGHLIGHT,
+  EDGE_WIDTH,
+  EDGE_WIDTH_HIGHLIGHT,
+  EDGE_OPACITY,
+  EDGE_OPACITY_HIGHLIGHT,
   GraphNodeExecHistory,
   GraphNodeInspectorPanel,
   GraphNodeLineage,
+  routeEdge,
   McConfigPanel,
   McResultsPanel,
   McRunsPanel,

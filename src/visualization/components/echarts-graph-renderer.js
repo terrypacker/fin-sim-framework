@@ -11,10 +11,12 @@
 import * as echarts from 'echarts';
 import { BaseComponent } from './base-component.js';
 import { ColumnLayout } from '../graph-builder/column-layout.js';
+import { routeEdge } from '../graph-builder/orthogonal-edge-router.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bus-messages.js';
+import {NodeRendererRegistry} from "../graph-builder/rendering/node-renderer-registry.js";
 
 const NODE_WIDTH  = 180;
-const NODE_HEIGHT = 44;
+const NODE_HEIGHT = 56;
 
 const C = {
   bg:              '#111827',
@@ -34,14 +36,19 @@ const C = {
 };
 
 /**
- * EChartsGraphRenderer — drop-in replacement for GraphRenderer using an
- * eCharts graph series instead of DOM nodes + SVG edges.
+ * EChartsGraphRenderer — two custom series sharing a single cartesian2d
+ * coordinate system so that renderItem fires for both nodes and edges.
  *
- * Exposes the same public API as GraphRenderer so all callers (BaseGraphView,
- * GraphBuilderPresenter, SimulationAnimator) work without changes.
+ * Architecture:
+ *   series[0] 'edge-series' — custom, z:1, draws orthogonal polylines + arrowheads
+ *   series[1] 'node-series' — custom, z:2, draws rounded-rect nodes + text labels
  *
- * Dropped from the original: port dots, node drag, selection-box.
- * eCharts provides pan/zoom via roam:true.
+ * Both series use the same hidden xAxis/yAxis whose range equals the container
+ * pixel dimensions, so api.coord([layoutX, layoutY]) returns [layoutX, layoutY]
+ * (identity mapping). Node positions from ColumnLayout are therefore usable
+ * directly as data coordinates without any further conversion.
+ *
+ * Exposes the same public API as GraphRenderer so all callers work unchanged.
  */
 export class EChartsGraphRenderer extends BaseComponent {
 
@@ -67,6 +74,11 @@ export class EChartsGraphRenderer extends BaseComponent {
     this._highlightEdgeSet  = new Set();
     this.selectedNodeId     = null;
 
+    //TODO Move this to a central location for UI so the plugins and domain specific classes
+    // can register renderers, first up we will want Person and Account
+    this._nodeRendererRegistry = new NodeRendererRegistry();
+    this._nodeRendererRegistry.registerDefaults();
+
     this.nodeClickListeners        = [];
     this.breakpointChangeListeners = [];
 
@@ -82,8 +94,11 @@ export class EChartsGraphRenderer extends BaseComponent {
     this._drainExecEndMsgs    = noop;
     this._drainBreakpointMsgs = noop;
 
-    this._chart = null;
-    this._ro    = null;
+    this._chart       = null;
+    this._ro          = null;
+    this._viewRange   = null;   // { xMin, xMax, yMin, yMax } — current axis window
+    this._panStart    = null;   // { px, py, xMin, xMax, yMin, yMax } set on mousedown
+    this._dragNodeId  = null;   // id of node currently being dragged
     this._mount();
   }
 
@@ -92,45 +107,35 @@ export class EChartsGraphRenderer extends BaseComponent {
     this._chart = echarts.init(this._container, null, { renderer: 'canvas' });
     this._chart.setOption(this._buildBaseOption());
 
-    // Prevent browser context menu over the canvas so right-click works.
     this._container.addEventListener('contextmenu', (e) => e.preventDefault());
 
     this._chart.on('contextmenu', (params) => {
-      if (params.dataType !== 'node') return;
-      // Look up node by id — avoids storing domain objects in eCharts data.
-      const node = this._currentNodeMap.get(params.data.id);
+      if (params.seriesId !== 'node-series') return;
+      const node = this._currentNodes[params.dataIndex];
       if (!node) return;
       this.breakpointChangeListeners.forEach(l => l(node));
       this.render();
     });
 
     this._chart.on('click', (params) => {
-      if (params.dataType !== 'node') return;
-      const node = this._currentNodeMap.get(params.data.id);
+      if (params.seriesId !== 'node-series') return;
+      const node = this._currentNodes[params.dataIndex];
       if (!node) return;
-      this.selectedNodeId = params.data.id;
+      this.selectedNodeId = node.id;
       this.nodeClickListeners.forEach(l => l(params.event?.event, node));
       this.render();
     });
 
-    this._chart.getZr().on('mouseup', () => this._syncDraggedPositions());
+    // Pan, zoom, and node-drag via ZRender — replaces dataZoom so we can
+    // share the same mousedown between "drag node" and "pan canvas".
+    const zr = this._chart.getZr();
+    zr.on('mousewheel', (e) => this._onWheel(e));
+    zr.on('mousedown',  (e) => this._onDown(e));
+    zr.on('mousemove',  (e) => this._onMove(e));
+    zr.on('mouseup',    (e) => this._onUp(e));
 
     this._ro = new ResizeObserver(() => this._chart?.resize());
     this._ro.observe(this._container);
-  }
-
-  _syncDraggedPositions() {
-    try {
-      const series = this._chart.getModel().getSeries()[0];
-      const data   = series.getData();
-      data.each((idx) => {
-        const layout = data.getItemLayout(idx);
-        const id     = data.getId(idx);
-        if (layout && id) {
-          this._positions.set(id, { x: layout[0] - NODE_WIDTH / 2, y: layout[1] - NODE_HEIGHT / 2 });
-        }
-      });
-    } catch (_e) { /* internal eCharts API may differ across versions */ }
   }
 
   /* ───────────────────────── External Action Listeners ───────────────────── */
@@ -186,6 +191,7 @@ export class EChartsGraphRenderer extends BaseComponent {
   resizeCanvas() {
     this._chart?.resize();
     this._relayoutAll();
+    this._resetView();
     this.render();
   }
 
@@ -210,6 +216,7 @@ export class EChartsGraphRenderer extends BaseComponent {
 
   fitToView() {
     this._relayoutAll();
+    this._resetView();
     this.render();
   }
 
@@ -270,153 +277,269 @@ export class EChartsGraphRenderer extends BaseComponent {
     }
 
     const { nodes, edges } = this._refreshGraphState();
-
     if (!this._positions.size && nodes.length) this._relayoutAll();
 
     this._prevEdges = new Map(edges.map(e => [`${e.from}->${e.to}`, e]));
 
+    // Node data: each item is [centerX, centerY]. renderItem looks up the node
+    // by params.dataIndex into this._currentNodes (same order).
+    const nodeData = nodes.map(n => {
+      const pos = this._positions.get(n.id) || { x: 0, y: 0 };
+      return { value: [pos.x, pos.y] };
+    });
+
+    // Edge data: [srcCenterX, srcCenterY, tgtCenterX, tgtCenterY, highlighted].
+    const edgeData = [];
+    for (const [key, edge] of this._prevEdges) {
+      const src = this._positions.get(edge.from);
+      const tgt = this._positions.get(edge.to);
+      if (!src || !tgt) continue;
+      edgeData.push({ value: [src.x, src.y, tgt.x, tgt.y, this._highlightEdgeSet.has(key) ? 1 : 0] });
+    }
+
+    // Initialise the view range on the very first render; subsequent renders
+    // leave it alone so pan/zoom state is preserved.
+    if (!this._viewRange) this._resetView();
+
     this._chart?.setOption({
-      series: [{
-        data:  nodes.map(n => this._buildNodeData(n)),
-        edges: edges.map(e => this._buildEdgeData(e)),
-      }],
+      series: [
+        { id: 'edge-series', data: edgeData },
+        { id: 'node-series', data: nodeData },
+      ],
     });
   }
 
-  _buildNodeData(node) {
-    const pos  = this._positions.get(node.id) || { x: 0, y: 0 };
-    const exec = this._execOverlay.get(node.id);
+  /* ─────────────────── View (pan / zoom) ─────────────────────────────────── */
 
-    const isSelected    = node.id === this.selectedNodeId;
-    const isHighlighted = this._highlightNodeSet.has(node.id);
-    const hasBreakpoint = !!node.data?.breakpoint;
-    const hitBreakpoint = !!exec?.breakpointHit;
+  /** Reset the axis window to the full container dimensions (1:1 pixel mapping). */
+  _resetView() {
+    const rect = this._container.getBoundingClientRect();
+    const W    = rect.width  || 800;
+    const H    = rect.height || 600;
+    this._viewRange = { xMin: 0, xMax: W, yMin: 0, yMax: H };
+    this._applyView();
+  }
+
+  _applyView() {
+    const { xMin, xMax, yMin, yMax } = this._viewRange;
+    this._chart?.setOption({
+      xAxis: { min: xMin, max: xMax },
+      yAxis: { min: yMin, max: yMax },
+    });
+  }
+
+  /**
+   * Convert a canvas pixel position to data-space coordinates.
+   * Works correctly across any zoom/pan level because it uses the live
+   * _viewRange rather than the fixed initial dimensions.
+   */
+  _pixelToData(px, py) {
+    const { xMin, xMax, yMin, yMax } = this._viewRange;
+    const rect = this._container.getBoundingClientRect();
+    const W = rect.width  || 800;
+    const H = rect.height || 600;
+    return [
+      xMin + (px / W) * (xMax - xMin),
+      yMin + (py / H) * (yMax - yMin),
+    ];
+  }
+
+  /** Scroll-wheel zoom — equal factor on both axes, centred on cursor. */
+  _onWheel(e) {
+    if (!this._viewRange) return;
+    e.event?.preventDefault?.();
+    const factor = e.wheelDelta > 0 ? 0.85 : 1 / 0.85;
+    const { xMin, xMax, yMin, yMax } = this._viewRange;
+    const [cx, cy] = this._pixelToData(e.zrX, e.zrY);
+    this._viewRange = {
+      xMin: cx - (cx - xMin) * factor,
+      xMax: cx + (xMax - cx) * factor,
+      yMin: cy - (cy - yMin) * factor,
+      yMax: cy + (yMax - cy) * factor,
+    };
+    this._applyView();
+  }
+
+  /** Mousedown — start a node drag if cursor is over a node, else start pan. */
+  _onDown(e) {
+    if (!this._viewRange) return;
+    const [dataX, dataY] = this._pixelToData(e.zrX, e.zrY);
+    for (const [nodeId, pos] of this._positions) {
+      if (Math.abs(pos.x - dataX) <= NODE_WIDTH  / 2 &&
+          Math.abs(pos.y - dataY) <= NODE_HEIGHT / 2) {
+        this._dragNodeId = nodeId;
+        return;
+      }
+    }
+    const { xMin, xMax, yMin, yMax } = this._viewRange;
+    this._panStart = { px: e.zrX, py: e.zrY, xMin, xMax, yMin, yMax };
+  }
+
+  /** Mousemove — continue node drag or pan. */
+  _onMove(e) {
+    if (this._dragNodeId) {
+      const [dataX, dataY] = this._pixelToData(e.zrX, e.zrY);
+      this._positions.set(this._dragNodeId, { x: dataX, y: dataY });
+      this.render();
+    } else if (this._panStart) {
+      const { px, py, xMin, xMax, yMin, yMax } = this._panStart;
+      const rect = this._container.getBoundingClientRect();
+      const W    = rect.width  || 800;
+      const H    = rect.height || 600;
+      const dx   = -(e.zrX - px) / W * (xMax - xMin);
+      const dy   = -(e.zrY - py) / H * (yMax - yMin);
+      this._viewRange = { xMin: xMin + dx, xMax: xMax + dx, yMin: yMin + dy, yMax: yMax + dy };
+      this._applyView();
+    }
+  }
+
+  /** Mouseup — end any drag or pan. */
+  _onUp() {
+    this._dragNodeId = null;
+    this._panStart   = null;
+  }
+
+  /* ─────────────────── Custom series renderItem callbacks ─────────────────── */
+
+  /**
+   * Render one node as a rounded-rect group with two text lines.
+   * params.dataIndex indexes into this._currentNodes.
+   */
+  _renderNodeItem(params, api) {
+    const ctx = this._buildNodeRenderContext(params, api);
+
+    if (!ctx) {
+      return { type: 'group', children: [] };
+    }
+
+    const renderer = this._nodeRendererRegistry.get(ctx.node.kind);
+
+    return renderer.render(ctx);
+  }
+
+  _buildNodeRenderContext(params, api) {
+    const [cx, cy] = api.coord([api.value(0), api.value(1)]);
+    const node = this._currentNodes[params.dataIndex];
+
+    if (!node) return null;
+
+    const exec       = this._execOverlay.get(node.id);
+    const isSelected = node.id === this.selectedNodeId;
+    const isHL       = this._highlightNodeSet.has(node.id);
+    const hasBp      = !!node.data?.breakpoint;
+    const hitBp      = !!exec?.breakpointHit;
 
     let borderColor = C.border;
     let borderWidth = 1;
-    let bgColor     = C.bg;
+    let bgColor     = hitBp ? C.bgBreakpoint : C.bg;
 
     if (isSelected) {
       borderColor = C.borderSelected;
       borderWidth = 2;
-    } else if (isHighlighted) {
+    }
+    else if (isHL) {
       borderColor = C.borderHighlight;
       borderWidth = 2;
-    } else if (hasBreakpoint) {
+    }
+    else if (hasBp) {
       borderColor = C.borderBp;
       borderWidth = 2;
     }
 
-    if (hitBreakpoint) bgColor = C.bgBreakpoint;
-
-    // Only store primitives in eCharts data — domain objects cause clone$4 stack overflows.
     return {
-      id:        node.id,
-      name:      node.name,
-      x:         pos.x + NODE_WIDTH  / 2,
-      y:         pos.y + NODE_HEIGHT / 2,
-      itemStyle: { color: bgColor, borderColor, borderWidth },
+      node,
+      exec,
+
+      cx,
+      cy,
+
+      x: cx - NODE_WIDTH / 2,
+      y: cy - NODE_HEIGHT / 2,
+
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT,
+
+      borderColor,
+      borderWidth,
+      bgColor,
+
+      isSelected,
+      isHL,
+      hasBp,
+      hitBp,
+
+      padding: 10
     };
   }
 
-  _buildEdgeData(edge) {
-    const key         = `${edge.from}->${edge.to}`;
-    const highlighted = this._highlightEdgeSet.has(key);
+  /**
+   * Render one edge as an orthogonal polyline + arrowhead polygon.
+   * Value dimensions: [srcX, srcY, tgtX, tgtY, highlighted(0|1)].
+   */
+  _renderEdgeItem(params, api) {
+    const [sx, sy] = api.coord([api.value(0), api.value(1)]);
+    const [tx, ty] = api.coord([api.value(2), api.value(3)]);
+    const hl = api.value(4) === 1;
+
+    const pts = routeEdge(
+      { x: sx, y: sy },
+      { x: tx, y: ty },
+      { nodeWidth: NODE_WIDTH, nodeHeight: NODE_HEIGHT }
+    );
+
+    const stroke  = hl ? C.edgeHighlight : C.edge;
+    const lw      = hl ? 3 : 2;
+    const opacity = hl ? 1 : 0.7;
+    const [ex, ey] = pts[pts.length - 1];
+
     return {
-      source:    edge.from,
-      target:    edge.to,
-      lineStyle: highlighted
-        ? { color: C.edgeHighlight, width: 3, opacity: 1 }
-        : {},
+      type: 'group',
+      children: [
+        {
+          type:  'polyline',
+          shape: { points: pts },
+          style: { stroke, lineWidth: lw, opacity, fill: 'none', lineCap: 'round', lineJoin: 'round' },
+        },
+        {
+          type:  'polygon',
+          shape: { points: [[ex, ey], [ex - 8, ey - 5], [ex - 8, ey + 5]] },
+          style: { fill: stroke, opacity },
+        },
+      ],
     };
   }
 
   _buildBaseOption() {
-    const rich = {
-      hdr: {
-        fontSize:  9,
-        color:     C.textMuted,
-        padding:   [4, 6, 0, 6],
-        align:     'left',
-      },
-      ttl: {
-        fontSize:   10,
-        color:      C.text,
-        fontWeight: 'bold',
-        padding:    [2, 6, 4, 6],
-        align:      'left',
-      },
-      fired:  { fontSize: 9, color: '#fff', backgroundColor: C.badgeFired,   padding: [1, 4], borderRadius: 2 },
-      idle:   { fontSize: 9, color: '#fff', backgroundColor: C.badgeIdle,    padding: [1, 4], borderRadius: 2 },
-      change: { fontSize: 9, color: '#fff', backgroundColor: C.badgeChange,  padding: [1, 4], borderRadius: 2 },
-      bp:     { fontSize: 9, color: '#fff', backgroundColor: C.badgeBp,      padding: [1, 4], borderRadius: 2 },
-    };
+    const W = this._container.clientWidth  || 800;
+    const H = this._container.clientHeight || 600;
 
     return {
       backgroundColor: 'transparent',
       animation:       false,
-      series: [{
-        type:           'graph',
-        layout:         'none',
-        roam:           true,
-        draggable:      true,
-        symbolSize:     [NODE_WIDTH, NODE_HEIGHT],
-        symbol:         'rect',
-        cursor:         'pointer',
-        edgeSymbol:     ['none', 'arrow'],
-        edgeSymbolSize: 8,
-        label: {
-          show:      true,
-          position:  'inside',
-          formatter: (params) => this._buildLabel(params.data),
-          rich,
+      // Plot area fills the full container so coordinate [0,0] → canvas pixel (0,0).
+      grid: { left: 0, right: 0, top: 0, bottom: 0, containLabel: false },
+      xAxis: { show: false, type: 'value', min: 0, max: W },
+      yAxis: { show: false, type: 'value', min: 0, max: H, inverse: true },
+      series: [
+        {
+          id:         'edge-series',
+          type:       'custom',
+          z:          1,
+          silent:     true,
+          clip:       false,
+          renderItem: (params, api) => this._renderEdgeItem(params, api),
+          data:       [],
         },
-        itemStyle: {
-          color:        C.bg,
-          borderColor:  C.border,
-          borderWidth:  1,
-          borderRadius: 3,
+        {
+          id:         'node-series',
+          type:       'custom',
+          z:          2,
+          clip:       false,
+          renderItem: (params, api) => this._renderNodeItem(params, api),
+          data:       [],
         },
-        lineStyle: {
-          color:     C.edge,
-          width:     2,
-          opacity:   0.7,
-          curveness: 0.3,
-        },
-        emphasis: { disabled: true },
-        select:   { disabled: true },
-        data:     [],
-        edges:    [],
-      }],
+      ],
     };
-  }
-
-  _buildLabel(data) {
-    const node = this._currentNodeMap.get(data.id);
-    if (!node) return '';
-
-    const exec     = this._execOverlay.get(data.id);
-    const showExec = this._layerMode !== 'config';
-
-    let header = '';
-    switch (node.kind) {
-      case 'event':   header = node.eventType   ?? node.name; break;
-      case 'handler': header = node.handlerClass ?? node.name; break;
-      case 'action':  header = node.actionClass  ?? node.name; break;
-      case 'reducer': header = node.reducerType  ?? node.name; break;
-      default:        header = node.kind ?? '';
-    }
-
-    const name = node.name ?? '';
-
-    let badges = '';
-    if (showExec) {
-      badges += exec?.fired ? ' {fired|Fired}' : ' {idle|Idle}';
-      if (exec?.stateChanges?.length) badges += ' {change|Chg}';
-    }
-    if (node.data?.breakpoint) badges += ' {bp|⏸}';
-
-    return `{hdr|${header}}\n{ttl|${name}}${badges}`;
   }
 
   destroy() {
