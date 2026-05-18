@@ -7,7 +7,7 @@
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
-import {NodeRenderGroup} from "./default-node-renderer.js";
+import { NodeRenderGroup } from "./default-node-renderer.js";
 
 export class ReducerNodeRenderer {
 
@@ -15,7 +15,7 @@ export class ReducerNodeRenderer {
     this.renderKit = renderKit;
   }
 
-  render(ctx) {
+  render( ctx ) {
 
     const reducerName =
         ctx.node.reducerType

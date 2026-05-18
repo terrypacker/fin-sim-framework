@@ -67,22 +67,44 @@ test('EChartsGraphRenderer: constructs without error', () => {
   expect(() => makeRenderer()).not.toThrow();
 });
 
-// ─── _buildNodeData — position passthrough ────────────────────────────────────
+// ─── _buildNodeRenderContext — position passthrough ───────────────────────────
 
-describe('_buildNodeData: position coordinates', () => {
+describe('_buildNodeRenderContext: centre coordinates', () => {
 
-  test('x is the centre x from _positions', () => {
-    const r = makeRenderer();
-    r._positions.set('n1', { x: 170, y: 100 });
-    r._currentNodeMap.set('n1', { id: 'n1', name: 'Test', kind: 'event' });
-    expect(r._buildNodeData({ id: 'n1', name: 'Test', kind: 'event' }).x).toBe(170);
+  test('cx is the centre x (from api.coord)', () => {
+    const r    = makeRenderer();
+    const node = { id: 'n1', name: 'Test', kind: 'event' };
+    r._currentNodes = [node];
+    const ctx = r._buildNodeRenderContext({ dataIndex: 0 }, makeApi([170, 100]));
+    expect(ctx.cx).toBe(170);
   });
 
-  test('y is the centre y from _positions', () => {
+  test('cy is the centre y (from api.coord)', () => {
+    const r    = makeRenderer();
+    const node = { id: 'n1', name: 'Test', kind: 'event' };
+    r._currentNodes = [node];
+    const ctx = r._buildNodeRenderContext({ dataIndex: 0 }, makeApi([170, 100]));
+    expect(ctx.cy).toBe(100);
+  });
+
+  test('x = cx - NODE_WIDTH/2', () => {
+    const r    = makeRenderer();
+    r._currentNodes = [{ id: 'n1', name: 'T', kind: 'event' }];
+    const ctx = r._buildNodeRenderContext({ dataIndex: 0 }, makeApi([170, 100]));
+    expect(ctx.x).toBe(170 - 180 / 2);
+  });
+
+  test('y = cy - NODE_HEIGHT/2', () => {
+    const r    = makeRenderer();
+    r._currentNodes = [{ id: 'n1', name: 'T', kind: 'event' }];
+    const ctx = r._buildNodeRenderContext({ dataIndex: 0 }, makeApi([170, 100]));
+    expect(ctx.y).toBe(100 - 56 / 2);
+  });
+
+  test('returns null for unknown dataIndex', () => {
     const r = makeRenderer();
-    r._positions.set('n1', { x: 170, y: 100 });
-    r._currentNodeMap.set('n1', { id: 'n1', name: 'Test', kind: 'event' });
-    expect(r._buildNodeData({ id: 'n1', name: 'Test', kind: 'event' }).y).toBe(100);
+    r._currentNodes = [];
+    expect(r._buildNodeRenderContext({ dataIndex: 0 }, makeApi([0, 0]))).toBeNull();
   });
 
 });
@@ -234,100 +256,76 @@ describe('_renderNodeItem: structure', () => {
     const node = { id: 'n1', name: 'Pay Salary', kind: 'action', actionClass: 'PaySalaryAction', ...nodeOverride };
     r._currentNodes = [node];
     r._currentNodeMap.set('n1', node);
-    const api  = makeApi([SRC.x, SRC.y]);
-    return r._renderNodeItem({ dataIndex: 0 }, api);
+    return r._renderNodeItem({ dataIndex: 0 }, makeApi([SRC.x, SRC.y]));
   }
 
   test('returns a group', () => {
     expect(renderNode().type).toBe('group');
   });
 
-  test('group has at least 2 children (rect + text)', () => {
+  test('group has at least 2 children', () => {
     expect(renderNode().children.length).toBeGreaterThanOrEqual(2);
   });
 
-  test('first child is a rect', () => {
-    expect(renderNode().children[0].type).toBe('rect');
+  test('unknown dataIndex returns empty group', () => {
+    const r = makeRenderer();
+    r._currentNodes = [];
+    expect(r._renderNodeItem({ dataIndex: 0 }, makeApi([0, 0])).children).toHaveLength(0);
   });
 
 });
 
-describe('_renderNodeItem: rect position and size', () => {
+// ─── _buildNodeRenderContext — colour states ──────────────────────────────────
+// Colour decisions live in the context object; node renderers consume them.
 
-  function nodeRect(nodeOverride = {}) {
-    const r    = makeRenderer();
-    const node = { id: 'n1', name: 'Test', kind: 'event', ...nodeOverride };
+describe('_buildNodeRenderContext: colour states', () => {
+
+  function ctx(r, node) {
     r._currentNodes = [node];
-    const api  = makeApi([SRC.x, SRC.y]);
-    return r._renderNodeItem({ dataIndex: 0 }, api).children[0].shape;
+    return r._buildNodeRenderContext({ dataIndex: 0 }, makeApi([SRC.x, SRC.y]));
   }
 
-  test('rect x = cx - NODE_WIDTH/2', () => {
-    expect(nodeRect().x).toBe(SRC.x - 180 / 2);
-  });
-
-  test('rect y = cy - NODE_HEIGHT/2', () => {
-    expect(nodeRect().y).toBe(SRC.y - 56 / 2);
-  });
-
-  test('rect width = NODE_WIDTH', () => {
-    expect(nodeRect().width).toBe(180);
-  });
-
-  test('rect height = NODE_HEIGHT', () => {
-    expect(nodeRect().height).toBe(56);
-  });
-
-});
-
-describe('_renderNodeItem: colour states', () => {
-
-  function nodeRect(r, node, api) {
-    return r._renderNodeItem({ dataIndex: 0 }, api).children[0].style;
-  }
-
-  test('default fill is the background colour', () => {
+  test('default bgColor is #111827', () => {
     const r    = makeRenderer();
     const node = { id: 'n1', name: 'T', kind: 'event' };
-    r._currentNodes = [node];
-    const style = nodeRect(r, node, makeApi([SRC.x, SRC.y]));
-    expect(style.fill).toBe('#111827');
+    expect(ctx(r, node).bgColor).toBe('#111827');
   });
 
-  test('selected node gets a highlighted border colour', () => {
+  test('selected node sets borderColor to #f59e0b and borderWidth 2', () => {
     const r    = makeRenderer();
     const node = { id: 'n1', name: 'T', kind: 'event' };
-    r._currentNodes = [node];
     r.selectedNodeId = 'n1';
-    const style = nodeRect(r, node, makeApi([SRC.x, SRC.y]));
-    expect(style.stroke).toBe('#f59e0b');
-    expect(style.lineWidth).toBe(2);
+    const c = ctx(r, node);
+    expect(c.borderColor).toBe('#f59e0b');
+    expect(c.borderWidth).toBe(2);
   });
 
-  test('highlighted node gets an orange border', () => {
+  test('highlighted node sets borderColor to #f97316', () => {
     const r    = makeRenderer();
     const node = { id: 'n1', name: 'T', kind: 'event' };
-    r._currentNodes = [node];
     r._highlightNodeSet.add('n1');
-    const style = nodeRect(r, node, makeApi([SRC.x, SRC.y]));
-    expect(style.stroke).toBe('#f97316');
+    expect(ctx(r, node).borderColor).toBe('#f97316');
   });
 
-  test('breakpoint node gets a red border', () => {
+  test('breakpoint node sets borderColor to #ef4444', () => {
     const r    = makeRenderer();
     const node = { id: 'n1', name: 'T', kind: 'event', data: { breakpoint: true } };
-    r._currentNodes = [node];
-    const style = nodeRect(r, node, makeApi([SRC.x, SRC.y]));
-    expect(style.stroke).toBe('#ef4444');
+    expect(ctx(r, node).borderColor).toBe('#ef4444');
   });
 
-  test('breakpoint-hit node gets a dark red background', () => {
+  test('breakpoint-hit node sets bgColor to #2d1515', () => {
     const r    = makeRenderer();
     const node = { id: 'n1', name: 'T', kind: 'event' };
-    r._currentNodes = [node];
     r._execOverlay.set('n1', { breakpointHit: true });
-    const style = nodeRect(r, node, makeApi([SRC.x, SRC.y]));
-    expect(style.fill).toBe('#2d1515');
+    expect(ctx(r, node).bgColor).toBe('#2d1515');
+  });
+
+  test('context includes node dimensions from NODE_WIDTH/HEIGHT', () => {
+    const r    = makeRenderer();
+    const node = { id: 'n1', name: 'T', kind: 'event' };
+    const c    = ctx(r, node);
+    expect(c.width).toBe(180);
+    expect(c.height).toBe(56);
   });
 
 });

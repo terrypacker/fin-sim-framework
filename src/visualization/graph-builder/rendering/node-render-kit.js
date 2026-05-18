@@ -30,6 +30,8 @@ export class NodeRenderKit {
           height,
           r: 8
         },
+        // CRITICAL FOR PAN/ZOOM: Clip the element to the current coordinate system
+        clip: ctx.clip,
         style: {
           fill: 'rgba(0,0,0,0.10)'
         }
@@ -45,6 +47,8 @@ export class NodeRenderKit {
           height,
           r: 8
         },
+        // CRITICAL FOR PAN/ZOOM: Clip the element to the current coordinate system
+        clip: ctx.clip,
         style: {
           fill: bgColor,
           stroke: borderColor,
@@ -117,7 +121,8 @@ export class NodeRenderKit {
           x2: x + width - padding,
           y2: y + 26
         },
-
+        // CRITICAL FOR PAN/ZOOM: Clip the element to the current coordinate system
+        clip: ctx.clip,
         style: {
           stroke: 'rgba(255,255,255,0.08)',
           lineWidth: 1
@@ -177,7 +182,8 @@ export class NodeRenderKit {
           height: 16,
           r: 8
         },
-
+        // CRITICAL FOR PAN/ZOOM: Clip the element to the current coordinate system
+        clip: ctx.clip,
         style: {
           fill: badge.bg
         }
@@ -231,7 +237,8 @@ export class NodeRenderKit {
           cy: y + height - 12,
           r: 4
         },
-
+        // CRITICAL FOR PAN/ZOOM: Clip the element to the current coordinate system
+        clip: ctx.clip,
         style: {
           fill: isActive
               ? '#22c55e'

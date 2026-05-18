@@ -126,8 +126,8 @@ export class EChartsGraphRenderer extends BaseComponent {
       this.render();
     });
 
-    // Pan, zoom, and node-drag via ZRender — replaces dataZoom so we can
-    // share the same mousedown between "drag node" and "pan canvas".
+    // Pan, zoom, and node-drag via ZRender — gives full control so pan,
+    // zoom, and node-drag can share the same mousedown event correctly.
     const zr = this._chart.getZr();
     zr.on('mousewheel', (e) => this._onWheel(e));
     zr.on('mousedown',  (e) => this._onDown(e));
@@ -297,11 +297,14 @@ export class EChartsGraphRenderer extends BaseComponent {
       edgeData.push({ value: [src.x, src.y, tgt.x, tgt.y, this._highlightEdgeSet.has(key) ? 1 : 0] });
     }
 
-    // Initialise the view range on the very first render; subsequent renders
-    // leave it alone so pan/zoom state is preserved.
     if (!this._viewRange) this._resetView();
 
+    // Always include axis ranges so that a series-only setOption call cannot
+    // cause eCharts to re-evaluate and override the current pan/zoom state.
+    const { xMin, xMax, yMin, yMax } = this._viewRange;
     this._chart?.setOption({
+      xAxis: { min: xMin, max: xMax },
+      yAxis: { min: yMin, max: yMax, inverse: true },
       series: [
         { id: 'edge-series', data: edgeData },
         { id: 'node-series', data: nodeData },
@@ -324,7 +327,7 @@ export class EChartsGraphRenderer extends BaseComponent {
     const { xMin, xMax, yMin, yMax } = this._viewRange;
     this._chart?.setOption({
       xAxis: { min: xMin, max: xMax },
-      yAxis: { min: yMin, max: yMax },
+      yAxis: { min: yMin, max: yMax, inverse: true },
     });
   }
 
@@ -350,7 +353,8 @@ export class EChartsGraphRenderer extends BaseComponent {
     e.event?.preventDefault?.();
     const factor = e.wheelDelta > 0 ? 0.85 : 1 / 0.85;
     const { xMin, xMax, yMin, yMax } = this._viewRange;
-    const [cx, cy] = this._pixelToData(e.zrX, e.zrY);
+    // ZRender fires the event *packet* which has offsetX/offsetY (= the original zrX/zrY).
+    const [cx, cy] = this._pixelToData(e.offsetX, e.offsetY);
     this._viewRange = {
       xMin: cx - (cx - xMin) * factor,
       xMax: cx + (xMax - cx) * factor,
@@ -363,7 +367,9 @@ export class EChartsGraphRenderer extends BaseComponent {
   /** Mousedown — start a node drag if cursor is over a node, else start pan. */
   _onDown(e) {
     if (!this._viewRange) return;
-    const [dataX, dataY] = this._pixelToData(e.zrX, e.zrY);
+    const px = e.offsetX;
+    const py = e.offsetY;
+    const [dataX, dataY] = this._pixelToData(px, py);
     for (const [nodeId, pos] of this._positions) {
       if (Math.abs(pos.x - dataX) <= NODE_WIDTH  / 2 &&
           Math.abs(pos.y - dataY) <= NODE_HEIGHT / 2) {
@@ -372,13 +378,15 @@ export class EChartsGraphRenderer extends BaseComponent {
       }
     }
     const { xMin, xMax, yMin, yMax } = this._viewRange;
-    this._panStart = { px: e.zrX, py: e.zrY, xMin, xMax, yMin, yMax };
+    this._panStart = { px, py, xMin, xMax, yMin, yMax };
   }
 
   /** Mousemove — continue node drag or pan. */
   _onMove(e) {
+    const ex = e.offsetX;
+    const ey = e.offsetY;
     if (this._dragNodeId) {
-      const [dataX, dataY] = this._pixelToData(e.zrX, e.zrY);
+      const [dataX, dataY] = this._pixelToData(ex, ey);
       this._positions.set(this._dragNodeId, { x: dataX, y: dataY });
       this.render();
     } else if (this._panStart) {
@@ -386,8 +394,8 @@ export class EChartsGraphRenderer extends BaseComponent {
       const rect = this._container.getBoundingClientRect();
       const W    = rect.width  || 800;
       const H    = rect.height || 600;
-      const dx   = -(e.zrX - px) / W * (xMax - xMin);
-      const dy   = -(e.zrY - py) / H * (yMax - yMin);
+      const dx   = -(ex - px) / W * (xMax - xMin);
+      const dy   = -(ey - py) / H * (yMax - yMin);
       this._viewRange = { xMin: xMin + dx, xMax: xMax + dx, yMin: yMin + dy, yMax: yMax + dy };
       this._applyView();
     }
@@ -446,6 +454,15 @@ export class EChartsGraphRenderer extends BaseComponent {
       borderWidth = 2;
     }
 
+    const clip = params.coordSys ? {
+      shape: {
+        x: params.coordSys.x,
+        y: params.coordSys.y,
+        width: params.coordSys.width,
+        height: params.coordSys.height,
+      }
+    } : null;
+
     return {
       node,
       exec,
@@ -467,6 +484,7 @@ export class EChartsGraphRenderer extends BaseComponent {
       isHL,
       hasBp,
       hitBp,
+      clip: clip,
 
       padding: 10
     };
@@ -518,8 +536,10 @@ export class EChartsGraphRenderer extends BaseComponent {
       animation:       false,
       // Plot area fills the full container so coordinate [0,0] → canvas pixel (0,0).
       grid: { left: 0, right: 0, top: 0, bottom: 0, containLabel: false },
-      xAxis: { show: false, type: 'value', min: 0, max: W },
-      yAxis: { show: false, type: 'value', min: 0, max: H, inverse: true },
+      xAxis: { show: false, type: 'value' },
+      // inverse: true makes canvas y=0 map to data y=0 (top of layout),
+      // giving api.coord an identity mapping and making _pixelToData correct.
+      yAxis: { show: false, type: 'value', inverse: true },
       series: [
         {
           id:         'edge-series',
