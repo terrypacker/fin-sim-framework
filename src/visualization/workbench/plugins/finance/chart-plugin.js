@@ -54,4 +54,9 @@ export class ChartPlugin extends WorkbenchComponent {
     this._ro?.disconnect();
     this._ro = null;
   }
+
+  onAdopt(_fromPane, _toPane) {
+    // Notify BaseApp's resize handler so Chart.js redraws in the new container.
+    window.dispatchEvent(new Event('resize'));
+  }
 }

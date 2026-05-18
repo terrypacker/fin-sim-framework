@@ -202,13 +202,17 @@ export class TabGroup extends WorkbenchComponent {
    * Move or mount a plugin's DOM element into this pane's view area.
    * If the instance is already mounted elsewhere, `appendChild` moves its el.
    * If it was previously unmounted (e.g. after close), it is remounted.
+   * When fromPane is provided, fires onAdopt(fromPane, toPane) on the instance.
+   * @param {string}      tabId
+   * @param {string|null} [fromPane]  — source pane when called from a drag-and-drop move
    */
-  adoptPlugin(tabId) {
+  adoptPlugin(tabId, fromPane = null) {
     const instance = this.instances.get(tabId);
     const view     = this.el?.querySelector('.wb-view');
     if (!instance || !view) return;
 
-    if (instance.mounted && instance.el) {
+    const wasMoved = instance.mounted && instance.el;
+    if (wasMoved) {
       view.appendChild(instance.el);
     } else {
       instance.mount(view);
@@ -217,6 +221,10 @@ export class TabGroup extends WorkbenchComponent {
     const paneConfig = this.layout.layout[this.pane];
     if (instance.el) {
       instance.el.style.display = (paneConfig?.active === tabId) ? '' : 'none';
+    }
+
+    if (wasMoved && fromPane !== null && fromPane !== this.pane) {
+      instance.onAdopt?.(fromPane, this.pane);
     }
   }
 

@@ -280,7 +280,7 @@ export class WorkbenchShell {
 
     fromTg?.removeTabButton(tabId);
     toTg?.addTabButton(tabId);
-    toTg?.adoptPlugin(tabId);   // moves instance.el — appendChild handles cross-parent move
+    toTg?.adoptPlugin(tabId, fromPane);   // moves instance.el — appendChild handles cross-parent move
 
     // Sync tab bar highlights; fromGroup may need to show a different active tab now
     const fromActive = this.layout.layout[fromPane]?.active;
