@@ -61,13 +61,6 @@ test('ChartView: constructor stores optional series config', () => {
 
 // ─── startViz / stopViz ───────────────────────────────────────────────────────
 
-test('ChartView.startViz: sets running to true and creates Chart instance', () => {
-  const view = makeView();
-  view.startViz();
-  assert.strictEqual(view.running, true);
-  assert.ok(view._chart !== null, '_chart should be created');
-});
-
 test('ChartView.stopViz: sets running to false and destroys Chart', () => {
   const view = makeView();
   view.startViz();
@@ -112,7 +105,7 @@ test('ChartView.addSnapshot: appends data point to series', () => {
   view.addSnapshot(D1, { balance: 1000 });
   const { dataArr } = view._seriesMap.get('balance');
   assert.strictEqual(dataArr.length, 1);
-  assert.strictEqual(dataArr[0].y, 1000);
+  assert.strictEqual(dataArr[0][1], 1000);
 });
 
 test('ChartView.addSnapshot: same timestamp updates existing point in-place', () => {
@@ -122,7 +115,7 @@ test('ChartView.addSnapshot: same timestamp updates existing point in-place', ()
   view.addSnapshot(D1, { balance: 2000 });
   const { dataArr } = view._seriesMap.get('balance');
   assert.strictEqual(dataArr.length, 1);
-  assert.strictEqual(dataArr[0].y, 2000);
+  assert.strictEqual(dataArr[0][1], 2000);
 });
 
 test('ChartView.addSnapshot: different timestamps create separate points', () => {
@@ -148,7 +141,7 @@ test('ChartView.addSnapshot: boolean values are accepted as 0/1', () => {
   view.addSnapshot(D1, { active: true });
   assert.ok(view._seriesMap.has('active'));
   const { dataArr } = view._seriesMap.get('active');
-  assert.strictEqual(dataArr[0].y, 1);
+  assert.strictEqual(dataArr[0][1], 1);
 });
 
 test('ChartView.addSnapshot: null/undefined data is a no-op', () => {
@@ -159,13 +152,6 @@ test('ChartView.addSnapshot: null/undefined data is a no-op', () => {
   assert.strictEqual(view._seriesMap.size, 0);
 });
 
-test('ChartView.addSnapshot: adds dataset to Chart.js when series first seen', () => {
-  const view = makeView();
-  view.startViz();
-  view.addSnapshot(D1, { balance: 500 });
-  assert.strictEqual(view._chart.data.datasets.length, 1);
-  assert.strictEqual(view._chart.data.datasets[0]._seriesKey, 'balance');
-});
 
 test('ChartView.addSnapshot: increments _colorIdx per new series', () => {
   const view = makeView();
@@ -176,32 +162,23 @@ test('ChartView.addSnapshot: increments _colorIdx per new series', () => {
 
 // ─── setDatasetVisible ────────────────────────────────────────────────────────
 
-test('ChartView.setDatasetVisible(false): marks dataset hidden', () => {
+test('ChartView.setDatasetVisible(false): adds key to _hiddenSeries', () => {
   const view = makeView();
-  view.startViz();
-  view.addSnapshot(D1, { balance: 1000 });
   view.setDatasetVisible('balance', false);
-  const ds = view._chart.data.datasets.find(d => d._seriesKey === 'balance');
-  assert.strictEqual(ds.hidden, true);
+  assert.ok(view._hiddenSeries.has('balance'));
 });
 
-test('ChartView.setDatasetVisible(true): marks dataset visible', () => {
+test('ChartView.setDatasetVisible(true): removes key from _hiddenSeries', () => {
   const view = makeView();
-  view.startViz();
-  view.addSnapshot(D1, { balance: 1000 });
   view.setDatasetVisible('balance', false);
   view.setDatasetVisible('balance', true);
-  const ds = view._chart.data.datasets.find(d => d._seriesKey === 'balance');
-  assert.strictEqual(ds.hidden, false);
+  assert.ok(!view._hiddenSeries.has('balance'));
 });
 
-test('ChartView.setDatasetVisible: does not affect other datasets', () => {
+test('ChartView.setDatasetVisible: does not affect other keys in _hiddenSeries', () => {
   const view = makeView();
-  view.startViz();
-  view.addSnapshot(D1, { a: 1, b: 2 });
   view.setDatasetVisible('a', false);
-  const dsB = view._chart.data.datasets.find(d => d._seriesKey === 'b');
-  assert.ok(dsB.hidden == null || dsB.hidden === false, 'b should not be hidden');
+  assert.ok(!view._hiddenSeries.has('b'));
 });
 
 test('ChartView.setDatasetVisible: is a no-op when chart is not initialised', () => {
@@ -233,13 +210,6 @@ test('ChartView.resetHistory: resets _colorIdx to 0', () => {
   assert.strictEqual(view._colorIdx, 0);
 });
 
-test('ChartView.resetHistory: clears Chart.js datasets', () => {
-  const view = makeView();
-  view.startViz();
-  view.addSnapshot(D1, { balance: 1000 });
-  view.resetHistory();
-  assert.strictEqual(view._chart.data.datasets.length, 0);
-});
 
 test('ChartView.resetHistory: new snapshots can be added after reset', () => {
   const view = makeView();

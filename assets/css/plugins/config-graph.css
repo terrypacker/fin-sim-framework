@@ -1,0 +1,156 @@
+/* ── CONFIG GRAPH PLUGIN ── */
+.config-graph-tab {}
+
+.graph-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: #0f172a;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.graph-filter-bar .node-field {
+  margin: 0;
+}
+
+#graphRoot {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #080b10;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+#graphViewport {
+  height: 100%;
+  flex: 1;
+  position: relative;
+}
+
+/* SVG edges layer */
+#graphEdges {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* Node layer */
+#graphNodes {
+  position: absolute;
+  inset: 0;
+}
+
+.selection-box {
+  position: absolute;
+  border: 1px dashed #4da3ff;
+  background: rgba(77, 163, 255, 0.15);
+  pointer-events: none;
+  display: none;
+  box-sizing: border-box;
+  transform: translate(0, 0);
+  z-index: 100;
+}
+
+/* ── NODE BADGE ── */
+.node-fired-badge  { flex: 0.5; margin-left: 2px; }
+.node-state-badge  { flex: 0.5; margin-left: 2px; }
+.node-breakpoint-badge { flex: 0.5; margin-left: 2px; cursor: pointer; }
+
+/* ── GRAPH NODES ── */
+.g-node {
+  position: absolute;
+  width: 180px;
+  height: 40px;
+  background: var(--bg-panel2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  cursor: grab;
+  user-select: none;
+  transition: box-shadow 0.15s ease;
+}
+
+.g-node:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.6); }
+.g-node:active { cursor: grabbing; }
+
+.g-node.selected {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 1px var(--amber), 0 4px 12px rgba(0,0,0,0.6);
+}
+
+.g-node.has-breakpoint {
+  border-color: var(--red, #f87171);
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.5), 0 2px 6px rgba(0,0,0,0.4);
+}
+
+.g-node.node-highlighted {
+  border-color: #f90;
+  box-shadow: 0 0 0 2px rgba(255, 153, 0, 0.45), 0 4px 12px rgba(0,0,0,0.6);
+}
+
+/* Node header */
+.g-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  height: 18px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.g-header-text {
+  flex: 1;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.g-title {
+  display: flex;
+  width: 100%;
+  border: none;
+  padding-left: 10px;
+  padding-top: 2px;
+  background: transparent;
+  color: var(--text);
+  font-size: 10px;
+  outline: none;
+}
+.g-title-text { flex: 1; }
+.g-type-text  { flex: 0.25; }
+
+/* ── PORTS ── */
+.g-port {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 1px solid #000;
+}
+
+.g-port.in  { left: -6px;  background: var(--amber); }
+.g-port.out { right: -6px; background: var(--purple); }
+
+.g-port.fired { background: var(--green); top: 6px; right: 2px; }
+.g-port.off   { background: var(--red);   top: 6px; right: 2px; }
+
+/* ── EDGES ── */
+#graphEdges path {
+  stroke: var(--text-muted);
+  stroke-width: 2;
+  fill: none;
+  opacity: 0.7;
+}
+
+#graphEdges path.active     { stroke: var(--amber); opacity: 1; }
+#graphEdges path.highlighted { stroke: #f90; stroke-width: 3; opacity: 1; }

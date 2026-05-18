@@ -409,7 +409,7 @@ export class ScenarioSerializer {
   }
 
   static _serializeAction(node) {
-    const C = FinSimLib.Core;
+    const C = FinSimLib.Engine;
     let typeName;
     // Check subclasses before superclasses (order matters for instanceof).
     // AmountAction must be checked before FieldValueAction since it extends it.
@@ -626,7 +626,7 @@ export class ScenarioSerializer {
         handler = new FinSimLib.Finance.OutOfFundsHandler();
         break;
       default:
-        handler = new FinSimLib.Core.HandlerEntry(null, d.name);
+        handler = new FinSimLib.Engine.HandlerEntry(null, d.name);
         break;
     }
     handler.id = d.id;
@@ -681,7 +681,7 @@ export class ScenarioSerializer {
 
   static _makeEvent(d) {
     if (d.__type === 'OneOffEvent') {
-      return new FinSimLib.Core.OneOffEvent({
+      return new FinSimLib.Engine.OneOffEvent({
         id:      d.id,
         name:    d.name,
         type:    d.type,
@@ -690,7 +690,7 @@ export class ScenarioSerializer {
         color:   d.color ?? '#888888',
       });
     }else if(d.__type == 'EventSeries') {
-      return new FinSimLib.Core.EventSeries({
+      return new FinSimLib.Engine.EventSeries({
         id: d.id,
         name: d.name,
         type: d.type,
@@ -705,7 +705,7 @@ export class ScenarioSerializer {
   }
 
   static _makeAction(d) {
-    const C = FinSimLib.Core;
+    const C = FinSimLib.Engine;
     let action;
     switch (d.__type) {
       case 'Action':
@@ -730,7 +730,7 @@ export class ScenarioSerializer {
   }
 
   static _makeReducer(d, services) {
-    const C = FinSimLib.Core;
+    const C = FinSimLib.Engine;
     const F = FinSimLib.Finance;
 
     // ── Account-module reducers — all constructed with { accountService } ──────

@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Simulation Workbench V3</title>
+
+<style>
+:root {
+  --bg:#0f1216;
+  --panel:#171b21;
+  --panel2:#1e242c;
+  --panel3:#262d37;
+
+  --text:#e7edf5;
+  --muted:#92a0b2;
+
+  --accent:#5aa2ff;
+  --accentSoft: rgba(90,162,255,.15);
+
+  --border:1px solid rgba(255,255,255,.06);
+
+  --space1:4px;
+  --space2:8px;
+  --space3:12px;
+  --space4:16px;
+  --space5:24px;
+
+  --radius:10px;
+
+  --left:240px;
+  --right:340px;
+  --top:48px;
+  --bottom:200px;
+
+  font-family: system-ui, sans-serif;
+}
+
+* { box-sizing:border-box; }
+
+body {
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  overflow:hidden;
+}
+
+/* =======================================================
+   APP SHELL
+======================================================= */
+
+.app {
+  display:grid;
+  grid-template-columns: 56px 1fr;
+  height:100vh;
+}
+
+/* =======================================================
+   ACTIVITY BAR (WORKSPACES)
+======================================================= */
+
+.activity {
+  background:#0c0f13;
+  border-right:var(--border);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  padding:10px 0;
+  gap:10px;
+}
+
+.act-btn {
+  width:40px;height:40px;
+  border:none;
+  border-radius:10px;
+  background:transparent;
+  color:var(--muted);
+  cursor:pointer;
+}
+
+.act-btn.active {
+  background:var(--accentSoft);
+  color:white;
+}
+
+/* =======================================================
+   MAIN
+======================================================= */
+
+.main {
+  display:grid;
+  grid-template-rows: var(--top) 1fr var(--bottom);
+  overflow:hidden;
+}
+
+/* =======================================================
+   TOP (GLOBAL TIME CONTROLS)
+======================================================= */
+
+.top {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:0 14px;
+  background:var(--panel);
+  border-bottom:var(--border);
+}
+
+.brand { font-weight:600; }
+
+.controls button {
+  background:var(--panel2);
+  border:var(--border);
+  color:var(--text);
+  padding:6px 10px;
+  border-radius:8px;
+  margin-right:6px;
+  cursor:pointer;
+}
+
+/* =======================================================
+   WORKSPACE GRID (LEFT / CENTER / RIGHT)
+======================================================= */
+
+.workspace {
+  display:grid;
+  grid-template-columns: var(--left) 1fr var(--right);
+  overflow:hidden;
+}
+
+/* =======================================================
+   PANELS
+======================================================= */
+
+.panel {
+  background:var(--panel);
+  border-right:var(--border);
+  overflow:auto;
+}
+
+.panel.right {
+  border-right:none;
+  border-left:var(--border);
+}
+
+/* =======================================================
+   CENTER
+======================================================= */
+
+.center {
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+
+/* =======================================================
+   WORKSPACE HEADER
+======================================================= */
+
+.ws-header {
+  display:flex;
+  gap:6px;
+  padding:8px;
+  background:var(--panel);
+  border-bottom:var(--border);
+}
+
+.tab {
+  padding:6px 10px;
+  border-radius:8px;
+  background:transparent;
+  color:var(--muted);
+  cursor:pointer;
+}
+
+.tab.active {
+  background:var(--panel2);
+  color:white;
+}
+
+/* =======================================================
+   VIEWPORT
+======================================================= */
+
+.viewport {
+  flex:1;
+  overflow:auto;
+  padding:18px;
+}
+
+/* =======================================================
+   SECTIONS
+======================================================= */
+
+.card {
+  background:var(--panel2);
+  border:var(--border);
+  border-radius:var(--radius);
+  padding:12px;
+  margin-bottom:10px;
+}
+
+.small {
+  color:var(--muted);
+  font-size:12px;
+}
+
+/* =======================================================
+   BOTTOM (JOURNAL / EXECUTION TRACE)
+======================================================= */
+
+.bottom {
+  background:#0c0f13;
+  border-top:var(--border);
+  overflow:auto;
+  padding:10px;
+  font-family:monospace;
+  font-size:12px;
+}
+
+.log {
+  margin-bottom:6px;
+  color:var(--muted);
+}
+
+.log b { color:white; }
+</style>
+</head>
+
+<body>
+
+<div class="app">
+
+  <!-- LEFT WORKSPACE SWITCHER -->
+  <div class="activity" id="wsButtons"></div>
+
+  <div class="main">
+
+    <!-- GLOBAL TIME BAR -->
+    <div class="top">
+      <div class="brand">Simulation Workbench V3</div>
+      <div class="controls">
+        <button onclick="emit('time.play')">Play</button>
+        <button onclick="emit('time.step')">Step</button>
+        <button onclick="emit('time.reset')">Reset</button>
+        <button onclick="emit('mc.run')">Monte Carlo</button>
+      </div>
+    </div>
+
+    <!-- WORKSPACE -->
+    <div class="workspace">
+
+      <div class="panel" id="left"></div>
+
+      <div class="center">
+
+        <div class="ws-header" id="tabs"></div>
+        <div class="viewport" id="viewport"></div>
+
+      </div>
+
+      <div class="panel right" id="right"></div>
+
+    </div>
+
+    <div class="bottom" id="log"></div>
+
+  </div>
+</div>
+
+<script>
+
+/* ======================================================
+   EVENT BUS
+====================================================== */
+
+const bus = {
+  map:{},
+  on(e,f){ (this.map[e]??=[]).push(f) },
+  emit(e,p){ (this.map[e]||[]).forEach(f=>f(p)) }
+};
+
+function emit(e,p){
+  bus.emit(e,p);
+  log(`EVENT <b>${e}</b>`);
+}
+
+/* ======================================================
+   GLOBAL STATE
+====================================================== */
+
+const state = {
+  workspace: 'runtime',
+  view: 'timeline',
+  selection: null
+};
+
+/* ======================================================
+   WORKSPACES (CORE ARCHITECTURE)
+====================================================== */
+
+const workspaces = {
+
+  runtime: {
+    name: "Runtime",
+    left: () => `
+      <div class="card"><b>Scenario</b><div class="small">Active simulation config</div></div>
+      <div class="card"><b>Time Controls</b><div class="small">Global execution state</div></div>
+    `,
+    center: () => renderTimeline(),
+    right: () => renderStatePanel()
+  },
+
+  graph: {
+    name: "Graph",
+    left: () => `<div class="card"><b>Filters</b></div>`,
+    center: () => `<div class="card">Execution Graph View</div>`,
+    right: () => `<div class="card">Node Lineage</div>`
+  },
+
+  analysis: {
+    name: "Analysis",
+    left: () => `<div class="card">MC Config</div>`,
+    center: () => `<div class="card">Distributions / Charts</div>`,
+    right: () => `<div class="card">Best Runs</div>`
+  },
+
+  config: {
+    name: "Config",
+    left: () => `<div class="card">Events / Handlers</div>`,
+    center: () => `<div class="card">Graph Editor</div>`,
+    right: () => `<div class="card">Inspector</div>`
+  }
+};
+
+/* ======================================================
+   WORKSPACE SWITCHING
+====================================================== */
+
+function setWorkspace(id){
+  state.workspace = id;
+  render();
+}
+
+/* ======================================================
+   TABS (CENTER VIEW SWITCH)
+====================================================== */
+
+const views = {
+  timeline: "Timeline",
+  graph: "Graph Trace",
+  monte: "Monte Carlo"
+};
+
+/* ======================================================
+   SAMPLE DATA
+====================================================== */
+
+const timeline = [
+  { id:"e1", t:"2028", label:"Roth Conversion" },
+  { id:"e2", t:"2029", label:"Retirement Phase 1" },
+  { id:"e3", t:"2031", label:"FIRE" }
+];
+
+/* ======================================================
+   RENDER
+====================================================== */
+
+function render(){
+
+  const ws = workspaces[state.workspace];
+
+  document.getElementById("left").innerHTML = ws.left();
+  document.getElementById("right").innerHTML = ws.right();
+
+  renderTabs();
+  ws.center();
+
+}
+
+/* ======================================================
+   TABS
+====================================================== */
+
+function renderTabs(){
+
+  const el = document.getElementById("tabs");
+  el.innerHTML = "";
+
+  Object.entries(views).forEach(([k,v])=>{
+    const d = document.createElement("div");
+    d.className = "tab " + (state.view===k?"active":"");
+    d.textContent = v;
+    d.onclick = ()=> {
+      state.view = k;
+      render();
+    };
+    el.appendChild(d);
+  });
+}
+
+/* ======================================================
+   TIMELINE VIEW
+====================================================== */
+
+function renderTimeline(){
+
+  return `
+    <div class="card">
+      <b>Timeline</b>
+      <div class="small">Runtime execution view</div>
+    </div>
+
+    ${timeline.map(e=>`
+      <div class="card" onclick="select('${e.id}')">
+        <b>${e.label}</b>
+        <div class="small">${e.t}</div>
+      </div>
+    `).join("")}
+  `;
+}
+
+/* ======================================================
+   SELECTION (GLOBAL INVARIANT)
+====================================================== */
+
+function select(id){
+  state.selection = id;
+  emit("selection.changed", id);
+  render();
+}
+
+/* ======================================================
+   STATE PANEL
+====================================================== */
+
+function renderStatePanel(){
+  return `
+    <div class="card">
+      <b>Live State</b>
+      <div class="small">Selection: ${state.selection || "none"}</div>
+    </div>
+  `;
+}
+
+/* ======================================================
+   LOG
+====================================================== */
+
+function log(msg){
+  const el = document.getElementById("log");
+  const div = document.createElement("div");
+  div.className = "log";
+  div.innerHTML = msg;
+  el.prepend(div);
+}
+
+/* ======================================================
+   WORKSPACE BUTTONS
+====================================================== */
+
+function renderWSButtons(){
+
+  const el = document.getElementById("wsButtons");
+
+  Object.entries(workspaces).forEach(([id,w])=>{
+    const b = document.createElement("button");
+    b.className = "act-btn " + (state.workspace===id?"active":"");
+    b.textContent = w.name[0];
+    b.title = w.name;
+    b.onclick = ()=> setWorkspace(id);
+    el.appendChild(b);
+  });
+
+}
+
+/* ======================================================
+   INIT
+====================================================== */
+
+renderWSButtons();
+render();
+
+</script>
+
+</body>
+</html>

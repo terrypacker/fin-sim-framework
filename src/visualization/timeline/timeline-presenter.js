@@ -15,7 +15,6 @@ export class TimelinePresenter {
   constructor({ controller, view, onDetail, onTaxDocument, onRewind, onNavigateToNode, formatDate }) {
     this._controller = controller;
     this._view       = view;
-    this._onDetail   = onDetail;
     this._onRewind   = onRewind ?? null;
     this._formatDate = formatDate ?? (d => d.toDateString());
 

@@ -24,6 +24,15 @@
   <link rel="stylesheet" href="https://terrypacker.com/assets/css/base.css">
   <link rel="stylesheet" href="https://terrypacker.com/assets/css/theme-amber.css">
   <link rel="stylesheet" href="assets/css/fin-sim.css">
+  <link rel="stylesheet" href="assets/css/workbench.css">
+  <link rel="stylesheet" href="assets/css/plugins/config-builder.css">
+  <link rel="stylesheet" href="assets/css/plugins/config-graph.css">
+  <link rel="stylesheet" href="assets/css/plugins/timeline.css">
+  <link rel="stylesheet" href="assets/css/plugins/state-panel.css">
+  <link rel="stylesheet" href="assets/css/plugins/dashboard.css">
+  <link rel="stylesheet" href="assets/css/plugins/chart.css">
+  <link rel="stylesheet" href="assets/css/plugins/inspector.css">
+  <link rel="stylesheet" href="assets/css/plugins/modals.css">
 </head>
 <body>
 <div id="app">
@@ -61,341 +70,17 @@
         </select>
       </div>
     </div>
-    <div style="display:flex;align-items:center;gap:10px">
+    <div class="header-right">
+      <div class="header-templates">
+        <select id="workbenchTemplate" class="wb-select" title="Workspace layout template"></select>
+        <button class="btn btn-sm" id="btnSaveTemplate"   title="Save current layout as template">Save</button>
+        <button class="btn btn-sm" id="btnDeleteTemplate" title="Delete selected template">Del</button>
+      </div>
       <span class="panel-tag">v1.0</span>
       <button class="btn btn-sm" id="btnHelp" title="Open help documentation">? HELP</button>
     </div>
   </header>
-
-  <!-- ══ MAIN GRID ════════════════════════════════════════════ -->
-  <div id="mainGrid">
-    <!-- ── LEFT COLUMN: config ────────────────────────────── -->
-    <div class="left-col">
-
-      <!-- ── Panel group selector ──────────────────────── -->
-      <div class="left-group-selector">
-        <button class="left-group-btn active" data-group="simulation">⚙ Simulation</button>
-        <button class="left-group-btn" data-group="configuration"># Configuration</button>
-      </div>
-
-      <!-- ── SIMULATION group ──────────────────────────── -->
-      <div class="left-group" data-group="simulation">
-        <!-- ── Tab headers ─────────────────────────────── -->
-        <div class="tab">
-          <div class="panel-header tab-header active" data-dest-tab="left-scenario" data-tab-group="left-col-sim">
-            <span class="panel-tag">SC</span>
-            <span class="panel-title">SCENARIO</span>
-          </div>
-          <div class="panel-header tab-header" data-dest-tab="left-mc" data-tab-group="left-col-sim">
-            <span class="panel-tag">MC</span>
-            <span class="panel-title">MONTE CARLO</span>
-          </div>
-          <div class="panel-header tab-header" data-dest-tab="left-opt" data-tab-group="left-col-sim">
-            <span class="panel-tag">OPT</span>
-            <span class="panel-title">OPTIMIZE</span>
-          </div>
-        </div>
-
-      <!-- ── SCENARIO tab ──────────────────────────────── -->
-      <div class="tab-content left-scenario-tab" data-tab="left-scenario" data-tab-group="left-col-sim">
-        <div class="node-header">Scenario</div>
-        <div class="node-field">
-          <select id="scenarioSelect" style="width:100%"></select>
-        </div>
-        <div style="display:flex;gap:4px;padding:4px">
-          <button class="btn btn-sm" id="loadScenarioBtn" style="flex:1">Load</button>
-          <button class="btn btn-sm" id="newScenarioBtn"  style="flex:1">+ New</button>
-          <button class="btn btn-sm btn-warn" id="deleteScenarioBtn" style="flex:1">Delete</button>
-        </div>
-        <div class="node-header">Name</div>
-        <div class="node-field">
-          <input id="scenarioName" placeholder="Scenario name" />
-        </div>
-
-        <div class="node-header">Simulation Period</div>
-        <div class="node-field">
-          <label>Start</label>
-          <input type="date" id="simStartInput"/>
-        </div>
-        <div class="node-field">
-          <label>End</label>
-          <input type="date" id="simEndInput"/>
-        </div>
-
-        <div class="node-header">Initial State (JSON)</div>
-        <div class="node-field">
-          <textarea id="initialStateJson" rows="5"
-            style="width:100%;box-sizing:border-box;font-family:monospace;font-size:11px;resize:vertical"></textarea>
-        </div>
-
-        <div class="node-header">Parameters</div>
-        <div id="paramsList"></div>
-        <div style="padding:4px">
-          <button class="btn btn-sm" id="addParamBtn" style="width:100%">+ Add Parameter</button>
-        </div>
-      </div><!-- /left-scenario -->
-
-      <!-- ── MONTE CARLO tab ──────────────────────────────── -->
-      <div class="tab-content left-mc-tab" data-tab="left-mc" data-tab-group="left-col-sim" style="display:none;flex:1;min-height:0;overflow-y:auto">
-        <div id="mcConfigPane"></div>
-      </div>
-
-      <!-- ── OPTIMIZE tab ─────────────────────────────────── -->
-      <div class="tab-content left-opt-tab" data-tab="left-opt" data-tab-group="left-col-sim" style="display:none;flex:1;min-height:0;overflow-y:auto">
-        <div id="optConfigPane"></div>
-      </div>
-
-      </div><!-- /left-group simulation -->
-
-      <!-- ── CONFIGURATION group ──────────────────────── -->
-      <div class="left-group" data-group="configuration" style="display:none" id="configGroup">
-        <!-- Sub-tab headers -->
-        <div class="tab">
-          <div class="panel-header tab-header active" data-dest-tab="left-graph-nodes" data-tab-group="left-col-graph">
-            <span class="panel-tag">ND</span>
-            <span class="panel-title">NODES</span>
-          </div>
-          <div class="panel-header tab-header" data-dest-tab="left-graph-edit" data-tab-group="left-col-graph">
-            <span class="panel-tag">ED</span>
-            <span class="panel-title">EDIT</span>
-          </div>
-        </div>
-        <!-- NODES sub-tab -->
-        <div class="tab-content" data-tab="left-graph-nodes" data-tab-group="left-col-graph" style="flex:1;min-height:0;overflow-y:auto">
-          <div id="configGroupNodes"></div>
-        </div>
-        <!-- EDIT sub-tab -->
-        <div class="tab-content" data-tab="left-graph-edit" data-tab-group="left-col-graph" style="display:none;flex:1;min-height:0;overflow-y:auto">
-          <div id="graphNodeEditPane"></div>
-        </div>
-      </div>
-      <!-- /left-group configuration -->
-      <div class="node-header">Storage</div>
-      <div class="node-body">
-        <button class="btn" id="rebuildBtn">↺ Rebuild Simulation</button>
-        <button class="btn btn-sm" id="saveScenarioBtn">Save to Browser</button>
-        <button class="btn btn-sm" id="downloadJsonBtn">Download JSON</button>
-        <label class="btn btn-sm" style="text-align:center;cursor:pointer;margin:0">
-          Upload JSON
-          <input type="file" id="uploadJsonFileInput" accept=".json" style="display:none" />
-        </label>
-      </div>
-    </div><!-- /left-col -->
-
-    <!-- ── CENTER COLUMN: dash + viz + charts ──────────────────────── -->
-    <div class="center-col">
-
-      <!-- Dashboard Cards -->
-      <div class="panel" style="flex-shrink:0">
-        <div class="panel-header">
-          <span class="panel-tag">LIVE</span>
-          <span class="panel-title">DASHBOARD</span>
-        </div>
-        <div class="fin-dash-cards">
-          <div class="dash-card">
-            <div class="dc-label">Current Date</div>
-            <div class="dc-value" id="cardCurrentDate">-</div>
-          </div>
-          <div class="dash-card">
-            <div class="dc-label">Total Events</div>
-            <div class="dc-value" id="cardEventExecutions">—</div>
-          </div>
-          <div class="dash-card">
-            <div class="dc-label">Total Handlers</div>
-            <div class="dc-value" id="cardHandlerExecutions">—</div>
-          </div>
-          <div class="dash-card">
-            <div class="dc-label">Total Actions</div>
-            <div class="dc-value" id="cardActionExecutions">—</div>
-          </div>
-          <div class="dash-card">
-            <div class="dc-label">Total Reducers</div>
-            <div class="dc-value" id="cardReducerExecutions">—</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Center viz tabs -->
-      <div id="content" class="viz-container">
-        <div class="tab">
-          <div class="panel-header tab-header active" data-dest-tab="config-graph-tab" data-tab-group="center-col">
-            <span class="panel-tag">GR</span>
-            <span class="panel-title">GRAPH</span>
-          </div>
-          <div class="panel-header tab-header" data-dest-tab="timeline-tab" data-tab-group="center-col">
-            <span class="panel-tag">TL</span>
-            <span class="panel-title">TIMELINE</span>
-          </div>
-          <div class="panel-header tab-header" data-dest-tab="chart-tab" data-tab-group="center-col">
-            <span class="panel-tag">CT</span>
-            <span class="panel-title">CHART</span>
-          </div>
-          <div class="panel-header tab-header" data-dest-tab="mc-tab" data-tab-group="center-col">
-            <span class="panel-tag">MC</span>
-            <span class="panel-title">MONTE CARLO</span>
-          </div>
-          <div class="panel-header tab-header" data-dest-tab="opt-tab" data-tab-group="center-col">
-            <span class="panel-tag">OPT</span>
-            <span class="panel-title">OPTIMIZE</span>
-          </div>
-        </div>
-
-        <!-- Config Graph View -->
-        <div class="tab-content config-graph-tab" data-tab="config-graph-tab" data-tab-group="center-col">
-          <div class="panel" style="flex:1;min-height:0">
-
-            <div id="graphRoot">
-              <div id="graphViewport">
-                <svg id="graphEdges"></svg>
-                <div id="graphNodes"></div>
-                <div class="selection-box"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Timeline Tab -->
-        <div class="tab-content timeline-tab" style="display:none" data-tab="timeline-tab" data-tab-group="center-col">
-          <div class="panel" style="flex:1;min-height:0">
-            <div id="timelineContainer" class="tl-container"></div>
-          </div>
-        </div>
-
-        <!-- Chart Tab -->
-        <div class="tab-content chart-tab" style="display:none" data-tab="chart-tab" data-tab-group="center-col">
-          <div class="panel" style="flex:1;min-height:0;display:flex;flex-direction:column">
-            <div id="chartFilterContainer"></div>
-            <div id="failureBanner" class="failure-banner" style="display:none">
-              <span class="failure-banner-icon">⚠</span>
-              <span>SCENARIO FAILED — OUT OF FUNDS</span>
-              <span class="failure-banner-deficit">
-                shortfall: <span id="failureBannerDeficit">—</span>
-                over <span id="failureBannerMonths">—</span> months
-              </span>
-              <span id="failureBannerDate" class="failure-banner-date"></span>
-            </div>
-            <div class="viz-wrap" style="flex:1;margin:10px;border-radius:4px;overflow:hidden">
-              <canvas id="chartCanvas"></canvas>
-            </div>
-          </div>
-        </div>
-
-        <!-- Monte Carlo Tab -->
-        <div class="tab-content monte-carlo-tab" style="display:none" data-tab="mc-tab" data-tab-group="center-col">
-          <div id="mcResultsPane" style="flex:1;min-width:0;overflow:hidden"></div>
-        </div>
-
-        <!-- Optimization Tab -->
-        <div class="tab-content optimization-tab" style="display:none" data-tab="opt-tab" data-tab-group="center-col">
-          <div id="optResultsPane" style="flex:1;min-width:0;overflow:hidden"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── RIGHT COLUMN ──────────────── -->
-    <div class="right-col">
-
-      <!-- ── Panel group selector ──────────────────────── -->
-      <div class="right-group-selector">
-        <button class="right-group-btn active" data-right-group="sim">▶ SIM</button>
-        <button class="right-group-btn" data-right-group="mc">◎ MC</button>
-        <button class="right-group-btn" data-right-group="opt">⚡ OPT</button>
-        <button class="right-group-btn" data-right-group="graph">⬡ GRAPH</button>
-      </div>
-
-      <!-- ── SIM group ─────────────────────────────────── -->
-      <div class="right-group" data-right-group="sim">
-        <div class="panel" style="flex:1;min-height:0;display:flex;flex-direction:column">
-          <!-- Tab headers -->
-          <div class="tab">
-            <div class="panel-header tab-header active" data-dest-tab="right-live-state" data-tab-group="right-col">
-              <span class="panel-tag">ST</span>
-              <span class="panel-title">STATE</span>
-            </div>
-            <div class="panel-header tab-header" data-dest-tab="right-action-detail" data-tab-group="right-col">
-              <span class="panel-tag">AD</span>
-              <span class="panel-title">ACTION</span>
-            </div>
-          </div>
-          <!-- Live State Tab -->
-          <div class="tab-content" data-tab="right-live-state" data-tab-group="right-col">
-            <div id="liveStatePanel">
-              <div class="data-section-title">Metrics</div>
-              <div id="cumulativeMetricsContent" style="display:block"></div>
-              <div class="data-section-title lsp-state-toggle" id="stateSectionHeader">
-                <span>State</span><span class="lsp-collapse-icon">▶</span>
-              </div>
-              <div id="currentStateContent" style="display:none"></div>
-            </div>
-          </div>
-          <!-- Action Detail Tab -->
-          <div class="tab-content" data-tab="right-action-detail" data-tab-group="right-col" style="display:none">
-            <div id="actionPanelDetails" class="actionPanelDetails"></div>
-          </div>
-        </div>
-      </div><!-- /right-group sim -->
-
-      <!-- ── MC group ──────────────────────────────────── -->
-      <div class="right-group" data-right-group="mc" style="display:none">
-        <div class="panel" style="flex:1;min-height:0;display:flex;flex-direction:column">
-          <!-- Tab headers -->
-          <div class="tab">
-            <div class="panel-header tab-header active" data-dest-tab="right-mc-runs" data-tab-group="right-col-mc">
-              <span class="panel-tag">RN</span>
-              <span class="panel-title">RUNS</span>
-            </div>
-          </div>
-          <!-- MC Runs Tab -->
-          <div class="tab-content" data-tab="right-mc-runs" data-tab-group="right-col-mc">
-            <div id="mcRunsPane"></div>
-          </div>
-        </div>
-      </div><!-- /right-group mc -->
-
-      <!-- ── OPT group ────────────────────────────────────── -->
-      <div class="right-group" data-right-group="opt" style="display:none">
-        <div class="panel" style="flex:1;min-height:0;display:flex;flex-direction:column">
-          <!-- Tab headers -->
-          <div class="tab">
-            <div class="panel-header tab-header active" data-dest-tab="right-opt-runs" data-tab-group="right-col-opt">
-              <span class="panel-tag">RN</span>
-              <span class="panel-title">BEST RUNS</span>
-            </div>
-          </div>
-          <!-- Opt Runs Tab -->
-          <div class="tab-content" data-tab="right-opt-runs" data-tab-group="right-col-opt">
-            <div id="optRunsPane" style="overflow-y:auto;height:100%"></div>
-          </div>
-        </div>
-      </div><!-- /right-group opt -->
-
-      <!-- ── GRAPH group ─────────────────────────────────── -->
-      <div class="right-group" data-right-group="graph" style="display:none">
-        <div class="panel" style="flex:1;min-height:0;display:flex;flex-direction:column">
-          <!-- Tab headers -->
-          <div class="tab">
-            <div class="panel-header tab-header active" data-dest-tab="right-graph-node" data-tab-group="right-col-graph">
-              <span class="panel-tag">ND</span>
-              <span class="panel-title">NODE HISTORY</span>
-            </div>
-            <div class="panel-header tab-header" data-dest-tab="right-graph-lineage" data-tab-group="right-col-graph">
-              <span class="panel-tag">LN</span>
-              <span class="panel-title">LINEAGE</span>
-            </div>
-          </div>
-          <!-- Node History Tab -->
-          <div class="tab-content" data-tab="right-graph-node" data-tab-group="right-col-graph" style="overflow-y:auto;flex:1;min-height:0">
-            <div id="graphNodeHistoryPane"></div>
-          </div>
-          <!-- Lineage Tab -->
-          <div class="tab-content" data-tab="right-graph-lineage" data-tab-group="right-col-graph" style="overflow-y:auto;flex:1;min-height:0;display:none">
-            <div id="graphNodeLineagePane"></div>
-          </div>
-        </div>
-      </div><!-- /right-group graph -->
-
-    </div>
-  </div>
+  <div id="workbench-root" style="flex:1;min-height:0;overflow:hidden"></div>
   <!-- ══ STATUS BAR ══════════════════════════════════════════ -->
   <div id="statusBar">
     <span>FinSim</span>
@@ -979,7 +664,7 @@
 <script type="module">
   // ── Init ──────────────────────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
-    const app = new FinSimLib.Misc.SimulationWorkbench();
+    const app = new FinSimLib.Apps.SimulationWorkbench();
     app.initView();
     app.initScenario();
   });

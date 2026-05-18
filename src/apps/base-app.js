@@ -134,9 +134,6 @@ export class BaseApp extends BaseComponent {
       graph: registry.graph,
       graphQueryApi: registry.graphQueryApi,
       graphRoot:               document.getElementById('graphRoot'),
-      graphNodes:              document.getElementById('graphNodes'),
-      graphEdges:              document.getElementById('graphEdges'),
-      nodeDetailsTemplate:     document.getElementById('tpl-node-details'),
       displayNodeStateChanges: (changes) => this._statePanelView.showNodeStateChanges(changes),
       bus:                     registry.bus,
     });
@@ -274,6 +271,7 @@ export class BaseApp extends BaseComponent {
       view: this._scenarioTabView,
       bus: registry.bus,
       initScenario: () => { this.destroyScenario(); this.initScenario(); },
+      getBuiltScenario: () => this.scenario,
     });
 
     // ── Build scenario ────────────────────────────────────────────────────────
@@ -297,6 +295,9 @@ export class BaseApp extends BaseComponent {
       const node = registry.graph.getNode(nodeId);
       if (node) this._editModal.open(node);
     };
+    this._statePanelView.onShowActionDetail = () => {
+      document.querySelector('.tab-header[data-dest-tab="right-action-detail"]')?.click();
+    };
 
     // ── Visualization views ───────────────────────────────────────────────────
     const eventColors = new Map(
@@ -308,10 +309,10 @@ export class BaseApp extends BaseComponent {
 
     const chartController = new ChartController();
     const chartView = new ChartView({
-      canvas:   $('chartCanvas'),
-      simStart: this.scenario.simStart,
-      simEnd:   this.scenario.simEnd,
-      series:   this.chartSeries ?? undefined,
+      container: $('chartContainer'),
+      simStart:  this.scenario.simStart,
+      simEnd:    this.scenario.simEnd,
+      series:    this.chartSeries ?? undefined,
     });
     this.chartPresenter = new ChartPresenter({ controller: chartController, view: chartView });
     this.chartPresenter.startViz();
@@ -590,8 +591,7 @@ export class BaseApp extends BaseComponent {
     const h = contentEl.clientHeight;
     if (this.graphView)            this.graphView.resizeCanvas(h, w);
     if (this.graphBuilderPresenter) this.graphBuilderPresenter.resizeCanvas(h, w);
-    $('chartCanvas').width  = w;
-    $('chartCanvas').height = h;
+    this.chartPresenter?.resize();
   }
 
   /**

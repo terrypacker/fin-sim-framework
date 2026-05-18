@@ -116,6 +116,7 @@ export class ChartPresenter extends BaseComponent {
 
   // ── Annotations ───────────────────────────────────────────────────────────────
 
+  resize()                 { this._view.resize(); }
   addAnnotation(id, opts)  { this._view.addAnnotation(id, opts); }
   removeAnnotation(id)     { this._view.removeAnnotation(id); }
 

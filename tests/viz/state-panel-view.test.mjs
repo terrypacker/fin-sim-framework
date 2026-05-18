@@ -362,3 +362,71 @@ test('StatePanelView.wireSimBus: stores chartPresenter reference', () => {
   panel.wireSimBus(bus, { chartPresenter: chart });
   assert.strictEqual(panel._chartPresenter, chart);
 });
+
+// ─── showNodeDetail ───────────────────────────────────────────────────────────
+
+function makeEntry() {
+  return {
+    seq:        0,
+    date:       new Date(2025, 0, 1),
+    event:      { type: 'TEST_EVENT', name: 'Test Event' },
+    action:     { instanceId: 'abc', parentId: null, rootId: null, siblingIndex: 0,
+                  nodeId: null, type: 'TEST_ACTION', name: 'Test Action', data: {} },
+    reducer:    { name: 'TestReducer', nodeId: null },
+    stateDiff:  [],
+    emittedInstanceIds: [],
+    emittedTypes: [],
+  };
+}
+
+test('StatePanelView.showNodeDetail: does not throw when #actionPanelDetails is absent', () => {
+  const panel = makePanel();
+  // Stub _buildActionDetailEl to avoid template lookup in jsdom
+  panel._buildActionDetailEl = () => document.createElement('div');
+  assert.doesNotThrow(() => panel.showNodeDetail(makeEntry()));
+});
+
+test('StatePanelView.showNodeDetail: calls onShowActionDetail before writing to the container', () => {
+  const panel = makePanel();
+  panel._buildActionDetailEl = () => document.createElement('div');
+
+  const order = [];
+
+  const container = document.createElement('div');
+  container.id = 'actionPanelDetails';
+  document.body.appendChild(container);
+
+  const origReplaceChildren = container.replaceChildren.bind(container);
+  container.replaceChildren = (...args) => {
+    order.push('replaceChildren');
+    origReplaceChildren(...args);
+  };
+
+  panel.onShowActionDetail = () => { order.push('onShowActionDetail'); };
+
+  try {
+    panel.showNodeDetail(makeEntry());
+    assert.deepEqual(order, ['onShowActionDetail', 'replaceChildren'],
+      'onShowActionDetail must fire before replaceChildren');
+  } finally {
+    container.remove();
+  }
+});
+
+test('StatePanelView.showNodeDetail: renders content into #actionPanelDetails', () => {
+  const panel = makePanel();
+  const sentinel = document.createElement('span');
+  sentinel.id = 'sentinel';
+  panel._buildActionDetailEl = () => sentinel;
+
+  const container = document.createElement('div');
+  container.id = 'actionPanelDetails';
+  document.body.appendChild(container);
+
+  try {
+    panel.showNodeDetail(makeEntry());
+    assert.ok(container.contains(sentinel), 'sentinel element should be inside #actionPanelDetails');
+  } finally {
+    container.remove();
+  }
+});

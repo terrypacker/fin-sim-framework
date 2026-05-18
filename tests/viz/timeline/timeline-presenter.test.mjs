@@ -97,6 +97,12 @@ test('TimelinePresenter: constructor wires filter callbacks on the view', () => 
   assert.ok(typeof view.onDetail          === 'function', 'onDetail should be wired');
 });
 
+test('TimelinePresenter: does not store onDetail as a private field', () => {
+  const { presenter } = makePresenter({ onDetail: () => {} });
+  assert.strictEqual(presenter._onDetail, undefined,
+    '_onDetail should not exist — the callback is used directly via view.onDetail');
+});
+
 test('TimelinePresenter: onRewind not wired when not provided', () => {
   const { view } = makePresenter({ onRewind: null });
   assert.strictEqual(view.onRewind, null);

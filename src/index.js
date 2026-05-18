@@ -5,6 +5,7 @@
 
 import { BaseApp } from './apps/base-app.js';
 import { SimulationWorkbench } from './apps/simulation-workbench.js';
+import { WorkbenchApp } from './apps/workbench-app.js';
 import { AccountRulesEngine } from './finance/account-rules/account-rules-engine.js';
 import { AuAccountModule2024 } from './finance/account-rules/au/au-account-module-2024.js';
 import { AuAccountModule2025 } from './finance/account-rules/au/au-account-module-2025.js';
@@ -162,6 +163,7 @@ import { ActionDefinitionList } from './visualization/components/action-definiti
 import { ActionEditor } from './visualization/components/action-editor.js';
 import { BaseComponent } from './visualization/components/base-component.js';
 import { BaseNodeEditor } from './visualization/components/base-node-editor.js';
+import { EChartsGraphRenderer } from './visualization/components/echarts-graph-renderer.js';
 import { EventEditor } from './visualization/components/event-editor.js';
 import { GraphNodeFilterMultiSelect } from './visualization/components/graph-node-filter-multi-select.js';
 import { GraphRenderer } from './visualization/components/graph-renderer.js';
@@ -206,6 +208,15 @@ import { TimelineController } from './visualization/timeline/timeline-controller
 import { TimelinePresenter } from './visualization/timeline/timeline-presenter.js';
 import { TimelineView } from './visualization/timeline/timeline-view.js';
 import { $, fmt, fmtUTC, fmtLocal } from './visualization/ui-utils.js';
+import { WorkbenchComponent } from './visualization/workbench/component.js';
+import { WorkbenchLayoutModel } from './visualization/workbench/layout-model.js';
+import { PluginRegistry } from './visualization/workbench/plugin-registry.js';
+import { PLUGIN_CATEGORIES, PLUGIN_PANES, definePlugin } from './visualization/workbench/plugin-sdk.js';
+import { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
+import { SplitPane } from './visualization/workbench/split-pane.js';
+import { TabGroup } from './visualization/workbench/tab-group.js';
+import { WB_EVENTS, WorkbenchRuntime } from './visualization/workbench/workbench-runtime.js';
+import { WorkbenchShell } from './visualization/workbench/workbench-shell.js';
 
 // =========================================================
 // TOP-LEVEL EXPORTS
@@ -223,17 +234,10 @@ export {
 // NAMESPACES
 // =========================================================
 
-export const Misc = {
+export const Apps = {
   BaseApp,
   SimulationWorkbench,
-  EDGE_TYPES,
-  createEdgeId,
-  Edge,
-  GraphQueryApi,
-  Graph,
-  SimGraphNode,
-  QueryApi,
-  InMemoryStorage,
+  WorkbenchApp,
 };
 
 export const Finance = {
@@ -458,32 +462,14 @@ export const Finance = {
   TaxSettleService,
 };
 
-export const Scenarios = {
-  BaseScenario,
-  INTL_RETIREMENT_DEFAULTS,
-  INTL_RETIREMENT_PARAM_SCHEMA,
-  IntlRetirementScenario,
-  PrebuiltScenario,
-  ScenarioRegistry,
-  ScenarioSerializer,
-  ScenarioStorage,
-  SimulationWorkbenchDefaultScenario,
-};
-
-export const Services = {
-  ActionService,
-  BaseService,
-  EVENT_CLASSES,
-  EventService,
-  HandlerService,
-  ReducerService,
-  ScenarioService,
-  ServiceRegistry,
-  SimulationRegistry,
-  SimulationSync,
-};
-
-export const Core = {
+export const Engine = {
+  EDGE_TYPES,
+  createEdgeId,
+  Edge,
+  GraphQueryApi,
+  Graph,
+  SimGraphNode,
+  QueryApi,
   ACTION_TEMPLATES,
   DEFAULT_ACTIONS,
   Action,
@@ -562,6 +548,32 @@ export const Core = {
   BreakpointSignal,
   Simulation,
   diffStates,
+  InMemoryStorage,
+};
+
+export const Scenarios = {
+  BaseScenario,
+  INTL_RETIREMENT_DEFAULTS,
+  INTL_RETIREMENT_PARAM_SCHEMA,
+  IntlRetirementScenario,
+  PrebuiltScenario,
+  ScenarioRegistry,
+  ScenarioSerializer,
+  ScenarioStorage,
+  SimulationWorkbenchDefaultScenario,
+};
+
+export const Services = {
+  ActionService,
+  BaseService,
+  EVENT_CLASSES,
+  EventService,
+  HandlerService,
+  ReducerService,
+  ScenarioService,
+  ServiceRegistry,
+  SimulationRegistry,
+  SimulationSync,
 };
 
 export const Visualization = {
@@ -574,6 +586,7 @@ export const Visualization = {
   ActionEditor,
   BaseComponent,
   BaseNodeEditor,
+  EChartsGraphRenderer,
   EventEditor,
   GraphNodeFilterMultiSelect,
   GraphRenderer,
@@ -623,6 +636,43 @@ export const Visualization = {
   fmtLocal,
 };
 
+export const Workbench = {
+  WorkbenchComponent,
+  WorkbenchLayoutModel,
+  PluginRegistry,
+  PLUGIN_CATEGORIES,
+  PLUGIN_PANES,
+  definePlugin,
+  SplitPane,
+  TabGroup,
+  WB_EVENTS,
+  WorkbenchRuntime,
+  WorkbenchShell,
+};
+
+export const FinancePlugins = {
+  ScenarioPlugin,
+  ConfigGraphPlugin,
+  ConfigListPlugin,
+  InspectorPlugin,
+  TimelinePlugin,
+  ChartPlugin,
+  StatePanelPlugin,
+  DashboardPlugin,
+  McConfigPlugin,
+  McResultsPlugin,
+  McRunsPlugin,
+  OptConfigPlugin,
+  OptResultsPlugin,
+  OptRunsPlugin,
+  ExecHistoryPlugin,
+  LineagePlugin,
+  PerfPlugin,
+  ActionDetailPlugin,
+  FINANCE_PLUGINS,
+  FINANCE_DEFAULT_LAYOUT,
+};
+
 // =========================================================
 // DEFAULT EXPORT
 // =========================================================
@@ -633,10 +683,12 @@ export default {
   Person,
   BaseScenario,
   Simulation,
-  Misc,
+  Apps,
   Finance,
+  Engine,
   Scenarios,
   Services,
-  Core,
   Visualization,
+  Workbench,
+  FinancePlugins,
 };

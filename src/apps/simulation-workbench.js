@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-import { BaseApp }                            from './base-app.js';
+import { WorkbenchApp }                        from './workbench-app.js';
 import { PrebuiltScenario }                   from '../scenarios/prebuilt-scenario.js';
 import { IntlRetirementScenario }             from '../scenarios/intl-retirement-scenario.js';
 import { SimulationWorkbenchDefaultScenario } from '../scenarios/simulation-workbench-default-scenario.js';
@@ -68,7 +68,7 @@ const PREBUILT_SCENARIOS = [
   }),
 ];
 
-export class SimulationWorkbench extends BaseApp {
+export class SimulationWorkbench extends WorkbenchApp {
   constructor() {
     super({
       prebuiltScenarios: PREBUILT_SCENARIOS,

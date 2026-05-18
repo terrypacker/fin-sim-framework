@@ -20,6 +20,9 @@
 import { ConfigGraphView } from '../../src/visualization/graph-builder/config-graph-view.js';
 import { ServiceRegistry }  from '../../src/services/service-registry.js';
 
+// eCharts uses ResizeObserver for auto-resize; jsdom doesn't provide it.
+global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+
 // ─── DOM helpers ──────────────────────────────────────────────────────────────
 
 function makeElements() {
