@@ -74,6 +74,11 @@ export class WorkbenchApp extends BaseApp {
     // Publish SCENARIO_READY so PerfPlugin and other bus-aware plugins can wire up.
     runtime.scenarioReady(this.scenario);
 
+    // When a graph node is clicked, also focus the exec-history plugin.
+    this.configPresenter?._graphRenderer?.registerNodeClickListener(() => {
+      this._wbShell?.activatePlugin('exec-history');
+    });
+
     // Bridge sim-bus BREAKPOINT_HIT → workbench bus so timeline/graph plugins react.
     this.scenario.sim.bus.subscribe('BREAKPOINT_HIT', (msg) => {
       runtime.breakpointHit({

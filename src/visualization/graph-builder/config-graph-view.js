@@ -8,9 +8,9 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { BaseComponent }  from '../components/base-component.js';
-import { GraphRenderer }  from '../components/graph-renderer.js';
-import { BaseGraphView }  from './base-graph-view.js';
+import { BaseComponent }         from '../components/base-component.js';
+import { EChartsGraphRenderer as GraphRenderer } from '../components/echarts-graph-renderer.js';
+import { BaseGraphView }          from './base-graph-view.js';
 
 const KIND_OPTIONS = [
   ['',        'All Kinds'],
@@ -39,15 +39,11 @@ const LAYER_OPTIONS = [
 export class ConfigGraphView extends BaseComponent {
 
   /**
-   * Accepts the same args as GraphRenderer plus the usual parent.
    * @param {{
    *   parent?:                   BaseComponent,
    *   graph:                     import('../../graph/graph.js').Graph,
    *   graphQueryApi:             import('../../graph/graph-query-api.js').GraphQueryApi,
    *   graphRoot:                 HTMLElement,
-   *   graphNodes:                HTMLElement,
-   *   graphEdges:                SVGElement,
-   *   nodeDetailsTemplate:       HTMLTemplateElement,
    *   displayNodeStateChanges?:  function,
    *   bus?:                      import('../../simulation-framework/event-bus.js').EventBus,
    *   layout?:                   object,
@@ -58,9 +54,6 @@ export class ConfigGraphView extends BaseComponent {
     graph,
     graphQueryApi,
     graphRoot,
-    graphNodes,
-    graphEdges,
-    nodeDetailsTemplate,
     displayNodeStateChanges,
     bus,
     layout,
@@ -80,9 +73,6 @@ export class ConfigGraphView extends BaseComponent {
       graph,
       graphQueryApi,
       graphRoot,
-      graphNodes,
-      graphEdges,
-      nodeDetailsTemplate,
       displayNodeStateChanges,
       bus,
       layout,

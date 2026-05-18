@@ -134,9 +134,6 @@ export class BaseApp extends BaseComponent {
       graph: registry.graph,
       graphQueryApi: registry.graphQueryApi,
       graphRoot:               document.getElementById('graphRoot'),
-      graphNodes:              document.getElementById('graphNodes'),
-      graphEdges:              document.getElementById('graphEdges'),
-      nodeDetailsTemplate:     document.getElementById('tpl-node-details'),
       displayNodeStateChanges: (changes) => this._statePanelView.showNodeStateChanges(changes),
       bus:                     registry.bus,
     });
