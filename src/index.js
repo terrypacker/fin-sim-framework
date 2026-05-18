@@ -214,7 +214,6 @@ import { PLUGIN_CATEGORIES, PLUGIN_PANES, definePlugin } from './visualization/w
 import { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
 import { SplitPane } from './visualization/workbench/split-pane.js';
 import { TabGroup } from './visualization/workbench/tab-group.js';
-import { WB_PANEL, WorkbenchChannel } from './visualization/workbench/workbench-channel.js';
 import { WB_EVENTS, WorkbenchRuntime } from './visualization/workbench/workbench-runtime.js';
 import { WorkbenchShell } from './visualization/workbench/workbench-shell.js';
 
@@ -644,8 +643,6 @@ export const Workbench = {
   definePlugin,
   SplitPane,
   TabGroup,
-  WB_PANEL,
-  WorkbenchChannel,
   WB_EVENTS,
   WorkbenchRuntime,
   WorkbenchShell,

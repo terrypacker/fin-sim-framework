@@ -4,20 +4,32 @@
  * Supports two directions:
  *   'horizontal' (default) — panes side by side; sizes are flex fractions
  *   'vertical'             — panes stacked; first pane is flex:1, last pane
- *                            has a fixed px height driven by layout.getBottomSize()
+ *                            has a fixed px height
+ *
+ * Size persistence is delegated via callbacks so multiple SplitPane instances
+ * can store sizes independently in the same LayoutModel.
  *
  * @param {object}               opts
- * @param {WorkbenchLayoutModel} opts.layout     — for size persistence
- * @param {string[]}             opts.panes      — ordered pane names
+ * @param {WorkbenchLayoutModel} opts.layout          — for save() calls
+ * @param {string[]}             opts.panes           — ordered pane names
  * @param {'horizontal'|'vertical'} [opts.direction='horizontal']
+ * @param {function(): number[]}    [opts.getSizes]   — returns flex fractions (horizontal)
+ * @param {function(number[]): void} [opts.setSizes]  — persists flex fractions (horizontal)
+ * @param {function(): number}      [opts.getFixedSize] — returns px height of last pane (vertical)
+ * @param {function(number): void}  [opts.setFixedSize] — persists px height (vertical)
  */
 export class SplitPane {
-  constructor({ layout, panes, direction = 'horizontal' }) {
+  constructor({ layout, panes, direction = 'horizontal', getSizes, setSizes, getFixedSize, setFixedSize }) {
     this.layout    = layout;
     this.panes     = panes;
     this.direction = direction;
     this.el        = null;
     this._paneEls  = new Map();
+
+    this._getSizes    = getSizes    ?? (() => layout.getSizes());
+    this._setSizes    = setSizes    ?? ((s) => layout.setSizes(s));
+    this._getFixedSize = getFixedSize ?? (() => layout.getBottomSize());
+    this._setFixedSize = setFixedSize ?? ((h) => layout.setBottomSize(h));
   }
 
   mount(container) {
@@ -47,7 +59,7 @@ export class SplitPane {
   // ── Horizontal ──────────────────────────────────────────────────────────────
 
   _mountHorizontal() {
-    const sizes = this.layout.getSizes();
+    const sizes = this._getSizes();
     this.panes.forEach((name, i) => {
       const paneEl = document.createElement('div');
       paneEl.className = 'wb-pane';
@@ -93,6 +105,7 @@ export class SplitPane {
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
         this._persistHSizes();
+        this.layout.save();
       };
 
       document.addEventListener('mousemove', onMove);
@@ -104,14 +117,13 @@ export class SplitPane {
 
   _persistHSizes() {
     const sizes = this.panes.map(name => parseFloat(this._paneEls.get(name)?.style.flex ?? 1));
-    this.layout.setSizes(sizes);
-    this.layout.save();
+    this._setSizes(sizes);
   }
 
   // ── Vertical ────────────────────────────────────────────────────────────────
 
   _mountVertical() {
-    const bottomH = this.layout.getBottomSize();
+    const bottomH = this._getFixedSize();
 
     this.panes.forEach((name, i) => {
       const paneEl = document.createElement('div');
@@ -156,7 +168,7 @@ export class SplitPane {
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
         const h = parseFloat(this._paneEls.get(bottomPaneName).style.height);
-        this.layout.setBottomSize(h);
+        this._setFixedSize(h);
         this.layout.save();
       };
 

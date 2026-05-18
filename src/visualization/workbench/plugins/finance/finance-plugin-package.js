@@ -69,6 +69,11 @@ export const FINANCE_DEFAULT_LAYOUT = {
     tabs: ['dashboard', 'perf'],
     active: 'dashboard',
   },
-  bottomSize: 110,
-  bottomCollapsed: false,
+  bottomSize:       110,
+  bottomCollapsed:  false,
+  centerSplit:      false,
+  centerSplitDir:   'h',
+  centerInnerSizes: [1, 1],
+  'center-a':       { tabs: [], active: null },
+  'center-b':       { tabs: [], active: null },
 };

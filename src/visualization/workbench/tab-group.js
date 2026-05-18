@@ -21,12 +21,12 @@ import { WorkbenchComponent } from './component.js';
  * @param {HTMLElement}                    [opts.extraControls] — appended right-aligned in tab bar
  * @param {function(string, string): void}  opts.onActivate    — (tab, pane) tab became active
  * @param {function(string, string): void}  opts.onClose       — (tab, pane) tab closed
- * @param {function(string, string): void}  [opts.onDetach]    — (tab, pane) tab detached to window
  * @param {function(DragEvent, string, string): void} opts.onDragStart — drag started
  * @param {function(DragEvent, string): void}         opts.onDrop      — dropped onto pane
+ * @param {function(string, string|null, string): void} [opts.onReorder] — (tab, insertBefore, pane) same-pane reorder
  */
 export class TabGroup extends WorkbenchComponent {
-  constructor({ pane, layout, registry, instances, extraControls, onActivate, onClose, onDetach, onDragStart, onDrop }) {
+  constructor({ pane, layout, registry, instances, extraControls, onActivate, onClose, onDragStart, onDrop, onReorder }) {
     super();
     this.pane          = pane;
     this.layout        = layout;
@@ -35,10 +35,11 @@ export class TabGroup extends WorkbenchComponent {
     this.extraControls = extraControls ?? null;
     this.onActivate    = onActivate;
     this.onClose       = onClose;
-    this.onDetach      = onDetach ?? null;
     this.onDragStart   = onDragStart;
     this.onDrop        = onDrop;
+    this.onReorder     = onReorder ?? null;
     this._activeInstance = null;
+    this._insertBefore   = null;  // tabId before which the dragged tab will land
   }
 
   render() {
@@ -99,6 +100,24 @@ export class TabGroup extends WorkbenchComponent {
       bar.appendChild(this.extraControls);
     }
 
+    // Track insertion point for same-pane reordering
+    bar.addEventListener('dragover', (e) => {
+      const nearest = e.target.closest('.wb-tab[data-tab]');
+      bar.querySelectorAll('.wb-tab').forEach(t => t.classList.remove('wb-tab--insert-before'));
+      if (nearest && bar.contains(nearest)) {
+        nearest.classList.add('wb-tab--insert-before');
+        this._insertBefore = nearest.dataset.tab;
+      } else {
+        this._insertBefore = null;
+      }
+    });
+    bar.addEventListener('dragleave', (e) => {
+      if (!bar.contains(e.relatedTarget)) {
+        bar.querySelectorAll('.wb-tab').forEach(t => t.classList.remove('wb-tab--insert-before'));
+        this._insertBefore = null;
+      }
+    });
+
     return bar;
   }
 
@@ -115,23 +134,16 @@ export class TabGroup extends WorkbenchComponent {
     titleEl.className = 'wb-tab-title';
     titleEl.textContent = title;
 
-    const detachEl = document.createElement('span');
-    detachEl.className = 'wb-tab-detach';
-    detachEl.textContent = '⤢';
-    detachEl.title = 'Detach to window';
-
     const closeEl = document.createElement('span');
     closeEl.className = 'wb-tab-close';
     closeEl.textContent = '×';
     closeEl.title = 'Close';
 
-    tab.append(titleEl, detachEl, closeEl);
+    tab.append(titleEl, closeEl);
 
     tab.addEventListener('click', (e) => {
       if (e.target === closeEl) {
         this.onClose?.(tabId, this.pane);
-      } else if (e.target === detachEl) {
-        this.onDetach?.(tabId, this.pane);
       } else {
         this.onActivate?.(tabId, this.pane);
       }
@@ -226,6 +238,27 @@ export class TabGroup extends WorkbenchComponent {
     if (wasMoved && fromPane !== null && fromPane !== this.pane) {
       instance.onAdopt?.(fromPane, this.pane);
     }
+  }
+
+  /**
+   * Move a tab button to a new position within the bar.
+   * @param {string}      tabId
+   * @param {string|null} insertBeforeId — tab to insert before, or null to append
+   */
+  reorderTabButton(tabId, insertBeforeId) {
+    const bar   = this.el?.querySelector('.wb-tabs');
+    if (!bar) return;
+    const tabEl = bar.querySelector(`.wb-tab[data-tab="${tabId}"]`);
+    if (!tabEl) return;
+    if (insertBeforeId) {
+      const beforeEl = bar.querySelector(`.wb-tab[data-tab="${insertBeforeId}"]`);
+      if (beforeEl && beforeEl !== tabEl) bar.insertBefore(tabEl, beforeEl);
+    } else {
+      const extra = bar.querySelector('.wb-tab-extra');
+      bar.insertBefore(tabEl, extra ?? null);
+    }
+    bar.querySelectorAll('.wb-tab').forEach(t => t.classList.remove('wb-tab--insert-before'));
+    this._insertBefore = null;
   }
 
   /** Unmount a plugin that is being closed, leaving it in the instances map. */

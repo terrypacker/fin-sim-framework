@@ -3,11 +3,10 @@ import { PluginRegistry }       from './plugin-registry.js';
 import { SplitPane }            from './split-pane.js';
 import { TabGroup }             from './tab-group.js';
 import { WorkbenchRuntime, WB_EVENTS } from './workbench-runtime.js';
-import { WorkbenchChannel, WB_PANEL }  from './workbench-channel.js';
 
-const STORAGE_KEY = 'sim-workbench-layout';
-const H_PANES  = ['left', 'center', 'right'];
-const ALL_PANES = [...H_PANES, 'bottom'];
+const STORAGE_KEY  = 'sim-workbench-layout';
+const OUTER_PANES  = ['left', 'center', 'right'];   // outer horizontal split — always 3
+const CENTER_SPLIT_PANES = ['center-a', 'center-b'];
 
 /**
  * WorkbenchShell — assembles the full dockable workbench.
@@ -15,6 +14,7 @@ const ALL_PANES = [...H_PANES, 'bottom'];
  * Layout structure:
  *   outer vertical split ('main' / 'bottom')
  *     └── main  → inner horizontal split ('left' / 'center' / 'right')
+ *                  └── 'center' may contain a nested SplitPane ('center-a' / 'center-b')
  *     └── bottom → bottom TabGroup (collapsible)
  *
  * Usage:
@@ -25,36 +25,38 @@ const ALL_PANES = [...H_PANES, 'bottom'];
  * @param {object}       opts.defaultLayout  — initial layout if no persisted state
  * @param {Array<{ id, title, component }>} opts.plugins — plugin descriptors to register
  * @param {string}       [opts.storageKey]   — localStorage key for persisted layout
- * @param {string}       [opts.panelUrl]     — URL of the detached-panel HTML page
- * @param {string}       [opts.channelName]  — BroadcastChannel name for cross-window sync
  */
 export class WorkbenchShell {
-  constructor({ defaultLayout, plugins = [], storageKey, panelUrl, channelName }) {
+  constructor({ defaultLayout, plugins = [], storageKey }) {
     this.runtime  = new WorkbenchRuntime();
     this.registry = new PluginRegistry();
     this.layout   = new WorkbenchLayoutModel(defaultLayout);
     this._storageKey = storageKey ?? STORAGE_KEY;
-    this._panelUrl   = panelUrl ?? null;
 
     /** @type {Map<string, import('./component.js').WorkbenchComponent>} */
     this.instances = new Map();
 
-    this._outerSplit = null;
-    this._innerSplit = null;
-    this._tabGroups  = new Map();   // pane name → TabGroup
-    this._container  = null;
-    this._dragState  = null;        // { tabId, fromPane }
-    this._ghost      = null;
-    this._collapseBtn = null;
-
-    /** @type {Map<string, { win: Window, sourcePane: string }>} */
-    this._detachedWindows = new Map();
-
-    this._channel = channelName ? new WorkbenchChannel(channelName) : null;
+    this._outerSplit       = null;
+    this._innerSplit       = null;
+    this._centerInnerSplit = null;  // nested split inside center pane when centerSplit=true
+    this._tabGroups        = new Map();   // pane name → TabGroup
+    this._container        = null;
+    this._dragState        = null;        // { tabId, fromPane }
+    this._ghost            = null;
+    this._collapseBtn      = null;
+    this._maximized        = false;
 
     for (const descriptor of plugins) {
       this.registry.registerPlugin(descriptor);
     }
+  }
+
+  // ── Active pane helpers ─────────────────────────────────────────────────────
+
+  /** All pane names that currently have TabGroups (varies with center split state). */
+  get _activePanes() {
+    const center = this.layout.isCenterSplit() ? CENTER_SPLIT_PANES : ['center'];
+    return ['left', ...center, 'right', 'bottom'];
   }
 
   /**
@@ -64,20 +66,6 @@ export class WorkbenchShell {
   init(container) {
     this._container = container;
     this.layout.load(this._storageKey);
-
-    if (this._channel) {
-      this._channel.attachBus(this.runtime.bus, [
-        WB_EVENTS.SELECTION_CHANGED,
-        WB_EVENTS.RUNTIME_TICK,
-        WB_EVENTS.SCENARIO_READY,
-      ]);
-      this._channel.onControl((msg) => {
-        if (msg?.type === WB_PANEL.CLOSING) {
-          this._reattachTab(msg.tabId, msg.sourcePane);
-        }
-      });
-    }
-
     this._instantiatePlugins();
     this._render();
   }
@@ -86,7 +74,7 @@ export class WorkbenchShell {
 
   _instantiatePlugins() {
     const allTabIds = new Set();
-    for (const pane of ALL_PANES) {
+    for (const pane of this._activePanes) {
       const cfg = this.layout.layout[pane];
       if (cfg) cfg.tabs.forEach(id => allTabIds.add(id));
     }
@@ -107,6 +95,8 @@ export class WorkbenchShell {
   _render() {
     this._container.innerHTML = '';
     this._tabGroups.clear();
+    this._centerInnerSplit = null;
+    this._maximized = false;
 
     // Outer vertical split: 'main' (flex:1) + 'bottom' (fixed px)
     this._outerSplit = new SplitPane({ layout: this.layout, panes: ['main', 'bottom'], direction: 'vertical' });
@@ -114,7 +104,7 @@ export class WorkbenchShell {
 
     // Inner horizontal split inside 'main'
     const mainEl = this._outerSplit.getPaneEl('main');
-    this._innerSplit = new SplitPane({ layout: this.layout, panes: H_PANES });
+    this._innerSplit = new SplitPane({ layout: this.layout, panes: OUTER_PANES });
     this._innerSplit.mount(mainEl);
 
     // Collapse toggle button — injected into the bottom TabGroup's tab bar
@@ -125,38 +115,19 @@ export class WorkbenchShell {
     this._collapseBtn.addEventListener('click', () => this._toggleBottomCollapse());
 
     // Bottom TabGroup
-    const bottomTabGroup = new TabGroup({
-      pane:          'bottom',
-      layout:        this.layout,
-      registry:      this.registry,
-      instances:     this.instances,
-      extraControls: this._collapseBtn,
-      onActivate:  (tab, p) => this._onActivate(tab, p),
-      onClose:     (tab, p) => this._onClose(tab, p),
-      onDetach:    (tab, p) => this._onDetach(tab, p),
-      onDragStart: (e, tab, p) => this._onDragStart(e, tab, p),
-      onDrop:      (e, p) => this._onDrop(e, p),
-    });
+    const bottomTabGroup = this._newTabGroup('bottom', { extraControls: this._collapseBtn });
     bottomTabGroup.mount(this._outerSplit.getPaneEl('bottom'));
     this._tabGroups.set('bottom', bottomTabGroup);
 
-    // Three horizontal pane TabGroups
-    for (const pane of H_PANES) {
-      const tabGroup = new TabGroup({
-        pane,
-        layout:    this.layout,
-        registry:  this.registry,
-        instances: this.instances,
-        onActivate:  (tab, p) => this._onActivate(tab, p),
-        onClose:     (tab, p) => this._onClose(tab, p),
-        onDetach:    (tab, p) => this._onDetach(tab, p),
-        onDragStart: (e, tab, p) => this._onDragStart(e, tab, p),
-        onDrop:      (e, p) => this._onDrop(e, p),
-      });
-
-      tabGroup.mount(this._innerSplit.getPaneEl(pane));
-      this._tabGroups.set(pane, tabGroup);
+    // Left and right TabGroups
+    for (const pane of ['left', 'right']) {
+      const tg = this._newTabGroup(pane);
+      tg.mount(this._innerSplit.getPaneEl(pane));
+      this._tabGroups.set(pane, tg);
     }
+
+    // Center — may be a single TabGroup or a split pair
+    this._mountCenterContent(this._innerSplit.getPaneEl('center'));
 
     // Apply initial collapsed state
     if (this.layout.isBottomCollapsed()) {
@@ -166,9 +137,119 @@ export class WorkbenchShell {
     }
   }
 
+  /** Mount center pane content (single TabGroup or nested split). */
+  _mountCenterContent(centerEl) {
+    centerEl.innerHTML = '';
+
+    if (this.layout.isCenterSplit()) {
+      const dir = this.layout.getCenterSplitDir() === 'v' ? 'vertical' : 'horizontal';
+      this._centerInnerSplit = new SplitPane({
+        layout:       this.layout,
+        panes:        CENTER_SPLIT_PANES,
+        direction:    dir,
+        getSizes:     ()  => this.layout.getCenterInnerSizes(),
+        setSizes:     (s) => this.layout.setCenterInnerSizes(s),
+        getFixedSize: ()  => this.layout.getCenterInnerSizes()[1] ?? 300,
+        setFixedSize: (h) => this.layout.setCenterInnerSizes([this.layout.getCenterInnerSizes()[0], h]),
+      });
+      this._centerInnerSplit.mount(centerEl);
+
+      const controls = this._buildCenterControls();
+      const tgA = this._newTabGroup('center-a', { extraControls: controls });
+      tgA.mount(this._centerInnerSplit.getPaneEl('center-a'));
+      this._tabGroups.set('center-a', tgA);
+
+      const tgB = this._newTabGroup('center-b');
+      tgB.mount(this._centerInnerSplit.getPaneEl('center-b'));
+      this._tabGroups.set('center-b', tgB);
+    } else {
+      const controls = this._buildCenterControls();
+      const tg = this._newTabGroup('center', { extraControls: controls });
+      tg.mount(centerEl);
+      this._tabGroups.set('center', tg);
+    }
+  }
+
+  /**
+   * Re-mount just the center pane area (used when toggling split or direction).
+   * Preserves all other panes and plugin instances.
+   */
+  _remountCenter() {
+    // Unmount existing center TabGroups and inner split
+    for (const pane of ['center', ...CENTER_SPLIT_PANES]) {
+      const tg = this._tabGroups.get(pane);
+      if (tg) { tg.unmount(); this._tabGroups.delete(pane); }
+    }
+    this._centerInnerSplit?.unmount();
+    this._centerInnerSplit = null;
+
+    this._instantiatePlugins();
+    this._mountCenterContent(this._innerSplit.getPaneEl('center'));
+  }
+
+  // ── Center controls ─────────────────────────────────────────────────────────
+
+  /** Build the split/direction/maximize button group for the center tab bar. */
+  _buildCenterControls() {
+    const wrap = document.createElement('div');
+    wrap.className = 'wb-center-controls';
+
+    const isSplit = this.layout.isCenterSplit();
+
+    const splitBtn = document.createElement('button');
+    splitBtn.className = 'wb-btn wb-btn--icon';
+    splitBtn.title    = isSplit ? 'Unsplit center' : 'Split center';
+    splitBtn.textContent = isSplit ? '⊡' : '⊞';
+    splitBtn.addEventListener('click', () => this._toggleCenterSplit());
+
+    if (isSplit) {
+      const dirBtn = document.createElement('button');
+      dirBtn.className = 'wb-btn wb-btn--icon';
+      const isV = this.layout.getCenterSplitDir() === 'v';
+      dirBtn.title       = isV ? 'Switch to side-by-side' : 'Switch to top/bottom';
+      dirBtn.textContent = isV ? '↔' : '↕';
+      dirBtn.addEventListener('click', () => this._toggleCenterDir());
+      wrap.appendChild(dirBtn);
+    }
+
+    const maxBtn = document.createElement('button');
+    maxBtn.className = 'wb-btn wb-btn--icon';
+    maxBtn.title     = 'Maximize center';
+    maxBtn.textContent = '⛶';
+    maxBtn.addEventListener('click', () => this._toggleMaximize(maxBtn));
+
+    wrap.append(splitBtn, maxBtn);
+    return wrap;
+  }
+
+  _toggleCenterSplit() {
+    this.layout.setCenterSplit(!this.layout.isCenterSplit());
+    this.layout.save();
+    this._remountCenter();
+  }
+
+  _toggleCenterDir() {
+    const next = this.layout.getCenterSplitDir() === 'h' ? 'v' : 'h';
+    this.layout.setCenterSplitDir(next);
+    // Reset inner sizes to equal split when direction changes
+    this.layout.setCenterInnerSizes([1, 1]);
+    this.layout.save();
+    this._remountCenter();
+  }
+
+  _toggleMaximize(btn) {
+    this._maximized = !this._maximized;
+    this._innerSplit.el?.classList.toggle('wb-center-maximized', this._maximized);
+    btn.title       = this._maximized ? 'Restore' : 'Maximize center';
+    btn.textContent = this._maximized ? '⛶' : '⛶';
+    btn.classList.toggle('wb-btn--active', this._maximized);
+  }
+
+  // ── Re-render helpers ────────────────────────────────────────────────────────
+
   /** Re-render all panes. */
   _renderAll() {
-    for (const pane of ALL_PANES) {
+    for (const pane of this._activePanes) {
       this._tabGroups.get(pane)?.rerender();
     }
   }
@@ -180,6 +261,23 @@ export class WorkbenchShell {
     }
   }
 
+  // ── TabGroup factory ────────────────────────────────────────────────────────
+
+  _newTabGroup(pane, { extraControls } = {}) {
+    return new TabGroup({
+      pane,
+      layout:        this.layout,
+      registry:      this.registry,
+      instances:     this.instances,
+      extraControls,
+      onActivate:  (tab, p) => this._onActivate(tab, p),
+      onClose:     (tab, p) => this._onClose(tab, p),
+      onDragStart: (e, tab, p) => this._onDragStart(e, tab, p),
+      onDrop:      (e, p) => this._onDrop(e, p),
+      onReorder:   (tab, before, p) => this._onReorder(tab, before, p),
+    });
+  }
+
   // ── Collapse toggle ─────────────────────────────────────────────────────────
 
   _toggleBottomCollapse() {
@@ -189,7 +287,6 @@ export class WorkbenchShell {
 
     const bottomEl = this._outerSplit.getPaneEl('bottom');
     if (collapsed) {
-      // Save current height before collapsing
       const currentH = parseFloat(bottomEl.style.height);
       if (currentH > 34) this.layout.setBottomSize(currentH);
       bottomEl.style.height = '34px';
@@ -206,7 +303,6 @@ export class WorkbenchShell {
 
   _onActivate(tab, pane) {
     this.layout.setActive(pane, tab);
-    // Use lightweight show/hide rather than full rerender for tab switches.
     this._tabGroups.get(pane)?.setActive(tab);
   }
 
@@ -217,41 +313,6 @@ export class WorkbenchShell {
     tg?.closePlugin(tab);
     const newActive = this.layout.layout[pane]?.active;
     if (newActive) tg?.setActive(newActive);
-  }
-
-  _onDetach(tabId, pane) {
-    if (!this._panelUrl) return;
-
-    this.layout.closeTab(pane, tabId);
-    const tg = this._tabGroups.get(pane);
-    tg?.removeTabButton(tabId);
-    tg?.closePlugin(tabId);
-    const newActive = this.layout.layout[pane]?.active;
-    if (newActive) tg?.setActive(newActive);
-
-    const url = `${this._panelUrl}?tab=${encodeURIComponent(tabId)}&source=${encodeURIComponent(pane)}`;
-    const win = window.open(url, `wb-panel-${tabId}`, 'width=800,height=600,menubar=no,toolbar=no,status=no');
-
-    if (win) {
-      this._detachedWindows.set(tabId, { win, sourcePane: pane });
-    } else {
-      // Popup blocked — restore tab immediately
-      this.layout.addTab(pane, tabId);
-      tg?.addTabButton(tabId);
-      tg?.adoptPlugin(tabId);
-      tg?.setActive(tabId);
-    }
-  }
-
-  _reattachTab(tabId, sourcePane) {
-    if (!this.instances.has(tabId)) return;
-    const targetPane = (sourcePane && this.layout.layout[sourcePane]) ? sourcePane : H_PANES[0];
-    this.layout.addTab(targetPane, tabId);
-    const tg = this._tabGroups.get(targetPane);
-    tg?.addTabButton(tabId);
-    tg?.adoptPlugin(tabId);
-    tg?.setActive(tabId);
-    this._detachedWindows.delete(tabId);
   }
 
   _onDragStart(e, tabId, fromPane) {
@@ -271,7 +332,13 @@ export class WorkbenchShell {
     this._dragState = null;
 
     const { tabId, fromPane } = data;
-    if (fromPane === toPane) return;
+
+    // Same-pane drag → reorder
+    if (fromPane === toPane) {
+      const insertBefore = this._tabGroups.get(toPane)?._insertBefore ?? null;
+      this._onReorder(tabId, insertBefore, toPane);
+      return;
+    }
 
     this.layout.moveTab(tabId, fromPane, toPane);
 
@@ -280,12 +347,18 @@ export class WorkbenchShell {
 
     fromTg?.removeTabButton(tabId);
     toTg?.addTabButton(tabId);
-    toTg?.adoptPlugin(tabId, fromPane);   // moves instance.el — appendChild handles cross-parent move
+    toTg?.adoptPlugin(tabId, fromPane);
 
-    // Sync tab bar highlights; fromGroup may need to show a different active tab now
     const fromActive = this.layout.layout[fromPane]?.active;
     if (fromActive) fromTg?.setActive(fromActive);
     toTg?.setActive(this.layout.layout[toPane]?.active);
+    this.layout.save();
+  }
+
+  _onReorder(tabId, insertBefore, pane) {
+    this.layout.reorderTab(pane, tabId, insertBefore);
+    this._tabGroups.get(pane)?.reorderTabButton(tabId, insertBefore);
+    this.layout.save();
   }
 
   // ── Save / reset layout ─────────────────────────────────────────────────────
@@ -300,12 +373,10 @@ export class WorkbenchShell {
    * @returns {boolean} true if found and activated
    */
   activatePlugin(id) {
-    for (const pane of ALL_PANES) {
+    for (const pane of this._activePanes) {
       const cfg = this.layout.layout[pane];
       if (cfg?.tabs.includes(id)) {
         this.layout.setActive(pane, id);
-        // Lightweight show/hide — avoids destroying plugin DOM and invalidating
-        // container references held by BaseApp (graphNodeInspector, etc.)
         this._tabGroups.get(pane)?.setActive(id);
         return true;
       }
@@ -313,11 +384,17 @@ export class WorkbenchShell {
     return false;
   }
 
-  resetLayout() {
+  _teardownLayout() {
     for (const tg of this._tabGroups.values()) tg.unmount();
+    this._centerInnerSplit?.unmount();
+    this._centerInnerSplit = null;
     this._innerSplit?.unmount();
     this._outerSplit?.unmount();
+    this._tabGroups.clear();
+  }
 
+  resetLayout() {
+    this._teardownLayout();
     this.layout.reset();
     this._render();
   }
@@ -328,10 +405,7 @@ export class WorkbenchShell {
    * @param {object} layoutObj
    */
   applyLayout(layoutObj) {
-    for (const tg of this._tabGroups.values()) tg.unmount();
-    this._innerSplit?.unmount();
-    this._outerSplit?.unmount();
-
+    this._teardownLayout();
     this.layout.applyTemplate(layoutObj);
     this._instantiatePlugins();
     this._render();

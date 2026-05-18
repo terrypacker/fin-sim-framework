@@ -10,13 +10,18 @@ const STORAGE_KEY = 'sim-workbench-layout-prod';
 
 // ── Built-in workspace templates ────────────────────────────────────────────
 
+const CENTER_SPLIT_DEFAULTS = {
+  centerSplit: false, centerSplitDir: 'h', centerInnerSizes: [1, 1],
+  'center-a': { tabs: [], active: null }, 'center-b': { tabs: [], active: null },
+};
+
 const ANALYSIS_LAYOUT = {
   sizes: [1, 2, 1],
   left:   { tabs: ['scenario', 'mc-config', 'opt-config'],             active: 'mc-config'  },
   center: { tabs: ['chart', 'mc-results', 'opt-results', 'timeline'],  active: 'chart'      },
   right:  { tabs: ['mc-runs', 'opt-runs', 'state-panel'],              active: 'mc-runs'    },
   bottom: { tabs: ['dashboard', 'perf'],                               active: 'dashboard'  },
-  bottomSize: 110, bottomCollapsed: false,
+  bottomSize: 110, bottomCollapsed: false, ...CENTER_SPLIT_DEFAULTS,
 };
 
 const DEBUGGING_LAYOUT = {
@@ -25,7 +30,7 @@ const DEBUGGING_LAYOUT = {
   center: { tabs: ['config-graph', 'timeline'],                                 active: 'config-graph'},
   right:  { tabs: ['inspector', 'exec-history', 'lineage', 'state-panel'],      active: 'exec-history'},
   bottom: { tabs: ['perf', 'dashboard'],                                        active: 'perf'        },
-  bottomSize: 110, bottomCollapsed: false,
+  bottomSize: 110, bottomCollapsed: false, ...CENTER_SPLIT_DEFAULTS,
 };
 
 const REVIEW_LAYOUT = {
@@ -34,7 +39,7 @@ const REVIEW_LAYOUT = {
   center: { tabs: ['timeline', 'chart'],                                        active: 'timeline'   },
   right:  { tabs: ['state-panel', 'inspector', 'exec-history', 'lineage'],      active: 'state-panel'},
   bottom: { tabs: ['dashboard'],                                                active: 'dashboard'  },
-  bottomSize: 110, bottomCollapsed: false,
+  bottomSize: 110, bottomCollapsed: false, ...CENTER_SPLIT_DEFAULTS,
 };
 
 const BUILTIN_TEMPLATES = {
@@ -98,8 +103,6 @@ export class WorkbenchApp extends BaseApp {
       defaultLayout: FINANCE_DEFAULT_LAYOUT,
       plugins:       FINANCE_PLUGINS,
       storageKey:    STORAGE_KEY,
-      panelUrl:      'workbench-panel-prod.html',
-      channelName:   'sim-workbench-prod',
     });
     this._wbShell.init(container);
 

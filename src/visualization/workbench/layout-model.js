@@ -3,13 +3,18 @@
  *
  * Layout shape:
  *   {
- *     sizes:          [number, number, number],  // flex fractions for left/center/right
- *     left:           { tabs: string[], active: string | null },
- *     center:         { tabs: string[], active: string | null },
- *     right:          { tabs: string[], active: string | null },
- *     bottom:         { tabs: string[], active: string | null },
- *     bottomSize:     number,   // px height of bottom panel
- *     bottomCollapsed: boolean,
+ *     sizes:            [number, number, number],  // flex fractions for left/center/right
+ *     left:             { tabs: string[], active: string | null },
+ *     center:           { tabs: string[], active: string | null },
+ *     right:            { tabs: string[], active: string | null },
+ *     bottom:           { tabs: string[], active: string | null },
+ *     bottomSize:       number,   // px height of bottom panel
+ *     bottomCollapsed:  boolean,
+ *     centerSplit:      boolean,  // whether center is split into two sub-panes
+ *     centerSplitDir:   'h'|'v',  // 'h' = side-by-side, 'v' = stacked
+ *     centerInnerSizes: [number, number],  // flex fractions (h) or [1, px-height] (v)
+ *     'center-a':       { tabs: string[], active: string | null },
+ *     'center-b':       { tabs: string[], active: string | null },
  *   }
  */
 export class WorkbenchLayoutModel {
@@ -89,7 +94,7 @@ export class WorkbenchLayoutModel {
   }
 
   /**
-   * Add a tab to a pane (e.g. reattach from detached window).
+   * Add a tab to a pane.
    * No-op if the pane doesn't exist or already contains the tab.
    */
   addTab(pane, tab) {
@@ -148,6 +153,72 @@ export class WorkbenchLayoutModel {
     this._layout.bottomCollapsed = collapsed;
   }
 
+  // ── Center split ────────────────────────────────────────────────────────────
+
+  /** @returns {boolean} */
+  isCenterSplit() {
+    return this._layout.centerSplit ?? false;
+  }
+
+  /** @returns {'h'|'v'} */
+  getCenterSplitDir() {
+    return this._layout.centerSplitDir ?? 'h';
+  }
+
+  /** @param {'h'|'v'} dir */
+  setCenterSplitDir(dir) {
+    this._layout.centerSplitDir = dir;
+  }
+
+  /**
+   * Toggle center split on/off, migrating tabs between center ↔ center-a.
+   * @param {boolean} enabled
+   */
+  setCenterSplit(enabled) {
+    if (enabled === this.isCenterSplit()) return;
+    if (enabled) {
+      this._layout['center-a'] = structuredClone(this._layout.center);
+      this._layout['center-b'] = { tabs: [], active: null };
+    } else {
+      const a = this._layout['center-a'] ?? { tabs: [], active: null };
+      const b = this._layout['center-b'] ?? { tabs: [], active: null };
+      this._layout.center = {
+        tabs:   [...a.tabs, ...b.tabs],
+        active: a.active ?? b.active ?? null,
+      };
+    }
+    this._layout.centerSplit = enabled;
+  }
+
+  /** @returns {[number, number]} */
+  getCenterInnerSizes() {
+    return this._layout.centerInnerSizes ?? [1, 1];
+  }
+
+  /** @param {[number, number]} sizes */
+  setCenterInnerSizes(sizes) {
+    this._layout.centerInnerSizes = sizes;
+  }
+
+  /**
+   * Reorder a tab within its pane by moving it before insertBefore (or to end).
+   * @param {string}      pane
+   * @param {string}      tabId
+   * @param {string|null} insertBefore  — tabId to insert before, or null to append
+   */
+  reorderTab(pane, tabId, insertBefore) {
+    const cfg = this._layout[pane];
+    if (!cfg) return;
+    const tabs = cfg.tabs.filter(t => t !== tabId);
+    const idx  = insertBefore ? tabs.indexOf(insertBefore) : -1;
+    if (idx === -1) {
+      tabs.push(tabId);
+    } else {
+      tabs.splice(idx, 0, tabId);
+    }
+    cfg.tabs = tabs;
+  }
+
   // ── Template management ─────────────────────────────────────────────────────
 
   static get _TEMPLATE_PREFIX() { return 'workbench-tpl-'; }
@@ -202,10 +273,12 @@ export class WorkbenchLayoutModel {
 
   /**
    * Replace the current layout with the given layout object and persist it.
+   * Backfills any keys present in the default but absent in the template.
    * @param {object} layoutObj
    */
   applyTemplate(layoutObj) {
     this._layout = structuredClone(layoutObj);
+    this._fillMissingFromDefault();
     this.save();
   }
 }
