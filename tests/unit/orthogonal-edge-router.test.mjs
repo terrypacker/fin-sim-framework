@@ -413,3 +413,47 @@ describe('computeLaneOffsets — laneOffset option', () => {
   });
 
 });
+
+// ── routeEdge — loopY override ────────────────────────────────────────────────
+
+describe('routeEdge — loopY override for backward edges', () => {
+
+  const BWD_SRC = { x: 450, y: 100 };
+  const BWD_TGT = { x: 170, y: 200 };
+
+  test('null loopY → uses internal floor computation', () => {
+    const base = routeEdge(BWD_SRC, BWD_TGT, OPTS);
+    const same = routeEdge(BWD_SRC, BWD_TGT, { ...OPTS, loopY: null });
+    assert.deepEqual(base, same);
+  });
+
+  test('loopY overrides the bottom segment Y', () => {
+    const customFloor = 999;
+    const pts = routeEdge(BWD_SRC, BWD_TGT, { ...OPTS, loopY: customFloor });
+    // Points 2 and 3 form the horizontal bottom leg
+    assert.equal(pts[2][1], customFloor, 'bottom leg Y matches loopY');
+    assert.equal(pts[3][1], customFloor, 'bottom leg Y matches loopY (both sides)');
+  });
+
+  test('loopY higher than internal floor is still respected', () => {
+    // Internal floor = max(100+28, 200+28)+30 = 258. Provide a lower value: 50.
+    // The caller is responsible for choosing a sensible value; routeEdge uses it verbatim.
+    const pts = routeEdge(BWD_SRC, BWD_TGT, { ...OPTS, loopY: 50 });
+    assert.equal(pts[2][1], 50);
+  });
+
+  test('route remains 6-point with loopY', () => {
+    const pts = routeEdge(BWD_SRC, BWD_TGT, { ...OPTS, loopY: 500 });
+    assert.equal(pts.length, 6);
+  });
+
+  test('all segments remain axis-aligned with loopY', () => {
+    const pts = routeEdge(BWD_SRC, BWD_TGT, { ...OPTS, loopY: 500 });
+    for (let i = 1; i < pts.length; i++) {
+      const sameX = pts[i][0] === pts[i - 1][0];
+      const sameY = pts[i][1] === pts[i - 1][1];
+      assert.ok(sameX || sameY, `segment ${i - 1}→${i} is not axis-aligned`);
+    }
+  });
+
+});

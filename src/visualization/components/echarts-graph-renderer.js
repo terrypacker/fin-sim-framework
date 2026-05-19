@@ -12,11 +12,14 @@ import * as echarts from 'echarts';
 import { BaseComponent } from './base-component.js';
 import { ColumnLayout } from '../graph-builder/column-layout.js';
 import { routeEdge, computeFanOutOffsets, computeLaneOffsets } from '../graph-builder/orthogonal-edge-router.js';
+import { chooseClearMidX } from '../graph-builder/collision-detector.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bus-messages.js';
 import {NodeRendererRegistry} from "../graph-builder/rendering/node-renderer-registry.js";
+import { BACKWARD_MARGIN } from '../graph-builder/graph-metrics.js';
 
 const NODE_WIDTH  = 180;
 const NODE_HEIGHT = 56;
+const FIT_PAD     = 40;   // padding around nodes when fitting the viewport
 
 const C = {
   bg:              '#111827',
@@ -191,7 +194,7 @@ export class EChartsGraphRenderer extends BaseComponent {
   resizeCanvas() {
     this._chart?.resize();
     this._relayoutAll();
-    this._resetView();
+    this._fitToView();
     this.render();
   }
 
@@ -216,7 +219,7 @@ export class EChartsGraphRenderer extends BaseComponent {
 
   fitToView() {
     this._relayoutAll();
-    this._resetView();
+    this._fitToView();
     this.render();
   }
 
@@ -243,6 +246,9 @@ export class EChartsGraphRenderer extends BaseComponent {
     for (const [id, pos] of positions) {
       this._positions.set(id, pos);
     }
+    // Fit the viewport to the new layout only on the first layout (no viewport yet).
+    // Subsequent relayouts (service changes, firedOnly toggle) preserve the user's zoom.
+    if (!this._viewRange) this._fitToView();
   }
 
   _renderGraph() {
@@ -294,25 +300,59 @@ export class EChartsGraphRenderer extends BaseComponent {
     const { sourceOffsets, targetOffsets } = computeFanOutOffsets(edgesArray, this._positions);
     const midXOffsets = computeLaneOffsets(edgesArray, this._positions, { nodeWidth: NODE_WIDTH });
 
-    // Edge data: [srcX, srcY, tgtX, tgtY, highlighted, srcYOffset, tgtYOffset, midXOffset].
+    // Edge data: [srcX, srcY, tgtX, tgtY, hl, srcYOff, tgtYOff, midXOff, loopY].
+    //   midXOff  — obstacle-aware lane offset (computed below for forward edges)
+    //   loopY    — pre-computed backward-edge floor in data space (-1 for forward edges)
     const edgeData = [];
     for (const [key, edge] of this._prevEdges) {
       const src = this._positions.get(edge.from);
       const tgt = this._positions.get(edge.to);
       if (!src || !tgt) continue;
+
+      const srcYOff      = sourceOffsets.get(key) ?? 0;
+      const tgtYOff      = targetOffsets.get(key)  ?? 0;
+      const baseMidXOff  = midXOffsets.get(key)    ?? 0;
+
+      const sx = src.x + NODE_WIDTH  / 2;
+      const tx = tgt.x - NODE_WIDTH  / 2;
+      const sy = src.y + srcYOff;
+      const ty = tgt.y + tgtYOff;
+
+      // ── Forward edges: obstacle-aware midX ────────────────────────────────────
+      let finalMidXOff = baseMidXOff;
+      if (sx < tx) {
+        const candidateMidX = (sx + tx) / 2 + baseMidXOff;
+        const clearedMidX   = chooseClearMidX(candidateMidX, sx, tx, sy, ty, this._positions,
+          { nodeWidth: NODE_WIDTH, nodeHeight: NODE_HEIGHT });
+        finalMidXOff = clearedMidX - (sx + tx) / 2;
+      }
+
+      // ── Backward edges: floor that clears all nodes in the corridor ────────────
+      let loopY = -1;
+      if (sx >= tx) {
+        const defaultBottom = Math.max(src.y + NODE_HEIGHT / 2, tgt.y + NODE_HEIGHT / 2)
+          + BACKWARD_MARGIN;
+        loopY = defaultBottom;
+        const xLeft  = Math.min(src.x, tgt.x) - BACKWARD_MARGIN;
+        const xRight = Math.max(src.x, tgt.x) + BACKWARD_MARGIN;
+        for (const { x, y } of this._positions.values()) {
+          if (x >= xLeft && x <= xRight) {
+            loopY = Math.max(loopY, y + NODE_HEIGHT / 2 + BACKWARD_MARGIN);
+          }
+        }
+      }
+
       edgeData.push({
         value: [
           src.x, src.y,
           tgt.x, tgt.y,
           this._highlightEdgeSet.has(key) ? 1 : 0,
-          sourceOffsets.get(key) ?? 0,
-          targetOffsets.get(key) ?? 0,
-          midXOffsets.get(key)   ?? 0,
+          srcYOff, tgtYOff, finalMidXOff, loopY,
         ],
       });
     }
 
-    if (!this._viewRange) this._resetView();
+    if (!this._viewRange) this._fitToView();
 
     // Always include axis ranges so that a series-only setOption call cannot
     // cause eCharts to re-evaluate and override the current pan/zoom state.
@@ -328,6 +368,47 @@ export class EChartsGraphRenderer extends BaseComponent {
   }
 
   /* ─────────────────── View (pan / zoom) ─────────────────────────────────── */
+
+  /**
+   * Set the viewport so that every positioned node is visible with FIT_PAD
+   * clearance on all sides, maintaining a 1:1 pixel aspect ratio.
+   * Falls back to _resetView when no positions are available yet.
+   */
+  _fitToView() {
+    if (!this._positions.size) {
+      this._resetView();
+      return;
+    }
+    const rect = this._container.getBoundingClientRect();
+    const W    = rect.width  || 800;
+    const H    = rect.height || 600;
+
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const { x, y } of this._positions.values()) {
+      minX = Math.min(minX, x - NODE_WIDTH  / 2);
+      maxX = Math.max(maxX, x + NODE_WIDTH  / 2);
+      minY = Math.min(minY, y - NODE_HEIGHT / 2);
+      maxY = Math.max(maxY, y + NODE_HEIGHT / 2);
+    }
+
+    const graphW = (maxX - minX) + FIT_PAD * 2;
+    const graphH = (maxY - minY) + FIT_PAD * 2;
+
+    // Scale factor: data units per pixel — whichever axis is more constrained
+    const scale = Math.max(graphW / W, graphH / H);
+    const viewW = W * scale;
+    const viewH = H * scale;
+    const midX  = (minX + maxX) / 2;
+    const midY  = (minY + maxY) / 2;
+
+    this._viewRange = {
+      xMin: midX - viewW / 2,
+      xMax: midX + viewW / 2,
+      yMin: midY - viewH / 2,
+      yMax: midY + viewH / 2,
+    };
+    this._applyView();
+  }
 
   /** Reset the axis window to the full container dimensions (1:1 pixel mapping). */
   _resetView() {
@@ -514,15 +595,18 @@ export class EChartsGraphRenderer extends BaseComponent {
   _renderEdgeItem(params, api) {
     const [sx, sy] = api.coord([api.value(0), api.value(1)]);
     const [tx, ty] = api.coord([api.value(2), api.value(3)]);
-    const hl       = api.value(4) === 1;
-    const srcYOff  = api.value(5) ?? 0;
-    const tgtYOff  = api.value(6) ?? 0;
-    const midXOff  = api.value(7) ?? 0;
+    const hl        = api.value(4) === 1;
+    const srcYOff   = api.value(5) ?? 0;
+    const tgtYOff   = api.value(6) ?? 0;
+    const midXOff   = api.value(7) ?? 0;
+    // dim 8: pre-computed backward-edge floor in data space (-1 = not applicable)
+    const loopYData = api.value(8) ?? -1;
+    const loopY     = loopYData >= 0 ? api.coord([0, loopYData])[1] : null;
 
     const pts = routeEdge(
       { x: sx, y: sy },
       { x: tx, y: ty },
-      { nodeWidth: NODE_WIDTH, nodeHeight: NODE_HEIGHT, sourceYOffset: srcYOff, targetYOffset: tgtYOff, midXOffset: midXOff }
+      { nodeWidth: NODE_WIDTH, nodeHeight: NODE_HEIGHT, sourceYOffset: srcYOff, targetYOffset: tgtYOff, midXOffset: midXOff, loopY }
     );
 
     const stroke  = hl ? C.edgeHighlight : C.edge;

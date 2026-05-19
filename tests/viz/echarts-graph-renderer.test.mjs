@@ -366,3 +366,72 @@ describe('_pixelToData: identity mapping at initial view', () => {
   });
 
 });
+
+// ─── _fitToView ───────────────────────────────────────────────────────────────
+
+describe('_fitToView: viewport encloses all nodes', () => {
+
+  // Container is 800×600 (set in makeRenderer via getBoundingClientRect stub).
+  // NODE_WIDTH=180, NODE_HEIGHT=56, FIT_PAD=40 (private constant, but observable via viewRange).
+
+  test('no positions → falls back to 0..W × 0..H', () => {
+    const r = makeRenderer();
+    r._positions = new Map();
+    r._fitToView();
+    expect(r._viewRange.xMin).toBe(0);
+    expect(r._viewRange.xMax).toBe(800);
+    expect(r._viewRange.yMin).toBe(0);
+    expect(r._viewRange.yMax).toBe(600);
+  });
+
+  test('single node → graph centre is viewport centre', () => {
+    const r = makeRenderer();
+    r._positions = new Map([['n0', { x: 400, y: 300 }]]);
+    r._fitToView();
+    const { xMin, xMax, yMin, yMax } = r._viewRange;
+    const midX = (xMin + xMax) / 2;
+    const midY = (yMin + yMax) / 2;
+    expect(midX).toBeCloseTo(400);
+    expect(midY).toBeCloseTo(300);
+  });
+
+  test('viewRange is wider than graph (with padding)', () => {
+    const r = makeRenderer();
+    // Two nodes: col0 (x=170) and col1 (x=450)
+    r._positions = new Map([['a', { x: 170, y: 100 }], ['b', { x: 450, y: 200 }]]);
+    r._fitToView();
+    // Graph X extents: 170-90=80 to 450+90=540, with 40 pad → 40..580
+    // Graph Y extents: 100-28=72 to 200+28=228, with 40 pad → 32..268
+    expect(r._viewRange.xMin).toBeLessThanOrEqual(80);
+    expect(r._viewRange.xMax).toBeGreaterThanOrEqual(540);
+    expect(r._viewRange.yMin).toBeLessThanOrEqual(72);
+    expect(r._viewRange.yMax).toBeGreaterThanOrEqual(228);
+  });
+
+  test('aspect ratio preserved — viewRange W/H matches container W/H', () => {
+    const r = makeRenderer();
+    r._positions = new Map([['a', { x: 170, y: 100 }], ['b', { x: 450, y: 200 }]]);
+    r._fitToView();
+    const { xMin, xMax, yMin, yMax } = r._viewRange;
+    const rangeW = xMax - xMin;
+    const rangeH = yMax - yMin;
+    // Container is 800×600 → aspect ratio 4:3 = 1.333...
+    // viewRange must have same ratio so pixels aren't stretched
+    expect(rangeW / rangeH).toBeCloseTo(800 / 600, 5);
+  });
+
+  test('4-column graph (rightmost at x=1010) is fully visible', () => {
+    const r = makeRenderer();
+    // 4-column layout centrex: 170, 450, 730, 1010
+    r._positions = new Map([
+      ['e', { x: 170,  y: 100 }],
+      ['h', { x: 450,  y: 100 }],
+      ['a', { x: 730,  y: 100 }],
+      ['re', { x: 1010, y: 100 }],
+    ]);
+    r._fitToView();
+    expect(r._viewRange.xMin).toBeLessThanOrEqual(170 - 90);   // left of first node
+    expect(r._viewRange.xMax).toBeGreaterThanOrEqual(1010 + 90); // right of last node
+  });
+
+});

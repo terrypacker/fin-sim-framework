@@ -31,10 +31,13 @@ import { BACKWARD_MARGIN, EDGE_SPACING, LANE_OFFSET } from './graph-metrics.js';
  *
  * @param {{ x: number, y: number }} source  Center of source node.
  * @param {{ x: number, y: number }} target  Center of target node.
- * @param {{ nodeWidth: number, nodeHeight: number, sourceYOffset?: number, targetYOffset?: number, midXOffset?: number }} opts
+ * @param {{ nodeWidth: number, nodeHeight: number, sourceYOffset?: number, targetYOffset?: number, midXOffset?: number, loopY?: number|null }} opts
+ *   `loopY` — when provided, overrides the internal bottom-clearance calculation for
+ *   backwards edges.  Pass a pre-computed floor (pixel or data space, matching the
+ *   other coordinates) to ensure backward routes clear intermediate nodes.
  * @returns {Array<[number, number]>}
  */
-export function routeEdge(source, target, { nodeWidth, nodeHeight, sourceYOffset = 0, targetYOffset = 0, midXOffset = 0 }) {
+export function routeEdge(source, target, { nodeWidth, nodeHeight, sourceYOffset = 0, targetYOffset = 0, midXOffset = 0, loopY = null }) {
   const sx = source.x + nodeWidth / 2;         // right anchor of source
   const sy = source.y + sourceYOffset;          // fan-out Y offset
   const tx = target.x - nodeWidth / 2;         // left anchor of target
@@ -52,10 +55,11 @@ export function routeEdge(source, target, { nodeWidth, nodeHeight, sourceYOffset
   }
 
   // Backwards or same-column: route below both nodes then back left (5-segment).
-  // bottomY uses node centre Y (not the offset anchor) so it clears the node body.
-  const bottomY =
-    Math.max(source.y + nodeHeight / 2, target.y + nodeHeight / 2) +
-    BACKWARD_MARGIN;
+  // loopY may be pre-computed by the caller to clear intermediate nodes; otherwise
+  // fall back to clearing just the two endpoint node bodies.
+  const bottomY = loopY !== null
+    ? loopY
+    : Math.max(source.y + nodeHeight / 2, target.y + nodeHeight / 2) + BACKWARD_MARGIN;
 
   return [
     [sx,                   sy],
