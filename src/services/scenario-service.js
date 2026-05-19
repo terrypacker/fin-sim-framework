@@ -17,6 +17,16 @@ export class ScenarioService {
   constructor(bus = {}, scenarioRegistry = {}) {
     this._bus = bus;
     this._registry = scenarioRegistry;
+    this._fallbackFactory = null;
+  }
+
+  /**
+   * Register a factory used when a user scenario has no matching scenarioId.
+   * Call this once at app startup before createActiveScenario() is first invoked.
+   * @param {Function} factory (params, initialState, simStart, simEnd) => BaseScenario
+   */
+  setFallbackFactory(factory) {
+    this._fallbackFactory = factory;
   }
 
   getAll() {
@@ -104,11 +114,12 @@ export class ScenarioService {
           new Date(active.simStart), new Date(active.simEnd)
       );
 
-      const firstPrebuilt = this._registry.getPrebuiltScenarios()[0];
-      if (firstPrebuilt?.factory) return firstPrebuilt.factory(
-        this._getParams(active), this._getInitialState(active));
+      if (this._fallbackFactory) return this._fallbackFactory(
+        this._getParams(active), this._getInitialState(active),
+        new Date(active.simStart), new Date(active.simEnd)
+      );
     }
-    throw new Error('No scenario factory available');
+    throw new Error('No scenario factory available — register a fallbackFactory via setFallbackFactory()');
   }
 
   _getParams(scenario) {

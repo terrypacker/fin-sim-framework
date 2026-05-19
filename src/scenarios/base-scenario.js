@@ -71,6 +71,7 @@ export class BaseScenario {
       order = 100,
       prebuilt =  false,
       context,
+      initialState = {},
       params = [],
       simStart =  new Date(Date.UTC(2026, 0, 1)),
       simEnd = new Date(Date.UTC(2041, 0, 1))} = {}) {
@@ -78,7 +79,7 @@ export class BaseScenario {
     this.order = order;
     this.prebuilt = prebuilt;
     this.context = context;
-    this.initialState = {},
+    this.initialState = initialState;
     this.params = params;
     this.simStart = simStart;
     this.simEnd = simEnd;

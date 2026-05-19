@@ -114,7 +114,7 @@ export class ScenarioTabPresenter {
         active?.id    ?? 'export',
         active?.name  ?? 'Exported Scenario',
         active?.order ?? 100,
-        false,
+        true,
         built?.simStart    ?? active?.simStart,
         built?.simEnd      ?? active?.simEnd,
         built?.initialState ?? active?.initialState ?? {},

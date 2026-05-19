@@ -260,6 +260,7 @@ export class ScenarioSerializer {
       name:             account.name             ?? '',
       type:             account.type             ?? null,
       role:             account.role             ?? null,
+      stateKey:         account.stateKey         ?? null,
       initialValue:     account.balance,
       ownershipType:    account.ownershipType    ?? 'sole',
       ownerId:          account.ownerId          ?? null,
@@ -299,14 +300,14 @@ export class ScenarioSerializer {
 
   static _serializeEvent(node) {
     const d = {
-      __type:   node.eventType === 'OneOff' ? 'OneOffEvent' : 'EventSeries',
+      __type:   node.eventType === 'OneOffEvent' ? 'OneOffEvent' : 'EventSeries',
       id:       node.id,
       name:     node.name,
       type:     node.type,
       enabled:  node.enabled ?? false,
       color:    node.color ?? '#888888',
     };
-    if (node.eventType === 'OneOff') {
+    if (node.eventType === 'OneOffEvent') {
       d.date = node.date instanceof Date ? node.date.toISOString() : node.date;
     } else {
       d.interval    = node.interval;
@@ -653,17 +654,20 @@ export class ScenarioSerializer {
       opts.loanBalance              = d.loanBalance   ?? 0;
       opts.minimumAge               = d.minimumAge    ?? null;
     }
+    let account;
     switch (d.__type) {
-      case 'CheckingAccount':     return new F.CheckingAccount    (d.initialValue ?? 0, opts);
-      case 'SavingsAccount':      return new F.SavingsAccount     (d.initialValue ?? 0, opts);
-      case 'BrokerageAccount':    return new F.BrokerageAccount   (d.initialValue ?? 0, opts);
-      case 'FourOhOneKAccount':   return new F.FourOhOneKAccount  (d.initialValue ?? 0, opts);
-      case 'RothAccount':         return new F.RothAccount        (d.initialValue ?? 0, opts);
-      case 'TraditionalIRAAccount': return new F.TraditionalIRAAccount(d.initialValue ?? 0, opts);
-      case 'SuperannuationAccount': return new F.SuperannuationAccount(d.initialValue ?? 0, opts);
+      case 'CheckingAccount':       account = new F.CheckingAccount       (d.initialValue ?? 0, opts); break;
+      case 'SavingsAccount':        account = new F.SavingsAccount        (d.initialValue ?? 0, opts); break;
+      case 'BrokerageAccount':      account = new F.BrokerageAccount      (d.initialValue ?? 0, opts); break;
+      case 'FourOhOneKAccount':     account = new F.FourOhOneKAccount     (d.initialValue ?? 0, opts); break;
+      case 'RothAccount':           account = new F.RothAccount           (d.initialValue ?? 0, opts); break;
+      case 'TraditionalIRAAccount': account = new F.TraditionalIRAAccount (d.initialValue ?? 0, opts); break;
+      case 'SuperannuationAccount': account = new F.SuperannuationAccount (d.initialValue ?? 0, opts); break;
       default:
-        return new F.Account(d.initialValue ?? 0, opts);
+        account = new F.Account(d.initialValue ?? 0, opts);
     }
+    if (d.stateKey) account.stateKey = d.stateKey;
+    return account;
   }
 
   static _makePerson(d) {
