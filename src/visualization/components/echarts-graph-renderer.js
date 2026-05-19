@@ -232,6 +232,7 @@ export class EChartsGraphRenderer extends BaseComponent {
 
     this._currentNodes   = nodes;
     this._currentNodeMap = new Map(nodes.map(n => [n.id, n]));
+    this._prevEdges      = new Map(edges.map(e => [`${e.from}->${e.to}`, e]));
     return { nodes, edges };
   }
 
@@ -243,6 +244,11 @@ export class EChartsGraphRenderer extends BaseComponent {
     const minW    = numCols * (NODE_WIDTH + 60) + 60;
     const W       = Math.max(rect.width || 800, minW);
     const positions = this._layout.apply(this._currentNodes, { width: W, height: H });
+    // Prune positions for nodes no longer in the current graph so that hit
+    // detection in _onDown cannot false-match against invisible stale entries.
+    for (const id of this._positions.keys()) {
+      if (!positions.has(id)) this._positions.delete(id);
+    }
     for (const [id, pos] of positions) {
       this._positions.set(id, pos);
     }
@@ -282,10 +288,8 @@ export class EChartsGraphRenderer extends BaseComponent {
       this._execOverlay.set(msg.nodeId, entry);
     }
 
-    const { nodes, edges } = this._refreshGraphState();
+    const { nodes } = this._refreshGraphState();
     if (!this._positions.size && nodes.length) this._relayoutAll();
-
-    this._prevEdges = new Map(edges.map(e => [`${e.from}->${e.to}`, e]));
 
     // Node data: each item is [centerX, centerY]. renderItem looks up the node
     // by params.dataIndex into this._currentNodes (same order).
@@ -370,8 +374,14 @@ export class EChartsGraphRenderer extends BaseComponent {
   /* ─────────────────── View (pan / zoom) ─────────────────────────────────── */
 
   /**
-   * Set the viewport so that every positioned node is visible with FIT_PAD
-   * clearance on all sides, maintaining a 1:1 pixel aspect ratio.
+   * Set the viewport so that every positioned node (and backward-edge routing
+   * path) is visible with FIT_PAD clearance on all sides.
+   *
+   * Each axis is fitted independently — X is tight around nodes, Y is extended
+   * to include backward-edge loopY paths.  Nodes are always rendered at fixed
+   * pixel sizes by renderItem, so there is no visual distortion from having
+   * different data-per-pixel ratios on each axis.
+   *
    * Falls back to _resetView when no positions are available yet.
    */
   _fitToView() {
@@ -379,10 +389,6 @@ export class EChartsGraphRenderer extends BaseComponent {
       this._resetView();
       return;
     }
-    const rect = this._container.getBoundingClientRect();
-    const W    = rect.width  || 800;
-    const H    = rect.height || 600;
-
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (const { x, y } of this._positions.values()) {
       minX = Math.min(minX, x - NODE_WIDTH  / 2);
@@ -391,21 +397,37 @@ export class EChartsGraphRenderer extends BaseComponent {
       maxY = Math.max(maxY, y + NODE_HEIGHT / 2);
     }
 
-    const graphW = (maxX - minX) + FIT_PAD * 2;
-    const graphH = (maxY - minY) + FIT_PAD * 2;
-
-    // Scale factor: data units per pixel — whichever axis is more constrained
-    const scale = Math.max(graphW / W, graphH / H);
-    const viewW = W * scale;
-    const viewH = H * scale;
-    const midX  = (minX + maxX) / 2;
-    const midY  = (minY + maxY) / 2;
+    // Extend the bottom bound to include backward-edge routing paths.  Backward
+    // edges route below all nodes in their X corridor, so they can extend well
+    // past the lowest node's bottom edge and appear as "edges to nowhere" when
+    // the viewport is fitted to nodes only.
+    for (const edge of this._prevEdges.values()) {
+      const src = this._positions.get(edge.from);
+      const tgt = this._positions.get(edge.to);
+      if (!src || !tgt) continue;
+      const sx = src.x + NODE_WIDTH / 2;
+      const tx = tgt.x - NODE_WIDTH / 2;
+      if (sx >= tx) {
+        // Mirror the loopY calculation from _renderGraph.
+        const defaultBottom = Math.max(src.y + NODE_HEIGHT / 2, tgt.y + NODE_HEIGHT / 2)
+          + BACKWARD_MARGIN;
+        let loopY = defaultBottom;
+        const xLeft  = Math.min(src.x, tgt.x) - BACKWARD_MARGIN;
+        const xRight = Math.max(src.x, tgt.x) + BACKWARD_MARGIN;
+        for (const { x, y } of this._positions.values()) {
+          if (x >= xLeft && x <= xRight) {
+            loopY = Math.max(loopY, y + NODE_HEIGHT / 2 + BACKWARD_MARGIN);
+          }
+        }
+        maxY = Math.max(maxY, loopY);
+      }
+    }
 
     this._viewRange = {
-      xMin: midX - viewW / 2,
-      xMax: midX + viewW / 2,
-      yMin: midY - viewH / 2,
-      yMax: midY + viewH / 2,
+      xMin: minX - FIT_PAD,
+      xMax: maxX + FIT_PAD,
+      yMin: minY - FIT_PAD,
+      yMax: maxY + FIT_PAD,
     };
     this._applyView();
   }
@@ -443,6 +465,18 @@ export class EChartsGraphRenderer extends BaseComponent {
     ];
   }
 
+  /** Convert a data-space coordinate to canvas pixel position (inverse of _pixelToData). */
+  _dataToPixel(x, y) {
+    const { xMin, xMax, yMin, yMax } = this._viewRange;
+    const rect = this._container.getBoundingClientRect();
+    const W = rect.width  || 800;
+    const H = rect.height || 600;
+    return [
+      (x - xMin) / (xMax - xMin) * W,
+      (y - yMin) / (yMax - yMin) * H,
+    ];
+  }
+
   /** Scroll-wheel zoom — equal factor on both axes, centred on cursor. */
   _onWheel(e) {
     if (!this._viewRange) return;
@@ -465,11 +499,17 @@ export class EChartsGraphRenderer extends BaseComponent {
     if (!this._viewRange) return;
     const px = e.offsetX;
     const py = e.offsetY;
-    const [dataX, dataY] = this._pixelToData(px, py);
-    for (const [nodeId, pos] of this._positions) {
-      if (Math.abs(pos.x - dataX) <= NODE_WIDTH  / 2 &&
-          Math.abs(pos.y - dataY) <= NODE_HEIGHT / 2) {
-        this._dragNodeId = nodeId;
+    // Hit-test in pixel space: nodes are rendered at a fixed pixel size
+    // (NODE_WIDTH × NODE_HEIGHT) regardless of zoom, so checking data-space
+    // distances would give an area that shrinks when zoomed out and grows
+    // when zoomed in, making grabs unreliable.
+    for (const node of this._currentNodes) {
+      const pos = this._positions.get(node.id);
+      if (!pos) continue;
+      const [nodePx, nodePy] = this._dataToPixel(pos.x, pos.y);
+      if (Math.abs(nodePx - px) <= NODE_WIDTH  / 2 &&
+          Math.abs(nodePy - py) <= NODE_HEIGHT / 2) {
+        this._dragNodeId = node.id;
         return;
       }
     }
@@ -659,6 +699,7 @@ export class EChartsGraphRenderer extends BaseComponent {
           type:       'custom',
           z:          2,
           clip:       false,
+          emphasis:   { disabled: true },
           renderItem: (params, api) => this._renderNodeItem(params, api),
           data:       [],
         },

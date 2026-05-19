@@ -409,16 +409,20 @@ describe('_fitToView: viewport encloses all nodes', () => {
     expect(r._viewRange.yMax).toBeGreaterThanOrEqual(228);
   });
 
-  test('aspect ratio preserved — viewRange W/H matches container W/H', () => {
+  test('each axis fitted independently — X tight around nodes, Y independent', () => {
+    // Nodes render at a fixed pixel size regardless of zoom, so there is no
+    // visual distortion from having different data-per-pixel ratios per axis.
+    // X and Y should each be fitted tightly to their own content.
     const r = makeRenderer();
     r._positions = new Map([['a', { x: 170, y: 100 }], ['b', { x: 450, y: 200 }]]);
     r._fitToView();
     const { xMin, xMax, yMin, yMax } = r._viewRange;
-    const rangeW = xMax - xMin;
-    const rangeH = yMax - yMin;
-    // Container is 800×600 → aspect ratio 4:3 = 1.333...
-    // viewRange must have same ratio so pixels aren't stretched
-    expect(rangeW / rangeH).toBeCloseTo(800 / 600, 5);
+    // X: node extents 80..540, FIT_PAD=40 → 40..580 (range = 540)
+    expect(xMin).toBeCloseTo(40);
+    expect(xMax).toBeCloseTo(580);
+    // Y: node extents 72..228, FIT_PAD=40 → 32..268 (range = 236)
+    expect(yMin).toBeCloseTo(32);
+    expect(yMax).toBeCloseTo(268);
   });
 
   test('4-column graph (rightmost at x=1010) is fully visible', () => {
@@ -433,6 +437,67 @@ describe('_fitToView: viewport encloses all nodes', () => {
     r._fitToView();
     expect(r._viewRange.xMin).toBeLessThanOrEqual(170 - 90);   // left of first node
     expect(r._viewRange.xMax).toBeGreaterThanOrEqual(1010 + 90); // right of last node
+  });
+
+  test('backward edge loopY extends yMax beyond node bounds', () => {
+    // A backward edge routes below all nodes in its X corridor.  _fitToView
+    // must include that path so it is not clipped out of the viewport.
+    const r = makeRenderer();
+    // Two same-column nodes — the edge from b→a is backward (src.x >= tgt.x).
+    r._positions  = new Map([
+      ['a', { x: 170, y: 100 }],
+      ['b', { x: 170, y: 236 }],   // 136 below = NODE_HEIGHT(56) + ROW_GAP(80)
+    ]);
+    r._prevEdges  = new Map([['b->a', { from: 'b', to: 'a' }]]);
+    r._fitToView();
+    // Node bottom: max(100+28, 236+28) = 264.  loopY ≥ 264+30 = 294.
+    // yMax must be at least loopY + FIT_PAD(40) = 334.
+    expect(r._viewRange.yMax).toBeGreaterThanOrEqual(294);
+    // But node-only yMax would be 264+40 = 304, so the backward edge ADDS room.
+    expect(r._viewRange.yMax).toBeGreaterThan(304);
+  });
+
+});
+
+// ─── _onDown pixel-space hit detection ───────────────────────────────────────
+
+describe('_onDown: pixel-space node hit detection', () => {
+
+  test('click at node visual centre grabs node at any zoom level', () => {
+    const r = makeRenderer();
+    // Place a node at data (400, 300), which at the 1:1 default view maps to
+    // pixel (400, 300) — centre of the 800×600 container.
+    r._positions    = new Map([['n', { x: 400, y: 300 }]]);
+    r._currentNodes = [{ id: 'n' }];
+    r._viewRange    = { xMin: 0, xMax: 800, yMin: 0, yMax: 600 };
+    r._onDown({ offsetX: 400, offsetY: 300 });
+    expect(r._dragNodeId).toBe('n');
+    expect(r._panStart).toBeNull();
+  });
+
+  test('click at visual node edge still grabs (pixel tolerance, not data tolerance)', () => {
+    const r = makeRenderer();
+    // Zoom out 4×: viewRange covers 0..3200 × 0..2400 but container is 800×600.
+    // Node at data (400, 300) maps to pixel (400*800/3200, 300*600/2400) = (100, 75).
+    // Visual half-width = NODE_WIDTH/2 = 90 CSS px; right visual edge at pixel 190.
+    // Data-space hit at px=190 would be data x = 190/800*3200 = 760 → 360 away from 400.
+    // The old data-space check (±90 data units) would MISS. The pixel check HITS.
+    r._positions    = new Map([['n', { x: 400, y: 300 }]]);
+    r._currentNodes = [{ id: 'n' }];
+    r._viewRange    = { xMin: 0, xMax: 3200, yMin: 0, yMax: 2400 };
+    // Click at the right visual edge of the node.
+    r._onDown({ offsetX: 100 + 89, offsetY: 75 });
+    expect(r._dragNodeId).toBe('n');
+  });
+
+  test('click in empty space starts pan', () => {
+    const r = makeRenderer();
+    r._positions    = new Map([['n', { x: 400, y: 300 }]]);
+    r._currentNodes = [{ id: 'n' }];
+    r._viewRange    = { xMin: 0, xMax: 800, yMin: 0, yMax: 600 };
+    r._onDown({ offsetX: 10, offsetY: 10 });
+    expect(r._dragNodeId).toBeNull();
+    expect(r._panStart).not.toBeNull();
   });
 
 });
