@@ -178,6 +178,7 @@ export class EChartsGraphRenderer extends BaseComponent {
   setFiredOnly(bool) {
     this._firedOnly = bool;
     this._relayoutAll();
+    this._fitToView();
     this.render();
   }
 
@@ -252,8 +253,8 @@ export class EChartsGraphRenderer extends BaseComponent {
     for (const [id, pos] of positions) {
       this._positions.set(id, pos);
     }
-    // Fit the viewport to the new layout only on the first layout (no viewport yet).
-    // Subsequent relayouts (service changes, firedOnly toggle) preserve the user's zoom.
+    // Fit the viewport on the very first layout (no viewport yet).
+    // Mid-simulation relayouts preserve the user's zoom; setFiredOnly re-fits explicitly.
     if (!this._viewRange) this._fitToView();
   }
 
@@ -279,7 +280,10 @@ export class EChartsGraphRenderer extends BaseComponent {
       this._execOverlay.set(msg.nodeId, entry);
     }
 
-    if (this._firedOnly && (beginMsgs.length || endMsgs.length)) this._relayoutAll();
+    if (this._firedOnly && (beginMsgs.length || endMsgs.length)) {
+      this._relayoutAll();
+      this._fitToView();
+    }
 
     for (const msg of this._drainBreakpointMsgs()) {
       if (!msg.nodeId) continue;
