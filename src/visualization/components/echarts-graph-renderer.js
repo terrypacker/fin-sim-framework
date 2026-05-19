@@ -14,7 +14,7 @@ import { ColumnLayout } from '../graph-builder/column-layout.js';
 import { routeEdge, computeFanOutOffsets, computeLaneOffsets } from '../graph-builder/orthogonal-edge-router.js';
 import { chooseClearMidX } from '../graph-builder/collision-detector.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bus-messages.js';
-import {NodeRendererRegistry} from "../graph-builder/rendering/node-renderer-registry.js";
+import { NodeRendererRegistry } from "./graph/rendering/node-renderer-registry.js";
 import { BACKWARD_MARGIN } from '../graph-builder/graph-metrics.js';
 
 const NODE_WIDTH  = 180;

@@ -437,18 +437,20 @@ export class NodeRenderKit {
    */
   getTextWidth(text, options) {
     const { fontFamily, fontSize, fontStyle, fontWeight } = options;
+
+    if (!this._context) {
+      // Fallback when canvas 2D context is unavailable (e.g. jsdom in tests).
+      const size = typeof fontSize === 'number' ? fontSize : parseFloat(fontSize) || 12;
+      return { width: size * 0.6 * text.length, height: size };
+    }
+
     // Order is important for the browser to parse it correctly.
     this._context.font = `${fontStyle || 'normal'} ${fontWeight || 'normal'} ${fontSize} ${fontFamily}`;
 
-    // Measure and return the width
-    // 3. Measure the text
     const metrics = this._context.measureText(text);
-
     return {
       width: metrics.width,
-      // Calculate height using font bounding box metrics
       height: metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent
     };
-
   }
 }

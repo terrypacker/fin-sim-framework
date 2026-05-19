@@ -44,6 +44,7 @@ function makeApi(values) {
   return {
     value: (i) => values[i],
     coord: (pt) => [...pt],
+    style: (s) => s,
   };
 }
 
