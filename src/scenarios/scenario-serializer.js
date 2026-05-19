@@ -321,6 +321,9 @@ export class ScenarioSerializer {
     };
     if (node.eventType === 'OneOffEvent') {
       d.date = node.date instanceof Date ? node.date.toISOString() : node.date;
+      if (node.data && Object.keys(node.data).length > 0) {
+        d.data = node.data;
+      }
     } else {
       d.interval    = node.interval;
       d.startOffset = node.startOffset ?? 0;
@@ -704,6 +707,7 @@ export class ScenarioSerializer {
         date:    d.date ? new Date(d.date) : new Date(),
         enabled: d.enabled ?? false,
         color:   d.color ?? '#888888',
+        data:    d.data ?? {},
       });
     }else if(d.__type == 'EventSeries') {
       return new FinSimLib.Engine.EventSeries({
