@@ -54,7 +54,8 @@
       "mcp__chrome-devtools__list_network_requests",
       "Bash(rollup *)",
       "Bash(awk '{print $5, $6, $7, $8}')",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(npm ls *)"
     ]
   },
   "hooks": {

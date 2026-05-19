@@ -1,0 +1,612 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "scenario-toolset-us-retirement",
+  "title": "US Retirement Toolset Scenario",
+  "description": "Simplified scenario format for US retirement simulations. The toolset automatically wires all events, handlers, and reducers — you only need to define persons, accounts, and assumptions.",
+  "type": "object",
+  "required": ["toolset", "simStart", "simEnd", "persons", "accounts"],
+  "additionalProperties": false,
+  "properties": {
+    "toolset": {
+      "const": "us-retirement",
+      "description": "Identifies this as a US retirement toolset scenario."
+    },
+    "simStart": {
+      "type": "string",
+      "format": "date",
+      "description": "Simulation start date in YYYY-MM-DD format.",
+      "examples": ["2026-01-01"]
+    },
+    "simEnd": {
+      "type": "string",
+      "format": "date",
+      "description": "Simulation end date in YYYY-MM-DD format.",
+      "examples": ["2055-01-01"]
+    },
+    "assumptions": {
+      "type": "object",
+      "description": "Annual growth rate and inflation assumptions. All rates are decimal fractions (0.07 = 7%).",
+      "additionalProperties": false,
+      "properties": {
+        "inflationRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.03,
+          "description": "Annual US inflation rate used to adjust monthly expenses over time."
+        },
+        "usSavingsInterestRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.03,
+          "description": "Annual interest rate applied monthly to US savings accounts."
+        },
+        "iraGrowthRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.07,
+          "description": "Annual growth rate applied year-end to Traditional IRA balances."
+        },
+        "rothGrowthRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.07,
+          "description": "Annual growth rate applied year-end to Roth IRA balances."
+        },
+        "k401GrowthRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.07,
+          "description": "Annual growth rate applied year-end to 401(k) balances."
+        },
+        "brokerageGrowthRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.05,
+          "description": "Annual capital appreciation rate applied year-end to brokerage (US stock) accounts."
+        },
+        "brokerageDividendRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.02,
+          "description": "Annual dividend yield applied year-end to brokerage (US stock) accounts."
+        },
+        "dividendReinvest": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, dividends are reinvested into the brokerage account. If false, dividends are paid as cash into US savings."
+        },
+        "fixedIncomeInterestRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.04,
+          "description": "Annual interest rate applied year-end to fixed income accounts."
+        }
+      }
+    },
+    "expenses": {
+      "type": "object",
+      "description": "Monthly living expense configuration.",
+      "additionalProperties": false,
+      "properties": {
+        "monthlyExpenses": {
+          "type": "number",
+          "minimum": 0,
+          "default": 6000,
+          "description": "Monthly household expenses in the account's base currency (USD). Debited from US savings each month."
+        },
+        "inflationAdjust": {
+          "type": "boolean",
+          "default": true,
+          "description": "If true, monthly expenses grow each year by inflationRate."
+        }
+      }
+    },
+    "persons": {
+      "type": "array",
+      "description": "People in the simulation. At least one person is required. The first person's savings account ownerId is used as the primary drawdown source.",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/Person"
+      }
+    },
+    "accounts": {
+      "type": "array",
+      "description": "Financial accounts in the simulation. At least one US savings account is strongly recommended as the cash drawdown source.",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/SavingsAccount" },
+          { "$ref": "#/$defs/TraditionalIRAAccount" },
+          { "$ref": "#/$defs/RothAccount" },
+          { "$ref": "#/$defs/FourOhOneKAccount" },
+          { "$ref": "#/$defs/BrokerageAccount" },
+          { "$ref": "#/$defs/FixedIncomeAccount" }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "Person": {
+      "type": "object",
+      "title": "Person",
+      "required": ["__type", "id", "name", "birthDate"],
+      "additionalProperties": false,
+      "properties": {
+        "__type": { "const": "Person" },
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this person. Referenced by account ownerId fields.",
+          "examples": ["primary", "spouse"]
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name shown in the UI.",
+          "examples": ["Alice", "Bob"]
+        },
+        "birthDate": {
+          "type": "string",
+          "format": "date",
+          "description": "Date of birth in YYYY-MM-DD format. Used to calculate age-based rules (RMDs, Social Security eligibility, early withdrawal penalties).",
+          "examples": ["1975-06-15"]
+        },
+        "citizen": {
+          "type": "array",
+          "description": "Country citizenship codes. Affects tax treatment. Use [\"US\"] for US citizens.",
+          "items": { "type": "string", "enum": ["US", "AU"] },
+          "default": ["US"],
+          "examples": [["US"]]
+        },
+        "lifeExpectancy": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 120,
+          "default": 90,
+          "description": "Projected age of death. Used to compute simulation horizon and RMD tables."
+        },
+        "socialSecurityMonthly": {
+          "type": "number",
+          "minimum": 0,
+          "default": 2800,
+          "description": "Monthly Social Security benefit in USD. Applied after retirementDate."
+        },
+        "monthlyWage": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0,
+          "description": "Gross monthly wage in USD before taxes. Applied until retirementDate."
+        },
+        "retirementDate": {
+          "type": "string",
+          "format": "date",
+          "default": "2040-01-01",
+          "description": "Date wages stop and Social Security begins (if configured). Format: YYYY-MM-DD.",
+          "examples": ["2040-01-01"]
+        }
+      }
+    },
+    "Currency": {
+      "type": "object",
+      "description": "ISO 4217 currency descriptor.",
+      "required": ["code", "symbol"],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "ISO 4217 currency code.",
+          "examples": ["USD"]
+        },
+        "symbol": {
+          "type": "string",
+          "description": "Display symbol.",
+          "examples": ["$"]
+        }
+      }
+    },
+    "AccountBase": {
+      "type": "object",
+      "description": "Fields common to all account types.",
+      "required": ["__type", "id", "name", "role", "stateKey", "initialValue", "ownerId"],
+      "properties": {
+        "__type": { "type": "string" },
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this account.",
+          "examples": ["acct-savings", "acct-ira", "acct-k401"]
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name shown in the UI.",
+          "examples": ["US Savings", "Traditional IRA", "401(k)"]
+        },
+        "type": {
+          "type": ["string", "null"],
+          "description": "Account type label (savings, ira, roth, 401k, brokerage).",
+          "enum": ["savings", "checking", "brokerage", "ira", "roth", "401k", "super", null]
+        },
+        "role": {
+          "type": "string",
+          "description": "Semantic role that determines which handlers and reducers interact with this account.",
+          "enum": ["us-savings", "ira", "roth-ira", "k401", "us-stock", "fixed-income", "au-savings", "au-stock", "super"]
+        },
+        "stateKey": {
+          "type": "string",
+          "description": "Property name on the simulation state object where this account's balance is stored. Must be unique across all accounts.",
+          "examples": ["usSavingsAccount", "iraAccount", "k401Account", "rothAccount", "brokerageAccount"]
+        },
+        "initialValue": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Starting balance in the account's currency."
+        },
+        "ownershipType": {
+          "type": "string",
+          "enum": ["sole", "joint"],
+          "default": "sole",
+          "description": "Whether this account is owned by one person (sole) or two (joint)."
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "ID of the person who owns this account. Must match a person id in the persons array."
+        },
+        "minimumBalance": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0,
+          "description": "Minimum balance to maintain in this account before drawing down to other accounts."
+        },
+        "drawdownPriority": {
+          "type": ["integer", "null"],
+          "default": null,
+          "description": "Drawdown order when expenses exceed savings. Lower numbers are drawn first. Null means not used for drawdown."
+        },
+        "country": {
+          "type": ["string", "null"],
+          "default": "US",
+          "description": "Country code where this account is held.",
+          "examples": ["US", "AU"]
+        },
+        "currency": {
+          "oneOf": [
+            { "$ref": "#/$defs/Currency" },
+            { "type": "null" }
+          ],
+          "description": "Currency this account is denominated in."
+        }
+      }
+    },
+    "InvestmentFields": {
+      "description": "Additional fields required for tax-advantaged investment accounts (IRA, Roth, 401k, brokerage).",
+      "properties": {
+        "contributionBasis": {
+          "type": "number",
+          "minimum": 0,
+          "description": "After-tax contribution basis. For Roth accounts this is the total contributed principal; for Traditional IRA/401k it is the non-deductible portion."
+        },
+        "earningsBasis": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0,
+          "description": "Accumulated earnings component. Typically 0 at scenario start."
+        },
+        "loanBalance": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0,
+          "description": "Outstanding loan balance against this account (e.g. 401k loan)."
+        },
+        "minimumAge": {
+          "type": ["number", "null"],
+          "default": null,
+          "description": "Age (in years) before which withdrawals incur an early withdrawal penalty. 59.5 for IRA/401k/Roth earnings."
+        }
+      }
+    },
+    "SavingsAccount": {
+      "title": "US Savings Account",
+      "description": "Liquid cash account. Receives wages, pays expenses, and is the primary drawdown source. Role must be 'us-savings'.",
+      "allOf": [
+        { "$ref": "#/$defs/AccountBase" },
+        {
+          "type": "object",
+          "properties": {
+            "__type": { "const": "SavingsAccount" },
+            "type": { "const": "savings" },
+            "role": { "const": "us-savings" },
+            "currency": { "default": { "code": "USD", "symbol": "$" } }
+          },
+          "required": ["__type"]
+        }
+      ],
+      "examples": [
+        {
+          "__type": "SavingsAccount",
+          "id": "acct-savings",
+          "name": "US Savings",
+          "type": "savings",
+          "role": "us-savings",
+          "stateKey": "usSavingsAccount",
+          "initialValue": 50000,
+          "ownershipType": "sole",
+          "ownerId": "primary",
+          "minimumBalance": 5000,
+          "drawdownPriority": 1,
+          "country": "US",
+          "currency": { "code": "USD", "symbol": "$" }
+        }
+      ]
+    },
+    "TraditionalIRAAccount": {
+      "title": "Traditional IRA Account",
+      "description": "Pre-tax retirement account. Grows tax-deferred; withdrawals are taxed as ordinary income. Role must be 'ira'.",
+      "allOf": [
+        { "$ref": "#/$defs/AccountBase" },
+        { "$ref": "#/$defs/InvestmentFields" },
+        {
+          "type": "object",
+          "required": ["contributionBasis"],
+          "properties": {
+            "__type": { "const": "TraditionalIRAAccount" },
+            "type": { "const": "ira" },
+            "role": { "const": "ira" }
+          }
+        }
+      ],
+      "examples": [
+        {
+          "__type": "TraditionalIRAAccount",
+          "id": "acct-ira",
+          "name": "Traditional IRA",
+          "type": "ira",
+          "role": "ira",
+          "stateKey": "iraAccount",
+          "initialValue": 250000,
+          "ownershipType": "sole",
+          "ownerId": "primary",
+          "contributionBasis": 180000,
+          "earningsBasis": 0,
+          "loanBalance": 0,
+          "minimumAge": 59.5,
+          "drawdownPriority": 3,
+          "country": "US",
+          "currency": { "code": "USD", "symbol": "$" }
+        }
+      ]
+    },
+    "RothAccount": {
+      "title": "Roth IRA Account",
+      "description": "After-tax retirement account. Contributions can be withdrawn tax-free at any age; earnings are tax-free after age 59½. Role must be 'roth-ira'.",
+      "allOf": [
+        { "$ref": "#/$defs/AccountBase" },
+        { "$ref": "#/$defs/InvestmentFields" },
+        {
+          "type": "object",
+          "required": ["contributionBasis"],
+          "properties": {
+            "__type": { "const": "RothAccount" },
+            "type": { "const": "roth" },
+            "role": { "const": "roth-ira" }
+          }
+        }
+      ],
+      "examples": [
+        {
+          "__type": "RothAccount",
+          "id": "acct-roth",
+          "name": "Roth IRA",
+          "type": "roth",
+          "role": "roth-ira",
+          "stateKey": "rothAccount",
+          "initialValue": 80000,
+          "ownershipType": "sole",
+          "ownerId": "primary",
+          "contributionBasis": 60000,
+          "earningsBasis": 0,
+          "loanBalance": 0,
+          "minimumAge": 59.5,
+          "drawdownPriority": 2,
+          "country": "US",
+          "currency": { "code": "USD", "symbol": "$" }
+        }
+      ]
+    },
+    "FourOhOneKAccount": {
+      "title": "401(k) Account",
+      "description": "Employer-sponsored pre-tax retirement account. Grows tax-deferred; withdrawals taxed as ordinary income. Role must be 'k401'.",
+      "allOf": [
+        { "$ref": "#/$defs/AccountBase" },
+        { "$ref": "#/$defs/InvestmentFields" },
+        {
+          "type": "object",
+          "required": ["contributionBasis"],
+          "properties": {
+            "__type": { "const": "FourOhOneKAccount" },
+            "type": { "const": "401k" },
+            "role": { "const": "k401" }
+          }
+        }
+      ],
+      "examples": [
+        {
+          "__type": "FourOhOneKAccount",
+          "id": "acct-k401",
+          "name": "401(k)",
+          "type": "401k",
+          "role": "k401",
+          "stateKey": "k401Account",
+          "initialValue": 350000,
+          "ownershipType": "sole",
+          "ownerId": "primary",
+          "contributionBasis": 200000,
+          "earningsBasis": 0,
+          "loanBalance": 0,
+          "minimumAge": 59.5,
+          "drawdownPriority": 4,
+          "country": "US",
+          "currency": { "code": "USD", "symbol": "$" }
+        }
+      ]
+    },
+    "BrokerageAccount": {
+      "title": "US Brokerage (Stock) Account",
+      "description": "Taxable brokerage account holding equities. Earns capital appreciation and dividends. Role must be 'us-stock'.",
+      "allOf": [
+        { "$ref": "#/$defs/AccountBase" },
+        { "$ref": "#/$defs/InvestmentFields" },
+        {
+          "type": "object",
+          "required": ["contributionBasis"],
+          "properties": {
+            "__type": { "const": "BrokerageAccount" },
+            "type": { "const": "brokerage" },
+            "role": { "const": "us-stock" }
+          }
+        }
+      ],
+      "examples": [
+        {
+          "__type": "BrokerageAccount",
+          "id": "acct-brokerage",
+          "name": "US Brokerage",
+          "type": "brokerage",
+          "role": "us-stock",
+          "stateKey": "brokerageAccount",
+          "initialValue": 120000,
+          "ownershipType": "sole",
+          "ownerId": "primary",
+          "contributionBasis": 90000,
+          "earningsBasis": 0,
+          "loanBalance": 0,
+          "drawdownPriority": 2,
+          "country": "US",
+          "currency": { "code": "USD", "symbol": "$" }
+        }
+      ]
+    },
+    "FixedIncomeAccount": {
+      "title": "Fixed Income Account",
+      "description": "Bond / fixed-income account earning periodic interest. Role must be 'fixed-income'.",
+      "allOf": [
+        { "$ref": "#/$defs/AccountBase" },
+        { "$ref": "#/$defs/InvestmentFields" },
+        {
+          "type": "object",
+          "required": ["contributionBasis"],
+          "properties": {
+            "__type": { "const": "BrokerageAccount" },
+            "type": { "const": "brokerage" },
+            "role": { "const": "fixed-income" }
+          }
+        }
+      ],
+      "examples": [
+        {
+          "__type": "BrokerageAccount",
+          "id": "acct-bonds",
+          "name": "Bond Portfolio",
+          "type": "brokerage",
+          "role": "fixed-income",
+          "stateKey": "fixedIncomeAccount",
+          "initialValue": 100000,
+          "ownershipType": "sole",
+          "ownerId": "primary",
+          "contributionBasis": 100000,
+          "earningsBasis": 0,
+          "loanBalance": 0,
+          "drawdownPriority": 5,
+          "country": "US",
+          "currency": { "code": "USD", "symbol": "$" }
+        }
+      ]
+    }
+  },
+  "examples": [
+    {
+      "toolset": "us-retirement",
+      "simStart": "2026-01-01",
+      "simEnd": "2055-01-01",
+      "assumptions": {
+        "inflationRate": 0.03,
+        "usSavingsInterestRate": 0.03,
+        "iraGrowthRate": 0.07,
+        "rothGrowthRate": 0.07,
+        "k401GrowthRate": 0.07,
+        "brokerageGrowthRate": 0.05,
+        "brokerageDividendRate": 0.02,
+        "dividendReinvest": false
+      },
+      "expenses": { "monthlyExpenses": 7000, "inflationAdjust": true },
+      "persons": [
+        {
+          "__type": "Person",
+          "id": "primary",
+          "name": "Alice",
+          "birthDate": "1975-06-15",
+          "citizen": ["US"],
+          "lifeExpectancy": 90,
+          "socialSecurityMonthly": 2800,
+          "monthlyWage": 9000,
+          "retirementDate": "2040-06-01"
+        }
+      ],
+      "accounts": [
+        {
+          "__type": "SavingsAccount",
+          "id": "acct-savings",
+          "name": "US Savings",
+          "type": "savings",
+          "role": "us-savings",
+          "stateKey": "usSavingsAccount",
+          "initialValue": 50000,
+          "ownershipType": "sole",
+          "ownerId": "primary",
+          "minimumBalance": 5000,
+          "drawdownPriority": 1,
+          "country": "US",
+          "currency": { "code": "USD", "symbol": "$" }
+        },
+        {
+          "__type": "TraditionalIRAAccount",
+          "id": "acct-ira",
+          "name": "Traditional IRA",
+          "type": "ira",
+          "role": "ira",
+          "stateKey": "iraAccount",
+          "initialValue": 250000,
+          "ownershipType": "sole",
+          "ownerId": "primary",
+          "contributionBasis": 180000,
+          "earningsBasis": 0,
+          "loanBalance": 0,
+          "drawdownPriority": 3,
+          "country": "US",
+          "currency": { "code": "USD", "symbol": "$" }
+        },
+        {
+          "__type": "FourOhOneKAccount",
+          "id": "acct-k401",
+          "name": "401(k)",
+          "type": "401k",
+          "role": "k401",
+          "stateKey": "k401Account",
+          "initialValue": 350000,
+          "ownershipType": "sole",
+          "ownerId": "primary",
+          "contributionBasis": 200000,
+          "earningsBasis": 0,
+          "loanBalance": 0,
+          "drawdownPriority": 4,
+          "country": "US",
+          "currency": { "code": "USD", "symbol": "$" }
+        }
+      ]
+    }
+  ]
+}
