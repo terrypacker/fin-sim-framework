@@ -39,20 +39,21 @@ export class DividendScheduledHandler extends HandlerEntry {
 
   static eventType = 'DIVIDEND_SCHEDULED';
 
-  constructor({ stateRegistry, role, ownerId = null, dividendRate = 0.02, reinvest = false } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, stateKey = null, dividendRate = 0.02, reinvest = false } = {}) {
     super(null, 'Dividend Scheduled');
-    this.stateRegistry = stateRegistry;
-    this.role          = role;
-    this.ownerId       = ownerId;
-    this.dividendRate  = dividendRate;
-    this.reinvest      = reinvest;
+    this.stateRegistry   = stateRegistry;
+    this.role            = role;
+    this.ownerId         = ownerId;
+    this._stateKeyFixed  = stateKey;
+    this.dividendRate    = dividendRate;
+    this.reinvest        = reinvest;
     // Declares both branches; actual type chosen at runtime based on reinvest flag
     this.generatedActionTypes = ['STOCK_DIVIDEND_APPLY', 'STOCK_DIVIDEND_CASH_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ data, state }) {
-    const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
+    const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
+    const balance  = state[stateKey]?.balance ?? 0;
     const amount   = +(balance * this.dividendRate).toFixed(2);
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
 
@@ -61,7 +62,7 @@ export class DividendScheduledHandler extends HandlerEntry {
     const actionType   = reinvest ? 'STOCK_DIVIDEND_APPLY' : 'STOCK_DIVIDEND_CASH_APPLY';
 
     return [
-      { type: actionType, amount, isAuResident },
+      { type: actionType, amount, isAuResident, stateKey },
       new RecordMetricAction('dividends', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];

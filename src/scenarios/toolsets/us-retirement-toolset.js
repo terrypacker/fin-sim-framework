@@ -197,7 +197,7 @@ export class UsRetirementToolset {
       for (const acct of iraAccounts) {
         const h = new IntlIraEarningsHandler({
           stateRegistry, role: ACCOUNT_ROLES.IRA,
-          ownerId: acct.ownerId, growthRate: iraGrowthRate,
+          ownerId: acct.ownerId, stateKey: acct.stateKey, growthRate: iraGrowthRate,
         });
         h.handledEvents.push(iraEvent);
         handlerService.register(h);
@@ -214,7 +214,7 @@ export class UsRetirementToolset {
       for (const acct of rothAccounts) {
         const h = new IntlRothEarningsHandler({
           stateRegistry, role: ACCOUNT_ROLES.ROTH,
-          ownerId: acct.ownerId, growthRate: rothGrowthRate,
+          ownerId: acct.ownerId, stateKey: acct.stateKey, growthRate: rothGrowthRate,
         });
         h.handledEvents.push(rothEvent);
         handlerService.register(h);
@@ -231,7 +231,7 @@ export class UsRetirementToolset {
       for (const acct of k401Accounts) {
         const h = new IntlK401EarningsHandler({
           stateRegistry, role: ACCOUNT_ROLES.K401,
-          ownerId: acct.ownerId, growthRate: k401GrowthRate,
+          ownerId: acct.ownerId, stateKey: acct.stateKey, growthRate: k401GrowthRate,
         });
         h.handledEvents.push(k401Event);
         handlerService.register(h);
@@ -253,14 +253,15 @@ export class UsRetirementToolset {
       for (const acct of usStockAccounts) {
         const earningsH = new IntlUsStockEarningsHandler({
           stateRegistry, role: ACCOUNT_ROLES.US_STOCK,
-          ownerId: acct.ownerId, growthRate: stockGrowthRate,
+          ownerId: acct.ownerId, stateKey: acct.stateKey, growthRate: stockGrowthRate,
         });
         earningsH.handledEvents.push(stockEarningsEvent);
         handlerService.register(earningsH);
 
         const divH = new DividendScheduledHandler({
           stateRegistry, role: ACCOUNT_ROLES.US_STOCK,
-          ownerId: acct.ownerId, dividendRate: dividendRate, reinvest: dividendReinvest,
+          ownerId: acct.ownerId, stateKey: acct.stateKey,
+          dividendRate: dividendRate, reinvest: dividendReinvest,
         });
         divH.handledEvents.push(dividendsEvent);
         handlerService.register(divH);
@@ -277,7 +278,7 @@ export class UsRetirementToolset {
       for (const acct of fixedIncomeAccounts) {
         const h = new FixedIncomeInterestHandler({
           stateRegistry, role: ACCOUNT_ROLES.FIXED_INCOME,
-          ownerId: acct.ownerId, interestRate: fixedIncomeRate,
+          ownerId: acct.ownerId, stateKey: acct.stateKey, interestRate: fixedIncomeRate,
         });
         h.handledEvents.push(fiEvent);
         handlerService.register(h);
