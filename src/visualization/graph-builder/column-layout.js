@@ -8,39 +8,85 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-// Must match .g-node CSS dimensions
-const NODE_WIDTH  = 180;
-const NODE_HEIGHT = 40;
+import { NODE_WIDTH, NODE_HEIGHT, COLUMN_GAP, ROW_GAP, PADDING_X, PADDING_Y } from './graph-metrics.js';
 
 const KIND_ORDER = ['event', 'handler', 'action', 'reducer'];
 
 /**
- * ColumnLayout — positions nodes in vertical columns grouped by kind.
+ * ColumnLayout — deterministic left-to-right DAG layout.
  *
- * apply(nodes, { width, height }) returns a Map<id, { x, y }> so the
- * caller can position nodes without coupling layout to the renderer.
+ * Produces center coordinates:
+ *
+ *   Map<nodeId, { x, y }>
  */
 export class ColumnLayout {
+
   apply(nodes, { width = 800, height = 400 } = {}) {
+
     const groups = new Map();
-    for (const kind of KIND_ORDER) groups.set(kind, []);
+
+    for (const kind of KIND_ORDER) {
+      groups.set(kind, []);
+    }
 
     for (const node of nodes) {
       const kind = node.kind ?? 'other';
-      if (!groups.has(kind)) groups.set(kind, []);
+
+      if (!groups.has(kind)) {
+        groups.set(kind, []);
+      }
+
       groups.get(kind).push(node);
     }
 
-    const active = [...groups.entries()].filter(([, g]) => g.length > 0);
-    const numCols = active.length;
+    // Remove empty columns
+    const active = [...groups.entries()]
+    .filter(([, group]) => group.length > 0);
+
     const positions = new Map();
 
-    active.forEach(([, group], colIdx) => {
-      const x = width * (colIdx + 1) / (numCols + 1) - NODE_WIDTH / 2;
+    active.forEach(([kind, group], colIdx) => {
 
+      //
+      // Fixed left-to-right column placement
+      //
+      const x =
+          PADDING_X +
+          (colIdx * COLUMN_GAP);
+
+      //
+      // Vertically center the entire column
+      //
+      const totalColumnHeight =
+          (group.length * NODE_HEIGHT) +
+          ((group.length - 1) * ROW_GAP);
+
+      const startY =
+          Math.max(
+              PADDING_Y,
+              (height - totalColumnHeight) / 2
+          );
+
+      //
+      // Position nodes
+      //
       group.forEach((node, rowIdx) => {
-        const y = height * (rowIdx + 1) / (group.length + 1) - NODE_HEIGHT / 2;
-        positions.set(node.id, { x, y });
+
+        const centerX =
+            PADDING_X +
+            (colIdx * COLUMN_GAP) +
+            NODE_WIDTH / 2;
+
+        const centerY =
+            startY +
+            (rowIdx * (NODE_HEIGHT + ROW_GAP)) +
+            NODE_HEIGHT / 2;
+
+        positions.set(node.id, {
+          x: centerX,
+          y: centerY,
+        });
+
       });
     });
 

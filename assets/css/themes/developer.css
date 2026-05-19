@@ -1,0 +1,343 @@
+/*
+Copyright (c) 2026 Terry Packer.
+
+This file is part of Terry Packer's Work.
+See www.terrypacker.com for further info.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+/* =============================================================
+   THEME-AMBER.CSS
+   Dark industrial / amber-accent theme.
+   Shared by: main.css, control_styles.css, control_help.css
+
+   Load after base.css, before any page-specific sheet.
+   ============================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;500;600&display=swap');
+
+:root {
+  /* Backgrounds */
+  --bg-base:      #0a0c0f;
+  --bg-panel:     #0f1217;
+  --bg-panel2:    #141820;
+  --bg-input:     #1a1f2a;
+  --bg-active:    #36383b;
+
+  /* Borders */
+  --border:       #222a38;
+  --border-hi:    #2e3a50;
+
+  /* Accent colours */
+  --amber:        #f0a500;
+  --amber-dim:    #a06a00;
+  --amber-glow:   rgba(240, 165, 0, 0.12);
+  --cyan:         #00d4e8;
+  --cyan-dim:     #007080;
+  --green:        #39e080;
+  --green-dim:    #1a6035;
+  --red:          #ff4455;
+  --red-dim:      #7a1520;
+  --purple:       #a080ff;
+
+  /* Semantic accent alias used by base range input */
+  --accent-primary: var(--amber);
+
+  /* Text */
+  --text-primary: #d8dde8;
+  --text-dim: #8d98af;
+  --text-muted: #8690ab;
+
+  /* Typography */
+  --font-mono:    'Share Tech Mono', monospace;
+  --font-head:    'Barlow Condensed', sans-serif;
+  --font-body:    'Barlow', sans-serif;
+
+  /* Spacing */
+  --radius:       4px;
+  --panel-gap:    10px;
+}
+
+html, body {
+  min-height: 100vh;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+/* ── HEADER ── */
+header, #header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  height: 58px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 16px;
+}
+
+.logo-mark {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  color: var(--amber);
+  letter-spacing: 0.05em;
+  line-height: 1;
+}
+
+.app-title, .site-title {
+  font-family: var(--font-head);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--text-primary);
+}
+
+.app-subtitle, .site-sub {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+}
+/* ── TABS ── */
+.tab { display: flex; }
+.tab-content { display: none; }
+.tab .active { background-color: var(--bg-active); }
+.tab-header {
+  padding: 8px 8px;
+  flex: 1;
+  border-top-left-radius: var(--radius);
+  border-top-right-radius: var(--radius);
+}
+.tab-header:hover {background-color: var(--amber-dim)}
+
+/* ── PANELS ── */
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--bg-panel2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.panel-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--amber);
+  background: var(--amber-glow);
+  border: 1px solid var(--amber-dim);
+  padding: 1px 5px;
+  border-radius: 2px;
+}
+
+.panel-title {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.panel-body {
+  padding: 14px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* ── BUTTONS ── */
+.btn {
+  font-family: var(--font-head);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  padding: 6px 14px;
+  border: 1px solid var(--border-hi);
+  border-radius: var(--radius);
+  cursor: pointer;
+  background: var(--bg-panel2);
+  color: var(--text-dim);
+  transition: all 0.15s;
+}
+.btn:hover { border-color: var(--amber-dim); color: var(--amber); }
+.btn-primary {
+  background: var(--amber-glow);
+  border-color: var(--amber-dim);
+  color: var(--amber);
+}
+.btn-primary:hover { background: rgba(240,165,0,0.25); border-color: var(--amber); }
+.btn-warn { border-color: var(--red-dim); color: var(--red); background: rgba(255,68,85,0.08); }
+.btn-warn:hover { background: rgba(255,68,85,0.18); border-color: var(--red); }
+.btn-ghost { background: transparent; }
+.btn-sm { padding: 4px 10px; font-size: 11px; }
+.btn-xs { padding: 2px 8px; font-size: 10px; }
+
+/* ── FORM ELEMENTS ── */
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: stretch;
+}
+.field-group {
+  flex: 1 0 30%;
+}
+
+.field-group label {
+  display: block;
+  font-size: 9px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 4px;
+  margin-top: 4px;
+}
+
+.field-group input, textarea, .field-select {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-hi);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 6px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.field-group input:focus, .field-select:focus { border-color: var(--amber-dim); }
+.field-select option { background: var(--bg-panel2); }
+
+/* CHECKBOX STYLES */
+.field-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-hi);
+  border-radius: 3px;
+  cursor: pointer;
+  display: inline-block;
+  position: relative;
+  vertical-align: middle;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+/* Hover / focus */
+.field-checkbox:hover,
+.field-checkbox:focus {
+  border-color: var(--amber-dim);
+  outline: none;
+}
+
+/* Checked state */
+.field-checkbox:checked {
+  background: var(--amber-dim);
+  border-color: var(--amber-dim);
+}
+
+/* Checkmark */
+.field-checkbox:checked::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 5px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--bg-panel2);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* Hide value by default */
+.field-slider-value {
+  display: none;
+  font-size: 9px;
+  color: #fff;
+  border-radius: 4px;
+}
+
+/* ── SHARED STATUS DOT ── */
+.status-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: background 0.3s, box-shadow 0.3s;
+}
+.status-dot.running {
+  background: var(--green);
+  box-shadow: 0 0 10px var(--green);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.status-dot.stopped { background: var(--red); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+/* ── FOOTER ── */
+footer {
+  padding: 20px 32px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.footer-left {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+}
+
+/* ── DIVIDER ── */
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 12px 0;
+}
+
+/* ── SCANLINE (shared atmospheric effect) ── */
+.scanlines::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.06) 2px,
+      rgba(0, 0, 0, 0.06) 4px
+  );
+}
