@@ -115,7 +115,9 @@ import { PrebuiltScenario } from './scenarios/prebuilt-scenario.js';
 import { ScenarioRegistry } from './scenarios/scenario-registry.js';
 import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
 import { ScenarioStorage } from './scenarios/scenario-storage.js';
+import { ScenarioToolsetRegistry } from './scenarios/scenario-toolset-registry.js';
 import { SimulationWorkbenchDefaultScenario } from './scenarios/simulation-workbench-default-scenario.js';
+import { UsRetirementToolset } from './scenarios/toolsets/us-retirement-toolset.js';
 import { ActionService } from './services/action-service.js';
 import { BaseService } from './services/base-service.js';
 import { EVENT_CLASSES, EventService } from './services/event-service.js';
@@ -571,7 +573,9 @@ export const Scenarios = {
   ScenarioRegistry,
   ScenarioSerializer,
   ScenarioStorage,
+  ScenarioToolsetRegistry,
   SimulationWorkbenchDefaultScenario,
+  UsRetirementToolset,
 };
 
 export const Services = {

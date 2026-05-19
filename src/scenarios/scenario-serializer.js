@@ -177,24 +177,36 @@ export class ScenarioSerializer {
    * @param {{ eventService, handlerService, actionService, reducerService, personService }} services
    *   Pass ServiceRegistry.getInstance() or any object exposing the service properties.
    */
-  static deserialize(config, services) {
-    const { eventService, handlerService, actionService, reducerService, personService, accountService } = services;
 
-    // 0. Persons — no dependencies; register before actions so they're available first.
+  /**
+   * Load only the persons and accounts from a config into the services.
+   * Used by the toolset path in BaseApp when a custom JSON has persons/accounts
+   * but no serialized events/handlers/actions/reducers.
+   *
+   * @param {object} config   - serialized scenario config (only persons/accounts are read)
+   * @param {object} services - ServiceRegistry instance
+   */
+  static deserializePersonsAccounts(config, services) {
+    const { personService, accountService } = services;
     if (personService) {
       for (const d of (config.persons ?? [])) {
         const person = ScenarioSerializer._makePerson(d);
         personService.register(person);
       }
     }
-
-    // 0b. Accounts — no dependencies; register alongside persons.
     if (accountService) {
       for (const d of (config.accounts ?? [])) {
         const account = ScenarioSerializer._makeAccount(d);
         accountService.register(account);
       }
     }
+  }
+
+  static deserialize(config, services) {
+    const { eventService, handlerService, actionService, reducerService } = services;
+
+    // 0. Persons + accounts — delegate to the dedicated helper.
+    ScenarioSerializer.deserializePersonsAccounts(config, services);
 
     // 1. Actions first — handlers and reducers hold references to them.
     const actionMap = new Map();
