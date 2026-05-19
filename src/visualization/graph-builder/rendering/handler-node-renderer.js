@@ -22,25 +22,13 @@ export class HandlerNodeRenderer {
         ?? ctx.node.handlerClass
         ?? 'Handler';
 
-    const durationMs =
-        ctx.exec?.durationMs
-        ?? 0;
-
     return new NodeRenderGroup(
-
         this.renderKit.createCardChrome(ctx),
-
         this.renderKit.createTitleSection(ctx, {
           icon: '🛠️',
           title
         }),
-
         this.renderKit.createBadgeSection(ctx),
-
-        this.renderKit.createHandlerMetrics(ctx, {
-          durationMs
-        }),
-
         this.renderKit.createFooterSection(ctx)
     );
   }

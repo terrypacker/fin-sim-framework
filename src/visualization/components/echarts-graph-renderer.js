@@ -481,12 +481,14 @@ export class EChartsGraphRenderer extends BaseComponent {
     return {
       node,
       exec,
+      api,
+      textStyle: this._chart.getOption().textStyle,
 
-      cx,
-      cy,
+      cx, //center of node x
+      cy, //center of node y
 
-      x: cx - NODE_WIDTH / 2,
-      y: cy - NODE_HEIGHT / 2,
+      x: cx - NODE_WIDTH / 2, //bottom left corner x
+      y: cy - NODE_HEIGHT / 2, //bottom left corner y
 
       width: NODE_WIDTH,
       height: NODE_HEIGHT,

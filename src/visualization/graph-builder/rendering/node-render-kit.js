@@ -9,6 +9,12 @@
  */
 export class NodeRenderKit {
 
+  constructor() {
+    //TODO remove this or relocate it so we can control it
+    this._canvas = document.createElement('canvas');
+    this._context = this._canvas.getContext('2d');
+  }
+
   createCardChrome(ctx) {
     const {
       x, y, width, height,
@@ -64,57 +70,55 @@ export class NodeRenderKit {
   }) {
 
     const {
+      textStyle,
+      api,
+      width,
+      height,
       x,
       y,
-      width,
       padding
     } = ctx;
+
+    const titleText = `${icon} ${title}`
+    const titleTextMetrics = this.getTextWidth(titleText, {
+      fontFamily: textStyle.fontFamily,
+      fontSize: 14,
+      fontStyle: textStyle.fontStyle,
+      fontWeight: textStyle.fontWeight
+    });
 
     return [
 
       // icon
       {
         type: 'text',
-
-        style: {
+        style: api.style({
           text: icon,
-
           x: x + padding,
-          y: y + 14,
-
+          y: y + titleTextMetrics.height,
           fontSize: 14,
-
           textVerticalAlign: 'middle'
-        }
+        })
       },
-
       // title
       {
         type: 'text',
-
-        style: {
+        style: api.style({
           text: title,
-
           x: x + 30,
           y: y + 14,
-
-          width: width - 80,
-
+          width: width - 30 - padding,
           overflow: 'truncate',
-
           fontSize: 11,
           fontWeight: 'bold',
-
-          fill: '#fff',
-
+          textFill: '#fff',
           textVerticalAlign: 'middle'
-        }
+        })
       },
 
       // divider
       {
         type: 'line',
-
         shape: {
           x1: x + padding,
           y1: y + 26,
@@ -131,142 +135,143 @@ export class NodeRenderKit {
     ];
   }
 
-
   createBadgeSection(ctx) {
+    const {
+      textStyle,
+      api,
+      width,
+      height,
+      x,
+      y,
+      padding
+    } = ctx;
 
     const badges = [];
-
-    if (ctx.exec?.fired) {
+    if (ctx.exec?.stateChanges?.length > 0) {
       badges.push({
-        text: 'Fired',
-        bg: '#d8f8e8',
-        fg: '#18794e'
+        text: 'Changed',
+        bg: '#794112',
+        fg: '#c7b9a4'
       });
     }
 
     if (ctx.hasBp) {
       badges.push({
         text: '⏸ BP',
-        bg: '#ffe0e0',
-        fg: '#9f1c1c'
+        bg: '#9b1b1b',
+        fg: '#dac8c8'
       });
     }
-
-    const {
-      x,
-      y,
-      width,
-      padding
-    } = ctx;
 
     const children = [];
 
-    let badgeY = y + 8;
-
+    let badgeY;
+    let badgeHeight;
+    let badgeX = x + width;
     for (const badge of badges) {
-
-      const badgeWidth =
-          Math.max(40, badge.text.length * 6 + 12);
-
-      const bx =
-          x + width - badgeWidth - padding;
-
+      const textMetrics = this.getTextWidth(badge.text, {
+        fontFamily: textStyle.fontFamily,
+        fontSize: 8,
+        fontStyle: textStyle.fontStyle,
+        fontWeight: textStyle.fontWeight
+      });
+      const badgeWidth = textMetrics.width + 12;
+      //Set badge height on first pass
+      if(typeof badgeHeight === 'undefined') {
+        badgeHeight = textMetrics.height + 4;
+      }
+      badgeX = badgeX - (badgeWidth + padding);
+      //Set Y on first pass
+      if(typeof badgeY === 'undefined') {
+        badgeY = y + height - (padding + badgeHeight);
+      }
       children.push({
-
         type: 'rect',
-
         shape: {
-          x: bx,
+          x: badgeX,
           y: badgeY,
           width: badgeWidth,
-          height: 16,
-          r: 8
+          height: badgeHeight,
+          r: 4
         },
         // CRITICAL FOR PAN/ZOOM: Clip the element to the current coordinate system
         clip: ctx.clip,
-        style: {
+        style: api.style({
           fill: badge.bg
-        }
+        })
       });
 
       children.push({
-
         type: 'text',
-
-        style: {
+        style: api.style({
           text: badge.text,
-
-          x: bx + badgeWidth / 2,
-          y: badgeY + 8,
-
+          x: badgeX + badgeWidth / 2,
+          y: badgeY + badgeHeight / 2,
           textAlign: 'center',
           textVerticalAlign: 'middle',
-
           fontSize: 8,
           fontWeight: 'bold',
-
-          fill: badge.fg
-        }
+          textFill: badge.fg
+        })
       });
-
-      badgeY += 18;
     }
-
     return children;
   }
 
   createFooterSection(ctx) {
 
-    const isActive = !!ctx.exec?.fired;
-
     const {
+      textStyle,
+      api,
+      height,
       x,
       y,
-      height,
       padding
     } = ctx;
 
-    return [
+    const isActive = !!ctx.exec?.fired;
+    const activeText = isActive
+        ? 'active'
+        : 'idle';
+    const textMetrics = this.getTextWidth(activeText, {
+      fontFamily: textStyle.fontFamily,
+      fontSize: 9,
+      fontStyle: textStyle.fontStyle,
+      fontWeight: textStyle.fontWeight
+    });
 
+    return [
       // activity dot
       {
         type: 'circle',
-
         shape: {
           cx: x + padding + 4,
-          cy: y + height - 12,
+          cy: y + height - (padding + textMetrics.height),
           r: 4
         },
         // CRITICAL FOR PAN/ZOOM: Clip the element to the current coordinate system
         clip: ctx.clip,
-        style: {
+        style: api.style({
           fill: isActive
               ? '#22c55e'
               : '#777',
-
           shadowBlur: isActive ? 8 : 0,
           shadowColor: '#22c55e'
-        }
+        })
       },
 
       // activity label
       {
         type: 'text',
-
-        style: {
-          text: isActive
-              ? 'active'
-              : 'idle',
+        style: api.style({
+          text: activeText,
 
           x: x + padding + 14,
-          y: y + height - 12,
-
+          y: y + height - (padding + textMetrics.height),
           fontSize: 9,
-
-          fill: '#aaa',
-
+          textFill: '#aaa',
           textVerticalAlign: 'middle'
-        }
+        })
       }
     ];
   }
@@ -276,26 +281,33 @@ export class NodeRenderKit {
   }) {
 
     const {
+      textStyle,
+      api,
+      width,
+      height,
       x,
       y,
       padding
     } = ctx;
 
-    return [
+    const metricsText =  `State Changes: ${mutationCount}`;
+    const metrics = this.getTextWidth(metricsText, {
+      fontFamily: textStyle.fontFamily,
+      fontSize: 9,
+      fontStyle: textStyle.fontStyle,
+      fontWeight: textStyle.fontWeight
+    });
 
+    return [
       {
         type: 'text',
-
-        style: {
-          text: `State Changes: ${mutationCount}`,
-
-          x: x + padding,
-          y: y + 44,
-
+        style: api.style({
+          text: metricsText,
+          x: x + width - (padding + metrics.width),
+          y: y + height - (padding + metrics.height),
           fontSize: 9,
-
-          fill: '#9ecbff'
-        }
+          textFill: '9ecbff'
+        })
       }
     ];
   }
@@ -305,30 +317,37 @@ export class NodeRenderKit {
   }) {
 
     const {
+      textStyle,
+      api,
+      width,
+      height,
       x,
       y,
       padding
     } = ctx;
 
-    return [
+    const metricsText = emitted
+        ? 'Event emitted'
+        : 'Awaiting emission';
+    const metrics = this.getTextWidth(metricsText, {
+      fontFamily: textStyle.fontFamily,
+      fontSize: 9,
+      fontStyle: textStyle.fontStyle,
+      fontWeight: textStyle.fontWeight
+    });
 
+    return [
       {
         type: 'text',
-
-        style: {
-          text: emitted
-              ? 'Event emitted'
-              : 'Awaiting emission',
-
-          x: x + padding,
-          y: y + 44,
-
+        style: api.style({
+          text: metricsText,
+          x: x + width - (padding + metrics.width),
+          y: y + height - (padding + metrics.height),
           fontSize: 9,
-
-          fill: emitted
+          textFill: emitted
               ? '#7ee787'
               : '#999'
-        }
+        })
       }
     ];
   }
@@ -338,26 +357,33 @@ export class NodeRenderKit {
   }) {
 
     const {
+      textStyle,
+      api,
+      width,
+      height,
       x,
       y,
       padding
     } = ctx;
 
-    return [
+    const metricsText = `Payload: ${payloadSize} bytes`;
+    const metrics = this.getTextWidth(metricsText, {
+      fontFamily: textStyle.fontFamily,
+      fontSize: 9,
+      fontStyle: textStyle.fontStyle,
+      fontWeight: textStyle.fontWeight
+    });
 
+    return [
       {
         type: 'text',
-
-        style: {
-          text: `Payload: ${payloadSize} bytes`,
-
-          x: x + padding,
-          y: y + 44,
-
+        style: api.style({
+          text: metricsText,
+          x: x + width -( padding + metrics.width),
+          y: y + height - (padding + metrics.height),
           fontSize: 9,
-
-          fill: '#9ecbff'
-        }
+          textFill: '9ecbff'
+        })
       }
     ];
   }
@@ -367,32 +393,62 @@ export class NodeRenderKit {
   }) {
 
     const {
+      textStyle,
+      api,
+      width,
+      height,
       x,
       y,
       padding
     } = ctx;
 
     const slow =
-        durationMs > 100;
+        durationMs > 5;
+
+    const metricsText = `Exec: ${durationMs} ms`;
+    const metrics = this.getTextWidth(metricsText, {
+      fontFamily: textStyle.fontFamily,
+      fontSize: 9,
+      fontStyle: textStyle.fontStyle,
+      fontWeight: textStyle.fontWeight
+    });
 
     return [
-
       {
         type: 'text',
-
-        style: {
-          text: `Exec: ${durationMs} ms`,
-
-          x: x + padding,
-          y: y + 44,
-
+        style: api.style({
+          text: metricsText,
+          x: x + width -( padding + metrics.width),
+          y: y + height - (padding + metrics.height),
           fontSize: 9,
-
-          fill: slow
+          textFill: slow
               ? '#ffb86b'
               : '#8be9fd'
-        }
+        })
       }
     ];
+  }
+
+  /**
+   * Measures the width and height of text based on font properties.
+   * @param {string} text - The string to measure.
+   * @param {Object} options - Font style options.
+   * @returns {Object} { width, height }
+   */
+  getTextWidth(text, options) {
+    const { fontFamily, fontSize, fontStyle, fontWeight } = options;
+    // Order is important for the browser to parse it correctly.
+    this._context.font = `${fontStyle || 'normal'} ${fontWeight || 'normal'} ${fontSize} ${fontFamily}`;
+
+    // Measure and return the width
+    // 3. Measure the text
+    const metrics = this._context.measureText(text);
+
+    return {
+      width: metrics.width,
+      // Calculate height using font bounding box metrics
+      height: metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent
+    };
+
   }
 }

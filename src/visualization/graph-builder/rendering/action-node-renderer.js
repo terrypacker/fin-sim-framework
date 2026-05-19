@@ -21,26 +21,13 @@ export class ActionNodeRenderer {
         ctx.node.name
         ?? ctx.node.actionClass
         ?? 'Action';
-
-    const payloadSize =
-        ctx.exec?.payloadSize
-        ?? 0;
-
     return new NodeRenderGroup(
-
         this.renderKit.createCardChrome(ctx),
-
         this.renderKit.createTitleSection(ctx, {
           icon: '⚡',
           title
         }),
-
         this.renderKit.createBadgeSection(ctx),
-
-        this.renderKit.createActionMetrics(ctx, {
-          payloadSize
-        }),
-
         this.renderKit.createFooterSection(ctx)
     );
   }

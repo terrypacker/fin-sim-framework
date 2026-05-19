@@ -22,24 +22,13 @@ export class EventNodeRenderer {
         ?? ctx.node.eventType
         ?? 'Event';
 
-    const emitted =
-        !!ctx.exec?.fired;
-
     return new NodeRenderGroup(
-
         this.renderKit.createCardChrome(ctx),
-
         this.renderKit.createTitleSection(ctx, {
           icon: '🕔',
           title
         }),
-
         this.renderKit.createBadgeSection(ctx),
-
-        this.renderKit.createEventMetrics(ctx, {
-          emitted
-        }),
-
         this.renderKit.createFooterSection(ctx)
     );
   }

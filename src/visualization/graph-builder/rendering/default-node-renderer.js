@@ -16,16 +16,12 @@ export class DefaultNodeRenderer {
   render(ctx) {
 
     return new NodeRenderGroup(
-
         this.renderKit.createCardChrome(ctx),
-
         this.renderKit.createTitleSection(ctx, {
           icon: '•',
           title: ctx.node.name ?? ctx.node.kind
         }),
-
         this.renderKit.createBadgeSection(ctx),
-
         this.renderKit.createFooterSection(ctx)
     );
   }

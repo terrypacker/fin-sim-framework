@@ -21,25 +21,14 @@ export class ReducerNodeRenderer {
         ctx.node.name
         ?? ctx.node.reducerType
         ?? 'Reducer';
-
-    const mutationCount =
-        ctx.exec?.stateChanges?.length ?? 0;
-
     return new NodeRenderGroup(
 
         this.renderKit.createCardChrome(ctx),
-
         this.renderKit.createTitleSection(ctx, {
           icon: '🧠',
           title: reducerName
         }),
-
         this.renderKit.createBadgeSection(ctx),
-
-        this.renderKit.createReducerMetrics(ctx, {
-          mutationCount
-        }),
-
         this.renderKit.createFooterSection(ctx)
     );
   }
