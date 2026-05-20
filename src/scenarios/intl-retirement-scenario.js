@@ -13,7 +13,10 @@ import { ServiceRegistry } from '../services/service-registry.js';
 import { EventBuilder } from '../simulation-framework/builders/event-builder.js';
 import { Person } from '../finance/person.js';
 import { Account, USD, AUD } from '../finance/assets/account.js';
-import { InvestmentAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount } from '../finance/assets/investment-account.js';
+import {
+  InvestmentAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount,
+  BrokerageAccount
+} from '../finance/assets/investment-account.js';
 import { TaxService } from '../finance/tax-service.js';
 import { PeriodService } from '../finance/period/period-service.js';
 import { buildUsCalendarYear, buildAuFiscalYear, applyTo } from '../finance/period/period-builder.js';
@@ -518,7 +521,7 @@ export class IntlRetirementScenario extends BaseScenario {
       ownerId:          primary.id,
       drawdownPriority: 1,
     });
-    const usStockAccount = new InvestmentAccount(p.stockBalance, {
+    const usStockAccount = new BrokerageAccount(p.stockBalance, {
       name:             'US Stock',
       role:             ACCOUNT_ROLES.US_STOCK,
       contributionBasis: p.stockBasis,
@@ -565,7 +568,7 @@ export class IntlRetirementScenario extends BaseScenario {
       minimumBalance: p.auSavingsMinBalance,
       currency:      AUD,
     });
-    const auStockAccount = new InvestmentAccount(p.auStockBalance, {
+    const auStockAccount = new BrokerageAccount(p.auStockBalance, {
       name:             'AU Stock',
       role:             ACCOUNT_ROLES.AU_STOCK,
       contributionBasis: p.auStockBasis,
