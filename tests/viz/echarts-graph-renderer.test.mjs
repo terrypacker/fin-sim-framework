@@ -16,6 +16,7 @@
  */
 
 import { EChartsGraphRenderer } from '../../src/visualization/components/echarts-graph-renderer.js';
+import {mockGraphRoot} from "../helpers/viz-utils.js";
 
 // jsdom doesn't ship ResizeObserver.
 global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
@@ -27,11 +28,7 @@ function stubGraphQueryApi() {
 }
 
 function makeRenderer() {
-  const graphRoot = document.createElement('div');
-  // Give it pixel dimensions so _pixelToData and _resetView work.
-  Object.defineProperty(graphRoot, 'getBoundingClientRect', {
-    value: () => ({ width: 800, height: 600, left: 0, top: 0 }),
-  });
+  const graphRoot = mockGraphRoot();
   document.body.appendChild(graphRoot);
   return new EChartsGraphRenderer({
     graphRoot,

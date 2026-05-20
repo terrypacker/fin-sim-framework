@@ -19,6 +19,7 @@
 
 import { ConfigGraphView } from '../../src/visualization/graph-builder/config-graph-view.js';
 import { ServiceRegistry }  from '../../src/services/service-registry.js';
+import {mockGraphRoot} from "../helpers/viz-utils.js";
 
 // eCharts uses ResizeObserver for auto-resize; jsdom doesn't provide it.
 global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
@@ -27,7 +28,7 @@ global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
 
 function makeElements() {
   const panel        = document.createElement('div');
-  const graphRoot    = document.createElement('div');
+  const graphRoot     = mockGraphRoot();
   const graphViewPort = document.createElement('div');
   const graphEdges   = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   const graphNodes   = document.createElement('div');

@@ -11,6 +11,9 @@
 import { jest } from '@jest/globals';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import {
+  EChartsGraphRenderer
+} from "../../src/visualization/components/echarts-graph-renderer.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DOM setup
@@ -55,4 +58,56 @@ export function makeMockElement(tagName, parent) {
   const el = document.createElement(tagName);
   parent.appendChild(el);
   return el;
+}
+
+/**
+ * Mock a very dumb canvas, useful for Echarts tests
+ */
+export function mockCanvas() {
+  // At the top of your test or in setupTests.js
+  window.HTMLCanvasElement.prototype.getContext = () => {
+    return {
+      // Return a basic mock of the context object if ECharts calls specific methods
+      fillRect: () => {},
+      clearRect: () => {},
+      getImageData: (x, y, w, h) => ({ data: new Array(w * h * 4).fill(0) }),
+      putImageData: () => {},
+      createImageData: () => [],
+      setTransform: () => {},
+      drawImage: () => {},
+      save: () => {},
+      restore: () => {},
+      beginPath: () => {},
+      moveTo: () => {},
+      lineTo: () => {},
+      closePath: () => {},
+      stroke: () => {},
+      translate: () => {},
+      scale: () => {},
+      rotate: () => {},
+      arc: () => {},
+      fill: () => {},
+      measureText: () => ({ width: 0 }),
+      transform: () => {},
+      rect: () => {},
+      clip: () => {},
+    };
+  };
+}
+
+/**
+ * Mock the div and canvas so echarts can function properly
+ */
+export function mockGraphRoot() {
+  mockCanvas();
+  const graphRoot = document.createElement('div');
+  // Give it pixel dimensions so _pixelToData and _resetView work.
+  Object.defineProperty(graphRoot, 'getBoundingClientRect', {
+    value: () => ({ width: 800, height: 600, left: 0, top: 0 }),
+  });
+
+  // Mock clientWidth and clientHeight
+  Object.defineProperty(graphRoot, 'clientWidth', { value: 800 });
+  Object.defineProperty(graphRoot, 'clientHeight', { value: 600 });
+  return graphRoot;
 }
