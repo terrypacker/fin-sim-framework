@@ -430,3 +430,59 @@ test('computeAuTaxPerPerson splits shared passive income equally', () => {
   assert.strictEqual(alice.taxDetail.inputs.ordinaryIncome, 10000);
   assert.strictEqual(bob.taxDetail.inputs.ordinaryIncome,   10000);
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Filing Status: Single vs Married Filing Jointly
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('US single filer standard deduction is $15,000 (not $30,000 MFJ)', () => {
+  // $20k income: MFJ std deduction = $30k → zero tax; single std deduction = $15k → taxable $5k
+  const mfjTax    = usRates.computeTax(usState({ usOrdinaryIncomeYTD: 20_000 })).netLiability;
+  const singleTax = usRates.computeTax(usState({ usOrdinaryIncomeYTD: 20_000, usFilingSingle: true })).netLiability;
+  assert.strictEqual(mfjTax, 0, 'MFJ: $20k is below $30k std deduction');
+  assert.ok(singleTax > 0, 'Single: $20k exceeds $15k std deduction → taxable');
+});
+
+test('US single filer: $50k income computes correct tax', () => {
+  // AGI = $50k, std deduction = $15k, taxable = $35k
+  // [0, 11925] @ 10% = 1192.50 | [11925, 35000] @ 12% = 23075 × 0.12 = 2769 → 3961.50
+  const { netLiability } = usRates.computeTax(usState({ usOrdinaryIncomeYTD: 50_000, usFilingSingle: true }));
+  assert.strictEqual(netLiability, 3961.5);
+});
+
+test('US MFJ filer: $50k income computes correct tax (unchanged)', () => {
+  // AGI = $50k, std deduction = $30k, taxable = $20k
+  // [0, 20000] @ 10% = 2000
+  const { netLiability } = usRates.computeTax(usState({ usOrdinaryIncomeYTD: 50_000 }));
+  assert.strictEqual(netLiability, 2000);
+});
+
+test('US computeTax returns filingStatus: "Single" when usFilingSingle is true', () => {
+  const result = usRates.computeTax(usState({ usFilingSingle: true }));
+  assert.strictEqual(result.filingStatus, 'Single');
+});
+
+test('US computeTax returns filingStatus: "Married Filing Jointly" when usFilingSingle is falsy', () => {
+  const noFlag = usRates.computeTax(usState({}));
+  const explicit = usRates.computeTax(usState({ usFilingSingle: false }));
+  assert.strictEqual(noFlag.filingStatus,    'Married Filing Jointly');
+  assert.strictEqual(explicit.filingStatus,  'Married Filing Jointly');
+});
+
+test('US single filer standardDeduction in result inputs is $15,000', () => {
+  const result = usRates.computeTax(usState({ usFilingSingle: true }));
+  assert.strictEqual(result.inputs.standardDeduction, 15_000);
+});
+
+test('US MFJ standardDeduction in result inputs is $30,000', () => {
+  const result = usRates.computeTax(usState({}));
+  assert.strictEqual(result.inputs.standardDeduction, 30_000);
+});
+
+test('US single filer LTCG 0% bracket threshold is $48,350 (not $96,700 MFJ)', () => {
+  // $60k CG: MFJ → 0% (below $96,700); Single → taxed at 15% above $48,350
+  const mfjTax    = usRates.computeTax(usState({ usCapitalGainsYTD: 60_000 })).netLiability;
+  const singleTax = usRates.computeTax(usState({ usCapitalGainsYTD: 60_000, usFilingSingle: true })).netLiability;
+  assert.strictEqual(mfjTax, 0, 'MFJ: $60k CG is below $96,700 0% threshold');
+  assert.ok(singleTax > 0, 'Single: $60k CG exceeds $48,350 0% threshold');
+});

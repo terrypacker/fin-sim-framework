@@ -113,6 +113,11 @@ export class UsRetirementToolset {
     }
     sim.state.people = people;
 
+    // Filing status: single when 1 person; MFJ for 2+. Explicit config override respected.
+    sim.state.usFilingSingle = config.usFilingSingle !== undefined
+      ? Boolean(config.usFilingSingle)
+      : Object.keys(people).length <= 1;
+
     // Account state entries (handlers read state[stateKey] for balance lookups)
     for (const account of (accountService?.getAll() ?? [])) {
       if (account.stateKey && sim.state[account.stateKey] === undefined) {
