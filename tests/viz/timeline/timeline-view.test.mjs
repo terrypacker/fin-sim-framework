@@ -408,6 +408,40 @@ test('TimelineView: clicking download CSV button fires onDownloadCsv', () => {
   assert.ok(called, 'onDownloadCsv should be called when the button is clicked');
 });
 
+// ─── render: virtual scroll spacers (not inline padding) ─────────────────────
+
+test('TimelineView._virtualRender: does not set inline paddingTop or paddingBottom', () => {
+  // 20 collapsed date groups → totalH=720px, viewport fallback=400px → spacers are needed.
+  // With border-box sizing, setting paddingTop+paddingBottom > element height forces the
+  // element to expand beyond its flex allocation and triggers a second scrollbar in the
+  // parent. The fix uses spacer divs instead of inline padding.
+  const entries = [];
+  for (let i = 0; i < 20; i++) {
+    entries.push(makeEntry({ date: new Date(2025, 0, i + 1) }));
+  }
+  const view = makeView();
+  renderView(view, { entries });
+  assert.strictEqual(view._listEl.style.paddingTop,    '', 'paddingTop must not be set inline');
+  assert.strictEqual(view._listEl.style.paddingBottom, '', 'paddingBottom must not be set inline');
+});
+
+test('TimelineView._virtualRender: bottom spacer div present when content exceeds viewport', () => {
+  const entries = [];
+  for (let i = 0; i < 20; i++) {
+    entries.push(makeEntry({ date: new Date(2025, 0, i + 1) }));
+  }
+  const view = makeView();
+  renderView(view, { entries });
+  // Viewport fallback=400px; 20 groups × 36px = 720px total; groups past the visible
+  // window are represented by a trailing spacer div rather than paddingBottom.
+  const listChildren = [...view._listEl.children];
+  const lastChild = listChildren[listChildren.length - 1];
+  assert.ok(
+    lastChild && lastChild.getAttribute('aria-hidden') === 'true' && parseInt(lastChild.style.height, 10) > 0,
+    'last child should be a bottom spacer div with a positive height',
+  );
+});
+
 // ─── Mode toggle ──────────────────────────────────────────────────────────────
 
 test('TimelineView: mode toggle button is present after first render', () => {

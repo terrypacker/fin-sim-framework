@@ -4,9 +4,11 @@
 .tl-container {
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
   flex: 1;
   min-height: 0;
+  height: 100%;
+  width: 100%;
 }
 .tl-filter-bar {
   display: flex;
