@@ -25,14 +25,25 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
   get countryCode() { return 'US'; }
   get year()        { return 2026; }
 
-  generate(taxDetail, taxYear) {
-    const { inputs } = taxDetail;
+  /**
+   * @param {object}   taxDetail
+   * @param {number}   taxYear
+   * @param {object[]} [saleRecords]  - Capital gain transactions from journal mining.
+   * @returns {object|object[]}  Single TaxDocument, or [Form 1040, Schedule D, Form 8949] array.
+   */
+  generate(taxDetail, taxYear, saleRecords = []) {
+    const form1040 = this._generateForm1040(taxDetail, taxYear);
+    if (!saleRecords.length) return form1040;
+    return [form1040, this._generateScheduleD(saleRecords, taxYear), this._generateForm8949(saleRecords, taxYear)];
+  }
 
+  _generateForm1040(taxDetail, taxYear) {
+    const { inputs } = taxDetail;
     return {
-      title:         `U.S. Federal Income Tax Return — ${taxYear}`,
-      country:       'US',
+      title:        `Form 1040 — ${taxYear}`,
+      country:      'US',
       taxYear,
-      filingStatus:  taxDetail.filingStatus ?? 'Married Filing Jointly',
+      filingStatus: taxDetail.filingStatus ?? 'Married Filing Jointly',
       sections: [
         {
           heading: 'Income',
@@ -42,7 +53,7 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
             { label: 'Adjusted Gross Income',               amount:  taxDetail.adjustedGrossIncome },
             { label: 'Standard Deduction',                  amount: -inputs.standardDeduction },
             { label: 'Taxable Ordinary Income',             amount:  taxDetail.taxableIncome },
-            { label: 'Long-Term Capital Gains',             amount:  inputs.capitalGains },
+            { label: 'Long-Term Capital Gains (Sch. D)',    amount:  inputs.capitalGains },
             { label: 'Collectible Gains',                   amount:  inputs.collectibleGains },
           ],
         },
@@ -75,4 +86,63 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
       },
     };
   }
+
+  _generateScheduleD(saleRecords, taxYear) {
+    const totalProceeds  = saleRecords.reduce((s, r) => s + r.proceeds,  0);
+    const totalCostBasis = saleRecords.reduce((s, r) => s + r.costBasis, 0);
+    const totalGain      = saleRecords.reduce((s, r) => s + r.gain,      0);
+    return {
+      title:        `Schedule D — ${taxYear}`,
+      country:      'US',
+      taxYear,
+      filingStatus: 'Capital Gains and Losses',
+      sections: [
+        {
+          heading: 'Part II — Long-Term Capital Gains and Losses',
+          lineItems: [
+            { label: 'Total Proceeds (from Form 8949)',    amount: totalProceeds  },
+            { label: 'Total Cost Basis (from Form 8949)',  amount: totalCostBasis },
+            { label: 'Net Long-Term Gain / (Loss)',        amount: totalGain      },
+          ],
+        },
+        {
+          heading: 'Net Capital Gain',
+          lineItems: [
+            { label: 'Net Capital Gain (Line 15)',          amount: totalGain },
+            { label: 'Transfer to Form 1040, Line 7',       amount: totalGain },
+          ],
+        },
+      ],
+    };
+  }
+
+  _generateForm8949(saleRecords, taxYear) {
+    const totalProceeds  = saleRecords.reduce((s, r) => s + r.proceeds,  0);
+    const totalCostBasis = saleRecords.reduce((s, r) => s + r.costBasis, 0);
+    const totalGain      = saleRecords.reduce((s, r) => s + r.gain,      0);
+    return {
+      title:        `Form 8949 — ${taxYear}`,
+      country:      'US',
+      taxYear,
+      filingStatus: 'Part II — Long-Term (held more than one year)',
+      table: {
+        heading: 'Sales and Other Dispositions of Capital Assets',
+        columns: ['Description', 'Date Acquired', 'Date Sold', 'Proceeds', 'Cost Basis', 'Gain / (Loss)'],
+        rows: saleRecords.map(r => [
+          r.description,
+          r.dateAcquired,
+          _fmtDate(r.dateSold),
+          r.proceeds,
+          r.costBasis,
+          r.gain,
+        ]),
+        totals: ['Totals', '', '', totalProceeds, totalCostBasis, totalGain],
+      },
+    };
+  }
+}
+
+function _fmtDate(date) {
+  if (!date) return '—';
+  return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }

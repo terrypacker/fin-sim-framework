@@ -51,6 +51,11 @@ function _pickActionData(action) {
   if (action.cc               != null) d.cc               = action.cc;
   if (action.taxDetail        != null) d.taxDetail        = action.taxDetail;
   if (action.personTaxDetails != null) d.personTaxDetails = action.personTaxDetails;
+  // Capital gain sale fields — used for Form 8949 / Schedule D reporting.
+  if (action.gain             != null) d.gain             = action.gain;
+  if (action.proceeds         != null) d.proceeds         = action.proceeds;
+  if (action.costBasis        != null) d.costBasis        = action.costBasis;
+  if (action.description      != null) d.description      = action.description;
   return d;
 }
 

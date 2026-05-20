@@ -44,11 +44,12 @@ export class JournalReportingService {
    * Generate a document for the given journal entry, or null if no reporter
    * is registered for the entry's action type.
    *
-   * @param {object} journalEntry
+   * @param {object}   journalEntry
+   * @param {object[]} [journal]     - Full journal array, used for multi-entry reporting (e.g. Form 8949).
    * @returns {object|null}
    */
-  generate(journalEntry) {
+  generate(journalEntry, journal) {
     const reporter = this._reporters.get(journalEntry.action?.type);
-    return reporter ? reporter.generate(journalEntry) : null;
+    return reporter ? reporter.generate(journalEntry, journal) : null;
   }
 }

@@ -257,6 +257,23 @@ export class AccountService extends AssetService {
         const withdraw = Math.min(remaining, account.balance);
         this.transaction(targetAccount, +withdraw, date);
         this.transaction(account,       -withdraw, date);
+
+        // For brokerage accounts with unrealised gains: compute proportional
+        // capital gain, update basis, and emit STOCK_WITHDRAWAL_TAX so the gain
+        // is tracked for Form 8949 and the YTD capital-gains accumulator.
+        if (account.type === ACCOUNT_TYPE.BROKERAGE && 'earningsBasis' in account) {
+          const totalBal  = account.balance + withdraw; // balance before transaction
+          const gainRatio = totalBal > 0 ? (account.earningsBasis ?? 0) / totalBal : 0;
+          const gain      = withdraw * gainRatio;
+          const saleCost  = withdraw - gain;
+          account.earningsBasis     = Math.max(0, (account.earningsBasis ?? 0) - gain);
+          account.contributionBasis = Math.max(0, (account.contributionBasis ?? 0) - saleCost);
+          pendingTaxActions.push({
+            type: 'STOCK_WITHDRAWAL_TAX', gain, isAuResident,
+            proceeds: withdraw, costBasis: saleCost, description: account.name ?? key,
+          });
+        }
+
         drawnKeys.push(key);
         remaining -= withdraw;
 

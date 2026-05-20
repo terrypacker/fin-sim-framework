@@ -354,14 +354,16 @@ export class UsRetirementToolset {
 
 function _accountToStatePlain(account) {
   const plain = {
-    balance:          account.balance,
-    stateKey:         account.stateKey,
-    country:          account.country          ?? null,
-    currency:         account.currency         ?? null,
-    role:             account.role             ?? null,
-    ownerId:          account.ownerId          ?? null,
-    minimumBalance:   account.minimumBalance   ?? 0,
-    drawdownPriority: account.drawdownPriority ?? null,
+    balance:               account.balance,
+    stateKey:              account.stateKey,
+    type:                  account.type                  ?? null,
+    country:               account.country               ?? null,
+    currency:              account.currency              ?? null,
+    role:                  account.role                  ?? null,
+    ownerId:               account.ownerId               ?? null,
+    minimumBalance:        account.minimumBalance        ?? 0,
+    drawdownPriority:      account.drawdownPriority      ?? null,
+    allowsEarlyWithdrawal: account.allowsEarlyWithdrawal ?? false,
   };
   if (account.contributionBasis !== undefined) {
     plain.contributionBasis        = account.contributionBasis;

@@ -364,8 +364,8 @@ export class BaseApp extends BaseComponent {
       controller:    new TimelineController(),
       view:          new TimelineView({ container: $('timelineContainer') }),
       onDetail:      (entry) => this._statePanelView.showNodeDetail(entry),
-      onTaxDocument: (entry) => {
-        const doc = this._reportingService.generate(entry);
+      onTaxDocument: (entry, journal) => {
+        const doc = this._reportingService.generate(entry, journal);
         if (doc) this._taxDocModal.open(doc);
       },
       onRewind: (date) => {

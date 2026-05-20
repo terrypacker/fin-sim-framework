@@ -66,6 +66,9 @@ export class TaxDocumentModal {
   }
 
   _render(doc) {
+    const body = doc.table
+      ? this._renderTable(doc.table)
+      : doc.sections.map(s => this._renderSection(s)).join('') + (doc.summary ? this._renderSummary(doc.summary) : '');
     return `
       <div class="tax-doc-header">
         <div class="tax-doc-title-group">
@@ -74,10 +77,37 @@ export class TaxDocumentModal {
         </div>
       </div>
       <div class="tax-doc-body">
-        ${doc.sections.map(s => this._renderSection(s)).join('')}
-        ${this._renderSummary(doc.summary)}
+        ${body}
       </div>
       <div class="tax-doc-footer">
+      </div>`;
+  }
+
+  _renderTable({ heading, columns, rows, totals }) {
+    const headerCells = columns.map(c => `<th class="tax-doc-tbl-th">${c}</th>`).join('');
+    const dataRows = rows.map(row => {
+      const cells = row.map((cell, i) => {
+        const isAmt = typeof cell === 'number';
+        const cls   = isAmt && cell < 0 ? 'tax-doc-tbl-td tax-doc-tbl-td--neg' : 'tax-doc-tbl-td';
+        return `<td class="${cls}">${isAmt ? _fmtAmt(cell) : (cell ?? '—')}</td>`;
+      }).join('');
+      return `<tr class="tax-doc-tbl-row">${cells}</tr>`;
+    }).join('');
+    const totalCells = totals.map((cell, i) => {
+      const isAmt = typeof cell === 'number';
+      const cls   = isAmt && cell < 0 ? 'tax-doc-tbl-td tax-doc-tbl-total tax-doc-tbl-td--neg' : 'tax-doc-tbl-td tax-doc-tbl-total';
+      return `<td class="${cls}">${isAmt ? _fmtAmt(cell) : (cell ?? '')}</td>`;
+    }).join('');
+    return `
+      <div class="tax-doc-section">
+        <div class="tax-doc-section-hdr">${heading}</div>
+        <div class="tax-doc-tbl-wrap">
+          <table class="tax-doc-tbl">
+            <thead><tr>${headerCells}</tr></thead>
+            <tbody>${dataRows}</tbody>
+            <tfoot><tr>${totalCells}</tr></tfoot>
+          </table>
+        </div>
       </div>`;
   }
 

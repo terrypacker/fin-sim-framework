@@ -96,11 +96,16 @@ export class ScenarioTabPresenter {
       this._view._renderParamsList(this._activeScenario);
     }
 
-    /**
-     * This call assumes this._activeScenario is up to date with the inputs
-     * @param scenario
-     */
     this._view.onSave = () => {
+      const services = ServiceRegistry.getInstance();
+      if (services.accountService && this._activeScenario) {
+        this._activeScenario.accounts = services.accountService.getAll()
+          .map(a => ScenarioSerializer._serializeAccount(a));
+      }
+      if (services.personService && this._activeScenario) {
+        this._activeScenario.persons = services.personService.getAll()
+          .map(p => ScenarioSerializer._serializePerson(p));
+      }
       this._controller.save(this._activeScenario);
       this._view._refreshScenarioSelect(this._controller.getAll(), this._activeScenario);
     };

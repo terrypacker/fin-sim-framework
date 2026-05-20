@@ -360,15 +360,20 @@ test('EW-6: penalty amount is tracked in pendingTaxActions, not deposited', () =
 // EW-7: pendingTaxActions returned and chainable
 // ══════════════════════════════════════════════════════════════════════════════
 
-test('EW-7: pendingTaxActions is empty for phase-1-only drawdown', () => {
+test('EW-7: pendingTaxActions contains STOCK_WITHDRAWAL_TAX for phase-1 brokerage draw (even zero gain)', () => {
   const svc    = makeSvc();
   const date   = new Date(2026, 0, 1);
   const target = new CheckingAccount(0, { country: 'US', currency: USD });
+  // earningsBasis defaults to 0 (all cost basis) — gain=0 but sale still tracked for Form 8949
   const brok   = new BrokerageAccount(20000, { country: 'US', currency: USD, drawdownPriority: 1 });
   const state  = { target, brok, personBirthDate: new Date(1990, 0, 1) };
 
   const { pendingTaxActions } = svc.replenishSavings(state, 'target', 5000, date);
-  assert.deepStrictEqual(pendingTaxActions, []);
+  assert.strictEqual(pendingTaxActions.length, 1);
+  assert.strictEqual(pendingTaxActions[0].type, 'STOCK_WITHDRAWAL_TAX');
+  assert.strictEqual(pendingTaxActions[0].gain, 0);
+  assert.ok(Math.abs(pendingTaxActions[0].proceeds  - 5000) < 0.01);
+  assert.ok(Math.abs(pendingTaxActions[0].costBasis - 5000) < 0.01);
 });
 
 test('EW-7: pendingTaxActions contains one action per early-withdrawal source touched', () => {
