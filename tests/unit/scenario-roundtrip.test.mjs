@@ -82,6 +82,8 @@ import { StockDividendCashApplyReducer }  from '../../src/finance/reducers/stock
 import { UsSavingsInterestCreditReducer } from '../../src/finance/reducers/us-savings-interest-credit-reducer.js';
 import { Account, CheckingAccount, SavingsAccount }   from '../../src/finance/assets/account.js';
 import { InvestmentAccount, BrokerageAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from '../../src/finance/assets/investment-account.js';
+import { RealProperty }  from '../../src/finance/assets/real-property.js';
+import { Collectible }   from '../../src/finance/assets/collectible.js';
 import { Person } from '../../src/finance/person.js';
 
 // ─── FinSimLib global ─────────────────────────────────────────────────────────
@@ -156,6 +158,7 @@ globalThis.FinSimLib = {
     Account, CheckingAccount, SavingsAccount,
     InvestmentAccount, BrokerageAccount, FourOhOneKAccount,
     RothAccount, TraditionalIRAAccount, SuperannuationAccount,
+    RealProperty, Collectible,
     Person,
   },
 };

@@ -82,4 +82,13 @@ export class SimulationState {
       this._schemaRegistry?.registerAccount(key, account);
     }
   }
+
+  /**
+   * Assign a RealProperty or Collectible to a named state property and stamp
+   * its stateKey.  Does not trigger account schema registration.
+   */
+  _assignAsset(key, asset) {
+    this[key] = asset;
+    if (asset != null) asset.stateKey = key;
+  }
 }

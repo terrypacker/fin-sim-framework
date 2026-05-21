@@ -159,6 +159,8 @@ import { diffStates } from './simulation-framework/state-utils.js';
 import { InMemoryStorage } from './storage/in-memory-storage.js';
 import { AccountEditor } from './visualization/accounts/account-editor.js';
 import { AccountsController } from './visualization/accounts/accounts-controller.js';
+import { CollectibleEditor } from './visualization/assets/collectible-editor.js';
+import { RealPropertyEditor } from './visualization/assets/real-property-editor.js';
 import { ChartController } from './visualization/chart/chart-controller.js';
 import { ChartPresenter } from './visualization/chart/chart-presenter.js';
 import { ChartView } from './visualization/chart/chart-view.js';
@@ -596,6 +598,8 @@ export const Services = {
 export const Visualization = {
   AccountEditor,
   AccountsController,
+  CollectibleEditor,
+  RealPropertyEditor,
   ChartController,
   ChartPresenter,
   ChartView,

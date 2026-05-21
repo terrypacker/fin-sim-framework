@@ -660,6 +660,140 @@
   </div>
 </template>
 
+<!-- ── REAL PROPERTY EDITOR TEMPLATE ─────────────────── -->
+<template id="tpl-real-property-editor">
+  <div data-real-property-editor>
+    <div class="node">
+      <div class="node-header"><span>REAL PROPERTY</span></div>
+      <div class="node-body">
+        <div class="node-field">
+          <label>Name</label>
+          <input data-id="name" placeholder="e.g. Primary Residence"/>
+        </div>
+        <div class="node-field">
+          <label>Country</label>
+          <select data-id="country">
+            <option value="US">US</option>
+            <option value="AU">AU</option>
+          </select>
+        </div>
+        <div class="node-field">
+          <label>Value</label>
+          <input type="number" data-id="value" value="0"/>
+        </div>
+        <div class="node-field">
+          <label>Cost Basis</label>
+          <input type="number" data-id="costBasis" value="0"/>
+        </div>
+        <div class="node-field">
+          <label>Apprec. Rate</label>
+          <input type="number" data-id="appreciationRate" value="0.035" step="0.001"/>
+        </div>
+        <div class="node-field">
+          <label>Primary Res.</label>
+          <input type="checkbox" data-id="isPrimaryResidence"/>
+        </div>
+        <div class="node-field">
+          <label>Mortgage Bal.</label>
+          <input type="number" data-id="mortgageBalance" value="0"/>
+        </div>
+        <div class="node-field">
+          <label>Monthly Mtg.</label>
+          <input type="number" data-id="monthlyMortgage" value="0"/>
+        </div>
+        <div class="node-field">
+          <label>Sale Year</label>
+          <input type="number" data-id="plannedSaleYear" placeholder="blank = none"/>
+        </div>
+        <div class="node-field">
+          <label>Sale Acct.</label>
+          <select data-id="saleDestinationAccount">
+            <option value="">— none —</option>
+          </select>
+        </div>
+        <div class="node-field">
+          <label>Ownership</label>
+          <select data-id="ownershipType">
+            <option value="sole">Sole</option>
+            <option value="joint">Joint</option>
+          </select>
+        </div>
+        <div class="node-field">
+          <label>Owner</label>
+          <select data-id="ownerId">
+            <option value="">— none —</option>
+          </select>
+        </div>
+      </div>
+      <div class="node-buttons">
+        <button class="btn btn-sm btn-primary" data-id="saveBtn">Save</button>
+        <button class="btn btn-sm btn-warn" data-id="deleteBtn" style="display:none">Delete</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<!-- ── COLLECTIBLE EDITOR TEMPLATE ───────────────────── -->
+<template id="tpl-collectible-editor">
+  <div data-collectible-editor>
+    <div class="node">
+      <div class="node-header"><span>COLLECTIBLE</span></div>
+      <div class="node-body">
+        <div class="node-field">
+          <label>Name</label>
+          <input data-id="name" placeholder="e.g. Gold Bullion"/>
+        </div>
+        <div class="node-field">
+          <label>Country</label>
+          <select data-id="country">
+            <option value="US">US</option>
+            <option value="AU">AU</option>
+          </select>
+        </div>
+        <div class="node-field">
+          <label>Value</label>
+          <input type="number" data-id="value" value="0"/>
+        </div>
+        <div class="node-field">
+          <label>Cost Basis</label>
+          <input type="number" data-id="costBasis" value="0"/>
+        </div>
+        <div class="node-field">
+          <label>Apprec. Rate</label>
+          <input type="number" data-id="appreciationRate" value="0.035" step="0.001"/>
+        </div>
+        <div class="node-field">
+          <label>Sale Year</label>
+          <input type="number" data-id="plannedSaleYear" placeholder="blank = none"/>
+        </div>
+        <div class="node-field">
+          <label>Sale Acct.</label>
+          <select data-id="saleDestinationAccount">
+            <option value="">— none —</option>
+          </select>
+        </div>
+        <div class="node-field">
+          <label>Ownership</label>
+          <select data-id="ownershipType">
+            <option value="sole">Sole</option>
+            <option value="joint">Joint</option>
+          </select>
+        </div>
+        <div class="node-field">
+          <label>Owner</label>
+          <select data-id="ownerId">
+            <option value="">— none —</option>
+          </select>
+        </div>
+      </div>
+      <div class="node-buttons">
+        <button class="btn btn-sm btn-primary" data-id="saveBtn">Save</button>
+        <button class="btn btn-sm btn-warn" data-id="deleteBtn" style="display:none">Delete</button>
+      </div>
+    </div>
+  </div>
+</template>
+
 <script type="module" src="./index.umd.min.js"></script>
 <script type="module">
   // ── Init ──────────────────────────────────────────────────────────────────────
