@@ -156,12 +156,8 @@ export class TaxPaymentDebitReducer extends Reducer {
       this.accountService.transaction(cashAccount, -debit, date);
     }
 
-    const metricKey = cc === 'AU' ? 'tax_paid_au' : 'tax_paid_us';
-    const list      = state.metrics[metricKey] || [];
-
     return this.newState(state, {
       [accountKey]: { ...cashAccount },   // explicit new reference so balance change is visible in state diffs
-      metrics: { ...state.metrics, [metricKey]: [...list, debit] },
     });
   }
 }
