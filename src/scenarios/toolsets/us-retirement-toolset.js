@@ -485,6 +485,10 @@ export const US_RETIREMENT = {
       inflationAccumulator: { US: 1.0 },
       metrics:              {},
       people,
+      outOfFundsDate:       null,
+      scenarioFailed:       false,
+      cumulativeDeficit:    0,
+      deficitMonths:        0,
     };
 
     // Account state entries (handlers read state[stateKey] for balance lookups)

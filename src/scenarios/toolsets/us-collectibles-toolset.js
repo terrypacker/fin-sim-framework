@@ -38,7 +38,13 @@ export const US_COLLECTIBLES = {
   },
 
   state(context) {
-    return {};
+    const patches = {};
+    for (const col of (context.collectibles ?? [])) {
+      if (col.stateKey) {
+        patches[col.stateKey] = _collectibleToStatePlain(col);
+      }
+    }
+    return patches;
   },
 
   schedules(context) {
@@ -64,3 +70,16 @@ export const US_COLLECTIBLES = {
     return [new CollectibleSaleApplyReducer({ accountService: context.accountService })];
   },
 };
+
+function _collectibleToStatePlain(col) {
+  return {
+    stateKey:         col.stateKey,
+    value:            col.value            ?? 0,
+    costBasis:        col.costBasis        ?? 0,
+    appreciationRate: col.appreciationRate ?? 0,
+    plannedSaleYear:  col.plannedSaleYear  ?? null,
+    ownershipType:    col.ownershipType    ?? 'sole',
+    ownerId:          col.ownerId          ?? null,
+    country:          col.country          ?? 'US',
+  };
+}

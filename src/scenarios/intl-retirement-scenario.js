@@ -8,53 +8,24 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { BaseScenario } from './base-scenario.js';
-import { ServiceRegistry } from '../services/service-registry.js';
-import { EventBuilder } from '../simulation-framework/builders/event-builder.js';
-import { Person } from '../finance/person.js';
-import { Account, USD, AUD } from '../finance/assets/account.js';
-import { RealProperty } from '../finance/assets/real-property.js';
-import { Collectible } from '../finance/assets/collectible.js';
-import { US_REAL_PROPERTY }   from './toolsets/us-real-property-toolset.js';
-import { AU_REAL_PROPERTY }   from './toolsets/au-real-property-toolset.js';
-import { US_COLLECTIBLES }    from './toolsets/us-collectibles-toolset.js';
-import { US_ROTH_CONVERSION } from './toolsets/us-roth-conversion-toolset.js';
-import {
-  InvestmentAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount,
-  BrokerageAccount
-} from '../finance/assets/investment-account.js';
-import { TaxService } from '../finance/tax-service.js';
-import { PeriodService } from '../finance/period/period-service.js';
-import { buildUsCalendarYear, buildAuFiscalYear, applyTo } from '../finance/period/period-builder.js';
-import { UsSavingsInterestMonthlyHandler } from '../finance/handlers/us-savings-interest-handler.js';
-import { MonthlyExpensesHandler } from '../finance/handlers/monthly-expenses-handler.js';
-import { IntlTransferToUsHandler, IntlTransferToAuHandler } from '../finance/handlers/intl-transfer-handlers.js';
-import {
-  AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler,
-  IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,
-  IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
-} from '../finance/handlers/earnings-handlers.js';
-import { DividendScheduledHandler } from '../finance/handlers/dividend-scheduled-handler.js';
-import { ChangeResidencyHandler } from '../finance/handlers/change-residency-handler.js';
-import { OutOfFundsHandler } from '../finance/handlers/out-of-funds-handler.js';
-import { MonthlyWagesHandler } from '../finance/handlers/monthly-wages-handler.js';
-import { InflationAdjustReducer } from '../finance/reducers/inflation-adjust-reducer.js';
-import { UsSavingsInterestCreditReducer } from '../finance/reducers/us-savings-interest-credit-reducer.js';
-import { ExpenseDebitReducer } from '../finance/reducers/expense-debit-reducer.js';
-import { ReplenishSavingsReducer } from '../finance/reducers/replenish-savings-reducer.js';
-import { IntlTransferApplyReducer } from '../finance/reducers/intl-transfer-apply-reducer.js';
-import { StockDividendCashApplyReducer } from '../finance/reducers/stock-dividend-cash-apply-reducer.js';
-import { ChangeResidencyApplyReducer } from '../finance/reducers/change-residency-apply-reducer.js';
-import { SetOutOfFundsDateReducer } from '../finance/reducers/set-out-of-funds-date-reducer.js';
-import { AccumulateDeficitReducer } from '../finance/reducers/accumulate-deficit-reducer.js';
-import { OutOfFundsReducer } from '../finance/reducers/out-of-funds-reducer.js';
-import {
-  ReducerBuilder
-} from "../simulation-framework/builders/reducer-builder.js";
-import {
-  InternationalRetirementFinancialState
-} from "../finance/state/intl-retirement-state.js";
-import { ACCOUNT_ROLES } from '../finance/state/account-roles.js';
+import { BaseScenario }       from './base-scenario.js';
+import { ScenarioSerializer }  from './scenario-serializer.js';
+import { ToolsetRegistry }     from './toolsets/toolset-registry.js';
+import { ScenarioCompiler }    from './toolsets/scenario-compiler.js';
+import { US_BANKING }          from './toolsets/us-banking-toolset.js';
+import { US_TAX }              from './toolsets/us-tax-toolset.js';
+import { US_RETIREMENT }       from './toolsets/us-retirement-toolset.js';
+import { AU_BANKING }          from './toolsets/au-banking-toolset.js';
+import { AU_TAX }              from './toolsets/au-tax-toolset.js';
+import { AU_RETIREMENT }       from './toolsets/au-retirement-toolset.js';
+import { US_AU_CROSS_BORDER }  from './toolsets/us-au-cross-border-toolset.js';
+import { US_REAL_PROPERTY }    from './toolsets/us-real-property-toolset.js';
+import { AU_REAL_PROPERTY }    from './toolsets/au-real-property-toolset.js';
+import { US_COLLECTIBLES }     from './toolsets/us-collectibles-toolset.js';
+import { US_ROTH_CONVERSION }  from './toolsets/us-roth-conversion-toolset.js';
+import { ServiceRegistry }     from '../services/service-registry.js';
+import { USD, AUD }            from '../finance/assets/account.js';
+import { ACCOUNT_ROLES }       from '../finance/state/account-roles.js';
 
 /**
  * Default parameters for the International Retirement scenario.
@@ -450,629 +421,71 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
  * IntlRetirementScenario — International two-person retirement simulation.
  *
  * Two people (primary + spouse), US→AU migration on Jul 1 of moveYear.
- * Uses all framework finance handler/reducer classes registered via the
- * ServiceRegistry so the UI can inspect and serialize every component.
- *
- * ### Build phases
- *
- *   buildSim()      — builds initialState with accounts and people,
- *                     registers the Simulation, wires TaxService,
- *                     and schedules the one-off CHANGE_RESIDENCY event.
- *
- *   loadDefaults()  — populates all services with people, accounts,
- *                     events, handlers, and reducers via service factories
- *                     so every item appears in the config graph and UI.
+ * Wired entirely through the toolset compiler path (Path 2 in BaseApp):
+ * getToolsets() declares all 11 toolsets; buildDefaultConfig() produces the
+ * serialized persons/accounts/realProperties/collectibles for a fresh load.
  */
 export class IntlRetirementScenario extends BaseScenario {
   static getParamSchema() { return INTL_RETIREMENT_PARAM_SCHEMA; }
 
-  constructor({ context, params, simStart, simEnd } = {}) {
-    super({
-      context,
-      params,
-      simStart: simStart ?? new Date(Date.UTC(2026, 0, 1)),
-      simEnd:   simEnd ?? new Date(Date.UTC(2041, 0, 1)),
-    });
-    // Populated in buildSim(); consumed in loadDefaults().
-    this._people         = null;
-    this._accounts       = null;
-    this._realProperties = null;
-    this._collectibles   = null;
-    this._params         = null;
-    this._taxService     = null;
+  static getToolsets() {
+    return [
+      'US_BANKING', 'US_TAX', 'US_RETIREMENT',
+      'AU_BANKING', 'AU_TAX', 'AU_RETIREMENT',
+      'US_AU_CROSS_BORDER',
+      'US_REAL_PROPERTY', 'AU_REAL_PROPERTY',
+      'US_COLLECTIBLES', 'US_ROTH_CONVERSION',
+    ];
   }
 
   /**
-   * Build the scenario-specific default initial state.
-   * Called by BaseScenario.buildSim() when no saved initialState is provided.
-   * Constructs all domain objects (people, accounts) from params and stores
-   * them on `this._people` / `this._accounts` so loadDefaults() can use them.
+   * Build a declarative config that ScenarioCompiler can consume for a fresh
+   * prebuilt load.  Produces serialized persons/accounts/realProperties/collectibles
+   * (with stable stateKeys) plus a parameters map aligned to toolset param keys.
    */
-  buildDefaultInitialState(params) {
-    const p = { ...INTL_RETIREMENT_DEFAULTS, ...(params ?? {}) };
-    // Params arriving from serialized scenario JSON carry Date fields as ISO strings.
+  static buildDefaultConfig(params = {}, simStart, simEnd) {
+    const p = { ...INTL_RETIREMENT_DEFAULTS, ...params };
     const toDate = v => (v instanceof Date ? v : new Date(v));
-    p.primaryRetirementDate = toDate(p.primaryRetirementDate);
-    p.spouseRetirementDate  = toDate(p.spouseRetirementDate);
     p.primaryBirthDate      = toDate(p.primaryBirthDate);
     p.spouseBirthDate       = toDate(p.spouseBirthDate);
-    this._params = p;
+    p.primaryRetirementDate = toDate(p.primaryRetirementDate);
+    p.spouseRetirementDate  = toDate(p.spouseRetirementDate);
 
-    // ── People ────────────────────────────────────────────────────────────────
-    const primary = new Person('primary', p.primaryBirthDate, {
-      name: 'Primary', citizen: ['US'],
-      monthlyWage:    p.primaryMonthlyWage,
-      retirementDate: p.primaryRetirementDate,
-    });
-    const spouse  = new Person('spouse',  p.spouseBirthDate,  {
-      name: 'Spouse',  citizen: ['US'],
-      monthlyWage:    p.spouseMonthlyWage,
-      retirementDate: p.spouseRetirementDate,
-    });
+    const isoDate = d => d.toISOString().slice(0, 10);
 
-    // ── US accounts ───────────────────────────────────────────────────────────
-    const usSavingsAccount = new Account(p.initialUsSavings, {
-      name:          'US Savings',
-      role:          ACCOUNT_ROLES.US_SAVINGS,
-      ownershipType: 'joint',
-      ownerId:       primary.id,
-      minimumBalance: p.usSavingsMinBalance,
-      country:       'US',
-      currency:      USD,
-    });
-    const fixedIncomeAccount = new Account(p.fixedIncomeBalance, {
-      name:             'Fixed Income',
-      role:             ACCOUNT_ROLES.FIXED_INCOME,
-      country:          'US',
-      currency:         USD,
-      ownerId:          primary.id,
-      drawdownPriority: 1,
-    });
-    const usStockAccount = new BrokerageAccount(p.stockBalance, {
-      name:             'US Stock',
-      role:             ACCOUNT_ROLES.US_STOCK,
-      contributionBasis: p.stockBasis,
-      country:          'US',
-      currency:         USD,
-      ownerId:          primary.id,
-      drawdownPriority: 2,
-    });
-    const iraAccount = new TraditionalIRAAccount(p.iraBalance, {
-      name:             'Traditional IRA',
-      role:             ACCOUNT_ROLES.IRA,
-      contributionBasis: p.iraBasis,
-      country:          'US',
-      currency:         USD,
-      ownerId:          primary.id,
-      drawdownPriority: 3,
-    });
-    const k401Account = new FourOhOneKAccount(p.k401Balance, {
-      name:             '401(k)',
-      role:             ACCOUNT_ROLES.K401,
-      contributionBasis: p.k401Basis,
-      country:          'US',
-      currency:         USD,
-      ownerId:          primary.id,
-      drawdownPriority: 4,
-    });
-    const rothAccount = new RothAccount(p.rothBalance, {
-      name:             'Roth IRA',
-      role:             ACCOUNT_ROLES.ROTH,
-      contributionBasis: p.rothBasis,
-      country:          'US',
-      currency:         USD,
-      ownerId:          primary.id,
-      drawdownPriority: 5,
-    });
+    return {
+      toolsets:       IntlRetirementScenario.getToolsets(),
+      simStart:       (simStart ?? new Date(Date.UTC(2026, 0, 1))).toISOString(),
+      simEnd:         (simEnd   ?? new Date(Date.UTC(2041, 0, 1))).toISOString(),
 
-    // ── AU accounts ───────────────────────────────────────────────────────────
-    const auSavingsAccount = new Account(p.auSavingsBalance, {
-      name:          'AU Savings',
-      role:          ACCOUNT_ROLES.AU_SAVINGS,
-      ownershipType: 'joint',
-      ownerId:       primary.id,
-      country:       'AU',
-      minimumBalance: p.auSavingsMinBalance,
-      currency:      AUD,
-    });
-    const auStockAccount = new BrokerageAccount(p.auStockBalance, {
-      name:             'AU Stock',
-      role:             ACCOUNT_ROLES.AU_STOCK,
-      contributionBasis: p.auStockBasis,
-      country:          'AU',
-      currency:         AUD,
-      ownerId:          primary.id,
-      drawdownPriority: 1,
-    });
-    const superAccount = new InvestmentAccount(p.superBalance, {
-      name:             'Superannuation',
-      role:             ACCOUNT_ROLES.SUPER,
-      contributionBasis: p.superBasis,
-      country:          'AU',
-      currency:         AUD,
-      ownerId:          primary.id,
-      drawdownPriority: 2,
-      minimumAge:       60,
-    });
-
-    // ── Spouse retirement accounts ─────────────────────────────────────────────
-    const spouseRothAccount = new RothAccount(p.spouseRothBalance, {
-      name:             'Roth IRA (Spouse)',
-      role:             ACCOUNT_ROLES.ROTH,
-      contributionBasis: p.spouseRothBasis,
-      country:          'US',
-      currency:         USD,
-      ownerId:          spouse.id,
-      drawdownPriority: 8,
-    });
-    const spouseIraAccount = new TraditionalIRAAccount(p.spouseIraBalance, {
-      name:             'Traditional IRA (Spouse)',
-      role:             ACCOUNT_ROLES.IRA,
-      contributionBasis: p.spouseIraBasis,
-      country:          'US',
-      currency:         USD,
-      ownerId:          spouse.id,
-      drawdownPriority: 6,
-    });
-    const spouseK401Account = new FourOhOneKAccount(p.spouseK401Balance, {
-      name:             '401(k) (Spouse)',
-      role:             ACCOUNT_ROLES.K401,
-      contributionBasis: p.spouseK401Basis,
-      country:          'US',
-      currency:         USD,
-      ownerId:          spouse.id,
-      drawdownPriority: 7,
-    });
-    const spouseSuperAccount = new InvestmentAccount(p.spouseSuperBalance, {
-      name:             'Superannuation (Spouse)',
-      role:             ACCOUNT_ROLES.SUPER,
-      contributionBasis: p.spouseSuperBasis,
-      country:          'AU',
-      currency:         AUD,
-      ownerId:          spouse.id,
-      drawdownPriority: 3,
-      minimumAge:       60,
-    });
-
-    // ── Real property ─────────────────────────────────────────────────────────
-    const usHouseProperty = new RealProperty(1_000_000, {
-      name:               'US House',
-      country:            'US',
-      currency:           USD,
-      costBasis:          800_000,
-      appreciationRate:   0.04,
-      isPrimaryResidence: true,
-      ownershipType:      'joint',
-      ownerId:            primary.id,
-    });
-
-    const auHouseProperty = new RealProperty(1_000_000, {
-      name:               'AU House',
-      country:            'AU',
-      currency:           AUD,
-      costBasis:          900_000,
-      appreciationRate:   0.04,
-      isPrimaryResidence: true,
-      ownershipType:      'joint',
-      ownerId:            primary.id,
-    });
-
-    // ── Collectibles ──────────────────────────────────────────────────────────
-    const collectibleAccount = new Collectible(100_000, {
-      name:             'Gold',
-      country:          'US',
-      currency:         USD,
-      costBasis:        60_000,
-      appreciationRate: 0.03,
-      ownershipType:    'sole',
-      ownerId:          primary.id,
-    });
-
-    // ── Store for loadDefaults() ──────────────────────────────────────────────
-    this._people = { primary, spouse };
-    this._accounts = {
-      usSavingsAccount, fixedIncomeAccount, usStockAccount,
-      iraAccount, k401Account, rothAccount,
-      auSavingsAccount, auStockAccount, superAccount,
-      spouseRothAccount, spouseIraAccount, spouseK401Account, spouseSuperAccount,
-    };
-    this._realProperties = { usHouseProperty, auHouseProperty };
-    this._collectibles   = { collectibleAccount };
-
-    const { schemaRegistry } = ServiceRegistry.getInstance();
-    return new InternationalRetirementFinancialState({
-      schemaRegistry,
-      primary, spouse,
-      usSavingsAccount, fixedIncomeAccount, usStockAccount,
-      iraAccount, k401Account, rothAccount,
-      auSavingsAccount, auStockAccount, superAccount,
-      spouseRothAccount, spouseIraAccount, spouseK401Account, spouseSuperAccount,
-      usHouseProperty, auHouseProperty,
-      collectibleAccount,
-      exchangeRateUsdToAud: p.exchangeRateUsdToAud,
-      intlTransferFeeUsd:   p.intlTransferFeeUsd,
-      inflationRates:       { US: p.usInflationRate, AU: p.auInflationRate },
-      monthlyExpenses:      p.monthlyExpenses,
-    });
-  }
-
-  /**
-   * Register the simulation and wire TaxService.
-   * Overrides BaseScenario.buildSim() only to add TaxService setup after the
-   * simulation is created (TaxService needs this.sim).
-   * The initialState is provided via buildDefaultInitialState() when absent.
-   *
-   * The problem with moving this logic to loadDefaults() is that loadDefaults() is only called
-   *   for fresh scenarios. When a saved config is loaded, afterBuildSim() calls ScenarioSerializer.deserialize()
-   *   instead — loadDefaults() is never reached. The currentPeriods injection would be skipped and the dynamic
-   *   tax reducers would have nothing to read.
-   *
-   *   Fresh scenario:  buildSim() → afterBuildSim() → loadDefaults()      ✓ setup() runs
-   *   Saved scenario:  buildSim() → afterBuildSim() → deserialize()        ✗ setup() never runs
-   */
-  buildSim() {
-    super.buildSim();
-
-    // ── Wire TaxService — phase 1: state init + direct event scheduling.
-    //    Handlers/reducers are registered in loadDefaults() (phase 2) so that
-    //    loading a saved config restores the serialized items instead of
-    //    creating a duplicate set here.
-    const startYear = this.simStart.getUTCFullYear();
-    const endYear = this.simEnd.getUTCFullYear();
-    const periodService = new PeriodService();
-    for (let y = startYear; y <= endYear; y++) applyTo(periodService, buildUsCalendarYear(y));
-    //Start AU the year before so 1st period ends in first year
-    for (let y = startYear - 1; y <= endYear; y++) applyTo(periodService, buildAuFiscalYear(y));
-    this._taxService = new TaxService();
-    this._taxService.setup(this.sim, ['US', 'AU'], periodService);
-    // TaxService.setup() injects currentPeriods into sim.state; merge into initialState so
-    // serialize() captures it for round-trip import (Period objects are immutable plain data).
-    this.initialState = { ...this.initialState, currentPeriods: this._taxService._currentPeriods };
-  }
-
-  /**
-   * Populate all services with people, accounts, events, handlers, and reducers.
-   * Called by ScenarioTabPresenter.afterBuildSim() when no saved config exists.
-   */
-  loadDefaults() {
-    const { eventService, handlerService, reducerService, accountService, personService, stateRegistry,
-            realPropertyService, collectibleService } = ServiceRegistry.getInstance();
-    const p = this._params;
-    const primaryId = this._people.primary.id;
-    const spouseId  = this._people.spouse.id;
-
-    // ── TaxService phase 2: register handlers/reducers through the service layer
-    this._taxService.registerHandlersAndReducers(ServiceRegistry.getInstance(), ['US', 'AU']);
-
-    // ── People ────────────────────────────────────────────────────────────────
-    personService.register(this._people.primary);
-    personService.register(this._people.spouse);
-
-    // ── Accounts ──────────────────────────────────────────────────────────────
-    for (const account of Object.values(this._accounts)) {
-      accountService.createAccount(account);
-    }
-
-    // ── Real Property ─────────────────────────────────────────────────────────
-    for (const prop of Object.values(this._realProperties)) {
-      realPropertyService.createProperty(prop);
-    }
-
-    // ── Collectibles ──────────────────────────────────────────────────────────
-    for (const col of Object.values(this._collectibles)) {
-      collectibleService.createCollectible(col);
-    }
-
-    // ── Schedule one-off CHANGE_RESIDENCY (Jul 1 of moveYear) ────────────────
-    // Registered through EventService so it gets an ID visible in the config graph.
-    const moveYearEvent = eventService.createOneOffEvent({
-      name:    'Change Residency',
-      type:    'CHANGE_RESIDENCY',
-      date:    new Date(Date.UTC(p.moveYear, 6, 1)),
-      data:    {},
-      enabled: true,
-    });
-
-    // ── Recurring event series ────────────────────────────────────────────────
-    const expensesEvent = EventBuilder.eventSeries()
-      .name('Monthly Expenses').type('MONTHLY_EXPENSES')
-      .interval('month-end').enabled(true).color('#F44336').build();
-    eventService.register(expensesEvent);
-
-    const wagesEvent = EventBuilder.eventSeries()
-      .name('Monthly Wages').type('MONTHLY_WAGES')
-      .interval('month-end').enabled(true).color('#4CAF50').build();
-    eventService.register(wagesEvent);
-
-    const usSavingsIntEvent = EventBuilder.eventSeries()
-      .name('Monthly US Savings Interest').type('US_SAVINGS_INTEREST_MONTHLY')
-      .interval('month-end').enabled(true).color('#00BCD4').build();
-    eventService.register(usSavingsIntEvent);
-
-    const dividendsEvent = EventBuilder.eventSeries()
-      .name('US Stock Dividends').type('DIVIDEND_SCHEDULED')
-      .interval('year-end').startOffset(1).enabled(true).color('#4CAF50').build();
-    eventService.register(dividendsEvent);
-
-    const fixedIncomeEvent = EventBuilder.eventSeries()
-      .name('Fixed Income Interest').type('INTL_FIXED_INCOME_INTEREST')
-      .interval('year-end').startOffset(1).enabled(true).color('#2196F3').build();
-    eventService.register(fixedIncomeEvent);
-
-    const auSavingsEvent = EventBuilder.eventSeries()
-      .name('AU Savings Interest').type('INTL_AU_SAVINGS_INTEREST')
-      .interval('year-end').startOffset(1).enabled(true).color('#FF9800').build();
-    eventService.register(auSavingsEvent);
-
-    const superEvent = EventBuilder.eventSeries()
-      .name('Super Earnings').type('INTL_SUPER_EARNINGS')
-      .interval('year-end').startOffset(1).enabled(true).color('#9C27B0').build();
-    eventService.register(superEvent);
-
-    const rothEarningsEvent = EventBuilder.eventSeries()
-      .name('Roth IRA Earnings').type('INTL_ROTH_EARNINGS')
-      .interval('year-end').startOffset(1).enabled(true).color('#7E57C2').build();
-    eventService.register(rothEarningsEvent);
-
-    const iraEarningsEvent = EventBuilder.eventSeries()
-      .name('IRA Earnings').type('INTL_IRA_EARNINGS')
-      .interval('year-end').startOffset(1).enabled(true).color('#5C6BC0').build();
-    eventService.register(iraEarningsEvent);
-
-    const k401EarningsEvent = EventBuilder.eventSeries()
-      .name('401k Earnings').type('INTL_K401_EARNINGS')
-      .interval('year-end').startOffset(1).enabled(true).color('#42A5F5').build();
-    eventService.register(k401EarningsEvent);
-
-    const usStockEarningsEvent = EventBuilder.eventSeries()
-      .name('US Stock Earnings').type('INTL_STOCK_EARNINGS')
-      .interval('year-end').startOffset(1).enabled(true).color('#26A69A').build();
-    eventService.register(usStockEarningsEvent);
-
-    const auStockEarningsEvent = EventBuilder.eventSeries()
-      .name('AU Stock Earnings').type('INTL_AU_STOCK_EARNINGS')
-      .interval('year-end').startOffset(1).enabled(true).color('#66BB6A').build();
-    eventService.register(auStockEarningsEvent);
-
-    const auStockDividendEvent = EventBuilder.eventSeries()
-      .name('AU Stock Dividend').type('INTL_AU_STOCK_DIVIDEND')
-      .interval('year-end').startOffset(1).enabled(true).color('#FFA726').build();
-    eventService.register(auStockDividendEvent);
-
-    // ── Handlers ──────────────────────────────────────────────────────────────
-
-    const expensesHandler = new MonthlyExpensesHandler({
-      stateRegistry,
-      monthlyExpenses: p.monthlyExpenses,
-      usRole: ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
-      auRole: ACCOUNT_ROLES.AU_SAVINGS, auOwnerId: primaryId,
-    });
-    expensesHandler.handledEvents.push(expensesEvent);
-    handlerService.register(expensesHandler);
-
-    const wagesHandler = new MonthlyWagesHandler({ stateRegistry });
-    wagesHandler.handledEvents.push(wagesEvent);
-    handlerService.register(wagesHandler);
-
-    const usSavingsIntHandler = new UsSavingsInterestMonthlyHandler({
-      stateRegistry,
-      role:         ACCOUNT_ROLES.US_SAVINGS,
-      ownerId:      primaryId,
-      interestRate: p.usSavingsInterestRate,
-    });
-    usSavingsIntHandler.handledEvents.push(usSavingsIntEvent);
-    handlerService.register(usSavingsIntHandler);
-
-    const dividendHandler = new DividendScheduledHandler({
-      stateRegistry,
-      role:         ACCOUNT_ROLES.US_STOCK,
-      ownerId:      primaryId,
-      dividendRate: p.stockDividendRate,
-      reinvest:     p.stockDividendReinvest,
-    });
-    dividendHandler.handledEvents.push(dividendsEvent);
-    handlerService.register(dividendHandler);
-
-    const fixedIncomeHandler = new FixedIncomeInterestHandler({
-      stateRegistry,
-      role:         ACCOUNT_ROLES.FIXED_INCOME,
-      ownerId:      primaryId,
-      interestRate: p.fixedIncomeInterestRate,
-    });
-    fixedIncomeHandler.handledEvents.push(fixedIncomeEvent);
-    handlerService.register(fixedIncomeHandler);
-
-    const auSavingsHandler = new AuSavingsInterestHandler({
-      stateRegistry,
-      role:         ACCOUNT_ROLES.AU_SAVINGS,
-      ownerId:      primaryId,
-      interestRate: p.auSavingsInterestRate,
-    });
-    auSavingsHandler.handledEvents.push(auSavingsEvent);
-    handlerService.register(auSavingsHandler);
-
-    const superHandler = new SuperEarningsHandler({
-      stateRegistry,
-      role:    ACCOUNT_ROLES.SUPER,
-      ownerId: primaryId,
-    });
-    superHandler.handledEvents.push(superEvent);
-    handlerService.register(superHandler);
-
-    const rothEarningsHandler = new IntlRothEarningsHandler({
-      stateRegistry,
-      role:       ACCOUNT_ROLES.ROTH,
-      ownerId:    primaryId,
-      growthRate: p.rothGrowthRate,
-    });
-    rothEarningsHandler.handledEvents.push(rothEarningsEvent);
-    handlerService.register(rothEarningsHandler);
-
-    const iraEarningsHandler = new IntlIraEarningsHandler({
-      stateRegistry,
-      role:       ACCOUNT_ROLES.IRA,
-      ownerId:    primaryId,
-      growthRate: p.iraGrowthRate,
-    });
-    iraEarningsHandler.handledEvents.push(iraEarningsEvent);
-    handlerService.register(iraEarningsHandler);
-
-    const k401EarningsHandler = new IntlK401EarningsHandler({
-      stateRegistry,
-      role:       ACCOUNT_ROLES.K401,
-      ownerId:    primaryId,
-      growthRate: p.k401GrowthRate,
-    });
-    k401EarningsHandler.handledEvents.push(k401EarningsEvent);
-    handlerService.register(k401EarningsHandler);
-
-    // ── Spouse retirement account handlers ────────────────────────────────────
-    const spouseSuperHandler = new SuperEarningsHandler({
-      stateRegistry,
-      role:        ACCOUNT_ROLES.SUPER,
-      ownerId:     spouseId,
-      defaultRate: p.spouseSuperGrowthRate,
-    });
-    spouseSuperHandler.handledEvents.push(superEvent);
-    handlerService.register(spouseSuperHandler);
-
-    const spouseRothEarningsHandler = new IntlRothEarningsHandler({
-      stateRegistry,
-      role:       ACCOUNT_ROLES.ROTH,
-      ownerId:    spouseId,
-      growthRate: p.spouseRothGrowthRate,
-    });
-    spouseRothEarningsHandler.handledEvents.push(rothEarningsEvent);
-    handlerService.register(spouseRothEarningsHandler);
-
-    const spouseIraEarningsHandler = new IntlIraEarningsHandler({
-      stateRegistry,
-      role:       ACCOUNT_ROLES.IRA,
-      ownerId:    spouseId,
-      growthRate: p.spouseIraGrowthRate,
-    });
-    spouseIraEarningsHandler.handledEvents.push(iraEarningsEvent);
-    handlerService.register(spouseIraEarningsHandler);
-
-    const spouseK401EarningsHandler = new IntlK401EarningsHandler({
-      stateRegistry,
-      role:       ACCOUNT_ROLES.K401,
-      ownerId:    spouseId,
-      growthRate: p.spouseK401GrowthRate,
-    });
-    spouseK401EarningsHandler.handledEvents.push(k401EarningsEvent);
-    handlerService.register(spouseK401EarningsHandler);
-
-    const usStockEarningsHandler = new IntlUsStockEarningsHandler({
-      stateRegistry,
-      role:       ACCOUNT_ROLES.US_STOCK,
-      ownerId:    primaryId,
-      growthRate: p.usStockGrowthRate,
-    });
-    usStockEarningsHandler.handledEvents.push(usStockEarningsEvent);
-    handlerService.register(usStockEarningsHandler);
-
-    const auStockEarningsHandler = new IntlAuStockEarningsHandler({
-      stateRegistry,
-      role:       ACCOUNT_ROLES.AU_STOCK,
-      ownerId:    primaryId,
-      growthRate: p.auStockGrowthRate,
-    });
-    auStockEarningsHandler.handledEvents.push(auStockEarningsEvent);
-    handlerService.register(auStockEarningsHandler);
-
-    const auStockDividendHandler = new IntlAuStockDividendHandler({
-      stateRegistry,
-      role:         ACCOUNT_ROLES.AU_STOCK,
-      ownerId:      primaryId,
-      dividendRate: p.auStockDividendRate,
-    });
-    auStockDividendHandler.handledEvents.push(auStockDividendEvent);
-    handlerService.register(auStockDividendHandler);
-
-    // User-triggered transfer handlers (no event series — fired on-demand)
-    const intlToUsHandler = new IntlTransferToUsHandler({
-      stateRegistry,
-      auRole: ACCOUNT_ROLES.AU_SAVINGS, auOwnerId: primaryId,
-      usRole: ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
-    });
-    handlerService.register(intlToUsHandler);
-
-    const intlToAuHandler = new IntlTransferToAuHandler({
-      stateRegistry,
-      usRole: ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
-      auRole: ACCOUNT_ROLES.AU_SAVINGS, auOwnerId: primaryId,
-    });
-    handlerService.register(intlToAuHandler);
-
-    // CHANGE_RESIDENCY is scheduled directly in buildSim() (one-off)
-    const changeResidencyHandler = new ChangeResidencyHandler();
-    changeResidencyHandler.handledEvents.push(moveYearEvent);
-    handlerService.register(changeResidencyHandler);
-
-    // OUT_OF_FUNDS is fired by reducers when all sources are exhausted
-    const outOfFundsHandler = new OutOfFundsHandler();
-    handlerService.register(outOfFundsHandler);
-
-    // ── Reducers ──────────────────────────────────────────────────────────────
-    const { accountService: svc } = ServiceRegistry.getInstance();
-
-    const recordMetricReducer = ReducerBuilder.metric(null).reduceActionType('RECORD_METRIC').build();
-    reducerService.register(recordMetricReducer);
-
-    const expenseDebitReducer = new ExpenseDebitReducer({ accountService: svc });
-    reducerService.register(expenseDebitReducer);
-
-    const replenishReducer = new ReplenishSavingsReducer({ accountService: svc });
-    reducerService.register(replenishReducer);
-
-    const intlTransferReducer = new IntlTransferApplyReducer({ accountService: svc });
-    reducerService.register(intlTransferReducer);
-
-    const usSavingsIntCreditReducer = new UsSavingsInterestCreditReducer({
-      accountService: svc,
-      stateRegistry,
-      role:    ACCOUNT_ROLES.US_SAVINGS,
-      ownerId: primaryId,
-    });
-    reducerService.register(usSavingsIntCreditReducer);
-
-    const stockDividendCashReducer = new StockDividendCashApplyReducer({
-      accountService: svc,
-      stateRegistry,
-      role:    ACCOUNT_ROLES.US_SAVINGS,
-      ownerId: primaryId,
-    });
-    reducerService.register(stockDividendCashReducer);
-
-    const changeResidencyApplyReducer = new ChangeResidencyApplyReducer({ accountService: svc, stateRegistry });
-    reducerService.register(changeResidencyApplyReducer);
-
-    const setOutOfFundsDateReducer = new SetOutOfFundsDateReducer();
-    reducerService.register(setOutOfFundsDateReducer);
-
-    const accumulateDeficitReducer = new AccumulateDeficitReducer();
-    reducerService.register(accumulateDeficitReducer);
-
-    const outOfFundsReducer = new OutOfFundsReducer();
-    reducerService.register(outOfFundsReducer);
-
-    const inflationAdjustReducer = new InflationAdjustReducer();
-    reducerService.register(inflationAdjustReducer);
-
-    // ── Asset sales + Roth conversion — delegated to toolsets ─────────────────
-    const toolsetContext = {
-      startDate:      this.simStart,
-      endDate:        this.simEnd,
-      people:         personService.getAll(),
-      accounts:       accountService.getAll(),
-      realProperties: realPropertyService.getAll(),
-      collectibles:   collectibleService.getAll(),
-      stateRegistry,
-      accountService,
-      schedulesById:  {},
+      // ── Parameters (toolset-key names) ──────────────────────────────────────
       parameters: {
+        // US_BANKING
+        usSavingsInterestRate:    p.usSavingsInterestRate,
+        // US_RETIREMENT / AU_RETIREMENT share 'inflationRate'; US_AU_CROSS_BORDER uses both
         inflationRate:            p.usInflationRate,
+        auInflationRate:          p.auInflationRate,
+        iraGrowthRate:            p.iraGrowthRate,
+        rothGrowthRate:           p.rothGrowthRate,
+        k401GrowthRate:           p.k401GrowthRate,
+        brokerageGrowthRate:      p.usStockGrowthRate,
+        brokerageDividendRate:    p.stockDividendRate,
+        dividendReinvest:         p.stockDividendReinvest,
+        fixedIncomeInterestRate:  p.fixedIncomeInterestRate,
+        monthlyExpenses:          p.monthlyExpenses,
+        inflationAdjust:          true,
+        // AU_BANKING
+        auSavingsInterestRate:    p.auSavingsInterestRate,
+        // AU_RETIREMENT
+        superGrowthRate:          p.spouseSuperGrowthRate ?? 0.07,
+        auStockGrowthRate:        p.auStockGrowthRate,
+        auStockDividendRate:      p.auStockDividendRate,
+        // US_AU_CROSS_BORDER
+        moveYear:                 p.moveYear,
+        exchangeRateUsdToAud:     p.exchangeRateUsdToAud,
+        intlTransferFeeUsd:       p.intlTransferFeeUsd,
+        isAuResident:             false,
+        // US_ROTH_CONVERSION
         rothConversionEnabled:    p.rothConversionEnabled,
         rothConversionStartYear:  p.rothConversionStartYear,
         rothConversionEndYear:    p.rothConversionEndYear,
@@ -1081,12 +494,204 @@ export class IntlRetirementScenario extends BaseScenario {
         rothConversionMonth:      p.rothConversionMonth,
         rothConversionDay:        p.rothConversionDay,
       },
-    };
 
-    for (const toolset of [US_REAL_PROPERTY, AU_REAL_PROPERTY, US_COLLECTIBLES, US_ROTH_CONVERSION]) {
-      for (const s of toolset.schedules?.(toolsetContext) ?? []) eventService.register(s);
-      for (const h of toolset.handlers?.(toolsetContext) ?? []) handlerService.register(h);
-      for (const r of toolset.reducers?.(toolsetContext) ?? []) reducerService.register(r);
+      // ── Persons ─────────────────────────────────────────────────────────────
+      persons: [
+        {
+          __type: 'Person', id: 'primary', name: 'Primary',
+          birthDate:      isoDate(p.primaryBirthDate),
+          citizen:        ['US'],
+          monthlyWage:    p.primaryMonthlyWage,
+          retirementDate: isoDate(p.primaryRetirementDate),
+          lifeExpectancy: 90, socialSecurityMonthly: 0,
+        },
+        {
+          __type: 'Person', id: 'spouse', name: 'Spouse',
+          birthDate:      isoDate(p.spouseBirthDate),
+          citizen:        ['US'],
+          monthlyWage:    p.spouseMonthlyWage,
+          retirementDate: isoDate(p.spouseRetirementDate),
+          lifeExpectancy: 90, socialSecurityMonthly: 0,
+        },
+      ],
+
+      // ── Accounts ─────────────────────────────────────────────────────────────
+      // stateKey is included so deserializePersonsAccounts stamps it on the account
+      // before ScenarioCompiler reads it from accountService.getAll().
+      accounts: [
+        {
+          __type: 'Account',              stateKey: 'usSavingsAccount',
+          name: 'US Savings',             role: ACCOUNT_ROLES.US_SAVINGS,
+          initialValue: p.initialUsSavings, ownershipType: 'joint', ownerId: 'primary',
+          minimumBalance: p.usSavingsMinBalance, country: 'US', currency: USD,
+        },
+        {
+          __type: 'Account',              stateKey: 'fixedIncomeAccount',
+          name: 'Fixed Income',           role: ACCOUNT_ROLES.FIXED_INCOME,
+          initialValue: p.fixedIncomeBalance, ownerId: 'primary',
+          drawdownPriority: 1,            contributionBasis: 0,
+          country: 'US', currency: USD,
+        },
+        {
+          __type: 'BrokerageAccount',     stateKey: 'usStockAccount',
+          name: 'US Stock',               role: ACCOUNT_ROLES.US_STOCK,
+          initialValue: p.stockBalance,   contributionBasis: p.stockBasis,
+          ownerId: 'primary',             drawdownPriority: 2,
+          country: 'US', currency: USD,
+        },
+        {
+          __type: 'TraditionalIRAAccount', stateKey: 'iraAccount',
+          name: 'Traditional IRA',        role: ACCOUNT_ROLES.IRA,
+          initialValue: p.iraBalance,     contributionBasis: p.iraBasis,
+          ownerId: 'primary',             drawdownPriority: 3,
+          country: 'US', currency: USD,
+        },
+        {
+          __type: 'FourOhOneKAccount',    stateKey: 'k401Account',
+          name: '401(k)',                 role: ACCOUNT_ROLES.K401,
+          initialValue: p.k401Balance,    contributionBasis: p.k401Basis,
+          ownerId: 'primary',             drawdownPriority: 4,
+          country: 'US', currency: USD,
+        },
+        {
+          __type: 'RothAccount',          stateKey: 'rothAccount',
+          name: 'Roth IRA',              role: ACCOUNT_ROLES.ROTH,
+          initialValue: p.rothBalance,    contributionBasis: p.rothBasis,
+          ownerId: 'primary',             drawdownPriority: 5,
+          country: 'US', currency: USD,
+        },
+        {
+          __type: 'Account',              stateKey: 'auSavingsAccount',
+          name: 'AU Savings',             role: ACCOUNT_ROLES.AU_SAVINGS,
+          initialValue: p.auSavingsBalance, ownershipType: 'joint', ownerId: 'primary',
+          minimumBalance: p.auSavingsMinBalance, country: 'AU', currency: AUD,
+        },
+        {
+          __type: 'BrokerageAccount',     stateKey: 'auStockAccount',
+          name: 'AU Stock',               role: ACCOUNT_ROLES.AU_STOCK,
+          initialValue: p.auStockBalance, contributionBasis: p.auStockBasis,
+          ownerId: 'primary',             drawdownPriority: 1,
+          country: 'AU', currency: AUD,
+        },
+        {
+          __type: 'SuperannuationAccount', stateKey: 'superAccount',
+          name: 'Superannuation',          role: ACCOUNT_ROLES.SUPER,
+          initialValue: p.superBalance,   contributionBasis: p.superBasis,
+          ownerId: 'primary',             drawdownPriority: 2,
+          minimumAge: 60,                 country: 'AU', currency: AUD,
+        },
+        // Spouse accounts
+        {
+          __type: 'RothAccount',           stateKey: 'spouseRothAccount',
+          name: 'Roth IRA (Spouse)',       role: ACCOUNT_ROLES.ROTH,
+          initialValue: p.spouseRothBalance, contributionBasis: p.spouseRothBasis,
+          ownerId: 'spouse',               drawdownPriority: 8,
+          country: 'US', currency: USD,
+        },
+        {
+          __type: 'TraditionalIRAAccount', stateKey: 'spouseIraAccount',
+          name: 'Traditional IRA (Spouse)', role: ACCOUNT_ROLES.IRA,
+          initialValue: p.spouseIraBalance, contributionBasis: p.spouseIraBasis,
+          ownerId: 'spouse',               drawdownPriority: 6,
+          country: 'US', currency: USD,
+        },
+        {
+          __type: 'FourOhOneKAccount',     stateKey: 'spouseK401Account',
+          name: '401(k) (Spouse)',         role: ACCOUNT_ROLES.K401,
+          initialValue: p.spouseK401Balance, contributionBasis: p.spouseK401Basis,
+          ownerId: 'spouse',               drawdownPriority: 7,
+          country: 'US', currency: USD,
+        },
+        {
+          __type: 'SuperannuationAccount', stateKey: 'spouseSuperAccount',
+          name: 'Superannuation (Spouse)', role: ACCOUNT_ROLES.SUPER,
+          initialValue: p.spouseSuperBalance, contributionBasis: p.spouseSuperBasis,
+          ownerId: 'spouse',               drawdownPriority: 3,
+          minimumAge: 60,                  country: 'AU', currency: AUD,
+        },
+      ],
+
+      // ── Real Properties ──────────────────────────────────────────────────────
+      realProperties: [
+        {
+          __type: 'RealProperty', name: 'US House', stateKey: 'usHouseProperty',
+          value: 1_000_000, costBasis: 800_000, appreciationRate: 0.04,
+          isPrimaryResidence: true, ownershipType: 'joint', ownerId: 'primary',
+          country: 'US',
+        },
+        {
+          __type: 'RealProperty', name: 'AU House', stateKey: 'auHouseProperty',
+          value: 1_000_000, costBasis: 900_000, appreciationRate: 0.04,
+          isPrimaryResidence: true, ownershipType: 'joint', ownerId: 'primary',
+          country: 'AU',
+        },
+      ],
+
+      // ── Collectibles ─────────────────────────────────────────────────────────
+      collectibles: [
+        {
+          __type: 'Collectible', name: 'Gold', stateKey: 'collectibleAccount',
+          value: 100_000, costBasis: 60_000, appreciationRate: 0.03,
+          ownershipType: 'sole', ownerId: 'primary', country: 'US',
+        },
+      ],
+    };
+  }
+
+  /**
+   * Convenience factory: reset-proof builder that creates the scenario, runs
+   * the full toolset compilation path, and returns the scenario.
+   *
+   * Callers must call ServiceRegistry.reset() before invoking this if they
+   * want an isolated simulation (e.g. MC runner, optimizer, unit tests).
+   *
+   * @param {{ params?, simStart?, simEnd? }} [opts]
+   * @returns {IntlRetirementScenario}
+   */
+  static buildAndCompile({ params = {}, simStart, simEnd } = {}) {
+    const registry = ServiceRegistry.getInstance();
+    const scenario = new IntlRetirementScenario({
+      context: registry.simulationContext,
+      params,
+      simStart,
+      simEnd,
+    });
+    scenario.buildSim();
+
+    const cfg = IntlRetirementScenario.buildDefaultConfig(params, scenario.simStart, scenario.simEnd);
+
+    const hasPersonsOrAccounts = (cfg?.persons?.length > 0) || (cfg?.accounts?.length > 0);
+    if (hasPersonsOrAccounts) {
+      ScenarioSerializer.deserializePersonsAccounts(cfg, registry);
     }
+
+    const toolsetRegistry = new ToolsetRegistry();
+    toolsetRegistry.register(US_BANKING);
+    toolsetRegistry.register(US_TAX);
+    toolsetRegistry.register(US_RETIREMENT);
+    toolsetRegistry.register(AU_BANKING);
+    toolsetRegistry.register(AU_TAX);
+    toolsetRegistry.register(AU_RETIREMENT);
+    toolsetRegistry.register(US_AU_CROSS_BORDER);
+    toolsetRegistry.register(US_REAL_PROPERTY);
+    toolsetRegistry.register(AU_REAL_PROPERTY);
+    toolsetRegistry.register(US_COLLECTIBLES);
+    toolsetRegistry.register(US_ROTH_CONVERSION);
+    new ScenarioCompiler(toolsetRegistry).compile(cfg, registry);
+
+    // Sync initialState with the compiled sim.state so serializers and round-trip
+    // tests get the correct populated state (account balances, currentPeriods, etc.).
+    scenario.initialState = { ...scenario.sim.state };
+
+    return scenario;
+  }
+
+  constructor({ context, params, simStart, simEnd } = {}) {
+    super({
+      context,
+      params,
+      simStart: simStart ?? new Date(Date.UTC(2026, 0, 1)),
+      simEnd:   simEnd ?? new Date(Date.UTC(2041, 0, 1)),
+    });
   }
 }

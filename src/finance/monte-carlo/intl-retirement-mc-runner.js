@@ -121,14 +121,7 @@ export class IntlRetirementMcRunner {
     const runner = new ScenarioRunner({
       createSimulation: (params) => {
         ServiceRegistry.reset();
-        const scenario = new IntlRetirementScenario({
-          context:  ServiceRegistry.getInstance().simulationContext,
-          params,
-          simStart,
-          simEnd,
-        });
-        scenario.buildSim();
-        scenario.loadDefaults();
+        const scenario = IntlRetirementScenario.buildAndCompile({ params, simStart, simEnd });
         scenario.sim.silent = true; // skip bus, clones, diffs — not needed in MC
         return scenario.sim;
       },

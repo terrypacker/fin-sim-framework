@@ -448,9 +448,22 @@ export class BaseApp extends BaseComponent {
 
     // Decide how to populate the scenario's services after buildSim():
     //   1. Full serialized config → deserialize() restores everything.
-    //   2. Custom JSON with toolset → load persons/accounts, then toolset.setup().
-    //   3. Prebuilt or empty → loadDefaults() creates domain objects from scratch.
+    //   2. Declarative toolset array → load persons/accounts, then compile.
+    //   3. Legacy class-based toolset → load persons/accounts, then toolset.setup().
+    //   4. Prebuilt or empty → loadDefaults() creates domain objects from scratch.
     const activeConfig = registry.scenarioService.getActive();
+
+    // For fresh prebuilt scenarios whose class declares toolsets, inject the
+    // declarative config so they route through Path 2 on first and subsequent loads.
+    const ScenarioCls = this.scenario.constructor;
+    const declaredToolsets = ScenarioCls.getToolsets?.() ?? [];
+    if (declaredToolsets.length > 0 && !activeConfig?.toolsets) {
+      const defaultCfg = ScenarioCls.buildDefaultConfig(
+        this.scenario.params, this.scenario.simStart, this.scenario.simEnd
+      );
+      if (defaultCfg && activeConfig) Object.assign(activeConfig, defaultCfg);
+    }
+
     const hasSerializedConfig = (activeConfig?.events?.length   > 0)
                              || (activeConfig?.handlers?.length > 0)
                              || (activeConfig?.actions?.length  > 0)

@@ -66,6 +66,29 @@ export class BaseScenario {
   static getParamSchema() { return []; }
   getParamSchema() { return this.constructor.getParamSchema(); }
 
+  /**
+   * Return the toolset IDs this scenario declares.
+   * Non-empty means the scenario routes through ScenarioCompiler (Path 2) rather
+   * than loadDefaults() (Path 4).
+   * @returns {string[]}
+   */
+  static getToolsets() { return []; }
+  getToolsets() { return this.constructor.getToolsets(); }
+
+  /**
+   * Produce the declarative config that BaseApp merges into activeConfig for a
+   * fresh prebuilt scenario.  Must return an object with at minimum:
+   *   { toolsets, parameters, persons, accounts, realProperties, collectibles }
+   * Returns null for scenarios that don't use the toolset path.
+   *
+   * @param {object}  _params   - merged params plain object
+   * @param {Date}    _simStart
+   * @param {Date}    _simEnd
+   * @returns {object|null}
+   */
+  // eslint-disable-next-line no-unused-vars
+  static buildDefaultConfig(_params, _simStart, _simEnd) { return null; }
+
   constructor({
       id,
       order = 100,

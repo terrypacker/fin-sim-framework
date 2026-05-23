@@ -191,21 +191,13 @@ function makeStubUI() {
 // ─── Build helpers ────────────────────────────────────────────────────────────
 
 /**
- * Build and initialise an IntlRetirementScenario.
+ * Build and initialise an IntlRetirementScenario using the toolset compiler path.
  * Returns { scenario, sim } ready to step.
  */
 function buildScenario(params = {}) {
   ServiceRegistry.reset();
-  const ui       = makeStubUI();
-  const scenario = new IntlRetirementScenario({
-    eventSchedulerUI: ui,
-    context: ServiceRegistry.getInstance().simulationContext,
-    params: params
-  });
-  scenario.buildSim();
-  scenario.loadDefaults();
-  const sim = scenario.sim;
-  return { scenario, sim };
+  const scenario = IntlRetirementScenario.buildAndCompile({ params });
+  return { scenario, sim: scenario.sim };
 }
 
 /**
@@ -1191,14 +1183,9 @@ test('ASSET-13: PATH-4 load overrides restore edited fields on realProperties, c
   assert.strictEqual(config.accounts.find(a => a.stateKey === 'usSavingsAccount')?.minimumBalance, 5000);
   assert.strictEqual(config.persons.find(p => p.id === 'primary')?.lifeExpectancy, 95);
 
-  // Reload: fresh build + loadDefaults() resets everything to code defaults
+  // Reload: fresh buildAndCompile() resets everything to code defaults
   ServiceRegistry.reset();
-  const scenario2 = new IntlRetirementScenario({
-    eventSchedulerUI: makeStubUI(),
-    context: ServiceRegistry.getInstance().simulationContext,
-  });
-  scenario2.buildSim();
-  scenario2.loadDefaults();
+  IntlRetirementScenario.buildAndCompile({});
 
   const registry2 = ServiceRegistry.getInstance();
   // Confirm defaults were reset (pre-override state)

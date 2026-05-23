@@ -91,6 +91,12 @@ export const AU_RETIREMENT = {
 
   state(context) {
     const p = context.parameters;
+    // When US_RETIREMENT ran first it already set up shared state (MONTHLY_EXPENSES
+    // was registered before AU_RETIREMENT.state() is called).  Don't override
+    // isAuResident or the people/metrics/monthlyExpenses patches in that case —
+    // US_AU_CROSS_BORDER will set the correct isAuResident for cross-border scenarios.
+    const sharedAlreadySetup = !!context.schedulesById['MONTHLY_EXPENSES'];
+    context._auSharedDelegated = sharedAlreadySetup;
 
     const people = {};
     for (const person of context.people) {
@@ -107,13 +113,17 @@ export const AU_RETIREMENT = {
     }
 
     const patches = {
-      isAuResident:         true,
-      monthlyExpenses:      p.monthlyExpenses,
-      inflationRates:       { AU: p.inflationRate },
-      inflationAccumulator: { AU: 1.0 },
-      metrics:              {},
-      people,
+      inflationRates:          { AU: p.inflationRate },
+      inflationAccumulator:    { AU: 1.0 },
+      superWithdrawalBlocked:  false,
     };
+
+    if (!sharedAlreadySetup) {
+      patches.isAuResident    = true;
+      patches.monthlyExpenses = p.monthlyExpenses;
+      patches.metrics         = {};
+      patches.people          = people;
+    }
 
     for (const account of context.accounts) {
       if (account.stateKey && patches[account.stateKey] === undefined) {
@@ -131,16 +141,25 @@ export const AU_RETIREMENT = {
     const auStockAccts = accounts.filter(a => a.role === ACCOUNT_ROLES.AU_STOCK);
     const withSS       = people.filter(p => (p.socialSecurityMonthly ?? 0) > 0);
 
-    const schedules = [
-      EventBuilder.eventSeries()
-        .name('Monthly Expenses').type('MONTHLY_EXPENSES')
-        .interval('month-end').enabled(true).color('#F44336').build(),
-      EventBuilder.eventSeries()
-        .name('Monthly Wages').type('MONTHLY_WAGES')
-        .interval('month-end').enabled(true).color('#4CAF50').build(),
-    ];
+    const schedules = [];
 
-    if (withSS.length > 0) {
+    // Skip shared events if US_RETIREMENT already registered them.
+    if (!context.schedulesById['MONTHLY_EXPENSES']) {
+      schedules.push(
+        EventBuilder.eventSeries()
+          .name('Monthly Expenses').type('MONTHLY_EXPENSES')
+          .interval('month-end').enabled(true).color('#F44336').build()
+      );
+    }
+    if (!context.schedulesById['MONTHLY_WAGES']) {
+      schedules.push(
+        EventBuilder.eventSeries()
+          .name('Monthly Wages').type('MONTHLY_WAGES')
+          .interval('month-end').enabled(true).color('#4CAF50').build()
+      );
+    }
+
+    if (withSS.length > 0 && !context.schedulesById['MONTHLY_SS_INCOME']) {
       schedules.push(
         EventBuilder.eventSeries()
           .name('Monthly Social Security').type('MONTHLY_SS_INCOME')
@@ -185,23 +204,26 @@ export const AU_RETIREMENT = {
     const primaryId = auSavAccts[0]?.ownerId ?? (people[0]?.id ?? null);
     const handlers  = [];
 
-    // Monthly Expenses (draws from AU savings)
-    const expHandler = new MonthlyExpensesHandler({
-      stateRegistry:   sr,
-      monthlyExpenses: p.monthlyExpenses,
-      usRole:          ACCOUNT_ROLES.US_SAVINGS, usOwnerId: null,
-      auRole:          ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
-    });
-    expHandler.handledEvents.push(context.schedulesById['MONTHLY_EXPENSES']);
-    handlers.push(expHandler);
+    // Only register shared handlers if US_RETIREMENT did not already do so.
+    if (!context._auSharedDelegated) {
+      const expHandler = new MonthlyExpensesHandler({
+        stateRegistry:   sr,
+        monthlyExpenses: p.monthlyExpenses,
+        usRole:          ACCOUNT_ROLES.US_SAVINGS, usOwnerId: null,
+        auRole:          ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
+      });
+      expHandler.handledEvents.push(context.schedulesById['MONTHLY_EXPENSES']);
+      handlers.push(expHandler);
 
-    // Monthly Wages
-    const wagesHandler = new MonthlyWagesHandler({ stateRegistry: sr });
-    wagesHandler.handledEvents.push(context.schedulesById['MONTHLY_WAGES']);
-    handlers.push(wagesHandler);
+      const wagesHandler = new MonthlyWagesHandler({ stateRegistry: sr });
+      wagesHandler.handledEvents.push(context.schedulesById['MONTHLY_WAGES']);
+      handlers.push(wagesHandler);
+
+      handlers.push(new OutOfFundsHandler());
+    }
 
     // Social Security / AU Age Pension
-    if (withSS.length > 0) {
+    if (withSS.length > 0 && !context._auSharedDelegated) {
       const ssHandler = new MonthlySocialSecurityHandler({ stateRegistry: sr });
       ssHandler.handledEvents.push(context.schedulesById['MONTHLY_SS_INCOME']);
       handlers.push(ssHandler);
@@ -247,8 +269,6 @@ export const AU_RETIREMENT = {
       }
     }
 
-    handlers.push(new OutOfFundsHandler());
-
     return handlers;
   },
 
@@ -257,18 +277,21 @@ export const AU_RETIREMENT = {
     const accountSvc = context.accountService;
     const reducers   = [];
 
-    const recordMetricReducer = ReducerBuilder.metric(null).name('Record Metric').build();
-    recordMetricReducer.reducedActionTypes = ['RECORD_METRIC'];
-    reducers.push(recordMetricReducer);
+    // Skip reducers already registered by US_RETIREMENT.
+    if (!context._auSharedDelegated) {
+      const recordMetricReducer = ReducerBuilder.metric(null).name('Record Metric').build();
+      recordMetricReducer.reducedActionTypes = ['RECORD_METRIC'];
+      reducers.push(recordMetricReducer);
 
-    reducers.push(new ExpenseDebitReducer({ accountService: accountSvc }));
-    reducers.push(new ReplenishSavingsReducer({ accountService: accountSvc }));
-    reducers.push(new SetOutOfFundsDateReducer());
-    reducers.push(new AccumulateDeficitReducer());
-    reducers.push(new OutOfFundsReducer());
+      reducers.push(new ExpenseDebitReducer({ accountService: accountSvc }));
+      reducers.push(new ReplenishSavingsReducer({ accountService: accountSvc }));
+      reducers.push(new SetOutOfFundsDateReducer());
+      reducers.push(new AccumulateDeficitReducer());
+      reducers.push(new OutOfFundsReducer());
 
-    if (p.inflationAdjust) {
-      reducers.push(new InflationAdjustReducer());
+      if (p.inflationAdjust) {
+        reducers.push(new InflationAdjustReducer());
+      }
     }
 
     return reducers;

@@ -10,8 +10,16 @@
 
 
 
-import { ActionDefinition } from '../simulation-framework/actions.js';
-import { ACCOUNT_ROLES } from '../finance/state/account-roles.js';
+import { ActionDefinition }     from '../simulation-framework/actions.js';
+import { ACCOUNT_ROLES }        from '../finance/state/account-roles.js';
+import { Person }               from '../finance/person.js';
+import { Account, CheckingAccount, SavingsAccount } from '../finance/assets/account.js';
+import {
+  InvestmentAccount, BrokerageAccount, FourOhOneKAccount,
+  RothAccount, TraditionalIRAAccount, SuperannuationAccount,
+} from '../finance/assets/investment-account.js';
+import { RealProperty }  from '../finance/assets/real-property.js';
+import { Collectible }   from '../finance/assets/collectible.js';
 
 // ─── Lookup sets for fast-path constructor dispatch ───────────────────────────
 
@@ -158,7 +166,7 @@ export class ScenarioSerializer {
       handlers: handlerService.getAll().map(n => ScenarioSerializer._serializeHandler(n)),
       actions:  actionService.getAll().map(n => ScenarioSerializer._serializeAction(n)),
       reducers: reducerService.getAll().map(n => ScenarioSerializer._serializeReducer(n)),
-      initialState: initialState ?? {},
+      initialState: initialState ? structuredClone(initialState) : {},
       params:   params ?? [],
     };
   }
@@ -330,7 +338,6 @@ export class ScenarioSerializer {
   }
 
   static _makeRealProperty(d) {
-    const { RealProperty } = FinSimLib.Finance;
     const prop = new RealProperty(d.value ?? 0, {
       id:                  d.id,
       name:                d.name                ?? '',
@@ -371,7 +378,6 @@ export class ScenarioSerializer {
   }
 
   static _makeCollectible(d) {
-    const { Collectible } = FinSimLib.Finance;
     const col = new Collectible(d.value ?? 0, {
       id:                  d.id,
       name:                d.name                ?? '',
@@ -752,7 +758,6 @@ export class ScenarioSerializer {
   }
 
   static _makeAccount(d) {
-    const F = FinSimLib.Finance;
     const opts = {
       id:               d.id,
       name:             d.name             ?? '',
@@ -766,29 +771,30 @@ export class ScenarioSerializer {
     };
     // Investment-specific opts
     if (d.contributionBasis !== undefined) {
-      opts.contributionBasis        = d.contributionBasis;
-      opts.earningsBasis            = d.earningsBasis ?? 0;
-      opts.loanBalance              = d.loanBalance   ?? 0;
-      opts.minimumAge               = d.minimumAge    ?? null;
+      opts.contributionBasis = d.contributionBasis;
+      opts.earningsBasis     = d.earningsBasis ?? 0;
+      opts.loanBalance       = d.loanBalance   ?? 0;
+      // Only set minimumAge when the serialized value is non-null; otherwise let
+      // the subclass constructor apply its own default (59.5, 60, etc.).
+      if (d.minimumAge != null) opts.minimumAge = d.minimumAge;
     }
     let account;
     switch (d.__type) {
-      case 'CheckingAccount':       account = new F.CheckingAccount       (d.initialValue ?? 0, opts); break;
-      case 'SavingsAccount':        account = new F.SavingsAccount        (d.initialValue ?? 0, opts); break;
-      case 'BrokerageAccount':      account = new F.BrokerageAccount      (d.initialValue ?? 0, opts); break;
-      case 'FourOhOneKAccount':     account = new F.FourOhOneKAccount     (d.initialValue ?? 0, opts); break;
-      case 'RothAccount':           account = new F.RothAccount           (d.initialValue ?? 0, opts); break;
-      case 'TraditionalIRAAccount': account = new F.TraditionalIRAAccount (d.initialValue ?? 0, opts); break;
-      case 'SuperannuationAccount': account = new F.SuperannuationAccount (d.initialValue ?? 0, opts); break;
+      case 'CheckingAccount':       account = new CheckingAccount       (d.initialValue ?? 0, opts); break;
+      case 'SavingsAccount':        account = new SavingsAccount        (d.initialValue ?? 0, opts); break;
+      case 'BrokerageAccount':      account = new BrokerageAccount      (d.initialValue ?? 0, opts); break;
+      case 'FourOhOneKAccount':     account = new FourOhOneKAccount     (d.initialValue ?? 0, opts); break;
+      case 'RothAccount':           account = new RothAccount           (d.initialValue ?? 0, opts); break;
+      case 'TraditionalIRAAccount': account = new TraditionalIRAAccount (d.initialValue ?? 0, opts); break;
+      case 'SuperannuationAccount': account = new SuperannuationAccount (d.initialValue ?? 0, opts); break;
       default:
-        account = new F.Account(d.initialValue ?? 0, opts);
+        account = new Account(d.initialValue ?? 0, opts);
     }
     if (d.stateKey) account.stateKey = d.stateKey;
     return account;
   }
 
   static _makePerson(d) {
-    const { Person } = FinSimLib.Finance;
     const person = new Person(d.id, new Date(d.birthDate), {
       name:                  d.name ?? '',
       citizen:               d.citizen ?? ['US'],
