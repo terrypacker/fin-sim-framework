@@ -15,9 +15,10 @@ import { Person } from '../finance/person.js';
 import { Account, USD, AUD } from '../finance/assets/account.js';
 import { RealProperty } from '../finance/assets/real-property.js';
 import { Collectible } from '../finance/assets/collectible.js';
-import { UsHouseSaleApplyReducer, UsHouseSaleHandler } from '../finance/account-rules/us/us-real-property-classes.js';
-import { AuHouseSaleApplyReducer, AuHouseSaleHandler } from '../finance/account-rules/au/au-real-property-classes.js';
-import { CollectibleSaleApplyReducer, CollectibleSaleHandler } from '../finance/account-rules/us/us-collectible-classes.js';
+import { US_REAL_PROPERTY }   from './toolsets/us-real-property-toolset.js';
+import { AU_REAL_PROPERTY }   from './toolsets/au-real-property-toolset.js';
+import { US_COLLECTIBLES }    from './toolsets/us-collectibles-toolset.js';
+import { US_ROTH_CONVERSION } from './toolsets/us-roth-conversion-toolset.js';
 import {
   InvestmentAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount,
   BrokerageAccount
@@ -38,7 +39,6 @@ import { ChangeResidencyHandler } from '../finance/handlers/change-residency-han
 import { OutOfFundsHandler } from '../finance/handlers/out-of-funds-handler.js';
 import { MonthlyWagesHandler } from '../finance/handlers/monthly-wages-handler.js';
 import { InflationAdjustReducer } from '../finance/reducers/inflation-adjust-reducer.js';
-import { usBracketGrossIncomeCeiling } from '../finance/tax/us/us-tax-rates-2025.js';
 import { UsSavingsInterestCreditReducer } from '../finance/reducers/us-savings-interest-credit-reducer.js';
 import { ExpenseDebitReducer } from '../finance/reducers/expense-debit-reducer.js';
 import { ReplenishSavingsReducer } from '../finance/reducers/replenish-savings-reducer.js';
@@ -1014,16 +1014,6 @@ export class IntlRetirementScenario extends BaseScenario {
     const outOfFundsHandler = new OutOfFundsHandler();
     handlerService.register(outOfFundsHandler);
 
-    // ── Asset sale handlers (user fires events manually or via one-off events) ─
-    const usHouseSaleHandler = new UsHouseSaleHandler();
-    handlerService.register(usHouseSaleHandler);
-
-    const auHouseSaleHandler = new AuHouseSaleHandler();
-    handlerService.register(auHouseSaleHandler);
-
-    const collectibleSaleHandler = new CollectibleSaleHandler();
-    handlerService.register(collectibleSaleHandler);
-
     // ── Reducers ──────────────────────────────────────────────────────────────
     const { accountService: svc } = ServiceRegistry.getInstance();
 
@@ -1070,49 +1060,33 @@ export class IntlRetirementScenario extends BaseScenario {
     const inflationAdjustReducer = new InflationAdjustReducer();
     reducerService.register(inflationAdjustReducer);
 
-    // ── Asset sale reducers ────────────────────────────────────────────────────
-    const usHouseSaleApplyReducer = new UsHouseSaleApplyReducer({ accountService: svc });
-    reducerService.register(usHouseSaleApplyReducer);
+    // ── Asset sales + Roth conversion — delegated to toolsets ─────────────────
+    const toolsetContext = {
+      startDate:      this.simStart,
+      endDate:        this.simEnd,
+      people:         personService.getAll(),
+      accounts:       accountService.getAll(),
+      realProperties: realPropertyService.getAll(),
+      collectibles:   collectibleService.getAll(),
+      stateRegistry,
+      accountService,
+      schedulesById:  {},
+      parameters: {
+        inflationRate:            p.usInflationRate,
+        rothConversionEnabled:    p.rothConversionEnabled,
+        rothConversionStartYear:  p.rothConversionStartYear,
+        rothConversionEndYear:    p.rothConversionEndYear,
+        rothConversionMaxBracket: p.rothConversionMaxBracket,
+        rothConversionOwner:      p.rothConversionOwner,
+        rothConversionMonth:      p.rothConversionMonth,
+        rothConversionDay:        p.rothConversionDay,
+      },
+    };
 
-    const auHouseSaleApplyReducer = new AuHouseSaleApplyReducer({ accountService: svc });
-    reducerService.register(auHouseSaleApplyReducer);
-
-    const collectibleSaleApplyReducer = new CollectibleSaleApplyReducer({ accountService: svc });
-    reducerService.register(collectibleSaleApplyReducer);
-
-    // ── Roth Conversion policy events ─────────────────────────────────────────
-    if (p.rothConversionEnabled) {
-      const toFiniteYear = (v, fallback) =>
-        (typeof v === 'number' && Number.isFinite(v)) ? v : fallback;
-      const convStartYear = toFiniteYear(
-        p.rothConversionStartYear,
-        p.primaryRetirementDate.getFullYear(),
-      );
-      // Default end: year before primary turns 73 (RMD start under SECURE 2.0)
-      const convEndYear = toFiniteYear(
-        p.rothConversionEndYear,
-        p.primaryBirthDate.getFullYear() + 72,
-      );
-      const owners = p.rothConversionOwner === 'both'
-        ? ['primary', 'spouse']
-        : [p.rothConversionOwner];
-
-      for (let year = convStartYear; year <= convEndYear; year++) {
-        const targetIncome = usBracketGrossIncomeCeiling(
-          p.rothConversionMaxBracket, year, p.usInflationRate
-        );
-        for (const owner of owners) {
-          const iraKey  = owner === 'spouse' ? 'spouseIraAccount' : 'iraAccount';
-          const rothKey = owner === 'spouse' ? 'spouseRothAccount' : 'rothAccount';
-          eventService.createOneOffEvent({
-            name:    `Roth Conversion (${owner}, ${year})`,
-            type:    'ROTH_CONVERSION_POLICY_EVALUATE',
-            date:    new Date(Date.UTC(year, p.rothConversionMonth - 1, p.rothConversionDay)),
-            data:    { targetIncome, iraKey, rothKey },
-            enabled: true,
-          });
-        }
-      }
+    for (const toolset of [US_REAL_PROPERTY, AU_REAL_PROPERTY, US_COLLECTIBLES, US_ROTH_CONVERSION]) {
+      for (const s of toolset.schedules?.(toolsetContext) ?? []) eventService.register(s);
+      for (const h of toolset.handlers?.(toolsetContext) ?? []) handlerService.register(h);
+      for (const r of toolset.reducers?.(toolsetContext) ?? []) reducerService.register(r);
     }
   }
 }
