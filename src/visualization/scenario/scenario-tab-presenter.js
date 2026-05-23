@@ -106,6 +106,14 @@ export class ScenarioTabPresenter {
         this._activeScenario.persons = services.personService.getAll()
           .map(p => ScenarioSerializer._serializePerson(p));
       }
+      if (services.realPropertyService && this._activeScenario) {
+        this._activeScenario.realProperties = services.realPropertyService.getAll()
+          .map(p => ScenarioSerializer._serializeRealProperty(p));
+      }
+      if (services.collectibleService && this._activeScenario) {
+        this._activeScenario.collectibles = services.collectibleService.getAll()
+          .map(c => ScenarioSerializer._serializeCollectible(c));
+      }
       this._controller.save(this._activeScenario);
       this._view._refreshScenarioSelect(this._controller.getAll(), this._activeScenario);
     };
