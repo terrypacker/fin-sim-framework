@@ -29,7 +29,10 @@ import { PrebuiltScenario } from '../../src/scenarios/prebuilt-scenario.js';
 function makePrebuilt(id, order = 1) {
   const factory = jest.fn((_p, _i) => ({ id, buildSim: jest.fn(), loadDefaults: jest.fn() }));
   return new PrebuiltScenario({
-    id, label: `Label ${id}`, order, simStart: '2026-01-01', simEnd: '2041-01-01', factory,
+    id, label: `Label ${id}`, order,
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd: new Date(Date.UTC(2041, 0, 1)),
+    factory,
   });
 }
 
@@ -43,7 +46,14 @@ function makeStack({ prebuiltScenarios = [] } = {}) {
   return { registry, service: new ScenarioService({}, registry) };
 }
 
-beforeEach(() => { localStorage.clear(); });
+beforeEach(() => {
+  localStorage.clear();
+  if (typeof global.structuredClone !== 'function') {
+    global.structuredClone = (obj) => JSON.parse(JSON.stringify(obj));
+    // Note: JSON.parse/stringify is a basic fallback.
+    // For full support (Dates, Sets, etc.), use a real polyfill like 'core-js'.
+  }
+});
 
 // ═════════════════════════════════════════════════════════════════════════════
 // getParams()
@@ -184,7 +194,10 @@ test('newScenario: pre-populates params from scenarioClass.getParamSchema()', ()
   ];
   const scenarioClass = { getParamSchema: () => fakeSchema };
   const pb = new PrebuiltScenario({
-    id: 'test', label: 'Test', order: 1, factory: jest.fn(), scenarioClass,
+    id: 'test', label: 'Test', order: 1,
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd: new Date(Date.UTC(2041, 0, 1)),
+    factory: jest.fn(), scenarioClass,
   });
   const { registry, service } = makeStack({ prebuiltScenarios: [pb] });
   const created = service.newScenario(registry.getActive());

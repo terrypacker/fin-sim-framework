@@ -80,11 +80,13 @@ export class ScenarioTabPresenter {
     }
 
     this._view.onStartChange = (startDate) => {
-      this._activeScenario.simStart = startDate
+      //TODO #268 Need to deal with timezone here
+      this._activeScenario.simStart = new Date(startDate);
     }
 
     this._view.onEndChange = (endDate) => {
-      this._activeScenario.simEnd = endDate
+      //TODO #268 Need to deal with timezone here
+      this._activeScenario.simEnd = new Date(endDate);
     }
 
     this._view.onInitialStateChange = (initialState) => {

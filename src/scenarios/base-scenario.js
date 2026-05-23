@@ -104,10 +104,20 @@ export class BaseScenario {
     this.context = context;
     this.initialState = initialState;
     this.params = params;
+    //Validate the inputs to be dates
+    if(!this._isDate(simStart)) {
+      throw new Error('Must supply simStart Date to scenario');
+    }
+    if(!this._isDate(simEnd)) {
+      throw new Error('Must supply simEnd Date to scenario');
+    }
     this.simStart = simStart;
     this.simEnd = simEnd;
   }
 
+  _isDate(date) {
+    return date instanceof Date && !isNaN(date);
+  }
   // ─── Simulation accessor ──────────────────────────────────────────────────
 
   /**

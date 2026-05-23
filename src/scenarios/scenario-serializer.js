@@ -120,6 +120,39 @@ const _NO_ARG_HANDLERS = new Set([
 
 export class ScenarioSerializer {
 
+  static toDateStr(d) {
+    if (!d) return null;
+    if (d instanceof Date) return d.toISOString().slice(0, 10);
+    return String(d).slice(0, 10);
+  }
+
+  //TODO Clean up API
+  //TODO Support toolsets export here?
+  //TODO Params vs parameters
+  static serializeScenario(scenario) {
+    return {
+      id: scenario.id,
+      name: scenario.name,
+      order: scenario.order,
+      active: scenario.active,
+      prebuilt: scenario.prebuilt,
+      scenarioId:   scenario?.scenarioId ?? null,
+      simStart: this.toDateStr(scenario.simStart),
+      simEnd:   this.toDateStr(scenario.simEnd),
+      persons:        (scenario.persons  ?? []).map(n => ScenarioSerializer._serializePerson(n)),
+      accounts:       (scenario.accounts ?? []).map(n => ScenarioSerializer._serializeAccount(n)),
+      realProperties: (scenario.realProperty ?? []).map(n => ScenarioSerializer._serializeRealProperty(n)),
+      collectibles:   (scenario.collectibles ?? []).map(n => ScenarioSerializer._serializeCollectible(n)),
+      events:   (scenario.events ?? []).map(n => ScenarioSerializer._serializeEvent(n)),
+      handlers: (scenario.handlers ?? []).map(n => ScenarioSerializer._serializeHandler(n)),
+      actions:  (scenario.actions ?? []).map(n => ScenarioSerializer._serializeAction(n)),
+      reducers: (scenario.reducers ?? []).map(n => ScenarioSerializer._serializeReducer(n)),
+      initialState: scenario.initialState ? structuredClone(scenario.initialState) : {},
+      params:   scenario.params ?? [],
+      toolsets: scenario?.toolsets ?? []
+    };
+  }
+
   /**
    * Serialize the current scenario state into a config object.
    *
@@ -143,12 +176,6 @@ export class ScenarioSerializer {
   static serialize(services, id, name, order, active, simStart, simEnd, initialState, params) {
     const { eventService, handlerService, actionService, reducerService, personService, accountService } = services;
 
-    const toDateStr = (d) => {
-      if (!d) return null;
-      if (d instanceof Date) return d.toISOString().slice(0, 10);
-      return String(d).slice(0, 10);
-    };
-
     const { realPropertyService, collectibleService } = services;
     return {
       id,
@@ -156,8 +183,8 @@ export class ScenarioSerializer {
       order,
       active: active,
       prebuilt: false,
-      simStart: toDateStr(simStart),
-      simEnd:   toDateStr(simEnd),
+      simStart: this.toDateStr(simStart),
+      simEnd:   this.toDateStr(simEnd),
       persons:        (personService?.getAll()          ?? []).map(n => ScenarioSerializer._serializePerson(n)),
       accounts:       (accountService?.getAll()         ?? []).map(n => ScenarioSerializer._serializeAccount(n)),
       realProperties: (realPropertyService?.getAll()    ?? []).map(n => ScenarioSerializer._serializeRealProperty(n)),

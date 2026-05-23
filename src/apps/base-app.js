@@ -471,7 +471,7 @@ export class BaseApp extends BaseComponent {
 
     if (hasSerializedConfig) {
       ScenarioSerializer.deserialize(activeConfig, registry);
-    } else if (activeConfig?.toolsets && Array.isArray(activeConfig.toolsets)) {
+    } else if (activeConfig?.toolsets && Array.isArray(activeConfig.toolsets) && activeConfig.toolsets.length > 0) {
       const hasPersonsOrAccounts = (activeConfig?.persons?.length  > 0)
                                 || (activeConfig?.accounts?.length > 0);
       if (hasPersonsOrAccounts) {

@@ -43,8 +43,8 @@ const PREBUILT_SCENARIOS = [
     order:         1,
     prebuilt:      true,
     active:        true,
-    simStart:      '2026-01-01',
-    simEnd:        '2041-01-01',
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:  new Date(Date.UTC(2041, 0, 1)),
     scenarioClass: IntlRetirementScenario,
     factory:  (params, _initialState, simStart, simEnd) => new IntlRetirementScenario({
       context: ServiceRegistry.getInstance().simulationContext,
@@ -58,8 +58,8 @@ const PREBUILT_SCENARIOS = [
     label:    'Workbench Default',
     order:    2,
     prebuilt: true,
-    simStart: '2026-01-01',
-    simEnd:   '2041-01-01',
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:  new Date(Date.UTC(2041, 0, 1)),
     factory:  (_params, _initialState, simStart, simEnd) => new SimulationWorkbenchDefaultScenario({
       context: ServiceRegistry.getInstance().simulationContext,
       simStart: simStart,
