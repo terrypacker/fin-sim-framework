@@ -46,7 +46,7 @@ import { OneOffEvent }     from '../../src/simulation-framework/events/one-off-e
 import { ServiceRegistry }    from '../../src/services/service-registry.js';
 import { BaseScenario }       from '../../src/scenarios/base-scenario.js';
 import { ScenarioSerializer } from '../../src/scenarios/scenario-serializer.js';
-import { UsRetirementToolset } from '../../src/scenarios/toolsets/us-retirement-toolset.js';
+import { ScenarioLoader } from '../../src/scenarios/scenario-loader.js';
 import { UsTaxRates2025 }      from '../../src/finance/tax/us/us-tax-rates-2025.js';
 
 import { TaxService }           from '../../src/finance/tax-service.js';
@@ -252,10 +252,10 @@ globalThis.FinSimLib = {
  * this in { "scenarios": [{ "id": "u:1", ... }] }, but tests use it directly.
  */
 const JOE_CONFIG = {
-  toolset:  'us-retirement',
+  toolsets: ['US_RETIREMENT'],
   simStart: '2026-05-01',
   simEnd:   '2050-01-01',
-  assumptions: {
+  parameters: {
     inflationRate:           0.03,
     usSavingsInterestRate:   0.03,
     iraGrowthRate:           0.07,
@@ -264,8 +264,9 @@ const JOE_CONFIG = {
     brokerageGrowthRate:     0.05,
     brokerageDividendRate:   0.02,
     dividendReinvest:        false,
+    monthlyExpenses:         10_000,
+    inflationAdjust:         true,
   },
-  expenses: { monthlyExpenses: 10_000, inflationAdjust: true },
   persons: [
     {
       __type:                'Person',
@@ -381,11 +382,7 @@ function loadToolsetScenario(config) {
   });
   scenario.buildSim();
 
-  const hasPersonsOrAccounts = (config.persons?.length > 0) || (config.accounts?.length > 0);
-  if (hasPersonsOrAccounts) {
-    ScenarioSerializer.deserializePersonsAccounts(config, services);
-  }
-  UsRetirementToolset.setup(config, services);
+  new ScenarioLoader().load(config, services);
 
   return { scenario, sim: scenario.sim };
 }
@@ -570,7 +567,10 @@ test('joe: single person auto-detected as single filer (usFilingSingle=true)', (
 });
 
 test('joe: explicit usFilingSingle=false overrides single-person auto-detect', () => {
-  const config = { ...JOE_CONFIG, usFilingSingle: false };
+  const config = {
+    ...JOE_CONFIG,
+    parameters: { ...JOE_CONFIG.parameters, usFilingSingle: false },
+  };
   const { sim } = loadToolsetScenario(config);
   assert.strictEqual(sim.state.usFilingSingle, false,
     'explicit usFilingSingle=false should be honored even with 1 person');

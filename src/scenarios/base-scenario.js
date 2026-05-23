@@ -14,43 +14,18 @@ import {ServiceRegistry} from "../services/service-registry.js";
 /**
  * Base class for simulation scenarios.
  *
- * ### Responsibilities
- *
- * BaseScenario is now a thin UI coordinator:
+ * BaseScenario is a thin UI coordinator:
  *   - Constructs the Simulation via buildSim().
- *   - Delegates UI button "+" creation events to the appropriate service
- *     create* methods (which publish CREATE on the bus).
  *   - Provides a convenience `sim` getter.
- *
- * ### What lives elsewhere
  *
  * All simulation-wiring logic (scheduling events, registering handlers,
  * wiring reducers, and the inverse operations on UPDATE / DELETE) lives in
- * ServiceRegistry.simulationSync (SimulationSync).  SimulationSync subscribes
+ * ServiceRegistry.simulationSync (SimulationSync). SimulationSync subscribes
  * to the shared bus and keeps the active Simulation in sync automatically.
  *
- * ConfigBuilder has its own bus subscription that handles graph node creation.
- *
- * ### CustomScenario pattern
- *
- * Subclasses implement loadDefaults() and populate the scenario by inserting
- * items directly into the services.  The bus takes care of the rest:
- *
- *   loadDefaults() {
- *     const sr = ServiceRegistry.getInstance();
- *     const event = new EventSeries({ name: 'Monthly', type: 'MONTH_END',
- *       interval: 'month-end', enabled: true, color: '#F44336' });
- *     sr.eventService.register(event);   // → sim scheduled + graph node added
- *
- *     const action = new AmountAction('PAY', 'Pay Salary', 1200);
- *     sr.actionService.register(action); // → graph node added
- *
- *     const handler = new HandlerEntry(fn, 'Month Handler');
- *     handler.handledEvents.push(event);
- *     handler.generatedActionTypes.push(action.type);
- *     handler.generatedActionDefinitions.push(ActionDefinition.fromAction(action));
- *     sr.handlerService.register(handler); // → sim wired + graph node added
- *   }
+ * Scenario population is owned by ScenarioLoader, which dispatches between
+ * graph deserialization (saved snapshot) and toolset compilation (declarative
+ * inputs). Subclasses declare toolsets via `getToolsets()` + `buildDefaultConfig()`.
  */
 export class BaseScenario {
   /**
@@ -67,9 +42,8 @@ export class BaseScenario {
   getParamSchema() { return this.constructor.getParamSchema(); }
 
   /**
-   * Return the toolset IDs this scenario declares.
-   * Non-empty means the scenario routes through ScenarioCompiler (Path 2) rather
-   * than loadDefaults() (Path 4).
+   * Return the toolset IDs this scenario declares. Non-empty means the
+   * scenario routes through ScenarioCompiler on first load.
    * @returns {string[]}
    */
   static getToolsets() { return []; }
@@ -172,13 +146,4 @@ export class BaseScenario {
   buildDefaultInitialState(_params) {
     return null;
   }
-
-  /**
-   * Subclasses implement loadDefaults() and populate the scenario by inserting
-   * items directly into the services.  The bus takes care of the rest.
-   */
-  loadDefaults() {
-
-  }
-
 }

@@ -113,11 +113,10 @@ import { QueryApi } from './query/query-api.js';
 import { BaseScenario } from './scenarios/base-scenario.js';
 import { INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, IntlRetirementScenario } from './scenarios/intl-retirement-scenario.js';
 import { PrebuiltScenario } from './scenarios/prebuilt-scenario.js';
+import { ScenarioLoader } from './scenarios/scenario-loader.js';
 import { ScenarioRegistry } from './scenarios/scenario-registry.js';
 import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
 import { ScenarioStorage } from './scenarios/scenario-storage.js';
-import { ScenarioToolsetRegistry } from './scenarios/scenario-toolset-registry.js';
-import { SimulationWorkbenchDefaultScenario } from './scenarios/simulation-workbench-default-scenario.js';
 import { AU_BANKING } from './scenarios/toolsets/au-banking-toolset.js';
 import { AU_REAL_PROPERTY } from './scenarios/toolsets/au-real-property-toolset.js';
 import { AU_RETIREMENT } from './scenarios/toolsets/au-retirement-toolset.js';
@@ -128,7 +127,7 @@ import { US_AU_CROSS_BORDER } from './scenarios/toolsets/us-au-cross-border-tool
 import { US_BANKING } from './scenarios/toolsets/us-banking-toolset.js';
 import { US_COLLECTIBLES } from './scenarios/toolsets/us-collectibles-toolset.js';
 import { US_REAL_PROPERTY } from './scenarios/toolsets/us-real-property-toolset.js';
-import { UsRetirementToolset, US_RETIREMENT } from './scenarios/toolsets/us-retirement-toolset.js';
+import { US_RETIREMENT } from './scenarios/toolsets/us-retirement-toolset.js';
 import { US_ROTH_CONVERSION } from './scenarios/toolsets/us-roth-conversion-toolset.js';
 import { US_TAX } from './scenarios/toolsets/us-tax-toolset.js';
 import { ActionService } from './services/action-service.js';
@@ -586,11 +585,10 @@ export const Scenarios = {
   INTL_RETIREMENT_PARAM_SCHEMA,
   IntlRetirementScenario,
   PrebuiltScenario,
+  ScenarioLoader,
   ScenarioRegistry,
   ScenarioSerializer,
   ScenarioStorage,
-  ScenarioToolsetRegistry,
-  SimulationWorkbenchDefaultScenario,
   AU_BANKING,
   AU_REAL_PROPERTY,
   AU_RETIREMENT,
@@ -601,7 +599,6 @@ export const Scenarios = {
   US_BANKING,
   US_COLLECTIBLES,
   US_REAL_PROPERTY,
-  UsRetirementToolset,
   US_RETIREMENT,
   US_ROTH_CONVERSION,
   US_TAX,

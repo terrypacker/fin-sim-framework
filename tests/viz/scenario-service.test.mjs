@@ -129,7 +129,7 @@ test('createActiveScenario: uses scenarioId to find matching prebuilt factory', 
   expect(pbB.factory).toHaveBeenCalledWith({}, {}, new Date(expectedStart), new Date(expectedEnd));
 });
 
-test('createActiveScenario: uses fallbackFactory for user scenario without scenarioId match', () => {
+test('createActiveScenario: falls back to first prebuilt for user scenario without scenarioId match', () => {
   const pbA = makePrebuilt('alpha', 1);
   const pbB = makePrebuilt('beta',  2);
   const expectedStart = '2025-01-01';
@@ -139,20 +139,19 @@ test('createActiveScenario: uses fallbackFactory for user scenario without scena
     scenarios: [{ name: 'S', params: [], initialState: {}, simStart: expectedStart, simEnd: expectedEnd }],
   });
   const { service } = makeStack({ prebuiltScenarios: [pbA, pbB] });
-  const fallback = jest.fn((_p, _i) => ({ buildSim: jest.fn(), loadDefaults: jest.fn() }));
-  service.setFallbackFactory(fallback);
   service.createActiveScenario();
-  expect(pbA.factory).not.toHaveBeenCalled();
-  expect(fallback).toHaveBeenCalledWith(
+  // First prebuilt by order (pbA) is the fallback target.
+  expect(pbA.factory).toHaveBeenCalledWith(
     {}, {}, new Date(expectedStart), new Date(expectedEnd)
   );
+  expect(pbB.factory).not.toHaveBeenCalled();
 });
 
-test('createActiveScenario: throws when no factory available', () => {
+test('createActiveScenario: throws when there is no active scenario', () => {
   const registry = new ScenarioRegistry(new ScenarioStorage());
   registry.loadPrebuilt([]);
   const service = new ScenarioService({}, registry);
-  assert.throws(() => service.createActiveScenario(), /no scenario factory/i);
+  assert.throws(() => service.createActiveScenario(), /no active scenario/i);
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -216,12 +215,12 @@ test('_getParams: converts Number params to flat object', () => {
     lastUsed: 'u:0',
     scenarios: [{ name: 'S', params: [{ name: 'drift', type: 'Number', value: 0.07 }] }],
   });
-  const { service } = makeStack({ prebuiltScenarios: [makePrebuilt('alpha')] });
-  // Use fallback factory (no scenarioId) to observe what params the factory receives.
-  const fallback = jest.fn((_p, _i) => ({ buildSim: jest.fn(), loadDefaults: jest.fn() }));
-  service.setFallbackFactory(fallback);
+  // User scenario has no scenarioId match → falls back to first prebuilt's factory,
+  // which we observe to see what params it received.
+  const pb = makePrebuilt('alpha');
+  const { service } = makeStack({ prebuiltScenarios: [pb] });
   service.createActiveScenario();
-  const callArgs = fallback.mock.calls[0][0];
+  const callArgs = pb.factory.mock.calls[0][0];
   assert.strictEqual(callArgs.drift, 0.07);
 });
 

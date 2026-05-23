@@ -40,7 +40,7 @@ import { OneOffEvent }     from '../../src/simulation-framework/events/one-off-e
 import { ServiceRegistry }    from '../../src/services/service-registry.js';
 import { BaseScenario }       from '../../src/scenarios/base-scenario.js';
 import { ScenarioSerializer } from '../../src/scenarios/scenario-serializer.js';
-import { UsRetirementToolset } from '../../src/scenarios/toolsets/us-retirement-toolset.js';
+import { ScenarioLoader } from '../../src/scenarios/scenario-loader.js';
 
 import { TaxService }           from '../../src/finance/tax-service.js';
 import { DynamicTaxReducer }    from '../../src/finance/tax/dynamic-tax-reducer.js';
@@ -227,16 +227,16 @@ globalThis.FinSimLib = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * A minimal custom JSON scenario with toolset: 'us-retirement'.
+ * A minimal declarative scenario using the US_RETIREMENT toolset.
  * Person has wages so MonthlyWagesHandler produces income.
  * US Savings starts at $30k with $6k/month expenses → should drop by ~$18k after 3 months
  * (before wages come in — wages of $8k/month should largely offset expenses).
  */
 const CUSTOM_JSON = {
-  toolset:   'us-retirement',
-  simStart:  '2026-01-01',
-  simEnd:    '2041-01-01',
-  assumptions: {
+  toolsets: ['US_RETIREMENT'],
+  simStart: '2026-01-01',
+  simEnd:   '2041-01-01',
+  parameters: {
     inflationRate:          0.03,
     usSavingsInterestRate:  0.03,
     iraGrowthRate:          0.07,
@@ -244,8 +244,9 @@ const CUSTOM_JSON = {
     brokerageGrowthRate:    0.05,
     brokerageDividendRate:  0.02,
     dividendReinvest:       false,
+    monthlyExpenses:        6_000,
+    inflationAdjust:        false,
   },
-  expenses: { monthlyExpenses: 6_000, inflationAdjust: false },
   persons: [
     {
       __type:                'Person',
@@ -312,8 +313,9 @@ const CUSTOM_JSON = {
 };
 
 /**
- * Load and run a toolset scenario from a custom JSON config.
- * Returns { scenario, sim } after loading persons/accounts and running toolset.setup().
+ * Load and run a toolset scenario from a declarative JSON config.
+ * Returns { scenario, sim } after running ScenarioLoader.load() (persons/accounts
+ * are deserialized and US_RETIREMENT is compiled).
  */
 function loadToolsetScenario(config) {
   ServiceRegistry.reset();
@@ -326,11 +328,7 @@ function loadToolsetScenario(config) {
   });
   scenario.buildSim();
 
-  const hasPersonsOrAccounts = (config.persons?.length > 0) || (config.accounts?.length > 0);
-  if (hasPersonsOrAccounts) {
-    ScenarioSerializer.deserializePersonsAccounts(config, services);
-  }
-  UsRetirementToolset.setup(config, services);
+  new ScenarioLoader().load(config, services);
 
   return { scenario, sim: scenario.sim };
 }
@@ -439,15 +437,16 @@ test('toolset: deserializePersonsAccounts loads accounts into accountService', (
  */
 function makeSsConfig({ socialSecurityMonthly, retirementDate, monthlyWage = 0 }) {
   return {
-    toolset:  'us-retirement',
+    toolsets: ['US_RETIREMENT'],
     simStart: '2026-01-01',
     simEnd:   '2041-01-01',
-    assumptions: {
+    parameters: {
       inflationRate:         0.03,
       usSavingsInterestRate: 0,
       iraGrowthRate:         0.07,
+      monthlyExpenses:       0,
+      inflationAdjust:       false,
     },
-    expenses: { monthlyExpenses: 0, inflationAdjust: false },
     persons: [
       {
         __type:                'Person',
@@ -555,8 +554,11 @@ test('toolset: 2 persons → usFilingSingle is false (auto-detect)', () => {
     'two persons in config should auto-detect as married filing jointly');
 });
 
-test('toolset: config.usFilingSingle=false overrides auto-detect for 1 person', () => {
-  const config = { ...CUSTOM_JSON, usFilingSingle: false };
+test('toolset: parameters.usFilingSingle=false overrides auto-detect for 1 person', () => {
+  const config = {
+    ...CUSTOM_JSON,
+    parameters: { ...CUSTOM_JSON.parameters, usFilingSingle: false },
+  };
   const { sim } = loadToolsetScenario(config);
   assert.strictEqual(sim.state.usFilingSingle, false,
     'explicit usFilingSingle=false should override auto-detect');

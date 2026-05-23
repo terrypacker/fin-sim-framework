@@ -118,6 +118,20 @@ const _NO_ARG_HANDLERS = new Set([
   'AuSeIncomeHandler',
 ]);
 
+/**
+ * True when `node` looks like a record previously emitted by one of the
+ * _serialize* helpers: a plain object (own prototype is Object.prototype) that
+ * already carries a `__type` discriminator. Used by the _serialize* helpers to
+ * remain idempotent — `serializeScenario` is sometimes called on a scenario
+ * whose graph arrays were pre-serialized by `onSave`, and the live-instance
+ * fields those helpers read (handlerClass, reducerType, handledEvents, …) are
+ * absent on plain records, which would silently clobber data otherwise.
+ */
+function _isAlreadySerialized(node) {
+  return node && typeof node === 'object' && typeof node.__type === 'string'
+      && Object.getPrototypeOf(node) === Object.prototype;
+}
+
 export class ScenarioSerializer {
 
   static toDateStr(d) {
@@ -252,7 +266,26 @@ export class ScenarioSerializer {
     }
   }
 
-  static deserialize(config, services) {
+  /**
+   * Returns true when `config` carries a serialized graph snapshot
+   * (events/handlers/actions/reducers populated by a prior save).
+   * Persons / accounts / real-properties / collectibles do not count — those
+   * may be present without a snapshot when the scenario was built declaratively.
+   */
+  static hasSerializedGraph(config) {
+    return (config?.events?.length   > 0)
+        || (config?.handlers?.length > 0)
+        || (config?.actions?.length  > 0)
+        || (config?.reducers?.length > 0);
+  }
+
+  /**
+   * Restore a previously serialized graph (events / handlers / actions /
+   * reducers) into the services. Persons / accounts / real-properties /
+   * collectibles are also restored as a convenience, so this is the single
+   * call that fully rebuilds the services from a snapshot.
+   */
+  static deserializeGraph(config, services) {
     const { eventService, handlerService, actionService, reducerService } = services;
 
     // 0. Persons + accounts — delegate to the dedicated helper.
@@ -441,6 +474,7 @@ export class ScenarioSerializer {
   }
 
   static _serializeEvent(node) {
+    if (_isAlreadySerialized(node)) return node;
     const d = {
       __type:   node.eventType === 'OneOffEvent' ? 'OneOffEvent' : 'EventSeries',
       id:       node.id,
@@ -467,6 +501,7 @@ export class ScenarioSerializer {
   }
 
   static _serializeHandler(node) {
+    if (_isAlreadySerialized(node)) return node;
     const d = {
       __type:                    node.handlerClass ?? 'HandlerEntry',
       id:                        node.id,
@@ -560,6 +595,8 @@ export class ScenarioSerializer {
   }
 
   static _serializeAction(node) {
+    if (_isAlreadySerialized(node)) return node;
+
     const C = FinSimLib.Engine;
     let typeName;
     // Check subclasses before superclasses (order matters for instanceof).
@@ -583,6 +620,7 @@ export class ScenarioSerializer {
   }
 
   static _serializeReducer(node) {
+    if (_isAlreadySerialized(node)) return node;
     const d = {
       __type:             node.reducerType ?? 'FieldReducer',
       id:                 node.id,
@@ -867,7 +905,8 @@ export class ScenarioSerializer {
     let action;
     switch (d.__type) {
       case 'Action':
-        action = new C.Action(d.type, d.name)
+        action = new C.Action(d.type, d.name);
+        break;
       case 'FieldAction':
         action = new C.FieldAction(d.type, d.name, d.fieldName);
         break;

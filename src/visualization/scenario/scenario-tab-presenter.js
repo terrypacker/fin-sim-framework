@@ -100,22 +100,21 @@ export class ScenarioTabPresenter {
 
     this._view.onSave = () => {
       const services = ServiceRegistry.getInstance();
-      if (services.accountService && this._activeScenario) {
-        this._activeScenario.accounts = services.accountService.getAll()
-          .map(a => ScenarioSerializer._serializeAccount(a));
-      }
-      if (services.personService && this._activeScenario) {
-        this._activeScenario.persons = services.personService.getAll()
-          .map(p => ScenarioSerializer._serializePerson(p));
-      }
-      if (services.realPropertyService && this._activeScenario) {
-        this._activeScenario.realProperties = services.realPropertyService.getAll()
-          .map(p => ScenarioSerializer._serializeRealProperty(p));
-      }
-      if (services.collectibleService && this._activeScenario) {
-        this._activeScenario.collectibles = services.collectibleService.getAll()
-          .map(c => ScenarioSerializer._serializeCollectible(c));
-      }
+      if (!this._activeScenario) return;
+
+      // Domain objects
+      this._activeScenario.persons        = (services.personService?.getAll()        ?? []).map(p => ScenarioSerializer._serializePerson(p));
+      this._activeScenario.accounts       = (services.accountService?.getAll()       ?? []).map(a => ScenarioSerializer._serializeAccount(a));
+      this._activeScenario.realProperties = (services.realPropertyService?.getAll()  ?? []).map(p => ScenarioSerializer._serializeRealProperty(p));
+      this._activeScenario.collectibles   = (services.collectibleService?.getAll()   ?? []).map(c => ScenarioSerializer._serializeCollectible(c));
+
+      // Graph snapshot — captured so subsequent loads take the deserialize
+      // branch in ScenarioLoader rather than recompiling from toolsets.
+      this._activeScenario.events   = (services.eventService?.getAll()   ?? []).map(n => ScenarioSerializer._serializeEvent(n));
+      this._activeScenario.handlers = (services.handlerService?.getAll() ?? []).map(n => ScenarioSerializer._serializeHandler(n));
+      this._activeScenario.actions  = (services.actionService?.getAll()  ?? []).map(n => ScenarioSerializer._serializeAction(n));
+      this._activeScenario.reducers = (services.reducerService?.getAll() ?? []).map(n => ScenarioSerializer._serializeReducer(n));
+
       this._controller.save(this._activeScenario);
       this._view._refreshScenarioSelect(this._controller.getAll(), this._activeScenario);
     };

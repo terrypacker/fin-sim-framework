@@ -341,8 +341,8 @@ test('serialize → deserialize round-trip reconstructs all TaxService reducers'
   });
   scenario2.buildSim();
   assert.doesNotThrow(
-    () => ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance()),
-    'ScenarioSerializer.deserialize should not throw for any TaxService reducer type'
+    () => ScenarioSerializer.deserializeGraph(config, ServiceRegistry.getInstance()),
+    'ScenarioSerializer.deserializeGraph should not throw for any TaxService reducer type'
   );
 
   const reducerTypes = ServiceRegistry.getInstance().reducerService.getAll()
@@ -386,7 +386,7 @@ test('serialize → deserialize round-trip reconstructs all TaxService handlers'
     context: ServiceRegistry.getInstance().simulationContext
   });
   scenario2.buildSim();
-  ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(config, ServiceRegistry.getInstance());
 
   const handlerTypes = ServiceRegistry.getInstance().handlerService.getAll()
     .map(h => h.handlerClass);
@@ -460,7 +460,7 @@ test('DynamicTaxReducer round-trip preserves cc and actionType', () => {
     context: ServiceRegistry.getInstance().simulationContext
   });
   scenario2.buildSim();
-  ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(config, ServiceRegistry.getInstance());
 
   const dynamicReducers = ServiceRegistry.getInstance().reducerService.getAll()
     .filter(r => r.reducerType === 'DynamicTaxReducer');
@@ -693,7 +693,7 @@ test('SPOUSE-6: serialize → deserialize round-trip preserves spouse accounts',
   });
   scenario2.buildSim();
   assert.doesNotThrow(
-    () => ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance()),
+    () => ScenarioSerializer.deserializeGraph(config, ServiceRegistry.getInstance()),
     'deserialize should not throw with spouse accounts'
   );
 
@@ -754,7 +754,7 @@ test('rothConversionEndYear: Date object falls back to RMD year', () => {
 
 /**
  * Build and initialise an IntlRetirementScenario, serialize it, then rebuild
- * it as a BaseScenario via ScenarioSerializer.deserialize() — exactly the path
+ * it as a BaseScenario via ScenarioSerializer.deserializeGraph() — exactly the path
  * the browser takes when a user exports and re-imports a scenario.
  */
 function buildRoundTripped(params = {}) {
@@ -782,7 +782,7 @@ function buildRoundTripped(params = {}) {
     simEnd:       orig.simEnd,
   });
   scenario2.buildSim();
-  ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(config, ServiceRegistry.getInstance());
 
   return { scenario: scenario2, sim: scenario2.sim };
 }
@@ -1030,7 +1030,7 @@ test('ASSET-11: realProperties and collectibles survive serialize → deserializ
   scenario2.buildSim();
 
   assert.doesNotThrow(
-    () => ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance()),
+    () => ScenarioSerializer.deserializeGraph(config, ServiceRegistry.getInstance()),
     'deserialize should not throw with realProperties and collectibles'
   );
 
@@ -1083,7 +1083,7 @@ test('ASSET-12: realProperties and collectibles survive full storage round-trip 
   scenario2.buildSim();
 
   assert.doesNotThrow(
-    () => ScenarioSerializer.deserialize(restoredConfig, ServiceRegistry.getInstance()),
+    () => ScenarioSerializer.deserializeGraph(restoredConfig, ServiceRegistry.getInstance()),
     'deserialize should not throw after storage round-trip'
   );
 

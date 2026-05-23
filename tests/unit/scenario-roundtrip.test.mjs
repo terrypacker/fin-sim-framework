@@ -219,7 +219,7 @@ function restoreFromConfig(config) {
     simEnd:       new Date(config.simEnd),
   });
   scenario.buildSim();
-  ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(config, ServiceRegistry.getInstance());
   return { scenario, sim: scenario.sim };
 }
 
