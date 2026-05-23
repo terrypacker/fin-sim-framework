@@ -717,8 +717,8 @@ export class IntlRetirementScenario extends BaseScenario {
     //    Handlers/reducers are registered in loadDefaults() (phase 2) so that
     //    loading a saved config restores the serialized items instead of
     //    creating a duplicate set here.
-    const startYear = this.simStart.getFullYear();
-    const endYear = this.simEnd.getFullYear();
+    const startYear = this.simStart.getUTCFullYear();
+    const endYear = this.simEnd.getUTCFullYear();
     const periodService = new PeriodService();
     for (let y = startYear; y <= endYear; y++) applyTo(periodService, buildUsCalendarYear(y));
     //Start AU the year before so 1st period ends in first year

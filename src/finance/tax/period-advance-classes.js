@@ -36,6 +36,12 @@ export class PeriodAdvanceReducer extends Reducer {
  * Converts the scheduled PERIOD_ADVANCE event into a PERIOD_ADVANCE action so
  * the PeriodAdvanceReducer fires.
  *
+ * The event's data.periods array is populated at build time (see TaxService)
+ * with all annual periods for the country.  At fire time the handler looks up
+ * the period that contains the current simulation date, so PERIOD_ADVANCE can
+ * be scheduled as a single EventSeries (one node per country in the config
+ * graph) rather than one OneOffEvent per year boundary.
+ *
  * SimulationSync wires this via the static eventType property.
  */
 export class PeriodAdvanceHandler extends HandlerEntry {
@@ -47,7 +53,13 @@ export class PeriodAdvanceHandler extends HandlerEntry {
     this.generatedActionTypes = ['PERIOD_ADVANCE'];
   }
 
-  call({ data }) {
-    return [{ type: 'PERIOD_ADVANCE', cc: data.cc, period: data.period }];
+  call({ data, date }) {
+    const { cc, periods } = data;
+    // date is always UTC midnight (from sim.normalizeDate); use getTime() directly
+    // to match period.startMs/endMs which are also UTC epoch values.
+    const ts = date.getTime();
+    const period = periods.find(p => p.startMs <= ts && ts < p.endMs);
+    if (!period) return [];
+    return [{ type: 'PERIOD_ADVANCE', cc, period }];
   }
 }

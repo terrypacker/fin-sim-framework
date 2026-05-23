@@ -13,6 +13,7 @@ import { PeriodService } from '../../finance/period/period-service.js';
 import { buildUsCalendarYear, applyTo }
   from '../../finance/period/period-builder.js';
 import { OneOffEvent }   from '../../simulation-framework/events/one-off-event.js';
+import { EventSeries }  from '../../simulation-framework/events/event-series.js';
 
 /**
  * US_TAX toolset — thin declarative shell around TaxService.
@@ -86,8 +87,8 @@ function _getCapture(context) {
 
   // Build PeriodService for the full simulation range
   const periodService = new PeriodService();
-  const startYear = context.startDate.getFullYear();
-  const endYear   = context.endDate.getFullYear();
+  const startYear = context.startDate.getUTCFullYear();
+  const endYear   = context.endDate.getUTCFullYear();
   for (let y = startYear; y <= endYear; y++) applyTo(periodService, buildUsCalendarYear(y));
 
   // Phase 1: setup() — use a fake sim object so we can capture state patches.
@@ -108,6 +109,11 @@ function _getCapture(context) {
     eventService: {
       createOneOffEvent(params) {
         const event = new OneOffEvent(params);
+        capturedEvents.push(event);
+        return event;
+      },
+      createEventSeries(params) {
+        const event = new EventSeries(params);
         capturedEvents.push(event);
         return event;
       },

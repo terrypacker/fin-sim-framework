@@ -131,8 +131,17 @@ export class SimulationAdapter {
     let start = series.startOffset
         ? DateUtils.addYears(this.simStart, series.startOffset)
         : this.simStart;
-    const snapFn = startSnapFns[series.interval];
-    if (snapFn) start = snapFn(start);
+
+    if (series.month != null && series.day != null) {
+      // Anchor to a fixed calendar date each year (e.g. Jun 30, Dec 31).
+      // Normalize via sim.normalizeDate so we stay in UTC-midnight space,
+      // consistent with how the simulation queues and compares all dates.
+      const normed = this.sim.normalizeDate(start);
+      start = new Date(Date.UTC(normed.getUTCFullYear(), series.month - 1, series.day));
+    } else {
+      const snapFn = startSnapFns[series.interval];
+      if (snapFn) start = snapFn(start);
+    }
 
     while (start <= this.sim.currentDate) {
       start = intervalFn(start);

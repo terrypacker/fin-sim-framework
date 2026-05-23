@@ -118,34 +118,7 @@ export class TaxService {
     }
     sim.state = { ...sim.state, currentPeriods };
     this._currentPeriods = currentPeriods;  // retained for registerHandlersAndReducers()
-
-    // Accumulate PERIOD_ADVANCE event data for registerHandlersAndReducers().
-    // Events are created through the service layer there so they appear in the
-    // config graph; SimulationSync handles scheduling them on the simulation.
-    this._pendingPeriodAdvances = [];
-    for (const cc of countryCodes) {
-      const periodType = _periodTypeFor(cc);
-      for (const period of periodService.getAllPeriods()) {
-        if (period.type === periodType && period.startMs > startTs) {
-          const d = new Date(period.startMs);
-          const date = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-          this._pendingPeriodAdvances.push({ cc, period, date });
-        }
-      }
-    }
-
-    // Accumulate TAX_SETTLE event data for registerHandlersAndReducers().
-    this._pendingTaxSettles = [];
-    for (const cc of countryCodes) {
-      const periodType = _periodTypeFor(cc);
-      for (const period of periodService.getAllPeriods()) {
-        if (period.type === periodType && period.endMs > startTs) {
-          const d = new Date(period.endMs);
-          const date = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - 1);
-          this._pendingTaxSettles.push({ cc, period, date });
-        }
-      }
-    }
+    this._periodService  = periodService;   // retained for building period lists in registerHandlersAndReducers()
   }
 
   /**
@@ -165,37 +138,44 @@ export class TaxService {
 
     const periodAdvanceHandler = new PeriodAdvanceHandler();
 
-
-    // Register PERIOD_ADVANCE events through the service layer so they appear
-    // in the config graph (SimulationSync will schedule them on the simulation).
-    for (const { cc, period, date } of this._pendingPeriodAdvances) {
-      const year = new Date(period.startMs).getUTCFullYear();
-      const periodAdvance = eventService.createOneOffEvent({
-        name: `${cc} Period Advance ${year}`,
-        type: 'PERIOD_ADVANCE',
-        date,
-        data: { cc, period },
-        enabled: true,
-        color: '#78909C',
+    // One EventSeries per country fires on the first day of each new tax year,
+    // replacing the previous pattern of N OneOffEvents per simulation range.
+    // All annual periods for the country are embedded in data.periods so the
+    // handler can resolve the correct period at fire time without a service lookup.
+    for (const cc of countryCodes) {
+      const { month, day } = _periodAdvanceDateFor(cc);
+      const periodType = _periodTypeFor(cc);
+      const periods = this._periodService.getAllPeriods()
+        .filter(p => p.type === periodType);
+      const series = eventService.createEventSeries({
+        name:     `${cc} Period Advance`,
+        type:     `PERIOD_ADVANCE_${cc}`,
+        interval: 'annually',
+        month,
+        day,
+        data:     { cc, periods },
+        enabled:  true,
+        color:    '#78909C',
       });
-      periodAdvanceHandler.handledEvents.push(periodAdvance);
+      periodAdvanceHandler.handledEvents.push(series);
     }
 
     const taxSettleHandler = new TaxSettleHandler();
-    // Register TAX_SETTLE events through the service layer.
-    for (const { cc, period, date } of this._pendingTaxSettles) {
-      const startYear = new Date(period.startMs).getUTCFullYear();
-      const endYear   = new Date(period.endMs).getUTCFullYear();
-      const label = startYear === endYear ? `${startYear}` : `${startYear}-${endYear}`;
-      const taxSettleEvent = eventService.createOneOffEvent({
-        name: `${cc} Tax Settle ${label}`,
-        type: 'TAX_SETTLE',
-        date,
-        data: { cc },
-        enabled: true,
-        color: '#FF7043',
+
+    // One EventSeries per country fires on the last day of each tax year.
+    for (const cc of countryCodes) {
+      const { month, day } = _taxSettleDateFor(cc);
+      const series = eventService.createEventSeries({
+        name:     `${cc} Tax Settle`,
+        type:     `TAX_SETTLE_${cc}`,
+        interval: 'annually',
+        month,
+        day,
+        data:     { cc },
+        enabled:  true,
+        color:    '#FF7043',
       });
-      taxSettleHandler.handledEvents.push(taxSettleEvent);
+      taxSettleHandler.handledEvents.push(series);
     }
 
     // PERIOD_ADVANCE reducer + handler
@@ -258,4 +238,20 @@ export class TaxService {
  */
 function _periodTypeFor(cc) {
   return cc === 'AU' ? 'YEAR_AU' : 'YEAR_US';
+}
+
+/**
+ * Month/day (1-based) of the first day of the new tax year for a country.
+ * This is the date PERIOD_ADVANCE fires each year.
+ */
+function _periodAdvanceDateFor(cc) {
+  return cc === 'AU' ? { month: 7, day: 1 } : { month: 1, day: 1 };
+}
+
+/**
+ * Month/day (1-based) of the last day of the tax year for a country.
+ * This is the date TAX_SETTLE fires each year.
+ */
+function _taxSettleDateFor(cc) {
+  return cc === 'AU' ? { month: 6, day: 30 } : { month: 12, day: 31 };
 }
