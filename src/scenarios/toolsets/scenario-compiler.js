@@ -1,0 +1,123 @@
+/*
+ * Copyright (c) 2026 Terry Packer.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ */
+
+/**
+ * ScenarioCompiler — consumes a declarative scenario definition and a
+ * ToolsetRegistry, resolves toolset dependencies, collects contributions
+ * (state, schedules, handlers, reducers), and registers everything with
+ * the simulation services.
+ *
+ * JSON scenario definition shape:
+ * {
+ *   "toolsets": ["US_RETIREMENT"],
+ *   "simStart": "2026-01-01",
+ *   "simEnd":   "2046-01-01",
+ *   "parameters": { "inflationRate": 0.03, ... },
+ *   "persons": [...],
+ *   "accounts": [...]
+ * }
+ */
+export class ScenarioCompiler {
+  constructor(registry) {
+    this.registry = registry;
+  }
+
+  /**
+   * Compile a declarative scenario definition into a fully wired simulation.
+   *
+   * @param {object} definition — parsed JSON scenario (toolsets, simStart, simEnd, parameters)
+   * @param {object} services — ServiceRegistry instance
+   * @returns {{ paramSchema: Array }} merged typed schema for UI rendering
+   */
+  compile(definition, services) {
+    const resolved   = this._resolveToolsets(definition.toolsets);
+    const parameters = this._resolveParameters(definition, resolved);
+    const paramSchema = resolved.flatMap(t => t.paramSchema?.({}) ?? []);
+    const context    = this._buildContext(definition, services, parameters, paramSchema);
+
+    const statePatches = {};
+    const schedules    = [];
+    const handlers     = [];
+    const reducers     = [];
+
+    for (const toolset of resolved) {
+      Object.assign(statePatches, toolset.state?.(context) ?? {});
+
+      const ts = toolset.schedules?.(context) ?? [];
+      for (const s of ts) {
+        schedules.push(s);
+        context.schedulesById[s.type] = s;
+      }
+
+      for (const h of toolset.handlers?.(context) ?? []) {
+        h._sourceToolset = toolset.id;
+        handlers.push(h);
+      }
+
+      reducers.push(...(toolset.reducers?.(context) ?? []));
+    }
+
+    // Warn on duplicate EventSeries types (same recurring event registered twice)
+    const seenSeries = new Set();
+    for (const s of schedules) {
+      if (s.interval !== undefined && seenSeries.has(s.type)) {
+        console.warn(`[ScenarioCompiler] duplicate EventSeries type '${s.type}'`);
+      }
+      seenSeries.add(s.type);
+    }
+
+    // Register everything with the simulation services
+    const sim = services.simulationRegistry.getPrimary();
+    Object.assign(sim.state, statePatches);
+    for (const s of schedules) services.eventService.register(s);
+    for (const h of handlers)  services.handlerService.register(h);
+    for (const r of reducers)  services.reducerService.register(r);
+
+    return { paramSchema };
+  }
+
+  _resolveToolsets(requestedIds) {
+    const resolved = new Map();
+    const visit = (id) => {
+      if (resolved.has(id)) return;
+      const toolset = this.registry.get(id);
+      for (const dep of toolset.dependencies ?? []) visit(dep);
+      resolved.set(id, toolset);
+    };
+    for (const id of requestedIds) visit(id);
+    return [...resolved.values()];
+  }
+
+  _resolveParameters(definition, resolvedToolsets) {
+    const defaults = {};
+    for (const toolset of resolvedToolsets) {
+      for (const entry of toolset.paramSchema?.({}) ?? []) {
+        if (entry.defaultValue !== undefined) {
+          defaults[entry.key] = entry.defaultValue;
+        }
+      }
+    }
+    return { ...defaults, ...(definition.parameters ?? {}) };
+  }
+
+  _buildContext(definition, services, parameters, paramSchema) {
+    return {
+      startDate:     new Date(definition.simStart),
+      endDate:       new Date(definition.simEnd),
+      people:        services.personService?.getAll()  ?? [],
+      accounts:      services.accountService?.getAll() ?? [],
+      parameters,
+      paramSchema,
+      stateRegistry: services.stateRegistry,
+      accountService: services.accountService,
+      schedulesById: {},
+    };
+  }
+}
