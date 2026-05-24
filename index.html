@@ -374,6 +374,15 @@
         <div class="tab-content chart-tab" style="display:none" data-tab="chart-tab" data-tab-group="center-col">
           <div class="panel" style="flex:1;min-height:0;display:flex;flex-direction:column">
             <div id="chartFilterContainer"></div>
+            <div id="failureBanner" class="failure-banner" style="display:none">
+              <span class="failure-banner-icon">⚠</span>
+              <span>SCENARIO FAILED — OUT OF FUNDS</span>
+              <span class="failure-banner-deficit">
+                shortfall: <span id="failureBannerDeficit">—</span>
+                over <span id="failureBannerMonths">—</span> months
+              </span>
+              <span id="failureBannerDate" class="failure-banner-date"></span>
+            </div>
             <div class="viz-wrap" style="flex:1;margin:10px;border-radius:4px;overflow:hidden">
               <canvas id="chartCanvas"></canvas>
             </div>

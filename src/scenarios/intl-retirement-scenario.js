@@ -37,6 +37,8 @@ import { IntlTransferApplyReducer } from '../finance/reducers/intl-transfer-appl
 import { StockDividendCashApplyReducer } from '../finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { ChangeResidencyApplyReducer } from '../finance/reducers/change-residency-apply-reducer.js';
 import { SetOutOfFundsDateReducer } from '../finance/reducers/set-out-of-funds-date-reducer.js';
+import { AccumulateDeficitReducer } from '../finance/reducers/accumulate-deficit-reducer.js';
+import { OutOfFundsReducer } from '../finance/reducers/out-of-funds-reducer.js';
 import {
   ReducerBuilder
 } from "../simulation-framework/builders/reducer-builder.js";
@@ -930,6 +932,12 @@ export class IntlRetirementScenario extends BaseScenario {
 
     const setOutOfFundsDateReducer = new SetOutOfFundsDateReducer();
     reducerService.register(setOutOfFundsDateReducer);
+
+    const accumulateDeficitReducer = new AccumulateDeficitReducer();
+    reducerService.register(accumulateDeficitReducer);
+
+    const outOfFundsReducer = new OutOfFundsReducer();
+    reducerService.register(outOfFundsReducer);
 
     const inflationAdjustReducer = new InflationAdjustReducer();
     reducerService.register(inflationAdjustReducer);

@@ -56,24 +56,63 @@ export class ScenarioRunner {
   }
 
   /**
-   *
-   * @param results - [] result from each simulation
-   * @param mapResults - r => r.result.totalReturn
-   * @returns {{mean: number, p10: *, p50: *, p90: *}}
+   * @param results      - array of results from runBatch / monteCarlo
+   * @param mapResults   - r => number  (e.g. r => r.result.totalReturn)
+   * @param mapFailure   - optional: r => { failed: boolean, outOfFundsDate: Date|null }
+   *                       When provided, adds successRate, failureCount, and
+   *                       medianOutOfFundsDate to the returned summary.
+   * @returns {{ mean, p10, p50, p90, [successRate], [failureCount], [medianOutOfFundsDate] }}
    */
-  summarize(results, mapResults) {
+  summarize(results, mapResults, mapFailure = null) {
     const values = results.map(mapResults);
 
     values.sort((a, b) => a - b);
 
     const mean = values.reduce((a, b) => a + b, 0) / values.length;
 
-    return {
+    const summary = {
       mean,
       p10: values[Math.floor(values.length * 0.1)],
       p50: values[Math.floor(values.length * 0.5)],
       p90: values[Math.floor(values.length * 0.9)]
     };
+
+    if (mapFailure) {
+      const failureInfos  = results.map(mapFailure);
+      const failed        = failureInfos.filter(f => f.failed);
+      summary.failureCount  = failed.length;
+      summary.successRate   = (results.length - failed.length) / results.length;
+
+      const failureTimes = failed
+        .map(f => f.outOfFundsDate)
+        .filter(d => d instanceof Date)
+        .map(d => d.getTime())
+        .sort((a, b) => a - b);
+
+      if (failureTimes.length > 0) {
+        summary.medianOutOfFundsDate = new Date(failureTimes[Math.floor(failureTimes.length * 0.5)]);
+      }
+
+      const deficits = failed
+        .map(f => f.cumulativeDeficit ?? 0)
+        .sort((a, b) => a - b);
+
+      if (deficits.length > 0) {
+        summary.p50Deficit = deficits[Math.floor(deficits.length * 0.5)];
+        summary.p90Deficit = deficits[Math.floor(deficits.length * 0.9)];
+      }
+
+      const deficitMonths = failed
+        .map(f => f.deficitMonths ?? 0)
+        .sort((a, b) => a - b);
+
+      if (deficitMonths.length > 0) {
+        summary.p50DeficitMonths = deficitMonths[Math.floor(deficitMonths.length * 0.5)];
+        summary.p90DeficitMonths = deficitMonths[Math.floor(deficitMonths.length * 0.9)];
+      }
+    }
+
+    return summary;
   }
 
   /**

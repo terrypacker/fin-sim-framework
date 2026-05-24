@@ -96,6 +96,9 @@ export class InternationalRetirementFinancialState extends SimulationState {
 
     this.superWithdrawalBlocked = false;
     this.outOfFundsDate = null;
+    this.scenarioFailed = false;
+    this.cumulativeDeficit = 0;
+    this.deficitMonths = 0;
   }
 }
 

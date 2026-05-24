@@ -33,15 +33,19 @@ export class OutOfFundsHandler extends HandlerEntry {
 
   constructor() {
     super(null, 'Out of Funds');
-    this.generatedActionTypes = ['SET_OUT_OF_FUNDS_DATE', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['SET_OUT_OF_FUNDS_DATE', 'ACCUMULATE_DEFICIT', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ data, date, state }) {
+    const deficit = data.deficit ?? 0;
     console.warn(
-      `[OUT_OF_FUNDS] ${(data.deficit ?? 0).toFixed(2)} ${data.currency ?? ''} deficit on ` +
+      `[OUT_OF_FUNDS] ${deficit.toFixed(2)} ${data.currency ?? ''} deficit on ` +
       (date instanceof Date ? date.toISOString().slice(0, 10) : String(date))
     );
-    const actions = [new RecordMetricAction('out_of_funds', data.deficit ?? 0)];
+    const actions = [
+      new RecordMetricAction('out_of_funds', deficit),
+      { type: 'ACCUMULATE_DEFICIT', amount: deficit },
+    ];
     if (!state.outOfFundsDate) {
       actions.push({ type: 'SET_OUT_OF_FUNDS_DATE', date });
     }

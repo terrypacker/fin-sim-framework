@@ -1408,4 +1408,22 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 }
 .tax-doc-tab-content { flex: 1; overflow: hidden; display: flex; }
 .tax-doc-panel { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+/* ── FAILURE BANNER ── */
+.failure-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(248, 113, 113, 0.10);
+  border-bottom: 1px solid rgba(248, 113, 113, 0.35);
+  color: #f87171;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  flex-shrink: 0;
+}
+.failure-banner-icon   { font-size: 13px; }
+.failure-banner-deficit { color: #fca5a5; margin-left: 12px; }
+.failure-banner-date   { margin-left: auto; color: #94a3b8; }
 .tax-doc-panel--hidden { display: none; }

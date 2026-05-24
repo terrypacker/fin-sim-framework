@@ -69,6 +69,8 @@ import { ExpenseDebitReducer }                                                  
 import { IntlTransferApplyReducer }                                                  from '../../src/finance/reducers/intl-transfer-apply-reducer.js';
 import { ReplenishSavingsReducer }                                                   from '../../src/finance/reducers/replenish-savings-reducer.js';
 import { SetOutOfFundsDateReducer }                                                  from '../../src/finance/reducers/set-out-of-funds-date-reducer.js';
+import { AccumulateDeficitReducer }                                                  from '../../src/finance/reducers/accumulate-deficit-reducer.js';
+import { OutOfFundsReducer }                                                         from '../../src/finance/reducers/out-of-funds-reducer.js';
 import { InflationAdjustReducer }                                                    from '../../src/finance/reducers/inflation-adjust-reducer.js';
 import { StockDividendCashApplyReducer }                                             from '../../src/finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { UsSavingsInterestCreditReducer }                                            from '../../src/finance/reducers/us-savings-interest-credit-reducer.js';
@@ -153,7 +155,7 @@ globalThis.FinSimLib = {
     IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,
     IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
     ChangeResidencyApplyReducer, ExpenseDebitReducer, IntlTransferApplyReducer,
-    ReplenishSavingsReducer, SetOutOfFundsDateReducer, InflationAdjustReducer,
+    ReplenishSavingsReducer, SetOutOfFundsDateReducer, AccumulateDeficitReducer, OutOfFundsReducer, InflationAdjustReducer,
     StockDividendCashApplyReducer, UsSavingsInterestCreditReducer,
     // Account types
     Account, CheckingAccount, SavingsAccount,
