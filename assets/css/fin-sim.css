@@ -615,7 +615,7 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   border-radius: 2px;
   border: 1px solid transparent;
   font-size: 11px;
-  background: var(--bg-panel2);
+  background: var(--bg-active);
 }
 .data-grid {
   display: grid;
@@ -632,6 +632,10 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   flex: 1;
 }
 
+.data-grid-1 {
+  grid-template-columns: 1fr 1fr;
+}
+
 .data-grid-2 {
   grid-template-columns: 1fr 1fr;
 }
@@ -642,16 +646,20 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 
 /* ── STATE CHANGE GRID ── */
 [data-state-change-grid] {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 0.5fr) minmax(0, 1fr);
   overflow-x: auto;
 }
 
 /* ── DATA DIFF ── */
-.diff-field  { color: #94a3b8; font-size: 10px; }
-.diff-before { color: #64748b; word-break: break-word; overflow-wrap: break-word; }
-.diff-after  { color: #e5e7eb; word-break: break-word; overflow-wrap: break-word; }
-.diff-pos    { color: #34d399; margin-left: 6px; }
-.diff-neg    { color: #f87171; margin-left: 6px; }
+.diff-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+}
+.diff-field  { color: #94a3b8; }
+.diff-before { color: #64748b; word-break: break-word; overflow-wrap: break-word; font-size: 9px; }
+.diff-after  { color: #e5e7eb; word-break: break-word; overflow-wrap: break-word; font-size: 9px; }
+.diff-pos    { color: #34d399; margin-left: 6px; font-size: 9px; }
+.diff-neg    { color: #f87171; margin-left: 6px; font-size: 9px; }
 
 
 /* ── CONFIG BUILDER ── */
