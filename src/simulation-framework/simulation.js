@@ -487,7 +487,7 @@ export class Simulation {
       this.addActionNode({
         actionClone,
         parentId,
-        reducerName: reducerWrapper.name,
+        reducerClone,
         prevState,
         nextState,
         sourceEvent
@@ -498,7 +498,7 @@ export class Simulation {
           date: new Date(this.currentDate),
           eventType: sourceEventType,
           action: actionClone,
-          reducer: reducerWrapper.name,
+          reducer: reducerClone,
           prevState,
           nextState: structuredClone(this.state),
           emittedActions: structuredClone(emitted),
@@ -680,7 +680,7 @@ export class Simulation {
   addActionNode({
                   actionClone,
                   parentId,
-                  reducerName,
+                  reducerClone,
                   prevState,
                   nextState,
                   sourceEvent
@@ -695,7 +695,7 @@ export class Simulation {
       children: [],
 
       action: actionClone,
-      reducer: reducerName,
+      reducer: reducerClone,
 
       stateBefore: prevState,
       stateAfter: stateSnapshot,
