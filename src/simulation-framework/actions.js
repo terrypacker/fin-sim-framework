@@ -23,6 +23,7 @@
  */
 export class Action {
   constructor(type, name) {
+    this.id   = type ?? null;  // Actions use their type string as stable identity
     this.type = type;
     this.name = name;
   }

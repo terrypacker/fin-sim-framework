@@ -209,16 +209,6 @@ test('ActionService: deleteAction publishes DELETE event', () => {
   assert.ok(deleteEvents[0].item instanceof AmountAction);
 });
 
-test('ActionService: factory property exposes the ActionFactory', () => {
-  const r = ServiceRegistry.getInstance();
-  assert.ok(r.actionService.factory !== null);
-  // factory can create actions without bus publishing
-  const a = r.actionService.factory.amountAction('RAW', 'Raw', 0);
-  assert.ok(a instanceof AmountAction);
-  // should not have emitted a service event
-  assert.strictEqual(r.bus.getHistory().length, 0);
-});
-
 // ─── EventService ─────────────────────────────────────────────────────────────
 
 test('EventService: createEventSeries returns an EventSeries and publishes CREATE', () => {

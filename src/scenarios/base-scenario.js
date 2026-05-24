@@ -54,13 +54,6 @@ export class BaseScenario {
     this.simStart = simStart;
     this.simEnd = simEnd;
 
-    // ID counters — still used by ScenarioSerializer to avoid collision with
-    // pre-saved IDs.  Service ID counters auto-advance separately.
-    this._nextHandlerId = 1;
-    this._nextReducerId = 1;
-    this._nextEventId = 1;
-    this._nextActionId = 1;
-
     // Tracks which event types already have a recurring auto-rescheduling
     // handler registered so we never register a second one on re-enable.
     this._registeredRecurringTypes = new Map();
@@ -103,9 +96,6 @@ export class BaseScenario {
   scheduleEvent(event) {
     if (!event.enabled) {
       throw new Error('Do not schedule a disabled event');
-    }
-    if (!event.id) {
-      event.id = 'e' + this._nextEventId++;
     }
 
     // Ensure the item is in the service map so editor updates can find it
@@ -173,9 +163,6 @@ export class BaseScenario {
    * Uses action.type as the stable ID, matching the ActionService convention.
    */
   registerAction(action) {
-    if (!action.id) {
-      action.id = action.type || ('a' + this._nextActionId++);
-    }
     const { actionService } = ServiceRegistry.getInstance();
     if (!actionService.get(action.id)) {
       actionService.load(action);
@@ -191,10 +178,6 @@ export class BaseScenario {
    * deserialized reducers that were constructed outside the service).
    */
   registerReducer(reducer) {
-    if (!reducer.id) {
-      reducer.id = 'r' + this._nextReducerId++;
-    }
-
     const { reducerService } = ServiceRegistry.getInstance();
     if (!reducerService.get(reducer.id)) {
       reducerService.load(reducer);
@@ -218,10 +201,6 @@ export class BaseScenario {
    * Calls service.load() so the handler is findable via handlerService.get(id).
    */
   registerHandler(handler) {
-    if (!handler.id) {
-      handler.id = 'h' + this._nextHandlerId++;
-    }
-
     const { handlerService } = ServiceRegistry.getInstance();
     if (!handlerService.get(handler.id)) {
       handlerService.load(handler);

@@ -22,6 +22,7 @@
  */
 export class HandlerEntry {
   constructor(fn, name = 'anonymous') {
+    this.id   = null;
     this.fn   = fn ?? this.defaultFunction;
     this.name = name;
     this.handledEvents = [];

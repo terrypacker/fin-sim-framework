@@ -9,7 +9,12 @@
  */
 
 import { BaseService } from './base-service.js';
-import { ActionFactory } from './action-factory.js';
+
+import {
+  AmountAction, RecordArrayMetricAction, RecordBalanceAction,
+  RecordMetricAction,
+  RecordMultiplicativeMetricAction, RecordNumericSumMetricAction
+} from "../simulation-framework/actions.js";
 
 /**
  * Service for managing Action instances throughout their lifecycle.
@@ -22,60 +27,49 @@ import { ActionFactory } from './action-factory.js';
  */
 export class ActionService extends BaseService {
   constructor(bus) {
-    super(bus);
-    this._factory = new ActionFactory();
-  }
-
-  /** Access the underlying ActionFactory directly when needed. */
-  get factory() {
-    return this._factory;
+    super(bus, 'a');
   }
 
   // ─── Create ───────────────────────────────────────────────────────────────
 
   createAmountAction(type, name, value = 0) {
-    const item = this._factory.amountAction(type, name, value);
-    item.id = type;
+    const item = new AmountAction(type, name, value);
+    // item.id is set to type in the Action constructor
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
   }
 
   createRecordMetricAction(type, name, fieldName, value) {
-    const item = this._factory.recordMetricAction(type, name, fieldName, value);
-    item.id = type;
+    const item = new RecordMetricAction(type, name, fieldName, value);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
   }
 
   createRecordArrayMetricAction(name, fieldName, value) {
-    const item = this._factory.recordArrayMetricAction(name, fieldName, value);
-    item.id = item.type;
+    const item = new RecordArrayMetricAction(name, fieldName, value);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
   }
 
   createRecordNumericSumMetricAction(name, fieldName, value) {
-    const item = this._factory.recordNumericSumMetricAction(name, fieldName, value);
-    item.id = item.type;
+    const item = new RecordNumericSumMetricAction(name, fieldName, value);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
   }
 
   createRecordMultiplicativeMetricAction(name, fieldName, value) {
-    const item = this._factory.recordMultiplicativeMetricAction(name, fieldName, value);
-    item.id = item.type;
+    const item = new RecordMultiplicativeMetricAction(name, fieldName, value);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
   }
 
   createRecordBalanceAction() {
-    const item = this._factory.recordBalanceAction();
-    item.id = item.type;
+    const item = new RecordBalanceAction();
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;

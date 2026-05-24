@@ -101,6 +101,7 @@ export const PRIORITY = {
  */
 export class Reducer {
   constructor(name = 'anonymous', priority = PRIORITY.LOGGING) {
+    this.id       = null;
     this.name     = name;
     this.priority = priority;
     this.generatedActions = [];

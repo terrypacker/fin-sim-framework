@@ -40,7 +40,6 @@ import { TaxSettleService } from './finance/tax-settle-service.js';
 import { intervalFns, startSnapFns, BaseScenario } from './scenarios/base-scenario.js';
 import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
 import { ScenarioStorage } from './scenarios/scenario-storage.js';
-import { ActionFactory } from './services/action-factory.js';
 import { ActionService } from './services/action-service.js';
 import { BaseService } from './services/base-service.js';
 import { EventService } from './services/event-service.js';
@@ -49,8 +48,8 @@ import { ReducerService } from './services/reducer-service.js';
 import { ServiceRegistry } from './services/service-registry.js';
 import { SimulationRegistry } from './services/simulation-registry.js';
 import { Action, FieldAction, FieldValueAction, AmountAction, RecordMetricAction, RecordArrayMetricAction, RecordNumericSumMetricAction, RecordMultiplicativeMetricAction, RecordBalanceAction } from './simulation-framework/actions.js';
-import { EventBuilder } from './simulation-framework/builders/event-builder.js';
 import { ActionBuilder } from './simulation-framework/builders/action-builder.js';
+import { EventBuilder } from './simulation-framework/builders/event-builder.js';
 import { HandlerBuilder } from './simulation-framework/builders/handler-builder.js';
 import { ReducerBuilder } from './simulation-framework/builders/reducer-builder.js';
 import { BusMessage, SimulationBusMessage, DebugActionBusMessage, ServiceActionEvent } from './simulation-framework/bus-messages.js';
@@ -153,7 +152,6 @@ export const Scenarios = {
 };
 
 export const Services = {
-  ActionFactory,
   ActionService,
   BaseService,
   EventService,
@@ -173,8 +171,8 @@ export const Core = {
   RecordNumericSumMetricAction,
   RecordMultiplicativeMetricAction,
   RecordBalanceAction,
-  EventBuilder,
   ActionBuilder,
+  EventBuilder,
   HandlerBuilder,
   ReducerBuilder,
   BusMessage,

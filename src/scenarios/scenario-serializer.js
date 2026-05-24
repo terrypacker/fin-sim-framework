@@ -11,9 +11,25 @@
 export class ScenarioSerializer {
 
   /**
-   * Serialize the current graph state into a scenario config object.
+   * Serialize the current scenario state into a config object.
+   *
+   * Reads directly from the service maps so that in-flight UI edits (name,
+   * type, field values) are captured without relying on the ConfigGraphBuilder's
+   * internal node structure.
+   *
+   * @param {{ eventService, handlerService, actionService, reducerService }} services
+   *   The ServiceRegistry instance (or any object exposing the four service
+   *   properties).  Pass `ServiceRegistry.getInstance()` from the save handler.
+   * @param {string} name
+   * @param {string|Date} simStart
+   * @param {string|Date} simEnd
+   * @param {object} initialState
+   * @param {Array}  params
+   * @returns {object} serialized scenario config
    */
-  static serialize(graphBuilder, name, simStart, simEnd, initialState, params) {
+  static serialize(services, name, simStart, simEnd, initialState, params) {
+    const { eventService, handlerService, actionService, reducerService } = services;
+
     const toDateStr = (d) => {
       if (!d) return null;
       if (d instanceof Date) return d.toISOString().slice(0, 10);
@@ -24,10 +40,10 @@ export class ScenarioSerializer {
       name,
       simStart: toDateStr(simStart),
       simEnd:   toDateStr(simEnd),
-      events:   graphBuilder.getKind('event').map(n => ScenarioSerializer._serializeEvent(n)),
-      handlers: graphBuilder.getKind('handler').map(n => ScenarioSerializer._serializeHandler(n)),
-      actions:  graphBuilder.getKind('action').map(n => ScenarioSerializer._serializeAction(n)),
-      reducers: graphBuilder.getKind('reducer').map(n => ScenarioSerializer._serializeReducer(n)),
+      events:   eventService.getAll().map(n => ScenarioSerializer._serializeEvent(n)),
+      handlers: handlerService.getAll().map(n => ScenarioSerializer._serializeHandler(n)),
+      actions:  actionService.getAll().map(n => ScenarioSerializer._serializeAction(n)),
+      reducers: reducerService.getAll().map(n => ScenarioSerializer._serializeReducer(n)),
       initialState: initialState ?? {},
       params:   params ?? [],
     };
@@ -87,17 +103,6 @@ export class ScenarioSerializer {
       scenario.registerReducer(reducer);
     }
 
-    // Advance scenario ID counters to avoid collisions with future nodes
-    const maxNum = (items, prefix) =>
-      (items ?? []).reduce((m, d) => {
-        const match = d.id?.match(new RegExp(`^${prefix}(\\d+)$`));
-        return match ? Math.max(m, parseInt(match[1]) + 1) : m;
-      }, 1);
-
-    scenario._nextEventId   = Math.max(scenario._nextEventId,   maxNum(config.events,   'e'));
-    scenario._nextHandlerId = Math.max(scenario._nextHandlerId,  (config.handlers?.length ?? 0) + 1);
-    scenario._nextReducerId = Math.max(scenario._nextReducerId,  maxNum(config.reducers, 'r'));
-    scenario._nextActionId  = Math.max(scenario._nextActionId,   (config.actions?.length ?? 0) + 1);
   }
 
   // ─── Serializers ──────────────────────────────────────────────────────────────

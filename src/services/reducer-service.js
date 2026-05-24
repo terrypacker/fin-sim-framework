@@ -27,6 +27,7 @@ import {
  * into a ReducerPipeline is the caller's responsibility.
  */
 export class ReducerService extends BaseService {
+  constructor(bus) { super(bus, 'r'); }
 
   // ─── Create ───────────────────────────────────────────────────────────────
 
