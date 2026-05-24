@@ -31,6 +31,7 @@ export class TimelineView {
     this.onFilterDateStart = null;
     this.onFilterDateEnd   = null;
     this.onClearFilters    = null;
+    this.onDownloadCsv     = null;
     this.onToggle          = null;
     this.onDetail          = null;
     this.onRewind          = null;
@@ -65,7 +66,8 @@ export class TimelineView {
         <label class="tl-filter-label" for="tl-date-end-${uid}">To</label>
         <input class="tl-filter-date" type="date" id="tl-date-end-${uid}">
       </div>
-      <button class="tl-filter-clear" id="tl-filter-clear-${uid}" title="Clear all filters">✕</button>
+      <button class="tl-filter-clear"    id="tl-filter-clear-${uid}"    title="Clear all filters">✕</button>
+      <button class="tl-download-csv"   id="tl-download-csv-${uid}"   title="Download visible rows as CSV">⬇ CSV</button>
     `;
     this._listEl = document.createElement('div');
     this._listEl.className = 'tl-list';
@@ -89,6 +91,9 @@ export class TimelineView {
     startIn.addEventListener('change', () => this.onFilterDateStart?.(startIn.value));
     endIn.addEventListener('change',   () => this.onFilterDateEnd?.(endIn.value));
     clearBtn.addEventListener('click', () => this.onClearFilters?.());
+
+    const csvBtn = this._filterBarEl.querySelector(`#tl-download-csv-${uid}`);
+    csvBtn.addEventListener('click', () => this.onDownloadCsv?.());
   }
 
   _syncFilters(options, filterEvents, filterActions, filterDateStart, filterDateEnd) {

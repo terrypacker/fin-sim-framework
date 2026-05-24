@@ -33,6 +33,10 @@ export class TimelinePresenter {
       controller.filterDateEnd   = null;
       this._render();
     };
+    view.onDownloadCsv = () => {
+      const csv = controller.generateCsv(this._formatDate);
+      if (csv) this._triggerDownload(csv);
+    };
     view.onToggle  = key => { controller.toggleExpanded(key); this._render(); };
     view.onDetail  = idx => onDetail(controller.journal.journal[idx]);
     if (onRewind) {
@@ -68,6 +72,18 @@ export class TimelinePresenter {
       expanded:        ctrl.expanded,
       hasRewind:       !!this._onRewind,
     });
+  }
+
+  _triggerDownload(csv) {
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `timeline-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   // Parse a YYYY-MM-DD string to local midnight (start of day)
