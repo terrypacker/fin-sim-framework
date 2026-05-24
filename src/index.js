@@ -140,8 +140,9 @@ import { InMemoryStorage } from './storage/in-memory-storage.js';
 import { AccountsController } from './visualization/accounts/accounts-controller.js';
 import { AccountsPresenter } from './visualization/accounts/accounts-presenter.js';
 import { AccountsView } from './visualization/accounts/accounts-view.js';
-import { BalanceChartView } from './visualization/balance-chart-view.js';
-import { ChartView } from './visualization/chart-view.js';
+import { ChartController } from './visualization/chart/chart-controller.js';
+import { ChartPresenter } from './visualization/chart/chart-presenter.js';
+import { ChartView } from './visualization/chart/chart-view.js';
 import { BaseComponent } from './visualization/components/base-component.js';
 import { GraphNodeFilterMultiSelect } from './visualization/components/graph-node-filter-multi-select.js';
 import { GraphRenderer } from './visualization/components/graph-renderer.js';
@@ -494,7 +495,8 @@ export const Visualization = {
   AccountsController,
   AccountsPresenter,
   AccountsView,
-  BalanceChartView,
+  ChartController,
+  ChartPresenter,
   ChartView,
   BaseComponent,
   GraphNodeFilterMultiSelect,

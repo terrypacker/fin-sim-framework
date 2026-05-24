@@ -18,7 +18,9 @@
  */
 
 import { $, fmtUTC, fmtLocal }     from '../visualization/ui-utils.js';
-import { ChartView }                from '../visualization/chart-view.js';
+import { ChartController }          from '../visualization/chart/chart-controller.js';
+import { ChartView }                from '../visualization/chart/chart-view.js';
+import { ChartPresenter }           from '../visualization/chart/chart-presenter.js';
 import { TimelineController }        from '../visualization/timeline/timeline-controller.js';
 import { TimelineView }             from '../visualization/timeline/timeline-view.js';
 import { TimelinePresenter }        from '../visualization/timeline/timeline-presenter.js';
@@ -77,7 +79,7 @@ export class BaseApp extends BaseComponent {
 
     // UI handles (recreated each buildScenario)
     this.configPresenter = null;
-    this.chartView             = null;
+    this.chartPresenter        = null;
     this.timelineView          = null;
     this.timeControls          = null;
     this.peoplePresenter       = null;
@@ -183,13 +185,15 @@ export class BaseApp extends BaseComponent {
         .filter(([, c]) => c)
     );
 
-    this.chartView = new ChartView({
+    const chartController = new ChartController();
+    const chartView = new ChartView({
       canvas:   $('chartCanvas'),
       simStart: this.scenario.simStart,
       simEnd:   this.scenario.simEnd,
       series:   this.chartSeries ?? undefined,
     });
-    this.chartView.startViz();
+    this.chartPresenter = new ChartPresenter({ controller: chartController, view: chartView });
+    this.chartPresenter.startViz();
 
     this.timelineView = new TimelinePresenter({
       controller:    new TimelineController(),
@@ -216,7 +220,7 @@ export class BaseApp extends BaseComponent {
       scenario:        this.scenario,
       configPresenter: this.configPresenter,
       timelineView:    this.timelineView,
-      chartView:       this.chartView,
+      chartView:       this.chartPresenter,
       timeLabel:       $('timeLabel'),
       timeSlider:      $('timeSlider'),
       formatDate:      currentFmt,
@@ -232,7 +236,7 @@ export class BaseApp extends BaseComponent {
       scenario:           this.scenario,
       timeControls:       this.timeControls,
       statePanelView:     this._statePanelView,
-      chartView:          this.chartView,
+      chartView:          this.chartPresenter,
       graphRenderer:      this.configPresenter._graphRenderer,
       accountsPresenter:  this.accountsPresenter,
     });
@@ -265,7 +269,7 @@ export class BaseApp extends BaseComponent {
     $('currentStateContent').innerHTML  = '';
     $('cumulativeMetricsContent').innerHTML = '';
 
-    if (this.chartView)  this.chartView.stopViz();
+    if (this.chartPresenter) this.chartPresenter.stopViz();
     if (this.configPresenter) this.configPresenter.destroy();
 
   }

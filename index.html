@@ -372,7 +372,8 @@
 
         <!-- Chart Tab -->
         <div class="tab-content chart-tab" style="display:none" data-tab="chart-tab" data-tab-group="center-col">
-          <div class="panel" style="flex:1;min-height:0">
+          <div class="panel" style="flex:1;min-height:0;display:flex;flex-direction:column">
+            <div id="chartFilterContainer"></div>
             <div class="viz-wrap" style="flex:1;margin:10px;border-radius:4px;overflow:hidden">
               <canvas id="chartCanvas"></canvas>
             </div>
@@ -417,7 +418,7 @@
     <span>·</span>
     <span>Financial Simulation Framework</span>
     <span>·</span>
-    <span id="footerPageTitle">Custom Logic Example</span>
+    <span id="footerPageTitle">Simulation Workbench</span>
   </div>
 </div>
 
@@ -822,6 +823,14 @@
 <template id="tpl-time-control-slider-overlay">
   <div class="time-controls-slider-overlay">
     Busy...
+  </div>
+</template>
+<template id="tpl-chart-filter-bar">
+  <div class="tl-filter-bar">
+    <div class="tl-filter-group">
+      <label class="tl-filter-label">Metrics</label>
+      <div class="reducer-chip-grid" id="chart-metric-select"></div>
+    </div>
   </div>
 </template>
 <template id="tpl-timeline-filter-bar">

@@ -12,6 +12,7 @@ import { Chart, registerables } from 'chart.js';
 import annotationPlugin from 'chartjs-plugin-annotation';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import 'chartjs-adapter-date-fns';
+import { BaseComponent } from '../components/base-component.js';
 
 Chart.register(...registerables, annotationPlugin, zoomPlugin);
 
@@ -22,15 +23,15 @@ const COLOR_PALETTE = [
 ];
 
 /**
- * Chart view backed by Chart.js. Requires Chart.js (and optionally
- * chartjs-plugin-annotation and chartjs-plugin-zoom) to be loaded as
- * globals before this class is instantiated.
+ * Pure Chart.js rendering layer. Extends BaseComponent so it participates in
+ * the parent→child destroy lifecycle (e.g. MapFilterMultiSelect cleanup).
  *
- * Series are discovered automatically from the data keys passed to
- * addSnapshot(). Non-primitive values are skipped by default; override
- * serializePrimitive() to extract a number from them instead.
+ * Series are discovered automatically from keys passed to addSnapshot().
+ * Non-primitive values are skipped unless serializePrimitive() returns a number.
+ *
+ * Use setDatasetVisible(key, visible) to show/hide a series without losing data.
  */
-export class ChartView {
+export class ChartView extends BaseComponent {
   /**
    * @param {object}  opts
    * @param {Element} opts.canvas    - <canvas> element
@@ -39,23 +40,56 @@ export class ChartView {
    * @param {Array}   [opts.series]  - optional [{key, color, label}] overrides
    */
   constructor({ canvas, simStart, simEnd, series }) {
+    super();
     this.canvas   = canvas;
     this.simStart = simStart;
     this.simEnd   = simEnd;
     this.running  = false;
 
-    this._chart      = null;
-    this._seriesMap  = new Map();  // key → { colorIdx: number, dataArr: [{x,y}] }
-    this._colorIdx   = 0;
+    this._chart       = null;
+    this._seriesMap   = new Map();  // key → { colorIdx, dataArr }
+    this._colorIdx    = 0;
     this._annotations = {};
+    this._filterBarEl = null;
+    this._controlsEl  = null;
 
-    // Optional pre-configured color/label overrides keyed by series key
     this._seriesConfig = new Map((series ?? []).map(s => [s.key, s]));
 
-    this._renderThrottleMs  = 0;
-    this._chartDirty        = false;
-    this._chartPending      = false;
-    this._chartLastRender   = 0;
+    this._renderThrottleMs = 0;
+    this._chartDirty       = false;
+    this._chartPending     = false;
+    this._chartLastRender  = 0;
+  }
+
+  // ── Filter bar ────────────────────────────────────────────────────────────────
+
+  /**
+   * Instantiate and mount the chart filter bar template into #chartFilterContainer.
+   * Safe to call multiple times; returns the existing element after the first mount.
+   * @returns {Element|null}
+   */
+  mountFilterBar() {
+    if (this._filterBarEl) return this._filterBarEl;
+    const container = document.getElementById('chartFilterContainer');
+    if (!container) return null;
+    container.innerHTML = '';
+    this._filterBarEl = this._getTemplate('tpl-chart-filter-bar');
+    container.appendChild(this._filterBarEl);
+    return this._filterBarEl;
+  }
+
+  // ── Dataset visibility ────────────────────────────────────────────────────────
+
+  /**
+   * Show or hide a series by key without discarding its data.
+   */
+  setDatasetVisible(key, visible) {
+    if (!this._chart) return;
+    const ds = this._chart.data.datasets.find(d => d._seriesKey === key);
+    if (ds && ds.hidden !== !visible) {
+      ds.hidden = !visible;
+      this._scheduleChartUpdate();
+    }
   }
 
   // ── Throttle ──────────────────────────────────────────────────────────────────
@@ -90,9 +124,6 @@ export class ChartView {
   /**
    * Override to handle non-primitive values in a snapshot.
    * Return a number to plot it, or null/undefined to skip the key entirely.
-   * @param {string} key
-   * @param {*}      value  - the raw (non-primitive) value
-   * @returns {number|null|undefined}
    */
   serializePrimitive(key, value) {  // eslint-disable-line no-unused-vars
     return undefined;
@@ -102,12 +133,8 @@ export class ChartView {
 
   /**
    * Record a snapshot of values at a point in time.
-   * Iterates all keys in data; skips non-primitives unless serializePrimitive()
-   * returns a number. Series are created automatically on first encounter.
-   *
-   * @param {string}       type - action type (e.g. 'RECORD_BALANCE')
-   * @param {Date|number}  date
-   * @param {object}       data - flat map of { seriesKey: number }
+   * All keys are stored regardless of current visibility state; call
+   * setDatasetVisible() after to apply the filter.
    */
   addSnapshot(date, data) {
     if (!data || typeof data !== 'object') return;
@@ -144,13 +171,6 @@ export class ChartView {
 
   /**
    * Add a vertical-line annotation to the chart.
-   *
-   * @param {string}       id       - unique key; use the same key to overwrite
-   * @param {object}       opts
-   * @param {string}       opts.label
-   * @param {Date|number}  opts.date
-   * @param {string}       [opts.color='#f59e0b']
-   * @param {string}       [opts.position='start']  - 'start'|'center'|'end'
    */
   addAnnotation(id, { label, date, color = '#f59e0b', position = 'start' }) {
     this._annotations[id] = {
@@ -176,10 +196,6 @@ export class ChartView {
     }
   }
 
-  /**
-   * Remove a previously added annotation by id.
-   * @param {string} id
-   */
   removeAnnotation(id) {
     delete this._annotations[id];
     if (this._chart) {
@@ -188,9 +204,7 @@ export class ChartView {
     }
   }
 
-  /**
-   * Clear all series data and annotations (called on rewind).
-   */
+  /** Clear all series data and annotations (called on rewind). */
   resetHistory() {
     this._seriesMap.clear();
     this._colorIdx = 0;
@@ -202,18 +216,11 @@ export class ChartView {
     }
   }
 
-  /**
-   * Create the Chart.js instance. Must be called after Chart.js is loaded.
-   */
   startViz() {
     this.running = true;
     if (!this._chart) this._initChart();
   }
 
-  /**
-   * Destroy the Chart.js instance (called when the scenario is rebuilt so the
-   * canvas can be reused by the next ChartView).
-   */
   stopViz() {
     this.running = false;
     if (this._chart) {
@@ -222,6 +229,8 @@ export class ChartView {
     }
     this._controlsEl?.remove();
     this._controlsEl = null;
+    this._filterBarEl?.remove();
+    this._filterBarEl = null;
   }
 
   // ── Private ──────────────────────────────────────────────────────────────────
@@ -245,21 +254,21 @@ export class ChartView {
     const cfg   = this._seriesConfig.get(key);
     const color = cfg?.color ?? this._colorFor(colorIdx);
     this._chart.data.datasets.push({
-      label:           this._labelFor(key),
-      data:            dataArr,          // same array reference — push updates it live
-      parsing: false,
-      normalized: true,
-      borderColor:     color,
-      backgroundColor: color + '22',
-      borderWidth: 2.5,
-      pointRadius: 0,
-      pointHitRadius: 12,
-      tension: 0.35,
+      label:                  this._labelFor(key),
+      data:                   dataArr,
+      parsing:                false,
+      normalized:             true,
+      borderColor:            color,
+      backgroundColor:        color + '22',
+      borderWidth:            2.5,
+      pointRadius:            0,
+      pointHitRadius:         12,
+      tension:                0.35,
       cubicInterpolationMode: 'monotone',
-      borderCapStyle: 'round',
-      borderJoinStyle: 'round',
-      fill: false,
-      _seriesKey:      key
+      borderCapStyle:         'round',
+      borderJoinStyle:        'round',
+      fill:                   false,
+      _seriesKey:             key
     });
   }
 
@@ -294,31 +303,22 @@ export class ChartView {
 
     this._buildControls();
 
-    const minX = this.simStart?.getTime() ?? Date.now();
-    const maxX = this.simEnd?.getTime()   ?? (Date.now() + 1);
-
     this._chart = new Chart(this.canvas, {
       type: 'line',
       data: { datasets: [] },
       options: {
-        devicePixelRatio: window.devicePixelRatio || 1,
+        devicePixelRatio:    window.devicePixelRatio || 1,
         responsive:          true,
         maintainAspectRatio: false,
-        animation: false,
+        animation:           false,
         transitions: {
-          active: {
-            animation: {
-              duration: 0
-            }
-          }
+          active: { animation: { duration: 0 } }
         },
         layout: { padding: { top: 10, right: 30, bottom: 10, left: 10 } },
         scales: {
           x: {
             type: 'time',
-            time: {
-              unit: 'month'
-            }
+            time: { unit: 'month' }
           },
           y: {
             ticks: {
@@ -327,9 +327,9 @@ export class ChartView {
               callback: (val) => Number(val).toLocaleString()
             },
             grid: {
-              color: 'rgba(148,163,184,0.08)',
-              lineWidth: 1,
-              drawBorder: false
+              color:       'rgba(148,163,184,0.08)',
+              lineWidth:   1,
+              drawBorder:  false
             }
           }
         },
@@ -337,10 +337,7 @@ export class ChartView {
           legend: {
             labels: {
               color: '#94a3b8',
-              font: {
-                family: 'Inter, system-ui, sans-serif',
-                size: 11
-              }
+              font:  { family: 'Inter, system-ui, sans-serif', size: 11 }
             }
           },
           tooltip: {
@@ -354,15 +351,15 @@ export class ChartView {
             annotations: this._annotations
           },
           decimation: {
-            enabled: true,
+            enabled:   true,
             algorithm: 'lttb',
-            samples: 500
+            samples:   500
           },
           zoom: {
             zoom: {
-              wheel: { enabled: true },
-              pinch: { enabled: true },
-              mode:  'x'
+              wheel:  { enabled: true },
+              pinch:  { enabled: true },
+              mode:   'x'
             },
             pan: {
               enabled: true,
