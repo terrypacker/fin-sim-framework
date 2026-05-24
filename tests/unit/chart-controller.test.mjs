@@ -168,7 +168,7 @@ test('ChartController.getQueryApi: search filters by name substring', async () =
   ctrl.discoverKey('taxOwed');
   ctrl.discoverKey('income');
   ctrl.discoverKey('taxPaid');
-  const { items, total } = await ctrl.getQueryApi().search({ query: 'Tax', offset: 0, limit: 50 });
+  const { items, total } = await ctrl.getQueryApi().search({ query: 'contains(name,Tax)', offset: 0, limit: 50 });
   assert.strictEqual(total, 2);
   assert.ok(items.every(i => i.name.toLowerCase().includes('tax')));
 });
@@ -176,7 +176,7 @@ test('ChartController.getQueryApi: search filters by name substring', async () =
 test('ChartController.getQueryApi: search is case-insensitive', async () => {
   const ctrl = makeCtrl();
   ctrl.discoverKey('totalBalance');
-  const { items } = await ctrl.getQueryApi().search({ query: 'TOTAL', offset: 0, limit: 50 });
+  const { items } = await ctrl.getQueryApi().search({ query: 'contains(name,TOTAL)', offset: 0, limit: 50 });
   assert.strictEqual(items.length, 1);
 });
 
@@ -193,7 +193,7 @@ test('ChartController.getQueryApi: results are sorted alphabetically by name', a
   ctrl.discoverKey('zzebra');
   ctrl.discoverKey('apple');
   ctrl.discoverKey('mango');
-  const { items } = await ctrl.getQueryApi().search({ query: '', offset: 0, limit: 50 });
+  const { items } = await ctrl.getQueryApi().search({ query: '', sort: [{ field: 'name', dir: 'asc' }], offset: 0, limit: 50 });
   const names = items.map(i => i.name);
   assert.deepStrictEqual(names, [...names].sort((a, b) => a.localeCompare(b)));
 });

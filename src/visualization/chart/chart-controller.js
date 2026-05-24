@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import {QueryApi} from "../../query/query-api.js";
+
 /**
  * Tracks which metric keys are known and which are hidden.
  * Persists hidden-key selection across rewinds so the filter survives replay.
@@ -58,20 +60,6 @@ export class ChartController {
    * Each item is { id: key, name: humanLabel }.
    */
   getQueryApi() {
-    const knownKeys = this._knownKeys;
-    return {
-      search({ query, offset = 0, limit = 50 }) {
-        const items = [...knownKeys.values()];
-        const q = (query ?? '').trim().toLowerCase();
-        const filtered = q
-          ? items.filter(i => i.name.toLowerCase().includes(q))
-          : items;
-        filtered.sort((a, b) => a.name.localeCompare(b.name));
-        return Promise.resolve({
-          items: filtered.slice(offset, offset + limit),
-          total: filtered.length,
-        });
-      }
-    };
+    return new QueryApi({getAll: () => [...this._knownKeys.values()]});
   }
 }
