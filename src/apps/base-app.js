@@ -147,6 +147,7 @@ export class BaseApp {
     //if(this.schedulerUI) this.schedulerUI.stopViz();
 
     //Setup the Configuration vizuals
+    if (this.configGraphBuilder) this.configGraphBuilder.destroy();
     this.configGraphBuilder = new ConfigGraphBuilder({
       graphRoot: document.getElementById('graphRoot'),
       graphNodes: document.getElementById('graphNodes'),

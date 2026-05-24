@@ -31,7 +31,7 @@ export class ConfigGraphBuilder {
   /* ───────────────────────────── EVENTS ───────────────────────────── */
 
   _bindEvents() {
-    this.graphNodesEl.addEventListener('mousedown', (e) => {
+    this._onMouseDown = (e) => {
       const el = e.target.closest('.g-node');
       if (!el) return;
 
@@ -45,9 +45,9 @@ export class ConfigGraphBuilder {
       };
 
       el.style.zIndex = 10;
-    });
+    };
 
-    window.addEventListener('mousemove', (e) => {
+    this._onMouseMove = (e) => {
       if (!this.dragState) return;
 
       const rootRect = this.graphRoot.getBoundingClientRect();
@@ -63,13 +63,23 @@ export class ConfigGraphBuilder {
       this.dragState.el.style.top  = y + 'px';
 
       this._drawEdges();
-    });
+    };
 
-    window.addEventListener('mouseup', () => {
+    this._onMouseUp = () => {
       if (!this.dragState) return;
       this.dragState.el.style.zIndex = '';
       this.dragState = null;
-    });
+    };
+
+    this.graphNodesEl.addEventListener('mousedown', this._onMouseDown);
+    window.addEventListener('mousemove', this._onMouseMove);
+    window.addEventListener('mouseup', this._onMouseUp);
+  }
+
+  destroy() {
+    this.graphNodesEl.removeEventListener('mousedown', this._onMouseDown);
+    window.removeEventListener('mousemove', this._onMouseMove);
+    window.removeEventListener('mouseup', this._onMouseUp);
   }
 
   _renderGraph() {

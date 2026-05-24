@@ -301,7 +301,7 @@ export class MetricReducer extends FieldReducer {
 export class ArrayMetricReducer extends MetricReducer {
 
   static fromMetric(fieldName) {
-    return new ArrayMetricReducer(name = 'Array Metric Logger', PRIORITY.METRICS, fieldName);
+    return new ArrayMetricReducer('Array Metric Logger', PRIORITY.METRICS, fieldName);
   }
   constructor(name = 'Array Metric Logger', priority = PRIORITY.METRICS,
      fieldName) {
