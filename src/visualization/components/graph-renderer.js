@@ -92,6 +92,13 @@ export class GraphRenderer extends BaseComponent {
     // 'config' | 'execution' | 'both'
     // Controls whether execution badges (Fired/Changed) are rendered.
     this._layerMode = 'both';
+
+    // When true, only fired nodes (per _execOverlay) are shown.
+    this._firedOnly = false;
+
+    // Node/edge IDs to render with an orange highlight ring (lineage trace).
+    this._highlightNodeSet = new Set();
+    this._highlightEdgeSet = new Set();
     this._bindEvents();
     // mount immediately
     this._mount();
@@ -156,6 +163,41 @@ export class GraphRenderer extends BaseComponent {
    */
   getExecState(nodeId) {
     return this._execOverlay.get(nodeId) ?? null;
+  }
+
+  /**
+   * Highlight a set of config-layer node IDs and the edges between them
+   * in orange (lineage trace).  Cleared automatically on the next event
+   * cycle (EXECUTION_BEGIN).
+   * @param {string[]} nodeIds
+   */
+  setHighlight(nodeIds) {
+    this._highlightNodeSet = new Set(nodeIds);
+    this._highlightEdgeSet = new Set();
+    for (const [key, edge] of this._prevEdges) {
+      if (this._highlightNodeSet.has(edge.from) && this._highlightNodeSet.has(edge.to)) {
+        this._highlightEdgeSet.add(key);
+      }
+    }
+    this.render();
+  }
+
+  clearHighlight() {
+    if (!this._highlightNodeSet.size && !this._highlightEdgeSet.size) return;
+    this._highlightNodeSet.clear();
+    this._highlightEdgeSet.clear();
+    this.render();
+  }
+
+  /**
+   * When true, only nodes that have fired this event cycle are included in
+   * the graph view.  Triggers a relayout + render immediately.
+   * @param {boolean} bool
+   */
+  setFiredOnly(bool) {
+    this._firedOnly = bool;
+    this._relayoutAll();
+    this.render();
   }
 
   /* ───────────────────────── PUBLIC API ───────────────────────────── */
@@ -226,17 +268,24 @@ export class GraphRenderer extends BaseComponent {
     if (serviceChanged) this._relayoutAll();
 
     // Drain execution messages; update the per-node display overlay.
-    for (const _msg of this._drainExecBeginMsgs()) {
-      // New event cycle — reset all execution-time display state.
+    const beginMsgs = this._drainExecBeginMsgs();
+    for (const _msg of beginMsgs) {
+      // New event cycle — reset execution display state and lineage highlight.
       this._execOverlay.clear();
+      this._highlightNodeSet.clear();
+      this._highlightEdgeSet.clear();
     }
-    for (const msg of this._drainExecEndMsgs()) {
+    const endMsgs = this._drainExecEndMsgs();
+    for (const msg of endMsgs) {
       if (!msg.nodeId) continue;
       const entry = this._execOverlay.get(msg.nodeId) ?? {};
       entry.fired = true;
       if (msg.stateDiff?.length) entry.stateChanges = msg.stateDiff;
       this._execOverlay.set(msg.nodeId, entry);
     }
+    // Relayout when fired-only mode is active and the visible set may have changed.
+    if (this._firedOnly && (beginMsgs.length || endMsgs.length)) this._relayoutAll();
+
     for (const msg of this._drainBreakpointMsgs()) {
       if (!msg.nodeId) continue;
       const entry = this._execOverlay.get(msg.nodeId) ?? {};
@@ -371,6 +420,9 @@ export class GraphRenderer extends BaseComponent {
     // selected
     el.classList.toggle('selected', node.id === this.selectedNodeId);
 
+    // lineage highlight
+    el.classList.toggle('node-highlighted', this._highlightNodeSet.has(node.id));
+
     // flashing
     el.classList.toggle('node-flash', !!data.breakpointHit);
 
@@ -430,6 +482,16 @@ export class GraphRenderer extends BaseComponent {
 
   _selectNode(id) {
     this.selectedNodeId = id;
+    // Bring selected node element to top of the node layer.
+    const el = this._nodeEls.get(id);
+    if (el) this.graphNodesEl.appendChild(el);
+    // Bring connected edges to top of the edge layer.
+    for (const [key, path] of this._edgeEls) {
+      const sep = key.indexOf('->');
+      if (key.slice(0, sep) === id || key.slice(sep + 2) === id) {
+        this.graphEdgesEl.appendChild(path);
+      }
+    }
     this.render();
   }
 
@@ -473,6 +535,7 @@ export class GraphRenderer extends BaseComponent {
 
     const d = `M ${x1} ${y1} C ${x1 + 60} ${y1}, ${x2 - 60} ${y2}, ${x2} ${y2}`;
     path.setAttribute('d', d);
+    path.classList.toggle('highlighted', this._highlightEdgeSet.has(id));
   }
 
   /* ───────────────────────── Layout Helpers ───────────────────────────── */
