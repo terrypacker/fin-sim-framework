@@ -121,7 +121,8 @@ export class ScenarioLoader {
     const sim = services.simulationRegistry?.getPrimary?.();
 
     if (cfg.toolsets?.length > 0) {
-      const { statePatches } = new ScenarioCompiler(this._toolsetRegistry).compile(cfg, services);
+      const { paramSchema: toolsetParamSchema, statePatches } =
+        new ScenarioCompiler(this._toolsetRegistry).compile(cfg, services);
       cfg.initialState = statePatches;
 
       // Snapshot the compiled graph back to cfg so the config is a complete
@@ -138,23 +139,50 @@ export class ScenarioLoader {
       cfg.collectibles   = (collectibleService?.getAll()   ?? []).map(n => ScenarioSerializer._serializeCollectible(n));
 
       // Normalize params to a typed schema array if the prebuilt hasn't done it yet (old saved cfg).
-      const schema = cfg.scenarioClass?.getParamSchema?.() ?? [];
+      // The full schema is the scenario-class schema followed by any toolset params not already
+      // covered by the scenario. Scenario-level entries win on key collisions because they carry
+      // richer labels/groups and may include `node:` declarations for the param→field cascade.
+      // Within toolset entries the first occurrence wins (multiple toolsets may legitimately
+      // declare the same key — e.g. monthlyExpenses in both US_RETIREMENT and AU_RETIREMENT —
+      // and duplicates in cfg.params would break the cfg.params → cfg.parameters sync loop).
+      const scenarioSchema = cfg.scenarioClass?.getParamSchema?.() ?? [];
+      const scenarioKeys   = new Set(scenarioSchema.map(s => s.key));
+      const toolsetEntries = [];
+      const seenToolsetKeys = new Set();
+      for (const t of (toolsetParamSchema ?? [])) {
+        if (scenarioKeys.has(t.key) || seenToolsetKeys.has(t.key)) continue;
+        seenToolsetKeys.add(t.key);
+        toolsetEntries.push(t);
+      }
+      const combinedSchema = [...scenarioSchema, ...toolsetEntries];
+
+      // Seed entry.value from cfg.parameters when it carries an explicit value
+      // (e.g. set by buildDefaultConfig or a JSON import). Otherwise fall back
+      // to the schema's defaultValue. This keeps the UI representation aligned
+      // with the value the compiler actually used.
+      //
+      // Omit the `value` key entirely when both sources are undefined — some
+      // structured-clone implementations (notably jsdom's) drop undefined props,
+      // which would otherwise make active.params and structuredClone(active.params)
+      // unequal.
+      const _toEntry = s => {
+        const v = cfg.parameters?.[s.key];
+        const value = v !== undefined ? v : s.defaultValue;
+        const entry = { name: s.key, label: s.label, type: s.type, group: s.group };
+        if (value !== undefined) entry.value = value;
+        if (s.node) entry.node = s.node;
+        return entry;
+      };
+
       if (!Array.isArray(cfg.params)) {
-        cfg.params = schema.map(s => {
-          const entry = { name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue };
-          if (s.node) entry.node = s.node;
-          return entry;
-        });
-      } else if (schema.length > 0) {
+        cfg.params = combinedSchema.map(_toEntry);
+      } else if (combinedSchema.length > 0) {
         // Schema-drift guard: merge any schema entries missing from cfg.params so new
-        // params added to the schema propagate to existing saved scenarios with their defaults.
+        // params added to the schema (scenario or toolset) propagate to existing saved
+        // scenarios with their defaults.
         const existing = new Set(cfg.params.map(p => p.name));
-        for (const s of schema) {
-          if (!existing.has(s.key)) {
-            const entry = { name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue };
-            if (s.node) entry.node = s.node;
-            cfg.params.push(entry);
-          }
+        for (const s of combinedSchema) {
+          if (!existing.has(s.key)) cfg.params.push(_toEntry(s));
         }
       }
     } else if (ScenarioSerializer.hasSerializedGraph(cfg)) {

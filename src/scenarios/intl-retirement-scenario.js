@@ -145,18 +145,6 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     description: 'Gross monthly wage for spouse before retirement',
     node: { type: 'person', id: 'spouse', field: 'monthlyWage' },
   },
-  {
-    key: 'moveYear', label: 'US→AU Move Year',
-    type: 'Number', group: 'People', mc: false, opt: true,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.moveYear,
-    description: 'Calendar year of US→AU migration (Jul 1)',
-  },
-  {
-    key: 'stockDividendReinvest', label: 'Reinvest US Stock Dividends',
-    type: 'Boolean', group: 'People', mc: false, opt: true,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.stockDividendReinvest,
-    description: 'If false, US stock dividends are taken as cash',
-  },
 
   // ── US Account Balances ────────────────────────────────────────────────────
   {
@@ -281,70 +269,6 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     description: 'Annual growth rate for spouse superannuation',
   },
 
-  // ── US Account Rates ───────────────────────────────────────────────────────
-  {
-    key: 'usSavingsInterestRate', label: 'US Savings Interest Rate',
-    type: 'Number', group: 'US Account Rates', mc: true, opt: true,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.usSavingsInterestRate,
-    description: 'Annual interest rate on US cash savings',
-  },
-  {
-    key: 'rothGrowthRate', label: 'Roth IRA Growth Rate',
-    type: 'Number', group: 'US Account Rates', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.rothGrowthRate,
-    description: 'Annual growth rate for Roth IRA',
-  },
-  {
-    key: 'iraGrowthRate', label: 'Traditional IRA Growth Rate',
-    type: 'Number', group: 'US Account Rates', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.iraGrowthRate,
-    description: 'Annual growth rate for Traditional IRA',
-  },
-  {
-    key: 'k401GrowthRate', label: '401(k) Growth Rate',
-    type: 'Number', group: 'US Account Rates', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.k401GrowthRate,
-    description: 'Annual growth rate for 401(k)',
-  },
-  {
-    key: 'usStockGrowthRate', label: 'US Stock Growth Rate',
-    type: 'Number', group: 'US Account Rates', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.usStockGrowthRate,
-    description: 'Annual capital growth rate for US brokerage stock',
-  },
-  {
-    key: 'stockDividendRate', label: 'US Stock Dividend Rate',
-    type: 'Number', group: 'US Account Rates', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.stockDividendRate,
-    description: 'Annual dividend yield on US stock',
-  },
-  {
-    key: 'fixedIncomeInterestRate', label: 'Fixed Income Interest Rate',
-    type: 'Number', group: 'US Account Rates', mc: true, opt: true,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.fixedIncomeInterestRate,
-    description: 'Annual interest rate on fixed income',
-  },
-
-  // ── AU Account Rates ───────────────────────────────────────────────────────
-  {
-    key: 'auSavingsInterestRate', label: 'AU Savings Interest Rate',
-    type: 'Number', group: 'AU Account Rates', mc: true, opt: true,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.auSavingsInterestRate,
-    description: 'Annual interest rate on AU cash savings',
-  },
-  {
-    key: 'auStockGrowthRate', label: 'AU Stock Growth Rate',
-    type: 'Number', group: 'AU Account Rates', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.auStockGrowthRate,
-    description: 'Annual capital growth rate for AU stock',
-  },
-  {
-    key: 'auStockDividendRate', label: 'AU Stock Dividend Rate',
-    type: 'Number', group: 'AU Account Rates', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.auStockDividendRate,
-    description: 'Annual dividend yield on AU stock',
-  },
-
   // ── Min Balances ───────────────────────────────────────────────────────────
   {
     key: 'usSavingsMinBalance', label: 'US Savings Min Balance (USD)',
@@ -361,83 +285,6 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     node: { type: 'account', stateKey: 'auSavingsAccount', field: 'minimumBalance' },
   },
 
-  // ── Transfer & Expenses ────────────────────────────────────────────────────
-  {
-    key: 'exchangeRateUsdToAud', label: 'Exchange Rate USD→AUD',
-    type: 'Number', group: 'Transfer & Expenses', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.exchangeRateUsdToAud,
-    description: 'USD to AUD exchange rate applied on transfers',
-  },
-  {
-    key: 'intlTransferFeeUsd', label: 'International Transfer Fee (USD)',
-    type: 'Number', group: 'Transfer & Expenses', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.intlTransferFeeUsd,
-    description: 'Fixed fee per international wire transfer',
-  },
-  {
-    key: 'monthlyExpenses', label: 'Monthly Expenses',
-    type: 'Number', group: 'Transfer & Expenses', mc: true, opt: true,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.monthlyExpenses,
-    description: 'Monthly living expenses in local currency',
-  },
-
-  // ── Inflation ──────────────────────────────────────────────────────────────
-  {
-    key: 'usInflationRate', label: 'US Inflation Rate',
-    type: 'Number', group: 'Inflation', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.usInflationRate,
-    description: 'Annual US inflation rate applied to USD expenses',
-  },
-  {
-    key: 'auInflationRate', label: 'AU Inflation Rate',
-    type: 'Number', group: 'Inflation', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.auInflationRate,
-    description: 'Annual AU inflation rate applied to AUD expenses',
-  },
-
-  // ── Roth Conversion ────────────────────────────────────────────────────────
-  {
-    key: 'rothConversionEnabled', label: 'Roth Conversion Enabled',
-    type: 'Boolean', group: 'Roth Conversion', mc: false, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.rothConversionEnabled,
-    description: 'Enable bracket-fill Roth conversion policy',
-  },
-  {
-    key: 'rothConversionStartYear', label: 'Roth Conversion Start Year',
-    type: 'Number', group: 'Roth Conversion', mc: false, opt: true,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.rothConversionStartYear,
-    description: 'First year to convert; null = primary retirement year',
-  },
-  {
-    key: 'rothConversionEndYear', label: 'Roth Conversion End Year',
-    type: 'Number', group: 'Roth Conversion', mc: false, opt: true,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.rothConversionEndYear,
-    description: 'Last year to convert; null = year before RMD start at age 73',
-  },
-  {
-    key: 'rothConversionMaxBracket', label: 'Roth Conversion Max Bracket Rate',
-    type: 'Number', group: 'Roth Conversion', mc: false, opt: true,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.rothConversionMaxBracket,
-    description: 'Fill ordinary income up to top of this marginal bracket',
-  },
-  {
-    key: 'rothConversionOwner', label: 'Roth Conversion Owner',
-    type: 'String', group: 'Roth Conversion', mc: false, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.rothConversionOwner,
-    description: "Whose IRA to convert: 'primary', 'spouse', or 'both'",
-  },
-  {
-    key: 'rothConversionMonth', label: 'Roth Conversion Month',
-    type: 'Number', group: 'Roth Conversion', mc: false, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.rothConversionMonth,
-    description: 'Month (1–12) when the policy fires each year',
-  },
-  {
-    key: 'rothConversionDay', label: 'Roth Conversion Day',
-    type: 'Number', group: 'Roth Conversion', mc: false, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.rothConversionDay,
-    description: 'Day of month when the policy fires each year',
-  },
 ];
 
 /**
