@@ -119,7 +119,7 @@ test('createActiveScenario: uses scenarioId to find matching prebuilt factory', 
   expect(pbB.factory).toHaveBeenCalledWith({}, {}, new Date(expectedStart), new Date(expectedEnd));
 });
 
-test('createActiveScenario: falls back to first prebuilt for user scenario without scenarioId match', () => {
+test('createActiveScenario: uses fallbackFactory for user scenario without scenarioId match', () => {
   const pbA = makePrebuilt('alpha', 1);
   const pbB = makePrebuilt('beta',  2);
   const expectedStart = '2025-01-01';
@@ -129,8 +129,13 @@ test('createActiveScenario: falls back to first prebuilt for user scenario witho
     scenarios: [{ name: 'S', params: [], initialState: {}, simStart: expectedStart, simEnd: expectedEnd }],
   });
   const { service } = makeStack({ prebuiltScenarios: [pbA, pbB] });
+  const fallback = jest.fn((_p, _i) => ({ buildSim: jest.fn(), loadDefaults: jest.fn() }));
+  service.setFallbackFactory(fallback);
   service.createActiveScenario();
-  expect(pbA.factory).toHaveBeenCalledWith({}, {});
+  expect(pbA.factory).not.toHaveBeenCalled();
+  expect(fallback).toHaveBeenCalledWith(
+    {}, {}, new Date(expectedStart), new Date(expectedEnd)
+  );
 });
 
 test('createActiveScenario: throws when no factory available', () => {
@@ -199,10 +204,11 @@ test('_getParams: converts Number params to flat object', () => {
     scenarios: [{ name: 'S', params: [{ name: 'drift', type: 'Number', value: 0.07 }] }],
   });
   const { service } = makeStack({ prebuiltScenarios: [makePrebuilt('alpha')] });
-  // Access via createActiveScenario to observe what the factory receives
-  const pb = service._registry.get('p:alpha');
+  // Use fallback factory (no scenarioId) to observe what params the factory receives.
+  const fallback = jest.fn((_p, _i) => ({ buildSim: jest.fn(), loadDefaults: jest.fn() }));
+  service.setFallbackFactory(fallback);
   service.createActiveScenario();
-  const callArgs = pb.factory.mock.calls[0][0];
+  const callArgs = fallback.mock.calls[0][0];
   assert.strictEqual(callArgs.drift, 0.07);
 });
 

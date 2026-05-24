@@ -677,6 +677,9 @@ export class IntlRetirementScenario extends BaseScenario {
     for (let y = startYear - 1; y <= endYear; y++) applyTo(periodService, buildAuFiscalYear(y));
     this._taxService = new TaxService();
     this._taxService.setup(this.sim, ['US', 'AU'], periodService);
+    // TaxService.setup() injects currentPeriods into sim.state; merge into initialState so
+    // serialize() captures it for round-trip import (Period objects are immutable plain data).
+    this.initialState = { ...this.initialState, currentPeriods: this._taxService._currentPeriods };
   }
 
   /**

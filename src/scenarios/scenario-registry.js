@@ -138,11 +138,22 @@ export class ScenarioRegistry {
 
   replaceUserScenarios(data) {
     [...this._scenarios.keys()].filter(k => k.startsWith('u:')).forEach(k => this._scenarios.delete(k));
+    let firstId  = null;
+    let activeId = null;
     if (Array.isArray(data.scenarios)) {
       data.scenarios.forEach((s, i) => {
-        s.id = 'u:' + i;
+        s.id      = 'u:' + i;
+        s.prebuilt = false;
+        if (i === 0)  firstId  = s.id;
+        if (s.active) activeId = s.id;
         this._scenarios.set(s.id, s);
       });
+    }
+    const targetId = activeId ?? firstId;
+    if (targetId) {
+      this._scenarios.forEach(s => { s.active = false; });
+      this._scenarios.get(targetId).active = true;
+      this._persistLastUsed(targetId);
     }
     this._persistUserScenarios();
   }

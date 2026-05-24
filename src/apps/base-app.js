@@ -18,6 +18,8 @@
  */
 
 import { $, fmtUTC, fmtLocal }     from '../visualization/ui-utils.js';
+import { BaseScenario }            from '../scenarios/base-scenario.js';
+import { ScenarioSerializer }      from '../scenarios/scenario-serializer.js';
 import { ChartController }          from '../visualization/chart/chart-controller.js';
 import { ChartView }                from '../visualization/chart/chart-view.js';
 import { ChartPresenter }           from '../visualization/chart/chart-presenter.js';
@@ -127,6 +129,19 @@ export class BaseApp extends BaseComponent {
     //TODO Clean up for #146
     const registry = ServiceRegistry.getInstance();
     registry.scenarioRegistry.loadPrebuilt(this._prebuiltScenarios);
+
+    // Register the generic fallback used when an uploaded scenario has no scenarioId.
+    // BaseScenario has no domain defaults — buildDefaultInitialState returns null (empty
+    // state) and loadDefaults is a no-op, so ScenarioSerializer.deserialize() owns setup.
+    registry.scenarioService.setFallbackFactory(
+      (params, initialState, simStart, simEnd) => new BaseScenario({
+        context: registry.simulationContext,
+        params,
+        initialState,
+        simStart,
+        simEnd,
+      })
+    );
 
     // ── Config graph (visual node canvas + filter bar) ────────────────────────
     this.configGraphView = new ConfigGraphView({
@@ -282,7 +297,20 @@ export class BaseApp extends BaseComponent {
       this._replayParams = null;
     }
     this.scenario.buildSim();
-    this.scenario.loadDefaults();
+
+    // Scenarios with serialized config (events/handlers/etc.) restore themselves
+    // via ScenarioSerializer.deserialize() rather than loadDefaults(), which
+    // would otherwise re-create the domain defaults from scratch.
+    const activeConfig = registry.scenarioService.getActive();
+    const hasSerializedConfig = (activeConfig?.events?.length  > 0)
+                             || (activeConfig?.handlers?.length > 0)
+                             || (activeConfig?.actions?.length  > 0)
+                             || (activeConfig?.reducers?.length > 0);
+    if (hasSerializedConfig) {
+      ScenarioSerializer.deserialize(activeConfig, registry);
+    } else {
+      this.scenario.loadDefaults();
+    }
     // Derive display settings from DOM so rebuilds preserve user selections.
     const currentFmt      = $('tzSelect')?.value === 'utc' ? fmtUTC : fmtLocal;
     const currentCurrency = $('displayCurrency')?.value ?? 'USD';
