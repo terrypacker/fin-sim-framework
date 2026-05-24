@@ -68,9 +68,10 @@ export class K401EarningsApplyReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const ka = state.k401Account;
+    const key = action.stateKey ?? 'k401Account';
+    const ka = state[key];
     return this.newState(state, {
-      k401Account: {
+      [key]: {
         ...ka,
         balance:       ka.balance       + action.amount,
         earningsBasis: ka.earningsBasis + action.amount,

@@ -143,17 +143,18 @@ export class SuperEarningsApplyReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const sa = state.superAccount;
+    const key = action.stateKey ?? 'superAccount';
+    const sa = state[key];
     return this.newState(
       state,
       {
-        superAccount: {
+        [key]: {
           ...sa,
           balance:       sa.balance       + action.amount,
           earningsBasis: sa.earningsBasis + action.amount,
         },
       },
-      [{ type: 'SUPER_EARNINGS_TAX', amount: action.amount }]
+      [{ type: 'SUPER_EARNINGS_TAX', amount: action.amount, stateKey: key }]
     );
   }
 }

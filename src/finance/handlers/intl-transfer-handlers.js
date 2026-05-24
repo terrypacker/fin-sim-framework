@@ -14,32 +14,35 @@ import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framew
 /**
  * Handles user-triggered INTL_TRANSFER_TO_US events (AUD → USD).
  *
- * data.amount is the AUD amount the user wants to send from auSavingsAccount.
+ * data.amount is the AUD amount the user wants to send from the AU savings account.
  * The actual AUD withdrawn is capped to the available balance; the USD received
- * is computed after the fixed fee is subtracted. The computation is:
+ * is computed after the fixed fee is subtracted:
  *
- *   audActual     = min(data.amount, auSavingsAccount.balance)
+ *   audActual     = min(data.amount, auSavings.balance)
  *   targetDeficit = max(0, audActual / rate − fee)   [USD to land in US account]
  *
  * Emits INTL_TRANSFER_APPLY direction=AU_TO_US so IntlTransferApplyReducer
  * handles the actual ledger mutations.
  *
- * Exchange rate and fee are read from state (state.exchangeRateUsdToAud,
- * state.intlTransferFeeUsd) at event time.
- *
  * @param {object} [opts]
- * @param {string} [opts.auAccountKey='auSavingsAccount']
- * @param {string} [opts.usAccountKey='usSavingsAccount']
+ * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry
+ * @param {string} opts.auRole      - ACCOUNT_ROLES value for the AU savings account
+ * @param {string} [opts.auOwnerId] - Person id for AU savings (null = any owner)
+ * @param {string} opts.usRole      - ACCOUNT_ROLES value for the US savings account
+ * @param {string} [opts.usOwnerId] - Person id for US savings (null = any owner)
  */
 export class IntlTransferToUsHandler extends HandlerEntry {
   static description = 'User-triggered AUD→USD transfer: converts data.amount AUD to USD using state exchange rate and fee, emitting INTL_TRANSFER_APPLY direction=AU_TO_US.';
 
   static eventType = 'INTL_TRANSFER_TO_US';
 
-  constructor({ auAccountKey = 'auSavingsAccount', usAccountKey = 'usSavingsAccount' } = {}) {
+  constructor({ stateRegistry, auRole, auOwnerId = null, usRole, usOwnerId = null } = {}) {
     super(null, 'International Transfer to US');
-    this.auAccountKey = auAccountKey;
-    this.usAccountKey = usAccountKey;
+    this.stateRegistry = stateRegistry;
+    this.auRole        = auRole;
+    this.auOwnerId     = auOwnerId;
+    this.usRole        = usRole;
+    this.usOwnerId     = usOwnerId;
     this.generatedActionTypes = ['INTL_TRANSFER_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
@@ -47,12 +50,14 @@ export class IntlTransferToUsHandler extends HandlerEntry {
     const amount        = data?.amount ?? 0;
     const rate          = state.exchangeRateUsdToAud;
     const fee           = state.intlTransferFeeUsd;
-    const audActual     = Math.min(amount, state[this.auAccountKey].balance);
+    const auBalance     = this.stateRegistry.getAccount(state, this.auRole, this.auOwnerId)?.balance ?? 0;
+    const audActual     = Math.min(amount, auBalance);
     const targetDeficit = Math.max(0, audActual / rate - fee);
+    const usStateKey    = this.stateRegistry.getStateKey(this.usRole, this.usOwnerId);
     return [
       { type: 'INTL_TRANSFER_APPLY', direction: 'AU_TO_US', targetDeficit },
       new RecordMetricAction('intl_transfer_to_us', targetDeficit),
-      new RecordBalanceAction(`${this.usAccountKey}.balance`, `${this.usAccountKey}`),
+      new RecordBalanceAction(`${usStateKey}.balance`, usStateKey),
     ];
   }
 }
@@ -60,29 +65,35 @@ export class IntlTransferToUsHandler extends HandlerEntry {
 /**
  * Handles user-triggered INTL_TRANSFER_TO_AU events (USD → AUD).
  *
- * data.amount is the USD amount the user wants to send from usSavingsAccount.
+ * data.amount is the USD amount the user wants to send from the US savings account.
  * The actual USD withdrawn is capped to the available balance; the AUD received
- * is computed after the fixed fee is subtracted. The computation is:
+ * is computed after the fixed fee is subtracted:
  *
- *   usdActual     = min(data.amount, usSavingsAccount.balance)
+ *   usdActual     = min(data.amount, usSavings.balance)
  *   targetDeficit = max(0, (usdActual − fee) × rate)   [AUD to land in AU account]
  *
  * Emits INTL_TRANSFER_APPLY direction=US_TO_AU so IntlTransferApplyReducer
  * handles the actual ledger mutations.
  *
  * @param {object} [opts]
- * @param {string} [opts.usAccountKey='usSavingsAccount']
- * @param {string} [opts.auAccountKey='auSavingsAccount']
+ * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry
+ * @param {string} opts.usRole      - ACCOUNT_ROLES value for the US savings account
+ * @param {string} [opts.usOwnerId] - Person id for US savings (null = any owner)
+ * @param {string} opts.auRole      - ACCOUNT_ROLES value for the AU savings account
+ * @param {string} [opts.auOwnerId] - Person id for AU savings (null = any owner)
  */
 export class IntlTransferToAuHandler extends HandlerEntry {
   static description = 'User-triggered USD→AUD transfer: converts data.amount USD to AUD using state exchange rate and fee, emitting INTL_TRANSFER_APPLY direction=US_TO_AU.';
 
   static eventType = 'INTL_TRANSFER_TO_AU';
 
-  constructor({ usAccountKey = 'usSavingsAccount', auAccountKey = 'auSavingsAccount' } = {}) {
+  constructor({ stateRegistry, usRole, usOwnerId = null, auRole, auOwnerId = null } = {}) {
     super(null, 'International Transfer to AU');
-    this.usAccountKey = usAccountKey;
-    this.auAccountKey = auAccountKey;
+    this.stateRegistry = stateRegistry;
+    this.usRole        = usRole;
+    this.usOwnerId     = usOwnerId;
+    this.auRole        = auRole;
+    this.auOwnerId     = auOwnerId;
     this.generatedActionTypes = ['INTL_TRANSFER_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
@@ -90,12 +101,14 @@ export class IntlTransferToAuHandler extends HandlerEntry {
     const amount        = data?.amount ?? 0;
     const rate          = state.exchangeRateUsdToAud;
     const fee           = state.intlTransferFeeUsd;
-    const usdActual     = Math.min(amount, state[this.usAccountKey].balance);
+    const usBalance     = this.stateRegistry.getAccount(state, this.usRole, this.usOwnerId)?.balance ?? 0;
+    const usdActual     = Math.min(amount, usBalance);
     const targetDeficit = Math.max(0, (usdActual - fee) * rate);
+    const auStateKey    = this.stateRegistry.getStateKey(this.auRole, this.auOwnerId);
     return [
       { type: 'INTL_TRANSFER_APPLY', direction: 'US_TO_AU', targetDeficit },
       new RecordMetricAction('intl_transfer_to_au', targetDeficit),
-      new RecordBalanceAction(`${this.auAccountKey}.balance`, `${this.auAccountKey}`),
+      new RecordBalanceAction(`${auStateKey}.balance`, auStateKey),
     ];
   }
 }

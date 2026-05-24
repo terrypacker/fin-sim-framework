@@ -93,11 +93,13 @@ export class AuTaxModule2026 extends BaseTaxModule {
       // EVT-23: super earnings — AU super tax at 15%, no US tax
       ['SUPER_EARNINGS_TAX', (state, action) => {
         const superTax = action.amount * SUPER_TAX_RATE;
-        const perPerson = state.people != null && state.superAccount != null;
+        const accountKey = action.stateKey ?? 'superAccount';
+        const account = state[accountKey];
+        const perPerson = state.people != null && account != null;
         return {
           ...state,
           ...(perPerson
-            ? { auPersonSuperTaxYTD: accumulateByOwnership(state.auPersonSuperTaxYTD ?? {}, state.superAccount, superTax, state.people) }
+            ? { auPersonSuperTaxYTD: accumulateByOwnership(state.auPersonSuperTaxYTD ?? {}, account, superTax, state.people) }
             : { auSuperTaxYTD: state.auSuperTaxYTD + superTax }),
         };
       }],

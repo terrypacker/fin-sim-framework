@@ -19,21 +19,24 @@ export class IntlRothEarningsHandler extends HandlerEntry {
   static description = 'Computes annual growth on the Roth IRA (balance × growthRate) and dispatches ROTH_EARNINGS_APPLY.';
   static eventType = 'INTL_ROTH_EARNINGS';
 
-  constructor({ accountKey = 'rothAccount', growthRate = 0.07 } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, growthRate = 0.07 } = {}) {
     super(null, 'Roth IRA Earnings');
-    this.accountKey = accountKey;
-    this.growthRate = growthRate;
+    this.stateRegistry = stateRegistry;
+    this.role          = role;
+    this.ownerId       = ownerId;
+    this.growthRate    = growthRate;
     this.generatedActionTypes = ['ROTH_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ state }) {
-    const balance = state[this.accountKey]?.balance ?? 0;
-    const amount  = +(balance * this.growthRate).toFixed(2);
-    if (amount <= 0) return [new RecordBalanceAction(`${this.accountKey}.balance`, this.accountKey)];
+    const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
+    const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
+    const amount   = +(balance * this.growthRate).toFixed(2);
+    if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'ROTH_EARNINGS_APPLY', amount },
+      { type: 'ROTH_EARNINGS_APPLY', amount, stateKey },
       new RecordMetricAction('roth_earnings', amount),
-      new RecordBalanceAction(`${this.accountKey}.balance`, this.accountKey),
+      new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
 }
@@ -46,21 +49,24 @@ export class IntlIraEarningsHandler extends HandlerEntry {
   static description = 'Computes annual growth on the Traditional IRA (balance × growthRate) and dispatches IRA_EARNINGS_APPLY.';
   static eventType = 'INTL_IRA_EARNINGS';
 
-  constructor({ accountKey = 'iraAccount', growthRate = 0.07 } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, growthRate = 0.07 } = {}) {
     super(null, 'IRA Earnings');
-    this.accountKey = accountKey;
-    this.growthRate = growthRate;
+    this.stateRegistry = stateRegistry;
+    this.role          = role;
+    this.ownerId       = ownerId;
+    this.growthRate    = growthRate;
     this.generatedActionTypes = ['IRA_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ state }) {
-    const balance = state[this.accountKey]?.balance ?? 0;
-    const amount  = +(balance * this.growthRate).toFixed(2);
-    if (amount <= 0) return [new RecordBalanceAction(`${this.accountKey}.balance`, this.accountKey)];
+    const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
+    const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
+    const amount   = +(balance * this.growthRate).toFixed(2);
+    if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'IRA_EARNINGS_APPLY', amount },
+      { type: 'IRA_EARNINGS_APPLY', amount, stateKey },
       new RecordMetricAction('ira_earnings', amount),
-      new RecordBalanceAction(`${this.accountKey}.balance`, this.accountKey),
+      new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
 }
@@ -73,21 +79,24 @@ export class IntlK401EarningsHandler extends HandlerEntry {
   static description = 'Computes annual growth on the 401k (balance × growthRate) and dispatches K401_EARNINGS_APPLY.';
   static eventType = 'INTL_K401_EARNINGS';
 
-  constructor({ accountKey = 'k401Account', growthRate = 0.07 } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, growthRate = 0.07 } = {}) {
     super(null, '401k Earnings');
-    this.accountKey = accountKey;
-    this.growthRate = growthRate;
+    this.stateRegistry = stateRegistry;
+    this.role          = role;
+    this.ownerId       = ownerId;
+    this.growthRate    = growthRate;
     this.generatedActionTypes = ['K401_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ state }) {
-    const balance = state[this.accountKey]?.balance ?? 0;
-    const amount  = +(balance * this.growthRate).toFixed(2);
-    if (amount <= 0) return [new RecordBalanceAction(`${this.accountKey}.balance`, this.accountKey)];
+    const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
+    const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
+    const amount   = +(balance * this.growthRate).toFixed(2);
+    if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'K401_EARNINGS_APPLY', amount },
+      { type: 'K401_EARNINGS_APPLY', amount, stateKey },
       new RecordMetricAction('k401_earnings', amount),
-      new RecordBalanceAction(`${this.accountKey}.balance`, this.accountKey),
+      new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
 }
@@ -101,21 +110,24 @@ export class IntlUsStockEarningsHandler extends HandlerEntry {
   static description = 'Computes annual unrealized appreciation on the US stock account (balance × growthRate) and dispatches STOCK_EARNINGS_APPLY.';
   static eventType = 'INTL_STOCK_EARNINGS';
 
-  constructor({ accountKey = 'stockAccount', growthRate = 0.05 } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, growthRate = 0.05 } = {}) {
     super(null, 'US Stock Earnings');
-    this.accountKey = accountKey;
-    this.growthRate = growthRate;
+    this.stateRegistry = stateRegistry;
+    this.role          = role;
+    this.ownerId       = ownerId;
+    this.growthRate    = growthRate;
     this.generatedActionTypes = ['STOCK_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ state }) {
-    const balance = state[this.accountKey]?.balance ?? 0;
-    const amount  = +(balance * this.growthRate).toFixed(2);
-    if (amount <= 0) return [new RecordBalanceAction(`${this.accountKey}.balance`, this.accountKey)];
+    const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
+    const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
+    const amount   = +(balance * this.growthRate).toFixed(2);
+    if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'STOCK_EARNINGS_APPLY', amount },
       new RecordMetricAction('us_stock_earnings', amount),
-      new RecordBalanceAction(`${this.accountKey}.balance`, this.accountKey),
+      new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
 }
@@ -129,21 +141,24 @@ export class IntlAuStockEarningsHandler extends HandlerEntry {
   static description = 'Computes annual unrealized appreciation on the AU stock account (balance × growthRate) and dispatches AU_STOCK_EARNINGS_APPLY.';
   static eventType = 'INTL_AU_STOCK_EARNINGS';
 
-  constructor({ accountKey = 'auStockAccount', growthRate = 0.06 } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, growthRate = 0.06 } = {}) {
     super(null, 'AU Stock Earnings');
-    this.accountKey = accountKey;
-    this.growthRate = growthRate;
+    this.stateRegistry = stateRegistry;
+    this.role          = role;
+    this.ownerId       = ownerId;
+    this.growthRate    = growthRate;
     this.generatedActionTypes = ['AU_STOCK_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ state }) {
-    const balance = state[this.accountKey]?.balance ?? 0;
-    const amount  = +(balance * this.growthRate).toFixed(2);
-    if (amount <= 0) return [new RecordBalanceAction(`${this.accountKey}.balance`, this.accountKey)];
+    const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
+    const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
+    const amount   = +(balance * this.growthRate).toFixed(2);
+    if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'AU_STOCK_EARNINGS_APPLY', amount },
       new RecordMetricAction('au_stock_earnings', amount),
-      new RecordBalanceAction(`${this.accountKey}.balance`, this.accountKey),
+      new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
 }
@@ -159,10 +174,12 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
   static description = 'Computes annual AU stock dividends (balance × dividendRate) and routes to the franked-resident or franked-non-resident apply action based on residency.';
   static eventType = 'INTL_AU_STOCK_DIVIDEND';
 
-  constructor({ accountKey = 'auStockAccount', dividendRate = 0.04 } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, dividendRate = 0.04 } = {}) {
     super(null, 'AU Stock Dividend');
-    this.accountKey   = accountKey;
-    this.dividendRate = dividendRate;
+    this.stateRegistry = stateRegistry;
+    this.role          = role;
+    this.ownerId       = ownerId;
+    this.dividendRate  = dividendRate;
     this.generatedActionTypes = [
       'AU_DIVIDEND_FRANKED_RESIDENT_APPLY',
       'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY',
@@ -172,9 +189,10 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
   }
 
   call({ state }) {
-    const balance = state[this.accountKey]?.balance ?? 0;
-    const amount  = +(balance * this.dividendRate).toFixed(2);
-    if (amount <= 0) return [new RecordBalanceAction(`${this.accountKey}.balance`, this.accountKey)];
+    const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
+    const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
+    const amount   = +(balance * this.dividendRate).toFixed(2);
+    if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
 
     const actionType = state.isAuResident
       ? 'AU_DIVIDEND_FRANKED_RESIDENT_APPLY'
@@ -183,7 +201,7 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
     return [
       { type: actionType, amount },
       new RecordMetricAction('au_stock_dividend', amount),
-      new RecordBalanceAction(`${this.accountKey}.balance`, this.accountKey),
+      new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
 }
@@ -192,37 +210,37 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
  * Handles INTL_AU_SAVINGS_INTEREST events.
  *
  * Computes annual interest as: balance × interestRate, rounded to 2 dp.
- * Emits AU_SAVINGS_EARNINGS_APPLY (registered by AuAccountModule) which
- * credits the account and chains AU_SAVINGS_EARNINGS_TAX.
- *
- * Uses the INTL_ prefix to avoid colliding with the account module's own
- * AU_SAVINGS_EARNINGS event handler (which expects data.amount to be provided
- * by the caller rather than computed from balance × rate).
+ * Emits AU_SAVINGS_EARNINGS_APPLY (registered by AuAccountModule).
  *
  * @param {object} [opts]
- * @param {string} [opts.accountKey='auSavingsAccount']
- * @param {number} [opts.interestRate=0.045] Annual interest rate (e.g. 0.045 = 4.5%)
+ * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry
+ * @param {string} opts.role       - ACCOUNT_ROLES value for the AU savings account
+ * @param {string} [opts.ownerId]  - Person id (null = any owner)
+ * @param {number} [opts.interestRate=0.045]
  */
 export class AuSavingsInterestHandler extends HandlerEntry {
   static description = 'Computes annual interest on the AU savings account and emits AU_SAVINGS_EARNINGS_APPLY (credited by AuAccountModule).';
 
   static eventType = 'INTL_AU_SAVINGS_INTEREST';
 
-  constructor({ accountKey = 'auSavingsAccount', interestRate = 0.045 } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, interestRate = 0.045 } = {}) {
     super(null, 'AU Savings Interest');
-    this.accountKey   = accountKey;
-    this.interestRate = interestRate;
+    this.stateRegistry = stateRegistry;
+    this.role          = role;
+    this.ownerId       = ownerId;
+    this.interestRate  = interestRate;
     this.generatedActionTypes = ['AU_SAVINGS_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ state }) {
-    const balance = state[this.accountKey]?.balance ?? 0;
-    const amount  = +(balance * this.interestRate).toFixed(2);
-    if (amount <= 0) return [new RecordBalanceAction(`${this.accountKey}.balance`, `${this.accountKey}`)];
+    const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
+    const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
+    const amount   = +(balance * this.interestRate).toFixed(2);
+    if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'AU_SAVINGS_EARNINGS_APPLY', amount, isAuResident: state.isAuResident },
       new RecordMetricAction('au_savings_interest', amount),
-      new RecordBalanceAction(`${this.accountKey}.balance`, `${this.accountKey}`),
+      new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
 }
@@ -231,36 +249,37 @@ export class AuSavingsInterestHandler extends HandlerEntry {
  * Handles INTL_FIXED_INCOME_INTEREST events.
  *
  * Computes annual interest as: balance × interestRate, rounded to 2 dp.
- * Emits FIXED_INCOME_EARNINGS_APPLY (registered by UsAccountModule) which
- * credits the account and chains FIXED_INCOME_EARNINGS_TAX.
- *
- * Uses the INTL_ prefix to avoid colliding with the account module's own
- * FIXED_INCOME_EARNINGS handler.
+ * Emits FIXED_INCOME_EARNINGS_APPLY (registered by UsAccountModule).
  *
  * @param {object} [opts]
- * @param {string} [opts.accountKey='fixedIncomeAccount']
- * @param {number} [opts.interestRate=0.04] Annual interest rate (e.g. 0.04 = 4%)
+ * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry
+ * @param {string} opts.role       - ACCOUNT_ROLES value for the fixed income account
+ * @param {string} [opts.ownerId]  - Person id (null = any owner)
+ * @param {number} [opts.interestRate=0.04]
  */
 export class FixedIncomeInterestHandler extends HandlerEntry {
   static description = 'Computes annual interest on the fixed income account and emits FIXED_INCOME_EARNINGS_APPLY (credited by UsAccountModule).';
 
   static eventType = 'INTL_FIXED_INCOME_INTEREST';
 
-  constructor({ accountKey = 'fixedIncomeAccount', interestRate = 0.04 } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, interestRate = 0.04 } = {}) {
     super(null, 'Fixed Income Interest');
-    this.accountKey   = accountKey;
-    this.interestRate = interestRate;
+    this.stateRegistry = stateRegistry;
+    this.role          = role;
+    this.ownerId       = ownerId;
+    this.interestRate  = interestRate;
     this.generatedActionTypes = ['FIXED_INCOME_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ state }) {
-    const balance = state[this.accountKey]?.balance ?? 0;
-    const amount  = +(balance * this.interestRate).toFixed(2);
-    if (amount <= 0) return [new RecordBalanceAction(`${this.accountKey}.balance`, `${this.accountKey}`)];
+    const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
+    const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
+    const amount   = +(balance * this.interestRate).toFixed(2);
+    if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'FIXED_INCOME_EARNINGS_APPLY', amount, isAuResident: state.isAuResident },
       new RecordMetricAction('fixed_income_interest', amount),
-      new RecordBalanceAction(`${this.accountKey}.balance`, `${this.accountKey}`),
+      new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
 }
@@ -270,37 +289,38 @@ export class FixedIncomeInterestHandler extends HandlerEntry {
  *
  * Computes annual earnings as: balance × rate, rounded to 2 dp.
  * data.rate overrides the configured defaultRate for one-off adjustments.
- * Emits SUPER_EARNINGS_APPLY (registered by AuAccountModule) which credits
- * both balance and earningsBasis, then chains SUPER_EARNINGS_TAX (15%).
- *
- * Uses the INTL_ prefix to avoid colliding with the account module's own
- * SUPER_EARNINGS handler.
+ * Emits SUPER_EARNINGS_APPLY (registered by AuAccountModule).
  *
  * @param {object} [opts]
- * @param {string} [opts.accountKey='superAccount']
- * @param {number} [opts.defaultRate=0.07] Default annual growth rate (e.g. 0.07 = 7%)
+ * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry
+ * @param {string} opts.role       - ACCOUNT_ROLES value for the super account
+ * @param {string} [opts.ownerId]  - Person id (null = any owner)
+ * @param {number} [opts.defaultRate=0.07]
  */
 export class SuperEarningsHandler extends HandlerEntry {
   static description = 'Computes annual earnings on the superannuation account and emits SUPER_EARNINGS_APPLY (credited by AuAccountModule).';
 
   static eventType = 'INTL_SUPER_EARNINGS';
 
-  constructor({ accountKey = 'superAccount', defaultRate = 0.07 } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, defaultRate = 0.07 } = {}) {
     super(null, 'Super Earnings');
-    this.accountKey  = accountKey;
-    this.defaultRate = defaultRate;
+    this.stateRegistry = stateRegistry;
+    this.role          = role;
+    this.ownerId       = ownerId;
+    this.defaultRate   = defaultRate;
     this.generatedActionTypes = ['SUPER_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ data, state }) {
-    const rate    = data?.rate ?? this.defaultRate;
-    const balance = state[this.accountKey]?.balance ?? 0;
-    const amount  = +(balance * rate).toFixed(2);
-    if (amount <= 0) return [new RecordBalanceAction(`${this.accountKey}.balance`, `${this.accountKey}`)];
+    const rate     = data?.rate ?? this.defaultRate;
+    const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
+    const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
+    const amount   = +(balance * rate).toFixed(2);
+    if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'SUPER_EARNINGS_APPLY', amount },
+      { type: 'SUPER_EARNINGS_APPLY', amount, stateKey },
       new RecordMetricAction('super_earnings', amount),
-      new RecordBalanceAction(`${this.accountKey}.balance`, `${this.accountKey}`),
+      new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
   }
 }

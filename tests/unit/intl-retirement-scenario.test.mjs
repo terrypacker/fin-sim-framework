@@ -56,7 +56,11 @@ import { UsSavingsInterestMonthlyHandler }                                      
 import { MonthlyExpensesHandler }                                                    from '../../src/finance/handlers/monthly-expenses-handler.js';
 import { MonthlyWagesHandler }                                                       from '../../src/finance/handlers/monthly-wages-handler.js';
 import { IntlTransferToUsHandler, IntlTransferToAuHandler }                          from '../../src/finance/handlers/intl-transfer-handlers.js';
-import { AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler } from '../../src/finance/handlers/earnings-handlers.js';
+import {
+  AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler,
+  IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,
+  IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
+} from '../../src/finance/handlers/earnings-handlers.js';
 import { DividendScheduledHandler }                                                  from '../../src/finance/handlers/dividend-scheduled-handler.js';
 import { ChangeResidencyHandler }                                                    from '../../src/finance/handlers/change-residency-handler.js';
 import { OutOfFundsHandler }                                                         from '../../src/finance/handlers/out-of-funds-handler.js';
@@ -146,6 +150,8 @@ globalThis.FinSimLib = {
     IntlTransferToUsHandler, IntlTransferToAuHandler,
     AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler,
     DividendScheduledHandler, ChangeResidencyHandler, OutOfFundsHandler,
+    IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,
+    IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
     ChangeResidencyApplyReducer, ExpenseDebitReducer, IntlTransferApplyReducer,
     ReplenishSavingsReducer, SetOutOfFundsDateReducer, InflationAdjustReducer,
     StockDividendCashApplyReducer, UsSavingsInterestCreditReducer,
@@ -409,18 +415,18 @@ test('serialize → deserialize round-trip reconstructs all TaxService handlers'
 // Metrics: investment account balances captured in state.metrics
 // ═════════════════════════════════════════════════════════════════════════════
 
-test('DIVIDEND_SCHEDULED: state.metrics.stockAccount is set after year-end dividend', () => {
+test('DIVIDEND_SCHEDULED: state.metrics.usStockAccount is set after year-end dividend', () => {
   // dividendsEvent has startOffset(1), so first DIVIDEND_SCHEDULED fires Dec 31 2027
   const { sim } = buildScenario();
   sim.stepTo(new Date(Date.UTC(2027, 11, 31)));
 
   assert.ok(
-    sim.state.metrics?.stockAccount != null,
-    `state.metrics.stockAccount should be set after DIVIDEND_SCHEDULED; got ${JSON.stringify(sim.state.metrics)}`
+    sim.state.metrics?.usStockAccount != null,
+    `state.metrics.usStockAccount should be set after DIVIDEND_SCHEDULED; got ${JSON.stringify(sim.state.metrics)}`
   );
   assert.ok(
-    typeof sim.state.metrics.stockAccount === 'number' && sim.state.metrics.stockAccount > 0,
-    `state.metrics.stockAccount should be a positive number, got ${sim.state.metrics.stockAccount}`
+    typeof sim.state.metrics.usStockAccount === 'number' && sim.state.metrics.usStockAccount > 0,
+    `state.metrics.usStockAccount should be a positive number, got ${sim.state.metrics.usStockAccount}`
   );
 });
 
@@ -569,4 +575,132 @@ test('EW-INTL-3: early retirement draws from retirement accounts before triggeri
     sim.state.outOfFundsDate, null,
     `outOfFundsDate should remain null; got ${sim.state.outOfFundsDate}`
   );
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Spouse retirement accounts — Session 4 additions
+// Verify that all 4 spouse accounts exist in state with correct roles/ownerIds,
+// and that their balances grow via the earnings handlers.
+// ═════════════════════════════════════════════════════════════════════════════
+
+test('SPOUSE-1: spouse retirement accounts exist in initial state', () => {
+  const { sim } = buildScenario();
+  const s = sim.state;
+
+  assert.ok(s.spouseRothAccount,  'spouseRothAccount missing from state');
+  assert.ok(s.spouseIraAccount,   'spouseIraAccount missing from state');
+  assert.ok(s.spouseK401Account,  'spouseK401Account missing from state');
+  assert.ok(s.spouseSuperAccount, 'spouseSuperAccount missing from state');
+});
+
+test('SPOUSE-2: spouse accounts have correct role and ownerId', () => {
+  const { sim } = buildScenario();
+  const s = sim.state;
+
+  assert.strictEqual(s.spouseRothAccount.role,    'roth-ira', 'spouseRothAccount.role');
+  assert.strictEqual(s.spouseIraAccount.role,     'ira',      'spouseIraAccount.role');
+  assert.strictEqual(s.spouseK401Account.role,    'k401',     'spouseK401Account.role');
+  assert.strictEqual(s.spouseSuperAccount.role,   'super',    'spouseSuperAccount.role');
+
+  assert.strictEqual(s.spouseRothAccount.ownerId,  'spouse', 'spouseRothAccount.ownerId');
+  assert.strictEqual(s.spouseIraAccount.ownerId,   'spouse', 'spouseIraAccount.ownerId');
+  assert.strictEqual(s.spouseK401Account.ownerId,  'spouse', 'spouseK401Account.ownerId');
+  assert.strictEqual(s.spouseSuperAccount.ownerId, 'spouse', 'spouseSuperAccount.ownerId');
+});
+
+test('SPOUSE-3: spouse accounts initialize with correct default balances', () => {
+  const { sim } = buildScenario();
+  const s = sim.state;
+
+  assert.strictEqual(s.spouseRothAccount.balance,  40_000,  'spouseRothAccount initial balance');
+  assert.strictEqual(s.spouseIraAccount.balance,   100_000, 'spouseIraAccount initial balance');
+  assert.strictEqual(s.spouseK401Account.balance,  150_000, 'spouseK401Account initial balance');
+  assert.strictEqual(s.spouseSuperAccount.balance, 125_000, 'spouseSuperAccount initial balance');
+});
+
+test('SPOUSE-4: spouse account balances grow independently after year-end earnings', () => {
+  const { sim } = buildScenario();
+  const initialSpouseRoth  = sim.state.spouseRothAccount.balance;
+  const initialPrimaryRoth = sim.state.rothAccount.balance;
+
+  // Advance to first earnings event (startOffset(1) means Dec 31 2027)
+  sim.stepTo(new Date(Date.UTC(2027, 11, 31)));
+
+  const spouseRothAfter  = sim.state.spouseRothAccount.balance;
+  const primaryRothAfter = sim.state.rothAccount.balance;
+
+  assert.ok(spouseRothAfter > initialSpouseRoth,
+    `spouseRothAccount should grow; was ${initialSpouseRoth}, now ${spouseRothAfter}`);
+  assert.ok(primaryRothAfter > initialPrimaryRoth,
+    `rothAccount should grow; was ${initialPrimaryRoth}, now ${primaryRothAfter}`);
+
+  // Each grows by its own rate × balance — they should grow independently
+  const spouseGrowth  = spouseRothAfter - initialSpouseRoth;
+  const primaryGrowth = primaryRothAfter - initialPrimaryRoth;
+  assert.ok(spouseGrowth > 0,  `spouse Roth growth should be positive; got ${spouseGrowth}`);
+  assert.ok(primaryGrowth > 0, `primary Roth growth should be positive; got ${primaryGrowth}`);
+  // Primary started with 80k, spouse with 40k; same rate → primary growth ~ 2× spouse growth
+  assert.ok(
+    Math.abs(primaryGrowth / spouseGrowth - 2) < 0.01,
+    `primaryGrowth (${primaryGrowth}) should be ~2× spouseGrowth (${spouseGrowth})`
+  );
+});
+
+test('SPOUSE-5: ROTH_EARNINGS_APPLY credits spouse account, not primary', () => {
+  // Set spouse balance to 0 so any earnings would be from primary only if routing is wrong.
+  const { sim } = buildScenario({ spouseRothBalance: 0, spouseRothBasis: 0 });
+
+  const initialPrimaryRoth = sim.state.rothAccount.balance;
+  sim.stepTo(new Date(Date.UTC(2027, 11, 31)));
+
+  // Primary should still grow; spouse should stay at 0 (no earnings on zero balance)
+  assert.ok(sim.state.rothAccount.balance > initialPrimaryRoth,
+    'primary rothAccount should grow regardless');
+  assert.strictEqual(sim.state.spouseRothAccount.balance, 0,
+    'spouseRothAccount with 0 balance should stay 0 — earnings must not leak to primary');
+});
+
+test('SPOUSE-6: serialize → deserialize round-trip preserves spouse accounts', () => {
+  const { scenario } = buildScenario();
+  const services = ServiceRegistry.getInstance();
+
+  const config = ScenarioSerializer.serialize(
+    services, 'Test',
+    new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)),
+    scenario.sim.state, {}
+  );
+
+  // Verify spouse accounts appear in serialized config
+  const accountNames = config.accounts.map(a => a.name);
+  assert.ok(accountNames.some(n => n.includes('Spouse') && n.includes('Roth')),
+    `Roth IRA (Spouse) missing from serialized accounts; got: ${accountNames}`);
+  assert.ok(accountNames.some(n => n.includes('Spouse') && n.includes('IRA')),
+    `Traditional IRA (Spouse) missing from serialized accounts`);
+  assert.ok(accountNames.some(n => n.includes('Spouse') && n.includes('401')),
+    `401(k) (Spouse) missing from serialized accounts`);
+  assert.ok(accountNames.some(n => n.includes('Spouse') && n.includes('Super')),
+    `Superannuation (Spouse) missing from serialized accounts`);
+
+  // Verify role is preserved in serialized data
+  const spouseRothData = config.accounts.find(a => a.name === 'Roth IRA (Spouse)');
+  assert.ok(spouseRothData, 'Roth IRA (Spouse) account data not found');
+  assert.strictEqual(spouseRothData.role,    'roth-ira', 'role should be preserved');
+  assert.strictEqual(spouseRothData.ownerId, 'spouse',   'ownerId should be preserved');
+
+  // Deserialize and verify accounts are restored
+  ServiceRegistry.reset();
+  const scenario2 = new IntlRetirementScenario({
+    eventSchedulerUI: makeStubUI(),
+    context: ServiceRegistry.getInstance().simulationContext,
+  });
+  scenario2.buildSim();
+  assert.doesNotThrow(
+    () => ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance()),
+    'deserialize should not throw with spouse accounts'
+  );
+
+  const restoredAccounts = ServiceRegistry.getInstance().accountService.getAll();
+  const restoredNames = restoredAccounts.map(a => a.name);
+  assert.ok(restoredNames.some(n => n === 'Roth IRA (Spouse)'),
+    `Roth IRA (Spouse) not restored after deserialize; got: ${restoredNames}`);
 });

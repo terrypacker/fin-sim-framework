@@ -61,6 +61,8 @@ import { AssetService } from './finance/services/asset-service.js';
 import { CollectibleService } from './finance/services/collectible-service.js';
 import { PersonService } from './finance/services/person-service.js';
 import { RealPropertyService } from './finance/services/real-property-service.js';
+import { StateRegistry } from './finance/services/state-registry.js';
+import { ACCOUNT_ROLES } from './finance/state/account-roles.js';
 import { FinancialState } from './finance/state/financial-state.js';
 import { InternationalRetirementFinancialState } from './finance/state/intl-retirement-state.js';
 import { AuTaxDocument2024 } from './finance/tax/au/au-tax-document-2024.js';
@@ -367,6 +369,8 @@ export const Finance = {
   CollectibleService,
   PersonService,
   RealPropertyService,
+  StateRegistry,
+  ACCOUNT_ROLES,
   FinancialState,
   InternationalRetirementFinancialState,
   AuTaxDocument2024,

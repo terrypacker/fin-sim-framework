@@ -15,7 +15,8 @@ import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framew
  * Handles the MONTHLY_EXPENSES event.
  *
  * Residence-aware: reads state.isAuResident to determine whether expenses
- * come from usSavingsAccount (USD pre-move) or auSavingsAccount (AUD post-move).
+ * come from the US savings account (USD pre-move) or AU savings account
+ * (AUD post-move).
  *
  * If the target savings account would fall below its minimumBalance after the
  * debit, a REPLENISH_SAVINGS action is prepended to trigger the drawdown
@@ -24,29 +25,40 @@ import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framew
  * data.amount overrides the configured monthlyExpenses for one-off adjustments.
  *
  * @param {object} opts
+ * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry
  * @param {number} [opts.monthlyExpenses=6000]
- *   Default monthly spending amount in the local currency.
- * @param {string} [opts.usAccountKey='usSavingsAccount']
- *   State key for the USD cash pool.
- * @param {string} [opts.auAccountKey='auSavingsAccount']
- *   State key for the AUD cash pool.
+ * @param {string} opts.usRole      - ACCOUNT_ROLES value for the USD cash pool
+ * @param {string} [opts.usOwnerId] - Person id for US savings (null = any owner)
+ * @param {string} opts.auRole      - ACCOUNT_ROLES value for the AUD cash pool
+ * @param {string} [opts.auOwnerId] - Person id for AU savings (null = any owner)
  */
 export class MonthlyExpensesHandler extends HandlerEntry {
-  static description = 'Residence-aware monthly expense handler: debits usSavingsAccount (pre-move) or auSavingsAccount (post-move), prepending REPLENISH_SAVINGS if the balance would fall below minimum.';
+  static description = 'Residence-aware monthly expense handler: debits US savings (pre-move) or AU savings (post-move), prepending REPLENISH_SAVINGS if the balance would fall below minimum.';
 
   static eventType = 'MONTHLY_EXPENSES';
 
-  constructor({ monthlyExpenses = 6000, usAccountKey = 'usSavingsAccount', auAccountKey = 'auSavingsAccount' } = {}) {
+  constructor({
+    stateRegistry,
+    monthlyExpenses = 6000,
+    usRole, usOwnerId = null,
+    auRole, auOwnerId = null,
+  } = {}) {
     super(null, 'Monthly Expenses');
+    this.stateRegistry  = stateRegistry;
     this.monthlyExpenses = monthlyExpenses;
-    this.usAccountKey    = usAccountKey;
-    this.auAccountKey    = auAccountKey;
+    this.usRole         = usRole;
+    this.usOwnerId      = usOwnerId;
+    this.auRole         = auRole;
+    this.auOwnerId      = auOwnerId;
     this.generatedActionTypes = ['REPLENISH_SAVINGS', 'EXPENSE_DEBIT', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   call({ data, state }) {
     const amount    = data?.amount ?? state.monthlyExpenses ?? this.monthlyExpenses;
-    const targetKey = state.isAuResident ? this.auAccountKey : this.usAccountKey;
+    const isAu      = state.isAuResident;
+    const targetKey = isAu
+      ? this.stateRegistry.getStateKey(this.auRole, this.auOwnerId)
+      : this.stateRegistry.getStateKey(this.usRole, this.usOwnerId);
     const account   = state[targetKey];
 
     const actions = [];
@@ -60,7 +72,7 @@ export class MonthlyExpensesHandler extends HandlerEntry {
     actions.push(
       { type: 'EXPENSE_DEBIT', amount },
       new RecordMetricAction('monthly_expenses', amount),
-      new RecordBalanceAction(`${targetKey}.balance`, `${targetKey}`),
+      new RecordBalanceAction(`${targetKey}.balance`, targetKey),
     );
     return actions;
   }

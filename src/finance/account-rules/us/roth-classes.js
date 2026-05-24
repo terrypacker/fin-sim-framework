@@ -124,9 +124,10 @@ export class RothEarningsApplyReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const ra = state.rothAccount;
+    const key = action.stateKey ?? 'rothAccount';
+    const ra = state[key];
     return this.newState(state, {
-      rothAccount: {
+      [key]: {
         ...ra,
         balance:       ra.balance       + action.amount,
         earningsBasis: ra.earningsBasis + action.amount,
