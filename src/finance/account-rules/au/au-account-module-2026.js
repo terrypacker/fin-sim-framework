@@ -41,6 +41,9 @@ import {
  * AU account types.  Each reducer that produces a tax effect emits a _TAX child
  * action via next:[] for the AU tax module to handle.
  *
+ * Used by the legacy registerHandlersAndReducers() path.
+ * The declarative toolset path uses the individual toolset files instead.
+ *
  * Covered events:
  *   EVT-16 to 19  AU Savings
  *   EVT-20 to 23  Superannuation

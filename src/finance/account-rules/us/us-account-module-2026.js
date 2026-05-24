@@ -63,6 +63,9 @@ import {
  * US account types.  Each reducer that produces a tax effect emits a _TAX child
  * action via next:[] for the US tax module to handle.
  *
+ * Used by the legacy registerHandlersAndReducers() path.
+ * The declarative toolset path uses the individual toolset files instead.
+ *
  * Covered events:
  *   EVT-1 to 4   Roth IRA
  *   EVT-5 to 8   Traditional IRA

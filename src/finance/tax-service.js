@@ -299,14 +299,6 @@ export class TaxService {
     handlers.push(periodAdvanceHandler);
     reducers.push(new PeriodAdvanceReducer());
 
-    // Account module reducers + handlers (static, start-year mechanics)
-    for (const cc of countryCodes) {
-      const startYear     = new Date(currentPeriods[cc].startMs).getUTCFullYear();
-      const accountModule = this._accountRulesEngine.get(cc, startYear);
-      accountModule.createReducers(accountService).forEach(r => reducers.push(r));
-      accountModule.createHandlers().forEach(h => handlers.push(h));
-    }
-
     // Dynamic tax reducers (one per action type per country)
     for (const cc of countryCodes) {
       const actionTypes = new Set();

@@ -27,6 +27,12 @@ import { SetOutOfFundsDateReducer }   from '../../finance/reducers/set-out-of-fu
 import { AccumulateDeficitReducer }   from '../../finance/reducers/accumulate-deficit-reducer.js';
 import { OutOfFundsReducer }          from '../../finance/reducers/out-of-funds-reducer.js';
 import { InflationAdjustReducer }     from '../../finance/reducers/inflation-adjust-reducer.js';
+import {
+  SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer,
+  SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer,
+  SuperContributionHandler, SuperWithdrawalContributionsHandler,
+  SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler,
+} from '../../finance/account-rules/au/au-super-classes.js';
 
 /**
  * AU_RETIREMENT toolset — AU retirement/superannuation scenario wiring.
@@ -229,6 +235,14 @@ export const AU_RETIREMENT = {
       handlers.push(ssHandler);
     }
 
+    // Super account mechanics
+    if (superAccts.length > 0) handlers.push(
+      new SuperContributionHandler(),
+      new SuperWithdrawalContributionsHandler(),
+      new SuperWithdrawalEarningsHandler(),
+      new SuperEarningsDirectHandler(),
+    );
+
     // Super Earnings (one handler per SUPER account)
     const superEvent = context.schedulesById['INTL_SUPER_EARNINGS'];
     if (superEvent) {
@@ -293,6 +307,15 @@ export const AU_RETIREMENT = {
         reducers.push(new InflationAdjustReducer());
       }
     }
+
+    // Super account mechanics
+    const superAccts = context.accounts.filter(a => a.role === ACCOUNT_ROLES.SUPER);
+    if (superAccts.length > 0) reducers.push(
+      new SuperContributionApplyReducer({ accountService: accountSvc }),
+      new SuperWithdrawalContribApplyReducer({ accountService: accountSvc }),
+      new SuperWithdrawalEarningsApplyReducer({ accountService: accountSvc }),
+      new SuperEarningsApplyReducer({ accountService: accountSvc }),
+    );
 
     return reducers;
   },

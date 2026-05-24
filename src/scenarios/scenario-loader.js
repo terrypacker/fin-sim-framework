@@ -22,6 +22,10 @@ import { US_REAL_PROPERTY }   from './toolsets/us-real-property-toolset.js';
 import { AU_REAL_PROPERTY }   from './toolsets/au-real-property-toolset.js';
 import { US_COLLECTIBLES }    from './toolsets/us-collectibles-toolset.js';
 import { US_ROTH_CONVERSION } from './toolsets/us-roth-conversion-toolset.js';
+import { US_BROKERAGE }      from './toolsets/us-brokerage-toolset.js';
+import { AU_BROKERAGE }      from './toolsets/au-brokerage-toolset.js';
+import { US_INCOME }         from './toolsets/us-income-toolset.js';
+import { AU_INCOME }         from './toolsets/au-income-toolset.js';
 
 const BUILT_IN_TOOLSETS = [
   US_BANKING, US_TAX, US_RETIREMENT,
@@ -29,6 +33,7 @@ const BUILT_IN_TOOLSETS = [
   US_AU_CROSS_BORDER,
   US_REAL_PROPERTY, AU_REAL_PROPERTY,
   US_COLLECTIBLES, US_ROTH_CONVERSION,
+  US_BROKERAGE, AU_BROKERAGE, US_INCOME, AU_INCOME,
 ];
 
 /**

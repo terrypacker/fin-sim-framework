@@ -28,6 +28,45 @@ import { SetOutOfFundsDateReducer }     from '../../finance/reducers/set-out-of-
 import { AccumulateDeficitReducer }     from '../../finance/reducers/accumulate-deficit-reducer.js';
 import { OutOfFundsReducer }            from '../../finance/reducers/out-of-funds-reducer.js';
 import { InflationAdjustReducer }       from '../../finance/reducers/inflation-adjust-reducer.js';
+import {
+  RothContributionApplyReducer, RothWithdrawalContribApplyReducer,
+  RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer,
+  RothContributionHandler, RothWithdrawalContributionsHandler,
+  RothWithdrawalEarningsHandler, RothEarningsHandler,
+} from '../../finance/account-rules/us/roth-classes.js';
+import {
+  IraContributionApplyReducer, IraWithdrawalContribApplyReducer,
+  IraWithdrawalEarningsApplyReducer, IraEarningsApplyReducer,
+  IraContributionHandler, IraWithdrawalContributionsHandler,
+  IraWithdrawalEarningsHandler, IraEarningsHandler,
+} from '../../finance/account-rules/us/ira-classes.js';
+import {
+  K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer,
+  K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler,
+} from '../../finance/account-rules/us/k401-classes.js';
+import {
+  IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
+  IraRolloverWithdrawalHandler, IraRmdHandler,
+} from '../../finance/account-rules/us/ira-rollover-classes.js';
+import {
+  RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
+  RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer,
+  RothRolloverContributionHandler, RothRolloverEarningsHandler,
+  RothRolloverWithdrawalContributionsHandler, RothRolloverWithdrawalEarningsHandler,
+} from '../../finance/account-rules/us/roth-rollover-classes.js';
+import {
+  SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer,
+  SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer,
+  SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler,
+  SeIncomeUsHandler, BonusHandler, CompanySaleHandler,
+} from '../../finance/account-rules/us/us-income-classes.js';
+import {
+  FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer,
+  FixedIncomeEarningsApplyReducer, StockContributionApplyReducer,
+  StockDividendApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer,
+  FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler,
+  StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler,
+} from '../../finance/account-rules/us/us-brokerage-classes.js';
 
 function _accountToStatePlain(account) {
   const plain = {
@@ -371,6 +410,40 @@ export const US_RETIREMENT = {
       }
     }
 
+    // Direct income event handlers (for SS_INCOME, WAGES_INCOME, etc. one-off events)
+    handlers.push(
+      new SsIncomeHandler(), new WagesIncomeHandler(), new WagesWithheldHandler(),
+      new SeIncomeUsHandler(), new BonusHandler(), new CompanySaleHandler(),
+    );
+
+    // US Brokerage handlers
+    if (fixedIncomeAccounts.length > 0) handlers.push(
+      new FixedIncomeContributionHandler(), new FixedIncomeWithdrawalHandler(), new FixedIncomeEarningsHandler(),
+    );
+    if (usStockAccounts.length > 0) handlers.push(
+      new StockContributionHandler(), new StockDividendHandler(), new StockEarningsHandler(), new StockWithdrawalHandler(),
+    );
+
+    // Roth IRA mechanics
+    if (rothAccounts.length > 0) handlers.push(
+      new RothContributionHandler(), new RothWithdrawalContributionsHandler(),
+      new RothWithdrawalEarningsHandler(), new RothEarningsHandler(),
+      new RothRolloverContributionHandler(), new RothRolloverEarningsHandler(),
+      new RothRolloverWithdrawalContributionsHandler(), new RothRolloverWithdrawalEarningsHandler(),
+    );
+
+    // Traditional IRA mechanics
+    if (iraAccounts.length > 0) handlers.push(
+      new IraContributionHandler(), new IraWithdrawalContributionsHandler(),
+      new IraWithdrawalEarningsHandler(), new IraEarningsHandler(),
+      new IraRolloverWithdrawalHandler(), new IraRmdHandler(),
+    );
+
+    // 401(k) mechanics
+    if (k401Accounts.length > 0) handlers.push(
+      new K401ContributionHandler(), new K401EarningsHandler(), new K401WithdrawalHandler(),
+    );
+
     // Out-of-funds handler (no event binding)
     handlers.push(new OutOfFundsHandler());
 
@@ -385,6 +458,9 @@ export const US_RETIREMENT = {
 
     const usSavingsAccounts = accounts.filter(a => a.role === ACCOUNT_ROLES.US_SAVINGS);
     const usStockAccounts   = accounts.filter(a => a.role === ACCOUNT_ROLES.US_STOCK);
+    const rothAccounts      = accounts.filter(a => a.role === ACCOUNT_ROLES.ROTH);
+    const iraAccounts       = accounts.filter(a => a.role === ACCOUNT_ROLES.IRA);
+    const k401Accounts      = accounts.filter(a => a.role === ACCOUNT_ROLES.K401);
     const primaryId = usSavingsAccounts[0]?.ownerId ?? (context.people[0]?.id ?? null);
 
     const reducers = [];
@@ -395,6 +471,15 @@ export const US_RETIREMENT = {
 
     reducers.push(new ExpenseDebitReducer({ accountService: accountSvc }));
     reducers.push(new ReplenishSavingsReducer({ accountService: accountSvc }));
+
+    // Income apply reducers (needed by MonthlyWagesHandler, MonthlySocialSecurityHandler,
+    // and direct income events dispatched within US retirement scenarios)
+    reducers.push(new SsIncomeApplyReducer({ accountService: accountSvc }));
+    reducers.push(new WagesIncomeApplyReducer({ accountService: accountSvc }));
+    reducers.push(new WagesWithheldApplyReducer({ accountService: accountSvc }));
+    reducers.push(new SeIncomeUsApplyReducer({ accountService: accountSvc }));
+    reducers.push(new BonusApplyReducer({ accountService: accountSvc }));
+    reducers.push(new CompanySaleApplyReducer({ accountService: accountSvc }));
 
     if (usStockAccounts.length > 0) {
       reducers.push(new StockDividendCashApplyReducer({
@@ -410,6 +495,49 @@ export const US_RETIREMENT = {
     if (p.inflationAdjust) {
       reducers.push(new InflationAdjustReducer());
     }
+
+    // US Brokerage (Fixed Income + Stock) mechanics
+    const fixedIncomeAccts = accounts.filter(a => a.role === ACCOUNT_ROLES.FIXED_INCOME);
+    if (fixedIncomeAccts.length > 0) reducers.push(
+      new FixedIncomeContributionApplyReducer({ accountService: accountSvc }),
+      new FixedIncomeWithdrawalApplyReducer({ accountService: accountSvc }),
+      new FixedIncomeEarningsApplyReducer({ accountService: accountSvc }),
+    );
+    if (usStockAccounts.length > 0) reducers.push(
+      new StockContributionApplyReducer({ accountService: accountSvc }),
+      new StockDividendApplyReducer({ accountService: accountSvc }),
+      new StockEarningsApplyReducer({ accountService: accountSvc }),
+      new StockWithdrawalApplyReducer({ accountService: accountSvc }),
+    );
+
+    // Roth IRA mechanics
+    if (rothAccounts.length > 0) reducers.push(
+      new RothContributionApplyReducer({ accountService: accountSvc }),
+      new RothWithdrawalContribApplyReducer({ accountService: accountSvc }),
+      new RothWithdrawalEarningsApplyReducer({ accountService: accountSvc }),
+      new RothEarningsApplyReducer({ accountService: accountSvc }),
+      new RothRolloverContributionApplyReducer({ accountService: accountSvc }),
+      new RothRolloverEarningsApplyReducer({ accountService: accountSvc }),
+      new RothRolloverWithdrawalContribApplyReducer({ accountService: accountSvc }),
+      new RothRolloverWithdrawalEarningsApplyReducer({ accountService: accountSvc }),
+    );
+
+    // Traditional IRA mechanics
+    if (iraAccounts.length > 0) reducers.push(
+      new IraContributionApplyReducer({ accountService: accountSvc }),
+      new IraWithdrawalContribApplyReducer({ accountService: accountSvc }),
+      new IraWithdrawalEarningsApplyReducer({ accountService: accountSvc }),
+      new IraEarningsApplyReducer({ accountService: accountSvc }),
+      new IraRolloverWithdrawalApplyReducer({ accountService: accountSvc }),
+      new IraRmdApplyReducer({ accountService: accountSvc }),
+    );
+
+    // 401(k) mechanics
+    if (k401Accounts.length > 0) reducers.push(
+      new K401ContributionApplyReducer({ accountService: accountSvc }),
+      new K401EarningsApplyReducer({ accountService: accountSvc }),
+      new K401WithdrawalApplyReducer({ accountService: accountSvc }),
+    );
 
     return reducers;
   },
