@@ -16,6 +16,7 @@ import { PeriodService }        from '../../finance/period/period-service.js';
 import { buildUsCalendarYear, applyTo } from '../../finance/period/period-builder.js';
 import { MonthlyExpensesHandler }       from '../../finance/handlers/monthly-expenses-handler.js';
 import { MonthlyWagesHandler }          from '../../finance/handlers/monthly-wages-handler.js';
+import { MonthlySocialSecurityHandler } from '../../finance/handlers/monthly-social-security-handler.js';
 import { UsSavingsInterestMonthlyHandler }   from '../../finance/handlers/us-savings-interest-handler.js';
 import { DividendScheduledHandler }     from '../../finance/handlers/dividend-scheduled-handler.js';
 import {
@@ -169,6 +170,19 @@ export class UsRetirementToolset {
     const wagesHandler = new MonthlyWagesHandler({ stateRegistry });
     wagesHandler.handledEvents.push(wagesEvent);
     handlerService.register(wagesHandler);
+
+    // ── Monthly Social Security ─────────────────────────────────────────────────
+    const personsWithSS = Object.values(people).filter(p => (p.socialSecurityMonthly ?? 0) > 0);
+    if (personsWithSS.length > 0) {
+      const ssEvent = EventBuilder.eventSeries()
+        .name('Monthly Social Security').type('MONTHLY_SS_INCOME')
+        .interval('month-end').enabled(true).color('#3F51B5').build();
+      eventService.register(ssEvent);
+
+      const ssHandler = new MonthlySocialSecurityHandler({ stateRegistry });
+      ssHandler.handledEvents.push(ssEvent);
+      handlerService.register(ssHandler);
+    }
 
     // ── US Savings interest ─────────────────────────────────────────────────────
     if (usSavingsAccounts.length > 0) {

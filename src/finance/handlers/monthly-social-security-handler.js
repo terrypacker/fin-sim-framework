@@ -1,0 +1,62 @@
+/*
+ * Copyright (c) 2026 Terry Packer.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ */
+
+import { HandlerEntry } from '../../simulation-framework/handlers.js';
+import { FieldValueAction, RecordBalanceAction } from '../../simulation-framework/actions.js';
+import { ACCOUNT_ROLES } from '../state/account-roles.js';
+
+/**
+ * Handles the MONTHLY_SS_INCOME event.
+ *
+ * Iterates over all people in state.people and dispatches SS_INCOME_APPLY
+ * for each person whose socialSecurityMonthly > 0 and whose retirementDate
+ * has been reached (or is null, meaning SS is always active).
+ *
+ * The SsIncomeApplyReducer (registered via the US account module) handles the
+ * actual cash credit and tax chaining (85% of SS is taxable ordinary income).
+ *
+ * @param {object} [opts]
+ * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry
+ */
+export class MonthlySocialSecurityHandler extends HandlerEntry {
+  static description = 'Credits the US cash pool with Social Security income for each eligible person; starts at their retirementDate.';
+  static eventType   = 'MONTHLY_SS_INCOME';
+
+  constructor({ stateRegistry } = {}) {
+    super(null, 'Monthly Social Security');
+    this.stateRegistry = stateRegistry;
+    this.generatedActionTypes = ['SS_INCOME_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
+  }
+
+  call({ date, state }) {
+    const actions = [];
+    const cashKey = this.stateRegistry?.getStateKey(ACCOUNT_ROLES.US_SAVINGS) ?? 'usSavingsAccount';
+
+    for (const [key, person] of Object.entries(state.people ?? {})) {
+      const ssMonthly = person.socialSecurityMonthly ?? 0;
+      if (ssMonthly <= 0) continue;
+
+      // SS payments begin at retirementDate; if no retirementDate, always pay
+      const retDate = person.retirementDate;
+      if (retDate && date < new Date(retDate)) continue;
+
+      actions.push(
+        { type: 'SS_INCOME_APPLY', amount: ssMonthly, isAuResident: state.isAuResident },
+        new FieldValueAction(`ss_income_${key}`, `${person.name || key} Social Security`, ssMonthly),
+      );
+    }
+
+    if (actions.length > 0) {
+      actions.push(new RecordBalanceAction(`${cashKey}.balance`, cashKey));
+    }
+
+    return actions;
+  }
+}
