@@ -47,23 +47,25 @@ function makePresenter({ onDetail = () => {}, onRewind = null, containerOpts = {
 
 // ─── Constructor / wiring ─────────────────────────────────────────────────────
 
-test('TimelinePresenter: constructor wires view callbacks', () => {
+test('TimelinePresenter: constructor wires filter callbacks on the view', () => {
   const { view } = makePresenter();
-  assert.ok(typeof view.onFilterEvent  === 'function', 'onFilterEvent should be wired');
-  assert.ok(typeof view.onFilterAction === 'function', 'onFilterAction should be wired');
-  assert.ok(typeof view.onClearFilters === 'function', 'onClearFilters should be wired');
-  assert.ok(typeof view.onToggle       === 'function', 'onToggle should be wired');
-  assert.ok(typeof view.onDetail       === 'function', 'onDetail should be wired');
+  assert.ok(typeof view.onFilterEvents    === 'function', 'onFilterEvents should be wired');
+  assert.ok(typeof view.onFilterActions   === 'function', 'onFilterActions should be wired');
+  assert.ok(typeof view.onFilterDateStart === 'function', 'onFilterDateStart should be wired');
+  assert.ok(typeof view.onFilterDateEnd   === 'function', 'onFilterDateEnd should be wired');
+  assert.ok(typeof view.onClearFilters    === 'function', 'onClearFilters should be wired');
+  assert.ok(typeof view.onToggle          === 'function', 'onToggle should be wired');
+  assert.ok(typeof view.onDetail          === 'function', 'onDetail should be wired');
 });
 
 test('TimelinePresenter: onRewind not wired when not provided', () => {
   const { view } = makePresenter({ onRewind: null });
-  assert.strictEqual(view.onRewind, null, 'onRewind should remain null when not supplied');
+  assert.strictEqual(view.onRewind, null);
 });
 
 test('TimelinePresenter: onRewind wired when provided', () => {
   const { view } = makePresenter({ onRewind: () => {} });
-  assert.ok(typeof view.onRewind === 'function', 'onRewind should be wired when supplied');
+  assert.ok(typeof view.onRewind === 'function');
 });
 
 // ─── attach ───────────────────────────────────────────────────────────────────
@@ -75,21 +77,21 @@ test('TimelinePresenter.attach: sets journal on the controller', () => {
   assert.strictEqual(controller.journal, journal);
 });
 
-test('TimelinePresenter.attach: resets controller state (_lastLen, _lastDate, expanded)', () => {
+test('TimelinePresenter.attach: resets controller state', () => {
   const { presenter, controller } = makePresenter();
   controller._lastLen  = 99;
   controller._lastDate = 'old';
   controller.expanded.add('foo');
   presenter.attach(makeJournal());
-  assert.strictEqual(controller._lastLen, 0);
+  assert.strictEqual(controller._lastLen,  0);
   assert.strictEqual(controller._lastDate, null);
   assert.strictEqual(controller.expanded.size, 0);
 });
 
-test('TimelinePresenter.attach: renders immediately (container gets innerHTML)', () => {
+test('TimelinePresenter.attach: renders immediately', () => {
   const { presenter, container } = makePresenter();
   presenter.attach(makeJournal());
-  assert.ok(container.innerHTML.length > 0, 'container should have content after attach');
+  assert.ok(container.innerHTML.length > 0);
 });
 
 // ─── reset ────────────────────────────────────────────────────────────────────
@@ -102,7 +104,7 @@ test('TimelinePresenter.reset: clears controller expanded set', () => {
   assert.strictEqual(controller.expanded.size, 0);
 });
 
-test('TimelinePresenter.reset: resets controller _lastLen to 0', () => {
+test('TimelinePresenter.reset: resets _lastLen to 0', () => {
   const { presenter, controller } = makePresenter();
   presenter.attach(makeJournal([makeEntry()]));
   controller._lastLen = 5;
@@ -110,7 +112,7 @@ test('TimelinePresenter.reset: resets controller _lastLen to 0', () => {
   assert.strictEqual(controller._lastLen, 0);
 });
 
-test('TimelinePresenter.reset: resets controller _lastDate to null', () => {
+test('TimelinePresenter.reset: resets _lastDate to null', () => {
   const { presenter, controller } = makePresenter();
   presenter.attach(makeJournal([makeEntry()]));
   controller._lastDate = 'Wed Jan 01 2025';
@@ -138,10 +140,10 @@ test('TimelinePresenter.update: is a no-op when journal length has not changed',
   view.render = (...args) => { renderCalls++; orig(...args); };
 
   presenter.update();
-  assert.strictEqual(renderCalls, 0, 'view.render should not be called when nothing changed');
+  assert.strictEqual(renderCalls, 0);
 });
 
-test('TimelinePresenter.update: calls view.render when new entries are added', () => {
+test('TimelinePresenter.update: calls view.render when new entries arrive', () => {
   const { presenter, view } = makePresenter();
   const journal = makeJournal([]);
   presenter.attach(journal);
@@ -152,7 +154,7 @@ test('TimelinePresenter.update: calls view.render when new entries are added', (
 
   journal.journal.push(makeEntry({ date: new Date(2025, 0, 1) }));
   presenter.update();
-  assert.ok(renderCalls >= 1, 'view.render should be called when new entries arrive');
+  assert.ok(renderCalls >= 1);
 });
 
 test('TimelinePresenter.update: auto-expands the latest date group', () => {
@@ -162,34 +164,77 @@ test('TimelinePresenter.update: auto-expands the latest date group', () => {
   const d = new Date(2025, 0, 1);
   journal.journal.push(makeEntry({ date: d }));
   presenter.update();
-  assert.ok(controller.expanded.has(d.toDateString()),
-    'date group for the latest entry should be expanded after update');
+  assert.ok(controller.expanded.has(d.toDateString()));
 });
 
 // ─── filter callback wiring ───────────────────────────────────────────────────
 
-test('TimelinePresenter: onFilterEvent updates controller.filterEvent', () => {
+test('TimelinePresenter: onFilterEvents updates controller.filterEvents', () => {
   const { presenter, controller, view } = makePresenter();
   presenter.attach(makeJournal([]));
-  view.onFilterEvent('SELL');
-  assert.strictEqual(controller.filterEvent, 'SELL');
+  view.onFilterEvents(new Set(['SELL_ASSET', 'SALARY']));
+  assert.ok(controller.filterEvents.has('SELL_ASSET'));
+  assert.ok(controller.filterEvents.has('SALARY'));
+  assert.strictEqual(controller.filterEvents.size, 2);
 });
 
-test('TimelinePresenter: onFilterAction updates controller.filterAction', () => {
+test('TimelinePresenter: onFilterActions updates controller.filterActions', () => {
   const { presenter, controller, view } = makePresenter();
   presenter.attach(makeJournal([]));
-  view.onFilterAction('REALIZE');
-  assert.strictEqual(controller.filterAction, 'REALIZE');
+  view.onFilterActions(new Set(['REALIZE_GAIN']));
+  assert.ok(controller.filterActions.has('REALIZE_GAIN'));
 });
 
-test('TimelinePresenter: onClearFilters resets both filter values', () => {
+test('TimelinePresenter: onFilterDateStart parses string to local start-of-day Date', () => {
   const { presenter, controller, view } = makePresenter();
   presenter.attach(makeJournal([]));
-  controller.filterEvent  = 'SELL';
-  controller.filterAction = 'REALIZE';
+  view.onFilterDateStart('2025-06-15');
+  assert.ok(controller.filterDateStart instanceof Date);
+  assert.strictEqual(controller.filterDateStart.getFullYear(), 2025);
+  assert.strictEqual(controller.filterDateStart.getMonth(),    5);   // June = 5
+  assert.strictEqual(controller.filterDateStart.getDate(),     15);
+  assert.strictEqual(controller.filterDateStart.getHours(),    0);
+});
+
+test('TimelinePresenter: onFilterDateEnd parses string to local end-of-day Date', () => {
+  const { presenter, controller, view } = makePresenter();
+  presenter.attach(makeJournal([]));
+  view.onFilterDateEnd('2025-06-15');
+  assert.ok(controller.filterDateEnd instanceof Date);
+  assert.strictEqual(controller.filterDateEnd.getFullYear(), 2025);
+  assert.strictEqual(controller.filterDateEnd.getMonth(),    5);
+  assert.strictEqual(controller.filterDateEnd.getDate(),     15);
+  assert.strictEqual(controller.filterDateEnd.getHours(),    23);
+});
+
+test('TimelinePresenter: onFilterDateStart with empty string clears filterDateStart', () => {
+  const { presenter, controller, view } = makePresenter();
+  presenter.attach(makeJournal([]));
+  view.onFilterDateStart('2025-06-15');
+  view.onFilterDateStart('');
+  assert.strictEqual(controller.filterDateStart, null);
+});
+
+test('TimelinePresenter: onFilterDateEnd with empty string clears filterDateEnd', () => {
+  const { presenter, controller, view } = makePresenter();
+  presenter.attach(makeJournal([]));
+  view.onFilterDateEnd('2025-06-15');
+  view.onFilterDateEnd('');
+  assert.strictEqual(controller.filterDateEnd, null);
+});
+
+test('TimelinePresenter: onClearFilters resets all filter state', () => {
+  const { presenter, controller, view } = makePresenter();
+  presenter.attach(makeJournal([]));
+  controller.filterEvents    = new Set(['SELL']);
+  controller.filterActions   = new Set(['GAIN']);
+  controller.filterDateStart = new Date(2025, 0, 1);
+  controller.filterDateEnd   = new Date(2025, 11, 31);
   view.onClearFilters();
-  assert.strictEqual(controller.filterEvent,  '');
-  assert.strictEqual(controller.filterAction, '');
+  assert.strictEqual(controller.filterEvents.size,  0);
+  assert.strictEqual(controller.filterActions.size, 0);
+  assert.strictEqual(controller.filterDateStart, null);
+  assert.strictEqual(controller.filterDateEnd,   null);
 });
 
 test('TimelinePresenter: onToggle delegates to controller.toggleExpanded', () => {
@@ -203,7 +248,7 @@ test('TimelinePresenter: onToggle delegates to controller.toggleExpanded', () =>
 
 // ─── detail callback ──────────────────────────────────────────────────────────
 
-test('TimelinePresenter: onDetail fires onDetail callback with the journal entry', () => {
+test('TimelinePresenter: onDetail fires callback with the correct journal entry', () => {
   let received = null;
   const entry   = makeEntry();
   const journal = makeJournal([entry]);

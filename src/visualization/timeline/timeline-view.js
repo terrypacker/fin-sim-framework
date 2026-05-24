@@ -10,6 +10,15 @@
 
 let _tlViewCounter = 0;
 
+// Format a Date to YYYY-MM-DD for <input type="date"> value
+function toDateInput(date) {
+  if (!date) return '';
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export class TimelineView {
   constructor({ container }) {
     this.container    = container;
@@ -17,38 +26,46 @@ export class TimelineView {
     this._filterBarEl = null;
     this._uid         = ++_tlViewCounter;
     // Callbacks wired by presenter
-    this.onFilterEvent  = null;
-    this.onFilterAction = null;
-    this.onClearFilters = null;
-    this.onToggle       = null;
-    this.onDetail       = null;
-    this.onRewind       = null;
+    this.onFilterEvents    = null;
+    this.onFilterActions   = null;
+    this.onFilterDateStart = null;
+    this.onFilterDateEnd   = null;
+    this.onClearFilters    = null;
+    this.onToggle          = null;
+    this.onDetail          = null;
+    this.onRewind          = null;
   }
 
-  // @param {{ groups, options, filterEvent, filterAction, expanded, hasRewind }}
-  render({ groups, options, filterEvent, filterAction, expanded, hasRewind }) {
-    this._ensureStructure(filterEvent, filterAction);
-    this._updateDataLists(options, filterEvent, filterAction);
-    this._renderList({ groups, expanded, filterEvent, filterAction, hasRewind });
+  // @param {{ groups, options, filterEvents, filterActions, filterDateStart, filterDateEnd, expanded, hasRewind }}
+  render({ groups, options, filterEvents, filterActions, filterDateStart, filterDateEnd, expanded, hasRewind }) {
+    this._ensureStructure();
+    this._syncFilters(options, filterEvents, filterActions, filterDateStart, filterDateEnd);
+    this._renderList({ groups, expanded, filterEvents, filterActions, filterDateStart, filterDateEnd, hasRewind });
   }
 
-  _ensureStructure(filterEvent = '', filterAction = '') {
+  _ensureStructure() {
     if (this._listEl) return;
     const uid = this._uid;
     this._filterBarEl = document.createElement('div');
     this._filterBarEl.className = 'tl-filter-bar';
     this._filterBarEl.innerHTML = `
       <div class="tl-filter-group">
-        <input class="tl-filter-input" id="tl-ev-input-${uid}" placeholder="Filter by Event…"
-               list="tl-ev-opts-${uid}" autocomplete="off" value="${filterEvent}">
-        <datalist id="tl-ev-opts-${uid}"></datalist>
+        <label class="tl-filter-label" for="tl-ev-select-${uid}">Event</label>
+        <select class="tl-filter-select" id="tl-ev-select-${uid}" multiple></select>
       </div>
       <div class="tl-filter-group">
-        <input class="tl-filter-input" id="tl-act-input-${uid}" placeholder="Filter by Action…"
-               list="tl-act-opts-${uid}" autocomplete="off" value="${filterAction}">
-        <datalist id="tl-act-opts-${uid}"></datalist>
+        <label class="tl-filter-label" for="tl-act-select-${uid}">Action</label>
+        <select class="tl-filter-select" id="tl-act-select-${uid}" multiple></select>
       </div>
-      <button class="tl-filter-clear" id="tl-filter-clear-${uid}" title="Clear filters">✕</button>
+      <div class="tl-filter-group">
+        <label class="tl-filter-label" for="tl-date-start-${uid}">From</label>
+        <input class="tl-filter-date" type="date" id="tl-date-start-${uid}">
+      </div>
+      <div class="tl-filter-group">
+        <label class="tl-filter-label" for="tl-date-end-${uid}">To</label>
+        <input class="tl-filter-date" type="date" id="tl-date-end-${uid}">
+      </div>
+      <button class="tl-filter-clear" id="tl-filter-clear-${uid}" title="Clear all filters">✕</button>
     `;
     this._listEl = document.createElement('div');
     this._listEl.className = 'tl-list';
@@ -57,37 +74,54 @@ export class TimelineView {
     this.container.appendChild(this._filterBarEl);
     this.container.appendChild(this._listEl);
 
-    const evInput  = this._filterBarEl.querySelector(`#tl-ev-input-${uid}`);
-    const actInput = this._filterBarEl.querySelector(`#tl-act-input-${uid}`);
+    const evSel    = this._filterBarEl.querySelector(`#tl-ev-select-${uid}`);
+    const actSel   = this._filterBarEl.querySelector(`#tl-act-select-${uid}`);
+    const startIn  = this._filterBarEl.querySelector(`#tl-date-start-${uid}`);
+    const endIn    = this._filterBarEl.querySelector(`#tl-date-end-${uid}`);
     const clearBtn = this._filterBarEl.querySelector(`#tl-filter-clear-${uid}`);
 
-    evInput.addEventListener('input',  () => this.onFilterEvent?.(evInput.value));
-    actInput.addEventListener('input', () => this.onFilterAction?.(actInput.value));
-    clearBtn.addEventListener('click', () => {
-      evInput.value  = '';
-      actInput.value = '';
-      this.onClearFilters?.();
+    evSel.addEventListener('change', () => {
+      this.onFilterEvents?.(new Set([...evSel.selectedOptions].map(o => o.value)));
     });
+    actSel.addEventListener('change', () => {
+      this.onFilterActions?.(new Set([...actSel.selectedOptions].map(o => o.value)));
+    });
+    startIn.addEventListener('change', () => this.onFilterDateStart?.(startIn.value));
+    endIn.addEventListener('change',   () => this.onFilterDateEnd?.(endIn.value));
+    clearBtn.addEventListener('click', () => this.onClearFilters?.());
   }
 
-  _updateDataLists(options, filterEvent, filterAction) {
+  _syncFilters(options, filterEvents, filterActions, filterDateStart, filterDateEnd) {
     const uid = this._uid;
-    const evDl  = this._filterBarEl.querySelector(`#tl-ev-opts-${uid}`);
-    const actDl = this._filterBarEl.querySelector(`#tl-act-opts-${uid}`);
-    evDl.innerHTML  = options.events.map(v  => `<option value="${v}">`).join('');
-    actDl.innerHTML = options.actions.map(v => `<option value="${v}">`).join('');
+    const evSel    = this._filterBarEl.querySelector(`#tl-ev-select-${uid}`);
+    const actSel   = this._filterBarEl.querySelector(`#tl-act-select-${uid}`);
+    const startIn  = this._filterBarEl.querySelector(`#tl-date-start-${uid}`);
+    const endIn    = this._filterBarEl.querySelector(`#tl-date-end-${uid}`);
     const clearBtn = this._filterBarEl.querySelector(`#tl-filter-clear-${uid}`);
-    clearBtn.style.display = (filterEvent || filterAction) ? '' : 'none';
+
+    // Repopulate options, restoring current selections from controller state
+    evSel.innerHTML  = options.events.map(v =>
+      `<option value="${v}"${filterEvents.has(v)  ? ' selected' : ''}>${v}</option>`).join('');
+    actSel.innerHTML = options.actions.map(v =>
+      `<option value="${v}"${filterActions.has(v) ? ' selected' : ''}>${v}</option>`).join('');
+
+    const startStr = toDateInput(filterDateStart);
+    const endStr   = toDateInput(filterDateEnd);
+    if (startIn.value !== startStr) startIn.value = startStr;
+    if (endIn.value   !== endStr)   endIn.value   = endStr;
+
+    const hasFilter = filterEvents.size > 0 || filterActions.size > 0 || filterDateStart || filterDateEnd;
+    clearBtn.style.display = hasFilter ? '' : 'none';
   }
 
-  _renderList({ groups, expanded, filterEvent, filterAction, hasRewind }) {
+  _renderList({ groups, expanded, filterEvents, filterActions, filterDateStart, filterDateEnd, hasRewind }) {
     if (!this._listEl) return;
 
     const atBottom = this.container.scrollHeight - this.container.scrollTop
                      - this.container.clientHeight < 80;
 
     if (groups.size === 0) {
-      const hasFilter = filterEvent || filterAction;
+      const hasFilter = filterEvents.size > 0 || filterActions.size > 0 || filterDateStart || filterDateEnd;
       this._listEl.innerHTML = `<div class="tl-empty">${
         hasFilter
           ? 'No entries match the current filters.'

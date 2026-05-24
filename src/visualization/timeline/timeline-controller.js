@@ -12,12 +12,14 @@ const fmt = n => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, max
 
 export class TimelineController {
   constructor() {
-    this.journal      = null;
-    this.filterEvent  = '';
-    this.filterAction = '';
-    this.expanded     = new Set();
-    this._lastLen     = 0;
-    this._lastDate    = null;
+    this.journal         = null;
+    this.filterEvents    = new Set(); // selected event types; empty = no filter
+    this.filterActions   = new Set(); // selected action types; empty = no filter
+    this.filterDateStart = null;      // Date (start of day, inclusive) | null
+    this.filterDateEnd   = null;      // Date (end of day, inclusive)   | null
+    this.expanded        = new Set();
+    this._lastLen        = 0;
+    this._lastDate       = null;
   }
 
   setJournal(journal) {
@@ -65,13 +67,13 @@ export class TimelineController {
 
   // Returns Map<dateStr, Map<evType, Array<{entry, idx, sum}>>>
   groups(formatDate) {
-    const evFilter  = this.filterEvent.trim().toLowerCase();
-    const actFilter = this.filterAction.trim().toLowerCase();
     const map = new Map();
     if (!this.journal) return map;
     this.journal.journal.forEach((entry, idx) => {
-      if (evFilter  && !entry.eventType.toLowerCase().includes(evFilter))    return;
-      if (actFilter && !entry.action.type.toLowerCase().includes(actFilter)) return;
+      if (this.filterEvents.size  > 0 && !this.filterEvents.has(entry.eventType))    return;
+      if (this.filterActions.size > 0 && !this.filterActions.has(entry.action.type)) return;
+      if (this.filterDateStart && entry.date < this.filterDateStart) return;
+      if (this.filterDateEnd   && entry.date > this.filterDateEnd)   return;
       const d = formatDate(entry.date);
       if (!map.has(d)) map.set(d, new Map());
       const byEv = map.get(d);

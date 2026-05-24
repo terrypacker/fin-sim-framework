@@ -51,10 +51,16 @@ test('TimelineController: constructor sets _lastDate to null', () => {
   assert.strictEqual(makeController()._lastDate, null);
 });
 
-test('TimelineController: constructor sets filterEvent and filterAction to empty strings', () => {
+test('TimelineController: constructor initialises filterEvents and filterActions as empty Sets', () => {
   const ctrl = makeController();
-  assert.strictEqual(ctrl.filterEvent, '');
-  assert.strictEqual(ctrl.filterAction, '');
+  assert.ok(ctrl.filterEvents  instanceof Set && ctrl.filterEvents.size  === 0);
+  assert.ok(ctrl.filterActions instanceof Set && ctrl.filterActions.size === 0);
+});
+
+test('TimelineController: constructor initialises filterDateStart and filterDateEnd to null', () => {
+  const ctrl = makeController();
+  assert.strictEqual(ctrl.filterDateStart, null);
+  assert.strictEqual(ctrl.filterDateEnd,   null);
 });
 
 // ─── setJournal ───────────────────────────────────────────────────────────────
@@ -113,6 +119,20 @@ test('TimelineController.reset: resets _lastDate to null', () => {
   ctrl._lastDate = 'Wed Jan 01 2025';
   ctrl.reset();
   assert.strictEqual(ctrl._lastDate, null);
+});
+
+test('TimelineController.reset: does not clear filter state', () => {
+  const ctrl = makeController();
+  ctrl.setJournal(makeJournal());
+  ctrl.filterEvents    = new Set(['SELL_ASSET']);
+  ctrl.filterActions   = new Set(['REALIZE_GAIN']);
+  ctrl.filterDateStart = new Date(2025, 0, 1);
+  ctrl.filterDateEnd   = new Date(2025, 11, 31);
+  ctrl.reset();
+  assert.strictEqual(ctrl.filterEvents.size,  1, 'filterEvents should survive reset');
+  assert.strictEqual(ctrl.filterActions.size, 1, 'filterActions should survive reset');
+  assert.ok(ctrl.filterDateStart !== null, 'filterDateStart should survive reset');
+  assert.ok(ctrl.filterDateEnd   !== null, 'filterDateEnd should survive reset');
 });
 
 // ─── update ───────────────────────────────────────────────────────────────────
@@ -262,29 +282,105 @@ test('TimelineController.groups: each item includes the original entry, its inde
   assert.ok('sum' in items[0], 'item should include precomputed sum');
 });
 
-test('TimelineController.groups: filterEvent excludes non-matching entries', () => {
+// ─── groups: event/action filter (multi-select) ───────────────────────────────
+
+test('TimelineController.groups: filterEvents excludes non-selected event types', () => {
   const d    = new Date(2025, 0, 1);
   const ctrl = makeController();
   ctrl.setJournal(makeJournal([
     makeEntry({ date: d, eventType: 'SELL_ASSET' }),
     makeEntry({ date: d, eventType: 'SALARY'     }),
   ]));
-  ctrl.filterEvent = 'sell';
+  ctrl.filterEvents = new Set(['SELL_ASSET']);
   const groups = ctrl.groups(fmtDate);
   assert.strictEqual(groups.size, 1);
   assert.ok(groups.get(d.toDateString()).has('SELL_ASSET'));
+  assert.ok(!groups.get(d.toDateString()).has('SALARY'));
 });
 
-test('TimelineController.groups: filterAction excludes non-matching entries', () => {
+test('TimelineController.groups: filterEvents allows multiple selections', () => {
+  const d    = new Date(2025, 0, 1);
+  const ctrl = makeController();
+  ctrl.setJournal(makeJournal([
+    makeEntry({ date: d, eventType: 'SELL_ASSET' }),
+    makeEntry({ date: d, eventType: 'SALARY'     }),
+    makeEntry({ date: d, eventType: 'EXPENSE'    }),
+  ]));
+  ctrl.filterEvents = new Set(['SELL_ASSET', 'SALARY']);
+  const byEvent = ctrl.groups(fmtDate).get(d.toDateString());
+  assert.ok(byEvent.has('SELL_ASSET'));
+  assert.ok(byEvent.has('SALARY'));
+  assert.ok(!byEvent.has('EXPENSE'));
+});
+
+test('TimelineController.groups: empty filterEvents passes all event types', () => {
+  const d    = new Date(2025, 0, 1);
+  const ctrl = makeController();
+  ctrl.setJournal(makeJournal([
+    makeEntry({ date: d, eventType: 'SELL_ASSET' }),
+    makeEntry({ date: d, eventType: 'SALARY'     }),
+  ]));
+  ctrl.filterEvents = new Set(); // no filter
+  const byEvent = ctrl.groups(fmtDate).get(d.toDateString());
+  assert.strictEqual(byEvent.size, 2);
+});
+
+test('TimelineController.groups: filterActions excludes non-selected action types', () => {
   const d    = new Date(2025, 0, 1);
   const ctrl = makeController();
   ctrl.setJournal(makeJournal([
     makeEntry({ date: d, actionType: 'REALIZE_GAIN' }),
     makeEntry({ date: d, actionType: 'ADD_CASH'     }),
   ]));
-  ctrl.filterAction = 'realize';
+  ctrl.filterActions = new Set(['REALIZE_GAIN']);
   const byEvent = ctrl.groups(fmtDate).get(d.toDateString());
   assert.strictEqual(byEvent.get('TEST_EVENT').length, 1);
+  assert.strictEqual(byEvent.get('TEST_EVENT')[0].entry.action.type, 'REALIZE_GAIN');
+});
+
+// ─── groups: date range filter ────────────────────────────────────────────────
+
+test('TimelineController.groups: filterDateStart excludes entries before the start date', () => {
+  const ctrl = makeController();
+  ctrl.setJournal(makeJournal([
+    makeEntry({ date: new Date(2025, 0, 1) }),
+    makeEntry({ date: new Date(2025, 5, 1) }),
+    makeEntry({ date: new Date(2025, 11, 1) }),
+  ]));
+  ctrl.filterDateStart = new Date(2025, 5, 1, 0, 0, 0, 0); // June 1
+  assert.strictEqual(ctrl.groups(fmtDate).size, 2, 'only June and December should pass');
+});
+
+test('TimelineController.groups: filterDateEnd excludes entries after the end date', () => {
+  const ctrl = makeController();
+  ctrl.setJournal(makeJournal([
+    makeEntry({ date: new Date(2025, 0, 1) }),
+    makeEntry({ date: new Date(2025, 5, 1) }),
+    makeEntry({ date: new Date(2025, 11, 1) }),
+  ]));
+  ctrl.filterDateEnd = new Date(2025, 5, 1, 23, 59, 59, 999); // end of June 1
+  assert.strictEqual(ctrl.groups(fmtDate).size, 2, 'only January and June should pass');
+});
+
+test('TimelineController.groups: date range filter is inclusive on both ends', () => {
+  const ctrl = makeController();
+  ctrl.setJournal(makeJournal([
+    makeEntry({ date: new Date(2025, 0, 1) }),
+    makeEntry({ date: new Date(2025, 5, 1) }),
+    makeEntry({ date: new Date(2025, 11, 1) }),
+  ]));
+  ctrl.filterDateStart = new Date(2025, 0, 1, 0, 0, 0, 0);
+  ctrl.filterDateEnd   = new Date(2025, 5, 1, 23, 59, 59, 999);
+  assert.strictEqual(ctrl.groups(fmtDate).size, 2, 'January and June should both be included');
+});
+
+test('TimelineController.groups: null date filters pass all entries', () => {
+  const ctrl = makeController();
+  ctrl.setJournal(makeJournal([
+    makeEntry({ date: new Date(2025, 0, 1) }),
+    makeEntry({ date: new Date(2025, 5, 1) }),
+  ]));
+  assert.strictEqual(ctrl.groups(fmtDate).size, 2);
 });
 
 // ─── sum ─────────────────────────────────────────────────────────────────────

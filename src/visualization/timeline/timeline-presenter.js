@@ -16,11 +16,21 @@ export class TimelinePresenter {
     this._onRewind   = onRewind ?? null;
     this._formatDate = formatDate ?? (d => d.toDateString());
 
-    view.onFilterEvent  = val => { controller.filterEvent = val;  this._render(); };
-    view.onFilterAction = val => { controller.filterAction = val; this._render(); };
-    view.onClearFilters = ()  => {
-      controller.filterEvent  = '';
-      controller.filterAction = '';
+    view.onFilterEvents  = set => { controller.filterEvents  = set; this._render(); };
+    view.onFilterActions = set => { controller.filterActions = set; this._render(); };
+    view.onFilterDateStart = dateStr => {
+      controller.filterDateStart = dateStr ? this._parseStart(dateStr) : null;
+      this._render();
+    };
+    view.onFilterDateEnd = dateStr => {
+      controller.filterDateEnd = dateStr ? this._parseEnd(dateStr) : null;
+      this._render();
+    };
+    view.onClearFilters = () => {
+      controller.filterEvents    = new Set();
+      controller.filterActions   = new Set();
+      controller.filterDateStart = null;
+      controller.filterDateEnd   = null;
       this._render();
     };
     view.onToggle  = key => { controller.toggleExpanded(key); this._render(); };
@@ -49,12 +59,26 @@ export class TimelinePresenter {
     if (!this._controller.journal) return;
     const ctrl = this._controller;
     this._view.render({
-      groups:       ctrl.groups(this._formatDate),
-      options:      ctrl.allOptions(),
-      filterEvent:  ctrl.filterEvent,
-      filterAction: ctrl.filterAction,
-      expanded:     ctrl.expanded,
-      hasRewind:    !!this._onRewind,
+      groups:          ctrl.groups(this._formatDate),
+      options:         ctrl.allOptions(),
+      filterEvents:    ctrl.filterEvents,
+      filterActions:   ctrl.filterActions,
+      filterDateStart: ctrl.filterDateStart,
+      filterDateEnd:   ctrl.filterDateEnd,
+      expanded:        ctrl.expanded,
+      hasRewind:       !!this._onRewind,
     });
+  }
+
+  // Parse a YYYY-MM-DD string to local midnight (start of day)
+  _parseStart(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d, 0, 0, 0, 0);
+  }
+
+  // Parse a YYYY-MM-DD string to local end-of-day (inclusive upper bound)
+  _parseEnd(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d, 23, 59, 59, 999);
   }
 }
