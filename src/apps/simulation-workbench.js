@@ -21,6 +21,7 @@ import { BaseApp }                            from './base-app.js';
 import { PrebuiltScenario }                   from '../scenarios/prebuilt-scenario.js';
 import { IntlRetirementScenario }             from '../scenarios/intl-retirement-scenario.js';
 import { SimulationWorkbenchDefaultScenario } from '../scenarios/simulation-workbench-default-scenario.js';
+import {ServiceRegistry} from "../services/service-registry.js";
 
 const CHART_SERIES = [
   { key: 'usSavingsAccount.balance', color: '#60a5fa', label: 'US Savings'    },
@@ -42,7 +43,10 @@ const PREBUILT_SCENARIOS = [
     order:    1,
     simStart: '2026-01-01',
     simEnd:   '2041-01-01',
-    factory:  (_params, _initialState, ui) => new IntlRetirementScenario({ eventSchedulerUI: ui }),
+    factory:  (_params, _initialState, ui) => new IntlRetirementScenario({
+      eventSchedulerUI: ui,
+      context: ServiceRegistry.getInstance().simulationContext
+    }),
   }),
   new PrebuiltScenario({
     id:       'workbench-default',
@@ -50,7 +54,10 @@ const PREBUILT_SCENARIOS = [
     order:    2,
     simStart: '2026-01-01',
     simEnd:   '2041-01-01',
-    factory:  (_params, _initialState, ui) => new SimulationWorkbenchDefaultScenario({ eventSchedulerUI: ui }),
+    factory:  (_params, _initialState, ui) => new SimulationWorkbenchDefaultScenario({
+      eventSchedulerUI: ui,
+      context: ServiceRegistry.getInstance().simulationContext
+    }),
   }),
 ];
 

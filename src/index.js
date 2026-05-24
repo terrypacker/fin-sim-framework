@@ -74,7 +74,7 @@ import { TaxService } from './finance/tax-service.js';
 import { TaxSettleService } from './finance/tax-settle-service.js';
 import { GraphQueryApi } from './graph/graph-query-api.js';
 import { QueryApi } from './query/query-api.js';
-import { intervalFns, startSnapFns, BaseScenario } from './scenarios/base-scenario.js';
+import { BaseScenario } from './scenarios/base-scenario.js';
 import { INTL_RETIREMENT_DEFAULTS, IntlRetirementScenario } from './scenarios/intl-retirement-scenario.js';
 import { PrebuiltScenario } from './scenarios/prebuilt-scenario.js';
 import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
@@ -106,6 +106,7 @@ import { JournalEntry, Journal } from './simulation-framework/journal.js';
 import { MinHeap } from './simulation-framework/min-heap.js';
 import { ReducerPipeline, PRIORITY, Reducer, NoOpReducer, FieldReducer, MetricReducer, BalanceSnapshotReducer, FieldValueReducer, ArrayReducer, NumericSumReducer, MultiplicativeReducer, AccountTransactionReducer, REDUCER_CLASSES, RepeatingReducer, ScriptedReducer } from './simulation-framework/reducers.js';
 import { ScenarioRunner } from './simulation-framework/scenario.js';
+import { intervalFns, startSnapFns, SimulationAdapter } from './simulation-framework/simulation/simulation-adapter.js';
 import { ActionNode, SimulationEventGraph } from './simulation-framework/simulation-event-graph.js';
 import { SimulationHistory } from './simulation-framework/simulation-history.js';
 import { SimulationState } from './simulation-framework/simulation-state.js';
@@ -309,8 +310,6 @@ export const Finance = {
 };
 
 export const Scenarios = {
-  intervalFns,
-  startSnapFns,
   BaseScenario,
   INTL_RETIREMENT_DEFAULTS,
   IntlRetirementScenario,
@@ -386,6 +385,9 @@ export const Core = {
   RepeatingReducer,
   ScriptedReducer,
   ScenarioRunner,
+  intervalFns,
+  startSnapFns,
+  SimulationAdapter,
   ActionNode,
   SimulationEventGraph,
   SimulationHistory,

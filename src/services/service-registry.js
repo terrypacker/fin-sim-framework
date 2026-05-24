@@ -42,9 +42,22 @@ export class ServiceRegistry {
     this.personService      = new PersonService(this.bus);
     this.reducerService     = new ReducerService(this.bus);
     this.simulationRegistry = new SimulationRegistry();
-    // SimulationSync receives `this` so it can reach the bus, simulationRegistry,
-    // and sibling services without a ServiceRegistry import (avoids circular deps).
-    this.simulationSync     = new SimulationSync(this);
+
+    //The
+    this.simulationSync     = new SimulationSync({
+      bus: this.bus,
+      simulationRegistry: this.simulationRegistry
+    });
+
+    //Context for a simulation
+    this.simulationContext = {
+      simulationRegistry: this.simulationRegistry,
+      simulationSync: this.simulationSync,
+      eventService: this.eventService,
+      handlerService: this.handlerService,
+      actionService: this.actionService,
+      reducerService: this.reducerService,
+    };
   }
 
   /**

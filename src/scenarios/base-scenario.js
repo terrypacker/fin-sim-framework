@@ -8,26 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { DateUtils } from '../simulation-framework/date-utils.js';
-import { ServiceRegistry } from '../services/service-registry.js';
-
-/**
- * Interval functions used by SimulationSync to advance recurring event dates.
- * Exported so consumers can reuse them without re-deriving the same logic.
- */
-export const intervalFns = {
-  monthly:    d => DateUtils.addMonths(d, 1),
-  quarterly:  d => DateUtils.addMonths(d, 3),
-  annually:   d => DateUtils.addYears(d, 1),
-  'month-end': d => DateUtils.endOfMonth(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))),
-  'year-end':  d => DateUtils.endOfYear(DateUtils.addYears(d, 1)),
-};
-
-/** Snap the start date to the end of the period for period-end intervals. */
-export const startSnapFns = {
-  'month-end': d => DateUtils.endOfMonth(d),
-  'year-end':  d => DateUtils.endOfYear(d),
-};
+import {Simulation} from "../simulation-framework/simulation.js";
 
 /**
  * Base class for simulation scenarios.
@@ -73,10 +54,12 @@ export const startSnapFns = {
 export class BaseScenario {
   constructor({
       eventSchedulerUI,
+      context,
       simStart =  new Date(Date.UTC(2026, 0, 1)),
       simEnd = new Date(Date.UTC(2041, 0, 1))} = {}) {
 
     this.eventSchedulerUI = eventSchedulerUI;
+    this.context = context;
     this.simStart = simStart;
     this.simEnd = simEnd;
 
@@ -95,7 +78,7 @@ export class BaseScenario {
    * @returns {import('../simulation-framework/simulation.js').Simulation|null}
    */
   get sim() {
-    return ServiceRegistry.getInstance().simulationRegistry.getPrimary();
+    return this.context.simulationRegistry.getPrimary();
   }
 
   // ─── Build ────────────────────────────────────────────────────────────────
@@ -117,10 +100,15 @@ export class BaseScenario {
     // Persist as a plain object so ScenarioTabPresenter can serialize it.
     this.initialState = typeof resolved?.toPlain === 'function' ? resolved.toPlain() : resolved;
 
-    const sr = ServiceRegistry.getInstance();
-    sr.simulationRegistry.unregister('primary');
-    sr.simulationRegistry.register('primary', new FinSimLib.Core.Simulation(this.simStart, { initialState: resolved }));
-    sr.simulationSync.setSimStart(this.simStart);
+    const { simulationRegistry, simulationSync } = this.context;
+    simulationRegistry.unregister('primary');
+
+    const sim = new Simulation(this.simStart, {
+      initialState: resolved,
+    });
+
+    simulationRegistry.register('primary', sim);
+    simulationSync.setSimStart(this.simStart);
   }
 
   /**
@@ -143,40 +131,45 @@ export class BaseScenario {
   // The only thing these handlers do explicitly is open the editor panel.
 
   eventCreationRequested(subtype) {
-    const { eventService } = ServiceRegistry.getInstance();
+    const { eventService } = this.context;
+    //TODO need a better way to generate unique names and ids outside of the EventService...
     const id = eventService._generateId('e');
     let event;
     if (subtype === 'OneOff') {
       event = eventService.createOneOffEvent({
-        id,
-        name: 'New One-Off Event', type: 'NEW_ONEOFF_' + id,
-        date: new Date(), enabled: false, color: '#f87171'
+        id: id,
+        name: 'New One-Off Event',
+        type: 'NEW_ONEOFF_' + id,
+        date: new Date(), enabled: false,
+        color: '#f87171'
       });
     } else {
       event = eventService.createEventSeries({
-        id,
-        name: 'New Event Series', type: 'NEW_SERIES_' + id,
-        interval: 'month-end', enabled: false, color: '#60a5fa'
+        id: id,
+        name: 'New Event Series',
+        type: 'NEW_SERIES_' + id,
+        interval: 'month-end', enabled: false,
+        color: '#60a5fa'
       });
     }
     this.eventSchedulerUI.editNode(event);
   }
 
   handlerCreationRequested() {
-    const { handlerService } = ServiceRegistry.getInstance();
+    const { handlerService } = this.context;
     // null fn → uses HandlerEntry.defaultFunction which instantiates from generatedActionDefinitions
     const handler = handlerService.createHandler(null, 'New Handler');
     this.eventSchedulerUI.editNode(handler);
   }
 
   actionCreationRequested() {
-    const { actionService } = ServiceRegistry.getInstance();
+    const { actionService } = this.context;
     const action = actionService.createAmountAction('NEW_ACTION', 'New Action', 0);
     this.eventSchedulerUI.editNode(action);
   }
 
   reducerCreationRequested() {
-    const { reducerService } = ServiceRegistry.getInstance();
+    const { reducerService } = this.context;
     const reducer = reducerService.createFieldReducer('', 'New Reducer');
     this.eventSchedulerUI.editNode(reducer);
   }

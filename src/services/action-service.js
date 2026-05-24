@@ -19,6 +19,8 @@ import {
   ScriptedAction,
   ACTION_CLASSES,
 } from "../simulation-framework/actions.js";
+import {HandlerEntry} from "../simulation-framework/handlers.js";
+import {Reducer} from "../simulation-framework/reducers.js";
 
 /**
  * Service for managing Action instances throughout their lifecycle.
@@ -32,6 +34,13 @@ import {
 export class ActionService extends BaseService {
   constructor(bus) {
     super(bus, 'a');
+
+    //TODO Could move out to ActionTypeEnsurer class if we want to decouple this,
+    //  we want to ensure HandlerEntry and Reducer classes have their actions registered
+    //  when one is created
+    bus.subscribe('SERVICE_ACTION', msg => {
+      this._handle(msg);
+    });
   }
 
   // ─── Create ───────────────────────────────────────────────────────────────
@@ -151,5 +160,52 @@ export class ActionService extends BaseService {
     this._unregister(action.id);
     this._publish('DELETE', action.constructor.name, action, action);
     return action;
+  }
+
+  //  BUS LISTENER TO CREATE ACTIONS
+  _handle({ actionType, item }) {
+    if (actionType !== 'CREATE') return;
+
+    if (this._isHandler(item)) {
+      this._ensureActionTypes(item.generatedActionTypes);
+    }
+
+    if (this._isReducer(item)) {
+      this._ensureActionTypes(item.generatedActionTypes);
+      this._ensureActionTypes(item.reducedActionTypes);
+    }
+  }
+
+  /**
+   * Ensure each action type string has at least one stub Action registered in
+   * ActionService. Skips types that already have a registered action, so this
+   * is safe to call for every handler/reducer CREATE without producing duplicates.
+   *
+   * Stubs allow the config graph to show action nodes for finance-domain
+   * handlers/reducers that emit plain objects rather than service-registered
+   * Action instances.
+   *
+   * @param {string[]} types
+   * @private
+   */
+  _ensureActionTypes(types) {
+    if (!types || types.length === 0) return;
+
+    const existing = new Set(this.getAll().map(a => a.type));
+
+    for (const type of types) {
+      if (!existing.has(type)) {
+        this.register(new Action(type, type));
+        existing.add(type);
+      }
+    }
+  }
+
+  _isHandler(item) {
+    return item instanceof HandlerEntry;
+  }
+
+  _isReducer(item) {
+    return item instanceof Reducer;
   }
 }

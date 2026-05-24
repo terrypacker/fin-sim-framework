@@ -8,12 +8,9 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { DateUtils } from '../simulation-framework/date-utils.js';
-import { intervalFns, startSnapFns } from '../scenarios/base-scenario.js';
-import {BaseEvent} from "../simulation-framework/events/base-event.js";
-import {HandlerEntry} from "../simulation-framework/handlers.js";
-import {Reducer} from "../simulation-framework/reducers.js";
-import {Action} from "../simulation-framework/actions.js";
+import {
+  SimulationAdapter
+} from "../simulation-framework/simulation/simulation-adapter.js";
 
 /**
  * Bridges the service layer (configuration) and the Simulation (execution).
@@ -32,259 +29,41 @@ import {Action} from "../simulation-framework/actions.js";
  * created (i.e., from BaseScenario.buildSim()).
  */
 export class SimulationSync {
-  /**
-   * @param {{ bus, handlerService, reducerService }} registry
-   *   The ServiceRegistry that owns this instance.  Passed so we can reach
-   *   the bus and sibling services without importing ServiceRegistry (avoids
-   *   a circular dependency).
-   */
-  constructor(registry) {
-    this._registry = registry;
+  constructor({ bus, simulationRegistry }) {
+    this.simulationRegistry = simulationRegistry;
 
-    /** Date from which recurring event series are scheduled. Set by buildSim. */
-    this.simStart = null;
+    this.adapter = new SimulationAdapter({
+      sim: null,
+      simStart: null
+    });
 
-    /**
-     * Tracks which event types already have the auto-rescheduling handler
-     * registered in the sim so we never register a second one on re-enable.
-     * @type {Map<string, object>}
-     */
-    this._registeredRecurringTypes = new Map();
-
-    registry.bus.subscribe('SERVICE_ACTION', (msg) => {
-      this._handleServiceAction(msg);
+    bus.subscribe('SERVICE_ACTION', msg => {
+      this._handle(msg);
     });
   }
 
-  // ─── Configuration ────────────────────────────────────────────────────────
-
-  /**
-   * Must be called after the Simulation is created so recurring events can be
-   * scheduled relative to the right start date.
-   * @param {Date} simStart
-   */
   setSimStart(simStart) {
-    this.simStart = simStart;
+    this.adapter.setSimStart(simStart);
   }
 
-  // ─── Sim accessor ─────────────────────────────────────────────────────────
-
-  /** @returns {import('../simulation-framework/simulation.js').Simulation|null} */
-  get sim() {
-    return this._registry.simulationRegistry.getPrimary();
+  _getSim() {
+    return this.simulationRegistry.getPrimary();
   }
 
-  // ─── Bus dispatch ─────────────────────────────────────────────────────────
+  _handle(msg) {
+    const sim = this._getSim();
+    if (!sim) return;
 
-  /** @private */
-  _handleServiceAction(msg) {
-    if (!this.sim) return; // sim not yet built
+    this.adapter.setSim(sim);
 
-    const { actionType, classType, item } = msg;
+    const { actionType, item } = msg;
 
     if (actionType === 'CREATE') {
-      if (item instanceof BaseEvent) {
-        if (item.enabled) {
-          item.date ? this._scheduleOneOffEvent(item) : this._scheduleEventSeries(item);
-        }
-      } else if (item instanceof HandlerEntry) {
-        this._wireHandler(item);
-        this._ensureActionTypes(item.generatedActionTypes);
-      } else if (item instanceof Reducer) {
-        this._wireReducer(item);
-        this._ensureActionTypes(item.reducedActionTypes);
-        this._ensureActionTypes(item.generatedActionTypes);
-      }
-      // Actions: no sim wiring needed on CREATE
-
+      this.adapter.onCreate(item);
     } else if (actionType === 'UPDATE') {
-      if (item instanceof BaseEvent) {
-        this._applyEventChange(item);
-      } else if (item instanceof HandlerEntry) {
-        this._applyHandlerChange(item);
-      } else if (item instanceof Action) {
-        this._applyActionChange(item);
-      } else if (item instanceof Reducer) {
-        this._applyReducerChange(item);
-      }
-
+      this.adapter.onUpdate(item);
     } else if (actionType === 'DELETE') {
-      if (item instanceof BaseEvent) {
-        this._applyEventDelete(item);
-      } else if (item instanceof HandlerEntry) {
-        this._applyHandlerDelete(item);
-      } else if (item instanceof Action) {
-        this._applyActionDelete(item);
-      } else if (item instanceof Reducer) {
-        this._applyReducerDelete(item);
-      }
+      this.adapter.onDelete(item);
     }
-  }
-
-  // ─── Scheduling helpers ───────────────────────────────────────────────────
-
-  /** @private */
-  _scheduleEventSeries(series) {
-    if (!series.enabled) return;
-
-    const intervalFn = intervalFns[series.interval];
-
-    if (!this._registeredRecurringTypes.has(series.type)) {
-      this.sim.register(series.type, ({ sim, date }) => {
-        sim.schedule({ ...series, date: intervalFn(date) });
-      });
-      this._registeredRecurringTypes.set(series.type, series);
-    }
-
-    let start = series.startOffset
-        ? DateUtils.addYears(this.simStart, series.startOffset)
-        : this.simStart;
-    const snapFn = startSnapFns[series.interval];
-    if (snapFn) start = snapFn(start);
-
-    while (start <= this.sim.currentDate) {
-      start = intervalFn(start);
-    }
-
-    this.sim.schedule({ ...series, date: start });
-  }
-
-  /** @private */
-  _scheduleOneOffEvent(event) {
-    if (event.enabled) {
-      this.sim.schedule({ ...event, date: new Date(event.date) });
-    }
-  }
-
-  /** @private */
-  _unscheduleEvent(event) {
-    this.sim.unschedule(event.type);
-  }
-
-  // ─── Apply methods (UPDATE / DELETE) ─────────────────────────────────────
-
-  /** @private */
-  _applyEventChange(event) {
-    this._unscheduleEvent(event);
-    if (event.enabled) {
-      event.date ? this._scheduleOneOffEvent(event) : this._scheduleEventSeries(event);
-    }
-  }
-
-  /** @private */
-  _applyHandlerChange(handler) {
-    this.sim.handlers.unregisterFromAll(handler);
-    this._wireHandler(handler);
-  }
-
-  /** @private */
-  _applyActionChange(action) {
-    // With reducedActionTypes as explicit type strings, changing an Action's type
-    // does not automatically propagate to reducer registrations — reducers declare
-    // their handled types independently.  No re-wiring needed here.
-  }
-
-  /** @private */
-  _applyReducerChange(reducer) {
-    this.reregisterReducer(reducer);
-  }
-
-  /** @private */
-  _applyEventDelete(event) {
-    if (event.enabled) {
-      this._unscheduleEvent(event);
-    }
-    this._registeredRecurringTypes.delete(event.type);
-  }
-
-  /** @private */
-  _applyHandlerDelete(handler) {
-    this.sim.handlers.unregisterFromAll(handler);
-  }
-
-  /** @private */
-  _applyActionDelete(action) {
-    // handlers and reducers now hold type strings (not Action references),
-    // so no cross-reference cleanup is needed when an Action service item is deleted.
-  }
-
-  /** @private */
-  _applyReducerDelete(reducer) {
-    this.sim.reducers.unregisterAllForReducer(reducer);
-  }
-
-  // ─── Public helpers ───────────────────────────────────────────────────────
-
-  /**
-   * Wire a handler into the simulation's HandlerRegistry.
-   *
-   * Supports two registration styles:
-   *   1. Event-linked style: handler.handledEvents[] holds EventSeries objects;
-   *      each series.type is used as the registry key.
-   *   2. Direct-wired style: handler class declares a static eventType string;
-   *      used for finance-domain handlers whose event type is fixed by design
-   *      (e.g. CHANGE_RESIDENCY, OUT_OF_FUNDS, INTL_TRANSFER_TO_US/AU).
-   *
-   * @private
-   */
-  _wireHandler(handler) {
-    if (handler.handledEvents.length > 0) {
-      handler.handledEvents.forEach(e => this.sim.register(e.type, handler, handler.name));
-    } else if (handler.constructor.eventType) {
-      this.sim.register(handler.constructor.eventType, handler, handler.name);
-    }
-  }
-
-  /**
-   * Ensure each action type string has at least one stub Action registered in
-   * ActionService. Skips types that already have a registered action, so this
-   * is safe to call for every handler/reducer CREATE without producing duplicates.
-   *
-   * Stubs allow the config graph to show action nodes for finance-domain
-   * handlers/reducers that emit plain objects rather than service-registered
-   * Action instances.
-   *
-   * @param {string[]} types
-   * @private
-   */
-  _ensureActionTypes(types) {
-    if (!types || types.length === 0) return;
-    const svc      = this._registry.actionService;
-    const existing = new Set(svc.getAll().map(a => a.type));
-    for (const type of types) {
-      if (!existing.has(type)) {
-        svc.register(new Action(type, type));
-        existing.add(type); // prevent duplicates within the same call
-      }
-    }
-  }
-
-  /**
-   * Wire a reducer into the simulation pipeline.
-   *
-   * Supports two registration styles:
-   *   1. Service-graph style: reducer.reducedActionTypes[] holds type strings;
-   *      each string is used directly as the pipeline key.
-   *   2. Direct-wired style: reducer class declares a static actionType string;
-   *      used for finance-domain reducers whose action type is fixed by design.
-   *
-   * @private
-   */
-  _wireReducer(reducer) {
-    if (reducer.reducedActionTypes.length > 0) {
-      reducer.reducedActionTypes.forEach(type => reducer.registerWith(this.sim.reducers, type));
-    } else if (reducer.constructor.actionType) {
-      reducer.registerWith(this.sim.reducers, reducer.constructor.actionType);
-    }
-  }
-
-  /**
-   * Remove all sim registrations for a reducer then re-wire it based on its
-   * current reducedActionTypes array (or static actionType).
-   * Called after type changes.
-   */
-  reregisterReducer(reducer) {
-    this.sim.reducers.unregisterAllForReducer(reducer);
-    this._wireReducer(reducer);
   }
 }
