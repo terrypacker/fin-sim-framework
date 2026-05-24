@@ -102,10 +102,11 @@ export class AuSavingsContributionHandler extends HandlerEntry {
     this.generatedActionTypes = ['AU_SAVINGS_CONTRIBUTION_APPLY', 'RECORD_BALANCE'];
   }
 
-  call({ data }) {
+  call({ data, state }) {
+    const cashKey = state.auSavingsAccount != null ? 'auSavingsAccount' : 'checkingAccount';
     return [
       { type: 'AU_SAVINGS_CONTRIBUTION_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];
   }
 }
@@ -119,10 +120,11 @@ export class AuSavingsWithdrawalHandler extends HandlerEntry {
     this.generatedActionTypes = ['AU_SAVINGS_WITHDRAWAL_APPLY', 'RECORD_BALANCE'];
   }
 
-  call({ data }) {
+  call({ data, state }) {
+    const cashKey = state.auSavingsAccount != null ? 'auSavingsAccount' : 'checkingAccount';
     return [
       { type: 'AU_SAVINGS_WITHDRAWAL_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];
   }
 }
@@ -137,9 +139,10 @@ export class AuSavingsEarningsHandler extends HandlerEntry {
   }
 
   call({ data, state }) {
+    const cashKey = state.auSavingsAccount != null ? 'auSavingsAccount' : 'checkingAccount';
     return [
       { type: 'AU_SAVINGS_EARNINGS_APPLY', amount: data.amount, isAuResident: state.isAuResident },
-      new RecordBalanceAction(),
+      new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];
   }
 }

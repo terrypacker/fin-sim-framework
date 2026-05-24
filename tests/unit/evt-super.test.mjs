@@ -22,15 +22,18 @@
  * Run with: node --test tests/evt-super.test.mjs
  */
 
-import { test } from 'node:test';
+import { test, beforeEach } from 'node:test';
 import assert   from 'node:assert/strict';
 
 import { Account } from '../../src/finance/account.js';
 import { FinancialState } from '../../src/finance/state/financial-state.js';
 import { Simulation } from '../../src/simulation-framework/simulation.js';
 import { TaxService } from '../../src/finance/tax-service.js';
+import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { PeriodService } from '../../src/finance/period/period-service.js';
 import { buildAuFiscalYear, applyTo } from '../../src/finance/period/period-builder.js';
+
+beforeEach(() => ServiceRegistry.reset());
 
 // Jan 1 2026 falls within AU fiscal year starting Jul 1 2025 (FY2025-26).
 function buildAuPeriodService() {
@@ -39,6 +42,8 @@ function buildAuPeriodService() {
   return ps;
 }
 
+const START_DATE = new Date(2026, 0, 1);
+
 function buildSuperSim({
   initialChecking    = 20000,
   superBalance       = 0,
@@ -46,7 +51,8 @@ function buildSuperSim({
   superEarningsBasis = 0,
   personBirthDate    = new Date(1966, 0, 1), // turns 60 on 2026-01-01
 } = {}) {
-  const sim = new Simulation(new Date(2026, 0, 1), { initialState: new FinancialState({
+  const registry = ServiceRegistry.getInstance();
+  const sim = new Simulation(START_DATE, { initialState: new FinancialState({
     checkingAccount: new Account(initialChecking),
     superAccount: {
       balance:           superBalance,
@@ -58,9 +64,13 @@ function buildSuperSim({
     auSuperTaxYTD:          0,
     superWithdrawalBlocked: false,
   }) });
-  const svc = new TaxService().registerWith(sim, ['AU'], buildAuPeriodService());
+  registry.simulationRegistry.register('primary', sim);
+  registry.simulationSync.setSimStart(START_DATE);
+  const taxService = new TaxService();
+  taxService.setup(sim, ['AU'], buildAuPeriodService());
+  taxService.registerHandlersAndReducers(registry, ['AU']);
 
-  return { sim, svc };
+  return { sim };
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

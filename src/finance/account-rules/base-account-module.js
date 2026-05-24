@@ -28,19 +28,9 @@ export class BaseAccountModule {
   }
 
   /**
-   * Register all event handlers and Stage-1 (CASH_FLOW priority) reducers.
-   * Called by TaxService during sim wiring.
-   * @param {import('../../simulation-framework/simulation.js').Simulation} sim
-   * @param {import('../services/account-service.js').AccountService} svc
-   */
-  registerWith(sim, svc) {
-    throw new Error(`${this.constructor.name}: registerWith not implemented`);
-  }
-
-  /**
    * Create all Reducer instances for this module.
-   * Used by TaxService.registerWithServices() to route registration through
-   * the service layer so items appear in the config graph.
+   * Called by TaxService to route registration through the service layer so
+   * items appear in the config graph.
    *
    * @param {import('../services/account-service.js').AccountService} accountService
    * @returns {import('../../simulation-framework/reducers.js').Reducer[]}
@@ -51,8 +41,8 @@ export class BaseAccountModule {
 
   /**
    * Create all HandlerEntry instances for this module.
-   * Used by TaxService.registerWithServices() to route registration through
-   * the service layer so items appear in the config graph.
+   * Called by TaxService to route registration through the service layer so
+   * items appear in the config graph.
    *
    * @returns {import('../../simulation-framework/handlers.js').HandlerEntry[]}
    */

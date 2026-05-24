@@ -59,6 +59,7 @@ export class UsHouseSaleHandler extends HandlerEntry {
   }
 
   call({ data, state }) {
+    const cashKey = state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
     return [
       {
         type:         'US_HOUSE_SALE_APPLY',
@@ -66,7 +67,7 @@ export class UsHouseSaleHandler extends HandlerEntry {
         costBasis:    data.costBasis,
         isAuResident: state.isAuResident,
       },
-      new RecordBalanceAction(),
+      new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];
   }
 }

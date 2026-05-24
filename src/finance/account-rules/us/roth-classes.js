@@ -154,7 +154,7 @@ export class RothContributionHandler extends HandlerEntry {
     return [
       { type: 'ROTH_CONTRIBUTION_APPLY', amount: data.amount },
       new FieldValueAction('roth_contribution', 'Roth Contribution', data.amount),
-      new RecordBalanceAction(),
+      new RecordBalanceAction('rothAccount.balance', 'rothAccount'),
     ];
   }
 }
@@ -172,7 +172,7 @@ export class RothWithdrawalContributionsHandler extends HandlerEntry {
     return [
       { type: 'ROTH_WITHDRAWAL_CONTRIB_APPLY', amount: data.amount },
       new FieldValueAction('roth_withdrawal_contributions', 'Roth Withdrawal', data.amount),
-      new RecordBalanceAction(),
+      new RecordBalanceAction('rothAccount.balance', 'rothAccount'),
     ];
   }
 }
@@ -197,7 +197,7 @@ export class RothWithdrawalEarningsHandler extends HandlerEntry {
         isAuResident:  state.isAuResident,
       },
       new FieldValueAction('roth_withdrawal_earnings', 'Roth Withdrawal Earnings', data.amount),
-      new RecordBalanceAction(),
+      new RecordBalanceAction('rothAccount.balance', 'rothAccount'),
     ];
   }
 }
@@ -215,7 +215,7 @@ export class RothEarningsHandler extends HandlerEntry {
     return [
       { type: 'ROTH_EARNINGS_APPLY', amount: data.amount },
       new FieldValueAction('roth_earnings', 'Roth Earnings', data.amount),
-      new RecordBalanceAction(),
+      new RecordBalanceAction('rothAccount.balance', 'rothAccount'),
     ];
   }
 }
