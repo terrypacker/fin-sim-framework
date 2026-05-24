@@ -122,6 +122,32 @@ export class BaseService {
   }
 
   /**
+   * Register an existing item in the map AND publish a CREATE event on the bus.
+   *
+   * This is the primary entry point for programmatic item setup (CustomScenario,
+   * ScenarioSerializer) and replaces the old pattern of calling BaseScenario
+   * helper methods (scheduleEvent, registerHandler, etc.).
+   *
+   * Subscribers — BaseScenario (sim wiring) and EventScheduler (graph node) —
+   * react to the CREATE event, so the caller does not need to wire anything
+   * manually.
+   *
+   * If the item has no id one is generated.  Advances the ID counter exactly
+   * as load() does, so saved IDs are preserved and future generated IDs never
+   * collide.
+   *
+   * @param {*} item - must have an `id` property (may be null before this call)
+   * @returns {*} the item
+   */
+  register(item) {
+    if (item.id == null) item.id = this._generateId(this._idPrefix);
+    this._items.set(item.id, item);
+    this._advanceCounter(item.id);
+    this._publish('CREATE', item.constructor.name, item);
+    return item;
+  }
+
+  /**
    * Advance _nextId if the given id has a trailing numeric suffix higher than
    * the current counter.
    * @param {string} id

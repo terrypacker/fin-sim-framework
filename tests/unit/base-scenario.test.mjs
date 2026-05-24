@@ -10,9 +10,14 @@
 
 /**
  * base-scenario.test.mjs
- * Tests for BaseScenario: creation/deletion listener flow, ID counters,
- * eventChanged fix, and sim cleanup.
- * Run with: node --test tests/base-scenario.test.mjs
+ *
+ * Tests for BaseScenario: service-as-entry-point wiring, creation listener flow,
+ * ID counters, and sim cleanup via bus events.
+ *
+ * Objects are inserted via service.register() or service.create*().  The bus
+ * propagates CREATE → BaseScenario wires sim; UPDATE/DELETE follow unchanged.
+ *
+ * Run with: node --test tests/unit/base-scenario.test.mjs
  */
 
 import { test } from 'node:test';
@@ -42,25 +47,14 @@ class StubSchedulerUI {
     this.nodes       = [];
     this.editedNodes = [];
     this._listeners  = {
-      eventChange: [], handlerChange: [], actionChange: [], reducerChange: [],
       eventCreated: [], handlerCreated: [], actionCreated: [], reducerCreated: [],
-      eventDeleted: [], handlerDeleted: [], actionDeleted: [], reducerDeleted: [],
     };
-    this.graph = { getKind: (kind) => this.nodes.filter(n => n.kind === kind) };
   }
 
-  registerEventChangeListener(l)    { this._listeners.eventChange.push(l); }
-  registerHandlerChangeListener(l)  { this._listeners.handlerChange.push(l); }
-  registerActionChangeListener(l)   { this._listeners.actionChange.push(l); }
-  registerReducerChangeListener(l)  { this._listeners.reducerChange.push(l); }
   registerEventCreatedListener(l)   { this._listeners.eventCreated.push(l); }
   registerHandlerCreatedListener(l) { this._listeners.handlerCreated.push(l); }
   registerActionCreatedListener(l)  { this._listeners.actionCreated.push(l); }
   registerReducerCreatedListener(l) { this._listeners.reducerCreated.push(l); }
-  registerEventDeletedListener(l)   { this._listeners.eventDeleted.push(l); }
-  registerHandlerDeletedListener(l) { this._listeners.handlerDeleted.push(l); }
-  registerActionDeletedListener(l)  { this._listeners.actionDeleted.push(l); }
-  registerReducerDeletedListener(l) { this._listeners.reducerDeleted.push(l); }
 
   addEvent(e)   { e.kind = 'event'; this.nodes.push(e); }
   addHandler(h) { this.nodes.push(h); }
@@ -74,51 +68,128 @@ class StubSchedulerUI {
     if (kind === 'action')  this._listeners.actionCreated.forEach(l => l());
     if (kind === 'reducer') this._listeners.reducerCreated.forEach(l => l());
   }
-
-  triggerDelete(node) {
-    if (node.kind === 'event')   this._listeners.eventDeleted.forEach(l => l(node));
-    if (node.kind === 'handler') this._listeners.handlerDeleted.forEach(l => l(node));
-    if (node.kind === 'action')  this._listeners.actionDeleted.forEach(l => l(node));
-    if (node.kind === 'reducer') this._listeners.reducerDeleted.forEach(l => l(node));
-  }
 }
 
 function makeScenario() {
   ServiceRegistry.reset();
   const ui       = new StubSchedulerUI();
+
+  // Subscribe to bus so the stub UI reacts to CREATE events — mirrors what
+  // EventScheduler does in production.
+  ServiceRegistry.getInstance().bus.subscribe('SERVICE_ACTION', (msg) => {
+    if (msg.actionType !== 'CREATE') return;
+    const { classType, item } = msg;
+    if (classType === 'EventSeries' || classType === 'OneOffEvent') { item.kind = 'event'; ui.nodes.push(item); }
+    else if (classType === 'HandlerEntry') ui.nodes.push(item);
+    else if (['AmountAction','RecordMetricAction','RecordArrayMetricAction',
+              'RecordNumericSumMetricAction','RecordMultiplicativeMetricAction',
+              'RecordBalanceAction','ScriptedAction','FieldValueAction'].includes(classType)) ui.nodes.push(item);
+    else if (['MetricReducer','ArrayMetricReducer','NumericSumMetricReducer',
+              'MultiplicativeMetricReducer','NoOpReducer','FieldReducer',
+              'StateFieldReducer','AccountTransactionReducer','ScriptedReducer'].includes(classType)) ui.nodes.push(item);
+  });
+
   const scenario = new BaseScenario({ eventSchedulerUI: ui });
   scenario.buildSim({}, { metrics: {} });
   return { ui, scenario };
 }
 
-// ─── ID counters ──────────────────────────────────────────────────────────────
+// ─── service.register() → ID assignment ──────────────────────────────────────
 
-test('registerHandler: assigns incrementing IDs h1, h2, h3', () => {
+test('handlerService.register: assigns incrementing IDs h1, h2, h3', () => {
   const { scenario } = makeScenario();
+  const { handlerService } = ServiceRegistry.getInstance();
   const h1 = new HandlerEntry(() => [], 'A');
   const h2 = new HandlerEntry(() => [], 'B');
   const h3 = new HandlerEntry(() => [], 'C');
-  scenario.registerHandler(h1);
-  scenario.registerHandler(h2);
-  scenario.registerHandler(h3);
+  handlerService.register(h1);
+  handlerService.register(h2);
+  handlerService.register(h3);
   assert.strictEqual(h1.id, 'h1');
   assert.strictEqual(h2.id, 'h2');
   assert.strictEqual(h3.id, 'h3');
 });
 
-test('registerReducer: assigns incrementing IDs r1, r2', () => {
+test('reducerService.register: assigns incrementing IDs r1, r2', () => {
   const { scenario } = makeScenario();
+  const { reducerService } = ServiceRegistry.getInstance();
   const r1 = ReducerBuilder.metric('a').name('R1').build();
   const r2 = ReducerBuilder.metric('b').name('R2').build();
-  scenario.registerReducer(r1);
-  scenario.registerReducer(r2);
+  reducerService.register(r1);
+  reducerService.register(r2);
   assert.strictEqual(r1.id, 'r1');
   assert.strictEqual(r2.id, 'r2');
 });
 
-// ─── Event creation ───────────────────────────────────────────────────────────
+// ─── service.register() → sim wiring (CREATE path) ───────────────────────────
 
-test('eventCreationRequested Series: adds EventSeries to UI with e1 id', () => {
+test('eventService.register: enabled EventSeries is scheduled in sim', () => {
+  const { scenario } = makeScenario();
+  const event = new EventSeries({
+    name: 'Monthly', type: 'MONTHLY_TEST', interval: 'month-end', enabled: true, color: '#fff'
+  });
+  ServiceRegistry.getInstance().eventService.register(event);
+  assert.ok(ServiceRegistry.getInstance().simulationSync._registeredRecurringTypes.has('MONTHLY_TEST'),
+    'enabled series should be in _registeredRecurringTypes after register');
+});
+
+test('eventService.register: disabled EventSeries is not scheduled in sim', () => {
+  const { scenario } = makeScenario();
+  const event = new EventSeries({
+    name: 'Monthly', type: 'MONTHLY_DISABLED', interval: 'month-end', enabled: false, color: '#fff'
+  });
+  ServiceRegistry.getInstance().eventService.register(event);
+  assert.ok(!ServiceRegistry.getInstance().simulationSync._registeredRecurringTypes.has('MONTHLY_DISABLED'),
+    'disabled series should not be scheduled');
+});
+
+test('eventService.register: enabled OneOffEvent is placed in sim queue', () => {
+  const { scenario } = makeScenario();
+  const futureDate = new Date(Date.UTC(2035, 5, 1));
+  const event = new OneOffEvent({
+    name: 'One-Off', type: 'ONE_OFF_TEST', date: futureDate, enabled: true, color: '#fff'
+  });
+  ServiceRegistry.getInstance().eventService.register(event);
+  // Queue should contain at least the one-off event
+  assert.ok(scenario.sim.queue.size() > 0, 'one-off event should be in sim queue');
+});
+
+test('handlerService.register: handler is wired into sim for each handledEvent', () => {
+  const { scenario } = makeScenario();
+  const sr = ServiceRegistry.getInstance();
+
+  const event = new EventSeries({ name: 'E', type: 'H_WIRE_TEST', interval: 'month-end', enabled: true, color: '#fff' });
+  sr.eventService.register(event);
+
+  const handler = new HandlerEntry(() => [], 'H');
+  handler.handledEvents.push(event);
+  sr.handlerService.register(handler);
+
+  // The sim should have the user handler registered for the event type
+  // (plus the auto-reschedule handler from the series — so at least 2)
+  const handlers = scenario.sim.handlers.get('H_WIRE_TEST');
+  assert.ok(handlers.length >= 2, 'handler should be registered with sim');
+  assert.ok(handlers.some(h => h === handler || h.handler === handler));
+});
+
+test('reducerService.register: reducer is wired into sim for each reducedAction', () => {
+  const { scenario } = makeScenario();
+  const sr = ServiceRegistry.getInstance();
+
+  const action = new AmountAction('PAY_TEST', 'Pay', 100);
+  sr.actionService.register(action);
+
+  const reducer = ReducerBuilder.metric('amount').name('Metric R').build();
+  reducer.reducedActions.push(action);
+  sr.reducerService.register(reducer);
+
+  const reducers = scenario.sim.reducers.get('PAY_TEST');
+  assert.ok(reducers.length > 0, 'reducer should be registered with sim after register()');
+});
+
+// ─── Event creation via UI ────────────────────────────────────────────────────
+
+test('eventCreationRequested Series: node appears in UI via bus with e1 id', () => {
   const { ui } = makeScenario();
   ui.triggerCreate('event', 'Series');
   const events = ui.nodes.filter(n => n.kind === 'event');
@@ -128,7 +199,7 @@ test('eventCreationRequested Series: adds EventSeries to UI with e1 id', () => {
   assert.strictEqual(events[0].enabled, false);
 });
 
-test('eventCreationRequested OneOff: adds plain object with date field', () => {
+test('eventCreationRequested OneOff: node appears in UI via bus with date field', () => {
   const { ui } = makeScenario();
   ui.triggerCreate('event', 'OneOff');
   const events = ui.nodes.filter(n => n.kind === 'event');
@@ -152,9 +223,9 @@ test('eventCreationRequested: IDs increment across multiple creates', () => {
   assert.deepStrictEqual(ids, ['e1', 'e2']);
 });
 
-// ─── Handler creation ─────────────────────────────────────────────────────────
+// ─── Handler creation via UI ──────────────────────────────────────────────────
 
-test('handlerCreationRequested: adds HandlerEntry to UI with h1 id', () => {
+test('handlerCreationRequested: node appears in UI via bus with h1 id', () => {
   const { ui } = makeScenario();
   ui.triggerCreate('handler');
   const handlers = ui.nodes.filter(n => n.kind === 'handler');
@@ -170,16 +241,16 @@ test('handlerCreationRequested: opens editor for created node', () => {
   assert.strictEqual(ui.editedNodes[0].id, 'h1');
 });
 
-// ─── Action creation ──────────────────────────────────────────────────────────
+// ─── Action creation via UI ───────────────────────────────────────────────────
 
-test('actionCreationRequested: adds AmountAction to UI with service-generated id', () => {
+test('actionCreationRequested: node appears in UI via bus with service-generated id', () => {
   const { ui } = makeScenario();
   ui.triggerCreate('action');
   const actions = ui.nodes.filter(n => n.kind === 'action');
   assert.strictEqual(actions.length, 1);
   assert.ok(actions[0] instanceof AmountAction);
-  assert.strictEqual(actions[0].id, 'a1');          // service-assigned id
-  assert.strictEqual(actions[0].type, 'NEW_ACTION'); // category type is separate
+  assert.strictEqual(actions[0].id, 'a1');
+  assert.strictEqual(actions[0].type, 'NEW_ACTION');
 });
 
 test('actionCreationRequested: opens editor for created node', () => {
@@ -188,9 +259,9 @@ test('actionCreationRequested: opens editor for created node', () => {
   assert.strictEqual(ui.editedNodes.length, 1);
 });
 
-// ─── Reducer creation ─────────────────────────────────────────────────────────
+// ─── Reducer creation via UI ──────────────────────────────────────────────────
 
-test('reducerCreationRequested: adds MetricReducer to UI with r1 id', () => {
+test('reducerCreationRequested: node appears in UI via bus with r1 id', () => {
   const { ui } = makeScenario();
   ui.triggerCreate('reducer');
   const reducers = ui.nodes.filter(n => n.kind === 'reducer');
@@ -206,43 +277,44 @@ test('reducerCreationRequested: opens editor for created node', () => {
   assert.strictEqual(ui.editedNodes[0].id, 'r1');
 });
 
-// ─── eventChanged fix ─────────────────────────────────────────────────────────
+// ─── Enable / disable via service UPDATE ─────────────────────────────────────
 
-test('eventChanged: enabling a UI-created event does not throw', () => {
+test('enabling a registered event via service update schedules it in sim', () => {
   const { ui, scenario } = makeScenario();
   ui.triggerCreate('event', 'Series');
   const event = ui.nodes.find(n => n.kind === 'event');
 
-  // Simulate user enabling it — this must NOT throw "already in graph"
-  event.enabled = true;
-  assert.doesNotThrow(() => scenario.eventChanged(event));
+  assert.doesNotThrow(() => {
+    ServiceRegistry.getInstance().eventService.updateEvent(event.id, { enabled: true });
+  });
+  assert.ok(ServiceRegistry.getInstance().simulationSync._registeredRecurringTypes.has(event.type));
 });
 
-test('eventChanged: disabling an enabled event unschedules it from sim', () => {
+test('disabling an enabled event via service update unschedules it from sim', () => {
   const { scenario } = makeScenario();
   const event = new EventSeries({
-    id: 'e-test', name: 'Test', type: 'TEST_EVT', interval: 'month-end', enabled: true, color: '#fff'
+    name: 'Test', type: 'TEST_EVT', interval: 'month-end', enabled: true, color: '#fff'
   });
-  scenario.scheduleEvent(event);
+  ServiceRegistry.getInstance().eventService.register(event);
+  assert.ok(ServiceRegistry.getInstance().simulationSync._registeredRecurringTypes.has('TEST_EVT'));
 
-  event.enabled = false;
-  assert.doesNotThrow(() => scenario.eventChanged(event));
+  assert.doesNotThrow(() => {
+    ServiceRegistry.getInstance().eventService.updateEvent(event.id, { enabled: false });
+  });
 });
 
 // ─── Event deletion ───────────────────────────────────────────────────────────
 
 test('eventDeleted: removes event from _registeredRecurringTypes', () => {
-  const { ui, scenario } = makeScenario();
-  ui.triggerCreate('event', 'Series');
-  const event = ui.nodes.find(n => n.kind === 'event');
-
-  // Enable and schedule it so it gets into _registeredRecurringTypes
-  event.enabled = true;
-  scenario.eventChanged(event);
-  assert.ok(scenario._registeredRecurringTypes.has(event.type));
+  const { scenario } = makeScenario();
+  const event = new EventSeries({
+    name: 'Test', type: 'DELETE_EVT', interval: 'month-end', enabled: true, color: '#fff'
+  });
+  ServiceRegistry.getInstance().eventService.register(event);
+  assert.ok(ServiceRegistry.getInstance().simulationSync._registeredRecurringTypes.has('DELETE_EVT'));
 
   ServiceRegistry.getInstance().eventService.deleteEvent(event.id);
-  assert.ok(!scenario._registeredRecurringTypes.has(event.type));
+  assert.ok(!ServiceRegistry.getInstance().simulationSync._registeredRecurringTypes.has('DELETE_EVT'));
 });
 
 test('eventDeleted: disabled event can be deleted without error', () => {
@@ -255,19 +327,19 @@ test('eventDeleted: disabled event can be deleted without error', () => {
 // ─── Handler deletion ─────────────────────────────────────────────────────────
 
 test('handlerDeleted: unregisters handler from sim', () => {
-  const { ui, scenario } = makeScenario();
-  ui.triggerCreate('handler');
-  const handler = ui.nodes.find(n => n.kind === 'handler');
+  const { scenario } = makeScenario();
+  const sr = ServiceRegistry.getInstance();
 
-  // Link to a dummy event type so the handler is registered
-  const event = new EventSeries({ id: 'ev1', name: 'Ev', type: 'TEST_HANDLER_EVT', interval: 'month-end', enabled: true, color: '#aaa' });
-  scenario.scheduleEvent(event);
+  const event = new EventSeries({ name: 'Ev', type: 'TEST_HANDLER_EVT', interval: 'month-end', enabled: true, color: '#aaa' });
+  sr.eventService.register(event);
+
+  const handler = new HandlerEntry(() => [], 'H');
   handler.handledEvents.push(event);
-  scenario.sim.register(event.type, handler);
+  sr.handlerService.register(handler);
 
-  ServiceRegistry.getInstance().handlerService.deleteHandler(handler.id);
-  // After deletion, no handlers should fire for this event type
-  assert.strictEqual(scenario.sim.handlers.get(event.type).length, 1); // only auto-reschedule handler remains
+  sr.handlerService.deleteHandler(handler.id);
+  // Only the auto-reschedule handler should remain
+  assert.strictEqual(scenario.sim.handlers.get(event.type).length, 1);
 });
 
 // ─── Action deletion ──────────────────────────────────────────────────────────
@@ -305,22 +377,20 @@ test('actionDeleted: removes action from reducer reducedActions', () => {
 // ─── Reducer deletion ─────────────────────────────────────────────────────────
 
 test('reducerDeleted: unregisters reducer from sim pipeline', () => {
-  const { ui, scenario } = makeScenario();
-  ui.triggerCreate('action');
-  ui.triggerCreate('reducer');
+  const { scenario } = makeScenario();
+  const sr = ServiceRegistry.getInstance();
 
-  const reducer = ui.nodes.find(n => n.kind === 'reducer');
-  const action  = ui.nodes.find(n => n.kind === 'action');
+  const action = new AmountAction('DEL_ACTION', 'Del', 0);
+  sr.actionService.register(action);
 
-  // Register the reducer for the action type
+  const reducer = ReducerBuilder.metric('x').name('R').build();
   reducer.reducedActions.push(action);
-  scenario.reregisterReducer(reducer);
+  sr.reducerService.register(reducer);
 
-  // Verify it is registered
-  const before = scenario.sim.reducers.get(action.type);
+  const before = scenario.sim.reducers.get('DEL_ACTION');
   assert.ok(before.length > 0, 'reducer should be registered before deletion');
 
-  ServiceRegistry.getInstance().reducerService.deleteReducer(reducer.id);
-  const after = scenario.sim.reducers.get(action.type);
+  sr.reducerService.deleteReducer(reducer.id);
+  const after = scenario.sim.reducers.get('DEL_ACTION');
   assert.strictEqual(after.length, 0, 'reducer should be unregistered after deletion');
 });

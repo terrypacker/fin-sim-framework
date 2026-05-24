@@ -14,6 +14,7 @@ import { EventService } from './event-service.js';
 import { HandlerService } from './handler-service.js';
 import { ReducerService } from './reducer-service.js';
 import { SimulationRegistry } from './simulation-registry.js';
+import { SimulationSync } from './simulation-sync.js';
 
 /**
  * Central singleton registry for all application services, the shared
@@ -37,6 +38,9 @@ export class ServiceRegistry {
     this.handlerService     = new HandlerService(this.bus);
     this.reducerService     = new ReducerService(this.bus);
     this.simulationRegistry = new SimulationRegistry();
+    // SimulationSync receives `this` so it can reach the bus, simulationRegistry,
+    // and sibling services without a ServiceRegistry import (avoids circular deps).
+    this.simulationSync     = new SimulationSync(this);
   }
 
   /**

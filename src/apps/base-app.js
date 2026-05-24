@@ -94,7 +94,7 @@ export class BaseApp {
     const cfg = this._activeScenario();
     if (cfg) {
       // Restore a previously saved scenario — do not call loadDefaults().
-      ScenarioSerializer.deserialize(cfg, this.scenario);
+      ScenarioSerializer.deserialize(cfg, ServiceRegistry.getInstance());
     } else if (typeof this.scenario.loadDefaults === 'function') {
       // No saved config: populate the scenario with its default configuration.
       this.scenario.loadDefaults();
@@ -164,9 +164,12 @@ export class BaseApp {
     this.scenario.buildSim(this.getParams(), this.getInitialState());
     this.afterBuildSim();
 
-    //TODO Share these across the app, color registry or something?
+    // Build a color map from all enabled recurring events in the service.
     const eventColors = new Map(
-        (this.scenario.getRegisteredRecurringEvents() ?? []).map(s => [s.type, s.color]).filter(([, c]) => c)
+      ServiceRegistry.getInstance().eventService.getAll()
+        .filter(e => e.enabled && e.interval)
+        .map(e => [e.type, e.color])
+        .filter(([, c]) => c)
     );
 
     /* Event Graph View */
