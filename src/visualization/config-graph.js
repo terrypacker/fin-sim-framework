@@ -547,13 +547,6 @@ export class ConfigGraph {
 
     const width = maxX - minX + padding * 2;
     const height = maxY - minY + padding * 2;
-
-    // expand SVG coordinate system
-    this.graphEdgesEl.setAttribute(
-        'viewBox',
-        `${minX - padding} ${minY - padding} ${width} ${height}`
-    );
-
     for (const edge of this.edges) {
       const from = this.nodes.find(n => n.id === edge.from);
       const to   = this.nodes.find(n => n.id === edge.to);
