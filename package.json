@@ -2,19 +2,24 @@
   "name": "@terrypacker/financial-sim",
   "version": "1.0.0-alpha.1",
   "type": "module",
-  "main": "dist/index.cjs.js",
-  "module": "dist/index.esm.js",
-  "browser": "dist/index.umd.js",
+  "module": "dist-lib/index.esm.js",
+  "exports": {
+    ".": {
+      "import": "./dist-lib/index.esm.js"
+    }
+  },
   "scripts": {
-    "clean": "rm -rf dist",
+    "dev": "vite",
+    "build": "vite build",
+    "build:lib": "vite build --config vite.lib.config.js",
+    "build:all": "npm run build && npm run build:lib",
+    "preview": "vite preview",
+    "clean": "rm -rf dist dist-lib",
     "build:index": "node scripts/build-index.js",
-    "build": "rollup -c",
     "test:unit": "node --test \"tests/unit/**/*.test.mjs\"",
     "test:viz": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs",
     "test": "npm run test:unit && npm run test:viz",
     "test:all": "npm run test:unit && npm run test:viz",
-    "build:watch": "rollup -c -w",
-    "dev": "npm run clean && rollup -c -w",
     "requirements": "node scripts/check-requirements.js",
     "requirements:missing": "node scripts/check-requirements.js --missing"
   },
@@ -27,18 +32,10 @@
   },
   "devDependencies": {
     "@babel/parser": "^7.29.2",
-    "@rollup/plugin-commonjs": "^29.0.2",
-    "@rollup/plugin-node-resolve": "^16.0.3",
-    "@rollup/plugin-replace": "^6.0.3",
-    "@rollup/plugin-terser": "^1.0.0",
+    "@babel/parser": "^7.29.2",
     "echarts": "^6.0.0",
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
-    "rollup": "^4.60.2",
-    "rollup-plugin-copy": "^3.5.0",
-    "rollup-plugin-copy-watch": "^0.0.1",
-    "rollup-plugin-dev": "^2.1.0",
-    "rollup-plugin-livereload": "^2.0.5",
-    "rollup-plugin-watch-assets": "^1.0.1"
+    "vite": "^8.0.14"
   }
 }

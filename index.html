@@ -21,22 +21,10 @@
 <head>
   <meta charset="UTF-8" />
   <title>Event Driven Financial Simulation</title>
-  <link rel="stylesheet" href="assets/css/base.css">
-  <link rel="stylesheet" href="assets/css/themes/developer.css">
-  <link rel="stylesheet" href="assets/css/fin-sim.css">
-  <link rel="stylesheet" href="assets/css/workbench.css">
-  <link rel="stylesheet" href="assets/css/plugins/config-builder.css">
-  <link rel="stylesheet" href="assets/css/plugins/config-graph.css">
-  <link rel="stylesheet" href="assets/css/plugins/timeline.css">
-  <link rel="stylesheet" href="assets/css/plugins/state-panel.css">
-  <link rel="stylesheet" href="assets/css/plugins/dashboard.css">
-  <link rel="stylesheet" href="assets/css/plugins/chart.css">
-  <link rel="stylesheet" href="assets/css/plugins/inspector.css">
-  <link rel="stylesheet" href="assets/css/plugins/modals.css">
-  <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico">
-  <link rel="icon" type="image/png" sizes="16x16" href="assets/img/favicon-16x16.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="assets/img/favicon-32x32.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="assets/img/apple-touch-icon.png">
+  <link rel="icon" type="image/x-icon" href="/img/favicon.ico">
+  <link rel="icon" type="image/png" sizes="16x16" href="/img/favicon-16x16.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32x32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png">
 </head>
 <body>
 <div id="app">
@@ -798,14 +786,6 @@
   </div>
 </template>
 
-<script type="module" src="./index.umd.min.js"></script>
-<script type="module">
-  // ── Init ──────────────────────────────────────────────────────────────────────
-  document.addEventListener('DOMContentLoaded', () => {
-    const app = new FinSimLib.Apps.SimulationWorkbench();
-    app.initView();
-    app.initScenario();
-  });
-</script>
+<script type="module" src="/src/main.js"></script>
 </body>
 </html>
