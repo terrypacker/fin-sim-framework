@@ -321,9 +321,9 @@ export class Simulation {
       queue = [];
       let prev = null;
       for (const a of rawActions) {
-        const tagged = this.tagAction(a, prev);
-        queue.push(tagged);
-        prev = tagged;
+        const decorated = this.decorateAction(a, prev);
+        queue.push(decorated);
+        prev = decorated;
       }
     }
 
@@ -373,8 +373,13 @@ export class Simulation {
           unwrappedReducers.push(r.reducer);
         })
       }
+
+      //Execute action mutation if it can be
+      if(action.mutate) {
+        action.mutate(this.state, unwrappedReducers, this.currentDate);
+      }
+
       const prevState = structuredClone(this.state);
-      //TODO This is where we would add the call to the ScriptAction to mutate it
       this.bus.publish(new ActionResultMessage({
         date: new Date(this.currentDate),
         sim: this,
@@ -468,7 +473,7 @@ export class Simulation {
       if (result.next) {
         emitted = (Array.isArray(result.next)
             ? result.next
-            : [result.next]).map(a => this.tagAction(a, action));
+            : [result.next]).map(a => this.decorateAction(a, action));
 
         // Prepend emitted actions so they run before remaining queued actions.
         actionQueue.unshift(...emitted);
@@ -477,8 +482,10 @@ export class Simulation {
       this.state = nextState;
 
       const parentId = action._parent ?? null;
+      const actionClone = this.cloneObjectFields(action);
+      const reducerClone = this.cloneObjectFields(reducerWrapper.reducer);
       this.addActionNode({
-        action,
+        actionClone,
         parentId,
         reducerName: reducerWrapper.name,
         prevState,
@@ -490,7 +497,7 @@ export class Simulation {
         this.journal.addEntry(new JournalEntry({
           date: new Date(this.currentDate),
           eventType: sourceEventType,
-          action: structuredClone(action),
+          action: actionClone,
           reducer: reducerWrapper.name,
           prevState,
           nextState: structuredClone(this.state),
@@ -642,34 +649,46 @@ export class Simulation {
   }
 
   /**
-   * Tagging for Action Graph
+   * Decorate the Action use in the Action Graph but keep
+   * the physical class structure of the object as we will need it
+   * before we insert it into the graph
    * @param action
    * @param parent
    * @returns {*&{_id: number, _parent, _root}}
    */
-  tagAction(action, parent = null) {
-    return {
-      ...action,
+  decorateAction(action, parent = null) {
+    const clone = Object.create(Object.getPrototypeOf(action));
+
+    return Object.assign(clone, action, {
       _id: this.nextActionId++,
       _parent: parent?._id ?? null,
       _root: parent?._root ?? parent?._id ?? null
-    };
+    });
+  }
+
+  /**
+   * Extract the field information for the graph, must become a structuredClonable object
+   * @param action
+   * @param parent
+   * @returns {*&{_id: number, _parent, _root}}
+   */
+  cloneObjectFields(action) {
+    return {...action };
   }
 
   /** Action Graph **/
   addActionNode({
-                  action,
+                  actionClone,
                   parentId,
                   reducerName,
                   prevState,
                   nextState,
                   sourceEvent
                 }) {
-    const actionClone = structuredClone(action)
     const stateSnapshot = structuredClone(nextState);
     const node = new ActionNode({
-      id: action._id,
-      type: action.type,
+      id: actionClone._id,
+      type: actionClone.type,
       date: new Date(this.currentDate),
 
       parent: parentId,

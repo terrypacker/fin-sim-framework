@@ -53,6 +53,16 @@ export class Action {
     return this.constructor.getDescription();
   }
 
+  /**
+   * Optionally mutate our self or the state
+   * @param state - current sim state
+   * @param reducers - list of reducers that will act on this state
+   * @param date - date of mutation
+   * @param me - the instance of the Action calling the method
+   */
+  mutate(state, reducers, date, me) {
+    //No Op by default
+  }
 }
 
 export class FieldAction extends Action {
@@ -107,11 +117,10 @@ export class RecordBalanceAction extends Action {
  * Intended for rapid prototyping before promoting logic into a dedicated class.
  *
  * Script signature:
- *   (state, date) => value
- *   The returned value becomes this action's effective value when getValue() is called.
+ *   (state, reducers, date, this) => <empty>
+ *   The script can modify the action itself or decide to alter the state or reducers.
  *
- * Reducers that are script-aware (e.g. ScriptedReducer) call action.getValue(state, date)
- * instead of reading action.value directly.
+ * The script is called prior to a reducer acting on it but the list of reducers is already known.
  *
  * The compiled function is cached in _fn and intentionally NOT serialized,
  * so deserialization triggers a clean recompile — making replays safe.
@@ -132,7 +141,7 @@ export class ScriptedAction extends FieldValueAction {
     if (!this._fn) {
       try {
         // eslint-disable-next-line no-new-func
-        this._fn = new Function('state', 'date', this.script);
+        this._fn = new Function('state', 'reducers', 'date', 'me', this.script);
       } catch (e) {
         console.error('ScriptedAction compile error:', e);
         this._fn = () => null;
@@ -141,12 +150,11 @@ export class ScriptedAction extends FieldValueAction {
     return this._fn;
   }
 
-  getValue(state, date) {
+  mutate(state, reducers, date) {
     try {
-      return this._compile()(state, date);
+      this._compile()(state, reducers, date, this);
     } catch (e) {
       console.error('ScriptedAction runtime error:', e);
-      return null;
     }
   }
 }
