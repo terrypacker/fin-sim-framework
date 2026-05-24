@@ -148,9 +148,8 @@ import { SimulationState } from './simulation-framework/simulation-state.js';
 import { BreakpointSignal, Simulation } from './simulation-framework/simulation.js';
 import { diffStates } from './simulation-framework/state-utils.js';
 import { InMemoryStorage } from './storage/in-memory-storage.js';
+import { AccountEditor } from './visualization/accounts/account-editor.js';
 import { AccountsController } from './visualization/accounts/accounts-controller.js';
-import { AccountsPresenter } from './visualization/accounts/accounts-presenter.js';
-import { AccountsView } from './visualization/accounts/accounts-view.js';
 import { ChartController } from './visualization/chart/chart-controller.js';
 import { ChartPresenter } from './visualization/chart/chart-presenter.js';
 import { ChartView } from './visualization/chart/chart-view.js';
@@ -163,7 +162,9 @@ import { GraphNodeFilterMultiSelect } from './visualization/components/graph-nod
 import { GraphRenderer } from './visualization/components/graph-renderer.js';
 import { HandlerEditor } from './visualization/components/handler-editor.js';
 import { MapFilterMultiSelect } from './visualization/components/map-filter-multi-select.js';
+import { NodeEditModal } from './visualization/components/node-edit-modal.js';
 import { ReducerEditor } from './visualization/components/reducer-editor.js';
+import { ConfigurationListComponent } from './visualization/configuration/configuration-list.js';
 import { GraphBuilderController } from './visualization/graph-builder/graph-builder-controller.js';
 import { GraphBuilderPresenter } from './visualization/graph-builder/graph-builder-presenter.js';
 import { GraphBuilderView } from './visualization/graph-builder/graph-builder-view.js';
@@ -174,8 +175,7 @@ import { MonteCarloController } from './visualization/monte-carlo/monte-carlo-co
 import { MonteCarloPresenter } from './visualization/monte-carlo/monte-carlo-presenter.js';
 import { MonteCarloView } from './visualization/monte-carlo/monte-carlo-view.js';
 import { PeopleController } from './visualization/people/people-controller.js';
-import { PeoplePresenter } from './visualization/people/people-presenter.js';
-import { PeopleView } from './visualization/people/people-view.js';
+import { PersonEditor } from './visualization/people/person-editor.js';
 import { ScenarioTabController } from './visualization/scenario/scenario-tab-controller.js';
 import { ScenarioTabPresenter } from './visualization/scenario/scenario-tab-presenter.js';
 import { ScenarioTabView } from './visualization/scenario/scenario-tab-view.js';
@@ -536,9 +536,8 @@ export const Core = {
 };
 
 export const Visualization = {
+  AccountEditor,
   AccountsController,
-  AccountsPresenter,
-  AccountsView,
   ChartController,
   ChartPresenter,
   ChartView,
@@ -551,7 +550,9 @@ export const Visualization = {
   GraphRenderer,
   HandlerEditor,
   MapFilterMultiSelect,
+  NodeEditModal,
   ReducerEditor,
+  ConfigurationListComponent,
   GraphBuilderController,
   GraphBuilderPresenter,
   GraphBuilderView,
@@ -562,8 +563,7 @@ export const Visualization = {
   MonteCarloPresenter,
   MonteCarloView,
   PeopleController,
-  PeoplePresenter,
-  PeopleView,
+  PersonEditor,
   ScenarioTabController,
   ScenarioTabPresenter,
   ScenarioTabView,

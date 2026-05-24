@@ -9,10 +9,10 @@
  */
 
 /**
- * GraphBuilderView — pure DOM / template layer for the event-graph editor panel.
+ * GraphBuilderView — pure DOM / template layer for the event-graph editor.
  *
- * Renders all node editors (Event, Handler, Action, Reducer) and the toolbar
- * "+" buttons.  Contains no ServiceRegistry calls.
+ * Creates and wires node editors (Event, Handler, Action, Reducer) for display
+ * in a NodeEditModal.  Also manages the overlay toolbar "+" buttons on the graph.
  *
  * Communicates mutations outward via callback properties set by
  * GraphBuilderPresenter:
@@ -25,26 +25,22 @@
  *   onReducerTypeChange(nodeId, newType)    — reducer type dropdown changed
  *   onHandlerClassChange(nodeId, newClass)  — handler class dropdown changed
  *
- * `editNode(node)` is the primary entry point called by the Presenter to
- * (re-)render the editor panel for a node.
+ * `createAndRenderEditor(node, container)` is the primary entry point called
+ * by NodeEditModal to (re-)render the editor for a node into a given container.
  */
 
 import { BaseComponent } from '../components/base-component.js';
 
-import { EventEditor } from '../components/event-editor.js';
+import { EventEditor }   from '../components/event-editor.js';
 import { HandlerEditor } from '../components/handler-editor.js';
-import { ActionEditor } from '../components/action-editor.js';
+import { ActionEditor }  from '../components/action-editor.js';
 import { ReducerEditor } from '../components/reducer-editor.js';
 
 export class GraphBuilderView extends BaseComponent {
 
-  constructor({
-    builderCanvas,
-    graphRenderer,
-  }) {
+  constructor({ graphRenderer }) {
     super();
 
-    this._canvas = builderCanvas;
     this._graphRenderer = graphRenderer;
 
     /** @type {function(node, field: string, value)|null} */
@@ -72,66 +68,50 @@ export class GraphBuilderView extends BaseComponent {
     this._buildControls();
   }
 
-  editNode(node) {
-    this._editor?.destroy();
-    this._canvas.innerHTML = '';
+  /**
+   * Create, wire, and render an editor for `node` into `container`.
+   * Returns the editor instance (so the caller can destroy it when done).
+   * Returns null for unknown node kinds.
+   */
+  createAndRenderEditor(node, container) {
+    if (!node) return null;
 
-    if (!node) {
-      this._canvas.appendChild(
-          this._getTemplate('tpl-empty')
-      );
-      return;
-    }
+    const editor = this._createEditor(node, container);
+    if (!editor) return null;
 
-    this._editor = this._createEditor(node);
-
-    if (!this._editor) {
-      this._canvas.innerHTML = `<div class="tl-empty">Unknown node type</div>`;
-      return;
-    }
-
-    this._wireEditor(this._editor);
-
-    this._editor.render();
+    this._wireEditor(editor);
+    editor.render();
+    return editor;
   }
 
-  _createEditor(node) {
+  _createEditor(node, container) {
     const common = {
       parent: this,
-      container: this._canvas,
+      container,
       node,
       graphRenderer: this._graphRenderer,
     };
 
     switch (node.kind) {
-      case 'event':
-        return new EventEditor(common);
-
-      case 'handler':
-        return new HandlerEditor(common);
-
-      case 'action':
-        return new ActionEditor(common);
-
-      case 'reducer':
-        return new ReducerEditor(common);
-
-      default:
-        return null;
+      case 'event':   return new EventEditor(common);
+      case 'handler': return new HandlerEditor(common);
+      case 'action':  return new ActionEditor(common);
+      case 'reducer': return new ReducerEditor(common);
+      default:        return null;
     }
   }
 
   _wireEditor(editor) {
     editor.onFieldChange = (...args) => this.onFieldChange?.(...args);
-    editor.onDelete = (...args) => this.onDelete?.(...args);
-    editor.onLinkToggle = (...args) => this.onLinkToggle?.(...args);
+    editor.onDelete      = (...args) => this.onDelete?.(...args);
+    editor.onLinkToggle  = (...args) => this.onLinkToggle?.(...args);
 
-    editor.onActionClassChange = (...args) => this.onActionClassChange?.(...args);
-    editor.onReducerTypeChange = (...args) => this.onReducerTypeChange?.(...args);
+    editor.onActionClassChange  = (...args) => this.onActionClassChange?.(...args);
+    editor.onReducerTypeChange  = (...args) => this.onReducerTypeChange?.(...args);
     editor.onHandlerClassChange = (...args) => this.onHandlerClassChange?.(...args);
-    editor.onEventTypeChange = (...args) => this.onEventTypeChange?.(...args);
+    editor.onEventTypeChange    = (...args) => this.onEventTypeChange?.(...args);
 
-    editor.onActionDefinitionAdd = (...args) => this.onActionDefinitionAdd?.(...args);
+    editor.onActionDefinitionAdd    = (...args) => this.onActionDefinitionAdd?.(...args);
     editor.onActionDefinitionRemove = (...args) => this.onActionDefinitionRemove?.(...args);
     editor.onActionDefinitionUpdate = (...args) => this.onActionDefinitionUpdate?.(...args);
   }
