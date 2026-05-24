@@ -57,6 +57,7 @@ import { OptimizationController } from '../visualization/optimization/optimizati
 import { OptimizationPresenter }  from '../visualization/optimization/optimization-presenter.js';
 import { GraphNodeInspectorPanel } from '../visualization/graph-builder/graph-node-inspector-panel.js';
 import { GraphNodeExecHistory }    from '../visualization/graph-builder/graph-node-exec-history.js';
+import { GraphNodeLineage }        from '../visualization/graph-builder/graph-node-lineage.js';
 
 /**
  * BaseApp — composition root.
@@ -99,6 +100,7 @@ export class BaseApp extends BaseComponent {
     this._replayParams         = null;
     this._graphNodeInspector   = null;
     this._graphNodeExecHistory = null;
+    this._graphNodeLineage     = null;
 
     // Created once — survive scenario rebuilds.
     this._statePanelView  = new StatePanelView();
@@ -251,11 +253,18 @@ export class BaseApp extends BaseComponent {
     this._graphNodeExecHistory = new GraphNodeExecHistory({
       container:     document.getElementById('graphNodeHistoryPane'),
       graphRenderer: this.configGraphView.graphRenderer,
+      graphQueryApi: registry.graphQueryApi,
     });
 
-    // Wire node click → exec history panel
+    this._graphNodeLineage = new GraphNodeLineage({
+      container:     document.getElementById('graphNodeLineagePane'),
+      graphQueryApi: registry.graphQueryApi,
+    });
+
+    // Wire node click → exec history + lineage panels
     this.configPresenter._graphRenderer.registerNodeClickListener((_evt, node) => {
       this._graphNodeExecHistory.showNode(node);
+      this._graphNodeLineage.showNode(node);
     });
 
     // Scenario Tab
@@ -360,6 +369,7 @@ export class BaseApp extends BaseComponent {
     this._animator.toggleBreakpoint();
     this._animator.wireSimBus(this.scenario.sim.bus);
     this._graphNodeExecHistory?.wireSimBus(this.scenario.sim.bus);
+    this._graphNodeLineage?.wireSimBus(this.scenario.sim.bus);
 
     // Track _currentDate for subclass access.
     this.scenario.sim.bus.subscribe(`EXECUTION_${EXECUTION_PHASES.BEGIN}`, { kind: EXECUTION_KINDS.EVENT }, ({ date }) => {
@@ -406,6 +416,7 @@ export class BaseApp extends BaseComponent {
     this._editModal?.close();
     this._graphNodeInspector?.clear();
     this._graphNodeExecHistory?.showNode(null);
+    this._graphNodeLineage?.showNode(null);
     if (this.chartPresenter)  this.chartPresenter.stopViz();
     if (this.configGraphView)  this.configGraphView.destroy();
     if (this.configPresenter)  this.configPresenter.destroy();
@@ -628,6 +639,7 @@ export class BaseApp extends BaseComponent {
   _openNodeInInspector(node) {
     this._graphNodeInspector?.open(node);
     this._graphNodeExecHistory?.showNode(node);
+    this._graphNodeLineage?.showNode(node);
   }
 
   /** Switch the left column to Configuration > EDIT sub-tab. */

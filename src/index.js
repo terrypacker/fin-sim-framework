@@ -176,6 +176,9 @@ import { ConfigGraphView } from './visualization/graph-builder/config-graph-view
 import { GraphBuilderController } from './visualization/graph-builder/graph-builder-controller.js';
 import { GraphBuilderPresenter } from './visualization/graph-builder/graph-builder-presenter.js';
 import { GraphBuilderView } from './visualization/graph-builder/graph-builder-view.js';
+import { GraphNodeExecHistory } from './visualization/graph-builder/graph-node-exec-history.js';
+import { GraphNodeInspectorPanel } from './visualization/graph-builder/graph-node-inspector-panel.js';
+import { GraphNodeLineage } from './visualization/graph-builder/graph-node-lineage.js';
 import { McConfigPanel } from './visualization/monte-carlo/mc-config-panel.js';
 import { McResultsPanel } from './visualization/monte-carlo/mc-results-panel.js';
 import { McRunsPanel } from './visualization/monte-carlo/mc-runs-panel.js';
@@ -585,6 +588,9 @@ export const Visualization = {
   GraphBuilderController,
   GraphBuilderPresenter,
   GraphBuilderView,
+  GraphNodeExecHistory,
+  GraphNodeInspectorPanel,
+  GraphNodeLineage,
   McConfigPanel,
   McResultsPanel,
   McRunsPanel,

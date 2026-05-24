@@ -11,41 +11,45 @@
 import { BaseComponent } from '../components/base-component.js';
 
 /**
- * GraphNodeExecHistory — shows execution overlay data (fired status, state
- * changes, breakpoint hits) for the currently-selected graph node.
+ * GraphNodeExecHistory — NODE HISTORY right-panel tab.
  *
- * Renders into a fixed right-column pane. Subscribes to the sim bus and
- * re-renders on every EXECUTION_BEGIN / EXECUTION_END so the display stays
- * live while the simulation runs.
+ * For a selected config node shows:
+ *   - Live fired/idle status from _execOverlay (updates every event cycle)
+ *   - Execution instance count accumulated in the ExecutionGraph
+ *   - Most-recent instance state diff (from GraphRecorder.endNode data)
+ *   - diffExecution coverage: config nodes missing from or extra in the chain
  *
- * Phase 2 (TODO #126): once ExecutionGraph instance nodes are wired during
- * simulation runs, this panel can show full causal chains and per-instance
- * diffs instead of just the per-definition overlay.
+ * Subscribes to the sim bus to stay live during playback.
  */
 export class GraphNodeExecHistory extends BaseComponent {
   /**
    * @param {{
    *   container:     HTMLElement,
    *   graphRenderer: import('../components/graph-renderer.js').GraphRenderer | null,
+   *   graphQueryApi: import('../../graph/graph-query-api.js').GraphQueryApi | null,
    * }}
    */
-  constructor({ container, graphRenderer }) {
+  constructor({ container, graphRenderer, graphQueryApi }) {
     super();
-    this._container    = container;
+    this._container     = container;
     this._graphRenderer = graphRenderer;
+    this._graphQueryApi = graphQueryApi;
     this._selectedNode  = null;
     this._drainBegin    = () => [];
     this._drainEnd      = () => [];
     this._render();
   }
 
-  /** Point at a fresh renderer after each scenario rebuild. */
   setGraphRenderer(renderer) {
     this._graphRenderer = renderer;
     this._render();
   }
 
-  /** Called when a graph node is clicked. Pass null to clear. */
+  setGraphQueryApi(api) {
+    this._graphQueryApi = api;
+    this._render();
+  }
+
   showNode(node) {
     this._selectedNode = node ?? null;
     this._render();
@@ -59,7 +63,6 @@ export class GraphNodeExecHistory extends BaseComponent {
   // ── Private ────────────────────────────────────────────────────────────────
 
   _render() {
-    // Drain queued messages so the overlay in GraphRenderer is already updated.
     this._drainBegin();
     this._drainEnd();
 
@@ -70,58 +73,119 @@ export class GraphNodeExecHistory extends BaseComponent {
       return;
     }
 
-    const exec         = this._graphRenderer?.getExecState(node.id) ?? null;
-    const hasBreakpoint = !!node.data?.breakpoint;
-
     const parts = [];
 
     parts.push(`<div class="node-header" style="margin-top:0">${this._esc(node.name ?? node.id)}</div>`);
 
     const kindLabel = this._kindLabel(node);
-    if (kindLabel) {
-      parts.push(this._field('KIND', this._esc(kindLabel)));
-    }
+    if (kindLabel) parts.push(this._field('KIND', this._esc(kindLabel)));
 
+    const hasBreakpoint = !!node.data?.breakpoint;
     parts.push(this._field('BREAKPOINT', hasBreakpoint ? '⏸ Active' : '—'));
 
-    if (!exec) {
-      parts.push(
-        '<div style="padding:8px 12px;color:var(--color-text-dim,#888);font-size:11px">No execution data — run the simulation.</div>'
-      );
-    } else {
+    // ── Live status from _execOverlay ────────────────────────────────────────
+    const exec = this._graphRenderer?.getExecState(node.id) ?? null;
+    if (exec) {
       const firedHtml = exec.fired
         ? '<span class="badge-green" style="padding:1px 6px;border-radius:3px;font-size:10px">Fired</span>'
         : '<span class="badge-cyan"  style="padding:1px 6px;border-radius:3px;font-size:10px">Idle</span>';
-      parts.push(this._field('STATUS', firedHtml));
+      parts.push(this._field('LIVE STATUS', firedHtml));
 
       if (exec.breakpointHit) {
         parts.push(this._field('HIT',
           '<span class="badge-red" style="padding:1px 6px;border-radius:3px;font-size:10px">⏸ Paused</span>'
         ));
       }
+    }
 
-      if (exec.stateChanges?.length > 0) {
-        parts.push('<div class="node-header" style="margin-top:8px">State Changes</div>');
-        for (const ch of exec.stateChanges) {
-          const delta = ch.delta != null
-            ? `<span style="color:#8fa">(${ch.delta > 0 ? '+' : ''}${this._fmt(ch.delta)})</span>`
-            : '';
-          parts.push(`
-            <div class="node-field" style="flex-direction:column;align-items:flex-start;gap:2px;padding:4px 8px">
-              <label style="font-weight:600;font-size:10px">${this._esc(ch.field)}</label>
-              <div style="display:flex;gap:6px;font-size:11px;font-family:monospace;align-items:center">
-                <span style="color:#888">${this._fmt(ch.before)}</span>
-                <span style="color:#666">→</span>
-                <span style="color:#aef">${this._fmt(ch.after)}</span>
-                ${delta}
-              </div>
-            </div>`);
-        }
-      } else if (exec.fired) {
+    // ── ExecutionGraph instances ─────────────────────────────────────────────
+    const api = this._graphQueryApi;
+    const instances = api ? api.getInstances(node.id) : [];
+
+    if (!instances.length) {
+      if (!exec) {
         parts.push(
-          '<div style="padding:4px 12px;color:var(--color-text-dim,#888);font-size:11px">No state changes recorded</div>'
+          '<div style="padding:8px 12px;color:var(--color-text-dim,#888);font-size:11px">No execution data — run the simulation.</div>'
         );
       }
+      this._container.innerHTML = parts.join('');
+      return;
+    }
+
+    // Sort ascending by timestamp so most-recent is last.
+    const sorted = [...instances].sort((a, b) => {
+      const ta = a.timestamp instanceof Date ? a.timestamp.getTime() : (a.timestamp ?? 0);
+      const tb = b.timestamp instanceof Date ? b.timestamp.getTime() : (b.timestamp ?? 0);
+      return ta - tb;
+    });
+    const latest = sorted[sorted.length - 1];
+
+    parts.push(this._field('EXECUTIONS',
+      `<span style="font-size:12px;font-weight:600">${instances.length}</span>`
+    ));
+
+    // ── Most-recent instance state diff ──────────────────────────────────────
+    const diff = latest.meta?.stateDiff ?? [];
+    if (diff.length) {
+      parts.push('<div class="node-header" style="margin-top:8px">Last State Changes</div>');
+      for (const ch of diff) {
+        const delta = ch.delta != null
+          ? `<span style="color:#8fa">(${ch.delta > 0 ? '+' : ''}${this._fmt(ch.delta)})</span>`
+          : '';
+        parts.push(`
+          <div class="node-field" style="flex-direction:column;align-items:flex-start;gap:2px;padding:4px 8px">
+            <label style="font-weight:600;font-size:10px">${this._esc(ch.field)}</label>
+            <div style="display:flex;gap:6px;font-size:11px;font-family:monospace;align-items:center">
+              <span style="color:#888">${this._fmt(ch.before)}</span>
+              <span style="color:#666">→</span>
+              <span style="color:#aef">${this._fmt(ch.after)}</span>
+              ${delta}
+            </div>
+          </div>`);
+      }
+    } else if (exec?.stateChanges?.length > 0) {
+      // Fall back to live overlay diff when graph node has no persisted diff yet.
+      parts.push('<div class="node-header" style="margin-top:8px">State Changes (live)</div>');
+      for (const ch of exec.stateChanges) {
+        const delta = ch.delta != null
+          ? `<span style="color:#8fa">(${ch.delta > 0 ? '+' : ''}${this._fmt(ch.delta)})</span>`
+          : '';
+        parts.push(`
+          <div class="node-field" style="flex-direction:column;align-items:flex-start;gap:2px;padding:4px 8px">
+            <label style="font-weight:600;font-size:10px">${this._esc(ch.field)}</label>
+            <div style="display:flex;gap:6px;font-size:11px;font-family:monospace;align-items:center">
+              <span style="color:#888">${this._fmt(ch.before)}</span>
+              <span style="color:#666">→</span>
+              <span style="color:#aef">${this._fmt(ch.after)}</span>
+              ${delta}
+            </div>
+          </div>`);
+      }
+    }
+
+    // ── diffExecution: config coverage ───────────────────────────────────────
+    try {
+      const { missing, extra } = api.diffExecution(node.id, latest.id);
+      if (missing.length || extra.length) {
+        parts.push('<div class="node-header" style="margin-top:8px">Config Coverage</div>');
+        if (missing.length) {
+          const chips = missing.map(id =>
+            `<span style="padding:1px 6px;border-radius:3px;font-size:10px;background:#622;color:#faa;margin:1px 2px;display:inline-block">${this._esc(id)}</span>`
+          ).join('');
+          parts.push(`<div class="node-field" style="flex-wrap:wrap"><label>MISSING</label><div>${chips}</div></div>`);
+        }
+        if (extra.length) {
+          const chips = extra.map(id =>
+            `<span style="padding:1px 6px;border-radius:3px;font-size:10px;background:#262;color:#afa;margin:1px 2px;display:inline-block">${this._esc(id)}</span>`
+          ).join('');
+          parts.push(`<div class="node-field" style="flex-wrap:wrap"><label>EXTRA</label><div>${chips}</div></div>`);
+        }
+      } else if (instances.length) {
+        parts.push('<div class="node-header" style="margin-top:8px">Config Coverage</div>');
+        parts.push('<div style="padding:4px 12px;color:#8fa;font-size:11px">✓ Matches config path</div>');
+      }
+    } catch (_) {
+      // diffExecution is best-effort; skip on any error.
     }
 
     this._container.innerHTML = parts.join('');
