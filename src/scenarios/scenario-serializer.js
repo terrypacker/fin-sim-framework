@@ -30,7 +30,7 @@ export class ScenarioSerializer {
    * @returns {object} serialized scenario config
    */
   static serialize(services, name, simStart, simEnd, initialState, params) {
-    const { eventService, handlerService, actionService, reducerService, personService } = services;
+    const { eventService, handlerService, actionService, reducerService, personService, accountService } = services;
 
     const toDateStr = (d) => {
       if (!d) return null;
@@ -42,7 +42,8 @@ export class ScenarioSerializer {
       name,
       simStart: toDateStr(simStart),
       simEnd:   toDateStr(simEnd),
-      persons:  (personService?.getAll() ?? []).map(n => ScenarioSerializer._serializePerson(n)),
+      persons:  (personService?.getAll()  ?? []).map(n => ScenarioSerializer._serializePerson(n)),
+      accounts: (accountService?.getAll() ?? []).map(n => ScenarioSerializer._serializeAccount(n)),
       events:   eventService.getAll().map(n => ScenarioSerializer._serializeEvent(n)),
       handlers: handlerService.getAll().map(n => ScenarioSerializer._serializeHandler(n)),
       actions:  actionService.getAll().map(n => ScenarioSerializer._serializeAction(n)),
@@ -70,13 +71,21 @@ export class ScenarioSerializer {
    *   Pass ServiceRegistry.getInstance() or any object exposing the service properties.
    */
   static deserialize(config, services) {
-    const { eventService, handlerService, actionService, reducerService, personService } = services;
+    const { eventService, handlerService, actionService, reducerService, personService, accountService } = services;
 
     // 0. Persons — no dependencies; register before actions so they're available first.
     if (personService) {
       for (const d of (config.persons ?? [])) {
         const person = ScenarioSerializer._makePerson(d);
         personService.register(person);
+      }
+    }
+
+    // 0b. Accounts — no dependencies; register alongside persons.
+    if (accountService) {
+      for (const d of (config.accounts ?? [])) {
+        const account = ScenarioSerializer._makeAccount(d);
+        accountService.register(account);
       }
     }
 
@@ -129,6 +138,42 @@ export class ScenarioSerializer {
   }
 
   // ─── Serializers ──────────────────────────────────────────────────────────────
+
+  static _serializeAccount(account) {
+    // Determine __type from type discriminator or class name
+    const typeToClass = {
+      'checking': 'CheckingAccount',
+      'savings':  'SavingsAccount',
+      'brokerage':'BrokerageAccount',
+      '401k':     'FourOhOneKAccount',
+      'roth':     'RothAccount',
+      'ira':      'TraditionalIRAAccount',
+      'super':    'SuperannuationAccount',
+    };
+    const __type = typeToClass[account.type] ?? account.constructor?.name ?? 'Account';
+    const d = {
+      __type,
+      id:               account.id,
+      name:             account.name             ?? '',
+      type:             account.type             ?? null,
+      initialValue:     account.balance,
+      ownershipType:    account.ownershipType    ?? 'sole',
+      ownerId:          account.ownerId          ?? null,
+      minimumBalance:   account.minimumBalance   ?? 0,
+      drawdownPriority: account.drawdownPriority ?? null,
+      country:          account.country          ?? null,
+      currency:         account.currency         ?? null,
+    };
+    // InvestmentAccount-specific fields
+    if ('contributionBasis' in account) {
+      d.contributionBasis        = account.contributionBasis;
+      d.earningsBasis            = account.earningsBasis            ?? 0;
+      d.loanBalance              = account.loanBalance              ?? 0;
+      d.minimumAge               = account.minimumAge               ?? null;
+      d.balanceAtResidencyChange = account.balanceAtResidencyChange ?? null;
+    }
+    return d;
+  }
 
   static _serializePerson(person) {
     return {
@@ -210,6 +255,38 @@ export class ScenarioSerializer {
   }
 
   // ─── Constructors ─────────────────────────────────────────────────────────────
+
+  static _makeAccount(d) {
+    const F = FinSimLib.Finance;
+    const opts = {
+      id:               d.id,
+      name:             d.name             ?? '',
+      ownershipType:    d.ownershipType    ?? 'sole',
+      ownerId:          d.ownerId          ?? null,
+      minimumBalance:   d.minimumBalance   ?? 0,
+      drawdownPriority: d.drawdownPriority ?? null,
+      country:          d.country          ?? null,
+      currency:         d.currency         ?? null,
+    };
+    // Investment-specific opts
+    if (d.contributionBasis !== undefined) {
+      opts.contributionBasis        = d.contributionBasis;
+      opts.earningsBasis            = d.earningsBasis ?? 0;
+      opts.loanBalance              = d.loanBalance   ?? 0;
+      opts.minimumAge               = d.minimumAge    ?? null;
+    }
+    switch (d.__type) {
+      case 'CheckingAccount':     return new F.CheckingAccount    (d.initialValue ?? 0, opts);
+      case 'SavingsAccount':      return new F.SavingsAccount     (d.initialValue ?? 0, opts);
+      case 'BrokerageAccount':    return new F.BrokerageAccount   (d.initialValue ?? 0, opts);
+      case 'FourOhOneKAccount':   return new F.FourOhOneKAccount  (d.initialValue ?? 0, opts);
+      case 'RothAccount':         return new F.RothAccount        (d.initialValue ?? 0, opts);
+      case 'TraditionalIRAAccount': return new F.TraditionalIRAAccount(d.initialValue ?? 0, opts);
+      case 'SuperannuationAccount': return new F.SuperannuationAccount(d.initialValue ?? 0, opts);
+      default:
+        return new F.Account(d.initialValue ?? 0, opts);
+    }
+  }
 
   static _makePerson(d) {
     const { Person } = FinSimLib.Finance;

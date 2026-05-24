@@ -12,6 +12,7 @@ import { EventBus } from '../simulation-framework/event-bus.js';
 import { ActionService } from './action-service.js';
 import { EventService } from './event-service.js';
 import { HandlerService } from './handler-service.js';
+import { AccountService } from '../finance/services/account-service.js';
 import { PersonService } from '../finance/services/person-service.js';
 import { ReducerService } from './reducer-service.js';
 import { SimulationRegistry } from './simulation-registry.js';
@@ -34,6 +35,7 @@ export class ServiceRegistry {
 
   constructor() {
     this.bus                = new EventBus();
+    this.accountService     = new AccountService(this.bus);
     this.actionService      = new ActionService(this.bus);
     this.eventService       = new EventService(this.bus);
     this.handlerService     = new HandlerService(this.bus);

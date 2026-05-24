@@ -17,9 +17,10 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Account, AccountService } from '../../src/finance/account.js';
-import { InvestmentAccount }       from '../../src/finance/investment-account.js';
-import { Person }                  from '../../src/finance/person.js';
+import { Account } from '../../src/finance/account.js';
+import { InvestmentAccount } from '../../src/finance/investment-account.js';
+import { AccountService }   from '../../src/finance/services/account-service.js';
+import { Person }           from '../../src/finance/person.js';
 
 const DATE = new Date(2025, 0, 1);
 

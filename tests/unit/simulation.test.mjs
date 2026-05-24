@@ -27,7 +27,8 @@ import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 import { Assert } from '../helpers/assert.js';
 
-import { Account, AccountService } from '../../src/finance/account.js';
+import { Account } from '../../src/finance/account.js';
+import { AccountService } from '../../src/finance/services/account-service.js';
 import { Asset } from '../../src/finance/asset.js';
 import { Simulation } from '../../src/simulation-framework/simulation.js';
 import { PRIORITY } from '../../src/simulation-framework/reducers.js';

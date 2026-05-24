@@ -31,7 +31,7 @@ export class BaseAccountModule {
    * Register all event handlers and Stage-1 (CASH_FLOW priority) reducers.
    * Called by TaxService during sim wiring.
    * @param {import('../../simulation-framework/simulation.js').Simulation} sim
-   * @param {import('../account.js').AccountService} svc
+   * @param {import('../services/account-service.js').AccountService} svc
    */
   registerWith(sim, svc) {
     throw new Error(`${this.constructor.name}: registerWith not implemented`);

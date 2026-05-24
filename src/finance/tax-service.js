@@ -10,7 +10,8 @@
 
 import { TaxEngine }             from './tax/tax-engine.js';
 import { AccountRulesEngine }    from './account-rules/account-rules-engine.js';
-import { AccountService, InsufficientFundsError } from './account.js';
+import { InsufficientFundsError } from './account.js';
+import { AccountService } from './services/account-service.js';
 import { ReducerBuilder } from '../simulation-framework/builders/reducer-builder.js'
 import { PRIORITY } from '../simulation-framework/reducers.js';
 import { TaxSettleService }      from './tax-settle-service.js';
