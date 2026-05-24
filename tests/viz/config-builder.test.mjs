@@ -9,7 +9,7 @@
  */
 
 /**
- * event-scheduler.test.mjs
+ * config-builder.test.mjs
  *
  * Tests for ConfigBuilder:
  *   - Construction and button wiring

@@ -565,7 +565,7 @@ tests/
 | Finance domain | `account.test.mjs`, `asset.test.mjs`, `investment-account.test.mjs`, `person.test.mjs`, `period-service.test.mjs`, `asset-rules.test.mjs` |
 | Tax / account event scenarios | `evt-401k.test.mjs`, `evt-ira.test.mjs`, `evt-roth.test.mjs`, `evt-us-brokerage.test.mjs`, `evt-au-brokerage.test.mjs`, `evt-real-property.test.mjs`, `evt-super.test.mjs`, `evt-au-savings.test.mjs` |
 | Service layer | `service-registry.test.mjs`, `base-scenario.test.mjs`, `scenario-serializer.test.mjs` |
-| Visualization | `base-app.test.mjs`, `graph-builder.test.mjs`, `graph-sync.test.mjs`, `event-scheduler.test.mjs`, `balance-chart-view.test.mjs`, `timeline-view.test.mjs`, `time-controls.test.mjs` |
+| Visualization | `base-app.test.mjs`, `config-graph.test.mjs`, `graph-sync.test.mjs`, `config-builder.test.mjs`, `balance-chart-view.test.mjs`, `timeline-view.test.mjs`, `time-controls.test.mjs` |
 
 ### Test helper
 
