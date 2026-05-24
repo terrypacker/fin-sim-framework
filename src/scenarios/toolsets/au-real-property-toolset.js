@@ -53,7 +53,7 @@ export const AU_REAL_PROPERTY = {
         name:    `Sell ${p.name}`,
         type:    'AU_HOUSE_SALE',
         date:    new Date(Date.UTC(p.plannedSaleYear, 0, 15)),
-        data:    { salePrice: p.value, costBasis: p.costBasis },
+        data:    { salePrice: p.value, costBasis: p.costBasis, ownershipType: p.ownershipType, ownerId: p.ownerId, owners: p.owners },
         enabled: true,
         color:   '#5D4037',
       }));

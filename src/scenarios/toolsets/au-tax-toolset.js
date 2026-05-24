@@ -44,7 +44,7 @@ export const AU_TAX = {
 
   state(context) {
     const capture = _getCapture(context);
-    return {
+    const state = {
       ...capture.statePatches,
       auOrdinaryIncomeYTD:              0,
       auCapitalGainsYTD:                0,
@@ -58,6 +58,17 @@ export const AU_TAX = {
       auPersonSuperTaxYTD:              {},
       auPersonFrankingCreditYTD:        {},
     };
+
+    //Zero out some fields that we will need
+    context.people.forEach(p => {
+      state.auPersonOrdinaryIncomeYTD[p.id] = 0;
+      state.auPersonCapitalGainsYTD[p.id] = 0;
+      state.auPersonNonResidentWithholdingYTD[p.id] = 0;
+      state.auPersonSuperTaxYTD[p.id] = 0;
+      state.auPersonFrankingCreditYTD[p.id] = 0;
+    })
+
+    return state;
   },
 
   schedules(context) {
