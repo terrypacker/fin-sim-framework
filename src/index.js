@@ -71,8 +71,8 @@ import { SimulationState } from './simulation-framework/simulation-state.js';
 import { BreakpointSignal, Simulation } from './simulation-framework/simulation.js';
 import { BalanceChartView } from './visualization/balance-chart-view.js';
 import { ChartView } from './visualization/chart-view.js';
-import { EventScheduler } from './visualization/event-scheduler.js';
-import { ConfigGraphBuilder } from './visualization/graph-builder.js';
+import { ConfigBuilder } from './visualization/config-builder.js';
+import { ConfigGraph } from './visualization/config-graph.js';
 import { GraphSync } from './visualization/graph-sync.js';
 import { GraphView } from './visualization/graph-view.js';
 import { TimeControls } from './visualization/time-controls.js';
@@ -223,8 +223,8 @@ export const Core = {
 export const Visualization = {
   BalanceChartView,
   ChartView,
-  EventScheduler,
-  ConfigGraphBuilder,
+  ConfigBuilder,
+  ConfigGraph,
   GraphSync,
   GraphView,
   TimeControls,

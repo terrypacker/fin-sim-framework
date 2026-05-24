@@ -31,8 +31,8 @@ Other top-level HTML files and apps in `assets/js/` are legacy — only the `ind
 │   index.html → CustomApp (extends BaseApp)                          │
 │                   │                                                 │
 │         ┌─────────┴──────────────────────────────────┐             │
-│         │  ConfigGraphBuilder  SVG node/edge canvas   │             │
-│         │  EventScheduler      Editor panel + buttons │             │
+│         │  ConfigGraph  SVG node/edge canvas   │             │
+│         │  ConfigBuilder      Editor panel + buttons │             │
 │         │  GraphSync           Bus → graph updater    │             │
 │         └─────────┬──────────────────────────────────┘             │
 │                   │  + button clicks / node edits                   │
@@ -130,7 +130,7 @@ The service layer is the **authoritative source of truth** for all configuration
 ```
 UI change → service.updateX(id, changes) → ServiceActionEvent on bus
                                               ├── SimulationSync re-wires sim
-                                              └── GraphSync updates ConfigGraphBuilder
+                                              └── GraphSync updates ConfigGraph
 Save      → ScenarioSerializer.serialize(ServiceRegistry.getInstance(), ...)
                                     └── reads from service.getAll()
 ```
@@ -174,9 +174,9 @@ Each service exposes `createX(...)`, `updateX(id, changes)`, and `deleteX(id)` m
 
 #### `BaseScenario`
 
-Base class for all simulation scenarios. A thin coordinator between the `EventScheduler` UI and the `ServiceRegistry`.
+Base class for all simulation scenarios. A thin coordinator between the `ConfigBuilder` UI and the `ServiceRegistry`.
 
-**Construction listeners** (EventScheduler `+` buttons) are registered in the constructor. Creation of new nodes goes: button click → `BaseScenario.xCreationRequested()` → `service.createX()` → bus event → `SimulationSync` wires the sim; `GraphSync` adds the graph node.
+**Construction listeners** (ConfigBuilder `+` buttons) are registered in the constructor. Creation of new nodes goes: button click → `BaseScenario.xCreationRequested()` → `service.createX()` → bus event → `SimulationSync` wires the sim; `GraphSync` adds the graph node.
 
 All simulation-wiring and graph-update logic lives in `SimulationSync` and `GraphSync` respectively, both of which subscribe to the shared bus independently. `BaseScenario` itself does not subscribe.
 
@@ -224,7 +224,7 @@ ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance());
 
 Base class for browser apps. Owns the top-level UI orchestration:
 
-- Builds `ConfigGraphBuilder` (the draggable SVG node graph), `EventScheduler` (editor panel + `+` buttons), and `GraphSync` (bus subscriber that keeps the graph in sync)
+- Builds `ConfigGraph` (the draggable SVG node graph), `ConfigBuilder` (editor panel + `+` buttons), and `GraphSync` (bus subscriber that keeps the graph in sync)
 - Builds `ChartView` (Chart.js time-series chart), `TimelineView` (scrollable journal), and `TimeControls` (play/pause/step slider)
 - Handles scenario save/load via `ScenarioStorage` and `ScenarioSerializer`
 - Calls `ServiceRegistry.reset()` before each rebuild so the service maps, bus, `SimulationSync`, and `GraphSync` all start clean
@@ -242,9 +242,9 @@ _saveCurrentScenario()
 
 | Module | File | Responsibility |
 |---|---|---|
-| `EventScheduler` | `event-scheduler.js` | **UI only.** Renders node editors (event / handler / action / reducer) in a side panel; exposes `+` creation buttons. All editor inputs call `service.updateX(id, changes)` directly. Does **not** subscribe to the bus — graph updates are handled by `GraphSync`. |
-| `GraphSync` | `graph-sync.js` | **Bus subscriber.** Subscribes to `SERVICE_ACTION` events and keeps `ConfigGraphBuilder` in sync: CREATE adds nodes with `kind`/`eventType` decoration and edges; UPDATE merges position and visual state (x, y, fired, breakpoint) from the old node before replacing — preserving them across `replaceReducer`/`replaceAction` type changes; DELETE removes nodes and incident edges. Analogous to `SimulationSync` for the graph layer. |
-| `ConfigGraphBuilder` | `graph-builder.js` | SVG drag-and-drop node/edge canvas. **Display only** — not a source of truth. Nodes are keyed by domain object `id`. Right-clicking any node toggles a breakpoint; a red `⏸` badge appears and the border turns red. |
+| `ConfigBuilder` | `config-builder.js` | **UI only.** Renders node editors (event / handler / action / reducer) in a side panel; exposes `+` creation buttons. All editor inputs call `service.updateX(id, changes)` directly. Does **not** subscribe to the bus — graph updates are handled by `GraphSync`. |
+| `GraphSync` | `graph-sync.js` | **Bus subscriber.** Subscribes to `SERVICE_ACTION` events and keeps `ConfigGraph` in sync: CREATE adds nodes with `kind`/`eventType` decoration and edges; UPDATE merges position and visual state (x, y, fired, breakpoint) from the old node before replacing — preserving them across `replaceReducer`/`replaceAction` type changes; DELETE removes nodes and incident edges. Analogous to `SimulationSync` for the graph layer. |
+| `ConfigGraph` | `config-graph.js` | SVG drag-and-drop node/edge canvas. **Display only** — not a source of truth. Nodes are keyed by domain object `id`. Right-clicking any node toggles a breakpoint; a red `⏸` badge appears and the border turns red. |
 | `ChartView` | `chart-view.js` | Chart.js-backed time-series chart. Series discovered automatically from data snapshot keys. Supports `chartjs-plugin-annotation` and `chartjs-plugin-zoom`. |
 | `TimelineView` | `timeline-view.js` | Scrollable DOM journal timeline. |
 | `TimeControls` | `time-controls.js` | Bridges the play/pause/step/slider UI to `sim.stepTo`, `sim.rewindToStart`, and replay. |
@@ -332,7 +332,7 @@ scenario.registerReducer(reducer);
 Two distinct buses exist:
 
 1. **Simulation `EventBus`** — carries `SimulationBusMessage` (event fires) and `DebugActionBusMessage` (action graph node added). Lives on `sim.bus`.
-2. **Service `EventBus`** — shared across all services via `ServiceRegistry`. Carries `ServiceActionEvent` with `{ actionType: 'CREATE'|'UPDATE'|'DELETE', classType, item, originalItem }`. Two independent subscribers react to it: `SimulationSync` re-wires the active `Simulation`; `GraphSync` updates the `ConfigGraphBuilder`.
+2. **Service `EventBus`** — shared across all services via `ServiceRegistry`. Carries `ServiceActionEvent` with `{ actionType: 'CREATE'|'UPDATE'|'DELETE', classType, item, originalItem }`. Two independent subscribers react to it: `SimulationSync` re-wires the active `Simulation`; `GraphSync` updates the `ConfigGraph`.
 
 ### Snapshots, Rewind & Replay
 
@@ -521,7 +521,7 @@ npm run build:index
 
 ### Minification and class names
 
-`Action.actionClass` and `Reducer.reducerType` both return `this.constructor.name`. These values are used by `ScenarioSerializer` (to record which concrete class to reconstruct on deserialize) and by `EventScheduler` (for type-based dispatch). Minifiers mangle class names by default, which breaks both features silently.
+`Action.actionClass` and `Reducer.reducerType` both return `this.constructor.name`. These values are used by `ScenarioSerializer` (to record which concrete class to reconstruct on deserialize) and by `ConfigBuilder` (for type-based dispatch). Minifiers mangle class names by default, which breaks both features silently.
 
 The Rollup/terser config preserves class names matching `/Reducer$|Action$/` via `mangle: { keep_classnames: /Reducer$|Action$/ }`. **If you switch to a different minifier** (esbuild, swc, uglify-js, closure compiler, etc.) you must apply the equivalent option for that tool before shipping a minified build. The symptom of a missing fix is that save/load stops working and action type dispatch returns wrong types at runtime.
 
@@ -580,7 +580,7 @@ tests/
 - **Use builders.** Prefer `ActionBuilder`, `ReducerBuilder`, `HandlerBuilder`, `EventBuilder` over constructing domain objects directly.
 - **IDs are assigned by services.** Domain objects start with `id = null` (except `Action` which sets `id = type`). Never assign IDs manually outside a service.
 - **All mutations go through services.** UI editors call `service.updateX(id, changes)`; they never mutate domain objects directly. The service publishes a `ServiceActionEvent` and the sim re-wires itself via the bus subscriber in `BaseScenario`.
-- **`ConfigGraphBuilder` is display-only.** It is not a source of truth. `ScenarioSerializer` reads from `ServiceRegistry` service maps, not from the graph.
+- **`ConfigGraph` is display-only.** It is not a source of truth. `ScenarioSerializer` reads from `ServiceRegistry` service maps, not from the graph.
 - **Imports use `.js` extensions.** All `src/` files must use explicit `.js` extensions in ES module import paths (even from `.mjs` test files). Tests import directly from `src/` — they do not go through `dist/`.
 - **`src/index.js` is auto-generated.** Run `npm run build:index` after adding or removing exported classes; do not edit it manually.
 - **No external runtime dependencies.** The framework and tests rely only on browser/Node built-ins. Dev tools are `devDependencies` only.

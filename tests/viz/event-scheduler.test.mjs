@@ -11,7 +11,7 @@
 /**
  * event-scheduler.test.mjs
  *
- * Tests for EventScheduler:
+ * Tests for ConfigBuilder:
  *   - Construction and button wiring
  *   - Creation listener registration and notification
  *   - deleteNode: calls the right service and clears the editor panel
@@ -24,7 +24,7 @@
  * --experimental-vm-modules; all call tracking uses plain closures.
  */
 
-import { EventScheduler } from '../../src/visualization/event-scheduler.js';
+import { ConfigBuilder } from '../../src/visualization/config-builder.js';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
 
 // ─── Graph stub ───────────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ function makeBuilderCanvas() {
 
 function makeScheduler(graph, canvas) {
   ServiceRegistry.reset();
-  return new EventScheduler({
+  return new ConfigBuilder({
     graph:         graph  ?? makeGraph(),
     builderCanvas: canvas ?? makeBuilderCanvas(),
   });
@@ -74,11 +74,11 @@ function makeScheduler(graph, canvas) {
 
 // ─── Construction ─────────────────────────────────────────────────────────────
 
-test('EventScheduler: constructs without error', () => {
+test('ConfigBuilder: constructs without error', () => {
   expect(() => makeScheduler()).not.toThrow();
 });
 
-test('EventScheduler: listener arrays initialize empty', () => {
+test('ConfigBuilder: listener arrays initialize empty', () => {
   const s = makeScheduler();
   expect(s.eventNodeCreatedListeners).toHaveLength(0);
   expect(s.handlerNodeCreatedListeners).toHaveLength(0);
@@ -240,18 +240,18 @@ test('deleteNode: does NOT call graph.removeNode (GraphSync handles removal)', (
   expect(removeNodeCalled).toBe(false);
 });
 
-// ─── EventScheduler does NOT subscribe to SERVICE_ACTION ─────────────────────
+// ─── ConfigBuilder does NOT subscribe to SERVICE_ACTION ─────────────────────
 //
 // Graph synchronization is now exclusively GraphSync's responsibility.
 // Verifying there are no SERVICE_ACTION subscriptions on the bus after
-// constructing EventScheduler ensures the bus is not double-handled.
+// constructing ConfigBuilder ensures the bus is not double-handled.
 
-test('EventScheduler does not add SERVICE_ACTION subscription to the bus', () => {
+test('ConfigBuilder does not add SERVICE_ACTION subscription to the bus', () => {
   ServiceRegistry.reset();
   const { bus } = ServiceRegistry.getInstance();
   const before = (bus.listeners.get('SERVICE_ACTION') ?? []).length;
 
-  makeScheduler(); // constructs EventScheduler
+  makeScheduler(); // constructs ConfigBuilder
 
   const after = (bus.listeners.get('SERVICE_ACTION') ?? []).length;
   expect(after).toBe(before);

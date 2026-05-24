@@ -12,7 +12,7 @@ const NODE_WIDTH = 180;
 const NODE_HEIGHT = 40;
 const PADDING = 20;
 
-export class ConfigGraphBuilder {
+export class ConfigGraph {
   constructor({ graphRoot, graphNodes, graphEdges, nodeDetailsTemplate, displayNodeStateChanges}) {
     this.graphRoot = graphRoot;
     this.graphNodesEl = graphNodes;

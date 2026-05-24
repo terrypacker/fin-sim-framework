@@ -71,7 +71,7 @@ globalThis.FinSimLib = {
 
 // ─── Tracking scheduler UI stub ───────────────────────────────────────────────
 //
-// Subscribes to the shared bus (just like the real EventScheduler does) and
+// Subscribes to the shared bus (just like the real ConfigBuilder does) and
 // adds nodes to this.nodes on CREATE events.  This means ScenarioSerializer
 // no longer needs to know about the UI — nodes arrive via the bus.
 
@@ -93,7 +93,7 @@ class TrackingUI {
       eventCreated: [], handlerCreated: [], actionCreated: [], reducerCreated: [],
     };
 
-    // React to CREATE events on the bus, mirroring EventScheduler behaviour.
+    // React to CREATE events on the bus, mirroring ConfigBuilder behaviour.
     ServiceRegistry.getInstance().bus.subscribe('SERVICE_ACTION', (msg) => {
       if (msg.actionType !== 'CREATE') return;
       const { classType, item } = msg;

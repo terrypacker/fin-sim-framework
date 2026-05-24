@@ -128,7 +128,7 @@ export class BaseService {
    * ScenarioSerializer) and replaces the old pattern of calling BaseScenario
    * helper methods (scheduleEvent, registerHandler, etc.).
    *
-   * Subscribers — BaseScenario (sim wiring) and EventScheduler (graph node) —
+   * Subscribers — BaseScenario (sim wiring) and ConfigBuilder (graph node) —
    * react to the CREATE event, so the caller does not need to wire anything
    * manually.
    *

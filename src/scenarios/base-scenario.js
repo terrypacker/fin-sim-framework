@@ -47,7 +47,7 @@ export const startSnapFns = {
  * ServiceRegistry.simulationSync (SimulationSync).  SimulationSync subscribes
  * to the shared bus and keeps the active Simulation in sync automatically.
  *
- * EventScheduler has its own bus subscription that handles graph node creation.
+ * ConfigBuilder has its own bus subscription that handles graph node creation.
  *
  * ### CustomScenario pattern
  *
@@ -79,7 +79,7 @@ export class BaseScenario {
     this.simStart = simStart;
     this.simEnd = simEnd;
 
-    // ── Wire up the "+" creation buttons in EventScheduler ────────────────────
+    // ── Wire up the "+" creation buttons in ConfigBuilder ────────────────────
     this.eventSchedulerUI.registerEventCreatedListener(subtype => this.eventCreationRequested(subtype));
     this.eventSchedulerUI.registerHandlerCreatedListener(() => this.handlerCreationRequested());
     this.eventSchedulerUI.registerActionCreatedListener(() => this.actionCreationRequested());
@@ -111,11 +111,11 @@ export class BaseScenario {
     sr.simulationSync.setSimStart(this.simStart);
   }
 
-  // ─── Creation handlers (called via EventScheduler "+" buttons) ───────────
+  // ─── Creation handlers (called via ConfigBuilder "+" buttons) ───────────
   //
   // Each service create* call publishes CREATE on the bus.
   // SimulationSync's subscriber wires it into the sim.
-  // EventScheduler's subscriber adds the node to the graph.
+  // ConfigBuilder's subscriber adds the node to the graph.
   // The only thing these handlers do explicitly is open the editor panel.
 
   eventCreationRequested(subtype) {

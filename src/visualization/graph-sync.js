@@ -10,7 +10,7 @@
 
 /**
  * GraphSync subscribes to SERVICE_ACTION events on the shared bus and
- * keeps the ConfigGraphBuilder in sync with the service maps:
+ * keeps the ConfigGraph in sync with the service maps:
  *
  *   CREATE  — adds the new node to the graph with the correct kind/eventType
  *             decoration, then adds edges for handler.handledEvents,
@@ -22,13 +22,13 @@
  *             when replaceReducer / replaceAction creates a brand-new object.
  *   DELETE  — removes the node (and its incident edges) from the graph.
  *
- * One instance is created by BaseApp.buildScenario() after ConfigGraphBuilder
- * and EventScheduler are ready.  The bus is replaced on every
+ * One instance is created by BaseApp.buildScenario() after ConfigGraph
+ * and ConfigBuilder are ready.  The bus is replaced on every
  * ServiceRegistry.reset(), so stale subscriptions are discarded automatically.
  */
 export class GraphSync {
   /**
-   * @param {{ graph: import('./graph-builder.js').ConfigGraphBuilder,
+   * @param {{ graph: import('./config-graph.js').ConfigGraph,
    *           registry: { bus: import('../simulation-framework/event-bus.js').EventBus } }} opts
    */
   constructor({ graph, registry }) {
