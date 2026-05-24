@@ -229,6 +229,13 @@ export class ConfigGraphBuilder {
     this.nodes.forEach(n => n[field] = value);
   }
 
+  applyToNodes(filter, field, value) {
+    this.nodes.forEach(n => {
+      if(filter(n))
+        n[field] = value
+    });
+  }
+
   removeNode(nodeId) {
     this.edges = this.edges.filter(e => e.from !== nodeId && e.to !== nodeId);
     this.nodes = this.nodes.filter(n => n.id !== nodeId);

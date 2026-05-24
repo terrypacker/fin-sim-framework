@@ -53,7 +53,7 @@ import { ActionBuilder } from './simulation-framework/builders/action-builder.js
 import { EventBuilder } from './simulation-framework/builders/event-builder.js';
 import { HandlerBuilder } from './simulation-framework/builders/handler-builder.js';
 import { ReducerBuilder } from './simulation-framework/builders/reducer-builder.js';
-import { BusMessage, SimulationBusMessage, DebugActionBusMessage, ServiceActionEvent } from './simulation-framework/bus-messages.js';
+import { SIMULATION_BUS_MESSAGES, BusMessage, SimulationBusMessage, EventStartBusMessage, EventEndBusMessage, EventHandledMessage, ActionResultMessage, ReducerResultMessage, DebugActionBusMessage, ServiceActionEvent } from './simulation-framework/bus-messages.js';
 import { DateUtils } from './simulation-framework/date-utils.js';
 import { EventBus } from './simulation-framework/event-bus.js';
 import { BaseEvent } from './simulation-framework/events/base-event.js';
@@ -176,8 +176,14 @@ export const Core = {
   EventBuilder,
   HandlerBuilder,
   ReducerBuilder,
+  SIMULATION_BUS_MESSAGES,
   BusMessage,
   SimulationBusMessage,
+  EventStartBusMessage,
+  EventEndBusMessage,
+  EventHandledMessage,
+  ActionResultMessage,
+  ReducerResultMessage,
   DebugActionBusMessage,
   ServiceActionEvent,
   DateUtils,

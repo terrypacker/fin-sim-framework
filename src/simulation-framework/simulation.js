@@ -24,10 +24,17 @@ import { JournalEntry, Journal } from './journal.js'
 import { ReducerPipeline } from './reducers.js'
 import { HandlerRegistry } from './handlers.js'
 import { DateUtils } from "./date-utils.js";
-import { SimulationBusMessage, DebugActionBusMessage } from "./bus-messages.js";
+import {
+  EventStartBusMessage,
+  EventEndBusMessage,
+  EventHandledMessage,
+  ActionResultMessage,
+  ReducerResultMessage
+} from "./bus-messages.js";
 import { SimulationHistory } from "./simulation-history.js";
 import { SimulationState } from "./simulation-state.js";
 
+const INTERNAL_SCHEDULING_HANDLER_NAME = 'INTERNAL_SCHEDULING_HANDLER_NAME';
 /**
  *
  * // run baseline
@@ -145,20 +152,20 @@ export class Simulation {
   }
 
   register(type, handlerOrEntry) {
-    this.handlers.register(type, handlerOrEntry);
+    this.handlers.register(type, handlerOrEntry, INTERNAL_SCHEDULING_HANDLER_NAME);
   }
 
   execute(event) {
     const handlers = this.handlers.get(event.type) || [];
 
-    //Send event out on the bus
-    this.bus.publish(new SimulationBusMessage({
-      type: event.type,
+    //Publish the event occurred message
+    this.bus.publish(new EventStartBusMessage({
       date: this.currentDate,
-      sim: this,
-      payload: event,
-      stateSnapshot: this.state
-    }));
+      payload: {
+        event: event,
+        sim: this,
+        stateSnapshot: this.state
+      }}));
 
     for (const entry of handlers) {
       const actions = entry.call({
@@ -168,6 +175,11 @@ export class Simulation {
         meta: event.meta,
         state: this.state
       });
+
+      //Publish the handled event message for non event re-schedule handlers
+      if(entry.name !== 'INTERNAL_SCHEDULING_HANDLER_NAME') {
+        this.bus.publish(new EventHandledMessage({date: this.currentDate, payload: {handler: entry, event: event}}));
+      }
 
       this.applyActions(actions, event);
 
@@ -181,6 +193,15 @@ export class Simulation {
         this.history.takeSnapshot();
       }
     }
+
+    //Publish the EVENT_OCCURRENCE_END message
+    this.bus.publish(new EventEndBusMessage({
+      date: this.currentDate,
+      payload: {
+        event: event,
+        sim: this,
+        stateSnapshot: this.state
+      }}));
   }
 
   applyActions(actions, sourceEvent) {
@@ -210,10 +231,20 @@ export class Simulation {
 
       if (!reducers || reducers.length === 0) continue;
 
-      for (const { fn, name } of reducers) {
+      for (const reducerWrapper of reducers) {
         const prevState = structuredClone(this.state);
 
-        const result = fn(this.state, action, this.currentDate);
+        const result = reducerWrapper.fn(this.state, action, this.currentDate);
+
+        //Publish the REDUCER_RESULT message
+        this.bus.publish(new ReducerResultMessage({
+          date: this.currentDate,
+          payload: {
+            reducer: reducerWrapper.reducer,
+            result: result,
+            sim: this,
+            stateSnapshot: this.state
+          }}));
 
         // Support multiple reducer return styles
         if (!result) continue;
@@ -244,7 +275,7 @@ export class Simulation {
         this.addActionNode({
           action,
           parentId: parentId,
-          reducerName: name,
+          reducerName: reducerWrapper.name,
           prevState,
           nextState,
           sourceEvent
@@ -256,7 +287,7 @@ export class Simulation {
             date: new Date(this.currentDate),
             eventType: sourceEventType,
             action: structuredClone(action),
-            reducer: name,
+            reducer: reducerWrapper.name,
             prevState: prevState,
             nextState: structuredClone(this.state),
             emittedActions: structuredClone(emitted),
@@ -264,15 +295,6 @@ export class Simulation {
           }));
         }
       }
-
-      // Publish to bus after full pipeline
-      this.bus.publish(new SimulationBusMessage({
-        type: sourceEventType,
-        date: this.currentDate,
-        sim: this,
-        payload: action,
-        stateSnapshot: this.state
-      }));
     }
   }
 
@@ -368,7 +390,7 @@ export class Simulation {
     this.actionGraph.addActionNode(node);
 
     //Emit debug actions to track nodes
-    this.bus.publish(new DebugActionBusMessage({
+    this.bus.publish(new ActionResultMessage({
       date: new Date(this.currentDate),
       payload: node
     }));

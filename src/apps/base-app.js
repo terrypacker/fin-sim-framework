@@ -27,6 +27,7 @@ import { ConfigGraphBuilder } from "../visualization/graph-builder.js";
 import { ScenarioStorage } from "../scenarios/scenario-storage.js";
 import { ScenarioSerializer } from "../scenarios/scenario-serializer.js";
 import { ServiceRegistry } from "../services/service-registry.js";
+import {SIMULATION_BUS_MESSAGES} from "../simulation-framework/bus-messages.js";
 
 export class BaseApp {
   constructor({ newScenario, chartSeries }) {
@@ -105,29 +106,42 @@ export class BaseApp {
     chartView.addSnapshot(type, date, state.metrics ? {...state.metrics} : {});
   }
 
-  updateConfigGraph(payload) {
+  updateConfigGraphEvents(payload, start = true) {
+    if(start) {
+      //Event start
+      this.configGraphBuilder.applyToAllNodes('fired', false);
+
+      //Set Event node to fired
+      const eventNode = this.configGraphBuilder.getNode(payload.event.id);
+      eventNode.fired = true;
+      this.configGraphBuilder.render();
+    }
+  }
+
+  updateConfigGraphHandlers(payload) {
+    //Set Event node to fired
+    const eventNode = this.configGraphBuilder.getNode(payload.handler.id);
+    eventNode.fired = true;
+    this.configGraphBuilder.render();
+  }
+
+  updateConfigGraphActions(payload) {
     const stateBefore = payload.stateBefore;
     const stateAfter = payload.stateAfter;
     const action = payload.action;
     const sourceEvent = payload.sourceEvent;
 
     const diff = this.diffStates(stateBefore, stateAfter);
-    //Reset all node statuses
-    this.configGraphBuilder.applyToAllNodes('fired', false);
-
-    //Set Event node to fired
-    const eventNode = this.configGraphBuilder.getNode(sourceEvent.id);
-    eventNode.fired = true;
-
-    //Set Handler node to fired
-    //TODO Need handler in message
-
-    //Set Reducer node to fired
-    //TODO Need Reducer in message
 
     //Set Action node to fired
     const actionNode = this.configGraphBuilder.getNode(action.id);
     actionNode.fired = true;
+    this.configGraphBuilder.render();
+  }
+
+  updateConfigGraphReducers(payload) {
+    const reducerNode = this.configGraphBuilder.getNode(payload.reducer.id);
+    reducerNode.fired = true;
     this.configGraphBuilder.render();
   }
 
@@ -259,21 +273,36 @@ export class BaseApp {
       formatDate: this._formatDate,
     });
 
-    // Subscribe to RECORD_BALANCE DEBUG_ACTION events to capture balance snapshots
-    this.scenario.sim.bus.subscribe('DEBUG_ACTION', ({ payload }) => {
+    // Subscribe to EVENT_OCCURRENCE events
+    this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START, ({ date, payload }) => {
+      this.updateConfigGraphEvents(payload, true);
+    });
 
+    // Subscribe to HANDLED_EVENT events
+    this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.HANDLED_EVENT, ({ date, payload }) => {
+      this.updateConfigGraphHandlers(payload);
+    });
+
+    // Subscribe to ACTION_RESULT events
+    this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.ACTION_RESULT, ({ date, payload }) => {
+      //TODO Weed out and optimize these messages
       //Fire the date changed listeners
-      const date = new Date(payload.date);
-      this._currentDate = date;
-      this.timeControls.onDateChanged(date);
+      const actionDate = new Date(date);
+      this._currentDate = actionDate;
+      this.timeControls.onDateChanged(actionDate);
       if(this.graphView) {
         this.graphView.updateView(payload);
       }
-      this.updateStatePanel(date, payload.stateAfter);
+      this.updateStatePanel(actionDate, payload.stateAfter);
       this.updateChart(this.chartView, payload.type, payload.date, payload.stateAfter);
-      this.updateConfigGraph(payload);
+      this.updateConfigGraphActions(payload);
       if(this.updateDashCards)
         this.updateDashCards(payload);
+    });
+
+    // Subscribe to REDUCER_RESULT events
+    this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.REDUCER_RESULT, ({ date, payload }) => {
+      this.updateConfigGraphReducers(payload);
     });
 
     // Reset slider and direction tracker
