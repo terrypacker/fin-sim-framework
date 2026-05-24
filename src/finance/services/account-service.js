@@ -120,7 +120,13 @@ export class AccountService extends AssetService {
       if (!entry.stateDiff) continue;
       const diff = entry.stateDiff.find(d => d.field === field);
       if (diff?.delta != null) {
-        results.push({ date: entry.date, amount: diff.delta, balanceAfter: diff.after, eventType: entry.eventType, reducer: entry.reducer });
+        results.push({
+          date: entry.date,
+          amount: diff.delta,
+          balanceAfter: diff.after,
+          event: entry.event,
+          reducer: entry.reducer
+        });
       }
     }
     return results;

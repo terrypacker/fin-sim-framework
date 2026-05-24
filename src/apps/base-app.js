@@ -734,7 +734,7 @@ export class BaseApp extends BaseComponent {
       table.style.cssText = 'width:100%;border-collapse:collapse;';
       const thead = table.createTHead();
       const hrow  = thead.insertRow();
-      for (const col of ['Date', 'Event', 'Amount', 'Balance']) {
+      for (const col of ['Date', 'Event', 'Reducer', 'Amount', 'Balance']) {
         const th = document.createElement('th');
         th.textContent  = col;
         th.style.cssText = 'text-align:left;padding:2px 6px;font-size:9px;letter-spacing:0.06em;color:var(--text-muted);border-bottom:1px solid var(--border);';
@@ -752,7 +752,8 @@ export class BaseApp extends BaseComponent {
         const balStr = bal != null ? (bal < 0 ? '-' + sym : sym) + Math.abs(bal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
         const cells = [
           { text: dateStr, style: '' },
-          { text: entry.eventType ?? entry.reducer ?? '', style: 'color:var(--text-muted);' },
+          { text: entry.event?.type ?? '', style: 'color:var(--text-muted);' },
+          { text: entry.reducer?.name ?? '', style: 'color:var(--text-muted);' },
           { text: amtStr, style: `color:${amt >= 0 ? 'var(--accent-green,#4a8)' : 'var(--accent-red,#e55)'};font-family:var(--font-mono);` },
           { text: balStr, style: `font-family:var(--font-mono);${bal != null && bal < 0 ? 'color:var(--accent-red,#e55);' : ''}` },
         ];
