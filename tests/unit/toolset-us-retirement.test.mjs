@@ -676,3 +676,147 @@ test('no duplicate reducers when US_RETIREMENT, US_INCOME, and US_BROKERAGE are 
   assert.deepStrictEqual(duplicates, [],
     `Duplicate reducers found for action types:\n  ${duplicates.join('\n  ')}`);
 });
+
+// ─── IRA Annual RMD tests (EVT-40) ───────────────────────────────────────────
+
+/**
+ * RMD config helper.
+ *
+ * birthDate controls when RMDs begin (first year-end after person turns 73).
+ * iraBalance is the starting balance used for the RMD calculation.
+ * We zero out all growth rates and expenses so the only moving part is the RMD.
+ */
+function makeRmdConfig({ birthDate, iraBalance = 500_000, iraContribBasis = 500_000 }) {
+  return {
+    toolsets: ['US_RETIREMENT'],
+    simStart: '2026-01-01',
+    simEnd:   '2050-01-01',
+    parameters: {
+      inflationRate:          0,
+      usSavingsInterestRate:  0,
+      iraGrowthRate:          0,    // zero growth so RMD amount is predictable
+      monthlyExpenses:        0,
+      inflationAdjust:        false,
+    },
+    persons: [
+      {
+        __type:                'Person',
+        id:                    'primary',
+        name:                  'Primary',
+        birthDate,
+        citizen:               ['US'],
+        lifeExpectancy:        90,
+        socialSecurityMonthly: 0,
+        monthlyWage:           0,
+        retirementDate:        '2020-01-01',
+      },
+    ],
+    accounts: [
+      {
+        __type:         'SavingsAccount',
+        id:             'acct-savings',
+        name:           'US Savings',
+        type:           'savings',
+        role:           'us-savings',
+        stateKey:       'usSavingsAccount',
+        initialValue:   1_000_000,
+        ownershipType:  'sole',
+        ownerId:        'primary',
+        minimumBalance: 0,
+        country:        'US',
+        currency:       { code: 'USD', symbol: '$' },
+      },
+      {
+        __type:            'TraditionalIRAAccount',
+        id:                'acct-ira',
+        name:              'Traditional IRA',
+        type:              'ira',
+        role:              'ira',
+        stateKey:          'iraAccount',
+        initialValue:      iraBalance,
+        ownershipType:     'sole',
+        ownerId:           'primary',
+        contributionBasis: iraContribBasis,
+        earningsBasis:     0,
+        loanBalance:       0,
+        country:           'US',
+        currency:          { code: 'USD', symbol: '$' },
+      },
+    ],
+  };
+}
+
+test('EVT-40: IRA RMD does not fire before person turns 73', () => {
+  // Born 1960-01-01 → turns 73 in 2033; simulating only through end of 2032
+  const config = makeRmdConfig({ birthDate: '1960-01-01', iraBalance: 500_000 });
+  const { sim } = loadToolsetScenario(config);
+  const endOf2032 = new Date(Date.UTC(2032, 11, 31));
+  sim.stepTo(endOf2032);
+  // IRA balance should be unchanged (zero growth, no RMD yet)
+  assert.strictEqual(sim.state.iraAccount.balance, 500_000,
+    'IRA balance should be untouched before RMD age');
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0,
+    'no ordinary income should be recorded before RMD age');
+});
+
+test('EVT-40: IRA RMD fires at year-end when person turns 73', () => {
+  // Born 1960-01-01 → turns 73 on Jan 1, 2033; first RMD due Dec 31, 2033
+  const iraBalance = 500_000;
+  const config = makeRmdConfig({ birthDate: '1960-01-01', iraBalance });
+  const { sim } = loadToolsetScenario(config);
+  const endOf2033 = new Date(Date.UTC(2033, 11, 31));
+  sim.stepTo(endOf2033);
+
+  // IRS Uniform Lifetime Table: age 73 → distribution period 26.5
+  const expectedRmd = Math.round(iraBalance / 26.5 * 100) / 100;
+  const expectedIraBalance = iraBalance - expectedRmd;
+
+  assert.strictEqual(sim.state.iraAccount.balance, expectedIraBalance,
+    `IRA should be reduced by first RMD of ${expectedRmd}`);
+});
+
+test('EVT-40: IRA RMD credits US savings account', () => {
+  const iraBalance     = 500_000;
+  const savingsStart   = 1_000_000;
+  const config = makeRmdConfig({ birthDate: '1960-01-01', iraBalance });
+  const { sim } = loadToolsetScenario(config);
+  const savingsBefore  = sim.state.usSavingsAccount.balance;
+  const endOf2033      = new Date(Date.UTC(2033, 11, 31));
+  sim.stepTo(endOf2033);
+
+  const expectedRmd = Math.round(iraBalance / 26.5 * 100) / 100;
+  assert.strictEqual(sim.state.usSavingsAccount.balance, savingsBefore + expectedRmd,
+    'RMD proceeds should be credited to US savings account');
+});
+
+test('EVT-40: IRA RMD amount is taxable as ordinary income', () => {
+  const iraBalance = 500_000;
+  const config = makeRmdConfig({ birthDate: '1960-01-01', iraBalance });
+  const { sim } = loadToolsetScenario(config);
+  // Period-advance resets YTD at start of 2033; step to Dec 31 2033
+  const endOf2033 = new Date(Date.UTC(2033, 11, 31));
+  sim.stepTo(endOf2033);
+
+  const expectedRmd = Math.round(iraBalance / 26.5 * 100) / 100;
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, expectedRmd,
+    'RMD should be fully recorded as US ordinary income (no exclusions for traditional IRA)');
+});
+
+test('EVT-40: IRA RMD uses age-73 distribution period in first year and age-74 in second', () => {
+  // Zero growth rate — each year the RMD depletes the balance, so next year's basis is lower
+  const iraBalance = 500_000;
+  const config = makeRmdConfig({ birthDate: '1960-01-01', iraBalance });
+  const { sim } = loadToolsetScenario(config);
+
+  // End of 2033 — person is 73 (distribution period 26.5)
+  sim.stepTo(new Date(Date.UTC(2033, 11, 31)));
+  const rmd73 = Math.round(iraBalance / 26.5 * 100) / 100;
+  const balAfter73 = iraBalance - rmd73;
+  assert.strictEqual(sim.state.iraAccount.balance, balAfter73);
+
+  // End of 2034 — person is 74 (distribution period 25.5)
+  sim.stepTo(new Date(Date.UTC(2034, 11, 31)));
+  const rmd74 = Math.round(balAfter73 / 25.5 * 100) / 100;
+  assert.strictEqual(sim.state.iraAccount.balance, balAfter73 - rmd74,
+    'second RMD should use age-74 distribution period');
+});
