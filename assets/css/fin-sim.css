@@ -247,6 +247,88 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   min-height: 0;
 }
 
+/* ── Right panel group selector (mirrors left-col pattern) ── */
+.right-group-selector {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  flex-shrink: 0;
+}
+
+.right-group-btn {
+  flex: 1;
+  background: var(--bg-panel, #1e293b);
+  color: var(--text-dim, #64748b);
+  border: 1px solid var(--border, #334155);
+  padding: 4px 8px;
+  font-family: var(--font-head, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.right-group-btn.active {
+  background: var(--amber, #f59e0b);
+  color: #000;
+  border-color: var(--amber, #f59e0b);
+}
+
+.right-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--panel-gap);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Live State panel — collapsible State section ── */
+.lsp-state-toggle {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+}
+.lsp-state-toggle:hover { background: var(--bg-panel2, #1a1a1a); }
+
+.lsp-collapse-icon {
+  font-size: 8px;
+  color: var(--text-muted);
+}
+
+/* ── Metric rows in Live State ── */
+.lsp-metric-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  cursor: pointer;
+  font-size: 11px;
+  border-radius: 2px;
+  border: 1px solid transparent;
+}
+.lsp-metric-row:hover {
+  background: var(--bg-panel2);
+  border-color: var(--border-subtle, var(--border));
+}
+
+.lsp-metric-label {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lsp-metric-value {
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
 #actionPanelDetails {
   display: flex;
   flex-direction: column;

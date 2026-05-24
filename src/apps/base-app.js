@@ -361,6 +361,7 @@ export class BaseApp extends BaseComponent {
 
     $('currentStateContent').innerHTML  = '';
     $('cumulativeMetricsContent').innerHTML = '';
+    this._statePanelView.clearMetricHistory();
 
     this._editModal?.close();
     if (this.chartPresenter)  this.chartPresenter.stopViz();
@@ -384,12 +385,25 @@ export class BaseApp extends BaseComponent {
   }
 
   initView() {
-    this._initGroupSelector(); //Init left-panel group selector
+    this._initGroupSelector();
+    this._initRightGroupSelector();
+    this._statePanelView.initLiveState();
 
     this.scenarioTabHeader = document.querySelector('.tab-header[data-dest-tab=left-scenario][data-tab-group=left-col-sim]');
 
     document.querySelectorAll('.tab-header').forEach(el => {
       el.addEventListener('click', (evt) => this.openTab(evt, el.dataset.destTab, el.dataset.tabGroup));
+    });
+
+    // Auto-switch left and right column groups when center tab changes.
+    const leftMcHeader = document.querySelector('.tab-header[data-dest-tab="left-mc"][data-tab-group="left-col-sim"]');
+    document.querySelectorAll('.tab-header[data-tab-group="center-col"]').forEach(el => {
+      el.addEventListener('click', () => {
+        const isMc = el.dataset.destTab === 'mc-tab';
+        this._openRightGroup(isMc ? 'mc' : 'sim');
+        const leftTarget = isMc ? leftMcHeader : this.scenarioTabHeader;
+        if (leftTarget) this.openTab({ currentTarget: leftTarget }, leftTarget.dataset.destTab, 'left-col-sim');
+      });
     });
 
     $('displayCurrency').addEventListener('change', () => {
@@ -520,6 +534,21 @@ export class BaseApp extends BaseComponent {
           g.style.display = g.dataset.group === group ? '' : 'none';
         });
       });
+    });
+  }
+
+  _initRightGroupSelector() {
+    document.querySelectorAll('.right-group-btn').forEach(btn => {
+      btn.addEventListener('click', () => this._openRightGroup(btn.dataset.rightGroup));
+    });
+  }
+
+  _openRightGroup(group) {
+    document.querySelectorAll('.right-group-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.rightGroup === group);
+    });
+    document.querySelectorAll('.right-group').forEach(g => {
+      g.style.display = g.dataset.rightGroup === group ? '' : 'none';
     });
   }
   // ── Account history modal ─────────────────────────────────────────────────
