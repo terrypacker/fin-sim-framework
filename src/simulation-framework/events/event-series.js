@@ -15,11 +15,18 @@ import { BaseEvent } from './base-event.js';
  *
  * @property {string} interval    - Recurrence: 'monthly' | 'quarterly' | 'annually' | 'month-end' | 'year-end'
  * @property {number} startOffset - Years after simStart to begin (0 = start immediately)
+ * @property {number} [month]     - 1–12: anchor to this calendar month (requires interval='annually')
+ * @property {number} [day]       - 1–31: anchor to this day of month  (requires interval='annually')
+ *
+ * When both month and day are set, the series fires on that exact date every year
+ * regardless of simStart (e.g. month=6, day=30 → Jun 30 annually for AU tax settle).
  */
 export class EventSeries extends BaseEvent {
-  constructor({ id, name, type, enabled = true, color = '#888888', interval, startOffset = 0, data = {}, meta = {} } = {}) {
+  constructor({ id, name, type, enabled = true, color = '#888888', interval, startOffset = 0, month, day, data = {}, meta = {} } = {}) {
     super({ id, name, type, enabled, color, data, meta });
     this.interval    = interval;
     this.startOffset = startOffset;
+    if (month != null) this.month = month;
+    if (day   != null) this.day   = day;
   }
 }

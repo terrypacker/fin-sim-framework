@@ -424,6 +424,11 @@ export class ScenarioSerializer {
     } else {
       d.interval    = node.interval;
       d.startOffset = node.startOffset ?? 0;
+      if (node.month != null) d.month = node.month;
+      if (node.day   != null) d.day   = node.day;
+      if (node.data && Object.keys(node.data).length > 0) {
+        d.data = node.data;
+      }
     }
     return d;
   }
@@ -808,13 +813,16 @@ export class ScenarioSerializer {
       });
     }else if(d.__type == 'EventSeries') {
       return new FinSimLib.Engine.EventSeries({
-        id: d.id,
-        name: d.name,
-        type: d.type,
-        interval: d.interval ?? 'month-end',
+        id:          d.id,
+        name:        d.name,
+        type:        d.type,
+        interval:    d.interval ?? 'month-end',
         startOffset: d.startOffset ?? 0,
-        enabled: d.enabled ?? false,
-        color: d.color ?? '#888888',
+        month:       d.month,
+        day:         d.day,
+        enabled:     d.enabled ?? false,
+        color:       d.color ?? '#888888',
+        data:        d.data ?? {},
       });
     }else {
       throw new Error(`Add support for deserialization of event type ${d.__type}.`);

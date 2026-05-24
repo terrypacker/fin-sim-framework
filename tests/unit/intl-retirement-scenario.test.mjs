@@ -794,7 +794,7 @@ function buildRoundTripped(params = {}) {
   return { scenario: scenario2, sim: scenario2.sim };
 }
 
-test('RT-1: PERIOD_ADVANCE events serialize with data.cc and data.period', () => {
+test('RT-1: PERIOD_ADVANCE events serialize with data.cc and data.periods', () => {
   const { scenario } = buildScenario();
   const registry = ServiceRegistry.getInstance();
   const config = ScenarioSerializer.serialize(
@@ -804,14 +804,16 @@ test('RT-1: PERIOD_ADVANCE events serialize with data.cc and data.period', () =>
     scenario.initialState, scenario.params ?? [],
   );
 
-  const events = config.events.filter(e => e.type === 'PERIOD_ADVANCE');
+  // There is now one EventSeries per country (not one OneOffEvent per year boundary).
+  const events = config.events.filter(e => e.type.startsWith('PERIOD_ADVANCE_'));
   assert.ok(events.length > 0, 'should have PERIOD_ADVANCE events in serialized config');
   for (const e of events) {
-    assert.ok(e.data,        `event "${e.name}" is missing data field`);
-    assert.ok(e.data.cc,     `event "${e.name}" data is missing cc`);
-    assert.ok(e.data.period, `event "${e.name}" data is missing period`);
-    assert.ok(typeof e.data.period.startMs === 'number',
-      `event "${e.name}" data.period.startMs should be a number, got ${typeof e.data.period.startMs}`);
+    assert.ok(e.data,                         `event "${e.name}" is missing data field`);
+    assert.ok(e.data.cc,                      `event "${e.name}" data is missing cc`);
+    assert.ok(Array.isArray(e.data.periods),  `event "${e.name}" data.periods should be an array`);
+    assert.ok(e.data.periods.length > 0,      `event "${e.name}" data.periods should not be empty`);
+    assert.ok(typeof e.data.periods[0].startMs === 'number',
+      `event "${e.name}" data.periods[0].startMs should be a number, got ${typeof e.data.periods[0].startMs}`);
   }
 });
 
@@ -825,7 +827,7 @@ test('RT-2: TAX_SETTLE events serialize with data.cc', () => {
     scenario.initialState, scenario.params ?? [],
   );
 
-  const events = config.events.filter(e => e.type === 'TAX_SETTLE');
+  const events = config.events.filter(e => e.type.startsWith('TAX_SETTLE_'));
   assert.ok(events.length > 0, 'should have TAX_SETTLE events in serialized config');
   for (const e of events) {
     assert.ok(e.data,    `event "${e.name}" is missing data field`);
@@ -875,6 +877,21 @@ test('RT-5: round-trip simulation resets usOrdinaryIncomeYTD after Dec 31 2026 s
     'usOrdinaryIncomeYTD should be non-negative after round-trip US tax settlement');
   assert.ok(sim.state.usOrdinaryIncomeYTD < 100,
     `round-trip: usOrdinaryIncomeYTD should be a single month's interest after settlement, got ${sim.state.usOrdinaryIncomeYTD}`);
+});
+
+test('RT-6: sim runs to completion date', () => {
+  const { scenario, sim } = buildRoundTripped();
+  sim.stepTo(scenario.simEnd);
+  assert.ok(
+      sim.currentDate.getFullYear() === scenario.simEnd.getFullYear(),
+      'did not run to completion year');
+  assert.ok(
+      sim.currentDate.getMonth() === scenario.simEnd.getMonth(),
+      'did not run to completion month');
+  assert.ok(
+      sim.currentDate.getDay() >= scenario.simEnd.getDay(),
+      'did not run to completion day');
+
 });
 
 // ═════════════════════════════════════════════════════════════════════════════

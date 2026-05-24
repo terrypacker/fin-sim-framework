@@ -13,6 +13,7 @@ import { PeriodService } from '../../finance/period/period-service.js';
 import { buildAuFiscalYear, applyTo }
   from '../../finance/period/period-builder.js';
 import { OneOffEvent }   from '../../simulation-framework/events/one-off-event.js';
+import { EventSeries }  from '../../simulation-framework/events/event-series.js';
 
 /**
  * AU_TAX toolset — thin declarative shell around TaxService for AU.
@@ -85,8 +86,8 @@ function _getCapture(context) {
   // AU fiscal year starts Jul 1, so we need the year before simStart to cover
   // the initial period (e.g. simStart Jan 2026 → need FY2025: Jul 2025–Jun 2026)
   const periodService = new PeriodService();
-  const startYear = context.startDate.getFullYear();
-  const endYear   = context.endDate.getFullYear();
+  const startYear = context.startDate.getUTCFullYear();
+  const endYear   = context.endDate.getUTCFullYear();
   for (let y = startYear - 1; y <= endYear; y++) applyTo(periodService, buildAuFiscalYear(y));
 
   // Phase 1: setup() — use a fake sim object so we can capture state patches.
@@ -107,6 +108,11 @@ function _getCapture(context) {
     eventService: {
       createOneOffEvent(params) {
         const event = new OneOffEvent(params);
+        capturedEvents.push(event);
+        return event;
+      },
+      createEventSeries(params) {
+        const event = new EventSeries(params);
         capturedEvents.push(event);
         return event;
       },

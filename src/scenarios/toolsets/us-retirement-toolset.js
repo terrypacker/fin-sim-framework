@@ -128,8 +128,8 @@ export class UsRetirementToolset {
     // ── TaxService setup (US only) ──────────────────────────────────────────────
     const simStart  = new Date(config.simStart);
     const simEnd    = new Date(config.simEnd);
-    const startYear = simStart.getFullYear();
-    const endYear   = simEnd.getFullYear();
+    const startYear = simStart.getUTCFullYear();
+    const endYear   = simEnd.getUTCFullYear();
 
     const periodService = new PeriodService();
     for (let y = startYear; y <= endYear; y++) applyTo(periodService, buildUsCalendarYear(y));
