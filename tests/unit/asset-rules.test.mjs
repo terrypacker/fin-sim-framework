@@ -40,8 +40,9 @@ import { AssetService }             from '../../src/finance/asset-service.js';
 import { Person }                   from '../../src/finance/person.js';
 import { Simulation }               from '../../src/simulation-framework/simulation.js';
 import { SimulationState }          from '../../src/simulation-framework/simulation-state.js';
-import { PRIORITY, ArrayMetricReducer, NoOpReducer } from '../../src/simulation-framework/reducers.js';
+import { PRIORITY } from '../../src/simulation-framework/reducers.js';
 import { RecordBalanceAction } from '../../src/simulation-framework/actions.js';
+import { ReducerBuilder } from '../../src/simulation-framework/builders/reducer-builder.js';
 
 const svc     = new AccountService();
 const assetSvc = new AssetService();
@@ -226,8 +227,8 @@ function buildResidencyTrackingSim({
     return { ...state, person: newPerson };
   }, PRIORITY.CASH_FLOW, 'Residency Change Apply');
 
-  new ArrayMetricReducer().registerWith(sim.reducers, 'RECORD_METRIC');
-  new NoOpReducer('Balance Snapshot').registerWith(sim.reducers, 'RECORD_BALANCE');
+  ReducerBuilder.arrayMetric().build().registerWith(sim.reducers, 'RECORD_METRIC');
+  ReducerBuilder.noOp().name('Balance Snapshot').build().registerWith(sim.reducers, 'RECORD_BALANCE');
 
   sim.register('RESIDENCY_CHANGE', ({ data }) => [
     { type: 'RESIDENCY_CHANGE_APPLY', isAuResident: data.isAuResident },
@@ -365,8 +366,8 @@ function buildLoanSim({
     return { ...state };
   }, PRIORITY.CASH_FLOW, 'Property Loan Repayment');
 
-  new ArrayMetricReducer().registerWith(sim.reducers, 'RECORD_METRIC');
-  new NoOpReducer('Balance Snapshot').registerWith(sim.reducers, 'RECORD_BALANCE');
+  ReducerBuilder.arrayMetric().build().registerWith(sim.reducers, 'RECORD_METRIC');
+  ReducerBuilder.noOp().name('Balance Snapshot').build().registerWith(sim.reducers, 'RECORD_BALANCE');
 
   sim.register('AU_STOCK_TAKE_LOAN',  ({ data }) => [{ type: 'AU_STOCK_LOAN_APPLY',       amount: data.amount }, new RecordBalanceAction()]);
   sim.register('AU_STOCK_REPAY_LOAN', ({ data }) => [{ type: 'AU_STOCK_LOAN_REPAY_APPLY', amount: data.amount }, new RecordBalanceAction()]);

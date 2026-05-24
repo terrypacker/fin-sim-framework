@@ -41,48 +41,65 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
    * Called by BaseApp.afterBuildSim() when there is no saved config to load.
    */
   loadDefaults() {
-    const { eventService, handlerService, actionService } = FinSimLib.Services.ServiceRegistry.getInstance();
+    const { EventBuilder, ActionBuilder, HandlerBuilder, ReducerBuilder } = FinSimLib.Core;
 
     // ── Events ────────────────────────────────────────────────────────────────
-    const monthEndEventSeries = eventService.createEventSeries({
-      name: 'Month End',
-      type: 'MONTH_END',
-      interval: 'month-end',
-      enabled: true,
-      color: '#F44336'
-    });
+    const monthEndEventSeries = EventBuilder
+      .eventSeries()
+      .name('Month End')
+      .type('MONTH_END')
+      .interval('month-end')
+      .enabled(true)
+      .color('#F44336')
+      .build();
     this.scheduleEvent(monthEndEventSeries);
 
     // ── Actions ───────────────────────────────────────────────────────────────
-    const recordSalaryPaymentAction = actionService.createAmountAction('RECORD_METRIC', 'Pay Salary', 1200);
-    const sumSalaryPaymentAction    = actionService.createRecordNumericSumMetricAction('Sum Payments', 'amount');
+    const recordSalaryPaymentAction = this.registerAction(
+      ActionBuilder.amount()
+        .type('RECORD_METRIC')
+        .name('Pay Salary')
+        .value(1200)
+        .build()
+    );
+
+    const sumSalaryPaymentAction = this.registerAction(
+      ActionBuilder.recordNumericSum()
+        .name('Sum Payments')
+        .fieldName('amount')
+        .build()
+    );
 
     // ── Handlers ──────────────────────────────────────────────────────────────
-    const monthEndHandler = handlerService.createHandler(
-      function({ data, date, state }) { return [...this.generatedActions]; },
-      'Month End Handler'
-    );
-    monthEndHandler.forEvent(monthEndEventSeries).generateAction(recordSalaryPaymentAction);
+    const monthEndHandler = HandlerBuilder
+      .handler(function({ data, date, state }) { return [...this.generatedActions]; })
+      .name('Month End Handler')
+      .forEvent(monthEndEventSeries)
+      .generateAction(recordSalaryPaymentAction)
+      .build();
     this.registerHandler(monthEndHandler);
 
     // ── Reducers ──────────────────────────────────────────────────────────────
-    const recordSalaryPaymentReducer = FinSimLib.Core.MetricReducer
-      .fromMetric('amount')
-      .withName('Process Salary Payment Amount')
+    const recordSalaryPaymentReducer = ReducerBuilder
+      .metric('amount')
+      .name('Process Salary Payment Amount')
       .reduceAction(recordSalaryPaymentAction)
-      .generateAction(sumSalaryPaymentAction);
+      .generateAction(sumSalaryPaymentAction)
+      .build();
     this.registerReducer(recordSalaryPaymentReducer);
 
-    const sumSalaryPaymentReducer = FinSimLib.Core.NumericSumMetricReducer
-      .fromMetric('salary')
-      .withName('Update Total Salary')
-      .reduceAction(sumSalaryPaymentAction);
+    const sumSalaryPaymentReducer = ReducerBuilder
+      .numericSum('salary')
+      .name('Update Total Salary')
+      .reduceAction(sumSalaryPaymentAction)
+      .build();
     this.registerReducer(sumSalaryPaymentReducer);
 
-    const depositReducer = FinSimLib.Core.ArrayMetricReducer
-      .fromMetric('deposits')
-      .withName('Deposit Payment')
-      .reduceAction(recordSalaryPaymentAction);
+    const depositReducer = ReducerBuilder
+      .arrayMetric('deposits')
+      .name('Deposit Payment')
+      .reduceAction(recordSalaryPaymentAction)
+      .build();
     this.registerReducer(depositReducer);
   }
 }

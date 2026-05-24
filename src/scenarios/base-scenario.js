@@ -166,7 +166,23 @@ export class BaseScenario {
     }
   }
 
-  // ─── Handler / Reducer registration ───────────────────────────────────────
+  // ─── Handler / Reducer / Action registration ──────────────────────────────
+
+  /**
+   * Register a pre-built Action with the ActionService and add it to the graph.
+   * Uses action.type as the stable ID, matching the ActionService convention.
+   */
+  registerAction(action) {
+    if (!action.id) {
+      action.id = action.type || ('a' + this._nextActionId++);
+    }
+    const { actionService } = ServiceRegistry.getInstance();
+    if (!actionService.get(action.id)) {
+      actionService.load(action);
+    }
+    this.eventSchedulerUI.addAction(action);
+    return action;
+  }
 
   /**
    * Wire a reducer into the sim and add it to the graph.
@@ -400,7 +416,7 @@ export class BaseScenario {
 
   reducerCreationRequested() {
     const { reducerService } = ServiceRegistry.getInstance();
-    const reducer = reducerService.createMetricReducer('').withName('New Reducer');
+    const reducer = reducerService.createMetricReducer('', 'New Reducer');
     this.registerReducer(reducer);
     this.eventSchedulerUI.editNode(reducer);
   }

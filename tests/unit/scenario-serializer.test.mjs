@@ -46,6 +46,7 @@ import {
   MultiplicativeMetricReducer,
   NoOpReducer,
 } from '../../src/simulation-framework/reducers.js';
+import { ReducerBuilder } from '../../src/simulation-framework/builders/reducer-builder.js';
 
 // ─── FinSimLib global (required by BaseScenario and ScenarioSerializer) ────────
 
@@ -64,6 +65,7 @@ globalThis.FinSimLib = {
     ArrayMetricReducer,
     MultiplicativeMetricReducer,
     NoOpReducer,
+    ReducerBuilder,
     EventSeries,
     OneOffEvent,
   },

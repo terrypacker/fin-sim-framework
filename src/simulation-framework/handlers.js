@@ -28,16 +28,6 @@ export class HandlerEntry {
     this.generatedActions = [];
   }
 
-  forEvent(event) {
-    this.handledEvents.push(event);
-    return this;
-  }
-
-  generateAction(action) {
-    this.generatedActions.push(action);
-    return this;
-  }
-
   call(ctx) {
     return this.fn(ctx);
   }

@@ -27,6 +27,7 @@ import { OneOffEvent }  from '../../src/simulation-framework/events/one-off-even
 import { HandlerEntry } from '../../src/simulation-framework/handlers.js';
 import { AmountAction } from '../../src/simulation-framework/actions.js';
 import { MetricReducer } from '../../src/simulation-framework/reducers.js';
+import { ReducerBuilder } from '../../src/simulation-framework/builders/reducer-builder.js';
 
 // BaseScenario references FinSimLib as a browser global — provide it here.
 globalThis.FinSimLib = {
@@ -107,8 +108,8 @@ test('registerHandler: assigns incrementing IDs h1, h2, h3', () => {
 
 test('registerReducer: assigns incrementing IDs r1, r2', () => {
   const { scenario } = makeScenario();
-  const r1 = MetricReducer.fromMetric('a').withName('R1');
-  const r2 = MetricReducer.fromMetric('b').withName('R2');
+  const r1 = ReducerBuilder.metric('a').name('R1').build();
+  const r2 = ReducerBuilder.metric('b').name('R2').build();
   scenario.registerReducer(r1);
   scenario.registerReducer(r2);
   assert.strictEqual(r1.id, 'r1');
