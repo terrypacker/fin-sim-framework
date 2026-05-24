@@ -346,6 +346,11 @@
         <input data-id="name"></input>
       </div>
       <div class="node-field">
+        <label>Action Class</label>
+        <select data-id="type"></select>
+      </div>
+      <div data-id="config"></div>
+      <div class="node-field">
         <label>
           Handlers
           <span class="reducer-sel-count" id="action-handler-count"></span>
@@ -360,6 +365,47 @@
         <div class="reducer-chip-grid" id="action-reducers"></div>
       </div>
     </div>
+  </div>
+</template>
+
+<!-- AmountAction config: editable type discriminator + numeric amount -->
+<template id="tpl-amount-action-editor">
+  <div class="node-field">
+    <label>Type (Discriminator)</label>
+    <input data-field="type" placeholder="e.g. ADD_CASH" />
+  </div>
+  <div class="node-field">
+    <label>Amount</label>
+    <input type="number" data-field="value" value="0" />
+  </div>
+</template>
+
+<!-- RecordMetricAction config: editable type + field name + value -->
+<template id="tpl-record-metric-action-editor">
+  <div class="node-field">
+    <label>Type (Discriminator)</label>
+    <input data-field="type" placeholder="e.g. RECORD_METRIC" />
+  </div>
+  <div class="node-field">
+    <label>Field Name</label>
+    <input data-field="fieldName" placeholder="e.g. salary" />
+  </div>
+  <div class="node-field">
+    <label>Value</label>
+    <input type="number" data-field="value" value="0" />
+  </div>
+</template>
+
+<!-- RecordArrayMetricAction / RecordNumericSumMetricAction / RecordMultiplicativeMetricAction:
+     type is fixed by class, only field name and value are configurable -->
+<template id="tpl-fixed-type-metric-action-editor">
+  <div class="node-field">
+    <label>Field Name</label>
+    <input data-field="fieldName" placeholder="e.g. salary" />
+  </div>
+  <div class="node-field">
+    <label>Value</label>
+    <input type="number" data-field="value" value="0" />
   </div>
 </template>
 
