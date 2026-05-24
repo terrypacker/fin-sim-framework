@@ -10,7 +10,7 @@
 
 /**
  * evt-ira.test.mjs
- * Tests for Traditional IRA events: EVT-5 through EVT-8
+ * Tests for Traditional IRA events: EVT-5 through EVT-8, EVT-35, EVT-40
  *
  * EVT-5  IRA Contribution             +contribution  out of checking  US: negative income (deduction), no AU tax
  * EVT-6  IRA Withdrawal-Contributions -contribution  into checking    age 60 gate, 10% penalty before 60,
@@ -18,6 +18,8 @@
  * EVT-7  IRA Withdrawal-Earnings      -earnings      into checking    age 60 gate, 10% penalty before 60,
  *                                                                       US: ordinary income, AU: ordinary if resident, FTC
  * EVT-8  IRA Earnings                 +earnings      stays in account no tax
+ * EVT-35 IRA Rollover Withdrawal     −contrib+earn  into checking    US: ordinary income, no penalty, AU: ordinary if resident
+ * EVT-40 IRA RMD                     −contrib+earn  into checking    US: ordinary income (required at 72), AU: ordinary if resident
  *
  * Run with: node --test tests/evt-ira.test.mjs
  */
@@ -282,4 +284,139 @@ test('EVT-8: IRA earnings are not a US or AU taxable event', () => {
 
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0);
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EVT-35: IRA Rollover Withdrawal
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('EVT-35: IRA rollover withdrawal credits checking account', () => {
+  const { sim } = buildIraSim({
+    initialChecking: 5000,
+    iraBalance: 20000,
+    iraContribBasis: 20000,
+  });
+  sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_ROLLOVER_WITHDRAWAL', data: { amount: 8000 } });
+  sim.stepTo(new Date(2026, 1, 28));
+
+  assert.strictEqual(sim.state.checkingAccount.balance, 13000); // 5000 + 8000
+});
+
+test('EVT-35: IRA rollover withdrawal debits IRA balance', () => {
+  const { sim } = buildIraSim({
+    iraBalance: 20000,
+    iraContribBasis: 15000,
+    iraEarningsBasis: 5000,
+  });
+  sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_ROLLOVER_WITHDRAWAL', data: { amount: 8000 } });
+  sim.stepTo(new Date(2026, 1, 28));
+
+  assert.strictEqual(sim.state.iraAccount.balance, 12000);
+});
+
+test('EVT-35: IRA rollover withdrawal is US ordinary income', () => {
+  const { sim } = buildIraSim({
+    iraBalance: 20000,
+    iraContribBasis: 20000,
+  });
+  sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_ROLLOVER_WITHDRAWAL', data: { amount: 8000 } });
+  sim.stepTo(new Date(2026, 1, 28));
+
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 8000);
+});
+
+test('EVT-35: IRA rollover withdrawal has NO penalty even when person is under 60', () => {
+  const { sim } = buildIraSim({
+    iraBalance: 20000,
+    iraContribBasis: 20000,
+    personBirthDate: new Date(1990, 0, 1), // age 36 in 2026
+  });
+  sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_ROLLOVER_WITHDRAWAL', data: { amount: 8000 } });
+  sim.stepTo(new Date(2026, 1, 28));
+
+  assert.strictEqual(sim.state.usPenaltyYTD, 0);
+});
+
+test('EVT-35: IRA rollover withdrawal is AU ordinary income if AU resident', () => {
+  const { sim } = buildIraSim({
+    iraBalance: 20000,
+    iraContribBasis: 20000,
+    isAuResident: true,
+  });
+  sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_ROLLOVER_WITHDRAWAL', data: { amount: 8000 } });
+  sim.stepTo(new Date(2026, 1, 28));
+
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 8000);
+  assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded for AU resident');
+});
+
+test('EVT-35: IRA rollover withdrawal is not AU taxable if not AU resident', () => {
+  const { sim } = buildIraSim({
+    iraBalance: 20000,
+    iraContribBasis: 20000,
+    isAuResident: false,
+  });
+  sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_ROLLOVER_WITHDRAWAL', data: { amount: 8000 } });
+  sim.stepTo(new Date(2026, 1, 28));
+
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
+  assert.strictEqual(sim.state.ftcYTD, 0);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EVT-40: IRA RMD (Required Minimum Distribution)
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('EVT-40: IRA RMD credits checking account', () => {
+  const { sim } = buildIraSim({
+    initialChecking: 3000,
+    iraBalance: 500000,
+    iraContribBasis: 300000,
+    iraEarningsBasis: 200000,
+    personBirthDate: new Date(1954, 0, 1), // age 72 in 2026
+  });
+  sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_RMD', data: { amount: 20000 } });
+  sim.stepTo(new Date(2026, 1, 28));
+
+  assert.strictEqual(sim.state.checkingAccount.balance, 23000); // 3000 + 20000
+});
+
+test('EVT-40: IRA RMD debits IRA balance', () => {
+  const { sim } = buildIraSim({
+    iraBalance: 500000,
+    iraContribBasis: 300000,
+    iraEarningsBasis: 200000,
+    personBirthDate: new Date(1954, 0, 1),
+  });
+  sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_RMD', data: { amount: 20000 } });
+  sim.stepTo(new Date(2026, 1, 28));
+
+  assert.strictEqual(sim.state.iraAccount.balance, 480000);
+});
+
+test('EVT-40: IRA RMD is US ordinary income', () => {
+  const { sim } = buildIraSim({
+    iraBalance: 500000,
+    iraContribBasis: 500000,
+    personBirthDate: new Date(1954, 0, 1),
+  });
+  sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_RMD', data: { amount: 20000 } });
+  sim.stepTo(new Date(2026, 1, 28));
+
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 20000);
+  assert.strictEqual(sim.state.usPenaltyYTD, 0);
+});
+
+test('EVT-40: IRA RMD is AU ordinary income if AU resident', () => {
+  const { sim } = buildIraSim({
+    iraBalance: 500000,
+    iraContribBasis: 500000,
+    personBirthDate: new Date(1954, 0, 1),
+    isAuResident: true,
+  });
+  sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_RMD', data: { amount: 20000 } });
+  sim.stepTo(new Date(2026, 1, 28));
+
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 20000);
+  assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded for AU resident');
 });

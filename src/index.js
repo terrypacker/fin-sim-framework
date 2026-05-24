@@ -24,6 +24,8 @@ import { FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer,
 import { UsHouseSaleApplyReducer, UsHouseSaleHandler } from './finance/account-rules/us/us-real-property-classes.js';
 import { SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer, SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer, SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler, SeIncomeUsHandler, BonusHandler, CompanySaleHandler } from './finance/account-rules/us/us-income-classes.js';
 import { CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer, CollectibleSaleHandler, CollectibleValueChangeHandler } from './finance/account-rules/us/us-collectible-classes.js';
+import { IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer, IraRolloverWithdrawalHandler, IraRmdHandler } from './finance/account-rules/us/ira-rollover-classes.js';
+import { RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer, RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer, RothRolloverContributionHandler, RothRolloverEarningsHandler, RothRolloverWithdrawalContributionsHandler, RothRolloverWithdrawalEarningsHandler } from './finance/account-rules/us/roth-rollover-classes.js';
 import { AuSeIncomeApplyReducer, AuSeIncomeHandler } from './finance/account-rules/au/au-income-classes.js';
 import { USD, AUD, ACCOUNT_TYPE, InsufficientFundsError, Account, CheckingAccount, SavingsAccount } from './finance/assets/account.js';
 import { AssetService } from './finance/services/asset-service.js';
@@ -269,6 +271,18 @@ export const Finance = {
   CollectibleValueChangeHandler,
   AuSeIncomeApplyReducer,
   AuSeIncomeHandler,
+  IraRolloverWithdrawalApplyReducer,
+  IraRmdApplyReducer,
+  IraRolloverWithdrawalHandler,
+  IraRmdHandler,
+  RothRolloverContributionApplyReducer,
+  RothRolloverEarningsApplyReducer,
+  RothRolloverWithdrawalContribApplyReducer,
+  RothRolloverWithdrawalEarningsApplyReducer,
+  RothRolloverContributionHandler,
+  RothRolloverEarningsHandler,
+  RothRolloverWithdrawalContributionsHandler,
+  RothRolloverWithdrawalEarningsHandler,
   USD,
   AUD,
   ACCOUNT_TYPE,
