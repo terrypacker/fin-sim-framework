@@ -35,13 +35,17 @@ export class UsHouseSaleApplyReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const { salePrice, costBasis } = action;
+    const { salePrice, costBasis, stateKey } = action;
     const rawGain     = Math.max(0, salePrice - costBasis);
     const taxableGain = Math.max(0, rawGain - US_PRIMARY_HOME_EXEMPTION);
     this.accountService.transaction(usCash(state), salePrice, null);
+    const updates = {};
+    if (stateKey && state[stateKey]) {
+      updates[stateKey] = { ...state[stateKey], mortgageBalance: 0 };
+    }
     return this.newState(
       state,
-      {},
+      updates,
       [{ type: 'US_HOUSE_SALE_TAX', taxableGain }]
     );
   }
@@ -66,6 +70,7 @@ export class UsHouseSaleHandler extends HandlerEntry {
         salePrice:    data.salePrice,
         costBasis:    data.costBasis,
         isAuResident: state.isAuResident,
+        stateKey:     data.stateKey ?? null,
       },
       new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];
