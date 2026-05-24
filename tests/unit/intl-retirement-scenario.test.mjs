@@ -54,6 +54,7 @@ import { AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentAppl
 import { AuHouseSaleApplyReducer, AuHouseSaleHandler }                               from '../../src/finance/account-rules/au/au-real-property-classes.js';
 import { UsSavingsInterestMonthlyHandler }                                           from '../../src/finance/handlers/us-savings-interest-handler.js';
 import { MonthlyExpensesHandler }                                                    from '../../src/finance/handlers/monthly-expenses-handler.js';
+import { MonthlyWagesHandler }                                                       from '../../src/finance/handlers/monthly-wages-handler.js';
 import { IntlTransferToUsHandler, IntlTransferToAuHandler }                          from '../../src/finance/handlers/intl-transfer-handlers.js';
 import { AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler } from '../../src/finance/handlers/earnings-handlers.js';
 import { DividendScheduledHandler }                                                  from '../../src/finance/handlers/dividend-scheduled-handler.js';
@@ -140,7 +141,7 @@ globalThis.FinSimLib = {
     // AU — Income
     AuSeIncomeApplyReducer, AuSeIncomeHandler,
     // Scenario-level handlers and reducers
-    UsSavingsInterestMonthlyHandler, MonthlyExpensesHandler,
+    UsSavingsInterestMonthlyHandler, MonthlyExpensesHandler, MonthlyWagesHandler,
     IntlTransferToUsHandler, IntlTransferToAuHandler,
     AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler,
     DividendScheduledHandler, ChangeResidencyHandler, OutOfFundsHandler,

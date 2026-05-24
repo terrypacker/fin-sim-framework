@@ -23,7 +23,7 @@ node scripts/check-requirements.js
 | Symbol | Meaning |
 |--------|---------|
 | ✅ | Tested — at least one `test('ID:…')` exists |
-| ⬜ | Not yet tested |__
+| ⬜ | Not yet tested |
 | ⚠️ | Partially covered — referenced in comments but no dedicated `test('ID:…')` |
 
 ---

@@ -20,7 +20,7 @@
  */
 export class PeopleView {
   constructor() {
-    /** @type {function({id,name,birthDate,citizen,lifeExpectancy,socialSecurityMonthly})|null} */
+    /** @type {function({id,name,birthDate,citizen,lifeExpectancy,socialSecurityMonthly,monthlyWage,retirementDate})|null} */
     this.onSave   = null;
     /** @type {function(string)|null} */
     this.onDelete = null;
@@ -106,6 +106,13 @@ export class PeopleView {
 
     document.getElementById('personFormLifeExp').value = person?.lifeExpectancy        ?? 90;
     document.getElementById('personFormSS').value      = person?.socialSecurityMonthly ?? 2800;
+    document.getElementById('personFormWage').value    = person?.monthlyWage           ?? 0;
+
+    const rd = person?.retirementDate;
+    document.getElementById('personFormRetirementDate').value =
+      rd instanceof Date ? rd.toISOString().slice(0, 10)
+                         : (rd ? String(rd).slice(0, 10) : '2040-01-01');
+
     document.getElementById('personForm').style.display = '';
   }
 
@@ -126,6 +133,8 @@ export class PeopleView {
       citizen,
       lifeExpectancy:        Number(document.getElementById('personFormLifeExp').value),
       socialSecurityMonthly: Number(document.getElementById('personFormSS').value),
+      monthlyWage:           Number(document.getElementById('personFormWage').value),
+      retirementDate:        document.getElementById('personFormRetirementDate').value,
     };
   }
 }

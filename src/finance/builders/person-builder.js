@@ -33,6 +33,8 @@ class PersonBuilderInstance {
     this._citizen               = ['US'];
     this._lifeExpectancy        = 90;
     this._socialSecurityMonthly = 2800;
+    this._monthlyWage           = 0;
+    this._retirementDate        = new Date(Date.UTC(2040, 0, 1));
   }
 
   /** Pre-assign an id (normally left null so PersonService assigns one). */
@@ -43,6 +45,8 @@ class PersonBuilderInstance {
   citizen(v)               { this._citizen = v;               return this; }
   lifeExpectancy(v)        { this._lifeExpectancy = v;        return this; }
   socialSecurityMonthly(v) { this._socialSecurityMonthly = v; return this; }
+  monthlyWage(v)           { this._monthlyWage = v;           return this; }
+  retirementDate(v)        { this._retirementDate = v;        return this; }
 
   build() {
     return new Person(this._id, this._birthDate, {
@@ -50,6 +54,8 @@ class PersonBuilderInstance {
       citizen:               this._citizen,
       lifeExpectancy:        this._lifeExpectancy,
       socialSecurityMonthly: this._socialSecurityMonthly,
+      monthlyWage:           this._monthlyWage,
+      retirementDate:        this._retirementDate,
     });
   }
 }
