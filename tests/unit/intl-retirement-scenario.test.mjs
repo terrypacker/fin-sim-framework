@@ -469,3 +469,104 @@ test('DynamicTaxReducer round-trip preserves cc and actionType', () => {
     assert.ok(typeof r.reducedActionTypes[0] === 'string', 'action type should be a string');
   }
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Early withdrawal: account types and allowsEarlyWithdrawal flags
+// Regression: accounts were created as generic InvestmentAccount, leaving
+// type=null and allowsEarlyWithdrawal=false, so replenishSavings Phase 2
+// silently skipped them and triggered premature OUT_OF_FUNDS.
+// ═════════════════════════════════════════════════════════════════════════════
+
+test('EW-INTL-1: iraAccount has type ira and allowsEarlyWithdrawal true', () => {
+  const { sim } = buildScenario();
+  const ira = sim.state.iraAccount;
+  assert.strictEqual(ira.type, 'ira', 'iraAccount.type should be "ira"');
+  assert.strictEqual(ira.allowsEarlyWithdrawal, true, 'iraAccount.allowsEarlyWithdrawal should be true');
+  assert.strictEqual(ira.minimumAge, 60, 'iraAccount.minimumAge should be 60 (TraditionalIRAAccount default)');
+});
+
+test('EW-INTL-1: k401Account has type 401k and allowsEarlyWithdrawal true', () => {
+  const { sim } = buildScenario();
+  const k401 = sim.state.k401Account;
+  assert.strictEqual(k401.type, '401k', 'k401Account.type should be "401k"');
+  assert.strictEqual(k401.allowsEarlyWithdrawal, true, 'k401Account.allowsEarlyWithdrawal should be true');
+  assert.strictEqual(k401.minimumAge, 59.5, 'k401Account.minimumAge should be 59.5 (FourOhOneKAccount default)');
+});
+
+test('EW-INTL-1: rothAccount has type roth and allowsEarlyWithdrawal true', () => {
+  const { sim } = buildScenario();
+  const roth = sim.state.rothAccount;
+  assert.strictEqual(roth.type, 'roth', 'rothAccount.type should be "roth"');
+  assert.strictEqual(roth.allowsEarlyWithdrawal, true, 'rothAccount.allowsEarlyWithdrawal should be true');
+  assert.strictEqual(roth.minimumAge, 59.5, 'rothAccount.minimumAge should be 59.5 (RothAccount default)');
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Early retirement scenario: retiring in 2028 should NOT trigger OUT_OF_FUNDS
+// in 2028 given ample retirement account balances (IRA + 401k + Roth).
+// The primary person is born 1978-04-15 → age ~50 in 2028, well below the
+// 59.5/60 age gates, so early-withdrawal code paths are exercised.
+// ═════════════════════════════════════════════════════════════════════════════
+
+test('EW-INTL-2: early retirement in 2028 does not trigger OUT_OF_FUNDS through end of 2028', () => {
+  const { sim } = buildScenario({
+    primaryRetirementDate: new Date(Date.UTC(2028, 0, 1)),
+    spouseRetirementDate:  new Date(Date.UTC(2028, 0, 1)),
+    // Drain non-retirement US savings so early withdrawal is required
+    initialUsSavings:   10_000,
+    fixedIncomeBalance:  5_000,
+    stockBalance:        5_000,
+    // Retirement accounts have plenty of funds
+    iraBalance:   200_000,
+    k401Balance:  300_000,
+    rothBalance:   80_000,
+  });
+
+  const end2028 = new Date(Date.UTC(2028, 11, 31));
+  stepWithGuard(sim, end2028, 15000);
+
+  assert.strictEqual(
+    sim.state.outOfFundsDate, null,
+    `outOfFundsDate should remain null through 2028 with retirement accounts available; got ${sim.state.outOfFundsDate}`
+  );
+});
+
+test('EW-INTL-3: early retirement draws from retirement accounts before triggering OUT_OF_FUNDS', () => {
+  // Retire both people at sim start so wages never flow in.
+  // Non-retirement accounts are empty, so drawdown from retirement accounts must fire immediately.
+  // Roth contributions (always accessible, Phase 1) are drawn first, then IRA/401k via
+  // Phase 2 early withdrawal once Roth contributions are exhausted.
+  const { sim } = buildScenario({
+    primaryRetirementDate: new Date(Date.UTC(2026, 0, 1)),
+    spouseRetirementDate:  new Date(Date.UTC(2026, 0, 1)),
+    initialUsSavings:   3_000,
+    usSavingsMinBalance: 0,
+    fixedIncomeBalance:     0,
+    stockBalance:           0,
+    // Retirement accounts are the only source
+    iraBalance:   200_000,  iraBasis: 200_000,
+    k401Balance:  300_000,  k401Basis: 300_000,
+    rothBalance:   80_000,  rothBasis:  80_000,
+  });
+
+  const end2026 = new Date(Date.UTC(2026, 11, 31));
+  stepWithGuard(sim, end2026, 10000);
+
+  // With no wages and no non-retirement cash, retirement accounts must be drawn.
+  // Roth contributions (drawdownPriority 5) are drawn in Phase 1 (always accessible).
+  // If Roth is exhausted, IRA (priority 3) or 401k (priority 4) follow via Phase 2
+  // early withdrawal (primary person is ~48 years old, below all age gates).
+  const rothBalance = sim.state.rothAccount.balance;
+  const iraBalance  = sim.state.iraAccount.balance;
+  const k401Balance = sim.state.k401Account.balance;
+
+  assert.ok(
+    rothBalance < 80_000 || iraBalance < 200_000 || k401Balance < 300_000,
+    `Expected at least one retirement account drawn; Roth=${rothBalance}, IRA=${iraBalance}, 401k=${k401Balance}`
+  );
+
+  assert.strictEqual(
+    sim.state.outOfFundsDate, null,
+    `outOfFundsDate should remain null; got ${sim.state.outOfFundsDate}`
+  );
+});
