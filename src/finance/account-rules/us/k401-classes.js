@@ -10,7 +10,8 @@
 
 import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
-import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
+import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
+import { getUniformDistributionPeriod } from './us-rmd-uniform-table.js';
 
 /** Resolve the US cash pool. */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -170,4 +171,117 @@ export class K401WithdrawalHandler extends HandlerEntry {
       new RecordBalanceAction('k401Account.balance', 'k401Account'),
     ];
   }
+}
+
+/**
+ * EVT-40 (401k): 401(k) RMD — credit US cash pool, debit 401(k) (earnings-first basis
+ * deduction; no penalty).  Chains K401_RMD_TAX (ordinary income).
+ * Accepts optional action.stateKey to support multiple 401(k) accounts per person.
+ */
+export class K401RmdApplyReducer extends Reducer {
+  static description = 'Credits the US cash pool and debits the 401(k) for the required minimum distribution (no penalty); chains K401_RMD_TAX.';
+  static actionType  = 'K401_RMD_APPLY';
+
+  constructor({ accountService }) {
+    super('401k RMD Apply', PRIORITY.CASH_FLOW);
+    this.accountService = accountService;
+    this.reducedActionTypes   = ['K401_RMD_APPLY'];
+    this.generatedActionTypes = ['K401_RMD_TAX'];
+  }
+
+  reduce(state, action) {
+    const { amount, isAuResident } = action;
+    const stateKey    = action.stateKey ?? 'k401Account';
+    const ka          = state[stateKey];
+    const fromEarnings = Math.min(amount, ka.earningsBasis);
+    const fromContrib  = amount - fromEarnings;
+    this.accountService.transaction(usCash(state), amount, null);
+    return this.newState(
+      state,
+      {
+        [stateKey]: {
+          ...ka,
+          balance:           ka.balance           - amount,
+          earningsBasis:     ka.earningsBasis     - fromEarnings,
+          contributionBasis: ka.contributionBasis - fromContrib,
+        },
+      },
+      [{ type: 'K401_RMD_TAX', amount, isAuResident }]
+    );
+  }
+}
+
+/**
+ * Auto-scheduled annual 401(k) Required Minimum Distribution handler.
+ *
+ * Fires on the K401_ANNUAL_RMD event (year-end) for a specific 401(k) account / owner.
+ * Applies the same SECURE 2.0 rules as IRA RMDs: starts at age 73, uses the IRS
+ * Uniform Lifetime Table.
+ *
+ * TODO: Support delayFirstRmd=true (April 1 grace period) — same caveat as IRA RMDs.
+ * TODO: IRS basis is the prior December 31 balance; simplified here to current balance.
+ * TODO: Enforce failure-to-withdraw 50% penalty if RMD is not taken.
+ *
+ * @param {object} opts
+ * @param {import('../../../finance/services/state-registry.js').StateRegistry} opts.stateRegistry
+ * @param {string}  opts.role              - ACCOUNT_ROLES.K401
+ * @param {string}  opts.ownerId           - Person id owning this 401(k)
+ * @param {string}  [opts.stateKey]        - Explicit state key (falls back to registry lookup)
+ * @param {import('../account-rules-engine.js').AccountRulesEngine} opts.accountRulesEngine
+ */
+export class K401AnnualRmdHandler extends HandlerEntry {
+  static description = 'Auto-calculates and dispatches the annual 401(k) RMD for the account owner once they reach age 73.';
+  static eventType   = 'K401_ANNUAL_RMD';
+
+  constructor({ stateRegistry, role, ownerId, stateKey, accountRulesEngine } = {}) {
+    super(null, '401k Annual RMD');
+    this.stateRegistry      = stateRegistry;
+    this.role               = role;
+    this.ownerId            = ownerId;
+    this._stateKeyFixed     = stateKey ?? null;
+    this.accountRulesEngine = accountRulesEngine ?? null;
+    this.generatedActionTypes = ['K401_RMD_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
+  }
+
+  call({ date, state }) {
+    const resolvedKey = this._stateKeyFixed ?? this.stateRegistry?.getStateKey(this.role, this.ownerId);
+    const k401 = state[resolvedKey];
+    if (!k401 || k401.balance <= 0) return [];
+
+    const year  = date.getUTCFullYear();
+    const rules = this.accountRulesEngine?.get('US', year)?.getIraRmdRules?.();
+    if (!rules) return [];
+
+    const person = state.people?.[this.ownerId];
+    if (!person?.birthDate) return [];
+
+    const birthDate = person.birthDate instanceof Date ? person.birthDate : new Date(person.birthDate);
+    const age = _getAge(birthDate, date);
+    if (age < rules.rmdAge) return [];
+
+    const distributionPeriod = getUniformDistributionPeriod(age);
+    if (!distributionPeriod) return [];
+
+    const rmdAmount = Math.round(k401.balance / distributionPeriod * 100) / 100;
+    if (rmdAmount <= 0) return [];
+
+    const cashKey = state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
+    const label   = `${person.name ?? this.ownerId} 401(k) RMD`;
+    return [
+      { type: 'K401_RMD_APPLY', amount: rmdAmount, stateKey: resolvedKey, isAuResident: state.isAuResident },
+      new FieldValueAction(`k401_annual_rmd_${this.ownerId}`, label, rmdAmount),
+      new RecordBalanceAction(`${cashKey}.balance`, cashKey),
+      new RecordBalanceAction(`${resolvedKey}.balance`, resolvedKey),
+    ];
+  }
+}
+
+/** Returns whole years of age as of asOfDate. */
+function _getAge(birthDate, asOfDate) {
+  const years = asOfDate.getUTCFullYear() - birthDate.getUTCFullYear();
+  const hadBirthday =
+    asOfDate.getUTCMonth() > birthDate.getUTCMonth() ||
+    (asOfDate.getUTCMonth() === birthDate.getUTCMonth() &&
+      asOfDate.getUTCDate() >= birthDate.getUTCDate());
+  return hadBirthday ? years : years - 1;
 }

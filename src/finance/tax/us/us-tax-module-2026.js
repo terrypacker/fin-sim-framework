@@ -113,6 +113,20 @@ export class UsTaxModule2026 extends BaseTaxModule {
         usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + action.amount,
         usPenaltyYTD:        state.usPenaltyYTD        + action.penaltyAmount,
       })],
+
+      // EVT-40 (401k RMD): US ordinary income, no penalty; AU ordinary income if resident
+      ['K401_RMD_TAX', (state, action) => {
+        const { amount, isAuResident } = action;
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        if (isAuResident) {
+          next = {
+            ...next,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            ftcYTD:              state.ftcYTD              + amount,
+          };
+        }
+        return next;
+      }],
     ];
   }
 

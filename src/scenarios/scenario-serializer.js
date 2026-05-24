@@ -36,6 +36,7 @@ const _ACCOUNT_SERVICE_REDUCERS = new Set([
   'IraWithdrawalEarningsApplyReducer', 'IraEarningsApplyReducer',
   // US — 401k
   'K401ContributionApplyReducer', 'K401EarningsApplyReducer', 'K401WithdrawalApplyReducer',
+  'K401RmdApplyReducer',
   // US — Brokerage (Fixed Income + Stock)
   'FixedIncomeContributionApplyReducer', 'FixedIncomeWithdrawalApplyReducer',
   'FixedIncomeEarningsApplyReducer',

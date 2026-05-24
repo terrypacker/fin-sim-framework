@@ -43,6 +43,7 @@ import {
 import {
   K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer,
   K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler,
+  K401RmdApplyReducer, K401AnnualRmdHandler,
 } from '../../finance/account-rules/us/k401-classes.js';
 import {
   IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
@@ -261,6 +262,11 @@ export const US_RETIREMENT = {
           .name('401k Earnings').type('INTL_K401_EARNINGS')
           .interval('year-end').startOffset(1).enabled(true).color('#42A5F5').build()
       );
+      schedules.push(
+        EventBuilder.eventSeries()
+          .name('401k Annual RMD').type('K401_ANNUAL_RMD')
+          .interval('year-end').startOffset(1).enabled(true).color('#BF360C').build()
+      );
     }
 
     if (usStockAccounts.length > 0) {
@@ -366,8 +372,9 @@ export const US_RETIREMENT = {
       }
     }
 
-    // 401(k) earnings
-    const k401Event = context.schedulesById['INTL_K401_EARNINGS'];
+    // 401(k) earnings + annual RMD
+    const k401Event    = context.schedulesById['INTL_K401_EARNINGS'];
+    const k401RmdEvent = context.schedulesById['K401_ANNUAL_RMD'];
     if (k401Event) {
       for (const acct of k401Accounts) {
         const h = new IntlK401EarningsHandler({
@@ -377,6 +384,16 @@ export const US_RETIREMENT = {
         });
         h.handledEvents.push(k401Event);
         handlers.push(h);
+
+        if (k401RmdEvent) {
+          const rmdH = new K401AnnualRmdHandler({
+            stateRegistry: sr, role: ACCOUNT_ROLES.K401,
+            ownerId: acct.ownerId, stateKey: acct.stateKey,
+            accountRulesEngine,
+          });
+          rmdH.handledEvents.push(k401RmdEvent);
+          handlers.push(rmdH);
+        }
       }
     }
 
@@ -508,6 +525,7 @@ export const US_RETIREMENT = {
       new K401ContributionApplyReducer({ accountService: accountSvc }),
       new K401EarningsApplyReducer({ accountService: accountSvc }),
       new K401WithdrawalApplyReducer({ accountService: accountSvc }),
+      new K401RmdApplyReducer({ accountService: accountSvc }),
     );
 
     return reducers;
