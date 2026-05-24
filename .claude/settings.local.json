@@ -25,7 +25,8 @@
       "Bash(ls /Users/tpacker/IdeaProjects/fin-sim-framework/src/*.html)",
       "Bash(npx:*)",
       "Bash(gtimeout 30 node --test tests/unit/intl-retirement-scenario.test.mjs)",
-      "Bash(echo \"EXIT: $?\")"
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(NODE_OPTIONS=--experimental-vm-modules npx jest *)"
     ]
   },
   "hooks": {

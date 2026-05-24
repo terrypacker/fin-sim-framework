@@ -19,7 +19,9 @@
 
 import { $, fmtUTC, fmtLocal }     from '../visualization/ui-utils.js';
 import { ChartView }                from '../visualization/chart-view.js';
-import { TimelineView }             from '../visualization/timeline-view.js';
+import { TimelineController }        from '../visualization/timeline/timeline-controller.js';
+import { TimelineView }             from '../visualization/timeline/timeline-view.js';
+import { TimelinePresenter }        from '../visualization/timeline/timeline-presenter.js';
 import { TimeControls }             from '../visualization/time-controls.js';
 import { GraphBuilderPresenter }    from '../visualization/graph-builder/graph-builder-presenter.js';
 import { ServiceRegistry }          from '../services/service-registry.js';
@@ -182,8 +184,9 @@ export class BaseApp extends BaseComponent {
     });
     this.chartView.startViz();
 
-    this.timelineView = new TimelineView({
-      container:  $('timelineContainer'),
+    this.timelineView = new TimelinePresenter({
+      controller: new TimelineController(),
+      view:       new TimelineView({ container: $('timelineContainer') }),
       onDetail:   (node) => this._statePanelView.showNodeDetail(node),
       onRewind:   (date) => {
         const pct     = (date.getTime() - this.scenario.simStart.getTime()) /
