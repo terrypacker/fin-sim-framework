@@ -17,11 +17,10 @@
  * limitations under the License.
  */
 
-import {BaseApp} from "./base-app.js";
-import { IntlRetirementScenario } from "../scenarios/intl-retirement-scenario.js";
-import {
-  SimulationWorkbenchDefaultScenario
-} from "../scenarios/simulation-workbench-default-scenario.js";
+import { BaseApp }                            from './base-app.js';
+import { PrebuiltScenario }                   from '../scenarios/prebuilt-scenario.js';
+import { IntlRetirementScenario }             from '../scenarios/intl-retirement-scenario.js';
+import { SimulationWorkbenchDefaultScenario } from '../scenarios/simulation-workbench-default-scenario.js';
 
 const CHART_SERIES = [
   { key: 'usSavingsAccount.balance', color: '#60a5fa', label: 'US Savings'    },
@@ -30,15 +29,36 @@ const CHART_SERIES = [
   { key: 'stockAccount.balance',     color: '#a78bfa', label: 'US Stock'      },
 ];
 
+/**
+ * Pre-built scenarios available in the SimulationWorkbench dropdown.
+ *
+ * Order matters: the scenario with the lowest `order` value is selected
+ * automatically on a fresh page load (no saved localStorage state).
+ */
+const PREBUILT_SCENARIOS = [
+  new PrebuiltScenario({
+    id:       'intl-retirement',
+    label:    'International Retirement',
+    order:    1,
+    simStart: '2026-01-01',
+    simEnd:   '2041-01-01',
+    factory:  (_params, _initialState, ui) => new IntlRetirementScenario({ eventSchedulerUI: ui }),
+  }),
+  new PrebuiltScenario({
+    id:       'workbench-default',
+    label:    'Workbench Default',
+    order:    2,
+    simStart: '2026-01-01',
+    simEnd:   '2041-01-01',
+    factory:  (_params, _initialState, ui) => new SimulationWorkbenchDefaultScenario({ eventSchedulerUI: ui }),
+  }),
+];
+
 export class SimulationWorkbench extends BaseApp {
   constructor() {
     super({
-      newScenario: (params, initialState, eventSchedulerUI) => {
-        const intlRetirementScenario = new IntlRetirementScenario({ eventSchedulerUI });
-        //TODO When we support selecting from a few default scenarios: const defaultScenario = new SimulationWorkbenchDefaultScenario({ eventSchedulerUI });
-        return intlRetirementScenario;
-      },
-      chartSeries: CHART_SERIES,
+      prebuiltScenarios: PREBUILT_SCENARIOS,
+      chartSeries:       CHART_SERIES,
     });
   }
 }

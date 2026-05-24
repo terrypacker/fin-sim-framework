@@ -15,17 +15,53 @@ import { ServiceRegistry }    from '../services/service-registry.js';
 /**
  * ScenarioTabPresenter — owns all scenario-tab UI and scenario CRUD.
  *
- * Owns:
- *  - _scenarioData / _activeIdx state
- *  - All scenario-tab DOM event listeners (wired once via init())
- *  - getParams() / getInitialState() / afterBuildSim() for BaseApp.buildScenario()
+ * ### Active-value encoding
+ *
+ * `_activeValue` is a string that identifies which scenario is currently
+ * selected in the dropdown:
+ *
+ *   `'p:<id>'`  — a pre-built scenario (shipped with the app, not in localStorage)
+ *   `'u:<N>'`   — a user-saved scenario at index N in `_scenarioData.scenarios`
+ *   `''`        — nothing selected (edge case / legacy)
+ *
+ * ### Pre-built scenario selection and first-load default
+ *
+ * Pre-built scenarios are supplied via the constructor's `prebuiltScenarios`
+ * array and sorted by `PrebuiltScenario.order` (ascending).  On a fresh page
+ * load with no localStorage state the lowest-order pre-built is selected
+ * automatically, making it the "default first load" scenario.
+ *
+ * ### Last-used persistence
+ *
+ * `_activeValue` is written to `_scenarioData.lastUsed` and persisted to
+ * localStorage whenever the selection changes or a scenario is saved/deleted.
+ * On the next page load the last-used value is restored.
  */
 export class ScenarioTabPresenter {
 
-  constructor() {
+  /**
+   * @param {object}            [opts]
+   * @param {PrebuiltScenario[]} [opts.prebuiltScenarios=[]]
+   */
+  constructor({ prebuiltScenarios = [] } = {}) {
+    // Sort pre-built scenarios by order (ascending) so index 0 is the default.
+    this._prebuiltScenarios = [...prebuiltScenarios].sort((a, b) => a.order - b.order);
+
     this._scenarioData = ScenarioStorage.load();
-    // Auto-select the first saved scenario on load; fall back to default if none.
-    this._activeIdx = this._scenarioData.scenarios.length > 0 ? 0 : null;
+
+    // Restore last-used selection, or compute the appropriate default.
+    const lastUsed = this._scenarioData.lastUsed;
+    if (lastUsed !== undefined && lastUsed !== null) {
+      this._activeValue = lastUsed;
+    } else if (this._scenarioData.scenarios.length > 0) {
+      // Backward-compat: if the user has saved scenarios but no lastUsed
+      // (pre-feature data), select the first one as before.
+      this._activeValue = 'u:0';
+    } else if (this._prebuiltScenarios.length > 0) {
+      this._activeValue = `p:${this._prebuiltScenarios[0].id}`;
+    } else {
+      this._activeValue = '';
+    }
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
@@ -38,6 +74,40 @@ export class ScenarioTabPresenter {
 
   getInitialState() {
     return this._activeScenario()?.initialState ?? {};
+  }
+
+  /**
+   * Instantiate the correct scenario class for the current selection.
+   *
+   * Resolution order:
+   *  1. Active pre-built → use its factory directly.
+   *  2. Active user scenario with a `scenarioId` → use the matching prebuilt factory.
+   *  3. Active user scenario without `scenarioId` → use the first prebuilt factory.
+   *  4. `fallbackFactory` argument → used when no prebuilt scenarios are registered.
+   *
+   * @param {object}   params        - Scenario params (from getParams())
+   * @param {object}   initialState  - Initial state (from getInitialState())
+   * @param {object}   ui            - EventSchedulerUI instance
+   * @param {Function} [fallbackFactory] - Legacy factory for apps that don't supply prebuiltScenarios
+   * @returns {BaseScenario}
+   */
+  createScenario(params, initialState, ui, fallbackFactory) {
+    const pb = this._activePrebuilt();
+    if (pb) return pb.factory(params, initialState, ui);
+
+    const cfg = this._activeScenario();
+    if (cfg) {
+      // Try to find the prebuilt this user scenario was derived from.
+      const matchedPb = cfg.scenarioId
+        ? this._prebuiltScenarios.find(p => p.id === cfg.scenarioId)
+        : null;
+      const factory = (matchedPb ?? this._prebuiltScenarios[0])?.factory;
+      if (factory) return factory(params, initialState, ui);
+    }
+
+    if (fallbackFactory) return fallbackFactory(params, initialState, ui);
+
+    throw new Error('ScenarioTabPresenter: no scenario factory available');
   }
 
   /** Restore saved config or call loadDefaults(). Called after scenario.buildSim(). */
@@ -58,8 +128,8 @@ export class ScenarioTabPresenter {
     this._refreshScenarioSelect();
 
     document.getElementById('scenarioSelect')?.addEventListener('change', (e) => {
-      const val = e.target.value;
-      this._activeIdx = val === '' ? null : parseInt(val, 10);
+      this._activeValue = e.target.value || '';
+      this._persistLastUsed();
       this._populateScenarioForm();
     });
 
@@ -68,27 +138,41 @@ export class ScenarioTabPresenter {
     });
 
     document.getElementById('newScenarioBtn')?.addEventListener('click', () => {
+      // Base the new scenario on whatever prebuilt is currently active (or the first one).
+      const pb = this._activePrebuilt() ?? this._prebuiltScenarios[0] ?? null;
       const newCfg = {
         name:         'New Scenario',
-        simStart:     '2026-01-01',
-        simEnd:       '2041-01-01',
+        scenarioId:   pb?.id ?? null,
+        simStart:     pb?.simStart ?? '2026-01-01',
+        simEnd:       pb?.simEnd   ?? '2041-01-01',
         events:       [],
         handlers:     [],
         actions:      [],
         reducers:     [],
-        initialState: { metrics: { amount: 0, salary: 0 } },
+        initialState: {},
         params:       [],
       };
       this._scenarioData.scenarios.push(newCfg);
-      this._activeIdx = this._scenarioData.scenarios.length - 1;
+      this._activeValue = `u:${this._scenarioData.scenarios.length - 1}`;
+      this._persistLastUsed();
+      ScenarioStorage.save(this._scenarioData);
       this._refreshScenarioSelect();
       this._populateScenarioForm();
     });
 
     document.getElementById('deleteScenarioBtn')?.addEventListener('click', () => {
-      if (this._activeIdx === null) return;
-      this._scenarioData.scenarios.splice(this._activeIdx, 1);
-      this._activeIdx = null;
+      if (!this._activeValue?.startsWith('u:')) return;
+      const idx = parseInt(this._activeValue.slice(2), 10);
+      this._scenarioData.scenarios.splice(idx, 1);
+      // After deletion, fall back to first prebuilt, then first user scenario, then empty.
+      if (this._prebuiltScenarios.length > 0) {
+        this._activeValue = `p:${this._prebuiltScenarios[0].id}`;
+      } else if (this._scenarioData.scenarios.length > 0) {
+        this._activeValue = 'u:0';
+      } else {
+        this._activeValue = '';
+      }
+      this._persistLastUsed();
       ScenarioStorage.save(this._scenarioData);
       this._refreshScenarioSelect();
       this._populateScenarioForm();
@@ -163,30 +247,79 @@ export class ScenarioTabPresenter {
 
   // ── Private ────────────────────────────────────────────────────────────────
 
-  _activeScenario() {
-    if (this._activeIdx !== null) {
-      return this._scenarioData.scenarios[this._activeIdx] ?? null;
+  /** Returns the active PrebuiltScenario, or null if a user scenario (or nothing) is selected. */
+  _activePrebuilt() {
+    if (this._activeValue?.startsWith('p:')) {
+      const id = this._activeValue.slice(2);
+      return this._prebuiltScenarios.find(p => p.id === id) ?? null;
     }
     return null;
+  }
+
+  /** Returns the active user-saved scenario config, or null if a prebuilt is selected. */
+  _activeScenario() {
+    if (this._activeValue?.startsWith('u:')) {
+      const idx = parseInt(this._activeValue.slice(2), 10);
+      return this._scenarioData.scenarios[idx] ?? null;
+    }
+    return null;
+  }
+
+  /** Write the current active value as lastUsed and flush to localStorage. */
+  _persistLastUsed() {
+    this._scenarioData.lastUsed = this._activeValue;
+    ScenarioStorage.save(this._scenarioData);
   }
 
   _refreshScenarioSelect() {
     const sel = document.getElementById('scenarioSelect');
     if (!sel) return;
-    sel.innerHTML = '<option value="">— Default Scenario —</option>';
-    this._scenarioData.scenarios.forEach((s, i) => {
-      const opt = document.createElement('option');
-      opt.value       = i;
-      opt.textContent = s.name || `Scenario ${i + 1}`;
-      sel.appendChild(opt);
-    });
-    sel.value = this._activeIdx !== null ? String(this._activeIdx) : '';
+    sel.innerHTML = '';
+
+    // ── Pre-built scenarios optgroup ─────────────────────────────────────────
+    if (this._prebuiltScenarios.length > 0) {
+      const group = document.createElement('optgroup');
+      group.label = 'Pre-built Scenarios';
+      for (const pb of this._prebuiltScenarios) {
+        const opt = document.createElement('option');
+        opt.value       = `p:${pb.id}`;
+        opt.textContent = pb.label;
+        group.appendChild(opt);
+      }
+      sel.appendChild(group);
+    }
+
+    // ── User-saved scenarios optgroup ────────────────────────────────────────
+    if (this._scenarioData.scenarios.length > 0) {
+      const group = document.createElement('optgroup');
+      group.label = 'Saved Scenarios';
+      this._scenarioData.scenarios.forEach((s, i) => {
+        const opt = document.createElement('option');
+        opt.value       = `u:${i}`;
+        opt.textContent = s.name || `Scenario ${i + 1}`;
+        group.appendChild(opt);
+      });
+      sel.appendChild(group);
+    }
+
+    sel.value = this._activeValue ?? '';
     this._populateScenarioForm();
   }
 
   _populateScenarioForm() {
     const cfg = this._activeScenario();
+    const pb  = this._activePrebuilt();
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+
+    if (pb) {
+      set('scenarioName',     pb.label);
+      set('simStartInput',    pb.simStart);
+      set('simEndInput',      pb.simEnd);
+      set('initialStateJson', '{}');
+      this._renderParamsList();
+      return;
+    }
+
     set('scenarioName',     cfg?.name     ?? '');
     set('simStartInput',    cfg?.simStart ?? '2026-01-01');
     set('simEndInput',      cfg?.simEnd   ?? '2041-01-01');
@@ -246,19 +379,23 @@ export class ScenarioTabPresenter {
   }
 
   _saveCurrentScenario() {
-    if (this._activeIdx === null) {
-      const name = document.getElementById('scenarioName')?.value || 'Saved Scenario';
-      let initialState = { metrics: { amount: 0, salary: 0 } };
+    const pb = this._activePrebuilt();
+
+    if (pb || !this._activeValue?.startsWith('u:')) {
+      // Saving from a pre-built baseline → create a new user scenario.
+      const name = document.getElementById('scenarioName')?.value || pb?.label || 'Saved Scenario';
+      let initialState = {};
       try { initialState = JSON.parse(document.getElementById('initialStateJson')?.value); } catch {}
       this._scenarioData.scenarios.push({
         name,
-        simStart:     document.getElementById('simStartInput')?.value || '2026-01-01',
-        simEnd:       document.getElementById('simEndInput')?.value   || '2041-01-01',
+        scenarioId:   pb?.id ?? null,
+        simStart:     document.getElementById('simStartInput')?.value || pb?.simStart || '2026-01-01',
+        simEnd:       document.getElementById('simEndInput')?.value   || pb?.simEnd   || '2041-01-01',
         events: [], handlers: [], actions: [], reducers: [],
         initialState,
         params: [],
       });
-      this._activeIdx = this._scenarioData.scenarios.length - 1;
+      this._activeValue = `u:${this._scenarioData.scenarios.length - 1}`;
     }
 
     const cfg = this._activeScenario();
@@ -271,7 +408,7 @@ export class ScenarioTabPresenter {
       cfg.params,
     );
     Object.assign(cfg, serialized);
-    ScenarioStorage.save(this._scenarioData);
+    this._persistLastUsed();
     this._refreshScenarioSelect();
   }
 }
