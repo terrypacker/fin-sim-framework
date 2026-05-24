@@ -404,6 +404,21 @@
   </div>
 </template>
 
+<!-- ScriptedAction: target state field + JS script body that computes value -->
+<!-- Script signature: (state, date) => value                                -->
+<template id="tpl-scripted-action-editor">
+  <div class="node-field">
+    <label>Target field (optional)</label>
+    <input data-field="fieldName" placeholder="e.g. salary or leave blank">
+  </div>
+  <div class="node-field">
+    <label>Script <small style="font-weight:normal;opacity:.7">(state, date) =&gt; value</small></label>
+    <textarea data-field="script" rows="6"
+      style="width:100%;box-sizing:border-box;font-family:monospace;font-size:11px;resize:vertical"
+      placeholder="// return the computed value for this action&#10;return 0;"></textarea>
+  </div>
+</template>
+
 <!-- RecordArrayMetricAction / RecordNumericSumMetricAction / RecordMultiplicativeMetricAction:
      type is fixed by class, only field name and value are configurable -->
 <template id="tpl-fixed-type-metric-action-editor">
@@ -473,6 +488,22 @@
   <div class="node-field">
     <label>State field</label>
     <input data-field="fieldName">
+  </div>
+</template>
+
+<!-- ScriptedReducer: optional target field + JS script body -->
+<!-- Script signature (fieldName set):  (state, action, date) => value        -->
+<!-- Script signature (no fieldName):   (state, action, date) => partialState -->
+<template id="tpl-scripted-reducer-editor">
+  <div class="node-field">
+    <label>Target field (optional)</label>
+    <input data-field="fieldName" placeholder="e.g. salary or leave blank for full patch">
+  </div>
+  <div class="node-field">
+    <label>Script <small style="font-weight:normal;opacity:.7">(state, action, date) =&gt; value | partialState</small></label>
+    <textarea data-field="script" rows="8"
+      style="width:100%;box-sizing:border-box;font-family:monospace;font-size:11px;resize:vertical"
+      placeholder="// return value (if Target field set) or a partial state object&#10;return {};"></textarea>
   </div>
 </template>
 

@@ -47,7 +47,7 @@ import { HandlerService } from './services/handler-service.js';
 import { ReducerService } from './services/reducer-service.js';
 import { ServiceRegistry } from './services/service-registry.js';
 import { SimulationRegistry } from './services/simulation-registry.js';
-import { Action, FieldAction, FieldValueAction, AmountAction, RecordMetricAction, RecordArrayMetricAction, RecordNumericSumMetricAction, RecordMultiplicativeMetricAction, RecordBalanceAction } from './simulation-framework/actions.js';
+import { Action, FieldAction, FieldValueAction, AmountAction, RecordMetricAction, RecordArrayMetricAction, RecordNumericSumMetricAction, RecordMultiplicativeMetricAction, RecordBalanceAction, ScriptedAction, ACTION_CLASSES } from './simulation-framework/actions.js';
 import { ActionBuilder } from './simulation-framework/builders/action-builder.js';
 import { EventBuilder } from './simulation-framework/builders/event-builder.js';
 import { HandlerBuilder } from './simulation-framework/builders/handler-builder.js';
@@ -58,11 +58,11 @@ import { EventBus } from './simulation-framework/event-bus.js';
 import { BaseEvent } from './simulation-framework/events/base-event.js';
 import { EventSeries } from './simulation-framework/events/event-series.js';
 import { OneOffEvent } from './simulation-framework/events/one-off-event.js';
-import { HandlerEntry, HandlerRegistry } from './simulation-framework/handlers.js';
+import { HandlerEntry, HANDLER_CLASSES, HandlerRegistry } from './simulation-framework/handlers.js';
 import { IndexedMinHeap } from './simulation-framework/indexed-min-heap.js';
 import { JournalEntry, Journal } from './simulation-framework/journal.js';
 import { MinHeap } from './simulation-framework/min-heap.js';
-import { ReducerPipeline, PRIORITY, Reducer, NoOpReducer, FieldReducer, StateFieldReducer, MetricReducer, ArrayMetricReducer, NumericSumMetricReducer, MultiplicativeMetricReducer, AccountTransactionReducer, RepeatingReducer } from './simulation-framework/reducers.js';
+import { ReducerPipeline, PRIORITY, Reducer, NoOpReducer, FieldReducer, StateFieldReducer, MetricReducer, ArrayMetricReducer, NumericSumMetricReducer, MultiplicativeMetricReducer, AccountTransactionReducer, REDUCER_CLASSES, RepeatingReducer, ScriptedReducer } from './simulation-framework/reducers.js';
 import { ScenarioRunner } from './simulation-framework/scenario.js';
 import { ActionNode, SimulationEventGraph } from './simulation-framework/simulation-event-graph.js';
 import { SimulationHistory } from './simulation-framework/simulation-history.js';
@@ -171,6 +171,8 @@ export const Core = {
   RecordNumericSumMetricAction,
   RecordMultiplicativeMetricAction,
   RecordBalanceAction,
+  ScriptedAction,
+  ACTION_CLASSES,
   ActionBuilder,
   EventBuilder,
   HandlerBuilder,
@@ -185,6 +187,7 @@ export const Core = {
   EventSeries,
   OneOffEvent,
   HandlerEntry,
+  HANDLER_CLASSES,
   HandlerRegistry,
   IndexedMinHeap,
   JournalEntry,
@@ -201,7 +204,9 @@ export const Core = {
   NumericSumMetricReducer,
   MultiplicativeMetricReducer,
   AccountTransactionReducer,
+  REDUCER_CLASSES,
   RepeatingReducer,
+  ScriptedReducer,
   ScenarioRunner,
   ActionNode,
   SimulationEventGraph,

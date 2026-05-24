@@ -31,14 +31,14 @@ export class EventScheduler {
     this.REDUCER_TYPES = [
       'MetricReducer', 'ArrayMetricReducer', 'NumericSumMetricReducer',
       'MultiplicativeMetricReducer', 'AccountTransactionReducer',
-      'StateFieldReducer', 'NoOpReducer'
+      'StateFieldReducer', 'ScriptedReducer', 'NoOpReducer'
     ];
 
     // Ordered most-specific to least-specific for instanceof checks.
     this.ACTION_TYPES = [
       'AmountAction', 'RecordMetricAction', 'RecordArrayMetricAction',
       'RecordNumericSumMetricAction', 'RecordMultiplicativeMetricAction',
-      'RecordBalanceAction', 'FieldValueAction'
+      'RecordBalanceAction', 'ScriptedAction', 'FieldValueAction'
     ];
 
     // Subscribe to service bus: re-render graph on any service mutation.
@@ -447,16 +447,23 @@ export class EventScheduler {
       case 'RecordBalanceAction':
       default:
         break;
+      case 'ScriptedAction':
+        wrap = this._getTemplate('tpl-scripted-action-editor');
+        wrap.querySelector('[data-field="fieldName"]').value = node.fieldName || '';
+        wrap.querySelector('[data-field="script"]').value    = node.script || '';
+        break;
     }
 
     if (wrap) {
-      wrap.querySelectorAll('input, select').forEach(input => {
+      const isScripted = node.actionClass === 'ScriptedAction';
+      wrap.querySelectorAll('input, select, textarea').forEach(input => {
         input.addEventListener('input', () => {
           const field = input.dataset.field;
           let value;
           if (input.type === 'number') {
             value = parseFloat(input.value) || 0;
-          } else if (field === 'fieldName') {
+          } else if (field === 'fieldName' && !isScripted) {
+            // Metric actions store fieldName with 'metrics.' prefix
             const stripped = input.value.startsWith('metrics.') ? input.value.slice(8) : input.value;
             value = 'metrics.' + stripped;
           } else {
@@ -544,15 +551,20 @@ export class EventScheduler {
         wrap = this._getTemplate('tpl-state-field-reducer-editor');
         wrap.querySelector('[data-field="fieldName"]').value = node.fieldName || '';
         break;
+      case 'ScriptedReducer':
+        wrap = this._getTemplate('tpl-scripted-reducer-editor');
+        wrap.querySelector('[data-field="fieldName"]').value = node.fieldName || '';
+        wrap.querySelector('[data-field="script"]').value    = node.script || '';
+        break;
       default:
         container.innerHTML = '<div class="tl-empty">No config</div>';
         return;
     }
 
-    // Previously mutated node directly without notifying — now goes via service
-    wrap.querySelectorAll('input').forEach(input => {
-      input.addEventListener('input', () => {
-        ServiceRegistry.getInstance().reducerService.updateReducer(node.id, { [input.dataset.field]: input.value });
+    // Wire inputs and textareas — both fire on 'input' events
+    wrap.querySelectorAll('input, textarea').forEach(el => {
+      el.addEventListener('input', () => {
+        ServiceRegistry.getInstance().reducerService.updateReducer(node.id, { [el.dataset.field]: el.value });
       });
     });
 

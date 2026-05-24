@@ -422,11 +422,72 @@ export class RepeatingReducer extends Reducer {
   }
 }
 
+/**
+ * A reducer whose logic is a user-supplied JS script string.
+ * Intended for rapid prototyping before promoting logic into a dedicated class.
+ *
+ * Script signature (fieldName set):
+ *   (state, action, date) => value
+ *   The returned value is written to state at fieldName via setValueByPath.
+ *
+ * Script signature (no fieldName):
+ *   (state, action, date) => partialState
+ *   The returned object is spread into the current state.
+ *
+ * If the action is a ScriptedAction it exposes getValue(state, date); this
+ * reducer calls that instead of action.value when both are scripted.
+ *
+ * The compiled function is cached in _fn and intentionally NOT serialized,
+ * so deserialization triggers a clean recompile — making replays safe.
+ */
+export class ScriptedReducer extends FieldReducer {
+  static description = 'Prototype reducer: supply a JS script instead of a baked-in class. Script receives (state, action, date).';
+
+  constructor(name = 'Scripted Reducer', priority = PRIORITY.POSITION_UPDATE,
+      fieldName = '', script = '// return value (if fieldName set) or partial state object\nreturn {};') {
+    super(name, priority, fieldName);
+    this._script = script;
+    this._fn = null;  // not serialized — recompiled on first reduce() call
+  }
+
+  get script() { return this._script; }
+  set script(v) { this._script = v; this._fn = null; }  // invalidate cache on edit
+
+  _compile() {
+    if (!this._fn) {
+      try {
+        // eslint-disable-next-line no-new-func
+        this._fn = new Function('state', 'action', 'date', this.script);
+      } catch (e) {
+        console.error('ScriptedReducer compile error:', e);
+        this._fn = () => ({});
+      }
+    }
+    return this._fn;
+  }
+
+  reduce(state, action, date) {
+    let result;
+    try {
+      result = this._compile()(state, action, date);
+    } catch (e) {
+      console.error('ScriptedReducer runtime error:', e);
+      return this.newState(state);
+    }
+    const base = this.newState(state);
+    if (this.fieldName) {
+      return this.setValueByPath(base, this.fieldName, result);
+    }
+    return { ...base, ...(result ?? {}) };
+  }
+}
+
 // Populate registry after all classes are declared
 Object.assign(REDUCER_CLASSES, {
   NoOpReducer,
   FieldReducer,
   StateFieldReducer,
+  ScriptedReducer,
   MetricReducer,
   ArrayMetricReducer,
   NumericSumMetricReducer,

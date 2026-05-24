@@ -112,27 +112,17 @@ class TrackingUI {
     if (!this.nodes.find(n => n.id === a.id)) {
       const { actionService } = ServiceRegistry.getInstance();
       if (!actionService.get(a.id)) actionService.load(a);
-      a.kind = 'action';
       this.nodes.push(a);
     }
   }
 
   addHandler(h) {
-    h.kind = 'handler';
     this.nodes.push(h);
     // EventScheduler.addHandler calls addAction for each generated action
     (h.generatedActions ?? []).forEach(a => this.addAction(a));
   }
 
   addReducer(r) {
-    r.kind = 'reducer';
-    // Mirror EventScheduler.addReducer: stamp reducerType so _serializeReducer works.
-    if      (r instanceof NumericSumMetricReducer)    r.reducerType = 'NumericSumMetricReducer';
-    else if (r instanceof ArrayMetricReducer)          r.reducerType = 'ArrayMetricReducer';
-    else if (r instanceof MultiplicativeMetricReducer) r.reducerType = 'MultiplicativeMetricReducer';
-    else if (r instanceof MetricReducer)               r.reducerType = 'MetricReducer';
-    else if (r instanceof NoOpReducer)                 r.reducerType = 'NoOpReducer';
-    else                                               r.reducerType = 'MetricReducer';
     this.nodes.push(r);
     // EventScheduler.addReducer calls addAction for reduced and generated actions
     (r.reducedActions   ?? []).forEach(a => this.addAction(a));
@@ -469,7 +459,7 @@ test('serialize regression: reducer type change is captured in saved config', ()
   ScenarioSerializer.deserialize(MINIMAL_CONFIG, scenario);
 
   // Simulate what the UI type-select does when user picks a different reducer type
-  ServiceRegistry.getInstance().reducerService.updateReducer('r1', { reducerType: 'NumericSumMetricReducer' });
+  ServiceRegistry.getInstance().reducerService.replaceReducer('r1', 'NumericSumMetricReducer');
 
   const cfg = serializeNow();
   const r = cfg.reducers.find(r => r.id === 'r1');

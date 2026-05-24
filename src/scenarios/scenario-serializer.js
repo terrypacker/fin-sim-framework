@@ -146,6 +146,7 @@ export class ScenarioSerializer {
     else if (node instanceof C.RecordBalanceAction)              typeName = 'RecordBalanceAction';
     else if (node instanceof C.RecordMetricAction)               typeName = 'RecordMetricAction';
     else if (node instanceof C.AmountAction)                     typeName = 'AmountAction';
+    else if (node instanceof C.ScriptedAction)                   typeName = 'ScriptedAction';
     else if (node instanceof C.FieldValueAction)                 typeName = 'FieldValueAction';
     else throw new Error(`Unsupported action type ${node}`);
 
@@ -160,6 +161,7 @@ export class ScenarioSerializer {
       type:      node.type,  // category discriminator for ReducerPipeline lookup
       value:     node.value,
       fieldName,
+      script:    node.script,  // ScriptedAction only; undefined for all other types
     };
   }
 
@@ -170,6 +172,7 @@ export class ScenarioSerializer {
       name:               node.name,
       priority:           node.priority,
       fieldName:          node.fieldName,
+      script:             node.script,  // ScriptedReducer only; undefined for all other types
       reducedActionIds:   (node.reducedActions   ?? []).map(a => a.id),
       generatedActionIds: (node.generatedActions ?? []).map(a => a.id),
     };
@@ -227,6 +230,9 @@ export class ScenarioSerializer {
       case 'AmountAction':
         action = new C.AmountAction(d.type, d.name, d.value ?? 0);
         break;
+      case 'ScriptedAction':
+        action = new C.ScriptedAction(d.type, d.name, d.fieldName ?? '', d.script ?? '');
+        break;
       default:
         throw new Error(`Add support for deserialization of action type ${d.__type}.`);
     }
@@ -254,7 +260,8 @@ export class ScenarioSerializer {
         return C.ReducerBuilder.noOp().name(d.name).build();
       case 'StateFieldReducer':
         return C.ReducerBuilder.stateField().name(d.name).fieldName(d.fieldName).build();
-        break;
+      case 'ScriptedReducer':
+        return new C.ScriptedReducer(d.name, d.priority, d.fieldName ?? '', d.script ?? '');
       default:
         throw new Error(`Add support for deserialization of reducer type ${d.__type}.`);
     }

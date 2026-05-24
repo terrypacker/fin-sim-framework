@@ -14,6 +14,7 @@ import {
   AmountAction, RecordArrayMetricAction, RecordBalanceAction,
   RecordMetricAction,
   RecordMultiplicativeMetricAction, RecordNumericSumMetricAction,
+  ScriptedAction,
   ACTION_CLASSES,
 } from "../simulation-framework/actions.js";
 
@@ -75,6 +76,14 @@ export class ActionService extends BaseService {
 
   createRecordBalanceAction() {
     const item = new RecordBalanceAction();
+    item.id = this._generateId(this._idPrefix);
+    this._register(item);
+    this._publish('CREATE', item.constructor.name, item);
+    return item;
+  }
+
+  createScriptedAction(type, name, fieldName = '', script = '// return computed value\nreturn 0;') {
+    const item = new ScriptedAction(type, name, fieldName, script);
     item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
