@@ -4,6 +4,10 @@
  */
 
 import { BaseApp } from './apps/base-app.js';
+import { ScenarioTabPresenter } from './apps/scenario-tab-presenter.js';
+import { SimulationAnimator } from './apps/simulation-animator.js';
+import { SimulationWorkbench } from './apps/simulation-workbench.js';
+import { StatePanelView } from './apps/state-panel-view.js';
 import { AccountRulesEngine } from './finance/account-rules/account-rules-engine.js';
 import { AuAccountModule2024 } from './finance/account-rules/au/au-account-module-2024.js';
 import { AuAccountModule2025 } from './finance/account-rules/au/au-account-module-2025.js';
@@ -44,6 +48,7 @@ import { TaxSettleService } from './finance/tax-settle-service.js';
 import { intervalFns, startSnapFns, BaseScenario } from './scenarios/base-scenario.js';
 import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
 import { ScenarioStorage } from './scenarios/scenario-storage.js';
+import { SimulationWorkbenchDefaultScenario } from './scenarios/simulation-workbench-default-scenario.js';
 import { ActionService } from './services/action-service.js';
 import { BaseService } from './services/base-service.js';
 import { EventService } from './services/event-service.js';
@@ -109,6 +114,10 @@ export {
 
 export const Misc = {
   BaseApp,
+  ScenarioTabPresenter,
+  SimulationAnimator,
+  SimulationWorkbench,
+  StatePanelView,
 };
 
 export const Finance = {
@@ -173,6 +182,7 @@ export const Scenarios = {
   BaseScenario,
   ScenarioSerializer,
   ScenarioStorage,
+  SimulationWorkbenchDefaultScenario,
 };
 
 export const Services = {
