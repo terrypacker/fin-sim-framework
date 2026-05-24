@@ -56,10 +56,13 @@ export class TaxSettleService {
    * FTC credit applied after computing gross liability (cannot exceed liability).
    *
    * @param {object} state - Simulation state snapshot
-   * @returns {number} Net US tax owed (>= 0)
+   * @returns {TaxComputationResult} Structured result including line items, rates, netLiability, and taxYear
    */
   computeUsTax(state) {
-    return this._getModule('US', state).computeTax(state);
+    const result = this._getModule('US', state).computeTax(state);
+    const period = state.currentPeriods?.US;
+    result.taxYear = period ? new Date(period.startMs).getUTCFullYear() : undefined;
+    return result;
   }
 
   /**
@@ -69,11 +72,16 @@ export class TaxSettleService {
    * Resident:     progressive brackets + Medicare levy, franking credits offset.
    * Non-resident: flat brackets (no threshold), withholding added directly.
    *
+   * taxYear reflects the financial year start (e.g. 2025 = FY2025-26 starting July 2025).
+   *
    * @param {object} state - Simulation state snapshot
-   * @returns {number} Net AU tax owed (>= 0)
+   * @returns {TaxComputationResult} Structured result including line items, rates, netLiability, and taxYear
    */
   computeAuTax(state) {
-    return this._getModule('AU', state).computeTax(state);
+    const result = this._getModule('AU', state).computeTax(state);
+    const period = state.currentPeriods?.AU;
+    result.taxYear = period ? new Date(period.startMs).getUTCFullYear() : undefined;
+    return result;
   }
 
   // ─── Private ───────────────────────────────────────────────────────────────

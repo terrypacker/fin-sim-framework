@@ -34,7 +34,7 @@ export class BaseTaxRatesModule {
    * Compute net tax liability from a simulation state snapshot.
    *
    * @param {object} state  Simulation state at period end
-   * @returns {number}      Net tax owed (>= 0)
+   * @returns {TaxComputationResult}  Structured result with line items, rates, and netLiability
    */
   computeTax(state) {
     throw new Error(`${this.constructor.name}: computeTax() not implemented`);

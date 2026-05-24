@@ -264,8 +264,8 @@ test('INFL-5: inflated US brackets yield lower tax on same nominal income', () =
   const base     = new UsTaxRates2025();
   const inflated = new InflationAdjustedUsTaxRates(base, 1.03);
   const income   = 100_000;
-  const baseTax     = base.computeTax(usState({ usOrdinaryIncomeYTD: income }));
-  const inflatedTax = inflated.computeTax(usState({ usOrdinaryIncomeYTD: income }));
+  const baseTax     = base.computeTax(usState({ usOrdinaryIncomeYTD: income })).netLiability;
+  const inflatedTax = inflated.computeTax(usState({ usOrdinaryIncomeYTD: income })).netLiability;
   // Higher brackets → same income taxed at lower marginal rates → less tax owed
   assert.ok(inflatedTax < baseTax, `inflated ${inflatedTax} should be < base ${baseTax}`);
 });
@@ -291,8 +291,8 @@ test('INFL-5: inflated AU brackets yield lower tax on same nominal income', () =
   const base     = new AuTaxRates2025();
   const inflated = new InflationAdjustedAuTaxRates(base, 1.04);
   const state    = auState({ auOrdinaryIncomeYTD: 80_000 });
-  const baseTax     = base.computeTax(state);
-  const inflatedTax = inflated.computeTax(state);
+  const baseTax     = base.computeTax(state).netLiability;
+  const inflatedTax = inflated.computeTax(state).netLiability;
   assert.ok(inflatedTax < baseTax, `inflated ${inflatedTax} should be < base ${baseTax}`);
 });
 
@@ -304,8 +304,8 @@ test('INFL-5: TaxSettleService returns uninflated tax when accumulator is 1.0', 
     ...usState({ usOrdinaryIncomeYTD: 200_000 }),
   };
   const base   = new UsTaxRates2025();
-  const direct = base.computeTax(usState({ usOrdinaryIncomeYTD: 200_000 }));
-  assert.ok(Math.abs(service.computeUsTax(state) - direct) < 0.01);
+  const direct = base.computeTax(usState({ usOrdinaryIncomeYTD: 200_000 })).netLiability;
+  assert.ok(Math.abs(service.computeUsTax(state).netLiability - direct) < 0.01);
 });
 
 test('INFL-5: TaxSettleService applies inflation-adjusted brackets when accumulator > 1', () => {
@@ -320,8 +320,8 @@ test('INFL-5: TaxSettleService applies inflation-adjusted brackets when accumula
     ...noInflation,
     inflationAccumulator: { US: 1.03 ** 3 },  // 3 years of 3% inflation
   };
-  const taxBase     = service.computeUsTax(noInflation);
-  const taxInflated = service.computeUsTax(withInflation);
+  const taxBase     = service.computeUsTax(noInflation).netLiability;
+  const taxInflated = service.computeUsTax(withInflation).netLiability;
   assert.ok(taxInflated < taxBase,
     `inflated tax ${taxInflated.toFixed(2)} should be < base tax ${taxBase.toFixed(2)}`);
 });
@@ -338,8 +338,8 @@ test('INFL-5: TaxSettleService applies AU inflation-adjusted brackets when AU ac
     ...noInflation,
     inflationAccumulator: { AU: 1.04 ** 3 },
   };
-  const taxBase     = service.computeAuTax(noInflation);
-  const taxInflated = service.computeAuTax(withInflation);
+  const taxBase     = service.computeAuTax(noInflation).netLiability;
+  const taxInflated = service.computeAuTax(withInflation).netLiability;
   assert.ok(taxInflated < taxBase,
     `AU inflated tax ${taxInflated.toFixed(2)} should be < base ${taxBase.toFixed(2)}`);
 });

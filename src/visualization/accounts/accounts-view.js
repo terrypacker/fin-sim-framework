@@ -252,9 +252,7 @@ export class AccountsView {
 
     const overlay = document.createElement('div');
     overlay.id = 'accountHistoryModal';
-    overlay.style.cssText =
-      'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;' +
-      'display:flex;align-items:center;justify-content:center;';
+    overlay.classList.add('sim-modal-overlay')
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 
     const modal = document.createElement('div');

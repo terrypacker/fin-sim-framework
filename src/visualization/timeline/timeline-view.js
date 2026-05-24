@@ -43,6 +43,7 @@ export class TimelineView extends BaseComponent {
     this.onDownloadCsv     = null;
     this.onToggle          = null;
     this.onDetail          = null;
+    this.onTaxDocument     = null;
     this.onRewind          = null;
   }
 
@@ -181,13 +182,15 @@ export class TimelineView extends BaseComponent {
           if (evOpen) {
             html.push('<div class="tl-acts">');
             items.forEach(({ entry, idx, sum }, ai) => {
-              const lastA = ai === items.length - 1;
+              const lastA     = ai === items.length - 1;
+              const hasTaxDoc = entry.action.type === 'TAX_SETTLE_APPLY' && entry.action.taxDetail;
               html.push(`<div class="tl-act">
                 <span class="tl-pipe" style="color:#1e3a5f">${lastA ? '└' : '├'}</span>
                 <span class="tl-act-type">${entry.action.type}</span>
                 ${sum ? `<span class="tl-act-val">${sum}</span>` : ''}
                 <span class="tl-act-reducer">${entry.reducer.name}</span>
                 <button class="tl-det" data-idx="${idx}">detail ↗</button>
+                ${hasTaxDoc ? `<button class="tl-taxdoc" data-idx="${idx}">Tax Doc ↗</button>` : ''}
               </div>`);
             });
             html.push('</div>'); // tl-acts
@@ -211,6 +214,13 @@ export class TimelineView extends BaseComponent {
       btn.addEventListener('click', e => {
         e.stopPropagation();
         this.onDetail?.(+btn.dataset.idx);
+      });
+    });
+
+    this._listEl.querySelectorAll('.tl-taxdoc').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        this.onTaxDocument?.(+btn.dataset.idx);
       });
     });
 

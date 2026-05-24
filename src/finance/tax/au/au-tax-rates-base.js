@@ -63,17 +63,100 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
 
     if (isAuResident) {
       // Resident: apply 50% CGT discount (ATO Division 115)
-      const discountedIncome = auOrdinaryIncomeYTD + auCapitalGainsYTD * 0.5;
-      const baseTax     = _applyBrackets(Math.max(0, discountedIncome), this._brackets);
-      const medicare    = this._computeMedicareLevy(discountedIncome);
-      const frankingOff = Math.min(auFrankingCreditYTD, baseTax);
-      const ordinaryNet = Math.max(0, baseTax + medicare - frankingOff);
-      return ordinaryNet + auSuperTaxYTD;
+      const cgtDiscount        = auCapitalGainsYTD * 0.5;
+      const discountedIncome   = auOrdinaryIncomeYTD + cgtDiscount;
+      const assessableIncome   = Math.max(0, discountedIncome);
+      const baseTax            = _applyBrackets(assessableIncome, this._brackets);
+      const medicareLevy       = this._computeMedicareLevy(discountedIncome);
+      const frankingOffset     = Math.min(auFrankingCreditYTD, baseTax);
+      const grossTax           = Math.max(0, baseTax + medicareLevy - frankingOffset) + auSuperTaxYTD;
+      const netLiability       = grossTax;
+
+      const totalGrossIncome   = auOrdinaryIncomeYTD + auCapitalGainsYTD;
+      const effectiveRate      = totalGrossIncome > 0 ? netLiability / totalGrossIncome : 0;
+      const marginalRate       = _marginalBracketRate(assessableIncome, this._brackets);
+
+      return {
+        inputs: {
+          ordinaryIncome:         auOrdinaryIncomeYTD,
+          capitalGains:           auCapitalGainsYTD,
+          nonResidentWithholding: auNonResidentWithholdingYTD,
+          superTax:               auSuperTaxYTD,
+          frankingCredits:        auFrankingCreditYTD,
+          isResident:             true,
+        },
+        isResident:               true,
+        cgtDiscount,
+        discountedCapitalGains:   cgtDiscount,
+        assessableIncome,
+        baseTax,
+        medicareLevy,
+        frankingOffset,
+        nonResidentWithholdingTax: 0,
+        grossTax:                 baseTax + medicareLevy + auSuperTaxYTD,
+        credits:                  frankingOffset,
+        netLiability,
+        effectiveRate,
+        marginalRate,
+        lineItems: [
+          { label: 'Ordinary Income',               amount:  auOrdinaryIncomeYTD },
+          { label: 'Capital Gains (before discount)', amount: auCapitalGainsYTD },
+          { label: 'CGT 50% Discount',              amount: -cgtDiscount },
+          { label: 'Net Capital Gains',             amount:  cgtDiscount },
+          { label: 'Total Assessable Income',       amount:  assessableIncome },
+          { label: 'Tax on Income',                 amount:  baseTax },
+          { label: 'Medicare Levy',                 amount:  medicareLevy },
+          { label: 'Super Tax',                     amount:  auSuperTaxYTD },
+          { label: 'Gross Tax',                     amount:  baseTax + medicareLevy + auSuperTaxYTD },
+          { label: 'Franking Credits',              amount: -frankingOffset },
+          { label: 'Net Tax Liability',             amount:  netLiability },
+        ],
+      };
     } else {
       // Non-resident: no CGT discount; NR withholding income taxed at flat 15% rate
-      const totalIncome = auOrdinaryIncomeYTD + auCapitalGainsYTD;
-      const baseTax     = _applyBrackets(Math.max(0, totalIncome), this._nonResidentBrackets);
-      return Math.max(0, baseTax) + auSuperTaxYTD + auNonResidentWithholdingYTD * 0.15;
+      const totalIncome              = auOrdinaryIncomeYTD + auCapitalGainsYTD;
+      const assessableIncome         = Math.max(0, totalIncome);
+      const baseTax                  = _applyBrackets(assessableIncome, this._nonResidentBrackets);
+      const nonResidentWithholdingTax = auNonResidentWithholdingYTD * 0.15;
+      const grossTax                 = Math.max(0, baseTax) + auSuperTaxYTD + nonResidentWithholdingTax;
+      const netLiability             = grossTax;
+
+      const totalGrossIncome   = totalIncome + auNonResidentWithholdingYTD;
+      const effectiveRate      = totalGrossIncome > 0 ? netLiability / totalGrossIncome : 0;
+      const marginalRate       = _marginalBracketRate(assessableIncome, this._nonResidentBrackets);
+
+      return {
+        inputs: {
+          ordinaryIncome:         auOrdinaryIncomeYTD,
+          capitalGains:           auCapitalGainsYTD,
+          nonResidentWithholding: auNonResidentWithholdingYTD,
+          superTax:               auSuperTaxYTD,
+          frankingCredits:        auFrankingCreditYTD,
+          isResident:             false,
+        },
+        isResident:               false,
+        cgtDiscount:              0,
+        discountedCapitalGains:   auCapitalGainsYTD,
+        assessableIncome,
+        baseTax,
+        medicareLevy:             0,
+        frankingOffset:           0,
+        nonResidentWithholdingTax,
+        grossTax,
+        credits:                  0,
+        netLiability,
+        effectiveRate,
+        marginalRate,
+        lineItems: [
+          { label: 'Ordinary Income',                         amount:  auOrdinaryIncomeYTD },
+          { label: 'Capital Gains (no CGT discount)',         amount:  auCapitalGainsYTD },
+          { label: 'Total Assessable Income',                 amount:  assessableIncome },
+          { label: 'Tax on Income (Non-Resident Brackets)',   amount:  baseTax },
+          { label: 'Non-Resident Withholding Tax (15%)',      amount:  nonResidentWithholdingTax },
+          { label: 'Super Tax',                               amount:  auSuperTaxYTD },
+          { label: 'Net Tax Liability',                       amount:  netLiability },
+        ],
+      };
     }
   }
 
@@ -114,4 +197,14 @@ function _applyBrackets(income, brackets) {
     tax += (Math.min(income, hi) - lo) * rate;
   }
   return tax;
+}
+
+/** Return the marginal rate of the highest bracket reached by income. */
+function _marginalBracketRate(income, brackets) {
+  if (income <= 0 || brackets.length === 0) return 0;
+  let rate = 0;
+  for (const [lo, r] of brackets) {
+    if (income > lo) rate = r;
+  }
+  return rate;
 }

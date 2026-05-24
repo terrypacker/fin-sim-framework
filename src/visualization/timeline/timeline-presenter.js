@@ -9,7 +9,7 @@
  */
 
 export class TimelinePresenter {
-  constructor({ controller, view, onDetail, onRewind, formatDate }) {
+  constructor({ controller, view, onDetail, onTaxDocument, onRewind, formatDate }) {
     this._controller = controller;
     this._view       = view;
     this._onDetail   = onDetail;
@@ -37,8 +37,11 @@ export class TimelinePresenter {
       const csv = controller.generateCsv(this._formatDate);
       if (csv) this._triggerDownload(csv);
     };
-    view.onToggle  = key => { controller.toggleExpanded(key); this._render(); };
-    view.onDetail  = idx => onDetail(controller.journal.journal[idx]);
+    view.onToggle      = key => { controller.toggleExpanded(key); this._render(); };
+    view.onDetail      = idx => onDetail(controller.journal.journal[idx]);
+    if (onTaxDocument) {
+      view.onTaxDocument = idx => onTaxDocument(controller.journal.journal[idx]);
+    }
     if (onRewind) {
       view.onRewind = ts => onRewind(new Date(ts));
     }
