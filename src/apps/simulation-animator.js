@@ -152,7 +152,9 @@ export class SimulationAnimator {
         n.stateChanged = false;
         n.stateChanges = [];
       }, false);
+      if (!event.id) return;  // infrastructure event scheduled directly — no graph node
       const eventNode = this._configGraph.getNode(event.id);
+      if (!eventNode) throw new Error(`Config graph node not found for event id '${event.id}'`);
       eventNode.fired = true;
       this._configGraph.render();
     } else {
@@ -186,8 +188,10 @@ export class SimulationAnimator {
   }
 
   _renderNodeFired(id, stateBefore, stateAfter) {
+    if (!id) return;  // infrastructure event — no graph node
     const diff = this._statePanelView.diffStates(stateBefore, stateAfter);
     const node = this._configGraph.getNode(id);
+    if (!node) throw new Error(`Config graph node not found for id '${id}'`);
     node.fired = true;
     if (diff.length > 0) {
       node.stateChanged = true;

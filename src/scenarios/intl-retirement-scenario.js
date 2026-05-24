@@ -104,9 +104,10 @@ export class IntlRetirementScenario extends BaseScenario {
       simEnd:   new Date(Date.UTC(2041, 0, 1)),
     });
     // Populated in buildSim(); consumed in loadDefaults().
-    this._people   = null;
-    this._accounts = null;
-    this._params   = null;
+    this._people      = null;
+    this._accounts    = null;
+    this._params      = null;
+    this._taxService  = null;
   }
 
   /**
@@ -217,13 +218,15 @@ export class IntlRetirementScenario extends BaseScenario {
     // ── Register simulation ───────────────────────────────────────────────────
     super.buildSim(params, retirementInitialState);
 
-    // ── Wire TaxService through the service layer (registers PERIOD_ADVANCE,
-    //    TAX_SETTLE, account module reducers/handlers, and dynamic tax reducers
-    //    as named class instances visible in the config graph).
+    // ── Wire TaxService — phase 1: state init + direct event scheduling.
+    //    Handlers/reducers are registered in loadDefaults() (phase 2) so that
+    //    loading a saved config restores the serialized items instead of
+    //    creating a duplicate set here.
     const periodService = new PeriodService();
     for (let y = 2026; y <= 2041; y++) applyTo(periodService, buildUsCalendarYear(y));
     for (let y = 2025; y <= 2041; y++) applyTo(periodService, buildAuFiscalYear(y));
-    new TaxService().registerWithServices(this.sim, ['US', 'AU'], periodService, ServiceRegistry.getInstance());
+    this._taxService = new TaxService();
+    this._taxService.setup(this.sim, ['US', 'AU'], periodService);
 
     // ── Schedule one-off CHANGE_RESIDENCY (Jul 1 of moveYear) ────────────────
     // Registered through EventService so it gets an ID visible in the config graph.
@@ -243,6 +246,9 @@ export class IntlRetirementScenario extends BaseScenario {
   loadDefaults() {
     const { eventService, handlerService, reducerService, accountService, personService } = ServiceRegistry.getInstance();
     const p = this._params;
+
+    // ── TaxService phase 2: register handlers/reducers through the service layer
+    this._taxService.registerHandlersAndReducers(ServiceRegistry.getInstance(), ['US', 'AU']);
 
     // ── People ────────────────────────────────────────────────────────────────
     personService.register(this._people.primary);

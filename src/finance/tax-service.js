@@ -382,6 +382,124 @@ export class TaxService {
     return accountService;
   }
 
+  /**
+   * Phase 1 of the two-phase setup: state init + direct event scheduling.
+   *
+   * Resolves the starting period for each country, injects currentPeriods into
+   * sim.state, and schedules PERIOD_ADVANCE and TAX_SETTLE events directly on
+   * the simulation (no service layer).  Stores the resolved periods on this
+   * instance for use by registerHandlersAndReducers().
+   *
+   * Call from buildSim() so that state and events are ready before any items
+   * are wired through the service layer.
+   *
+   * @param {import('../simulation-framework/simulation.js').Simulation} sim
+   * @param {string[]} countryCodes
+   * @param {import('./period/period-service.js').PeriodService} periodService
+   */
+  setup(sim, countryCodes, periodService) {
+    const startTs = sim.currentDate.getTime();
+
+    // Resolve the starting period for each country and inject into sim.state.
+    const currentPeriods = {};
+    for (const cc of countryCodes) {
+      const periodType = _periodTypeFor(cc);
+      const current = periodService.getAllPeriods()
+        .find(p => p.type === periodType && p.startMs <= startTs && startTs < p.endMs);
+      if (!current) {
+        throw new Error(
+          `TaxService.setup: no '${periodType}' period found for start date ` +
+          `${sim.currentDate.toISOString()} in PeriodService. ` +
+          `Add the appropriate year via buildUsCalendarYear() or buildAuFiscalYear().`
+        );
+      }
+      currentPeriods[cc] = current;
+    }
+    sim.state = { ...sim.state, currentPeriods };
+    this._currentPeriods = currentPeriods;  // retained for registerHandlersAndReducers()
+
+    // Schedule PERIOD_ADVANCE events directly on sim (no service layer).
+    for (const cc of countryCodes) {
+      const periodType = _periodTypeFor(cc);
+      for (const period of periodService.getAllPeriods()) {
+        if (period.type === periodType && period.startMs > startTs) {
+          const d = new Date(period.startMs);
+          const schedDate = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+          sim.schedule({ date: schedDate, type: 'PERIOD_ADVANCE', data: { cc, period } });
+        }
+      }
+    }
+
+    // Schedule TAX_SETTLE events directly on sim (no service layer).
+    for (const cc of countryCodes) {
+      const periodType = _periodTypeFor(cc);
+      for (const period of periodService.getAllPeriods()) {
+        if (period.type === periodType && period.endMs > startTs) {
+          const d = new Date(period.endMs);
+          const lastDay = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - 1);
+          sim.schedule({ date: lastDay, type: 'TAX_SETTLE', data: { cc } });
+        }
+      }
+    }
+  }
+
+  /**
+   * Phase 2 of the two-phase setup: register handlers and reducers through the
+   * service layer so they appear in the config graph and are serializable.
+   *
+   * Must be called after setup() (which populates this._currentPeriods).
+   * Call from loadDefaults() — when a saved scenario is loaded,
+   * ScenarioSerializer.load() restores the saved items instead of this method
+   * creating fresh duplicates.
+   *
+   * @param {import('../services/service-registry.js').ServiceRegistry} serviceRegistry
+   * @param {string[]} countryCodes
+   */
+  registerHandlersAndReducers(serviceRegistry, countryCodes) {
+    const { reducerService, handlerService, accountService } = serviceRegistry;
+
+    // PERIOD_ADVANCE reducer + handler
+    reducerService.register(new PeriodAdvanceReducer());
+    handlerService.register(new PeriodAdvanceHandler());
+
+    // Account module reducers + handlers (static, start-year mechanics)
+    for (const cc of countryCodes) {
+      const startYear     = new Date(this._currentPeriods[cc].startMs).getUTCFullYear();
+      const accountModule = this._accountRulesEngine.get(cc, startYear);
+      accountModule.createReducers(accountService).forEach(r => reducerService.register(r));
+      accountModule.createHandlers().forEach(h => handlerService.register(h));
+    }
+
+    // Dynamic tax reducers (one per action type per country)
+    for (const cc of countryCodes) {
+      const actionTypes = new Set();
+      Object.keys(this._taxEngine._modules)
+        .filter(k => k.startsWith(cc + '_'))
+        .forEach(k => {
+          for (const [type] of this._taxEngine._modules[k].getReducerFns()) {
+            actionTypes.add(type);
+          }
+        });
+      for (const actionType of actionTypes) {
+        reducerService.register(new DynamicTaxReducer(this._taxEngine, cc, actionType));
+      }
+    }
+
+    // TAX_SETTLE handler + reducers
+    handlerService.register(new TaxSettleHandler());
+    reducerService.register(new TaxSettleApplyReducer());
+    reducerService.register(new TaxPaymentDebitReducer({ accountService }));
+
+    // Metric/balance reducers
+    const taxDebitReducer = new ArrayReducer('Tax Debit');
+    taxDebitReducer.reducedActionTypes = ['RECORD_ARRAY_METRIC'];
+    reducerService.register(taxDebitReducer);
+
+    const balanceSnapshotReducer = new NoOpReducer('Balance Snapshot');
+    balanceSnapshotReducer.reducedActionTypes = ['RECORD_BALANCE'];
+    reducerService.register(balanceSnapshotReducer);
+  }
+
   /** @returns {TaxEngine} */
   get taxEngine() { return this._taxEngine; }
 
