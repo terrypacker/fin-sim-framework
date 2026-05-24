@@ -240,7 +240,23 @@ export class StatePanelView extends BaseComponent {
     // ── Date / Event / Parent / Reducer / Emitted ─────────────────────────
     clone.querySelector('[data-id="entry-date"]').innerText   = this.fmtVal(entry.date);
     clone.querySelector('[data-id="event-name"]').innerText   = entry.event?.name ?? entry.event?.type ?? '—';
-    clone.querySelector('[data-id="parent-info"]').innerText  = parentInfo;
+
+    const parentInfoSpan = clone.querySelector('[data-id="parent-info"]');
+    if (entry.action?.parentId && this._journal) {
+      parentInfoSpan.style.cssText = 'display:flex;align-items:center;gap:6px;';
+      const parentText = document.createElement('span');
+      parentText.textContent = parentInfo;
+      parentInfoSpan.appendChild(parentText);
+      const chainBtn = document.createElement('button');
+      chainBtn.className = 'ad-history-btn';
+      chainBtn.textContent = 'Show Chain';
+      chainBtn.title = 'Trace causal ancestor chain from root action';
+      this.listen(chainBtn, 'click', () => this._showCausalChain(entry));
+      parentInfoSpan.appendChild(chainBtn);
+    } else {
+      parentInfoSpan.innerText = parentInfo;
+    }
+
     clone.querySelector('[data-id="reducer-name"]').innerText = entry.reducer?.name ?? '—';
 
     const reducerBtn = clone.querySelector('[data-action-btn="open-reducer"]');
@@ -262,6 +278,19 @@ export class StatePanelView extends BaseComponent {
       collapseContent.style.display = open ? 'none' : '';
       collapseHeader.querySelector('.ad-collapse-icon').classList.toggle('open', !open);
     });
+
+    // ── Analytics toolbar ─────────────────────────────────────────────────
+    if (this._journal && changes.length > 0) {
+      const toolbar = document.createElement('div');
+      toolbar.className = 'ad-analytics-toolbar';
+      const queryBtn = document.createElement('button');
+      queryBtn.className = 'ad-history-btn';
+      queryBtn.textContent = '⊞ Field × Action';
+      queryBtn.title = 'Query how a state field changes across all instances of an action type';
+      this.listen(queryBtn, 'click', () => this._showCrossActionModal(changes[0]?.field ?? null, entry.action.type));
+      toolbar.appendChild(queryBtn);
+      collapseHeader.parentNode.insertBefore(toolbar, collapseHeader);
+    }
 
     // ── State changes ─────────────────────────────────────────────────────
     const scTmpl  = document.querySelector('#tpl-node-state-changes');
@@ -301,6 +330,8 @@ export class StatePanelView extends BaseComponent {
             this._showFieldHistory(change.field, timeline);
           });
           fieldCell.appendChild(histBtn);
+          const sparkline = this._renderSparkline(change.field, entry.seq);
+          if (sparkline) fieldCell.appendChild(sparkline);
         }
 
         stateChangesGrid.appendChild(stateChangeFieldRow);
@@ -375,6 +406,53 @@ export class StatePanelView extends BaseComponent {
       empty.textContent = 'No changes recorded for this field.';
       body.appendChild(empty);
     } else {
+      // ── Period analytics ──────────────────────────────────────────────────
+      const periodRow = document.createElement('div');
+      periodRow.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:10px;padding:4px 0;border-bottom:1px solid var(--border);margin-bottom:4px;flex-wrap:wrap;';
+      const inputStyle = 'font-size:10px;padding:1px 4px;background:var(--bg-panel2,#111);color:var(--text-primary,#e5e7eb);border:1px solid var(--border);border-radius:2px;';
+
+      const fromLbl = document.createElement('span');
+      fromLbl.style.color = 'var(--text-muted)';
+      fromLbl.textContent = 'Period:';
+
+      const fromInput = document.createElement('input');
+      fromInput.type = 'date';
+      fromInput.style.cssText = inputStyle;
+      fromInput.value = this._toDateInputVal(entries[0].date);
+
+      const toArrow = document.createElement('span');
+      toArrow.style.color = 'var(--text-muted)';
+      toArrow.textContent = '→';
+
+      const toInput = document.createElement('input');
+      toInput.type = 'date';
+      toInput.style.cssText = inputStyle;
+      toInput.value = this._toDateInputVal(entries[entries.length - 1].date);
+
+      const netSpan = document.createElement('span');
+      netSpan.style.cssText = 'font-family:var(--font-mono);font-size:11px;margin-left:4px;';
+
+      const updateNet = () => {
+        const from = fromInput.value ? new Date(fromInput.value) : null;
+        const to   = toInput.value   ? new Date(new Date(toInput.value).getTime() + 86399999) : null;
+        const filtered = entries.filter(e => {
+          const d = e.date instanceof Date ? e.date : new Date(e.date);
+          if (from && d < from) return false;
+          if (to   && d > to)   return false;
+          return true;
+        });
+        const net = filtered.reduce((s, e) => s + (typeof e.delta === 'number' ? e.delta : 0), 0);
+        netSpan.style.color = net > 0 ? '#34d399' : net < 0 ? '#f87171' : 'var(--text-muted)';
+        netSpan.textContent = `Net Δ: ${net >= 0 ? '+' : ''}${this._fmtChange(field, net)}  (${filtered.length}/${entries.length})`;
+      };
+
+      fromInput.addEventListener('change', updateNet);
+      toInput.addEventListener('change', updateNet);
+      periodRow.append(fromLbl, fromInput, toArrow, toInput, netSpan);
+      body.appendChild(periodRow);
+      updateNet();
+
+      // ── History table ─────────────────────────────────────────────────────
       const table         = document.createElement('table');
       table.style.cssText = 'width:100%;border-collapse:collapse;';
       const thead = table.createTHead();
@@ -417,6 +495,295 @@ export class StatePanelView extends BaseComponent {
     modal.append(header, body);
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
+  }
+
+  // ── Feature: sparkline ───────────────────────────────────────────────────
+
+  _renderSparkline(field, seq) {
+    if (!this._journal) return null;
+    const timeline = this._journal.getStateTimelineUpTo(field, seq);
+    const values = timeline.map(e => e.after).filter(v => typeof v === 'number' && isFinite(v));
+    if (values.length < 2) return null;
+
+    const W = 56, H = 14, P = 1;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min || 1;
+
+    const pts = values.map((v, i) => {
+      const x = P + (i / (values.length - 1)) * (W - P * 2);
+      const y = P + (H - P * 2) - ((v - min) / range) * (H - P * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+
+    const trend = values[values.length - 1] - values[0];
+    const color = trend > 0 ? '#34d399' : trend < 0 ? '#f87171' : '#6b7280';
+
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('width', W);
+    svg.setAttribute('height', H);
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.style.cssText = 'flex-shrink:0;vertical-align:middle;';
+    svg.setAttribute('title', `Trend over ${values.length} points: ${trend >= 0 ? '+' : ''}${trend.toFixed(2)}`);
+
+    const poly = document.createElementNS(NS, 'polyline');
+    poly.setAttribute('points', pts);
+    poly.setAttribute('fill', 'none');
+    poly.setAttribute('stroke', color);
+    poly.setAttribute('stroke-width', '1.5');
+    poly.setAttribute('stroke-linejoin', 'round');
+    poly.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(poly);
+
+    const lastPt = pts.split(' ').at(-1).split(',');
+    const dot = document.createElementNS(NS, 'circle');
+    dot.setAttribute('cx', lastPt[0]);
+    dot.setAttribute('cy', lastPt[1]);
+    dot.setAttribute('r', '2');
+    dot.setAttribute('fill', color);
+    svg.appendChild(dot);
+
+    return svg;
+  }
+
+  // ── Feature: causal chain view ───────────────────────────────────────────
+
+  _showCausalChain(entry) {
+    const chain = [entry];
+    const seen  = new Set([entry.action.instanceId]);
+    let cur = entry;
+    while (cur.action?.parentId && this._journal) {
+      const parent = this._journal.getByInstanceId(cur.action.parentId);
+      if (!parent || seen.has(parent.action.instanceId)) break;
+      seen.add(parent.action.instanceId);
+      chain.unshift(parent);
+      cur = parent;
+    }
+
+    document.getElementById('causalChainModal')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id        = 'causalChainModal';
+    overlay.className = 'sim-modal-overlay';
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+    const modal = document.createElement('div');
+    modal.className   = 'sim-modal';
+    modal.style.width = '520px';
+
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
+    const hdrTitle = document.createElement('span');
+    hdrTitle.style.cssText = 'font-size:12px;font-weight:600;';
+    hdrTitle.textContent   = `Causal Chain — ${chain.length} action${chain.length !== 1 ? 's' : ''}`;
+    const closeBtn = document.createElement('button');
+    closeBtn.className   = 'btn btn-sm';
+    closeBtn.textContent = '✕';
+    closeBtn.addEventListener('click', () => overlay.remove());
+    hdr.append(hdrTitle, closeBtn);
+
+    const body = document.createElement('div');
+    body.style.cssText = 'overflow-y:auto;flex:1;';
+
+    for (let i = 0; i < chain.length; i++) {
+      const node      = chain[i];
+      const isCurrent = node === entry;
+
+      const row = document.createElement('div');
+      row.style.cssText = `display:flex;align-items:flex-start;gap:6px;padding:6px 6px 6px ${6 + i * 16}px;border-bottom:1px solid var(--border-subtle,var(--border));${isCurrent ? 'background:var(--bg-panel2,#1a1a1a);' : ''}`;
+
+      const connector = document.createElement('span');
+      connector.style.cssText = 'font-family:var(--font-mono);font-size:10px;color:var(--text-muted);flex-shrink:0;padding-top:1px;';
+      connector.textContent   = i === 0 ? '◆' : '└─';
+
+      const info = document.createElement('div');
+      info.style.cssText = 'flex:1;';
+
+      const nameRow = document.createElement('div');
+      nameRow.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:11px;';
+
+      const name = document.createElement('span');
+      name.style.cssText = 'color:var(--accent-blue,#60a5fa);font-weight:500;';
+      name.textContent   = node.action.name ?? node.action.type;
+
+      const badge = document.createElement('span');
+      badge.className   = 'ad-type-badge';
+      badge.textContent = node.action.type;
+
+      nameRow.append(name, badge);
+
+      if (isCurrent) {
+        const curBadge = document.createElement('span');
+        curBadge.style.cssText = 'font-size:9px;padding:1px 5px;background:var(--amber,#f59e0b);color:#000;border-radius:2px;';
+        curBadge.textContent   = 'current';
+        nameRow.appendChild(curBadge);
+      } else {
+        const detailBtn = document.createElement('button');
+        detailBtn.className   = 'ad-history-btn';
+        detailBtn.textContent = 'Detail ↗';
+        detailBtn.addEventListener('click', () => { overlay.remove(); this.showNodeDetail(node); });
+        nameRow.appendChild(detailBtn);
+      }
+
+      const meta = document.createElement('div');
+      meta.style.cssText = 'font-size:9px;color:var(--text-muted);margin-top:2px;';
+      meta.textContent   = `${this.fmtVal(node.date)}  ·  ${node.event?.name ?? node.event?.type ?? '—'}  ·  sibling ${node.action.siblingIndex ?? 0}`;
+
+      info.append(nameRow, meta);
+      row.append(connector, info);
+      body.appendChild(row);
+    }
+
+    modal.append(hdr, body);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  }
+
+  // ── Feature: cross-action pattern query ──────────────────────────────────
+
+  _showCrossActionModal(defaultField, defaultActionType) {
+    if (!this._journal) return;
+    const actionTypes = this._journal.getActionTypes();
+    const allFields   = this._journal.getChangedFields();
+
+    document.getElementById('crossActionModal')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id        = 'crossActionModal';
+    overlay.className = 'sim-modal-overlay';
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+    const modal = document.createElement('div');
+    modal.className   = 'sim-modal';
+    modal.style.width = '640px';
+
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
+    const hdrTitle = document.createElement('span');
+    hdrTitle.style.cssText = 'font-size:12px;font-weight:600;';
+    hdrTitle.textContent   = 'Field × Action Query';
+    const closeBtn = document.createElement('button');
+    closeBtn.className   = 'btn btn-sm';
+    closeBtn.textContent = '✕';
+    closeBtn.addEventListener('click', () => overlay.remove());
+    hdr.append(hdrTitle, closeBtn);
+
+    const selStyle = 'font-size:11px;padding:2px 6px;background:var(--bg-panel2,#111);color:var(--text-primary,#e5e7eb);border:1px solid var(--border);border-radius:3px;flex:1;min-width:140px;';
+
+    const controls = document.createElement('div');
+    controls.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
+
+    const fieldSel = document.createElement('select');
+    fieldSel.style.cssText = selStyle;
+    for (const f of allFields) {
+      const o = document.createElement('option');
+      o.value = f; o.textContent = f;
+      if (f === defaultField) o.selected = true;
+      fieldSel.appendChild(o);
+    }
+
+    const actionSel = document.createElement('select');
+    actionSel.style.cssText = selStyle;
+    for (const t of actionTypes) {
+      const o = document.createElement('option');
+      o.value = t; o.textContent = t;
+      if (t === defaultActionType) o.selected = true;
+      actionSel.appendChild(o);
+    }
+
+    const runBtn = document.createElement('button');
+    runBtn.className   = 'btn btn-sm';
+    runBtn.textContent = 'Run';
+
+    const mkLabel = text => {
+      const l = document.createElement('span');
+      l.style.cssText = 'font-size:10px;color:var(--text-muted);flex-shrink:0;';
+      l.textContent = text;
+      return l;
+    };
+    controls.append(mkLabel('Field:'), fieldSel, mkLabel('Action:'), actionSel, runBtn);
+
+    const results = document.createElement('div');
+    results.style.cssText = 'overflow-y:auto;flex:1;';
+
+    const runQuery = () => {
+      const field      = fieldSel.value;
+      const actionType = actionSel.value;
+      results.innerHTML = '';
+
+      const rows = this._journal.getActions(actionType)
+        .map(e => ({ e, diff: e.stateDiff?.find(d => d.field === field) }))
+        .filter(({ diff }) => diff != null);
+
+      if (rows.length === 0) {
+        const empty = document.createElement('span');
+        empty.style.cssText = 'color:var(--text-muted);font-size:11px;';
+        empty.textContent   = `No changes to "${field}" found in "${actionType}" actions.`;
+        results.appendChild(empty);
+        return;
+      }
+
+      const totalDelta = rows.reduce((s, { diff }) => s + (typeof diff.delta === 'number' ? diff.delta : 0), 0);
+      const summary = document.createElement('div');
+      summary.style.cssText = 'font-size:10px;color:var(--text-muted);padding:4px 0;border-bottom:1px solid var(--border);margin-bottom:6px;display:flex;gap:12px;';
+      const cntSpan = document.createElement('span');
+      cntSpan.textContent = `${rows.length} occurrence${rows.length !== 1 ? 's' : ''}`;
+      const netSpan = document.createElement('span');
+      netSpan.style.color = totalDelta >= 0 ? '#34d399' : '#f87171';
+      netSpan.textContent = `Net Δ: ${totalDelta >= 0 ? '+' : ''}${this._fmtChange(field, totalDelta)}`;
+      summary.append(cntSpan, netSpan);
+      results.appendChild(summary);
+
+      const table = document.createElement('table');
+      table.style.cssText = 'width:100%;border-collapse:collapse;';
+      const thead = table.createTHead();
+      const hrow  = thead.insertRow();
+      const thStyle = 'text-align:left;padding:2px 6px;font-size:9px;letter-spacing:0.06em;color:var(--text-muted);border-bottom:1px solid var(--border);';
+      for (const col of ['Date', 'Event', 'Before', 'After', 'Δ Delta']) {
+        const th = document.createElement('th');
+        th.textContent   = col;
+        th.style.cssText = thStyle;
+        hrow.appendChild(th);
+      }
+      const tbody = table.createTBody();
+      for (const { e, diff } of rows) {
+        const tr = tbody.insertRow();
+        tr.style.cssText = 'border-bottom:1px solid var(--border-subtle,var(--border));cursor:pointer;';
+        tr.title = 'Click to view action detail';
+        tr.addEventListener('click', () => { overlay.remove(); this.showNodeDetail(e); });
+        const dStr = diff.delta != null ? (diff.delta > 0 ? '+' : '') + this._fmtChange(field, diff.delta) : '—';
+        const dCol = diff.delta > 0 ? '#34d399' : diff.delta < 0 ? '#f87171' : '';
+        const cells = [
+          { text: this.fmtVal(e.date),                  style: '' },
+          { text: e.event?.name ?? e.event?.type ?? '—', style: 'color:var(--text-muted);' },
+          { text: this._fmtChange(field, diff.before),   style: 'font-family:var(--font-mono);' },
+          { text: this._fmtChange(field, diff.after),    style: 'font-family:var(--font-mono);' },
+          { text: dStr, style: `font-family:var(--font-mono);${dCol ? 'color:' + dCol + ';' : ''}` },
+        ];
+        for (const { text, style } of cells) {
+          const td = tr.insertCell();
+          td.textContent   = text;
+          td.style.cssText = 'padding:3px 6px;font-size:11px;' + style;
+        }
+      }
+      results.appendChild(table);
+    };
+
+    runBtn.addEventListener('click', runQuery);
+    modal.append(hdr, controls, results);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    if (defaultField && defaultActionType) runQuery();
+  }
+
+  // ── Feature: date-input helper ────────────────────────────────────────────
+
+  _toDateInputVal(date) {
+    if (!date) return '';
+    const d = date instanceof Date ? date : new Date(date);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
   }
 
   buildActionDetail(entry) {

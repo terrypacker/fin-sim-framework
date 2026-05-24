@@ -158,4 +158,16 @@ export class Journal {
   traceEvent(date) {
     return this.journal.filter(e => e.date.getTime() === date.getTime());
   }
+
+  /** Return sorted unique action types present in the journal. */
+  getActionTypes() {
+    return [...new Set(this.journal.map(e => e.action?.type).filter(Boolean))].sort();
+  }
+
+  /** Return sorted unique state-diff field names across all journal entries. */
+  getChangedFields() {
+    const fields = new Set();
+    for (const e of this.journal) for (const d of e.stateDiff ?? []) fields.add(d.field);
+    return [...fields].sort();
+  }
 }
