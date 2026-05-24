@@ -705,3 +705,45 @@ test('SPOUSE-6: serialize → deserialize round-trip preserves spouse accounts',
   assert.ok(restoredNames.some(n => n === 'Roth IRA (Spouse)'),
     `Roth IRA (Spouse) not restored after deserialize; got: ${restoredNames}`);
 });
+
+// ─── Roth conversion param type-mismatch guard ────────────────────────────────
+
+test('rothConversionStartYear: Date object falls back to primary retirement year', () => {
+  // Regression: changing the UI type dropdown from Number→Date persists a Date
+  // object that caused the loadDefaults() year loop to run with a non-numeric
+  // start, producing thousands of events and hanging the browser.
+  const { scenario } = buildScenario({
+    rothConversionEnabled:   true,
+    rothConversionStartYear: new Date('2026-05-16'), // Date where milliseconds << year
+  });
+  const events = ServiceRegistry.getInstance().eventService.getAll()
+    .filter(e => e.type === 'ROTH_CONVERSION_POLICY_EVALUATE');
+  // With a Date object, toFiniteYear() falls back to primaryRetirementDate year,
+  // so the loop runs a small bounded number of times (retirement → RMD year).
+  assert.ok(events.length < 100,
+    `Expected < 100 Roth conversion events but got ${events.length} — type guard may not be working`);
+});
+
+test('rothConversionStartYear: empty-string falls back to primary retirement year', () => {
+  // Regression: an empty-string value (e.g. date picker cleared after type change)
+  // coerces to 0 in the loop comparison, causing ~2038 iterations and a browser hang.
+  const { scenario } = buildScenario({
+    rothConversionEnabled:   true,
+    rothConversionStartYear: '', // empty string coerces to 0 via numeric comparison
+  });
+  const events = ServiceRegistry.getInstance().eventService.getAll()
+    .filter(e => e.type === 'ROTH_CONVERSION_POLICY_EVALUATE');
+  assert.ok(events.length < 100,
+    `Expected < 100 Roth conversion events but got ${events.length} — empty-string guard may not be working`);
+});
+
+test('rothConversionEndYear: Date object falls back to RMD year', () => {
+  const { scenario } = buildScenario({
+    rothConversionEnabled: true,
+    rothConversionEndYear: new Date('2060-01-01'),
+  });
+  const events = ServiceRegistry.getInstance().eventService.getAll()
+    .filter(e => e.type === 'ROTH_CONVERSION_POLICY_EVALUATE');
+  assert.ok(events.length < 100,
+    `Expected < 100 Roth conversion events but got ${events.length} — end-year Date guard may not be working`);
+});

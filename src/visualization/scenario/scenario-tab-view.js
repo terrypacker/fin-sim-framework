@@ -243,10 +243,16 @@ export class ScenarioTabView {
         typeSelect.appendChild(opt);
       });
       typeSelect.value = param.type ?? 'Number';
-      typeSelect.addEventListener('change', () => {
-        param.type = typeSelect.value;
-        this._renderParamsList(scenario);
-      });
+      // Schema-defined params carry a label; prevent type changes on them to
+      // avoid corrupting numeric year/boolean fields with incompatible types.
+      if (param.label) {
+        typeSelect.disabled = true;
+      } else {
+        typeSelect.addEventListener('change', () => {
+          param.type = typeSelect.value;
+          this._renderParamsList(scenario);
+        });
+      }
       row.appendChild(typeSelect);
 
       // ── Delete button ─────────────────────────────────────────────────────
