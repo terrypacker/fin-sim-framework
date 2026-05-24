@@ -57,11 +57,10 @@ export class BaseApp {
     // Auto-select the first saved scenario on load; fall back to default if none exist.
     this._activeIdx = this._scenarioData.scenarios.length > 0 ? 0 : null;
 
-    //TODO REMOVE?
-    this.activeTab = 'timeline';
-
-    //TODO REMOVE ?
-    this.activeSidebarTab = 'settings';
+    this._eventExecutions = 0;
+    this._handlerExecutions = 0;
+    this._actionExecutions = 0;
+    this._reducerExecutions = 0;
 
     // ── PeriodService: US calendar years 2026-2040, AU fiscal years 2025-2040
     const periodService = new FinSimLib.Finance.PeriodService();
@@ -107,41 +106,53 @@ export class BaseApp {
   }
 
   updateConfigGraphEvents(payload, start = true) {
+    const event = payload.event;
     if(start) {
       //Event start
       this.configGraphBuilder.applyToAllNodes('fired', false);
 
-      //Set Event node to fired
-      const eventNode = this.configGraphBuilder.getNode(payload.event.id);
+      //Set Event node to fired (no state change available)
+      const eventNode = this.configGraphBuilder.getNode(event.id);
       eventNode.fired = true;
       this.configGraphBuilder.render();
+    }else {
+      const stateBefore = payload.stateBefore;
+      const stateAfter = payload.stateAfter;
+
+      this._renderNodeFired(event.id, stateBefore, stateAfter);
     }
   }
 
   updateConfigGraphHandlers(payload) {
-    //Set Event node to fired
-    const eventNode = this.configGraphBuilder.getNode(payload.handler.id);
-    eventNode.fired = true;
-    this.configGraphBuilder.render();
+    const handler = payload.handler;
+    const stateBefore = payload.stateBefore;
+    const stateAfter = payload.stateAfter;
+
+    this._renderNodeFired(handler.id, stateBefore, stateAfter);
   }
 
   updateConfigGraphActions(payload) {
+    const action = payload.action;
     const stateBefore = payload.stateBefore;
     const stateAfter = payload.stateAfter;
-    const action = payload.action;
-    const sourceEvent = payload.sourceEvent;
 
-    const diff = this.diffStates(stateBefore, stateAfter);
-
-    //Set Action node to fired
-    const actionNode = this.configGraphBuilder.getNode(action.id);
-    actionNode.fired = true;
-    this.configGraphBuilder.render();
+    this._renderNodeFired(action.id, stateBefore, stateAfter);
   }
 
   updateConfigGraphReducers(payload) {
-    const reducerNode = this.configGraphBuilder.getNode(payload.reducer.id);
-    reducerNode.fired = true;
+    const reducer = payload.reducer;
+    const stateBefore = payload.stateBefore;
+    const stateAfter = payload.stateAfter;
+
+    this._renderNodeFired(reducer.id, stateBefore, stateAfter);
+  }
+
+  _renderNodeFired(id, stateBefore, stateAfter) {
+    const diff = this.diffStates(stateBefore, stateAfter);
+
+    //Set node to fired
+    const node = this.configGraphBuilder.getNode(id);
+    node.fired = true;
     this.configGraphBuilder.render();
   }
 
@@ -204,11 +215,13 @@ export class BaseApp {
     this.afterBuildSim();
 
     //Clear out the dashcards
+    this._eventExecutions = 0;
+    this._handlerExecutions = 0;
+    this._actionExecutions = 0;
+    this._reducerExecutions = 0;
+
     if(this.updateDashCards) {
-      this.updateDashCards({
-        date: this.scenario.simStart,
-        id: 0
-      })
+      this.updateDashCards(this.scenario.simStart);
     }
 
     // Build a color map from all enabled recurring events in the service.
@@ -275,17 +288,25 @@ export class BaseApp {
 
     // Subscribe to EVENT_OCCURRENCE events
     this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START, ({ date, payload }) => {
+      this._eventExecutions++;
       this.updateConfigGraphEvents(payload, true);
+      if(this.updateDashCards)
+        this.updateDashCards(date);
     });
 
     // Subscribe to HANDLED_EVENT events
     this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.HANDLED_EVENT, ({ date, payload }) => {
+      this._handlerExecutions++;
       this.updateConfigGraphHandlers(payload);
+      if(this.updateDashCards)
+        this.updateDashCards(date);
     });
 
     // Subscribe to ACTION_RESULT events
     this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.ACTION_RESULT, ({ date, payload }) => {
-      //TODO Weed out and optimize these messages
+      this._actionExecutions++;
+
+      //TODO Weed out and optimize what calls should relate to other message types
       //Fire the date changed listeners
       const actionDate = new Date(date);
       this._currentDate = actionDate;
@@ -297,12 +318,15 @@ export class BaseApp {
       this.updateChart(this.chartView, payload.type, payload.date, payload.stateAfter);
       this.updateConfigGraphActions(payload);
       if(this.updateDashCards)
-        this.updateDashCards(payload);
+        this.updateDashCards(dae);
     });
 
     // Subscribe to REDUCER_RESULT events
     this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.REDUCER_RESULT, ({ date, payload }) => {
+      this._reducerExecutions++;
       this.updateConfigGraphReducers(payload);
+      if(this.updateDashCards)
+        this.updateDashCards(date);
     });
 
     // Reset slider and direction tracker
@@ -706,9 +730,12 @@ export class BaseApp {
     evt.currentTarget.classList.add("active");
   }
 
-  updateDashCards(payload) {
-    $('cardCurrentDate').innerText = this.fmtVal(payload.date);
-    $('cardActionCount').innerText = payload.id;
+  updateDashCards(date) {
+    $('cardCurrentDate').innerText = this.fmtVal(date);
+    $('cardEventExecutions').innerText =  this._eventExecutions;
+    $('cardHandlerExecutions').innerText = this._handlerExecutions;
+    $('cardActionExecutions').innerText = this._actionExecutions;
+    $('cardReducerExecutions').innerText = this._reducerExecutions;
   }
 
   /**

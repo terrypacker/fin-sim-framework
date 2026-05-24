@@ -232,7 +232,7 @@ export class ConfigGraphBuilder {
   applyToNodes(filter, field, value) {
     this.nodes.forEach(n => {
       if(filter(n))
-        n[field] = value
+        n[field] = value;
     });
   }
 
