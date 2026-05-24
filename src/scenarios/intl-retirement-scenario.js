@@ -100,6 +100,228 @@ export const INTL_RETIREMENT_DEFAULTS = {
 };
 
 /**
+ * Typed parameter schema for the International Retirement scenario.
+ *
+ * Describes every field from INTL_RETIREMENT_DEFAULTS that is meaningful to
+ * vary across scenario saves, MonteCarlo runs, or optimization loops.
+ * Fields excluded here (e.g. birthDates, basis values) are identity or
+ * historical-cost data that should not be randomized.
+ *
+ * Each entry: { key, label, type, group, defaultValue, description }
+ *   type: 'Number' | 'Date' | 'Boolean' | 'String'
+ *   group: logical section used for UI grouping and MonteCarlo targeting
+ */
+export const INTL_RETIREMENT_PARAM_SCHEMA = [
+  // ── People ─────────────────────────────────────────────────────────────────
+  {
+    key: 'primaryRetirementDate', label: 'Primary Retirement Date',
+    type: 'Date', group: 'People',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.primaryRetirementDate.toISOString().slice(0, 10),
+    description: 'Date primary person stops working (MC, Opt)',
+  },
+  {
+    key: 'spouseRetirementDate', label: 'Spouse Retirement Date',
+    type: 'Date', group: 'People',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseRetirementDate.toISOString().slice(0, 10),
+    description: 'Date spouse stops working (MC, Opt)',
+  },
+  {
+    key: 'primaryMonthlyWage', label: 'Primary Monthly Wage (USD)',
+    type: 'Number', group: 'People',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.primaryMonthlyWage,
+    description: 'Gross monthly wage for primary before retirement (MC, Opt)',
+  },
+  {
+    key: 'spouseMonthlyWage', label: 'Spouse Monthly Wage (USD)',
+    type: 'Number', group: 'People',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseMonthlyWage,
+    description: 'Gross monthly wage for spouse before retirement (MC, Opt)',
+  },
+  {
+    key: 'moveYear', label: 'US→AU Move Year',
+    type: 'Number', group: 'People',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.moveYear,
+    description: 'Calendar year of US→AU migration (Jul 1) (MC, Opt)',
+  },
+  {
+    key: 'stockDividendReinvest', label: 'Reinvest US Stock Dividends',
+    type: 'Boolean', group: 'People',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.stockDividendReinvest,
+    description: 'If false, US stock dividends are taken as cash (Opt)',
+  },
+
+  // ── US Account Balances ────────────────────────────────────────────────────
+  {
+    key: 'initialUsSavings', label: 'US Savings Initial Balance (USD)',
+    type: 'Number', group: 'US Account Balances',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.initialUsSavings,
+    description: 'Starting US cash savings balance (MC)',
+  },
+  {
+    key: 'rothBalance', label: 'Roth IRA Balance (USD)',
+    type: 'Number', group: 'US Account Balances',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.rothBalance,
+    description: 'Starting Roth IRA balance (MC)',
+  },
+  {
+    key: 'iraBalance', label: 'Traditional IRA Balance (USD)',
+    type: 'Number', group: 'US Account Balances',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.iraBalance,
+    description: 'Starting Traditional IRA balance (MC)',
+  },
+  {
+    key: 'k401Balance', label: '401(k) Balance (USD)',
+    type: 'Number', group: 'US Account Balances',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.k401Balance,
+    description: 'Starting 401(k) balance (MC)',
+  },
+  {
+    key: 'stockBalance', label: 'US Stock Balance (USD)',
+    type: 'Number', group: 'US Account Balances',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.stockBalance,
+    description: 'Starting US brokerage stock balance (MC)',
+  },
+  {
+    key: 'fixedIncomeBalance', label: 'Fixed Income Balance (USD)',
+    type: 'Number', group: 'US Account Balances',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.fixedIncomeBalance,
+    description: 'Starting fixed income account balance (MC)',
+  },
+
+  // ── AU Account Balances ────────────────────────────────────────────────────
+  {
+    key: 'auSavingsBalance', label: 'AU Savings Initial Balance (AUD)',
+    type: 'Number', group: 'AU Account Balances',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.auSavingsBalance,
+    description: 'Starting AU cash savings balance (MC)',
+  },
+  {
+    key: 'superBalance', label: 'Superannuation Balance (AUD)',
+    type: 'Number', group: 'AU Account Balances',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.superBalance,
+    description: 'Starting superannuation balance (MC)',
+  },
+  {
+    key: 'auStockBalance', label: 'AU Stock Balance (AUD)',
+    type: 'Number', group: 'AU Account Balances',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.auStockBalance,
+    description: 'Starting AU brokerage stock balance (MC)',
+  },
+
+  // ── US Account Rates ───────────────────────────────────────────────────────
+  {
+    key: 'usSavingsInterestRate', label: 'US Savings Interest Rate',
+    type: 'Number', group: 'US Account Rates',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.usSavingsInterestRate,
+    description: 'Annual interest rate on US cash savings (MC, Opt)',
+  },
+  {
+    key: 'rothGrowthRate', label: 'Roth IRA Growth Rate',
+    type: 'Number', group: 'US Account Rates',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.rothGrowthRate,
+    description: 'Annual growth rate for Roth IRA (MC)',
+  },
+  {
+    key: 'iraGrowthRate', label: 'Traditional IRA Growth Rate',
+    type: 'Number', group: 'US Account Rates',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.iraGrowthRate,
+    description: 'Annual growth rate for Traditional IRA (MC)',
+  },
+  {
+    key: 'k401GrowthRate', label: '401(k) Growth Rate',
+    type: 'Number', group: 'US Account Rates',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.k401GrowthRate,
+    description: 'Annual growth rate for 401(k) (MC)',
+  },
+  {
+    key: 'usStockGrowthRate', label: 'US Stock Growth Rate',
+    type: 'Number', group: 'US Account Rates',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.usStockGrowthRate,
+    description: 'Annual capital growth rate for US brokerage stock (MC)',
+  },
+  {
+    key: 'stockDividendRate', label: 'US Stock Dividend Rate',
+    type: 'Number', group: 'US Account Rates',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.stockDividendRate,
+    description: 'Annual dividend yield on US stock (MC)',
+  },
+  {
+    key: 'fixedIncomeInterestRate', label: 'Fixed Income Interest Rate',
+    type: 'Number', group: 'US Account Rates',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.fixedIncomeInterestRate,
+    description: 'Annual interest rate on fixed income (MC, Opt)',
+  },
+
+  // ── AU Account Rates ───────────────────────────────────────────────────────
+  {
+    key: 'auSavingsInterestRate', label: 'AU Savings Interest Rate',
+    type: 'Number', group: 'AU Account Rates',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.auSavingsInterestRate,
+    description: 'Annual interest rate on AU cash savings (MC, Opt)',
+  },
+  {
+    key: 'auStockGrowthRate', label: 'AU Stock Growth Rate',
+    type: 'Number', group: 'AU Account Rates',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.auStockGrowthRate,
+    description: 'Annual capital growth rate for AU stock (MC)',
+  },
+  {
+    key: 'auStockDividendRate', label: 'AU Stock Dividend Rate',
+    type: 'Number', group: 'AU Account Rates',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.auStockDividendRate,
+    description: 'Annual dividend yield on AU stock (MC)',
+  },
+
+  // ── Min Balances ───────────────────────────────────────────────────────────
+  {
+    key: 'usSavingsMinBalance', label: 'US Savings Min Balance (USD)',
+    type: 'Number', group: 'Min Balances',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.usSavingsMinBalance,
+    description: 'Minimum US cash reserve before drawing investments (Opt)',
+  },
+  {
+    key: 'auSavingsMinBalance', label: 'AU Savings Min Balance (AUD)',
+    type: 'Number', group: 'Min Balances',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.auSavingsMinBalance,
+    description: 'Minimum AU cash reserve before drawing investments (Opt)',
+  },
+
+  // ── Transfer & Expenses ────────────────────────────────────────────────────
+  {
+    key: 'exchangeRateUsdToAud', label: 'Exchange Rate USD→AUD',
+    type: 'Number', group: 'Transfer & Expenses',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.exchangeRateUsdToAud,
+    description: 'USD to AUD exchange rate applied on transfers (MC)',
+  },
+  {
+    key: 'intlTransferFeeUsd', label: 'International Transfer Fee (USD)',
+    type: 'Number', group: 'Transfer & Expenses',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.intlTransferFeeUsd,
+    description: 'Fixed fee per international wire transfer (MC)',
+  },
+  {
+    key: 'monthlyExpenses', label: 'Monthly Expenses',
+    type: 'Number', group: 'Transfer & Expenses',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.monthlyExpenses,
+    description: 'Monthly living expenses in local currency (MC, Opt)',
+  },
+
+  // ── Inflation ──────────────────────────────────────────────────────────────
+  {
+    key: 'usInflationRate', label: 'US Inflation Rate',
+    type: 'Number', group: 'Inflation',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.usInflationRate,
+    description: 'Annual US inflation rate applied to USD expenses (MC)',
+  },
+  {
+    key: 'auInflationRate', label: 'AU Inflation Rate',
+    type: 'Number', group: 'Inflation',
+    defaultValue: INTL_RETIREMENT_DEFAULTS.auInflationRate,
+    description: 'Annual AU inflation rate applied to AUD expenses (MC)',
+  },
+];
+
+/**
  * IntlRetirementScenario — International two-person retirement simulation.
  *
  * Two people (primary + spouse), US→AU migration on Jul 1 of moveYear.
@@ -117,6 +339,8 @@ export const INTL_RETIREMENT_DEFAULTS = {
  *                     so every item appears in the config graph and UI.
  */
 export class IntlRetirementScenario extends BaseScenario {
+  static getParamSchema() { return INTL_RETIREMENT_PARAM_SCHEMA; }
+
   constructor({ context, params, simStart, simEnd } = {}) {
     super({
       context,
@@ -139,6 +363,12 @@ export class IntlRetirementScenario extends BaseScenario {
    */
   buildDefaultInitialState(params) {
     const p = { ...INTL_RETIREMENT_DEFAULTS, ...(params ?? {}) };
+    // Params arriving from serialized scenario JSON carry Date fields as ISO strings.
+    const toDate = v => (v instanceof Date ? v : new Date(v));
+    p.primaryRetirementDate = toDate(p.primaryRetirementDate);
+    p.spouseRetirementDate  = toDate(p.spouseRetirementDate);
+    p.primaryBirthDate      = toDate(p.primaryBirthDate);
+    p.spouseBirthDate       = toDate(p.spouseBirthDate);
     this._params = p;
 
     // ── People ────────────────────────────────────────────────────────────────

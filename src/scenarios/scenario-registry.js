@@ -54,7 +54,7 @@ export class ScenarioRegistry {
       if(active && active.id !== pb.id) {
         pb.active = false;
       }
-      this._scenarios.set(id, { ...pb, id, factory: pb.factory });
+      this._scenarios.set(id, { ...pb, id, factory: pb.factory, scenarioClass: pb.scenarioClass });
     });
 
     if (active) return;

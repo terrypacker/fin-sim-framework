@@ -29,23 +29,32 @@ import {BaseScenario} from "./base-scenario.js";
 export class PrebuiltScenario extends BaseScenario {
   /**
    * @param {object}   opts
-   * @param {string}   opts.id        - Unique stable identifier (e.g. 'intl-retirement').
-   *                                    Stored in saved user scenarios via `scenarioId`.
-   * @param {string}   opts.label     - Display name shown in the dropdown.
-   * @param {number}   opts.order     - Sort key; lower values appear first and are
-   *                                    selected by default on a fresh page load.
+   * @param {string}   opts.id            - Unique stable identifier (e.g. 'intl-retirement').
+   *                                        Stored in saved user scenarios via `scenarioId`.
+   * @param {string}   opts.label         - Display name shown in the dropdown.
+   * @param {number}   opts.order         - Sort key; lower values appear first and are
+   *                                        selected by default on a fresh page load.
    * @param {string}   [opts.simStart='2026-01-01'] - ISO date for the default sim start.
    * @param {string}   [opts.simEnd='2041-01-01']   - ISO date for the default sim end.
-   * @param {Function} opts.factory   - (params, initialState, eventSchedulerUI) => BaseScenario
+   * @param {Function} opts.factory       - (params, initialState, simStart, simEnd) => BaseScenario
+   * @param {Function} [opts.scenarioClass] - The scenario class (e.g. IntlRetirementScenario).
+   *                                          Used to call getParamSchema() when creating a new
+   *                                          user scenario without instantiating the class.
    */
-  constructor({ id, label, order, simStart = '2026-01-01', simEnd = '2041-01-01', factory, active = false }) {
+  constructor({ id, label, order, simStart = '2026-01-01', simEnd = '2041-01-01', factory, scenarioClass, active = false }) {
     super({
       id, order, context: {}, simStart, simEnd
     })
-    this.label    = label;
-    this.prebuilt = true;
-    this.active   = active;
-    this.factory  = factory;
-    this.params   = {};
+    this.label         = label;
+    this.prebuilt      = true;
+    this.active        = active;
+    this.factory       = factory;
+    this.scenarioClass = scenarioClass ?? null;
+    this.params        = {};
+  }
+
+  /** Delegates to the scenario class's static getParamSchema(), or [] if unset. */
+  getParamSchema() {
+    return this.scenarioClass?.getParamSchema?.() ?? [];
   }
 }
