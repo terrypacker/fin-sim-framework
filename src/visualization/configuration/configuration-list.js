@@ -38,7 +38,7 @@ const KIND_SUBTITLES = {
  * Renders a kind dropdown, text filter, scrollable item list, and + Add button.
  * Queries all items via graphQueryApi.getByKind(selectedKind).
  *
- * Callbacks (set by base-app):
+ * Callbacks (set by WorkbenchApp):
  *   onItemClick(node)   — user clicked a list row
  *   onAddClick(kind)    — user clicked + Add
  */

@@ -40,7 +40,7 @@ export class OptimizationPresenter {
       this.onApplyCandidate?.(this._mergeParams(candidate));
     };
 
-    /** Set by base-app: onApplyCandidate(mergedParams) */
+    /** Set by WorkbenchApp: onApplyCandidate(mergedParams) */
     this.onApplyCandidate = null;
   }
 

@@ -207,7 +207,7 @@ export class StockWithdrawalApplyReducer extends Reducer {
           earningsBasis:     newEarnings,
         },
       },
-      [{ type: 'STOCK_WITHDRAWAL_TAX', gain, isAuResident, proceeds: salePrice, costBasis, description: sa.name ?? key }]
+      [{ type: 'STOCK_WITHDRAWAL_TAX', gain, isAuResident, proceeds: salePrice, costBasis, description: sa.name || key }]
     );
   }
 }

@@ -2,11 +2,12 @@ import { EventBus } from '../../simulation-framework/event-bus.js';
 
 /** UI-layer event types — distinct from simulation bus messages. */
 export const WB_EVENTS = {
-  SELECTION_CHANGED: 'workbench.selection.changed',
-  RUNTIME_TICK:      'workbench.runtime.tick',
-  BREAKPOINT_HIT:    'workbench.breakpoint.hit',
-  SCENARIO_READY:    'workbench.scenario.ready',
-  LAYOUT_CHANGED:    'workbench.layout.changed',
+  SELECTION_CHANGED:   'workbench.selection.changed',
+  RUNTIME_TICK:        'workbench.runtime.tick',
+  BREAKPOINT_HIT:      'workbench.breakpoint.hit',
+  SCENARIO_READY:      'workbench.scenario.ready',
+  LAYOUT_CHANGED:      'workbench.layout.changed',
+  JOURNAL_REPORT_OPEN: 'workbench.journal.report.open',
 };
 
 /**

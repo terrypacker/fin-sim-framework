@@ -50,7 +50,7 @@ export class BaseScenario {
   getToolsets() { return this.constructor.getToolsets(); }
 
   /**
-   * Produce the declarative config that BaseApp merges into activeConfig for a
+   * Produce the declarative config that WorkbenchApp merges into activeConfig for a
    * fresh prebuilt scenario.  Must return an object with at minimum:
    *   { toolsets, parameters, persons, accounts, realProperties, collectibles }
    * Returns null for scenarios that don't use the toolset path.

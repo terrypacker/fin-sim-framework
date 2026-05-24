@@ -16,7 +16,7 @@ import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bu
  * Wires ChartController and ChartView together and owns the metric filter.
  *
  * Exposes the same surface as ChartView so callers (SimulationAnimator,
- * TimeControls, BaseApp) can treat this as a drop-in replacement:
+ * TimeControls, WorkbenchApp) can treat this as a drop-in replacement:
  *   wireSimBus(simBus)
  *   addSnapshot(date, data)
  *   setRenderThrottle(ms)    — inherited from BaseComponent

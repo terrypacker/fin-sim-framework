@@ -11,7 +11,7 @@ import { WorkbenchComponent } from './component.js';
  * Inactive plugins are hidden via display:none. Tab switching is a show/hide
  * operation — no mount/unmount per switch. This ensures every plugin's DOM
  * is always in the document, which is required for getElementById() calls in
- * BaseApp.initScenario() and for plugins that depend on each other's containers.
+ * WorkbenchApp.initScenario() and for plugins that depend on each other's containers.
  *
  * @param {object} opts
  * @param {string}                         opts.pane           — 'left' | 'center' | 'right' | 'bottom'
@@ -193,7 +193,7 @@ export class TabGroup extends WorkbenchComponent {
 
   // ── Surgical DOM operations ─────────────────────────────────────────────────
   // These avoid the destroy-and-recreate cycle of rerender() so that plugin
-  // state and external references (e.g. BaseApp holding DOM ids) survive moves.
+  // state and external references (e.g. WorkbenchApp holding DOM ids) survive moves.
 
   /** Remove a tab button from the bar. Does not touch the plugin instance. */
   removeTabButton(tabId) {

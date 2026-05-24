@@ -209,6 +209,63 @@ export class QueryApi {
     };
   }
 
+  /**
+   * Aggregate query — filter, group, and fold results.
+   *
+   * @param {object}   opts
+   * @param {string|object} opts.query       - DSL string or pre-built AST (empty = all rows)
+   * @param {string[]} opts.groupBy          - 1+ field names to bucket on
+   * @param {Record<string,{fn:string,field?:string}>} opts.aggregates
+   *   Supported fn: 'sum', 'count', 'min', 'max', 'avg'. field is required for all except 'count'.
+   * @param {Array<{field:string,dir?:'asc'|'desc'}>} [opts.sort]  - sort groups
+   *
+   * @returns {Promise<{ groups: Array<{key:object, items:object[], ...aggregates}>, grandTotal: number|null }>}
+   *   grandTotal is the 'total' aggregate's sum across all groups, or null when not defined.
+   */
+  async aggregate({ query = '', groupBy = [], aggregates = {}, sort = [] }) {
+    if (this.rebuildIndexes) this._buildIndexes();
+
+    const where = typeof query === 'string'
+      ? this._parse(query)
+      : query;
+
+    const predicate = this._buildPredicate(where);
+    const allItems  = this._dataSource.getAll();
+    const filtered  = allItems.filter(predicate);
+
+    // Bucket by composite group key
+    const buckets = new Map(); // key-string → { key: {}, items: [] }
+    for (const item of filtered) {
+      const keyObj = {};
+      for (const f of groupBy) keyObj[f] = item[f] ?? null;
+      const keyStr = JSON.stringify(keyObj);
+      if (!buckets.has(keyStr)) buckets.set(keyStr, { key: keyObj, items: [] });
+      buckets.get(keyStr).items.push(item);
+    }
+
+    // Fold each bucket
+    const groups = [];
+    for (const { key, items } of buckets.values()) {
+      const group = { key, items };
+      for (const [name, { fn, field }] of Object.entries(aggregates)) {
+        group[name] = _fold(fn, field, items);
+      }
+      groups.push(group);
+    }
+
+    // Sort groups
+    const comparator = this._buildComparator(sort);
+    if (comparator) {
+      groups.sort((a, b) => comparator(a, b));
+    }
+
+    const grandTotal = aggregates.total
+      ? groups.reduce((s, g) => s + (g.total ?? 0), 0)
+      : null;
+
+    return { groups, grandTotal };
+  }
+
   // =========================================================
   // Optimization hook for subclasses
   // =========================================================
@@ -565,5 +622,20 @@ export class QueryApi {
     }
 
     return null;
+  }
+}
+
+// ─── Module-level helpers ─────────────────────────────────────────────────────
+
+function _fold(fn, field, items) {
+  if (fn === 'count') return items.length;
+  const vals = items.map(x => x[field]).filter(v => v != null && typeof v === 'number');
+  if (!vals.length) return fn === 'sum' ? 0 : null;
+  switch (fn) {
+    case 'sum': return vals.reduce((a, b) => a + b, 0);
+    case 'min': return Math.min(...vals);
+    case 'max': return Math.max(...vals);
+    case 'avg': return vals.reduce((a, b) => a + b, 0) / vals.length;
+    default: throw new Error(`Unknown aggregate fn: ${fn}`);
   }
 }

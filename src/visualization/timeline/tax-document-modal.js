@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { WB_EVENTS } from '../workbench/workbench-runtime.js';
+
 /**
  * TaxDocumentModal — renders a TaxDocument in a native <dialog> modal.
  *
@@ -16,10 +18,21 @@
  *
  * Closes on: close-button click, footer Close button, Escape key (native),
  * or backdrop click.
+ *
+ * When `runtime` is supplied and a line item carries a `drillReport` descriptor,
+ * that line is rendered as a clickable button.  Clicking it publishes
+ * WB_EVENTS.JOURNAL_REPORT_OPEN and closes the modal.
  */
 export class TaxDocumentModal {
-  constructor() {
+  /**
+   * @param {{ runtime?: object }} [opts]
+   */
+  constructor({ runtime = null } = {}) {
+    this._runtime = runtime;
   }
+
+  /** Wire (or replace) the WorkbenchRuntime after construction. */
+  set runtime(r) { this._runtime = r; }
 
   /** @param {TaxDocument|TaxDocument[]} docOrDocs */
   open(docOrDocs) {
@@ -46,8 +59,10 @@ export class TaxDocumentModal {
         this._dialog.querySelectorAll('.tax-doc-panel').forEach(p =>
           p.classList.toggle('tax-doc-panel--hidden', parseInt(p.dataset.idx, 10) !== idx));
       });
+      this._wireDrillClicks();
     } else {
       this._dialog.innerHTML = this._render(docs[0]);
+      this._wireDrillClicks();
     }
 
     document.body.appendChild(this._overlay);
@@ -121,12 +136,33 @@ export class TaxDocumentModal {
             : li.amount === 0
               ? 'tax-doc-line tax-doc-line--zero'
               : 'tax-doc-line';
+          if (li.drillReport && this._runtime) {
+            const paramsAttr = JSON.stringify(li.drillReport.params ?? {}).replace(/"/g, '&quot;');
+            return `<button class="tax-doc-line-btn ${cls} tax-doc-line-drill"
+              data-report-id="${li.drillReport.reportId}"
+              data-params="${paramsAttr}">
+              <span class="tax-doc-line-label">${li.label} ↗</span>
+              <span class="tax-doc-line-amount">${_fmtAmt(li.amount)}</span>
+            </button>`;
+          }
           return `<div class="${cls}">
             <span class="tax-doc-line-label">${li.label}</span>
             <span class="tax-doc-line-amount">${_fmtAmt(li.amount)}</span>
           </div>`;
         }).join('')}
       </div>`;
+  }
+
+  _wireDrillClicks() {
+    if (!this._runtime || !this._dialog) return;
+    this._dialog.addEventListener('click', (e) => {
+      const btn = e.target.closest('.tax-doc-line-drill');
+      if (!btn) return;
+      const reportId = btn.dataset.reportId;
+      const params   = JSON.parse(btn.dataset.params || '{}');
+      this._runtime.bus.publish({ type: WB_EVENTS.JOURNAL_REPORT_OPEN, reportId, params });
+      this._overlay?.remove();
+    });
   }
 
   _renderSummary({ grossIncome, grossTax, credits, netLiability, effectiveRate, marginalRate }) {
