@@ -170,6 +170,7 @@ export class ScenarioLoader {
         const value = v !== undefined ? v : s.defaultValue;
         const entry = { name: s.key, label: s.label, type: s.type, group: s.group };
         if (value !== undefined) entry.value = value;
+        if (s.description) entry.description = s.description;
         if (s.node) entry.node = s.node;
         return entry;
       };
@@ -177,9 +178,23 @@ export class ScenarioLoader {
       if (!Array.isArray(cfg.params)) {
         cfg.params = combinedSchema.map(_toEntry);
       } else if (combinedSchema.length > 0) {
-        // Schema-drift guard: merge any schema entries missing from cfg.params so new
-        // params added to the schema (scenario or toolset) propagate to existing saved
-        // scenarios with their defaults.
+        // Schema-drift guard:
+        //   - Backfill any metadata fields (label, group, type, description, node)
+        //     that are missing on existing cfg.params entries. This lets scenarios
+        //     saved before a metadata field was introduced (e.g. description for
+        //     UI tooltips) pick it up on the next load without losing user values.
+        //   - Append schema entries whose key isn't yet in cfg.params with the
+        //     schema's defaults.
+        const schemaByKey = new Map(combinedSchema.map(s => [s.key, s]));
+        for (const p of cfg.params) {
+          const s = schemaByKey.get(p.name);
+          if (!s) continue;
+          if (p.label       === undefined && s.label)       p.label       = s.label;
+          if (p.group       === undefined && s.group)       p.group       = s.group;
+          if (p.type        === undefined && s.type)        p.type        = s.type;
+          if (p.description === undefined && s.description) p.description = s.description;
+          if (p.node        === undefined && s.node)        p.node        = s.node;
+        }
         const existing = new Set(cfg.params.map(p => p.name));
         for (const s of combinedSchema) {
           if (!existing.has(s.key)) cfg.params.push(_toEntry(s));

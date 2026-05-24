@@ -543,6 +543,54 @@ test('toolset params: edited user value round-trips through cfg.params → cfg.p
     'user-edited toolset param must propagate to cfg.parameters on subsequent load');
 });
 
+test('toolset params: cfg.params[].description is propagated from schema for UI tooltips', () => {
+  // The UI uses param.description as a hover tooltip on labels/inputs, so the
+  // loader must thread description through from both scenario and toolset schemas.
+  const cfg = freshDeclarativeConfig();
+  cfg.scenarioClass = IntlRetirementScenario; // enable scenario-level schema merge
+  loadIntoFreshServices(cfg);
+
+  // Toolset-owned key (US_RETIREMENT) — description must come from the toolset schema.
+  const k401 = cfg.params.find(p => p.name === 'k401ToIraConversionEnabled');
+  assert.ok(k401, 'k401ToIraConversionEnabled must exist in cfg.params');
+  assert.ok(k401.description && k401.description.length > 0,
+    'k401ToIraConversionEnabled.description must be populated from US_RETIREMENT.paramSchema');
+
+  // Scenario-owned key (node-bound) — description must come from the scenario schema.
+  const primaryWage = cfg.params.find(p => p.name === 'primaryMonthlyWage');
+  assert.ok(primaryWage);
+  assert.ok(primaryWage.description && primaryWage.description.length > 0,
+    'primaryMonthlyWage.description must be populated from the scenario schema');
+});
+
+test('toolset params: drift guard backfills missing description on pre-existing cfg.params entries', () => {
+  // Simulate a scenario saved BEFORE description was added to cfg.params entries:
+  // cfg.params has the right keys/labels but no description field. The loader must
+  // backfill description from the schema so the UI tooltip works on next load.
+  const cfg = freshDeclarativeConfig();
+  cfg.scenarioClass = IntlRetirementScenario;
+  cfg.params = [
+    { name: 'primaryMonthlyWage', label: 'Primary Monthly Wage (USD)',
+      type: 'Number', group: 'People', value: 8000,
+      node: { type: 'person', id: 'primary', field: 'monthlyWage' } },
+    // saved value the user edited — must not be reset by backfill
+    { name: 'monthlyExpenses', label: 'Monthly Expenses (USD)',
+      type: 'Number', group: 'US Retirement', value: 7500 },
+  ];
+
+  loadIntoFreshServices(cfg);
+
+  const wage = cfg.params.find(p => p.name === 'primaryMonthlyWage');
+  assert.ok(wage?.description?.length > 0,
+    'scenario-schema description should be backfilled onto pre-existing entries');
+
+  const expenses = cfg.params.find(p => p.name === 'monthlyExpenses');
+  assert.ok(expenses?.description?.length > 0,
+    'toolset-schema description should be backfilled onto pre-existing entries');
+  assert.strictEqual(expenses.value, 7500,
+    'backfill must preserve the existing user value');
+});
+
 test('toolset params: cfg.params has no duplicates when multiple toolsets declare the same key', () => {
   // US_RETIREMENT and AU_RETIREMENT both declare `monthlyExpenses` (and `inflationAdjust`).
   // The merge must dedup, otherwise the cfg.params → cfg.parameters sync loop overwrites
