@@ -34,8 +34,10 @@ function makeApp() {
 
 // ─── Constructor ──────────────────────────────────────────────────────────────
 
-test('BaseApp: displayCurrency defaults to USD', () => {
-  assert.strictEqual(makeApp().displayCurrency, 'USD');
+test('BaseApp: displayCurrency defaults to USD via timeControls', () => {
+  const app = makeApp();
+  app.timeControls = { displayCurrency: 'USD' };
+  assert.strictEqual(app.timeControls.displayCurrency, 'USD');
 });
 
 test('BaseApp: playing initializes to false', () => {
@@ -270,35 +272,36 @@ test('BaseApp.getNestedProperty: returns undefined for missing path', () => {
 
 test('BaseApp.toDisplayCurrency: returns same value when native matches displayCurrency', () => {
   const app = makeApp();
-  app.displayCurrency = 'USD';
+  app.timeControls = { displayCurrency: 'USD' };
   assert.strictEqual(app.toDisplayCurrency(1000, 'USD', 1.5), 1000);
 });
 
 test('BaseApp.toDisplayCurrency: converts USD to AUD by multiplying by rate', () => {
   const app = makeApp();
-  app.displayCurrency = 'AUD';
+  app.timeControls = { displayCurrency: 'AUD' };
   assert.strictEqual(app.toDisplayCurrency(100, 'USD', 1.5), 150);
 });
 
 test('BaseApp.toDisplayCurrency: converts AUD to USD by dividing by rate', () => {
   const app = makeApp();
-  app.displayCurrency = 'USD';
+  app.timeControls = { displayCurrency: 'USD' };
   assert.strictEqual(app.toDisplayCurrency(150, 'AUD', 1.5), 100);
 });
 
 // ─── setFormatDate ────────────────────────────────────────────────────────────
 
-test('BaseApp.setFormatDate: updates _formatDate to the new function', () => {
-  const app    = makeApp();
-  const myFmt  = d => 'custom:' + d.getFullYear();
-  app.setFormatDate(myFmt);
-  assert.strictEqual(app._formatDate, myFmt);
+test('BaseApp.setFormatDate: updates formatDate on timeControls', () => {
+  const app   = makeApp();
+  const myFmt = d => 'custom:' + d.getFullYear();
+  app.timeControls = { formatDate: d => d.toDateString(), setFormatDate(fn) { this.formatDate = fn; } };
+  app.timeControls.setFormatDate(myFmt);
+  assert.strictEqual(app.timeControls.formatDate, myFmt);
 });
 
 test('BaseApp.setFormatDate: new formatter is used by fmtVal for Date values', () => {
-  const app   = makeApp();
-  const d     = new Date(2030, 5, 15);
-  app.setFormatDate(() => 'FIXED');
+  const app = makeApp();
+  const d   = new Date(2030, 5, 15);
+  app.timeControls = { formatDate: () => 'FIXED' };
   assert.strictEqual(app.fmtVal(d), 'FIXED');
 });
 

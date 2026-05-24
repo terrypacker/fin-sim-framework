@@ -35,8 +35,6 @@ export class BaseApp {
 
     this.newScenario = newScenario
     this.chartSeries = chartSeries ?? null;
-    this._formatDate = (d) => d.toDateString();
-
     this.scenario = null;
 
     //UI
@@ -55,9 +53,6 @@ export class BaseApp {
     this.playing = false;
     this.lastSliderValue = 0;
     this._currentDate = null;
-    // Current display currency — 'USD' or 'AUD'.  Updated by the selector.
-    this.displayCurrency = 'USD';
-
     this._scenarioData = ScenarioStorage.load();
     // Auto-select the first saved scenario on load; fall back to default if none exist.
     this._activeIdx = this._scenarioData.scenarios.length > 0 ? 0 : null;
@@ -147,25 +142,6 @@ export class BaseApp {
     this.configGraphBuilder.render();
   }
 
-  /**
-   * Update the date formatter used by all views. Takes effect immediately
-   * without requiring a simulation rebuild.
-   * @param {function(Date): string} fn
-   */
-  setFormatDate(fn) {
-    this._formatDate = fn;
-    if (this.timeControls) this.timeControls.formatDate = fn;
-    if (this.timelineView) {
-      this.timelineView.formatDate = fn;
-      // Rebuilt groups use new format — clear expand state so keys stay consistent
-      this.timelineView.expanded.clear();
-      this.timelineView._lastDate = null;
-      this.timelineView._render();
-    }
-    if (this._currentDate) {
-      $('timeLabel').textContent = fn(this._currentDate);
-    }
-  }
 
   buildScenario() {
 
@@ -257,6 +233,10 @@ export class BaseApp {
     });
     this.chartView.startViz();
 
+    // Derive current display settings from DOM so rebuilds preserve user selections.
+    const currentFmt = $('tzSelect')?.value === 'utc' ? fmtUTC : fmtLocal;
+    const currentCurrency = $('displayCurrency')?.value ?? 'USD';
+
     // Timeline view
     this.timelineView = new TimelineView({
       container:   $('timelineContainer'),
@@ -270,7 +250,7 @@ export class BaseApp {
         $('timeSlider').value = sliderVal;
         this.lastSliderValue = sliderVal;
       },
-      formatDate:  this._formatDate,
+      formatDate: currentFmt,
     });
     this.timelineView.attach(this.scenario.sim.journal);
 
@@ -282,7 +262,8 @@ export class BaseApp {
       chartView: this.chartView,
       timeLabel: $('timeLabel'),
       timeSlider: $('timeSlider'),
-      formatDate: this._formatDate,
+      formatDate: currentFmt,
+      displayCurrency: currentCurrency,
       onReset: (date, state) => {
         this.updateDashCards(date);
         this.updateStatePanel(date, state);
@@ -350,7 +331,7 @@ export class BaseApp {
     $('timeSlider').value = 0;
     this.lastSliderValue = 0;
     this._currentDate = this.scenario.simStart;
-    $('timeLabel').textContent = this._formatDate(this.scenario.simStart);
+    $('timeLabel').textContent = this.timeControls.formatDate(this.scenario.simStart);
   }
 
   buildActionDetail(entry) {
@@ -406,7 +387,7 @@ export class BaseApp {
           let name,value;
           if(this.isDate(item)) {
             name = '[' + index + ']';
-            value = this._formatDate(item);
+            value = (this.timeControls?.formatDate ?? (d => d.toDateString()))(item);
           }else {
             name  = item.name ?? JSON.stringify(item);
             value = item.value != null ? item.value : '';
@@ -685,12 +666,13 @@ export class BaseApp {
     });
 
     $('displayCurrency').addEventListener('change', () => {
-      this.displayCurrency = $('displayCurrency').value;
+      if (this.timeControls) this.timeControls.displayCurrency = $('displayCurrency').value;
       this.buildScenario();
     });
 
     $('tzSelect').addEventListener('change', () => {
-      this.setFormatDate($('tzSelect').value === 'utc' ? fmtUTC : fmtLocal);
+      const fmt = $('tzSelect').value === 'utc' ? fmtUTC : fmtLocal;
+      if (this.timeControls) this.timeControls.setFormatDate(fmt);
       this.renderEventList();
     });
 
@@ -740,11 +722,6 @@ export class BaseApp {
     // Params form
     $('rebuildBtn').addEventListener('click', () => this.buildScenario());
 
-    $('tzSelect').addEventListener('change', () => {
-      this.setFormatDate($('tzSelect').value === 'utc' ? fmtUTC : fmtLocal);
-      renderEventList();
-    });
-
     this._initScenarioTab();
     this.openTab({ currentTarget: this.scenarioTabHeader }, 'left-scenario', 'left-col');
 
@@ -774,7 +751,7 @@ export class BaseApp {
     if (Array.isArray(v)) {
       return this.fmtArray(v, objAsCode)
     }
-    if(this.isDate(v)) return this._formatDate(v);
+    if(this.isDate(v)) return (this.timeControls?.formatDate ?? (d => d.toDateString()))(v);
     if (typeof v === 'object') {
       if(objAsCode) {
         return `<pre class="text-wrap:auto">${JSON.stringify(v, null, 2)}</pre>`;
@@ -818,7 +795,7 @@ export class BaseApp {
       return v.map(x => (typeof x === 'object' ? this.renderObj(x) : String(x))).join(', ');
     }
     if(typeof v === 'object') {
-      if (v instanceof Date) return this._formatDate(v);
+      if (v instanceof Date) return (this.timeControls?.formatDate ?? (d => d.toDateString()))(v);
       let result = '{ ';
       for(let f in v) {
         result += f + ': ' + this.renderObj(v[f]) + ' }';
@@ -871,9 +848,10 @@ export class BaseApp {
    * @param {number} rate        - exchangeRateUsdToAud (1 USD = N AUD)
    */
   toDisplayCurrency(value, native, rate) {
-    if (native === this.displayCurrency) return value;
-    if (this.displayCurrency === 'AUD') return value * rate;   // USD → AUD
-    return value / rate;                                   // AUD → USD
+    const currency = this.timeControls?.displayCurrency ?? 'USD';
+    if (native === currency) return value;
+    if (currency === 'AUD') return value * rate;   // USD → AUD
+    return value / rate;                           // AUD → USD
   }
 
   // ── Active scenario helpers ───────────────────────────────────────────────
