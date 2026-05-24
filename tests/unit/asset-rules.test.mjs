@@ -37,6 +37,8 @@ import { AccountService }           from '../../src/finance/services/account-ser
 import { FinancialState }           from '../../src/finance/state/financial-state.js';
 import { InvestmentAccount }        from '../../src/finance/assets/investment-account.js';
 import { AssetService }             from '../../src/finance/services/asset-service.js';
+import { Collectible }              from '../../src/finance/assets/collectible.js';
+import { CollectibleService }       from '../../src/finance/services/collectible-service.js';
 import { Person }                   from '../../src/finance/person.js';
 import { Simulation }               from '../../src/simulation-framework/simulation.js';
 import { SimulationState }          from '../../src/simulation-framework/simulation-state.js';
@@ -46,8 +48,9 @@ import { ReducerBuilder } from '../../src/simulation-framework/builders/reducer-
 import {Graph} from "../../src/graph/graph.js";
 import {EventBus} from "../../src/simulation-framework/event-bus.js";
 
-const svc     = new AccountService(new Graph(), new EventBus());
-const assetSvc = new AssetService();
+const svc            = new AccountService(new Graph(), new EventBus());
+const assetSvc       = new AssetService();
+const collectibleSvc = new CollectibleService();
 
 // ══════════════════════════════════════════════════════════════════════════════
 // RULE: Ownership (50/50 or Solo)  — AR-1 through AR-10
@@ -467,10 +470,11 @@ const ASSET_DRAWDOWN_PRIORITIES = [
   { key: 'k401Account',        label: '401k',                   priority: 8  },
   { key: 'superAccount',       label: 'Superannuation',         priority: 9  },
   { key: 'realProperty',       label: 'Real Property',          priority: 10 },
+  { key: 'collectibleAsset',   label: 'Collectible',            priority: 11 },
 ];
 
-test('AR: Drawdown priority registry covers all 10 asset types', () => {
-  assert.strictEqual(ASSET_DRAWDOWN_PRIORITIES.length, 10);
+test('AR: Drawdown priority registry covers all 11 asset types', () => {
+  assert.strictEqual(ASSET_DRAWDOWN_PRIORITIES.length, 11);
 });
 
 test('AR: Drawdown priority order is correct for all assets', () => {
@@ -486,6 +490,7 @@ test('AR: Drawdown priority order is correct for all assets', () => {
   assert.strictEqual(sorted[7].key, 'k401Account');         // priority 8  — AR-8
   assert.strictEqual(sorted[8].key, 'superAccount');        // priority 9  — AR-10
   assert.strictEqual(sorted[9].key, 'realProperty');        // priority 10 — AR-9
+  assert.strictEqual(sorted[10].key, 'collectibleAsset');   // priority 11 — AR-11
 });
 
 function buildDrawdownSim() {
@@ -576,4 +581,80 @@ test('AR-4: Drawdown reaches Stocks (priority=4) only after lower-priority asset
 
   const stocks = sim.state.assets.find(a => a.key === 'stockAccount');
   assert.strictEqual(stocks.balance, 19000); // 20000 - 1000 overflow
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AR-11: Collectible
+//
+// Rule columns:
+//   Transaction Account: N — not a ledger account; holds value/costBasis
+//   Ownership:           Y — sole or joint (or percentage via owners array)
+//   Min Balance:         N — no minimum balance constraint
+//   Min Age:             N — no age gate
+//   Track Contrib/Earnings: Y — costBasis = contribution; value − costBasis = gain
+//   Track Balance @ Residency: Y — value snapshot on first residency change
+//   Allow Loan:          N — no loanBalance field; CollectibleService does not expose takeLoan
+//   Drawdown Priority:  11 — last to liquidate
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('AR-11: Collectible sole ownership — person has 100% of value', () => {
+  const baseball = new Collectible(5000, { ownershipType: 'sole', costBasis: 1000 });
+  assert.strictEqual(collectibleSvc.getPersonShare(baseball), 5000);
+});
+
+test('AR-11: Collectible joint ownership — each person has 50% of value', () => {
+  const gold = new Collectible(20000, { ownershipType: 'joint', costBasis: 10000 });
+  assert.strictEqual(collectibleSvc.getPersonShare(gold), 10000);
+});
+
+test('AR-11: Collectible percentage ownership — per-person share uses owners array', () => {
+  const art = new Collectible(100000, {
+    owners: [
+      { personId: 'alice', ownershipPct: 60 },
+      { personId: 'bob',   ownershipPct: 40 },
+    ],
+  });
+  assert.strictEqual(collectibleSvc.getPersonShare(art, 'alice'), 60000);
+  assert.strictEqual(collectibleSvc.getPersonShare(art, 'bob'),   40000);
+});
+
+test('AR-11: Collectible tracks contribution via costBasis', () => {
+  const baseball = new Collectible(8000, { costBasis: 3000 });
+  assert.strictEqual(baseball.costBasis, 3000);
+});
+
+test('AR-11: Collectible tracks earnings as value above costBasis', () => {
+  const baseball = new Collectible(8000, { costBasis: 3000 });
+  const gain = baseball.value - baseball.costBasis;
+  assert.strictEqual(gain, 5000);
+});
+
+test('AR-11: Collectible records value at residency change (one-time snapshot)', () => {
+  const gold = new Collectible(15000, { ownershipType: 'sole' });
+  assert.strictEqual(gold.balanceAtResidencyChange, null); // not yet captured
+
+  collectibleSvc.recordResidencyChange(gold);
+  assert.strictEqual(gold.balanceAtResidencyChange, 15000);
+});
+
+test('AR-11: Collectible residency-change snapshot is not overwritten on subsequent calls', () => {
+  const gold = new Collectible(15000, { ownershipType: 'sole' });
+  collectibleSvc.recordResidencyChange(gold);
+  gold.value = 20000; // appreciation after first move
+  collectibleSvc.recordResidencyChange(gold); // second move — should be no-op
+  assert.strictEqual(gold.balanceAtResidencyChange, 15000); // still the first snapshot
+});
+
+test('AR-11: Collectible does not have a loanBalance field (no loan allowed)', () => {
+  const baseball = new Collectible(5000, { costBasis: 1000 });
+  assert.strictEqual(baseball.loanBalance, undefined);
+});
+
+test('AR-11: Collectible has drawdown priority 11 — last to liquidate', () => {
+  const entry = ASSET_DRAWDOWN_PRIORITIES.find(a => a.key === 'collectibleAsset');
+  assert.ok(entry, 'Collectible entry must exist in priority registry');
+  assert.strictEqual(entry.priority, 11);
+
+  const maxPriority = Math.max(...ASSET_DRAWDOWN_PRIORITIES.map(a => a.priority));
+  assert.strictEqual(entry.priority, maxPriority, 'Collectible must have the highest (last) drawdown priority');
 });
