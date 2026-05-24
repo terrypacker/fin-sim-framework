@@ -30,9 +30,6 @@ import {
   AuStockEarningsHandler, AuStockWithdrawalHandler,
 } from './au-brokerage-classes.js';
 import {
-  AuHouseSaleApplyReducer, AuHouseSaleHandler,
-} from './au-real-property-classes.js';
-import {
   AuSeIncomeApplyReducer, AuSeIncomeHandler,
 } from './au-income-classes.js';
 
@@ -73,8 +70,6 @@ export class AuAccountModule2026 extends BaseAccountModule {
       new AuDividendUnfrankedNonResidentApplyReducer({ accountService }),
       new AuStockEarningsApplyReducer({ accountService }),
       new AuStockWithdrawalApplyReducer({ accountService }),
-      // Real Property
-      new AuHouseSaleApplyReducer({ accountService }),
       // AU Income
       new AuSeIncomeApplyReducer({ accountService }),
     ];
@@ -98,8 +93,6 @@ export class AuAccountModule2026 extends BaseAccountModule {
       new AuDividendUnfrankedNonResidentHandler(),
       new AuStockEarningsHandler(),
       new AuStockWithdrawalHandler(),
-      // Real Property
-      new AuHouseSaleHandler(),
       // AU Income
       new AuSeIncomeHandler(),
     ];

@@ -33,6 +33,7 @@ import { ServiceRegistry }     from '../../src/services/service-registry.js';
 import { BaseScenario }            from '../../src/scenarios/base-scenario.js';
 import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
 import { ScenarioSerializer }     from '../../src/scenarios/scenario-serializer.js';
+import { ScenarioLoader }         from '../../src/scenarios/scenario-loader.js';
 import { InMemoryStorage }        from '../../src/storage/in-memory-storage.js';
 
 // Finance classes needed by ScenarioSerializer._makeReducer / _makeHandler
@@ -1211,4 +1212,121 @@ test('ASSET-13: PATH-4 load overrides restore edited fields on realProperties, c
 
   const primaryFinal = registry2.personService.getAll().find(p => p.id === 'primary');
   assert.strictEqual(primaryFinal.lifeExpectancy, 95, 'person.lifeExpectancy restored');
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Property sale: exactly one sale per event
+//
+// Regression: a single US_HOUSE_SALE event was observed to trigger 4 credits
+// to the US savings account instead of 1.  The root cause is duplicate event
+// or handler registration when the config is compiled via ScenarioLoader.load()
+// with plannedSaleYear already set in cfg.realProperties.
+//
+// We exercise the realistic browser path:
+//   1. buildSim() — creates the Simulation
+//   2. ScenarioLoader.load(cfg) — compiles toolsets from a config that already
+//      has plannedSaleYear set (mirrors save→reload after user edits property)
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Build a scenario via ScenarioLoader.load() with optional sale years set on
+ * real properties. This mirrors the browser's save→reload path where
+ * plannedSaleYear has already been persisted in cfg.realProperties before
+ * ScenarioCompiler.compile() runs.
+ */
+function buildScenarioViaSaveReload({ usSaleYear = null, auSaleYear = null, collectibleSaleYear = null } = {}) {
+  ServiceRegistry.reset();
+  const registry = ServiceRegistry.getInstance();
+  const scenario = new IntlRetirementScenario({ context: registry.simulationContext });
+  scenario.buildSim();
+
+  const cfg = IntlRetirementScenario.buildDefaultConfig({});
+
+  // Patch real properties and collectibles with sale years — simulates a config
+  // that was saved after the user set plannedSaleYear in the editor.
+  if (usSaleYear != null) {
+    const prop = cfg.realProperties.find(p => p.country === 'US');
+    if (prop) prop.plannedSaleYear = usSaleYear;
+  }
+  if (auSaleYear != null) {
+    const prop = cfg.realProperties.find(p => p.country === 'AU');
+    if (prop) prop.plannedSaleYear = auSaleYear;
+  }
+  if (collectibleSaleYear != null) {
+    if (cfg.collectibles?.length > 0) cfg.collectibles[0].plannedSaleYear = collectibleSaleYear;
+  }
+
+  new ScenarioLoader().load(cfg, registry);
+  scenario.initialState = { ...scenario.sim.state };
+  return { scenario, sim: scenario.sim };
+}
+
+test('SALE-1: exactly one US_HOUSE_SALE event is scheduled when usSaleYear is set', () => {
+  const { sim } = buildScenarioViaSaveReload({ usSaleYear: 2028 });
+  const services = ServiceRegistry.getInstance();
+
+  const saleEvents = services.eventService.getAll()
+    .filter(e => e.type === 'US_HOUSE_SALE');
+
+  assert.strictEqual(
+    saleEvents.length, 1,
+    `Expected 1 US_HOUSE_SALE event in eventService, got ${saleEvents.length}. ` +
+    `Duplicate events cause multiple sale credits.`
+  );
+
+  // Also verify exactly one US_HOUSE_SALE entry is in the sim queue
+  const queuedSales = [];
+  const allQueued = [];
+  // Walk the priority queue by type — use a temp snapshot approach
+  const origPop = sim.queue.pop.bind(sim.queue);
+  const peeked = [];
+  let next;
+  while ((next = origPop()) != null) {
+    if (next.type === 'US_HOUSE_SALE') queuedSales.push(next);
+    peeked.push(next);
+  }
+  // Restore the queue
+  for (const item of peeked) sim.queue.push(item);
+
+  assert.strictEqual(
+    queuedSales.length, 1,
+    `Expected 1 US_HOUSE_SALE in the sim queue, got ${queuedSales.length}`
+  );
+});
+
+test('SALE-2: exactly one UsHouseSaleHandler is registered for US_HOUSE_SALE', () => {
+  const { sim } = buildScenarioViaSaveReload({ usSaleYear: 2028 });
+
+  const handlers = sim.handlers.get('US_HOUSE_SALE') || [];
+  assert.strictEqual(
+    handlers.length, 1,
+    `Expected 1 handler for US_HOUSE_SALE, got ${handlers.length}. ` +
+    `Multiple handlers cause duplicate credits per sale event.`
+  );
+});
+
+test('SALE-3: US_HOUSE_SALE credits savings exactly once (balance delta = salePrice)', () => {
+  // Use a large initial savings to survive expenses/drawdowns through to the sale date.
+  const saleYear  = 2028;
+  const salePrice = 1_000_000; // default usHouseProperty.value
+  const { sim } = buildScenarioViaSaveReload({ usSaleYear: saleYear });
+
+  // Step to Jan 14 — the day before the scheduled sale (Jan 15)
+  stepWithGuard(sim, new Date(Date.UTC(saleYear, 0, 14)), 15000);
+  const balanceBefore = sim.state.usSavingsAccount.balance;
+
+  // Step to Jan 15 — the sale date
+  stepWithGuard(sim, new Date(Date.UTC(saleYear, 0, 15)), 15000);
+  const balanceAfter = sim.state.usSavingsAccount.balance;
+
+  const delta = balanceAfter - balanceBefore;
+  const effectiveCount = Math.round(delta / salePrice);
+
+  // Jan 15 has no monthly recurring events, so delta should equal salePrice exactly.
+  assert.ok(
+    Math.abs(delta - salePrice) < 1,
+    `usSavingsAccount should increase by exactly ${salePrice} on the sale date. ` +
+    `Actual delta: ${delta.toFixed(2)} (~${effectiveCount}× sale price). ` +
+    `Bug: US_HOUSE_SALE fired ${effectiveCount} time(s) instead of once.`
+  );
 });

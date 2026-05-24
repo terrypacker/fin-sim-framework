@@ -35,17 +35,14 @@ import {
   StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler,
 } from './us-brokerage-classes.js';
 import {
-  UsHouseSaleApplyReducer, UsHouseSaleHandler,
-} from './us-real-property-classes.js';
-import {
   SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer,
   SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer,
   SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler,
   SeIncomeUsHandler, BonusHandler, CompanySaleHandler,
 } from './us-income-classes.js';
 import {
-  CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer,
-  CollectibleSaleHandler, CollectibleValueChangeHandler,
+  CollectibleValueChangeApplyReducer,
+  CollectibleValueChangeHandler,
 } from './us-collectible-classes.js';
 import {
   IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
@@ -124,8 +121,6 @@ export class UsAccountModule2026 extends BaseAccountModule {
       new StockDividendApplyReducer({ accountService }),
       new StockEarningsApplyReducer({ accountService }),
       new StockWithdrawalApplyReducer({ accountService }),
-      // Real Property
-      new UsHouseSaleApplyReducer({ accountService }),
       // Income
       new SsIncomeApplyReducer({ accountService }),
       new WagesIncomeApplyReducer({ accountService }),
@@ -134,7 +129,6 @@ export class UsAccountModule2026 extends BaseAccountModule {
       new BonusApplyReducer({ accountService }),
       new CompanySaleApplyReducer({ accountService }),
       // Collectibles
-      new CollectibleSaleApplyReducer({ accountService }),
       new CollectibleValueChangeApplyReducer({ accountService }),
       // IRA Rollover + RMD
       new IraRolloverWithdrawalApplyReducer({ accountService }),
@@ -173,8 +167,6 @@ export class UsAccountModule2026 extends BaseAccountModule {
       new StockDividendHandler(),
       new StockEarningsHandler(),
       new StockWithdrawalHandler(),
-      // Real Property
-      new UsHouseSaleHandler(),
       // Income
       new SsIncomeHandler(),
       new WagesIncomeHandler(),
@@ -183,7 +175,6 @@ export class UsAccountModule2026 extends BaseAccountModule {
       new BonusHandler(),
       new CompanySaleHandler(),
       // Collectibles
-      new CollectibleSaleHandler(),
       new CollectibleValueChangeHandler(),
       // IRA Rollover + RMD
       new IraRolloverWithdrawalHandler(),

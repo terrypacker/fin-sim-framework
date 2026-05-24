@@ -55,7 +55,8 @@
       "Bash(rollup *)",
       "Bash(awk '{print $5, $6, $7, $8}')",
       "Bash(npm install *)",
-      "Bash(npm ls *)"
+      "Bash(npm ls *)",
+      "Bash(xargs -I {} basename {})"
     ]
   },
   "hooks": {
