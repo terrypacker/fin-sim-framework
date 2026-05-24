@@ -425,6 +425,20 @@
         <select data-id="type"></select>
       </div>
       <div data-id="config"></div>
+      <div class="node-field">
+        <label>
+          Reduced Actions
+          <span class="reducer-sel-count" id="reducer-reduced-actions-count"></span>
+        </label>
+        <div class="reducer-chip-grid" id="reducer-reduced-actions"></div>
+      </div>
+      <div class="node-field">
+        <label>
+          Generated Actions
+          <span class="reducer-sel-count" id="reducer-generated-actions-count"></span>
+        </label>
+        <div class="reducer-chip-grid" id="reducer-generated-actions"></div>
+      </div>
     </div>
   </div>
 </template>
@@ -440,6 +454,13 @@
   <div class="node-field">
     <label>Account Key</label>
     <input data-field="accountKey">
+  </div>
+</template>
+
+<template id="tpl-state-field-reducer-editor">
+  <div class="node-field">
+    <label>State field</label>
+    <input data-field="stateField">
   </div>
 </template>
 

@@ -243,9 +243,13 @@ export class FieldReducer extends Reducer {
  */
 export class StateFieldReducer extends FieldReducer {
   constructor(name = 'State Field', priority = PRIORITY.POSITION_UPDATE, fieldName,
-      generate = (state, action, date) => 0) {
+      generate = null) {
     super(name, priority, fieldName);
-    this.generate = generate;
+    if(!generate) {
+      this.generate = (state, action, date) => this.getStateValue(action, state);
+    }else {
+      this.generate = generate;
+    }
   }
 
   reduce(state, action, date) {
