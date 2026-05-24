@@ -91,6 +91,27 @@ function makeGroups(entries, formatDate = d => d.toDateString()) {
 
 const emptyOptions = { events: [], actions: [] };
 
+// Builds the causalGroups Map (rootNode[]) from the TimelineController.causalGroups() shape
+function makeCausalGroups(entries, formatDate = d => d.toDateString()) {
+  const byId  = new Map();
+  const roots = new Map();
+  entries.forEach(entry => byId.set(entry.action.instanceId, { entry, children: [] }));
+  for (const [, node] of byId) {
+    const { entry } = node;
+    const parentNode = entry.action.parentId ? byId.get(entry.action.parentId) : null;
+    if (parentNode) {
+      parentNode.children.push(node);
+    } else {
+      const d = formatDate(entry.date);
+      if (!roots.has(d)) roots.set(d, new Map());
+      const byEv = roots.get(d);
+      if (!byEv.has(entry.event.type)) byEv.set(entry.event.type, []);
+      byEv.get(entry.event.type).push(node);
+    }
+  }
+  return roots;
+}
+
 function renderView(view, {
   entries        = [],
   expanded       = new Set(),
@@ -100,8 +121,9 @@ function renderView(view, {
   filterDateEnd   = null,
   hasRewind      = false,
 } = {}) {
-  const groups = makeGroups(entries);
-  view.render({ groups, options: emptyOptions, filterEvents, filterActions, filterDateStart, filterDateEnd, expanded, hasRewind });
+  const groups      = makeGroups(entries);
+  const causalGroups = makeCausalGroups(entries);
+  view.render({ groups, causalGroups, options: emptyOptions, filterEvents, filterActions, filterDateStart, filterDateEnd, expanded, hasRewind });
 }
 
 // ─── Constructor ──────────────────────────────────────────────────────────────
@@ -301,6 +323,30 @@ test('TimelineView.render: expanded event group shows action rows with detail bu
   assert.ok(view.container.innerHTML.includes('tl-det'));
 });
 
+test('TimelineView.render: event color from entry.event.color is applied to event type label', () => {
+  const view  = makeView();
+  const d     = new Date(2025, 0, 1);
+  const entry = makeEntry({ date: d, eventType: 'SELL_ASSET' });
+  entry.event.color = '#ff0000';
+  renderView(view, {
+    entries:  [entry],
+    expanded: new Set([d.toDateString()]),
+  });
+  assert.ok(view.container.innerHTML.includes('color:#ff0000'), 'event color should appear in style attribute');
+});
+
+test('TimelineView.render: no inline color style when entry.event.color is null', () => {
+  const view  = makeView();
+  const d     = new Date(2025, 0, 1);
+  const entry = makeEntry({ date: d, eventType: 'SELL_ASSET' });
+  // color is null by default in makeEntry
+  renderView(view, {
+    entries:  [entry],
+    expanded: new Set([d.toDateString()]),
+  });
+  assert.ok(!view.container.innerHTML.includes('tl-ev-type" style'), 'no inline style when color is null');
+});
+
 test('TimelineView.render: right-pointing chevron for collapsed group', () => {
   const view = makeView();
   renderView(view, { entries: [makeEntry()], expanded: new Set() });
@@ -367,4 +413,96 @@ test('TimelineView: clicking download CSV button fires onDownloadCsv', () => {
   const csvBtn = view._filterBarEl.querySelector(`#tl-download-csv`);
   csvBtn.click();
   assert.ok(called, 'onDownloadCsv should be called when the button is clicked');
+});
+
+// ─── Mode toggle ──────────────────────────────────────────────────────────────
+
+test('TimelineView: mode toggle button is present after first render', () => {
+  const view = makeView();
+  renderView(view);
+  assert.ok(view._filterBarEl.querySelector('#tl-mode-toggle') !== null);
+});
+
+test('TimelineView: mode toggle button starts with label "Tree"', () => {
+  const view = makeView();
+  renderView(view);
+  const btn = view._filterBarEl.querySelector('#tl-mode-toggle');
+  assert.equal(btn.textContent, 'Tree');
+});
+
+test('TimelineView: clicking mode toggle switches label to "Timeline"', () => {
+  const view = makeView();
+  renderView(view);
+  const btn = view._filterBarEl.querySelector('#tl-mode-toggle');
+  btn.click();
+  assert.equal(btn.textContent, 'Timeline');
+});
+
+test('TimelineView: clicking mode toggle fires onToggle with null', () => {
+  let received = 'NOT_CALLED';
+  const view = makeView();
+  renderView(view);
+  view.onToggle = key => { received = key; };
+  view._filterBarEl.querySelector('#tl-mode-toggle').click();
+  assert.equal(received, null);
+});
+
+test('TimelineView: clicking mode toggle a second time switches label back to "Tree"', () => {
+  const view = makeView();
+  renderView(view);
+  const btn = view._filterBarEl.querySelector('#tl-mode-toggle');
+  btn.click();
+  btn.click();
+  assert.equal(btn.textContent, 'Tree');
+});
+
+// ─── Tree mode rendering ──────────────────────────────────────────────────────
+
+test('TimelineView: tree mode renders action rows with tl-act--tree class', () => {
+  const view   = makeView();
+  const entry  = makeEntry();
+  const groups = makeGroups([entry]);
+  const causalGroups = makeCausalGroups([entry]);
+  const expanded = new Set([entry.date.toDateString(), `${entry.date.toDateString()}::${entry.event.type}`]);
+  // Switch to tree mode before render
+  view._treeMode = true;
+  view.render({ groups, causalGroups, filterEvents: new Set(), filterActions: new Set(), filterDateStart: null, filterDateEnd: null, expanded, hasRewind: false });
+  assert.ok(view._listEl.querySelector('.tl-act--tree') !== null, 'tree node should have tl-act--tree class');
+});
+
+test('TimelineView: tree mode renders child nodes with increased padding-left', () => {
+  const view   = makeView();
+  const parent = makeEntry();
+  const child  = makeEntry();
+  child.action.parentId = parent.action.instanceId;
+  const causalGroups = makeCausalGroups([parent, child]);
+  const groups       = makeGroups([parent, child]);
+  const dateStr      = parent.date.toDateString();
+  const expanded     = new Set([dateStr, `${dateStr}::${parent.event.type}`]);
+  view._treeMode = true;
+  view.render({ groups, causalGroups, filterEvents: new Set(), filterActions: new Set(), filterDateStart: null, filterDateEnd: null, expanded, hasRewind: false });
+  const treeNodes = view._listEl.querySelectorAll('.tl-act--tree');
+  assert.equal(treeNodes.length, 2, 'parent and child both rendered');
+  const parentPad = parseInt(treeNodes[0].style.paddingLeft, 10);
+  const childPad  = parseInt(treeNodes[1].style.paddingLeft, 10);
+  assert.ok(childPad > parentPad, 'child should have greater padding-left than parent');
+});
+
+// ─── onNavigateToNode ─────────────────────────────────────────────────────────
+
+test('TimelineView: clicking cfg-link button fires onNavigateToNode with nodeId', () => {
+  let received = null;
+  const view  = makeView();
+  const entry = makeEntry();
+  entry.action.nodeId = 'node-abc';
+  const groups   = makeGroups([entry]);
+  const causalGroups = makeCausalGroups([entry]);
+  const dateStr  = entry.date.toDateString();
+  const expanded = new Set([dateStr, `${dateStr}::${entry.event.type}`]);
+  view.onNavigateToNode = id => { received = id; };
+  view.render({ groups, causalGroups, filterEvents: new Set(), filterActions: new Set(), filterDateStart: null, filterDateEnd: null, expanded, hasRewind: false });
+  const cfgBtn = view._listEl.querySelector('.tl-cfg-link');
+  assert.ok(cfgBtn !== null, 'cfg-link button should be present when nodeId is set');
+  cfgBtn.click();
+  assert.equal(received, 'node-abc');
 });

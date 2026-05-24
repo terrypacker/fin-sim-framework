@@ -295,6 +295,7 @@ export class BaseApp extends BaseComponent {
       formatDate: currentFmt,
     });
     this.timelinePresenter.attach(this.scenario.sim.journal);
+    this.timelinePresenter.schemaRegistry = registry.schemaRegistry;
 
     this.timeControls = new TimeControls({
       scenario:        this.scenario,

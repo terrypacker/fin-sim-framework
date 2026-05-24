@@ -647,6 +647,20 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 
 .tl-det:hover { color: #93c5fd; border-color: #3b82f6; }
 
+.tl-cfg-link {
+  background: transparent;
+  border: none;
+  color: #475569;
+  padding: 1px 3px;
+  font-size: 11px;
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.tl-cfg-link:hover { color: #f59e0b; }
+
 .tl-taxdoc {
   background: #1e293b;
   border: 1px solid #334155;

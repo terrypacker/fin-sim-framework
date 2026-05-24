@@ -66,6 +66,7 @@ import { CollectibleService } from './finance/services/collectible-service.js';
 import { PersonService } from './finance/services/person-service.js';
 import { RealPropertyService } from './finance/services/real-property-service.js';
 import { StateRegistry } from './finance/services/state-registry.js';
+import { ValueType, StateSchemaRegistry } from './finance/services/state-schema-registry.js';
 import { ACCOUNT_ROLES } from './finance/state/account-roles.js';
 import { FinancialState } from './finance/state/financial-state.js';
 import { InternationalRetirementFinancialState } from './finance/state/intl-retirement-state.js';
@@ -394,6 +395,8 @@ export const Finance = {
   PersonService,
   RealPropertyService,
   StateRegistry,
+  ValueType,
+  StateSchemaRegistry,
   ACCOUNT_ROLES,
   FinancialState,
   InternationalRetirementFinancialState,

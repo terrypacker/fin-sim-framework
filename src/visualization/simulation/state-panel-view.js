@@ -177,14 +177,14 @@ export class StatePanelView extends BaseComponent {
           const statRow = document.importNode(statGrid.querySelector('[data-stat-row]'), true);
           statRow.style = '';
           statRow.querySelector('.stat-label').innerText = this.toLabel(sk);
-          statRow.querySelector('.stat-value').innerText = typeof sv === 'object' ? this.renderObj(sv) : sv;
+          statRow.querySelector('.stat-value').innerText = typeof sv === 'object' ? this.renderObj(sv) : this._fmtChange(`${k}.${sk}`, sv);
           statGrid.appendChild(statRow);
         }
       } else {
         const statRow = document.importNode(statGrid.querySelector('[data-stat-row]'), true);
         statRow.style = '';
         statRow.querySelector('.stat-label').innerText = this.toLabel(k);
-        statRow.querySelector('.stat-value').innerText = typeof v === 'object' ? this.renderObj(v) : this.fmtVal(v);
+        statRow.querySelector('.stat-value').innerText = typeof v === 'object' ? this.renderObj(v) : this._fmtChange(k, v);
         statGrid.appendChild(statRow);
       }
     }
