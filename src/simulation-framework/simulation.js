@@ -172,14 +172,19 @@ export class Simulation {
   }
 
   clearAllBreakpoints() {
+    for (const node of this.control.breakpointNodes.values()) {
+      if (node.data) node.data = { ...node.data, breakpoint: false };
+    }
     this.control.breakpointNodes.clear();
   }
 
   toggleNodeBreakpoint(node) {
     if (this.control.breakpointNodes.has(node.id)) {
       this.control.breakpointNodes.delete(node.id);
+      node.data = { ...node.data, breakpoint: false };
     } else {
       this.control.breakpointNodes.set(node.id, node);
+      node.data = { ...node.data, breakpoint: true };
     }
   }
 

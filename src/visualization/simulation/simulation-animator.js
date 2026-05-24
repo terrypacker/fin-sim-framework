@@ -114,7 +114,6 @@ export class SimulationAnimator {
     const label = $('simStatus');
     if (dot)   dot.className     = this.playing ? 'status-dot running' : 'status-dot stopped';
     if (label) label.textContent = this.playing ? 'RUNNING' : 'STOPPED';
-    this._scenario.sim.clearAllBreakpoints();
   }
 
   showBreakpointPaused(hit) {
