@@ -24,7 +24,7 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { SimulationAnimator } from '../../src/apps/simulation-animator.js';
+import { SimulationAnimator } from '../../src/visualization/simulation/simulation-animator.js';
 import {EventBus} from "../../src/simulation-framework/event-bus.js";
 
 // ─── Minimal stubs ────────────────────────────────────────────────────────────

@@ -41,6 +41,8 @@ const PREBUILT_SCENARIOS = [
     id:       'intl-retirement',
     label:    'International Retirement',
     order:    1,
+    prebuilt: true,
+    active:   true,
     simStart: '2026-01-01',
     simEnd:   '2041-01-01',
     factory:  (_params, _initialState, simStart, simEnd) => new IntlRetirementScenario({
@@ -53,6 +55,7 @@ const PREBUILT_SCENARIOS = [
     id:       'workbench-default',
     label:    'Workbench Default',
     order:    2,
+    prebuilt: true,
     simStart: '2026-01-01',
     simEnd:   '2041-01-01',
     factory:  (_params, _initialState, simStart, simEnd) => new SimulationWorkbenchDefaultScenario({

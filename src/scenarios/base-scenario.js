@@ -54,11 +54,19 @@ import {ServiceRegistry} from "../services/service-registry.js";
  */
 export class BaseScenario {
   constructor({
+      id,
+      order = 100,
+      prebuilt =  false,
       context,
+      params = [],
       simStart =  new Date(Date.UTC(2026, 0, 1)),
       simEnd = new Date(Date.UTC(2041, 0, 1))} = {}) {
-
+    this.id = id;
+    this.order = order;
+    this.prebuilt = prebuilt;
     this.context = context;
+    this.initialState = {},
+    this.params = params;
     this.simStart = simStart;
     this.simEnd = simEnd;
   }
@@ -86,9 +94,9 @@ export class BaseScenario {
    * method.  The resolved state (as a plain object) is stored on `this.initialState`
    * so it can be captured for serialization.
    */
-  buildSim(params, initialState) {
-    const isEmpty = !initialState || Object.keys(initialState).length === 0;
-    const resolved = isEmpty ? (this.buildDefaultInitialState(params) ?? {}) : initialState;
+  buildSim() {
+    const isEmpty = !this.initialState || Object.keys(this.initialState).length === 0;
+    const resolved = isEmpty ? (this.buildDefaultInitialState(this.params) ?? {}) : this.initialState;
 
     // Persist as a plain object so ScenarioTabPresenter can serialize it.
     this.initialState = typeof resolved?.toPlain === 'function' ? resolved.toPlain() : resolved;
@@ -115,6 +123,14 @@ export class BaseScenario {
   // eslint-disable-next-line no-unused-vars
   buildDefaultInitialState(_params) {
     return null;
+  }
+
+  /**
+   * Subclasses implement loadDefaults() and populate the scenario by inserting
+   * items directly into the services.  The bus takes care of the rest.
+   */
+  loadDefaults() {
+
   }
 
 }

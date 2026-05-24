@@ -106,9 +106,10 @@ export const INTL_RETIREMENT_DEFAULTS = {
  *                     so every item appears in the config graph and UI.
  */
 export class IntlRetirementScenario extends BaseScenario {
-  constructor({ context, simStart, simEnd } = {}) {
+  constructor({ context, params, simStart, simEnd } = {}) {
     super({
       context,
+      params,
       simStart: simStart ?? new Date(Date.UTC(2026, 0, 1)),
       simEnd:   simEnd ?? new Date(Date.UTC(2041, 0, 1)),
     });
@@ -240,8 +241,8 @@ export class IntlRetirementScenario extends BaseScenario {
    *   Fresh scenario:  buildSim() → afterBuildSim() → loadDefaults()      ✓ setup() runs
    *   Saved scenario:  buildSim() → afterBuildSim() → deserialize()        ✗ setup() never runs
    */
-  buildSim(params, initialState) {
-    super.buildSim(params, initialState);
+  buildSim() {
+    super.buildSim();
 
     // ── Wire TaxService — phase 1: state init + direct event scheduling.
     //    Handlers/reducers are registered in loadDefaults() (phase 2) so that
