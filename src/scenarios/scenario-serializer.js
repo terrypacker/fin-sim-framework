@@ -356,7 +356,7 @@ export class ScenarioSerializer {
       type:             account.type             ?? null,
       role:             account.role             ?? null,
       stateKey:         account.stateKey         ?? null,
-      initialValue:     account.balance,
+      initialValue:     account.balance ?? account.initialValue, //TODO Hack here since the field name is not the same as the constructor
       ownershipType:    account.ownershipType    ?? 'sole',
       ownerId:          account.ownerId          ?? null,
       minimumBalance:   account.minimumBalance   ?? 0,

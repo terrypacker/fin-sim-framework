@@ -80,7 +80,7 @@ export class ScenarioCompiler {
     for (const h of handlers)  services.handlerService.register(h);
     for (const r of reducers)  services.reducerService.register(r);
 
-    return { paramSchema };
+    return { paramSchema, statePatches };
   }
 
   _resolveToolsets(requestedIds) {

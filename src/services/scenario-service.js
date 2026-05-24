@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import {ScenarioSerializer} from "../scenarios/scenario-serializer.js";
+
 /**
  * Scenario id format:
  *   'p:<id>'  — a pre-built scenario
@@ -51,26 +53,19 @@ export class ScenarioService {
    */
   newScenario(fromScenario) {
     const newId = `u:${this._registry.getNextUserScenarioId()}`;
+    const serialized = ScenarioSerializer.serializeScenario(fromScenario);
+    serialized.id = newId;
+    serialized.name = 'New Scenario';
+    serialized.order = 100;
+    serialized.prebuilt = false;
+    serialized.scenarioId = fromScenario.id;
+
     const schema = fromScenario?.scenarioClass?.getParamSchema?.() ?? [];
-    const params = schema.map(s => ({ name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue }));
-    const scenario = {
-      id:           newId,
-      name:         'New Scenario',
-      order:        100,
-      prebuilt:     false,
-      scenarioId:   fromScenario?.id ?? null,
-      simStart:     fromScenario?.simStart ?? new Date(Date.UTC(2026, 0, 1)),
-      simEnd:       fromScenario?.simEnd   ?? new Date(Date.UTC(2041, 0, 1)),
-      events:       [],
-      handlers:     [],
-      actions:      [],
-      reducers:     [],
-      initialState: fromScenario?.initialState ?? {},
-      toolsets: fromScenario?.toolsets ?? [],
-      params,
-    };
-    this._registry.save(scenario, true);
-    return scenario;
+    serialized.params = schema.map(s => ({ name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue }));
+
+
+    this._registry.save(serialized, true);
+    return serialized;
   }
 
   getUserScenarios() {

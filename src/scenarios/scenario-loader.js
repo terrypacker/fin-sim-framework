@@ -80,8 +80,10 @@ export class ScenarioLoader {
         Object.assign(sim.state, _cloneState(cfg.initialState));
       }
     } else if (cfg.toolsets?.length > 0) {
-      new ScenarioCompiler(this._toolsetRegistry).compile(cfg, services);
-      if (sim) cfg.initialState = _cloneState(sim.state);
+     const { paramSchema, statePatches } = new ScenarioCompiler(this._toolsetRegistry).compile(cfg, services);
+      //TODO I don't think we want to do this, we need a safer way to compute the initial state or better yet always have it.
+      //if (sim) cfg.initialState = _cloneState(sim.state);
+      cfg.initialState = statePatches;
     }
   }
 }
