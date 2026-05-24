@@ -46,6 +46,10 @@ export class BaseApp {
     this.timelineView = null;
     this.timeControls = null;
 
+    //References to UI elements
+    this.eventsTabHeader = null;
+    this.scenarioTabHeader = null;
+    
     //State
     this.playing = false;
     this.lastSliderValue = 0;
@@ -204,7 +208,7 @@ export class BaseApp {
     //TODO Need to stop other UI VIZ?
     //if(this.schedulerUI) this.schedulerUI.stopViz();
 
-    //Setup the Configuration vizuals
+    //Setup the Configuration visuals
     if (this.configGraphBuilder) this.configGraphBuilder.destroy();
     this.configGraphBuilder = new ConfigGraphBuilder({
       graphRoot: document.getElementById('graphRoot'),
@@ -213,6 +217,9 @@ export class BaseApp {
       nodeTemplate: document.getElementById('tpl-node-details'),
       displayNodeStateChanges: (changes) => this.showNodeStateChanges(changes)
     });
+
+    this.configGraphBuilder.registerNodeClickListener((event, node) => this.openTab(
+        { currentTarget: this.eventsTabHeader }, 'left-events', 'left-col'));
 
     this.schedulerUI = new EventScheduler({
       builderCanvas: document.getElementById('builderCanvas'),
@@ -595,6 +602,11 @@ export class BaseApp {
   }
 
   initView() {
+
+    //Keep a reference to this
+    this.eventsTabHeader = document.querySelector(`.tab-header[data-dest-tab=left-events][data-tab-group=left-col]`);
+    this.scenarioTabHeader = document.querySelector(`.tab-header[data-dest-tab=left-scenario][data-tab-group=left-col]`);
+
     //Setup the tabs
     document.querySelectorAll('.tab-header').forEach(el => {
       el.addEventListener('click', (evt) => {
@@ -649,13 +661,12 @@ export class BaseApp {
     $('rebuildBtn').addEventListener('click', () => this.buildScenario());
 
     $('tzSelect').addEventListener('change', () => {
-      setFormatDate($('tzSelect').value === 'utc' ? fmtUTC : fmtLocal);
+      this.setFormatDate($('tzSelect').value === 'utc' ? fmtUTC : fmtLocal);
       renderEventList();
     });
 
     this._initScenarioTab();
-    const eventsTabHeader = document.querySelector(`.tab-header[data-dest-tab=left-events][data-tab-group=left-col]`);
-    this.openTab({currentTarget: eventsTabHeader}, 'left-events', 'left-col');
+    this.openTab({ currentTarget: this.scenarioTabHeader }, 'left-scenario', 'left-col');
 
     window.addEventListener('resize', () => this.resizeCanvases());
     this.resizeCanvases();
