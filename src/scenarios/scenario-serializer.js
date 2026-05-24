@@ -146,6 +146,7 @@ export class ScenarioSerializer {
     else if (node instanceof C.RecordBalanceAction)              typeName = 'RecordBalanceAction';
     else if (node instanceof C.RecordMetricAction)               typeName = 'RecordMetricAction';
     else if (node instanceof C.AmountAction)                     typeName = 'AmountAction';
+    else if (node instanceof C.FieldValueAction)                 typeName = 'FieldValueAction';
     else throw new Error(`Unsupported action type ${node}`);
 
     // fieldName on RecordMetricAction subclasses includes 'metrics.' prefix — strip it
