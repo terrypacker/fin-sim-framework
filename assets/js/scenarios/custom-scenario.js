@@ -54,10 +54,7 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
     const recordSalaryPaymentAction = new FinSimLib.Core.AmountAction('RECORD_METRIC', 'Pay Salary', 1200);
     const sumSalaryPaymentAction = new FinSimLib.Core.RecordNumericSumMetricAction('Sum Payments', 'amount');
 
-    const monthEndHandler = new FinSimLib.Core.HandlerEntry(function ({ data, date, state }) {
-      const actions = [...this.generatedActions];
-      return actions;
-    }, 'Month End Handler');
+    const monthEndHandler = new FinSimLib.Core.HandlerEntry( null,'Month End Handler');
     monthEndHandler.forEvent(monthEndEventSeries).generateAction(recordSalaryPaymentAction);
     this.registerHandler(monthEndHandler);
 

@@ -22,7 +22,7 @@
  */
 export class HandlerEntry {
   constructor(fn, name = 'anonymous') {
-    this.fn   = fn;
+    this.fn   = fn ?? this.defaultFunction;
     this.name = name;
     this.handledEvents = [];
     this.generatedActions = [];
@@ -40,6 +40,11 @@ export class HandlerEntry {
 
   call(ctx) {
     return this.fn(ctx);
+  }
+
+  defaultFunction ({ data, date, state }) {
+    const actions = [...this.generatedActions];
+    return actions;
   }
 }
 

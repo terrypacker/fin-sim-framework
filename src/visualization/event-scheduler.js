@@ -54,11 +54,6 @@ export class EventScheduler {
   }
 
   _bind() {
-    document.getElementById('addSeriesBtn').onclick   = () => this._notifyNodeCreationRequested('event', 'Series');
-    document.getElementById('addOneOffBtn').onclick   = () => this._notifyNodeCreationRequested('event', 'OneOff');
-    document.getElementById('addHandlerNode').onclick = () => this._notifyNodeCreationRequested('handler');
-    document.getElementById('addActionNode').onclick  = () => this._notifyNodeCreationRequested('action');
-    document.getElementById('addReducerNode').onclick = () => this._notifyNodeCreationRequested('reducer');
     this._buildControls();
   }
 
