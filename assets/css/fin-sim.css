@@ -628,6 +628,12 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   outline: none;
 }
 
+.node-field input:disabled  {
+  background-color:var(--bg-muted);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
 /* ── GRAPH AREA ── */
 .config-graph-tab { /* the element was .tab-content */
   display: flex;
