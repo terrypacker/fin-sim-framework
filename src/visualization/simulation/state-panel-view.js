@@ -10,6 +10,7 @@
 
 import { $ } from '../ui-utils.js';
 import { diffStates } from "../../simulation-framework/state-utils.js";
+import { BaseComponent } from '../components/base-component.js';
 
 /**
  * StatePanelView — pure DOM layer for state/metrics panels and node detail.
@@ -22,11 +23,11 @@ import { diffStates } from "../../simulation-framework/state-utils.js";
  * BaseApp calls `this._statePanelView.formatDate = currentFmt` on each buildScenario()
  * and when the TZ selector changes.
  */
-export class StatePanelView {
+export class StatePanelView extends BaseComponent {
 
   constructor() {
+    super();
     this._formatDate = d => d.toDateString();
-    this._dirty = false;
   }
 
   /** Update the active date-format function (UTC vs local). */
@@ -34,31 +35,14 @@ export class StatePanelView {
     this._formatDate = fn ?? (d => d.toDateString());
   }
 
-  /* ───────────────────────── CORE RENDERING ───────────────────────────── */
-
-  _scheduleFrame(date, state) {
-    if (this._frameScheduled) return;
-
-    this._frameScheduled = true;
-
-    requestAnimationFrame(() => {
-      this._frameScheduled = false;
-
-      if (!this._dirty) return;
-
-      this._dirty = false;
-      this._renderStatePanel(date, state);
-    });
-  }
-
   // ── State panel rendering ─────────────────────────────────────────────────
 
   updateStatePanel(date, state) {
     //TODO change this method name to render
     //TODO #140 render diffs only, we can get them from SimulationAnimator whos is calling this already
-    if (this._dirty) return; // already scheduled
-    this._dirty = true;
-    this._scheduleFrame(date, state);
+    this._pendingDate  = date;
+    this._pendingState = state;
+    this.scheduleRender(() => this._renderStatePanel(this._pendingDate, this._pendingState));
   }
 
   _renderStatePanel(date, state) {

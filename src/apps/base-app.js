@@ -222,6 +222,7 @@ export class BaseApp extends BaseComponent {
       timeControls:   this.timeControls,
       statePanelView: this._statePanelView,
       chartView:      this.chartView,
+      graphRenderer:  this.configPresenter._graphRenderer,
     });
 
     this._animator.toggleBreakpoint();

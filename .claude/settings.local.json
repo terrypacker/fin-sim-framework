@@ -26,7 +26,13 @@
       "Bash(npx:*)",
       "Bash(gtimeout 30 node --test tests/unit/intl-retirement-scenario.test.mjs)",
       "Bash(echo \"EXIT: $?\")",
-      "Bash(NODE_OPTIONS=--experimental-vm-modules npx jest *)"
+      "Bash(NODE_OPTIONS=--experimental-vm-modules npx jest *)",
+      "mcp__chrome-devtools__list_pages",
+      "mcp__chrome-devtools__take_screenshot",
+      "mcp__chrome-devtools__performance_start_trace",
+      "mcp__chrome-devtools__take_snapshot",
+      "mcp__chrome-devtools__click",
+      "mcp__chrome-devtools__performance_analyze_insight"
     ]
   },
   "hooks": {
