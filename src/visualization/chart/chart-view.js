@@ -8,13 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Chart, registerables } from 'chart.js';
-import annotationPlugin from 'chartjs-plugin-annotation';
-import zoomPlugin from 'chartjs-plugin-zoom';
-import 'chartjs-adapter-date-fns';
+import * as echarts from 'echarts';
 import { BaseComponent } from '../components/base-component.js';
-
-Chart.register(...registerables, annotationPlugin, zoomPlugin);
 
 const COLOR_PALETTE = [
   '#60a5fa', '#34d399', '#f59e0b', '#f87171', '#a78bfa',
@@ -23,7 +18,7 @@ const COLOR_PALETTE = [
 ];
 
 /**
- * Pure Chart.js rendering layer. Extends BaseComponent so it participates in
+ * ECharts rendering layer. Extends BaseComponent so it participates in
  * the parent→child destroy lifecycle (e.g. MapFilterMultiSelect cleanup).
  *
  * Series are discovered automatically from keys passed to addSnapshot().
@@ -34,36 +29,37 @@ const COLOR_PALETTE = [
 export class ChartView extends BaseComponent {
   /**
    * @param {object}  opts
-   * @param {Element} opts.canvas    - <canvas> element
+   * @param {Element} opts.container  - div element for ECharts to own
    * @param {Date}    opts.simStart
    * @param {Date}    opts.simEnd
-   * @param {Array}   [opts.series]  - optional [{key, color, label}] overrides
+   * @param {Array}   [opts.series]   - optional [{key, color, label}] overrides
    */
-  constructor({ canvas, simStart, simEnd, series }) {
+  constructor({ container, simStart, simEnd, series }) {
     super();
-    this.canvas   = canvas;
-    this.simStart = simStart;
-    this.simEnd   = simEnd;
-    this.running  = false;
+    this.container = container;
+    this.simStart  = simStart;
+    this.simEnd    = simEnd;
+    this.running   = false;
 
-    this._chart       = null;
-    this._seriesMap   = new Map();  // key → { colorIdx, dataArr }
-    this._colorIdx    = 0;
-    this._annotations = {};
-    this._filterBarEl = null;
-    this._controlsEl  = null;
+    this._chart        = null;
+    this._ro           = null;
+    this._seriesMap    = new Map();  // key → { colorIdx, dataArr }
+    this._colorIdx     = 0;
+    this._annotations  = {};         // id → { date, label, color, position }
+    this._hiddenSeries = new Set();
+    this._filterBarEl  = null;
 
     this._seriesConfig = new Map((series ?? []).map(s => [s.key, s]));
+  }
 
+  // ── Resize ────────────────────────────────────────────────────────────────────
+
+  resize() {
+    this._chart?.resize();
   }
 
   // ── Filter bar ────────────────────────────────────────────────────────────────
 
-  /**
-   * Instantiate and mount the chart filter bar template into #chartFilterContainer.
-   * Safe to call multiple times; returns the existing element after the first mount.
-   * @returns {Element|null}
-   */
   mountFilterBar() {
     if (this._filterBarEl) return this._filterBarEl;
     const container = document.getElementById('chartFilterContainer');
@@ -76,15 +72,16 @@ export class ChartView extends BaseComponent {
 
   // ── Dataset visibility ────────────────────────────────────────────────────────
 
-  /**
-   * Show or hide a series by key without discarding its data.
-   */
   setDatasetVisible(key, visible) {
-    if (!this._chart) return;
-    const ds = this._chart.data.datasets.find(d => d._seriesKey === key);
-    if (ds && ds.hidden !== !visible) {
-      ds.hidden = !visible;
-      this.scheduleRender(() => this._chart?.update('none'));
+    if (visible) {
+      this._hiddenSeries.delete(key);
+    } else {
+      this._hiddenSeries.add(key);
+    }
+    if (this._chart) {
+      this._chart.setOption({
+        legend: { selected: { [this._labelFor(key)]: visible } }
+      });
     }
   }
 
@@ -100,11 +97,6 @@ export class ChartView extends BaseComponent {
 
   // ── Public API ───────────────────────────────────────────────────────────────
 
-  /**
-   * Record a snapshot of values at a point in time.
-   * All keys are stored regardless of current visibility state; call
-   * setDatasetVisible() after to apply the filter.
-   */
   addSnapshot(date, data) {
     if (!data || typeof data !== 'object') return;
     const t = new Date(date).getTime();
@@ -120,68 +112,44 @@ export class ChartView extends BaseComponent {
       const num = Number(value);
 
       if (!this._seriesMap.has(key)) {
-        const dataArr = [];
-        this._seriesMap.set(key, { colorIdx: this._colorIdx++, dataArr });
-        if (this._chart) this._appendDataset(key, dataArr);
+        this._seriesMap.set(key, { colorIdx: this._colorIdx++, dataArr: [] });
       }
-      const dataArr = this._seriesMap.get(key).dataArr;
-      if (dataArr.length > 0 && dataArr[dataArr.length - 1].x === t) {
-        dataArr[dataArr.length - 1].y = num;
+      const { dataArr } = this._seriesMap.get(key);
+      if (dataArr.length > 0 && dataArr[dataArr.length - 1][0] === t) {
+        dataArr[dataArr.length - 1][1] = num;
       } else {
-        dataArr.push({ x: t, y: num });
+        dataArr.push([t, num]);
       }
       didAdd = true;
     }
 
     if (didAdd && this._chart) {
-      this.scheduleRender(() => this._chart?.update('none'));
+      this.scheduleRender(() => this._doChartUpdate());
     }
   }
 
-  /**
-   * Add a vertical-line annotation to the chart.
-   */
   addAnnotation(id, { label, date, color = '#f59e0b', position = 'start' }) {
-    this._annotations[id] = {
-      type: 'line',
-      xMin: new Date(date).getTime(),
-      xMax: new Date(date).getTime(),
-      borderColor: color,
-      borderWidth: 2,
-      borderDash: [4, 4],
-      label: {
-        display:         true,
-        content:         label,
-        position,
-        backgroundColor: color + '33',
-        color:           '#f8fafc',
-        font:            { size: 11, family: 'monospace' },
-        padding:         4
-      }
-    };
+    this._annotations[id] = { label, date: new Date(date), color, position };
     if (this._chart) {
-      this._chart.options.plugins.annotation.annotations = { ...this._annotations };
-      this._chart.update();
+      this.scheduleRender(() => this._doChartUpdate());
     }
   }
 
   removeAnnotation(id) {
     delete this._annotations[id];
     if (this._chart) {
-      this._chart.options.plugins.annotation.annotations = { ...this._annotations };
-      this._chart.update();
+      this.scheduleRender(() => this._doChartUpdate());
     }
   }
 
-  /** Clear all series data and annotations (called on rewind). */
   resetHistory() {
     this._seriesMap.clear();
-    this._colorIdx = 0;
+    this._colorIdx    = 0;
     this._annotations = {};
+    this._hiddenSeries.clear();
     if (this._chart) {
-      this._chart.data.datasets = [];
-      this._chart.options.plugins.annotation.annotations = {};
-      this._chart.update();
+      this._chart.clear();
+      this._applyBaseOptions();
     }
   }
 
@@ -192,12 +160,12 @@ export class ChartView extends BaseComponent {
 
   stopViz() {
     this.running = false;
+    this._ro?.disconnect();
+    this._ro = null;
     if (this._chart) {
-      this._chart.destroy();
+      this._chart.dispose();
       this._chart = null;
     }
-    this._controlsEl?.remove();
-    this._controlsEl = null;
     this._filterBarEl?.remove();
     this._filterBarEl = null;
   }
@@ -218,125 +186,172 @@ export class ChartView extends BaseComponent {
       .trim();
   }
 
-  _appendDataset(key, dataArr) {
+  _buildSeriesOption(key, dataArr) {
     const { colorIdx } = this._seriesMap.get(key);
     const cfg   = this._seriesConfig.get(key);
     const color = cfg?.color ?? this._colorFor(colorIdx);
-    this._chart.data.datasets.push({
-      label:                  this._labelFor(key),
-      data:                   dataArr,
-      parsing:                false,
-      normalized:             true,
-      borderColor:            color,
-      backgroundColor:        color + '22',
-      borderWidth:            2.5,
-      pointRadius:            0,
-      pointHitRadius:         12,
-      tension:                0.35,
-      cubicInterpolationMode: 'monotone',
-      borderCapStyle:         'round',
-      borderJoinStyle:        'round',
-      fill:                   false,
-      _seriesKey:             key
+    return {
+      type:           'line',
+      id:             key,
+      name:           this._labelFor(key),
+      data:           dataArr,
+      smooth:         true,
+      smoothMonotone: 'x',
+      symbol:         'none',
+      sampling:       'lttb',
+      emphasis:       { focus: 'series' },
+      lineStyle:      { color, width: 2 },
+      itemStyle:      { color },
+    };
+  }
+
+  _buildAnnotationSeries() {
+    const annList = Object.values(this._annotations);
+    if (annList.length === 0) return null;
+    return {
+      type:            'line',
+      id:              '__annotations__',
+      name:            '__annotations__',
+      data:            [],
+      silent:          false,
+      legendHoverLink: false,
+      tooltip:         { show: false },
+      lineStyle:       { opacity: 0 },
+      symbol:          'none',
+      markLine: {
+        symbol:  ['none', 'none'],
+        silent:  false,
+        data: annList.map(ann => ({
+          name:      ann.label,
+          xAxis:     ann.date.getTime(),
+          lineStyle: { color: ann.color, width: 2, type: 'dashed' },
+          label: {
+            show:            true,
+            position:        ann.position === 'end' ? 'insideEndTop' : 'insideStartTop',
+            formatter:       ann.label,
+            color:           ann.color,
+            fontSize:        11,
+            fontFamily:      'monospace',
+            backgroundColor: ann.color + '22',
+            padding:         [2, 4],
+          }
+        }))
+      }
+    };
+  }
+
+  _doChartUpdate() {
+    if (!this._chart) return;
+
+    const series = [];
+    const selected = {};
+
+    for (const [key, { dataArr }] of this._seriesMap) {
+      series.push(this._buildSeriesOption(key, dataArr));
+      selected[this._labelFor(key)] = !this._hiddenSeries.has(key);
+    }
+
+    const annSeries = this._buildAnnotationSeries();
+    if (annSeries) series.push(annSeries);
+
+    this._chart.setOption({ series, legend: { selected } });
+  }
+
+  _applyBaseOptions() {
+    this._chart.setOption({
+      backgroundColor: 'transparent',
+      animation:       false,
+      grid: {
+        top:          40,
+        right:        16,
+        bottom:       24,
+        left:         16,
+        containLabel: true,
+      },
+      legend: {
+        show:     false,
+        selected: {},
+      },
+      toolbox: {
+        right: 12,
+        top:    6,
+        feature: {
+          dataZoom: {
+            yAxisIndex: 'none',
+            title:      { zoom: 'Select Zoom', back: 'Undo Zoom' },
+            brushStyle: { color: 'rgba(96,165,250,0.08)', borderColor: '#60a5fa', borderWidth: 1 },
+          },
+          restore: { title: 'Reset View' },
+        },
+        iconStyle: { borderColor: '#475569' },
+        emphasis:  { iconStyle: { borderColor: '#94a3b8' } },
+      },
+      xAxis: {
+        type:  'time',
+        axisLabel: {
+          color:      '#94a3b8',
+          fontSize:   11,
+          fontFamily: 'monospace',
+        },
+        splitLine: { show: false },
+        axisLine:  { lineStyle: { color: 'rgba(148,163,184,0.15)' } },
+        axisTick:  { lineStyle: { color: 'rgba(148,163,184,0.15)' } },
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: {
+          color:      '#94a3b8',
+          fontSize:   11,
+          fontFamily: 'monospace',
+          formatter:  (val) => Number(val).toLocaleString(),
+        },
+        splitLine: { lineStyle: { color: 'rgba(148,163,184,0.08)', width: 1 } },
+        axisLine:  { show: false },
+        axisTick:  { show: false },
+      },
+      tooltip: {
+        trigger:     'axis',
+        axisPointer: {
+          type:       'cross',
+          lineStyle:  { color: 'rgba(148,163,184,0.35)' },
+          crossStyle: { color: 'rgba(148,163,184,0.35)' },
+        },
+        backgroundColor: '#1e293b',
+        borderColor:     '#334155',
+        borderWidth:     1,
+        textStyle:       { color: '#e2e8f0', fontSize: 11, fontFamily: 'monospace' },
+        formatter:       (params) => this._fmtTooltip(params),
+      },
+      dataZoom: [
+        { type: 'inside', xAxisIndex: 0, filterMode: 'filter' },
+      ],
+      series: [],
     });
-  }
-
-  _fmtDateTick(ts) {
-    const d = new Date(ts);
-    return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0');
-  }
-
-  _buildControls() {
-    const wrapper = this.canvas.parentElement;
-    if (!wrapper || this._controlsEl) return;
-
-    wrapper.style.position = 'relative';
-
-    this._controlsEl = document.createElement('div');
-    this._controlsEl.className = 'chart-controls';
-    this._controlsEl.style.cssText =
-      'position:absolute;top:8px;right:8px;z-index:10;display:flex;gap:6px;';
-
-    const resetBtn = document.createElement('button');
-    resetBtn.className = 'btn btn-sm';
-    resetBtn.title = 'Reset zoom and pan';
-    resetBtn.textContent = '⊙ RESET ZOOM';
-    resetBtn.addEventListener('click', () => this._chart?.resetZoom());
-
-    this._controlsEl.appendChild(resetBtn);
-    wrapper.appendChild(this._controlsEl);
   }
 
   _initChart() {
-    if (!this.canvas) return;
+    if (!this.container) return;
 
-    this._buildControls();
+    this._chart = echarts.init(this.container, null, { renderer: 'canvas' });
 
-    this._chart = new Chart(this.canvas, {
-      type: 'line',
-      data: { datasets: [] },
-      options: {
-        devicePixelRatio:    window.devicePixelRatio || 1,
-        responsive:          true,
-        maintainAspectRatio: false,
-        animation:           false,
-        transitions: {
-          active: { animation: { duration: 0 } }
-        },
-        layout: { padding: { top: 10, right: 30, bottom: 10, left: 10 } },
-        scales: {
-          x: {
-            type: 'time',
-            time: { unit: 'month' }
-          },
-          y: {
-            ticks: {
-              color: '#94a3b8',
-              font:  { family: 'monospace', size: 11 },
-              callback: (val) => Number(val).toLocaleString()
-            },
-            grid: {
-              color:       'rgba(148,163,184,0.08)',
-              lineWidth:   1,
-              drawBorder:  false
-            }
-          }
-        },
-        plugins: {
-          legend: {
-            labels: {
-              color: '#94a3b8',
-              font:  { family: 'Inter, system-ui, sans-serif', size: 11 }
-            }
-          },
-          tooltip: {
-            callbacks: {
-              title: (items) => items.length ? this._fmtDateTick(items[0].parsed.x) : '',
-              label: (item)  =>
-                `${item.dataset.label}: ${Number(item.parsed.y).toLocaleString()}`
-            }
-          },
-          annotation: {
-            annotations: this._annotations
-          },
-          decimation: {
-            enabled:   true,
-            algorithm: 'lttb',
-            samples:   500
-          },
-          zoom: {
-            zoom: {
-              wheel:  { enabled: true },
-              pinch:  { enabled: true },
-              mode:   'x'
-            },
-            pan: {
-              enabled: true,
-              mode:    'x'
-            }
-          }
-        }
-      }
-    });
+    // Auto-resize when the container's dimensions change (covers tab-switch and pane-resize).
+    this._ro = new ResizeObserver(() => this._chart?.resize());
+    this._ro.observe(this.container);
+
+    this._applyBaseOptions();
+  }
+
+  _fmtTooltip(params) {
+    if (!params || params.length === 0) return '';
+    const ts = params[0].axisValue;
+    const d  = new Date(ts);
+    const dateStr = d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0');
+    const lines = [`<span style="font-size:10px;color:#64748b">${dateStr}</span>`];
+    for (const p of params) {
+      if (!p.seriesName || p.seriesName === '__annotations__') continue;
+      const val = Number(p.value?.[1] ?? p.value).toLocaleString();
+      lines.push(`${p.marker}${p.seriesName}: <b>${val}</b>`);
+    }
+    return lines.join('<br/>');
   }
 }

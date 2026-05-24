@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Workbench V6 - Drag Tabs</title>
+
+<style>
+:root {
+  --bg:#0e1116;
+  --panel:#171b21;
+  --panel2:#1e242c;
+  --border:1px solid rgba(255,255,255,0.08);
+  --text:#e7edf5;
+  --muted:#92a0b3;
+  --accent:#5aa2ff;
+
+  font-family: system-ui, sans-serif;
+}
+
+* { box-sizing:border-box; }
+
+body {
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  height:100vh;
+  overflow:hidden;
+}
+
+/* =======================================================
+   LAYOUT
+======================================================= */
+
+#app {
+  display:grid;
+  grid-template-rows:48px 1fr;
+  height:100vh;
+}
+
+.top {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:0 12px;
+  background:var(--panel);
+  border-bottom:var(--border);
+}
+
+.workspace {
+  display:grid;
+  grid-template-columns:260px 1fr 320px;
+  height:100%;
+  overflow:hidden;
+}
+
+.panel {
+  background:var(--panel);
+  border-right:var(--border);
+  overflow:hidden;
+}
+
+.panel.right {
+  border-right:none;
+  border-left:var(--border);
+}
+
+/* =======================================================
+   TAB GROUPS
+======================================================= */
+
+.tabgroup {
+  display:flex;
+  flex-direction:column;
+  height:100%;
+}
+
+.tabs {
+  display:flex;
+  background:var(--panel2);
+  border-bottom:var(--border);
+  min-height:32px;
+}
+
+.tab {
+  padding:6px 10px;
+  font-size:12px;
+  cursor:grab;
+  user-select:none;
+  color:var(--muted);
+}
+
+.tab.active {
+  background:rgba(90,162,255,0.15);
+  color:white;
+}
+
+.view {
+  flex:1;
+  padding:10px;
+  overflow:auto;
+}
+
+/* =======================================================
+   DROP ZONES
+======================================================= */
+
+.dropzone {
+  position:relative;
+  height:100%;
+}
+
+.dropzone.dragover {
+  outline:2px dashed var(--accent);
+  outline-offset:-6px;
+}
+
+/* =======================================================
+   COMPONENT CARDS
+======================================================= */
+
+.card {
+  background:var(--panel2);
+  border:var(--border);
+  border-radius:10px;
+  padding:10px;
+  margin-bottom:8px;
+}
+
+.small {
+  color:var(--muted);
+  font-size:12px;
+}
+
+/* =======================================================
+   DRAG GHOST
+======================================================= */
+
+.ghost {
+  position:fixed;
+  pointer-events:none;
+  padding:6px 10px;
+  background:var(--panel2);
+  border:var(--border);
+  border-radius:8px;
+  font-size:12px;
+  opacity:0.9;
+  transform:translate(-50%, -50%);
+}
+</style>
+</head>
+
+<body>
+
+<div id="app">
+
+  <div class="top">
+    <div><b>Workbench V6</b></div>
+    <div class="small">Drag Tabs Between Panels</div>
+  </div>
+
+  <div class="workspace">
+
+    <div id="left" class="panel dropzone"></div>
+    <div id="center" class="panel dropzone"></div>
+    <div id="right" class="panel dropzone"></div>
+
+  </div>
+
+</div>
+
+<script>
+
+/* =======================================================
+   TAB REGISTRY (GLOBAL SOURCE OF TRUTH)
+======================================================= */
+
+const tabRegistry = {
+
+  timeline: {
+    title: "Timeline",
+    render: () => `<div class="card"><b>Timeline</b></div>`
+  },
+
+  graph: {
+    title: "Graph",
+    render: () => `<div class="card"><b>Graph Trace</b></div>`
+  },
+
+  montecarlo: {
+    title: "Monte Carlo",
+    render: () => `<div class="card"><b>Monte Carlo</b></div>`
+  },
+
+  inspector: {
+    title: "Inspector",
+    render: () => `<div class="card"><b>Inspector</b></div>`
+  }
+
+};
+
+/* =======================================================
+   PANES (STATEFUL CONTAINERS)
+======================================================= */
+
+const panes = {
+
+  left: {
+    el: document.getElementById("left"),
+    tabs: ["timeline", "graph"],
+    active: "timeline"
+  },
+
+  center: {
+    el: document.getElementById("center"),
+    tabs: ["montecarlo"],
+    active: "montecarlo"
+  },
+
+  right: {
+    el: document.getElementById("right"),
+    tabs: ["inspector"],
+    active: "inspector"
+  }
+
+};
+
+/* =======================================================
+   RENDER PANES
+======================================================= */
+
+function renderPane(name) {
+
+  const pane = panes[name];
+
+  const container = document.createElement("div");
+  container.className = "tabgroup dropzone";
+  container.dataset.pane = name;
+
+  /* tabs */
+  const tabs = document.createElement("div");
+  tabs.className = "tabs";
+
+  pane.tabs.forEach(tid => {
+
+    const tab = document.createElement("div");
+    tab.className = "tab " + (pane.active === tid ? "active" : "");
+    tab.textContent = tabRegistry[tid].title;
+
+    tab.dataset.tab = tid;
+    tab.dataset.pane = name;
+
+    /* CLICK = activate */
+    tab.onclick = () => {
+      pane.active = tid;
+      renderAll();
+    };
+
+    /* DRAG START */
+    tab.draggable = true;
+
+    tab.ondragstart = (e) => {
+      e.dataTransfer.setData("text/plain", JSON.stringify({
+        tab: tid,
+        from: name
+      }));
+
+      showGhost(tabRegistry[tid].title);
+    };
+
+    tab.ondragend = hideGhost;
+
+    tabs.appendChild(tab);
+  });
+
+  /* view */
+  const view = document.createElement("div");
+  view.className = "view";
+  view.innerHTML = tabRegistry[pane.active].render();
+
+  container.appendChild(tabs);
+  container.appendChild(view);
+
+  /* DROP HANDLERS */
+  container.ondragover = (e) => {
+    e.preventDefault();
+    container.classList.add("dragover");
+  };
+
+  container.ondragleave = () => {
+    container.classList.remove("dragover");
+  };
+
+  container.ondrop = (e) => {
+
+    e.preventDefault();
+    container.classList.remove("dragover");
+
+    const data = JSON.parse(
+      e.dataTransfer.getData("text/plain")
+    );
+
+    moveTab(data.tab, data.from, name);
+  };
+
+  pane.el.innerHTML = "";
+  pane.el.appendChild(container);
+}
+
+/* =======================================================
+   MOVE TAB (CORE LOGIC)
+======================================================= */
+
+function moveTab(tab, from, to) {
+
+  if (from === to) return;
+
+  const f = panes[from];
+  const t = panes[to];
+
+  f.tabs = f.tabs.filter(x => x !== tab);
+  t.tabs.push(tab);
+
+  t.active = tab;
+
+  renderAll();
+}
+
+/* =======================================================
+   RENDER ALL
+======================================================= */
+
+function renderAll() {
+  renderPane("left");
+  renderPane("center");
+  renderPane("right");
+}
+
+/* =======================================================
+   DRAG GHOST UI
+======================================================= */
+
+let ghost;
+
+function showGhost(text) {
+  ghost = document.createElement("div");
+  ghost.className = "ghost";
+  ghost.textContent = text;
+  document.body.appendChild(ghost);
+
+  document.onmousemove = (e) => {
+    ghost.style.left = e.clientX + "px";
+    ghost.style.top = e.clientY + "px";
+  };
+}
+
+function hideGhost() {
+  if (ghost) ghost.remove();
+  ghost = null;
+  document.onmousemove = null;
+}
+
+/* =======================================================
+   INIT
+======================================================= */
+
+renderAll();
+
+</script>
+
+</body>
+</html>

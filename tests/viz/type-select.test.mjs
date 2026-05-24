@@ -64,13 +64,21 @@ function makeBuilderView(elements) {
 }
 // ─── DOM helpers ──────────────────────────────────────────────────────────────
 function makeElements() {
-  const builderCanvas = document.querySelector('#builderCanvas');
-  const graphRoot  = document.querySelector('#graphRoot');
-  const graphViewPort = document.querySelector('#graphViewport');
-  const graphEdges = document.querySelector('#graphEdges');
-  const graphNodes = document.querySelector('#graphNodes');
+  // These IDs were removed from index.html in the Phase 2 workbench refactor;
+  // create elements directly so tests remain decoupled from production HTML structure.
+  const graphRoot = document.createElement('div');
+  const graphViewPort = document.createElement('div');
+  graphViewPort.id = 'graphViewport';
+  const selectionBox = document.createElement('div');
+  selectionBox.className = 'selection-box';
+  graphRoot.appendChild(graphViewPort);
+  graphRoot.appendChild(selectionBox);
+
+  const graphEdges = document.createElement('div');
+  const graphNodes = document.createElement('div');
+  const builderCanvas = document.createElement('div');
   const nodeDetailsTemplate = document.querySelector('#tpl-node-details');
-  return { builderCanvas, graphRoot, graphNodes, graphEdges , nodeDetailsTemplate};
+  return { builderCanvas, graphRoot, graphNodes, graphEdges, nodeDetailsTemplate };
 }
 
 // ─── Graph Renderer stub ───────────────────────────────────────────────────────────────

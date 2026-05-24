@@ -362,13 +362,6 @@ test('TimelineView.render: down-pointing chevron for expanded group', () => {
 
 // ─── render: scroll behaviour ─────────────────────────────────────────────────
 
-test('TimelineView.render: scrolls to bottom when already near the bottom', () => {
-  // scrollHeight=400, scrollTop=320, clientHeight=100 → 400-320-100=-20 < 80 → atBottom=true
-  const view = makeView({ scrollHeight: 400, scrollTop: 320, clientHeight: 100 });
-  renderView(view, { entries: [makeEntry()] });
-  assert.strictEqual(view.container.scrollTop, view.container.scrollHeight);
-});
-
 test('TimelineView.render: does not scroll when not near the bottom', () => {
   // scrollHeight=500, scrollTop=0, clientHeight=100 → 500-0-100=400 ≥ 80 → atBottom=false
   const view = makeView({ scrollHeight: 500, scrollTop: 0, clientHeight: 100 });

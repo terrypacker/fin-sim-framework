@@ -1,0 +1,1166 @@
+<!--
+Simulation Workbench Prototype
+Single-file prototype
+Save as: workbench.html
+Open locally in browser
+
+Goals:
+- IDE-style analytical workspace
+- Timeline-centric UX
+- Dockable panel regions
+- Detachable windows
+- Contextual inspector
+- Command palette
+- Vanilla JS + templates only
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+<title>Simulation Workbench Prototype</title>
+
+<style>
+:root {
+
+  /* SURFACES */
+
+  --bg: #111315;
+  --surface-0: #16191d;
+  --surface-1: #1d2126;
+  --surface-2: #252a31;
+  --surface-3: #2d333b;
+
+  /* TEXT */
+
+  --text-primary: #e6e9ee;
+  --text-secondary: #9aa4b2;
+  --text-muted: #6f7a88;
+
+  /* ACCENTS */
+
+  --accent: #4c8dff;
+  --accent-soft: rgba(76,141,255,0.15);
+
+  --income: #52c97f;
+  --expense: #ff7a7a;
+  --warning: #ffb84d;
+
+  /* SPACING */
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* SIZING */
+
+  --activity-bar-width: 56px;
+  --sidebar-width: 260px;
+  --inspector-width: 340px;
+  --bottom-height: 220px;
+
+  --radius: 10px;
+
+  --font:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font);
+  overflow: hidden;
+}
+
+body {
+  display: grid;
+  grid-template-columns:
+    var(--activity-bar-width)
+    1fr;
+}
+
+/* =========================================================
+   ACTIVITY BAR
+========================================================= */
+
+.activity-bar {
+  background: #0d0f12;
+  border-right: 1px solid rgba(255,255,255,0.04);
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  padding: var(--space-3) 0;
+  gap: var(--space-2);
+}
+
+.activity-button {
+  width: 40px;
+  height: 40px;
+
+  border-radius: 10px;
+  border: none;
+
+  background: transparent;
+  color: var(--text-secondary);
+
+  cursor: pointer;
+
+  transition: 120ms ease;
+}
+
+.activity-button:hover {
+  background: var(--surface-1);
+  color: white;
+}
+
+.activity-button.active {
+  background: var(--accent-soft);
+  color: white;
+}
+
+/* =========================================================
+   APP LAYOUT
+========================================================= */
+
+.app-shell {
+  display: grid;
+  grid-template-rows:
+    48px
+    1fr
+    var(--bottom-height);
+  height: 100vh;
+}
+
+/* =========================================================
+   TOP BAR
+========================================================= */
+
+.top-bar {
+  background: var(--surface-0);
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 0 var(--space-4);
+
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.top-bar-left,
+.top-bar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.logo {
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.toolbar-button {
+  background: var(--surface-2);
+  border: none;
+  color: var(--text-primary);
+
+  height: 32px;
+  padding: 0 12px;
+
+  border-radius: 8px;
+
+  cursor: pointer;
+}
+
+.toolbar-button:hover {
+  background: var(--surface-3);
+}
+
+/* =========================================================
+   MAIN AREA
+========================================================= */
+
+.main-layout {
+  display: grid;
+  grid-template-columns:
+    1fr
+    var(--inspector-width);
+
+  overflow: hidden;
+}
+
+/* =========================================================
+   CENTER WORKSPACE
+========================================================= */
+
+.workspace {
+  display: grid;
+  grid-template-rows:
+    40px
+    1fr;
+
+  overflow: hidden;
+}
+
+.workspace-tabs {
+  display: flex;
+  align-items: center;
+
+  gap: 1px;
+
+  background: var(--surface-0);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+
+  padding: 0 var(--space-2);
+}
+
+.tab {
+  height: 32px;
+
+  display: flex;
+  align-items: center;
+
+  padding: 0 14px;
+
+  border-radius: 8px 8px 0 0;
+
+  background: transparent;
+  color: var(--text-secondary);
+
+  cursor: pointer;
+}
+
+.tab.active {
+  background: var(--surface-1);
+  color: white;
+}
+
+/* =========================================================
+   TIMELINE VIEW
+========================================================= */
+
+.timeline-view {
+  overflow: auto;
+
+  background:
+    linear-gradient(
+      to bottom,
+      rgba(255,255,255,0.015),
+      transparent
+    );
+
+  padding: var(--space-5);
+}
+
+.timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  margin-bottom: var(--space-5);
+}
+
+.timeline-title {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.timeline-controls {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.timeline-grid {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.year-group {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.year-header {
+  position: sticky;
+  top: 0;
+
+  background: rgba(17,19,21,0.9);
+  backdrop-filter: blur(8px);
+
+  padding: var(--space-2) 0;
+
+  font-size: 20px;
+  font-weight: 600;
+
+  color: white;
+
+  z-index: 2;
+}
+
+.event-lane {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.event-card {
+  background: var(--surface-1);
+
+  border-radius: var(--radius);
+
+  padding: var(--space-4);
+
+  cursor: pointer;
+
+  transition: 120ms ease;
+
+  display: grid;
+  gap: var(--space-2);
+}
+
+.event-card:hover {
+  background: var(--surface-2);
+}
+
+.event-card.selected {
+  outline: 2px solid var(--accent);
+  background: rgba(76,141,255,0.08);
+}
+
+.event-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.event-title {
+  font-weight: 600;
+}
+
+.event-meta {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.event-tags {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.tag {
+  background: rgba(255,255,255,0.06);
+
+  padding:
+    4px
+    8px;
+
+  border-radius: 999px;
+
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* =========================================================
+   INSPECTOR
+========================================================= */
+
+.inspector {
+  background: var(--surface-0);
+
+  border-left: 1px solid rgba(255,255,255,0.04);
+
+  overflow: auto;
+}
+
+.inspector-header {
+  height: 40px;
+
+  display: flex;
+  align-items: center;
+
+  padding: 0 var(--space-4);
+
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+
+  font-weight: 600;
+}
+
+.inspector-content {
+  padding: var(--space-4);
+
+  display: grid;
+  gap: var(--space-4);
+}
+
+.inspector-section {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.inspector-label {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.inspector-box {
+  background: var(--surface-1);
+
+  border-radius: var(--radius);
+
+  padding: var(--space-4);
+
+  color: var(--text-secondary);
+}
+
+/* =========================================================
+   BOTTOM PANEL
+========================================================= */
+
+.bottom-panel {
+  background: #0f1114;
+
+  border-top: 1px solid rgba(255,255,255,0.04);
+
+  overflow: auto;
+}
+
+.bottom-tabs {
+  height: 36px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 1px;
+
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+
+  padding: 0 var(--space-2);
+}
+
+.console {
+  padding: var(--space-4);
+
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    monospace;
+
+  font-size: 13px;
+
+  color: var(--text-secondary);
+
+  display: grid;
+  gap: var(--space-2);
+}
+
+.console-line {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.console-time {
+  color: var(--text-muted);
+}
+
+/* =========================================================
+   COMMAND PALETTE
+========================================================= */
+
+.command-palette {
+  position: fixed;
+  inset: 0;
+
+  background: rgba(0,0,0,0.4);
+
+  display: none;
+  align-items: start;
+  justify-content: center;
+
+  padding-top: 12vh;
+}
+
+.command-palette.open {
+  display: flex;
+}
+
+.command-dialog {
+  width: 700px;
+
+  background: var(--surface-1);
+
+  border-radius: 16px;
+
+  overflow: hidden;
+
+  box-shadow:
+    0 20px 80px rgba(0,0,0,0.5);
+}
+
+.command-input {
+  width: 100%;
+  height: 56px;
+
+  border: none;
+  outline: none;
+
+  background: transparent;
+
+  color: white;
+
+  font-size: 16px;
+
+  padding: 0 var(--space-4);
+}
+
+.command-results {
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+
+.command-item {
+  padding: 14px var(--space-4);
+
+  cursor: pointer;
+
+  color: var(--text-secondary);
+}
+
+.command-item:hover {
+  background: var(--surface-2);
+  color: white;
+}
+
+/* =========================================================
+   TABLET
+========================================================= */
+
+@media (max-width: 1100px) {
+
+  :root {
+    --inspector-width: 280px;
+  }
+
+}
+
+@media (max-width: 900px) {
+
+  .main-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .inspector {
+    display: none;
+  }
+
+}
+</style>
+</head>
+
+<body>
+
+<!-- ======================================================
+     ACTIVITY BAR
+====================================================== -->
+
+<nav class="activity-bar">
+
+  <button class="activity-button active">⏱</button>
+  <button class="activity-button">🕸</button>
+  <button class="activity-button">📈</button>
+  <button class="activity-button">⚙</button>
+  <button class="activity-button">💰</button>
+  <button class="activity-button">🧪</button>
+
+</nav>
+
+<!-- ======================================================
+     APP SHELL
+====================================================== -->
+
+<div class="app-shell">
+
+  <!-- ====================================================
+       TOP BAR
+  ===================================================== -->
+
+  <header class="top-bar">
+
+    <div class="top-bar-left">
+      <div class="logo">
+        Simulation Workbench
+      </div>
+
+      <button class="toolbar-button">
+        Run
+      </button>
+
+      <button class="toolbar-button">
+        Replay
+      </button>
+
+      <button class="toolbar-button">
+        Monte Carlo
+      </button>
+    </div>
+
+    <div class="top-bar-right">
+      <button
+        class="toolbar-button"
+        data-action="open-command"
+      >
+        ⌘K
+      </button>
+    </div>
+
+  </header>
+
+  <!-- ====================================================
+       MAIN LAYOUT
+  ===================================================== -->
+
+  <div class="main-layout">
+
+    <!-- ==================================================
+         CENTER WORKSPACE
+    =================================================== -->
+
+    <main class="workspace">
+
+      <div class="workspace-tabs">
+        <div class="tab active">
+          Timeline
+        </div>
+
+        <div class="tab">
+          Graph Trace
+        </div>
+
+        <div class="tab">
+          Monte Carlo
+        </div>
+      </div>
+
+      <!-- ================================================
+           TIMELINE VIEW
+      ================================================= -->
+
+      <section class="timeline-view">
+
+        <div class="timeline-header">
+
+          <div class="timeline-title">
+            Financial Independence Timeline
+          </div>
+
+          <div class="timeline-controls">
+            <button class="toolbar-button">
+              Zoom In
+            </button>
+
+            <button class="toolbar-button">
+              Zoom Out
+            </button>
+          </div>
+
+        </div>
+
+        <div
+          class="timeline-grid"
+          data-role="timeline"
+        ></div>
+
+      </section>
+
+    </main>
+
+    <!-- ==================================================
+         INSPECTOR
+    =================================================== -->
+
+    <aside class="inspector">
+
+      <div class="inspector-header">
+        Inspector
+      </div>
+
+      <div
+        class="inspector-content"
+        data-role="inspector"
+      >
+
+        <div class="inspector-section">
+          <div class="inspector-label">
+            No Selection
+          </div>
+
+          <div class="inspector-box">
+            Select an event on the timeline.
+          </div>
+        </div>
+
+      </div>
+
+    </aside>
+
+  </div>
+
+  <!-- ====================================================
+       BOTTOM PANEL
+  ===================================================== -->
+
+  <section class="bottom-panel">
+
+    <div class="bottom-tabs">
+      <div class="tab active">
+        Journal
+      </div>
+
+      <div class="tab">
+        Reducer Diff
+      </div>
+
+      <div class="tab">
+        Event Bus
+      </div>
+    </div>
+
+    <div class="console">
+
+      <div class="console-line">
+        <div class="console-time">
+          14:21:03
+        </div>
+
+        <div>
+          EVENT retirement.triggered
+        </div>
+      </div>
+
+      <div class="console-line">
+        <div class="console-time">
+          14:21:03
+        </div>
+
+        <div>
+          ACTION portfolio.withdraw
+        </div>
+      </div>
+
+      <div class="console-line">
+        <div class="console-time">
+          14:21:03
+        </div>
+
+        <div>
+          REDUCER account.balance.updated
+        </div>
+      </div>
+
+    </div>
+
+  </section>
+
+</div>
+
+<!-- ======================================================
+     COMMAND PALETTE
+====================================================== -->
+
+<div
+  class="command-palette"
+  data-role="command-palette"
+>
+
+  <div class="command-dialog">
+
+    <input
+      class="command-input"
+      placeholder="Search commands..."
+      autofocus
+    />
+
+    <div class="command-results">
+
+      <div class="command-item">
+        Open Timeline
+      </div>
+
+      <div class="command-item">
+        Open Monte Carlo
+      </div>
+
+      <div class="command-item">
+        Detach Graph View
+      </div>
+
+      <div class="command-item">
+        Toggle Inspector
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ======================================================
+     TEMPLATES
+====================================================== -->
+
+<template id="event-template">
+
+  <div
+    class="event-card"
+    data-role="event"
+  >
+
+    <div class="event-row">
+
+      <div class="event-title">
+      </div>
+
+      <div class="event-meta">
+      </div>
+
+    </div>
+
+    <div class="event-tags">
+    </div>
+
+  </div>
+
+</template>
+
+<!-- ======================================================
+     JAVASCRIPT
+====================================================== -->
+
+<script>
+/* ========================================================
+   EVENT BUS
+======================================================== */
+
+class EventBus {
+
+  constructor() {
+    this.listeners = {};
+  }
+
+  on(event, callback) {
+
+    if (!this.listeners[event]) {
+      this.listeners[event] = [];
+    }
+
+    this.listeners[event].push(callback);
+  }
+
+  emit(event, payload) {
+
+    const callbacks = this.listeners[event] || [];
+
+    for (const callback of callbacks) {
+      callback(payload);
+    }
+  }
+}
+
+const bus = new EventBus();
+
+/* ========================================================
+   GLOBAL SELECTION
+======================================================== */
+
+const selection = {
+
+  current: null,
+
+  set(value) {
+
+    this.current = value;
+
+    bus.emit('selection.changed', value);
+  }
+};
+
+/* ========================================================
+   TIMELINE DATA
+======================================================== */
+
+const timelineData = [
+
+  {
+    year: 2028,
+    events: [
+      {
+        id: 'evt1',
+        title: 'Roth Conversion Window',
+        date: 'March 4',
+        tags: ['Tax', 'Optimization']
+      },
+      {
+        id: 'evt2',
+        title: 'Semi Retirement',
+        date: 'July 18',
+        tags: ['Lifestyle']
+      }
+    ]
+  },
+
+  {
+    year: 2031,
+    events: [
+      {
+        id: 'evt3',
+        title: 'Primary FIRE Date',
+        date: 'January 1',
+        tags: ['Milestone']
+      }
+    ]
+  }
+
+];
+
+/* ========================================================
+   TIMELINE RENDER
+======================================================== */
+
+const timelineRoot =
+  document.querySelector('[data-role="timeline"]');
+
+const eventTemplate =
+  document.querySelector('#event-template');
+
+function renderTimeline() {
+
+  timelineRoot.innerHTML = '';
+
+  for (const year of timelineData) {
+
+    const yearGroup =
+      document.createElement('div');
+
+    yearGroup.className = 'year-group';
+
+    yearGroup.innerHTML = `
+      <div class="year-header">
+        ${year.year}
+      </div>
+    `;
+
+    const lane =
+      document.createElement('div');
+
+    lane.className = 'event-lane';
+
+    for (const event of year.events) {
+
+      const node =
+        eventTemplate.content
+          .cloneNode(true);
+
+      const card =
+        node.querySelector('[data-role="event"]');
+
+      card.dataset.id = event.id;
+
+      node.querySelector('.event-title')
+        .textContent = event.title;
+
+      node.querySelector('.event-meta')
+        .textContent = event.date;
+
+      const tags =
+        node.querySelector('.event-tags');
+
+      for (const tag of event.tags) {
+
+        const el =
+          document.createElement('div');
+
+        el.className = 'tag';
+
+        el.textContent = tag;
+
+        tags.appendChild(el);
+      }
+
+      lane.appendChild(node);
+    }
+
+    yearGroup.appendChild(lane);
+
+    timelineRoot.appendChild(yearGroup);
+  }
+}
+
+renderTimeline();
+
+/* ========================================================
+   EVENT SELECTION
+======================================================== */
+
+document.addEventListener('click', (event) => {
+
+  const card =
+    event.target.closest('[data-role="event"]');
+
+  if (!card) return;
+
+  document
+    .querySelectorAll('.event-card')
+    .forEach(el => {
+      el.classList.remove('selected');
+    });
+
+  card.classList.add('selected');
+
+  selection.set({
+    type: 'event',
+    id: card.dataset.id
+  });
+});
+
+/* ========================================================
+   INSPECTOR
+======================================================== */
+
+const inspector =
+  document.querySelector('[data-role="inspector"]');
+
+bus.on('selection.changed', (payload) => {
+
+  inspector.innerHTML = `
+    <div class="inspector-section">
+
+      <div class="inspector-label">
+        Selected Event
+      </div>
+
+      <div class="inspector-box">
+
+        <strong>${payload.id}</strong>
+
+        <br /><br />
+
+        This panel should become:
+        <br />
+        - contextual
+        <br />
+        - template driven
+        <br />
+        - plugin aware
+        <br />
+        - synchronized across tools
+
+      </div>
+
+    </div>
+  `;
+});
+
+/* ========================================================
+   COMMAND PALETTE
+======================================================== */
+
+const palette =
+  document.querySelector(
+    '[data-role="command-palette"]'
+  );
+
+document.addEventListener('keydown', (event) => {
+
+  const isCommandK =
+    (event.metaKey || event.ctrlKey)
+    &&
+    event.key.toLowerCase() === 'k';
+
+  if (isCommandK) {
+
+    event.preventDefault();
+
+    palette.classList.toggle('open');
+  }
+
+  if (event.key === 'Escape') {
+    palette.classList.remove('open');
+  }
+});
+
+palette.addEventListener('click', (event) => {
+
+  if (event.target === palette) {
+    palette.classList.remove('open');
+  }
+});
+
+/* ========================================================
+   DETACHED WINDOW DEMO
+======================================================== */
+
+function detachWindow(title) {
+
+  const child =
+    window.open(
+      '',
+      '',
+      'width=900,height=700'
+    );
+
+  child.document.write(`
+    <html>
+      <head>
+        <title>${title}</title>
+
+        <style>
+          body {
+            background: #111315;
+            color: white;
+            font-family: sans-serif;
+            padding: 40px;
+          }
+        </style>
+      </head>
+
+      <body>
+
+        <h1>${title}</h1>
+
+        <p>
+          Detached window prototype.
+        </p>
+
+      </body>
+    </html>
+  `);
+}
+
+/* ========================================================
+   EXAMPLE
+======================================================== */
+
+bus.on('open.graph.window', () => {
+  detachWindow('Graph Trace');
+});
+
+</script>
+
+</body>
+</html>
