@@ -21,6 +21,8 @@
  * A single registered handler for an event type.
  */
 export class HandlerEntry {
+  static description = 'Returns generated actions.';
+
   constructor(fn, name = 'anonymous') {
     this.id   = null;
     this.fn   = fn ?? this.defaultFunction;
@@ -37,7 +39,32 @@ export class HandlerEntry {
     const actions = [...this.generatedActions];
     return actions;
   }
+
+  get kind() { return 'handler'; }
+
+  /** Always matches constructor.name — can never drift from the actual class. */
+  get handlerClass() { return this.constructor.name; }
+
+  static getDescription() {
+    return this.description;
+  }
+
+  getDescription() {
+    return this.constructor.getDescription();
+  }
+
 }
+
+// ─── Class registry ────────────────────────────────────────────────────────────
+
+/**
+ * Maps handlerClass string → class.
+ * Used by HandlerService.replaceHandler to instantiate the correct subclass
+ * when the user changes the type of an existing handler in the UI.
+ */
+export const HANDLER_CLASSES = {
+  HandlerEntry,
+};
 
 /**
  * Registry that maps event types to ordered lists of HandlerEntry instances.

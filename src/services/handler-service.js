@@ -9,7 +9,7 @@
  */
 
 import { BaseService } from './base-service.js';
-import { HandlerEntry } from '../simulation-framework/handlers.js';
+import { HandlerEntry, HANDLER_CLASSES } from '../simulation-framework/handlers.js';
 
 /**
  * Service for managing HandlerEntry instances throughout their lifecycle.
@@ -56,6 +56,38 @@ export class HandlerService extends BaseService {
     Object.assign(handler, changes);
     this._publish('UPDATE', handler.constructor.name, handler, originalItem);
     return handler;
+  }
+
+  /**
+   * Replace an existing handler with a new instance of the given class,
+   * preserving id, name, fn, handledEvents, and generatedActions.
+   *
+   * HandlerEntry subclasses may have different constructor signatures, so we
+   * bypass the constructor via Object.create and restore all relevant properties
+   * explicitly. This keeps constructor.name and getDescription() in sync with
+   * the stored handlerClass string.
+   *
+   * @param {string|HandlerEntry} idOrHandler
+   * @param {string}              newClass    - key in HANDLER_CLASSES
+   * @param {object}              [extraProps]
+   * @returns {HandlerEntry}
+   */
+  replaceHandler(idOrHandler, newClass, extraProps = {}) {
+    const old = this._resolve(idOrHandler);
+    const Cls = HANDLER_CLASSES[newClass];
+    if (!Cls) throw new Error(`HandlerService: unknown handler class "${newClass}"`);
+
+    const fresh = Object.create(Cls.prototype);
+    fresh.id               = old.id;
+    fresh.name             = old.name;
+    fresh.fn               = old.fn;
+    fresh.handledEvents    = old.handledEvents;
+    fresh.generatedActions = old.generatedActions;
+    Object.assign(fresh, extraProps);
+
+    this._items.set(fresh.id, fresh);
+    this._publish('UPDATE', newClass, fresh, old);
+    return fresh;
   }
 
   // ─── Delete ───────────────────────────────────────────────────────────────

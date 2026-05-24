@@ -27,14 +27,32 @@
  * type identifies which reducers should process it.
  */
 export class Action {
+  static description = 'Base action carrying only a type discriminator and optional name.';
+
   constructor(type, name) {
     this.id   = null;  // Assigned by ActionService after construction
     this.type = type;
     this.name = name;
   }
+
+  get kind() { return 'action'; }
+
+  /** Always matches constructor.name — can never drift from the actual class. */
+  get actionClass() { return this.constructor.name; }
+
+  static getDescription() {
+    return this.description;
+  }
+
+  getDescription() {
+    return this.constructor.getDescription();
+  }
+
 }
 
 export class FieldAction extends Action {
+  static description = 'Extends Action with a fieldName targeting a specific state field.';
+
   constructor(type, name, fieldName) {
     super(type, name);
     this.fieldName  = fieldName;
@@ -42,6 +60,8 @@ export class FieldAction extends Action {
 }
 
 export class FieldValueAction extends FieldAction {
+  static description = 'Extends FieldAction with a value to write into the targeted state field.';
+
   constructor(type, name, fieldName, value) {
     super(type, name, fieldName);
     this.value  = value;
@@ -58,6 +78,8 @@ export class FieldValueAction extends FieldAction {
  *           CALCULATE_CAPITAL_GAINS_TAX
  */
 export class AmountAction extends FieldValueAction {
+  static description = 'Carries a monetary or numeric amount (fieldName fixed to "amount"); used for cash flows, gains, and tax payments.';
+
   constructor(type, name, amount) {
     super(type, name, 'amount', amount);
   }
@@ -68,6 +90,8 @@ export class AmountAction extends FieldValueAction {
  * Used by the generic RECORD_METRIC reducer.
  */
 export class RecordMetricAction extends FieldValueAction {
+  static description = 'Writes a single value into state.metrics[fieldName], replacing any existing value.';
+
   constructor(type = 'RECORD_METRIC', name, fieldName, value) {
     super(type, name, 'metrics.' + fieldName, value);
   }
@@ -78,6 +102,8 @@ export class RecordMetricAction extends FieldValueAction {
  * Used by the generic RECORD_ARRAY_METRIC reducer registered in every financial scenario.
  */
 export class RecordArrayMetricAction extends RecordMetricAction {
+  static description = 'Appends a value to the array at state.metrics[fieldName]; processed by the RECORD_ARRAY_METRIC reducer.';
+
   constructor(name, fieldName, value) {
     super('RECORD_ARRAY_METRIC', name, fieldName, value);
   }
@@ -88,6 +114,8 @@ export class RecordArrayMetricAction extends RecordMetricAction {
  * Used by the generic RECORD_NUMERIC_SUM_METRIC.
  */
 export class RecordNumericSumMetricAction extends RecordMetricAction {
+  static description = 'Adds a value to the running numeric total at state.metrics[fieldName]; processed by the RECORD_NUMERIC_SUM_METRIC reducer.';
+
   constructor(name, fieldName, value) {
     super('RECORD_NUMERIC_SUM_METRIC', name, fieldName, value);
   }
@@ -98,6 +126,8 @@ export class RecordNumericSumMetricAction extends RecordMetricAction {
  * Used by the generic RECORD_MULTIPLICATIVE_METRIC reducer.
  */
 export class RecordMultiplicativeMetricAction extends RecordMetricAction {
+  static description = 'Multiplies the current value at state.metrics[fieldName] by the carried value; processed by the RECORD_MULTIPLICATIVE_METRIC reducer.';
+
   constructor(name, fieldName, value) {
     super('RECORD_MULTIPLICATIVE_METRIC', name, fieldName, value);
   }
@@ -110,7 +140,25 @@ export class RecordMultiplicativeMetricAction extends RecordMetricAction {
  * reflects the fully-updated state for that event.
  */
 export class RecordBalanceAction extends Action {
+  static description = 'Marker action that triggers a no-op pipeline flush, capturing a fully-updated stateAfter snapshot for the current event.';
   constructor() {
     super('RECORD_BALANCE');
   }
 }
+
+// ─── Class registry ────────────────────────────────────────────────────────────
+
+/**
+ * Maps actionClass string → class.
+ * Used by ActionService.replaceAction to instantiate the correct subclass
+ * when the user changes the type of an existing action in the UI.
+ */
+export const ACTION_CLASSES = {
+  AmountAction,
+  RecordMetricAction,
+  RecordArrayMetricAction,
+  RecordNumericSumMetricAction,
+  RecordMultiplicativeMetricAction,
+  RecordBalanceAction,
+  FieldValueAction,
+};
