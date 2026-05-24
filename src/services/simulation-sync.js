@@ -10,6 +10,10 @@
 
 import { DateUtils } from '../simulation-framework/date-utils.js';
 import { intervalFns, startSnapFns } from '../scenarios/base-scenario.js';
+import {BaseEvent} from "../simulation-framework/events/base-event.js";
+import {HandlerEntry} from "../simulation-framework/handlers.js";
+import {Reducer} from "../simulation-framework/reducers.js";
+import {Action} from "../simulation-framework/actions.js";
 
 /**
  * Bridges the service layer (configuration) and the Simulation (execution).
@@ -79,36 +83,36 @@ export class SimulationSync {
     const { actionType, classType, item } = msg;
 
     if (actionType === 'CREATE') {
-      if (classType === 'EventSeries' || classType === 'OneOffEvent') {
+      if (item instanceof BaseEvent) {
         if (item.enabled) {
           item.date ? this._scheduleOneOffEvent(item) : this._scheduleEventSeries(item);
         }
-      } else if (item.kind === 'handler') {
+      } else if (item instanceof HandlerEntry) {
         item.handledEvents.forEach(e => this.sim.register(e.type, item, item.name));
-      } else if (item.kind === 'reducer') {
+      } else if (item instanceof Reducer) {
         this._wireReducer(item);
       }
       // Actions: no sim wiring needed on CREATE
 
     } else if (actionType === 'UPDATE') {
-      if (classType === 'EventSeries' || classType === 'OneOffEvent') {
+      if (item instanceof BaseEvent) {
         this._applyEventChange(item);
-      } else if (item.kind === 'handler') {
+      } else if (item instanceof HandlerEntry) {
         this._applyHandlerChange(item);
-      } else if (item.kind === 'action') {
+      } else if (item instanceof Action) {
         this._applyActionChange(item);
-      } else if (item.kind === 'reducer') {
+      } else if (item instanceof Reducer) {
         this._applyReducerChange(item);
       }
 
     } else if (actionType === 'DELETE') {
-      if (classType === 'EventSeries' || classType === 'OneOffEvent') {
+      if (item instanceof BaseEvent) {
         this._applyEventDelete(item);
-      } else if (item.kind === 'handler') {
+      } else if (item instanceof HandlerEntry) {
         this._applyHandlerDelete(item);
-      } else if (item.kind === 'action') {
+      } else if (item instanceof Action) {
         this._applyActionDelete(item);
-      } else if (item.kind === 'reducer') {
+      } else if (item instanceof Reducer) {
         this._applyReducerDelete(item);
       }
     }

@@ -8,6 +8,11 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { HandlerEntry } from "../simulation-framework/handlers.js";
+import {BaseEvent} from "../simulation-framework/events/base-event.js";
+import {Action} from "../simulation-framework/actions.js";
+import {Reducer} from "../simulation-framework/reducers.js";
+
 /**
  * GraphSync subscribes to SERVICE_ACTION events on the shared bus and
  * keeps the ConfigGraph in sync with the service maps:
@@ -54,7 +59,7 @@ export class GraphSync {
 
   /** @private */
   _handleCreate(classType, item) {
-    if (classType === 'EventSeries' || classType === 'OneOffEvent') {
+    if (item instanceof BaseEvent) {
       // Events have no `get kind()` — set it as an own property
       if (!item.kind) item.kind = 'event';
       item.eventType = classType === 'EventSeries' ? 'Series' : 'OneOff';
@@ -62,7 +67,7 @@ export class GraphSync {
         this._graph.addNode(item);
       }
 
-    } else if (classType === 'HandlerEntry') {
+    } else if (item instanceof HandlerEntry) {
       // HandlerEntry has get kind() { return 'handler'; }
       if (!this._graph.getNode(item.id)) {
         this._graph.addNode(item);
@@ -77,10 +82,10 @@ export class GraphSync {
         this._graph.addEdge({ from: item.id, to: a.id });
       });
 
-    } else if (this._isActionClass(classType)) {
+    } else if (item instanceof Action) {
       this._ensureActionNode(item);
 
-    } else if (this._isReducerClass(classType)) {
+    } else if (item instanceof Reducer) {
       // Reducer has get kind() { return 'reducer'; }
       if (!this._graph.getNode(item.id)) {
         this._graph.addNode(item);
@@ -141,18 +146,5 @@ export class GraphSync {
     }
 
     this._graph.replaceNode(item.id, item);
-  }
-
-  // ─── Type guards ──────────────────────────────────────────────────────────
-
-  _isActionClass(classType) {
-    return ['AmountAction', 'Action', 'FieldAction',
-            'RecordBalanceAction', 'ScriptedAction', 'FieldValueAction'].includes(classType);
-  }
-
-  _isReducerClass(classType) {
-    return ['ArrayReducer', 'NumericSumReducer', 'MultiplicativeReducer',
-            'NoOpReducer', 'FieldReducer', 'FieldValueReducer',
-            'AccountTransactionReducer', 'ScriptedReducer', 'RepeatingReducer'].includes(classType);
   }
 }
