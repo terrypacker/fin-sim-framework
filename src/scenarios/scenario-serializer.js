@@ -155,7 +155,7 @@ export class ScenarioSerializer {
       simEnd:   this.toDateStr(scenario.simEnd),
       persons:        (scenario.persons  ?? []).map(n => ScenarioSerializer._serializePerson(n)),
       accounts:       (scenario.accounts ?? []).map(n => ScenarioSerializer._serializeAccount(n)),
-      realProperties: (scenario.realProperty ?? []).map(n => ScenarioSerializer._serializeRealProperty(n)),
+      realProperties: (scenario.realProperties ?? []).map(n => ScenarioSerializer._serializeRealProperty(n)),
       collectibles:   (scenario.collectibles ?? []).map(n => ScenarioSerializer._serializeCollectible(n)),
       events:   (scenario.events ?? []).map(n => ScenarioSerializer._serializeEvent(n)),
       handlers: (scenario.handlers ?? []).map(n => ScenarioSerializer._serializeHandler(n)),
