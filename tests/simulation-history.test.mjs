@@ -255,3 +255,90 @@ test('sim.eventCounter delegates to sim.history.eventCounter', () => {
 
   assert.strictEqual(sim.eventCounter, sim.history.eventCounter);
 });
+
+// ─── Step-back bug regression: rewindToStart before first stepTo ──────────────
+//
+// Bug: rewindToStart() called before any stepTo sets snapshots = [undefined]
+// (sparse length-1 array). Subsequent stepTo sees length === 1 so never takes
+// the initial snapshot (snap0). On the second rewindToStart, restoreSnapshot(0)
+// gets undefined and early-returns, leaving the queue in its end-of-run state.
+// stepTo then has no events to fire → events are silently skipped.
+
+test('step-back: rewindToStart before first stepTo does not corrupt snapshot array', () => {
+  const sim = makeCounterSim();
+
+  // Simulate what TimeControls.rewindTo does before any stepTo
+  sim.history.resetForReplay();
+  sim.history.rewindToStart();
+
+  // After the call, snapshots must be truly empty (length 0), not [undefined]
+  assert.strictEqual(sim.history.snapshots.length, 0,
+    'snapshots must be empty (not sparse) when rewindToStart is called before any stepTo');
+});
+
+test('step-back: stepTo after early rewindToStart still creates valid snap0', () => {
+  const sim = makeCounterSim();
+
+  sim.history.resetForReplay();
+  sim.history.rewindToStart();   // no snap0 yet — should reset cleanly
+  sim.stepTo(new Date(2025, 0, 1));
+
+  assert.ok(sim.history.snapshots[0] !== undefined,
+    'snap0 must be a real snapshot after stepTo following an early rewindToStart');
+  assert.strictEqual(sim.history.snapshots[0].state.counter, 0,
+    'snap0 must capture pre-event state (counter = 0)');
+});
+
+test('step-back: full run after early rewindToStart fires all events', () => {
+  const sim = makeCounterSim();
+
+  // Replicate the TimeControls.rewindTo flow called before the user ever
+  // stepped forward (the common "open app, drag slider" pattern).
+  sim.journal.journal.length = 0;
+  sim.history.resetForReplay();
+  sim.history.rewindToStart();
+  sim.stepTo(new Date(2027, 0, 1));   // 3 TICKs
+
+  assert.strictEqual(sim.state.counter, 3,
+    'all 3 TICK events must fire when stepTo is called after an early rewindToStart');
+});
+
+test('step-back: second rewindToStart after first run replays without skipping events', () => {
+  const sim = makeCounterSim();
+
+  // First "session": rewindToStart before any stepTo, then full run
+  sim.journal.journal.length = 0;
+  sim.history.resetForReplay();
+  sim.history.rewindToStart();
+  sim.stepTo(new Date(2027, 0, 1));
+  assert.strictEqual(sim.state.counter, 3, 'first run: counter must be 3');
+
+  // Second "session": rewindToStart now HAS a valid snap0 → must replay cleanly
+  sim.journal.journal.length = 0;
+  sim.history.resetForReplay();
+  sim.history.rewindToStart();
+  sim.stepTo(new Date(2026, 0, 1));   // only 2025 + 2026 → 2 TICKs
+
+  assert.strictEqual(sim.state.counter, 2,
+    'partial replay after second rewindToStart must not skip any events');
+});
+
+test('step-back: third rewindToStart (step-back scenario) fires correct event count', () => {
+  const sim = makeCounterSim();
+
+  // Replicate drag-forward → drag-back → drag-forward-partial flow
+  sim.history.rewindToStart();                    // before any stepTo
+  sim.stepTo(new Date(2027, 0, 1));               // full run → counter 3
+
+  sim.journal.journal.length = 0;
+  sim.history.resetForReplay();
+  sim.history.rewindToStart();
+  sim.stepTo(new Date(2025, 0, 1));              // partial replay → 1 TICK
+
+  assert.strictEqual(sim.state.counter, 1,
+    'step-back to 2025 must produce counter = 1, not 0 (event must not be skipped)');
+
+  const increments = sim.journal.getActions('INCREMENT');
+  assert.strictEqual(increments.length, 1,
+    'journal must contain exactly 1 INCREMENT after step-back to 2025');
+});

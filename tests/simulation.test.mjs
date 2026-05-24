@@ -840,6 +840,107 @@ test('Handler chaining: chain order is preserved across same-date events', () =>
   assert.deepStrictEqual(sim.state.log, ['A', 'B', 'C']);
 });
 
+// ─── schedule: event fields preserved on queued entry ────────────────────────
+
+test('schedule: type string is preserved on the queued event', () => {
+  const sim = new Simulation(new Date(2025, 0, 1));
+  sim.schedule({ date: new Date(2025, 0, 1), type: 'MY_EVENT' });
+  const entry = sim.queue.peek();
+  assert.strictEqual(typeof entry.type, 'string', 'type must be a string on the queued entry');
+  assert.strictEqual(entry.type, 'MY_EVENT');
+});
+
+test('schedule: color and name from event config are preserved on the queued entry', () => {
+  const sim = new Simulation(new Date(2025, 0, 1));
+  sim.schedule({ date: new Date(2025, 0, 1), type: 'STYLED', color: '#ff0000', name: 'My Event' });
+  const entry = sim.queue.peek();
+  assert.strictEqual(entry.color, '#ff0000');
+  assert.strictEqual(entry.name, 'My Event');
+});
+
+test('schedule: data and meta fields are set on the queued entry', () => {
+  const sim = new Simulation(new Date(2025, 0, 1));
+  sim.schedule({ date: new Date(2025, 0, 1), type: 'EV', data: { amount: 42 }, meta: { flag: true } });
+  const entry = sim.queue.peek();
+  assert.deepStrictEqual(entry.data, { amount: 42 });
+  assert.deepStrictEqual(entry.meta, { flag: true });
+});
+
+test('schedule: data defaults to {} when omitted', () => {
+  const sim = new Simulation(new Date(2025, 0, 1));
+  sim.schedule({ date: new Date(2025, 0, 1), type: 'EV' });
+  const entry = sim.queue.peek();
+  assert.deepStrictEqual(entry.data, {});
+});
+
+test('schedule: meta defaults to {} when omitted', () => {
+  const sim = new Simulation(new Date(2025, 0, 1));
+  sim.schedule({ date: new Date(2025, 0, 1), type: 'EV' });
+  const entry = sim.queue.peek();
+  assert.deepStrictEqual(entry.meta, {});
+});
+
+test('scheduleRecurring: type is a string on the initial queued entry', () => {
+  const sim = new Simulation(new Date(2025, 0, 1));
+  sim.scheduleAnnually({ startDate: new Date(2025, 0, 1), type: 'ANNUAL', data: { v: 1 } });
+  const entry = sim.queue.peek();
+  assert.strictEqual(typeof entry.type, 'string');
+  assert.strictEqual(entry.type, 'ANNUAL');
+});
+
+test('scheduleRecurring: type propagates correctly to each re-scheduled occurrence', () => {
+  const sim = new Simulation(new Date(2025, 0, 1));
+  sim.reducers.register('INC', (state) => ({ ...state, count: (state.count ?? 0) + 1 }));
+  sim.register('ANNUAL', () => [{ type: 'INC' }]);
+  sim.scheduleAnnually({ startDate: new Date(2025, 0, 1), type: 'ANNUAL' });
+  sim.stepTo(new Date(2027, 0, 1));  // fires 2025, 2026, 2027
+
+  // Each occurrence produces one INC action; sourceEvent.type must be 'ANNUAL' for all
+  const entries = sim.journal.getActions('INC');
+  assert.strictEqual(entries.length, 3, 'must have 3 INC journal entries (one per ANNUAL)');
+  assert.ok(entries.every(e => e.sourceEvent.type === 'ANNUAL'),
+    'every re-scheduled occurrence must carry sourceEvent.type === "ANNUAL"');
+});
+
+test('scheduleRecurring: data and meta propagate to every re-scheduled occurrence', () => {
+  const sim = new Simulation(new Date(2025, 0, 1));
+  const seenData = [];
+  sim.register('EV', ({ data }) => { seenData.push(data); return []; });
+  sim.scheduleAnnually({
+    startDate: new Date(2025, 0, 1),
+    type: 'EV',
+    data: { amount: 100 },
+    meta: { tag: 'x' }
+  });
+  sim.stepTo(new Date(2027, 0, 1));
+
+  assert.ok(seenData.every(d => d.amount === 100),
+    'data.amount must be 100 on every occurrence');
+});
+
+test('journal sourceEvent.type matches the scheduled event type', () => {
+  const sim = new Simulation(new Date(2025, 0, 1));
+  sim.reducers.register('INC', (state) => ({ ...state, v: (state.v ?? 0) + 1 }));
+  sim.register('EV', () => [{ type: 'INC' }]);
+  sim.schedule({ date: new Date(2025, 0, 1), type: 'EV', color: '#abc' });
+  sim.stepTo(new Date(2025, 0, 1));
+
+  const entry = sim.journal.getActions('INC')[0];
+  assert.strictEqual(entry.sourceEvent.type, 'EV');
+});
+
+test('journal sourceEvent.color matches the color passed to schedule', () => {
+  const sim = new Simulation(new Date(2025, 0, 1));
+  sim.reducers.register('INC', (state) => ({ ...state, v: (state.v ?? 0) + 1 }));
+  sim.register('EV', () => [{ type: 'INC' }]);
+  sim.schedule({ date: new Date(2025, 0, 1), type: 'EV', color: '#ff0000' });
+  sim.stepTo(new Date(2025, 0, 1));
+
+  const entry = sim.journal.getActions('INC')[0];
+  assert.strictEqual(entry.sourceEvent.color, '#ff0000',
+    'color from schedule() must be accessible on sourceEvent in the journal');
+});
+
 // ─── Events with future start dates ──────────────────────────────────────────
 
 test('One-off event scheduled for a future date does not fire before that date', () => {

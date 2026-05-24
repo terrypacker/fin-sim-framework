@@ -92,30 +92,23 @@ export class Simulation {
     return this.queue.removeAllByType(type);
   }
 
-  schedule({date, type, data = {}, meta = {} }) {
+  schedule(event) {
     this.queue.push({
+      data: {},
+      meta: {},
+      ...event,
       instanceId: this.nextEventInstanceId++,
-      date: this.normalizeDate(date),
-      type,
-      data,
-      meta
+      date: this.normalizeDate(event.date),
     });
   }
 
-  scheduleRecurring({startDate, type, intervalFn, data, meta }) {
-    this.register(type, ({ sim, date, data, meta }) => {
-      const nextDate = intervalFn(date);
-
-      sim.schedule({
-        date: nextDate,
-        type,
-        data,
-        meta
-      });
+  scheduleRecurring({startDate, type, intervalFn, ...eventFields}) {
+    this.register(type, ({ sim, date }) => {
+      sim.schedule({ type, ...eventFields, date: intervalFn(date) });
     });
 
     // Initial event
-    this.schedule({ date: startDate, type, data, meta });
+    this.schedule({ type, ...eventFields, date: startDate });
   }
 
   scheduleQuarterly(opts) {

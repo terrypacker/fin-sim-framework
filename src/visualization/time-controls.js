@@ -18,14 +18,59 @@ export class TimeControls {
     this.timeSlider = timeSlider;
     this.formatDate = formatDate ?? (d => d.toDateString());
     this._dateChangedRaf = null;
+    // Stack of fractional positions (0–1) visited by stepForward(),
+    // so stepBack() can return to exactly the previous event's position.
+    this._stepHistory = [];
   }
 
   stepForward() {
     const next = this.scenario.sim.queue.peek();
     if (!next || next.date > this.scenario.simEnd) return null;
-    const pct = (next.date.getTime() - this.scenario.simStart.getTime()) /
-        (this.scenario.simEnd.getTime() - this.scenario.simStart.getTime());
-    return this.stepTo(Math.min(1, pct));
+    const pct = Math.min(1,
+        (next.date.getTime() - this.scenario.simStart.getTime()) /
+        (this.scenario.simEnd.getTime() - this.scenario.simStart.getTime())
+    );
+    this._stepHistory.push(pct);
+    this.timeSlider.value = Math.round(pct * 100);
+    return this.stepTo(pct);
+  }
+
+  /**
+   * Step back to exactly where the previous stepForward() landed.
+   * If no stepForward() history exists (e.g. arrived here via play or the
+   * slider), scans the snapshot array to find the previous event's date.
+   */
+  stepBack() {
+    if (this._stepHistory.length > 0) {
+      this._stepHistory.pop();  // discard current position
+      const prev = this._stepHistory[this._stepHistory.length - 1] ?? 0;
+      this.timeSlider.value = Math.round(prev * 100);
+      return this._doRewindTo(prev);
+    }
+
+    // No step-forward history — find the previous event date from snapshots.
+    const currentDate = this.scenario.sim.currentDate;
+    const snapshots   = this.scenario.sim.history.snapshots;
+    let prevDate = null;
+    for (let i = snapshots.length - 1; i >= 0; i--) {
+      if (snapshots[i].date < currentDate) {
+        prevDate = snapshots[i].date;
+        break;
+      }
+    }
+
+    const pct = prevDate
+      ? Math.max(0, (prevDate.getTime() - this.scenario.simStart.getTime()) /
+          (this.scenario.simEnd.getTime() - this.scenario.simStart.getTime()))
+      : 0;
+
+    this.timeSlider.value = Math.round(pct * 100);
+    return this._doRewindTo(pct);
+  }
+
+  /** Called by the app when playback starts so step-back uses snapshot scanning. */
+  clearStepHistory() {
+    this._stepHistory = [];
   }
 
   stepTo(pct) {
@@ -40,6 +85,13 @@ export class TimeControls {
   }
 
   rewindTo(pct) {
+    // Manual slider/timeline rewind clears the stepForward history since the
+    // user is now navigating freely, not stepping event-by-event.
+    this._stepHistory = [];
+    return this._doRewindTo(pct);
+  }
+
+  _doRewindTo(pct) {
     this.graphView?.resetGraph();
     this.chartView?.resetHistory();
     // Journal entries are not part of the snapshot; clear them so replay
