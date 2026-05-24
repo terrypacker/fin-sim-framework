@@ -11,57 +11,26 @@
 /**
  * Person — plain data class representing a simulation participant.
  * No methods; safe for structuredClone snapshots.
- * Logic lives in PersonService.
+ * Logic lives in PersonService (src/services/person-service.js).
  */
 export class Person {
   /**
-   * @param {string} id         - Unique identifier (e.g. 'primary', 'spouse')
-   * @param {Date}   birthDate  - Date of birth (used for age-gated rules)
-   * @param {object} [opts]
-   * @param {string}  [opts.name='']
-   * @param {boolean} [opts.isAuResident=false]
+   * @param {string|null} id       - Unique identifier; null until assigned by PersonService
+   * @param {Date}        birthDate - Date of birth (used for age-gated rules)
+   * @param {object}      [opts]
+   * @param {string}      [opts.name='']
+   * @param {string[]}    [opts.citizen=['US']] - ISO country codes (e.g. 'US', 'AUS')
+   * @param {boolean}     [opts.isAuResident]   - AU tax-resident flag; defaults to citizen.includes('AUS')
+   * @param {number}      [opts.lifeExpectancy=90]         - Expected years to live
+   * @param {number}      [opts.socialSecurityMonthly=2800] - USD/month of SS at full retirement age
    */
   constructor(id, birthDate, opts = {}) {
-    this.id           = id;
-    this.birthDate    = birthDate;
-    this.name         = opts.name         ?? '';
-    this.isAuResident = opts.isAuResident ?? false;
-  }
-}
-
-/**
- * PersonService — stateless age calculations.
- * Centralises the getAge / getAgeDecimal helpers that were previously
- * duplicated in every evt-*.test.mjs file.
- */
-export class PersonService {
-  /**
-   * Returns age in whole years as of asOfDate.
-   * Used for age-60 gates (Roth, IRA, Superannuation).
-   *
-   * @param {Person} person
-   * @param {Date}   asOfDate
-   * @returns {number}
-   */
-  getAge(person, asOfDate) {
-    const years = asOfDate.getUTCFullYear() - person.birthDate.getUTCFullYear();
-    const hadBirthday =
-      asOfDate.getUTCMonth() > person.birthDate.getUTCMonth() ||
-      (asOfDate.getUTCMonth() === person.birthDate.getUTCMonth() &&
-       asOfDate.getUTCDate()  >= person.birthDate.getUTCDate());
-    return hadBirthday ? years : years - 1;
-  }
-
-  /**
-   * Returns age as a decimal (fractional years) as of asOfDate.
-   * Used for the age-59.5 gate (401k, IRA).
-   *
-   * @param {Person} person
-   * @param {Date}   asOfDate
-   * @returns {number}
-   */
-  getAgeDecimal(person, asOfDate) {
-    const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
-    return (asOfDate - person.birthDate) / msPerYear;
+    this.id                    = id ?? null;
+    this.birthDate             = birthDate;
+    this.name                  = opts.name                  ?? '';
+    this.citizen               = opts.citizen               ?? ['US'];
+    this.isAuResident          = opts.isAuResident          ?? this.citizen.includes('AUS');
+    this.lifeExpectancy        = opts.lifeExpectancy        ?? 90;
+    this.socialSecurityMonthly = opts.socialSecurityMonthly ?? 2800;
   }
 }

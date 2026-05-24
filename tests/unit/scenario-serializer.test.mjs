@@ -46,10 +46,12 @@ import {
   NoOpReducer,
 } from '../../src/simulation-framework/reducers.js';
 import { ReducerBuilder } from '../../src/simulation-framework/builders/reducer-builder.js';
+import { Person } from '../../src/finance/person.js';
 
 // ─── FinSimLib global (required by BaseScenario and ScenarioSerializer) ────────
 
 globalThis.FinSimLib = {
+  Finance: { Person },
   Core: {
     Simulation,
     HandlerEntry,
@@ -539,4 +541,88 @@ test('serialize round-trip: serialize then deserialize into fresh scenario has s
 
   assert.deepStrictEqual(secondIds, firstIds,
     'round-tripped scenario must have the same node IDs as the original');
+});
+
+// ─── Persons: serialize / deserialize round-trip ──────────────────────────────
+
+test('serialize: persons array is included in the serialized output', () => {
+  const { scenario } = makeScenario();
+  const sr = ServiceRegistry.getInstance();
+
+  sr.personService.createPerson(new Date(Date.UTC(1980, 0, 1)), { name: 'Alice', citizen: ['US'] });
+  sr.personService.createPerson(new Date(Date.UTC(1985, 5, 15)), { name: 'Bob', citizen: ['AUS'] });
+
+  const cfg = serializeNow();
+  assert.ok(Array.isArray(cfg.persons), 'persons should be an array');
+  assert.strictEqual(cfg.persons.length, 2);
+});
+
+test('serialize: person fields are correctly serialized', () => {
+  const { scenario } = makeScenario();
+  const sr = ServiceRegistry.getInstance();
+
+  sr.personService.createPerson(new Date(Date.UTC(1980, 0, 1)), {
+    name: 'Alice', citizen: ['US'], lifeExpectancy: 88, socialSecurityMonthly: 3000,
+  });
+
+  const cfg = serializeNow();
+  const d = cfg.persons[0];
+  assert.strictEqual(d.__type, 'Person');
+  assert.strictEqual(d.name, 'Alice');
+  assert.strictEqual(d.birthDate, '1980-01-01');
+  assert.deepStrictEqual(d.citizen, ['US']);
+  assert.strictEqual(d.lifeExpectancy, 88);
+  assert.strictEqual(d.socialSecurityMonthly, 3000);
+});
+
+test('deserialize: persons are registered into personService with correct fields', () => {
+  const { scenario } = makeScenario();
+  const config = {
+    ...MINIMAL_CONFIG,
+    persons: [
+      { __type: 'Person', id: 'p1', name: 'Alice', birthDate: '1980-01-01',
+        citizen: ['US'], lifeExpectancy: 90, socialSecurityMonthly: 2800 },
+      { __type: 'Person', id: 'p2', name: 'Bob', birthDate: '1985-06-15',
+        citizen: ['AUS'], lifeExpectancy: 85, socialSecurityMonthly: 0 },
+    ],
+  };
+
+  ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance());
+
+  const sr = ServiceRegistry.getInstance();
+  assert.strictEqual(sr.personService.getAll().length, 2);
+
+  const alice = sr.personService.get('p1');
+  assert.strictEqual(alice.name, 'Alice');
+  assert.deepStrictEqual(alice.citizen, ['US']);
+
+  const bob = sr.personService.get('p2');
+  assert.strictEqual(bob.name, 'Bob');
+  assert.deepStrictEqual(bob.citizen, ['AUS']);
+});
+
+test('persons round-trip: serialize then deserialize preserves all person data', () => {
+  const { scenario } = makeScenario();
+  const sr = ServiceRegistry.getInstance();
+
+  sr.personService.createPerson(new Date(Date.UTC(1975, 2, 10)), {
+    name: 'Carol', citizen: ['US', 'AUS'], lifeExpectancy: 92, socialSecurityMonthly: 3200,
+  });
+
+  const cfg = serializeNow('Round-Trip', {});
+
+  // Fresh scenario
+  makeScenario();
+  ScenarioSerializer.deserialize(cfg, ServiceRegistry.getInstance());
+
+  const sr2 = ServiceRegistry.getInstance();
+  const persons = sr2.personService.getAll();
+  assert.strictEqual(persons.length, 1);
+
+  const carol = persons[0];
+  assert.strictEqual(carol.name, 'Carol');
+  assert.deepStrictEqual(carol.citizen, ['US', 'AUS']);
+  assert.strictEqual(carol.lifeExpectancy, 92);
+  assert.strictEqual(carol.socialSecurityMonthly, 3200);
+  assert.strictEqual(carol.birthDate instanceof Date ? carol.birthDate.getUTCFullYear() : new Date(carol.birthDate).getUTCFullYear(), 1975);
 });
