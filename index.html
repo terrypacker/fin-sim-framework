@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<!--
+-- Copyright (c) 2026 Terry Packer.
+--
+-- This file is part of Terry Packer's Work.
+-- See www.terrypacker.com for further info.
+--
+-- Licensed under the Apache License, Version 2.0 (the "License");
+-- you may not use this file except in compliance with the License.
+-- You may obtain a copy of the License at
+--
+--     http://www.apache.org/licenses/LICENSE-2.0
+--
+-- Unless required by applicable law or agreed to in writing, software
+-- distributed under the License is distributed on an "AS IS" BASIS,
+-- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-- See the License for the specific language governing permissions and
+-- limitations under the License.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Event Driven Financial Simulation</title>
+  <link rel="stylesheet" href="https://terrypacker.com/assets/css/base.css">
+  <link rel="stylesheet" href="https://terrypacker.com/assets/css/theme-amber.css">
+  <link rel="stylesheet" href="assets/css/fin-sim.css">
+</head>
+<body>
+<div id="app">
+  <header id="header">
+    <div class="header-left">
+      <div class="logo-mark">⬡</div>
+      <div>
+        <div class="app-title">FinSim</div>
+        <div class="app-subtitle">Event Driven Financial Simulation</div>
+      </div>
+    </div>
+    <div class="header-center">
+      <div class="sim-status-row">
+        <div class="status-dot stopped" id="statusDot"></div>
+        <span id="simStatus">STOPPED</span>
+      </div>
+      <span class="sim-gen-display" id="simGen">GEN 0</span>
+
+      <!-- ── Time controls ─────────────────────────────────────────────────────────── -->
+      <div class="time-controls">
+        <button class="btn btn-warn btn-sm" id="resetBtn"     title="Reset to start">↩</button>
+        <button class="btn" id="stepBackward" title="Step backward">←</button>
+        <button class="btn btn-primary" id="playPause"    title="Play / Pause">▶</button>
+        <button class="btn" id="stepForward"  title="Step forward">→</button>
+        <input  id="timeSlider" type="range" min="0" max="100" value="0">
+        <span class="time-control-label" id="timeLabel">2026-01-01</span>
+        <select id="tzSelect" title="Date display timezone" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; padding:2px 6px; font-family:monospace; font-size:12px; border-radius:3px; margin-left:8px;">
+          <option value="utc"   selected>UTC</option>
+          <option value="local">Local</option>
+        </select>
+        <select id="displayCurrency" title="Display currency" style="background:#0f172a; color:#94a3b8; border:1px solid #334155; padding:2px 6px; font-family:monospace; font-size:12px; border-radius:3px; margin-left:8px;">
+          <option value="USD" selected>USD</option>
+          <option value="AUD">AUD</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="panel-tag">v1.0</span>
+      <button class="btn btn-sm" id="btnHelp" title="Open help documentation">? HELP</button>
+    </div>
+  </header>
+
+  <!-- ══ MAIN GRID ════════════════════════════════════════════ -->
+  <div id="mainGrid">
+    <!-- ── LEFT COLUMN: config ────────────────────────────── -->
+    <div class="left-col">
+      <!-- ── EVENT SCHEDULER ───────────────────────── -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-tag">EV</span>
+          <span class="panel-title">EVENTS</span>
+        </div>
+        <div class="node-header">Edit Node</div>
+        <div id="builderCanvas"></div>
+
+        <div class="node-header">Events</div>
+        <div class="node-field">
+          <button class="btn btn-sm" id="addSeriesBtn">+ Series</button>
+          <button class="btn btn-sm" id="addOneOffBtn">+ One-Off</button>
+          <div class="node-field">
+            <div class="node-header">Actions</div>
+            <div class="node-field">
+              <button class="btn btn-sm" id="addHandlerNode">+ Handler</button>
+              <button class="btn btn-sm" id="addActionNode">+ Action</button>
+              <button class="btn btn-sm" id="addReducerNode">+ Reducer</button>
+            </div>
+          </div>
+        </div>
+      </div>
+     <button class="btn" id="rebuildBtn">↺ Rebuild Simulation</button>
+    </div>
+
+    <!-- ── CENTER COLUMN: dash + viz + charts ──────────────────────── -->
+    <div class="center-col">
+
+      <!-- Dashboard Cards -->
+      <div class="panel" style="flex-shrink:0">
+        <div class="panel-header">
+          <span class="panel-tag">LIVE</span>
+          <span class="panel-title">DASHBOARD</span>
+        </div>
+        <div class="fin-dash-cards">
+          <div class="dash-card">
+            <div class="dc-label">Current Date</div>
+            <div class="dc-value" id="cardCurrentDate">-</div>
+          </div>
+          <div class="dash-card">
+            <div class="dc-label">Total Actions</div>
+            <div class="dc-value" id="cardActionCount">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center viz tabs -->
+      <div id="content" class="viz-container">
+        <div class="tab">
+          <div class="panel-header tab-header active" data-dest-tab="config-graph-tab" data-tab-group="center-col">
+            <span class="panel-tag">CFG</span>
+            <span class="panel-title">CONFIG GRAPH</span>
+          </div>
+          <div class="panel-header tab-header" data-dest-tab="timeline-tab" data-tab-group="center-col">
+            <span class="panel-tag">TL</span>
+            <span class="panel-title">TIMELINE</span>
+          </div>
+          <div class="panel-header tab-header" data-dest-tab="chart-tab" data-tab-group="center-col">
+            <span class="panel-tag">CT</span>
+            <span class="panel-title">CHART</span>
+          </div>
+        </div>
+
+        <!-- Config Graph View -->
+        <div class="tab-content config-graph-tab" data-tab="config-graph-tab" data-tab-group="center-col">
+          <div class="panel" style="flex:1;min-height:0">
+            <div id="graphRoot">
+              <svg id="graphEdges"></svg>
+              <div id="graphNodes"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Timeline Tab -->
+        <div class="tab-content timeline-tab" style="display:none" data-tab="timeline-tab" data-tab-group="center-col">
+          <div class="panel" style="flex:1;min-height:0">
+            <div id="timelineContainer" class="tl-container"></div>
+          </div>
+        </div>
+
+        <!-- Chart Tab -->
+        <div class="tab-content chart-tab" style="display:none" data-tab="chart-tab" data-tab-group="center-col">
+          <div class="panel" style="flex:1;min-height:0">
+            <div class="viz-wrap" style="flex:1;margin:10px;border-radius:4px;overflow:hidden">
+              <canvas id="chartCanvas"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── RIGHT COLUMN ──────────────── -->
+    <div class="right-col">
+      <div class="panel" style="flex:1;min-height:0;display:flex;flex-direction:column;">
+        <div class="panel-header">
+          <span class="panel-tag">AD</span>
+          <span class="panel-title">ACTION DETAIL</span>
+          <span class="badge-purple" style="margin-left:auto" id="popBadge">CLICK</span>
+        </div>
+        <div id="actionPanelDetails" style="overflow-y:auto;flex:1;min-height:0;"></div>
+      </div>
+
+      <!-- Current State -->
+      <div class="panel" style="flex:1;min-height:0">
+        <div class="panel-header">
+          <span class="panel-tag">ST</span>
+          <span class="panel-title">LIVE STATE</span>
+          <span class="badge-green" style="margin-left:auto" id="popBadge">LIVE</span>
+        </div>
+        <div class="data-section-title">State</div>
+        <div id="currentStateContent" class="data-list-wrap" style="display:block"></div>
+        <div class="data-section-title">Metrics</div>
+        <div id="cumulativeMetricsContent" class="data-list-wrap" style="display:block"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- ══ STATUS BAR ══════════════════════════════════════════ -->
+  <div id="statusBar">
+    <span>FinSim</span>
+    <span>·</span>
+    <span>Financial Simulation Framework</span>
+    <span>·</span>
+    <span id="footerPageTitle">Custom Logic Example</span>
+  </div>
+</div>
+
+<!-- ══ TEMPLATES  ══════════════════════════════════════════ -->
+
+<!-- NODE TEMPLATES -->
+<template id="tpl-empty">
+  <div class="tl-empty">Select a node</div>
+</template>
+
+<!-- ── EVENT TEMPLATES ───────────────────────── -->
+<template id="tpl-event-editor">
+  <div class="node">
+    <div class="node-header">
+      <span>EVENT</span>
+    </div>
+    <div class="node-body">
+      <div class="node-field">
+        <label>Label</label>
+        <input data-id="name"></input>
+      </div>
+      <div class="node-field">
+        <label>Event Type</label>
+        <select data-id="type"></select>
+      </div>
+      <div data-id="config"></div>
+      <div class="node-field">
+        <label>Color</label>
+        <input type="color" data-field="color" value="#888888" />
+      </div>
+      <div class="node-field">
+        <label>Enabled</label>
+        <input class="field-checkbox" type="checkbox" data-field="enabled" checked />
+      </div>
+    </div>
+    <div class="node-field">
+      <label>
+        Handlers
+        <span class="reducer-sel-count" id="event-handler-count"></span>
+      </label>
+      <div class="reducer-chip-grid" id="event-handlers"></div>
+    </div>
+  </div>
+</template>
+
+<template id="tpl-event-series-editor">
+  <div class="node-field">
+    <label>Interval</label>
+    <select data-field="interval"></select>
+  </div>
+  <div class="node-field">
+    <label>Start Offset</label>
+    <input type="number" data-field="startOffset" min="0" value="0" />
+  </div>
+</template>
+
+<template id="tpl-event-one-off-editor">
+  <div class="node-field">
+    <label>Date</label>
+    <input data-field="date" type="date" />
+  </div>
+</template>
+
+<!-- ── HANDLER TEMPLATES ───────────────────────── -->
+<template id="tpl-handler-editor">
+  <div class="node">
+    <div class="node-header">
+      <span>HANDLER</span>
+    </div>
+    <div class="node-body">
+      <div class="node-field">
+        <label>Label</label>
+        <input data-id="name"></input>
+      </div>
+      <div class="node-field">
+        <label>
+          Events
+          <span class="reducer-sel-count" id="handler-event-count"></span>
+        </label>
+        <div class="reducer-chip-grid" id="handler-events"></div>
+      </div>
+      <div class="node-field">
+        <label>
+          Actions
+          <span class="reducer-sel-count" id="handler-action-count"></span>
+        </label>
+        <div class="reducer-chip-grid" id="handler-actions"></div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<!-- ── ACTION TEMPLATES ───────────────────────── -->
+<template id="tpl-action-editor">
+  <div class="node">
+    <div class="node-header">
+      <span>ACTION</span>
+    </div>
+    <div class="node-body">
+      <div class="node-field">
+        <label>Label</label>
+        <input data-id="name"></input>
+      </div>
+      <div class="node-field">
+        <label>
+          Handlers
+          <span class="reducer-sel-count" id="action-handler-count"></span>
+        </label>
+        <div class="reducer-chip-grid" id="action-handlers"></div>
+      </div>
+      <div class="node-field">
+        <label>
+          Reducers
+          <span class="reducer-sel-count" id="action-reducer-count"></span>
+        </label>
+        <div class="reducer-chip-grid" id="action-reducers"></div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<!-- ── REDUCER TEMPLATES ───────────────────────── -->
+<template id="tpl-reducer-editor">
+  <div class="node">
+    <div class="node-header">
+      <span>REDUCER</span>
+    </div>
+    <div class="node-body">
+      <div class="node-field">
+        <label>Label</label>
+        <input data-id="name"></input>
+      </div>
+      <div class="node-field">
+        <label>Reducer Type</label>
+        <select data-id="type"></select>
+      </div>
+      <div data-id="config"></div>
+    </div>
+  </div>
+</template>
+
+<template id="tpl-metric-reducer-editor">
+  <div class="node-field">
+    <label>Metric Name</label>
+    <input data-field="metric">
+  </div>
+</template>
+
+<template id="tpl-account-transaction-reducer-editor">
+  <div class="node-field">
+    <label>Account Key</label>
+    <input data-field="accountKey">
+  </div>
+</template>
+
+<!-- VIEW ACTION TEMPLATE -->
+<template id="actionTemplate">
+  <div class="data-section-title">Action</div>
+  <div class="data-list-wrap">
+    <div class="data-grid data-grid-2" data-overview-grid>
+      <div class="data-row">
+        <label>Type</label>
+        <span data-id="entry.action.type"></span>
+      </div>
+      <div class="data-row">
+        <label>Date</label>
+        <span data-id="entry.date"></span>
+      </div>
+      <div class="data-row">
+        <label>Source event</label>
+        <span data-id="entry.eventType"></span>
+      </div>
+      <div class="data-row">
+        <label>Reducer</label>
+        <span data-id="entry.reducer"></span>
+      </div>
+      <div class="data-row">
+        <label>Emitted</label>
+        <span data-id="emitted"></span>
+      </div>
+      <div class="data-row">
+        <label class="single-row">Action payload</label>
+        <span class="single-row field-code" data-id="actionPayload"></span>
+      </div>
+    </div>
+    <div class="data-section-title">State Changes</div>
+    <div class="data-grid-center data-grid-3" data-state-change-grid>
+      <div class="data-row" data-id="stateHeaderRow" style="display:none">
+        <span>Field</span>
+        <span>Before</span>
+        <span>After</span>
+      </div>
+      <div class="data-row" data-state-change-row style="display:none">
+        <span class="diff-field" data-id="field"></span>
+        <span class="diff-before" data-id="before"></span>
+        <span class="diff-after" data-id="after"></span>
+      </div>
+      <div class="data-row" data-id="noChangeRow" style="display:none">
+        <label class="single-row" data-id="noChangeTitle" >(No Change - Previous State)</label>
+        <pre class="field-code single-row" data-id="noChangeState"></pre>
+      </div>
+
+    </div>
+  </div>
+</template>
+<template id="stateDetailsTemplate">
+  <div class="data-grid data-grid-2" data-stat-grid>
+    <div class="data-row-header"><span>NAME</span><span>VALUE</span></div>
+    <div class="data-row" data-stat-row style="display:none">
+      <span class="stat-label"></span>
+      <span class="stat-value"></span>
+    </div>
+  </div>
+</template>
+<script type="module" src="./index.umd.min.js"></script>
+<script type="module" src="./assets/js/custom-app.js"></script>
+</body>
+</html>
