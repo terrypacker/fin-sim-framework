@@ -9,6 +9,7 @@
  */
 
 import { fmtUTC } from '../ui-utils.js';
+import { BaseComponent } from "../components/base-component.js";
 
 // Account types whose country/currency are fixed at construction time.
 const FIXED_COUNTRY = new Set(['401k', 'roth', 'ira', 'super']);
@@ -37,8 +38,9 @@ const TYPE_LABELS = {
  * No business logic.  Communicates outward via callback properties set by
  * AccountsPresenter: onSave, onDelete, onEdit, onCancel.
  */
-export class AccountsView {
+export class AccountsView extends BaseComponent {
   constructor() {
+    super(); //I am the root component here
     /** @type {function(object)|null} */
     this.onSave    = null;
     /** @type {function(string)|null} */

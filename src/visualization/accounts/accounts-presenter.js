@@ -160,4 +160,8 @@ export class AccountsPresenter {
     }
     this._view.renderList(accounts, this._people, balanceMap);
   }
+
+  destroy() {
+    this._view.destroy();
+  }
 }

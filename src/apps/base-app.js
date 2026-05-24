@@ -80,7 +80,7 @@ export class BaseApp extends BaseComponent {
     // UI handles (recreated each buildScenario)
     this.configPresenter = null;
     this.chartPresenter        = null;
-    this.timelineView          = null;
+    this.timelinePresenter          = null;
     this.timeControls          = null;
     this.peoplePresenter       = null;
     this.accountsPresenter     = null;
@@ -195,7 +195,7 @@ export class BaseApp extends BaseComponent {
     this.chartPresenter = new ChartPresenter({ controller: chartController, view: chartView });
     this.chartPresenter.startViz();
 
-    this.timelineView = new TimelinePresenter({
+    this.timelinePresenter = new TimelinePresenter({
       controller:    new TimelineController(),
       view:          new TimelineView({ container: $('timelineContainer') }),
       onDetail:      (entry) => this._statePanelView.showNodeDetail(entry),
@@ -214,12 +214,12 @@ export class BaseApp extends BaseComponent {
       },
       formatDate: currentFmt,
     });
-    this.timelineView.attach(this.scenario.sim.journal);
+    this.timelinePresenter.attach(this.scenario.sim.journal);
 
     this.timeControls = new TimeControls({
       scenario:        this.scenario,
       configPresenter: this.configPresenter,
-      timelineView:    this.timelineView,
+      timelineView:    this.timelinePresenter,
       chartView:       this.chartPresenter,
       timeLabel:       $('timeLabel'),
       timeSlider:      $('timeSlider'),
@@ -271,6 +271,10 @@ export class BaseApp extends BaseComponent {
 
     if (this.chartPresenter) this.chartPresenter.stopViz();
     if (this.configPresenter) this.configPresenter.destroy();
+    if (this.peoplePresenter) this.peoplePresenter.destroy();
+    if (this.accountsPresenter) this.accountsPresenter.destroy();
+    if (this.timelinePresenter) this.timelinePresenter.destroy();
+
 
   }
 
