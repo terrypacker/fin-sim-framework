@@ -179,6 +179,7 @@ export class AccountService extends BaseService {
    * @param {string} targetKey  - State key for the savings account to credit
    * @param {number} deficit    - Amount that must be deposited into targetKey
    * @param {Date}   date       - As-of date (used for age-gate checks)
+   * @returns {string[]}        - State keys of accounts that were drawn from
    * @throws {InsufficientFundsError}
    */
   replenishSavings(state, targetKey, deficit, date) {
@@ -203,13 +204,15 @@ export class AccountService extends BaseService {
       .sort(([, a], [, b]) => a.drawdownPriority - b.drawdownPriority);
 
     let remaining = deficit;
-    for (const [, account] of sources) {
+    const drawnKeys = [];
+    for (const [key, account] of sources) {
       if (account.balance <= 0) continue;
       if (!this.isWithdrawalEligible(account, person, date)) continue;
 
       const withdraw = Math.min(remaining, account.balance);
       this.transaction(targetAccount, +withdraw, date);
       this.transaction(account,       -withdraw, date);
+      drawnKeys.push(key);
       remaining -= withdraw;
       if (remaining < 1e-9) { remaining = 0; break; }
     }
@@ -217,5 +220,6 @@ export class AccountService extends BaseService {
     if (remaining > 1e-9) {
       throw new InsufficientFundsError(country, currency, remaining);
     }
+    return drawnKeys;
   }
 }
