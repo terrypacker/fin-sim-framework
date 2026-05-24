@@ -165,6 +165,13 @@ import { BaseComponent } from './visualization/components/base-component.js';
 import { BaseNodeEditor } from './visualization/components/base-node-editor.js';
 import { EChartsGraphRenderer } from './visualization/components/echarts-graph-renderer.js';
 import { EventEditor } from './visualization/components/event-editor.js';
+import { ActionNodeRenderer } from './visualization/components/graph/rendering/action-node-renderer.js';
+import { DefaultNodeRenderer, NodeRenderGroup } from './visualization/components/graph/rendering/default-node-renderer.js';
+import { EventNodeRenderer } from './visualization/components/graph/rendering/event-node-renderer.js';
+import { HandlerNodeRenderer } from './visualization/components/graph/rendering/handler-node-renderer.js';
+import { NodeRenderKit } from './visualization/components/graph/rendering/node-render-kit.js';
+import { NodeRendererRegistry } from './visualization/components/graph/rendering/node-renderer-registry.js';
+import { ReducerNodeRenderer } from './visualization/components/graph/rendering/reducer-node-renderer.js';
 import { GraphNodeFilterMultiSelect } from './visualization/components/graph-node-filter-multi-select.js';
 import { GraphRenderer } from './visualization/components/graph-renderer.js';
 import { HandlerEditor } from './visualization/components/handler-editor.js';
@@ -173,14 +180,18 @@ import { NodeEditModal } from './visualization/components/node-edit-modal.js';
 import { ReducerEditor } from './visualization/components/reducer-editor.js';
 import { ConfigurationListComponent } from './visualization/configuration/configuration-list.js';
 import { BaseGraphView } from './visualization/graph-builder/base-graph-view.js';
+import { detectMidXObstacles, chooseClearMidX } from './visualization/graph-builder/collision-detector.js';
 import { ColumnLayout } from './visualization/graph-builder/column-layout.js';
 import { ConfigGraphView } from './visualization/graph-builder/config-graph-view.js';
 import { GraphBuilderController } from './visualization/graph-builder/graph-builder-controller.js';
 import { GraphBuilderPresenter } from './visualization/graph-builder/graph-builder-presenter.js';
 import { GraphBuilderView } from './visualization/graph-builder/graph-builder-view.js';
+import { nodeBounds, nodeAnchors } from './visualization/graph-builder/graph-geometry.js';
+import { NODE_WIDTH, NODE_HEIGHT, COLUMN_GAP, ROW_GAP, PADDING_X, PADDING_Y, BACKWARD_MARGIN, EDGE_SPACING, LANE_OFFSET, OBSTACLE_MARGIN, ARROW_SIZE, ARROW_HALF, EDGE_COLOR, EDGE_COLOR_HIGHLIGHT, EDGE_WIDTH, EDGE_WIDTH_HIGHLIGHT, EDGE_OPACITY, EDGE_OPACITY_HIGHLIGHT } from './visualization/graph-builder/graph-metrics.js';
 import { GraphNodeExecHistory } from './visualization/graph-builder/graph-node-exec-history.js';
 import { GraphNodeInspectorPanel } from './visualization/graph-builder/graph-node-inspector-panel.js';
 import { GraphNodeLineage } from './visualization/graph-builder/graph-node-lineage.js';
+import { routeEdge, computeFanOutOffsets, computeLaneOffsets } from './visualization/graph-builder/orthogonal-edge-router.js';
 import { McConfigPanel } from './visualization/monte-carlo/mc-config-panel.js';
 import { McResultsPanel } from './visualization/monte-carlo/mc-results-panel.js';
 import { McRunsPanel } from './visualization/monte-carlo/mc-runs-panel.js';
@@ -588,6 +599,14 @@ export const Visualization = {
   BaseNodeEditor,
   EChartsGraphRenderer,
   EventEditor,
+  ActionNodeRenderer,
+  DefaultNodeRenderer,
+  NodeRenderGroup,
+  EventNodeRenderer,
+  HandlerNodeRenderer,
+  NodeRenderKit,
+  NodeRendererRegistry,
+  ReducerNodeRenderer,
   GraphNodeFilterMultiSelect,
   GraphRenderer,
   HandlerEditor,
@@ -596,14 +615,39 @@ export const Visualization = {
   ReducerEditor,
   ConfigurationListComponent,
   BaseGraphView,
+  detectMidXObstacles,
+  chooseClearMidX,
   ColumnLayout,
   ConfigGraphView,
   GraphBuilderController,
   GraphBuilderPresenter,
   GraphBuilderView,
+  nodeBounds,
+  nodeAnchors,
+  NODE_WIDTH,
+  NODE_HEIGHT,
+  COLUMN_GAP,
+  ROW_GAP,
+  PADDING_X,
+  PADDING_Y,
+  BACKWARD_MARGIN,
+  EDGE_SPACING,
+  LANE_OFFSET,
+  OBSTACLE_MARGIN,
+  ARROW_SIZE,
+  ARROW_HALF,
+  EDGE_COLOR,
+  EDGE_COLOR_HIGHLIGHT,
+  EDGE_WIDTH,
+  EDGE_WIDTH_HIGHLIGHT,
+  EDGE_OPACITY,
+  EDGE_OPACITY_HIGHLIGHT,
   GraphNodeExecHistory,
   GraphNodeInspectorPanel,
   GraphNodeLineage,
+  routeEdge,
+  computeFanOutOffsets,
+  computeLaneOffsets,
   McConfigPanel,
   McResultsPanel,
   McRunsPanel,
