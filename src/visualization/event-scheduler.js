@@ -386,34 +386,45 @@ export class EventScheduler {
     const name = el.querySelector('[data-id="name"]');
     name.value = node.name || '';
     name.addEventListener('input', () => {
-      ServiceRegistry.getInstance().actionService.updateAction(node.id, { name: name.value });
+      ServiceRegistry.getInstance().actionService.updateAction(node.id,
+          {name: name.value});
     });
 
-    const typeSelect = el.querySelector('[data-id="type"]');
+    const actionClassSelect = el.querySelector('[data-id="actionClass"]');
     const configWrap = el.querySelector('[data-id="config"]');
 
     this.ACTION_TYPES.forEach(type => {
       const opt = document.createElement('option');
       opt.value = type;
       opt.textContent = type;
-      typeSelect.appendChild(opt);
+      actionClassSelect.appendChild(opt);
     });
 
-    typeSelect.value = node.actionClass || 'AmountAction';
-    typeSelect.onchange = () => {
-      ServiceRegistry.getInstance().actionService.updateAction(node.id, { actionClass: typeSelect.value });
+    actionClassSelect.value = node.actionClass || 'AmountAction';
+    actionClassSelect.onchange = () => {
+      ServiceRegistry.getInstance().actionService.updateAction(node.id,
+          {actionClass: actionClassSelect.value});
       this._renderActionConfig(node, configWrap);
     };
+
+    const type = el.querySelector('[data-id="type"]');
+    type.value = node.type || '';
+    type.addEventListener('input', () => {
+      ServiceRegistry.getInstance().actionService.updateAction(node.id,
+          {type: type.value});
+    });
 
     this._renderActionConfig(node, configWrap);
 
     const actionHandlerCount = el.querySelector('#action-handler-count');
     const actionHandlerGrid = el.querySelector('#action-handlers');
-    this._renderLinkableNodeChips(node, 'handler', actionHandlerCount, actionHandlerGrid, false);
+    this._renderLinkableNodeChips(node, 'handler', actionHandlerCount,
+        actionHandlerGrid, false);
 
     const actionReducerCount = el.querySelector('#action-reducer-count');
     const actionReducerGrid = el.querySelector('#action-reducers');
-    this._renderLinkableNodeChips(node, 'reducer', actionReducerCount, actionReducerGrid, true);
+    this._renderLinkableNodeChips(node, 'reducer', actionReducerCount,
+        actionReducerGrid, true);
 
     this.builderCanvas.appendChild(el);
     this.builderCanvas.appendChild(this._createDeleteButton(node));
@@ -429,12 +440,10 @@ export class EventScheduler {
     switch (node.actionClass) {
       case 'AmountAction':
         wrap = this._getTemplate('tpl-amount-action-editor');
-        wrap.querySelector('[data-field="type"]').value  = node.type  || '';
         wrap.querySelector('[data-field="value"]').value = node.value ?? 0;
         break;
       case 'RecordMetricAction':
         wrap = this._getTemplate('tpl-record-metric-action-editor');
-        wrap.querySelector('[data-field="type"]').value      = node.type  || '';
         wrap.querySelector('[data-field="fieldName"]').value = displayField(node.fieldName);
         wrap.querySelector('[data-field="value"]').value     = node.value ?? 0;
         break;
