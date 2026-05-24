@@ -49,13 +49,25 @@ function makeContainer({ scrollHeight = 400, scrollTop = 320, clientHeight = 100
   return el;
 }
 
+let _seq = 0;
 function makeEntry({
   date       = new Date(2025, 0, 1),
   eventType  = 'TEST_EVENT',
   actionType = 'TEST_ACTION',
   reducer    = { name: 'Test Reducer' },
 } = {}) {
-  return { date, eventType, action: { type: actionType }, reducer };
+  const seq = _seq++;
+  return {
+    seq,
+    date,
+    executionId: null,
+    event:  { nodeId: null, type: eventType,  name: eventType,  color: null },
+    action: { instanceId: `inst-${seq}`, parentId: null, rootId: null, siblingIndex: 0, nodeId: null, type: actionType, name: actionType, data: {} },
+    reducer,
+    stateDiff:          [],
+    emittedInstanceIds: [],
+    emittedTypes:       [],
+  };
 }
 
 function makeView(containerOpts = {}) {
@@ -71,8 +83,8 @@ function makeGroups(entries, formatDate = d => d.toDateString()) {
     const d = formatDate(entry.date);
     if (!map.has(d)) map.set(d, new Map());
     const byEv = map.get(d);
-    if (!byEv.has(entry.eventType)) byEv.set(entry.eventType, []);
-    byEv.get(entry.eventType).push({ entry, idx, sum: '' });
+    if (!byEv.has(entry.event.type)) byEv.set(entry.event.type, []);
+    byEv.get(entry.event.type).push({ entry, idx, sum: '' });
   });
   return map;
 }

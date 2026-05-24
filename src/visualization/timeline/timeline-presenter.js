@@ -12,12 +12,16 @@ import { MapFilterMultiSelect } from '../components/map-filter-multi-select.js';
 import { QueryApi }             from '../../query/query-api.js';
 
 export class TimelinePresenter {
-  constructor({ controller, view, onDetail, onTaxDocument, onRewind, formatDate }) {
+  constructor({ controller, view, onDetail, onTaxDocument, onRewind, onNavigateToNode, formatDate }) {
     this._controller = controller;
     this._view       = view;
     this._onDetail   = onDetail;
     this._onRewind   = onRewind ?? null;
     this._formatDate = formatDate ?? (d => d.toDateString());
+
+    if (onNavigateToNode) {
+      view.onNavigateToNode = onNavigateToNode;
+    }
 
     this._eventSelectFilter  = null;
     this._actionSelectFilter = null;
@@ -47,7 +51,7 @@ export class TimelinePresenter {
       const csv = controller.generateCsv(this._formatDate);
       if (csv) this._triggerDownload(csv);
     };
-    view.onToggle  = key => { controller.toggleExpanded(key); this._render(); };
+    view.onToggle  = key => { if (key !== null) controller.toggleExpanded(key); this._render(); };
     view.onDetail  = idx => onDetail(controller.journal.journal[idx]);
     if (onTaxDocument) {
       view.onTaxDocument = idx => onTaxDocument(controller.journal.journal[idx]);
@@ -95,6 +99,7 @@ export class TimelinePresenter {
 
     this._view.render({
       groups:          ctrl.groups(this._formatDate),
+      causalGroups:    ctrl.causalGroups(this._formatDate),
       filterEvents:    ctrl.filterEvents,
       filterActions:   ctrl.filterActions,
       filterDateStart: ctrl.filterDateStart,

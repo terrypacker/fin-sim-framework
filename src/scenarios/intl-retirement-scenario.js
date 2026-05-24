@@ -579,7 +579,9 @@ export class IntlRetirementScenario extends BaseScenario {
       spouseRothAccount, spouseIraAccount, spouseK401Account, spouseSuperAccount,
     };
 
+    const { schemaRegistry } = ServiceRegistry.getInstance();
     return new InternationalRetirementFinancialState({
+      schemaRegistry,
       primary, spouse,
       usSavingsAccount, fixedIncomeAccount, usStockAccount,
       iraAccount, k401Account, rothAccount,

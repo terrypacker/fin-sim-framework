@@ -87,26 +87,28 @@ test('StatePanelView.buildActionDetail: emitted is "(none)" when emittedActions 
 test('StatePanelView.buildActionDetail: emitted lists action types when actions were emitted', () => {
   const panel  = makePanel();
   const entry = {
-    stateDiff: [],
-    emittedActions: [{ type: 'TAX_DUE' }, { type: 'NOTIFY' }],
-    action:         { type: 'SELL' },
+    stateDiff:    [],
+    emittedTypes: ['TAX_DUE', 'NOTIFY'],
+    action:       { type: 'SELL', name: 'Sell', data: {} },
   };
   const { emitted } = panel.buildActionDetail(entry);
   assert.ok(emitted.includes('TAX_DUE'),  `expected "TAX_DUE" in "${emitted}"`);
   assert.ok(emitted.includes('NOTIFY'),   `expected "NOTIFY" in "${emitted}"`);
 });
 
-test('StatePanelView.buildActionDetail: actionPayload excludes underscore-prefixed keys', () => {
+test('StatePanelView.buildActionDetail: actionPayload includes type, name, and data sub-object', () => {
   const panel  = makePanel();
   const entry = {
-    stateDiff: [],
-    emittedActions: [],
-    action:         { type: 'FOO', amount: 50, _internal: 'hidden' },
+    stateDiff:    [],
+    emittedTypes: [],
+    action:       { instanceId: 'abc', parentId: null, rootId: null, siblingIndex: 0,
+                    nodeId: null, type: 'FOO', name: 'Foo', data: { amount: 50 } },
   };
   const payload = JSON.parse(panel.buildActionDetail(entry).actionPayload);
-  assert.ok('type'   in payload,     '"type" should be in payload');
-  assert.ok('amount' in payload,     '"amount" should be in payload');
-  assert.ok(!('_internal' in payload), '"_internal" should be excluded');
+  assert.ok('type' in payload,               '"type" should be in payload');
+  assert.ok('name' in payload,               '"name" should be in payload');
+  assert.ok('data' in payload,               '"data" sub-object should be in payload');
+  assert.strictEqual(payload.data.amount, 50, 'data.amount should be 50');
 });
 
 // ─── getNestedProperty ────────────────────────────────────────────────────────

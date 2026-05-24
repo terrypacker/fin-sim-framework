@@ -250,7 +250,8 @@ export class BaseApp extends BaseComponent {
     const currentFmt      = $('tzSelect')?.value === 'utc' ? fmtUTC : fmtLocal;
     const currentCurrency = $('displayCurrency')?.value ?? 'USD';
 
-    this._statePanelView.formatDate = currentFmt;
+    this._statePanelView.formatDate     = currentFmt;
+    this._statePanelView.schemaRegistry = registry.schemaRegistry;
 
     // ── Visualization views ───────────────────────────────────────────────────
     const eventColors = new Map(
@@ -286,6 +287,10 @@ export class BaseApp extends BaseComponent {
         const sliderVal    = Math.round(clamped * 100);
         $('timeSlider').value = sliderVal;
         this.lastSliderValue  = sliderVal;
+      },
+      onNavigateToNode: (nodeId) => {
+        const node = registry.graph.getNode(nodeId);
+        if (node) this._editModal.open(node);
       },
       formatDate: currentFmt,
     });

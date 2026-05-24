@@ -8,12 +8,6 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-/**
- * journal.test.mjs
- * Tests for Journal and JournalEntry
- * Run with: node --test tests/journal.test.mjs
- */
-
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
@@ -23,38 +17,61 @@ import { Journal, JournalEntry } from '../../src/simulation-framework/journal.js
 
 function makeEntry(overrides = {}) {
   return new JournalEntry({
-    date:           overrides.date       ?? new Date(2025, 0, 1),
-    eventType:      overrides.eventType  ?? 'TICK',
-    action:         overrides.action     ?? { type: 'INCREMENT', amount: 10 },
-    reducer:        overrides.reducer    ?? 'MyReducer',
-    stateDiff:      overrides.stateDiff  ?? [],
-    emittedActions: overrides.emitted    ?? [],
-    sourceEvent:    overrides.src        ?? {}
+    id:          overrides.id          ?? crypto.randomUUID(),
+    date:        overrides.date        ?? new Date(2025, 0, 1),
+    executionId: overrides.executionId ?? null,
+    event:       overrides.event       ?? { nodeId: null, type: 'TICK', name: 'Tick', color: null },
+    action:      overrides.action      ?? {
+      instanceId:   crypto.randomUUID(),
+      parentId:     null,
+      rootId:       null,
+      siblingIndex: 0,
+      nodeId:       null,
+      type:         'INCREMENT',
+      name:         'Increment',
+      data:         { amount: 10 },
+    },
+    reducer:             overrides.reducer             ?? { nodeId: null, name: 'MyReducer' },
+    stateDiff:           overrides.stateDiff           ?? [],
+    emittedInstanceIds:  overrides.emittedInstanceIds  ?? [],
+    emittedTypes:        overrides.emittedTypes        ?? [],
   });
 }
 
 // ─── JournalEntry construction ────────────────────────────────────────────────
 
 test('JournalEntry: all fields are assigned correctly', () => {
-  const date    = new Date(2025, 5, 15);
-  const action  = { type: 'FOO', amount: 99 };
+  const id     = crypto.randomUUID();
+  const date   = new Date(2025, 5, 15);
+  const event  = { nodeId: 'ev1', type: 'SOURCE_EVENT', name: 'Source Event', color: '#f00' };
+  const action = {
+    instanceId: 'a1', parentId: null, rootId: null, siblingIndex: 0,
+    nodeId: 'act1', type: 'FOO', name: 'Foo', data: { amount: 99 },
+  };
+  const reducer = { nodeId: 'r1', name: 'R1' };
   const diff    = [{ field: 'x', before: 0, after: 99, delta: 99 }];
-  const emitted = [{ type: 'BAR' }];
-  const src     = { type: 'SOURCE_EVENT' };
+  const emittedIds   = ['uuid-bar'];
+  const emittedTypes = ['BAR'];
 
   const entry = new JournalEntry({
-    date, eventType: 'SOURCE_EVENT', action,
-    reducer: 'R1', stateDiff: diff,
-    emittedActions: emitted, sourceEvent: src
+    id, date, executionId: 'e1.1:h1.1:a1.1:r1.1',
+    event, action, reducer,
+    stateDiff: diff,
+    emittedInstanceIds: emittedIds,
+    emittedTypes,
   });
 
-  assert.strictEqual(entry.date,           date);
-  assert.strictEqual(entry.eventType,      'SOURCE_EVENT');
-  assert.strictEqual(entry.action,         action);
-  assert.strictEqual(entry.reducer,        'R1');
-  assert.strictEqual(entry.stateDiff,      diff);
-  assert.strictEqual(entry.emittedActions, emitted);
-  assert.strictEqual(entry.sourceEvent,    src);
+  assert.strictEqual(entry.id,                  id);
+  assert.strictEqual(entry.date,                date);
+  assert.strictEqual(entry.executionId,         'e1.1:h1.1:a1.1:r1.1');
+  assert.strictEqual(entry.event.type,          'SOURCE_EVENT');
+  assert.strictEqual(entry.event.color,         '#f00');
+  assert.strictEqual(entry.action.type,         'FOO');
+  assert.strictEqual(entry.action.data.amount,  99);
+  assert.strictEqual(entry.reducer.name,        'R1');
+  assert.strictEqual(entry.stateDiff,           diff);
+  assert.deepStrictEqual(entry.emittedInstanceIds, emittedIds);
+  assert.deepStrictEqual(entry.emittedTypes,       emittedTypes);
 });
 
 // ─── Journal construction ──────────────────────────────────────────────────────
@@ -69,7 +86,7 @@ test('Journal: starts with an empty journal array', () => {
   assert.strictEqual(j.journal.length, 0);
 });
 
-// ─── addEntry ─────────────────────────────────────────────────────────────────
+// ─── addEntry + seq ───────────────────────────────────────────────────────────
 
 test('Journal.addEntry: adds entry to journal array', () => {
   const j = new Journal({ enabled: true });
@@ -77,11 +94,24 @@ test('Journal.addEntry: adds entry to journal array', () => {
   assert.strictEqual(j.journal.length, 1);
 });
 
+test('Journal.addEntry: assigns monotonically increasing seq', () => {
+  const j = new Journal({ enabled: true });
+  const e1 = makeEntry();
+  const e2 = makeEntry();
+  const e3 = makeEntry();
+  j.addEntry(e1);
+  j.addEntry(e2);
+  j.addEntry(e3);
+  assert.strictEqual(e1.seq, 0);
+  assert.strictEqual(e2.seq, 1);
+  assert.strictEqual(e3.seq, 2);
+});
+
 test('Journal.addEntry: multiple entries accumulate in order', () => {
-  const j   = new Journal({ enabled: true });
-  const e1  = makeEntry({ action: { type: 'A' } });
-  const e2  = makeEntry({ action: { type: 'B' } });
-  const e3  = makeEntry({ action: { type: 'C' } });
+  const j  = new Journal({ enabled: true });
+  const e1 = makeEntry({ action: { instanceId: 'i1', parentId: null, rootId: null, siblingIndex: 0, nodeId: null, type: 'A', name: 'A', data: {} } });
+  const e2 = makeEntry({ action: { instanceId: 'i2', parentId: null, rootId: null, siblingIndex: 0, nodeId: null, type: 'B', name: 'B', data: {} } });
+  const e3 = makeEntry({ action: { instanceId: 'i3', parentId: null, rootId: null, siblingIndex: 0, nodeId: null, type: 'C', name: 'C', data: {} } });
 
   j.addEntry(e1);
   j.addEntry(e2);
@@ -98,9 +128,9 @@ test('Journal.addEntry: multiple entries accumulate in order', () => {
 test('Journal.getActions: returns only entries matching the action type', () => {
   const j = new Journal({ enabled: true });
 
-  j.addEntry(makeEntry({ action: { type: 'INC', amount: 1 } }));
-  j.addEntry(makeEntry({ action: { type: 'DEC', amount: 1 } }));
-  j.addEntry(makeEntry({ action: { type: 'INC', amount: 2 } }));
+  j.addEntry(makeEntry({ action: { instanceId: 'i1', parentId: null, rootId: null, siblingIndex: 0, nodeId: null, type: 'INC', name: 'Inc', data: { amount: 1 } } }));
+  j.addEntry(makeEntry({ action: { instanceId: 'i2', parentId: null, rootId: null, siblingIndex: 0, nodeId: null, type: 'DEC', name: 'Dec', data: { amount: 1 } } }));
+  j.addEntry(makeEntry({ action: { instanceId: 'i3', parentId: null, rootId: null, siblingIndex: 0, nodeId: null, type: 'INC', name: 'Inc', data: { amount: 2 } } }));
 
   const results = j.getActions('INC');
   assert.strictEqual(results.length, 2);
@@ -109,15 +139,15 @@ test('Journal.getActions: returns only entries matching the action type', () => 
 
 test('Journal.getActions: returns empty array when no entries match', () => {
   const j = new Journal({ enabled: true });
-  j.addEntry(makeEntry({ action: { type: 'INC' } }));
+  j.addEntry(makeEntry({ action: { instanceId: 'i1', parentId: null, rootId: null, siblingIndex: 0, nodeId: null, type: 'INC', name: 'Inc', data: {} } }));
 
   assert.deepStrictEqual(j.getActions('UNKNOWN'), []);
 });
 
 test('Journal.getActions: returns all entries when all match', () => {
   const j = new Journal({ enabled: true });
-  j.addEntry(makeEntry({ action: { type: 'INC' } }));
-  j.addEntry(makeEntry({ action: { type: 'INC' } }));
+  j.addEntry(makeEntry({ action: { instanceId: 'i1', parentId: null, rootId: null, siblingIndex: 0, nodeId: null, type: 'INC', name: 'Inc', data: {} } }));
+  j.addEntry(makeEntry({ action: { instanceId: 'i2', parentId: null, rootId: null, siblingIndex: 0, nodeId: null, type: 'INC', name: 'Inc', data: {} } }));
 
   assert.strictEqual(j.getActions('INC').length, 2);
 });
@@ -155,9 +185,9 @@ test('Journal.traceEvent: returns entries whose date matches exactly', () => {
   const target  = new Date(2025, 5, 15);
   const other   = new Date(2026, 0, 1);
 
-  j.addEntry(makeEntry({ date: target, action: { type: 'A' } }));
-  j.addEntry(makeEntry({ date: other,  action: { type: 'B' } }));
-  j.addEntry(makeEntry({ date: target, action: { type: 'C' } }));
+  j.addEntry(makeEntry({ date: target, action: { instanceId: 'i1', parentId: null, rootId: null, siblingIndex: 0, nodeId: null, type: 'A', name: 'A', data: {} } }));
+  j.addEntry(makeEntry({ date: other,  action: { instanceId: 'i2', parentId: null, rootId: null, siblingIndex: 0, nodeId: null, type: 'B', name: 'B', data: {} } }));
+  j.addEntry(makeEntry({ date: target, action: { instanceId: 'i3', parentId: null, rootId: null, siblingIndex: 0, nodeId: null, type: 'C', name: 'C', data: {} } }));
 
   const results = j.traceEvent(target);
   assert.strictEqual(results.length, 2);
@@ -170,4 +200,45 @@ test('Journal.traceEvent: returns empty array when no entries match the date', (
 
   const results = j.traceEvent(new Date(2099, 0, 1));
   assert.deepStrictEqual(results, []);
+});
+
+// ─── addSnapshot / snapshotBefore ────────────────────────────────────────────
+
+test('Journal.addSnapshot: stores snapshot for a date key', () => {
+  const j = new Journal({ enabled: true });
+  const state = { balance: 1000 };
+  j.addSnapshot(new Date(Date.UTC(2025, 0, 1)), state);
+  assert.strictEqual(j.snapshots.size, 1);
+});
+
+test('Journal.addSnapshot: first-write-wins for the same date', () => {
+  const j = new Journal({ enabled: true });
+  j.addSnapshot(new Date(Date.UTC(2025, 0, 1)), { balance: 1000 });
+  j.addSnapshot(new Date(Date.UTC(2025, 0, 1)), { balance: 9999 });
+  assert.strictEqual(j.snapshots.size, 1);
+  // First snapshot wins
+  const snap = [...j.snapshots.values()][0];
+  assert.strictEqual(snap.state.balance, 1000);
+});
+
+test('Journal.snapshotBefore: returns nearest snapshot at or before seq', () => {
+  const j = new Journal({ enabled: true });
+  j.addEntry(makeEntry()); // seq 0
+  j.addEntry(makeEntry()); // seq 1
+  j.addSnapshot(new Date(Date.UTC(2025, 0, 1)), { balance: 100 }); // snap at seq=2
+  j.addEntry(makeEntry()); // seq 2
+  j.addEntry(makeEntry()); // seq 3
+
+  const snap = j.snapshotBefore(3);
+  assert.ok(snap !== null, 'should find a snapshot');
+  assert.strictEqual(snap.state.balance, 100);
+});
+
+test('Journal.snapshotBefore: returns null when no snapshot exists at or before seq', () => {
+  const j = new Journal({ enabled: true });
+  j.addEntry(makeEntry()); // seq 0
+  j.addSnapshot(new Date(Date.UTC(2025, 6, 1)), { balance: 500 }); // snap at seq=1
+
+  const snap = j.snapshotBefore(0);
+  assert.strictEqual(snap, null, 'snapshot was created after seq 0, should not be returned');
 });

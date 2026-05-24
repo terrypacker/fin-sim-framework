@@ -54,7 +54,7 @@ export class TaxDocumentRegistry {
    * @returns {TaxDocument|TaxDocument[]|null}
    */
   generate(journalEntry) {
-    const { cc, taxDetail, personTaxDetails } = journalEntry.action;
+    const { cc, taxDetail, personTaxDetails } = journalEntry.action.data ?? {};
 
     if (personTaxDetails?.length > 0) {
       const taxYear = personTaxDetails[0]?.taxDetail?.taxYear ?? new Date(journalEntry.date).getUTCFullYear();
