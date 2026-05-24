@@ -12,18 +12,28 @@ import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 
-/** Resolve the US cash pool. */
-const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
+/** Default US cash pool key when no saleDestinationAccount is provided. */
+const defaultUsCashKey = (state) =>
+  state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
+
+/** Resolve the destination state key, falling back to the default US cash pool. */
+const resolveDestinationKey = (state, saleDestinationAccount) => {
+  if (saleDestinationAccount && state[saleDestinationAccount] != null) {
+    return saleDestinationAccount;
+  }
+  return defaultUsCashKey(state);
+};
 
 // ─── Reducers ─────────────────────────────────────────────────────────────────
 
 /**
- * EVT-36/46: Collectible Sale — credit US cash pool, zero out collectibleAccount
- * value (if present in state), chain COLLECTIBLE_SALE_TAX.
- * Gain = salePrice - costBasis; taxed at the 28% collectibles rate (US).
+ * EVT-36/46: Collectible Sale — credit destination account with sale proceeds,
+ * zero out the collectible's stateKey value (if present), and chain
+ * COLLECTIBLE_SALE_TAX. Gain = salePrice - costBasis; taxed at the 28%
+ * collectibles rate (US) and/or as AU capital gain when isAuResident.
  */
 export class CollectibleSaleApplyReducer extends Reducer {
-  static description = 'Credits the US cash pool with collectible sale proceeds and chains COLLECTIBLE_SALE_TAX with the gain.';
+  static description = 'Credits the destination account with collectible sale proceeds, zeroes the collectible value, and chains COLLECTIBLE_SALE_TAX with the gain.';
   static actionType  = 'COLLECTIBLE_SALE_APPLY';
 
   constructor({ accountService }) {
@@ -34,12 +44,14 @@ export class CollectibleSaleApplyReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const { salePrice, costBasis, isAuResident } = action;
-    const gain = Math.max(0, salePrice - costBasis);
-    this.accountService.transaction(usCash(state), salePrice, null);
+    const { salePrice, costBasis, isAuResident, stateKey, destinationKey } = action;
+    const gain    = Math.max(0, salePrice - costBasis);
+    const destKey = destinationKey ?? defaultUsCashKey(state);
+    this.accountService.transaction(state[destKey], salePrice, null);
     const stateUpdate = {};
-    if (state.collectibleAccount != null) {
-      stateUpdate.collectibleAccount = { ...state.collectibleAccount, value: 0 };
+    const key = stateKey ?? 'collectibleAccount';
+    if (state[key] != null) {
+      stateUpdate[key] = { ...state[key], value: 0 };
     }
     return this.newState(
       state,
@@ -73,7 +85,7 @@ export class CollectibleValueChangeApplyReducer extends Reducer {
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 export class CollectibleSaleHandler extends HandlerEntry {
-  static description = 'Dispatches COLLECTIBLE_SALE_APPLY with sale price, cost basis, and AU residency flag.';
+  static description = 'Dispatches COLLECTIBLE_SALE_APPLY with sale price, cost basis, AU residency flag, and resolved destination account.';
   static eventType   = 'COLLECTIBLE_SALE';
 
   constructor() {
@@ -82,15 +94,17 @@ export class CollectibleSaleHandler extends HandlerEntry {
   }
 
   call({ data, state }) {
-    const cashKey = state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
+    const destinationKey = resolveDestinationKey(state, data.saleDestinationAccount);
     return [
       {
         type:         'COLLECTIBLE_SALE_APPLY',
         salePrice:    data.salePrice,
         costBasis:    data.costBasis,
         isAuResident: state.isAuResident,
+        stateKey:     data.stateKey ?? null,
+        destinationKey,
       },
-      new RecordBalanceAction(`${cashKey}.balance`, cashKey),
+      new RecordBalanceAction(`${destinationKey}.balance`, destinationKey),
     ];
   }
 }
