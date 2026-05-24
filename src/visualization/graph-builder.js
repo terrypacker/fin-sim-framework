@@ -154,7 +154,7 @@ export class ConfigGraphBuilder {
     }
     const existing = this.getNode(node.id);
     if(existing) {
-      throw new Error(`Node already added ${node}`);
+      throw new Error(`Node already added ${node.id} kind: ${node.kind}`);
     }
     this.nodes.push(node);
     this._relayoutAll();

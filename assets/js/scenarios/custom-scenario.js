@@ -25,10 +25,24 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
     super({ eventSchedulerUI });
   }
 
+  /**
+   * Build the bare Simulation instance. No events, handlers, or reducers are
+   * registered here. Call loadDefaults() to populate the default configuration,
+   * or let BaseApp call ScenarioSerializer.deserialize() when loading from a
+   * saved config.
+   */
   buildSim(params, initialState) {
     super.buildSim(params, initialState);
+  }
 
-    //Setup Events
+  /**
+   * Populate the scenario with its default event series, handlers, and reducers.
+   * Called by BaseApp.afterBuildSim() when there is no saved config to load.
+   * Uses this.actionFactory so action construction follows the same path as
+   * deserialization.
+   */
+  loadDefaults() {
+    // ── Events ────────────────────────────────────────────────────────────────
     const monthEndEventSeries = new FinSimLib.Core.EventSeries({
       name: 'Month End',
       type: 'MONTH_END',
@@ -38,27 +52,16 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
     });
     this.scheduleEvent(monthEndEventSeries);
 
-    /* Not rendering right on config graph
-    const buyLambo = new Date();
-    buyLambo.setMonth(buyLambo.getMonth() + 3);
-    this._scheduleOneOffEvent({
-      name: 'Buy Lamborghini',
-      type: 'BUY_LAMBO',
-      date: buyLambo,
-      enabled: true,
-      color: '#4CAF50'
-    });
-    */
+    // ── Actions ───────────────────────────────────────────────────────────────
+    const recordSalaryPaymentAction = this.actionFactory.amountAction('RECORD_METRIC', 'Pay Salary', 1200);
+    const sumSalaryPaymentAction = this.actionFactory.recordNumericSumMetricAction('Sum Payments', 'amount');
 
-    //Handle Month End
-    const recordSalaryPaymentAction = new FinSimLib.Core.AmountAction('RECORD_METRIC', 'Pay Salary', 1200);
-    const sumSalaryPaymentAction = new FinSimLib.Core.RecordNumericSumMetricAction('Sum Payments', 'amount');
-
-    const monthEndHandler = new FinSimLib.Core.HandlerEntry( null,'Month End Handler');
+    // ── Handlers ──────────────────────────────────────────────────────────────
+    const monthEndHandler = new FinSimLib.Core.HandlerEntry(null, 'Month End Handler');
     monthEndHandler.forEvent(monthEndEventSeries).generateAction(recordSalaryPaymentAction);
     this.registerHandler(monthEndHandler);
 
-    //Record Salary Reducer
+    // ── Reducers ──────────────────────────────────────────────────────────────
     const recordSalaryPaymentReducer = FinSimLib.Core.MetricReducer
       .fromMetric('amount')
       .withName('Process Salary Payment Amount')
@@ -66,72 +69,16 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
       .generateAction(sumSalaryPaymentAction);
     this.registerReducer(recordSalaryPaymentReducer);
 
-    //Sum all salaries
     const sumSalaryPaymentReducer = FinSimLib.Core.NumericSumMetricReducer
       .fromMetric('salary')
       .withName('Update Total Salary')
       .reduceAction(sumSalaryPaymentAction);
     this.registerReducer(sumSalaryPaymentReducer);
 
-    //Sum all salaries
     const depositReducer = FinSimLib.Core.ArrayMetricReducer
-    .fromMetric('deposits')
-    .withName('Deposit Payment')
-    .reduceAction(recordSalaryPaymentAction);
+      .fromMetric('deposits')
+      .withName('Deposit Payment')
+      .reduceAction(recordSalaryPaymentAction);
     this.registerReducer(depositReducer);
   }
-
-
-  //TODO REMOVE
-  _registerHandlers(p) {
-    this.sim.register('MONTH_END', new FinSimLib.Core.HandlerEntry(this.handlerLogic), 'Custom Handler');
-
-    this.sim.register('MONTH_END', new FinSimLib.Core.HandlerEntry(({ data, date, state }) => {
-      const actions = [];
-      actions.push(
-          { type: 'MONTH_END_PROCESS', date },
-          new FinSimLib.Core.RecordArrayMetricAction('monthEnd', date),
-      );
-      return actions;
-    }, 'Month End Handler'));
-  }
-
-  //TODO REMOVE
-  _registerReducers(p) {
-    //MONTH END COUNT
-    this.sim.reducers.register('MONTH_END_PROCESS', (state, action, date) => {
-      const monthCounter = state.monthCount + 1;
-      const gains = this.sim.rng() * 1000;
-      const taxRate = 0.10; //TODO Make variable by month
-      return {
-        state: {
-          ...state,
-          monthCount: monthCounter
-        },
-        next: [
-          new FinSimLib.Core.AmountAction('PURCHASE_EVENT', 'purchases', 5),
-          new FinSimLib.Core.RecordMetricAction('monthCount', monthCounter),
-          new FinSimLib.Core.RecordMetricAction('monthGains', gains),
-          new FinSimLib.Core.RecordNumericSumMetricAction('totalGains', gains),
-          new FinSimLib.Core.RecordMultiplicativeMetricAction('monthTax', taxRate),
-        ]
-      };
-    }, FinSimLib.Core.PRIORITY.PRE_PROCESS, 'Month Counter');
-
-    this.sim.reducers.register('CUSTOM_EVENT', this.reducerLogic, FinSimLib.Core.PRIORITY.PRE_PROCESS, 'Custom Reducer');
-
-    //Metric Recorder
-    new FinSimLib.Core.ArrayMetricReducer().registerWith(this.sim.reducers, 'RECORD_ARRAY_METRIC');
-    new FinSimLib.Core.MetricReducer().registerWith(this.sim.reducers, 'RECORD_METRIC');
-    new FinSimLib.Core.NumericSumMetricReducer().registerWith(this.sim.reducers, 'RECORD_NUMERIC_SUM_METRIC');
-    FinSimLib.Core.MultiplicativeMetricReducer.fromMetric('monthGains').registerWith(this.sim.reducers, 'RECORD_MULTIPLICATIVE_METRIC');
-
-    const purchase = new FinSimLib.Core.StateFieldReducer('Purchaser', PRIORITY.POSITION_UPDATE,
-        'purchase', (state, action, date) => {
-      return this.sim.rng() * 1000;
-    });
-    const recordPurchase = FinSimLib.Core.ArrayMetricReducer.fromField('purchase');
-    FinSimLib.Core.RepeatingReducer.fromReducer([purchase, recordPurchase], 'amount').registerWith(this.sim.reducers, 'PURCHASE_EVENT');
-  }
-
 }

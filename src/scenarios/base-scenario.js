@@ -9,6 +9,7 @@
  */
 
 import { DateUtils } from '../simulation-framework/date-utils.js';
+import { ActionFactory } from './action-factory.js';
 
 export const intervalFns = {
   monthly:    d => DateUtils.addMonths(d, 1),
@@ -46,6 +47,9 @@ export class BaseScenario {
     this._nextReducerId = 1;
     this._nextEventId = 1;
     this._nextActionId = 1;
+
+    // Centralized factory for creating action instances in subclasses
+    this.actionFactory = new ActionFactory();
     // Tracks which event types already have a recurring auto-rescheduling handler
     // registered, so we never register a second one on re-enable.
     this._registeredRecurringTypes = new Map();
@@ -162,7 +166,11 @@ export class BaseScenario {
 
   reregisterReducer(reducer) {
     this.sim.reducers.unregisterAllForReducer(reducer);
-    this.registerReducer(reducer);
+    // Re-register with the sim only — the reducer is already in the UI graph.
+    // Calling registerReducer here would try to add it to the graph again and throw.
+    reducer.reducedActions.forEach(action => {
+      reducer.registerWith(this.sim.reducers, action.type);
+    });
   }
 
   registerHandler(handler) {

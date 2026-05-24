@@ -37,6 +37,7 @@ import { UsTaxRates2025 } from './finance/tax/us/us-tax-rates-2025.js';
 import { UsTaxRatesBase } from './finance/tax/us/us-tax-rates-base.js';
 import { TaxService } from './finance/tax-service.js';
 import { TaxSettleService } from './finance/tax-settle-service.js';
+import { ActionFactory } from './scenarios/action-factory.js';
 import { intervalFns, startSnapFns, BaseScenario } from './scenarios/base-scenario.js';
 import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
 import { ScenarioStorage } from './scenarios/scenario-storage.js';
@@ -133,6 +134,7 @@ export const Finance = {
 };
 
 export const Scenarios = {
+  ActionFactory,
   intervalFns,
   startSnapFns,
   BaseScenario,

@@ -202,9 +202,16 @@ export class EventScheduler {
   addReducer(reducer) {
     //Decorate the reducer
     reducer.kind = 'reducer';
-    if(reducer instanceof FinSimLib.Core.MetricReducer) {
-      reducer.reducerType = 'MetricReducer';
-    }
+    // Resolve the most-specific subclass first so that e.g. NumericSumMetricReducer
+    // (which extends MetricReducer) is not incorrectly tagged as 'MetricReducer'.
+    const C = FinSimLib.Core;
+    if      (reducer instanceof C.NumericSumMetricReducer)      reducer.reducerType = 'NumericSumMetricReducer';
+    else if (reducer instanceof C.ArrayMetricReducer)            reducer.reducerType = 'ArrayMetricReducer';
+    else if (reducer instanceof C.MultiplicativeMetricReducer)   reducer.reducerType = 'MultiplicativeMetricReducer';
+    else if (reducer instanceof C.MetricReducer)                 reducer.reducerType = 'MetricReducer';
+    else if (reducer instanceof C.NoOpReducer)                   reducer.reducerType = 'NoOpReducer';
+    else if (reducer instanceof C.AccountTransactionReducer)     reducer.reducerType = 'AccountTransactionReducer';
+    else if (reducer instanceof C.StateFieldReducer)             reducer.reducerType = 'StateFieldReducer';
     this.graph.addNode(reducer);
 
     //Add the actions
