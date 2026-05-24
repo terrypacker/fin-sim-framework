@@ -10,6 +10,7 @@
 
 import { EventBuilder }         from '../../simulation-framework/builders/event-builder.js';
 import { ReducerBuilder }       from '../../simulation-framework/builders/reducer-builder.js';
+import { OneOffEvent }          from '../../simulation-framework/events/one-off-event.js';
 import { ACCOUNT_ROLES }        from '../../finance/state/account-roles.js';
 import { MonthlyExpensesHandler }       from '../../finance/handlers/monthly-expenses-handler.js';
 import { MonthlyWagesHandler }          from '../../finance/handlers/monthly-wages-handler.js';
@@ -44,6 +45,7 @@ import {
   K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer,
   K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler,
   K401RmdApplyReducer, K401AnnualRmdHandler,
+  K401ToIraConversionHandler, K401ToIraConversionApplyReducer,
 } from '../../finance/account-rules/us/k401-classes.js';
 import {
   IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
@@ -159,6 +161,30 @@ export const US_RETIREMENT = {
         type: 'Boolean', group: 'US Retirement', mc: false, opt: true,
         defaultValue: true,
         description: 'If true, monthly expenses grow with inflation each year',
+      },
+      {
+        key: 'k401ToIraConversionEnabled', label: '401(k)→IRA Conversion Enabled',
+        type: 'Boolean', group: 'US Retirement', mc: false, opt: false,
+        defaultValue: true,
+        description: 'If true, each 401(k) is rolled into the owner\'s first IRA on the owner\'s retirement date',
+      },
+      {
+        key: 'k401ToIraConversionMonth', label: '401(k)→IRA Conversion Month',
+        type: 'Number', group: 'US Retirement', mc: false, opt: true,
+        defaultValue: null,
+        description: 'Month (1–12) of the conversion; null = use the owner\'s retirement month',
+      },
+      {
+        key: 'k401ToIraConversionDay', label: '401(k)→IRA Conversion Day',
+        type: 'Number', group: 'US Retirement', mc: false, opt: true,
+        defaultValue: null,
+        description: 'Day of month for the conversion; null = use the owner\'s retirement day',
+      },
+      {
+        key: 'k401ToIraConversionYear', label: '401(k)→IRA Conversion Year',
+        type: 'Number', group: 'US Retirement', mc: false, opt: true,
+        defaultValue: null,
+        description: 'Year of the conversion; null = use the owner\'s retirement year',
       },
     ];
   },
@@ -288,6 +314,29 @@ export const US_RETIREMENT = {
           .name('Fixed Income Interest').type('INTL_FIXED_INCOME_INTEREST')
           .interval('year-end').startOffset(1).enabled(true).color('#2196F3').build()
       );
+    }
+
+    if (p.k401ToIraConversionEnabled && k401Accounts.length > 0) {
+      for (const k401 of k401Accounts) {
+        const owner = people.find(pe => pe.id === k401.ownerId);
+        if (!owner?.retirementDate) continue;
+        const ownerIra = iraAccounts.find(a => a.ownerId === k401.ownerId);
+        if (!ownerIra) continue;
+
+        const retirement = new Date(owner.retirementDate);
+        const year  = p.k401ToIraConversionYear  ?? retirement.getUTCFullYear();
+        const month = (p.k401ToIraConversionMonth ?? (retirement.getUTCMonth() + 1)) - 1;
+        const day   = p.k401ToIraConversionDay   ?? retirement.getUTCDate();
+
+        schedules.push(new OneOffEvent({
+          name:    `401(k)→IRA Conversion (${owner.name})`,
+          type:    'K401_TO_IRA_CONVERSION',
+          date:    new Date(Date.UTC(year, month, day)),
+          data:    { k401Key: k401.stateKey, iraKey: ownerIra.stateKey },
+          enabled: true,
+          color:   '#BF360C',
+        }));
+      }
     }
 
     return schedules;
@@ -455,6 +504,14 @@ export const US_RETIREMENT = {
       new K401ContributionHandler(), new K401EarningsHandler(), new K401WithdrawalHandler(),
     );
 
+    // 401(k)→IRA conversion (only when both account types exist)
+    if (k401Accounts.length > 0 && iraAccounts.length > 0) {
+      const convEvent = context.schedulesById['K401_TO_IRA_CONVERSION'];
+      const convH = new K401ToIraConversionHandler();
+      if (convEvent) convH.handledEvents.push(convEvent);
+      handlers.push(convH);
+    }
+
     // Out-of-funds handler (no event binding)
     handlers.push(new OutOfFundsHandler());
 
@@ -527,6 +584,11 @@ export const US_RETIREMENT = {
       new K401WithdrawalApplyReducer({ accountService: accountSvc }),
       new K401RmdApplyReducer({ accountService: accountSvc }),
     );
+
+    // 401(k)→IRA conversion (no cash pool / tax — direct rollover)
+    if (k401Accounts.length > 0 && iraAccounts.length > 0) {
+      reducers.push(new K401ToIraConversionApplyReducer({ accountService: accountSvc }));
+    }
 
     return reducers;
   },
