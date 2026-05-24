@@ -53,11 +53,6 @@ export class GraphBuilderPresenter {
 
     // ── Wire view mutation callbacks → controller ─────────────────────────
 
-    this._view.onCreationRequested = (kind, subtype) => {
-      const newNode = this.createNode(kind, subtype);
-      this.editNode(newNode);
-    };
-
     this._view.onDelete = (node) => {
       this._controller.deleteNode(node);
     };

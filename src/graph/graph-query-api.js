@@ -215,6 +215,94 @@ export class GraphQueryApi extends QueryApi {
   }
 
   // =========================================================
+  // Traversals
+  // =========================================================
+
+  /**
+   * DFS forward from startId along edges of the given type.
+   * Returns all reachable nodes (including the start node) in visit order.
+   * @param {string} startId
+   * @param {string|null} edgeType
+   * @returns {object[]}
+   */
+  traceForward(startId, edgeType = null) {
+    const visited = new Set();
+    const result  = [];
+
+    const dfs = (id) => {
+      if (visited.has(id)) return;
+      visited.add(id);
+
+      const node = this._graph.getNode(id);
+      if (!node) return;
+
+      result.push(node);
+
+      for (const edge of this._graph.getOutgoing(id, edgeType)) {
+        dfs(edge.to);
+      }
+    };
+
+    dfs(startId);
+    return result;
+  }
+
+  /**
+   * Walk backward from startId following the first incoming edge of the
+   * given type at each step. Returns the chain in root-first order.
+   * @param {string} startId
+   * @param {string|null} edgeType
+   * @returns {object[]}
+   */
+  traceBackward(startId, edgeType = null) {
+    const result  = [];
+    const visited = new Set();
+    let   current = this._graph.getNode(startId);
+
+    while (current && !visited.has(current.id)) {
+      visited.add(current.id);
+      result.push(current);
+
+      const incoming = this._graph.getIncoming(current.id, edgeType);
+      current = incoming.length ? this._graph.getNode(incoming[0].from) : null;
+    }
+
+    result.reverse();
+    return result;
+  }
+
+  // ─── Cross-layer queries ──────────────────────────────────────────────────
+  // TODO #126 — these depend on 'instance-of' edges not yet wired in the graph
+
+  /** Returns the config-layer definition node for a runtime instance node. */
+  getDefinition(_nodeId) { return null; }
+
+  /** Returns all runtime instance nodes for a config-layer definition node. */
+  getInstances(_definitionId) { return []; }
+
+  // ─── Domain-specific traversals ───────────────────────────────────────────
+  // TODO #126 — these depend on 'triggers' / 'causes' / 'config' edges
+
+  /** Forward execution chain from nodeId via 'triggers' edges. */
+  traceExecution(nodeId) { return this.traceForward(nodeId, 'triggers'); }
+
+  /** Backward causality chain to nodeId via 'causes' edges. */
+  traceCausality(nodeId) { return this.traceBackward(nodeId, 'causes'); }
+
+  /** Config path forward from definitionId via 'config' edges. */
+  getConfigPath(definitionId) { return this.traceForward(definitionId, 'config'); }
+
+  /**
+   * Compare the config path of a definition against the actual execution
+   * trace of a runtime instance.
+   * TODO #126 — instance-of / triggers edges not yet wired
+   * @returns {{ missing: string[], extra: string[] }}
+   */
+  diffExecution(_definitionId, _instanceId) {
+    return { missing: [], extra: [] };
+  }
+
+  // =========================================================
   // Optimization
   // =========================================================
 
