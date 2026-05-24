@@ -428,6 +428,15 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
 export class IntlRetirementScenario extends BaseScenario {
   static getParamSchema() { return INTL_RETIREMENT_PARAM_SCHEMA; }
 
+  // Declares which scenario params map directly to a person record field.
+  // ScenarioLoader reads this to cascade param changes into cfg.persons before
+  // compilation, while leaving all other person fields (lifeExpectancy, etc.)
+  // under the direct control of the person editor.
+  static paramToPersonSync = [
+    { param: 'primaryRetirementDate', personId: 'primary', field: 'retirementDate' },
+    { param: 'spouseRetirementDate',  personId: 'spouse',  field: 'retirementDate' },
+  ];
+
   static getToolsets() {
     return [
       'US_BANKING', 'US_TAX', 'US_RETIREMENT',

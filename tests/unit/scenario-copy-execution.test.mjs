@@ -301,3 +301,159 @@ test('copy with modified monthlyExpenses diverges from original at 2028-01-01', 
   assert.ok(copySavings > origSavings,
     `copy with lower expenses (3000) should have higher US savings — original: ${origSavings}, copy: ${copySavings}`);
 });
+
+// ─── Initialization-flow change-propagation tests ────────────────────────────
+//
+// These tests verify that changes made to a scenario config (params, person
+// fields, account values, event dates) are picked up by the simulation
+// initialization flow WITHOUT manually patching initialState.
+//
+// Root cause: ScenarioLoader.load() takes the deserialize branch whenever
+// cfg.events is non-empty, which restores the frozen cfg.initialState snapshot
+// and overwrites anything that changed.  Tests that exercise params→state,
+// person→state, and account→state currently FAIL.  The moveYear→event-date
+// test also FAILS because the compiled event date is frozen in cfg.events even
+// when the param that produced it is changed.  Only tests that mutate cfg.events
+// directly currently pass (test 3 above).  These tests document the full scope
+// of the problem before the architectural fix is applied.
+
+test('changing primaryRetirementDate param is reflected in state.people via initialization flow', () => {
+  // Build and compile the prebuilt (default primaryRetirementDate = 2040-01-01)
+  const { services } = buildAndCompilePrebuilt();
+  const active  = services.scenarioService.getActive();
+  const created = services.scenarioService.newScenario(active);
+
+  // Mutate the param — the initialization flow must propagate this into state.people
+  const retParam = created.params?.find(p => p.name === 'primaryRetirementDate');
+  assert.ok(retParam, 'primaryRetirementDate param must exist in the copy');
+  retParam.value = '2027-01-01';
+
+  const sim = loadCopyIntoFreshServices(created);
+
+  const primaryPerson = sim.state.people?.primary;
+  assert.ok(primaryPerson, 'primary person must exist in state.people after load');
+
+  const retDate = primaryPerson.retirementDate instanceof Date
+    ? primaryPerson.retirementDate
+    : new Date(primaryPerson.retirementDate);
+
+  assert.strictEqual(
+    retDate.toISOString().slice(0, 10),
+    '2027-01-01',
+    `state.people.primary.retirementDate should be 2027-01-01 after param change, got ${retDate?.toISOString?.() ?? retDate}`,
+  );
+});
+
+test('changing a non-param person field is reflected in state.people via initialization flow', () => {
+  // socialSecurityMonthly has no corresponding param and no paramToPersonSync entry,
+  // so a direct edit to cfg.persons must survive the recompile unchanged.
+  const { services } = buildAndCompilePrebuilt();
+  const active  = services.scenarioService.getActive();
+  const created = services.scenarioService.newScenario(active);
+
+  const primaryRec = created.persons?.find(p => p.id === 'primary');
+  assert.ok(primaryRec, 'primary person must exist in scenario persons array');
+  primaryRec.socialSecurityMonthly = 2_500;
+
+  const sim = loadCopyIntoFreshServices(created);
+
+  const statePerson = sim.state.people?.primary;
+  assert.ok(statePerson, 'primary person must exist in state.people after load');
+  assert.strictEqual(
+    statePerson.socialSecurityMonthly,
+    2_500,
+    `state.people.primary.socialSecurityMonthly should be 2500 after direct field change, got ${statePerson.socialSecurityMonthly}`,
+  );
+});
+
+test('direct event date edits in cfg.events are overridden by param-driven recompile for toolset scenarios', () => {
+  // For toolset scenarios, the event schedule is always derived from params.  Editing
+  // cfg.events[i].date directly (as the graph UI would do) is overridden on the next
+  // load because the compile branch regenerates the schedule from the current params.
+  // To change an event date, change the controlling param (e.g. moveYear) instead.
+  const { services } = buildAndCompilePrebuilt();
+  const active  = services.scenarioService.getActive();
+  const created = services.scenarioService.newScenario(active);
+
+  // Directly edit the CHANGE_RESIDENCY event date in cfg.events (moveYear param still 2031)
+  const changeResEvent = created.events?.find(e => e.type === 'CHANGE_RESIDENCY');
+  assert.ok(changeResEvent, 'CHANGE_RESIDENCY event must exist in the compiled events');
+  changeResEvent.date = new Date(Date.UTC(2027, 6, 1)).toISOString();
+
+  const sim = loadCopyIntoFreshServices(created);
+  sim.stepTo(TARGET);
+
+  // moveYear param = 2031 (after TARGET) → event recompiled to 2031-07-01 → direct edit ignored
+  assert.strictEqual(
+    sim.state.isAuResident,
+    false,
+    'Direct event date edit is overridden by recompile; moveYear=2031 so isAuResident should be false at TARGET',
+  );
+});
+
+test('changing moveYear param updates the CHANGE_RESIDENCY event date via initialization flow', () => {
+  // Default moveYear = 2031 → CHANGE_RESIDENCY compiled to 2031-07-01 (after TARGET).
+  // Changing the param to 2027 should make the event fire on 2027-07-01 (before TARGET),
+  // so isAuResident must be true at TARGET.  Currently FAILS because the param change
+  // is not cascaded to the frozen event date in cfg.events.
+  const { services } = buildAndCompilePrebuilt();
+  const active  = services.scenarioService.getActive();
+  const created = services.scenarioService.newScenario(active);
+
+  const moveParam = created.params?.find(p => p.name === 'moveYear');
+  assert.ok(moveParam, 'moveYear param must exist in the copy');
+  moveParam.value = 2027;
+
+  const sim = loadCopyIntoFreshServices(created);
+  sim.stepTo(TARGET);
+
+  assert.strictEqual(
+    sim.state.isAuResident,
+    true,
+    'isAuResident should be true at TARGET after moveYear param changed to 2027',
+  );
+});
+
+test('changing monthlyExpenses param is reflected in state.monthlyExpenses via initialization flow', () => {
+  // Default monthlyExpenses = 6000.  Changing the param to a distinctive value
+  // must be visible in state.monthlyExpenses after load, without touching initialState.
+  // Currently FAILS because cfg.initialState.monthlyExpenses is the frozen compile-time value.
+  const { services } = buildAndCompilePrebuilt();
+  const active  = services.scenarioService.getActive();
+  const created = services.scenarioService.newScenario(active);
+
+  const expParam = created.params?.find(p => p.name === 'monthlyExpenses');
+  assert.ok(expParam, 'monthlyExpenses param must exist in the copy');
+  expParam.value = 9_999;
+
+  const sim = loadCopyIntoFreshServices(created);
+
+  assert.strictEqual(
+    sim.state.monthlyExpenses,
+    9_999,
+    `state.monthlyExpenses should be 9999 after param change, got ${sim.state.monthlyExpenses}`,
+  );
+});
+
+test('changing initialValue on an account is reflected in state via initialization flow', () => {
+  // Default initialUsSavings = 30000 → state.usSavingsAccount.balance = 30000.
+  // Changing the initialValue on the serialized account record must propagate to
+  // state.usSavingsAccount.balance after load.  Currently FAILS because the
+  // Object.assign(sim.state, initialState) restore overwrites the freshly-deserialized
+  // account balance with the frozen compile-time snapshot.
+  const { services } = buildAndCompilePrebuilt();
+  const active  = services.scenarioService.getActive();
+  const created = services.scenarioService.newScenario(active);
+
+  const usSavingsRec = created.accounts?.find(a => a.stateKey === 'usSavingsAccount');
+  assert.ok(usSavingsRec, 'usSavingsAccount must exist in scenario accounts array');
+  usSavingsRec.initialValue = 99_999;
+
+  const sim = loadCopyIntoFreshServices(created);
+
+  assert.strictEqual(
+    sim.state.usSavingsAccount?.balance,
+    99_999,
+    `state.usSavingsAccount.balance should be 99999 after account initialValue change, got ${sim.state.usSavingsAccount?.balance}`,
+  );
+});

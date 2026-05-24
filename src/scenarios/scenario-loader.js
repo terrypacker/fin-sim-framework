@@ -70,24 +70,40 @@ export class ScenarioLoader {
   load(cfg, services) {
     if (!cfg) return;
 
+    if (cfg.toolsets?.length > 0) {
+      // Sync cfg.params (typed UI array) → cfg.parameters (plain key→value the compiler reads)
+      // before loading persons/accounts so any param-driven person fields are up to date.
+      if (Array.isArray(cfg.params) && cfg.params.length > 0) {
+        cfg.parameters = cfg.parameters ?? {};
+        for (const p of cfg.params) {
+          cfg.parameters[p.name] = (p.type === 'Date' && p.value) ? new Date(p.value) : p.value;
+        }
+      }
+
+      // Apply declared param→person field mappings so changed params cascade to cfg.persons
+      // before they are loaded into the personService.  Only the explicitly declared fields
+      // are touched; all other person fields (e.g. lifeExpectancy, socialSecurityMonthly)
+      // remain authoritative from cfg.persons regardless of params.
+      const syncRules = cfg.scenarioClass?.paramToPersonSync ?? [];
+      for (const { param, personId, field } of syncRules) {
+        const val = cfg.parameters[param];
+        if (val === undefined) continue;
+        const rec = (cfg.persons ?? []).find(p => p.id === personId);
+        if (rec) rec[field] = val instanceof Date ? val.toISOString().slice(0, 10) : String(val);
+      }
+    }
+
     ScenarioSerializer.deserializePersonsAccounts(cfg, services);
 
     const sim = services.simulationRegistry?.getPrimary?.();
 
-    if (ScenarioSerializer.hasSerializedGraph(cfg)) {
-      ScenarioSerializer.deserializeGraph(cfg, services);
-      if (sim && cfg.initialState && Object.keys(cfg.initialState).length > 0) {
-        Object.assign(sim.state, _cloneState(cfg.initialState));
-      }
-    } else if (cfg.toolsets?.length > 0) {
-     const { paramSchema, statePatches } = new ScenarioCompiler(this._toolsetRegistry).compile(cfg, services);
-      //TODO I don't think we want to do this, we need a safer way to compute the initial state or better yet always have it.
-      //if (sim) cfg.initialState = _cloneState(sim.state);
+    if (cfg.toolsets?.length > 0) {
+      const { statePatches } = new ScenarioCompiler(this._toolsetRegistry).compile(cfg, services);
       cfg.initialState = statePatches;
 
       // Snapshot the compiled graph back to cfg so the config is a complete
       // serialized representation usable by newScenario() and import/export.
-      const { eventService, handlerService, actionService, reducerService,
+      const { eventService, handlerService, reducerService,
               personService, accountService, realPropertyService, collectibleService } = services;
       cfg.events         = (eventService?.getAll()         ?? []).map(n => ScenarioSerializer._serializeEvent(n));
       cfg.handlers       = (handlerService?.getAll()       ?? []).map(n => ScenarioSerializer._serializeHandler(n));
@@ -102,6 +118,12 @@ export class ScenarioLoader {
       if (!Array.isArray(cfg.params)) {
         const schema = cfg.scenarioClass?.getParamSchema?.() ?? [];
         cfg.params = schema.map(s => ({ name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue }));
+      }
+    } else if (ScenarioSerializer.hasSerializedGraph(cfg)) {
+      // Fallback for manually-built scenarios that have no toolset declaration.
+      ScenarioSerializer.deserializeGraph(cfg, services);
+      if (sim && cfg.initialState && Object.keys(cfg.initialState).length > 0) {
+        Object.assign(sim.state, _cloneState(cfg.initialState));
       }
     }
   }

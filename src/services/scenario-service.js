@@ -73,6 +73,7 @@ export class ScenarioService {
       reducers:       structuredClone(fromScenario?.reducers       ?? []),
       initialState:   structuredClone(fromScenario?.initialState   ?? {}),
       toolsets:       structuredClone(fromScenario?.toolsets        ?? []),
+      scenarioClass:  fromScenario?.scenarioClass ?? null,
       persons:        structuredClone(fromScenario?.persons         ?? []),
       accounts:       structuredClone(fromScenario?.accounts        ?? []),
       realProperties: structuredClone(fromScenario?.realProperties  ?? []),
