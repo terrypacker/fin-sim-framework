@@ -187,6 +187,15 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   padding: 1px 6px;
   border-radius: 2px;
 }
+.badge-cyan {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--cyan);
+  background: rgba(57, 224, 128, 0.1);
+  border: 1px solid var(--cyan-dim);
+  padding: 1px 6px;
+  border-radius: 2px;
+}
 
 /* ── SCROLLBARS IN PANELS ── */
 .left-col::-webkit-scrollbar,
@@ -708,11 +717,19 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 .g-title {
   width: 100%;
   border: none;
+  padding-left: 10px;
   background: transparent;
   color: var(--text);
   font-family: var(--font-mono);
   font-size: 10px;
   outline: none;
+}
+
+/* ── NODE BADGE ── */
+.node-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
 }
 
 /* ── PORTS ── */
@@ -729,13 +746,24 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 /* Input port */
 .g-port.in {
   left: -6px;
-  background: var(--green);
+  background: var(--amber);
 }
 
 /* Output port */
 .g-port.out {
   right: -6px;
   background: var(--purple);
+}
+
+.g-port.fired {
+  background: var(--green);
+  top: 6px;
+  right: 2px;
+}
+.g-port.off {
+  background: var(--red);
+  top: 6px;
+  right: 2px;
 }
 
 /* ── EDGES ── */
