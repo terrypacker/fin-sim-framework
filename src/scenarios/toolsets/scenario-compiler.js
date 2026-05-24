@@ -109,15 +109,17 @@ export class ScenarioCompiler {
 
   _buildContext(definition, services, parameters, paramSchema) {
     return {
-      startDate:     new Date(definition.simStart),
-      endDate:       new Date(definition.simEnd),
-      people:        services.personService?.getAll()  ?? [],
-      accounts:      services.accountService?.getAll() ?? [],
+      startDate:      new Date(definition.simStart),
+      endDate:        new Date(definition.simEnd),
+      people:         services.personService?.getAll()         ?? [],
+      accounts:       services.accountService?.getAll()        ?? [],
+      realProperties: services.realPropertyService?.getAll()   ?? [],
+      collectibles:   services.collectibleService?.getAll()    ?? [],
       parameters,
       paramSchema,
-      stateRegistry: services.stateRegistry,
+      stateRegistry:  services.stateRegistry,
       accountService: services.accountService,
-      schedulesById: {},
+      schedulesById:  {},
     };
   }
 }

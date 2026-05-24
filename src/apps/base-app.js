@@ -31,6 +31,10 @@ import { AU_BANKING }              from '../scenarios/toolsets/au-banking-toolse
 import { AU_TAX }                  from '../scenarios/toolsets/au-tax-toolset.js';
 import { AU_RETIREMENT }          from '../scenarios/toolsets/au-retirement-toolset.js';
 import { US_AU_CROSS_BORDER }      from '../scenarios/toolsets/us-au-cross-border-toolset.js';
+import { US_REAL_PROPERTY }        from '../scenarios/toolsets/us-real-property-toolset.js';
+import { AU_REAL_PROPERTY }        from '../scenarios/toolsets/au-real-property-toolset.js';
+import { US_COLLECTIBLES }         from '../scenarios/toolsets/us-collectibles-toolset.js';
+import { US_ROTH_CONVERSION }      from '../scenarios/toolsets/us-roth-conversion-toolset.js';
 import { ChartController }          from '../visualization/chart/chart-controller.js';
 import { ChartView }                from '../visualization/chart/chart-view.js';
 import { ChartPresenter }           from '../visualization/chart/chart-presenter.js';
@@ -400,6 +404,10 @@ export class BaseApp extends BaseComponent {
       toolsetRegistry.register(AU_TAX);
       toolsetRegistry.register(AU_RETIREMENT);
       toolsetRegistry.register(US_AU_CROSS_BORDER);
+      toolsetRegistry.register(US_REAL_PROPERTY);
+      toolsetRegistry.register(AU_REAL_PROPERTY);
+      toolsetRegistry.register(US_COLLECTIBLES);
+      toolsetRegistry.register(US_ROTH_CONVERSION);
       const compiler = new ScenarioCompiler(toolsetRegistry);
       compiler.compile(activeConfig, registry);
     } else if (activeConfig?.toolset && ScenarioToolsetRegistry.has(activeConfig.toolset)) {
