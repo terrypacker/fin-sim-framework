@@ -185,6 +185,7 @@ export class ScenarioSerializer {
       name:               node.name,
       priority:           node.priority,
       fieldName:          node.fieldName,
+      value:              node.value ?? null,  // FieldValueReducer subclasses only; null for others
       script:             node.script,  // ScriptedReducer only; undefined for all other types
       reducedActionIds:   (node.reducedActions   ?? []).map(a => a.id),
       generatedActionIds: (node.generatedActions ?? []).map(a => a.id),
@@ -259,18 +260,17 @@ export class ScenarioSerializer {
     const fieldName = d.fieldName ?? '';
     switch (d.__type) {
       case 'ArrayReducer':
-        return C.ReducerBuilder.array(fieldName).name(d.name).build();
+        return C.ReducerBuilder.array(fieldName).name(d.name).priority(d.priority).value(d.value ?? null).build();
       case 'NumericSumReducer':
-        return C.ReducerBuilder.numericSum(fieldName).name(d.name).build();
+        return C.ReducerBuilder.numericSum(fieldName).name(d.name).priority(d.priority).value(d.value ?? null).build();
       case 'MultiplicativeReducer':
-        // MultiplicativeReducer extends FieldReducer (no metrics. prefix)
-        return C.ReducerBuilder.multiplicative(fieldName).name(d.name).build();
+        return C.ReducerBuilder.multiplicative(fieldName).name(d.name).priority(d.priority).value(d.value ?? null).build();
       case 'NoOpReducer':
-        return C.ReducerBuilder.noOp().name(d.name).build();
+        return C.ReducerBuilder.noOp().name(d.name).priority(d.priority).build();
       case 'ScriptedReducer':
         return new C.ScriptedReducer(d.name, d.priority, d.fieldName ?? '', d.script ?? '');
       case 'FieldReducer':
-        return C.ReducerBuilder.field(fieldName).name(d.name).build();
+        return C.ReducerBuilder.field(fieldName).name(d.name).priority(d.priority).build();
       default:
         throw new Error(`Add support for deserialization of reducer type ${d.__type}.`);
     }

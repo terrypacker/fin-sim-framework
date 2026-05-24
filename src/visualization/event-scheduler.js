@@ -8,6 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 import { ServiceRegistry } from '../services/service-registry.js';
+import { PRIORITY } from '../simulation-framework/reducers.js';
 
 export class EventScheduler {
 
@@ -26,6 +27,17 @@ export class EventScheduler {
 
     this.EVENT_SERIES_TYPES = [
       'monthly', 'quarterly', 'annually', 'month-end', 'year-end'
+    ];
+
+    this.PRIORITY_OPTIONS = [
+      { label: 'Pre-Process',      value: PRIORITY.PRE_PROCESS },
+      { label: 'Cash Flow',        value: PRIORITY.CASH_FLOW },
+      { label: 'Position Update',  value: PRIORITY.POSITION_UPDATE },
+      { label: 'Cost Basis',       value: PRIORITY.COST_BASIS },
+      { label: 'Tax Calc',         value: PRIORITY.TAX_CALC },
+      { label: 'Tax Apply',        value: PRIORITY.TAX_APPLY },
+      { label: 'Metrics',          value: PRIORITY.METRICS },
+      { label: 'Logging',          value: PRIORITY.LOGGING },
     ];
 
     this.REDUCER_TYPES = [
@@ -506,8 +518,9 @@ export class EventScheduler {
     const description = el.querySelector('[data-id="description"]');
     description.innerText = node.getDescription();
 
-    const typeSelect = el.querySelector('[data-id="type"]');
-    const configWrap = el.querySelector('[data-id="config"]');
+    const typeSelect     = el.querySelector('[data-id="type"]');
+    const prioritySelect = el.querySelector('[data-id="priority"]');
+    const configWrap     = el.querySelector('[data-id="config"]');
 
     const name = el.querySelector('[data-id="name"]');
     name.value = node.name || '';
@@ -533,6 +546,18 @@ export class EventScheduler {
       this._editNode(null, updated);
     };
 
+    this.PRIORITY_OPTIONS.forEach(({ label, value }) => {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = `${label} (${value})`;
+      prioritySelect.appendChild(opt);
+    });
+    prioritySelect.value = node.priority ?? PRIORITY.METRICS;
+    prioritySelect.onchange = () => {
+      ServiceRegistry.getInstance().reducerService
+          .updateReducer(node.id, { priority: parseInt(prioritySelect.value, 10) });
+    };
+
     this._renderReducerConfig(node, configWrap);
 
     const reducerReducedActionCount = el.querySelector('#reducer-reduced-actions-count');
@@ -556,20 +581,15 @@ export class EventScheduler {
       case 'NumericSumReducer':
       case 'ArrayReducer':
       case 'MultiplicativeReducer':
-      case 'MetricReducer':
-        wrap = this._getTemplate('tpl-metric-reducer-editor');
-        wrap.querySelector('[data-field="metric"]').value = node.metric || '';
-        wrap = this._getTemplate('tpl-state-field-reducer-editor');
+        wrap = this._getTemplate('tpl-field-value-reducer-editor');
         wrap.querySelector('[data-field="fieldName"]').value = node.fieldName || '';
+        wrap.querySelector('[data-field="value"]').value     = node.value ?? '';
         break;
       case 'AccountTransactionReducer':
         wrap = this._getTemplate('tpl-account-transaction-reducer-editor');
         wrap.querySelector('[data-field="accountKey"]').value = node.accountKey || '';
         break;
       case 'StateFieldReducer':
-        wrap = this._getTemplate('tpl-state-field-reducer-editor');
-        wrap.querySelector('[data-field="fieldName"]').value = node.fieldName || '';
-        break;
       case 'FieldReducer':
         wrap = this._getTemplate('tpl-state-field-reducer-editor');
         wrap.querySelector('[data-field="fieldName"]').value = node.fieldName || '';
@@ -587,7 +607,14 @@ export class EventScheduler {
     // Wire inputs and textareas — both fire on 'input' events
     wrap.querySelectorAll('input, textarea').forEach(el => {
       el.addEventListener('input', () => {
-        ServiceRegistry.getInstance().reducerService.updateReducer(node.id, { [el.dataset.field]: el.value });
+        let value;
+        if (el.dataset.field === 'value') {
+          // Empty string → null so the reducer ignores the field and reads from state
+          value = el.value === '' ? null : parseFloat(el.value);
+        } else {
+          value = el.value;
+        }
+        ServiceRegistry.getInstance().reducerService.updateReducer(node.id, { [el.dataset.field]: value });
       });
     });
 
