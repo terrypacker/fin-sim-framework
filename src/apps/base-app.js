@@ -27,6 +27,10 @@ import { ScenarioCompiler }        from '../scenarios/toolsets/scenario-compiler
 import { US_BANKING }              from '../scenarios/toolsets/us-banking-toolset.js';
 import { US_TAX }                  from '../scenarios/toolsets/us-tax-toolset.js';
 import { US_RETIREMENT }           from '../scenarios/toolsets/us-retirement-toolset.js';
+import { AU_BANKING }              from '../scenarios/toolsets/au-banking-toolset.js';
+import { AU_TAX }                  from '../scenarios/toolsets/au-tax-toolset.js';
+import { AU_RETIREMENT }          from '../scenarios/toolsets/au-retirement-toolset.js';
+import { US_AU_CROSS_BORDER }      from '../scenarios/toolsets/us-au-cross-border-toolset.js';
 import { ChartController }          from '../visualization/chart/chart-controller.js';
 import { ChartView }                from '../visualization/chart/chart-view.js';
 import { ChartPresenter }           from '../visualization/chart/chart-presenter.js';
@@ -392,6 +396,10 @@ export class BaseApp extends BaseComponent {
       toolsetRegistry.register(US_BANKING);
       toolsetRegistry.register(US_TAX);
       toolsetRegistry.register(US_RETIREMENT);
+      toolsetRegistry.register(AU_BANKING);
+      toolsetRegistry.register(AU_TAX);
+      toolsetRegistry.register(AU_RETIREMENT);
+      toolsetRegistry.register(US_AU_CROSS_BORDER);
       const compiler = new ScenarioCompiler(toolsetRegistry);
       compiler.compile(activeConfig, registry);
     } else if (activeConfig?.toolset && ScenarioToolsetRegistry.has(activeConfig.toolset)) {

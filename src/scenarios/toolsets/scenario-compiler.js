@@ -48,7 +48,7 @@ export class ScenarioCompiler {
     const reducers     = [];
 
     for (const toolset of resolved) {
-      Object.assign(statePatches, toolset.state?.(context) ?? {});
+      _mergeStatePatches(statePatches, toolset.state?.(context) ?? {});
 
       const ts = toolset.schedules?.(context) ?? [];
       for (const s of ts) {
@@ -119,5 +119,36 @@ export class ScenarioCompiler {
       accountService: services.accountService,
       schedulesById: {},
     };
+  }
+}
+
+/**
+ * Merge incoming state patches into the accumulator.
+ *
+ * Most keys are overwritten (last toolset wins, matching Object.assign semantics).
+ * A small set of well-known object keys that multiple toolsets may contribute to
+ * are merged shallowly so that each toolset's entries are additive rather than
+ * destructive:
+ *
+ *   currentPeriods     — US_TAX contributes { US }, AU_TAX contributes { AU }
+ *   inflationRates     — US_RETIREMENT contributes { US }, AU_RETIREMENT { AU }, etc.
+ *   inflationAccumulator — same pattern as inflationRates
+ *
+ * @param {object} acc     — accumulator (mutated in place)
+ * @param {object} patches — new patches from a single toolset
+ */
+function _mergeStatePatches(acc, patches) {
+  const SHALLOW_MERGE_KEYS = new Set([
+    'currentPeriods',
+    'inflationRates',
+    'inflationAccumulator',
+  ]);
+  for (const [key, value] of Object.entries(patches)) {
+    if (SHALLOW_MERGE_KEYS.has(key) && acc[key] != null && typeof acc[key] === 'object'
+        && value != null && typeof value === 'object') {
+      acc[key] = { ...acc[key], ...value };
+    } else {
+      acc[key] = value;
+    }
   }
 }
