@@ -106,12 +106,7 @@ export class BaseApp {
     }
   }
 
-  updateChart(chartView, type, date, state) {
-    chartView.addSnapshot(type, date, state.metrics ? {...state.metrics} : {});
-  }
-
-  updateConfigGraphEvents(payload, start = true) {
-    const event = payload.event;
+  updateConfigGraphEvents(event, stateBefore, stateAfter, start = true) {
     if(start) {
       //Event start
       this.configGraphBuilder.applyToAllNodes(n => {
@@ -125,34 +120,19 @@ export class BaseApp {
       eventNode.fired = true;
       this.configGraphBuilder.render();
     }else {
-      const stateBefore = payload.stateBefore;
-      const stateAfter = payload.stateAfter;
-
       this._renderNodeFired(event.id, stateBefore, stateAfter);
     }
   }
 
-  updateConfigGraphHandlers(payload) {
-    const handler = payload.handler;
-    const stateBefore = payload.stateBefore;
-    const stateAfter = payload.stateAfter;
-
+  updateConfigGraphHandlers(handler, stateBefore, stateAfter) {
     this._renderNodeFired(handler.id, stateBefore, stateAfter);
   }
 
-  updateConfigGraphActions(payload) {
-    const action = payload.action;
-    const stateBefore = payload.stateBefore;
-    const stateAfter = payload.stateAfter;
-
+  updateConfigGraphActions(action, stateBefore, stateAfter) {
     this._renderNodeFired(action.id, stateBefore, stateAfter);
   }
 
-  updateConfigGraphReducers(payload) {
-    const reducer = payload.reducer;
-    const stateBefore = payload.stateBefore;
-    const stateAfter = payload.stateAfter;
-
+  updateConfigGraphReducers(reducer, stateBefore, stateAfter) {
     this._renderNodeFired(reducer.id, stateBefore, stateAfter);
   }
 
@@ -320,46 +300,61 @@ export class BaseApp {
     this._syncBreakpointsToSim();
 
     // Subscribe to EVENT_OCCURRENCE events
-    this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START, ({ date, payload }) => {
+    this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START, ({ date, payload, stateSnapshot }) => {
       this._eventExecutions++;
-      this.updateConfigGraphEvents(payload, true);
-      if(this.updateDashCards)
-        this.updateDashCards(date);
-    });
 
-    // Subscribe to HANDLED_EVENT events
-    this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.HANDLED_EVENT, ({ date, payload }) => {
-      this._handlerExecutions++;
-      this.updateConfigGraphHandlers(payload);
-      if(this.updateDashCards)
-        this.updateDashCards(date);
-    });
-
-    // Subscribe to ACTION_RESULT events
-    this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.ACTION_RESULT, ({ date, payload }) => {
-      this._actionExecutions++;
-
-      //TODO Weed out and optimize what calls should relate to other message types
-      //Fire the date changed listeners
+      //Fire the date changed listeners as this is the only time the date will change
       const actionDate = new Date(date);
       this._currentDate = actionDate;
       this.timeControls.onDateChanged(actionDate);
-      if(this.graphView) {
-        this.graphView.updateView(payload);
-      }
-      this.updateStatePanel(actionDate, payload.stateAfter);
-      this.updateChart(this.chartView, payload.type, payload.date, payload.stateAfter);
-      this.updateConfigGraphActions(payload);
+
       if(this.updateDashCards)
         this.updateDashCards(date);
+
+      this.updateConfigGraphEvents(payload.event, payload.stateBefore, stateSnapshot,true);
+    });
+
+    // Subscribe to HANDLED_EVENT events
+    this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.HANDLED_EVENT, ({ date, payload, stateSnapshot }) => {
+      this._handlerExecutions++;
+
+      if(this.updateDashCards)
+        this.updateDashCards(date);
+
+      this.updateConfigGraphHandlers(payload.handler, payload.stateBefore, stateSnapshot);
+    });
+
+    // Subscribe to ACTION_RESULT events
+    this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.ACTION_RESULT, ({ date, payload, stateSnapshot}) => {
+      this._actionExecutions++;
+
+      this.updateStatePanel(date, stateSnapshot);
+
+      if(this.updateDashCards)
+        this.updateDashCards(date);
+
+      this.updateConfigGraphActions(payload.action, payload.stateBefore, stateSnapshot);
     });
 
     // Subscribe to REDUCER_RESULT events
-    this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.REDUCER_RESULT, ({ date, payload }) => {
+    this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.REDUCER_RESULT, ({ date, payload, stateSnapshot }) => {
       this._reducerExecutions++;
-      this.updateConfigGraphReducers(payload);
+
+      if(this.graphView) {
+        this.graphView.updateView(payload);
+      }
+
+      //Update the chart with a reduction of an action
+      const type = payload.action.type;
+      const metrics = stateSnapshot.metrics ? {...stateSnapshot.metrics} : {};
+      this.chartView.addSnapshot(type, date, metrics);
+
+      this.updateStatePanel(date, stateSnapshot);
+
       if(this.updateDashCards)
         this.updateDashCards(date);
+
+      this.updateConfigGraphReducers(payload.reducer, payload.stateBefore, stateSnapshot);
     });
 
     // Reset slider and direction tracker

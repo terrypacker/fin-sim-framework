@@ -365,6 +365,27 @@ export class Simulation {
       this.control.resuming = false;
 
       const reducers = this.reducers.get(action.type);
+
+      //Emit Action Result Message
+      const unwrappedReducers = [];
+      if (!reducers || reducers.length === 0) {
+        reducers.forEach(r => {
+          unwrappedReducers.push(r.reducer);
+        })
+      }
+      const prevState = structuredClone(this.state);
+      //TODO This is where we would add the call to the ScriptAction to mutate it
+      this.bus.publish(new ActionResultMessage({
+        date: new Date(this.currentDate),
+        sim: this,
+        payload: {
+          action: action,
+          reducers: unwrappedReducers,
+          sourceEvent: sourceEvent
+        },
+        stateSnapshot: prevState
+      }));
+
       if (!reducers || reducers.length === 0) continue;
 
       // Run all reducers for this action.  Emitted actions are unshifted onto
@@ -409,7 +430,6 @@ export class Simulation {
       this.control.resuming = false;
 
       const prevState = structuredClone(this.state);
-
       const result = reducerWrapper.fn(this.state, action, this.currentDate);
 
       // Publish the REDUCER_RESULT message.
@@ -421,14 +441,15 @@ export class Simulation {
       } else {
         stateSnapshot = structuredClone(result);
       }
+
       this.bus.publish(new ReducerResultMessage({
         date: new Date(this.currentDate),
         sim: this,
         stateSnapshot: stateSnapshot,
         payload: {
           reducer: reducerWrapper.reducer,
+          action: action,
           stateBefore: prevState,
-          stateAfter: stateSnapshot,
           sourceEvent: sourceEvent
         }
       }));
@@ -662,16 +683,5 @@ export class Simulation {
       sourceEvent: sourceEvent
     });
     this.actionGraph.addActionNode(node);
-
-    //Emit debug actions to track nodes
-    this.bus.publish(new ActionResultMessage({
-      date: node.date,
-      sim: this,
-      payload: {
-        action: action,
-        ...node
-      },
-      stateSnapshot: stateSnapshot
-    }));
   }
 }
