@@ -191,7 +191,7 @@ export class AuStockWithdrawalApplyReducer extends Reducer {
           contributionBasis: newContrib,
         },
       },
-      [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, isAuResident }]
+      [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, isAuResident, proceeds: salePrice, costBasis, description: sa.name ?? 'auStockAccount' }]
     );
   }
 }

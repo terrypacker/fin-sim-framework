@@ -39,10 +39,13 @@ export class AuHouseSaleApplyReducer extends Reducer {
     if (stateKey && state[stateKey]) {
       updates[stateKey] = { ...state[stateKey], mortgageBalance: 0 };
     }
+    const description = stateKey && state[stateKey]?.name
+      ? state[stateKey].name
+      : (stateKey ?? 'AU Real Property');
     return this.newState(
       state,
       updates,
-      [{ type: 'AU_HOUSE_SALE_TAX', gain, isAuResident, ownershipType, ownerId, owners }]
+      [{ type: 'AU_HOUSE_SALE_TAX', gain, isAuResident, ownershipType, ownerId, owners, proceeds: salePrice, costBasis, description }]
     );
   }
 }

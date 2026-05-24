@@ -27,11 +27,29 @@ import { BaseTaxDocumentModule } from '../base-tax-document-module.js';
  *   Income          — Ordinary income, capital gains (no discount), NR withholding income
  *   Tax Computation — Income tax (NR brackets), NR withholding tax (15%), super tax
  */
+const CGT_SCHEDULE_THRESHOLD = 10_000;
+
 export class AuTaxDocument2026 extends BaseTaxDocumentModule {
   get countryCode() { return 'AU'; }
   get year()        { return 2026; }
 
-  generate(taxDetail, taxYear) {
+  /**
+   * @param {object}   taxDetail
+   * @param {number}   taxYear
+   * @param {object[]} [saleRecords]  - Capital gain transactions from journal mining.
+   * @returns {object|object[]}  Single ITR, or [ITR, CGT Schedule] array when schedule rules apply.
+   */
+  generate(taxDetail, taxYear, saleRecords = []) {
+    const itr = this._generateItr(taxDetail, taxYear);
+    const needsSchedule = taxDetail.isResident
+      && saleRecords.length > 0
+      && Math.abs(taxDetail.inputs.capitalGains) > CGT_SCHEDULE_THRESHOLD;
+    return needsSchedule
+      ? [itr, this._generateCgtSchedule(saleRecords, taxYear)]
+      : itr;
+  }
+
+  _generateItr(taxDetail, taxYear) {
     const fyLabel = `FY ${taxYear}–${(taxYear + 1).toString().slice(-2)}`;
     const { inputs } = taxDetail;
 
@@ -116,4 +134,35 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
       },
     };
   }
+
+  _generateCgtSchedule(saleRecords, taxYear) {
+    const fyLabel        = `FY ${taxYear}–${(taxYear + 1).toString().slice(-2)}`;
+    const totalProceeds  = saleRecords.reduce((s, r) => s + r.proceeds,  0);
+    const totalCostBasis = saleRecords.reduce((s, r) => s + r.costBasis, 0);
+    const totalGain      = saleRecords.reduce((s, r) => s + r.gain,      0);
+    return {
+      title:        `CGT Schedule — ${fyLabel}`,
+      country:      'AU',
+      taxYear,
+      filingStatus: 'Capital Gains Tax Schedule',
+      table: {
+        heading: 'Disposal of Capital Assets',
+        columns: ['Description', 'Date Acquired', 'Date Sold', 'Proceeds', 'Cost Basis', 'Gain / (Loss)'],
+        rows: saleRecords.map(r => [
+          r.description,
+          r.dateAcquired,
+          _fmtDate(r.dateSold),
+          r.proceeds,
+          r.costBasis,
+          r.gain,
+        ]),
+        totals: ['Totals', '', '', totalProceeds, totalCostBasis, totalGain],
+      },
+    };
+  }
+}
+
+function _fmtDate(date) {
+  if (!date) return '—';
+  return new Date(date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 }

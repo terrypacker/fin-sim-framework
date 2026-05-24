@@ -319,3 +319,178 @@ test('JournalReportingService: custom reporter can be registered for new action 
   const entry = { date: new Date(), action: { type: 'SOME_FUTURE_ACTION' } };
   assert.deepEqual(service.generate(entry), { type: 'FAKE_REPORT' });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AuTaxDocument2026 — CGT Schedule
+// ══════════════════════════════════════════════════════════════════════════════
+
+function makeSaleRecord(overrides = {}) {
+  return {
+    description:  'AU Stock Account',
+    dateAcquired: 'Various',
+    dateSold:     new Date(Date.UTC(2026, 5, 1)),
+    proceeds:     50_000,
+    costBasis:    35_000,
+    gain:         15_000,
+    ...overrides,
+  };
+}
+
+test('AuTaxDocument2026 CGT: no schedule when capital gains <= $10,000', () => {
+  const detail = auResidentDetail({ auCapitalGainsYTD: 5_000 });
+  const doc    = new AuTaxDocument2026().generate(detail, 2025, [makeSaleRecord({ gain: 5_000, proceeds: 40_000, costBasis: 35_000 })]);
+  assert.ok(!Array.isArray(doc), 'should return single ITR when CG <= $10,000');
+  assert.strictEqual(doc.country, 'AU');
+});
+
+test('AuTaxDocument2026 CGT: returns [ITR, CGT Schedule] when resident with CG > $10,000', () => {
+  const detail = auResidentDetail({ auCapitalGainsYTD: 20_000 });
+  const docs   = new AuTaxDocument2026().generate(detail, 2025, [makeSaleRecord()]);
+  assert.ok(Array.isArray(docs), 'should return array when CG > $10,000');
+  assert.strictEqual(docs.length, 2);
+  assert.ok(docs[0].title.includes('Tax Return'), 'first doc should be the ITR');
+  assert.ok(docs[1].title.includes('CGT Schedule'), 'second doc should be CGT Schedule');
+});
+
+test('AuTaxDocument2026 CGT: no schedule for non-resident even with CG records', () => {
+  const detail = auNrDetail({ auCapitalGainsYTD: 50_000 });
+  const doc    = new AuTaxDocument2026().generate(detail, 2025, [makeSaleRecord()]);
+  assert.ok(!Array.isArray(doc), 'non-resident should never get CGT schedule');
+});
+
+test('AuTaxDocument2026 CGT: no schedule when no sale records regardless of CG', () => {
+  const detail = auResidentDetail({ auCapitalGainsYTD: 50_000 });
+  const doc    = new AuTaxDocument2026().generate(detail, 2025, []);
+  assert.ok(!Array.isArray(doc), 'no schedule without sale records');
+});
+
+test('AuTaxDocument2026 CGT: schedule country is AU and taxYear matches', () => {
+  const detail = auResidentDetail({ auCapitalGainsYTD: 20_000 });
+  const [, cgt] = new AuTaxDocument2026().generate(detail, 2025, [makeSaleRecord()]);
+  assert.strictEqual(cgt.country, 'AU');
+  assert.strictEqual(cgt.taxYear, 2025);
+});
+
+test('AuTaxDocument2026 CGT: schedule filingStatus is Capital Gains Tax Schedule', () => {
+  const detail = auResidentDetail({ auCapitalGainsYTD: 20_000 });
+  const [, cgt] = new AuTaxDocument2026().generate(detail, 2025, [makeSaleRecord()]);
+  assert.strictEqual(cgt.filingStatus, 'Capital Gains Tax Schedule');
+});
+
+test('AuTaxDocument2026 CGT: schedule table has correct columns', () => {
+  const detail = auResidentDetail({ auCapitalGainsYTD: 20_000 });
+  const [, cgt] = new AuTaxDocument2026().generate(detail, 2025, [makeSaleRecord()]);
+  assert.ok(cgt.table, 'CGT schedule should have a table');
+  assert.deepEqual(cgt.table.columns, ['Description', 'Date Acquired', 'Date Sold', 'Proceeds', 'Cost Basis', 'Gain / (Loss)']);
+});
+
+test('AuTaxDocument2026 CGT: schedule table rows match sale records', () => {
+  const detail  = auResidentDetail({ auCapitalGainsYTD: 20_000 });
+  const records = [makeSaleRecord(), makeSaleRecord({ description: 'AU Real Property', proceeds: 600_000, costBasis: 400_000, gain: 200_000 })];
+  const [, cgt] = new AuTaxDocument2026().generate(detail, 2025, records);
+  assert.strictEqual(cgt.table.rows.length, 2);
+  assert.strictEqual(cgt.table.rows[0][0], 'AU Stock Account');
+  assert.strictEqual(cgt.table.rows[1][0], 'AU Real Property');
+});
+
+test('AuTaxDocument2026 CGT: schedule table totals sum correctly', () => {
+  const detail  = auResidentDetail({ auCapitalGainsYTD: 30_000 });
+  const r1 = makeSaleRecord({ proceeds: 50_000, costBasis: 35_000, gain: 15_000 });
+  const r2 = makeSaleRecord({ proceeds: 30_000, costBasis: 15_000, gain: 15_000 });
+  const [, cgt] = new AuTaxDocument2026().generate(detail, 2025, [r1, r2]);
+  const totals = cgt.table.totals;
+  assert.strictEqual(totals[3], 80_000,  'total proceeds');
+  assert.strictEqual(totals[4], 50_000,  'total cost basis');
+  assert.strictEqual(totals[5], 30_000,  'total gain');
+});
+
+test('AuTaxDocument2026 CGT: FY label in schedule title matches taxYear', () => {
+  const detail = auResidentDetail({ auCapitalGainsYTD: 20_000 });
+  const [, cgt] = new AuTaxDocument2026().generate(detail, 2025, [makeSaleRecord()]);
+  assert.ok(cgt.title.includes('FY 2025'), `expected FY 2025 in title, got: ${cgt.title}`);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TaxDocumentRegistry — AU CGT Schedule via journal extraction
+// ══════════════════════════════════════════════════════════════════════════════
+
+function makeAuSaleJournalEntry(type, data, dateMs = Date.UTC(2026, 3, 1)) {
+  return {
+    date:   new Date(dateMs),
+    action: { type, data },
+  };
+}
+
+test('TaxDocumentRegistry: AU entry with CG > $10,000 returns [ITR, CGT Schedule]', () => {
+  const registry   = new TaxDocumentRegistry();
+  const detail     = { ...auResidentDetail({ auCapitalGainsYTD: 20_000 }), taxYear: 2025 };
+  const settleEntry = makeEntry('AU', detail, Date.UTC(2026, 6, 1));
+  const saleEntry   = makeAuSaleJournalEntry('AU_STOCK_WITHDRAWAL_TAX', {
+    gain: 20_000, proceeds: 55_000, costBasis: 35_000, description: 'AU Stock Account',
+  });
+  const journal = [saleEntry, settleEntry];
+  const docs    = registry.generate(settleEntry, journal);
+  assert.ok(Array.isArray(docs), 'should return array when CG > $10,000 with sale records');
+  assert.strictEqual(docs.length, 2);
+  assert.ok(docs[0].country === 'AU');
+  assert.ok(docs[1].table, 'second doc should have a table');
+});
+
+test('TaxDocumentRegistry: AU entry with CG <= $10,000 returns single ITR', () => {
+  const registry    = new TaxDocumentRegistry();
+  const detail      = { ...auResidentDetail({ auCapitalGainsYTD: 5_000 }), taxYear: 2025 };
+  const settleEntry = makeEntry('AU', detail, Date.UTC(2026, 6, 1));
+  const saleEntry   = makeAuSaleJournalEntry('AU_STOCK_WITHDRAWAL_TAX', {
+    gain: 5_000, proceeds: 40_000, costBasis: 35_000, description: 'AU Stock Account',
+  });
+  const journal = [saleEntry, settleEntry];
+  const doc     = registry.generate(settleEntry, journal);
+  assert.ok(!Array.isArray(doc), 'single ITR expected when CG <= $10,000');
+  assert.strictEqual(doc.country, 'AU');
+});
+
+test('TaxDocumentRegistry: STOCK_WITHDRAWAL_TAX with isAuResident=true included in AU CGT schedule', () => {
+  const registry    = new TaxDocumentRegistry();
+  const detail      = { ...auResidentDetail({ auCapitalGainsYTD: 20_000 }), taxYear: 2025 };
+  const settleEntry = makeEntry('AU', detail, Date.UTC(2026, 6, 1));
+  // replenishSavings emits STOCK_WITHDRAWAL_TAX (not AU_STOCK_WITHDRAWAL_TAX)
+  const replenishSale = makeAuSaleJournalEntry('STOCK_WITHDRAWAL_TAX', {
+    gain: 20_000, proceeds: 55_000, costBasis: 35_000,
+    description: 'AU Stock Account', isAuResident: true,
+  });
+  const journal = [replenishSale, settleEntry];
+  const docs    = registry.generate(settleEntry, journal);
+  assert.ok(Array.isArray(docs), 'should return array when CG > $10,000');
+  assert.strictEqual(docs.length, 2);
+  assert.strictEqual(docs[1].table.rows.length, 1);
+  assert.strictEqual(docs[1].table.rows[0][0], 'AU Stock Account');
+});
+
+test('TaxDocumentRegistry: STOCK_WITHDRAWAL_TAX with isAuResident=false NOT included in AU CGT schedule', () => {
+  const registry    = new TaxDocumentRegistry();
+  const detail      = { ...auResidentDetail({ auCapitalGainsYTD: 0 }), taxYear: 2025 };
+  const settleEntry = makeEntry('AU', detail, Date.UTC(2026, 6, 1));
+  const nonResSale  = makeAuSaleJournalEntry('STOCK_WITHDRAWAL_TAX', {
+    gain: 20_000, proceeds: 55_000, costBasis: 35_000,
+    description: 'US Stock Account', isAuResident: false,
+  });
+  const journal = [nonResSale, settleEntry];
+  const doc     = registry.generate(settleEntry, journal);
+  assert.ok(!Array.isArray(doc), 'non-resident STOCK_WITHDRAWAL_TAX should not trigger AU CGT schedule');
+});
+
+test('TaxDocumentRegistry: AU house sale journal entry included in CGT schedule', () => {
+  const registry    = new TaxDocumentRegistry();
+  const detail      = { ...auResidentDetail({ auCapitalGainsYTD: 150_000 }), taxYear: 2025 };
+  const settleEntry = makeEntry('AU', detail, Date.UTC(2026, 6, 1));
+  const houseSale   = makeAuSaleJournalEntry('AU_HOUSE_SALE_TAX', {
+    gain: 150_000, proceeds: 800_000, costBasis: 650_000, description: 'Primary Residence',
+  });
+  const journal = [houseSale, settleEntry];
+  const docs    = registry.generate(settleEntry, journal);
+  assert.ok(Array.isArray(docs));
+  const cgt = docs[1];
+  assert.strictEqual(cgt.table.rows.length, 1);
+  assert.strictEqual(cgt.table.rows[0][0], 'Primary Residence');
+  assert.strictEqual(cgt.table.rows[0][3], 800_000);
+});
