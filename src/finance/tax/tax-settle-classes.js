@@ -43,6 +43,18 @@ export class TaxSettleHandler extends HandlerEntry {
 
   call({ data, state }) {
     const { cc } = data;
+
+    if (cc === 'AU' && state.auPersonOrdinaryIncomeYTD && Object.keys(state.auPersonOrdinaryIncomeYTD).length > 0) {
+      const personTaxDetails = this._settleService.computeAuTaxPerPerson(state);
+      if (personTaxDetails.length > 0) {
+        const totalTax = personTaxDetails.reduce((sum, p) => sum + p.taxDetail.netLiability, 0);
+        return [
+          { type: 'TAX_SETTLE_APPLY', cc, tax: totalTax, taxDetail: null, personTaxDetails },
+          { type: 'RECORD_BALANCE' },
+        ];
+      }
+    }
+
     const taxDetail = cc === 'AU'
       ? this._settleService.computeAuTax(state)
       : this._settleService.computeUsTax(state);
@@ -75,6 +87,11 @@ export class TaxSettleApplyReducer extends Reducer {
     const resets = {};
     for (const field of (YTD_FIELDS[cc] || [])) {
       if (field in state) resets[field] = 0;
+    }
+    if (cc === 'AU' && state.auPersonOrdinaryIncomeYTD) {
+      const personResets = {};
+      for (const k of Object.keys(state.auPersonOrdinaryIncomeYTD)) personResets[k] = 0;
+      resets.auPersonOrdinaryIncomeYTD = personResets;
     }
     if (tax > 0) {
       return this.newState({ ...state, ...resets }, {}, [{ type: 'TAX_PAYMENT_DEBIT', amount: tax, cc }]);

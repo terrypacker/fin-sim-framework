@@ -47,9 +47,6 @@ test('TimelineController: constructor sets _lastLen to 0', () => {
   assert.strictEqual(makeController()._lastLen, 0);
 });
 
-test('TimelineController: constructor sets _lastDate to null', () => {
-  assert.strictEqual(makeController()._lastDate, null);
-});
 
 test('TimelineController: constructor initialises filterEvents and filterActions as empty Sets', () => {
   const ctrl = makeController();
@@ -80,12 +77,6 @@ test('TimelineController.setJournal: resets _lastLen to 0', () => {
   assert.strictEqual(ctrl._lastLen, 0);
 });
 
-test('TimelineController.setJournal: resets _lastDate to null', () => {
-  const ctrl = makeController();
-  ctrl._lastDate = 'Wed Jan 01 2025';
-  ctrl.setJournal(makeJournal());
-  assert.strictEqual(ctrl._lastDate, null);
-});
 
 test('TimelineController.setJournal: clears the expanded set', () => {
   const ctrl = makeController();
@@ -113,13 +104,6 @@ test('TimelineController.reset: resets _lastLen to 0', () => {
   assert.strictEqual(ctrl._lastLen, 0);
 });
 
-test('TimelineController.reset: resets _lastDate to null', () => {
-  const ctrl = makeController();
-  ctrl.setJournal(makeJournal([makeEntry()]));
-  ctrl._lastDate = 'Wed Jan 01 2025';
-  ctrl.reset();
-  assert.strictEqual(ctrl._lastDate, null);
-});
 
 test('TimelineController.reset: does not clear filter state', () => {
   const ctrl = makeController();
@@ -167,43 +151,24 @@ test('TimelineController.update: advances _lastLen to match new journal length',
   assert.strictEqual(ctrl._lastLen, 1);
 });
 
-test('TimelineController.update: auto-expands the date group of the latest entry', () => {
-  const ctrl    = makeController();
-  const journal = makeJournal([]);
-  ctrl.setJournal(journal);
-  const d = new Date(2025, 0, 1);
-  journal.journal.push(makeEntry({ date: d }));
-  ctrl.update(fmtDate);
-  assert.ok(ctrl.expanded.has(d.toDateString()),
-    'date group for the latest entry should be added to expanded');
-});
-
-test('TimelineController.update: does not re-expand a date the user has already collapsed', () => {
-  const ctrl    = makeController();
-  const journal = makeJournal([]);
-  ctrl.setJournal(journal);
-  const d = new Date(2025, 0, 1);
-  journal.journal.push(makeEntry({ date: d }));
-  ctrl.update(fmtDate);
-  ctrl.expanded.delete(d.toDateString()); // simulate user collapsing
-
-  journal.journal.push(makeEntry({ date: d, actionType: 'SECOND' }));
-  ctrl.update(fmtDate);
-  assert.ok(!ctrl.expanded.has(d.toDateString()),
-    'same date should not be re-expanded after user collapsed it');
-});
-
-test('TimelineController.update: auto-expands when the date changes to a new day', () => {
+test('TimelineController.update: does not auto-expand any date group when entries arrive', () => {
   const ctrl    = makeController();
   const journal = makeJournal([]);
   ctrl.setJournal(journal);
   journal.journal.push(makeEntry({ date: new Date(2025, 0, 1) }));
   ctrl.update(fmtDate);
-  const d2 = new Date(2025, 1, 1);
-  journal.journal.push(makeEntry({ date: d2 }));
+  assert.strictEqual(ctrl.expanded.size, 0, 'no date groups should be auto-expanded');
+});
+
+test('TimelineController.update: does not auto-expand when date changes to a new day', () => {
+  const ctrl    = makeController();
+  const journal = makeJournal([]);
+  ctrl.setJournal(journal);
+  journal.journal.push(makeEntry({ date: new Date(2025, 0, 1) }));
   ctrl.update(fmtDate);
-  assert.ok(ctrl.expanded.has(d2.toDateString()),
-    'new date group should be auto-expanded when date advances');
+  journal.journal.push(makeEntry({ date: new Date(2025, 1, 1) }));
+  ctrl.update(fmtDate);
+  assert.strictEqual(ctrl.expanded.size, 0, 'new date groups should not be auto-expanded');
 });
 
 // ─── groups ──────────────────────────────────────────────────────────────────

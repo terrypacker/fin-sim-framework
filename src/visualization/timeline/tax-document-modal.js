@@ -21,12 +21,13 @@ export class TaxDocumentModal {
   constructor() {
   }
 
-  /** @param {TaxDocument} doc */
-  open(doc) {
-    //TODO These don't need to be private or we should use show/hide logic instead
+  /** @param {TaxDocument|TaxDocument[]} docOrDocs */
+  open(docOrDocs) {
+    const docs = Array.isArray(docOrDocs) ? docOrDocs : [docOrDocs];
+
     this._overlay = document.createElement('div');
     this._overlay.id = 'tax-doc-modal-overlay';
-    this._overlay.classList.add('tax-doc-modal-overlay')
+    this._overlay.classList.add('tax-doc-modal-overlay');
     this._overlay.addEventListener('click', (e) => { if (e.target === this._overlay) this._overlay.remove(); });
 
     this._dialog = document.createElement('div');
@@ -34,11 +35,35 @@ export class TaxDocumentModal {
 
     this._overlay.appendChild(this._dialog);
 
-    this._dialog.innerHTML = this._render(doc);
+    if (docs.length > 1) {
+      this._dialog.innerHTML = this._renderTabs(docs);
+      this._dialog.addEventListener('click', (e) => {
+        const tab = e.target.closest('.tax-doc-tab');
+        if (!tab) return;
+        const idx = parseInt(tab.dataset.idx, 10);
+        this._dialog.querySelectorAll('.tax-doc-tab').forEach(t =>
+          t.classList.toggle('tax-doc-tab--active', parseInt(t.dataset.idx, 10) === idx));
+        this._dialog.querySelectorAll('.tax-doc-panel').forEach(p =>
+          p.classList.toggle('tax-doc-panel--hidden', parseInt(p.dataset.idx, 10) !== idx));
+      });
+    } else {
+      this._dialog.innerHTML = this._render(docs[0]);
+    }
+
     document.body.appendChild(this._overlay);
   }
 
   // ─── Private ───────────────────────────────────────────────────────────────
+
+  _renderTabs(docs) {
+    const headers = docs.map((doc, i) =>
+      `<button class="tax-doc-tab${i === 0 ? ' tax-doc-tab--active' : ''}" data-idx="${i}">${doc.personName || doc.title}</button>`
+    ).join('');
+    const panels = docs.map((doc, i) =>
+      `<div class="tax-doc-panel${i === 0 ? '' : ' tax-doc-panel--hidden'}" data-idx="${i}">${this._render(doc)}</div>`
+    ).join('');
+    return `<div class="tax-doc-tab-bar">${headers}</div><div class="tax-doc-tab-content">${panels}</div>`;
+  }
 
   _render(doc) {
     return `

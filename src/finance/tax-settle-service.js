@@ -84,6 +84,49 @@ export class TaxSettleService {
     return result;
   }
 
+  /**
+   * Compute AU tax separately for each person in state.people.
+   *
+   * Each person's AU ordinary income = their individual wages/SE income
+   * (from auPersonOrdinaryIncomeYTD) plus an equal share of any shared
+   * passive income (auOrdinaryIncomeYTD / numResidents).  All other AU
+   * fields (capital gains, super tax, franking credits, withholding) are
+   * also split evenly across residents.
+   *
+   * Used when state.auPersonOrdinaryIncomeYTD is populated (i.e. the
+   * InternationalRetirementFinancialState is in use).
+   *
+   * @param {object} state - Simulation state snapshot
+   * @returns {{ personKey: string, personName: string, taxDetail: TaxComputationResult }[]}
+   */
+  computeAuTaxPerPerson(state) {
+    const people = state.people ?? {};
+    const residents = Object.entries(people).filter(([, p]) => p != null);
+    const numResidents = Math.max(1, residents.length);
+    const auModule = this._getModule('AU', state);
+    const period   = state.currentPeriods?.AU;
+    const taxYear  = period ? new Date(period.startMs).getUTCFullYear() : undefined;
+
+    return residents.map(([key, person]) => {
+      const personalOrdinary = state.auPersonOrdinaryIncomeYTD?.[key] ?? 0;
+      const sharedOrdinary   = (state.auOrdinaryIncomeYTD ?? 0) / numResidents;
+
+      const personState = {
+        ...state,
+        auOrdinaryIncomeYTD:         personalOrdinary + sharedOrdinary,
+        auCapitalGainsYTD:           (state.auCapitalGainsYTD ?? 0) / numResidents,
+        auNonResidentWithholdingYTD: (state.auNonResidentWithholdingYTD ?? 0) / numResidents,
+        auSuperTaxYTD:               (state.auSuperTaxYTD ?? 0) / numResidents,
+        auFrankingCreditYTD:         (state.auFrankingCreditYTD ?? 0) / numResidents,
+      };
+
+      const taxDetail = auModule.computeTax(personState);
+      taxDetail.taxYear = taxYear;
+
+      return { personKey: key, personName: person.name || key, taxDetail };
+    });
+  }
+
   // ─── Private ───────────────────────────────────────────────────────────────
 
   /**

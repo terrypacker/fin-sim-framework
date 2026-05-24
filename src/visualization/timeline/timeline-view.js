@@ -183,7 +183,8 @@ export class TimelineView extends BaseComponent {
             html.push('<div class="tl-acts">');
             items.forEach(({ entry, idx, sum }, ai) => {
               const lastA     = ai === items.length - 1;
-              const hasTaxDoc = entry.action.type === 'TAX_SETTLE_APPLY' && entry.action.taxDetail;
+              const hasTaxDoc = entry.action.type === 'TAX_SETTLE_APPLY' &&
+                (entry.action.taxDetail != null || entry.action.personTaxDetails?.length > 0);
               html.push(`<div class="tl-act">
                 <span class="tl-pipe" style="color:#1e3a5f">${lastA ? '└' : '├'}</span>
                 <span class="tl-act-type">${entry.action.type}</span>
