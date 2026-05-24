@@ -99,9 +99,23 @@ export class ConfigGraphBuilder {
       el.style.top  = node.y + 'px';
 
       const header = el.querySelector('span.g-header-text');
-      header.innerText = node.kind;
-      const title = el.querySelector('span.g-title');
+      switch(node.kind) {
+        case 'event':
+          header.innerText = node.eventType;
+          break;
+        case 'handler':
+          header.innerText = node.handlerClass;
+          break;
+        case 'action':
+          header.innerText = node.actionClass;
+          break;
+        case 'reducer':
+          header.innerText = node.reducerType;
+          break;
+      }
+      const title = el.querySelector('span.g-title-text');
       title.innerText = node.name;
+      const type = el.querySelector('span.g-type-text');
 
       //Update the fired status
       const firedIndicator = el.querySelector('[data-id="firedIndicator"]');
