@@ -30,22 +30,25 @@ Other top-level HTML files and apps in `assets/js/` are legacy — only the `ind
 │                                                                     │
 │   index.html → CustomApp (extends BaseApp)                          │
 │                   │                                                 │
-│         ┌─────────┴──────────┐                                      │
-│         │   EventScheduler   │  Visual graph builder (nodes + edges)│
-│         │  (ConfigGraphBuilder)  SVG drag-and-drop canvas           │
-│         └─────────┬──────────┘                                      │
-│                   │  creation / click events                        │
+│         ┌─────────┴──────────────────────────────────┐             │
+│         │  ConfigGraphBuilder  SVG node/edge canvas   │             │
+│         │  EventScheduler      Editor panel + buttons │             │
+│         │  GraphSync           Bus → graph updater    │             │
+│         └─────────┬──────────────────────────────────┘             │
+│                   │  + button clicks / node edits                   │
 │                   ▼                                                 │
 │   CustomScenario (extends BaseScenario)                             │
-│         │                                                           │
-│         │  registerHandler / registerReducer / scheduleEvent        │
+│         │  service.register(item) — fires CREATE on bus             │
 │         ▼                                                           │
 │   ServiceRegistry (singleton per scenario build)                    │
-│     ├── EventBus  ◀── ServiceActionEvents (CREATE / UPDATE / DELETE)│
+│     ├── EventBus ──► ServiceActionEvent (CREATE / UPDATE / DELETE)  │
+│     │                  ├── SimulationSync  (re-wires Simulation)    │
+│     │                  └── GraphSync       (updates graph nodes)    │
 │     ├── EventService                                                │
 │     ├── HandlerService                                              │
 │     ├── ActionService                                               │
 │     ├── ReducerService                                              │
+│     ├── SimulationSync                                              │
 │     └── SimulationRegistry                                          │
 │                   │                                                 │
 │                   ▼                                                 │
@@ -73,21 +76,21 @@ Other top-level HTML files and apps in `assets/js/` are legacy — only the `ind
 
 The core simulation engine. Unchanged in structure from earlier versions.
 
-| Module | File | Responsibility |
-|---|---|---|
-| `Simulation` | `simulation.js` | Orchestrator. Owns the event queue, handler registry, reducer pipeline, state, journal, action graph, and breakpoint/pause control object. Delegates snapshot/rewind to `SimulationHistory`. |
-| `SimulationHistory` | `simulation-history.js` | Manages snapshot array; all rewind/replay/branching navigation. Holds `snapshotCursor` and `eventCounter`. |
-| `EventBus` | `event-bus.js` | Pub/sub with wildcard support. Keeps a full message history for replay and debug. Receives typed `BusMessage` objects. |
-| `BusMessage` / `SimulationBusMessage` / `DebugActionBusMessage` / `ServiceActionEvent` | `bus-messages.js` | Typed message wrappers. `ServiceActionEvent` is new — published by services on CREATE / UPDATE / DELETE so the sim and graph stay in sync. |
-| `Action` / `AmountAction` / `RecordMetricAction` / `RecordArrayMetricAction` / `RecordNumericSumMetricAction` / `RecordMultiplicativeMetricAction` / `RecordBalanceAction` | `actions.js` | Base and concrete action classes. **All actions now default `id = type`** — set in the constructor so services never need to assign it manually. |
-| `HandlerEntry` / `HandlerRegistry` | `handlers.js` | `HandlerEntry` wraps a handler function with a name, `handledEvents`, and `generatedActions` arrays. Defaults `id = null` — assigned by `HandlerService`. |
-| Reducer classes / `ReducerPipeline` / `PRIORITY` | `reducers.js` | Prioritized reducer chain. All reducer subclasses now default `id = null` — assigned by `ReducerService`. Built-in: `MetricReducer`, `ArrayReducer`, `NumericSumReducer`, `MultiplicativeReducer`, `FieldReducer`, `StateFieldReducer`, `NoOpReducer`. |
-| `EventSeries` / `OneOffEvent` / `BaseEvent` | `events/` | Configuration objects for recurring and one-off events. Default `id = null` — assigned by `EventService`. |
-| `Journal` | `journal.js` | Append-only log of every `(action, prevState, nextState)` tuple. |
-| `SimulationEventGraph` | `simulation-event-graph.js` | DAG of all `ActionNode`s produced during a run for causal tracing. |
-| `MinHeap` / `IndexedMinHeap` | `min-heap.js`, `indexed-min-heap.js` | Priority queues keyed on event date. |
-| `DateUtils` | `date-utils.js` | Stateless date arithmetic (`addDays`, `addMonths`, `addYears`, `endOfMonth`, `endOfYear`). |
-| `ScenarioRunner` | `scenario.js` | Batch and Monte Carlo runner plus a `summarize` helper (mean, p10/p50/p90). |
+| Module | File | Responsibility                                                                                                                                                                                                                                                                                                    |
+|---|---|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Simulation` | `simulation.js` | Orchestrator. Owns the event queue, handler registry, reducer pipeline, state, journal, action graph, and breakpoint/pause control object. Delegates snapshot/rewind to `SimulationHistory`.                                                                                                                      |
+| `SimulationHistory` | `simulation-history.js` | Manages snapshot array; all rewind/replay/branching navigation. Holds `snapshotCursor` and `eventCounter`.                                                                                                                                                                                                        |
+| `EventBus` | `event-bus.js` | Pub/sub with wildcard support. Keeps a full message history for replay and debug. Receives typed `BusMessage` objects.                                                                                                                                                                                            |
+| `BusMessage` / `SimulationBusMessage` / `DebugActionBusMessage` / `ServiceActionEvent` | `bus-messages.js` | Typed message wrappers. `ServiceActionEvent` is new — published by services on CREATE / UPDATE / DELETE so the sim and graph stay in sync.                                                                                                                                                                        |
+| `Action` / `AmountAction` / `RecordMetricAction` / `RecordArrayMetricAction` / `RecordNumericSumMetricAction` / `RecordMultiplicativeMetricAction` / `RecordBalanceAction` | `actions.js` | Base and concrete action classes. **All actions now default `id = type`** — set in the constructor so services never need to assign it manually.                                                                                                                                                                  |
+| `HandlerEntry` / `HandlerRegistry` | `handlers.js` | `HandlerEntry` wraps a handler function with a name, `handledEvents`, and `generatedActions` arrays. Defaults `id = null` — assigned by `HandlerService`.                                                                                                                                                         |
+| Reducer classes / `ReducerPipeline` / `PRIORITY` | `reducers.js` | Prioritized reducer chain. All reducer subclasses now default `id = null` — assigned by `ReducerService`. Built-in: `Reducer`, `AccountTransactionReducer`, `ArrayReducer`, `NumericSumReducer`, `MultiplicativeReducer`, `FieldReducer`, `FieldValueReducer`, `NoOpReducer`, `RepeatingReducer`, `ScripedReducer`. |
+| `EventSeries` / `OneOffEvent` / `BaseEvent` | `events/` | Configuration objects for recurring and one-off events. Default `id = null` — assigned by `EventService`.                                                                                                                                                                                                         |
+| `Journal` | `journal.js` | Append-only log of every `(action, prevState, nextState)` tuple.                                                                                                                                                                                                                                                  |
+| `SimulationEventGraph` | `simulation-event-graph.js` | DAG of all `ActionNode`s produced during a run for causal tracing.                                                                                                                                                                                                                                                |
+| `MinHeap` / `IndexedMinHeap` | `min-heap.js`, `indexed-min-heap.js` | Priority queues keyed on event date.                                                                                                                                                                                                                                                                              |
+| `DateUtils` | `date-utils.js` | Stateless date arithmetic (`addDays`, `addMonths`, `addYears`, `endOfMonth`, `endOfYear`).                                                                                                                                                                                                                        |
+| `ScenarioRunner` | `scenario.js` | Batch and Monte Carlo runner plus a `summarize` helper (mean, p10/p50/p90).                                                                                                                                                                                                                                       |
 
 #### Fluent Builders (`src/simulation-framework/builders/`)
 
@@ -126,7 +129,8 @@ The service layer is the **authoritative source of truth** for all configuration
 
 ```
 UI change → service.updateX(id, changes) → ServiceActionEvent on bus
-                                              └── BaseScenario subscriber re-wires sim
+                                              ├── SimulationSync re-wires sim
+                                              └── GraphSync updates ConfigGraphBuilder
 Save      → ScenarioSerializer.serialize(ServiceRegistry.getInstance(), ...)
                                     └── reads from service.getAll()
 ```
@@ -170,27 +174,30 @@ Each service exposes `createX(...)`, `updateX(id, changes)`, and `deleteX(id)` m
 
 #### `BaseScenario`
 
-Base class for all simulation scenarios. Wires together the `EventScheduler` UI, the `ServiceRegistry`, and the `Simulation`.
+Base class for all simulation scenarios. A thin coordinator between the `EventScheduler` UI and the `ServiceRegistry`.
 
-**Construction listeners** (EventScheduler `+` buttons) remain registered in the constructor. Creation of new nodes goes: button click → `BaseScenario.xCreationRequested()` → `service.createX()` → bus event → graph re-renders.
+**Construction listeners** (EventScheduler `+` buttons) are registered in the constructor. Creation of new nodes goes: button click → `BaseScenario.xCreationRequested()` → `service.createX()` → bus event → `SimulationSync` wires the sim; `GraphSync` adds the graph node.
 
-**Change / delete listeners** have been removed. Instead, `BaseScenario` subscribes to `SERVICE_ACTION` events on the bus and dispatches to internal `_apply*` methods:
+All simulation-wiring and graph-update logic lives in `SimulationSync` and `GraphSync` respectively, both of which subscribe to the shared bus independently. `BaseScenario` itself does not subscribe.
 
-```
-service.updateX() → ServiceActionEvent(UPDATE) → _applyEventChange / _applyHandlerChange / ...
-service.deleteX() → ServiceActionEvent(DELETE) → _applyEventDelete / _applyHandlerDelete / ...
-```
-
-Key methods:
+**`loadDefaults()` pattern** — subclasses populate the scenario by calling `service.register(item)` directly. The bus handles both sides automatically:
 
 ```js
-scenario.scheduleEvent(event)       // schedule into sim + load into eventService
-scenario.registerHandler(handler)   // wire to sim + load into handlerService
-scenario.registerReducer(reducer)   // wire to sim + load into reducerService
-scenario.registerAction(action)     // load into actionService + add to graph
-```
+loadDefaults() {
+  const sr = ServiceRegistry.getInstance();
+  const event = new EventSeries({ name: 'Monthly', type: 'MONTH_END',
+    interval: 'month-end', enabled: true, color: '#F44336' });
+  sr.eventService.register(event);   // → sim scheduled + graph node added
 
-All four methods call `service.load(item)` if the item is not already tracked, ensuring fluent-built or deserialized objects are findable by the editor.
+  const action = new AmountAction('PAY', 'Pay Salary', 1200);
+  sr.actionService.register(action); // → graph node added
+
+  const handler = new HandlerEntry(fn, 'Month Handler');
+  handler.handledEvents.push(event);
+  handler.generatedActions.push(action);
+  sr.handlerService.register(handler); // → sim wired + graph node + edges added
+}
+```
 
 #### `ScenarioSerializer`
 
@@ -203,8 +210,8 @@ const config = ScenarioSerializer.serialize(
   name, simStart, simEnd, initialState, params
 );
 
-// Deserialize — reconstructs domain objects and registers them with the scenario
-ScenarioSerializer.deserialize(config, scenario);
+// Deserialize — reconstructs domain objects and registers them with the services
+ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance());
 ```
 
 `ScenarioStorage` wraps `localStorage` to load/save the list of scenario configs.
@@ -217,10 +224,10 @@ ScenarioSerializer.deserialize(config, scenario);
 
 Base class for browser apps. Owns the top-level UI orchestration:
 
-- Builds `ConfigGraphBuilder` (the draggable SVG node graph) and `EventScheduler` (editor panel + `+` buttons)
+- Builds `ConfigGraphBuilder` (the draggable SVG node graph), `EventScheduler` (editor panel + `+` buttons), and `GraphSync` (bus subscriber that keeps the graph in sync)
 - Builds `ChartView` (Chart.js time-series chart), `TimelineView` (scrollable journal), and `TimeControls` (play/pause/step slider)
 - Handles scenario save/load via `ScenarioStorage` and `ScenarioSerializer`
-- Calls `ServiceRegistry.reset()` then `newScenario(ui)` on each rebuild so the service maps, bus, and simulation start clean
+- Calls `ServiceRegistry.reset()` before each rebuild so the service maps, bus, `SimulationSync`, and `GraphSync` all start clean
 
 **Save flow:**
 ```
@@ -235,8 +242,9 @@ _saveCurrentScenario()
 
 | Module | File | Responsibility |
 |---|---|---|
-| `EventScheduler` | `event-scheduler.js` | Wraps `ConfigGraphBuilder`; renders node editors (event / handler / action / reducer) in a side panel; subscribes to the service bus to re-render the graph on any change. All editor inputs call `service.updateX(id, changes)` directly. |
-| `ConfigGraphBuilder` | `graph-builder.js` | SVG drag-and-drop node/edge canvas for the simulation configuration graph. **Display only** — not a source of truth. Nodes are keyed by domain object `id`. Right-clicking any node toggles a breakpoint; a red `⏸` badge appears and the node border turns red. |
+| `EventScheduler` | `event-scheduler.js` | **UI only.** Renders node editors (event / handler / action / reducer) in a side panel; exposes `+` creation buttons. All editor inputs call `service.updateX(id, changes)` directly. Does **not** subscribe to the bus — graph updates are handled by `GraphSync`. |
+| `GraphSync` | `graph-sync.js` | **Bus subscriber.** Subscribes to `SERVICE_ACTION` events and keeps `ConfigGraphBuilder` in sync: CREATE adds nodes with `kind`/`eventType` decoration and edges; UPDATE merges position and visual state (x, y, fired, breakpoint) from the old node before replacing — preserving them across `replaceReducer`/`replaceAction` type changes; DELETE removes nodes and incident edges. Analogous to `SimulationSync` for the graph layer. |
+| `ConfigGraphBuilder` | `graph-builder.js` | SVG drag-and-drop node/edge canvas. **Display only** — not a source of truth. Nodes are keyed by domain object `id`. Right-clicking any node toggles a breakpoint; a red `⏸` badge appears and the border turns red. |
 | `ChartView` | `chart-view.js` | Chart.js-backed time-series chart. Series discovered automatically from data snapshot keys. Supports `chartjs-plugin-annotation` and `chartjs-plugin-zoom`. |
 | `TimelineView` | `timeline-view.js` | Scrollable DOM journal timeline. |
 | `TimeControls` | `time-controls.js` | Bridges the play/pause/step/slider UI to `sim.stepTo`, `sim.rewindToStart`, and replay. |
@@ -324,7 +332,7 @@ scenario.registerReducer(reducer);
 Two distinct buses exist:
 
 1. **Simulation `EventBus`** — carries `SimulationBusMessage` (event fires) and `DebugActionBusMessage` (action graph node added). Lives on `sim.bus`.
-2. **Service `EventBus`** — shared across all services via `ServiceRegistry`. Carries `ServiceActionEvent` with `{ actionType: 'CREATE'|'UPDATE'|'DELETE', classType, item, originalItem }`. `BaseScenario` and `EventScheduler` both subscribe to re-wire the sim and re-render the graph respectively.
+2. **Service `EventBus`** — shared across all services via `ServiceRegistry`. Carries `ServiceActionEvent` with `{ actionType: 'CREATE'|'UPDATE'|'DELETE', classType, item, originalItem }`. Two independent subscribers react to it: `SimulationSync` re-wires the active `Simulation`; `GraphSync` updates the `ConfigGraphBuilder`.
 
 ### Snapshots, Rewind & Replay
 
@@ -557,7 +565,7 @@ tests/
 | Finance domain | `account.test.mjs`, `asset.test.mjs`, `investment-account.test.mjs`, `person.test.mjs`, `period-service.test.mjs`, `asset-rules.test.mjs` |
 | Tax / account event scenarios | `evt-401k.test.mjs`, `evt-ira.test.mjs`, `evt-roth.test.mjs`, `evt-us-brokerage.test.mjs`, `evt-au-brokerage.test.mjs`, `evt-real-property.test.mjs`, `evt-super.test.mjs`, `evt-au-savings.test.mjs` |
 | Service layer | `service-registry.test.mjs`, `base-scenario.test.mjs`, `scenario-serializer.test.mjs` |
-| Visualization | `base-app.test.mjs`, `graph-builder.test.mjs`, `balance-chart-view.test.mjs`, `timeline-view.test.mjs`, `time-controls.test.mjs` |
+| Visualization | `base-app.test.mjs`, `graph-builder.test.mjs`, `graph-sync.test.mjs`, `event-scheduler.test.mjs`, `balance-chart-view.test.mjs`, `timeline-view.test.mjs`, `time-controls.test.mjs` |
 
 ### Test helper
 
