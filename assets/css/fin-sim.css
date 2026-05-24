@@ -1148,3 +1148,17 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 .param-row input  { flex: 1; min-width: 0; }
 .param-row select { flex: 0 0 72px; }
 .param-row .btn-warn { flex: 0 0 auto; }
+
+
+.sim-modal {
+  background: black;
+  border: 1px solid var(--border);
+  border-radius:6px;
+  padding:12px;
+  width:500px;
+  max-height:75vh;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  font-size:11px;
+}

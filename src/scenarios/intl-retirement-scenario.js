@@ -74,7 +74,8 @@ export const INTL_RETIREMENT_DEFAULTS = {
   usStockGrowthRate: 0.05,
 
   // AU accounts
-  auSavingsBalance:     50_000,  auSavingsInterestRate: 0.045,
+  auSavingsBalance:     50_000,
+  auSavingsMinBalance:   3_000,  auSavingsInterestRate: 0.045,
   superBalance:        250_000,  superBasis:           180_000,
   auStockBalance:       60_000,  auStockBasis:          40_000,
   auStockGrowthRate:   0.06,
@@ -189,6 +190,7 @@ export class IntlRetirementScenario extends BaseScenario {
     const auSavingsAccount = new Account(p.auSavingsBalance, {
       name:     'AU Savings',
       country:  'AU',
+      minimumBalance: p.auSavingsMinBalance,
       currency: AUD,
     });
     const auStockAccount = new InvestmentAccount(p.auStockBalance, {

@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { fmtUTC } from '../ui-utils.js';
+
 // Account types whose country/currency are fixed at construction time.
 const FIXED_COUNTRY = new Set(['401k', 'roth', 'ira', 'super']);
 
@@ -38,14 +40,17 @@ const TYPE_LABELS = {
 export class AccountsView {
   constructor() {
     /** @type {function(object)|null} */
-    this.onSave   = null;
+    this.onSave    = null;
     /** @type {function(string)|null} */
-    this.onDelete = null;
+    this.onDelete  = null;
     /** @type {function(import('../../finance/account.js').Account)|null} */
-    this.onEdit   = null;
+    this.onEdit    = null;
     /** @type {function()|null} */
-    this.onCancel = null;
+    this.onCancel  = null;
+    /** @type {function(import('../../finance/account.js').Account)|null} */
+    this.onHistory = null;
 
+    this._editingAccount = null;
     this._init();
   }
 
@@ -64,6 +69,10 @@ export class AccountsView {
       if (this.onCancel) this.onCancel();
     });
 
+    document.getElementById('historyAccountBtn')?.addEventListener('click', () => {
+      if (this.onHistory && this._editingAccount) this.onHistory(this._editingAccount);
+    });
+
     // Show/hide investment fields and country row when type changes.
     document.getElementById('accountFormType')?.addEventListener('change', () => {
       this._applyTypeVisibility();
@@ -75,9 +84,10 @@ export class AccountsView {
   /**
    * Re-render the accounts list.
    * @param {import('../../finance/account.js').Account[]} accounts
-   * @param {import('../../finance/person.js').Person[]}  people   — for owner name lookup
+   * @param {import('../../finance/person.js').Person[]}  people      — for owner name lookup
+   * @param {Map<string, number>}                          balanceMap  — live balances keyed by account id
    */
-  renderList(accounts, people = []) {
+  renderList(accounts, people = [], balanceMap = new Map()) {
     const list = document.getElementById('accountsList');
     list.innerHTML = '';
 
@@ -97,6 +107,19 @@ export class AccountsView {
         ? `${account.name} (${typeLabel} · ${owner})`
         : `${account.name} (${typeLabel})`;
 
+      const balField = document.createElement('div');
+      balField.className = 'node-field';
+      balField.style.cssText = 'flex-shrink:0;min-width:72px;';
+      const balLabel = document.createElement('label');
+      balLabel.textContent = 'Balance';
+      const balValue = document.createElement('span');
+      const sym = account.currency?.symbol ?? '$';
+      const n = balanceMap.has(account.id) ? balanceMap.get(account.id) : (account.balance ?? 0);
+      balValue.textContent = (n < 0 ? '-' + sym : sym) +
+        Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      if (n < 0) balValue.style.color = 'var(--accent-red, #e55)';
+      balField.append(balLabel, balValue);
+
       const editBtn = document.createElement('button');
       editBtn.className   = 'btn btn-sm';
       editBtn.textContent = 'Edit';
@@ -108,7 +131,7 @@ export class AccountsView {
       delBtn.style.color = 'var(--accent-red, #e55)';
       delBtn.addEventListener('click', () => { if (this.onDelete) this.onDelete(account.id); });
 
-      row.append(label, editBtn, delBtn);
+      row.append(label, balField, editBtn, delBtn);
       list.appendChild(row);
     }
   }
@@ -121,9 +144,11 @@ export class AccountsView {
    * @param {import('../../finance/person.js').Person[]} people
    */
   showForm(account, people = []) {
-    this._currentPeople = people;
+    this._currentPeople  = people;
+    this._editingAccount = account ?? null;
 
     const isEdit = !!account;
+    document.getElementById('historyAccountBtn').style.display = isEdit ? '' : 'none';
     document.getElementById('accountFormTitle').textContent = isEdit ? 'Edit Account' : 'New Account';
     document.getElementById('accountFormId').value          = account?.id ?? '';
     document.getElementById('accountFormName').value        = account?.name ?? '';
@@ -212,5 +237,97 @@ export class AccountsView {
       if (p.id === selectedId) opt.selected = true;
       sel.appendChild(opt);
     }
+  }
+
+  // ─── Transaction history modal ────────────────────────────────────────────
+
+  /**
+   * Display a modal overlay with the transaction history for an account.
+   * @param {{ date: Date, amount: number, eventType: string, reducer: string }[]} entries
+   * @param {string} accountName
+   * @param {string} [currencySymbol]
+   */
+  showHistory(entries, accountName, currencySymbol = '$') {
+    document.getElementById('accountHistoryModal')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'accountHistoryModal';
+    overlay.style.cssText =
+      'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;' +
+      'display:flex;align-items:center;justify-content:center;';
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+    const modal = document.createElement('div');
+    modal.classList.add('sim-modal');
+
+    // ── Header ──
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
+    const title = document.createElement('span');
+    title.style.cssText = 'font-size:12px;font-weight:600;';
+    title.textContent = `Transaction History — ${accountName}`;
+    const closeBtn = document.createElement('button');
+    closeBtn.className   = 'btn btn-sm';
+    closeBtn.textContent = '✕';
+    closeBtn.addEventListener('click', () => overlay.remove());
+    header.append(title, closeBtn);
+
+    // ── Body ──
+    const body = document.createElement('div');
+    body.style.cssText = 'overflow-y:auto;flex:1;';
+
+    if (!entries || entries.length === 0) {
+      const empty = document.createElement('span');
+      empty.style.color   = 'var(--text-muted)';
+      empty.textContent   = 'No transactions recorded. Run a simulation first.';
+      body.appendChild(empty);
+    } else {
+      const table = document.createElement('table');
+      table.style.cssText = 'width:100%;border-collapse:collapse;';
+
+      const thead = table.createTHead();
+      const hrow  = thead.insertRow();
+      for (const col of ['Date', 'Event', 'Amount', 'Balance']) {
+        const th = document.createElement('th');
+        th.textContent  = col;
+        th.style.cssText =
+          'text-align:left;padding:2px 6px;font-size:9px;letter-spacing:0.06em;' +
+          'color:var(--text-muted);border-bottom:1px solid var(--border);';
+        hrow.appendChild(th);
+      }
+
+      const tbody = table.createTBody();
+      for (const entry of entries) {
+        const tr = tbody.insertRow();
+        tr.style.cssText = 'border-bottom:1px solid var(--border-subtle, var(--border));';
+
+        const dateStr = entry.date instanceof Date ? fmtUTC(entry.date) : String(entry.date);
+        const sym     = currencySymbol;
+        const amt     = entry.amount;
+        const bal     = entry.balanceAfter;
+        const amtStr  = (amt >= 0 ? '+' + sym : '-' + sym) +
+          Math.abs(amt).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const balStr  = bal != null
+          ? (bal < 0 ? '-' + sym : sym) + Math.abs(bal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          : '—';
+
+        const cells = [
+          { text: dateStr,                                style: '' },
+          { text: entry.eventType ?? entry.reducer ?? '', style: 'color:var(--text-muted);' },
+          { text: amtStr, style: `color:${amt >= 0 ? 'var(--accent-green,#4a8)' : 'var(--accent-red,#e55)'};font-family:var(--font-mono);` },
+          { text: balStr, style: `font-family:var(--font-mono);${bal != null && bal < 0 ? 'color:var(--accent-red,#e55);' : ''}` },
+        ];
+        for (const { text, style } of cells) {
+          const td = tr.insertCell();
+          td.textContent   = text;
+          td.style.cssText = 'padding:3px 6px;' + style;
+        }
+      }
+      body.appendChild(table);
+    }
+
+    modal.append(header, body);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
   }
 }
