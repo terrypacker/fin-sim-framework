@@ -382,9 +382,20 @@ export class Simulation {
         })
       }
 
-      //Execute action mutation if it can be
-      if(action.mutate) {
-        action.mutate(this.state, unwrappedReducers, this.currentDate);
+      //Execute action transform if it can be
+      const stateClone = structuredClone(this.state);
+      if (action.transform) {
+        const newActions = action.transform(stateClone, {
+          date: this.currentDate,
+          sourceEvent,
+          handlerContext
+        });
+
+        if (newActions?.length) {
+          //TODO I think this tagging is the correct parent
+          let emitted = newActions.map(a => this.decorateAction(a, action));
+          queue.unshift(...emitted);
+        }
       }
 
       const prevState = structuredClone(this.state);
