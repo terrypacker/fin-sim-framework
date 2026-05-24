@@ -20,7 +20,11 @@ import { buildUsCalendarYear, buildAuFiscalYear, applyTo } from '../finance/peri
 import { UsSavingsInterestMonthlyHandler } from '../finance/handlers/us-savings-interest-handler.js';
 import { MonthlyExpensesHandler } from '../finance/handlers/monthly-expenses-handler.js';
 import { IntlTransferToUsHandler, IntlTransferToAuHandler } from '../finance/handlers/intl-transfer-handlers.js';
-import { AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler } from '../finance/handlers/earnings-handlers.js';
+import {
+  AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler,
+  IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,
+  IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
+} from '../finance/handlers/earnings-handlers.js';
 import { DividendScheduledHandler } from '../finance/handlers/dividend-scheduled-handler.js';
 import { ChangeResidencyHandler } from '../finance/handlers/change-residency-handler.js';
 import { OutOfFundsHandler } from '../finance/handlers/out-of-funds-handler.js';
@@ -66,10 +70,18 @@ export const INTL_RETIREMENT_DEFAULTS = {
   fixedIncomeBalance:   80_000,
   fixedIncomeInterestRate: 0.04,
 
+  // US investment growth rates (annual, separate from dividends)
+  rothGrowthRate:   0.07,
+  iraGrowthRate:    0.07,
+  k401GrowthRate:   0.07,
+  usStockGrowthRate: 0.05,
+
   // AU accounts
   auSavingsBalance:     50_000,  auSavingsInterestRate: 0.045,
   superBalance:        250_000,  superBasis:           180_000,
   auStockBalance:       60_000,  auStockBasis:          40_000,
+  auStockGrowthRate:   0.06,
+  auStockDividendRate: 0.04,
 
   // International transfer
   exchangeRateUsdToAud: 1.55,  // 1 USD = 1.55 AUD
@@ -228,15 +240,6 @@ export class IntlRetirementScenario extends BaseScenario {
     this._taxService = new TaxService();
     this._taxService.setup(this.sim, ['US', 'AU'], periodService);
 
-    // ── Schedule one-off CHANGE_RESIDENCY (Jul 1 of moveYear) ────────────────
-    // Registered through EventService so it gets an ID visible in the config graph.
-    ServiceRegistry.getInstance().eventService.createOneOffEvent({
-      name:    'Change Residency',
-      type:    'CHANGE_RESIDENCY',
-      date:    new Date(Date.UTC(p.moveYear, 6, 1)),
-      data:    {},
-      enabled: true,
-    });
   }
 
   /**
@@ -258,6 +261,16 @@ export class IntlRetirementScenario extends BaseScenario {
     for (const account of Object.values(this._accounts)) {
       accountService.createAccount(account);
     }
+
+    // ── Schedule one-off CHANGE_RESIDENCY (Jul 1 of moveYear) ────────────────
+    // Registered through EventService so it gets an ID visible in the config graph.
+    const moveYearEvent = eventService.createOneOffEvent({
+      name:    'Change Residency',
+      type:    'CHANGE_RESIDENCY',
+      date:    new Date(Date.UTC(p.moveYear, 6, 1)),
+      data:    {},
+      enabled: true,
+    });
 
     // ── Recurring event series ────────────────────────────────────────────────
     const expensesEvent = EventBuilder.eventSeries()
@@ -290,10 +303,35 @@ export class IntlRetirementScenario extends BaseScenario {
       .interval('year-end').startOffset(1).enabled(true).color('#9C27B0').build();
     eventService.register(superEvent);
 
-    const taxEvent = EventBuilder.eventSeries()
-      .name('Annual Tax Filing').type('ANNUAL_TAX')
-      .interval('year-end').startOffset(1).enabled(true).color('#FF5722').build();
-    eventService.register(taxEvent);
+    const rothEarningsEvent = EventBuilder.eventSeries()
+      .name('Roth IRA Earnings').type('INTL_ROTH_EARNINGS')
+      .interval('year-end').startOffset(1).enabled(true).color('#7E57C2').build();
+    eventService.register(rothEarningsEvent);
+
+    const iraEarningsEvent = EventBuilder.eventSeries()
+      .name('IRA Earnings').type('INTL_IRA_EARNINGS')
+      .interval('year-end').startOffset(1).enabled(true).color('#5C6BC0').build();
+    eventService.register(iraEarningsEvent);
+
+    const k401EarningsEvent = EventBuilder.eventSeries()
+      .name('401k Earnings').type('INTL_K401_EARNINGS')
+      .interval('year-end').startOffset(1).enabled(true).color('#42A5F5').build();
+    eventService.register(k401EarningsEvent);
+
+    const usStockEarningsEvent = EventBuilder.eventSeries()
+      .name('US Stock Earnings').type('INTL_STOCK_EARNINGS')
+      .interval('year-end').startOffset(1).enabled(true).color('#26A69A').build();
+    eventService.register(usStockEarningsEvent);
+
+    const auStockEarningsEvent = EventBuilder.eventSeries()
+      .name('AU Stock Earnings').type('INTL_AU_STOCK_EARNINGS')
+      .interval('year-end').startOffset(1).enabled(true).color('#66BB6A').build();
+    eventService.register(auStockEarningsEvent);
+
+    const auStockDividendEvent = EventBuilder.eventSeries()
+      .name('AU Stock Dividend').type('INTL_AU_STOCK_DIVIDEND')
+      .interval('year-end').startOffset(1).enabled(true).color('#FFA726').build();
+    eventService.register(auStockDividendEvent);
 
     // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -332,6 +370,30 @@ export class IntlRetirementScenario extends BaseScenario {
     superHandler.handledEvents.push(superEvent);
     handlerService.register(superHandler);
 
+    const rothEarningsHandler = new IntlRothEarningsHandler({ growthRate: p.rothGrowthRate });
+    rothEarningsHandler.handledEvents.push(rothEarningsEvent);
+    handlerService.register(rothEarningsHandler);
+
+    const iraEarningsHandler = new IntlIraEarningsHandler({ growthRate: p.iraGrowthRate });
+    iraEarningsHandler.handledEvents.push(iraEarningsEvent);
+    handlerService.register(iraEarningsHandler);
+
+    const k401EarningsHandler = new IntlK401EarningsHandler({ growthRate: p.k401GrowthRate });
+    k401EarningsHandler.handledEvents.push(k401EarningsEvent);
+    handlerService.register(k401EarningsHandler);
+
+    const usStockEarningsHandler = new IntlUsStockEarningsHandler({ growthRate: p.usStockGrowthRate });
+    usStockEarningsHandler.handledEvents.push(usStockEarningsEvent);
+    handlerService.register(usStockEarningsHandler);
+
+    const auStockEarningsHandler = new IntlAuStockEarningsHandler({ growthRate: p.auStockGrowthRate });
+    auStockEarningsHandler.handledEvents.push(auStockEarningsEvent);
+    handlerService.register(auStockEarningsHandler);
+
+    const auStockDividendHandler = new IntlAuStockDividendHandler({ dividendRate: p.auStockDividendRate });
+    auStockDividendHandler.handledEvents.push(auStockDividendEvent);
+    handlerService.register(auStockDividendHandler);
+
     // User-triggered transfer handlers (no event series — fired on-demand)
     const intlToUsHandler = new IntlTransferToUsHandler();
     handlerService.register(intlToUsHandler);
@@ -341,6 +403,7 @@ export class IntlRetirementScenario extends BaseScenario {
 
     // CHANGE_RESIDENCY is scheduled directly in buildSim() (one-off)
     const changeResidencyHandler = new ChangeResidencyHandler();
+    changeResidencyHandler.handledEvents.push(moveYearEvent);
     handlerService.register(changeResidencyHandler);
 
     // OUT_OF_FUNDS is fired by reducers when all sources are exhausted

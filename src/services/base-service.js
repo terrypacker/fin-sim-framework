@@ -55,6 +55,14 @@ export class BaseService {
     return [...this._items.values()];
   }
 
+  /**
+   * actionService
+   *   .query()
+   *   .where(a => a.type === type)
+   *   .where(a => a.enabled)
+   *   .toArray();
+   * @return {any}
+   */
   query() {
     let results = [...this._items.values()];
 
@@ -62,6 +70,11 @@ export class BaseService {
       where: (predicate) => {
         results = results.filter(predicate);
         return this.queryFrom(results);
+      },
+      orWhere: (predicate) => {
+        const orResults = [...this._items.values()].filter(predicate);
+        results = [...new Set([...results, ...orResults])];
+        return this;
       },
       toArray: () => results
     };
