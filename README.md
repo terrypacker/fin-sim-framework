@@ -75,7 +75,7 @@ The core simulation engine. Unchanged in structure from earlier versions.
 
 | Module | File | Responsibility |
 |---|---|---|
-| `Simulation` | `simulation.js` | Orchestrator. Owns the event queue, handler registry, reducer pipeline, state, journal, and action graph. Delegates snapshot/rewind to `SimulationHistory`. |
+| `Simulation` | `simulation.js` | Orchestrator. Owns the event queue, handler registry, reducer pipeline, state, journal, action graph, and breakpoint/pause control object. Delegates snapshot/rewind to `SimulationHistory`. |
 | `SimulationHistory` | `simulation-history.js` | Manages snapshot array; all rewind/replay/branching navigation. Holds `snapshotCursor` and `eventCounter`. |
 | `EventBus` | `event-bus.js` | Pub/sub with wildcard support. Keeps a full message history for replay and debug. Receives typed `BusMessage` objects. |
 | `BusMessage` / `SimulationBusMessage` / `DebugActionBusMessage` / `ServiceActionEvent` | `bus-messages.js` | Typed message wrappers. `ServiceActionEvent` is new — published by services on CREATE / UPDATE / DELETE so the sim and graph stay in sync. |
@@ -236,7 +236,7 @@ _saveCurrentScenario()
 | Module | File | Responsibility |
 |---|---|---|
 | `EventScheduler` | `event-scheduler.js` | Wraps `ConfigGraphBuilder`; renders node editors (event / handler / action / reducer) in a side panel; subscribes to the service bus to re-render the graph on any change. All editor inputs call `service.updateX(id, changes)` directly. |
-| `ConfigGraphBuilder` | `graph-builder.js` | SVG drag-and-drop node/edge canvas for the simulation configuration graph. **Display only** — not a source of truth. Nodes are keyed by domain object `id`. |
+| `ConfigGraphBuilder` | `graph-builder.js` | SVG drag-and-drop node/edge canvas for the simulation configuration graph. **Display only** — not a source of truth. Nodes are keyed by domain object `id`. Right-clicking any node toggles a breakpoint; a red `⏸` badge appears and the node border turns red. |
 | `ChartView` | `chart-view.js` | Chart.js-backed time-series chart. Series discovered automatically from data snapshot keys. Supports `chartjs-plugin-annotation` and `chartjs-plugin-zoom`. |
 | `TimelineView` | `timeline-view.js` | Scrollable DOM journal timeline. |
 | `TimeControls` | `time-controls.js` | Bridges the play/pause/step/slider UI to `sim.stepTo`, `sim.rewindToStart`, and replay. |
@@ -345,6 +345,83 @@ sim.journal.getActions('SALARY');              // all SALARY reducer entries
 sim.journal.getStateTimeline('metrics.salary'); // [{date, value}, ...]
 sim.journal.traceEvent(new Date(2027, 0, 1));  // all entries on that date
 ```
+
+---
+
+### Simulation Debugger (Breakpoints)
+
+The simulation supports a step-debugger that can pause execution at any granularity — before an event fires, before a specific handler is called, before an action is dispatched, or before a reducer runs. This is useful for inspecting state at any point during a run.
+
+#### How it works
+
+Breakpoints are driven by `sim.control.breakpointNodeIds` — a `Set` of config-graph node IDs. Before each handler, action, and reducer call the simulation checks this set. On a match it saves a **`pendingExecution` resume context** and throws an internal `BreakpointSignal`, which is caught by `stepTo()`, leaving `control.paused = true`. The paused node has **not** executed yet, so `sim.state` reflects the state immediately before it.
+
+The `animate()` loop in `BaseApp` checks `sim.control.paused` after each `stepTo()` call. When `true` it stops playback and calls `_showBreakpointPaused()` to update the status bar.
+
+#### Breakpoint stages
+
+| Stage | When | `breakpointHit.stage` |
+|---|---|---|
+| Event node | Before the event is dequeued and `execute()` is called | `event:start` |
+| Handler node | Inside the handler `for` loop, before `entry.call()` | `handler:before` |
+| Action node | Inside `_processActionQueue`, before the action enters the reducer pipeline | `action` |
+| Reducer node | Inside `_processReducers`, before `reducerWrapper.fn()` is called | `reducer:before` |
+
+#### `sim.control` fields
+
+| Field | Type | Description |
+|---|---|---|
+| `paused` | `boolean` | `true` when stopped at a breakpoint. |
+| `breakpointHit` | `object \| null` | `{ stage, event? / handler? / action? / reducer? }` describing what triggered the pause. |
+| `pendingExecution` | `object \| null` | Saved mid-event state used by `_resumeFromPendingExecution()` to re-enter at the exact handler/action/reducer position. `null` for event-level pauses and after clean completion. |
+| `resuming` | `boolean` | Set to `true` by the resume path so the node we're stepping past skips its own breakpoint check. Cleared after the first successful execution step. |
+| `breakpointsEnabled` | `boolean` | Disabled during rewind/replay so breakpoints do not halt snapshot restoration. |
+| `breakpointNodeIds` | `Set<string>` | Set of config-graph node IDs that have active breakpoints. Managed by `BaseApp._syncBreakpointsToSim()`. |
+
+#### UI interaction
+
+- **Right-click** any node on the Config Graph to toggle its breakpoint. A red `⏸` badge appears on the node and the border turns red.
+- When paused, the **status bar** shows `PAUSED @ <node-name> [<stage>]` with a pulsing red dot.
+- Click **Play** (`▶`) to continue until the next breakpoint.
+- Click **Step Forward** (`→`) to execute past the current breakpoint and pause immediately before the next one.
+
+#### Programmatic use
+
+```js
+// Set breakpoints by node ID (same IDs as config-graph nodes)
+sim.control.breakpointNodeIds.add('h-salary-handler');
+sim.control.breakpointNodeIds.add('r-tax-reducer');
+
+sim.stepTo(end);
+
+if (sim.control.paused) {
+  console.log('Paused at', sim.control.breakpointHit.stage);
+  console.log('State before:', sim.state);
+
+  // Resume: clear paused and set resuming for mid-event pauses
+  if (!sim.control.pendingExecution) sim.control.resuming = true; // event-level
+  sim.control.paused = false;
+  sim.control.breakpointHit = null;
+
+  sim.stepTo(end); // continues from the paused position
+}
+```
+
+#### Resume mechanics
+
+`_resumeFromPendingExecution()` re-enters execution at the saved position based on `pendingExecution.type`:
+
+| Type | Resume path |
+|---|---|
+| `handler` | `execute(event, { startHandlerIdx: i })` — `resuming=true` skips the check on handler `i`, then clears so subsequent handlers are checked |
+| `action` | `_processActionQueue([pausedAction, ...rest])` then `execute()` for remaining handlers |
+| `reducer` | `_processReducers(action, j, ...)` to finish reducers for the current action, then `_processActionQueue()` for remaining actions, then `execute()` for remaining handlers |
+
+If another breakpoint is hit during resume, a new `BreakpointSignal` is thrown with a fresh `pendingExecution`, and the cycle repeats.
+
+#### Rewind safety
+
+`TimeControls._doRewindTo()` sets `breakpointsEnabled = false` and clears `pendingExecution` before replaying snapshots, then re-enables breakpoints after replay completes. This prevents mid-event resume state from becoming invalid after a state rollback.
 
 ---
 
@@ -475,6 +552,7 @@ tests/
 | Category | Examples |
 |---|---|
 | Simulation engine | `simulation.test.mjs`, `simulation-history.test.mjs`, `journal.test.mjs`, `event-bus.test.mjs` |
+| Breakpoint system | `simulation-breakpoints.test.mjs` — pause/resume at event, handler, action, and reducer granularity; state-before-execution assertions; emitted-action correctness; rewind safety |
 | Domain objects | `reducers.test.mjs`, `action-builder.test.mjs`, `reducer-builder.test.mjs`, `handler-builder.test.mjs`, `event-builder.test.mjs` |
 | Finance domain | `account.test.mjs`, `asset.test.mjs`, `investment-account.test.mjs`, `person.test.mjs`, `period-service.test.mjs`, `asset-rules.test.mjs` |
 | Tax / account event scenarios | `evt-401k.test.mjs`, `evt-ira.test.mjs`, `evt-roth.test.mjs`, `evt-us-brokerage.test.mjs`, `evt-au-brokerage.test.mjs`, `evt-real-property.test.mjs`, `evt-super.test.mjs`, `evt-au-savings.test.mjs` |

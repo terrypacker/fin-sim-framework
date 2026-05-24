@@ -68,7 +68,7 @@ import { ScenarioRunner } from './simulation-framework/scenario.js';
 import { ActionNode, SimulationEventGraph } from './simulation-framework/simulation-event-graph.js';
 import { SimulationHistory } from './simulation-framework/simulation-history.js';
 import { SimulationState } from './simulation-framework/simulation-state.js';
-import { Simulation } from './simulation-framework/simulation.js';
+import { BreakpointSignal, Simulation } from './simulation-framework/simulation.js';
 import { BalanceChartView } from './visualization/balance-chart-view.js';
 import { ChartView } from './visualization/chart-view.js';
 import { EventScheduler } from './visualization/event-scheduler.js';
@@ -215,6 +215,7 @@ export const Core = {
   SimulationEventGraph,
   SimulationHistory,
   SimulationState,
+  BreakpointSignal,
   Simulation,
 };
 

@@ -221,6 +221,11 @@ export class BaseApp {
     this.configGraphBuilder.registerNodeClickListener((event, node) => this.openTab(
         { currentTarget: this.eventsTabHeader }, 'left-events', 'left-col'));
 
+    // Sync breakpoints to the sim whenever the user toggles one on the graph.
+    this.configGraphBuilder.registerBreakpointChangeListener(() => {
+      this._syncBreakpointsToSim();
+    });
+
     this.schedulerUI = new EventScheduler({
       builderCanvas: document.getElementById('builderCanvas'),
       graph: this.configGraphBuilder
@@ -304,6 +309,9 @@ export class BaseApp {
       timeSlider: $('timeSlider'),
       formatDate: this._formatDate,
     });
+
+    // Wire event-level breakpoints: called by the sim before each event executes.
+    this._syncBreakpointsToSim();
 
     // Subscribe to EVENT_OCCURRENCE events
     this.scenario.sim.bus.subscribe(SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START, ({ date, payload }) => {
@@ -580,6 +588,13 @@ export class BaseApp {
 
     this.timeControls.stepTo(+slider.value / 100);
 
+    // Check whether the simulation paused at a breakpoint during stepTo.
+    if (this.scenario?.sim?.control?.paused) {
+      this.stopPlaying();
+      this._showBreakpointPaused(this.scenario.sim.control.breakpointHit);
+      return;
+    }
+
     if (+slider.value < 100) {
       requestAnimationFrame(() => this.animate());
     } else {
@@ -588,17 +603,80 @@ export class BaseApp {
   }
 
   startPlaying() {
+    // Clear the paused flag so stepTo() proceeds.  If pendingExecution is set
+    // (mid-event pause), _resumeFromPendingExecution() will handle the resume
+    // with resuming=true to skip past the breakpoint node.
+    // For event-level pauses (no pendingExecution), set resuming so the
+    // event-level check is skipped on the next stepTo() call.
+    const ctrl = this.scenario?.sim?.control;
+    if (ctrl?.paused) {
+      if (!ctrl.pendingExecution) ctrl.resuming = true; // event-level pause
+      ctrl.paused = false;
+      ctrl.breakpointHit = null;
+    }
+
     this.playing = true;
     // Playback drives the slider continuously, not event-by-event, so
     // clear the step-forward history.  stepBack() will use snapshot scanning.
     this.timeControls.clearStepHistory();
     $('playPause').textContent = '⏸';
+    this._clearBreakpointStatus();
     this.animate();
   }
 
   stopPlaying() {
     this.playing = false;
     $('playPause').textContent = '▶';
+    // Only update status if we're not in a breakpoint pause (that has its own display).
+    if (!this.scenario?.sim?.control?.paused) {
+      this._clearBreakpointStatus();
+    }
+  }
+
+  // ── Breakpoint status display ────────────────────────────────────────────────
+
+  /**
+   * Sync the set of breakpointed node IDs from the config graph into the
+   * simulation's control.breakpointNodeIds.  Called when any node's breakpoint
+   * flag is toggled and when the scenario is first built.
+   */
+  _syncBreakpointsToSim() {
+    if (!this.scenario?.sim) return;
+    const ids = new Set(
+      this.configGraphBuilder.nodes
+        .filter(n => n.breakpoint)
+        .map(n => n.id)
+    );
+    this.scenario.sim.control.breakpointNodeIds = ids;
+  }
+
+  /**
+   * Update the status row to show that the simulation is paused at a breakpoint.
+   * @param {{ stage: string, event?: object, handler?: object, action?: object, reducer?: object, node?: object }} hit
+   */
+  _showBreakpointPaused(hit) {
+    const dot = $('statusDot');
+    const label = $('simStatus');
+    if (dot) dot.className = 'status-dot breakpoint';
+    if (label && hit) {
+      const name =
+        hit.node?.name ??
+        hit.event?.type ??
+        hit.handler?.name ??
+        hit.action?.type ??
+        hit.reducer?.name ??
+        '?';
+      label.textContent = `PAUSED @ ${name} [${hit.stage}]`;
+    } else if (label) {
+      label.textContent = 'PAUSED';
+    }
+  }
+
+  _clearBreakpointStatus() {
+    const dot = $('statusDot');
+    const label = $('simStatus');
+    if (dot) dot.className = this.playing ? 'status-dot running' : 'status-dot stopped';
+    if (label) label.textContent = this.playing ? 'RUNNING' : 'STOPPED';
   }
 
   initView() {
@@ -630,7 +708,20 @@ export class BaseApp {
     $('playPause').addEventListener('click', () => this.playing ? this.stopPlaying() : this.startPlaying());
 
     $('stepForward').addEventListener('click', () => {
+      const ctrl = this.scenario?.sim?.control;
+      if (ctrl?.paused) {
+        // Mid-event pause: _resumeFromPendingExecution will set resuming internally.
+        // Event-level pause: set resuming now so the event-level check is skipped.
+        if (!ctrl.pendingExecution) ctrl.resuming = true;
+        ctrl.paused = false;
+        ctrl.breakpointHit = null;
+        this._clearBreakpointStatus();
+      }
       this.timeControls.stepForward();
+      // Check whether we landed on another breakpoint.
+      if (ctrl?.paused) {
+        this._showBreakpointPaused(ctrl.breakpointHit);
+      }
     });
 
     $('stepBackward').addEventListener('click', () => {
