@@ -17,8 +17,6 @@
  * limitations under the License.
  */
 
-import {FieldValueAction} from "./actions.js";
-
 export class ReducerPipeline {
   constructor() {
     this.map = new Map(); // actionType -> [{priority, fn}]
@@ -162,8 +160,8 @@ export class NoOpReducer extends Reducer {
  * Reducer that is places a field in the state
  */
 export class FieldReducer extends Reducer {
-  constructor(name, priority, fieldName = null) {
-    super(`${name} for ${fieldName}`, priority);
+  constructor(name = 'Field Reducer', priority, fieldName = null) {
+    super(name, priority);
     if (fieldName == null) {
       // Executes if variable is null or undefined
       throw new Error('Must have field name defined for Field Reducer');
