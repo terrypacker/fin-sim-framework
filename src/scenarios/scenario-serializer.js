@@ -486,7 +486,7 @@ export class ScenarioSerializer {
     if (node.eventType === 'OneOffEvent') {
       d.date = node.date instanceof Date ? node.date.toISOString() : node.date;
       if (node.data && Object.keys(node.data).length > 0) {
-        d.data = node.data;
+        d.data = JSON.parse(JSON.stringify(node.data));
       }
     } else {
       d.interval    = node.interval;
@@ -494,7 +494,7 @@ export class ScenarioSerializer {
       if (node.month != null) d.month = node.month;
       if (node.day   != null) d.day   = node.day;
       if (node.data && Object.keys(node.data).length > 0) {
-        d.data = node.data;
+        d.data = JSON.parse(JSON.stringify(node.data));
       }
     }
     return d;
@@ -625,16 +625,19 @@ export class ScenarioSerializer {
       __type:             node.reducerType ?? 'FieldReducer',
       id:                 node.id,
       name:               node.name,
-      priority:           node.priority,
-      fieldName:          node.fieldName,
-      value:              node.value ?? null,  // FieldValueReducer subclasses only; null for others
-      script:             node.script,  // ScriptedReducer only; undefined for all other types
+      priority:           node.priority   ?? null,
+      fieldName:          node.fieldName  ?? null,
+      value:              node.value      ?? null,  // FieldValueReducer subclasses only; null for others
       reducedActionTypes:         [...(node.reducedActionTypes ?? [])],
       generatedActionTypes:       [...(node.generatedActionTypes ?? [])],
       generatedActionDefinitions: (node.generatedActionDefinitions ?? []).map(
         def => ({ type: def.type, config: def.config })
       ),
     };
+    // Only include script for ScriptedReducer — omitting it keeps the serialized
+    // shape clean for clone/deepEqual comparisons (undefined own-props behave
+    // differently across structuredClone implementations).
+    if (node.script !== undefined) d.script = node.script;
     // Subclass-specific params
     switch (d.__type) {
       case 'UsSavingsInterestCreditReducer':

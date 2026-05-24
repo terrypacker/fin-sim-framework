@@ -75,7 +75,11 @@ export class ScenarioCompiler {
 
     // Register everything with the simulation services
     const sim = services.simulationRegistry.getPrimary();
-    Object.assign(sim.state, statePatches);
+    try {
+      Object.assign(sim.state, structuredClone(statePatches));
+    } catch {
+      Object.assign(sim.state, JSON.parse(JSON.stringify(statePatches)));
+    }
     for (const s of schedules) services.eventService.register(s);
     for (const h of handlers)  services.handlerService.register(h);
     for (const r of reducers)  services.reducerService.register(r);

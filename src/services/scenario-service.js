@@ -53,19 +53,34 @@ export class ScenarioService {
    */
   newScenario(fromScenario) {
     const newId = `u:${this._registry.getNextUserScenarioId()}`;
-    const serialized = ScenarioSerializer.serializeScenario(fromScenario);
-    serialized.id = newId;
-    serialized.name = 'New Scenario';
-    serialized.order = 100;
-    serialized.prebuilt = false;
-    serialized.scenarioId = fromScenario.id;
-
     const schema = fromScenario?.scenarioClass?.getParamSchema?.() ?? [];
-    serialized.params = schema.map(s => ({ name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue }));
-
-
-    this._registry.save(serialized, true);
-    return serialized;
+    // Prefer the pre-populated params array from fromScenario (set by ScenarioLoader after
+    // compilation) over recomputing from schema defaults, so edits are preserved.
+    const params = Array.isArray(fromScenario?.params)
+      ? structuredClone(fromScenario.params)
+      : schema.map(s => ({ name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue }));
+    const scenario = {
+      id:             newId,
+      name:           'New Scenario',
+      order:          100,
+      prebuilt:       false,
+      scenarioId:     fromScenario?.id ?? null,
+      simStart:       fromScenario?.simStart ?? new Date(Date.UTC(2026, 0, 1)),
+      simEnd:         fromScenario?.simEnd   ?? new Date(Date.UTC(2041, 0, 1)),
+      events:         structuredClone(fromScenario?.events         ?? []),
+      handlers:       structuredClone(fromScenario?.handlers       ?? []),
+      actions:        structuredClone(fromScenario?.actions        ?? []),
+      reducers:       structuredClone(fromScenario?.reducers       ?? []),
+      initialState:   structuredClone(fromScenario?.initialState   ?? {}),
+      toolsets:       structuredClone(fromScenario?.toolsets        ?? []),
+      persons:        structuredClone(fromScenario?.persons         ?? []),
+      accounts:       structuredClone(fromScenario?.accounts        ?? []),
+      realProperties: structuredClone(fromScenario?.realProperties  ?? []),
+      collectibles:   structuredClone(fromScenario?.collectibles    ?? []),
+      params,
+    };
+    this._registry.save(scenario, true);
+    return scenario;
   }
 
   getUserScenarios() {

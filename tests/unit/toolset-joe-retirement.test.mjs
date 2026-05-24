@@ -382,7 +382,7 @@ function loadToolsetScenario(config) {
   });
   scenario.buildSim();
 
-  new ScenarioLoader().load(config, services);
+  new ScenarioLoader().load(structuredClone(config), services);
 
   return { scenario, sim: scenario.sim };
 }

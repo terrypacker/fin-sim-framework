@@ -84,6 +84,25 @@ export class ScenarioLoader {
       //TODO I don't think we want to do this, we need a safer way to compute the initial state or better yet always have it.
       //if (sim) cfg.initialState = _cloneState(sim.state);
       cfg.initialState = statePatches;
+
+      // Snapshot the compiled graph back to cfg so the config is a complete
+      // serialized representation usable by newScenario() and import/export.
+      const { eventService, handlerService, actionService, reducerService,
+              personService, accountService, realPropertyService, collectibleService } = services;
+      cfg.events         = (eventService?.getAll()         ?? []).map(n => ScenarioSerializer._serializeEvent(n));
+      cfg.handlers       = (handlerService?.getAll()       ?? []).map(n => ScenarioSerializer._serializeHandler(n));
+      cfg.actions        = []; // action stubs are re-derived from handler generatedActionTypes at load time
+      cfg.reducers       = (reducerService?.getAll()       ?? []).map(n => ScenarioSerializer._serializeReducer(n));
+      cfg.persons        = (personService?.getAll()        ?? []).map(n => ScenarioSerializer._serializePerson(n));
+      cfg.accounts       = (accountService?.getAll()       ?? []).map(n => ScenarioSerializer._serializeAccount(n));
+      cfg.realProperties = (realPropertyService?.getAll()  ?? []).map(n => ScenarioSerializer._serializeRealProperty(n));
+      cfg.collectibles   = (collectibleService?.getAll()   ?? []).map(n => ScenarioSerializer._serializeCollectible(n));
+
+      // Normalize params to a typed schema array if the prebuilt hasn't done it yet.
+      if (!Array.isArray(cfg.params)) {
+        const schema = cfg.scenarioClass?.getParamSchema?.() ?? [];
+        cfg.params = schema.map(s => ({ name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue }));
+      }
     }
   }
 }

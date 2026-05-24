@@ -82,7 +82,6 @@ export class BaseApp extends BaseComponent {
   /**
    * @param {object}            opts
    * @param {PrebuiltScenario[]} [opts.prebuiltScenarios=[]] - Pre-built scenario descriptors.
-   * @param {Function}          [opts.newScenario]  - Legacy single-factory fallback.
    * @param {Array|null}        [opts.chartSeries]  - Chart series config.
    */
   constructor({ chartSeries, prebuiltScenarios = [] }) {
