@@ -66,10 +66,11 @@ beforeEach(() => {
 // getParams()
 // ═════════════════════════════════════════════════════════════════════════════
 
-test('getParams: returns {} when prebuilt is active', () => {
+test('getParams: returns [] when prebuilt with no schema is active', () => {
   const { service } = makeStack({ prebuiltScenarios: [makePrebuilt('alpha')] });
   const active = service.getActive();
-  assert.deepStrictEqual(active.params, {});
+  // Registry now eagerly derives a typed array from getParamSchema(); no-schema prebuilt → [].
+  assert.deepStrictEqual(active.params, []);
 });
 
 test('getParams: returns mapped params for user scenario', () => {
@@ -482,4 +483,73 @@ test('_getParams: empty Date value does not produce an Invalid Date', () => {
   const callArgs = pb.factory.mock.calls[0][0];
   // Empty date value should pass through as empty string (falsy guard in _getParams)
   assert.strictEqual(callArgs.retirementDate, '');
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// resetParamsFromSchema()
+// ═════════════════════════════════════════════════════════════════════════════
+
+function makePrebuiltWithSchema(id, schema) {
+  const scenarioClass = { getParamSchema: () => schema };
+  return new PrebuiltScenario({
+    id, label: `Label ${id}`, order: 1,
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2041, 0, 1)),
+    factory:  jest.fn(),
+    scenarioClass,
+  });
+}
+
+test('resetParamsFromSchema: resets each param value to the schema default', () => {
+  const schema = [
+    { key: 'drift', label: 'Drift', type: 'Number', group: null, defaultValue: 0.05 },
+    { key: 'years', label: 'Years', type: 'Number', group: null, defaultValue: 15 },
+  ];
+  const pb = makePrebuiltWithSchema('alpha', schema);
+  const { service, registry } = makeStack({ prebuiltScenarios: [pb] });
+  const active = registry.getActive();
+
+  // Simulate user editing params in the UI (direct mutation, as the view does)
+  active.params[0].value = 0.99;
+  active.params[1].value = 99;
+
+  service.resetParamsFromSchema(active);
+
+  assert.strictEqual(active.params[0].value, 0.05);
+  assert.strictEqual(active.params[1].value, 15);
+});
+
+test('resetParamsFromSchema: leaves user-added params (not in schema) untouched', () => {
+  const schema = [
+    { key: 'drift', label: 'Drift', type: 'Number', group: null, defaultValue: 0.05 },
+  ];
+  const pb = makePrebuiltWithSchema('alpha', schema);
+  const { service, registry } = makeStack({ prebuiltScenarios: [pb] });
+  const active = registry.getActive();
+
+  // Add a user-defined param not in the schema
+  active.params.push({ name: 'custom', type: 'Number', value: 42 });
+  active.params[0].value = 0.99;
+
+  service.resetParamsFromSchema(active);
+
+  // Schema param reset, user-added param unchanged
+  assert.strictEqual(active.params[0].value, 0.05);
+  assert.strictEqual(active.params[1].value, 42);
+});
+
+test('resetParamsFromSchema: is a no-op when scenarioClass has no schema', () => {
+  const { service } = makeStack({ prebuiltScenarios: [makePrebuilt('alpha')] });
+  const active = service.getActive();
+  // Should not throw; params stays []
+  service.resetParamsFromSchema(active);
+  assert.deepStrictEqual(active.params, []);
+});
+
+test('resetParamsFromSchema: is a no-op when scenario has no scenarioClass', () => {
+  const scenario = { params: [{ name: 'x', type: 'Number', value: 7 }] };
+  const { service } = makeStack();
+  service.resetParamsFromSchema(scenario);
+  // No crash, value unchanged
+  assert.strictEqual(scenario.params[0].value, 7);
 });

@@ -50,7 +50,8 @@ export class PrebuiltScenario extends BaseScenario {
     this.active        = active;
     this.factory       = factory;
     this.scenarioClass = scenarioClass ?? null;
-    this.params        = {};
+    // params is intentionally absent here — ScenarioRegistry.loadPrebuilt() derives
+    // the typed array from scenarioClass.getParamSchema() when the entry is first added.
   }
 
   /** Delegates to the scenario class's static getParamSchema(), or [] if unset. */

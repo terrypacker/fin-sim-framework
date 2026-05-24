@@ -88,6 +88,20 @@ export class ScenarioService {
     return scenario;
   }
 
+  /**
+   * Reset each param's value to the schema's defaultValue for that key.
+   * Params not present in the schema (user-added) are left untouched.
+   */
+  resetParamsFromSchema(scenario) {
+    const schema = scenario?.scenarioClass?.getParamSchema?.() ?? [];
+    if (!schema.length || !Array.isArray(scenario?.params)) return;
+    const schemaMap = new Map(schema.map(s => [s.key, s]));
+    for (const p of scenario.params) {
+      const s = schemaMap.get(p.name);
+      if (s !== undefined) p.value = s.defaultValue;
+    }
+  }
+
   getUserScenarios() {
     return this._registry.getUserScenarios();
   }

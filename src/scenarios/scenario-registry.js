@@ -51,10 +51,19 @@ export class ScenarioRegistry {
     const active = this.getActive();
     prebuiltScenarios.forEach(pb => {
       const id = 'p:' + pb.id;
-      if(active && active.id !== pb.id) {
-        pb.active = false;
-      }
-      this._scenarios.set(id, { ...pb, id, factory: pb.factory, scenarioClass: pb.scenarioClass });
+      // Preserve existing entries so param edits survive Rebuild (Design §2.3 Option A).
+      if (this._scenarios.has(id)) return;
+      const schema = pb.scenarioClass?.getParamSchema?.() ?? [];
+      const params = schema.map(s => {
+        const entry = { name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue };
+        if (s.node) entry.node = s.node;
+        return entry;
+      });
+      // If another scenario (e.g. a user scenario) is already active, force active:false so
+      // the prebuilt's active:true flag doesn't create two active scenarios. When nothing is
+      // active yet, preserve pb.active so the post-loop "find(p => p.active)" fallback works.
+      const pbActive = active ? false : pb.active;
+      this._scenarios.set(id, { ...pb, id, params, active: pbActive, factory: pb.factory, scenarioClass: pb.scenarioClass });
     });
 
     if (active) return;
