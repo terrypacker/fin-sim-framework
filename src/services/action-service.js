@@ -11,9 +11,11 @@
 import { BaseService } from './base-service.js';
 
 import {
-  AmountAction, RecordArrayMetricAction, RecordBalanceAction,
-  RecordMetricAction,
-  RecordMultiplicativeMetricAction, RecordNumericSumMetricAction,
+  AmountAction,
+  Action,
+  FieldAction,
+  FieldValueAction,
+  RecordBalanceAction,
   ScriptedAction,
   ACTION_CLASSES,
 } from "../simulation-framework/actions.js";
@@ -42,32 +44,24 @@ export class ActionService extends BaseService {
     return item;
   }
 
-  createRecordMetricAction(type, name, fieldName, value) {
-    const item = new RecordMetricAction(type, name, fieldName, value);
+  createAction(type, name) {
+    const item = new Action(type, name);
     item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
   }
 
-  createRecordArrayMetricAction(name, fieldName, value) {
-    const item = new RecordArrayMetricAction(name, fieldName, value);
+  createFieldAction(type, name, field) {
+    const item = new FieldAction(type, name, field);
     item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
   }
 
-  createRecordNumericSumMetricAction(name, fieldName, value) {
-    const item = new RecordNumericSumMetricAction(name, fieldName, value);
-    item.id = this._generateId(this._idPrefix);
-    this._register(item);
-    this._publish('CREATE', item.constructor.name, item);
-    return item;
-  }
-
-  createRecordMultiplicativeMetricAction(name, fieldName, value) {
-    const item = new RecordMultiplicativeMetricAction(name, fieldName, value);
+  createFieldValueAction(type, name, field, value) {
+    const item = new FieldValueAction(type, name, field, value);
     item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);

@@ -26,10 +26,9 @@ import { ReducerService } from '../../src/services/reducer-service.js';
 
 import {
   AmountAction,
-  RecordMetricAction,
-  RecordArrayMetricAction,
-  RecordNumericSumMetricAction,
-  RecordMultiplicativeMetricAction,
+  Action,
+  FieldAction,
+  FieldValueAction,
   RecordBalanceAction,
 } from '../../src/simulation-framework/actions.js';
 
@@ -134,33 +133,28 @@ test('ActionService: createAmountAction publishes CREATE ServiceActionEvent', ()
   assert.strictEqual(evt.originalItem, null);
 });
 
-test('ActionService: createRecordMetricAction returns a RecordMetricAction', () => {
+test('ActionService: createAction returns a Action', () => {
   const events = captureServiceEvents(({ actionService }) => {
-    const a = actionService.createRecordMetricAction('REC', 'Record', 'balance', 100);
-    assert.ok(a instanceof RecordMetricAction);
+    const a = actionService.createAction('REC', 'Record');
+    assert.ok(a instanceof Action);
   });
-  assert.strictEqual(events[0].classType, 'RecordMetricAction');
+  assert.strictEqual(events[0].classType, 'Action');
 });
 
-test('ActionService: createRecordArrayMetricAction returns a RecordArrayMetricAction', () => {
-  captureServiceEvents(({ actionService }) => {
-    const a = actionService.createRecordArrayMetricAction('ArrRec', 'balances', 0);
-    assert.ok(a instanceof RecordArrayMetricAction);
+test('ActionService: createFieldAction returns a FieldAction', () => {
+  const events = captureServiceEvents(({ actionService }) => {
+    const a = actionService.createFieldAction('REC', 'Record', 'balance');
+    assert.ok(a instanceof FieldAction);
   });
+  assert.strictEqual(events[0].classType, 'FieldAction');
 });
 
-test('ActionService: createRecordNumericSumMetricAction returns correct type', () => {
-  captureServiceEvents(({ actionService }) => {
-    const a = actionService.createRecordNumericSumMetricAction('Sum', 'total', 0);
-    assert.ok(a instanceof RecordNumericSumMetricAction);
+test('ActionService: createFieldValueAction returns a FieldValueAction', () => {
+  const events = captureServiceEvents(({ actionService }) => {
+    const a = actionService.createFieldValueAction('REC', 'Record', 'balance', 100);
+    assert.ok(a instanceof FieldValueAction);
   });
-});
-
-test('ActionService: createRecordMultiplicativeMetricAction returns correct type', () => {
-  captureServiceEvents(({ actionService }) => {
-    const a = actionService.createRecordMultiplicativeMetricAction('Mul', 'rate', 1);
-    assert.ok(a instanceof RecordMultiplicativeMetricAction);
-  });
+  assert.strictEqual(events[0].classType, 'FieldValueAction');
 });
 
 test('ActionService: createRecordBalanceAction returns a RecordBalanceAction', () => {

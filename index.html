@@ -392,8 +392,16 @@
   </div>
 </template>
 
-<!-- RecordMetricAction config: editable type + field name + value -->
-<template id="tpl-record-metric-action-editor">
+<!-- FieldValueAction config: editable type + field name + value -->
+<template id="tpl-field-action-editor">
+  <div class="node-field">
+    <label>Field Name</label>
+    <input data-field="fieldName" placeholder="e.g. salary" />
+  </div>
+</template>
+
+<!-- FieldValueAction config: editable type + field name + value -->
+<template id="tpl-field-value-action-editor">
   <div class="node-field">
     <label>Field Name</label>
     <input data-field="fieldName" placeholder="e.g. salary" />
@@ -416,19 +424,6 @@
     <textarea data-field="script" rows="6"
       style="width:100%;box-sizing:border-box;font-family:monospace;font-size:11px;resize:vertical"
       placeholder="// return the computed value for this action&#10;return 0;"></textarea>
-  </div>
-</template>
-
-<!-- RecordArrayMetricAction / RecordNumericSumMetricAction / RecordMultiplicativeMetricAction:
-     type is fixed by class, only field name and value are configurable -->
-<template id="tpl-fixed-type-metric-action-editor">
-  <div class="node-field">
-    <label>Field Name</label>
-    <input data-field="fieldName" placeholder="e.g. salary" />
-  </div>
-  <div class="node-field">
-    <label>Value</label>
-    <input type="number" data-field="value" value="0" />
   </div>
 </template>
 

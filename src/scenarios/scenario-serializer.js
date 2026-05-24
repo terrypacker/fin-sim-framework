@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+
+
 export class ScenarioSerializer {
 
   /**
@@ -153,19 +155,12 @@ export class ScenarioSerializer {
     let typeName;
     // Check subclasses before superclasses (order matters for instanceof).
     // AmountAction must be checked before FieldValueAction since it extends it.
-    if      (node instanceof C.RecordNumericSumMetricAction)     typeName = 'RecordNumericSumMetricAction';
-    else if (node instanceof C.RecordArrayMetricAction)          typeName = 'RecordArrayMetricAction';
-    else if (node instanceof C.RecordMultiplicativeMetricAction) typeName = 'RecordMultiplicativeMetricAction';
-    else if (node instanceof C.RecordBalanceAction)              typeName = 'RecordBalanceAction';
-    else if (node instanceof C.RecordMetricAction)               typeName = 'RecordMetricAction';
-    else if (node instanceof C.AmountAction)                     typeName = 'AmountAction';
-    else if (node instanceof C.ScriptedAction)                   typeName = 'ScriptedAction';
-    else if (node instanceof C.FieldValueAction)                 typeName = 'FieldValueAction';
+    if (node instanceof C.AmountAction)           typeName = 'AmountAction';
+    else if (node instanceof C.ScriptedAction)    typeName = 'ScriptedAction';
+    else if (node instanceof C.FieldValueAction)  typeName = 'FieldValueAction';
+    else if (node instanceof C.FieldAction)       typeName = 'FieldAction';
+    else if (node instanceof C.Action)            typeName = 'Action';
     else throw new Error(`Unsupported action type ${node}`);
-
-    // fieldName on RecordMetricAction subclasses includes 'metrics.' prefix — strip it
-    const rawField = node.fieldName;
-    const fieldName = rawField?.startsWith('metrics.') ? rawField.slice(8) : rawField;
 
     return {
       __type:    typeName,
@@ -173,7 +168,7 @@ export class ScenarioSerializer {
       name:      node.name,
       type:      node.type,  // category discriminator for ReducerPipeline lookup
       value:     node.value,
-      fieldName,
+      fieldName: node.fieldName,
       script:    node.script,  // ScriptedAction only; undefined for all other types
     };
   }
@@ -223,20 +218,10 @@ export class ScenarioSerializer {
     const C = FinSimLib.Core;
     let action;
     switch (d.__type) {
-      case 'RecordNumericSumMetricAction':
-        action = new C.RecordNumericSumMetricAction(d.name, d.fieldName, d.value);
-        break;
-      case 'RecordArrayMetricAction':
-        action = new C.RecordArrayMetricAction(d.name, d.fieldName, d.value);
-        break;
-      case 'RecordMultiplicativeMetricAction':
-        action = new C.RecordMultiplicativeMetricAction(d.name, d.fieldName, d.value);
-        break;
-      case 'RecordBalanceAction':
-        action = new C.RecordBalanceAction();
-        break;
-      case 'RecordMetricAction':
-        action = new C.RecordMetricAction(d.type, d.name, d.fieldName, d.value);
+      case 'Action':
+        action = new C.Action(d.type, d.name)
+      case 'FieldAction':
+        action = new C.FieldAction(d.type, d.name, d.fieldName);
         break;
       case 'FieldValueAction':
         action = new C.FieldValueAction(d.type, d.name, d.fieldName, d.value);

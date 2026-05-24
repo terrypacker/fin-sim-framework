@@ -251,14 +251,13 @@ export class SimulationSync {
   // ─── Type guards ──────────────────────────────────────────────────────────
 
   _isActionClass(classType) {
-    return ['AmountAction', 'RecordMetricAction', 'RecordArrayMetricAction',
-            'RecordNumericSumMetricAction', 'RecordMultiplicativeMetricAction',
+    return ['AmountAction', 'Action', 'FieldAction',
             'RecordBalanceAction', 'ScriptedAction', 'FieldValueAction'].includes(classType);
   }
 
   _isReducerClass(classType) {
-    return ['MetricReducer', 'ArrayReducer', 'NumericSumReducer',
+    return ['ArrayReducer', 'NumericSumReducer',
             'MultiplicativeReducer', 'NoOpReducer', 'FieldReducer',
-            'StateFieldReducer', 'AccountTransactionReducer', 'ScriptedReducer'].includes(classType);
+            'FieldValueReducer', 'AccountTransactionReducer', 'ScriptedReducer'].includes(classType);
   }
 }

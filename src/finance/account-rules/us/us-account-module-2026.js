@@ -10,7 +10,7 @@
 
 import { BaseAccountModule } from '../base-account-module.js';
 import { PRIORITY } from '../../../simulation-framework/reducers.js';
-import { RecordArrayMetricAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
+import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 
 
 /** Returns age in whole years as of asOfDate. */
@@ -125,13 +125,13 @@ export class UsAccountModule2026 extends BaseAccountModule {
 
     sim.register('ROTH_CONTRIBUTION', ({ data }) => [
       { type: 'ROTH_CONTRIBUTION_APPLY', amount: data.amount },
-      new RecordArrayMetricAction('Roth Contribution','roth_contribution', data.amount),
+      new FieldValueAction('roth_contribution', 'Roth Contribution', data.amount),
       new RecordBalanceAction(),
     ]);
 
     sim.register('ROTH_WITHDRAWAL_CONTRIBUTIONS', ({ data }) => [
       { type: 'ROTH_WITHDRAWAL_CONTRIB_APPLY', amount: data.amount },
-      new RecordArrayMetricAction('Roth Withdrawl', 'roth_withdrawal_contributions', data.amount),
+      new FieldValueAction( 'roth_withdrawal_contributions', 'Roth Withdrawal', data.amount),
       new RecordBalanceAction(),
     ]);
 
@@ -144,14 +144,14 @@ export class UsAccountModule2026 extends BaseAccountModule {
           penaltyAmount: penalty,
           isAuResident: state.isAuResident,
         },
-        new RecordArrayMetricAction('Roth Withdrawl Earnings', 'roth_withdrawal_earnings', data.amount),
+        new FieldValueAction('roth_withdrawal_earnings', 'Roth Withdrawal Earnings', data.amount),
         new RecordBalanceAction(),
       ];
     });
 
     sim.register('ROTH_EARNINGS', ({ data }) => [
       { type: 'ROTH_EARNINGS_APPLY', amount: data.amount },
-      new RecordArrayMetricAction('Roth Earnings', 'roth_earnings', data.amount),
+      new FieldValueAction( 'roth_earnings', 'Roth Earnings', data.amount),
       new RecordBalanceAction(),
     ]);
   }
@@ -230,7 +230,7 @@ export class UsAccountModule2026 extends BaseAccountModule {
 
     sim.register('IRA_CONTRIBUTION', ({ data }) => [
       { type: 'IRA_CONTRIBUTION_APPLY', amount: data.amount },
-      new RecordArrayMetricAction('IRA Contribution', 'ira_contribution', data.amount),
+      new FieldValueAction( 'ira_contribution', 'IRA Contribution', data.amount),
       new RecordBalanceAction(),
     ]);
 
@@ -239,7 +239,7 @@ export class UsAccountModule2026 extends BaseAccountModule {
       const penalty = age < 60 ? data.amount * 0.10 : 0;
       return [
         { type: 'IRA_WITHDRAWAL_CONTRIB_APPLY', amount: data.amount, penaltyAmount: penalty },
-        new RecordArrayMetricAction('IRA Withdrawal',  'ira_withdrawal_contributions', data.amount),
+        new FieldValueAction( 'ira_withdrawal_contributions', 'IRA Withdrawal', data.amount),
         new RecordBalanceAction(),
       ];
     });
@@ -253,14 +253,14 @@ export class UsAccountModule2026 extends BaseAccountModule {
           penaltyAmount: penalty,
           isAuResident: state.isAuResident,
         },
-        new RecordArrayMetricAction('IRA Withdrawal Earnings', 'ira_withdrawal_earnings', data.amount),
+        new FieldValueAction('ira_withdrawal_earnings', 'IRA Withdrawal Earnings', data.amount),
         new RecordBalanceAction(),
       ];
     });
 
     sim.register('IRA_EARNINGS', ({ data }) => [
       { type: 'IRA_EARNINGS_APPLY', amount: data.amount },
-      new RecordArrayMetricAction('IRA Earnings','ira_earnings', data.amount),
+      new FieldValueAction('ira_earnings', 'IRA Earnings', data.amount),
       new RecordBalanceAction(),
     ]);
   }

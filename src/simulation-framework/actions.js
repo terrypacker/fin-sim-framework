@@ -17,6 +17,11 @@
  * limitations under the License.
  */
 
+export const DEFAULT_ACTIONS = {
+  RECORD_METRIC: 'RECORD_METRIC',
+  RECORD_BALANCE: 'RECORD_BALANCE',
+};
+
 /**
  * Base class for all actions returned by Handlers and emitted via next:[].
  * Every action has a type discriminator consumed by the ReducerPipeline.
@@ -84,55 +89,6 @@ export class AmountAction extends FieldValueAction {
     super(type, name, 'amount', amount);
   }
 }
-
-/**
- * Replaces a metric value into state.metrics.
- * Used by the generic RECORD_METRIC reducer.
- */
-export class RecordMetricAction extends FieldValueAction {
-  static description = 'Writes a single value into state.metrics[fieldName], replacing any existing value.';
-
-  constructor(type = 'RECORD_METRIC', name, fieldName, value) {
-    super(type, name, 'metrics.' + fieldName, value);
-  }
-}
-
-/**
- * Pushes a named metric value into an array within state.metrics.
- * Used by the generic RECORD_ARRAY_METRIC reducer registered in every financial scenario.
- */
-export class RecordArrayMetricAction extends RecordMetricAction {
-  static description = 'Appends a value to the array at state.metrics[fieldName]; processed by the RECORD_ARRAY_METRIC reducer.';
-
-  constructor(name, fieldName, value) {
-    super('RECORD_ARRAY_METRIC', name, fieldName, value);
-  }
-}
-
-/**
- * Records a named metric value into state.metrics.
- * Used by the generic RECORD_NUMERIC_SUM_METRIC.
- */
-export class RecordNumericSumMetricAction extends RecordMetricAction {
-  static description = 'Adds a value to the running numeric total at state.metrics[fieldName]; processed by the RECORD_NUMERIC_SUM_METRIC reducer.';
-
-  constructor(name, fieldName, value) {
-    super('RECORD_NUMERIC_SUM_METRIC', name, fieldName, value);
-  }
-}
-
-/**
- * Multiplies the current metric by this value and replaces it in state.metrics.
- * Used by the generic RECORD_MULTIPLICATIVE_METRIC reducer.
- */
-export class RecordMultiplicativeMetricAction extends RecordMetricAction {
-  static description = 'Multiplies the current value at state.metrics[fieldName] by the carried value; processed by the RECORD_MULTIPLICATIVE_METRIC reducer.';
-
-  constructor(name, fieldName, value) {
-    super('RECORD_MULTIPLICATIVE_METRIC', name, fieldName, value);
-  }
-}
-
 
 /**
  * Marker action that triggers the RECORD_BALANCE no-op reducer.
@@ -204,11 +160,9 @@ export class ScriptedAction extends FieldValueAction {
  */
 export const ACTION_CLASSES = {
   AmountAction,
-  RecordMetricAction,
-  RecordArrayMetricAction,
-  RecordNumericSumMetricAction,
-  RecordMultiplicativeMetricAction,
-  RecordBalanceAction,
+  Action,
+  FieldAction,
   FieldValueAction,
-  ScriptedAction,
+  RecordBalanceAction,
+  ScriptedAction
 };

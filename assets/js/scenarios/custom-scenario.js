@@ -73,17 +73,16 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
       .build();
     actionService.register(recordSalaryPaymentAction);
 
-    const sumSalaryPaymentAction = ActionBuilder.recordNumericSum()
+    const sumSalaryPaymentAction = ActionBuilder.fieldAction('SUM_SALARY_PAYMENT')
       .name('Sum Payments')
-      .fieldName('amount')
+      .fieldName('metrics.amount')
       .build();
     actionService.register(sumSalaryPaymentAction);
 
     //TODO When we fix the classes for Actions we can make this a field metric
-    const sumTaxAction = ActionBuilder.recordMetric()
-    .type('SUM_TAX')
+    const sumTaxAction = ActionBuilder.fieldValueAction('SUM_TAX')
     .name('Sum Salary Tax')
-    .fieldName('taxAmount')
+    .fieldName('metrics.taxAmount')
     .build();
     actionService.register(sumTaxAction);
 

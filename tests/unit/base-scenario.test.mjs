@@ -81,12 +81,11 @@ function makeScenario() {
     const { classType, item } = msg;
     if (classType === 'EventSeries' || classType === 'OneOffEvent') { item.kind = 'event'; ui.nodes.push(item); }
     else if (classType === 'HandlerEntry') ui.nodes.push(item);
-    else if (['AmountAction','RecordMetricAction','RecordArrayMetricAction',
-              'RecordNumericSumMetricAction','RecordMultiplicativeMetricAction',
-              'RecordBalanceAction','ScriptedAction','FieldValueAction'].includes(classType)) ui.nodes.push(item);
+    else if (['AmountAction', 'RecordBalanceAction','ScriptedAction',
+      'FieldValueAction', 'FieldAction', 'Action'].includes(classType)) ui.nodes.push(item);
     else if ([,'ArrayReducer','NumericSumReducer',
-              'MultiplicativeReducer','NoOpReducer','FieldReducer',
-              'StateFieldReducer','AccountTransactionReducer','ScriptedReducer'].includes(classType)) ui.nodes.push(item);
+              'MultiplicativeReducer','NoOpReducer','FieldReducer', 'FieldValueReducer'
+              ,'AccountTransactionReducer','ScriptedReducer'].includes(classType)) ui.nodes.push(item);
   });
 
   const scenario = new BaseScenario({ eventSchedulerUI: ui });

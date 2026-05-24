@@ -96,7 +96,7 @@ Every domain type has a fluent builder so scenarios read as configuration rather
 ```js
 // Actions
 ActionBuilder.amount().type('SALARY').name('Monthly Salary').value(8000).build()
-ActionBuilder.recordMetric().name('Record Salary').fieldName('salary').build()
+ActionBuilder.fieldValueAction(DEFAULT_ACTIONS.RECORD_METRIC).name('Record Salary').fieldName('salary').build()
 ActionBuilder.recordNumericSum().name('Accumulate').fieldName('totalSalary').build()
 ActionBuilder.recordBalance().build()
 
@@ -288,14 +288,13 @@ ActionBuilder.amount().type('SALARY').name('Monthly Salary').value(8000).build()
 // → AmountAction { id: 'SALARY', type: 'SALARY', name: 'Monthly Salary', value: 8000 }
 ```
 
-| Builder | Class | Description |
-|---|---|---|
-| `ActionBuilder.amount()` | `AmountAction` | Cash credit or debit by amount |
-| `ActionBuilder.recordMetric()` | `RecordMetricAction` | Set a metrics field to a value |
-| `ActionBuilder.recordNumericSum()` | `RecordNumericSumMetricAction` | Accumulate a running numeric sum |
-| `ActionBuilder.recordArrayMetric()` | `RecordArrayMetricAction` | Append a value to a metrics array |
-| `ActionBuilder.recordMultiplicative()` | `RecordMultiplicativeMetricAction` | Apply a multiplicative factor |
-| `ActionBuilder.recordBalance()` | `RecordBalanceAction` | Record the current balance as a snapshot |
+| Builder                                                         | Class                 | Description                              |
+|-----------------------------------------------------------------|-----------------------|------------------------------------------|
+| `ActionBuilder.amount()`                                        | `AmountAction`        | Cash credit or debit by amount           |
+| `ActionBuilder.fieldValueAction(DEFAULT_ACTIONS.RECORD_METRIC)` | `FieldValueAction`    | Set a field to a value                   |
+| `ActionBuilder.fieldAction()`                                   | `FieldAction`         | Action with a field to use in reducer    |
+| `ActionBuilder.action()`                                        | `Action`              | Generic action to trigger a reducer      |
+| `ActionBuilder.recordBalance()`                                 | `RecordBalanceAction` | Record the current balance as a snapshot |
 
 ### Reducers
 
