@@ -823,6 +823,25 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   animation: bp-pulse 1s ease-in-out infinite;
 }
 
+/* Domain-type badge — replaces the <select> when the node's class is not in
+   the registered registry (e.g. SuperContributionApplyReducer).  Read-only. */
+.type-badge {
+  display: inline-block;
+  width: 100%;
+  padding: 4px 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  border-radius: 3px;
+  box-sizing: border-box;
+}
+
+.type-badge--domain {
+  background: #0f172a;
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+  cursor: default;
+}
+
 /* ── GRAPH AREA ── */
 .config-graph-tab {
 

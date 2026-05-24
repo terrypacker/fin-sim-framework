@@ -18,6 +18,23 @@ import { DividendScheduledHandler } from '../finance/handlers/dividend-scheduled
 import { ChangeResidencyHandler } from '../finance/handlers/change-residency-handler.js';
 import { OutOfFundsHandler } from '../finance/handlers/out-of-funds-handler.js';
 
+// Augment the HANDLER_CLASSES registry with all domain-specific handler subclasses.
+// HANDLER_CLASSES is declared in handlers.js with only HandlerEntry; we extend it here
+// because the domain handlers import HandlerEntry from handlers.js (which would create
+// circular imports if we tried to register them there directly).
+Object.assign(HANDLER_CLASSES, {
+  UsSavingsInterestMonthlyHandler,
+  MonthlyExpensesHandler,
+  IntlTransferToUsHandler,
+  IntlTransferToAuHandler,
+  AuSavingsInterestHandler,
+  FixedIncomeInterestHandler,
+  SuperEarningsHandler,
+  DividendScheduledHandler,
+  ChangeResidencyHandler,
+  OutOfFundsHandler,
+});
+
 /**
  * Service for managing HandlerEntry instances throughout their lifecycle.
  *
