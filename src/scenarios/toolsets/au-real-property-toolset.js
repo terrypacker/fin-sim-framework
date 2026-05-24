@@ -37,7 +37,13 @@ export const AU_REAL_PROPERTY = {
   },
 
   state(context) {
-    return {};
+    const patches = {};
+    for (const prop of (context.realProperties ?? [])) {
+      if (prop.stateKey && prop.country === 'AU') {
+        patches[prop.stateKey] = _propertyToStatePlain(prop);
+      }
+    }
+    return patches;
   },
 
   schedules(context) {
@@ -47,7 +53,7 @@ export const AU_REAL_PROPERTY = {
         name:    `Sell ${p.name}`,
         type:    'AU_HOUSE_SALE',
         date:    new Date(Date.UTC(p.plannedSaleYear, 0, 15)),
-        data:    { salePrice: p.value, costBasis: p.costBasis },
+        data:    { salePrice: p.value, costBasis: p.costBasis, ownershipType: p.ownershipType, ownerId: p.ownerId, owners: p.owners },
         enabled: true,
         color:   '#5D4037',
       }));
@@ -65,3 +71,17 @@ export const AU_REAL_PROPERTY = {
     return [new AuHouseSaleApplyReducer({ accountService: context.accountService })];
   },
 };
+
+function _propertyToStatePlain(prop) {
+  return {
+    stateKey:           prop.stateKey,
+    value:              prop.value              ?? 0,
+    costBasis:          prop.costBasis          ?? 0,
+    appreciationRate:   prop.appreciationRate   ?? 0,
+    isPrimaryResidence: prop.isPrimaryResidence ?? false,
+    plannedSaleYear:    prop.plannedSaleYear    ?? null,
+    ownershipType:      prop.ownershipType      ?? 'sole',
+    ownerId:            prop.ownerId            ?? null,
+    country:            prop.country            ?? 'AU',
+  };
+}

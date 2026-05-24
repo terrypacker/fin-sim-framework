@@ -42,9 +42,12 @@ import { ToolsetRegistry }    from '../../src/scenarios/toolsets/toolset-registr
 import { ScenarioCompiler }   from '../../src/scenarios/toolsets/scenario-compiler.js';
 import { US_BANKING }         from '../../src/scenarios/toolsets/us-banking-toolset.js';
 import { US_TAX }             from '../../src/scenarios/toolsets/us-tax-toolset.js';
+import { US_INCOME }          from '../../src/scenarios/toolsets/us-income-toolset.js';
+import { US_BROKERAGE }       from '../../src/scenarios/toolsets/us-brokerage-toolset.js';
 import { US_RETIREMENT }      from '../../src/scenarios/toolsets/us-retirement-toolset.js';
 import { AU_BANKING }         from '../../src/scenarios/toolsets/au-banking-toolset.js';
 import { AU_TAX }             from '../../src/scenarios/toolsets/au-tax-toolset.js';
+import { AU_INCOME }          from '../../src/scenarios/toolsets/au-income-toolset.js';
 import { AU_RETIREMENT }      from '../../src/scenarios/toolsets/au-retirement-toolset.js';
 import { US_AU_CROSS_BORDER } from '../../src/scenarios/toolsets/us-au-cross-border-toolset.js';
 
@@ -345,9 +348,12 @@ function loadCrossBorderScenario(config) {
   const toolsetRegistry = new ToolsetRegistry();
   toolsetRegistry.register(US_BANKING);
   toolsetRegistry.register(US_TAX);
+  toolsetRegistry.register(US_INCOME);
+  toolsetRegistry.register(US_BROKERAGE);
   toolsetRegistry.register(US_RETIREMENT);
   toolsetRegistry.register(AU_BANKING);
   toolsetRegistry.register(AU_TAX);
+  toolsetRegistry.register(AU_INCOME);
   toolsetRegistry.register(AU_RETIREMENT);
   toolsetRegistry.register(US_AU_CROSS_BORDER);
 
@@ -398,9 +404,12 @@ test('cross-border: CHANGE_RESIDENCY event registered when moveYear is set', () 
   const toolsetRegistry = new ToolsetRegistry();
   toolsetRegistry.register(US_BANKING);
   toolsetRegistry.register(US_TAX);
+  toolsetRegistry.register(US_INCOME);
+  toolsetRegistry.register(US_BROKERAGE);
   toolsetRegistry.register(US_RETIREMENT);
   toolsetRegistry.register(AU_BANKING);
   toolsetRegistry.register(AU_TAX);
+  toolsetRegistry.register(AU_INCOME);
   toolsetRegistry.register(AU_RETIREMENT);
   toolsetRegistry.register(US_AU_CROSS_BORDER);
 
@@ -433,9 +442,12 @@ test('cross-border: CHANGE_RESIDENCY event not registered when moveYear is unset
   const toolsetRegistry = new ToolsetRegistry();
   toolsetRegistry.register(US_BANKING);
   toolsetRegistry.register(US_TAX);
+  toolsetRegistry.register(US_INCOME);
+  toolsetRegistry.register(US_BROKERAGE);
   toolsetRegistry.register(US_RETIREMENT);
   toolsetRegistry.register(AU_BANKING);
   toolsetRegistry.register(AU_TAX);
+  toolsetRegistry.register(AU_INCOME);
   toolsetRegistry.register(AU_RETIREMENT);
   toolsetRegistry.register(US_AU_CROSS_BORDER);
 

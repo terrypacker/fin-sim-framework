@@ -9,6 +9,8 @@
  */
 
 import { InMemoryStorage } from "../storage/in-memory-storage.js";
+import {ScenarioSerializer} from "./scenario-serializer.js";
+import {ServiceRegistry} from "../services/service-registry.js";
 
 export class ScenarioStorage {
   static STORAGE_KEY = 'fin-sim-scenarios';
@@ -43,7 +45,22 @@ export class ScenarioStorage {
     return { scenarios: [] };
   }
 
+  /**
+   * We only recieve user scenarios to save here
+   * { scenarios: [...], lastUsed: 'id of active scenario' }
+   * @param data
+   */
   save(data) {
-    this._getStorageInstance().setItem(ScenarioStorage.STORAGE_KEY, JSON.stringify(data));
+    //TODO Clean this up to be in the constructor
+    const services = ServiceRegistry.getInstance();
+    const serializedScenarios = [];
+    data.scenarios.forEach(s => {
+      serializedScenarios.push(ScenarioSerializer.serializeScenario(s));
+    });
+    const serialized = {
+      lastUsed: data.lastUsed,
+      scenarios: serializedScenarios
+    }
+    this._getStorageInstance().setItem(ScenarioStorage.STORAGE_KEY, JSON.stringify(serialized));
   }
 }

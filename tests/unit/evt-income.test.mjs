@@ -24,72 +24,94 @@
 import { test, beforeEach } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Account } from '../../src/finance/assets/account.js';
-import { FinancialState } from '../../src/finance/state/financial-state.js';
-import { Simulation } from '../../src/simulation-framework/simulation.js';
-import { TaxService } from '../../src/finance/tax-service.js';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
-import { PeriodService } from '../../src/finance/period/period-service.js';
-import { buildUsCalendarYear, buildAuFiscalYear, applyTo } from '../../src/finance/period/period-builder.js';
+import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
+import { BaseScenario }    from '../../src/index.js';
 
 beforeEach(() => ServiceRegistry.reset());
 
-function buildUsPeriodService(year) {
-  const ps = new PeriodService();
-  applyTo(ps, buildUsCalendarYear(year));
-  return ps;
+function loadToolsetScenario(config) {
+  const services = ServiceRegistry.getInstance();
+  const scenario = new BaseScenario({
+    context:  services.simulationContext,
+    simStart: new Date(config.simStart),
+    simEnd:   new Date(config.simEnd),
+  });
+  scenario.buildSim();
+  new ScenarioLoader().load(structuredClone(config), services);
+  return { scenario, sim: scenario.sim };
 }
 
-function buildAuPeriodService() {
-  const ps = new PeriodService();
-  applyTo(ps, buildAuFiscalYear(2025));
-  return ps;
-}
+const COMMON_PARAMS = {
+  monthlyExpenses: 0, inflationAdjust: false, inflationRate: 0,
+  rothGrowthRate: 0, iraGrowthRate: 0, k401GrowthRate: 0,
+  brokerageGrowthRate: 0, brokerageDividendRate: 0, fixedIncomeInterestRate: 0,
+  usSavingsInterestRate: 0, auSavingsInterestRate: 0,
+  superGrowthRate: 0, auStockGrowthRate: 0, auStockDividendRate: 0,
+};
 
-const START_DATE = new Date(2026, 0, 1);
-
-function buildUsIncomeSim({
-  initialChecking   = 20000,
-  isAuResident      = false,
+function makeUsIncomeConfig({
+  initialChecking  = 20000,
+  initialAuSavings = 50000,
+  isAuResident     = false,
 } = {}) {
-  const registry = ServiceRegistry.getInstance();
-  const sim = new Simulation(START_DATE, { initialState: new FinancialState({
-    checkingAccount:     new Account(initialChecking),
-    isAuResident,
-    usOrdinaryIncomeYTD: 0,
-    usCapitalGainsYTD:   0,
-    usWithheldYTD:       0,
-    auOrdinaryIncomeYTD: 0,
-    auCapitalGainsYTD:   0,
-    ftcYTD:              0,
-  }) });
-  registry.simulationRegistry.register('primary', sim);
-  registry.simulationSync.setSimStart(START_DATE);
-  const taxService = new TaxService();
-  taxService.setup(sim, ['US'], buildUsPeriodService(2026));
-  taxService.registerHandlersAndReducers(registry, ['US']);
-  return { sim };
+  return {
+    toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'US_AU_CROSS_BORDER'],
+    simStart: '2026-01-01',
+    simEnd:   '2028-01-01',
+    parameters: { ...COMMON_PARAMS, isAuResident },
+    persons: [{
+      __type: 'Person', id: 'primary', name: 'Primary', birthDate: '1966-01-01',
+      citizen: ['US'], lifeExpectancy: 90, monthlyWage: 0,
+      retirementDate: '2025-01-01', socialSecurityMonthly: 0,
+    }],
+    accounts: [
+      {
+        __type: 'SavingsAccount', id: 'checking', name: 'Checking',
+        role: 'us-savings', stateKey: 'checkingAccount',
+        initialValue: initialChecking, ownershipType: 'sole', ownerId: 'primary',
+        minimumBalance: 0, country: 'US', currency: { code: 'USD', symbol: '$' },
+      },
+      {
+        __type: 'SavingsAccount', id: 'au-savings', name: 'AU Savings',
+        role: 'au-savings', stateKey: 'auSavingsAccount',
+        initialValue: initialAuSavings, ownershipType: 'sole', ownerId: 'primary',
+        minimumBalance: 0, country: 'AU', currency: { code: 'AUD', symbol: '$' },
+      },
+    ],
+  };
 }
 
-function buildAuIncomeSim({
-  initialAuSavings  = 0,
-  isAuResident      = true,
+function makeAuIncomeConfig({
+  initialChecking  = 0,
+  initialAuSavings = 0,
+  isAuResident     = true,
 } = {}) {
-  const registry = ServiceRegistry.getInstance();
-  const sim = new Simulation(START_DATE, { initialState: new FinancialState({
-    checkingAccount:     new Account(0),
-    auSavingsAccount:    { balance: initialAuSavings },
-    isAuResident,
-    usOrdinaryIncomeYTD: 0,
-    auOrdinaryIncomeYTD: 0,
-    ftcYTD:              0,
-  }) });
-  registry.simulationRegistry.register('primary', sim);
-  registry.simulationSync.setSimStart(START_DATE);
-  const taxService = new TaxService();
-  taxService.setup(sim, ['AU'], buildAuPeriodService());
-  taxService.registerHandlersAndReducers(registry, ['AU']);
-  return { sim };
+  return {
+    toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'AU_INCOME', 'US_AU_CROSS_BORDER'],
+    simStart: '2026-01-01',
+    simEnd:   '2028-01-01',
+    parameters: { ...COMMON_PARAMS, isAuResident },
+    persons: [{
+      __type: 'Person', id: 'primary', name: 'Primary', birthDate: '1966-01-01',
+      citizen: ['AU'], lifeExpectancy: 90, monthlyWage: 0,
+      retirementDate: '2025-01-01', socialSecurityMonthly: 0,
+    }],
+    accounts: [
+      {
+        __type: 'SavingsAccount', id: 'checking', name: 'Checking',
+        role: 'us-savings', stateKey: 'checkingAccount',
+        initialValue: initialChecking, ownershipType: 'sole', ownerId: 'primary',
+        minimumBalance: 0, country: 'US', currency: { code: 'USD', symbol: '$' },
+      },
+      {
+        __type: 'SavingsAccount', id: 'au-savings', name: 'AU Savings',
+        role: 'au-savings', stateKey: 'auSavingsAccount',
+        initialValue: initialAuSavings, ownershipType: 'sole', ownerId: 'primary',
+        minimumBalance: 0, country: 'AU', currency: { code: 'AUD', symbol: '$' },
+      },
+    ],
+  };
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -97,7 +119,7 @@ function buildAuIncomeSim({
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-37: SS income credits full amount to checking', () => {
-  const { sim } = buildUsIncomeSim({ initialChecking: 5000 });
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ initialChecking: 5000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SS_INCOME', data: { amount: 2000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -105,7 +127,7 @@ test('EVT-37: SS income credits full amount to checking', () => {
 });
 
 test('EVT-37: SS income records only 85% as US ordinary income', () => {
-  const { sim } = buildUsIncomeSim();
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig());
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SS_INCOME', data: { amount: 2000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -113,7 +135,7 @@ test('EVT-37: SS income records only 85% as US ordinary income', () => {
 });
 
 test('EVT-37: SS income records full amount as AU ordinary income if AU resident', () => {
-  const { sim } = buildUsIncomeSim({ isAuResident: true });
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ isAuResident: true }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SS_INCOME', data: { amount: 2000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -122,7 +144,7 @@ test('EVT-37: SS income records full amount as AU ordinary income if AU resident
 });
 
 test('EVT-37: SS income is not AU taxable if not AU resident', () => {
-  const { sim } = buildUsIncomeSim({ isAuResident: false });
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ isAuResident: false }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SS_INCOME', data: { amount: 2000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -135,7 +157,7 @@ test('EVT-37: SS income is not AU taxable if not AU resident', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-38: wages credit full gross amount to checking', () => {
-  const { sim } = buildUsIncomeSim({ initialChecking: 3000 });
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ initialChecking: 3000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'WAGES_INCOME', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -143,7 +165,7 @@ test('EVT-38: wages credit full gross amount to checking', () => {
 });
 
 test('EVT-38: wages record full amount as US ordinary income', () => {
-  const { sim } = buildUsIncomeSim();
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig());
   sim.schedule({ date: new Date(2026, 0, 15), type: 'WAGES_INCOME', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -151,7 +173,7 @@ test('EVT-38: wages record full amount as US ordinary income', () => {
 });
 
 test('EVT-38: wages record full amount as AU ordinary income if AU resident', () => {
-  const { sim } = buildUsIncomeSim({ isAuResident: true });
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ isAuResident: true }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'WAGES_INCOME', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -160,7 +182,7 @@ test('EVT-38: wages record full amount as AU ordinary income if AU resident', ()
 });
 
 test('EVT-38: wages are not AU taxable if not AU resident', () => {
-  const { sim } = buildUsIncomeSim({ isAuResident: false });
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ isAuResident: false }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'WAGES_INCOME', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -173,7 +195,7 @@ test('EVT-38: wages are not AU taxable if not AU resident', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-39: wages withheld debits checking account', () => {
-  const { sim } = buildUsIncomeSim({ initialChecking: 10000 });
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ initialChecking: 10000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'WAGES_WITHHELD', data: { amount: 1500 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -181,7 +203,7 @@ test('EVT-39: wages withheld debits checking account', () => {
 });
 
 test('EVT-39: wages withheld increments usWithheldYTD', () => {
-  const { sim } = buildUsIncomeSim({ initialChecking: 10000 });
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ initialChecking: 10000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'WAGES_WITHHELD', data: { amount: 1500 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -189,7 +211,7 @@ test('EVT-39: wages withheld increments usWithheldYTD', () => {
 });
 
 test('EVT-39: wages withheld does not affect any income YTD field', () => {
-  const { sim } = buildUsIncomeSim({ initialChecking: 10000, isAuResident: true });
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ initialChecking: 10000, isAuResident: true }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'WAGES_WITHHELD', data: { amount: 1500 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -203,7 +225,7 @@ test('EVT-39: wages withheld does not affect any income YTD field', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-48: US self-employment income credits checking', () => {
-  const { sim } = buildUsIncomeSim({ initialChecking: 2000 });
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ initialChecking: 2000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SE_INCOME_US', data: { amount: 4000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -211,7 +233,7 @@ test('EVT-48: US self-employment income credits checking', () => {
 });
 
 test('EVT-48: US self-employment income is US ordinary income', () => {
-  const { sim } = buildUsIncomeSim();
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig());
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SE_INCOME_US', data: { amount: 4000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -219,7 +241,7 @@ test('EVT-48: US self-employment income is US ordinary income', () => {
 });
 
 test('EVT-48: US self-employment income is AU ordinary income if AU resident', () => {
-  const { sim } = buildUsIncomeSim({ isAuResident: true });
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ isAuResident: true }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SE_INCOME_US', data: { amount: 4000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -228,7 +250,7 @@ test('EVT-48: US self-employment income is AU ordinary income if AU resident', (
 });
 
 test('EVT-48: US self-employment income is not AU taxable if not AU resident', () => {
-  const { sim } = buildUsIncomeSim({ isAuResident: false });
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ isAuResident: false }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SE_INCOME_US', data: { amount: 4000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -241,7 +263,7 @@ test('EVT-48: US self-employment income is not AU taxable if not AU resident', (
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-49: AU self-employment income credits AU savings account', () => {
-  const { sim } = buildAuIncomeSim({ initialAuSavings: 1000 });
+  const { sim } = loadToolsetScenario(makeAuIncomeConfig({ initialAuSavings: 1000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SE_INCOME_AU', data: { amount: 3000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -249,7 +271,7 @@ test('EVT-49: AU self-employment income credits AU savings account', () => {
 });
 
 test('EVT-49: AU self-employment income is always US ordinary income', () => {
-  const { sim } = buildAuIncomeSim({ isAuResident: false });
+  const { sim } = loadToolsetScenario(makeAuIncomeConfig({ isAuResident: false }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SE_INCOME_AU', data: { amount: 3000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -257,7 +279,7 @@ test('EVT-49: AU self-employment income is always US ordinary income', () => {
 });
 
 test('EVT-49: AU self-employment income is AU ordinary income if AU resident', () => {
-  const { sim } = buildAuIncomeSim({ isAuResident: true });
+  const { sim } = loadToolsetScenario(makeAuIncomeConfig({ isAuResident: true }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SE_INCOME_AU', data: { amount: 3000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -266,7 +288,7 @@ test('EVT-49: AU self-employment income is AU ordinary income if AU resident', (
 });
 
 test('EVT-49: AU self-employment income is not AU taxable if not AU resident', () => {
-  const { sim } = buildAuIncomeSim({ isAuResident: false });
+  const { sim } = loadToolsetScenario(makeAuIncomeConfig({ isAuResident: false }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SE_INCOME_AU', data: { amount: 3000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -279,7 +301,7 @@ test('EVT-49: AU self-employment income is not AU taxable if not AU resident', (
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-50: bonus credits full amount to checking', () => {
-  const { sim } = buildUsIncomeSim({ initialChecking: 5000 });
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ initialChecking: 5000 }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'BONUS', data: { amount: 10000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -287,7 +309,7 @@ test('EVT-50: bonus credits full amount to checking', () => {
 });
 
 test('EVT-50: bonus is US ordinary income', () => {
-  const { sim } = buildUsIncomeSim();
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig());
   sim.schedule({ date: new Date(2026, 1, 1), type: 'BONUS', data: { amount: 10000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -295,7 +317,7 @@ test('EVT-50: bonus is US ordinary income', () => {
 });
 
 test('EVT-50: bonus is AU ordinary income if AU resident', () => {
-  const { sim } = buildUsIncomeSim({ isAuResident: true });
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ isAuResident: true }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'BONUS', data: { amount: 10000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -304,7 +326,7 @@ test('EVT-50: bonus is AU ordinary income if AU resident', () => {
 });
 
 test('EVT-50: bonus is not AU taxable if not AU resident', () => {
-  const { sim } = buildUsIncomeSim({ isAuResident: false });
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ isAuResident: false }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'BONUS', data: { amount: 10000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -317,7 +339,7 @@ test('EVT-50: bonus is not AU taxable if not AU resident', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-51: company sale credits full sale price to checking', () => {
-  const { sim } = buildUsIncomeSim({ initialChecking: 5000 });
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ initialChecking: 5000 }));
   sim.schedule({
     date: new Date(2026, 1, 1),
     type: 'COMPANY_SALE',
@@ -329,7 +351,7 @@ test('EVT-51: company sale credits full sale price to checking', () => {
 });
 
 test('EVT-51: company sale records gain as US capital gain', () => {
-  const { sim } = buildUsIncomeSim();
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig());
   sim.schedule({
     date: new Date(2026, 1, 1),
     type: 'COMPANY_SALE',
@@ -341,7 +363,7 @@ test('EVT-51: company sale records gain as US capital gain', () => {
 });
 
 test('EVT-51: company sale records gain as AU capital gain if AU resident', () => {
-  const { sim } = buildUsIncomeSim({ isAuResident: true });
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ isAuResident: true }));
   sim.schedule({
     date: new Date(2026, 1, 1),
     type: 'COMPANY_SALE',
@@ -354,7 +376,7 @@ test('EVT-51: company sale records gain as AU capital gain if AU resident', () =
 });
 
 test('EVT-51: company sale is not AU taxable if not AU resident', () => {
-  const { sim } = buildUsIncomeSim({ isAuResident: false });
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ isAuResident: false }));
   sim.schedule({
     date: new Date(2026, 1, 1),
     type: 'COMPANY_SALE',
@@ -367,7 +389,7 @@ test('EVT-51: company sale is not AU taxable if not AU resident', () => {
 });
 
 test('EVT-51: company sale with no gain records zero capital gain', () => {
-  const { sim } = buildUsIncomeSim({ initialChecking: 5000 });
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ initialChecking: 5000 }));
   sim.schedule({
     date: new Date(2026, 1, 1),
     type: 'COMPANY_SALE',

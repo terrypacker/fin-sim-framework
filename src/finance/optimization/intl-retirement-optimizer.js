@@ -116,14 +116,7 @@ export class IntlRetirementOptimizer {
 
   _runOne(params) {
     ServiceRegistry.reset();
-    const scenario = new IntlRetirementScenario({
-      context:  ServiceRegistry.getInstance().simulationContext,
-      params,
-      simStart: this.simStart,
-      simEnd:   this.simEnd,
-    });
-    scenario.buildSim();
-    scenario.loadDefaults();
+    const scenario = IntlRetirementScenario.buildAndCompile({ params, simStart: this.simStart, simEnd: this.simEnd });
     scenario.sim.silent = true;
     scenario.sim.stepTo(params.endDate);
     const state = scenario.sim.state;

@@ -10,8 +10,16 @@
 
 
 
-import { ActionDefinition } from '../simulation-framework/actions.js';
-import { ACCOUNT_ROLES } from '../finance/state/account-roles.js';
+import { ActionDefinition }     from '../simulation-framework/actions.js';
+import { ACCOUNT_ROLES }        from '../finance/state/account-roles.js';
+import { Person }               from '../finance/person.js';
+import { Account, CheckingAccount, SavingsAccount } from '../finance/assets/account.js';
+import {
+  InvestmentAccount, BrokerageAccount, FourOhOneKAccount,
+  RothAccount, TraditionalIRAAccount, SuperannuationAccount,
+} from '../finance/assets/investment-account.js';
+import { RealProperty }  from '../finance/assets/real-property.js';
+import { Collectible }   from '../finance/assets/collectible.js';
 
 // ─── Lookup sets for fast-path constructor dispatch ───────────────────────────
 
@@ -110,7 +118,54 @@ const _NO_ARG_HANDLERS = new Set([
   'AuSeIncomeHandler',
 ]);
 
+/**
+ * True when `node` looks like a record previously emitted by one of the
+ * _serialize* helpers: a plain object (own prototype is Object.prototype) that
+ * already carries a `__type` discriminator. Used by the _serialize* helpers to
+ * remain idempotent — `serializeScenario` is sometimes called on a scenario
+ * whose graph arrays were pre-serialized by `onSave`, and the live-instance
+ * fields those helpers read (handlerClass, reducerType, handledEvents, …) are
+ * absent on plain records, which would silently clobber data otherwise.
+ */
+function _isAlreadySerialized(node) {
+  return node && typeof node === 'object' && typeof node.__type === 'string'
+      && Object.getPrototypeOf(node) === Object.prototype;
+}
+
 export class ScenarioSerializer {
+
+  static toDateStr(d) {
+    if (!d) return null;
+    if (d instanceof Date) return d.toISOString().slice(0, 10);
+    return String(d).slice(0, 10);
+  }
+
+  //TODO Clean up API
+  //TODO Support toolsets export here?
+  //TODO Params vs parameters
+  static serializeScenario(scenario) {
+    return {
+      id: scenario.id,
+      name: scenario.name,
+      order: scenario.order,
+      active: scenario.active,
+      prebuilt: scenario.prebuilt,
+      scenarioId:   scenario?.scenarioId ?? null,
+      simStart: this.toDateStr(scenario.simStart),
+      simEnd:   this.toDateStr(scenario.simEnd),
+      persons:        (scenario.persons  ?? []).map(n => ScenarioSerializer._serializePerson(n)),
+      accounts:       (scenario.accounts ?? []).map(n => ScenarioSerializer._serializeAccount(n)),
+      realProperties: (scenario.realProperties ?? []).map(n => ScenarioSerializer._serializeRealProperty(n)),
+      collectibles:   (scenario.collectibles ?? []).map(n => ScenarioSerializer._serializeCollectible(n)),
+      events:   (scenario.events ?? []).map(n => ScenarioSerializer._serializeEvent(n)),
+      handlers: (scenario.handlers ?? []).map(n => ScenarioSerializer._serializeHandler(n)),
+      actions:  (scenario.actions ?? []).map(n => ScenarioSerializer._serializeAction(n)),
+      reducers: (scenario.reducers ?? []).map(n => ScenarioSerializer._serializeReducer(n)),
+      initialState: scenario.initialState ? structuredClone(scenario.initialState) : {},
+      params:   scenario.params ?? [],
+      toolsets: scenario?.toolsets ?? []
+    };
+  }
 
   /**
    * Serialize the current scenario state into a config object.
@@ -135,12 +190,6 @@ export class ScenarioSerializer {
   static serialize(services, id, name, order, active, simStart, simEnd, initialState, params) {
     const { eventService, handlerService, actionService, reducerService, personService, accountService } = services;
 
-    const toDateStr = (d) => {
-      if (!d) return null;
-      if (d instanceof Date) return d.toISOString().slice(0, 10);
-      return String(d).slice(0, 10);
-    };
-
     const { realPropertyService, collectibleService } = services;
     return {
       id,
@@ -148,8 +197,8 @@ export class ScenarioSerializer {
       order,
       active: active,
       prebuilt: false,
-      simStart: toDateStr(simStart),
-      simEnd:   toDateStr(simEnd),
+      simStart: this.toDateStr(simStart),
+      simEnd:   this.toDateStr(simEnd),
       persons:        (personService?.getAll()          ?? []).map(n => ScenarioSerializer._serializePerson(n)),
       accounts:       (accountService?.getAll()         ?? []).map(n => ScenarioSerializer._serializeAccount(n)),
       realProperties: (realPropertyService?.getAll()    ?? []).map(n => ScenarioSerializer._serializeRealProperty(n)),
@@ -158,7 +207,7 @@ export class ScenarioSerializer {
       handlers: handlerService.getAll().map(n => ScenarioSerializer._serializeHandler(n)),
       actions:  actionService.getAll().map(n => ScenarioSerializer._serializeAction(n)),
       reducers: reducerService.getAll().map(n => ScenarioSerializer._serializeReducer(n)),
-      initialState: initialState ?? {},
+      initialState: initialState ? structuredClone(initialState) : {},
       params:   params ?? [],
     };
   }
@@ -217,7 +266,26 @@ export class ScenarioSerializer {
     }
   }
 
-  static deserialize(config, services) {
+  /**
+   * Returns true when `config` carries a serialized graph snapshot
+   * (events/handlers/actions/reducers populated by a prior save).
+   * Persons / accounts / real-properties / collectibles do not count — those
+   * may be present without a snapshot when the scenario was built declaratively.
+   */
+  static hasSerializedGraph(config) {
+    return (config?.events?.length   > 0)
+        || (config?.handlers?.length > 0)
+        || (config?.actions?.length  > 0)
+        || (config?.reducers?.length > 0);
+  }
+
+  /**
+   * Restore a previously serialized graph (events / handlers / actions /
+   * reducers) into the services. Persons / accounts / real-properties /
+   * collectibles are also restored as a convenience, so this is the single
+   * call that fully rebuilds the services from a snapshot.
+   */
+  static deserializeGraph(config, services) {
     const { eventService, handlerService, actionService, reducerService } = services;
 
     // 0. Persons + accounts — delegate to the dedicated helper.
@@ -288,7 +356,7 @@ export class ScenarioSerializer {
       type:             account.type             ?? null,
       role:             account.role             ?? null,
       stateKey:         account.stateKey         ?? null,
-      initialValue:     account.balance,
+      initialValue:     account.balance ?? account.initialValue, //TODO Hack here since the field name is not the same as the constructor
       ownershipType:    account.ownershipType    ?? 'sole',
       ownerId:          account.ownerId          ?? null,
       minimumBalance:   account.minimumBalance   ?? 0,
@@ -330,7 +398,6 @@ export class ScenarioSerializer {
   }
 
   static _makeRealProperty(d) {
-    const { RealProperty } = FinSimLib.Finance;
     const prop = new RealProperty(d.value ?? 0, {
       id:                  d.id,
       name:                d.name                ?? '',
@@ -371,7 +438,6 @@ export class ScenarioSerializer {
   }
 
   static _makeCollectible(d) {
-    const { Collectible } = FinSimLib.Finance;
     const col = new Collectible(d.value ?? 0, {
       id:                  d.id,
       name:                d.name                ?? '',
@@ -408,6 +474,7 @@ export class ScenarioSerializer {
   }
 
   static _serializeEvent(node) {
+    if (_isAlreadySerialized(node)) return node;
     const d = {
       __type:   node.eventType === 'OneOffEvent' ? 'OneOffEvent' : 'EventSeries',
       id:       node.id,
@@ -419,7 +486,7 @@ export class ScenarioSerializer {
     if (node.eventType === 'OneOffEvent') {
       d.date = node.date instanceof Date ? node.date.toISOString() : node.date;
       if (node.data && Object.keys(node.data).length > 0) {
-        d.data = node.data;
+        d.data = JSON.parse(JSON.stringify(node.data));
       }
     } else {
       d.interval    = node.interval;
@@ -427,13 +494,14 @@ export class ScenarioSerializer {
       if (node.month != null) d.month = node.month;
       if (node.day   != null) d.day   = node.day;
       if (node.data && Object.keys(node.data).length > 0) {
-        d.data = node.data;
+        d.data = JSON.parse(JSON.stringify(node.data));
       }
     }
     return d;
   }
 
   static _serializeHandler(node) {
+    if (_isAlreadySerialized(node)) return node;
     const d = {
       __type:                    node.handlerClass ?? 'HandlerEntry',
       id:                        node.id,
@@ -527,6 +595,8 @@ export class ScenarioSerializer {
   }
 
   static _serializeAction(node) {
+    if (_isAlreadySerialized(node)) return node;
+
     const C = FinSimLib.Engine;
     let typeName;
     // Check subclasses before superclasses (order matters for instanceof).
@@ -550,20 +620,24 @@ export class ScenarioSerializer {
   }
 
   static _serializeReducer(node) {
+    if (_isAlreadySerialized(node)) return node;
     const d = {
       __type:             node.reducerType ?? 'FieldReducer',
       id:                 node.id,
       name:               node.name,
-      priority:           node.priority,
-      fieldName:          node.fieldName,
-      value:              node.value ?? null,  // FieldValueReducer subclasses only; null for others
-      script:             node.script,  // ScriptedReducer only; undefined for all other types
+      priority:           node.priority   ?? null,
+      fieldName:          node.fieldName  ?? null,
+      value:              node.value      ?? null,  // FieldValueReducer subclasses only; null for others
       reducedActionTypes:         [...(node.reducedActionTypes ?? [])],
       generatedActionTypes:       [...(node.generatedActionTypes ?? [])],
       generatedActionDefinitions: (node.generatedActionDefinitions ?? []).map(
         def => ({ type: def.type, config: def.config })
       ),
     };
+    // Only include script for ScriptedReducer — omitting it keeps the serialized
+    // shape clean for clone/deepEqual comparisons (undefined own-props behave
+    // differently across structuredClone implementations).
+    if (node.script !== undefined) d.script = node.script;
     // Subclass-specific params
     switch (d.__type) {
       case 'UsSavingsInterestCreditReducer':
@@ -752,7 +826,6 @@ export class ScenarioSerializer {
   }
 
   static _makeAccount(d) {
-    const F = FinSimLib.Finance;
     const opts = {
       id:               d.id,
       name:             d.name             ?? '',
@@ -766,29 +839,32 @@ export class ScenarioSerializer {
     };
     // Investment-specific opts
     if (d.contributionBasis !== undefined) {
-      opts.contributionBasis        = d.contributionBasis;
-      opts.earningsBasis            = d.earningsBasis ?? 0;
-      opts.loanBalance              = d.loanBalance   ?? 0;
-      opts.minimumAge               = d.minimumAge    ?? null;
+      opts.contributionBasis = d.contributionBasis;
+      opts.earningsBasis     = d.earningsBasis ?? 0;
+      opts.loanBalance       = d.loanBalance   ?? 0;
+      // Only set minimumAge when the serialized value is non-null; otherwise let
+      // the subclass constructor apply its own default (59.5, 60, etc.).
+      if (d.minimumAge != null) opts.minimumAge = d.minimumAge;
     }
     let account;
     switch (d.__type) {
-      case 'CheckingAccount':       account = new F.CheckingAccount       (d.initialValue ?? 0, opts); break;
-      case 'SavingsAccount':        account = new F.SavingsAccount        (d.initialValue ?? 0, opts); break;
-      case 'BrokerageAccount':      account = new F.BrokerageAccount      (d.initialValue ?? 0, opts); break;
-      case 'FourOhOneKAccount':     account = new F.FourOhOneKAccount     (d.initialValue ?? 0, opts); break;
-      case 'RothAccount':           account = new F.RothAccount           (d.initialValue ?? 0, opts); break;
-      case 'TraditionalIRAAccount': account = new F.TraditionalIRAAccount (d.initialValue ?? 0, opts); break;
-      case 'SuperannuationAccount': account = new F.SuperannuationAccount (d.initialValue ?? 0, opts); break;
+      case 'CheckingAccount':       account = new CheckingAccount       (d.initialValue ?? 0, opts); break;
+      case 'SavingsAccount':        account = new SavingsAccount        (d.initialValue ?? 0, opts); break;
+      case 'BrokerageAccount':      account = new BrokerageAccount      (d.initialValue ?? 0, opts); break;
+      case 'FourOhOneKAccount':     account = new FourOhOneKAccount     (d.initialValue ?? 0, opts); break;
+      case 'RothAccount':           account = new RothAccount           (d.initialValue ?? 0, opts); break;
+      case 'TraditionalIRAAccount': account = new TraditionalIRAAccount (d.initialValue ?? 0, opts); break;
+      case 'SuperannuationAccount': account = new SuperannuationAccount (d.initialValue ?? 0, opts); break;
       default:
-        account = new F.Account(d.initialValue ?? 0, opts);
+        account = new Account(d.initialValue ?? 0, opts);
     }
     if (d.stateKey) account.stateKey = d.stateKey;
+    if (d.rolloverContribBasis  != null) account.rolloverContribBasis  = d.rolloverContribBasis;
+    if (d.rolloverEarningsBasis != null) account.rolloverEarningsBasis = d.rolloverEarningsBasis;
     return account;
   }
 
   static _makePerson(d) {
-    const { Person } = FinSimLib.Finance;
     const person = new Person(d.id, new Date(d.birthDate), {
       name:                  d.name ?? '',
       citizen:               d.citizen ?? ['US'],
@@ -834,7 +910,8 @@ export class ScenarioSerializer {
     let action;
     switch (d.__type) {
       case 'Action':
-        action = new C.Action(d.type, d.name)
+        action = new C.Action(d.type, d.name);
+        break;
       case 'FieldAction':
         action = new C.FieldAction(d.type, d.name, d.fieldName);
         break;

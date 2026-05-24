@@ -11,7 +11,7 @@
 /**
  * scenario-serializer.test.mjs
  *
- * Tests that ScenarioSerializer.deserialize registers every node from a saved
+ * Tests that ScenarioSerializer.deserializeGraph registers every node from a saved
  * config — including nodes added beyond the built-in defaults — into the
  * scenario's scheduler UI.
  *
@@ -240,25 +240,25 @@ const EXTENDED_CONFIG = {
 
 test('deserialize minimal: event e1 is added to the scheduler UI', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(MINIMAL_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(MINIMAL_CONFIG, ServiceRegistry.getInstance());
   assert.ok(ui.nodeIds().includes('e1'), 'e1 should be present');
 });
 
 test('deserialize minimal: handler h1 is added to the scheduler UI', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(MINIMAL_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(MINIMAL_CONFIG, ServiceRegistry.getInstance());
   assert.ok(ui.nodeIds().includes('h1'), 'h1 should be present');
 });
 
 test('deserialize minimal: action RECORD_METRIC is added via the handler', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(MINIMAL_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(MINIMAL_CONFIG, ServiceRegistry.getInstance());
   assert.ok(ui.nodeIds().includes('RECORD_METRIC'), 'RECORD_METRIC should be present');
 });
 
 test('deserialize minimal: reducer r1 is added to the scheduler UI', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(MINIMAL_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(MINIMAL_CONFIG, ServiceRegistry.getInstance());
   assert.ok(ui.nodeIds().includes('r1'), 'r1 should be present');
 });
 
@@ -266,37 +266,37 @@ test('deserialize minimal: reducer r1 is added to the scheduler UI', () => {
 
 test('deserialize extended: e1 (original event) is present', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(EXTENDED_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(EXTENDED_CONFIG, ServiceRegistry.getInstance());
   assert.ok(ui.nodeIds().includes('e1'));
 });
 
 test('deserialize extended: e2 (added event) is present — regression', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(EXTENDED_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(EXTENDED_CONFIG, ServiceRegistry.getInstance());
   assert.ok(ui.nodeIds().includes('e2'), 'e2 was missing before the fix');
 });
 
 test('deserialize extended: h1 (original handler) is present', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(EXTENDED_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(EXTENDED_CONFIG, ServiceRegistry.getInstance());
   assert.ok(ui.nodeIds().includes('h1'));
 });
 
 test('deserialize extended: h2 (added handler) is present — regression', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(EXTENDED_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(EXTENDED_CONFIG, ServiceRegistry.getInstance());
   assert.ok(ui.nodeIds().includes('h2'), 'h2 was missing before the fix');
 });
 
 test('deserialize extended: RECORD_METRIC action is present', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(EXTENDED_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(EXTENDED_CONFIG, ServiceRegistry.getInstance());
   assert.ok(ui.nodeIds().includes('RECORD_METRIC'));
 });
 
 test('deserialize extended: NEW_ACTION_a1 (added action) is present — regression', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(EXTENDED_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(EXTENDED_CONFIG, ServiceRegistry.getInstance());
   assert.ok(
     ui.nodeIds().includes('NEW_ACTION_a1'),
     'NEW_ACTION_a1 was missing before the fix'
@@ -305,13 +305,13 @@ test('deserialize extended: NEW_ACTION_a1 (added action) is present — regressi
 
 test('deserialize extended: RECORD_NUMERIC_SUM_METRIC action is present', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(EXTENDED_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(EXTENDED_CONFIG, ServiceRegistry.getInstance());
   assert.ok(ui.nodeIds().includes('RECORD_NUMERIC_SUM_METRIC'));
 });
 
 test('deserialize extended: r1, r2, r3 (original reducers) are present', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(EXTENDED_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(EXTENDED_CONFIG, ServiceRegistry.getInstance());
   assert.ok(ui.nodeIds().includes('r1'));
   assert.ok(ui.nodeIds().includes('r2'));
   assert.ok(ui.nodeIds().includes('r3'));
@@ -319,13 +319,13 @@ test('deserialize extended: r1, r2, r3 (original reducers) are present', () => {
 
 test('deserialize extended: r4 (added reducer) is present — regression', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(EXTENDED_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(EXTENDED_CONFIG, ServiceRegistry.getInstance());
   assert.ok(ui.nodeIds().includes('r4'), 'r4 was missing before the fix');
 });
 
 test('deserialize extended: total node count matches all config entries', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(EXTENDED_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(EXTENDED_CONFIG, ServiceRegistry.getInstance());
   // 2 events + 2 handlers + 3 actions + 4 reducers = 11 nodes
   assert.strictEqual(ui.nodes.length, 11,
     `expected 11 nodes, got ${ui.nodes.length}: [${ui.nodeIds().join(', ')}]`);
@@ -335,26 +335,26 @@ test('deserialize extended: total node count matches all config entries', () => 
 
 test('deserialize extended: each event node has kind "event"', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(EXTENDED_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(EXTENDED_CONFIG, ServiceRegistry.getInstance());
   ui.ofKind('event').forEach(n => assert.strictEqual(n.kind, 'event'));
   assert.strictEqual(ui.ofKind('event').length, 2);
 });
 
 test('deserialize extended: each handler node has kind "handler"', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(EXTENDED_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(EXTENDED_CONFIG, ServiceRegistry.getInstance());
   assert.strictEqual(ui.ofKind('handler').length, 2);
 });
 
 test('deserialize extended: each action node has kind "action"', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(EXTENDED_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(EXTENDED_CONFIG, ServiceRegistry.getInstance());
   assert.strictEqual(ui.ofKind('action').length, 3);
 });
 
 test('deserialize extended: each reducer node has kind "reducer"', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(EXTENDED_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(EXTENDED_CONFIG, ServiceRegistry.getInstance());
   assert.strictEqual(ui.ofKind('reducer').length, 4);
 });
 
@@ -362,7 +362,7 @@ test('deserialize extended: each reducer node has kind "reducer"', () => {
 
 test('deserialize advances eventService _nextId past the highest event id', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(EXTENDED_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(EXTENDED_CONFIG, ServiceRegistry.getInstance());
   // config has e1, e2 → service counter must be at least 3
   const nextId = ServiceRegistry.getInstance().eventService._nextId;
   assert.ok(nextId >= 3,
@@ -371,7 +371,7 @@ test('deserialize advances eventService _nextId past the highest event id', () =
 
 test('deserialize advances reducerService _nextId past the highest reducer id', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(EXTENDED_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(EXTENDED_CONFIG, ServiceRegistry.getInstance());
   // config has r1..r4 → service counter must be at least 5
   const nextId = ServiceRegistry.getInstance().reducerService._nextId;
   assert.ok(nextId >= 5,
@@ -391,7 +391,7 @@ test('deserialize: disabled event is added to UI without being scheduled', () =>
     actions: [],
   };
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(cfg, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(cfg, ServiceRegistry.getInstance());
   assert.ok(ui.nodeIds().includes('e-off'), 'disabled event should still appear in the UI');
   // It must not be scheduled in the sim
   assert.ok(!ServiceRegistry.getInstance().simulationSync.adapter._registeredRecurringTypes.has('OFF_EVT'),
@@ -414,7 +414,7 @@ function serializeNow(name = 'Test', initialState = {}) {
 
 test('serialize: returns arrays for events, handlers, actions, reducers', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(MINIMAL_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(MINIMAL_CONFIG, ServiceRegistry.getInstance());
   const cfg = serializeNow();
   assert.ok(Array.isArray(cfg.events),   'events should be an array');
   assert.ok(Array.isArray(cfg.handlers), 'handlers should be an array');
@@ -424,7 +424,7 @@ test('serialize: returns arrays for events, handlers, actions, reducers', () => 
 
 test('serialize: minimal config produces correct node counts', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(MINIMAL_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(MINIMAL_CONFIG, ServiceRegistry.getInstance());
   const cfg = serializeNow();
   assert.strictEqual(cfg.events.length,   1, 'one event');
   assert.strictEqual(cfg.handlers.length, 1, 'one handler');
@@ -433,14 +433,14 @@ test('serialize: minimal config produces correct node counts', () => {
 
 test('serialize: event __type is EventSeries for a recurring event', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(MINIMAL_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(MINIMAL_CONFIG, ServiceRegistry.getInstance());
   const cfg = serializeNow();
   assert.strictEqual(cfg.events[0].__type, 'EventSeries');
 });
 
 test('serialize: reducer __type matches the class set during registration', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(MINIMAL_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(MINIMAL_CONFIG, ServiceRegistry.getInstance());
   const cfg = serializeNow();
   const r = cfg.reducers.find(r => r.id === 'r1');
   assert.strictEqual(r.__type, 'FieldReducer');
@@ -448,7 +448,7 @@ test('serialize: reducer __type matches the class set during registration', () =
 
 test('serialize: extended config produces correct node counts', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(EXTENDED_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(EXTENDED_CONFIG, ServiceRegistry.getInstance());
   const cfg = serializeNow();
   assert.strictEqual(cfg.events.length,   2);
   assert.strictEqual(cfg.handlers.length, 2);
@@ -463,7 +463,7 @@ test('serialize: extended config produces correct node counts', () => {
 
 test('serialize regression: reducer name change is captured in saved config', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(MINIMAL_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(MINIMAL_CONFIG, ServiceRegistry.getInstance());
 
   // Simulate what the UI reducer editor does when user types a new name
   ServiceRegistry.getInstance().reducerService.updateReducer('r1', { name: 'Renamed Reducer' });
@@ -477,7 +477,7 @@ test('serialize regression: reducer name change is captured in saved config', ()
 
 test('serialize regression: reducer type change is captured in saved config', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(MINIMAL_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(MINIMAL_CONFIG, ServiceRegistry.getInstance());
 
   // Simulate what the UI type-select does when user picks a different reducer type
   ServiceRegistry.getInstance().reducerService.replaceReducer('r1', 'NumericSumReducer');
@@ -491,7 +491,7 @@ test('serialize regression: reducer type change is captured in saved config', ()
 
 test('serialize regression: event name change is captured in saved config', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(MINIMAL_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(MINIMAL_CONFIG, ServiceRegistry.getInstance());
 
   ServiceRegistry.getInstance().eventService.updateEvent('e1', { name: 'Renamed Event' });
 
@@ -504,7 +504,7 @@ test('serialize regression: event name change is captured in saved config', () =
 
 test('serialize regression: event type string change is captured in saved config', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(MINIMAL_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(MINIMAL_CONFIG, ServiceRegistry.getInstance());
 
   ServiceRegistry.getInstance().eventService.updateEvent('e1', { type: 'CUSTOM_EVENT_TYPE' });
 
@@ -516,7 +516,7 @@ test('serialize regression: event type string change is captured in saved config
 
 test('serialize regression: handler name change is captured in saved config', () => {
   const { ui, scenario } = makeScenario();
-  ScenarioSerializer.deserialize(MINIMAL_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(MINIMAL_CONFIG, ServiceRegistry.getInstance());
 
   ServiceRegistry.getInstance().handlerService.updateHandler('h1', { name: 'Renamed Handler' });
 
@@ -532,7 +532,7 @@ test('serialize regression: handler name change is captured in saved config', ()
 test('serialize round-trip: serialize then deserialize into fresh scenario has same node IDs', () => {
   // First scenario: deserialize EXTENDED_CONFIG
   const { ui: ui1, scenario: s1 } = makeScenario();
-  ScenarioSerializer.deserialize(EXTENDED_CONFIG, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(EXTENDED_CONFIG, ServiceRegistry.getInstance());
   const firstIds = ui1.nodeIds().sort();
 
   // Serialize the first scenario's services to a config
@@ -540,7 +540,7 @@ test('serialize round-trip: serialize then deserialize into fresh scenario has s
 
   // Second scenario: deserialize the round-trip config
   const { ui: ui2, scenario: s2 } = makeScenario();
-  ScenarioSerializer.deserialize(roundTripCfg, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(roundTripCfg, ServiceRegistry.getInstance());
   const secondIds = ui2.nodeIds().sort();
 
   assert.deepStrictEqual(secondIds, firstIds,
@@ -591,7 +591,7 @@ test('deserialize: persons are registered into personService with correct fields
     ],
   };
 
-  ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(config, ServiceRegistry.getInstance());
 
   const sr = ServiceRegistry.getInstance();
   assert.strictEqual(sr.personService.getAll().length, 2);
@@ -617,7 +617,7 @@ test('persons round-trip: serialize then deserialize preserves all person data',
 
   // Fresh scenario
   makeScenario();
-  ScenarioSerializer.deserialize(cfg, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(cfg, ServiceRegistry.getInstance());
 
   const sr2 = ServiceRegistry.getInstance();
   const persons = sr2.personService.getAll();

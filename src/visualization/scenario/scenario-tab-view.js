@@ -173,9 +173,22 @@ export class ScenarioTabView {
   _populateScenarioForm(scenario) {
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
 
+    let simStart,simEnd;
+    if(scenario?.simStart instanceof Date) {
+      simStart = scenario.simStart.toISOString().slice(0, 10);
+    }else {
+      simStart = '2026-01-01';
+    }
+    if(scenario?.simEnd instanceof Date) {
+      simEnd = scenario.simEnd.toISOString().slice(0, 10);
+    }else {
+      simEnd = '2041-01-01';
+    }
+
+
     set('scenarioName',     scenario?.name ?? scenario?.label ?? '');
-    set('simStartInput',    scenario?.simStart ?? '2026-01-01');
-    set('simEndInput',      scenario?.simEnd   ?? '2041-01-01');
+    set('simStartInput',    simStart);
+    set('simEndInput',      simEnd);
     set('initialStateJson', JSON.stringify(scenario?.initialState ?? { metrics: { } }, null, 2));
     this._renderParamsList(scenario);
   }

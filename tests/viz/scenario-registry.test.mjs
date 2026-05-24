@@ -27,7 +27,9 @@ import { PrebuiltScenario } from '../../src/scenarios/prebuilt-scenario.js';
 
 function makePrebuilt(id, order = 1, active = false) {
   return new PrebuiltScenario({
-    id, label: `Label ${id}`, order, simStart: '2026-01-01', simEnd: '2041-01-01',
+    id, label: `Label ${id}`, order,
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd: new Date(Date.UTC(2041, 0, 1)),
     factory: jest.fn(),
     active,
   });

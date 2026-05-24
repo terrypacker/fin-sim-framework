@@ -11,20 +11,21 @@
 import { OneOffEvent }  from '../../simulation-framework/events/one-off-event.js';
 import { ACCOUNT_ROLES } from '../../finance/state/account-roles.js';
 import { usBracketGrossIncomeCeiling } from '../../finance/tax/us/us-tax-rates-2025.js';
+import {
+  RothConversionApplyReducer,
+  RothConversionHandler, RothConversionPolicyHandler,
+} from '../../finance/account-rules/us/roth-conversion-classes.js';
 
 /**
  * US_ROTH_CONVERSION toolset — bracket-fill Roth conversion policy scheduling.
  *
  * Capabilities: roth-conversion
- * Depends on: US_TAX (RothConversionPolicyHandler and RothConversionApplyReducer
- *   are registered by TaxService via the US account module)
+ * Depends on: US_TAX
  *
  * This toolset generates one ROTH_CONVERSION_POLICY_EVALUATE one-off event
  * per (year, owner) pair within the conversion window.  Each event carries:
  *   - targetIncome: gross income ceiling for the chosen bracket
  *   - iraKey / rothKey: state keys of the IRA and Roth accounts to convert
- *
- * No handlers or reducers are registered here — those come from US_TAX.
  *
  * Parameters:
  *   rothConversionEnabled    — master switch; if false nothing is scheduled
@@ -146,10 +147,10 @@ export const US_ROTH_CONVERSION = {
   },
 
   handlers(context) {
-    return [];
+    return [new RothConversionHandler(), new RothConversionPolicyHandler()];
   },
 
   reducers(context) {
-    return [];
+    return [new RothConversionApplyReducer({ accountService: context.accountService })];
   },
 };

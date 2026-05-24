@@ -43,7 +43,11 @@ export class MonthlySocialSecurityHandler extends HandlerEntry {
       const ssMonthly = person.socialSecurityMonthly ?? 0;
       if (ssMonthly <= 0) continue;
 
-      // SS payments begin at retirementDate; if no retirementDate, always pay
+      //TODO #292 Support Early or FRA, this is FRA only right now (Born 1960+ FRA is 67)
+      //  there are also 'delayed retirement credits' that can accrue to age 70
+      const age     = getAge(person.birthDate, date);
+      if(age < 67) continue;
+      // If not retired, don't accept payments?
       const retDate = person.retirementDate;
       if (retDate && date < new Date(retDate)) continue;
 
@@ -59,4 +63,14 @@ export class MonthlySocialSecurityHandler extends HandlerEntry {
 
     return actions;
   }
+}
+
+/** Returns age in whole years as of asOfDate. */
+function getAge(birthDate, asOfDate) {
+  const years = asOfDate.getUTCFullYear() - birthDate.getUTCFullYear();
+  const hadBirthday =
+      asOfDate.getUTCMonth() > birthDate.getUTCMonth() ||
+      (asOfDate.getUTCMonth() === birthDate.getUTCMonth() &&
+          asOfDate.getUTCDate() >= birthDate.getUTCDate());
+  return hadBirthday ? years : years - 1;
 }

@@ -224,8 +224,10 @@ import { OneOffEvent }     from '../../src/simulation-framework/events/one-off-e
 import { ServiceRegistry }    from '../../src/services/service-registry.js';
 import { BaseScenario }       from '../../src/scenarios/base-scenario.js';
 import { ScenarioSerializer } from '../../src/scenarios/scenario-serializer.js';
-import { US_BANKING }   from '../../src/scenarios/toolsets/us-banking-toolset.js';
-import { US_TAX }       from '../../src/scenarios/toolsets/us-tax-toolset.js';
+import { US_BANKING }    from '../../src/scenarios/toolsets/us-banking-toolset.js';
+import { US_TAX }        from '../../src/scenarios/toolsets/us-tax-toolset.js';
+import { US_INCOME }     from '../../src/scenarios/toolsets/us-income-toolset.js';
+import { US_BROKERAGE }  from '../../src/scenarios/toolsets/us-brokerage-toolset.js';
 import { US_RETIREMENT } from '../../src/scenarios/toolsets/us-retirement-toolset.js';
 
 import { TaxService }           from '../../src/finance/tax-service.js';
@@ -511,6 +513,8 @@ function loadNewFormatScenario(config) {
   const toolsetRegistry = new ToolsetRegistry();
   toolsetRegistry.register(US_BANKING);
   toolsetRegistry.register(US_TAX);
+  toolsetRegistry.register(US_INCOME);
+  toolsetRegistry.register(US_BROKERAGE);
   toolsetRegistry.register(US_RETIREMENT);
 
   const compiler = new ScenarioCompiler(toolsetRegistry);
@@ -591,6 +595,8 @@ test('compiler: paramSchema returned contains all toolset schemas merged', () =>
   const toolsetRegistry = new ToolsetRegistry();
   toolsetRegistry.register(US_BANKING);
   toolsetRegistry.register(US_TAX);
+  toolsetRegistry.register(US_INCOME);
+  toolsetRegistry.register(US_BROKERAGE);
   toolsetRegistry.register(US_RETIREMENT);
 
   const compiler = new ScenarioCompiler(toolsetRegistry);

@@ -27,56 +27,78 @@
 import { test, beforeEach } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Account } from '../../src/finance/assets/account.js';
-import { FinancialState } from '../../src/finance/state/financial-state.js';
-import { Simulation } from '../../src/simulation-framework/simulation.js';
-import { TaxService } from '../../src/finance/tax-service.js';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
-import { PeriodService } from '../../src/finance/period/period-service.js';
-import { buildUsCalendarYear, applyTo } from '../../src/finance/period/period-builder.js';
+import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
+import { BaseScenario }    from '../../src/index.js';
 
 beforeEach(() => ServiceRegistry.reset());
 
-function buildUsPeriodService(year) {
-  const ps = new PeriodService();
-  applyTo(ps, buildUsCalendarYear(year));
-  return ps;
+function loadToolsetScenario(config) {
+  const services = ServiceRegistry.getInstance();
+  const scenario = new BaseScenario({
+    context:  services.simulationContext,
+    simStart: new Date(config.simStart),
+    simEnd:   new Date(config.simEnd),
+  });
+  scenario.buildSim();
+  new ScenarioLoader().load(structuredClone(config), services);
+  return { scenario, sim: scenario.sim };
 }
 
-const START_DATE = new Date(2026, 0, 1);
-
-function buildIraSim({
-  initialChecking   = 20000,
-  iraBalance        = 0,
-  iraContribBasis   = 0,
-  iraEarningsBasis  = 0,
-  isAuResident      = false,
-  personBirthDate   = new Date(1966, 0, 1), // turns 60 on 2026-01-01
+/**
+ * Build an IRA scenario config.
+ * Uses US_RETIREMENT + AU_RETIREMENT + US_AU_CROSS_BORDER so that both US and AU
+ * YTD counters are always in state.
+ */
+function makeIraConfig({
+  initialChecking  = 20000,
+  initialAuSavings = 50000,
+  iraBalance       = 0,
+  iraContribBasis  = 0,
+  iraEarningsBasis = 0,
+  birthDate        = '1966-01-01',
+  isAuResident     = false,
 } = {}) {
-  const registry = ServiceRegistry.getInstance();
-  const sim = new Simulation(START_DATE, { initialState: new FinancialState({
-    checkingAccount: new Account(initialChecking),
-    iraAccount: {
-      balance:           iraBalance,
-      contributionBasis: iraContribBasis,
-      earningsBasis:     iraEarningsBasis,
+  return {
+    toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'US_AU_CROSS_BORDER'],
+    simStart: '2026-01-01',
+    simEnd:   '2028-01-01',
+    parameters: {
+      monthlyExpenses: 0, inflationAdjust: false, inflationRate: 0,
+      rothGrowthRate: 0, iraGrowthRate: 0, k401GrowthRate: 0,
+      brokerageGrowthRate: 0, brokerageDividendRate: 0, fixedIncomeInterestRate: 0,
+      usSavingsInterestRate: 0, auSavingsInterestRate: 0,
+      superGrowthRate: 0, auStockGrowthRate: 0, auStockDividendRate: 0,
+      isAuResident,
     },
-    isAuResident,
-    personBirthDate,
-    usOrdinaryIncomeYTD: 0,
-    usNegativeIncomeYTD: 0,
-    usCapitalGainsYTD:   0,
-    usPenaltyYTD:        0,
-    auOrdinaryIncomeYTD: 0,
-    ftcYTD:              0,
-  }) });
-  registry.simulationRegistry.register('primary', sim);
-  registry.simulationSync.setSimStart(START_DATE);
-  const taxService = new TaxService();
-  taxService.setup(sim, ['US'], buildUsPeriodService(2026));
-  taxService.registerHandlersAndReducers(registry, ['US']);
-
-  return { sim };
+    persons: [{
+      __type: 'Person', id: 'primary', name: 'Primary', birthDate,
+      citizen: ['US'], lifeExpectancy: 90, monthlyWage: 0,
+      retirementDate: '2025-01-01', socialSecurityMonthly: 0,
+    }],
+    accounts: [
+      {
+        __type: 'SavingsAccount', id: 'checking', name: 'Checking',
+        role: 'us-savings', stateKey: 'checkingAccount',
+        initialValue: initialChecking, ownershipType: 'sole', ownerId: 'primary',
+        minimumBalance: 0, country: 'US', currency: { code: 'USD', symbol: '$' },
+      },
+      {
+        __type: 'SavingsAccount', id: 'au-savings', name: 'AU Savings',
+        role: 'au-savings', stateKey: 'auSavingsAccount',
+        initialValue: initialAuSavings, ownershipType: 'sole', ownerId: 'primary',
+        minimumBalance: 0, country: 'AU', currency: { code: 'AUD', symbol: '$' },
+      },
+      {
+        __type: 'TraditionalIRAAccount', id: 'ira', name: 'Traditional IRA',
+        role: 'ira', stateKey: 'iraAccount',
+        initialValue: iraBalance, contributionBasis: iraContribBasis,
+        earningsBasis: iraEarningsBasis,
+        ownershipType: 'sole', ownerId: 'primary',
+        country: 'US', currency: { code: 'USD', symbol: '$' },
+      },
+    ],
+  };
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -84,7 +106,7 @@ function buildIraSim({
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-5: IRA contribution increases iraAccount balance and contributionBasis', () => {
-  const { sim } = buildIraSim({ initialChecking: 10000 });
+  const { sim } = loadToolsetScenario(makeIraConfig({ initialChecking: 10000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'IRA_CONTRIBUTION', data: { amount: 6500 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -94,7 +116,7 @@ test('EVT-5: IRA contribution increases iraAccount balance and contributionBasis
 });
 
 test('EVT-5: IRA contribution debits checking account', () => {
-  const { sim } = buildIraSim({ initialChecking: 10000 });
+  const { sim } = loadToolsetScenario(makeIraConfig({ initialChecking: 10000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'IRA_CONTRIBUTION', data: { amount: 6500 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -102,7 +124,7 @@ test('EVT-5: IRA contribution debits checking account', () => {
 });
 
 test('EVT-5: IRA contribution is a US negative income (deduction) event', () => {
-  const { sim } = buildIraSim({ initialChecking: 10000 });
+  const { sim } = loadToolsetScenario(makeIraConfig({ initialChecking: 10000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'IRA_CONTRIBUTION', data: { amount: 6500 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -111,7 +133,7 @@ test('EVT-5: IRA contribution is a US negative income (deduction) event', () => 
 });
 
 test('EVT-5: IRA contribution is not an AU taxable event', () => {
-  const { sim } = buildIraSim({ initialChecking: 10000, isAuResident: true });
+  const { sim } = loadToolsetScenario(makeIraConfig({ initialChecking: 10000, isAuResident: true }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'IRA_CONTRIBUTION', data: { amount: 6500 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -123,12 +145,12 @@ test('EVT-5: IRA contribution is not an AU taxable event', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-6: IRA contribution withdrawal at age 60+ has no penalty', () => {
-  const { sim } = buildIraSim({
+  const { sim } = loadToolsetScenario(makeIraConfig({
     initialChecking: 5000,
     iraBalance: 20000,
     iraContribBasis: 20000,
-    personBirthDate: new Date(1966, 0, 1), // age 60 in 2026
-  });
+    birthDate: '1966-01-01', // turns 60 in 2026
+  }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_WITHDRAWAL_CONTRIBUTIONS', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -137,12 +159,12 @@ test('EVT-6: IRA contribution withdrawal at age 60+ has no penalty', () => {
 });
 
 test('EVT-6: IRA contribution withdrawal before age 60 incurs 10% penalty', () => {
-  const { sim } = buildIraSim({
+  const { sim } = loadToolsetScenario(makeIraConfig({
     initialChecking: 5000,
     iraBalance: 20000,
     iraContribBasis: 20000,
-    personBirthDate: new Date(1990, 0, 1), // age 36 in 2026
-  });
+    birthDate: '1990-01-01', // age 36 in 2026
+  }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'IRA_WITHDRAWAL_CONTRIBUTIONS', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -151,12 +173,12 @@ test('EVT-6: IRA contribution withdrawal before age 60 incurs 10% penalty', () =
 });
 
 test('EVT-6: IRA contribution withdrawal is US ordinary income taxable', () => {
-  const { sim } = buildIraSim({
+  const { sim } = loadToolsetScenario(makeIraConfig({
     initialChecking: 5000,
     iraBalance: 20000,
     iraContribBasis: 20000,
-    personBirthDate: new Date(1966, 0, 1),
-  });
+    birthDate: '1966-01-01',
+  }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_WITHDRAWAL_CONTRIBUTIONS', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -164,13 +186,13 @@ test('EVT-6: IRA contribution withdrawal is US ordinary income taxable', () => {
 });
 
 test('EVT-6: IRA contribution withdrawal is not AU taxable', () => {
-  const { sim } = buildIraSim({
+  const { sim } = loadToolsetScenario(makeIraConfig({
     initialChecking: 5000,
     iraBalance: 20000,
     iraContribBasis: 20000,
     isAuResident: true,
-    personBirthDate: new Date(1966, 0, 1),
-  });
+    birthDate: '1966-01-01',
+  }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_WITHDRAWAL_CONTRIBUTIONS', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -182,12 +204,12 @@ test('EVT-6: IRA contribution withdrawal is not AU taxable', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-7: IRA earnings withdrawal at age 60+ has no penalty', () => {
-  const { sim } = buildIraSim({
+  const { sim } = loadToolsetScenario(makeIraConfig({
     initialChecking: 5000,
     iraBalance: 20000,
     iraEarningsBasis: 20000,
-    personBirthDate: new Date(1966, 0, 1),
-  });
+    birthDate: '1966-01-01',
+  }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_WITHDRAWAL_EARNINGS', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -196,12 +218,12 @@ test('EVT-7: IRA earnings withdrawal at age 60+ has no penalty', () => {
 });
 
 test('EVT-7: IRA earnings withdrawal before age 60 incurs 10% penalty', () => {
-  const { sim } = buildIraSim({
+  const { sim } = loadToolsetScenario(makeIraConfig({
     initialChecking: 5000,
     iraBalance: 20000,
     iraEarningsBasis: 20000,
-    personBirthDate: new Date(1990, 0, 1),
-  });
+    birthDate: '1990-01-01',
+  }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'IRA_WITHDRAWAL_EARNINGS', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -209,12 +231,12 @@ test('EVT-7: IRA earnings withdrawal before age 60 incurs 10% penalty', () => {
 });
 
 test('EVT-7: IRA earnings withdrawal is US ordinary income taxable', () => {
-  const { sim } = buildIraSim({
+  const { sim } = loadToolsetScenario(makeIraConfig({
     initialChecking: 5000,
     iraBalance: 20000,
     iraEarningsBasis: 20000,
-    personBirthDate: new Date(1966, 0, 1),
-  });
+    birthDate: '1966-01-01',
+  }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_WITHDRAWAL_EARNINGS', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -222,13 +244,13 @@ test('EVT-7: IRA earnings withdrawal is US ordinary income taxable', () => {
 });
 
 test('EVT-7: IRA earnings withdrawal IS AU taxable if person is AU resident', () => {
-  const { sim } = buildIraSim({
+  const { sim } = loadToolsetScenario(makeIraConfig({
     initialChecking: 5000,
     iraBalance: 20000,
     iraEarningsBasis: 20000,
-    personBirthDate: new Date(1966, 0, 1),
+    birthDate: '1966-01-01',
     isAuResident: true,
-  });
+  }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_WITHDRAWAL_EARNINGS', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -237,13 +259,13 @@ test('EVT-7: IRA earnings withdrawal IS AU taxable if person is AU resident', ()
 });
 
 test('EVT-7: IRA earnings withdrawal is NOT AU taxable if person is not AU resident', () => {
-  const { sim } = buildIraSim({
+  const { sim } = loadToolsetScenario(makeIraConfig({
     initialChecking: 5000,
     iraBalance: 20000,
     iraEarningsBasis: 20000,
-    personBirthDate: new Date(1966, 0, 1),
+    birthDate: '1966-01-01',
     isAuResident: false,
-  });
+  }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_WITHDRAWAL_EARNINGS', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -256,7 +278,7 @@ test('EVT-7: IRA earnings withdrawal is NOT AU taxable if person is not AU resid
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-8: IRA earnings increase iraAccount balance and earningsBasis', () => {
-  const { sim } = buildIraSim({ iraBalance: 50000, iraContribBasis: 50000 });
+  const { sim } = loadToolsetScenario(makeIraConfig({ iraBalance: 50000, iraContribBasis: 50000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'IRA_EARNINGS', data: { amount: 3000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -266,7 +288,7 @@ test('EVT-8: IRA earnings increase iraAccount balance and earningsBasis', () => 
 });
 
 test('EVT-8: IRA earnings stay in account — no checking transaction', () => {
-  const { sim } = buildIraSim({ initialChecking: 5000, iraBalance: 50000, iraContribBasis: 50000 });
+  const { sim } = loadToolsetScenario(makeIraConfig({ initialChecking: 5000, iraBalance: 50000, iraContribBasis: 50000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'IRA_EARNINGS', data: { amount: 3000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -274,11 +296,11 @@ test('EVT-8: IRA earnings stay in account — no checking transaction', () => {
 });
 
 test('EVT-8: IRA earnings are not a US or AU taxable event', () => {
-  const { sim } = buildIraSim({
+  const { sim } = loadToolsetScenario(makeIraConfig({
     iraBalance: 50000,
     iraContribBasis: 50000,
     isAuResident: true,
-  });
+  }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'IRA_EARNINGS', data: { amount: 3000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -291,11 +313,11 @@ test('EVT-8: IRA earnings are not a US or AU taxable event', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-35: IRA rollover withdrawal credits checking account', () => {
-  const { sim } = buildIraSim({
+  const { sim } = loadToolsetScenario(makeIraConfig({
     initialChecking: 5000,
     iraBalance: 20000,
     iraContribBasis: 20000,
-  });
+  }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_ROLLOVER_WITHDRAWAL', data: { amount: 8000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -303,11 +325,11 @@ test('EVT-35: IRA rollover withdrawal credits checking account', () => {
 });
 
 test('EVT-35: IRA rollover withdrawal debits IRA balance', () => {
-  const { sim } = buildIraSim({
+  const { sim } = loadToolsetScenario(makeIraConfig({
     iraBalance: 20000,
     iraContribBasis: 15000,
     iraEarningsBasis: 5000,
-  });
+  }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_ROLLOVER_WITHDRAWAL', data: { amount: 8000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -315,10 +337,10 @@ test('EVT-35: IRA rollover withdrawal debits IRA balance', () => {
 });
 
 test('EVT-35: IRA rollover withdrawal is US ordinary income', () => {
-  const { sim } = buildIraSim({
+  const { sim } = loadToolsetScenario(makeIraConfig({
     iraBalance: 20000,
     iraContribBasis: 20000,
-  });
+  }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_ROLLOVER_WITHDRAWAL', data: { amount: 8000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -326,11 +348,11 @@ test('EVT-35: IRA rollover withdrawal is US ordinary income', () => {
 });
 
 test('EVT-35: IRA rollover withdrawal has NO penalty even when person is under 60', () => {
-  const { sim } = buildIraSim({
+  const { sim } = loadToolsetScenario(makeIraConfig({
     iraBalance: 20000,
     iraContribBasis: 20000,
-    personBirthDate: new Date(1990, 0, 1), // age 36 in 2026
-  });
+    birthDate: '1990-01-01', // age 36 in 2026
+  }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_ROLLOVER_WITHDRAWAL', data: { amount: 8000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -338,11 +360,11 @@ test('EVT-35: IRA rollover withdrawal has NO penalty even when person is under 6
 });
 
 test('EVT-35: IRA rollover withdrawal is AU ordinary income if AU resident', () => {
-  const { sim } = buildIraSim({
+  const { sim } = loadToolsetScenario(makeIraConfig({
     iraBalance: 20000,
     iraContribBasis: 20000,
     isAuResident: true,
-  });
+  }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_ROLLOVER_WITHDRAWAL', data: { amount: 8000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -351,11 +373,11 @@ test('EVT-35: IRA rollover withdrawal is AU ordinary income if AU resident', () 
 });
 
 test('EVT-35: IRA rollover withdrawal is not AU taxable if not AU resident', () => {
-  const { sim } = buildIraSim({
+  const { sim } = loadToolsetScenario(makeIraConfig({
     iraBalance: 20000,
     iraContribBasis: 20000,
     isAuResident: false,
-  });
+  }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_ROLLOVER_WITHDRAWAL', data: { amount: 8000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -368,13 +390,13 @@ test('EVT-35: IRA rollover withdrawal is not AU taxable if not AU resident', () 
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-40: IRA RMD credits checking account', () => {
-  const { sim } = buildIraSim({
+  const { sim } = loadToolsetScenario(makeIraConfig({
     initialChecking: 3000,
     iraBalance: 500000,
     iraContribBasis: 300000,
     iraEarningsBasis: 200000,
-    personBirthDate: new Date(1954, 0, 1), // age 72 in 2026
-  });
+    birthDate: '1954-01-01', // age 72 in 2026
+  }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_RMD', data: { amount: 20000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -382,12 +404,12 @@ test('EVT-40: IRA RMD credits checking account', () => {
 });
 
 test('EVT-40: IRA RMD debits IRA balance', () => {
-  const { sim } = buildIraSim({
+  const { sim } = loadToolsetScenario(makeIraConfig({
     iraBalance: 500000,
     iraContribBasis: 300000,
     iraEarningsBasis: 200000,
-    personBirthDate: new Date(1954, 0, 1),
-  });
+    birthDate: '1954-01-01',
+  }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_RMD', data: { amount: 20000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -395,11 +417,11 @@ test('EVT-40: IRA RMD debits IRA balance', () => {
 });
 
 test('EVT-40: IRA RMD is US ordinary income', () => {
-  const { sim } = buildIraSim({
+  const { sim } = loadToolsetScenario(makeIraConfig({
     iraBalance: 500000,
     iraContribBasis: 500000,
-    personBirthDate: new Date(1954, 0, 1),
-  });
+    birthDate: '1954-01-01',
+  }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_RMD', data: { amount: 20000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -408,12 +430,12 @@ test('EVT-40: IRA RMD is US ordinary income', () => {
 });
 
 test('EVT-40: IRA RMD is AU ordinary income if AU resident', () => {
-  const { sim } = buildIraSim({
+  const { sim } = loadToolsetScenario(makeIraConfig({
     iraBalance: 500000,
     iraContribBasis: 500000,
-    personBirthDate: new Date(1954, 0, 1),
+    birthDate: '1954-01-01',
     isAuResident: true,
-  });
+  }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_RMD', data: { amount: 20000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
