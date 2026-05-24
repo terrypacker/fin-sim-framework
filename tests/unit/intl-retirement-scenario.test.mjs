@@ -33,6 +33,7 @@ import { ServiceRegistry }     from '../../src/services/service-registry.js';
 import { BaseScenario }            from '../../src/scenarios/base-scenario.js';
 import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
 import { ScenarioSerializer }     from '../../src/scenarios/scenario-serializer.js';
+import { InMemoryStorage }        from '../../src/storage/in-memory-storage.js';
 
 // Finance classes needed by ScenarioSerializer._makeReducer / _makeHandler
 import { TaxService }           from '../../src/finance/tax-service.js';
@@ -1056,4 +1057,171 @@ test('ASSET-11: realProperties and collectibles survive serialize → deserializ
   const gold = registry2.collectibleService.getAll()[0];
   assert.strictEqual(gold.name, 'Gold');
   assert.strictEqual(gold.stateKey, 'collectibleAccount');
+});
+
+test('ASSET-12: realProperties and collectibles survive full storage round-trip (JSON.stringify → JSON.parse → deserialize)', () => {
+  const { scenario } = buildScenario();
+  const services = ServiceRegistry.getInstance();
+
+  // Serialize the full intl scenario
+  const config = ScenarioSerializer.serialize(
+    services, 'test-storage', 'Storage RT Test', 1, true,
+    new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)),
+    scenario.sim.state, []
+  );
+
+  // Simulate what ScenarioStorage.save() + load() does via JSON
+  const storage = new InMemoryStorage();
+  storage.setItem('fin-sim-scenarios', JSON.stringify({ scenarios: [config] }));
+  const loaded = JSON.parse(storage.getItem('fin-sim-scenarios'));
+  const restoredConfig = loaded.scenarios[0];
+
+  // Verify the raw JSON preserved both asset arrays
+  assert.ok(Array.isArray(restoredConfig.realProperties), 'realProperties should survive JSON round-trip');
+  assert.strictEqual(restoredConfig.realProperties.length, 2, 'should have 2 real properties after JSON round-trip');
+  assert.ok(Array.isArray(restoredConfig.collectibles), 'collectibles should survive JSON round-trip');
+  assert.strictEqual(restoredConfig.collectibles.length, 1, 'should have 1 collectible after JSON round-trip');
+
+  // Deserialize into a fresh registry and verify objects reconstruct correctly
+  ServiceRegistry.reset();
+  const scenario2 = new IntlRetirementScenario({
+    eventSchedulerUI: makeStubUI(),
+    context: ServiceRegistry.getInstance().simulationContext,
+  });
+  scenario2.buildSim();
+
+  assert.doesNotThrow(
+    () => ScenarioSerializer.deserialize(restoredConfig, ServiceRegistry.getInstance()),
+    'deserialize should not throw after storage round-trip'
+  );
+
+  const registry2 = ServiceRegistry.getInstance();
+
+  const props = registry2.realPropertyService.getAll();
+  assert.strictEqual(props.length, 2, 'storage round-trip should restore 2 real properties');
+  const usHouse = props.find(p => p.country === 'US');
+  assert.ok(usHouse, 'US house should survive storage round-trip');
+  assert.strictEqual(usHouse.value, 1_000_000);
+  assert.strictEqual(usHouse.costBasis, 800_000);
+  assert.strictEqual(usHouse.stateKey, 'usHouseProperty');
+  assert.strictEqual(usHouse.isPrimaryResidence, true);
+
+  const auHouse = props.find(p => p.country === 'AU');
+  assert.ok(auHouse, 'AU house should survive storage round-trip');
+  assert.strictEqual(auHouse.value, 1_000_000);
+  assert.strictEqual(auHouse.stateKey, 'auHouseProperty');
+
+  const cols = registry2.collectibleService.getAll();
+  assert.strictEqual(cols.length, 1, 'storage round-trip should restore 1 collectible');
+  const gold = cols[0];
+  assert.strictEqual(gold.name, 'Gold');
+  assert.strictEqual(gold.value, 100_000);
+  assert.strictEqual(gold.costBasis, 60_000);
+  assert.strictEqual(gold.stateKey, 'collectibleAccount');
+});
+
+// ─── Helper matching the _applyLoadDefaultsOverrides logic in base-app.js ─────
+function applyLoadDefaultsOverrides(config, registry) {
+  if (!config) return;
+  if (config.persons?.length) {
+    const svc = registry.personService;
+    for (const d of config.persons) {
+      const live = svc.getAll().find(p => p.id === d.id);
+      if (live) { const { id, __type, ...changes } = d; svc.updatePerson(live, changes); }
+    }
+  }
+  if (config.accounts?.length) {
+    const svc = registry.accountService;
+    for (const d of config.accounts) {
+      const live = svc.getAll().find(a => a.stateKey === d.stateKey);
+      if (live) {
+        const { id, __type, initialValue, ...changes } = d;
+        if (initialValue !== undefined) changes.balance = initialValue;
+        svc.updateAccount(live, changes);
+      }
+    }
+  }
+  if (config.realProperties?.length) {
+    const svc = registry.realPropertyService;
+    for (const d of config.realProperties) {
+      const live = svc.getAll().find(p => p.stateKey === d.stateKey);
+      if (live) { const { id, __type, ...changes } = d; svc.updateProperty(live, changes); }
+    }
+  }
+  if (config.collectibles?.length) {
+    const svc = registry.collectibleService;
+    for (const d of config.collectibles) {
+      const live = svc.getAll().find(c => c.stateKey === d.stateKey);
+      if (live) { const { id, __type, ...changes } = d; svc.updateCollectible(live, changes); }
+    }
+  }
+}
+
+test('ASSET-13: PATH-4 load overrides restore edited fields on realProperties, collectibles, accounts, and persons', () => {
+  // Simulate the PATH-4 load path: loadDefaults() runs first (code defaults),
+  // then _applyLoadDefaultsOverrides() re-applies saved user edits.
+  // This covers any field change the user makes via the editor before saving to browser.
+
+  const { scenario } = buildScenario();
+  const registry = ServiceRegistry.getInstance();
+
+  // Edit a field on each asset/domain type
+  const usHouse = registry.realPropertyService.getAll().find(p => p.country === 'US');
+  registry.realPropertyService.updateProperty(usHouse, { plannedSaleYear: 2033 });
+
+  const gold = registry.collectibleService.getAll()[0];
+  registry.collectibleService.updateCollectible(gold, { plannedSaleYear: 2035 });
+
+  const usSavings = registry.accountService.getAll().find(a => a.stateKey === 'usSavingsAccount');
+  registry.accountService.updateAccount(usSavings, { minimumBalance: 5000 });
+
+  const primary = registry.personService.getAll().find(p => p.id === 'primary');
+  registry.personService.updatePerson(primary, { lifeExpectancy: 95 });
+
+  // Serialize (as onSave would)
+  const config = ScenarioSerializer.serialize(
+    registry, 'test-path4', 'Path4 Test', 1, true,
+    new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)),
+    scenario.sim.state, []
+  );
+
+  // Verify the serialized config captured the edits
+  assert.strictEqual(config.realProperties.find(p => p.country === 'US')?.plannedSaleYear, 2033);
+  assert.strictEqual(config.collectibles[0]?.plannedSaleYear, 2035);
+  assert.strictEqual(config.accounts.find(a => a.stateKey === 'usSavingsAccount')?.minimumBalance, 5000);
+  assert.strictEqual(config.persons.find(p => p.id === 'primary')?.lifeExpectancy, 95);
+
+  // Reload: fresh build + loadDefaults() resets everything to code defaults
+  ServiceRegistry.reset();
+  const scenario2 = new IntlRetirementScenario({
+    eventSchedulerUI: makeStubUI(),
+    context: ServiceRegistry.getInstance().simulationContext,
+  });
+  scenario2.buildSim();
+  scenario2.loadDefaults();
+
+  const registry2 = ServiceRegistry.getInstance();
+  // Confirm defaults were reset (pre-override state)
+  assert.strictEqual(registry2.realPropertyService.getAll().find(p => p.country === 'US')?.plannedSaleYear, null,
+    'plannedSaleYear should be null before override is applied');
+  assert.strictEqual(registry2.personService.getAll().find(p => p.id === 'primary')?.lifeExpectancy, 90,
+    'lifeExpectancy should be default 90 before override is applied');
+
+  // Apply the saved overrides (mirrors _applyLoadDefaultsOverrides in base-app.js)
+  applyLoadDefaultsOverrides(config, registry2);
+
+  // Verify all edits were restored
+  const usHouseFinal = registry2.realPropertyService.getAll().find(p => p.country === 'US');
+  assert.strictEqual(usHouseFinal.plannedSaleYear, 2033, 'realProperty.plannedSaleYear restored');
+  assert.strictEqual(usHouseFinal.value, 1_000_000, 'other fields not corrupted');
+  assert.strictEqual(usHouseFinal.stateKey, 'usHouseProperty', 'stateKey preserved');
+
+  const goldFinal = registry2.collectibleService.getAll()[0];
+  assert.strictEqual(goldFinal.plannedSaleYear, 2035, 'collectible.plannedSaleYear restored');
+
+  const usSavingsFinal = registry2.accountService.getAll().find(a => a.stateKey === 'usSavingsAccount');
+  assert.strictEqual(usSavingsFinal.minimumBalance, 5000, 'account.minimumBalance restored');
+
+  const primaryFinal = registry2.personService.getAll().find(p => p.id === 'primary');
+  assert.strictEqual(primaryFinal.lifeExpectancy, 95, 'person.lifeExpectancy restored');
 });
