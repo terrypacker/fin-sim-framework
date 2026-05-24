@@ -522,7 +522,7 @@ export class IntlRetirementScenario extends BaseScenario {
           citizen:        ['US'],
           monthlyWage:    p.primaryMonthlyWage,
           retirementDate: isoDate(p.primaryRetirementDate),
-          lifeExpectancy: 90, socialSecurityMonthly: 0,
+          lifeExpectancy: 90, socialSecurityMonthly: 2000,
         },
         {
           __type: 'Person', id: 'spouse', name: 'Spouse',
@@ -530,7 +530,7 @@ export class IntlRetirementScenario extends BaseScenario {
           citizen:        ['US'],
           monthlyWage:    p.spouseMonthlyWage,
           retirementDate: isoDate(p.spouseRetirementDate),
-          lifeExpectancy: 90, socialSecurityMonthly: 0,
+          lifeExpectancy: 90, socialSecurityMonthly: 1000,
         },
       ],
 
