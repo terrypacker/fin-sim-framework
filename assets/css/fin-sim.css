@@ -23,12 +23,14 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 .sim-status-row {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   font-family: var(--font-head);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.12em;
   color: var(--text-dim);
+  width: 150px;
 }
 
 .sim-gen-display {
@@ -760,6 +762,10 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   background-color:var(--bg-muted);
   color: var(--text-muted);
   cursor: not-allowed;
+}
+
+.node-flash {
+  animation: bp-pulse 1s ease-in-out infinite;
 }
 
 /* ── GRAPH AREA ── */

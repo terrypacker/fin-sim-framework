@@ -99,6 +99,12 @@ export class ConfigGraph {
       el.style.left = node.x + 'px';
       el.style.top  = node.y + 'px';
 
+      if(node.flashing) {
+        el.classList.add('node-flash');
+      }else {
+        el.classList.remove('node-flash');
+      }
+
       const header = el.querySelector('span.g-header-text');
       switch(node.kind) {
         case 'event':
@@ -249,6 +255,14 @@ export class ConfigGraph {
     this.render();
   }
 
+  flashNode(nodeId) {
+    const node = this.getNode(nodeId);
+    if(node) {
+      node.flashing = true;
+      this.render();
+    }
+  }
+
   /**
    * Re-position all nodes using a hierarchical column layout.
    * Nodes are grouped by kind into columns (event → handler → action → reducer),
@@ -288,7 +302,7 @@ export class ConfigGraph {
     return this.nodes.find(n => n.id == nodeId);
   }
 
-  applyToAllNodes(changer, value) {
+  applyToAllNodes(changer) {
     this.nodes.forEach(n => changer(n));
   }
 

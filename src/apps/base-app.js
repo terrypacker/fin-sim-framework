@@ -654,6 +654,18 @@ export class BaseApp {
     } else if (label) {
       label.textContent = 'PAUSED';
     }
+
+    //Flash the node so we know where the breakpoint is
+    if(hit.event) {
+      this.configGraphBuilder.flashNode(hit.event.id);
+    }else if(hit.action) {
+      this.configGraphBuilder.flashNode(hit.action.id);
+    }else if(hit.handler) {
+      this.configGraphBuilder.flashNode(hit.handler.id);
+    }else if(hit.reducer) {
+      this.configGraphBuilder.flashNode(hit.reducer.id);
+    }
+    this.configGraphBuilder.render();
   }
 
   _clearBreakpointStatus() {
@@ -661,6 +673,7 @@ export class BaseApp {
     const label = $('simStatus');
     if (dot) dot.className = this.playing ? 'status-dot running' : 'status-dot stopped';
     if (label) label.textContent = this.playing ? 'RUNNING' : 'STOPPED';
+    this.configGraphBuilder.applyToAllNodes(n => n.flashing = false);
   }
 
   initView() {
