@@ -26,42 +26,42 @@ Other top-level HTML files and apps in `assets/js/` are legacy — only the `ind
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        Browser Application                           │
-│                                                                      │
-│   index.html → CustomApp (extends BaseApp)                           │
-│                   │                                                   │
-│         ┌─────────┴──────────┐                                       │
-│         │   EventScheduler   │  Visual graph builder (nodes + edges) │
-│         │  (ConfigGraphBuilder)  SVG drag-and-drop canvas            │
-│         └─────────┬──────────┘                                       │
-│                   │  creation / click events                         │
-│                   ▼                                                   │
-│   CustomScenario (extends BaseScenario)                              │
-│         │                                                             │
-│         │  registerHandler / registerReducer / scheduleEvent         │
-│         ▼                                                             │
-│   ServiceRegistry (singleton per scenario build)                     │
-│     ├── EventBus  ◀── ServiceActionEvents (CREATE / UPDATE / DELETE) │
-│     ├── EventService                                                  │
-│     ├── HandlerService                                                │
-│     ├── ActionService                                                 │
-│     ├── ReducerService                                                │
-│     └── SimulationRegistry                                           │
-│                   │                                                   │
-│                   ▼                                                   │
-│   ┌───────────────────────────────────────────────────────┐          │
-│   │                     Simulation                         │          │
-│   │  queue(MinHeap)  state  handlers  reducers  journal    │          │
-│   │  stepTo(date)  →  execute(event)  →  applyActions()   │          │
-│   │         └── HandlerRegistry  →  ReducerPipeline        │          │
-│   │                   └── state mutation + chained actions │          │
-│   └───────────────────────────────────────────────────────┘          │
-│                   │                                                   │
-│         ┌─────────┴──────────┐                                       │
-│         │     ChartView      │  Chart.js powered time-series chart    │
-│         │     TimelineView   │  Scrollable journal log                │
-│         │     TimeControls   │  Play/pause/step/rewind slider         │
-│         └────────────────────┘                                       │
+│                        Browser Application                          │
+│                                                                     │
+│   index.html → CustomApp (extends BaseApp)                          │
+│                   │                                                 │
+│         ┌─────────┴──────────┐                                      │
+│         │   EventScheduler   │  Visual graph builder (nodes + edges)│
+│         │  (ConfigGraphBuilder)  SVG drag-and-drop canvas           │
+│         └─────────┬──────────┘                                      │
+│                   │  creation / click events                        │
+│                   ▼                                                 │
+│   CustomScenario (extends BaseScenario)                             │
+│         │                                                           │
+│         │  registerHandler / registerReducer / scheduleEvent        │
+│         ▼                                                           │
+│   ServiceRegistry (singleton per scenario build)                    │
+│     ├── EventBus  ◀── ServiceActionEvents (CREATE / UPDATE / DELETE)│
+│     ├── EventService                                                │
+│     ├── HandlerService                                              │
+│     ├── ActionService                                               │
+│     ├── ReducerService                                              │
+│     └── SimulationRegistry                                          │
+│                   │                                                 │
+│                   ▼                                                 │
+│   ┌───────────────────────────────────────────────────────┐         │
+│   │                     Simulation                        │         │
+│   │  queue(MinHeap)  state  handlers  reducers  journal   │         │
+│   │  stepTo(date)  →  execute(event)  →  applyActions()   │         │
+│   │         └── HandlerRegistry  →  ReducerPipeline       │         │
+│   │                   └── state mutation + chained actions│         │
+│   └───────────────────────────────────────────────────────┘         │
+│                   │                                                 │
+│         ┌─────────┴──────────┐                                      │
+│         │     ChartView      │  Chart.js powered time-series chart  │
+│         │     TimelineView   │  Scrollable journal log              │
+│         │     TimeControls   │  Play/pause/step/rewind slider       │
+│         └────────────────────┘                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
