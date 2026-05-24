@@ -729,11 +729,10 @@ export class BaseApp {
       this.timeControls.stepBack();
     });
 
-    // True reset: rebuild the scenario from scratch so the sim queue and state
-    // are pristine (rewindToStart only restores to snapshot 0, not time 0).
-    $('resetBtn').addEventListener('click', () => this.buildScenario());
-
+    // True reset: ensure the sim queue and state are pristine (rewindToStart only restores to snapshot 0, not time 0).
     let sliderTimeout;
+    $('resetBtn').addEventListener('click', () => this.timeControls.reset());
+
     $('timeSlider').addEventListener('input', () => {
       clearTimeout(sliderTimeout);
       sliderTimeout = setTimeout(() => {

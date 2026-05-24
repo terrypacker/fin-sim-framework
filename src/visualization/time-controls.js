@@ -68,6 +68,33 @@ export class TimeControls {
     return this._doRewindTo(pct);
   }
 
+  /**
+   * True reset: restore the simulation to its pristine pre-run state.
+   * Unlike rewindTo(0), this does NOT call stepTo() — the event queue is
+   * left intact at simStart so the next stepForward()/play() starts fresh.
+   */
+  reset() {
+    this._stepHistory = [];
+
+    this.graphView?.resetGraph();
+    this.chartView?.resetHistory();
+    this.scenario.sim.journal.journal.length = 0;
+    this.scenario.sim.history.resetForReplay();
+    this.timelineView?.reset();
+    this.scenario.sim.rewindToStart();
+
+    const ctrl = this.scenario.sim.control;
+    if (ctrl) {
+      ctrl.breakpointsEnabled = true;
+      ctrl.pendingExecution = null;
+      ctrl.paused = false;
+    }
+
+    this.timeSlider.value = 0;
+    this.timeLabel.textContent = this.formatDate(this.scenario.simStart);
+  }
+
+
   /** Called by the app when playback starts so step-back uses snapshot scanning. */
   clearStepHistory() {
     this._stepHistory = [];
