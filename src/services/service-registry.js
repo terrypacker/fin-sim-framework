@@ -24,6 +24,8 @@ import {ScenarioStorage} from "../scenarios/scenario-storage.js";
 import {ScenarioRegistry} from "../scenarios/scenario-registry.js";
 import { StateRegistry } from '../finance/services/state-registry.js';
 import { StateSchemaRegistry } from '../finance/services/state-schema-registry.js';
+import { RealPropertyService } from '../finance/services/real-property-service.js';
+import { CollectibleService } from '../finance/services/collectible-service.js';
 
 /**
  * Central singleton registry for all application services, the shared
@@ -44,12 +46,14 @@ export class ServiceRegistry {
     this.bus                = new EventBus();
     this.graph              = new Graph();
     this.graphQueryApi      = new GraphQueryApi(this.graph);
-    this.accountService     = new AccountService(this.graph, this.graphQueryApi, this.bus);
-    this.actionService      = new ActionService(this.graph, this.graphQueryApi, this.bus);
-    this.eventService       = new EventService(this.graph, this.graphQueryApi, this.bus);
-    this.handlerService     = new HandlerService(this.graph, this.graphQueryApi, this.bus);
-    this.personService      = new PersonService(this.graph, this.graphQueryApi, this.bus);
-    this.reducerService     = new ReducerService(this.graph, this.graphQueryApi, this.bus);
+    this.accountService         = new AccountService(this.graph, this.graphQueryApi, this.bus);
+    this.actionService          = new ActionService(this.graph, this.graphQueryApi, this.bus);
+    this.eventService           = new EventService(this.graph, this.graphQueryApi, this.bus);
+    this.handlerService         = new HandlerService(this.graph, this.graphQueryApi, this.bus);
+    this.personService          = new PersonService(this.graph, this.graphQueryApi, this.bus);
+    this.reducerService         = new ReducerService(this.graph, this.graphQueryApi, this.bus);
+    this.realPropertyService    = new RealPropertyService(this.graph, this.graphQueryApi, this.bus);
+    this.collectibleService     = new CollectibleService(this.graph, this.graphQueryApi, this.bus);
 
     this.stateRegistry      = new StateRegistry({ accountService: this.accountService });
     this.schemaRegistry     = new StateSchemaRegistry();

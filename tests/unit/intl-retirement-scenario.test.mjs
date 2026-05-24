@@ -78,6 +78,8 @@ import { StockDividendCashApplyReducer }                                        
 import { UsSavingsInterestCreditReducer }                                            from '../../src/finance/reducers/us-savings-interest-credit-reducer.js';
 import { Account, CheckingAccount, SavingsAccount }                                  from '../../src/finance/assets/account.js';
 import { InvestmentAccount, BrokerageAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from '../../src/finance/assets/investment-account.js';
+import { RealProperty }  from '../../src/finance/assets/real-property.js';
+import { Collectible }   from '../../src/finance/assets/collectible.js';
 import { Person }                                                                    from '../../src/finance/person.js';
 // ─── Provide the FinSimLib global that BaseScenario.buildSim() needs ──────────
 
@@ -161,6 +163,7 @@ globalThis.FinSimLib = {
     Account, CheckingAccount, SavingsAccount,
     InvestmentAccount, BrokerageAccount, FourOhOneKAccount,
     RothAccount, TraditionalIRAAccount, SuperannuationAccount,
+    RealProperty, Collectible,
     Person,
   },
 };
@@ -872,4 +875,168 @@ test('RT-5: round-trip simulation resets usOrdinaryIncomeYTD after Dec 31 2026 s
     'usOrdinaryIncomeYTD should be non-negative after round-trip US tax settlement');
   assert.ok(sim.state.usOrdinaryIncomeYTD < 100,
     `round-trip: usOrdinaryIncomeYTD should be a single month's interest after settlement, got ${sim.state.usOrdinaryIncomeYTD}`);
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Real Property and Collectible assets
+// Regression coverage: assets must exist in initial state with correct values,
+// stateKey stamps, service registration, handler/reducer wiring, and
+// serialize → deserialize round-trip.
+// ═════════════════════════════════════════════════════════════════════════════
+
+test('ASSET-1: usHouseProperty exists in initial state with correct value and country', () => {
+  const { sim } = buildScenario();
+  const prop = sim.state.usHouseProperty;
+  assert.ok(prop, 'usHouseProperty should exist in state');
+  assert.strictEqual(prop.value, 1_000_000, 'usHouseProperty initial value should be $1M');
+  assert.strictEqual(prop.country, 'US');
+  assert.strictEqual(prop.isPrimaryResidence, true);
+  assert.strictEqual(prop.costBasis, 800_000);
+});
+
+test('ASSET-2: auHouseProperty exists in initial state with correct value and country', () => {
+  const { sim } = buildScenario();
+  const prop = sim.state.auHouseProperty;
+  assert.ok(prop, 'auHouseProperty should exist in state');
+  assert.strictEqual(prop.value, 1_000_000, 'auHouseProperty initial value should be $1M AUD');
+  assert.strictEqual(prop.country, 'AU');
+  assert.strictEqual(prop.isPrimaryResidence, true);
+  assert.strictEqual(prop.costBasis, 900_000);
+});
+
+test('ASSET-3: collectibleAccount exists in initial state with correct value and country', () => {
+  const { sim } = buildScenario();
+  const col = sim.state.collectibleAccount;
+  assert.ok(col, 'collectibleAccount should exist in state');
+  assert.strictEqual(col.value, 100_000, 'collectibleAccount initial value should be $100K');
+  assert.strictEqual(col.country, 'US');
+  assert.strictEqual(col.costBasis, 60_000);
+});
+
+test('ASSET-4: assets have correct stateKey stamps', () => {
+  const { sim } = buildScenario();
+  assert.strictEqual(sim.state.usHouseProperty.stateKey,   'usHouseProperty');
+  assert.strictEqual(sim.state.auHouseProperty.stateKey,   'auHouseProperty');
+  assert.strictEqual(sim.state.collectibleAccount.stateKey, 'collectibleAccount');
+});
+
+test('ASSET-5: realPropertyService contains exactly 2 properties after loadDefaults()', () => {
+  buildScenario();
+  const props = ServiceRegistry.getInstance().realPropertyService.getAll();
+  assert.strictEqual(props.length, 2, `expected 2 real properties, got ${props.length}`);
+});
+
+test('ASSET-6: collectibleService contains exactly 1 collectible after loadDefaults()', () => {
+  buildScenario();
+  const cols = ServiceRegistry.getInstance().collectibleService.getAll();
+  assert.strictEqual(cols.length, 1, `expected 1 collectible, got ${cols.length}`);
+});
+
+test('ASSET-7: realPropertyService contains both US and AU house after loadDefaults()', () => {
+  buildScenario();
+  const props = ServiceRegistry.getInstance().realPropertyService.getAll();
+  const countries = props.map(p => p.country).sort();
+  assert.deepStrictEqual(countries, ['AU', 'US']);
+});
+
+test('ASSET-8: CollectibleSaleHandler is registered after loadDefaults()', () => {
+  buildScenario();
+  const handlers = ServiceRegistry.getInstance().handlerService.getAll();
+  const types = handlers.map(h => h.handlerClass);
+  assert.ok(types.includes('CollectibleSaleHandler'),
+    `CollectibleSaleHandler missing; handlers: ${types.join(', ')}`);
+});
+
+test('ASSET-8: CollectibleSaleApplyReducer is registered after loadDefaults()', () => {
+  buildScenario();
+  const reducers = ServiceRegistry.getInstance().reducerService.getAll();
+  const types = reducers.map(r => r.reducerType);
+  assert.ok(types.includes('CollectibleSaleApplyReducer'),
+    `CollectibleSaleApplyReducer missing; reducers: ${types.join(', ')}`);
+});
+
+test('ASSET-9: serialize includes realProperties array with US and AU house entries', () => {
+  const { scenario } = buildScenario();
+  const services = ServiceRegistry.getInstance();
+
+  const config = ScenarioSerializer.serialize(
+    services, 'test-assets', 'Asset Test', 1, true,
+    new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)),
+    scenario.sim.state, []
+  );
+
+  assert.ok(Array.isArray(config.realProperties), 'realProperties should be an array');
+  assert.strictEqual(config.realProperties.length, 2, 'should have 2 real properties');
+
+  const usHouse = config.realProperties.find(p => p.country === 'US');
+  assert.ok(usHouse, 'US house missing from serialized realProperties');
+  assert.strictEqual(usHouse.value, 1_000_000);
+  assert.strictEqual(usHouse.stateKey, 'usHouseProperty');
+  assert.strictEqual(usHouse.isPrimaryResidence, true);
+
+  const auHouse = config.realProperties.find(p => p.country === 'AU');
+  assert.ok(auHouse, 'AU house missing from serialized realProperties');
+  assert.strictEqual(auHouse.value, 1_000_000);
+  assert.strictEqual(auHouse.stateKey, 'auHouseProperty');
+});
+
+test('ASSET-10: serialize includes collectibles array with Gold entry', () => {
+  const { scenario } = buildScenario();
+  const services = ServiceRegistry.getInstance();
+
+  const config = ScenarioSerializer.serialize(
+    services, 'test-assets', 'Asset Test', 1, true,
+    new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)),
+    scenario.sim.state, []
+  );
+
+  assert.ok(Array.isArray(config.collectibles), 'collectibles should be an array');
+  assert.strictEqual(config.collectibles.length, 1, 'should have 1 collectible');
+
+  const gold = config.collectibles[0];
+  assert.strictEqual(gold.name, 'Gold');
+  assert.strictEqual(gold.value, 100_000);
+  assert.strictEqual(gold.country, 'US');
+  assert.strictEqual(gold.stateKey, 'collectibleAccount');
+  assert.strictEqual(gold.costBasis, 60_000);
+});
+
+test('ASSET-11: realProperties and collectibles survive serialize → deserialize round-trip', () => {
+  const { scenario } = buildScenario();
+  const services = ServiceRegistry.getInstance();
+
+  const config = ScenarioSerializer.serialize(
+    services, 'test-rt', 'RT Test', 1, true,
+    new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)),
+    scenario.sim.state, []
+  );
+
+  // Rebuild and deserialize into a fresh registry
+  ServiceRegistry.reset();
+  const scenario2 = new IntlRetirementScenario({
+    eventSchedulerUI: makeStubUI(),
+    context: ServiceRegistry.getInstance().simulationContext,
+  });
+  scenario2.buildSim();
+
+  assert.doesNotThrow(
+    () => ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance()),
+    'deserialize should not throw with realProperties and collectibles'
+  );
+
+  const registry2 = ServiceRegistry.getInstance();
+  assert.strictEqual(registry2.realPropertyService.getAll().length, 2,
+    'round-trip should restore 2 real properties');
+  assert.strictEqual(registry2.collectibleService.getAll().length, 1,
+    'round-trip should restore 1 collectible');
+
+  const props = registry2.realPropertyService.getAll();
+  const usHouse = props.find(p => p.country === 'US');
+  assert.ok(usHouse, 'US house should survive round-trip');
+  assert.strictEqual(usHouse.value, 1_000_000);
+  assert.strictEqual(usHouse.stateKey, 'usHouseProperty');
+
+  const gold = registry2.collectibleService.getAll()[0];
+  assert.strictEqual(gold.name, 'Gold');
+  assert.strictEqual(gold.stateKey, 'collectibleAccount');
 });

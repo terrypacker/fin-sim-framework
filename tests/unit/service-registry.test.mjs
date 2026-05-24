@@ -23,6 +23,10 @@ import { ActionService }  from '../../src/services/action-service.js';
 import { EventService }   from '../../src/services/event-service.js';
 import { HandlerService } from '../../src/services/handler-service.js';
 import { ReducerService } from '../../src/services/reducer-service.js';
+import { RealPropertyService } from '../../src/finance/services/real-property-service.js';
+import { CollectibleService }  from '../../src/finance/services/collectible-service.js';
+import { RealProperty }        from '../../src/finance/assets/real-property.js';
+import { Collectible }         from '../../src/finance/assets/collectible.js';
 
 import {
   AmountAction,
@@ -399,4 +403,60 @@ test('Bus history contains all published SERVICE_ACTION events', () => {
   const history = registry.bus.getHistory();
   assert.strictEqual(history.length, 3);
   assert.ok(history.every(e => e instanceof ServiceActionEvent));
+});
+
+// ─── RealPropertyService and CollectibleService ───────────────────────────────
+
+test('ServiceRegistry: exposes realPropertyService instance', () => {
+  const r = ServiceRegistry.getInstance();
+  assert.ok(r.realPropertyService instanceof RealPropertyService);
+});
+
+test('ServiceRegistry: exposes collectibleService instance', () => {
+  const r = ServiceRegistry.getInstance();
+  assert.ok(r.collectibleService instanceof CollectibleService);
+});
+
+test('ServiceRegistry: realPropertyService shares the same bus', () => {
+  const r = ServiceRegistry.getInstance();
+  assert.strictEqual(r.realPropertyService.bus, r.bus);
+});
+
+test('ServiceRegistry: collectibleService shares the same bus', () => {
+  const r = ServiceRegistry.getInstance();
+  assert.strictEqual(r.collectibleService.bus, r.bus);
+});
+
+test('ServiceRegistry: realPropertyService starts with empty store', () => {
+  const r = ServiceRegistry.getInstance();
+  assert.strictEqual(r.realPropertyService.getAll().length, 0);
+});
+
+test('ServiceRegistry: collectibleService starts with empty store', () => {
+  const r = ServiceRegistry.getInstance();
+  assert.strictEqual(r.collectibleService.getAll().length, 0);
+});
+
+test('ServiceRegistry: realPropertyService CREATE event appears on shared bus', () => {
+  ServiceRegistry.reset();
+  const registry = ServiceRegistry.getInstance();
+  const events = [];
+  registry.bus.subscribe('SERVICE_ACTION', e => events.push(e));
+
+  registry.realPropertyService.createProperty(new RealProperty(500_000, { name: 'Test Home' }));
+
+  assert.strictEqual(events.length, 1);
+  assert.strictEqual(events[0].actionType, 'CREATE');
+});
+
+test('ServiceRegistry: collectibleService CREATE event appears on shared bus', () => {
+  ServiceRegistry.reset();
+  const registry = ServiceRegistry.getInstance();
+  const events = [];
+  registry.bus.subscribe('SERVICE_ACTION', e => events.push(e));
+
+  registry.collectibleService.createCollectible(new Collectible(50_000, { name: 'Gold' }));
+
+  assert.strictEqual(events.length, 1);
+  assert.strictEqual(events[0].actionType, 'CREATE');
 });

@@ -11,21 +11,25 @@
 import { BaseComponent } from '../components/base-component.js';
 
 const KIND_LABELS = {
-  person:  'People',
-  account: 'Accounts',
-  event:   'Events',
-  handler: 'Handlers',
-  action:  'Actions',
-  reducer: 'Reducers',
+  person:          'People',
+  account:         'Accounts',
+  'real-property': 'Real Property',
+  collectible:     'Collectibles',
+  event:           'Events',
+  handler:         'Handlers',
+  action:          'Actions',
+  reducer:         'Reducers',
 };
 
 const KIND_SUBTITLES = {
-  person:  (n) => n.citizen?.join('/') ?? '',
-  account: (n) => n.type ?? '',
-  event:   (n) => n.eventType ?? '',
-  handler: (n) => n.handlerClass ?? '',
-  action:  (n) => n.actionClass  ?? '',
-  reducer: (n) => n.reducerType  ?? '',
+  person:          (n) => n.citizen?.join('/') ?? '',
+  account:         (n) => n.type ?? '',
+  'real-property': (n) => [n.country, n.isPrimaryResidence ? 'Primary' : ''].filter(Boolean).join(' · '),
+  collectible:     (n) => n.country ?? '',
+  event:           (n) => n.eventType ?? '',
+  handler:         (n) => n.handlerClass ?? '',
+  action:          (n) => n.actionClass  ?? '',
+  reducer:         (n) => n.reducerType  ?? '',
 };
 
 /**
@@ -95,7 +99,7 @@ export class ConfigurationListComponent extends BaseComponent {
     }
     this.listen(this._kindSelect, 'change', () => {
       this._selectedKind = this._kindSelect.value;
-      this._addBtn.textContent = `+ Add ${KIND_LABELS[this._selectedKind] ?? ''}`.replace(/s$/, '');
+      this._addBtn.textContent = this._addLabel(this._selectedKind);
       this.render();
     });
     kindField.appendChild(this._kindSelect);
@@ -127,12 +131,19 @@ export class ConfigurationListComponent extends BaseComponent {
     this._addBtn = document.createElement('button');
     this._addBtn.className   = 'btn btn-sm';
     this._addBtn.style.width = '100%';
-    this._addBtn.textContent = '+ Add Person';
+    this._addBtn.textContent = this._addLabel('person');
     this.listen(this._addBtn, 'click', () => {
       if (this.onAddClick) this.onAddClick(this._selectedKind);
     });
     addRow.appendChild(this._addBtn);
     this._container.appendChild(addRow);
+  }
+
+  _addLabel(kind) {
+    const label = KIND_LABELS[kind] ?? kind;
+    // For multi-word labels (Real Property) keep as-is; for plural labels strip trailing 's'.
+    if (label.includes(' ')) return `+ Add ${label}`;
+    return `+ Add ${label.replace(/s$/, '')}`;
   }
 
   _renderList() {

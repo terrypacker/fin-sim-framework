@@ -13,6 +13,11 @@ import { ServiceRegistry } from '../services/service-registry.js';
 import { EventBuilder } from '../simulation-framework/builders/event-builder.js';
 import { Person } from '../finance/person.js';
 import { Account, USD, AUD } from '../finance/assets/account.js';
+import { RealProperty } from '../finance/assets/real-property.js';
+import { Collectible } from '../finance/assets/collectible.js';
+import { UsHouseSaleApplyReducer, UsHouseSaleHandler } from '../finance/account-rules/us/us-real-property-classes.js';
+import { AuHouseSaleApplyReducer, AuHouseSaleHandler } from '../finance/account-rules/au/au-real-property-classes.js';
+import { CollectibleSaleApplyReducer, CollectibleSaleHandler } from '../finance/account-rules/us/us-collectible-classes.js';
 import {
   InvestmentAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount,
   BrokerageAccount
@@ -469,10 +474,12 @@ export class IntlRetirementScenario extends BaseScenario {
       simEnd:   simEnd ?? new Date(Date.UTC(2041, 0, 1)),
     });
     // Populated in buildSim(); consumed in loadDefaults().
-    this._people      = null;
-    this._accounts    = null;
-    this._params      = null;
-    this._taxService  = null;
+    this._people         = null;
+    this._accounts       = null;
+    this._realProperties = null;
+    this._collectibles   = null;
+    this._params         = null;
+    this._taxService     = null;
   }
 
   /**
@@ -627,6 +634,40 @@ export class IntlRetirementScenario extends BaseScenario {
       minimumAge:       60,
     });
 
+    // ── Real property ─────────────────────────────────────────────────────────
+    const usHouseProperty = new RealProperty(1_000_000, {
+      name:               'US House',
+      country:            'US',
+      currency:           USD,
+      costBasis:          800_000,
+      appreciationRate:   0.04,
+      isPrimaryResidence: true,
+      ownershipType:      'joint',
+      ownerId:            primary.id,
+    });
+
+    const auHouseProperty = new RealProperty(1_000_000, {
+      name:               'AU House',
+      country:            'AU',
+      currency:           AUD,
+      costBasis:          900_000,
+      appreciationRate:   0.04,
+      isPrimaryResidence: true,
+      ownershipType:      'joint',
+      ownerId:            primary.id,
+    });
+
+    // ── Collectibles ──────────────────────────────────────────────────────────
+    const collectibleAccount = new Collectible(100_000, {
+      name:             'Gold',
+      country:          'US',
+      currency:         USD,
+      costBasis:        60_000,
+      appreciationRate: 0.03,
+      ownershipType:    'sole',
+      ownerId:          primary.id,
+    });
+
     // ── Store for loadDefaults() ──────────────────────────────────────────────
     this._people = { primary, spouse };
     this._accounts = {
@@ -635,6 +676,8 @@ export class IntlRetirementScenario extends BaseScenario {
       auSavingsAccount, auStockAccount, superAccount,
       spouseRothAccount, spouseIraAccount, spouseK401Account, spouseSuperAccount,
     };
+    this._realProperties = { usHouseProperty, auHouseProperty };
+    this._collectibles   = { collectibleAccount };
 
     const { schemaRegistry } = ServiceRegistry.getInstance();
     return new InternationalRetirementFinancialState({
@@ -644,6 +687,8 @@ export class IntlRetirementScenario extends BaseScenario {
       iraAccount, k401Account, rothAccount,
       auSavingsAccount, auStockAccount, superAccount,
       spouseRothAccount, spouseIraAccount, spouseK401Account, spouseSuperAccount,
+      usHouseProperty, auHouseProperty,
+      collectibleAccount,
       exchangeRateUsdToAud: p.exchangeRateUsdToAud,
       intlTransferFeeUsd:   p.intlTransferFeeUsd,
       inflationRates:       { US: p.usInflationRate, AU: p.auInflationRate },
@@ -690,7 +735,8 @@ export class IntlRetirementScenario extends BaseScenario {
    * Called by ScenarioTabPresenter.afterBuildSim() when no saved config exists.
    */
   loadDefaults() {
-    const { eventService, handlerService, reducerService, accountService, personService, stateRegistry } = ServiceRegistry.getInstance();
+    const { eventService, handlerService, reducerService, accountService, personService, stateRegistry,
+            realPropertyService, collectibleService } = ServiceRegistry.getInstance();
     const p = this._params;
     const primaryId = this._people.primary.id;
     const spouseId  = this._people.spouse.id;
@@ -705,6 +751,16 @@ export class IntlRetirementScenario extends BaseScenario {
     // ── Accounts ──────────────────────────────────────────────────────────────
     for (const account of Object.values(this._accounts)) {
       accountService.createAccount(account);
+    }
+
+    // ── Real Property ─────────────────────────────────────────────────────────
+    for (const prop of Object.values(this._realProperties)) {
+      realPropertyService.createProperty(prop);
+    }
+
+    // ── Collectibles ──────────────────────────────────────────────────────────
+    for (const col of Object.values(this._collectibles)) {
+      collectibleService.createCollectible(col);
     }
 
     // ── Schedule one-off CHANGE_RESIDENCY (Jul 1 of moveYear) ────────────────
@@ -958,6 +1014,16 @@ export class IntlRetirementScenario extends BaseScenario {
     const outOfFundsHandler = new OutOfFundsHandler();
     handlerService.register(outOfFundsHandler);
 
+    // ── Asset sale handlers (user fires events manually or via one-off events) ─
+    const usHouseSaleHandler = new UsHouseSaleHandler();
+    handlerService.register(usHouseSaleHandler);
+
+    const auHouseSaleHandler = new AuHouseSaleHandler();
+    handlerService.register(auHouseSaleHandler);
+
+    const collectibleSaleHandler = new CollectibleSaleHandler();
+    handlerService.register(collectibleSaleHandler);
+
     // ── Reducers ──────────────────────────────────────────────────────────────
     const { accountService: svc } = ServiceRegistry.getInstance();
 
@@ -1003,6 +1069,16 @@ export class IntlRetirementScenario extends BaseScenario {
 
     const inflationAdjustReducer = new InflationAdjustReducer();
     reducerService.register(inflationAdjustReducer);
+
+    // ── Asset sale reducers ────────────────────────────────────────────────────
+    const usHouseSaleApplyReducer = new UsHouseSaleApplyReducer({ accountService: svc });
+    reducerService.register(usHouseSaleApplyReducer);
+
+    const auHouseSaleApplyReducer = new AuHouseSaleApplyReducer({ accountService: svc });
+    reducerService.register(auHouseSaleApplyReducer);
+
+    const collectibleSaleApplyReducer = new CollectibleSaleApplyReducer({ accountService: svc });
+    reducerService.register(collectibleSaleApplyReducer);
 
     // ── Roth Conversion policy events ─────────────────────────────────────────
     if (p.rothConversionEnabled) {

@@ -141,6 +141,7 @@ export class ScenarioSerializer {
       return String(d).slice(0, 10);
     };
 
+    const { realPropertyService, collectibleService } = services;
     return {
       id,
       name,
@@ -149,8 +150,10 @@ export class ScenarioSerializer {
       prebuilt: false,
       simStart: toDateStr(simStart),
       simEnd:   toDateStr(simEnd),
-      persons:  (personService?.getAll()  ?? []).map(n => ScenarioSerializer._serializePerson(n)),
-      accounts: (accountService?.getAll() ?? []).map(n => ScenarioSerializer._serializeAccount(n)),
+      persons:        (personService?.getAll()          ?? []).map(n => ScenarioSerializer._serializePerson(n)),
+      accounts:       (accountService?.getAll()         ?? []).map(n => ScenarioSerializer._serializeAccount(n)),
+      realProperties: (realPropertyService?.getAll()    ?? []).map(n => ScenarioSerializer._serializeRealProperty(n)),
+      collectibles:   (collectibleService?.getAll()     ?? []).map(n => ScenarioSerializer._serializeCollectible(n)),
       events:   eventService.getAll().map(n => ScenarioSerializer._serializeEvent(n)),
       handlers: handlerService.getAll().map(n => ScenarioSerializer._serializeHandler(n)),
       actions:  actionService.getAll().map(n => ScenarioSerializer._serializeAction(n)),
@@ -187,7 +190,7 @@ export class ScenarioSerializer {
    * @param {object} services - ServiceRegistry instance
    */
   static deserializePersonsAccounts(config, services) {
-    const { personService, accountService } = services;
+    const { personService, accountService, realPropertyService, collectibleService } = services;
     if (personService) {
       for (const d of (config.persons ?? [])) {
         const person = ScenarioSerializer._makePerson(d);
@@ -198,6 +201,18 @@ export class ScenarioSerializer {
       for (const d of (config.accounts ?? [])) {
         const account = ScenarioSerializer._makeAccount(d);
         accountService.register(account);
+      }
+    }
+    if (realPropertyService) {
+      for (const d of (config.realProperties ?? [])) {
+        const prop = ScenarioSerializer._makeRealProperty(d);
+        realPropertyService.createProperty(prop);
+      }
+    }
+    if (collectibleService) {
+      for (const d of (config.collectibles ?? [])) {
+        const col = ScenarioSerializer._makeCollectible(d);
+        collectibleService.createCollectible(col);
       }
     }
   }
@@ -290,6 +305,88 @@ export class ScenarioSerializer {
       d.balanceAtResidencyChange = account.balanceAtResidencyChange ?? null;
     }
     return d;
+  }
+
+  static _serializeRealProperty(p) {
+    return {
+      __type:               'RealProperty',
+      id:                   p.id,
+      name:                 p.name                 ?? '',
+      value:                p.value                ?? 0,
+      costBasis:            p.costBasis            ?? 0,
+      mortgageBalance:      p.mortgageBalance      ?? 0,
+      monthlyMortgage:      p.monthlyMortgage      ?? 0,
+      appreciationRate:     p.appreciationRate     ?? 0.035,
+      isPrimaryResidence:   p.isPrimaryResidence   ?? false,
+      plannedSaleYear:      p.plannedSaleYear      ?? null,
+      saleDestinationAccount: p.saleDestinationAccount ?? null,
+      ownershipType:        p.ownershipType        ?? 'sole',
+      ownerId:              p.ownerId              ?? null,
+      drawdownPriority:     p.drawdownPriority     ?? null,
+      owners:               p.owners               ?? [],
+      country:              p.country              ?? 'US',
+      stateKey:             p.stateKey             ?? null,
+    };
+  }
+
+  static _makeRealProperty(d) {
+    const { RealProperty } = FinSimLib.Finance;
+    const prop = new RealProperty(d.value ?? 0, {
+      id:                  d.id,
+      name:                d.name                ?? '',
+      costBasis:           d.costBasis           ?? 0,
+      mortgageBalance:     d.mortgageBalance     ?? 0,
+      monthlyMortgage:     d.monthlyMortgage     ?? 0,
+      appreciationRate:    d.appreciationRate    ?? 0.035,
+      isPrimaryResidence:  d.isPrimaryResidence  ?? false,
+      plannedSaleYear:     d.plannedSaleYear     ?? null,
+      saleDestinationAccount: d.saleDestinationAccount ?? null,
+      ownershipType:       d.ownershipType       ?? 'sole',
+      ownerId:             d.ownerId             ?? null,
+      drawdownPriority:    d.drawdownPriority    ?? null,
+      owners:              d.owners              ?? [],
+      country:             d.country             ?? 'US',
+    });
+    if (d.stateKey) prop.stateKey = d.stateKey;
+    return prop;
+  }
+
+  static _serializeCollectible(c) {
+    return {
+      __type:               'Collectible',
+      id:                   c.id,
+      name:                 c.name                 ?? '',
+      value:                c.value                ?? 0,
+      costBasis:            c.costBasis            ?? 0,
+      appreciationRate:     c.appreciationRate     ?? 0.035,
+      plannedSaleYear:      c.plannedSaleYear      ?? null,
+      saleDestinationAccount: c.saleDestinationAccount ?? null,
+      ownershipType:        c.ownershipType        ?? 'sole',
+      ownerId:              c.ownerId              ?? null,
+      drawdownPriority:     c.drawdownPriority     ?? null,
+      owners:               c.owners               ?? [],
+      country:              c.country              ?? 'US',
+      stateKey:             c.stateKey             ?? null,
+    };
+  }
+
+  static _makeCollectible(d) {
+    const { Collectible } = FinSimLib.Finance;
+    const col = new Collectible(d.value ?? 0, {
+      id:                  d.id,
+      name:                d.name                ?? '',
+      costBasis:           d.costBasis           ?? 0,
+      appreciationRate:    d.appreciationRate    ?? 0.035,
+      plannedSaleYear:     d.plannedSaleYear     ?? null,
+      saleDestinationAccount: d.saleDestinationAccount ?? null,
+      ownershipType:       d.ownershipType       ?? 'sole',
+      ownerId:             d.ownerId             ?? null,
+      drawdownPriority:    d.drawdownPriority    ?? null,
+      owners:              d.owners              ?? [],
+      country:             d.country             ?? 'US',
+    });
+    if (d.stateKey) col.stateKey = d.stateKey;
+    return col;
   }
 
   static _serializePerson(person) {

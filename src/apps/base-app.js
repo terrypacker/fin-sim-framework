@@ -41,6 +41,10 @@ import { PeopleController }              from '../visualization/people/people-co
 import { PersonEditor }                  from '../visualization/people/person-editor.js';
 import { AccountsController }            from '../visualization/accounts/accounts-controller.js';
 import { AccountEditor }                 from '../visualization/accounts/account-editor.js';
+import { RealPropertyEditor }            from '../visualization/assets/real-property-editor.js';
+import { CollectibleEditor }             from '../visualization/assets/collectible-editor.js';
+import { RealProperty }                  from '../finance/assets/real-property.js';
+import { Collectible }                   from '../finance/assets/collectible.js';
 import { NodeEditModal }                 from '../visualization/components/node-edit-modal.js';
 import { ConfigurationListComponent }    from '../visualization/configuration/configuration-list.js';
 import { ScenarioTabPresenter }     from '../visualization/scenario/scenario-tab-presenter.js';
@@ -192,6 +196,10 @@ export class BaseApp extends BaseComponent {
         this._editModal.open({ kind: 'person', id: null, name: 'New Person' });
       } else if (kind === 'account') {
         this._editModal.open({ kind: 'account', id: null, name: 'New Account' });
+      } else if (kind === 'real-property') {
+        this._editModal.open({ kind: 'real-property', id: null, name: 'New Property' });
+      } else if (kind === 'collectible') {
+        this._editModal.open({ kind: 'collectible', id: null, name: 'New Collectible' });
       } else {
         const newNode = this.configPresenter.createNode(kind, null);
         this._editModal.open(newNode);
@@ -247,6 +255,60 @@ export class BaseApp extends BaseComponent {
               ? accountsController.getHistory(account.id, journal)
               : [];
             this._showAccountHistory(entries, account.name, account.currency?.symbol ?? '$');
+          },
+        });
+        editor.render();
+        return editor;
+      }
+
+      if (node?.kind === 'real-property') {
+        const people   = registry.graphQueryApi.getByKind('person');
+        const accounts = registry.graphQueryApi.getByKind('account');
+        const editor = new RealPropertyEditor({
+          container,
+          node,
+          people,
+          accounts,
+          onSave: (data) => {
+            if (data.id) {
+              const { id, ...changes } = data;
+              registry.realPropertyService.updateProperty(id, changes);
+            } else {
+              const prop = new RealProperty(data.value ?? 0, data);
+              registry.realPropertyService.createProperty(prop);
+            }
+            this._editModal.close();
+          },
+          onDelete: (id) => {
+            registry.realPropertyService.deleteProperty(id);
+            this._editModal.close();
+          },
+        });
+        editor.render();
+        return editor;
+      }
+
+      if (node?.kind === 'collectible') {
+        const people   = registry.graphQueryApi.getByKind('person');
+        const accounts = registry.graphQueryApi.getByKind('account');
+        const editor = new CollectibleEditor({
+          container,
+          node,
+          people,
+          accounts,
+          onSave: (data) => {
+            if (data.id) {
+              const { id, ...changes } = data;
+              registry.collectibleService.updateCollectible(id, changes);
+            } else {
+              const col = new Collectible(data.value ?? 0, data);
+              registry.collectibleService.createCollectible(col);
+            }
+            this._editModal.close();
+          },
+          onDelete: (id) => {
+            registry.collectibleService.deleteCollectible(id);
+            this._editModal.close();
           },
         });
         editor.render();
