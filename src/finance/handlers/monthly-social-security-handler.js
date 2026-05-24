@@ -45,7 +45,7 @@ export class MonthlySocialSecurityHandler extends HandlerEntry {
 
       //TODO #292 Support Early or FRA, this is FRA only right now (Born 1960+ FRA is 67)
       //  there are also 'delayed retirement credits' that can accrue to age 70
-      const age     = getAge(state.personBirthDate, date);
+      const age     = getAge(person.birthDate, date);
       if(age < 67) continue;
       // If not retired, don't accept payments?
       const retDate = person.retirementDate;
