@@ -34,6 +34,11 @@ const _ACCOUNT_SERVICE_REDUCERS = new Set([
   'StockEarningsApplyReducer', 'StockWithdrawalApplyReducer',
   // US — Real Property
   'UsHouseSaleApplyReducer',
+  // US — Income
+  'SsIncomeApplyReducer', 'WagesIncomeApplyReducer', 'WagesWithheldApplyReducer',
+  'SeIncomeUsApplyReducer', 'BonusApplyReducer', 'CompanySaleApplyReducer',
+  // US — Collectibles
+  'CollectibleSaleApplyReducer', 'CollectibleValueChangeApplyReducer',
   // AU — Savings
   'AuSavingsContributionApplyReducer', 'AuSavingsWithdrawalApplyReducer',
   'AuSavingsEarningsApplyReducer',
@@ -46,6 +51,8 @@ const _ACCOUNT_SERVICE_REDUCERS = new Set([
   'AuStockEarningsApplyReducer', 'AuStockWithdrawalApplyReducer',
   // AU — Real Property
   'AuHouseSaleApplyReducer',
+  // AU — Income
+  'AuSeIncomeApplyReducer',
 ]);
 
 /**
@@ -68,6 +75,11 @@ const _NO_ARG_HANDLERS = new Set([
   'StockContributionHandler', 'StockDividendHandler', 'StockEarningsHandler', 'StockWithdrawalHandler',
   // US — Real Property
   'UsHouseSaleHandler',
+  // US — Income
+  'SsIncomeHandler', 'WagesIncomeHandler', 'WagesWithheldHandler',
+  'SeIncomeUsHandler', 'BonusHandler', 'CompanySaleHandler',
+  // US — Collectibles
+  'CollectibleSaleHandler', 'CollectibleValueChangeHandler',
   // AU — Savings
   'AuSavingsContributionHandler', 'AuSavingsWithdrawalHandler', 'AuSavingsEarningsHandler',
   // AU — Superannuation
@@ -79,6 +91,8 @@ const _NO_ARG_HANDLERS = new Set([
   'AuStockEarningsHandler', 'AuStockWithdrawalHandler',
   // AU — Real Property
   'AuHouseSaleHandler',
+  // AU — Income
+  'AuSeIncomeHandler',
 ]);
 
 export class ScenarioSerializer {

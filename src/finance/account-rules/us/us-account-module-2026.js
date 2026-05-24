@@ -36,6 +36,16 @@ import {
 import {
   UsHouseSaleApplyReducer, UsHouseSaleHandler,
 } from './us-real-property-classes.js';
+import {
+  SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer,
+  SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer,
+  SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler,
+  SeIncomeUsHandler, BonusHandler, CompanySaleHandler,
+} from './us-income-classes.js';
+import {
+  CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer,
+  CollectibleSaleHandler, CollectibleValueChangeHandler,
+} from './us-collectible-classes.js';
 
 
 /**
@@ -51,6 +61,14 @@ import {
  *   EVT-9 to 15  US Brokerage (fixed income + stocks)
  *   EVT-24/25    401k
  *   EVT-34       US House Sale
+ *   EVT-36/46    Collectible Sale (baseball cards, gold)
+ *   EVT-37       Social Security Income
+ *   EVT-38       Wages (Gross)
+ *   EVT-39       Wages Taxes Withheld
+ *   EVT-45/47    Collectible Value Change
+ *   EVT-48       Self-Employment Income (US)
+ *   EVT-50       Bonus
+ *   EVT-51       Company Sale
  */
 export class UsAccountModule2026 extends BaseAccountModule {
   get countryCode() { return 'US'; }
@@ -82,6 +100,16 @@ export class UsAccountModule2026 extends BaseAccountModule {
       new StockWithdrawalApplyReducer({ accountService }),
       // Real Property
       new UsHouseSaleApplyReducer({ accountService }),
+      // Income
+      new SsIncomeApplyReducer({ accountService }),
+      new WagesIncomeApplyReducer({ accountService }),
+      new WagesWithheldApplyReducer({ accountService }),
+      new SeIncomeUsApplyReducer({ accountService }),
+      new BonusApplyReducer({ accountService }),
+      new CompanySaleApplyReducer({ accountService }),
+      // Collectibles
+      new CollectibleSaleApplyReducer({ accountService }),
+      new CollectibleValueChangeApplyReducer({ accountService }),
     ];
   }
 
@@ -111,6 +139,16 @@ export class UsAccountModule2026 extends BaseAccountModule {
       new StockWithdrawalHandler(),
       // Real Property
       new UsHouseSaleHandler(),
+      // Income
+      new SsIncomeHandler(),
+      new WagesIncomeHandler(),
+      new WagesWithheldHandler(),
+      new SeIncomeUsHandler(),
+      new BonusHandler(),
+      new CompanySaleHandler(),
+      // Collectibles
+      new CollectibleSaleHandler(),
+      new CollectibleValueChangeHandler(),
     ];
   }
 }

@@ -35,6 +35,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
       ...this._k401ReducerFns(),
       ...this._usBrokerageReducerFns(),
       ...this._realPropertyReducerFns(),
+      ...this._incomeReducerFns(),
+      ...this._collectibleReducerFns(),
     ]);
   }
 
@@ -163,6 +165,102 @@ export class UsTaxModule2026 extends BaseTaxModule {
         ...state,
         usCapitalGainsYTD: state.usCapitalGainsYTD + action.taxableGain,
       })],
+    ];
+  }
+
+  _incomeReducerFns() {
+    return [
+      // EVT-37: SS income — 85% taxable as US ordinary income; AU ordinary income if resident
+      ['SS_INCOME_TAX', (state, action) => {
+        const { amount, isAuResident } = action;
+        const taxable = amount * 0.85;
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + taxable };
+        if (isAuResident) {
+          next = {
+            ...next,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            ftcYTD:              state.ftcYTD              + taxable,
+          };
+        }
+        return next;
+      }],
+
+      // EVT-38: wages — US ordinary income; AU ordinary income if resident
+      ['WAGES_INCOME_TAX', (state, action) => {
+        const { amount, isAuResident } = action;
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        if (isAuResident) {
+          next = {
+            ...next,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            ftcYTD:              state.ftcYTD              + amount,
+          };
+        }
+        return next;
+      }],
+
+      // EVT-48: US self-employment income — US ordinary income; AU ordinary income if resident
+      ['SE_INCOME_US_TAX', (state, action) => {
+        const { amount, isAuResident } = action;
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        if (isAuResident) {
+          next = {
+            ...next,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            ftcYTD:              state.ftcYTD              + amount,
+          };
+        }
+        return next;
+      }],
+
+      // EVT-50: bonus — US ordinary income; AU ordinary income if resident
+      ['BONUS_TAX', (state, action) => {
+        const { amount, isAuResident } = action;
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        if (isAuResident) {
+          next = {
+            ...next,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            ftcYTD:              state.ftcYTD              + amount,
+          };
+        }
+        return next;
+      }],
+
+      // EVT-51: company sale — US capital gain; AU capital gain if resident
+      ['COMPANY_SALE_TAX', (state, action) => {
+        const { gain, isAuResident } = action;
+        let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + gain };
+        if (isAuResident) {
+          next = {
+            ...next,
+            auCapitalGainsYTD: (state.auCapitalGainsYTD ?? 0) + gain,
+            ftcYTD:            state.ftcYTD                   + gain,
+          };
+        }
+        return next;
+      }],
+    ];
+  }
+
+  _collectibleReducerFns() {
+    return [
+      // EVT-36/46: collectible sale — US collectible gain (28% rate); AU capital gain if resident
+      ['COLLECTIBLE_SALE_TAX', (state, action) => {
+        const { gain, isAuResident } = action;
+        let next = {
+          ...state,
+          usCollectibleGainsYTD: (state.usCollectibleGainsYTD ?? 0) + gain,
+        };
+        if (isAuResident) {
+          next = {
+            ...next,
+            auCapitalGainsYTD: (state.auCapitalGainsYTD ?? 0) + gain,
+            ftcYTD:            (state.ftcYTD ?? 0)            + gain,
+          };
+        }
+        return next;
+      }],
     ];
   }
 }
