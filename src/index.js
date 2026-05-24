@@ -63,7 +63,7 @@ import { HandlerEntry, HANDLER_CLASSES, HandlerRegistry } from './simulation-fra
 import { IndexedMinHeap } from './simulation-framework/indexed-min-heap.js';
 import { JournalEntry, Journal } from './simulation-framework/journal.js';
 import { MinHeap } from './simulation-framework/min-heap.js';
-import { ReducerPipeline, PRIORITY, Reducer, NoOpReducer, FieldReducer, StateFieldReducer, MetricReducer, ArrayMetricReducer, NumericSumMetricReducer, MultiplicativeMetricReducer, AccountTransactionReducer, REDUCER_CLASSES, RepeatingReducer, ScriptedReducer } from './simulation-framework/reducers.js';
+import { ReducerPipeline, PRIORITY, Reducer, NoOpReducer, FieldReducer, ArrayReducer, NumericSumReducer, MultiplicativeReducer, AccountTransactionReducer, REDUCER_CLASSES, RepeatingReducer, ScriptedReducer } from './simulation-framework/reducers.js';
 import { ScenarioRunner } from './simulation-framework/scenario.js';
 import { ActionNode, SimulationEventGraph } from './simulation-framework/simulation-event-graph.js';
 import { SimulationHistory } from './simulation-framework/simulation-history.js';
@@ -200,11 +200,9 @@ export const Core = {
   Reducer,
   NoOpReducer,
   FieldReducer,
-  StateFieldReducer,
-  MetricReducer,
-  ArrayMetricReducer,
-  NumericSumMetricReducer,
-  MultiplicativeMetricReducer,
+  ArrayReducer,
+  NumericSumReducer,
+  MultiplicativeReducer,
   AccountTransactionReducer,
   REDUCER_CLASSES,
   RepeatingReducer,

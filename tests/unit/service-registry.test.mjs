@@ -37,10 +37,9 @@ import { EventSeries }  from '../../src/simulation-framework/events/event-series
 import { OneOffEvent }  from '../../src/simulation-framework/events/one-off-event.js';
 import { HandlerEntry } from '../../src/simulation-framework/handlers.js';
 import {
-  MetricReducer,
-  ArrayMetricReducer,
-  NumericSumMetricReducer,
-  MultiplicativeMetricReducer,
+  ArrayReducer,
+  NumericSumReducer,
+  MultiplicativeReducer,
   NoOpReducer,
   FieldReducer,
 } from '../../src/simulation-framework/reducers.js';
@@ -303,33 +302,33 @@ test('HandlerService: deleteHandler publishes DELETE', () => {
 
 // ─── ReducerService ───────────────────────────────────────────────────────────
 
-test('ReducerService: createMetricReducer returns a MetricReducer and publishes CREATE', () => {
+test('ReducerService: createFieldReducer returns a FieldReducer and publishes CREATE', () => {
   const events = captureServiceEvents(({ reducerService }) => {
-    const r = reducerService.createMetricReducer('balance');
-    assert.ok(r instanceof MetricReducer);
+    const r = reducerService.createFieldReducer('metrics.balance');
+    assert.ok(r instanceof FieldReducer);
   });
   assert.strictEqual(events[0].actionType, 'CREATE');
-  assert.strictEqual(events[0].classType,  'MetricReducer');
+  assert.strictEqual(events[0].classType,  'FieldReducer');
 });
 
-test('ReducerService: createArrayMetricReducer returns an ArrayMetricReducer', () => {
+test('ReducerService: createArrayReducer returns an ArrayReducer', () => {
   captureServiceEvents(({ reducerService }) => {
-    const r = reducerService.createArrayMetricReducer('balances');
-    assert.ok(r instanceof ArrayMetricReducer);
+    const r = reducerService.createArrayReducer('balances');
+    assert.ok(r instanceof ArrayReducer);
   });
 });
 
-test('ReducerService: createNumericSumMetricReducer returns correct type', () => {
+test('ReducerService: createNumericSumReducer returns correct type', () => {
   captureServiceEvents(({ reducerService }) => {
-    const r = reducerService.createNumericSumMetricReducer('total');
-    assert.ok(r instanceof NumericSumMetricReducer);
+    const r = reducerService.createNumericSumReducer('total');
+    assert.ok(r instanceof NumericSumReducer);
   });
 });
 
-test('ReducerService: createMultiplicativeMetricReducer returns correct type', () => {
+test('ReducerService: createMultiplicativeReducer returns correct type', () => {
   captureServiceEvents(({ reducerService }) => {
-    const r = reducerService.createMultiplicativeMetricReducer('rate');
-    assert.ok(r instanceof MultiplicativeMetricReducer);
+    const r = reducerService.createMultiplicativeReducer('rate');
+    assert.ok(r instanceof MultiplicativeReducer);
   });
 });
 
@@ -350,25 +349,25 @@ test('ReducerService: createFieldReducer returns a FieldReducer', () => {
 test('ReducerService: updateReducer mutates in-place and publishes UPDATE', () => {
   ServiceRegistry.reset();
   const registry = ServiceRegistry.getInstance();
-  const r = registry.reducerService.createMetricReducer('balance');
+  const r = registry.reducerService.createFieldReducer('metrics.balance');
   let evt;
   registry.bus.subscribe('SERVICE_ACTION', ev => { if (ev.actionType === 'UPDATE') evt = ev; });
   registry.reducerService.updateReducer(r, { name: 'Renamed' });
   assert.strictEqual(r.name,         'Renamed');
   assert.strictEqual(evt.actionType, 'UPDATE');
-  assert.strictEqual(evt.classType,  'MetricReducer');
+  assert.strictEqual(evt.classType,  'FieldReducer');
   assert.strictEqual(evt.item.name,  'Renamed');
 });
 
 test('ReducerService: deleteReducer publishes DELETE', () => {
   ServiceRegistry.reset();
   const registry = ServiceRegistry.getInstance();
-  const r = registry.reducerService.createMetricReducer('balance');
+  const r = registry.reducerService.createFieldReducer('metrics.balance');
   let evt;
   registry.bus.subscribe('SERVICE_ACTION', ev => { if (ev.actionType === 'DELETE') evt = ev; });
   registry.reducerService.deleteReducer(r);
   assert.strictEqual(evt.actionType, 'DELETE');
-  assert.strictEqual(evt.classType,  'MetricReducer');
+  assert.strictEqual(evt.classType,  'FieldReducer');
 });
 
 // ─── Cross-service bus integration ────────────────────────────────────────────
@@ -378,14 +377,14 @@ test('All services publish to the same shared bus', () => {
     actionService.createAmountAction('T', 'T', 0);
     eventService.createEventSeries({ id: 'e1', name: 'E', type: 'E', interval: 'monthly' });
     handlerService.createHandler(null, 'H');
-    reducerService.createMetricReducer('m');
+    reducerService.createFieldReducer('metrics.m');
   });
   assert.strictEqual(events.length, 4);
   const classTypes = events.map(e => e.classType);
   assert.ok(classTypes.includes('AmountAction'));
   assert.ok(classTypes.includes('EventSeries'));
   assert.ok(classTypes.includes('HandlerEntry'));
-  assert.ok(classTypes.includes('MetricReducer'));
+  assert.ok(classTypes.includes('FieldReducer'));
 });
 
 test('Wildcard bus subscriber receives all SERVICE_ACTION events', () => {

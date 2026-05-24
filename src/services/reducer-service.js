@@ -12,12 +12,10 @@ import { BaseService } from './base-service.js';
 import {
   NoOpReducer,
   FieldReducer,
-  StateFieldReducer,
   ScriptedReducer,
-  MetricReducer,
-  ArrayMetricReducer,
-  NumericSumMetricReducer,
-  MultiplicativeMetricReducer,
+  ArrayReducer,
+  NumericSumReducer,
+  MultiplicativeReducer,
   PRIORITY,
   REDUCER_CLASSES,
 } from '../simulation-framework/reducers.js';
@@ -49,40 +47,24 @@ export class ReducerService extends BaseService {
     return item;
   }
 
-  createStateFieldReducer(fieldName, generate, name = 'State Field Reducer', priority = PRIORITY.POSITION_UPDATE) {
-    const item = new StateFieldReducer(name, priority, fieldName, generate);
+  createArrayReducer(fieldName, name = 'Array Metric Reducer', priority = PRIORITY.METRICS) {
+    const item = new ArrayReducer(name, priority, fieldName);
     item.id = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
   }
 
-  createMetricReducer(metricName, name = 'Metric Reducer', priority = PRIORITY.METRICS) {
-    const item = new MetricReducer(name, priority, metricName);
+  createNumericSumReducer(metricName, name = 'Sum Metric Reducer', priority = PRIORITY.METRICS) {
+    const item = new NumericSumReducer(name, priority, metricName);
     item.id = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
   }
 
-  createArrayMetricReducer(fieldName, name = 'Array Metric Reducer', priority = PRIORITY.METRICS) {
-    const item = new ArrayMetricReducer(name, priority, fieldName);
-    item.id = this._generateId('r');
-    this._register(item);
-    this._publish('CREATE', item.constructor.name, item);
-    return item;
-  }
-
-  createNumericSumMetricReducer(metricName, name = 'Sum Metric Reducer', priority = PRIORITY.METRICS) {
-    const item = new NumericSumMetricReducer(name, priority, metricName);
-    item.id = this._generateId('r');
-    this._register(item);
-    this._publish('CREATE', item.constructor.name, item);
-    return item;
-  }
-
-  createMultiplicativeMetricReducer(metricName, name = 'Multiplicative Metric Reducer', priority = PRIORITY.METRICS) {
-    const item = new MultiplicativeMetricReducer(name, priority, metricName);
+  createMultiplicativeReducer(metricName, name = 'Multiplicative Metric Reducer', priority = PRIORITY.METRICS) {
+    const item = new MultiplicativeReducer(name, priority, metricName);
     item.id = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);

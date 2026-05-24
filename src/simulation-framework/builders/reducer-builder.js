@@ -11,12 +11,10 @@
 import {
   NoOpReducer,
   FieldReducer,
-  MetricReducer,
-  ArrayMetricReducer,
-  NumericSumMetricReducer,
-  MultiplicativeMetricReducer,
+  ArrayReducer,
+  NumericSumReducer,
+  MultiplicativeReducer,
   RepeatingReducer,
-  StateFieldReducer,
   PRIORITY,
 } from '../reducers.js';
 
@@ -40,81 +38,66 @@ class BaseReducerBuilder {
   }
 }
 
+class BaseFieldReducerBuilder extends BaseReducerBuilder {
+  constructor(defaultName, defaultPriority, defaultFieldName) {
+    super(defaultName, defaultPriority);
+    this._fieldName = defaultFieldName;
+  }
+  fieldName(v) { this._fieldName = v; return this; }
+}
+
 class NoOpReducerBuilder extends BaseReducerBuilder {
   constructor() { super('No-Op', PRIORITY.LOGGING + 5); }
   build() { return this._apply(new NoOpReducer(this._name, this._priority)); }
 }
 
-class FieldReducerBuilder extends BaseReducerBuilder {
-  constructor() { super('Field Logger', PRIORITY.METRICS); this._fieldName = null; }
-  fieldName(v) { this._fieldName = v; return this; }
+class FieldReducerBuilder extends BaseFieldReducerBuilder {
+  constructor(fieldName) { super('Field Logger', PRIORITY.METRICS, fieldName); }
   build() { return this._apply(new FieldReducer(this._name, this._priority, this._fieldName)); }
 }
 
-class StateFieldReducerBuilder extends BaseReducerBuilder {
-  constructor() { super('State Field Logger', PRIORITY.POSITION_UPDATE); this._fieldName = null; }
-  fieldName(v) { this._fieldName = v; return this; }
-  build() { return this._apply(new StateFieldReducer(this._name, this._priority, this._fieldName)); }
-}
-
-class MetricReducerBuilder extends BaseReducerBuilder {
-  constructor(metricName) {
-    super('Metric Logger', PRIORITY.METRICS);
-    this._metricName = metricName;
-  }
-  build() { return this._apply(new MetricReducer(this._name, this._priority, this._metricName)); }
-}
-
-class ArrayMetricReducerBuilder extends BaseReducerBuilder {
+class ArrayReducerBuilder extends BaseFieldReducerBuilder {
   constructor(fieldName) {
-    super('Array Metric Logger', PRIORITY.METRICS);
-    this._fieldName = fieldName;
+    super('Array Reducer', PRIORITY.METRICS, fieldName);
   }
-  build() { return this._apply(new ArrayMetricReducer(this._name, this._priority, this._fieldName)); }
+  build() { return this._apply(new ArrayReducer(this._name, this._priority, this._fieldName)); }
 }
 
-class NumericSumMetricReducerBuilder extends BaseReducerBuilder {
-  constructor(metricName) {
-    super('Sum Metric Logger', PRIORITY.METRICS);
-    this._metricName = metricName;
+class NumericSumReducerBuilder extends BaseFieldReducerBuilder {
+  constructor(fieldName) {
+    super('Sum Reducer', PRIORITY.METRICS, fieldName);
   }
-  build() { return this._apply(new NumericSumMetricReducer(this._name, this._priority, this._metricName)); }
+  build() { return this._apply(new NumericSumReducer(this._name, this._priority, this._fieldName)); }
 }
 
-class MultiplicativeMetricReducerBuilder extends BaseReducerBuilder {
-  constructor(metricName) {
-    super('Multiplicative Metric Logger', PRIORITY.METRICS);
-    this._metricName = metricName;
+class MultiplicativeReducerBuilder extends BaseFieldReducerBuilder {
+  constructor(fieldName) {
+    super('Multiplicative Metric Logger', PRIORITY.METRICS, fieldName);
   }
-  build() { return this._apply(new MultiplicativeMetricReducer(this._name, this._priority, this._metricName)); }
+  build() { return this._apply(new MultiplicativeReducer(this._name, this._priority, this._fieldName)); }
 }
 
-class RepeatingReducerBuilder extends BaseReducerBuilder {
-  constructor() {
-    super('Repeating Reducer', PRIORITY.METRICS);
+class RepeatingReducerBuilder extends BaseFieldReducerBuilder {
+  constructor(fieldName) {
+    super('Repeating Reducer', PRIORITY.METRICS, fieldName = 'value');
     this._reducers   = [];
-    this._countField = 'value';
     this._count      = null;
   }
 
   reducers(v)   { this._reducers = v;    return this; }
-  countField(v) { this._countField = v;  return this; }
   count(v)      { this._count = v;       return this; }
-
   build() {
     return this._apply(
-      new RepeatingReducer(this._name, this._priority, this._reducers, this._countField, this._count)
+      new RepeatingReducer(this._name, this._priority, this._reducers, this._fieldName, this._count)
     );
   }
 }
 
 export class ReducerBuilder {
   static noOp()                   { return new NoOpReducerBuilder(); }
-  static field()                  { return new FieldReducerBuilder(); }
-  static stateField() { return new StateFieldReducerBuilder(); }
-  static metric(metricName)       { return new MetricReducerBuilder(metricName); }
-  static arrayMetric(fieldName)   { return new ArrayMetricReducerBuilder(fieldName); }
-  static numericSum(metricName)   { return new NumericSumMetricReducerBuilder(metricName); }
-  static multiplicative(metricName) { return new MultiplicativeMetricReducerBuilder(metricName); }
-  static repeating()              { return new RepeatingReducerBuilder(); }
+  static field(fieldName)                  { return new FieldReducerBuilder(fieldName); }
+  static array(fieldName)   { return new ArrayReducerBuilder(fieldName); }
+  static numericSum(fieldName)   { return new NumericSumReducerBuilder(fieldName); }
+  static multiplicative(fieldName) { return new MultiplicativeReducerBuilder(fieldName); }
+  static repeating(fieldName)              { return new RepeatingReducerBuilder(fieldName); }
 }

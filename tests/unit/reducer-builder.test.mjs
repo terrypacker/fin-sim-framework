@@ -21,10 +21,9 @@ import {
   ReducerPipeline,
   NoOpReducer,
   FieldReducer,
-  MetricReducer,
-  ArrayMetricReducer,
-  NumericSumMetricReducer,
-  MultiplicativeMetricReducer,
+  ArrayReducer,
+  NumericSumReducer,
+  MultiplicativeReducer,
   RepeatingReducer,
   PRIORITY,
 } from '../../src/simulation-framework/reducers.js';
@@ -80,60 +79,48 @@ test('ReducerBuilder.field: name is set', () => {
   assert.ok(r.name.includes('Balance Reducer'));
 });
 
-// ─── Metric builder ───────────────────────────────────────────────────────────
-
-test('ReducerBuilder.metric: build() returns a MetricReducer', () => {
-  const r = ReducerBuilder.metric('salary').build();
-  assert.ok(r instanceof MetricReducer);
+test('ReducerBuilder.field: fieldName is used in constructor.', () => {
+  const r = ReducerBuilder.field('salary').build();
+  assert.strictEqual(r.fieldName, 'salary');
 });
 
-test('ReducerBuilder.metric: fieldName is prefixed with metrics.', () => {
-  const r = ReducerBuilder.metric('salary').build();
-  assert.strictEqual(r.fieldName, 'metrics.salary');
-});
-
-test('ReducerBuilder.metric: name is set', () => {
-  const r = ReducerBuilder.metric('salary').name('Salary Reducer').build();
-  assert.ok(r.name.includes('Salary Reducer'));
-});
-
-test('ReducerBuilder.metric: default priority is METRICS', () => {
-  const r = ReducerBuilder.metric('salary').build();
+test('ReducerBuilder.field: default priority is METRICS', () => {
+  const r = ReducerBuilder.field('salary').build();
   assert.strictEqual(r.priority, PRIORITY.METRICS);
 });
 
-test('ReducerBuilder.metric: priority is overridable', () => {
-  const r = ReducerBuilder.metric('salary').priority(PRIORITY.CASH_FLOW).build();
+test('ReducerBuilder.field: priority is overridable', () => {
+  const r = ReducerBuilder.field('salary').priority(PRIORITY.CASH_FLOW).build();
   assert.strictEqual(r.priority, PRIORITY.CASH_FLOW);
 });
 
 // ─── Array metric builder ─────────────────────────────────────────────────────
 
-test('ReducerBuilder.arrayMetric: build() returns an ArrayMetricReducer', () => {
-  const r = ReducerBuilder.arrayMetric('deposits').build();
-  assert.ok(r instanceof ArrayMetricReducer);
+test('ReducerBuilder.array: build() returns an ArrayReducer', () => {
+  const r = ReducerBuilder.array('deposits').build();
+  assert.ok(r instanceof ArrayReducer);
 });
 
-test('ReducerBuilder.arrayMetric: fieldName is set', () => {
-  const r = ReducerBuilder.arrayMetric('deposits').build();
-  assert.strictEqual(r.fieldName, 'metrics.deposits');
+test('ReducerBuilder.array: fieldName is set', () => {
+  const r = ReducerBuilder.array('deposits').build();
+  assert.strictEqual(r.fieldName, 'deposits');
 });
 
-test('ReducerBuilder.arrayMetric: name is set', () => {
-  const r = ReducerBuilder.arrayMetric('deposits').name('Deposit Logger').build();
+test('ReducerBuilder.array: name is set', () => {
+  const r = ReducerBuilder.array('deposits').name('Deposit Logger').build();
   assert.ok(r.name.includes('Deposit Logger'));
 });
 
 // ─── Numeric sum builder ──────────────────────────────────────────────────────
 
-test('ReducerBuilder.numericSum: build() returns a NumericSumMetricReducer', () => {
+test('ReducerBuilder.numericSum: build() returns a NumericSumReducer', () => {
   const r = ReducerBuilder.numericSum('total').build();
-  assert.ok(r instanceof NumericSumMetricReducer);
+  assert.ok(r instanceof NumericSumReducer);
 });
 
 test('ReducerBuilder.numericSum: fieldName is set', () => {
   const r = ReducerBuilder.numericSum('total').build();
-  assert.strictEqual(r.fieldName, 'metrics.total');
+  assert.strictEqual(r.fieldName, 'total');
 });
 
 test('ReducerBuilder.numericSum: name is set', () => {
@@ -143,9 +130,9 @@ test('ReducerBuilder.numericSum: name is set', () => {
 
 // ─── Multiplicative builder ───────────────────────────────────────────────────
 
-test('ReducerBuilder.multiplicative: build() returns a MultiplicativeMetricReducer', () => {
+test('ReducerBuilder.multiplicative: build() returns a MultiplicativeReducer', () => {
   const r = ReducerBuilder.multiplicative('growth').build();
-  assert.ok(r instanceof MultiplicativeMetricReducer);
+  assert.ok(r instanceof MultiplicativeReducer);
 });
 
 test('ReducerBuilder.multiplicative: fieldName is set', () => {
@@ -161,15 +148,15 @@ test('ReducerBuilder.repeating: build() returns a RepeatingReducer', () => {
 });
 
 test('ReducerBuilder.repeating: reducers array is set', () => {
-  const inner = ReducerBuilder.metric('x').build();
+  const inner = ReducerBuilder.field('x').build();
   const r = ReducerBuilder.repeating().reducers([inner]).build();
   assert.strictEqual(r.reducers.length, 1);
   assert.strictEqual(r.reducers[0], inner);
 });
 
 test('ReducerBuilder.repeating: countField is set', () => {
-  const r = ReducerBuilder.repeating().countField('count').build();
-  assert.strictEqual(r.countField, 'count');
+  const r = ReducerBuilder.repeating().fieldName('count').build();
+  assert.strictEqual(r.fieldName, 'count');
 });
 
 test('ReducerBuilder.repeating: count is set', () => {
@@ -186,7 +173,7 @@ test('ReducerBuilder.repeating: name is set', () => {
 
 test('ReducerBuilder: reduceAction adds to reducedActions', () => {
   const action = { type: 'ADD_CASH' };
-  const r = ReducerBuilder.metric('x').reduceAction(action).build();
+  const r = ReducerBuilder.field('x').reduceAction(action).build();
   assert.strictEqual(r.reducedActions.length, 1);
   assert.strictEqual(r.reducedActions[0], action);
 });
@@ -194,20 +181,20 @@ test('ReducerBuilder: reduceAction adds to reducedActions', () => {
 test('ReducerBuilder: multiple reduceAction calls accumulate', () => {
   const a1 = { type: 'A' };
   const a2 = { type: 'B' };
-  const r = ReducerBuilder.metric('x').reduceAction(a1).reduceAction(a2).build();
+  const r = ReducerBuilder.field('x').reduceAction(a1).reduceAction(a2).build();
   assert.strictEqual(r.reducedActions.length, 2);
 });
 
 test('ReducerBuilder: generateAction adds to generatedActions', () => {
   const action = { type: 'NEXT' };
-  const r = ReducerBuilder.metric('x').generateAction(action).build();
+  const r = ReducerBuilder.field('x').generateAction(action).build();
   assert.strictEqual(r.generatedActions.length, 1);
   assert.strictEqual(r.generatedActions[0], action);
 });
 
 test('ReducerBuilder: built reducedActions is a copy of builder state', () => {
   const a1 = { type: 'A' };
-  const builder = ReducerBuilder.metric('x').reduceAction(a1);
+  const builder = ReducerBuilder.field('x').reduceAction(a1);
   const r1 = builder.build();
   builder.reduceAction({ type: 'B' });
   const r2 = builder.build();
@@ -218,7 +205,7 @@ test('ReducerBuilder: built reducedActions is a copy of builder state', () => {
 // ─── Builder chaining ─────────────────────────────────────────────────────────
 
 test('ReducerBuilder: all methods are chainable', () => {
-  const b = ReducerBuilder.metric('m');
+  const b = ReducerBuilder.field('m');
   assert.strictEqual(b.name('N'), b);
   assert.strictEqual(b.priority(10), b);
   assert.strictEqual(b.reduceAction({ type: 'A' }), b);

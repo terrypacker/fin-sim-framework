@@ -11,7 +11,8 @@
 import { TaxEngine }             from './tax/tax-engine.js';
 import { AccountRulesEngine }    from './account-rules/account-rules-engine.js';
 import { AccountService, InsufficientFundsError } from './account.js';
-import { ArrayMetricReducer, NoOpReducer, PRIORITY } from '../simulation-framework/reducers.js';
+import { ReducerBuilder } from '../simulation-framework/builders/reducer-builder.js'
+import { PRIORITY } from '../simulation-framework/reducers.js';
 import { TaxSettleService }      from './tax-settle-service.js';
 
 import { UsTaxModule2024 }       from './tax/us/us-tax-module-2024.js';
@@ -247,8 +248,8 @@ export class TaxService {
     }, PRIORITY.TAX_APPLY + 1, 'Tax Payment Debit');
 
     // ── Step 7: register metric/balance reducers ───────────────────────────────
-    new ArrayMetricReducer().registerWith(sim.reducers, 'RECORD_ARRAY_METRIC');
-    new NoOpReducer('Balance Snapshot').registerWith(sim.reducers, 'RECORD_BALANCE');
+    ReducerBuilder.array().name('Tax Debit').build().registerWith(sim.reducers, 'RECORD_ARRAY_METRIC');
+    ReducerBuilder.noOp().name('Balance Snapshot').build().registerWith(sim.reducers, 'RECORD_BALANCE');
 
     return this._accountService;
   }

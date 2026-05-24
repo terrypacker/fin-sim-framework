@@ -31,12 +31,12 @@ import { EventSeries }  from '../../src/simulation-framework/events/event-series
 import { OneOffEvent }  from '../../src/simulation-framework/events/one-off-event.js';
 import { HandlerEntry } from '../../src/simulation-framework/handlers.js';
 import { AmountAction } from '../../src/simulation-framework/actions.js';
-import { MetricReducer } from '../../src/simulation-framework/reducers.js';
+import { FieldReducer } from '../../src/simulation-framework/reducers.js';
 import { ReducerBuilder } from '../../src/simulation-framework/builders/reducer-builder.js';
 
 // BaseScenario references FinSimLib as a browser global — provide it here.
 globalThis.FinSimLib = {
-  Core:      { Simulation, HandlerEntry, AmountAction, MetricReducer, BaseEvent, EventSeries, OneOffEvent },
+  Core:      { Simulation, HandlerEntry, AmountAction, FieldReducer, BaseEvent, EventSeries, OneOffEvent },
   Scenarios: {},
 };
 
@@ -84,8 +84,8 @@ function makeScenario() {
     else if (['AmountAction','RecordMetricAction','RecordArrayMetricAction',
               'RecordNumericSumMetricAction','RecordMultiplicativeMetricAction',
               'RecordBalanceAction','ScriptedAction','FieldValueAction'].includes(classType)) ui.nodes.push(item);
-    else if (['MetricReducer','ArrayMetricReducer','NumericSumMetricReducer',
-              'MultiplicativeMetricReducer','NoOpReducer','FieldReducer',
+    else if ([,'ArrayReducer','NumericSumReducer',
+              'MultiplicativeReducer','NoOpReducer','FieldReducer',
               'StateFieldReducer','AccountTransactionReducer','ScriptedReducer'].includes(classType)) ui.nodes.push(item);
   });
 
@@ -113,8 +113,8 @@ test('handlerService.register: assigns incrementing IDs h1, h2, h3', () => {
 test('reducerService.register: assigns incrementing IDs r1, r2', () => {
   const { scenario } = makeScenario();
   const { reducerService } = ServiceRegistry.getInstance();
-  const r1 = ReducerBuilder.metric('a').name('R1').build();
-  const r2 = ReducerBuilder.metric('b').name('R2').build();
+  const r1 = ReducerBuilder.field('a').name('R1').build();
+  const r2 = ReducerBuilder.field('b').name('R2').build();
   reducerService.register(r1);
   reducerService.register(r2);
   assert.strictEqual(r1.id, 'r1');
@@ -179,7 +179,7 @@ test('reducerService.register: reducer is wired into sim for each reducedAction'
   const action = new AmountAction('PAY_TEST', 'Pay', 100);
   sr.actionService.register(action);
 
-  const reducer = ReducerBuilder.metric('amount').name('Metric R').build();
+  const reducer = ReducerBuilder.field('amount').name('Metric R').build();
   reducer.reducedActions.push(action);
   sr.reducerService.register(reducer);
 
@@ -267,7 +267,7 @@ test('reducerCreationRequested: node appears in UI via bus with r1 id', () => {
   const reducers = ui.nodes.filter(n => n.kind === 'reducer');
   assert.strictEqual(reducers.length, 1);
   assert.strictEqual(reducers[0].id, 'r1');
-  assert.ok(reducers[0] instanceof MetricReducer);
+  assert.ok(reducers[0] instanceof FieldReducer);
 });
 
 test('reducerCreationRequested: opens editor for created node', () => {
@@ -383,7 +383,7 @@ test('reducerDeleted: unregisters reducer from sim pipeline', () => {
   const action = new AmountAction('DEL_ACTION', 'Del', 0);
   sr.actionService.register(action);
 
-  const reducer = ReducerBuilder.metric('x').name('R').build();
+  const reducer = ReducerBuilder.field('x').name('R').build();
   reducer.reducedActions.push(action);
   sr.reducerService.register(reducer);
 

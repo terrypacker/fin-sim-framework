@@ -92,7 +92,7 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
 
     // ── Reducers ──────────────────────────────────────────────────────────────
     const recordSalaryPaymentReducer = ReducerBuilder
-      .metric('amount')
+      .field('metrics.amount')
       .name('Process Salary Payment Amount')
       .reduceAction(recordSalaryPaymentAction)
       .generateAction(sumSalaryPaymentAction)
@@ -100,14 +100,14 @@ export class CustomScenario extends FinSimLib.Scenarios.BaseScenario {
     reducerService.register(recordSalaryPaymentReducer);
 
     const sumSalaryPaymentReducer = ReducerBuilder
-      .numericSum('salary')
+      .numericSum('metrics.salary')
       .name('Update Total Salary')
       .reduceAction(sumSalaryPaymentAction)
       .build();
     reducerService.register(sumSalaryPaymentReducer);
 
     const depositReducer = ReducerBuilder
-      .arrayMetric('deposits')
+      .array('metrics.deposits')
       .name('Deposit Payment')
       .reduceAction(recordSalaryPaymentAction)
       .build();
