@@ -37,6 +37,7 @@
     "rollup-plugin-copy": "^3.5.0",
     "rollup-plugin-copy-watch": "^0.0.1",
     "rollup-plugin-dev": "^2.1.0",
-    "rollup-plugin-livereload": "^2.0.5"
+    "rollup-plugin-livereload": "^2.0.5",
+    "rollup-plugin-watch-assets": "^1.0.1"
   }
 }

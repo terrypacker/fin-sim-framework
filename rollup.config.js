@@ -4,6 +4,7 @@ import dev from 'rollup-plugin-dev'
 import livereload from 'rollup-plugin-livereload';
 import nodeResolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
+import watchAssets from 'rollup-plugin-watch-assets';
 
 const isWatching = process.env.ROLLUP_WATCH === 'true';
 
@@ -57,8 +58,10 @@ export default [
           port: 10001,
         }),
         isWatching && livereload({
-          watch: 'dist',
-          delay: 500
+          watch: ['.', 'dist']
+        }),
+        isWatching && watchAssets({
+          assets: ['assets', 'index.html'], // Add folders or files
         }),
        !isWatching && terser() //minify when not debugging
     ].filter(Boolean)
