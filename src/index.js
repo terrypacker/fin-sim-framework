@@ -30,7 +30,6 @@ import { AssetService } from './finance/asset-service.js';
 import { Asset } from './finance/asset.js';
 import { AccountBuilder } from './finance/builders/account-builder.js';
 import { PersonBuilder } from './finance/builders/person-builder.js';
-import { FinancialState } from './finance/state/financial-state.js';
 import { ChangeResidencyHandler } from './finance/handlers/change-residency-handler.js';
 import { DividendScheduledHandler } from './finance/handlers/dividend-scheduled-handler.js';
 import { AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler } from './finance/handlers/earnings-handlers.js';
@@ -51,6 +50,8 @@ import { StockDividendCashApplyReducer } from './finance/reducers/stock-dividend
 import { UsSavingsInterestCreditReducer } from './finance/reducers/us-savings-interest-credit-reducer.js';
 import { AccountService } from './finance/services/account-service.js';
 import { PersonService } from './finance/services/person-service.js';
+import { FinancialState } from './finance/state/financial-state.js';
+import { InternationalRetirementFinancialState } from './finance/state/intl-retirement-state.js';
 import { AuTaxModule2024 } from './finance/tax/au/au-tax-module-2024.js';
 import { AuTaxModule2025 } from './finance/tax/au/au-tax-module-2025.js';
 import { AuTaxModule2026 } from './finance/tax/au/au-tax-module-2026.js';
@@ -234,7 +235,6 @@ export const Finance = {
   Asset,
   AccountBuilder,
   PersonBuilder,
-  FinancialState,
   ChangeResidencyHandler,
   DividendScheduledHandler,
   AuSavingsInterestHandler,
@@ -268,6 +268,8 @@ export const Finance = {
   UsSavingsInterestCreditReducer,
   AccountService,
   PersonService,
+  FinancialState,
+  InternationalRetirementFinancialState,
   AuTaxModule2024,
   AuTaxModule2025,
   AuTaxModule2026,
