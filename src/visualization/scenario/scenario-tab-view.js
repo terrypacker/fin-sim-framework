@@ -173,16 +173,22 @@ export class ScenarioTabView {
   _populateScenarioForm(scenario) {
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
 
+    //TODO #268 this should be cleaned up to always be a date or UTC String
     let simStart,simEnd;
     if(scenario?.simStart instanceof Date) {
       simStart = scenario.simStart.toISOString().slice(0, 10);
+    }else if(scenario?.simStart) {
+      simStart = scenario?.simStart; //Could be a string not serialized I guess
     }else {
-      simStart = '2026-01-01';
+      simStart = '2026-01-01'; // Default
     }
+
     if(scenario?.simEnd instanceof Date) {
       simEnd = scenario.simEnd.toISOString().slice(0, 10);
+    }else if(scenario?.simEnd) {
+      simEnd = scenario?.simEnd; //Could be a string not serialized I guess {
     }else {
-      simEnd = '2041-01-01';
+      simEnd = '2041-01-01'; // Default
     }
 
 
