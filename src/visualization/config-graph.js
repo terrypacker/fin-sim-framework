@@ -719,4 +719,12 @@ export class ConfigGraph {
     });
   }
 
+  /**
+   * Be a DataSource for the query API
+   * @return {[]}
+   */
+  getAll() {
+    return this.nodes;
+  }
+
 }
