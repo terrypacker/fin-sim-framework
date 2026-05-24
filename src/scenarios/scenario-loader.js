@@ -80,16 +80,25 @@ export class ScenarioLoader {
         }
       }
 
-      // Apply declared param→person field mappings so changed params cascade to cfg.persons
-      // before they are loaded into the personService.  Only the explicitly declared fields
-      // are touched; all other person fields (e.g. lifeExpectancy, socialSecurityMonthly)
-      // remain authoritative from cfg.persons regardless of params.
-      const syncRules = cfg.scenarioClass?.paramToPersonSync ?? [];
-      for (const { param, personId, field } of syncRules) {
-        const val = cfg.parameters[param];
+      // Generic param→node cascade: each schema entry with a `node` declaration drives
+      // a field update on cfg.persons or cfg.accounts before compilation.
+      // Node is read from cfg.params[i].node (serialized alongside the param value) so
+      // the mapping survives round-trips without requiring scenarioClass to be present.
+      // Only explicitly declared fields are touched; all other person/account fields
+      // (e.g. lifeExpectancy, contributionBasis) remain authoritative from their records.
+      for (const p of (Array.isArray(cfg.params) ? cfg.params : [])) {
+        const node = p.node;
+        if (!node) continue;
+        const val = cfg.parameters?.[p.name];
         if (val === undefined) continue;
-        const rec = (cfg.persons ?? []).find(p => p.id === personId);
-        if (rec) rec[field] = val instanceof Date ? val.toISOString().slice(0, 10) : String(val);
+
+        if (node.type === 'person') {
+          const rec = (cfg.persons ?? []).find(r => r.id === node.id);
+          if (rec) rec[node.field] = val instanceof Date ? val.toISOString().slice(0, 10) : val;
+        } else if (node.type === 'account') {
+          const rec = (cfg.accounts ?? []).find(r => r.stateKey === node.stateKey);
+          if (rec) rec[node.field] = val;
+        }
       }
     }
 
@@ -117,7 +126,11 @@ export class ScenarioLoader {
       // Normalize params to a typed schema array if the prebuilt hasn't done it yet.
       if (!Array.isArray(cfg.params)) {
         const schema = cfg.scenarioClass?.getParamSchema?.() ?? [];
-        cfg.params = schema.map(s => ({ name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue }));
+        cfg.params = schema.map(s => {
+          const entry = { name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue };
+          if (s.node) entry.node = s.node;
+          return entry;
+        });
       }
     } else if (ScenarioSerializer.hasSerializedGraph(cfg)) {
       // Fallback for manually-built scenarios that have no toolset declaration.

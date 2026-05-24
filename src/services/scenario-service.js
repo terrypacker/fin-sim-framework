@@ -58,7 +58,11 @@ export class ScenarioService {
     // compilation) over recomputing from schema defaults, so edits are preserved.
     const params = Array.isArray(fromScenario?.params)
       ? structuredClone(fromScenario.params)
-      : schema.map(s => ({ name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue }));
+      : schema.map(s => {
+          const entry = { name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue };
+          if (s.node) entry.node = s.node;
+          return entry;
+        });
     const scenario = {
       id:             newId,
       name:           'New Scenario',

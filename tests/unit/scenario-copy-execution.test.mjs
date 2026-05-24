@@ -435,25 +435,145 @@ test('changing monthlyExpenses param is reflected in state.monthlyExpenses via i
   );
 });
 
-test('changing initialValue on an account is reflected in state via initialization flow', () => {
-  // Default initialUsSavings = 30000 → state.usSavingsAccount.balance = 30000.
-  // Changing the initialValue on the serialized account record must propagate to
-  // state.usSavingsAccount.balance after load.  Currently FAILS because the
-  // Object.assign(sim.state, initialState) restore overwrites the freshly-deserialized
-  // account balance with the frozen compile-time snapshot.
+test('changing a non-param account field (drawdownPriority) is reflected in state via initialization flow', () => {
+  // Fields on account records that have no corresponding param (e.g. drawdownPriority)
+  // are authoritative from cfg.accounts and survive the compile/load cycle unchanged.
+  // Fields that DO have a param mapping (e.g. initialValue, minimumBalance) are controlled
+  // by the param; direct edits to those fields on cfg.accounts are overridden by the
+  // param node sync.  This test validates the non-param field path.
   const { services } = buildAndCompilePrebuilt();
   const active  = services.scenarioService.getActive();
   const created = services.scenarioService.newScenario(active);
 
-  const usSavingsRec = created.accounts?.find(a => a.stateKey === 'usSavingsAccount');
-  assert.ok(usSavingsRec, 'usSavingsAccount must exist in scenario accounts array');
-  usSavingsRec.initialValue = 99_999;
+  const iraRec = created.accounts?.find(a => a.stateKey === 'iraAccount');
+  assert.ok(iraRec, 'iraAccount must exist in scenario accounts array');
+  const originalPriority = iraRec.drawdownPriority;
+  const newPriority = (originalPriority ?? 3) + 10;
+  iraRec.drawdownPriority = newPriority;
+
+  const sim = loadCopyIntoFreshServices(created);
+
+  assert.strictEqual(
+    sim.state.iraAccount?.drawdownPriority,
+    newPriority,
+    `state.iraAccount.drawdownPriority should be ${newPriority} after direct field change, got ${sim.state.iraAccount?.drawdownPriority}`,
+  );
+});
+
+// ─── Generic schema-node cascade tests ───────────────────────────────────────
+//
+// These tests verify the generic param→node mechanism: changing a param value
+// cascades automatically to cfg.persons or cfg.accounts (via schema node
+// declarations) before compilation, without any manual patching.
+
+test('changing primaryMonthlyWage param cascades to person via schema node', () => {
+  const { services } = buildAndCompilePrebuilt();
+  const active  = services.scenarioService.getActive();
+  const created = services.scenarioService.newScenario(active);
+
+  const wageParam = created.params?.find(p => p.name === 'primaryMonthlyWage');
+  assert.ok(wageParam, 'primaryMonthlyWage param must exist in the copy');
+  wageParam.value = 12_345;
+
+  const sim = loadCopyIntoFreshServices(created);
+
+  const primary = sim.state.people?.primary;
+  assert.ok(primary, 'primary person must exist in state.people after load');
+  assert.strictEqual(
+    primary.monthlyWage,
+    12_345,
+    `state.people.primary.monthlyWage should be 12345 after param change, got ${primary.monthlyWage}`,
+  );
+});
+
+test('changing spouseMonthlyWage param cascades to person via schema node', () => {
+  const { services } = buildAndCompilePrebuilt();
+  const active  = services.scenarioService.getActive();
+  const created = services.scenarioService.newScenario(active);
+
+  const wageParam = created.params?.find(p => p.name === 'spouseMonthlyWage');
+  assert.ok(wageParam, 'spouseMonthlyWage param must exist in the copy');
+  wageParam.value = 6_789;
+
+  const sim = loadCopyIntoFreshServices(created);
+
+  const spouse = sim.state.people?.spouse;
+  assert.ok(spouse, 'spouse person must exist in state.people after load');
+  assert.strictEqual(
+    spouse.monthlyWage,
+    6_789,
+    `state.people.spouse.monthlyWage should be 6789 after param change, got ${spouse.monthlyWage}`,
+  );
+});
+
+test('changing initialUsSavings param cascades to account initialValue via schema node', () => {
+  const { services } = buildAndCompilePrebuilt();
+  const active  = services.scenarioService.getActive();
+  const created = services.scenarioService.newScenario(active);
+
+  const param = created.params?.find(p => p.name === 'initialUsSavings');
+  assert.ok(param, 'initialUsSavings param must exist in the copy');
+  param.value = 77_777;
 
   const sim = loadCopyIntoFreshServices(created);
 
   assert.strictEqual(
     sim.state.usSavingsAccount?.balance,
-    99_999,
-    `state.usSavingsAccount.balance should be 99999 after account initialValue change, got ${sim.state.usSavingsAccount?.balance}`,
+    77_777,
+    `state.usSavingsAccount.balance should be 77777 after initialUsSavings param change, got ${sim.state.usSavingsAccount?.balance}`,
+  );
+});
+
+test('changing rothBalance param cascades to account initialValue via schema node', () => {
+  const { services } = buildAndCompilePrebuilt();
+  const active  = services.scenarioService.getActive();
+  const created = services.scenarioService.newScenario(active);
+
+  const param = created.params?.find(p => p.name === 'rothBalance');
+  assert.ok(param, 'rothBalance param must exist in the copy');
+  param.value = 55_555;
+
+  const sim = loadCopyIntoFreshServices(created);
+
+  assert.strictEqual(
+    sim.state.rothAccount?.balance,
+    55_555,
+    `state.rothAccount.balance should be 55555 after rothBalance param change, got ${sim.state.rothAccount?.balance}`,
+  );
+});
+
+test('changing usSavingsMinBalance param cascades to account minimumBalance via schema node', () => {
+  const { services } = buildAndCompilePrebuilt();
+  const active  = services.scenarioService.getActive();
+  const created = services.scenarioService.newScenario(active);
+
+  const param = created.params?.find(p => p.name === 'usSavingsMinBalance');
+  assert.ok(param, 'usSavingsMinBalance param must exist in the copy');
+  param.value = 8_888;
+
+  const sim = loadCopyIntoFreshServices(created);
+
+  assert.strictEqual(
+    sim.state.usSavingsAccount?.minimumBalance,
+    8_888,
+    `state.usSavingsAccount.minimumBalance should be 8888 after usSavingsMinBalance param change, got ${sim.state.usSavingsAccount?.minimumBalance}`,
+  );
+});
+
+test('changing spouseRothBalance param cascades to account initialValue via schema node', () => {
+  const { services } = buildAndCompilePrebuilt();
+  const active  = services.scenarioService.getActive();
+  const created = services.scenarioService.newScenario(active);
+
+  const param = created.params?.find(p => p.name === 'spouseRothBalance');
+  assert.ok(param, 'spouseRothBalance param must exist in the copy');
+  param.value = 33_333;
+
+  const sim = loadCopyIntoFreshServices(created);
+
+  assert.strictEqual(
+    sim.state.spouseRothAccount?.balance,
+    33_333,
+    `state.spouseRothAccount.balance should be 33333 after spouseRothBalance param change, got ${sim.state.spouseRothAccount?.balance}`,
   );
 });

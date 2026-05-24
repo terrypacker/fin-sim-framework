@@ -118,24 +118,28 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     type: 'Date', group: 'People', mc: false, opt: true,
     defaultValue: INTL_RETIREMENT_DEFAULTS.primaryRetirementDate.toISOString().slice(0, 10),
     description: 'Date primary person stops working',
+    node: { type: 'person', id: 'primary', field: 'retirementDate' },
   },
   {
     key: 'spouseRetirementDate', label: 'Spouse Retirement Date',
     type: 'Date', group: 'People', mc: false, opt: true,
     defaultValue: INTL_RETIREMENT_DEFAULTS.spouseRetirementDate.toISOString().slice(0, 10),
     description: 'Date spouse stops working',
+    node: { type: 'person', id: 'spouse', field: 'retirementDate' },
   },
   {
     key: 'primaryMonthlyWage', label: 'Primary Monthly Wage (USD)',
     type: 'Number', group: 'People', mc: true, opt: true,
     defaultValue: INTL_RETIREMENT_DEFAULTS.primaryMonthlyWage,
     description: 'Gross monthly wage for primary before retirement',
+    node: { type: 'person', id: 'primary', field: 'monthlyWage' },
   },
   {
     key: 'spouseMonthlyWage', label: 'Spouse Monthly Wage (USD)',
     type: 'Number', group: 'People', mc: true, opt: true,
     defaultValue: INTL_RETIREMENT_DEFAULTS.spouseMonthlyWage,
     description: 'Gross monthly wage for spouse before retirement',
+    node: { type: 'person', id: 'spouse', field: 'monthlyWage' },
   },
   {
     key: 'moveYear', label: 'US→AU Move Year',
@@ -156,36 +160,42 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     type: 'Number', group: 'US Account Balances', mc: true, opt: false,
     defaultValue: INTL_RETIREMENT_DEFAULTS.initialUsSavings,
     description: 'Starting US cash savings balance',
+    node: { type: 'account', stateKey: 'usSavingsAccount', field: 'initialValue' },
   },
   {
     key: 'rothBalance', label: 'Roth IRA Balance (USD)',
     type: 'Number', group: 'US Account Balances', mc: true, opt: false,
     defaultValue: INTL_RETIREMENT_DEFAULTS.rothBalance,
     description: 'Starting Roth IRA balance',
+    node: { type: 'account', stateKey: 'rothAccount', field: 'initialValue' },
   },
   {
     key: 'iraBalance', label: 'Traditional IRA Balance (USD)',
     type: 'Number', group: 'US Account Balances', mc: true, opt: false,
     defaultValue: INTL_RETIREMENT_DEFAULTS.iraBalance,
     description: 'Starting Traditional IRA balance',
+    node: { type: 'account', stateKey: 'iraAccount', field: 'initialValue' },
   },
   {
     key: 'k401Balance', label: '401(k) Balance (USD)',
     type: 'Number', group: 'US Account Balances', mc: true, opt: false,
     defaultValue: INTL_RETIREMENT_DEFAULTS.k401Balance,
     description: 'Starting 401(k) balance',
+    node: { type: 'account', stateKey: 'k401Account', field: 'initialValue' },
   },
   {
     key: 'stockBalance', label: 'US Stock Balance (USD)',
     type: 'Number', group: 'US Account Balances', mc: true, opt: false,
     defaultValue: INTL_RETIREMENT_DEFAULTS.stockBalance,
     description: 'Starting US brokerage stock balance',
+    node: { type: 'account', stateKey: 'usStockAccount', field: 'initialValue' },
   },
   {
     key: 'fixedIncomeBalance', label: 'Fixed Income Balance (USD)',
     type: 'Number', group: 'US Account Balances', mc: true, opt: false,
     defaultValue: INTL_RETIREMENT_DEFAULTS.fixedIncomeBalance,
     description: 'Starting fixed income account balance',
+    node: { type: 'account', stateKey: 'fixedIncomeAccount', field: 'initialValue' },
   },
 
   // ── AU Account Balances ────────────────────────────────────────────────────
@@ -194,18 +204,21 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     type: 'Number', group: 'AU Account Balances', mc: true, opt: false,
     defaultValue: INTL_RETIREMENT_DEFAULTS.auSavingsBalance,
     description: 'Starting AU cash savings balance',
+    node: { type: 'account', stateKey: 'auSavingsAccount', field: 'initialValue' },
   },
   {
     key: 'superBalance', label: 'Superannuation Balance (AUD)',
     type: 'Number', group: 'AU Account Balances', mc: true, opt: false,
     defaultValue: INTL_RETIREMENT_DEFAULTS.superBalance,
     description: 'Starting superannuation balance',
+    node: { type: 'account', stateKey: 'superAccount', field: 'initialValue' },
   },
   {
     key: 'auStockBalance', label: 'AU Stock Balance (AUD)',
     type: 'Number', group: 'AU Account Balances', mc: true, opt: false,
     defaultValue: INTL_RETIREMENT_DEFAULTS.auStockBalance,
     description: 'Starting AU brokerage stock balance',
+    node: { type: 'account', stateKey: 'auStockAccount', field: 'initialValue' },
   },
 
   // ── Spouse Account Balances ────────────────────────────────────────────────
@@ -214,24 +227,28 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     type: 'Number', group: 'Spouse Account Balances', mc: true, opt: false,
     defaultValue: INTL_RETIREMENT_DEFAULTS.spouseRothBalance,
     description: 'Starting Roth IRA balance for spouse',
+    node: { type: 'account', stateKey: 'spouseRothAccount', field: 'initialValue' },
   },
   {
     key: 'spouseIraBalance', label: 'Spouse Traditional IRA Balance (USD)',
     type: 'Number', group: 'Spouse Account Balances', mc: true, opt: false,
     defaultValue: INTL_RETIREMENT_DEFAULTS.spouseIraBalance,
     description: 'Starting Traditional IRA balance for spouse',
+    node: { type: 'account', stateKey: 'spouseIraAccount', field: 'initialValue' },
   },
   {
     key: 'spouseK401Balance', label: 'Spouse 401(k) Balance (USD)',
     type: 'Number', group: 'Spouse Account Balances', mc: true, opt: false,
     defaultValue: INTL_RETIREMENT_DEFAULTS.spouseK401Balance,
     description: 'Starting 401(k) balance for spouse',
+    node: { type: 'account', stateKey: 'spouseK401Account', field: 'initialValue' },
   },
   {
     key: 'spouseSuperBalance', label: 'Spouse Superannuation Balance (AUD)',
     type: 'Number', group: 'Spouse Account Balances', mc: true, opt: false,
     defaultValue: INTL_RETIREMENT_DEFAULTS.spouseSuperBalance,
     description: 'Starting superannuation balance for spouse',
+    node: { type: 'account', stateKey: 'spouseSuperAccount', field: 'initialValue' },
   },
 
   // ── Spouse Account Rates ───────────────────────────────────────────────────
@@ -330,12 +347,14 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     type: 'Number', group: 'Min Balances', mc: false, opt: true,
     defaultValue: INTL_RETIREMENT_DEFAULTS.usSavingsMinBalance,
     description: 'Minimum US cash reserve before drawing investments',
+    node: { type: 'account', stateKey: 'usSavingsAccount', field: 'minimumBalance' },
   },
   {
     key: 'auSavingsMinBalance', label: 'AU Savings Min Balance (AUD)',
     type: 'Number', group: 'Min Balances', mc: false, opt: true,
     defaultValue: INTL_RETIREMENT_DEFAULTS.auSavingsMinBalance,
     description: 'Minimum AU cash reserve before drawing investments',
+    node: { type: 'account', stateKey: 'auSavingsAccount', field: 'minimumBalance' },
   },
 
   // ── Transfer & Expenses ────────────────────────────────────────────────────
@@ -427,15 +446,6 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
  */
 export class IntlRetirementScenario extends BaseScenario {
   static getParamSchema() { return INTL_RETIREMENT_PARAM_SCHEMA; }
-
-  // Declares which scenario params map directly to a person record field.
-  // ScenarioLoader reads this to cascade param changes into cfg.persons before
-  // compilation, while leaving all other person fields (lifeExpectancy, etc.)
-  // under the direct control of the person editor.
-  static paramToPersonSync = [
-    { param: 'primaryRetirementDate', personId: 'primary', field: 'retirementDate' },
-    { param: 'spouseRetirementDate',  personId: 'spouse',  field: 'retirementDate' },
-  ];
 
   static getToolsets() {
     return [
