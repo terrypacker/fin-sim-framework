@@ -379,14 +379,15 @@ test('deserialize: disabled event is added to UI without being scheduled', () =>
 
 /** Helper: serialize the current ServiceRegistry state into a config object. */
 function serializeNow(name = 'Test', initialState = {}) {
-  return ScenarioSerializer.serialize(
-    ServiceRegistry.getInstance(),
+  const services = ServiceRegistry.getInstance();
+  return ScenarioSerializer.serializeScenario({
+    ...ScenarioSerializer.snapshotServices(services),
     name,
-    '2026-01-01',
-    '2041-01-01',
+    simStart: '2026-01-01',
+    simEnd:   '2041-01-01',
     initialState,
-    [],
-  );
+    params: [],
+  });
 }
 
 test('serialize: returns arrays for events, handlers, actions, reducers', () => {
@@ -550,7 +551,8 @@ test('serialize: person fields are correctly serialized', () => {
   const d = cfg.persons[0];
   assert.strictEqual(d.__type, 'Person');
   assert.strictEqual(d.name, 'Alice');
-  assert.strictEqual(d.birthDate, '1980-01-01');
+  // Design 15: dates emit full ISO 8601 (with time component).
+  assert.strictEqual(d.birthDate, '1980-01-01T00:00:00.000Z');
   assert.deepStrictEqual(d.citizen, ['US']);
   assert.strictEqual(d.lifeExpectancy, 88);
   assert.strictEqual(d.socialSecurityMonthly, 3000);

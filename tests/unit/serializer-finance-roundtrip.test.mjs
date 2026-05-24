@@ -112,11 +112,12 @@ function buildAndSerialize(initialState, buildFn) {
   scenario.buildSim();
   buildFn(ServiceRegistry.getInstance());
   const sr = ServiceRegistry.getInstance();
-  const config = ScenarioSerializer.serialize(
-    sr, 'test', 'Finance Test', 1, true,
-    scenario.simStart, scenario.simEnd,
-    scenario.initialState, [],
-  );
+  const config = ScenarioSerializer.serializeScenario({
+    ...ScenarioSerializer.snapshotServices(sr),
+    id: 'test', name: 'Finance Test', order: 1, active: true,
+    simStart: scenario.simStart, simEnd: scenario.simEnd,
+    initialState: scenario.initialState, params: [],
+  });
   return { sim: scenario.sim, config };
 }
 

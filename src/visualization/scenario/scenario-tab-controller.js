@@ -58,6 +58,10 @@ export class ScenarioTabController {
     this._service.resetParamsFromSchema(scenario);
   }
 
+  resetToDefaults(scenario) {
+    this._service.resetToDefaults(scenario);
+  }
+
   getUserScenarios() {
     return this._service.getUserScenarios();
   }

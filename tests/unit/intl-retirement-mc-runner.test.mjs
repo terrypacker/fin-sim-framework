@@ -21,7 +21,8 @@ import assert    from 'node:assert/strict';
 import { IntlRetirementMcRunner }    from '../../src/finance/monte-carlo/intl-retirement-mc-runner.js';
 import { DEFAULT_MC_VARIABLE_CONFIGS } from '../../src/finance/monte-carlo/intl-retirement-mc-config.js';
 import { DISTRIBUTION_TYPES }        from '../../src/simulation-framework/distributions.js';
-import { INTL_RETIREMENT_DEFAULTS }  from '../../src/scenarios/intl-retirement-scenario.js';
+import { INTL_RETIREMENT_DEFAULTS, IntlRetirementScenario }
+                                     from '../../src/scenarios/intl-retirement-scenario.js';
 
 // Short window: 2026-01-01 → 2028-01-01 (2 years — fast to run in tests)
 const SIM_START = new Date(Date.UTC(2026, 0, 1));
@@ -170,6 +171,32 @@ test('IntlRetirementMcRunner: no variable configs produces n identical runs', as
   // With no perturbation every run is identical
   const first = runs[0].finalNetWorthUsd;
   for (const r of runs) assert.strictEqual(r.finalNetWorthUsd, first);
+});
+
+// ─── Regression: template carrying functions/classes must not break clone ─────
+//
+// The ServiceRegistry-backed active scenario record carries `factory` (closure)
+// and `scenarioClass` (class) — both unclonable by `structuredClone`. The
+// runner must normalize the template before per-iteration cloning, otherwise
+// every MC run from the UI throws `DataCloneError`.
+
+test('IntlRetirementMcRunner: cfgTemplate with factory/scenarioClass does not break structuredClone', async () => {
+  // Mirror what ScenarioRegistry.loadPrebuilt stores on each entry: the
+  // declarative cfg + unclonable registry-metadata fields (factory closure,
+  // scenarioClass reference). The runner must strip these before per-iteration
+  // structuredClone, otherwise the UI's MC button throws DataCloneError.
+  const cfgTemplate = {
+    ...IntlRetirementScenario.buildDefaultConfig({}, SIM_START, SIM_END),
+    id:            'p:test',
+    name:          'Test',
+    active:        true,
+    prebuilt:      true,
+    factory:       (_p, _i, _s, _e) => null,
+    scenarioClass: IntlRetirementScenario,
+  };
+  const runner = makeRunner({ cfgTemplate, variableConfigs: [] });
+  const { runs } = await runner.run();
+  assert.strictEqual(runs.length, N, 'MC should complete despite unclonable fields on the template');
 });
 
 // ─── DEFAULT_MC_VARIABLE_CONFIGS structure ────────────────────────────────────

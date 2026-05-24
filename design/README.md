@@ -41,6 +41,22 @@ edited parameter values directly from the UI, by:
   clobbering existing registry entries.
 
 ---
+### [Config as Source of Truth](15-config-as-source-of-truth.md)
+This document defines a refactor that makes the active scenario `cfg` the sole
+authoritative description of a scenario, by:
+
+* Materializing `buildDefaultConfig()` output onto a prebuilt's registry entry
+  exactly once, at registration time, instead of re-firing it on every Rebuild.
+* Removing the `Object.assign(activeConfig, defaultCfg)` clobber inside
+  `BaseApp.initScenario` so loaded JSON / edited cfgs survive Rebuild.
+* Switching Monte Carlo and Optimization runners to clone the live `cfg` as
+  their per-iteration template, so user edits to non-param fields
+  (`RealProperty.plannedSaleYear`, `Person.lifeExpectancy`, `drawdownPriority`,
+  custom graph nodes) are honored across MC/Opt runs.
+* Introducing an explicit "Reset to Defaults" action for the recovery path now
+  that defaults no longer fire implicitly.
+
+---
 ### [Adjustment Entry System](1-adjustment-entry-system.md)
 This document defines the architecture, data model, invariants, APIs, and UI integration requirements for implementing an **Adjustment Entry System** within a time-aware, event-sourced financial + simulation platform.
 

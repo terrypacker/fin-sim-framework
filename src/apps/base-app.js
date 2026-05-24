@@ -101,7 +101,6 @@ export class BaseApp extends BaseComponent {
     this._animator             = null;
     this.mcPresenter           = null;
     this.optPresenter          = null;
-    this._replayParams         = null;
     this._graphNodeInspector   = null;
     this._graphNodeExecHistory = null;
     this._graphNodeLineage     = null;
@@ -333,35 +332,23 @@ export class BaseApp extends BaseComponent {
       view: this._scenarioTabView,
       bus: registry.bus,
       initScenario: () => { this.destroyScenario(); this.initScenario(); },
-      getBuiltScenario: () => this.scenario,
     });
 
     // ── Build scenario ────────────────────────────────────────────────────────
     //This will create the active scenario
     this.scenario = registry.scenarioService.createActiveScenario();
-    if (this._replayParams) {
-      this.scenario.params = this._replayParams;
-      this._replayParams = null;
-    }
     this.scenario.buildSim();
 
-    // Populate services after buildSim():
-    //   - Fresh prebuilt with declared toolsets and no cfg toolsets yet:
-    //     inject buildDefaultConfig() so the loader has something to compile.
-    //   - ScenarioLoader then dispatches to either deserializeGraph() (if cfg
-    //     carries a saved graph snapshot) or toolset compilation.
+    // Design 15: the active scenario cfg is the single source of truth. Defaults
+    // are materialized once at registry registration; Rebuild reads whatever the
+    // user has saved/edited. ScenarioLoader dispatches to deserializeGraph() (if
+    // cfg carries a saved graph snapshot) or toolset compilation.
     const activeConfig = registry.scenarioService.getActive();
-
-    const ScenarioCls = this.scenario.constructor;
-    const declaredToolsets = ScenarioCls.getToolsets?.() ?? [];
-    if (declaredToolsets.length > 0 && !activeConfig?.toolsets?.length) {
-      const defaultCfg = ScenarioCls.buildDefaultConfig(
-        this.scenario.params, this.scenario.simStart, this.scenario.simEnd
-      );
-      if (defaultCfg && activeConfig) Object.assign(activeConfig, defaultCfg);
-    }
-
     new ScenarioLoader().load(activeConfig, registry);
+
+    //TODO this should be wired to a bus event (AND removed from constructor of tab presenter)
+    this.scenarioTabPresenter._refresh();
+
     // Derive display settings from DOM so rebuilds preserve user selections.
     const currentFmt      = $('tzSelect')?.value === 'utc' ? fmtUTC : fmtLocal;
     const currentCurrency = $('displayCurrency')?.value ?? 'USD';
@@ -509,9 +496,13 @@ export class BaseApp extends BaseComponent {
   /**
    * Rebuild the scenario using the exact params from a MC run, then switch
    * to the Timeline tab so the user can step through the replayed simulation.
+   *
+   * Design 15: applies the replay params to the active scenario's cfg.params
+   * (the typed UI array). ScenarioLoader's param→node cascade propagates them
+   * into persons/accounts during the next initScenario.
    */
   _replayMcRun(run) {
-    this._replayParams = run.params;
+    this._applyParamsToActive(run.params);
     this.destroyScenario();
     this.initScenario();
 
@@ -524,12 +515,28 @@ export class BaseApp extends BaseComponent {
    * then switch to the Chart tab to compare the outcome.
    */
   _applyOptCandidate(params) {
-    this._replayParams = params;
+    this._applyParamsToActive(params);
     this.destroyScenario();
     this.initScenario();
 
     const chartHeader = document.querySelector('[data-dest-tab="chart-tab"][data-tab-group="center-col"]');
     if (chartHeader) this.openTab({ currentTarget: chartHeader }, 'chart-tab', 'center-col');
+  }
+
+  /**
+   * Write replay/candidate params into the active scenario's typed cfg.params
+   * array so the next Rebuild reflects them. Only keys present in cfg.params
+   * are touched — keys without a matching typed entry are dropped because they
+   * have no path into the scenario otherwise.
+   */
+  _applyParamsToActive(params) {
+    if (!params) return;
+    const registry = ServiceRegistry.getInstance();
+    const active   = registry.scenarioService.getActive();
+    if (!Array.isArray(active?.params)) return;
+    for (const p of active.params) {
+      if (params[p.name] !== undefined) p.value = params[p.name];
+    }
   }
 
   initView() {

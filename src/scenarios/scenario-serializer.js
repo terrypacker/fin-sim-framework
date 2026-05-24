@@ -321,15 +321,32 @@ function _isAlreadySerialized(node) {
 
 export class ScenarioSerializer {
 
+  /**
+   * Canonicalize a sim start/end date to a full ISO 8601 string
+   * (`YYYY-MM-DDTHH:mm:ss.sssZ`). Used by the scenario registry + serializer to
+   * guarantee a single representation across:
+   *   - Prebuilt registry entries (originally `Date` objects)
+   *   - User scenarios in localStorage (round-tripped via JSON)
+   *   - Downloaded JSON exports
+   *
+   * Returns null for null/undefined inputs and for unparseable strings. UI
+   * inputs (`<input type="date">`) slice the first 10 characters; scenario
+   * construction calls `new Date(isoString)` to obtain a real `Date`.
+   *
+   * @param {Date|string|null|undefined} d
+   * @returns {string|null}
+   */
   static toDateStr(d) {
-    if (!d) return null;
-    if (d instanceof Date) return d.toISOString().slice(0, 10);
-    return String(d).slice(0, 10);
+    if (d == null) return null;
+    if (d instanceof Date) {
+      if (Number.isNaN(d.getTime())) return null;
+      return d.toISOString();
+    }
+    const parsed = new Date(d);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toISOString();
   }
 
-  //TODO Clean up API
-  //TODO Support toolsets export here?
-  //TODO Params vs parameters
   static serializeScenario(scenario) {
     return {
       id: scenario.id,
@@ -355,47 +372,42 @@ export class ScenarioSerializer {
   }
 
   /**
-   * Serialize the current scenario state into a config object.
+   * Capture the current state of the live service maps as a partial cfg slice
+   * — persons, accounts, realProperties, collectibles plus the full
+   * events/handlers/actions/reducers graph.
    *
-   * Reads directly from the service maps so that in-flight UI edits (name,
-   * type, field values) are captured without relying on the ConfigGraph's
-   * internal node structure.
+   * Compose with `serializeScenario` when you need a complete cfg:
    *
-   * @param {{ eventService, handlerService, actionService, reducerService, personService }} services
-   *   The ServiceRegistry instance (or any object exposing the service properties).
-   *   Pass `ServiceRegistry.getInstance()` from the save handler.
-   * @param {string} id
-   * @param {string} name
-   * @param {number} order
-   * @param {boolean} active
-   * @param {string|Date} simStart
-   * @param {string|Date} simEnd
-   * @param {object} initialState
-   * @param {Array}  params
-   * @returns {object} serialized scenario config
+   * ```js
+   * const cfg = ScenarioSerializer.serializeScenario({
+   *   ...ScenarioSerializer.snapshotServices(services),
+   *   id, name, order, simStart, simEnd, initialState, params,
+   * });
+   * ```
+   *
+   * Design 15: the active scenario record is the source of truth, not the
+   * services. This helper is the bridge for callers (the Save handler, tests)
+   * that need to harvest in-flight service-map state into that record.
+   *
+   * @param {{ eventService, handlerService, actionService, reducerService,
+   *           personService, accountService, realPropertyService, collectibleService }} services
+   * @returns {{ persons, accounts, realProperties, collectibles,
+   *             events, handlers, actions, reducers }}
    */
-  static serialize(services, id, name, order, active, simStart, simEnd, initialState, params) {
-    const { eventService, handlerService, actionService, reducerService, personService, accountService } = services;
-
-    const { realPropertyService, collectibleService } = services;
+  static snapshotServices(services) {
+    const {
+      eventService, handlerService, actionService, reducerService,
+      personService, accountService, realPropertyService, collectibleService,
+    } = services;
     return {
-      id,
-      name,
-      order,
-      active: active,
-      prebuilt: false,
-      simStart: this.toDateStr(simStart),
-      simEnd:   this.toDateStr(simEnd),
-      persons:        (personService?.getAll()          ?? []).map(n => ScenarioSerializer._serializePerson(n)),
-      accounts:       (accountService?.getAll()         ?? []).map(n => ScenarioSerializer._serializeAccount(n)),
-      realProperties: (realPropertyService?.getAll()    ?? []).map(n => ScenarioSerializer._serializeRealProperty(n)),
-      collectibles:   (collectibleService?.getAll()     ?? []).map(n => ScenarioSerializer._serializeCollectible(n)),
-      events:   eventService.getAll().map(n => ScenarioSerializer._serializeEvent(n)),
-      handlers: handlerService.getAll().map(n => ScenarioSerializer._serializeHandler(n)),
-      actions:  actionService.getAll().map(n => ScenarioSerializer._serializeAction(n)),
-      reducers: reducerService.getAll().map(n => ScenarioSerializer._serializeReducer(n)),
-      initialState: initialState ? structuredClone(initialState) : {},
-      params:   params ?? [],
+      persons:        (personService?.getAll()         ?? []).map(n => ScenarioSerializer._serializePerson(n)),
+      accounts:       (accountService?.getAll()        ?? []).map(n => ScenarioSerializer._serializeAccount(n)),
+      realProperties: (realPropertyService?.getAll()   ?? []).map(n => ScenarioSerializer._serializeRealProperty(n)),
+      collectibles:   (collectibleService?.getAll()    ?? []).map(n => ScenarioSerializer._serializeCollectible(n)),
+      events:         (eventService?.getAll()          ?? []).map(n => ScenarioSerializer._serializeEvent(n)),
+      handlers:       (handlerService?.getAll()        ?? []).map(n => ScenarioSerializer._serializeHandler(n)),
+      actions:        (actionService?.getAll()         ?? []).map(n => ScenarioSerializer._serializeAction(n)),
+      reducers:       (reducerService?.getAll()        ?? []).map(n => ScenarioSerializer._serializeReducer(n)),
     };
   }
 
@@ -647,16 +659,16 @@ export class ScenarioSerializer {
       __type:                'Person',
       id:                    person.id,
       name:                  person.name,
-      birthDate:             person.birthDate instanceof Date
-                               ? person.birthDate.toISOString().slice(0, 10)
-                               : person.birthDate,
+      // Design 15: all dates serialize as full ISO 8601 strings. Deserializers
+      // (e.g. _makePerson) wrap with `new Date(...)` which accepts both full ISO
+      // and YYYY-MM-DD, so existing payloads remain readable.
+      birthDate:             ScenarioSerializer.toDateStr(person.birthDate),
       citizen:               person.citizen ?? ['US'],
       lifeExpectancy:        person.lifeExpectancy ?? 90,
       socialSecurityMonthly: person.socialSecurityMonthly ?? 2800,
       monthlyWage:           person.monthlyWage ?? 0,
-      retirementDate:        person.retirementDate instanceof Date
-                               ? person.retirementDate.toISOString().slice(0, 10)
-                               : (person.retirementDate ?? '2040-01-01'),
+      retirementDate:        ScenarioSerializer.toDateStr(person.retirementDate)
+                               ?? new Date(Date.UTC(2040, 0, 1)).toISOString(),
     };
   }
 

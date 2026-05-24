@@ -10,6 +10,7 @@
 
 import { IntlRetirementMcRunner }     from '../../finance/monte-carlo/intl-retirement-mc-runner.js';
 import { DEFAULT_MC_VARIABLE_CONFIGS } from '../../finance/monte-carlo/intl-retirement-mc-config.js';
+import { ServiceRegistry }             from '../../services/service-registry.js';
 
 /**
  * MonteCarloController — domain logic for the MC tab.
@@ -31,7 +32,10 @@ export class MonteCarloController {
    * @returns {Promise<{ runs: Array, summary: object }>}
    */
   async runMonteCarlo({ simStart, simEnd, n = 100, variableConfigs = DEFAULT_MC_VARIABLE_CONFIGS, baseParams = {}, onProgress }) {
-    const runner = new IntlRetirementMcRunner({ n, variableConfigs, simStart, simEnd });
+    // Design 15 §2.3: snapshot the active scenario cfg as the per-iteration template
+    // so non-param edits (planned sale year, life expectancy, etc.) are honored.
+    const cfgTemplate = ServiceRegistry.getInstance().scenarioService?.getActive() ?? null;
+    const runner = new IntlRetirementMcRunner({ n, variableConfigs, simStart, simEnd, cfgTemplate });
     return runner.run(baseParams, onProgress);
   }
 }

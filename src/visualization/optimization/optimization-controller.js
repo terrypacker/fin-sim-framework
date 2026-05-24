@@ -11,6 +11,7 @@
 import { IntlRetirementOptimizer }     from '../../finance/optimization/intl-retirement-optimizer.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS } from '../../finance/optimization/intl-retirement-opt-config.js';
 import { OPTIMIZATION_OBJECTIVES }      from '../../finance/optimization/optimization-objectives.js';
+import { ServiceRegistry }              from '../../services/service-registry.js';
 
 /**
  * OptimizationController — domain logic for the Optimization tab.
@@ -41,11 +42,14 @@ export class OptimizationController {
     simEnd,
     onProgress,
   }) {
+    // Design 15 §2.3: snapshot the active scenario cfg as the per-iteration template.
+    const cfgTemplate = ServiceRegistry.getInstance().scenarioService?.getActive() ?? null;
     const optimizer = new IntlRetirementOptimizer({
       optimizationConfigs,
       objective,
       simStart,
       simEnd,
+      cfgTemplate,
     });
     const result = await optimizer.run(baseParams, onProgress);
     return { ...result, objectiveKey };

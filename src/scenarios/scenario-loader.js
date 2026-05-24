@@ -76,6 +76,13 @@ export class ScenarioLoader {
     if (!cfg) return;
 
     if (cfg.toolsets?.length > 0) {
+      // Design 15 §2.5: drift-merge persons/accounts/realProperties/collectibles
+      // before deserialization so that schema additions in buildDefaultConfig
+      // propagate into existing cfgs. Conservative: only appends entries whose
+      // key is absent; never replaces or reorders. Skipped when scenarioClass
+      // isn't on the cfg (e.g. raw JSON imports).
+      this._driftMergeDomainRecords(cfg);
+
       // Sync cfg.params (typed UI array) → cfg.parameters (plain key→value the compiler reads)
       // before loading persons/accounts so any param-driven person fields are up to date.
       if (Array.isArray(cfg.params) && cfg.params.length > 0) {
@@ -99,7 +106,9 @@ export class ScenarioLoader {
 
         if (node.type === 'person') {
           const rec = (cfg.persons ?? []).find(r => r.id === node.id);
-          if (rec) rec[node.field] = val instanceof Date ? val.toISOString().slice(0, 10) : val;
+          // Design 15: canonicalize Date values to full ISO strings so the
+          // cascaded field matches the serialized representation everywhere.
+          if (rec) rec[node.field] = val instanceof Date ? val.toISOString() : val;
         } else if (node.type === 'account') {
           const rec = (cfg.accounts ?? []).find(r => r.stateKey === node.stateKey);
           if (rec) rec[node.field] = val;
@@ -155,6 +164,50 @@ export class ScenarioLoader {
         Object.assign(sim.state, _cloneState(cfg.initialState));
       }
     }
+  }
+
+  /**
+   * Drift-merge domain records (persons / accounts / realProperties / collectibles)
+   * from cfg.scenarioClass.buildDefaultConfig() into cfg. Append-only: a default
+   * entry is added when its key (id for persons, stateKey for the others) is
+   * absent from cfg. Never replaces, removes, or reorders existing entries —
+   * if a user deleted a default account, drift merge will NOT re-add it
+   * (presence is keyed by stateKey, so renames also count as new entries).
+   *
+   * No-op when cfg has no scenarioClass (raw JSON imports without class metadata).
+   * @private
+   */
+  _driftMergeDomainRecords(cfg) {
+    const ScenarioCls = cfg.scenarioClass;
+    if (typeof ScenarioCls?.buildDefaultConfig !== 'function') return;
+
+    const schema = ScenarioCls.getParamSchema?.() ?? [];
+    const defaultParams = Object.fromEntries(schema.map(s => [s.key, s.defaultValue]));
+    let defaults;
+    try {
+      defaults = ScenarioCls.buildDefaultConfig(defaultParams, cfg.simStart, cfg.simEnd);
+    } catch {
+      return;
+    }
+    if (!defaults) return;
+
+    const append = (cfgList, defaultList, keyFn) => {
+      if (!Array.isArray(defaultList) || defaultList.length === 0) return cfgList;
+      const out = Array.isArray(cfgList) ? cfgList : [];
+      const present = new Set(out.map(keyFn).filter(k => k != null));
+      for (const def of defaultList) {
+        const k = keyFn(def);
+        if (k == null || present.has(k)) continue;
+        out.push(structuredClone(def));
+        present.add(k);
+      }
+      return out;
+    };
+
+    cfg.persons        = append(cfg.persons,        defaults.persons,        r => r.id);
+    cfg.accounts       = append(cfg.accounts,       defaults.accounts,       r => r.stateKey);
+    cfg.realProperties = append(cfg.realProperties, defaults.realProperties, r => r.stateKey);
+    cfg.collectibles   = append(cfg.collectibles,   defaults.collectibles,   r => r.stateKey);
   }
 }
 
