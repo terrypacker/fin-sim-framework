@@ -676,8 +676,7 @@ export class Simulation {
           eventType: sourceEventType,
           action: actionClone,
           reducer: reducerClone,
-          prevState,
-          nextState: structuredClone(this.state),
+          stateDiff: diffStates(prevState, this.state),
           emittedActions: structuredClone(emitted),
           sourceEvent
         }));

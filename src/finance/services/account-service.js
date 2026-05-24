@@ -95,12 +95,29 @@ export class AccountService extends BaseService {
    * @param {Date}    date
    */
   transaction(account, amount, date) {
-    if (amount > 0) {
-      account.credits.push({ amount, date });
-    } else if (amount < 0) {
-      account.debits.push({ amount, date });
-    }
     account.balance = account.balance + amount;
+  }
+
+  /**
+   * Reconstruct the transaction history for an account from the simulation journal.
+   * Finds all journal entries whose state diff contains a balance change for the
+   * given state key (the property name of the account on the state object, e.g. 'usSavingsAccount').
+   *
+   * @param {string}  stateKey  - Property name of the account on the state object
+   * @param {import('../../simulation-framework/journal.js').Journal} journal
+   * @returns {{ date: Date, amount: number, eventType: string, reducer: string }[]}
+   */
+  getAccountHistory(stateKey, journal) {
+    const field = `${stateKey}.balance`;
+    const results = [];
+    for (const entry of journal.journal) {
+      if (!entry.stateDiff) continue;
+      const diff = entry.stateDiff.find(d => d.field === field);
+      if (diff?.delta != null) {
+        results.push({ date: entry.date, amount: diff.delta, eventType: entry.eventType, reducer: entry.reducer });
+      }
+    }
+    return results;
   }
 
   /**

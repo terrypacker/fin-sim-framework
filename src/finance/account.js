@@ -78,7 +78,7 @@ export class InsufficientFundsError extends Error {
  *
  * Design note: Account intentionally does NOT extend Asset.
  * Asset models a non-ledger market-value holding (real property, value/costBasis).
- * Account models a transaction ledger (balance, credits[], debits[]).
+ * Account models a balance holder; transaction history is derived from the Journal.
  * They share some opts (ownershipType, ownerId, drawdownPriority) but their
  * mechanics and service methods are fundamentally different.
  */
@@ -100,8 +100,6 @@ export class Account extends SimGraphNode {
     super({id: opts.id ?? null, kind: 'account', layer: 'config', name: opts.name ?? ''});
     this.type             = opts.type             ?? null;
     this.balance          = initialValue;
-    this.credits          = [];
-    this.debits           = [];
     this.ownershipType    = opts.ownershipType    ?? 'sole';
     this.ownerId          = opts.ownerId          ?? null;
     this.minimumBalance   = opts.minimumBalance   ?? 0;
