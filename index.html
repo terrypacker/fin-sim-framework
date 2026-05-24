@@ -229,7 +229,7 @@
           <span class="panel-title">ACTION DETAIL</span>
           <span class="badge-purple" style="margin-left:auto" id="popBadge">CLICK</span>
         </div>
-        <div id="actionPanelDetails" style="overflow-y:auto;flex:1;min-height:0;"></div>
+        <div id="actionPanelDetails" class="actionPanelDetails"></div>
       </div>
 
       <!-- Current State -->
@@ -575,7 +575,29 @@
         <label class="single-row" data-id="noChangeTitle" >(No Change - Previous State)</label>
         <pre class="field-code single-row" data-id="noChangeState"></pre>
       </div>
+    </div>
+  </div>
+</template>
 
+<!-- NODE STATE CHANGES TEMPLATE -->
+<template id="tpl-node-state-changes">
+  <div id="node-state-changes">
+    <div class="data-section-title">State Changes</div>
+    <div class="data-grid-center data-grid-3" data-state-change-grid>
+      <div class="data-row" data-id="stateHeaderRow" style="display:none">
+        <span>Field</span>
+        <span>Before</span>
+        <span>After</span>
+      </div>
+      <div class="data-row" data-state-change-row style="display:none">
+        <span class="diff-field" data-id="field"></span>
+        <span class="diff-before" data-id="before"></span>
+        <span class="diff-after" data-id="after"></span>
+      </div>
+      <div class="data-row" data-id="noChangeRow" style="display:none">
+        <label class="single-row" data-id="noChangeTitle" >(No Change - Previous State)</label>
+        <pre class="field-code single-row" data-id="noChangeState"></pre>
+      </div>
     </div>
   </div>
 </template>
@@ -594,9 +616,12 @@
 <!-- NODE DETAILS TEMPLATE -->
 <template id="tpl-node-details">
   <div class="g-node">
-    <div class="g-header"></div>
-    <div class="g-title"></div>
-    <div class="node-badge badge-green" data-id="firedIndicator"></div>
+    <div class="g-header">
+      <span class="g-header-text"></span>
+      <span class="node-state-badge badge-green" data-id="stateChangeIndicator" style="display:none"></span>
+      <span class="node-fired-badge badge-green" data-id="firedIndicator"></span>
+    </div>
+    <span class="g-title"></span>
     <div class="g-port in"></div>
     <div class="g-port out"></div>
   </div>

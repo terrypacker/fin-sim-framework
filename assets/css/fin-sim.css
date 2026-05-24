@@ -107,6 +107,20 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   min-height: 0;
 }
 
+#actionPanelDetails {
+  display:flex;
+  flex-direction: column;
+  overflow-y:auto;
+  flex:1;
+  min-height:0;
+}
+
+#node-state-changes {
+  display:flex;
+  flex-direction: column;
+  flex: 1;
+}
+
 /* ── DASHBOARD CARDS ── */
 .fin-dash-cards {
   display: grid;
@@ -519,6 +533,7 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   grid-template-columns: 1fr;
   gap: 4px;
   place-items: center;
+  flex: 1;
 }
 
 .data-grid-2 {
@@ -676,6 +691,15 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   inset: 0;
 }
 
+/* ── NODE BADGE ── */
+.node-fired-badge {
+  margin-left: 2px;
+}
+
+.node-state-badge {
+  margin-left: 2px;
+}
+
 /* ── GRAPH NODES ── */
 .g-node {
   position: absolute;
@@ -705,12 +729,21 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 
 /* Node header */
 .g-header {
-  font-size: 9px;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  height: 18px;
   padding: 4px 6px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-panel);
+}
+
+.g-header-text {
+  flex: 1;
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
 }
 
 /* Title input */
@@ -718,18 +751,11 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   width: 100%;
   border: none;
   padding-left: 10px;
+  padding-top: 2px;
   background: transparent;
   color: var(--text);
-  font-family: var(--font-mono);
   font-size: 10px;
   outline: none;
-}
-
-/* ── NODE BADGE ── */
-.node-badge {
-  position: absolute;
-  top: 2px;
-  right: 2px;
 }
 
 /* ── PORTS ── */
