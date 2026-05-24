@@ -38,9 +38,22 @@ import {SimulationState} from "../simulation-framework/simulation-state.js";
  * ServiceRegistry and the domain objects.
  */
 export class SimulationWorkbenchDefaultScenario extends BaseScenario {
-  constructor({eventSchedulerUI, context} = {}) {
-    super({ eventSchedulerUI, context });
-    this.initialState = new SimulationState();
+  constructor({context} = {}) {
+    super({ context });
+  }
+
+  /**
+   * Build the scenario-specific default initial state.
+   * Called by BaseScenario.buildSim() when no saved initialState is provided.
+   * Constructs all domain objects (people, accounts) from params and stores
+   * them on `this._people` / `this._accounts` so loadDefaults() can use them.
+   */
+  buildDefaultInitialState(params) {
+    return new SimulationState({
+      metrics: {
+        salary: 0,
+        amount: 0,
+      }});
   }
 
   /**
@@ -99,8 +112,6 @@ export class SimulationWorkbenchDefaultScenario extends BaseScenario {
     .build();
     actionService.register(monthStartAction);
 
-
-    //TODO When we fix the classes for Actions we can make this a field metric
     const sumTaxAction = ActionBuilder.fieldValueAction('SUM_TAX')
     .name('Sum Salary Tax')
     .fieldName('metrics.taxAmount')

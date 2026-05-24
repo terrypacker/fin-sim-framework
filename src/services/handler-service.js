@@ -17,6 +17,7 @@ import { AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHand
 import { DividendScheduledHandler } from '../finance/handlers/dividend-scheduled-handler.js';
 import { ChangeResidencyHandler } from '../finance/handlers/change-residency-handler.js';
 import { OutOfFundsHandler } from '../finance/handlers/out-of-funds-handler.js';
+import {Edge, EDGE_TYPES} from "../graph/edge.js";
 
 // Augment the HANDLER_CLASSES registry with all domain-specific handler subclasses.
 // HANDLER_CLASSES is declared in handlers.js with only HandlerEntry; we extend it here
@@ -42,10 +43,42 @@ Object.assign(HANDLER_CLASSES, {
  * into a simulation's HandlerRegistry is the caller's responsibility.
  */
 export class HandlerService extends BaseService {
-  constructor(bus) { super(bus, 'h'); }
+  constructor(graph, query, bus) {
+    super(graph, query, bus, 'handler');
+  }
+
+  // ─── Edges ───────────────────────────────────────────────────────────────
+  _wireNodeEdges(item) {
+    (item.handledEvents ?? []).forEach(e => {
+      this.linkEventToHandler(e.id, item.id);
+    });
+
+    (item.generatedActionTypes ?? []).forEach(a => {
+      const action = this._query.getOneByKind('action', 'type', a);
+      if(action == null) {
+        throw Error(`Action for type ${a} missing.`)
+      }
+      this.linkHandlerToAction(item.id, action.id);
+    });
+  }
+
+  linkEventToHandler(eventId, handlerId) {
+    this._addEdge(eventId, handlerId, EDGE_TYPES.HANDLED_BY);
+  }
+
+  unlinkEventFromHandler(eventId, handlerId) {
+    this._removeEdge(eventId, handlerId, EDGE_TYPES.HANDLED_BY);
+  }
+
+  linkHandlerToAction(handlerId, actionId) {
+    this._addEdge(handlerId, actionId, EDGE_TYPES.GENERATES_ACTION);
+  }
+
+  unlinkHandlerFromAction(handlerId, actionId) {
+    this._removeEdge(handlerId, actionId, EDGE_TYPES.GENERATES_ACTION);
+  }
 
   // ─── Create ───────────────────────────────────────────────────────────────
-
   /**
    * Create a new HandlerEntry and publish a CREATE event.
    *
@@ -58,6 +91,7 @@ export class HandlerService extends BaseService {
     item.id = this._generateId('h');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -77,8 +111,10 @@ export class HandlerService extends BaseService {
   updateHandler(idOrHandler, changes = {}) {
     const handler = this._resolve(idOrHandler);
     const originalItem = Object.assign(Object.create(Object.getPrototypeOf(handler)), handler);
-    Object.assign(handler, changes);
+    this.mergeChanges(handler, changes);
+    this._graph.notifyNodeWatchers(); //Notify that the content in the graph changed
     this._publish('UPDATE', handler.constructor.name, handler, originalItem);
+    this._rewireEdges(handler);
     return handler;
   }
 
@@ -101,16 +137,16 @@ export class HandlerService extends BaseService {
     const Cls = HANDLER_CLASSES[newClass];
     if (!Cls) throw new Error(`HandlerService: unknown handler class "${newClass}"`);
 
-    const fresh = Object.create(Cls.prototype);
-    fresh.id                       = old.id;
-    fresh.name                     = old.name;
-    fresh.fn                       = old.fn;
-    fresh.handledEvents             = old.handledEvents;
-    fresh.generatedActionTypes      = old.generatedActionTypes;
+    const fresh = new Cls(old.fn, old.name);
+    fresh.id                        = old.id;
+    fresh.name                      = old.name;
+    fresh.fn                        = old.fn;
+    fresh.handledEvents              = old.handledEvents;
+    fresh.generatedActionTypes       = old.generatedActionTypes;
     fresh.generatedActionDefinitions = old.generatedActionDefinitions;
     Object.assign(fresh, extraProps);
 
-    this._items.set(fresh.id, fresh);
+    this._graph.updateNode(fresh.id, fresh);
     this._publish('UPDATE', newClass, fresh, old);
     return fresh;
   }
@@ -135,6 +171,7 @@ export class HandlerService extends BaseService {
     item.id   = this._generateId('h');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -152,6 +189,7 @@ export class HandlerService extends BaseService {
     item.id   = this._generateId('h');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -168,6 +206,7 @@ export class HandlerService extends BaseService {
     item.id   = this._generateId('h');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -184,6 +223,7 @@ export class HandlerService extends BaseService {
     item.id   = this._generateId('h');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -200,6 +240,7 @@ export class HandlerService extends BaseService {
     item.id   = this._generateId('h');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -216,6 +257,7 @@ export class HandlerService extends BaseService {
     item.id   = this._generateId('h');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -232,6 +274,7 @@ export class HandlerService extends BaseService {
     item.id   = this._generateId('h');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -249,6 +292,7 @@ export class HandlerService extends BaseService {
     item.id   = this._generateId('h');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -264,6 +308,7 @@ export class HandlerService extends BaseService {
     item.id   = this._generateId('h');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -278,6 +323,7 @@ export class HandlerService extends BaseService {
     item.id   = this._generateId('h');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 

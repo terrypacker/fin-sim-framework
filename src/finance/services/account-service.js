@@ -28,10 +28,12 @@ import { InsufficientFundsError } from '../account.js';
  */
 export class AccountService extends BaseService {
   /**
+   * @param {import('../../graph/graph.js').Graph} [graph]
+   * @param query - graph query api
    * @param {import('../../simulation-framework/event-bus.js').EventBus} [bus]
    */
-  constructor(bus = null) {
-    super(bus ?? new EventBus(), 'ac');
+  constructor(graph, query, bus) {
+    super(graph, query, bus, 'account', 2, false);
   }
 
   // ─── Create ───────────────────────────────────────────────────────────────
@@ -46,6 +48,7 @@ export class AccountService extends BaseService {
     account.id = this._generateId(this._idPrefix);
     this._register(account);
     this._publish('CREATE', 'Account', account);
+    this._wireNodeEdges(account);
     return account;
   }
 
@@ -61,8 +64,9 @@ export class AccountService extends BaseService {
   updateAccount(idOrAccount, changes = {}) {
     const account = this._resolve(idOrAccount);
     const original = { ...account };
-    Object.assign(account, changes);
+    this.mergeChanges(account, changes);
     this._publish('UPDATE', 'Account', account, original);
+    this._wireNodeEdges(account);
     return account;
   }
 

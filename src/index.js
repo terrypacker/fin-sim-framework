@@ -72,7 +72,10 @@ import { UsTaxRates2025 } from './finance/tax/us/us-tax-rates-2025.js';
 import { UsTaxRatesBase } from './finance/tax/us/us-tax-rates-base.js';
 import { TaxService } from './finance/tax-service.js';
 import { TaxSettleService } from './finance/tax-settle-service.js';
+import { EDGE_TYPES, createEdgeId, Edge } from './graph/edge.js';
 import { GraphQueryApi } from './graph/graph-query-api.js';
+import { Graph } from './graph/graph.js';
+import { SimGraphNode } from './graph/sim-graph-node.js';
 import { QueryApi } from './query/query-api.js';
 import { BaseScenario } from './scenarios/base-scenario.js';
 import { INTL_RETIREMENT_DEFAULTS, IntlRetirementScenario } from './scenarios/intl-retirement-scenario.js';
@@ -82,7 +85,7 @@ import { ScenarioStorage } from './scenarios/scenario-storage.js';
 import { SimulationWorkbenchDefaultScenario } from './scenarios/simulation-workbench-default-scenario.js';
 import { ActionService } from './services/action-service.js';
 import { BaseService } from './services/base-service.js';
-import { EventService } from './services/event-service.js';
+import { EVENT_CLASSES, EventService } from './services/event-service.js';
 import { HandlerService } from './services/handler-service.js';
 import { ReducerService } from './services/reducer-service.js';
 import { ServiceRegistry } from './services/service-registry.js';
@@ -94,7 +97,7 @@ import { ActionBuilder } from './simulation-framework/builders/action-builder.js
 import { EventBuilder } from './simulation-framework/builders/event-builder.js';
 import { HandlerBuilder } from './simulation-framework/builders/handler-builder.js';
 import { ReducerBuilder } from './simulation-framework/builders/reducer-builder.js';
-import { SIMULATION_BUS_MESSAGES, BusMessage, SimulationBusMessage, EventStartBusMessage, EventEndBusMessage, EventHandledMessage, ActionInstanceMessage, ActionResultMessage, ReducerResultMessage, ServiceActionEvent } from './simulation-framework/bus-messages.js';
+import { SIMULATION_BUS_MESSAGES, BusMessage, SimulationBusMessage, NodeDataBusMessage, BreakpointHitBusMessage, EventStartBusMessage, EventEndBusMessage, EventHandledMessage, ActionInstanceMessage, ActionResultMessage, ReducerResultMessage, ServiceActionEvent, ServiceBulkActionEvent } from './simulation-framework/bus-messages.js';
 import { DateUtils } from './simulation-framework/date-utils.js';
 import { EventBus } from './simulation-framework/event-bus.js';
 import { BaseEvent } from './simulation-framework/events/base-event.js';
@@ -111,6 +114,7 @@ import { ActionNode, SimulationEventGraph } from './simulation-framework/simulat
 import { SimulationHistory } from './simulation-framework/simulation-history.js';
 import { SimulationState } from './simulation-framework/simulation-state.js';
 import { BreakpointSignal, Simulation } from './simulation-framework/simulation.js';
+import { diffStates } from './simulation-framework/state-utils.js';
 import { AccountsController } from './visualization/accounts/accounts-controller.js';
 import { AccountsPresenter } from './visualization/accounts/accounts-presenter.js';
 import { AccountsView } from './visualization/accounts/accounts-view.js';
@@ -118,12 +122,10 @@ import { BalanceChartView } from './visualization/balance-chart-view.js';
 import { ChartView } from './visualization/chart-view.js';
 import { BaseComponent } from './visualization/components/base-component.js';
 import { GraphNodeFilterMultiSelect } from './visualization/components/graph-node-filter-multi-select.js';
-import { ConfigGraph } from './visualization/config-graph.js';
+import { GraphRenderer } from './visualization/components/graph-renderer.js';
 import { GraphBuilderController } from './visualization/graph-builder/graph-builder-controller.js';
 import { GraphBuilderPresenter } from './visualization/graph-builder/graph-builder-presenter.js';
 import { GraphBuilderView } from './visualization/graph-builder/graph-builder-view.js';
-import { GraphSync } from './visualization/graph-sync.js';
-import { GraphView } from './visualization/graph-view.js';
 import { PeopleController } from './visualization/people/people-controller.js';
 import { PeoplePresenter } from './visualization/people/people-presenter.js';
 import { PeopleView } from './visualization/people/people-view.js';
@@ -153,7 +155,12 @@ export const Misc = {
   SimulationAnimator,
   SimulationWorkbench,
   StatePanelView,
+  EDGE_TYPES,
+  createEdgeId,
+  Edge,
   GraphQueryApi,
+  Graph,
+  SimGraphNode,
   QueryApi,
 };
 
@@ -322,6 +329,7 @@ export const Scenarios = {
 export const Services = {
   ActionService,
   BaseService,
+  EVENT_CLASSES,
   EventService,
   HandlerService,
   ReducerService,
@@ -350,6 +358,8 @@ export const Core = {
   SIMULATION_BUS_MESSAGES,
   BusMessage,
   SimulationBusMessage,
+  NodeDataBusMessage,
+  BreakpointHitBusMessage,
   EventStartBusMessage,
   EventEndBusMessage,
   EventHandledMessage,
@@ -357,6 +367,7 @@ export const Core = {
   ActionResultMessage,
   ReducerResultMessage,
   ServiceActionEvent,
+  ServiceBulkActionEvent,
   DateUtils,
   EventBus,
   BaseEvent,
@@ -394,6 +405,7 @@ export const Core = {
   SimulationState,
   BreakpointSignal,
   Simulation,
+  diffStates,
 };
 
 export const Visualization = {
@@ -404,12 +416,10 @@ export const Visualization = {
   ChartView,
   BaseComponent,
   GraphNodeFilterMultiSelect,
-  ConfigGraph,
+  GraphRenderer,
   GraphBuilderController,
   GraphBuilderPresenter,
   GraphBuilderView,
-  GraphSync,
-  GraphView,
   PeopleController,
   PeoplePresenter,
   PeopleView,

@@ -17,6 +17,8 @@
  * limitations under the License.
  */
 
+import {SimGraphNode} from "../graph/sim-graph-node.js";
+
 export const DEFAULT_ACTIONS = {
   RECORD_METRIC: 'RECORD_METRIC',
   RECORD_BALANCE: 'RECORD_BALANCE',
@@ -35,19 +37,16 @@ export const DEFAULT_ACTIONS = {
  *   parentInstanceId — instanceId of the action that emitted this one (null = top-level)
  *   rootInstanceId   — instanceId of the originating root action (null = this is root)
  */
-export class Action {
+export class Action extends SimGraphNode {
   static description = 'Base action carrying only a type discriminator and optional name.';
 
   constructor(type, name) {
-    this.id              = null;  // Assigned by ActionService (config) or instantiate() (runtime UUID)
+    super({id: null, kind: 'action', layer: 'config', name})
     this.instanceId      = null;  // UUID — assigned by instantiate() or decorateAction()
     this.parentInstanceId = null; // UUID of parent action (null = top-level)
     this.rootInstanceId  = null;  // UUID of root action (null = this is the root)
     this.type = type;
-    this.name = name;
   }
-
-  get kind() { return 'action'; }
 
   /** Always matches constructor.name — can never drift from the actual class. Don't let minification strip this out! */
   get actionClass() { return this.constructor.name; }
@@ -77,7 +76,7 @@ export class Action {
 export class FieldAction extends Action {
   static description = 'Extends Action with a fieldName targeting a specific state field.';
 
-  constructor(type, name, fieldName) {
+  constructor(type, name, fieldName = '') {
     super(type, name);
     this.fieldName  = fieldName;
   }
@@ -86,7 +85,7 @@ export class FieldAction extends Action {
 export class FieldValueAction extends FieldAction {
   static description = 'Extends FieldAction with a value to write into the targeted state field.';
 
-  constructor(type, name, fieldName, value) {
+  constructor(type, name, fieldName = '', value = null) {
     super(type, name, fieldName);
     this.value  = value;
   }
@@ -104,7 +103,7 @@ export class FieldValueAction extends FieldAction {
 export class AmountAction extends FieldValueAction {
   static description = 'Carries a monetary or numeric amount (fieldName fixed to "amount"); used for cash flows, gains, and tax payments.';
 
-  constructor(type, name, amount) {
+  constructor(type, name, amount = 0) {
     super(type, name, 'amount', amount);
   }
 }
@@ -250,6 +249,7 @@ export class ActionDefinition {
     const config = { actionClass: action.actionClass };
     if (action.id        !== undefined) config.actionId  = action.id;
     if (action.name      !== undefined) config.name      = action.name;
+    if (action.kind      !== undefined) config.kind      = action.kind;
     if (action.fieldName !== undefined) config.fieldName = action.fieldName;
     if (action.value     !== undefined) config.value     = action.value;
     if (action._script   !== undefined) config.script    = action._script;

@@ -128,8 +128,7 @@ export class QueryApi {
     this._dataSource = dataSource;
     this._idIndex = new Map();     // id -> item
     this._nameIndex = new Map();   // lower(name) -> [items]
-
-    this._buildIndexes();
+    this.rebuildIndexes = true;
   }
 
 
@@ -138,7 +137,13 @@ export class QueryApi {
   // =========================================================
 
   getById(id) {
+    if(this.rebuildIndexes) this._buildIndexes();
     return this._idIndex.get(String(id)) || null;
+  }
+
+  getByName(name) {
+    if(this.rebuildIndexes) this._buildIndexes();
+    return this._nameIndex.get(name) || null;
   }
 
   getAll() {
@@ -161,6 +166,8 @@ export class QueryApi {
    * @return {Promise<{items: *, total: *}>}
    */
   async search({ query, sort = [], offset = 0, limit = 50 }) {
+    if(this.rebuildIndexes) this._buildIndexes();
+
     const where = typeof query === 'string'
         ? this._parse(query)
         : query;
@@ -206,7 +213,7 @@ export class QueryApi {
   // Optimization hook for subclasses
   // =========================================================
   _createDataSource(where) {
-        return this._dataSource.getAll();
+    return this._dataSource.getAll();
   }
 
   // =========================================================
@@ -463,9 +470,17 @@ export class QueryApi {
   // =========================================================
   // Optimization
   // =========================================================
+  _invalidateIndexes() {
+    this.rebuildIndexes = true;
+  }
 
   _buildIndexes() {
-    const all = this.getAll();
+    this._buildIndexesFrom(this.getAll());
+  }
+  _buildIndexesFrom(all) {
+    // Clear before rebuilding
+    this._idIndex.clear();
+    this._nameIndex.clear();
 
     for (const item of all) {
       if (item.id != null) {
@@ -480,6 +495,7 @@ export class QueryApi {
         this._nameIndex.get(key).push(item);
       }
     }
+    this.rebuildIndexes = false;
   }
 
   _extractIndexCandidates(node) {

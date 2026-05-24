@@ -35,17 +35,19 @@ export class GraphBuilderPresenter {
    *   builderCanvas: HTMLElement
    * }}
    */
-  constructor({ graph, builderCanvas }) {
-    this._controller = new GraphBuilderController({ graph });
-    this._view       = new GraphBuilderView({ builderCanvas, graph });
-
+  constructor({ graphRenderer, builderCanvas, eventService, handlerService, actionService, reducerService }) {
+    this._controller = new GraphBuilderController({ eventService, handlerService, actionService, reducerService });
+    this._view       = new GraphBuilderView({ builderCanvas, graphRenderer });
+    this._graphRenderer = graphRenderer;
     // Register the graph node-click listener so clicking a node opens its editor.
-    graph.registerNodeClickListener((event, node) => this._view.editNode(node));
+    this._graphRenderer.registerNodeClickListener((event, node) => this._view.editNode(node));
 
     // ── Wire view mutation callbacks → controller ─────────────────────────
 
     this._view.onCreationRequested = (kind, subtype) => {
       this._controller.notifyCreationRequested(kind, subtype);
+      const newNode = this._controller.createNewNode(kind, subtype);
+      this.editNode(newNode);
     };
 
     this._view.onDelete = (node) => {
@@ -62,8 +64,13 @@ export class GraphBuilderPresenter {
       else       this._controller.unlinkNodes(node, selectedNode, kind, linkTo);
     };
 
-    // For replaceAction/replaceReducer the node instance changes, so re-render
+    // For replace* operations the node instance changes, so re-render
     // the full editor with the returned replacement node.
+    this._view.onEventTypeChange = (nodeId, newClass) => {
+      const updated = this._controller.replaceEvent(nodeId, newClass);
+      this._view.editNode(updated);
+    };
+
     this._view.onActionClassChange = (nodeId, newClass) => {
       const updated = this._controller.replaceAction(nodeId, newClass);
       this._view.editNode(updated);
@@ -90,8 +97,9 @@ export class GraphBuilderPresenter {
     };
 
     this._view.onActionDefinitionUpdate = (node, defId, field, value) => {
-      this._controller.updateActionDefinition(node, defId, field, value);
-      this._view.editNode(node);
+      if(this._controller.updateActionDefinition(node, defId, field, value)) {
+        this._view.editNode(node);
+      }
     };
   }
 
@@ -104,6 +112,12 @@ export class GraphBuilderPresenter {
 
   /** Open the editor panel for a node.  Called by BaseScenario after creation. */
   editNode(node) { this._view.editNode(node); }
+
+  //Clear out meta data from nodes?
+  resetForReplay() {
+    //Clear out the fired, state changed and
+    this._controller.resetForReplay();
+  }
 
   // ── Delegating accessors (preserve backwards-compatibility for tests) ──────
 
@@ -122,5 +136,10 @@ export class GraphBuilderPresenter {
   deleteNode(node) {
     this._controller.deleteNode(node);
     this._view.editNode(null);
+  }
+
+  destroy() {
+    this._view.destroy();
+    this._graphRenderer.destroy();
   }
 }

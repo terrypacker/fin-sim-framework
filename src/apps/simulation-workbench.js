@@ -43,9 +43,10 @@ const PREBUILT_SCENARIOS = [
     order:    1,
     simStart: '2026-01-01',
     simEnd:   '2041-01-01',
-    factory:  (_params, _initialState, ui) => new IntlRetirementScenario({
-      eventSchedulerUI: ui,
-      context: ServiceRegistry.getInstance().simulationContext
+    factory:  (_params, _initialState, simStart, simEnd) => new IntlRetirementScenario({
+      context: ServiceRegistry.getInstance().simulationContext,
+      simStart: simStart,
+      simEnd: simEnd
     }),
   }),
   new PrebuiltScenario({
@@ -54,9 +55,10 @@ const PREBUILT_SCENARIOS = [
     order:    2,
     simStart: '2026-01-01',
     simEnd:   '2041-01-01',
-    factory:  (_params, _initialState, ui) => new SimulationWorkbenchDefaultScenario({
-      eventSchedulerUI: ui,
-      context: ServiceRegistry.getInstance().simulationContext
+    factory:  (_params, _initialState, simStart, simEnd) => new SimulationWorkbenchDefaultScenario({
+      context: ServiceRegistry.getInstance().simulationContext,
+      simStart: simStart,
+      simEnd: simEnd
     }),
   }),
 ];

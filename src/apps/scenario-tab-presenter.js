@@ -87,13 +87,15 @@ export class ScenarioTabPresenter {
    *
    * @param {object}   params        - Scenario params (from getParams())
    * @param {object}   initialState  - Initial state (from getInitialState())
-   * @param {object}   ui            - EventSchedulerUI instance
    * @param {Function} [fallbackFactory] - Legacy factory for apps that don't supply prebuiltScenarios
    * @returns {BaseScenario}
    */
-  createScenario(params, initialState, ui, fallbackFactory) {
+  createScenario(params, initialState, fallbackFactory) {
     const pb = this._activePrebuilt();
-    if (pb) return pb.factory(params, initialState, ui);
+    const simStart = pb == null ? this._getSimStart() : new Date(pb.simStart);
+    const simEnd = pb == null ? this._getSimEnd() : new Date(pb.simEnd);
+
+    if (pb) return pb.factory(params, initialState, simStart, simEnd);
 
     const cfg = this._activeScenario();
     if (cfg) {
@@ -102,10 +104,12 @@ export class ScenarioTabPresenter {
         ? this._prebuiltScenarios.find(p => p.id === cfg.scenarioId)
         : null;
       const factory = (matchedPb ?? this._prebuiltScenarios[0])?.factory;
-      if (factory) return factory(params, initialState, ui);
+      if (factory) return factory(params, initialState,
+          (cfg.simStart) ? new Date(cfg.simStart) : undefined,
+          (cfg.simEnd) ? new Date(cfg.simEnd) : undefined);
     }
 
-    if (fallbackFactory) return fallbackFactory(params, initialState, ui);
+    if (fallbackFactory) return fallbackFactory(params, initialState, simStart, simEnd);
 
     throw new Error('ScenarioTabPresenter: no scenario factory available');
   }
@@ -249,6 +253,16 @@ export class ScenarioTabPresenter {
   }
 
   // ── Private ────────────────────────────────────────────────────────────────
+
+  _getSimStart() {
+    const simStartString = document.getElementById('simStartInput')?.value; //this.getSimulationStartDate();
+    return (simStartString) ? new Date(simStartString) : undefined;
+  }
+
+  _getSimEnd() {
+    const simEndString = document.getElementById('simEndInput')?.value; //this.getSimulationEndDate();
+    return (simEndString) ? new Date(simEndString) : undefined;
+  }
 
   /** Returns the active PrebuiltScenario, or null if a user scenario (or nothing) is selected. */
   _activePrebuilt() {

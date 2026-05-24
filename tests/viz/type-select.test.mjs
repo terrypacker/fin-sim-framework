@@ -36,25 +36,28 @@ import { HANDLER_CLASSES } from '../../src/simulation-framework/handlers.js';
 import { REDUCER_CLASSES } from '../../src/simulation-framework/reducers.js';
 import { ACTION_CLASSES }  from '../../src/simulation-framework/actions.js';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
+import {
+  GraphRenderer
+} from "../../src/visualization/components/graph-renderer.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function makeMinimalGraph() {
-  return {
-    // graphRoot without a parentElement → _buildControls() returns early (no error)
-    graphRoot: document.createElement('div'),
-    registerNodeClickListener() {},
-    getNodesToKindFromMe()  { return []; },
-    getNodesFromKindToMe()  { return []; },
-    getKind()               { return []; },
-    getAll() { return []; }
-  };
-}
-
-function makeView() {
+function makeBuilderView(elements) {
+  ServiceRegistry.reset();
+  const registry = ServiceRegistry.getInstance();
+  const { builderCanvas, graphRoot, graphNodes, graphEdges, nodeDetailsTemplate } = elements ?? makeElements();
   return new GraphBuilderView({
-    builderCanvas: document.createElement('div'),
-    graph: makeMinimalGraph(),
+    builderCanvas,
+    graphRenderer: new GraphRenderer({
+      parent: null,
+      graph: registry.graph,
+      graphQueryApi: registry.graphQueryApi,
+      graphRoot,
+      graphNodes,
+      graphEdges,
+      nodeDetailsTemplate,
+      displayNodeStateChanges: (changes) => {}
+    })
   });
 }
 
@@ -64,12 +67,12 @@ function makeView() {
 // would only contain ["HandlerEntry"] instead of the full domain class set.
 
 test('GraphBuilderView.HANDLER_TYPES matches Object.keys(HANDLER_CLASSES) at construction time', () => {
-  const view = makeView();
+  const view = makeBuilderView();
   expect(view.HANDLER_TYPES).toEqual(Object.keys(HANDLER_CLASSES));
 });
 
 test('GraphBuilderView.HANDLER_TYPES includes domain handler subclasses (not just HandlerEntry)', () => {
-  const view = makeView();
+  const view = makeBuilderView();
   expect(view.HANDLER_TYPES).toContain('UsSavingsInterestMonthlyHandler');
   expect(view.HANDLER_TYPES).toContain('MonthlyExpensesHandler');
   expect(view.HANDLER_TYPES).toContain('ChangeResidencyHandler');
@@ -77,12 +80,12 @@ test('GraphBuilderView.HANDLER_TYPES includes domain handler subclasses (not jus
 });
 
 test('GraphBuilderView.REDUCER_TYPES matches Object.keys(REDUCER_CLASSES)', () => {
-  const view = makeView();
+  const view = makeBuilderView();
   expect(view.REDUCER_TYPES).toEqual(Object.keys(REDUCER_CLASSES));
 });
 
 test('GraphBuilderView.ACTION_TYPES matches Object.keys(ACTION_CLASSES)', () => {
-  const view = makeView();
+  const view = makeBuilderView();
   expect(view.ACTION_TYPES).toEqual(Object.keys(ACTION_CLASSES));
 });
 
@@ -133,52 +136,48 @@ function makeHandlerNode(handlerClass = 'HandlerEntry') {
 }
 
 test('handler editor: select is populated with all HANDLER_CLASSES keys', () => {
-  const canvas = document.createElement('div');
   document.body.appendChild(makeHandlerTemplate());
   document.body.appendChild(makeDeleteTemplate());
 
-  const view = new GraphBuilderView({ builderCanvas: canvas, graph: makeMinimalGraph() });
+  const view = makeBuilderView();
   view.editNode(makeHandlerNode('HandlerEntry'));
 
-  const select = canvas.querySelector('[data-id="handlerClass"]');
+  const select = view._canvas.querySelector('[data-id="handlerClass"]');
   const options = Array.from(select.options).map(o => o.value);
 
   expect(options).toEqual(Object.keys(HANDLER_CLASSES));
 });
 
 test('handler editor: select value reflects the node handlerClass', () => {
-  const canvas = document.createElement('div');
-  const view = new GraphBuilderView({ builderCanvas: canvas, graph: makeMinimalGraph() });
+  const view = makeBuilderView();
   view.editNode(makeHandlerNode('MonthlyExpensesHandler'));
 
-  const select = canvas.querySelector('[data-id="handlerClass"]');
+  const select = view._canvas.querySelector('[data-id="handlerClass"]');
   expect(select.value).toBe('MonthlyExpensesHandler');
 });
 
 test('handler editor: domain type (not in registry) renders as read-only badge, not select', () => {
-  const canvas = document.createElement('div');
-  const view = new GraphBuilderView({ builderCanvas: canvas, graph: makeMinimalGraph() });
+  const view = makeBuilderView();
   view.editNode(makeHandlerNode('SuperContributionHandler'));
 
   // The <select> should have been replaced by a <span> badge
-  expect(canvas.querySelector('[data-id="handlerClass"]')).toBeNull();
-  const badge = canvas.querySelector('.type-badge--domain');
+  expect(view._canvas.querySelector('[data-id="handlerClass"]')).toBeNull();
+  const badge = view._canvas.querySelector('.type-badge--domain');
   expect(badge).not.toBeNull();
   expect(badge.textContent).toBe('SuperContributionHandler');
 });
 
 test('handler editor: domain type badge has tooltip hint', () => {
-  const canvas = document.createElement('div');
-  const view = new GraphBuilderView({ builderCanvas: canvas, graph: makeMinimalGraph() });
+  const view = makeBuilderView();
   view.editNode(makeHandlerNode('SuperContributionHandler'));
 
-  const badge = canvas.querySelector('.type-badge--domain');
+  const badge = view._canvas.querySelector('.type-badge--domain');
   expect(badge.title).toMatch(/domain type/i);
 });
 
 test('handler editor: onHandlerClassChange fires when select changes', () => {
-  const canvas = document.createElement('div');
-  const view = new GraphBuilderView({ builderCanvas: canvas, graph: makeMinimalGraph() });
+  document.body.appendChild(makeHandlerTemplate());
+  const view = makeBuilderView();
 
   let capturedId    = null;
   let capturedClass = null;
@@ -189,7 +188,7 @@ test('handler editor: onHandlerClassChange fires when select changes', () => {
 
   view.editNode(makeHandlerNode('HandlerEntry'));
 
-  const select = canvas.querySelector('[data-id="handlerClass"]');
+  const select = view._canvas.querySelector('[data-id="handlerClass"]');
   select.value = 'MonthlyExpensesHandler';
   select.dispatchEvent(new Event('change'));
 
@@ -199,25 +198,58 @@ test('handler editor: onHandlerClassChange fires when select changes', () => {
 
 // ─── Presenter wires onHandlerClassChange ─────────────────────────────────────
 
-function makeGraph() {
-  const nodes = [];
-  return {
-    graphRoot: document.createElement('div'),
-    nodes,
-    getNode(id)        { return nodes.find(n => n.id === id); },
-    getKind(kind)      { return nodes.filter(n => n.kind === kind); },
-    addNode(n)         { nodes.push(n); },
-    replaceNode(id, n) { const i = nodes.findIndex(x => x.id === id); if (i >= 0) nodes[i] = n; },
-    removeNode(id)     { const i = nodes.findIndex(x => x.id === id); if (i >= 0) nodes.splice(i, 1); },
-    addEdge()          {},
-    removeEdge()       {},
-    getNodesToKindFromMe() { return []; },
-    getNodesFromKindToMe() { return []; },
-    render()           {},
-    registerNodeClickListener() {},
-    selectNode()       {},
-    getAll() { return nodes; }
-  };
+// ─── DOM helpers ──────────────────────────────────────────────────────────────
+function makeElements() {
+  const builderCanvas = document.createElement('div');
+  const graphRoot  = document.createElement('div');
+  graphRoot.id = 'graphRoot';
+  const graphViewPort = document.createElement('div');
+  graphViewPort.id = 'graphViewport';
+  const graphEdges = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  graphEdges.id = 'graphEdges';
+  const graphNodes = document.createElement('div');
+  graphNodes.id = 'graphNodes';
+  const selectionBox = document.createElement('div');
+  selectionBox.classList.add('selection-box');
+
+  const nodeDetailsTemplate = document.createElement('template');
+
+  document.body.appendChild(graphRoot);
+  graphRoot.appendChild(graphViewPort);
+  graphViewPort.appendChild(graphEdges);
+  graphViewPort.appendChild(graphNodes);
+  graphViewPort.appendChild(selectionBox);
+
+  nodeDetailsTemplate.innerHTML = '<div class="g-node">\n'
+      + '    <div class="g-header">\n'
+      + '      <span class="g-header-text"></span>\n'
+      + '      <span class="node-state-badge badge-green" data-id="stateChangeIndicator" style="display:none"></span>\n'
+      + '      <span class="node-fired-badge badge-green" data-id="firedIndicator"></span>\n'
+      + '    </div>\n'
+      + '    <div class="g-title">\n'
+      + '      <span class="g-title-text"></span>\n'
+      + '    </div>\n'
+      + '\n'
+      + '    <div class="g-port in"></div>\n'
+      + '    <div class="g-port out"></div>\n'
+      + '  </div>'
+  document.body.appendChild(nodeDetailsTemplate);
+  return { builderCanvas, graphRoot, graphNodes, graphEdges , nodeDetailsTemplate};
+}
+
+// ─── Graph Renderer stub ───────────────────────────────────────────────────────────────
+function makeGraphRenderer(elements = makeElements()) {
+  const registry = ServiceRegistry.getInstance();
+  return new GraphRenderer({
+    parent: null,
+    graph: registry.graph,
+    graphQueryApi: registry.graphQueryApi,
+    graphRoot: elements.graphRoot,
+    graphNodes: elements.graphNodes,
+    graphEdges: elements.graphEdges,
+    nodeDetailsTemplate: elements.nodeDetailsTemplate,
+    displayNodeStateChanges: (changes) => {}
+  });
 }
 
 function makePresenter() {
@@ -226,9 +258,14 @@ function makePresenter() {
   tpl.innerHTML = '<div class="tl-empty">Select a node</div>';
   document.body.appendChild(tpl);
   ServiceRegistry.reset();
+  const registry = ServiceRegistry.getInstance();
   return new GraphBuilderPresenter({
-    graph:         makeGraph(),
+    graphRenderer:         makeGraphRenderer(),
     builderCanvas: document.createElement('div'),
+    eventService: registry.eventService,
+    handlerService: registry.handlerService,
+    actionService: registry.actionService,
+    reducerService: registry.reducerService
   });
 }
 

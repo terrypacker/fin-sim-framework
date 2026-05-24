@@ -9,10 +9,10 @@
  */
 
 export class TimeControls {
-  constructor({scenario, timelineView, graphView, chartView, timeLabel, timeSlider, formatDate, displayCurrency, onReset}) {
+  constructor({scenario, configPresenter, timelineView, chartView, timeLabel, timeSlider, formatDate, displayCurrency, onReset}) {
     this.scenario = scenario;
+    this.configPresenter = configPresenter;
     this.timelineView = timelineView;
-    this.graphView = graphView;
     this.chartView = chartView;
     this.timeLabel = timeLabel;
     this.timeSlider = timeSlider;
@@ -97,7 +97,7 @@ export class TimeControls {
   reset() {
     this._stepHistory = [];
 
-    this.graphView?.resetGraph();
+    this.configPresenter.resetForReplay();
     this.chartView?.resetHistory();
     this.scenario.sim.journal.journal.length = 0;
     this.scenario.sim.history.resetForReplay();
@@ -141,7 +141,6 @@ export class TimeControls {
   }
 
   _doRewindTo(pct) {
-    this.graphView?.resetGraph();
     this.chartView?.resetHistory();
     // Journal entries are not part of the snapshot; clear them so replay
     // doesn't accumulate duplicates on top of the original run.

@@ -9,6 +9,7 @@
  */
 
 import {Simulation} from "../simulation-framework/simulation.js";
+import {ServiceRegistry} from "../services/service-registry.js";
 
 /**
  * Base class for simulation scenarios.
@@ -53,21 +54,13 @@ import {Simulation} from "../simulation-framework/simulation.js";
  */
 export class BaseScenario {
   constructor({
-      eventSchedulerUI,
       context,
       simStart =  new Date(Date.UTC(2026, 0, 1)),
       simEnd = new Date(Date.UTC(2041, 0, 1))} = {}) {
 
-    this.eventSchedulerUI = eventSchedulerUI;
     this.context = context;
     this.simStart = simStart;
     this.simEnd = simEnd;
-
-    // ── Wire up the "+" creation buttons in ConfigBuilder ────────────────────
-    this.eventSchedulerUI.registerEventCreatedListener(subtype => this.eventCreationRequested(subtype));
-    this.eventSchedulerUI.registerHandlerCreatedListener(() => this.handlerCreationRequested());
-    this.eventSchedulerUI.registerActionCreatedListener(() => this.actionCreationRequested());
-    this.eventSchedulerUI.registerReducerCreatedListener(() => this.reducerCreationRequested());
   }
 
   // ─── Simulation accessor ──────────────────────────────────────────────────
@@ -104,6 +97,7 @@ export class BaseScenario {
     simulationRegistry.unregister('primary');
 
     const sim = new Simulation(this.simStart, {
+      bus: ServiceRegistry.getInstance().bus,
       initialState: resolved,
     });
 
@@ -123,54 +117,4 @@ export class BaseScenario {
     return null;
   }
 
-  // ─── Creation handlers (called via ConfigBuilder "+" buttons) ───────────
-  //
-  // Each service create* call publishes CREATE on the bus.
-  // SimulationSync's subscriber wires it into the sim.
-  // ConfigBuilder's subscriber adds the node to the graph.
-  // The only thing these handlers do explicitly is open the editor panel.
-
-  eventCreationRequested(subtype) {
-    const { eventService } = this.context;
-    //TODO need a better way to generate unique names and ids outside of the EventService...
-    const id = eventService._generateId('e');
-    let event;
-    if (subtype === 'OneOff') {
-      event = eventService.createOneOffEvent({
-        id: id,
-        name: 'New One-Off Event',
-        type: 'NEW_ONEOFF_' + id,
-        date: new Date(), enabled: false,
-        color: '#f87171'
-      });
-    } else {
-      event = eventService.createEventSeries({
-        id: id,
-        name: 'New Event Series',
-        type: 'NEW_SERIES_' + id,
-        interval: 'month-end', enabled: false,
-        color: '#60a5fa'
-      });
-    }
-    this.eventSchedulerUI.editNode(event);
-  }
-
-  handlerCreationRequested() {
-    const { handlerService } = this.context;
-    // null fn → uses HandlerEntry.defaultFunction which instantiates from generatedActionDefinitions
-    const handler = handlerService.createHandler(null, 'New Handler');
-    this.eventSchedulerUI.editNode(handler);
-  }
-
-  actionCreationRequested() {
-    const { actionService } = this.context;
-    const action = actionService.createAmountAction('NEW_ACTION', 'New Action', 0);
-    this.eventSchedulerUI.editNode(action);
-  }
-
-  reducerCreationRequested() {
-    const { reducerService } = this.context;
-    const reducer = reducerService.createFieldReducer('', 'New Reducer');
-    this.eventSchedulerUI.editNode(reducer);
-  }
 }

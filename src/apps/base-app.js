@@ -18,15 +18,16 @@
  */
 
 import { $, fmtUTC, fmtLocal }     from '../visualization/ui-utils.js';
-import { GraphView }                from '../visualization/graph-view.js';
 import { ChartView }                from '../visualization/chart-view.js';
 import { TimelineView }             from '../visualization/timeline-view.js';
 import { TimeControls }             from '../visualization/time-controls.js';
 import { GraphBuilderPresenter }    from '../visualization/graph-builder/graph-builder-presenter.js';
-import { GraphSync }                from '../visualization/graph-sync.js';
-import { ConfigGraph }              from '../visualization/config-graph.js';
 import { ServiceRegistry }          from '../services/service-registry.js';
-import { SIMULATION_BUS_MESSAGES }  from '../simulation-framework/bus-messages.js';
+import {
+  BusMessage,
+  SIMULATION_BUS_MESSAGES,
+  SimulationBusMessage
+} from '../simulation-framework/bus-messages.js';
 import { PeopleController }         from '../visualization/people/people-controller.js';
 import { PeopleView }               from '../visualization/people/people-view.js';
 import { PeoplePresenter }          from '../visualization/people/people-presenter.js';
@@ -36,6 +37,8 @@ import { AccountsPresenter }        from '../visualization/accounts/accounts-pre
 import { ScenarioTabPresenter }     from './scenario-tab-presenter.js';
 import { StatePanelView }           from './state-panel-view.js';
 import { SimulationAnimator }       from './simulation-animator.js';
+import {GraphRenderer} from "../visualization/components/graph-renderer.js";
+import {BaseComponent} from "../visualization/components/base-component.js";
 
 /**
  * BaseApp — composition root.
@@ -51,7 +54,7 @@ import { SimulationAnimator }       from './simulation-animator.js';
  *   AccountsPresenter     — accounts sidebar MVP (recreated per buildScenario)
  *   GraphBuilderPresenter — event-graph editor (recreated per buildScenario)
  */
-export class BaseApp {
+export class BaseApp extends BaseComponent {
   /**
    * @param {object}            opts
    * @param {PrebuiltScenario[]} [opts.prebuiltScenarios=[]] - Pre-built scenario descriptors.
@@ -59,16 +62,14 @@ export class BaseApp {
    * @param {Array|null}        [opts.chartSeries]  - Chart series config.
    */
   constructor({ newScenario, chartSeries, prebuiltScenarios = [] }) {
-
+    super(  )
     // Kept for backward-compat (used as fallback in createScenario when no prebuiltScenarios).
     this.newScenario = newScenario ?? null;
     this.chartSeries = chartSeries ?? null;
     this.scenario    = null;
 
     // UI handles (recreated each buildScenario)
-    this.graphBuilderPresenter = null;
-    this.schedulerUI           = null;
-    this.graphView             = null;
+    this.configPresenter = null;
     this.chartView             = null;
     this.timelineView          = null;
     this.timeControls          = null;
@@ -103,7 +104,9 @@ export class BaseApp {
   getParams()       { return this._scenarioTab.getParams(); }
   getInitialState() { return this._scenarioTab.getInitialState(); }
 
-  afterBuildSim() { this._scenarioTab.afterBuildSim(this.scenario); }
+  afterBuildSim() {
+    this._scenarioTab.afterBuildSim(this.scenario);
+  }
 
   // ── Core lifecycle ────────────────────────────────────────────────────────
 
@@ -115,36 +118,40 @@ export class BaseApp {
     $('currentStateContent').innerHTML  = '';
     $('cumulativeMetricsContent').innerHTML = '';
 
-    if (this.graphView)  this.graphView.stopViz();
     if (this.chartView)  this.chartView.stopViz();
 
-    // ── Config graph (visual node canvas) ─────────────────────────────────────
-    if (this.graphBuilderPresenter) this.graphBuilderPresenter.destroy();
-    this.graphBuilderPresenter = new ConfigGraph({
-      graphRoot:               document.getElementById('graphRoot'),
-      graphNodes:              document.getElementById('graphNodes'),
-      graphEdges:              document.getElementById('graphEdges'),
-      nodeDetailsTemplate:     document.getElementById('tpl-node-details'),
-      displayNodeStateChanges: (changes) => this._statePanelView.showNodeStateChanges(changes),
-    });
-
-    this.graphBuilderPresenter.registerNodeClickListener(() =>
-      this.openTab({ currentTarget: this.eventsTabHeader }, 'left-events', 'left-col-sim')
-    );
-
-    // Breakpoint listener: delegate to animator once it is created.
-    this.graphBuilderPresenter.registerBreakpointChangeListener(() => {
-      this._animator?.syncBreakpoints();
-    });
-
-    // ── Event-graph editor (scheduler UI) ─────────────────────────────────────
-    this.schedulerUI = new GraphBuilderPresenter({
-      builderCanvas: document.getElementById('builderCanvas'),
-      graph:         this.graphBuilderPresenter,
-    });
-
     const registry = ServiceRegistry.getInstance();
-    new GraphSync({ graph: this.graphBuilderPresenter, registry });
+
+    // ── Config graph (visual node canvas) ─────────────────────────────────────
+    // ── Event-graph editor (scheduler UI) ─────────────────────────────────────
+    if(this.configPresenter) this.configPresenter.destroy();
+    this.configPresenter = new GraphBuilderPresenter({
+      builderCanvas: document.getElementById('builderCanvas'),
+      //TODO Move into GraphBuilderPresenter._view entirely
+      graphRenderer: new GraphRenderer({
+        parent: this,
+        graph: registry.graph,
+        graphQueryApi: registry.graphQueryApi,
+        graphRoot:               document.getElementById('graphRoot'),
+        graphNodes:              document.getElementById('graphNodes'),
+        graphEdges:              document.getElementById('graphEdges'),
+        nodeDetailsTemplate:     document.getElementById('tpl-node-details'),
+        displayNodeStateChanges: (changes) => this._statePanelView.showNodeStateChanges(changes),
+      }),
+      eventService: registry.eventService,
+      handlerService: registry.handlerService,
+      actionService: registry.actionService,
+      reducerService: registry.reducerService
+    });
+    //TODO This should be put into the builder-presenter too
+    this.configPresenter._graphRenderer.registerNodeClickListener(() =>
+        this.openTab({ currentTarget: this.eventsTabHeader }, 'left-events', 'left-col-sim')
+    );
+    //TODO This should be put into the builder-presenter too
+    // Breakpoint listener: delegate to animator once it is created.
+    this.configPresenter._graphRenderer.registerBreakpointChangeListener((node) => {
+      this._animator?.toggleBreakpoint(node);
+    });
 
     // ── People / Accounts MVP ─────────────────────────────────────────────────
     // Controllers and presenters are recreated each rebuild to bind to the fresh bus.
@@ -158,7 +165,7 @@ export class BaseApp {
 
     // ── Build scenario ────────────────────────────────────────────────────────
     this.scenario = this._scenarioTab.createScenario(
-      this.getParams(), this.getInitialState(), this.schedulerUI, this.newScenario
+      this.getParams(), this.getInitialState(), this.newScenario
     );
     this.scenario.buildSim(this.getParams(), this.getInitialState());
     this.afterBuildSim();
@@ -176,21 +183,6 @@ export class BaseApp {
         .map(e => [e.type, e.color])
         .filter(([, c]) => c)
     );
-
-    const graphCanvas = $('graphCanvas');
-    if (graphCanvas) {
-      this.graphView = new GraphView({
-        simulator:            this.scenario.sim,
-        canvas:               graphCanvas,
-        getNodeDetail:        (n) => this._statePanelView.getNodeDetail(n),
-        formatNodeDetailHtml: (n) => this.formatNodeDetailHtml(n),
-        simStart:             this.scenario.simStart,
-        simEnd:               this.scenario.simEnd,
-        eventColors,
-      });
-      this.graphView.initView();
-      this.graphView.startViz();
-    }
 
     this.chartView = new ChartView({
       canvas:   $('chartCanvas'),
@@ -218,8 +210,8 @@ export class BaseApp {
 
     this.timeControls = new TimeControls({
       scenario:        this.scenario,
+      configPresenter: this.configPresenter,
       timelineView:    this.timelineView,
-      graphView:       this.graphView,
       chartView:       this.chartView,
       timeLabel:       $('timeLabel'),
       timeSlider:      $('timeSlider'),
@@ -233,16 +225,13 @@ export class BaseApp {
 
     // ── Simulation animator ───────────────────────────────────────────────────
     this._animator = new SimulationAnimator({
-      configGraph:    this.graphBuilderPresenter,
       scenario:       this.scenario,
       timeControls:   this.timeControls,
       statePanelView: this._statePanelView,
-      graphView:      this.graphView,
       chartView:      this.chartView,
-      actionService:  registry.actionService,
     });
 
-    this._animator.syncBreakpoints();
+    this._animator.toggleBreakpoint();
     this._animator.wireSimBus(this.scenario.sim.bus);
 
     // Track _currentDate for subclass access.
@@ -256,6 +245,9 @@ export class BaseApp {
     this.lastSliderValue       = 0;
     this._currentDate          = this.scenario.simStart;
     $('timeLabel').textContent = this.timeControls.formatDate(this.scenario.simStart);
+
+    //Send Scenario Ready Message
+    registry.bus.publish(new BusMessage({ type: SIMULATION_BUS_MESSAGES.SCENARIO_READY, date: this.scenario.simStart}));
   }
 
   initView() {
@@ -307,6 +299,7 @@ export class BaseApp {
       this.showBusyInputOverlay(stepBackButton, () => this.timeControls.stepBack());
     });
 
+    //TODO Need to have a central location to reset the sim  See #135
     $('resetBtn').addEventListener('click', () => this.timeControls.reset());
 
     let sliderTimeout;
@@ -402,6 +395,7 @@ export class BaseApp {
 
   /**
    * TODO Refactor to remove these, they should be in the views.
+   * TODO Extract to shared UI class #139
    * Formatting helpers — subclasses and custom scenarios may call these.
    * fmtVal syncs timeControls.formatDate into StatePanelView so that tests
    * which stub timeControls directly continue to work.
@@ -410,21 +404,4 @@ export class BaseApp {
     if (this.timeControls?.formatDate) this._statePanelView.formatDate = this.timeControls.formatDate;
     return this._statePanelView.fmtVal(v, objAsCode);
   }
-  fmtArray(v, objAsCode = false){ return this._statePanelView.fmtArray(v, objAsCode); }
-  diffStates(prev, next)        { return this._statePanelView.diffStates(prev, next); }
-  toLabel(key)                  { return this._statePanelView.toLabel(key); }
-  isDate(obj)                   { return this._statePanelView.isDate(obj); }
-  renderObj(v)                  { return this._statePanelView.renderObj(v); }
-  renderHeaderRow(label)        { return this._statePanelView.renderHeaderRow(label); }
-  getNestedProperty(obj, path)  { return this._statePanelView.getNestedProperty(obj, path); }
-  buildActionDetail(entry)      { return this._statePanelView.buildActionDetail(entry); }
-  getNodeDetail(node)           { return this._statePanelView.getNodeDetail(node); }
-
-  /** State panel — subclasses may call these to push custom content. */
-  updateStatePanel(date, state)   { return this._statePanelView.updateStatePanel(date, state); }
-  showNodeStateChanges(changes)   { return this._statePanelView.showNodeStateChanges(changes); }
-  showNodeDetail(entry)           { return this._statePanelView.showNodeDetail(entry); }
-
-  /** Dashboard cards — subclasses may call to force a refresh. */
-  updateDashCards(date) { return this._animator?.updateDashCards(date); }
 }

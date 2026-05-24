@@ -32,8 +32,8 @@ import {Reducer} from "../simulation-framework/reducers.js";
  * Owns an internal Map<id, item> as the source of truth.
  */
 export class ActionService extends BaseService {
-  constructor(bus) {
-    super(bus, 'a');
+  constructor(graph, query, bus) {
+    super(graph, query, bus, 'action', 1, false);
 
     //TODO Could move out to ActionTypeEnsurer class if we want to decouple this,
     //  we want to ensure HandlerEntry and Reducer classes have their actions registered
@@ -43,6 +43,12 @@ export class ActionService extends BaseService {
     });
   }
 
+  // ─── Query API ───────────────────────────────────────────────────────────────
+  //TODO Need a type index for this
+  getByType(type) {
+    return this._query.getOneByKind('action', 'type', type);
+  }
+
   // ─── Create ───────────────────────────────────────────────────────────────
 
   createAmountAction(type, name, value = 0) {
@@ -50,6 +56,7 @@ export class ActionService extends BaseService {
     item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -58,6 +65,7 @@ export class ActionService extends BaseService {
     item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -66,6 +74,7 @@ export class ActionService extends BaseService {
     item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -74,6 +83,7 @@ export class ActionService extends BaseService {
     item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -82,6 +92,7 @@ export class ActionService extends BaseService {
     item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -90,6 +101,7 @@ export class ActionService extends BaseService {
     item.id = this._generateId(this._idPrefix);
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
+    this._wireNodeEdges(item);
     return item;
   }
 
@@ -109,7 +121,8 @@ export class ActionService extends BaseService {
   updateAction(idOrAction, changes = {}) {
     const action = this._resolve(idOrAction);
     const originalItem = Object.assign(Object.create(Object.getPrototypeOf(action)), action);
-    Object.assign(action, changes);
+    this.mergeChanges(action, changes);
+    this._graph.notifyNodeWatchers(); //Notify that the content in the graph changed
     this._publish('UPDATE', action.constructor.name, action, originalItem);
     return action;
   }
@@ -133,7 +146,7 @@ export class ActionService extends BaseService {
     const Cls = ACTION_CLASSES[newClass];
     if (!Cls) throw new Error(`ActionService: unknown action class "${newClass}"`);
 
-    const fresh = Object.create(Cls.prototype);
+    const fresh = new Cls(old.type, old.name);
     fresh.id        = old.id;
     fresh.name      = old.name;
     fresh.type      = old.type;
@@ -141,7 +154,7 @@ export class ActionService extends BaseService {
     fresh.value     = old.value;
     Object.assign(fresh, extraProps);
 
-    this._items.set(fresh.id, fresh);
+    this._graph.updateNode(fresh.id, fresh);
     this._publish('UPDATE', newClass, fresh, old);
     return fresh;
   }

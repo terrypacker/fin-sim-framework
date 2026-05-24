@@ -8,12 +8,14 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import {SimGraphNode} from "../graph/sim-graph-node.js";
+
 /**
  * Person — plain data class representing a simulation participant.
  * No methods; safe for structuredClone snapshots.
  * Logic lives in PersonService (src/services/person-service.js).
  */
-export class Person {
+export class Person extends SimGraphNode {
   /**
    * @param {string|null} id       - Unique identifier; null until assigned by PersonService
    * @param {Date}        birthDate - Date of birth (used for age-gated rules)
@@ -24,10 +26,9 @@ export class Person {
    * @param {number}      [opts.lifeExpectancy=90]         - Expected years to live
    * @param {number}      [opts.socialSecurityMonthly=2800] - USD/month of SS at full retirement age
    */
-  constructor(id, birthDate, opts = {}) {
-    this.id                    = id ?? null;
+  constructor(id = null, birthDate, opts = {}) {
+    super({id: id, kind: 'person', layer: 'config', name: opts.name ?? ''});
     this.birthDate             = birthDate;
-    this.name                  = opts.name                  ?? '';
     this.citizen               = opts.citizen               ?? ['US'];
     this.isAuResident          = opts.isAuResident          ?? this.citizen.includes('AUS');
     this.lifeExpectancy        = opts.lifeExpectancy        ?? 90;
