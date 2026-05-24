@@ -36,8 +36,7 @@ function makeNode(overrides = {}) {
     children:    overrides.children    ?? [],
     action:      overrides.action      ?? { type: 'ACTION' },
     reducer:     overrides.reducer     ?? 'anonymous',
-    stateBefore: overrides.stateBefore ?? null,
-    stateAfter:  overrides.stateAfter  ?? {},
+    stateDiff:   overrides.stateDiff   ?? [],
     sourceEvent: overrides.sourceEvent ?? {}
   });
 }
@@ -47,14 +46,13 @@ function makeNode(overrides = {}) {
 test('ActionNode: all fields are assigned from constructor', () => {
   const date   = new Date(2025, 3, 1);
   const action = { type: 'FOO', amount: 5 };
-  const before = { counter: 0 };
-  const after  = { counter: 5 };
+  const diff   = [{ field: 'counter', before: 0, after: 5, delta: 5 }];
   const src    = { type: 'SOURCE' };
 
   const node = new ActionNode({
     id: 7, type: 'FOO', date,
     parent: 3, children: [8, 9],
-    action, reducer: 'R', stateBefore: before, stateAfter: after, sourceEvent: src
+    action, reducer: 'R', stateDiff: diff, sourceEvent: src
   });
 
   assert.strictEqual(node.id,          7);
@@ -64,8 +62,7 @@ test('ActionNode: all fields are assigned from constructor', () => {
   assert.deepStrictEqual(node.children, [8, 9]);
   assert.strictEqual(node.action,      action);
   assert.strictEqual(node.reducer,     'R');
-  assert.strictEqual(node.stateBefore, before);
-  assert.strictEqual(node.stateAfter,  after);
+  assert.strictEqual(node.stateDiff,   diff);
   assert.strictEqual(node.sourceEvent, src);
 });
 

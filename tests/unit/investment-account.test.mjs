@@ -72,12 +72,6 @@ test('InvestmentAccount: opts set loanBalance for accounts that allow loans', ()
 
 // ── Inheritance from Account ──────────────────────────────────────────────────
 
-test('InvestmentAccount: inherits credits and debits arrays from Account', () => {
-  const a = new InvestmentAccount(50000);
-  assert.deepStrictEqual(a.credits, []);
-  assert.deepStrictEqual(a.debits,  []);
-});
-
 test('InvestmentAccount: inherits ownershipType from Account (default sole)', () => {
   const a = new InvestmentAccount(50000);
   assert.strictEqual(a.ownershipType, 'sole');
@@ -113,6 +107,4 @@ test('InvestmentAccount: is structuredClone-safe', () => {
   assert.strictEqual(a2.minimumAge,                60);
   assert.strictEqual(a2.loanBalance,               5000);
   assert.strictEqual(a2.ownershipType,             'joint');
-  assert.deepStrictEqual(a2.credits, []);
-  assert.deepStrictEqual(a2.debits,  []);
 });

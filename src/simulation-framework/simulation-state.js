@@ -68,4 +68,13 @@ export class SimulationState {
   toPlain() {
     return { ...this };
   }
+
+  /**
+   * Assign an Account to a named state property and stamp its stateKey so
+   * AccountService.getAccountHistory() can look it up by account ID.
+   */
+  _assignAccount(key, account) {
+    this[key] = account;
+    if (account != null) account.stateKey = key;
+  }
 }

@@ -58,7 +58,7 @@ import { Account } from '../account.js';
 export class FinancialState extends SimulationState {
   constructor({ checkingAccount = new Account(0), ...rest } = {}) {
     super(rest);
-    this.checkingAccount = checkingAccount;
+    this._assignAccount('checkingAccount', checkingAccount);
   }
 }
 

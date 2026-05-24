@@ -205,8 +205,7 @@ export class StatePanelView extends BaseComponent {
   }
 
   getNodeDetail(node) {
-    const diff = diffStates(node.stateBefore, node.stateAfter);
-    return JSON.stringify({ ...node, stateDiff: diff }, null, 2);
+    return JSON.stringify({ type: node.type, date: node.date, stateDiff: node.stateDiff ?? [] }, null, 2);
   }
 
   // ── Formatting helpers ────────────────────────────────────────────────────

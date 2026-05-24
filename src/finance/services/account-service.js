@@ -100,14 +100,19 @@ export class AccountService extends BaseService {
 
   /**
    * Reconstruct the transaction history for an account from the simulation journal.
-   * Finds all journal entries whose state diff contains a balance change for the
-   * given state key (the property name of the account on the state object, e.g. 'usSavingsAccount').
+   * Accepts either an account ID or a state key (the property name on the state object,
+   * e.g. 'usSavingsAccount'). When given an ID, resolves to the stateKey via the
+   * account's stamped stateKey property (set by SimulationState._assignAccount).
    *
-   * @param {string}  stateKey  - Property name of the account on the state object
+   * @param {string}  accountIdOrKey  - Account ID or state key
    * @param {import('../../simulation-framework/journal.js').Journal} journal
    * @returns {{ date: Date, amount: number, eventType: string, reducer: string }[]}
    */
-  getAccountHistory(stateKey, journal) {
+  getAccountHistory(accountIdOrKey, journal) {
+    let stateKey = accountIdOrKey;
+    const byId = this.getAll().find(a => a.id === accountIdOrKey);
+    if (byId?.stateKey) stateKey = byId.stateKey;
+
     const field = `${stateKey}.balance`;
     const results = [];
     for (const entry of journal.journal) {

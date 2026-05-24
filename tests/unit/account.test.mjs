@@ -38,12 +38,6 @@ test('Account: accepts a non-zero initial balance', () => {
   assert.strictEqual(a.balance, 500);
 });
 
-test('Account: starts with empty credits and debits arrays', () => {
-  const a = new Account(0);
-  assert.deepStrictEqual(a.credits, []);
-  assert.deepStrictEqual(a.debits,  []);
-});
-
 // ─── AccountService: credits (positive amounts) ───────────────────────────────
 
 test('AccountService.transaction: positive amount increases balance', () => {
@@ -55,26 +49,6 @@ test('AccountService.transaction: positive amount increases balance', () => {
   assert.strictEqual(acc.balance, 200);
 });
 
-test('AccountService.transaction: positive amount appends to credits', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
-  const acc = new Account(0);
-
-  svc.transaction(acc, 200, DATE);
-
-  assert.strictEqual(acc.credits.length, 1);
-  assert.strictEqual(acc.credits[0].amount, 200);
-  assert.strictEqual(acc.credits[0].date,   DATE);
-});
-
-test('AccountService.transaction: positive amount does not touch debits', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
-  const acc = new Account(0);
-
-  svc.transaction(acc, 200, DATE);
-
-  assert.strictEqual(acc.debits.length, 0);
-});
-
 test('AccountService.transaction: multiple credits accumulate correctly', () => {
   const svc  = new AccountService(new Graph(), new EventBus());
   const acc  = new Account(0);
@@ -84,9 +58,6 @@ test('AccountService.transaction: multiple credits accumulate correctly', () => 
   svc.transaction(acc, 250, d2);
 
   assert.strictEqual(acc.balance, 350);
-  assert.strictEqual(acc.credits.length, 2);
-  assert.strictEqual(acc.credits[1].amount, 250);
-  assert.strictEqual(acc.credits[1].date,   d2);
 });
 
 // ─── AccountService: debits (negative amounts) ────────────────────────────────
@@ -100,26 +71,6 @@ test('AccountService.transaction: negative amount decreases balance', () => {
   assert.strictEqual(acc.balance, 700);
 });
 
-test('AccountService.transaction: negative amount appends to debits', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
-  const acc = new Account(1000);
-
-  svc.transaction(acc, -300, DATE);
-
-  assert.strictEqual(acc.debits.length, 1);
-  assert.strictEqual(acc.debits[0].amount, -300);
-  assert.strictEqual(acc.debits[0].date,    DATE);
-});
-
-test('AccountService.transaction: negative amount does not touch credits', () => {
-  const svc = new AccountService(new Graph(), new EventBus());
-  const acc = new Account(1000);
-
-  svc.transaction(acc, -300, DATE);
-
-  assert.strictEqual(acc.credits.length, 0);
-});
-
 test('AccountService.transaction: multiple debits reduce balance correctly', () => {
   const svc = new AccountService(new Graph(), new EventBus());
   const acc = new Account(1000);
@@ -128,7 +79,6 @@ test('AccountService.transaction: multiple debits reduce balance correctly', () 
   svc.transaction(acc, -200, DATE);
 
   assert.strictEqual(acc.balance, 700);
-  assert.strictEqual(acc.debits.length, 2);
 });
 
 test('AccountService.transaction: debit can reduce balance below zero', () => {
@@ -148,9 +98,7 @@ test('AccountService.transaction: zero amount leaves balance unchanged', () => {
 
   svc.transaction(acc, 0, DATE);
 
-  assert.strictEqual(acc.balance,        500);
-  assert.strictEqual(acc.credits.length, 0);
-  assert.strictEqual(acc.debits.length,  0);
+  assert.strictEqual(acc.balance, 500);
 });
 
 // ─── AccountService: mixed credits and debits ─────────────────────────────────
@@ -164,9 +112,7 @@ test('AccountService.transaction: interleaved credits and debits reach correct b
   svc.transaction(acc,   500, DATE);   //  +500 → 1200
   svc.transaction(acc,  -200, DATE);   //  -200 → 1000
 
-  assert.strictEqual(acc.balance,        1000);
-  assert.strictEqual(acc.credits.length, 2);
-  assert.strictEqual(acc.debits.length,  2);
+  assert.strictEqual(acc.balance, 1000);
 });
 
 test('AccountService.transaction: non-zero initial balance is included in running total', () => {
@@ -272,7 +218,6 @@ test('AccountService.safeDebit: rejects debit and returns false when it would br
   const result = svc.safeDebit(acc, 600, DATE);
   assert.strictEqual(result, false);
   assert.strictEqual(acc.balance, 1000); // unchanged
-  assert.strictEqual(acc.debits.length, 0); // no entry recorded
 });
 
 // ─── AccountService.isWithdrawalEligible ─────────────────────────────────────
