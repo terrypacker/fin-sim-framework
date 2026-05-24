@@ -41,11 +41,11 @@ export class AuSavingsInterestHandler extends HandlerEntry {
   call({ state }) {
     const balance = state[this.accountKey]?.balance ?? 0;
     const amount  = +(balance * this.interestRate).toFixed(2);
-    if (amount <= 0) return [new RecordBalanceAction()];
+    if (amount <= 0) return [new RecordBalanceAction(`${this.accountKey}.balance`, `${this.accountKey}`)];
     return [
       { type: 'AU_SAVINGS_EARNINGS_APPLY', amount, isAuResident: state.isAuResident },
       new RecordMetricAction('au_savings_interest', amount),
-      new RecordBalanceAction(),
+      new RecordBalanceAction(`${this.accountKey}.balance`, `${this.accountKey}`),
     ];
   }
 }
@@ -79,11 +79,11 @@ export class FixedIncomeInterestHandler extends HandlerEntry {
   call({ state }) {
     const balance = state[this.accountKey]?.balance ?? 0;
     const amount  = +(balance * this.interestRate).toFixed(2);
-    if (amount <= 0) return [new RecordBalanceAction()];
+    if (amount <= 0) return [new RecordBalanceAction(`${this.accountKey}.balance`, `${this.accountKey}`)];
     return [
       { type: 'FIXED_INCOME_EARNINGS_APPLY', amount, isAuResident: state.isAuResident },
       new RecordMetricAction('fixed_income_interest', amount),
-      new RecordBalanceAction(),
+      new RecordBalanceAction(`${this.accountKey}.balance`, `${this.accountKey}`),
     ];
   }
 }
@@ -119,11 +119,11 @@ export class SuperEarningsHandler extends HandlerEntry {
     const rate    = data?.rate ?? this.defaultRate;
     const balance = state[this.accountKey]?.balance ?? 0;
     const amount  = +(balance * rate).toFixed(2);
-    if (amount <= 0) return [new RecordBalanceAction()];
+    if (amount <= 0) return [new RecordBalanceAction(`${this.accountKey}.balance`, `${this.accountKey}`)];
     return [
       { type: 'SUPER_EARNINGS_APPLY', amount },
       new RecordMetricAction('super_earnings', amount),
-      new RecordBalanceAction(),
+      new RecordBalanceAction(`${this.accountKey}.balance`, `${this.accountKey}`),
     ];
   }
 }

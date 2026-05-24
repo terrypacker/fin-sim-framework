@@ -19,6 +19,7 @@
 
 import {
   NoOpReducer,
+  BalanceSnapshotReducer,
   FieldReducer,
   ArrayReducer,
   NumericSumReducer,
@@ -111,6 +112,11 @@ class NoOpReducerBuilder extends BaseReducerBuilder {
   build() { return this._apply(new NoOpReducer(this._name, this._priority)); }
 }
 
+class BalanceSnapshotReducerBuilder extends BaseReducerBuilder {
+  constructor() { super('Balance Snapshot', PRIORITY.METRICS); }
+  build() { return this._apply(new BalanceSnapshotReducer(this._name, this._priority)); }
+}
+
 class FieldReducerBuilder extends BaseFieldReducerBuilder {
   constructor(fieldName) { super('Field Logger', PRIORITY.METRICS, fieldName); }
   build() { return this._apply(new FieldReducer(this._name, this._priority, this._fieldName)); }
@@ -159,7 +165,8 @@ class RepeatingReducerBuilder extends BaseFieldReducerBuilder {
 }
 
 export class ReducerBuilder {
-  static noOp()                   { return new NoOpReducerBuilder(); }
+  static noOp()             { return new NoOpReducerBuilder(); }
+  static balanceSnapshot()  { return new BalanceSnapshotReducerBuilder(); }
   static field(fieldName)                  { return new FieldReducerBuilder(fieldName); }
   static metric(fieldName)  {return new MetricReducerBuilder(fieldName); }
   static array(fieldName)   { return new ArrayReducerBuilder(fieldName); }

@@ -52,7 +52,7 @@ export class IntlTransferToUsHandler extends HandlerEntry {
     return [
       { type: 'INTL_TRANSFER_APPLY', direction: 'AU_TO_US', targetDeficit },
       new RecordMetricAction('intl_transfer_to_us', targetDeficit),
-      new RecordBalanceAction(),
+      new RecordBalanceAction(`${this.usAccountKey}.balance`, `${this.usAccountKey}`),
     ];
   }
 }
@@ -95,7 +95,7 @@ export class IntlTransferToAuHandler extends HandlerEntry {
     return [
       { type: 'INTL_TRANSFER_APPLY', direction: 'US_TO_AU', targetDeficit },
       new RecordMetricAction('intl_transfer_to_au', targetDeficit),
-      new RecordBalanceAction(),
+      new RecordBalanceAction(`${this.auAccountKey}.balance`, `${this.auAccountKey}`),
     ];
   }
 }

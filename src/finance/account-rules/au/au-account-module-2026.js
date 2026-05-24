@@ -37,7 +37,8 @@ import {
 
 
 /** Resolve the AU cash pool: auSavingsAccount in intl scenarios, checkingAccount in single-account tests. */
-const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
+const auCash    = (state) => state.auSavingsAccount ?? state.checkingAccount;
+const auCashKey = (state) => state.auSavingsAccount != null ? 'auSavingsAccount' : 'checkingAccount';
 
 /** Returns age in whole years as of asOfDate. */
 function getAge(birthDate, asOfDate) {
@@ -160,20 +161,20 @@ export class AuAccountModule2026 extends BaseAccountModule {
       };
     }, PRIORITY.CASH_FLOW, 'AU Savings Earnings Apply');
 
-    sim.register('AU_SAVINGS_CONTRIBUTION', ({ data }) => [
+    sim.register('AU_SAVINGS_CONTRIBUTION', ({ data, state }) => [
       { type: 'AU_SAVINGS_CONTRIBUTION_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction(`${auCashKey(state)}.balance`, `${auCashKey(state)}`),
     ]);
 
-    sim.register('AU_SAVINGS_WITHDRAWAL', ({ data }) => [
+    sim.register('AU_SAVINGS_WITHDRAWAL', ({ data, state }) => [
       { type: 'AU_SAVINGS_WITHDRAWAL_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction(`${auCashKey(state)}.balance`, `${auCashKey(state)}`),
     ]);
 
     // EVT-18 and EVT-19 share the same event type; residency in state determines AU tax bucket
     sim.register('AU_SAVINGS_EARNINGS', ({ data, state }) => [
       { type: 'AU_SAVINGS_EARNINGS_APPLY', amount: data.amount, isAuResident: state.isAuResident },
-      new RecordBalanceAction(),
+      new RecordBalanceAction(`${auCashKey(state)}.balance`, `${auCashKey(state)}`),
     ]);
   }
 
@@ -260,7 +261,7 @@ export class AuAccountModule2026 extends BaseAccountModule {
 
     sim.register('SUPER_CONTRIBUTION', ({ data }) => [
       { type: 'SUPER_CONTRIBUTION_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('superAccount.balance', 'superAccount'),
     ]);
 
     sim.register('SUPER_WITHDRAWAL_CONTRIBUTIONS', ({ date, state, data }) => {
@@ -268,7 +269,7 @@ export class AuAccountModule2026 extends BaseAccountModule {
       const blocked = age < 60;
       return [
         { type: 'SUPER_WITHDRAWAL_CONTRIB_APPLY', amount: data.amount, blocked },
-        new RecordBalanceAction(),
+        new RecordBalanceAction('superAccount.balance', 'superAccount'),
       ];
     });
 
@@ -277,13 +278,13 @@ export class AuAccountModule2026 extends BaseAccountModule {
       const blocked = age < 60;
       return [
         { type: 'SUPER_WITHDRAWAL_EARNINGS_APPLY', amount: data.amount, blocked },
-        new RecordBalanceAction(),
+        new RecordBalanceAction('superAccount.balance', 'superAccount'),
       ];
     });
 
     sim.register('SUPER_EARNINGS', ({ data }) => [
       { type: 'SUPER_EARNINGS_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('superAccount.balance', 'superAccount'),
     ]);
   }
 
@@ -399,27 +400,27 @@ export class AuAccountModule2026 extends BaseAccountModule {
 
     sim.register('AU_DIVIDEND_FRANKED_RESIDENT', ({ data }) => [
       { type: 'AU_DIVIDEND_FRANKED_RESIDENT_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('auStockAccount.balance', 'auStockAccount'),
     ]);
 
     sim.register('AU_DIVIDEND_FRANKED_NONRESIDENT', ({ data }) => [
       { type: 'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('auStockAccount.balance', 'auStockAccount'),
     ]);
 
     sim.register('AU_DIVIDEND_UNFRANKED_RESIDENT', ({ data }) => [
       { type: 'AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('auStockAccount.balance', 'auStockAccount'),
     ]);
 
     sim.register('AU_DIVIDEND_UNFRANKED_NONRESIDENT', ({ data }) => [
       { type: 'AU_DIVIDEND_UNFRANKED_NONRESIDENT_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('auStockAccount.balance', 'auStockAccount'),
     ]);
 
     sim.register('AU_STOCK_EARNINGS', ({ data }) => [
       { type: 'AU_STOCK_EARNINGS_APPLY', amount: data.amount },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('auStockAccount.balance', 'auStockAccount'),
     ]);
 
     // EVT-31/32: residency flag read from state and passed through to reducer
@@ -429,7 +430,7 @@ export class AuAccountModule2026 extends BaseAccountModule {
         costBasis:    data.costBasis,
         isAuResident: state.isAuResident,
       },
-      new RecordBalanceAction(),
+      new RecordBalanceAction('auStockAccount.balance', 'auStockAccount'),
     ]);
   }
 
@@ -447,9 +448,9 @@ export class AuAccountModule2026 extends BaseAccountModule {
       };
     }, PRIORITY.CASH_FLOW, 'AU House Sale Apply');
 
-    sim.register('AU_HOUSE_SALE', ({ data }) => [
+    sim.register('AU_HOUSE_SALE', ({ data, state }) => [
       { type: 'AU_HOUSE_SALE_APPLY', salePrice: data.salePrice, costBasis: data.costBasis },
-      new RecordBalanceAction(),
+      new RecordBalanceAction(`${auCashKey(state)}.balance`, `${auCashKey(state)}`),
     ]);
   }
 }

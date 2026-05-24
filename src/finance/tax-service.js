@@ -13,7 +13,7 @@ import { AccountRulesEngine }    from './account-rules/account-rules-engine.js';
 import { InsufficientFundsError } from './account.js';
 import { AccountService } from './services/account-service.js';
 import { ReducerBuilder } from '../simulation-framework/builders/reducer-builder.js'
-import { PRIORITY, ArrayReducer, NoOpReducer } from '../simulation-framework/reducers.js';
+import { PRIORITY, ArrayReducer, NoOpReducer, BalanceSnapshotReducer } from '../simulation-framework/reducers.js';
 import { TaxSettleService }      from './tax-settle-service.js';
 
 import { PeriodAdvanceReducer, PeriodAdvanceHandler } from './tax/period-advance-classes.js';
@@ -254,7 +254,7 @@ export class TaxService {
 
     // ── Step 7: register metric/balance reducers ───────────────────────────────
     ReducerBuilder.array().name('Tax Debit').build().registerWith(sim.reducers, 'RECORD_ARRAY_METRIC');
-    ReducerBuilder.noOp().name('Balance Snapshot').build().registerWith(sim.reducers, 'RECORD_BALANCE');
+    ReducerBuilder.balanceSnapshot().name('Balance Snapshot').build().registerWith(sim.reducers, 'RECORD_BALANCE');
 
     return this._accountService;
   }
@@ -375,7 +375,7 @@ export class TaxService {
     taxDebitReducer.reducedActionTypes = ['RECORD_ARRAY_METRIC'];
     reducerService.register(taxDebitReducer);
 
-    const balanceSnapshotReducer = new NoOpReducer('Balance Snapshot');
+    const balanceSnapshotReducer = new BalanceSnapshotReducer('Balance Snapshot');
     balanceSnapshotReducer.reducedActionTypes = ['RECORD_BALANCE'];
     reducerService.register(balanceSnapshotReducer);
 
@@ -495,7 +495,7 @@ export class TaxService {
     taxDebitReducer.reducedActionTypes = ['RECORD_ARRAY_METRIC'];
     reducerService.register(taxDebitReducer);
 
-    const balanceSnapshotReducer = new NoOpReducer('Balance Snapshot');
+    const balanceSnapshotReducer = new BalanceSnapshotReducer('Balance Snapshot');
     balanceSnapshotReducer.reducedActionTypes = ['RECORD_BALANCE'];
     reducerService.register(balanceSnapshotReducer);
   }
