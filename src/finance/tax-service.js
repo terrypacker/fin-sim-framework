@@ -16,6 +16,7 @@ import { ArrayReducer, BalanceSnapshotReducer } from '../simulation-framework/re
 import { PeriodAdvanceReducer, PeriodAdvanceHandler } from './tax/period-advance-classes.js';
 import { TaxSettleHandler, TaxSettleApplyReducer, TaxPaymentDebitReducer } from './tax/tax-settle-classes.js';
 import { DynamicTaxReducer } from './tax/dynamic-tax-reducer.js';
+import { EventSeries } from '../simulation-framework/events/event-series.js';
 
 import { UsTaxModule2024 }       from './tax/us/us-tax-module-2024.js';
 import { UsTaxModule2025 }       from './tax/us/us-tax-module-2025.js';
@@ -218,6 +219,122 @@ export class TaxService {
     const balanceSnapshotReducer = new BalanceSnapshotReducer('Balance Snapshot');
     balanceSnapshotReducer.reducedActionTypes = ['RECORD_BALANCE'];
     reducerService.register(balanceSnapshotReducer);
+  }
+
+  /**
+   * Declarative alternative to the two-phase setup()/registerHandlersAndReducers() API.
+   *
+   * Returns all contributions as plain data — no services are called, no side effects.
+   * The ScenarioCompiler (via the US_TAX / AU_TAX toolsets) is responsible for
+   * registering the returned items with the real service layer.
+   *
+   * @param {string[]}  countryCodes
+   * @param {import('./period/period-service.js').PeriodService} periodService
+   * @param {Date}      startDate
+   * @param {object}    accountService
+   * @param {object}    stateRegistry
+   * @returns {{ statePatches: object, events: object[], handlers: object[], reducers: object[] }}
+   */
+  getContributions(countryCodes, periodService, startDate, accountService, stateRegistry) {
+    const startTs = startDate.getTime();
+
+    // Resolve starting period for each country
+    const currentPeriods = {};
+    for (const cc of countryCodes) {
+      const periodType = _periodTypeFor(cc);
+      const current = periodService.getAllPeriods()
+        .find(p => p.type === periodType && p.startMs <= startTs && startTs < p.endMs);
+      if (!current) {
+        throw new Error(
+          `TaxService.getContributions: no '${periodType}' period found for start date ` +
+          `${startDate.toISOString()} in PeriodService. ` +
+          `Add the appropriate year via buildUsCalendarYear() or buildAuFiscalYear().`
+        );
+      }
+      currentPeriods[cc] = current;
+    }
+
+    const events   = [];
+    const handlers = [];
+    const reducers = [];
+
+    const periodAdvanceHandler = new PeriodAdvanceHandler();
+
+    for (const cc of countryCodes) {
+      const { month, day } = _periodAdvanceDateFor(cc);
+      const periodType = _periodTypeFor(cc);
+      const periods = periodService.getAllPeriods().filter(p => p.type === periodType);
+      const series = new EventSeries({
+        name:     `${cc} Period Advance`,
+        type:     `PERIOD_ADVANCE_${cc}`,
+        interval: 'annually',
+        month,
+        day,
+        data:     { cc, periods },
+        enabled:  true,
+        color:    '#78909C',
+      });
+      events.push(series);
+      periodAdvanceHandler.handledEvents.push(series);
+    }
+
+    const taxSettleHandler = new TaxSettleHandler();
+
+    for (const cc of countryCodes) {
+      const { month, day } = _taxSettleDateFor(cc);
+      const series = new EventSeries({
+        name:     `${cc} Tax Settle`,
+        type:     `TAX_SETTLE_${cc}`,
+        interval: 'annually',
+        month,
+        day,
+        data:     { cc },
+        enabled:  true,
+        color:    '#FF7043',
+      });
+      events.push(series);
+      taxSettleHandler.handledEvents.push(series);
+    }
+
+    handlers.push(periodAdvanceHandler);
+    reducers.push(new PeriodAdvanceReducer());
+
+    // Account module reducers + handlers (static, start-year mechanics)
+    for (const cc of countryCodes) {
+      const startYear     = new Date(currentPeriods[cc].startMs).getUTCFullYear();
+      const accountModule = this._accountRulesEngine.get(cc, startYear);
+      accountModule.createReducers(accountService).forEach(r => reducers.push(r));
+      accountModule.createHandlers().forEach(h => handlers.push(h));
+    }
+
+    // Dynamic tax reducers (one per action type per country)
+    for (const cc of countryCodes) {
+      const actionTypes = new Set();
+      Object.keys(this._taxEngine._modules)
+        .filter(k => k.startsWith(cc + '_'))
+        .forEach(k => {
+          for (const [type] of this._taxEngine._modules[k].getReducerFns()) {
+            actionTypes.add(type);
+          }
+        });
+      for (const actionType of actionTypes) {
+        reducers.push(new DynamicTaxReducer(this._taxEngine, cc, actionType));
+      }
+    }
+
+    handlers.push(taxSettleHandler);
+    reducers.push(new TaxSettleApplyReducer());
+    reducers.push(new TaxPaymentDebitReducer({ accountService, stateRegistry }));
+
+    const taxDebitReducer = new ArrayReducer('Tax Debit');
+    taxDebitReducer.reducedActionTypes = ['RECORD_ARRAY_METRIC'];
+    reducers.push(taxDebitReducer);
+
+    const balanceSnapshotReducer = new BalanceSnapshotReducer('Balance Snapshot');
+    balanceSnapshotReducer.reducedActionTypes = ['RECORD_BALANCE'];
+    reducers.push(balanceSnapshotReducer);
+
+    return { statePatches: { currentPeriods }, events, handlers, reducers };
   }
 
   /** @returns {TaxEngine} */

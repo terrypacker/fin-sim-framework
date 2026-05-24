@@ -88,17 +88,10 @@ module so they are only registered when that capability is declared.
 | `CollectibleSaleHandler` / `CollectibleSaleApplyReducer` | *(was never in account module)* | `US_COLLECTIBLES` | `collectibles.length > 0` |
 | `CollectibleValueChangeHandler` / `CollectibleValueChangeApplyReducer` | `us-account-module-2026.js` | `US_COLLECTIBLES` | `collectibles.length > 0` |
 
-**Status:** Done in this session.  `us-account-module-2026.js` no longer imports or registers
-either collectible class.
-
-**Future items in this phase** (not yet done):
-
-| Class | From | To | Guard |
-|---|---|---|---|
-| `UsHouseSaleHandler` / `UsHouseSaleApplyReducer` | `us-account-module-2026.js` | `US_REAL_PROPERTY` | `realProperties.filter(US).length > 0` |
-
-The AU equivalents (`AuHouseSaleHandler` / `AuHouseSaleApplyReducer`) should be verified to
-already live in `AU_REAL_PROPERTY` (they do — the AU account module never included them).
+**Status:** Complete.  `us-account-module-2026.js` no longer imports or registers either
+collectible class.  `UsHouseSaleHandler` / `UsHouseSaleApplyReducer` were already exclusively
+in `US_REAL_PROPERTY` (never in the account module).  AU equivalents confirmed in
+`AU_REAL_PROPERTY`.
 
 ---
 
@@ -221,7 +214,7 @@ toolsets — they are already registry-style and fit the declarative model.
 |---|---|
 | 1 (done) | `us-account-module-2026.js`, `us-collectibles-toolset.js` |
 | 2 | `finance/tax-service.js`, `toolsets/us-tax-toolset.js`, `toolsets/au-tax-toolset.js` |
-| 3 | `us-account-module-2026.js`, `au-account-module-2026.js`, multiple toolsets, possibly new `us-brokerage-toolset.js` / `au-brokerage-toolset.js` |
+| 3 | `us-account-module-2026.js`, `au-account-module-2026.js`, multiple toolsets, new `us-brokerage-toolset.js`, `au-brokerage-toolset.js`, `us-income-toolset.js`, `au-income-toolset.js` |
 | 4 | `finance/tax-service.js`, all direct `TaxService` test consumers |
 | 5 (opt) | `toolsets/us-tax-toolset.js`, `toolsets/au-tax-toolset.js`, `finance/tax-service.js` |
 
