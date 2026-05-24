@@ -7,8 +7,6 @@
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
-
-import { BaseComponent } from "./base-component.js";
 import {MapFilterMultiSelect} from "./map-filter-multi-select.js";
 
 /**

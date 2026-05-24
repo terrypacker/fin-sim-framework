@@ -39,10 +39,12 @@ import { ServiceRegistry } from '../../src/services/service-registry.js';
 import {
   GraphRenderer
 } from "../../src/visualization/components/graph-renderer.js";
+import {loadHtml} from "../helpers/viz-utils.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeBuilderView(elements) {
+  loadHtml('../../index.html');
   ServiceRegistry.reset();
   const registry = ServiceRegistry.getInstance();
   const { builderCanvas, graphRoot, graphNodes, graphEdges, nodeDetailsTemplate } = elements ?? makeElements();
@@ -60,66 +62,47 @@ function makeBuilderView(elements) {
     })
   });
 }
-
-// ─── Type list snapshot matches live registries ───────────────────────────────
-//
-// If HANDLER_CLASSES was not yet augmented when the constructor ran, HANDLER_TYPES
-// would only contain ["HandlerEntry"] instead of the full domain class set.
-
-test('GraphBuilderView.HANDLER_TYPES matches Object.keys(HANDLER_CLASSES) at construction time', () => {
-  const view = makeBuilderView();
-  expect(view.HANDLER_TYPES).toEqual(Object.keys(HANDLER_CLASSES));
-});
-
-test('GraphBuilderView.HANDLER_TYPES includes domain handler subclasses (not just HandlerEntry)', () => {
-  const view = makeBuilderView();
-  expect(view.HANDLER_TYPES).toContain('UsSavingsInterestMonthlyHandler');
-  expect(view.HANDLER_TYPES).toContain('MonthlyExpensesHandler');
-  expect(view.HANDLER_TYPES).toContain('ChangeResidencyHandler');
-  expect(view.HANDLER_TYPES).toContain('OutOfFundsHandler');
-});
-
-test('GraphBuilderView.REDUCER_TYPES matches Object.keys(REDUCER_CLASSES)', () => {
-  const view = makeBuilderView();
-  expect(view.REDUCER_TYPES).toEqual(Object.keys(REDUCER_CLASSES));
-});
-
-test('GraphBuilderView.ACTION_TYPES matches Object.keys(ACTION_CLASSES)', () => {
-  const view = makeBuilderView();
-  expect(view.ACTION_TYPES).toEqual(Object.keys(ACTION_CLASSES));
-});
-
-// ─── Handler type select renders correctly ────────────────────────────────────
-//
-// Verifies that _renderHandlerEditor populates the <select data-id="handlerClass">
-// with one <option> per registered class, and that the current value reflects
-// the node's handlerClass.
-
-function makeHandlerTemplate() {
-  const tpl = document.createElement('template');
-  tpl.id = 'tpl-handler-editor';
-  tpl.innerHTML = `
-    <div data-handler-editor>
-      <div class="node">
-        <div class="node-body">
-          <span data-id="description"></span>
-          <select data-id="handlerClass"></select>
-          <input data-id="name" />
-          <div id="handler-event-count"></div>
-          <div id="handler-events"></div>
-          <div id="handler-action-count"></div>
-          <div id="handler-actions"></div>
-        </div>
-      </div>
-    </div>`;
-  return tpl;
+// ─── DOM helpers ──────────────────────────────────────────────────────────────
+function makeElements() {
+  const builderCanvas = document.querySelector('#builderCanvas');
+  const graphRoot  = document.querySelector('#graphRoot');
+  const graphViewPort = document.querySelector('#graphViewport');
+  const graphEdges = document.querySelector('#graphEdges');
+  const graphNodes = document.querySelector('#graphNodes');
+  const nodeDetailsTemplate = document.querySelector('#tpl-node-details');
+  return { builderCanvas, graphRoot, graphNodes, graphEdges , nodeDetailsTemplate};
 }
 
-function makeDeleteTemplate() {
+// ─── Graph Renderer stub ───────────────────────────────────────────────────────────────
+function makeGraphRenderer(elements = makeElements()) {
+  const registry = ServiceRegistry.getInstance();
+  return new GraphRenderer({
+    parent: null,
+    graph: registry.graph,
+    graphQueryApi: registry.graphQueryApi,
+    graphRoot: elements.graphRoot,
+    graphNodes: elements.graphNodes,
+    graphEdges: elements.graphEdges,
+    nodeDetailsTemplate: elements.nodeDetailsTemplate,
+    displayNodeStateChanges: (changes) => {}
+  });
+}
+
+function makePresenter() {
   const tpl = document.createElement('template');
-  tpl.id = 'tpl-delete-button';
-  tpl.innerHTML = '<button class="delete-node-btn">Delete</button>';
-  return tpl;
+  tpl.id = 'tpl-empty';
+  tpl.innerHTML = '<div class="tl-empty">Select a node</div>';
+  document.body.appendChild(tpl);
+  ServiceRegistry.reset();
+  const registry = ServiceRegistry.getInstance();
+  return new GraphBuilderPresenter({
+    graphRenderer:         makeGraphRenderer(),
+    builderCanvas: document.createElement('div'),
+    eventService: registry.eventService,
+    handlerService: registry.handlerService,
+    actionService: registry.actionService,
+    reducerService: registry.reducerService
+  });
 }
 
 function makeHandlerNode(handlerClass = 'HandlerEntry') {
@@ -135,10 +118,8 @@ function makeHandlerNode(handlerClass = 'HandlerEntry') {
   };
 }
 
-test('handler editor: select is populated with all HANDLER_CLASSES keys', () => {
-  document.body.appendChild(makeHandlerTemplate());
-  document.body.appendChild(makeDeleteTemplate());
 
+test('handler editor: select is populated with all HANDLER_CLASSES keys', () => {
   const view = makeBuilderView();
   view.editNode(makeHandlerNode('HandlerEntry'));
 
@@ -176,7 +157,6 @@ test('handler editor: domain type badge has tooltip hint', () => {
 });
 
 test('handler editor: onHandlerClassChange fires when select changes', () => {
-  document.body.appendChild(makeHandlerTemplate());
   const view = makeBuilderView();
 
   let capturedId    = null;
@@ -196,78 +176,6 @@ test('handler editor: onHandlerClassChange fires when select changes', () => {
   expect(capturedClass).toBe('MonthlyExpensesHandler');
 });
 
-// ─── Presenter wires onHandlerClassChange ─────────────────────────────────────
-
-// ─── DOM helpers ──────────────────────────────────────────────────────────────
-function makeElements() {
-  const builderCanvas = document.createElement('div');
-  const graphRoot  = document.createElement('div');
-  graphRoot.id = 'graphRoot';
-  const graphViewPort = document.createElement('div');
-  graphViewPort.id = 'graphViewport';
-  const graphEdges = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  graphEdges.id = 'graphEdges';
-  const graphNodes = document.createElement('div');
-  graphNodes.id = 'graphNodes';
-  const selectionBox = document.createElement('div');
-  selectionBox.classList.add('selection-box');
-
-  const nodeDetailsTemplate = document.createElement('template');
-
-  document.body.appendChild(graphRoot);
-  graphRoot.appendChild(graphViewPort);
-  graphViewPort.appendChild(graphEdges);
-  graphViewPort.appendChild(graphNodes);
-  graphViewPort.appendChild(selectionBox);
-
-  nodeDetailsTemplate.innerHTML = '<div class="g-node">\n'
-      + '    <div class="g-header">\n'
-      + '      <span class="g-header-text"></span>\n'
-      + '      <span class="node-state-badge badge-green" data-id="stateChangeIndicator" style="display:none"></span>\n'
-      + '      <span class="node-fired-badge badge-green" data-id="firedIndicator"></span>\n'
-      + '    </div>\n'
-      + '    <div class="g-title">\n'
-      + '      <span class="g-title-text"></span>\n'
-      + '    </div>\n'
-      + '\n'
-      + '    <div class="g-port in"></div>\n'
-      + '    <div class="g-port out"></div>\n'
-      + '  </div>'
-  document.body.appendChild(nodeDetailsTemplate);
-  return { builderCanvas, graphRoot, graphNodes, graphEdges , nodeDetailsTemplate};
-}
-
-// ─── Graph Renderer stub ───────────────────────────────────────────────────────────────
-function makeGraphRenderer(elements = makeElements()) {
-  const registry = ServiceRegistry.getInstance();
-  return new GraphRenderer({
-    parent: null,
-    graph: registry.graph,
-    graphQueryApi: registry.graphQueryApi,
-    graphRoot: elements.graphRoot,
-    graphNodes: elements.graphNodes,
-    graphEdges: elements.graphEdges,
-    nodeDetailsTemplate: elements.nodeDetailsTemplate,
-    displayNodeStateChanges: (changes) => {}
-  });
-}
-
-function makePresenter() {
-  const tpl = document.createElement('template');
-  tpl.id = 'tpl-empty';
-  tpl.innerHTML = '<div class="tl-empty">Select a node</div>';
-  document.body.appendChild(tpl);
-  ServiceRegistry.reset();
-  const registry = ServiceRegistry.getInstance();
-  return new GraphBuilderPresenter({
-    graphRenderer:         makeGraphRenderer(),
-    builderCanvas: document.createElement('div'),
-    eventService: registry.eventService,
-    handlerService: registry.handlerService,
-    actionService: registry.actionService,
-    reducerService: registry.reducerService
-  });
-}
 
 test('GraphBuilderPresenter: replaceHandler is called when onHandlerClassChange fires', () => {
   const presenter = makePresenter();

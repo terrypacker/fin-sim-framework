@@ -131,12 +131,12 @@ export class BaseApp extends BaseComponent {
       eventService: registry.eventService,
       handlerService: registry.handlerService,
       actionService: registry.actionService,
-      reducerService: registry.reducerService
+      reducerService: registry.reducerService,
+      onNodeConfigurationView: () =>  {
+        this.openTab({ currentTarget: this.eventsTabHeader }, 'left-events', 'left-col-sim');
+      }
     });
-    //TODO This should be put into the builder-presenter too
-    this.configPresenter._graphRenderer.registerNodeClickListener(() =>
-        this.openTab({ currentTarget: this.eventsTabHeader }, 'left-events', 'left-col-sim')
-    );
+
     //TODO This should be put into the builder-presenter too
     // Breakpoint listener: delegate to animator once it is created.
     this.configPresenter._graphRenderer.registerBreakpointChangeListener((node) => {

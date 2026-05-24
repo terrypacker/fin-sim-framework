@@ -35,12 +35,15 @@ export class GraphBuilderPresenter {
    *   builderCanvas: HTMLElement
    * }}
    */
-  constructor({ graphRenderer, builderCanvas, eventService, handlerService, actionService, reducerService }) {
+  constructor({ graphRenderer, builderCanvas, eventService, handlerService, actionService, reducerService, onNodeConfigurationView }) {
     this._controller = new GraphBuilderController({ eventService, handlerService, actionService, reducerService });
     this._view       = new GraphBuilderView({ builderCanvas, graphRenderer });
     this._graphRenderer = graphRenderer;
     // Register the graph node-click listener so clicking a node opens its editor.
-    this._graphRenderer.registerNodeClickListener((event, node) => this._view.editNode(node));
+    this._graphRenderer.registerNodeClickListener((event, node) => this.editNode(node));
+
+    //When a node is edited, we want to highlight it's editor
+    this._onNodeConfigurationView = onNodeConfigurationView;
 
     // ── Wire view mutation callbacks → controller ─────────────────────────
 
@@ -111,7 +114,10 @@ export class GraphBuilderPresenter {
   registerReducerCreatedListener(l) { this._controller.registerReducerCreatedListener(l); }
 
   /** Open the editor panel for a node.  Called by BaseScenario after creation. */
-  editNode(node) { this._view.editNode(node); }
+  editNode(node) {
+    this._view.editNode(node);
+    this._onNodeConfigurationView(node);
+  }
 
   //Clear out meta data from nodes?
   resetForReplay() {

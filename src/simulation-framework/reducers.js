@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-import {SimGraphNode} from "../graph/sim-graph-node.js";
+import { SimGraphNode } from "../graph/sim-graph-node.js";
 
 export class ReducerPipeline {
   constructor() {
@@ -519,15 +519,20 @@ export class ScriptedReducer extends FieldReducer {
       } catch (e) {
         console.error('ScriptedReducer compile error:', e);
         this._fn = () => ({});
+        throw e;
       }
     }
-    return this._fn;
+  }
+
+  _compileAndExecute(state, action, date) {
+    this._compile();
+    return this._fn(state, action, date);
   }
 
   reduce(state, action, date) {
     let result;
     try {
-      result = this._compile()(state, action, date);
+      result = this._compileAndExecute(state, action, date);
     } catch (e) {
       console.error('ScriptedReducer runtime error:', e);
       return this.newState(state);
