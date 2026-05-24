@@ -164,6 +164,14 @@ export class BaseApp {
     this.scenario.buildSim(this.getParams(), this.getInitialState());
     this.afterBuildSim();
 
+    //Clear out the dashcards
+    if(this.updateDashCards) {
+      this.updateDashCards({
+        date: this.scenario.simStart,
+        id: 0
+      })
+    }
+
     // Build a color map from all enabled recurring events in the service.
     const eventColors = new Map(
       ServiceRegistry.getInstance().eventService.getAll()
