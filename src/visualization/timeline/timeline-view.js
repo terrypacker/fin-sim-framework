@@ -202,9 +202,14 @@ export class TimelineView extends BaseComponent {
       html.push(this._renderDateGroup(dateStr, byEvent, expanded, hasRewind, treeMode));
     }
 
-    this._listEl.style.paddingTop    = paddingTop    > 0 ? paddingTop    + 'px' : '';
-    this._listEl.style.paddingBottom = paddingBottom > 0 ? paddingBottom + 'px' : '';
-    this._listEl.innerHTML = html.join('');
+    // Use spacer divs rather than padding so the list element never expands
+    // beyond its flex-allocated height (border-box: large padding would force
+    // the element to grow, overflowing the parent and triggering a second scrollbar).
+    const topSpacer    = paddingTop    > 0 ? `<div style="height:${paddingTop}px"    aria-hidden="true"></div>` : '';
+    const bottomSpacer = paddingBottom > 0 ? `<div style="height:${paddingBottom}px" aria-hidden="true"></div>` : '';
+    this._listEl.style.paddingTop    = '';
+    this._listEl.style.paddingBottom = '';
+    this._listEl.innerHTML = topSpacer + html.join('') + bottomSpacer;
     this._wireListeners(hasRewind);
   }
 
