@@ -77,6 +77,9 @@ export class TimelinePresenter {
     if (groups.size > 0) {
       const lastDateKey = [...groups.keys()].at(-1);
       if (lastDateKey && lastDateKey !== this._controller._lastDate) {
+        if (this._controller._lastDate) {
+          this._controller.expanded.delete(this._controller._lastDate);
+        }
         this._controller.expanded.add(lastDateKey);
         this._controller._lastDate = lastDateKey;
       }
