@@ -13,7 +13,7 @@ import { HandlerEntry, HANDLER_CLASSES } from '../simulation-framework/handlers.
 import { UsSavingsInterestMonthlyHandler } from '../finance/handlers/us-savings-interest-handler.js';
 import { MonthlyExpensesHandler } from '../finance/handlers/monthly-expenses-handler.js';
 import { IntlTransferToUsHandler, IntlTransferToAuHandler } from '../finance/handlers/intl-transfer-handlers.js';
-import { AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler } from '../finance/handlers/earnings-handlers.js';
+import { AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler, FixedIncomeInterestHandler, SuperEarningsHandler } from '../finance/handlers/earnings-handlers.js';
 import { DividendScheduledHandler } from '../finance/handlers/dividend-scheduled-handler.js';
 import { ChangeResidencyHandler } from '../finance/handlers/change-residency-handler.js';
 import { OutOfFundsHandler } from '../finance/handlers/out-of-funds-handler.js';
@@ -30,6 +30,7 @@ Object.assign(HANDLER_CLASSES, {
   IntlTransferToUsHandler,
   IntlTransferToAuHandler,
   AuSavingsInterestHandler,
+  AuFixedIncomeInterestMonthlyHandler,
   FixedIncomeInterestHandler,
   SuperEarningsHandler,
   DividendScheduledHandler,

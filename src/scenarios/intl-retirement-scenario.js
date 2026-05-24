@@ -77,6 +77,7 @@ export const INTL_RETIREMENT_DEFAULTS = {
   // AU accounts
   auSavingsBalance:     50_000,
   auSavingsMinBalance:   3_000,  auSavingsInterestRate: 0.045,
+  auFixedIncomeBalance:  1_000,  auFixedIncomeInterestRate: 0.04,
   superBalance:        250_000,  superBasis:           180_000,
   auStockBalance:       60_000,  auStockBasis:          40_000,
   auStockGrowthRate:   0.06,
@@ -349,6 +350,7 @@ export class IntlRetirementScenario extends BaseScenario {
         inflationAdjust:          true,
         // AU_BANKING
         auSavingsInterestRate:    p.auSavingsInterestRate,
+        auFixedIncomeInterestRate: p.auFixedIncomeInterestRate,
         // AU_RETIREMENT
         superGrowthRate:          p.spouseSuperGrowthRate ?? 0.07,
         auStockGrowthRate:        p.auStockGrowthRate,
@@ -393,13 +395,13 @@ export class IntlRetirementScenario extends BaseScenario {
       // before ScenarioCompiler reads it from accountService.getAll().
       accounts: [
         {
-          __type: 'Account',              stateKey: 'usSavingsAccount',
+          __type: 'SavingsAccount',       stateKey: 'usSavingsAccount',
           name: 'US Savings',             role: ACCOUNT_ROLES.US_SAVINGS,
           initialValue: p.initialUsSavings, ownershipType: 'joint', ownerId: 'primary',
           minimumBalance: p.usSavingsMinBalance, country: 'US', currency: USD,
         },
         {
-          __type: 'Account',              stateKey: 'fixedIncomeAccount',
+          __type: 'BrokerageAccount',              stateKey: 'fixedIncomeAccount',
           name: 'Fixed Income',           role: ACCOUNT_ROLES.FIXED_INCOME,
           initialValue: p.fixedIncomeBalance, ownerId: 'primary',
           drawdownPriority: 1,            contributionBasis: 0,
@@ -434,10 +436,17 @@ export class IntlRetirementScenario extends BaseScenario {
           country: 'US', currency: USD,
         },
         {
-          __type: 'Account',              stateKey: 'auSavingsAccount',
+          __type: 'SavingsAccount',              stateKey: 'auSavingsAccount',
           name: 'AU Savings',             role: ACCOUNT_ROLES.AU_SAVINGS,
           initialValue: p.auSavingsBalance, ownershipType: 'joint', ownerId: 'primary',
           minimumBalance: p.auSavingsMinBalance, country: 'AU', currency: AUD,
+        },
+        {
+          __type: 'BrokerageAccount',     stateKey: 'auFixedIncomeAccount',
+          name: 'AU Fixed Income',        role: ACCOUNT_ROLES.AU_FIXED_INCOME,
+          initialValue: p.auFixedIncomeBalance, ownerId: 'primary',
+          drawdownPriority: 1,            contributionBasis: 0,
+          country: 'AU', currency: AUD,
         },
         {
           __type: 'BrokerageAccount',     stateKey: 'auStockAccount',
