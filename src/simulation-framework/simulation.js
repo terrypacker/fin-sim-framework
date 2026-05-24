@@ -376,7 +376,7 @@ export class Simulation {
 
       //Emit Action Result Message
       const unwrappedReducers = [];
-      if (!reducers || reducers.length === 0) {
+      if (reducers && reducers.length > 0) {
         reducers.forEach(r => {
           unwrappedReducers.push(r.reducer);
         })
