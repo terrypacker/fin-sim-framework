@@ -34,9 +34,9 @@ export class AuSeIncomeApplyReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const { amount, isAuResident } = action;
+    const { amount, isAuResident, personKey } = action;
     this.accountService.transaction(auCash(state), amount, null);
-    return this.newState(state, {}, [{ type: 'AU_SE_INCOME_TAX', amount, isAuResident }]);
+    return this.newState(state, {}, [{ type: 'AU_SE_INCOME_TAX', amount, isAuResident, personKey }]);
   }
 }
 
@@ -54,7 +54,7 @@ export class AuSeIncomeHandler extends HandlerEntry {
   call({ data, state }) {
     const cashKey = state.auSavingsAccount != null ? 'auSavingsAccount' : 'checkingAccount';
     return [
-      { type: 'SE_INCOME_AU_APPLY', amount: data.amount, isAuResident: state.isAuResident },
+      { type: 'SE_INCOME_AU_APPLY', amount: data.amount, isAuResident: state.isAuResident, personKey: data.personKey },
       new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];
   }

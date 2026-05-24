@@ -73,13 +73,18 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.auFrankingCreditYTD = 0;
     this.ftcYTD = 0;
 
-    // Per-person AU ordinary income (wages and other individually-attributed income).
-    // Keys mirror state.people. At AU tax settlement, each person's total AU ordinary
-    // income = auPersonOrdinaryIncomeYTD[key] + auOrdinaryIncomeYTD / numResidents.
-    this.auPersonOrdinaryIncomeYTD = {};
-    for (const [key, person] of Object.entries(this.people)) {
-      if (person != null) this.auPersonOrdinaryIncomeYTD[key] = 0;
-    }
+    // Per-person AU YTD accumulators.  Keys mirror state.people.
+    // At AU tax settlement each person's share = perPersonMap[key] + sharedPool / numResidents.
+    // As each income type is migrated to ownership-aware attribution, its shared pool drains to 0.
+    const _personKeys = Object.entries(this.people)
+      .filter(([, p]) => p != null)
+      .map(([k]) => k);
+    const _zeroes = () => Object.fromEntries(_personKeys.map(k => [k, 0]));
+    this.auPersonOrdinaryIncomeYTD          = _zeroes();
+    this.auPersonCapitalGainsYTD            = _zeroes();
+    this.auPersonFrankingCreditYTD          = _zeroes();
+    this.auPersonNonResidentWithholdingYTD  = _zeroes();
+    this.auPersonSuperTaxYTD                = _zeroes();
 
     this.superWithdrawalBlocked = false;
     this.outOfFundsDate = null;
