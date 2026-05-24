@@ -27,11 +27,14 @@ import { AuTaxRatesBase } from './au/au-tax-rates-base.js';
 export class InflationAdjustedUsTaxRates extends UsTaxRatesBase {
   constructor(baseRates, cumulativeFactor) {
     super();
-    this._brackets_mfj     = baseRates._brackets_mfj.map(([t, r]) => [t * cumulativeFactor, r]);
-    this._ltcg_mfj         = baseRates._ltcg_mfj.map(([t, r]) => [t * cumulativeFactor, r]);
-    this._stdDeduction_mfj = baseRates._stdDeduction_mfj * cumulativeFactor;
-    this._ficaWageBase     = baseRates._ficaWageBase     * cumulativeFactor;
-    this._baseYear         = baseRates.year;
+    this._brackets_mfj       = baseRates._brackets_mfj.map(([t, r]) => [t * cumulativeFactor, r]);
+    this._ltcg_mfj           = baseRates._ltcg_mfj.map(([t, r]) => [t * cumulativeFactor, r]);
+    this._stdDeduction_mfj   = baseRates._stdDeduction_mfj * cumulativeFactor;
+    this._brackets_single    = baseRates._brackets_single.map(([t, r]) => [t * cumulativeFactor, r]);
+    this._ltcg_single        = baseRates._ltcg_single.map(([t, r]) => [t * cumulativeFactor, r]);
+    this._stdDeduction_single = baseRates._stdDeduction_single * cumulativeFactor;
+    this._ficaWageBase       = baseRates._ficaWageBase     * cumulativeFactor;
+    this._baseYear           = baseRates.year;
   }
 
   get year()        { return this._baseYear; }

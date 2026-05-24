@@ -41,6 +41,26 @@ export class UsTaxRates2024 extends UsTaxRatesBase {
     ];
 
     this._stdDeduction_mfj = 29_200;
-    this._ficaWageBase     = 168_600; // IRS Social Security wage base 2024
+
+    // Single ordinary income brackets (IRS Rev. Proc. 2023-34)
+    this._brackets_single = [
+      [        0, 0.10],
+      [   11_600, 0.12],
+      [   47_150, 0.22],
+      [  100_525, 0.24],
+      [  191_950, 0.32],
+      [  243_725, 0.35],
+      [  609_350, 0.37],
+    ];
+
+    // Single long-term capital gains brackets
+    this._ltcg_single = [
+      [        0, 0.00],
+      [   47_025, 0.15],
+      [  518_900, 0.20],
+    ];
+
+    this._stdDeduction_single = 14_600;
+    this._ficaWageBase        = 168_600; // IRS Social Security wage base 2024
   }
 }

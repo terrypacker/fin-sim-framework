@@ -13,27 +13,36 @@ import { BaseTaxRatesModule } from '../base-tax-rates-module.js';
 /**
  * UsTaxRatesBase — base class for US federal tax rate computation.
  *
- * Implements computeTax() using MFJ ordinary income brackets, LTCG brackets,
- * standard deduction, and the Foreign Tax Credit (FTC) offset.
+ * Implements computeTax() supporting two filing statuses:
+ *   - Married Filing Jointly (MFJ): default when state.usFilingSingle is falsy
+ *   - Single:                       used when state.usFilingSingle === true
  *
- * Filing status: Married Filing Jointly (MFJ).
- * Subclasses set year-specific bracket tables and deduction amounts.
+ * Subclasses set year-specific bracket tables and deduction amounts for both
+ * filing statuses.
  *
  * State fields consumed:
  *   usOrdinaryIncomeYTD, usNegativeIncomeYTD, usCapitalGainsYTD,
- *   usPenaltyYTD, ftcYTD
+ *   usPenaltyYTD, ftcYTD, usFilingSingle
  */
 export class UsTaxRatesBase extends BaseTaxRatesModule {
   get countryCode() { return 'US'; }
 
   // Subclasses set these in their constructors:
 
-  /** Ordinary income brackets: [[threshold, rate], ...] ascending by threshold */
+  /** Ordinary income brackets (MFJ): [[threshold, rate], ...] ascending by threshold */
   _brackets_mfj     = [];
-  /** Long-term capital gains brackets: [[threshold, rate], ...] ascending */
+  /** Long-term capital gains brackets (MFJ): [[threshold, rate], ...] ascending */
   _ltcg_mfj         = [];
   /** Standard deduction for MFJ filing status */
   _stdDeduction_mfj = 0;
+
+  /** Ordinary income brackets (Single): [[threshold, rate], ...] ascending by threshold */
+  _brackets_single     = [];
+  /** Long-term capital gains brackets (Single): [[threshold, rate], ...] ascending */
+  _ltcg_single         = [];
+  /** Standard deduction for Single filing status */
+  _stdDeduction_single = 0;
+
   /** Social Security wage base (informational; not used in income tax calc) */
   _ficaWageBase     = 0;
 
@@ -45,18 +54,24 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       usCollectibleGainsYTD  = 0,
       usPenaltyYTD           = 0,
       ftcYTD                 = 0,
+      usFilingSingle         = false,
     } = state;
+
+    const brackets     = usFilingSingle ? this._brackets_single     : this._brackets_mfj;
+    const ltcgBrackets = usFilingSingle ? this._ltcg_single         : this._ltcg_mfj;
+    const stdDeduction = usFilingSingle ? this._stdDeduction_single : this._stdDeduction_mfj;
+    const filingStatus = usFilingSingle ? 'Single' : 'Married Filing Jointly';
 
     // Step 1: AGI and taxable ordinary income
     const agi             = usOrdinaryIncomeYTD - usNegativeIncomeYTD;
-    const taxableOrdinary = Math.max(0, agi - this._stdDeduction_mfj);
+    const taxableOrdinary = Math.max(0, agi - stdDeduction);
 
     // Step 2: ordinary income tax via marginal brackets
-    const ordinaryTax    = _applyBrackets(taxableOrdinary, this._brackets_mfj);
+    const ordinaryTax    = _applyBrackets(taxableOrdinary, brackets);
 
     // Step 3: long-term capital gains tax
     const cg             = Math.max(0, usCapitalGainsYTD);
-    const capitalGainsTax = _applyBrackets(cg, this._ltcg_mfj);
+    const capitalGainsTax = _applyBrackets(cg, ltcgBrackets);
 
     // Step 4: collectibles taxed at flat 28% rate (IRS §1(h)(4))
     const collectibles    = Math.max(0, usCollectibleGainsYTD);
@@ -72,9 +87,10 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
 
     const totalGrossIncome = usOrdinaryIncomeYTD + cg + collectibles;
     const effectiveRate    = totalGrossIncome > 0 ? netLiability / totalGrossIncome : 0;
-    const marginalRate     = _marginalBracketRate(taxableOrdinary, this._brackets_mfj);
+    const marginalRate     = _marginalBracketRate(taxableOrdinary, brackets);
 
     return {
+      filingStatus,
       inputs: {
         grossOrdinaryIncome: usOrdinaryIncomeYTD,
         adjustments:         usNegativeIncomeYTD,
@@ -82,7 +98,7 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
         collectibleGains:    usCollectibleGainsYTD,
         penalties:           usPenaltyYTD,
         foreignTaxCredit:    ftcYTD,
-        standardDeduction:   this._stdDeduction_mfj,
+        standardDeduction:   stdDeduction,
       },
       adjustedGrossIncome: agi,
       taxableIncome:       taxableOrdinary,
@@ -99,7 +115,7 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
         { label: 'Gross Ordinary Income',               amount:  usOrdinaryIncomeYTD },
         { label: 'Adjustments (Pre-tax Contributions)', amount: -usNegativeIncomeYTD },
         { label: 'Adjusted Gross Income',               amount:  agi },
-        { label: 'Standard Deduction',                  amount: -this._stdDeduction_mfj },
+        { label: 'Standard Deduction',                  amount: -stdDeduction },
         { label: 'Taxable Ordinary Income',             amount:  taxableOrdinary },
         { label: 'Tax on Ordinary Income',              amount:  ordinaryTax },
         { label: 'Long-Term Capital Gains Tax',         amount:  capitalGainsTax },

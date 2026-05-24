@@ -47,6 +47,7 @@ import { ServiceRegistry }    from '../../src/services/service-registry.js';
 import { BaseScenario }       from '../../src/scenarios/base-scenario.js';
 import { ScenarioSerializer } from '../../src/scenarios/scenario-serializer.js';
 import { UsRetirementToolset } from '../../src/scenarios/toolsets/us-retirement-toolset.js';
+import { UsTaxRates2025 }      from '../../src/finance/tax/us/us-tax-rates-2025.js';
 
 import { TaxService }           from '../../src/finance/tax-service.js';
 import { DynamicTaxReducer }    from '../../src/finance/tax/dynamic-tax-reducer.js';
@@ -558,4 +559,42 @@ test('joe: drawdown priorities are set correctly on all accounts', () => {
   assert.strictEqual(byKey.brokerageAccount.drawdownPriority,    3);
   assert.strictEqual(byKey.iraAccount.drawdownPriority,          4);
   assert.strictEqual(byKey.inheritedIraAccount.drawdownPriority, 5);
+});
+
+// ─── Filing Status tests ──────────────────────────────────────────────────────
+
+test('joe: single person auto-detected as single filer (usFilingSingle=true)', () => {
+  const { sim } = loadToolsetScenario(JOE_CONFIG);
+  assert.strictEqual(sim.state.usFilingSingle, true,
+    'Joe is the only person — toolset should set usFilingSingle=true');
+});
+
+test('joe: explicit usFilingSingle=false overrides single-person auto-detect', () => {
+  const config = { ...JOE_CONFIG, usFilingSingle: false };
+  const { sim } = loadToolsetScenario(config);
+  assert.strictEqual(sim.state.usFilingSingle, false,
+    'explicit usFilingSingle=false should be honored even with 1 person');
+});
+
+test('joe: usFilingSingle=true causes tax engine to use single brackets ($15k std deduction)', () => {
+  const { sim } = loadToolsetScenario(JOE_CONFIG);
+  assert.strictEqual(sim.state.usFilingSingle, true);
+
+  // Inject a synthetic state to verify the tax engine picks up single-filer deduction
+  const rates = new UsTaxRates2025();
+  const result = rates.computeTax({
+    usOrdinaryIncomeYTD:   20_000,
+    usNegativeIncomeYTD:   0,
+    usCapitalGainsYTD:     0,
+    usCollectibleGainsYTD: 0,
+    usPenaltyYTD:          0,
+    ftcYTD:                0,
+    usFilingSingle:        true,
+  });
+  assert.strictEqual(result.inputs.standardDeduction, 15_000,
+    'single-filer std deduction should be $15,000');
+  assert.strictEqual(result.filingStatus, 'Single');
+  // $20k − $15k = $5k taxable @ 10% = $500
+  assert.strictEqual(result.netLiability, 500,
+    '$20k income − $15k deduction = $5k taxable @ 10% = $500');
 });

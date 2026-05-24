@@ -68,6 +68,26 @@ export class UsTaxRates2025 extends UsTaxRatesBase {
     ];
 
     this._stdDeduction_mfj = 30_000;
-    this._ficaWageBase     = 176_100; // IRS Social Security wage base 2025
+
+    // Single ordinary income brackets (IRS Rev. Proc. 2024-40)
+    this._brackets_single = [
+      [        0, 0.10],
+      [   11_925, 0.12],
+      [   48_475, 0.22],
+      [  103_350, 0.24],
+      [  197_300, 0.32],
+      [  250_525, 0.35],
+      [  626_350, 0.37],
+    ];
+
+    // Single long-term capital gains brackets
+    this._ltcg_single = [
+      [        0, 0.00],
+      [   48_350, 0.15],
+      [  533_400, 0.20],
+    ];
+
+    this._stdDeduction_single = 15_000;
+    this._ficaWageBase        = 176_100; // IRS Social Security wage base 2025
   }
 }

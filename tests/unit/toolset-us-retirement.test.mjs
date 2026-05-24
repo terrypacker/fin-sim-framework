@@ -523,3 +523,71 @@ test('EVT-37: person with socialSecurityMonthly=0 emits no SS actions', () => {
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0,
     'no SS income when socialSecurityMonthly is 0');
 });
+
+// ─── Filing Status tests ──────────────────────────────────────────────────────
+
+test('toolset: 1 person → usFilingSingle is true (auto-detect)', () => {
+  const { sim } = loadToolsetScenario(CUSTOM_JSON);
+  assert.strictEqual(sim.state.usFilingSingle, true,
+    'single person in config should auto-detect as single filer');
+});
+
+test('toolset: 2 persons → usFilingSingle is false (auto-detect)', () => {
+  const twoPersonConfig = {
+    ...CUSTOM_JSON,
+    persons: [
+      ...CUSTOM_JSON.persons,
+      {
+        __type:                'Person',
+        id:                    'spouse',
+        name:                  'Spouse',
+        birthDate:             '1980-06-01',
+        citizen:               ['US'],
+        lifeExpectancy:        88,
+        socialSecurityMonthly: 1_500,
+        monthlyWage:           0,
+        retirementDate:        '2040-01-01',
+      },
+    ],
+  };
+  const { sim } = loadToolsetScenario(twoPersonConfig);
+  assert.strictEqual(sim.state.usFilingSingle, false,
+    'two persons in config should auto-detect as married filing jointly');
+});
+
+test('toolset: config.usFilingSingle=false overrides auto-detect for 1 person', () => {
+  const config = { ...CUSTOM_JSON, usFilingSingle: false };
+  const { sim } = loadToolsetScenario(config);
+  assert.strictEqual(sim.state.usFilingSingle, false,
+    'explicit usFilingSingle=false should override auto-detect');
+});
+
+test('toolset: single filer flag propagates to state (usFilingSingle=true for 1 person)', () => {
+  // CUSTOM_JSON has 1 person → auto-detected as single; tax engine will use $15k std deduction
+  const { sim } = loadToolsetScenario(CUSTOM_JSON);
+  assert.strictEqual(sim.state.usFilingSingle, true,
+    'state.usFilingSingle should be true so the tax engine uses single-filer brackets');
+});
+
+test('toolset: MFJ flag propagates to state (usFilingSingle=false for 2 persons)', () => {
+  const twoPersonConfig = {
+    ...CUSTOM_JSON,
+    persons: [
+      ...CUSTOM_JSON.persons,
+      {
+        __type:                'Person',
+        id:                    'spouse',
+        name:                  'Spouse',
+        birthDate:             '1980-06-01',
+        citizen:               ['US'],
+        lifeExpectancy:        88,
+        socialSecurityMonthly: 1_500,
+        monthlyWage:           0,
+        retirementDate:        '2040-01-01',
+      },
+    ],
+  };
+  const { sim } = loadToolsetScenario(twoPersonConfig);
+  assert.strictEqual(sim.state.usFilingSingle, false,
+    'state.usFilingSingle should be false so the tax engine uses MFJ brackets');
+});

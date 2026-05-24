@@ -32,7 +32,7 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
       title:         `U.S. Federal Income Tax Return — ${taxYear}`,
       country:       'US',
       taxYear,
-      filingStatus:  'Married Filing Jointly',
+      filingStatus:  taxDetail.filingStatus ?? 'Married Filing Jointly',
       sections: [
         {
           heading: 'Income',
