@@ -20,6 +20,8 @@
 import { $, fmtUTC, fmtLocal }     from '../visualization/ui-utils.js';
 import { BaseScenario }            from '../scenarios/base-scenario.js';
 import { ScenarioSerializer }      from '../scenarios/scenario-serializer.js';
+import { ScenarioToolsetRegistry } from '../scenarios/scenario-toolset-registry.js';
+import { UsRetirementToolset }     from '../scenarios/toolsets/us-retirement-toolset.js';
 import { ChartController }          from '../visualization/chart/chart-controller.js';
 import { ChartView }                from '../visualization/chart/chart-view.js';
 import { ChartPresenter }           from '../visualization/chart/chart-presenter.js';
@@ -129,6 +131,9 @@ export class BaseApp extends BaseComponent {
     //TODO Clean up for #146
     const registry = ServiceRegistry.getInstance();
     registry.scenarioRegistry.loadPrebuilt(this._prebuiltScenarios);
+
+    // Register built-in toolsets so custom JSON scenarios can reference them.
+    ScenarioToolsetRegistry.register('us-retirement', UsRetirementToolset);
 
     // Register the generic fallback used when an uploaded scenario has no scenarioId.
     // BaseScenario has no domain defaults — buildDefaultInitialState returns null (empty
@@ -298,16 +303,26 @@ export class BaseApp extends BaseComponent {
     }
     this.scenario.buildSim();
 
-    // Scenarios with serialized config (events/handlers/etc.) restore themselves
-    // via ScenarioSerializer.deserialize() rather than loadDefaults(), which
-    // would otherwise re-create the domain defaults from scratch.
+    // Decide how to populate the scenario's services after buildSim():
+    //   1. Full serialized config → deserialize() restores everything.
+    //   2. Custom JSON with toolset → load persons/accounts, then toolset.setup().
+    //   3. Prebuilt or empty → loadDefaults() creates domain objects from scratch.
     const activeConfig = registry.scenarioService.getActive();
-    const hasSerializedConfig = (activeConfig?.events?.length  > 0)
+    const hasSerializedConfig = (activeConfig?.events?.length   > 0)
                              || (activeConfig?.handlers?.length > 0)
                              || (activeConfig?.actions?.length  > 0)
                              || (activeConfig?.reducers?.length > 0);
+
     if (hasSerializedConfig) {
       ScenarioSerializer.deserialize(activeConfig, registry);
+    } else if (activeConfig?.toolset && ScenarioToolsetRegistry.has(activeConfig.toolset)) {
+      const hasPersonsOrAccounts = (activeConfig?.persons?.length  > 0)
+                                || (activeConfig?.accounts?.length > 0);
+      if (hasPersonsOrAccounts) {
+        ScenarioSerializer.deserializePersonsAccounts(activeConfig, registry);
+      }
+      const toolset = ScenarioToolsetRegistry.get(activeConfig.toolset);
+      toolset.setup(activeConfig, registry);
     } else {
       this.scenario.loadDefaults();
     }
