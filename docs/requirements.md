@@ -94,16 +94,16 @@ Columns: Account · Event description · Balance direction · Balance part · Ea
 
 | ID | Tax Rate Type | US Treatment | AU Treatment | Status |
 |----|--------------|--------------|--------------|--------|
-| TE-1 | Superannuation | N/A | 15% flat + negative income (tax deduction) | ⬜ |
-| TE-2 | Non-Resident Withholding | N/A | 15% | ⬜ |
-| TE-3 | Ordinary Income | Tax brackets minus standard deduction | Tax brackets | ⬜ |
-| TE-4 | Long-Term Capital Gains | % gain based on total income (minus std deduction) | Ordinary Income brackets with 50% discount | ⬜ |
-| TE-5 | Non-Resident Tax Rates | N/A | Different brackets with NO 50% discount | ⬜ |
-| TE-6 | Franking Credit | Same as ordinary income | Tax brackets with 30% discount | ⬜ |
-| TE-7 | Collectibles | 28% of gain | Capital Gains | ⬜ |
-| TE-8 | Social Security Income | 85% of benefit is taxable | Ordinary income | ⬜ |
+| TE-1 | Superannuation | N/A | 15% flat + negative income (tax deduction) | ✅ |
+| TE-2 | Non-Resident Withholding | N/A | 15% | ✅ |
+| TE-3 | Ordinary Income | Tax brackets minus standard deduction | Tax brackets | ✅ |
+| TE-4 | Long-Term Capital Gains | % gain based on total income (minus std deduction) | Ordinary Income brackets with 50% discount | ✅ |
+| TE-5 | Non-Resident Tax Rates | N/A | Different brackets with NO 50% discount | ✅ |
+| TE-6 | Franking Credit | Same as ordinary income | Tax brackets with 30% discount | ✅ |
+| TE-7 | Collectibles | 28% of gain | Capital Gains | ✅ |
+| TE-8 | Social Security Income | 85% of benefit is taxable | Ordinary income | ✅ |
 
-**TE coverage: 0 / 8 tested**
+**TE coverage: 8 / 8 tested**
 
 > Note: The tax rate logic is implemented in the tax modules (`UsTaxModule*`, `AuTaxModule*`) and exercised
 > indirectly through EVT tests. TE requirements need dedicated tests that verify the *rate calculation*
@@ -150,10 +150,10 @@ Columns: Account · Event description · Balance direction · Balance part · Ea
 | Category | Covered | Total | Remaining |
 |----------|---------|-------|-----------|
 | EVT (Events) | 51 | 51 | 0 |
-| TE (Tax Rates) | 0 | 8 | 8 |
+| TE (Tax Rates) | 8 | 8 | 0 |
 | AR (Asset Rules) | 11 | 11 | 0 |
 | INFL (Inflation) | 0 | 5 | 5 |
-| **Total** | **62** | **75** | **13** |
+| **Total** | **70** | **75** | **5** |
 
 ---
 

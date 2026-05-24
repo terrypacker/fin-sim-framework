@@ -61,17 +61,19 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       isAuResident                = false,
     } = state;
 
-    const totalIncome = auOrdinaryIncomeYTD + auCapitalGainsYTD;
-
     if (isAuResident) {
-      const baseTax     = _applyBrackets(Math.max(0, totalIncome), this._brackets);
-      const medicare    = this._computeMedicareLevy(totalIncome);
+      // Resident: apply 50% CGT discount (ATO Division 115)
+      const discountedIncome = auOrdinaryIncomeYTD + auCapitalGainsYTD * 0.5;
+      const baseTax     = _applyBrackets(Math.max(0, discountedIncome), this._brackets);
+      const medicare    = this._computeMedicareLevy(discountedIncome);
       const frankingOff = Math.min(auFrankingCreditYTD, baseTax);
       const ordinaryNet = Math.max(0, baseTax + medicare - frankingOff);
       return ordinaryNet + auSuperTaxYTD;
     } else {
-      const baseTax = _applyBrackets(Math.max(0, totalIncome), this._nonResidentBrackets);
-      return Math.max(0, baseTax) + auSuperTaxYTD + auNonResidentWithholdingYTD;
+      // Non-resident: no CGT discount; NR withholding income taxed at flat 15% rate
+      const totalIncome = auOrdinaryIncomeYTD + auCapitalGainsYTD;
+      const baseTax     = _applyBrackets(Math.max(0, totalIncome), this._nonResidentBrackets);
+      return Math.max(0, baseTax) + auSuperTaxYTD + auNonResidentWithholdingYTD * 0.15;
     }
   }
 
