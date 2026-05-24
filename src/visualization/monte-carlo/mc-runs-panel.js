@@ -36,7 +36,7 @@ function selectRepresentativeRuns(runs, summary) {
   if (!runs.length) return [];
 
   const sorted = [...runs].sort((a, b) => a.finalNetWorthUsd - b.finalNetWorthUsd);
-  const best   = sorted[sorted.length - 1];
+  const best   = sorted.at(-1);
   const worst  = sorted[0];
 
   const p50    = summary.p50 ?? 0;
@@ -63,7 +63,6 @@ function selectRepresentativeRuns(runs, summary) {
   ];
   if (earlyFail) candidates.push({ label: 'Early Failure', run: earlyFail });
 
-  // Deduplicate by seed
   const seen = new Set();
   return candidates.filter(({ run }) => {
     if (!run || seen.has(run.seed)) return false;
@@ -102,7 +101,7 @@ export class McRunsPanel extends BaseComponent {
     const reps = selectRepresentativeRuns(runs, summary);
 
     const wrapper = document.createElement('div');
-    wrapper.style.cssText = 'padding:8px;display:flex;flex-direction:column;gap:6px';
+    wrapper.className = 'mc-runs-wrapper';
 
     const header = document.createElement('div');
     header.className = 'node-header';
@@ -111,7 +110,7 @@ export class McRunsPanel extends BaseComponent {
 
     if (!reps.length) {
       const empty = document.createElement('div');
-      empty.style.cssText = 'color:#475569;font-size:12px;font-family:monospace;padding:8px';
+      empty.className = 'mc-runs-empty';
       empty.textContent = 'No runs to display.';
       wrapper.appendChild(empty);
     } else {
@@ -127,72 +126,52 @@ export class McRunsPanel extends BaseComponent {
 
   _renderIdle() {
     this._container.innerHTML =
-      '<div style="display:flex;height:100%;align-items:center;justify-content:center">' +
-      '<span style="color:#475569;font-size:12px;font-family:monospace;text-align:center;padding:16px">' +
-      'Run Monte Carlo to see representative scenarios.' +
-      '</span></div>';
+      '<div class="mc-idle-msg"><span>Run Monte Carlo to see representative scenarios.</span></div>';
   }
 
   _buildRow(label, run) {
     const card = document.createElement('div');
-    card.style.cssText =
-      'background:#0f172a;border:1px solid #1e293b;border-radius:4px;padding:8px;' +
-      'display:flex;flex-direction:column;gap:4px';
+    card.className = 'mc-run-card';
 
-    // Label + status badges row
     const topRow = document.createElement('div');
-    topRow.style.cssText = 'display:flex;align-items:center;gap:6px';
+    topRow.className = 'mc-run-top-row';
 
     const labelEl = document.createElement('span');
-    labelEl.style.cssText =
-      'font-size:10px;font-weight:600;font-family:monospace;text-transform:uppercase;' +
-      'letter-spacing:0.06em;color:#60a5fa;flex:1';
+    labelEl.className = 'mc-run-label';
     labelEl.textContent = label;
 
     const failBadge = document.createElement('span');
-    if (run.scenarioFailed) {
-      failBadge.style.cssText =
-        'font-size:9px;padding:1px 5px;border-radius:2px;font-family:monospace;' +
-        'background:rgba(248,113,113,0.15);color:#f87171;border:1px solid #f87171';
-      failBadge.textContent = 'FAILED';
-    } else {
-      failBadge.style.cssText =
-        'font-size:9px;padding:1px 5px;border-radius:2px;font-family:monospace;' +
-        'background:rgba(74,222,128,0.1);color:#4ade80;border:1px solid #4ade80';
-      failBadge.textContent = 'OK';
-    }
+    failBadge.className = run.scenarioFailed
+      ? 'mc-run-badge mc-run-badge--fail'
+      : 'mc-run-badge mc-run-badge--ok';
+    failBadge.textContent = run.scenarioFailed ? 'FAILED' : 'OK';
 
     topRow.append(labelEl, failBadge);
     card.appendChild(topRow);
 
-    // Metrics row
     const metricsRow = document.createElement('div');
-    metricsRow.style.cssText =
-      'display:flex;gap:8px;font-size:11px;font-family:monospace;color:#64748b';
+    metricsRow.className = 'mc-run-metrics';
 
     const seedEl = document.createElement('span');
     seedEl.textContent = `seed ${run.seed}`;
 
     const nwEl = document.createElement('span');
-    nwEl.style.cssText = 'color:' + (run.scenarioFailed ? '#f87171' : '#94a3b8');
+    nwEl.className = run.scenarioFailed ? 'mc-run-nw mc-run-nw--fail' : 'mc-run-nw';
     nwEl.textContent = fmtK(run.finalNetWorthUsd);
 
-    const failDate = run.outOfFundsDate instanceof Date
-      ? document.createElement('span')
-      : null;
-    if (failDate) {
-      failDate.style.cssText = 'color:#fbbf24';
+    metricsRow.append(seedEl, nwEl);
+
+    if (run.outOfFundsDate instanceof Date) {
+      const failDate = document.createElement('span');
+      failDate.className = 'mc-run-date';
       failDate.textContent = '⊘ ' + run.outOfFundsDate.toISOString().slice(0, 7);
+      metricsRow.appendChild(failDate);
     }
 
-    metricsRow.append(seedEl, nwEl);
-    if (failDate) metricsRow.appendChild(failDate);
     card.appendChild(metricsRow);
 
-    // Replay button
     const replayBtn = document.createElement('button');
-    replayBtn.className = 'btn btn-primary';
-    replayBtn.style.cssText = 'width:100%;font-size:11px;padding:3px 6px;margin-top:2px';
+    replayBtn.className = 'btn btn-primary mc-replay-btn';
     replayBtn.textContent = '▶ Replay This Run';
     this.listen(replayBtn, 'click', () => {
       if (this.onRunSelected) this.onRunSelected(run);

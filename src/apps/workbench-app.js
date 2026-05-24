@@ -19,7 +19,8 @@
 
 import { WorkbenchShell }              from '../visualization/workbench/workbench-shell.js';
 import { BaseComponent }               from '../visualization/components/base-component.js';
-import { $, fmtUTC, fmtLocal }        from '../visualization/ui-utils.js';
+import { $, fmtUTC }                   from '../visualization/ui-utils.js';
+import { AppDisplaySettings }          from '../visualization/app-display-settings.js';
 import { ScenarioLoader }             from '../scenarios/scenario-loader.js';
 import { ChartController }            from '../visualization/chart/chart-controller.js';
 import { ChartView }                  from '../visualization/chart/chart-view.js';
@@ -151,8 +152,11 @@ export class WorkbenchApp extends BaseComponent {
     this._graphNodeExecHistory = null;
     this._graphNodeLineage     = null;
 
+    // App-lifetime display settings service (timezone, currency, theme + persistence).
+    this.displaySettings = new AppDisplaySettings();
+
     // Created once — survive scenario rebuilds.
-    this._statePanelView   = new StatePanelView();
+    this._statePanelView   = new StatePanelView({ displaySettings: this.displaySettings });
     this._scenarioTabView  = new ScenarioTabView();
     this._reportingService = new JournalReportingService();
     this._taxDocModal      = new TaxDocumentModal();
@@ -424,11 +428,6 @@ export class WorkbenchApp extends BaseComponent {
     //TODO this should be wired to a bus event (AND removed from constructor of tab presenter)
     this.scenarioTabPresenter._refresh();
 
-    // Derive display settings from DOM so rebuilds preserve user selections.
-    const currentFmt      = $('tzSelect')?.value === 'utc' ? fmtUTC : fmtLocal;
-    const currentCurrency = $('displayCurrency')?.value ?? 'USD';
-
-    this._statePanelView.formatDate     = currentFmt;
     this._statePanelView.schemaRegistry = registry.schemaRegistry;
     this._statePanelView.journal        = this.scenario.sim.journal;
     this._statePanelView.executionGraph = this.scenario.sim.executionGraph;
@@ -479,7 +478,7 @@ export class WorkbenchApp extends BaseComponent {
         const node = registry.graph.getNode(nodeId);
         if (node) this._editModal.open(node);
       },
-      formatDate: currentFmt,
+      displaySettings: this.displaySettings,
     });
     this.timelinePresenter.attach(this.scenario.sim.journal);
     this.timelinePresenter.schemaRegistry = registry.schemaRegistry;
@@ -491,8 +490,7 @@ export class WorkbenchApp extends BaseComponent {
       chartView:       this.chartPresenter,
       timeLabel:       $('timeLabel'),
       timeSlider:      $('timeSlider'),
-      formatDate:      currentFmt,
-      displayCurrency: currentCurrency,
+      displaySettings: this.displaySettings,
       onReset: (date, state) => {
         this._animator?.updateDashCards(date);
         this._statePanelView.updateStatePanel(date, state);
@@ -501,11 +499,12 @@ export class WorkbenchApp extends BaseComponent {
 
     // ── Simulation animator ───────────────────────────────────────────────────
     this._animator = new SimulationAnimator({
-      scenario:       this.scenario,
-      timeControls:   this.timeControls,
-      statePanelView: this._statePanelView,
-      chartView:      this.chartPresenter,
-      graphRenderer:  this.configPresenter._graphRenderer,
+      scenario:        this.scenario,
+      timeControls:    this.timeControls,
+      statePanelView:  this._statePanelView,
+      chartView:       this.chartPresenter,
+      graphRenderer:   this.configPresenter._graphRenderer,
+      displaySettings: this.displaySettings,
     });
 
     this._animator.toggleBreakpoint();
@@ -523,7 +522,7 @@ export class WorkbenchApp extends BaseComponent {
     $('timeSlider').value      = 0;
     this.lastSliderValue       = 0;
     this._currentDate          = this.scenario.simStart;
-    $('timeLabel').textContent = this.timeControls.formatDate(this.scenario.simStart);
+    $('timeLabel').textContent = this.displaySettings.formatDate(this.scenario.simStart);
 
     // ── Monte Carlo ───────────────────────────────────────────────────────────
     this.mcPresenter = new MonteCarloPresenter({
@@ -589,6 +588,8 @@ export class WorkbenchApp extends BaseComponent {
     this._graphNodeInspector?.clear();
     this._graphNodeExecHistory?.showNode(null);
     this._graphNodeLineage?.showNode(null);
+    if (this._animator)         this._animator.destroy();
+    if (this.timeControls)      this.timeControls.destroy();
     if (this.chartPresenter)    this.chartPresenter.stopViz();
     if (this.configGraphView)   this.configGraphView.destroy();
     if (this.configPresenter)   this.configPresenter.destroy();
@@ -602,18 +603,22 @@ export class WorkbenchApp extends BaseComponent {
 
   _wireSimControls() {
     $('displayCurrency')?.addEventListener('change', () => {
-      if (this.timeControls) this.timeControls.displayCurrency = $('displayCurrency').value;
-      this.destroyScenario();
-      this.initScenario();
+      this.displaySettings.setCurrency($('displayCurrency').value);
     });
 
     $('tzSelect')?.addEventListener('change', () => {
-      const fmt = $('tzSelect').value === 'utc' ? fmtUTC : fmtLocal;
-      if (this.timeControls) this.timeControls.setFormatDate(fmt);
-      this._statePanelView.formatDate = fmt;
-      this.destroyScenario();
-      this.initScenario();
+      this.displaySettings.setTimezone($('tzSelect').value);
     });
+
+    $('themeSelect')?.addEventListener('change', () => {
+      this.displaySettings.setTheme($('themeSelect').value);
+    });
+
+    // Initialize selects from persisted state so they reflect the loaded settings.
+    const ds = this.displaySettings;
+    if ($('tzSelect'))        $('tzSelect').value        = ds.timezone;
+    if ($('displayCurrency')) $('displayCurrency').value = ds.displayCurrency;
+    if ($('themeSelect'))     $('themeSelect').value     = ds.theme;
 
     $('playPause')?.addEventListener('click', () => {
       if (this._animator?.playing) this._animator.stopPlaying();

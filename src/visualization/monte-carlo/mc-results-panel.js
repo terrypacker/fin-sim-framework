@@ -10,6 +10,7 @@
 
 import * as echarts from 'echarts';
 import { BaseComponent } from '../components/base-component.js';
+import { readThemeColor } from '../theme.js';
 
 const HIST_BUCKETS = 20;
 
@@ -92,16 +93,12 @@ export class McResultsPanel extends BaseComponent {
 
   _renderIdle() {
     this._container.innerHTML =
-      '<div style="display:flex;height:100%;align-items:center;justify-content:center">' +
-      '<span style="color:#475569;font-size:13px;font-family:monospace">' +
-      'Configure and run Monte Carlo to see results.' +
-      '</span></div>';
+      '<div class="mc-idle-msg"><span>Configure and run Monte Carlo to see results.</span></div>';
   }
 
   _renderResults(summary, runs) {
     const wrapper = document.createElement('div');
-    wrapper.style.cssText =
-      'height:100%;display:flex;flex-direction:column;padding:8px;gap:8px;overflow-y:auto;overflow-x:hidden';
+    wrapper.className = 'mc-results-wrapper';
     this._wrapperEl = wrapper;
 
     wrapper.appendChild(this._buildBadges(summary, runs.length));
@@ -110,15 +107,14 @@ export class McResultsPanel extends BaseComponent {
     let fanDiv = null;
     if (fanData) {
       const label = document.createElement('div');
-      label.style.cssText =
-        'font-size:11px;color:#475569;font-family:monospace;padding:2px 0;flex-shrink:0';
+      label.className = 'mc-section-label';
       label.textContent = 'Net Worth — Confidence Bands';
       wrapper.appendChild(label);
 
       const fanWrap = document.createElement('div');
-      fanWrap.style.cssText = 'height:260px;flex-shrink:0';
+      fanWrap.className = 'mc-fan-wrap';
       fanDiv = document.createElement('div');
-      fanDiv.style.cssText = 'width:100%;height:100%';
+      fanDiv.className = 'mc-chart-fill';
       fanWrap.appendChild(fanDiv);
       wrapper.appendChild(fanWrap);
     }
@@ -127,15 +123,14 @@ export class McResultsPanel extends BaseComponent {
     let histDiv = null;
     if (histData.data.length) {
       const label = document.createElement('div');
-      label.style.cssText =
-        'font-size:11px;color:#475569;font-family:monospace;padding:2px 0;flex-shrink:0';
+      label.className = 'mc-section-label';
       label.textContent = 'Terminal Net Worth Distribution';
       wrapper.appendChild(label);
 
       const histWrap = document.createElement('div');
-      histWrap.style.cssText = 'height:160px;flex-shrink:0';
+      histWrap.className = 'mc-hist-wrap';
       histDiv = document.createElement('div');
-      histDiv.style.cssText = 'width:100%;height:100%';
+      histDiv.className = 'mc-chart-fill';
       histWrap.appendChild(histDiv);
       wrapper.appendChild(histWrap);
     }
@@ -157,33 +152,27 @@ export class McResultsPanel extends BaseComponent {
 
   _buildBadges(summary, n) {
     const badges = [
-      { label: 'Success Rate',   value: fmtPct(summary.successRate),           color: '#4ade80' },
-      { label: 'Failures',       value: String(summary.failureCount ?? 0),     color: '#f87171' },
-      { label: 'Median Failure', value: fmtDate(summary.medianOutOfFundsDate), color: '#fbbf24' },
-      { label: 'P90 Net Worth',  value: fmtDollar(summary.p90),                color: '#94a3b8' },
-      { label: 'P50 Net Worth',  value: fmtDollar(summary.p50),                color: '#94a3b8' },
-      { label: 'P10 Net Worth',  value: fmtDollar(summary.p10),                color: '#94a3b8' },
+      { label: 'Success Rate',   value: fmtPct(summary.successRate),           cls: 'mc-badge-value--success' },
+      { label: 'Failures',       value: String(summary.failureCount ?? 0),     cls: 'mc-badge-value--failure' },
+      { label: 'Median Failure', value: fmtDate(summary.medianOutOfFundsDate), cls: 'mc-badge-value--warning' },
+      { label: 'P90 Net Worth',  value: fmtDollar(summary.p90),                cls: 'mc-badge-value--muted'   },
+      { label: 'P50 Net Worth',  value: fmtDollar(summary.p50),                cls: 'mc-badge-value--muted'   },
+      { label: 'P10 Net Worth',  value: fmtDollar(summary.p10),                cls: 'mc-badge-value--muted'   },
     ];
 
     const header = document.createElement('div');
-    header.style.cssText =
-      'font-size:10px;color:#475569;font-family:monospace;margin-bottom:2px;flex-shrink:0';
+    header.className = 'mc-results-header';
     header.textContent = `Results — ${n} runs`;
 
     const grid = document.createElement('div');
-    grid.style.cssText =
-      'display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;flex-shrink:0';
+    grid.className = 'mc-badge-grid';
 
     for (const b of badges) {
       const card = document.createElement('div');
-      card.style.cssText =
-        'background:#0f172a;border:1px solid #1e293b;border-radius:4px;' +
-        'padding:6px 8px;text-align:center;min-width:0';
+      card.className = 'mc-badge-card';
       card.innerHTML =
-        `<div style="font-size:9px;color:#475569;font-family:monospace;margin-bottom:2px;` +
-        `overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.label}</div>` +
-        `<div style="font-size:12px;font-weight:600;color:${b.color};font-family:monospace;` +
-        `overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.value}</div>`;
+        `<div class="mc-badge-label">${b.label}</div>` +
+        `<div class="mc-badge-value ${b.cls}">${b.value}</div>`;
       grid.appendChild(card);
     }
 
@@ -245,13 +234,11 @@ export class McResultsPanel extends BaseComponent {
   }
 
   _createFanChart(container, { p10, p25, p50, p75, p90 }) {
-    // Confidence band data uses the stacking trick: base (invisible) + delta fill
     const outerBase = p10;
     const outerFill = p10.map(([ts, lo], i) => [ts, p90[i][1] - lo]);
     const innerBase = p25;
     const innerFill = p25.map(([ts, lo], i) => [ts, p75[i][1] - lo]);
 
-    // Tooltip lookup by exact timestamp from P50 series
     const tipMap = new Map(p50.map(([ts, v], i) => [ts, {
       p10: p10[i][1], p25: p25[i][1], p50: v, p75: p75[i][1], p90: p90[i][1]
     }]));
@@ -262,6 +249,14 @@ export class McResultsPanel extends BaseComponent {
       emphasis: { disabled: true }, tooltip: { show: false },
     };
 
+    const blueMuted  = readThemeColor('--blue-muted');
+    const textDim    = readThemeColor('--text-dim');
+    const border     = readThemeColor('--border');
+    const borderHi   = readThemeColor('--border-hi');
+    const textPrim   = readThemeColor('--text-primary');
+    const textMuted  = readThemeColor('--text-muted');
+    const bgPanel2   = readThemeColor('--bg-panel2');
+
     const chart = echarts.init(container, null, { renderer: 'canvas' });
     chart.setOption({
       backgroundColor: 'transparent',
@@ -269,25 +264,25 @@ export class McResultsPanel extends BaseComponent {
       grid: { top: 24, right: 16, bottom: 36, left: 16, containLabel: true },
       xAxis: {
         type: 'time',
-        axisLabel: { color: '#475569', fontSize: 10, fontFamily: 'monospace' },
+        axisLabel: { color: textDim, fontSize: 10, fontFamily: 'monospace' },
         splitLine: { show: false },
-        axisLine: { lineStyle: { color: '#1e293b' } },
-        axisTick: { lineStyle: { color: '#1e293b' } },
+        axisLine: { lineStyle: { color: border } },
+        axisTick: { lineStyle: { color: border } },
       },
       yAxis: {
         type: 'value',
-        axisLabel: { color: '#475569', fontSize: 10, fontFamily: 'monospace', formatter: v => fmtK(v) },
-        splitLine: { lineStyle: { color: '#1e293b' } },
+        axisLabel: { color: textDim, fontSize: 10, fontFamily: 'monospace', formatter: v => fmtK(v) },
+        splitLine: { lineStyle: { color: border } },
         axisLine: { show: false },
         axisTick: { show: false },
       },
       tooltip: {
         trigger: 'axis',
-        backgroundColor: '#1e293b',
-        borderColor: '#334155',
+        backgroundColor: bgPanel2,
+        borderColor: borderHi,
         borderWidth: 1,
-        textStyle: { color: '#e2e8f0', fontSize: 10, fontFamily: 'monospace' },
-        axisPointer: { lineStyle: { color: 'rgba(148,163,184,0.3)' } },
+        textStyle: { color: textPrim, fontSize: 10, fontFamily: 'monospace' },
+        axisPointer: { lineStyle: { color: textMuted + '4d' } },
         formatter: params => {
           const p50param = params.find(p => p.seriesId === 'p50');
           if (!p50param) return '';
@@ -295,35 +290,39 @@ export class McResultsPanel extends BaseComponent {
           if (!pt) return '';
           const d  = new Date(p50param.value[0]);
           const ds = d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0');
-          return `<span style="font-size:10px;color:#64748b">${ds}</span><br/>` +
+          return `<span style="font-size:10px;color:${textMuted}">${ds}</span><br/>` +
             `P90: <b>${fmtK(pt.p90)}</b><br/>P75: <b>${fmtK(pt.p75)}</b><br/>` +
             `P50: <b>${fmtK(pt.p50)}</b><br/>P25: <b>${fmtK(pt.p25)}</b><br/>` +
             `P10: <b>${fmtK(pt.p10)}</b>`;
         },
       },
       series: [
-        // Outer band P10→P90
         { ...baseSeriesOpts, id: 'outer-base', data: outerBase, stack: 'outer' },
         { ...baseSeriesOpts, id: 'outer-fill', data: outerFill, stack: 'outer',
-          lineStyle: { opacity: 0 }, areaStyle: { color: 'rgba(59,130,246,0.09)', opacity: 1 } },
-        // Inner band P25→P75
+          lineStyle: { opacity: 0 }, areaStyle: { color: blueMuted + '17', opacity: 1 } },
         { ...baseSeriesOpts, id: 'inner-base', data: innerBase, stack: 'inner' },
         { ...baseSeriesOpts, id: 'inner-fill', data: innerFill, stack: 'inner',
-          lineStyle: { opacity: 0 }, areaStyle: { color: 'rgba(59,130,246,0.16)', opacity: 1 } },
-        // Outer edge lines
+          lineStyle: { opacity: 0 }, areaStyle: { color: blueMuted + '29', opacity: 1 } },
         { id: 'p90-line', type: 'line', data: p90, symbol: 'none', smooth: true,
-          lineStyle: { color: 'rgba(96,165,250,0.28)', width: 1 }, tooltip: { show: false } },
+          lineStyle: { color: blueMuted + '47', width: 1 }, tooltip: { show: false } },
         { id: 'p10-line', type: 'line', data: p10, symbol: 'none', smooth: true,
-          lineStyle: { color: 'rgba(96,165,250,0.28)', width: 1 }, tooltip: { show: false } },
-        // P50 median
+          lineStyle: { color: blueMuted + '47', width: 1 }, tooltip: { show: false } },
         { id: 'p50', name: 'Median (P50)', type: 'line', data: p50, symbol: 'none', smooth: true,
-          lineStyle: { color: '#60a5fa', width: 2.5 } },
+          lineStyle: { color: blueMuted, width: 2.5 } },
       ],
     });
     return chart;
   }
 
   _createHistChart(container, { labels, data, bucketMins }) {
+    const textDim   = readThemeColor('--text-dim');
+    const border    = readThemeColor('--border');
+    const borderHi  = readThemeColor('--border-hi');
+    const textPrim  = readThemeColor('--text-primary');
+    const bgPanel2  = readThemeColor('--bg-panel2');
+    const red       = readThemeColor('--red');
+    const blueMuted = readThemeColor('--blue-muted');
+
     const chart = echarts.init(container, null, { renderer: 'canvas' });
     chart.setOption({
       backgroundColor: 'transparent',
@@ -333,27 +332,27 @@ export class McResultsPanel extends BaseComponent {
         type: 'category',
         data: labels,
         axisLabel: {
-          color: '#475569', fontSize: 9, fontFamily: 'monospace',
+          color: textDim, fontSize: 9, fontFamily: 'monospace',
           rotate: 45,
           interval: Math.max(0, Math.floor(labels.length / 10) - 1),
         },
         splitLine: { show: false },
-        axisLine: { lineStyle: { color: '#1e293b' } },
-        axisTick: { lineStyle: { color: '#1e293b' } },
+        axisLine: { lineStyle: { color: border } },
+        axisTick: { lineStyle: { color: border } },
       },
       yAxis: {
         type: 'value',
-        axisLabel: { color: '#475569', fontSize: 10, fontFamily: 'monospace' },
-        splitLine: { lineStyle: { color: '#1e293b' } },
+        axisLabel: { color: textDim, fontSize: 10, fontFamily: 'monospace' },
+        splitLine: { lineStyle: { color: border } },
         axisLine: { show: false },
         axisTick: { show: false },
       },
       tooltip: {
         trigger: 'axis',
-        backgroundColor: '#1e293b',
-        borderColor: '#334155',
+        backgroundColor: bgPanel2,
+        borderColor: borderHi,
         borderWidth: 1,
-        textStyle: { color: '#e2e8f0', fontSize: 10, fontFamily: 'monospace' },
+        textStyle: { color: textPrim, fontSize: 10, fontFamily: 'monospace' },
         formatter: params => {
           const n = params[0]?.value;
           return `${params[0]?.name}: <b>${n} run${n !== 1 ? 's' : ''}</b>`;
@@ -364,7 +363,7 @@ export class McResultsPanel extends BaseComponent {
         data: data.map((v, i) => ({
           value: v,
           itemStyle: {
-            color: bucketMins[i] < 0 ? 'rgba(248,113,113,0.75)' : 'rgba(96,165,250,0.75)',
+            color: bucketMins[i] < 0 ? red + 'bf' : blueMuted + 'bf',
           },
         })),
         barMaxWidth: 40,

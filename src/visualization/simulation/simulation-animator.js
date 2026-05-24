@@ -32,16 +32,22 @@ const PLAYBACK_THROTTLE_MS = 1000;
 
 export class SimulationAnimator {
 
-  constructor({ scenario, timeControls, statePanelView, chartView, graphRenderer, accountsPresenter }) {
+  constructor({ scenario, timeControls, statePanelView, chartView, graphRenderer, accountsPresenter, displaySettings }) {
     this._scenario          = scenario;
     this._timeControls      = timeControls;
     this._statePanelView    = statePanelView;
     this._chartView         = chartView;
     this._graphRenderer     = graphRenderer ?? null;
     this._accountsPresenter = accountsPresenter ?? null;
+    this._displaySettings   = displaySettings ?? null;
     this._dashCards         = null;   // created in wireSimBus
 
     this.playing = false;
+  }
+
+  destroy() {
+    this._dashCards?.destroy?.();
+    this._dashCards = null;
   }
 
   // ── Playback ──────────────────────────────────────────────────────────────
@@ -148,7 +154,7 @@ export class SimulationAnimator {
     this._timeControls?.wireSimBus(bus);
 
     this._dashCards = new DashCardsComponent({
-      formatDate: (d) => this._statePanelView?.fmtVal(d) ?? d?.toDateString?.() ?? '',
+      displaySettings: this._displaySettings,
     });
     this._dashCards.wireSimBus(bus, this._scenario?.sim);
 

@@ -10,12 +10,7 @@
 
 import * as echarts from 'echarts';
 import { BaseComponent } from '../components/base-component.js';
-
-const COLOR_PALETTE = [
-  '#60a5fa', '#34d399', '#f59e0b', '#f87171', '#a78bfa',
-  '#38bdf8', '#fb923c', '#4ade80', '#e879f9', '#fbbf24',
-  '#94a3b8', '#f472b6'
-];
+import { readThemeColor, CHART_PALETTE } from '../theme.js';
 
 /**
  * ECharts rendering layer. Extends BaseComponent so it participates in
@@ -128,7 +123,7 @@ export class ChartView extends BaseComponent {
     }
   }
 
-  addAnnotation(id, { label, date, color = '#f59e0b', position = 'start' }) {
+  addAnnotation(id, { label, date, color = readThemeColor('--amber'), position = 'start' }) {
     this._annotations[id] = { label, date: new Date(date), color, position };
     if (this._chart) {
       this.scheduleRender(() => this._doChartUpdate());
@@ -173,7 +168,7 @@ export class ChartView extends BaseComponent {
   // ── Private ──────────────────────────────────────────────────────────────────
 
   _colorFor(idx) {
-    return COLOR_PALETTE[idx % COLOR_PALETTE.length];
+    return CHART_PALETTE[idx % CHART_PALETTE.length];
   }
 
   _labelFor(key) {
@@ -280,33 +275,33 @@ export class ChartView extends BaseComponent {
           dataZoom: {
             yAxisIndex: 'none',
             title:      { zoom: 'Select Zoom', back: 'Undo Zoom' },
-            brushStyle: { color: 'rgba(96,165,250,0.08)', borderColor: '#60a5fa', borderWidth: 1 },
+            brushStyle: { color: readThemeColor('--cyan-glow'), borderColor: readThemeColor('--blue-muted'), borderWidth: 1 },
           },
           restore: { title: 'Reset View' },
         },
-        iconStyle: { borderColor: '#475569' },
-        emphasis:  { iconStyle: { borderColor: '#94a3b8' } },
+        iconStyle: { borderColor: readThemeColor('--text-muted') },
+        emphasis:  { iconStyle: { borderColor: readThemeColor('--text-dim') } },
       },
       xAxis: {
         type:  'time',
         axisLabel: {
-          color:      '#94a3b8',
+          color:      readThemeColor('--text-dim'),
           fontSize:   11,
           fontFamily: 'monospace',
         },
         splitLine: { show: false },
-        axisLine:  { lineStyle: { color: 'rgba(148,163,184,0.15)' } },
-        axisTick:  { lineStyle: { color: 'rgba(148,163,184,0.15)' } },
+        axisLine:  { lineStyle: { color: readThemeColor('--border') } },
+        axisTick:  { lineStyle: { color: readThemeColor('--border') } },
       },
       yAxis: {
         type: 'value',
         axisLabel: {
-          color:      '#94a3b8',
+          color:      readThemeColor('--text-dim'),
           fontSize:   11,
           fontFamily: 'monospace',
           formatter:  (val) => Number(val).toLocaleString(),
         },
-        splitLine: { lineStyle: { color: 'rgba(148,163,184,0.08)', width: 1 } },
+        splitLine: { lineStyle: { color: readThemeColor('--border-light'), width: 1 } },
         axisLine:  { show: false },
         axisTick:  { show: false },
       },
@@ -314,13 +309,13 @@ export class ChartView extends BaseComponent {
         trigger:     'item',
         axisPointer: {
           type:       'cross',
-          lineStyle:  { color: 'rgba(148,163,184,0.35)' },
-          crossStyle: { color: 'rgba(148,163,184,0.35)' },
+          lineStyle:  { color: readThemeColor('--border-hi') },
+          crossStyle: { color: readThemeColor('--border-hi') },
         },
-        backgroundColor: '#1e293b',
-        borderColor:     '#334155',
+        backgroundColor: readThemeColor('--bg-panel2'),
+        borderColor:     readThemeColor('--border-hi'),
         borderWidth:     1,
-        textStyle:       { color: '#e2e8f0', fontSize: 11, fontFamily: 'monospace' },
+        textStyle:       { color: readThemeColor('--text-primary'), fontSize: 11, fontFamily: 'monospace' },
         formatter:       (params) => this._fmtTooltip(params),
       },
       dataZoom: [
@@ -387,7 +382,7 @@ export class ChartView extends BaseComponent {
     const lines = [];
     if (dateStr) {
       lines.push(
-          `<span style="font-size:10px;color:#64748b">${dateStr}</span>`
+          `<span style="font-size:10px;color:${readThemeColor('--text-muted')}">${dateStr}</span>`
       );
     }
 

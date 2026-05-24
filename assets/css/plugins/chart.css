@@ -7,14 +7,14 @@
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  background: rgba(248, 113, 113, 0.10);
-  border-bottom: 1px solid rgba(248, 113, 113, 0.35);
-  color: #f87171;
+  background: var(--red-glow);
+  border-bottom: 1px solid var(--red-border);
+  color: var(--red);
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.08em;
   flex-shrink: 0;
 }
 .failure-banner-icon    { font-size: 13px; }
-.failure-banner-deficit { color: #fca5a5; margin-left: 12px; }
-.failure-banner-date    { margin-left: auto; color: #94a3b8; }
+.failure-banner-deficit { color: var(--red); opacity: 0.75; margin-left: 12px; }
+.failure-banner-date    { margin-left: auto; color: var(--text-dim); }

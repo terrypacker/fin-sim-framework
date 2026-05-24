@@ -16,27 +16,37 @@ import { chooseClearMidX } from '../graph-builder/collision-detector.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bus-messages.js';
 import { NodeRendererRegistry } from "./graph/rendering/node-renderer-registry.js";
 import { BACKWARD_MARGIN } from '../graph-builder/graph-metrics.js';
+import { readThemeColor } from '../theme.js';
 
 const NODE_WIDTH  = 180;
 const NODE_HEIGHT = 56;
 const FIT_PAD     = 40;   // padding around nodes when fitting the viewport
 
-const C = {
-  bg:              '#111827',
-  bgBreakpoint:    '#2d1515',
-  border:          '#374151',
-  borderSelected:  '#f59e0b',
-  borderHighlight: '#f97316',
-  borderBp:        '#ef4444',
-  text:            '#e2e8f0',
-  textMuted:       '#6b7280',
-  edge:            '#374151',
-  edgeHighlight:   '#f97316',
-  badgeFired:      '#16a34a',
-  badgeIdle:       '#0891b2',
-  badgeChange:     '#d97706',
-  badgeBp:         '#dc2626',
-};
+function buildColors() {
+  const r = (v, fb) => readThemeColor(v) || fb;
+  return {
+    bg:              r('--bg-panel2',           '#141820'),
+    bgBreakpoint:    r('--red-dim',             '#7a1520'),
+    border:          r('--border-hi',           '#2e3a50'),
+    borderSelected:  r('--amber',               '#f0a500'),
+    borderHighlight: r('--amber',               '#f0a500'),
+    borderBp:        r('--red',                 '#ff4455'),
+    text:            r('--text-primary',        '#d8dde8'),
+    textMuted:       r('--text-muted',          '#8690ab'),
+    borderLight:     r('--border',              '#222a38'),
+    edge:            r('--edge-color',          '#374151'),
+    edgeHighlight:   r('--edge-color-highlight','#f0a500'),
+    badgeFired:      r('--green',               '#39e080'),
+    badgeChangeBg:   r('--amber-dim',           '#a06a00'),
+    badgeChangeFg:   r('--amber',               '#f0a500'),
+    badgeBpBg:       r('--red-dim',             '#7a1520'),
+    badgeBpFg:       r('--red',                 '#ff4455'),
+    green:           r('--green',               '#39e080'),
+    amber:           r('--amber',               '#f0a500'),
+    cyan:            r('--cyan',                '#00d4e8'),
+    blueText:        r('--blue-text',           '#93c5fd'),
+  };
+}
 
 /**
  * EChartsGraphRenderer — two custom series sharing a single cartesian2d
@@ -259,6 +269,8 @@ export class EChartsGraphRenderer extends BaseComponent {
   }
 
   _renderGraph() {
+    this._colors = buildColors();
+
     const serviceChanged =
       this._drainServiceMsgs().length > 0 ||
       this._drainServiceBulkMsgs().length > 0;
@@ -577,20 +589,21 @@ export class EChartsGraphRenderer extends BaseComponent {
     const hasBp      = !!node.data?.breakpoint;
     const hitBp      = !!exec?.breakpointHit;
 
-    let borderColor = C.border;
+    const colors = this._colors ?? buildColors();
+    let borderColor = colors.border;
     let borderWidth = 1;
-    let bgColor     = hitBp ? C.bgBreakpoint : C.bg;
+    let bgColor     = hitBp ? colors.bgBreakpoint : colors.bg;
 
     if (isSelected) {
-      borderColor = C.borderSelected;
+      borderColor = colors.borderSelected;
       borderWidth = 2;
     }
     else if (isHL) {
-      borderColor = C.borderHighlight;
+      borderColor = colors.borderHighlight;
       borderWidth = 2;
     }
     else if (hasBp) {
-      borderColor = C.borderBp;
+      borderColor = colors.borderBp;
       borderWidth = 2;
     }
 
@@ -607,6 +620,7 @@ export class EChartsGraphRenderer extends BaseComponent {
       node,
       exec,
       api,
+      colors,
       textStyle: this._chart.getOption().textStyle,
 
       cx, //center of node x
@@ -653,10 +667,11 @@ export class EChartsGraphRenderer extends BaseComponent {
       { nodeWidth: NODE_WIDTH, nodeHeight: NODE_HEIGHT, sourceYOffset: srcYOff, targetYOffset: tgtYOff, midXOffset: midXOff, loopY }
     );
 
-    const stroke  = hl ? C.edgeHighlight : C.edge;
+    const colors  = this._colors ?? buildColors();
+    const stroke  = hl ? colors.edgeHighlight : colors.edge;
     const lw      = hl ? 3 : 2;
     const opacity = hl ? 1 : 0.7;
-    const [ex, ey] = pts[pts.length - 1];
+    const [ex, ey] = pts.at(-1);
 
     return {
       type: 'group',

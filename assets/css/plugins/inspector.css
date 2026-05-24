@@ -4,7 +4,7 @@
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border-bottom: 1px solid #1e293b;
+  border-bottom: 1px solid var(--border);
   padding-bottom: 4px;
 }
 .data-list-wrap {
@@ -59,8 +59,8 @@
 
 /* ── DATA DIFF ── */
 .diff-label  { font-size: 9px; color: var(--text-muted); letter-spacing: 0.06em; }
-.diff-field  { color: #94a3b8; }
-.diff-before { color: #64748b; word-break: break-word; overflow-wrap: break-word; font-size: 9px; }
-.diff-after  { color: #e5e7eb; word-break: break-word; overflow-wrap: break-word; font-size: 9px; }
-.diff-pos    { color: #34d399; margin-left: 6px; font-size: 9px; }
-.diff-neg    { color: #f87171; margin-left: 6px; font-size: 9px; }
+.diff-field  { color: var(--text-dim); }
+.diff-before { color: var(--text-muted); word-break: break-word; overflow-wrap: break-word; font-size: 9px; }
+.diff-after  { color: var(--text-primary); word-break: break-word; overflow-wrap: break-word; font-size: 9px; }
+.diff-pos    { color: var(--diff-added); margin-left: 6px; font-size: 9px; }
+.diff-neg    { color: var(--diff-removed); margin-left: 6px; font-size: 9px; }

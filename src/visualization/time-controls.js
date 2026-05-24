@@ -12,7 +12,7 @@ import { BaseComponent }              from './components/base-component.js';
 import { PlaybackProgressComponent } from './simulation/playback-progress-component.js';
 
 export class TimeControls extends BaseComponent {
-  constructor({scenario, configPresenter, timelineView, chartView, timeLabel, timeSlider, formatDate, displayCurrency, onReset}) {
+  constructor({ scenario, configPresenter, timelineView, chartView, timeLabel, timeSlider, displaySettings, onReset }) {
     super();
     this.scenario = scenario;
     this.configPresenter = configPresenter;
@@ -20,38 +20,28 @@ export class TimeControls extends BaseComponent {
     this.chartView = chartView;
     this.timeLabel = timeLabel;
     this.timeSlider = timeSlider;
-    this.formatDate = formatDate ?? (d => d.toDateString());
-    this.displayCurrency = displayCurrency ?? 'USD';
+    this.formatDate = displaySettings?.formatDate ?? (d => d.toDateString());
+    this.displayCurrency = displaySettings?.displayCurrency ?? 'USD';
     this.onReset = onReset ?? null;
     // Stack of fractional positions (0–1) visited by stepForward(),
     // so stepBack() can return to exactly the previous event's position.
     this._stepHistory = [];
 
     this._progress = new PlaybackProgressComponent({
-      scenario:   this.scenario,
-      timeSlider: this.timeSlider,
-      timeLabel:  this.timeLabel,
-      formatDate: this.formatDate,
+      scenario:        this.scenario,
+      timeSlider:      this.timeSlider,
+      timeLabel:       this.timeLabel,
+      displaySettings: displaySettings,
     });
     this._registerChild(this._progress);
-  }
 
-  /**
-   * Update the date formatter used across all views.
-   * Takes effect immediately without requiring a simulation rebuild.
-   * @param {function(Date): string} fn
-   */
-  setFormatDate(fn) {
-    this.formatDate = fn;
-    if (this.timelineView) {
-      this.timelineView.formatDate = fn;
-      this.timelineView.expanded.clear();
-      this.timelineView._lastDate = null;
-      this.timelineView._render();
-    }
-    const current = this.scenario?.sim?.currentDate;
-    if (current) {
-      this.timeLabel.textContent = fn(current);
+    if (displaySettings) {
+      this.onCleanup(displaySettings.subscribe(({ formatDate, currency }) => {
+        this.formatDate = formatDate;
+        this.displayCurrency = currency;
+        const current = this.scenario?.sim?.currentDate;
+        if (current) this.timeLabel.textContent = formatDate(current);
+      }));
     }
   }
 

@@ -3,15 +3,15 @@
    ============================================================ */
 
 :root {
-  --wb-bg:       #0f1217;
-  --wb-surface:  #171c23;
-  --wb-surface2: #1f2630;
-  --wb-border:   rgba(255, 255, 255, 0.07);
-  --wb-text:     #e8eef7;
-  --wb-muted:    #91a0b4;
-  --wb-accent:   #5aa2ff;
+  --wb-bg:        var(--bg-panel);
+  --wb-surface:   var(--bg-panel2);
+  --wb-surface2:  var(--bg-panel3);
+  --wb-border:    rgba(255, 255, 255, 0.07);
+  --wb-text:      var(--text-primary);
+  --wb-muted:     var(--text-dim);
+  --wb-accent:    #5aa2ff;
   --wb-accent-bg: rgba(90, 162, 255, 0.14);
-  --wb-gutter-w: 5px;
+  --wb-gutter-w:  5px;
 }
 
 /* ── Shell root ──────────────────────────────────────────── */
@@ -181,7 +181,7 @@
 
 .wb-tab-close:hover {
   opacity: 1;
-  color: #ff7a7a;
+  color: var(--red);
 }
 
 /* ── View area ───────────────────────────────────────────── */

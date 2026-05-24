@@ -24,17 +24,24 @@ import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bu
  */
 export class DashCardsComponent extends BaseComponent {
   /**
-   * @param {{ formatDate: function(Date): string }} opts
+   * @param {{ displaySettings?: import('../app-display-settings.js').AppDisplaySettings, formatDate?: function }} opts
    */
-  constructor({ formatDate } = {}) {
+  constructor({ displaySettings, formatDate } = {}) {
     super();
-    this._formatDate = formatDate ?? (d => d?.toDateString() ?? '');
+    this._formatDate = displaySettings?.formatDate ?? formatDate ?? (d => d?.toDateString() ?? '');
     this._sim        = null;
     this._pendingDate = null;
 
     const noop = () => [];
     this._drainBeginMsgs = noop;
     this._drainEndMsgs   = noop;
+
+    if (displaySettings) {
+      this.onCleanup(displaySettings.subscribe(({ formatDate: fmt }) => {
+        this._formatDate = fmt;
+        this.render();
+      }));
+    }
   }
 
   /**

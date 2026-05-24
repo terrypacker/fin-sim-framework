@@ -9,6 +9,7 @@
  */
 
 import { BaseComponent } from '../components/base-component.js';
+import { readThemeColor } from '../theme.js';
 
 /**
  * GraphNodeExecHistory — NODE HISTORY right-panel tab.
@@ -69,7 +70,7 @@ export class GraphNodeExecHistory extends BaseComponent {
     const node = this._selectedNode;
     if (!node) {
       this._container.innerHTML =
-        '<div style="padding:12px;color:var(--color-text-dim,#888);font-size:12px">Select a node to inspect</div>';
+        '<div style="padding:12px;color:var(--text-dim);font-size:12px">Select a node to inspect</div>';
       return;
     }
 
@@ -105,7 +106,7 @@ export class GraphNodeExecHistory extends BaseComponent {
     if (!instances.length) {
       if (!exec) {
         parts.push(
-          '<div style="padding:8px 12px;color:var(--color-text-dim,#888);font-size:11px">No execution data — run the simulation.</div>'
+          '<div style="padding:8px 12px;color:var(--text-dim);font-size:11px">No execution data — run the simulation.</div>'
         );
       }
       this._container.innerHTML = parts.join('');
@@ -127,9 +128,7 @@ export class GraphNodeExecHistory extends BaseComponent {
     if (this._graphQueryApi && this._graphRenderer) {
       parts.push(`
         <div style="padding:4px 8px">
-          <button data-action="highlight-lineage"
-            style="font-size:10px;padding:2px 8px;border-radius:3px;border:1px solid #f90;
-                   background:rgba(255,153,0,0.12);color:#f90;cursor:pointer;width:100%">
+          <button data-action="highlight-lineage" class="btn btn-primary btn-xs" style="width:100%">
             ⬡ Highlight Lineage
           </button>
         </div>`);
@@ -141,15 +140,15 @@ export class GraphNodeExecHistory extends BaseComponent {
       parts.push('<div class="node-header" style="margin-top:8px">Last State Changes</div>');
       for (const ch of diff) {
         const delta = ch.delta != null
-          ? `<span style="color:#8fa">(${ch.delta > 0 ? '+' : ''}${this._fmt(ch.delta)})</span>`
+          ? `<span class="diff-pos">(${ch.delta > 0 ? '+' : ''}${this._fmt(ch.delta)})</span>`
           : '';
         parts.push(`
           <div class="node-field" style="flex-direction:column;align-items:flex-start;gap:2px;padding:4px 8px">
             <label style="font-weight:600;font-size:10px">${this._esc(ch.field)}</label>
             <div style="display:flex;gap:6px;font-size:11px;font-family:monospace;align-items:center">
-              <span style="color:#888">${this._fmt(ch.before)}</span>
-              <span style="color:#666">→</span>
-              <span style="color:#aef">${this._fmt(ch.after)}</span>
+              <span class="diff-before">${this._fmt(ch.before)}</span>
+              <span class="diff-field">→</span>
+              <span class="diff-after">${this._fmt(ch.after)}</span>
               ${delta}
             </div>
           </div>`);
@@ -159,15 +158,15 @@ export class GraphNodeExecHistory extends BaseComponent {
       parts.push('<div class="node-header" style="margin-top:8px">State Changes (live)</div>');
       for (const ch of exec.stateChanges) {
         const delta = ch.delta != null
-          ? `<span style="color:#8fa">(${ch.delta > 0 ? '+' : ''}${this._fmt(ch.delta)})</span>`
+          ? `<span class="diff-pos">(${ch.delta > 0 ? '+' : ''}${this._fmt(ch.delta)})</span>`
           : '';
         parts.push(`
           <div class="node-field" style="flex-direction:column;align-items:flex-start;gap:2px;padding:4px 8px">
             <label style="font-weight:600;font-size:10px">${this._esc(ch.field)}</label>
             <div style="display:flex;gap:6px;font-size:11px;font-family:monospace;align-items:center">
-              <span style="color:#888">${this._fmt(ch.before)}</span>
-              <span style="color:#666">→</span>
-              <span style="color:#aef">${this._fmt(ch.after)}</span>
+              <span class="diff-before">${this._fmt(ch.before)}</span>
+              <span class="diff-field">→</span>
+              <span class="diff-after">${this._fmt(ch.after)}</span>
               ${delta}
             </div>
           </div>`);
@@ -181,19 +180,19 @@ export class GraphNodeExecHistory extends BaseComponent {
         parts.push('<div class="node-header" style="margin-top:8px">Config Coverage</div>');
         if (missing.length) {
           const chips = missing.map(id =>
-            `<span style="padding:1px 6px;border-radius:3px;font-size:10px;background:#622;color:#faa;margin:1px 2px;display:inline-block">${this._esc(id)}</span>`
+            `<span class="badge-red" style="margin:1px 2px;display:inline-block">${this._esc(id)}</span>`
           ).join('');
           parts.push(`<div class="node-field" style="flex-wrap:wrap"><label>MISSING</label><div>${chips}</div></div>`);
         }
         if (extra.length) {
           const chips = extra.map(id =>
-            `<span style="padding:1px 6px;border-radius:3px;font-size:10px;background:#262;color:#afa;margin:1px 2px;display:inline-block">${this._esc(id)}</span>`
+            `<span class="badge-green" style="margin:1px 2px;display:inline-block">${this._esc(id)}</span>`
           ).join('');
           parts.push(`<div class="node-field" style="flex-wrap:wrap"><label>EXTRA</label><div>${chips}</div></div>`);
         }
       } else if (instances.length) {
         parts.push('<div class="node-header" style="margin-top:8px">Config Coverage</div>');
-        parts.push('<div style="padding:4px 12px;color:#8fa;font-size:11px">✓ Matches config path</div>');
+        parts.push('<div class="diff-pos" style="padding:4px 12px;font-size:11px">✓ Matches config path</div>');
       }
     } catch (_) {
       // diffExecution is best-effort; skip on any error.

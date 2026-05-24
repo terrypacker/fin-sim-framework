@@ -8,7 +8,7 @@
   justify-content: space-between;
   user-select: none;
 }
-.lsp-state-toggle:hover { background: var(--bg-panel2, #1a1a1a); }
+.lsp-state-toggle:hover { background: var(--bg-panel2); }
 
 .lsp-collapse-icon {
   font-size: 8px;
@@ -66,9 +66,9 @@
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  border-bottom: 1px solid #1e293b;
+  border-bottom: 1px solid var(--border);
   padding: 5px 10px 4px;
-  background: var(--bg-active, #1a2234);
+  background: var(--bg-active);
 }
 
 .ad-overview-grid {
@@ -81,7 +81,7 @@
   justify-content: space-between;
   padding: 4px 10px;
   cursor: pointer;
-  border-bottom: 1px solid #1e293b;
+  border-bottom: 1px solid var(--border);
   user-select: none;
 }
 .ad-collapse-header:hover { background: var(--bg-panel2); }
@@ -138,12 +138,12 @@
   padding: 1px 5px;
   border: 1px solid var(--border);
   background: none;
-  color: var(--cyan, #67e8f9);
+  color: var(--cyan);
   border-radius: 2px;
   cursor: pointer;
   flex-shrink: 0;
 }
-.ad-history-btn:hover { border-color: var(--cyan, #67e8f9); background: var(--bg-panel2); }
+.ad-history-btn:hover { border-color: var(--cyan); background: var(--bg-panel2); }
 
 .ad-analytics-toolbar {
   display: flex;

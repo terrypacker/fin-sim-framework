@@ -68,10 +68,7 @@ export class OptRunsPanel extends BaseComponent {
 
   _renderIdle() {
     this._container.innerHTML =
-      '<div style="display:flex;height:100%;align-items:center;justify-content:center;padding:16px">' +
-      '<span style="color:#475569;font-size:12px;font-family:monospace;text-align:center">' +
-      'Run optimization to see top candidates here.' +
-      '</span></div>';
+      '<div class="opt-idle-msg"><span>Run optimization to see top candidates here.</span></div>';
   }
 
   _renderResults(result) {
@@ -79,9 +76,7 @@ export class OptRunsPanel extends BaseComponent {
     const objFn = (OPTIMIZATION_OBJECTIVES[objectiveKey] ?? OPTIMIZATION_OBJECTIVES.MAX_NET_WORTH).evaluate;
 
     const header = document.createElement('div');
-    header.style.cssText =
-      'font-size:11px;color:#475569;font-family:monospace;padding:6px 8px;' +
-      'border-bottom:1px solid #1e293b;text-transform:uppercase;letter-spacing:0.05em';
+    header.className = 'opt-runs-header';
     header.textContent = `Top ${Math.min(TOP_N, candidates.length)} Candidates`;
     this._container.appendChild(header);
 
@@ -100,51 +95,42 @@ export class OptRunsPanel extends BaseComponent {
     const roth    = fmtDollar(c.result.rothFinalBalance);
 
     const row = document.createElement('div');
-    row.style.cssText =
-      `padding:8px;border-bottom:1px solid #1e293b;` +
-      `background:${isBest ? '#1a1a2e' : 'transparent'}`;
+    row.className = isBest ? 'opt-run-row opt-run-row--best' : 'opt-run-row';
 
     // Rank + status header
     const rowHeader = document.createElement('div');
-    rowHeader.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px';
+    rowHeader.className = 'opt-run-rank-row';
     rowHeader.innerHTML = `
-      <span style="font-size:12px;font-weight:600;color:${isBest?'#fbbf24':'#64748b'}">
+      <span class="opt-run-rank ${isBest ? 'opt-run-rank--best' : ''}">
         ${isBest ? '🥇' : `#${rank}`}
       </span>
-      <span style="font-size:10px;padding:1px 5px;border-radius:3px;font-family:monospace;
-                   background:${failed?'#7f1d1d':'#14532d'};color:${failed?'#f87171':'#4ade80'}">
+      <span class="opt-run-status ${failed ? 'opt-run-status--failed' : 'opt-run-status--ok'}">
         ${failed ? 'FAILED' : 'OK'}
       </span>`;
     row.appendChild(rowHeader);
 
     // Param list
     const paramDiv = document.createElement('div');
-    paramDiv.style.cssText =
-      'font-size:11px;color:#94a3b8;font-family:monospace;white-space:pre;' +
-      'margin-bottom:6px;line-height:1.5';
+    paramDiv.className = 'opt-run-params';
     paramDiv.textContent = params || '(no overrides)';
     row.appendChild(paramDiv);
 
     // Metrics
     const metrics = document.createElement('div');
-    metrics.style.cssText =
-      'display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-bottom:6px';
+    metrics.className = 'opt-run-metrics';
     metrics.innerHTML = `
-      <div style="font-size:10px;color:#64748b;font-family:monospace">Score</div>
-      <div style="font-size:11px;color:${isBest?'#fbbf24':'#a78bfa'};font-family:monospace;
-                  font-weight:${isBest?600:400};text-align:right">${score}</div>
-      <div style="font-size:10px;color:#64748b;font-family:monospace">Net Worth</div>
-      <div style="font-size:11px;color:#60a5fa;font-family:monospace;text-align:right">${nw}</div>
-      <div style="font-size:10px;color:#64748b;font-family:monospace">Roth Balance</div>
-      <div style="font-size:11px;color:#34d399;font-family:monospace;text-align:right">${roth}</div>`;
+      <div class="opt-run-metric-label">Score</div>
+      <div class="opt-run-metric-value ${isBest ? 'opt-run-metric-value--score-best' : 'opt-run-metric-value--score'}">${score}</div>
+      <div class="opt-run-metric-label">Net Worth</div>
+      <div class="opt-run-metric-value opt-run-metric-value--nw">${nw}</div>
+      <div class="opt-run-metric-label">Roth Balance</div>
+      <div class="opt-run-metric-value opt-run-metric-value--roth">${roth}</div>`;
     row.appendChild(metrics);
 
     // Apply button
     const applyBtn = document.createElement('button');
-    applyBtn.className   = 'btn btn-sm';
-    applyBtn.style.cssText =
-      `width:100%;font-family:monospace;font-size:11px;` +
-      `${isBest ? 'border-color:#fbbf24;color:#fbbf24' : ''}`;
+    applyBtn.className = isBest ? 'btn btn-sm opt-apply-btn--best' : 'btn btn-sm';
+    applyBtn.style.width = '100%';
     applyBtn.textContent = isBest ? '★ Apply Best' : '↺ Apply This';
 
     this.listen(applyBtn, 'click', () => {

@@ -11,6 +11,7 @@
 import * as echarts from 'echarts';
 import { BaseComponent }        from '../components/base-component.js';
 import { OPTIMIZATION_OBJECTIVES } from '../../finance/optimization/optimization-objectives.js';
+import { readThemeColor }       from '../theme.js';
 
 const MAX_CHART_BARS = 30;
 
@@ -95,10 +96,7 @@ export class OptResultsPanel extends BaseComponent {
 
   _renderIdle() {
     this._container.innerHTML =
-      '<div style="display:flex;height:100%;align-items:center;justify-content:center">' +
-      '<span style="color:#475569;font-size:13px;font-family:monospace">' +
-      'Configure and run Optimization to see results.' +
-      '</span></div>';
+      '<div class="opt-idle-msg"><span>Configure and run Optimization to see results.</span></div>';
   }
 
   _renderResults(result) {
@@ -106,15 +104,13 @@ export class OptResultsPanel extends BaseComponent {
     const objFn = (OPTIMIZATION_OBJECTIVES[objectiveKey] ?? OPTIMIZATION_OBJECTIVES.MAX_NET_WORTH).evaluate;
 
     const wrapper = document.createElement('div');
-    wrapper.style.cssText =
-      'height:100%;display:flex;flex-direction:column;padding:8px;gap:8px;overflow-y:auto;overflow-x:hidden';
+    wrapper.className = 'opt-results-wrapper';
     this._wrapperEl = wrapper;
 
     wrapper.appendChild(this._buildBadges(candidates, totalRuns, objective, objFn));
 
     const chartLabel = document.createElement('div');
-    chartLabel.style.cssText =
-      'font-size:11px;color:#475569;font-family:monospace;padding:2px 0;flex-shrink:0';
+    chartLabel.className = 'opt-section-label';
     chartLabel.textContent = `Candidate Scores (top ${Math.min(candidates.length, MAX_CHART_BARS)})`;
     wrapper.appendChild(chartLabel);
 
@@ -126,8 +122,7 @@ export class OptResultsPanel extends BaseComponent {
     wrapper.appendChild(chartWrap);
 
     const tableLabel = document.createElement('div');
-    tableLabel.style.cssText =
-      'font-size:11px;color:#475569;font-family:monospace;padding:2px 0;flex-shrink:0';
+    tableLabel.className = 'opt-section-label';
     tableLabel.textContent = `All ${candidates.length} Candidates`;
     wrapper.appendChild(tableLabel);
 
@@ -147,32 +142,27 @@ export class OptResultsPanel extends BaseComponent {
     const failures = candidates.filter(c => c.result.scenarioFailed).length;
 
     const badges = [
-      { label: 'Best Score',     value: best  ? fmtDollar(objFn(best.result))  : '—', color: '#fbbf24' },
-      { label: 'Worst Score',    value: worst ? fmtDollar(objFn(worst.result)) : '—', color: '#94a3b8' },
-      { label: 'Candidates',     value: String(totalRuns),                              color: '#a78bfa' },
-      { label: 'Failures',       value: String(failures),                               color: failures ? '#f87171' : '#4ade80' },
-      { label: 'Best Net Worth', value: best  ? fmtDollar(best.result.finalNetWorthUsd) : '—', color: '#60a5fa' },
-      { label: 'Best Roth Bal',  value: best  ? fmtDollar(best.result.rothFinalBalance)  : '—', color: '#34d399' },
+      { label: 'Best Score',     value: best  ? fmtDollar(objFn(best.result))  : '—', cls: 'opt-badge-value--best-score' },
+      { label: 'Worst Score',    value: worst ? fmtDollar(objFn(worst.result)) : '—', cls: 'opt-badge-value--worst-score' },
+      { label: 'Candidates',     value: String(totalRuns),                              cls: 'opt-badge-value--candidates' },
+      { label: 'Failures',       value: String(failures),                               cls: failures ? 'opt-badge-value--failures' : 'opt-badge-value--failures-ok' },
+      { label: 'Best Net Worth', value: best  ? fmtDollar(best.result.finalNetWorthUsd) : '—', cls: 'opt-badge-value--nw' },
+      { label: 'Best Roth Bal',  value: best  ? fmtDollar(best.result.rothFinalBalance)  : '—', cls: 'opt-badge-value--roth' },
     ];
 
     const header = document.createElement('div');
-    header.style.cssText =
-      'font-size:10px;color:#475569;font-family:monospace;margin-bottom:2px;flex-shrink:0';
+    header.className = 'opt-section-label';
     header.textContent = `Results — ${objectiveLabel}`;
 
     const grid = document.createElement('div');
-    grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;flex-shrink:0';
+    grid.className = 'opt-badge-grid';
 
     for (const b of badges) {
       const card = document.createElement('div');
-      card.style.cssText =
-        'background:#0f172a;border:1px solid #1e293b;border-radius:4px;' +
-        'padding:6px 8px;text-align:center;min-width:0';
+      card.className = 'opt-badge-card';
       card.innerHTML =
-        `<div style="font-size:9px;color:#475569;font-family:monospace;margin-bottom:2px;` +
-        `overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.label}</div>` +
-        `<div style="font-size:12px;font-weight:600;color:${b.color};font-family:monospace;` +
-        `overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.value}</div>`;
+        `<div class="opt-badge-label">${b.label}</div>` +
+        `<div class="opt-badge-value ${b.cls}">${b.value}</div>`;
       grid.appendChild(card);
     }
 
@@ -196,24 +186,24 @@ export class OptResultsPanel extends BaseComponent {
       xAxis: {
         type: 'category',
         data: labels,
-        axisLabel: { color: '#475569', fontSize: 9, fontFamily: 'monospace' },
+        axisLabel: { color: readThemeColor('--text-muted'), fontSize: 9, fontFamily: 'monospace' },
         splitLine: { show: false },
-        axisLine: { lineStyle: { color: '#1e293b' } },
-        axisTick: { lineStyle: { color: '#1e293b' } },
+        axisLine: { lineStyle: { color: readThemeColor('--border') } },
+        axisTick: { lineStyle: { color: readThemeColor('--border') } },
       },
       yAxis: {
         type: 'value',
-        axisLabel: { color: '#475569', fontSize: 10, fontFamily: 'monospace', formatter: v => fmtK(v) },
-        splitLine: { lineStyle: { color: '#1e293b' } },
+        axisLabel: { color: readThemeColor('--text-muted'), fontSize: 10, fontFamily: 'monospace', formatter: v => fmtK(v) },
+        splitLine: { lineStyle: { color: readThemeColor('--border-light') } },
         axisLine: { show: false },
         axisTick: { show: false },
       },
       tooltip: {
         trigger: 'axis',
-        backgroundColor: '#1e293b',
-        borderColor: '#334155',
+        backgroundColor: readThemeColor('--bg-panel2'),
+        borderColor: readThemeColor('--border-hi'),
         borderWidth: 1,
-        textStyle: { color: '#e2e8f0', fontSize: 10, fontFamily: 'monospace' },
+        textStyle: { color: readThemeColor('--text-primary'), fontSize: 10, fontFamily: 'monospace' },
         formatter: params => {
           const idx = params[0]?.dataIndex;
           if (idx == null) return '';
@@ -225,9 +215,9 @@ export class OptResultsPanel extends BaseComponent {
         data: top.map((c, i) => ({
           value: data[i],
           itemStyle: {
-            color: c.result.scenarioFailed ? 'rgba(248,113,113,0.8)'
-              : i === 0                    ? 'rgba(251,191,36,0.85)'
-                                           : 'rgba(167,139,250,0.7)',
+            color: c.result.scenarioFailed ? `${readThemeColor('--red')}cc`
+              : i === 0                    ? `${readThemeColor('--amber')}d9`
+                                           : `${readThemeColor('--purple')}b3`,
           },
         })),
         barMaxWidth: 40,
@@ -239,18 +229,17 @@ export class OptResultsPanel extends BaseComponent {
 
   _buildTable(candidates, objFn) {
     const table = document.createElement('table');
-    table.style.cssText =
-      'width:100%;border-collapse:collapse;font-family:monospace;font-size:11px;flex-shrink:0';
+    table.className = 'opt-table-wrap';
 
     const thead = document.createElement('thead');
     thead.innerHTML = `
-      <tr style="border-bottom:1px solid #334155">
-        <th style="padding:4px 6px;color:#64748b;text-align:center;font-weight:400;width:32px">#</th>
-        <th style="padding:4px 6px;color:#64748b;text-align:left;font-weight:400">Parameters</th>
-        <th style="padding:4px 6px;color:#64748b;text-align:right;font-weight:400">Score</th>
-        <th style="padding:4px 6px;color:#64748b;text-align:right;font-weight:400">Net Worth</th>
-        <th style="padding:4px 6px;color:#64748b;text-align:right;font-weight:400">Roth</th>
-        <th style="padding:4px 6px;color:#64748b;text-align:center;font-weight:400">OK?</th>
+      <tr class="opt-table-thead-row">
+        <th class="opt-table-th opt-table-th--center" style="width:32px">#</th>
+        <th class="opt-table-th opt-table-th--left">Parameters</th>
+        <th class="opt-table-th opt-table-th--right">Score</th>
+        <th class="opt-table-th opt-table-th--right">Net Worth</th>
+        <th class="opt-table-th opt-table-th--right">Roth</th>
+        <th class="opt-table-th opt-table-th--center">OK?</th>
       </tr>`;
     table.appendChild(thead);
 
@@ -261,23 +250,17 @@ export class OptResultsPanel extends BaseComponent {
       const failed = c.result.scenarioFailed;
 
       const tr = document.createElement('tr');
-      tr.style.cssText =
-        `border-bottom:1px solid #0f172a;` +
-        `background:${isBest ? '#1a1a2e' : i % 2 === 0 ? 'transparent' : '#0f172a'}`;
-
-      const rankColor = isBest ? '#fbbf24' : '#64748b';
-      const rankTxt   = isBest ? '🥇' : String(rank);
+      tr.className = isBest ? 'opt-table-row opt-table-row--best'
+                   : i % 2 !== 0 ? 'opt-table-row opt-table-row--alt'
+                   : 'opt-table-row';
 
       tr.innerHTML = `
-        <td style="padding:3px 6px;text-align:center;color:${rankColor};font-weight:${isBest ? 600 : 400}">${rankTxt}</td>
-        <td style="padding:3px 6px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;
-                   white-space:nowrap;max-width:200px" title="${fmtCandidate(c.candidate)}">
-          ${fmtCandidate(c.candidate)}
-        </td>
-        <td style="padding:3px 6px;text-align:right;color:${isBest ? '#fbbf24' : '#a78bfa'}">${fmtDollar(objFn(c.result))}</td>
-        <td style="padding:3px 6px;text-align:right;color:#60a5fa">${fmtK(c.result.finalNetWorthUsd)}</td>
-        <td style="padding:3px 6px;text-align:right;color:#34d399">${fmtK(c.result.rothFinalBalance)}</td>
-        <td style="padding:3px 6px;text-align:center;color:${failed ? '#f87171' : '#4ade80'}">${failed ? 'FAIL' : 'OK'}</td>`;
+        <td class="opt-table-td ${isBest ? 'opt-table-td--rank-best' : 'opt-table-td--rank'}">${isBest ? '🥇' : String(rank)}</td>
+        <td class="opt-table-td opt-table-td--params" title="${fmtCandidate(c.candidate)}">${fmtCandidate(c.candidate)}</td>
+        <td class="opt-table-td ${isBest ? 'opt-table-td--score-best' : 'opt-table-td--score'}">${fmtDollar(objFn(c.result))}</td>
+        <td class="opt-table-td opt-table-td--nw">${fmtK(c.result.finalNetWorthUsd)}</td>
+        <td class="opt-table-td opt-table-td--roth">${fmtK(c.result.rothFinalBalance)}</td>
+        <td class="opt-table-td ${failed ? 'opt-table-td--fail' : 'opt-table-td--ok'}">${failed ? 'FAIL' : 'OK'}</td>`;
 
       tbody.appendChild(tr);
     });
