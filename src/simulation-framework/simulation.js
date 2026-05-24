@@ -160,12 +160,13 @@ export class Simulation {
 
     //Publish the event occurred message
     this.bus.publish(new EventStartBusMessage({
-      date: this.currentDate,
+      date: new Date(this.currentDate),
+      sim: this,
+      stateSnapshot: structuredClone(this.state),
       payload: {
         event: event,
-        sim: this,
-        stateSnapshot: this.state
-      }}));
+      }
+    }));
 
     for (const entry of handlers) {
       const actions = entry.call({
@@ -196,12 +197,13 @@ export class Simulation {
 
     //Publish the EVENT_OCCURRENCE_END message
     this.bus.publish(new EventEndBusMessage({
-      date: this.currentDate,
+      date: new Date(this.currentDate),
+      sim: this,
+      stateSnapshot: structuredClone(this.state),
       payload: {
         event: event,
-        sim: this,
-        stateSnapshot: this.state
-      }}));
+      }
+    }));
   }
 
   applyActions(actions, sourceEvent) {
@@ -237,14 +239,22 @@ export class Simulation {
         const result = reducerWrapper.fn(this.state, action, this.currentDate);
 
         //Publish the REDUCER_RESULT message
+        let stateSnapshot;
+        if(!result) {
+          stateSnapshot = prevState;
+        }else if(result.state) {
+          stateSnapshot = structuredClone(result.state);
+        } else{
+          stateSnapshot = structuredClone(result);;
+        }
         this.bus.publish(new ReducerResultMessage({
-          date: this.currentDate,
+          date: new Date(this.currentDate),
+          sim: this,
+          stateSnapshot: stateSnapshot,
           payload: {
-            reducer: reducerWrapper.reducer,
-            result: result,
-            sim: this,
-            stateSnapshot: this.state
-          }}));
+            reducer: reducerWrapper.reducer
+          }
+        }));
 
         // Support multiple reducer return styles
         if (!result) continue;
@@ -372,6 +382,8 @@ export class Simulation {
                   nextState,
                   sourceEvent
                 }) {
+    const actionClone = structuredClone(action)
+    const stateSnapshot = structuredClone(nextState);
     const node = new ActionNode({
       id: action._id,
       type: action.type,
@@ -380,19 +392,24 @@ export class Simulation {
       parent: parentId,
       children: [],
 
-      action: structuredClone(action),
+      action: actionClone,
       reducer: reducerName,
 
       stateBefore: prevState,
-      stateAfter: structuredClone(nextState),
+      stateAfter: stateSnapshot,
       sourceEvent: sourceEvent
     });
     this.actionGraph.addActionNode(node);
 
     //Emit debug actions to track nodes
     this.bus.publish(new ActionResultMessage({
-      date: new Date(this.currentDate),
-      payload: node
+      date: node.date,
+      sim: this,
+      payload: {
+        action: action,
+        ...node
+      },
+      stateSnapshot: stateSnapshot
     }));
   }
 }

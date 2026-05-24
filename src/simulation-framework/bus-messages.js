@@ -55,10 +55,9 @@ export class SimulationBusMessage extends BusMessage {
  * Published once per Event occurrence at the start.
  * Always has type 'EVENT_OCCURRENCE_START'.
  */
-export class EventStartBusMessage extends BusMessage {
-  constructor({ date, payload }) {
-    super({ type: SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START, date });
-    this.payload = payload;
+export class EventStartBusMessage extends SimulationBusMessage {
+  constructor({ date, sim, payload, stateSnapshot }) {
+    super({ type: SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_START, date, sim, payload, stateSnapshot });
   }
 }
 
@@ -66,10 +65,9 @@ export class EventStartBusMessage extends BusMessage {
  * Published once per Event occurrence at the end after the event is complete.
  * Always has type 'EVENT_OCCURRENCE_END'.
  */
-export class EventEndBusMessage extends BusMessage {
-  constructor({ date, payload }) {
-    super({ type: SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_END, date });
-    this.payload = payload;
+export class EventEndBusMessage extends SimulationBusMessage {
+  constructor({ date, sim, payload, stateSnapshot }) {
+    super({ type: SIMULATION_BUS_MESSAGES.EVENT_OCCURRENCE_END, date, sim, payload, stateSnapshot });
   }
 }
 
@@ -77,10 +75,9 @@ export class EventEndBusMessage extends BusMessage {
  * Published once per each Action processed an event occurrence.
  * Always has type 'HANDLED_EVENT'.
  */
-export class EventHandledMessage extends BusMessage {
-  constructor({ date, payload }) {
-    super({ type: SIMULATION_BUS_MESSAGES.HANDLED_EVENT, date });
-    this.payload = payload;
+export class EventHandledMessage extends SimulationBusMessage {
+  constructor({ date, sim, payload, stateSnapshot }) {
+    super({ type: SIMULATION_BUS_MESSAGES.HANDLED_EVENT, date, sim, payload, stateSnapshot });
   }
 }
 
@@ -88,10 +85,9 @@ export class EventHandledMessage extends BusMessage {
  * Published once per Action occurrence.
  * Always has type 'ACTION_RESULT'.
  */
-export class ActionResultMessage extends BusMessage {
-  constructor({ date, payload }) {
-    super({ type: SIMULATION_BUS_MESSAGES.ACTION_RESULT, date });
-    this.payload = payload;
+export class ActionResultMessage extends SimulationBusMessage {
+  constructor({ date, sim, payload, stateSnapshot }) {
+    super({ type: SIMULATION_BUS_MESSAGES.ACTION_RESULT, date, sim, payload, stateSnapshot });
   }
 }
 
@@ -99,21 +95,9 @@ export class ActionResultMessage extends BusMessage {
  * Published once per Reducer execution.
  * Always has type 'REDUCER_RESULT'.
  */
-export class ReducerResultMessage extends BusMessage {
-  constructor({ date, payload }) {
-    super({ type: SIMULATION_BUS_MESSAGES.REDUCER_RESULT, date });
-    this.payload = payload;
-  }
-}
-
-/**
- * Published once per ActionNode added to the SimulationEventGraph.
- * Always has type 'DEBUG_ACTION'. Used by the graph visualizer.
- */
-export class DebugActionBusMessage extends BusMessage {
-  constructor({ date, payload }) {
-    super({ type: 'DEBUG_ACTION', date });
-    this.payload = payload;
+export class ReducerResultMessage extends SimulationBusMessage {
+  constructor({ date, sim, payload, stateSnapshot }) {
+    super({ type: SIMULATION_BUS_MESSAGES.REDUCER_RESULT, date, sim, payload, stateSnapshot });
   }
 }
 
