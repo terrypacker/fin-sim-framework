@@ -22,6 +22,11 @@ import { BaseScenario }            from '../scenarios/base-scenario.js';
 import { ScenarioSerializer }      from '../scenarios/scenario-serializer.js';
 import { ScenarioToolsetRegistry } from '../scenarios/scenario-toolset-registry.js';
 import { UsRetirementToolset }     from '../scenarios/toolsets/us-retirement-toolset.js';
+import { ToolsetRegistry }         from '../scenarios/toolsets/toolset-registry.js';
+import { ScenarioCompiler }        from '../scenarios/toolsets/scenario-compiler.js';
+import { US_BANKING }              from '../scenarios/toolsets/us-banking-toolset.js';
+import { US_TAX }                  from '../scenarios/toolsets/us-tax-toolset.js';
+import { US_RETIREMENT }           from '../scenarios/toolsets/us-retirement-toolset.js';
 import { ChartController }          from '../visualization/chart/chart-controller.js';
 import { ChartView }                from '../visualization/chart/chart-view.js';
 import { ChartPresenter }           from '../visualization/chart/chart-presenter.js';
@@ -377,6 +382,18 @@ export class BaseApp extends BaseComponent {
 
     if (hasSerializedConfig) {
       ScenarioSerializer.deserialize(activeConfig, registry);
+    } else if (activeConfig?.toolsets && Array.isArray(activeConfig.toolsets)) {
+      const hasPersonsOrAccounts = (activeConfig?.persons?.length  > 0)
+                                || (activeConfig?.accounts?.length > 0);
+      if (hasPersonsOrAccounts) {
+        ScenarioSerializer.deserializePersonsAccounts(activeConfig, registry);
+      }
+      const toolsetRegistry = new ToolsetRegistry();
+      toolsetRegistry.register(US_BANKING);
+      toolsetRegistry.register(US_TAX);
+      toolsetRegistry.register(US_RETIREMENT);
+      const compiler = new ScenarioCompiler(toolsetRegistry);
+      compiler.compile(activeConfig, registry);
     } else if (activeConfig?.toolset && ScenarioToolsetRegistry.has(activeConfig.toolset)) {
       const hasPersonsOrAccounts = (activeConfig?.persons?.length  > 0)
                                 || (activeConfig?.accounts?.length > 0);
