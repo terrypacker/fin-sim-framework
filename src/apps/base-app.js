@@ -214,7 +214,7 @@ export class BaseApp {
       graphRoot: document.getElementById('graphRoot'),
       graphNodes: document.getElementById('graphNodes'),
       graphEdges: document.getElementById('graphEdges'),
-      nodeTemplate: document.getElementById('tpl-node-details'),
+      nodeDetailsTemplate: document.getElementById('tpl-node-details'),
       displayNodeStateChanges: (changes) => this.showNodeStateChanges(changes)
     });
 
