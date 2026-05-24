@@ -8,7 +8,14 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 import { ServiceRegistry } from '../services/service-registry.js';
-import { PRIORITY } from '../simulation-framework/reducers.js';
+import {PRIORITY, ScriptedReducer} from '../simulation-framework/reducers.js';
+import {
+  ActionBuilder
+} from "../simulation-framework/builders/action-builder.js";
+import {
+  FieldValueAction,
+  ScriptedAction
+} from "../simulation-framework/actions.js";
 
 export class ConfigBuilder {
 
@@ -149,14 +156,13 @@ export class ConfigBuilder {
   }
 
   // ─── Template helpers ─────────────────────────────────────────────────────
-
   _getTemplate(templateId) {
     //TODO Note here that since we don't have a single root node in all our templates
     // we are actually working with a Fragment here, so you can't set css classlist or id fields
     // to fix this we need to wrap everything in a root node for all the templates and then
     // use tmpl.content.firstElementChild.cloneNode(true);
     const tmpl = document.getElementById(templateId);
-    return tmpl.content.cloneNode(true);
+    return tmpl.content.firstElementChild.cloneNode(true);
   }
 
   _editNode(event, node) {
@@ -307,7 +313,6 @@ export class ConfigBuilder {
   /* ─────────────────────────────  ACTION EDITOR  ───────────────────────────── */
   _renderActionEditor(node) {
     const el = this._getTemplate('tpl-action-editor');
-
     const description = el.querySelector('[data-id="description"]');
     description.innerText = node.getDescription();
 
@@ -344,7 +349,7 @@ export class ConfigBuilder {
           {type: type.value});
     });
 
-    this._renderActionConfig(node, configWrap);
+    this._renderActionConfig(node, configWrap, el);
 
     const actionHandlerCount = el.querySelector('#action-handler-count');
     const actionHandlerGrid = el.querySelector('#action-handlers');
@@ -361,7 +366,7 @@ export class ConfigBuilder {
   }
 
   /* ───────────────────── ACTION CONFIG EDITOR ─────────────────────── */
-  _renderActionConfig(node, container) {
+  _renderActionConfig(node, container, parent) {
     container.innerHTML = '';
 
     let wrap = null;
@@ -388,6 +393,31 @@ export class ConfigBuilder {
         wrap = this._getTemplate('tpl-scripted-action-editor');
         wrap.querySelector('[data-field="fieldName"]').value = node.fieldName || '';
         wrap.querySelector('[data-field="script"]').value    = node.script || '';
+        wrap.querySelector('.script-validate-button').addEventListener('click', (evt) => {
+          const resultDiv = wrap.querySelector('.code-test-result');
+          const type = parent.querySelector('[data-id="type"]').value;
+          const name = parent.querySelector('[data-id="name"]').value;
+          const fieldName = wrap.querySelector('[data-field="fieldName"]').value;
+          const script = wrap.querySelector('[data-field="script"]').value;
+
+          //TODO Replace with builder once we have one
+          try {
+            const scriptAction = new ScriptedAction(type, name, fieldName, script);
+            const state = {}; //TODO Get default state from scenario
+            const reducers = []; //TODO Get the list from graph
+            const date = new Date();
+            scriptAction.mutate(state, reducers, date);
+            const output = {
+              state: state,
+              reducers: reducers,
+              action: scriptAction
+            };
+            resultDiv.innerText = JSON.stringify(output, null, 2);
+          }catch(e) {
+            resultDiv.innerText = `Error: ${e.message}`;
+          }
+          resultDiv.style = ''; //Show it
+        });
         break;
     }
 
@@ -457,7 +487,7 @@ export class ConfigBuilder {
           .updateReducer(node.id, { priority: parseInt(prioritySelect.value, 10) });
     };
 
-    this._renderReducerConfig(node, configWrap);
+    this._renderReducerConfig(node, configWrap, el);
 
     const reducerReducedActionCount = el.querySelector('#reducer-reduced-actions-count');
     const reducerReducedActions = el.querySelector('#reducer-reduced-actions');
@@ -472,7 +502,7 @@ export class ConfigBuilder {
   }
 
   /* ───────────────────── REDUCER CONFIG EDITOR ─────────────────────── */
-  _renderReducerConfig(node, container) {
+  _renderReducerConfig(node, container, parent) {
     container.innerHTML = '';
 
     let wrap;
@@ -497,6 +527,31 @@ export class ConfigBuilder {
         wrap = this._getTemplate('tpl-scripted-reducer-editor');
         wrap.querySelector('[data-field="fieldName"]').value = node.fieldName || '';
         wrap.querySelector('[data-field="script"]').value    = node.script || '';
+        wrap.querySelector('.script-validate-button').addEventListener('click', (evt) => {
+          const resultDiv = wrap.querySelector('.code-test-result');
+          const priority = parent.querySelector('[data-id="priority"]').value;
+          const name = parent.querySelector('[data-id="name"]').value;
+          const fieldName = wrap.querySelector('[data-field="fieldName"]').value;
+          const script = wrap.querySelector('[data-field="script"]').value;
+
+          //TODO Replace with builder once we have one
+          try {
+            const scriptReducer = new ScriptedReducer(name, priority, fieldName, script);
+            const state = {}; //TODO Get default state from scenario
+            const action = new FieldValueAction('TEST', 'test action', 'testField', 10); //TODO Get the use real action
+            const date = new Date();
+            const result = scriptReducer.reduce(state, action, date);
+            const output = {
+              state: state,
+              action: action,
+              result: result
+            };
+            resultDiv.innerText = JSON.stringify(output, null, 2);
+          }catch(e) {
+            resultDiv.innerText = `Error: ${e.message}`;
+          }
+          resultDiv.style = ''; //Show it
+        });
         break;
       case 'RepeatingReducer':
         //TODO Need UI

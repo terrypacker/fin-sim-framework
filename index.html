@@ -329,85 +329,93 @@
 
 <!-- ── EVENT TEMPLATES ───────────────────────── -->
 <template id="tpl-event-editor">
-  <div class="node">
-    <div class="node-header">
-      <span>EVENT</span>
-    </div>
-    <div class="node-body">
-      <div class="node-field">
-        <label>Label</label>
-        <input data-id="name"></input>
+  <div data-event-editor>
+    <div class="node">
+      <div class="node-header">
+        <span>EVENT</span>
+      </div>
+      <div class="node-body">
+        <div class="node-field">
+          <label>Label</label>
+          <input data-id="name"></input>
+        </div>
+        <div class="node-field">
+          <label>Event Type</label>
+          <select data-id="type"></select>
+        </div>
+        <div data-id="config"></div>
+        <div class="node-field">
+          <label>Color</label>
+          <input type="color" data-field="color" value="#888888" />
+        </div>
+        <div class="node-field">
+          <label>Enabled</label>
+          <input class="field-checkbox" type="checkbox" data-field="enabled" checked />
+        </div>
       </div>
       <div class="node-field">
-        <label>Event Type</label>
-        <select data-id="type"></select>
+        <label>
+          Handlers
+          <span class="reducer-sel-count" id="event-handler-count"></span>
+        </label>
+        <div class="reducer-chip-grid" id="event-handlers"></div>
       </div>
-      <div data-id="config"></div>
-      <div class="node-field">
-        <label>Color</label>
-        <input type="color" data-field="color" value="#888888" />
-      </div>
-      <div class="node-field">
-        <label>Enabled</label>
-        <input class="field-checkbox" type="checkbox" data-field="enabled" checked />
-      </div>
-    </div>
-    <div class="node-field">
-      <label>
-        Handlers
-        <span class="reducer-sel-count" id="event-handler-count"></span>
-      </label>
-      <div class="reducer-chip-grid" id="event-handlers"></div>
     </div>
   </div>
 </template>
 
 <template id="tpl-event-series-editor">
-  <div class="node-field">
-    <label>Interval</label>
-    <select data-field="interval"></select>
-  </div>
-  <div class="node-field">
-    <label>Start Offset</label>
-    <input type="number" data-field="startOffset" min="0" value="0" />
+  <div data-event-series-editor>
+    <div class="node-field">
+      <label>Interval</label>
+      <select data-field="interval"></select>
+    </div>
+    <div class="node-field">
+      <label>Start Offset</label>
+      <input type="number" data-field="startOffset" min="0" value="0" />
+    </div>
   </div>
 </template>
 
 <template id="tpl-event-one-off-editor">
-  <div class="node-field">
-    <label>Date</label>
-    <input data-field="date" type="date" />
+  <div data-event-one-off-editor>
+    <div class="node-field">
+      <label>Date</label>
+      <input data-field="date" type="date" />
+    </div>
   </div>
 </template>
 
 <!-- ── HANDLER TEMPLATES ───────────────────────── -->
 <template id="tpl-handler-editor">
-  <div class="node">
-    <div class="node-header">
-      <span>HANDLER</span>
-    </div>
-    <div class="node-body">
-      <div class="node-field">
-        <label>Description</label>
-        <span data-id="description"></span>
+  <div data-handler-editor>
+    <div class="node">
+      <div class="node-header">
+        <span>HANDLER</span>
       </div>
-      <div class="node-field">
-        <label>Label</label>
-        <input data-id="name"></input>
-      </div>
-      <div class="node-field">
-        <label>
-          Events
-          <span class="reducer-sel-count" id="handler-event-count"></span>
-        </label>
-        <div class="reducer-chip-grid" id="handler-events"></div>
-      </div>
-      <div class="node-field">
-        <label>
-          Actions
-          <span class="reducer-sel-count" id="handler-action-count"></span>
-        </label>
-        <div class="reducer-chip-grid" id="handler-actions"></div>
+      <div class="node-body">
+        <div class="node-field">
+          <label>Description</label>
+          <span data-id="description"></span>
+        </div>
+        <div class="node-field">
+          <label>Label</label>
+          <input data-id="name"></input>
+        </div>
+        <div class="node-field">
+          <label>
+            Events
+            <span class="reducer-sel-count" id="handler-event-count"></span>
+          </label>
+          <div class="reducer-chip-grid" id="handler-events"></div>
+        </div>
+        <div class="node-field">
+          <label>
+            Actions
+            <span class="reducer-sel-count" id="handler-action-count"></span>
+          </label>
+          <div class="reducer-chip-grid" id="handler-actions"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -415,41 +423,43 @@
 
 <!-- ── ACTION TEMPLATES ───────────────────────── -->
 <template id="tpl-action-editor">
-  <div class="node">
-    <div class="node-header">
-      <span>ACTION</span>
-    </div>
-    <div class="node-body">
-      <div class="node-field">
-        <label>Description</label>
-        <span data-id="description"></span>
+  <div data-action-editor>
+    <div class="node">
+      <div class="node-header">
+        <span>ACTION</span>
       </div>
-      <div class="node-field">
-        <label>Label</label>
-        <input data-id="name"></input>
-      </div>
-      <div class="node-field">
-        <label>Action Class</label>
-        <select data-id="actionClass"></select>
-      </div>
-      <div class="node-field">
-        <label>Type (Discriminator)</label>
-        <input data-id="type" placeholder="e.g. RECORD_METRIC" />
-      </div>
-      <div data-id="config"></div>
-      <div class="node-field">
-        <label>
-          Handlers
-          <span class="reducer-sel-count" id="action-handler-count"></span>
-        </label>
-        <div class="reducer-chip-grid" id="action-handlers"></div>
-      </div>
-      <div class="node-field">
-        <label>
-          Reducers
-          <span class="reducer-sel-count" id="action-reducer-count"></span>
-        </label>
-        <div class="reducer-chip-grid" id="action-reducers"></div>
+      <div class="node-body">
+        <div class="node-field">
+          <label>Description</label>
+          <span data-id="description"></span>
+        </div>
+        <div class="node-field">
+          <label>Label</label>
+          <input data-id="name"></input>
+        </div>
+        <div class="node-field">
+          <label>Action Class</label>
+          <select data-id="actionClass"></select>
+        </div>
+        <div class="node-field">
+          <label>Type (Discriminator)</label>
+          <input data-id="type" placeholder="e.g. RECORD_METRIC" />
+        </div>
+        <div data-id="config"></div>
+        <div class="node-field">
+          <label>
+            Handlers
+            <span class="reducer-sel-count" id="action-handler-count"></span>
+          </label>
+          <div class="reducer-chip-grid" id="action-handlers"></div>
+        </div>
+        <div class="node-field">
+          <label>
+            Reducers
+            <span class="reducer-sel-count" id="action-reducer-count"></span>
+          </label>
+          <div class="reducer-chip-grid" id="action-reducers"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -457,122 +467,133 @@
 
 <!-- AmountAction config: editable type discriminator + numeric amount -->
 <template id="tpl-amount-action-editor">
-  <div class="node-field">
-    <label>Field name</label>
-    <input type="text" disabled data-field="fieldName" value="amount" />
-  </div>
-  <div class="node-field">
-    <label>Amount</label>
-    <input type="number" data-field="value" value="0" />
+  <div data-amount-action-editor>
+    <div class="node-field">
+      <label>Field name</label>
+      <input type="text" disabled data-field="fieldName" value="amount" />
+    </div>
+    <div class="node-field">
+      <label>Amount</label>
+      <input type="number" data-field="value" value="0" />
+    </div>
   </div>
 </template>
 
 <!-- FieldValueAction config: editable type + field name + value -->
 <template id="tpl-field-action-editor">
-  <div class="node-field">
-    <label>Field Name</label>
-    <input data-field="fieldName" placeholder="e.g. salary" />
+  <div data-field-action-editor>
+    <div class="node-field">
+      <label>Field Name</label>
+      <input data-field="fieldName" placeholder="e.g. salary" />
+    </div>
   </div>
 </template>
 
 <!-- FieldValueAction config: editable type + field name + value -->
 <template id="tpl-field-value-action-editor">
-  <div class="node-field">
-    <label>Field Name</label>
-    <input data-field="fieldName" placeholder="e.g. salary" />
-  </div>
-  <div class="node-field">
-    <label>Fixed value <small style="font-weight:normal;opacity:.7">(leave blank to use value from state)</small></label>
-    <input type="number" data-field="value" placeholder="auto">
+  <div data-field-value-action-editor>
+    <div class="node-field">
+      <label>Field Name</label>
+      <input data-field="fieldName" placeholder="e.g. salary" />
+    </div>
+    <div class="node-field">
+      <label>Fixed value <small style="font-weight:normal;opacity:.7">(leave blank to use value from state)</small></label>
+      <input type="number" data-field="value" placeholder="auto">
+    </div>
   </div>
 </template>
 
 <!-- ScriptedAction: target state field + JS script body that computes value -->
 <!-- Script signature: (state, date) => value                                -->
 <template id="tpl-scripted-action-editor">
-  <div class="node-field">
-    <label>Target field (optional)</label>
-    <input data-field="fieldName" placeholder="e.g. salary or leave blank">
-  </div>
-  <div class="node-field">
-    <label>Script <small style="font-weight:normal;opacity:.7">(state, reducers, date, me)</small></label>
-    <textarea data-field="script" rows="6"
-      style="width:100%;box-sizing:border-box;font-family:monospace;font-size:11px;resize:vertical"
-      placeholder="// Set my value to 4&#10;me.value = 4; "></textarea>
+  <div data-scripted-action-editor>
+    <div class="node-field">
+      <label>Target field (optional)</label>
+      <input data-field="fieldName" placeholder="e.g. salary or leave blank">
+    </div>
+    <div class="node-field">
+      <label>Script <small style="font-weight:normal;opacity:.7">(state, reducers, date, me)</small></label>
+      <textarea data-field="script" rows="6"
+                style="width:100%;box-sizing:border-box;font-family:monospace;font-size:11px;resize:vertical"
+                placeholder="// Set my value to 4&#10;me.value = 4; "></textarea>
+    </div>
+    <button class="btn btn-sm script-validate-button">Test</button>
+    <pre class="code-test-result" style="display:none"></pre>
   </div>
 </template>
 
 <!-- ── REDUCER TEMPLATES ───────────────────────── -->
 <template id="tpl-reducer-editor">
-  <div class="node">
-    <div class="node-header">
-      <span>REDUCER</span>
+  <div data-reducer-editor>
+    <div class="node">
+      <div class="node-header">
+        <span>REDUCER</span>
+      </div>
+      <div class="node-body">
+        <div class="node-field">
+          <label>Description</label>
+          <span data-id="description"></span>
+        </div>
+        <div class="node-field">
+          <label>Label</label>
+          <input data-id="name"></input>
+        </div>
+        <div class="node-field">
+          <label>Reducer Type</label>
+          <select data-id="type"></select>
+        </div>
+        <div class="node-field">
+          <label>Priority</label>
+          <select data-id="priority"></select>
+        </div>
+        <div data-id="config"></div>
+        <div class="node-field">
+          <label>
+            Reduced Actions
+            <span class="reducer-sel-count" id="reducer-reduced-actions-count"></span>
+          </label>
+          <div class="reducer-chip-grid" id="reducer-reduced-actions"></div>
+        </div>
+        <div class="node-field">
+          <label>
+            Generated Actions
+            <span class="reducer-sel-count" id="reducer-generated-actions-count"></span>
+          </label>
+          <div class="reducer-chip-grid" id="reducer-generated-actions"></div>
+        </div>
+      </div>
     </div>
-    <div class="node-body">
-      <div class="node-field">
-        <label>Description</label>
-        <span data-id="description"></span>
-      </div>
-      <div class="node-field">
-        <label>Label</label>
-        <input data-id="name"></input>
-      </div>
-      <div class="node-field">
-        <label>Reducer Type</label>
-        <select data-id="type"></select>
-      </div>
-      <div class="node-field">
-        <label>Priority</label>
-        <select data-id="priority"></select>
-      </div>
-      <div data-id="config"></div>
-      <div class="node-field">
-        <label>
-          Reduced Actions
-          <span class="reducer-sel-count" id="reducer-reduced-actions-count"></span>
-        </label>
-        <div class="reducer-chip-grid" id="reducer-reduced-actions"></div>
-      </div>
-      <div class="node-field">
-        <label>
-          Generated Actions
-          <span class="reducer-sel-count" id="reducer-generated-actions-count"></span>
-        </label>
-        <div class="reducer-chip-grid" id="reducer-generated-actions"></div>
-      </div>
-    </div>
-  </div>
-</template>
-
-<template id="tpl-metric-reducer-editor">
-  <div class="node-field">
-    <label>Metric Name</label>
-    <input data-field="metric">
   </div>
 </template>
 
 <template id="tpl-account-transaction-reducer-editor">
-  <div class="node-field">
-    <label>Account Key</label>
-    <input data-field="accountKey">
+  <div data-account-transaction-reducer-editor>
+    <div class="node-field">
+      <label>Account Key</label>
+      <input data-field="accountKey">
+    </div>
   </div>
 </template>
 
 <template id="tpl-field-reducer-editor">
-  <div class="node-field">
-    <label>State field</label>
-    <input data-field="fieldName">
+  <div data-field-reducer-editor>
+    <div class="node-field">
+      <label>State field</label>
+      <input data-field="fieldName">
+    </div>
   </div>
 </template>
 
 <template id="tpl-field-value-reducer-editor">
-  <div class="node-field">
-    <label>State field</label>
-    <input data-field="fieldName">
-  </div>
-  <div class="node-field">
-    <label>Fixed value <small style="font-weight:normal;opacity:.7">(leave blank to use action/state value)</small></label>
-    <input type="number" data-field="value" placeholder="auto">
+  <div data-field-value-reducer-editor>
+    <div class="node-field">
+      <label>State field</label>
+      <input data-field="fieldName">
+    </div>
+    <div class="node-field">
+      <label>Fixed value <small style="font-weight:normal;opacity:.7">(leave blank to use action/state value)</small></label>
+      <input type="number" data-field="value" placeholder="auto">
+    </div>
   </div>
 </template>
 
@@ -580,73 +601,81 @@
 <!-- Script signature (fieldName set):  (state, action, date) => value        -->
 <!-- Script signature (no fieldName):   (state, action, date) => partialState -->
 <template id="tpl-scripted-reducer-editor">
-  <div class="node-field">
-    <label>Target field (optional)</label>
-    <input data-field="fieldName" placeholder="e.g. salary or leave blank for full patch">
-  </div>
-  <div class="node-field">
-    <label>Script <small style="font-weight:normal;opacity:.7">(state, action, date) =&gt; value | partialState</small></label>
-    <textarea data-field="script" rows="8"
-      style="width:100%;box-sizing:border-box;font-family:monospace;font-size:11px;resize:vertical"
-      placeholder="// return value (if Target field set) or a partial state object&#10;return {};"></textarea>
+  <div data-scripted-reducer-editor>
+    <div class="node-field">
+      <label>Target field (optional)</label>
+      <input data-field="fieldName" placeholder="e.g. salary or leave blank for full patch">
+    </div>
+    <div class="node-field">
+      <label>Script <small style="font-weight:normal;opacity:.7">(state, action, date) =&gt; value | partialState</small></label>
+      <textarea data-field="script" rows="8"
+                style="width:100%;box-sizing:border-box;font-family:monospace;font-size:11px;resize:vertical"
+                placeholder="// return value (if Target field set) or a partial state object&#10;return {};"></textarea>
+    </div>
+    <button class="btn btn-sm script-validate-button">Test</button>
+    <pre class="code-test-result" style="display:none"></pre>
   </div>
 </template>
 
 <!-- VIEW ACTION TEMPLATE -->
 <template id="tpl-action-template">
-  <div class="data-section-title">Action</div>
-  <div class="data-list-wrap">
-    <div class="data-grid data-grid-2" data-overview-grid>
-      <div class="data-row">
-        <label>Type</label>
-        <span data-id="entry.action.type"></span>
+  <div data-action>
+    <div class="data-section-title">Action</div>
+    <div class="data-list-wrap">
+      <div class="data-grid data-grid-2" data-overview-grid>
+        <div class="data-row">
+          <label>Type</label>
+          <span data-id="entry.action.type"></span>
+        </div>
+        <div class="data-row">
+          <label>Date</label>
+          <span data-id="entry.date"></span>
+        </div>
+        <div class="data-row">
+          <label>Source event</label>
+          <span data-id="entry.eventType"></span>
+        </div>
+        <div class="data-row">
+          <label>Reducer</label>
+          <span data-id="entry.reducer.name"></span>
+        </div>
+        <div class="data-row">
+          <label>Emitted</label>
+          <span data-id="emitted"></span>
+        </div>
+        <div class="data-row">
+          <label class="single-row">Action payload</label>
+          <span class="single-row field-code" data-id="actionPayload"></span>
+        </div>
       </div>
-      <div class="data-row">
-        <label>Date</label>
-        <span data-id="entry.date"></span>
-      </div>
-      <div class="data-row">
-        <label>Source event</label>
-        <span data-id="entry.eventType"></span>
-      </div>
-      <div class="data-row">
-        <label>Reducer</label>
-        <span data-id="entry.reducer.name"></span>
-      </div>
-      <div class="data-row">
-        <label>Emitted</label>
-        <span data-id="emitted"></span>
-      </div>
-      <div class="data-row">
-        <label class="single-row">Action payload</label>
-        <span class="single-row field-code" data-id="actionPayload"></span>
-      </div>
+      <div class="data-section-title">State Changes</div>
+      <div data-state-change-grid></div>
     </div>
-    <div class="data-section-title">State Changes</div>
-    <div data-state-change-grid></div>
   </div>
 </template>
 
 <!-- NODE STATE CHANGES TEMPLATE -->
 <template id="tpl-node-state-changes">
-  <div id="node-state-changes">
-    <div class="data-section-title">State Changes</div>
-    <div class="data-grid data-grid-2" data-state-change-grid>
-      <div class="data-row data-row-header" data-state-change-field-row style="display:none">
-        <span class="diff-label">Field</span>
-        <span class="diff-field" data-id="field"></span>
-      </div>
-      <div class="data-row" data-state-change-before-row style="display:none">
-        <span class="diff-label">Before</span>
-        <span class="diff-before" data-id="before"></span>
-      </div>
-      <div class="data-row" data-state-change-after-row style="display:none">
-        <span class="diff-label">After</span>
-        <span class="diff-after" data-id="after"></span>
-      </div>
-      <div class="data-row" data-id="noChangeRow" style="display:none">
-        <label class="single-row" data-id="noChangeTitle" >(No Change - Previous State)</label>
-        <pre class="field-code single-row" data-id="noChangeState"></pre>
+  <div data-node-state-changes>
+    <div id="node-state-changes">
+      <div class="data-section-title">State Changes</div>
+      <div class="data-grid data-grid-2" data-state-change-grid>
+        <div class="data-row data-row-header" data-state-change-field-row style="display:none">
+          <span class="diff-label">Field</span>
+          <span class="diff-field" data-id="field"></span>
+        </div>
+        <div class="data-row" data-state-change-before-row style="display:none">
+          <span class="diff-label">Before</span>
+          <span class="diff-before" data-id="before"></span>
+        </div>
+        <div class="data-row" data-state-change-after-row style="display:none">
+          <span class="diff-label">After</span>
+          <span class="diff-after" data-id="after"></span>
+        </div>
+        <div class="data-row" data-id="noChangeRow" style="display:none">
+          <label class="single-row" data-id="noChangeTitle" >(No Change - Previous State)</label>
+          <pre class="field-code single-row" data-id="noChangeState"></pre>
+        </div>
       </div>
     </div>
   </div>
@@ -665,19 +694,21 @@
 
 <!-- NODE DETAILS TEMPLATE -->
 <template id="tpl-node-details">
-  <div class="g-node">
-    <div class="g-header">
-      <span class="g-header-text"></span>
-      <span class="node-state-badge badge-amber" data-id="stateChangeIndicator" style="display:none">Change</span>
-      <span class="node-fired-badge badge-green" data-id="firedIndicator"></span>
-      <span class="node-breakpoint-badge badge-red" data-id="breakpointIndicator" style="display:none" title="Breakpoint — right-click to remove">⏸</span>
-    </div>
-    <div class="g-title">
-      <span class="g-title-text"></span>
-    </div>
+  <div data-node-details>
+    <div class="g-node">
+      <div class="g-header">
+        <span class="g-header-text"></span>
+        <span class="node-state-badge badge-amber" data-id="stateChangeIndicator" style="display:none">Change</span>
+        <span class="node-fired-badge badge-green" data-id="firedIndicator"></span>
+        <span class="node-breakpoint-badge badge-red" data-id="breakpointIndicator" style="display:none" title="Breakpoint — right-click to remove">⏸</span>
+      </div>
+      <div class="g-title">
+        <span class="g-title-text"></span>
+      </div>
 
-    <div class="g-port in"></div>
-    <div class="g-port out"></div>
+      <div class="g-port in"></div>
+      <div class="g-port out"></div>
+    </div>
   </div>
 </template>
 
