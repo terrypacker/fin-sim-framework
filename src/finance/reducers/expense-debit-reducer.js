@@ -13,9 +13,11 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 /**
  * Handles the EXPENSE_DEBIT action.
  *
- * Debits the residence-appropriate savings account:
- *   - Pre-move: state[usAccountKey] (USD)
- *   - Post-move: state[auAccountKey] (AUD)
+ * Debits the residence-appropriate savings account. The target account is
+ * resolved in priority order:
+ *   1. action.targetKey — set by MonthlyExpensesHandler via StateRegistry lookup
+ *   2. usAccountKey / auAccountKey constructor params — fallback for manually
+ *      dispatched EXPENSE_DEBIT actions that omit targetKey
  *
  * The debit is capped to the available balance so this reducer never goes
  * negative — ReplenishSavingsReducer runs first (lower priority = earlier)
@@ -27,7 +29,7 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  * @param {string} [opts.auAccountKey='auSavingsAccount']
  */
 export class ExpenseDebitReducer extends Reducer {
-  static description = 'Debits the residence-appropriate savings account (US pre-move, AU post-move); capped to available balance.';
+  static description = 'Debits the residence-appropriate savings account (resolved from action.targetKey, then constructor fallback); capped to available balance.';
 
   static actionType = 'EXPENSE_DEBIT';
 
@@ -40,7 +42,8 @@ export class ExpenseDebitReducer extends Reducer {
   }
 
   reduce(state, action, date) {
-    const accountKey = state.isAuResident ? this.auAccountKey : this.usAccountKey;
+    const fallback   = state.isAuResident ? this.auAccountKey : this.usAccountKey;
+    const accountKey = action.targetKey ?? fallback;
     const account    = state[accountKey];
     const debit      = Math.min(action.amount, Math.max(0, account.balance));
     if (debit > 0) {

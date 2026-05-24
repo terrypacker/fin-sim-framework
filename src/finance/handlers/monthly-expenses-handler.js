@@ -70,7 +70,7 @@ export class MonthlyExpensesHandler extends HandlerEntry {
     }
 
     actions.push(
-      { type: 'EXPENSE_DEBIT', amount },
+      { type: 'EXPENSE_DEBIT', amount, targetKey },
       new RecordMetricAction('monthly_expenses', amount),
       new RecordBalanceAction(`${targetKey}.balance`, targetKey),
     );

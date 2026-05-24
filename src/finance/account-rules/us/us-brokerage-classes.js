@@ -105,9 +105,10 @@ export class StockContributionApplyReducer extends Reducer {
 
   reduce(state, action) {
     this.accountService.transaction(usCash(state), -action.amount, null);
-    const sa = state.usStockAccount;
+    const key = action.stateKey ?? 'usStockAccount';
+    const sa = state[key];
     return this.newState(state, {
-      usStockAccount: {
+      [key]: {
         ...sa,
         balance:           sa.balance           + action.amount,
         contributionBasis: sa.contributionBasis + action.amount,
@@ -132,11 +133,12 @@ export class StockDividendApplyReducer extends Reducer {
 
   reduce(state, action) {
     const { amount, isAuResident } = action;
-    const sa = state.usStockAccount;
+    const key = action.stateKey ?? 'usStockAccount';
+    const sa = state[key];
     return this.newState(
       state,
       {
-        usStockAccount: {
+        [key]: {
           ...sa,
           balance:           sa.balance           + amount,
           contributionBasis: sa.contributionBasis + amount,
@@ -159,9 +161,10 @@ export class StockEarningsApplyReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const sa = state.usStockAccount;
+    const key = action.stateKey ?? 'usStockAccount';
+    const sa = state[key];
     return this.newState(state, {
-      usStockAccount: {
+      [key]: {
         ...sa,
         balance:       sa.balance       + action.amount,
         earningsBasis: sa.earningsBasis + action.amount,
@@ -189,14 +192,15 @@ export class StockWithdrawalApplyReducer extends Reducer {
     const { salePrice, costBasis, isAuResident } = action;
     const gain = Math.max(0, salePrice - costBasis);
     this.accountService.transaction(usCash(state), salePrice, null);
-    const sa = state.usStockAccount;
+    const key = action.stateKey ?? 'usStockAccount';
+    const sa = state[key];
     const newBalance  = sa.balance - salePrice;
     const newEarnings = Math.max(0, sa.earningsBasis - gain);
     const newContrib  = newBalance - newEarnings;
     return this.newState(
       state,
       {
-        usStockAccount: {
+        [key]: {
           ...sa,
           balance:           newBalance,
           contributionBasis: newContrib,
