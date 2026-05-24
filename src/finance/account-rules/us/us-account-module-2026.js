@@ -41,10 +41,6 @@ import {
   SeIncomeUsHandler, BonusHandler, CompanySaleHandler,
 } from './us-income-classes.js';
 import {
-  CollectibleValueChangeApplyReducer,
-  CollectibleValueChangeHandler,
-} from './us-collectible-classes.js';
-import {
   IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
   IraRolloverWithdrawalHandler, IraRmdHandler,
 } from './ira-rollover-classes.js';
@@ -73,11 +69,11 @@ import {
  *   EVT-9 to 15  US Brokerage (fixed income + stocks)
  *   EVT-24/25    401k
  *   EVT-34       US House Sale
- *   EVT-36/46    Collectible Sale (baseball cards, gold)
+ *   EVT-36/46    Collectible Sale — handler/reducer in US_COLLECTIBLES toolset
  *   EVT-37       Social Security Income
  *   EVT-38       Wages (Gross)
  *   EVT-39       Wages Taxes Withheld
- *   EVT-45/47    Collectible Value Change
+ *   EVT-45/47    Collectible Value Change — handler/reducer in US_COLLECTIBLES toolset
  *   EVT-48       Self-Employment Income (US)
  *   EVT-50       Bonus
  *   EVT-51       Company Sale
@@ -128,8 +124,6 @@ export class UsAccountModule2026 extends BaseAccountModule {
       new SeIncomeUsApplyReducer({ accountService }),
       new BonusApplyReducer({ accountService }),
       new CompanySaleApplyReducer({ accountService }),
-      // Collectibles
-      new CollectibleValueChangeApplyReducer({ accountService }),
       // IRA Rollover + RMD
       new IraRolloverWithdrawalApplyReducer({ accountService }),
       new IraRmdApplyReducer({ accountService }),
@@ -174,8 +168,6 @@ export class UsAccountModule2026 extends BaseAccountModule {
       new SeIncomeUsHandler(),
       new BonusHandler(),
       new CompanySaleHandler(),
-      // Collectibles
-      new CollectibleValueChangeHandler(),
       // IRA Rollover + RMD
       new IraRolloverWithdrawalHandler(),
       new IraRmdHandler(),

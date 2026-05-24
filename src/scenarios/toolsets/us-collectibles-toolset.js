@@ -9,8 +9,10 @@
  */
 
 import { OneOffEvent }               from '../../simulation-framework/events/one-off-event.js';
-import { CollectibleSaleHandler }    from '../../finance/account-rules/us/us-collectible-classes.js';
-import { CollectibleSaleApplyReducer } from '../../finance/account-rules/us/us-collectible-classes.js';
+import {
+  CollectibleSaleHandler, CollectibleSaleApplyReducer,
+  CollectibleValueChangeHandler, CollectibleValueChangeApplyReducer,
+} from '../../finance/account-rules/us/us-collectible-classes.js';
 
 /**
  * US_COLLECTIBLES toolset — wires US collectible sale machinery.
@@ -38,7 +40,7 @@ export const US_COLLECTIBLES = {
   },
 
   state(context) {
-    const patches = {};
+    const patches = { usCollectibleGainsYTD: 0 };
     for (const col of (context.collectibles ?? [])) {
       if (col.stateKey) {
         patches[col.stateKey] = _collectibleToStatePlain(col);
@@ -62,12 +64,15 @@ export const US_COLLECTIBLES = {
 
   handlers(context) {
     if ((context.collectibles ?? []).length === 0) return [];
-    return [new CollectibleSaleHandler()];
+    return [new CollectibleSaleHandler(), new CollectibleValueChangeHandler()];
   },
 
   reducers(context) {
     if ((context.collectibles ?? []).length === 0) return [];
-    return [new CollectibleSaleApplyReducer({ accountService: context.accountService })];
+    return [
+      new CollectibleSaleApplyReducer({ accountService: context.accountService }),
+      new CollectibleValueChangeApplyReducer({ accountService: context.accountService }),
+    ];
   },
 };
 
