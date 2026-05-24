@@ -13,7 +13,7 @@ const NODE_HEIGHT = 40;
 const PADDING = 20;
 
 export class ConfigGraphBuilder {
-  constructor({ graphRoot, graphNodes, graphEdges}) {
+  constructor({ graphRoot, graphNodes, graphEdges, nodeTemplate}) {
     this.graphRoot = graphRoot;
     this.graphNodesEl = graphNodes;
     this.graphEdgesEl = graphEdges;
@@ -24,7 +24,7 @@ export class ConfigGraphBuilder {
     this.nodeClickListeners = [];
     this.selectedNodeId = null;
     this.dragState = null;
-    this.nodeTemplate = document.getElementById('tpl-node-details');
+    this.nodeTemplate = nodeTemplate;
     this._bindEvents();
   }
 

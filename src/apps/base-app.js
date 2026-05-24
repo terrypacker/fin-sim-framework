@@ -173,7 +173,8 @@ export class BaseApp {
     this.configGraphBuilder = new ConfigGraphBuilder({
       graphRoot: document.getElementById('graphRoot'),
       graphNodes: document.getElementById('graphNodes'),
-      graphEdges: document.getElementById('graphEdges')
+      graphEdges: document.getElementById('graphEdges'),
+      nodeTemplate: document.getElementById('tpl-node-details')
     });
 
     this.schedulerUI = new EventScheduler({
