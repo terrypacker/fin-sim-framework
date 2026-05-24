@@ -73,6 +73,22 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   overflow-y: scroll;
 }
 
+.left-events-tab { /* the element was .tab-content */
+  display: flex;
+  flex-direction: column;
+  min-height: 0px;
+  flex: 1 1 0%;
+}
+
+.left-scenario-tab { /* the element was .tab-content */
+  display: flex;
+  flex-direction: column;
+  min-height: 0px;
+  flex: 1 1 0%;
+}
+
+
+
 /* ── CENTER COL ── */
 .center-col {
   display: flex;
@@ -770,3 +786,10 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   margin-left: 8px;
   vertical-align: middle;
 }
+
+
+/* ── SCENARIO TAB: param rows ── */
+.param-row { display: flex; gap: 4px; align-items: center; padding: 2px 4px; }
+.param-row input  { flex: 1; min-width: 0; }
+.param-row select { flex: 0 0 72px; }
+.param-row .btn-warn { flex: 0 0 auto; }

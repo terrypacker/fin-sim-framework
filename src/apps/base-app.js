@@ -24,6 +24,8 @@ import { TimelineView } from '../visualization/timeline-view.js';
 import { TimeControls } from '../visualization/time-controls.js';
 import { EventScheduler } from '../visualization/event-scheduler.js';
 import { ConfigGraphBuilder } from "../visualization/graph-builder.js";
+import { ScenarioStorage } from "../scenarios/scenario-storage.js";
+import { ScenarioSerializer } from "../scenarios/scenario-serializer.js";
 
 export class BaseApp {
   constructor({ newScenario, chartSeries }) {
@@ -49,12 +51,17 @@ export class BaseApp {
     // Current display currency — 'USD' or 'AUD'.  Updated by the selector.
     this.displayCurrency = 'USD';
 
+    this._scenarioData = ScenarioStorage.load();
+    this._activeIdx = null; // null → use default CustomScenario
+
     //TODO REMOVE?
     this.activeTab = 'timeline';
 
     //TODO REMOVE ?
     this.activeSidebarTab = 'settings';
 
+    this._scenarioData = ScenarioStorage.load();
+    this._activeIdx = null; // null → use default CustomScenario
 
     // ── PeriodService: US calendar years 2026-2040, AU fiscal years 2025-2040
     const periodService = new FinSimLib.Finance.PeriodService();
@@ -65,16 +72,37 @@ export class BaseApp {
 
   // ── Params form ───────────────────────────────────────────────────────────────
   getParams() {
-    return {};
+    const params = this._activeScenario()?.params;
+    if (!params?.length) return {};
+    return Object.fromEntries(params.map(p => [p.name, p.value]));
   }
 
   getInitialState() {
-    return {};
+    return this._activeScenario()?.initialState ?? {};
+  }
+
+  // ── Active scenario helpers ───────────────────────────────────────────────
+
+  _activeScenario() {
+    if (this._activeIdx !== null) {
+      return this._scenarioData.scenarios[this._activeIdx] ?? null;
+    }
+    return null;
+  }
+
+  /** Hook called after scenario.buildSim(). Override in subclasses to load from config. */
+  afterBuildSim() {
+    const cfg = this._activeScenario();
+    if (cfg) {
+      ScenarioSerializer.deserialize(cfg, this.scenario);
+    }
   }
 
   updateChart(chartView, type, date, state) {
     chartView.addSnapshot(type, date, state.metrics ? {...state.metrics} : {});
   }
+
+
 
   /**
    * Update the date formatter used by all views. Takes effect immediately
@@ -125,6 +153,7 @@ export class BaseApp {
 
     //Recreate the simulator and configuration
     this.scenario.buildSim(this.getParams(), this.getInitialState());
+    this.afterBuildSim();
 
     //TODO Share these across the app, color registry or something?
     const eventColors = new Map(
@@ -490,13 +519,17 @@ export class BaseApp {
     $('rebuildBtn').addEventListener('click', () => this.buildScenario());
 
     $('tzSelect').addEventListener('change', () => {
-      app.setFormatDate($('tzSelect').value === 'utc' ? fmtUTC : fmtLocal);
+      setFormatDate($('tzSelect').value === 'utc' ? fmtUTC : fmtLocal);
       renderEventList();
     });
 
+    this._initScenarioTab();
+    const eventsTabHeader = document.querySelector(`.tab-header[data-dest-tab=left-events][data-tab-group=left-col]`);
+    this.openTab({currentTarget: eventsTabHeader}, 'left-events', 'left-col');
 
     window.addEventListener('resize', () => this.resizeCanvases());
     this.resizeCanvases();
+
   }
 
   resizeCanvases() {
@@ -583,6 +616,7 @@ export class BaseApp {
   };
 
   openTab(evt, tabName, tabGroup) {
+    //TODO in the base.css .tab-content is display: none so every tab has to override display: css setting for this to work
     // Hide content
     document.querySelectorAll(`.tab-content[data-tab-group=${tabGroup}]`).forEach(el => el.style.display = "none");
 
@@ -593,7 +627,7 @@ export class BaseApp {
     const tab = document.querySelector(`.tab-content[data-tab-group=${tabGroup}][data-tab=${tabName}]`);
     tab.style.display = "";
 
-    //Active to clicke tab header
+    //Active to click tab header
     evt.currentTarget.classList.add("active");
   }
 
@@ -612,6 +646,223 @@ export class BaseApp {
     if (native === this.displayCurrency) return value;
     if (this.displayCurrency === 'AUD') return value * rate;   // USD → AUD
     return value / rate;                                   // AUD → USD
+  }
+
+  // ── Active scenario helpers ───────────────────────────────────────────────
+  // ── Scenario tab wiring ──────────────────────────────────────────────────
+  _initScenarioTab() {
+    this._refreshScenarioSelect();
+
+    document.getElementById('scenarioSelect').addEventListener('change', (e) => {
+      const val = e.target.value;
+      this._activeIdx = val === '' ? null : parseInt(val, 10);
+      this._populateScenarioForm();
+    });
+
+    document.getElementById('loadScenarioBtn').addEventListener('click', () => {
+      this.buildScenario();
+    });
+
+    document.getElementById('newScenarioBtn').addEventListener('click', () => {
+      const newCfg = {
+        name:         'New Scenario',
+        simStart:     '2026-01-01',
+        simEnd:       '2041-01-01',
+        events:       [],
+        handlers:     [],
+        actions:      [],
+        reducers:     [],
+        initialState: { metrics: { amount: 0, salary: 0 } },
+        params:       [],
+      };
+      this._scenarioData.scenarios.push(newCfg);
+      this._activeIdx = this._scenarioData.scenarios.length - 1;
+      this._refreshScenarioSelect();
+      this._populateScenarioForm();
+    });
+
+    document.getElementById('deleteScenarioBtn').addEventListener('click', () => {
+      if (this._activeIdx === null) return;
+      this._scenarioData.scenarios.splice(this._activeIdx, 1);
+      this._activeIdx = null;
+      ScenarioStorage.save(this._scenarioData);
+      this._refreshScenarioSelect();
+      this._populateScenarioForm();
+    });
+
+    document.getElementById('scenarioName').addEventListener('input', (e) => {
+      const cfg = this._activeScenario();
+      if (!cfg) return;
+      cfg.name = e.target.value;
+      const sel = document.getElementById('scenarioSelect');
+      if (sel.selectedIndex >= 0) sel.options[sel.selectedIndex].textContent = cfg.name || 'Unnamed';
+    });
+
+    document.getElementById('simStartInput').addEventListener('change', (e) => {
+      const cfg = this._activeScenario();
+      if (cfg) cfg.simStart = e.target.value;
+    });
+
+    document.getElementById('simEndInput').addEventListener('change', (e) => {
+      const cfg = this._activeScenario();
+      if (cfg) cfg.simEnd = e.target.value;
+    });
+
+    document.getElementById('initialStateJson').addEventListener('blur', (e) => {
+      const cfg = this._activeScenario();
+      if (!cfg) return;
+      try {
+        cfg.initialState = JSON.parse(e.target.value);
+        e.target.style.borderColor = '';
+      } catch {
+        e.target.style.borderColor = 'red';
+      }
+    });
+
+    document.getElementById('addParamBtn').addEventListener('click', () => {
+      const cfg = this._activeScenario();
+      if (!cfg) return;
+      cfg.params.push({ name: '', type: 'Number', value: 0 });
+      this._renderParamsList();
+    });
+
+    document.getElementById('saveScenarioBtn').addEventListener('click', () => {
+      this._saveCurrentScenario();
+    });
+
+    document.getElementById('downloadJsonBtn').addEventListener('click', () => {
+      ScenarioStorage.downloadJson(this._scenarioData);
+    });
+
+    document.getElementById('uploadJsonFileInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const data = await ScenarioStorage.readUploadedJson(file);
+        if (Array.isArray(data.scenarios)) {
+          const existing = new Set(this._scenarioData.scenarios.map(s => s.name));
+          for (const s of data.scenarios) {
+            if (!existing.has(s.name)) {
+              this._scenarioData.scenarios.push(s);
+              existing.add(s.name);
+            }
+          }
+        }
+        ScenarioStorage.save(this._scenarioData);
+        this._refreshScenarioSelect();
+      } catch (err) {
+        alert('Failed to parse JSON file: ' + err.message);
+      }
+      e.target.value = '';
+    });
+  }
+
+  _refreshScenarioSelect() {
+    const sel = document.getElementById('scenarioSelect');
+    sel.innerHTML = '<option value="">— Default Scenario —</option>';
+    this._scenarioData.scenarios.forEach((s, i) => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = s.name || `Scenario ${i + 1}`;
+      sel.appendChild(opt);
+    });
+    sel.value = this._activeIdx !== null ? String(this._activeIdx) : '';
+    this._populateScenarioForm();
+  }
+
+  _populateScenarioForm() {
+    const cfg = this._activeScenario();
+    document.getElementById('scenarioName').value       = cfg?.name     ?? '';
+    document.getElementById('simStartInput').value      = cfg?.simStart ?? '2026-01-01';
+    document.getElementById('simEndInput').value        = cfg?.simEnd   ?? '2041-01-01';
+    document.getElementById('initialStateJson').value   = JSON.stringify(
+        cfg?.initialState ?? { metrics: { amount: 0, salary: 0 } }, null, 2
+    );
+    this._renderParamsList();
+  }
+
+  _renderParamsList() {
+    const cfg = this._activeScenario();
+    const container = document.getElementById('paramsList');
+    container.innerHTML = '';
+    if (!cfg?.params?.length) return;
+
+    cfg.params.forEach((param, i) => {
+      const row = document.createElement('div');
+      row.className = 'param-row';
+
+      const nameInput = document.createElement('input');
+      nameInput.placeholder = 'name';
+      nameInput.value = param.name;
+      nameInput.addEventListener('input', () => { param.name = nameInput.value; });
+
+      const typeSelect = document.createElement('select');
+      ['Number', 'String', 'Boolean'].forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t; opt.textContent = t;
+        typeSelect.appendChild(opt);
+      });
+      typeSelect.value = param.type ?? 'Number';
+      typeSelect.addEventListener('change', () => { param.type = typeSelect.value; });
+
+      const valueInput = document.createElement('input');
+      valueInput.placeholder = 'value';
+      valueInput.value = String(param.value ?? '');
+      valueInput.addEventListener('input', () => {
+        const raw = valueInput.value;
+        if (param.type === 'Number')  param.value = parseFloat(raw);
+        else if (param.type === 'Boolean') param.value = raw === 'true';
+        else param.value = raw;
+      });
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn btn-warn btn-sm';
+      delBtn.textContent = '✕';
+      delBtn.addEventListener('click', () => {
+        cfg.params.splice(i, 1);
+        this._renderParamsList();
+      });
+
+      row.appendChild(nameInput);
+      row.appendChild(typeSelect);
+      row.appendChild(valueInput);
+      row.appendChild(delBtn);
+      container.appendChild(row);
+    });
+  }
+
+  _saveCurrentScenario() {
+    if (this._activeIdx === null) {
+      // Create a new slot for the current default scenario
+      const name = document.getElementById('scenarioName').value || 'Saved Scenario';
+      let initialState = { metrics: { amount: 0, salary: 0 } };
+      try { initialState = JSON.parse(document.getElementById('initialStateJson').value); } catch {}
+      this._scenarioData.scenarios.push({
+        name,
+        simStart:     document.getElementById('simStartInput').value || '2026-01-01',
+        simEnd:       document.getElementById('simEndInput').value   || '2041-01-01',
+        events: [], handlers: [], actions: [], reducers: [],
+        initialState,
+        params: [],
+      });
+      this._activeIdx = this._scenarioData.scenarios.length - 1;
+    }
+
+    const cfg = this._activeScenario();
+
+    // Serialize graph state + current form values into the config
+    const serialized = ScenarioSerializer.serialize(
+        this.configGraphBuilder,
+        cfg.name,
+        cfg.simStart,
+        cfg.simEnd,
+        cfg.initialState,
+        cfg.params,
+    );
+    Object.assign(cfg, serialized);
+
+    ScenarioStorage.save(this._scenarioData);
+    this._refreshScenarioSelect();
   }
 
 }
