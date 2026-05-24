@@ -526,7 +526,7 @@ export class EventScheduler {
         break;
       case 'StateFieldReducer':
         wrap = this._getTemplate('tpl-state-field-reducer-editor');
-        wrap.querySelector('[data-field="stateField"]').value = node.stateField || '';
+        wrap.querySelector('[data-field="fieldName"]').value = node.fieldName || '';
         break;
       default:
         container.innerHTML = '<div class="tl-empty">No config</div>';

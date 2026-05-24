@@ -54,7 +54,7 @@ class FieldReducerBuilder extends BaseReducerBuilder {
 class StateFieldReducerBuilder extends BaseReducerBuilder {
   constructor() { super('State Field Logger', PRIORITY.POSITION_UPDATE); this._fieldName = null; }
   fieldName(v) { this._fieldName = v; return this; }
-  build() { return this._apply(new FieldReducer(this._name, this._priority, this._fieldName)); }
+  build() { return this._apply(new StateFieldReducer(this._name, this._priority, this._fieldName)); }
 }
 
 class MetricReducerBuilder extends BaseReducerBuilder {
