@@ -37,7 +37,7 @@ export class Action {
 
   get kind() { return 'action'; }
 
-  /** Always matches constructor.name — can never drift from the actual class. */
+  /** Always matches constructor.name — can never drift from the actual class. Don't let minification strip this out! */
   get actionClass() { return this.constructor.name; }
 
   static getDescription() {

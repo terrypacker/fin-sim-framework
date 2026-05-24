@@ -63,7 +63,12 @@ export default [
         isWatching && watchAssets({
           assets: ['assets', 'index.html'], // Add folders or files
         }),
-       !isWatching && terser() //minify when not debugging
+       // keep_classnames is required because Action.actionClass and Reducer.reducerType
+       // use `constructor.name` for serialization (ScenarioSerializer) and type dispatch
+       // (EventScheduler). Minification mangles class names, breaking both. If you switch
+       // to a different minifier (esbuild, swc, uglify-js, etc.) you must apply the
+       // equivalent option there — see the "Minification and class names" note in README.md.
+       !isWatching && terser({ mangle: { keep_classnames: /Reducer$|Action$/ } })
     ].filter(Boolean)
   }
 ];

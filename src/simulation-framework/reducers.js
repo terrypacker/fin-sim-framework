@@ -142,7 +142,7 @@ export class Reducer {
 
   get kind() { return 'reducer'; }
 
-  /** Always matches constructor.name — can never drift from the actual class. */
+  /** Always matches constructor.name — can never drift from the actual class. Don't let minification strip this out! */
   get reducerType() { return this.constructor.name; }
 
   static getDescription() {
