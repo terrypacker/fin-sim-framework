@@ -123,10 +123,12 @@ export class IntlRetirementScenario extends BaseScenario {
   }
 
   /**
-   * Construct the initialState and register the Simulation.
-   * Overrides BaseScenario.buildSim() to supply scenario-specific state.
+   * Build the scenario-specific default initial state.
+   * Called by BaseScenario.buildSim() when no saved initialState is provided.
+   * Constructs all domain objects (people, accounts) from params and stores
+   * them on `this._people` / `this._accounts` so loadDefaults() can use them.
    */
-  buildSim(params) {
+  buildDefaultInitialState(params) {
     const p = { ...INTL_RETIREMENT_DEFAULTS, ...(params ?? {}) };
     this._params = p;
 
@@ -217,18 +219,32 @@ export class IntlRetirementScenario extends BaseScenario {
       auSavingsAccount, auStockAccount, superAccount,
     };
 
-    // ── Initial state ─────────────────────────────────────────────────────────
-    const retirementInitialState = new InternationalRetirementFinancialState({
+    return new InternationalRetirementFinancialState({
       primary, spouse,
       usSavingsAccount, fixedIncomeAccount, stockAccount,
       iraAccount, k401Account, rothAccount,
       auSavingsAccount, auStockAccount, superAccount,
       exchangeRateUsdToAud: p.exchangeRateUsdToAud,
-      intlTransferFeeUsd: p.intlTransferFeeUsd,
+      intlTransferFeeUsd:   p.intlTransferFeeUsd,
     });
+  }
 
-    // ── Register simulation ───────────────────────────────────────────────────
-    super.buildSim(params, retirementInitialState);
+  /**
+   * Register the simulation and wire TaxService.
+   * Overrides BaseScenario.buildSim() only to add TaxService setup after the
+   * simulation is created (TaxService needs this.sim).
+   * The initialState is provided via buildDefaultInitialState() when absent.
+   *
+   * The problem with moving this logic to loadDefaults() is that loadDefaults() is only called
+   *   for fresh scenarios. When a saved config is loaded, afterBuildSim() calls ScenarioSerializer.deserialize()
+   *   instead — loadDefaults() is never reached. The currentPeriods injection would be skipped and the dynamic
+   *   tax reducers would have nothing to read.
+   *
+   *   Fresh scenario:  buildSim() → afterBuildSim() → loadDefaults()      ✓ setup() runs
+   *   Saved scenario:  buildSim() → afterBuildSim() → deserialize()        ✗ setup() never runs
+   */
+  buildSim(params, initialState) {
+    super.buildSim(params, initialState);
 
     // ── Wire TaxService — phase 1: state init + direct event scheduling.
     //    Handlers/reducers are registered in loadDefaults() (phase 2) so that
@@ -239,7 +255,6 @@ export class IntlRetirementScenario extends BaseScenario {
     for (let y = 2025; y <= 2041; y++) applyTo(periodService, buildAuFiscalYear(y));
     this._taxService = new TaxService();
     this._taxService.setup(this.sim, ['US', 'AU'], periodService);
-
   }
 
   /**
