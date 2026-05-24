@@ -7,58 +7,47 @@
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
+import { ServiceRegistry } from '../services/service-registry.js';
+
 export class EventScheduler {
 
-  constructor({ graph , builderCanvas}) {
+  constructor({ graph, builderCanvas }) {
     this.graph = graph;
     this.builderCanvas = builderCanvas;
     this.graph.registerNodeClickListener((event, node) => this._editNode(event, node));
-    this.eventNodeChangeListeners = [];
-    this.handlerNodeChangeListeners = [];
-    this.actionNodeChangeListeners = [];
-    this.reducerNodeChangeListeners = [];
 
+    // Creation listener arrays (still used — BaseScenario registers here)
     this.eventNodeCreatedListeners = [];
     this.handlerNodeCreatedListeners = [];
     this.actionNodeCreatedListeners = [];
     this.reducerNodeCreatedListeners = [];
 
-    this.eventNodeDeletedListeners = [];
-    this.handlerNodeDeletedListeners = [];
-    this.actionNodeDeletedListeners = [];
-    this.reducerNodeDeletedListeners = [];
-
-    this.EVENT_TYPES = [
-      'Series',
-      'OneOff'
-    ];
+    this.EVENT_TYPES = ['Series', 'OneOff'];
 
     this.EVENT_SERIES_TYPES = [
-      'monthly',
-      'quarterly',
-      'annually',
-      'month-end',
-      'year-end'
-    ];
-    this.REDUCER_TYPES = [
-      'MetricReducer',
-      'ArrayMetricReducer',
-      'NumericSumMetricReducer',
-      'MultiplicativeMetricReducer',
-      'AccountTransactionReducer',
-      'StateFieldReducer',
-      'NoOpReducer'
+      'monthly', 'quarterly', 'annually', 'month-end', 'year-end'
     ];
 
-    // Ordered from most-specific to least-specific so instanceof checks work correctly.
+    this.REDUCER_TYPES = [
+      'MetricReducer', 'ArrayMetricReducer', 'NumericSumMetricReducer',
+      'MultiplicativeMetricReducer', 'AccountTransactionReducer',
+      'StateFieldReducer', 'NoOpReducer'
+    ];
+
+    // Ordered most-specific to least-specific for instanceof checks.
     this.ACTION_TYPES = [
-      'AmountAction',
-      'RecordMetricAction',
-      'RecordArrayMetricAction',
-      'RecordNumericSumMetricAction',
-      'RecordMultiplicativeMetricAction',
+      'AmountAction', 'RecordMetricAction', 'RecordArrayMetricAction',
+      'RecordNumericSumMetricAction', 'RecordMultiplicativeMetricAction',
       'RecordBalanceAction',
     ];
+
+    // Subscribe to service bus: re-render graph on any service mutation.
+    // This replaces the _nodeChanged → changeListener → service → graph.render()
+    // chain.  All editors now call service.updateX(id, changes) directly, and
+    // the bus subscriber here triggers the visual refresh.
+    ServiceRegistry.getInstance().bus.subscribe('SERVICE_ACTION', () => {
+      this.graph.render();
+    });
 
     this._bind();
   }
@@ -108,28 +97,7 @@ export class EventScheduler {
   registerActionCreatedListener(listener)  { this.actionNodeCreatedListeners.push(listener); }
   registerReducerCreatedListener(listener) { this.reducerNodeCreatedListeners.push(listener); }
 
-  registerEventDeletedListener(listener)   { this.eventNodeDeletedListeners.push(listener); }
-  registerHandlerDeletedListener(listener) { this.handlerNodeDeletedListeners.push(listener); }
-  registerActionDeletedListener(listener)  { this.actionNodeDeletedListeners.push(listener); }
-  registerReducerDeletedListener(listener) { this.reducerNodeDeletedListeners.push(listener); }
-
-  _notifyNodeDeleted(node) {
-    if (node.kind === 'event') {
-      this.eventNodeDeletedListeners.forEach(l => l(node));
-    } else if (node.kind === 'handler') {
-      this.handlerNodeDeletedListeners.forEach(l => l(node));
-    } else if (node.kind === 'action') {
-      this.actionNodeDeletedListeners.forEach(l => l(node));
-    } else if (node.kind === 'reducer') {
-      this.reducerNodeDeletedListeners.forEach(l => l(node));
-    }
-  }
-
-  deleteNode(node) {
-    this._notifyNodeDeleted(node);
-    this.graph.removeNode(node.id);
-    this._editNode(null, null);
-  }
+  // ─── Deletion ─────────────────────────────────────────────────────────────
 
   _createDeleteButton(node) {
     const wrap = document.createElement('div');
@@ -142,6 +110,43 @@ export class EventScheduler {
     wrap.appendChild(btn);
     return wrap;
   }
+
+  deleteNode(node) {
+    // Call the appropriate service: fires DELETE on bus → BaseScenario
+    // subscriber cleans up the sim.  Graph removal follows synchronously.
+    const { eventService, handlerService, actionService, reducerService } = ServiceRegistry.getInstance();
+    if (node.kind === 'event')        eventService.deleteEvent(node.id);
+    else if (node.kind === 'handler') handlerService.deleteHandler(node.id);
+    else if (node.kind === 'action')  actionService.deleteAction(node.id);
+    else if (node.kind === 'reducer') reducerService.deleteReducer(node.id);
+
+    this.graph.removeNode(node.id);
+    this._editNode(null, null);
+  }
+
+  // ─── Change notification (chip toggles use in-place mutation then this) ───
+
+  /**
+   * Called after a chip toggle mutates a canonical array (handledEvents,
+   * generatedActions, reducedActions) in-place.  Triggers the service update
+   * so the bus fires and BaseScenario re-wires the sim.
+   *
+   * NOTE: Because the mutation has already happened before this call the
+   * originalItem in the ServiceActionEvent captures the post-mutation state.
+   * Scalar property changes go through service.updateX(id, changes) directly
+   * and do NOT have this limitation.
+   * @private
+   */
+  _nodeChanged(node) {
+    const { eventService, handlerService, actionService, reducerService } = ServiceRegistry.getInstance();
+    if (node.kind === 'event')        eventService.updateEvent(node.id, {});
+    else if (node.kind === 'handler') handlerService.updateHandler(node.id, {});
+    else if (node.kind === 'action')  actionService.updateAction(node.id, {});
+    else if (node.kind === 'reducer') reducerService.updateReducer(node.id, {});
+    // graph.render() is triggered by the bus subscription in the constructor
+  }
+
+  // ─── Template helpers ─────────────────────────────────────────────────────
 
   _getTemplate(templateId) {
     const tmpl = document.getElementById(templateId);
@@ -161,59 +166,57 @@ export class EventScheduler {
       this._renderReducerEditor(node);
     } else if (node.kind === 'event') {
       this._renderEventEditor(node);
-    }else if (node.kind === 'handler') {
+    } else if (node.kind === 'handler') {
       this._renderHandlerEditor(node);
-    }else if (node.kind === 'action') {
+    } else if (node.kind === 'action') {
       this._renderActionEditor(node);
-    }else {
+    } else {
       this.builderCanvas.innerHTML = `<div class="tl-empty">${node.kind} editor coming next</div>`;
     }
   }
 
+  // ─── Graph management ──────────────────────────────────────────────────────
+
   /**
-   * Add an event to the graph
-   * @param event
+   * Add an event node to the graph.  Also loads the event into the service map
+   * if it was created outside the service (e.g. ScenarioSerializer).
    */
   addEvent(event) {
     const existing = this.graph.getNode(event.id);
-    if(existing) {
+    if (existing) {
       throw new Error(`Event already exists in graph ${event.type}`);
     }
+
+    // Ensure the item is in the service map for editor update calls
+    const { eventService } = ServiceRegistry.getInstance();
+    if (!eventService.get(event.id)) {
+      eventService.load(event);
+    }
+
     event.kind = 'event';
-    if(event instanceof FinSimLib.Core.EventSeries) {
+    if (event instanceof FinSimLib.Core.EventSeries) {
       event.eventType = 'Series';
-    }else {
+    } else {
       event.eventType = 'OneOff';
     }
     this.graph.addNode(event);
   }
 
-  /**
-   * Add a handler to an event
-   * @param event
-   * @param handler
-   */
   addHandler(handler) {
-    //Decorate the handler
     handler.kind = 'handler';
     this.graph.addNode(handler);
 
     handler.handledEvents.forEach(e => {
-      //Add an edge from event --> handler
-      this.graph.addEdge({from: e.id, to: handler.id});
-    })
-    //Add the actions
+      this.graph.addEdge({ from: e.id, to: handler.id });
+    });
     handler.generatedActions.forEach(a => {
-      this.addAction(a)
-      this.graph.addEdge({from: handler.id, to: a.id});
-    })
+      this.addAction(a);
+      this.graph.addEdge({ from: handler.id, to: a.id });
+    });
   }
 
   addReducer(reducer) {
-    //Decorate the reducer
     reducer.kind = 'reducer';
-    // Resolve the most-specific subclass first so that e.g. NumericSumMetricReducer
-    // (which extends MetricReducer) is not incorrectly tagged as 'MetricReducer'.
     const C = FinSimLib.Core;
     if      (reducer instanceof C.NumericSumMetricReducer)      reducer.reducerType = 'NumericSumMetricReducer';
     else if (reducer instanceof C.ArrayMetricReducer)            reducer.reducerType = 'ArrayMetricReducer';
@@ -224,26 +227,27 @@ export class EventScheduler {
     else if (reducer instanceof C.StateFieldReducer)             reducer.reducerType = 'StateFieldReducer';
     this.graph.addNode(reducer);
 
-    //Add the actions
     reducer.reducedActions.forEach(a => {
       this.addAction(a);
-      this.graph.addEdge({from: a.id, to: reducer.id});
-    })
+      this.graph.addEdge({ from: a.id, to: reducer.id });
+    });
     reducer.generatedActions.forEach(a => {
       this.addAction(a);
-      this.graph.addEdge({from: reducer.id, to: a.id});
-    })
+      this.graph.addEdge({ from: reducer.id, to: a.id });
+    });
   }
 
   addAction(action) {
-    //Does this action exist
     action.id = action.type;
     const existing = this.graph.getNode(action.id);
-    if(existing === undefined) {
-      //Decorate the action
+    if (existing === undefined) {
+      // Ensure the item is in the service map
+      const { actionService } = ServiceRegistry.getInstance();
+      if (!actionService.get(action.id)) {
+        actionService.load(action);
+      }
+
       action.kind = 'action';
-      // Tag the action class so the editor knows which config template to show.
-      // Check subclasses before superclasses (same ordering as ScenarioSerializer).
       const C = FinSimLib.Core;
       if      (action instanceof C.RecordNumericSumMetricAction)    action.actionClass = 'RecordNumericSumMetricAction';
       else if (action instanceof C.RecordArrayMetricAction)          action.actionClass = 'RecordArrayMetricAction';
@@ -255,38 +259,6 @@ export class EventScheduler {
     }
   }
 
-  registerEventChangeListener(listener) {
-    this.eventNodeChangeListeners.push(listener);
-  }
-
-  registerHandlerChangeListener(listener) {
-    this.handlerNodeChangeListeners.push(listener);
-  }
-
-  registerActionChangeListener(listener) {
-    this.actionNodeChangeListeners.push(listener);
-  }
-
-  registerReducerChangeListener(listener) {
-    this.reducerNodeChangeListeners.push(listener);
-  }
-
-  _nodeChanged(node) {
-    if (node.kind === 'reducer') {
-      this.reducerNodeChangeListeners.forEach(l => l(node));
-    } else if (node.kind === 'event') {
-      this.eventNodeChangeListeners.forEach(l => l(node));
-    }else if (node.kind === 'handler') {
-      this.handlerNodeChangeListeners.forEach(l => l(node));
-    }else if (node.kind === 'action') {
-      this.actionNodeChangeListeners.forEach(l => l(node));
-    }else {
-      throw new Error(`Unsupported node kind: ${node.kind}`)
-    }
-
-    this.graph.render();
-  }
-
   /* ─────────────────────────────  EVENT EDITOR  ───────────────────────────── */
   _renderEventEditor(node) {
     const el = this._getTemplate('tpl-event-editor');
@@ -296,11 +268,9 @@ export class EventScheduler {
     const label = el.querySelector('[data-id="name"]');
     label.value = node.name || '';
     label.addEventListener('input', () => {
-      node.name = label.value;
-      this._nodeChanged(node);
+      ServiceRegistry.getInstance().eventService.updateEvent(node.id, { name: label.value });
     });
 
-    // populate dropdown
     this.EVENT_TYPES.forEach(type => {
       const opt = document.createElement('option');
       opt.value = type;
@@ -310,35 +280,32 @@ export class EventScheduler {
 
     typeSelect.value = node.eventType || 'Series';
     typeSelect.onchange = () => {
-      node.eventType = typeSelect.value;
+      // eventType is UI decoration; update via service so bus fires and sim re-wires
+      ServiceRegistry.getInstance().eventService.updateEvent(node.id, { eventType: typeSelect.value });
       this._renderEventConfig(node, configWrap);
-      this._nodeChanged(node);
     };
 
     const colorInput = el.querySelector('[data-field="color"]');
     colorInput.value = node.color || '#888888';
     colorInput.addEventListener('input', () => {
-      node.color = colorInput.value;
-      this._nodeChanged(node);
+      ServiceRegistry.getInstance().eventService.updateEvent(node.id, { color: colorInput.value });
     });
 
     const seriesEnabled = el.querySelector('[data-field="enabled"]');
     seriesEnabled.checked = node.enabled || false;
     seriesEnabled.addEventListener('input', () => {
-      node[seriesEnabled.dataset.field] = seriesEnabled.checked;
-      this._nodeChanged(node);
+      ServiceRegistry.getInstance().eventService.updateEvent(node.id, { enabled: seriesEnabled.checked });
     });
 
-    //Build out the chips for the handlers
     const eventHandlerCount = el.querySelector('#event-handler-count');
     const eventHandlersGrid = el.querySelector('#event-handlers');
-    this._renderLinkableNodeChips(node, 'handler', eventHandlerCount,
-        eventHandlersGrid, true);
+    this._renderLinkableNodeChips(node, 'handler', eventHandlerCount, eventHandlersGrid, true);
 
     this._renderEventConfig(node, configWrap);
     this.builderCanvas.appendChild(el);
     this.builderCanvas.appendChild(this._createDeleteButton(node));
   }
+
   /* ───────────────── EVENT CONFIG EDITOR ─────────────────── */
   _renderEventConfig(node, container) {
     container.innerHTML = '';
@@ -364,22 +331,25 @@ export class EventScheduler {
         dateInput.valueAsDate = node.date || new Date();
         break;
       default:
-        wrap.innerHTML = `<div class="tl-empty">No config</div>`;
+        container.innerHTML = '<div class="tl-empty">No config</div>';
+        return;
     }
 
-    // bind inputs → node
+    // Bind config inputs → service (fixes the mutation-before-snapshot bug for
+    // event config fields that previously mutated node directly without notifying)
     wrap.querySelectorAll('input, select').forEach(input => {
       input.addEventListener('input', () => {
+        let value;
         if (input.type === 'checkbox') {
-          node[input.dataset.field] = input.checked;
+          value = input.checked;
         } else if (input.type === 'date') {
-          //TODO HANDLE TIMEZONE of APP
-          node[input.dataset.field] = input.valueAsDate;
+          value = input.valueAsDate;
         } else if (input.type === 'number') {
-          node[input.dataset.field] = parseInt(input.value, 10);
+          value = parseInt(input.value, 10);
         } else {
-          node[input.dataset.field] = input.value;
+          value = input.value;
         }
+        ServiceRegistry.getInstance().eventService.updateEvent(node.id, { [input.dataset.field]: value });
       });
     });
 
@@ -392,20 +362,17 @@ export class EventScheduler {
     const name = el.querySelector('[data-id="name"]');
     name.value = node.name || '';
     name.addEventListener('input', () => {
-      node.name = name.value;
+      // Previously mutated node.name without notifying — now goes via service
+      ServiceRegistry.getInstance().handlerService.updateHandler(node.id, { name: name.value });
     });
 
-    //Build out the event chips
     const handlerEventCount = el.querySelector('#handler-event-count');
     const handlerEventGrid = el.querySelector('#handler-events');
-    this._renderLinkableNodeChips(node, 'event', handlerEventCount,
-        handlerEventGrid, false);
+    this._renderLinkableNodeChips(node, 'event', handlerEventCount, handlerEventGrid, false);
 
-    //Build out the action chips
     const handlerActionCount = el.querySelector('#handler-action-count');
     const handlerActionGrid = el.querySelector('#handler-actions');
-    this._renderLinkableNodeChips(node, 'action', handlerActionCount,
-        handlerActionGrid, true);
+    this._renderLinkableNodeChips(node, 'action', handlerActionCount, handlerActionGrid, true);
 
     this.builderCanvas.appendChild(el);
     this.builderCanvas.appendChild(this._createDeleteButton(node));
@@ -418,8 +385,7 @@ export class EventScheduler {
     const name = el.querySelector('[data-id="name"]');
     name.value = node.name || '';
     name.addEventListener('input', () => {
-      node.name = name.value;
-      this._nodeChanged(node);
+      ServiceRegistry.getInstance().actionService.updateAction(node.id, { name: name.value });
     });
 
     const typeSelect = el.querySelector('[data-id="type"]');
@@ -434,24 +400,19 @@ export class EventScheduler {
 
     typeSelect.value = node.actionClass || 'AmountAction';
     typeSelect.onchange = () => {
-      node.actionClass = typeSelect.value;
+      ServiceRegistry.getInstance().actionService.updateAction(node.id, { actionClass: typeSelect.value });
       this._renderActionConfig(node, configWrap);
-      this._nodeChanged(node);
     };
 
     this._renderActionConfig(node, configWrap);
 
-    //Build out the handler chips
     const actionHandlerCount = el.querySelector('#action-handler-count');
     const actionHandlerGrid = el.querySelector('#action-handlers');
-    this._renderLinkableNodeChips(node, 'handler', actionHandlerCount,
-        actionHandlerGrid, false);
+    this._renderLinkableNodeChips(node, 'handler', actionHandlerCount, actionHandlerGrid, false);
 
-    //Build out the reducer chips
     const actionReducerCount = el.querySelector('#action-reducer-count');
     const actionReducerGrid = el.querySelector('#action-reducers');
-    this._renderLinkableNodeChips(node, 'reducer', actionReducerCount,
-        actionReducerGrid, true);
+    this._renderLinkableNodeChips(node, 'reducer', actionReducerCount, actionReducerGrid, true);
 
     this.builderCanvas.appendChild(el);
     this.builderCanvas.appendChild(this._createDeleteButton(node));
@@ -461,7 +422,6 @@ export class EventScheduler {
   _renderActionConfig(node, container) {
     container.innerHTML = '';
 
-    // Strip the 'metrics.' storage prefix for user-facing display.
     const displayField = (fn) => fn?.startsWith('metrics.') ? fn.slice(8) : (fn ?? '');
 
     let wrap = null;
@@ -486,29 +446,28 @@ export class EventScheduler {
         break;
       case 'RecordBalanceAction':
       default:
-        break; // no extra config for this class
+        break;
     }
 
     if (wrap) {
       wrap.querySelectorAll('input, select').forEach(input => {
         input.addEventListener('input', () => {
           const field = input.dataset.field;
+          let value;
           if (input.type === 'number') {
-            node[field] = parseFloat(input.value) || 0;
+            value = parseFloat(input.value) || 0;
           } else if (field === 'fieldName') {
-            // Normalise: strip any user-typed 'metrics.' prefix then re-add it.
             const stripped = input.value.startsWith('metrics.') ? input.value.slice(8) : input.value;
-            node[field] = 'metrics.' + stripped;
+            value = 'metrics.' + stripped;
           } else {
-            node[field] = input.value;
+            value = input.value;
           }
-          this._nodeChanged(node);
+          ServiceRegistry.getInstance().actionService.updateAction(node.id, { [field]: value });
         });
       });
       container.appendChild(wrap);
     }
   }
-
 
   /* ───────────────────────────── REDUCER EDITOR ───────────────────────────── */
   _renderReducerEditor(node) {
@@ -520,10 +479,10 @@ export class EventScheduler {
     const name = el.querySelector('[data-id="name"]');
     name.value = node.name || '';
     name.addEventListener('input', () => {
-      node.name = name.value;
+      // Previously mutated node.name without notifying — now goes via service
+      ServiceRegistry.getInstance().reducerService.updateReducer(node.id, { name: name.value });
     });
 
-    // populate dropdown
     this.REDUCER_TYPES.forEach(type => {
       const opt = document.createElement('option');
       opt.value = type;
@@ -532,9 +491,8 @@ export class EventScheduler {
     });
 
     typeSelect.value = node.reducerType || 'MetricReducer';
-
     typeSelect.onchange = () => {
-      node.reducerType = typeSelect.value;
+      ServiceRegistry.getInstance().reducerService.updateReducer(node.id, { reducerType: typeSelect.value });
       this._renderReducerConfig(node, configWrap);
     };
 
@@ -553,23 +511,21 @@ export class EventScheduler {
       case 'NumericSumMetricReducer':
       case 'MetricReducer':
         wrap = this._getTemplate('tpl-metric-reducer-editor');
-        const metricInput = wrap.querySelector('[data-field="metric"]');
-        metricInput.value = node.metric || '';
+        wrap.querySelector('[data-field="metric"]').value = node.metric || '';
         break;
       case 'AccountTransactionReducer':
         wrap = this._getTemplate('tpl-account-transaction-reducer-editor');
-        const accountKeyInput = wrap.querySelector('[data-field="accountKey"]');
-        accountKeyInput.value = node.accountKey || '';
+        wrap.querySelector('[data-field="accountKey"]').value = node.accountKey || '';
         break;
-
       default:
-        wrap.innerHTML = `<div class="tl-empty">No config</div>`;
+        container.innerHTML = '<div class="tl-empty">No config</div>';
+        return;
     }
 
-    // bind inputs → node
+    // Previously mutated node directly without notifying — now goes via service
     wrap.querySelectorAll('input').forEach(input => {
       input.addEventListener('input', () => {
-        node[input.dataset.field] = input.value;
+        ServiceRegistry.getInstance().reducerService.updateReducer(node.id, { [input.dataset.field]: input.value });
       });
     });
 
@@ -578,24 +534,21 @@ export class EventScheduler {
 
   /* ───────────────────────────── CHIPS HELPER ───────────────────────────── */
   _renderLinkableNodeChips(node, kind, countSpan, chipGrid, linkTo) {
-    //Get nodes that I link to
     let myChildren;
-    if(linkTo) {
+    if (linkTo) {
       myChildren = this.graph.getNodesToKindFromMe(node, kind);
-    }else {
+    } else {
       myChildren = this.graph.getNodesFromKindToMe(node, kind);
     }
 
-    //Set count
     countSpan.innerText = `${myChildren.length} selected`;
 
-    //Build out the chips
     const allAvailable = this.graph.getKind(kind);
     allAvailable.forEach(available => {
       const nodeDiv = document.createElement('div');
       nodeDiv.classList.add('reducer-chip');
       nodeDiv.dataset.nodeId = available.id;
-      if(myChildren.some(r => r.id === available.id)) {
+      if (myChildren.some(r => r.id === available.id)) {
         nodeDiv.classList.add('reducer-chip-on');
       }
       const nameSpan = document.createElement('span');
@@ -613,23 +566,22 @@ export class EventScheduler {
       const chip = e.target.closest('.reducer-chip[data-node-id]');
       if (!chip) return;
       const chipNode = this.graph.getNode(chip.dataset.nodeId);
-      //Toggle behavior, if we have it remove it, if we don't add it.
-      const index = myChildren.findIndex(n => n.id == chipNode.id);
-      if(index < 0) {
+      const index = myChildren.findIndex(n => n.id === chipNode.id);
+      if (index < 0) {
         myChildren.push(chipNode);
-        if(linkTo) {
-          this.graph.addEdge({from: node.id, to: chipNode.id});
-        }else {
-          this.graph.addEdge({from: chipNode.id, to: node.id});
+        if (linkTo) {
+          this.graph.addEdge({ from: node.id, to: chipNode.id });
+        } else {
+          this.graph.addEdge({ from: chipNode.id, to: node.id });
         }
         chip.classList.toggle('reducer-chip-on', true);
         this._syncCanonicalArrays(node, chipNode, kind, linkTo, 'add');
-      }else {
+      } else {
         myChildren.splice(index, 1);
-        if(linkTo) {
-          this.graph.removeEdge({from: node.id, to: chipNode.id});
-        }else {
-          this.graph.removeEdge({from: chipNode.id, to: node.id});
+        if (linkTo) {
+          this.graph.removeEdge({ from: node.id, to: chipNode.id });
+        } else {
+          this.graph.removeEdge({ from: chipNode.id, to: node.id });
         }
         chip.classList.toggle('reducer-chip-on', false);
         this._syncCanonicalArrays(node, chipNode, kind, linkTo, 'remove');
@@ -639,19 +591,14 @@ export class EventScheduler {
   }
 
   /**
-   * After a chip toggle, update the canonical array on the correct object and
-   * fire _nodeChanged on the node that owns the sim registration.
+   * After a chip toggle, update the canonical array on the domain object and
+   * notify via _nodeChanged (which calls service.updateX(id, {})) so the bus
+   * fires and BaseScenario re-wires the sim.
    *
-   * The graph edges are the UI representation; the arrays on the domain objects
-   * (handledEvents, generatedActions, reducedActions) are the sim representation.
-   * These must be kept in sync, but the direction of ownership varies:
-   *
-   *   Handler editor → event chips   : node = handler,  owns handledEvents
-   *   Handler editor → action chips  : node = handler,  owns generatedActions
-   *   Reducer editor → action chips  : node = reducer,  owns reducedActions / generatedActions
-   *   Event editor   → handler chips : chipNode = handler, owns handledEvents
-   *   Action editor  → handler chips : chipNode = handler, owns generatedActions
-   *   Action editor  → reducer chips : chipNode = reducer, owns reducedActions
+   * NOTE: The arrays are mutated in-place before the service call, so
+   * originalItem in the ServiceActionEvent captures the post-mutation state
+   * for relationship changes.  Scalar property changes go through
+   * service.updateX(id, changes) directly and do not have this limitation.
    */
   _syncCanonicalArrays(node, chipNode, kind, linkTo, op) {
     const add = op === 'add';
@@ -665,7 +612,6 @@ export class EventScheduler {
       }
     };
 
-    // Cases where node owns the canonical array → notify node
     if (node.kind === 'handler' && kind === 'event' && !linkTo) {
       syncArr(node.handledEvents, chipNode);
       this._nodeChanged(node);
@@ -687,7 +633,6 @@ export class EventScheduler {
       return;
     }
 
-    // Cases where chipNode owns the canonical array → notify chipNode
     if (node.kind === 'event' && kind === 'handler' && linkTo) {
       syncArr(chipNode.handledEvents, node);
       this._nodeChanged(chipNode);
@@ -704,5 +649,4 @@ export class EventScheduler {
       return;
     }
   }
-
 }

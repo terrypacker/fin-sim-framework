@@ -26,6 +26,7 @@ import { EventScheduler } from '../visualization/event-scheduler.js';
 import { ConfigGraphBuilder } from "../visualization/graph-builder.js";
 import { ScenarioStorage } from "../scenarios/scenario-storage.js";
 import { ScenarioSerializer } from "../scenarios/scenario-serializer.js";
+import { ServiceRegistry } from "../services/service-registry.js";
 
 export class BaseApp {
   constructor({ newScenario, chartSeries }) {
@@ -129,6 +130,11 @@ export class BaseApp {
   }
 
   buildScenario() {
+
+    // Reset all services, the shared bus, and the SimulationRegistry so every
+    // rebuild starts with a clean slate.  All stale bus subscriptions from the
+    // previous scenario/EventScheduler are discarded with the old instance.
+    ServiceRegistry.reset();
 
     //Clear out state and metrics
     $('currentStateContent').innerHTML = '';

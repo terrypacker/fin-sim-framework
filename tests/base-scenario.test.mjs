@@ -18,8 +18,9 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { BaseScenario }  from '../src/scenarios/base-scenario.js';
-import { Simulation }    from '../src/simulation-framework/simulation.js';
+import { BaseScenario }    from '../src/scenarios/base-scenario.js';
+import { ServiceRegistry } from '../src/services/service-registry.js';
+import { Simulation }      from '../src/simulation-framework/simulation.js';
 import { BaseEvent }    from '../src/simulation-framework/events/base-event.js';
 import { EventSeries }  from '../src/simulation-framework/events/event-series.js';
 import { OneOffEvent }  from '../src/simulation-framework/events/one-off-event.js';
@@ -82,6 +83,7 @@ class StubSchedulerUI {
 }
 
 function makeScenario() {
+  ServiceRegistry.reset();
   const ui       = new StubSchedulerUI();
   const scenario = new BaseScenario({ eventSchedulerUI: ui });
   scenario.buildSim({}, { metrics: {} });
@@ -237,8 +239,7 @@ test('eventDeleted: removes event from _registeredRecurringTypes', () => {
   scenario.eventChanged(event);
   assert.ok(scenario._registeredRecurringTypes.has(event.type));
 
-  event.kind = 'event'; // ensure kind is set for triggerDelete
-  ui.triggerDelete(event);
+  ServiceRegistry.getInstance().eventService.deleteEvent(event.id);
   assert.ok(!scenario._registeredRecurringTypes.has(event.type));
 });
 
@@ -246,7 +247,7 @@ test('eventDeleted: disabled event can be deleted without error', () => {
   const { ui } = makeScenario();
   ui.triggerCreate('event', 'Series');
   const event = ui.nodes.find(n => n.kind === 'event');
-  assert.doesNotThrow(() => ui.triggerDelete(event));
+  assert.doesNotThrow(() => ServiceRegistry.getInstance().eventService.deleteEvent(event.id));
 });
 
 // ─── Handler deletion ─────────────────────────────────────────────────────────
@@ -262,7 +263,7 @@ test('handlerDeleted: unregisters handler from sim', () => {
   handler.handledEvents.push(event);
   scenario.sim.register(event.type, handler);
 
-  ui.triggerDelete(handler);
+  ServiceRegistry.getInstance().handlerService.deleteHandler(handler.id);
   // After deletion, no handlers should fire for this event type
   assert.strictEqual(scenario.sim.handlers.get(event.type).length, 1); // only auto-reschedule handler remains
 });
@@ -280,7 +281,7 @@ test('actionDeleted: removes action from handler generatedActions', () => {
   handler.generatedActions.push(action);
   assert.strictEqual(handler.generatedActions.length, 1);
 
-  ui.triggerDelete(action);
+  ServiceRegistry.getInstance().actionService.deleteAction(action.id);
   assert.strictEqual(handler.generatedActions.length, 0);
 });
 
@@ -295,7 +296,7 @@ test('actionDeleted: removes action from reducer reducedActions', () => {
   reducer.reducedActions.push(action);
   assert.strictEqual(reducer.reducedActions.length, 1);
 
-  ui.triggerDelete(action);
+  ServiceRegistry.getInstance().actionService.deleteAction(action.id);
   assert.strictEqual(reducer.reducedActions.length, 0);
 });
 
@@ -317,7 +318,7 @@ test('reducerDeleted: unregisters reducer from sim pipeline', () => {
   const before = scenario.sim.reducers.get(action.type);
   assert.ok(before.length > 0, 'reducer should be registered before deletion');
 
-  ui.triggerDelete(reducer);
+  ServiceRegistry.getInstance().reducerService.deleteReducer(reducer.id);
   const after = scenario.sim.reducers.get(action.type);
   assert.strictEqual(after.length, 0, 'reducer should be unregistered after deletion');
 });

@@ -47,6 +47,7 @@ import { EventService } from './services/event-service.js';
 import { HandlerService } from './services/handler-service.js';
 import { ReducerService } from './services/reducer-service.js';
 import { ServiceRegistry } from './services/service-registry.js';
+import { SimulationRegistry } from './services/simulation-registry.js';
 import { Action, FieldAction, FieldValueAction, AmountAction, RecordMetricAction, RecordArrayMetricAction, RecordNumericSumMetricAction, RecordMultiplicativeMetricAction, RecordBalanceAction } from './simulation-framework/actions.js';
 import { BusMessage, SimulationBusMessage, DebugActionBusMessage, ServiceActionEvent } from './simulation-framework/bus-messages.js';
 import { DateUtils } from './simulation-framework/date-utils.js';
@@ -155,6 +156,7 @@ export const Services = {
   HandlerService,
   ReducerService,
   ServiceRegistry,
+  SimulationRegistry,
 };
 
 export const Core = {

@@ -14,9 +14,8 @@ import { HandlerEntry } from '../simulation-framework/handlers.js';
 /**
  * Service for managing HandlerEntry instances throughout their lifecycle.
  *
- * Each mutating method publishes a ServiceActionEvent to the shared EventBus.
- * Wiring the handler into a simulation's HandlerRegistry is the caller's
- * responsibility.
+ * Owns an internal Map<id, item> as the source of truth.  Wiring handlers
+ * into a simulation's HandlerRegistry is the caller's responsibility.
  */
 export class HandlerService extends BaseService {
 
@@ -31,6 +30,8 @@ export class HandlerService extends BaseService {
    */
   createHandler(fn = null, name = 'New Handler') {
     const item = new HandlerEntry(fn, name);
+    item.id = this._generateId('h');
+    this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
   }
@@ -38,17 +39,19 @@ export class HandlerService extends BaseService {
   // ─── Update ───────────────────────────────────────────────────────────────
 
   /**
-   * Apply `changes` to an existing handler in-place, then publish an UPDATE event.
+   * Apply `changes` to an existing handler and publish an UPDATE event.
    *
-   * @param {HandlerEntry} handler
-   * @param {object}       changes
+   * Accepts either the item's string ID or the handler object.  The item is
+   * resolved from the internal map so the originalItem snapshot is taken
+   * before the mutation is applied.
+   *
+   * @param {string|HandlerEntry} idOrHandler
+   * @param {object} changes
    * @returns {HandlerEntry}
    */
-  updateHandler(handler, changes = {}) {
-    const originalItem = Object.assign(
-      Object.create(Object.getPrototypeOf(handler)),
-      handler
-    );
+  updateHandler(idOrHandler, changes = {}) {
+    const handler = this._resolve(idOrHandler);
+    const originalItem = Object.assign(Object.create(Object.getPrototypeOf(handler)), handler);
     Object.assign(handler, changes);
     this._publish('UPDATE', handler.constructor.name, handler, originalItem);
     return handler;
@@ -57,13 +60,15 @@ export class HandlerService extends BaseService {
   // ─── Delete ───────────────────────────────────────────────────────────────
 
   /**
-   * Publish a DELETE event for the given handler.
+   * Remove the handler from the service map and publish a DELETE event.
    * The caller is responsible for unregistering it from the HandlerRegistry.
    *
-   * @param {HandlerEntry} handler
+   * @param {string|HandlerEntry} idOrHandler
    * @returns {HandlerEntry}
    */
-  deleteHandler(handler) {
+  deleteHandler(idOrHandler) {
+    const handler = this._resolve(idOrHandler);
+    this._unregister(handler.id);
     this._publish('DELETE', handler.constructor.name, handler, handler);
     return handler;
   }
