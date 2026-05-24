@@ -111,7 +111,6 @@ export class TimelineView extends BaseComponent {
     // Repopulate options, restoring current selections from controller state
     this._availableEvents.length = 0;
     this._availableEvents.push(...options.events);
-    this._eventSelectFilter.addSelected(filterEvents);
 
     this._availableActions.length = 0;
     this._availableActions.push(...options.actions);
