@@ -140,6 +140,14 @@ export class GraphBuilderView {
       });
       this._controlsEl.appendChild(btn);
     });
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-sm';
+    btn.textContent = 'Fit';
+    btn.addEventListener('click', () => {
+      this._graph.fitToView();
+    });
+    this._controlsEl.appendChild(btn);
+
     wrapper.appendChild(this._controlsEl);
   }
 

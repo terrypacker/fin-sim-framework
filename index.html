@@ -344,9 +344,13 @@
         <!-- Config Graph View -->
         <div class="tab-content config-graph-tab" data-tab="config-graph-tab" data-tab-group="center-col">
           <div class="panel" style="flex:1;min-height:0">
+
             <div id="graphRoot">
-              <svg id="graphEdges"></svg>
-              <div id="graphNodes"></div>
+              <div id="graphViewport">
+                <svg id="graphEdges"></svg>
+                <div id="graphNodes"></div>
+                <div class="selection-box"></div>
+              </div>
             </div>
           </div>
         </div>
