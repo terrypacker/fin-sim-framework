@@ -8,19 +8,28 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { BaseService } from '../../services/base-service.js';
+
 /**
  * AssetService — operations on Asset state objects (and any object
  * that carries value / loanBalance / balanceAtResidencyChange fields).
  *
+ * Extends BaseService so AccountService and future RealPropertyService
+ * can both extend it.
+ *
  * Methods mutate the asset object in-place following the same pattern
  * as AccountService.transaction.
  */
-export class AssetService {
+export class AssetService extends BaseService {
+
+  constructor(graph, query, bus, kind = 'asset', prefixLength = 2, hasEdges = false) {
+    super(graph, query, bus, kind, prefixLength, hasEdges);
+  }
 
   /**
    * Returns the asset value attributable to one person.
    * Joint ownership splits value 50/50.
-   * @param {import('./asset.js').Asset} asset
+   * @param {import('../assets/asset.js').Asset} asset
    * @returns {number}
    */
   getPersonShare(asset) {
@@ -30,7 +39,7 @@ export class AssetService {
   /**
    * Snapshots the current value as balanceAtResidencyChange (one-time capture).
    * No-op if already set (preserves the first residency-change snapshot).
-   * @param {import('./asset.js').Asset} asset
+   * @param {import('../assets/asset.js').Asset} asset
    */
   recordResidencyChange(asset) {
     if (asset.balanceAtResidencyChange === null) {

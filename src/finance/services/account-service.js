@@ -8,9 +8,9 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { BaseService } from '../../services/base-service.js';
+import { AssetService } from './asset-service.js';
 import { EventBus } from '../../simulation-framework/event-bus.js';
-import { InsufficientFundsError } from '../account.js';
+import { InsufficientFundsError } from '../assets/account.js';
 
 /**
  * AccountService — manages Account instances on the service bus and provides
@@ -26,7 +26,7 @@ import { InsufficientFundsError } from '../account.js';
  * Accounts are persisted as part of the scenario configuration via
  * ScenarioSerializer.
  */
-export class AccountService extends BaseService {
+export class AccountService extends AssetService {
   /**
    * @param {import('../../graph/graph.js').Graph} [graph]
    * @param query - graph query api

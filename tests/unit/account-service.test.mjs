@@ -32,7 +32,7 @@ import {
   SavingsAccount,
   USD,
   AUD,
-} from '../../src/finance/account.js';
+} from '../../src/finance/assets/account.js';
 import {
   InvestmentAccount,
   BrokerageAccount,
@@ -40,7 +40,7 @@ import {
   RothAccount,
   TraditionalIRAAccount,
   SuperannuationAccount,
-} from '../../src/finance/investment-account.js';
+} from '../../src/finance/assets/investment-account.js';
 import { AccountService } from '../../src/finance/services/account-service.js';
 import { AccountBuilder } from '../../src/finance/builders/account-builder.js';
 import { ServiceRegistry } from '../../src/services/service-registry.js';

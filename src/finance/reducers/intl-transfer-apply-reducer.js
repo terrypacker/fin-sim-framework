@@ -9,7 +9,7 @@
  */
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
-import { InsufficientFundsError } from '../account.js';
+import { InsufficientFundsError } from '../assets/account.js';
 
 /**
  * Handles the INTL_TRANSFER_APPLY action.

@@ -27,9 +27,8 @@ import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 import { Assert } from '../helpers/assert.js';
 
-import { Account } from '../../src/finance/account.js';
+import { Account } from '../../src/finance/assets/account.js';
 import { AccountService } from '../../src/finance/services/account-service.js';
-import { Asset } from '../../src/finance/asset.js';
 import { Simulation } from '../../src/simulation-framework/simulation.js';
 import { PRIORITY } from '../../src/simulation-framework/reducers.js';
 import { SimulationState } from '../../src/simulation-framework/simulation-state.js';
@@ -55,10 +54,10 @@ function buildFinancialSim({ seed = 1, assets } = {}) {
   const accountService = new AccountService(new Graph(), new EventBus());
 
   const defaultAssets = [
-    new Asset('item1', 1200,  200),
-    new Asset('item2', 10400, 400),
-    new Asset('item3', 20200, 200),
-    new Asset('item4', 9200,  1200),
+    { name: 'item1', value: 1200,  costBasis: 200  },
+    { name: 'item2', value: 10400, costBasis: 400  },
+    { name: 'item3', value: 20200, costBasis: 200  },
+    { name: 'item4', value: 9200,  costBasis: 1200 },
   ];
 
   const sim = new Simulation(new Date(2025, 0, 1), { seed, initialState: new SimulationState({

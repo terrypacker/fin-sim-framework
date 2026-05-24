@@ -10,65 +10,32 @@
 
 /**
  * asset.test.mjs
- * Tests for Asset
- * Run with: node --test tests/asset.test.mjs
+ * Tests for the lean Asset base class (ownership metadata only).
+ * Run with: node --test tests/unit/asset.test.mjs
  */
 
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Asset } from '../../src/finance/asset.js';
+import { Asset }        from '../../src/finance/assets/asset.js';
+import { SimGraphNode } from '../../src/graph/sim-graph-node.js';
 
-test('Asset: constructor assigns name, value, and costBasis', () => {
-  const a = new Asset('AAPL', 15000, 10000);
-  assert.strictEqual(a.name,      'AAPL');
-  assert.strictEqual(a.value,     15000);
-  assert.strictEqual(a.costBasis, 10000);
+test('Asset: name is set via constructor', () => {
+  const a = new Asset('AAPL');
+  assert.strictEqual(a.name, 'AAPL');
 });
 
-test('Asset: default values are empty string and zero', () => {
+test('Asset: default name is empty string', () => {
   const a = new Asset();
-  assert.strictEqual(a.name,      '');
-  assert.strictEqual(a.value,     0);
-  assert.strictEqual(a.costBasis, 0);
+  assert.strictEqual(a.name, '');
 });
-
-test('Asset: partial defaults — name only', () => {
-  const a = new Asset('MSFT');
-  assert.strictEqual(a.name,      'MSFT');
-  assert.strictEqual(a.value,     0);
-  assert.strictEqual(a.costBasis, 0);
-});
-
-test('Asset: fields are writable after construction', () => {
-  const a = new Asset('X', 100, 50);
-  a.value = 200;
-  assert.strictEqual(a.value, 200);
-});
-
-test('Asset: realized gain can be derived as value minus costBasis', () => {
-  const a = new Asset('TSLA', 9200, 1200);
-  assert.strictEqual(a.value - a.costBasis, 8000);
-});
-
-test('Asset: zero gain when value equals costBasis', () => {
-  const a = new Asset('FLAT', 5000, 5000);
-  assert.strictEqual(a.value - a.costBasis, 0);
-});
-
-test('Asset: negative gain (loss) is representable', () => {
-  const a = new Asset('LOSS', 500, 1000);
-  assert.strictEqual(a.value - a.costBasis, -500);
-});
-
-// ─── Asset opts (ownership, drawdown, residency, loan) ───────────────────────
 
 test('Asset: default ownershipType is sole', () => {
-  assert.strictEqual(new Asset('X', 1000, 500).ownershipType, 'sole');
+  assert.strictEqual(new Asset('X').ownershipType, 'sole');
 });
 
 test('Asset: opts.ownershipType sets joint ownership', () => {
-  const a = new Asset('X', 1000, 500, { ownershipType: 'joint' });
+  const a = new Asset('X', { ownershipType: 'joint' });
   assert.strictEqual(a.ownershipType, 'joint');
 });
 
@@ -76,41 +43,54 @@ test('Asset: default ownerId is null', () => {
   assert.strictEqual(new Asset().ownerId, null);
 });
 
+test('Asset: opts.ownerId is set', () => {
+  const a = new Asset('X', { ownerId: 'p1' });
+  assert.strictEqual(a.ownerId, 'p1');
+});
+
 test('Asset: default drawdownPriority is null', () => {
   assert.strictEqual(new Asset().drawdownPriority, null);
 });
 
 test('Asset: opts.drawdownPriority is set correctly', () => {
-  const a = new Asset('House', 800000, 300000, { drawdownPriority: 10 });
+  const a = new Asset('House', { drawdownPriority: 10 });
   assert.strictEqual(a.drawdownPriority, 10);
 });
 
-test('Asset: default balanceAtResidencyChange is null', () => {
-  assert.strictEqual(new Asset().balanceAtResidencyChange, null);
+test('Asset: id is null by default', () => {
+  assert.strictEqual(new Asset().id, null);
 });
 
-test('Asset: default loanBalance is 0', () => {
-  assert.strictEqual(new Asset().loanBalance, 0);
+test('Asset: opts.id is set', () => {
+  const a = new Asset('X', { id: 'a-001' });
+  assert.strictEqual(a.id, 'a-001');
 });
 
-test('Asset: opts.loanBalance is set correctly', () => {
-  const a = new Asset('House', 800000, 300000, { loanBalance: 200000 });
-  assert.strictEqual(a.loanBalance, 200000);
+test('Asset: kind is asset by default', () => {
+  assert.strictEqual(new Asset().kind, 'asset');
 });
 
-test('Asset: is structuredClone-safe with all opts fields', () => {
-  const a  = new Asset('House', 800000, 300000, {
-    ownershipType: 'joint',
-    ownerId: 'p1',
+test('Asset: opts.kind overrides default', () => {
+  const a = new Asset('X', { kind: 'account' });
+  assert.strictEqual(a.kind, 'account');
+});
+
+test('Asset: instanceof SimGraphNode', () => {
+  assert.ok(new Asset('X') instanceof SimGraphNode);
+});
+
+test('Asset: is structuredClone-safe', () => {
+  const a = new Asset('House', {
+    ownershipType:    'joint',
+    ownerId:          'p1',
     drawdownPriority: 10,
-    loanBalance: 150000,
+    id:               'a-001',
   });
   const a2 = structuredClone(a);
   assert.strictEqual(a2.name,             'House');
-  assert.strictEqual(a2.value,            800000);
-  assert.strictEqual(a2.costBasis,        300000);
   assert.strictEqual(a2.ownershipType,    'joint');
+  assert.strictEqual(a2.ownerId,          'p1');
   assert.strictEqual(a2.drawdownPriority, 10);
-  assert.strictEqual(a2.loanBalance,      150000);
-  assert.strictEqual(a2.balanceAtResidencyChange, null);
+  assert.strictEqual(a2.id,              'a-001');
+  assert.strictEqual(a2.kind,            'asset');
 });

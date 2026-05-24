@@ -61,8 +61,8 @@ import { ReplenishSavingsReducer }                                              
 import { SetOutOfFundsDateReducer }                                                  from '../../src/finance/reducers/set-out-of-funds-date-reducer.js';
 import { StockDividendCashApplyReducer }                                             from '../../src/finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { UsSavingsInterestCreditReducer }                                            from '../../src/finance/reducers/us-savings-interest-credit-reducer.js';
-import { Account, CheckingAccount, SavingsAccount }                                  from '../../src/finance/account.js';
-import { InvestmentAccount, BrokerageAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from '../../src/finance/investment-account.js';
+import { Account, CheckingAccount, SavingsAccount }                                  from '../../src/finance/assets/account.js';
+import { InvestmentAccount, BrokerageAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from '../../src/finance/assets/investment-account.js';
 import { Person }                                                                    from '../../src/finance/person.js';
 import {
   SIMULATION_BUS_MESSAGES

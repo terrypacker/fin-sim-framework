@@ -8,14 +8,14 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { USD, AUD, CheckingAccount, SavingsAccount } from '../account.js';
+import { USD, AUD, CheckingAccount, SavingsAccount } from '../assets/account.js';
 import {
   BrokerageAccount,
   FourOhOneKAccount,
   RothAccount,
   TraditionalIRAAccount,
   SuperannuationAccount,
-} from '../investment-account.js';
+} from '../assets/investment-account.js';
 
 /**
  * Base fluent builder shared by all account builder types.

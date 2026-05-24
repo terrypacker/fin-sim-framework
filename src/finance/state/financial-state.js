@@ -18,7 +18,7 @@
  */
 
 import { SimulationState } from '../../simulation-framework/simulation-state.js';
-import { Account } from '../account.js';
+import { Account } from '../assets/account.js';
 
 /**
  * FinancialState extends SimulationState with the standard fields common to

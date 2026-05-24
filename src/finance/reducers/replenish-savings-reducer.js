@@ -9,7 +9,7 @@
  */
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
-import { InsufficientFundsError } from '../account.js';
+import { InsufficientFundsError } from '../assets/account.js';
 import { RecordBalanceAction } from '../../simulation-framework/actions.js';
 
 /**

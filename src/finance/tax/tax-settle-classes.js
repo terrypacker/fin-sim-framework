@@ -11,7 +11,7 @@
 import { Reducer, PRIORITY }  from '../../simulation-framework/reducers.js';
 import { HandlerEntry }        from '../../simulation-framework/handlers.js';
 import { TaxSettleService }    from '../tax-settle-service.js';
-import { InsufficientFundsError } from '../account.js';
+import { InsufficientFundsError } from '../assets/account.js';
 
 // YTD fields reset to zero after each annual settlement, keyed by country code.
 const YTD_FIELDS = {

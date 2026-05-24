@@ -22,9 +22,13 @@ import { UsAccountModule2025 } from './finance/account-rules/us/us-account-modul
 import { UsAccountModule2026 } from './finance/account-rules/us/us-account-module-2026.js';
 import { FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer, FixedIncomeEarningsApplyReducer, StockContributionApplyReducer, StockDividendApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer, FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler, StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler } from './finance/account-rules/us/us-brokerage-classes.js';
 import { UsHouseSaleApplyReducer, UsHouseSaleHandler } from './finance/account-rules/us/us-real-property-classes.js';
-import { USD, AUD, ACCOUNT_TYPE, InsufficientFundsError, Account, CheckingAccount, SavingsAccount } from './finance/account.js';
-import { AssetService } from './finance/asset-service.js';
-import { Asset } from './finance/asset.js';
+import { USD, AUD, ACCOUNT_TYPE, InsufficientFundsError, Account, CheckingAccount, SavingsAccount } from './finance/assets/account.js';
+import { AssetService } from './finance/services/asset-service.js';
+import { Asset } from './finance/assets/asset.js';
+import { RealProperty } from './finance/assets/real-property.js';
+import { RealPropertyService } from './finance/services/real-property-service.js';
+import { Collectible } from './finance/assets/collectible.js';
+import { CollectibleService } from './finance/services/collectible-service.js';
 import { AccountBuilder } from './finance/builders/account-builder.js';
 import { PersonBuilder } from './finance/builders/person-builder.js';
 import { ChangeResidencyHandler } from './finance/handlers/change-residency-handler.js';
@@ -34,7 +38,7 @@ import { IntlTransferToUsHandler, IntlTransferToAuHandler } from './finance/hand
 import { MonthlyExpensesHandler } from './finance/handlers/monthly-expenses-handler.js';
 import { OutOfFundsHandler } from './finance/handlers/out-of-funds-handler.js';
 import { UsSavingsInterestMonthlyHandler } from './finance/handlers/us-savings-interest-handler.js';
-import { InvestmentAccount, BrokerageAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from './finance/investment-account.js';
+import { InvestmentAccount, BrokerageAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from './finance/assets/investment-account.js';
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
 import { Person } from './finance/person.js';
@@ -253,6 +257,10 @@ export const Finance = {
   SavingsAccount,
   AssetService,
   Asset,
+  RealProperty,
+  RealPropertyService,
+  Collectible,
+  CollectibleService,
   AccountBuilder,
   PersonBuilder,
   ChangeResidencyHandler,

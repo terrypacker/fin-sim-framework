@@ -17,8 +17,8 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Account } from '../../src/finance/account.js';
-import { InvestmentAccount } from '../../src/finance/investment-account.js';
+import { Account } from '../../src/finance/assets/account.js';
+import { InvestmentAccount } from '../../src/finance/assets/investment-account.js';
 import { AccountService }   from '../../src/finance/services/account-service.js';
 import { Person }           from '../../src/finance/person.js';
 import {Graph} from "../../src/graph/graph.js";
