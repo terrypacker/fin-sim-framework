@@ -252,31 +252,33 @@
 
     <!-- ── RIGHT COLUMN ──────────────── -->
     <div class="right-col">
-
-
-      <!-- Current State -->
-      <div class="panel" style="flex:1;min-height:0">
-        <div class="panel-header">
-          <span class="panel-tag">ST</span>
-          <span class="panel-title">LIVE STATE</span>
-          <span class="badge-green" style="margin-left:auto">LIVE</span>
+      <div class="panel" style="flex:1;min-height:0;display:flex;flex-direction:column">
+        <!-- Tab headers -->
+        <div class="tab">
+          <div class="panel-header tab-header active" data-dest-tab="right-live-state" data-tab-group="right-col">
+            <span class="panel-tag">ST</span>
+            <span class="panel-title">LIVE STATE</span>
+            <span class="badge-green" style="margin-left:auto">LIVE</span>
+          </div>
+          <div class="panel-header tab-header" data-dest-tab="right-action-detail" data-tab-group="right-col">
+            <span class="panel-tag">AD</span>
+            <span class="panel-title">ACTION DETAIL</span>
+            <span class="badge-purple" style="margin-left:auto">CLICK</span>
+          </div>
         </div>
-        <div id="liveStatePanel">
-          <div class="data-section-title">Metrics</div>
-          <div id="cumulativeMetricsContent" style="display:block"></div>
-
-          <div class="data-section-title">State</div>
-          <div id="currentStateContent" style="display:block"></div>
+        <!-- Live State Tab -->
+        <div class="tab-content" data-tab="right-live-state" data-tab-group="right-col">
+          <div id="liveStatePanel">
+            <div class="data-section-title">Metrics</div>
+            <div id="cumulativeMetricsContent" style="display:block"></div>
+            <div class="data-section-title">State</div>
+            <div id="currentStateContent" style="display:block"></div>
+          </div>
         </div>
-      </div>
-      <!-- Action Detail -->
-      <div class="panel" style="flex:1;min-height:0;display:flex;flex-direction:column;">
-        <div class="panel-header">
-          <span class="panel-tag">AD</span>
-          <span class="panel-title">ACTION DETAIL</span>
-          <span class="badge-purple" style="margin-left:auto">CLICK</span>
+        <!-- Action Detail Tab -->
+        <div class="tab-content" data-tab="right-action-detail" data-tab-group="right-col" style="display:none">
+          <div id="actionPanelDetails" class="actionPanelDetails"></div>
         </div>
-        <div id="actionPanelDetails" class="actionPanelDetails"></div>
       </div>
     </div>
   </div>
@@ -597,37 +599,52 @@
 
 <!-- VIEW ACTION TEMPLATE -->
 <template id="tpl-action-template">
-  <div data-action>
-    <div class="data-section-title">Action</div>
-    <div class="data-list-wrap">
-      <div class="data-grid data-grid-2" data-overview-grid>
-        <div class="data-row">
-          <label>Type</label>
-          <span data-id="entry.action.type"></span>
-        </div>
-        <div class="data-row">
-          <label>Date</label>
-          <span data-id="entry.date"></span>
-        </div>
-        <div class="data-row">
-          <label>Source event</label>
-          <span data-id="entry.eventType"></span>
-        </div>
-        <div class="data-row">
-          <label>Reducer</label>
-          <span data-id="entry.reducer.name"></span>
-        </div>
-        <div class="data-row">
-          <label>Emitted</label>
-          <span data-id="emitted"></span>
-        </div>
-        <div class="data-row">
-          <label class="single-row">Action payload</label>
-          <span class="single-row field-code" data-id="actionPayload"></span>
-        </div>
+  <div data-action class="action-detail">
+    <!-- Overview -->
+    <div class="ad-section-header">Action</div>
+    <div class="data-grid data-grid-2 ad-overview-grid">
+      <div class="data-row">
+        <label>Name</label>
+        <span class="ad-node-row">
+          <span data-id="action-name"></span>
+          <span class="ad-type-badge" data-id="action-type"></span>
+          <button class="ad-node-btn" data-action-btn="open-action" title="Open in editor" style="display:none">↗</button>
+        </span>
       </div>
-      <div data-state-change-grid></div>
+      <div class="data-row">
+        <label>Date</label>
+        <span data-id="entry-date"></span>
+      </div>
+      <div class="data-row">
+        <label>Event</label>
+        <span data-id="event-name"></span>
+      </div>
+      <div class="data-row">
+        <label>Parent</label>
+        <span data-id="parent-info"></span>
+      </div>
+      <div class="data-row">
+        <label>Reducer</label>
+        <span class="ad-node-row">
+          <span data-id="reducer-name"></span>
+          <button class="ad-node-btn" data-action-btn="open-reducer" title="Open in editor" style="display:none">↗</button>
+        </span>
+      </div>
+      <div class="data-row">
+        <label>Emitted</label>
+        <span data-id="emitted"></span>
+      </div>
     </div>
+    <!-- Payload (collapsible) -->
+    <div class="ad-collapse-header" data-collapse-toggle>
+      <span class="ad-section-label">Payload</span>
+      <span class="ad-collapse-icon">▶</span>
+    </div>
+    <div data-collapse-content style="display:none;padding:0 10px 6px">
+      <pre class="field-code" data-id="action-payload" style="max-height:200px"></pre>
+    </div>
+    <!-- State changes (replaced by JS) -->
+    <div data-state-change-grid></div>
   </div>
 </template>
 

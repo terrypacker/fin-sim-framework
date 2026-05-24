@@ -45,7 +45,8 @@
       "Bash(git *)",
       "mcp__chrome-devtools__performance_stop_trace",
       "Bash(sed -i '' 's/this\\\\._publish\\('\\\\''CREATE'\\\\'', '\\\\''Collectible'\\\\'', collectible\\)/this._publish\\('\\\\''CREATE'\\\\'', collectible\\)/g; \\\\ *)",
-      "Bash(sed -i '' 's/this\\\\._publish\\('\\\\''CREATE'\\\\'', '\\\\''RealProperty'\\\\'', property\\)/this._publish\\('\\\\''CREATE'\\\\'', property\\)/g; \\\\ *)"
+      "Bash(sed -i '' 's/this\\\\._publish\\('\\\\''CREATE'\\\\'', '\\\\''RealProperty'\\\\'', property\\)/this._publish\\('\\\\''CREATE'\\\\'', property\\)/g; \\\\ *)",
+      "Bash(awk '/^\\\\.panel[^-]/{found=1} found{print NR\": \"$0; if\\(found && /^}/\\) {found=0; exit}}' /Users/tpacker/IdeaProjects/fin-sim-framework/assets/css/fin-sim.css)"
     ]
   },
   "hooks": {
