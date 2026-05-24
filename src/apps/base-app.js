@@ -230,11 +230,11 @@ export class BaseApp {
     if (!state) return;
 
     const { metrics, ...rest } = state;
-    const newStateDetails = this.createStateDetails('stateDetailsTemplate', date, rest);
+    const newStateDetails = this.createStateDetails('tpl-state-details', date, rest);
     const stateDetails = $('currentStateContent');
     stateDetails.replaceChildren(newStateDetails);
 
-    const newMetricDetails = this.createStateDetails('stateDetailsTemplate', date, metrics);
+    const newMetricDetails = this.createStateDetails('tpl-state-details', date, metrics);
     const metricDetails = $('cumulativeMetricsContent');
     metricDetails.replaceChildren(newMetricDetails);
   }
@@ -300,7 +300,7 @@ export class BaseApp {
     const changes = actionDetail.changes;
     const emitted= actionDetail.emitted;
     const actionPayload = actionDetail.actionPayload;
-    const newActionDetails = this.createActionDetail('actionTemplate', {entry, changes, emitted, actionPayload});
+    const newActionDetails = this.createActionDetail('tpl-action-template', {entry, changes, emitted, actionPayload});
     const actionDetails =$('actionPanelDetails');
     actionDetails.replaceChildren(newActionDetails);
   }
