@@ -155,46 +155,48 @@ test('ActionBuilder.recordBalance: each build() returns a new instance', () => {
   assert.notStrictEqual(b.build(), b.build());
 });
 
-// ─── id === type invariant ────────────────────────────────────────────────────
-// Action constructor sets id = type so services don't need to do it separately.
+// ─── id is null before service assignment ────────────────────────────────────
+// Action.id is null after construction; ActionService assigns it via _generateId.
+// type is the category discriminator and remains independent of id.
 
-test('AmountAction: id equals type after construction', () => {
+test('AmountAction: id is null after construction', () => {
   const a = ActionBuilder.amount().type('MY_ACTION').name('Test').build();
-  assert.strictEqual(a.id, a.type);
-  assert.strictEqual(a.id, 'MY_ACTION');
+  assert.strictEqual(a.id, null);
+  assert.strictEqual(a.type, 'MY_ACTION');
 });
 
-test('RecordMetricAction: id equals type after construction', () => {
+test('RecordMetricAction: id is null after construction', () => {
   const a = ActionBuilder.recordMetric().type('CUSTOM').name('M').fieldName('f').build();
-  assert.strictEqual(a.id, a.type);
-  assert.strictEqual(a.id, 'CUSTOM');
+  assert.strictEqual(a.id, null);
+  assert.strictEqual(a.type, 'CUSTOM');
 });
 
-test('RecordMetricAction: id equals default type RECORD_METRIC when type not overridden', () => {
+test('RecordMetricAction: id is null with default type', () => {
   const a = ActionBuilder.recordMetric().name('M').fieldName('f').build();
-  assert.strictEqual(a.id, 'RECORD_METRIC');
+  assert.strictEqual(a.id, null);
+  assert.strictEqual(a.type, 'RECORD_METRIC');
 });
 
-test('RecordArrayMetricAction: id equals type after construction', () => {
+test('RecordArrayMetricAction: id is null after construction', () => {
   const a = ActionBuilder.recordArrayMetric().name('A').fieldName('f').build();
-  assert.strictEqual(a.id, a.type);
-  assert.strictEqual(a.id, 'RECORD_ARRAY_METRIC');
+  assert.strictEqual(a.id, null);
+  assert.strictEqual(a.type, 'RECORD_ARRAY_METRIC');
 });
 
-test('RecordNumericSumMetricAction: id equals type after construction', () => {
+test('RecordNumericSumMetricAction: id is null after construction', () => {
   const a = ActionBuilder.recordNumericSum().name('S').fieldName('f').build();
-  assert.strictEqual(a.id, a.type);
-  assert.strictEqual(a.id, 'RECORD_NUMERIC_SUM_METRIC');
+  assert.strictEqual(a.id, null);
+  assert.strictEqual(a.type, 'RECORD_NUMERIC_SUM_METRIC');
 });
 
-test('RecordMultiplicativeMetricAction: id equals type after construction', () => {
+test('RecordMultiplicativeMetricAction: id is null after construction', () => {
   const a = ActionBuilder.recordMultiplicative().name('M').fieldName('f').build();
-  assert.strictEqual(a.id, a.type);
-  assert.strictEqual(a.id, 'RECORD_MULTIPLICATIVE_METRIC');
+  assert.strictEqual(a.id, null);
+  assert.strictEqual(a.type, 'RECORD_MULTIPLICATIVE_METRIC');
 });
 
-test('RecordBalanceAction: id equals type after construction', () => {
+test('RecordBalanceAction: id is null after construction', () => {
   const a = ActionBuilder.recordBalance().build();
-  assert.strictEqual(a.id, a.type);
-  assert.strictEqual(a.id, 'RECORD_BALANCE');
+  assert.strictEqual(a.id, null);
+  assert.strictEqual(a.type, 'RECORD_BALANCE');
 });

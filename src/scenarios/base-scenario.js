@@ -386,9 +386,7 @@ export class BaseScenario {
 
   actionCreationRequested() {
     const { actionService } = ServiceRegistry.getInstance();
-    const action = actionService.createAmountAction(
-      'NEW_ACTION_' + actionService._generateId('a'), 'New Action', 0
-    );
+    const action = actionService.createAmountAction('NEW_ACTION', 'New Action', 0);
     this.eventSchedulerUI.addAction(action);
     this.eventSchedulerUI.editNode(action);
   }

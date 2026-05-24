@@ -20,10 +20,15 @@
 /**
  * Base class for all actions returned by Handlers and emitted via next:[].
  * Every action has a type discriminator consumed by the ReducerPipeline.
+ *
+ * id is null until assigned by ActionService._generateId().
+ * type is the category discriminator used as the ReducerPipeline lookup key.
+ * These are intentionally separate: id uniquely identifies the action instance;
+ * type identifies which reducers should process it.
  */
 export class Action {
   constructor(type, name) {
-    this.id   = type ?? null;  // Actions use their type string as stable identity
+    this.id   = null;  // Assigned by ActionService after construction
     this.type = type;
     this.name = name;
   }

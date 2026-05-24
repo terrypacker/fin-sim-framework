@@ -64,7 +64,7 @@ class StubSchedulerUI {
 
   addEvent(e)   { e.kind = 'event';   this.nodes.push(e); }
   addHandler(h) { h.kind = 'handler'; this.nodes.push(h); }
-  addAction(a)  { a.kind = 'action';  a.id = a.type; this.nodes.push(a); }
+  addAction(a)  { a.kind = 'action';  this.nodes.push(a); }
   addReducer(r) { r.kind = 'reducer'; this.nodes.push(r); }
   editNode(n)   { this.editedNodes.push(n); }
 
@@ -172,13 +172,14 @@ test('handlerCreationRequested: opens editor for created node', () => {
 
 // ─── Action creation ──────────────────────────────────────────────────────────
 
-test('actionCreationRequested: adds AmountAction to UI', () => {
+test('actionCreationRequested: adds AmountAction to UI with service-generated id', () => {
   const { ui } = makeScenario();
   ui.triggerCreate('action');
   const actions = ui.nodes.filter(n => n.kind === 'action');
   assert.strictEqual(actions.length, 1);
   assert.ok(actions[0] instanceof AmountAction);
-  assert.ok(actions[0].id.startsWith('NEW_ACTION_a1'));
+  assert.strictEqual(actions[0].id, 'a1');          // service-assigned id
+  assert.strictEqual(actions[0].type, 'NEW_ACTION'); // category type is separate
 });
 
 test('actionCreationRequested: opens editor for created node', () => {

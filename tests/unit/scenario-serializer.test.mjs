@@ -108,7 +108,7 @@ class TrackingUI {
   }
 
   addAction(a) {
-    // Mirror EventScheduler.addAction: load into service (id already = type from constructor).
+    // Mirror EventScheduler.addAction: load into service if not already registered.
     if (!this.nodes.find(n => n.id === a.id)) {
       const { actionService } = ServiceRegistry.getInstance();
       if (!actionService.get(a.id)) actionService.load(a);
