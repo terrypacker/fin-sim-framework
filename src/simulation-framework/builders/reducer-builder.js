@@ -44,6 +44,26 @@ class BaseFieldReducerBuilder extends BaseReducerBuilder {
     this._fieldName = defaultFieldName;
   }
   fieldName(v) { this._fieldName = v; return this; }
+
+  _apply(reducer) {
+    const r = super._apply(reducer);
+    r.fieldName = this._fieldName;
+    return r;
+  }
+}
+
+class BaseFieldValueReducerBuilder extends BaseFieldReducerBuilder {
+  constructor(defaultName, defaultPriority, defaultFieldName, defaultValue) {
+    super(defaultName, defaultPriority, defaultFieldName);
+    this._value = defaultValue;
+  }
+  value(v) { this._value = v; return this; }
+
+  _apply(reducer) {
+    const r = super._apply(reducer);
+    r.value = this._value;
+    return r;
+  }
 }
 
 class NoOpReducerBuilder extends BaseReducerBuilder {
@@ -63,18 +83,18 @@ class ArrayReducerBuilder extends BaseFieldReducerBuilder {
   build() { return this._apply(new ArrayReducer(this._name, this._priority, this._fieldName)); }
 }
 
-class NumericSumReducerBuilder extends BaseFieldReducerBuilder {
+class NumericSumReducerBuilder extends BaseFieldValueReducerBuilder {
   constructor(fieldName) {
-    super('Sum Reducer', PRIORITY.METRICS, fieldName);
+    super('Sum Reducer', PRIORITY.METRICS, fieldName, null);
   }
-  build() { return this._apply(new NumericSumReducer(this._name, this._priority, this._fieldName)); }
+  build() { return this._apply(new NumericSumReducer(this._name, this._priority, this._fieldName, this._value)); }
 }
 
-class MultiplicativeReducerBuilder extends BaseFieldReducerBuilder {
+class MultiplicativeReducerBuilder extends BaseFieldValueReducerBuilder {
   constructor(fieldName) {
-    super('Multiplicative Metric Logger', PRIORITY.METRICS, fieldName);
+    super('Multiplicative Metric Logger', PRIORITY.METRICS, fieldName, null);
   }
-  build() { return this._apply(new MultiplicativeReducer(this._name, this._priority, this._fieldName)); }
+  build() { return this._apply(new MultiplicativeReducer(this._name, this._priority, this._fieldName, this._value)); }
 }
 
 class RepeatingReducerBuilder extends BaseFieldReducerBuilder {
