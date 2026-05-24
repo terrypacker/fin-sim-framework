@@ -685,6 +685,8 @@ export class ScenarioSerializer {
         });
       case 'SetOutOfFundsDateReducer':
         return new FinSimLib.Finance.SetOutOfFundsDateReducer();
+      case 'InflationAdjustReducer':
+        return new FinSimLib.Finance.InflationAdjustReducer();
       default:
         throw new Error(`Add support for deserialization of reducer type ${d.__type}.`);
     }

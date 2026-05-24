@@ -29,6 +29,7 @@ import { DividendScheduledHandler } from '../finance/handlers/dividend-scheduled
 import { ChangeResidencyHandler } from '../finance/handlers/change-residency-handler.js';
 import { OutOfFundsHandler } from '../finance/handlers/out-of-funds-handler.js';
 import { MonthlyWagesHandler } from '../finance/handlers/monthly-wages-handler.js';
+import { InflationAdjustReducer } from '../finance/reducers/inflation-adjust-reducer.js';
 import { UsSavingsInterestCreditReducer } from '../finance/reducers/us-savings-interest-credit-reducer.js';
 import { ExpenseDebitReducer } from '../finance/reducers/expense-debit-reducer.js';
 import { ReplenishSavingsReducer } from '../finance/reducers/replenish-savings-reducer.js';
@@ -92,6 +93,10 @@ export const INTL_RETIREMENT_DEFAULTS = {
 
   // Expenses (local currency: USD pre-move, AUD post-move)
   monthlyExpenses: 6_000,
+
+  // Inflation rates (annual, per country)
+  usInflationRate: 0.03,
+  auInflationRate: 0.03,
 };
 
 /**
@@ -239,6 +244,8 @@ export class IntlRetirementScenario extends BaseScenario {
       auSavingsAccount, auStockAccount, superAccount,
       exchangeRateUsdToAud: p.exchangeRateUsdToAud,
       intlTransferFeeUsd:   p.intlTransferFeeUsd,
+      inflationRates:       { US: p.usInflationRate, AU: p.auInflationRate },
+      monthlyExpenses:      p.monthlyExpenses,
     });
   }
 
@@ -476,5 +483,8 @@ export class IntlRetirementScenario extends BaseScenario {
 
     const setOutOfFundsDateReducer = new SetOutOfFundsDateReducer();
     reducerService.register(setOutOfFundsDateReducer);
+
+    const inflationAdjustReducer = new InflationAdjustReducer();
+    reducerService.register(inflationAdjustReducer);
   }
 }

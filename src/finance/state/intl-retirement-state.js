@@ -29,6 +29,8 @@ export class InternationalRetirementFinancialState extends SimulationState {
     auSavingsAccount, auStockAccount, superAccount,
     exchangeRateUsdToAud,
     intlTransferFeeUsd,
+    inflationRates,
+    monthlyExpenses,
     ...rest
   } = {}) {
     super(rest);
@@ -54,6 +56,10 @@ export class InternationalRetirementFinancialState extends SimulationState {
     //TODO Move to FX When available.
     this.exchangeRateUsdToAud = exchangeRateUsdToAud;
     this.intlTransferFeeUsd = intlTransferFeeUsd;
+
+    this.inflationRates       = inflationRates ?? { US: 0.03, AU: 0.03 };
+    this.inflationAccumulator = { US: 1.0, AU: 1.0 };
+    this.monthlyExpenses      = monthlyExpenses ?? 6_000;
 
     // YTD tax accumulators
     this.usOrdinaryIncomeYTD = 0;

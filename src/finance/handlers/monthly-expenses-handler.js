@@ -45,7 +45,7 @@ export class MonthlyExpensesHandler extends HandlerEntry {
   }
 
   call({ data, state }) {
-    const amount    = data?.amount ?? this.monthlyExpenses;
+    const amount    = data?.amount ?? state.monthlyExpenses ?? this.monthlyExpenses;
     const targetKey = state.isAuResident ? this.auAccountKey : this.usAccountKey;
     const account   = state[targetKey];
 

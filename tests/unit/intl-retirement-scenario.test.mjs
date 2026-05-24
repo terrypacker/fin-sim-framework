@@ -65,6 +65,7 @@ import { ExpenseDebitReducer }                                                  
 import { IntlTransferApplyReducer }                                                  from '../../src/finance/reducers/intl-transfer-apply-reducer.js';
 import { ReplenishSavingsReducer }                                                   from '../../src/finance/reducers/replenish-savings-reducer.js';
 import { SetOutOfFundsDateReducer }                                                  from '../../src/finance/reducers/set-out-of-funds-date-reducer.js';
+import { InflationAdjustReducer }                                                    from '../../src/finance/reducers/inflation-adjust-reducer.js';
 import { StockDividendCashApplyReducer }                                             from '../../src/finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { UsSavingsInterestCreditReducer }                                            from '../../src/finance/reducers/us-savings-interest-credit-reducer.js';
 import { Account, CheckingAccount, SavingsAccount }                                  from '../../src/finance/assets/account.js';
@@ -146,7 +147,7 @@ globalThis.FinSimLib = {
     AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler,
     DividendScheduledHandler, ChangeResidencyHandler, OutOfFundsHandler,
     ChangeResidencyApplyReducer, ExpenseDebitReducer, IntlTransferApplyReducer,
-    ReplenishSavingsReducer, SetOutOfFundsDateReducer,
+    ReplenishSavingsReducer, SetOutOfFundsDateReducer, InflationAdjustReducer,
     StockDividendCashApplyReducer, UsSavingsInterestCreditReducer,
     // Account types
     Account, CheckingAccount, SavingsAccount,

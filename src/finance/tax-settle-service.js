@@ -12,6 +12,10 @@ import { UsTaxRates2024 } from './tax/us/us-tax-rates-2024.js';
 import { UsTaxRates2025 } from './tax/us/us-tax-rates-2025.js';
 import { AuTaxRates2024 } from './tax/au/au-tax-rates-2024.js';
 import { AuTaxRates2025 } from './tax/au/au-tax-rates-2025.js';
+import {
+  InflationAdjustedUsTaxRates,
+  InflationAdjustedAuTaxRates,
+} from './tax/inflation-adjusted-tax-rates.js';
 
 /**
  * TaxSettleService — year-aware computation of end-of-period tax liability.
@@ -75,6 +79,24 @@ export class TaxSettleService {
   // ─── Private ───────────────────────────────────────────────────────────────
 
   /**
+   * Wrap a rates module with inflation-adjusted brackets when
+   * state.inflationAccumulator[cc] > 1.0.  Returns the base module unchanged
+   * when no accumulator is present or the factor is effectively 1.
+   *
+   * @param {string} cc
+   * @param {import('./tax/base-tax-rates-module.js').BaseTaxRatesModule} baseModule
+   * @param {object} state
+   * @returns {import('./tax/base-tax-rates-module.js').BaseTaxRatesModule}
+   */
+  _inflationWrap(cc, baseModule, state) {
+    const factor = state.inflationAccumulator?.[cc] ?? 1.0;
+    if (factor <= 1.0) return baseModule;
+    if (cc === 'US') return new InflationAdjustedUsTaxRates(baseModule, factor);
+    if (cc === 'AU') return new InflationAdjustedAuTaxRates(baseModule, factor);
+    return baseModule;
+  }
+
+  /**
    * Resolve the best-matching rates module for the given country.
    *
    * Uses state.currentPeriods[cc].startMs to derive the tax year, then picks
@@ -99,10 +121,11 @@ export class TaxSettleService {
     if (period) {
       const taxYear = new Date(period.startMs).getUTCFullYear();
       const best    = available.filter(y => y <= taxYear).pop() ?? available[0];
-      return this._modules[`${cc}_${best}`];
+      return this._inflationWrap(cc, this._modules[`${cc}_${best}`], state);
     }
 
     // No period in state — use highest available year as fallback
-    return this._modules[`${cc}_${available[available.length - 1]}`];
+    const baseModule = this._modules[`${cc}_${available[available.length - 1]}`];
+    return this._inflationWrap(cc, baseModule, state);
   }
 }
