@@ -44,6 +44,8 @@ import { MonthlyWagesHandler } from './finance/handlers/monthly-wages-handler.js
 import { OutOfFundsHandler } from './finance/handlers/out-of-funds-handler.js';
 import { UsSavingsInterestMonthlyHandler } from './finance/handlers/us-savings-interest-handler.js';
 import { JournalReportingService } from './finance/journal-reporting-service.js';
+import { DEFAULT_MC_VARIABLE_CONFIGS } from './finance/monte-carlo/intl-retirement-mc-config.js';
+import { computeNetWorthUsd, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
 import { ownershipFractions, splitByOwnership, accumulateByOwnership } from './finance/ownership-utils.js';
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
@@ -125,6 +127,7 @@ import { HandlerBuilder } from './simulation-framework/builders/handler-builder.
 import { ReducerBuilder } from './simulation-framework/builders/reducer-builder.js';
 import { SIMULATION_BUS_MESSAGES, BusMessage, SimulationBusMessage, NodeDataBusMessage, BreakpointHitBusMessage, EventStartBusMessage, EventEndBusMessage, EventHandledMessage, ActionInstanceMessage, ActionResultMessage, ReducerResultMessage, ServiceActionEvent, ServiceBulkActionEvent } from './simulation-framework/bus-messages.js';
 import { DateUtils } from './simulation-framework/date-utils.js';
+import { ConstantDistribution, UniformDistribution, NormalDistribution, LogNormalDistribution, BernoulliDistribution, DISTRIBUTION_TYPES, createDistribution } from './simulation-framework/distributions.js';
 import { EventBus } from './simulation-framework/event-bus.js';
 import { BaseEvent } from './simulation-framework/events/base-event.js';
 import { EventSeries } from './simulation-framework/events/event-series.js';
@@ -161,6 +164,12 @@ import { ReducerEditor } from './visualization/components/reducer-editor.js';
 import { GraphBuilderController } from './visualization/graph-builder/graph-builder-controller.js';
 import { GraphBuilderPresenter } from './visualization/graph-builder/graph-builder-presenter.js';
 import { GraphBuilderView } from './visualization/graph-builder/graph-builder-view.js';
+import { McConfigPanel } from './visualization/monte-carlo/mc-config-panel.js';
+import { McResultsPanel } from './visualization/monte-carlo/mc-results-panel.js';
+import { McRunsPanel } from './visualization/monte-carlo/mc-runs-panel.js';
+import { MonteCarloController } from './visualization/monte-carlo/monte-carlo-controller.js';
+import { MonteCarloPresenter } from './visualization/monte-carlo/monte-carlo-presenter.js';
+import { MonteCarloView } from './visualization/monte-carlo/monte-carlo-view.js';
 import { PeopleController } from './visualization/people/people-controller.js';
 import { PeoplePresenter } from './visualization/people/people-presenter.js';
 import { PeopleView } from './visualization/people/people-view.js';
@@ -347,6 +356,9 @@ export const Finance = {
   OutOfFundsHandler,
   UsSavingsInterestMonthlyHandler,
   JournalReportingService,
+  DEFAULT_MC_VARIABLE_CONFIGS,
+  computeNetWorthUsd,
+  IntlRetirementMcRunner,
   ownershipFractions,
   splitByOwnership,
   accumulateByOwnership,
@@ -468,6 +480,13 @@ export const Core = {
   ServiceActionEvent,
   ServiceBulkActionEvent,
   DateUtils,
+  ConstantDistribution,
+  UniformDistribution,
+  NormalDistribution,
+  LogNormalDistribution,
+  BernoulliDistribution,
+  DISTRIBUTION_TYPES,
+  createDistribution,
   EventBus,
   BaseEvent,
   EventSeries,
@@ -527,6 +546,12 @@ export const Visualization = {
   GraphBuilderController,
   GraphBuilderPresenter,
   GraphBuilderView,
+  McConfigPanel,
+  McResultsPanel,
+  McRunsPanel,
+  MonteCarloController,
+  MonteCarloPresenter,
+  MonteCarloView,
   PeopleController,
   PeoplePresenter,
   PeopleView,
