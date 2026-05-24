@@ -10,6 +10,13 @@
 
 import { BaseService } from './base-service.js';
 import { HandlerEntry, HANDLER_CLASSES } from '../simulation-framework/handlers.js';
+import { UsSavingsInterestMonthlyHandler } from '../finance/handlers/us-savings-interest-handler.js';
+import { MonthlyExpensesHandler } from '../finance/handlers/monthly-expenses-handler.js';
+import { IntlTransferToUsHandler, IntlTransferToAuHandler } from '../finance/handlers/intl-transfer-handlers.js';
+import { AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler } from '../finance/handlers/earnings-handlers.js';
+import { DividendScheduledHandler } from '../finance/handlers/dividend-scheduled-handler.js';
+import { ChangeResidencyHandler } from '../finance/handlers/change-residency-handler.js';
+import { OutOfFundsHandler } from '../finance/handlers/out-of-funds-handler.js';
 
 /**
  * Service for managing HandlerEntry instances throughout their lifecycle.
@@ -88,6 +95,172 @@ export class HandlerService extends BaseService {
     this._items.set(fresh.id, fresh);
     this._publish('UPDATE', newClass, fresh, old);
     return fresh;
+  }
+
+  // ─── Delete ───────────────────────────────────────────────────────────────
+
+  // ── Finance domain handlers ────────────────────────────────────────────────
+
+  /**
+   * Create and register a UsSavingsInterestMonthlyHandler.
+   * Wire the handler to an event by adding the EventSeries to handler.handledEvents
+   * before calling this, or call updateHandler(id, { handledEvents: [...] }) after.
+   *
+   * @param {object} [opts]
+   * @param {string} [opts.accountKey='usSavingsAccount']
+   * @param {number} [opts.interestRate=0.03]
+   * @param {string} [opts.name='Monthly US Savings Interest']
+   */
+  createUsSavingsInterestHandler({ accountKey = 'usSavingsAccount', interestRate = 0.03, name = 'Monthly US Savings Interest' } = {}) {
+    const item = new UsSavingsInterestMonthlyHandler({ accountKey, interestRate });
+    item.name = name;
+    item.id   = this._generateId('h');
+    this._register(item);
+    this._publish('CREATE', item.constructor.name, item);
+    return item;
+  }
+
+  /**
+   * Create and register a MonthlyExpensesHandler.
+   * @param {object} [opts]
+   * @param {number} [opts.monthlyExpenses=6000]
+   * @param {string} [opts.usAccountKey='usSavingsAccount']
+   * @param {string} [opts.auAccountKey='auSavingsAccount']
+   * @param {string} [opts.name='Monthly Expenses']
+   */
+  createMonthlyExpensesHandler({ monthlyExpenses = 6000, usAccountKey = 'usSavingsAccount', auAccountKey = 'auSavingsAccount', name = 'Monthly Expenses' } = {}) {
+    const item = new MonthlyExpensesHandler({ monthlyExpenses, usAccountKey, auAccountKey });
+    item.name = name;
+    item.id   = this._generateId('h');
+    this._register(item);
+    this._publish('CREATE', item.constructor.name, item);
+    return item;
+  }
+
+  /**
+   * Create and register an IntlTransferToUsHandler (AUD → USD, user-triggered).
+   * @param {object} [opts]
+   * @param {string} [opts.auAccountKey='auSavingsAccount']
+   * @param {string} [opts.usAccountKey='usSavingsAccount']
+   * @param {string} [opts.name='International Transfer to US']
+   */
+  createIntlTransferToUsHandler({ auAccountKey = 'auSavingsAccount', usAccountKey = 'usSavingsAccount', name = 'International Transfer to US' } = {}) {
+    const item = new IntlTransferToUsHandler({ auAccountKey, usAccountKey });
+    item.name = name;
+    item.id   = this._generateId('h');
+    this._register(item);
+    this._publish('CREATE', item.constructor.name, item);
+    return item;
+  }
+
+  /**
+   * Create and register an IntlTransferToAuHandler (USD → AUD, user-triggered).
+   * @param {object} [opts]
+   * @param {string} [opts.usAccountKey='usSavingsAccount']
+   * @param {string} [opts.auAccountKey='auSavingsAccount']
+   * @param {string} [opts.name='International Transfer to AU']
+   */
+  createIntlTransferToAuHandler({ usAccountKey = 'usSavingsAccount', auAccountKey = 'auSavingsAccount', name = 'International Transfer to AU' } = {}) {
+    const item = new IntlTransferToAuHandler({ usAccountKey, auAccountKey });
+    item.name = name;
+    item.id   = this._generateId('h');
+    this._register(item);
+    this._publish('CREATE', item.constructor.name, item);
+    return item;
+  }
+
+  /**
+   * Create and register an AuSavingsInterestHandler.
+   * @param {object} [opts]
+   * @param {string} [opts.accountKey='auSavingsAccount']
+   * @param {number} [opts.interestRate=0.045]
+   * @param {string} [opts.name='AU Savings Interest']
+   */
+  createAuSavingsInterestHandler({ accountKey = 'auSavingsAccount', interestRate = 0.045, name = 'AU Savings Interest' } = {}) {
+    const item = new AuSavingsInterestHandler({ accountKey, interestRate });
+    item.name = name;
+    item.id   = this._generateId('h');
+    this._register(item);
+    this._publish('CREATE', item.constructor.name, item);
+    return item;
+  }
+
+  /**
+   * Create and register a FixedIncomeInterestHandler.
+   * @param {object} [opts]
+   * @param {string} [opts.accountKey='fixedIncomeAccount']
+   * @param {number} [opts.interestRate=0.04]
+   * @param {string} [opts.name='Fixed Income Interest']
+   */
+  createFixedIncomeInterestHandler({ accountKey = 'fixedIncomeAccount', interestRate = 0.04, name = 'Fixed Income Interest' } = {}) {
+    const item = new FixedIncomeInterestHandler({ accountKey, interestRate });
+    item.name = name;
+    item.id   = this._generateId('h');
+    this._register(item);
+    this._publish('CREATE', item.constructor.name, item);
+    return item;
+  }
+
+  /**
+   * Create and register a SuperEarningsHandler.
+   * @param {object} [opts]
+   * @param {string} [opts.accountKey='superAccount']
+   * @param {number} [opts.defaultRate=0.07]
+   * @param {string} [opts.name='Super Earnings']
+   */
+  createSuperEarningsHandler({ accountKey = 'superAccount', defaultRate = 0.07, name = 'Super Earnings' } = {}) {
+    const item = new SuperEarningsHandler({ accountKey, defaultRate });
+    item.name = name;
+    item.id   = this._generateId('h');
+    this._register(item);
+    this._publish('CREATE', item.constructor.name, item);
+    return item;
+  }
+
+  /**
+   * Create and register a DividendScheduledHandler.
+   * @param {object} [opts]
+   * @param {string}  [opts.accountKey='stockAccount']
+   * @param {number}  [opts.dividendRate=0.02]
+   * @param {boolean} [opts.reinvest=false]
+   * @param {string}  [opts.name='Dividend Scheduled']
+   */
+  createDividendScheduledHandler({ accountKey = 'stockAccount', dividendRate = 0.02, reinvest = false, name = 'Dividend Scheduled' } = {}) {
+    const item = new DividendScheduledHandler({ accountKey, dividendRate, reinvest });
+    item.name = name;
+    item.id   = this._generateId('h');
+    this._register(item);
+    this._publish('CREATE', item.constructor.name, item);
+    return item;
+  }
+
+  /**
+   * Create and register a ChangeResidencyHandler.
+   * No params — TaxSettleService is created internally.
+   * @param {object} [opts]
+   * @param {string} [opts.name='Change Residency']
+   */
+  createChangeResidencyHandler({ name = 'Change Residency' } = {}) {
+    const item = new ChangeResidencyHandler();
+    item.name = name;
+    item.id   = this._generateId('h');
+    this._register(item);
+    this._publish('CREATE', item.constructor.name, item);
+    return item;
+  }
+
+  /**
+   * Create and register an OutOfFundsHandler.
+   * @param {object} [opts]
+   * @param {string} [opts.name='Out of Funds']
+   */
+  createOutOfFundsHandler({ name = 'Out of Funds' } = {}) {
+    const item = new OutOfFundsHandler();
+    item.name = name;
+    item.id   = this._generateId('h');
+    this._register(item);
+    this._publish('CREATE', item.constructor.name, item);
+    return item;
   }
 
   // ─── Delete ───────────────────────────────────────────────────────────────

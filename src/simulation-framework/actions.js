@@ -115,6 +115,21 @@ export class RecordBalanceAction extends Action {
 }
 
 /**
+ * Emits a named metric value for reporting.
+ * Consumed by any NumericSumReducer (or custom reducer) registered for RECORD_METRIC.
+ * key — metric name (e.g. 'us_savings_interest')
+ * value — numeric amount to record
+ */
+export class RecordMetricAction extends Action {
+  static description = 'Records a named metric value for reporting; consumed by reducers registered for RECORD_METRIC.';
+  constructor(key, value) {
+    super('RECORD_METRIC');
+    this.key   = key;
+    this.value = value;
+  }
+}
+
+/**
  * An action whose value is computed at reduce-time by a user-supplied JS script.
  * Intended for rapid prototyping before promoting logic into a dedicated class.
  *
@@ -174,5 +189,6 @@ export const ACTION_CLASSES = {
   FieldAction,
   FieldValueAction,
   RecordBalanceAction,
+  RecordMetricAction,
   ScriptedAction
 };

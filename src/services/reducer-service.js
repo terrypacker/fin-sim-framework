@@ -19,6 +19,13 @@ import {
   PRIORITY,
   REDUCER_CLASSES,
 } from '../simulation-framework/reducers.js';
+import { UsSavingsInterestCreditReducer } from '../finance/reducers/us-savings-interest-credit-reducer.js';
+import { ExpenseDebitReducer } from '../finance/reducers/expense-debit-reducer.js';
+import { ReplenishSavingsReducer } from '../finance/reducers/replenish-savings-reducer.js';
+import { IntlTransferApplyReducer } from '../finance/reducers/intl-transfer-apply-reducer.js';
+import { StockDividendCashApplyReducer } from '../finance/reducers/stock-dividend-cash-apply-reducer.js';
+import { ChangeResidencyApplyReducer } from '../finance/reducers/change-residency-apply-reducer.js';
+import { SetOutOfFundsDateReducer } from '../finance/reducers/set-out-of-funds-date-reducer.js';
 
 /**
  * Service for managing Reducer instances throughout their lifecycle.
@@ -74,6 +81,119 @@ export class ReducerService extends BaseService {
   createScriptedReducer(fieldName = '', script = '// return value (fieldName set) or partial state object\nreturn {};', name = 'Scripted Reducer', priority = PRIORITY.POSITION_UPDATE) {
     const item = new ScriptedReducer(name, priority, fieldName, script);
     item.id = this._generateId('r');
+    this._register(item);
+    this._publish('CREATE', item.constructor.name, item);
+    return item;
+  }
+
+  // ── Finance domain reducers ────────────────────────────────────────────────
+
+  /**
+   * Create and register a UsSavingsInterestCreditReducer.
+   * @param {import('../finance/services/account-service.js').AccountService} accountService
+   * @param {object} [opts]
+   * @param {string} [opts.accountKey='usSavingsAccount']
+   * @param {string} [opts.name='US Savings Interest Credit']
+   */
+  createUsSavingsInterestCreditReducer(accountService, { accountKey = 'usSavingsAccount', name = 'US Savings Interest Credit' } = {}) {
+    const item = new UsSavingsInterestCreditReducer({ accountService, accountKey });
+    item.name = name;
+    item.id   = this._generateId('r');
+    this._register(item);
+    this._publish('CREATE', item.constructor.name, item);
+    return item;
+  }
+
+  /**
+   * Create and register an ExpenseDebitReducer.
+   * @param {import('../finance/services/account-service.js').AccountService} accountService
+   * @param {object} [opts]
+   * @param {string} [opts.usAccountKey='usSavingsAccount']
+   * @param {string} [opts.auAccountKey='auSavingsAccount']
+   * @param {string} [opts.name='Expense Debit']
+   */
+  createExpenseDebitReducer(accountService, { usAccountKey = 'usSavingsAccount', auAccountKey = 'auSavingsAccount', name = 'Expense Debit' } = {}) {
+    const item = new ExpenseDebitReducer({ accountService, usAccountKey, auAccountKey });
+    item.name = name;
+    item.id   = this._generateId('r');
+    this._register(item);
+    this._publish('CREATE', item.constructor.name, item);
+    return item;
+  }
+
+  /**
+   * Create and register a ReplenishSavingsReducer.
+   * @param {import('../finance/services/account-service.js').AccountService} accountService
+   * @param {object} [opts]
+   * @param {string} [opts.name='Replenish Savings']
+   */
+  createReplenishSavingsReducer(accountService, { name = 'Replenish Savings' } = {}) {
+    const item = new ReplenishSavingsReducer({ accountService });
+    item.name = name;
+    item.id   = this._generateId('r');
+    this._register(item);
+    this._publish('CREATE', item.constructor.name, item);
+    return item;
+  }
+
+  /**
+   * Create and register an IntlTransferApplyReducer.
+   * @param {import('../finance/services/account-service.js').AccountService} accountService
+   * @param {object} [opts]
+   * @param {string} [opts.usSavingsKey='usSavingsAccount']
+   * @param {string} [opts.auSavingsKey='auSavingsAccount']
+   * @param {string} [opts.name='International Transfer Apply']
+   */
+  createIntlTransferApplyReducer(accountService, { usSavingsKey = 'usSavingsAccount', auSavingsKey = 'auSavingsAccount', name = 'International Transfer Apply' } = {}) {
+    const item = new IntlTransferApplyReducer({ accountService, usSavingsKey, auSavingsKey });
+    item.name = name;
+    item.id   = this._generateId('r');
+    this._register(item);
+    this._publish('CREATE', item.constructor.name, item);
+    return item;
+  }
+
+  /**
+   * Create and register a StockDividendCashApplyReducer.
+   * @param {import('../finance/services/account-service.js').AccountService} accountService
+   * @param {object} [opts]
+   * @param {string} [opts.accountKey='usSavingsAccount']
+   * @param {string} [opts.name='Stock Dividend Cash Apply']
+   */
+  createStockDividendCashApplyReducer(accountService, { accountKey = 'usSavingsAccount', name = 'Stock Dividend Cash Apply' } = {}) {
+    const item = new StockDividendCashApplyReducer({ accountService, accountKey });
+    item.name = name;
+    item.id   = this._generateId('r');
+    this._register(item);
+    this._publish('CREATE', item.constructor.name, item);
+    return item;
+  }
+
+  /**
+   * Create and register a ChangeResidencyApplyReducer.
+   * @param {import('../finance/services/account-service.js').AccountService} accountService
+   * @param {object} [opts]
+   * @param {string[]} [opts.investmentKeys]
+   * @param {string}   [opts.name='Change Residency Apply']
+   */
+  createChangeResidencyApplyReducer(accountService, { investmentKeys, name = 'Change Residency Apply' } = {}) {
+    const item = new ChangeResidencyApplyReducer({ accountService, ...(investmentKeys ? { investmentKeys } : {}) });
+    item.name = name;
+    item.id   = this._generateId('r');
+    this._register(item);
+    this._publish('CREATE', item.constructor.name, item);
+    return item;
+  }
+
+  /**
+   * Create and register a SetOutOfFundsDateReducer.
+   * @param {object} [opts]
+   * @param {string} [opts.name='Set Out of Funds Date']
+   */
+  createSetOutOfFundsDateReducer({ name = 'Set Out of Funds Date' } = {}) {
+    const item = new SetOutOfFundsDateReducer();
+    item.name = name;
+    item.id   = this._generateId('r');
     this._register(item);
     this._publish('CREATE', item.constructor.name, item);
     return item;
