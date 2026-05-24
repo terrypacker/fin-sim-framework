@@ -26,7 +26,7 @@ import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
 import { Account } from '../../src/finance/account.js';
-import { FinancialState } from '../../src/finance/financial-state.js';
+import { FinancialState } from '../../src/finance/state/financial-state.js';
 import { Simulation } from '../../src/simulation-framework/simulation.js';
 import { TaxService } from '../../src/finance/tax-service.js';
 import { PeriodService } from '../../src/finance/period/period-service.js';

@@ -30,7 +30,7 @@ import { AssetService } from './finance/asset-service.js';
 import { Asset } from './finance/asset.js';
 import { AccountBuilder } from './finance/builders/account-builder.js';
 import { PersonBuilder } from './finance/builders/person-builder.js';
-import { FinancialState } from './finance/financial-state.js';
+import { FinancialState } from './finance/state/financial-state.js';
 import { ChangeResidencyHandler } from './finance/handlers/change-residency-handler.js';
 import { DividendScheduledHandler } from './finance/handlers/dividend-scheduled-handler.js';
 import { AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler } from './finance/handlers/earnings-handlers.js';
