@@ -9,7 +9,7 @@
  */
 
 export class TimeControls {
-  constructor({scenario, timelineView, graphView, chartView, timeLabel, timeSlider, formatDate}) {
+  constructor({scenario, timelineView, graphView, chartView, timeLabel, timeSlider, formatDate, onReset}) {
     this.scenario = scenario;
     this.timelineView = timelineView;
     this.graphView = graphView;
@@ -17,6 +17,7 @@ export class TimeControls {
     this.timeLabel = timeLabel;
     this.timeSlider = timeSlider;
     this.formatDate = formatDate ?? (d => d.toDateString());
+    this.onReset = onReset ?? null;
     this._dateChangedRaf = null;
     // Stack of fractional positions (0–1) visited by stepForward(),
     // so stepBack() can return to exactly the previous event's position.
@@ -92,6 +93,7 @@ export class TimeControls {
 
     this.timeSlider.value = 0;
     this.timeLabel.textContent = this.formatDate(this.scenario.simStart);
+    this.onReset?.(this.scenario.simStart, this.scenario.sim.state);
   }
 
 
