@@ -83,31 +83,6 @@ import {
   IraContributionHandler,
 } from '../../src/finance/account-rules/us/ira-classes.js';
 
-// FinSimLib global — required by ScenarioSerializer._makeX methods
-globalThis.FinSimLib = {
-  Finance: {
-    Person, Account, SavingsAccount,
-    RothAccount, TraditionalIRAAccount, FourOhOneKAccount, BrokerageAccount,
-    SuperannuationAccount,
-    TaxService, DynamicTaxReducer,
-    PeriodAdvanceReducer, PeriodAdvanceHandler,
-    TaxSettleHandler, TaxSettleApplyReducer, TaxPaymentDebitReducer,
-    RothContributionApplyReducer, RothEarningsApplyReducer, RothContributionHandler,
-    IraContributionApplyReducer, IraEarningsApplyReducer, IraContributionHandler,
-    MonthlyExpensesHandler, ChangeResidencyHandler, UsSavingsInterestMonthlyHandler,
-    ExpenseDebitReducer, ReplenishSavingsReducer, ChangeResidencyApplyReducer,
-    UsSavingsInterestCreditReducer,
-  },
-  Engine: {
-    Simulation, HandlerEntry,
-    AmountAction, Action, FieldAction, FieldValueAction, ScriptedAction, RecordBalanceAction,
-    FieldReducer, NumericSumReducer, ArrayReducer, MultiplicativeReducer, NoOpReducer, ScriptedReducer,
-    ReducerBuilder,
-    EventSeries, OneOffEvent,
-  },
-  Scenarios: {},
-};
-
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
 const SIM_START = new Date(Date.UTC(2026, 0, 1));
@@ -251,7 +226,7 @@ test('finance round-trip: MonthlyExpensesHandler debits usSavingsAccount when is
   };
 
   const { sim: simOrig, config } = buildAndSerialize(initialState, (sr) => {
-    const primary = new (FinSimLib.Finance.Person)('primary', new Date(Date.UTC(1978, 3, 15)),
+    const primary = new Person('primary', new Date(Date.UTC(1978, 3, 15)),
       { name: 'Primary', citizen: ['US'] });
     sr.personService.register(primary);
 
@@ -328,7 +303,7 @@ test('finance round-trip: increasing monthlyExpenses in config+state reduces US 
   };
 
   const { config } = buildAndSerialize(initialState, (sr) => {
-    const primary = new (FinSimLib.Finance.Person)('primary', new Date(Date.UTC(1978, 3, 15)),
+    const primary = new Person('primary', new Date(Date.UTC(1978, 3, 15)),
       { name: 'Primary', citizen: ['US'] });
     sr.personService.register(primary);
 

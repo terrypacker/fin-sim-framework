@@ -49,29 +49,6 @@ import {
 import { ReducerBuilder } from '../../src/simulation-framework/builders/reducer-builder.js';
 import { Person } from '../../src/finance/person.js';
 
-// ─── FinSimLib global (required by BaseScenario and ScenarioSerializer) ────────
-
-globalThis.FinSimLib = {
-  Finance: { Person },
-  Engine: {
-    Simulation,
-    HandlerEntry,
-    AmountAction,
-    Action,
-    FieldAction,
-    FieldValueAction,
-    RecordBalanceAction,
-    ScriptedAction,
-    NumericSumReducer,
-    ArrayReducer,
-    MultiplicativeReducer,
-    NoOpReducer,
-    ReducerBuilder,
-    EventSeries,
-    OneOffEvent,
-  },
-};
-
 // ─── Tracking scheduler UI stub ───────────────────────────────────────────────
 //
 // Subscribes to the shared bus (just like the real ConfigBuilder does) and

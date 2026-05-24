@@ -56,23 +56,6 @@ import {
   SuperannuationAccount,
 } from '../../src/finance/assets/investment-account.js';
 
-// FinSimLib global
-globalThis.FinSimLib = {
-  Finance: {
-    Person, Account, SavingsAccount,
-    RothAccount, TraditionalIRAAccount, FourOhOneKAccount, BrokerageAccount,
-    SuperannuationAccount,
-  },
-  Engine: {
-    Simulation, HandlerEntry,
-    AmountAction, Action, FieldAction, FieldValueAction, ScriptedAction, RecordBalanceAction,
-    FieldReducer, NumericSumReducer, ArrayReducer, MultiplicativeReducer, NoOpReducer, ScriptedReducer,
-    ReducerBuilder,
-    EventSeries, OneOffEvent,
-  },
-  Scenarios: {},
-};
-
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
 const SIM_START = new Date(Date.UTC(2026, 0, 1));
