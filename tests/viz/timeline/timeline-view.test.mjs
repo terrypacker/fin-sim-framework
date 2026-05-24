@@ -153,23 +153,8 @@ test('TimelineView.render: filter bar contains date range inputs', () => {
 
 // ─── render: filter bar options ───────────────────────────────────────────────
 
-test('TimelineView.render: event select is populated with options', () => {
-  const view    = makeView();
-  const entries = [makeEntry({ eventType: 'SELL_ASSET' }), makeEntry({ eventType: 'SALARY' })];
-  const groups  = makeGroups(entries);
-  view.render({
-    groups,
-    options:         { events:[{id: 'SALARY', name: 'SALARY'}, {id: 'SELL_ASSET', name: 'SELL_ASSET'}], actions: [] },
-    filterEvents:    new Set(),
-    filterActions:   new Set(),
-    filterDateStart: null,
-    filterDateEnd:   null,
-    expanded:        new Set(),
-    hasRewind:       false,
-  });
-  const selected = [...view._availableEvents].map(o => o.name);
-  assert.strictEqual(selected.length, 2);
-});
+// Available event/action options are now managed by the presenter (not the view).
+// See timeline-presenter.test.mjs for option-population coverage.
 
 /** I'm not sure we want this to happen, it breaks the UI?
 test('TimelineView.render: previously selected event options are marked selected', () => {
