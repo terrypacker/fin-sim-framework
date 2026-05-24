@@ -45,6 +45,8 @@ const _ACCOUNT_SERVICE_REDUCERS = new Set([
   // US — Roth Rollover
   'RothRolloverContributionApplyReducer', 'RothRolloverEarningsApplyReducer',
   'RothRolloverWithdrawalContribApplyReducer', 'RothRolloverWithdrawalEarningsApplyReducer',
+  // US — Roth Conversion
+  'RothConversionApplyReducer',
   // AU — Savings
   'AuSavingsContributionApplyReducer', 'AuSavingsWithdrawalApplyReducer',
   'AuSavingsEarningsApplyReducer',
@@ -91,6 +93,8 @@ const _NO_ARG_HANDLERS = new Set([
   // US — Roth Rollover
   'RothRolloverContributionHandler', 'RothRolloverEarningsHandler',
   'RothRolloverWithdrawalContributionsHandler', 'RothRolloverWithdrawalEarningsHandler',
+  // US — Roth Conversion
+  'RothConversionHandler', 'RothConversionPolicyHandler',
   // AU — Savings
   'AuSavingsContributionHandler', 'AuSavingsWithdrawalHandler', 'AuSavingsEarningsHandler',
   // AU — Superannuation

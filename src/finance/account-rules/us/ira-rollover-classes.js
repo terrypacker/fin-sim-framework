@@ -19,7 +19,7 @@ const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
  * Reduce IRA by `amount`, drawing from contributionBasis first then earningsBasis.
  * Returns the updated iraAccount object.
  */
-function debitIra(ia, amount) {
+export function debitIra(ia, amount) {
   const fromContrib  = Math.min(amount, ia.contributionBasis);
   const fromEarnings = Math.min(amount - fromContrib, ia.earningsBasis);
   return {

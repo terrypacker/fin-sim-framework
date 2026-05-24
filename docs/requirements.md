@@ -85,8 +85,9 @@ Columns: Account · Event description · Balance direction · Balance part · Ea
 | EVT-49 | AU Savings | Self-Employment Income | + $ amount/month | Ordinary Income | Ordinary Income if resident | N | ✅ |
 | EVT-50 | US Checking | Bonus | + $ amount | Ordinary Income | Ordinary Income if resident | N | ✅ |
 | EVT-51 | US Checking | Company Sale | + $ amount | Capital Gain | Capital Gain if resident | N | ✅ |
+| EVT-52 | Roth Conversion | IRA → Roth Conversion | −IRA, +Roth rollover contribs | Ordinary Income | Ordinary Income if resident | N | ✅ |
 
-**EVT coverage: 51 / 51 tested**
+**EVT coverage: 52 / 52 tested**
 
 ---
 

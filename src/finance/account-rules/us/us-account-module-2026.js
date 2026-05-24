@@ -57,6 +57,10 @@ import {
   RothRolloverContributionHandler, RothRolloverEarningsHandler,
   RothRolloverWithdrawalContributionsHandler, RothRolloverWithdrawalEarningsHandler,
 } from './roth-rollover-classes.js';
+import {
+  RothConversionApplyReducer,
+  RothConversionHandler, RothConversionPolicyHandler,
+} from './roth-conversion-classes.js';
 
 
 /**
@@ -86,6 +90,7 @@ import {
  *   EVT-42       Roth Rollover Earnings
  *   EVT-43       Roth Rollover Withdrawal – Contributions
  *   EVT-44       Roth Rollover Withdrawal – Earnings
+ *   EVT-52       Roth Conversion (IRA → Roth, bracket-fill policy)
  */
 export class UsAccountModule2026 extends BaseAccountModule {
   get countryCode() { return 'US'; }
@@ -139,6 +144,8 @@ export class UsAccountModule2026 extends BaseAccountModule {
       new RothRolloverEarningsApplyReducer({ accountService }),
       new RothRolloverWithdrawalContribApplyReducer({ accountService }),
       new RothRolloverWithdrawalEarningsApplyReducer({ accountService }),
+      // Roth Conversion
+      new RothConversionApplyReducer({ accountService }),
     ];
   }
 
@@ -186,6 +193,9 @@ export class UsAccountModule2026 extends BaseAccountModule {
       new RothRolloverEarningsHandler(),
       new RothRolloverWithdrawalContributionsHandler(),
       new RothRolloverWithdrawalEarningsHandler(),
+      // Roth Conversion
+      new RothConversionHandler(),
+      new RothConversionPolicyHandler(),
     ];
   }
 }

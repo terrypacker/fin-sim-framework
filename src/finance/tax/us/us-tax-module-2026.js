@@ -23,6 +23,7 @@ import { BaseTaxModule } from '../base-tax-module.js';
  *   EVT-9 to 15  US Brokerage (fixed income + stocks)
  *   EVT-24/25    401k
  *   EVT-34       US House Sale
+ *   EVT-52       Roth Conversion
  */
 export class UsTaxModule2026 extends BaseTaxModule {
   get countryCode() { return 'US'; }
@@ -39,6 +40,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
       ...this._collectibleReducerFns(),
       ...this._iraRolloverReducerFns(),
       ...this._rothRolloverReducerFns(),
+      ...this._rothConversionReducerFns(),
     ]);
   }
 
@@ -313,6 +315,24 @@ export class UsTaxModule2026 extends BaseTaxModule {
           auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
           ftcYTD:              state.ftcYTD              + amount,
         };
+      }],
+    ];
+  }
+
+  _rothConversionReducerFns() {
+    return [
+      // EVT-52: Roth conversion — US ordinary income; AU ordinary income if resident
+      ['ROTH_CONVERSION_TAX', (state, action) => {
+        const { amount, isAuResident } = action;
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        if (isAuResident) {
+          next = {
+            ...next,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            ftcYTD:              state.ftcYTD              + amount,
+          };
+        }
+        return next;
       }],
     ];
   }

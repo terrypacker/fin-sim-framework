@@ -16,9 +16,10 @@ import { AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuS
 import { SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer, SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperContributionHandler, SuperWithdrawalContributionsHandler, SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler } from './finance/account-rules/au/au-super-classes.js';
 import { BaseAccountModule } from './finance/account-rules/base-account-module.js';
 import { IraContributionApplyReducer, IraWithdrawalContribApplyReducer, IraWithdrawalEarningsApplyReducer, IraEarningsApplyReducer, IraContributionHandler, IraWithdrawalContributionsHandler, IraWithdrawalEarningsHandler, IraEarningsHandler } from './finance/account-rules/us/ira-classes.js';
-import { IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer, IraRolloverWithdrawalHandler, IraRmdHandler } from './finance/account-rules/us/ira-rollover-classes.js';
+import { debitIra, IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer, IraRolloverWithdrawalHandler, IraRmdHandler } from './finance/account-rules/us/ira-rollover-classes.js';
 import { K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer, K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler } from './finance/account-rules/us/k401-classes.js';
 import { RothContributionApplyReducer, RothWithdrawalContribApplyReducer, RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer, RothContributionHandler, RothWithdrawalContributionsHandler, RothWithdrawalEarningsHandler, RothEarningsHandler } from './finance/account-rules/us/roth-classes.js';
+import { RothConversionApplyReducer, RothConversionHandler, RothConversionPolicyHandler } from './finance/account-rules/us/roth-conversion-classes.js';
 import { RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer, RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer, RothRolloverContributionHandler, RothRolloverEarningsHandler, RothRolloverWithdrawalContributionsHandler, RothRolloverWithdrawalEarningsHandler } from './finance/account-rules/us/roth-rollover-classes.js';
 import { UsAccountModule2024 } from './finance/account-rules/us/us-account-module-2024.js';
 import { UsAccountModule2025 } from './finance/account-rules/us/us-account-module-2025.js';
@@ -267,6 +268,7 @@ export const Finance = {
   IraWithdrawalContributionsHandler,
   IraWithdrawalEarningsHandler,
   IraEarningsHandler,
+  debitIra,
   IraRolloverWithdrawalApplyReducer,
   IraRmdApplyReducer,
   IraRolloverWithdrawalHandler,
@@ -285,6 +287,9 @@ export const Finance = {
   RothWithdrawalContributionsHandler,
   RothWithdrawalEarningsHandler,
   RothEarningsHandler,
+  RothConversionApplyReducer,
+  RothConversionHandler,
+  RothConversionPolicyHandler,
   RothRolloverContributionApplyReducer,
   RothRolloverEarningsApplyReducer,
   RothRolloverWithdrawalContribApplyReducer,
