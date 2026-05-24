@@ -66,8 +66,8 @@ export class TimelineView {
         <label class="tl-filter-label" for="tl-date-end-${uid}">To</label>
         <input class="tl-filter-date" type="date" id="tl-date-end-${uid}">
       </div>
-      <button class="tl-filter-clear"    id="tl-filter-clear-${uid}"    title="Clear all filters">✕</button>
-      <button class="tl-download-csv"   id="tl-download-csv-${uid}"   title="Download visible rows as CSV">⬇ CSV</button>
+      <button class="btn btn-sm"    id="tl-filter-clear-${uid}"    title="Clear all filters">✕</button>
+      <button class="btn btn-sm"   id="tl-download-csv-${uid}"   title="Download visible rows as CSV">⬇ CSV</button>
     `;
     this._listEl = document.createElement('div');
     this._listEl.className = 'tl-list';
