@@ -36,7 +36,7 @@ Columns: Account · Event description · Balance direction · Balance part · Ea
 |----|---------|-------|-----------|--------|--------|-----|--------|
 | EVT-1 | Roth | Contribution | + contribution | N | N | N | ✅ |
 | EVT-2 | Roth | Withdrawal – Contributions | − contribution | N | N | N | ✅ |
-| EVT-3 | Roth | Withdrawal – Earnings | − earnings | N | Ordinary Income if resident | Y | ✅ |
+| EVT-3 | Roth | Withdrawal – Earnings | − earnings | N (10% penalty if age < 59.5) | Ordinary Income if resident | Y | ✅ |
 | EVT-4 | Roth | Earnings | + earnings | N | N | N | ✅ |
 | EVT-5 | IRA | Contribution | + contribution | Negative Income | N | N | ✅ |
 | EVT-6 | IRA | Withdrawal – Contributions | − contribution | Ordinary Income | N | N | ✅ |
@@ -145,6 +145,34 @@ Columns: Account · Event description · Balance direction · Balance part · Ea
 
 ---
 
+## Sheet: Early Withdrawal Drawdown — EW Requirements
+
+These requirements govern the *automated drawdown* path (`replenishSavings` / `ReplenishSavingsReducer` /
+`IntlTransferApplyReducer`), where the simulation draws from retirement accounts to cover a cash deficit
+before the person has reached the normal penalty-free age.  They complement the existing EVT requirements,
+which cover explicit manual withdrawal events.
+
+Age threshold for all US retirement accounts: **59.5** (IRS rule, decimal years).  
+Super is excluded — AU preservation rules are absolute (no early access in this model).
+
+Columns: Account · Rule · Net cash to target · US Tax · AU Tax · Basis tracking
+
+| ID | Account | Rule | Net to Target | US Tax | AU Tax | Basis Updated | Status |
+|----|---------|------|---------------|--------|--------|---------------|--------|
+| EW-1 | Roth, IRA, 401k | `allowsEarlyWithdrawal: true` flag on account. `replenishSavings` considers these accounts (after exhausting non-age-gated accounts) when person is below `minimumAge`. Super stays `false`. | — | — | — | — | ✅ |
+| EW-2 | Roth | Early drawdown phase 1: draw from `contributionBasis` first. No age gate, no penalty, no US tax, no AU tax. | gross = net | N | N | contributionBasis − amount | ✅ |
+| EW-3 | Roth | Early drawdown phase 2: draw from `earningsBasis` only after contributions exhausted. 10% penalty if age < 59.5. No US income tax; AU ordinary income if resident + FTC. | gross × 0.9 | penalty only | Ord. Income if resident | earningsBasis − amount | ✅ |
+| EW-4 | IRA | All early draws: US ordinary income + 10% penalty if age < 59.5. Draw contributions first for basis tracking; earnings next (same tax treatment). AU ordinary income if resident + FTC. | gross × 0.9 | Ord. Income + penalty | Ord. Income if resident | contrib/earningsBasis decremented | ✅ |
+| EW-5 | 401k | All early draws: US ordinary income + 10% penalty if age < 59.5. No AU tax. | gross × 0.9 | Ord. Income + penalty | N | contrib/earningsBasis decremented | ✅ |
+| EW-6 | All early-eligible | Target savings account is credited with `net` (gross − penalty). Penalty is never deposited — tracked via `usPenaltyYTD`. | net only | — | — | — | ✅ |
+| EW-7 | All early-eligible | `replenishSavings` return type changes to `{ drawnKeys, pendingTaxActions }`. Callers (`ReplenishSavingsReducer`, `IntlTransferApplyReducer`) chain `pendingTaxActions` so YTD tax fields update correctly. | — | — | — | — | ✅ |
+| EW-8 | All early-eligible | Early withdrawal penalty rate (10%) and age threshold (59.5) sourced from the US account rules module (year-aware), not hardcoded in `AccountService`. | — | — | — | — | ✅ |
+| EW-9 | Super | `allowsEarlyWithdrawal: false`. Super is never drawn before age 60 regardless of deficit. | — | — | — | — | ✅ |
+
+**EW coverage: 9 / 9 tested**
+
+---
+
 ## Overall Summary
 
 | Category | Covered | Total | Remaining |
@@ -153,7 +181,8 @@ Columns: Account · Event description · Balance direction · Balance part · Ea
 | TE (Tax Rates) | 8 | 8 | 0 |
 | AR (Asset Rules) | 11 | 11 | 0 |
 | INFL (Inflation) | 0 | 5 | 5 |
-| **Total** | **70** | **75** | **5** |
+| EW (Early Withdrawal Drawdown) | 9 | 9 | 0 |
+| **Total** | **79** | **84** | **5** |
 
 ---
 

@@ -49,4 +49,16 @@ export class BaseAccountModule {
   createHandlers() {
     throw new Error(`${this.constructor.name}: createHandlers not implemented`);
   }
+
+  /**
+   * Returns early-withdrawal penalty rules for the given account type.
+   * Returns null for account types that don't support early withdrawal, or for
+   * country modules where no early-withdrawal rules apply (e.g. AU).
+   *
+   * @param {string} accountType - ACCOUNT_TYPE value
+   * @returns {{ penaltyRate: number, ageThreshold: number } | null}
+   */
+  getEarlyWithdrawalRules(_accountType) {
+    return null;
+  }
 }

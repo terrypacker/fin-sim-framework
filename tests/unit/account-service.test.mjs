@@ -138,7 +138,7 @@ test('RothAccount: type, country, currency, minimumAge defaults', () => {
   assert.strictEqual(a.type, ACCOUNT_TYPE.ROTH);
   assert.strictEqual(a.country, 'US');
   assert.deepStrictEqual(a.currency, USD);
-  assert.strictEqual(a.minimumAge, 60);
+  assert.strictEqual(a.minimumAge, 59.5);
   assert.ok(a instanceof InvestmentAccount);
 });
 
@@ -223,7 +223,7 @@ test('AccountBuilder.roth: builds RothAccount with US defaults', () => {
   const a = AccountBuilder.roth().initialValue(80000).build();
   assert.ok(a instanceof RothAccount);
   assert.strictEqual(a.type, 'roth');
-  assert.strictEqual(a.minimumAge, 60);
+  assert.strictEqual(a.minimumAge, 59.5);
   assert.strictEqual(a.country, 'US');
 });
 
@@ -554,8 +554,8 @@ test('replenishSavings: returns keys of accounts drawn from', () => {
     personBirthDate:  new Date(1970, 0, 1),
   };
 
-  const drawn = svc.replenishSavings(state, 'savingsAccount', 10000, date);
-  assert.deepStrictEqual(drawn, ['brokerageAccount']);
+  const { drawnKeys } = svc.replenishSavings(state, 'savingsAccount', 10000, date);
+  assert.deepStrictEqual(drawnKeys, ['brokerageAccount']);
   assert.strictEqual(savings.balance,   10000);
   assert.strictEqual(brokerage.balance, 40000);
 });
@@ -575,26 +575,27 @@ test('replenishSavings: returns multiple keys when deficit spans accounts', () =
     personBirthDate: new Date(1970, 0, 1),
   };
 
-  const drawn = svc.replenishSavings(state, 'savingsAccount', 5000, date);
-  assert.deepStrictEqual(drawn, ['accountA', 'accountB']);
+  const { drawnKeys } = svc.replenishSavings(state, 'savingsAccount', 5000, date);
+  assert.deepStrictEqual(drawnKeys, ['accountA', 'accountB']);
 });
 
-test('replenishSavings: skips age-ineligible accounts and does not return them', () => {
+test('replenishSavings: phase-1 draws eligible accounts before early-withdrawal accounts', () => {
   const bus = new EventBus();
   const graph = new Graph();
   const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
   const date = new Date(2026, 0, 1);
   const savings  = new CheckingAccount(0, { country: 'US', currency: USD });
+  // 401k is below minimumAge — will only be drawn if eligible account is insufficient
   const locked   = new FourOhOneKAccount(50000, { country: 'US', currency: USD, drawdownPriority: 1 });
   const eligible = new BrokerageAccount(20000,   { country: 'US', currency: USD, drawdownPriority: 2 });
   const state = {
     savingsAccount: savings,
     lockedAccount:  locked,
     eligibleAccount: eligible,
-    personBirthDate: new Date(1990, 0, 1), // too young for 401k
+    personBirthDate: new Date(1990, 0, 1), // age 36, below 401k minimumAge 59.5
   };
 
-  const drawn = svc.replenishSavings(state, 'savingsAccount', 5000, date);
-  assert.deepStrictEqual(drawn, ['eligibleAccount']);
-  assert.strictEqual(locked.balance, 50000); // untouched
+  const { drawnKeys } = svc.replenishSavings(state, 'savingsAccount', 5000, date);
+  assert.deepStrictEqual(drawnKeys, ['eligibleAccount']);
+  assert.strictEqual(locked.balance, 50000); // untouched — eligible account covered the deficit
 });

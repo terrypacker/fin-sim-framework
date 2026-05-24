@@ -9,6 +9,7 @@
  */
 
 import { BaseAccountModule } from '../base-account-module.js';
+import { getUsEarlyWithdrawalRules } from './us-early-withdrawal-rules.js';
 
 import {
   RothContributionApplyReducer, RothWithdrawalContribApplyReducer,
@@ -89,6 +90,10 @@ import {
 export class UsAccountModule2026 extends BaseAccountModule {
   get countryCode() { return 'US'; }
   get year()        { return 2026; }
+
+  getEarlyWithdrawalRules(accountType) {
+    return getUsEarlyWithdrawalRules(accountType, this.year);
+  }
 
   createReducers(accountService) {
     return [

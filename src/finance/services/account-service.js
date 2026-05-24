@@ -10,7 +10,8 @@
 
 import { AssetService } from './asset-service.js';
 import { EventBus } from '../../simulation-framework/event-bus.js';
-import { InsufficientFundsError } from '../assets/account.js';
+import { InsufficientFundsError, ACCOUNT_TYPE } from '../assets/account.js';
+import { getUsEarlyWithdrawalRules } from '../account-rules/us/us-early-withdrawal-rules.js';
 
 /**
  * AccountService — manages Account instances on the service bus and provides
@@ -191,31 +192,44 @@ export class AccountService extends AssetService {
    * account to cover a deficit, crediting the savings account as each source
    * account is debited.
    *
-   * Discovery: iterates all values in `state` that are plain objects with a
-   * numeric `balance`, share the target account's `country`, and have a
-   * non-null `drawdownPriority`.  Accounts are processed in ascending priority
-   * order.  Age-gated accounts (those with a `minimumAge` field) are skipped
-   * when the person has not yet reached that age (decimal-year check).
+   * Two-phase drawdown (EW requirements):
+   *
+   * Phase 1 — penalty-free sources, in drawdownPriority order:
+   *   a) Age-eligible accounts (isWithdrawalEligible → true): full balance drawn normally.
+   *   b) Roth accounts below minimumAge: contributionBasis drawn first — contributions
+   *      are always accessible without penalty or tax (EVT-2 / EW-2).
+   *
+   * Phase 2 — early withdrawal, in drawdownPriority order:
+   *   Only when phase 1 cannot cover the deficit.  Draws from accounts where
+   *   allowsEarlyWithdrawal is true and the person is below minimumAge.
+   *   - Roth: earningsBasis only (contributions already exhausted in phase 1).
+   *   - IRA: contributions then earnings — same tax treatment, different basis fields.
+   *   - 401k: full balance — earnings then contributions for basis tracking.
+   *   Penalty is deducted from the cash deposited to the target (EW-6).
+   *   Basis fields (contributionBasis, earningsBasis) are updated alongside balance.
+   *   Tax action objects are collected and returned for callers to chain (EW-7).
    *
    * Throws InsufficientFundsError if the deficit cannot be fully covered after
-   * exhausting all eligible accounts.  State is partially mutated up to the
-   * point of exhaustion — callers should proceed with whatever was deposited.
+   * exhausting all eligible and early-withdrawal accounts.  State is partially
+   * mutated up to the point of exhaustion.
    *
-   * @param {object} state      - Current simulation state
-   * @param {string} targetKey  - State key for the savings account to credit
-   * @param {number} deficit    - Amount that must be deposited into targetKey
-   * @param {Date}   date       - As-of date (used for age-gate checks)
-   * @returns {string[]}        - State keys of accounts that were drawn from
+   * @param {object}   state      - Current simulation state
+   * @param {string}   targetKey  - State key for the savings account to credit
+   * @param {number}   deficit    - Amount that must be deposited into targetKey
+   * @param {Date}     date       - As-of date (used for age-gate checks)
+   * @param {Function} [earlyWithdrawalRulesFn] - (accountType) → { penaltyRate, ageThreshold } | null
+   * @returns {{ drawnKeys: string[], pendingTaxActions: object[] }}
    * @throws {InsufficientFundsError}
    */
-  replenishSavings(state, targetKey, deficit, date) {
+  replenishSavings(state, targetKey, deficit, date, earlyWithdrawalRulesFn = getUsEarlyWithdrawalRules) {
     const targetAccount = state[targetKey];
     const country       = targetAccount.country;
     const currency      = targetAccount.currency?.code ?? country;
-    const person        = { birthDate: state.personBirthDate };
+    const msPerYear     = 365.25 * 24 * 60 * 60 * 1000;
+    const ageDecimal    = (date - state.personBirthDate) / msPerYear;
+    const isAuResident  = state.isAuResident ?? false;
 
-    // Discover all drawdown sources: objects in state with a drawdownPriority,
-    // belonging to the same country, excluding the target account itself.
+    // Discover all drawdown sources in priority order.
     const sources = Object.entries(state)
       .filter(([k, v]) =>
         k !== targetKey &&
@@ -229,23 +243,122 @@ export class AccountService extends AssetService {
       )
       .sort(([, a], [, b]) => a.drawdownPriority - b.drawdownPriority);
 
-    let remaining = deficit;
-    const drawnKeys = [];
-    for (const [key, account] of sources) {
-      if (account.balance <= 0) continue;
-      if (!this.isWithdrawalEligible(account, person, date)) continue;
+    let remaining         = deficit;
+    const drawnKeys       = [];
+    const pendingTaxActions = [];
 
-      const withdraw = Math.min(remaining, account.balance);
-      this.transaction(targetAccount, +withdraw, date);
-      this.transaction(account,       -withdraw, date);
-      drawnKeys.push(key);
-      remaining -= withdraw;
-      if (remaining < 1e-9) { remaining = 0; break; }
+    // ── Phase 1: penalty-free sources ─────────────────────────────────────────
+    for (const [key, account] of sources) {
+      if (remaining < 1e-9) break;
+
+      if (this.isWithdrawalEligible(account, { birthDate: state.personBirthDate }, date)) {
+        // Normal eligible withdrawal.
+        if (account.balance <= 0) continue;
+        const withdraw = Math.min(remaining, account.balance);
+        this.transaction(targetAccount, +withdraw, date);
+        this.transaction(account,       -withdraw, date);
+        drawnKeys.push(key);
+        remaining -= withdraw;
+
+      } else if (account.type === ACCOUNT_TYPE.ROTH && (account.contributionBasis ?? 0) > 0) {
+        // Roth contributions are always accessible without penalty (EW-2).
+        const available = Math.min(account.contributionBasis, account.balance);
+        if (available <= 0) continue;
+        const withdraw = Math.min(remaining, available);
+        this.transaction(targetAccount, +withdraw, date);
+        this.transaction(account,       -withdraw, date);
+        account.contributionBasis -= withdraw;
+        if (!drawnKeys.includes(key)) drawnKeys.push(key);
+        remaining -= withdraw;
+      }
+    }
+
+    if (remaining < 1e-9) {
+      return { drawnKeys, pendingTaxActions };
+    }
+
+    // ── Phase 2: early withdrawal (with penalty) ──────────────────────────────
+    for (const [key, account] of sources) {
+      if (remaining < 1e-9) break;
+      if (!account.allowsEarlyWithdrawal) continue;
+      if (this.isWithdrawalEligible(account, { birthDate: state.personBirthDate }, date)) continue;
+
+      const rules = earlyWithdrawalRulesFn(account.type);
+      if (!rules) continue;
+
+      const penaltyRate = ageDecimal < rules.ageThreshold ? rules.penaltyRate : 0;
+      const netFactor   = 1 - penaltyRate;
+
+      if (account.type === ACCOUNT_TYPE.ROTH) {
+        // Phase 1 already drew contributions; only earningsBasis remains.
+        const earningsAvail = Math.min(account.earningsBasis ?? 0, account.balance);
+        if (earningsAvail <= 0) continue;
+
+        // Gross up: to net `remaining` after penalty, we must withdraw remaining/netFactor.
+        const grossNeeded = netFactor > 0 ? remaining / netFactor : remaining;
+        const gross       = Math.min(grossNeeded, earningsAvail);
+        const net         = gross * netFactor;
+        const penalty     = gross * penaltyRate;
+
+        this.transaction(targetAccount, +net,   date);
+        this.transaction(account,       -gross, date);
+        account.earningsBasis = (account.earningsBasis ?? 0) - gross;
+        if (!drawnKeys.includes(key)) drawnKeys.push(key);
+        pendingTaxActions.push({ type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount: gross, penaltyAmount: penalty, isAuResident });
+        remaining -= net;
+
+      } else if (account.type === ACCOUNT_TYPE.TRADITIONAL_IRA) {
+        if (account.balance <= 0) continue;
+
+        const grossNeeded = netFactor > 0 ? remaining / netFactor : remaining;
+        const grossCapped = Math.min(grossNeeded, account.balance);
+
+        // Draw contributions first, then earnings.
+        const contribPortion  = Math.min(grossCapped, account.contributionBasis ?? 0);
+        const earningsPortion = grossCapped - contribPortion;
+
+        const net     = grossCapped * netFactor;
+        const penalty = grossCapped * penaltyRate;
+
+        this.transaction(targetAccount, +net,        date);
+        this.transaction(account,       -grossCapped, date);
+        account.contributionBasis = (account.contributionBasis ?? 0) - contribPortion;
+        account.earningsBasis     = (account.earningsBasis     ?? 0) - earningsPortion;
+        if (!drawnKeys.includes(key)) drawnKeys.push(key);
+
+        if (contribPortion > 0) {
+          pendingTaxActions.push({ type: 'IRA_WITHDRAWAL_CONTRIB_TAX', amount: contribPortion, penaltyAmount: contribPortion * penaltyRate });
+        }
+        if (earningsPortion > 0) {
+          pendingTaxActions.push({ type: 'IRA_WITHDRAWAL_EARNINGS_TAX', amount: earningsPortion, penaltyAmount: earningsPortion * penaltyRate, isAuResident });
+        }
+        remaining -= net;
+
+      } else if (account.type === ACCOUNT_TYPE.FOUR_OH_ONE_K) {
+        if (account.balance <= 0) continue;
+
+        const grossNeeded = netFactor > 0 ? remaining / netFactor : remaining;
+        const gross       = Math.min(grossNeeded, account.balance);
+        const net         = gross * netFactor;
+        const penalty     = gross * penaltyRate;
+
+        // 401k draws earnings first, then contributions (mirrors K401WithdrawalApplyReducer).
+        const fromEarnings = Math.min(gross, account.earningsBasis ?? 0);
+        const fromContrib  = gross - fromEarnings;
+
+        this.transaction(targetAccount, +net,   date);
+        this.transaction(account,       -gross, date);
+        account.earningsBasis     = (account.earningsBasis     ?? 0) - fromEarnings;
+        account.contributionBasis = (account.contributionBasis ?? 0) - fromContrib;
+        if (!drawnKeys.includes(key)) drawnKeys.push(key);
+        pendingTaxActions.push({ type: 'K401_WITHDRAWAL_TAX', amount: gross, penaltyAmount: penalty });
+        remaining -= net;
+      }
     }
 
     if (remaining > 1e-9) {
       throw new InsufficientFundsError(country, currency, remaining);
     }
-    return drawnKeys;
+    return { drawnKeys, pendingTaxActions };
   }
 }

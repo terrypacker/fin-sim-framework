@@ -25,14 +25,16 @@ export class InvestmentAccount extends Account {
    * @param {number}      [opts.earningsBasis=0]
    * @param {number}      [opts.loanBalance=0]           - Outstanding loan (AR-5, AR-8 if applicable)
    * @param {number|null} [opts.minimumAge=null]         - Age gate in decimal years (e.g. 59.5, 60)
+   * @param {boolean}     [opts.allowsEarlyWithdrawal=false] - True if pre-minimumAge drawdown is permitted (with penalty)
    */
   constructor(initialValue = 0, opts = {}) {
     super(initialValue, opts);
-    this.contributionBasis        = opts.contributionBasis ?? initialValue;
-    this.earningsBasis            = opts.earningsBasis     ?? 0;
+    this.contributionBasis        = opts.contributionBasis    ?? initialValue;
+    this.earningsBasis            = opts.earningsBasis        ?? 0;
     this.balanceAtResidencyChange = null;   // set by AccountService.recordResidencyChange
-    this.loanBalance              = opts.loanBalance       ?? 0;
-    this.minimumAge               = opts.minimumAge        ?? null;
+    this.loanBalance              = opts.loanBalance          ?? 0;
+    this.minimumAge               = opts.minimumAge           ?? null;
+    this.allowsEarlyWithdrawal    = opts.allowsEarlyWithdrawal ?? false;
   }
 }
 
@@ -65,9 +67,10 @@ export class FourOhOneKAccount extends InvestmentAccount {
    */
   constructor(initialValue = 0, opts = {}) {
     super(initialValue, {
-      country:    opts.country    ?? 'US',
-      currency:   opts.currency   ?? USD,
-      minimumAge: opts.minimumAge ?? 59.5,
+      country:               opts.country               ?? 'US',
+      currency:              opts.currency              ?? USD,
+      minimumAge:            opts.minimumAge            ?? 59.5,
+      allowsEarlyWithdrawal: opts.allowsEarlyWithdrawal ?? true,
       ...opts,
       type: ACCOUNT_TYPE.FOUR_OH_ONE_K,
     });
@@ -76,7 +79,7 @@ export class FourOhOneKAccount extends InvestmentAccount {
 
 /**
  * RothAccount — US after-tax retirement account.
- * US only. Penalty-free withdrawals from age 59.5 (modeled as 60 per sim convention).
+ * US only. Penalty-free withdrawals from age 59.5 (IRS rule).
  * Contributions are post-tax; qualified withdrawals are tax-free.
  * Tracks balance at residency change.
  */
@@ -87,9 +90,10 @@ export class RothAccount extends InvestmentAccount {
    */
   constructor(initialValue = 0, opts = {}) {
     super(initialValue, {
-      country:    opts.country    ?? 'US',
-      currency:   opts.currency   ?? USD,
-      minimumAge: opts.minimumAge ?? 60,
+      country:               opts.country               ?? 'US',
+      currency:              opts.currency              ?? USD,
+      minimumAge:            opts.minimumAge            ?? 59.5,
+      allowsEarlyWithdrawal: opts.allowsEarlyWithdrawal ?? true,
       ...opts,
       type: ACCOUNT_TYPE.ROTH,
     });
@@ -109,9 +113,10 @@ export class TraditionalIRAAccount extends InvestmentAccount {
    */
   constructor(initialValue = 0, opts = {}) {
     super(initialValue, {
-      country:    opts.country    ?? 'US',
-      currency:   opts.currency   ?? USD,
-      minimumAge: opts.minimumAge ?? 60,
+      country:               opts.country               ?? 'US',
+      currency:              opts.currency              ?? USD,
+      minimumAge:            opts.minimumAge            ?? 60,
+      allowsEarlyWithdrawal: opts.allowsEarlyWithdrawal ?? true,
       ...opts,
       type: ACCOUNT_TYPE.TRADITIONAL_IRA,
     });

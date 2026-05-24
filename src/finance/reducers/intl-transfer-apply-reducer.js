@@ -10,6 +10,7 @@
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { InsufficientFundsError } from '../assets/account.js';
+import { getUsEarlyWithdrawalRules } from '../account-rules/us/us-early-withdrawal-rules.js';
 
 /**
  * Handles the INTL_TRANSFER_APPLY action.
@@ -38,42 +39,44 @@ import { InsufficientFundsError } from '../assets/account.js';
  *   state.exchangeRateUsdToAud  — 1 USD = N AUD
  *   state.intlTransferFeeUsd    — fixed fee per transfer in USD
  *
- * @param {object} opts
+ * @param {object}   opts
  * @param {import('../../finance/services/account-service.js').AccountService} opts.accountService
- * @param {string} [opts.usSavingsKey='usSavingsAccount']
- * @param {string} [opts.auSavingsKey='auSavingsAccount']
+ * @param {string}   [opts.usSavingsKey='usSavingsAccount']
+ * @param {string}   [opts.auSavingsKey='auSavingsAccount']
+ * @param {Function} [opts.earlyWithdrawalRulesFn] - (accountType) → rules | null
  */
 export class IntlTransferApplyReducer extends Reducer {
   static description = 'Executes a cross-currency transfer (AU↔US) with exchange rate conversion and fee; chains OUT_OF_FUNDS if neither side can cover the deficit.';
 
   static actionType = 'INTL_TRANSFER_APPLY';
 
-  constructor({ accountService, usSavingsKey = 'usSavingsAccount', auSavingsKey = 'auSavingsAccount' } = {}) {
+  constructor({ accountService, usSavingsKey = 'usSavingsAccount', auSavingsKey = 'auSavingsAccount', earlyWithdrawalRulesFn = getUsEarlyWithdrawalRules } = {}) {
     super('International Transfer Apply', PRIORITY.PRE_PROCESS);
-    this.accountService = accountService;
-    this.usSavingsKey   = usSavingsKey;
-    this.auSavingsKey   = auSavingsKey;
-    this.reducedActionTypes  = ['INTL_TRANSFER_APPLY'];
-    this.generatedActionTypes = ['OUT_OF_FUNDS'];
+    this.accountService         = accountService;
+    this.usSavingsKey           = usSavingsKey;
+    this.auSavingsKey           = auSavingsKey;
+    this.earlyWithdrawalRulesFn = earlyWithdrawalRulesFn;
+    this.reducedActionTypes     = ['INTL_TRANSFER_APPLY'];
+    this.generatedActionTypes   = ['OUT_OF_FUNDS'];
   }
 
   reduce(state, action, date) {
     const { direction, targetDeficit } = action;
-    const rate = state.exchangeRateUsdToAud;
-    const fee  = state.intlTransferFeeUsd;
+    const rate  = state.exchangeRateUsdToAud;
+    const fee   = state.intlTransferFeeUsd;
     const usAcc = state[this.usSavingsKey];
     const auAcc = state[this.auSavingsKey];
+    const pendingTaxActions = [];
 
     if (direction === 'AU_TO_US') {
-      // How much AUD do we need from the AU side?
-      const audNeeded  = (targetDeficit + fee) * rate;
-      const shortfall  = audNeeded - auAcc.balance;
+      const audNeeded = (targetDeficit + fee) * rate;
+      const shortfall = audNeeded - auAcc.balance;
       if (shortfall > 0) {
         try {
-          this.accountService.replenishSavings(state, this.auSavingsKey, shortfall, date);
+          const result = this.accountService.replenishSavings(state, this.auSavingsKey, shortfall, date, this.earlyWithdrawalRulesFn);
+          pendingTaxActions.push(...result.pendingTaxActions);
         } catch (e) {
           if (!(e instanceof InsufficientFundsError)) throw e;
-          // AU exhausted — proceed with whatever AUD is available
         }
       }
       const audActual   = Math.min(audNeeded, auAcc.balance);
@@ -84,19 +87,18 @@ export class IntlTransferApplyReducer extends Reducer {
       }
       const usdShortfall = targetDeficit - usdReceived;
       if (usdShortfall > 0.01) {
-        return this.newState(state, {}, [{ type: 'OUT_OF_FUNDS', deficit: usdShortfall, currency: 'USD' }]);
+        return this.newState(state, {}, [...pendingTaxActions, { type: 'OUT_OF_FUNDS', deficit: usdShortfall, currency: 'USD' }]);
       }
 
     } else {
-      // US_TO_AU — how much USD do we need from the US side?
-      const usdNeeded  = targetDeficit / rate + fee;
-      const shortfall  = usdNeeded - usAcc.balance;
+      const usdNeeded = targetDeficit / rate + fee;
+      const shortfall = usdNeeded - usAcc.balance;
       if (shortfall > 0) {
         try {
-          this.accountService.replenishSavings(state, this.usSavingsKey, shortfall, date);
+          const result = this.accountService.replenishSavings(state, this.usSavingsKey, shortfall, date, this.earlyWithdrawalRulesFn);
+          pendingTaxActions.push(...result.pendingTaxActions);
         } catch (e) {
           if (!(e instanceof InsufficientFundsError)) throw e;
-          // US exhausted — proceed with whatever USD is available
         }
       }
       const usdActual   = Math.min(usdNeeded, usAcc.balance);
@@ -107,10 +109,12 @@ export class IntlTransferApplyReducer extends Reducer {
       }
       const audShortfall = targetDeficit - audReceived;
       if (audShortfall > 0.01) {
-        return this.newState(state, {}, [{ type: 'OUT_OF_FUNDS', deficit: audShortfall, currency: 'AUD' }]);
+        return this.newState(state, {}, [...pendingTaxActions, { type: 'OUT_OF_FUNDS', deficit: audShortfall, currency: 'AUD' }]);
       }
     }
 
-    return this.newState(state);
+    return pendingTaxActions.length > 0
+      ? this.newState(state, {}, pendingTaxActions)
+      : this.newState(state);
   }
 }
