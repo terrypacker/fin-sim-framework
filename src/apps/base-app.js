@@ -29,6 +29,12 @@ import { ScenarioStorage } from "../scenarios/scenario-storage.js";
 import { ScenarioSerializer } from "../scenarios/scenario-serializer.js";
 import { ServiceRegistry } from "../services/service-registry.js";
 import {SIMULATION_BUS_MESSAGES} from "../simulation-framework/bus-messages.js";
+import { PeopleController }  from '../visualization/people/people-controller.js';
+import { PeopleView }        from '../visualization/people/people-view.js';
+import { PeoplePresenter }   from '../visualization/people/people-presenter.js';
+import { AccountsController }from '../visualization/accounts/accounts-controller.js';
+import { AccountsView }      from '../visualization/accounts/accounts-view.js';
+import { AccountsPresenter } from '../visualization/accounts/accounts-presenter.js';
 
 export class BaseApp {
   constructor({ newScenario, chartSeries }) {
@@ -44,6 +50,12 @@ export class BaseApp {
     this.chartView = null;
     this.timelineView = null;
     this.timeControls = null;
+    this.peoplePresenter   = null;
+    this.accountsPresenter = null;
+
+    // Views are created once so their DOM listeners are only wired once.
+    this._peopleView   = new PeopleView();
+    this._accountsView = new AccountsView();
 
     //References to UI elements
     this.eventsTabHeader = null;
@@ -186,7 +198,21 @@ export class BaseApp {
     // GraphSync keeps the ConfigGraph in sync with service bus events.
     // Must be created after the ServiceRegistry is reset (above) so it
     // subscribes to the fresh bus instance.
-    new GraphSync({ graph: this.configGraphBuilder, registry: ServiceRegistry.getInstance() });
+    const registry = ServiceRegistry.getInstance();
+    new GraphSync({ graph: this.configGraphBuilder, registry });
+
+    // ── People / Accounts MVP modules ────────────────────────────────────────
+    // Controllers and presenters are re-created each rebuild to bind to the
+    // fresh registry bus.  Views are created once (in the constructor) so
+    // their DOM event listeners are only wired once.
+    const peopleController = new PeopleController({ personService: registry.personService });
+    this.peoplePresenter   = new PeoplePresenter({ controller: peopleController, view: this._peopleView, bus: registry.bus });
+
+    const accountsController = new AccountsController({ accountService: registry.accountService });
+    this.accountsPresenter   = new AccountsPresenter({ controller: accountsController, view: this._accountsView, bus: registry.bus });
+
+    // Keep the accounts owner dropdown in sync when people change.
+    this.peoplePresenter.onPeopleChanged = (people) => this.accountsPresenter.setPeople(people);
 
     //Setup the scenario
     this.scenario = this.newScenario(this.getParams(), this.getInitialState(), this.schedulerUI);
