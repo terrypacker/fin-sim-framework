@@ -197,7 +197,8 @@ export class ChartView extends BaseComponent {
       data:           dataArr,
       smooth:         true,
       smoothMonotone: 'x',
-      symbol:         'none',
+      symbol:         'circle',
+      symbolSize:     6,
       sampling:       'lttb',
       emphasis:       { focus: 'series' },
       lineStyle:      { color, width: 2 },
@@ -310,7 +311,7 @@ export class ChartView extends BaseComponent {
         axisTick:  { show: false },
       },
       tooltip: {
-        trigger:     'axis',
+        trigger:     'item',
         axisPointer: {
           type:       'cross',
           lineStyle:  { color: 'rgba(148,163,184,0.35)' },
@@ -343,15 +344,70 @@ export class ChartView extends BaseComponent {
 
   _fmtTooltip(params) {
     if (!params || params.length === 0) return '';
-    const ts = params[0].axisValue;
-    const d  = new Date(ts);
-    const dateStr = d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0');
-    const lines = [`<span style="font-size:10px;color:#64748b">${dateStr}</span>`];
-    for (const p of params) {
-      if (!p.seriesName || p.seriesName === '__annotations__') continue;
-      const val = Number(p.value?.[1] ?? p.value).toLocaleString();
-      lines.push(`${p.marker}${p.seriesName}: <b>${val}</b>`);
+
+    // Normalize both:
+    // trigger: 'axis' => array
+    // trigger: 'item' => single object
+    const list = Array.isArray(params) ? params : [params];
+
+    if (!list || list.length === 0) {
+      return '';
     }
+
+    // Filter out hidden/internal series
+    const filtered = list.filter(p =>
+        p &&
+        p.seriesName &&
+        p.seriesName !== '__annotations__'
+    );
+
+    if (filtered.length === 0) {
+      return '';
+    }
+
+    // Timestamp extraction
+    const first = filtered[0];
+    let ts = null;
+    if (Array.isArray(first.value)) {
+      ts = first.value[0];
+    } else {
+      ts = first.axisValue;
+    }
+
+    // Date formatting
+    let dateStr = '';
+    if (ts != null) {
+      const d = new Date(ts);
+      dateStr =
+          d.getUTCFullYear() +
+          '-' +
+          String(d.getUTCMonth() + 1).padStart(2, '0');
+    }
+
+    const lines = [];
+    if (dateStr) {
+      lines.push(
+          `<span style="font-size:10px;color:#64748b">${dateStr}</span>`
+      );
+    }
+
+    // Series lines
+    for (const p of filtered) {
+      let rawVal;
+      if (Array.isArray(p.value)) {
+        rawVal = p.value[1];
+      } else {
+        rawVal = p.value;
+      }
+      const formattedVal =
+          typeof rawVal === 'number'
+              ? rawVal.toLocaleString()
+              : rawVal;
+      lines.push(
+          `${p.marker}${p.seriesName}: <b>${formattedVal}</b>`
+      );
+    }
+
     return lines.join('<br/>');
   }
 }
