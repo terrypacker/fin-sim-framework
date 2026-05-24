@@ -254,6 +254,7 @@ export class BaseApp extends BaseComponent {
     this._statePanelView.formatDate     = currentFmt;
     this._statePanelView.schemaRegistry = registry.schemaRegistry;
     this._statePanelView.journal        = this.scenario.sim.journal;
+    this._statePanelView.executionGraph = this.scenario.sim.executionGraph;
     this._statePanelView.onOpenNode     = (nodeId) => {
       const node = registry.graph.getNode(nodeId);
       if (node) this._editModal.open(node);
