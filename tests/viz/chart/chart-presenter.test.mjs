@@ -11,6 +11,8 @@
 import assert from 'node:assert/strict';
 import { ChartController } from '../../../src/visualization/chart/chart-controller.js';
 import { ChartPresenter }  from '../../../src/visualization/chart/chart-presenter.js';
+import { EventBus }        from '../../../src/simulation-framework/event-bus.js';
+import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../../src/simulation-framework/bus-messages.js';
 
 // ─── DOM setup ────────────────────────────────────────────────────────────────
 
@@ -115,10 +117,20 @@ test('ChartPresenter.stopViz: clears _metricFilter reference', () => {
 
 // ─── setRenderThrottle ────────────────────────────────────────────────────────
 
-test('ChartPresenter.setRenderThrottle: delegates to view', () => {
+// ChartPresenter now extends BaseComponent and owns its own throttle.
+// It no longer delegates setRenderThrottle to the view — the view is only
+// rendered from ChartPresenter's already-throttled scheduleRender path.
+test('ChartPresenter.setRenderThrottle: sets _renderThrottleMs on presenter', () => {
+  const { presenter } = makePresenter();
+  presenter.setRenderThrottle(500);
+  assert.strictEqual(presenter._renderThrottleMs, 500);
+});
+
+test('ChartPresenter.setRenderThrottle: does not delegate to view', () => {
   const { presenter, view } = makePresenter();
   presenter.setRenderThrottle(500);
-  assert.deepStrictEqual(view.calls.setRenderThrottle, [500]);
+  assert.deepStrictEqual(view.calls.setRenderThrottle, [],
+    'view.setRenderThrottle should not be called — view is driven by presenter');
 });
 
 // ─── addAnnotation / removeAnnotation ─────────────────────────────────────────
@@ -286,4 +298,87 @@ test('ChartPresenter: filter toggle with empty selection clears controller hidde
   onToggle({}, false, []);
 
   assert.strictEqual(controller.isVisible('a'), true, 'controller should clear hidden on empty selection');
+});
+
+// ─── wireSimBus ───────────────────────────────────────────────────────────────
+
+function makeSimBus() {
+  return new EventBus();
+}
+
+function makeExecEndMsg(date, metrics = {}) {
+  return {
+    type:          `EXECUTION_${EXECUTION_PHASES.END}`,
+    kind:          EXECUTION_KINDS.EVENT,
+    date:          date.toISOString(),
+    stateSnapshot: { metrics },
+  };
+}
+
+test('ChartPresenter.wireSimBus: subscribes to EXECUTION_END(EVENT)', () => {
+  const { presenter } = makePresenter();
+  const bus = makeSimBus();
+  presenter.wireSimBus(bus);
+  // Publishing a non-EVENT kind should not enqueue
+  const before = presenter._drainExecEndMsgs().length;
+  bus.publish({ type: `EXECUTION_${EXECUTION_PHASES.END}`, kind: EXECUTION_KINDS.HANDLER, date: D1.toISOString() });
+  const after = presenter._drainExecEndMsgs().length;
+  assert.strictEqual(before, 0);
+  assert.strictEqual(after,  0, 'HANDLER-kind end messages should not be queued');
+});
+
+test('ChartPresenter.wireSimBus: queues EXECUTION_END(EVENT) messages', () => {
+  const { presenter } = makePresenter();
+  const bus = makeSimBus();
+  presenter.wireSimBus(bus);
+  bus.publish(makeExecEndMsg(D1, { balance: 1000 }));
+  bus.publish(makeExecEndMsg(new Date(2025, 1, 1), { balance: 1100 }));
+  const queued = presenter._drainExecEndMsgs();
+  assert.strictEqual(queued.length, 2, 'both messages should be queued');
+});
+
+test('ChartPresenter.wireSimBus: drain returns and clears the queue', () => {
+  const { presenter } = makePresenter();
+  const bus = makeSimBus();
+  presenter.wireSimBus(bus);
+  bus.publish(makeExecEndMsg(D1, { balance: 500 }));
+  presenter._drainExecEndMsgs(); // consume
+  const second = presenter._drainExecEndMsgs();
+  assert.strictEqual(second.length, 0, 'drain should clear the queue');
+});
+
+test('ChartPresenter._doRender: calls addSnapshot for each queued message', () => {
+  const { presenter, view } = makePresenter();
+  const bus = makeSimBus();
+  presenter.wireSimBus(bus);
+  const D2 = new Date(2025, 1, 1);
+  bus.publish(makeExecEndMsg(D1, { balance: 100 }));
+  bus.publish(makeExecEndMsg(D2, { balance: 200 }));
+  presenter._doRender();
+  assert.strictEqual(view.calls.addSnapshot.length, 2, 'addSnapshot should be called once per message');
+});
+
+test('ChartPresenter._doRender: passes metrics object to addSnapshot', () => {
+  const { presenter, view } = makePresenter();
+  const bus = makeSimBus();
+  presenter.wireSimBus(bus);
+  bus.publish(makeExecEndMsg(D1, { netWorth: 500_000, income: 120_000 }));
+  presenter._doRender();
+  assert.deepStrictEqual(view.calls.addSnapshot[0].data, { netWorth: 500_000, income: 120_000 });
+});
+
+test('ChartPresenter._doRender: handles missing stateSnapshot gracefully', () => {
+  const { presenter } = makePresenter();
+  const bus = makeSimBus();
+  presenter.wireSimBus(bus);
+  bus.publish({ type: `EXECUTION_${EXECUTION_PHASES.END}`, kind: EXECUTION_KINDS.EVENT, date: D1.toISOString() });
+  assert.doesNotThrow(() => presenter._doRender());
+});
+
+test('ChartPresenter._doRender: handles null metrics gracefully', () => {
+  const { presenter } = makePresenter();
+  const bus = makeSimBus();
+  presenter.wireSimBus(bus);
+  bus.publish({ type: `EXECUTION_${EXECUTION_PHASES.END}`, kind: EXECUTION_KINDS.EVENT, date: D1.toISOString(), stateSnapshot: {} });
+  assert.doesNotThrow(() => presenter._doRender());
 });

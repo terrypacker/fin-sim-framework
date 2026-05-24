@@ -19,7 +19,10 @@
  * Exposes `onPeopleChanged(people[])` for AccountsPresenter to update its
  * owner dropdown whenever the people list changes.
  */
-export class PeoplePresenter {
+import { BaseComponent } from '../components/base-component.js';
+import { Person }        from '../../finance/person.js';
+
+export class PeoplePresenter extends BaseComponent {
   /**
    * @param {{
    *   controller: import('./people-controller.js').PeopleController,
@@ -28,6 +31,7 @@ export class PeoplePresenter {
    * }}
    */
   constructor({ controller, view, bus }) {
+    super();
     this._controller = controller;
     this._view       = view;
 
@@ -63,12 +67,17 @@ export class PeoplePresenter {
     };
 
     // ── React to service bus (deserialization, programmatic changes) ────────
-    bus.subscribe('SERVICE_ACTION', (msg) => {
-      if (msg.classType === 'Person') this._refresh();
-    });
+    this._drainServiceMsgs = this.busQueue(bus, 'SERVICE_ACTION', () => this.render(), { instanceOf: Person });
 
     // Initial render (handles the case where people were loaded before mount).
     this._refresh();
+  }
+
+  render() {
+    this.scheduleRender(() => {
+      this._drainServiceMsgs();
+      this._refresh();
+    });
   }
 
   _refresh() {
@@ -78,6 +87,7 @@ export class PeoplePresenter {
   }
 
   destroy() {
+    super.destroy();
     this._view.destroy();
   }
 }

@@ -9,53 +9,10 @@
  */
 export class Graph {
   constructor() {
-    this.nodes = new Map();        // id -> node
-    this.edges = new Map();           // edgeId -> Edge
-    this.out   = new Map();           // nodeId -> Set<edgeId>
-    this.in    = new Map();           // nodeId -> Set<edgeId>
-
-    this.nodeModifcationWatchers = []; //Notify listeners to rebuild indexes
-    this.edgeModifcationWatchers = []; //Notify listeners to rebuild indexes
-  }
-
-  /**
-   * Add a callback for when the nodes are modified
-   * TODO could be a bus message later
-   * @param watcher
-   */
-  addNodeModifcationWatcher(name, watcher) {
-    this.nodeModifcationWatchers.push({name: name, fn: watcher});
-  }
-
-  removeNodeModificationWatcher(watcher) {
-    const index = this.nodeModifcationWatchers.indexOf(watcher);
-    if (index > -1) {
-      this.nodeModifcationWatchers.splice(index, 1);
-    }
-  }
-
-  notifyNodeWatchers() {
-    this.nodeModifcationWatchers.forEach(w => w.fn.call());
-  }
-
-  /**
-   * Add a callback for when the edges are modified
-   * TODO could be a bus message later
-   * @param watcher
-   */
-  addEdgeModifcationWatcher(name, watcher) {
-    this.edgeModifcationWatchers.push({name: name, fn: watcher});
-  }
-
-  removeEdgeModificationWatcher(watcher) {
-    const index = this.edgeModifcationWatchers.indexOf(watcher);
-    if (index > -1) {
-      this.edgeModifcationWatchers.splice(index, 1);
-    }
-  }
-
-  notifyEdgeWatchers() {
-    this.edgeModifcationWatchers.forEach(w => w.fn.call());
+    this.nodes = new Map();
+    this.edges = new Map();
+    this.out   = new Map(); // nodeId -> Set<edgeId>
+    this.in    = new Map(); // nodeId -> Set<edgeId>
   }
 
   addNode(node) {
@@ -67,7 +24,6 @@ export class Graph {
     }
 
     this.nodes.set(node.id, node);
-    this.notifyNodeWatchers();
   }
 
   getNode(id) {
@@ -79,7 +35,6 @@ export class Graph {
       throw new Error("Cannot change node id");
     }
     this.nodes.set(id, node);
-    this.notifyNodeWatchers();
   }
 
   getNodes() {
@@ -108,26 +63,9 @@ export class Graph {
     this.nodes.delete(id);
     this.out.delete(id);
     this.in.delete(id);
-    this.notifyNodeWatchers();
   }
 
-// ─── Edges ────────────────────────────────────────────────────────────────
-  /*
-  TODO This was  a duplicate method
-  addEdge(edge) {
-    if (!edge.type) throw new Error("Edge must have type");
-    if (edge.from === edge.to) throw new Error("Self edges not allowed"); // optional
-
-    if (!this.nodes.has(edge.from) || !this.nodes.has(edge.to)) {
-      throw new Error("Edge references missing nodes");
-    }
-
-    this.edges.add(edge);
-    this.out.get(edge.from).add(edge);
-    this.in.get(edge.to).add(edge);
-    this.notifyEdgeWatchers();
-  }
-   */
+  // ─── Edges ───────────────────────────────────────────────────────────────
 
   addEdge(edge) {
     if (!edge?.id) throw new Error("Edge must have id");
@@ -135,15 +73,11 @@ export class Graph {
       throw new Error("Edge references missing nodes");
     }
 
-    // Prevent duplicates
     if (this.edges.has(edge.id)) return this.edges.get(edge.id);
 
     this.edges.set(edge.id, edge);
-
     this.out.get(edge.from).add(edge.id);
     this.in.get(edge.to).add(edge.id);
-
-    this.notifyEdgeWatchers();
 
     return edge;
   }
@@ -159,7 +93,6 @@ export class Graph {
     this.out.get(edge.from)?.delete(edgeId);
     this.in.get(edge.to)?.delete(edgeId);
     this.edges.delete(edgeId);
-    this.notifyEdgeWatchers();
   }
 
   // ─── Edge Queries ─────────────────────────────────────────────────────────

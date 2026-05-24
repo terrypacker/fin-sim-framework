@@ -76,6 +76,40 @@ export class BaseComponent {
   }
 
   /**
+   * Subscribe to a bus message type, buffering received messages in an internal queue.
+   * When any message arrives, renderFn() is called (typically () => this.render()).
+   * Returns a drain() function that returns and clears all queued messages.
+   *
+   * Allows bus subscribers to accumulate messages between render frames and process
+   * them in batch at render time, rather than re-rendering on every message.
+   *
+   * Usage:
+   *   this._drainService = this.busQueue(bus, 'SERVICE_ACTION', () => this.render());
+   *   // In your render function:
+   *   const msgs = this._drainService(); // get & clear queued messages
+   *
+   * @param {EventBus}  bus       - The bus to subscribe to
+   * @param {string}    type      - Message type (e.g. 'SERVICE_ACTION')
+   * @param {function}  renderFn  - Called when a message arrives (e.g. () => this.render())
+   * @param {object}   [filter]   - Optional filter object { kind, subtype, instanceOf }
+   * @returns {function(): Array} drain — returns and clears the queued messages
+   */
+  busQueue(bus, type, renderFn, filter) {
+    const queue = [];
+    const drain = () => queue.splice(0);
+    const subscriber = (msg) => {
+      queue.push(msg);
+      renderFn();
+    };
+    if (filter) {
+      bus.subscribe(type, filter, subscriber);
+    } else {
+      bus.subscribe(type, subscriber);
+    }
+    return drain;
+  }
+
+  /**
    * Add event listener with automatic cleanup
    */
   listen(target, event, handler, options) {

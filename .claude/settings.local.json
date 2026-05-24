@@ -43,7 +43,9 @@
       "Bash(xargs cat *)",
       "mcp__chrome-devtools__navigate_page",
       "Bash(git *)",
-      "mcp__chrome-devtools__performance_stop_trace"
+      "mcp__chrome-devtools__performance_stop_trace",
+      "Bash(sed -i '' 's/this\\\\._publish\\('\\\\''CREATE'\\\\'', '\\\\''Collectible'\\\\'', collectible\\)/this._publish\\('\\\\''CREATE'\\\\'', collectible\\)/g; \\\\ *)",
+      "Bash(sed -i '' 's/this\\\\._publish\\('\\\\''CREATE'\\\\'', '\\\\''RealProperty'\\\\'', property\\)/this._publish\\('\\\\''CREATE'\\\\'', property\\)/g; \\\\ *)"
     ]
   },
   "hooks": {

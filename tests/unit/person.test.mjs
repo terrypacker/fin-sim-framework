@@ -142,7 +142,7 @@ test('PersonService: updatePerson applies changes and publishes UPDATE', () => {
 
   let updateFired = false;
   bus.subscribe('SERVICE_ACTION', msg => {
-    if (msg.actionType === 'UPDATE' && msg.classType === 'Person') updateFired = true;
+    if (msg.actionType === 'UPDATE' && msg.item instanceof Person) updateFired = true;
   });
 
   svc.updatePerson(p.id, { name: 'Alice Updated', lifeExpectancy: 85 });
@@ -159,7 +159,7 @@ test('PersonService: deletePerson removes from map and publishes DELETE', () => 
 
   let deleteFired = false;
   bus.subscribe('SERVICE_ACTION', msg => {
-    if (msg.actionType === 'DELETE' && msg.classType === 'Person') deleteFired = true;
+    if (msg.actionType === 'DELETE' && msg.item instanceof Person) deleteFired = true;
   });
 
   svc.deletePerson(p.id);

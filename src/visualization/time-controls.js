@@ -8,8 +8,12 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-export class TimeControls {
+import { BaseComponent }              from './components/base-component.js';
+import { PlaybackProgressComponent } from './simulation/playback-progress-component.js';
+
+export class TimeControls extends BaseComponent {
   constructor({scenario, configPresenter, timelineView, chartView, timeLabel, timeSlider, formatDate, displayCurrency, onReset}) {
+    super();
     this.scenario = scenario;
     this.configPresenter = configPresenter;
     this.timelineView = timelineView;
@@ -19,10 +23,17 @@ export class TimeControls {
     this.formatDate = formatDate ?? (d => d.toDateString());
     this.displayCurrency = displayCurrency ?? 'USD';
     this.onReset = onReset ?? null;
-    this._dateChangedRaf = null;
     // Stack of fractional positions (0–1) visited by stepForward(),
     // so stepBack() can return to exactly the previous event's position.
     this._stepHistory = [];
+
+    this._progress = new PlaybackProgressComponent({
+      scenario:   this.scenario,
+      timeSlider: this.timeSlider,
+      timeLabel:  this.timeLabel,
+      formatDate: this.formatDate,
+    });
+    this._registerChild(this._progress);
   }
 
   /**
@@ -166,23 +177,25 @@ export class TimeControls {
   }
 
   /**
-   * Call on every message sent over the bus to track time in the slider.
-   *
-   * Throttled: graphView fires this on every DEBUG_ACTION node; we only need the
-   *   slider/label updated once per animation frame.
-   * @param date
+   * Wire the playback-progress component to the simulation bus.
+   * Call once per scenario after scenario.buildSim().
+   */
+  wireSimBus(simBus) {
+    this._progress.wireSimBus(simBus);
+  }
+
+  /**
+   * Update the slider and label to reflect the current date.
+   * Delegates to PlaybackProgressComponent so updates are coalesced via
+   * scheduleRender and respect the active render-throttle setting.
    */
   onDateChanged(date) {
-    this._pendingDate = date;          // always track the latest date
-    if (this._dateChangedRaf) return;
-    this._dateChangedRaf = requestAnimationFrame(() => {
-      this._dateChangedRaf = null;
-      const d = this._pendingDate;    // use the most-recent date, not the first
-      const pct = (d.getTime() - this.scenario.simStart.getTime()) /
-          (this.scenario.simEnd.getTime() - this.scenario.simStart.getTime());
-      this.timeSlider.value = Math.round(pct * 100);
-      this.timeLabel.textContent = this.formatDate(d);
-    });
+    this._progress.update(date);
+  }
+
+  /** Cascade render throttle to the progress component. */
+  setRenderThrottle(ms) {
+    this._progress.setRenderThrottle(ms);
   }
 
 }

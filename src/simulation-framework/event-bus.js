@@ -23,27 +23,52 @@ export class EventBus {
     this.history = []; // optional (for replay/debug)
   }
 
-  subscribe(type, handler) {
+  /**
+   * Subscribe to messages of a given type, with optional filtering.
+   *
+   * Overloads:
+   *   subscribe(type, handler)
+   *   subscribe(type, filter, handler)
+   *
+   * Filter fields (all optional, combined with AND):
+   *   kind      — matches msg.kind exactly
+   *   subtype   — matches msg.subtype exactly
+   *   instanceOf — matches msg.item instanceof X
+   */
+  subscribe(type, filterOrHandler, handler) {
+    let predicate, fn;
+
+    if (typeof filterOrHandler === 'function') {
+      predicate = null;
+      fn = filterOrHandler;
+    } else {
+      const { kind, subtype, instanceOf: Cls } = filterOrHandler;
+      predicate = (msg) => {
+        if (kind     !== undefined && msg.kind    !== kind)              return false;
+        if (subtype  !== undefined && msg.subtype !== subtype)           return false;
+        if (Cls      !== undefined && !(msg.item instanceof Cls))        return false;
+        return true;
+      };
+      fn = handler;
+    }
+
     if (!this.listeners.has(type)) {
       this.listeners.set(type, []);
     }
-    this.listeners.get(type).push(handler);
+    this.listeners.get(type).push({ predicate, fn });
   }
 
   publish(event) {
-    // event = { date, type, payload }
-
     this.history.push(event);
 
-    const handlers = this.listeners.get(event.type) || [];
-    for (const h of handlers) {
-      h(event);
+    const entries = this.listeners.get(event.type) || [];
+    for (const { predicate, fn } of entries) {
+      if (predicate === null || predicate(event)) fn(event);
     }
 
-    // wildcard listeners
-    const any = this.listeners.get('*') || [];
-    for (const h of any) {
-      h(event);
+    const wildcards = this.listeners.get('*') || [];
+    for (const { predicate, fn } of wildcards) {
+      if (predicate === null || predicate(event)) fn(event);
     }
   }
 

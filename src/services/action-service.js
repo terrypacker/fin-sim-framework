@@ -35,11 +35,12 @@ export class ActionService extends BaseService {
   constructor(graph, query, bus) {
     super(graph, query, bus, 'action', 1, false);
 
-    //TODO Could move out to ActionTypeEnsurer class if we want to decouple this,
-    //  we want to ensure HandlerEntry and Reducer classes have their actions registered
-    //  when one is created
-    bus.subscribe('SERVICE_ACTION', msg => {
-      this._handle(msg);
+    bus.subscribe('SERVICE_ACTION', { subtype: 'CREATE', instanceOf: HandlerEntry }, ({ item }) => {
+      this._ensureActionTypes(item.generatedActionTypes);
+    });
+    bus.subscribe('SERVICE_ACTION', { subtype: 'CREATE', instanceOf: Reducer }, ({ item }) => {
+      this._ensureActionTypes(item.generatedActionTypes);
+      this._ensureActionTypes(item.reducedActionTypes);
     });
   }
 
@@ -55,7 +56,7 @@ export class ActionService extends BaseService {
     const item = new AmountAction(type, name, value);
     item.id = this._generateId(this._idPrefix);
     this._register(item);
-    this._publish('CREATE', item.constructor.name, item);
+    this._publish('CREATE', item);
     this._wireNodeEdges(item);
     return item;
   }
@@ -64,7 +65,7 @@ export class ActionService extends BaseService {
     const item = new Action(type, name);
     item.id = this._generateId(this._idPrefix);
     this._register(item);
-    this._publish('CREATE', item.constructor.name, item);
+    this._publish('CREATE', item);
     this._wireNodeEdges(item);
     return item;
   }
@@ -73,7 +74,7 @@ export class ActionService extends BaseService {
     const item = new FieldAction(type, name, field);
     item.id = this._generateId(this._idPrefix);
     this._register(item);
-    this._publish('CREATE', item.constructor.name, item);
+    this._publish('CREATE', item);
     this._wireNodeEdges(item);
     return item;
   }
@@ -82,7 +83,7 @@ export class ActionService extends BaseService {
     const item = new FieldValueAction(type, name, field, value);
     item.id = this._generateId(this._idPrefix);
     this._register(item);
-    this._publish('CREATE', item.constructor.name, item);
+    this._publish('CREATE', item);
     this._wireNodeEdges(item);
     return item;
   }
@@ -91,7 +92,7 @@ export class ActionService extends BaseService {
     const item = new RecordBalanceAction();
     item.id = this._generateId(this._idPrefix);
     this._register(item);
-    this._publish('CREATE', item.constructor.name, item);
+    this._publish('CREATE', item);
     this._wireNodeEdges(item);
     return item;
   }
@@ -100,7 +101,7 @@ export class ActionService extends BaseService {
     const item = new ScriptedAction(type, name, fieldName, script);
     item.id = this._generateId(this._idPrefix);
     this._register(item);
-    this._publish('CREATE', item.constructor.name, item);
+    this._publish('CREATE', item);
     this._wireNodeEdges(item);
     return item;
   }
@@ -122,8 +123,7 @@ export class ActionService extends BaseService {
     const action = this._resolve(idOrAction);
     const originalItem = Object.assign(Object.create(Object.getPrototypeOf(action)), action);
     this.mergeChanges(action, changes);
-    this._graph.notifyNodeWatchers(); //Notify that the content in the graph changed
-    this._publish('UPDATE', action.constructor.name, action, originalItem);
+    this._publish('UPDATE', action, originalItem);
     return action;
   }
 
@@ -155,7 +155,7 @@ export class ActionService extends BaseService {
     Object.assign(fresh, extraProps);
 
     this._graph.updateNode(fresh.id, fresh);
-    this._publish('UPDATE', newClass, fresh, old);
+    this._publish('UPDATE', fresh, old);
     return fresh;
   }
 
@@ -171,22 +171,8 @@ export class ActionService extends BaseService {
   deleteAction(idOrAction) {
     const action = this._resolve(idOrAction);
     this._unregister(action.id);
-    this._publish('DELETE', action.constructor.name, action, action);
+    this._publish('DELETE', action, action);
     return action;
-  }
-
-  //  BUS LISTENER TO CREATE ACTIONS
-  _handle({ actionType, item }) {
-    if (actionType !== 'CREATE') return;
-
-    if (this._isHandler(item)) {
-      this._ensureActionTypes(item.generatedActionTypes);
-    }
-
-    if (this._isReducer(item)) {
-      this._ensureActionTypes(item.generatedActionTypes);
-      this._ensureActionTypes(item.reducedActionTypes);
-    }
   }
 
   /**
@@ -214,11 +200,4 @@ export class ActionService extends BaseService {
     }
   }
 
-  _isHandler(item) {
-    return item instanceof HandlerEntry;
-  }
-
-  _isReducer(item) {
-    return item instanceof Reducer;
-  }
 }
