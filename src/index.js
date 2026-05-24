@@ -41,8 +41,14 @@ import { ActionFactory } from './scenarios/action-factory.js';
 import { intervalFns, startSnapFns, BaseScenario } from './scenarios/base-scenario.js';
 import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
 import { ScenarioStorage } from './scenarios/scenario-storage.js';
+import { ActionService } from './services/action-service.js';
+import { BaseService } from './services/base-service.js';
+import { EventService } from './services/event-service.js';
+import { HandlerService } from './services/handler-service.js';
+import { ReducerService } from './services/reducer-service.js';
+import { ServiceRegistry } from './services/service-registry.js';
 import { Action, FieldAction, FieldValueAction, AmountAction, RecordMetricAction, RecordArrayMetricAction, RecordNumericSumMetricAction, RecordMultiplicativeMetricAction, RecordBalanceAction } from './simulation-framework/actions.js';
-import { BusMessage, SimulationBusMessage, DebugActionBusMessage } from './simulation-framework/bus-messages.js';
+import { BusMessage, SimulationBusMessage, DebugActionBusMessage, ServiceActionEvent } from './simulation-framework/bus-messages.js';
 import { DateUtils } from './simulation-framework/date-utils.js';
 import { EventBus } from './simulation-framework/event-bus.js';
 import { BaseEvent } from './simulation-framework/events/base-event.js';
@@ -142,6 +148,15 @@ export const Scenarios = {
   ScenarioStorage,
 };
 
+export const Services = {
+  ActionService,
+  BaseService,
+  EventService,
+  HandlerService,
+  ReducerService,
+  ServiceRegistry,
+};
+
 export const Core = {
   Action,
   FieldAction,
@@ -155,6 +170,7 @@ export const Core = {
   BusMessage,
   SimulationBusMessage,
   DebugActionBusMessage,
+  ServiceActionEvent,
   DateUtils,
   EventBus,
   BaseEvent,
@@ -213,6 +229,7 @@ export default {
   Misc,
   Finance,
   Scenarios,
+  Services,
   Core,
   Visualization,
 };

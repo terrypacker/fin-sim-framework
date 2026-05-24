@@ -10,6 +10,7 @@
 
 import { DateUtils } from '../simulation-framework/date-utils.js';
 import { ActionFactory } from './action-factory.js';
+import { ServiceRegistry } from '../services/service-registry.js';
 
 export const intervalFns = {
   monthly:    d => DateUtils.addMonths(d, 1),
@@ -48,7 +49,8 @@ export class BaseScenario {
     this._nextEventId = 1;
     this._nextActionId = 1;
 
-    // Centralized factory for creating action instances in subclasses
+    // Centralized factory for creating action instances in subclasses.
+    // Also accessible via ServiceRegistry.getInstance().actionService.factory.
     this.actionFactory = new ActionFactory();
     // Tracks which event types already have a recurring auto-rescheduling handler
     // registered, so we never register a second one on re-enable.
@@ -184,13 +186,14 @@ export class BaseScenario {
   //Creation listeners
   eventCreationRequested(subtype) {
     const id = 'e' + this._nextEventId++;
+    const { eventService } = ServiceRegistry.getInstance();
     let event;
     if (subtype === 'OneOff') {
-      event = new FinSimLib.Core.OneOffEvent({
+      event = eventService.createOneOffEvent({
         id, name: 'New One-Off Event', type: 'NEW_ONEOFF_' + id, date: new Date(), enabled: false, color: '#f87171'
       });
     } else {
-      event = new FinSimLib.Core.EventSeries({
+      event = eventService.createEventSeries({
         id, name: 'New Event Series', type: 'NEW_SERIES_' + id,
         interval: 'month-end', enabled: false, color: '#60a5fa'
       });
@@ -200,28 +203,33 @@ export class BaseScenario {
   }
 
   handlerCreationRequested() {
-    const handler = new FinSimLib.Core.HandlerEntry(function({ data, date, state }) {
-      return [...this.generatedActions];
-    }, 'New Handler');
+    const { handlerService } = ServiceRegistry.getInstance();
+    const handler = handlerService.createHandler(
+      function({ data, date, state }) { return [...this.generatedActions]; },
+      'New Handler'
+    );
     this.registerHandler(handler);
     this.eventSchedulerUI.editNode(handler);
   }
 
   actionCreationRequested() {
     const id = 'a' + this._nextActionId++;
-    const action = new FinSimLib.Core.AmountAction('NEW_ACTION_' + id, 'New Action', 0);
+    const { actionService } = ServiceRegistry.getInstance();
+    const action = actionService.createAmountAction('NEW_ACTION_' + id, 'New Action', 0);
     this.eventSchedulerUI.addAction(action);
     this.eventSchedulerUI.editNode(action);
   }
 
   reducerCreationRequested() {
-    const reducer = FinSimLib.Core.MetricReducer.fromMetric('').withName('New Reducer');
+    const { reducerService } = ServiceRegistry.getInstance();
+    const reducer = reducerService.createMetricReducer('').withName('New Reducer');
     this.registerReducer(reducer);
     this.eventSchedulerUI.editNode(reducer);
   }
 
   //Deletion listeners
   eventDeleted(event) {
+    ServiceRegistry.getInstance().eventService.deleteEvent(event);
     if (event.enabled) {
       this.unscheduleEvent(event);
     }
@@ -229,10 +237,12 @@ export class BaseScenario {
   }
 
   handlerDeleted(handler) {
+    ServiceRegistry.getInstance().handlerService.deleteHandler(handler);
     this.sim.handlers.unregisterFromAll(handler);
   }
 
   actionDeleted(action) {
+    ServiceRegistry.getInstance().actionService.deleteAction(action);
     // Remove from any handler's generatedActions
     for (const handler of this.eventSchedulerUI.graph.getKind('handler')) {
       if (handler.generatedActions) {
@@ -254,11 +264,13 @@ export class BaseScenario {
   }
 
   reducerDeleted(reducer) {
+    ServiceRegistry.getInstance().reducerService.deleteReducer(reducer);
     this.sim.reducers.unregisterAllForReducer(reducer);
   }
 
   //Change listeners
   eventChanged(event) {
+    ServiceRegistry.getInstance().eventService.updateEvent(event);
     this.unscheduleEvent(event);
     if (event.enabled) {
       if (event.date) {
@@ -270,6 +282,7 @@ export class BaseScenario {
   }
 
   handlerChanged(handler) {
+    ServiceRegistry.getInstance().handlerService.updateHandler(handler);
     // The HandlerEntry object is registered by reference, so name and
     // generatedActions mutations are already live in the sim.
     // Re-sync only the event-type → handler mapping, which changes when the
@@ -281,6 +294,7 @@ export class BaseScenario {
   }
 
   actionChanged(action) {
+    ServiceRegistry.getInstance().actionService.updateAction(action);
     // Action properties (name, value, fieldName) are on the shared object so
     // they are already live everywhere that references the action.
     // If action.type changed, any reducer registered for the old type key will
@@ -300,6 +314,7 @@ export class BaseScenario {
   }
 
   reducerChanged(reducer) {
+    ServiceRegistry.getInstance().reducerService.updateReducer(reducer);
     // Priority is captured in the pipeline entry at registration time and
     // does not update automatically — re-registration picks up the current
     // value. fieldName, name, and other properties are accessed via closure

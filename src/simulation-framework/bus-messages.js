@@ -54,3 +54,22 @@ export class DebugActionBusMessage extends BusMessage {
     this.payload = payload;
   }
 }
+
+/**
+ * Published by service-layer CRUD operations.
+ * Always has bus type 'SERVICE_ACTION'.
+ *
+ * @property {'CREATE'|'UPDATE'|'DELETE'} actionType - The operation performed
+ * @property {string}  classType    - Constructor name of the item (e.g. 'AmountAction', 'EventSeries')
+ * @property {*}       item         - The item returned from the service call (may differ from originalItem after CREATE/UPDATE)
+ * @property {*}       originalItem - The item as passed into the service call (null for CREATE)
+ */
+export class ServiceActionEvent extends BusMessage {
+  constructor({ actionType, classType, item, originalItem = null }) {
+    super({ type: 'SERVICE_ACTION' });
+    this.actionType   = actionType;
+    this.classType    = classType;
+    this.item         = item;
+    this.originalItem = originalItem;
+  }
+}
