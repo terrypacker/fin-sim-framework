@@ -255,7 +255,7 @@ const CROSS_BORDER_JSON = {
 // ─── Helper to load cross-border scenario ────────────────────────────────────
 
 function loadCrossBorderScenario(config) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
 
   const scenario = new BaseScenario({
@@ -314,7 +314,7 @@ test('cross-border: inflationAccumulator has both US and AU keys', () => {
 });
 
 test('cross-border: CHANGE_RESIDENCY event registered when moveYear is set', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
 
   const scenario = new BaseScenario({
@@ -352,7 +352,7 @@ test('cross-border: CHANGE_RESIDENCY event not registered when moveYear is unset
     parameters: { ...CROSS_BORDER_JSON.parameters, moveYear: undefined },
   };
 
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
 
   const scenario = new BaseScenario({

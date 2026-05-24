@@ -14,7 +14,7 @@ export class SimGraphNode {
     kind,           // 'event' | 'handler' | 'action' | 'reducer'
 
     // Layer
-    layer,          // 'config' | 'event'
+    layer,          // 'config' | 'execution' | 'scenario'
 
     // Structural identity
     name,

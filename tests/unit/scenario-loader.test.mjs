@@ -111,7 +111,7 @@ function freshDeclarativeConfig() {
  * returning the ServiceRegistry and Simulation.
  */
 function loadIntoFreshServices(cfg) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
 
   const scenario = new BaseScenario({
@@ -242,7 +242,7 @@ test('round-trip via ScenarioLoader: US savings balance matches after 3 months',
   });
   // Capture the post-compile / pre-run state so the reload starts from the
   // same point (currentPeriods, inflationAccumulator, etc.).
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services2 = ServiceRegistry.getInstance();
   const tmpScenario = new BaseScenario({
     context: services2.simulationContext,
@@ -376,7 +376,7 @@ test('regression: _makeAction returns an Action (not FieldAction) for __type=Act
 test('regression: copy IntlRetirement, save, reload, and run — handlers fire and state updates', () => {
   // Step 1 — compile (mirrors first initScenario after merging buildDefaultConfig).
   const cfg = freshDeclarativeConfig();
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const s1 = ServiceRegistry.getInstance();
   const sc1 = new BaseScenario({
     context:      s1.simulationContext,
@@ -418,7 +418,7 @@ test('regression: copy IntlRetirement, save, reload, and run — handlers fire a
   const stored     = JSON.parse(JSON.stringify(serialized));
 
   // Step 4 — reload via ScenarioLoader (deserialize branch).
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const s2 = ServiceRegistry.getInstance();
   const sc2 = new BaseScenario({
     context:      s2.simulationContext,

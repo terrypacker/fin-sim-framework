@@ -51,7 +51,7 @@ import {
 
 /** Collect all SERVICE_ACTION events from a fresh registry, run work, return events. */
 function captureServiceEvents(work) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const events = [];
   registry.bus.subscribe('SERVICE_ACTION', e => events.push(e));
@@ -60,7 +60,7 @@ function captureServiceEvents(work) {
 }
 
 // Reset the singleton before every test so tests are fully isolated.
-beforeEach(() => ServiceRegistry.reset());
+beforeEach(() => ServiceRegistry.resetAll());
 
 // ─── ServiceRegistry singleton ────────────────────────────────────────────────
 
@@ -72,7 +72,7 @@ test('ServiceRegistry: getInstance returns the same instance', () => {
 
 test('ServiceRegistry: reset creates a new instance on next call', () => {
   const a = ServiceRegistry.getInstance();
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const b = ServiceRegistry.getInstance();
   assert.notStrictEqual(a, b);
 });
@@ -165,7 +165,7 @@ test('ActionService: createRecordBalanceAction returns a RecordBalanceAction', (
 });
 
 test('ActionService: updateAction mutates in-place and publishes UPDATE event', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const a = registry.actionService.createAmountAction('SALARY', 'Salary', 5000);
   const updateEvents = [];
@@ -180,7 +180,7 @@ test('ActionService: updateAction mutates in-place and publishes UPDATE event', 
 });
 
 test('ActionService: updateAction originalItem is a separate object from item', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const a = registry.actionService.createAmountAction('X', 'X', 1);
   let evt;
@@ -190,7 +190,7 @@ test('ActionService: updateAction originalItem is a separate object from item', 
 });
 
 test('ActionService: deleteAction publishes DELETE event', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const a = registry.actionService.createAmountAction('X', 'X', 0);
   const deleteEvents = [];
@@ -227,7 +227,7 @@ test('EventService: createOneOffEvent returns a OneOffEvent and publishes CREATE
 });
 
 test('EventService: updateEvent mutates in-place and publishes UPDATE', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const e = registry.eventService.createEventSeries({ id: 'e1', name: 'Old', type: 'T', interval: 'monthly' });
   let evt;
@@ -240,7 +240,7 @@ test('EventService: updateEvent mutates in-place and publishes UPDATE', () => {
 });
 
 test('EventService: deleteEvent publishes DELETE', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const e = registry.eventService.createOneOffEvent({ id: 'e1', name: 'X', type: 'X', date: new Date() });
   let evt;
@@ -270,7 +270,7 @@ test('HandlerService: createHandler with default name', () => {
 });
 
 test('HandlerService: updateHandler mutates in-place and publishes UPDATE', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const h = registry.handlerService.createHandler(null, 'Old Name');
   let evt;
@@ -283,7 +283,7 @@ test('HandlerService: updateHandler mutates in-place and publishes UPDATE', () =
 });
 
 test('HandlerService: deleteHandler publishes DELETE', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const h = registry.handlerService.createHandler(null, 'H');
   let evt;
@@ -340,7 +340,7 @@ test('ReducerService: createFieldReducer returns a FieldReducer', () => {
 });
 
 test('ReducerService: updateReducer mutates in-place and publishes UPDATE', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const r = registry.reducerService.createFieldReducer('metrics.balance');
   let evt;
@@ -353,7 +353,7 @@ test('ReducerService: updateReducer mutates in-place and publishes UPDATE', () =
 });
 
 test('ReducerService: deleteReducer publishes DELETE', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const r = registry.reducerService.createFieldReducer('metrics.balance');
   let evt;
@@ -380,7 +380,7 @@ test('All services publish to the same shared bus', () => {
 });
 
 test('Wildcard bus subscriber receives all SERVICE_ACTION events', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const wildcardEvents = [];
   registry.bus.subscribe('*', e => wildcardEvents.push(e));
@@ -393,7 +393,7 @@ test('Wildcard bus subscriber receives all SERVICE_ACTION events', () => {
 });
 
 test('Bus history contains all published SERVICE_ACTION events', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
 
   registry.actionService.createAmountAction('A', 'A', 0);
@@ -438,7 +438,7 @@ test('ServiceRegistry: collectibleService starts with empty store', () => {
 });
 
 test('ServiceRegistry: realPropertyService CREATE event appears on shared bus', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const events = [];
   registry.bus.subscribe('SERVICE_ACTION', e => events.push(e));
@@ -450,7 +450,7 @@ test('ServiceRegistry: realPropertyService CREATE event appears on shared bus', 
 });
 
 test('ServiceRegistry: collectibleService CREATE event appears on shared bus', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const events = [];
   registry.bus.subscribe('SERVICE_ACTION', e => events.push(e));
@@ -463,27 +463,29 @@ test('ServiceRegistry: collectibleService CREATE event appears on shared bus', (
 
 // ─── ScenarioRegistry persistence across reset() ──────────────────────────────
 
-test('ServiceRegistry: reset() preserves ScenarioRegistry across rebuilds', () => {
-  ServiceRegistry.resetAll();
+test('ServiceRegistry: reset() keeps the singleton alive (same instance)', () => {
   const r1 = ServiceRegistry.getInstance();
-  const scenarioReg1 = r1.scenarioRegistry;
-
-  ServiceRegistry.reset(); // simulates Rebuild
+  ServiceRegistry.reset();
   const r2 = ServiceRegistry.getInstance();
-
-  // ServiceRegistry instance is new (simulation services cleared)
-  assert.notStrictEqual(r1, r2);
-  // But ScenarioRegistry is the same object (in-memory param edits survive)
-  assert.strictEqual(r2.scenarioRegistry, scenarioReg1);
+  // reset() keeps the singleton — same bus, graph, and ScenarioRegistry.
+  assert.strictEqual(r1, r2);
+  assert.strictEqual(r1.scenarioRegistry, r2.scenarioRegistry);
 });
 
-test('ServiceRegistry: resetAll() creates a fresh ScenarioRegistry', () => {
-  ServiceRegistry.resetAll();
+test('ServiceRegistry: reset() clears SimulationRegistry', () => {
+  const reg = ServiceRegistry.getInstance();
+  // Register a dummy sim then reset.
+  reg.simulationRegistry.register('primary', { fake: true });
+  assert.ok(reg.simulationRegistry.getPrimary());
+  ServiceRegistry.reset();
+  assert.strictEqual(reg.simulationRegistry.getPrimary(), null);
+});
+
+test('ServiceRegistry: resetAll() creates a fresh instance and ScenarioRegistry', () => {
   const r1 = ServiceRegistry.getInstance();
   const scenarioReg1 = r1.scenarioRegistry;
-
   ServiceRegistry.resetAll();
   const r2 = ServiceRegistry.getInstance();
-
+  assert.notStrictEqual(r1, r2);
   assert.notStrictEqual(r2.scenarioRegistry, scenarioReg1);
 });

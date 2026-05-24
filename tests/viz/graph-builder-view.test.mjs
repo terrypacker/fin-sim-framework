@@ -52,7 +52,7 @@ function makeElements() {
 }
 
 function makBuilderView(elements) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const { builderCanvas, graphRoot, graphNodes, graphEdges, nodeDetailsTemplate } = elements ?? makeElements();
   return new GraphBuilderView({

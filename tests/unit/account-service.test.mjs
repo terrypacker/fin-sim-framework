@@ -498,14 +498,14 @@ test('AccountService.getPersonShare: joint returns half balance', () => {
 // ─── ServiceRegistry integration ──────────────────────────────────────────────
 
 test('ServiceRegistry: exposes accountService', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   assert.ok(registry.accountService instanceof AccountService);
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
 });
 
 test('ServiceRegistry.accountService: shares the same bus as other services', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const events = [];
   registry.bus.subscribe('SERVICE_ACTION', e => events.push(e));
@@ -515,7 +515,7 @@ test('ServiceRegistry.accountService: shares the same bus as other services', ()
 
   const created = events.find(e => e.actionType === 'CREATE' && e.item instanceof Account);
   assert.ok(created, 'CREATE event should have been published on the shared bus');
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
 });
 
 // ─── Account type country/currency coverage ────────────────────────────────────

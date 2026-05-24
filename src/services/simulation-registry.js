@@ -59,6 +59,11 @@ export class SimulationRegistry {
     this._sims.delete(id);
   }
 
+  /** Remove all registered simulations. Called by ServiceRegistry.reset(). */
+  clear() {
+    this._sims.clear();
+  }
+
   /**
    * Convenience method for single-sim apps: returns the first registered
    * simulation, or null if none are registered.

@@ -29,7 +29,7 @@ import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
 import { BaseScenario }    from '../../src/index.js';
 
-beforeEach(() => ServiceRegistry.reset());
+beforeEach(() => ServiceRegistry.resetAll());
 
 function loadToolsetScenario(config) {
   const services = ServiceRegistry.getInstance();

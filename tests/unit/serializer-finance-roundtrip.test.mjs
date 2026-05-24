@@ -101,7 +101,7 @@ function makeContext() {
 }
 
 function buildAndSerialize(initialState, buildFn) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const scenario = new BaseScenario({
     eventSchedulerUI: STUB_UI,
     context: makeContext(),
@@ -122,7 +122,7 @@ function buildAndSerialize(initialState, buildFn) {
 }
 
 function restoreFromConfig(config) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const scenario = new BaseScenario({
     eventSchedulerUI: STUB_UI,
     context:  makeContext(),

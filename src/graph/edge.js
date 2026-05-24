@@ -8,9 +8,10 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 export const EDGE_TYPES = {
-  HANDLED_BY: 'HANDLED_BY',
+  HANDLED_BY:       'HANDLED_BY',
   GENERATES_ACTION: 'GENERATES_ACTION',
-  REDUCES_ACTION: 'REDUCES_ACTION'
+  REDUCES_ACTION:   'REDUCES_ACTION',
+  DERIVES_FROM:     'DERIVES_FROM',   // child scenario → parent scenario (user save → prebuilt, branch → base)
 }
 
 export const createEdgeId = (from, to, type) => {

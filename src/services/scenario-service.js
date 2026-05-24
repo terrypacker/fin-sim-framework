@@ -152,26 +152,24 @@ export class ScenarioService {
    * Instantiate the correct scenario class for the current selection.
    *
    * Resolution order:
-   *  1. Active pre-built → use its factory directly.
-   *  2. Active user scenario with a matching scenarioId → use that prebuilt's factory.
-   *  3. Active user scenario without a match → fall back to the first prebuilt's factory.
+   *  1. Active scenario carries scenarioClass directly.
+   *  2. Active user scenario with a matching scenarioId → use that prebuilt's scenarioClass.
+   *  3. Fall back to the first prebuilt's scenarioClass.
    */
   createActiveScenario() {
     const active = this.getActive();
     if (!active) throw new Error('No active scenario');
 
-    if (active.prebuilt) return active.factory(
-        this._getParams(active),
-        this._getInitialState(active),
-        new Date(active.simStart), new Date(active.simEnd));
+    const cls =
+      active.scenarioClass
+      ?? this._registry.get(active.scenarioId)?.scenarioClass
+      ?? this._registry.getPrebuiltScenarios()[0]?.scenarioClass;
+    if (!cls) throw new Error('No scenario class available');
 
-    const parent  = this._registry.get(active.scenarioId);
-    const factory = parent?.factory ?? this._registry.getPrebuiltScenarios()[0]?.factory;
-    if (!factory) throw new Error('No prebuilt scenario factory available');
-
-    return factory(
-      this._getParams(active), this._getInitialState(active),
-      new Date(active.simStart), new Date(active.simEnd),
+    return cls.instantiate(
+      this._getParams(active),
+      new Date(active.simStart),
+      new Date(active.simEnd),
     );
   }
 
@@ -184,8 +182,5 @@ export class ScenarioService {
     }));
   }
 
-   _getInitialState(scenario) {
-    return scenario?.initialState ?? {};
-  }
-
 }
+

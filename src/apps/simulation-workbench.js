@@ -17,10 +17,8 @@
  * limitations under the License.
  */
 
-import { WorkbenchApp }                        from './workbench-app.js';
-import { PrebuiltScenario }                   from '../scenarios/prebuilt-scenario.js';
-import { IntlRetirementScenario }             from '../scenarios/intl-retirement-scenario.js';
-import {ServiceRegistry} from "../services/service-registry.js";
+import { WorkbenchApp }            from './workbench-app.js';
+import { IntlRetirementScenario } from '../scenarios/intl-retirement-scenario.js';
 
 const CHART_SERIES = [
   { key: 'usSavingsAccount.balance', color: '#60a5fa', label: 'US Savings'    },
@@ -32,26 +30,17 @@ const CHART_SERIES = [
 /**
  * Pre-built scenarios available in the SimulationWorkbench dropdown.
  *
- * Order matters: the scenario with the lowest `order` value is selected
- * automatically on a fresh page load (no saved localStorage state).
+ * Each entry: { cls, order, active, simStart, simEnd }
+ * The scenario with the lowest `order` is selected on a fresh page load.
  */
 const PREBUILT_SCENARIOS = [
-  new PrebuiltScenario({
-    id:            'intl-retirement',
-    label:         'International Retirement',
-    order:         1,
-    prebuilt:      true,
-    active:        true,
+  {
+    cls:      IntlRetirementScenario,
+    order:    1,
+    active:   true,
     simStart: new Date(Date.UTC(2026, 0, 1)),
-    simEnd:  new Date(Date.UTC(2041, 0, 1)),
-    scenarioClass: IntlRetirementScenario,
-    factory:  (params, _initialState, simStart, simEnd) => new IntlRetirementScenario({
-      context: ServiceRegistry.getInstance().simulationContext,
-      params,
-      simStart,
-      simEnd,
-    }),
-  }),
+    simEnd:   new Date(Date.UTC(2041, 0, 1)),
+  },
 ];
 
 export class SimulationWorkbench extends WorkbenchApp {

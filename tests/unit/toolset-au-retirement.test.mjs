@@ -213,7 +213,7 @@ const AU_JSON = {
 // ─── Helper to load AU_RETIREMENT scenario ───────────────────────────────────
 
 function loadAuRetirementScenario(config) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
 
   const scenario = new BaseScenario({
@@ -279,7 +279,7 @@ test('AU_RETIREMENT: monthly expenses reduce AU savings over 3 months', () => {
 });
 
 test('AU_RETIREMENT: INTL_AU_SAVINGS_INTEREST event is registered', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
 
   const scenario = new BaseScenario({
@@ -306,7 +306,7 @@ test('AU_RETIREMENT: INTL_AU_SAVINGS_INTEREST event is registered', () => {
 });
 
 test('AU_RETIREMENT: INTL_SUPER_EARNINGS event is registered', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
 
   const scenario = new BaseScenario({
@@ -343,7 +343,7 @@ test('AU_RETIREMENT: super earnings event fires (INTL_SUPER_EARNINGS registered 
   // Verify INTL_SUPER_EARNINGS is scheduled (already tested above) and that
   // the SuperEarningsHandler is wired by confirming the event exists in the
   // event service with the correct type and interval.
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
 
   const scenario = new BaseScenario({
