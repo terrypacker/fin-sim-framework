@@ -128,7 +128,12 @@ export class ChartView {
         this._seriesMap.set(key, { colorIdx: this._colorIdx++, dataArr });
         if (this._chart) this._appendDataset(key, dataArr);
       }
-      this._seriesMap.get(key).dataArr.push({ x: t, y: num });
+      const dataArr = this._seriesMap.get(key).dataArr;
+      if (dataArr.length > 0 && dataArr[dataArr.length - 1].x === t) {
+        dataArr[dataArr.length - 1].y = num;
+      } else {
+        dataArr.push({ x: t, y: num });
+      }
       didAdd = true;
     }
 
