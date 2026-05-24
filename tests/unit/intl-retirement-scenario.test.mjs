@@ -30,6 +30,7 @@ import { BaseEvent }       from '../../src/simulation-framework/events/base-even
 import { EventSeries }     from '../../src/simulation-framework/events/event-series.js';
 import { OneOffEvent }     from '../../src/simulation-framework/events/one-off-event.js';
 import { ServiceRegistry }     from '../../src/services/service-registry.js';
+import { BaseScenario }            from '../../src/scenarios/base-scenario.js';
 import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
 import { ScenarioSerializer }     from '../../src/scenarios/scenario-serializer.js';
 
@@ -746,4 +747,129 @@ test('rothConversionEndYear: Date object falls back to RMD year', () => {
     .filter(e => e.type === 'ROTH_CONVERSION_POLICY_EVALUATE');
   assert.ok(events.length < 100,
     `Expected < 100 Roth conversion events but got ${events.length} — end-year Date guard may not be working`);
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Event data round-trip: PERIOD_ADVANCE and TAX_SETTLE events must carry their
+// data field (cc, period) through serialize → deserialize so that handlers fire
+// correctly in imported scenarios.  Missing data was the root cause of a bug
+// where imported scenarios computed incorrect balances vs the original.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Build and initialise an IntlRetirementScenario, serialize it, then rebuild
+ * it as a BaseScenario via ScenarioSerializer.deserialize() — exactly the path
+ * the browser takes when a user exports and re-imports a scenario.
+ */
+function buildRoundTripped(params = {}) {
+  const { scenario: orig } = buildScenario(params);
+  const registry = ServiceRegistry.getInstance();
+
+  const config = ScenarioSerializer.serialize(
+    registry,
+    orig.id ?? 'test-rt',
+    'Round-trip Test',
+    100,
+    true,
+    orig.simStart,
+    orig.simEnd,
+    orig.initialState,
+    orig.params ?? [],
+  );
+
+  ServiceRegistry.reset();
+  const scenario2 = new BaseScenario({
+    context:      ServiceRegistry.getInstance().simulationContext,
+    params:       config.params ?? [],
+    initialState: config.initialState ?? {},
+    simStart:     orig.simStart,
+    simEnd:       orig.simEnd,
+  });
+  scenario2.buildSim();
+  ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance());
+
+  return { scenario: scenario2, sim: scenario2.sim };
+}
+
+test('RT-1: PERIOD_ADVANCE events serialize with data.cc and data.period', () => {
+  const { scenario } = buildScenario();
+  const registry = ServiceRegistry.getInstance();
+  const config = ScenarioSerializer.serialize(
+    registry,
+    'test-rt', 'RT Test', 100, true,
+    scenario.simStart, scenario.simEnd,
+    scenario.initialState, scenario.params ?? [],
+  );
+
+  const events = config.events.filter(e => e.type === 'PERIOD_ADVANCE');
+  assert.ok(events.length > 0, 'should have PERIOD_ADVANCE events in serialized config');
+  for (const e of events) {
+    assert.ok(e.data,        `event "${e.name}" is missing data field`);
+    assert.ok(e.data.cc,     `event "${e.name}" data is missing cc`);
+    assert.ok(e.data.period, `event "${e.name}" data is missing period`);
+    assert.ok(typeof e.data.period.startMs === 'number',
+      `event "${e.name}" data.period.startMs should be a number, got ${typeof e.data.period.startMs}`);
+  }
+});
+
+test('RT-2: TAX_SETTLE events serialize with data.cc', () => {
+  const { scenario } = buildScenario();
+  const registry = ServiceRegistry.getInstance();
+  const config = ScenarioSerializer.serialize(
+    registry,
+    'test-rt', 'RT Test', 100, true,
+    scenario.simStart, scenario.simEnd,
+    scenario.initialState, scenario.params ?? [],
+  );
+
+  const events = config.events.filter(e => e.type === 'TAX_SETTLE');
+  assert.ok(events.length > 0, 'should have TAX_SETTLE events in serialized config');
+  for (const e of events) {
+    assert.ok(e.data,    `event "${e.name}" is missing data field`);
+    assert.ok(e.data.cc, `event "${e.name}" data is missing cc`);
+    assert.ok(e.data.cc === 'US' || e.data.cc === 'AU',
+      `event "${e.name}" data.cc should be "US" or "AU", got "${e.data.cc}"`);
+  }
+});
+
+test('RT-3: round-trip simulation matches original US savings balance at end of 2026', () => {
+  const endOf2026 = new Date(Date.UTC(2026, 11, 31));
+
+  // Run original scenario to end of 2026
+  const { sim: sim1 } = buildScenario();
+  stepWithGuard(sim1, endOf2026);
+  const origBalance = sim1.state.usSavingsAccount.balance;
+
+  // Run round-tripped scenario (serialize → BaseScenario + deserialize) to same date
+  const { sim: sim2 } = buildRoundTripped();
+  stepWithGuard(sim2, endOf2026);
+  const rtBalance = sim2.state.usSavingsAccount.balance;
+
+  assert.ok(origBalance > 0,
+    `original US savings should be positive at end of 2026, got ${origBalance}`);
+  assert.ok(
+    Math.abs(origBalance - rtBalance) < 1.0,
+    `round-trip US savings should match original (within $1); orig=${origBalance.toFixed(2)}, rt=${rtBalance.toFixed(2)}`
+  );
+});
+
+test('RT-4: round-trip simulation advances currentPeriods.US to 2027 after Jan 1 2027', () => {
+  const jan2027 = new Date(Date.UTC(2027, 0, 2));
+  const { sim } = buildRoundTripped();
+  stepWithGuard(sim, jan2027);
+
+  const period = sim.state.currentPeriods?.US;
+  assert.ok(period, 'currentPeriods.US should exist after round-trip');
+  const startYear = new Date(period.startMs).getUTCFullYear();
+  assert.strictEqual(startYear, 2027,
+    `round-trip: US period should advance to 2027 after Jan 1 PERIOD_ADVANCE, got ${startYear}`);
+});
+
+test('RT-5: round-trip simulation resets usOrdinaryIncomeYTD after Dec 31 2026 settlement', () => {
+  const { sim } = buildRoundTripped();
+  sim.stepTo(new Date(Date.UTC(2026, 11, 31)));
+  assert.ok(sim.state.usOrdinaryIncomeYTD >= 0,
+    'usOrdinaryIncomeYTD should be non-negative after round-trip US tax settlement');
+  assert.ok(sim.state.usOrdinaryIncomeYTD < 100,
+    `round-trip: usOrdinaryIncomeYTD should be a single month's interest after settlement, got ${sim.state.usOrdinaryIncomeYTD}`);
 });
