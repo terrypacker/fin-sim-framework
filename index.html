@@ -694,24 +694,23 @@
 
 <!-- NODE DETAILS TEMPLATE -->
 <template id="tpl-node-details">
-  <div data-node-details>
-    <div class="g-node">
-      <div class="g-header">
-        <span class="g-header-text"></span>
-        <span class="node-state-badge badge-amber" data-id="stateChangeIndicator" style="display:none">Change</span>
-        <span class="node-fired-badge badge-green" data-id="firedIndicator"></span>
-        <span class="node-breakpoint-badge badge-red" data-id="breakpointIndicator" style="display:none" title="Breakpoint — right-click to remove">⏸</span>
-      </div>
-      <div class="g-title">
-        <span class="g-title-text"></span>
-      </div>
-
-      <div class="g-port in"></div>
-      <div class="g-port out"></div>
+  <div class="g-node" ata-node-details>
+    <div class="g-header">
+      <span class="g-header-text"></span>
+      <span class="node-state-badge badge-amber" data-id="stateChangeIndicator" style="display:none">Change</span>
+      <span class="node-fired-badge badge-green" data-id="firedIndicator"></span>
+      <span class="node-breakpoint-badge badge-red" data-id="breakpointIndicator" style="display:none" title="Breakpoint — right-click to remove">⏸</span>
     </div>
+    <div class="g-title">
+      <span class="g-title-text"></span>
+    </div>
+
+    <div class="g-port in"></div>
+    <div class="g-port out"></div>
   </div>
 </template>
 
+<!-- TIME SLIDER TEMPLATE -->
 <template id="tpl-time-control-slider-overlay">
   <div class="time-controls-slider-overlay">
     Busy...
