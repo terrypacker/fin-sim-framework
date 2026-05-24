@@ -58,6 +58,7 @@ export default [
           port: 10001,
         }),
         isWatching && livereload({
+          delay: 1000,
           watch: ['.', 'dist']
         }),
         isWatching && watchAssets({

@@ -88,6 +88,10 @@ export class GraphRenderer extends BaseComponent {
     this.breakpointChangeListeners = [];
     this.selectedNodeId = null;
     this.dragState = null;
+
+    // 'config' | 'execution' | 'both'
+    // Controls whether execution badges (Fired/Changed) are rendered.
+    this._layerMode = 'both';
     this._bindEvents();
     // mount immediately
     this._mount();
@@ -130,6 +134,28 @@ export class GraphRenderer extends BaseComponent {
    */
   registerBreakpointChangeListener(listener) {
     this.breakpointChangeListeners.push(listener);
+  }
+
+  /**
+   * Set the active layer display mode.
+   * 'config'    — execution badges (Fired/Changed) hidden
+   * 'execution' — show execution overlay only
+   * 'both'      — show everything (default)
+   * @param {'config'|'execution'|'both'} mode
+   */
+  setLayerMode(mode) {
+    this._layerMode = mode;
+    this.render();
+  }
+
+  /**
+   * Return the current execution overlay entry for a node, or null if none.
+   * Used by GraphNodeExecHistory to display per-node execution state.
+   * @param {string} nodeId
+   * @returns {{ fired?: boolean, stateChanges?: object[], breakpointHit?: boolean } | null}
+   */
+  getExecState(nodeId) {
+    return this._execOverlay.get(nodeId) ?? null;
   }
 
   /* ───────────────────────── PUBLIC API ───────────────────────────── */
@@ -373,20 +399,23 @@ export class GraphRenderer extends BaseComponent {
       renderedState.name = node.name;
     }
 
-    // ── fired indicator ─────────────────────────
+    // ── fired indicator — hidden in config-only mode ──────────────────
     const firedIndicator = el.querySelector('[data-id="firedIndicator"]');
+    const showExec = this._layerMode !== 'config';
 
-    const fired = !!data.fired;
-    firedIndicator.classList.toggle('badge-green', fired);
-    firedIndicator.classList.toggle('badge-cyan', !fired);
-    firedIndicator.innerText = fired ? 'Fired' : 'Idle';
-    renderedState.fired = fired;
+    firedIndicator.style.display = showExec ? '' : 'none';
+    if (showExec) {
+      const fired = !!data.fired;
+      firedIndicator.classList.toggle('badge-green', fired);
+      firedIndicator.classList.toggle('badge-cyan', !fired);
+      firedIndicator.innerText = fired ? 'Fired' : 'Idle';
+      renderedState.fired = fired;
+    }
 
-    // ── state change indicator (update only) ─────────────────────────
+    // ── state change indicator — hidden in config-only mode ───────────
     const stateChangedIndicator = el.querySelector('[data-id="stateChangeIndicator"]');
-
     if (stateChangedIndicator) {
-      stateChangedIndicator.style.display = data.stateChanges?.length > 0 ? '' : 'none';
+      stateChangedIndicator.style.display = showExec && data.stateChanges?.length > 0 ? '' : 'none';
     }
 
     // ── breakpoint indicator ─────────────────────────

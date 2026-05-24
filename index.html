@@ -148,7 +148,27 @@
       </div><!-- /left-group simulation -->
 
       <!-- ── CONFIGURATION group ──────────────────────── -->
-      <div class="left-group" data-group="configuration" style="display:none" id="configGroup"></div>
+      <div class="left-group" data-group="configuration" style="display:none" id="configGroup">
+        <!-- Sub-tab headers -->
+        <div class="tab">
+          <div class="panel-header tab-header active" data-dest-tab="left-graph-nodes" data-tab-group="left-col-graph">
+            <span class="panel-tag">ND</span>
+            <span class="panel-title">NODES</span>
+          </div>
+          <div class="panel-header tab-header" data-dest-tab="left-graph-edit" data-tab-group="left-col-graph">
+            <span class="panel-tag">ED</span>
+            <span class="panel-title">EDIT</span>
+          </div>
+        </div>
+        <!-- NODES sub-tab -->
+        <div class="tab-content" data-tab="left-graph-nodes" data-tab-group="left-col-graph" style="flex:1;min-height:0;overflow-y:auto">
+          <div id="configGroupNodes"></div>
+        </div>
+        <!-- EDIT sub-tab -->
+        <div class="tab-content" data-tab="left-graph-edit" data-tab-group="left-col-graph" style="display:none;flex:1;min-height:0;overflow-y:auto">
+          <div id="graphNodeEditPane"></div>
+        </div>
+      </div>
       <!-- /left-group configuration -->
       <div class="node-header">Storage</div>
       <div class="node-body">
@@ -199,8 +219,8 @@
       <div id="content" class="viz-container">
         <div class="tab">
           <div class="panel-header tab-header active" data-dest-tab="config-graph-tab" data-tab-group="center-col">
-            <span class="panel-tag">CFG</span>
-            <span class="panel-title">CONFIG GRAPH</span>
+            <span class="panel-tag">GR</span>
+            <span class="panel-title">GRAPH</span>
           </div>
           <div class="panel-header tab-header" data-dest-tab="timeline-tab" data-tab-group="center-col">
             <span class="panel-tag">TL</span>
@@ -280,6 +300,7 @@
         <button class="right-group-btn active" data-right-group="sim">▶ SIM</button>
         <button class="right-group-btn" data-right-group="mc">◎ MC</button>
         <button class="right-group-btn" data-right-group="opt">⚡ OPT</button>
+        <button class="right-group-btn" data-right-group="graph">⬡ GRAPH</button>
       </div>
 
       <!-- ── SIM group ─────────────────────────────────── -->
@@ -347,6 +368,23 @@
           </div>
         </div>
       </div><!-- /right-group opt -->
+
+      <!-- ── GRAPH group ─────────────────────────────────── -->
+      <div class="right-group" data-right-group="graph" style="display:none">
+        <div class="panel" style="flex:1;min-height:0;display:flex;flex-direction:column">
+          <!-- Tab headers -->
+          <div class="tab">
+            <div class="panel-header tab-header active" data-dest-tab="right-graph-node" data-tab-group="right-col-graph">
+              <span class="panel-tag">ND</span>
+              <span class="panel-title">NODE HISTORY</span>
+            </div>
+          </div>
+          <!-- Node History Tab -->
+          <div class="tab-content" data-tab="right-graph-node" data-tab-group="right-col-graph" style="overflow-y:auto;flex:1;min-height:0">
+            <div id="graphNodeHistoryPane"></div>
+          </div>
+        </div>
+      </div><!-- /right-group graph -->
 
     </div>
   </div>
