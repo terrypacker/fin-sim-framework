@@ -53,7 +53,7 @@ export class TimelinePresenter {
     view.onToggle  = key => { if (key !== null) controller.toggleExpanded(key); this._render(); };
     view.onDetail  = idx => onDetail(controller.journal.journal[idx]);
     if (onTaxDocument) {
-      view.onTaxDocument = idx => onTaxDocument(controller.journal.journal[idx]);
+      view.onTaxDocument = idx => onTaxDocument(controller.journal.journal[idx], controller.journal.journal);
     }
     if (onRewind) {
       view.onRewind = ts => onRewind(new Date(ts));

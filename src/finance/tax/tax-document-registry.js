@@ -47,13 +47,15 @@ export class TaxDocumentRegistry {
    * Generate a TaxDocument (or array of TaxDocuments) from a TAX_SETTLE_APPLY entry.
    *
    * Returns null when the entry has no taxDetail and no personTaxDetails.
-   * Returns TaxDocument[] when personTaxDetails is present (per-person AU filing).
-   * Returns TaxDocument for single-filer or US entries.
+   * Returns TaxDocument[] when personTaxDetails is present (per-person AU filing) or
+   *   when capital gain sale records exist for a US filing (Form 1040 + Schedule D + Form 8949).
+   * Returns TaxDocument for single-filer US entries with no capital gains.
    *
-   * @param {object} journalEntry
+   * @param {object}   journalEntry
+   * @param {object[]} [journal]     - Full journal array; required for Form 8949 extraction.
    * @returns {TaxDocument|TaxDocument[]|null}
    */
-  generate(journalEntry) {
+  generate(journalEntry, journal) {
     const { cc, taxDetail, personTaxDetails } = journalEntry.action.data ?? {};
 
     if (personTaxDetails?.length > 0) {
@@ -68,9 +70,10 @@ export class TaxDocumentRegistry {
     }
 
     if (!taxDetail) return null;
-    const taxYear = taxDetail.taxYear ?? new Date(journalEntry.date).getUTCFullYear();
-    const module  = this._get(cc, taxYear);
-    return module.generate(taxDetail, taxYear);
+    const taxYear    = taxDetail.taxYear ?? new Date(journalEntry.date).getUTCFullYear();
+    const module     = this._get(cc, taxYear);
+    const saleRecords = cc === 'US' && journal ? _extractUsSaleRecords(journalEntry, journal) : [];
+    return module.generate(taxDetail, taxYear, saleRecords);
   }
 
   // ─── Private ───────────────────────────────────────────────────────────────
@@ -88,4 +91,48 @@ export class TaxDocumentRegistry {
     const best = available.filter(y => y <= year).pop() ?? available[0];
     return this._modules[`${cc}_${best}`];
   }
+}
+
+// ─── Module-level helpers ─────────────────────────────────────────────────────
+
+/**
+ * Collect all STOCK_WITHDRAWAL_TAX journal entries that carry sale detail
+ * (proceeds field) between the previous US TAX_SETTLE_APPLY and the current one.
+ * These entries are emitted by StockWithdrawalApplyReducer (explicit sales) and
+ * AccountService.replenishSavings (brokerage drawdowns).
+ *
+ * @param {object}   currentEntry  - The TAX_SETTLE_APPLY journal entry being reported.
+ * @param {object[]} journal       - Full journal entry array.
+ * @returns {{ description, dateAcquired, dateSold, proceeds, costBasis, gain }[]}
+ */
+function _extractUsSaleRecords(currentEntry, journal) {
+  const currentIdx = journal.indexOf(currentEntry);
+  if (currentIdx < 0) return [];
+
+  // Find the previous US TAX_SETTLE_APPLY to define year start.
+  let yearStartIdx = 0;
+  for (let i = currentIdx - 1; i >= 0; i--) {
+    const e = journal[i];
+    if (e.action?.type === 'TAX_SETTLE_APPLY' && e.action?.data?.cc === 'US') {
+      yearStartIdx = i + 1;
+      break;
+    }
+  }
+
+  const records = [];
+  for (let i = yearStartIdx; i < currentIdx; i++) {
+    const e = journal[i];
+    if (e.action?.type === 'STOCK_WITHDRAWAL_TAX' && e.action.data?.proceeds != null) {
+      const d = e.action.data;
+      records.push({
+        description:  d.description ?? 'Investment Account',
+        dateAcquired: 'Various',
+        dateSold:     new Date(e.date),
+        proceeds:     d.proceeds,
+        costBasis:    d.costBasis ?? (d.proceeds - (d.gain ?? 0)),
+        gain:         d.gain ?? 0,
+      });
+    }
+  }
+  return records;
 }
