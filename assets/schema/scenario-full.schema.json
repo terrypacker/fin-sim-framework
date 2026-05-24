@@ -1,0 +1,544 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "scenario-full",
+  "title": "Full Serialized Scenario",
+  "description": "Complete scenario format produced by the scenario export feature. Contains every event, handler, action, and reducer explicitly. For LLM-assisted authoring of new US retirement scenarios, prefer the simpler 'scenario-toolset-us-retirement' schema instead.",
+  "type": "object",
+  "required": ["id", "name", "simStart", "simEnd", "persons", "accounts", "events", "handlers", "actions", "reducers"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique scenario identifier (UUID or slug).",
+      "examples": ["scenario-1", "my-retirement-2026"]
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable scenario name shown in the UI."
+    },
+    "order": {
+      "type": "integer",
+      "default": 0,
+      "description": "Display sort order among scenarios. Lower numbers appear first."
+    },
+    "active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this scenario is currently active."
+    },
+    "prebuilt": {
+      "type": "boolean",
+      "default": false,
+      "description": "True for read-only factory scenarios shipped with the app."
+    },
+    "simStart": {
+      "type": "string",
+      "format": "date",
+      "description": "Simulation start date in YYYY-MM-DD format.",
+      "examples": ["2026-01-01"]
+    },
+    "simEnd": {
+      "type": "string",
+      "format": "date",
+      "description": "Simulation end date in YYYY-MM-DD format.",
+      "examples": ["2055-01-01"]
+    },
+    "persons": {
+      "type": "array",
+      "description": "People in the simulation.",
+      "items": { "$ref": "#/$defs/Person" }
+    },
+    "accounts": {
+      "type": "array",
+      "description": "Financial accounts.",
+      "items": { "$ref": "#/$defs/Account" }
+    },
+    "events": {
+      "type": "array",
+      "description": "Scheduled events that drive the simulation. Each event fires handlers on its configured schedule.",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/EventSeries" },
+          { "$ref": "#/$defs/OneOffEvent" }
+        ]
+      }
+    },
+    "handlers": {
+      "type": "array",
+      "description": "Handlers that process events and emit actions.",
+      "items": { "$ref": "#/$defs/Handler" }
+    },
+    "actions": {
+      "type": "array",
+      "description": "Action templates used by handlers and reducers.",
+      "items": { "$ref": "#/$defs/Action" }
+    },
+    "reducers": {
+      "type": "array",
+      "description": "Reducers that consume actions and update simulation state.",
+      "items": { "$ref": "#/$defs/Reducer" }
+    },
+    "initialState": {
+      "type": "object",
+      "description": "Seed values for the simulation state object at t=0. Toolsets populate this automatically; only needed for manual scenarios.",
+      "additionalProperties": true
+    },
+    "params": {
+      "type": "array",
+      "description": "Named parameter overrides for scenario parameterization (e.g. Monte Carlo sweep variables).",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    }
+  },
+  "$defs": {
+    "Person": {
+      "type": "object",
+      "title": "Person",
+      "required": ["__type", "id", "name", "birthDate"],
+      "additionalProperties": false,
+      "properties": {
+        "__type": { "const": "Person" },
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for this person. Referenced by account ownerId fields.",
+          "examples": ["primary", "spouse"]
+        },
+        "name": { "type": "string" },
+        "birthDate": {
+          "type": "string",
+          "format": "date",
+          "description": "YYYY-MM-DD date of birth."
+        },
+        "citizen": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["US", "AU"] },
+          "default": ["US"],
+          "description": "Country citizenship codes. Affects tax treatment."
+        },
+        "lifeExpectancy": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 120,
+          "default": 90
+        },
+        "socialSecurityMonthly": {
+          "type": "number",
+          "minimum": 0,
+          "default": 2800,
+          "description": "Monthly Social Security benefit in USD, applied after retirementDate."
+        },
+        "monthlyWage": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0,
+          "description": "Gross monthly wage in USD before taxes, applied until retirementDate."
+        },
+        "retirementDate": {
+          "type": "string",
+          "format": "date",
+          "default": "2040-01-01"
+        }
+      }
+    },
+    "Currency": {
+      "type": "object",
+      "required": ["code", "symbol"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "type": "string", "examples": ["USD", "AUD"] },
+        "symbol": { "type": "string", "examples": ["$", "A$"] }
+      }
+    },
+    "Account": {
+      "type": "object",
+      "title": "Account",
+      "required": ["__type", "id", "name", "role", "stateKey", "initialValue", "ownerId"],
+      "additionalProperties": true,
+      "properties": {
+        "__type": {
+          "type": "string",
+          "description": "Account class name.",
+          "enum": [
+            "SavingsAccount", "CheckingAccount", "BrokerageAccount",
+            "TraditionalIRAAccount", "RothAccount", "FourOhOneKAccount",
+            "SuperannuationAccount", "Account"
+          ]
+        },
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": {
+          "type": ["string", "null"],
+          "enum": ["savings", "checking", "brokerage", "ira", "roth", "401k", "super", null]
+        },
+        "role": {
+          "type": ["string", "null"],
+          "enum": ["us-savings", "ira", "roth-ira", "k401", "us-stock", "fixed-income", "au-savings", "au-stock", "super", null],
+          "description": "Semantic role used by handlers and reducers to look up this account."
+        },
+        "stateKey": {
+          "type": "string",
+          "description": "Unique property name on the simulation state object."
+        },
+        "initialValue": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Starting balance."
+        },
+        "ownershipType": {
+          "type": "string",
+          "enum": ["sole", "joint"],
+          "default": "sole"
+        },
+        "ownerId": {
+          "type": ["string", "null"],
+          "description": "Person id of the account owner."
+        },
+        "minimumBalance": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0
+        },
+        "drawdownPriority": {
+          "type": ["integer", "null"],
+          "default": null
+        },
+        "country": { "type": ["string", "null"], "default": null },
+        "currency": {
+          "oneOf": [
+            { "$ref": "#/$defs/Currency" },
+            { "type": "null" }
+          ]
+        },
+        "contributionBasis": {
+          "type": "number",
+          "minimum": 0,
+          "description": "After-tax contribution basis (investment accounts only)."
+        },
+        "earningsBasis": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0
+        },
+        "loanBalance": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0
+        },
+        "minimumAge": {
+          "type": ["number", "null"],
+          "default": null,
+          "description": "Age before which early withdrawal penalties apply (e.g. 59.5 for IRA/401k)."
+        },
+        "balanceAtResidencyChange": {
+          "type": ["number", "null"],
+          "default": null
+        }
+      }
+    },
+    "EventSeries": {
+      "type": "object",
+      "title": "EventSeries",
+      "description": "A recurring event that fires on a fixed interval throughout the simulation.",
+      "required": ["__type", "id", "name", "type", "interval"],
+      "additionalProperties": false,
+      "properties": {
+        "__type": { "const": "EventSeries" },
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": {
+          "type": "string",
+          "description": "Event type discriminator. Handlers subscribe to specific types.",
+          "examples": [
+            "MONTHLY_EXPENSES", "MONTHLY_WAGES", "US_SAVINGS_INTEREST_MONTHLY",
+            "INTL_IRA_EARNINGS", "INTL_ROTH_EARNINGS", "INTL_K401_EARNINGS",
+            "INTL_STOCK_EARNINGS", "DIVIDEND_SCHEDULED", "INTL_FIXED_INCOME_INTEREST",
+            "PERIOD_ADVANCE", "TAX_SETTLE"
+          ]
+        },
+        "interval": {
+          "type": "string",
+          "enum": ["month-end", "year-end", "quarter-end"],
+          "description": "How often the event fires."
+        },
+        "startOffset": {
+          "type": "integer",
+          "default": 0,
+          "description": "Number of periods to skip before the first firing. 1 means the event first fires at the second interval."
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "default": "#888888",
+          "description": "Hex color for display in the timeline UI."
+        }
+      }
+    },
+    "OneOffEvent": {
+      "type": "object",
+      "title": "OneOffEvent",
+      "description": "A single event that fires once on a specific date.",
+      "required": ["__type", "id", "name", "type", "date"],
+      "additionalProperties": false,
+      "properties": {
+        "__type": { "const": "OneOffEvent" },
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": {
+          "type": "string",
+          "description": "Event type discriminator.",
+          "examples": ["CHANGE_RESIDENCY", "ROTH_CONVERSION", "IRA_ROLLOVER", "HOUSE_SALE"]
+        },
+        "date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 date-time when this event fires.",
+          "examples": ["2035-06-01T00:00:00.000Z"]
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "default": "#888888"
+        },
+        "data": {
+          "type": "object",
+          "description": "Event-specific payload passed to handlers.",
+          "additionalProperties": true
+        }
+      }
+    },
+    "Handler": {
+      "type": "object",
+      "title": "Handler",
+      "description": "A handler subscribes to one or more event types, reads simulation state, and emits actions.",
+      "required": ["__type", "id", "name"],
+      "additionalProperties": true,
+      "properties": {
+        "__type": {
+          "type": "string",
+          "description": "Handler class name.",
+          "enum": [
+            "MonthlyExpensesHandler", "MonthlyWagesHandler", "OutOfFundsHandler",
+            "UsSavingsInterestMonthlyHandler", "AuSavingsInterestHandler",
+            "FixedIncomeInterestHandler", "SuperEarningsHandler",
+            "DividendScheduledHandler", "IntlRothEarningsHandler",
+            "IntlIraEarningsHandler", "IntlK401EarningsHandler",
+            "IntlUsStockEarningsHandler", "IntlAuStockEarningsHandler",
+            "IntlAuStockDividendHandler", "IntlTransferToUsHandler",
+            "IntlTransferToAuHandler", "ChangeResidencyHandler",
+            "PeriodAdvanceHandler", "TaxSettleHandler",
+            "RothContributionHandler", "RothWithdrawalContributionsHandler",
+            "RothWithdrawalEarningsHandler", "RothEarningsHandler",
+            "IraContributionHandler", "IraWithdrawalContributionsHandler",
+            "IraWithdrawalEarningsHandler", "IraEarningsHandler",
+            "K401ContributionHandler", "K401EarningsHandler", "K401WithdrawalHandler",
+            "FixedIncomeContributionHandler", "FixedIncomeWithdrawalHandler",
+            "FixedIncomeEarningsHandler", "StockContributionHandler",
+            "StockDividendHandler", "StockEarningsHandler", "StockWithdrawalHandler",
+            "UsHouseSaleHandler", "SsIncomeHandler", "WagesIncomeHandler",
+            "WagesWithheldHandler", "SeIncomeUsHandler", "BonusHandler",
+            "CompanySaleHandler", "CollectibleSaleHandler", "CollectibleValueChangeHandler",
+            "IraRolloverWithdrawalHandler", "IraRmdHandler",
+            "RothRolloverContributionHandler", "RothRolloverEarningsHandler",
+            "RothRolloverWithdrawalContributionsHandler", "RothRolloverWithdrawalEarningsHandler",
+            "RothConversionHandler", "RothConversionPolicyHandler",
+            "AuSavingsContributionHandler", "AuSavingsWithdrawalHandler",
+            "AuSavingsEarningsHandler", "SuperContributionHandler",
+            "SuperWithdrawalContributionsHandler", "SuperWithdrawalEarningsHandler",
+            "SuperEarningsDirectHandler", "AuDividendFrankedResidentHandler",
+            "AuDividendFrankedNonResidentHandler", "AuDividendUnfrankedResidentHandler",
+            "AuDividendUnfrankedNonResidentHandler", "AuStockEarningsHandler",
+            "AuStockWithdrawalHandler", "AuHouseSaleHandler", "AuSeIncomeHandler"
+          ]
+        },
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "handledEventIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "IDs of events this handler subscribes to."
+        },
+        "generatedActionTypes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Action type strings this handler emits."
+        },
+        "generatedActionDefinitions": {
+          "type": "array",
+          "description": "Action definition templates used for dynamic action generation.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "config": { "type": "object", "additionalProperties": true }
+            }
+          }
+        },
+        "role": {
+          "type": "string",
+          "description": "Account role this handler targets (for role-scoped handlers).",
+          "enum": ["us-savings", "ira", "roth-ira", "k401", "us-stock", "fixed-income", "au-savings", "au-stock", "super"]
+        },
+        "ownerId": {
+          "type": ["string", "null"],
+          "description": "Person id whose account this handler targets."
+        },
+        "interestRate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "growthRate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "dividendRate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "defaultRate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "reinvest": { "type": "boolean" },
+        "monthlyExpenses": { "type": "number", "minimum": 0 },
+        "usRole": { "type": "string" },
+        "usOwnerId": { "type": ["string", "null"] },
+        "auRole": { "type": "string" },
+        "auOwnerId": { "type": ["string", "null"] }
+      }
+    },
+    "Action": {
+      "type": "object",
+      "title": "Action",
+      "description": "An action template that carries typed data through the reducer pipeline.",
+      "required": ["__type", "id", "name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "__type": {
+          "type": "string",
+          "enum": ["Action", "FieldAction", "FieldValueAction", "AmountAction", "ScriptedAction"]
+        },
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": {
+          "type": "string",
+          "description": "Action type discriminator matched by reducers.",
+          "examples": ["EXPENSE_DEBIT", "WAGES_INCOME", "IRA_EARNINGS", "ROTH_EARNINGS"]
+        },
+        "value": {
+          "description": "Numeric or string payload carried by the action.",
+          "oneOf": [
+            { "type": "number" },
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
+        "fieldName": {
+          "type": ["string", "null"],
+          "description": "State field name targeted by FieldAction / FieldValueAction / ScriptedAction."
+        },
+        "script": {
+          "type": ["string", "null"],
+          "description": "JavaScript expression string evaluated at runtime (ScriptedAction only)."
+        }
+      }
+    },
+    "Reducer": {
+      "type": "object",
+      "title": "Reducer",
+      "description": "A reducer consumes actions of specific types and updates simulation state.",
+      "required": ["__type", "id", "name"],
+      "additionalProperties": true,
+      "properties": {
+        "__type": {
+          "type": "string",
+          "description": "Reducer class name.",
+          "enum": [
+            "FieldReducer", "ArrayReducer", "NumericSumReducer", "MultiplicativeReducer",
+            "NoOpReducer", "MetricReducer", "BalanceSnapshotReducer", "ScriptedReducer",
+            "ExpenseDebitReducer", "ReplenishSavingsReducer", "UsSavingsInterestCreditReducer",
+            "StockDividendCashApplyReducer", "IntlTransferApplyReducer",
+            "ChangeResidencyApplyReducer", "SetOutOfFundsDateReducer",
+            "AccumulateDeficitReducer", "OutOfFundsReducer", "InflationAdjustReducer",
+            "DynamicTaxReducer", "PeriodAdvanceReducer", "TaxSettleApplyReducer",
+            "TaxPaymentDebitReducer",
+            "RothContributionApplyReducer", "RothWithdrawalContribApplyReducer",
+            "RothWithdrawalEarningsApplyReducer", "RothEarningsApplyReducer",
+            "IraContributionApplyReducer", "IraWithdrawalContribApplyReducer",
+            "IraWithdrawalEarningsApplyReducer", "IraEarningsApplyReducer",
+            "K401ContributionApplyReducer", "K401EarningsApplyReducer",
+            "K401WithdrawalApplyReducer",
+            "FixedIncomeContributionApplyReducer", "FixedIncomeWithdrawalApplyReducer",
+            "FixedIncomeEarningsApplyReducer", "StockContributionApplyReducer",
+            "StockDividendApplyReducer", "StockEarningsApplyReducer",
+            "StockWithdrawalApplyReducer", "UsHouseSaleApplyReducer",
+            "SsIncomeApplyReducer", "WagesIncomeApplyReducer", "WagesWithheldApplyReducer",
+            "SeIncomeUsApplyReducer", "BonusApplyReducer", "CompanySaleApplyReducer",
+            "CollectibleSaleApplyReducer", "CollectibleValueChangeApplyReducer",
+            "IraRolloverWithdrawalApplyReducer", "IraRmdApplyReducer",
+            "RothRolloverContributionApplyReducer", "RothRolloverEarningsApplyReducer",
+            "RothRolloverWithdrawalContribApplyReducer",
+            "RothRolloverWithdrawalEarningsApplyReducer", "RothConversionApplyReducer",
+            "AuSavingsContributionApplyReducer", "AuSavingsWithdrawalApplyReducer",
+            "AuSavingsEarningsApplyReducer", "SuperContributionApplyReducer",
+            "SuperWithdrawalContribApplyReducer", "SuperWithdrawalEarningsApplyReducer",
+            "SuperEarningsApplyReducer", "AuDividendFrankedResidentApplyReducer",
+            "AuDividendFrankedNonResidentApplyReducer",
+            "AuDividendUnfrankedResidentApplyReducer",
+            "AuDividendUnfrankedNonResidentApplyReducer",
+            "AuStockEarningsApplyReducer", "AuStockWithdrawalApplyReducer",
+            "AuHouseSaleApplyReducer", "AuSeIncomeApplyReducer"
+          ]
+        },
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "priority": {
+          "type": ["integer", "null"],
+          "description": "Execution order among reducers processing the same action type. Lower numbers run first."
+        },
+        "fieldName": {
+          "type": ["string", "null"],
+          "description": "State field this reducer writes to (for field-based reducers)."
+        },
+        "value": {
+          "description": "Fixed value written or used in computation (FieldValueReducer subclasses).",
+          "oneOf": [
+            { "type": "number" },
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
+        "script": {
+          "type": ["string", "null"],
+          "description": "JavaScript expression evaluated at runtime (ScriptedReducer only)."
+        },
+        "reducedActionTypes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Action type strings this reducer processes."
+        },
+        "generatedActionTypes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "generatedActionDefinitions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "config": { "type": "object", "additionalProperties": true }
+            }
+          }
+        },
+        "role": { "type": "string" },
+        "ownerId": { "type": ["string", "null"] },
+        "cc": {
+          "type": "string",
+          "description": "Country code for DynamicTaxReducer (e.g. 'US', 'AU')."
+        },
+        "usAccountKey": { "type": "string" },
+        "auAccountKey": { "type": "string" },
+        "usSavingsKey": { "type": "string" },
+        "auSavingsKey": { "type": "string" }
+      }
+    }
+  }
+}
