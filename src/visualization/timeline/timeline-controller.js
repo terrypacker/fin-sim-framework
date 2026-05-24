@@ -54,15 +54,28 @@ export class TimelineController {
   }
 
   allOptions() {
-    const events  = new Set();
-    const actions = new Set();
+    const events  = new Map();
+    const actions = new Map();
     if (this.journal) {
       for (const entry of this.journal.journal) {
-        events.add(entry.eventType);
-        actions.add(entry.action.type);
+        if(!events.has(entry.eventType)) {
+          events.set(entry.eventType, {
+            id: entry.eventType,
+            name: entry.eventType,
+          });
+        }
+        if(!actions.has(entry.action.type)) {
+          actions.set(entry.action.type, {
+            id: entry.action.type,
+            name: entry.action.type,
+          });
+        }
       }
     }
-    return { events: [...events].sort(), actions: [...actions].sort() };
+    return {
+      events: [...events.values()].sort((a, b) => a.name.localeCompare(b.name)),
+      actions: [...actions.values()].sort((a, b) => a.name.localeCompare(b.name))
+    };
   }
 
   // Returns Map<dateStr, Map<evType, Array<{entry, idx, sum}>>>

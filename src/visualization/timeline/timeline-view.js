@@ -8,6 +8,10 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import {BaseComponent} from "../components/base-component.js";
+import {MapFilterMultiSelect} from "../components/map-filter-multi-select.js";
+import {QueryApi} from "../../query/query-api.js";
+
 let _tlViewCounter = 0;
 
 // Format a Date to YYYY-MM-DD for <input type="date"> value
@@ -19,12 +23,17 @@ function toDateInput(date) {
   return `${y}-${m}-${d}`;
 }
 
-export class TimelineView {
+export class TimelineView extends BaseComponent {
   constructor({ container }) {
+    super(); //I am the root component here
+
     this.container    = container;
     this._listEl      = null;
     this._filterBarEl = null;
-    this._uid         = ++_tlViewCounter;
+    this._eventSelectFilter = null;
+    this._actionSelectFilter = null;
+    this._availableEvents = [];
+    this._availableActions = [];
     // Callbacks wired by presenter
     this.onFilterEvents    = null;
     this.onFilterActions   = null;
@@ -46,29 +55,8 @@ export class TimelineView {
 
   _ensureStructure() {
     if (this._listEl) return;
-    const uid = this._uid;
-    this._filterBarEl = document.createElement('div');
-    this._filterBarEl.className = 'tl-filter-bar';
-    this._filterBarEl.innerHTML = `
-      <div class="tl-filter-group">
-        <label class="tl-filter-label" for="tl-ev-select-${uid}">Event</label>
-        <select class="tl-filter-select" id="tl-ev-select-${uid}" multiple></select>
-      </div>
-      <div class="tl-filter-group">
-        <label class="tl-filter-label" for="tl-act-select-${uid}">Action</label>
-        <select class="tl-filter-select" id="tl-act-select-${uid}" multiple></select>
-      </div>
-      <div class="tl-filter-group">
-        <label class="tl-filter-label" for="tl-date-start-${uid}">From</label>
-        <input class="tl-filter-date" type="date" id="tl-date-start-${uid}">
-      </div>
-      <div class="tl-filter-group">
-        <label class="tl-filter-label" for="tl-date-end-${uid}">To</label>
-        <input class="tl-filter-date" type="date" id="tl-date-end-${uid}">
-      </div>
-      <button class="btn btn-sm"    id="tl-filter-clear-${uid}"    title="Clear all filters">✕</button>
-      <button class="btn btn-sm"   id="tl-download-csv-${uid}"   title="Download visible rows as CSV">⬇ CSV</button>
-    `;
+    this._filterBarEl = this._getTemplate('tpl-timeline-filter-bar');
+
     this._listEl = document.createElement('div');
     this._listEl.className = 'tl-list';
 
@@ -76,39 +64,57 @@ export class TimelineView {
     this.container.appendChild(this._filterBarEl);
     this.container.appendChild(this._listEl);
 
-    const evSel    = this._filterBarEl.querySelector(`#tl-ev-select-${uid}`);
-    const actSel   = this._filterBarEl.querySelector(`#tl-act-select-${uid}`);
-    const startIn  = this._filterBarEl.querySelector(`#tl-date-start-${uid}`);
-    const endIn    = this._filterBarEl.querySelector(`#tl-date-end-${uid}`);
-    const clearBtn = this._filterBarEl.querySelector(`#tl-filter-clear-${uid}`);
+    const evSel    = this._filterBarEl.querySelector(`#tl-ev-select`);
+    const actSel   = this._filterBarEl.querySelector(`#tl-act-select`);
+    const startIn  = this._filterBarEl.querySelector(`#tl-date-start`);
+    const endIn    = this._filterBarEl.querySelector(`#tl-date-end`);
+    const clearBtn = this._filterBarEl.querySelector(`#tl-filter-clear`);
 
-    evSel.addEventListener('change', () => {
-      this.onFilterEvents?.(new Set([...evSel.selectedOptions].map(o => o.value)));
+    this._eventSelectFilter = new MapFilterMultiSelect({
+      parent: this,
+      container: evSel,
+      selectedItems: [],
+      onToggle: (item, added, selectedItems) => {
+        this.onFilterEvents?.(new Set([...selectedItems].map(o => o.name)));
+      },
+      queryApi: new QueryApi({
+        getAll: () => this._availableEvents
+      })
     });
-    actSel.addEventListener('change', () => {
-      this.onFilterActions?.(new Set([...actSel.selectedOptions].map(o => o.value)));
+
+    this._actionSelectFilter = new MapFilterMultiSelect({
+      parent: this,
+      container: actSel,
+      selectedItems: [],
+      onToggle: (item, added, selectedItems) => {
+        this.onFilterActions?.(new Set([...selectedItems].map(o => o.name)));
+      },
+      queryApi: new QueryApi({
+        getAll: () => this._availableActions
+      })
     });
+
     startIn.addEventListener('change', () => this.onFilterDateStart?.(startIn.value));
     endIn.addEventListener('change',   () => this.onFilterDateEnd?.(endIn.value));
     clearBtn.addEventListener('click', () => this.onClearFilters?.());
 
-    const csvBtn = this._filterBarEl.querySelector(`#tl-download-csv-${uid}`);
+    const csvBtn = this._filterBarEl.querySelector(`#tl-download-csv`);
     csvBtn.addEventListener('click', () => this.onDownloadCsv?.());
   }
 
   _syncFilters(options, filterEvents, filterActions, filterDateStart, filterDateEnd) {
-    const uid = this._uid;
-    const evSel    = this._filterBarEl.querySelector(`#tl-ev-select-${uid}`);
-    const actSel   = this._filterBarEl.querySelector(`#tl-act-select-${uid}`);
-    const startIn  = this._filterBarEl.querySelector(`#tl-date-start-${uid}`);
-    const endIn    = this._filterBarEl.querySelector(`#tl-date-end-${uid}`);
-    const clearBtn = this._filterBarEl.querySelector(`#tl-filter-clear-${uid}`);
+    const evSel    = this._filterBarEl.querySelector(`#tl-ev-select`);
+    const startIn  = this._filterBarEl.querySelector(`#tl-date-start`);
+    const endIn    = this._filterBarEl.querySelector(`#tl-date-end`);
+    const clearBtn = this._filterBarEl.querySelector(`#tl-filter-clear`);
 
     // Repopulate options, restoring current selections from controller state
-    evSel.innerHTML  = options.events.map(v =>
-      `<option value="${v}"${filterEvents.has(v)  ? ' selected' : ''}>${v}</option>`).join('');
-    actSel.innerHTML = options.actions.map(v =>
-      `<option value="${v}"${filterActions.has(v) ? ' selected' : ''}>${v}</option>`).join('');
+    this._availableEvents.length = 0;
+    this._availableEvents.push(...options.events);
+    this._eventSelectFilter.addSelected(filterEvents);
+
+    this._availableActions.length = 0;
+    this._availableActions.push(...options.actions);
 
     const startStr = toDateInput(filterDateStart);
     const endStr   = toDateInput(filterDateEnd);

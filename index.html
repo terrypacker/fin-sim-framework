@@ -823,6 +823,28 @@
     Busy...
   </div>
 </template>
+<template id="tpl-timeline-filter-bar">
+  <div class = "tl-filter-bar">
+    <div class="tl-filter-group">
+      <label class="tl-filter-label" for="tl-ev-select">Event</label>
+      <div class="reducer-chip-grid" id="tl-ev-select"></div>
+    </div>
+    <div class="tl-filter-group">
+      <label class="tl-filter-label" for="tl-act-select">Action</label>
+      <div class="reducer-chip-grid" id="tl-act-select"></div>
+    </div>
+    <div class="tl-filter-group">
+      <label class="tl-filter-label" for="tl-date-start">From</label>
+      <input class="tl-filter-date" type="date" id="tl-date-start">
+    </div>
+    <div class="tl-filter-group">
+      <label class="tl-filter-label" for="tl-date-end">To</label>
+      <input class="tl-filter-date" type="date" id="tl-date-end">
+    </div>
+    <button class="btn btn-sm"    id="tl-filter-clear"    title="Clear all filters">✕</button>
+    <button class="btn btn-sm"   id="tl-download-csv"   title="Download visible rows as CSV">⬇ CSV</button>
+  </div>
+</template>
 
 <script type="module" src="./index.umd.min.js"></script>
 <script type="module">

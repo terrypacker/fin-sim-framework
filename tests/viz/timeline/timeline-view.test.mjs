@@ -14,6 +14,33 @@ import { TimelineView } from '../../../src/visualization/timeline/timeline-view.
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function makeFilterTemplate() {
+  //Setup Template
+  const timelineFilterTemplate = document.createElement('template');
+  timelineFilterTemplate.id = 'tpl-timeline-filter-bar';
+  timelineFilterTemplate.innerHTML = `<div class = "tl-filter-bar">
+    <div class="tl-filter-group">
+      <label class="tl-filter-label" for="tl-ev-select">Event</label>
+      <div class="reducer-chip-grid" id="tl-ev-select"></div>
+    </div>
+    <div class="tl-filter-group">
+      <label class="tl-filter-label" for="tl-act-select">Action</label>
+      <div class="reducer-chip-grid" id="tl-act-select"></div>
+    </div>
+    <div class="tl-filter-group">
+      <label class="tl-filter-label" for="tl-date-start">From</label>
+      <input class="tl-filter-date" type="date" id="tl-date-start">
+    </div>
+    <div class="tl-filter-group">
+      <label class="tl-filter-label" for="tl-date-end">To</label>
+      <input class="tl-filter-date" type="date" id="tl-date-end">
+    </div>
+    <button class="btn btn-sm"    id="tl-filter-clear"    title="Clear all filters">✕</button>
+    <button class="btn btn-sm"   id="tl-download-csv"   title="Download visible rows as CSV">⬇ CSV</button>
+  </div>`;
+  document.body.appendChild(timelineFilterTemplate);
+}
+
 function makeContainer({ scrollHeight = 400, scrollTop = 320, clientHeight = 100 } = {}) {
   const el = document.createElement('div');
   Object.defineProperty(el, 'scrollHeight', { configurable: true, get: () => scrollHeight });
@@ -32,6 +59,7 @@ function makeEntry({
 }
 
 function makeView(containerOpts = {}) {
+  makeFilterTemplate();
   const container = makeContainer(containerOpts);
   return new TimelineView({ container });
 }
@@ -92,12 +120,6 @@ test('TimelineView: constructor initialises all callbacks to null', () => {
   assert.strictEqual(view.onRewind,          null);
 });
 
-test('TimelineView: _uid increments across instances', () => {
-  const a = makeView();
-  const b = makeView();
-  assert.ok(b._uid > a._uid, '_uid should increase for each new instance');
-});
-
 // ─── render: DOM structure ────────────────────────────────────────────────────
 
 test('TimelineView.render: creates filter bar and list elements', () => {
@@ -118,17 +140,15 @@ test('TimelineView.render: does not recreate DOM on second call', () => {
 test('TimelineView.render: filter bar contains multi-select for events and actions', () => {
   const view = makeView();
   renderView(view);
-  const uid = view._uid;
-  assert.ok(view._filterBarEl.querySelector(`#tl-ev-select-${uid}`)  !== null, 'event select should exist');
-  assert.ok(view._filterBarEl.querySelector(`#tl-act-select-${uid}`) !== null, 'action select should exist');
+  assert.ok(view._filterBarEl.querySelector(`#tl-ev-select`)  !== null, 'event select should exist');
+  assert.ok(view._filterBarEl.querySelector(`#tl-act-select`) !== null, 'action select should exist');
 });
 
 test('TimelineView.render: filter bar contains date range inputs', () => {
   const view = makeView();
   renderView(view);
-  const uid = view._uid;
-  assert.ok(view._filterBarEl.querySelector(`#tl-date-start-${uid}`) !== null, 'start date input should exist');
-  assert.ok(view._filterBarEl.querySelector(`#tl-date-end-${uid}`)   !== null, 'end date input should exist');
+  assert.ok(view._filterBarEl.querySelector(`#tl-date-start`) !== null, 'start date input should exist');
+  assert.ok(view._filterBarEl.querySelector(`#tl-date-end`)   !== null, 'end date input should exist');
 });
 
 // ─── render: filter bar options ───────────────────────────────────────────────
@@ -139,7 +159,7 @@ test('TimelineView.render: event select is populated with options', () => {
   const groups  = makeGroups(entries);
   view.render({
     groups,
-    options:         { events: ['SALARY', 'SELL_ASSET'], actions: [] },
+    options:         { events:[{id: 'SALARY', name: 'SALARY'}, {id: 'SELL_ASSET', name: 'SELL_ASSET'}], actions: [] },
     filterEvents:    new Set(),
     filterActions:   new Set(),
     filterDateStart: null,
@@ -147,9 +167,8 @@ test('TimelineView.render: event select is populated with options', () => {
     expanded:        new Set(),
     hasRewind:       false,
   });
-  const uid = view._uid;
-  const evSel = view._filterBarEl.querySelector(`#tl-ev-select-${uid}`);
-  assert.strictEqual(evSel.options.length, 2);
+  const selected = [...view._availableEvents].map(o => o.name);
+  assert.strictEqual(selected.length, 2);
 });
 
 test('TimelineView.render: previously selected event options are marked selected', () => {
@@ -157,17 +176,15 @@ test('TimelineView.render: previously selected event options are marked selected
   const groups = makeGroups([makeEntry({ eventType: 'SELL_ASSET' })]);
   view.render({
     groups,
-    options:         { events: ['SALARY', 'SELL_ASSET'], actions: [] },
-    filterEvents:    new Set(['SELL_ASSET']),
+    options:         { events: [{id: 'SALARY', name: 'SALARY'}, {id: 'SELL_ASSET', name: 'SELL_ASSET'}], actions: [] },
+    filterEvents:    new Set([{id: 'SELL_ASSET', name: 'SELL_ASSET'}]),
     filterActions:   new Set(),
     filterDateStart: null,
     filterDateEnd:   null,
     expanded:        new Set(),
     hasRewind:       false,
   });
-  const uid    = view._uid;
-  const evSel  = view._filterBarEl.querySelector(`#tl-ev-select-${uid}`);
-  const selected = [...evSel.selectedOptions].map(o => o.value);
+  const selected = [...view._eventSelectFilter._selectedMap.values()].map(o => o.name);
   assert.ok(selected.includes('SELL_ASSET'), 'SELL_ASSET should be selected');
   assert.ok(!selected.includes('SALARY'),    'SALARY should not be selected');
 });
@@ -186,9 +203,8 @@ test('TimelineView.render: date inputs reflect filterDateStart and filterDateEnd
     expanded:        new Set(),
     hasRewind:       false,
   });
-  const uid      = view._uid;
-  const startIn  = view._filterBarEl.querySelector(`#tl-date-start-${uid}`);
-  const endIn    = view._filterBarEl.querySelector(`#tl-date-end-${uid}`);
+  const startIn  = view._filterBarEl.querySelector(`#tl-date-start`);
+  const endIn    = view._filterBarEl.querySelector(`#tl-date-end`);
   assert.strictEqual(startIn.value, '2025-01-15');
   assert.strictEqual(endIn.value,   '2025-06-30');
 });
@@ -196,24 +212,21 @@ test('TimelineView.render: date inputs reflect filterDateStart and filterDateEnd
 test('TimelineView.render: clear button hidden when no filters are active', () => {
   const view = makeView();
   renderView(view, { filterEvents: new Set(), filterActions: new Set() });
-  const uid      = view._uid;
-  const clearBtn = view._filterBarEl.querySelector(`#tl-filter-clear-${uid}`);
+  const clearBtn = view._filterBarEl.querySelector(`#tl-filter-clear`);
   assert.strictEqual(clearBtn.style.display, 'none');
 });
 
 test('TimelineView.render: clear button visible when event filter is active', () => {
   const view = makeView();
   renderView(view, { filterEvents: new Set(['SELL_ASSET']) });
-  const uid      = view._uid;
-  const clearBtn = view._filterBarEl.querySelector(`#tl-filter-clear-${uid}`);
+  const clearBtn = view._filterBarEl.querySelector(`#tl-filter-clear`);
   assert.notStrictEqual(clearBtn.style.display, 'none');
 });
 
 test('TimelineView.render: clear button visible when date filter is active', () => {
   const view = makeView();
   renderView(view, { filterDateStart: new Date(2025, 0, 1) });
-  const uid      = view._uid;
-  const clearBtn = view._filterBarEl.querySelector(`#tl-filter-clear-${uid}`);
+  const clearBtn = view._filterBarEl.querySelector(`#tl-filter-clear`);
   assert.notStrictEqual(clearBtn.style.display, 'none');
 });
 
@@ -341,9 +354,8 @@ test('TimelineView: onDownloadCsv callback initialises to null', () => {
 test('TimelineView.render: CSV download button is present in the filter bar', () => {
   const view = makeView();
   renderView(view);
-  const uid = view._uid;
   assert.ok(
-    view._filterBarEl.querySelector(`#tl-download-csv-${uid}`) !== null,
+    view._filterBarEl.querySelector(`#tl-download-csv`) !== null,
     'download CSV button should exist in the filter bar',
   );
 });
@@ -353,8 +365,7 @@ test('TimelineView: clicking download CSV button fires onDownloadCsv', () => {
   const view = makeView();
   renderView(view);
   view.onDownloadCsv = () => { called = true; };
-  const uid    = view._uid;
-  const csvBtn = view._filterBarEl.querySelector(`#tl-download-csv-${uid}`);
+  const csvBtn = view._filterBarEl.querySelector(`#tl-download-csv`);
   csvBtn.click();
   assert.ok(called, 'onDownloadCsv should be called when the button is clicked');
 });

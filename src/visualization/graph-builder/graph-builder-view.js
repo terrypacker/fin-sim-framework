@@ -194,11 +194,6 @@ export class GraphBuilderView extends BaseComponent {
 
   // ── Template helpers ──────────────────────────────────────────────────────
 
-  _getTemplate(templateId) {
-    const tmpl = document.getElementById(templateId);
-    return tmpl.content.firstElementChild.cloneNode(true);
-  }
-
   _createDeleteButton(node) {
     const wrap = document.createElement('div');
     wrap.className = 'node-field';
