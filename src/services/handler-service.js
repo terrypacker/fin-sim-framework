@@ -67,7 +67,7 @@ export class HandlerService extends BaseService {
 
   /**
    * Replace an existing handler with a new instance of the given class,
-   * preserving id, name, fn, handledEvents, and generatedActions.
+   * preserving id, name, fn, handledEvents, generatedActionTypes, and generatedActionDefinitions.
    *
    * HandlerEntry subclasses may have different constructor signatures, so we
    * bypass the constructor via Object.create and restore all relevant properties
@@ -85,11 +85,12 @@ export class HandlerService extends BaseService {
     if (!Cls) throw new Error(`HandlerService: unknown handler class "${newClass}"`);
 
     const fresh = Object.create(Cls.prototype);
-    fresh.id               = old.id;
-    fresh.name             = old.name;
-    fresh.fn               = old.fn;
-    fresh.handledEvents    = old.handledEvents;
-    fresh.generatedActions = old.generatedActions;
+    fresh.id                       = old.id;
+    fresh.name                     = old.name;
+    fresh.fn                       = old.fn;
+    fresh.handledEvents             = old.handledEvents;
+    fresh.generatedActionTypes      = old.generatedActionTypes;
+    fresh.generatedActionDefinitions = old.generatedActionDefinitions;
     Object.assign(fresh, extraProps);
 
     this._items.set(fresh.id, fresh);

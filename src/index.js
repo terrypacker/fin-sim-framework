@@ -12,10 +12,19 @@ import { AccountRulesEngine } from './finance/account-rules/account-rules-engine
 import { AuAccountModule2024 } from './finance/account-rules/au/au-account-module-2024.js';
 import { AuAccountModule2025 } from './finance/account-rules/au/au-account-module-2025.js';
 import { AuAccountModule2026 } from './finance/account-rules/au/au-account-module-2026.js';
+import { AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer, AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer, AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer, AuDividendFrankedResidentHandler, AuDividendFrankedNonResidentHandler, AuDividendUnfrankedResidentHandler, AuDividendUnfrankedNonResidentHandler, AuStockEarningsHandler, AuStockWithdrawalHandler } from './finance/account-rules/au/au-brokerage-classes.js';
+import { AuHouseSaleApplyReducer, AuHouseSaleHandler } from './finance/account-rules/au/au-real-property-classes.js';
+import { AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer, AuSavingsContributionHandler, AuSavingsWithdrawalHandler, AuSavingsEarningsHandler } from './finance/account-rules/au/au-savings-classes.js';
+import { SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer, SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperContributionHandler, SuperWithdrawalContributionsHandler, SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler } from './finance/account-rules/au/au-super-classes.js';
 import { BaseAccountModule } from './finance/account-rules/base-account-module.js';
+import { IraContributionApplyReducer, IraWithdrawalContribApplyReducer, IraWithdrawalEarningsApplyReducer, IraEarningsApplyReducer, IraContributionHandler, IraWithdrawalContributionsHandler, IraWithdrawalEarningsHandler, IraEarningsHandler } from './finance/account-rules/us/ira-classes.js';
+import { K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer, K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler } from './finance/account-rules/us/k401-classes.js';
+import { RothContributionApplyReducer, RothWithdrawalContribApplyReducer, RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer, RothContributionHandler, RothWithdrawalContributionsHandler, RothWithdrawalEarningsHandler, RothEarningsHandler } from './finance/account-rules/us/roth-classes.js';
 import { UsAccountModule2024 } from './finance/account-rules/us/us-account-module-2024.js';
 import { UsAccountModule2025 } from './finance/account-rules/us/us-account-module-2025.js';
 import { UsAccountModule2026 } from './finance/account-rules/us/us-account-module-2026.js';
+import { FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer, FixedIncomeEarningsApplyReducer, StockContributionApplyReducer, StockDividendApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer, FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler, StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler } from './finance/account-rules/us/us-brokerage-classes.js';
+import { UsHouseSaleApplyReducer, UsHouseSaleHandler } from './finance/account-rules/us/us-real-property-classes.js';
 import { USD, AUD, ACCOUNT_TYPE, InsufficientFundsError, Account, CheckingAccount, SavingsAccount } from './finance/account.js';
 import { AssetService } from './finance/asset-service.js';
 import { Asset } from './finance/asset.js';
@@ -50,7 +59,10 @@ import { AuTaxRates2025 } from './finance/tax/au/au-tax-rates-2025.js';
 import { AuTaxRatesBase } from './finance/tax/au/au-tax-rates-base.js';
 import { BaseTaxModule } from './finance/tax/base-tax-module.js';
 import { BaseTaxRatesModule } from './finance/tax/base-tax-rates-module.js';
+import { DynamicTaxReducer } from './finance/tax/dynamic-tax-reducer.js';
+import { PeriodAdvanceReducer, PeriodAdvanceHandler } from './finance/tax/period-advance-classes.js';
 import { TaxEngine } from './finance/tax/tax-engine.js';
+import { TaxSettleHandler, TaxSettleApplyReducer, TaxPaymentDebitReducer } from './finance/tax/tax-settle-classes.js';
 import { UsTaxModule2024 } from './finance/tax/us/us-tax-module-2024.js';
 import { UsTaxModule2025 } from './finance/tax/us/us-tax-module-2025.js';
 import { UsTaxModule2026 } from './finance/tax/us/us-tax-module-2026.js';
@@ -72,12 +84,13 @@ import { ReducerService } from './services/reducer-service.js';
 import { ServiceRegistry } from './services/service-registry.js';
 import { SimulationRegistry } from './services/simulation-registry.js';
 import { SimulationSync } from './services/simulation-sync.js';
-import { DEFAULT_ACTIONS, Action, FieldAction, FieldValueAction, AmountAction, RecordBalanceAction, RecordMetricAction, ScriptedAction, ACTION_CLASSES } from './simulation-framework/actions.js';
+import { ACTION_TEMPLATES } from './simulation-framework/action-templates.js';
+import { DEFAULT_ACTIONS, Action, FieldAction, FieldValueAction, AmountAction, RecordBalanceAction, RecordMetricAction, ScriptedAction, ACTION_CLASSES, generateActionId, ActionDefinition } from './simulation-framework/actions.js';
 import { ActionBuilder } from './simulation-framework/builders/action-builder.js';
 import { EventBuilder } from './simulation-framework/builders/event-builder.js';
 import { HandlerBuilder } from './simulation-framework/builders/handler-builder.js';
 import { ReducerBuilder } from './simulation-framework/builders/reducer-builder.js';
-import { SIMULATION_BUS_MESSAGES, BusMessage, SimulationBusMessage, EventStartBusMessage, EventEndBusMessage, EventHandledMessage, ActionResultMessage, ReducerResultMessage, ServiceActionEvent } from './simulation-framework/bus-messages.js';
+import { SIMULATION_BUS_MESSAGES, BusMessage, SimulationBusMessage, EventStartBusMessage, EventEndBusMessage, EventHandledMessage, ActionInstanceMessage, ActionResultMessage, ReducerResultMessage, ServiceActionEvent } from './simulation-framework/bus-messages.js';
 import { DateUtils } from './simulation-framework/date-utils.js';
 import { EventBus } from './simulation-framework/event-bus.js';
 import { BaseEvent } from './simulation-framework/events/base-event.js';
@@ -87,7 +100,7 @@ import { HandlerEntry, HANDLER_CLASSES, HandlerRegistry } from './simulation-fra
 import { IndexedMinHeap } from './simulation-framework/indexed-min-heap.js';
 import { JournalEntry, Journal } from './simulation-framework/journal.js';
 import { MinHeap } from './simulation-framework/min-heap.js';
-import { ReducerPipeline, PRIORITY, Reducer, NoOpReducer, FieldReducer, FieldValueReducer, ArrayReducer, NumericSumReducer, MultiplicativeReducer, AccountTransactionReducer, REDUCER_CLASSES, RepeatingReducer, ScriptedReducer } from './simulation-framework/reducers.js';
+import { ReducerPipeline, PRIORITY, Reducer, NoOpReducer, FieldReducer, MetricReducer, FieldValueReducer, ArrayReducer, NumericSumReducer, MultiplicativeReducer, AccountTransactionReducer, REDUCER_CLASSES, RepeatingReducer, ScriptedReducer } from './simulation-framework/reducers.js';
 import { ScenarioRunner } from './simulation-framework/scenario.js';
 import { ActionNode, SimulationEventGraph } from './simulation-framework/simulation-event-graph.js';
 import { SimulationHistory } from './simulation-framework/simulation-history.js';
@@ -140,10 +153,76 @@ export const Finance = {
   AuAccountModule2024,
   AuAccountModule2025,
   AuAccountModule2026,
+  AuDividendFrankedResidentApplyReducer,
+  AuDividendFrankedNonResidentApplyReducer,
+  AuDividendUnfrankedResidentApplyReducer,
+  AuDividendUnfrankedNonResidentApplyReducer,
+  AuStockEarningsApplyReducer,
+  AuStockWithdrawalApplyReducer,
+  AuDividendFrankedResidentHandler,
+  AuDividendFrankedNonResidentHandler,
+  AuDividendUnfrankedResidentHandler,
+  AuDividendUnfrankedNonResidentHandler,
+  AuStockEarningsHandler,
+  AuStockWithdrawalHandler,
+  AuHouseSaleApplyReducer,
+  AuHouseSaleHandler,
+  AuSavingsContributionApplyReducer,
+  AuSavingsWithdrawalApplyReducer,
+  AuSavingsEarningsApplyReducer,
+  AuSavingsContributionHandler,
+  AuSavingsWithdrawalHandler,
+  AuSavingsEarningsHandler,
+  SuperContributionApplyReducer,
+  SuperWithdrawalContribApplyReducer,
+  SuperWithdrawalEarningsApplyReducer,
+  SuperEarningsApplyReducer,
+  SuperContributionHandler,
+  SuperWithdrawalContributionsHandler,
+  SuperWithdrawalEarningsHandler,
+  SuperEarningsDirectHandler,
   BaseAccountModule,
+  IraContributionApplyReducer,
+  IraWithdrawalContribApplyReducer,
+  IraWithdrawalEarningsApplyReducer,
+  IraEarningsApplyReducer,
+  IraContributionHandler,
+  IraWithdrawalContributionsHandler,
+  IraWithdrawalEarningsHandler,
+  IraEarningsHandler,
+  K401ContributionApplyReducer,
+  K401EarningsApplyReducer,
+  K401WithdrawalApplyReducer,
+  K401ContributionHandler,
+  K401EarningsHandler,
+  K401WithdrawalHandler,
+  RothContributionApplyReducer,
+  RothWithdrawalContribApplyReducer,
+  RothWithdrawalEarningsApplyReducer,
+  RothEarningsApplyReducer,
+  RothContributionHandler,
+  RothWithdrawalContributionsHandler,
+  RothWithdrawalEarningsHandler,
+  RothEarningsHandler,
   UsAccountModule2024,
   UsAccountModule2025,
   UsAccountModule2026,
+  FixedIncomeContributionApplyReducer,
+  FixedIncomeWithdrawalApplyReducer,
+  FixedIncomeEarningsApplyReducer,
+  StockContributionApplyReducer,
+  StockDividendApplyReducer,
+  StockEarningsApplyReducer,
+  StockWithdrawalApplyReducer,
+  FixedIncomeContributionHandler,
+  FixedIncomeWithdrawalHandler,
+  FixedIncomeEarningsHandler,
+  StockContributionHandler,
+  StockDividendHandler,
+  StockEarningsHandler,
+  StockWithdrawalHandler,
+  UsHouseSaleApplyReducer,
+  UsHouseSaleHandler,
   USD,
   AUD,
   ACCOUNT_TYPE,
@@ -197,7 +276,13 @@ export const Finance = {
   AuTaxRatesBase,
   BaseTaxModule,
   BaseTaxRatesModule,
+  DynamicTaxReducer,
+  PeriodAdvanceReducer,
+  PeriodAdvanceHandler,
   TaxEngine,
+  TaxSettleHandler,
+  TaxSettleApplyReducer,
+  TaxPaymentDebitReducer,
   UsTaxModule2024,
   UsTaxModule2025,
   UsTaxModule2026,
@@ -231,6 +316,7 @@ export const Services = {
 };
 
 export const Core = {
+  ACTION_TEMPLATES,
   DEFAULT_ACTIONS,
   Action,
   FieldAction,
@@ -240,6 +326,8 @@ export const Core = {
   RecordMetricAction,
   ScriptedAction,
   ACTION_CLASSES,
+  generateActionId,
+  ActionDefinition,
   ActionBuilder,
   EventBuilder,
   HandlerBuilder,
@@ -250,6 +338,7 @@ export const Core = {
   EventStartBusMessage,
   EventEndBusMessage,
   EventHandledMessage,
+  ActionInstanceMessage,
   ActionResultMessage,
   ReducerResultMessage,
   ServiceActionEvent,
@@ -270,6 +359,7 @@ export const Core = {
   Reducer,
   NoOpReducer,
   FieldReducer,
+  MetricReducer,
   FieldValueReducer,
   ArrayReducer,
   NumericSumReducer,

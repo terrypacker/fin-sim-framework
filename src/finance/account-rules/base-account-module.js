@@ -36,4 +36,27 @@ export class BaseAccountModule {
   registerWith(sim, svc) {
     throw new Error(`${this.constructor.name}: registerWith not implemented`);
   }
+
+  /**
+   * Create all Reducer instances for this module.
+   * Used by TaxService.registerWithServices() to route registration through
+   * the service layer so items appear in the config graph.
+   *
+   * @param {import('../services/account-service.js').AccountService} accountService
+   * @returns {import('../../simulation-framework/reducers.js').Reducer[]}
+   */
+  createReducers(accountService) {
+    throw new Error(`${this.constructor.name}: createReducers not implemented`);
+  }
+
+  /**
+   * Create all HandlerEntry instances for this module.
+   * Used by TaxService.registerWithServices() to route registration through
+   * the service layer so items appear in the config graph.
+   *
+   * @returns {import('../../simulation-framework/handlers.js').HandlerEntry[]}
+   */
+  createHandlers() {
+    throw new Error(`${this.constructor.name}: createHandlers not implemented`);
+  }
 }

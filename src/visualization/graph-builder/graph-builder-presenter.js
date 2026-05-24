@@ -73,6 +73,21 @@ export class GraphBuilderPresenter {
       const updated = this._controller.replaceReducer(nodeId, newType);
       this._view.editNode(updated);
     };
+
+    this._view.onActionDefinitionAdd = (node, defData) => {
+      this._controller.addActionDefinition(node, defData);
+      this._view.editNode(node);
+    };
+
+    this._view.onActionDefinitionRemove = (node, defId) => {
+      this._controller.removeActionDefinition(node, defId);
+      this._view.editNode(node);
+    };
+
+    this._view.onActionDefinitionUpdate = (node, defId, field, value) => {
+      this._controller.updateActionDefinition(node, defId, field, value);
+      this._view.editNode(node);
+    };
   }
 
   // ── Public API (BaseScenario contract) ────────────────────────────────────

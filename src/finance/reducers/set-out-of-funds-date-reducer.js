@@ -27,6 +27,7 @@ export class SetOutOfFundsDateReducer extends Reducer {
 
   constructor() {
     super('Set Out of Funds Date', PRIORITY.PRE_PROCESS);
+    this.reducedActionTypes = ['SET_OUT_OF_FUNDS_DATE'];
   }
 
   reduce(state, action) {

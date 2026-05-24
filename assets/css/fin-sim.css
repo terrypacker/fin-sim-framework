@@ -228,6 +228,15 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   min-height:0;
 }
 
+#liveStatePanel {
+  display:flex;
+  flex-direction: column;
+  overflow-y:auto;
+  flex:1;
+  min-height:0;
+}
+
+
 #node-state-changes {
   display:flex;
   flex-direction: column;

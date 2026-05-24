@@ -13,8 +13,12 @@ import { AccountRulesEngine }    from './account-rules/account-rules-engine.js';
 import { InsufficientFundsError } from './account.js';
 import { AccountService } from './services/account-service.js';
 import { ReducerBuilder } from '../simulation-framework/builders/reducer-builder.js'
-import { PRIORITY } from '../simulation-framework/reducers.js';
+import { PRIORITY, ArrayReducer, NoOpReducer } from '../simulation-framework/reducers.js';
 import { TaxSettleService }      from './tax-settle-service.js';
+
+import { PeriodAdvanceReducer, PeriodAdvanceHandler } from './tax/period-advance-classes.js';
+import { TaxSettleHandler, TaxSettleApplyReducer, TaxPaymentDebitReducer } from './tax/tax-settle-classes.js';
+import { DynamicTaxReducer } from './tax/dynamic-tax-reducer.js';
 
 import { UsTaxModule2024 }       from './tax/us/us-tax-module-2024.js';
 import { UsTaxModule2025 }       from './tax/us/us-tax-module-2025.js';
@@ -253,6 +257,129 @@ export class TaxService {
     ReducerBuilder.noOp().name('Balance Snapshot').build().registerWith(sim.reducers, 'RECORD_BALANCE');
 
     return this._accountService;
+  }
+
+  /**
+   * Wire up all reducers and handlers through the ServiceRegistry so they
+   * appear in the config graph and are reachable via the UI.
+   *
+   * Performs the same state-setup and event-scheduling work as registerWith(),
+   * then registers every reducer and handler as a named class instance via
+   * the service layer (reducerService / handlerService).  SimulationSync
+   * picks up the CREATE events and wires each instance into the Simulation.
+   *
+   * Call this instead of registerWith() when building a scenario that uses
+   * the full service-registry stack (e.g. IntlRetirementScenario).
+   * Tests that call registerWith() directly are unaffected.
+   *
+   * @param {import('../simulation-framework/simulation.js').Simulation} sim
+   * @param {string[]} countryCodes
+   * @param {import('./period/period-service.js').PeriodService} periodService
+   * @param {import('../services/service-registry.js').ServiceRegistry} serviceRegistry
+   * @returns {import('./services/account-service.js').AccountService}
+   */
+  registerWithServices(sim, countryCodes, periodService, serviceRegistry) {
+    const { reducerService, handlerService, accountService } = serviceRegistry;
+    const startTs = sim.currentDate.getTime();
+
+    // ── Step 1: resolve the starting period for each country ──────────────────
+    const currentPeriods = {};
+    for (const cc of countryCodes) {
+      const periodType = _periodTypeFor(cc);
+      const current = periodService.getAllPeriods()
+        .find(p => p.type === periodType && p.startMs <= startTs && startTs < p.endMs);
+      if (!current) {
+        throw new Error(
+          `TaxService.registerWithServices: no '${periodType}' period found for start date ` +
+          `${sim.currentDate.toISOString()} in PeriodService.`
+        );
+      }
+      currentPeriods[cc] = current;
+    }
+
+    // Inject currentPeriods into simulation state before any events run.
+    sim.state = { ...sim.state, currentPeriods };
+
+    // ── Step 2: register PERIOD_ADVANCE reducer + handler ─────────────────────
+    reducerService.register(new PeriodAdvanceReducer());
+    handlerService.register(new PeriodAdvanceHandler());
+
+    // ── Step 3: schedule PERIOD_ADVANCE events for future year boundaries ──────
+    for (const cc of countryCodes) {
+      const periodType = _periodTypeFor(cc);
+      for (const period of periodService.getAllPeriods()) {
+        if (period.type === periodType && period.startMs > startTs) {
+          const d = new Date(period.startMs);
+          const schedDate = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+          const year = d.getUTCFullYear();
+          serviceRegistry.eventService.createOneOffEvent({
+            name:    `Period Advance ${cc} ${year}`,
+            type:    'PERIOD_ADVANCE',
+            date:    schedDate,
+            data:    { cc, period },
+            enabled: true,
+          });
+        }
+      }
+    }
+
+    // ── Step 4: register account module reducers + handlers ───────────────────
+    for (const cc of countryCodes) {
+      const startYear     = new Date(currentPeriods[cc].startMs).getUTCFullYear();
+      const accountModule = this._accountRulesEngine.get(cc, startYear);
+      accountModule.createReducers(accountService).forEach(r => reducerService.register(r));
+      accountModule.createHandlers().forEach(h => handlerService.register(h));
+    }
+
+    // ── Step 5: register dynamic tax reducers ──────────────────────────────────
+    for (const cc of countryCodes) {
+      const actionTypes = new Set();
+      Object.keys(this._taxEngine._modules)
+        .filter(k => k.startsWith(cc + '_'))
+        .forEach(k => {
+          for (const [type] of this._taxEngine._modules[k].getReducerFns()) {
+            actionTypes.add(type);
+          }
+        });
+      for (const actionType of actionTypes) {
+        reducerService.register(new DynamicTaxReducer(this._taxEngine, cc, actionType));
+      }
+    }
+
+    // ── Step 6: schedule TAX_SETTLE events at each period end ──────────────────
+    for (const cc of countryCodes) {
+      const periodType = _periodTypeFor(cc);
+      for (const period of periodService.getAllPeriods()) {
+        if (period.type === periodType && period.endMs > startTs) {
+          const d       = new Date(period.endMs);
+          const lastDay = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - 1);
+          const year    = new Date(period.startMs).getUTCFullYear();
+          serviceRegistry.eventService.createOneOffEvent({
+            name:    `Tax Settle ${cc} ${year}`,
+            type:    'TAX_SETTLE',
+            date:    lastDay,
+            data:    { cc },
+            enabled: true,
+          });
+        }
+      }
+    }
+
+    // ── Step 7: register TAX_SETTLE handler + TAX_SETTLE_APPLY + TAX_PAYMENT_DEBIT
+    handlerService.register(new TaxSettleHandler());
+    reducerService.register(new TaxSettleApplyReducer());
+    reducerService.register(new TaxPaymentDebitReducer({ accountService }));
+
+    // ── Step 8: register metric/balance reducers ───────────────────────────────
+    const taxDebitReducer = new ArrayReducer('Tax Debit');
+    taxDebitReducer.reducedActionTypes = ['RECORD_ARRAY_METRIC'];
+    reducerService.register(taxDebitReducer);
+
+    const balanceSnapshotReducer = new NoOpReducer('Balance Snapshot');
+    balanceSnapshotReducer.reducedActionTypes = ['RECORD_BALANCE'];
+    reducerService.register(balanceSnapshotReducer);
+
+    return accountService;
   }
 
   /** @returns {TaxEngine} */

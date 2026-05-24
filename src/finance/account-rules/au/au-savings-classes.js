@@ -1,0 +1,145 @@
+/*
+ * Copyright (c) 2026 Terry Packer.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ */
+
+import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
+import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
+import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
+
+/** Resolve the AU cash pool. */
+const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
+
+// ─── Reducers ─────────────────────────────────────────────────────────────────
+
+/**
+ * EVT-16: AU savings contribution — debit external cash pool, credit AU savings.
+ * In the intl scenario this is a no-op (src === auSavingsAccount).
+ */
+export class AuSavingsContributionApplyReducer extends Reducer {
+  static description = 'Debits the external cash pool and credits auSavingsAccount balance; no-op in the intl scenario where there is no checkingAccount.';
+  static actionType  = 'AU_SAVINGS_CONTRIBUTION_APPLY';
+
+  constructor({ accountService }) {
+    super('AU Savings Contribution Apply', PRIORITY.CASH_FLOW);
+    this.accountService = accountService;
+    this.reducedActionTypes = ['AU_SAVINGS_CONTRIBUTION_APPLY'];
+  }
+
+  reduce(state, action) {
+    const src  = state.checkingAccount ?? state.auSavingsAccount;
+    this.accountService.transaction(src, -action.amount, null);
+    const prev = state.auSavingsAccount ?? {};
+    return this.newState(state, {
+      auSavingsAccount: { ...prev, balance: (prev.balance ?? 0) + action.amount },
+    });
+  }
+}
+
+/**
+ * EVT-17: AU savings withdrawal — debit AU savings balance, credit external cash pool.
+ */
+export class AuSavingsWithdrawalApplyReducer extends Reducer {
+  static description = 'Credits the external cash pool and debits auSavingsAccount balance.';
+  static actionType  = 'AU_SAVINGS_WITHDRAWAL_APPLY';
+
+  constructor({ accountService }) {
+    super('AU Savings Withdrawal Apply', PRIORITY.CASH_FLOW);
+    this.accountService = accountService;
+    this.reducedActionTypes = ['AU_SAVINGS_WITHDRAWAL_APPLY'];
+  }
+
+  reduce(state, action) {
+    const src  = state.checkingAccount ?? state.auSavingsAccount;
+    this.accountService.transaction(src, action.amount, null);
+    const prev = state.auSavingsAccount ?? {};
+    return this.newState(state, {
+      auSavingsAccount: { ...prev, balance: (prev.balance ?? 0) - action.amount },
+    });
+  }
+}
+
+/**
+ * EVT-18/19: AU savings earnings — stay in account.
+ * Chains AU_SAVINGS_EARNINGS_TAX (US ordinary + AU resident/NR bucket).
+ */
+export class AuSavingsEarningsApplyReducer extends Reducer {
+  static description = 'Adds earnings to auSavingsAccount balance; chains AU_SAVINGS_EARNINGS_TAX.';
+  static actionType  = 'AU_SAVINGS_EARNINGS_APPLY';
+
+  constructor({ accountService }) {  // accountService unused but accepted for API symmetry
+    super('AU Savings Earnings Apply', PRIORITY.CASH_FLOW);
+    this.reducedActionTypes   = ['AU_SAVINGS_EARNINGS_APPLY'];
+    this.generatedActionTypes = ['AU_SAVINGS_EARNINGS_TAX'];
+  }
+
+  reduce(state, action) {
+    const { amount, isAuResident } = action;
+    const cashPool = auCash(state);
+    return this.newState(
+      state,
+      {
+        auSavingsAccount: { ...state.auSavingsAccount, balance: cashPool.balance + amount },
+      },
+      [{ type: 'AU_SAVINGS_EARNINGS_TAX', amount, isAuResident }]
+    );
+  }
+}
+
+// ─── Handlers ─────────────────────────────────────────────────────────────────
+
+export class AuSavingsContributionHandler extends HandlerEntry {
+  static description = 'Dispatches AU_SAVINGS_CONTRIBUTION_APPLY.';
+  static eventType   = 'AU_SAVINGS_CONTRIBUTION';
+
+  constructor() {
+    super(null, 'AU Savings Contribution');
+    this.generatedActionTypes = ['AU_SAVINGS_CONTRIBUTION_APPLY', 'RECORD_BALANCE'];
+  }
+
+  call({ data }) {
+    return [
+      { type: 'AU_SAVINGS_CONTRIBUTION_APPLY', amount: data.amount },
+      new RecordBalanceAction(),
+    ];
+  }
+}
+
+export class AuSavingsWithdrawalHandler extends HandlerEntry {
+  static description = 'Dispatches AU_SAVINGS_WITHDRAWAL_APPLY.';
+  static eventType   = 'AU_SAVINGS_WITHDRAWAL';
+
+  constructor() {
+    super(null, 'AU Savings Withdrawal');
+    this.generatedActionTypes = ['AU_SAVINGS_WITHDRAWAL_APPLY', 'RECORD_BALANCE'];
+  }
+
+  call({ data }) {
+    return [
+      { type: 'AU_SAVINGS_WITHDRAWAL_APPLY', amount: data.amount },
+      new RecordBalanceAction(),
+    ];
+  }
+}
+
+export class AuSavingsEarningsHandler extends HandlerEntry {
+  static description = 'Dispatches AU_SAVINGS_EARNINGS_APPLY, passing the AU residency flag from state.';
+  static eventType   = 'AU_SAVINGS_EARNINGS';
+
+  constructor() {
+    super(null, 'AU Savings Earnings');
+    this.generatedActionTypes = ['AU_SAVINGS_EARNINGS_APPLY', 'RECORD_BALANCE'];
+  }
+
+  call({ data, state }) {
+    return [
+      { type: 'AU_SAVINGS_EARNINGS_APPLY', amount: data.amount, isAuResident: state.isAuResident },
+      new RecordBalanceAction(),
+    ];
+  }
+}

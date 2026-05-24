@@ -12,6 +12,29 @@ import { BaseAccountModule } from '../base-account-module.js';
 import { PRIORITY } from '../../../simulation-framework/reducers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 
+import {
+  AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer,
+  AuSavingsEarningsApplyReducer,
+  AuSavingsContributionHandler, AuSavingsWithdrawalHandler, AuSavingsEarningsHandler,
+} from './au-savings-classes.js';
+import {
+  SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer,
+  SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer,
+  SuperContributionHandler, SuperWithdrawalContributionsHandler,
+  SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler,
+} from './au-super-classes.js';
+import {
+  AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer,
+  AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer,
+  AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer,
+  AuDividendFrankedResidentHandler, AuDividendFrankedNonResidentHandler,
+  AuDividendUnfrankedResidentHandler, AuDividendUnfrankedNonResidentHandler,
+  AuStockEarningsHandler, AuStockWithdrawalHandler,
+} from './au-brokerage-classes.js';
+import {
+  AuHouseSaleApplyReducer, AuHouseSaleHandler,
+} from './au-real-property-classes.js';
+
 
 /** Resolve the AU cash pool: auSavingsAccount in intl scenarios, checkingAccount in single-account tests. */
 const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
@@ -48,6 +71,52 @@ export class AuAccountModule2026 extends BaseAccountModule {
     this._registerSuper(sim, svc);
     this._registerAuBrokerage(sim, svc);
     this._registerRealProperty(sim, svc);
+  }
+
+  createReducers(accountService) {
+    return [
+      // AU Savings
+      new AuSavingsContributionApplyReducer({ accountService }),
+      new AuSavingsWithdrawalApplyReducer({ accountService }),
+      new AuSavingsEarningsApplyReducer({ accountService }),
+      // Superannuation
+      new SuperContributionApplyReducer({ accountService }),
+      new SuperWithdrawalContribApplyReducer({ accountService }),
+      new SuperWithdrawalEarningsApplyReducer({ accountService }),
+      new SuperEarningsApplyReducer({ accountService }),
+      // AU Brokerage
+      new AuDividendFrankedResidentApplyReducer({ accountService }),
+      new AuDividendFrankedNonResidentApplyReducer({ accountService }),
+      new AuDividendUnfrankedResidentApplyReducer({ accountService }),
+      new AuDividendUnfrankedNonResidentApplyReducer({ accountService }),
+      new AuStockEarningsApplyReducer({ accountService }),
+      new AuStockWithdrawalApplyReducer({ accountService }),
+      // Real Property
+      new AuHouseSaleApplyReducer({ accountService }),
+    ];
+  }
+
+  createHandlers() {
+    return [
+      // AU Savings
+      new AuSavingsContributionHandler(),
+      new AuSavingsWithdrawalHandler(),
+      new AuSavingsEarningsHandler(),
+      // Superannuation
+      new SuperContributionHandler(),
+      new SuperWithdrawalContributionsHandler(),
+      new SuperWithdrawalEarningsHandler(),
+      new SuperEarningsDirectHandler(),
+      // AU Brokerage
+      new AuDividendFrankedResidentHandler(),
+      new AuDividendFrankedNonResidentHandler(),
+      new AuDividendUnfrankedResidentHandler(),
+      new AuDividendUnfrankedNonResidentHandler(),
+      new AuStockEarningsHandler(),
+      new AuStockWithdrawalHandler(),
+      // Real Property
+      new AuHouseSaleHandler(),
+    ];
   }
 
   // ── AU Savings ────────────────────────────────────────────────────────────

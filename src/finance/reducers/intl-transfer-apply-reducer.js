@@ -53,6 +53,8 @@ export class IntlTransferApplyReducer extends Reducer {
     this.accountService = accountService;
     this.usSavingsKey   = usSavingsKey;
     this.auSavingsKey   = auSavingsKey;
+    this.reducedActionTypes  = ['INTL_TRANSFER_APPLY'];
+    this.generatedActionTypes = ['OUT_OF_FUNDS'];
   }
 
   reduce(state, action, date) {

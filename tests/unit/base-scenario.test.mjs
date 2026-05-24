@@ -171,15 +171,12 @@ test('handlerService.register: handler is wired into sim for each handledEvent',
   assert.ok(handlers.some(h => h === handler || h.handler === handler));
 });
 
-test('reducerService.register: reducer is wired into sim for each reducedAction', () => {
+test('reducerService.register: reducer is wired into sim for each reducedActionType', () => {
   const { scenario } = makeScenario();
   const sr = ServiceRegistry.getInstance();
 
-  const action = new AmountAction('PAY_TEST', 'Pay', 100);
-  sr.actionService.register(action);
-
   const reducer = ReducerBuilder.field('amount').name('Metric R').build();
-  reducer.reducedActions.push(action);
+  reducer.reducedActionTypes.push('PAY_TEST');
   sr.reducerService.register(reducer);
 
   const reducers = scenario.sim.reducers.get('PAY_TEST');
@@ -343,34 +340,16 @@ test('handlerDeleted: unregisters handler from sim', () => {
 
 // ─── Action deletion ──────────────────────────────────────────────────────────
 
-test('actionDeleted: removes action from handler generatedActions', () => {
-  const { ui, scenario } = makeScenario();
-  ui.triggerCreate('handler');
+// Note: Phase 1 removed object references (generatedActions/reducedActions) from
+// handlers and reducers — those arrays are now type strings (generatedActionTypes /
+// reducedActionTypes).  SimulationSync._applyActionDelete is a no-op; the graph
+// layer (Phase 3) will handle edge cleanup by type-string lookup.
+
+test('actionDeleted: can delete action without error', () => {
+  const { ui } = makeScenario();
   ui.triggerCreate('action');
-
-  const handler = ui.nodes.find(n => n.kind === 'handler');
-  const action  = ui.nodes.find(n => n.kind === 'action');
-
-  handler.generatedActions.push(action);
-  assert.strictEqual(handler.generatedActions.length, 1);
-
-  ServiceRegistry.getInstance().actionService.deleteAction(action.id);
-  assert.strictEqual(handler.generatedActions.length, 0);
-});
-
-test('actionDeleted: removes action from reducer reducedActions', () => {
-  const { ui, scenario } = makeScenario();
-  ui.triggerCreate('reducer');
-  ui.triggerCreate('action');
-
-  const reducer = ui.nodes.find(n => n.kind === 'reducer');
-  const action  = ui.nodes.find(n => n.kind === 'action');
-
-  reducer.reducedActions.push(action);
-  assert.strictEqual(reducer.reducedActions.length, 1);
-
-  ServiceRegistry.getInstance().actionService.deleteAction(action.id);
-  assert.strictEqual(reducer.reducedActions.length, 0);
+  const action = ui.nodes.find(n => n.kind === 'action');
+  assert.doesNotThrow(() => ServiceRegistry.getInstance().actionService.deleteAction(action.id));
 });
 
 // ─── Reducer deletion ─────────────────────────────────────────────────────────
@@ -379,11 +358,8 @@ test('reducerDeleted: unregisters reducer from sim pipeline', () => {
   const { scenario } = makeScenario();
   const sr = ServiceRegistry.getInstance();
 
-  const action = new AmountAction('DEL_ACTION', 'Del', 0);
-  sr.actionService.register(action);
-
   const reducer = ReducerBuilder.field('x').name('R').build();
-  reducer.reducedActions.push(action);
+  reducer.reducedActionTypes.push('DEL_ACTION');
   sr.reducerService.register(reducer);
 
   const before = scenario.sim.reducers.get('DEL_ACTION');

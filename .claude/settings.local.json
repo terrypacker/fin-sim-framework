@@ -23,7 +23,9 @@
       "Bash(curl -s https://terrypacker.com/assets/css/theme-amber.css)",
       "Bash(ls /Users/tpacker/IdeaProjects/fin-sim-framework/*.html)",
       "Bash(ls /Users/tpacker/IdeaProjects/fin-sim-framework/src/*.html)",
-      "Bash(npx:*)"
+      "Bash(npx:*)",
+      "Bash(gtimeout 30 node --test tests/unit/intl-retirement-scenario.test.mjs)",
+      "Bash(echo \"EXIT: $?\")"
     ]
   },
   "hooks": {

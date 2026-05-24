@@ -36,6 +36,7 @@ export class UsSavingsInterestCreditReducer extends Reducer {
     super('US Savings Interest Credit', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
     this.accountKey     = accountKey;
+    this.reducedActionTypes = ['US_SAVINGS_INTEREST_CREDIT'];
   }
 
   reduce(state, action, date) {
