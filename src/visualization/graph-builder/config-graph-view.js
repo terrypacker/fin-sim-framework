@@ -144,6 +144,7 @@ export class ConfigGraphView extends BaseComponent {
 
     bar.append(kindField, nameField);
     panel.insertBefore(bar, graphRoot);
+    this.onCleanup(() => bar.remove());
   }
 
   _applyFilter() {
