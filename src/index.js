@@ -182,6 +182,12 @@ import { McRunsPanel } from './visualization/monte-carlo/mc-runs-panel.js';
 import { MonteCarloController } from './visualization/monte-carlo/monte-carlo-controller.js';
 import { MonteCarloPresenter } from './visualization/monte-carlo/monte-carlo-presenter.js';
 import { MonteCarloView } from './visualization/monte-carlo/monte-carlo-view.js';
+import { OptConfigPanel } from './visualization/optimization/opt-config-panel.js';
+import { OptResultsPanel } from './visualization/optimization/opt-results-panel.js';
+import { OptRunsPanel } from './visualization/optimization/opt-runs-panel.js';
+import { OptimizationController } from './visualization/optimization/optimization-controller.js';
+import { OptimizationPresenter } from './visualization/optimization/optimization-presenter.js';
+import { OptimizationView } from './visualization/optimization/optimization-view.js';
 import { PeopleController } from './visualization/people/people-controller.js';
 import { PersonEditor } from './visualization/people/person-editor.js';
 import { ScenarioTabController } from './visualization/scenario/scenario-tab-controller.js';
@@ -585,6 +591,12 @@ export const Visualization = {
   MonteCarloController,
   MonteCarloPresenter,
   MonteCarloView,
+  OptConfigPanel,
+  OptResultsPanel,
+  OptRunsPanel,
+  OptimizationController,
+  OptimizationPresenter,
+  OptimizationView,
   PeopleController,
   PersonEditor,
   ScenarioTabController,

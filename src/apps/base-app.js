@@ -52,6 +52,9 @@ import {
 import { MonteCarloView }       from '../visualization/monte-carlo/monte-carlo-view.js';
 import { MonteCarloController } from '../visualization/monte-carlo/monte-carlo-controller.js';
 import { MonteCarloPresenter }  from '../visualization/monte-carlo/monte-carlo-presenter.js';
+import { OptimizationView }       from '../visualization/optimization/optimization-view.js';
+import { OptimizationController } from '../visualization/optimization/optimization-controller.js';
+import { OptimizationPresenter }  from '../visualization/optimization/optimization-presenter.js';
 
 /**
  * BaseApp — composition root.
@@ -90,6 +93,7 @@ export class BaseApp extends BaseComponent {
     this.scenarioTabPresenter  = null;
     this._animator             = null;
     this.mcPresenter           = null;
+    this.optPresenter          = null;
     this._replayParams         = null;
 
     // Created once — survive scenario rebuilds.
@@ -351,6 +355,14 @@ export class BaseApp extends BaseComponent {
     });
     this.mcPresenter.onReplayRun = (run) => this._replayMcRun(run);
 
+    // ── Optimization ──────────────────────────────────────────────────────────────
+    this.optPresenter = new OptimizationPresenter({
+      controller: new OptimizationController(),
+      view:       new OptimizationView(),
+      scenario:   this.scenario,
+    });
+    this.optPresenter.onApplyCandidate = (params) => this._applyOptCandidate(params);
+
     //Send Scenario Ready Message
     registry.bus.publish(new BusMessage({ type: SIMULATION_BUS_MESSAGES.SCENARIO_READY, date: this.scenario.simStart}));
   }
@@ -372,6 +384,7 @@ export class BaseApp extends BaseComponent {
     if (this.configList)      this.configList.destroy();
     if (this.timelinePresenter) this.timelinePresenter.destroy();
     if (this.mcPresenter)     this.mcPresenter.destroy();
+    if (this.optPresenter)    this.optPresenter.destroy();
   }
 
   /**
@@ -387,6 +400,19 @@ export class BaseApp extends BaseComponent {
     if (tlHeader) this.openTab({ currentTarget: tlHeader }, 'timeline-tab', 'center-col');
   }
 
+  /**
+   * Rebuild the scenario with the merged params from a selected optimization candidate,
+   * then switch to the Chart tab to compare the outcome.
+   */
+  _applyOptCandidate(params) {
+    this._replayParams = params;
+    this.destroyScenario();
+    this.initScenario();
+
+    const chartHeader = document.querySelector('[data-dest-tab="chart-tab"][data-tab-group="center-col"]');
+    if (chartHeader) this.openTab({ currentTarget: chartHeader }, 'chart-tab', 'center-col');
+  }
+
   initView() {
     this._initGroupSelector();
     this._initRightGroupSelector();
@@ -399,12 +425,14 @@ export class BaseApp extends BaseComponent {
     });
 
     // Auto-switch left and right column groups when center tab changes.
-    const leftMcHeader = document.querySelector('.tab-header[data-dest-tab="left-mc"][data-tab-group="left-col-sim"]');
+    const leftMcHeader  = document.querySelector('.tab-header[data-dest-tab="left-mc"][data-tab-group="left-col-sim"]');
+    const leftOptHeader = document.querySelector('.tab-header[data-dest-tab="left-opt"][data-tab-group="left-col-sim"]');
     document.querySelectorAll('.tab-header[data-tab-group="center-col"]').forEach(el => {
       el.addEventListener('click', () => {
-        const isMc = el.dataset.destTab === 'mc-tab';
-        this._openRightGroup(isMc ? 'mc' : 'sim');
-        const leftTarget = isMc ? leftMcHeader : this.scenarioTabHeader;
+        const isOpt = el.dataset.destTab === 'opt-tab';
+        const isMc  = el.dataset.destTab === 'mc-tab';
+        this._openRightGroup(isOpt ? 'opt' : isMc ? 'mc' : 'sim');
+        const leftTarget = isOpt ? leftOptHeader : isMc ? leftMcHeader : this.scenarioTabHeader;
         if (leftTarget) this.openTab({ currentTarget: leftTarget }, leftTarget.dataset.destTab, 'left-col-sim');
       });
     });
