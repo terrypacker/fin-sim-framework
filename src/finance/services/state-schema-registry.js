@@ -17,6 +17,8 @@
  * limitations under the License.
  */
 
+import {ACCOUNT_TYPE} from "../assets/account.js";
+
 /**
  * Descriptor for how a state field value should be interpreted and displayed.
  * Used by the display layer to format raw numbers with the right currency,
@@ -171,6 +173,9 @@ export class StateSchemaRegistry {
     this.register(`${stateKey}.contributionBasis`, vt);
     this.register(`${stateKey}.earningsBasis`,    vt);
     this.register(`${stateKey}.minimumBalance`,   vt);
+    if (account.type === ACCOUNT_TYPE.BROKERAGE && 'earningsBasis' in account) {
+      this.register(`${stateKey}.earningsBasis`,   vt);
+    }
   }
 
   /**
