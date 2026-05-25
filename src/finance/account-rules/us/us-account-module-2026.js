@@ -11,82 +11,12 @@
 import { BaseAccountModule } from '../base-account-module.js';
 import { getUsEarlyWithdrawalRules } from './us-early-withdrawal-rules.js';
 
-import {
-  RothContributionApplyReducer, RothWithdrawalContribApplyReducer,
-  RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer,
-  RothContributionHandler, RothWithdrawalContributionsHandler,
-  RothWithdrawalEarningsHandler, RothEarningsHandler,
-} from './roth-classes.js';
-import {
-  IraContributionApplyReducer, IraWithdrawalContribApplyReducer,
-  IraWithdrawalEarningsApplyReducer, IraEarningsApplyReducer,
-  IraContributionHandler, IraWithdrawalContributionsHandler,
-  IraWithdrawalEarningsHandler, IraEarningsHandler,
-} from './ira-classes.js';
-import {
-  K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer,
-  K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler,
-} from './k401-classes.js';
-import {
-  FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer,
-  FixedIncomeEarningsApplyReducer, StockContributionApplyReducer,
-  StockDividendApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer,
-  FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler,
-  StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler,
-} from './us-brokerage-classes.js';
-import {
-  SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer,
-  SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer,
-  SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler,
-  SeIncomeUsHandler, BonusHandler, CompanySaleHandler,
-} from './us-income-classes.js';
-import {
-  IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
-  IraRolloverWithdrawalHandler, IraRmdHandler,
-} from './ira-rollover-classes.js';
-import {
-  RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
-  RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer,
-  RothRolloverContributionHandler, RothRolloverEarningsHandler,
-  RothRolloverWithdrawalContributionsHandler, RothRolloverWithdrawalEarningsHandler,
-} from './roth-rollover-classes.js';
-import {
-  RothConversionApplyReducer,
-  RothConversionHandler, RothConversionPolicyHandler,
-} from './roth-conversion-classes.js';
-
 
 /**
- * UsAccountModule2026 — US account mechanics rules for 2026.
+ * UsAccountModule2026 — US account rule hooks for 2026.
  *
- * Registers Stage-1 (CASH_FLOW priority) reducers and event handlers for all
- * US account types.  Each reducer that produces a tax effect emits a _TAX child
- * action via next:[] for the US tax module to handle.
- *
- * Used by the legacy registerHandlersAndReducers() path.
- * The declarative toolset path uses the individual toolset files instead.
- *
- * Covered events:
- *   EVT-1 to 4   Roth IRA
- *   EVT-5 to 8   Traditional IRA
- *   EVT-9 to 15  US Brokerage (fixed income + stocks)
- *   EVT-24/25    401k
- *   EVT-34       US House Sale
- *   EVT-36/46    Collectible Sale — handler/reducer in US_COLLECTIBLES toolset
- *   EVT-37       Social Security Income
- *   EVT-38       Wages (Gross)
- *   EVT-39       Wages Taxes Withheld
- *   EVT-45/47    Collectible Value Change — handler/reducer in US_COLLECTIBLES toolset
- *   EVT-48       Self-Employment Income (US)
- *   EVT-50       Bonus
- *   EVT-51       Company Sale
- *   EVT-35       IRA Rollover Withdrawal
- *   EVT-40       IRA RMD (Required Minimum Distribution)
- *   EVT-41       Roth Rollover Contribution
- *   EVT-42       Roth Rollover Earnings
- *   EVT-43       Roth Rollover Withdrawal – Contributions
- *   EVT-44       Roth Rollover Withdrawal – Earnings
- *   EVT-52       Roth Conversion (IRA → Roth, bracket-fill policy)
+ * Provides year-specific rule queries used by the AccountRulesEngine.
+ * Handler and reducer registration is handled exclusively by toolsets.
  */
 export class UsAccountModule2026 extends BaseAccountModule {
   get countryCode() { return 'US'; }
@@ -94,94 +24,5 @@ export class UsAccountModule2026 extends BaseAccountModule {
 
   getEarlyWithdrawalRules(accountType) {
     return getUsEarlyWithdrawalRules(accountType, this.year);
-  }
-
-  createReducers(accountService) {
-    return [
-      // Roth IRA
-      new RothContributionApplyReducer({ accountService }),
-      new RothWithdrawalContribApplyReducer({ accountService }),
-      new RothWithdrawalEarningsApplyReducer({ accountService }),
-      new RothEarningsApplyReducer({ accountService }),
-      // Traditional IRA
-      new IraContributionApplyReducer({ accountService }),
-      new IraWithdrawalContribApplyReducer({ accountService }),
-      new IraWithdrawalEarningsApplyReducer({ accountService }),
-      new IraEarningsApplyReducer({ accountService }),
-      // 401k
-      new K401ContributionApplyReducer({ accountService }),
-      new K401EarningsApplyReducer({ accountService }),
-      new K401WithdrawalApplyReducer({ accountService }),
-      // US Brokerage (Fixed Income + Stock)
-      new FixedIncomeContributionApplyReducer({ accountService }),
-      new FixedIncomeWithdrawalApplyReducer({ accountService }),
-      new FixedIncomeEarningsApplyReducer({ accountService }),
-      new StockContributionApplyReducer({ accountService }),
-      new StockDividendApplyReducer({ accountService }),
-      new StockEarningsApplyReducer({ accountService }),
-      new StockWithdrawalApplyReducer({ accountService }),
-      // Income
-      new SsIncomeApplyReducer({ accountService }),
-      new WagesIncomeApplyReducer({ accountService }),
-      new WagesWithheldApplyReducer({ accountService }),
-      new SeIncomeUsApplyReducer({ accountService }),
-      new BonusApplyReducer({ accountService }),
-      new CompanySaleApplyReducer({ accountService }),
-      // IRA Rollover + RMD
-      new IraRolloverWithdrawalApplyReducer({ accountService }),
-      new IraRmdApplyReducer({ accountService }),
-      // Roth Rollover
-      new RothRolloverContributionApplyReducer({ accountService }),
-      new RothRolloverEarningsApplyReducer({ accountService }),
-      new RothRolloverWithdrawalContribApplyReducer({ accountService }),
-      new RothRolloverWithdrawalEarningsApplyReducer({ accountService }),
-      // Roth Conversion
-      new RothConversionApplyReducer({ accountService }),
-    ];
-  }
-
-  createHandlers() {
-    return [
-      // Roth IRA
-      new RothContributionHandler(),
-      new RothWithdrawalContributionsHandler(),
-      new RothWithdrawalEarningsHandler(),
-      new RothEarningsHandler(),
-      // Traditional IRA
-      new IraContributionHandler(),
-      new IraWithdrawalContributionsHandler(),
-      new IraWithdrawalEarningsHandler(),
-      new IraEarningsHandler(),
-      // 401k
-      new K401ContributionHandler(),
-      new K401EarningsHandler(),
-      new K401WithdrawalHandler(),
-      // US Brokerage
-      new FixedIncomeContributionHandler(),
-      new FixedIncomeWithdrawalHandler(),
-      new FixedIncomeEarningsHandler(),
-      new StockContributionHandler(),
-      new StockDividendHandler(),
-      new StockEarningsHandler(),
-      new StockWithdrawalHandler(),
-      // Income
-      new SsIncomeHandler(),
-      new WagesIncomeHandler(),
-      new WagesWithheldHandler(),
-      new SeIncomeUsHandler(),
-      new BonusHandler(),
-      new CompanySaleHandler(),
-      // IRA Rollover + RMD
-      new IraRolloverWithdrawalHandler(),
-      new IraRmdHandler(),
-      // Roth Rollover
-      new RothRolloverContributionHandler(),
-      new RothRolloverEarningsHandler(),
-      new RothRolloverWithdrawalContributionsHandler(),
-      new RothRolloverWithdrawalEarningsHandler(),
-      // Roth Conversion
-      new RothConversionHandler(),
-      new RothConversionPolicyHandler(),
-    ];
   }
 }

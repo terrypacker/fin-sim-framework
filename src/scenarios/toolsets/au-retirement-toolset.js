@@ -52,7 +52,7 @@ import {
 export const AU_RETIREMENT = {
   id: 'AU_RETIREMENT',
   capabilities: ['superannuation'],
-  dependencies: ['AU_TAX', 'AU_BANKING'],
+  dependencies: ['AU_TAX', 'AU_BANKING', 'AU_INCOME'],
 
   paramSchema(context) {
     return [

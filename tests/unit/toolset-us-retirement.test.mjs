@@ -593,3 +593,86 @@ test('toolset: MFJ flag propagates to state (usFilingSingle=false for 2 persons)
   assert.strictEqual(sim.state.usFilingSingle, false,
     'state.usFilingSingle should be false so the tax engine uses MFJ brackets');
 });
+
+// ─── Deduplication guard ──────────────────────────────────────────────────────
+
+/**
+ * Config that covers income AND brokerage accounts so both conditional
+ * reducer blocks in US_BROKERAGE are activated.  This makes the dedup
+ * check meaningful for every reducer that was previously duplicated between
+ * US_RETIREMENT and the sub-toolsets.
+ */
+const DEDUP_JSON = {
+  toolsets: ['US_RETIREMENT', 'US_INCOME', 'US_BROKERAGE'],
+  simStart: '2026-01-01',
+  simEnd:   '2041-01-01',
+  parameters: {
+    inflationRate:         0.03,
+    usSavingsInterestRate: 0.03,
+    iraGrowthRate:         0.07,
+    k401GrowthRate:        0.07,
+    brokerageGrowthRate:   0.05,
+    brokerageDividendRate: 0.02,
+    dividendReinvest:      false,
+    fixedIncomeInterestRate: 0.04,
+    monthlyExpenses:       4_000,
+    inflationAdjust:       false,
+  },
+  persons: [
+    {
+      __type:                'Person',
+      id:                    'primary',
+      name:                  'Primary',
+      birthDate:             '1965-01-01',
+      citizen:               ['US'],
+      lifeExpectancy:        90,
+      socialSecurityMonthly: 2_000,
+      monthlyWage:           5_000,
+      retirementDate:        '2030-01-01',
+    },
+  ],
+  accounts: [
+    {
+      __type: 'SavingsAccount', id: 'acct-savings', name: 'US Savings',
+      type: 'savings', role: 'us-savings', stateKey: 'usSavingsAccount',
+      initialValue: 50_000, ownershipType: 'sole', ownerId: 'primary',
+      minimumBalance: 0, country: 'US', currency: { code: 'USD', symbol: '$' },
+    },
+    {
+      __type: 'BrokerageAccount', id: 'acct-stock', name: 'US Stock',
+      type: 'brokerage', role: 'us-stock', stateKey: 'usStockAccount',
+      initialValue: 100_000, ownershipType: 'sole', ownerId: 'primary',
+      contributionBasis: 60_000, earningsBasis: 0, loanBalance: 0,
+      country: 'US', currency: { code: 'USD', symbol: '$' }, drawdownPriority: 2,
+    },
+    {
+      __type: 'InvestmentAccount', id: 'acct-fi', name: 'Fixed Income',
+      type: 'brokerage', role: 'fixed-income', stateKey: 'fixedIncomeAccount',
+      initialValue: 80_000, ownershipType: 'sole', ownerId: 'primary',
+      contributionBasis: 60_000, earningsBasis: 0, loanBalance: 0,
+      country: 'US', currency: { code: 'USD', symbol: '$' }, drawdownPriority: 1,
+    },
+  ],
+};
+
+test('no duplicate reducers when US_RETIREMENT, US_INCOME, and US_BROKERAGE are all listed', () => {
+  loadToolsetScenario(DEDUP_JSON);
+
+  const reducers = ServiceRegistry.getInstance().reducerService.getAll();
+
+  // Build a map from action type → list of reducer class names that handle it.
+  const actionTypeMap = new Map();
+  for (const r of reducers) {
+    for (const actionType of (r.reducedActionTypes ?? [])) {
+      if (!actionTypeMap.has(actionType)) actionTypeMap.set(actionType, []);
+      actionTypeMap.get(actionType).push(r.constructor.name);
+    }
+  }
+
+  const duplicates = [...actionTypeMap.entries()]
+    .filter(([, names]) => names.length > 1)
+    .map(([type, names]) => `${type}: [${names.join(', ')}]`);
+
+  assert.deepStrictEqual(duplicates, [],
+    `Duplicate reducers found for action types:\n  ${duplicates.join('\n  ')}`);
+});
