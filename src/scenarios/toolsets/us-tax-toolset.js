@@ -65,7 +65,7 @@ export const US_TAX = {
   },
 
   reducers(context) {
-    return _getContributions(context).reducers;
+    return [..._getContributions(context).reducers, ..._getSharedReducers(context)];
   },
 };
 
@@ -80,4 +80,10 @@ function _getContributions(context) {
     context.accountService, context.stateRegistry,
   );
   return context._usTaxCapture;
+}
+
+function _getSharedReducers(context) {
+  if (context._taxSharedDone) return [];
+  context._taxSharedDone = true;
+  return new TaxService().getSharedReducers(context.accountService, context.stateRegistry);
 }

@@ -140,7 +140,6 @@ export class TaxService {
     }
 
     handlers.push(periodAdvanceHandler);
-    reducers.push(new PeriodAdvanceReducer());
 
     // Dynamic tax reducers (one per action type per country)
     for (const cc of countryCodes) {
@@ -158,18 +157,34 @@ export class TaxService {
     }
 
     handlers.push(taxSettleHandler);
-    reducers.push(new TaxSettleApplyReducer());
-    reducers.push(new TaxPaymentDebitReducer({ accountService, stateRegistry }));
 
+    return { statePatches: { currentPeriods }, events, handlers, reducers };
+  }
+
+  /**
+   * Returns the reducers that are shared across all tax toolsets — these must
+   * be registered exactly once regardless of how many country tax toolsets are
+   * active.  Callers (US_TAX, AU_TAX toolsets) use a context-level cache so
+   * only the first toolset to run provides these; subsequent ones return [].
+   *
+   * @param {object} accountService
+   * @param {object} stateRegistry
+   * @returns {import('../simulation-framework/reducers.js').Reducer[]}
+   */
+  getSharedReducers(accountService, stateRegistry) {
     const taxDebitReducer = new ArrayReducer('Tax Debit');
     taxDebitReducer.reducedActionTypes = ['RECORD_ARRAY_METRIC'];
-    reducers.push(taxDebitReducer);
 
     const balanceSnapshotReducer = new BalanceSnapshotReducer('Balance Snapshot');
     balanceSnapshotReducer.reducedActionTypes = ['RECORD_BALANCE'];
-    reducers.push(balanceSnapshotReducer);
 
-    return { statePatches: { currentPeriods }, events, handlers, reducers };
+    return [
+      new PeriodAdvanceReducer(),
+      new TaxSettleApplyReducer(),
+      new TaxPaymentDebitReducer({ accountService, stateRegistry }),
+      taxDebitReducer,
+      balanceSnapshotReducer,
+    ];
   }
 
   /** @returns {TaxEngine} */
