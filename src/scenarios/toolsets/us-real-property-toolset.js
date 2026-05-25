@@ -9,8 +9,9 @@
  */
 
 import { OneOffEvent }           from '../../simulation-framework/events/one-off-event.js';
-import { UsHouseSaleHandler }    from '../../finance/account-rules/us/us-real-property-classes.js';
-import { UsHouseSaleApplyReducer } from '../../finance/account-rules/us/us-real-property-classes.js';
+import { EventSeries }           from '../../simulation-framework/events/event-series.js';
+import { UsHouseSaleHandler, UsHouseSaleApplyReducer } from '../../finance/account-rules/us/us-real-property-classes.js';
+import { UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer } from '../../finance/account-rules/mortgage-payment-classes.js';
 
 /**
  * US_REAL_PROPERTY toolset — wires US house sale machinery.
@@ -47,28 +48,52 @@ export const US_REAL_PROPERTY = {
   },
 
   schedules(context) {
-    return (context.realProperties ?? [])
-      .filter(p => p.country === 'US' && p.plannedSaleYear != null)
+    const usProps = (context.realProperties ?? []).filter(p => p.country === 'US');
+    const schedules = usProps
+      .filter(p => p.plannedSaleYear != null)
       .map(p => new OneOffEvent({
         name:    `Sell ${p.name}`,
         type:    'US_HOUSE_SALE',
         date:    new Date(Date.UTC(p.plannedSaleYear, 0, 15)),
-        data:    { salePrice: p.value, costBasis: p.costBasis },
+        data:    { salePrice: p.value, costBasis: p.costBasis, stateKey: p.stateKey },
         enabled: true,
         color:   '#795548',
       }));
+    const mortgagedProps = usProps.filter(p => (p.mortgageBalance ?? 0) > 0 && (p.monthlyMortgage ?? 0) > 0);
+    if (mortgagedProps.length > 0) {
+      schedules.push(new EventSeries({
+        name:     'US Mortgage Payment',
+        type:     'US_MORTGAGE_PAYMENT',
+        interval: 'month-end',
+        enabled:  true,
+        color:    '#6D4C41',
+      }));
+    }
+    return schedules;
   },
 
   handlers(context) {
     const props = (context.realProperties ?? []).filter(p => p.country === 'US');
     if (props.length === 0) return [];
-    return [new UsHouseSaleHandler()];
+    const handlers = [new UsHouseSaleHandler()];
+    const mortgagedProps = props.filter(p => (p.mortgageBalance ?? 0) > 0 && (p.monthlyMortgage ?? 0) > 0);
+    if (mortgagedProps.length > 0) {
+      handlers.push(new UsMortgagePaymentHandler({
+        properties: mortgagedProps.map(p => ({ stateKey: p.stateKey, monthlyMortgage: p.monthlyMortgage })),
+      }));
+    }
+    return handlers;
   },
 
   reducers(context) {
     const props = (context.realProperties ?? []).filter(p => p.country === 'US');
     if (props.length === 0) return [];
-    return [new UsHouseSaleApplyReducer({ accountService: context.accountService })];
+    const reducers = [new UsHouseSaleApplyReducer({ accountService: context.accountService })];
+    const mortgagedProps = props.filter(p => (p.mortgageBalance ?? 0) > 0 && (p.monthlyMortgage ?? 0) > 0);
+    if (mortgagedProps.length > 0) {
+      reducers.push(new UsMortgagePaymentApplyReducer({ accountService: context.accountService }));
+    }
+    return reducers;
   },
 };
 
@@ -77,6 +102,8 @@ function _propertyToStatePlain(prop) {
     stateKey:           prop.stateKey,
     value:              prop.value              ?? 0,
     costBasis:          prop.costBasis          ?? 0,
+    mortgageBalance:    prop.mortgageBalance    ?? 0,
+    monthlyMortgage:    prop.monthlyMortgage    ?? 0,
     appreciationRate:   prop.appreciationRate   ?? 0,
     isPrimaryResidence: prop.isPrimaryResidence ?? false,
     plannedSaleYear:    prop.plannedSaleYear    ?? null,

@@ -32,12 +32,16 @@ export class AuHouseSaleApplyReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const { salePrice, costBasis, isAuResident, ownershipType, ownerId, owners } = action;
+    const { salePrice, costBasis, isAuResident, ownershipType, ownerId, owners, stateKey } = action;
     const gain = Math.max(0, salePrice - costBasis);
     this.accountService.transaction(auCash(state), salePrice, null);
+    const updates = {};
+    if (stateKey && state[stateKey]) {
+      updates[stateKey] = { ...state[stateKey], mortgageBalance: 0 };
+    }
     return this.newState(
       state,
-      {},
+      updates,
       [{ type: 'AU_HOUSE_SALE_TAX', gain, isAuResident, ownershipType, ownerId, owners }]
     );
   }
@@ -65,6 +69,7 @@ export class AuHouseSaleHandler extends HandlerEntry {
         ownershipType: data.ownershipType,
         ownerId:       data.ownerId,
         owners:        data.owners,
+        stateKey:      data.stateKey ?? null,
       },
       new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];
