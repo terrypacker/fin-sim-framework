@@ -20,85 +20,115 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Account }        from '../../src/finance/assets/account.js';
-import { FinancialState } from '../../src/finance/state/financial-state.js';
-import { Simulation }     from '../../src/simulation-framework/simulation.js';
-import { TaxService }     from '../../src/finance/tax-service.js';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
-import { PeriodService }  from '../../src/finance/period/period-service.js';
-import { buildUsCalendarYear, applyTo } from '../../src/finance/period/period-builder.js';
+import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
+import { BaseScenario }    from '../../src/index.js';
 
 beforeEach(() => ServiceRegistry.reset());
 
-function buildUsPeriodService(year) {
-  const ps = new PeriodService();
-  applyTo(ps, buildUsCalendarYear(year));
-  return ps;
+function loadToolsetScenario(config) {
+  const services = ServiceRegistry.getInstance();
+  const scenario = new BaseScenario({
+    context:  services.simulationContext,
+    simStart: new Date(config.simStart),
+    simEnd:   new Date(config.simEnd),
+  });
+  scenario.buildSim();
+  new ScenarioLoader().load(structuredClone(config), services);
+  return { scenario, sim: scenario.sim };
 }
 
-const START_DATE = new Date(2026, 0, 1);
-
 /**
- * Build a minimal conversion simulation.
- * Includes both iraAccount and rothAccount (and optional spouse accounts).
+ * Build a Roth conversion scenario config.
+ * Includes primary and spouse accounts so both conversion directions can be tested.
+ * Uses US_RETIREMENT + AU_RETIREMENT + US_ROTH_CONVERSION + US_AU_CROSS_BORDER.
  */
-function buildConversionSim({
-  initialChecking         = 20_000,
-  iraBalance              = 100_000,
-  iraContribBasis         = 100_000,
-  iraEarningsBasis        = 0,
-  rothBalance             = 0,
-  rolloverContribBasis    = 0,
-  spouseIraBalance        = 0,
-  spouseIraContribBasis   = 0,
-  spouseRothBalance       = 0,
-  spouseRolloverContrib   = 0,
-  isAuResident            = false,
-  usOrdinaryIncomeYTD     = 0,
+function makeConversionConfig({
+  initialChecking        = 20_000,
+  initialAuSavings       = 50_000,
+  iraBalance             = 100_000,
+  iraContribBasis        = 100_000,
+  iraEarningsBasis       = 0,
+  rothBalance            = 0,
+  rolloverContribBasis   = 0,
+  spouseIraBalance       = 0,
+  spouseIraContribBasis  = 0,
+  spouseRothBalance      = 0,
+  spouseRolloverContrib  = 0,
+  isAuResident           = false,
 } = {}) {
-  const registry = ServiceRegistry.getInstance();
-  const sim = new Simulation(START_DATE, {
-    initialState: new FinancialState({
-      checkingAccount: new Account(initialChecking),
-      iraAccount: {
-        balance:           iraBalance,
-        contributionBasis: iraContribBasis,
-        earningsBasis:     iraEarningsBasis,
-      },
-      rothAccount: {
-        balance:              rothBalance,
-        contributionBasis:    0,
-        earningsBasis:        0,
-        rolloverContribBasis,
-        rolloverEarningsBasis: 0,
-      },
-      spouseIraAccount: {
-        balance:           spouseIraBalance,
-        contributionBasis: spouseIraContribBasis,
-        earningsBasis:     0,
-      },
-      spouseRothAccount: {
-        balance:               spouseRothBalance,
-        contributionBasis:     0,
-        earningsBasis:         0,
-        rolloverContribBasis:  spouseRolloverContrib,
-        rolloverEarningsBasis: 0,
-      },
+  return {
+    toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'US_ROTH_CONVERSION', 'US_AU_CROSS_BORDER'],
+    simStart: '2026-01-01',
+    simEnd:   '2028-01-01',
+    parameters: {
+      monthlyExpenses: 0, inflationAdjust: false, inflationRate: 0,
+      rothGrowthRate: 0, iraGrowthRate: 0, k401GrowthRate: 0,
+      brokerageGrowthRate: 0, brokerageDividendRate: 0, fixedIncomeInterestRate: 0,
+      usSavingsInterestRate: 0, auSavingsInterestRate: 0,
+      superGrowthRate: 0, auStockGrowthRate: 0, auStockDividendRate: 0,
+      rothConversionEnabled: false,
       isAuResident,
-      usOrdinaryIncomeYTD,
-      usNegativeIncomeYTD: 0,
-      usCapitalGainsYTD:   0,
-      usPenaltyYTD:        0,
-      auOrdinaryIncomeYTD: 0,
-      ftcYTD:              0,
-    }),
-  });
-  registry.simulationRegistry.register('primary', sim);
-  registry.simulationSync.setSimStart(START_DATE);
-  const taxService = new TaxService();
-  taxService.setup(sim, ['US'], buildUsPeriodService(2026));
-  taxService.registerHandlersAndReducers(registry, ['US']);
-  return { sim };
+    },
+    persons: [
+      {
+        __type: 'Person', id: 'primary', name: 'Primary', birthDate: '1966-01-01',
+        citizen: ['US'], lifeExpectancy: 90, monthlyWage: 0,
+        retirementDate: '2025-01-01', socialSecurityMonthly: 0,
+      },
+      {
+        __type: 'Person', id: 'spouse', name: 'Spouse', birthDate: '1968-01-01',
+        citizen: ['US'], lifeExpectancy: 90, monthlyWage: 0,
+        retirementDate: '2030-01-01', socialSecurityMonthly: 0,
+      },
+    ],
+    accounts: [
+      {
+        __type: 'SavingsAccount', id: 'checking', name: 'Checking',
+        role: 'us-savings', stateKey: 'checkingAccount',
+        initialValue: initialChecking, ownershipType: 'sole', ownerId: 'primary',
+        minimumBalance: 0, country: 'US', currency: { code: 'USD', symbol: '$' },
+      },
+      {
+        __type: 'SavingsAccount', id: 'au-savings', name: 'AU Savings',
+        role: 'au-savings', stateKey: 'auSavingsAccount',
+        initialValue: initialAuSavings, ownershipType: 'sole', ownerId: 'primary',
+        minimumBalance: 0, country: 'AU', currency: { code: 'AUD', symbol: '$' },
+      },
+      {
+        __type: 'TraditionalIRAAccount', id: 'ira', name: 'IRA',
+        role: 'ira', stateKey: 'iraAccount',
+        initialValue: iraBalance, contributionBasis: iraContribBasis,
+        earningsBasis: iraEarningsBasis,
+        ownershipType: 'sole', ownerId: 'primary',
+        country: 'US', currency: { code: 'USD', symbol: '$' },
+      },
+      {
+        __type: 'RothAccount', id: 'roth', name: 'Roth IRA',
+        role: 'roth-ira', stateKey: 'rothAccount',
+        initialValue: rothBalance, contributionBasis: 0, earningsBasis: 0,
+        rolloverContribBasis, rolloverEarningsBasis: 0,
+        ownershipType: 'sole', ownerId: 'primary',
+        country: 'US', currency: { code: 'USD', symbol: '$' },
+      },
+      {
+        __type: 'TraditionalIRAAccount', id: 'spouse-ira', name: 'Spouse IRA',
+        role: 'ira', stateKey: 'spouseIraAccount',
+        initialValue: spouseIraBalance, contributionBasis: spouseIraContribBasis,
+        earningsBasis: 0,
+        ownershipType: 'sole', ownerId: 'spouse',
+        country: 'US', currency: { code: 'USD', symbol: '$' },
+      },
+      {
+        __type: 'RothAccount', id: 'spouse-roth', name: 'Spouse Roth IRA',
+        role: 'roth-ira', stateKey: 'spouseRothAccount',
+        initialValue: spouseRothBalance, contributionBasis: 0, earningsBasis: 0,
+        rolloverContribBasis: spouseRolloverContrib, rolloverEarningsBasis: 0,
+        ownershipType: 'sole', ownerId: 'spouse',
+        country: 'US', currency: { code: 'USD', symbol: '$' },
+      },
+    ],
+  };
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -106,7 +136,7 @@ function buildConversionSim({
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-52: Roth Conversion — IRA balance debited', () => {
-  const { sim } = buildConversionSim({ iraBalance: 100_000, iraContribBasis: 100_000 });
+  const { sim } = loadToolsetScenario(makeConversionConfig({ iraBalance: 100_000, iraContribBasis: 100_000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_CONVERSION', data: { amount: 20_000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -115,7 +145,7 @@ test('EVT-52: Roth Conversion — IRA balance debited', () => {
 });
 
 test('EVT-52: Roth Conversion — Roth rolloverContribBasis credited', () => {
-  const { sim } = buildConversionSim({ iraBalance: 100_000, iraContribBasis: 100_000 });
+  const { sim } = loadToolsetScenario(makeConversionConfig({ iraBalance: 100_000, iraContribBasis: 100_000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_CONVERSION', data: { amount: 20_000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -125,7 +155,7 @@ test('EVT-52: Roth Conversion — Roth rolloverContribBasis credited', () => {
 });
 
 test('EVT-52: Roth Conversion — amount does NOT flow through cash pool', () => {
-  const { sim } = buildConversionSim({ initialChecking: 10_000, iraBalance: 100_000, iraContribBasis: 100_000 });
+  const { sim } = loadToolsetScenario(makeConversionConfig({ initialChecking: 10_000, iraBalance: 100_000, iraContribBasis: 100_000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_CONVERSION', data: { amount: 20_000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -133,7 +163,7 @@ test('EVT-52: Roth Conversion — amount does NOT flow through cash pool', () =>
 });
 
 test('EVT-52: Roth Conversion — US ordinary income recorded', () => {
-  const { sim } = buildConversionSim({ iraBalance: 100_000, iraContribBasis: 100_000 });
+  const { sim } = loadToolsetScenario(makeConversionConfig({ iraBalance: 100_000, iraContribBasis: 100_000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_CONVERSION', data: { amount: 20_000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -141,7 +171,7 @@ test('EVT-52: Roth Conversion — US ordinary income recorded', () => {
 });
 
 test('EVT-52: Roth Conversion — AU ordinary income recorded when isAuResident', () => {
-  const { sim } = buildConversionSim({ iraBalance: 100_000, iraContribBasis: 100_000, isAuResident: true });
+  const { sim } = loadToolsetScenario(makeConversionConfig({ iraBalance: 100_000, iraContribBasis: 100_000, isAuResident: true }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_CONVERSION', data: { amount: 20_000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -150,7 +180,7 @@ test('EVT-52: Roth Conversion — AU ordinary income recorded when isAuResident'
 });
 
 test('EVT-52: Roth Conversion — no AU income when not resident', () => {
-  const { sim } = buildConversionSim({ iraBalance: 100_000, iraContribBasis: 100_000, isAuResident: false });
+  const { sim } = loadToolsetScenario(makeConversionConfig({ iraBalance: 100_000, iraContribBasis: 100_000, isAuResident: false }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_CONVERSION', data: { amount: 20_000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -159,7 +189,7 @@ test('EVT-52: Roth Conversion — no AU income when not resident', () => {
 });
 
 test('EVT-52: Roth Conversion — no penalty', () => {
-  const { sim } = buildConversionSim({ iraBalance: 100_000, iraContribBasis: 100_000 });
+  const { sim } = loadToolsetScenario(makeConversionConfig({ iraBalance: 100_000, iraContribBasis: 100_000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_CONVERSION', data: { amount: 20_000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -167,7 +197,7 @@ test('EVT-52: Roth Conversion — no penalty', () => {
 });
 
 test('EVT-52: Roth Conversion — debit draws from contributionBasis first then earningsBasis', () => {
-  const { sim } = buildConversionSim({ iraBalance: 100_000, iraContribBasis: 60_000, iraEarningsBasis: 40_000 });
+  const { sim } = loadToolsetScenario(makeConversionConfig({ iraBalance: 100_000, iraContribBasis: 60_000, iraEarningsBasis: 40_000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_CONVERSION', data: { amount: 70_000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -181,10 +211,10 @@ test('EVT-52: Roth Conversion — debit draws from contributionBasis first then 
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-52: Roth Conversion — spouse IRA debited, spouse Roth credited', () => {
-  const { sim } = buildConversionSim({
+  const { sim } = loadToolsetScenario(makeConversionConfig({
     spouseIraBalance:      50_000,
     spouseIraContribBasis: 50_000,
-  });
+  }));
   sim.schedule({
     date: new Date(2026, 0, 15),
     type: 'ROTH_CONVERSION',
@@ -195,15 +225,15 @@ test('EVT-52: Roth Conversion — spouse IRA debited, spouse Roth credited', () 
   assert.strictEqual(sim.state.spouseIraAccount.balance, 35_000);
   assert.strictEqual(sim.state.spouseRothAccount.balance, 15_000);
   assert.strictEqual(sim.state.spouseRothAccount.rolloverContribBasis, 15_000);
-  assert.strictEqual(sim.state.iraAccount.balance, 100_000);  // primary IRA untouched (default 100k)
+  assert.strictEqual(sim.state.iraAccount.balance, 100_000);  // primary IRA untouched
   assert.strictEqual(sim.state.rothAccount.balance, 0);       // primary Roth untouched
 });
 
 test('EVT-52: Roth Conversion — spouse conversion records US ordinary income', () => {
-  const { sim } = buildConversionSim({
+  const { sim } = loadToolsetScenario(makeConversionConfig({
     spouseIraBalance:      50_000,
     spouseIraContribBasis: 50_000,
-  });
+  }));
   sim.schedule({
     date: new Date(2026, 0, 15),
     type: 'ROTH_CONVERSION',
@@ -219,7 +249,7 @@ test('EVT-52: Roth Conversion — spouse conversion records US ordinary income',
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-52: Roth Conversion — throws when amount exceeds IRA balance', () => {
-  const { sim } = buildConversionSim({ iraBalance: 10_000, iraContribBasis: 10_000 });
+  const { sim } = loadToolsetScenario(makeConversionConfig({ iraBalance: 10_000, iraContribBasis: 10_000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_CONVERSION', data: { amount: 20_000 } });
 
   assert.throws(
@@ -233,11 +263,12 @@ test('EVT-52: Roth Conversion — throws when amount exceeds IRA balance', () =>
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('Bracket-fill policy — converts nothing when usOrdinaryIncomeYTD >= targetIncome', () => {
-  const { sim } = buildConversionSim({
-    iraBalance:         100_000,
-    iraContribBasis:    100_000,
-    usOrdinaryIncomeYTD: 60_000,
-  });
+  const { sim } = loadToolsetScenario(makeConversionConfig({
+    iraBalance:      100_000,
+    iraContribBasis: 100_000,
+  }));
+  // Pre-load ordinary income to 60k so it exceeds the 50k target
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'WAGES_INCOME', data: { amount: 60_000 } });
   sim.schedule({
     date: new Date(2026, 6, 1),
     type: 'ROTH_CONVERSION_POLICY_EVALUATE',
@@ -251,11 +282,12 @@ test('Bracket-fill policy — converts nothing when usOrdinaryIncomeYTD >= targe
 });
 
 test('Bracket-fill policy — converts exactly the bracket room when IRA has enough', () => {
-  const { sim } = buildConversionSim({
-    iraBalance:          100_000,
-    iraContribBasis:     100_000,
-    usOrdinaryIncomeYTD: 30_000,
-  });
+  const { sim } = loadToolsetScenario(makeConversionConfig({
+    iraBalance:      100_000,
+    iraContribBasis: 100_000,
+  }));
+  // Pre-load 30k income; policy will fill up to 50k → converts 20k
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'WAGES_INCOME', data: { amount: 30_000 } });
   sim.schedule({
     date: new Date(2026, 6, 1),
     type: 'ROTH_CONVERSION_POLICY_EVALUATE',
@@ -269,11 +301,12 @@ test('Bracket-fill policy — converts exactly the bracket room when IRA has eno
 });
 
 test('Bracket-fill policy — converts IRA balance when less than bracket room', () => {
-  const { sim } = buildConversionSim({
-    iraBalance:          8_000,
-    iraContribBasis:     8_000,
-    usOrdinaryIncomeYTD: 30_000,
-  });
+  const { sim } = loadToolsetScenario(makeConversionConfig({
+    iraBalance:      8_000,
+    iraContribBasis: 8_000,
+  }));
+  // Pre-load 30k income; room = 20k but IRA only has 8k → converts 8k
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'WAGES_INCOME', data: { amount: 30_000 } });
   sim.schedule({
     date: new Date(2026, 6, 1),
     type: 'ROTH_CONVERSION_POLICY_EVALUATE',
@@ -287,11 +320,12 @@ test('Bracket-fill policy — converts IRA balance when less than bracket room',
 });
 
 test('Bracket-fill policy — spouse conversion uses spouseIraAccount', () => {
-  const { sim } = buildConversionSim({
-    spouseIraBalance:     40_000,
+  const { sim } = loadToolsetScenario(makeConversionConfig({
+    spouseIraBalance:      40_000,
     spouseIraContribBasis: 40_000,
-    usOrdinaryIncomeYTD:  30_000,
-  });
+  }));
+  // Pre-load 30k income; room = 20k, spouse IRA has 40k → converts 20k
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'WAGES_INCOME', data: { amount: 30_000 } });
   sim.schedule({
     date: new Date(2026, 6, 1),
     type: 'ROTH_CONVERSION_POLICY_EVALUATE',
@@ -302,15 +336,16 @@ test('Bracket-fill policy — spouse conversion uses spouseIraAccount', () => {
   assert.strictEqual(sim.state.spouseIraAccount.balance, 20_000);   // 40k - 20k
   assert.strictEqual(sim.state.spouseRothAccount.balance, 20_000);
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 50_000);
-  assert.strictEqual(sim.state.iraAccount.balance, 100_000);        // primary untouched (default 100k)
+  assert.strictEqual(sim.state.iraAccount.balance, 100_000);        // primary untouched
 });
 
 test('Bracket-fill policy — no actions when IRA balance is zero', () => {
-  const { sim } = buildConversionSim({
-    iraBalance:          0,
-    iraContribBasis:     0,
-    usOrdinaryIncomeYTD: 30_000,
-  });
+  const { sim } = loadToolsetScenario(makeConversionConfig({
+    iraBalance:      0,
+    iraContribBasis: 0,
+  }));
+  // Pre-load 30k income; IRA is empty so nothing converts
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'WAGES_INCOME', data: { amount: 30_000 } });
   sim.schedule({
     date: new Date(2026, 6, 1),
     type: 'ROTH_CONVERSION_POLICY_EVALUATE',

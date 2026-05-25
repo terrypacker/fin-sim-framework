@@ -40,7 +40,7 @@ import { OneOffEvent }     from '../../src/simulation-framework/events/one-off-e
 import { ServiceRegistry }    from '../../src/services/service-registry.js';
 import { BaseScenario }       from '../../src/scenarios/base-scenario.js';
 import { ScenarioSerializer } from '../../src/scenarios/scenario-serializer.js';
-import { UsRetirementToolset } from '../../src/scenarios/toolsets/us-retirement-toolset.js';
+import { ScenarioLoader } from '../../src/scenarios/scenario-loader.js';
 
 import { TaxService }           from '../../src/finance/tax-service.js';
 import { DynamicTaxReducer }    from '../../src/finance/tax/dynamic-tax-reducer.js';
@@ -227,16 +227,16 @@ globalThis.FinSimLib = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * A minimal custom JSON scenario with toolset: 'us-retirement'.
+ * A minimal declarative scenario using the US_RETIREMENT toolset.
  * Person has wages so MonthlyWagesHandler produces income.
  * US Savings starts at $30k with $6k/month expenses → should drop by ~$18k after 3 months
  * (before wages come in — wages of $8k/month should largely offset expenses).
  */
 const CUSTOM_JSON = {
-  toolset:   'us-retirement',
-  simStart:  '2026-01-01',
-  simEnd:    '2041-01-01',
-  assumptions: {
+  toolsets: ['US_RETIREMENT'],
+  simStart: '2026-01-01',
+  simEnd:   '2041-01-01',
+  parameters: {
     inflationRate:          0.03,
     usSavingsInterestRate:  0.03,
     iraGrowthRate:          0.07,
@@ -244,8 +244,9 @@ const CUSTOM_JSON = {
     brokerageGrowthRate:    0.05,
     brokerageDividendRate:  0.02,
     dividendReinvest:       false,
+    monthlyExpenses:        6_000,
+    inflationAdjust:        false,
   },
-  expenses: { monthlyExpenses: 6_000, inflationAdjust: false },
   persons: [
     {
       __type:                'Person',
@@ -312,8 +313,9 @@ const CUSTOM_JSON = {
 };
 
 /**
- * Load and run a toolset scenario from a custom JSON config.
- * Returns { scenario, sim } after loading persons/accounts and running toolset.setup().
+ * Load and run a toolset scenario from a declarative JSON config.
+ * Returns { scenario, sim } after running ScenarioLoader.load() (persons/accounts
+ * are deserialized and US_RETIREMENT is compiled).
  */
 function loadToolsetScenario(config) {
   ServiceRegistry.reset();
@@ -326,11 +328,7 @@ function loadToolsetScenario(config) {
   });
   scenario.buildSim();
 
-  const hasPersonsOrAccounts = (config.persons?.length > 0) || (config.accounts?.length > 0);
-  if (hasPersonsOrAccounts) {
-    ScenarioSerializer.deserializePersonsAccounts(config, services);
-  }
-  UsRetirementToolset.setup(config, services);
+  new ScenarioLoader().load(structuredClone(config), services);
 
   return { scenario, sim: scenario.sim };
 }
@@ -439,15 +437,16 @@ test('toolset: deserializePersonsAccounts loads accounts into accountService', (
  */
 function makeSsConfig({ socialSecurityMonthly, retirementDate, monthlyWage = 0 }) {
   return {
-    toolset:  'us-retirement',
+    toolsets: ['US_RETIREMENT'],
     simStart: '2026-01-01',
     simEnd:   '2041-01-01',
-    assumptions: {
+    parameters: {
       inflationRate:         0.03,
       usSavingsInterestRate: 0,
       iraGrowthRate:         0.07,
+      monthlyExpenses:       0,
+      inflationAdjust:       false,
     },
-    expenses: { monthlyExpenses: 0, inflationAdjust: false },
     persons: [
       {
         __type:                'Person',
@@ -555,8 +554,11 @@ test('toolset: 2 persons → usFilingSingle is false (auto-detect)', () => {
     'two persons in config should auto-detect as married filing jointly');
 });
 
-test('toolset: config.usFilingSingle=false overrides auto-detect for 1 person', () => {
-  const config = { ...CUSTOM_JSON, usFilingSingle: false };
+test('toolset: parameters.usFilingSingle=false overrides auto-detect for 1 person', () => {
+  const config = {
+    ...CUSTOM_JSON,
+    parameters: { ...CUSTOM_JSON.parameters, usFilingSingle: false },
+  };
   const { sim } = loadToolsetScenario(config);
   assert.strictEqual(sim.state.usFilingSingle, false,
     'explicit usFilingSingle=false should override auto-detect');
@@ -590,4 +592,87 @@ test('toolset: MFJ flag propagates to state (usFilingSingle=false for 2 persons)
   const { sim } = loadToolsetScenario(twoPersonConfig);
   assert.strictEqual(sim.state.usFilingSingle, false,
     'state.usFilingSingle should be false so the tax engine uses MFJ brackets');
+});
+
+// ─── Deduplication guard ──────────────────────────────────────────────────────
+
+/**
+ * Config that covers income AND brokerage accounts so both conditional
+ * reducer blocks in US_BROKERAGE are activated.  This makes the dedup
+ * check meaningful for every reducer that was previously duplicated between
+ * US_RETIREMENT and the sub-toolsets.
+ */
+const DEDUP_JSON = {
+  toolsets: ['US_RETIREMENT', 'US_INCOME', 'US_BROKERAGE'],
+  simStart: '2026-01-01',
+  simEnd:   '2041-01-01',
+  parameters: {
+    inflationRate:         0.03,
+    usSavingsInterestRate: 0.03,
+    iraGrowthRate:         0.07,
+    k401GrowthRate:        0.07,
+    brokerageGrowthRate:   0.05,
+    brokerageDividendRate: 0.02,
+    dividendReinvest:      false,
+    fixedIncomeInterestRate: 0.04,
+    monthlyExpenses:       4_000,
+    inflationAdjust:       false,
+  },
+  persons: [
+    {
+      __type:                'Person',
+      id:                    'primary',
+      name:                  'Primary',
+      birthDate:             '1965-01-01',
+      citizen:               ['US'],
+      lifeExpectancy:        90,
+      socialSecurityMonthly: 2_000,
+      monthlyWage:           5_000,
+      retirementDate:        '2030-01-01',
+    },
+  ],
+  accounts: [
+    {
+      __type: 'SavingsAccount', id: 'acct-savings', name: 'US Savings',
+      type: 'savings', role: 'us-savings', stateKey: 'usSavingsAccount',
+      initialValue: 50_000, ownershipType: 'sole', ownerId: 'primary',
+      minimumBalance: 0, country: 'US', currency: { code: 'USD', symbol: '$' },
+    },
+    {
+      __type: 'BrokerageAccount', id: 'acct-stock', name: 'US Stock',
+      type: 'brokerage', role: 'us-stock', stateKey: 'usStockAccount',
+      initialValue: 100_000, ownershipType: 'sole', ownerId: 'primary',
+      contributionBasis: 60_000, earningsBasis: 0, loanBalance: 0,
+      country: 'US', currency: { code: 'USD', symbol: '$' }, drawdownPriority: 2,
+    },
+    {
+      __type: 'InvestmentAccount', id: 'acct-fi', name: 'Fixed Income',
+      type: 'brokerage', role: 'fixed-income', stateKey: 'fixedIncomeAccount',
+      initialValue: 80_000, ownershipType: 'sole', ownerId: 'primary',
+      contributionBasis: 60_000, earningsBasis: 0, loanBalance: 0,
+      country: 'US', currency: { code: 'USD', symbol: '$' }, drawdownPriority: 1,
+    },
+  ],
+};
+
+test('no duplicate reducers when US_RETIREMENT, US_INCOME, and US_BROKERAGE are all listed', () => {
+  loadToolsetScenario(DEDUP_JSON);
+
+  const reducers = ServiceRegistry.getInstance().reducerService.getAll();
+
+  // Build a map from action type → list of reducer class names that handle it.
+  const actionTypeMap = new Map();
+  for (const r of reducers) {
+    for (const actionType of (r.reducedActionTypes ?? [])) {
+      if (!actionTypeMap.has(actionType)) actionTypeMap.set(actionType, []);
+      actionTypeMap.get(actionType).push(r.constructor.name);
+    }
+  }
+
+  const duplicates = [...actionTypeMap.entries()]
+    .filter(([, names]) => names.length > 1)
+    .map(([type, names]) => `${type}: [${names.join(', ')}]`);
+
+  assert.deepStrictEqual(duplicates, [],
+    `Duplicate reducers found for action types:\n  ${duplicates.join('\n  ')}`);
 });

@@ -33,6 +33,7 @@ import { ServiceRegistry }     from '../../src/services/service-registry.js';
 import { BaseScenario }            from '../../src/scenarios/base-scenario.js';
 import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
 import { ScenarioSerializer }     from '../../src/scenarios/scenario-serializer.js';
+import { ScenarioLoader }         from '../../src/scenarios/scenario-loader.js';
 import { InMemoryStorage }        from '../../src/storage/in-memory-storage.js';
 
 // Finance classes needed by ScenarioSerializer._makeReducer / _makeHandler
@@ -191,21 +192,13 @@ function makeStubUI() {
 // ─── Build helpers ────────────────────────────────────────────────────────────
 
 /**
- * Build and initialise an IntlRetirementScenario.
+ * Build and initialise an IntlRetirementScenario using the toolset compiler path.
  * Returns { scenario, sim } ready to step.
  */
 function buildScenario(params = {}) {
   ServiceRegistry.reset();
-  const ui       = makeStubUI();
-  const scenario = new IntlRetirementScenario({
-    eventSchedulerUI: ui,
-    context: ServiceRegistry.getInstance().simulationContext,
-    params: params
-  });
-  scenario.buildSim();
-  scenario.loadDefaults();
-  const sim = scenario.sim;
-  return { scenario, sim };
+  const scenario = IntlRetirementScenario.buildAndCompile({ params });
+  return { scenario, sim: scenario.sim };
 }
 
 /**
@@ -349,8 +342,8 @@ test('serialize → deserialize round-trip reconstructs all TaxService reducers'
   });
   scenario2.buildSim();
   assert.doesNotThrow(
-    () => ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance()),
-    'ScenarioSerializer.deserialize should not throw for any TaxService reducer type'
+    () => ScenarioSerializer.deserializeGraph(config, ServiceRegistry.getInstance()),
+    'ScenarioSerializer.deserializeGraph should not throw for any TaxService reducer type'
   );
 
   const reducerTypes = ServiceRegistry.getInstance().reducerService.getAll()
@@ -394,7 +387,7 @@ test('serialize → deserialize round-trip reconstructs all TaxService handlers'
     context: ServiceRegistry.getInstance().simulationContext
   });
   scenario2.buildSim();
-  ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(config, ServiceRegistry.getInstance());
 
   const handlerTypes = ServiceRegistry.getInstance().handlerService.getAll()
     .map(h => h.handlerClass);
@@ -468,7 +461,7 @@ test('DynamicTaxReducer round-trip preserves cc and actionType', () => {
     context: ServiceRegistry.getInstance().simulationContext
   });
   scenario2.buildSim();
-  ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(config, ServiceRegistry.getInstance());
 
   const dynamicReducers = ServiceRegistry.getInstance().reducerService.getAll()
     .filter(r => r.reducerType === 'DynamicTaxReducer');
@@ -701,7 +694,7 @@ test('SPOUSE-6: serialize → deserialize round-trip preserves spouse accounts',
   });
   scenario2.buildSim();
   assert.doesNotThrow(
-    () => ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance()),
+    () => ScenarioSerializer.deserializeGraph(config, ServiceRegistry.getInstance()),
     'deserialize should not throw with spouse accounts'
   );
 
@@ -762,7 +755,7 @@ test('rothConversionEndYear: Date object falls back to RMD year', () => {
 
 /**
  * Build and initialise an IntlRetirementScenario, serialize it, then rebuild
- * it as a BaseScenario via ScenarioSerializer.deserialize() — exactly the path
+ * it as a BaseScenario via ScenarioSerializer.deserializeGraph() — exactly the path
  * the browser takes when a user exports and re-imports a scenario.
  */
 function buildRoundTripped(params = {}) {
@@ -790,7 +783,7 @@ function buildRoundTripped(params = {}) {
     simEnd:       orig.simEnd,
   });
   scenario2.buildSim();
-  ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(config, ServiceRegistry.getInstance());
 
   return { scenario: scenario2, sim: scenario2.sim };
 }
@@ -1038,7 +1031,7 @@ test('ASSET-11: realProperties and collectibles survive serialize → deserializ
   scenario2.buildSim();
 
   assert.doesNotThrow(
-    () => ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance()),
+    () => ScenarioSerializer.deserializeGraph(config, ServiceRegistry.getInstance()),
     'deserialize should not throw with realProperties and collectibles'
   );
 
@@ -1091,7 +1084,7 @@ test('ASSET-12: realProperties and collectibles survive full storage round-trip 
   scenario2.buildSim();
 
   assert.doesNotThrow(
-    () => ScenarioSerializer.deserialize(restoredConfig, ServiceRegistry.getInstance()),
+    () => ScenarioSerializer.deserializeGraph(restoredConfig, ServiceRegistry.getInstance()),
     'deserialize should not throw after storage round-trip'
   );
 
@@ -1191,14 +1184,9 @@ test('ASSET-13: PATH-4 load overrides restore edited fields on realProperties, c
   assert.strictEqual(config.accounts.find(a => a.stateKey === 'usSavingsAccount')?.minimumBalance, 5000);
   assert.strictEqual(config.persons.find(p => p.id === 'primary')?.lifeExpectancy, 95);
 
-  // Reload: fresh build + loadDefaults() resets everything to code defaults
+  // Reload: fresh buildAndCompile() resets everything to code defaults
   ServiceRegistry.reset();
-  const scenario2 = new IntlRetirementScenario({
-    eventSchedulerUI: makeStubUI(),
-    context: ServiceRegistry.getInstance().simulationContext,
-  });
-  scenario2.buildSim();
-  scenario2.loadDefaults();
+  IntlRetirementScenario.buildAndCompile({});
 
   const registry2 = ServiceRegistry.getInstance();
   // Confirm defaults were reset (pre-override state)
@@ -1224,4 +1212,121 @@ test('ASSET-13: PATH-4 load overrides restore edited fields on realProperties, c
 
   const primaryFinal = registry2.personService.getAll().find(p => p.id === 'primary');
   assert.strictEqual(primaryFinal.lifeExpectancy, 95, 'person.lifeExpectancy restored');
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Property sale: exactly one sale per event
+//
+// Regression: a single US_HOUSE_SALE event was observed to trigger 4 credits
+// to the US savings account instead of 1.  The root cause is duplicate event
+// or handler registration when the config is compiled via ScenarioLoader.load()
+// with plannedSaleYear already set in cfg.realProperties.
+//
+// We exercise the realistic browser path:
+//   1. buildSim() — creates the Simulation
+//   2. ScenarioLoader.load(cfg) — compiles toolsets from a config that already
+//      has plannedSaleYear set (mirrors save→reload after user edits property)
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Build a scenario via ScenarioLoader.load() with optional sale years set on
+ * real properties. This mirrors the browser's save→reload path where
+ * plannedSaleYear has already been persisted in cfg.realProperties before
+ * ScenarioCompiler.compile() runs.
+ */
+function buildScenarioViaSaveReload({ usSaleYear = null, auSaleYear = null, collectibleSaleYear = null } = {}) {
+  ServiceRegistry.reset();
+  const registry = ServiceRegistry.getInstance();
+  const scenario = new IntlRetirementScenario({ context: registry.simulationContext });
+  scenario.buildSim();
+
+  const cfg = IntlRetirementScenario.buildDefaultConfig({});
+
+  // Patch real properties and collectibles with sale years — simulates a config
+  // that was saved after the user set plannedSaleYear in the editor.
+  if (usSaleYear != null) {
+    const prop = cfg.realProperties.find(p => p.country === 'US');
+    if (prop) prop.plannedSaleYear = usSaleYear;
+  }
+  if (auSaleYear != null) {
+    const prop = cfg.realProperties.find(p => p.country === 'AU');
+    if (prop) prop.plannedSaleYear = auSaleYear;
+  }
+  if (collectibleSaleYear != null) {
+    if (cfg.collectibles?.length > 0) cfg.collectibles[0].plannedSaleYear = collectibleSaleYear;
+  }
+
+  new ScenarioLoader().load(cfg, registry);
+  scenario.initialState = { ...scenario.sim.state };
+  return { scenario, sim: scenario.sim };
+}
+
+test('SALE-1: exactly one US_HOUSE_SALE event is scheduled when usSaleYear is set', () => {
+  const { sim } = buildScenarioViaSaveReload({ usSaleYear: 2028 });
+  const services = ServiceRegistry.getInstance();
+
+  const saleEvents = services.eventService.getAll()
+    .filter(e => e.type === 'US_HOUSE_SALE');
+
+  assert.strictEqual(
+    saleEvents.length, 1,
+    `Expected 1 US_HOUSE_SALE event in eventService, got ${saleEvents.length}. ` +
+    `Duplicate events cause multiple sale credits.`
+  );
+
+  // Also verify exactly one US_HOUSE_SALE entry is in the sim queue
+  const queuedSales = [];
+  const allQueued = [];
+  // Walk the priority queue by type — use a temp snapshot approach
+  const origPop = sim.queue.pop.bind(sim.queue);
+  const peeked = [];
+  let next;
+  while ((next = origPop()) != null) {
+    if (next.type === 'US_HOUSE_SALE') queuedSales.push(next);
+    peeked.push(next);
+  }
+  // Restore the queue
+  for (const item of peeked) sim.queue.push(item);
+
+  assert.strictEqual(
+    queuedSales.length, 1,
+    `Expected 1 US_HOUSE_SALE in the sim queue, got ${queuedSales.length}`
+  );
+});
+
+test('SALE-2: exactly one UsHouseSaleHandler is registered for US_HOUSE_SALE', () => {
+  const { sim } = buildScenarioViaSaveReload({ usSaleYear: 2028 });
+
+  const handlers = sim.handlers.get('US_HOUSE_SALE') || [];
+  assert.strictEqual(
+    handlers.length, 1,
+    `Expected 1 handler for US_HOUSE_SALE, got ${handlers.length}. ` +
+    `Multiple handlers cause duplicate credits per sale event.`
+  );
+});
+
+test('SALE-3: US_HOUSE_SALE credits savings exactly once (balance delta = salePrice)', () => {
+  // Use a large initial savings to survive expenses/drawdowns through to the sale date.
+  const saleYear  = 2028;
+  const salePrice = 1_000_000; // default usHouseProperty.value
+  const { sim } = buildScenarioViaSaveReload({ usSaleYear: saleYear });
+
+  // Step to Jan 14 — the day before the scheduled sale (Jan 15)
+  stepWithGuard(sim, new Date(Date.UTC(saleYear, 0, 14)), 15000);
+  const balanceBefore = sim.state.usSavingsAccount.balance;
+
+  // Step to Jan 15 — the sale date
+  stepWithGuard(sim, new Date(Date.UTC(saleYear, 0, 15)), 15000);
+  const balanceAfter = sim.state.usSavingsAccount.balance;
+
+  const delta = balanceAfter - balanceBefore;
+  const effectiveCount = Math.round(delta / salePrice);
+
+  // Jan 15 has no monthly recurring events, so delta should equal salePrice exactly.
+  assert.ok(
+    Math.abs(delta - salePrice) < 1,
+    `usSavingsAccount should increase by exactly ${salePrice} on the sale date. ` +
+    `Actual delta: ${delta.toFixed(2)} (~${effectiveCount}× sale price). ` +
+    `Bug: US_HOUSE_SALE fired ${effectiveCount} time(s) instead of once.`
+  );
 });

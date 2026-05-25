@@ -27,51 +27,63 @@
 import { test, beforeEach } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Account } from '../../src/finance/assets/account.js';
-import { FinancialState } from '../../src/finance/state/financial-state.js';
-import { Simulation } from '../../src/simulation-framework/simulation.js';
-import { TaxService } from '../../src/finance/tax-service.js';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
-import { PeriodService } from '../../src/finance/period/period-service.js';
-import { buildUsCalendarYear, applyTo } from '../../src/finance/period/period-builder.js';
+import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
+import { BaseScenario }    from '../../src/index.js';
 
 beforeEach(() => ServiceRegistry.reset());
 
-function buildUsPeriodService(year) {
-  const ps = new PeriodService();
-  applyTo(ps, buildUsCalendarYear(year));
-  return ps;
+function loadToolsetScenario(config) {
+  const services = ServiceRegistry.getInstance();
+  const scenario = new BaseScenario({
+    context:  services.simulationContext,
+    simStart: new Date(config.simStart),
+    simEnd:   new Date(config.simEnd),
+  });
+  scenario.buildSim();
+  new ScenarioLoader().load(structuredClone(config), services);
+  return { scenario, sim: scenario.sim };
 }
 
-const START_DATE = new Date(2026, 0, 1);
-
-function build401kSim({
-  initialChecking     = 20000,
-  k401Balance         = 0,
-  k401ContribBasis    = 0,
-  k401EarningsBasis   = 0,
-  personBirthDate     = new Date(1966, 0, 1), // turns 60 on 2026-01-01
+function makeK401Config({
+  initialChecking   = 20000,
+  k401Balance       = 0,
+  k401ContribBasis  = 0,
+  k401EarningsBasis = 0,
+  birthDate         = '1966-01-01',
 } = {}) {
-  const registry = ServiceRegistry.getInstance();
-  const sim = new Simulation(START_DATE, { initialState: new FinancialState({
-    checkingAccount: new Account(initialChecking),
-    k401Account: {
-      balance:           k401Balance,
-      contributionBasis: k401ContribBasis,
-      earningsBasis:     k401EarningsBasis,
+  return {
+    toolsets: ['US_RETIREMENT'],
+    simStart: '2026-01-01',
+    simEnd:   '2028-01-01',
+    parameters: {
+      monthlyExpenses: 0, inflationAdjust: false, inflationRate: 0,
+      rothGrowthRate: 0, iraGrowthRate: 0, k401GrowthRate: 0,
+      brokerageGrowthRate: 0, brokerageDividendRate: 0, fixedIncomeInterestRate: 0,
+      usSavingsInterestRate: 0,
     },
-    personBirthDate,
-    usOrdinaryIncomeYTD: 0,
-    usNegativeIncomeYTD: 0,
-    usPenaltyYTD:        0,
-  }) });
-  registry.simulationRegistry.register('primary', sim);
-  registry.simulationSync.setSimStart(START_DATE);
-  const taxService = new TaxService();
-  taxService.setup(sim, ['US'], buildUsPeriodService(2026));
-  taxService.registerHandlersAndReducers(registry, ['US']);
-
-  return { sim };
+    persons: [{
+      __type: 'Person', id: 'primary', name: 'Primary', birthDate,
+      citizen: ['US'], lifeExpectancy: 90, monthlyWage: 0,
+      retirementDate: '2025-01-01', socialSecurityMonthly: 0,
+    }],
+    accounts: [
+      {
+        __type: 'SavingsAccount', id: 'checking', name: 'Checking',
+        role: 'us-savings', stateKey: 'checkingAccount',
+        initialValue: initialChecking, ownershipType: 'sole', ownerId: 'primary',
+        minimumBalance: 0, country: 'US', currency: { code: 'USD', symbol: '$' },
+      },
+      {
+        __type: 'FourOhOneKAccount', id: 'k401', name: '401K',
+        role: 'k401', stateKey: 'k401Account',
+        initialValue: k401Balance, contributionBasis: k401ContribBasis,
+        earningsBasis: k401EarningsBasis,
+        ownershipType: 'sole', ownerId: 'primary',
+        country: 'US', currency: { code: 'USD', symbol: '$' },
+      },
+    ],
+  };
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -79,7 +91,7 @@ function build401kSim({
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-24: 401K contribution increases k401Account balance and contributionBasis', () => {
-  const { sim } = build401kSim({ initialChecking: 10000 });
+  const { sim } = loadToolsetScenario(makeK401Config({ initialChecking: 10000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'K401_CONTRIBUTION', data: { amount: 7000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -89,7 +101,7 @@ test('EVT-24: 401K contribution increases k401Account balance and contributionBa
 });
 
 test('EVT-24: 401K contribution debits checking account', () => {
-  const { sim } = build401kSim({ initialChecking: 10000 });
+  const { sim } = loadToolsetScenario(makeK401Config({ initialChecking: 10000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'K401_CONTRIBUTION', data: { amount: 7000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -97,7 +109,7 @@ test('EVT-24: 401K contribution debits checking account', () => {
 });
 
 test('EVT-24: 401K contribution is a US negative income (deduction) event', () => {
-  const { sim } = build401kSim({ initialChecking: 10000 });
+  const { sim } = loadToolsetScenario(makeK401Config({ initialChecking: 10000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'K401_CONTRIBUTION', data: { amount: 7000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -110,7 +122,7 @@ test('EVT-24: 401K contribution is a US negative income (deduction) event', () =
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-25: 401K earnings increase k401Account balance and earningsBasis', () => {
-  const { sim } = build401kSim({ k401Balance: 50000, k401ContribBasis: 50000 });
+  const { sim } = loadToolsetScenario(makeK401Config({ k401Balance: 50000, k401ContribBasis: 50000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'K401_EARNINGS', data: { amount: 4000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -120,7 +132,7 @@ test('EVT-25: 401K earnings increase k401Account balance and earningsBasis', () 
 });
 
 test('EVT-25: 401K earnings stay in account — no checking transaction', () => {
-  const { sim } = build401kSim({ initialChecking: 5000, k401Balance: 50000, k401ContribBasis: 50000 });
+  const { sim } = loadToolsetScenario(makeK401Config({ initialChecking: 5000, k401Balance: 50000, k401ContribBasis: 50000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'K401_EARNINGS', data: { amount: 4000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -132,13 +144,13 @@ test('EVT-25: 401K earnings stay in account — no checking transaction', () => 
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-25: 401K withdrawal at age 59.5+ has no penalty and is US ordinary income taxable', () => {
-  // Person born 1966-07-01: turns 59.5 on 2026-01-01
-  const { sim } = build401kSim({
+  // Born 1966-07-01: turns 59.5 on 2026-01-01, so is 60 by the July 1 withdrawal date
+  const { sim } = loadToolsetScenario(makeK401Config({
     initialChecking: 5000,
     k401Balance: 50000,
     k401EarningsBasis: 50000,
-    personBirthDate: new Date(1966, 6, 1), // July 1, 1966 → age 59.5 on Jan 1, 2026
-  });
+    birthDate: '1966-07-01',
+  }));
   sim.schedule({ date: new Date(2026, 6, 1), type: 'K401_WITHDRAWAL', data: { amount: 10000 } });
   sim.stepTo(new Date(2026, 6, 30));
 
@@ -148,31 +160,30 @@ test('EVT-25: 401K withdrawal at age 59.5+ has no penalty and is US ordinary inc
 });
 
 test('EVT-25: 401K withdrawal before age 59.5 incurs 10% penalty', () => {
-  // Person born 1990 — age 36 in 2026
-  const { sim } = build401kSim({
+  const { sim } = loadToolsetScenario(makeK401Config({
     initialChecking: 5000,
     k401Balance: 50000,
     k401EarningsBasis: 50000,
-    personBirthDate: new Date(1990, 0, 1),
-  });
+    birthDate: '1990-01-01',
+  }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'K401_WITHDRAWAL', data: { amount: 10000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.usPenaltyYTD, 1000);      // 10% of 10000
-  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 10000); // full amount still taxable
+  assert.strictEqual(sim.state.usPenaltyYTD, 1000);           // 10% of 10000
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 10000);   // full amount still taxable
   assert.strictEqual(sim.state.checkingAccount.balance, 14000); // 5000 + 9000 net
 });
 
 test('EVT-25: 401K withdrawal is always US ordinary income taxable (no AU tax)', () => {
-  const { sim } = build401kSim({
+  const { sim } = loadToolsetScenario(makeK401Config({
     initialChecking: 5000,
     k401Balance: 50000,
     k401EarningsBasis: 50000,
-    personBirthDate: new Date(1966, 0, 1),
-  });
+    birthDate: '1966-01-01',
+  }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'K401_WITHDRAWAL', data: { amount: 10000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 10000);
-  // No AU tax fields exist in this sim — ordinary income is US-only per requirements
+  // 401K withdrawals are US-only taxable events per requirements
 });

@@ -12,17 +12,21 @@ import { EventBuilder }            from '../../simulation-framework/builders/eve
 import { ACCOUNT_ROLES }           from '../../finance/state/account-roles.js';
 import { AuSavingsInterestHandler }
   from '../../finance/handlers/earnings-handlers.js';
+import {
+  AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer,
+  AuSavingsEarningsApplyReducer,
+  AuSavingsContributionHandler, AuSavingsWithdrawalHandler, AuSavingsEarningsHandler,
+} from '../../finance/account-rules/au/au-savings-classes.js';
 
 /**
- * AU_BANKING toolset — AU savings account interest machinery.
+ * AU_BANKING toolset — AU savings account interest and cash-flow machinery.
  *
  * Capabilities: banking
  * Depends on: (none)
  *
  * State ownership:
- *   Contributes: INTL_AU_SAVINGS_INTEREST schedule, per-account handlers.
- *   AU account module reducers (AuSavingsEarningsApplyReducer) come from
- *   AU_TAX via TaxService, not from this toolset.
+ *   Contributes: INTL_AU_SAVINGS_INTEREST schedule, per-account handlers,
+ *                AU savings contribution/withdrawal/earnings handlers and reducers.
  */
 export const AU_BANKING = {
   id: 'AU_BANKING',
@@ -59,7 +63,12 @@ export const AU_BANKING = {
     if (accounts.length === 0) return [];
     const event = context.schedulesById['INTL_AU_SAVINGS_INTEREST'];
     const rate  = context.parameters.auSavingsInterestRate;
-    return accounts.map(acct => {
+    const handlers = [
+      new AuSavingsContributionHandler(),
+      new AuSavingsWithdrawalHandler(),
+      new AuSavingsEarningsHandler(),
+    ];
+    accounts.forEach(acct => {
       const h = new AuSavingsInterestHandler({
         stateRegistry: context.stateRegistry,
         role:          ACCOUNT_ROLES.AU_SAVINGS,
@@ -67,11 +76,19 @@ export const AU_BANKING = {
         interestRate:  rate,
       });
       h.handledEvents.push(event);
-      return h;
+      handlers.push(h);
     });
+    return handlers;
   },
 
   reducers(context) {
-    return [];
+    const accounts = context.accounts.filter(a => a.role === ACCOUNT_ROLES.AU_SAVINGS);
+    if (accounts.length === 0) return [];
+    const accountService = context.accountService;
+    return [
+      new AuSavingsContributionApplyReducer({ accountService }),
+      new AuSavingsWithdrawalApplyReducer({ accountService }),
+      new AuSavingsEarningsApplyReducer({ accountService }),
+    ];
   },
 };

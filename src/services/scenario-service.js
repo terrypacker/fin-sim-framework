@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import {ScenarioSerializer} from "../scenarios/scenario-serializer.js";
+
 /**
  * Scenario id format:
  *   'p:<id>'  — a pre-built scenario
@@ -17,16 +19,6 @@ export class ScenarioService {
   constructor(bus = {}, scenarioRegistry = {}) {
     this._bus = bus;
     this._registry = scenarioRegistry;
-    this._fallbackFactory = null;
-  }
-
-  /**
-   * Register a factory used when a user scenario has no matching scenarioId.
-   * Call this once at app startup before createActiveScenario() is first invoked.
-   * @param {Function} factory (params, initialState, simStart, simEnd) => BaseScenario
-   */
-  setFallbackFactory(factory) {
-    this._fallbackFactory = factory;
   }
 
   getAll() {
@@ -62,20 +54,34 @@ export class ScenarioService {
   newScenario(fromScenario) {
     const newId = `u:${this._registry.getNextUserScenarioId()}`;
     const schema = fromScenario?.scenarioClass?.getParamSchema?.() ?? [];
-    const params = schema.map(s => ({ name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue }));
+    // Prefer the pre-populated params array from fromScenario (set by ScenarioLoader after
+    // compilation) over recomputing from schema defaults, so edits are preserved.
+    const params = Array.isArray(fromScenario?.params)
+      ? structuredClone(fromScenario.params)
+      : schema.map(s => {
+          const entry = { name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue };
+          if (s.node) entry.node = s.node;
+          return entry;
+        });
     const scenario = {
-      id:           newId,
-      name:         'New Scenario',
-      order:        100,
-      prebuilt:     false,
-      scenarioId:   fromScenario?.id ?? null,
-      simStart:     fromScenario?.simStart ?? '2026-01-01',
-      simEnd:       fromScenario?.simEnd   ?? '2041-01-01',
-      events:       [],
-      handlers:     [],
-      actions:      [],
-      reducers:     [],
-      initialState: {},
+      id:             newId,
+      name:           'New Scenario',
+      order:          100,
+      prebuilt:       false,
+      scenarioId:     fromScenario?.id ?? null,
+      simStart:       fromScenario?.simStart ?? new Date(Date.UTC(2026, 0, 1)),
+      simEnd:         fromScenario?.simEnd   ?? new Date(Date.UTC(2041, 0, 1)),
+      events:         structuredClone(fromScenario?.events         ?? []),
+      handlers:       structuredClone(fromScenario?.handlers       ?? []),
+      actions:        structuredClone(fromScenario?.actions        ?? []),
+      reducers:       structuredClone(fromScenario?.reducers       ?? []),
+      initialState:   structuredClone(fromScenario?.initialState   ?? {}),
+      toolsets:       structuredClone(fromScenario?.toolsets        ?? []),
+      scenarioClass:  fromScenario?.scenarioClass ?? null,
+      persons:        structuredClone(fromScenario?.persons         ?? []),
+      accounts:       structuredClone(fromScenario?.accounts        ?? []),
+      realProperties: structuredClone(fromScenario?.realProperties  ?? []),
+      collectibles:   structuredClone(fromScenario?.collectibles    ?? []),
       params,
     };
     this._registry.save(scenario, true);
@@ -95,31 +101,26 @@ export class ScenarioService {
    *
    * Resolution order:
    *  1. Active pre-built → use its factory directly.
-   *  2. Active user scenario with a scenarioId → use the matching prebuilt factory.
-   *  3. Active user scenario without scenarioId → use the first prebuilt factory.
+   *  2. Active user scenario with a matching scenarioId → use that prebuilt's factory.
+   *  3. Active user scenario without a match → fall back to the first prebuilt's factory.
    */
   createActiveScenario() {
     const active = this.getActive();
+    if (!active) throw new Error('No active scenario');
 
-    if (active?.prebuilt) return active.factory(
+    if (active.prebuilt) return active.factory(
         this._getParams(active),
         this._getInitialState(active),
         new Date(active.simStart), new Date(active.simEnd));
 
-    if (active) {
-      const preBuiltParent = this._registry.get(active.scenarioId);
-      const factory = preBuiltParent?.factory;
-      if (factory) return factory(
-        this._getParams(active), this._getInitialState(active),
-          new Date(active.simStart), new Date(active.simEnd)
-      );
+    const parent  = this._registry.get(active.scenarioId);
+    const factory = parent?.factory ?? this._registry.getPrebuiltScenarios()[0]?.factory;
+    if (!factory) throw new Error('No prebuilt scenario factory available');
 
-      if (this._fallbackFactory) return this._fallbackFactory(
-        this._getParams(active), this._getInitialState(active),
-        new Date(active.simStart), new Date(active.simEnd)
-      );
-    }
-    throw new Error('No scenario factory available — register a fallbackFactory via setFallbackFactory()');
+    return factory(
+      this._getParams(active), this._getInitialState(active),
+      new Date(active.simStart), new Date(active.simEnd),
+    );
   }
 
   _getParams(scenario) {

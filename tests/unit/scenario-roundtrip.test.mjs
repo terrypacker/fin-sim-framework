@@ -179,18 +179,16 @@ const STUB_UI = {
 };
 
 /**
- * Build and fully initialise an IntlRetirementScenario.
+ * Build and fully initialise an IntlRetirementScenario using the toolset path.
  * Returns { scenario, sim, config } where config is the serialized form captured
  * BEFORE the simulation is run — it represents the canonical initial state.
+ *
+ * Uses sim.state (post-compilation) as initialState so that currentPeriods and
+ * other toolset-provided state survive the serialize→deserialize round-trip.
  */
 function buildIntlAndSerialize() {
   ServiceRegistry.reset();
-  const scenario = new IntlRetirementScenario({
-    eventSchedulerUI: STUB_UI,
-    context: ServiceRegistry.getInstance().simulationContext,
-  });
-  scenario.buildSim();
-  scenario.loadDefaults();
+  const scenario = IntlRetirementScenario.buildAndCompile({});
 
   const services = ServiceRegistry.getInstance();
   const config = ScenarioSerializer.serialize(
@@ -201,7 +199,7 @@ function buildIntlAndSerialize() {
     true,
     scenario.simStart,
     scenario.simEnd,
-    scenario.initialState,
+    scenario.sim.state,  // capture compiled state for correct currentPeriods/inflation
     [],
   );
 
@@ -221,7 +219,7 @@ function restoreFromConfig(config) {
     simEnd:       new Date(config.simEnd),
   });
   scenario.buildSim();
-  ScenarioSerializer.deserialize(config, ServiceRegistry.getInstance());
+  ScenarioSerializer.deserializeGraph(config, ServiceRegistry.getInstance());
   return { scenario, sim: scenario.sim };
 }
 

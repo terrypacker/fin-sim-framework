@@ -9,12 +9,11 @@
  */
 
 /**
- * BaseAccountModule — abstract base for country+year account mechanics modules.
+ * BaseAccountModule — abstract base for country+year account rule providers.
  *
- * Subclasses register:
- *   - Event handlers (age gates, residency checks, action dispatch)
- *   - Stage-1 (CASH_FLOW priority) reducers that mutate account balances and
- *     emit _TAX child actions via next:[] for cross-country tax classification
+ * Subclasses expose query hooks (e.g. getEarlyWithdrawalRules) consumed by the
+ * AccountRulesEngine at runtime.  Handler and reducer registration is handled
+ * exclusively by toolsets — modules do not instantiate handlers or reducers.
  */
 export class BaseAccountModule {
   /** @returns {string}  e.g. 'US' or 'AU' */
@@ -25,29 +24,6 @@ export class BaseAccountModule {
   /** @returns {number}  e.g. 2025 or 2026 */
   get year() {
     throw new Error(`${this.constructor.name}: year not implemented`);
-  }
-
-  /**
-   * Create all Reducer instances for this module.
-   * Called by TaxService to route registration through the service layer so
-   * items appear in the config graph.
-   *
-   * @param {import('../services/account-service.js').AccountService} accountService
-   * @returns {import('../../simulation-framework/reducers.js').Reducer[]}
-   */
-  createReducers(accountService) {
-    throw new Error(`${this.constructor.name}: createReducers not implemented`);
-  }
-
-  /**
-   * Create all HandlerEntry instances for this module.
-   * Called by TaxService to route registration through the service layer so
-   * items appear in the config graph.
-   *
-   * @returns {import('../../simulation-framework/handlers.js').HandlerEntry[]}
-   */
-  createHandlers() {
-    throw new Error(`${this.constructor.name}: createHandlers not implemented`);
   }
 
   /**

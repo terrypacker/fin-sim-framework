@@ -20,7 +20,6 @@
 import { WorkbenchApp }                        from './workbench-app.js';
 import { PrebuiltScenario }                   from '../scenarios/prebuilt-scenario.js';
 import { IntlRetirementScenario }             from '../scenarios/intl-retirement-scenario.js';
-import { SimulationWorkbenchDefaultScenario } from '../scenarios/simulation-workbench-default-scenario.js';
 import {ServiceRegistry} from "../services/service-registry.js";
 
 const CHART_SERIES = [
@@ -43,27 +42,14 @@ const PREBUILT_SCENARIOS = [
     order:         1,
     prebuilt:      true,
     active:        true,
-    simStart:      '2026-01-01',
-    simEnd:        '2041-01-01',
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:  new Date(Date.UTC(2041, 0, 1)),
     scenarioClass: IntlRetirementScenario,
     factory:  (params, _initialState, simStart, simEnd) => new IntlRetirementScenario({
       context: ServiceRegistry.getInstance().simulationContext,
       params,
       simStart,
       simEnd,
-    }),
-  }),
-  new PrebuiltScenario({
-    id:       'workbench-default',
-    label:    'Workbench Default',
-    order:    2,
-    prebuilt: true,
-    simStart: '2026-01-01',
-    simEnd:   '2041-01-01',
-    factory:  (_params, _initialState, simStart, simEnd) => new SimulationWorkbenchDefaultScenario({
-      context: ServiceRegistry.getInstance().simulationContext,
-      simStart: simStart,
-      simEnd: simEnd
     }),
   }),
 ];

@@ -40,9 +40,10 @@ import { BaseScenario }       from '../../src/scenarios/base-scenario.js';
 import { ScenarioSerializer } from '../../src/scenarios/scenario-serializer.js';
 import { ToolsetRegistry }    from '../../src/scenarios/toolsets/toolset-registry.js';
 import { ScenarioCompiler }   from '../../src/scenarios/toolsets/scenario-compiler.js';
-import { AU_BANKING }         from '../../src/scenarios/toolsets/au-banking-toolset.js';
-import { AU_TAX }             from '../../src/scenarios/toolsets/au-tax-toolset.js';
-import { AU_RETIREMENT }      from '../../src/scenarios/toolsets/au-retirement-toolset.js';
+import { AU_BANKING }    from '../../src/scenarios/toolsets/au-banking-toolset.js';
+import { AU_TAX }        from '../../src/scenarios/toolsets/au-tax-toolset.js';
+import { AU_INCOME }     from '../../src/scenarios/toolsets/au-income-toolset.js';
+import { AU_RETIREMENT } from '../../src/scenarios/toolsets/au-retirement-toolset.js';
 
 import { TaxService }           from '../../src/finance/tax-service.js';
 import { DynamicTaxReducer }    from '../../src/finance/tax/dynamic-tax-reducer.js';
@@ -305,6 +306,7 @@ function loadAuRetirementScenario(config) {
   const toolsetRegistry = new ToolsetRegistry();
   toolsetRegistry.register(AU_BANKING);
   toolsetRegistry.register(AU_TAX);
+  toolsetRegistry.register(AU_INCOME);
   toolsetRegistry.register(AU_RETIREMENT);
 
   const compiler = new ScenarioCompiler(toolsetRegistry);
@@ -367,6 +369,7 @@ test('AU_RETIREMENT: INTL_AU_SAVINGS_INTEREST event is registered', () => {
   const toolsetRegistry = new ToolsetRegistry();
   toolsetRegistry.register(AU_BANKING);
   toolsetRegistry.register(AU_TAX);
+  toolsetRegistry.register(AU_INCOME);
   toolsetRegistry.register(AU_RETIREMENT);
 
   const compiler = new ScenarioCompiler(toolsetRegistry);
@@ -393,6 +396,7 @@ test('AU_RETIREMENT: INTL_SUPER_EARNINGS event is registered', () => {
   const toolsetRegistry = new ToolsetRegistry();
   toolsetRegistry.register(AU_BANKING);
   toolsetRegistry.register(AU_TAX);
+  toolsetRegistry.register(AU_INCOME);
   toolsetRegistry.register(AU_RETIREMENT);
 
   const compiler = new ScenarioCompiler(toolsetRegistry);
@@ -429,6 +433,7 @@ test('AU_RETIREMENT: super earnings event fires (INTL_SUPER_EARNINGS registered 
   const toolsetRegistry = new ToolsetRegistry();
   toolsetRegistry.register(AU_BANKING);
   toolsetRegistry.register(AU_TAX);
+  toolsetRegistry.register(AU_INCOME);
   toolsetRegistry.register(AU_RETIREMENT);
 
   const compiler = new ScenarioCompiler(toolsetRegistry);

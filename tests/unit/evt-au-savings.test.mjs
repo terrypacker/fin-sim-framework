@@ -28,47 +28,61 @@
 import { test, beforeEach } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Account } from '../../src/finance/assets/account.js';
-import { FinancialState } from '../../src/finance/state/financial-state.js';
-import { Simulation } from '../../src/simulation-framework/simulation.js';
-import { TaxService } from '../../src/finance/tax-service.js';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
-import { PeriodService } from '../../src/finance/period/period-service.js';
-import { buildAuFiscalYear, applyTo } from '../../src/finance/period/period-builder.js';
+import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
+import { BaseScenario }    from '../../src/index.js';
 
 beforeEach(() => ServiceRegistry.reset());
 
-// Jan 1 2026 falls within AU fiscal year starting Jul 1 2025 (FY2025-26).
-function buildAuPeriodService() {
-  const ps = new PeriodService();
-  applyTo(ps, buildAuFiscalYear(2025));
-  return ps;
+function loadToolsetScenario(config) {
+  const services = ServiceRegistry.getInstance();
+  const scenario = new BaseScenario({
+    context:  services.simulationContext,
+    simStart: new Date(config.simStart),
+    simEnd:   new Date(config.simEnd),
+  });
+  scenario.buildSim();
+  new ScenarioLoader().load(structuredClone(config), services);
+  return { scenario, sim: scenario.sim };
 }
 
-const START_DATE = new Date(2026, 0, 1);
-
-function buildAuSavingsSim({
-  initialChecking    = 20000,
-  auSavingsBalance   = 0,
-  isAuResident       = true,
+function makeAuSavingsConfig({
+  initialChecking  = 20000,
+  auSavingsBalance = 0,
+  isAuResident     = true,
 } = {}) {
-  const registry = ServiceRegistry.getInstance();
-  const sim = new Simulation(START_DATE, { initialState: new FinancialState({
-    checkingAccount: new Account(initialChecking),
-    auSavingsAccount: { balance: auSavingsBalance },
-    isAuResident,
-    usOrdinaryIncomeYTD:           0,
-    auOrdinaryIncomeYTD:           0,
-    auNonResidentWithholdingYTD:   0,
-    ftcYTD:                        0,
-  }) });
-  registry.simulationRegistry.register('primary', sim);
-  registry.simulationSync.setSimStart(START_DATE);
-  const taxService = new TaxService();
-  taxService.setup(sim, ['AU'], buildAuPeriodService());
-  taxService.registerHandlersAndReducers(registry, ['AU']);
-
-  return { sim };
+  return {
+    toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'US_AU_CROSS_BORDER'],
+    simStart: '2026-01-01',
+    simEnd:   '2028-01-01',
+    parameters: {
+      monthlyExpenses: 0, inflationAdjust: false, inflationRate: 0,
+      rothGrowthRate: 0, iraGrowthRate: 0, k401GrowthRate: 0,
+      brokerageGrowthRate: 0, brokerageDividendRate: 0, fixedIncomeInterestRate: 0,
+      usSavingsInterestRate: 0, auSavingsInterestRate: 0,
+      superGrowthRate: 0, auStockGrowthRate: 0, auStockDividendRate: 0,
+      isAuResident,
+    },
+    persons: [{
+      __type: 'Person', id: 'primary', name: 'Primary', birthDate: '1966-01-01',
+      citizen: ['AU'], lifeExpectancy: 90, monthlyWage: 0,
+      retirementDate: '2025-01-01', socialSecurityMonthly: 0,
+    }],
+    accounts: [
+      {
+        __type: 'SavingsAccount', id: 'checking', name: 'Checking',
+        role: 'us-savings', stateKey: 'checkingAccount',
+        initialValue: initialChecking, ownershipType: 'sole', ownerId: 'primary',
+        minimumBalance: 0, country: 'US', currency: { code: 'USD', symbol: '$' },
+      },
+      {
+        __type: 'SavingsAccount', id: 'au-savings', name: 'AU Savings',
+        role: 'au-savings', stateKey: 'auSavingsAccount',
+        initialValue: auSavingsBalance, ownershipType: 'sole', ownerId: 'primary',
+        minimumBalance: 0, country: 'AU', currency: { code: 'AUD', symbol: '$' },
+      },
+    ],
+  };
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -76,7 +90,7 @@ function buildAuSavingsSim({
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-16: AU savings contribution increases auSavingsAccount and debits checking', () => {
-  const { sim } = buildAuSavingsSim({ initialChecking: 10000 });
+  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ initialChecking: 10000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_CONTRIBUTION', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -85,7 +99,7 @@ test('EVT-16: AU savings contribution increases auSavingsAccount and debits chec
 });
 
 test('EVT-16: AU savings contribution is not a US or AU taxable event', () => {
-  const { sim } = buildAuSavingsSim({ initialChecking: 10000, isAuResident: true });
+  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ initialChecking: 10000, isAuResident: true }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_CONTRIBUTION', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -99,7 +113,7 @@ test('EVT-16: AU savings contribution is not a US or AU taxable event', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-17: AU savings withdrawal decreases auSavingsAccount and credits checking', () => {
-  const { sim } = buildAuSavingsSim({ initialChecking: 5000, auSavingsBalance: 20000 });
+  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ initialChecking: 5000, auSavingsBalance: 20000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_WITHDRAWAL', data: { amount: 8000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -108,7 +122,7 @@ test('EVT-17: AU savings withdrawal decreases auSavingsAccount and credits check
 });
 
 test('EVT-17: AU savings withdrawal is not a US or AU taxable event', () => {
-  const { sim } = buildAuSavingsSim({ initialChecking: 5000, auSavingsBalance: 20000, isAuResident: true });
+  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ initialChecking: 5000, auSavingsBalance: 20000, isAuResident: true }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_WITHDRAWAL', data: { amount: 8000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -122,11 +136,7 @@ test('EVT-17: AU savings withdrawal is not a US or AU taxable event', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-18: AU savings earnings (resident) stay in account', () => {
-  const { sim } = buildAuSavingsSim({
-    initialChecking: 5000,
-    auSavingsBalance: 20000,
-    isAuResident: true,
-  });
+  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ initialChecking: 5000, auSavingsBalance: 20000, isAuResident: true }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_EARNINGS', data: { amount: 600 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -135,7 +145,7 @@ test('EVT-18: AU savings earnings (resident) stay in account', () => {
 });
 
 test('EVT-18: AU savings earnings (resident) are US ordinary income taxable', () => {
-  const { sim } = buildAuSavingsSim({ auSavingsBalance: 20000, isAuResident: true });
+  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ auSavingsBalance: 20000, isAuResident: true }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_EARNINGS', data: { amount: 600 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -143,11 +153,12 @@ test('EVT-18: AU savings earnings (resident) are US ordinary income taxable', ()
 });
 
 test('EVT-18: AU savings earnings (resident) are ALWAYS AU taxable at ordinary income rate', () => {
-  const { sim } = buildAuSavingsSim({ auSavingsBalance: 20000, isAuResident: true });
+  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ auSavingsBalance: 20000, isAuResident: true }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_EARNINGS', data: { amount: 600 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 600);
+  // In the toolset path, state.people is non-null → per-person maps are used instead of flat YTD fields
+  assert.strictEqual(sim.state.auPersonOrdinaryIncomeYTD?.['primary'], 600);
   assert.strictEqual(sim.state.auNonResidentWithholdingYTD, 0); // resident pays ordinary rate
   assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded');
 });
@@ -157,11 +168,7 @@ test('EVT-18: AU savings earnings (resident) are ALWAYS AU taxable at ordinary i
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-19: AU savings earnings (non-resident) stay in account', () => {
-  const { sim } = buildAuSavingsSim({
-    initialChecking: 5000,
-    auSavingsBalance: 20000,
-    isAuResident: false,
-  });
+  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ initialChecking: 5000, auSavingsBalance: 20000, isAuResident: false }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_EARNINGS', data: { amount: 600 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -170,7 +177,7 @@ test('EVT-19: AU savings earnings (non-resident) stay in account', () => {
 });
 
 test('EVT-19: AU savings earnings (non-resident) are US ordinary income taxable', () => {
-  const { sim } = buildAuSavingsSim({ auSavingsBalance: 20000, isAuResident: false });
+  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ auSavingsBalance: 20000, isAuResident: false }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_EARNINGS', data: { amount: 600 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -178,11 +185,12 @@ test('EVT-19: AU savings earnings (non-resident) are US ordinary income taxable'
 });
 
 test('EVT-19: AU savings earnings (non-resident) are ALWAYS AU taxable at non-resident withholding rate', () => {
-  const { sim } = buildAuSavingsSim({ auSavingsBalance: 20000, isAuResident: false });
+  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ auSavingsBalance: 20000, isAuResident: false }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_EARNINGS', data: { amount: 600 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.auNonResidentWithholdingYTD, 600);
+  // In the toolset path, state.people is non-null → per-person maps are used instead of flat YTD fields
+  assert.strictEqual(sim.state.auPersonNonResidentWithholdingYTD?.['primary'], 600);
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0); // non-resident pays withholding rate
   assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded');
 });

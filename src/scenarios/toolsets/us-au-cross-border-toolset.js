@@ -57,6 +57,18 @@ export const US_AU_CROSS_BORDER = {
         defaultValue: 0.03,
         description: 'AU inflation rate when running combined US+AU scenario',
       },
+      {
+        key: 'exchangeRateUsdToAud', label: 'Exchange Rate USD→AUD',
+        type: 'Number', group: 'Cross Border', mc: true, opt: false,
+        defaultValue: 1.55,
+        description: 'USD to AUD exchange rate applied on international transfers',
+      },
+      {
+        key: 'intlTransferFeeUsd', label: 'International Transfer Fee (USD)',
+        type: 'Number', group: 'Cross Border', mc: true, opt: false,
+        defaultValue: 15,
+        description: 'Fixed fee per international wire transfer in USD',
+      },
     ];
   },
 
@@ -67,6 +79,8 @@ export const US_AU_CROSS_BORDER = {
     return {
       isAuResident:         p.isAuResident ?? false,
       ftcYTD:               0,
+      exchangeRateUsdToAud: p.exchangeRateUsdToAud ?? 1.55,
+      intlTransferFeeUsd:   p.intlTransferFeeUsd   ?? 15,
       inflationRates:       {
         US: p.inflationRate    ?? 0.03,
         AU: p.auInflationRate  ?? 0.03,

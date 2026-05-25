@@ -110,7 +110,9 @@ test('_refreshScenarioSelect: pre-selects the active scenario', () => {
 test('_populateScenarioForm: fills name, dates, and initialState for user scenario', () => {
   const view = new ScenarioTabView();
   view._populateScenarioForm({
-    name: 'My Save', simStart: '2028-06-01', simEnd: '2043-06-01',
+    name: 'My Save',
+    simStart: new Date(Date.UTC(2028, 5, 1)),
+    simEnd: new Date(Date.UTC(2043, 5, 1)),
     initialState: { metrics: { amount: 42 } }, params: [],
   });
   assert.strictEqual(document.getElementById('scenarioName').value,  'My Save');
@@ -120,13 +122,19 @@ test('_populateScenarioForm: fills name, dates, and initialState for user scenar
 
 test('_populateScenarioForm: uses label as name for prebuilt (no name property)', () => {
   const view = new ScenarioTabView();
-  view._populateScenarioForm({ label: 'Alpha Scenario', simStart: '2027-01-01', simEnd: '2042-01-01', prebuilt: true, params: [] });
+  view._populateScenarioForm({ label: 'Alpha Scenario',
+    simStart: new Date(Date.UTC(2027, 0, 1)),
+    simEnd: new Date(Date.UTC(2042, 0, 1)),
+    prebuilt: true, params: [] });
   assert.strictEqual(document.getElementById('scenarioName').value, 'Alpha Scenario');
 });
 
 test('_populateScenarioForm: initialStateJson defaults to {"metrics":{}}', () => {
   const view = new ScenarioTabView();
-  view._populateScenarioForm({ name: 'S', simStart: '2026-01-01', simEnd: '2041-01-01', params: [] });
+  view._populateScenarioForm({ name: 'S',
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd: new Date(Date.UTC(2041, 0, 1)),
+    params: [] });
   const raw = document.getElementById('initialStateJson').value;
   assert.deepStrictEqual(JSON.parse(raw), { metrics: {} });
 });
