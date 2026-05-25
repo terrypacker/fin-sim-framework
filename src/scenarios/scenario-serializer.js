@@ -859,6 +859,8 @@ export class ScenarioSerializer {
         account = new Account(d.initialValue ?? 0, opts);
     }
     if (d.stateKey) account.stateKey = d.stateKey;
+    if (d.rolloverContribBasis  != null) account.rolloverContribBasis  = d.rolloverContribBasis;
+    if (d.rolloverEarningsBasis != null) account.rolloverEarningsBasis = d.rolloverEarningsBasis;
     return account;
   }
 

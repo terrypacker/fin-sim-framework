@@ -87,6 +87,8 @@ function _accountToStatePlain(account) {
     plain.loanBalance              = account.loanBalance   ?? 0;
     plain.minimumAge               = account.minimumAge    ?? null;
     plain.balanceAtResidencyChange = account.balanceAtResidencyChange ?? null;
+    if (account.rolloverContribBasis  !== undefined) plain.rolloverContribBasis  = account.rolloverContribBasis;
+    if (account.rolloverEarningsBasis !== undefined) plain.rolloverEarningsBasis = account.rolloverEarningsBasis;
   }
   return plain;
 }
@@ -201,6 +203,7 @@ export const US_RETIREMENT = {
       scenarioFailed:       false,
       cumulativeDeficit:    0,
       deficitMonths:        0,
+      personBirthDate:      context.people[0]?.birthDate ?? null,
     };
 
     // Account state entries (handlers read state[stateKey] for balance lookups)

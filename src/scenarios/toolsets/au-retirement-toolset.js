@@ -122,6 +122,7 @@ export const AU_RETIREMENT = {
       inflationRates:          { AU: p.inflationRate },
       inflationAccumulator:    { AU: 1.0 },
       superWithdrawalBlocked:  false,
+      personBirthDate:         context.people[0]?.birthDate ?? null,
     };
 
     if (!sharedAlreadySetup) {
@@ -340,6 +341,8 @@ function _accountToStatePlain(account) {
     plain.loanBalance              = account.loanBalance   ?? 0;
     plain.minimumAge               = account.minimumAge    ?? null;
     plain.balanceAtResidencyChange = account.balanceAtResidencyChange ?? null;
+    if (account.rolloverContribBasis  !== undefined) plain.rolloverContribBasis  = account.rolloverContribBasis;
+    if (account.rolloverEarningsBasis !== undefined) plain.rolloverEarningsBasis = account.rolloverEarningsBasis;
   }
   return plain;
 }

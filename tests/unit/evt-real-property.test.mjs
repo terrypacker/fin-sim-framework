@@ -16,212 +16,29 @@
  * EVT-34  US House Sale          into checking  US: capital gain after $500K exemption,
  *                                                AU: TODO (??) if resident, FTC
  *
- * Run with: node --test tests/evt-real-property.test.mjs
+ * Run with: node --test tests/unit/evt-real-property.test.mjs
  */
 
 import { test, beforeEach } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { FinancialState } from '../../src/finance/state/financial-state.js';
-import { Simulation } from '../../src/simulation-framework/simulation.js';
-import { TaxService } from '../../src/finance/tax-service.js';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
-import { PeriodService } from '../../src/finance/period/period-service.js';
-import { buildUsCalendarYear, buildAuFiscalYear, applyTo } from '../../src/finance/period/period-builder.js';
-import {ScenarioLoader} from "../../src/scenarios/scenario-loader.js";
-import {BaseScenario} from "../../src/index.js";
+import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
+import { BaseScenario }    from '../../src/index.js';
 
-import { HandlerEntry }    from '../../src/simulation-framework/handlers.js';
-import {
-  AmountAction, Action, FieldAction, FieldValueAction, ScriptedAction, RecordBalanceAction,
-} from '../../src/simulation-framework/actions.js';
-import {
-  FieldReducer, NoOpReducer, ArrayReducer, NumericSumReducer, MultiplicativeReducer, ScriptedReducer,
-} from '../../src/simulation-framework/reducers.js';
-import { ReducerBuilder }  from '../../src/simulation-framework/builders/reducer-builder.js';
-import { BaseEvent }       from '../../src/simulation-framework/events/base-event.js';
-import { EventSeries }     from '../../src/simulation-framework/events/event-series.js';
-import { OneOffEvent }     from '../../src/simulation-framework/events/one-off-event.js';
+beforeEach(() => ServiceRegistry.reset());
 
-import { DynamicTaxReducer }    from '../../src/finance/tax/dynamic-tax-reducer.js';
-import { PeriodAdvanceReducer, PeriodAdvanceHandler }
-  from '../../src/finance/tax/period-advance-classes.js';
-import { TaxSettleHandler, TaxSettleApplyReducer, TaxPaymentDebitReducer }
-  from '../../src/finance/tax/tax-settle-classes.js';
-import {
-  RothContributionApplyReducer, RothWithdrawalContribApplyReducer,
-  RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer,
-  RothContributionHandler, RothWithdrawalContributionsHandler,
-  RothWithdrawalEarningsHandler, RothEarningsHandler,
-} from '../../src/finance/account-rules/us/roth-classes.js';
-import {
-  IraContributionApplyReducer, IraWithdrawalContribApplyReducer,
-  IraWithdrawalEarningsApplyReducer, IraEarningsApplyReducer,
-  IraContributionHandler, IraWithdrawalContributionsHandler,
-  IraWithdrawalEarningsHandler, IraEarningsHandler,
-} from '../../src/finance/account-rules/us/ira-classes.js';
-import {
-  K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer,
-  K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler,
-} from '../../src/finance/account-rules/us/k401-classes.js';
-import {
-  FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer,
-  FixedIncomeEarningsApplyReducer, StockContributionApplyReducer,
-  StockDividendApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer,
-  FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler,
-  StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler,
-} from '../../src/finance/account-rules/us/us-brokerage-classes.js';
-import { UsHouseSaleApplyReducer, UsHouseSaleHandler }
-  from '../../src/finance/account-rules/us/us-real-property-classes.js';
-import {
-  SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer,
-  SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer,
-  SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler,
-  SeIncomeUsHandler, BonusHandler, CompanySaleHandler,
-} from '../../src/finance/account-rules/us/us-income-classes.js';
-import {
-  CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer,
-  CollectibleSaleHandler, CollectibleValueChangeHandler,
-} from '../../src/finance/account-rules/us/us-collectible-classes.js';
-import {
-  IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
-  IraRolloverWithdrawalHandler, IraRmdHandler,
-} from '../../src/finance/account-rules/us/ira-rollover-classes.js';
-import {
-  RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
-  RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer,
-  RothRolloverContributionHandler, RothRolloverEarningsHandler,
-  RothRolloverWithdrawalContributionsHandler, RothRolloverWithdrawalEarningsHandler,
-} from '../../src/finance/account-rules/us/roth-rollover-classes.js';
-import { RothConversionApplyReducer, RothConversionHandler, RothConversionPolicyHandler }
-  from '../../src/finance/account-rules/us/roth-conversion-classes.js';
-import { AuSeIncomeApplyReducer, AuSeIncomeHandler }
-  from '../../src/finance/account-rules/au/au-income-classes.js';
-import {
-  AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer,
-  AuSavingsEarningsApplyReducer, AuSavingsContributionHandler,
-  AuSavingsWithdrawalHandler, AuSavingsEarningsHandler,
-} from '../../src/finance/account-rules/au/au-savings-classes.js';
-import {
-  SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer,
-  SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer,
-  SuperContributionHandler, SuperWithdrawalContributionsHandler,
-  SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler,
-} from '../../src/finance/account-rules/au/au-super-classes.js';
-import {
-  AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer,
-  AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer,
-  AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer,
-  AuDividendFrankedResidentHandler, AuDividendFrankedNonResidentHandler,
-  AuDividendUnfrankedResidentHandler, AuDividendUnfrankedNonResidentHandler,
-  AuStockEarningsHandler, AuStockWithdrawalHandler,
-} from '../../src/finance/account-rules/au/au-brokerage-classes.js';
-import { AuHouseSaleApplyReducer, AuHouseSaleHandler }
-  from '../../src/finance/account-rules/au/au-real-property-classes.js';
-import { UsSavingsInterestMonthlyHandler }  from '../../src/finance/handlers/us-savings-interest-handler.js';
-import { MonthlyExpensesHandler }           from '../../src/finance/handlers/monthly-expenses-handler.js';
-import { MonthlyWagesHandler }              from '../../src/finance/handlers/monthly-wages-handler.js';
-import { MonthlySocialSecurityHandler }     from '../../src/finance/handlers/monthly-social-security-handler.js';
-import { IntlTransferToUsHandler, IntlTransferToAuHandler }
-  from '../../src/finance/handlers/intl-transfer-handlers.js';
-import {
-  AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler,
-  IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,
-  IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
-} from '../../src/finance/handlers/earnings-handlers.js';
-import { DividendScheduledHandler }   from '../../src/finance/handlers/dividend-scheduled-handler.js';
-import { ChangeResidencyHandler }     from '../../src/finance/handlers/change-residency-handler.js';
-import { OutOfFundsHandler }          from '../../src/finance/handlers/out-of-funds-handler.js';
-import { ChangeResidencyApplyReducer } from '../../src/finance/reducers/change-residency-apply-reducer.js';
-import { ExpenseDebitReducer }         from '../../src/finance/reducers/expense-debit-reducer.js';
-import { IntlTransferApplyReducer }    from '../../src/finance/reducers/intl-transfer-apply-reducer.js';
-import { ReplenishSavingsReducer }     from '../../src/finance/reducers/replenish-savings-reducer.js';
-import { SetOutOfFundsDateReducer }    from '../../src/finance/reducers/set-out-of-funds-date-reducer.js';
-import { AccumulateDeficitReducer }    from '../../src/finance/reducers/accumulate-deficit-reducer.js';
-import { OutOfFundsReducer }           from '../../src/finance/reducers/out-of-funds-reducer.js';
-import { InflationAdjustReducer }      from '../../src/finance/reducers/inflation-adjust-reducer.js';
-import { StockDividendCashApplyReducer }   from '../../src/finance/reducers/stock-dividend-cash-apply-reducer.js';
-import { UsSavingsInterestCreditReducer }  from '../../src/finance/reducers/us-savings-interest-credit-reducer.js';
-import { Account, CheckingAccount, SavingsAccount } from '../../src/finance/assets/account.js';
-import {
-  InvestmentAccount, BrokerageAccount, FourOhOneKAccount,
-  RothAccount, TraditionalIRAAccount, SuperannuationAccount,
-} from '../../src/finance/assets/investment-account.js';
-import { Person } from '../../src/finance/person.js';
-// ─── FinSimLib global (required by ScenarioSerializer's _makeX methods) ─────────
-
-globalThis.FinSimLib = {
-  Engine: {
-    Simulation, HandlerEntry,
-    AmountAction, Action, FieldAction, ScriptedAction, FieldValueAction, RecordBalanceAction,
-    FieldReducer, NoOpReducer, ArrayReducer, NumericSumReducer, MultiplicativeReducer, ScriptedReducer,
-    ReducerBuilder,
-    BaseEvent, EventSeries, OneOffEvent,
-  },
-  Scenarios: {},
-  Finance: {
-    TaxService, DynamicTaxReducer,
-    PeriodAdvanceReducer, PeriodAdvanceHandler,
-    TaxSettleHandler, TaxSettleApplyReducer, TaxPaymentDebitReducer,
-    RothContributionApplyReducer, RothWithdrawalContribApplyReducer,
-    RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer,
-    RothContributionHandler, RothWithdrawalContributionsHandler,
-    RothWithdrawalEarningsHandler, RothEarningsHandler,
-    IraContributionApplyReducer, IraWithdrawalContribApplyReducer,
-    IraWithdrawalEarningsApplyReducer, IraEarningsApplyReducer,
-    IraContributionHandler, IraWithdrawalContributionsHandler,
-    IraWithdrawalEarningsHandler, IraEarningsHandler,
-    K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer,
-    K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler,
-    FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer,
-    FixedIncomeEarningsApplyReducer, StockContributionApplyReducer,
-    StockDividendApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer,
-    FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler,
-    StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler,
-    UsHouseSaleApplyReducer, UsHouseSaleHandler,
-    SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer,
-    SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer,
-    SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler,
-    SeIncomeUsHandler, BonusHandler, CompanySaleHandler,
-    CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer,
-    CollectibleSaleHandler, CollectibleValueChangeHandler,
-    IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
-    IraRolloverWithdrawalHandler, IraRmdHandler,
-    RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
-    RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer,
-    RothRolloverContributionHandler, RothRolloverEarningsHandler,
-    RothRolloverWithdrawalContributionsHandler, RothRolloverWithdrawalEarningsHandler,
-    RothConversionApplyReducer, RothConversionHandler, RothConversionPolicyHandler,
-    AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer,
-    AuSavingsContributionHandler, AuSavingsWithdrawalHandler, AuSavingsEarningsHandler,
-    SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer,
-    SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer,
-    SuperContributionHandler, SuperWithdrawalContributionsHandler,
-    SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler,
-    AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer,
-    AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer,
-    AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer,
-    AuDividendFrankedResidentHandler, AuDividendFrankedNonResidentHandler,
-    AuDividendUnfrankedResidentHandler, AuDividendUnfrankedNonResidentHandler,
-    AuStockEarningsHandler, AuStockWithdrawalHandler,
-    AuHouseSaleApplyReducer, AuHouseSaleHandler,
-    AuSeIncomeApplyReducer, AuSeIncomeHandler,
-    UsSavingsInterestMonthlyHandler, MonthlyExpensesHandler, MonthlyWagesHandler, MonthlySocialSecurityHandler,
-    IntlTransferToUsHandler, IntlTransferToAuHandler,
-    AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler,
-    DividendScheduledHandler, ChangeResidencyHandler, OutOfFundsHandler,
-    IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,
-    IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
-    ChangeResidencyApplyReducer, ExpenseDebitReducer, IntlTransferApplyReducer,
-    ReplenishSavingsReducer, SetOutOfFundsDateReducer, AccumulateDeficitReducer,
-    OutOfFundsReducer, InflationAdjustReducer,
-    StockDividendCashApplyReducer, UsSavingsInterestCreditReducer,
-    Account, CheckingAccount, SavingsAccount,
-    InvestmentAccount, BrokerageAccount, FourOhOneKAccount,
-    RothAccount, TraditionalIRAAccount, SuperannuationAccount,
-    Person,
-  },
-};
+function loadToolsetScenario(config) {
+  const services = ServiceRegistry.getInstance();
+  const scenario = new BaseScenario({
+    context:  services.simulationContext,
+    simStart: new Date(config.simStart),
+    simEnd:   new Date(config.simEnd),
+  });
+  scenario.buildSim();
+  new ScenarioLoader().load(structuredClone(config), services);
+  return { scenario, sim: scenario.sim };
+}
 
 const US_HOUSE_JSON = {
   toolsets: ['US_RETIREMENT', 'US_REAL_PROPERTY'],
@@ -414,63 +231,8 @@ const CROSS_BORDER_HOUSE_JSON = {
   ]
 };
 
-/**
- * Load and run a toolset scenario from a declarative JSON config.
- * Returns { scenario, sim } after running ScenarioLoader.load() (persons/accounts
- * are deserialized and US_RETIREMENT is compiled).
- */
-function loadToolsetScenario(config) {
-  const services = ServiceRegistry.getInstance();
-
-  const scenario = new BaseScenario({
-    context:  services.simulationContext,
-    simStart: new Date(config.simStart),
-    simEnd:   new Date(config.simEnd),
-  });
-  scenario.buildSim();
-
-  new ScenarioLoader().load(structuredClone(config), services);
-
-  return { scenario, sim: scenario.sim };
-}
-
 // End of first quarter 2028 — 3 month-end events (Jan 31, Feb 28, Mar 31).
 const Q1_2028 = new Date(Date.UTC(2028, 2, 31));
-
-// Jan 1 2026: US calendar year 2026, AU fiscal year starting Jul 1 2025 (FY2025-26).
-function buildMixedPeriodService() {
-  const ps = new PeriodService();
-  applyTo(ps, buildUsCalendarYear(2026));
-  applyTo(ps, buildAuFiscalYear(2025));
-  return ps;
-}
-
-const START_DATE = new Date(2026, 0, 1);
-
-function buildRealPropertySim({
-  initialChecking  = 5000,
-  isAuResident     = false,
-} = {}) {
-  const registry = ServiceRegistry.getInstance();
-  const sim = new Simulation(START_DATE, { initialState: new FinancialState({
-    checkingAccount: new Account(initialChecking),
-    isAuResident,
-    usCapitalGainsYTD:           0,
-    auCapitalGainsYTD:           0,
-    auNonResidentWithholdingYTD: 0,
-    ftcYTD:                      0,
-  }) });
-  registry.simulationRegistry.register('primary', sim);
-  registry.simulationSync.setSimStart(START_DATE);
-  // EVT-33 (AU house) + EVT-34 (US house) — needs both country modules
-  const taxService = new TaxService();
-  taxService.setup(sim, ['AU', 'US'], buildMixedPeriodService());
-  taxService.registerHandlersAndReducers(registry, ['AU', 'US']);
-
-  return { sim };
-}
-
-beforeEach(() => ServiceRegistry.reset());
 
 // ══════════════════════════════════════════════════════════════════════════════
 // EVT-33: Australian House Sale

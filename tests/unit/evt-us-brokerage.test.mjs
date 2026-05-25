@@ -26,56 +26,79 @@
 import { test, beforeEach } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { Account } from '../../src/finance/assets/account.js';
-import { FinancialState } from '../../src/finance/state/financial-state.js';
-import { Simulation } from '../../src/simulation-framework/simulation.js';
-import { TaxService } from '../../src/finance/tax-service.js';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
-import { PeriodService } from '../../src/finance/period/period-service.js';
-import { buildUsCalendarYear, applyTo } from '../../src/finance/period/period-builder.js';
+import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
+import { BaseScenario }    from '../../src/index.js';
 
 beforeEach(() => ServiceRegistry.reset());
 
-function buildUsPeriodService(year) {
-  const ps = new PeriodService();
-  applyTo(ps, buildUsCalendarYear(year));
-  return ps;
+function loadToolsetScenario(config) {
+  const services = ServiceRegistry.getInstance();
+  const scenario = new BaseScenario({
+    context:  services.simulationContext,
+    simStart: new Date(config.simStart),
+    simEnd:   new Date(config.simEnd),
+  });
+  scenario.buildSim();
+  new ScenarioLoader().load(structuredClone(config), services);
+  return { scenario, sim: scenario.sim };
 }
 
-const START_DATE = new Date(2026, 0, 1);
-
-function buildBrokerageSim({
-  initialChecking        = 20000,
-  fixedIncomeBalance     = 0,
-  stockBalance           = 0,
-  stockContribBasis      = 0,
-  stockEarningsBasis     = 0,
-  isAuResident           = false,
+function makeBrokerageConfig({
+  initialChecking    = 20000,
+  initialAuSavings   = 50000,
+  fixedIncomeBalance = 0,
+  stockBalance       = 0,
+  stockContribBasis  = 0,
+  stockEarningsBasis = 0,
+  isAuResident       = false,
 } = {}) {
-  const registry = ServiceRegistry.getInstance();
-  const sim = new Simulation(START_DATE, { initialState: new FinancialState({
-    checkingAccount: new Account(initialChecking),
-    fixedIncomeAccount: { balance: fixedIncomeBalance },
-    usStockAccount: {
-      balance:           stockBalance,
-      contributionBasis: stockContribBasis,
-      earningsBasis:     stockEarningsBasis,
+  return {
+    toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'US_AU_CROSS_BORDER'],
+    simStart: '2026-01-01',
+    simEnd:   '2028-01-01',
+    parameters: {
+      monthlyExpenses: 0, inflationAdjust: false, inflationRate: 0,
+      rothGrowthRate: 0, iraGrowthRate: 0, k401GrowthRate: 0,
+      brokerageGrowthRate: 0, brokerageDividendRate: 0, fixedIncomeInterestRate: 0,
+      usSavingsInterestRate: 0, auSavingsInterestRate: 0,
+      superGrowthRate: 0, auStockGrowthRate: 0, auStockDividendRate: 0,
+      isAuResident,
     },
-    isAuResident,
-    usOrdinaryIncomeYTD: 0,
-    usNegativeIncomeYTD: 0,
-    usCapitalGainsYTD:   0,
-    auOrdinaryIncomeYTD: 0,
-    auCapitalGainsYTD:   0,
-    ftcYTD:              0,
-  }) });
-  registry.simulationRegistry.register('primary', sim);
-  registry.simulationSync.setSimStart(START_DATE);
-  const taxService = new TaxService();
-  taxService.setup(sim, ['US'], buildUsPeriodService(2026));
-  taxService.registerHandlersAndReducers(registry, ['US']);
-
-  return { sim };
+    persons: [{
+      __type: 'Person', id: 'primary', name: 'Primary', birthDate: '1966-01-01',
+      citizen: ['US'], lifeExpectancy: 90, monthlyWage: 0,
+      retirementDate: '2025-01-01', socialSecurityMonthly: 0,
+    }],
+    accounts: [
+      {
+        __type: 'SavingsAccount', id: 'checking', name: 'Checking',
+        role: 'us-savings', stateKey: 'checkingAccount',
+        initialValue: initialChecking, ownershipType: 'sole', ownerId: 'primary',
+        minimumBalance: 0, country: 'US', currency: { code: 'USD', symbol: '$' },
+      },
+      {
+        __type: 'SavingsAccount', id: 'au-savings', name: 'AU Savings',
+        role: 'au-savings', stateKey: 'auSavingsAccount',
+        initialValue: initialAuSavings, ownershipType: 'sole', ownerId: 'primary',
+        minimumBalance: 0, country: 'AU', currency: { code: 'AUD', symbol: '$' },
+      },
+      {
+        __type: 'Account', id: 'fixed-income', name: 'Fixed Income',
+        role: 'fixed-income', stateKey: 'fixedIncomeAccount',
+        initialValue: fixedIncomeBalance, ownershipType: 'sole', ownerId: 'primary',
+        country: 'US', currency: { code: 'USD', symbol: '$' },
+      },
+      {
+        __type: 'BrokerageAccount', id: 'us-stock', name: 'US Stock',
+        role: 'us-stock', stateKey: 'usStockAccount',
+        initialValue: stockBalance, contributionBasis: stockContribBasis,
+        earningsBasis: stockEarningsBasis,
+        ownershipType: 'sole', ownerId: 'primary',
+        country: 'US', currency: { code: 'USD', symbol: '$' },
+      },
+    ],
+  };
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -83,7 +106,7 @@ function buildBrokerageSim({
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-9: Fixed income contribution increases fixedIncomeAccount and debits checking', () => {
-  const { sim } = buildBrokerageSim({ initialChecking: 10000 });
+  const { sim } = loadToolsetScenario(makeBrokerageConfig({ initialChecking: 10000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'FIXED_INCOME_CONTRIBUTION', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -97,7 +120,7 @@ test('EVT-9: Fixed income contribution increases fixedIncomeAccount and debits c
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-10: Fixed income withdrawal decreases fixedIncomeAccount and credits checking', () => {
-  const { sim } = buildBrokerageSim({ initialChecking: 5000, fixedIncomeBalance: 20000 });
+  const { sim } = loadToolsetScenario(makeBrokerageConfig({ initialChecking: 5000, fixedIncomeBalance: 20000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'FIXED_INCOME_WITHDRAWAL', data: { amount: 8000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -111,7 +134,7 @@ test('EVT-10: Fixed income withdrawal decreases fixedIncomeAccount and credits c
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-11: Fixed income earnings stay in account', () => {
-  const { sim } = buildBrokerageSim({ initialChecking: 5000, fixedIncomeBalance: 20000 });
+  const { sim } = loadToolsetScenario(makeBrokerageConfig({ initialChecking: 5000, fixedIncomeBalance: 20000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'FIXED_INCOME_EARNINGS', data: { amount: 400 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -120,7 +143,7 @@ test('EVT-11: Fixed income earnings stay in account', () => {
 });
 
 test('EVT-11: Fixed income earnings are US ordinary income taxable', () => {
-  const { sim } = buildBrokerageSim({ fixedIncomeBalance: 20000 });
+  const { sim } = loadToolsetScenario(makeBrokerageConfig({ fixedIncomeBalance: 20000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'FIXED_INCOME_EARNINGS', data: { amount: 400 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -128,7 +151,7 @@ test('EVT-11: Fixed income earnings are US ordinary income taxable', () => {
 });
 
 test('EVT-11: Fixed income earnings ARE AU taxable if person is AU resident', () => {
-  const { sim } = buildBrokerageSim({ fixedIncomeBalance: 20000, isAuResident: true });
+  const { sim } = loadToolsetScenario(makeBrokerageConfig({ fixedIncomeBalance: 20000, isAuResident: true }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'FIXED_INCOME_EARNINGS', data: { amount: 400 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -137,7 +160,7 @@ test('EVT-11: Fixed income earnings ARE AU taxable if person is AU resident', ()
 });
 
 test('EVT-11: Fixed income earnings are NOT AU taxable if person is not AU resident', () => {
-  const { sim } = buildBrokerageSim({ fixedIncomeBalance: 20000, isAuResident: false });
+  const { sim } = loadToolsetScenario(makeBrokerageConfig({ fixedIncomeBalance: 20000, isAuResident: false }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'FIXED_INCOME_EARNINGS', data: { amount: 400 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -150,7 +173,7 @@ test('EVT-11: Fixed income earnings are NOT AU taxable if person is not AU resid
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-12: Stock contribution increases usStockAccount contributionBasis and debits checking', () => {
-  const { sim } = buildBrokerageSim({ initialChecking: 10000 });
+  const { sim } = loadToolsetScenario(makeBrokerageConfig({ initialChecking: 10000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'STOCK_CONTRIBUTION', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -166,11 +189,11 @@ test('EVT-12: Stock contribution increases usStockAccount contributionBasis and 
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-13: Stock dividend stays in account and increases both basis fields', () => {
-  const { sim } = buildBrokerageSim({
+  const { sim } = loadToolsetScenario(makeBrokerageConfig({
     initialChecking: 5000,
     stockBalance: 50000,
     stockContribBasis: 50000,
-  });
+  }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'STOCK_DIVIDEND', data: { amount: 1000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -181,7 +204,7 @@ test('EVT-13: Stock dividend stays in account and increases both basis fields', 
 });
 
 test('EVT-13: Stock dividend is US ordinary income taxable', () => {
-  const { sim } = buildBrokerageSim({ stockBalance: 50000, stockContribBasis: 50000 });
+  const { sim } = loadToolsetScenario(makeBrokerageConfig({ stockBalance: 50000, stockContribBasis: 50000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'STOCK_DIVIDEND', data: { amount: 1000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -189,7 +212,9 @@ test('EVT-13: Stock dividend is US ordinary income taxable', () => {
 });
 
 test('EVT-13: Stock dividend IS AU taxable if person is AU resident', () => {
-  const { sim } = buildBrokerageSim({ stockBalance: 50000, stockContribBasis: 50000, isAuResident: true });
+  const { sim } = loadToolsetScenario(makeBrokerageConfig({
+    stockBalance: 50000, stockContribBasis: 50000, isAuResident: true,
+  }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'STOCK_DIVIDEND', data: { amount: 1000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -198,7 +223,9 @@ test('EVT-13: Stock dividend IS AU taxable if person is AU resident', () => {
 });
 
 test('EVT-13: Stock dividend is NOT AU taxable if person is not AU resident', () => {
-  const { sim } = buildBrokerageSim({ stockBalance: 50000, stockContribBasis: 50000, isAuResident: false });
+  const { sim } = loadToolsetScenario(makeBrokerageConfig({
+    stockBalance: 50000, stockContribBasis: 50000, isAuResident: false,
+  }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'STOCK_DIVIDEND', data: { amount: 1000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -210,18 +237,18 @@ test('EVT-13: Stock dividend is NOT AU taxable if person is not AU resident', ()
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-14: Stock earnings stay in account, increase earningsBasis, no tax', () => {
-  const { sim } = buildBrokerageSim({
+  const { sim } = loadToolsetScenario(makeBrokerageConfig({
     initialChecking: 5000,
     stockBalance: 50000,
     stockContribBasis: 50000,
     isAuResident: true,
-  });
+  }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'STOCK_EARNINGS', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.usStockAccount.balance, 55000);
   assert.strictEqual(sim.state.usStockAccount.earningsBasis, 5000);
-  assert.strictEqual(sim.state.checkingAccount.balance, 5000);    // unchanged
+  assert.strictEqual(sim.state.checkingAccount.balance, 5000); // unchanged
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0);
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
   assert.strictEqual(sim.state.usCapitalGainsYTD, 0);
@@ -232,12 +259,12 @@ test('EVT-14: Stock earnings stay in account, increase earningsBasis, no tax', (
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-15: Stock sale proceeds credit checking', () => {
-  const { sim } = buildBrokerageSim({
+  const { sim } = loadToolsetScenario(makeBrokerageConfig({
     initialChecking: 5000,
     stockBalance: 20000,
     stockContribBasis: 10000,
     stockEarningsBasis: 10000,
-  });
+  }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'STOCK_WITHDRAWAL',
     data: { salePrice: 15000, costBasis: 10000 } });
   sim.stepTo(new Date(2026, 0, 31));
@@ -246,11 +273,11 @@ test('EVT-15: Stock sale proceeds credit checking', () => {
 });
 
 test('EVT-15: Stock sale records US capital gain (sale price - cost basis)', () => {
-  const { sim } = buildBrokerageSim({
+  const { sim } = loadToolsetScenario(makeBrokerageConfig({
     stockBalance: 20000,
     stockContribBasis: 10000,
     stockEarningsBasis: 10000,
-  });
+  }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'STOCK_WITHDRAWAL',
     data: { salePrice: 15000, costBasis: 10000 } });
   sim.stepTo(new Date(2026, 0, 31));
@@ -259,12 +286,12 @@ test('EVT-15: Stock sale records US capital gain (sale price - cost basis)', () 
 });
 
 test('EVT-15: Stock sale IS AU capital gains taxable if person is AU resident', () => {
-  const { sim } = buildBrokerageSim({
+  const { sim } = loadToolsetScenario(makeBrokerageConfig({
     stockBalance: 20000,
     stockContribBasis: 10000,
     stockEarningsBasis: 10000,
     isAuResident: true,
-  });
+  }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'STOCK_WITHDRAWAL',
     data: { salePrice: 15000, costBasis: 10000 } });
   sim.stepTo(new Date(2026, 0, 31));
@@ -274,12 +301,12 @@ test('EVT-15: Stock sale IS AU capital gains taxable if person is AU resident', 
 });
 
 test('EVT-15: Stock sale is NOT AU taxable if person is not AU resident', () => {
-  const { sim } = buildBrokerageSim({
+  const { sim } = loadToolsetScenario(makeBrokerageConfig({
     stockBalance: 20000,
     stockContribBasis: 10000,
     stockEarningsBasis: 10000,
     isAuResident: false,
-  });
+  }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'STOCK_WITHDRAWAL',
     data: { salePrice: 15000, costBasis: 10000 } });
   sim.stepTo(new Date(2026, 0, 31));
