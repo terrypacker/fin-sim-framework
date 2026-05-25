@@ -19,19 +19,24 @@ import { ACCOUNT_ROLES } from '../state/account-roles.js';
  * for each person whose socialSecurityMonthly > 0 and whose retirementDate
  * has been reached (or is null, meaning SS is always active).
  *
+ * Eligibility age (minAge) is read from the AccountRulesEngine so that the rule
+ * lives in the account module rather than being baked into this handler.
+ *
  * The SsIncomeApplyReducer (registered via the US account module) handles the
  * actual cash credit and tax chaining (85% of SS is taxable ordinary income).
  *
  * @param {object} [opts]
- * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry
+ * @param {import('../services/state-registry.js').StateRegistry}    opts.stateRegistry
+ * @param {import('../account-rules/account-rules-engine.js').AccountRulesEngine} [opts.accountRulesEngine]
  */
 export class MonthlySocialSecurityHandler extends HandlerEntry {
   static description = 'Credits the US cash pool with Social Security income for each eligible person; starts at their retirementDate.';
   static eventType   = 'MONTHLY_SS_INCOME';
 
-  constructor({ stateRegistry } = {}) {
+  constructor({ stateRegistry, accountRulesEngine } = {}) {
     super(null, 'Monthly Social Security');
-    this.stateRegistry = stateRegistry;
+    this.stateRegistry      = stateRegistry;
+    this.accountRulesEngine = accountRulesEngine ?? null;
     this.generatedActionTypes = ['SS_INCOME_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
   }
 
@@ -39,15 +44,19 @@ export class MonthlySocialSecurityHandler extends HandlerEntry {
     const actions = [];
     const cashKey = this.stateRegistry?.getStateKey(ACCOUNT_ROLES.US_SAVINGS) ?? 'usSavingsAccount';
 
+    //TODO #292 Support Early or FRA, this is FRA only right now (Born 1960+ FRA is 67)
+    //  there are also 'delayed retirement credits' that can accrue to age 70
+    const year    = date.getUTCFullYear();
+    const ssRules = this.accountRulesEngine?.get('US', year)?.getSsEligibilityRules?.();
+    const minAge  = ssRules?.minAge ?? 67;
+
     for (const [key, person] of Object.entries(state.people ?? {})) {
       const ssMonthly = person.socialSecurityMonthly ?? 0;
       if (ssMonthly <= 0) continue;
 
-      //TODO #292 Support Early or FRA, this is FRA only right now (Born 1960+ FRA is 67)
-      //  there are also 'delayed retirement credits' that can accrue to age 70
-      const age     = getAge(person.birthDate, date);
-      if(age < 67) continue;
-      // If not retired, don't accept payments?
+      const age = getAge(person.birthDate, date);
+      if (age < minAge) continue;
+
       const retDate = person.retirementDate;
       if (retDate && date < new Date(retDate)) continue;
 

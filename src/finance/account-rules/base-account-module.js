@@ -37,4 +37,24 @@ export class BaseAccountModule {
   getEarlyWithdrawalRules(_accountType) {
     return null;
   }
+
+  /**
+   * Returns Social Security eligibility rules for this country and year.
+   * Returns null for countries where SS does not apply.
+   *
+   * @returns {{ minAge: number } | null}
+   */
+  getSsEligibilityRules() {
+    return null;
+  }
+
+  /**
+   * Returns IRA Required Minimum Distribution rules for this country and year.
+   * Returns null for countries where IRA RMDs do not apply.
+   *
+   * @returns {{ rmdAge: number } | null}
+   */
+  getIraRmdRules() {
+    return null;
+  }
 }

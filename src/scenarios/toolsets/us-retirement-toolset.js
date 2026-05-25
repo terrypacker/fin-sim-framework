@@ -46,8 +46,9 @@ import {
 } from '../../finance/account-rules/us/k401-classes.js';
 import {
   IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
-  IraRolloverWithdrawalHandler, IraRmdHandler,
+  IraRolloverWithdrawalHandler, IraRmdHandler, IraAnnualRmdHandler,
 } from '../../finance/account-rules/us/ira-rollover-classes.js';
+import { TaxService } from '../../finance/tax-service.js';
 import {
   RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
   RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer,
@@ -239,6 +240,11 @@ export const US_RETIREMENT = {
           .name('IRA Earnings').type('INTL_IRA_EARNINGS')
           .interval('year-end').startOffset(1).enabled(true).color('#5C6BC0').build()
       );
+      schedules.push(
+        EventBuilder.eventSeries()
+          .name('IRA Annual RMD').type('IRA_ANNUAL_RMD')
+          .interval('year-end').startOffset(1).enabled(true).color('#E65100').build()
+      );
     }
 
     if (rothAccounts.length > 0) {
@@ -295,8 +301,9 @@ export const US_RETIREMENT = {
     const fixedIncomeAccounts = accounts.filter(a => a.role === ACCOUNT_ROLES.FIXED_INCOME);
     const personsWithSS       = people.filter(pe => (pe.socialSecurityMonthly ?? 0) > 0);
 
-    const primaryId = usSavingsAccounts[0]?.ownerId ?? (people[0]?.id ?? null);
-    const handlers  = [];
+    const primaryId         = usSavingsAccounts[0]?.ownerId ?? (people[0]?.id ?? null);
+    const accountRulesEngine = new TaxService().accountRulesEngine;
+    const handlers          = [];
 
     // Monthly Expenses
     const expensesHandler = new MonthlyExpensesHandler({
@@ -315,13 +322,14 @@ export const US_RETIREMENT = {
 
     // Social Security
     if (personsWithSS.length > 0) {
-      const ssHandler = new MonthlySocialSecurityHandler({ stateRegistry: sr });
+      const ssHandler = new MonthlySocialSecurityHandler({ stateRegistry: sr, accountRulesEngine });
       ssHandler.handledEvents.push(context.schedulesById['MONTHLY_SS_INCOME']);
       handlers.push(ssHandler);
     }
 
-    // IRA earnings
-    const iraEvent = context.schedulesById['INTL_IRA_EARNINGS'];
+    // IRA earnings + annual RMD
+    const iraEvent   = context.schedulesById['INTL_IRA_EARNINGS'];
+    const rmdEvent   = context.schedulesById['IRA_ANNUAL_RMD'];
     if (iraEvent) {
       for (const acct of iraAccounts) {
         const h = new IntlIraEarningsHandler({
@@ -331,6 +339,16 @@ export const US_RETIREMENT = {
         });
         h.handledEvents.push(iraEvent);
         handlers.push(h);
+
+        if (rmdEvent) {
+          const rmdH = new IraAnnualRmdHandler({
+            stateRegistry: sr, role: ACCOUNT_ROLES.IRA,
+            ownerId: acct.ownerId, stateKey: acct.stateKey,
+            accountRulesEngine,
+          });
+          rmdH.handledEvents.push(rmdEvent);
+          handlers.push(rmdH);
+        }
       }
     }
 
