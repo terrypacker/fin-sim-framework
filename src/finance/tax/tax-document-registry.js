@@ -59,20 +59,31 @@ export class TaxDocumentRegistry {
     const { cc, taxDetail, personTaxDetails } = journalEntry.action.data ?? {};
 
     if (personTaxDetails?.length > 0) {
-      const taxYear = personTaxDetails[0]?.taxDetail?.taxYear ?? new Date(journalEntry.date).getUTCFullYear();
-      const module  = this._get(cc, taxYear);
-      return personTaxDetails.map(({ personKey, personName, taxDetail: pd }) => {
-        const doc = module.generate(pd, taxYear);
-        doc.personKey  = personKey;
-        doc.personName = personName;
-        return doc;
+      const taxYear    = personTaxDetails[0]?.taxDetail?.taxYear ?? new Date(journalEntry.date).getUTCFullYear();
+      const module     = this._get(cc, taxYear);
+      const saleRecords = cc === 'AU' && journal ? _extractAuSaleRecords(journalEntry, journal) : [];
+      return personTaxDetails.flatMap(({ personKey, personName, taxDetail: pd }) => {
+        const result = module.generate(pd, taxYear, saleRecords);
+        const docs   = Array.isArray(result) ? result : [result];
+        docs[0].personKey  = personKey;
+        docs[0].personName = personName;
+        // For supplementary docs (e.g. CGT Schedule) label them under the same person.
+        for (let i = 1; i < docs.length; i++) {
+          docs[i].personKey  = personKey;
+          docs[i].personName = `${personName} — ${docs[i].title.split('—')[0].trim()}`;
+        }
+        return docs;
       });
     }
 
     if (!taxDetail) return null;
     const taxYear    = taxDetail.taxYear ?? new Date(journalEntry.date).getUTCFullYear();
     const module     = this._get(cc, taxYear);
-    const saleRecords = cc === 'US' && journal ? _extractUsSaleRecords(journalEntry, journal) : [];
+    const saleRecords = journal
+      ? cc === 'US' ? _extractUsSaleRecords(journalEntry, journal)
+      : cc === 'AU' ? _extractAuSaleRecords(journalEntry, journal)
+      : []
+      : [];
     return module.generate(taxDetail, taxYear, saleRecords);
   }
 
@@ -94,6 +105,55 @@ export class TaxDocumentRegistry {
 }
 
 // ─── Module-level helpers ─────────────────────────────────────────────────────
+
+/**
+ * Collect AU_STOCK_WITHDRAWAL_TAX and AU_HOUSE_SALE_TAX journal entries that carry
+ * sale detail (proceeds field) between the previous AU TAX_SETTLE_APPLY and the current one.
+ *
+ * @param {object}   currentEntry  - The TAX_SETTLE_APPLY journal entry being reported.
+ * @param {object[]} journal       - Full journal entry array.
+ * @returns {{ description, dateAcquired, dateSold, proceeds, costBasis, gain }[]}
+ */
+function _extractAuSaleRecords(currentEntry, journal) {
+  const currentIdx = journal.indexOf(currentEntry);
+  if (currentIdx < 0) return [];
+
+  let yearStartIdx = 0;
+  for (let i = currentIdx - 1; i >= 0; i--) {
+    const e = journal[i];
+    if (e.action?.type === 'TAX_SETTLE_APPLY' && e.action?.data?.cc === 'AU') {
+      yearStartIdx = i + 1;
+      break;
+    }
+  }
+
+  const records = [];
+  for (let i = yearStartIdx; i < currentIdx; i++) {
+    const e = journal[i];
+    const t = e.action?.type;
+    const d = e.action?.data;
+    if (!d?.proceeds) continue;
+
+    // Explicit AU stock or property sale via AU-specific action types.
+    const isAuSaleAction = t === 'AU_STOCK_WITHDRAWAL_TAX' || t === 'AU_HOUSE_SALE_TAX';
+    // Replenish-savings drawdown from any brokerage for an AU resident
+    // (STOCK_WITHDRAWAL_TAX with isAuResident covers both AU and US brokerage drawdowns;
+    //  AU residents are taxed on worldwide capital gains).
+    const isAuResidentSale = t === 'STOCK_WITHDRAWAL_TAX' && d.isAuResident === true;
+
+    if (!isAuSaleAction && !isAuResidentSale) continue;
+
+    records.push({
+      description:  d.description ?? (t === 'AU_HOUSE_SALE_TAX' ? 'AU Real Property' : 'Investment Account'),
+      dateAcquired: 'Various',
+      dateSold:     new Date(e.date),
+      proceeds:     d.proceeds,
+      costBasis:    d.costBasis ?? (d.proceeds - (d.gain ?? 0)),
+      gain:         d.gain ?? 0,
+    });
+  }
+  return records;
+}
 
 /**
  * Collect all STOCK_WITHDRAWAL_TAX journal entries that carry sale detail
