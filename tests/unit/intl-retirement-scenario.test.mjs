@@ -43,12 +43,12 @@ import { PeriodAdvanceReducer, PeriodAdvanceHandler }                           
 import { TaxSettleHandler, TaxSettleApplyReducer, TaxPaymentDebitReducer }           from '../../src/finance/tax/tax-settle-classes.js';
 import { RothContributionApplyReducer, RothWithdrawalContribApplyReducer, RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer, RothContributionHandler, RothWithdrawalContributionsHandler, RothWithdrawalEarningsHandler, RothEarningsHandler }             from '../../src/finance/account-rules/us/roth-classes.js';
 import { IraContributionApplyReducer, IraWithdrawalContribApplyReducer, IraWithdrawalEarningsApplyReducer, IraEarningsApplyReducer, IraContributionHandler, IraWithdrawalContributionsHandler, IraWithdrawalEarningsHandler, IraEarningsHandler }                     from '../../src/finance/account-rules/us/ira-classes.js';
-import { K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer, K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler }                                                                                                     from '../../src/finance/account-rules/us/k401-classes.js';
+import { K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer, K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler, K401RmdApplyReducer, K401AnnualRmdHandler }                                                                                                     from '../../src/finance/account-rules/us/k401-classes.js';
 import { FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer, FixedIncomeEarningsApplyReducer, StockContributionApplyReducer, StockDividendApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer, FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler, StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler } from '../../src/finance/account-rules/us/us-brokerage-classes.js';
 import { UsHouseSaleApplyReducer, UsHouseSaleHandler }                               from '../../src/finance/account-rules/us/us-real-property-classes.js';
 import { SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer, SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer, SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler, SeIncomeUsHandler, BonusHandler, CompanySaleHandler } from '../../src/finance/account-rules/us/us-income-classes.js';
 import { CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer, CollectibleSaleHandler, CollectibleValueChangeHandler } from '../../src/finance/account-rules/us/us-collectible-classes.js';
-import { IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer, IraRolloverWithdrawalHandler, IraRmdHandler } from '../../src/finance/account-rules/us/ira-rollover-classes.js';
+import { IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer, IraRolloverWithdrawalHandler, IraRmdHandler, IraAnnualRmdHandler } from '../../src/finance/account-rules/us/ira-rollover-classes.js';
 import { RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer, RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer, RothRolloverContributionHandler, RothRolloverEarningsHandler, RothRolloverWithdrawalContributionsHandler, RothRolloverWithdrawalEarningsHandler } from '../../src/finance/account-rules/us/roth-rollover-classes.js';
 import { RothConversionApplyReducer, RothConversionHandler, RothConversionPolicyHandler } from '../../src/finance/account-rules/us/roth-conversion-classes.js';
 import { AuSeIncomeApplyReducer, AuSeIncomeHandler }                                 from '../../src/finance/account-rules/au/au-income-classes.js';
@@ -109,7 +109,7 @@ globalThis.FinSimLib = {
     IraContributionHandler, IraWithdrawalContributionsHandler,
     IraWithdrawalEarningsHandler, IraEarningsHandler,
     K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer,
-    K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler,
+    K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler, K401RmdApplyReducer, K401AnnualRmdHandler,
     FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer,
     FixedIncomeEarningsApplyReducer, StockContributionApplyReducer,
     StockDividendApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer,
@@ -126,7 +126,7 @@ globalThis.FinSimLib = {
     CollectibleSaleHandler, CollectibleValueChangeHandler,
     // US — IRA Rollover + RMD
     IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
-    IraRolloverWithdrawalHandler, IraRmdHandler,
+    IraRolloverWithdrawalHandler, IraRmdHandler, IraAnnualRmdHandler,
     // US — Roth Rollover
     RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
     RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer,

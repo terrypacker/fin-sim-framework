@@ -63,6 +63,7 @@ import {
 import {
   K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer,
   K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler,
+  K401RmdApplyReducer, K401AnnualRmdHandler,
 } from '../../src/finance/account-rules/us/k401-classes.js';
 import {
   FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer,
@@ -85,7 +86,7 @@ import {
 } from '../../src/finance/account-rules/us/us-collectible-classes.js';
 import {
   IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
-  IraRolloverWithdrawalHandler, IraRmdHandler,
+  IraRolloverWithdrawalHandler, IraRmdHandler, IraAnnualRmdHandler,
 } from '../../src/finance/account-rules/us/ira-rollover-classes.js';
 import {
   RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
@@ -174,6 +175,7 @@ globalThis.FinSimLib = {
     IraWithdrawalEarningsHandler, IraEarningsHandler,
     K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer,
     K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler,
+    K401RmdApplyReducer, K401AnnualRmdHandler,
     FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer,
     FixedIncomeEarningsApplyReducer, StockContributionApplyReducer,
     StockDividendApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer,
@@ -187,7 +189,7 @@ globalThis.FinSimLib = {
     CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer,
     CollectibleSaleHandler, CollectibleValueChangeHandler,
     IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
-    IraRolloverWithdrawalHandler, IraRmdHandler,
+    IraRolloverWithdrawalHandler, IraRmdHandler, IraAnnualRmdHandler,
     RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
     RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer,
     RothRolloverContributionHandler, RothRolloverEarningsHandler,
@@ -818,5 +820,133 @@ test('EVT-40: IRA RMD uses age-73 distribution period in first year and age-74 i
   sim.stepTo(new Date(Date.UTC(2034, 11, 31)));
   const rmd74 = Math.round(balAfter73 / 25.5 * 100) / 100;
   assert.strictEqual(sim.state.iraAccount.balance, balAfter73 - rmd74,
+    'second RMD should use age-74 distribution period');
+});
+
+// ─── 401(k) Annual RMD tests ──────────────────────────────────────────────────
+
+/**
+ * Config with only a 401(k) (no IRA) so only the K401 RMD fires.
+ * Zero growth and zero expenses to keep math exact.
+ */
+function makeK401RmdConfig({ birthDate, k401Balance = 400_000, k401ContribBasis = 400_000 }) {
+  return {
+    toolsets: ['US_RETIREMENT'],
+    simStart: '2026-01-01',
+    simEnd:   '2050-01-01',
+    parameters: {
+      inflationRate:         0,
+      usSavingsInterestRate: 0,
+      k401GrowthRate:        0,
+      monthlyExpenses:       0,
+      inflationAdjust:       false,
+    },
+    persons: [
+      {
+        __type:                'Person',
+        id:                    'primary',
+        name:                  'Primary',
+        birthDate,
+        citizen:               ['US'],
+        lifeExpectancy:        90,
+        socialSecurityMonthly: 0,
+        monthlyWage:           0,
+        retirementDate:        '2020-01-01',
+      },
+    ],
+    accounts: [
+      {
+        __type:         'SavingsAccount',
+        id:             'acct-savings',
+        name:           'US Savings',
+        type:           'savings',
+        role:           'us-savings',
+        stateKey:       'usSavingsAccount',
+        initialValue:   1_000_000,
+        ownershipType:  'sole',
+        ownerId:        'primary',
+        minimumBalance: 0,
+        country:        'US',
+        currency:       { code: 'USD', symbol: '$' },
+      },
+      {
+        __type:            'FourOhOneKAccount',
+        id:                'acct-k401',
+        name:              '401(k)',
+        type:              '401k',
+        role:              'k401',
+        stateKey:          'k401Account',
+        initialValue:      k401Balance,
+        ownershipType:     'sole',
+        ownerId:           'primary',
+        contributionBasis: k401ContribBasis,
+        earningsBasis:     0,
+        loanBalance:       0,
+        country:           'US',
+        currency:          { code: 'USD', symbol: '$' },
+      },
+    ],
+  };
+}
+
+test('EVT-40 (401k): 401(k) RMD does not fire before person turns 73', () => {
+  // Born 1960-01-01 → turns 73 in 2033; only run through end of 2032
+  const config = makeK401RmdConfig({ birthDate: '1960-01-01', k401Balance: 400_000 });
+  const { sim } = loadToolsetScenario(config);
+  sim.stepTo(new Date(Date.UTC(2032, 11, 31)));
+  assert.strictEqual(sim.state.k401Account.balance, 400_000,
+    '401(k) balance should be untouched before RMD age');
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0,
+    'no ordinary income should be recorded before RMD age');
+});
+
+test('EVT-40 (401k): 401(k) RMD fires at year-end when person turns 73', () => {
+  const k401Balance = 400_000;
+  const config = makeK401RmdConfig({ birthDate: '1960-01-01', k401Balance });
+  const { sim } = loadToolsetScenario(config);
+  sim.stepTo(new Date(Date.UTC(2033, 11, 31)));
+
+  // IRS Uniform Lifetime Table: age 73 → distribution period 26.5
+  const expectedRmd = Math.round(k401Balance / 26.5 * 100) / 100;
+  assert.strictEqual(sim.state.k401Account.balance, k401Balance - expectedRmd,
+    `401(k) should be reduced by first RMD of ${expectedRmd}`);
+});
+
+test('EVT-40 (401k): 401(k) RMD credits US savings account', () => {
+  const k401Balance = 400_000;
+  const config = makeK401RmdConfig({ birthDate: '1960-01-01', k401Balance });
+  const { sim } = loadToolsetScenario(config);
+  const savingsBefore = sim.state.usSavingsAccount.balance;
+  sim.stepTo(new Date(Date.UTC(2033, 11, 31)));
+  const expectedRmd = Math.round(k401Balance / 26.5 * 100) / 100;
+  assert.strictEqual(sim.state.usSavingsAccount.balance, savingsBefore + expectedRmd,
+    'RMD proceeds should be credited to US savings');
+});
+
+test('EVT-40 (401k): 401(k) RMD is fully taxable as ordinary income', () => {
+  const k401Balance = 400_000;
+  const config = makeK401RmdConfig({ birthDate: '1960-01-01', k401Balance });
+  const { sim } = loadToolsetScenario(config);
+  sim.stepTo(new Date(Date.UTC(2033, 11, 31)));
+  const expectedRmd = Math.round(k401Balance / 26.5 * 100) / 100;
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, expectedRmd,
+    '401(k) RMD should be fully recorded as US ordinary income');
+});
+
+test('EVT-40 (401k): 401(k) RMD uses age-73 period in first year and age-74 in second', () => {
+  const k401Balance = 400_000;
+  const config = makeK401RmdConfig({ birthDate: '1960-01-01', k401Balance });
+  const { sim } = loadToolsetScenario(config);
+
+  // End of 2033 — person is 73 (distribution period 26.5)
+  sim.stepTo(new Date(Date.UTC(2033, 11, 31)));
+  const rmd73      = Math.round(k401Balance / 26.5 * 100) / 100;
+  const balAfter73 = k401Balance - rmd73;
+  assert.strictEqual(sim.state.k401Account.balance, balAfter73);
+
+  // End of 2034 — person is 74 (distribution period 25.5)
+  sim.stepTo(new Date(Date.UTC(2034, 11, 31)));
+  const rmd74 = Math.round(balAfter73 / 25.5 * 100) / 100;
+  assert.strictEqual(sim.state.k401Account.balance, balAfter73 - rmd74,
     'second RMD should use age-74 distribution period');
 });

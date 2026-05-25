@@ -65,7 +65,7 @@ import {
 } from '../../src/finance/account-rules/us/ira-classes.js';
 import {
   K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer,
-  K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler,
+  K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler, K401RmdApplyReducer, K401AnnualRmdHandler,
 } from '../../src/finance/account-rules/us/k401-classes.js';
 import {
   FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer,
@@ -88,7 +88,7 @@ import {
 } from '../../src/finance/account-rules/us/us-collectible-classes.js';
 import {
   IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
-  IraRolloverWithdrawalHandler, IraRmdHandler,
+  IraRolloverWithdrawalHandler, IraRmdHandler, IraAnnualRmdHandler,
 } from '../../src/finance/account-rules/us/ira-rollover-classes.js';
 import {
   RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
@@ -174,7 +174,7 @@ globalThis.FinSimLib = {
     IraContributionHandler, IraWithdrawalContributionsHandler,
     IraWithdrawalEarningsHandler, IraEarningsHandler,
     K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer,
-    K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler,
+    K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler, K401RmdApplyReducer, K401AnnualRmdHandler,
     FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer,
     FixedIncomeEarningsApplyReducer, StockContributionApplyReducer,
     StockDividendApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer,
@@ -188,7 +188,7 @@ globalThis.FinSimLib = {
     CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer,
     CollectibleSaleHandler, CollectibleValueChangeHandler,
     IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
-    IraRolloverWithdrawalHandler, IraRmdHandler,
+    IraRolloverWithdrawalHandler, IraRmdHandler, IraAnnualRmdHandler,
     RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
     RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer,
     RothRolloverContributionHandler, RothRolloverEarningsHandler,
