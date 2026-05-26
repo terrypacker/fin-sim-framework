@@ -35,6 +35,17 @@ function makePrebuilt(id, order = 1, active = false) {
   });
 }
 
+function makePrebuiltWithSchema(id, schema, order = 1) {
+  const scenarioClass = { getParamSchema: () => schema };
+  return new PrebuiltScenario({
+    id, label: `Label ${id}`, order,
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2041, 0, 1)),
+    factory:  jest.fn(),
+    scenarioClass,
+  });
+}
+
 function setStorageData(data) {
   localStorage.setItem(ScenarioStorage.STORAGE_KEY, JSON.stringify(data));
 }
@@ -172,4 +183,64 @@ test('getPrebuiltScenarios returns only prebuilts', () => {
   const prebuilts = r.getPrebuiltScenarios();
   assert.strictEqual(prebuilts.length, 2);
   assert.ok(prebuilts.every(s => s.prebuilt === true));
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// loadPrebuilt — typed params initialization and Rebuild preservation
+// ═════════════════════════════════════════════════════════════════════════════
+
+const SAMPLE_SCHEMA = [
+  { key: 'drift',    label: 'Drift',    type: 'Number',  group: 'Rates',   defaultValue: 0.05 },
+  { key: 'retDate',  label: 'Ret Date', type: 'Date',    group: 'Dates',   defaultValue: '2035-01-01' },
+  { key: 'enabled',  label: 'Enabled',  type: 'Boolean', group: 'Options', defaultValue: true },
+];
+
+test('loadPrebuilt: schema-less prebuilt gets empty params array', () => {
+  const r = makeRegistry([makePrebuilt('alpha')]);
+  assert.deepStrictEqual(r.getActive().params, []);
+});
+
+test('loadPrebuilt: prebuilt with schema gets typed-array params from schema defaults', () => {
+  const r = makeRegistry([makePrebuiltWithSchema('alpha', SAMPLE_SCHEMA)]);
+  const params = r.getActive().params;
+  assert.strictEqual(params.length, 3);
+  assert.strictEqual(params[0].name,  'drift');
+  assert.strictEqual(params[0].value, 0.05);
+  assert.strictEqual(params[0].type,  'Number');
+  assert.strictEqual(params[1].name,  'retDate');
+  assert.strictEqual(params[1].value, '2035-01-01');
+  assert.strictEqual(params[2].name,  'enabled');
+  assert.strictEqual(params[2].value, true);
+});
+
+test('loadPrebuilt: calling loadPrebuilt a second time preserves edited param values', () => {
+  const pb = makePrebuiltWithSchema('alpha', SAMPLE_SCHEMA);
+  const r  = makeRegistry([pb]);
+  const entry = r.getActive();
+
+  // Simulate user editing a param value
+  entry.params[0].value = 0.99;
+
+  // Rebuild path: loadPrebuilt is called again with the same prebuilt definitions
+  r.loadPrebuilt([pb]);
+
+  // Entry preserved — edited value survives
+  assert.strictEqual(r.getActive().params[0].value, 0.99);
+});
+
+test('loadPrebuilt: second call does not add duplicate entries', () => {
+  const pb = makePrebuiltWithSchema('alpha', SAMPLE_SCHEMA);
+  const r  = makeRegistry([pb]);
+  r.loadPrebuilt([pb]);
+  assert.strictEqual(r.getPrebuiltScenarios().length, 1);
+});
+
+test('loadPrebuilt: schema node field is copied to param entry', () => {
+  const schema = [
+    { key: 'initialSavings', label: 'Initial Savings', type: 'Number', group: 'Accounts',
+      defaultValue: 50000, node: { type: 'account', stateKey: 'savings', field: 'initialValue' } },
+  ];
+  const r = makeRegistry([makePrebuiltWithSchema('alpha', schema)]);
+  const param = r.getActive().params[0];
+  assert.deepStrictEqual(param.node, { type: 'account', stateKey: 'savings', field: 'initialValue' });
 });

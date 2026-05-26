@@ -51,10 +51,15 @@ export class ScenarioRegistry {
     const active = this.getActive();
     prebuiltScenarios.forEach(pb => {
       const id = 'p:' + pb.id;
-      if(active && active.id !== pb.id) {
-        pb.active = false;
-      }
-      this._scenarios.set(id, { ...pb, id, factory: pb.factory, scenarioClass: pb.scenarioClass });
+      // Preserve existing entries so param edits survive Rebuild (Design §2.3 Option A).
+      if (this._scenarios.has(id)) return;
+      const schema = pb.scenarioClass?.getParamSchema?.() ?? [];
+      const params = schema.map(s => {
+        const entry = { name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue };
+        if (s.node) entry.node = s.node;
+        return entry;
+      });
+      this._scenarios.set(id, { ...pb, id, params, factory: pb.factory, scenarioClass: pb.scenarioClass });
     });
 
     if (active) return;
