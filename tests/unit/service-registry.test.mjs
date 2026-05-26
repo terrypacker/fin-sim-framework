@@ -460,3 +460,30 @@ test('ServiceRegistry: collectibleService CREATE event appears on shared bus', (
   assert.strictEqual(events.length, 1);
   assert.strictEqual(events[0].actionType, 'CREATE');
 });
+
+// ─── ScenarioRegistry persistence across reset() ──────────────────────────────
+
+test('ServiceRegistry: reset() preserves ScenarioRegistry across rebuilds', () => {
+  ServiceRegistry.resetAll();
+  const r1 = ServiceRegistry.getInstance();
+  const scenarioReg1 = r1.scenarioRegistry;
+
+  ServiceRegistry.reset(); // simulates Rebuild
+  const r2 = ServiceRegistry.getInstance();
+
+  // ServiceRegistry instance is new (simulation services cleared)
+  assert.notStrictEqual(r1, r2);
+  // But ScenarioRegistry is the same object (in-memory param edits survive)
+  assert.strictEqual(r2.scenarioRegistry, scenarioReg1);
+});
+
+test('ServiceRegistry: resetAll() creates a fresh ScenarioRegistry', () => {
+  ServiceRegistry.resetAll();
+  const r1 = ServiceRegistry.getInstance();
+  const scenarioReg1 = r1.scenarioRegistry;
+
+  ServiceRegistry.resetAll();
+  const r2 = ServiceRegistry.getInstance();
+
+  assert.notStrictEqual(r2.scenarioRegistry, scenarioReg1);
+});

@@ -55,8 +55,13 @@ export class ScenarioTabPresenter {
     this._view.onOpen = (id) => {
       this._controller.setActiveById(id);
       this._activeScenario = this._controller.getActiveScenario();
+      if (this._activeScenario?.prebuilt) {
+        // Selecting a prebuilt from the dropdown resets params to schema defaults
+        // so the user always starts from a known baseline (re-select = "Load Defaults").
+        this._controller.resetParamsFromSchema(this._activeScenario);
+      }
       this._view._populateScenarioForm(this._activeScenario);
-
+      this._initScenario();
     };
 
     this._view.onRebuild = () => {

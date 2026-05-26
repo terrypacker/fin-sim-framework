@@ -128,14 +128,25 @@ export class ScenarioLoader {
       cfg.realProperties = (realPropertyService?.getAll()  ?? []).map(n => ScenarioSerializer._serializeRealProperty(n));
       cfg.collectibles   = (collectibleService?.getAll()   ?? []).map(n => ScenarioSerializer._serializeCollectible(n));
 
-      // Normalize params to a typed schema array if the prebuilt hasn't done it yet.
+      // Normalize params to a typed schema array if the prebuilt hasn't done it yet (old saved cfg).
+      const schema = cfg.scenarioClass?.getParamSchema?.() ?? [];
       if (!Array.isArray(cfg.params)) {
-        const schema = cfg.scenarioClass?.getParamSchema?.() ?? [];
         cfg.params = schema.map(s => {
           const entry = { name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue };
           if (s.node) entry.node = s.node;
           return entry;
         });
+      } else if (schema.length > 0) {
+        // Schema-drift guard: merge any schema entries missing from cfg.params so new
+        // params added to the schema propagate to existing saved scenarios with their defaults.
+        const existing = new Set(cfg.params.map(p => p.name));
+        for (const s of schema) {
+          if (!existing.has(s.key)) {
+            const entry = { name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue };
+            if (s.node) entry.node = s.node;
+            cfg.params.push(entry);
+          }
+        }
       }
     } else if (ScenarioSerializer.hasSerializedGraph(cfg)) {
       // Fallback for manually-built scenarios that have no toolset declaration.

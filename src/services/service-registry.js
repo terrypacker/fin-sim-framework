@@ -41,6 +41,13 @@ import { CollectibleService } from '../finance/services/collectible-service.js';
 export class ServiceRegistry {
   /** @type {ServiceRegistry|null} */
   static _instance = null;
+  /**
+   * ScenarioRegistry is preserved across reset() because it holds the user's
+   * in-memory param edits and active-scenario selection. Only simulation
+   * services (bus, graph, events, accounts, …) need to be torn down on Rebuild.
+   * @type {ScenarioRegistry|null}
+   */
+  static _scenarioRegistry = null;
 
   constructor() {
     this.bus                = new EventBus();
@@ -57,7 +64,10 @@ export class ServiceRegistry {
 
     this.stateRegistry      = new StateRegistry({ accountService: this.accountService });
     this.schemaRegistry     = new StateSchemaRegistry();
-    this.scenarioRegistry   = new ScenarioRegistry(new ScenarioStorage());
+    if (!ServiceRegistry._scenarioRegistry) {
+      ServiceRegistry._scenarioRegistry = new ScenarioRegistry(new ScenarioStorage());
+    }
+    this.scenarioRegistry   = ServiceRegistry._scenarioRegistry;
     this.scenarioService    = new ScenarioService(this.bus, this.scenarioRegistry);
     this.simulationRegistry = new SimulationRegistry();
 
@@ -97,10 +107,21 @@ export class ServiceRegistry {
 
   /**
    * Destroy the current singleton and create a fresh one.
-   * All service item maps, the bus, and the SimulationRegistry are cleared.
+   * Simulation services (bus, graph, events, accounts, …) are cleared.
+   * ScenarioRegistry is intentionally preserved so param edits survive Rebuild.
    * Intended to be called at the start of every scenario rebuild.
    */
   static reset() {
     ServiceRegistry._instance = null;
+    // _scenarioRegistry is preserved intentionally — see field declaration above.
+  }
+
+  /**
+   * Full reset including the ScenarioRegistry. Use in tests that need a
+   * completely clean service environment.
+   */
+  static resetAll() {
+    ServiceRegistry._instance = null;
+    ServiceRegistry._scenarioRegistry = null;
   }
 }

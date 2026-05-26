@@ -26,6 +26,21 @@ This document defines a **general-purpose Period Engine** that:
 ## Unimplemented Features
 
 ---
+### [Prebuilt Scenario Parameter Editing](13-prebuilt-scenario-parameters.md)
+This document defines a refactor that allows prebuilt scenarios to be re-run with
+edited parameter values directly from the UI, by:
+
+* Unifying the prebuilt vs. user-scenario data shapes around a single typed
+  `params` array, populated eagerly from `getParamSchema()` when a prebuilt enters
+  the registry.
+* Distinguishing **Rebuild** (preserve current params) from **Load Defaults**
+  (reset to schema defaults) as two explicit UI actions.
+* Renaming the three overloaded "params" concepts (schema vs. current values vs.
+  compiler-facing map) so they no longer collide.
+* Preserving param edits across rebuilds by stopping `loadPrebuilt` from
+  clobbering existing registry entries.
+
+---
 ### [Adjustment Entry System](1-adjustment-entry-system.md)
 This document defines the architecture, data model, invariants, APIs, and UI integration requirements for implementing an **Adjustment Entry System** within a time-aware, event-sourced financial + simulation platform.
 
