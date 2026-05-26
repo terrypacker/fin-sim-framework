@@ -59,7 +59,11 @@ export class ScenarioRegistry {
         if (s.node) entry.node = s.node;
         return entry;
       });
-      this._scenarios.set(id, { ...pb, id, params, factory: pb.factory, scenarioClass: pb.scenarioClass });
+      // If another scenario (e.g. a user scenario) is already active, force active:false so
+      // the prebuilt's active:true flag doesn't create two active scenarios. When nothing is
+      // active yet, preserve pb.active so the post-loop "find(p => p.active)" fallback works.
+      const pbActive = active ? false : pb.active;
+      this._scenarios.set(id, { ...pb, id, params, active: pbActive, factory: pb.factory, scenarioClass: pb.scenarioClass });
     });
 
     if (active) return;

@@ -101,6 +101,19 @@ test('lastUsed: u:1 in storage → u:1 is active', () => {
   assert.strictEqual(r.getActive().id, 'u:1');
 });
 
+test('lastUsed: u:0 with prebuilt active:true → user scenario wins on page load', () => {
+  // Regression: prebuilt definitions ship with active:true. When a user scenario is
+  // lastUsed, loadPrebuilt must not let the prebuilt's active:true flag override it.
+  setStorageData({
+    lastUsed: 'u:0',
+    scenarios: [{ name: 'MySaved', simStart: '2026-01-01', simEnd: '2041-01-01' }],
+  });
+  const r = makeRegistry([makePrebuilt('alpha', 1, true)]);
+  assert.strictEqual(r.getActive().id, 'u:0');
+  // Only one active scenario
+  assert.strictEqual(r.getAll().filter(s => s.active).length, 1);
+});
+
 test('lastUsed: p:alpha in storage → p:alpha is active', () => {
   setStorageData({ lastUsed: 'p:alpha', scenarios: [] });
   const r = makeRegistry([makePrebuilt('alpha')]);
