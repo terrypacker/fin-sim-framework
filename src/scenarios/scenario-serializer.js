@@ -346,7 +346,7 @@ export class ScenarioSerializer {
     if (Number.isNaN(parsed.getTime())) return null;
     return parsed.toISOString();
   }
-  
+
   static serializeScenario(scenario) {
     return {
       id: scenario.id,
@@ -659,16 +659,16 @@ export class ScenarioSerializer {
       __type:                'Person',
       id:                    person.id,
       name:                  person.name,
-      birthDate:             person.birthDate instanceof Date
-                               ? person.birthDate.toISOString().slice(0, 10)
-                               : person.birthDate,
+      // Design 15: all dates serialize as full ISO 8601 strings. Deserializers
+      // (e.g. _makePerson) wrap with `new Date(...)` which accepts both full ISO
+      // and YYYY-MM-DD, so existing payloads remain readable.
+      birthDate:             ScenarioSerializer.toDateStr(person.birthDate),
       citizen:               person.citizen ?? ['US'],
       lifeExpectancy:        person.lifeExpectancy ?? 90,
       socialSecurityMonthly: person.socialSecurityMonthly ?? 2800,
       monthlyWage:           person.monthlyWage ?? 0,
-      retirementDate:        person.retirementDate instanceof Date
-                               ? person.retirementDate.toISOString().slice(0, 10)
-                               : (person.retirementDate ?? '2040-01-01'),
+      retirementDate:        ScenarioSerializer.toDateStr(person.retirementDate)
+                               ?? new Date(Date.UTC(2040, 0, 1)).toISOString(),
     };
   }
 

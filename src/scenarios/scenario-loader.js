@@ -106,7 +106,9 @@ export class ScenarioLoader {
 
         if (node.type === 'person') {
           const rec = (cfg.persons ?? []).find(r => r.id === node.id);
-          if (rec) rec[node.field] = val instanceof Date ? val.toISOString().slice(0, 10) : val;
+          // Design 15: canonicalize Date values to full ISO strings so the
+          // cascaded field matches the serialized representation everywhere.
+          if (rec) rec[node.field] = val instanceof Date ? val.toISOString() : val;
         } else if (node.type === 'account') {
           const rec = (cfg.accounts ?? []).find(r => r.stateKey === node.stateKey);
           if (rec) rec[node.field] = val;
