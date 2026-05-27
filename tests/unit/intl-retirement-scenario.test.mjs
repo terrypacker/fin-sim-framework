@@ -241,11 +241,13 @@ test('serialize → deserialize round-trip reconstructs all TaxService reducers'
   const { scenario } = buildScenario();
   const services = ServiceRegistry.getInstance();
 
-  const config = ScenarioSerializer.serialize(
-    services, 'Test',
-    new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)),
-    scenario.sim.state, {}
-  );
+  const config = ScenarioSerializer.serializeScenario({
+    ...ScenarioSerializer.snapshotServices(services),
+    id: 'Test',
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2041, 0, 1)),
+    initialState: scenario.sim.state,
+  });
 
   // Rebuild the sim (phase 1 only) then deserialize the saved config.
   ServiceRegistry.reset();
@@ -288,11 +290,13 @@ test('serialize → deserialize round-trip reconstructs all TaxService handlers'
   const { scenario } = buildScenario();
   const services = ServiceRegistry.getInstance();
 
-  const config = ScenarioSerializer.serialize(
-    services, 'Test',
-    new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)),
-    scenario.sim.state, {}
-  );
+  const config = ScenarioSerializer.serializeScenario({
+    ...ScenarioSerializer.snapshotServices(services),
+    id: 'Test',
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2041, 0, 1)),
+    initialState: scenario.sim.state,
+  });
 
   ServiceRegistry.reset();
   const scenario2 = new IntlRetirementScenario({
@@ -362,11 +366,13 @@ test('DynamicTaxReducer round-trip preserves cc and actionType', () => {
   const { scenario } = buildScenario();
   const services = ServiceRegistry.getInstance();
 
-  const config = ScenarioSerializer.serialize(
-    services, 'Test',
-    new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)),
-    scenario.sim.state, {}
-  );
+  const config = ScenarioSerializer.serializeScenario({
+    ...ScenarioSerializer.snapshotServices(services),
+    id: 'Test',
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2041, 0, 1)),
+    initialState: scenario.sim.state,
+  });
 
   ServiceRegistry.reset();
   const scenario2 = new IntlRetirementScenario({
@@ -576,11 +582,13 @@ test('SPOUSE-6: serialize → deserialize round-trip preserves spouse accounts',
   const { scenario } = buildScenario();
   const services = ServiceRegistry.getInstance();
 
-  const config = ScenarioSerializer.serialize(
-    services, 'Test',
-    new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)),
-    scenario.sim.state, {}
-  );
+  const config = ScenarioSerializer.serializeScenario({
+    ...ScenarioSerializer.snapshotServices(services),
+    id: 'Test',
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2041, 0, 1)),
+    initialState: scenario.sim.state,
+  });
 
   // Verify spouse accounts appear in serialized config
   const accountNames = config.accounts.map(a => a.name);
@@ -675,17 +683,17 @@ function buildRoundTripped(params = {}) {
   const { scenario: orig } = buildScenario(params);
   const registry = ServiceRegistry.getInstance();
 
-  const config = ScenarioSerializer.serialize(
-    registry,
-    orig.id ?? 'test-rt',
-    'Round-trip Test',
-    100,
-    true,
-    orig.simStart,
-    orig.simEnd,
-    orig.initialState,
-    orig.params ?? [],
-  );
+  const config = ScenarioSerializer.serializeScenario({
+    ...ScenarioSerializer.snapshotServices(registry),
+    id:           orig.id ?? 'test-rt',
+    name:         'Round-trip Test',
+    order:        100,
+    active:       true,
+    simStart:     orig.simStart,
+    simEnd:       orig.simEnd,
+    initialState: orig.initialState,
+    params:       orig.params ?? [],
+  });
 
   ServiceRegistry.reset();
   const scenario2 = new BaseScenario({
@@ -704,12 +712,12 @@ function buildRoundTripped(params = {}) {
 test('RT-1: PERIOD_ADVANCE events serialize with data.cc and data.periods', () => {
   const { scenario } = buildScenario();
   const registry = ServiceRegistry.getInstance();
-  const config = ScenarioSerializer.serialize(
-    registry,
-    'test-rt', 'RT Test', 100, true,
-    scenario.simStart, scenario.simEnd,
-    scenario.initialState, scenario.params ?? [],
-  );
+  const config = ScenarioSerializer.serializeScenario({
+    ...ScenarioSerializer.snapshotServices(registry),
+    id: 'test-rt', name: 'RT Test', order: 100, active: true,
+    simStart: scenario.simStart, simEnd: scenario.simEnd,
+    initialState: scenario.initialState, params: scenario.params ?? [],
+  });
 
   // There is now one EventSeries per country (not one OneOffEvent per year boundary).
   const events = config.events.filter(e => e.type.startsWith('PERIOD_ADVANCE_'));
@@ -727,12 +735,12 @@ test('RT-1: PERIOD_ADVANCE events serialize with data.cc and data.periods', () =
 test('RT-2: TAX_SETTLE events serialize with data.cc', () => {
   const { scenario } = buildScenario();
   const registry = ServiceRegistry.getInstance();
-  const config = ScenarioSerializer.serialize(
-    registry,
-    'test-rt', 'RT Test', 100, true,
-    scenario.simStart, scenario.simEnd,
-    scenario.initialState, scenario.params ?? [],
-  );
+  const config = ScenarioSerializer.serializeScenario({
+    ...ScenarioSerializer.snapshotServices(registry),
+    id: 'test-rt', name: 'RT Test', order: 100, active: true,
+    simStart: scenario.simStart, simEnd: scenario.simEnd,
+    initialState: scenario.initialState, params: scenario.params ?? [],
+  });
 
   const events = config.events.filter(e => e.type.startsWith('TAX_SETTLE_'));
   assert.ok(events.length > 0, 'should have TAX_SETTLE events in serialized config');
@@ -883,11 +891,13 @@ test('ASSET-9: serialize includes realProperties array with US and AU house entr
   const { scenario } = buildScenario();
   const services = ServiceRegistry.getInstance();
 
-  const config = ScenarioSerializer.serialize(
-    services, 'test-assets', 'Asset Test', 1, true,
-    new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)),
-    scenario.sim.state, []
-  );
+  const config = ScenarioSerializer.serializeScenario({
+    ...ScenarioSerializer.snapshotServices(services),
+    id: 'test-assets', name: 'Asset Test', order: 1, active: true,
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2041, 0, 1)),
+    initialState: scenario.sim.state, params: [],
+  });
 
   assert.ok(Array.isArray(config.realProperties), 'realProperties should be an array');
   assert.strictEqual(config.realProperties.length, 2, 'should have 2 real properties');
@@ -908,11 +918,13 @@ test('ASSET-10: serialize includes collectibles array with Gold entry', () => {
   const { scenario } = buildScenario();
   const services = ServiceRegistry.getInstance();
 
-  const config = ScenarioSerializer.serialize(
-    services, 'test-assets', 'Asset Test', 1, true,
-    new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)),
-    scenario.sim.state, []
-  );
+  const config = ScenarioSerializer.serializeScenario({
+    ...ScenarioSerializer.snapshotServices(services),
+    id: 'test-assets', name: 'Asset Test', order: 1, active: true,
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2041, 0, 1)),
+    initialState: scenario.sim.state, params: [],
+  });
 
   assert.ok(Array.isArray(config.collectibles), 'collectibles should be an array');
   assert.strictEqual(config.collectibles.length, 1, 'should have 1 collectible');
@@ -929,11 +941,13 @@ test('ASSET-11: realProperties and collectibles survive serialize → deserializ
   const { scenario } = buildScenario();
   const services = ServiceRegistry.getInstance();
 
-  const config = ScenarioSerializer.serialize(
-    services, 'test-rt', 'RT Test', 1, true,
-    new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)),
-    scenario.sim.state, []
-  );
+  const config = ScenarioSerializer.serializeScenario({
+    ...ScenarioSerializer.snapshotServices(services),
+    id: 'test-rt', name: 'RT Test', order: 1, active: true,
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2041, 0, 1)),
+    initialState: scenario.sim.state, params: [],
+  });
 
   // Rebuild and deserialize into a fresh registry
   ServiceRegistry.reset();
@@ -970,11 +984,13 @@ test('ASSET-12: realProperties and collectibles survive full storage round-trip 
   const services = ServiceRegistry.getInstance();
 
   // Serialize the full intl scenario
-  const config = ScenarioSerializer.serialize(
-    services, 'test-storage', 'Storage RT Test', 1, true,
-    new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)),
-    scenario.sim.state, []
-  );
+  const config = ScenarioSerializer.serializeScenario({
+    ...ScenarioSerializer.snapshotServices(services),
+    id: 'test-storage', name: 'Storage RT Test', order: 1, active: true,
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2041, 0, 1)),
+    initialState: scenario.sim.state, params: [],
+  });
 
   // Simulate what ScenarioStorage.save() + load() does via JSON
   const storage = new InMemoryStorage();
@@ -1085,11 +1101,13 @@ test('ASSET-13: PATH-4 load overrides restore edited fields on realProperties, c
   registry.personService.updatePerson(primary, { lifeExpectancy: 95 });
 
   // Serialize (as onSave would)
-  const config = ScenarioSerializer.serialize(
-    registry, 'test-path4', 'Path4 Test', 1, true,
-    new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)),
-    scenario.sim.state, []
-  );
+  const config = ScenarioSerializer.serializeScenario({
+    ...ScenarioSerializer.snapshotServices(registry),
+    id: 'test-path4', name: 'Path4 Test', order: 1, active: true,
+    simStart: new Date(Date.UTC(2026, 0, 1)),
+    simEnd:   new Date(Date.UTC(2041, 0, 1)),
+    initialState: scenario.sim.state, params: [],
+  });
 
   // Verify the serialized config captured the edits
   assert.strictEqual(config.realProperties.find(p => p.country === 'US')?.plannedSaleYear, 2033);

@@ -478,8 +478,8 @@ export class IntlRetirementScenario extends BaseScenario {
 
     return {
       toolsets: IntlRetirementScenario.getToolsets(),
-      simStart:       (simStart ?? isoDate(new Date(Date.UTC(2026, 0, 1)))),
-      simEnd:         (simEnd   ?? isoDate(new Date(Date.UTC(2041, 0, 1)))),
+      simStart:       ScenarioSerializer.toDateStr(simStart ?? new Date(Date.UTC(2026, 0, 1))),
+      simEnd:         ScenarioSerializer.toDateStr(simEnd   ?? new Date(Date.UTC(2041, 0, 1))),
 
       // ── Parameters (toolset-key names) ──────────────────────────────────────
       parameters: {

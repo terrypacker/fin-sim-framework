@@ -379,14 +379,15 @@ test('deserialize: disabled event is added to UI without being scheduled', () =>
 
 /** Helper: serialize the current ServiceRegistry state into a config object. */
 function serializeNow(name = 'Test', initialState = {}) {
-  return ScenarioSerializer.serialize(
-    ServiceRegistry.getInstance(),
+  const services = ServiceRegistry.getInstance();
+  return ScenarioSerializer.serializeScenario({
+    ...ScenarioSerializer.snapshotServices(services),
     name,
-    '2026-01-01',
-    '2041-01-01',
+    simStart: '2026-01-01',
+    simEnd:   '2041-01-01',
     initialState,
-    [],
-  );
+    params: [],
+  });
 }
 
 test('serialize: returns arrays for events, handlers, actions, reducers', () => {

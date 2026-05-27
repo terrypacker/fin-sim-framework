@@ -8,8 +8,19 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { ScenarioSerializer } from './scenario-serializer.js';
+
 /**
  * Storage to track and manage Scenarios, including the current active one.
+ *
+ * ### Date representation
+ *
+ * Every registry entry's `simStart` / `simEnd` is a **full ISO 8601 string**
+ * (e.g. `'2026-01-01T00:00:00.000Z'`), regardless of where it came from
+ * (prebuilt descriptor with a `Date`, JSON-deserialized user scenario,
+ * uploaded JSON file). This is the single canonical representation; conversion
+ * to `Date` happens only when the scenario instance is constructed for the
+ * Simulation, and to `YYYY-MM-DD` only when populating UI inputs.
  *
  * ID scheme:
  *   'p:<id>'  — prebuilt scenario (e.g. 'p:intl-retirement')
@@ -26,12 +37,16 @@ export class ScenarioRegistry {
   /**
    * Load user scenarios from storage and assign u:<N> IDs.
    * If lastUsed refers to a user scenario, mark it active immediately.
+   * Storage round-trips simStart/simEnd as strings already, but older payloads
+   * may have truncated dates — re-canonicalize through ScenarioSerializer.toDateStr.
    */
   _init() {
     this._scenarioData = this._scenarioStorage.load();
     this._scenarioData.scenarios.forEach((s, i) => {
       s.id = 'u:' + i;
       s.prebuilt = false;
+      s.simStart = ScenarioSerializer.toDateStr(s.simStart);
+      s.simEnd   = ScenarioSerializer.toDateStr(s.simEnd);
       this._scenarios.set(s.id, s);
     });
     const lastUsed = this._scenarioData.lastUsed;
@@ -59,12 +74,16 @@ export class ScenarioRegistry {
         if (s.node) entry.node = s.node;
         return entry;
       });
+      // Canonicalize prebuilt sim window to ISO strings up-front so the registry
+      // entry matches the storage / JSON / serialized representation.
+      const simStart = ScenarioSerializer.toDateStr(pb.simStart);
+      const simEnd   = ScenarioSerializer.toDateStr(pb.simEnd);
       // Design 15 §2.1: materialize buildDefaultConfig once at registration so the
       // registry entry carries persons/accounts/realProperties/collectibles/toolsets
       // up-front. Subsequent Rebuilds read straight from the entry — defaults never
       // fire again unless explicitly requested via resetToDefaults.
       const defaultParams = Object.fromEntries(schema.map(s => [s.key, s.defaultValue]));
-      const defaultCfg = pb.scenarioClass?.buildDefaultConfig?.(defaultParams, pb.simStart, pb.simEnd) ?? {};
+      const defaultCfg = pb.scenarioClass?.buildDefaultConfig?.(defaultParams, simStart, simEnd) ?? {};
       // If another scenario (e.g. a user scenario) is already active, force active:false so
       // the prebuilt's active:true flag doesn't create two active scenarios. When nothing is
       // active yet, preserve pb.active so the post-loop "find(p => p.active)" fallback works.
@@ -74,6 +93,8 @@ export class ScenarioRegistry {
         ...defaultCfg,
         id,
         params,
+        simStart,
+        simEnd,
         active: pbActive,
         factory: pb.factory,
         scenarioClass: pb.scenarioClass,
@@ -167,6 +188,8 @@ export class ScenarioRegistry {
       data.scenarios.forEach((s, i) => {
         s.id      = 'u:' + i;
         s.prebuilt = false;
+        s.simStart = ScenarioSerializer.toDateStr(s.simStart);
+        s.simEnd   = ScenarioSerializer.toDateStr(s.simEnd);
         if (i === 0)  firstId  = s.id;
         if (s.active) activeId = s.id;
         this._scenarios.set(s.id, s);

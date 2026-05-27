@@ -184,13 +184,13 @@ test('deserialize branch: loads saved graph without invoking compiler', () => {
   const cfg = freshDeclarativeConfig();
   const { services: origServices } = loadIntoFreshServices(cfg);
 
-  const snapshot = ScenarioSerializer.serialize(
-    origServices,
-    'snap', 'Snap', 1, true,
-    new Date(cfg.simStart), new Date(cfg.simEnd),
-    origServices.simulationRegistry.getPrimary().state,
-    [],
-  );
+  const snapshot = ScenarioSerializer.serializeScenario({
+    ...ScenarioSerializer.snapshotServices(origServices),
+    id: 'snap', name: 'Snap', order: 1, active: true,
+    simStart: new Date(cfg.simStart), simEnd: new Date(cfg.simEnd),
+    initialState: origServices.simulationRegistry.getPrimary().state,
+    params: [],
+  });
 
   assert.ok(ScenarioSerializer.hasSerializedGraph(snapshot),
     'snapshot must carry a serialized graph');
@@ -233,13 +233,13 @@ test('round-trip via ScenarioLoader: US savings balance matches after 3 months',
   assert.ok(baseline != null);
 
   // Snapshot the compiled scenario
-  const snapshot = ScenarioSerializer.serialize(
-    svc1,
-    'snap', 'Snap', 1, true,
-    new Date(cfg.simStart), new Date(cfg.simEnd),
-    cfg.initialState ?? {},   // use the pre-run initial state for the round-trip
-    [],
-  );
+  const snapshot = ScenarioSerializer.serializeScenario({
+    ...ScenarioSerializer.snapshotServices(svc1),
+    id: 'snap', name: 'Snap', order: 1, active: true,
+    simStart: new Date(cfg.simStart), simEnd: new Date(cfg.simEnd),
+    initialState: cfg.initialState ?? {},   // pre-run initial state for round-trip
+    params: [],
+  });
   // Capture the post-compile / pre-run state so the reload starts from the
   // same point (currentPeriods, inflationAccumulator, etc.).
   ServiceRegistry.reset();

@@ -44,12 +44,11 @@ export class ScenarioTabPresenter {
    *   bus:        import('../../simulation-framework/event-bus.js').EventBus
    * }}
    */
-  constructor({ controller, view, bus, initScenario, getBuiltScenario }) {
+  constructor({ controller, view, bus, initScenario }) {
     this._controller = controller;
     this._view = view;
     this._bus = bus;
     this._initScenario = initScenario;
-    this._getBuiltScenario = getBuiltScenario ?? null;
     this._activeScenario = null;
 
     this._view.onOpen = (id) => {
@@ -64,7 +63,7 @@ export class ScenarioTabPresenter {
 
     this._view.onNew = () => {
       this._activeScenario = this._controller.newScenario(this._activeScenario);
-      this._view._refreshScenarioSelect(this._controller.getAll(), this._activeScenario);
+      this._loadActiveScenario();
     };
 
     this._view.onDelete = () => {
@@ -86,13 +85,13 @@ export class ScenarioTabPresenter {
     }
 
     this._view.onStartChange = (startDate) => {
-      //TODO #268 Need to deal with timezone here
-      this._activeScenario.simStart = new Date(startDate);
+      // <input type="date"> emits YYYY-MM-DD; canonicalize to full ISO so the
+      // registry / storage / JSON download all share one representation.
+      this._activeScenario.simStart = ScenarioSerializer.toDateStr(startDate);
     }
 
     this._view.onEndChange = (endDate) => {
-      //TODO #268 Need to deal with timezone here
-      this._activeScenario.simEnd = new Date(endDate);
+      this._activeScenario.simEnd = ScenarioSerializer.toDateStr(endDate);
     }
 
     this._view.onInitialStateChange = (initialState) => {
@@ -105,41 +104,22 @@ export class ScenarioTabPresenter {
     }
 
     this._view.onSave = () => {
-      const services = ServiceRegistry.getInstance();
       if (!this._activeScenario) return;
-
-      // Domain objects
-      this._activeScenario.persons        = (services.personService?.getAll()        ?? []).map(p => ScenarioSerializer._serializePerson(p));
-      this._activeScenario.accounts       = (services.accountService?.getAll()       ?? []).map(a => ScenarioSerializer._serializeAccount(a));
-      this._activeScenario.realProperties = (services.realPropertyService?.getAll()  ?? []).map(p => ScenarioSerializer._serializeRealProperty(p));
-      this._activeScenario.collectibles   = (services.collectibleService?.getAll()   ?? []).map(c => ScenarioSerializer._serializeCollectible(c));
-
-      // Graph snapshot — captured so subsequent loads take the deserialize
-      // branch in ScenarioLoader rather than recompiling from toolsets.
-      this._activeScenario.events   = (services.eventService?.getAll()   ?? []).map(n => ScenarioSerializer._serializeEvent(n));
-      this._activeScenario.handlers = (services.handlerService?.getAll() ?? []).map(n => ScenarioSerializer._serializeHandler(n));
-      this._activeScenario.actions  = (services.actionService?.getAll()  ?? []).map(n => ScenarioSerializer._serializeAction(n));
-      this._activeScenario.reducers = (services.reducerService?.getAll() ?? []).map(n => ScenarioSerializer._serializeReducer(n));
-
+      // Harvest in-flight service-map state into the active scenario record so
+      // localStorage / Download / Rebuild see edits the user has made but not
+      // yet rebuilt. The graph snapshot also forces subsequent loads through
+      // the deserialize branch rather than recompiling from toolsets.
+      Object.assign(this._activeScenario, ScenarioSerializer.snapshotServices(ServiceRegistry.getInstance()));
       this._controller.save(this._activeScenario);
       this._view._refreshScenarioSelect(this._controller.getAll(), this._activeScenario);
     };
 
     this._view.onDownloadJson = () => {
-      const services = ServiceRegistry.getInstance();
-      const active   = this._activeScenario;
-      const built    = this._getBuiltScenario?.();
-      const serialized = ScenarioSerializer.serialize(
-        services,
-        active?.id    ?? 'export',
-        active?.name  ?? 'Exported Scenario',
-        active?.order ?? 100,
-        true,
-        built?.simStart    ?? active?.simStart,
-        built?.simEnd      ?? active?.simEnd,
-        built?.initialState ?? active?.initialState ?? {},
-        active?.params ?? [],
-      );
+      // Design 15: the active scenario record is the source of truth. Serialize
+      // straight from it instead of re-reading services or the live built
+      // scenario — both can diverge from what's actually in storage/cfg.
+      if (!this._activeScenario) return;
+      const serialized = ScenarioSerializer.serializeScenario(this._activeScenario);
       this._view.downloadJson({ scenarios: [serialized] });
     };
 

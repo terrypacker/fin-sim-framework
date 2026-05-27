@@ -114,17 +114,17 @@ function buildIntlAndSerialize() {
   const scenario = IntlRetirementScenario.buildAndCompile({});
 
   const services = ServiceRegistry.getInstance();
-  const config = ScenarioSerializer.serialize(
-    services,
-    'roundtrip-test',
-    'Round-trip Test',
-    1,
-    true,
-    scenario.simStart,
-    scenario.simEnd,
-    scenario.sim.state,  // capture compiled state for correct currentPeriods/inflation
-    [],
-  );
+  const config = ScenarioSerializer.serializeScenario({
+    ...ScenarioSerializer.snapshotServices(services),
+    id:           'roundtrip-test',
+    name:         'Round-trip Test',
+    order:        1,
+    active:       true,
+    simStart:     scenario.simStart,
+    simEnd:       scenario.simEnd,
+    initialState: scenario.sim.state,  // capture compiled state for correct currentPeriods/inflation
+    params:       [],
+  });
 
   return { scenario, sim: scenario.sim, config };
 }

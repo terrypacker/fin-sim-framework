@@ -73,6 +73,9 @@ function makeStack({ prebuiltScenarios = [] } = {}) {
   const controller = new ScenarioTabController({ scenarioService: service });
   const view       = new ScenarioTabView();
   const presenter  = new ScenarioTabPresenter({ controller, view, bus: {}, initScenario: () => {} });
+  // BaseApp drives initial render externally now; mirror that here so tests
+  // observe a populated dropdown / active scenario.
+  presenter._refresh();
   return { registry, service, controller, view, presenter };
 }
 
@@ -203,4 +206,86 @@ test('getSimStart: returns undefined when simStartInput is empty', () => {
   const { presenter } = makeStack({ prebuiltScenarios: [makePrebuilt('alpha')] });
   document.getElementById('simStartInput').value = '';
   assert.strictEqual(presenter.getSimStart(), undefined);
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// onDownloadJson — Design 15: serialize directly from active cfg
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * The download path must serialize from the active scenario record only — not
+ * from the live "built scenario" or services. This guards the regression where
+ * initialState saved in localStorage was clobbered by the built scenario's
+ * empty initialState in the downloaded JSON.
+ */
+test('onDownloadJson: serialized payload reflects active cfg, not built scenario', () => {
+  // Seed an active user scenario with hand-crafted persons / accounts /
+  // initialState / params — the kind of data localStorage would carry.
+  setStorageData({
+    lastUsed: 'u:0',
+    scenarios: [{
+      name: 'My Saved',
+      simStart: '2026-01-01',
+      simEnd:   '2041-01-01',
+      initialState:   { metrics: { keptThroughDownload: 42 } },
+      persons:        [{ __type: 'Person', id: 'primary', birthDate: '1980-01-01' }],
+      accounts:       [{ __type: 'CheckingAccount', stateKey: 'usSavingsAccount', balance: 12345 }],
+      realProperties: [{ __type: 'RealProperty', stateKey: 'usHouseProperty', value: 500_000 }],
+      collectibles:   [],
+      events: [], handlers: [], actions: [], reducers: [],
+      params:   [{ name: 'inflationRate', label: 'Inflation', type: 'Number', value: 0.025 }],
+      toolsets: ['US_BANKING'],
+    }],
+  });
+  const { view } = makeStack({ prebuiltScenarios: [makePrebuilt('alpha')] });
+
+  // Intercept the download to inspect the payload that the view would receive.
+  let downloaded = null;
+  view.downloadJson = (data) => { downloaded = data; };
+
+  document.getElementById('downloadJsonBtn').click();
+
+  assert.ok(downloaded?.scenarios?.length === 1, 'download should produce a single scenario');
+  const cfg = downloaded.scenarios[0];
+  assert.deepStrictEqual(cfg.initialState, { metrics: { keptThroughDownload: 42 } },
+    'initialState must round-trip through the download path');
+  assert.strictEqual(cfg.name, 'My Saved');
+  // Design 15: simStart/simEnd are full ISO strings end-to-end.
+  assert.strictEqual(cfg.simStart, '2026-01-01T00:00:00.000Z');
+  assert.strictEqual(cfg.simEnd,   '2041-01-01T00:00:00.000Z');
+  assert.strictEqual(cfg.persons.length,        1);
+  assert.strictEqual(cfg.accounts.length,       1);
+  assert.strictEqual(cfg.realProperties.length, 1);
+  assert.strictEqual(cfg.params[0].name,  'inflationRate');
+  assert.strictEqual(cfg.params[0].value, 0.025);
+  assert.deepStrictEqual(cfg.toolsets, ['US_BANKING']);
+});
+
+test('onDownloadJson: no-op when no active scenario is set', () => {
+  const { view, registry } = makeStack({ prebuiltScenarios: [] });
+  // No prebuilts and no user scenarios → no active scenario.
+  assert.strictEqual(registry.getActive(), undefined);
+
+  let downloaded = null;
+  view.downloadJson = (data) => { downloaded = data; };
+  document.getElementById('downloadJsonBtn').click();
+  assert.strictEqual(downloaded, null, 'download should not fire when nothing is active');
+});
+
+test('onDownloadJson: empty initialState produces {} in payload', () => {
+  setStorageData({
+    lastUsed: 'u:0',
+    scenarios: [{
+      name: 'Empty State', simStart: '2026-01-01', simEnd: '2041-01-01',
+      // no initialState field at all
+      persons: [], accounts: [], realProperties: [], collectibles: [],
+      events: [], handlers: [], actions: [], reducers: [],
+      params: [], toolsets: [],
+    }],
+  });
+  const { view } = makeStack({ prebuiltScenarios: [makePrebuilt('alpha')] });
+  let downloaded = null;
+  view.downloadJson = (data) => { downloaded = data; };
+  document.getElementById('downloadJsonBtn').click();
+  assert.deepStrictEqual(downloaded.scenarios[0].initialState, {});
 });
