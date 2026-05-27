@@ -12,6 +12,8 @@ import { ScenarioRunner }             from '../../simulation-framework/scenario.
 import { createDistribution }         from '../../simulation-framework/distributions.js';
 import { ServiceRegistry }            from '../../services/service-registry.js';
 import { IntlRetirementScenario }     from '../../scenarios/intl-retirement-scenario.js';
+import { ScenarioLoader }             from '../../scenarios/scenario-loader.js';
+import { ScenarioSerializer }         from '../../scenarios/scenario-serializer.js';
 import { DEFAULT_MC_VARIABLE_CONFIGS } from './intl-retirement-mc-config.js';
 
 // USD account state keys
@@ -99,11 +101,13 @@ export class IntlRetirementMcRunner {
     variableConfigs = DEFAULT_MC_VARIABLE_CONFIGS,
     simStart       = new Date(Date.UTC(2026, 0, 1)),
     simEnd         = new Date(Date.UTC(2041, 0, 1)),
+    cfgTemplate    = null,
   } = {}) {
     this.n               = n;
     this.variableConfigs = variableConfigs;
     this.simStart        = simStart;
     this.simEnd          = simEnd;
+    this.cfgTemplate     = cfgTemplate;
   }
 
   /**
@@ -118,10 +122,37 @@ export class IntlRetirementMcRunner {
     const simStart = this.simStart;
     const simEnd   = this.simEnd;
 
+    // Design 15 §2.3: the active scenario cfg is the per-iteration template.
+    // Fallback to a fresh defaults cfg for tests / library consumers that don't
+    // wire a ServiceRegistry-backed active scenario.
+    //
+    // Pipe through serializeScenario so the template is a plain JSON-safe object
+    // (no functions / class refs); registry entries carry `factory` and
+    // `scenarioClass` which `structuredClone` would reject.
+    const rawTemplate = this.cfgTemplate
+      ?? IntlRetirementScenario.buildDefaultConfig({}, simStart, simEnd);
+    const cfgTemplate = ScenarioSerializer.serializeScenario(rawTemplate);
+
     const runner = new ScenarioRunner({
       createSimulation: (params) => {
         ServiceRegistry.reset();
-        const scenario = IntlRetirementScenario.buildAndCompile({ params, simStart, simEnd });
+        const registry = ServiceRegistry.getInstance();
+        const scenario = new IntlRetirementScenario({
+          context: registry.simulationContext,
+          params,
+          simStart,
+          simEnd,
+        });
+        scenario.buildSim();
+
+        const cfg = structuredClone(cfgTemplate);
+        if (Array.isArray(cfg.params)) {
+          for (const p of cfg.params) {
+            if (params[p.name] !== undefined) p.value = params[p.name];
+          }
+        }
+        new ScenarioLoader().load(cfg, registry);
+
         scenario.sim.silent = true; // skip bus, clones, diffs — not needed in MC
         return scenario.sim;
       },

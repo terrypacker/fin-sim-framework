@@ -69,8 +69,8 @@ export class ScenarioService {
       order:          100,
       prebuilt:       false,
       scenarioId:     fromScenario?.id ?? null,
-      simStart:       fromScenario?.simStart ?? new Date(Date.UTC(2026, 0, 1)),
-      simEnd:         fromScenario?.simEnd   ?? new Date(Date.UTC(2041, 0, 1)),
+      simStart:       ScenarioSerializer.toDateStr(fromScenario?.simStart ?? new Date(Date.UTC(2026, 0, 1))),
+      simEnd:         ScenarioSerializer.toDateStr(fromScenario?.simEnd   ?? new Date(Date.UTC(2041, 0, 1))),
       events:         structuredClone(fromScenario?.events         ?? []),
       handlers:       structuredClone(fromScenario?.handlers       ?? []),
       actions:        structuredClone(fromScenario?.actions        ?? []),
@@ -100,6 +100,44 @@ export class ScenarioService {
       const s = schemaMap.get(p.name);
       if (s !== undefined) p.value = s.defaultValue;
     }
+  }
+
+  /**
+   * Design 15 §2.4: "Reset to Defaults" — explicit user-triggered restoration
+   * of the prebuilt's reference scenario. Replaces the cfg's top-level domain
+   * data (persons / accounts / realProperties / collectibles / toolsets /
+   * parameters) with buildDefaultConfig() output and resets all params to
+   * schema defaults. The scenario record itself (id, name, parent reference)
+   * is preserved. Clears any saved graph snapshot so the next load takes the
+   * compile branch.
+   *
+   * No-op when the scenario's scenarioClass cannot produce defaults.
+   */
+  resetToDefaults(scenario) {
+    const ScenarioCls = scenario?.scenarioClass;
+    if (typeof ScenarioCls?.buildDefaultConfig !== 'function') return;
+
+    this.resetParamsFromSchema(scenario);
+
+    const schema = ScenarioCls.getParamSchema?.() ?? [];
+    const defaultParams = Object.fromEntries(schema.map(s => [s.key, s.defaultValue]));
+    const defaults = ScenarioCls.buildDefaultConfig(defaultParams, scenario.simStart, scenario.simEnd);
+    if (!defaults) return;
+
+    scenario.toolsets       = structuredClone(defaults.toolsets       ?? []);
+    scenario.parameters     = structuredClone(defaults.parameters     ?? {});
+    scenario.persons        = structuredClone(defaults.persons        ?? []);
+    scenario.accounts       = structuredClone(defaults.accounts       ?? []);
+    scenario.realProperties = structuredClone(defaults.realProperties ?? []);
+    scenario.collectibles   = structuredClone(defaults.collectibles   ?? []);
+
+    // Drop the saved compiled graph so the next ScenarioLoader.load() takes the
+    // compile branch and rebuilds events/handlers/reducers from the toolsets.
+    scenario.events   = [];
+    scenario.handlers = [];
+    scenario.actions  = [];
+    scenario.reducers = [];
+    scenario.initialState = {};
   }
 
   getUserScenarios() {

@@ -120,14 +120,14 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
   {
     key: 'primaryRetirementDate', label: 'Primary Retirement Date',
     type: 'Date', group: 'People', mc: false, opt: true,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.primaryRetirementDate.toISOString().slice(0, 10),
+    defaultValue: INTL_RETIREMENT_DEFAULTS.primaryRetirementDate.toISOString(),
     description: 'Date primary person stops working',
     node: { type: 'person', id: 'primary', field: 'retirementDate' },
   },
   {
     key: 'spouseRetirementDate', label: 'Spouse Retirement Date',
     type: 'Date', group: 'People', mc: false, opt: true,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseRetirementDate.toISOString().slice(0, 10),
+    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseRetirementDate.toISOString(),
     description: 'Date spouse stops working',
     node: { type: 'person', id: 'spouse', field: 'retirementDate' },
   },
@@ -474,12 +474,15 @@ export class IntlRetirementScenario extends BaseScenario {
     p.primaryRetirementDate = toDate(p.primaryRetirementDate);
     p.spouseRetirementDate  = toDate(p.spouseRetirementDate);
 
-    const isoDate = d => d.toISOString().slice(0, 10);
+    // Design 15: emit full ISO 8601 strings for all dates. Deserializers
+    // (`_makePerson`, etc.) wrap with `new Date(...)` which accepts both full
+    // ISO and YYYY-MM-DD, so older payloads remain readable.
+    const isoDate = d => ScenarioSerializer.toDateStr(d);
 
     return {
       toolsets: IntlRetirementScenario.getToolsets(),
-      simStart:       (simStart ?? isoDate(new Date(Date.UTC(2026, 0, 1)))),
-      simEnd:         (simEnd   ?? isoDate(new Date(Date.UTC(2041, 0, 1)))),
+      simStart:       ScenarioSerializer.toDateStr(simStart ?? new Date(Date.UTC(2026, 0, 1))),
+      simEnd:         ScenarioSerializer.toDateStr(simEnd   ?? new Date(Date.UTC(2041, 0, 1))),
 
       // ── Parameters (toolset-key names) ──────────────────────────────────────
       parameters: {
@@ -662,11 +665,18 @@ export class IntlRetirementScenario extends BaseScenario {
   }
 
   /**
-   * Convenience factory: reset-proof builder that creates the scenario, runs
-   * the full toolset compilation path, and returns the scenario.
+   * Test / programmatic convenience: reset-proof builder that constructs a
+   * scenario, derives a cfg from buildDefaultConfig(params), and runs the
+   * toolset compilation path. Returns the scenario.
+   *
+   * Design 15: production Monte Carlo and Optimization paths NO LONGER call
+   * this — they clone the active scenario cfg as a template so user edits to
+   * non-param fields (planned sale years, life expectancy, drawdown priority,
+   * custom graph nodes) are preserved across iterations. Use this only for
+   * unit tests and one-off "give me a fresh reference scenario" callers.
    *
    * Callers must call ServiceRegistry.reset() before invoking this if they
-   * want an isolated simulation (e.g. MC runner, optimizer, unit tests).
+   * want an isolated simulation.
    *
    * @param {{ params?, simStart?, simEnd? }} [opts]
    * @returns {IntlRetirementScenario}

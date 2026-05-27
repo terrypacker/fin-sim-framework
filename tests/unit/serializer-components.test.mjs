@@ -283,10 +283,12 @@ test('person: round-trip preserves name, birthDate, citizen, lifeExpectancy, soc
   assert.strictEqual(new Date(restored.birthDate).getUTCFullYear(), 1978);
 });
 
-test('person: birthDate serializes as YYYY-MM-DD string', () => {
+test('person: birthDate serializes as full ISO 8601 string', () => {
   const p = new Person('p2', new Date(Date.UTC(1990, 5, 20)), { name: 'Bob' });
   const { d } = personRoundTrip(p);
-  assert.strictEqual(d.birthDate, '1990-06-20');
+  // Design 15: all dates emit full ISO 8601 (with time component) end-to-end so
+  // simStart/simEnd/birthDate/retirementDate share one canonical format.
+  assert.strictEqual(d.birthDate, '1990-06-20T00:00:00.000Z');
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -328,4 +330,55 @@ test('account: round-trip reconstructs correct class', () => {
   const { account: restored } = accountRoundTrip(a);
   assert.ok(restored instanceof FourOhOneKAccount,
     'restored account should be a FourOhOneKAccount instance');
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Design 15 — Canonical date format across the serializer
+//
+// Regression guard: every date field emitted by ScenarioSerializer must be a
+// full ISO 8601 string (`YYYY-MM-DDTHH:mm:ss.sssZ`), not the short YYYY-MM-DD
+// form. simStart/simEnd, Person.birthDate/retirementDate, and OneOffEvent.date
+// all share this one canonical representation — UI inputs slice to 10 chars
+// only for `<input type="date">` display.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** Match the full ISO 8601 with milliseconds + UTC zone marker. */
+const FULL_ISO_RX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+test('dates: toDateStr produces full ISO from Date input', () => {
+  const iso = ScenarioSerializer.toDateStr(new Date(Date.UTC(1985, 5, 15)));
+  assert.match(iso, FULL_ISO_RX, `expected full ISO, got ${iso}`);
+});
+
+test('dates: toDateStr produces full ISO from YYYY-MM-DD input', () => {
+  const iso = ScenarioSerializer.toDateStr('1985-06-15');
+  assert.match(iso, FULL_ISO_RX, `expected full ISO, got ${iso}`);
+  assert.strictEqual(iso, '1985-06-15T00:00:00.000Z');
+});
+
+test('dates: _serializePerson emits full ISO for birthDate and retirementDate', () => {
+  const p = new Person('p1', new Date(Date.UTC(1978, 3, 15)), {
+    name: 'Alice',
+    retirementDate: new Date(Date.UTC(2045, 11, 31)),
+  });
+  const d = ScenarioSerializer._serializePerson(p);
+  assert.match(d.birthDate,      FULL_ISO_RX, `birthDate truncated: ${d.birthDate}`);
+  assert.match(d.retirementDate, FULL_ISO_RX, `retirementDate truncated: ${d.retirementDate}`);
+});
+
+test('dates: _serializePerson falls back to full ISO when retirementDate is missing', () => {
+  // Person without retirementDate gets Date(2040-01-01) from the Person ctor —
+  // the fallback in _serializePerson should never produce a short ISO.
+  const p = new Person('p1', new Date(Date.UTC(1978, 3, 15)));
+  p.retirementDate = null;
+  const d = ScenarioSerializer._serializePerson(p);
+  assert.match(d.retirementDate, FULL_ISO_RX, `fallback retirementDate truncated: ${d.retirementDate}`);
+});
+
+test('dates: _serializeEvent emits full ISO for OneOffEvent.date', () => {
+  const ev = new OneOffEvent({
+    id: 'one1', name: 'One', type: 'BONUS', date: new Date(Date.UTC(2027, 6, 4)),
+  });
+  const d = ScenarioSerializer._serializeEvent(ev);
+  assert.match(d.date, FULL_ISO_RX, `OneOffEvent.date truncated: ${d.date}`);
 });
