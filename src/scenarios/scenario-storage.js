@@ -51,16 +51,6 @@ export class ScenarioStorage {
    * @param data
    */
   save(data) {
-    //TODO Clean this up to be in the constructor
-    const services = ServiceRegistry.getInstance();
-    const serializedScenarios = [];
-    data.scenarios.forEach(s => {
-      serializedScenarios.push(ScenarioSerializer.serializeScenario(s));
-    });
-    const serialized = {
-      lastUsed: data.lastUsed,
-      scenarios: serializedScenarios
-    }
-    this._getStorageInstance().setItem(ScenarioStorage.STORAGE_KEY, JSON.stringify(serialized));
+    this._getStorageInstance().setItem(ScenarioStorage.STORAGE_KEY, JSON.stringify(data));
   }
 }

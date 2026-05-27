@@ -55,13 +55,7 @@ export class ScenarioTabPresenter {
     this._view.onOpen = (id) => {
       this._controller.setActiveById(id);
       this._activeScenario = this._controller.getActiveScenario();
-      if (this._activeScenario?.prebuilt) {
-        // Selecting a prebuilt from the dropdown resets params to schema defaults
-        // so the user always starts from a known baseline (re-select = "Load Defaults").
-        this._controller.resetParamsFromSchema(this._activeScenario);
-      }
-      this._view._populateScenarioForm(this._activeScenario);
-      this._initScenario();
+      this._loadActiveScenario();
     };
 
     this._view.onRebuild = () => {
@@ -144,12 +138,30 @@ export class ScenarioTabPresenter {
 
     this._view.onUploadJson = async (file) => {
       const data = await this._view.readUploadedJson(file);
+
+      //Replace and set active scenario
       this._activeScenario = this._controller.replaceUserScenarios(data);
-      this._view._refreshScenarioSelect(this._controller.getAll(), this._activeScenario);
+      this._loadActiveScenario();
     };
 
     // Initial render.
     this._refresh();
+  }
+
+  /**
+   * Performs load of scenario data in UI and services.
+   *
+   * Assumes the active scenario is set in this._activeScenario?
+   * @private
+   */
+  _loadActiveScenario() {
+    if (this._activeScenario?.prebuilt) {
+      // Selecting a prebuilt from the dropdown resets params to schema defaults
+      // so the user always starts from a known baseline (re-select = "Load Defaults").
+      this._controller.resetParamsFromSchema(this._activeScenario);
+    }
+    this._view._populateScenarioForm(this._activeScenario);
+    this._initScenario();
   }
 
   _refresh() {
