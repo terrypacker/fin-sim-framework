@@ -10,9 +10,12 @@
 
 
 
-import { ActionDefinition }     from '../simulation-framework/actions.js';
-import { ACCOUNT_ROLES }        from '../finance/state/account-roles.js';
-import { Person }               from '../finance/person.js';
+import {
+  ActionDefinition,
+  Action, FieldAction, FieldValueAction, AmountAction, ScriptedAction,
+} from '../simulation-framework/actions.js';
+import { ACCOUNT_ROLES }  from '../finance/state/account-roles.js';
+import { Person }         from '../finance/person.js';
 import { Account, CheckingAccount, SavingsAccount } from '../finance/assets/account.js';
 import {
   InvestmentAccount, BrokerageAccount, FourOhOneKAccount,
@@ -20,6 +23,189 @@ import {
 } from '../finance/assets/investment-account.js';
 import { RealProperty }  from '../finance/assets/real-property.js';
 import { Collectible }   from '../finance/assets/collectible.js';
+
+// ─── Engine classes (replaces Engine global) ────────────────────────
+import { HandlerEntry }   from '../simulation-framework/handlers.js';
+import { OneOffEvent }    from '../simulation-framework/events/one-off-event.js';
+import { EventSeries }    from '../simulation-framework/events/event-series.js';
+import { ReducerBuilder } from '../simulation-framework/builders/reducer-builder.js';
+import { ScriptedReducer } from '../simulation-framework/reducers.js';
+
+// ─── Finance handler classes (replaces Finance global) ──────────────
+import { UsSavingsInterestMonthlyHandler }              from '../finance/handlers/us-savings-interest-handler.js';
+import { MonthlyExpensesHandler }                       from '../finance/handlers/monthly-expenses-handler.js';
+import { MonthlyWagesHandler }                          from '../finance/handlers/monthly-wages-handler.js';
+import { IntlTransferToUsHandler, IntlTransferToAuHandler } from '../finance/handlers/intl-transfer-handlers.js';
+import {
+  AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler,
+  IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,
+  IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
+} from '../finance/handlers/earnings-handlers.js';
+import { DividendScheduledHandler } from '../finance/handlers/dividend-scheduled-handler.js';
+import { ChangeResidencyHandler }   from '../finance/handlers/change-residency-handler.js';
+import { OutOfFundsHandler }        from '../finance/handlers/out-of-funds-handler.js';
+
+// ─── Finance reducer classes ──────────────────────────────────────────────────
+import { UsSavingsInterestCreditReducer } from '../finance/reducers/us-savings-interest-credit-reducer.js';
+import { ExpenseDebitReducer }            from '../finance/reducers/expense-debit-reducer.js';
+import { ReplenishSavingsReducer }        from '../finance/reducers/replenish-savings-reducer.js';
+import { IntlTransferApplyReducer }       from '../finance/reducers/intl-transfer-apply-reducer.js';
+import { StockDividendCashApplyReducer }  from '../finance/reducers/stock-dividend-cash-apply-reducer.js';
+import { ChangeResidencyApplyReducer }    from '../finance/reducers/change-residency-apply-reducer.js';
+import { SetOutOfFundsDateReducer }       from '../finance/reducers/set-out-of-funds-date-reducer.js';
+import { AccumulateDeficitReducer }       from '../finance/reducers/accumulate-deficit-reducer.js';
+import { OutOfFundsReducer }             from '../finance/reducers/out-of-funds-reducer.js';
+import { InflationAdjustReducer }        from '../finance/reducers/inflation-adjust-reducer.js';
+
+// ─── Tax infrastructure ────────────────────────────────────────────────────────
+import { PeriodAdvanceHandler, PeriodAdvanceReducer }                          from '../finance/tax/period-advance-classes.js';
+import { TaxSettleHandler, TaxSettleApplyReducer, TaxPaymentDebitReducer }     from '../finance/tax/tax-settle-classes.js';
+import { DynamicTaxReducer }  from '../finance/tax/dynamic-tax-reducer.js';
+import { TaxService }         from '../finance/tax-service.js';
+
+// ─── US account-module handlers and reducers ───────────────────────────────────
+import {
+  RothContributionHandler, RothWithdrawalContributionsHandler,
+  RothWithdrawalEarningsHandler, RothEarningsHandler,
+  RothContributionApplyReducer, RothWithdrawalContribApplyReducer,
+  RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer,
+} from '../finance/account-rules/us/roth-classes.js';
+import {
+  IraContributionHandler, IraWithdrawalContributionsHandler,
+  IraWithdrawalEarningsHandler, IraEarningsHandler,
+  IraContributionApplyReducer, IraWithdrawalContribApplyReducer,
+  IraWithdrawalEarningsApplyReducer, IraEarningsApplyReducer,
+} from '../finance/account-rules/us/ira-classes.js';
+import {
+  K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler,
+  K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer,
+  K401RmdApplyReducer,
+} from '../finance/account-rules/us/k401-classes.js';
+import {
+  FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler,
+  StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler,
+  FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer, FixedIncomeEarningsApplyReducer,
+  StockContributionApplyReducer, StockDividendApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer,
+} from '../finance/account-rules/us/us-brokerage-classes.js';
+import { UsHouseSaleHandler, UsHouseSaleApplyReducer }     from '../finance/account-rules/us/us-real-property-classes.js';
+import {
+  SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler,
+  SeIncomeUsHandler, BonusHandler, CompanySaleHandler,
+  SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer,
+  SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer,
+} from '../finance/account-rules/us/us-income-classes.js';
+import {
+  CollectibleSaleHandler, CollectibleValueChangeHandler,
+  CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer,
+} from '../finance/account-rules/us/us-collectible-classes.js';
+import {
+  IraRolloverWithdrawalHandler, IraRmdHandler,
+  IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
+} from '../finance/account-rules/us/ira-rollover-classes.js';
+import {
+  RothRolloverContributionHandler, RothRolloverEarningsHandler,
+  RothRolloverWithdrawalContributionsHandler, RothRolloverWithdrawalEarningsHandler,
+  RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
+  RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer,
+} from '../finance/account-rules/us/roth-rollover-classes.js';
+import {
+  RothConversionHandler, RothConversionPolicyHandler,
+  RothConversionApplyReducer,
+} from '../finance/account-rules/us/roth-conversion-classes.js';
+
+// ─── AU account-module handlers and reducers ───────────────────────────────────
+import {
+  AuSavingsContributionHandler, AuSavingsWithdrawalHandler, AuSavingsEarningsHandler,
+  AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer,
+} from '../finance/account-rules/au/au-savings-classes.js';
+import {
+  SuperContributionHandler, SuperWithdrawalContributionsHandler,
+  SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler,
+  SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer,
+  SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer,
+} from '../finance/account-rules/au/au-super-classes.js';
+import {
+  AuDividendFrankedResidentHandler, AuDividendFrankedNonResidentHandler,
+  AuDividendUnfrankedResidentHandler, AuDividendUnfrankedNonResidentHandler,
+  AuStockEarningsHandler, AuStockWithdrawalHandler,
+  AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer,
+  AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer,
+  AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer,
+} from '../finance/account-rules/au/au-brokerage-classes.js';
+import { AuHouseSaleHandler, AuHouseSaleApplyReducer } from '../finance/account-rules/au/au-real-property-classes.js';
+import { AuSeIncomeHandler, AuSeIncomeApplyReducer }   from '../finance/account-rules/au/au-income-classes.js';
+
+// ─── Local namespace objects replacing Engine / Finance ───
+const Engine = {
+  Action, FieldAction, FieldValueAction, AmountAction, ScriptedAction,
+  HandlerEntry, OneOffEvent, EventSeries, ReducerBuilder, ScriptedReducer,
+};
+
+const Finance = {
+  // Direct-named handlers
+  UsSavingsInterestMonthlyHandler, MonthlyExpensesHandler, MonthlyWagesHandler,
+  IntlTransferToUsHandler, IntlTransferToAuHandler,
+  AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler,
+  IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,
+  IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
+  DividendScheduledHandler, ChangeResidencyHandler, OutOfFundsHandler,
+  // Direct-named reducers
+  UsSavingsInterestCreditReducer, ExpenseDebitReducer, ReplenishSavingsReducer,
+  IntlTransferApplyReducer, StockDividendCashApplyReducer, ChangeResidencyApplyReducer,
+  SetOutOfFundsDateReducer, AccumulateDeficitReducer, OutOfFundsReducer, InflationAdjustReducer,
+  // Tax infrastructure
+  PeriodAdvanceHandler, PeriodAdvanceReducer,
+  TaxSettleHandler, TaxSettleApplyReducer, TaxPaymentDebitReducer,
+  DynamicTaxReducer, TaxService,
+  // US account-module handlers
+  RothContributionHandler, RothWithdrawalContributionsHandler,
+  RothWithdrawalEarningsHandler, RothEarningsHandler,
+  IraContributionHandler, IraWithdrawalContributionsHandler,
+  IraWithdrawalEarningsHandler, IraEarningsHandler,
+  K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler,
+  FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler,
+  StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler,
+  UsHouseSaleHandler,
+  SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler,
+  SeIncomeUsHandler, BonusHandler, CompanySaleHandler,
+  CollectibleSaleHandler, CollectibleValueChangeHandler,
+  IraRolloverWithdrawalHandler, IraRmdHandler,
+  RothRolloverContributionHandler, RothRolloverEarningsHandler,
+  RothRolloverWithdrawalContributionsHandler, RothRolloverWithdrawalEarningsHandler,
+  RothConversionHandler, RothConversionPolicyHandler,
+  // US account-module reducers
+  RothContributionApplyReducer, RothWithdrawalContribApplyReducer,
+  RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer,
+  IraContributionApplyReducer, IraWithdrawalContribApplyReducer,
+  IraWithdrawalEarningsApplyReducer, IraEarningsApplyReducer,
+  K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer, K401RmdApplyReducer,
+  FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer, FixedIncomeEarningsApplyReducer,
+  StockContributionApplyReducer, StockDividendApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer,
+  UsHouseSaleApplyReducer,
+  SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer,
+  SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer,
+  CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer,
+  IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
+  RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
+  RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer,
+  RothConversionApplyReducer,
+  // AU account-module handlers
+  AuSavingsContributionHandler, AuSavingsWithdrawalHandler, AuSavingsEarningsHandler,
+  SuperContributionHandler, SuperWithdrawalContributionsHandler,
+  SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler,
+  AuDividendFrankedResidentHandler, AuDividendFrankedNonResidentHandler,
+  AuDividendUnfrankedResidentHandler, AuDividendUnfrankedNonResidentHandler,
+  AuStockEarningsHandler, AuStockWithdrawalHandler,
+  AuHouseSaleHandler, AuSeIncomeHandler,
+  // AU account-module reducers
+  AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer,
+  SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer,
+  SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer,
+  AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer,
+  AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer,
+  AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer,
+  AuHouseSaleApplyReducer, AuSeIncomeApplyReducer,
+};
 
 // ─── Lookup sets for fast-path constructor dispatch ───────────────────────────
 
@@ -598,7 +784,7 @@ export class ScenarioSerializer {
   static _serializeAction(node) {
     if (_isAlreadySerialized(node)) return node;
 
-    const C = FinSimLib.Engine;
+    const C = Engine;
     let typeName;
     // Check subclasses before superclasses (order matters for instanceof).
     // AmountAction must be checked before FieldValueAction since it extends it.
@@ -685,7 +871,7 @@ export class ScenarioSerializer {
 
     // ── No-arg account-module and tax-infrastructure handlers ─────────────────
     if (_NO_ARG_HANDLERS.has(d.__type)) {
-      const handler = new FinSimLib.Finance[d.__type]();
+      const handler = new Finance[d.__type]();
       handler.id = d.id;
       return handler;
     }
@@ -693,7 +879,7 @@ export class ScenarioSerializer {
     let handler;
     switch (d.__type) {
       case 'UsSavingsInterestMonthlyHandler':
-        handler = new FinSimLib.Finance.UsSavingsInterestMonthlyHandler({
+        handler = new Finance.UsSavingsInterestMonthlyHandler({
           stateRegistry,
           role:         d.role    ?? ACCOUNT_ROLES.US_SAVINGS,
           ownerId:      d.ownerId ?? null,
@@ -701,7 +887,7 @@ export class ScenarioSerializer {
         });
         break;
       case 'MonthlyExpensesHandler':
-        handler = new FinSimLib.Finance.MonthlyExpensesHandler({
+        handler = new Finance.MonthlyExpensesHandler({
           stateRegistry,
           monthlyExpenses: d.monthlyExpenses ?? 6000,
           usRole:    d.usRole    ?? ACCOUNT_ROLES.US_SAVINGS,
@@ -711,10 +897,10 @@ export class ScenarioSerializer {
         });
         break;
       case 'MonthlyWagesHandler':
-        handler = new FinSimLib.Finance.MonthlyWagesHandler({ stateRegistry });
+        handler = new Finance.MonthlyWagesHandler({ stateRegistry });
         break;
       case 'IntlTransferToUsHandler':
-        handler = new FinSimLib.Finance.IntlTransferToUsHandler({
+        handler = new Finance.IntlTransferToUsHandler({
           stateRegistry,
           auRole:    d.auRole    ?? ACCOUNT_ROLES.AU_SAVINGS,
           auOwnerId: d.auOwnerId ?? null,
@@ -723,7 +909,7 @@ export class ScenarioSerializer {
         });
         break;
       case 'IntlTransferToAuHandler':
-        handler = new FinSimLib.Finance.IntlTransferToAuHandler({
+        handler = new Finance.IntlTransferToAuHandler({
           stateRegistry,
           usRole:    d.usRole    ?? ACCOUNT_ROLES.US_SAVINGS,
           usOwnerId: d.usOwnerId ?? null,
@@ -732,7 +918,7 @@ export class ScenarioSerializer {
         });
         break;
       case 'AuSavingsInterestHandler':
-        handler = new FinSimLib.Finance.AuSavingsInterestHandler({
+        handler = new Finance.AuSavingsInterestHandler({
           stateRegistry,
           role:         d.role    ?? ACCOUNT_ROLES.AU_SAVINGS,
           ownerId:      d.ownerId ?? null,
@@ -740,7 +926,7 @@ export class ScenarioSerializer {
         });
         break;
       case 'FixedIncomeInterestHandler':
-        handler = new FinSimLib.Finance.FixedIncomeInterestHandler({
+        handler = new Finance.FixedIncomeInterestHandler({
           stateRegistry,
           role:         d.role    ?? ACCOUNT_ROLES.FIXED_INCOME,
           ownerId:      d.ownerId ?? null,
@@ -748,7 +934,7 @@ export class ScenarioSerializer {
         });
         break;
       case 'SuperEarningsHandler':
-        handler = new FinSimLib.Finance.SuperEarningsHandler({
+        handler = new Finance.SuperEarningsHandler({
           stateRegistry,
           role:        d.role    ?? ACCOUNT_ROLES.SUPER,
           ownerId:     d.ownerId ?? null,
@@ -756,7 +942,7 @@ export class ScenarioSerializer {
         });
         break;
       case 'DividendScheduledHandler':
-        handler = new FinSimLib.Finance.DividendScheduledHandler({
+        handler = new Finance.DividendScheduledHandler({
           stateRegistry,
           role:         d.role    ?? ACCOUNT_ROLES.US_STOCK,
           ownerId:      d.ownerId ?? null,
@@ -765,7 +951,7 @@ export class ScenarioSerializer {
         });
         break;
       case 'IntlRothEarningsHandler':
-        handler = new FinSimLib.Finance.IntlRothEarningsHandler({
+        handler = new Finance.IntlRothEarningsHandler({
           stateRegistry,
           role:       d.role    ?? ACCOUNT_ROLES.ROTH,
           ownerId:    d.ownerId ?? null,
@@ -773,7 +959,7 @@ export class ScenarioSerializer {
         });
         break;
       case 'IntlIraEarningsHandler':
-        handler = new FinSimLib.Finance.IntlIraEarningsHandler({
+        handler = new Finance.IntlIraEarningsHandler({
           stateRegistry,
           role:       d.role    ?? ACCOUNT_ROLES.IRA,
           ownerId:    d.ownerId ?? null,
@@ -781,7 +967,7 @@ export class ScenarioSerializer {
         });
         break;
       case 'IntlK401EarningsHandler':
-        handler = new FinSimLib.Finance.IntlK401EarningsHandler({
+        handler = new Finance.IntlK401EarningsHandler({
           stateRegistry,
           role:       d.role    ?? ACCOUNT_ROLES.K401,
           ownerId:    d.ownerId ?? null,
@@ -789,7 +975,7 @@ export class ScenarioSerializer {
         });
         break;
       case 'IntlUsStockEarningsHandler':
-        handler = new FinSimLib.Finance.IntlUsStockEarningsHandler({
+        handler = new Finance.IntlUsStockEarningsHandler({
           stateRegistry,
           role:       d.role    ?? ACCOUNT_ROLES.US_STOCK,
           ownerId:    d.ownerId ?? null,
@@ -797,7 +983,7 @@ export class ScenarioSerializer {
         });
         break;
       case 'IntlAuStockEarningsHandler':
-        handler = new FinSimLib.Finance.IntlAuStockEarningsHandler({
+        handler = new Finance.IntlAuStockEarningsHandler({
           stateRegistry,
           role:       d.role    ?? ACCOUNT_ROLES.AU_STOCK,
           ownerId:    d.ownerId ?? null,
@@ -805,7 +991,7 @@ export class ScenarioSerializer {
         });
         break;
       case 'IntlAuStockDividendHandler':
-        handler = new FinSimLib.Finance.IntlAuStockDividendHandler({
+        handler = new Finance.IntlAuStockDividendHandler({
           stateRegistry,
           role:         d.role    ?? ACCOUNT_ROLES.AU_STOCK,
           ownerId:      d.ownerId ?? null,
@@ -813,13 +999,13 @@ export class ScenarioSerializer {
         });
         break;
       case 'ChangeResidencyHandler':
-        handler = new FinSimLib.Finance.ChangeResidencyHandler();
+        handler = new Finance.ChangeResidencyHandler();
         break;
       case 'OutOfFundsHandler':
-        handler = new FinSimLib.Finance.OutOfFundsHandler();
+        handler = new Finance.OutOfFundsHandler();
         break;
       default:
-        handler = new FinSimLib.Engine.HandlerEntry(null, d.name);
+        handler = new Engine.HandlerEntry(null, d.name);
         break;
     }
     handler.id = d.id;
@@ -879,7 +1065,7 @@ export class ScenarioSerializer {
 
   static _makeEvent(d) {
     if (d.__type === 'OneOffEvent') {
-      return new FinSimLib.Engine.OneOffEvent({
+      return new Engine.OneOffEvent({
         id:      d.id,
         name:    d.name,
         type:    d.type,
@@ -889,7 +1075,7 @@ export class ScenarioSerializer {
         data:    d.data ?? {},
       });
     }else if(d.__type == 'EventSeries') {
-      return new FinSimLib.Engine.EventSeries({
+      return new Engine.EventSeries({
         id:          d.id,
         name:        d.name,
         type:        d.type,
@@ -907,7 +1093,7 @@ export class ScenarioSerializer {
   }
 
   static _makeAction(d) {
-    const C = FinSimLib.Engine;
+    const C = Engine;
     let action;
     switch (d.__type) {
       case 'Action':
@@ -933,8 +1119,8 @@ export class ScenarioSerializer {
   }
 
   static _makeReducer(d, services) {
-    const C = FinSimLib.Engine;
-    const F = FinSimLib.Finance;
+    const C = Engine;
+    const F = Finance;
 
     // ── Account-module reducers — all constructed with { accountService } ──────
     // Adding a new account-module reducer class only requires adding it here.
@@ -981,48 +1167,48 @@ export class ScenarioSerializer {
         return C.ReducerBuilder.field(fieldName).name(d.name).priority(d.priority).build();
       // ── Finance domain reducers ───────────────────────────────────────────
       case 'UsSavingsInterestCreditReducer':
-        return new FinSimLib.Finance.UsSavingsInterestCreditReducer({
+        return new Finance.UsSavingsInterestCreditReducer({
           accountService: services?.accountService,
           stateRegistry:  services?.stateRegistry,
           role:           d.role    ?? ACCOUNT_ROLES.US_SAVINGS,
           ownerId:        d.ownerId ?? null,
         });
       case 'ExpenseDebitReducer':
-        return new FinSimLib.Finance.ExpenseDebitReducer({
+        return new Finance.ExpenseDebitReducer({
           accountService: services?.accountService,
           usAccountKey:   d.usAccountKey ?? 'usSavingsAccount',
           auAccountKey:   d.auAccountKey ?? 'auSavingsAccount',
         });
       case 'ReplenishSavingsReducer':
-        return new FinSimLib.Finance.ReplenishSavingsReducer({
+        return new Finance.ReplenishSavingsReducer({
           accountService: services?.accountService,
         });
       case 'IntlTransferApplyReducer':
-        return new FinSimLib.Finance.IntlTransferApplyReducer({
+        return new Finance.IntlTransferApplyReducer({
           accountService: services?.accountService,
           usSavingsKey:   d.usSavingsKey ?? 'usSavingsAccount',
           auSavingsKey:   d.auSavingsKey ?? 'auSavingsAccount',
         });
       case 'StockDividendCashApplyReducer':
-        return new FinSimLib.Finance.StockDividendCashApplyReducer({
+        return new Finance.StockDividendCashApplyReducer({
           accountService: services?.accountService,
           stateRegistry:  services?.stateRegistry,
           role:           d.role    ?? ACCOUNT_ROLES.US_SAVINGS,
           ownerId:        d.ownerId ?? null,
         });
       case 'ChangeResidencyApplyReducer':
-        return new FinSimLib.Finance.ChangeResidencyApplyReducer({
+        return new Finance.ChangeResidencyApplyReducer({
           accountService: services?.accountService,
           stateRegistry:  services?.stateRegistry,
         });
       case 'SetOutOfFundsDateReducer':
-        return new FinSimLib.Finance.SetOutOfFundsDateReducer();
+        return new Finance.SetOutOfFundsDateReducer();
       case 'AccumulateDeficitReducer':
-        return new FinSimLib.Finance.AccumulateDeficitReducer();
+        return new Finance.AccumulateDeficitReducer();
       case 'OutOfFundsReducer':
-        return new FinSimLib.Finance.OutOfFundsReducer();
+        return new Finance.OutOfFundsReducer();
       case 'InflationAdjustReducer':
-        return new FinSimLib.Finance.InflationAdjustReducer();
+        return new Finance.InflationAdjustReducer();
       default:
         throw new Error(`Add support for deserialization of reducer type ${d.__type}.`);
     }

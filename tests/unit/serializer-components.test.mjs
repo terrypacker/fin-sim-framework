@@ -43,25 +43,27 @@ import {
   SuperannuationAccount,
 } from '../../src/finance/assets/investment-account.js';
 import { Person }              from '../../src/finance/person.js';
-import { Simulation }          from '../../src/simulation-framework/simulation.js';
 
-// FinSimLib global required by _makeX methods
-globalThis.FinSimLib = {
-  Finance: {
-    Person,
-    Account, SavingsAccount,
-    RothAccount, TraditionalIRAAccount, FourOhOneKAccount, BrokerageAccount,
-    SuperannuationAccount,
-  },
-  Engine: {
-    Simulation, HandlerEntry,
-    AmountAction, Action, FieldAction, FieldValueAction, ScriptedAction,
-    FieldReducer, NumericSumReducer, ArrayReducer, MultiplicativeReducer,
-    NoOpReducer, ScriptedReducer,
-    ReducerBuilder,
-    EventSeries, OneOffEvent,
-  },
-};
+// ─── Regression: serializer must not require a FinSimLib browser global ───────
+// Before the Vite ESM migration, ScenarioSerializer._serializeAction and
+// _makeAction referenced `FinSimLib.Engine` as a browser global.  This test
+// ensures that path never regresses — if FinSimLib is absent, all round-trips
+// must still succeed.
+test('no FinSimLib global needed — _serializeAction/_makeAction work standalone', () => {
+  const saved = globalThis.FinSimLib;
+  delete globalThis.FinSimLib;
+  try {
+    const action = new AmountAction('EXPENSE', 'Monthly Bills', 3500);
+    const d = ScenarioSerializer._serializeAction(action);
+    assert.strictEqual(d.__type, 'AmountAction');
+    assert.strictEqual(d.value, 3500);
+    const restored = ScenarioSerializer._makeAction(d);
+    assert.ok(restored instanceof AmountAction);
+    assert.strictEqual(restored.value, 3500);
+  } finally {
+    if (saved !== undefined) globalThis.FinSimLib = saved;
+  }
+});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
