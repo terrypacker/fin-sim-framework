@@ -19,6 +19,8 @@ export class ScenarioTabView {
     this.onNew = null;
     /** @type {function(string)|null} */
     this.onDelete = null;
+    /** @type {function()|null} */
+    this.onResetDefaults = null;
 
 
     /** @type {function(string)|null} */
@@ -76,6 +78,10 @@ export class ScenarioTabView {
 
     document.getElementById('deleteScenarioBtn')?.addEventListener('click', () => {
       if(this.onDelete) this.onDelete();
+    });
+
+    document.getElementById('resetDefaultsBtn')?.addEventListener('click', () => {
+      if(this.onResetDefaults) this.onResetDefaults();
     });
 
     document.getElementById('scenarioName')?.addEventListener('input', (e) => {

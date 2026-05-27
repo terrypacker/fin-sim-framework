@@ -15,6 +15,10 @@ export class ScenarioPlugin extends WorkbenchComponent {
       <button class="btn btn-sm" id="newScenarioBtn">+ New</button>
       <button class="btn btn-sm btn-warn" id="deleteScenarioBtn">Delete</button>
     </div>
+    <div class="wb-scenario-btn-row">
+      <button class="btn btn-sm" id="resetDefaultsBtn"
+              title="Replace this scenario's persons, accounts, properties, and parameters with the reference defaults. The scenario record (name, id) is preserved.">Reset to Defaults</button>
+    </div>
     <div class="node-header">Name</div>
     <div class="node-field">
       <input id="scenarioName" placeholder="Scenario name" />

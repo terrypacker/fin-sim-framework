@@ -662,11 +662,18 @@ export class IntlRetirementScenario extends BaseScenario {
   }
 
   /**
-   * Convenience factory: reset-proof builder that creates the scenario, runs
-   * the full toolset compilation path, and returns the scenario.
+   * Test / programmatic convenience: reset-proof builder that constructs a
+   * scenario, derives a cfg from buildDefaultConfig(params), and runs the
+   * toolset compilation path. Returns the scenario.
+   *
+   * Design 15: production Monte Carlo and Optimization paths NO LONGER call
+   * this — they clone the active scenario cfg as a template so user edits to
+   * non-param fields (planned sale years, life expectancy, drawdown priority,
+   * custom graph nodes) are preserved across iterations. Use this only for
+   * unit tests and one-off "give me a fresh reference scenario" callers.
    *
    * Callers must call ServiceRegistry.reset() before invoking this if they
-   * want an isolated simulation (e.g. MC runner, optimizer, unit tests).
+   * want an isolated simulation.
    *
    * @param {{ params?, simStart?, simEnd? }} [opts]
    * @returns {IntlRetirementScenario}

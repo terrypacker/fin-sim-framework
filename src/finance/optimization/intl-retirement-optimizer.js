@@ -10,6 +10,7 @@
 
 import { ServiceRegistry }          from '../../services/service-registry.js';
 import { IntlRetirementScenario }   from '../../scenarios/intl-retirement-scenario.js';
+import { ScenarioLoader }           from '../../scenarios/scenario-loader.js';
 import { computeNetWorthUsd }       from '../monte-carlo/intl-retirement-mc-runner.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS } from './intl-retirement-opt-config.js';
 import { OPTIMIZATION_OBJECTIVES, OPT_PARAM_TYPES } from './optimization-objectives.js';
@@ -65,11 +66,13 @@ export class IntlRetirementOptimizer {
     objective           = OPTIMIZATION_OBJECTIVES.MAX_NET_WORTH,
     simStart            = new Date(Date.UTC(2026, 0, 1)),
     simEnd              = new Date(Date.UTC(2041, 0, 1)),
+    cfgTemplate         = null,
   } = {}) {
     this.optimizationConfigs = optimizationConfigs;
     this.objective           = objective;
     this.simStart            = simStart;
     this.simEnd              = simEnd;
+    this.cfgTemplate         = cfgTemplate;
   }
 
   /**
@@ -96,9 +99,15 @@ export class IntlRetirementOptimizer {
     const { evaluate, direction } = this.objective;
     const sign         = direction === 'minimize' ? -1 : 1;
 
+    // Design 15 §2.3: clone the active scenario cfg per iteration. Tests / library
+    // consumers that don't wire a ServiceRegistry-backed active scenario get a
+    // fresh defaults cfg.
+    const cfgTemplate = this.cfgTemplate
+      ?? IntlRetirementScenario.buildDefaultConfig({}, this.simStart, this.simEnd);
+
     for (let i = 0; i < totalRuns; i++) {
       const params = { ...baseParams, endDate: this.simEnd, ...candidates[i] };
-      const result = this._runOne(params);
+      const result = this._runOne(params, cfgTemplate);
       const score  = sign * evaluate(result);
       results.push({ candidate: candidates[i], result, score });
       if (onProgress) onProgress(i + 1, totalRuns);
@@ -114,9 +123,25 @@ export class IntlRetirementOptimizer {
     };
   }
 
-  _runOne(params) {
+  _runOne(params, cfgTemplate) {
     ServiceRegistry.reset();
-    const scenario = IntlRetirementScenario.buildAndCompile({ params, simStart: this.simStart, simEnd: this.simEnd });
+    const registry = ServiceRegistry.getInstance();
+    const scenario = new IntlRetirementScenario({
+      context: registry.simulationContext,
+      params,
+      simStart: this.simStart,
+      simEnd:   this.simEnd,
+    });
+    scenario.buildSim();
+
+    const cfg = structuredClone(cfgTemplate);
+    if (Array.isArray(cfg.params)) {
+      for (const p of cfg.params) {
+        if (params[p.name] !== undefined) p.value = params[p.name];
+      }
+    }
+    new ScenarioLoader().load(cfg, registry);
+
     scenario.sim.silent = true;
     scenario.sim.stepTo(params.endDate);
     const state = scenario.sim.state;

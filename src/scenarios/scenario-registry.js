@@ -59,11 +59,25 @@ export class ScenarioRegistry {
         if (s.node) entry.node = s.node;
         return entry;
       });
+      // Design 15 §2.1: materialize buildDefaultConfig once at registration so the
+      // registry entry carries persons/accounts/realProperties/collectibles/toolsets
+      // up-front. Subsequent Rebuilds read straight from the entry — defaults never
+      // fire again unless explicitly requested via resetToDefaults.
+      const defaultParams = Object.fromEntries(schema.map(s => [s.key, s.defaultValue]));
+      const defaultCfg = pb.scenarioClass?.buildDefaultConfig?.(defaultParams, pb.simStart, pb.simEnd) ?? {};
       // If another scenario (e.g. a user scenario) is already active, force active:false so
       // the prebuilt's active:true flag doesn't create two active scenarios. When nothing is
       // active yet, preserve pb.active so the post-loop "find(p => p.active)" fallback works.
       const pbActive = active ? false : pb.active;
-      this._scenarios.set(id, { ...pb, id, params, active: pbActive, factory: pb.factory, scenarioClass: pb.scenarioClass });
+      this._scenarios.set(id, {
+        ...pb,
+        ...defaultCfg,
+        id,
+        params,
+        active: pbActive,
+        factory: pb.factory,
+        scenarioClass: pb.scenarioClass,
+      });
     });
 
     if (active) return;

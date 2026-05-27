@@ -73,6 +73,13 @@ export class ScenarioTabPresenter {
       this._view._refreshScenarioSelect(this._controller.getAll(), this._activeScenario);
     };
 
+    this._view.onResetDefaults = () => {
+      if (!this._activeScenario) return;
+      this._controller.resetToDefaults(this._activeScenario);
+      this._view._populateScenarioForm(this._activeScenario);
+      this._initScenario();
+    };
+
     this._view.onNameChange = (name) => {
       this._activeScenario.name = name;
       this._view.updateSelectOption(name);
@@ -144,24 +151,21 @@ export class ScenarioTabPresenter {
       this._loadActiveScenario();
     };
 
-    // Initial render.
-    this._refresh();
   }
 
   /**
    * Performs load of scenario data in UI and services.
    *
+   * Design 15 §2.4: re-selecting the same prebuilt no longer silently resets to
+   * defaults — Load means "load as stored." Reset is its own explicit action
+   * (the Reset to Defaults button).
+   *
    * Assumes the active scenario is set in this._activeScenario?
    * @private
    */
   _loadActiveScenario() {
-    if (this._activeScenario?.prebuilt) {
-      // Selecting a prebuilt from the dropdown resets params to schema defaults
-      // so the user always starts from a known baseline (re-select = "Load Defaults").
-      this._controller.resetParamsFromSchema(this._activeScenario);
-    }
-    this._view._populateScenarioForm(this._activeScenario);
     this._initScenario();
+    this._view._populateScenarioForm(this._activeScenario);
   }
 
   _refresh() {
