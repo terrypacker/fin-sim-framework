@@ -196,10 +196,6 @@ There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; se
 - The `PREBUILT_SCENARIOS` array contains one entry. The plumbing (factory + class + descriptor) implies more were planned.
 - **Direction**: either commit to one canonical scenario and simplify the prebuilt path, or add the missing variants the workbench dropdown expects.
 
-### 4.10 Vite library output is ESM-only
-- `package.json` exports only `import` for the published package. The previous Rollup setup produced ESM + CJS + UMD. Any consumer depending on `require('financial-sim')` or a `<script>` UMD load will break.
-- **Direction**: confirm consumers are ESM-only; if not, restore CJS/UMD outputs in `vite.lib.config.js`.
-
 ---
 
 ## 5. Smaller Annoyances
