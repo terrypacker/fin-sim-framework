@@ -37,12 +37,6 @@ import {
   GraphBuilderView
 } from "../../src/visualization/graph-builder/graph-builder-view.js";
 
-// BaseScenario references FinSimLib as a browser global — provide it here.
-globalThis.FinSimLib = {
-  Core:      { Simulation, HandlerEntry, AmountAction, FieldReducer, BaseEvent, EventSeries, OneOffEvent },
-  Scenarios: {},
-};
-
 // ─── Stub EventSchedulerUI ────────────────────────────────────────────────────
 
 class StubGraphBuilderView {

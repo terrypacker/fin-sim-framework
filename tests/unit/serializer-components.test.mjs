@@ -50,19 +50,13 @@ import { Person }              from '../../src/finance/person.js';
 // ensures that path never regresses — if FinSimLib is absent, all round-trips
 // must still succeed.
 test('no FinSimLib global needed — _serializeAction/_makeAction work standalone', () => {
-  const saved = globalThis.FinSimLib;
-  delete globalThis.FinSimLib;
-  try {
-    const action = new AmountAction('EXPENSE', 'Monthly Bills', 3500);
-    const d = ScenarioSerializer._serializeAction(action);
-    assert.strictEqual(d.__type, 'AmountAction');
-    assert.strictEqual(d.value, 3500);
-    const restored = ScenarioSerializer._makeAction(d);
-    assert.ok(restored instanceof AmountAction);
-    assert.strictEqual(restored.value, 3500);
-  } finally {
-    if (saved !== undefined) globalThis.FinSimLib = saved;
-  }
+  const action = new AmountAction('EXPENSE', 'Monthly Bills', 3500);
+  const d = ScenarioSerializer._serializeAction(action);
+  assert.strictEqual(d.__type, 'AmountAction');
+  assert.strictEqual(d.value, 3500);
+  const restored = ScenarioSerializer._makeAction(d);
+  assert.ok(restored instanceof AmountAction);
+  assert.strictEqual(restored.value, 3500);
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

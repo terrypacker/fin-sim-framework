@@ -20,8 +20,6 @@
 import { test }  from 'node:test';
 import assert    from 'node:assert/strict';
 
-// ─── FinSimLib global (required by ScenarioSerializer's _makeX methods) ──────
-
 import { Simulation }      from '../../src/simulation-framework/simulation.js';
 import { HandlerEntry }    from '../../src/simulation-framework/handlers.js';
 import {
@@ -157,79 +155,6 @@ import {
   RothAccount, TraditionalIRAAccount, SuperannuationAccount,
 } from '../../src/finance/assets/investment-account.js';
 import { Person } from '../../src/finance/person.js';
-
-globalThis.FinSimLib = {
-  Engine: {
-    Simulation, HandlerEntry,
-    AmountAction, Action, FieldAction, ScriptedAction, FieldValueAction, RecordBalanceAction,
-    FieldReducer, NoOpReducer, ArrayReducer, NumericSumReducer, MultiplicativeReducer, ScriptedReducer,
-    ReducerBuilder,
-    BaseEvent, EventSeries, OneOffEvent,
-  },
-  Scenarios: {},
-  Finance: {
-    TaxService, DynamicTaxReducer,
-    PeriodAdvanceReducer, PeriodAdvanceHandler,
-    TaxSettleHandler, TaxSettleApplyReducer, TaxPaymentDebitReducer,
-    RothContributionApplyReducer, RothWithdrawalContribApplyReducer,
-    RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer,
-    RothContributionHandler, RothWithdrawalContributionsHandler,
-    RothWithdrawalEarningsHandler, RothEarningsHandler,
-    IraContributionApplyReducer, IraWithdrawalContribApplyReducer,
-    IraWithdrawalEarningsApplyReducer, IraEarningsApplyReducer,
-    IraContributionHandler, IraWithdrawalContributionsHandler,
-    IraWithdrawalEarningsHandler, IraEarningsHandler,
-    K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer,
-    K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler, K401RmdApplyReducer, K401AnnualRmdHandler,
-    FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer,
-    FixedIncomeEarningsApplyReducer, StockContributionApplyReducer,
-    StockDividendApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer,
-    FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler,
-    StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler,
-    UsHouseSaleApplyReducer, UsHouseSaleHandler,
-    SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer,
-    SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer,
-    SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler,
-    SeIncomeUsHandler, BonusHandler, CompanySaleHandler,
-    CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer,
-    CollectibleSaleHandler, CollectibleValueChangeHandler,
-    IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
-    IraRolloverWithdrawalHandler, IraRmdHandler, IraAnnualRmdHandler,
-    RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
-    RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer,
-    RothRolloverContributionHandler, RothRolloverEarningsHandler,
-    RothRolloverWithdrawalContributionsHandler, RothRolloverWithdrawalEarningsHandler,
-    RothConversionApplyReducer, RothConversionHandler, RothConversionPolicyHandler,
-    AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer,
-    AuSavingsContributionHandler, AuSavingsWithdrawalHandler, AuSavingsEarningsHandler,
-    SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer,
-    SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer,
-    SuperContributionHandler, SuperWithdrawalContributionsHandler,
-    SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler,
-    AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer,
-    AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer,
-    AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer,
-    AuDividendFrankedResidentHandler, AuDividendFrankedNonResidentHandler,
-    AuDividendUnfrankedResidentHandler, AuDividendUnfrankedNonResidentHandler,
-    AuStockEarningsHandler, AuStockWithdrawalHandler,
-    AuHouseSaleApplyReducer, AuHouseSaleHandler,
-    AuSeIncomeApplyReducer, AuSeIncomeHandler,
-    UsSavingsInterestMonthlyHandler, MonthlyExpensesHandler, MonthlyWagesHandler, MonthlySocialSecurityHandler,
-    IntlTransferToUsHandler, IntlTransferToAuHandler,
-    AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler,
-    DividendScheduledHandler, ChangeResidencyHandler, OutOfFundsHandler,
-    IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,
-    IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
-    ChangeResidencyApplyReducer, ExpenseDebitReducer, IntlTransferApplyReducer,
-    ReplenishSavingsReducer, SetOutOfFundsDateReducer, AccumulateDeficitReducer,
-    OutOfFundsReducer, InflationAdjustReducer,
-    StockDividendCashApplyReducer, UsSavingsInterestCreditReducer,
-    Account, CheckingAccount, SavingsAccount,
-    InvestmentAccount, BrokerageAccount, FourOhOneKAccount,
-    RothAccount, TraditionalIRAAccount, SuperannuationAccount,
-    Person,
-  },
-};
 
 // ─── Cross-border JSON scenario ──────────────────────────────────────────────
 
