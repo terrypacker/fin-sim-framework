@@ -13,6 +13,7 @@ import { createDistribution }         from '../../simulation-framework/distribut
 import { ServiceRegistry }            from '../../services/service-registry.js';
 import { IntlRetirementScenario }     from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioLoader }             from '../../scenarios/scenario-loader.js';
+import { ScenarioSerializer }         from '../../scenarios/scenario-serializer.js';
 import { DEFAULT_MC_VARIABLE_CONFIGS } from './intl-retirement-mc-config.js';
 
 // USD account state keys
@@ -124,8 +125,13 @@ export class IntlRetirementMcRunner {
     // Design 15 §2.3: the active scenario cfg is the per-iteration template.
     // Fallback to a fresh defaults cfg for tests / library consumers that don't
     // wire a ServiceRegistry-backed active scenario.
-    const cfgTemplate = this.cfgTemplate
+    //
+    // Pipe through serializeScenario so the template is a plain JSON-safe object
+    // (no functions / class refs); registry entries carry `factory` and
+    // `scenarioClass` which `structuredClone` would reject.
+    const rawTemplate = this.cfgTemplate
       ?? IntlRetirementScenario.buildDefaultConfig({}, simStart, simEnd);
+    const cfgTemplate = ScenarioSerializer.serializeScenario(rawTemplate);
 
     const runner = new ScenarioRunner({
       createSimulation: (params) => {

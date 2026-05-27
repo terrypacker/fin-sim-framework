@@ -11,6 +11,7 @@
 import { ServiceRegistry }          from '../../services/service-registry.js';
 import { IntlRetirementScenario }   from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioLoader }           from '../../scenarios/scenario-loader.js';
+import { ScenarioSerializer }       from '../../scenarios/scenario-serializer.js';
 import { computeNetWorthUsd }       from '../monte-carlo/intl-retirement-mc-runner.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS } from './intl-retirement-opt-config.js';
 import { OPTIMIZATION_OBJECTIVES, OPT_PARAM_TYPES } from './optimization-objectives.js';
@@ -102,8 +103,13 @@ export class IntlRetirementOptimizer {
     // Design 15 §2.3: clone the active scenario cfg per iteration. Tests / library
     // consumers that don't wire a ServiceRegistry-backed active scenario get a
     // fresh defaults cfg.
-    const cfgTemplate = this.cfgTemplate
+    //
+    // Pipe through serializeScenario so the template is a plain JSON-safe object
+    // — registry entries carry `factory`/`scenarioClass` which `structuredClone`
+    // would reject.
+    const rawTemplate = this.cfgTemplate
       ?? IntlRetirementScenario.buildDefaultConfig({}, this.simStart, this.simEnd);
+    const cfgTemplate = ScenarioSerializer.serializeScenario(rawTemplate);
 
     for (let i = 0; i < totalRuns; i++) {
       const params = { ...baseParams, endDate: this.simEnd, ...candidates[i] };
