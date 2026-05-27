@@ -10,10 +10,9 @@ Last reviewed: 2026-05-26.
 
 ## 1. Naming and Structural Duplication
 
-### 1.1 Two `Graph`-like recorders for execution data
-- `src/simulation-framework/simulation-event-graph.js` (`SimulationEventGraph`, `ActionNode`) — still exported from `src/index.js` but no in-tree caller imports it (only the test `simulation-event-graph.test.mjs` and the auto-generated `src/index.js`).
-- `src/simulation-framework/execution-graph.js` (`ExecutionGraph`) — the actual runtime recorder, used by `Simulation` and `GraphRecorder`.
-- **Direction**: confirm `SimulationEventGraph` is dead, delete it, drop the export from `build-index.js`'s output, and rename its test to target `ExecutionGraph` instead.
+### ~~1.1 Two `Graph`-like recorders for execution data~~
+- ~~`src/simulation-framework/simulation-event-graph.js` (`SimulationEventGraph`, `ActionNode`) — still exported from `src/index.js` but no in-tree caller imports it (only the test `simulation-event-graph.test.mjs` and the auto-generated `src/index.js`).~~
+- **Deleted**: `SimulationEventGraph`
 
 ### 1.2 `ToolsetRegistry` vs. `ScenarioToolsetRegistry`
 - The header comment in `src/scenarios/toolsets/toolset-registry.js` references a `ScenarioToolsetRegistry` ("Unlike ScenarioToolsetRegistry…") that no longer exists in `src/`.

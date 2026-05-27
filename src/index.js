@@ -168,7 +168,6 @@ import { MinHeap } from './simulation-framework/min-heap.js';
 import { ReducerPipeline, PRIORITY, Reducer, NoOpReducer, FieldReducer, MetricReducer, BalanceSnapshotReducer, FieldValueReducer, ArrayReducer, NumericSumReducer, MultiplicativeReducer, AccountTransactionReducer, REDUCER_CLASSES, RepeatingReducer, ScriptedReducer } from './simulation-framework/reducers.js';
 import { ScenarioRunner } from './simulation-framework/scenario.js';
 import { intervalFns, startSnapFns, SimulationAdapter } from './simulation-framework/simulation/simulation-adapter.js';
-import { ActionNode, SimulationEventGraph } from './simulation-framework/simulation-event-graph.js';
 import { SimulationHistory } from './simulation-framework/simulation-history.js';
 import { SimulationState } from './simulation-framework/simulation-state.js';
 import { BreakpointSignal, Simulation } from './simulation-framework/simulation.js';
@@ -583,8 +582,6 @@ export const Engine = {
   intervalFns,
   startSnapFns,
   SimulationAdapter,
-  ActionNode,
-  SimulationEventGraph,
   SimulationHistory,
   SimulationState,
   BreakpointSignal,
