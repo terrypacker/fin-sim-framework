@@ -404,3 +404,144 @@ test('EVT-34: US house sale with no gain has zero capital gains exposure', () =>
 // TODO (EVT-34): AU tax treatment for a US house sale when the person is an AU resident is
 // unresolved (CSV: "??"). When clarified, add assertions here for auCapitalGainsYTD or
 // auNonResidentWithholdingYTD as applicable.
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Mortgage handling on sale (US + AU)
+// ══════════════════════════════════════════════════════════════════════════════
+
+const findDiff = (entry, field) => entry.stateDiff.find(d => d.field === field);
+
+test('EVT-34: US house sale credits net proceeds (sale price − mortgage) and zeroes mortgage', () => {
+  const config = structuredClone(US_HOUSE_JSON);
+  const mortgage = 300_000;
+  config.realProperties[0].mortgageBalance = mortgage;
+  const { sim } = loadToolsetScenario(config);
+  assert.doesNotThrow(() => sim.stepTo(Q1_2028), 'stepTo should not throw');
+
+  const [apply] = sim.journal.getActions('US_HOUSE_SALE_APPLY');
+  assert.ok(apply);
+
+  const cashDiff = findDiff(apply, 'usSavingsAccount.balance');
+  assert.ok(cashDiff, 'should credit usSavingsAccount with net proceeds');
+  assert.strictEqual(cashDiff.delta, config.realProperties[0].value - mortgage);
+
+  const mortgageDiff = findDiff(apply, 'usHouseProperty.mortgageBalance');
+  assert.ok(mortgageDiff, 'should record mortgage payoff to 0');
+  assert.strictEqual(mortgageDiff.after, 0);
+  assert.strictEqual(mortgageDiff.delta, -mortgage);
+});
+
+test('EVT-34: US house sale taxable gain is unaffected by mortgage payoff', () => {
+  const config = structuredClone(US_HOUSE_JSON);
+  config.realProperties[0].costBasis       = config.realProperties[0].value - 600_000;
+  config.realProperties[0].mortgageBalance = 250_000;
+  const { sim } = loadToolsetScenario(config);
+  assert.doesNotThrow(() => sim.stepTo(Q1_2028), 'stepTo should not throw');
+
+  const [tax] = sim.journal.getActions('US_HOUSE_SALE_TAX');
+  assert.ok(tax);
+  const cgDiff = findDiff(tax, 'usCapitalGainsYTD');
+  assert.ok(cgDiff, 'should record taxable capital gain');
+  // Gain still computed from salePrice − costBasis − $500K exemption (mortgage ignored).
+  assert.strictEqual(cgDiff.delta, (config.realProperties[0].value - config.realProperties[0].costBasis) - 500_000);
+});
+
+test('EVT-33: AU house sale credits net proceeds (sale price − mortgage) and zeroes mortgage', () => {
+  const config = structuredClone(AU_HOUSE_JSON);
+  const mortgage = 400_000;
+  config.realProperties[0].mortgageBalance = mortgage;
+  const { sim } = loadToolsetScenario(config);
+  assert.doesNotThrow(() => sim.stepTo(Q1_2028), 'stepTo should not throw');
+
+  const [apply] = sim.journal.getActions('AU_HOUSE_SALE_APPLY');
+  assert.ok(apply);
+
+  const cashDiff = findDiff(apply, 'auSavingsAccount.balance');
+  assert.ok(cashDiff, 'should credit auSavingsAccount with net proceeds');
+  assert.strictEqual(cashDiff.delta, config.realProperties[0].value - mortgage);
+
+  const mortgageDiff = findDiff(apply, 'auHouseProperty.mortgageBalance');
+  assert.ok(mortgageDiff, 'should record mortgage payoff to 0');
+  assert.strictEqual(mortgageDiff.after, 0);
+  assert.strictEqual(mortgageDiff.delta, -mortgage);
+});
+
+test('EVT-33: AU house sale capital gain is unaffected by mortgage payoff', () => {
+  const config = structuredClone(AU_HOUSE_JSON);
+  config.realProperties[0].mortgageBalance = 350_000;
+  const { sim } = loadToolsetScenario(config);
+  assert.doesNotThrow(() => sim.stepTo(Q1_2028), 'stepTo should not throw');
+
+  const [tax] = sim.journal.getActions('AU_HOUSE_SALE_TAX');
+  assert.ok(tax);
+  const cgDiff = findDiff(tax, 'usCapitalGainsYTD');
+  assert.ok(cgDiff, 'should record US capital gain');
+  // Gain still computed from salePrice − costBasis (mortgage ignored).
+  assert.strictEqual(cgDiff.delta, config.realProperties[0].value - config.realProperties[0].costBasis);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// saleDestinationAccount routing (US + AU)
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('EVT-34: US house sale credits saleDestinationAccount instead of default cash pool', () => {
+  const config = structuredClone(US_HOUSE_JSON);
+  config.accounts.push({
+    __type:         'CheckingAccount',
+    id:             'us-checking',
+    name:           'US Checking',
+    type:           'checking',
+    role:           'us-savings',
+    stateKey:       'checkingAccount',
+    initialValue:   1_000,
+    ownershipType:  'sole',
+    ownerId:        'primary',
+    minimumBalance: 0,
+    country:        'US',
+    currency:       { code: 'USD', symbol: '$' },
+  });
+  config.realProperties[0].saleDestinationAccount = 'checkingAccount';
+  const { sim } = loadToolsetScenario(config);
+  assert.doesNotThrow(() => sim.stepTo(Q1_2028), 'stepTo should not throw');
+
+  const [apply] = sim.journal.getActions('US_HOUSE_SALE_APPLY');
+  assert.ok(apply);
+
+  const destDiff = findDiff(apply, 'checkingAccount.balance');
+  assert.ok(destDiff, 'sale proceeds should land in checkingAccount (saleDestinationAccount)');
+  assert.strictEqual(destDiff.delta, config.realProperties[0].value);
+
+  const defaultDiff = findDiff(apply, 'usSavingsAccount.balance');
+  assert.strictEqual(defaultDiff, undefined, 'default usSavingsAccount should not be touched');
+});
+
+test('EVT-33: AU house sale credits saleDestinationAccount instead of default cash pool', () => {
+  const config = structuredClone(AU_HOUSE_JSON);
+  config.accounts.push({
+    __type:         'CheckingAccount',
+    id:             'au-checking',
+    name:           'AU Checking',
+    type:           'checking',
+    role:           'au-savings',
+    stateKey:       'checkingAccount',
+    initialValue:   1_000,
+    ownershipType:  'sole',
+    ownerId:        'primary',
+    minimumBalance: 0,
+    country:        'AU',
+    currency:       { code: 'AUD', symbol: 'A$' },
+  });
+  config.realProperties[0].saleDestinationAccount = 'checkingAccount';
+  const { sim } = loadToolsetScenario(config);
+  assert.doesNotThrow(() => sim.stepTo(Q1_2028), 'stepTo should not throw');
+
+  const [apply] = sim.journal.getActions('AU_HOUSE_SALE_APPLY');
+  assert.ok(apply);
+
+  const destDiff = findDiff(apply, 'checkingAccount.balance');
+  assert.ok(destDiff, 'sale proceeds should land in checkingAccount (saleDestinationAccount)');
+  assert.strictEqual(destDiff.delta, config.realProperties[0].value);
+
+  const defaultDiff = findDiff(apply, 'auSavingsAccount.balance');
+  assert.strictEqual(defaultDiff, undefined, 'default auSavingsAccount should not be touched');
+});

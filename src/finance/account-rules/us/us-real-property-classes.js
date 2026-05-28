@@ -12,19 +12,30 @@ import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 
-/** Resolve the US cash pool. */
-const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
-
 const US_PRIMARY_HOME_EXEMPTION = 500_000;
+
+/** Default US cash pool key when no saleDestinationAccount is provided. */
+const defaultUsCashKey = (state) =>
+  state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
+
+/** Resolve the destination state key, falling back to the default US cash pool. */
+const resolveDestinationKey = (state, saleDestinationAccount) => {
+  if (saleDestinationAccount && state[saleDestinationAccount] != null) {
+    return saleDestinationAccount;
+  }
+  return defaultUsCashKey(state);
+};
 
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 
 /**
- * EVT-34: US house sale — credit US cash pool, compute taxable gain after the
- * $500K primary-home exemption, chain US_HOUSE_SALE_TAX.
+ * EVT-34: US house sale — credit destination account with sale proceeds net of
+ * mortgage payoff, compute taxable capital gain after the $500K primary-home
+ * exemption (mortgage payoff does not reduce the taxable gain), and chain
+ * US_HOUSE_SALE_TAX.
  */
 export class UsHouseSaleApplyReducer extends Reducer {
-  static description = 'Credits the US cash pool with sale proceeds and chains US_HOUSE_SALE_TAX with the post-exemption taxable gain.';
+  static description = 'Credits the destination account with net proceeds (salePrice − mortgage), zeroes mortgageBalance, and chains US_HOUSE_SALE_TAX with the post-exemption taxable gain.';
   static actionType  = 'US_HOUSE_SALE_APPLY';
 
   constructor({ accountService }) {
@@ -35,10 +46,13 @@ export class UsHouseSaleApplyReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const { salePrice, costBasis, stateKey } = action;
+    const { salePrice, costBasis, mortgageBalance, stateKey, destinationKey } = action;
+    const mortgage    = mortgageBalance ?? 0;
+    const netProceeds = Math.max(0, salePrice - mortgage);
     const rawGain     = Math.max(0, salePrice - costBasis);
     const taxableGain = Math.max(0, rawGain - US_PRIMARY_HOME_EXEMPTION);
-    this.accountService.transaction(usCash(state), salePrice, null);
+    const destKey     = destinationKey ?? defaultUsCashKey(state);
+    this.accountService.transaction(state[destKey], netProceeds, null);
     const updates = {};
     if (stateKey && state[stateKey]) {
       updates[stateKey] = { ...state[stateKey], mortgageBalance: 0 };
@@ -54,7 +68,7 @@ export class UsHouseSaleApplyReducer extends Reducer {
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
 export class UsHouseSaleHandler extends HandlerEntry {
-  static description = 'Dispatches US_HOUSE_SALE_APPLY with sale price, cost basis, and AU residency flag.';
+  static description = 'Dispatches US_HOUSE_SALE_APPLY with sale price, cost basis, current mortgage balance, and resolved destination account.';
   static eventType   = 'US_HOUSE_SALE';
 
   constructor() {
@@ -63,16 +77,20 @@ export class UsHouseSaleHandler extends HandlerEntry {
   }
 
   call({ data, state }) {
-    const cashKey = state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
+    const propState       = data.stateKey ? state[data.stateKey] : null;
+    const mortgageBalance = propState?.mortgageBalance ?? 0;
+    const destinationKey  = resolveDestinationKey(state, data.saleDestinationAccount);
     return [
       {
-        type:         'US_HOUSE_SALE_APPLY',
-        salePrice:    data.salePrice,
-        costBasis:    data.costBasis,
-        isAuResident: state.isAuResident,
-        stateKey:     data.stateKey ?? null,
+        type:            'US_HOUSE_SALE_APPLY',
+        salePrice:       data.salePrice,
+        costBasis:       data.costBasis,
+        mortgageBalance,
+        isAuResident:    state.isAuResident,
+        stateKey:        data.stateKey ?? null,
+        destinationKey,
       },
-      new RecordBalanceAction(`${cashKey}.balance`, cashKey),
+      new RecordBalanceAction(`${destinationKey}.balance`, destinationKey),
     ];
   }
 }
