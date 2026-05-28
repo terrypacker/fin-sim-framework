@@ -69,8 +69,14 @@ export class ScenarioRegistry {
       // Preserve existing entries so param edits survive Rebuild (Design §2.3 Option A).
       if (this._scenarios.has(id)) return;
       const schema = pb.scenarioClass?.getParamSchema?.() ?? [];
+      // Keep this entry shape in sync with ScenarioLoader._toEntry — both produce
+      // cfg.params records that the UI consumes (label, group, description for
+      // tooltips, node for the param→field cascade). Toolset-owned params are
+      // appended by the loader on first compile.
       const params = schema.map(s => {
-        const entry = { name: s.key, label: s.label, type: s.type, group: s.group, value: s.defaultValue };
+        const entry = { name: s.key, label: s.label, type: s.type, group: s.group };
+        if (s.defaultValue !== undefined) entry.value = s.defaultValue;
+        if (s.description) entry.description = s.description;
         if (s.node) entry.node = s.node;
         return entry;
       });

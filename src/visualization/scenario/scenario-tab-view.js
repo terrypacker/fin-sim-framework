@@ -223,7 +223,10 @@ export class ScenarioTabView {
 
       const labelEl = document.createElement('label');
       labelEl.textContent = param.label ?? param.name;
-      if (param.label) labelEl.title = param.name;
+      // Tooltip: prefer the schema description (richest), then the key name,
+      // so hovering surfaces the toolset's authoritative documentation.
+      const tooltip = param.description || (param.label ? param.name : '');
+      if (tooltip) labelEl.title = tooltip;
       field.appendChild(labelEl);
 
       // For user-defined params (no label), also provide an editable name input above the value
@@ -266,6 +269,7 @@ export class ScenarioTabView {
           param.value = param.type === 'Number' ? parseFloat(raw) : raw;
         });
       }
+      if (tooltip) valueInput.title = tooltip;
       field.appendChild(valueInput);
       row.appendChild(field);
 
