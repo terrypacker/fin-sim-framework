@@ -17,8 +17,49 @@ import { valuesForConfig, IntlRetirementOptimizer }
   from '../../src/finance/optimization/intl-retirement-optimizer.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS }
   from '../../src/finance/optimization/intl-retirement-opt-config.js';
-import { INTL_RETIREMENT_PARAM_SCHEMA }
+import { INTL_RETIREMENT_PARAM_SCHEMA, IntlRetirementScenario }
   from '../../src/scenarios/intl-retirement-scenario.js';
+import { ToolsetRegistry } from '../../src/scenarios/toolsets/toolset-registry.js';
+import { US_BANKING }      from '../../src/scenarios/toolsets/us-banking-toolset.js';
+import { US_TAX }          from '../../src/scenarios/toolsets/us-tax-toolset.js';
+import { US_RETIREMENT }   from '../../src/scenarios/toolsets/us-retirement-toolset.js';
+import { US_INCOME }       from '../../src/scenarios/toolsets/us-income-toolset.js';
+import { US_BROKERAGE }    from '../../src/scenarios/toolsets/us-brokerage-toolset.js';
+import { US_REAL_PROPERTY } from '../../src/scenarios/toolsets/us-real-property-toolset.js';
+import { US_COLLECTIBLES } from '../../src/scenarios/toolsets/us-collectibles-toolset.js';
+import { US_ROTH_CONVERSION } from '../../src/scenarios/toolsets/us-roth-conversion-toolset.js';
+import { AU_BANKING }      from '../../src/scenarios/toolsets/au-banking-toolset.js';
+import { AU_TAX }          from '../../src/scenarios/toolsets/au-tax-toolset.js';
+import { AU_RETIREMENT }   from '../../src/scenarios/toolsets/au-retirement-toolset.js';
+import { AU_INCOME }       from '../../src/scenarios/toolsets/au-income-toolset.js';
+import { AU_BROKERAGE }    from '../../src/scenarios/toolsets/au-brokerage-toolset.js';
+import { AU_REAL_PROPERTY } from '../../src/scenarios/toolsets/au-real-property-toolset.js';
+import { US_AU_CROSS_BORDER } from '../../src/scenarios/toolsets/us-au-cross-border-toolset.js';
+
+/**
+ * Build the same combined schema (scenario + toolsets) that ScenarioLoader
+ * presents to the UI. Scenario entries win on key collision.
+ */
+function buildCombinedSchema() {
+  const registry = new ToolsetRegistry();
+  for (const t of [
+    US_BANKING, US_TAX, US_RETIREMENT, US_INCOME, US_BROKERAGE,
+    US_REAL_PROPERTY, US_COLLECTIBLES, US_ROTH_CONVERSION,
+    AU_BANKING, AU_TAX, AU_RETIREMENT, AU_INCOME, AU_BROKERAGE,
+    AU_REAL_PROPERTY, US_AU_CROSS_BORDER,
+  ]) registry.register(t);
+
+  const toolsetEntries = IntlRetirementScenario.getToolsets()
+    .flatMap(id => registry.get(id).paramSchema?.({}) ?? []);
+
+  const scenarioKeys = new Set(INTL_RETIREMENT_PARAM_SCHEMA.map(s => s.key));
+  return [
+    ...INTL_RETIREMENT_PARAM_SCHEMA,
+    ...toolsetEntries.filter(t => !scenarioKeys.has(t.key)),
+  ];
+}
+
+const COMBINED_SCHEMA = buildCombinedSchema();
 
 // ─── valuesForConfig ──────────────────────────────────────────────────────────
 
@@ -175,54 +216,61 @@ describe('IntlRetirementOptimizer.candidateCount', () => {
   });
 });
 
-// ─── INTL_RETIREMENT_PARAM_SCHEMA mc/opt flags ───────────────────────────────
+// ─── Combined scenario + toolset schema mc/opt flags ─────────────────────────
+//
+// IntlRetirementScenario deliberately delegates non-binding params (rates,
+// expenses, policy flags) to the toolsets that consume them. The UI/optimizer
+// see the merged schema, so these assertions inspect that merged view.
 
-describe('INTL_RETIREMENT_PARAM_SCHEMA mc/opt flags', () => {
-  test('every entry has boolean mc and opt fields', () => {
-    for (const entry of INTL_RETIREMENT_PARAM_SCHEMA) {
+describe('IntlRetirement combined param schema mc/opt flags', () => {
+  test('every combined entry has boolean mc and opt fields', () => {
+    for (const entry of COMBINED_SCHEMA) {
       assert.strictEqual(typeof entry.mc,  'boolean', `${entry.key}: mc must be boolean`);
       assert.strictEqual(typeof entry.opt, 'boolean', `${entry.key}: opt must be boolean`);
     }
   });
 
   test('rothConversionMaxBracket has opt:true', () => {
-    const entry = INTL_RETIREMENT_PARAM_SCHEMA.find(e => e.key === 'rothConversionMaxBracket');
+    const entry = COMBINED_SCHEMA.find(e => e.key === 'rothConversionMaxBracket');
     assert.ok(entry, 'rothConversionMaxBracket entry must exist');
     assert.strictEqual(entry.opt, true);
   });
 
   test('rothConversionStartYear has opt:true', () => {
-    const entry = INTL_RETIREMENT_PARAM_SCHEMA.find(e => e.key === 'rothConversionStartYear');
+    const entry = COMBINED_SCHEMA.find(e => e.key === 'rothConversionStartYear');
     assert.ok(entry);
     assert.strictEqual(entry.opt, true);
   });
 
   test('rothConversionEndYear has opt:true', () => {
-    const entry = INTL_RETIREMENT_PARAM_SCHEMA.find(e => e.key === 'rothConversionEndYear');
+    const entry = COMBINED_SCHEMA.find(e => e.key === 'rothConversionEndYear');
     assert.ok(entry);
     assert.strictEqual(entry.opt, true);
   });
 
   test('rothConversionEnabled has mc:false and opt:false', () => {
-    const entry = INTL_RETIREMENT_PARAM_SCHEMA.find(e => e.key === 'rothConversionEnabled');
+    const entry = COMBINED_SCHEMA.find(e => e.key === 'rothConversionEnabled');
     assert.ok(entry);
     assert.strictEqual(entry.mc,  false);
     assert.strictEqual(entry.opt, false);
   });
 
-  test('growth rates have mc:true and opt:false', () => {
-    const rateKeys = ['rothGrowthRate', 'iraGrowthRate', 'usStockGrowthRate'];
+  test('growth rates have mc:true and opt:true', () => {
+    // After deduplication these live in US_RETIREMENT and AU_RETIREMENT, which
+    // set opt:true (the toolset-level defaults). brokerageGrowthRate replaces
+    // the prior scenario-level usStockGrowthRate alias.
+    const rateKeys = ['rothGrowthRate', 'iraGrowthRate', 'brokerageGrowthRate'];
     for (const k of rateKeys) {
-      const entry = INTL_RETIREMENT_PARAM_SCHEMA.find(e => e.key === k);
-      assert.ok(entry, `${k} must be in schema`);
+      const entry = COMBINED_SCHEMA.find(e => e.key === k);
+      assert.ok(entry, `${k} must be in combined schema`);
       assert.strictEqual(entry.mc,  true,  `${k}: mc should be true`);
-      assert.strictEqual(entry.opt, false, `${k}: opt should be false (market rate, not a decision)`);
+      assert.strictEqual(entry.opt, true,  `${k}: opt should be true at the toolset level`);
     }
   });
 
   test('usSavingsMinBalance and auSavingsMinBalance have mc:false, opt:true', () => {
     for (const k of ['usSavingsMinBalance', 'auSavingsMinBalance']) {
-      const entry = INTL_RETIREMENT_PARAM_SCHEMA.find(e => e.key === k);
+      const entry = COMBINED_SCHEMA.find(e => e.key === k);
       assert.ok(entry);
       assert.strictEqual(entry.mc,  false);
       assert.strictEqual(entry.opt, true);
@@ -230,7 +278,7 @@ describe('INTL_RETIREMENT_PARAM_SCHEMA mc/opt flags', () => {
   });
 
   test('no description contains legacy (MC) or (Opt) text markers', () => {
-    for (const entry of INTL_RETIREMENT_PARAM_SCHEMA) {
+    for (const entry of COMBINED_SCHEMA) {
       assert.ok(
         !entry.description.includes('(MC') && !entry.description.includes('(Opt'),
         `${entry.key}: description should not contain legacy (MC)/(Opt) markers`
@@ -238,15 +286,38 @@ describe('INTL_RETIREMENT_PARAM_SCHEMA mc/opt flags', () => {
     }
   });
 
-  test('DEFAULT_OPTIMIZATION_CONFIGS only contains opt:true schema params', () => {
-    const optKeys = new Set(
-      INTL_RETIREMENT_PARAM_SCHEMA.filter(e => e.opt).map(e => e.key)
-    );
+  test('DEFAULT_OPTIMIZATION_CONFIGS only contains opt:true combined-schema params', () => {
+    const optKeys = new Set(COMBINED_SCHEMA.filter(e => e.opt).map(e => e.key));
     for (const cfg of DEFAULT_OPTIMIZATION_CONFIGS) {
       assert.ok(
         optKeys.has(cfg.paramKey),
-        `${cfg.paramKey} in DEFAULT_OPTIMIZATION_CONFIGS must have opt:true in schema`
+        `${cfg.paramKey} in DEFAULT_OPTIMIZATION_CONFIGS must have opt:true in combined schema`
       );
     }
+  });
+
+  test('scenario schema does not duplicate any toolset paramSchema key (drift guard)', () => {
+    // Catch future regressions where someone redeclares a toolset param at the
+    // scenario level. Such drift caused the original missing-params-in-UI bug.
+    const registry = new ToolsetRegistry();
+    for (const t of [
+      US_BANKING, US_TAX, US_RETIREMENT, US_INCOME, US_BROKERAGE,
+      US_REAL_PROPERTY, US_COLLECTIBLES, US_ROTH_CONVERSION,
+      AU_BANKING, AU_TAX, AU_RETIREMENT, AU_INCOME, AU_BROKERAGE,
+      AU_REAL_PROPERTY, US_AU_CROSS_BORDER,
+    ]) registry.register(t);
+
+    const toolsetKeys = new Set(
+      IntlRetirementScenario.getToolsets()
+        .flatMap(id => registry.get(id).paramSchema?.({}) ?? [])
+        .map(e => e.key)
+    );
+
+    const duplicates = INTL_RETIREMENT_PARAM_SCHEMA
+      .filter(s => toolsetKeys.has(s.key))
+      .map(s => s.key);
+
+    assert.deepStrictEqual(duplicates, [],
+      `scenario must not redeclare toolset-owned keys; duplicates: ${duplicates.join(', ')}`);
   });
 });

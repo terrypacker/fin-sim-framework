@@ -9,8 +9,6 @@
  */
 
 import { InMemoryStorage } from "../storage/in-memory-storage.js";
-import {ScenarioSerializer} from "./scenario-serializer.js";
-import {ServiceRegistry} from "../services/service-registry.js";
 
 export class ScenarioStorage {
   static STORAGE_KEY = 'fin-sim-scenarios';

@@ -449,3 +449,150 @@ test('regression: copy IntlRetirement, save, reload, and run — handlers fire a
   assert.notStrictEqual(finalBalance, initialBalance,
     'usSavingsAccount.balance should have moved after 3 months of wage/expense events');
 });
+
+// ─── Regression: toolset paramSchemas are merged into cfg.params ──────────────
+//
+// ScenarioCompiler returns a merged toolset paramSchema, but ScenarioLoader used
+// to drop it and only populate cfg.params from cfg.scenarioClass.getParamSchema().
+// Toolset-only params (e.g. k401ToIraConversionEnabled from US_RETIREMENT) were
+// therefore invisible in the scenario UI panel. These tests pin the merge so the
+// regression can't reappear.
+
+test('toolset params: cfg.params includes toolset-only keys missing from scenario schema', () => {
+  // Use IntlRetirement WITHOUT stamping cfg.scenarioClass so toolset params land
+  // straight into cfg.params from the compiler result.
+  const cfg = freshDeclarativeConfig();
+  const { services } = loadIntoFreshServices(cfg);
+
+  const names = new Set(cfg.params.map(p => p.name));
+
+  // From US_RETIREMENT — not in INTL_RETIREMENT_PARAM_SCHEMA.
+  assert.ok(names.has('k401ToIraConversionEnabled'),
+    'cfg.params should expose toolset-only key k401ToIraConversionEnabled');
+  assert.ok(names.has('k401ToIraConversionMonth'),
+    'cfg.params should expose toolset-only key k401ToIraConversionMonth');
+  assert.ok(names.has('k401ToIraConversionDay'),
+    'cfg.params should expose toolset-only key k401ToIraConversionDay');
+  assert.ok(names.has('k401ToIraConversionYear'),
+    'cfg.params should expose toolset-only key k401ToIraConversionYear');
+
+  // sanity — services still load.
+  assert.ok(services.handlerService.getAll().length > 0);
+});
+
+test('toolset params: scenario-class entries win on key collision with toolset entry', () => {
+  // The real IntlRetirementScenario intentionally doesn't redeclare any toolset
+  // params (drift hazard), so we use a synthetic class that DOES redeclare one
+  // to pin the precedence rule for future scenarios.
+  class CollidingScenario extends BaseScenario {
+    static getParamSchema() {
+      return [{
+        key: 'usSavingsInterestRate', label: 'My Custom Label',
+        type: 'Number', group: 'Custom Group', mc: false, opt: false,
+        defaultValue: 0.99,
+      }];
+    }
+  }
+
+  const cfg = freshDeclarativeConfig();
+  cfg.scenarioClass = CollidingScenario;
+  cfg.params = []; // start clean so the schema merge populates from scratch
+  loadIntoFreshServices(cfg);
+
+  const usSavings = cfg.params.filter(p => p.name === 'usSavingsInterestRate');
+  assert.strictEqual(usSavings.length, 1,
+    'usSavingsInterestRate should appear exactly once even though two schemas declare it');
+  assert.strictEqual(usSavings[0].group, 'Custom Group',
+    'scenario-class group must win over toolset group on key collision');
+  assert.strictEqual(usSavings[0].label, 'My Custom Label',
+    'scenario-class label must win over toolset label on key collision');
+});
+
+test('toolset params: defaults come from toolset paramSchema when scenario schema omits the key', () => {
+  // k401ToIraConversionEnabled is only in US_RETIREMENT.paramSchema() with defaultValue=true.
+  const cfg = freshDeclarativeConfig();
+  loadIntoFreshServices(cfg);
+
+  const entry = cfg.params.find(p => p.name === 'k401ToIraConversionEnabled');
+  assert.ok(entry, 'cfg.params must contain the toolset-only param');
+  assert.strictEqual(entry.type,  'Boolean');
+  assert.strictEqual(entry.group, 'US Retirement');
+  assert.strictEqual(entry.value, true,
+    'toolset paramSchema defaultValue must seed cfg.params[].value');
+});
+
+test('toolset params: edited user value round-trips through cfg.params → cfg.parameters on next load', () => {
+  // First load — toolset params get populated with defaults.
+  const cfg = freshDeclarativeConfig();
+  loadIntoFreshServices(cfg);
+
+  // User flips a toolset-only param via the UI.
+  const idx = cfg.params.findIndex(p => p.name === 'k401ToIraConversionEnabled');
+  assert.notStrictEqual(idx, -1);
+  cfg.params[idx].value = false;
+
+  // Wipe the compile-derived graph snapshot so the loader takes the compile branch
+  // again (mirrors what happens after a user toggles a param and clicks Rebuild).
+  cfg.events = []; cfg.handlers = []; cfg.actions = []; cfg.reducers = [];
+
+  // Second load — the sync at the top of ScenarioLoader.load() must propagate
+  // cfg.params[].value into cfg.parameters before compile runs.
+  loadIntoFreshServices(cfg);
+
+  assert.strictEqual(cfg.parameters.k401ToIraConversionEnabled, false,
+    'user-edited toolset param must propagate to cfg.parameters on subsequent load');
+});
+
+test('toolset params: cfg.params has no duplicates when multiple toolsets declare the same key', () => {
+  // US_RETIREMENT and AU_RETIREMENT both declare `monthlyExpenses` (and `inflationAdjust`).
+  // The merge must dedup, otherwise the cfg.params → cfg.parameters sync loop overwrites
+  // user-edited values with the second toolset's default.
+  const cfg = freshDeclarativeConfig();
+  loadIntoFreshServices(cfg);
+
+  const names = cfg.params.map(p => p.name);
+  const dupes = names.filter((n, i) => names.indexOf(n) !== i);
+  assert.deepStrictEqual(dupes, [],
+    `cfg.params should not contain duplicate keys; saw: ${dupes.join(', ')}`);
+
+  // Spot-check: monthlyExpenses appears exactly once.
+  const monthly = cfg.params.filter(p => p.name === 'monthlyExpenses');
+  assert.strictEqual(monthly.length, 1,
+    'monthlyExpenses should be deduplicated across US_RETIREMENT and AU_RETIREMENT');
+});
+
+test('toolset params: cfg.params[].value seeds from cfg.parameters when set by buildDefaultConfig', () => {
+  // buildDefaultConfig populates cfg.parameters.moveYear = 2031, but the toolset
+  // paramSchema's defaultValue is undefined. The merged cfg.params entry must use
+  // 2031 (the value the compiler actually consumed), not undefined — otherwise
+  // saving + reloading the scenario would lose the move year.
+  const cfg = freshDeclarativeConfig();
+  assert.strictEqual(cfg.parameters.moveYear, 2031,
+    'precondition: buildDefaultConfig should set moveYear');
+
+  loadIntoFreshServices(cfg);
+
+  const moveYear = cfg.params.find(p => p.name === 'moveYear');
+  assert.ok(moveYear, 'moveYear should appear in cfg.params (from US_AU_CROSS_BORDER paramSchema)');
+  assert.strictEqual(moveYear.value, 2031,
+    'cfg.params[].value must mirror cfg.parameters when buildDefaultConfig sets it');
+});
+
+test('toolset params: schema-drift adds newly-introduced toolset keys to existing cfg.params', () => {
+  // Simulate a saved cfg from an older release that predates k401ToIraConversion* params:
+  // cfg.params is non-empty but missing those keys. Loader must append them with defaults.
+  const cfg = freshDeclarativeConfig();
+  cfg.params = [
+    // single entry, simulating a sparse older save
+    { name: 'monthlyExpenses', label: 'Monthly Expenses', type: 'Number',
+      group: 'Transfer & Expenses', value: 6000 },
+  ];
+
+  loadIntoFreshServices(cfg);
+
+  const names = new Set(cfg.params.map(p => p.name));
+  assert.ok(names.has('k401ToIraConversionEnabled'),
+    'schema-drift guard should append toolset-only params missing from saved cfg.params');
+  assert.ok(names.has('superGrowthRate'),
+    'schema-drift guard should append AU_RETIREMENT params missing from saved cfg.params');
+});

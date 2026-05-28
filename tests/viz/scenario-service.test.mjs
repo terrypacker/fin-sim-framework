@@ -318,12 +318,18 @@ test('newScenario: active config has correct content after compile', () => {
   const active = registry.scenarioRegistry.getActive();
   const D = INTL_RETIREMENT_DEFAULTS;
 
-  // ── Params: typed schema array populated from IntlRetirementScenario ──────
+  // ── Params: typed schema array populated from IntlRetirementScenario + toolsets ──
+  // active.params is the merged scenario+toolset schema, so every scenario key
+  // must appear and at least one toolset-only key (e.g. monthlyExpenses from
+  // US_RETIREMENT) must too.
   assert.ok(Array.isArray(active.params), 'params should be an array after compile');
-  assert.strictEqual(active.params.length, IntlRetirementScenario.getParamSchema().length);
+  const paramNames = new Set(active.params.map(p => p.name));
+  for (const s of IntlRetirementScenario.getParamSchema()) {
+    assert.ok(paramNames.has(s.key), `scenario-level param ${s.key} should be in active.params`);
+  }
 
   const expensesParam = active.params.find(p => p.name === 'monthlyExpenses');
-  assert.ok(expensesParam,                              'monthlyExpenses param should exist');
+  assert.ok(expensesParam, 'monthlyExpenses (toolset-owned) param should exist in active.params');
   assert.strictEqual(expensesParam.type,  'Number');
   assert.strictEqual(expensesParam.value, D.monthlyExpenses);
 
