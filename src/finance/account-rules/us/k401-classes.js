@@ -276,6 +276,91 @@ export class K401AnnualRmdHandler extends HandlerEntry {
   }
 }
 
+/**
+ * EVT-53: 401(k) → IRA Conversion (rollover) — direct pre-tax transfer.
+ *
+ * No cash pool movement, no tax: both accounts are pre-tax, so a rollover from
+ * a Traditional 401(k) into a Traditional IRA preserves basis types and creates
+ * no taxable event.  The full amount is moved from the 401(k) (drawing from
+ * contributionBasis first, then earningsBasis) into the destination IRA,
+ * preserving the same basis split on the IRA side.
+ *
+ * Accepts:
+ *   - action.amount     (optional) — if omitted, converts the full 401(k) balance
+ *   - action.k401Key    — source 401(k) state key
+ *   - action.iraKey     — destination IRA state key
+ */
+export class K401ToIraConversionApplyReducer extends Reducer {
+  static description = 'Debits the 401(k) and credits a Traditional IRA, preserving contribution/earnings basis; no cash pool, no tax.';
+  static actionType  = 'K401_TO_IRA_CONVERSION_APPLY';
+
+  constructor({ accountService } = {}) { // accountService unused — no cash pool movement
+    super('401k→IRA Conversion Apply', PRIORITY.CASH_FLOW);
+    this.reducedActionTypes = ['K401_TO_IRA_CONVERSION_APPLY'];
+  }
+
+  reduce(state, action) {
+    const { amount, k401Key, iraKey } = action;
+    const k401 = state[k401Key];
+    const ira  = state[iraKey];
+
+    const fromContrib  = Math.min(amount, k401.contributionBasis);
+    const fromEarnings = Math.min(amount - fromContrib, k401.earningsBasis);
+
+    return this.newState(state, {
+      [k401Key]: {
+        ...k401,
+        balance:           k401.balance           - amount,
+        contributionBasis: k401.contributionBasis - fromContrib,
+        earningsBasis:     k401.earningsBasis     - fromEarnings,
+      },
+      [iraKey]: {
+        ...ira,
+        balance:           ira.balance           + amount,
+        contributionBasis: ira.contributionBasis + fromContrib,
+        earningsBasis:     ira.earningsBasis     + fromEarnings,
+      },
+    });
+  }
+}
+
+/**
+ * EVT-53: 401(k) → IRA Conversion handler.  Validates the source 401(k) has
+ * the requested funds, then dispatches K401_TO_IRA_CONVERSION_APPLY.  If
+ * data.amount is omitted, converts the entire 401(k) balance.
+ */
+export class K401ToIraConversionHandler extends HandlerEntry {
+  static description = 'Validates 401(k) balance and dispatches K401_TO_IRA_CONVERSION_APPLY (no tax).';
+  static eventType   = 'K401_TO_IRA_CONVERSION';
+
+  constructor() {
+    super(null, '401k→IRA Conversion');
+    this.generatedActionTypes = ['K401_TO_IRA_CONVERSION_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
+  }
+
+  call({ state, data }) {
+    const k401Key = data.k401Key ?? 'k401Account';
+    const iraKey  = data.iraKey  ?? 'iraAccount';
+    const k401 = state[k401Key];
+    const ira  = state[iraKey];
+    if (!k401) throw new Error(`K401ToIraConversion: missing source ${k401Key}`);
+    if (!ira)  throw new Error(`K401ToIraConversion: missing destination ${iraKey}`);
+
+    const amount = data.amount ?? k401.balance;
+    if (amount <= 0) return [];
+    if (amount > k401.balance) {
+      throw new Error(`K401ToIraConversion: requested ${amount} exceeds ${k401Key} balance ${k401.balance}`);
+    }
+
+    return [
+      { type: 'K401_TO_IRA_CONVERSION_APPLY', amount, k401Key, iraKey },
+      new FieldValueAction('k401_to_ira_conversion', '401(k)→IRA Conversion', amount),
+      new RecordBalanceAction(`${k401Key}.balance`, k401Key),
+      new RecordBalanceAction(`${iraKey}.balance`,  iraKey),
+    ];
+  }
+}
+
 /** Returns whole years of age as of asOfDate. */
 function _getAge(birthDate, asOfDate) {
   const years = asOfDate.getUTCFullYear() - birthDate.getUTCFullYear();

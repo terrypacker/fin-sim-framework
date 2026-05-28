@@ -70,7 +70,7 @@ export const US_ROTH_CONVERSION = {
       {
         key: 'rothConversionOwner', label: 'Roth Conversion Owner',
         type: 'String', group: 'Roth Conversion', mc: false, opt: false,
-        defaultValue: 'primary',
+        defaultValue: 'both',
         description: "Whose IRA to convert: 'primary', 'spouse', or 'both'",
       },
       {

@@ -80,6 +80,7 @@ import {
   K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler,
   K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer,
   K401RmdApplyReducer,
+  K401ToIraConversionHandler, K401ToIraConversionApplyReducer,
 } from '../finance/account-rules/us/k401-classes.js';
 import {
   FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler,
@@ -163,6 +164,7 @@ const Finance = {
   IraContributionHandler, IraWithdrawalContributionsHandler,
   IraWithdrawalEarningsHandler, IraEarningsHandler,
   K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler,
+  K401ToIraConversionHandler,
   FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler,
   StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler,
   UsHouseSaleHandler,
@@ -179,6 +181,7 @@ const Finance = {
   IraContributionApplyReducer, IraWithdrawalContribApplyReducer,
   IraWithdrawalEarningsApplyReducer, IraEarningsApplyReducer,
   K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer, K401RmdApplyReducer,
+  K401ToIraConversionApplyReducer,
   FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer, FixedIncomeEarningsApplyReducer,
   StockContributionApplyReducer, StockDividendApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer,
   UsHouseSaleApplyReducer,
@@ -222,7 +225,7 @@ const _ACCOUNT_SERVICE_REDUCERS = new Set([
   'IraWithdrawalEarningsApplyReducer', 'IraEarningsApplyReducer',
   // US — 401k
   'K401ContributionApplyReducer', 'K401EarningsApplyReducer', 'K401WithdrawalApplyReducer',
-  'K401RmdApplyReducer',
+  'K401RmdApplyReducer', 'K401ToIraConversionApplyReducer',
   // US — Brokerage (Fixed Income + Stock)
   'FixedIncomeContributionApplyReducer', 'FixedIncomeWithdrawalApplyReducer',
   'FixedIncomeEarningsApplyReducer',
@@ -273,6 +276,7 @@ const _NO_ARG_HANDLERS = new Set([
   'IraWithdrawalEarningsHandler', 'IraEarningsHandler',
   // US — 401k
   'K401ContributionHandler', 'K401EarningsHandler', 'K401WithdrawalHandler',
+  'K401ToIraConversionHandler',
   // US — Brokerage
   'FixedIncomeContributionHandler', 'FixedIncomeWithdrawalHandler', 'FixedIncomeEarningsHandler',
   'StockContributionHandler', 'StockDividendHandler', 'StockEarningsHandler', 'StockWithdrawalHandler',
