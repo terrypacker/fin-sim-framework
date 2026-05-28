@@ -37,7 +37,8 @@ import { MonthlyExpensesHandler }                       from '../finance/handler
 import { MonthlyWagesHandler }                          from '../finance/handlers/monthly-wages-handler.js';
 import { IntlTransferToUsHandler, IntlTransferToAuHandler } from '../finance/handlers/intl-transfer-handlers.js';
 import {
-  AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler,
+  AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler,
+  FixedIncomeInterestHandler, SuperEarningsHandler,
   IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,
   IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
 } from '../finance/handlers/earnings-handlers.js';
@@ -135,6 +136,7 @@ import {
 } from '../finance/account-rules/au/au-brokerage-classes.js';
 import { AuHouseSaleHandler, AuHouseSaleApplyReducer } from '../finance/account-rules/au/au-real-property-classes.js';
 import { AuSeIncomeHandler, AuSeIncomeApplyReducer }   from '../finance/account-rules/au/au-income-classes.js';
+import { AuFixedIncomeEarningsApplyReducer }            from '../finance/account-rules/au/au-fixed-income-classes.js';
 
 // ─── Local namespace objects replacing Engine / Finance ───
 const Engine = {
@@ -146,7 +148,8 @@ const Finance = {
   // Direct-named handlers
   UsSavingsInterestMonthlyHandler, MonthlyExpensesHandler, MonthlyWagesHandler,
   IntlTransferToUsHandler, IntlTransferToAuHandler,
-  AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler,
+  AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler,
+  FixedIncomeInterestHandler, SuperEarningsHandler,
   IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,
   IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
   DividendScheduledHandler, ChangeResidencyHandler, OutOfFundsHandler,
@@ -202,6 +205,7 @@ const Finance = {
   AuHouseSaleHandler, AuSeIncomeHandler,
   // AU account-module reducers
   AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer,
+  AuFixedIncomeEarningsApplyReducer,
   SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer,
   SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer,
   AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer,
@@ -248,6 +252,8 @@ const _ACCOUNT_SERVICE_REDUCERS = new Set([
   // AU — Savings
   'AuSavingsContributionApplyReducer', 'AuSavingsWithdrawalApplyReducer',
   'AuSavingsEarningsApplyReducer',
+  // AU — Fixed Income
+  'AuFixedIncomeEarningsApplyReducer',
   // AU — Superannuation
   'SuperContributionApplyReducer', 'SuperWithdrawalContribApplyReducer',
   'SuperWithdrawalEarningsApplyReducer', 'SuperEarningsApplyReducer',
@@ -746,6 +752,11 @@ export class ScenarioSerializer {
         d.ownerId      = node.ownerId;
         d.interestRate = node.interestRate;
         break;
+      case 'AuFixedIncomeInterestMonthlyHandler':
+        d.role         = node.role;
+        d.ownerId      = node.ownerId;
+        d.interestRate = node.interestRate;
+        break;
       case 'FixedIncomeInterestHandler':
         d.role         = node.role;
         d.ownerId      = node.ownerId;
@@ -939,6 +950,14 @@ export class ScenarioSerializer {
           role:         d.role    ?? ACCOUNT_ROLES.AU_SAVINGS,
           ownerId:      d.ownerId ?? null,
           interestRate: d.interestRate ?? 0.045,
+        });
+        break;
+      case 'AuFixedIncomeInterestMonthlyHandler':
+        handler = new Finance.AuFixedIncomeInterestMonthlyHandler({
+          stateRegistry,
+          role:         d.role    ?? ACCOUNT_ROLES.AU_FIXED_INCOME,
+          ownerId:      d.ownerId ?? null,
+          interestRate: d.interestRate ?? 0.04,
         });
         break;
       case 'FixedIncomeInterestHandler':

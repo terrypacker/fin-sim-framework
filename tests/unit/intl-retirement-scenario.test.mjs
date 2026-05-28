@@ -194,13 +194,13 @@ test('scenario advances through year 3 (end of 2028) without looping', () => {
 test('US tax YTD resets after Dec 31 2026 settlement (Dec interest re-adds)', () => {
   const { sim } = buildScenario();
   sim.stepTo(new Date(Date.UTC(2026, 11, 31)));
-  // TAX_SETTLE resets usOrdinaryIncomeYTD to 0 but the same-day Dec 31
-  // US_SAVINGS_INTEREST_MONTHLY event fires and adds December's interest back,
-  // so the value should be a small positive number (not the full year's YTD).
+  // TAX_SETTLE resets usOrdinaryIncomeYTD to 0 but same-day month-end events
+  // fire and add December's interest back (US savings, US fixed income,
+  // AU savings, AU fixed income — all now monthly).
   assert.ok(sim.state.usOrdinaryIncomeYTD >= 0,
     'usOrdinaryIncomeYTD should be non-negative after US tax settlement + Dec interest');
-  // Sanity: it should be less than one month's worth of interest (~75 max)
-  assert.ok(sim.state.usOrdinaryIncomeYTD < 100,
+  // Sanity: it should be less than one month's worth of interest across all accounts (~600 max)
+  assert.ok(sim.state.usOrdinaryIncomeYTD < 1000,
     `usOrdinaryIncomeYTD should be a single month's interest, got ${sim.state.usOrdinaryIncomeYTD}`);
 });
 
@@ -790,7 +790,9 @@ test('RT-5: round-trip simulation resets usOrdinaryIncomeYTD after Dec 31 2026 s
   sim.stepTo(new Date(Date.UTC(2026, 11, 31)));
   assert.ok(sim.state.usOrdinaryIncomeYTD >= 0,
     'usOrdinaryIncomeYTD should be non-negative after round-trip US tax settlement');
-  assert.ok(sim.state.usOrdinaryIncomeYTD < 100,
+  // Same-day month-end interest (US savings, US fixed income, AU savings, AU fixed income)
+  // fires after TAX_SETTLE resets the counter, giving ~$500–600 total.
+  assert.ok(sim.state.usOrdinaryIncomeYTD < 1000,
     `round-trip: usOrdinaryIncomeYTD should be a single month's interest after settlement, got ${sim.state.usOrdinaryIncomeYTD}`);
 });
 

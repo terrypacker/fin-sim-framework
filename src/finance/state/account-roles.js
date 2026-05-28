@@ -19,13 +19,14 @@
  * Naming convention: kebab-case strings that read as account descriptions.
  */
 export const ACCOUNT_ROLES = Object.freeze({
-  US_SAVINGS:   'us-savings',
-  FIXED_INCOME: 'fixed-income',
-  US_STOCK:     'us-stock',
-  IRA:          'ira',
-  K401:         'k401',
-  ROTH:         'roth-ira',
-  AU_SAVINGS:   'au-savings',
-  AU_STOCK:     'au-stock',
-  SUPER:        'super',
+  US_SAVINGS:      'us-savings',
+  FIXED_INCOME:    'fixed-income',
+  US_STOCK:        'us-stock',
+  IRA:             'ira',
+  K401:            'k401',
+  ROTH:            'roth-ira',
+  AU_SAVINGS:      'au-savings',
+  AU_FIXED_INCOME: 'au-fixed-income',
+  AU_STOCK:        'au-stock',
+  SUPER:           'super',
 });

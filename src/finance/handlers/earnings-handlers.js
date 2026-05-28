@@ -211,9 +211,9 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
 }
 
 /**
- * Handles INTL_AU_SAVINGS_INTEREST events.
+ * Handles INTL_AU_SAVINGS_INTEREST events (fires monthly).
  *
- * Computes annual interest as: balance × interestRate, rounded to 2 dp.
+ * Computes monthly interest as: balance × interestRate ÷ 12, rounded to 2 dp.
  * Emits AU_SAVINGS_EARNINGS_APPLY (registered by AuAccountModule).
  *
  * @param {object} [opts]
@@ -223,7 +223,7 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
  * @param {number} [opts.interestRate=0.045]
  */
 export class AuSavingsInterestHandler extends HandlerEntry {
-  static description = 'Computes annual interest on the AU savings account and emits AU_SAVINGS_EARNINGS_APPLY (credited by AuAccountModule).';
+  static description = 'Computes monthly interest on the AU savings account (balance × rate ÷ 12) and emits AU_SAVINGS_EARNINGS_APPLY (credited by AuAccountModule).';
 
   static eventType = 'INTL_AU_SAVINGS_INTEREST';
 
@@ -239,7 +239,7 @@ export class AuSavingsInterestHandler extends HandlerEntry {
   call({ state }) {
     const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
     const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
-    const amount   = +(balance * this.interestRate).toFixed(2);
+    const amount   = +(balance * this.interestRate / 12).toFixed(2);
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'AU_SAVINGS_EARNINGS_APPLY', amount, isAuResident: state.isAuResident },
@@ -250,9 +250,48 @@ export class AuSavingsInterestHandler extends HandlerEntry {
 }
 
 /**
- * Handles INTL_FIXED_INCOME_INTEREST events.
+ * Handles INTL_AU_FIXED_INCOME_INTEREST events (fires monthly).
  *
- * Computes annual interest as: balance × interestRate, rounded to 2 dp.
+ * Computes monthly interest as: balance × interestRate ÷ 12, rounded to 2 dp.
+ * Emits AU_FIXED_INCOME_EARNINGS_APPLY.
+ *
+ * @param {object} [opts]
+ * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry
+ * @param {string} opts.role       - ACCOUNT_ROLES value for the AU fixed income account
+ * @param {string} [opts.ownerId]  - Person id (null = any owner)
+ * @param {number} [opts.interestRate=0.04]
+ */
+export class AuFixedIncomeInterestMonthlyHandler extends HandlerEntry {
+  static description = 'Computes monthly interest on the AU fixed income account (balance × rate ÷ 12) and emits AU_FIXED_INCOME_EARNINGS_APPLY.';
+
+  static eventType = 'INTL_AU_FIXED_INCOME_INTEREST';
+
+  constructor({ stateRegistry, role, ownerId = null, interestRate = 0.04 } = {}) {
+    super(null, 'AU Fixed Income Interest');
+    this.stateRegistry = stateRegistry;
+    this.role          = role;
+    this.ownerId       = ownerId;
+    this.interestRate  = interestRate;
+    this.generatedActionTypes = ['AU_FIXED_INCOME_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+  }
+
+  call({ state }) {
+    const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
+    const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
+    const amount   = +(balance * this.interestRate / 12).toFixed(2);
+    if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
+    return [
+      { type: 'AU_FIXED_INCOME_EARNINGS_APPLY', amount, isAuResident: state.isAuResident },
+      new RecordMetricAction('au_fixed_income_interest', amount),
+      new RecordBalanceAction(`${stateKey}.balance`, stateKey),
+    ];
+  }
+}
+
+/**
+ * Handles INTL_FIXED_INCOME_INTEREST events (fires monthly).
+ *
+ * Computes monthly interest as: balance × interestRate ÷ 12, rounded to 2 dp.
  * Emits FIXED_INCOME_EARNINGS_APPLY (registered by UsAccountModule).
  *
  * @param {object} [opts]
@@ -262,7 +301,7 @@ export class AuSavingsInterestHandler extends HandlerEntry {
  * @param {number} [opts.interestRate=0.04]
  */
 export class FixedIncomeInterestHandler extends HandlerEntry {
-  static description = 'Computes annual interest on the fixed income account and emits FIXED_INCOME_EARNINGS_APPLY (credited by UsAccountModule).';
+  static description = 'Computes monthly interest on the fixed income account (balance × rate ÷ 12) and emits FIXED_INCOME_EARNINGS_APPLY (credited by UsAccountModule).';
 
   static eventType = 'INTL_FIXED_INCOME_INTEREST';
 
@@ -278,7 +317,7 @@ export class FixedIncomeInterestHandler extends HandlerEntry {
   call({ state }) {
     const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
     const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
-    const amount   = +(balance * this.interestRate).toFixed(2);
+    const amount   = +(balance * this.interestRate / 12).toFixed(2);
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'FIXED_INCOME_EARNINGS_APPLY', amount, isAuResident: state.isAuResident },

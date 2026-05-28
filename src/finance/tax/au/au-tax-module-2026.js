@@ -33,6 +33,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
   getReducerFns() {
     return new Map([
       ...this._auSavingsReducerFns(),
+      ...this._auFixedIncomeReducerFns(),
       ...this._superReducerFns(),
       ...this._auBrokerageReducerFns(),
       ...this._realPropertyReducerFns(),
@@ -61,6 +62,36 @@ export class AuTaxModule2026 extends BaseTaxModule {
             ...next,
             ...(perPerson
               ? { auPersonNonResidentWithholdingYTD: accumulateByOwnership(state.auPersonNonResidentWithholdingYTD ?? {}, state.auSavingsAccount, amount, state.people) }
+              : { auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + amount }),
+            ftcYTD: state.ftcYTD + amount,
+          };
+        }
+        return next;
+      }],
+    ];
+  }
+
+  _auFixedIncomeReducerFns() {
+    return [
+      // AU fixed income interest — always US ordinary income;
+      //   AU ordinary income for residents, AU NR withholding for non-residents
+      ['AU_FIXED_INCOME_EARNINGS_TAX', (state, action) => {
+        const { amount, isAuResident } = action;
+        const perPerson = state.people != null && state.auFixedIncomeAccount != null;
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        if (isAuResident) {
+          next = {
+            ...next,
+            ...(perPerson
+              ? { auPersonOrdinaryIncomeYTD: accumulateByOwnership(state.auPersonOrdinaryIncomeYTD ?? {}, state.auFixedIncomeAccount, amount, state.people) }
+              : { auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount }),
+            ftcYTD: state.ftcYTD + amount,
+          };
+        } else {
+          next = {
+            ...next,
+            ...(perPerson
+              ? { auPersonNonResidentWithholdingYTD: accumulateByOwnership(state.auPersonNonResidentWithholdingYTD ?? {}, state.auFixedIncomeAccount, amount, state.people) }
               : { auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + amount }),
             ftcYTD: state.ftcYTD + amount,
           };

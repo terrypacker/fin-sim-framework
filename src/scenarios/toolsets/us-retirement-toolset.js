@@ -312,7 +312,7 @@ export const US_RETIREMENT = {
       schedules.push(
         EventBuilder.eventSeries()
           .name('Fixed Income Interest').type('INTL_FIXED_INCOME_INTEREST')
-          .interval('year-end').startOffset(1).enabled(true).color('#2196F3').build()
+          .interval('month-end').enabled(true).color('#2196F3').build()
       );
     }
 
