@@ -131,3 +131,23 @@ Temporal query language design — a DSL for querying “state across time, bran
 ### Journal System
 * upgrade journaling to delta-based + compressed storage
 
+---
+### [Journal Reporting Plugin](16-journal-reporting-plugin.md)
+This document defines a generic Journal Reporting capability whose first
+consumer is a drill-down from the US/AU tax-return modal:
+
+* `JournalDataSource` projects `Journal.journal` entries into flat rows for
+  `QueryApi` predicates.
+* `JournalQueryApi` extends `QueryApi` with `between()`, `periodOf()` (settle
+  boundary lookup), and an `aggregate({ groupBy, aggregates })` rollup method.
+* A `ReportDefinitionRegistry` declares saved reports (Ordinary Income by
+  Source, Capital Gains by Disposal, Cash Flow by Account, …) with built-in
+  facets — no DSL exposed to the user.
+* A new `journal-report` workbench plugin renders a saved report with a
+  faceted UI, expandable group rows, and CSV export.
+* `TaxDocumentModal` line items gain an optional `drillReport` descriptor;
+  clicking a number publishes `JOURNAL_REPORT_OPEN` and pre-filters the
+  plugin to the line's source predicate.
+* Phased: targeted tax-modal drill-down first (Phase 1), then cash-flow
+  report + state-diff projection, then more definitions + facet polish.
+
