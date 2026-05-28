@@ -375,3 +375,85 @@ test('EVT-47: gold collectible value change is not a US or AU taxable event', ()
   assert.strictEqual(sim.state.auCapitalGainsYTD ?? 0, 0);
   assert.strictEqual(sim.state.ftcYTD ?? 0, 0);
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// saleDestinationAccount routing (US + AU)
+// ══════════════════════════════════════════════════════════════════════════════
+
+const findDiff = (entry, field) => entry.stateDiff.find(d => d.field === field);
+
+test('EVT-36: US collectible sale credits saleDestinationAccount instead of default cash pool', () => {
+  const config = structuredClone(US_COLLECTIBLE_JSON);
+  config.accounts.push({
+    __type:         'CheckingAccount',
+    id:             'us-checking',
+    name:           'US Checking',
+    type:           'checking',
+    role:           'us-savings',
+    stateKey:       'checkingAccount',
+    initialValue:   1_000,
+    ownershipType:  'sole',
+    ownerId:        'primary',
+    minimumBalance: 0,
+    country:        'US',
+    currency:       { code: 'USD', symbol: '$' },
+  });
+  config.collectibles[0].saleDestinationAccount = 'checkingAccount';
+  const { sim } = loadToolsetScenario(config);
+  assert.doesNotThrow(() => sim.stepTo(Q1_2028));
+
+  const [apply] = sim.journal.getActions('COLLECTIBLE_SALE_APPLY');
+  assert.ok(apply);
+
+  const destDiff = findDiff(apply, 'checkingAccount.balance');
+  assert.ok(destDiff, 'sale proceeds should land in checkingAccount (saleDestinationAccount)');
+  assert.strictEqual(destDiff.delta, config.collectibles[0].value);
+
+  const defaultDiff = findDiff(apply, 'usSavingsAccount.balance');
+  assert.strictEqual(defaultDiff, undefined, 'default usSavingsAccount should not be touched');
+});
+
+test('EVT-36: AU-resident collectible sale credits saleDestinationAccount instead of default cash pool', () => {
+  const config = structuredClone(AU_COLLECTIBLE_JSON);
+  config.accounts.push({
+    __type:         'CheckingAccount',
+    id:             'au-checking',
+    name:           'AU Checking',
+    type:           'checking',
+    role:           'au-savings',
+    stateKey:       'checkingAccount',
+    initialValue:   1_000,
+    ownershipType:  'sole',
+    ownerId:        'primary',
+    minimumBalance: 0,
+    country:        'AU',
+    currency:       { code: 'AUD', symbol: 'A$' },
+  });
+  config.collectibles[0].saleDestinationAccount = 'checkingAccount';
+  const { sim } = loadToolsetScenario(config);
+  assert.doesNotThrow(() => sim.stepTo(Q1_2028));
+
+  const [apply] = sim.journal.getActions('COLLECTIBLE_SALE_APPLY');
+  assert.ok(apply);
+
+  const destDiff = findDiff(apply, 'checkingAccount.balance');
+  assert.ok(destDiff, 'sale proceeds should land in checkingAccount (saleDestinationAccount)');
+  assert.strictEqual(destDiff.delta, config.collectibles[0].value);
+
+  const defaultDiff = findDiff(apply, 'usSavingsAccount.balance');
+  assert.strictEqual(defaultDiff, undefined, 'default usSavingsAccount should not be touched');
+});
+
+test('EVT-36: collectible sale with unknown saleDestinationAccount falls back to default cash pool', () => {
+  const config = structuredClone(US_COLLECTIBLE_JSON);
+  config.collectibles[0].saleDestinationAccount = 'nonexistentAccount';
+  const { sim } = loadToolsetScenario(config);
+  assert.doesNotThrow(() => sim.stepTo(Q1_2028));
+
+  const [apply] = sim.journal.getActions('COLLECTIBLE_SALE_APPLY');
+  assert.ok(apply);
+
+  const defaultDiff = findDiff(apply, 'usSavingsAccount.balance');
+  assert.ok(defaultDiff, 'should fall back to default usSavingsAccount');
+  assert.strictEqual(defaultDiff.delta, config.collectibles[0].value);
+});
