@@ -112,6 +112,35 @@
 .tax-doc-line--neg  .tax-doc-line-amount { color: var(--red, #f87171); }
 .tax-doc-line--zero .tax-doc-line-amount { color: #6d7c93; }
 
+.tax-doc-line-btn {
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+}
+
+/* Drill button in tax doc modal */
+.tax-doc-line-drill {
+  display: flex;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 0;
+  text-align: left;
+  border-radius: 2px;
+}
+
+.tax-doc-line-drill:hover {
+  background: rgba(99, 179, 237, 0.06);
+}
+
+.tax-doc-line-drill .tax-doc-line-label {
+  color: #7dd3fc;
+}
+
+.tax-doc-line-drill:hover .tax-doc-line-label {
+  text-decoration: underline;
+}
+
 .tax-doc-summary {
   margin-top: 18px;
   background: #111e30;

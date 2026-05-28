@@ -57,13 +57,14 @@ export class TaxDocumentRegistry {
    */
   generate(journalEntry, journal) {
     const { cc, taxDetail, personTaxDetails } = journalEntry.action.data ?? {};
+    const period = journal ? _extractPeriod(journalEntry, journal, cc) : null;
 
     if (personTaxDetails?.length > 0) {
       const taxYear    = personTaxDetails[0]?.taxDetail?.taxYear ?? new Date(journalEntry.date).getUTCFullYear();
       const module     = this._get(cc, taxYear);
       const saleRecords = cc === 'AU' && journal ? _extractAuSaleRecords(journalEntry, journal) : [];
       return personTaxDetails.flatMap(({ personKey, personName, taxDetail: pd }) => {
-        const result = module.generate(pd, taxYear, saleRecords);
+        const result = module.generate(pd, taxYear, saleRecords, period);
         const docs   = Array.isArray(result) ? result : [result];
         docs[0].personKey  = personKey;
         docs[0].personName = personName;
@@ -84,7 +85,7 @@ export class TaxDocumentRegistry {
       : cc === 'AU' ? _extractAuSaleRecords(journalEntry, journal)
       : []
       : [];
-    return module.generate(taxDetail, taxYear, saleRecords);
+    return module.generate(taxDetail, taxYear, saleRecords, period);
   }
 
   // ─── Private ───────────────────────────────────────────────────────────────
@@ -105,6 +106,30 @@ export class TaxDocumentRegistry {
 }
 
 // ─── Module-level helpers ─────────────────────────────────────────────────────
+
+/**
+ * Return { fromEntryId, toEntryId } identifying the tax period boundaries for
+ * the given TAX_SETTLE_APPLY entry.  Used to populate drillReport.params.period
+ * on drillable line items so the Journal Report plugin can reconstruct the range.
+ *
+ * toEntryId   = currentEntry.id
+ * fromEntryId = the previous TAX_SETTLE_APPLY for the same cc (null if first year)
+ */
+function _extractPeriod(currentEntry, journal, cc) {
+  const currentIdx = journal.indexOf(currentEntry);
+  if (currentIdx < 0) return null;
+
+  let fromEntryId = null;
+  for (let i = currentIdx - 1; i >= 0; i--) {
+    const e = journal[i];
+    if (e.action?.type === 'TAX_SETTLE_APPLY' && e.action?.data?.cc === cc) {
+      fromEntryId = e.id;
+      break;
+    }
+  }
+
+  return { fromEntryId, toEntryId: currentEntry.id };
+}
 
 /**
  * Collect AU_STOCK_WITHDRAWAL_TAX and AU_HOUSE_SALE_TAX journal entries that carry

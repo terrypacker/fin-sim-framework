@@ -276,7 +276,7 @@ export class AccountService extends AssetService {
           account.contributionBasis = Math.max(0, (account.contributionBasis ?? 0) - saleCost);
           pendingTaxActions.push({
             type: 'STOCK_WITHDRAWAL_TAX', gain, isAuResident,
-            proceeds: withdraw, costBasis: saleCost, description: account.name ?? key,
+            proceeds: withdraw, costBasis: saleCost, description: account.name || key,
           });
         }
 

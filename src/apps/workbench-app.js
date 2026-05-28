@@ -5,6 +5,7 @@ import {
   FINANCE_PLUGINS,
   FINANCE_DEFAULT_LAYOUT,
 } from '../visualization/workbench/plugins/finance/finance-plugin-package.js';
+import { WB_EVENTS } from '../visualization/workbench/workbench-runtime.js';
 
 const STORAGE_KEY = 'sim-workbench-layout-prod';
 
@@ -20,7 +21,7 @@ const ANALYSIS_LAYOUT = {
   left:   { tabs: ['scenario', 'mc-config', 'opt-config'],                    active: 'mc-config'     },
   center: { tabs: ['chart', 'mc-results', 'opt-results', 'timeline'],         active: 'chart'         },
   right:  { tabs: ['mc-runs', 'opt-runs', 'state-panel', 'action-detail'],    active: 'mc-runs'       },
-  bottom: { tabs: ['dashboard', 'perf'],                                      active: 'dashboard'     },
+  bottom: { tabs: ['journal-report', 'dashboard', 'perf'],                    active: 'dashboard'     },
   bottomSize: 110, bottomCollapsed: false, ...CENTER_SPLIT_DEFAULTS,
 };
 
@@ -38,7 +39,7 @@ const REVIEW_LAYOUT = {
   left:   { tabs: ['scenario', 'config-list'],                                        active: 'scenario'     },
   center: { tabs: ['timeline', 'chart'],                                              active: 'timeline'     },
   right:  { tabs: ['state-panel', 'action-detail', 'inspector', 'exec-history', 'lineage'], active: 'state-panel' },
-  bottom: { tabs: ['dashboard'],                                                      active: 'dashboard'    },
+  bottom: { tabs: ['journal-report', 'dashboard'],                                    active: 'journal-report' },
   bottomSize: 110, bottomCollapsed: false, ...CENTER_SPLIT_DEFAULTS,
 };
 
@@ -105,6 +106,14 @@ export class WorkbenchApp extends BaseApp {
       storageKey:    STORAGE_KEY,
     });
     this._wbShell.init(container);
+
+    // Give the tax modal access to the workbench runtime so drill-down buttons work.
+    this._taxDocModal.runtime = this._wbShell.runtime;
+
+    // Activate the journal-report plugin pane whenever a drill-down fires.
+    this._wbShell.runtime.bus.subscribe(WB_EVENTS.JOURNAL_REPORT_OPEN, () => {
+      this._wbShell.activatePlugin('journal-report');
+    });
 
     // Bind scenario tab view now that ScenarioPlugin DOM exists
     this._scenarioTabView.bind();

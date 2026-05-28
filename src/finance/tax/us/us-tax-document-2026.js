@@ -31,14 +31,17 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
    * @param {object[]} [saleRecords]  - Capital gain transactions from journal mining.
    * @returns {object|object[]}  Single TaxDocument, or [Form 1040, Schedule D, Form 8949] array.
    */
-  generate(taxDetail, taxYear, saleRecords = []) {
-    const form1040 = this._generateForm1040(taxDetail, taxYear);
+  generate(taxDetail, taxYear, saleRecords = [], period = null) {
+    const form1040 = this._generateForm1040(taxDetail, taxYear, period);
     if (!saleRecords.length) return form1040;
     return [form1040, this._generateScheduleD(saleRecords, taxYear), this._generateForm8949(saleRecords, taxYear)];
   }
 
-  _generateForm1040(taxDetail, taxYear) {
+  _generateForm1040(taxDetail, taxYear, period = null) {
     const { inputs } = taxDetail;
+    const drill = (reportId) => period
+      ? { reportId, params: { cc: 'US', period } }
+      : undefined;
     return {
       title:        `Form 1040 — ${taxYear}`,
       country:      'US',
@@ -48,12 +51,12 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
         {
           heading: 'Income',
           lineItems: [
-            { label: 'Gross Ordinary Income',               amount:  inputs.grossOrdinaryIncome },
-            { label: 'Adjustments (Pre-tax Contributions)', amount: -inputs.adjustments },
+            { label: 'Gross Ordinary Income',               amount:  inputs.grossOrdinaryIncome, drillReport: drill('ordinary-income-by-source')     },
+            { label: 'Adjustments (Pre-tax Contributions)', amount: -inputs.adjustments,          drillReport: drill('pretax-adjustments-by-source')  },
             { label: 'Adjusted Gross Income',               amount:  taxDetail.adjustedGrossIncome },
             { label: 'Standard Deduction',                  amount: -inputs.standardDeduction },
             { label: 'Taxable Ordinary Income',             amount:  taxDetail.taxableIncome },
-            { label: 'Long-Term Capital Gains (Sch. D)',    amount:  inputs.capitalGains },
+            { label: 'Long-Term Capital Gains (Sch. D)',    amount:  inputs.capitalGains,         drillReport: drill('capital-gains-by-disposal')     },
             { label: 'Collectible Gains',                   amount:  inputs.collectibleGains },
           ],
         },
