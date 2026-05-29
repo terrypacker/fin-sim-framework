@@ -8,26 +8,22 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import {SimGraphNode} from "../graph/sim-graph-node.js";
 import {Simulation} from "../simulation-framework/simulation.js";
 import {ServiceRegistry} from "../services/service-registry.js";
 
 /**
  * Base class for simulation scenarios.
  *
- * BaseScenario is a thin UI coordinator:
- *   - Constructs the Simulation via buildSim().
- *   - Provides a convenience `sim` getter.
- *
- * All simulation-wiring logic (scheduling events, registering handlers,
- * wiring reducers, and the inverse operations on UPDATE / DELETE) lives in
- * ServiceRegistry.simulationSync (SimulationSync). SimulationSync subscribes
- * to the shared bus and keeps the active Simulation in sync automatically.
+ * BaseScenario extends SimGraphNode with kind:'scenario' / layer:'scenario'.
+ * Scenario nodes live in the shared Graph and survive ServiceRegistry.reset()
+ * (see design/17-scenario-as-graph-node.md §3.8).
  *
  * Scenario population is owned by ScenarioLoader, which dispatches between
  * graph deserialization (saved snapshot) and toolset compilation (declarative
  * inputs). Subclasses declare toolsets via `getToolsets()` + `buildDefaultConfig()`.
  */
-export class BaseScenario {
+export class BaseScenario extends SimGraphNode {
   /**
    * Declare the typed parameters this scenario exposes for UI editing,
    * MonteCarlo sampling, and optimization.
@@ -56,37 +52,76 @@ export class BaseScenario {
    * Returns null for scenarios that don't use the toolset path.
    *
    * @param {object}  _params   - merged params plain object
-   * @param {Date}    _simStart
-   * @param {Date}    _simEnd
+   * @param {string}  _simStart - ISO date string
+   * @param {string}  _simEnd   - ISO date string
    * @returns {object|null}
    */
   // eslint-disable-next-line no-unused-vars
   static buildDefaultConfig(_params, _simStart, _simEnd) { return null; }
 
+  /**
+   * Construct a runnable scenario instance from typed inputs.
+   * Subclasses must override — calling the base throws.
+   * @param {object[]} _params
+   * @param {Date}     _simStart
+   * @param {Date}     _simEnd
+   * @returns {BaseScenario}
+   */
+  // eslint-disable-next-line no-unused-vars
+  static instantiate(_params, _simStart, _simEnd) {
+    throw new Error(`${this.name} must implement static instantiate()`);
+  }
+
+  /** Stable machine identifier for this scenario class (e.g. 'intl-retirement'). */
+  static scenarioId() {
+    throw new Error(`${this.name} must implement static scenarioId()`);
+  }
+
+  /** Human-readable display name (e.g. 'International Retirement'). */
+  static scenarioName() {
+    throw new Error(`${this.name} must implement static scenarioName()`);
+  }
+
   constructor({
+    id,
+    name,
+    order        = 100,
+    prebuilt     = false,
+    active       = false,
+    context,
+    initialState = {},
+    params       = [],
+    simStart     = new Date(Date.UTC(2026, 0, 1)),
+    simEnd       = new Date(Date.UTC(2041, 0, 1)),
+    // Materialized cfg (populated by buildDefaultConfig / ScenarioLoader)
+    persons, accounts, realProperties, collectibles, toolsets,
+  } = {}) {
+    super({
       id,
-      order = 100,
-      prebuilt =  false,
-      context,
-      initialState = {},
-      params = [],
-      simStart =  new Date(Date.UTC(2026, 0, 1)),
-      simEnd = new Date(Date.UTC(2041, 0, 1))} = {}) {
-    this.id = id;
-    this.order = order;
+      name:  name ?? id,
+      kind:  'scenario',
+      layer: 'scenario',
+    });
+
+    this.order    = order;
     this.prebuilt = prebuilt;
-    this.context = context;
+    this.active   = active;
+    // Runtime-only; never serialized
+    this.context      = context;
     this.initialState = initialState;
-    this.params = params;
-    //Validate the inputs to be dates
-    if(!this._isDate(simStart)) {
-      throw new Error('Must supply simStart Date to scenario');
-    }
-    if(!this._isDate(simEnd)) {
-      throw new Error('Must supply simEnd Date to scenario');
-    }
+    this.params       = params;
+
+    if (!this._isDate(simStart)) throw new Error('Must supply simStart Date to scenario');
+    if (!this._isDate(simEnd))   throw new Error('Must supply simEnd Date to scenario');
+
     this.simStart = simStart;
-    this.simEnd = simEnd;
+    this.simEnd   = simEnd;
+
+    if (persons)        this.persons        = persons;
+    if (accounts)       this.accounts       = accounts;
+    if (realProperties) this.realProperties = realProperties;
+    if (collectibles)   this.collectibles   = collectibles;
+    if (toolsets)       this.toolsets       = toolsets;
   }
 
   _isDate(date) {

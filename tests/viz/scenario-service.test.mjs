@@ -22,7 +22,6 @@ import { jest }            from '@jest/globals';
 import { ScenarioRegistry } from '../../src/scenarios/scenario-registry.js';
 import { ScenarioService }  from '../../src/services/scenario-service.js';
 import { ScenarioStorage }  from '../../src/scenarios/scenario-storage.js';
-import { PrebuiltScenario } from '../../src/scenarios/prebuilt-scenario.js';
 import {ServiceRegistry} from "../../src/services/service-registry.js";
 import {
   IntlRetirementScenario,
@@ -33,13 +32,19 @@ import {ScenarioLoader} from "../../src/scenarios/scenario-loader.js";
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function makePrebuilt(id, order = 1) {
-  const factory = jest.fn((_p, _i) => ({ id, buildSim: jest.fn(), loadDefaults: jest.fn() }));
-  return new PrebuiltScenario({
-    id, label: `Label ${id}`, order,
+  return {
+    cls: {
+      scenarioId:         () => id,
+      scenarioName:       () => `Label ${id}`,
+      getParamSchema:     () => [],
+      buildDefaultConfig: () => null,
+      instantiate:        jest.fn((_p, _s, _e) => ({ id, buildSim: jest.fn() })),
+    },
+    order,
+    active: false,
     simStart: new Date(Date.UTC(2026, 0, 1)),
-    simEnd: new Date(Date.UTC(2041, 0, 1)),
-    factory,
-  });
+    simEnd:   new Date(Date.UTC(2041, 0, 1)),
+  };
 }
 
 function setStorageData(data) {
@@ -111,14 +116,14 @@ test('getInitialState: returns initialState for user scenario', () => {
 // createActiveScenario()
 // ═════════════════════════════════════════════════════════════════════════════
 
-test('createActiveScenario: calls prebuilt factory when prebuilt is active', () => {
+test('createActiveScenario: calls scenarioClass.instantiate when prebuilt is active', () => {
   const pb = makePrebuilt('alpha');
   const { service } = makeStack({ prebuiltScenarios: [pb] });
   service.createActiveScenario();
-  expect(pb.factory).toHaveBeenCalledWith({}, {}, new Date(pb.simStart), new Date(pb.simEnd));
+  expect(pb.cls.instantiate).toHaveBeenCalledWith({}, new Date(pb.simStart), new Date(pb.simEnd));
 });
 
-test('createActiveScenario: uses scenarioId to find matching prebuilt factory', () => {
+test('createActiveScenario: uses scenarioId to find matching prebuilt scenarioClass', () => {
   const pbA = makePrebuilt('alpha', 1);
   const pbB = makePrebuilt('beta',  2);
   const expectedStart = '2025-01-01';
@@ -132,8 +137,8 @@ test('createActiveScenario: uses scenarioId to find matching prebuilt factory', 
   });
   const { service } = makeStack({ prebuiltScenarios: [pbA, pbB] });
   service.createActiveScenario();
-  expect(pbA.factory).not.toHaveBeenCalled();
-  expect(pbB.factory).toHaveBeenCalledWith({}, {}, new Date(expectedStart), new Date(expectedEnd));
+  expect(pbA.cls.instantiate).not.toHaveBeenCalled();
+  expect(pbB.cls.instantiate).toHaveBeenCalledWith({}, new Date(expectedStart), new Date(expectedEnd));
 });
 
 test('createActiveScenario: falls back to first prebuilt for user scenario without scenarioId match', () => {
@@ -148,10 +153,10 @@ test('createActiveScenario: falls back to first prebuilt for user scenario witho
   const { service } = makeStack({ prebuiltScenarios: [pbA, pbB] });
   service.createActiveScenario();
   // First prebuilt by order (pbA) is the fallback target.
-  expect(pbA.factory).toHaveBeenCalledWith(
-    {}, {}, new Date(expectedStart), new Date(expectedEnd)
+  expect(pbA.cls.instantiate).toHaveBeenCalledWith(
+    {}, new Date(expectedStart), new Date(expectedEnd)
   );
-  expect(pbB.factory).not.toHaveBeenCalled();
+  expect(pbB.cls.instantiate).not.toHaveBeenCalled();
 });
 
 test('createActiveScenario: throws when there is no active scenario', () => {
@@ -198,13 +203,18 @@ test('newScenario: pre-populates params from scenarioClass.getParamSchema()', ()
     { key: 'retirementDate',  label: 'Retirement Date',  type: 'Date',   group: 'People',   defaultValue: '2040-01-01' },
     { key: 'reinvest',        label: 'Reinvest',         type: 'Boolean', group: 'People',  defaultValue: false },
   ];
-  const scenarioClass = { getParamSchema: () => fakeSchema };
-  const pb = new PrebuiltScenario({
-    id: 'test', label: 'Test', order: 1,
+  const pb = {
+    cls: {
+      scenarioId:         () => 'test',
+      scenarioName:       () => 'Test',
+      getParamSchema:     () => fakeSchema,
+      buildDefaultConfig: () => null,
+      instantiate:        jest.fn(),
+    },
+    order: 1, active: false,
     simStart: new Date(Date.UTC(2026, 0, 1)),
-    simEnd: new Date(Date.UTC(2041, 0, 1)),
-    factory: jest.fn(), scenarioClass,
-  });
+    simEnd:   new Date(Date.UTC(2041, 0, 1)),
+  };
   const { registry, service } = makeStack({ prebuiltScenarios: [pb] });
   const created = service.newScenario(registry.getActive());
   assert.strictEqual(created.params.length, 3);
@@ -218,22 +228,13 @@ test('newScenario: pre-populates params from scenarioClass.getParamSchema()', ()
 function buildAndCompilePrebuilt() {
   ServiceRegistry.reset();
   const PREBUILT_SCENARIOS = [
-    new PrebuiltScenario({
-      id:            'intl-retirement',
-      label:         'International Retirement',
-      order:         1,
-      prebuilt:      true,
-      active:        true,
+    {
+      cls:      IntlRetirementScenario,
+      order:    1,
+      active:   true,
       simStart: new Date(Date.UTC(2026, 0, 1)),
       simEnd:   new Date(Date.UTC(2041, 0, 1)),
-      scenarioClass: IntlRetirementScenario,
-      factory:  (params, _initialState, simStart, simEnd) => new IntlRetirementScenario({
-        context: ServiceRegistry.getInstance().simulationContext,
-        params,
-        simStart,
-        simEnd,
-      }),
-    }),
+    },
   ];
   const registry = ServiceRegistry.getInstance();
   registry.scenarioRegistry.loadPrebuilt(PREBUILT_SCENARIOS);
@@ -439,7 +440,7 @@ test('_getParams: converts Number params to flat object', () => {
   const pb = makePrebuilt('alpha');
   const { service } = makeStack({ prebuiltScenarios: [pb] });
   service.createActiveScenario();
-  const callArgs = pb.factory.mock.calls[0][0];
+  const callArgs = pb.cls.instantiate.mock.calls[0][0];
   assert.strictEqual(callArgs.drift, 0.07);
 });
 
@@ -454,7 +455,7 @@ test('_getParams: converts Date params to Date objects', () => {
   const pb = makePrebuilt('alpha');
   const { service } = makeStack({ prebuiltScenarios: [pb] });
   service.createActiveScenario();
-  const callArgs = pb.factory.mock.calls[0][0];
+  const callArgs = pb.cls.instantiate.mock.calls[0][0];
   assert.ok(callArgs.primaryRetirementDate instanceof Date, 'Date param should be converted to Date');
   assert.strictEqual(callArgs.primaryRetirementDate.toISOString().slice(0, 10), '2040-01-01');
 });
@@ -470,7 +471,7 @@ test('_getParams: Boolean params remain as boolean values', () => {
   const pb = makePrebuilt('alpha');
   const { service } = makeStack({ prebuiltScenarios: [pb] });
   service.createActiveScenario();
-  const callArgs = pb.factory.mock.calls[0][0];
+  const callArgs = pb.cls.instantiate.mock.calls[0][0];
   assert.strictEqual(callArgs.reinvest, true);
 });
 
@@ -485,7 +486,7 @@ test('_getParams: empty Date value does not produce an Invalid Date', () => {
   const pb = makePrebuilt('alpha');
   const { service } = makeStack({ prebuiltScenarios: [pb] });
   service.createActiveScenario();
-  const callArgs = pb.factory.mock.calls[0][0];
+  const callArgs = pb.cls.instantiate.mock.calls[0][0];
   // Empty date value should pass through as empty string (falsy guard in _getParams)
   assert.strictEqual(callArgs.retirementDate, '');
 });
@@ -495,14 +496,18 @@ test('_getParams: empty Date value does not produce an Invalid Date', () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 function makePrebuiltWithSchema(id, schema) {
-  const scenarioClass = { getParamSchema: () => schema };
-  return new PrebuiltScenario({
-    id, label: `Label ${id}`, order: 1,
+  return {
+    cls: {
+      scenarioId:         () => id,
+      scenarioName:       () => `Label ${id}`,
+      getParamSchema:     () => schema,
+      buildDefaultConfig: () => null,
+      instantiate:        jest.fn(),
+    },
+    order: 1, active: false,
     simStart: new Date(Date.UTC(2026, 0, 1)),
     simEnd:   new Date(Date.UTC(2041, 0, 1)),
-    factory:  jest.fn(),
-    scenarioClass,
-  });
+  };
 }
 
 test('resetParamsFromSchema: resets each param value to the schema default', () => {

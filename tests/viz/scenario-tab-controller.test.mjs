@@ -23,17 +23,22 @@ import { ScenarioRegistry }      from '../../src/scenarios/scenario-registry.js'
 import { ScenarioService }       from '../../src/services/scenario-service.js';
 import { ScenarioTabController } from '../../src/visualization/scenario/scenario-tab-controller.js';
 import { ScenarioStorage }       from '../../src/scenarios/scenario-storage.js';
-import { PrebuiltScenario }      from '../../src/scenarios/prebuilt-scenario.js';
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function makePrebuilt(id, order = 1) {
-  return new PrebuiltScenario({
-    id, label: `Label ${id}`, order,
+  return {
+    cls: {
+      scenarioId:         () => id,
+      scenarioName:       () => `Label ${id}`,
+      getParamSchema:     () => [],
+      buildDefaultConfig: () => null,
+      instantiate:        jest.fn(),
+    },
+    order,
+    active: false,
     simStart: new Date(Date.UTC(2026, 0, 1)),
-    simEnd: new Date(Date.UTC(2041, 0, 1)),
-    factory: jest.fn(),
-  });
+    simEnd:   new Date(Date.UTC(2041, 0, 1)),
+  };
 }
 
 function setStorageData(data) {

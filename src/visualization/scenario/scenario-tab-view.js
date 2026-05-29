@@ -150,7 +150,7 @@ export class ScenarioTabView {
       for (const pb of prebuiltScenarios) {
         const opt = document.createElement('option');
         opt.value       = pb.id;
-        opt.textContent = pb.label;
+        opt.textContent = pb.name;
         group.appendChild(opt);
       }
       sel.appendChild(group);

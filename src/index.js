@@ -117,7 +117,6 @@ import { SimGraphNode } from './graph/sim-graph-node.js';
 import { QueryApi } from './query/query-api.js';
 import { BaseScenario } from './scenarios/base-scenario.js';
 import { INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, IntlRetirementScenario } from './scenarios/intl-retirement-scenario.js';
-import { PrebuiltScenario } from './scenarios/prebuilt-scenario.js';
 import { ScenarioLoader } from './scenarios/scenario-loader.js';
 import { ScenarioRegistry } from './scenarios/scenario-registry.js';
 import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
@@ -605,7 +604,6 @@ export const Scenarios = {
   INTL_RETIREMENT_DEFAULTS,
   INTL_RETIREMENT_PARAM_SCHEMA,
   IntlRetirementScenario,
-  PrebuiltScenario,
   ScenarioLoader,
   ScenarioRegistry,
   ScenarioSerializer,

@@ -56,19 +56,24 @@ export class ScenarioRegistry {
   }
 
   /**
-   * Load prebuilt scenarios, storing them under 'p:<id>' keys.
+   * Load prebuilt scenarios from class entries, storing them under 'p:<id>' keys.
+   *
+   * Each entry: { cls, order, active, simStart, simEnd }
+   * where cls is the scenario subclass with static scenarioId(), scenarioName(),
+   * getParamSchema(), buildDefaultConfig(), and instantiate().
+   *
    * After adding all prebuilts, sets the active scenario if not already set:
    *   1. lastUsed from storage (if it maps to a loaded prebuilt)
-   *   2. The prebuilt with active: true (designated by the caller, e.g. SimulationWorkbench)
+   *   2. The prebuilt with active: true (designated by the caller)
    *   3. The first prebuilt by order
    */
-  loadPrebuilt(prebuiltScenarios = []) {
+  loadPrebuilt(entries = []) {
     const active = this.getActive();
-    prebuiltScenarios.forEach(pb => {
-      const id = 'p:' + pb.id;
-      // Preserve existing entries so param edits survive Rebuild (Design §2.3 Option A).
+    entries.forEach(({ cls, order, active: entryActive, simStart, simEnd }) => {
+      const id = 'p:' + cls.scenarioId();
+      // Preserve existing entries so param edits survive Rebuild.
       if (this._scenarios.has(id)) return;
-      const schema = pb.scenarioClass?.getParamSchema?.() ?? [];
+      const schema = cls.getParamSchema?.() ?? [];
       // Keep this entry shape in sync with ScenarioLoader._toEntry — both produce
       // cfg.params records that the UI consumes (label, group, description for
       // tooltips, node for the param→field cascade). Toolset-owned params are
@@ -82,28 +87,29 @@ export class ScenarioRegistry {
       });
       // Canonicalize prebuilt sim window to ISO strings up-front so the registry
       // entry matches the storage / JSON / serialized representation.
-      const simStart = ScenarioSerializer.toDateStr(pb.simStart);
-      const simEnd   = ScenarioSerializer.toDateStr(pb.simEnd);
+      const simStartStr = ScenarioSerializer.toDateStr(simStart);
+      const simEndStr   = ScenarioSerializer.toDateStr(simEnd);
       // Design 15 §2.1: materialize buildDefaultConfig once at registration so the
       // registry entry carries persons/accounts/realProperties/collectibles/toolsets
       // up-front. Subsequent Rebuilds read straight from the entry — defaults never
       // fire again unless explicitly requested via resetToDefaults.
       const defaultParams = Object.fromEntries(schema.map(s => [s.key, s.defaultValue]));
-      const defaultCfg = pb.scenarioClass?.buildDefaultConfig?.(defaultParams, simStart, simEnd) ?? {};
-      // If another scenario (e.g. a user scenario) is already active, force active:false so
-      // the prebuilt's active:true flag doesn't create two active scenarios. When nothing is
-      // active yet, preserve pb.active so the post-loop "find(p => p.active)" fallback works.
-      const pbActive = active ? false : pb.active;
+      const defaultCfg = cls.buildDefaultConfig?.(defaultParams, simStartStr, simEndStr) ?? {};
+      // If another scenario is already active, force active:false so the prebuilt's
+      // active:true flag doesn't create two active scenarios.
+      const pbActive = active ? false : entryActive;
       this._scenarios.set(id, {
-        ...pb,
-        ...defaultCfg,
         id,
+        name:          cls.scenarioName(),
+        order,
+        prebuilt:      true,
+        active:        pbActive,
+        simStart:      simStartStr,
+        simEnd:        simEndStr,
         params,
-        simStart,
-        simEnd,
-        active: pbActive,
-        factory: pb.factory,
-        scenarioClass: pb.scenarioClass,
+        initialState:  {},
+        scenarioClass: cls,
+        ...defaultCfg,
       });
     });
 
