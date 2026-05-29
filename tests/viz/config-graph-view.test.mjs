@@ -59,7 +59,7 @@ function makeElements() {
 }
 
 function makeConfigGraphView(elements = makeElements()) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   return new ConfigGraphView({
     parent:                  null,

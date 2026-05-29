@@ -22,12 +22,12 @@ import { Collectible } from '../../src/finance/assets/collectible.js';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { ServiceActionEvent } from '../../src/simulation-framework/bus-messages.js';
 
-beforeEach(() => ServiceRegistry.reset());
+beforeEach(() => ServiceRegistry.resetAll());
 
 // ── CRUD helpers ──────────────────────────────────────────────────────────────
 
 function captureEvents(work) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const events = [];
   registry.bus.subscribe('SERVICE_ACTION', e => events.push(e));
@@ -83,7 +83,7 @@ test('CollectibleService: getAll returns all created collectibles', () => {
 // ── CRUD: updateCollectible ───────────────────────────────────────────────────
 
 test('CollectibleService: updateCollectible mutates collectible in-place', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const col = new Collectible(100_000, { name: 'Gold' });
   registry.collectibleService.createCollectible(col);
@@ -95,7 +95,7 @@ test('CollectibleService: updateCollectible mutates collectible in-place', () =>
 });
 
 test('CollectibleService: updateCollectible publishes UPDATE event with originalItem', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const col = new Collectible(100_000, { name: 'Gold' });
   registry.collectibleService.createCollectible(col);
@@ -110,7 +110,7 @@ test('CollectibleService: updateCollectible publishes UPDATE event with original
 });
 
 test('CollectibleService: updateCollectible originalItem is a separate object from item', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const col = new Collectible(100_000, { name: 'Gold' });
   registry.collectibleService.createCollectible(col);
@@ -125,7 +125,7 @@ test('CollectibleService: updateCollectible originalItem is a separate object fr
 // ── CRUD: deleteCollectible ───────────────────────────────────────────────────
 
 test('CollectibleService: deleteCollectible removes the collectible from the service', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const col = new Collectible(100_000, { name: 'Gold' });
   registry.collectibleService.createCollectible(col);
@@ -136,7 +136,7 @@ test('CollectibleService: deleteCollectible removes the collectible from the ser
 });
 
 test('CollectibleService: deleteCollectible publishes DELETE event', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const col = new Collectible(100_000, { name: 'Gold' });
   registry.collectibleService.createCollectible(col);

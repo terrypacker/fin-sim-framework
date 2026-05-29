@@ -45,7 +45,7 @@ import {loadHtml} from "../helpers/viz-utils.js";
 
 function makeBuilderView(elements) {
   loadHtml('../../index.html');
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const { builderCanvas, graphRoot, graphNodes, graphEdges, nodeDetailsTemplate } = elements ?? makeElements();
   return new GraphBuilderView({
@@ -101,7 +101,7 @@ function makePresenter() {
   tpl.id = 'tpl-empty';
   tpl.innerHTML = '<div class="tl-empty">Select a node</div>';
   document.body.appendChild(tpl);
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   return new GraphBuilderPresenter({
     graphRenderer:  makeGraphRenderer(),

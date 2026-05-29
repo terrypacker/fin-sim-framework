@@ -575,9 +575,10 @@ export class WorkbenchApp extends BaseComponent {
 
   /**
    * Destroy all existing data, prepare for initScenario().
+   * Clears config + execution layers so ScenarioLoader starts with a fresh graph.
    */
   destroyScenario() {
-    // Reset all services, bus, and SimulationRegistry so every rebuild starts clean.
+    ServiceRegistry.getInstance()?.graph.clearLayer('config');
     ServiceRegistry.reset();
 
     $('currentStateContent').innerHTML      = '';

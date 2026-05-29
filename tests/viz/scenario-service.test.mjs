@@ -20,6 +20,7 @@
 import assert from 'node:assert/strict';
 import { jest }            from '@jest/globals';
 import { ScenarioRegistry } from '../../src/scenarios/scenario-registry.js';
+import { Graph } from '../../src/graph/graph.js';
 import { ScenarioService }  from '../../src/services/scenario-service.js';
 import { ScenarioStorage }  from '../../src/scenarios/scenario-storage.js';
 import {ServiceRegistry} from "../../src/services/service-registry.js";
@@ -52,7 +53,7 @@ function setStorageData(data) {
 }
 
 function makeStack({ prebuiltScenarios = [] } = {}) {
-  const registry = new ScenarioRegistry(new ScenarioStorage());
+  const registry = new ScenarioRegistry(new ScenarioStorage(), new Graph());
   registry.loadPrebuilt(prebuiltScenarios);
   return { registry, service: new ScenarioService({}, registry) };
 }
@@ -160,7 +161,7 @@ test('createActiveScenario: falls back to first prebuilt for user scenario witho
 });
 
 test('createActiveScenario: throws when there is no active scenario', () => {
-  const registry = new ScenarioRegistry(new ScenarioStorage());
+  const registry = new ScenarioRegistry(new ScenarioStorage(), new Graph());
   registry.loadPrebuilt([]);
   const service = new ScenarioService({}, registry);
   assert.throws(() => service.createActiveScenario(), /no active scenario/i);
@@ -226,7 +227,7 @@ test('newScenario: pre-populates params from scenarioClass.getParamSchema()', ()
 // ── Shared setup for full-copy tests ─────────────────────────────────────────
 
 function buildAndCompilePrebuilt() {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const PREBUILT_SCENARIOS = [
     {
       cls:      IntlRetirementScenario,

@@ -20,6 +20,7 @@
 import assert from 'node:assert/strict';
 import { jest }             from '@jest/globals';
 import { ScenarioRegistry } from '../../src/scenarios/scenario-registry.js';
+import { Graph } from '../../src/graph/graph.js';
 import { ScenarioStorage }  from '../../src/scenarios/scenario-storage.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -61,7 +62,7 @@ function setStorageData(data) {
 }
 
 function makeRegistry(prebuiltScenarios = []) {
-  const registry = new ScenarioRegistry(new ScenarioStorage());
+  const registry = new ScenarioRegistry(new ScenarioStorage(), new Graph());
   registry.loadPrebuilt(prebuiltScenarios);
   return registry;
 }

@@ -110,7 +110,7 @@ function makePrebuiltArray() {
  *   - activeConfig has been mutated to carry events/handlers/reducers/initialState.
  */
 function buildAndCompilePrebuilt() {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
   services.scenarioRegistry.loadPrebuilt(makePrebuiltArray());
 
@@ -136,7 +136,7 @@ function buildAndCompilePrebuilt() {
  * Takes the deserialize branch (cfg.events is non-empty after compile).
  */
 function loadCopyIntoFreshServices(cfg) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
   const scenario = new BaseScenario({
     context:  services.simulationContext,

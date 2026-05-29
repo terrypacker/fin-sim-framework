@@ -20,6 +20,7 @@
 import assert from 'node:assert/strict';
 import { jest }                  from '@jest/globals';
 import { ScenarioRegistry }      from '../../src/scenarios/scenario-registry.js';
+import { Graph } from '../../src/graph/graph.js';
 import { ScenarioService }       from '../../src/services/scenario-service.js';
 import { ScenarioTabController } from '../../src/visualization/scenario/scenario-tab-controller.js';
 import { ScenarioTabView }       from '../../src/visualization/scenario/scenario-tab-view.js';
@@ -71,7 +72,7 @@ function setupDOM() {
 }
 
 function makeStack({ prebuiltScenarios = [] } = {}) {
-  const registry   = new ScenarioRegistry(new ScenarioStorage());
+  const registry   = new ScenarioRegistry(new ScenarioStorage(), new Graph());
   registry.loadPrebuilt(prebuiltScenarios);
   const service    = new ScenarioService({}, registry);
   const controller = new ScenarioTabController({ scenarioService: service });

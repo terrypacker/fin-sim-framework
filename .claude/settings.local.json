@@ -62,7 +62,11 @@
       "Bash(sed -n '12,16p' /Users/tpacker/IdeaProjects/fin-sim-framework/src/visualization/workbench/tab-group.js)",
       "Bash(sed -n '194,198p' /Users/tpacker/IdeaProjects/fin-sim-framework/src/visualization/workbench/tab-group.js)",
       "Bash(sed -n '40,44p' /Users/tpacker/IdeaProjects/fin-sim-framework/src/visualization/monte-carlo/monte-carlo-presenter.js)",
-      "Bash(sed -n '37,41p' /Users/tpacker/IdeaProjects/fin-sim-framework/src/services/service-registry.js)"
+      "Bash(sed -n '37,41p' /Users/tpacker/IdeaProjects/fin-sim-framework/src/services/service-registry.js)",
+      "Bash(xargs sed -i '' 's/ServiceRegistry\\\\.reset\\(\\)/ServiceRegistry.resetAll\\(\\)/g')",
+      "Bash(xargs sed -i '' 's/new ScenarioRegistry\\(new ScenarioStorage\\(\\)\\)/new ScenarioRegistry\\(new ScenarioStorage\\(\\), new Graph\\(\\)\\)/g')",
+      "Bash(gtimeout 5 node --test \"tests/unit/account.test.mjs\")",
+      "Bash(echo \"FAIL/TIMEOUT \\($?\\)\")"
     ]
   },
   "hooks": {

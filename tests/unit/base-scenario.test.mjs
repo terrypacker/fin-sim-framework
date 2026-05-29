@@ -68,7 +68,7 @@ class StubGraphBuilderView {
 }
 
 function makeScenario() {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
 
   const scenario = new BaseScenario({
     context: ServiceRegistry.getInstance().simulationContext

@@ -34,20 +34,15 @@ import { CollectibleService } from '../finance/services/collectible-service.js';
  * Usage:
  *   const { eventService, simulationRegistry } = ServiceRegistry.getInstance();
  *
- * Call ServiceRegistry.reset() before rebuilding a scenario to get a fresh
- * instance with a clean bus, empty service maps, and an empty SimulationRegistry.
- * This is also called automatically by WorkbenchApp.initScenario().
+ * Call ServiceRegistry.reset() at the start of every scenario Rebuild.
+ * It keeps the singleton alive and clears only the execution layer + SimulationRegistry,
+ * so scenario nodes (layer:'scenario') and config nodes (layer:'config') survive.
+ *
+ * Call ServiceRegistry.resetAll() in tests that need a completely fresh environment.
  */
 export class ServiceRegistry {
   /** @type {ServiceRegistry|null} */
   static _instance = null;
-  /**
-   * ScenarioRegistry is preserved across reset() because it holds the user's
-   * in-memory param edits and active-scenario selection. Only simulation
-   * services (bus, graph, events, accounts, …) need to be torn down on Rebuild.
-   * @type {ScenarioRegistry|null}
-   */
-  static _scenarioRegistry = null;
 
   constructor() {
     this.bus                = new EventBus();
@@ -64,14 +59,10 @@ export class ServiceRegistry {
 
     this.stateRegistry      = new StateRegistry({ accountService: this.accountService });
     this.schemaRegistry     = new StateSchemaRegistry();
-    if (!ServiceRegistry._scenarioRegistry) {
-      ServiceRegistry._scenarioRegistry = new ScenarioRegistry(new ScenarioStorage());
-    }
-    this.scenarioRegistry   = ServiceRegistry._scenarioRegistry;
+    this.scenarioRegistry   = new ScenarioRegistry(new ScenarioStorage(), this.graph);
     this.scenarioService    = new ScenarioService(this.bus, this.scenarioRegistry);
     this.simulationRegistry = new SimulationRegistry();
 
-    //The
     this.simulationSync     = new SimulationSync({
       bus: this.bus,
       simulationRegistry: this.simulationRegistry,
@@ -81,7 +72,6 @@ export class ServiceRegistry {
       reducerService: this.reducerService
     });
 
-    //Context for a simulation
     this.simulationContext = {
       simulationRegistry: this.simulationRegistry,
       simulationSync: this.simulationSync,
@@ -106,22 +96,24 @@ export class ServiceRegistry {
   }
 
   /**
-   * Destroy the current singleton and create a fresh one.
-   * Simulation services (bus, graph, events, accounts, …) are cleared.
-   * ScenarioRegistry is intentionally preserved so param edits survive Rebuild.
-   * Intended to be called at the start of every scenario rebuild.
+   * Lightweight Rebuild reset: keep the singleton alive, clear only the
+   * execution layer and SimulationRegistry. Scenario and config nodes survive.
+   * Callers (WorkbenchApp.destroyScenario) are responsible for clearing
+   * layer:'config' when they also need a fresh config graph.
    */
   static reset() {
-    ServiceRegistry._instance = null;
-    // _scenarioRegistry is preserved intentionally — see field declaration above.
+    const inst = ServiceRegistry._instance;
+    if (!inst) return;
+    inst.graph.clearLayer('execution');
+    inst.simulationRegistry.clear();
+    inst.bus.publish({ type: 'execution:reset' });
   }
 
   /**
-   * Full reset including the ScenarioRegistry. Use in tests that need a
-   * completely clean service environment.
+   * Full teardown — discards the singleton entirely. Use in tests that need
+   * a completely clean environment (fresh graph, bus, and all services).
    */
   static resetAll() {
     ServiceRegistry._instance = null;
-    ServiceRegistry._scenarioRegistry = null;
   }
 }

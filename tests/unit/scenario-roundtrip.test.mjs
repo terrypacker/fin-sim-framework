@@ -110,7 +110,7 @@ const STUB_UI = {
  * other toolset-provided state survive the serialize→deserialize round-trip.
  */
 function buildIntlAndSerialize() {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const scenario = IntlRetirementScenario.buildAndCompile({});
 
   const services = ServiceRegistry.getInstance();
@@ -134,7 +134,7 @@ function buildIntlAndSerialize() {
  * This mirrors what BaseApp.initScenario() does for an imported scenario.
  */
 function restoreFromConfig(config) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const scenario = new BaseScenario({
     context:      ServiceRegistry.getInstance().simulationContext,
     initialState: config.initialState ?? {},

@@ -33,7 +33,7 @@ import { HANDLER_CLASSES } from '../../src/simulation-framework/handlers.js';
 import { ACTION_CLASSES }  from '../../src/simulation-framework/actions.js';
 import { REDUCER_CLASSES, PRIORITY } from '../../src/simulation-framework/reducers.js';
 
-beforeEach(() => ServiceRegistry.reset());
+beforeEach(() => ServiceRegistry.resetAll());
 
 // ─── Shared SimGraphNode field checker ────────────────────────────────────────
 

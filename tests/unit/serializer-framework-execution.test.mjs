@@ -76,7 +76,7 @@ const STUB_UI = {
  * generatedActionDefinitions so they survive the serialize/deserialize cycle.
  */
 function buildAndSerialize(initialState, buildFn) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const scenario = new BaseScenario({
     eventSchedulerUI: STUB_UI,
     context:      ServiceRegistry.getInstance().simulationContext,
@@ -102,7 +102,7 @@ function buildAndSerialize(initialState, buildFn) {
  * Restore a scenario from a serialized config using BaseScenario + deserialize.
  */
 function restoreFromConfig(config) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const scenario = new BaseScenario({
     eventSchedulerUI: STUB_UI,
     context:      ServiceRegistry.getInstance().simulationContext,

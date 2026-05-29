@@ -109,7 +109,7 @@ function makeStubUI() {
  * Returns { scenario, sim } ready to step.
  */
 function buildScenario(params = {}) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const scenario = IntlRetirementScenario.buildAndCompile({ params });
   return { scenario, sim: scenario.sim };
 }
@@ -250,7 +250,7 @@ test('serialize → deserialize round-trip reconstructs all TaxService reducers'
   });
 
   // Rebuild the sim (phase 1 only) then deserialize the saved config.
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const scenario2 = new IntlRetirementScenario({
     eventSchedulerUI: makeStubUI(),
     context: ServiceRegistry.getInstance().simulationContext
@@ -298,7 +298,7 @@ test('serialize → deserialize round-trip reconstructs all TaxService handlers'
     initialState: scenario.sim.state,
   });
 
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const scenario2 = new IntlRetirementScenario({
     eventSchedulerUI: makeStubUI(),
     context: ServiceRegistry.getInstance().simulationContext
@@ -374,7 +374,7 @@ test('DynamicTaxReducer round-trip preserves cc and actionType', () => {
     initialState: scenario.sim.state,
   });
 
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const scenario2 = new IntlRetirementScenario({
     eventSchedulerUI: makeStubUI(),
     context: ServiceRegistry.getInstance().simulationContext
@@ -608,7 +608,7 @@ test('SPOUSE-6: serialize → deserialize round-trip preserves spouse accounts',
   assert.strictEqual(spouseRothData.ownerId, 'spouse',   'ownerId should be preserved');
 
   // Deserialize and verify accounts are restored
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const scenario2 = new IntlRetirementScenario({
     eventSchedulerUI: makeStubUI(),
     context: ServiceRegistry.getInstance().simulationContext,
@@ -695,7 +695,7 @@ function buildRoundTripped(params = {}) {
     params:       orig.params ?? [],
   });
 
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const scenario2 = new BaseScenario({
     context:      ServiceRegistry.getInstance().simulationContext,
     params:       config.params ?? [],
@@ -952,7 +952,7 @@ test('ASSET-11: realProperties and collectibles survive serialize → deserializ
   });
 
   // Rebuild and deserialize into a fresh registry
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const scenario2 = new IntlRetirementScenario({
     eventSchedulerUI: makeStubUI(),
     context: ServiceRegistry.getInstance().simulationContext,
@@ -1007,7 +1007,7 @@ test('ASSET-12: realProperties and collectibles survive full storage round-trip 
   assert.strictEqual(restoredConfig.collectibles.length, 1, 'should have 1 collectible after JSON round-trip');
 
   // Deserialize into a fresh registry and verify objects reconstruct correctly
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const scenario2 = new IntlRetirementScenario({
     eventSchedulerUI: makeStubUI(),
     context: ServiceRegistry.getInstance().simulationContext,
@@ -1118,7 +1118,7 @@ test('ASSET-13: PATH-4 load overrides restore edited fields on realProperties, c
   assert.strictEqual(config.persons.find(p => p.id === 'primary')?.lifeExpectancy, 95);
 
   // Reload: fresh buildAndCompile() resets everything to code defaults
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   IntlRetirementScenario.buildAndCompile({});
 
   const registry2 = ServiceRegistry.getInstance();
@@ -1168,7 +1168,7 @@ test('ASSET-13: PATH-4 load overrides restore edited fields on realProperties, c
  * ScenarioCompiler.compile() runs.
  */
 function buildScenarioViaSaveReload({ usSaleYear = null, auSaleYear = null, collectibleSaleYear = null } = {}) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const scenario = new IntlRetirementScenario({ context: registry.simulationContext });
   scenario.buildSim();

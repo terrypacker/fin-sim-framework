@@ -22,12 +22,12 @@ import { RealProperty } from '../../src/finance/assets/real-property.js';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { ServiceActionEvent } from '../../src/simulation-framework/bus-messages.js';
 
-beforeEach(() => ServiceRegistry.reset());
+beforeEach(() => ServiceRegistry.resetAll());
 
 // ── CRUD helpers ──────────────────────────────────────────────────────────────
 
 function captureEvents(work) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const events = [];
   registry.bus.subscribe('SERVICE_ACTION', e => events.push(e));
@@ -83,7 +83,7 @@ test('RealPropertyService: getAll returns all created properties', () => {
 // ── CRUD: updateProperty ──────────────────────────────────────────────────────
 
 test('RealPropertyService: updateProperty mutates property in-place', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const prop = new RealProperty(500_000, { name: 'Home' });
   registry.realPropertyService.createProperty(prop);
@@ -95,7 +95,7 @@ test('RealPropertyService: updateProperty mutates property in-place', () => {
 });
 
 test('RealPropertyService: updateProperty publishes UPDATE event with originalItem', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const prop = new RealProperty(500_000, { name: 'Home' });
   registry.realPropertyService.createProperty(prop);
@@ -110,7 +110,7 @@ test('RealPropertyService: updateProperty publishes UPDATE event with originalIt
 });
 
 test('RealPropertyService: updateProperty originalItem is a separate object from item', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const prop = new RealProperty(500_000, { name: 'Home' });
   registry.realPropertyService.createProperty(prop);
@@ -125,7 +125,7 @@ test('RealPropertyService: updateProperty originalItem is a separate object from
 // ── CRUD: deleteProperty ──────────────────────────────────────────────────────
 
 test('RealPropertyService: deleteProperty removes the property from the service', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const prop = new RealProperty(500_000, { name: 'Home' });
   registry.realPropertyService.createProperty(prop);
@@ -137,7 +137,7 @@ test('RealPropertyService: deleteProperty removes the property from the service'
 });
 
 test('RealPropertyService: deleteProperty publishes DELETE event', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   const prop = new RealProperty(500_000, { name: 'Home' });
   registry.realPropertyService.createProperty(prop);

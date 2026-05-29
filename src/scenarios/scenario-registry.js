@@ -13,24 +13,26 @@ import { ScenarioSerializer } from './scenario-serializer.js';
 /**
  * Storage to track and manage Scenarios, including the current active one.
  *
+ * Scenario entries live in the shared Graph under layer:'scenario' so they
+ * survive ServiceRegistry.reset() (design/17-scenario-as-graph-node.md §3.6).
+ *
  * ### Date representation
  *
  * Every registry entry's `simStart` / `simEnd` is a **full ISO 8601 string**
  * (e.g. `'2026-01-01T00:00:00.000Z'`), regardless of where it came from
  * (prebuilt descriptor with a `Date`, JSON-deserialized user scenario,
- * uploaded JSON file). This is the single canonical representation; conversion
- * to `Date` happens only when the scenario instance is constructed for the
- * Simulation, and to `YYYY-MM-DD` only when populating UI inputs.
+ * uploaded JSON file). Conversion to `Date` happens only when the scenario
+ * instance is constructed for the Simulation.
  *
  * ID scheme:
  *   'p:<id>'  — prebuilt scenario (e.g. 'p:intl-retirement')
  *   'u:<N>'   — user-saved scenario at index N
  */
 export class ScenarioRegistry {
-  constructor(scenarioStorage) {
+  constructor(scenarioStorage, graph) {
     this._scenarioStorage = scenarioStorage;
-    this._scenarios = new Map();
-    this._scenarioData = {};
+    this._graph           = graph;
+    this._scenarioData    = {};
     this._init();
   }
 
@@ -43,15 +45,16 @@ export class ScenarioRegistry {
   _init() {
     this._scenarioData = this._scenarioStorage.load();
     this._scenarioData.scenarios.forEach((s, i) => {
-      s.id = 'u:' + i;
+      s.id      = 'u:' + i;
       s.prebuilt = false;
+      s.layer   = 'scenario';
       s.simStart = ScenarioSerializer.toDateStr(s.simStart);
       s.simEnd   = ScenarioSerializer.toDateStr(s.simEnd);
-      this._scenarios.set(s.id, s);
+      this._graph.addNode(s);
     });
     const lastUsed = this._scenarioData.lastUsed;
-    if (lastUsed?.startsWith('u:') && this._scenarios.has(lastUsed)) {
-      this._scenarios.get(lastUsed).active = true;
+    if (lastUsed?.startsWith('u:') && this._graph.getNode(lastUsed)) {
+      this._graph.getNode(lastUsed).active = true;
     }
   }
 
@@ -72,7 +75,7 @@ export class ScenarioRegistry {
     entries.forEach(({ cls, order, active: entryActive, simStart, simEnd }) => {
       const id = 'p:' + cls.scenarioId();
       // Preserve existing entries so param edits survive Rebuild.
-      if (this._scenarios.has(id)) return;
+      if (this._graph.getNode(id)) return;
       const schema = cls.getParamSchema?.() ?? [];
       // Keep this entry shape in sync with ScenarioLoader._toEntry — both produce
       // cfg.params records that the UI consumes (label, group, description for
@@ -98,8 +101,9 @@ export class ScenarioRegistry {
       // If another scenario is already active, force active:false so the prebuilt's
       // active:true flag doesn't create two active scenarios.
       const pbActive = active ? false : entryActive;
-      this._scenarios.set(id, {
+      this._graph.addNode({
         id,
+        layer:         'scenario',
         name:          cls.scenarioName(),
         order,
         prebuilt:      true,
@@ -116,8 +120,8 @@ export class ScenarioRegistry {
     if (active) return;
 
     const lastUsed = this._scenarioData.lastUsed;
-    if (lastUsed?.startsWith('p:') && this._scenarios.has(lastUsed)) {
-      this.save(this._scenarios.get(lastUsed), true);
+    if (lastUsed?.startsWith('p:') && this._graph.getNode(lastUsed)) {
+      this.save(this._graph.getNode(lastUsed), true);
       return;
     }
     const prebuilts = this.getPrebuiltScenarios();
@@ -129,11 +133,12 @@ export class ScenarioRegistry {
    * Get all scenarios ordered by order (ascending).
    */
   getAll() {
-    return [...this._scenarios.values()].sort((a, b) => a.order - b.order);
+    return this._byLayer().sort((a, b) => a.order - b.order);
   }
 
   get(id) {
-    return this._scenarios.get(id);
+    const node = this._graph.getNode(id);
+    return node?.layer === 'scenario' ? node : undefined;
   }
 
   /**
@@ -141,15 +146,16 @@ export class ScenarioRegistry {
    * and persists lastUsed. When active=false, just updates storage.
    */
   save(scenario, active) {
+    scenario.layer = 'scenario';
     if (active) {
-      this._scenarios.forEach(s => { s.active = false; });
+      this._byLayer().forEach(s => { s.active = false; });
       scenario.active = true;
-      this._scenarios.set(scenario.id, scenario);
+      this._upsert(scenario);
       this._persistUserScenarios();
       this._persistLastUsed(scenario.id);
     } else {
       scenario.active = false;
-      this._scenarios.set(scenario.id, scenario);
+      this._upsert(scenario);
       this._persistUserScenarios();
     }
   }
@@ -158,7 +164,7 @@ export class ScenarioRegistry {
    * Delete a scenario by id. Falls back to getAll()[0] as the new active.
    */
   delete(id) {
-    this._scenarios.delete(id);
+    this._graph.removeNode(id);
     const newActive = this.getAll()[0];
     if (newActive) this.save(newActive, true);
     return this.getActive();
@@ -168,7 +174,7 @@ export class ScenarioRegistry {
    * Set the scenario with the given id as the sole active one.
    */
   setActiveById(id) {
-    const s = this._scenarios.get(id);
+    const s = this.get(id);
     if (s) this.save(s, true);
   }
 
@@ -177,13 +183,13 @@ export class ScenarioRegistry {
   }
 
   getPrebuiltScenarios() {
-    return [...this._scenarios.values()]
+    return this._byLayer()
       .filter(s => s.prebuilt === true)
       .sort((a, b) => a.order - b.order);
   }
 
   getUserScenarios() {
-    return [...this._scenarios.values()]
+    return this._byLayer()
       .filter(s => s.prebuilt === false)
       .sort((a, b) => a.order - b.order);
   }
@@ -193,27 +199,46 @@ export class ScenarioRegistry {
   }
 
   replaceUserScenarios(data) {
-    [...this._scenarios.keys()].filter(k => k.startsWith('u:')).forEach(k => this._scenarios.delete(k));
+    // Remove existing user scenario nodes from graph.
+    this._byLayer()
+      .filter(n => n.id.startsWith('u:'))
+      .forEach(n => this._graph.removeNode(n.id));
+
     let firstId  = null;
     let activeId = null;
     if (Array.isArray(data.scenarios)) {
       data.scenarios.forEach((s, i) => {
-        s.id      = 'u:' + i;
+        s.id       = 'u:' + i;
         s.prebuilt = false;
+        s.layer    = 'scenario';
         s.simStart = ScenarioSerializer.toDateStr(s.simStart);
         s.simEnd   = ScenarioSerializer.toDateStr(s.simEnd);
         if (i === 0)  firstId  = s.id;
         if (s.active) activeId = s.id;
-        this._scenarios.set(s.id, s);
+        this._graph.addNode(s);
       });
     }
     const targetId = activeId ?? firstId;
     if (targetId) {
-      this._scenarios.forEach(s => { s.active = false; });
-      this._scenarios.get(targetId).active = true;
+      this._byLayer().forEach(s => { s.active = false; });
+      this._graph.getNode(targetId).active = true;
       this._persistLastUsed(targetId);
     }
     this._persistUserScenarios();
+  }
+
+  // ─── Private ────────────────────────────────────────────────────────────────
+
+  _byLayer() {
+    return this._graph.getNodes().filter(n => n.layer === 'scenario');
+  }
+
+  _upsert(scenario) {
+    if (this._graph.getNode(scenario.id)) {
+      this._graph.updateNode(scenario.id, scenario);
+    } else {
+      this._graph.addNode(scenario);
+    }
   }
 
   _persistLastUsed(id) {

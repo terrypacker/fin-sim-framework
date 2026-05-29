@@ -420,7 +420,7 @@ const NEW_FORMAT_JSON = {
 };
 
 function loadNewFormatScenario(config) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
 
   const scenario = new BaseScenario({
@@ -508,7 +508,7 @@ test('compiler: SS income credited after 1 month (person past retirement)', () =
 });
 
 test('compiler: paramSchema returned contains all toolset schemas merged', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
   const scenario = new BaseScenario({
     context:  services.simulationContext,

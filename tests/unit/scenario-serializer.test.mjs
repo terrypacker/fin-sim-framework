@@ -125,7 +125,7 @@ class TrackingUI {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeScenario() {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const ui       = new TrackingUI();
   const scenario = new BaseScenario({
     eventSchedulerUI: ui,
