@@ -57,7 +57,12 @@
       "Bash(npm install *)",
       "Bash(npm ls *)",
       "Bash(xargs -I {} basename {})",
-      "Bash(awk -F\"'\" '{print $2}')"
+      "Bash(awk -F\"'\" '{print $2}')",
+      "Bash(sed -n '40,46p' /Users/tpacker/IdeaProjects/fin-sim-framework/src/visualization/optimization/optimization-presenter.js)",
+      "Bash(sed -n '12,16p' /Users/tpacker/IdeaProjects/fin-sim-framework/src/visualization/workbench/tab-group.js)",
+      "Bash(sed -n '194,198p' /Users/tpacker/IdeaProjects/fin-sim-framework/src/visualization/workbench/tab-group.js)",
+      "Bash(sed -n '40,44p' /Users/tpacker/IdeaProjects/fin-sim-framework/src/visualization/monte-carlo/monte-carlo-presenter.js)",
+      "Bash(sed -n '37,41p' /Users/tpacker/IdeaProjects/fin-sim-framework/src/services/service-registry.js)"
     ]
   },
   "hooks": {

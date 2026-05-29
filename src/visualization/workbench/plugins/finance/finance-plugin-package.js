@@ -19,16 +19,18 @@ import { McRunsPlugin }      from './mc-runs-plugin.js';
 import { OptConfigPlugin }   from './opt-config-plugin.js';
 import { OptResultsPlugin }  from './opt-results-plugin.js';
 import { OptRunsPlugin }     from './opt-runs-plugin.js';
-import { ExecHistoryPlugin }   from './exec-history-plugin.js';
-import { LineagePlugin }       from './lineage-plugin.js';
-import { PerfPlugin }          from './perf-plugin.js';
-import { ActionDetailPlugin }  from './action-detail-plugin.js';
+import { ExecHistoryPlugin }     from './exec-history-plugin.js';
+import { LineagePlugin }         from './lineage-plugin.js';
+import { PerfPlugin }            from './perf-plugin.js';
+import { ActionDetailPlugin }    from './action-detail-plugin.js';
+import { JournalReportPlugin }   from './journal-report-plugin.js';
 
 export { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin,
          TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin,
          McConfigPlugin, McResultsPlugin, McRunsPlugin,
          OptConfigPlugin, OptResultsPlugin, OptRunsPlugin,
-         ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin };
+         ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin,
+         JournalReportPlugin };
 
 /** All finance plugin descriptors — pass directly to WorkbenchShell `plugins` option. */
 export const FINANCE_PLUGINS = [
@@ -48,6 +50,7 @@ export const FINANCE_PLUGINS = [
   { id: 'exec-history',   title: 'Node History',    component: ExecHistoryPlugin  },
   { id: 'lineage',        title: 'Lineage',         component: LineagePlugin      },
   { id: 'action-detail',  title: 'Action Detail',   component: ActionDetailPlugin },
+  { id: 'journal-report', title: 'Journal Report', component: JournalReportPlugin },
   { id: 'dashboard',    title: 'Dashboard',     component: DashboardPlugin   },
   { id: 'perf',         title: 'Performance',   component: PerfPlugin        },
 ];
@@ -68,8 +71,8 @@ export const FINANCE_DEFAULT_LAYOUT = {
     active: 'state-panel',
   },
   bottom: {
-    tabs: ['dashboard', 'perf'],
-    active: 'dashboard',
+    tabs: ['journal-report', 'dashboard', 'perf'],
+    active: 'journal-report',
   },
   bottomSize:       110,
   bottomCollapsed:  false,

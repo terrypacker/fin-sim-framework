@@ -441,7 +441,7 @@ export class ScenarioSerializer {
 
   /**
    * Load only the persons and accounts from a config into the services.
-   * Used by the toolset path in BaseApp when a custom JSON has persons/accounts
+   * Used by the toolset path in WorkbenchApp when a custom JSON has persons/accounts
    * but no serialized events/handlers/actions/reducers.
    *
    * @param {object} config   - serialized scenario config (only persons/accounts are read)

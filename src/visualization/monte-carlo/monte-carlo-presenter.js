@@ -39,7 +39,7 @@ export class MonteCarloPresenter {
     this._configPanel.onRun         = (config) => this._onRun(config);
     this._runsPanel.onRunSelected   = (run)    => this.onReplayRun?.(run);
 
-    /** Set by base-app to handle replay: onReplayRun(run) */
+    /** Set by WorkbenchApp to handle replay: onReplayRun(run) */
     this.onReplayRun = null;
   }
 

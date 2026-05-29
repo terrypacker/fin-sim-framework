@@ -10,6 +10,7 @@ import '../assets/css/plugins/dashboard.css';
 import '../assets/css/plugins/chart.css';
 import '../assets/css/plugins/inspector.css';
 import '../assets/css/plugins/modals.css';
+import '../assets/css/plugins/journal-report.css';
 
 import { SimulationWorkbench } from './apps/simulation-workbench.js';
 

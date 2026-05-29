@@ -21,7 +21,7 @@ import { EXECUTION_EDGE_TYPES } from '../../simulation-framework/execution-graph
  *  - Node detail panel (showNodeDetail, showNodeStateChanges, createActionDetail)
  *
  * formatDate is injected via the setter and defaults to Date.toDateString().
- * BaseApp calls `this._statePanelView.formatDate = currentFmt` on each buildScenario()
+ * WorkbenchApp calls `this._statePanelView.formatDate = currentFmt` on each buildScenario()
  * and when the TZ selector changes.
  */
 export class StatePanelView extends BaseComponent {
@@ -134,7 +134,7 @@ export class StatePanelView extends BaseComponent {
     this._metricHistory.clear();
   }
 
-  /** Wire the collapse toggle for the State section. Called once from BaseApp.initView(). */
+  /** Wire the collapse toggle for the State section. Called once from WorkbenchApp.initView(). */
   initLiveState() {
     const header  = document.getElementById('stateSectionHeader');
     const content = document.getElementById('currentStateContent');

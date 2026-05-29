@@ -457,8 +457,51 @@ Goal: prove the plugin is useful outside the tax drill-down.
    Conversions by Year*, *Real Property Cash Flow*.
 2. `FacetPanel` improvements: account-stateKey multiselect powered by
    `StateRegistry`, person multiselect from `personService`.
-3. Period facet: dropdown of all `TAX_SETTLE_APPLY` boundaries the journal
-   has produced for the selected country, plus "Whole simulation."
+   **Status (Phase 3B — done May 2026):** plugin gained a `multiselect` facet
+   kind plus an `optionsSource: 'account' | 'person'` resolver. The plugin
+   reads `accountService.getAll()` / `personService.getAll()` lazily via
+   `ServiceRegistry.getInstance()` (with a `setServices()` test override).
+   Account multiselect filters perDiff stateKey via `or(contains(stateKey, '<sk>.'))`;
+   person multiselect filters by `in(personKey, [...])`. Updated defs:
+   cash-flow-by-account, withdrawals-by-account, real-property-cash-flow
+   (account); ordinary-income-by-source, capital-gains-by-disposal,
+   tax-paid-by-year (person). Empty / null arrays treated as "no filter".
+3. **Period facet UI (Phase 3c — done May 2026)** — render the existing
+   `kind: 'period'` facet as a user-facing select. Subtasks:
+   1. `JournalQueryApi.listSettledPeriods(cc)` — scan the journal for
+      `TAX_SETTLE_APPLY` entries matching `cc`, pair each with its predecessor
+      (or `null` → simulation start), and return
+      `[{ fromEntryId, toEntryId, toEntryDate, label }, …]` in reverse
+      chronological order. Labels: `CY <year>` for US (calendar year of
+      `toEntryDate`); `FY <year-1>–<year>` for AU (July-anchored fiscal year of
+      `toEntryDate`).
+   2. `JournalQueryApi.currentInProgressPeriod(cc)` — when the user has rewound
+      mid-year and no trailing settle exists, return
+      `{ fromEntryId: lastSettleId|null, toEntryId: null, label: 'Current (in progress)' }`.
+      The existing `periodOf({fromEntryId, toEntryId: null})` path already
+      treats a null upper bound as "include everything after `fromSeq`", so no
+      query-API change is required — just the enumerator.
+   3. Extend `_renderFacets()` to render `kind: 'period'` as a `<select>` with
+      options built from steps (1)+(2), plus a synthetic **Whole simulation**
+      option that resolves to `{ fromEntryId: null, toEntryId: null }`.
+   4. Reactive refresh: when `cc` changes, rebuild the period option list (the
+      settle entries are cc-scoped). Preserve the user's selection only if the
+      same `toEntryId` exists for the new cc; otherwise fall back to the
+      default (most-recent settled period for the new cc).
+   5. On `JOURNAL_REPORT_OPEN`: select the period option matching incoming
+      `params.period.toEntryId`. If the incoming period doesn't match any
+      enumerated option (e.g. report opened with a custom period), inject a
+      transient option labelled by the entry's date and select it.
+   6. Default selection when no drill-down seeded: the **most recent settled
+      period** for the active cc, matching §10.3.
+   7. Tests:
+      - `journal-query-api.test.mjs` — `listSettledPeriods` returns correct
+        pairs for a journal with N AU + M US settles; labels formatted per
+        rules above.
+      - `journal-report-plugin.test.mjs` — picking a different period from the
+        select re-runs the query with the new `{fromEntryId, toEntryId}`;
+        switching cc rebuilds the option list; `JOURNAL_REPORT_OPEN` selects
+        the correct option.
 
 ### Phase 4 (deferred) — Saved user queries
 
@@ -505,6 +548,12 @@ Plan: only add `drillReport` to the first list. The button affordance is
 literally absent on the others, so the user discovers what is and isn't
 drillable visually.
 
+### 10.2a Per-person AU drill-down — wired via dedicated report (Phase 3c, May 2026)
+
+`AuTaxByPersonYearDef` (`au-tax-by-person-year`) reads `TAX_SETTLE_APPLY.data.personTaxDetails[]` through a new `perPerson` `JournalDataSource` mode that emits one row per person × per settle entry. Groups by `[year, personName]`, sums `personTaxAmount` (= `taxDetail.netLiability`). The `personKeys` facet on this report is meaningful and narrows to the selected people.
+
+Note: `TaxPaidByYearDef` no longer advertises a person facet — `TAX_PAYMENT_DEBIT` is structurally household-only (carries only `{ amount, cc }`). For per-person AU breakdowns, use `au-tax-by-person-year`.
+
 ### 10.2 Per-person AU drill-down — Phase 1 falls back to household totals
 
 `personTaxDetails` is an array; the modal renders one tab per person.
@@ -532,6 +581,15 @@ US 2026, AU FY 2025-26 → FY 2026-27). The Period facet:
 - Drill-down from the tax modal pre-selects the period bounded by the
   modal's own `TAX_SETTLE_APPLY` entry (via the `periodOf()` helper in
   §5.1). Users can switch periods after the drill without re-entering.
+
+**Status — Phase 3c (May 2026):** the `period` facet now renders as a
+`<select>` populated from `JournalQueryApi.listSettledPeriods(cc)` plus the
+optional `currentInProgressPeriod(cc)` and a synthetic *Whole simulation*
+option. cc changes rebuild the option list (preserving the selection only when
+the same `toEntryId` enumerates for the new cc, otherwise resetting to the
+most-recent settled period for that cc). `JOURNAL_REPORT_OPEN` selects the
+matching option, or injects a transient `Custom (<date>)` option when the
+drill-seeded period doesn't enumerate.
 
 ### 10.4 Period boundaries when the user has rewound
 

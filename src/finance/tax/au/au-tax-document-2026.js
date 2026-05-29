@@ -39,8 +39,8 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
    * @param {object[]} [saleRecords]  - Capital gain transactions from journal mining.
    * @returns {object|object[]}  Single ITR, or [ITR, CGT Schedule] array when schedule rules apply.
    */
-  generate(taxDetail, taxYear, saleRecords = []) {
-    const itr = this._generateItr(taxDetail, taxYear);
+  generate(taxDetail, taxYear, saleRecords = [], period = null) {
+    const itr = this._generateItr(taxDetail, taxYear, period);
     const needsSchedule = taxDetail.isResident
       && saleRecords.length > 0
       && Math.abs(taxDetail.inputs.capitalGains) > CGT_SCHEDULE_THRESHOLD;
@@ -49,9 +49,12 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
       : itr;
   }
 
-  _generateItr(taxDetail, taxYear) {
+  _generateItr(taxDetail, taxYear, period = null) {
     const fyLabel = `FY ${taxYear}–${(taxYear + 1).toString().slice(-2)}`;
     const { inputs } = taxDetail;
+    const drill = (reportId) => period
+      ? { reportId, params: { cc: 'AU', period } }
+      : undefined;
 
     if (taxDetail.isResident) {
       return {
@@ -63,8 +66,8 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
           {
             heading: 'Income',
             lineItems: [
-              { label: 'Ordinary Income',                 amount:  inputs.ordinaryIncome },
-              { label: 'Capital Gains (before discount)', amount:  inputs.capitalGains },
+              { label: 'Ordinary Income',                 amount:  inputs.ordinaryIncome, drillReport: drill('ordinary-income-by-source')  },
+              { label: 'Capital Gains (before discount)', amount:  inputs.capitalGains,   drillReport: drill('capital-gains-by-disposal')  },
               { label: 'CGT 50% Discount',                amount: -taxDetail.cgtDiscount },
               { label: 'Net Capital Gains',               amount:  taxDetail.discountedCapitalGains },
               { label: 'Total Assessable Income',         amount:  taxDetail.assessableIncome },
@@ -107,10 +110,10 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
         {
           heading: 'Income',
           lineItems: [
-            { label: 'Ordinary Income',                 amount: inputs.ordinaryIncome },
-            { label: 'Capital Gains (no CGT discount)', amount: inputs.capitalGains },
+            { label: 'Ordinary Income',                 amount: inputs.ordinaryIncome,           drillReport: drill('ordinary-income-by-source') },
+            { label: 'Capital Gains (no CGT discount)', amount: inputs.capitalGains,             drillReport: drill('capital-gains-by-disposal') },
             { label: 'Total Assessable Income',         amount: taxDetail.assessableIncome },
-            { label: 'Non-Resident Withholding Income', amount: inputs.nonResidentWithholding },
+            { label: 'Non-Resident Withholding Income', amount: inputs.nonResidentWithholding,   drillReport: drill('ordinary-income-by-source') },
           ],
         },
         {
