@@ -26,7 +26,7 @@ import { GraphBuilderView }       from './graph-builder-view.js';
  *   createNode(kind, subtype) — create a new node and open the edit modal
  *
  * Graph node clicks are routed through `editNode`, which fires `onEditNode(node)`
- * so that the host (base-app.js) can open the appropriate modal.
+ * so that the host (workbench-app.js) can open the appropriate modal.
  */
 export class GraphBuilderPresenter {
 

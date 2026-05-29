@@ -19,7 +19,7 @@ import {BaseScenario} from "./base-scenario.js";
 /**
  * PrebuiltScenario — descriptor for a scenario that ships with the application.
  *
- * An array of these is passed to BaseApp (via the `prebuiltScenarios` option)
+ * An array of these is passed to WorkbenchApp (via the `prebuiltScenarios` option)
  * and forwarded to ScenarioTabPresenter, which:
  *   - Shows them as the first option group in the scenario dropdown.
  *   - Selects the one with the lowest `order` value on first page load (no saved state).

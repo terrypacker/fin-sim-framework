@@ -36,7 +36,7 @@ import { CollectibleService } from '../finance/services/collectible-service.js';
  *
  * Call ServiceRegistry.reset() before rebuilding a scenario to get a fresh
  * instance with a clean bus, empty service maps, and an empty SimulationRegistry.
- * This is also called automatically by BaseApp.buildScenario().
+ * This is also called automatically by WorkbenchApp.initScenario().
  */
 export class ServiceRegistry {
   /** @type {ServiceRegistry|null} */

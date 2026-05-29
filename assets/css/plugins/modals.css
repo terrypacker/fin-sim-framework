@@ -255,3 +255,46 @@
   border-top: 1px solid #334155;
   border-bottom: none;
 }
+
+/* ── Account History Modal ── */
+.sim-modal--acct-history { width: 560px; }
+
+.acct-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.acct-history-title {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.acct-history-body {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.acct-history-empty { color: var(--text-muted); }
+
+.acct-history-tbl {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.acct-history-tbl-th {
+  text-align: left;
+  padding: 2px 6px;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.acct-history-tbl-row { border-bottom: 1px solid var(--border-subtle, var(--border)); }
+.acct-history-tbl-td  { padding: 3px 6px; }
+
+.acct-history-tbl-td--muted { color: var(--text-muted); }
+.acct-history-tbl-td--mono  { font-family: var(--font-mono); }
+.acct-history-tbl-td--pos   { color: var(--accent-green, #4a8); }
+.acct-history-tbl-td--neg   { color: var(--accent-red, #e55); }

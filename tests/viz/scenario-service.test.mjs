@@ -28,7 +28,6 @@ import {
   IntlRetirementScenario,
   INTL_RETIREMENT_DEFAULTS,
 } from "../../src/scenarios/intl-retirement-scenario.js";
-import {BaseApp} from "../../src/apps/base-app.js";
 import {ScenarioLoader} from "../../src/scenarios/scenario-loader.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

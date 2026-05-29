@@ -146,7 +146,7 @@ export class Simulation {
     // pendingExecution:   saved mid-event state so stepTo() can resume exactly
     //                     where it paused (handler/action/reducer level)
     // breakpointNodes:  Map of config-graph node IDs that have breakpoints;
-    //                     managed by the UI layer (base-app._syncBreakpointsToSim)
+    //                     managed by the UI layer (workbench-app)
     this.control = {
       paused: false,
       breakpointHit: null,

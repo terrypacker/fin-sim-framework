@@ -3,7 +3,6 @@
  * Run: npm run build:index
  */
 
-import { BaseApp } from './apps/base-app.js';
 import { SimulationWorkbench } from './apps/simulation-workbench.js';
 import { WorkbenchApp } from './apps/workbench-app.js';
 import { AccountRulesEngine } from './finance/account-rules/account-rules-engine.js';
@@ -11,6 +10,7 @@ import { AuAccountModule2024 } from './finance/account-rules/au/au-account-modul
 import { AuAccountModule2025 } from './finance/account-rules/au/au-account-module-2025.js';
 import { AuAccountModule2026 } from './finance/account-rules/au/au-account-module-2026.js';
 import { AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer, AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer, AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer, AuDividendFrankedResidentHandler, AuDividendFrankedNonResidentHandler, AuDividendUnfrankedResidentHandler, AuDividendUnfrankedNonResidentHandler, AuStockEarningsHandler, AuStockWithdrawalHandler } from './finance/account-rules/au/au-brokerage-classes.js';
+import { AuFixedIncomeEarningsApplyReducer } from './finance/account-rules/au/au-fixed-income-classes.js';
 import { AuSeIncomeApplyReducer, AuSeIncomeHandler } from './finance/account-rules/au/au-income-classes.js';
 import { AuHouseSaleApplyReducer, AuHouseSaleHandler } from './finance/account-rules/au/au-real-property-classes.js';
 import { AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer, AuSavingsContributionHandler, AuSavingsWithdrawalHandler, AuSavingsEarningsHandler } from './finance/account-rules/au/au-savings-classes.js';
@@ -19,7 +19,7 @@ import { BaseAccountModule } from './finance/account-rules/base-account-module.j
 import { UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer, AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer } from './finance/account-rules/mortgage-payment-classes.js';
 import { IraContributionApplyReducer, IraWithdrawalContribApplyReducer, IraWithdrawalEarningsApplyReducer, IraEarningsApplyReducer, IraContributionHandler, IraWithdrawalContributionsHandler, IraWithdrawalEarningsHandler, IraEarningsHandler } from './finance/account-rules/us/ira-classes.js';
 import { debitIra, IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer, IraRolloverWithdrawalHandler, IraRmdHandler, IraAnnualRmdHandler } from './finance/account-rules/us/ira-rollover-classes.js';
-import { K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer, K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler, K401RmdApplyReducer, K401AnnualRmdHandler } from './finance/account-rules/us/k401-classes.js';
+import { K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer, K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler, K401RmdApplyReducer, K401AnnualRmdHandler, K401ToIraConversionApplyReducer, K401ToIraConversionHandler } from './finance/account-rules/us/k401-classes.js';
 import { RothContributionApplyReducer, RothWithdrawalContribApplyReducer, RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer, RothContributionHandler, RothWithdrawalContributionsHandler, RothWithdrawalEarningsHandler, RothEarningsHandler } from './finance/account-rules/us/roth-classes.js';
 import { RothConversionApplyReducer, RothConversionHandler, RothConversionPolicyHandler } from './finance/account-rules/us/roth-conversion-classes.js';
 import { RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer, RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer, RothRolloverContributionHandler, RothRolloverEarningsHandler, RothRolloverWithdrawalContributionsHandler, RothRolloverWithdrawalEarningsHandler } from './finance/account-rules/us/roth-rollover-classes.js';
@@ -41,13 +41,16 @@ import { AccountBuilder } from './finance/builders/account-builder.js';
 import { PersonBuilder } from './finance/builders/person-builder.js';
 import { ChangeResidencyHandler } from './finance/handlers/change-residency-handler.js';
 import { DividendScheduledHandler } from './finance/handlers/dividend-scheduled-handler.js';
-import { IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler, IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler, AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler } from './finance/handlers/earnings-handlers.js';
+import { IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler, IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler, AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler, FixedIncomeInterestHandler, SuperEarningsHandler } from './finance/handlers/earnings-handlers.js';
 import { IntlTransferToUsHandler, IntlTransferToAuHandler } from './finance/handlers/intl-transfer-handlers.js';
 import { MonthlyExpensesHandler } from './finance/handlers/monthly-expenses-handler.js';
 import { MonthlySocialSecurityHandler } from './finance/handlers/monthly-social-security-handler.js';
 import { MonthlyWagesHandler } from './finance/handlers/monthly-wages-handler.js';
 import { OutOfFundsHandler } from './finance/handlers/out-of-funds-handler.js';
 import { UsSavingsInterestMonthlyHandler } from './finance/handlers/us-savings-interest-handler.js';
+import { JournalDataSource } from './finance/journal-data-source.js';
+import { JournalQueryApi } from './finance/journal-query-api.js';
+import { ReportDefinition, ReportDefinitionRegistry } from './finance/journal-reporting/report-definition-registry.js';
 import { JournalReportingService } from './finance/journal-reporting-service.js';
 import { DEFAULT_MC_VARIABLE_CONFIGS } from './finance/monte-carlo/intl-retirement-mc-config.js';
 import { computeNetWorthUsd, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
@@ -244,7 +247,7 @@ import { WorkbenchComponent } from './visualization/workbench/component.js';
 import { WorkbenchLayoutModel } from './visualization/workbench/layout-model.js';
 import { PluginRegistry } from './visualization/workbench/plugin-registry.js';
 import { PLUGIN_CATEGORIES, PLUGIN_PANES, definePlugin } from './visualization/workbench/plugin-sdk.js';
-import { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
+import { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, JournalReportPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
 import { SplitPane } from './visualization/workbench/split-pane.js';
 import { TabGroup } from './visualization/workbench/tab-group.js';
 import { WB_EVENTS, WorkbenchRuntime } from './visualization/workbench/workbench-runtime.js';
@@ -267,7 +270,6 @@ export {
 // =========================================================
 
 export const Apps = {
-  BaseApp,
   SimulationWorkbench,
   WorkbenchApp,
 };
@@ -289,6 +291,7 @@ export const Finance = {
   AuDividendUnfrankedNonResidentHandler,
   AuStockEarningsHandler,
   AuStockWithdrawalHandler,
+  AuFixedIncomeEarningsApplyReducer,
   AuSeIncomeApplyReducer,
   AuSeIncomeHandler,
   AuHouseSaleApplyReducer,
@@ -334,6 +337,8 @@ export const Finance = {
   K401WithdrawalHandler,
   K401RmdApplyReducer,
   K401AnnualRmdHandler,
+  K401ToIraConversionApplyReducer,
+  K401ToIraConversionHandler,
   RothContributionApplyReducer,
   RothWithdrawalContribApplyReducer,
   RothWithdrawalEarningsApplyReducer,
@@ -417,6 +422,7 @@ export const Finance = {
   IntlAuStockEarningsHandler,
   IntlAuStockDividendHandler,
   AuSavingsInterestHandler,
+  AuFixedIncomeInterestMonthlyHandler,
   FixedIncomeInterestHandler,
   SuperEarningsHandler,
   IntlTransferToUsHandler,
@@ -426,6 +432,10 @@ export const Finance = {
   MonthlyWagesHandler,
   OutOfFundsHandler,
   UsSavingsInterestMonthlyHandler,
+  JournalDataSource,
+  JournalQueryApi,
+  ReportDefinition,
+  ReportDefinitionRegistry,
   JournalReportingService,
   DEFAULT_MC_VARIABLE_CONFIGS,
   computeNetWorthUsd,
@@ -760,6 +770,7 @@ export const FinancePlugins = {
   LineagePlugin,
   PerfPlugin,
   ActionDetailPlugin,
+  JournalReportPlugin,
   FINANCE_PLUGINS,
   FINANCE_DEFAULT_LAYOUT,
 };
