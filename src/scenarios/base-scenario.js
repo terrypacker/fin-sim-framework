@@ -138,6 +138,82 @@ export class BaseScenario extends SimGraphNode {
     return this.context.simulationRegistry.getPrimary();
   }
 
+  // ─── Params ───────────────────────────────────────────────────────────────
+
+  /**
+   * Apply a plain params object to this scenario without clearing the config layer.
+   *
+   * Algorithm:
+   *   1. Write each key present in `params` back onto the matching `this.params[i].value`.
+   *   2. For each typed-param entry that carries a `node` declaration, update the
+   *      live config-layer person or account node in-place via the service APIs.
+   *   3. For account `initialValue` changes, also patch `this.initialState` so
+   *      that the next `buildSim()` starts with the correct opening balance.
+   *
+   * Subclasses may override for finer control (e.g. to also update event data).
+   *
+   * @param {object} params - Plain key→value map of param overrides.
+   */
+  applyParams(params) {
+    if (!params || !Array.isArray(this.params)) return;
+
+    // Step 1 — update typed params array
+    for (const p of this.params) {
+      const key = p.name ?? p.key;
+      if (params[key] !== undefined) p.value = params[key];
+    }
+
+    // Step 2+3 — apply node cascade to live config nodes
+    const { personService, accountService } = ServiceRegistry.getInstance();
+    for (const p of this.params) {
+      const node = p.node;
+      if (!node) continue;
+      const key = p.name ?? p.key;
+      const raw = params[key] ?? p.value;
+      if (raw === undefined) continue;
+      const val = (p.type === 'Date' && raw) ? new Date(raw) : raw;
+
+      if (node.type === 'person') {
+        const person = personService.getAll().find(pr => pr.id === node.id);
+        if (person) {
+          personService.updatePerson(person, {
+            [node.field]: val instanceof Date ? val.toISOString() : val,
+          });
+        }
+      } else if (node.type === 'account') {
+        const account = accountService.getAll().find(a => a.stateKey === node.stateKey);
+        if (account) {
+          // 'initialValue' is a constructor param, not a stored field — Account
+          // stores it as 'balance'. Map here so the live node stays serializable.
+          const liveField = node.field === 'initialValue' ? 'balance' : node.field;
+          accountService.updateAccount(account, { [liveField]: val });
+        }
+        // Keep initialState in sync for opening-balance params so buildSim()
+        // starts the Simulation with the updated balance.
+        if (node.field === 'initialValue' && this.initialState?.[node.stateKey]) {
+          this.initialState[node.stateKey].balance = val;
+        }
+      }
+    }
+  }
+
+  /**
+   * Cheap Rebuild: clears only the execution layer, applies params to existing
+   * config nodes in-place, then constructs a fresh Simulation.
+   *
+   * Use this instead of destroyScenario() + initScenario() when only typed
+   * params have changed and the config graph structure (persons, accounts,
+   * events, handlers) does not need to be recreated from scratch.
+   *
+   * @param {object} [params] - Plain key→value overrides.  If omitted, the
+   *   current this.params values are used as-is.
+   */
+  rebuild(params) {
+    ServiceRegistry.reset();
+    if (params) this.applyParams(params);
+    this.buildSim();
+  }
+
   // ─── Build ────────────────────────────────────────────────────────────────
 
   /**

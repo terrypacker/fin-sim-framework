@@ -33,6 +33,8 @@ import { HandlerEntry } from '../../src/simulation-framework/handlers.js';
 import { AmountAction } from '../../src/simulation-framework/actions.js';
 import { FieldReducer } from '../../src/simulation-framework/reducers.js';
 import { ReducerBuilder } from '../../src/simulation-framework/builders/reducer-builder.js';
+import { CheckingAccount } from '../../src/finance/assets/account.js';
+import { Person }          from '../../src/finance/person.js';
 import {
   GraphBuilderView
 } from "../../src/visualization/graph-builder/graph-builder-view.js";
@@ -230,4 +232,103 @@ test('reducerDeleted: unregisters reducer from sim pipeline', () => {
   sr.reducerService.deleteReducer(reducer.id);
   const after = scenario.sim.reducers.get('DEL_ACTION');
   assert.strictEqual(after.length, 0, 'reducer should be unregistered after deletion');
+});
+
+// ─── applyParams ──────────────────────────────────────────────────────────────
+
+function makeParamScenario() {
+  ServiceRegistry.resetAll();
+  const sr = ServiceRegistry.getInstance();
+
+  // Register a person with id 'primary'
+  const person = new Person('primary', new Date(Date.UTC(1980, 0, 1)), {
+    retirementDate: new Date(Date.UTC(2040, 0, 1)),
+    monthlyWage: 5000,
+  });
+  sr.personService.register(person);
+
+  // Register an account with stateKey 'mySavings'
+  const account = new CheckingAccount(10000, { name: 'My Savings' });
+  account.stateKey = 'mySavings';
+  sr.accountService.createAccount(account);
+
+  const scenario = new BaseScenario({
+    context: sr.simulationContext,
+    params: [
+      { name: 'retirementDate', type: 'Date', value: '2040-01-01T00:00:00.000Z',
+        node: { type: 'person', id: 'primary', field: 'retirementDate' } },
+      { name: 'monthlyWage', type: 'Number', value: 5000,
+        node: { type: 'person', id: 'primary', field: 'monthlyWage' } },
+      { name: 'savingsBalance', type: 'Number', value: 10000,
+        node: { type: 'account', stateKey: 'mySavings', field: 'initialValue' } },
+    ],
+    initialState: { mySavings: { balance: 10000 } },
+  });
+  return { scenario, sr, person, account };
+}
+
+test('applyParams: updates person field via node declaration', () => {
+  const { scenario, sr } = makeParamScenario();
+  const newDate = '2038-06-01T00:00:00.000Z';
+  scenario.applyParams({ retirementDate: newDate });
+  const person = sr.personService.getAll().find(p => p.id === 'primary');
+  assert.strictEqual(person.retirementDate, newDate);
+});
+
+test('applyParams: updates person Number field', () => {
+  const { scenario, sr } = makeParamScenario();
+  scenario.applyParams({ monthlyWage: 7500 });
+  const person = sr.personService.getAll().find(p => p.id === 'primary');
+  assert.strictEqual(person.monthlyWage, 7500);
+});
+
+test('applyParams: updates account balance and initialState for initialValue param', () => {
+  const { scenario, sr } = makeParamScenario();
+  scenario.applyParams({ savingsBalance: 50000 });
+  const account = sr.accountService.getAll().find(a => a.stateKey === 'mySavings');
+  assert.strictEqual(account.balance, 50000);
+  assert.strictEqual(scenario.initialState.mySavings.balance, 50000);
+});
+
+test('applyParams: updates this.params typed array values', () => {
+  const { scenario } = makeParamScenario();
+  scenario.applyParams({ monthlyWage: 9000, savingsBalance: 250000 });
+  const wage    = scenario.params.find(p => p.name === 'monthlyWage');
+  const savings = scenario.params.find(p => p.name === 'savingsBalance');
+  assert.strictEqual(wage.value, 9000);
+  assert.strictEqual(savings.value, 250000);
+});
+
+test('applyParams: is a no-op when params is empty/null', () => {
+  const { scenario, sr } = makeParamScenario();
+  scenario.applyParams({});
+  scenario.applyParams(null);
+  const person = sr.personService.getAll().find(p => p.id === 'primary');
+  assert.strictEqual(person.monthlyWage, 5000);
+});
+
+test('applyParams: ignores node when person/account not found', () => {
+  const { scenario } = makeParamScenario();
+  // Should not throw even if the target node doesn't exist
+  assert.doesNotThrow(() => scenario.applyParams({ retirementDate: '2039-01-01T00:00:00.000Z' }));
+});
+
+// ─── rebuild ──────────────────────────────────────────────────────────────────
+
+test('rebuild: creates a fresh simulation (new sim object)', () => {
+  const { scenario } = makeParamScenario();
+  scenario.buildSim();
+  const simBefore = scenario.sim;
+  ServiceRegistry.reset();
+  scenario.rebuild();
+  assert.notStrictEqual(scenario.sim, simBefore, 'rebuild should produce a new sim');
+  assert.ok(scenario.sim instanceof Simulation);
+});
+
+test('rebuild: applies params before creating simulation', () => {
+  const { scenario, sr } = makeParamScenario();
+  scenario.buildSim();
+  scenario.rebuild({ monthlyWage: 8000 });
+  const person = sr.personService.getAll().find(p => p.id === 'primary');
+  assert.strictEqual(person.monthlyWage, 8000);
 });

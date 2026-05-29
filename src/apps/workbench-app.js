@@ -127,7 +127,7 @@ const BUILTIN_TEMPLATES = {
 export class WorkbenchApp extends BaseComponent {
   /**
    * @param {object}             opts
-   * @param {PrebuiltScenario[]} [opts.prebuiltScenarios=[]] - Pre-built scenario descriptors.
+   * @param {Array<{cls,order,active,simStart,simEnd}>} [opts.prebuiltScenarios=[]] - Pre-built scenario class entries.
    * @param {Array|null}         [opts.chartSeries]  - Chart series config.
    */
   constructor({ chartSeries, prebuiltScenarios = [] }) {
