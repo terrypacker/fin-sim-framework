@@ -18,7 +18,7 @@ Last reviewed: 2026-05-29.
 
 ~~### 1.3 `bus` and `serviceBus` are the same EventBus~~
 
-### 1.4 `params` vs. `parameters` vs. `paramSchema`
+### 1.4 `params` vs. `parameters` vs. `paramSchema` (Git #350)
 - The scenario config carries three overlapping concepts:
   - `cfg.params` — typed UI form (`{ name, label, type, group, value, node? }[]`).
   - `cfg.parameters` — flat `{ key: value }` map the compiler reads.
@@ -26,18 +26,18 @@ Last reviewed: 2026-05-29.
 - `ScenarioLoader` syncs `params` → `parameters` on each load. `ScenarioSerializer` has a `//TODO Params vs parameters` note (line 146).
 - **Direction**: collapse to one canonical name and derive the others. The plan in `design/13-prebuilt-scenario-parameters.md` describes this.
 
-### 1.5 `getAll()` aliasing on `Graph`
+### 1.5 `getAll()` aliasing on `Graph` (Git #351)
 - `src/graph/graph.js` line 44–47:
   ```js
   getAll() { return this.getNodes(); }
   ```
 - **Direction**: remove `getAll()` once consumers migrate to `getNodes()`. Search for the remaining callers.
 
-### 1.6 `GraphQueryApi` duplicates a `_dataSource`
+### 1.6 `GraphQueryApi` duplicates a `_dataSource` (Git #352)
 - `src/graph/graph-query-api.js` line 35: `this._graph = graph; //TODO This is also in the parent as _dataSource`.
 - **Direction**: pick one of `_graph` / `_dataSource`. The parent class probably owns the canonical reference.
 
-### 1.7 `_pickActionData` exists in two places
+### 1.7 `_pickActionData` exists in two places (Git #202)
 - `src/simulation-framework/simulation.js` line 45 — module-local helper, called from `simulation.js`.
 - `src/finance/services/state-schema-registry.js` line 223 — `StateSchemaRegistry.pickActionData()` static method, labelled "Canonical public version" with a comment that `simulation.js` keeps a copy "to avoid cross-layer imports."
 - **Direction**: extract the canonical picker into a shared, dependency-free location (`src/simulation-framework/action-data.js` or similar) so both layers reference the same thing. The state-schema layer importing a finance-aware copy from `src/finance/` is the wrong dependency direction.
@@ -48,58 +48,53 @@ Last reviewed: 2026-05-29.
 
 There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; see `grep -rn TODO src/` for the full set.
 
-### 2.1 `BaseApp` carries stale scenario state pending issue #146
-- `src/apps/base-app.js` line 91: `this.scenario = null; //TODO Remove for #146`
-- Line 131: `//TODO Clean up for #146`
-- Lines 571, 580: `//TODO Really build scenario?`
-- Line 610: `//TODO Need to have a central location to reset the sim See #135`
-- Lines 817–818: `TODO Refactor to remove these, they should be in the views. / TODO Extract to shared UI class #139`
-- **Direction**: open issues #135, #139, #146 should be triaged together — the BaseApp is currently both a composition root and a holder of state that arguably belongs to controllers.
+~~### 2.1 `BaseApp` carries stale scenario state pending issue #146~~
+- Base app is gone now
 
-### 2.2 RMD half-implementations
+### 2.2 RMD half-implementations (Git #304)
 - `src/finance/account-rules/us/ira-rollover-classes.js` lines 151, 154, 158 and `us/k401-classes.js` lines 221–223 all carry the same three TODOs:
   - Support `delayFirstRmd=true` (April 1 grace period).
   - IRS basis should be prior December 31 balance, not current balance.
   - Enforce the 50% failure-to-withdraw penalty.
 - **Direction**: these are documented in the memory note `project_ira_rmd.md`. Pull them into a single design doc and resolve as a batch.
 
-### 2.3 Reducer payload contamination
+### 2.3 Reducer payload contamination (Git #353)
 - `src/simulation-framework/reducers.js` line 475: `...action, //TODO Need to strip out the _ base fields` — spreads the full action object including framework-internal fields.
 - Line 541: `//TODO is this ok?` — unattributed self-doubt.
 - **Direction**: define an `actionPayload(action)` helper that strips `_*` and framework fields before re-emission.
 
-### 2.4 `state-panel-view.js` is huge
+### 2.4 `state-panel-view.js` is huge (Git #354)
 - Single file with at least one `//TODO Extract to shared UI class #139` at line 1341. The file likely needs to be split into smaller presenter classes.
 
-### 2.5 `monthly-social-security-handler.js` — only FRA supported
+### 2.5 `monthly-social-security-handler.js` — only FRA supported (Git #292)
 - `src/finance/handlers/monthly-social-security-handler.js` line 47: `//TODO #292 Support Early or FRA, this is FRA only right now (Born 1960+ FRA is 67)`
 - **Direction**: tracked in issue #292.
 
-### 2.6 Scenario serializer hacks
+### 2.6 Scenario serializer hacks (Git #355)
 - `src/scenarios/scenario-serializer.js`:
   - Lines 144–146: `//TODO Clean up API / Support toolsets export here? / Params vs parameters`.
   - Line 360: `initialValue: account.balance ?? account.initialValue, //TODO Hack here since the field name is not the same as the constructor`.
 - **Direction**: rename `initialValue` to `balance` on the constructor side (or pick one canonical name) so the serializer doesn't have to translate.
 
-### 2.7 `Simulation` carries test-only baggage
+### 2.7 `Simulation` carries test-only baggage (Git #356)
 - `src/simulation-framework/simulation.js` line 160: `//TODO Remove these and fix the tests`.
 - **Direction**: chase the offending tests and remove the workaround.
 
-### 2.8 `ScenarioStorage` API drift
+### 2.8 `ScenarioStorage` API drift (Git #357)
 - `src/scenarios/scenario-storage.js` line 54: `//TODO Clean this up to be in the constructor`.
 
-### 2.9 Action service lacks a type index
+### 2.9 Action service lacks a type index (Git #358)
 - `src/services/action-service.js` line 48: `//TODO Need a type index for this`.
 
-### 2.10 Many graph-renderer TODOs
+### 2.10 Many graph-renderer TODOs (Git #347 and #348)
 - `node-render-kit.js` line 13; GitIssue #347
 - `graph-builder-controller.js` lines 73, 329 — all signal that the graph rendering layer has multiple unresolved seams (registering listeners, central UI dispatch, etc.). GitIssue: #348
 
-### 2.11 Timezone is unfinished
+### 2.11 Timezone is unfinished (Git #268)
 - `src/visualization/scenario/scenario-tab-presenter.js` lines 88, 93 (`//TODO #268 Need to deal with timezone here`) and `scenario-tab-view.js` line 176 (`//TODO #268 this should be cleaned up to always be a date or UTC String`).
 - **Direction**: complete the UTC normalization (issue #268). Memory notes the UTC vs local toggle in the header but the persistence path still passes through inconsistent types.
 
-### 2.12 `intl-retirement-state.js` carries removal-marked code
+### 2.12 `intl-retirement-state.js` carries removal-marked code (Git #349)
 - Lines 45, 73 — `//TODO Remove these this should not be needed.` / `//TODO Move to FX When available.` — implies a planned `FX` service. Git Issue #349
 
 ---
@@ -185,7 +180,6 @@ There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; se
 
 ## 5. Smaller Annoyances
 
-- `console.log` in production code paths (e.g. `tax-engine.js` and `account-rules-engine.js` log every module registration). Replace with a project-wide `log()` that can be toggled off in builds.
 - Mixed casing on toolset IDs vs. capabilities (`US_RETIREMENT` ID, lowercase `'retirement'` capability) — pick one.
 - The header comment block (Apache 2.0 boilerplate) is copy/pasted across every file. Consider a build-time injection or just trust `LICENSE`.
 - `chart.js`, `chartjs-plugin-annotation`, `chartjs-plugin-zoom` are still referenced in some comments but are not in `package.json`; `echarts` is the actual chart library now.
