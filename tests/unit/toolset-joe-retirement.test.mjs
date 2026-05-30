@@ -297,7 +297,7 @@ const JOE_CONFIG = {
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
 function loadToolsetScenario(config) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
 
   const scenario = new BaseScenario({
@@ -326,7 +326,7 @@ test('joe: toolset loads and runs one month without error', () => {
 });
 
 test('joe: deserializePersonsAccounts loads Joe into personService', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
   const scenario = new BaseScenario({
     context:  services.simulationContext,
@@ -346,7 +346,7 @@ test('joe: deserializePersonsAccounts loads Joe into personService', () => {
 });
 
 test('joe: all five accounts are registered in accountService', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
   const scenario = new BaseScenario({
     context:  services.simulationContext,
@@ -463,7 +463,7 @@ test('joe: Joe is in state.people with correct socialSecurityMonthly', () => {
 });
 
 test('joe: drawdown priorities are set correctly on all accounts', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
   const scenario = new BaseScenario({
     context:  services.simulationContext,

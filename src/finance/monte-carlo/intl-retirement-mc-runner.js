@@ -137,6 +137,7 @@ export class IntlRetirementMcRunner {
       createSimulation: (params) => {
         ServiceRegistry.reset();
         const registry = ServiceRegistry.getInstance();
+        registry.graph.clearLayer('config');
         const scenario = new IntlRetirementScenario({
           context: registry.simulationContext,
           params,

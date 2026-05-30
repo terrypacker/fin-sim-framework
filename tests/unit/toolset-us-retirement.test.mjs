@@ -244,7 +244,7 @@ const CUSTOM_JSON = {
  * are deserialized and US_RETIREMENT is compiled).
  */
 function loadToolsetScenario(config) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
 
   const scenario = new BaseScenario({
@@ -315,7 +315,7 @@ test('toolset: 401k account exists in state', () => {
 });
 
 test('toolset: deserializePersonsAccounts loads person into personService', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
 
   const scenario = new BaseScenario({
@@ -334,7 +334,7 @@ test('toolset: deserializePersonsAccounts loads person into personService', () =
 });
 
 test('toolset: deserializePersonsAccounts loads accounts into accountService', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
 
   const scenario = new BaseScenario({

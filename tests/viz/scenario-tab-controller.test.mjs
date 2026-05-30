@@ -20,20 +20,26 @@
 import assert from 'node:assert/strict';
 import { jest }                  from '@jest/globals';
 import { ScenarioRegistry }      from '../../src/scenarios/scenario-registry.js';
+import { Graph } from '../../src/graph/graph.js';
 import { ScenarioService }       from '../../src/services/scenario-service.js';
 import { ScenarioTabController } from '../../src/visualization/scenario/scenario-tab-controller.js';
 import { ScenarioStorage }       from '../../src/scenarios/scenario-storage.js';
-import { PrebuiltScenario }      from '../../src/scenarios/prebuilt-scenario.js';
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function makePrebuilt(id, order = 1) {
-  return new PrebuiltScenario({
-    id, label: `Label ${id}`, order,
+  return {
+    cls: {
+      scenarioId:         () => id,
+      scenarioName:       () => `Label ${id}`,
+      getParamSchema:     () => [],
+      buildDefaultConfig: () => null,
+      instantiate:        jest.fn(),
+    },
+    order,
+    active: false,
     simStart: new Date(Date.UTC(2026, 0, 1)),
-    simEnd: new Date(Date.UTC(2041, 0, 1)),
-    factory: jest.fn(),
-  });
+    simEnd:   new Date(Date.UTC(2041, 0, 1)),
+  };
 }
 
 function setStorageData(data) {
@@ -41,7 +47,7 @@ function setStorageData(data) {
 }
 
 function makeStack({ prebuiltScenarios = [] } = {}) {
-  const registry   = new ScenarioRegistry(new ScenarioStorage());
+  const registry   = new ScenarioRegistry(new ScenarioStorage(), new Graph());
   registry.loadPrebuilt(prebuiltScenarios);
   const service    = new ScenarioService({}, registry);
   const controller = new ScenarioTabController({ scenarioService: service });

@@ -32,7 +32,6 @@ import { EventSeries }     from '../../src/simulation-framework/events/event-ser
 import { OneOffEvent }     from '../../src/simulation-framework/events/one-off-event.js';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { BaseScenario }    from '../../src/scenarios/base-scenario.js';
-import { PrebuiltScenario }           from '../../src/scenarios/prebuilt-scenario.js';
 import { IntlRetirementScenario }     from '../../src/scenarios/intl-retirement-scenario.js';
 import { ScenarioLoader }             from '../../src/scenarios/scenario-loader.js';
 
@@ -92,22 +91,13 @@ const TARGET = new Date(Date.UTC(2028, 0, 1));
 
 function makePrebuiltArray() {
   return [
-    new PrebuiltScenario({
-      id:            'intl-retirement',
-      label:         'International Retirement',
-      order:         1,
-      prebuilt:      true,
-      active:        true,
-      simStart:      new Date(Date.UTC(2026, 0, 1)),
-      simEnd:        new Date(Date.UTC(2041, 0, 1)),
-      scenarioClass: IntlRetirementScenario,
-      factory: (params, _initialState, simStart, simEnd) => new IntlRetirementScenario({
-        context: ServiceRegistry.getInstance().simulationContext,
-        params,
-        simStart,
-        simEnd,
-      }),
-    }),
+    {
+      cls:      IntlRetirementScenario,
+      order:    1,
+      active:   true,
+      simStart: new Date(Date.UTC(2026, 0, 1)),
+      simEnd:   new Date(Date.UTC(2041, 0, 1)),
+    },
   ];
 }
 
@@ -120,7 +110,7 @@ function makePrebuiltArray() {
  *   - activeConfig has been mutated to carry events/handlers/reducers/initialState.
  */
 function buildAndCompilePrebuilt() {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
   services.scenarioRegistry.loadPrebuilt(makePrebuiltArray());
 
@@ -146,7 +136,7 @@ function buildAndCompilePrebuilt() {
  * Takes the deserialize branch (cfg.events is non-empty after compile).
  */
 function loadCopyIntoFreshServices(cfg) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const services = ServiceRegistry.getInstance();
   const scenario = new BaseScenario({
     context:  services.simulationContext,

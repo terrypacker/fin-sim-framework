@@ -1,6 +1,6 @@
 # 17 — Scenario as Graph Node
 
-**Status**: Draft
+**Status**: Implemented (Phases 1–6 complete, 2026-05-29)
 **Resolves**: `inconsistencies.md` §1.8 (`PrebuiltScenario` overlap with `BaseScenario`); §4.2 (`ScenarioRegistry` persists across reset deliberately)
 **Related**: `design/3-branching-event-streams.md`, `design/4-branch-diff-insight-engine.md`, `design/5-branch-merge-reconciliation.md`, `design/13-prebuilt-scenario-parameters.md`, `design/15-config-as-source-of-truth.md`
 **Author note**: Folds `PrebuiltScenario` into `BaseScenario`, makes scenarios first-class `SimGraphNode`s, and stores them in the shared `Graph`. Introduces **layer-scoped reset** (`graph.clearLayer(layer)`) so the `Graph` instance survives `ServiceRegistry.reset()` — scenarios live on `layer:'scenario'` which is never auto-cleared. This is the prerequisite for branch/merge persistence (designs 3–5) where each branch is a scenario node and the parent relationship is a graph edge.

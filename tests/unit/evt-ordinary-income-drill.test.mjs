@@ -35,7 +35,7 @@ import { ReportDefinitionRegistry } from '../../src/finance/journal-reporting/re
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function buildScenario() {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const scenario = IntlRetirementScenario.buildAndCompile({});
   return { scenario, sim: scenario.sim };
 }

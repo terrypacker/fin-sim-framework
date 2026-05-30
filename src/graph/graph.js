@@ -65,6 +65,12 @@ export class Graph {
     this.in.delete(id);
   }
 
+  clearLayer(layer) {
+    for (const node of [...this.nodes.values()]) {
+      if (node.layer === layer) this.removeNode(node.id);
+    }
+  }
+
   // ─── Edges ───────────────────────────────────────────────────────────────
 
   addEdge(edge) {

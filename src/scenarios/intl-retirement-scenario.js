@@ -297,6 +297,18 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
  * serialized persons/accounts/realProperties/collectibles for a fresh load.
  */
 export class IntlRetirementScenario extends BaseScenario {
+  static scenarioId()   { return 'intl-retirement'; }
+  static scenarioName() { return 'International Retirement'; }
+
+  static instantiate(params, simStart, simEnd) {
+    return new IntlRetirementScenario({
+      context: ServiceRegistry.getInstance().simulationContext,
+      params,
+      simStart,
+      simEnd,
+    });
+  }
+
   static getParamSchema() { return INTL_RETIREMENT_PARAM_SCHEMA; }
 
   static getToolsets() {

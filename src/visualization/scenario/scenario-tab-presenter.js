@@ -26,7 +26,8 @@ import { ScenarioSerializer } from '../../scenarios/scenario-serializer.js';
  * ### Pre-built scenario selection and first-load default
  *
  * Pre-built scenarios are supplied via the constructor's `prebuiltScenarios`
- * array and sorted by `PrebuiltScenario.order` (ascending).  On a fresh page
+ * array (each entry: `{cls, order, active, simStart, simEnd}`) sorted by `order`
+ * (ascending).  On a fresh page
  * load with no localStorage state the lowest-order pre-built is selected
  * automatically, making it the "default first load" scenario.
  *

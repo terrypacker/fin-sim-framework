@@ -4,7 +4,7 @@ A running list of structural friction in the codebase — places where two ways 
 
 > Living document. Add to it whenever something surprising shows up while reading the code; remove or update entries as they get resolved.
 
-Last reviewed: 2026-05-26.
+Last reviewed: 2026-05-29.
 
 ---
 
@@ -47,9 +47,9 @@ Last reviewed: 2026-05-26.
 - `src/finance/services/state-schema-registry.js` line 223 — `StateSchemaRegistry.pickActionData()` static method, labelled "Canonical public version" with a comment that `simulation.js` keeps a copy "to avoid cross-layer imports."
 - **Direction**: extract the canonical picker into a shared, dependency-free location (`src/simulation-framework/action-data.js` or similar) so both layers reference the same thing. The state-schema layer importing a finance-aware copy from `src/finance/` is the wrong dependency direction.
 
-### 1.8 `prebuilt-scenario.js` overlap with `BaseScenario`
-- `src/scenarios/prebuilt-scenario.js` is a thin descriptor wrapper used only by `SimulationWorkbench.PREBUILT_SCENARIOS`. Its `factory` arg duplicates information `BaseScenario.buildDefaultConfig()` could derive.
-- **Direction**: replace `PrebuiltScenario` with a typed array of scenario classes once `buildDefaultConfig` is the single source of construction info.
+### ~~1.8 `prebuilt-scenario.js` overlap with `BaseScenario`~~
+- ~~`src/scenarios/prebuilt-scenario.js` is a thin descriptor wrapper used only by `SimulationWorkbench.PREBUILT_SCENARIOS`. Its `factory` arg duplicates information `BaseScenario.buildDefaultConfig()` could derive.~~
+- **Resolved** by `design/17-scenario-as-graph-node.md`: `prebuilt-scenario.js` deleted; `SimulationWorkbench` now passes `{cls, order, active, simStart, simEnd}` entries; `ScenarioRegistry.loadPrebuilt` constructs scenario nodes directly from the class.
 
 ### 1.9 `config-graph.js` no longer exists; `ConfigGraphView` does
 - README and many in-code comments reference `ConfigGraph` as a class. The actual file is `src/visualization/graph-builder/config-graph-view.js` (`ConfigGraphView`). There's no `config-graph.js`.
@@ -162,9 +162,9 @@ There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; se
 - Every test that needs a clean state calls `ServiceRegistry.reset()` (or `resetAll`), and many call sites assume `getInstance()` always returns the active one. Branching, parallel simulations, and worker-pool Monte Carlo (mentioned in `design/README.md`) will all want multiple isolated registries.
 - **Direction**: keep `getInstance()` as a convenience but accept an explicit `ServiceRegistry` instance in constructors that currently use the singleton. Tests have shown the pattern is workable.
 
-### 4.2 `ScenarioRegistry` persists across `reset()` deliberately
-- `service-registry.js` lines 47–69 keep a static `_scenarioRegistry` so user param edits survive a Rebuild. This is implicit state that escapes the otherwise clean reset cycle.
-- **Direction**: confirm this is the desired behavior, or make it explicit (e.g. require callers to pass the prior `ScenarioRegistry` into `ServiceRegistry.reset(prev)`).
+### ~~4.2 `ScenarioRegistry` persists across `reset()` deliberately~~
+- ~~`service-registry.js` lines 47–69 keep a static `_scenarioRegistry` so user param edits survive a Rebuild. This is implicit state that escapes the otherwise clean reset cycle.~~
+- **Resolved** by `design/17-scenario-as-graph-node.md`: `static _scenarioRegistry` hack removed; scenario nodes now live on `layer:'scenario'` in the shared `Graph`, which survives `ServiceRegistry.reset()` naturally. `resetAll()` is the explicit full teardown for tests.
 
 ### 4.3 Two parallel bus-message hierarchies
 - `BusMessage` → `SimulationBusMessage` → `ExecutionBusMessage` / `BreakpointHitMessage`.

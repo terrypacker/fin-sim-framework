@@ -40,6 +40,12 @@ export class SimulationSync {
     bus.subscribe('SERVICE_ACTION', msg => {
       this._handle(msg);
     });
+
+    // Design/17 §3.8: clear per-run state so a fresh Simulation after
+    // ServiceRegistry.reset() gets all recurring-event handlers re-registered.
+    bus.subscribe('execution:reset', () => {
+      this.adapter.reset();
+    });
   }
 
   setSimStart(simStart) {

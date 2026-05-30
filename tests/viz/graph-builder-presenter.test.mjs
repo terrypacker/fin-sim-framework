@@ -80,7 +80,7 @@ function makeGraphRenderer(elements = makeElements()) {
 }
 
 function makeBuilderPresenter(graphRenderer = makeGraphRenderer()) {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
   return new GraphBuilderPresenter({
     graphRenderer,
@@ -278,7 +278,7 @@ test('deleteNode: does NOT call graph.removeNode (GraphSync handles removal)', (
 // constructing GraphBuilderPresenter ensures the bus is not double-handled.
 
 test('GraphBuilderPresenter does not add SERVICE_ACTION subscription to the bus', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const { bus } = ServiceRegistry.getInstance();
   const before = (bus.listeners.get('SERVICE_ACTION') ?? []).length;
 

@@ -135,7 +135,7 @@ test('HANDLER_CLASSES: constructor.name matches registry key for every entry', (
 // which is the service-level contract the UI type select depends on.
 
 test('HandlerService.replaceHandler: succeeds for every class in HANDLER_CLASSES', () => {
-  ServiceRegistry.reset();
+  ServiceRegistry.resetAll();
   const { handlerService } = ServiceRegistry.getInstance();
   const original = handlerService.createHandler(null, 'test handler');
 

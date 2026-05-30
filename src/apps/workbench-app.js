@@ -127,7 +127,7 @@ const BUILTIN_TEMPLATES = {
 export class WorkbenchApp extends BaseComponent {
   /**
    * @param {object}             opts
-   * @param {PrebuiltScenario[]} [opts.prebuiltScenarios=[]] - Pre-built scenario descriptors.
+   * @param {Array<{cls,order,active,simStart,simEnd}>} [opts.prebuiltScenarios=[]] - Pre-built scenario class entries.
    * @param {Array|null}         [opts.chartSeries]  - Chart series config.
    */
   constructor({ chartSeries, prebuiltScenarios = [] }) {
@@ -575,9 +575,10 @@ export class WorkbenchApp extends BaseComponent {
 
   /**
    * Destroy all existing data, prepare for initScenario().
+   * Clears config + execution layers so ScenarioLoader starts with a fresh graph.
    */
   destroyScenario() {
-    // Reset all services, bus, and SimulationRegistry so every rebuild starts clean.
+    ServiceRegistry.getInstance()?.graph.clearLayer('config');
     ServiceRegistry.reset();
 
     $('currentStateContent').innerHTML      = '';
