@@ -50,6 +50,17 @@ export class SimulationAdapter {
   }
 
   /**
+   * Clear per-run state. Called by SimulationSync on 'execution:reset' so that
+   * a fresh Simulation gets all recurring-event handlers registered from scratch.
+   * Without this, _registeredRecurringTypes retains entries from the previous run
+   * and the recurring self-scheduling closures are never wired into the new sim,
+   * causing each EventSeries to fire exactly once instead of throughout the run.
+   */
+  reset() {
+    this._registeredRecurringTypes.clear();
+  }
+
+  /**
    * Must be called after the Simulation is created so recurring events can be
    * scheduled relative to the right start date.
    * @param {Date} simStart
