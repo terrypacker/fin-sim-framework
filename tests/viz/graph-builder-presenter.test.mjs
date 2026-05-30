@@ -20,62 +20,25 @@
 
 import { GraphBuilderPresenter } from '../../src/visualization/graph-builder/graph-builder-presenter.js';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
-import {
-  GraphRenderer
-} from "../../src/visualization/components/graph-renderer.js";
+import { EChartsGraphRenderer } from "../../src/visualization/components/echarts-graph-renderer.js";
+import { mockGraphRoot } from "../helpers/viz-utils.js";
 
+global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
 
 // ─── DOM helpers ──────────────────────────────────────────────────────────────
 function makeElements() {
-  const builderCanvas = document.createElement('div');
-  const graphRoot  = document.createElement('div');
-  graphRoot.id = 'graphRoot';
-  const graphViewPort = document.createElement('div');
-  graphViewPort.id = 'graphViewport';
-  const graphEdges = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  graphEdges.id = 'graphEdges';
-  const graphNodes = document.createElement('div');
-  graphNodes.id = 'graphNodes';
-  const selectionBox = document.createElement('div');
-  selectionBox.classList.add('selection-box');
-
-  const nodeDetailsTemplate = document.createElement('template');
-
+  const graphRoot = mockGraphRoot();
   document.body.appendChild(graphRoot);
-  graphRoot.appendChild(graphViewPort);
-  graphViewPort.appendChild(graphEdges);
-  graphViewPort.appendChild(graphNodes);
-  graphViewPort.appendChild(selectionBox);
-
-  nodeDetailsTemplate.innerHTML = '<div class="g-node">\n'
-      + '    <div class="g-header">\n'
-      + '      <span class="g-header-text"></span>\n'
-      + '      <span class="node-state-badge badge-green" data-id="stateChangeIndicator" style="display:none"></span>\n'
-      + '      <span class="node-fired-badge badge-green" data-id="firedIndicator"></span>\n'
-      + '    </div>\n'
-      + '    <div class="g-title">\n'
-      + '      <span class="g-title-text"></span>\n'
-      + '    </div>\n'
-      + '\n'
-      + '    <div class="g-port in"></div>\n'
-      + '    <div class="g-port out"></div>\n'
-      + '  </div>'
-  document.body.appendChild(nodeDetailsTemplate);
-  return { builderCanvas, graphRoot, graphNodes, graphEdges , nodeDetailsTemplate};
+  return { graphRoot };
 }
 
 // ─── Graph Renderer stub ───────────────────────────────────────────────────────────────
 function makeGraphRenderer(elements = makeElements()) {
   const registry = ServiceRegistry.getInstance();
-  return new GraphRenderer({
+  return new EChartsGraphRenderer({
     parent: null,
-    graph: registry.graph,
     graphQueryApi: registry.graphQueryApi,
     graphRoot: elements.graphRoot,
-    graphNodes: elements.graphNodes,
-    graphEdges: elements.graphEdges,
-    nodeDetailsTemplate: elements.nodeDetailsTemplate,
-    displayNodeStateChanges: (changes) => {}
   });
 }
 
@@ -253,12 +216,12 @@ test('deleteNode: removes node from service', () => {
   expect(deletedId).toBe('e1');
 });
 
-test('deleteNode: does NOT call graph.removeNode (GraphSync handles removal)', () => {
+test('deleteNode: presenter does not directly render (GraphSync handles graph updates)', () => {
   const graph = makeGraphRenderer();
   document.body.appendChild(makeEmptyTemplate());
-  let removeNodeCalled = false;
-  const origRemoveNode = graph._removeNode.bind(graph);
-  graph._removeNode = (id) => { removeNodeCalled = true; origRemoveNode(id); };
+  let renderCalled = false;
+  const origRender = graph.render.bind(graph);
+  graph.render = () => { renderCalled = true; origRender(); };
 
   const s = makeBuilderPresenter(graph);
   const { eventService } = ServiceRegistry.getInstance();
@@ -268,7 +231,7 @@ test('deleteNode: does NOT call graph.removeNode (GraphSync handles removal)', (
   s.deleteNode({ id: 'e1', kind: 'event' });
 
   eventService.deleteEvent = orig;
-  expect(removeNodeCalled).toBe(false);
+  expect(renderCalled).toBe(false);
 });
 
 // ─── GraphBuilderPresenter does NOT subscribe to SERVICE_ACTION ─────────────────────

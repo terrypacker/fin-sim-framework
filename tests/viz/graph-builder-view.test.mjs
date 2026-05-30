@@ -11,11 +11,11 @@
 import {
   GraphBuilderView
 } from "../../src/visualization/graph-builder/graph-builder-view.js";
-import {
-  GraphRenderer
-} from "../../src/visualization/components/graph-renderer.js";
-import {ServiceRegistry} from "../../src/services/service-registry.js";
+import { EChartsGraphRenderer } from "../../src/visualization/components/echarts-graph-renderer.js";
+import { ServiceRegistry } from "../../src/services/service-registry.js";
+import { mockGraphRoot } from "../helpers/viz-utils.js";
 
+global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
 
 /**
  * Skeleton test to be filled out in #137
@@ -25,47 +25,20 @@ import {ServiceRegistry} from "../../src/services/service-registry.js";
 // ─── DOM helpers ──────────────────────────────────────────────────────────────
 
 function makeElements() {
-  const builderCanvas = document.createElement('div');
-  const graphRoot  = document.createElement('div');
-  const graphNodes = document.createElement('div');
-  const graphEdges = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  const nodeDetailsTemplate = document.createElement('template');
+  const graphRoot = mockGraphRoot();
   document.body.appendChild(graphRoot);
-  graphRoot.appendChild(graphNodes);
-  graphRoot.appendChild(graphEdges);
-
-  nodeDetailsTemplate.innerHTML = '<div class="g-node">\n'
-      + '    <div class="g-header">\n'
-      + '      <span class="g-header-text"></span>\n'
-      + '      <span class="node-state-badge badge-green" data-id="stateChangeIndicator" style="display:none"></span>\n'
-      + '      <span class="node-fired-badge badge-green" data-id="firedIndicator"></span>\n'
-      + '    </div>\n'
-      + '    <div class="g-title">\n'
-      + '      <span class="g-title-text"></span>\n'
-      + '    </div>\n'
-      + '\n'
-      + '    <div class="g-port in"></div>\n'
-      + '    <div class="g-port out"></div>\n'
-      + '  </div>'
-  document.body.appendChild(nodeDetailsTemplate);
-  return { builderCanvas, graphRoot, graphNodes, graphEdges , nodeDetailsTemplate};
+  return { graphRoot };
 }
 
 function makBuilderView(elements) {
   ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
-  const { builderCanvas, graphRoot, graphNodes, graphEdges, nodeDetailsTemplate } = elements ?? makeElements();
+  const { graphRoot } = elements ?? makeElements();
   return new GraphBuilderView({
-    builderCanvas,
-    graphRenderer: new GraphRenderer({
+    graphRenderer: new EChartsGraphRenderer({
       parent: null,
-      graph: registry.graph,
       graphQueryApi: registry.graphQueryApi,
       graphRoot,
-      graphNodes,
-      graphEdges,
-      nodeDetailsTemplate,
-      displayNodeStateChanges: (changes) => {}
     })
   });
 }

@@ -61,7 +61,6 @@ function buildColors() {
  * (identity mapping). Node positions from ColumnLayout are therefore usable
  * directly as data coordinates without any further conversion.
  *
- * Exposes the same public API as GraphRenderer so all callers work unchanged.
  */
 export class EChartsGraphRenderer extends BaseComponent {
 
@@ -87,8 +86,6 @@ export class EChartsGraphRenderer extends BaseComponent {
     this._highlightEdgeSet  = new Set();
     this.selectedNodeId     = null;
 
-    //TODO Move this to a central location for UI so the plugins and domain specific classes
-    // can register renderers, first up we will want Person and Account
     this._nodeRendererRegistry = new NodeRendererRegistry();
     this._nodeRendererRegistry.registerDefaults();
 

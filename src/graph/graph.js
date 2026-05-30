@@ -41,7 +41,8 @@ export class Graph {
     return [...this.nodes.values()];
   }
 
-  //TODO Remove once we get Rid of ConfigGraph as a data source
+  //TODO Fix up to integrate as a Query API Data Source Cleanly
+  //  inconsistencies.md #1.5 getAll() aliasing on Graph
   getAll() {
     return this.getNodes();
   }

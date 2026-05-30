@@ -36,10 +36,10 @@ import { HANDLER_CLASSES } from '../../src/simulation-framework/handlers.js';
 import { REDUCER_CLASSES } from '../../src/simulation-framework/reducers.js';
 import { ACTION_CLASSES }  from '../../src/simulation-framework/actions.js';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
-import {
-  GraphRenderer
-} from "../../src/visualization/components/graph-renderer.js";
-import {loadHtml} from "../helpers/viz-utils.js";
+import { EChartsGraphRenderer } from "../../src/visualization/components/echarts-graph-renderer.js";
+import { loadHtml, mockGraphRoot } from "../helpers/viz-utils.js";
+
+global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -47,52 +47,29 @@ function makeBuilderView(elements) {
   loadHtml('../../index.html');
   ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
-  const { builderCanvas, graphRoot, graphNodes, graphEdges, nodeDetailsTemplate } = elements ?? makeElements();
+  const { graphRoot } = elements ?? makeElements();
   return new GraphBuilderView({
-    builderCanvas,
-    graphRenderer: new GraphRenderer({
+    graphRenderer: new EChartsGraphRenderer({
       parent: null,
-      graph: registry.graph,
       graphQueryApi: registry.graphQueryApi,
       graphRoot,
-      graphNodes,
-      graphEdges,
-      nodeDetailsTemplate,
-      displayNodeStateChanges: (changes) => {}
     })
   });
 }
 // ─── DOM helpers ──────────────────────────────────────────────────────────────
 function makeElements() {
-  // These IDs were removed from index.html in the Phase 2 workbench refactor;
-  // create elements directly so tests remain decoupled from production HTML structure.
-  const graphRoot = document.createElement('div');
-  const graphViewPort = document.createElement('div');
-  graphViewPort.id = 'graphViewport';
-  const selectionBox = document.createElement('div');
-  selectionBox.className = 'selection-box';
-  graphRoot.appendChild(graphViewPort);
-  graphRoot.appendChild(selectionBox);
-
-  const graphEdges = document.createElement('div');
-  const graphNodes = document.createElement('div');
-  const builderCanvas = document.createElement('div');
-  const nodeDetailsTemplate = document.querySelector('#tpl-node-details');
-  return { builderCanvas, graphRoot, graphNodes, graphEdges, nodeDetailsTemplate };
+  const graphRoot = mockGraphRoot();
+  document.body.appendChild(graphRoot);
+  return { graphRoot };
 }
 
 // ─── Graph Renderer stub ───────────────────────────────────────────────────────────────
 function makeGraphRenderer(elements = makeElements()) {
   const registry = ServiceRegistry.getInstance();
-  return new GraphRenderer({
+  return new EChartsGraphRenderer({
     parent: null,
-    graph: registry.graph,
     graphQueryApi: registry.graphQueryApi,
     graphRoot: elements.graphRoot,
-    graphNodes: elements.graphNodes,
-    graphEdges: elements.graphEdges,
-    nodeDetailsTemplate: elements.nodeDetailsTemplate,
-    displayNodeStateChanges: (changes) => {}
   });
 }
 
