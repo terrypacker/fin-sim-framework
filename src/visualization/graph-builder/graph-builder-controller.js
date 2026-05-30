@@ -71,8 +71,7 @@ export class GraphBuilderController {
   }
 
   eventCreationRequested(subtype) {
-    //TODO need a better way to generate unique names and ids outside of the EventService...
-    const id = this.eventService._generateId('e');
+    const id = this.eventService.nextId();
     let event;
     if (subtype === 'OneOff') {
       event = this.eventService.createOneOffEvent({
@@ -327,7 +326,7 @@ export class GraphBuilderController {
 
   // ── Configuration Lifecycle ─────────────────────────────
   /**
-   * TODO Need to have a central location to reset the sim  See #135
+   * TODO Need to have a central location to reset the sim  See #348
    * Clear out any used meta and data from our nodes
    * - data.breakpointHit
    * - data.fired

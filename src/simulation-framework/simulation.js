@@ -95,8 +95,6 @@ export class Simulation {
 
     this.queue = new IndexedMinHeap((a, b) => a.date - b.date,
             item => item.instanceId, item => item.type);
-
-    this.serviceBus = bus;
     this.bus = bus;
 
     this.handlers = new HandlerRegistry();   // eventType -> [HandlerEntry]
