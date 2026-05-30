@@ -63,7 +63,7 @@ export class GraphNodeInspectorPanel extends BaseComponent {
 
   _renderPlaceholder() {
     this._container.innerHTML =
-      '<div style="padding:12px;color:var(--color-text-dim,#888);font-size:12px">Select a node to edit</div>';
+      '<div style="padding:12px;color:var(--text-dim);font-size:12px">Select a node to edit</div>';
   }
 
   destroy() {

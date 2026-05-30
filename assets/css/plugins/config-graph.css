@@ -6,7 +6,7 @@
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
-  background: #0f172a;
+  background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -19,7 +19,7 @@
   position: relative;
   width: 100%;
   height: 100%;
-  background: #080b10;
+  background: var(--bg-inset);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
@@ -49,8 +49,8 @@
 
 .selection-box {
   position: absolute;
-  border: 1px dashed #4da3ff;
-  background: rgba(77, 163, 255, 0.15);
+  border: 1px dashed var(--blue-muted);
+  background: rgba(90, 162, 255, 0.15);
   pointer-events: none;
   display: none;
   box-sizing: border-box;
@@ -86,13 +86,13 @@
 }
 
 .g-node.has-breakpoint {
-  border-color: var(--red, #f87171);
-  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.5), 0 2px 6px rgba(0,0,0,0.4);
+  border-color: var(--red);
+  box-shadow: 0 0 0 1px var(--red-border), 0 2px 6px rgba(0,0,0,0.4);
 }
 
 .g-node.node-highlighted {
-  border-color: #f90;
-  box-shadow: 0 0 0 2px rgba(255, 153, 0, 0.45), 0 4px 12px rgba(0,0,0,0.6);
+  border-color: var(--amber);
+  box-shadow: 0 0 0 2px var(--amber-glow), 0 4px 12px rgba(0,0,0,0.6);
 }
 
 /* Node header */
@@ -135,7 +135,7 @@
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  border: 1px solid #000;
+  border: 1px solid var(--bg-inset);
 }
 
 .g-port.in  { left: -6px;  background: var(--amber); }
@@ -153,4 +153,4 @@
 }
 
 #graphEdges path.active     { stroke: var(--amber); opacity: 1; }
-#graphEdges path.highlighted { stroke: #f90; stroke-width: 3; opacity: 1; }
+#graphEdges path.highlighted { stroke: var(--amber); stroke-width: 3; opacity: 1; }

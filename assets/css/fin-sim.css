@@ -42,9 +42,9 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 }
 
 .wb-select {
-  background: #0f172a;
-  color: #94a3b8;
-  border: 1px solid #334155;
+  background: var(--bg-panel);
+  color: var(--text-dim);
+  border: 1px solid var(--border-hi);
   padding: 2px 6px;
   font-family: monospace;
   font-size: 12px;
@@ -116,11 +116,11 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   border-radius: 50%;
   flex-shrink: 0;
 }
-.status-dot.stopped   { background: #64748b; }
-.status-dot.running   { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+.status-dot.stopped   { background: var(--text-muted); }
+.status-dot.running   { background: var(--green); box-shadow: 0 0 6px var(--green); }
 .status-dot.breakpoint {
-  background: #f87171;
-  box-shadow: 0 0 6px #f87171;
+  background: var(--red);
+  box-shadow: 0 0 6px var(--red);
   animation: bp-pulse 1s ease-in-out infinite;
 }
 
@@ -150,7 +150,7 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   font-family: var(--font-mono);
   font-size: 9px;
   color: var(--green);
-  background: rgba(57, 224, 128, 0.1);
+  background: var(--green-glow);
   border: 1px solid var(--green-dim);
   padding: 1px 6px;
   border-radius: 2px;
@@ -160,8 +160,8 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   font-family: var(--font-mono);
   font-size: 9px;
   color: var(--purple);
-  background: rgba(160, 128, 255, 0.1);
-  border: 1px solid #604090;
+  background: var(--purple-glow);
+  border: 1px solid var(--purple-dim);
   padding: 1px 6px;
   border-radius: 2px;
   text-align: center;
@@ -170,7 +170,7 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   font-family: var(--font-mono);
   font-size: 9px;
   color: var(--cyan);
-  background: rgba(57, 224, 128, 0.1);
+  background: var(--cyan-glow);
   border: 1px solid var(--cyan-dim);
   padding: 1px 6px;
   border-radius: 2px;
@@ -180,7 +180,7 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
   font-family: var(--font-mono);
   font-size: 9px;
   color: var(--amber);
-  background: rgba(57, 224, 128, 0.1);
+  background: var(--amber-glow);
   border: 1px solid var(--amber-dim);
   padding: 1px 6px;
   border-radius: 2px;
@@ -189,9 +189,9 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 .badge-red {
   font-family: var(--font-mono);
   font-size: 9px;
-  color: var(--red, #f87171);
-  background: rgba(248, 113, 113, 0.1);
-  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: var(--red);
+  background: var(--red-glow);
+  border: 1px solid var(--red-border);
   padding: 1px 6px;
   border-radius: 2px;
   text-align: center;
@@ -207,7 +207,7 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 .viz-wrap {
   flex: 1;
   position: relative;
-  background: #080b10;
+  background: var(--bg-inset);
   border: 1px solid var(--border);
   border-radius: 4px;
   overflow: hidden;
@@ -224,10 +224,10 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 /* ── CODE EDITOR ── */
 .code-editor {
   width: 100%;
-  background: #060910;
+  background: var(--bg-deep);
   border: 1px solid var(--border-hi);
   border-radius: var(--radius);
-  color: #abb2c0;
+  color: var(--text-dim);
   font-family: var(--font-mono);
   font-size: 11.5px;
   line-height: 1.6;
@@ -256,12 +256,12 @@ html, body { height: 100%; overflow: hidden; font-size: 13px; }
 }
 
 .field-code {
-  background: #0f172a;
-  border: 1px solid #1e293b;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
   border-radius: 4px;
   padding: 8px;
   font-size: 10px;
-  color: #94a3b8;
+  color: var(--text-dim);
   white-space: pre-wrap;
   overflow-x: auto;
   max-height: 120px;

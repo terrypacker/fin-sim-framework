@@ -9,9 +9,18 @@
  */
 
 import { BaseComponent } from '../components/base-component.js';
+import { readThemeColor } from '../theme.js';
 
 const KIND_ICON = { event: '⚡', handler: '⚙', action: '▶', reducer: '⬡' };
-const KIND_COLOR = { event: '#6af', handler: '#fa6', action: '#af6', reducer: '#f6a' };
+
+function kindColor() {
+  return {
+    event:   readThemeColor('--blue-muted'),
+    handler: readThemeColor('--amber'),
+    action:  readThemeColor('--green'),
+    reducer: readThemeColor('--purple'),
+  };
+}
 
 /**
  * GraphNodeLineage — LINEAGE right-panel tab.
@@ -65,7 +74,7 @@ export class GraphNodeLineage extends BaseComponent {
 
     if (!node || !api) {
       this._container.innerHTML =
-        '<div style="padding:12px;color:var(--color-text-dim,#888);font-size:12px">Select a node to trace its lineage</div>';
+        '<div style="padding:12px;color:var(--text-dim);font-size:12px">Select a node to trace its lineage</div>';
       return;
     }
 
@@ -78,7 +87,7 @@ export class GraphNodeLineage extends BaseComponent {
     const instances = api.getInstances(node.id);
     if (!instances.length) {
       this._container.innerHTML =
-        '<div style="padding:12px;color:var(--color-text-dim,#888);font-size:12px">No execution instances — run the simulation.</div>';
+        '<div style="padding:12px;color:var(--text-dim);font-size:12px">No execution instances — run the simulation.</div>';
       return;
     }
 
@@ -94,7 +103,7 @@ export class GraphNodeLineage extends BaseComponent {
   _renderChain(chain, selectedInstanceId) {
     if (!chain.length) {
       this._container.innerHTML =
-        '<div style="padding:12px;color:var(--color-text-dim,#888);font-size:12px">No causal chain found.</div>';
+        '<div style="padding:12px;color:var(--text-dim);font-size:12px">No causal chain found.</div>';
       return;
     }
 
@@ -103,7 +112,7 @@ export class GraphNodeLineage extends BaseComponent {
 
     chain.forEach((n, i) => {
       const icon    = KIND_ICON[n.kind]  ?? '●';
-      const color   = KIND_COLOR[n.kind] ?? '#888';
+      const color   = kindColor()[n.kind] ?? readThemeColor('--text-muted');
       const diff    = n.meta?.stateDiff ?? [];
       const changes = diff.length;
       const ts      = n.timestamp ? this._fmtTs(n.timestamp) : null;
@@ -114,20 +123,20 @@ export class GraphNodeLineage extends BaseComponent {
         <div style="
           display:flex;align-items:flex-start;gap:8px;
           padding:6px 10px;
-          background:${isSel ? 'rgba(255,255,255,0.06)' : 'transparent'};
+          background:${isSel ? 'var(--bg-panel2)' : 'transparent'};
           border-left:2px solid ${isSel ? color : 'transparent'};
         ">
           <div style="font-size:14px;color:${color};margin-top:1px;flex-shrink:0">${icon}</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:11px;font-weight:600;color:${color};text-transform:uppercase;letter-spacing:0.05em">${n.kind}</div>
-            <div style="font-size:12px;color:#ddd;margin-top:1px;word-break:break-all">${this._esc(defName)}</div>
-            ${ts ? `<div style="font-size:10px;color:#666;margin-top:2px">${ts}</div>` : ''}
-            ${changes > 0 ? `<div style="font-size:10px;color:#8fa;margin-top:2px">${changes} state change${changes !== 1 ? 's' : ''}</div>` : ''}
+            <div style="font-size:12px;color:var(--text-primary);margin-top:1px;word-break:break-all">${this._esc(defName)}</div>
+            ${ts ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px">${ts}</div>` : ''}
+            ${changes > 0 ? `<div style="font-size:10px;color:var(--diff-added);margin-top:2px">${changes} state change${changes !== 1 ? 's' : ''}</div>` : ''}
           </div>
         </div>`);
 
       if (i < chain.length - 1) {
-        parts.push(`<div style="padding-left:18px;color:#444;font-size:10px;line-height:1">│</div>`);
+        parts.push(`<div style="padding-left:18px;color:var(--border-hi);font-size:10px;line-height:1">│</div>`);
       }
     });
 

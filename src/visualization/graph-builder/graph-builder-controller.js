@@ -10,6 +10,7 @@
 
 import { ServiceRegistry } from '../../services/service-registry.js';
 import { ActionDefinition } from '../../simulation-framework/actions.js';
+import { readThemeColor } from '../theme.js';
 
 /**
  * GraphBuilderController — pure domain + graph-mutation layer.
@@ -79,7 +80,7 @@ export class GraphBuilderController {
         name: 'New One-Off Event',
         type: 'NEW_ONEOFF_' + id,
         date: new Date(), enabled: false,
-        color: '#f87171'
+        color: readThemeColor('--red'),
       });
     } else {
       event = this.eventService.createEventSeries({
@@ -87,7 +88,7 @@ export class GraphBuilderController {
         name: 'New Event Series',
         type: 'NEW_SERIES_' + id,
         interval: 'month-end', enabled: false,
-        color: '#60a5fa'
+        color: readThemeColor('--blue-muted'),
       });
     }
     return event;

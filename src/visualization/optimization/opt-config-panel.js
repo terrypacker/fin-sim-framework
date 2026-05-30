@@ -13,9 +13,7 @@ import { DEFAULT_OPTIMIZATION_CONFIGS } from '../../finance/optimization/intl-re
 import { OPTIMIZATION_OBJECTIVES, OPT_PARAM_TYPES } from '../../finance/optimization/optimization-objectives.js';
 import { valuesForConfig }              from '../../finance/optimization/intl-retirement-optimizer.js';
 
-const INPUT_STYLE =
-  'background:#0f172a;color:#94a3b8;border:1px solid #1e293b;' +
-  'font-size:10px;padding:1px 3px;font-family:monospace;';
+
 
 /**
  * OptConfigPanel — left pane of the Optimization tab.
@@ -102,30 +100,21 @@ export class OptConfigPanel extends BaseComponent {
     const shell = document.createElement('div');
     shell.innerHTML = `
       <div class="node-header">Optimization</div>
-      <div style="padding:4px;display:flex;flex-direction:column;gap:4px">
+      <div class="opt-controls">
         <div class="node-field">
           <label>Objective</label>
-          <select style="flex:1;background:#0f172a;color:#94a3b8;border:1px solid #334155;
-                         padding:3px 6px;font-family:monospace;font-size:12px;border-radius:3px">
+          <select class="toolbar-select" style="flex:1">
             ${objectiveOptions}
           </select>
         </div>
-        <div style="display:flex;gap:6px;align-items:center">
+        <div class="opt-controls-row">
           <button class="btn btn-primary" style="flex:1">⚡ Run Optimization</button>
-          <span class="opt-count-label"
-            style="font-size:11px;color:#64748b;font-family:monospace;white-space:nowrap">
-            — candidates
-          </span>
+          <span class="opt-count-label">— candidates</span>
         </div>
       </div>
-      <div class="opt-status"
-        style="padding:6px 8px;font-size:11px;font-family:monospace;color:#64748b;min-height:20px"></div>
+      <div class="opt-status"></div>
       <div class="opt-var-section">
-        <div style="font-size:11px;color:#475569;font-family:monospace;padding:4px 8px;
-                    border-bottom:1px solid #1e293b;border-top:1px solid #1e293b;
-                    text-transform:uppercase;letter-spacing:0.05em">
-          Search Space
-        </div>
+        <div class="opt-search-space-header">Search Space</div>
       </div>
     `;
     this.append(this._container, shell);
@@ -153,9 +142,7 @@ export class OptConfigPanel extends BaseComponent {
 
     for (const [groupName, configs] of groups) {
       const header = document.createElement('div');
-      header.style.cssText =
-        'font-size:10px;color:#334155;font-family:monospace;padding:6px 8px 2px;' +
-        'text-transform:uppercase;letter-spacing:0.05em;font-weight:600';
+      header.className = 'opt-group-header';
       header.textContent = groupName;
       section.appendChild(header);
 
@@ -169,29 +156,25 @@ export class OptConfigPanel extends BaseComponent {
 
   _buildVarRow(cfg) {
     const el = document.createElement('div');
-    el.style.cssText =
-      'display:flex;flex-direction:column;padding:3px 8px 4px;' +
-      'border-bottom:1px solid #0f172a';
+    el.className = 'opt-var-row';
 
     // Row 1: enabled checkbox + label + value-count badge
     const labelRow = document.createElement('div');
-    labelRow.style.cssText = 'display:flex;align-items:center;gap:4px';
+    labelRow.className = 'opt-var-label-row';
 
     const valCount = valuesForConfig(cfg).length;
     labelRow.innerHTML = `
       <input type="checkbox" ${cfg.enabled ? 'checked' : ''}
-        style="margin:0;cursor:pointer;accent-color:#a78bfa;flex-shrink:0" />
-      <span style="flex:1;font-size:11px;color:#94a3b8;font-family:monospace;
-                   overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-        title="${cfg.label}">${cfg.label}</span>
-      <span style="font-size:9px;color:#475569;font-family:monospace;flex-shrink:0">${valCount}v</span>
+        style="margin:0;cursor:pointer;accent-color:var(--purple);flex-shrink:0" />
+      <span class="opt-var-label" title="${cfg.label}">${cfg.label}</span>
+      <span class="opt-var-count">${valCount}v</span>
     `;
     el.appendChild(labelRow);
 
     // Row 2: range details (hidden when disabled)
     const rangeRow = document.createElement('div');
-    rangeRow.style.cssText =
-      'margin-top:3px;padding-left:18px;display:' + (cfg.enabled ? '' : 'none');
+    rangeRow.className = 'opt-var-range-row';
+    if (!cfg.enabled) rangeRow.style.display = 'none';
 
     let refs = { enabledCb: labelRow.querySelector('input[type="checkbox"]') };
 
@@ -199,8 +182,8 @@ export class OptConfigPanel extends BaseComponent {
       // Read-only pills for enum values
       const pct = v => (typeof v === 'number' && v > 0 && v < 1) ? `${(v * 100).toFixed(0)}%` : String(v);
       rangeRow.innerHTML =
-        `<div style="font-size:10px;color:#475569;font-family:monospace;word-break:break-all">` +
-        cfg.values.map(v => `<span style="display:inline-block;background:#1e293b;border-radius:3px;padding:0 4px;margin:1px">${pct(v)}</span>`).join(' ') +
+        `<div class="opt-enum-values">` +
+        cfg.values.map(v => `<span class="opt-enum-pill">${pct(v)}</span>`).join(' ') +
         `</div>`;
     } else {
       // Editable min / max / step inputs
@@ -210,14 +193,11 @@ export class OptConfigPanel extends BaseComponent {
 
       const lbl = (t) => {
         const s = document.createElement('span');
-        s.style.cssText = 'font-size:9px;color:#334155;font-family:monospace';
-        s.textContent   = t;
+        s.className   = 'opt-var-range-lbl';
+        s.textContent = t;
         return s;
       };
 
-      rangeRow.style.display = 'flex';
-      rangeRow.style.gap     = '3px';
-      rangeRow.style.alignItems = 'center';
       rangeRow.append(lbl('min'), minInp, lbl('max'), maxInp, lbl('step'), stepInp);
 
       refs = { ...refs, minInp, maxInp, stepInp };
@@ -244,7 +224,8 @@ export class OptConfigPanel extends BaseComponent {
     inp.step        = 'any';
     inp.value       = value;
     inp.placeholder = placeholder;
-    inp.style.cssText = INPUT_STYLE + `width:${width}`;
+    inp.className   = 'opt-num-input';
+    inp.style.width = width;
     return inp;
   }
 }

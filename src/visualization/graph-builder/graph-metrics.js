@@ -29,8 +29,10 @@ export const ARROW_SIZE = 8;   // tip-to-base length
 export const ARROW_HALF = 5;   // half the base width
 
 // ── Edge style ────────────────────────────────────────────────────────────────
-export const EDGE_COLOR           = '#374151';
-export const EDGE_COLOR_HIGHLIGHT = '#f97316';
+// SVG edge colors are driven by CSS (--edge-color / --edge-color-highlight).
+// These constants mirror the dark-theme defaults and are kept for public API compatibility.
+export const EDGE_COLOR           = '#2e3a50'; // mirrors --edge-color dark default
+export const EDGE_COLOR_HIGHLIGHT = '#f0a500'; // mirrors --edge-color-highlight (amber)
 export const EDGE_WIDTH           = 2;
 export const EDGE_WIDTH_HIGHLIGHT = 3;
 export const EDGE_OPACITY         = 0.7;

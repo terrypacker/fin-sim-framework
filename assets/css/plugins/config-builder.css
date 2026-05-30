@@ -32,25 +32,25 @@
   align-items: center;
   gap: 6px;
   padding: 4px 6px;
-  background: var(--bg-well, #0f172a);
-  border: 1px solid var(--border, #334155);
+  background: var(--bg-well);
+  border: 1px solid var(--border);
   border-radius: 3px;
   font-size: 12px;
 }
 
 .person-row-info { flex: 1; min-width: 0; }
-.person-row-name { color: var(--text, #e2e8f0); font-weight: 600; }
-.person-row-meta { color: var(--text-dim, #64748b); font-size: 11px; }
+.person-row-name { color: var(--text); font-weight: 600; }
+.person-row-meta { color: var(--text-dim); font-size: 11px; }
 .person-row-edit, .person-row-del {
   background: none;
-  border: 1px solid var(--border, #334155);
-  color: var(--text-dim, #64748b);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
   padding: 2px 5px;
   border-radius: 2px;
   cursor: pointer;
   font-size: 11px;
 }
-.person-row-del:hover { border-color: #ef4444; color: #ef4444; }
+.person-row-del:hover { border-color: var(--red); color: var(--red); }
 
 /* ── CONFIG BUILDER ── */
 .builder {
@@ -131,7 +131,7 @@
 .node-field select,
 .node-field textarea {
   width: 100%;
-  background: #0f172a;
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 4px 6px;
@@ -149,7 +149,7 @@
   appearance: none;
   width: 1.5em;
   height: 1.5em;
-  border: 2px solid #8b8c89;
+  border: 2px solid var(--border-hi);
   border-radius: 4px;
   display: grid;
   place-content: center;
@@ -162,8 +162,7 @@
   height: 0.65em;
   transform: scale(0);
   transition: 120ms transform ease-in-out;
-  background-color: #274c77;
-  /* Use clip-path for a checkmark shape */
+  background-color: var(--blue-dim);
   clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
 }
 
@@ -196,7 +195,7 @@
   align-items: flex-start;
   margin-bottom: 6px;
   padding: 6px;
-  border: 1px solid var(--border, #ccc);
+  border: 1px solid var(--border);
   border-radius: 4px;
 }
 
@@ -217,7 +216,7 @@
 }
 
 .type-badge--domain {
-  background: #0f172a;
+  background: var(--bg-panel);
   border: 1px dashed var(--border);
   color: var(--text-muted);
   cursor: default;
@@ -233,9 +232,9 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--accent, #60a5fa);
+  color: var(--accent);
   padding: 6px 4px 2px;
-  border-top: 1px solid var(--border, #333);
+  border-top: 1px solid var(--border);
   margin-top: 4px;
 }
 .param-group-header:first-child { border-top: none; margin-top: 0; }
@@ -245,7 +244,7 @@
 .param-row textarea {
   flex: 0.5;
   width: 100%;
-  background: #0f172a;
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 4px 6px;

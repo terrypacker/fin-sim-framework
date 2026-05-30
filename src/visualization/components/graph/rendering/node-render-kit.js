@@ -111,7 +111,7 @@ export class NodeRenderKit {
           overflow: 'truncate',
           fontSize: 11,
           fontWeight: 'bold',
-          textFill: '#fff',
+          textFill: ctx.colors?.text ?? '#e2e8f0',
           textVerticalAlign: 'middle'
         })
       },
@@ -128,7 +128,7 @@ export class NodeRenderKit {
         // CRITICAL FOR PAN/ZOOM: Clip the element to the current coordinate system
         clip: ctx.clip,
         style: {
-          stroke: 'rgba(255,255,255,0.08)',
+          stroke: ctx.colors?.borderLight ?? '#374151',
           lineWidth: 1
         }
       }
@@ -150,16 +150,16 @@ export class NodeRenderKit {
     if (ctx.exec?.stateChanges?.length > 0) {
       badges.push({
         text: 'Changed',
-        bg: '#794112',
-        fg: '#c7b9a4'
+        bg: ctx.colors?.badgeChangeBg ?? '#794112',
+        fg: ctx.colors?.badgeChangeFg ?? '#f0a500'
       });
     }
 
     if (ctx.hasBp) {
       badges.push({
         text: '⏸ BP',
-        bg: '#9b1b1b',
-        fg: '#dac8c8'
+        bg: ctx.colors?.badgeBpBg ?? '#9b1b1b',
+        fg: ctx.colors?.badgeBpFg ?? '#ff4455'
       });
     }
 
@@ -253,10 +253,10 @@ export class NodeRenderKit {
         clip: ctx.clip,
         style: api.style({
           fill: isActive
-              ? '#22c55e'
-              : '#777',
+              ? (ctx.colors?.badgeFired ?? '#39e080')
+              : (ctx.colors?.textMuted ?? '#6b7280'),
           shadowBlur: isActive ? 8 : 0,
-          shadowColor: '#22c55e'
+          shadowColor: ctx.colors?.badgeFired ?? '#39e080'
         })
       },
 
@@ -269,7 +269,7 @@ export class NodeRenderKit {
           x: x + padding + 14,
           y: y + height - (padding + textMetrics.height),
           fontSize: 9,
-          textFill: '#aaa',
+          textFill: ctx.colors?.textMuted ?? '#8690ab',
           textVerticalAlign: 'middle'
         })
       }
@@ -306,7 +306,7 @@ export class NodeRenderKit {
           x: x + width - (padding + metrics.width),
           y: y + height - (padding + metrics.height),
           fontSize: 9,
-          textFill: '9ecbff'
+          textFill: ctx.colors?.blueText ?? '#93c5fd'
         })
       }
     ];
@@ -345,8 +345,8 @@ export class NodeRenderKit {
           y: y + height - (padding + metrics.height),
           fontSize: 9,
           textFill: emitted
-              ? '#7ee787'
-              : '#999'
+              ? (ctx.colors?.green ?? '#39e080')
+              : (ctx.colors?.textMuted ?? '#8690ab')
         })
       }
     ];
@@ -382,7 +382,7 @@ export class NodeRenderKit {
           x: x + width -( padding + metrics.width),
           y: y + height - (padding + metrics.height),
           fontSize: 9,
-          textFill: '9ecbff'
+          textFill: ctx.colors?.blueText ?? '#93c5fd'
         })
       }
     ];
@@ -422,8 +422,8 @@ export class NodeRenderKit {
           y: y + height - (padding + metrics.height),
           fontSize: 9,
           textFill: slow
-              ? '#ffb86b'
-              : '#8be9fd'
+              ? (ctx.colors?.amber ?? '#f0a500')
+              : (ctx.colors?.cyan  ?? '#00d4e8')
         })
       }
     ];
