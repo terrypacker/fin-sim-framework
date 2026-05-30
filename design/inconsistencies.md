@@ -101,7 +101,7 @@ There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; se
 
 ## 3. Leaky or Inverted Layer Boundaries
 
-### 3.1 `simulation.js` reaches into finance-domain fields
+### 3.1 `simulation.js` reaches into finance-domain fields (Git #202)
 - `_pickActionData()` in `simulation-framework/simulation.js` lines 45–61 knows about finance-specific fields (`tax`, `taxDetail`, `personTaxDetails`, `gain`, `proceeds`, `costBasis`, `cc`, `isLongTerm`, `isAuResident`, …).
 - The simulation framework is supposed to be domain-agnostic; this couples it directly to US/AU tax modelling.
 - **Direction**: invert the dependency — let actions opt in via a `toJournalPayload()` method or have the finance domain register field extractors with the framework at startup.
@@ -110,25 +110,26 @@ There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; se
 - The schema registry holds finance-specific defaults (`usOrdinaryIncomeYTD`, `auCapitalGainsYTD`, `intlTransferFeeUsd`, …) but its `pickActionData` static is positioned as the "canonical public version" of a framework helper.
 - **Direction**: split into two: a framework-level `JournalSchemaRegistry` for the picker contract, and a finance-level `FinanceStateSchemaRegistry` that registers the domain defaults on top.
 
-### 3.3 `ScenarioLoader` knows about both branches
+### 3.3 `ScenarioLoader` knows about both branches (Git #364)
 - `src/scenarios/scenario-loader.js` dispatches between toolset-compile and graph-deserialize. The branch logic is mixed with per-param node-cascade rules — a single 80-line method (`load`) that does I/O normalization, dispatch, and snapshot-back. It also mutates `cfg.params` / `cfg.parameters` / `cfg.events` / `cfg.handlers` / `cfg.actions` / `cfg.reducers` / `cfg.initialState` in place.
 - **Direction**: extract three pure helpers (`normalizeParams(cfg)`, `compileFromToolsets(cfg, services)`, `restoreFromGraph(cfg, services)`) and keep `load()` as a thin dispatcher.
 
-### 3.4 `BaseApp` reaches into presenter internals
+### 3.4 `WorkbenchApp` reaches into presenter internals (Git #363)
 - `_replayMcRun`, `_applyOptCandidate`, `_showGraphEditTab` (in `base-app.js`) all rely on workbench-shell pane IDs (`activatePlugin('chart')` etc.) by hard-coded string. These coupling points live on the app, not on the runtime, and bypass the `WorkbenchRuntime` pub/sub.
 - **Direction**: route through `WorkbenchRuntime` events instead.
 
-### 3.5 `simulation-sync` only takes two of the services it's wired with
+### 3.5 `simulation-sync` only takes two of the services it's wired with (#362)
 - `ServiceRegistry` constructs `SimulationSync` with `{ bus, simulationRegistry, eventService, handlerService, actionService, reducerService }`, but `SimulationSync`'s constructor signature accepts only `{ bus, simulationRegistry }`. The extra services are silently dropped.
 - **Direction**: either consume them inside `SimulationSync` (currently it goes through the `SimulationAdapter`) or stop passing them in `service-registry.js` lines 75–82.
 
-### 3.6 Action / handler / reducer pre-registration string sets in the serializer
+### 3.6 Action / handler / reducer pre-registration string sets in the serializer (Git #361)
 - `src/scenarios/scenario-serializer.js` keeps three manually-maintained sets (`_ACCOUNT_SERVICE_REDUCERS`, `_NO_ARG_HANDLERS`, … ~70 class names total). Every new account-module class has to be remembered to be added here, or it silently fails to deserialize.
 - **Direction**: replace string sets with a self-registering `ClassRegistry.register(MyReducerClass)` so a new class type is registered alongside its definition. Same pattern would let us drop `actionClass`/`reducerType`/`handlerClass` constructor-name preservation, since the registry would carry the discriminator.
 
-### 3.7 `Person.isAuResident` is both stored and derived
+### 3.7 `Person.isAuResident` is both stored and derived (Git #324)
 - `src/finance/person.js` line 35 sets `this.isAuResident = opts.isAuResident ?? this.citizen.includes('AUS')`. Memory notes that residency was supposed to move into a derived `state.isAuResident` flag (the `ChangeResidencyApplyReducer` flow), but Person still carries it as an opt-in init.
 - **Direction**: pick one. The handlers downstream of `ChangeResidencyApplyReducer` already trust `state.isAuResident`, so removing the Person field would be cleaner.
+
 
 ### 3.8 `_unused-import` accumulation in `intl-retirement-scenario.js`
 - `src/scenarios/intl-retirement-scenario.js` imports `ScenarioSerializer`, `ToolsetRegistry`, `ScenarioCompiler`, all 15 toolsets, and `ACCOUNT_ROLES` even though `ScenarioLoader` now owns the resolution path. The scenario file likely only needs `BaseScenario`, parameter constants, and currency helpers.
@@ -138,7 +139,7 @@ There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; se
 
 ## 4. Open Architecture Questions
 
-### 4.1 `ServiceRegistry` is a singleton
+### 4.1 `ServiceRegistry` is a singleton (Git #360)
 - Every test that needs a clean state calls `ServiceRegistry.reset()` (or `resetAll`), and many call sites assume `getInstance()` always returns the active one. Branching, parallel simulations, and worker-pool Monte Carlo (mentioned in `design/README.md`) will all want multiple isolated registries.
 - **Direction**: keep `getInstance()` as a convenience but accept an explicit `ServiceRegistry` instance in constructors that currently use the singleton. Tests have shown the pattern is workable.
 
@@ -146,7 +147,7 @@ There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; se
 - ~~`service-registry.js` lines 47–69 keep a static `_scenarioRegistry` so user param edits survive a Rebuild. This is implicit state that escapes the otherwise clean reset cycle.~~
 - **Resolved** by `design/17-scenario-as-graph-node.md`: `static _scenarioRegistry` hack removed; scenario nodes now live on `layer:'scenario'` in the shared `Graph`, which survives `ServiceRegistry.reset()` naturally. `resetAll()` is the explicit full teardown for tests.
 
-### 4.3 Two parallel bus-message hierarchies
+### 4.3 Two parallel bus-message hierarchies (Git #355)
 - `BusMessage` → `SimulationBusMessage` → `ExecutionBusMessage` / `BreakpointHitMessage`.
 - `BusMessage` (separately) → `ServiceActionEvent` (via `services/`).
 - The dual paths share a base class but carry quite different fields and consumers. The memory note `project_bus_unification_plan.md` (8 phases tracking #87/#88/#93/#127) is the ongoing plan to unify them.
