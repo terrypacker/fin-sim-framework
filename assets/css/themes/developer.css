@@ -27,7 +27,8 @@ limitations under the License.
 
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;500;600&display=swap');
 
-:root {
+:root,
+:root[data-theme="dark"] {
   /* Backgrounds */
   --bg-base:      #0a0c0f;
   --bg-panel:     #0f1217;
@@ -67,6 +68,20 @@ limitations under the License.
   /* Spacing */
   --radius:       4px;
   --panel-gap:    10px;
+}
+
+:root[data-theme="light"] {
+  --bg-base:    #f7f8fa;
+  --bg-panel:   #ffffff;
+  --bg-panel2:  #eef1f5;
+  --bg-input:   #ffffff;
+  --bg-active:  #d8dde5;
+  --border:     #d0d6df;
+  --border-hi:  #b4bcc8;
+  --text-primary: #1a1f2a;
+  --text-dim:   #5a6478;
+  --text-muted: #5a6478;
+  /* Accent palette reads fine on both backgrounds — no overrides needed */
 }
 
 html, body {
@@ -196,6 +211,19 @@ header, #header {
 .btn-ghost { background: transparent; }
 .btn-sm { padding: 4px 10px; font-size: 11px; }
 .btn-xs { padding: 2px 8px; font-size: 10px; }
+
+/* ── TOOLBAR SELECTS ── */
+.toolbar-select {
+  background: var(--bg-input);
+  color: var(--text-dim);
+  border: 1px solid var(--border-hi);
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  border-radius: var(--radius);
+  margin-left: 8px;
+}
+.toolbar-select option { background: var(--bg-panel2); }
 
 /* ── FORM ELEMENTS ── */
 .field-row {

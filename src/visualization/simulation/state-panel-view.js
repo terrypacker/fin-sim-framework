@@ -26,9 +26,9 @@ import { EXECUTION_EDGE_TYPES } from '../../simulation-framework/execution-graph
  */
 export class StatePanelView extends BaseComponent {
 
-  constructor() {
+  constructor({ displaySettings } = {}) {
     super();
-    this._formatDate        = d => d.toDateString();
+    this._formatDate        = displaySettings?.formatDate ?? (d => d.toDateString());
     this._schemaRegistry    = null;
     this._pendingDate       = null;
     this._pendingState      = null;
@@ -41,6 +41,12 @@ export class StatePanelView extends BaseComponent {
     this._executionGraph    = null;
     this._metricHistory     = new Map();
     this._stateCollapsed    = true;
+
+    if (displaySettings) {
+      this.onCleanup(displaySettings.subscribe(({ formatDate }) => {
+        this._formatDate = formatDate;
+      }));
+    }
   }
 
   /** Update the active date-format function (UTC vs local). */

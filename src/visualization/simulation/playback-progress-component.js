@@ -24,14 +24,21 @@ import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bu
  */
 export class PlaybackProgressComponent extends BaseComponent {
 
-  constructor({ scenario, timeSlider, timeLabel, formatDate }) {
+  constructor({ scenario, timeSlider, timeLabel, displaySettings, formatDate }) {
     super();
     this._scenario       = scenario;
     this._timeSlider     = timeSlider;
     this._timeLabel      = timeLabel;
-    this._formatDate     = formatDate ?? (d => d.toDateString());
+    this._formatDate     = displaySettings?.formatDate ?? formatDate ?? (d => d.toDateString());
     this._pendingDate    = null;
     this._drainBeginMsgs = () => [];
+
+    if (displaySettings) {
+      this.onCleanup(displaySettings.subscribe(({ formatDate: fmt }) => {
+        this._formatDate = fmt;
+        if (this._pendingDate) this.render();
+      }));
+    }
   }
 
   /**

@@ -12,11 +12,12 @@ import { MapFilterMultiSelect } from '../components/map-filter-multi-select.js';
 import { QueryApi }             from '../../query/query-api.js';
 
 export class TimelinePresenter {
-  constructor({ controller, view, onDetail, onTaxDocument, onRewind, onNavigateToNode, formatDate }) {
+  constructor({ controller, view, onDetail, onTaxDocument, onRewind, onNavigateToNode, displaySettings }) {
     this._controller = controller;
     this._view       = view;
     this._onRewind   = onRewind ?? null;
-    this._formatDate = formatDate ?? (d => d.toDateString());
+    this._formatDate = displaySettings?.formatDate ?? (d => d.toDateString());
+    this._unsubscribeSettings = null;
 
     if (onNavigateToNode) {
       view.onNavigateToNode = onNavigateToNode;
@@ -57,6 +58,13 @@ export class TimelinePresenter {
     }
     if (onRewind) {
       view.onRewind = ts => onRewind(new Date(ts));
+    }
+
+    if (displaySettings) {
+      this._unsubscribeSettings = displaySettings.subscribe(({ formatDate }) => {
+        this._formatDate = formatDate;
+        if (this._controller?.journal) this._render();
+      });
     }
   }
 
@@ -175,6 +183,7 @@ export class TimelinePresenter {
   }
 
   destroy() {
+    this._unsubscribeSettings?.();
     this._view.destroy();
   }
 }
