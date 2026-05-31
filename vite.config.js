@@ -10,6 +10,6 @@ export default defineConfig({
   },
   server: {
     port: 10001,
-    open: true,
+    open: false,
   },
 });
