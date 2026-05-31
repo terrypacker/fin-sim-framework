@@ -230,7 +230,7 @@ export class ScenarioRegistry {
   // ─── Private ────────────────────────────────────────────────────────────────
 
   _byLayer() {
-    return this._graph.getNodes().filter(n => n.layer === 'scenario');
+    return this._graph.byLayer('scenario');
   }
 
   _upsert(scenario) {
