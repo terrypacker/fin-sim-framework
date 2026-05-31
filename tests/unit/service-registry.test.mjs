@@ -392,17 +392,19 @@ test('Wildcard bus subscriber receives all SERVICE_ACTION events', () => {
   assert.ok(wildcardEvents.every(e => e.type === 'SERVICE_ACTION'));
 });
 
-test('Bus history contains all published SERVICE_ACTION events', () => {
+test('Bus publishes SERVICE_ACTION events when services create nodes', () => {
   ServiceRegistry.resetAll();
   const registry = ServiceRegistry.getInstance();
+
+  const received = [];
+  registry.bus.subscribe('SERVICE_ACTION', e => received.push(e));
 
   registry.actionService.createAmountAction('A', 'A', 0);
   registry.actionService.createRecordBalanceAction();
   registry.handlerService.createHandler();
 
-  const history = registry.bus.getHistory();
-  assert.strictEqual(history.length, 3);
-  assert.ok(history.every(e => e instanceof ServiceActionEvent));
+  assert.strictEqual(received.length, 3);
+  assert.ok(received.every(e => e instanceof ServiceActionEvent));
 });
 
 // ─── RealPropertyService and CollectibleService ───────────────────────────────

@@ -108,7 +108,7 @@ export class Simulation {
 
     this.history = new SimulationHistory(this);
     this.history.enableSnapshots = opts.enableSnapshots ?? true;
-    this.history.snapshotInterval = opts.snapshotInterval ?? 1; // every N events
+    this.history.snapshotInterval = opts.snapshotInterval ?? 12; // every N events (~1/year)
     this.debug = opts.debug ?? false;
     this.silent = opts.silent ?? false; // when true: skip bus, clones, diffs (MC/batch mode)
     this.journal = new Journal({enabled: true});
@@ -482,7 +482,7 @@ export class Simulation {
         stateDiff:     stateBefore ? diffStates(stateBefore, stateSnapshot) : null
       }));
       if (this.graphRecorder && eventNodeId) {
-        this.graphRecorder.endNode(eventNodeId, { stateBefore, stateAfter: stateSnapshot });
+        this.graphRecorder.endNode(eventNodeId);
       }
 
       if (this.journal.enabled) {
@@ -808,7 +808,7 @@ export class Simulation {
           }));
         }
         if (this.graphRecorder && reducerNodeId) {
-          this.graphRecorder.endNode(reducerNodeId, { stateBefore: prevState, stateAfter: this.state, stateDiff: sd });
+          this.graphRecorder.endNode(reducerNodeId, { stateDiff: sd });
         }
 
         if (this.journal.enabled) {
