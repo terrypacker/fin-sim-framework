@@ -18,6 +18,7 @@
  */
 
 import { SimGraphNode } from "../graph/sim-graph-node.js";
+import { MutationTracker } from "./state-utils.js";
 
 export class ReducerPipeline {
   constructor() {
@@ -278,6 +279,14 @@ export class FieldReducer extends Reducer {
       return clone;
     };
 
+    if (MutationTracker.isActive) {
+      const pathStr = Array.isArray(path) ? path.join('.') : path;
+      const before = this.getValueByPath(obj, pathStr);
+      const result = setRecursive(obj, 0);
+      MutationTracker.record(pathStr, before, value);
+      return result;
+    }
+
     return setRecursive(obj, 0);
   }
 
@@ -428,8 +437,14 @@ export class AccountTransactionReducer extends Reducer {
   }
 
   reduce(state, action, date) {
-    this.accountService.transaction(state[this.accountKey], this.getAmount(action), date);
-    return this.newState(state);  //Pickup next actions
+    const account = state[this.accountKey];
+    const amount  = this.getAmount(action);
+    const balanceBefore = account.balance;
+    const newAccount = { ...account, balance: balanceBefore + amount };
+    if (MutationTracker.isActive) {
+      MutationTracker.record(`${this.accountKey}.balance`, balanceBefore, newAccount.balance);
+    }
+    return this.newState({ ...state, [this.accountKey]: newAccount });
   }
 }
 

@@ -20,7 +20,7 @@
 import { IndexedMinHeap } from './indexed-min-heap.js';
 import { EventBus }  from './event-bus.js';
 import { JournalEntry, Journal } from './journal.js'
-import { ReducerPipeline } from './reducers.js'
+import { ReducerPipeline, FieldReducer, AccountTransactionReducer } from './reducers.js'
 import { HandlerRegistry } from './handlers.js'
 import { DateUtils } from "./date-utils.js";
 import {
@@ -30,7 +30,7 @@ import {
 import { generateActionId } from "./actions.js";
 import { SimulationHistory } from "./simulation-history.js";
 import { SimulationState } from "./simulation-state.js";
-import { diffStates } from "./state-utils.js";
+import { diffStates, MutationTracker } from "./state-utils.js";
 import { buildExecutionId } from "./execution-utils.js";
 import { ExecutionGraph } from "./execution-graph.js";
 import { GraphRecorder } from "./graph-recorder.js";
@@ -710,7 +710,14 @@ export class Simulation {
       }
       this.control.resuming = false;
 
-      const prevState = this.silent ? null : structuredClone(this.state);
+      // Use MutationTracker for FieldReducer/AccountTransactionReducer (avoids structuredClone).
+      // Fall back to clone for other reducer types (account-rules, plain fns) that mutate directly.
+      const r = reducerWrapper.reducer;
+      const useTracker = !this.silent && (
+        r instanceof FieldReducer || r instanceof AccountTransactionReducer
+      );
+      if (useTracker) MutationTracker.begin();
+      const prevState = (!this.silent && !useTracker) ? structuredClone(this.state) : null;
       const reducerExecId = this._makeExecutionId(reducerWrapper.reducer?.id ?? null, actionExecId);
 
       let reducerNodeId = null;
@@ -741,6 +748,7 @@ export class Simulation {
       this.reducerExecutions++;
 
       if (!result) {
+        if (useTracker) MutationTracker.flush(); // discard — no state change
         if (!this.silent && reducerExecId) {
           this.bus.publish(new ExecutionBusMessage({
             phase:       EXECUTION_PHASES.END,
@@ -750,7 +758,7 @@ export class Simulation {
             nodeId:      reducerWrapper.reducer?.id ?? null,
             date:        new Date(this.currentDate),
             sim:         this,
-            data:        { reducer: reducerWrapper.reducer, action, stateBefore: prevState, sourceEvent, reducerCount: this.reducerExecutions },
+            data:        { reducer: reducerWrapper.reducer, action, sourceEvent, reducerCount: this.reducerExecutions },
             stateDiff:   null
           }));
         }
@@ -793,7 +801,7 @@ export class Simulation {
       this.state = nextState;
 
       if (!this.silent) {
-        const sd = diffStates(prevState, this.state);
+        const sd = useTracker ? MutationTracker.flush() : diffStates(prevState, this.state);
         if (reducerExecId) {
           this.bus.publish(new ExecutionBusMessage({
             phase:       EXECUTION_PHASES.END,
@@ -803,7 +811,7 @@ export class Simulation {
             nodeId:      reducerWrapper.reducer?.id ?? null,
             date:        new Date(this.currentDate),
             sim:         this,
-            data:        { reducer: reducerWrapper.reducer, action, stateBefore: prevState, sourceEvent, reducerCount: this.reducerExecutions },
+            data:        { reducer: reducerWrapper.reducer, action, sourceEvent, reducerCount: this.reducerExecutions },
             stateDiff:   sd
           }));
         }

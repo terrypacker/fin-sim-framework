@@ -421,10 +421,32 @@ swapping to a `Map<definitionId, [pending]>`.
    | History snapshot count | 3,008 | 251 |
    | Bus history length | 25,510 | 0 |
 
-2. **Phase 2 — Drop redundant clones (Tier 1.4):** rework `diffStates`
-   to a structural ref compare, then path-record reducers for free
-   diffs. Lands the biggest CPU win once snapshots/graph stop holding
-   the state alive.
+2. **Phase 2 — Drop redundant clones (Tier 1.4): DONE 2026-05-30**
+
+   Changes shipped:
+   - **`state-utils.js`**: Added `MutationTracker` — a module-level
+     recorder that collects `{field, before, after, delta}` entries during
+     a reducer call in the same format as `diffStates` output.
+   - **`reducers.js`**: `FieldReducer.setValueByPath` now calls
+     `MutationTracker.record()` when the tracker is active, capturing
+     before/after for every path it writes. `AccountTransactionReducer`
+     made fully immutable (creates `{ ...account, balance: newBalance }`
+     instead of mutating in place) and records the balance change via the
+     tracker. Import of `MutationTracker` added.
+   - **`simulation.js`**: For reducers where
+     `r instanceof FieldReducer || r instanceof AccountTransactionReducer`,
+     the `structuredClone(state)` is skipped and `MutationTracker.begin()`
+     is called instead. After the reducer, `MutationTracker.flush()` yields
+     the `stateDiff` directly — no tree walk. For all other reducer types
+     (account-rules subclasses that call `accountService.transaction`
+     directly, plain functions) the existing `structuredClone` + `diffStates`
+     path is kept as a fallback. `FieldReducer` and `AccountTransactionReducer`
+     added to imports.
+
+   Scope note: account-rules subclasses (`us-income-classes.js` etc.) still
+   use the clone fallback because they mutate state via `accountService.transaction`
+   without going through `setValueByPath`. Eliminating that remaining clone
+   requires making those reducers immutable (Phase 4 candidate).
 3. **Phase 3 — Bus + scheduling micro-opts (Tier 2.3, 2.4, 3.1, 3.4):**
    cleanup pass; runs alongside any UI changes.
 4. **Phase 4 — Monthly schedule rationalization (Tier 2.1, 2.2):**
