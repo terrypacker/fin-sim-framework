@@ -135,9 +135,9 @@ export class IntlRetirementMcRunner {
 
     const runner = new ScenarioRunner({
       createSimulation: (params) => {
-        ServiceRegistry.reset();
-        const registry = ServiceRegistry.getInstance();
-        registry.graph.clearLayer('config');
+        // Isolated per-iteration registry: never touches the singleton, so the
+        // user's active config graph + UI bindings stay intact across MC runs.
+        const registry = new ServiceRegistry();
         const scenario = new IntlRetirementScenario({
           context: registry.simulationContext,
           params,

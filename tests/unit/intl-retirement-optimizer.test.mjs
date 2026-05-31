@@ -19,6 +19,7 @@ import { DEFAULT_OPTIMIZATION_CONFIGS }
   from '../../src/finance/optimization/intl-retirement-opt-config.js';
 import { INTL_RETIREMENT_PARAM_SCHEMA, IntlRetirementScenario }
   from '../../src/scenarios/intl-retirement-scenario.js';
+import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { ToolsetRegistry } from '../../src/scenarios/toolsets/toolset-registry.js';
 import { US_BANKING }      from '../../src/scenarios/toolsets/us-banking-toolset.js';
 import { US_TAX }          from '../../src/scenarios/toolsets/us-tax-toolset.js';
@@ -123,6 +124,43 @@ describe('OPTIMIZATION_OBJECTIVES', () => {
   test('MIN_DEFICIT evaluates cumulativeDeficit', () => {
     assert.strictEqual(OPTIMIZATION_OBJECTIVES.MIN_DEFICIT.evaluate(result), 15_000);
     assert.strictEqual(OPTIMIZATION_OBJECTIVES.MIN_DEFICIT.direction, 'minimize');
+  });
+});
+
+// ─── Registry isolation ──────────────────────────────────────────────────────
+//
+// 4.1 (design/inconsistencies.md): the optimizer must not mutate the
+// singleton ServiceRegistry. Mirror of the MC isolation test.
+
+describe('IntlRetirementOptimizer registry isolation', () => {
+  test('run() does not mutate the singleton ServiceRegistry', async () => {
+    ServiceRegistry.resetAll();
+    const before = ServiceRegistry.getInstance();
+    const eventsBefore   = before.eventService.getAll().length;
+    const accountsBefore = before.accountService.getAll().length;
+    const configNodesBefore = before.graph.getNodes()
+      .filter(n => n.layer === 'config').length;
+
+    const opt = new IntlRetirementOptimizer({
+      optimizationConfigs: [
+        { paramKey: 'rothConversionMaxBracket', type: OPT_PARAM_TYPES.ENUM,
+          values: [0.22, 0.24], enabled: true },
+      ],
+      simStart: new Date(Date.UTC(2026, 0, 1)),
+      simEnd:   new Date(Date.UTC(2028, 1, 1)),
+    });
+    await opt.run();
+
+    const after = ServiceRegistry.getInstance();
+    assert.strictEqual(after, before, 'singleton instance must not be replaced');
+    assert.strictEqual(after.eventService.getAll().length,   eventsBefore);
+    assert.strictEqual(after.accountService.getAll().length, accountsBefore);
+    assert.strictEqual(
+      after.graph.getNodes().filter(n => n.layer === 'config').length,
+      configNodesBefore,
+      'optimizer must not touch the singleton config-layer graph'
+    );
+    assert.strictEqual(after.simulationRegistry.getPrimary(), null);
   });
 });
 
