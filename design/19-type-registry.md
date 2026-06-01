@@ -1,6 +1,6 @@
 # 19 — TypeRegistry, Action-Type Families, and the Per-Country Tax Split
 
-**Status**: Phase 0 + 1 + 2 + 3 + 4 complete (2026-06-01); Phase 5 next
+**Status**: Phase 0 + 1 + 2 + 3 + 4 + 5 complete (2026-06-01); Phase 6 next
 **Resolves**: `inconsistencies.md` §3.1 (`simulation.js` reaches into finance fields), §3.2 (`StateSchemaRegistry.pickActionData` lives in the wrong layer — partial), §3.6 (handler/reducer string sets in the serializer), §4.6 (`_pickActionData` allow-list is a maintenance burden)
 **Related**: `design/9-toolset-compiler.md` (toolset shape this design extends), `design/15-config-as-source-of-truth.md` (the cfg → services contract), `design/17-scenario-as-graph-node.md` (ServiceRegistry layered reset model)
 **Author note**: Introduces a framework-level `TypeRegistry` that lets toolsets declare every class, action type, and field-schema they own in inert metadata. Removes three categories of hand-maintained string lists, deletes ~1,100 lines from `scenario-serializer.js`, and ends the implicit "first-toolset-wins" coupling between `US_TAX` and `AU_TAX`. Bakes in a small rename of framework-internal fields on `Action` so `_*` actually means "framework-internal" everywhere.
@@ -538,10 +538,10 @@ Ordered for testability — each step leaves the tree green.
 15. ✅ Walk every finance handler, reducer, and action subclass listed in the deleted `_NO_ARG_HANDLERS` / `_ACCOUNT_SERVICE_REDUCERS`. Add `static type` and override `fromJSON` / `toJSON` only where they carry config beyond the base shape.
 16. ✅ Subclasses that only need the base behaviour add `static type` and inherit `fromJSON`. `AccountServiceReducer` intermediate class added to `reducers.js` — all 52 account-module reducers now extend it. Base `HandlerEntry.toJSON()` and `Reducer.toJSON()` updated to emit full graph fields for Phase 5 compatibility. `DynamicTaxReducer` given `fromJSON` with fresh `TaxService().taxEngine`. All 2409 tests pass.
 
-### Phase 5 — serializer rewrite
+### Phase 5 — serializer rewrite ✅
 
-17. Rewrite `scenario-serializer.js` per §9. Big-bang — delete the string sets and switches in one PR.
-18. Run the full test suite. The roundtrip suite is the regression net.
+17. ✅ Rewrite `scenario-serializer.js` per §9. Big-bang — delete the string sets and switches in one PR.
+18. ✅ Run the full test suite. The roundtrip suite is the regression net. All 1812 backend + 597 frontend tests pass.
 
 ### Phase 6 — picker swap
 

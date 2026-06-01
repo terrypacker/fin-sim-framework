@@ -83,10 +83,11 @@ export class MonthlySocialSecurityHandler extends HandlerEntry {
 
 /** Returns age in whole years as of asOfDate. */
 function getAge(birthDate, asOfDate) {
-  const years = asOfDate.getUTCFullYear() - birthDate.getUTCFullYear();
+  const bd = birthDate instanceof Date ? birthDate : new Date(birthDate);
+  const years = asOfDate.getUTCFullYear() - bd.getUTCFullYear();
   const hadBirthday =
-      asOfDate.getUTCMonth() > birthDate.getUTCMonth() ||
-      (asOfDate.getUTCMonth() === birthDate.getUTCMonth() &&
-          asOfDate.getUTCDate() >= birthDate.getUTCDate());
+      asOfDate.getUTCMonth() > bd.getUTCMonth() ||
+      (asOfDate.getUTCMonth() === bd.getUTCMonth() &&
+          asOfDate.getUTCDate() >= bd.getUTCDate());
   return hadBirthday ? years : years - 1;
 }

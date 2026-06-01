@@ -66,7 +66,8 @@
       "Bash(xargs sed -i '' 's/ServiceRegistry\\\\.reset\\(\\)/ServiceRegistry.resetAll\\(\\)/g')",
       "Bash(xargs sed -i '' 's/new ScenarioRegistry\\(new ScenarioStorage\\(\\)\\)/new ScenarioRegistry\\(new ScenarioStorage\\(\\), new Graph\\(\\)\\)/g')",
       "Bash(gtimeout 5 node --test \"tests/unit/account.test.mjs\")",
-      "Bash(echo \"FAIL/TIMEOUT \\($?\\)\")"
+      "Bash(echo \"FAIL/TIMEOUT \\($?\\)\")",
+      "Bash(awk '{print $3}')"
     ]
   },
   "hooks": {

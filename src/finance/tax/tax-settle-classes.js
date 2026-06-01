@@ -171,6 +171,12 @@ class TaxPaymentDebitReducerBase extends Reducer {
   static actionType;
   static savingsRole;
 
+  static fromJSON(d, services) {
+    const r = new this(services);
+    r.id = d.id;
+    return r;
+  }
+
   constructor({ accountService, stateRegistry }) {
     const cc = new.target.cc;
     super(`${cc} Tax Payment Debit`, PRIORITY.TAX_APPLY + 1);

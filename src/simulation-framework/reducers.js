@@ -189,6 +189,10 @@ export class Reducer extends SimGraphNode {
   static fromJSON(d, _ctx) {
     const r = new this(d.name);
     r.id = d.id;
+    if (d.priority  != null)    r.priority  = d.priority;
+    if (d.fieldName != null)    r.fieldName = d.fieldName;
+    if (d.value     != null)    r.value     = d.value;
+    if (d.script    !== undefined) r.script  = d.script;
     return r;
   }
 

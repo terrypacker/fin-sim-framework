@@ -61,6 +61,16 @@ export class Action extends SimGraphNode {
     return this.constructor.getDescription();
   }
 
+  toJSON() {
+    return { __type: this.constructor.type, id: this.id, name: this.name, type: this.type };
+  }
+
+  static fromJSON(d, _ctx) {
+    const a = new this(d.type, d.name);
+    a.id = d.id;
+    return a;
+  }
+
   /**
    * Optionally transform the action by generating more actions
    * @param state
@@ -83,6 +93,16 @@ export class FieldAction extends Action {
     super(type, name);
     this.fieldName  = fieldName;
   }
+
+  toJSON() {
+    return { ...super.toJSON(), fieldName: this.fieldName };
+  }
+
+  static fromJSON(d, _ctx) {
+    const a = new this(d.type, d.name, d.fieldName ?? '');
+    a.id = d.id;
+    return a;
+  }
 }
 
 export class FieldValueAction extends FieldAction {
@@ -92,6 +112,16 @@ export class FieldValueAction extends FieldAction {
   constructor(type, name, fieldName = '', value = null) {
     super(type, name, fieldName);
     this.value  = value;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), value: this.value };
+  }
+
+  static fromJSON(d, _ctx) {
+    const a = new this(d.type, d.name, d.fieldName ?? '', d.value);
+    a.id = d.id;
+    return a;
   }
 }
 
@@ -110,6 +140,12 @@ export class AmountAction extends FieldValueAction {
 
   constructor(type, name, amount = 0) {
     super(type, name, 'amount', amount);
+  }
+
+  static fromJSON(d, _ctx) {
+    const a = new this(d.type, d.name, d.value ?? 0);
+    a.id = d.id;
+    return a;
   }
 }
 
@@ -172,6 +208,16 @@ export class ScriptedAction extends FieldValueAction {
 
   get script() { return this._script; }
   set script(v) { this._script = v; this._fn = null; }  // invalidate cache on edit
+
+  toJSON() {
+    return { ...super.toJSON(), script: this._script };
+  }
+
+  static fromJSON(d, _ctx) {
+    const a = new this(d.type, d.name, d.fieldName ?? '', d.script ?? '');
+    a.id = d.id;
+    return a;
+  }
 
   _compile() {
     if (!this._fn) {

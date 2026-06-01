@@ -184,6 +184,12 @@ export class IraAnnualRmdHandler extends HandlerEntry {
     this.generatedActionTypes = ['IRA_RMD_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
   }
 
+  static fromJSON(d, services) {
+    const h = new this(services ?? {});
+    h.id = d.id;
+    return h;
+  }
+
   call({ date, state }) {
     const resolvedKey = this._stateKeyFixed ?? this.stateRegistry?.getStateKey(this.role, this.ownerId);
     const ira = state[resolvedKey];
