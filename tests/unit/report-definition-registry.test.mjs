@@ -135,9 +135,9 @@ test('tax-paid-by-year: groups TAX_PAYMENT_DEBIT entries by year, sums amount', 
   const def = reg.get('tax-paid-by-year');
 
   const entries = [
-    entry({ date: new Date(Date.UTC(2026, 5, 30)),  actionType: 'TAX_PAYMENT_DEBIT', data: { amount: 15000, cc: 'US' } }),
-    entry({ date: new Date(Date.UTC(2026, 11, 30)), actionType: 'TAX_PAYMENT_DEBIT', data: { amount:  8000, cc: 'AU' } }),
-    entry({ date: new Date(Date.UTC(2027, 5, 30)),  actionType: 'TAX_PAYMENT_DEBIT', data: { amount: 20000, cc: 'US' } }),
+    entry({ date: new Date(Date.UTC(2026, 5, 30)),  actionType: 'US_TAX_PAYMENT_DEBIT', data: { amount: 15000 } }),
+    entry({ date: new Date(Date.UTC(2026, 11, 30)), actionType: 'AU_TAX_PAYMENT_DEBIT', data: { amount:  8000 } }),
+    entry({ date: new Date(Date.UTC(2027, 5, 30)),  actionType: 'US_TAX_PAYMENT_DEBIT', data: { amount: 20000 } }),
     // Unrelated entry — should not match.
     entry({ date: new Date(Date.UTC(2027, 5, 30)),  actionType: 'WAGES_INCOME_TAX',  data: { amount: 99999, cc: 'US' } }),
   ];
@@ -154,8 +154,8 @@ test('tax-paid-by-year: cc facet filters to a single country', async () => {
   const def = reg.get('tax-paid-by-year');
 
   const entries = [
-    entry({ date: new Date(Date.UTC(2026, 5, 30)),  actionType: 'TAX_PAYMENT_DEBIT', data: { amount: 15000, cc: 'US' } }),
-    entry({ date: new Date(Date.UTC(2026, 11, 30)), actionType: 'TAX_PAYMENT_DEBIT', data: { amount:  8000, cc: 'AU' } }),
+    entry({ date: new Date(Date.UTC(2026, 5, 30)),  actionType: 'US_TAX_PAYMENT_DEBIT', data: { amount: 15000 } }),
+    entry({ date: new Date(Date.UTC(2026, 11, 30)), actionType: 'AU_TAX_PAYMENT_DEBIT', data: { amount:  8000 } }),
   ];
 
   const { grandTotal: usTotal } = await runDef(def, { cc: 'US', period: null }, entries);
@@ -343,8 +343,8 @@ test('person multiselect on ordinary-income-by-source filters by personKey', asy
 function auSettleEntry({ date, personTaxDetails }) {
   return entry({
     date,
-    actionType: 'TAX_SETTLE_APPLY',
-    data: { cc: 'AU', tax: personTaxDetails.reduce((s, p) => s + p.taxDetail.netLiability, 0), personTaxDetails },
+    actionType: 'AU_TAX_SETTLE_APPLY',
+    data: { tax: personTaxDetails.reduce((s, p) => s + p.taxDetail.netLiability, 0), personTaxDetails },
   });
 }
 
@@ -371,8 +371,8 @@ test('au-tax-by-person-year: fans out personTaxDetails and groups by year + pers
     // US settle with no per-person details — must be excluded by the cc filter.
     entry({
       date: new Date(Date.UTC(2026, 11, 30)),
-      actionType: 'TAX_SETTLE_APPLY',
-      data: { cc: 'US', tax: 30000, taxDetail: { netLiability: 30000 } },
+      actionType: 'US_TAX_SETTLE_APPLY',
+      data: { tax: 30000, taxDetail: { netLiability: 30000 } },
     }),
   ];
 
@@ -411,8 +411,8 @@ test('au-tax-by-person-year: ignores entries that lack personTaxDetails', async 
     // AU settle WITHOUT personTaxDetails — fall-back single-filer path. Should be skipped.
     entry({
       date: new Date(Date.UTC(2026, 5, 30)),
-      actionType: 'TAX_SETTLE_APPLY',
-      data: { cc: 'AU', tax: 10000, taxDetail: { netLiability: 10000 } },
+      actionType: 'AU_TAX_SETTLE_APPLY',
+      data: { tax: 10000, taxDetail: { netLiability: 10000 } },
     }),
   ];
 

@@ -36,8 +36,8 @@ import { TaxSettleService } from '../../src/finance/tax-settle-service.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const US_PERIOD_2027 = { type: 'PERIOD_ADVANCE', cc: 'US', period: { startMs: Date.UTC(2027, 0, 1) } };
-const AU_PERIOD_2027 = { type: 'PERIOD_ADVANCE', cc: 'AU', period: { startMs: Date.UTC(2027, 6, 1) } };
+const US_PERIOD_2027 = { type: 'US_PERIOD_ADVANCE', period: { startMs: Date.UTC(2027, 0, 1) } };
+const AU_PERIOD_2027 = { type: 'AU_PERIOD_ADVANCE', period: { startMs: Date.UTC(2027, 6, 1) } };
 
 function baseState(overrides = {}) {
   return {
@@ -108,9 +108,9 @@ test('INFL-1: zero inflation rate leaves accumulator unchanged', () => {
 
 test('INFL-1: accumulator compounds across multiple years', () => {
   let state = baseState({ inflationRates: { US: 0.03, AU: 0.03 } });
-  const action2027 = { type: 'PERIOD_ADVANCE', cc: 'US', period: { startMs: Date.UTC(2027, 0, 1) } };
-  const action2028 = { type: 'PERIOD_ADVANCE', cc: 'US', period: { startMs: Date.UTC(2028, 0, 1) } };
-  const action2029 = { type: 'PERIOD_ADVANCE', cc: 'US', period: { startMs: Date.UTC(2029, 0, 1) } };
+  const action2027 = { type: 'US_PERIOD_ADVANCE', period: { startMs: Date.UTC(2027, 0, 1) } };
+  const action2028 = { type: 'US_PERIOD_ADVANCE', period: { startMs: Date.UTC(2028, 0, 1) } };
+  const action2029 = { type: 'US_PERIOD_ADVANCE', period: { startMs: Date.UTC(2029, 0, 1) } };
 
   state = reducer.reduce(state, action2027);
   state = reducer.reduce(state, action2028);
@@ -179,7 +179,7 @@ test('INFL-3: monthlyWage does NOT change on AU PERIOD_ADVANCE (USD wages)', () 
 test('INFL-3: wage compounding matches (1 + rate)^n over multiple US advances', () => {
   let state = baseState({ inflationRates: { US: 0.05, AU: 0.03 } });
   for (let yr = 2027; yr <= 2031; yr++) {
-    state = reducer.reduce(state, { type: 'PERIOD_ADVANCE', cc: 'US', period: { startMs: Date.UTC(yr, 0, 1) } });
+    state = reducer.reduce(state, { type: 'US_PERIOD_ADVANCE', period: { startMs: Date.UTC(yr, 0, 1) } });
   }
   const expected = 8_000 * 1.05 ** 5;
   assert.ok(Math.abs(state.people.primary.monthlyWage - expected) < 0.01);
@@ -218,15 +218,15 @@ test('INFL-4: expenses compound after residency switch from US to AU', () => {
   let state = baseState({ isAuResident: false, inflationRates: { US: 0.03, AU: 0.04 } });
 
   // Two US-based years (2027, 2028)
-  state = reducer.reduce(state, { type: 'PERIOD_ADVANCE', cc: 'US', period: { startMs: Date.UTC(2027, 0, 1) } });
-  state = reducer.reduce(state, { type: 'PERIOD_ADVANCE', cc: 'US', period: { startMs: Date.UTC(2028, 0, 1) } });
+  state = reducer.reduce(state, { type: 'US_PERIOD_ADVANCE', period: { startMs: Date.UTC(2027, 0, 1) } });
+  state = reducer.reduce(state, { type: 'US_PERIOD_ADVANCE', period: { startMs: Date.UTC(2028, 0, 1) } });
 
   // Switch to AU residency
   state = { ...state, isAuResident: true };
 
   // Two AU-based years (2028, 2029 fiscal)
-  state = reducer.reduce(state, { type: 'PERIOD_ADVANCE', cc: 'AU', period: { startMs: Date.UTC(2028, 6, 1) } });
-  state = reducer.reduce(state, { type: 'PERIOD_ADVANCE', cc: 'AU', period: { startMs: Date.UTC(2029, 6, 1) } });
+  state = reducer.reduce(state, { type: 'AU_PERIOD_ADVANCE', period: { startMs: Date.UTC(2028, 6, 1) } });
+  state = reducer.reduce(state, { type: 'AU_PERIOD_ADVANCE', period: { startMs: Date.UTC(2029, 6, 1) } });
 
   const expected = 6_000 * 1.03 ** 2 * 1.04 ** 2;
   assert.ok(Math.abs(state.monthlyExpenses - expected) < 0.01);

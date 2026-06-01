@@ -10,6 +10,7 @@
 
 import { TaxService }    from '../../finance/tax-service.js';
 import { PeriodService } from '../../finance/period/period-service.js';
+import { BalanceSnapshotReducer } from '../../simulation-framework/reducers.js';
 import { buildAuFiscalYear, applyTo }
   from '../../finance/period/period-builder.js';
 
@@ -73,7 +74,7 @@ export const AU_TAX = {
   },
 
   reducers(context) {
-    return [..._getContributions(context).reducers, ..._getSharedReducers(context)];
+    return [..._getContributions(context).reducers, ..._getBalanceSnapshotReducer(context)];
   },
 };
 
@@ -92,8 +93,10 @@ function _getContributions(context) {
   return context._auTaxCapture;
 }
 
-function _getSharedReducers(context) {
-  if (context._taxSharedDone) return [];
-  context._taxSharedDone = true;
-  return new TaxService().getSharedReducers(context.accountService, context.stateRegistry);
+function _getBalanceSnapshotReducer(context) {
+  if (context._balanceSnapshotRegistered) return [];
+  context._balanceSnapshotRegistered = true;
+  const r = new BalanceSnapshotReducer('Balance Snapshot');
+  r.reducedActionTypes = ['RECORD_BALANCE'];
+  return [r];
 }

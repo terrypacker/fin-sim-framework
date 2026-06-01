@@ -286,7 +286,7 @@ export class TimelineView extends BaseComponent {
   }
 
   _renderFlatAction(entry, idx, sum, isLast) {
-    const hasTaxDoc = entry.action.type === 'TAX_SETTLE_APPLY' &&
+    const hasTaxDoc = (entry.action.type === 'US_TAX_SETTLE_APPLY' || entry.action.type === 'AU_TAX_SETTLE_APPLY') &&
       (entry.action.data?.taxDetail != null || entry.action.data?.personTaxDetails?.length > 0);
     const cfgBtn = entry.action.nodeId
       ? `<button class="tl-cfg-link" data-nodeid="${entry.action.nodeId}" title="Open in configuration">⚙</button>`
@@ -308,7 +308,7 @@ export class TimelineView extends BaseComponent {
       const { entry } = node;
       const isLast    = i === nodes.length - 1;
       const indent    = depth * 16;
-      const hasTaxDoc = entry.action.type === 'TAX_SETTLE_APPLY' &&
+      const hasTaxDoc = (entry.action.type === 'US_TAX_SETTLE_APPLY' || entry.action.type === 'AU_TAX_SETTLE_APPLY') &&
         (entry.action.data?.taxDetail != null || entry.action.data?.personTaxDetails?.length > 0);
       const cfgBtn = entry.action.nodeId
         ? `<button class="tl-cfg-link" data-nodeid="${entry.action.nodeId}" title="Open in configuration">⚙</button>`

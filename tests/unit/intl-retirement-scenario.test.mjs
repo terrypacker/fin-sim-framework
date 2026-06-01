@@ -39,8 +39,8 @@ import { InMemoryStorage }        from '../../src/storage/in-memory-storage.js';
 // Finance classes needed by ScenarioSerializer._makeReducer / _makeHandler
 import { TaxService }           from '../../src/finance/tax-service.js';
 import { DynamicTaxReducer }    from '../../src/finance/tax/dynamic-tax-reducer.js';
-import { PeriodAdvanceReducer, PeriodAdvanceHandler }                                 from '../../src/finance/tax/period-advance-classes.js';
-import { TaxSettleHandler, TaxSettleApplyReducer, TaxPaymentDebitReducer }           from '../../src/finance/tax/tax-settle-classes.js';
+import { UsPeriodAdvanceReducer, AuPeriodAdvanceReducer, UsPeriodAdvanceHandler, AuPeriodAdvanceHandler } from '../../src/finance/tax/period-advance-classes.js';
+import { UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from '../../src/finance/tax/tax-settle-classes.js';
 import { RothContributionApplyReducer, RothWithdrawalContribApplyReducer, RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer, RothContributionHandler, RothWithdrawalContributionsHandler, RothWithdrawalEarningsHandler, RothEarningsHandler }             from '../../src/finance/account-rules/us/roth-classes.js';
 import { IraContributionApplyReducer, IraWithdrawalContribApplyReducer, IraWithdrawalEarningsApplyReducer, IraEarningsApplyReducer, IraContributionHandler, IraWithdrawalContributionsHandler, IraWithdrawalEarningsHandler, IraEarningsHandler }                     from '../../src/finance/account-rules/us/ira-classes.js';
 import { K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer, K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler, K401RmdApplyReducer, K401AnnualRmdHandler }                                                                                                     from '../../src/finance/account-rules/us/k401-classes.js';
@@ -265,9 +265,9 @@ test('serialize → deserialize round-trip reconstructs all TaxService reducers'
     .map(r => r.reducerType);
 
   // Tax infrastructure
-  assert.ok(reducerTypes.includes('PeriodAdvanceReducer'),   'PeriodAdvanceReducer missing after round-trip');
-  assert.ok(reducerTypes.includes('TaxSettleApplyReducer'),  'TaxSettleApplyReducer missing after round-trip');
-  assert.ok(reducerTypes.includes('TaxPaymentDebitReducer'), 'TaxPaymentDebitReducer missing after round-trip');
+  assert.ok(reducerTypes.some(t => t === 'UsPeriodAdvanceReducer' || t === 'AuPeriodAdvanceReducer'), 'PeriodAdvanceReducer missing after round-trip');
+  assert.ok(reducerTypes.some(t => t === 'UsTaxSettleApplyReducer' || t === 'AuTaxSettleApplyReducer'), 'TaxSettleApplyReducer missing after round-trip');
+  assert.ok(reducerTypes.some(t => t === 'UsTaxPaymentDebitReducer' || t === 'AuTaxPaymentDebitReducer'), 'TaxPaymentDebitReducer missing after round-trip');
   assert.ok(reducerTypes.some(t => t === 'DynamicTaxReducer'), 'DynamicTaxReducer missing after round-trip');
 
   // US account module (spot-check one per category)
@@ -310,8 +310,8 @@ test('serialize → deserialize round-trip reconstructs all TaxService handlers'
     .map(h => h.handlerClass);
 
   // Tax infrastructure
-  assert.ok(handlerTypes.includes('PeriodAdvanceHandler'), 'PeriodAdvanceHandler missing after round-trip');
-  assert.ok(handlerTypes.includes('TaxSettleHandler'),     'TaxSettleHandler missing after round-trip');
+  assert.ok(handlerTypes.some(t => t === 'UsPeriodAdvanceHandler' || t === 'AuPeriodAdvanceHandler'), 'PeriodAdvanceHandler missing after round-trip');
+  assert.ok(handlerTypes.some(t => t === 'UsTaxSettleHandler' || t === 'AuTaxSettleHandler'), 'TaxSettleHandler missing after round-trip');
 
   // US account module (spot-check)
   assert.ok(handlerTypes.includes('RothContributionHandler'),           'RothContributionHandler missing');

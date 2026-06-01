@@ -31,21 +31,21 @@ import { TaxSettleService } from '../tax-settle-service.js';
  * only read-only tax-rates data, so no injection is required.
  */
 export class ChangeResidencyHandler extends HandlerEntry {
-  static description = 'Closes the partial US tax year and emits CHANGE_RESIDENCY_APPLY + TAX_SETTLE_APPLY on the move date.';
+  static description = 'Closes the partial US tax year and emits CHANGE_RESIDENCY_APPLY + US_TAX_SETTLE_APPLY on the move date.';
 
   static eventType = 'CHANGE_RESIDENCY';
 
   constructor() {
     super(null, 'Change Residency');
     this._settleService = new TaxSettleService();
-    this.generatedActionTypes = ['CHANGE_RESIDENCY_APPLY', 'TAX_SETTLE_APPLY', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['CHANGE_RESIDENCY_APPLY', 'US_TAX_SETTLE_APPLY', 'RECORD_BALANCE'];
   }
 
   call({ state }) {
     const usTax = this._settleService.computeUsTax(state);
     return [
       { type: 'CHANGE_RESIDENCY_APPLY' },
-      { type: 'TAX_SETTLE_APPLY', cc: 'US', tax: usTax },
+      { type: 'US_TAX_SETTLE_APPLY', tax: usTax },
       new RecordBalanceAction(),
     ];
   }

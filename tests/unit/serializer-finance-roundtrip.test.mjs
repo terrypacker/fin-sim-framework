@@ -68,10 +68,11 @@ import { UsSavingsInterestCreditReducer } from '../../src/finance/reducers/us-sa
 import { TaxService }                from '../../src/finance/tax-service.js';
 import { DynamicTaxReducer }         from '../../src/finance/tax/dynamic-tax-reducer.js';
 import {
-  PeriodAdvanceReducer, PeriodAdvanceHandler,
+  UsPeriodAdvanceReducer, AuPeriodAdvanceReducer, UsPeriodAdvanceHandler, AuPeriodAdvanceHandler,
 } from '../../src/finance/tax/period-advance-classes.js';
 import {
-  TaxSettleHandler, TaxSettleApplyReducer, TaxPaymentDebitReducer,
+  UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer,
+  UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer,
 } from '../../src/finance/tax/tax-settle-classes.js';
 // Account-module classes needed by serializer dispatch maps
 import {

@@ -29,71 +29,96 @@ const PER_PERSON_AU_FIELDS = [
   'auPersonSuperTaxYTD',
 ];
 
-// ─── TAX_SETTLE handler ────────────────────────────────────────────────────────
+// ─── TaxSettleHandler base + per-country subclasses ───────────────────────────
 
-/**
- * Fires at the end of each tax year (scheduled by TaxService).
- *
- * Computes the total tax liability for the given country via TaxSettleService,
- * then emits:
- *   TAX_SETTLE_APPLY — resets YTD fields and chains TAX_PAYMENT_DEBIT if tax > 0
- *   RECORD_BALANCE   — captures a post-settlement balance snapshot
- *
- * SimulationSync wires this via the static eventType property.
- */
-export class TaxSettleHandler extends HandlerEntry {
-  static description = 'Computes end-of-year tax liability and emits TAX_SETTLE_APPLY + RECORD_BALANCE; works for both US and AU settlements.';
-  static eventType   = 'TAX_SETTLE';
+class TaxSettleHandlerBase extends HandlerEntry {
+  static cc;
+  static settleActionType;
 
   constructor() {
-    super(null, 'Tax Settle');
+    super(null, `${new.target.cc} Tax Settle`);
     this._settleService = new TaxSettleService();
-    this.generatedActionTypes = ['TAX_SETTLE_APPLY', 'RECORD_BALANCE'];
+    this.generatedActionTypes = [new.target.settleActionType, 'RECORD_BALANCE'];
   }
+}
 
-  call({ data, state }) {
-    const { cc } = data;
+/**
+ * Fires at the end of each US tax year (scheduled by TaxService).
+ *
+ * Computes the US tax liability via TaxSettleService, then emits:
+ *   US_TAX_SETTLE_APPLY — resets US YTD fields and chains US_TAX_PAYMENT_DEBIT if tax > 0
+ *   RECORD_BALANCE      — captures a post-settlement balance snapshot
+ */
+export class UsTaxSettleHandler extends TaxSettleHandlerBase {
+  static type             = 'UsTaxSettleHandler';
+  static category         = 'handler';
+  static cc               = 'US';
+  static settleActionType = 'US_TAX_SETTLE_APPLY';
+  static eventType        = 'TAX_SETTLE_US';
+  static description      = 'Computes end-of-year US tax liability and emits US_TAX_SETTLE_APPLY + RECORD_BALANCE.';
 
-    if (cc === 'AU' && state.auPersonOrdinaryIncomeYTD && Object.keys(state.auPersonOrdinaryIncomeYTD).length > 0) {
-      const personTaxDetails = this._settleService.computeAuTaxPerPerson(state);
-      if (personTaxDetails.length > 0) {
-        const totalTax = personTaxDetails.reduce((sum, p) => sum + p.taxDetail.netLiability, 0);
-        return [
-          { type: 'TAX_SETTLE_APPLY', cc, tax: totalTax, taxDetail: null, personTaxDetails },
-          { type: 'RECORD_BALANCE' },
-        ];
-      }
-    }
-
-    const taxDetail = cc === 'AU'
-      ? this._settleService.computeAuTax(state)
-      : this._settleService.computeUsTax(state);
+  call({ state }) {
+    const taxDetail = this._settleService.computeUsTax(state);
     return [
-      { type: 'TAX_SETTLE_APPLY', cc, tax: taxDetail.netLiability, taxDetail },
+      { type: 'US_TAX_SETTLE_APPLY', tax: taxDetail.netLiability, taxDetail },
       { type: 'RECORD_BALANCE' },
     ];
   }
 }
 
-// ─── TAX_SETTLE_APPLY reducer ─────────────────────────────────────────────────
-
 /**
- * Resets YTD tax accumulators for the settled country code and, when the
- * computed tax is positive, chains a TAX_PAYMENT_DEBIT action to debit the
- * appropriate savings account.
+ * Fires at the end of each AU fiscal year (scheduled by TaxService).
+ *
+ * Computes the AU tax liability via TaxSettleService.  When per-person data is
+ * available, uses per-person breakdown; otherwise falls back to household total.
+ * Emits:
+ *   AU_TAX_SETTLE_APPLY — resets AU YTD fields and chains AU_TAX_PAYMENT_DEBIT if tax > 0
+ *   RECORD_BALANCE      — captures a post-settlement balance snapshot
  */
-export class TaxSettleApplyReducer extends Reducer {
-  static description = 'Resets YTD tax fields after settlement; chains TAX_PAYMENT_DEBIT when tax > 0.';
-  static actionType  = 'TAX_SETTLE_APPLY';
+export class AuTaxSettleHandler extends TaxSettleHandlerBase {
+  static type             = 'AuTaxSettleHandler';
+  static category         = 'handler';
+  static cc               = 'AU';
+  static settleActionType = 'AU_TAX_SETTLE_APPLY';
+  static eventType        = 'TAX_SETTLE_AU';
+  static description      = 'Computes end-of-year AU tax liability and emits AU_TAX_SETTLE_APPLY + RECORD_BALANCE.';
+
+  call({ state }) {
+    if (state.auPersonOrdinaryIncomeYTD && Object.keys(state.auPersonOrdinaryIncomeYTD).length > 0) {
+      const personTaxDetails = this._settleService.computeAuTaxPerPerson(state);
+      if (personTaxDetails.length > 0) {
+        const totalTax = personTaxDetails.reduce((sum, p) => sum + p.taxDetail.netLiability, 0);
+        return [
+          { type: 'AU_TAX_SETTLE_APPLY', tax: totalTax, taxDetail: null, personTaxDetails },
+          { type: 'RECORD_BALANCE' },
+        ];
+      }
+    }
+    const taxDetail = this._settleService.computeAuTax(state);
+    return [
+      { type: 'AU_TAX_SETTLE_APPLY', tax: taxDetail.netLiability, taxDetail },
+      { type: 'RECORD_BALANCE' },
+    ];
+  }
+}
+
+// ─── TaxSettleApplyReducer base + per-country subclasses ─────────────────────
+
+class TaxSettleApplyReducerBase extends Reducer {
+  static cc;
+  static applyActionType;
+  static debitActionType;
 
   constructor() {
-    super('Tax Settle Apply', PRIORITY.TAX_APPLY);
-    this.reducedActionTypes   = ['TAX_SETTLE_APPLY'];
-    this.generatedActionTypes = ['TAX_PAYMENT_DEBIT'];
+    const cc = new.target.cc;
+    super(`${cc} Tax Settle Apply`, PRIORITY.TAX_APPLY);
+    this.reducedActionTypes   = [new.target.applyActionType];
+    this.generatedActionTypes = [new.target.debitActionType];
   }
 
   reduce(state, action) {
-    const { cc, tax } = action;
+    const cc = this.constructor.cc;
+    const { tax } = action;
     const resets = {};
     for (const field of (YTD_FIELDS[cc] || [])) {
       if (field in state) resets[field] = 0;
@@ -106,41 +131,59 @@ export class TaxSettleApplyReducer extends Reducer {
       }
     }
     if (tax > 0) {
-      return this.newState({ ...state, ...resets }, {}, [{ type: 'TAX_PAYMENT_DEBIT', amount: tax, cc }]);
+      return this.newState({ ...state, ...resets }, {}, [{ type: this.constructor.debitActionType, amount: tax }]);
     }
     return this.newState({ ...state, ...resets });
   }
 }
 
-// ─── TAX_PAYMENT_DEBIT reducer ────────────────────────────────────────────────
+/**
+ * Resets US YTD tax accumulators and, when the computed tax is positive,
+ * chains a US_TAX_PAYMENT_DEBIT action to debit the US savings account.
+ */
+export class UsTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
+  static type            = 'UsTaxSettleApplyReducer';
+  static category        = 'reducer';
+  static cc              = 'US';
+  static applyActionType = 'US_TAX_SETTLE_APPLY';
+  static debitActionType = 'US_TAX_PAYMENT_DEBIT';
+  static description     = 'Resets US YTD tax fields after settlement; chains US_TAX_PAYMENT_DEBIT when tax > 0.';
+}
 
 /**
- * Debits the country-appropriate savings account for the computed tax amount.
- *
- * If the savings balance is insufficient, AccountService.replenishSavings()
- * is called first to draw from domestic investment accounts.  A partial
- * payment is accepted when all domestic sources are exhausted.
- *
- * @param {object} opts
- * @param {import('../services/account-service.js').AccountService} opts.accountService
+ * Resets AU YTD tax accumulators (including per-person maps) and, when the
+ * computed tax is positive, chains an AU_TAX_PAYMENT_DEBIT action to debit
+ * the AU savings account.
  */
-export class TaxPaymentDebitReducer extends Reducer {
-  static description = 'Debits the country savings account for the tax amount; replenishes from investment accounts first when the balance is short.';
-  static actionType  = 'TAX_PAYMENT_DEBIT';
+export class AuTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
+  static type            = 'AuTaxSettleApplyReducer';
+  static category        = 'reducer';
+  static cc              = 'AU';
+  static applyActionType = 'AU_TAX_SETTLE_APPLY';
+  static debitActionType = 'AU_TAX_PAYMENT_DEBIT';
+  static description     = 'Resets AU YTD tax fields after settlement; chains AU_TAX_PAYMENT_DEBIT when tax > 0.';
+}
+
+// ─── TaxPaymentDebitReducer base + per-country subclasses ────────────────────
+
+class TaxPaymentDebitReducerBase extends Reducer {
+  static cc;
+  static actionType;
+  static savingsRole;
 
   constructor({ accountService, stateRegistry }) {
-    super('Tax Payment Debit', PRIORITY.TAX_APPLY + 1);
+    const cc = new.target.cc;
+    super(`${cc} Tax Payment Debit`, PRIORITY.TAX_APPLY + 1);
     this.accountService = accountService;
     this.stateRegistry  = stateRegistry;
-    this.reducedActionTypes = ['TAX_PAYMENT_DEBIT'];
+    this.reducedActionTypes = [new.target.actionType];
   }
 
   reduce(state, action, date) {
-    const { amount, cc } = action;
-    const role       = cc === 'AU' ? ACCOUNT_ROLES.AU_SAVINGS : ACCOUNT_ROLES.US_SAVINGS;
+    const role       = this.constructor.savingsRole;
     const accountKey = this.stateRegistry.getStateKey(role);
     const cashAccount = state[accountKey];
-    const shortfall   = amount - Math.max(0, cashAccount.balance);
+    const shortfall   = action.amount - Math.max(0, cashAccount.balance);
 
     if (shortfall > 0) {
       try {
@@ -151,7 +194,7 @@ export class TaxPaymentDebitReducer extends Reducer {
       }
     }
 
-    const debit = Math.min(amount, Math.max(0, cashAccount.balance));
+    const debit = Math.min(action.amount, Math.max(0, cashAccount.balance));
     if (debit > 0) {
       this.accountService.transaction(cashAccount, -debit, date);
     }
@@ -160,4 +203,36 @@ export class TaxPaymentDebitReducer extends Reducer {
       [accountKey]: { ...cashAccount },   // explicit new reference so balance change is visible in state diffs
     });
   }
+}
+
+/**
+ * Debits the US savings account for the computed tax amount.
+ *
+ * @param {object} opts
+ * @param {import('../services/account-service.js').AccountService} opts.accountService
+ * @param {object} opts.stateRegistry
+ */
+export class UsTaxPaymentDebitReducer extends TaxPaymentDebitReducerBase {
+  static type        = 'UsTaxPaymentDebitReducer';
+  static category    = 'reducer';
+  static cc          = 'US';
+  static actionType  = 'US_TAX_PAYMENT_DEBIT';
+  static savingsRole = ACCOUNT_ROLES.US_SAVINGS;
+  static description = 'Debits the US savings account for the tax amount; replenishes from investment accounts first when the balance is short.';
+}
+
+/**
+ * Debits the AU savings account for the computed tax amount.
+ *
+ * @param {object} opts
+ * @param {import('../services/account-service.js').AccountService} opts.accountService
+ * @param {object} opts.stateRegistry
+ */
+export class AuTaxPaymentDebitReducer extends TaxPaymentDebitReducerBase {
+  static type        = 'AuTaxPaymentDebitReducer';
+  static category    = 'reducer';
+  static cc          = 'AU';
+  static actionType  = 'AU_TAX_PAYMENT_DEBIT';
+  static savingsRole = ACCOUNT_ROLES.AU_SAVINGS;
+  static description = 'Debits the AU savings account for the tax amount; replenishes from investment accounts first when the balance is short.';
 }

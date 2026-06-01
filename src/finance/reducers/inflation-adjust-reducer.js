@@ -12,7 +12,7 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 
 /**
  * InflationAdjustReducer — applies annual inflation adjustments when a
- * PERIOD_ADVANCE action fires at each year boundary.
+ * US_PERIOD_ADVANCE or AU_PERIOD_ADVANCE action fires at each year boundary.
  *
  * Reads state.inflationRates[cc] to determine the annual rate for the
  * advancing country.  On each advance it:
@@ -27,16 +27,16 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  * updated state.currentPeriods, but still in the pre-process phase.
  */
 export class InflationAdjustReducer extends Reducer {
-  static description = 'Applies annual inflation to wages, Social Security, and expenses on each PERIOD_ADVANCE; maintains state.inflationAccumulator per country.';
-  static actionType  = 'PERIOD_ADVANCE';
+  static description = 'Applies annual inflation to wages, Social Security, and expenses on each US_PERIOD_ADVANCE or AU_PERIOD_ADVANCE; maintains state.inflationAccumulator per country.';
+  static actionType  = null;
 
   constructor() {
     super('Inflation Adjust', PRIORITY.PRE_PROCESS + 1);
-    this.reducedActionTypes = ['PERIOD_ADVANCE'];
+    this.reducedActionTypes = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
   }
 
   reduce(state, action) {
-    const { cc } = action;
+    const cc = action.type === 'US_PERIOD_ADVANCE' ? 'US' : 'AU';
     const rate = state.inflationRates?.[cc] ?? 0;
     if (rate === 0) return this.newState(state);
 

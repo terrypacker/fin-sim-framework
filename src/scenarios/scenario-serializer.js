@@ -59,8 +59,8 @@ import { OutOfFundsReducer }             from '../finance/reducers/out-of-funds-
 import { InflationAdjustReducer }        from '../finance/reducers/inflation-adjust-reducer.js';
 
 // ─── Tax infrastructure ────────────────────────────────────────────────────────
-import { PeriodAdvanceHandler, PeriodAdvanceReducer }                          from '../finance/tax/period-advance-classes.js';
-import { TaxSettleHandler, TaxSettleApplyReducer, TaxPaymentDebitReducer }     from '../finance/tax/tax-settle-classes.js';
+import { UsPeriodAdvanceHandler, AuPeriodAdvanceHandler, UsPeriodAdvanceReducer, AuPeriodAdvanceReducer } from '../finance/tax/period-advance-classes.js';
+import { UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from '../finance/tax/tax-settle-classes.js';
 import { DynamicTaxReducer }  from '../finance/tax/dynamic-tax-reducer.js';
 import { TaxService }         from '../finance/tax-service.js';
 
@@ -158,8 +158,9 @@ const Finance = {
   IntlTransferApplyReducer, StockDividendCashApplyReducer, ChangeResidencyApplyReducer,
   SetOutOfFundsDateReducer, AccumulateDeficitReducer, OutOfFundsReducer, InflationAdjustReducer,
   // Tax infrastructure
-  PeriodAdvanceHandler, PeriodAdvanceReducer,
-  TaxSettleHandler, TaxSettleApplyReducer, TaxPaymentDebitReducer,
+  UsPeriodAdvanceHandler, AuPeriodAdvanceHandler, UsPeriodAdvanceReducer, AuPeriodAdvanceReducer,
+  UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer,
+  UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer,
   DynamicTaxReducer, TaxService,
   // US account-module handlers
   RothContributionHandler, RothWithdrawalContributionsHandler,
@@ -273,7 +274,8 @@ const _ACCOUNT_SERVICE_REDUCERS = new Set([
  */
 const _NO_ARG_HANDLERS = new Set([
   // Tax infrastructure
-  'PeriodAdvanceHandler', 'TaxSettleHandler',
+  'UsPeriodAdvanceHandler', 'AuPeriodAdvanceHandler',
+  'UsTaxSettleHandler', 'AuTaxSettleHandler',
   // US — Roth IRA
   'RothContributionHandler', 'RothWithdrawalContributionsHandler',
   'RothWithdrawalEarningsHandler', 'RothEarningsHandler',
@@ -1165,12 +1167,18 @@ export class ScenarioSerializer {
 
     // ── Tax-infrastructure reducers ────────────────────────────────────────────
     switch (d.__type) {
-      case 'PeriodAdvanceReducer':
-        return new F.PeriodAdvanceReducer();
-      case 'TaxSettleApplyReducer':
-        return new F.TaxSettleApplyReducer();
-      case 'TaxPaymentDebitReducer':
-        return new F.TaxPaymentDebitReducer({ accountService: services?.accountService, stateRegistry: services?.stateRegistry });
+      case 'UsPeriodAdvanceReducer':
+        return new F.UsPeriodAdvanceReducer();
+      case 'AuPeriodAdvanceReducer':
+        return new F.AuPeriodAdvanceReducer();
+      case 'UsTaxSettleApplyReducer':
+        return new F.UsTaxSettleApplyReducer();
+      case 'AuTaxSettleApplyReducer':
+        return new F.AuTaxSettleApplyReducer();
+      case 'UsTaxPaymentDebitReducer':
+        return new F.UsTaxPaymentDebitReducer({ accountService: services?.accountService, stateRegistry: services?.stateRegistry });
+      case 'AuTaxPaymentDebitReducer':
+        return new F.AuTaxPaymentDebitReducer({ accountService: services?.accountService, stateRegistry: services?.stateRegistry });
       case 'DynamicTaxReducer': {
         // TaxEngine is reconstructed from a fresh TaxService — all year modules are pre-registered.
         const taxEngine  = new F.TaxService().taxEngine;

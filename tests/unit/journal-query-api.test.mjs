@@ -111,7 +111,7 @@ test('periodOf() correctly includes same-day entries before settle via seq order
   const income1    = makeEntry({ id: 'inc1', date: sameDate, actionType: 'WAGES_INCOME_TAX',    data: { amount: 5000, cc: 'US' } });
   const income2    = makeEntry({ id: 'inc2', date: sameDate, actionType: 'IRA_RMD_TAX',         data: { amount: 2000, cc: 'US' } });
   const income3    = makeEntry({ id: 'inc3', date: sameDate, actionType: 'FIXED_INCOME_EARNINGS_TAX', data: { amount: 1000, cc: 'US' } });
-  const settle     = makeEntry({ id: 'settle', date: sameDate, actionType: 'TAX_SETTLE_APPLY',  data: { cc: 'US' } });
+  const settle     = makeEntry({ id: 'settle', date: sameDate, actionType: 'US_TAX_SETTLE_APPLY', data: {} });
   const { api }    = makeApi([income1, income2, income3, settle]);
 
   const ast    = api.periodOf({ fromEntryId: null, toEntryId: 'settle' });
@@ -122,15 +122,15 @@ test('periodOf() correctly includes same-day entries before settle via seq order
   });
 
   // settle entry should NOT be in results (its seq is >= settle.seq)
-  const settleGroup = result.groups.find(g => g.key.actionType === 'TAX_SETTLE_APPLY');
-  assert.ok(!settleGroup, 'TAX_SETTLE_APPLY entry should be excluded (same-day, higher seq)');
+  const settleGroup = result.groups.find(g => g.key.actionType === 'US_TAX_SETTLE_APPLY');
+  assert.ok(!settleGroup, 'US_TAX_SETTLE_APPLY entry should be excluded (same-day, higher seq)');
   assert.strictEqual(result.grandTotal, 8000, 'should include all 3 income entries');
 });
 
 // ─── periodOfTaxYear() — date-based bounds, includes settle + chained ────────
 
 test('periodOfTaxYear() bounds entries by the CY containing a US settle', () => {
-  const currSettle = makeEntry({ id: 'us-26', date: new Date(Date.UTC(2026, 11, 31)), actionType: 'TAX_SETTLE_APPLY', data: { cc: 'US' } });
+  const currSettle = makeEntry({ id: 'us-26', date: new Date(Date.UTC(2026, 11, 31)), actionType: 'US_TAX_SETTLE_APPLY', data: {} });
   const { api }    = makeApi([currSettle]);
 
   const ast = api.periodOfTaxYear({ fromEntryId: null, toEntryId: 'us-26' });
@@ -141,7 +141,7 @@ test('periodOfTaxYear() bounds entries by the CY containing a US settle', () => 
 });
 
 test('periodOfTaxYear() bounds entries by the July-anchored FY for an AU settle', () => {
-  const auSettle = makeEntry({ id: 'au-26', date: new Date(Date.UTC(2026, 5, 30)), actionType: 'TAX_SETTLE_APPLY', data: { cc: 'AU' } });
+  const auSettle = makeEntry({ id: 'au-26', date: new Date(Date.UTC(2026, 5, 30)), actionType: 'AU_TAX_SETTLE_APPLY', data: {} });
   const { api }  = makeApi([auSettle]);
 
   const ast = api.periodOfTaxYear({ fromEntryId: null, toEntryId: 'au-26' });
@@ -154,7 +154,7 @@ test('periodOfTaxYear() bounds entries by the July-anchored FY for an AU settle'
 test('periodOfTaxYear() includes the AU settle itself in its own FY window', async () => {
   // Reproduces the AU-Tax-by-Person-Year bug: seq-based bounds excluded
   // the settle entry; date-based bounds include it.
-  const auSettle = makeEntry({ id: 'au-26', date: new Date(Date.UTC(2026, 5, 30)), actionType: 'TAX_SETTLE_APPLY', data: { cc: 'AU' } });
+  const auSettle = makeEntry({ id: 'au-26', date: new Date(Date.UTC(2026, 5, 30)), actionType: 'AU_TAX_SETTLE_APPLY', data: {} });
   const { api }  = makeApi([auSettle]);
 
   const ast    = api.periodOfTaxYear({ fromEntryId: null, toEntryId: 'au-26' });
@@ -166,8 +166,8 @@ test('periodOfTaxYear() includes the AU settle itself in its own FY window', asy
 test('periodOfTaxYear() includes a chained TAX_PAYMENT_DEBIT dated on the settle day', async () => {
   // Reproduces the Tax-Paid-by-Year bug: the chained payment had a higher
   // seq than the settle, so the seq-based period dropped it.
-  const auSettle  = makeEntry({ id: 'au-26',  date: new Date(Date.UTC(2026, 5, 30)), actionType: 'TAX_SETTLE_APPLY',  data: { cc: 'AU' } });
-  const auPayment = makeEntry({ id: 'au-pay', date: new Date(Date.UTC(2026, 5, 30)), actionType: 'TAX_PAYMENT_DEBIT', data: { cc: 'AU', amount: 12000 } });
+  const auSettle  = makeEntry({ id: 'au-26',  date: new Date(Date.UTC(2026, 5, 30)), actionType: 'AU_TAX_SETTLE_APPLY',  data: {} });
+  const auPayment = makeEntry({ id: 'au-pay', date: new Date(Date.UTC(2026, 5, 30)), actionType: 'AU_TAX_PAYMENT_DEBIT', data: { amount: 12000 } });
   const { api }   = makeApi([auSettle, auPayment]);
 
   const ast    = api.periodOfTaxYear({ fromEntryId: null, toEntryId: 'au-26' });
@@ -177,7 +177,7 @@ test('periodOfTaxYear() includes a chained TAX_PAYMENT_DEBIT dated on the settle
 });
 
 test('periodOfTaxYear() with only fromEntryId yields gt(ts, lastTaxYearEnd - 1)', () => {
-  const usLast  = makeEntry({ id: 'us-25', date: new Date(Date.UTC(2025, 11, 31)), actionType: 'TAX_SETTLE_APPLY', data: { cc: 'US' } });
+  const usLast  = makeEntry({ id: 'us-25', date: new Date(Date.UTC(2025, 11, 31)), actionType: 'US_TAX_SETTLE_APPLY', data: {} });
   const { api } = makeApi([usLast]);
 
   const ast = api.periodOfTaxYear({ fromEntryId: 'us-25', toEntryId: null });
@@ -298,9 +298,9 @@ test('aggregate() with in operator on actionType', async () => {
 // ─── listSettledPeriods() ────────────────────────────────────────────────────
 
 test('listSettledPeriods() returns one period per US settle in reverse chronological order with CY labels', () => {
-  const us25 = makeEntry({ id: 'us-25', date: new Date(Date.UTC(2025, 11, 31)), actionType: 'TAX_SETTLE_APPLY', data: { cc: 'US' } });
-  const us26 = makeEntry({ id: 'us-26', date: new Date(Date.UTC(2026, 11, 31)), actionType: 'TAX_SETTLE_APPLY', data: { cc: 'US' } });
-  const us27 = makeEntry({ id: 'us-27', date: new Date(Date.UTC(2027, 11, 31)), actionType: 'TAX_SETTLE_APPLY', data: { cc: 'US' } });
+  const us25 = makeEntry({ id: 'us-25', date: new Date(Date.UTC(2025, 11, 31)), actionType: 'US_TAX_SETTLE_APPLY', data: {} });
+  const us26 = makeEntry({ id: 'us-26', date: new Date(Date.UTC(2026, 11, 31)), actionType: 'US_TAX_SETTLE_APPLY', data: {} });
+  const us27 = makeEntry({ id: 'us-27', date: new Date(Date.UTC(2027, 11, 31)), actionType: 'US_TAX_SETTLE_APPLY', data: {} });
   const { api } = makeApi([us25, us26, us27]);
 
   const periods = api.listSettledPeriods('US');
@@ -323,9 +323,9 @@ test('listSettledPeriods() returns one period per US settle in reverse chronolog
 
 test('listSettledPeriods() ignores non-matching cc and yields AU FY labels', () => {
   // AU FY 2025-26 settle dated 30 Jun 2026; AU FY 2026-27 settle dated 30 Jun 2027.
-  const au26   = makeEntry({ id: 'au-26', date: new Date(Date.UTC(2026, 5, 30)), actionType: 'TAX_SETTLE_APPLY', data: { cc: 'AU' } });
-  const us26   = makeEntry({ id: 'us-26', date: new Date(Date.UTC(2026, 11, 31)), actionType: 'TAX_SETTLE_APPLY', data: { cc: 'US' } });
-  const au27   = makeEntry({ id: 'au-27', date: new Date(Date.UTC(2027, 5, 30)), actionType: 'TAX_SETTLE_APPLY', data: { cc: 'AU' } });
+  const au26   = makeEntry({ id: 'au-26', date: new Date(Date.UTC(2026, 5, 30)), actionType: 'AU_TAX_SETTLE_APPLY', data: {} });
+  const us26   = makeEntry({ id: 'us-26', date: new Date(Date.UTC(2026, 11, 31)), actionType: 'US_TAX_SETTLE_APPLY', data: {} });
+  const au27   = makeEntry({ id: 'au-27', date: new Date(Date.UTC(2027, 5, 30)), actionType: 'AU_TAX_SETTLE_APPLY', data: {} });
   const { api } = makeApi([au26, us26, au27]);
 
   const periods = api.listSettledPeriods('AU');
@@ -361,13 +361,13 @@ test('currentInProgressPeriod() returns null when no settles exist (Whole simula
 
 test('currentInProgressPeriod() returns null when last settle is the last journal entry', () => {
   const wages  = makeEntry({ actionType: 'WAGES_INCOME_TAX', data: { amount: 100, cc: 'US' } });
-  const settle = makeEntry({ id: 'us-settle', actionType: 'TAX_SETTLE_APPLY', data: { cc: 'US' } });
+  const settle = makeEntry({ id: 'us-settle', actionType: 'US_TAX_SETTLE_APPLY', data: {} });
   const { api } = makeApi([wages, settle]);
   assert.strictEqual(api.currentInProgressPeriod('US'), null);
 });
 
 test('currentInProgressPeriod() reports an open period when post-settle activity exists', () => {
-  const settle = makeEntry({ id: 'us-settle', actionType: 'TAX_SETTLE_APPLY', data: { cc: 'US' } });
+  const settle = makeEntry({ id: 'us-settle', actionType: 'US_TAX_SETTLE_APPLY', data: {} });
   const post   = makeEntry({ actionType: 'WAGES_INCOME_TAX', data: { amount: 5000, cc: 'US' } });
   const { api } = makeApi([settle, post]);
 

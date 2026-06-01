@@ -328,12 +328,13 @@ class TaxPaidByYearDef extends ReportDefinition {
     // and shares its date but has a higher seq. Seq-based bounds drop it from
     // the same-day window; the date-bounded tax-year window keeps it.
     const periodAst = api.periodOfTaxYear(period);
-    const conditions = [
-      periodAst,
-      { op: 'eq', field: 'actionType', value: 'TAX_PAYMENT_DEBIT' },
-    ];
-    if (cc) conditions.push({ op: 'eq', field: 'cc', value: cc });
-    return { op: 'and', conditions };
+    const actionTypeNode = cc
+      ? { op: 'eq', field: 'actionType', value: `${cc}_TAX_PAYMENT_DEBIT` }
+      : { op: 'or', conditions: [
+          { op: 'eq', field: 'actionType', value: 'US_TAX_PAYMENT_DEBIT' },
+          { op: 'eq', field: 'actionType', value: 'AU_TAX_PAYMENT_DEBIT' },
+        ] };
+    return { op: 'and', conditions: [periodAst, actionTypeNode] };
   }
 }
 
@@ -366,8 +367,7 @@ class AuTaxByPersonYearDef extends ReportDefinition {
     const periodAst  = api.periodOfTaxYear(period);
     const conditions = [
       periodAst,
-      { op: 'eq', field: 'actionType', value: 'TAX_SETTLE_APPLY' },
-      { op: 'eq', field: 'cc',         value: 'AU' },
+      { op: 'eq', field: 'actionType', value: 'AU_TAX_SETTLE_APPLY' },
     ];
     _appendInFilter(conditions, 'personKey', personKeys);
     return { op: 'and', conditions };
