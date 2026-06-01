@@ -30,8 +30,8 @@ import { ACCOUNT_ROLES } from '../state/account-roles.js';
  */
 export class StockDividendCashApplyReducer extends Reducer {
   static description = 'Credits stock dividend cash payout to the savings account and chains STOCK_DIVIDEND_TAX for tax classification.';
-
-  static actionType = 'STOCK_DIVIDEND_CASH_APPLY';
+  static type        = 'StockDividendCashApplyReducer';
+  static actionType  = 'STOCK_DIVIDEND_CASH_APPLY';
 
   constructor({ accountService, stateRegistry, role = ACCOUNT_ROLES.US_SAVINGS, ownerId = null } = {}) {
     super('Stock Dividend Cash Apply', PRIORITY.CASH_FLOW);
@@ -41,6 +41,16 @@ export class StockDividendCashApplyReducer extends Reducer {
     this.ownerId         = ownerId;
     this.reducedActionTypes  = ['STOCK_DIVIDEND_CASH_APPLY'];
     this.generatedActionTypes = ['STOCK_DIVIDEND_TAX'];
+  }
+
+  static fromJSON(d, { accountService, stateRegistry }) {
+    const r = new this({ accountService, stateRegistry, role: d.role ?? ACCOUNT_ROLES.US_SAVINGS, ownerId: d.ownerId ?? null });
+    r.id = d.id;
+    return r;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId };
   }
 
   reduce(state, action, date) {

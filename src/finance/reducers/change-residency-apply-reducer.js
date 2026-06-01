@@ -33,14 +33,20 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  */
 export class ChangeResidencyApplyReducer extends Reducer {
   static description = 'Flips isAuResident, snapshots investment account balances at residency change, and adds AU citizenship to all people in state.';
-
-  static actionType = 'CHANGE_RESIDENCY_APPLY';
+  static type        = 'ChangeResidencyApplyReducer';
+  static actionType  = 'CHANGE_RESIDENCY_APPLY';
 
   constructor({ accountService, stateRegistry } = {}) {
     super('Change Residency Apply', PRIORITY.PRE_PROCESS);
     this.accountService  = accountService;
     this.stateRegistry   = stateRegistry;
     this.reducedActionTypes = ['CHANGE_RESIDENCY_APPLY'];
+  }
+
+  static fromJSON(d, { accountService, stateRegistry }) {
+    const r = new this({ accountService, stateRegistry });
+    r.id = d.id;
+    return r;
   }
 
   reduce(state) {

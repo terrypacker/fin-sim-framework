@@ -27,6 +27,7 @@ import { SetOutOfFundsDateReducer }   from '../../finance/reducers/set-out-of-fu
 import { AccumulateDeficitReducer }   from '../../finance/reducers/accumulate-deficit-reducer.js';
 import { OutOfFundsReducer }          from '../../finance/reducers/out-of-funds-reducer.js';
 import { InflationAdjustReducer }     from '../../finance/reducers/inflation-adjust-reducer.js';
+import { ValueType } from '../../simulation-framework/type-registry.js';
 import {
   SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer,
   SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer,
@@ -53,6 +54,37 @@ export const AU_RETIREMENT = {
   id: 'AU_RETIREMENT',
   capabilities: ['superannuation'],
   dependencies: ['AU_TAX', 'AU_BANKING', 'AU_INCOME'],
+
+  types: {
+    handlers: [
+      MonthlyExpensesHandler, MonthlyWagesHandler, MonthlySocialSecurityHandler,
+      OutOfFundsHandler,
+      SuperContributionHandler, SuperWithdrawalContributionsHandler,
+      SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler, SuperEarningsHandler,
+      IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
+    ],
+    reducers: [
+      ExpenseDebitReducer, ReplenishSavingsReducer,
+      SetOutOfFundsDateReducer, AccumulateDeficitReducer, OutOfFundsReducer, InflationAdjustReducer,
+      SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer,
+      SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer,
+    ],
+    actions: [
+      { type: 'EXPENSE_DEBIT',         fields: { amount: ValueType.number(), targetKey: ValueType.text() } },
+      { type: 'REPLENISH_SAVINGS',  fields: { deficit: ValueType.number(), targetKey: ValueType.text() } },
+      { type: 'RECORD_METRIC',         fields: { fieldName: ValueType.text(), value: ValueType.number() } },
+      { type: 'SET_OUT_OF_FUNDS_DATE', fields: { date: ValueType.any() } },
+      { type: 'ACCUMULATE_DEFICIT',    fields: { amount: ValueType.number() } },
+      { type: 'OUT_OF_FUNDS',          fields: { deficit: ValueType.number(), currency: ValueType.text() } },
+      { type: 'SUPER_CONTRIBUTION_APPLY',          fields: { amount: ValueType.currency('AUD') } },
+      { type: 'SUPER_CONTRIBUTION_TAX',            fields: { amount: ValueType.currency('AUD') } },
+      { type: 'SUPER_WITHDRAWAL_CONTRIB_APPLY',  family: 'WITHDRAWAL', cc: 'AU', fields: { amount: ValueType.currency('AUD') } },
+      { type: 'SUPER_WITHDRAWAL_EARNINGS_APPLY', family: 'WITHDRAWAL', cc: 'AU', fields: { amount: ValueType.currency('AUD') } },
+      { type: 'SUPER_WITHDRAWAL_EARNINGS_TAX',   fields: { amount: ValueType.currency('AUD') } },
+      { type: 'SUPER_EARNINGS_APPLY',              fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
+      { type: 'SUPER_EARNINGS_TAX',               fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
+    ],
+  },
 
   paramSchema(context) {
     return [

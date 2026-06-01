@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
+import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 
@@ -22,7 +22,8 @@ const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
  * US: always ordinary income (US citizen taxed on worldwide income).
  * AU: ordinary income if AU resident.
  */
-export class AuSeIncomeApplyReducer extends Reducer {
+export class AuSeIncomeApplyReducer extends AccountServiceReducer {
+  static type        = 'AuSeIncomeApplyReducer';
   static description = 'Credits the AU cash pool with self-employment income; chains AU_SE_INCOME_TAX.';
   static actionType  = 'SE_INCOME_AU_APPLY';
 
@@ -43,6 +44,7 @@ export class AuSeIncomeApplyReducer extends Reducer {
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
 export class AuSeIncomeHandler extends HandlerEntry {
+  static type        = 'AuSeIncomeHandler';
   static description = 'Dispatches SE_INCOME_AU_APPLY with the income amount and AU residency flag.';
   static eventType   = 'SE_INCOME_AU';
 

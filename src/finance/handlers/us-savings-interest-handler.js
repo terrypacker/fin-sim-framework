@@ -26,8 +26,8 @@ import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framew
  */
 export class UsSavingsInterestMonthlyHandler extends HandlerEntry {
   static description = 'Computes monthly interest on a US savings account and emits US_SAVINGS_INTEREST_CREDIT.';
-
-  static eventType = 'US_SAVINGS_INTEREST_MONTHLY';
+  static type        = 'UsSavingsInterestMonthlyHandler';
+  static eventType   = 'US_SAVINGS_INTEREST_MONTHLY';
 
   constructor({ stateRegistry, role, ownerId = null, interestRate = 0.03 } = {}) {
     super(null, 'Monthly US Savings Interest');
@@ -36,6 +36,16 @@ export class UsSavingsInterestMonthlyHandler extends HandlerEntry {
     this.ownerId       = ownerId;
     this.interestRate  = interestRate;
     this.generatedActionTypes = ['US_SAVINGS_INTEREST_CREDIT', 'RECORD_METRIC', 'RECORD_BALANCE'];
+  }
+
+  static fromJSON(d, { stateRegistry }) {
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, interestRate: d.interestRate ?? 0.03 });
+    h.id = d.id;
+    return h;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, interestRate: this.interestRate };
   }
 
   call({ state }) {

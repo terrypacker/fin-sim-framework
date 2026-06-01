@@ -38,6 +38,14 @@ export class ScenarioCompiler {
    */
   compile(definition, services) {
     const resolved   = this._resolveToolsets(definition.toolsets);
+
+    // Phase 3: register all resolved toolsets' class + action-type metadata
+    // BEFORE any handlers/reducers are instantiated, so the TypeRegistry is
+    // populated when the simulation pipeline first runs.
+    for (const toolset of resolved) {
+      services.typeRegistry?.registerToolset(toolset);
+    }
+
     const parameters = this._resolveParameters(definition, resolved);
     const paramSchema = resolved.flatMap(t => t.paramSchema?.({}) ?? []);
     const context    = this._buildContext(definition, services, parameters, paramSchema);

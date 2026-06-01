@@ -26,6 +26,7 @@ import { StateRegistry } from '../finance/services/state-registry.js';
 import { StateSchemaRegistry } from '../finance/services/state-schema-registry.js';
 import { RealPropertyService } from '../finance/services/real-property-service.js';
 import { CollectibleService } from '../finance/services/collectible-service.js';
+import { TypeRegistry } from '../simulation-framework/type-registry.js';
 
 /**
  * Central singleton registry for all application services, the shared
@@ -46,7 +47,9 @@ export class ServiceRegistry {
 
   constructor() {
     this.bus                = new EventBus();
+    this.bus.serviceRegistry = this;
     this.graph              = new Graph();
+    this.typeRegistry       = new TypeRegistry();
     this.graphQueryApi      = new GraphQueryApi(this.graph);
     this.accountService         = new AccountService(this.graph, this.graphQueryApi, this.bus);
     this.actionService          = new ActionService(this.graph, this.graphQueryApi, this.bus);
@@ -89,6 +92,7 @@ export class ServiceRegistry {
       collectibleService: this.collectibleService,
       stateRegistry: this.stateRegistry,
       schemaRegistry: this.schemaRegistry,
+      typeRegistry: this.typeRegistry,
       services: this,
     };
   }
@@ -102,6 +106,8 @@ export class ServiceRegistry {
   reset() {
     this.graph.clearLayer('execution');
     this.simulationRegistry.clear();
+    this.typeRegistry = new TypeRegistry();
+    this.simulationContext.typeRegistry = this.typeRegistry;
     this.bus.publish({ type: 'execution:reset' });
   }
 

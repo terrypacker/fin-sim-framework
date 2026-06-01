@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
+import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 
@@ -21,7 +21,8 @@ const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
  * EVT-16: AU savings contribution — debit external cash pool, credit AU savings.
  * In the intl scenario this is a no-op (src === auSavingsAccount).
  */
-export class AuSavingsContributionApplyReducer extends Reducer {
+export class AuSavingsContributionApplyReducer extends AccountServiceReducer {
+  static type        = 'AuSavingsContributionApplyReducer';
   static description = 'Debits the external cash pool and credits auSavingsAccount balance; no-op in the intl scenario where there is no checkingAccount.';
   static actionType  = 'AU_SAVINGS_CONTRIBUTION_APPLY';
 
@@ -44,7 +45,8 @@ export class AuSavingsContributionApplyReducer extends Reducer {
 /**
  * EVT-17: AU savings withdrawal — debit AU savings balance, credit external cash pool.
  */
-export class AuSavingsWithdrawalApplyReducer extends Reducer {
+export class AuSavingsWithdrawalApplyReducer extends AccountServiceReducer {
+  static type        = 'AuSavingsWithdrawalApplyReducer';
   static description = 'Credits the external cash pool and debits auSavingsAccount balance.';
   static actionType  = 'AU_SAVINGS_WITHDRAWAL_APPLY';
 
@@ -68,7 +70,8 @@ export class AuSavingsWithdrawalApplyReducer extends Reducer {
  * EVT-18/19: AU savings earnings — stay in account.
  * Chains AU_SAVINGS_EARNINGS_TAX (US ordinary + AU resident/NR bucket).
  */
-export class AuSavingsEarningsApplyReducer extends Reducer {
+export class AuSavingsEarningsApplyReducer extends AccountServiceReducer {
+  static type        = 'AuSavingsEarningsApplyReducer';
   static description = 'Adds earnings to auSavingsAccount balance; chains AU_SAVINGS_EARNINGS_TAX.';
   static actionType  = 'AU_SAVINGS_EARNINGS_APPLY';
 
@@ -94,6 +97,7 @@ export class AuSavingsEarningsApplyReducer extends Reducer {
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 export class AuSavingsContributionHandler extends HandlerEntry {
+  static type        = 'AuSavingsContributionHandler';
   static description = 'Dispatches AU_SAVINGS_CONTRIBUTION_APPLY.';
   static eventType   = 'AU_SAVINGS_CONTRIBUTION';
 
@@ -112,6 +116,7 @@ export class AuSavingsContributionHandler extends HandlerEntry {
 }
 
 export class AuSavingsWithdrawalHandler extends HandlerEntry {
+  static type        = 'AuSavingsWithdrawalHandler';
   static description = 'Dispatches AU_SAVINGS_WITHDRAWAL_APPLY.';
   static eventType   = 'AU_SAVINGS_WITHDRAWAL';
 
@@ -130,6 +135,7 @@ export class AuSavingsWithdrawalHandler extends HandlerEntry {
 }
 
 export class AuSavingsEarningsHandler extends HandlerEntry {
+  static type        = 'AuSavingsEarningsHandler';
   static description = 'Dispatches AU_SAVINGS_EARNINGS_APPLY, passing the AU residency flag from state.';
   static eventType   = 'AU_SAVINGS_EARNINGS';
 

@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
+import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 
@@ -21,7 +21,8 @@ const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
  * EVT-37: Social Security Income — credit US cash pool, chain SS_INCOME_TAX.
  * 85% of the amount is US-taxable ordinary income.
  */
-export class SsIncomeApplyReducer extends Reducer {
+export class SsIncomeApplyReducer extends AccountServiceReducer {
+  static type        = 'SsIncomeApplyReducer';
   static description = 'Credits the US cash pool with SS income; chains SS_INCOME_TAX (85% taxable).';
   static actionType  = 'SS_INCOME_APPLY';
 
@@ -42,7 +43,8 @@ export class SsIncomeApplyReducer extends Reducer {
 /**
  * EVT-38: Wages (Gross) — credit US cash pool, chain WAGES_INCOME_TAX.
  */
-export class WagesIncomeApplyReducer extends Reducer {
+export class WagesIncomeApplyReducer extends AccountServiceReducer {
+  static type        = 'WagesIncomeApplyReducer';
   static description = 'Credits the US cash pool with gross wages; chains WAGES_INCOME_TAX.';
   static actionType  = 'WAGES_INCOME_APPLY';
 
@@ -64,7 +66,8 @@ export class WagesIncomeApplyReducer extends Reducer {
  * EVT-39: Wages Taxes Withheld — debit US cash pool, track usWithheldYTD.
  * No separate TAX action; withholding is bookkeeping, not a taxable event.
  */
-export class WagesWithheldApplyReducer extends Reducer {
+export class WagesWithheldApplyReducer extends AccountServiceReducer {
+  static type        = 'WagesWithheldApplyReducer';
   static description = 'Debits the US cash pool by the withheld amount and increments usWithheldYTD.';
   static actionType  = 'WAGES_WITHHELD_APPLY';
 
@@ -85,7 +88,8 @@ export class WagesWithheldApplyReducer extends Reducer {
 /**
  * EVT-48: Self-Employment Income (US) — credit US cash pool, chain SE_INCOME_US_TAX.
  */
-export class SeIncomeUsApplyReducer extends Reducer {
+export class SeIncomeUsApplyReducer extends AccountServiceReducer {
+  static type        = 'SeIncomeUsApplyReducer';
   static description = 'Credits the US cash pool with US self-employment income; chains SE_INCOME_US_TAX.';
   static actionType  = 'SE_INCOME_US_APPLY';
 
@@ -106,7 +110,8 @@ export class SeIncomeUsApplyReducer extends Reducer {
 /**
  * EVT-50: Bonus — credit US cash pool, chain BONUS_TAX.
  */
-export class BonusApplyReducer extends Reducer {
+export class BonusApplyReducer extends AccountServiceReducer {
+  static type        = 'BonusApplyReducer';
   static description = 'Credits the US cash pool with the bonus amount; chains BONUS_TAX.';
   static actionType  = 'BONUS_APPLY';
 
@@ -128,7 +133,8 @@ export class BonusApplyReducer extends Reducer {
  * EVT-51: Company Sale — credit US cash pool, chain COMPANY_SALE_TAX.
  * Gain = salePrice - costBasis.
  */
-export class CompanySaleApplyReducer extends Reducer {
+export class CompanySaleApplyReducer extends AccountServiceReducer {
+  static type        = 'CompanySaleApplyReducer';
   static description = 'Credits the US cash pool with the company sale proceeds; chains COMPANY_SALE_TAX with the capital gain.';
   static actionType  = 'COMPANY_SALE_APPLY';
 
@@ -150,6 +156,7 @@ export class CompanySaleApplyReducer extends Reducer {
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 export class SsIncomeHandler extends HandlerEntry {
+  static type        = 'SsIncomeHandler';
   static description = 'Dispatches SS_INCOME_APPLY with the monthly SS amount and AU residency flag.';
   static eventType   = 'SS_INCOME';
 
@@ -169,6 +176,7 @@ export class SsIncomeHandler extends HandlerEntry {
 }
 
 export class WagesIncomeHandler extends HandlerEntry {
+  static type        = 'WagesIncomeHandler';
   static description = 'Dispatches WAGES_INCOME_APPLY with gross wages amount and AU residency flag.';
   static eventType   = 'WAGES_INCOME';
 
@@ -188,6 +196,7 @@ export class WagesIncomeHandler extends HandlerEntry {
 }
 
 export class WagesWithheldHandler extends HandlerEntry {
+  static type        = 'WagesWithheldHandler';
   static description = 'Dispatches WAGES_WITHHELD_APPLY with the withheld tax amount.';
   static eventType   = 'WAGES_WITHHELD';
 
@@ -207,6 +216,7 @@ export class WagesWithheldHandler extends HandlerEntry {
 }
 
 export class SeIncomeUsHandler extends HandlerEntry {
+  static type        = 'SeIncomeUsHandler';
   static description = 'Dispatches SE_INCOME_US_APPLY with the self-employment income amount and AU residency flag.';
   static eventType   = 'SE_INCOME_US';
 
@@ -226,6 +236,7 @@ export class SeIncomeUsHandler extends HandlerEntry {
 }
 
 export class BonusHandler extends HandlerEntry {
+  static type        = 'BonusHandler';
   static description = 'Dispatches BONUS_APPLY with the bonus amount and AU residency flag.';
   static eventType   = 'BONUS';
 
@@ -245,6 +256,7 @@ export class BonusHandler extends HandlerEntry {
 }
 
 export class CompanySaleHandler extends HandlerEntry {
+  static type        = 'CompanySaleHandler';
   static description = 'Dispatches COMPANY_SALE_APPLY with sale price, cost basis, and AU residency flag.';
   static eventType   = 'COMPANY_SALE';
 

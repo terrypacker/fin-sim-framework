@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
+import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 
@@ -21,7 +21,8 @@ const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
  * EVT-26: AU franked dividend (resident) — stays in account, increases all bases.
  * Chains AU_DIVIDEND_FRANKED_RESIDENT_TAX.
  */
-export class AuDividendFrankedResidentApplyReducer extends Reducer {
+export class AuDividendFrankedResidentApplyReducer extends AccountServiceReducer {
+  static type        = 'AuDividendFrankedResidentApplyReducer';
   static description = 'Adds franked dividend to auStockAccount; chains AU_DIVIDEND_FRANKED_RESIDENT_TAX.';
   static actionType  = 'AU_DIVIDEND_FRANKED_RESIDENT_APPLY';
 
@@ -51,7 +52,8 @@ export class AuDividendFrankedResidentApplyReducer extends Reducer {
 /**
  * EVT-27: AU franked dividend (non-resident) — stays in account, no AU tax.
  */
-export class AuDividendFrankedNonResidentApplyReducer extends Reducer {
+export class AuDividendFrankedNonResidentApplyReducer extends AccountServiceReducer {
+  static type        = 'AuDividendFrankedNonResidentApplyReducer';
   static description = 'Adds franked dividend to auStockAccount for non-residents; no AU tax chained.';
   static actionType  = 'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY';
 
@@ -77,7 +79,8 @@ export class AuDividendFrankedNonResidentApplyReducer extends Reducer {
  * EVT-28: AU unfranked dividend (resident) — stays in account.
  * Chains AU_DIVIDEND_UNFRANKED_RESIDENT_TAX.
  */
-export class AuDividendUnfrankedResidentApplyReducer extends Reducer {
+export class AuDividendUnfrankedResidentApplyReducer extends AccountServiceReducer {
+  static type        = 'AuDividendUnfrankedResidentApplyReducer';
   static description = 'Adds unfranked dividend to auStockAccount; chains AU_DIVIDEND_UNFRANKED_RESIDENT_TAX.';
   static actionType  = 'AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY';
 
@@ -108,7 +111,8 @@ export class AuDividendUnfrankedResidentApplyReducer extends Reducer {
  * EVT-29: AU unfranked dividend (non-resident) — stays in account.
  * Chains AU_DIVIDEND_UNFRANKED_NONRESIDENT_TAX.
  */
-export class AuDividendUnfrankedNonResidentApplyReducer extends Reducer {
+export class AuDividendUnfrankedNonResidentApplyReducer extends AccountServiceReducer {
+  static type        = 'AuDividendUnfrankedNonResidentApplyReducer';
   static description = 'Adds unfranked dividend to auStockAccount for non-residents; chains AU_DIVIDEND_UNFRANKED_NONRESIDENT_TAX.';
   static actionType  = 'AU_DIVIDEND_UNFRANKED_NONRESIDENT_APPLY';
 
@@ -136,7 +140,8 @@ export class AuDividendUnfrankedNonResidentApplyReducer extends Reducer {
 }
 
 /** EVT-30: AU stock unrealized earnings — stay in account, no tax. */
-export class AuStockEarningsApplyReducer extends Reducer {
+export class AuStockEarningsApplyReducer extends AccountServiceReducer {
+  static type        = 'AuStockEarningsApplyReducer';
   static description = 'Adds unrealized earnings to auStockAccount balance and earningsBasis; no tax effect.';
   static actionType  = 'AU_STOCK_EARNINGS_APPLY';
 
@@ -162,7 +167,8 @@ export class AuStockEarningsApplyReducer extends Reducer {
  * Credits AU cash pool, debits account.
  * Chains AU_STOCK_WITHDRAWAL_TAX (US cap gain always, AU cap gain + FTC if resident).
  */
-export class AuStockWithdrawalApplyReducer extends Reducer {
+export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
+  static type        = 'AuStockWithdrawalApplyReducer';
   static description = 'Credits the AU cash pool with sale proceeds, debits auStockAccount, and chains AU_STOCK_WITHDRAWAL_TAX.';
   static actionType  = 'AU_STOCK_WITHDRAWAL_APPLY';
 
@@ -199,6 +205,7 @@ export class AuStockWithdrawalApplyReducer extends Reducer {
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 export class AuDividendFrankedResidentHandler extends HandlerEntry {
+  static type        = 'AuDividendFrankedResidentHandler';
   static description = 'Dispatches AU_DIVIDEND_FRANKED_RESIDENT_APPLY.';
   static eventType   = 'AU_DIVIDEND_FRANKED_RESIDENT';
 
@@ -216,6 +223,7 @@ export class AuDividendFrankedResidentHandler extends HandlerEntry {
 }
 
 export class AuDividendFrankedNonResidentHandler extends HandlerEntry {
+  static type        = 'AuDividendFrankedNonResidentHandler';
   static description = 'Dispatches AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY.';
   static eventType   = 'AU_DIVIDEND_FRANKED_NONRESIDENT';
 
@@ -233,6 +241,7 @@ export class AuDividendFrankedNonResidentHandler extends HandlerEntry {
 }
 
 export class AuDividendUnfrankedResidentHandler extends HandlerEntry {
+  static type        = 'AuDividendUnfrankedResidentHandler';
   static description = 'Dispatches AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY.';
   static eventType   = 'AU_DIVIDEND_UNFRANKED_RESIDENT';
 
@@ -250,6 +259,7 @@ export class AuDividendUnfrankedResidentHandler extends HandlerEntry {
 }
 
 export class AuDividendUnfrankedNonResidentHandler extends HandlerEntry {
+  static type        = 'AuDividendUnfrankedNonResidentHandler';
   static description = 'Dispatches AU_DIVIDEND_UNFRANKED_NONRESIDENT_APPLY.';
   static eventType   = 'AU_DIVIDEND_UNFRANKED_NONRESIDENT';
 
@@ -267,6 +277,7 @@ export class AuDividendUnfrankedNonResidentHandler extends HandlerEntry {
 }
 
 export class AuStockEarningsHandler extends HandlerEntry {
+  static type        = 'AuStockEarningsHandler';
   static description = 'Dispatches AU_STOCK_EARNINGS_APPLY.';
   static eventType   = 'AU_STOCK_EARNINGS';
 
@@ -284,6 +295,7 @@ export class AuStockEarningsHandler extends HandlerEntry {
 }
 
 export class AuStockWithdrawalHandler extends HandlerEntry {
+  static type        = 'AuStockWithdrawalHandler';
   static description = 'Dispatches AU_STOCK_WITHDRAWAL_APPLY with sale price, cost basis, and AU residency flag.';
   static eventType   = 'AU_STOCK_WITHDRAWAL';
 

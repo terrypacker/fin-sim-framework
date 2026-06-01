@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
+import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 
@@ -34,7 +34,8 @@ const resolveDestinationKey = (state, saleDestinationAccount) => {
  * exemption (mortgage payoff does not reduce the taxable gain), and chain
  * US_HOUSE_SALE_TAX.
  */
-export class UsHouseSaleApplyReducer extends Reducer {
+export class UsHouseSaleApplyReducer extends AccountServiceReducer {
+  static type        = 'UsHouseSaleApplyReducer';
   static description = 'Credits the destination account with net proceeds (salePrice − mortgage), zeroes mortgageBalance, and chains US_HOUSE_SALE_TAX with the post-exemption taxable gain.';
   static actionType  = 'US_HOUSE_SALE_APPLY';
 
@@ -68,6 +69,7 @@ export class UsHouseSaleApplyReducer extends Reducer {
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
 export class UsHouseSaleHandler extends HandlerEntry {
+  static type        = 'UsHouseSaleHandler';
   static description = 'Dispatches US_HOUSE_SALE_APPLY with sale price, cost basis, current mortgage balance, and resolved destination account.';
   static eventType   = 'US_HOUSE_SALE';
 

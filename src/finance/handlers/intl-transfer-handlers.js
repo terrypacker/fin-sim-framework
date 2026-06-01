@@ -33,8 +33,8 @@ import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framew
  */
 export class IntlTransferToUsHandler extends HandlerEntry {
   static description = 'User-triggered AUD→USD transfer: converts data.amount AUD to USD using state exchange rate and fee, emitting INTL_TRANSFER_APPLY direction=AU_TO_US.';
-
-  static eventType = 'INTL_TRANSFER_TO_US';
+  static type        = 'IntlTransferToUsHandler';
+  static eventType   = 'INTL_TRANSFER_TO_US';
 
   constructor({ stateRegistry, auRole, auOwnerId = null, usRole, usOwnerId = null } = {}) {
     super(null, 'International Transfer to US');
@@ -44,6 +44,16 @@ export class IntlTransferToUsHandler extends HandlerEntry {
     this.usRole        = usRole;
     this.usOwnerId     = usOwnerId;
     this.generatedActionTypes = ['INTL_TRANSFER_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+  }
+
+  static fromJSON(d, { stateRegistry }) {
+    const h = new this({ stateRegistry, auRole: d.auRole, auOwnerId: d.auOwnerId ?? null, usRole: d.usRole, usOwnerId: d.usOwnerId ?? null });
+    h.id = d.id;
+    return h;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), auRole: this.auRole, auOwnerId: this.auOwnerId, usRole: this.usRole, usOwnerId: this.usOwnerId };
   }
 
   call({ state, data }) {
@@ -84,8 +94,8 @@ export class IntlTransferToUsHandler extends HandlerEntry {
  */
 export class IntlTransferToAuHandler extends HandlerEntry {
   static description = 'User-triggered USD→AUD transfer: converts data.amount USD to AUD using state exchange rate and fee, emitting INTL_TRANSFER_APPLY direction=US_TO_AU.';
-
-  static eventType = 'INTL_TRANSFER_TO_AU';
+  static type        = 'IntlTransferToAuHandler';
+  static eventType   = 'INTL_TRANSFER_TO_AU';
 
   constructor({ stateRegistry, usRole, usOwnerId = null, auRole, auOwnerId = null } = {}) {
     super(null, 'International Transfer to AU');
@@ -95,6 +105,16 @@ export class IntlTransferToAuHandler extends HandlerEntry {
     this.auRole        = auRole;
     this.auOwnerId     = auOwnerId;
     this.generatedActionTypes = ['INTL_TRANSFER_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+  }
+
+  static fromJSON(d, { stateRegistry }) {
+    const h = new this({ stateRegistry, usRole: d.usRole, usOwnerId: d.usOwnerId ?? null, auRole: d.auRole, auOwnerId: d.auOwnerId ?? null });
+    h.id = d.id;
+    return h;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), usRole: this.usRole, usOwnerId: this.usOwnerId, auRole: this.auRole, auOwnerId: this.auOwnerId };
   }
 
   call({ state, data }) {

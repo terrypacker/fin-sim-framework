@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
+import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 
@@ -31,7 +31,8 @@ function getAge(birthDate, asOfDate) {
  * EVT-5: IRA contribution — debit US cash pool, credit contributionBasis.
  * Chains IRA_CONTRIBUTION_TAX (US negative income / pre-tax deduction).
  */
-export class IraContributionApplyReducer extends Reducer {
+export class IraContributionApplyReducer extends AccountServiceReducer {
+  static type        = 'IraContributionApplyReducer';
   static description = 'Debits the US cash pool and credits IRA contributionBasis; chains IRA_CONTRIBUTION_TAX.';
   static actionType  = 'IRA_CONTRIBUTION_APPLY';
 
@@ -63,7 +64,8 @@ export class IraContributionApplyReducer extends Reducer {
  * EVT-6: IRA contribution withdrawal — credit US cash pool net of penalty,
  * debit contributionBasis.  Chains IRA_WITHDRAWAL_CONTRIB_TAX.
  */
-export class IraWithdrawalContribApplyReducer extends Reducer {
+export class IraWithdrawalContribApplyReducer extends AccountServiceReducer {
+  static type        = 'IraWithdrawalContribApplyReducer';
   static description = 'Credits the US cash pool net of penalty and debits IRA contributionBasis; chains IRA_WITHDRAWAL_CONTRIB_TAX.';
   static actionType  = 'IRA_WITHDRAWAL_CONTRIB_APPLY';
 
@@ -96,7 +98,8 @@ export class IraWithdrawalContribApplyReducer extends Reducer {
  * EVT-7: IRA earnings withdrawal — credit US cash pool net of penalty,
  * debit earningsBasis.  Chains IRA_WITHDRAWAL_EARNINGS_TAX.
  */
-export class IraWithdrawalEarningsApplyReducer extends Reducer {
+export class IraWithdrawalEarningsApplyReducer extends AccountServiceReducer {
+  static type        = 'IraWithdrawalEarningsApplyReducer';
   static description = 'Credits the US cash pool net of penalty and debits IRA earningsBasis; chains IRA_WITHDRAWAL_EARNINGS_TAX.';
   static actionType  = 'IRA_WITHDRAWAL_EARNINGS_APPLY';
 
@@ -128,7 +131,8 @@ export class IraWithdrawalEarningsApplyReducer extends Reducer {
 /**
  * EVT-8: IRA earnings accrual — stays in account, no tax.
  */
-export class IraEarningsApplyReducer extends Reducer {
+export class IraEarningsApplyReducer extends AccountServiceReducer {
+  static type        = 'IraEarningsApplyReducer';
   static description = 'Adds earnings to IRA balance and earningsBasis; no tax effect.';
   static actionType  = 'IRA_EARNINGS_APPLY';
 
@@ -153,6 +157,7 @@ export class IraEarningsApplyReducer extends Reducer {
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 export class IraContributionHandler extends HandlerEntry {
+  static type        = 'IraContributionHandler';
   static description = 'Dispatches IRA_CONTRIBUTION_APPLY and records the contribution metric.';
   static eventType   = 'IRA_CONTRIBUTION';
 
@@ -171,6 +176,7 @@ export class IraContributionHandler extends HandlerEntry {
 }
 
 export class IraWithdrawalContributionsHandler extends HandlerEntry {
+  static type        = 'IraWithdrawalContributionsHandler';
   static description = 'Applies 10% penalty for under-60 withdrawals and dispatches IRA_WITHDRAWAL_CONTRIB_APPLY.';
   static eventType   = 'IRA_WITHDRAWAL_CONTRIBUTIONS';
 
@@ -191,6 +197,7 @@ export class IraWithdrawalContributionsHandler extends HandlerEntry {
 }
 
 export class IraWithdrawalEarningsHandler extends HandlerEntry {
+  static type        = 'IraWithdrawalEarningsHandler';
   static description = 'Applies 10% penalty for under-60 withdrawals and dispatches IRA_WITHDRAWAL_EARNINGS_APPLY.';
   static eventType   = 'IRA_WITHDRAWAL_EARNINGS';
 
@@ -216,6 +223,7 @@ export class IraWithdrawalEarningsHandler extends HandlerEntry {
 }
 
 export class IraEarningsHandler extends HandlerEntry {
+  static type        = 'IraEarningsHandler';
   static description = 'Dispatches IRA_EARNINGS_APPLY and records the earnings metric.';
   static eventType   = 'IRA_EARNINGS';
 

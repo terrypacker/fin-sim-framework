@@ -20,6 +20,7 @@ import {
 import {
   AuFixedIncomeEarningsApplyReducer,
 } from '../../finance/account-rules/au/au-fixed-income-classes.js';
+import { ValueType } from '../../simulation-framework/type-registry.js';
 
 /**
  * AU_BANKING toolset — AU savings and fixed income account interest and cash-flow machinery.
@@ -35,6 +36,20 @@ export const AU_BANKING = {
   id: 'AU_BANKING',
   capabilities: ['banking'],
   dependencies: [],
+
+  types: {
+    handlers: [AuSavingsContributionHandler, AuSavingsWithdrawalHandler, AuSavingsEarningsHandler, AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler],
+    reducers: [AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer, AuFixedIncomeEarningsApplyReducer],
+    actions: [
+      { type: 'AU_SAVINGS_CONTRIBUTION_APPLY', fields: { amount: ValueType.currency('AUD') } },
+      { type: 'AU_SAVINGS_WITHDRAWAL_APPLY', family: 'WITHDRAWAL', cc: 'AU',
+        fields: { amount: ValueType.currency('AUD') } },
+      { type: 'AU_SAVINGS_EARNINGS_APPLY',   fields: { amount: ValueType.currency('AUD'), isAuResident: ValueType.boolean() } },
+      { type: 'AU_SAVINGS_EARNINGS_TAX',     fields: { amount: ValueType.currency('AUD'), isAuResident: ValueType.boolean() } },
+      { type: 'AU_FIXED_INCOME_EARNINGS_APPLY', fields: { amount: ValueType.currency('AUD'), isAuResident: ValueType.boolean() } },
+      { type: 'AU_FIXED_INCOME_EARNINGS_TAX',   fields: { amount: ValueType.currency('AUD'), isAuResident: ValueType.boolean() } },
+    ],
+  },
 
   paramSchema(context) {
     return [

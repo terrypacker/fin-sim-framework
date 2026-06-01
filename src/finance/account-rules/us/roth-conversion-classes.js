@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Reducer, PRIORITY }                         from '../../../simulation-framework/reducers.js';
+import { Reducer, PRIORITY, AccountServiceReducer }  from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }                              from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction }     from '../../../simulation-framework/actions.js';
 import { debitIra }                                  from './ira-rollover-classes.js';
@@ -49,7 +49,8 @@ function conversionActions(amount, iraKey, rothKey, isAuResident) {
  * Direct IRA→Roth transfer; no cash pool movement.
  * Chains ROTH_CONVERSION_TAX (ordinary income for US; also AU if resident).
  */
-export class RothConversionApplyReducer extends Reducer {
+export class RothConversionApplyReducer extends AccountServiceReducer {
+  static type        = 'RothConversionApplyReducer';
   static description = 'Debits the IRA and credits Roth rolloverContribBasis; no cash pool; chains ROTH_CONVERSION_TAX.';
   static actionType  = 'ROTH_CONVERSION_APPLY';
 
@@ -84,6 +85,7 @@ export class RothConversionApplyReducer extends Reducer {
  * Supports owner: 'primary' (default) or 'spouse'.
  */
 export class RothConversionHandler extends HandlerEntry {
+  static type        = 'RothConversionHandler';
   static description = 'Validates IRA balance and dispatches ROTH_CONVERSION_APPLY; no cash-pool movement.';
   static eventType   = 'ROTH_CONVERSION';
 
@@ -110,6 +112,7 @@ export class RothConversionHandler extends HandlerEntry {
  * Emits nothing if room or IRA balance is zero.
  */
 export class RothConversionPolicyHandler extends HandlerEntry {
+  static type        = 'RothConversionPolicyHandler';
   static description = 'Bracket-fill policy: converts up to (targetIncome − usOrdinaryIncomeYTD), capped at IRA balance.';
   static eventType   = 'ROTH_CONVERSION_POLICY_EVALUATE';
 

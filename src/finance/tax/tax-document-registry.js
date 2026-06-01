@@ -56,7 +56,9 @@ export class TaxDocumentRegistry {
    * @returns {TaxDocument|TaxDocument[]|null}
    */
   generate(journalEntry, journal) {
-    const { cc, taxDetail, personTaxDetails } = journalEntry.action.data ?? {};
+    const data = journalEntry.action.data ?? {};
+    const cc = data.cc ?? _ccFromActionType(journalEntry.action?.type);
+    const { taxDetail, personTaxDetails } = data;
     const period = journal ? _extractPeriod(journalEntry, journal, cc) : null;
 
     if (personTaxDetails?.length > 0) {
@@ -107,6 +109,13 @@ export class TaxDocumentRegistry {
 
 // ─── Module-level helpers ─────────────────────────────────────────────────────
 
+function _ccFromActionType(type) {
+  if (!type) return null;
+  if (type.startsWith('US_')) return 'US';
+  if (type.startsWith('AU_')) return 'AU';
+  return null;
+}
+
 /**
  * Return { fromEntryId, toEntryId } identifying the tax period boundaries for
  * the given TAX_SETTLE_APPLY entry.  Used to populate drillReport.params.period
@@ -122,7 +131,7 @@ function _extractPeriod(currentEntry, journal, cc) {
   let fromEntryId = null;
   for (let i = currentIdx - 1; i >= 0; i--) {
     const e = journal[i];
-    if (e.action?.type === 'TAX_SETTLE_APPLY' && e.action?.data?.cc === cc) {
+    if (e.action?.type === `${cc}_TAX_SETTLE_APPLY`) {
       fromEntryId = e.id;
       break;
     }
@@ -146,7 +155,7 @@ function _extractAuSaleRecords(currentEntry, journal) {
   let yearStartIdx = 0;
   for (let i = currentIdx - 1; i >= 0; i--) {
     const e = journal[i];
-    if (e.action?.type === 'TAX_SETTLE_APPLY' && e.action?.data?.cc === 'AU') {
+    if (e.action?.type === 'AU_TAX_SETTLE_APPLY') {
       yearStartIdx = i + 1;
       break;
     }
@@ -198,7 +207,7 @@ function _extractUsSaleRecords(currentEntry, journal) {
   let yearStartIdx = 0;
   for (let i = currentIdx - 1; i >= 0; i--) {
     const e = journal[i];
-    if (e.action?.type === 'TAX_SETTLE_APPLY' && e.action?.data?.cc === 'US') {
+    if (e.action?.type === 'US_TAX_SETTLE_APPLY') {
       yearStartIdx = i + 1;
       break;
     }

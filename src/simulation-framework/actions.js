@@ -33,18 +33,20 @@ export const DEFAULT_ACTIONS = {
  * type is the category discriminator used as the ReducerPipeline lookup key.
  *
  * Runtime-only parentage fields (set by Simulation.decorateAction):
- *   instanceId       — UUID assigned when the instance enters the action queue
- *   parentInstanceId — instanceId of the action that emitted this one (null = top-level)
- *   rootInstanceId   — instanceId of the originating root action (null = this is root)
+ *   _instanceId       — UUID assigned when the instance enters the action queue
+ *   _parentInstanceId — _instanceId of the action that emitted this one (null = top-level)
+ *   _rootInstanceId   — _instanceId of the originating root action (null = this is root)
  */
 export class Action extends SimGraphNode {
   static description = 'Base action carrying only a type discriminator and optional name.';
+  static type        = 'Action';
+  static category    = 'action';
 
   constructor(type, name) {
     super({id: null, kind: 'action', layer: 'config', name})
-    this.instanceId      = null;  // UUID — assigned by instantiate() or decorateAction()
-    this.parentInstanceId = null; // UUID of parent action (null = top-level)
-    this.rootInstanceId  = null;  // UUID of root action (null = this is the root)
+    this._instanceId      = null;  // UUID — assigned by instantiate() or decorateAction()
+    this._parentInstanceId = null; // UUID of parent action (null = top-level)
+    this._rootInstanceId  = null;  // UUID of root action (null = this is the root)
     this.type = type;
   }
 
@@ -57,6 +59,16 @@ export class Action extends SimGraphNode {
 
   getDescription() {
     return this.constructor.getDescription();
+  }
+
+  toJSON() {
+    return { __type: this.constructor.type, id: this.id, name: this.name, type: this.type };
+  }
+
+  static fromJSON(d, _ctx) {
+    const a = new this(d.type, d.name);
+    a.id = d.id;
+    return a;
   }
 
   /**
@@ -75,19 +87,41 @@ export class Action extends SimGraphNode {
 
 export class FieldAction extends Action {
   static description = 'Extends Action with a fieldName targeting a specific state field.';
+  static type        = 'FieldAction';
 
   constructor(type, name, fieldName = '') {
     super(type, name);
     this.fieldName  = fieldName;
   }
+
+  toJSON() {
+    return { ...super.toJSON(), fieldName: this.fieldName };
+  }
+
+  static fromJSON(d, _ctx) {
+    const a = new this(d.type, d.name, d.fieldName ?? '');
+    a.id = d.id;
+    return a;
+  }
 }
 
 export class FieldValueAction extends FieldAction {
   static description = 'Extends FieldAction with a value to write into the targeted state field.';
+  static type        = 'FieldValueAction';
 
   constructor(type, name, fieldName = '', value = null) {
     super(type, name, fieldName);
     this.value  = value;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), value: this.value };
+  }
+
+  static fromJSON(d, _ctx) {
+    const a = new this(d.type, d.name, d.fieldName ?? '', d.value);
+    a.id = d.id;
+    return a;
   }
 }
 
@@ -102,9 +136,16 @@ export class FieldValueAction extends FieldAction {
  */
 export class AmountAction extends FieldValueAction {
   static description = 'Carries a monetary or numeric amount (fieldName fixed to "amount"); used for cash flows, gains, and tax payments.';
+  static type        = 'AmountAction';
 
   constructor(type, name, amount = 0) {
     super(type, name, 'amount', amount);
+  }
+
+  static fromJSON(d, _ctx) {
+    const a = new this(d.type, d.name, d.value ?? 0);
+    a.id = d.id;
+    return a;
   }
 }
 
@@ -120,6 +161,7 @@ export class AmountAction extends FieldValueAction {
  */
 export class RecordBalanceAction extends Action {
   static description = 'Captures a state field value into state.metrics[metricKey] for charting; with no args, acts as a no-op pipeline-flush marker.';
+  static type        = 'RecordBalanceAction';
   constructor(fieldPath = null, metricKey = null) {
     super('RECORD_BALANCE');
     this.fieldPath = fieldPath;
@@ -135,6 +177,7 @@ export class RecordBalanceAction extends Action {
  */
 export class RecordMetricAction extends FieldValueAction {
   static description = 'Records a named metric value for reporting; consumed by reducers registered for RECORD_METRIC.';
+  static type        = 'RecordMetricAction';
   constructor(key, value) {
     super('RECORD_METRIC', `Record Metric for ${key}`, key, value);
   }
@@ -155,6 +198,7 @@ export class RecordMetricAction extends FieldValueAction {
  */
 export class ScriptedAction extends FieldValueAction {
   static description = 'Prototype action: supply a JS script to compute the value at reduce-time. Script receives (state, date).';
+  static type        = 'ScriptedAction';
 
   constructor(type, name, fieldName = '', script = '// return computed value\nreturn 0;') {
     super(type, name, fieldName, null);
@@ -164,6 +208,16 @@ export class ScriptedAction extends FieldValueAction {
 
   get script() { return this._script; }
   set script(v) { this._script = v; this._fn = null; }  // invalidate cache on edit
+
+  toJSON() {
+    return { ...super.toJSON(), script: this._script };
+  }
+
+  static fromJSON(d, _ctx) {
+    const a = new this(d.type, d.name, d.fieldName ?? '', d.script ?? '');
+    a.id = d.id;
+    return a;
+  }
 
   _compile() {
     if (!this._fn) {
@@ -252,7 +306,7 @@ export class ActionDefinition {
    */
   static fromAction(action) {
     const config = { actionClass: action.actionClass };
-    if (action.id        !== undefined) config.actionId  = action.id;
+    if (action.id        !== undefined) config._actionId  = action.id;
     if (action.name      !== undefined) config.name      = action.name;
     if (action.kind      !== undefined) config.kind      = action.kind;
     if (action.fieldName !== undefined) config.fieldName = action.fieldName;
@@ -306,9 +360,9 @@ export class ActionDefinition {
     if (!Cls) throw new Error(`ActionDefinition: unknown actionClass "${actionClass ?? 'Action'}"`);
     const instance = Object.create(Cls.prototype);
     instance.id              = null;             // no service-registered config ID
-    instance.instanceId      = generateActionId(); // UUID for runtime tracking
-    instance.parentInstanceId = null;
-    instance.rootInstanceId  = null;
+    instance._instanceId      = generateActionId(); // UUID for runtime tracking
+    instance._parentInstanceId = null;
+    instance._rootInstanceId  = null;
     Object.assign(instance, props);
     instance.type = this.type;  // definition's type discriminator always wins
     return instance;

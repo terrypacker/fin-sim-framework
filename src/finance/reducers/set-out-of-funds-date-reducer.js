@@ -22,8 +22,8 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  */
 export class SetOutOfFundsDateReducer extends Reducer {
   static description = 'Stamps outOfFundsDate in state on the first out-of-funds occurrence.';
-
-  static actionType = 'SET_OUT_OF_FUNDS_DATE';
+  static type        = 'SetOutOfFundsDateReducer';
+  static actionType  = 'SET_OUT_OF_FUNDS_DATE';
 
   constructor() {
     super('Set Out of Funds Date', PRIORITY.PRE_PROCESS);

@@ -184,10 +184,7 @@ class CapitalGainsByDisposalDef extends ReportDefinition {
   buildQuery(params, api) {
     const { cc, period, personKeys } = params;
     const periodAst   = api.periodOf(period);
-    const actionTypes = cc === 'AU'
-      ? ['AU_STOCK_WITHDRAWAL_TAX', 'AU_HOUSE_SALE_TAX', 'STOCK_WITHDRAWAL_TAX']
-      : ['STOCK_WITHDRAWAL_TAX'];
-
+    const actionTypes = api.familyTypes('CAPITAL_GAINS', { cc });
     const conditions = [
       periodAst,
       { op: 'in',  field: 'actionType', value: actionTypes },
@@ -238,30 +235,6 @@ class CashFlowByAccountDef extends ReportDefinition {
 
 // ─── Phase 3 definitions ──────────────────────────────────────────────────────
 
-// Source-account debits for withdrawal-class actions.  Many withdrawal reducers
-// emit two diffs (debit source, credit destination); we filter to the negative
-// `stateDelta` side so the per-account totals represent money leaving the
-// account, not the gross round-trip.
-const WITHDRAWAL_ACTION_TYPES = [
-  'IRA_WITHDRAWAL_CONTRIB_APPLY',
-  'IRA_WITHDRAWAL_EARNINGS_APPLY',
-  'IRA_ROLLOVER_WITHDRAWAL_APPLY',
-  'IRA_RMD_APPLY',
-  'K401_WITHDRAWAL_APPLY',
-  'K401_RMD_APPLY',
-  'K401_TO_IRA_CONVERSION_APPLY',
-  'ROTH_WITHDRAWAL_CONTRIB_APPLY',
-  'ROTH_WITHDRAWAL_EARNINGS_APPLY',
-  'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY',
-  'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_APPLY',
-  'FIXED_INCOME_WITHDRAWAL_APPLY',
-  'STOCK_WITHDRAWAL_APPLY',
-  'AU_SAVINGS_WITHDRAWAL_APPLY',
-  'SUPER_WITHDRAWAL_CONTRIB_APPLY',
-  'SUPER_WITHDRAWAL_EARNINGS_APPLY',
-  'AU_STOCK_WITHDRAWAL_APPLY',
-];
-
 class WithdrawalsByAccountDef extends ReportDefinition {
   get id()          { return 'withdrawals-by-account'; }
   get title()       { return 'Withdrawals by Account'; }
@@ -293,9 +266,9 @@ class WithdrawalsByAccountDef extends ReportDefinition {
     const periodAst  = api.periodOfTaxYear(period);
     const conditions = [
       periodAst,
-      { op: 'in',       field: 'actionType', value: WITHDRAWAL_ACTION_TYPES },
-      { op: 'contains', field: 'stateKey',   value: 'account.balance'       },
-      { op: 'lt',       field: 'stateDelta', value: 0                       },
+      { op: 'in',       field: 'actionType', value: api.familyTypes('WITHDRAWAL') },
+      { op: 'contains', field: 'stateKey',   value: 'account.balance'             },
+      { op: 'lt',       field: 'stateDelta', value: 0                             },
     ];
     _appendAccountStateKeyFilter(conditions, accountStateKeys);
     return { op: 'and', conditions };
@@ -327,13 +300,12 @@ class TaxPaidByYearDef extends ReportDefinition {
     // Tax-year semantics: TAX_PAYMENT_DEBIT is chained from TAX_SETTLE_APPLY
     // and shares its date but has a higher seq. Seq-based bounds drop it from
     // the same-day window; the date-bounded tax-year window keeps it.
-    const periodAst = api.periodOfTaxYear(period);
-    const conditions = [
+    const periodAst   = api.periodOfTaxYear(period);
+    const actionTypes = api.familyTypes('TAX_PAYMENT_DEBIT', { cc });
+    return { op: 'and', conditions: [
       periodAst,
-      { op: 'eq', field: 'actionType', value: 'TAX_PAYMENT_DEBIT' },
-    ];
-    if (cc) conditions.push({ op: 'eq', field: 'cc', value: cc });
-    return { op: 'and', conditions };
+      { op: 'in', field: 'actionType', value: actionTypes },
+    ] };
   }
 }
 
@@ -363,11 +335,11 @@ class AuTaxByPersonYearDef extends ReportDefinition {
     // Tax-year semantics: this report queries TAX_SETTLE_APPLY itself, and
     // seq-based periodOf excludes the upper-bound settle (the one the user
     // picked). Date-based bounds put the settle inside its own FY window.
-    const periodAst  = api.periodOfTaxYear(period);
-    const conditions = [
+    const periodAst   = api.periodOfTaxYear(period);
+    const actionTypes = api.familyTypes('TAX_SETTLE_APPLY', { cc: 'AU' });
+    const conditions  = [
       periodAst,
-      { op: 'eq', field: 'actionType', value: 'TAX_SETTLE_APPLY' },
-      { op: 'eq', field: 'cc',         value: 'AU' },
+      { op: 'in', field: 'actionType', value: actionTypes },
     ];
     _appendInFilter(conditions, 'personKey', personKeys);
     return { op: 'and', conditions };
@@ -410,13 +382,6 @@ class RothConversionsByYearDef extends ReportDefinition {
   }
 }
 
-const REAL_PROPERTY_ACTION_TYPES = [
-  'US_HOUSE_SALE_APPLY',
-  'AU_HOUSE_SALE_APPLY',
-  'US_MORTGAGE_PAYMENT_APPLY',
-  'AU_MORTGAGE_PAYMENT_APPLY',
-];
-
 class RealPropertyCashFlowDef extends ReportDefinition {
   get id()          { return 'real-property-cash-flow'; }
   get title()       { return 'Real Property Cash Flow'; }
@@ -445,8 +410,8 @@ class RealPropertyCashFlowDef extends ReportDefinition {
     const periodAst  = api.periodOfTaxYear(period);
     const conditions = [
       periodAst,
-      { op: 'in',       field: 'actionType', value: REAL_PROPERTY_ACTION_TYPES },
-      { op: 'contains', field: 'stateKey',   value: 'account.balance'          },
+      { op: 'in',       field: 'actionType', value: api.familyTypes('REAL_PROPERTY_CASH') },
+      { op: 'contains', field: 'stateKey',   value: 'account.balance'                     },
     ];
     _appendAccountStateKeyFilter(conditions, accountStateKeys);
     return { op: 'and', conditions };

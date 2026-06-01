@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
+import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 
@@ -27,7 +27,8 @@ function getAgeDecimal(birthDate, asOfDate) {
  * EVT-1: Roth contribution — debit US cash pool, credit contributionBasis.
  * No tax effect.
  */
-export class RothContributionApplyReducer extends Reducer {
+export class RothContributionApplyReducer extends AccountServiceReducer {
+  static type        = 'RothContributionApplyReducer';
   static description = 'Debits the US cash pool and credits Roth contributionBasis; no tax effect.';
   static actionType  = 'ROTH_CONTRIBUTION_APPLY';
 
@@ -54,7 +55,8 @@ export class RothContributionApplyReducer extends Reducer {
  * EVT-2: Roth contribution withdrawal — credit US cash pool, debit contributionBasis.
  * No tax effect.
  */
-export class RothWithdrawalContribApplyReducer extends Reducer {
+export class RothWithdrawalContribApplyReducer extends AccountServiceReducer {
+  static type        = 'RothWithdrawalContribApplyReducer';
   static description = 'Credits the US cash pool and debits Roth contributionBasis; no tax effect.';
   static actionType  = 'ROTH_WITHDRAWAL_CONTRIB_APPLY';
 
@@ -82,7 +84,8 @@ export class RothWithdrawalContribApplyReducer extends Reducer {
  * debit earningsBasis.  Chains ROTH_WITHDRAWAL_EARNINGS_TAX for penalty +
  * optional AU tax.
  */
-export class RothWithdrawalEarningsApplyReducer extends Reducer {
+export class RothWithdrawalEarningsApplyReducer extends AccountServiceReducer {
+  static type        = 'RothWithdrawalEarningsApplyReducer';
   static description = 'Credits the US cash pool net of penalty and debits Roth earningsBasis; chains ROTH_WITHDRAWAL_EARNINGS_TAX.';
   static actionType  = 'ROTH_WITHDRAWAL_EARNINGS_APPLY';
 
@@ -114,7 +117,8 @@ export class RothWithdrawalEarningsApplyReducer extends Reducer {
 /**
  * EVT-4: Roth earnings accrual — stays in account, no tax.
  */
-export class RothEarningsApplyReducer extends Reducer {
+export class RothEarningsApplyReducer extends AccountServiceReducer {
+  static type        = 'RothEarningsApplyReducer';
   static description = 'Adds earnings to Roth balance and earningsBasis; no tax effect.';
   static actionType  = 'ROTH_EARNINGS_APPLY';
 
@@ -139,6 +143,7 @@ export class RothEarningsApplyReducer extends Reducer {
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 export class RothContributionHandler extends HandlerEntry {
+  static type        = 'RothContributionHandler';
   static description = 'Dispatches ROTH_CONTRIBUTION_APPLY and records the contribution metric.';
   static eventType   = 'ROTH_CONTRIBUTION';
 
@@ -157,6 +162,7 @@ export class RothContributionHandler extends HandlerEntry {
 }
 
 export class RothWithdrawalContributionsHandler extends HandlerEntry {
+  static type        = 'RothWithdrawalContributionsHandler';
   static description = 'Dispatches ROTH_WITHDRAWAL_CONTRIB_APPLY and records the withdrawal metric.';
   static eventType   = 'ROTH_WITHDRAWAL_CONTRIBUTIONS';
 
@@ -175,6 +181,7 @@ export class RothWithdrawalContributionsHandler extends HandlerEntry {
 }
 
 export class RothWithdrawalEarningsHandler extends HandlerEntry {
+  static type        = 'RothWithdrawalEarningsHandler';
   static description = 'Applies 10% penalty for under-60 withdrawals and dispatches ROTH_WITHDRAWAL_EARNINGS_APPLY.';
   static eventType   = 'ROTH_WITHDRAWAL_EARNINGS';
 
@@ -200,6 +207,7 @@ export class RothWithdrawalEarningsHandler extends HandlerEntry {
 }
 
 export class RothEarningsHandler extends HandlerEntry {
+  static type        = 'RothEarningsHandler';
   static description = 'Dispatches ROTH_EARNINGS_APPLY and records the earnings metric.';
   static eventType   = 'ROTH_EARNINGS';
 

@@ -10,10 +10,15 @@
 
 import { TaxEngine }             from './tax/tax-engine.js';
 import { AccountRulesEngine }    from './account-rules/account-rules-engine.js';
-import { ArrayReducer, BalanceSnapshotReducer } from '../simulation-framework/reducers.js';
 
-import { PeriodAdvanceReducer, PeriodAdvanceHandler } from './tax/period-advance-classes.js';
-import { TaxSettleHandler, TaxSettleApplyReducer, TaxPaymentDebitReducer } from './tax/tax-settle-classes.js';
+import {
+  UsPeriodAdvanceReducer, UsPeriodAdvanceHandler,
+  AuPeriodAdvanceReducer, AuPeriodAdvanceHandler,
+} from './tax/period-advance-classes.js';
+import {
+  UsTaxSettleHandler, UsTaxSettleApplyReducer, UsTaxPaymentDebitReducer,
+  AuTaxSettleHandler, AuTaxSettleApplyReducer, AuTaxPaymentDebitReducer,
+} from './tax/tax-settle-classes.js';
 import { DynamicTaxReducer } from './tax/dynamic-tax-reducer.js';
 import { EventSeries } from '../simulation-framework/events/event-series.js';
 
@@ -30,6 +35,13 @@ import { UsAccountModule2026 }   from './account-rules/us/us-account-module-2026
 import { AuAccountModule2024 }   from './account-rules/au/au-account-module-2024.js';
 import { AuAccountModule2025 }   from './account-rules/au/au-account-module-2025.js';
 import { AuAccountModule2026 }   from './account-rules/au/au-account-module-2026.js';
+
+// Per-country handler/reducer factories — keyed by country code.
+const PERIOD_ADVANCE_HANDLER = { US: UsPeriodAdvanceHandler, AU: AuPeriodAdvanceHandler };
+const PERIOD_ADVANCE_REDUCER = { US: UsPeriodAdvanceReducer, AU: AuPeriodAdvanceReducer };
+const TAX_SETTLE_HANDLER     = { US: UsTaxSettleHandler,     AU: AuTaxSettleHandler     };
+const TAX_SETTLE_APPLY_REDUCER = { US: UsTaxSettleApplyReducer, AU: AuTaxSettleApplyReducer };
+const TAX_PAYMENT_DEBIT_REDUCER = { US: UsTaxPaymentDebitReducer, AU: AuTaxPaymentDebitReducer };
 
 /**
  * TaxService — coordinates TaxEngine and AccountRulesEngine.
@@ -67,11 +79,12 @@ export class TaxService {
   /**
    * Declarative alternative to the two-phase setup()/registerHandlersAndReducers() API.
    *
-   * Returns all contributions as plain data — no services are called, no side effects.
-   * The ScenarioCompiler (via the US_TAX / AU_TAX toolsets) is responsible for
-   * registering the returned items with the real service layer.
+   * Returns all contributions for the specified country codes as plain data —
+   * no services are called, no side effects. Each country's period-advance,
+   * tax-settle, and tax-payment-debit handlers and reducers are per-country
+   * subclasses that own their own action types (no shared reducers needed).
    *
-   * @param {string[]}  countryCodes
+   * @param {string[]}  countryCodes  — e.g. ['US'] or ['AU']
    * @param {import('./period/period-service.js').PeriodService} periodService
    * @param {Date}      startDate
    * @param {object}    accountService
@@ -101,48 +114,51 @@ export class TaxService {
     const handlers = [];
     const reducers = [];
 
-    const periodAdvanceHandler = new PeriodAdvanceHandler();
-
     for (const cc of countryCodes) {
-      const { month, day } = _periodAdvanceDateFor(cc);
+      // Period advance — one handler + one reducer per country
       const periodType = _periodTypeFor(cc);
-      const periods = periodService.getAllPeriods().filter(p => p.type === periodType);
-      const series = new EventSeries({
+      const periods    = periodService.getAllPeriods().filter(p => p.type === periodType);
+      const { month: paMonth, day: paDay } = _periodAdvanceDateFor(cc);
+      const paSeries = new EventSeries({
         name:     `${cc} Period Advance`,
         type:     `PERIOD_ADVANCE_${cc}`,
         interval: 'annually',
-        month,
-        day,
+        month:    paMonth,
+        day:      paDay,
         data:     { cc, periods },
         enabled:  true,
         color:    '#78909C',
       });
-      events.push(series);
-      periodAdvanceHandler.handledEvents.push(series);
-    }
+      events.push(paSeries);
 
-    const taxSettleHandler = new TaxSettleHandler();
+      const paHandler = new PERIOD_ADVANCE_HANDLER[cc]();
+      paHandler.handledEvents.push(paSeries);
+      handlers.push(paHandler);
 
-    for (const cc of countryCodes) {
-      const { month, day } = _taxSettleDateFor(cc);
-      const series = new EventSeries({
+      reducers.push(new PERIOD_ADVANCE_REDUCER[cc]());
+
+      // Tax settle — one handler + one apply reducer per country
+      const { month: tsMonth, day: tsDay } = _taxSettleDateFor(cc);
+      const tsSeries = new EventSeries({
         name:     `${cc} Tax Settle`,
         type:     `TAX_SETTLE_${cc}`,
         interval: 'annually',
-        month,
-        day,
+        month:    tsMonth,
+        day:      tsDay,
         data:     { cc },
         enabled:  true,
         color:    '#FF7043',
       });
-      events.push(series);
-      taxSettleHandler.handledEvents.push(series);
-    }
+      events.push(tsSeries);
 
-    handlers.push(periodAdvanceHandler);
+      const tsHandler = new TAX_SETTLE_HANDLER[cc]();
+      tsHandler.handledEvents.push(tsSeries);
+      handlers.push(tsHandler);
 
-    // Dynamic tax reducers (one per action type per country)
-    for (const cc of countryCodes) {
+      reducers.push(new TAX_SETTLE_APPLY_REDUCER[cc]());
+      reducers.push(new TAX_PAYMENT_DEBIT_REDUCER[cc]({ accountService, stateRegistry }));
+
+      // Dynamic tax reducers (one per action type per country)
       const actionTypes = new Set();
       Object.keys(this._taxEngine._modules)
         .filter(k => k.startsWith(cc + '_'))
@@ -156,35 +172,7 @@ export class TaxService {
       }
     }
 
-    handlers.push(taxSettleHandler);
-
     return { statePatches: { currentPeriods }, events, handlers, reducers };
-  }
-
-  /**
-   * Returns the reducers that are shared across all tax toolsets — these must
-   * be registered exactly once regardless of how many country tax toolsets are
-   * active.  Callers (US_TAX, AU_TAX toolsets) use a context-level cache so
-   * only the first toolset to run provides these; subsequent ones return [].
-   *
-   * @param {object} accountService
-   * @param {object} stateRegistry
-   * @returns {import('../simulation-framework/reducers.js').Reducer[]}
-   */
-  getSharedReducers(accountService, stateRegistry) {
-    const taxDebitReducer = new ArrayReducer('Tax Debit');
-    taxDebitReducer.reducedActionTypes = ['RECORD_ARRAY_METRIC'];
-
-    const balanceSnapshotReducer = new BalanceSnapshotReducer('Balance Snapshot');
-    balanceSnapshotReducer.reducedActionTypes = ['RECORD_BALANCE'];
-
-    return [
-      new PeriodAdvanceReducer(),
-      new TaxSettleApplyReducer(),
-      new TaxPaymentDebitReducer({ accountService, stateRegistry }),
-      taxDebitReducer,
-      balanceSnapshotReducer,
-    ];
   }
 
   /** @returns {TaxEngine} */
@@ -209,7 +197,7 @@ function _periodTypeFor(cc) {
 
 /**
  * Month/day (1-based) of the first day of the new tax year for a country.
- * This is the date PERIOD_ADVANCE fires each year.
+ * This is the date the PERIOD_ADVANCE_${cc} series fires each year.
  */
 function _periodAdvanceDateFor(cc) {
   return cc === 'AU' ? { month: 7, day: 1 } : { month: 1, day: 1 };
@@ -217,7 +205,7 @@ function _periodAdvanceDateFor(cc) {
 
 /**
  * Month/day (1-based) of the last day of the tax year for a country.
- * This is the date TAX_SETTLE fires each year.
+ * This is the date the TAX_SETTLE_${cc} series fires each year.
  */
 function _taxSettleDateFor(cc) {
   return cc === 'AU' ? { month: 6, day: 30 } : { month: 12, day: 31 };

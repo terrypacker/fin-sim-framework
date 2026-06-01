@@ -53,9 +53,9 @@ test('EVT-DRILL-1: US Form 1040 Gross Ordinary Income line carries a drillReport
 
   // Find the first US TAX_SETTLE_APPLY entry.
   const settleEntry = entries.find(
-    e => e.action?.type === 'TAX_SETTLE_APPLY' && e.action?.data?.cc === 'US'
+    e => e.action?.type === 'US_TAX_SETTLE_APPLY'
   );
-  assert.ok(settleEntry, 'Should have a US TAX_SETTLE_APPLY entry after stepping to Dec 31');
+  assert.ok(settleEntry, 'Should have a US_TAX_SETTLE_APPLY entry after stepping to Dec 31');
 
   const service   = new JournalReportingService();
   const taxDoc    = service.generate(settleEntry, entries);
@@ -84,9 +84,9 @@ test('EVT-DRILL-2: drill query total matches Form 1040 Gross Ordinary Income', a
   const entries = journal.journal;
 
   const settleEntry = entries.find(
-    e => e.action?.type === 'TAX_SETTLE_APPLY' && e.action?.data?.cc === 'US'
+    e => e.action?.type === 'US_TAX_SETTLE_APPLY'
   );
-  assert.ok(settleEntry, 'Should have a US TAX_SETTLE_APPLY entry');
+  assert.ok(settleEntry, 'Should have a US_TAX_SETTLE_APPLY entry');
 
   // Build the tax document.
   const service  = new JournalReportingService();
@@ -129,7 +129,7 @@ test('EVT-DRILL-3: AU Ordinary Income line carries a drillReport', () => {
 
   const entries = sim.journal.journal;
   const settleEntry = entries.find(
-    e => e.action?.type === 'TAX_SETTLE_APPLY' && e.action?.data?.cc === 'AU'
+    e => e.action?.type === 'AU_TAX_SETTLE_APPLY'
   );
 
   if (!settleEntry) {

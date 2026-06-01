@@ -213,9 +213,8 @@ test('JournalDataSource perDiff: default mode (no flag) is still one-row-per-ent
 
 test('JournalDataSource perPerson: fans out personTaxDetails into one row per person', () => {
   const settle = makeEntry({
-    actionType: 'TAX_SETTLE_APPLY',
+    actionType: 'AU_TAX_SETTLE_APPLY',
     data: {
-      cc: 'AU',
       tax: 20000,
       personTaxDetails: [
         { personKey: 'p-1', personName: 'Alice', taxDetail: { netLiability: 12000, taxableIncome: 90000, grossTax: 15000 } },
@@ -236,9 +235,8 @@ test('JournalDataSource perPerson: fans out personTaxDetails into one row per pe
 test('JournalDataSource perPerson: inherits base fields (date, year, actionType, cc) on each row', () => {
   const settle = makeEntry({
     date: new Date(Date.UTC(2027, 5, 30)),
-    actionType: 'TAX_SETTLE_APPLY',
+    actionType: 'AU_TAX_SETTLE_APPLY',
     data: {
-      cc: 'AU',
       tax: 12000,
       personTaxDetails: [
         { personKey: 'p-1', personName: 'Alice', taxDetail: { netLiability: 12000 } },
@@ -247,19 +245,18 @@ test('JournalDataSource perPerson: inherits base fields (date, year, actionType,
   });
   const [row] = new JournalDataSource(makeJournal(settle), { perPerson: true }).getAll();
   assert.strictEqual(row.year, 2027);
-  assert.strictEqual(row.actionType, 'TAX_SETTLE_APPLY');
+  assert.strictEqual(row.actionType, 'AU_TAX_SETTLE_APPLY');
   assert.strictEqual(row.cc, 'AU');
 });
 
 test('JournalDataSource perPerson: drops entries without personTaxDetails', () => {
   const noPersons = makeEntry({
-    actionType: 'TAX_SETTLE_APPLY',
-    data: { cc: 'US', tax: 5000, taxDetail: { netLiability: 5000 } },
+    actionType: 'US_TAX_SETTLE_APPLY',
+    data: { tax: 5000, taxDetail: { netLiability: 5000 } },
   });
   const withPersons = makeEntry({
-    actionType: 'TAX_SETTLE_APPLY',
+    actionType: 'AU_TAX_SETTLE_APPLY',
     data: {
-      cc: 'AU',
       tax: 7000,
       personTaxDetails: [{ personKey: 'p-1', personName: 'Alice', taxDetail: { netLiability: 7000 } }],
     },
@@ -271,8 +268,8 @@ test('JournalDataSource perPerson: drops entries without personTaxDetails', () =
 
 test('JournalDataSource perPerson: empty personTaxDetails array is treated as missing', () => {
   const entry = makeEntry({
-    actionType: 'TAX_SETTLE_APPLY',
-    data: { cc: 'AU', tax: 0, personTaxDetails: [] },
+    actionType: 'AU_TAX_SETTLE_APPLY',
+    data: { tax: 0, personTaxDetails: [] },
   });
   const rows = new JournalDataSource(makeJournal(entry), { perPerson: true }).getAll();
   assert.strictEqual(rows.length, 0);
@@ -280,9 +277,8 @@ test('JournalDataSource perPerson: empty personTaxDetails array is treated as mi
 
 test('JournalDataSource perPerson: null taxDetail.netLiability defaults to 0', () => {
   const settle = makeEntry({
-    actionType: 'TAX_SETTLE_APPLY',
+    actionType: 'AU_TAX_SETTLE_APPLY',
     data: {
-      cc: 'AU',
       tax: 0,
       personTaxDetails: [
         { personKey: 'p-1', personName: 'Alice', taxDetail: {} },

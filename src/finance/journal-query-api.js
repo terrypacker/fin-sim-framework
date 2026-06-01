@@ -27,6 +27,27 @@ import { QueryApi } from '../query/query-api.js';
  */
 export class JournalQueryApi extends QueryApi {
 
+  /**
+   * @param {import('../query/query-api.js').DataSource} dataSource
+   * @param {import('../simulation-framework/type-registry.js').TypeRegistry} [typeRegistry]
+   */
+  constructor(dataSource, typeRegistry) {
+    super(dataSource);
+    this._typeRegistry = typeRegistry ?? null;
+  }
+
+  /**
+   * Delegates to TypeRegistry.familyTypes(). Returns [] when no registry is bound.
+   * Use the result as the `value` of an `op:'in'` predicate on `actionType`.
+   *
+   * @param {string} family
+   * @param {{ cc?: string }} [opts]
+   * @returns {string[]}
+   */
+  familyTypes(family, { cc } = {}) {
+    return this._typeRegistry?.familyTypes(family, { cc }) ?? [];
+  }
+
   // ─── Domain helpers ────────────────────────────────────────────────────────
 
   /**
@@ -167,7 +188,7 @@ export class JournalQueryApi extends QueryApi {
     if (period.toEntryId) {
       const toEntry = entries.find(e => e.id === period.toEntryId);
       if (!toEntry) return { op: 'gt', field: 'seq', value: -1 };
-      const cc     = toEntry.action?.data?.cc ?? null;
+      const cc     = _ccFromEntry(toEntry);
       const window = _taxYearRange(cc, toEntry.date);
       return {
         op: 'and',
@@ -180,13 +201,13 @@ export class JournalQueryApi extends QueryApi {
 
     const fromEntry = entries.find(e => e.id === period.fromEntryId);
     if (!fromEntry) return { op: 'gt', field: 'seq', value: -1 };
-    const cc     = fromEntry.action?.data?.cc ?? null;
+    const cc     = _ccFromEntry(fromEntry);
     const window = _taxYearRange(cc, fromEntry.date);
     return { op: 'gt', field: 'ts', value: window.end - 1 };
   }
 
   /**
-   * Enumerate every TAX_SETTLE_APPLY entry matching `cc` and pair it with its
+   * Enumerate every tax-settle entry matching `cc` and pair it with its
    * predecessor to produce a list of settled periods. Returned in reverse
    * chronological order so the most recent period is first — matches the
    * "default to most recent" UX in the period facet.
@@ -206,16 +227,18 @@ export class JournalQueryApi extends QueryApi {
    */
   listSettledPeriods(cc) {
     const entries = this._dataSource._journal.journal;
-    const matchesCc = cc ? (e => e.action?.data?.cc === cc) : (() => true);
+    const matchesCc = cc
+      ? (e => _ccFromEntry(e) === cc)
+      : (() => true);
     const settles = entries.filter(e =>
-      e.action?.type === 'TAX_SETTLE_APPLY' && matchesCc(e)
+      _isSettleEntry(e) && matchesCc(e)
     );
 
     const periods = [];
     for (let i = 0; i < settles.length; i++) {
       const curr = settles[i];
       const prev = i > 0 ? settles[i - 1] : null;
-      const entryCc = curr.action?.data?.cc ?? cc ?? null;
+      const entryCc = _ccFromEntry(curr) ?? cc ?? null;
       periods.push({
         fromEntryId: prev?.id ?? null,
         toEntryId:   curr.id,
@@ -245,9 +268,9 @@ export class JournalQueryApi extends QueryApi {
     const entries = this._dataSource._journal.journal;
     if (!entries.length) return null;
 
-    const matchesCc = cc ? (e => e.action?.data?.cc === cc) : (() => true);
+    const matchesCc = cc ? (e => _ccFromEntry(e) === cc) : (() => true);
     const settles = entries.filter(e =>
-      e.action?.type === 'TAX_SETTLE_APPLY' && matchesCc(e)
+      _isSettleEntry(e) && matchesCc(e)
     );
     if (!settles.length) return null;
 
@@ -301,6 +324,26 @@ export class JournalQueryApi extends QueryApi {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const SETTLE_ACTION_TYPES = new Set(['US_TAX_SETTLE_APPLY', 'AU_TAX_SETTLE_APPLY']);
+
+/** Returns true when the journal entry is a tax-settle entry (either country). */
+function _isSettleEntry(e) {
+  return SETTLE_ACTION_TYPES.has(e.action?.type);
+}
+
+/**
+ * Derive the country code from a journal entry, checking `action.data.cc`
+ * first for backward compatibility, then inferring from the action type prefix.
+ */
+function _ccFromEntry(e) {
+  const dc = e.action?.data?.cc;
+  if (dc) return dc;
+  const type = e.action?.type ?? '';
+  if (type.startsWith('US_')) return 'US';
+  if (type.startsWith('AU_')) return 'AU';
+  return null;
+}
 
 /**
  * Format a period label from a settle entry's `cc` + `toEntryDate`.

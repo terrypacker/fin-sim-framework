@@ -51,9 +51,9 @@ import { UsTaxRates2025 }      from '../../src/finance/tax/us/us-tax-rates-2025.
 
 import { TaxService }           from '../../src/finance/tax-service.js';
 import { DynamicTaxReducer }    from '../../src/finance/tax/dynamic-tax-reducer.js';
-import { PeriodAdvanceReducer, PeriodAdvanceHandler }
+import { UsPeriodAdvanceReducer, AuPeriodAdvanceReducer, UsPeriodAdvanceHandler, AuPeriodAdvanceHandler }
   from '../../src/finance/tax/period-advance-classes.js';
-import { TaxSettleHandler, TaxSettleApplyReducer, TaxPaymentDebitReducer }
+import { UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer }
   from '../../src/finance/tax/tax-settle-classes.js';
 import {
   RothContributionApplyReducer, RothWithdrawalContribApplyReducer,

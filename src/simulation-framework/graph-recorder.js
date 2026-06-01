@@ -17,7 +17,7 @@ import { EXECUTION_EDGE_TYPES } from './execution-graph.js';
  * and EMITS edges require internal execution context unavailable on the bus.
  *
  * Node IDs are UUIDs generated here (or provided by the caller for actions,
- * which already carry action.instanceId).  Execution nodes accumulate across
+ * which already carry action._instanceId).  Execution nodes accumulate across
  * rewinds — they are never cleared.
  *
  * Silent mode: callers guard with `if (!this.silent)` before calling; the
@@ -33,7 +33,7 @@ export class GraphRecorder {
   /**
    * Open a new execution node.
    *
-   * @param {string|null} uuid          Use action.instanceId for action nodes;
+   * @param {string|null} uuid          Use action._instanceId for action nodes;
    *                                    omit (null) for event/handler/reducer nodes
    *                                    (a fresh UUID is generated).
    * @param {string}      kind          'event'|'handler'|'action'|'reducer'

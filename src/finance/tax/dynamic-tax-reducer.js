@@ -9,6 +9,7 @@
  */
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
+import { TaxService }        from '../tax-service.js';
 
 /**
  * DynamicTaxReducer — runtime-dispatched tax reducer for a single (countryCode, actionType) pair.
@@ -28,12 +29,26 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  */
 export class DynamicTaxReducer extends Reducer {
   static description = "Dispatches a tax-calculation action to the correct year's BaseTaxModule, resolved from state.currentPeriods at runtime.";
+  static type        = 'DynamicTaxReducer';
 
   constructor(taxEngine, cc, actionType) {
     super(`dynamic:${cc}:${actionType}`, PRIORITY.TAX_CALC);
     this._taxEngine = taxEngine;
     this.cc = cc;
     this.reducedActionTypes = [actionType];
+  }
+
+  static fromJSON(d, _services) {
+    const taxEngine  = new TaxService().taxEngine;
+    const cc         = d.cc ?? d.name.split(':')[1];
+    const actionType = (d.reducedActionTypes ?? [])[0];
+    const r          = new this(taxEngine, cc, actionType);
+    r.id = d.id;
+    return r;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), cc: this.cc };
   }
 
   reduce(state, action, date) {

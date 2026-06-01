@@ -17,7 +17,8 @@ import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framew
  */
 export class IntlRothEarningsHandler extends HandlerEntry {
   static description = 'Computes annual growth on the Roth IRA (balance × growthRate) and dispatches ROTH_EARNINGS_APPLY.';
-  static eventType = 'INTL_ROTH_EARNINGS';
+  static type        = 'IntlRothEarningsHandler';
+  static eventType   = 'INTL_ROTH_EARNINGS';
 
   constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = 0.07 } = {}) {
     super(null, 'Roth IRA Earnings');
@@ -27,6 +28,16 @@ export class IntlRothEarningsHandler extends HandlerEntry {
     this._stateKeyFixed  = stateKey;
     this.growthRate      = growthRate;
     this.generatedActionTypes = ['ROTH_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+  }
+
+  static fromJSON(d, { stateRegistry }) {
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, growthRate: d.growthRate ?? 0.07 });
+    h.id = d.id;
+    return h;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, growthRate: this.growthRate };
   }
 
   call({ state }) {
@@ -48,7 +59,8 @@ export class IntlRothEarningsHandler extends HandlerEntry {
  */
 export class IntlIraEarningsHandler extends HandlerEntry {
   static description = 'Computes annual growth on the Traditional IRA (balance × growthRate) and dispatches IRA_EARNINGS_APPLY.';
-  static eventType = 'INTL_IRA_EARNINGS';
+  static type        = 'IntlIraEarningsHandler';
+  static eventType   = 'INTL_IRA_EARNINGS';
 
   constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = 0.07 } = {}) {
     super(null, 'IRA Earnings');
@@ -58,6 +70,16 @@ export class IntlIraEarningsHandler extends HandlerEntry {
     this._stateKeyFixed  = stateKey;
     this.growthRate      = growthRate;
     this.generatedActionTypes = ['IRA_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+  }
+
+  static fromJSON(d, { stateRegistry }) {
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, growthRate: d.growthRate ?? 0.07 });
+    h.id = d.id;
+    return h;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, growthRate: this.growthRate };
   }
 
   call({ state }) {
@@ -79,7 +101,8 @@ export class IntlIraEarningsHandler extends HandlerEntry {
  */
 export class IntlK401EarningsHandler extends HandlerEntry {
   static description = 'Computes annual growth on the 401k (balance × growthRate) and dispatches K401_EARNINGS_APPLY.';
-  static eventType = 'INTL_K401_EARNINGS';
+  static type        = 'IntlK401EarningsHandler';
+  static eventType   = 'INTL_K401_EARNINGS';
 
   constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = 0.07 } = {}) {
     super(null, '401k Earnings');
@@ -89,6 +112,16 @@ export class IntlK401EarningsHandler extends HandlerEntry {
     this._stateKeyFixed  = stateKey;
     this.growthRate      = growthRate;
     this.generatedActionTypes = ['K401_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+  }
+
+  static fromJSON(d, { stateRegistry }) {
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, growthRate: d.growthRate ?? 0.07 });
+    h.id = d.id;
+    return h;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, growthRate: this.growthRate };
   }
 
   call({ state }) {
@@ -111,7 +144,8 @@ export class IntlK401EarningsHandler extends HandlerEntry {
  */
 export class IntlUsStockEarningsHandler extends HandlerEntry {
   static description = 'Computes annual unrealized appreciation on the US stock account (balance × growthRate) and dispatches STOCK_EARNINGS_APPLY.';
-  static eventType = 'INTL_STOCK_EARNINGS';
+  static type        = 'IntlUsStockEarningsHandler';
+  static eventType   = 'INTL_STOCK_EARNINGS';
 
   constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = 0.05 } = {}) {
     super(null, 'US Stock Earnings');
@@ -121,6 +155,16 @@ export class IntlUsStockEarningsHandler extends HandlerEntry {
     this._stateKeyFixed  = stateKey;
     this.growthRate      = growthRate;
     this.generatedActionTypes = ['STOCK_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+  }
+
+  static fromJSON(d, { stateRegistry }) {
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, growthRate: d.growthRate ?? 0.05 });
+    h.id = d.id;
+    return h;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, growthRate: this.growthRate };
   }
 
   call({ state }) {
@@ -143,7 +187,8 @@ export class IntlUsStockEarningsHandler extends HandlerEntry {
  */
 export class IntlAuStockEarningsHandler extends HandlerEntry {
   static description = 'Computes annual unrealized appreciation on the AU stock account (balance × growthRate) and dispatches AU_STOCK_EARNINGS_APPLY.';
-  static eventType = 'INTL_AU_STOCK_EARNINGS';
+  static type        = 'IntlAuStockEarningsHandler';
+  static eventType   = 'INTL_AU_STOCK_EARNINGS';
 
   constructor({ stateRegistry, role, ownerId = null, growthRate = 0.06 } = {}) {
     super(null, 'AU Stock Earnings');
@@ -152,6 +197,16 @@ export class IntlAuStockEarningsHandler extends HandlerEntry {
     this.ownerId       = ownerId;
     this.growthRate    = growthRate;
     this.generatedActionTypes = ['AU_STOCK_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+  }
+
+  static fromJSON(d, { stateRegistry }) {
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, growthRate: d.growthRate ?? 0.06 });
+    h.id = d.id;
+    return h;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, growthRate: this.growthRate };
   }
 
   call({ state }) {
@@ -176,7 +231,8 @@ export class IntlAuStockEarningsHandler extends HandlerEntry {
  */
 export class IntlAuStockDividendHandler extends HandlerEntry {
   static description = 'Computes annual AU stock dividends (balance × dividendRate) and routes to the franked-resident or franked-non-resident apply action based on residency.';
-  static eventType = 'INTL_AU_STOCK_DIVIDEND';
+  static type        = 'IntlAuStockDividendHandler';
+  static eventType   = 'INTL_AU_STOCK_DIVIDEND';
 
   constructor({ stateRegistry, role, ownerId = null, dividendRate = 0.04 } = {}) {
     super(null, 'AU Stock Dividend');
@@ -190,6 +246,16 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
       'RECORD_METRIC',
       'RECORD_BALANCE',
     ];
+  }
+
+  static fromJSON(d, { stateRegistry }) {
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, dividendRate: d.dividendRate ?? 0.04 });
+    h.id = d.id;
+    return h;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, dividendRate: this.dividendRate };
   }
 
   call({ state }) {
@@ -224,8 +290,8 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
  */
 export class AuSavingsInterestHandler extends HandlerEntry {
   static description = 'Computes monthly interest on the AU savings account (balance × rate ÷ 12) and emits AU_SAVINGS_EARNINGS_APPLY (credited by AuAccountModule).';
-
-  static eventType = 'INTL_AU_SAVINGS_INTEREST';
+  static type        = 'AuSavingsInterestHandler';
+  static eventType   = 'INTL_AU_SAVINGS_INTEREST';
 
   constructor({ stateRegistry, role, ownerId = null, interestRate = 0.045 } = {}) {
     super(null, 'AU Savings Interest');
@@ -234,6 +300,16 @@ export class AuSavingsInterestHandler extends HandlerEntry {
     this.ownerId       = ownerId;
     this.interestRate  = interestRate;
     this.generatedActionTypes = ['AU_SAVINGS_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+  }
+
+  static fromJSON(d, { stateRegistry }) {
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, interestRate: d.interestRate ?? 0.045 });
+    h.id = d.id;
+    return h;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, interestRate: this.interestRate };
   }
 
   call({ state }) {
@@ -263,8 +339,8 @@ export class AuSavingsInterestHandler extends HandlerEntry {
  */
 export class AuFixedIncomeInterestMonthlyHandler extends HandlerEntry {
   static description = 'Computes monthly interest on the AU fixed income account (balance × rate ÷ 12) and emits AU_FIXED_INCOME_EARNINGS_APPLY.';
-
-  static eventType = 'INTL_AU_FIXED_INCOME_INTEREST';
+  static type        = 'AuFixedIncomeInterestMonthlyHandler';
+  static eventType   = 'INTL_AU_FIXED_INCOME_INTEREST';
 
   constructor({ stateRegistry, role, ownerId = null, interestRate = 0.04 } = {}) {
     super(null, 'AU Fixed Income Interest');
@@ -273,6 +349,16 @@ export class AuFixedIncomeInterestMonthlyHandler extends HandlerEntry {
     this.ownerId       = ownerId;
     this.interestRate  = interestRate;
     this.generatedActionTypes = ['AU_FIXED_INCOME_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+  }
+
+  static fromJSON(d, { stateRegistry }) {
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, interestRate: d.interestRate ?? 0.04 });
+    h.id = d.id;
+    return h;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, interestRate: this.interestRate };
   }
 
   call({ state }) {
@@ -302,8 +388,8 @@ export class AuFixedIncomeInterestMonthlyHandler extends HandlerEntry {
  */
 export class FixedIncomeInterestHandler extends HandlerEntry {
   static description = 'Computes monthly interest on the fixed income account (balance × rate ÷ 12) and emits FIXED_INCOME_EARNINGS_APPLY (credited by UsAccountModule).';
-
-  static eventType = 'INTL_FIXED_INCOME_INTEREST';
+  static type        = 'FixedIncomeInterestHandler';
+  static eventType   = 'INTL_FIXED_INCOME_INTEREST';
 
   constructor({ stateRegistry, role, ownerId = null, interestRate = 0.04 } = {}) {
     super(null, 'Fixed Income Interest');
@@ -312,6 +398,16 @@ export class FixedIncomeInterestHandler extends HandlerEntry {
     this.ownerId       = ownerId;
     this.interestRate  = interestRate;
     this.generatedActionTypes = ['FIXED_INCOME_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+  }
+
+  static fromJSON(d, { stateRegistry }) {
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, interestRate: d.interestRate ?? 0.04 });
+    h.id = d.id;
+    return h;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, interestRate: this.interestRate };
   }
 
   call({ state }) {
@@ -342,8 +438,8 @@ export class FixedIncomeInterestHandler extends HandlerEntry {
  */
 export class SuperEarningsHandler extends HandlerEntry {
   static description = 'Computes annual earnings on the superannuation account and emits SUPER_EARNINGS_APPLY (credited by AuAccountModule).';
-
-  static eventType = 'INTL_SUPER_EARNINGS';
+  static type        = 'SuperEarningsHandler';
+  static eventType   = 'INTL_SUPER_EARNINGS';
 
   constructor({ stateRegistry, role, ownerId = null, defaultRate = 0.07 } = {}) {
     super(null, 'Super Earnings');
@@ -352,6 +448,16 @@ export class SuperEarningsHandler extends HandlerEntry {
     this.ownerId       = ownerId;
     this.defaultRate   = defaultRate;
     this.generatedActionTypes = ['SUPER_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+  }
+
+  static fromJSON(d, { stateRegistry }) {
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, defaultRate: d.defaultRate ?? 0.07 });
+    h.id = d.id;
+    return h;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, defaultRate: this.defaultRate };
   }
 
   call({ data, state }) {

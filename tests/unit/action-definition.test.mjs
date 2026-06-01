@@ -83,15 +83,15 @@ describe('ActionDefinition.instantiate() — static values', () => {
     assert.equal(instance.name, 'salary');
   });
 
-  test('assigns a UUID instanceId and null parentage fields', () => {
+  test('assigns a UUID _instanceId and null parentage fields', () => {
     const def = new ActionDefinition({
       type: 'T',
       config: { actionClass: 'AmountAction', value: 1 },
     });
     const instance = def.instantiate();
-    assert.ok(typeof instance.instanceId === 'string' && instance.instanceId.length > 0);
-    assert.equal(instance.parentInstanceId, null);
-    assert.equal(instance.rootInstanceId, null);
+    assert.ok(typeof instance._instanceId === 'string' && instance._instanceId.length > 0);
+    assert.equal(instance._parentInstanceId, null);
+    assert.equal(instance._rootInstanceId, null);
   });
 
   test('type discriminator from definition always wins over config', () => {

@@ -14,6 +14,7 @@ import { UsSavingsInterestMonthlyHandler }
   from '../../finance/handlers/us-savings-interest-handler.js';
 import { UsSavingsInterestCreditReducer }
   from '../../finance/reducers/us-savings-interest-credit-reducer.js';
+import { ValueType } from '../../simulation-framework/type-registry.js';
 
 /**
  * US_BANKING toolset — US savings account interest machinery.
@@ -30,6 +31,14 @@ export const US_BANKING = {
   id: 'US_BANKING',
   capabilities: ['banking'],
   dependencies: [],
+
+  types: {
+    handlers: [UsSavingsInterestMonthlyHandler],
+    reducers: [UsSavingsInterestCreditReducer],
+    actions: [
+      { type: 'US_SAVINGS_INTEREST_CREDIT', fields: { amount: ValueType.currency('USD') } },
+    ],
+  },
 
   paramSchema(context) {
     return [
