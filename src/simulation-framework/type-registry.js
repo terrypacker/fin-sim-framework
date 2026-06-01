@@ -26,7 +26,9 @@ export class ValueType {
 }
 
 // Fields that are always excluded by the fallback picker — durable framework names.
-const FRAMEWORK_FIELDS = new Set(['id', 'type', 'name', 'kind', 'layer']);
+// siblingIndex is assigned by the simulation engine (not a domain payload field).
+// data/meta are SimGraphNode infrastructure buckets, not action payload fields.
+const FRAMEWORK_FIELDS = new Set(['id', 'type', 'name', 'kind', 'layer', 'siblingIndex', 'data', 'meta']);
 
 /**
  * Registry of all handler / reducer / action-type metadata.

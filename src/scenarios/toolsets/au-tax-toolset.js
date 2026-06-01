@@ -41,12 +41,12 @@ export const AU_TAX = {
     handlers: [AuPeriodAdvanceHandler, AuTaxSettleHandler],
     reducers: [AuPeriodAdvanceReducer, AuTaxSettleApplyReducer, AuTaxPaymentDebitReducer, BalanceSnapshotReducer],
     actions: [
-      { type: 'AU_PERIOD_ADVANCE' },
+      { type: 'AU_PERIOD_ADVANCE',  fields: { period: ValueType.any() } },
       { type: 'AU_TAX_SETTLE_APPLY', family: 'TAX_SETTLE_APPLY', cc: 'AU',
         fields: { tax: ValueType.number(), taxDetail: ValueType.any(), personTaxDetails: ValueType.any() } },
       { type: 'AU_TAX_PAYMENT_DEBIT', family: 'TAX_PAYMENT_DEBIT', cc: 'AU',
         fields: { amount: ValueType.currency('AUD') } },
-      { type: 'RECORD_BALANCE' },
+      { type: 'RECORD_BALANCE',    fields: { fieldPath: ValueType.text(), metricKey: ValueType.text() } },
     ],
   },
 

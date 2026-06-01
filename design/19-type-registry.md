@@ -1,6 +1,6 @@
 # 19 — TypeRegistry, Action-Type Families, and the Per-Country Tax Split
 
-**Status**: Phase 0 + 1 + 2 + 3 + 4 + 5 + 6 + 7 complete (2026-06-01); Phase 8 next
+**Status**: All phases complete (2026-06-01)
 **Resolves**: `inconsistencies.md` §3.1 (`simulation.js` reaches into finance fields), §3.2 (`StateSchemaRegistry.pickActionData` lives in the wrong layer — partial), §3.6 (handler/reducer string sets in the serializer), §4.6 (`_pickActionData` allow-list is a maintenance burden)
 **Related**: `design/9-toolset-compiler.md` (toolset shape this design extends), `design/15-config-as-source-of-truth.md` (the cfg → services contract), `design/17-scenario-as-graph-node.md` (ServiceRegistry layered reset model)
 **Author note**: Introduces a framework-level `TypeRegistry` that lets toolsets declare every class, action type, and field-schema they own in inert metadata. Removes three categories of hand-maintained string lists, deletes ~1,100 lines from `scenario-serializer.js`, and ends the implicit "first-toolset-wins" coupling between `US_TAX` and `AU_TAX`. Bakes in a small rename of framework-internal fields on `Action` so `_*` actually means "framework-internal" everywhere.
@@ -557,11 +557,12 @@ Ordered for testability — each step leaves the tree green.
 25. ✅ Deleted `WITHDRAWAL_ACTION_TYPES`, `REAL_PROPERTY_ACTION_TYPES`, and the inline capital-gains list from `report-definition-registry.js`.
 26. ✅ `report-definition-registry.test.mjs` updated to build a `TypeRegistry` from all 14 toolsets so `familyTypes()` resolves correctly in tests. All 1812 backend + 597 frontend tests pass.
 
-### Phase 8 — cleanup
+### Phase 8 — cleanup ✅
 
-24. Remove the class-name preservation note from README (§9.3).
-25. Update `design/inconsistencies.md` — mark §3.1, §3.6, §4.6 resolved; partial on §3.2 (picker dedup done; full split deferred).
-26. Add `design/19-type-registry.md` to README design index.
+24. ✅ Removed the class-name preservation section from README (§9.3); updated the `Action` module table entry to reference `static type` instead. Updated the Serialization section to reference `TypeRegistry` dispatch.
+25. ✅ Updated `design/inconsistencies.md`: §1.7, §3.1, §3.6, §4.6 marked resolved; §3.2 marked partially resolved (picker dedup done; `StateSchemaRegistry` location split deferred); `primaryAmountField` follow-up added as §2.1b.
+26. ✅ Added `design/15`–`design/19` to README design index.
+27. ✅ `tests/unit/action-payload-schema.test.mjs` written — drift detector runs full IntlRetirementScenario for 2 years, asserts no undeclared fields on registered types and no unregistered types encountered. Added `siblingIndex`, `data`, `meta` to FRAMEWORK_FIELDS (SimGraphNode / engine-assigned fields). Fixed 9 toolset manifest gaps discovered by the test: `US_PERIOD_ADVANCE`, `AU_PERIOD_ADVANCE`, `RECORD_BALANCE`, `RECORD_METRIC` (field name correction: `key` → `fieldName`), `REPLENISH_SAVINGS`, `AU_SAVINGS_EARNINGS_APPLY`, `AU_FIXED_INCOME_EARNINGS_APPLY`, `FIXED_INCOME_EARNINGS_APPLY`, `STOCK_EARNINGS_APPLY`, `STOCK_DIVIDEND_CASH_APPLY`, `ROTH_EARNINGS_APPLY`, `IRA_EARNINGS_APPLY`, `K401_EARNINGS_APPLY`, `SUPER_EARNINGS_APPLY`. All 1814 backend + 597 frontend tests pass.
 
 ---
 

@@ -109,7 +109,7 @@ History note: the project previously used Rollup; see `design/14-vite-migration.
 | `GraphRecorder` | `graph-recorder.js` | Subscribes to `EXECUTION_BEGIN`/`EXECUTION_END` and writes nodes/edges via `ExecutionGraph`. |
 | `EventBus` | `event-bus.js` | Pub/sub with wildcard support. Keeps a full message history for replay/debug. Used both for `SERVICE_ACTION` and for execution telemetry. |
 | Bus messages | `bus-messages.js` | `BusMessage`, `SimulationBusMessage`, `ExecutionBusMessage`, `BreakpointHitMessage`. Discriminators: `type` / `subtype` / `kind` (`EVENT`/`HANDLER`/`ACTION`/`REDUCER`). Hierarchical `executionId` (e.g. `e1.1:h1.1:a1.1`). |
-| `Action` and subclasses | `actions.js` | `Action`, `FieldAction`, `FieldValueAction`, `AmountAction`, `RecordBalanceAction`, `ScriptedAction`, `RecordMetricAction`, `RecordArrayMetricAction`, `RecordNumericSumMetricAction`, `RecordMultiplicativeMetricAction`. All extend `SimGraphNode` (kind: `'action'`, layer: `'config'`). `actionClass` getter returns `constructor.name` — used by the serializer; do not let minifiers strip these names. |
+| `Action` and subclasses | `actions.js` | `Action`, `FieldAction`, `FieldValueAction`, `AmountAction`, `RecordBalanceAction`, `ScriptedAction`, `RecordMetricAction`, `RecordArrayMetricAction`, `RecordNumericSumMetricAction`, `RecordMultiplicativeMetricAction`. All extend `SimGraphNode` (kind: `'action'`, layer: `'config'`). Each subclass declares a `static type` discriminator used for `TypeRegistry` lookup and serialization round-trips. |
 | `ActionDefinition` | `actions.js` | Template that handlers carry in `generatedActionDefinitions`. `instantiate(ctx)` builds a fresh runtime `Action` with a UUID `instanceId`. |
 | `HandlerEntry` / `HandlerRegistry` | `handlers.js` | A `HandlerEntry` wraps a function with `handledEvents`, `generatedActionTypes` (for graph edges), and `generatedActionDefinitions` (for runtime instantiation). |
 | `Reducer` + subclasses + `ReducerPipeline` | `reducers.js` | Priority-ordered reducer chain keyed by action type. Subclasses: `Reducer`, `AccountTransactionReducer`, `ArrayReducer`, `NumericSumReducer`, `MultiplicativeReducer`, `FieldReducer`, `FieldValueReducer`, `NoOpReducer`, `RepeatingReducer`, `ScriptedReducer`. |
@@ -296,8 +296,8 @@ The production scenario. Combines all US + AU + cross-border toolsets, exposes ~
 
 `ScenarioSerializer`:
 
-- `_serializeEvent/_serializeHandler/_serializeReducer/_serializePerson/_serializeAccount/_serializeRealProperty/_serializeCollectible` — per-type serializers.
-- `deserializeGraph(cfg, services)` — reconstructs graph nodes via concrete-class registries (`_ACCOUNT_SERVICE_REDUCERS`, `_NO_ARG_HANDLERS`, …).
+- `_serializeEvent/_serializeHandler/_serializeReducer/_serializePerson/_serializeAccount/_serializeRealProperty/_serializeCollectible` — per-type serializers; each class's `toJSON` / `static fromJSON` carries its own fields.
+- `deserializeGraph(cfg, services)` — reconstructs graph nodes via `TypeRegistry` lookup (`services.typeRegistry.get(d.__type)`).
 - `deserializePersonsAccounts(cfg, services)` — domain objects only.
 - `hasSerializedGraph(cfg)` — guard for the fallback branch.
 
@@ -409,10 +409,6 @@ The current finance plugin set, exported as `FINANCE_PLUGINS` + `FINANCE_DEFAULT
 
 Exported namespaces include `Core` (simulation engine + builders + actions + reducers + journal + `PRIORITY` + `ScenarioRunner`), `Finance` (accounts, persons, periods, `TaxEngine`, `AccountRulesEngine`, jurisdiction modules), `Misc` (`BaseApp`, `BaseScenario`), and `Visualization`. The exact surface follows whatever `build-index.js` discovers under `src/` — re-run it after structural changes.
 
-### Class-name preservation under minification
-
-`Action.actionClass`, `Reducer.reducerType`, and `HandlerEntry.handlerClass` all return `this.constructor.name`. These drive serialization round-trips and editor dispatch. The library Vite config preserves class names; if you swap minifiers, verify the equivalent option is enabled or save/load and type dispatch will silently break.
-
 ---
 
 ## Testing
@@ -507,6 +503,11 @@ Architecture decisions and forward-looking proposals live in `design/`:
 - `12-toolset-ownership-refactor.md`.
 - `13-prebuilt-scenario-parameters.md` — typed param round-tripping (implemented).
 - `14-vite-migration.md`.
+- `15-config-as-source-of-truth.md` — config-as-bootstrap, defaults and state ownership (draft).
+- `16-journal-reporting-plugin.md` — journal reporting plugin design (draft).
+- `17-scenario-as-graph-node.md` — scenario as graph node; `ScenarioRegistry` graph-backed (implemented).
+- `18-performance-enhancements.md` — simulation performance enhancements (Phase 1 complete).
+- `19-type-registry.md` — `TypeRegistry`, action-type families, per-country tax split, serializer rewrite (implemented).
 
 Known structural issues, leaky boundaries, and rework candidates: **[`design/inconsistencies.md`](design/inconsistencies.md)**.
 

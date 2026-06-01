@@ -38,11 +38,11 @@ export const US_BROKERAGE = {
     actions: [
       { type: 'FIXED_INCOME_CONTRIBUTION_APPLY', fields: { amount: ValueType.currency('USD') } },
       { type: 'FIXED_INCOME_WITHDRAWAL_APPLY', family: 'WITHDRAWAL', fields: { amount: ValueType.currency('USD') } },
-      { type: 'FIXED_INCOME_EARNINGS_APPLY',   fields: { amount: ValueType.currency('USD') } },
+      { type: 'FIXED_INCOME_EARNINGS_APPLY',   fields: { amount: ValueType.currency('USD'), isAuResident: ValueType.boolean() } },
       { type: 'STOCK_CONTRIBUTION_APPLY',       fields: { amount: ValueType.currency('USD') } },
       { type: 'STOCK_DIVIDEND_APPLY',           fields: { amount: ValueType.currency('USD') } },
       { type: 'STOCK_DIVIDEND_TAX',             fields: { amount: ValueType.currency('USD'), isAuResident: ValueType.boolean() } },
-      { type: 'STOCK_EARNINGS_APPLY',           fields: { amount: ValueType.currency('USD') } },
+      { type: 'STOCK_EARNINGS_APPLY',           fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text() } },
       { type: 'STOCK_WITHDRAWAL_APPLY', family: 'WITHDRAWAL', cc: 'US',
         fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), isAuResident: ValueType.boolean() } },
       { type: 'STOCK_WITHDRAWAL_TAX', family: 'CAPITAL_GAINS', cc: 'US',
