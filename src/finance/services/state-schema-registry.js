@@ -211,24 +211,4 @@ export class StateSchemaRegistry {
     return _fmt(vt, value);
   }
 
-  /**
-   * Extract only the action-instance fields needed for timeline display and
-   * reporting — avoids deep-cloning the full action object into every journal entry.
-   * Canonical public version; simulation.js uses an internal copy to avoid
-   * cross-layer imports.
-   *
-   * @param {object} action
-   * @returns {object}
-   */
-  static pickActionData(action) {
-    const d = {};
-    if (action.amount           != null) d.amount           = action.amount;
-    if (action.tax              != null) d.tax              = action.tax;
-    if (action.isLongTerm       != null) d.isLongTerm       = action.isLongTerm;
-    if (action.value            != null) d.value            = action.value;
-    if (action.cc               != null) d.cc               = action.cc;
-    if (action.taxDetail        != null) d.taxDetail        = action.taxDetail;
-    if (action.personTaxDetails != null) d.personTaxDetails = action.personTaxDetails;
-    return d;
-  }
 }

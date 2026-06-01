@@ -37,27 +37,18 @@ import { GraphRecorder } from "./graph-recorder.js";
 
 const INTERNAL_SCHEDULING_HANDLER_NAME = 'INTERNAL_SCHEDULING_HANDLER_NAME';
 
-/**
- * Extract only the action-instance fields needed for timeline display and
- * reporting — avoids deep-cloning the full action object into every journal entry.
- * Add fields here as new reporters or display features require them.
- */
-function _pickActionData(action) {
-  const d = {};
-  if (action.amount           != null) d.amount           = action.amount;
-  if (action.tax              != null) d.tax              = action.tax;
-  if (action.isLongTerm       != null) d.isLongTerm       = action.isLongTerm;
-  if (action.value            != null) d.value            = action.value;
-  if (action.cc               != null) d.cc               = action.cc;
-  if (action.taxDetail        != null) d.taxDetail        = action.taxDetail;
-  if (action.personTaxDetails != null) d.personTaxDetails = action.personTaxDetails;
-  // Capital gain sale fields — used for Form 8949 / Schedule D and AU CGT Schedule reporting.
-  if (action.gain             != null) d.gain             = action.gain;
-  if (action.proceeds         != null) d.proceeds         = action.proceeds;
-  if (action.costBasis        != null) d.costBasis        = action.costBasis;
-  if (action.description      != null) d.description      = action.description;
-  if (action.isAuResident     != null) d.isAuResident     = action.isAuResident;
-  return d;
+// Fallback framework-field block-list used when no TypeRegistry is available
+// (e.g. bare Simulation created without a ServiceRegistry in test fixtures).
+const _FRAMEWORK_FIELDS = new Set(['id', 'type', 'name', 'kind', 'layer']);
+
+function _heuristicPickPayload(action) {
+  const out = {};
+  for (const k of Object.keys(action)) {
+    if (_FRAMEWORK_FIELDS.has(k)) continue;
+    if (k.startsWith('_'))       continue;
+    if (action[k] != null)       out[k] = action[k];
+  }
+  return out;
 }
 
 /**
@@ -166,6 +157,12 @@ export class Simulation {
   set snapshotInterval(v){ this.history.snapshotInterval = v; }
   get eventCounter()     { return this.history.eventCounter; }
   set eventCounter(v)    { this.history.eventCounter = v; }
+
+  _pickPayload(action) {
+    const reg = this.bus.serviceRegistry?.typeRegistry;
+    if (reg) return reg.pickPayload(action);
+    return _heuristicPickPayload(action);
+  }
 
   deepClone(obj) {
     return structuredClone(obj);
@@ -838,9 +835,7 @@ export class Simulation {
               nodeId:       action._actionId         ?? null,
               type:         action.type,
               name:         action.name              ?? action.type,
-              // Selective payload fields needed for display and reporting.
-              // Not a full clone — only fields consumed by the UI/reporting layer.
-              data:         _pickActionData(action),
+              data:         this._pickPayload(action),
             },
             reducer: {
               nodeId: reducerWrapper.reducer?.id   ?? null,

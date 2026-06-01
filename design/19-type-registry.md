@@ -1,6 +1,6 @@
 # 19 — TypeRegistry, Action-Type Families, and the Per-Country Tax Split
 
-**Status**: Phase 0 + 1 + 2 + 3 + 4 + 5 complete (2026-06-01); Phase 6 next
+**Status**: Phase 0 + 1 + 2 + 3 + 4 + 5 + 6 complete (2026-06-01); Phase 7 next
 **Resolves**: `inconsistencies.md` §3.1 (`simulation.js` reaches into finance fields), §3.2 (`StateSchemaRegistry.pickActionData` lives in the wrong layer — partial), §3.6 (handler/reducer string sets in the serializer), §4.6 (`_pickActionData` allow-list is a maintenance burden)
 **Related**: `design/9-toolset-compiler.md` (toolset shape this design extends), `design/15-config-as-source-of-truth.md` (the cfg → services contract), `design/17-scenario-as-graph-node.md` (ServiceRegistry layered reset model)
 **Author note**: Introduces a framework-level `TypeRegistry` that lets toolsets declare every class, action type, and field-schema they own in inert metadata. Removes three categories of hand-maintained string lists, deletes ~1,100 lines from `scenario-serializer.js`, and ends the implicit "first-toolset-wins" coupling between `US_TAX` and `AU_TAX`. Bakes in a small rename of framework-internal fields on `Action` so `_*` actually means "framework-internal" everywhere.
@@ -543,11 +543,11 @@ Ordered for testability — each step leaves the tree green.
 17. ✅ Rewrite `scenario-serializer.js` per §9. Big-bang — delete the string sets and switches in one PR.
 18. ✅ Run the full test suite. The roundtrip suite is the regression net. All 1812 backend + 597 frontend tests pass.
 
-### Phase 6 — picker swap
+### Phase 6 — picker swap ✅
 
-19. Delete `_pickActionData` from `simulation.js`. Replace callsites with `this.bus.serviceRegistry?.typeRegistry?.pickPayload(action)`, with a small fallback when the sim is constructed without a `ServiceRegistry` (test fixtures).
-20. Delete `StateSchemaRegistry.pickActionData`.
-21. Update `JournalReportPlugin` and any other plugin reading directly from action objects to use `typeRegistry.getAction(type).fields`.
+19. ✅ Deleted `_pickActionData` from `simulation.js`. Replaced with `_pickPayload(action)` method using `this.bus.serviceRegistry?.typeRegistry?.pickPayload(action)`, with heuristic fallback (all non-framework, non-underscore fields) when no ServiceRegistry is present (test fixtures). `ServiceRegistry` now sets `this.bus.serviceRegistry = this` so the back-reference is available.
+20. ✅ Deleted `StateSchemaRegistry.pickActionData` (had no callers).
+21. ✅ JournalReportPlugin reads from flat projected rows (via journal-data-source.js) which read from `entry.action.data` — no direct action-object reads needed. Toolset action type declarations updated: missing `taxDetail`/`personTaxDetails` added to tax settle entries; ~20 chained `*_TAX` action types registered across brokerage, income, real-property, retirement, and banking toolsets. TypeRegistry now defaults to permissive (`_strict = false`) to allow smooth transition while not all types are declared.
 
 ### Phase 7 — report families
 

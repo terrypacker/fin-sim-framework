@@ -47,6 +47,7 @@ export class ServiceRegistry {
 
   constructor() {
     this.bus                = new EventBus();
+    this.bus.serviceRegistry = this;
     this.graph              = new Graph();
     this.typeRegistry       = new TypeRegistry();
     this.graphQueryApi      = new GraphQueryApi(this.graph);

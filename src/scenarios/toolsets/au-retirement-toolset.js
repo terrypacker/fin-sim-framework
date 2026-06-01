@@ -77,9 +77,12 @@ export const AU_RETIREMENT = {
       { type: 'ACCUMULATE_DEFICIT',    fields: { amount: ValueType.number() } },
       { type: 'OUT_OF_FUNDS',          fields: { deficit: ValueType.number(), currency: ValueType.text() } },
       { type: 'SUPER_CONTRIBUTION_APPLY',          fields: { amount: ValueType.currency('AUD') } },
+      { type: 'SUPER_CONTRIBUTION_TAX',            fields: { amount: ValueType.currency('AUD') } },
       { type: 'SUPER_WITHDRAWAL_CONTRIB_APPLY',  family: 'WITHDRAWAL', cc: 'AU', fields: { amount: ValueType.currency('AUD') } },
       { type: 'SUPER_WITHDRAWAL_EARNINGS_APPLY', family: 'WITHDRAWAL', cc: 'AU', fields: { amount: ValueType.currency('AUD') } },
+      { type: 'SUPER_WITHDRAWAL_EARNINGS_TAX',   fields: { amount: ValueType.currency('AUD') } },
       { type: 'SUPER_EARNINGS_APPLY',              fields: { amount: ValueType.currency('AUD') } },
+      { type: 'SUPER_EARNINGS_TAX',               fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
     ],
   },
 

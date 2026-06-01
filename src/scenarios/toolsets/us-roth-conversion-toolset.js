@@ -47,6 +47,7 @@ export const US_ROTH_CONVERSION = {
     reducers: [RothConversionApplyReducer],
     actions: [
       { type: 'ROTH_CONVERSION_APPLY', fields: { amount: ValueType.currency('USD') } },
+      { type: 'ROTH_CONVERSION_TAX',   fields: { amount: ValueType.currency('USD'), isAuResident: ValueType.boolean() } },
     ],
   },
 

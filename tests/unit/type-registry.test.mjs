@@ -226,9 +226,9 @@ describe('TypeRegistry.pickPayload (fallback permissive)', () => {
 // ─── pickPayload — strict mode ────────────────────────────────────────────────
 
 describe('TypeRegistry.pickPayload (strict)', () => {
-  test('throws for unregistered action type', () => {
+  test('throws for unregistered action type when strict mode enabled', () => {
     const reg = makeRegistry();
-    // strict is true by default
+    reg.setStrict(true);
     assert.throws(
       () => reg.pickPayload({ type: 'MISSING_TYPE', amount: 1 }),
       /MISSING_TYPE/

@@ -43,6 +43,11 @@ export const AU_BROKERAGE = {
       { type: 'AU_STOCK_EARNINGS_APPLY', fields: { amount: ValueType.currency('AUD') } },
       { type: 'AU_STOCK_WITHDRAWAL_APPLY', family: 'WITHDRAWAL', cc: 'AU',
         fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), isAuResident: ValueType.boolean() } },
+      { type: 'AU_STOCK_WITHDRAWAL_TAX', family: 'CAPITAL_GAINS', cc: 'AU',
+        fields: { gain: ValueType.number(), isAuResident: ValueType.boolean(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text() } },
+      { type: 'AU_DIVIDEND_FRANKED_RESIDENT_TAX',    fields: { amount: ValueType.currency('AUD') } },
+      { type: 'AU_DIVIDEND_UNFRANKED_RESIDENT_TAX',  fields: { amount: ValueType.currency('AUD') } },
+      { type: 'AU_DIVIDEND_UNFRANKED_NONRESIDENT_TAX', fields: { amount: ValueType.currency('AUD') } },
     ],
   },
 

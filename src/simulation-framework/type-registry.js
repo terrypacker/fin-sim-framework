@@ -44,7 +44,7 @@ export class TypeRegistry {
     this._actionTypes = new Map();  // typeString → ActionTypeEntry
     this._families    = new Map();  // familyName → Set<typeString>
     this._byCategory  = new Map();  // category → Set<ctor>
-    this._strict      = true;
+    this._strict      = false;
     this._warnedTypes = new Set();
   }
 

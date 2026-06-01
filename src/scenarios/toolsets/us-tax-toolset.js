@@ -42,7 +42,7 @@ export const US_TAX = {
     actions: [
       { type: 'US_PERIOD_ADVANCE' },
       { type: 'US_TAX_SETTLE_APPLY', family: 'TAX_SETTLE_APPLY', cc: 'US',
-        fields: { tax: ValueType.number() } },
+        fields: { tax: ValueType.number(), taxDetail: ValueType.any() } },
       { type: 'US_TAX_PAYMENT_DEBIT', family: 'TAX_PAYMENT_DEBIT', cc: 'US',
         fields: { amount: ValueType.currency('USD') } },
       { type: 'RECORD_BALANCE' },

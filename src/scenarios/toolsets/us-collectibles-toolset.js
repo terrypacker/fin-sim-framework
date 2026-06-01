@@ -42,6 +42,8 @@ export const US_COLLECTIBLES = {
     actions: [
       { type: 'COLLECTIBLE_SALE_APPLY',
         fields: { salePrice: ValueType.number(), costBasis: ValueType.number() } },
+      { type: 'COLLECTIBLE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'US',
+        fields: { gain: ValueType.number(), isAuResident: ValueType.boolean() } },
       { type: 'COLLECTIBLE_VALUE_CHANGE_APPLY', fields: { amount: ValueType.number() } },
     ],
   },
