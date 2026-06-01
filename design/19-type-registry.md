@@ -1,6 +1,6 @@
 # 19 — TypeRegistry, Action-Type Families, and the Per-Country Tax Split
 
-**Status**: Phase 0 + 1 + 2 + 3 + 4 + 5 + 6 complete (2026-06-01); Phase 7 next
+**Status**: Phase 0 + 1 + 2 + 3 + 4 + 5 + 6 + 7 complete (2026-06-01); Phase 8 next
 **Resolves**: `inconsistencies.md` §3.1 (`simulation.js` reaches into finance fields), §3.2 (`StateSchemaRegistry.pickActionData` lives in the wrong layer — partial), §3.6 (handler/reducer string sets in the serializer), §4.6 (`_pickActionData` allow-list is a maintenance burden)
 **Related**: `design/9-toolset-compiler.md` (toolset shape this design extends), `design/15-config-as-source-of-truth.md` (the cfg → services contract), `design/17-scenario-as-graph-node.md` (ServiceRegistry layered reset model)
 **Author note**: Introduces a framework-level `TypeRegistry` that lets toolsets declare every class, action type, and field-schema they own in inert metadata. Removes three categories of hand-maintained string lists, deletes ~1,100 lines from `scenario-serializer.js`, and ends the implicit "first-toolset-wins" coupling between `US_TAX` and `AU_TAX`. Bakes in a small rename of framework-internal fields on `Action` so `_*` actually means "framework-internal" everywhere.
@@ -549,10 +549,13 @@ Ordered for testability — each step leaves the tree green.
 20. ✅ Deleted `StateSchemaRegistry.pickActionData` (had no callers).
 21. ✅ JournalReportPlugin reads from flat projected rows (via journal-data-source.js) which read from `entry.action.data` — no direct action-object reads needed. Toolset action type declarations updated: missing `taxDetail`/`personTaxDetails` added to tax settle entries; ~20 chained `*_TAX` action types registered across brokerage, income, real-property, retirement, and banking toolsets. TypeRegistry now defaults to permissive (`_strict = false`) to allow smooth transition while not all types are declared.
 
-### Phase 7 — report families
+### Phase 7 — report families ✅
 
-22. Rewrite `WithdrawalsByAccountDef`, `RealPropertyCashFlowDef`, `CapitalGainsByDisposalDef`, `TaxPaidByYearDef`, `AuTaxByPersonYearDef` to use `api.familyTypes(family, { cc })` and the per-country tax types.
-23. Delete `WITHDRAWAL_ACTION_TYPES`, `REAL_PROPERTY_ACTION_TYPES`, and the inline capital-gains list.
+22. ✅ `JournalQueryApi` extended: constructor now accepts optional `typeRegistry`; `familyTypes(family, { cc })` method added that delegates to `typeRegistry.familyTypes()` (returns `[]` when no registry). `JournalReportPlugin._bindJournal()` passes `services.typeRegistry` when constructing the three API instances.
+23. ✅ `K401_TO_IRA_CONVERSION_APPLY` registered with `family: 'WITHDRAWAL', cc: 'US'` in `us-retirement-toolset.js` (was the only WITHDRAWAL-family gap).
+24. ✅ Rewrote `WithdrawalsByAccountDef`, `RealPropertyCashFlowDef`, `CapitalGainsByDisposalDef`, `TaxPaidByYearDef`, `AuTaxByPersonYearDef` to use `api.familyTypes(family, { cc })`.
+25. ✅ Deleted `WITHDRAWAL_ACTION_TYPES`, `REAL_PROPERTY_ACTION_TYPES`, and the inline capital-gains list from `report-definition-registry.js`.
+26. ✅ `report-definition-registry.test.mjs` updated to build a `TypeRegistry` from all 14 toolsets so `familyTypes()` resolves correctly in tests. All 1812 backend + 597 frontend tests pass.
 
 ### Phase 8 — cleanup
 

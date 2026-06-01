@@ -21,7 +21,34 @@ import assert    from 'node:assert/strict';
 import { Journal, JournalEntry }      from '../../src/simulation-framework/journal.js';
 import { JournalDataSource }          from '../../src/finance/journal-data-source.js';
 import { JournalQueryApi }            from '../../src/finance/journal-query-api.js';
+import { TypeRegistry }               from '../../src/simulation-framework/type-registry.js';
 import { ReportDefinitionRegistry }   from '../../src/finance/journal-reporting/report-definition-registry.js';
+
+// All toolsets — registered once so familyTypes() resolves correctly.
+import { US_BANKING }        from '../../src/scenarios/toolsets/us-banking-toolset.js';
+import { US_BROKERAGE }      from '../../src/scenarios/toolsets/us-brokerage-toolset.js';
+import { US_COLLECTIBLES }   from '../../src/scenarios/toolsets/us-collectibles-toolset.js';
+import { US_INCOME }         from '../../src/scenarios/toolsets/us-income-toolset.js';
+import { US_REAL_PROPERTY }  from '../../src/scenarios/toolsets/us-real-property-toolset.js';
+import { US_RETIREMENT }     from '../../src/scenarios/toolsets/us-retirement-toolset.js';
+import { US_ROTH_CONVERSION } from '../../src/scenarios/toolsets/us-roth-conversion-toolset.js';
+import { US_TAX }            from '../../src/scenarios/toolsets/us-tax-toolset.js';
+import { AU_BANKING }        from '../../src/scenarios/toolsets/au-banking-toolset.js';
+import { AU_BROKERAGE }      from '../../src/scenarios/toolsets/au-brokerage-toolset.js';
+import { AU_INCOME }         from '../../src/scenarios/toolsets/au-income-toolset.js';
+import { AU_REAL_PROPERTY }  from '../../src/scenarios/toolsets/au-real-property-toolset.js';
+import { AU_RETIREMENT }     from '../../src/scenarios/toolsets/au-retirement-toolset.js';
+import { AU_TAX }            from '../../src/scenarios/toolsets/au-tax-toolset.js';
+
+function buildTypeRegistry() {
+  const reg = new TypeRegistry();
+  for (const t of [
+    US_BANKING, US_BROKERAGE, US_COLLECTIBLES, US_INCOME, US_REAL_PROPERTY,
+    US_RETIREMENT, US_ROTH_CONVERSION, US_TAX,
+    AU_BANKING, AU_BROKERAGE, AU_INCOME, AU_REAL_PROPERTY, AU_RETIREMENT, AU_TAX,
+  ]) reg.registerToolset(t);
+  return reg;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -51,10 +78,12 @@ function entry({ id, date, actionType, data, stateDiff } = {}) {
   });
 }
 
+const _typeRegistry = buildTypeRegistry();
+
 function buildApi(entries, { perDiff = false, perPerson = false } = {}) {
   const j = new Journal({ enabled: true });
   for (const e of entries) j.addEntry(e);
-  return new JournalQueryApi(new JournalDataSource(j, { perDiff, perPerson }));
+  return new JournalQueryApi(new JournalDataSource(j, { perDiff, perPerson }), _typeRegistry);
 }
 
 async function runDef(def, params, entries) {

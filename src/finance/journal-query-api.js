@@ -27,6 +27,27 @@ import { QueryApi } from '../query/query-api.js';
  */
 export class JournalQueryApi extends QueryApi {
 
+  /**
+   * @param {import('../query/query-api.js').DataSource} dataSource
+   * @param {import('../simulation-framework/type-registry.js').TypeRegistry} [typeRegistry]
+   */
+  constructor(dataSource, typeRegistry) {
+    super(dataSource);
+    this._typeRegistry = typeRegistry ?? null;
+  }
+
+  /**
+   * Delegates to TypeRegistry.familyTypes(). Returns [] when no registry is bound.
+   * Use the result as the `value` of an `op:'in'` predicate on `actionType`.
+   *
+   * @param {string} family
+   * @param {{ cc?: string }} [opts]
+   * @returns {string[]}
+   */
+  familyTypes(family, { cc } = {}) {
+    return this._typeRegistry?.familyTypes(family, { cc }) ?? [];
+  }
+
   // ─── Domain helpers ────────────────────────────────────────────────────────
 
   /**

@@ -174,9 +174,10 @@ export class JournalReportPlugin extends WorkbenchComponent {
 
   _bindJournal(journal) {
     this._journal   = journal;
-    this._api       = journal ? new JournalQueryApi(new JournalDataSource(journal))                          : null;
-    this._diffApi   = journal ? new JournalQueryApi(new JournalDataSource(journal, { perDiff:   true }))     : null;
-    this._personApi = journal ? new JournalQueryApi(new JournalDataSource(journal, { perPerson: true }))     : null;
+    const typeRegistry = this._services()?.typeRegistry ?? null;
+    this._api       = journal ? new JournalQueryApi(new JournalDataSource(journal),                          typeRegistry) : null;
+    this._diffApi   = journal ? new JournalQueryApi(new JournalDataSource(journal, { perDiff:   true }),     typeRegistry) : null;
+    this._personApi = journal ? new JournalQueryApi(new JournalDataSource(journal, { perPerson: true }),     typeRegistry) : null;
     this._groups    = [];
     this._grandTotal = null;
     this._expandedKeys.clear();

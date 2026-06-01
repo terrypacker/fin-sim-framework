@@ -164,7 +164,7 @@ export const US_RETIREMENT = {
       { type: 'K401_WITHDRAWAL_TAX',            fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number() } },
       { type: 'K401_RMD_APPLY',                 family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
       { type: 'K401_RMD_TAX',                   fields: { amount: ValueType.currency('USD'), isAuResident: ValueType.boolean() } },
-      { type: 'K401_TO_IRA_CONVERSION_APPLY',           fields: { amount: ValueType.currency('USD') } },
+      { type: 'K401_TO_IRA_CONVERSION_APPLY', family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
     ],
   },
 
