@@ -17,6 +17,7 @@ import {
   AuDividendUnfrankedResidentHandler, AuDividendUnfrankedNonResidentHandler,
   AuStockEarningsHandler, AuStockWithdrawalHandler,
 } from '../../finance/account-rules/au/au-brokerage-classes.js';
+import { ValueType } from '../../simulation-framework/type-registry.js';
 
 /**
  * AU_BROKERAGE toolset — AU stock and dividend account mechanics.
@@ -30,6 +31,20 @@ export const AU_BROKERAGE = {
   id: 'AU_BROKERAGE',
   capabilities: ['au-brokerage'],
   dependencies: ['AU_TAX'],
+
+  types: {
+    handlers: [AuDividendFrankedResidentHandler, AuDividendFrankedNonResidentHandler, AuDividendUnfrankedResidentHandler, AuDividendUnfrankedNonResidentHandler, AuStockEarningsHandler, AuStockWithdrawalHandler],
+    reducers: [AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer, AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer, AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer],
+    actions: [
+      { type: 'AU_DIVIDEND_FRANKED_RESIDENT_APPLY',    fields: { amount: ValueType.currency('AUD') } },
+      { type: 'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY', fields: { amount: ValueType.currency('AUD') } },
+      { type: 'AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY',  fields: { amount: ValueType.currency('AUD') } },
+      { type: 'AU_DIVIDEND_UNFRANKED_NONRESIDENT_APPLY', fields: { amount: ValueType.currency('AUD') } },
+      { type: 'AU_STOCK_EARNINGS_APPLY', fields: { amount: ValueType.currency('AUD') } },
+      { type: 'AU_STOCK_WITHDRAWAL_APPLY', family: 'WITHDRAWAL', cc: 'AU',
+        fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), isAuResident: ValueType.boolean() } },
+    ],
+  },
 
   paramSchema(context) { return []; },
   state(context) { return {}; },

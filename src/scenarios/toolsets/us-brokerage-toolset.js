@@ -16,6 +16,7 @@ import {
   FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler,
   StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler,
 } from '../../finance/account-rules/us/us-brokerage-classes.js';
+import { ValueType } from '../../simulation-framework/type-registry.js';
 
 /**
  * US_BROKERAGE toolset — US fixed-income and stock account mechanics.
@@ -30,6 +31,21 @@ export const US_BROKERAGE = {
   id: 'US_BROKERAGE',
   capabilities: ['brokerage'],
   dependencies: ['US_TAX'],
+
+  types: {
+    handlers: [FixedIncomeContributionHandler, FixedIncomeWithdrawalHandler, FixedIncomeEarningsHandler, StockContributionHandler, StockDividendHandler, StockEarningsHandler, StockWithdrawalHandler],
+    reducers: [FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer, FixedIncomeEarningsApplyReducer, StockContributionApplyReducer, StockDividendApplyReducer, StockEarningsApplyReducer, StockWithdrawalApplyReducer],
+    actions: [
+      { type: 'FIXED_INCOME_CONTRIBUTION_APPLY', fields: { amount: ValueType.currency('USD') } },
+      { type: 'FIXED_INCOME_WITHDRAWAL_APPLY', family: 'WITHDRAWAL', fields: { amount: ValueType.currency('USD') } },
+      { type: 'FIXED_INCOME_EARNINGS_APPLY',   fields: { amount: ValueType.currency('USD') } },
+      { type: 'STOCK_CONTRIBUTION_APPLY',       fields: { amount: ValueType.currency('USD') } },
+      { type: 'STOCK_DIVIDEND_APPLY',           fields: { amount: ValueType.currency('USD') } },
+      { type: 'STOCK_EARNINGS_APPLY',           fields: { amount: ValueType.currency('USD') } },
+      { type: 'STOCK_WITHDRAWAL_APPLY', family: 'WITHDRAWAL', cc: 'US',
+        fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), isAuResident: ValueType.boolean() } },
+    ],
+  },
 
   paramSchema(context) { return []; },
   state(context) { return {}; },

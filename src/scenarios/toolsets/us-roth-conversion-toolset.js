@@ -15,6 +15,7 @@ import {
   RothConversionApplyReducer,
   RothConversionHandler, RothConversionPolicyHandler,
 } from '../../finance/account-rules/us/roth-conversion-classes.js';
+import { ValueType } from '../../simulation-framework/type-registry.js';
 
 /**
  * US_ROTH_CONVERSION toolset — bracket-fill Roth conversion policy scheduling.
@@ -40,6 +41,14 @@ export const US_ROTH_CONVERSION = {
   id: 'US_ROTH_CONVERSION',
   capabilities: ['roth-conversion'],
   dependencies: ['US_TAX'],
+
+  types: {
+    handlers: [RothConversionHandler, RothConversionPolicyHandler],
+    reducers: [RothConversionApplyReducer],
+    actions: [
+      { type: 'ROTH_CONVERSION_APPLY', fields: { amount: ValueType.currency('USD') } },
+    ],
+  },
 
   paramSchema(context) {
     return [

@@ -13,6 +13,11 @@ import { PeriodService } from '../../finance/period/period-service.js';
 import { BalanceSnapshotReducer } from '../../simulation-framework/reducers.js';
 import { buildUsCalendarYear, applyTo }
   from '../../finance/period/period-builder.js';
+import { UsPeriodAdvanceHandler, UsPeriodAdvanceReducer }
+  from '../../finance/tax/period-advance-classes.js';
+import { UsTaxSettleHandler, UsTaxSettleApplyReducer, UsTaxPaymentDebitReducer }
+  from '../../finance/tax/tax-settle-classes.js';
+import { ValueType } from '../../simulation-framework/type-registry.js';
 
 /**
  * US_TAX toolset — declarative shell around TaxService.
@@ -30,6 +35,19 @@ export const US_TAX = {
   id: 'US_TAX',
   capabilities: ['taxation'],
   dependencies: ['US_BANKING'],
+
+  types: {
+    handlers: [UsPeriodAdvanceHandler, UsTaxSettleHandler],
+    reducers: [UsPeriodAdvanceReducer, UsTaxSettleApplyReducer, UsTaxPaymentDebitReducer, BalanceSnapshotReducer],
+    actions: [
+      { type: 'US_PERIOD_ADVANCE' },
+      { type: 'US_TAX_SETTLE_APPLY', family: 'TAX_SETTLE_APPLY', cc: 'US',
+        fields: { tax: ValueType.number() } },
+      { type: 'US_TAX_PAYMENT_DEBIT', family: 'TAX_PAYMENT_DEBIT', cc: 'US',
+        fields: { amount: ValueType.currency('USD') } },
+      { type: 'RECORD_BALANCE' },
+    ],
+  },
 
   paramSchema(context) {
     return [

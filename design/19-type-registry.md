@@ -1,6 +1,6 @@
 # 19 — TypeRegistry, Action-Type Families, and the Per-Country Tax Split
 
-**Status**: Phase 0 + 1 complete (2026-05-31); Phase 2 next
+**Status**: Phase 0 + 1 + 2 + 3 complete (2026-06-01); Phase 4 next
 **Resolves**: `inconsistencies.md` §3.1 (`simulation.js` reaches into finance fields), §3.2 (`StateSchemaRegistry.pickActionData` lives in the wrong layer — partial), §3.6 (handler/reducer string sets in the serializer), §4.6 (`_pickActionData` allow-list is a maintenance burden)
 **Related**: `design/9-toolset-compiler.md` (toolset shape this design extends), `design/15-config-as-source-of-truth.md` (the cfg → services contract), `design/17-scenario-as-graph-node.md` (ServiceRegistry layered reset model)
 **Author note**: Introduces a framework-level `TypeRegistry` that lets toolsets declare every class, action type, and field-schema they own in inert metadata. Removes three categories of hand-maintained string lists, deletes ~1,100 lines from `scenario-serializer.js`, and ends the implicit "first-toolset-wins" coupling between `US_TAX` and `AU_TAX`. Bakes in a small rename of framework-internal fields on `Action` so `_*` actually means "framework-internal" everywhere.
@@ -520,18 +520,18 @@ Ordered for testability — each step leaves the tree green.
 6. ✅ `typeRegistry` added to `ServiceRegistry` constructor, `simulationContext`, and instance `reset()`.
 7. ✅ `tests/unit/type-registry.test.mjs` — 29 tests covering registration, lookup, family queries, strict / permissive `pickPayload`, framework block-list, base class statics. All 2409 tests pass.
 
-### Phase 2 — country split
+### Phase 2 — country split ✅
 
-8. Refactor `TaxPaymentDebitReducer` / `TaxSettleApplyReducer` / `TaxSettleHandler` / `PeriodAdvanceReducer` / `PeriodAdvanceHandler` into base + per-country subclasses. Update emitters (`TaxSettleApplyReducer` chained action, `ChangeResidencyHandler`).
-9. Delete `TaxService.getSharedReducers()` and the context cache.
-10. Update US_TAX / AU_TAX toolsets to register their own per-country reducers directly.
-11. Regression: `evt-*` tests still pass; `intl-retirement-scenario.test.mjs` still passes; tax round-trip via `serializer-finance-roundtrip.test.mjs` still passes (after the next step touches the serializer).
+8. ✅ Refactored `TaxPaymentDebitReducer` / `TaxSettleApplyReducer` / `TaxSettleHandler` / `PeriodAdvanceReducer` / `PeriodAdvanceHandler` into base + per-country subclasses. Updated emitters (`TaxSettleApplyReducer` chained action, `ChangeResidencyHandler`).
+9. ✅ Deleted `TaxService.getSharedReducers()` and the context cache.
+10. ✅ Updated US_TAX / AU_TAX toolsets to register their own per-country reducers directly.
+11. ✅ Regression: `evt-*` tests still pass; `intl-retirement-scenario.test.mjs` still passes; tax round-trip via `serializer-finance-roundtrip.test.mjs` still passes.
 
-### Phase 3 — toolset manifests
+### Phase 3 — toolset manifests ✅
 
-12. Add `types: { handlers, reducers, actions }` blocks to every toolset (17 files in `src/scenarios/toolsets/`). The action entries are the migration of `_pickActionData` + the three report literal lists + new per-country tax variants.
-13. `ScenarioCompiler.compile()` calls `services.typeRegistry.registerToolset(t)` for each resolved toolset, as a new first step.
-14. `ScenarioLoader.load()` registers types from `cfg.toolsets` before dispatch, so the graph-deserialize path also sees a populated registry.
+12. ✅ Added `types: { handlers, reducers, actions }` blocks to all 17 toolsets in `src/scenarios/toolsets/`. Action entries cover all per-country tax variants, account-level withdrawal/deposit actions, and cross-border actions.
+13. ✅ `ScenarioCompiler.compile()` calls `services.typeRegistry.registerToolset(t)` for each resolved toolset as the first step.
+14. ✅ `ScenarioLoader.load()` graph-deserialize path covered via the compiler delegation — no separate change needed. All 597 tests pass.
 
 ### Phase 4 — class statics + `fromJSON` for every subclass
 

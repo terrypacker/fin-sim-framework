@@ -51,6 +51,7 @@ import {
   IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
   IraRolloverWithdrawalHandler, IraRmdHandler, IraAnnualRmdHandler,
 } from '../../finance/account-rules/us/ira-rollover-classes.js';
+import { ValueType } from '../../simulation-framework/type-registry.js';
 import { TaxService } from '../../finance/tax-service.js';
 import {
   RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
@@ -99,6 +100,63 @@ export const US_RETIREMENT = {
   id: 'US_RETIREMENT',
   capabilities: ['retirement'],
   dependencies: ['US_BANKING', 'US_TAX', 'US_INCOME', 'US_BROKERAGE'],
+
+  types: {
+    handlers: [
+      MonthlyExpensesHandler, MonthlyWagesHandler, MonthlySocialSecurityHandler,
+      DividendScheduledHandler, FixedIncomeInterestHandler,
+      IntlIraEarningsHandler, IntlRothEarningsHandler, IntlK401EarningsHandler, IntlUsStockEarningsHandler,
+      OutOfFundsHandler,
+      RothContributionHandler, RothWithdrawalContributionsHandler, RothWithdrawalEarningsHandler, RothEarningsHandler,
+      RothRolloverContributionHandler, RothRolloverEarningsHandler,
+      RothRolloverWithdrawalContributionsHandler, RothRolloverWithdrawalEarningsHandler,
+      IraContributionHandler, IraWithdrawalContributionsHandler, IraWithdrawalEarningsHandler, IraEarningsHandler,
+      IraRolloverWithdrawalHandler, IraRmdHandler, IraAnnualRmdHandler,
+      K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler,
+      K401AnnualRmdHandler, K401ToIraConversionHandler,
+    ],
+    reducers: [
+      ExpenseDebitReducer, ReplenishSavingsReducer, StockDividendCashApplyReducer,
+      SetOutOfFundsDateReducer, AccumulateDeficitReducer, OutOfFundsReducer, InflationAdjustReducer,
+      RothContributionApplyReducer, RothWithdrawalContribApplyReducer,
+      RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer,
+      RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
+      RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer,
+      IraContributionApplyReducer, IraWithdrawalContribApplyReducer,
+      IraWithdrawalEarningsApplyReducer, IraEarningsApplyReducer,
+      IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer,
+      K401ContributionApplyReducer, K401EarningsApplyReducer,
+      K401WithdrawalApplyReducer, K401RmdApplyReducer, K401ToIraConversionApplyReducer,
+    ],
+    actions: [
+      { type: 'EXPENSE_DEBIT',         fields: { amount: ValueType.number(), targetKey: ValueType.text() } },
+      { type: 'REPLENISH_SAVINGS' },
+      { type: 'RECORD_METRIC',         fields: { key: ValueType.text(), value: ValueType.number() } },
+      { type: 'SET_OUT_OF_FUNDS_DATE', fields: { date: ValueType.any() } },
+      { type: 'ACCUMULATE_DEFICIT',    fields: { amount: ValueType.number() } },
+      { type: 'OUT_OF_FUNDS',          fields: { deficit: ValueType.number(), currency: ValueType.text() } },
+      { type: 'STOCK_DIVIDEND_CASH_APPLY',              fields: { amount: ValueType.currency('USD') } },
+      { type: 'ROTH_CONTRIBUTION_APPLY',                fields: { amount: ValueType.currency('USD') } },
+      { type: 'ROTH_WITHDRAWAL_CONTRIB_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
+      { type: 'ROTH_WITHDRAWAL_EARNINGS_APPLY', family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
+      { type: 'ROTH_EARNINGS_APPLY',                    fields: { amount: ValueType.currency('USD') } },
+      { type: 'ROTH_ROLLOVER_CONTRIBUTION_APPLY',        fields: { amount: ValueType.currency('USD') } },
+      { type: 'ROTH_ROLLOVER_EARNINGS_APPLY',            fields: { amount: ValueType.currency('USD') } },
+      { type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
+      { type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_APPLY', family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
+      { type: 'IRA_CONTRIBUTION_APPLY',                 fields: { amount: ValueType.currency('USD') } },
+      { type: 'IRA_WITHDRAWAL_CONTRIB_APPLY',   family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
+      { type: 'IRA_WITHDRAWAL_EARNINGS_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
+      { type: 'IRA_EARNINGS_APPLY',                     fields: { amount: ValueType.currency('USD') } },
+      { type: 'IRA_ROLLOVER_WITHDRAWAL_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
+      { type: 'IRA_RMD_APPLY',                  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
+      { type: 'K401_CONTRIBUTION_APPLY',                fields: { amount: ValueType.currency('USD') } },
+      { type: 'K401_EARNINGS_APPLY',                    fields: { amount: ValueType.currency('USD') } },
+      { type: 'K401_WITHDRAWAL_APPLY',          family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
+      { type: 'K401_RMD_APPLY',                 family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
+      { type: 'K401_TO_IRA_CONVERSION_APPLY',           fields: { amount: ValueType.currency('USD') } },
+    ],
+  },
 
   paramSchema(context) {
     return [

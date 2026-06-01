@@ -13,6 +13,11 @@ import { PeriodService } from '../../finance/period/period-service.js';
 import { BalanceSnapshotReducer } from '../../simulation-framework/reducers.js';
 import { buildAuFiscalYear, applyTo }
   from '../../finance/period/period-builder.js';
+import { AuPeriodAdvanceHandler, AuPeriodAdvanceReducer }
+  from '../../finance/tax/period-advance-classes.js';
+import { AuTaxSettleHandler, AuTaxSettleApplyReducer, AuTaxPaymentDebitReducer }
+  from '../../finance/tax/tax-settle-classes.js';
+import { ValueType } from '../../simulation-framework/type-registry.js';
 
 /**
  * AU_TAX toolset — declarative shell around TaxService for AU.
@@ -31,6 +36,19 @@ export const AU_TAX = {
   id: 'AU_TAX',
   capabilities: ['taxation'],
   dependencies: ['AU_BANKING'],
+
+  types: {
+    handlers: [AuPeriodAdvanceHandler, AuTaxSettleHandler],
+    reducers: [AuPeriodAdvanceReducer, AuTaxSettleApplyReducer, AuTaxPaymentDebitReducer, BalanceSnapshotReducer],
+    actions: [
+      { type: 'AU_PERIOD_ADVANCE' },
+      { type: 'AU_TAX_SETTLE_APPLY', family: 'TAX_SETTLE_APPLY', cc: 'AU',
+        fields: { tax: ValueType.number() } },
+      { type: 'AU_TAX_PAYMENT_DEBIT', family: 'TAX_PAYMENT_DEBIT', cc: 'AU',
+        fields: { amount: ValueType.currency('AUD') } },
+      { type: 'RECORD_BALANCE' },
+    ],
+  },
 
   paramSchema(context) {
     return [];
