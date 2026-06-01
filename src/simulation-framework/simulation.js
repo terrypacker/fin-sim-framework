@@ -560,7 +560,7 @@ export class Simulation {
       const action = queue.shift();
 
       // ── Action breakpoint ─────────────────────────────────────────────
-      if (this._shouldPause(action.actionId)) {
+      if (this._shouldPause(action._actionId)) {
         this.control.pendingExecution = {
           type: 'action',
           actionQueue: [action, ...queue],  // put action back so it runs on resume
@@ -599,7 +599,7 @@ export class Simulation {
       }
 
       this.actionExecutions++;
-      const actionExecId = this._makeExecutionId(action.actionId ?? action.type, handlerExecId);
+      const actionExecId = this._makeExecutionId(action._actionId ?? action.type, handlerExecId);
 
       let actionNodeId = null;
       if (!this.silent) {
@@ -609,17 +609,17 @@ export class Simulation {
           kind:        EXECUTION_KINDS.ACTION,
           executionId: actionExecId,
           parentId:    handlerExecId ?? null,
-          nodeId:      action.actionId ?? null,
+          nodeId:      action._actionId ?? null,
           date:        now,
           sim:         this,
           data:        { action, reducers: unwrappedReducers, sourceEvent, actionCount: this.actionExecutions }
         }));
         if (this.graphRecorder) {
           actionNodeId = this.graphRecorder.beginNode({
-            uuid:         action.instanceId,
+            uuid:         action._instanceId,
             kind:         'action',
             name:         action.type,
-            definitionId: action.actionId ?? null,
+            definitionId: action._actionId ?? null,
             parentNodeId: handlerNodeId ?? eventNodeId,
             date:         now,
           });
@@ -636,7 +636,7 @@ export class Simulation {
             kind:        EXECUTION_KINDS.ACTION,
             executionId: actionExecId,
             parentId:    handlerExecId ?? null,
-            nodeId:      action.actionId ?? null,
+            nodeId:      action._actionId ?? null,
             date:        new Date(this.currentDate),
             sim:         this,
             data:        { action, sourceEvent }
@@ -831,13 +831,13 @@ export class Simulation {
               color:  sourceEvent?.color ?? null,
             },
             action: {
-              instanceId:   action.instanceId,
-              parentId:     action.parentInstanceId ?? null,
-              rootId:       action.rootInstanceId   ?? null,
-              siblingIndex: action.siblingIndex     ?? 0,
-              nodeId:       action.actionId         ?? null,
+              instanceId:   action._instanceId,
+              parentId:     action._parentInstanceId ?? null,
+              rootId:       action._rootInstanceId   ?? null,
+              siblingIndex: action.siblingIndex      ?? 0,
+              nodeId:       action._actionId         ?? null,
               type:         action.type,
-              name:         action.name             ?? action.type,
+              name:         action.name              ?? action.type,
               // Selective payload fields needed for display and reporting.
               // Not a full clone — only fields consumed by the UI/reporting layer.
               data:         _pickActionData(action),
@@ -847,7 +847,7 @@ export class Simulation {
               name:   reducerWrapper.reducer?.name ?? reducerWrapper.reducer?.id ?? 'unknown',
             },
             stateDiff:          sd,
-            emittedInstanceIds: emitted.map(a => a.instanceId),
+            emittedInstanceIds: emitted.map(a => a._instanceId),
             emittedTypes:       emitted.map(a => a.type),
           }));
         }
@@ -915,7 +915,7 @@ export class Simulation {
           kind:        EXECUTION_KINDS.ACTION,
           executionId: pe.actionExecId,
           parentId:    pe.handlerExecId ?? null,
-          nodeId:      pe.action.actionId ?? null,
+          nodeId:      pe.action._actionId ?? null,
           date:        new Date(this.currentDate),
           sim:         this,
           data:        { action: pe.action, sourceEvent: pe.sourceEvent }
@@ -999,8 +999,8 @@ export class Simulation {
       } catch (e) {
         if (e instanceof BreakpointSignal) {
           const node = e.context.node;
-          // ActionDefinition workaround: actions use actionId, others use id. See #134
-          const nodeId = node.kind === 'action' ? node.actionId : node.id;
+          // ActionDefinition workaround: actions use _actionId, others use id. See #134
+          const nodeId = node.kind === 'action' ? node._actionId : node.id;
           this.bus.publish(new BreakpointHitMessage({
             date:   new Date(this.currentDate),
             nodeId: nodeId,
@@ -1048,11 +1048,11 @@ export class Simulation {
     const clone = Object.create(Object.getPrototypeOf(action));
     Object.assign(clone, action);
 
-    if (!clone.instanceId) {
-      clone.instanceId = generateActionId();
+    if (!clone._instanceId) {
+      clone._instanceId = generateActionId();
     }
-    clone.parentInstanceId = parent?.instanceId ?? null;
-    clone.rootInstanceId   = parent?.rootInstanceId ?? parent?.instanceId ?? null;
+    clone._parentInstanceId = parent?._instanceId ?? null;
+    clone._rootInstanceId   = parent?._rootInstanceId ?? parent?._instanceId ?? null;
 
     return clone;
   }

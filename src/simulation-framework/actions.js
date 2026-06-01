@@ -33,18 +33,18 @@ export const DEFAULT_ACTIONS = {
  * type is the category discriminator used as the ReducerPipeline lookup key.
  *
  * Runtime-only parentage fields (set by Simulation.decorateAction):
- *   instanceId       — UUID assigned when the instance enters the action queue
- *   parentInstanceId — instanceId of the action that emitted this one (null = top-level)
- *   rootInstanceId   — instanceId of the originating root action (null = this is root)
+ *   _instanceId       — UUID assigned when the instance enters the action queue
+ *   _parentInstanceId — _instanceId of the action that emitted this one (null = top-level)
+ *   _rootInstanceId   — _instanceId of the originating root action (null = this is root)
  */
 export class Action extends SimGraphNode {
   static description = 'Base action carrying only a type discriminator and optional name.';
 
   constructor(type, name) {
     super({id: null, kind: 'action', layer: 'config', name})
-    this.instanceId      = null;  // UUID — assigned by instantiate() or decorateAction()
-    this.parentInstanceId = null; // UUID of parent action (null = top-level)
-    this.rootInstanceId  = null;  // UUID of root action (null = this is the root)
+    this._instanceId      = null;  // UUID — assigned by instantiate() or decorateAction()
+    this._parentInstanceId = null; // UUID of parent action (null = top-level)
+    this._rootInstanceId  = null;  // UUID of root action (null = this is the root)
     this.type = type;
   }
 
@@ -252,7 +252,7 @@ export class ActionDefinition {
    */
   static fromAction(action) {
     const config = { actionClass: action.actionClass };
-    if (action.id        !== undefined) config.actionId  = action.id;
+    if (action.id        !== undefined) config._actionId  = action.id;
     if (action.name      !== undefined) config.name      = action.name;
     if (action.kind      !== undefined) config.kind      = action.kind;
     if (action.fieldName !== undefined) config.fieldName = action.fieldName;
@@ -306,9 +306,9 @@ export class ActionDefinition {
     if (!Cls) throw new Error(`ActionDefinition: unknown actionClass "${actionClass ?? 'Action'}"`);
     const instance = Object.create(Cls.prototype);
     instance.id              = null;             // no service-registered config ID
-    instance.instanceId      = generateActionId(); // UUID for runtime tracking
-    instance.parentInstanceId = null;
-    instance.rootInstanceId  = null;
+    instance._instanceId      = generateActionId(); // UUID for runtime tracking
+    instance._parentInstanceId = null;
+    instance._rootInstanceId  = null;
     Object.assign(instance, props);
     instance.type = this.type;  // definition's type discriminator always wins
     return instance;

@@ -1,6 +1,6 @@
 # 19 — TypeRegistry, Action-Type Families, and the Per-Country Tax Split
 
-**Status**: Proposed (2026-05-31)
+**Status**: Phase 0 complete (2026-05-31); Phase 1 next
 **Resolves**: `inconsistencies.md` §3.1 (`simulation.js` reaches into finance fields), §3.2 (`StateSchemaRegistry.pickActionData` lives in the wrong layer — partial), §3.6 (handler/reducer string sets in the serializer), §4.6 (`_pickActionData` allow-list is a maintenance burden)
 **Related**: `design/9-toolset-compiler.md` (toolset shape this design extends), `design/15-config-as-source-of-truth.md` (the cfg → services contract), `design/17-scenario-as-graph-node.md` (ServiceRegistry layered reset model)
 **Author note**: Introduces a framework-level `TypeRegistry` that lets toolsets declare every class, action type, and field-schema they own in inert metadata. Removes three categories of hand-maintained string lists, deletes ~1,100 lines from `scenario-serializer.js`, and ends the implicit "first-toolset-wins" coupling between `US_TAX` and `AU_TAX`. Bakes in a small rename of framework-internal fields on `Action` so `_*` actually means "framework-internal" everywhere.
@@ -507,10 +507,10 @@ Today the project's vite config preserves class names because `Action.actionClas
 
 Ordered for testability — each step leaves the tree green.
 
-### Phase 0 — framework field rename
+### Phase 0 — framework field rename ✅
 
-1. Find/replace `instanceId/parentInstanceId/rootInstanceId/actionId` → `_instanceId/...` across `src/simulation-framework`, `src/visualization/workbench/plugins/finance/lineage-plugin.js`, `exec-history-plugin.js`, `graph-recorder.js`.
-2. Run `npm test`. Two reasonable expectation: `simulation-event-graph.test.mjs` and `simulation-breakpoints.test.mjs` exercise these fields most heavily.
+1. ✅ Find/replace `instanceId/parentInstanceId/rootInstanceId/actionId` → `_instanceId/...` across `src/simulation-framework/actions.js`, `simulation.js`, `graph-recorder.js`, and matching test fixtures in `simulation-breakpoints.test.mjs`, `action-definition.test.mjs`. Journal entry sub-objects (`entry.action.instanceId` etc.) are a separate schema and left unchanged.
+2. ✅ `npm test:all` — 1783 backend + 597 viz = 2380 tests, 0 failures.
 
 ### Phase 1 — TypeRegistry primitive
 
