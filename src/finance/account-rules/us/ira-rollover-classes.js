@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
+import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { getUniformDistributionPeriod } from './us-rmd-uniform-table.js';
@@ -38,7 +38,8 @@ export function debitIra(ia, amount) {
  * then earnings).  No penalty regardless of age (rollovers are penalty-exempt).
  * Chains IRA_ROLLOVER_WITHDRAWAL_TAX (ordinary income).
  */
-export class IraRolloverWithdrawalApplyReducer extends Reducer {
+export class IraRolloverWithdrawalApplyReducer extends AccountServiceReducer {
+  static type        = 'IraRolloverWithdrawalApplyReducer';
   static description = 'Credits the US cash pool and debits the IRA (no penalty); chains IRA_ROLLOVER_WITHDRAWAL_TAX.';
   static actionType  = 'IRA_ROLLOVER_WITHDRAWAL_APPLY';
 
@@ -65,7 +66,8 @@ export class IraRolloverWithdrawalApplyReducer extends Reducer {
  * No penalty.  Chains IRA_RMD_TAX (ordinary income).
  * Accepts optional action.stateKey to support multiple IRA accounts per person.
  */
-export class IraRmdApplyReducer extends Reducer {
+export class IraRmdApplyReducer extends AccountServiceReducer {
+  static type        = 'IraRmdApplyReducer';
   static description = 'Credits the US cash pool and debits the IRA for the required minimum distribution; chains IRA_RMD_TAX.';
   static actionType  = 'IRA_RMD_APPLY';
 
@@ -91,6 +93,7 @@ export class IraRmdApplyReducer extends Reducer {
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 export class IraRolloverWithdrawalHandler extends HandlerEntry {
+  static type        = 'IraRolloverWithdrawalHandler';
   static description = 'Dispatches IRA_ROLLOVER_WITHDRAWAL_APPLY — no penalty applied (rollover exemption).';
   static eventType   = 'IRA_ROLLOVER_WITHDRAWAL';
 
@@ -114,6 +117,7 @@ export class IraRolloverWithdrawalHandler extends HandlerEntry {
 }
 
 export class IraRmdHandler extends HandlerEntry {
+  static type        = 'IraRmdHandler';
   static description = 'Dispatches IRA_RMD_APPLY for the required minimum distribution.';
   static eventType   = 'IRA_RMD';
 
@@ -166,6 +170,7 @@ export class IraRmdHandler extends HandlerEntry {
  * @param {import('../account-rules-engine.js').AccountRulesEngine} opts.accountRulesEngine
  */
 export class IraAnnualRmdHandler extends HandlerEntry {
+  static type        = 'IraAnnualRmdHandler';
   static description = 'Auto-calculates and dispatches the annual IRA RMD for the account owner once they reach age 73.';
   static eventType   = 'IRA_ANNUAL_RMD';
 

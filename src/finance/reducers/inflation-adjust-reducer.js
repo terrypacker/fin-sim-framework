@@ -28,6 +28,7 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  */
 export class InflationAdjustReducer extends Reducer {
   static description = 'Applies annual inflation to wages, Social Security, and expenses on each US_PERIOD_ADVANCE or AU_PERIOD_ADVANCE; maintains state.inflationAccumulator per country.';
+  static type        = 'InflationAdjustReducer';
   static actionType  = null;
 
   constructor() {

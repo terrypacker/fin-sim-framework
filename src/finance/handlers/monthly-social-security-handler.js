@@ -31,6 +31,7 @@ import { ACCOUNT_ROLES } from '../state/account-roles.js';
  */
 export class MonthlySocialSecurityHandler extends HandlerEntry {
   static description = 'Credits the US cash pool with Social Security income for each eligible person; starts at their retirementDate.';
+  static type        = 'MonthlySocialSecurityHandler';
   static eventType   = 'MONTHLY_SS_INCOME';
 
   constructor({ stateRegistry, accountRulesEngine } = {}) {
@@ -38,6 +39,12 @@ export class MonthlySocialSecurityHandler extends HandlerEntry {
     this.stateRegistry      = stateRegistry;
     this.accountRulesEngine = accountRulesEngine ?? null;
     this.generatedActionTypes = ['SS_INCOME_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
+  }
+
+  static fromJSON(d, services) {
+    const h = new this({ stateRegistry: services?.stateRegistry, accountRulesEngine: services?.accountRulesEngine ?? null });
+    h.id = d.id;
+    return h;
   }
 
   call({ date, state }) {

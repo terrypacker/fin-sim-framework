@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
+import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { getUniformDistributionPeriod } from './us-rmd-uniform-table.js';
@@ -28,7 +28,8 @@ function getAgeDecimal(birthDate, asOfDate) {
  * EVT-24: 401k contribution — debit US cash pool, credit contributionBasis.
  * Chains K401_CONTRIBUTION_TAX (US negative income / pre-tax deduction).
  */
-export class K401ContributionApplyReducer extends Reducer {
+export class K401ContributionApplyReducer extends AccountServiceReducer {
+  static type        = 'K401ContributionApplyReducer';
   static description = 'Debits the US cash pool and credits 401k contributionBasis; chains K401_CONTRIBUTION_TAX.';
   static actionType  = 'K401_CONTRIBUTION_APPLY';
 
@@ -59,7 +60,8 @@ export class K401ContributionApplyReducer extends Reducer {
 /**
  * EVT-25 (accrual): 401k earnings — stay in account, tax deferred to withdrawal.
  */
-export class K401EarningsApplyReducer extends Reducer {
+export class K401EarningsApplyReducer extends AccountServiceReducer {
+  static type        = 'K401EarningsApplyReducer';
   static description = 'Adds earnings to 401k balance and earningsBasis; no immediate tax (deferred to withdrawal).';
   static actionType  = 'K401_EARNINGS_APPLY';
 
@@ -85,7 +87,8 @@ export class K401EarningsApplyReducer extends Reducer {
  * EVT-25 (withdrawal): credit US cash pool net of penalty, debit account.
  * Chains K401_WITHDRAWAL_TAX (US ordinary income + penalty).
  */
-export class K401WithdrawalApplyReducer extends Reducer {
+export class K401WithdrawalApplyReducer extends AccountServiceReducer {
+  static type        = 'K401WithdrawalApplyReducer';
   static description = 'Credits the US cash pool net of penalty and debits the 401k account; chains K401_WITHDRAWAL_TAX.';
   static actionType  = 'K401_WITHDRAWAL_APPLY';
 
@@ -120,6 +123,7 @@ export class K401WithdrawalApplyReducer extends Reducer {
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 export class K401ContributionHandler extends HandlerEntry {
+  static type        = 'K401ContributionHandler';
   static description = 'Dispatches K401_CONTRIBUTION_APPLY.';
   static eventType   = 'K401_CONTRIBUTION';
 
@@ -137,6 +141,7 @@ export class K401ContributionHandler extends HandlerEntry {
 }
 
 export class K401EarningsHandler extends HandlerEntry {
+  static type        = 'K401EarningsHandler';
   static description = 'Dispatches K401_EARNINGS_APPLY.';
   static eventType   = 'K401_EARNINGS';
 
@@ -154,6 +159,7 @@ export class K401EarningsHandler extends HandlerEntry {
 }
 
 export class K401WithdrawalHandler extends HandlerEntry {
+  static type        = 'K401WithdrawalHandler';
   static description = 'Applies 10% penalty for under-59.5 withdrawals and dispatches K401_WITHDRAWAL_APPLY.';
   static eventType   = 'K401_WITHDRAWAL';
 
@@ -178,7 +184,8 @@ export class K401WithdrawalHandler extends HandlerEntry {
  * deduction; no penalty).  Chains K401_RMD_TAX (ordinary income).
  * Accepts optional action.stateKey to support multiple 401(k) accounts per person.
  */
-export class K401RmdApplyReducer extends Reducer {
+export class K401RmdApplyReducer extends AccountServiceReducer {
+  static type        = 'K401RmdApplyReducer';
   static description = 'Credits the US cash pool and debits the 401(k) for the required minimum distribution (no penalty); chains K401_RMD_TAX.';
   static actionType  = 'K401_RMD_APPLY';
 
@@ -230,6 +237,7 @@ export class K401RmdApplyReducer extends Reducer {
  * @param {import('../account-rules-engine.js').AccountRulesEngine} opts.accountRulesEngine
  */
 export class K401AnnualRmdHandler extends HandlerEntry {
+  static type        = 'K401AnnualRmdHandler';
   static description = 'Auto-calculates and dispatches the annual 401(k) RMD for the account owner once they reach age 73.';
   static eventType   = 'K401_ANNUAL_RMD';
 
@@ -290,7 +298,8 @@ export class K401AnnualRmdHandler extends HandlerEntry {
  *   - action.k401Key    — source 401(k) state key
  *   - action.iraKey     — destination IRA state key
  */
-export class K401ToIraConversionApplyReducer extends Reducer {
+export class K401ToIraConversionApplyReducer extends AccountServiceReducer {
+  static type        = 'K401ToIraConversionApplyReducer';
   static description = 'Debits the 401(k) and credits a Traditional IRA, preserving contribution/earnings basis; no cash pool, no tax.';
   static actionType  = 'K401_TO_IRA_CONVERSION_APPLY';
 
@@ -330,6 +339,7 @@ export class K401ToIraConversionApplyReducer extends Reducer {
  * data.amount is omitted, converts the entire 401(k) balance.
  */
 export class K401ToIraConversionHandler extends HandlerEntry {
+  static type        = 'K401ToIraConversionHandler';
   static description = 'Validates 401(k) balance and dispatches K401_TO_IRA_CONVERSION_APPLY (no tax).';
   static eventType   = 'K401_TO_IRA_CONVERSION';
 

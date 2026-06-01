@@ -34,8 +34,8 @@ import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framew
  */
 export class MonthlyExpensesHandler extends HandlerEntry {
   static description = 'Residence-aware monthly expense handler: debits US savings (pre-move) or AU savings (post-move), prepending REPLENISH_SAVINGS if the balance would fall below minimum.';
-
-  static eventType = 'MONTHLY_EXPENSES';
+  static type        = 'MonthlyExpensesHandler';
+  static eventType   = 'MONTHLY_EXPENSES';
 
   constructor({
     stateRegistry,
@@ -51,6 +51,30 @@ export class MonthlyExpensesHandler extends HandlerEntry {
     this.auRole         = auRole;
     this.auOwnerId      = auOwnerId;
     this.generatedActionTypes = ['REPLENISH_SAVINGS', 'EXPENSE_DEBIT', 'RECORD_METRIC', 'RECORD_BALANCE'];
+  }
+
+  static fromJSON(d, { stateRegistry }) {
+    const h = new this({
+      stateRegistry,
+      monthlyExpenses: d.monthlyExpenses ?? 6000,
+      usRole:    d.usRole    ?? null,
+      usOwnerId: d.usOwnerId ?? null,
+      auRole:    d.auRole    ?? null,
+      auOwnerId: d.auOwnerId ?? null,
+    });
+    h.id = d.id;
+    return h;
+  }
+
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      monthlyExpenses: this.monthlyExpenses,
+      usRole:    this.usRole,
+      usOwnerId: this.usOwnerId,
+      auRole:    this.auRole,
+      auOwnerId: this.auOwnerId,
+    };
   }
 
   call({ data, state }) {

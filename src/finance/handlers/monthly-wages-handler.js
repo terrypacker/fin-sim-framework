@@ -27,12 +27,19 @@ import { ACCOUNT_ROLES } from '../state/account-roles.js';
  */
 export class MonthlyWagesHandler extends HandlerEntry {
   static description = 'Credits the US cash pool with gross wages for each employed person; stops at their retirementDate.';
+  static type        = 'MonthlyWagesHandler';
   static eventType   = 'MONTHLY_WAGES';
 
   constructor({ stateRegistry } = {}) {
     super(null, 'Monthly Wages');
     this.stateRegistry = stateRegistry;
     this.generatedActionTypes = ['WAGES_INCOME_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
+  }
+
+  static fromJSON(d, { stateRegistry }) {
+    const h = new this({ stateRegistry });
+    h.id = d.id;
+    return h;
   }
 
   call({ date, state }) {

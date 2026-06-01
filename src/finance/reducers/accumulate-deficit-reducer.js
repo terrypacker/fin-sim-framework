@@ -20,8 +20,8 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  */
 export class AccumulateDeficitReducer extends Reducer {
   static description = 'Accumulates cumulativeDeficit and deficitMonths in state on each out-of-funds occurrence.';
-
-  static actionType = 'ACCUMULATE_DEFICIT';
+  static type        = 'AccumulateDeficitReducer';
+  static actionType  = 'ACCUMULATE_DEFICIT';
 
   constructor() {
     super('Accumulate Deficit', PRIORITY.PRE_PROCESS);

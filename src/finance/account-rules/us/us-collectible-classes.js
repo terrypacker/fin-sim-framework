@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
+import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 
@@ -32,7 +32,8 @@ const resolveDestinationKey = (state, saleDestinationAccount) => {
  * COLLECTIBLE_SALE_TAX. Gain = salePrice - costBasis; taxed at the 28%
  * collectibles rate (US) and/or as AU capital gain when isAuResident.
  */
-export class CollectibleSaleApplyReducer extends Reducer {
+export class CollectibleSaleApplyReducer extends AccountServiceReducer {
+  static type        = 'CollectibleSaleApplyReducer';
   static description = 'Credits the destination account with collectible sale proceeds, zeroes the collectible value, and chains COLLECTIBLE_SALE_TAX with the gain.';
   static actionType  = 'COLLECTIBLE_SALE_APPLY';
 
@@ -65,7 +66,8 @@ export class CollectibleSaleApplyReducer extends Reducer {
  * EVT-45/47: Collectible Value Change — apply +/− change to collectibleAccount.value.
  * No tax effect (unrealized appreciation/depreciation).
  */
-export class CollectibleValueChangeApplyReducer extends Reducer {
+export class CollectibleValueChangeApplyReducer extends AccountServiceReducer {
+  static type        = 'CollectibleValueChangeApplyReducer';
   static description = 'Applies a +/− change to collectibleAccount.value; no tax effect.';
   static actionType  = 'COLLECTIBLE_VALUE_CHANGE_APPLY';
 
@@ -85,6 +87,7 @@ export class CollectibleValueChangeApplyReducer extends Reducer {
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 export class CollectibleSaleHandler extends HandlerEntry {
+  static type        = 'CollectibleSaleHandler';
   static description = 'Dispatches COLLECTIBLE_SALE_APPLY with sale price, cost basis, AU residency flag, and resolved destination account.';
   static eventType   = 'COLLECTIBLE_SALE';
 
@@ -110,6 +113,7 @@ export class CollectibleSaleHandler extends HandlerEntry {
 }
 
 export class CollectibleValueChangeHandler extends HandlerEntry {
+  static type        = 'CollectibleValueChangeHandler';
   static description = 'Dispatches COLLECTIBLE_VALUE_CHANGE_APPLY with the +/− change amount.';
   static eventType   = 'COLLECTIBLE_VALUE_CHANGE';
 

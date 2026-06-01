@@ -32,8 +32,8 @@ import { TaxSettleService } from '../tax-settle-service.js';
  */
 export class ChangeResidencyHandler extends HandlerEntry {
   static description = 'Closes the partial US tax year and emits CHANGE_RESIDENCY_APPLY + US_TAX_SETTLE_APPLY on the move date.';
-
-  static eventType = 'CHANGE_RESIDENCY';
+  static type        = 'ChangeResidencyHandler';
+  static eventType   = 'CHANGE_RESIDENCY';
 
   constructor() {
     super(null, 'Change Residency');

@@ -60,7 +60,16 @@ export class HandlerEntry extends SimGraphNode {
   }
 
   toJSON() {
-    return { __type: this.constructor.type, id: this.id, name: this.name };
+    return {
+      __type:                     this.constructor.type,
+      id:                         this.id,
+      name:                       this.name,
+      handledEventIds:            (this.handledEvents ?? []).map(e => e.id),
+      generatedActionTypes:       [...(this.generatedActionTypes ?? [])],
+      generatedActionDefinitions: (this.generatedActionDefinitions ?? []).map(
+        def => ({ type: def.type, config: def.config })
+      ),
+    };
   }
 
   static fromJSON(d, _ctx) {

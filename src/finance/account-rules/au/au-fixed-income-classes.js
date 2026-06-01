@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
+import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 
 // ─── Reducers ─────────────────────────────────────────────────────────────────
 
@@ -17,7 +17,8 @@ import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
  * Chains AU_FIXED_INCOME_EARNINGS_TAX (AU ordinary income for residents,
  * AU NR withholding for non-residents; always US ordinary income).
  */
-export class AuFixedIncomeEarningsApplyReducer extends Reducer {
+export class AuFixedIncomeEarningsApplyReducer extends AccountServiceReducer {
+  static type        = 'AuFixedIncomeEarningsApplyReducer';
   static description = 'Adds earnings to auFixedIncomeAccount balance; chains AU_FIXED_INCOME_EARNINGS_TAX.';
   static actionType  = 'AU_FIXED_INCOME_EARNINGS_APPLY';
 

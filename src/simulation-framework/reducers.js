@@ -169,7 +169,21 @@ export class Reducer extends SimGraphNode {
   }
 
   toJSON() {
-    return { __type: this.constructor.type, id: this.id, name: this.name };
+    const d = {
+      __type:                     this.constructor.type,
+      id:                         this.id,
+      name:                       this.name,
+      priority:                   this.priority  ?? null,
+      fieldName:                  this.fieldName ?? null,
+      value:                      this.value     ?? null,
+      reducedActionTypes:         [...(this.reducedActionTypes ?? [])],
+      generatedActionTypes:       [...(this.generatedActionTypes ?? [])],
+      generatedActionDefinitions: (this.generatedActionDefinitions ?? []).map(
+        def => ({ type: def.type, config: def.config })
+      ),
+    };
+    if (this.script !== undefined) d.script = this.script;
+    return d;
   }
 
   static fromJSON(d, _ctx) {
@@ -593,3 +607,21 @@ Object.assign(REDUCER_CLASSES, {
   AccountTransactionReducer,
   RepeatingReducer,
 });
+
+/**
+ * Base class for account-module reducers constructed with `{ accountService }`.
+ *
+ * Provides a shared `fromJSON` that passes the full services context to the
+ * constructor — each subclass destructures only the fields it needs.
+ * Subclasses add `static type` and inherit this fromJSON unchanged.
+ */
+export class AccountServiceReducer extends Reducer {
+  static description = 'Base for account-module reducers; fromJSON injects services so subclasses need only static type.';
+  static type        = 'AccountServiceReducer';
+
+  static fromJSON(d, services) {
+    const r = new this(services);
+    r.id = d.id;
+    return r;
+  }
+}

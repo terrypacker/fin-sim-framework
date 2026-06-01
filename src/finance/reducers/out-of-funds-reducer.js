@@ -29,8 +29,8 @@ import { RecordMetricAction, RecordBalanceAction } from '../../simulation-framew
  */
 export class OutOfFundsReducer extends Reducer {
   static description = 'Processes OUT_OF_FUNDS actions: records the deficit metric, accumulates deficit totals, and stamps the first-occurrence date in state.';
-
-  static actionType = 'OUT_OF_FUNDS';
+  static type        = 'OutOfFundsReducer';
+  static actionType  = 'OUT_OF_FUNDS';
 
   constructor() {
     super('Out of Funds', PRIORITY.PRE_PROCESS);

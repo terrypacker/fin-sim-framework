@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
+import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 
@@ -18,7 +18,8 @@ const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
 // ─── Fixed Income Reducers ────────────────────────────────────────────────────
 
 /** EVT-9: Fixed income contribution — debit US cash pool, credit account, no tax. */
-export class FixedIncomeContributionApplyReducer extends Reducer {
+export class FixedIncomeContributionApplyReducer extends AccountServiceReducer {
+  static type        = 'FixedIncomeContributionApplyReducer';
   static description = 'Debits the US cash pool and credits the fixed income account balance; no tax effect.';
   static actionType  = 'FIXED_INCOME_CONTRIBUTION_APPLY';
 
@@ -40,7 +41,8 @@ export class FixedIncomeContributionApplyReducer extends Reducer {
 }
 
 /** EVT-10: Fixed income withdrawal — debit account, credit US cash pool, no tax. */
-export class FixedIncomeWithdrawalApplyReducer extends Reducer {
+export class FixedIncomeWithdrawalApplyReducer extends AccountServiceReducer {
+  static type        = 'FixedIncomeWithdrawalApplyReducer';
   static description = 'Credits the US cash pool and debits the fixed income account balance; no tax effect.';
   static actionType  = 'FIXED_INCOME_WITHDRAWAL_APPLY';
 
@@ -65,7 +67,8 @@ export class FixedIncomeWithdrawalApplyReducer extends Reducer {
  * EVT-11: Fixed income earnings — stay in account.
  * Chains FIXED_INCOME_EARNINGS_TAX (US ordinary income, AU ordinary if resident).
  */
-export class FixedIncomeEarningsApplyReducer extends Reducer {
+export class FixedIncomeEarningsApplyReducer extends AccountServiceReducer {
+  static type        = 'FixedIncomeEarningsApplyReducer';
   static description = 'Adds earnings to fixed income account; chains FIXED_INCOME_EARNINGS_TAX.';
   static actionType  = 'FIXED_INCOME_EARNINGS_APPLY';
 
@@ -93,7 +96,8 @@ export class FixedIncomeEarningsApplyReducer extends Reducer {
 // ─── Stock Reducers ───────────────────────────────────────────────────────────
 
 /** EVT-12: Stock contribution — debit US cash pool, credit contributionBasis, no tax. */
-export class StockContributionApplyReducer extends Reducer {
+export class StockContributionApplyReducer extends AccountServiceReducer {
+  static type        = 'StockContributionApplyReducer';
   static description = 'Debits the US cash pool and credits stock contributionBasis; no tax effect.';
   static actionType  = 'STOCK_CONTRIBUTION_APPLY';
 
@@ -121,7 +125,8 @@ export class StockContributionApplyReducer extends Reducer {
  * EVT-13: Stock dividend — stays in account, increases both bases.
  * Chains STOCK_DIVIDEND_TAX (US ordinary income, AU ordinary if resident).
  */
-export class StockDividendApplyReducer extends Reducer {
+export class StockDividendApplyReducer extends AccountServiceReducer {
+  static type        = 'StockDividendApplyReducer';
   static description = 'Adds dividend to stock balance and both bases; chains STOCK_DIVIDEND_TAX.';
   static actionType  = 'STOCK_DIVIDEND_APPLY';
 
@@ -151,7 +156,8 @@ export class StockDividendApplyReducer extends Reducer {
 }
 
 /** EVT-14: Stock earnings (unrealized) — stay in account, no tax. */
-export class StockEarningsApplyReducer extends Reducer {
+export class StockEarningsApplyReducer extends AccountServiceReducer {
+  static type        = 'StockEarningsApplyReducer';
   static description = 'Adds unrealized earnings to stock balance and earningsBasis; no tax effect.';
   static actionType  = 'STOCK_EARNINGS_APPLY';
 
@@ -177,7 +183,8 @@ export class StockEarningsApplyReducer extends Reducer {
  * EVT-15: Stock withdrawal (sale) — credit US cash pool, debit account.
  * Chains STOCK_WITHDRAWAL_TAX (US capital gain, AU capital gain if resident).
  */
-export class StockWithdrawalApplyReducer extends Reducer {
+export class StockWithdrawalApplyReducer extends AccountServiceReducer {
+  static type        = 'StockWithdrawalApplyReducer';
   static description = 'Credits the US cash pool with sale proceeds, debits the stock account, and chains STOCK_WITHDRAWAL_TAX.';
   static actionType  = 'STOCK_WITHDRAWAL_APPLY';
 
@@ -215,6 +222,7 @@ export class StockWithdrawalApplyReducer extends Reducer {
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 export class FixedIncomeContributionHandler extends HandlerEntry {
+  static type        = 'FixedIncomeContributionHandler';
   static description = 'Dispatches FIXED_INCOME_CONTRIBUTION_APPLY.';
   static eventType   = 'FIXED_INCOME_CONTRIBUTION';
 
@@ -232,6 +240,7 @@ export class FixedIncomeContributionHandler extends HandlerEntry {
 }
 
 export class FixedIncomeWithdrawalHandler extends HandlerEntry {
+  static type        = 'FixedIncomeWithdrawalHandler';
   static description = 'Dispatches FIXED_INCOME_WITHDRAWAL_APPLY.';
   static eventType   = 'FIXED_INCOME_WITHDRAWAL';
 
@@ -249,6 +258,7 @@ export class FixedIncomeWithdrawalHandler extends HandlerEntry {
 }
 
 export class FixedIncomeEarningsHandler extends HandlerEntry {
+  static type        = 'FixedIncomeEarningsHandler';
   static description = 'Dispatches FIXED_INCOME_EARNINGS_APPLY, passing through the AU residency flag.';
   static eventType   = 'FIXED_INCOME_EARNINGS';
 
@@ -266,6 +276,7 @@ export class FixedIncomeEarningsHandler extends HandlerEntry {
 }
 
 export class StockContributionHandler extends HandlerEntry {
+  static type        = 'StockContributionHandler';
   static description = 'Dispatches STOCK_CONTRIBUTION_APPLY.';
   static eventType   = 'STOCK_CONTRIBUTION';
 
@@ -283,6 +294,7 @@ export class StockContributionHandler extends HandlerEntry {
 }
 
 export class StockDividendHandler extends HandlerEntry {
+  static type        = 'StockDividendHandler';
   static description = 'Dispatches STOCK_DIVIDEND_APPLY, passing through the AU residency flag.';
   static eventType   = 'STOCK_DIVIDEND';
 
@@ -300,6 +312,7 @@ export class StockDividendHandler extends HandlerEntry {
 }
 
 export class StockEarningsHandler extends HandlerEntry {
+  static type        = 'StockEarningsHandler';
   static description = 'Dispatches STOCK_EARNINGS_APPLY.';
   static eventType   = 'STOCK_EARNINGS';
 
@@ -317,6 +330,7 @@ export class StockEarningsHandler extends HandlerEntry {
 }
 
 export class StockWithdrawalHandler extends HandlerEntry {
+  static type        = 'StockWithdrawalHandler';
   static description = 'Dispatches STOCK_WITHDRAWAL_APPLY with sale price, cost basis, and AU residency flag.';
   static eventType   = 'STOCK_WITHDRAWAL';
 
