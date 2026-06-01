@@ -167,13 +167,14 @@ import { HandlerEntry, HANDLER_CLASSES, HandlerRegistry } from './simulation-fra
 import { IndexedMinHeap } from './simulation-framework/indexed-min-heap.js';
 import { JournalEntry, Journal } from './simulation-framework/journal.js';
 import { MinHeap } from './simulation-framework/min-heap.js';
-import { ReducerPipeline, PRIORITY, Reducer, NoOpReducer, FieldReducer, MetricReducer, BalanceSnapshotReducer, FieldValueReducer, ArrayReducer, NumericSumReducer, MultiplicativeReducer, AccountTransactionReducer, REDUCER_CLASSES, RepeatingReducer, ScriptedReducer } from './simulation-framework/reducers.js';
+import { ReducerPipeline, PRIORITY, Reducer, NoOpReducer, FieldReducer, MetricReducer, BalanceSnapshotReducer, FieldValueReducer, ArrayReducer, NumericSumReducer, MultiplicativeReducer, AccountTransactionReducer, REDUCER_CLASSES, RepeatingReducer, ScriptedReducer, AccountServiceReducer } from './simulation-framework/reducers.js';
 import { ScenarioRunner } from './simulation-framework/scenario.js';
 import { intervalFns, startSnapFns, SimulationAdapter } from './simulation-framework/simulation/simulation-adapter.js';
 import { SimulationHistory } from './simulation-framework/simulation-history.js';
 import { SimulationState } from './simulation-framework/simulation-state.js';
 import { BreakpointSignal, Simulation } from './simulation-framework/simulation.js';
-import { diffStates } from './simulation-framework/state-utils.js';
+import { MutationTracker, diffStates } from './simulation-framework/state-utils.js';
+import { ValueType, TypeRegistry } from './simulation-framework/type-registry.js';
 import { InMemoryStorage } from './storage/in-memory-storage.js';
 import { AccountEditor } from './visualization/accounts/account-editor.js';
 import { AccountsController } from './visualization/accounts/accounts-controller.js';
@@ -593,6 +594,7 @@ export const Engine = {
   REDUCER_CLASSES,
   RepeatingReducer,
   ScriptedReducer,
+  AccountServiceReducer,
   ScenarioRunner,
   intervalFns,
   startSnapFns,
@@ -601,7 +603,10 @@ export const Engine = {
   SimulationState,
   BreakpointSignal,
   Simulation,
+  MutationTracker,
   diffStates,
+  ValueType,
+  TypeRegistry,
   InMemoryStorage,
 };
 
