@@ -39,6 +39,8 @@ export const DEFAULT_ACTIONS = {
  */
 export class Action extends SimGraphNode {
   static description = 'Base action carrying only a type discriminator and optional name.';
+  static type        = 'Action';
+  static category    = 'action';
 
   constructor(type, name) {
     super({id: null, kind: 'action', layer: 'config', name})
@@ -75,6 +77,7 @@ export class Action extends SimGraphNode {
 
 export class FieldAction extends Action {
   static description = 'Extends Action with a fieldName targeting a specific state field.';
+  static type        = 'FieldAction';
 
   constructor(type, name, fieldName = '') {
     super(type, name);
@@ -84,6 +87,7 @@ export class FieldAction extends Action {
 
 export class FieldValueAction extends FieldAction {
   static description = 'Extends FieldAction with a value to write into the targeted state field.';
+  static type        = 'FieldValueAction';
 
   constructor(type, name, fieldName = '', value = null) {
     super(type, name, fieldName);
@@ -102,6 +106,7 @@ export class FieldValueAction extends FieldAction {
  */
 export class AmountAction extends FieldValueAction {
   static description = 'Carries a monetary or numeric amount (fieldName fixed to "amount"); used for cash flows, gains, and tax payments.';
+  static type        = 'AmountAction';
 
   constructor(type, name, amount = 0) {
     super(type, name, 'amount', amount);
@@ -120,6 +125,7 @@ export class AmountAction extends FieldValueAction {
  */
 export class RecordBalanceAction extends Action {
   static description = 'Captures a state field value into state.metrics[metricKey] for charting; with no args, acts as a no-op pipeline-flush marker.';
+  static type        = 'RecordBalanceAction';
   constructor(fieldPath = null, metricKey = null) {
     super('RECORD_BALANCE');
     this.fieldPath = fieldPath;
@@ -135,6 +141,7 @@ export class RecordBalanceAction extends Action {
  */
 export class RecordMetricAction extends FieldValueAction {
   static description = 'Records a named metric value for reporting; consumed by reducers registered for RECORD_METRIC.';
+  static type        = 'RecordMetricAction';
   constructor(key, value) {
     super('RECORD_METRIC', `Record Metric for ${key}`, key, value);
   }
@@ -155,6 +162,7 @@ export class RecordMetricAction extends FieldValueAction {
  */
 export class ScriptedAction extends FieldValueAction {
   static description = 'Prototype action: supply a JS script to compute the value at reduce-time. Script receives (state, date).';
+  static type        = 'ScriptedAction';
 
   constructor(type, name, fieldName = '', script = '// return computed value\nreturn 0;') {
     super(type, name, fieldName, null);

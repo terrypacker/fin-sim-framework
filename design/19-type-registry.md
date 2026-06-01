@@ -1,6 +1,6 @@
 # 19 — TypeRegistry, Action-Type Families, and the Per-Country Tax Split
 
-**Status**: Phase 0 complete (2026-05-31); Phase 1 next
+**Status**: Phase 0 + 1 complete (2026-05-31); Phase 2 next
 **Resolves**: `inconsistencies.md` §3.1 (`simulation.js` reaches into finance fields), §3.2 (`StateSchemaRegistry.pickActionData` lives in the wrong layer — partial), §3.6 (handler/reducer string sets in the serializer), §4.6 (`_pickActionData` allow-list is a maintenance burden)
 **Related**: `design/9-toolset-compiler.md` (toolset shape this design extends), `design/15-config-as-source-of-truth.md` (the cfg → services contract), `design/17-scenario-as-graph-node.md` (ServiceRegistry layered reset model)
 **Author note**: Introduces a framework-level `TypeRegistry` that lets toolsets declare every class, action type, and field-schema they own in inert metadata. Removes three categories of hand-maintained string lists, deletes ~1,100 lines from `scenario-serializer.js`, and ends the implicit "first-toolset-wins" coupling between `US_TAX` and `AU_TAX`. Bakes in a small rename of framework-internal fields on `Action` so `_*` actually means "framework-internal" everywhere.
@@ -512,13 +512,13 @@ Ordered for testability — each step leaves the tree green.
 1. ✅ Find/replace `instanceId/parentInstanceId/rootInstanceId/actionId` → `_instanceId/...` across `src/simulation-framework/actions.js`, `simulation.js`, `graph-recorder.js`, and matching test fixtures in `simulation-breakpoints.test.mjs`, `action-definition.test.mjs`. Journal entry sub-objects (`entry.action.instanceId` etc.) are a separate schema and left unchanged.
 2. ✅ `npm test:all` — 1783 backend + 597 viz = 2380 tests, 0 failures.
 
-### Phase 1 — TypeRegistry primitive
+### Phase 1 — TypeRegistry primitive ✅
 
-3. Add `src/simulation-framework/type-registry.js` with no callers.
-4. Add `static type` + `static category` to `Action` and its subclasses, `HandlerEntry`, `Reducer` + base subclasses (the framework ones).
-5. Add default `toJSON` and `static fromJSON` to those base classes.
-6. Add `typeRegistry` property to `ServiceRegistry`. `reset()` / `resetAll()` recreate it.
-7. Unit-test `TypeRegistry` registration / lookup / family queries / `pickPayload` strict & permissive paths.
+3. ✅ `src/simulation-framework/type-registry.js` created (TypeRegistry + ValueType). No callers yet.
+4. ✅ `static type` + `static category` added to `Action`, `FieldAction`, `FieldValueAction`, `AmountAction`, `RecordBalanceAction`, `RecordMetricAction`, `ScriptedAction` in `actions.js`; `HandlerEntry` in `handlers.js`; `Reducer`, `NoOpReducer`, `FieldReducer`, `MetricReducer`, `BalanceSnapshotReducer`, `FieldValueReducer`, `ArrayReducer`, `NumericSumReducer`, `MultiplicativeReducer`, `AccountTransactionReducer`, `RepeatingReducer`, `ScriptedReducer` in `reducers.js`.
+5. ✅ Default `toJSON` / `static fromJSON` added to `HandlerEntry` and `Reducer` base classes.
+6. ✅ `typeRegistry` added to `ServiceRegistry` constructor, `simulationContext`, and instance `reset()`.
+7. ✅ `tests/unit/type-registry.test.mjs` — 29 tests covering registration, lookup, family queries, strict / permissive `pickPayload`, framework block-list, base class statics. All 2409 tests pass.
 
 ### Phase 2 — country split
 

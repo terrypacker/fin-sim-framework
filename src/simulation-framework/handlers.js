@@ -29,6 +29,8 @@ import {SimGraphNode} from "../graph/sim-graph-node.js";
  */
 export class HandlerEntry extends SimGraphNode {
   static description = 'Returns generated actions.';
+  static type        = 'HandlerEntry';
+  static category    = 'handler';
 
   constructor(fn, name = 'anonymous') {
     super({id: null, kind: 'handler', layer: 'config', name})
@@ -55,6 +57,16 @@ export class HandlerEntry extends SimGraphNode {
 
   getDescription() {
     return this.constructor.getDescription();
+  }
+
+  toJSON() {
+    return { __type: this.constructor.type, id: this.id, name: this.name };
+  }
+
+  static fromJSON(d, _ctx) {
+    const h = new this(null, d.name);
+    h.id = d.id;
+    return h;
   }
 
 }
