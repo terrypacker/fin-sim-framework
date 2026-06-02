@@ -15,6 +15,14 @@ export class ScenarioTabView {
     this.onOpen = null;
     /** @type {function()|null} */
     this.onRebuild = null;
+
+    // Linked-node resolution for params with a `node` declaration. The
+    // presenter wires these so the params list reflects current account/person
+    // names instead of frozen schema labels.
+    /** @type {function({type,stateKey?,id?,field}): {name:string,kind:string,node?:object,found?:boolean}|null} */
+    this.nodeLookup = null;
+    /** @type {function(object): void} */
+    this.onOpenLinkedNode = null;
     /** @type {function()|null} */
     this.onNew = null;
     /** @type {function(string)|null} */
@@ -214,19 +222,52 @@ export class ScenarioTabView {
         container.appendChild(header);
       }
 
+      // ── Resolve linked-node label/state (account or person) ───────────────
+      // For params with a `node` declaration, derive the displayed label from
+      // the live account/person so that renaming an account in the
+      // Configuration list updates the params panel automatically.
+      let linkedInfo = null;
+      if (param.node && typeof this.nodeLookup === 'function') {
+        linkedInfo = this.nodeLookup(param.node);
+      }
+      const linkedFound = !linkedInfo ? null : (linkedInfo.found !== false);
+      const fallbackLabel = param.label ?? param.name;
+      const displayLabel = (linkedInfo && linkedFound)
+        ? `${linkedInfo.name} — ${this._humanizeField(param.node.field)}`
+        : (linkedInfo && linkedFound === false)
+          ? `(unlinked) ${fallbackLabel}`
+          : fallbackLabel;
+
       const row = document.createElement('div');
       row.className = 'param-row';
+      if (linkedFound === false) row.classList.add('param-row--unlinked');
 
       // ── node-field: label + value input ───────────────────────────────────
       const field = document.createElement('div');
       field.className = 'node-field param-field';
 
       const labelEl = document.createElement('label');
-      labelEl.textContent = param.label ?? param.name;
+      labelEl.textContent = displayLabel;
       // Tooltip: prefer the schema description (richest), then the key name,
       // so hovering surfaces the toolset's authoritative documentation.
       const tooltip = param.description || (param.label ? param.name : '');
       if (tooltip) labelEl.title = tooltip;
+
+      // Click-through to open the linked account/person editor. Only shown
+      // when a node was resolved and the presenter wired a handler.
+      if (param.node && linkedFound && typeof this.onOpenLinkedNode === 'function') {
+        const linkBtn = document.createElement('button');
+        linkBtn.type = 'button';
+        linkBtn.className = 'param-link-btn';
+        linkBtn.textContent = '↗';
+        linkBtn.title = `Open ${linkedInfo.name}`;
+        linkBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.onOpenLinkedNode(param.node);
+        });
+        labelEl.appendChild(linkBtn);
+      }
+
       field.appendChild(labelEl);
 
       // For user-defined params (no label), also provide an editable name input above the value
@@ -305,6 +346,26 @@ export class ScenarioTabView {
 
       container.appendChild(row);
     });
+  }
+
+  /**
+   * Turn a node field name (e.g. `initialValue`, `monthlyWage`) into a
+   * human-readable label. A small overrides map handles fields whose plain
+   * camelCase split is misleading (`initialValue` → "Initial Balance", not
+   * "Initial Value"); everything else falls back to camelCase splitting.
+   * @private
+   */
+  _humanizeField(field) {
+    if (!field) return '';
+    const OVERRIDES = {
+      initialValue:   'Initial Balance',
+      minimumBalance: 'Min Balance',
+      balance:        'Balance',
+    };
+    if (OVERRIDES[field]) return OVERRIDES[field];
+    return field
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/^./, c => c.toUpperCase());
   }
 
   downloadJson(data) {

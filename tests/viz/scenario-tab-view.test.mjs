@@ -322,6 +322,86 @@ test('_renderParamsList: delete button removes param and re-renders', () => {
   assert.strictEqual(document.querySelectorAll('#paramsList .param-row').length, 1);
 });
 
+// ═════════════════════════════════════════════════════════════════════════════
+// _renderParamsList — linked-node label resolution
+// ═════════════════════════════════════════════════════════════════════════════
+
+test('_renderParamsList: account-linked param uses live account name in label', () => {
+  const view = new ScenarioTabView();
+  view.nodeLookup = (n) => n.type === 'account' && n.stateKey === 'rothAccount'
+    ? { name: 'Spouse Backup Roth', kind: 'account', node: { kind: 'account', id: 'a1', name: 'Spouse Backup Roth' }, found: true }
+    : null;
+  const scenario = { params: [{
+    name: 'rothBalance', label: 'Roth IRA Balance (USD)', type: 'Number', value: 80000,
+    node: { type: 'account', stateKey: 'rothAccount', field: 'initialValue' },
+  }] };
+  view._renderParamsList(scenario);
+  const label = document.querySelector('#paramsList .node-field label');
+  assert.strictEqual(label.firstChild.textContent, 'Spouse Backup Roth — Initial Balance');
+});
+
+test('_renderParamsList: person-linked param uses live person name in label', () => {
+  const view = new ScenarioTabView();
+  view.nodeLookup = (n) => n.type === 'person' && n.id === 'primary'
+    ? { name: 'Alex', kind: 'person', node: { kind: 'person', id: 'primary', name: 'Alex' }, found: true }
+    : null;
+  const scenario = { params: [{
+    name: 'primaryMonthlyWage', label: 'Primary Monthly Wage (USD)', type: 'Number', value: 8000,
+    node: { type: 'person', id: 'primary', field: 'monthlyWage' },
+  }] };
+  view._renderParamsList(scenario);
+  const label = document.querySelector('#paramsList .node-field label');
+  assert.strictEqual(label.firstChild.textContent, 'Alex — Monthly Wage');
+});
+
+test('_renderParamsList: unresolved linked param marks row as unlinked', () => {
+  const view = new ScenarioTabView();
+  view.nodeLookup = () => ({ name: 'rothAccount', kind: 'account', node: null, found: false });
+  const scenario = { params: [{
+    name: 'rothBalance', label: 'Roth IRA Balance (USD)', type: 'Number', value: 80000,
+    node: { type: 'account', stateKey: 'rothAccount', field: 'initialValue' },
+  }] };
+  view._renderParamsList(scenario);
+  const row = document.querySelector('#paramsList .param-row');
+  assert.ok(row.classList.contains('param-row--unlinked'), 'row should be marked unlinked');
+  const label = row.querySelector('label');
+  assert.strictEqual(label.textContent, '(unlinked) Roth IRA Balance (USD)');
+});
+
+test('_renderParamsList: linked param renders open-node button that fires onOpenLinkedNode', () => {
+  const view = new ScenarioTabView();
+  view.nodeLookup = (n) => ({ name: 'Roth IRA', kind: 'account', node: { kind: 'account', id: 'a1' }, found: true });
+  const onOpen = jest.fn();
+  view.onOpenLinkedNode = onOpen;
+  const paramNode = { type: 'account', stateKey: 'rothAccount', field: 'initialValue' };
+  const scenario = { params: [{ name: 'rothBalance', label: 'Roth IRA Balance', type: 'Number', value: 0, node: paramNode }] };
+  view._renderParamsList(scenario);
+  const linkBtn = document.querySelector('#paramsList .param-link-btn');
+  assert.ok(linkBtn, 'expected a .param-link-btn');
+  linkBtn.click();
+  expect(onOpen).toHaveBeenCalledWith(paramNode);
+});
+
+test('_renderParamsList: param without node declaration still uses static label', () => {
+  const view = new ScenarioTabView();
+  view.nodeLookup = jest.fn();
+  const scenario = { params: [{ name: 'monthlyExpenses', label: 'Monthly Expenses', type: 'Number', value: 6000 }] };
+  view._renderParamsList(scenario);
+  const label = document.querySelector('#paramsList .node-field label');
+  assert.strictEqual(label.textContent, 'Monthly Expenses');
+  expect(view.nodeLookup).not.toHaveBeenCalled();
+});
+
+test('_humanizeField: known overrides and camelCase splitting', () => {
+  const view = new ScenarioTabView();
+  assert.strictEqual(view._humanizeField('initialValue'),   'Initial Balance');
+  assert.strictEqual(view._humanizeField('minimumBalance'), 'Min Balance');
+  assert.strictEqual(view._humanizeField('balance'),        'Balance');
+  assert.strictEqual(view._humanizeField('monthlyWage'),    'Monthly Wage');
+  assert.strictEqual(view._humanizeField('retirementDate'), 'Retirement Date');
+  assert.strictEqual(view._humanizeField(''),               '');
+});
+
 test('_renderParamsList: type dropdown includes Date as an option', () => {
   const view = new ScenarioTabView();
   const scenario = { params: [{ name: 'x', type: 'Number', value: 0 }] };

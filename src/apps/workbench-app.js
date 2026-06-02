@@ -411,6 +411,7 @@ export class WorkbenchApp extends BaseComponent {
       view:          this._scenarioTabView,
       bus:           registry.bus,
       initScenario:  () => { this.destroyScenario(); this.initScenario(); },
+      editModal:     this._editModal,
     });
 
     // ── Build scenario ────────────────────────────────────────────────────────
