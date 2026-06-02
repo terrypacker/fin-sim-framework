@@ -168,7 +168,7 @@ export class ScenarioTabPresenter {
       const data = await this._view.readUploadedJson(file);
 
       //Replace and set active scenario
-      this._activeScenario = this._controller.replaceUserScenarios(data);
+      this._activeScenario = this._controller.upsertUserScenarios(data);
       this._loadActiveScenario();
     };
 

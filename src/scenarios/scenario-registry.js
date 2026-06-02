@@ -37,7 +37,9 @@ export class ScenarioRegistry {
   }
 
   /**
-   * Load user scenarios from storage and assign u:<N> IDs.
+   * Load user scenarios from storage.
+   * Preserves the stored u:<N> id if present; only assigns a new index-based id
+   * for legacy records that have no id yet.
    * If lastUsed refers to a user scenario, mark it active immediately.
    * Storage round-trips simStart/simEnd as strings already, but older payloads
    * may have truncated dates — re-canonicalize through ScenarioSerializer.toDateStr.
@@ -45,7 +47,7 @@ export class ScenarioRegistry {
   _init() {
     this._scenarioData = this._scenarioStorage.load();
     this._scenarioData.scenarios.forEach((s, i) => {
-      s.id      = 'u:' + i;
+      if (!s.id || !s.id.startsWith('u:')) s.id = 'u:' + i;
       s.prebuilt = false;
       s.layer   = 'scenario';
       s.simStart = ScenarioSerializer.toDateStr(s.simStart);
@@ -198,31 +200,39 @@ export class ScenarioRegistry {
     return this.getUserScenarios().length;
   }
 
-  replaceUserScenarios(data) {
-    // Remove existing user scenario nodes from graph.
-    this._byLayer()
-      .filter(n => n.id.startsWith('u:'))
-      .forEach(n => this._graph.removeNode(n.id));
+  /**
+   * Upsert user scenarios from uploaded JSON data.
+   * Scenarios whose id matches an existing u:<N> node are updated in-place.
+   * Scenarios with no id (or a non-u: id) are assigned a fresh id that avoids
+   * collisions with all currently-loaded user scenarios.
+   * Existing user scenarios that are NOT present in the upload are preserved.
+   * Active state changes only when an uploaded scenario carries active:true.
+   */
+  upsertUserScenarios(data) {
+    if (!Array.isArray(data.scenarios)) return;
 
-    let firstId  = null;
+    // Find next available index beyond all current u:<N> ids.
+    const existingIndices = this._byLayer()
+      .filter(n => n.id?.startsWith('u:'))
+      .map(n => parseInt(n.id.slice(2), 10))
+      .filter(n => !isNaN(n));
+    let nextIndex = existingIndices.length > 0 ? Math.max(...existingIndices) + 1 : 0;
+
     let activeId = null;
-    if (Array.isArray(data.scenarios)) {
-      data.scenarios.forEach((s, i) => {
-        s.id       = 'u:' + i;
-        s.prebuilt = false;
-        s.layer    = 'scenario';
-        s.simStart = ScenarioSerializer.toDateStr(s.simStart);
-        s.simEnd   = ScenarioSerializer.toDateStr(s.simEnd);
-        if (i === 0)  firstId  = s.id;
-        if (s.active) activeId = s.id;
-        this._graph.addNode(s);
-      });
-    }
-    const targetId = activeId ?? firstId;
-    if (targetId) {
+    data.scenarios.forEach(s => {
+      s.prebuilt = false;
+      s.layer    = 'scenario';
+      s.simStart = ScenarioSerializer.toDateStr(s.simStart);
+      s.simEnd   = ScenarioSerializer.toDateStr(s.simEnd);
+      if (!s.id || !s.id.startsWith('u:')) s.id = 'u:' + nextIndex++;
+      if (s.active) activeId = s.id;
+      this._upsert(s);
+    });
+
+    if (activeId && this._graph.getNode(activeId)) {
       this._byLayer().forEach(s => { s.active = false; });
-      this._graph.getNode(targetId).active = true;
-      this._persistLastUsed(targetId);
+      this._graph.getNode(activeId).active = true;
+      this._persistLastUsed(activeId);
     }
     this._persistUserScenarios();
   }

@@ -144,8 +144,8 @@ export class ScenarioService {
     return this._registry.getUserScenarios();
   }
 
-  replaceUserScenarios(data) {
-    this._registry.replaceUserScenarios(data);
+  upsertUserScenarios(data) {
+    this._registry.upsertUserScenarios(data);
   }
 
   /**
