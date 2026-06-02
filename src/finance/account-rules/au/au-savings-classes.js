@@ -82,14 +82,14 @@ export class AuSavingsEarningsApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, isAuResident } = action;
+    const { amount, residency } = action;
     const cashPool = auCash(state);
     return this.newState(
       state,
       {
         auSavingsAccount: { ...state.auSavingsAccount, balance: cashPool.balance + amount },
       },
-      [{ type: 'AU_SAVINGS_EARNINGS_TAX', amount, isAuResident }]
+      [{ type: 'AU_SAVINGS_EARNINGS_TAX', amount, residency }]
     );
   }
 }
@@ -147,7 +147,7 @@ export class AuSavingsEarningsHandler extends HandlerEntry {
   call({ data, state }) {
     const cashKey = state.auSavingsAccount != null ? 'auSavingsAccount' : 'checkingAccount';
     return [
-      { type: 'AU_SAVINGS_EARNINGS_APPLY', amount: data.amount, isAuResident: state.isAuResident },
+      { type: 'AU_SAVINGS_EARNINGS_APPLY', amount: data.amount, residency: state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null },
       new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];
   }

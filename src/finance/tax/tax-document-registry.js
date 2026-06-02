@@ -173,7 +173,7 @@ function _extractAuSaleRecords(currentEntry, journal) {
     // Replenish-savings drawdown from any brokerage for an AU resident
     // (STOCK_WITHDRAWAL_TAX with isAuResident covers both AU and US brokerage drawdowns;
     //  AU residents are taxed on worldwide capital gains).
-    const isAuResidentSale = t === 'STOCK_WITHDRAWAL_TAX' && d.isAuResident === true;
+    const isAuResidentSale = t === 'STOCK_WITHDRAWAL_TAX' && d.residency === 'AUS';
 
     if (!isAuSaleAction && !isAuResidentSale) continue;
 

@@ -130,7 +130,7 @@ export class RothRolloverWithdrawalEarningsApplyReducer extends AccountServiceRe
   }
 
   reduce(state, action) {
-    const { amount, isAuResident } = action;
+    const { amount, residency } = action;
     this.accountService.transaction(usCash(state), amount, null);
     const ra = state.rothAccount;
     return this.newState(
@@ -142,7 +142,7 @@ export class RothRolloverWithdrawalEarningsApplyReducer extends AccountServiceRe
           rolloverEarningsBasis: (ra.rolloverEarningsBasis ?? 0)   - amount,
         },
       },
-      [{ type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX', amount, isAuResident }]
+      [{ type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX', amount, residency }]
     );
   }
 }
@@ -221,7 +221,7 @@ export class RothRolloverWithdrawalEarningsHandler extends HandlerEntry {
       {
         type:         'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_APPLY',
         amount:       data.amount,
-        isAuResident: state.isAuResident,
+        residency: state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null,
       },
       new FieldValueAction('roth_rollover_withdrawal_earnings', 'Roth Rollover Withdrawal Earnings', data.amount),
       new RecordBalanceAction('rothAccount.balance', 'rothAccount'),

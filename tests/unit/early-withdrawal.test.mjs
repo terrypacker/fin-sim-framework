@@ -151,7 +151,7 @@ test('EW-3: Roth earnings drawn in phase 2 after contributions exhausted', () =>
   const target = new CheckingAccount(0, { country: 'US', currency: USD });
   // 2000 contrib, 8000 earnings; need 5000 → 2000 from contrib (phase 1), 3000 net from earnings (phase 2)
   const roth   = new RothAccount(10000, { contributionBasis: 2000, earningsBasis: 8000, drawdownPriority: 1 });
-  const state  = { target, roth, personBirthDate: new Date(1990, 0, 1), isAuResident: false };
+  const state  = { target, roth, people: { primary: { birthDate: new Date(1990, 0, 1), residency: 'US' } } };
 
   const { pendingTaxActions } = svc.replenishSavings(state, 'target', 5000, date);
 
@@ -163,7 +163,7 @@ test('EW-3: Roth earnings drawn in phase 2 after contributions exhausted', () =>
   assert.strictEqual(pendingTaxActions.length, 1);
   assert.strictEqual(pendingTaxActions[0].type, 'ROTH_WITHDRAWAL_EARNINGS_TAX');
   assert.ok(pendingTaxActions[0].penaltyAmount > 0);
-  assert.strictEqual(pendingTaxActions[0].isAuResident, false);
+  assert.notStrictEqual(pendingTaxActions[0].residency, 'AUS');
 });
 
 test('EW-3: Roth earnings penalty is 10% of gross withdrawal', () => {
@@ -188,11 +188,11 @@ test('EW-3: Roth earnings drawdown includes AU ordinary income when AU resident'
   const date   = new Date(2026, 0, 1);
   const target = new CheckingAccount(0, { country: 'US', currency: USD });
   const roth   = new RothAccount(10000, { contributionBasis: 0, earningsBasis: 10000, drawdownPriority: 1 });
-  const state  = { target, roth, personBirthDate: new Date(1990, 0, 1), isAuResident: true };
+  const state  = { target, roth, people: { primary: { birthDate: new Date(1990, 0, 1), residency: 'AUS' } } };
 
   const { pendingTaxActions } = svc.replenishSavings(state, 'target', 9000, date);
 
-  assert.strictEqual(pendingTaxActions[0].isAuResident, true);
+  assert.strictEqual(pendingTaxActions[0].residency, 'AUS');
 });
 
 test('EW-3: Roth earnings at or above age 59.5 — no penalty', () => {
@@ -201,7 +201,7 @@ test('EW-3: Roth earnings at or above age 59.5 — no penalty', () => {
   const target = new CheckingAccount(0, { country: 'US', currency: USD });
   const roth   = new RothAccount(10000, { contributionBasis: 0, earningsBasis: 10000, drawdownPriority: 1 });
   // Person born 1966-01-01 → age 60 at date (>= 59.5, eligible — drawn in phase 1)
-  const state  = { target, roth, personBirthDate: new Date(1966, 0, 1), isAuResident: false };
+  const state  = { target, roth, people: { primary: { birthDate: new Date(1966, 0, 1), residency: 'US' } } };
 
   const { pendingTaxActions } = svc.replenishSavings(state, 'target', 5000, date);
 
@@ -252,13 +252,13 @@ test('EW-4: IRA earnings withdrawal includes AU ordinary income when AU resident
   const date   = new Date(2026, 0, 1);
   const target = new CheckingAccount(0, { country: 'US', currency: USD });
   const ira    = new TraditionalIRAAccount(20000, { contributionBasis: 0, earningsBasis: 20000, drawdownPriority: 1 });
-  const state  = { target, ira, personBirthDate: new Date(1990, 0, 1), isAuResident: true };
+  const state  = { target, ira, people: { primary: { birthDate: new Date(1990, 0, 1), residency: 'AUS' } } };
 
   const { pendingTaxActions } = svc.replenishSavings(state, 'target', 9000, date);
 
   const earningsTax = pendingTaxActions.find(a => a.type === 'IRA_WITHDRAWAL_EARNINGS_TAX');
   assert.ok(earningsTax, 'IRA_WITHDRAWAL_EARNINGS_TAX action expected');
-  assert.strictEqual(earningsTax.isAuResident, true);
+  assert.strictEqual(earningsTax.residency, 'AUS');
 });
 
 test('EW-4: IRA contribution withdrawal has no AU tax field', () => {

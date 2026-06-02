@@ -29,7 +29,7 @@ export const AU_INCOME = {
     reducers: [AuSeIncomeApplyReducer],
     actions: [
       { type: 'SE_INCOME_AU_APPLY', fields: { amount: ValueType.currency('AUD') } },
-      { type: 'AU_SE_INCOME_TAX',   fields: { amount: ValueType.currency('AUD'), isAuResident: ValueType.boolean(), personKey: ValueType.text() } },
+      { type: 'AU_SE_INCOME_TAX',   fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), personKey: ValueType.text() } },
     ],
   },
 

@@ -79,7 +79,7 @@ export class FixedIncomeEarningsApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, isAuResident } = action;
+    const { amount, residency } = action;
     return this.newState(
       state,
       {
@@ -88,7 +88,7 @@ export class FixedIncomeEarningsApplyReducer extends AccountServiceReducer {
           balance: state.fixedIncomeAccount.balance + amount,
         },
       },
-      [{ type: 'FIXED_INCOME_EARNINGS_TAX', amount, isAuResident }]
+      [{ type: 'FIXED_INCOME_EARNINGS_TAX', amount, residency }]
     );
   }
 }
@@ -137,7 +137,7 @@ export class StockDividendApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, isAuResident } = action;
+    const { amount, residency } = action;
     const key = action.stateKey ?? 'usStockAccount';
     const sa = state[key];
     return this.newState(
@@ -150,7 +150,7 @@ export class StockDividendApplyReducer extends AccountServiceReducer {
           earningsBasis:     sa.earningsBasis     + amount,
         },
       },
-      [{ type: 'STOCK_DIVIDEND_TAX', amount, isAuResident }]
+      [{ type: 'STOCK_DIVIDEND_TAX', amount, residency }]
     );
   }
 }
@@ -196,7 +196,7 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { salePrice, costBasis, isAuResident } = action;
+    const { salePrice, costBasis, residency } = action;
     const gain = Math.max(0, salePrice - costBasis);
     this.accountService.transaction(usCash(state), salePrice, null);
     const key = action.stateKey ?? 'usStockAccount';
@@ -214,7 +214,7 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
           earningsBasis:     newEarnings,
         },
       },
-      [{ type: 'STOCK_WITHDRAWAL_TAX', gain, isAuResident, proceeds: salePrice, costBasis, description: sa.name || key }]
+      [{ type: 'STOCK_WITHDRAWAL_TAX', gain, residency, proceeds: salePrice, costBasis, description: sa.name || key }]
     );
   }
 }
@@ -269,7 +269,7 @@ export class FixedIncomeEarningsHandler extends HandlerEntry {
 
   call({ data, state }) {
     return [
-      { type: 'FIXED_INCOME_EARNINGS_APPLY', amount: data.amount, isAuResident: state.isAuResident },
+      { type: 'FIXED_INCOME_EARNINGS_APPLY', amount: data.amount, residency: state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null },
       new RecordBalanceAction('fixedIncomeAccount.balance', 'fixedIncomeAccount'),
     ];
   }
@@ -305,7 +305,7 @@ export class StockDividendHandler extends HandlerEntry {
 
   call({ data, state }) {
     return [
-      { type: 'STOCK_DIVIDEND_APPLY', amount: data.amount, isAuResident: state.isAuResident },
+      { type: 'STOCK_DIVIDEND_APPLY', amount: data.amount, residency: state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null },
       new RecordBalanceAction('usStockAccount.balance', 'usStockAccount'),
     ];
   }
@@ -345,7 +345,7 @@ export class StockWithdrawalHandler extends HandlerEntry {
         type:         'STOCK_WITHDRAWAL_APPLY',
         salePrice:    data.salePrice,
         costBasis:    data.costBasis,
-        isAuResident: state.isAuResident,
+        residency: state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null,
       },
       new RecordBalanceAction('usStockAccount.balance', 'usStockAccount'),
     ];

@@ -14,9 +14,9 @@ import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framew
 /**
  * Handles the MONTHLY_EXPENSES event.
  *
- * Residence-aware: reads state.isAuResident to determine whether expenses
- * come from the US savings account (USD pre-move) or AU savings account
- * (AUD post-move).
+ * Reads primaryPersonKey's residency to determine whether expenses
+ * come from the US savings account (USD, 'US' residency) or AU savings account
+ * (AUD, 'AUS' residency).
  *
  * If the target savings account would fall below its minimumBalance after the
  * debit, a REPLENISH_SAVINGS action is prepended to trigger the drawdown
@@ -27,13 +27,14 @@ import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framew
  * @param {object} opts
  * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry
  * @param {number} [opts.monthlyExpenses=6000]
- * @param {string} opts.usRole      - ACCOUNT_ROLES value for the USD cash pool
- * @param {string} [opts.usOwnerId] - Person id for US savings (null = any owner)
- * @param {string} opts.auRole      - ACCOUNT_ROLES value for the AUD cash pool
- * @param {string} [opts.auOwnerId] - Person id for AU savings (null = any owner)
+ * @param {string} opts.usRole           - ACCOUNT_ROLES value for the USD cash pool
+ * @param {string} [opts.usOwnerId]      - Person id for US savings (null = any owner)
+ * @param {string} opts.auRole           - ACCOUNT_ROLES value for the AUD cash pool
+ * @param {string} [opts.auOwnerId]      - Person id for AU savings (null = any owner)
+ * @param {string} [opts.primaryPersonKey] - Person key to read residency from; defaults to first person
  */
 export class MonthlyExpensesHandler extends HandlerEntry {
-  static description = 'Residence-aware monthly expense handler: debits US savings (pre-move) or AU savings (post-move), prepending REPLENISH_SAVINGS if the balance would fall below minimum.';
+  static description = 'Residence-aware monthly expense handler: debits US savings (pre-move) or AU savings (post-move) based on primaryPersonKey residency, prepending REPLENISH_SAVINGS if needed.';
   static type        = 'MonthlyExpensesHandler';
   static eventType   = 'MONTHLY_EXPENSES';
 
@@ -42,25 +43,28 @@ export class MonthlyExpensesHandler extends HandlerEntry {
     monthlyExpenses = 6000,
     usRole, usOwnerId = null,
     auRole, auOwnerId = null,
+    primaryPersonKey = null,
   } = {}) {
     super(null, 'Monthly Expenses');
-    this.stateRegistry  = stateRegistry;
-    this.monthlyExpenses = monthlyExpenses;
-    this.usRole         = usRole;
-    this.usOwnerId      = usOwnerId;
-    this.auRole         = auRole;
-    this.auOwnerId      = auOwnerId;
+    this.stateRegistry      = stateRegistry;
+    this.monthlyExpenses    = monthlyExpenses;
+    this.usRole             = usRole;
+    this.usOwnerId          = usOwnerId;
+    this.auRole             = auRole;
+    this.auOwnerId          = auOwnerId;
+    this.primaryPersonKey   = primaryPersonKey;
     this.generatedActionTypes = ['REPLENISH_SAVINGS', 'EXPENSE_DEBIT', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
     const h = new this({
       stateRegistry,
-      monthlyExpenses: d.monthlyExpenses ?? 6000,
-      usRole:    d.usRole    ?? null,
-      usOwnerId: d.usOwnerId ?? null,
-      auRole:    d.auRole    ?? null,
-      auOwnerId: d.auOwnerId ?? null,
+      monthlyExpenses:  d.monthlyExpenses  ?? 6000,
+      usRole:           d.usRole           ?? null,
+      usOwnerId:        d.usOwnerId        ?? null,
+      auRole:           d.auRole           ?? null,
+      auOwnerId:        d.auOwnerId        ?? null,
+      primaryPersonKey: d.primaryPersonKey ?? null,
     });
     h.id = d.id;
     return h;
@@ -69,18 +73,21 @@ export class MonthlyExpensesHandler extends HandlerEntry {
   toJSON() {
     return {
       ...super.toJSON(),
-      monthlyExpenses: this.monthlyExpenses,
-      usRole:    this.usRole,
-      usOwnerId: this.usOwnerId,
-      auRole:    this.auRole,
-      auOwnerId: this.auOwnerId,
+      monthlyExpenses:  this.monthlyExpenses,
+      usRole:           this.usRole,
+      usOwnerId:        this.usOwnerId,
+      auRole:           this.auRole,
+      auOwnerId:        this.auOwnerId,
+      primaryPersonKey: this.primaryPersonKey,
     };
   }
 
   call({ data, state }) {
-    const amount    = data?.amount ?? state.monthlyExpenses ?? this.monthlyExpenses;
-    const isAu      = state.isAuResident;
-    const targetKey = isAu
+    const amount      = data?.amount ?? state.monthlyExpenses ?? this.monthlyExpenses;
+    const personKey   = this.primaryPersonKey ?? Object.keys(state.people ?? {})[0];
+    const residency   = state.people?.[personKey]?.residency ?? null;
+    const isAu        = residency === 'AUS';
+    const targetKey   = isAu
       ? this.stateRegistry.getStateKey(this.auRole, this.auOwnerId)
       : this.stateRegistry.getStateKey(this.usRole, this.usOwnerId);
     const account   = state[targetKey];

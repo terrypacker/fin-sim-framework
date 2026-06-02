@@ -143,7 +143,7 @@ function _project(entry) {
     costBasis:    d.costBasis     ?? null,
     gain:         d.gain          ?? null,
     isLongTerm:   d.isLongTerm    ?? null,
-    isAuResident: d.isAuResident  ?? null,
+    residency:    d.residency     ?? null,
     description:  d.description   ?? null,
     personKey:    d.personKey     ?? null,
 

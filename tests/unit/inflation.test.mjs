@@ -44,12 +44,21 @@ function baseState(overrides = {}) {
     inflationRates:       { US: 0.03, AU: 0.03 },
     inflationAccumulator: { US: 1.0,  AU: 1.0  },
     people: {
-      primary: { monthlyWage: 8_000, socialSecurityMonthly: 2_800 },
-      spouse:  { monthlyWage: 4_000, socialSecurityMonthly: 1_500 },
+      primary: { monthlyWage: 8_000, socialSecurityMonthly: 2_800, residency: 'US' },
+      spouse:  { monthlyWage: 4_000, socialSecurityMonthly: 1_500, residency: 'US' },
     },
-    isAuResident:   false,
     monthlyExpenses: 6_000,
     ...overrides,
+  };
+}
+
+function auBaseState(overrides = {}) {
+  return {
+    ...baseState(overrides),
+    people: {
+      primary: { monthlyWage: 8_000, socialSecurityMonthly: 2_800, residency: 'AUS' },
+      spouse:  { monthlyWage: 4_000, socialSecurityMonthly: 1_500, residency: 'AUS' },
+    },
   };
 }
 
@@ -67,7 +76,7 @@ function usState(overrides = {}) {
 
 function auState(overrides = {}) {
   return {
-    isAuResident:                true,
+    people: { primary: { residency: 'AUS' } },
     auOrdinaryIncomeYTD:         0,
     auCapitalGainsYTD:           0,
     auNonResidentWithholdingYTD: 0,
@@ -190,39 +199,44 @@ test('INFL-3: wage compounding matches (1 + rate)^n over multiple US advances', 
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('INFL-4: expenses inflate at US rate when US resident on US PERIOD_ADVANCE', () => {
-  const state = baseState({ isAuResident: false });
+  const state = baseState();
   const next = reducer.reduce(state, US_PERIOD_2027);
   assert.ok(Math.abs(next.monthlyExpenses - 6_000 * 1.03) < 0.01);
 });
 
 test('INFL-4: expenses NOT adjusted on US PERIOD_ADVANCE when AU resident', () => {
-  const state = baseState({ isAuResident: true });
+  const state = auBaseState();
   const next = reducer.reduce(state, US_PERIOD_2027);
   // Residence is AU so only AU advance should adjust AUD expenses
   assert.strictEqual(next.monthlyExpenses, 6_000);
 });
 
 test('INFL-4: expenses inflate at AU rate when AU resident on AU PERIOD_ADVANCE', () => {
-  const state = baseState({ isAuResident: true, inflationRates: { US: 0.03, AU: 0.04 } });
+  const state = auBaseState({ inflationRates: { US: 0.03, AU: 0.04 } });
   const next = reducer.reduce(state, AU_PERIOD_2027);
   assert.ok(Math.abs(next.monthlyExpenses - 6_000 * 1.04) < 0.01);
 });
 
 test('INFL-4: AU PERIOD_ADVANCE does NOT adjust expenses when US resident', () => {
-  const state = baseState({ isAuResident: false });
+  const state = baseState();
   const next = reducer.reduce(state, AU_PERIOD_2027);
   assert.strictEqual(next.monthlyExpenses, 6_000);
 });
 
 test('INFL-4: expenses compound after residency switch from US to AU', () => {
-  let state = baseState({ isAuResident: false, inflationRates: { US: 0.03, AU: 0.04 } });
+  let state = baseState({ inflationRates: { US: 0.03, AU: 0.04 } });
 
   // Two US-based years (2027, 2028)
   state = reducer.reduce(state, { type: 'US_PERIOD_ADVANCE', period: { startMs: Date.UTC(2027, 0, 1) } });
   state = reducer.reduce(state, { type: 'US_PERIOD_ADVANCE', period: { startMs: Date.UTC(2028, 0, 1) } });
 
-  // Switch to AU residency
-  state = { ...state, isAuResident: true };
+  // Switch to AU residency (flip all people to AUS)
+  state = {
+    ...state,
+    people: Object.fromEntries(
+      Object.entries(state.people).map(([k, p]) => [k, { ...p, residency: 'AUS' }])
+    ),
+  };
 
   // Two AU-based years (2028, 2029 fiscal)
   state = reducer.reduce(state, { type: 'AU_PERIOD_ADVANCE', period: { startMs: Date.UTC(2028, 6, 1) } });

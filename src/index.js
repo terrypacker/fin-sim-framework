@@ -71,6 +71,7 @@ import { ReplenishSavingsReducer } from './finance/reducers/replenish-savings-re
 import { SetOutOfFundsDateReducer } from './finance/reducers/set-out-of-funds-date-reducer.js';
 import { StockDividendCashApplyReducer } from './finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { UsSavingsInterestCreditReducer } from './finance/reducers/us-savings-interest-credit-reducer.js';
+import { getResidency, isResident, residentsOf, getBirthDate } from './finance/residency-utils.js';
 import { AccountService } from './finance/services/account-service.js';
 import { AssetService } from './finance/services/asset-service.js';
 import { CollectibleService } from './finance/services/collectible-service.js';
@@ -467,6 +468,10 @@ export const Finance = {
   SetOutOfFundsDateReducer,
   StockDividendCashApplyReducer,
   UsSavingsInterestCreditReducer,
+  getResidency,
+  isResident,
+  residentsOf,
+  getBirthDate,
   AccountService,
   AssetService,
   CollectibleService,

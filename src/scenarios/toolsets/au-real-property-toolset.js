@@ -41,7 +41,7 @@ export const AU_REAL_PROPERTY = {
       { type: 'AU_HOUSE_SALE_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'AU',
         fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), stateKey: ValueType.text() } },
       { type: 'AU_HOUSE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'AU',
-        fields: { gain: ValueType.number(), isAuResident: ValueType.boolean(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text() } },
+        fields: { gain: ValueType.number(), residency: ValueType.text(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text() } },
       { type: 'AU_MORTGAGE_PAYMENT_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'AU',
         fields: { amount: ValueType.currency('AUD') } },
     ],

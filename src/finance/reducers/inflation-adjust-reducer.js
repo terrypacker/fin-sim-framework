@@ -63,8 +63,10 @@ export class InflationAdjustReducer extends Reducer {
       updates.people = people;
     }
 
-    // Expenses are in local currency — inflate only when cc matches residence
-    const residenceCC = state.isAuResident ? 'AU' : 'US';
+    // Expenses are in local currency — inflate only when cc matches primary person's residence
+    const primaryKey  = Object.keys(state.people ?? {})[0];
+    const residency   = state.people?.[primaryKey]?.residency ?? null;
+    const residenceCC = residency === 'AUS' ? 'AU' : 'US';
     if (cc === residenceCC) {
       updates.monthlyExpenses = (state.monthlyExpenses ?? 0) * factor;
     }

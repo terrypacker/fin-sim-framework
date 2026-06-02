@@ -29,14 +29,14 @@ export class AuFixedIncomeEarningsApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, isAuResident } = action;
+    const { amount, residency } = action;
     const prev = state.auFixedIncomeAccount ?? {};
     return this.newState(
       state,
       {
         auFixedIncomeAccount: { ...prev, balance: (prev.balance ?? 0) + amount },
       },
-      [{ type: 'AU_FIXED_INCOME_EARNINGS_TAX', amount, isAuResident }]
+      [{ type: 'AU_FIXED_INCOME_EARNINGS_TAX', amount, residency }]
     );
   }
 }

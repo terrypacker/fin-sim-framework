@@ -41,7 +41,7 @@ function usDetail(overrides = {}) {
 
 function auResidentDetail(overrides = {}) {
   return new AuTaxRates2025().computeTax({
-    isAuResident:                true,
+    people:                      { primary: { residency: 'AUS' } },
     auOrdinaryIncomeYTD:         80_000,
     auCapitalGainsYTD:           20_000,
     auNonResidentWithholdingYTD: 0,
@@ -53,7 +53,7 @@ function auResidentDetail(overrides = {}) {
 
 function auNrDetail(overrides = {}) {
   return new AuTaxRates2025().computeTax({
-    isAuResident:                false,
+    people:                      { primary: { residency: 'US' } },
     auOrdinaryIncomeYTD:         50_000,
     auCapitalGainsYTD:           0,
     auNonResidentWithholdingYTD: 10_000,
@@ -448,14 +448,14 @@ test('TaxDocumentRegistry: AU entry with CG <= $10,000 returns single ITR', () =
   assert.strictEqual(doc.country, 'AU');
 });
 
-test('TaxDocumentRegistry: STOCK_WITHDRAWAL_TAX with isAuResident=true included in AU CGT schedule', () => {
+test('TaxDocumentRegistry: STOCK_WITHDRAWAL_TAX with residency=AUS included in AU CGT schedule', () => {
   const registry    = new TaxDocumentRegistry();
   const detail      = { ...auResidentDetail({ auCapitalGainsYTD: 20_000 }), taxYear: 2025 };
   const settleEntry = makeEntry('AU', detail, Date.UTC(2026, 6, 1));
   // replenishSavings emits STOCK_WITHDRAWAL_TAX (not AU_STOCK_WITHDRAWAL_TAX)
   const replenishSale = makeAuSaleJournalEntry('STOCK_WITHDRAWAL_TAX', {
     gain: 20_000, proceeds: 55_000, costBasis: 35_000,
-    description: 'AU Stock Account', isAuResident: true,
+    description: 'AU Stock Account', residency: 'AUS',
   });
   const journal = [replenishSale, settleEntry];
   const docs    = registry.generate(settleEntry, journal);
@@ -471,7 +471,7 @@ test('TaxDocumentRegistry: STOCK_WITHDRAWAL_TAX with isAuResident=false NOT incl
   const settleEntry = makeEntry('AU', detail, Date.UTC(2026, 6, 1));
   const nonResSale  = makeAuSaleJournalEntry('STOCK_WITHDRAWAL_TAX', {
     gain: 20_000, proceeds: 55_000, costBasis: 35_000,
-    description: 'US Stock Account', isAuResident: false,
+    description: 'US Stock Account', residency: null,
   });
   const journal = [nonResSale, settleEntry];
   const doc     = registry.generate(settleEntry, journal);

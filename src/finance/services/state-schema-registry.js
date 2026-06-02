@@ -115,7 +115,7 @@ export class StateSchemaRegistry {
 
     // ── Well-known exact fields ───────────────────────────────────────────────
     this.register('exchangeRateUsdToAud',        ParameterValueType.rate());
-    this.register('isAuResident',                ParameterValueType.boolean());
+    this.registerPattern('people.*.residency',    ParameterValueType.text());
     this.register('scenarioFailed',              ParameterValueType.boolean());
     this.register('superWithdrawalBlocked',      ParameterValueType.boolean());
     this.register('outOfFundsDate',              ParameterValueType.date());

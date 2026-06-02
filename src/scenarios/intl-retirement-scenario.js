@@ -371,7 +371,7 @@ export class IntlRetirementScenario extends BaseScenario {
         moveYear:                 p.moveYear,
         exchangeRateUsdToAud:     p.exchangeRateUsdToAud,
         intlTransferFeeUsd:       p.intlTransferFeeUsd,
-        isAuResident:             false,
+        startingResidency:        'US',
         // US_ROTH_CONVERSION
         rothConversionEnabled:    p.rothConversionEnabled,
         rothConversionStartYear:  p.rothConversionStartYear,

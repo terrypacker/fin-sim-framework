@@ -42,7 +42,7 @@ import {
  * Depends on: AU_TAX, AU_BANKING
  *
  * State ownership:
- *   Initializes: isAuResident (true), people, monthlyExpenses, inflationRates,
+ *   Initializes: people (with residency='AUS'), monthlyExpenses, inflationRates,
  *                inflationAccumulator, metrics, per-account state entries
  *   Reads: au* YTD keys from AU_TAX; INTL_AU_SAVINGS_INTEREST from AU_BANKING
  *
@@ -131,8 +131,8 @@ export const AU_RETIREMENT = {
     const p = context.parameters;
     // When US_RETIREMENT ran first it already set up shared state (MONTHLY_EXPENSES
     // was registered before AU_RETIREMENT.state() is called).  Don't override
-    // isAuResident or the people/metrics/monthlyExpenses patches in that case —
-    // US_AU_CROSS_BORDER will set the correct isAuResident for cross-border scenarios.
+    // the people/metrics/monthlyExpenses patches in that case —
+    // US_AU_CROSS_BORDER will set the correct residency for cross-border scenarios.
     const sharedAlreadySetup = !!context.schedulesById['MONTHLY_EXPENSES'];
     context._auSharedDelegated = sharedAlreadySetup;
 
@@ -146,7 +146,8 @@ export const AU_RETIREMENT = {
         retirementDate:        person.retirementDate        ?? null,
         socialSecurityMonthly: person.socialSecurityMonthly ?? 0,
         lifeExpectancy:        person.lifeExpectancy        ?? 90,
-        citizen:               person.citizen               ?? ['AU'],
+        citizen:               person.citizen               ?? ['AUS'],
+        residency:             'AUS',
       };
     }
 
@@ -154,11 +155,9 @@ export const AU_RETIREMENT = {
       inflationRates:          { AU: p.inflationRate },
       inflationAccumulator:    { AU: 1.0 },
       superWithdrawalBlocked:  false,
-      personBirthDate:         context.people[0]?.birthDate ?? null,
     };
 
     if (!sharedAlreadySetup) {
-      patches.isAuResident    = true;
       patches.monthlyExpenses = p.monthlyExpenses;
       patches.metrics         = {};
       patches.people          = people;

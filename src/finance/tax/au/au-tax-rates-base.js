@@ -32,7 +32,7 @@ import { BaseTaxRatesModule } from '../base-tax-rates-module.js';
  *
  * State fields consumed:
  *   auOrdinaryIncomeYTD, auCapitalGainsYTD, auNonResidentWithholdingYTD,
- *   auSuperTaxYTD, auFrankingCreditYTD, isAuResident
+ *   auSuperTaxYTD, auFrankingCreditYTD, people[*].residency
  */
 export class AuTaxRatesBase extends BaseTaxRatesModule {
   get countryCode() { return 'AU'; }
@@ -58,8 +58,11 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       auNonResidentWithholdingYTD = 0,
       auSuperTaxYTD               = 0,
       auFrankingCreditYTD         = 0,
-      isAuResident                = false,
     } = state;
+
+    // Resident if any person in state.people has residency === 'AUS'
+    const primaryKey   = Object.keys(state.people ?? {})[0];
+    const isAuResident = state.people?.[primaryKey]?.residency === 'AUS';
 
     if (isAuResident) {
       // Resident: apply 50% CGT discount (ATO Division 115)

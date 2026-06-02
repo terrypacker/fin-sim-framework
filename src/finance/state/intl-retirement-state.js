@@ -42,10 +42,6 @@ export class InternationalRetirementFinancialState extends SimulationState {
     super(rest);
     this.people = {primary, spouse};
 
-    //TODO Remove these this should not be needed.
-    this.personBirthDate = primary.birthDate;
-    this.isAuResident = false;
-
     //US Accounts
     this._assignAccount('usSavingsAccount', usSavingsAccount);
     this._assignAccount('fixedIncomeAccount', fixedIncomeAccount);

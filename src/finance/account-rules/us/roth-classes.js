@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
+import { getBirthDate } from '../../residency-utils.js';
 
 /** Resolve the US cash pool. */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -97,7 +98,7 @@ export class RothWithdrawalEarningsApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, penaltyAmount, isAuResident } = action;
+    const { amount, penaltyAmount, residency } = action;
     this.accountService.transaction(usCash(state), amount - penaltyAmount, null);
     const ra = state.rothAccount;
     return this.newState(
@@ -109,7 +110,7 @@ export class RothWithdrawalEarningsApplyReducer extends AccountServiceReducer {
           earningsBasis: ra.earningsBasis - amount,
         },
       },
-      [{ type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount, penaltyAmount, isAuResident }]
+      [{ type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount, penaltyAmount, residency }]
     );
   }
 }
@@ -185,20 +186,33 @@ export class RothWithdrawalEarningsHandler extends HandlerEntry {
   static description = 'Applies 10% penalty for under-60 withdrawals and dispatches ROTH_WITHDRAWAL_EARNINGS_APPLY.';
   static eventType   = 'ROTH_WITHDRAWAL_EARNINGS';
 
-  constructor() {
+  constructor({ ownerId = null } = {}) {
     super(null, 'Roth Withdrawal Earnings');
+    this.ownerId = ownerId;
     this.generatedActionTypes = ['ROTH_WITHDRAWAL_EARNINGS_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
   }
 
+  static fromJSON(d, ctx) {
+    const h = new this({ ownerId: d.ownerId ?? null });
+    h.id = d.id;
+    return h;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), ownerId: this.ownerId };
+  }
+
   call({ date, state, data }) {
-    const age     = getAgeDecimal(state.personBirthDate, date);
+    const personKey = this.ownerId ?? Object.keys(state.people ?? {})[0];
+    const birthDate = getBirthDate(state, personKey);
+    const age     = birthDate ? getAgeDecimal(birthDate, date) : 0;
     const penalty = age < 59.5 ? data.amount * 0.10 : 0;
     return [
       {
         type: 'ROTH_WITHDRAWAL_EARNINGS_APPLY',
         amount:        data.amount,
         penaltyAmount: penalty,
-        isAuResident:  state.isAuResident,
+        residency:     state.people?.[personKey]?.residency ?? null,
       },
       new FieldValueAction('roth_withdrawal_earnings', 'Roth Withdrawal Earnings', data.amount),
       new RecordBalanceAction('rothAccount.balance', 'rothAccount'),
