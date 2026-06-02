@@ -170,6 +170,9 @@ export class K401WithdrawalHandler extends HandlerEntry {
     this.generatedActionTypes = ['K401_WITHDRAWAL_APPLY', 'RECORD_BALANCE'];
   }
 
+  static fromJSON(d, ctx) { const h = new this({ ownerId: d.ownerId ?? null }); h.id = d.id; return h; }
+  toJSON() { return { ...super.toJSON(), ownerId: this.ownerId }; }
+
   call({ date, state, data }) {
     const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
     const personKey = this.ownerId ?? Object.keys(state.people ?? {})[0];

@@ -192,6 +192,16 @@ export class RothWithdrawalEarningsHandler extends HandlerEntry {
     this.generatedActionTypes = ['ROTH_WITHDRAWAL_EARNINGS_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
   }
 
+  static fromJSON(d, ctx) {
+    const h = new this({ ownerId: d.ownerId ?? null });
+    h.id = d.id;
+    return h;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), ownerId: this.ownerId };
+  }
+
   call({ date, state, data }) {
     const personKey = this.ownerId ?? Object.keys(state.people ?? {})[0];
     const birthDate = getBirthDate(state, personKey);
