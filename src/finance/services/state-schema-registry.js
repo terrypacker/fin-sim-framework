@@ -24,23 +24,23 @@ import {ACCOUNT_TYPE} from "../assets/account.js";
  * Used by the display layer to format raw numbers with the right currency,
  * unit, or precision — without baking that context into raw journal data.
  */
-export class ValueType {
+export class ParameterValueType {
   constructor(kind, options = {}) {
     this.kind         = kind;
     this.currencyCode = options.currencyCode ?? null; // string|null — for kind 'currency'
     this.precision    = options.precision    ?? 2;    // number      — for kind 'decimal'
   }
 
-  static currency(code = null) { return new ValueType('currency', { currencyCode: code }); }
-  static rate()                { return new ValueType('rate'); }
-  static percentage()          { return new ValueType('percentage'); }
-  static integer()             { return new ValueType('integer'); }
-  static decimal(precision=2)  { return new ValueType('decimal', { precision }); }
-  static boolean()             { return new ValueType('boolean'); }
-  static date()                { return new ValueType('date'); }
-  static text()                { return new ValueType('text'); }
-  static metric()              { return new ValueType('metric'); }
-  static unknown()             { return new ValueType('unknown'); }
+  static currency(code = null) { return new ParameterValueType('currency', { currencyCode: code }); }
+  static rate()                { return new ParameterValueType('rate'); }
+  static percentage()          { return new ParameterValueType('percentage'); }
+  static integer()             { return new ParameterValueType('integer'); }
+  static decimal(precision=2)  { return new ParameterValueType('decimal', { precision }); }
+  static boolean()             { return new ParameterValueType('boolean'); }
+  static date()                { return new ParameterValueType('date'); }
+  static text()                { return new ParameterValueType('text'); }
+  static metric()              { return new ParameterValueType('metric'); }
+  static unknown()             { return new ParameterValueType('unknown'); }
 }
 
 function _globToRegex(glob) {
@@ -96,49 +96,49 @@ function _fmt(vt, value) {
  * any glob pattern for that account's fields.
  *
  * Usage:
- *   registry.register('exchangeRateUsdToAud', ValueType.rate());
- *   registry.registerPattern('*.balance', ValueType.currency());
+ *   registry.register('exchangeRateUsdToAud', ParameterValueType.rate());
+ *   registry.registerPattern('*.balance', ParameterValueType.currency());
  *   registry.registerAccount('usSavingsAccount', account); // exact → currency('USD')
  *   registry.format('usSavingsAccount.balance', 50000);    // → '$50,000.00'
  */
 export class StateSchemaRegistry {
   constructor() {
-    this._exact    = new Map(); // path → ValueType
+    this._exact    = new Map(); // path → ParameterValueType
     this._patterns = [];       // [{ re, vt }] ordered by registration
 
     // ── Glob patterns ─────────────────────────────────────────────────────────
-    this.registerPattern('*.balance',           ValueType.currency());
-    this.registerPattern('*.contributionBasis', ValueType.currency());
-    this.registerPattern('*.earningsBasis',     ValueType.currency());
-    this.registerPattern('*.minimumBalance',    ValueType.currency());
-    this.registerPattern('metrics.*',           ValueType.metric());
+    this.registerPattern('*.balance',           ParameterValueType.currency());
+    this.registerPattern('*.contributionBasis', ParameterValueType.currency());
+    this.registerPattern('*.earningsBasis',     ParameterValueType.currency());
+    this.registerPattern('*.minimumBalance',    ParameterValueType.currency());
+    this.registerPattern('metrics.*',           ParameterValueType.metric());
 
     // ── Well-known exact fields ───────────────────────────────────────────────
-    this.register('exchangeRateUsdToAud',        ValueType.rate());
-    this.register('isAuResident',                ValueType.boolean());
-    this.register('scenarioFailed',              ValueType.boolean());
-    this.register('superWithdrawalBlocked',      ValueType.boolean());
-    this.register('outOfFundsDate',              ValueType.date());
-    this.register('monthlyExpenses',             ValueType.currency('USD'));
+    this.register('exchangeRateUsdToAud',        ParameterValueType.rate());
+    this.register('isAuResident',                ParameterValueType.boolean());
+    this.register('scenarioFailed',              ParameterValueType.boolean());
+    this.register('superWithdrawalBlocked',      ParameterValueType.boolean());
+    this.register('outOfFundsDate',              ParameterValueType.date());
+    this.register('monthlyExpenses',             ParameterValueType.currency('USD'));
 
     // US YTD
-    this.register('usOrdinaryIncomeYTD',         ValueType.currency('USD'));
-    this.register('usNegativeIncomeYTD',         ValueType.currency('USD'));
-    this.register('usCapitalGainsYTD',           ValueType.currency('USD'));
-    this.register('usCollectibleGainsYTD',       ValueType.currency('USD'));
-    this.register('usPenaltyYTD',                ValueType.currency('USD'));
-    this.register('ftcYTD',                      ValueType.currency('USD'));
-    this.register('cumulativeDeficit',           ValueType.currency('USD'));
+    this.register('usOrdinaryIncomeYTD',         ParameterValueType.currency('USD'));
+    this.register('usNegativeIncomeYTD',         ParameterValueType.currency('USD'));
+    this.register('usCapitalGainsYTD',           ParameterValueType.currency('USD'));
+    this.register('usCollectibleGainsYTD',       ParameterValueType.currency('USD'));
+    this.register('usPenaltyYTD',                ParameterValueType.currency('USD'));
+    this.register('ftcYTD',                      ParameterValueType.currency('USD'));
+    this.register('cumulativeDeficit',           ParameterValueType.currency('USD'));
 
     // AU YTD
-    this.register('auOrdinaryIncomeYTD',         ValueType.currency('AUD'));
-    this.register('auCapitalGainsYTD',           ValueType.currency('AUD'));
-    this.register('auNonResidentWithholdingYTD', ValueType.currency('AUD'));
-    this.register('auSuperTaxYTD',               ValueType.currency('AUD'));
-    this.register('auFrankingCreditYTD',         ValueType.currency('AUD'));
+    this.register('auOrdinaryIncomeYTD',         ParameterValueType.currency('AUD'));
+    this.register('auCapitalGainsYTD',           ParameterValueType.currency('AUD'));
+    this.register('auNonResidentWithholdingYTD', ParameterValueType.currency('AUD'));
+    this.register('auSuperTaxYTD',               ParameterValueType.currency('AUD'));
+    this.register('auFrankingCreditYTD',         ParameterValueType.currency('AUD'));
 
-    this.register('intlTransferFeeUsd',          ValueType.currency('USD'));
-    this.register('inflationAccumulator',        ValueType.decimal(4));
+    this.register('intlTransferFeeUsd',          ParameterValueType.currency('USD'));
+    this.register('inflationAccumulator',        ParameterValueType.decimal(4));
   }
 
   /**
@@ -168,7 +168,7 @@ export class StateSchemaRegistry {
    */
   registerAccount(stateKey, account) {
     const code = account?.currency?.code ?? null;
-    const vt   = ValueType.currency(code);
+    const vt   = ParameterValueType.currency(code);
     this.register(`${stateKey}.balance`,          vt);
     this.register(`${stateKey}.contributionBasis`, vt);
     this.register(`${stateKey}.earningsBasis`,    vt);
@@ -183,7 +183,7 @@ export class StateSchemaRegistry {
    * Returns ValueType.unknown() when no registration matches.
    *
    * @param {string} fieldPath - e.g. 'usSavingsAccount.balance'
-   * @returns {ValueType}
+   * @returns {ParameterValueType}
    */
   resolve(fieldPath) {
     const exact = this._exact.get(fieldPath);
@@ -191,7 +191,7 @@ export class StateSchemaRegistry {
     for (const { re, vt } of this._patterns) {
       if (re.test(fieldPath)) return vt;
     }
-    return ValueType.unknown();
+    return ParameterValueType.unknown();
   }
 
   /**
