@@ -155,9 +155,10 @@
 .jr-th {
   padding: 4px 8px;
   text-align: left;
-  color: var(--text-muted);
+  background: var(--bg-panel2);
+  color: var(--text-dim);
   font-size: 10px;
-  font-weight: normal;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   border-bottom: 1px solid var(--border);
@@ -200,7 +201,7 @@
 }
 
 .jr-group-row:hover td {
-  background: var(--row-hover);
+  background: var(--accent-primary-bg);
 }
 
 .jr-group-row--expanded .jr-group-label {

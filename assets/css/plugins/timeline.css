@@ -64,7 +64,7 @@
 .tl-filter-input::placeholder { color: var(--text-muted); }
 
 .tl-filter-input:focus {
-  border-color: var(--amber-dim);
+  border-color: var(--accent-primary);
   outline: none;
 }
 
@@ -145,7 +145,7 @@
 
 .tl-ev-hdr:hover { background: var(--bg-panel2); }
 
-.tl-ev-type { color: var(--amber); font-size: 11px; }
+.tl-ev-type { color: var(--kind-event); font-size: 11px; }
 
 .tl-acts { padding-left: 12px; padding-top: 2px; }
 
@@ -161,8 +161,8 @@
 .tl-act:hover { background: var(--row-hover); }
 
 .tl-act--bp {
-  background: var(--amber-glow) !important;
-  outline: 1px solid rgba(240, 165, 0, 0.5);
+  background: var(--warning-bg) !important;
+  outline: 1px solid rgba(245, 158, 11, 0.5);
   animation: tl-bp-flash 0.4s ease-out;
 }
 
@@ -171,7 +171,7 @@
   100% { background: rgba(251, 191, 36, 0.12); }
 }
 
-.tl-act-type { color: var(--purple); min-width: 180px; flex-shrink: 0; }
+.tl-act-type { color: var(--kind-action); min-width: 180px; flex-shrink: 0; }
 
 .tl-act-val { color: var(--diff-added); flex-shrink: 0; }
 
@@ -211,12 +211,12 @@
   line-height: 1;
 }
 
-.tl-cfg-link:hover { color: var(--amber); }
+.tl-cfg-link:hover { color: var(--accent-primary); }
 
 .tl-taxdoc {
   background: var(--bg-panel2);
   border: 1px solid var(--border-hi);
-  color: var(--amber-dim);
+  color: var(--warning-dim);
   padding: 1px 6px;
   font-family: monospace;
   font-size: 10px;
@@ -225,7 +225,7 @@
   flex-shrink: 0;
   white-space: nowrap;
 }
-.tl-taxdoc:hover { color: var(--amber); border-color: var(--amber-dim); }
+.tl-taxdoc:hover { color: var(--warning); border-color: var(--warning-dim); }
 
 .tl-rewind {
   background: var(--bg-panel2);
@@ -239,4 +239,4 @@
   margin-left: auto;
 }
 
-.tl-rewind:hover { color: var(--amber); border-color: var(--amber-dim); }
+.tl-rewind:hover { color: var(--accent-primary); border-color: var(--accent-primary); }

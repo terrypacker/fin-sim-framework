@@ -169,7 +169,7 @@
 }
 
 .opt-run-rank--best {
-  color: var(--amber);
+  color: var(--warning);
 }
 
 .opt-run-status {
@@ -218,13 +218,13 @@
 }
 
 .opt-run-metric-value--score      { color: var(--purple); }
-.opt-run-metric-value--score-best { color: var(--amber); font-weight: 600; }
+.opt-run-metric-value--score-best { color: var(--warning); font-weight: 600; }
 .opt-run-metric-value--nw         { color: var(--blue-muted); }
 .opt-run-metric-value--roth       { color: var(--diff-added); }
 
 .opt-apply-btn--best {
-  border-color: var(--amber);
-  color: var(--amber);
+  border-color: var(--warning);
+  color: var(--warning);
 }
 
 /* ── Results panel ── */
@@ -282,7 +282,7 @@
   white-space: nowrap;
 }
 
-.opt-badge-value--best-score  { color: var(--amber); }
+.opt-badge-value--best-score  { color: var(--warning); }
 .opt-badge-value--worst-score { color: var(--text-dim); }
 .opt-badge-value--candidates  { color: var(--purple); }
 .opt-badge-value--failures    { color: var(--red); }
@@ -304,8 +304,9 @@
 
 .opt-table-th {
   padding: 4px 6px;
-  color: var(--text-muted);
-  font-weight: 400;
+  background: var(--bg-panel2);
+  color: var(--text-dim);
+  font-weight: 600;
 }
 
 .opt-table-th--center { text-align: center; }
@@ -317,7 +318,7 @@
 }
 
 .opt-table-row--best {
-  background: var(--row-hover);
+  background: var(--accent-primary-bg);
 }
 
 .opt-table-row--alt {
@@ -328,10 +329,10 @@
   padding: 3px 6px;
 }
 
-.opt-table-td--rank-best { color: var(--amber); font-weight: 600; text-align: center; }
+.opt-table-td--rank-best { color: var(--warning); font-weight: 600; text-align: center; }
 .opt-table-td--rank      { color: var(--text-muted); text-align: center; }
 .opt-table-td--params    { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
-.opt-table-td--score-best { color: var(--amber); text-align: right; }
+.opt-table-td--score-best { color: var(--warning); text-align: right; }
 .opt-table-td--score      { color: var(--purple); text-align: right; }
 .opt-table-td--nw         { color: var(--blue-muted); text-align: right; }
 .opt-table-td--roth       { color: var(--diff-added); text-align: right; }

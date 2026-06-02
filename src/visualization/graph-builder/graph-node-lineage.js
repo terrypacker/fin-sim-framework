@@ -15,10 +15,10 @@ const KIND_ICON = { event: '⚡', handler: '⚙', action: '▶', reducer: '⬡' 
 
 function kindColor() {
   return {
-    event:   readThemeColor('--blue-muted'),
-    handler: readThemeColor('--amber'),
-    action:  readThemeColor('--green'),
-    reducer: readThemeColor('--purple'),
+    event:   readThemeColor('--kind-event'),
+    handler: readThemeColor('--kind-handler'),
+    action:  readThemeColor('--kind-action'),
+    reducer: readThemeColor('--kind-reducer'),
   };
 }
 

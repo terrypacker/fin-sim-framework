@@ -79,7 +79,7 @@
 
 .mc-badge-value--success { color: var(--green); }
 .mc-badge-value--failure { color: var(--red); }
-.mc-badge-value--warning { color: var(--amber); }
+.mc-badge-value--warning { color: var(--warning); }
 .mc-badge-value--muted   { color: var(--text-muted); }
 
 .mc-fan-wrap  { height: 260px; flex-shrink: 0; }
@@ -227,7 +227,7 @@
 
 .mc-run-nw        { color: var(--text-muted); }
 .mc-run-nw--fail  { color: var(--red); }
-.mc-run-date      { color: var(--amber); }
+.mc-run-date      { color: var(--accent-primary); }
 
 .mc-runs-empty {
   color: var(--text-dim);

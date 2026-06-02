@@ -124,13 +124,13 @@
   padding: 1px 5px;
   border: 1px solid var(--border);
   background: none;
-  color: var(--amber);
+  color: var(--accent-primary);
   border-radius: 2px;
   cursor: pointer;
   flex-shrink: 0;
   font-family: var(--font-mono);
 }
-.ad-node-btn:hover { border-color: var(--amber); background: var(--bg-panel2); }
+.ad-node-btn:hover { border-color: var(--accent-primary); background: var(--bg-panel2); }
 
 .ad-history-btn {
   font-family: var(--font-mono);

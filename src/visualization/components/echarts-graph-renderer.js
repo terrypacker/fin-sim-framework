@@ -25,25 +25,25 @@ const FIT_PAD     = 40;   // padding around nodes when fitting the viewport
 function buildColors() {
   const r = (v, fb) => readThemeColor(v) || fb;
   return {
-    bg:              r('--bg-panel2',           '#141820'),
+    bg:              r('--bg-panel2',           '#1f2937'),
     bgBreakpoint:    r('--red-dim',             '#7a1520'),
-    border:          r('--border-hi',           '#2e3a50'),
-    borderSelected:  r('--amber',               '#f0a500'),
-    borderHighlight: r('--amber',               '#f0a500'),
-    borderBp:        r('--red',                 '#ff4455'),
-    text:            r('--text-primary',        '#d8dde8'),
-    textMuted:       r('--text-muted',          '#8690ab'),
-    borderLight:     r('--border',              '#222a38'),
-    edge:            r('--edge-color',          '#374151'),
-    edgeHighlight:   r('--edge-color-highlight','#f0a500'),
-    badgeFired:      r('--green',               '#39e080'),
-    badgeChangeBg:   r('--amber-dim',           '#a06a00'),
-    badgeChangeFg:   r('--amber',               '#f0a500'),
-    badgeBpBg:       r('--red-dim',             '#7a1520'),
-    badgeBpFg:       r('--red',                 '#ff4455'),
-    green:           r('--green',               '#39e080'),
-    amber:           r('--amber',               '#f0a500'),
-    cyan:            r('--cyan',                '#00d4e8'),
+    border:          r('--border-hi',           '#475569'),
+    borderSelected:  r('--accent-primary',      '#6366f1'),
+    borderHighlight: r('--accent-primary',      '#6366f1'),
+    borderBp:        r('--red',                 '#fb7185'),
+    text:            r('--text-primary',        '#f1f5f9'),
+    textMuted:       r('--text-muted',          '#64748b'),
+    borderLight:     r('--border',              '#334155'),
+    edge:            r('--edge-color',          '#334155'),
+    edgeHighlight:   r('--edge-color-highlight','#6366f1'),
+    badgeFired:      r('--green',               '#34d399'),
+    badgeChangeBg:   r('--warning-dim',         '#b45309'),
+    badgeChangeFg:   r('--warning',             '#f59e0b'),
+    badgeBpBg:       r('--red-dim',             '#9f1239'),
+    badgeBpFg:       r('--red',                 '#fb7185'),
+    green:           r('--green',               '#34d399'),
+    warning:         r('--warning',             '#f59e0b'),
+    cyan:            r('--cyan',                '#22d3ee'),
     blueText:        r('--blue-text',           '#93c5fd'),
   };
 }
@@ -66,10 +66,11 @@ export class EChartsGraphRenderer extends BaseComponent {
 
   constructor({ parent, graph, graphQueryApi, graphRoot,
     graphNodes, graphEdges, nodeDetailsTemplate,
-    displayNodeStateChanges, bus, layout }) {
+    displayNodeStateChanges, bus, layout, displaySettings }) {
     super({ parent });
 
     this._graphQueryApi     = graphQueryApi;
+    this._displaySettings   = displaySettings ?? null;
     this._layout            = layout ?? new ColumnLayout();
     this._graphDataProvider = null;
     this._container         = graphRoot;
@@ -128,6 +129,16 @@ export class EChartsGraphRenderer extends BaseComponent {
         }
       });
       this._ro.observe(this._container);
+    }
+
+    if (this._displaySettings) {
+      let lastTheme = this._displaySettings.theme;
+      this.onCleanup(this._displaySettings.subscribe(({ theme }) => {
+        if (theme === lastTheme) return;
+        lastTheme = theme;
+        this._colors = buildColors();
+        this.render();
+      }));
     }
   }
 

@@ -218,6 +218,7 @@ export class WorkbenchApp extends BaseComponent {
       graphRoot:               document.getElementById('graphRoot'),
       displayNodeStateChanges: (changes) => this._statePanelView.showNodeStateChanges(changes),
       bus:                     registry.bus,
+      displaySettings:         this.displaySettings,
     });
 
     this.configPresenter = new GraphBuilderPresenter({

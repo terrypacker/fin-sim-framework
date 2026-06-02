@@ -173,7 +173,7 @@
 .node-field input:focus,
 .node-field select:focus,
 .node-field textarea:focus {
-  border-color: var(--amber-dim);
+  border-color: var(--accent-primary);
   outline: none;
 }
 
@@ -254,7 +254,7 @@
 .param-link-btn:hover { color: var(--accent); border-color: var(--accent); }
 
 /* Params whose declared node could not be resolved in the current scenario. */
-.param-row--unlinked label { color: var(--amber-dim); }
+.param-row--unlinked label { color: var(--warning); }
 
 .param-row input,
 .param-row select,
@@ -278,7 +278,7 @@
 .param-row input:focus,
 .param-row select:focus,
 .param-row textarea:focus {
-  border-color: var(--amber-dim);
+  border-color: var(--accent-primary);
   outline: none;
 }
 
@@ -328,8 +328,8 @@
 }
 
 .multi-select-item.selected {
-  background: var(--amber-glow);
-  color: var(--amber);
+  background: var(--accent-primary-bg);
+  color: var(--accent-primary);
 }
 
 /* ── REDUCER SELECTOR ── */
@@ -351,23 +351,23 @@
   transition: all 0.12s;
   user-select: none;
 }
-.reducer-chip:hover { border-color: var(--amber-dim); background: var(--bg-panel2); }
+.reducer-chip:hover { border-color: var(--accent-primary); background: var(--bg-panel2); }
 .reducer-chip-name  { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
-.reducer-chip-check { font-size: 10px; color: var(--amber); opacity: 0; transition: opacity 0.12s; }
+.reducer-chip-check { font-size: 10px; color: var(--accent-primary); opacity: 0; transition: opacity 0.12s; }
 
 .reducer-chip.reducer-chip-on {
-  background: var(--amber-glow);
-  border-color: var(--amber-dim);
+  background: var(--accent-primary-bg);
+  border-color: var(--accent-primary);
 }
-.reducer-chip.reducer-chip-on .reducer-chip-name  { color: var(--amber); }
+.reducer-chip.reducer-chip-on .reducer-chip-name  { color: var(--accent-primary); }
 .reducer-chip.reducer-chip-on .reducer-chip-check { opacity: 1; }
 
 .reducer-sel-count {
   font-family: var(--font-mono);
   font-size: 9px;
-  color: var(--amber);
-  background: var(--amber-glow);
-  border: 1px solid var(--amber-dim);
+  color: var(--accent-primary);
+  background: var(--accent-primary-bg);
+  border: 1px solid var(--accent-primary);
   padding: 1px 6px;
   border-radius: 2px;
   margin-left: 8px;
