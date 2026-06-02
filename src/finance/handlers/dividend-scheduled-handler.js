@@ -67,12 +67,15 @@ export class DividendScheduledHandler extends HandlerEntry {
     const amount   = +(balance * this.dividendRate).toFixed(2);
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
 
-    const reinvest     = data?.reinvest ?? this.reinvest;
-    const isAuResident = state.isAuResident;
-    const actionType   = reinvest ? 'STOCK_DIVIDEND_APPLY' : 'STOCK_DIVIDEND_CASH_APPLY';
+    const reinvest   = data?.reinvest ?? this.reinvest;
+    const account    = state[stateKey];
+    const residency  = account?.ownerId
+      ? (state.people?.[account.ownerId]?.residency ?? null)
+      : null;
+    const actionType = reinvest ? 'STOCK_DIVIDEND_APPLY' : 'STOCK_DIVIDEND_CASH_APPLY';
 
     return [
-      { type: actionType, amount, isAuResident, stateKey },
+      { type: actionType, amount, residency, stateKey },
       new RecordMetricAction('dividends', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];

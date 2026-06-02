@@ -34,9 +34,9 @@ export class SsIncomeApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, isAuResident } = action;
+    const { amount, residency } = action;
     this.accountService.transaction(usCash(state), amount, null);
-    return this.newState(state, {}, [{ type: 'SS_INCOME_TAX', amount, isAuResident }]);
+    return this.newState(state, {}, [{ type: 'SS_INCOME_TAX', amount, residency }]);
   }
 }
 
@@ -56,9 +56,9 @@ export class WagesIncomeApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, isAuResident, personKey } = action;
+    const { amount, residency, personKey } = action;
     this.accountService.transaction(usCash(state), amount, null);
-    return this.newState(state, {}, [{ type: 'WAGES_INCOME_TAX', amount, isAuResident, personKey }]);
+    return this.newState(state, {}, [{ type: 'WAGES_INCOME_TAX', amount, residency, personKey }]);
   }
 }
 
@@ -101,9 +101,9 @@ export class SeIncomeUsApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, isAuResident } = action;
+    const { amount, residency } = action;
     this.accountService.transaction(usCash(state), amount, null);
-    return this.newState(state, {}, [{ type: 'SE_INCOME_US_TAX', amount, isAuResident }]);
+    return this.newState(state, {}, [{ type: 'SE_INCOME_US_TAX', amount, residency }]);
   }
 }
 
@@ -123,9 +123,9 @@ export class BonusApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, isAuResident } = action;
+    const { amount, residency } = action;
     this.accountService.transaction(usCash(state), amount, null);
-    return this.newState(state, {}, [{ type: 'BONUS_TAX', amount, isAuResident }]);
+    return this.newState(state, {}, [{ type: 'BONUS_TAX', amount, residency }]);
   }
 }
 
@@ -146,10 +146,10 @@ export class CompanySaleApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { salePrice, costBasis, isAuResident } = action;
+    const { salePrice, costBasis, residency } = action;
     const gain = Math.max(0, salePrice - costBasis);
     this.accountService.transaction(usCash(state), salePrice, null);
-    return this.newState(state, {}, [{ type: 'COMPANY_SALE_TAX', gain, isAuResident }]);
+    return this.newState(state, {}, [{ type: 'COMPANY_SALE_TAX', gain, residency }]);
   }
 }
 
@@ -168,7 +168,7 @@ export class SsIncomeHandler extends HandlerEntry {
   call({ data, state }) {
     const cashKey = state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
     return [
-      { type: 'SS_INCOME_APPLY', amount: data.amount, isAuResident: state.isAuResident },
+      { type: 'SS_INCOME_APPLY', amount: data.amount, residency: state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null },
       new FieldValueAction('ss_income', 'Social Security Income', data.amount),
       new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];
@@ -188,7 +188,7 @@ export class WagesIncomeHandler extends HandlerEntry {
   call({ data, state }) {
     const cashKey = state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
     return [
-      { type: 'WAGES_INCOME_APPLY', amount: data.amount, isAuResident: state.isAuResident },
+      { type: 'WAGES_INCOME_APPLY', amount: data.amount, residency: state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null },
       new FieldValueAction('wages_income', 'Wages Income', data.amount),
       new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];
@@ -228,7 +228,7 @@ export class SeIncomeUsHandler extends HandlerEntry {
   call({ data, state }) {
     const cashKey = state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
     return [
-      { type: 'SE_INCOME_US_APPLY', amount: data.amount, isAuResident: state.isAuResident },
+      { type: 'SE_INCOME_US_APPLY', amount: data.amount, residency: state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null },
       new FieldValueAction('se_income_us', 'Self-Employment Income (US)', data.amount),
       new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];
@@ -248,7 +248,7 @@ export class BonusHandler extends HandlerEntry {
   call({ data, state }) {
     const cashKey = state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
     return [
-      { type: 'BONUS_APPLY', amount: data.amount, isAuResident: state.isAuResident },
+      { type: 'BONUS_APPLY', amount: data.amount, residency: state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null },
       new FieldValueAction('bonus', 'Bonus', data.amount),
       new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];
@@ -272,7 +272,7 @@ export class CompanySaleHandler extends HandlerEntry {
         type:         'COMPANY_SALE_APPLY',
         salePrice:    data.salePrice,
         costBasis:    data.costBasis,
-        isAuResident: state.isAuResident,
+        residency: state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null,
       },
       new RecordBalanceAction(`${cashKey}.balance`, cashKey),
     ];

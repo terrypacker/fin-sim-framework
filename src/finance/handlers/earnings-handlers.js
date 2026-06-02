@@ -226,7 +226,7 @@ export class IntlAuStockEarningsHandler extends HandlerEntry {
  * Handles INTL_AU_STOCK_DIVIDEND events.
  * Computes annual AU stock dividends as: balance × dividendRate.
  * Routes to AU_DIVIDEND_FRANKED_RESIDENT_APPLY (AU resident) or
- * AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY (non-resident) based on state.isAuResident.
+ * AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY (non-resident) based on the account owner's residency.
  * Assumes fully franked dividends, which is typical for Australian equities.
  */
 export class IntlAuStockDividendHandler extends HandlerEntry {
@@ -264,7 +264,9 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
     const amount   = +(balance * this.dividendRate).toFixed(2);
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
 
-    const actionType = state.isAuResident
+    const personKey  = this.ownerId ?? Object.keys(state.people ?? {})[0];
+    const residency  = state.people?.[personKey]?.residency ?? null;
+    const actionType = residency === 'AUS'
       ? 'AU_DIVIDEND_FRANKED_RESIDENT_APPLY'
       : 'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY';
 
@@ -318,7 +320,7 @@ export class AuSavingsInterestHandler extends HandlerEntry {
     const amount   = +(balance * this.interestRate / 12).toFixed(2);
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'AU_SAVINGS_EARNINGS_APPLY', amount, isAuResident: state.isAuResident },
+      { type: 'AU_SAVINGS_EARNINGS_APPLY', amount, residency: state.people?.[this.ownerId ?? Object.keys(state.people ?? {})[0]]?.residency ?? null },
       new RecordMetricAction('au_savings_interest', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
@@ -367,7 +369,7 @@ export class AuFixedIncomeInterestMonthlyHandler extends HandlerEntry {
     const amount   = +(balance * this.interestRate / 12).toFixed(2);
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'AU_FIXED_INCOME_EARNINGS_APPLY', amount, isAuResident: state.isAuResident },
+      { type: 'AU_FIXED_INCOME_EARNINGS_APPLY', amount, residency: state.people?.[this.ownerId ?? Object.keys(state.people ?? {})[0]]?.residency ?? null },
       new RecordMetricAction('au_fixed_income_interest', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
@@ -416,7 +418,7 @@ export class FixedIncomeInterestHandler extends HandlerEntry {
     const amount   = +(balance * this.interestRate / 12).toFixed(2);
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'FIXED_INCOME_EARNINGS_APPLY', amount, isAuResident: state.isAuResident },
+      { type: 'FIXED_INCOME_EARNINGS_APPLY', amount, residency: state.people?.[this.ownerId ?? Object.keys(state.people ?? {})[0]]?.residency ?? null },
       new RecordMetricAction('fixed_income_interest', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];

@@ -294,9 +294,10 @@ test('cross-border: scenario loads without error', () => {
   assert.doesNotThrow(() => loadCrossBorderScenario(CROSS_BORDER_JSON));
 });
 
-test('cross-border: isAuResident starts as false (US_AU_CROSS_BORDER overrides AU_RETIREMENT)', () => {
+test('cross-border: primary person residency starts as US (US_AU_CROSS_BORDER overrides AU_RETIREMENT)', () => {
   const { sim } = loadCrossBorderScenario(CROSS_BORDER_JSON);
-  assert.strictEqual(sim.state.isAuResident, false);
+  const primary = Object.values(sim.state.people ?? {})[0];
+  assert.strictEqual(primary?.residency, 'US');
 });
 
 test('cross-border: inflationRates has both US and AU keys', () => {
@@ -390,14 +391,16 @@ test('cross-border: runs 3 months without error', () => {
   assert.doesNotThrow(() => sim.stepTo(Q1_2026));
 });
 
-test('cross-border: isAuResident becomes true after moveYear Jul 1', () => {
+test('cross-border: person residency becomes AUS after moveYear Jul 1', () => {
   const { sim } = loadCrossBorderScenario(CROSS_BORDER_JSON);
-  // Before move: should be false
-  assert.strictEqual(sim.state.isAuResident, false);
+  // Before move: should be US
+  const primaryBefore = Object.values(sim.state.people ?? {})[0];
+  assert.strictEqual(primaryBefore?.residency, 'US');
   // Step past Jul 1 2026 — CHANGE_RESIDENCY event fires
   const afterMove = new Date(Date.UTC(2026, 7, 1));  // Aug 1 2026
   sim.stepTo(afterMove);
-  assert.strictEqual(sim.state.isAuResident, true, 'isAuResident must be true after moveYear Jul 1');
+  const primaryAfter = Object.values(sim.state.people ?? {})[0];
+  assert.strictEqual(primaryAfter?.residency, 'AUS', 'residency must be AUS after moveYear Jul 1');
 });
 
 test('cross-border: usSavingsAccount and auSavingsAccount both in state', () => {

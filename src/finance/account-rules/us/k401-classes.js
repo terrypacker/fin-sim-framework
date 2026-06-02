@@ -12,6 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { getUniformDistributionPeriod } from './us-rmd-uniform-table.js';
+import { getBirthDate } from '../../residency-utils.js';
 
 /** Resolve the US cash pool. */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -163,14 +164,17 @@ export class K401WithdrawalHandler extends HandlerEntry {
   static description = 'Applies 10% penalty for under-59.5 withdrawals and dispatches K401_WITHDRAWAL_APPLY.';
   static eventType   = 'K401_WITHDRAWAL';
 
-  constructor() {
+  constructor({ ownerId = null } = {}) {
     super(null, '401k Withdrawal');
+    this.ownerId = ownerId;
     this.generatedActionTypes = ['K401_WITHDRAWAL_APPLY', 'RECORD_BALANCE'];
   }
 
   call({ date, state, data }) {
     const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
-    const age       = (date - state.personBirthDate) / msPerYear;
+    const personKey = this.ownerId ?? Object.keys(state.people ?? {})[0];
+    const birthDate = getBirthDate(state, personKey);
+    const age       = birthDate ? (date - birthDate) / msPerYear : 0;
     const penalty   = age < 59.5 ? data.amount * 0.10 : 0;
     return [
       { type: 'K401_WITHDRAWAL_APPLY', amount: data.amount, penaltyAmount: penalty },
@@ -197,7 +201,7 @@ export class K401RmdApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, isAuResident } = action;
+    const { amount, residency } = action;
     const stateKey    = action.stateKey ?? 'k401Account';
     const ka          = state[stateKey];
     const fromEarnings = Math.min(amount, ka.earningsBasis);
@@ -213,7 +217,7 @@ export class K401RmdApplyReducer extends AccountServiceReducer {
           contributionBasis: ka.contributionBasis - fromContrib,
         },
       },
-      [{ type: 'K401_RMD_TAX', amount, isAuResident }]
+      [{ type: 'K401_RMD_TAX', amount, residency }]
     );
   }
 }
@@ -282,7 +286,7 @@ export class K401AnnualRmdHandler extends HandlerEntry {
     const cashKey = state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
     const label   = `${person.name ?? this.ownerId} 401(k) RMD`;
     return [
-      { type: 'K401_RMD_APPLY', amount: rmdAmount, stateKey: resolvedKey, isAuResident: state.isAuResident },
+      { type: 'K401_RMD_APPLY', amount: rmdAmount, stateKey: resolvedKey, residency: person.residency ?? null },
       new FieldValueAction(`k401_annual_rmd_${this.ownerId}`, label, rmdAmount),
       new RecordBalanceAction(`${cashKey}.balance`, cashKey),
       new RecordBalanceAction(`${resolvedKey}.balance`, resolvedKey),

@@ -56,7 +56,8 @@ export class UsSavingsInterestCreditReducer extends Reducer {
     const usNext = (state.usOrdinaryIncomeYTD ?? 0) + action.amount;
     const base   = { ...state, usOrdinaryIncomeYTD: usNext };
 
-    if (state.isAuResident) {
+    const personKey = this.ownerId ?? Object.keys(state.people ?? {})[0];
+    if (state.people?.[personKey]?.residency === 'AUS') {
       return this.newState({
         ...base,
         auOrdinaryIncomeYTD: (state.auOrdinaryIncomeYTD ?? 0) + action.amount,

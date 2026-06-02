@@ -19,20 +19,18 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  *      via AccountService.recordResidencyChange (one-time capture; no-op on
  *      plain Account objects that lack the field).
  *
- *   2. Adds 'AUS' to the citizen array of every person entry in state.people,
- *      deduplicating with a Set so repeated residency events are idempotent.
- *
- *   3. Sets state.isAuResident = true.
+ *   2. Sets residency = 'AUS' on every person in state.people.
+ *      Citizen arrays are NOT modified — moving countries does not change citizenship.
  *
  * Runs at PRIORITY.PRE_PROCESS — before any CASH_FLOW reducers that may
- * read isAuResident or balanceAtResidencyChange in the same event cycle.
+ * read person.residency or balanceAtResidencyChange in the same event cycle.
  *
  * @param {object} opts
  * @param {import('../../finance/services/account-service.js').AccountService} opts.accountService
  * @param {import('../../finance/services/state-registry.js').StateRegistry} opts.stateRegistry
  */
 export class ChangeResidencyApplyReducer extends Reducer {
-  static description = 'Flips isAuResident, snapshots investment account balances at residency change, and adds AU citizenship to all people in state.';
+  static description = 'Flips residency to AUS on all people, snapshots investment account balances at residency change; does NOT modify citizen arrays.';
   static type        = 'ChangeResidencyApplyReducer';
   static actionType  = 'CHANGE_RESIDENCY_APPLY';
 
@@ -55,26 +53,17 @@ export class ChangeResidencyApplyReducer extends Reducer {
       this.accountService.recordResidencyChange(account);
     }
 
-    // 2. Add AU citizenship to every person in state.people
+    // 2. Flip residency to 'AUS' for every person; citizen arrays unchanged
     const updatedPeople = {};
     if (state.people) {
       for (const [personKey, person] of Object.entries(state.people)) {
-        if (person && Array.isArray(person.citizen)) {
-          updatedPeople[personKey] = {
-            ...person,
-            citizen: [...new Set([...person.citizen, 'AUS'])],
-          };
-        } else {
-          updatedPeople[personKey] = person;
-        }
+        updatedPeople[personKey] = { ...person, residency: 'AUS' };
       }
     }
 
-    // 3. Set isAuResident flag
     return this.newState({
       ...state,
-      people:       Object.keys(updatedPeople).length > 0 ? updatedPeople : state.people,
-      isAuResident: true,
+      people: Object.keys(updatedPeople).length > 0 ? updatedPeople : state.people,
     });
   }
 }

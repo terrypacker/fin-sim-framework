@@ -49,7 +49,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
       // EVT-3: Roth withdrawal of earnings — penalty only (no US income tax),
       //        AU ordinary income if resident
       ['ROTH_WITHDRAWAL_EARNINGS_TAX', (state, action) => {
-        const { amount, penaltyAmount, isAuResident } = action;
+        const { amount, penaltyAmount, residency } = action;
+        const isAuResident = residency === 'AUS';
         let next = { ...state, usPenaltyYTD: state.usPenaltyYTD + penaltyAmount };
         if (isAuResident) {
           next = {
@@ -81,7 +82,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
       // EVT-7: IRA withdrawal of earnings — US ordinary income + optional penalty,
       //        AU ordinary income if resident
       ['IRA_WITHDRAWAL_EARNINGS_TAX', (state, action) => {
-        const { amount, penaltyAmount, isAuResident } = action;
+        const { amount, penaltyAmount, residency } = action;
+        const isAuResident = residency === 'AUS';
         let next = {
           ...state,
           usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount,
@@ -116,7 +118,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
 
       // EVT-40 (401k RMD): US ordinary income, no penalty; AU ordinary income if resident
       ['K401_RMD_TAX', (state, action) => {
-        const { amount, isAuResident } = action;
+        const { amount, residency } = action;
+        const isAuResident = residency === 'AUS';
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
           next = {
@@ -134,7 +137,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
     return [
       // EVT-11: fixed income earnings — US ordinary income, AU ordinary income if resident
       ['FIXED_INCOME_EARNINGS_TAX', (state, action) => {
-        const { amount, isAuResident } = action;
+        const { amount, residency } = action;
+        const isAuResident = residency === 'AUS';
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
           next = {
@@ -148,7 +152,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
 
       // EVT-13: stock dividend — US ordinary income, AU ordinary income if resident
       ['STOCK_DIVIDEND_TAX', (state, action) => {
-        const { amount, isAuResident } = action;
+        const { amount, residency } = action;
+        const isAuResident = residency === 'AUS';
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
           next = {
@@ -162,7 +167,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
 
       // EVT-15: stock withdrawal (sale) — US capital gain, AU capital gain if resident
       ['STOCK_WITHDRAWAL_TAX', (state, action) => {
-        const { gain, isAuResident } = action;
+        const { gain, residency } = action;
+        const isAuResident = residency === 'AUS';
         let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + gain };
         if (isAuResident) {
           next = {
@@ -190,7 +196,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
     return [
       // EVT-37: SS income — 85% taxable as US ordinary income; AU ordinary income if resident
       ['SS_INCOME_TAX', (state, action) => {
-        const { amount, isAuResident } = action;
+        const { amount, residency } = action;
+        const isAuResident = residency === 'AUS';
         const taxable = amount * 0.85;
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + taxable };
         if (isAuResident) {
@@ -206,7 +213,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
       // EVT-38: wages — US ordinary income; AU per-person income if resident + personKey,
       //         otherwise AU shared income (backward compat for non-monthly-wages events)
       ['WAGES_INCOME_TAX', (state, action) => {
-        const { amount, isAuResident, personKey } = action;
+        const { amount, residency, personKey } = action;
+        const isAuResident = residency === 'AUS';
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
           if (personKey && state.auPersonOrdinaryIncomeYTD) {
@@ -222,7 +230,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
 
       // EVT-48: US self-employment income — US ordinary income; AU ordinary income if resident
       ['SE_INCOME_US_TAX', (state, action) => {
-        const { amount, isAuResident } = action;
+        const { amount, residency } = action;
+        const isAuResident = residency === 'AUS';
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
           next = {
@@ -236,7 +245,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
 
       // EVT-50: bonus — US ordinary income; AU ordinary income if resident
       ['BONUS_TAX', (state, action) => {
-        const { amount, isAuResident } = action;
+        const { amount, residency } = action;
+        const isAuResident = residency === 'AUS';
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
           next = {
@@ -250,7 +260,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
 
       // EVT-51: company sale — US capital gain; AU capital gain if resident
       ['COMPANY_SALE_TAX', (state, action) => {
-        const { gain, isAuResident } = action;
+        const { gain, residency } = action;
+        const isAuResident = residency === 'AUS';
         let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + gain };
         if (isAuResident) {
           next = {
@@ -268,7 +279,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
     return [
       // EVT-36/46: collectible sale — US collectible gain (28% rate); AU capital gain if resident
       ['COLLECTIBLE_SALE_TAX', (state, action) => {
-        const { gain, isAuResident } = action;
+        const { gain, residency } = action;
+        const isAuResident = residency === 'AUS';
         let next = {
           ...state,
           usCollectibleGainsYTD: (state.usCollectibleGainsYTD ?? 0) + gain,
@@ -289,7 +301,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
     return [
       // EVT-35: IRA rollover withdrawal — US ordinary income (no penalty); AU ordinary income if resident
       ['IRA_ROLLOVER_WITHDRAWAL_TAX', (state, action) => {
-        const { amount, isAuResident } = action;
+        const { amount, residency } = action;
+        const isAuResident = residency === 'AUS';
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
           next = {
@@ -303,7 +316,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
 
       // EVT-40: IRA RMD — US ordinary income (no penalty); AU ordinary income if resident
       ['IRA_RMD_TAX', (state, action) => {
-        const { amount, isAuResident } = action;
+        const { amount, residency } = action;
+        const isAuResident = residency === 'AUS';
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
           next = {
@@ -322,8 +336,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
       // EVT-44: Roth rollover earnings withdrawal — no US tax or penalty;
       //         AU ordinary income if resident
       ['ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX', (state, action) => {
-        const { amount, isAuResident } = action;
-        if (!isAuResident) return state;
+        const { amount, residency } = action;
+        if (residency !== 'AUS') return state;
         return {
           ...state,
           auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
@@ -337,7 +351,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
     return [
       // EVT-52: Roth conversion — US ordinary income; AU ordinary income if resident
       ['ROTH_CONVERSION_TAX', (state, action) => {
-        const { amount, isAuResident } = action;
+        const { amount, residency } = action;
+        const isAuResident = residency === 'AUS';
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
           next = {

@@ -44,7 +44,7 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { salePrice, costBasis, mortgageBalance, isAuResident, ownershipType, ownerId, owners, stateKey, destinationKey } = action;
+    const { salePrice, costBasis, mortgageBalance, residency, ownershipType, ownerId, owners, stateKey, destinationKey } = action;
     const mortgage    = mortgageBalance ?? 0;
     const netProceeds = Math.max(0, salePrice - mortgage);
     const gain        = Math.max(0, salePrice - costBasis);
@@ -60,7 +60,7 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
     return this.newState(
       state,
       updates,
-      [{ type: 'AU_HOUSE_SALE_TAX', gain, isAuResident, ownershipType, ownerId, owners, proceeds: salePrice, costBasis, description }]
+      [{ type: 'AU_HOUSE_SALE_TAX', gain, residency, ownershipType, ownerId, owners, proceeds: salePrice, costBasis, description }]
     );
   }
 }
@@ -87,7 +87,7 @@ export class AuHouseSaleHandler extends HandlerEntry {
         salePrice:       data.salePrice,
         costBasis:       data.costBasis,
         mortgageBalance,
-        isAuResident:    state.isAuResident,
+        residency:       state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null,
         ownershipType:   data.ownershipType,
         ownerId:         data.ownerId,
         owners:          data.owners,

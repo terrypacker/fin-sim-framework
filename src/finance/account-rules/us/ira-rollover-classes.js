@@ -51,12 +51,12 @@ export class IraRolloverWithdrawalApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, isAuResident } = action;
+    const { amount, residency } = action;
     this.accountService.transaction(usCash(state), amount, null);
     return this.newState(
       state,
       { iraAccount: debitIra(state.iraAccount, amount) },
-      [{ type: 'IRA_ROLLOVER_WITHDRAWAL_TAX', amount, isAuResident }]
+      [{ type: 'IRA_ROLLOVER_WITHDRAWAL_TAX', amount, residency }]
     );
   }
 }
@@ -79,13 +79,13 @@ export class IraRmdApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, isAuResident } = action;
+    const { amount, residency } = action;
     const stateKey = action.stateKey ?? 'iraAccount';
     this.accountService.transaction(usCash(state), amount, null);
     return this.newState(
       state,
       { [stateKey]: debitIra(state[stateKey], amount) },
-      [{ type: 'IRA_RMD_TAX', amount, isAuResident }]
+      [{ type: 'IRA_RMD_TAX', amount, residency }]
     );
   }
 }
@@ -108,7 +108,7 @@ export class IraRolloverWithdrawalHandler extends HandlerEntry {
       {
         type:         'IRA_ROLLOVER_WITHDRAWAL_APPLY',
         amount:       data.amount,
-        isAuResident: state.isAuResident,
+        residency: state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null,
       },
       new FieldValueAction('ira_rollover_withdrawal', 'IRA Rollover Withdrawal', data.amount),
       new RecordBalanceAction(`${cashKey}.balance`, cashKey),
@@ -132,7 +132,7 @@ export class IraRmdHandler extends HandlerEntry {
       {
         type:         'IRA_RMD_APPLY',
         amount:       data.amount,
-        isAuResident: state.isAuResident,
+        residency: state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null,
       },
       new FieldValueAction('ira_rmd', 'IRA RMD', data.amount),
       new RecordBalanceAction(`${cashKey}.balance`, cashKey),
@@ -215,7 +215,7 @@ export class IraAnnualRmdHandler extends HandlerEntry {
     const cashKey  = state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
     const label    = `${person.name ?? this.ownerId} IRA RMD`;
     return [
-      { type: 'IRA_RMD_APPLY', amount: rmdAmount, stateKey: resolvedKey, isAuResident: state.isAuResident },
+      { type: 'IRA_RMD_APPLY', amount: rmdAmount, stateKey: resolvedKey, residency: person.residency ?? null },
       new FieldValueAction(`ira_annual_rmd_${this.ownerId}`, label, rmdAmount),
       new RecordBalanceAction(`${cashKey}.balance`, cashKey),
       new RecordBalanceAction(`${resolvedKey}.balance`, resolvedKey),

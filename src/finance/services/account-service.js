@@ -12,6 +12,7 @@ import { AssetService } from './asset-service.js';
 import { EventBus } from '../../simulation-framework/event-bus.js';
 import { InsufficientFundsError, ACCOUNT_TYPE } from '../assets/account.js';
 import { getUsEarlyWithdrawalRules } from '../account-rules/us/us-early-withdrawal-rules.js';
+import { getBirthDate, getResidency } from '../residency-utils.js';
 
 /**
  * AccountService — manages Account instances on the service bus and provides
@@ -223,17 +224,24 @@ export class AccountService extends AssetService {
    * @param {string}   targetKey  - State key for the savings account to credit
    * @param {number}   deficit    - Amount that must be deposited into targetKey
    * @param {Date}     date       - As-of date (used for age-gate checks)
-   * @param {Function} [earlyWithdrawalRulesFn] - (accountType) → { penaltyRate, ageThreshold } | null
+   * @param {Function|object} [opts] - Legacy: earlyWithdrawalRulesFn. New: { personKey?, earlyWithdrawalRulesFn? }
    * @returns {{ drawnKeys: string[], pendingTaxActions: object[] }}
    * @throws {InsufficientFundsError}
    */
-  replenishSavings(state, targetKey, deficit, date, earlyWithdrawalRulesFn = getUsEarlyWithdrawalRules) {
+  replenishSavings(state, targetKey, deficit, date, opts = {}) {
+    const earlyWithdrawalRulesFn = typeof opts === 'function'
+      ? opts
+      : (opts.earlyWithdrawalRulesFn ?? getUsEarlyWithdrawalRules);
     const targetAccount = state[targetKey];
     const country       = targetAccount.country;
     const currency      = targetAccount.currency?.code ?? country;
     const msPerYear     = 365.25 * 24 * 60 * 60 * 1000;
-    const ageDecimal    = (date - state.personBirthDate) / msPerYear;
-    const isAuResident  = state.isAuResident ?? false;
+    const personKey     = (typeof opts === 'object' ? opts.personKey : null)
+                          ?? targetAccount.ownerId
+                          ?? Object.keys(state.people ?? {})[0];
+    const birthDate     = getBirthDate(state, personKey);
+    const ageDecimal    = birthDate ? (date - birthDate) / msPerYear : 0;
+    const residency     = getResidency(state, personKey);
 
     // Discover all drawdown sources in priority order.
     const sources = Object.entries(state)
@@ -257,7 +265,7 @@ export class AccountService extends AssetService {
     for (const [key, account] of sources) {
       if (remaining < 1e-9) break;
 
-      if (this.isWithdrawalEligible(account, { birthDate: state.personBirthDate }, date)) {
+      if (this.isWithdrawalEligible(account, { birthDate }, date)) {
         // Normal eligible withdrawal.
         if (account.balance <= 0) continue;
         const withdraw = Math.min(remaining, account.balance);
@@ -275,7 +283,7 @@ export class AccountService extends AssetService {
           account.earningsBasis     = Math.max(0, (account.earningsBasis ?? 0) - gain);
           account.contributionBasis = Math.max(0, (account.contributionBasis ?? 0) - saleCost);
           pendingTaxActions.push({
-            type: 'STOCK_WITHDRAWAL_TAX', gain, isAuResident,
+            type: 'STOCK_WITHDRAWAL_TAX', gain, residency,
             proceeds: withdraw, costBasis: saleCost, description: account.name || key,
           });
         }
@@ -304,7 +312,7 @@ export class AccountService extends AssetService {
     for (const [key, account] of sources) {
       if (remaining < 1e-9) break;
       if (!account.allowsEarlyWithdrawal) continue;
-      if (this.isWithdrawalEligible(account, { birthDate: state.personBirthDate }, date)) continue;
+      if (this.isWithdrawalEligible(account, { birthDate }, date)) continue;
 
       const rules = earlyWithdrawalRulesFn(account.type);
       if (!rules) continue;
@@ -327,7 +335,7 @@ export class AccountService extends AssetService {
         this.transaction(account,       -gross, date);
         account.earningsBasis = (account.earningsBasis ?? 0) - gross;
         if (!drawnKeys.includes(key)) drawnKeys.push(key);
-        pendingTaxActions.push({ type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount: gross, penaltyAmount: penalty, isAuResident });
+        pendingTaxActions.push({ type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount: gross, penaltyAmount: penalty, residency });
         remaining -= net;
 
       } else if (account.type === ACCOUNT_TYPE.TRADITIONAL_IRA) {
@@ -353,7 +361,7 @@ export class AccountService extends AssetService {
           pendingTaxActions.push({ type: 'IRA_WITHDRAWAL_CONTRIB_TAX', amount: contribPortion, penaltyAmount: contribPortion * penaltyRate });
         }
         if (earningsPortion > 0) {
-          pendingTaxActions.push({ type: 'IRA_WITHDRAWAL_EARNINGS_TAX', amount: earningsPortion, penaltyAmount: earningsPortion * penaltyRate, isAuResident });
+          pendingTaxActions.push({ type: 'IRA_WITHDRAWAL_EARNINGS_TAX', amount: earningsPortion, penaltyAmount: earningsPortion * penaltyRate, residency });
         }
         remaining -= net;
 
