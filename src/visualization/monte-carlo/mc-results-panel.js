@@ -11,6 +11,7 @@
 import * as echarts from 'echarts';
 import { BaseComponent } from '../components/base-component.js';
 import { readThemeColor } from '../theme.js';
+import { initEChartWhenReady } from '../components/echarts-init.js';
 
 const HIST_BUCKETS = 20;
 
@@ -135,18 +136,23 @@ export class McResultsPanel extends BaseComponent {
       wrapper.appendChild(histWrap);
     }
 
-    // Append to DOM first so ECharts can measure real container dimensions.
     this._container.appendChild(wrapper);
 
     if (fanDiv) {
-      this._fanChart   = this._createFanChart(fanDiv, fanData);
-      this._fanChartRo = new ResizeObserver(() => this._fanChart?.resize());
-      this._fanChartRo.observe(fanDiv);
+      this._fanChartRo = initEChartWhenReady(fanDiv, () => {
+        this._fanChart   = this._createFanChart(fanDiv, fanData);
+        const ro = new ResizeObserver(() => this._fanChart?.resize());
+        ro.observe(fanDiv);
+        this._fanChartRo = ro;
+      });
     }
     if (histDiv) {
-      this._histChart   = this._createHistChart(histDiv, histData);
-      this._histChartRo = new ResizeObserver(() => this._histChart?.resize());
-      this._histChartRo.observe(histDiv);
+      this._histChartRo = initEChartWhenReady(histDiv, () => {
+        this._histChart   = this._createHistChart(histDiv, histData);
+        const ro = new ResizeObserver(() => this._histChart?.resize());
+        ro.observe(histDiv);
+        this._histChartRo = ro;
+      });
     }
   }
 

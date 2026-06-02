@@ -12,6 +12,7 @@ import * as echarts from 'echarts';
 import { BaseComponent }        from '../components/base-component.js';
 import { OPTIMIZATION_OBJECTIVES } from '../../finance/optimization/optimization-objectives.js';
 import { readThemeColor }       from '../theme.js';
+import { initEChartWhenReady }  from '../components/echarts-init.js';
 
 const MAX_CHART_BARS = 30;
 
@@ -128,12 +129,14 @@ export class OptResultsPanel extends BaseComponent {
 
     wrapper.appendChild(this._buildTable(candidates, objFn));
 
-    // Append to DOM first so ECharts can measure real container dimensions.
     this._container.appendChild(wrapper);
 
-    this._barChart   = this._createBarChart(chartDiv, candidates, objFn);
-    this._barChartRo = new ResizeObserver(() => this._barChart?.resize());
-    this._barChartRo.observe(chartDiv);
+    this._barChartRo = initEChartWhenReady(chartDiv, () => {
+      this._barChart   = this._createBarChart(chartDiv, candidates, objFn);
+      const ro = new ResizeObserver(() => this._barChart?.resize());
+      ro.observe(chartDiv);
+      this._barChartRo = ro;
+    });
   }
 
   _buildBadges(candidates, totalRuns, objectiveLabel, objFn) {
