@@ -593,8 +593,8 @@ test('Snapshot is captured after each handled event', () => {
   sim.stepTo(new Date(2027, 0, 1));
 
   assert.ok(
-    sim.snapshots.length >= 3,
-    `Expected at least 3 snapshots, got ${sim.snapshots.length}`
+    sim.history.snapshots.length >= 3,
+    `Expected at least 3 snapshots, got ${sim.history.snapshots.length}`
   );
 });
 
@@ -607,7 +607,7 @@ test('Snapshot captures state after the event is processed', () => {
   sim.stepTo(new Date(2025, 0, 1));
 
   // The last snapshot taken should reflect the incremented state
-  const lastSnap = sim.snapshots[sim.snapshots.length - 1];
+  const lastSnap = sim.history.snapshots[sim.history.snapshots.length - 1];
   assert.strictEqual(lastSnap.state.counter, 1);
   Assert.datesEqual(lastSnap.date, new Date(2025, 0, 1));
 });
@@ -636,7 +636,7 @@ test('branch creates an independent deep clone of current snapshot state', () =>
   const branched = sim.branch();
 
   // Branch reflects the snapshot at cursor (counter = 2)
-  assert.strictEqual(branched.state.counter, sim.snapshots[sim.snapshotCursor].state.counter);
+  assert.strictEqual(branched.state.counter, sim.history.snapshots[sim.history.snapshotCursor].state.counter);
 
   // Mutating the original does not affect the branch's deep-cloned state
   sim.state.counter = 99;

@@ -146,18 +146,6 @@ export class Simulation {
     };
   }
 
-  //TODO Remove these and fix the tests
-  // Backward-compat accessors so existing code and tests can still use sim.snapshots etc.
-  get snapshots()        { return this.history.snapshots; }
-  get snapshotCursor()   { return this.history.snapshotCursor; }
-  set snapshotCursor(v)  { this.history.snapshotCursor = v; }
-  get enableSnapshots()  { return this.history.enableSnapshots; }
-  set enableSnapshots(v) { this.history.enableSnapshots = v; }
-  get snapshotInterval() { return this.history.snapshotInterval; }
-  set snapshotInterval(v){ this.history.snapshotInterval = v; }
-  get eventCounter()     { return this.history.eventCounter; }
-  set eventCounter(v)    { this.history.eventCounter = v; }
-
   _pickPayload(action) {
     const reg = this.bus.serviceRegistry?.typeRegistry;
     if (reg) return reg.pickPayload(action);

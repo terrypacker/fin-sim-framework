@@ -83,9 +83,8 @@ There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; se
   - Line 360: `initialValue: account.balance ?? account.initialValue, //TODO Hack here since the field name is not the same as the constructor`.
 - **Direction**: rename `initialValue` to `balance` on the constructor side (or pick one canonical name) so the serializer doesn't have to translate.
 
-### 2.7 `Simulation` carries test-only baggage (Git #356)
-- `src/simulation-framework/simulation.js` line 160: `//TODO Remove these and fix the tests`.
-- **Direction**: chase the offending tests and remove the workaround.
+~~### 2.7 `Simulation` carries test-only baggage (Git #356)~~
+- **Resolved**: backward-compat accessor shims removed from `simulation.js`. Tests now access `sim.history.snapshots`, `sim.history.snapshotCursor`, `sim.history.eventCounter` directly. Production code was already using the `sim.history.*` path.
 
 ### 2.8 `ScenarioStorage` API drift (Git #357)
 - `src/scenarios/scenario-storage.js` line 54: `//TODO Clean this up to be in the constructor`.
