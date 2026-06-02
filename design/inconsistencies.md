@@ -154,9 +154,12 @@ There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; se
 - The codebase currently uses one `Graph` instance with config-layer and execution-layer nodes living side by side (`ExecutionGraph` is a thin wrapper). This is convenient for cross-layer queries (e.g. "which runtime nodes are instances of this handler?") but couples the lifetime of execution data to the config-graph.
 - **Direction**: keep the design, but make the layer split first-class — `graph.byLayer('execution')` should be a typed query rather than a `filter(n => n.layer === 'execution')` callout.
 
-### 4.5 Action ids default to `type` (Git #367)
-- `Action` sets `id = type` so action lookup by id and lookup by type are the same. This works fine for built-in actions but is a footgun when two distinct action **definitions** want the same `type` discriminator (e.g. two versions of `WAGES_INCOME` in different toolsets).
-- **Direction**: confirm there's no risk of collisions across toolsets, or generate `id = ${toolsetId}:${type}`.
+### ~~4.5 Action ids default to `type` (Git #367)~~
+⏺ The issue is already resolved. Here's what I found:
+Current behavior (not what the note describes):
+- Action constructor sets id = null (line 46 of actions.js)
+- ActionService.register() assigns a generated id like a1, a2, etc. (base-service.js:113)
+- id and type are fully independent
 
 ### ~~4.6 `_pickActionData` allow-list is a maintenance burden (Git #202)~~
 - **Resolved** by `design/19-type-registry.md`: the allow-list is gone. Each action type declares its `fields` in the owning toolset's `types.actions` block. `TypeRegistry.pickPayload(action)` reads those declarations; unregistered types fall back to "all non-framework, non-underscore fields" with a dev-mode warning. The three hand-maintained literal lists in `report-definition-registry.js` (`WITHDRAWAL_ACTION_TYPES`, `REAL_PROPERTY_ACTION_TYPES`, inline capital-gains list) are also deleted — replaced by `api.familyTypes(family, { cc })` calls.
