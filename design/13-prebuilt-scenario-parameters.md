@@ -1,6 +1,6 @@
 # Design 13 — Prebuilt Scenario Parameter Editing
 
-**Status**: Draft
+**Status**: Complete
 **Problem**: A prebuilt scenario cannot be re-run with different parameter values from the UI. Its parameter inputs are not displayed, and even when they are populated indirectly by the loader they are clobbered on every Rebuild. The only workaround is to create a new user scenario from the prebuilt and edit there.
 
 ---

@@ -18,13 +18,8 @@ Last reviewed: 2026-06-01.
 
 ~~### 1.3 `bus` and `serviceBus` are the same EventBus~~
 
-### 1.4 `params` vs. `parameters` vs. `paramSchema` (Git #350)
-- The scenario config carries three overlapping concepts:
-  - `cfg.params` — typed UI form (`{ name, label, type, group, value, node? }[]`).
-  - `cfg.parameters` — flat `{ key: value }` map the compiler reads.
-  - `BaseScenario.getParamSchema()` — typed schema source-of-truth.
-- `ScenarioLoader` syncs `params` → `parameters` on each load. `ScenarioSerializer` has a `//TODO Params vs parameters` note (line 146).
-- **Direction**: collapse to one canonical name and derive the others. The plan in `design/13-prebuilt-scenario-parameters.md` describes this.
+~~### 1.4 `params` vs. `parameters` vs. `paramSchema` (Git #350)~~
+- **Resolved** by designs 13 + 15 + 17: `PrebuiltScenario` deleted; `loadPrebuilt()` eagerly builds a typed-array `cfg.params` from `getParamSchema()` on first registration and preserves it on re-calls. `buildDefaultConfig()` fires once at registration, not on every Rebuild. `_mergeParamSchema` in the loader handles schema drift. `cfg.parameters` remains a loader-internal derived field inside `_normalizeParams()` — the noise of renaming it to `_compiledParameters` is not worth the churn (design 13 §4 risk note). The serializer `//TODO Params vs parameters` comment is gone. See `design/13-prebuilt-scenario-parameters.md` (Complete) and `design/15-config-as-source-of-truth.md`.
 
 ### 1.5 `getAll()` aliasing on `Graph` (Git #351)
 - `src/graph/graph.js` line 44–47:
