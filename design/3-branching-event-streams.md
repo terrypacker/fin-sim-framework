@@ -1,6 +1,12 @@
 # Branching Event Streams (Forkable Timelines)
 
-## Design Document
+**Status**: **Superseded** by `design/17-scenario-as-graph-node.md` (substrate) and `design/30-decision-graph-analysis.md` (analysis surface).
+
+**Why this is superseded**: this doc was written before design 17 implemented scenarios as first-class `SimGraphNode`s with `DERIVES_FROM` parent edges — which is the substrate this doc was reaching for, but at a coarser, more practical grain (a saved scenario, not a fork of the event stream mid-run). The "branch every event with a `branchId`" mechanism this proposed would multiply state-management cost for a use case (interactive mid-run forking) much smaller than expected. The user-facing "compare two saved scenarios" need is owned by design 30. The "merge / reconciliation" piece this doc lined up for is deprecated entirely (see `design/5-branch-merge-reconciliation.md`'s supersede note). Kept in the tree as historical context for what was once intended.
+
+---
+
+## Design Document (Superseded — see banner above)
 
 ---
 

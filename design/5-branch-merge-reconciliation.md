@@ -1,6 +1,12 @@
 # Branch Merge & Reconciliation Engine
 
-## Technical Design + Requirements Specification
+**Status**: **Superseded** (deprecated; no replacement).
+
+**Why this is superseded**: this doc proposed a git-style three-way merge of two scenario branches with conflict detection across financial / structural / period axes. The use case never materialized — users save alternative retirement scenarios (`SS-at-67`, `market-crash-2032`) but don't want to *reconcile* them; they want to *compare* them. Comparison is owned by `design/30-decision-graph-analysis.md`. If a genuine merge use case shows up later, a new design can be written against the current context (which is materially different from when this doc was authored). Kept in the tree as historical context.
+
+---
+
+## Technical Design + Requirements Specification (Superseded — see banner above)
 
 ---
 
