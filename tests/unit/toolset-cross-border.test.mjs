@@ -129,8 +129,6 @@ import { UsSavingsInterestMonthlyHandler }  from '../../src/finance/handlers/us-
 import { MonthlyExpensesHandler }           from '../../src/finance/handlers/monthly-expenses-handler.js';
 import { MonthlyWagesHandler }              from '../../src/finance/handlers/monthly-wages-handler.js';
 import { MonthlySocialSecurityHandler }     from '../../src/finance/handlers/monthly-social-security-handler.js';
-import { IntlTransferToUsHandler, IntlTransferToAuHandler }
-  from '../../src/finance/handlers/intl-transfer-handlers.js';
 import {
   AuSavingsInterestHandler, FixedIncomeInterestHandler, SuperEarningsHandler,
   IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,

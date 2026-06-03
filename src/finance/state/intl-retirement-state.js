@@ -33,8 +33,6 @@ export class InternationalRetirementFinancialState extends SimulationState {
     usHouseProperty, auHouseProperty,
       // Collectibles
     collectibleAccount,
-    exchangeRateUsdToAud,
-    intlTransferFeeUsd,
     inflationRates,
     monthlyExpenses,
     ...rest
@@ -66,9 +64,14 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this._assignAsset('auHouseProperty', auHouseProperty ?? null);
     this._assignAsset('collectibleAccount', collectibleAccount ?? null);
 
-    //TODO Move to FX When available.
-    this.exchangeRateUsdToAud = exchangeRateUsdToAud;
-    this.intlTransferFeeUsd = intlTransferFeeUsd;
+    // FX state — base values set at scenario boot via toolset patches (US_AU_CROSS_BORDER).
+    // Effective fields are regime-adjusted when the regime toolset is loaded; otherwise
+    // FxRefreshReducer mirrors base → effective on each period advance.
+    // Default values here ensure the state is valid even without the cross-border toolset.
+    this.baseExchangeRates      = { USD_AUD: 1.55 };
+    this.baseFxFees             = { USD_AUD: 15   };
+    this.effectiveExchangeRates = { ...this.baseExchangeRates };
+    this.effectiveFxFees        = { ...this.baseFxFees };
 
     this.inflationRates       = inflationRates ?? { US: 0.03, AU: 0.03 };
     this.inflationAccumulator = { US: 1.0, AU: 1.0 };
