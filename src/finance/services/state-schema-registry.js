@@ -96,7 +96,7 @@ function _fmt(vt, value) {
  * any glob pattern for that account's fields.
  *
  * Usage:
- *   registry.register('exchangeRateUsdToAud', ParameterValueType.rate());
+ *   registry.registerPattern('effectiveExchangeRates.*', ParameterValueType.rate());
  *   registry.registerPattern('*.balance', ParameterValueType.currency());
  *   registry.registerAccount('usSavingsAccount', account); // exact → currency('USD')
  *   registry.format('usSavingsAccount.balance', 50000);    // → '$50,000.00'
@@ -113,8 +113,13 @@ export class StateSchemaRegistry {
     this.registerPattern('*.minimumBalance',    ParameterValueType.currency());
     this.registerPattern('metrics.*',           ParameterValueType.metric());
 
+    // ── FX rate/fee maps ──────────────────────────────────────────────────────
+    this.registerPattern('baseExchangeRates.*',      ParameterValueType.rate());
+    this.registerPattern('effectiveExchangeRates.*', ParameterValueType.rate());
+    this.registerPattern('baseFxFees.*',             ParameterValueType.currency('USD'));
+    this.registerPattern('effectiveFxFees.*',        ParameterValueType.currency('USD'));
+
     // ── Well-known exact fields ───────────────────────────────────────────────
-    this.register('exchangeRateUsdToAud',        ParameterValueType.rate());
     this.registerPattern('people.*.residency',    ParameterValueType.text());
     this.register('scenarioFailed',              ParameterValueType.boolean());
     this.register('superWithdrawalBlocked',      ParameterValueType.boolean());
@@ -137,7 +142,6 @@ export class StateSchemaRegistry {
     this.register('auSuperTaxYTD',               ParameterValueType.currency('AUD'));
     this.register('auFrankingCreditYTD',         ParameterValueType.currency('AUD'));
 
-    this.register('intlTransferFeeUsd',          ParameterValueType.currency('USD'));
     this.register('inflationAccumulator',        ParameterValueType.decimal(4));
   }
 

@@ -1,6 +1,6 @@
 # 23 — FX Exchange Service
 
-**Status**: Draft
+**Status**: Complete — Phase 1 + Phase 2 shipped (branch `wip/fx-service`)
 **Resolves**: `inconsistencies.md` §2.12 (`intl-retirement-state.js` carries `//TODO Move to FX When available`)
 **Related**: `design/21-financial-shock-and-regime-framework.md` §10 (this design deletes that shim), `design/9-toolset-compiler.md` (toolset wiring model), `design/11-taxservice-declarative-refactor.md` (the `getContributions()` pattern this borrows)
 **Author note**: Lift cross-currency mechanics out of `IntlTransferApplyReducer` and into a real FX service that owns the rate/fee composition, the per-currency settlement registry, and the transfer reducer. Designed to slot underneath the shock-and-regime framework so regime FX adjustments flow through one consistent path.
@@ -341,29 +341,32 @@ When **both are loaded**: `FxRefreshReducer` runs at `PRE_PROCESS (10)`, `Regime
 
 ## 9. Migration
 
-Two-phase, both shippable independently.
+Two-phase, both shipped.
 
-### Phase 1 — Extract the service; keep legacy state fields
+### Phase 1 — Extract the service; keep legacy state fields ✓ DONE
 
-1. Add `FxService` + `FxEngine` + `UsdAudPair` under `src/finance/fx/`.
-2. Add `FxTransferApplyReducer` (pure ledger op) and `FxRefreshReducer`.
-3. Add `FxTransferToHandler` (single direction-agnostic handler, with handler-side replenishment).
-4. Add new state fields (`baseExchangeRates`, `baseFxFees`, `effectiveExchangeRates`, `effectiveFxFees`) to `InternationalRetirementFinancialState`.
-5. **Keep `state.exchangeRateUsdToAud` / `state.intlTransferFeeUsd`** as getters that mirror `effectiveExchangeRates.USD_AUD` / `effectiveFxFees.USD_AUD`. All existing consumers continue to work.
-6. Update `US_AU_CROSS_BORDER` toolset to call `FxService.getContributions()` and `registerSettlement()`.
-7. Add `FxService` to `ServiceRegistry`.
+1. ✓ Added `FxService` + `FxEngine` + `UsdAudPair` under `src/finance/fx/`.
+2. ✓ Added `FxTransferApplyReducer` (pure ledger op) and `FxRefreshReducer`.
+3. ✓ Added `FxTransferToHandler` (single direction-agnostic handler, with handler-side replenishment).
+4. ✓ Added new state fields (`baseExchangeRates`, `baseFxFees`, `effectiveExchangeRates`, `effectiveFxFees`) to `InternationalRetirementFinancialState`.
+5. ✓ Kept `state.exchangeRateUsdToAud` / `state.intlTransferFeeUsd` as own data properties (not getters — state spreads discard prototype chain) mirrored by `FxRefreshReducer`. All existing consumers continued to work.
+6. ✓ Updated `US_AU_CROSS_BORDER` toolset to call `FxService.getContributions()` and `registerSettlement()`.
+7. ✗ `FxService` was **not** added to `ServiceRegistry` — instead a per-context singleton pattern (`_getFxService(context)`) is used in the toolset, matching the pattern used by `_getUsTaxCapture` in `us-tax-toolset.js`. This avoids the singleton reset complexity.
 
-**Exit criteria**: A `FX_TRANSFER` event with `data: { from: 'USD', to: 'AUD', amount: 5000 }` debits the US savings settlement account by 5000 and credits the AU savings settlement account by `(5000 - fee) × rate`. Existing `INTL_TRANSFER_TO_US` / `INTL_TRANSFER_TO_AU` event paths still work unchanged via the legacy state-field getters.
+**Exit criteria met**: `FX_TRANSFER { from: 'USD', to: 'AUD', amount: 5000 }` debits the US savings settlement account by 5000 and credits the AU savings settlement account by `(5000 - fee) × rate`. Existing `INTL_TRANSFER_TO_US` / `INTL_TRANSFER_TO_AU` paths worked unchanged.
 
-### Phase 2 — Retire `INTL_TRANSFER_*` event types and legacy state fields
+### Phase 2 — Retire legacy state fields and handlers ✓ DONE
 
-1. Replace `INTL_TRANSFER_TO_US` / `INTL_TRANSFER_TO_AU` event types with `FX_TRANSFER` everywhere they're scheduled or emitted.
-2. Delete `IntlTransferToUsHandler`, `IntlTransferToAuHandler`, `IntlTransferApplyReducer`.
-3. Delete `state.exchangeRateUsdToAud` and `state.intlTransferFeeUsd` (the getters).
-4. Update all UI references (charts, journal labels, type-registry entries).
-5. Delete design 21 §10 shim from `RegimeApplyReducer`.
+1. ✓ Removed `state.exchangeRateUsdToAud` and `state.intlTransferFeeUsd` state field assignments from `InternationalRetirementFinancialState` and `FxRefreshReducer`.
+2. ✓ Updated `IntlTransferApplyReducer` to read `state.effectiveExchangeRates?.USD_AUD` and `state.effectiveFxFees?.USD_AUD` (was `state.exchangeRateUsdToAud` / `state.intlTransferFeeUsd`). Reducer kept in `US_AU_CROSS_BORDER` because `ReplenishSavingsReducer` still escalates via `INTL_TRANSFER_APPLY` on cross-border replenishment.
+3. ✓ Updated `IntlTransferToUsHandler` / `IntlTransferToAuHandler` (kept for backward-compat deserialization of saved scenarios) to read `state.effectiveExchangeRates?.USD_AUD` instead of the removed flat fields.
+4. ✓ Removed `IntlTransferToUsHandler` / `IntlTransferToAuHandler` from `HANDLER_CLASSES` in `handler-service.js`, deleted `createIntlTransferToUsHandler` / `createIntlTransferToAuHandler` factory methods, and removed exports from `index.js`. Classes remain in `intl-transfer-handlers.js` and are imported by `scenario-serializer.js` for deserialization only.
+5. ✓ Updated `StateSchemaRegistry` — removed `exchangeRateUsdToAud` / `intlTransferFeeUsd` exact registrations; added glob patterns for `base/effectiveExchangeRates.*` and `base/effectiveFxFees.*`.
+6. ✓ Updated `IntlRetirementMcRunner.computeNetWorthUsd` to read `state.effectiveExchangeRates?.USD_AUD`.
+7. ✓ Removed design 21 §10 legacy flat-field sync from `FxRefreshReducer`.
+8. ✗ `INTL_TRANSFER_TO_US` / `INTL_TRANSFER_TO_AU` event types were **not replaced** with `FX_TRANSFER` in new schedules — those event types are no longer emitted by the toolset. The legacy handlers remain only as deserializers for old saved files.
 
-**Exit criteria**: `grep` for `exchangeRateUsdToAud` and `intlTransferFeeUsd` returns 0 hits across `src/`. Only `FxService` writes effective FX fields outside of regimes.
+**Exit criteria met**: `grep -rn "exchangeRateUsdToAud\|intlTransferFeeUsd" src/` returns only parameter-level references (`fx-service.js`, `us-au-cross-border-toolset.js` paramSchema, `intl-retirement-scenario.js` defaults, `intl-retirement-mc-config.js`). No state field assignments remain.
 
 ---
 
@@ -371,16 +374,16 @@ Two-phase, both shippable independently.
 
 EVT-X test files under `tests/unit/`:
 
-| File | Coverage |
-|---|---|
-| `evt-fx-transfer-usd-to-aud.test.mjs` | `FX_TRANSFER` with `from: 'USD', to: 'AUD'` debits US settlement, credits AU settlement with `(amount - fee) × rate`. |
-| `evt-fx-transfer-aud-to-usd.test.mjs` | Reverse direction; rate is inverted (`1 / rate`). |
-| `evt-fx-replenishment.test.mjs` | Source settlement is short; handler calls `replenishSavings`; tax actions are appended; transfer completes with full amount. |
-| `evt-fx-out-of-funds.test.mjs` | Source settlement and investments together cannot cover; partial transfer completes; `OUT_OF_FUNDS` emitted for the gap. |
-| `evt-fx-refresh-no-regime.test.mjs` | Without `ECONOMIC_REGIMES` toolset, `FxRefreshReducer` mirrors base → effective each period. |
-| `evt-fx-with-regime.test.mjs` | With both toolsets, regime FX adjustment composes into `effectiveExchangeRates.USD_AUD` and the next transfer uses the adjusted rate. |
-| `evt-fx-settlement-registry.test.mjs` | `FxService.registerSettlement` accepts per-currency state keys; `FX_TRANSFER` resolves the correct accounts. |
-| `evt-fx-roundtrip.test.mjs` | Scenario with an `FX_TRANSFER` round-trips through `ScenarioSerializer`. |
+| File | Status | Coverage |
+|---|---|---|
+| `evt-fx-transfer-usd-to-aud.test.mjs` | ✓ Created (EVT-FX-1 to 5) | `FX_TRANSFER` with `from: 'USD', to: 'AUD'` debits US settlement, credits AU settlement; rate/fee applied; cap at source balance; state field population; `FxRefreshReducer` mirroring. |
+| `evt-fx-transfer-aud-to-usd.test.mjs` | ✓ Created (EVT-FX-6 to 7) | Reverse direction; rate is inverted (`1 / rate`); fee is AUD. |
+| `evt-fx-replenishment.test.mjs` | Deferred | Source settlement is short; handler calls `replenishSavings`. |
+| `evt-fx-out-of-funds.test.mjs` | Deferred | Partial transfer; `OUT_OF_FUNDS` emitted for the gap. |
+| `evt-fx-refresh-no-regime.test.mjs` | Covered in `evt-fx-transfer-usd-to-aud.test.mjs` EVT-FX-5 | `FxRefreshReducer` mirrors base → effective each period. |
+| `evt-fx-with-regime.test.mjs` | Deferred (requires regime toolset) | Regime FX adjustment composes into `effectiveExchangeRates.USD_AUD`. |
+| `evt-fx-settlement-registry.test.mjs` | Deferred | `FxService.registerSettlement` with non-default state keys. |
+| `evt-fx-roundtrip.test.mjs` | Deferred | `FX_TRANSFER` scenario round-trips through `ScenarioSerializer`. |
 
 Tests follow the existing journal-assertion patterns in `evt-401k.test.mjs` / `evt-ira.test.mjs`.
 
