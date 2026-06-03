@@ -82,7 +82,7 @@ class Account {
 
 **Migration**: each existing account is initialized with a **single holding** matching its current scalar balance and a per-account-type default allocation (`EQUITY_US` for retirement equity accounts, `FIXED_INCOME_US` for the fixed-income account, etc.). Mutators that previously wrote `account.balance` migrate to `account.transact(amount, { allocation })` or similar; the helper hides the holding lookup for call sites where the slice is unambiguous.
 
-**Owner**: **design 25 — Holding-Level State**.
+**Owner**: **design 25 — Holding-Level State** ([`design/25-holding-level-state.md`](25-holding-level-state.md)).
 
 ---
 
@@ -105,7 +105,7 @@ Strategies compose: a scenario can run `FixedInflationAdjusted` + `Guardrail` + 
 
 **Acts on cash flow, not portfolio structure** — design 26 doesn't read `Holding` directly. Per the §5 sequencing, it still ships after design 25 so the substrate is stable.
 
-**Owner**: **design 26 — Dynamic Spending Strategies**.
+**Owner**: **design 26 — Dynamic Spending Strategies** ([`design/26-dynamic-spending-strategies.md`](26-dynamic-spending-strategies.md), skeleton).
 
 ---
 
@@ -127,7 +127,7 @@ Strategies compose: a scenario can run `FixedInflationAdjusted` + `Guardrail` + 
 
 **Does not read portfolio structure** — design 27 doesn't touch `Holding`. Per the §5 sequencing, it still ships after design 25. Depends on the small formalization of lifecycle events (§4.2).
 
-**Owner**: **design 27 — Mortality & Survivor Mechanics**.
+**Owner**: **design 27 — Mortality & Survivor Mechanics** ([`design/27-mortality-and-survivor-mechanics.md`](27-mortality-and-survivor-mechanics.md), skeleton).
 
 ---
 
@@ -146,7 +146,7 @@ Strategies compose: a scenario can run `FixedInflationAdjusted` + `Guardrail` + 
 
 **Depends on Holdings**: per-holding appreciation and per-holding duration both want the `Holding` primitive from design 25.
 
-**Owner**: **design 28 — Time-Varying Appreciation & Bond Duration**.
+**Owner**: **design 28 — Time-Varying Appreciation & Bond Duration** ([`design/28-time-varying-appreciation-and-bond-duration.md`](28-time-varying-appreciation-and-bond-duration.md), skeleton).
 
 ---
 
@@ -164,7 +164,7 @@ Strategies compose: a scenario can run `FixedInflationAdjusted` + `Guardrail` + 
 
 **Depends on both Holdings (design 25) and Regimes (design 21)**.
 
-**Owner**: **design 29 — Behavioral Layer**.
+**Owner**: **design 29 — Behavioral Layer** ([`design/29-behavioral-layer.md`](29-behavioral-layer.md), skeleton).
 
 ---
 
@@ -210,6 +210,8 @@ Both shocks (design 21) and mortality (§3.3) follow the same rule: **determinis
 
 **Recommendation**: extend `IntlRetirementMcConfig` to support path-walking parameter keys (`shocks[0].severity`, `people.primary.lifeExpectancy`) as a small contained refactor. Solves both shock-MC and mortality-MC at the same time.
 
+**Owner**: **design 25a — MC-config nested param paths** ([`design/25a-mc-nested-param-paths.md`](25a-mc-nested-param-paths.md)).
+
 ---
 
 ## 5. Sequencing
@@ -218,8 +220,8 @@ Single-threaded build order. **Holdings (design 25) ships first**; everything el
 
 ### Phase A — Substrate
 
-1. **Design 25 — Holding-Level State.** The single largest refactor in the roadmap. Foundational for §3.4, §3.5, and the design-21 dividend-cut extension. Must land before anything else here.
-2. **MC-config nested param paths** (§4.4). Small, contained. Shared substrate for both shock-MC (design 21 Phase 2) and mortality-MC (design 27). Can land in parallel with design 25 since they touch different files.
+1. **Design 25 — Holding-Level State** ([`design/25-holding-level-state.md`](25-holding-level-state.md)). The single largest refactor in the roadmap. Foundational for §3.4, §3.5, and the design-21 dividend-cut extension. Must land before anything else here.
+2. **Design 25a — MC-config nested param paths** ([`design/25a-mc-nested-param-paths.md`](25a-mc-nested-param-paths.md), §4.4). Small, contained. Shared substrate for both shock-MC (design 21 Phase 2) and mortality-MC (design 27). Can land in parallel with design 25 since they touch different files.
 
 ### Phase B — User-facing features (parallel within the phase)
 
@@ -238,7 +240,7 @@ These don't read Holdings directly, but they ship after Phase A so the substrate
 7. **Design 29 — Behavioral Layer.** Requires Holdings + Regimes.
 
 ```
-Phase A:  25 Holdings ──┬── MC paths
+Phase A:  25 Holdings ──┬── 25a MC paths
                         │
 Phase B:                ├── 26 Spending
                         ├── 27 Mortality
