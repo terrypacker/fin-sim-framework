@@ -27,6 +27,7 @@ import { US_BROKERAGE }        from './toolsets/us-brokerage-toolset.js';
 import { AU_BROKERAGE }        from './toolsets/au-brokerage-toolset.js';
 import { US_INCOME }           from './toolsets/us-income-toolset.js';
 import { AU_INCOME }           from './toolsets/au-income-toolset.js';
+import { ECONOMIC_REGIMES }    from './toolsets/economic-regimes-toolset.js';
 import { ServiceRegistry }     from '../services/service-registry.js';
 import { USD, AUD }            from '../finance/assets/account.js';
 import { ACCOUNT_ROLES }       from '../finance/state/account-roles.js';
@@ -318,6 +319,7 @@ export class IntlRetirementScenario extends BaseScenario {
       'US_AU_CROSS_BORDER',
       'US_REAL_PROPERTY', 'AU_REAL_PROPERTY',
       'US_COLLECTIBLES', 'US_ROTH_CONVERSION',
+      'ECONOMIC_REGIMES',
     ];
   }
 
@@ -582,6 +584,7 @@ export class IntlRetirementScenario extends BaseScenario {
     toolsetRegistry.register(AU_BROKERAGE);
     toolsetRegistry.register(US_INCOME);
     toolsetRegistry.register(AU_INCOME);
+    toolsetRegistry.register(ECONOMIC_REGIMES);
     new ScenarioCompiler(toolsetRegistry).compile(cfg, registry);
 
     // Sync initialState with the compiled sim.state so serializers and round-trip

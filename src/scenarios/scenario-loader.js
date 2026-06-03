@@ -26,6 +26,7 @@ import { US_BROKERAGE }      from './toolsets/us-brokerage-toolset.js';
 import { AU_BROKERAGE }      from './toolsets/au-brokerage-toolset.js';
 import { US_INCOME }         from './toolsets/us-income-toolset.js';
 import { AU_INCOME }         from './toolsets/au-income-toolset.js';
+import { ECONOMIC_REGIMES }  from './toolsets/economic-regimes-toolset.js';
 
 const BUILT_IN_TOOLSETS = [
   US_BANKING, US_TAX, US_RETIREMENT,
@@ -34,6 +35,7 @@ const BUILT_IN_TOOLSETS = [
   US_REAL_PROPERTY, AU_REAL_PROPERTY,
   US_COLLECTIBLES, US_ROTH_CONVERSION,
   US_BROKERAGE, AU_BROKERAGE, US_INCOME, AU_INCOME,
+  ECONOMIC_REGIMES,
 ];
 
 /**
@@ -200,7 +202,9 @@ export class ScenarioLoader {
       const entry = { name: s.key, label: s.label, type: s.type, group: s.group };
       if (value !== undefined) entry.value = value;
       if (s.description) entry.description = s.description;
-      if (s.node) entry.node = s.node;
+      if (s.node)        entry.node        = s.node;
+      if (s.options)     entry.options     = s.options;
+      if (s.hidden)      entry.hidden      = s.hidden;
       return entry;
     };
 
@@ -225,6 +229,7 @@ export class ScenarioLoader {
       if (p.type        === undefined && s.type)        p.type        = s.type;
       if (p.description === undefined && s.description) p.description = s.description;
       if (p.node        === undefined && s.node)        p.node        = s.node;
+      if (p.options      === undefined && s.options)    p.options     = s.options;
     }
     const existing = new Set(cfg.params.map(p => p.name));
     for (const s of combinedSchema) {

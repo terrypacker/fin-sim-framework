@@ -10,6 +10,7 @@
 
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
+import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
 
 /**
  * Handles the US_SAVINGS_INTEREST_MONTHLY event.
@@ -28,13 +29,15 @@ export class UsSavingsInterestMonthlyHandler extends HandlerEntry {
   static description = 'Computes monthly interest on a US savings account and emits US_SAVINGS_INTEREST_CREDIT.';
   static type        = 'UsSavingsInterestMonthlyHandler';
   static eventType   = 'US_SAVINGS_INTEREST_MONTHLY';
+  static rateKey     = RATE_KEYS.SAVINGS_US;
 
-  constructor({ stateRegistry, role, ownerId = null, interestRate = 0.03 } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, interestRate = 0.03, rateKey = null } = {}) {
     super(null, 'Monthly US Savings Interest');
     this.stateRegistry = stateRegistry;
     this.role          = role;
     this.ownerId       = ownerId;
     this.interestRate  = interestRate;
+    this.rateKey       = rateKey ?? new.target.rateKey;
     this.generatedActionTypes = ['US_SAVINGS_INTEREST_CREDIT', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
@@ -51,7 +54,8 @@ export class UsSavingsInterestMonthlyHandler extends HandlerEntry {
   call({ state }) {
     const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
     const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
-    const amount   = +(balance * this.interestRate / 12).toFixed(2);
+    const rate     = state.effectiveInterestRates?.[this.rateKey] ?? this.interestRate;
+    const amount   = +(balance * rate / 12).toFixed(2);
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'US_SAVINGS_INTEREST_CREDIT', amount },
