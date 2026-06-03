@@ -86,6 +86,16 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
     enabled:  false,
   },
 
+  // ── Economic shocks ───────────────────────────────────────────────────────
+  {
+    paramKey: 'shockSeverity',
+    label:    'Shock Severity (shocks[0])',
+    type:     OPT_PARAM_TYPES.CONTINUOUS,
+    min: 0.10, max: 0.80, step: 0.10,
+    group:    'Economic Shocks',
+    enabled:  false,
+  },
+
   // ── Migration timing ──────────────────────────────────────────────────────
   {
     paramKey: 'moveYear',

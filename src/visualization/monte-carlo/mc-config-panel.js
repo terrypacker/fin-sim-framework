@@ -25,7 +25,7 @@ export class McConfigPanel extends BaseComponent {
   constructor(containerEl) {
     super();
     this._container  = containerEl;
-    this._rowMap     = new Map(); // paramKey → { enabledCb, typeSel, meanInp, stdDevInp, valueInp }
+    this._rowMap     = new Map(); // paramKey → { enabledCb, typeSel, meanInp, stdDevInp, valueInp, minDateInp, maxDateInp }
     this._iterEl     = null;
     this._runBtn     = null;
     this._statusEl   = null;
@@ -63,6 +63,9 @@ export class McConfigPanel extends BaseComponent {
       if (type === DISTRIBUTION_TYPES.CONSTANT) {
         out.value  = parseFloat(row.valueInp.value);
         if (!isFinite(out.value)) out.value = cfg.value ?? cfg.mean ?? 0;
+      } else if (type === DISTRIBUTION_TYPES.UNIFORM_DATE) {
+        out.min = row.minDateInp.value || cfg.min || '';
+        out.max = row.maxDateInp.value || cfg.max || '';
       } else {
         out.mean   = parseFloat(row.meanInp.value);
         out.stdDev = parseFloat(row.stdDevInp.value);
@@ -130,6 +133,7 @@ export class McConfigPanel extends BaseComponent {
 
   _buildVarRow(cfg) {
     const isConst = cfg.type === DISTRIBUTION_TYPES.CONSTANT;
+    const isDate  = cfg.type === DISTRIBUTION_TYPES.UNIFORM_DATE;
 
     const el = document.createElement('div');
     el.className = 'mc-var-row';
@@ -152,6 +156,7 @@ export class McConfigPanel extends BaseComponent {
       DISTRIBUTION_TYPES.NORMAL,
       DISTRIBUTION_TYPES.LOG_NORMAL,
       DISTRIBUTION_TYPES.UNIFORM,
+      DISTRIBUTION_TYPES.UNIFORM_DATE,
       DISTRIBUTION_TYPES.CONSTANT,
     ].map(t => `<option value="${t}" ${cfg.type === t ? 'selected' : ''}>${t}</option>`).join('');
 
@@ -159,19 +164,19 @@ export class McConfigPanel extends BaseComponent {
     meanInp.type  = 'number';
     meanInp.step  = 'any';
     meanInp.placeholder = 'mean';
-    meanInp.value = isConst ? '' : String(cfg.mean ?? '');
+    meanInp.value = (isConst || isDate) ? '' : String(cfg.mean ?? '');
     meanInp.className = 'mc-num-input';
     meanInp.style.width = '60px';
-    meanInp.style.display = isConst ? 'none' : 'block';
+    meanInp.style.display = (isConst || isDate) ? 'none' : 'block';
 
     const stdDevInp = document.createElement('input');
     stdDevInp.type  = 'number';
     stdDevInp.step  = 'any';
     stdDevInp.placeholder = 'σ';
-    stdDevInp.value = isConst ? '' : String(cfg.stdDev ?? '');
+    stdDevInp.value = (isConst || isDate) ? '' : String(cfg.stdDev ?? '');
     stdDevInp.className = 'mc-num-input';
     stdDevInp.style.width = '48px';
-    stdDevInp.style.display = isConst ? 'none' : 'block';
+    stdDevInp.style.display = (isConst || isDate) ? 'none' : 'block';
 
     const valueInp = document.createElement('input');
     valueInp.type  = 'number';
@@ -182,17 +187,36 @@ export class McConfigPanel extends BaseComponent {
     valueInp.style.width = '72px';
     valueInp.style.display = isConst ? 'block' : 'none';
 
-    inputRow.append(typeSel, meanInp, stdDevInp, valueInp);
+    const minDateInp = document.createElement('input');
+    minDateInp.type = 'date';
+    minDateInp.placeholder = 'from';
+    minDateInp.value = isDate ? String(cfg.min ?? '') : '';
+    minDateInp.className = 'mc-num-input';
+    minDateInp.style.width = '110px';
+    minDateInp.style.display = isDate ? 'block' : 'none';
+
+    const maxDateInp = document.createElement('input');
+    maxDateInp.type = 'date';
+    maxDateInp.placeholder = 'to';
+    maxDateInp.value = isDate ? String(cfg.max ?? '') : '';
+    maxDateInp.className = 'mc-num-input';
+    maxDateInp.style.width = '110px';
+    maxDateInp.style.display = isDate ? 'block' : 'none';
+
+    inputRow.append(typeSel, meanInp, stdDevInp, valueInp, minDateInp, maxDateInp);
     el.appendChild(inputRow);
 
     this.listen(typeSel, 'change', () => {
       const c = typeSel.value === DISTRIBUTION_TYPES.CONSTANT;
-      meanInp.style.display   = c ? 'none' : 'block';
-      stdDevInp.style.display = c ? 'none' : 'block';
-      valueInp.style.display  = c ? 'block' : 'none';
+      const d = typeSel.value === DISTRIBUTION_TYPES.UNIFORM_DATE;
+      meanInp.style.display    = (c || d) ? 'none' : 'block';
+      stdDevInp.style.display  = (c || d) ? 'none' : 'block';
+      valueInp.style.display   = c ? 'block' : 'none';
+      minDateInp.style.display = d ? 'block' : 'none';
+      maxDateInp.style.display = d ? 'block' : 'none';
     });
 
     const enabledCb = labelRow.querySelector('input[type="checkbox"]');
-    return { el, refs: { enabledCb, typeSel, meanInp, stdDevInp, valueInp } };
+    return { el, refs: { enabledCb, typeSel, meanInp, stdDevInp, valueInp, minDateInp, maxDateInp } };
   }
 }

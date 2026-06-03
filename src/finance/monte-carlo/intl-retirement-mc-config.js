@@ -146,6 +146,18 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
     group: 'People',                   enabled: false,
   },
 
+  // ── Economic shocks (disabled by default — only useful with ECONOMIC_REGIMES) ──
+  {
+    paramKey: 'shockSeverity',          label: 'Shock Severity (shocks[0])',
+    type: DISTRIBUTION_TYPES.NORMAL,    mean: 0.40, stdDev: 0.10,
+    group: 'Economic Shocks',           enabled: false,
+  },
+  {
+    paramKey: 'shockStartDate',         label: 'Shock Start Date (shocks[0])',
+    type: DISTRIBUTION_TYPES.UNIFORM_DATE, min: '2028-01-01', max: '2035-01-01',
+    group: 'Economic Shocks',           enabled: false,
+  },
+
   // ── Account balances (disabled by default — starting values are known) ────
   {
     paramKey: 'initialUsSavings',      label: 'US Savings Initial Balance (USD)',

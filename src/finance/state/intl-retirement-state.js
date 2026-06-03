@@ -73,6 +73,21 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.effectiveExchangeRates = { ...this.baseExchangeRates };
     this.effectiveFxFees        = { ...this.baseFxFees };
 
+    // Regime substrate (ECONOMIC_REGIMES toolset, design/21).
+    // baseGrowthRates / base*Rates are seeded by the toolset's state() method
+    // at compile time. effectiveGrowthRates / effective*Rates are written by
+    // RegimeApplyReducer on every period boundary and regime mutation.
+    // When ECONOMIC_REGIMES is not loaded, all effective*Rates fields are
+    // absent from state and handlers fall back to their own default rates.
+    this.activeRegimes          = [];
+    this.baseGrowthRates        = {};
+    this.baseInterestRates      = {};
+    this.baseAppreciationRates  = {};
+    this.effectiveGrowthRates       = {};
+    this.effectiveInterestRates     = {};
+    this.effectiveInflationRates    = {};
+    this.effectiveAppreciationRates = {};
+
     this.inflationRates       = inflationRates ?? { US: 0.03, AU: 0.03 };
     this.inflationAccumulator = { US: 1.0, AU: 1.0 };
     this.monthlyExpenses      = monthlyExpenses ?? 6_000;

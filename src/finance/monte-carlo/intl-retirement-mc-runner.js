@@ -147,6 +147,9 @@ export class IntlRetirementMcRunner {
         scenario.buildSim();
 
         const cfg = structuredClone(cfgTemplate);
+        // Merge perturbed params into cfg.parameters so ScenarioLoader reads them.
+        cfg.parameters = { ...(cfg.parameters ?? {}), ...params };
+        // Also update cfg.params entries if already populated (schema-drift guard path).
         if (Array.isArray(cfg.params)) {
           for (const p of cfg.params) {
             if (params[p.name] !== undefined) p.value = params[p.name];
