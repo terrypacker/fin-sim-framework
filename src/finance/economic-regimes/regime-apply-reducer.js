@@ -61,19 +61,21 @@ export class RegimeApplyReducer extends Reducer {
     }
 
     const effective = {
-      effectiveGrowthRates:       { ...(state.baseGrowthRates ?? {}) },
-      effectiveInterestRates:     { ...(state.baseInterestRates ?? {}) },
-      effectiveInflationRates:    { ...(state.baseInflationRates ?? state.inflationRates ?? {}) },
-      effectiveAppreciationRates: { ...(state.baseAppreciationRates ?? {}) },
+      effectiveGrowthRates:        { ...(state.baseGrowthRates ?? {}) },
+      effectiveInterestRates:      { ...(state.baseInterestRates ?? {}) },
+      effectiveInflationRates:     { ...(state.baseInflationRates ?? state.inflationRates ?? {}) },
+      effectiveAppreciationRates:  { ...(state.baseAppreciationRates ?? {}) },
+      effectiveDividendAdjustments:{},
       ...(state.baseExchangeRates && { effectiveExchangeRates: { ...state.baseExchangeRates } }),
       ...(state.baseFxFees        && { effectiveFxFees:        { ...state.baseFxFees } }),
     };
 
     for (const r of live) {
-      _addScaled(effective.effectiveGrowthRates,       r.returnAdjustment,       r.currentFactor);
-      _addScaled(effective.effectiveInterestRates,     r.interestRateAdjustment, r.currentFactor);
-      _addScaled(effective.effectiveInflationRates,    r.inflationAdjustment,    r.currentFactor);
-      _addScaled(effective.effectiveAppreciationRates, r.appreciationAdjustment, r.currentFactor);
+      _addScaled(effective.effectiveGrowthRates,        r.returnAdjustment,       r.currentFactor);
+      _addScaled(effective.effectiveInterestRates,      r.interestRateAdjustment, r.currentFactor);
+      _addScaled(effective.effectiveInflationRates,     r.inflationAdjustment,    r.currentFactor);
+      _addScaled(effective.effectiveAppreciationRates,  r.appreciationAdjustment, r.currentFactor);
+      _addScaled(effective.effectiveDividendAdjustments,r.dividendAdjustment,     r.currentFactor);
       if (effective.effectiveExchangeRates) {
         _addScaled(effective.effectiveExchangeRates, r.fxAdjustment, r.currentFactor);
       }

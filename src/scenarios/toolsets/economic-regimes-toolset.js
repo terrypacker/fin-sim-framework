@@ -237,15 +237,16 @@ export const ECONOMIC_REGIMES = {
       AU: p.auInflationRate ?? p.inflationRate ?? 0.03,
     };
     return {
-      activeRegimes:              [],
+      activeRegimes:               [],
       baseGrowthRates,
       baseInterestRates,
       baseInflationRates,
-      baseAppreciationRates:      {},
-      effectiveGrowthRates:       { ...baseGrowthRates },
-      effectiveInterestRates:     { ...baseInterestRates },
-      effectiveInflationRates:    { ...baseInflationRates },
-      effectiveAppreciationRates: {},
+      baseAppreciationRates:       {},
+      effectiveGrowthRates:        { ...baseGrowthRates },
+      effectiveInterestRates:      { ...baseInterestRates },
+      effectiveInflationRates:     { ...baseInflationRates },
+      effectiveAppreciationRates:  {},
+      effectiveDividendAdjustments:{},
     };
   },
 

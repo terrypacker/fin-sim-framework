@@ -10,6 +10,7 @@
 
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
+import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
 
 /**
  * Handles DIVIDEND_SCHEDULED events.
@@ -33,13 +34,15 @@ import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framew
  * @param {string} [opts.ownerId]  - Person id (null = any owner)
  * @param {number} [opts.dividendRate=0.02]
  * @param {boolean} [opts.reinvest=false]
+ * @param {string} [opts.rateKey]  - Rate key for regime dividend adjustment lookup
  */
 export class DividendScheduledHandler extends HandlerEntry {
-  static description = 'Computes stock dividends from balance × dividendRate and routes to STOCK_DIVIDEND_APPLY (reinvest) or STOCK_DIVIDEND_CASH_APPLY (cash payout).';
+  static description = 'Computes stock dividends from balance × dividendRate (scaled by any active regime dividend adjustment) and routes to STOCK_DIVIDEND_APPLY (reinvest) or STOCK_DIVIDEND_CASH_APPLY (cash payout).';
   static type        = 'DividendScheduledHandler';
   static eventType   = 'DIVIDEND_SCHEDULED';
+  static rateKey     = RATE_KEYS.EQUITY_US;
 
-  constructor({ stateRegistry, role, ownerId = null, stateKey = null, dividendRate = 0.02, reinvest = false } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, stateKey = null, dividendRate = 0.02, reinvest = false, rateKey = null } = {}) {
     super(null, 'Dividend Scheduled');
     this.stateRegistry   = stateRegistry;
     this.role            = role;
@@ -47,24 +50,27 @@ export class DividendScheduledHandler extends HandlerEntry {
     this._stateKeyFixed  = stateKey;
     this.dividendRate    = dividendRate;
     this.reinvest        = reinvest;
+    this.rateKey         = rateKey ?? new.target.rateKey;
     // Declares both branches; actual type chosen at runtime based on reinvest flag
     this.generatedActionTypes = ['STOCK_DIVIDEND_APPLY', 'STOCK_DIVIDEND_CASH_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, dividendRate: d.dividendRate ?? 0.02, reinvest: d.reinvest ?? false });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, dividendRate: d.dividendRate ?? 0.02, reinvest: d.reinvest ?? false, rateKey: d.rateKey ?? null });
     h.id = d.id;
     return h;
   }
 
   toJSON() {
-    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, dividendRate: this.dividendRate, reinvest: this.reinvest };
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, dividendRate: this.dividendRate, reinvest: this.reinvest, rateKey: this.rateKey };
   }
 
   call({ data, state }) {
-    const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const balance  = state[stateKey]?.balance ?? 0;
-    const amount   = +(balance * this.dividendRate).toFixed(2);
+    const stateKey      = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
+    const balance       = state[stateKey]?.balance ?? 0;
+    const adjustment    = state.effectiveDividendAdjustments?.[this.rateKey] ?? 0;
+    const effectiveRate = this.dividendRate * (1 + adjustment);
+    const amount        = +(balance * Math.max(0, effectiveRate)).toFixed(2);
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
 
     const reinvest   = data?.reinvest ?? this.reinvest;
