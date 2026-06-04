@@ -79,11 +79,19 @@ Default recommendation when Phase C opens: stay as-is unless the unified model u
 
 ---
 
-## 7. Dividend-yield cuts under regimes (small follow-up to design 21)
+## 7. Dividend-yield cuts under regimes — *spun out, do not implement here*
 
-Per roadmap §3.4: extend `EconomicRegime` with `dividendAdjustment: { [rateKey]: number }`. Migrate `DividendScheduledHandler` (already reads per-holding values post-design-25, per §6.5 of design 25) to consume `holding.dividendYield × (1 + regime.dividendAdjustment[holding.rateKey] × regime.currentFactor)`.
+**Status (2026-06-04): SPUN OUT.** Per §13 Q2 resolution, this section is *not* part of design 28's implementation. It ships as a standalone one-PR follow-up against design 21, tracked as Phase C deliverable #6 in [`24-financial-modeling-roadmap.md`](24-financial-modeling-roadmap.md) §5.
 
-`holding.dividendYield` is a new optional field added here; defaults to the handler's static yield. Could ship as part of this design or as a separate one-PR follow-up to design 21 — the work is small enough that bundling it here is reasonable.
+**What the spun-out PR will do** (kept here as the canonical implementation note since there is no dedicated `21a` doc):
+
+- Extend `EconomicRegime` with `dividendAdjustment: { [rateKey]: number }` (alongside the existing `returnAdjustment`, `interestRateAdjustment`, `inflationAdjustment`, `appreciationAdjustment`, `fxAdjustment` fields built in `EconomicShockHandler`).
+- Add optional `holding.dividendYield` field; defaults to `DividendScheduledHandler`'s static per-account yield.
+- Migrate `DividendScheduledHandler` (already reads per-holding values post-design-25, per §6.5 of design 25) to compute `holding.dividendYield × (1 + regime.dividendAdjustment[holding.rateKey] × regime.currentFactor)`.
+- Carry `dividendAdjustment` through `Shock` schema and scenario serializer.
+- Test coverage in a new `dividend-cuts-under-regime.test.mjs`.
+
+**Why spun out:** the change is 21-shaped (one more adjustment field on regime + small handler migration). Bundling it into design 28 would inflate this design's scope and gate a small, immediately-shippable improvement behind a Phase C design. Unblocked today (design 25 Holdings is complete); can ship before design 28 begins.
 
 ---
 
@@ -115,8 +123,8 @@ No new top-level state fields. `state.effectiveInterestRates[rateKey]` (owned by
 
 | Design | Interaction |
 |---|---|
-| **25 Holdings** | Adds optional fields on `Holding`. No structural change. |
-| **21 Regimes** | Bond duration consumes `state.effectiveInterestRates` (existing). Dividend cuts extend `EconomicRegime` with one new adjustment field. Real-estate location codes extend the rate-key namespace. |
+| **25 Holdings** | Adds optional fields on `Holding` (`appreciationSchedule`, `duration`). Bond duration also reads `RATE_KEYS[holding.rateKey].defaultDuration` (see §13 Q3). No structural change to the Holdings model itself. |
+| **21 Regimes** | Bond duration consumes `state.effectiveInterestRates` (existing). Real-estate location codes extend the rate-key namespace. Dividend cuts are **not part of this design** — see §7 (spun out as standalone follow-up to 21). |
 | **23 FX** | Untouched. |
 | **15 Config** | All new fields cascade through `cfg.accounts[*].holdings[*]` and `cfg.realProperties[*]`. |
 
@@ -144,7 +152,21 @@ No new top-level state fields. `state.effectiveInterestRates[rateKey]` (owned by
 
 > *Capture during Phase C kickoff. Initial seed:*
 
-- Promote `RealProperty` / `Collectible` to Holdings (§6) — yes / no / partial?
-- Bundle the dividend-cut extension (§7) with this design, or ship as a one-PR follow-up to design 21?
-- Where does `holding.duration` default live: per-toolset, per-rate-key, or hard-coded?
-- Does the bond price adjustment also adjust `costBasis`? (Probably not — basis is purchase basis, mark-to-market only moves `marketValue`.)
+- Promote `RealProperty` / `Collectible` to Holdings (§6) — yes / no / partial? **Answer: No (stay as-is).** Both keep their current Asset shape; this design adds appreciation-schedule support directly on the asset rather than wrapping in a single-holding container. Extract a shared `appreciation-schedule-utils.js` so Holdings and standalone Assets use the same schedule-lookup code (and the same rate-key resolution). Reason: Holdings was designed for *portfolio holdings inside investment accounts* — many holdings per account, FIFO basis, allocation classes. RealProperty has fundamentally different lifecycle concerns (one asset, mortgage attached, sale costs, jurisdiction-specific cap-gains rules). Forcing it into Holdings buys uniform schedule code at the cost of permanent ceremony. Collectible is borderline but follows the same call for consistency; promote *only Collectible* later if a multi-item collectibles account becomes a real use case.
+- Bundle the dividend-cut extension (§7) with this design, or ship as a one-PR follow-up to design 21? **Answer: One-PR follow-up to design 21 — spun out of this design entirely.** See §7 for the canonical implementation note (kept there since there is no dedicated `21a` doc) and [`24-financial-modeling-roadmap.md`](24-financial-modeling-roadmap.md) §5 Phase C item 6 for the tracked deliverable. Reason: the change is 21-shaped (one more `*Adjustment` field on `EconomicRegime`) and is immediately shippable today since design 25 (Holdings) is complete; bundling here would gate it behind a Phase C design for no architectural reason. **Tracking note: do not let this fall on the floor — it's a small, useful, unblocked improvement that's easy to forget because it doesn't live in its own design doc.**
+- Where does `holding.duration` default live: per-toolset, per-rate-key, or hard-coded? **Answer: Per-rate-key.** Extend the design-21 rate-key registry with an optional `defaultDuration: number` field (units: years). Holdings without an explicit `duration` look up `RATE_KEYS[holding.rateKey].defaultDuration ?? 0` — the `0` default makes non-bond rate keys safely no-op for the bond price adjustment. Toolsets can still override per-holding when they have more specific information (e.g. a specific corporate bond with known maturity). Reason: duration is a property of the bond category, which is what the rate key already represents — single source of truth, no toolset drift, correct grain.
+- Does the bond price adjustment also adjust `costBasis`? (Probably not — basis is purchase basis, mark-to-market only moves `marketValue`.) **Answer:** no
+
+---
+
+## 14. Doc-body follow-ups (from §13 answers)
+
+Sections to update before implementation begins:
+
+- **§3 appreciation schedules:** clarify that schedules attach to `Holding` *and* to standalone `RealProperty` / `Collectible` (Q1: no promotion). Both consume the shared `appreciation-schedule-utils.js`.
+- **§5 bond duration:** specify that `holding.duration` falls back to `RATE_KEYS[holding.rateKey].defaultDuration ?? 0` (Q3). Remove the "per-toolset default" line; per-toolset overrides are now an exception, not the default mechanism.
+- **§6 promoting RealProperty / Collectible:** rewrite as "decision: stay as-is" rather than "two options to consider." Reference the shared utility extraction.
+- **§7 dividend cuts:** already updated — marked spun out; do not implement here.
+- **§9 state/data model:** add `RATE_KEYS[*].defaultDuration?: number` to the registry-extension list. Note that `Holding.dividendYield` is *not* added by this design (moved to the spun-out PR).
+- **§10 interaction table:** already updated — dividend-cut line moved to the spun-out PR; rate-key registry note added.
+- **§12 testing:** drop `dividend-cuts-under-regime.test.mjs` from this design's test list (it lives with the spun-out PR). Add a test confirming the `RATE_KEYS.defaultDuration` lookup fallback works for holdings with no explicit duration.
