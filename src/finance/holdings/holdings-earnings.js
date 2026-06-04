@@ -1,0 +1,97 @@
+/*
+ * Copyright (c) 2026 Terry Packer.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ */
+
+import { HoldingTransactAction } from './holding-actions.js';
+
+/**
+ * Walk an account's holdings, compute per-holding growth using
+ * state[rateSource][holding.rateKey] (falling back to the handler-supplied
+ * rate), and return:
+ *
+ *   - `amount`           — the total Σ per-holding growth (rounded to 2 dp),
+ *                          which the calling handler emits as the *_EARNINGS_APPLY
+ *                          (or *_INTEREST_CREDIT) action's `amount` so existing
+ *                          tax / RMD / UI math keeps working off account.balance.
+ *   - `holdingActions`   — one HoldingTransactAction per non-zero-growth
+ *                          holding, with marketValueDelta = growth and
+ *                          costBasisDelta = 0 (appreciation does not raise basis).
+ *
+ * For single-holding accounts (the bootstrap default), the arithmetic
+ * collapses to the same `balance × rate` as the pre-substrate code path —
+ * existing tests remain green.
+ *
+ * For multi-holding accounts (toolset-declared splits), each sleeve grows at
+ * its own regime-adjusted rate and the total still flows through the
+ * downstream _APPLY reducer unchanged.
+ *
+ * Emission contract: the holding actions MUST be emitted AFTER the matching
+ * *_EARNINGS_APPLY action so the existing reducer (CASH_FLOW) updates
+ * balance first; HoldingTransactReducer (POSITION_UPDATE) then patches
+ * holdings and re-syncs balance to the same value.
+ *
+ * @param {object} opts
+ * @param {object} opts.state              - Current simulation state
+ * @param {string} opts.stateKey           - state[stateKey] is the account
+ * @param {number} opts.fallbackRate       - Rate to use when state has no effective rate for the holding
+ * @param {string} opts.fallbackRateKey    - RATE_KEYS entry to look up when a holding has no rateKey
+ * @param {string} [opts.rateSource='effectiveGrowthRates']
+ *                                          - 'effectiveGrowthRates' (equity-style)
+ *                                            or 'effectiveInterestRates' (interest-bearing)
+ * @param {number} [opts.factor=1]         - Multiplier applied to (mv × rate): 1 = annual,
+ *                                            1/12 = monthly
+ * @param {number|null} [opts.rateOverride=null]
+ *                                          - When provided, used for every holding,
+ *                                            bypassing the effective-rates map and
+ *                                            per-holding rateKey entirely. Used by
+ *                                            handlers that accept a `data.rate` one-off.
+ * @returns {{ amount: number, holdingActions: HoldingTransactAction[] }}
+ */
+export function computeHoldingsGrowth({
+  state,
+  stateKey,
+  fallbackRate,
+  fallbackRateKey,
+  rateSource   = 'effectiveGrowthRates',
+  factor       = 1,
+  rateOverride = null,
+}) {
+  const account  = state?.[stateKey];
+  const holdings = account?.holdings ?? [];
+  const ratesMap = state?.[rateSource] ?? {};
+  const fbRate   = rateOverride ?? ratesMap[fallbackRateKey] ?? fallbackRate;
+
+  if (!holdings.length) {
+    // No holdings (defensive): fall back to the scalar-balance code path.
+    const balance = account?.balance ?? 0;
+    const amount  = +(balance * fbRate * factor).toFixed(2);
+    return { amount, holdingActions: [] };
+  }
+
+  let total = 0;
+  const holdingActions = [];
+  for (const h of holdings) {
+    if (!h) continue;
+    const mv      = h.marketValue ?? 0;
+    const hRate   = rateOverride
+      ?? (h.rateKey != null ? ratesMap[h.rateKey] : undefined)
+      ?? fbRate;
+    const growth  = +(mv * hRate * factor).toFixed(2);
+    total += growth;
+    if (growth !== 0) {
+      holdingActions.push(new HoldingTransactAction({
+        stateKey,
+        holdingId:        h.id,
+        marketValueDelta: growth,
+        costBasisDelta:   0,
+      }));
+    }
+  }
+  return { amount: +total.toFixed(2), holdingActions };
+}

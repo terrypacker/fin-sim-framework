@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
+import { consumeHoldingsFifo } from '../../holdings/holdings-fifo.js';
 
 /** Resolve the AU cash pool. */
 const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
@@ -169,23 +170,38 @@ export class AuStockEarningsApplyReducer extends AccountServiceReducer {
  */
 export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
   static type        = 'AuStockWithdrawalApplyReducer';
-  static description = 'Credits the AU cash pool with sale proceeds, debits auStockAccount, and chains AU_STOCK_WITHDRAWAL_TAX.';
+  static description = 'Credits AU cash pool with sale proceeds, FIFO-consumes auStockAccount.holdings (design 25 §6.4), and chains AU_STOCK_WITHDRAWAL_TAX with the realized basis.';
   static actionType  = 'AU_STOCK_WITHDRAWAL_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, costBasisStrategy = 'FIFO' }) {
     super('AU Stock Withdrawal Apply', PRIORITY.CASH_FLOW);
-    this.accountService = accountService;
+    this.accountService    = accountService;
+    this.costBasisStrategy = costBasisStrategy;
     this.reducedActionTypes   = ['AU_STOCK_WITHDRAWAL_APPLY'];
     this.generatedActionTypes = ['AU_STOCK_WITHDRAWAL_TAX'];
   }
 
   reduce(state, action) {
-    const { salePrice, costBasis, residency } = action;
-    const gain = Math.max(0, salePrice - costBasis);
-    this.accountService.transaction(auCash(state), salePrice, null);
+    const { salePrice, residency } = action;
     const sa = state.auStockAccount;
-    const newBalance  = sa.balance - salePrice;
-    const newEarnings = Math.max(0, sa.earningsBasis - gain);
+
+    let realizedBasis;
+    let newHoldings = sa.holdings ?? [];
+    if (action.costBasis != null) {
+      realizedBasis = action.costBasis;
+      const { newHoldings: consumed } = consumeHoldingsFifo(sa.holdings ?? [], salePrice);
+      newHoldings = consumed;
+    } else {
+      const r = consumeHoldingsFifo(sa.holdings ?? [], salePrice);
+      realizedBasis = r.realizedBasis;
+      newHoldings   = r.newHoldings;
+    }
+    const gain = Math.max(0, salePrice - realizedBasis);
+
+    this.accountService.transaction(auCash(state), salePrice, null);
+
+    const newBalance  = +newHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
+    const newEarnings = Math.max(0, (sa.earningsBasis ?? 0) - gain);
     const newContrib  = newBalance - newEarnings;
     return this.newState(
       state,
@@ -193,11 +209,12 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
         auStockAccount: {
           ...sa,
           balance:           newBalance,
+          holdings:          newHoldings,
           earningsBasis:     newEarnings,
           contributionBasis: newContrib,
         },
       },
-      [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, residency, proceeds: salePrice, costBasis, description: sa.name || 'auStockAccount' }]
+      [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, residency, proceeds: salePrice, costBasis: realizedBasis, description: sa.name || 'auStockAccount' }]
     );
   }
 }

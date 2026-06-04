@@ -653,6 +653,23 @@
             <input type="number" data-id="earningsBasis" value="0"/>
           </div>
         </div>
+        <div data-id="holdingsSection" class="holdings-section" style="display:none">
+          <div class="holdings-header">Holdings</div>
+          <table class="holdings-table">
+            <thead>
+              <tr>
+                <th>Label</th>
+                <th>Allocation</th>
+                <th>Rate Key</th>
+                <th class="num">Market Value</th>
+                <th class="num">Cost Basis</th>
+                <th class="num">Unrealized G/L</th>
+                <th>Purchase Date</th>
+              </tr>
+            </thead>
+            <tbody data-id="holdingsTbody"></tbody>
+          </table>
+        </div>
       </div>
       <div class="node-buttons">
         <button class="btn btn-sm btn-primary" data-id="saveBtn">Save</button>

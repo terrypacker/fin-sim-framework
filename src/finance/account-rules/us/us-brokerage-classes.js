@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
+import { consumeHoldingsFifo } from '../../holdings/holdings-fifo.js';
 
 /** Resolve the US cash pool. */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -185,24 +186,41 @@ export class StockEarningsApplyReducer extends AccountServiceReducer {
  */
 export class StockWithdrawalApplyReducer extends AccountServiceReducer {
   static type        = 'StockWithdrawalApplyReducer';
-  static description = 'Credits the US cash pool with sale proceeds, debits the stock account, and chains STOCK_WITHDRAWAL_TAX.';
+  static description = 'Credits the US cash pool with sale proceeds, FIFO-consumes the stock account\'s holdings (design 25 §6.4), and chains STOCK_WITHDRAWAL_TAX with the realized basis.';
   static actionType  = 'STOCK_WITHDRAWAL_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, costBasisStrategy = 'FIFO' }) {
     super('Stock Withdrawal Apply', PRIORITY.CASH_FLOW);
-    this.accountService = accountService;
+    this.accountService    = accountService;
+    this.costBasisStrategy = costBasisStrategy; // 'FIFO' | 'LIFO' | 'SPECIFIC' (per design §6.4)
     this.reducedActionTypes   = ['STOCK_WITHDRAWAL_APPLY'];
     this.generatedActionTypes = ['STOCK_WITHDRAWAL_TAX'];
   }
 
   reduce(state, action) {
-    const { salePrice, costBasis, residency } = action;
-    const gain = Math.max(0, salePrice - costBasis);
-    this.accountService.transaction(usCash(state), salePrice, null);
+    const { salePrice, residency } = action;
     const key = action.stateKey ?? 'usStockAccount';
-    const sa = state[key];
-    const newBalance  = sa.balance - salePrice;
-    const newEarnings = Math.max(0, sa.earningsBasis - gain);
+    const sa  = state[key];
+
+    // Resolve realized cost basis. Action-supplied costBasis wins for backward
+    // compatibility (event-data API); otherwise consume holdings FIFO from state.
+    let realizedBasis;
+    let newHoldings = sa.holdings ?? [];
+    if (action.costBasis != null) {
+      realizedBasis = action.costBasis;
+      const { newHoldings: consumed } = consumeHoldingsFifo(sa.holdings ?? [], salePrice);
+      newHoldings = consumed;
+    } else {
+      const r = consumeHoldingsFifo(sa.holdings ?? [], salePrice);
+      realizedBasis = r.realizedBasis;
+      newHoldings   = r.newHoldings;
+    }
+    const gain = Math.max(0, salePrice - realizedBasis);
+
+    this.accountService.transaction(usCash(state), salePrice, null);
+
+    const newBalance  = +newHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
+    const newEarnings = Math.max(0, (sa.earningsBasis ?? 0) - gain);
     const newContrib  = newBalance - newEarnings;
     return this.newState(
       state,
@@ -210,11 +228,12 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
         [key]: {
           ...sa,
           balance:           newBalance,
+          holdings:          newHoldings,
           contributionBasis: newContrib,
           earningsBasis:     newEarnings,
         },
       },
-      [{ type: 'STOCK_WITHDRAWAL_TAX', gain, residency, proceeds: salePrice, costBasis, description: sa.name || key }]
+      [{ type: 'STOCK_WITHDRAWAL_TAX', gain, residency, proceeds: salePrice, costBasis: realizedBasis, description: sa.name || key }]
     );
   }
 }

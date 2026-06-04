@@ -63,6 +63,14 @@ import { MonthlySocialSecurityHandler } from './finance/handlers/monthly-social-
 import { MonthlyWagesHandler } from './finance/handlers/monthly-wages-handler.js';
 import { OutOfFundsHandler } from './finance/handlers/out-of-funds-handler.js';
 import { UsSavingsInterestMonthlyHandler } from './finance/handlers/us-savings-interest-handler.js';
+import { ALLOCATION, ALLOCATION_VALUES } from './finance/holdings/allocation.js';
+import { bootstrapHoldingSplit } from './finance/holdings/bootstrap-holding-split.js';
+import { DEFAULT_ALLOCATION_BY_ROLE, DEFAULT_ALLOCATION_BY_TYPE, resolveDefaultAllocation, resolveRateKey } from './finance/holdings/default-allocations.js';
+import { HOLDING_ACTION_TYPES, HOLDING_ACTION_ENTRIES, HoldingTransactAction, HoldingRevalueAction, HoldingSetBasisAction, HoldingSplitAction, HoldingRetitleAction, HOLDING_ACTION_CLASSES, registerHoldingActionTypes } from './finance/holdings/holding-actions.js';
+import { HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer, HoldingSplitReducer, HoldingRetitleReducer, HOLDING_REDUCER_CLASSES, _syncBalance } from './finance/holdings/holding-reducers.js';
+import { Holding } from './finance/holdings/holding.js';
+import { computeHoldingsGrowth } from './finance/holdings/holdings-earnings.js';
+import { consumeHoldingsFifo } from './finance/holdings/holdings-fifo.js';
 import { JournalDataSource } from './finance/journal-data-source.js';
 import { JournalQueryApi } from './finance/journal-query-api.js';
 import { ReportDefinition, ReportDefinitionRegistry } from './finance/journal-reporting/report-definition-registry.js';
@@ -468,6 +476,32 @@ export const Finance = {
   MonthlyWagesHandler,
   OutOfFundsHandler,
   UsSavingsInterestMonthlyHandler,
+  ALLOCATION,
+  ALLOCATION_VALUES,
+  bootstrapHoldingSplit,
+  DEFAULT_ALLOCATION_BY_ROLE,
+  DEFAULT_ALLOCATION_BY_TYPE,
+  resolveDefaultAllocation,
+  resolveRateKey,
+  HOLDING_ACTION_TYPES,
+  HOLDING_ACTION_ENTRIES,
+  HoldingTransactAction,
+  HoldingRevalueAction,
+  HoldingSetBasisAction,
+  HoldingSplitAction,
+  HoldingRetitleAction,
+  HOLDING_ACTION_CLASSES,
+  registerHoldingActionTypes,
+  HoldingTransactReducer,
+  HoldingRevalueReducer,
+  HoldingSetBasisReducer,
+  HoldingSplitReducer,
+  HoldingRetitleReducer,
+  HOLDING_REDUCER_CLASSES,
+  _syncBalance,
+  Holding,
+  computeHoldingsGrowth,
+  consumeHoldingsFifo,
   JournalDataSource,
   JournalQueryApi,
   ReportDefinition,

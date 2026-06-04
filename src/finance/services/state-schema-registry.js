@@ -113,6 +113,16 @@ export class StateSchemaRegistry {
     this.registerPattern('*.minimumBalance',    ParameterValueType.currency());
     this.registerPattern('metrics.*',           ParameterValueType.metric());
 
+    // Holdings (design 25 §5.6). Per-account exact paths take precedence
+    // when an account stamps them with its specific currency; globs cover
+    // anything the per-account stamp misses.
+    this.registerPattern('*.holdings.*.marketValue', ParameterValueType.currency());
+    this.registerPattern('*.holdings.*.costBasis',   ParameterValueType.currency());
+    this.registerPattern('*.holdings.*.allocation',  ParameterValueType.text());
+    this.registerPattern('*.holdings.*.rateKey',     ParameterValueType.text());
+    this.registerPattern('*.holdings.*.label',       ParameterValueType.text());
+    this.registerPattern('*.holdings.*.purchaseDate', ParameterValueType.date());
+
     // ── FX rate/fee maps ──────────────────────────────────────────────────────
     this.registerPattern('baseExchangeRates.*',      ParameterValueType.rate());
     this.registerPattern('effectiveExchangeRates.*', ParameterValueType.rate());
@@ -180,6 +190,9 @@ export class StateSchemaRegistry {
     if (account.type === ACCOUNT_TYPE.BROKERAGE && 'earningsBasis' in account) {
       this.register(`${stateKey}.earningsBasis`,   vt);
     }
+    // Holdings per-account stamp with the account's currency (design 25 §5.6).
+    this.registerPattern(`${stateKey}.holdings.*.marketValue`, vt);
+    this.registerPattern(`${stateKey}.holdings.*.costBasis`,   vt);
   }
 
   /**

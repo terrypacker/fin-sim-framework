@@ -11,6 +11,7 @@
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
 import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
+import { computeHoldingsGrowth } from '../holdings/holdings-earnings.js';
 
 /**
  * Handles INTL_ROTH_EARNINGS events.
@@ -45,12 +46,15 @@ export class IntlRothEarningsHandler extends HandlerEntry {
 
   call({ state }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const balance  = state[stateKey]?.balance ?? 0;
-    const rate     = state.effectiveGrowthRates?.[this.rateKey] ?? this.growthRate;
-    const amount   = +(balance * rate).toFixed(2);
+    const { amount, holdingActions } = computeHoldingsGrowth({
+      state, stateKey,
+      fallbackRate:    this.growthRate,
+      fallbackRateKey: this.rateKey,
+    });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'ROTH_EARNINGS_APPLY', amount, stateKey },
+      ...holdingActions,
       new RecordMetricAction('roth_earnings', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
@@ -90,12 +94,15 @@ export class IntlIraEarningsHandler extends HandlerEntry {
 
   call({ state }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const balance  = state[stateKey]?.balance ?? 0;
-    const rate     = state.effectiveGrowthRates?.[this.rateKey] ?? this.growthRate;
-    const amount   = +(balance * rate).toFixed(2);
+    const { amount, holdingActions } = computeHoldingsGrowth({
+      state, stateKey,
+      fallbackRate:    this.growthRate,
+      fallbackRateKey: this.rateKey,
+    });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'IRA_EARNINGS_APPLY', amount, stateKey },
+      ...holdingActions,
       new RecordMetricAction('ira_earnings', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
@@ -135,12 +142,15 @@ export class IntlK401EarningsHandler extends HandlerEntry {
 
   call({ state }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const balance  = state[stateKey]?.balance ?? 0;
-    const rate     = state.effectiveGrowthRates?.[this.rateKey] ?? this.growthRate;
-    const amount   = +(balance * rate).toFixed(2);
+    const { amount, holdingActions } = computeHoldingsGrowth({
+      state, stateKey,
+      fallbackRate:    this.growthRate,
+      fallbackRateKey: this.rateKey,
+    });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'K401_EARNINGS_APPLY', amount, stateKey },
+      ...holdingActions,
       new RecordMetricAction('k401_earnings', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
@@ -181,12 +191,15 @@ export class IntlUsStockEarningsHandler extends HandlerEntry {
 
   call({ state }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const balance  = state[stateKey]?.balance ?? 0;
-    const rate     = state.effectiveGrowthRates?.[this.rateKey] ?? this.growthRate;
-    const amount   = +(balance * rate).toFixed(2);
+    const { amount, holdingActions } = computeHoldingsGrowth({
+      state, stateKey,
+      fallbackRate:    this.growthRate,
+      fallbackRateKey: this.rateKey,
+    });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'STOCK_EARNINGS_APPLY', amount, stateKey },
+      ...holdingActions,
       new RecordMetricAction('us_stock_earnings', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
@@ -226,12 +239,15 @@ export class IntlAuStockEarningsHandler extends HandlerEntry {
 
   call({ state }) {
     const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
-    const rate     = state.effectiveGrowthRates?.[this.rateKey] ?? this.growthRate;
-    const amount   = +(balance * rate).toFixed(2);
+    const { amount, holdingActions } = computeHoldingsGrowth({
+      state, stateKey,
+      fallbackRate:    this.growthRate,
+      fallbackRateKey: this.rateKey,
+    });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'AU_STOCK_EARNINGS_APPLY', amount },
+      ...holdingActions,
       new RecordMetricAction('au_stock_earnings', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
@@ -276,8 +292,15 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
 
   call({ state }) {
     const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
-    const amount   = +(balance * this.dividendRate).toFixed(2);
+    // Dividends are paid pro-rata across holdings using the configured
+    // dividendRate (a future design 28 extension may swap this for a
+    // per-holding dividendYield; the substrate is ready for it).
+    const { amount, holdingActions } = computeHoldingsGrowth({
+      state, stateKey,
+      rateOverride:    this.dividendRate,
+      fallbackRate:    this.dividendRate,
+      fallbackRateKey: null,
+    });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
 
     const personKey  = this.ownerId ?? Object.keys(state.people ?? {})[0];
@@ -288,6 +311,7 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
 
     return [
       { type: actionType, amount },
+      ...holdingActions,
       new RecordMetricAction('au_stock_dividend', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
@@ -334,12 +358,17 @@ export class AuSavingsInterestHandler extends HandlerEntry {
 
   call({ state }) {
     const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
-    const rate     = state.effectiveInterestRates?.[this.rateKey] ?? this.interestRate;
-    const amount   = +(balance * rate / 12).toFixed(2);
+    const { amount, holdingActions } = computeHoldingsGrowth({
+      state, stateKey,
+      fallbackRate:    this.interestRate,
+      fallbackRateKey: this.rateKey,
+      rateSource:      'effectiveInterestRates',
+      factor:          1 / 12,
+    });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'AU_SAVINGS_EARNINGS_APPLY', amount, residency: state.people?.[this.ownerId ?? Object.keys(state.people ?? {})[0]]?.residency ?? null },
+      ...holdingActions,
       new RecordMetricAction('au_savings_interest', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
@@ -386,12 +415,17 @@ export class AuFixedIncomeInterestMonthlyHandler extends HandlerEntry {
 
   call({ state }) {
     const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
-    const rate     = state.effectiveInterestRates?.[this.rateKey] ?? this.interestRate;
-    const amount   = +(balance * rate / 12).toFixed(2);
+    const { amount, holdingActions } = computeHoldingsGrowth({
+      state, stateKey,
+      fallbackRate:    this.interestRate,
+      fallbackRateKey: this.rateKey,
+      rateSource:      'effectiveInterestRates',
+      factor:          1 / 12,
+    });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'AU_FIXED_INCOME_EARNINGS_APPLY', amount, residency: state.people?.[this.ownerId ?? Object.keys(state.people ?? {})[0]]?.residency ?? null },
+      ...holdingActions,
       new RecordMetricAction('au_fixed_income_interest', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
@@ -438,12 +472,17 @@ export class FixedIncomeInterestHandler extends HandlerEntry {
 
   call({ state }) {
     const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
-    const rate     = state.effectiveInterestRates?.[this.rateKey] ?? this.interestRate;
-    const amount   = +(balance * rate / 12).toFixed(2);
+    const { amount, holdingActions } = computeHoldingsGrowth({
+      state, stateKey,
+      fallbackRate:    this.interestRate,
+      fallbackRateKey: this.rateKey,
+      rateSource:      'effectiveInterestRates',
+      factor:          1 / 12,
+    });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'FIXED_INCOME_EARNINGS_APPLY', amount, residency: state.people?.[this.ownerId ?? Object.keys(state.people ?? {})[0]]?.residency ?? null },
+      ...holdingActions,
       new RecordMetricAction('fixed_income_interest', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
@@ -490,13 +529,18 @@ export class SuperEarningsHandler extends HandlerEntry {
   }
 
   call({ data, state }) {
-    const rate     = data?.rate ?? state.effectiveGrowthRates?.[this.rateKey] ?? this.defaultRate;
     const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
-    const amount   = +(balance * rate).toFixed(2);
+    const { amount, holdingActions } = computeHoldingsGrowth({
+      state, stateKey,
+      // data.rate is a one-off override that bypasses the effective-rate map.
+      rateOverride:    data?.rate ?? null,
+      fallbackRate:    this.defaultRate,
+      fallbackRateKey: this.rateKey,
+    });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
       { type: 'SUPER_EARNINGS_APPLY', amount, stateKey },
+      ...holdingActions,
       new RecordMetricAction('super_earnings', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];
