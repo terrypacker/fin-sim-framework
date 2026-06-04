@@ -11,8 +11,15 @@
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 
 /**
- * RevalueAssetReducer — applies a multiplier to the balance (Account) or
- * value (RealProperty / Collectible) of targeted state keys.
+ * RevalueAssetReducer — applies a multiplier to the marketValue of every
+ * holding under each targeted state key (Account), or to the scalar `value`
+ * of asset-level state entries (RealProperty / Collectible — design 25 §5.3
+ * keeps these scalar until design 28).
+ *
+ * For Accounts: post-design-25, balance is denormalized from Σ holdings, so
+ * shocking balance directly would be wiped out the next time a holdings
+ * reducer re-syncs. Instead we apply the multiplier to every holding's
+ * marketValue and re-sync balance from Σ holdings — the §4.4 invariant.
  *
  * Action fields:
  *   - targetStateKeys: string[]  — state keys to revalue
@@ -23,7 +30,7 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  */
 export class RevalueAssetReducer extends Reducer {
   static type        = 'RevalueAssetReducer';
-  static description = 'Applies the shock multiplier to balance or value of each targeted state key.';
+  static description = 'Applies the shock multiplier to every holding\'s marketValue (Account) or to the scalar value (RealProperty/Collectible), and re-syncs account.balance.';
 
   constructor() {
     super('Revalue Asset', PRIORITY.POSITION_UPDATE);
@@ -39,10 +46,22 @@ export class RevalueAssetReducer extends Reducer {
       const entry = state[key];
       if (!entry) continue;
 
-      if (entry.balance != null) {
+      if (Array.isArray(entry.holdings) && entry.holdings.length > 0) {
+        // Account with holdings — shock every holding's marketValue and
+        // re-sync balance from Σ. Each holding clamps at zero.
+        const nextHoldings = entry.holdings.map(h => {
+          if (!h) return h;
+          const drop = +((h.marketValue ?? 0) * multiplier).toFixed(2);
+          return { ...h, marketValue: Math.max(0, (h.marketValue ?? 0) + drop) };
+        });
+        const nextBalance = +nextHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
+        updates[key] = { ...entry, holdings: nextHoldings, balance: nextBalance };
+      } else if (entry.balance != null) {
+        // Account without holdings (degenerate): preserve legacy behavior.
         const drop = +(entry.balance * multiplier).toFixed(2);
         updates[key] = { ...entry, balance: Math.max(0, entry.balance + drop) };
       } else if (entry.value != null) {
+        // Asset-level (RealProperty / Collectible) — scalar value.
         const drop = +(entry.value * multiplier).toFixed(2);
         updates[key] = { ...entry, value: Math.max(0, entry.value + drop) };
       }

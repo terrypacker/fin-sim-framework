@@ -45,7 +45,35 @@ function _leafEqual(b, a) {
   if (b === a) return true;
   if (!Array.isArray(b) || !Array.isArray(a)) return false;
   if (b.length !== a.length) return false;
-  for (let i = 0; i < b.length; i++) if (b[i] !== a[i]) return false;
+  for (let i = 0; i < b.length; i++) {
+    if (b[i] === a[i]) continue;
+    if (typeof b[i] === 'object' && typeof a[i] === 'object' && b[i] !== null && a[i] !== null) {
+      // Object array elements: deep-equal so that structuredClone'd snapshots
+      // (where refs differ but values match) don't produce spurious diffs.
+      if (!_deepObjectEqual(b[i], a[i])) return false;
+    } else {
+      return false;
+    }
+  }
+  return true;
+}
+
+function _deepObjectEqual(a, b) {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const k of aKeys) {
+    const av = a[k], bv = b[k];
+    if (av === bv) continue;
+    if (typeof av === 'object' && typeof bv === 'object' && av !== null && bv !== null) {
+      if (!_deepObjectEqual(av, bv)) return false;
+    } else {
+      return false;
+    }
+  }
   return true;
 }
 

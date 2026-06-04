@@ -1,6 +1,6 @@
 # 21 — Financial Shock & Economic Regime Framework
 
-**Status**: Draft
+**Status**: Complete — Phase 1 + Phase 2 shipped (branch `wip/fx-service`)
 **Scope**: Phases 1 + 2 of the original concept, scoped to mechanics this codebase actually models. Employment, credit-market, and correlation regimes are deferred until the underlying systems exist.
 **Related**: `design/0-period-engine.md` (period model the reducer hooks into), `design/9-toolset-compiler.md` (where the new toolset plugs in), `design/19-type-registry.md` (action-type entries), `design/23-fx-exchange.md` (owns FX rate/fee composition — see §10).
 

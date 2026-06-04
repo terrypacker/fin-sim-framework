@@ -1,6 +1,6 @@
 # 25 — Holding-Level State
 
-**Status**: Draft
+**Status**: Implemented (2026-06-03). See §16 for implementation notes, deviations from this design, and remaining follow-ups.
 **Phase**: A — Substrate (per `design/24-financial-modeling-roadmap.md` §5)
 **Related**: `design/24-financial-modeling-roadmap.md` (umbrella), `design/21-financial-shock-and-regime-framework.md` (rate-key substrate this binds to), `design/23-fx-exchange.md` (effective-rate parallel), `design/15-config-as-source-of-truth.md` (config/state ownership boundary), `design/19-type-registry.md` (action-type entries), `design/25a-mc-nested-param-paths.md` (peer substrate piece in Phase A).
 **Author note**: The single largest refactor in the financial-modeling roadmap. Introduces `Holding` as the canonical sub-balance of an `Account`, with `allocation` and `costBasis` as first-class state. Foundational for designs 28 (per-holding appreciation, bond duration), 29 (behavioral selling, tax-loss harvesting), and the dividend-cut extension to design 21.
@@ -494,3 +494,76 @@ These are explicitly punted to design 28 or 29 unless flagged otherwise:
 The shape it lands in is intentionally minimal: a plain-data record on `sim.state`, a denormalized `account.balance` scalar synced by reducers, a five-action family for every holdings-level mutation, a one-PR big-bang migration that leaves every existing scenario passing because every account starts with one default holding.
 
 Everything else — appreciation schedules, location codes, bond duration, panic selling, tax-loss harvesting, joint inheritance — sequences behind this. None of it needs new substrate; all of it reads the same `holdings` array.
+
+---
+
+## 16. Implementation Notes (2026-06-03)
+
+All 10 migration steps from §10 landed in a single working session. Test suite: **2,571 passing** (1,961 unit + 610 viz). §4.4 invariant verified on `IntlRetirementScenario` at boot, after 5 years, and after 10 years.
+
+### 16.1 What landed
+
+| Step | Status | Notes |
+|---|---|---|
+| 1. Primitives (`Holding`, `ALLOCATION`, `resolveRateKey`) | ✅ Done | `src/finance/holdings/{holding,allocation,default-allocations}.js` |
+| 2. `Account.holdings` + service bootstrap | ✅ Done | `AccountService._bootstrapDefaultHolding` + helpers (`registerHolding`, `unrealizedGainLoss`, `findOrCreateHolding`, `defaultHoldingFor`, `holdingsByAllocation`) |
+| 3. `HOLDING_*` action family + reducers | ✅ Done | `holding-actions.js`, `holding-reducers.js`. Wired into `TypeRegistry` + every compiled scenario via `ScenarioCompiler` and `ServiceRegistry` |
+| 4. Earnings handlers migrated | ✅ Done | All Roth/IRA/K401/UsStock/AuStock/Super/FixedIncome/AuFixedIncome/AuSavings/AuStockDividend handlers walk holdings via the shared `computeHoldingsGrowth` helper |
+| 5. `RevalueAssetReducer` migrated | ✅ Done | Shocks each `holding.marketValue` whose `rateKey` matches; re-syncs balance from Σ. RealProperty/Collectible scalar `value` path preserved |
+| 6. STOCK_WITHDRAWAL FIFO basis | ✅ Done | `consumeHoldingsFifo()` helper; US + AU `StockWithdrawalApplyReducer` use it. `costBasisStrategy` field on the reducer (`FIFO` / `LIFO` / `SPECIFIC`) for design 29 extension |
+| 7. Toolset bootstrap-split mechanism | ✅ Done | `bootstrapHoldingSplit(account, splits, simStart)` helper available; no production toolset opts in yet (every account is single-sleeve) |
+| 8. Serialization round-trip | ✅ Done | `Holding.toJSON`/`fromJSON` round-trips via TypeRegistry; `_serializeAccount`/`_makeAccount` carry `holdings: []`; legacy configs without `holdings` re-bootstrap on register |
+| 9. Read-only holdings UI | ✅ Done | Holdings table in `account-editor.js` (label, allocation, rateKey, market value, cost basis, unrealized G/L, purchase date); StateSchemaRegistry stamps per-holding paths (`*.holdings.*.marketValue` etc.) |
+| 10. Invariant + FIFO + roundtrip tests | ✅ Done | `holdings-invariant.test.mjs` (12 cases incl. 5/10-year sim), `holdings-cost-basis-fifo.test.mjs` (9 cases), `holdings-roundtrip.test.mjs` (3 cases), plus 36 substrate tests (`holding.test.mjs`, `holdings-actions.test.mjs`) |
+
+### 16.2 Deviations from the design as written
+
+- **Action classes extend `Action` directly, not `FieldValueAction`** (§6.1 said the latter). `FieldValueAction`'s `(fieldName, value)` shape doesn't accommodate the multi-field payloads (`HOLDING_TRANSACT` carries `stateKey`, `holdingId`, `marketValueDelta`, `costBasisDelta`). Extending `Action` keeps the payload explicit; `TypeRegistry.registerActionType` still publishes the schema for the workbench's action-detail panel.
+
+- **`AccountService.transaction()` now also syncs `holdings[0].marketValue` for single-holding accounts.** Without this, every legacy cash-flow reducer that calls `transaction()` (expenses, wages, SS, replenishSavings, rollovers, mortgages, real-property sales, …) would break the §4.4 invariant mid-tick. The alternative — migrating every cash-flow handler individually — was out of scope for this session. Multi-holding accounts (post-toolset-split) intentionally do **not** get pro-rata sync; the caller must emit explicit `HOLDING_TRANSACT` against the correct sleeve, matching the design's intent (§6.5).
+
+- **`UsSavingsInterestMonthlyHandler` was NOT migrated to emit `HOLDING_TRANSACT`.** Its reducer (`UsSavingsInterestCreditReducer`) routes through `accountService.transaction()`, which already syncs holdings. Adding `HOLDING_TRANSACT` would double-count. AU savings/fixed-income reducers (`AuSavingsEarningsApplyReducer`, `AuFixedIncomeEarningsApplyReducer`) use direct balance mutation and DO emit `HOLDING_TRANSACT` as designed.
+
+- **`STOCK_WITHDRAWAL_APPLY` keeps backward compatibility with action-data `costBasis`.** When `action.costBasis` is set (legacy tests, manually scheduled withdrawals), it wins over FIFO. When absent, the reducer FIFO-consumes holdings and emits `STOCK_WITHDRAWAL_TAX` with the realized basis. This satisfies design §6.4 for new code paths without invalidating existing tests that pass `costBasis` in event data.
+
+- **`replenishSavings()` is unchanged.** It uses pro-rata basis from `account.earningsBasis`. Per design §7's allowance for legacy direct-balance mutation, and because every drawdown-source account currently has one default holding (where pro-rata = FIFO = SPECIFIC), this is acceptable. Future-future toolset splits in drawdown sources would need this path migrated.
+
+- **`state-utils.js#_leafEqual` now deep-equals object-typed array elements.** Required because `structuredClone` produces value-equal but reference-different array elements (holdings), and the original `_leafEqual` reported spurious diffs for every reducer that snapshotted state but didn't touch holdings. The change is value-safe for arrays of primitives (numbers in `state.metrics.*`) and is correct for arrays-of-records more generally.
+
+- **Toolset state-plain helpers (`us-retirement-toolset.js`, `au-retirement-toolset.js`#`_accountToStatePlain`) now carry `holdings`.** These plain-object copies are what `sim.state` actually holds; omitting holdings would leave the substrate unreachable from handlers. Two near-duplicate helpers — DRYing them is a follow-up.
+
+### 16.3 Follow-ups (not blocking; deferred to designs 28 / 29 / future)
+
+- **Per-holding appreciation schedules + bond duration** — design 28.
+- **Per-holding `dividendYield`** — small follow-up to design 21 once design 28 lands.
+- **`RealProperty` / `Collectible` folded into Holdings** — design 28 revisit point per §5.3 path B.
+- **LIFO / specific-lot identification** — `costBasisStrategy` constructor field is wired (`'FIFO' | 'LIFO' | 'SPECIFIC'`); only FIFO branch is implemented. Specific-lot needs UI work for lot selection — track under design 29 (tax-loss harvesting).
+- **Stepped-up basis at inheritance** — `HOLDING_SET_BASIS` is ready; the policy table (full / half / none by jurisdiction × account-type) is design 27 + a small estate-rules module.
+- **AU CGT 12-month discount via `purchaseDate`** — substrate is ready; the AU CGT module needs to consult `purchaseDate` rather than the existing flag. Roughly a half-day of tax-module work.
+- **`replenishSavings` FIFO migration** — only meaningful once toolsets declare multi-sleeve drawdown sources.
+- **`MonthlyExpenses`, `MonthlyWages`, `MonthlySocialSecurity` handlers** — these go through `transaction()` so the invariant holds, but they don't emit explicit `HOLDING_TRANSACT`. Migrating them yields better journal granularity (visible per-sleeve impact for behavioral handlers in design 29) but isn't required for §4.4.
+- **DRY `_accountToStatePlain` across `us-retirement-toolset.js` / `au-retirement-toolset.js`** — small refactor; move to `src/finance/state/account-to-state-plain.js`.
+- **Per-holding `marketValue` in `account.earningsBasis` reconciliation** — `StockWithdrawalApplyReducer` still derives `contributionBasis = balance - earningsBasis` and updates `earningsBasis` from realized gain. With state-derived holdings basis, the per-account `earningsBasis` field becomes redundant for brokerage accounts; consolidating is a follow-up but not blocking.
+- **Holdings editing UI** — read-only this design (§9). Editing flows ship with design 28 once appreciation schedules give the user something meaningful to edit.
+
+### 16.4 Files added
+
+| Path | Purpose |
+|---|---|
+| `src/finance/holdings/holding.js` | `Holding` plain-data class with `toJSON`/`fromJSON` |
+| `src/finance/holdings/allocation.js` | `ALLOCATION` enum + `ALLOCATION_VALUES` |
+| `src/finance/holdings/default-allocations.js` | `DEFAULT_ALLOCATION_BY_ROLE` (preferred), `DEFAULT_ALLOCATION_BY_TYPE` (fallback), `resolveDefaultAllocation`, `resolveRateKey` |
+| `src/finance/holdings/holding-actions.js` | Five `Holding*Action` subclasses + `HOLDING_ACTION_TYPES`, `HOLDING_ACTION_ENTRIES`, `registerHoldingActionTypes()` |
+| `src/finance/holdings/holding-reducers.js` | Five reducers + shared `_syncBalance()` |
+| `src/finance/holdings/holdings-earnings.js` | `computeHoldingsGrowth({state, stateKey, fallbackRate, fallbackRateKey, rateSource, factor, rateOverride})` — single helper used by every earnings/interest handler |
+| `src/finance/holdings/holdings-fifo.js` | `consumeHoldingsFifo(holdings, amount)` — FIFO consumption + realized-basis accumulation |
+| `src/finance/holdings/bootstrap-holding-split.js` | `bootstrapHoldingSplit(account, splits, simStart)` — toolset opt-in helper for multi-sleeve declaration at boot |
+| `tests/unit/holding.test.mjs` | 16 substrate tests |
+| `tests/unit/holdings-actions.test.mjs` | 20 action/reducer tests |
+| `tests/unit/holdings-invariant.test.mjs` | 12 §4.4 invariant + bootstrap tests |
+| `tests/unit/holdings-cost-basis-fifo.test.mjs` | 9 FIFO tests |
+| `tests/unit/holdings-roundtrip.test.mjs` | 3 serialize→deserialize tests |
+
+### 16.5 Files touched
+
+`src/finance/assets/account.js` · `src/finance/services/account-service.js` · `src/finance/handlers/earnings-handlers.js` · `src/finance/handlers/us-savings-interest-handler.js` (no-op revert) · `src/finance/economic-regimes/revalue-asset-reducer.js` · `src/finance/account-rules/us/us-brokerage-classes.js` · `src/finance/account-rules/au/au-brokerage-classes.js` · `src/finance/services/state-schema-registry.js` · `src/scenarios/scenario-serializer.js` · `src/scenarios/toolsets/scenario-compiler.js` · `src/scenarios/toolsets/us-retirement-toolset.js` · `src/scenarios/toolsets/au-retirement-toolset.js` · `src/services/service-registry.js` · `src/simulation-framework/state-utils.js` · `src/visualization/accounts/account-editor.js` · `index.html` · `assets/css/plugins/config-builder.css` · `src/index.js` (auto-generated)

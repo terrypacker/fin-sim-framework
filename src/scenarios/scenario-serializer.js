@@ -21,6 +21,7 @@ import {
   InvestmentAccount, BrokerageAccount, FourOhOneKAccount,
   RothAccount, TraditionalIRAAccount, SuperannuationAccount,
 } from '../finance/assets/investment-account.js';
+import { Holding } from '../finance/holdings/holding.js';
 import { RealProperty }  from '../finance/assets/real-property.js';
 import { Collectible }   from '../finance/assets/collectible.js';
 
@@ -155,6 +156,16 @@ import {
   AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer,
 } from '../finance/account-rules/mortgage-payment-classes.js';
 
+// ─── Holdings substrate (design 25) ─────────────────────────────────────────
+import {
+  HoldingTransactAction, HoldingRevalueAction, HoldingSetBasisAction,
+  HoldingSplitAction, HoldingRetitleAction, HOLDING_ACTION_ENTRIES,
+} from '../finance/holdings/holding-actions.js';
+import {
+  HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer,
+  HoldingSplitReducer, HoldingRetitleReducer,
+} from '../finance/holdings/holding-reducers.js';
+
 /**
  * All known handler / reducer / action classes.
  * Registered into the TypeRegistry before deserialization when the registry
@@ -164,6 +175,11 @@ import {
 const _ALL_CLASSES = [
   // Framework actions
   Action, FieldAction, FieldValueAction, AmountAction, ScriptedAction,
+  // Holdings actions + reducers (design 25)
+  HoldingTransactAction, HoldingRevalueAction, HoldingSetBasisAction,
+  HoldingSplitAction, HoldingRetitleAction,
+  HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer,
+  HoldingSplitReducer, HoldingRetitleReducer,
   // Framework handlers
   HandlerEntry,
   // Framework reducers
@@ -268,6 +284,12 @@ function _populateRegistry(typeRegistry) {
   if (!typeRegistry) return;
   for (const ctor of _ALL_CLASSES) {
     typeRegistry.registerClass(ctor);
+  }
+  // Framework-owned action type entries (holdings substrate).
+  // Toolset-owned entries are registered separately by ScenarioCompiler via
+  // typeRegistry.registerToolset().
+  for (const entry of HOLDING_ACTION_ENTRIES) {
+    typeRegistry.registerActionType(entry);
   }
 }
 
@@ -527,6 +549,14 @@ export class ScenarioSerializer {
       d.minimumAge               = account.minimumAge               ?? null;
       d.balanceAtResidencyChange = account.balanceAtResidencyChange ?? null;
     }
+    // Holdings (design 25 §8). Round-trip via Holding.toJSON; null when
+    // absent so legacy configs (no holdings field) round-trip unchanged
+    // and AccountService.register() re-bootstraps a default holding.
+    if (Array.isArray(account.holdings) && account.holdings.length > 0) {
+      d.holdings = account.holdings.map(h => (
+        h instanceof Holding ? h.toJSON() : new Holding(h).toJSON()
+      ));
+    }
     return d;
   }
 
@@ -720,6 +750,12 @@ export class ScenarioSerializer {
     if (d.stateKey) account.stateKey = d.stateKey;
     if (d.rolloverContribBasis  != null) account.rolloverContribBasis  = d.rolloverContribBasis;
     if (d.rolloverEarningsBasis != null) account.rolloverEarningsBasis = d.rolloverEarningsBasis;
+    // Holdings (design 25 §8) — restored via Holding.fromJSON. When absent
+    // the account's empty holdings array triggers AccountService.register()'s
+    // default-holding bootstrap, preserving legacy single-sleeve behavior.
+    if (Array.isArray(d.holdings) && d.holdings.length > 0) {
+      account.holdings = d.holdings.map(h => Holding.fromJSON(h));
+    }
     return account;
   }
 

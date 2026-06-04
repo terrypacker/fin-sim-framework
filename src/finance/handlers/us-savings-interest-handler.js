@@ -57,6 +57,10 @@ export class UsSavingsInterestMonthlyHandler extends HandlerEntry {
     const rate     = state.effectiveInterestRates?.[this.rateKey] ?? this.interestRate;
     const amount   = +(balance * rate / 12).toFixed(2);
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
+    // US_SAVINGS_INTEREST_CREDIT is reduced via UsSavingsInterestCreditReducer
+    // which calls accountService.transaction(). The transaction helper itself
+    // maintains the §4.4 holdings invariant for single-holding accounts —
+    // emitting HOLDING_TRANSACT here would double-count.
     return [
       { type: 'US_SAVINGS_INTEREST_CREDIT', amount },
       new RecordMetricAction('us_savings_interest', amount),

@@ -13,6 +13,8 @@ import { EventBus } from '../../simulation-framework/event-bus.js';
 import { InsufficientFundsError, ACCOUNT_TYPE } from '../assets/account.js';
 import { getUsEarlyWithdrawalRules } from '../account-rules/us/us-early-withdrawal-rules.js';
 import { getBirthDate, getResidency } from '../residency-utils.js';
+import { Holding } from '../holdings/holding.js';
+import { resolveDefaultAllocation, resolveRateKey } from '../holdings/default-allocations.js';
 
 /**
  * AccountService — manages Account instances on the service bus and provides
@@ -36,6 +38,7 @@ export class AccountService extends AssetService {
    */
   constructor(graph, query, bus) {
     super(graph, query, bus, 'account', 2, false);
+    this._nextHoldingSeq = 1;
   }
 
   // ─── Create ───────────────────────────────────────────────────────────────
@@ -48,10 +51,24 @@ export class AccountService extends AssetService {
    */
   createAccount(account) {
     account.id = this._generateId(this._idPrefix);
+    this._bootstrapDefaultHolding(account);
     this._register(account);
     this._publish('CREATE', account);
     this._wireNodeEdges(account);
     return account;
+  }
+
+  /**
+   * Override BaseService.register() so the deserialize path also runs the
+   * default-holding bootstrap. Idempotent — re-registering an account that
+   * already has holdings is a no-op.
+   *
+   * @param {import('../account.js').Account} account
+   * @returns {import('../account.js').Account}
+   */
+  register(account) {
+    this._bootstrapDefaultHolding(account);
+    return super.register(account);
   }
 
   // ─── Update ───────────────────────────────────────────────────────────────
@@ -87,17 +104,128 @@ export class AccountService extends AssetService {
     return account;
   }
 
+  // ─── Holdings ─────────────────────────────────────────────────────────────
+
+  /**
+   * Bootstrap one default Holding when an account has none. Matches the
+   * scalar balance as marketValue/costBasis so the §4.4 invariant
+   * (account.balance === Σ holdings[i].marketValue) holds at boot.
+   *
+   * Idempotent: a non-empty holdings array is left untouched.
+   *
+   * @param {import('../account.js').Account} account
+   */
+  _bootstrapDefaultHolding(account) {
+    if (!account) return;
+    if (!Array.isArray(account.holdings)) account.holdings = [];
+    if (account.holdings.length > 0) return;
+    const allocation = resolveDefaultAllocation(account);
+    const rateKey    = resolveRateKey(account.country, allocation, account.role);
+    const holding    = new Holding({
+      id:           this._generateHoldingId(),
+      allocation,
+      marketValue:  account.balance ?? 0,
+      costBasis:    account.balance ?? 0,
+      rateKey,
+      purchaseDate: null,
+      label:        '',
+    });
+    account.holdings = [holding];
+  }
+
+  /** Service-scoped monotonic id for Holdings (`hld1`, `hld2`, …). */
+  _generateHoldingId() {
+    return `hld${this._nextHoldingSeq++}`;
+  }
+
+  /**
+   * Add a holding to an already-registered account, assign an id, and
+   * publish HOLDING_REGISTERED on the bus so the workbench/runtime can
+   * react. UI-side flow — does not go through the action pipeline.
+   *
+   * @param {import('../account.js').Account} account
+   * @param {object|import('../holdings/holding.js').Holding} holdingSpec
+   * @returns {import('../holdings/holding.js').Holding}
+   */
+  registerHolding(account, holdingSpec) {
+    const holding = holdingSpec instanceof Holding
+      ? holdingSpec
+      : new Holding(holdingSpec);
+    if (holding.id == null) holding.id = this._generateHoldingId();
+    if (holding.rateKey == null) {
+      holding.rateKey = resolveRateKey(account.country, holding.allocation, account.role);
+    }
+    account.holdings = [...(account.holdings ?? []), holding];
+    this._publish('HOLDING_REGISTERED', account);
+    return holding;
+  }
+
+  /** Derived: marketValue − costBasis. Not stored on state. */
+  unrealizedGainLoss(holding) {
+    if (!holding) return 0;
+    return (holding.marketValue ?? 0) - (holding.costBasis ?? 0);
+  }
+
+  /**
+   * Return the first holding matching (allocation, rateKey) or create one
+   * with marketValue=0, costBasis=0 if absent. Used by contribution handlers
+   * to land deposits in the right sleeve.
+   *
+   * @param {import('../account.js').Account} account
+   * @param {string} allocation - ALLOCATION value
+   * @param {string|null} [rateKey] - Optional rateKey filter; resolved when absent
+   * @returns {import('../holdings/holding.js').Holding}
+   */
+  findOrCreateHolding(account, allocation, rateKey = null) {
+    const key = rateKey ?? resolveRateKey(account.country, allocation, account.role);
+    const existing = (account.holdings ?? []).find(
+      h => h.allocation === allocation && h.rateKey === key
+    );
+    if (existing) return existing;
+    const created = new Holding({
+      id:          this._generateHoldingId(),
+      allocation,
+      marketValue: 0,
+      costBasis:   0,
+      rateKey:     key,
+    });
+    account.holdings = [...(account.holdings ?? []), created];
+    return created;
+  }
+
+  /** Convenience for handlers that don't care which sleeve they hit. */
+  defaultHoldingFor(account) {
+    return account?.holdings?.[0] ?? null;
+  }
+
+  /** Filtered view by ALLOCATION. */
+  holdingsByAllocation(account, allocation) {
+    return (account?.holdings ?? []).filter(h => h.allocation === allocation);
+  }
+
   // ─── Ledger operations ────────────────────────────────────────────────────
 
   /**
    * Perform a transaction on an account.
    * Positive amount → credit; negative amount → debit.
+   *
+   * Maintains the §4.4 holdings invariant (balance === Σ holdings.marketValue)
+   * for single-holding accounts — the bootstrap default. For multi-holding
+   * accounts (post-toolset-split, design §6.5), the caller is responsible for
+   * emitting an explicit HOLDING_TRANSACT specifying which sleeve to hit;
+   * `transaction()` does not pro-rate, because the right destination depends
+   * on the contribution allocation strategy.
+   *
    * @param {import('../account.js').Account} account
    * @param {number}  amount
    * @param {Date}    date
    */
   transaction(account, amount, date) {
     account.balance = account.balance + amount;
+    if (Array.isArray(account.holdings) && account.holdings.length === 1) {
+      const h = account.holdings[0];
+      h.marketValue = (h.marketValue ?? 0) + amount;
+    }
   }
 
   /**
