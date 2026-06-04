@@ -1,6 +1,6 @@
 # 30 — Decision-Graph Analysis & Scenario Comparison
 
-**Status**: Draft
+**Status**: Complete (Phases A, B, B.5, C)
 **Supersedes**: `design/3-branching-event-streams.md` (the user-driven scenario-fork piece), `design/4-branch-diff-insight-engine.md` (the diff/insight piece — comparison view absorbed here; insight engine deferred), `design/5-branch-merge-reconciliation.md` (deprecated outright).
 **Related**: `design/17-scenario-as-graph-node.md` (the substrate this builds on — scenarios are already `SimGraphNode`s with `DERIVES_FROM` parent edges), `design/21-financial-shock-and-regime-framework.md` (regime composition), `design/24-financial-modeling-roadmap.md` (designs 25–29 may produce decision points worth exposing here), the user's "Branching Decision Graphs / Superposition" proposal (the conceptual seed for §3).
 
@@ -211,6 +211,95 @@ A new workbench plugin: `scenario-compare`. Layout:
 
 The lightest viable comparison UI. If a heavier insight surface proves valuable later, it can be added; the comparison view doesn't preclude it.
 
+### 5.4 Value-Level Journal Diff
+
+The Phase A overlay shipped with the cheapest possible journal view: A's action names on the left, B's on the right, day-by-day. That's enough to see *that* the scenarios differ, but not *by how much* — and the data needed to do better is already on every `JournalEntry`. Each entry carries `stateDiff: [{ field, before, after, delta }, ...]` (populated by `Simulation` at reducer execution; see `src/simulation-framework/simulation.js` and `journal.js:46`). Phase A throws this away and renders the action's display name. Phase B.5 surfaces it.
+
+#### 5.4.1 The pairing problem  *(landed early — see note)*
+
+Two scenarios produce independent `JournalEntry` instances with independent `action.instanceId` UUIDs, so there is no natural cross-scenario identity. To put A's `WAGES` row next to B's `WAGES` row we need a *structural* pairing key. We use a deterministic tuple, in priority order:
+
+| Priority | Key | Rationale |
+|---|---|---|
+| 1 | `(date, event.nodeId, action.nodeId, action.data.personKey ?? accountKey ?? ownerKey)` | The strongest key: config-graph node ids (`event.nodeId` from `sourceEvent.id`, `action.nodeId` from `action._actionId` — see `simulation.js:818` and `:597`) are **identical across A and B** for any event originating from the same config node. This pairs same-source events regardless of journal-seq drift. |
+| 2 | `(date, action.type, scope)` | Type-based fallback when node ids are missing (anonymous or programmatically emitted actions). |
+| 3 | `(date, action.type)` | Coarsest fallback when no scoping key is present. |
+| 4 | Ordinal within group | When N entries on each side share the same key, pair by within-day order. Imperfect but predictable; the user can see "the 2nd of 3 WAGES rows" if needed. |
+
+Pairing is computed per-day so cross-day mismatches don't propagate. An entry that doesn't pair becomes an **A-only** or **B-only** row, rendered with the existing single-side highlight.
+
+The pairing key extraction lives in `scenario-compare-utils.js` as the pure function `journalPairKey(entry)` so it can be unit-tested without a DOM and reused by the decision-graph leaf-vs-leaf view.
+
+**Note (2026-06-04):** The pairing key and row-aligned overlay landed ahead of Phase B.5 to fix a misalignment bug in the Phase A overlay (action rows in A and B were rendered in independent journal-seq order, producing visual mismatches whenever within-day order drifted between scenarios). `journalPairKey` + `pairEntriesWithinDay` are in `scenario-compare-utils.js`; `buildJournalOverlay` now returns `pairs: [{ kind, aEntry, bEntry, key }]` per day; the presenter renders row-by-row with hidden placeholder cells so heights align; the day header surfaces `⚠:N` when N rows are unmatched. **Cross-day alignment was rejected** as unprincipled: events on different days (e.g. A's SS check on the 1st vs. B's on the 15th) represent semantically different moments and should not be aliased. What remains for Phase B.5 is the *value-level* work in §5.4.2–§5.4.6 — field-aligned `before → after` rendering, paired Δ math, divergence banner, filter modes, running NW gutter — building on top of the now-correct pairing.
+
+#### 5.4.2 What a paired row shows
+
+A paired row is no longer a single line of action name — it expands to three logical strips:
+
+```
+┌─ 2032-04-15 ─────────────────────────────────────────────────────────────┐
+│  WAGES   (person: alice)                                          [▼]    │
+│  ───────────────────────────────────────────────────────────────────     │
+│   Field                          A              B           Δ (B−A)      │
+│   usCheckingAccount.balance      80,000 →       80,000 →    +2,500       │
+│                                  82,500         85,000                   │
+│   usOrdinaryIncomeYTD             8,000 →        8,000 →    +2,500       │
+│                                  10,500         13,000                   │
+│   …                                                                      │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+Three things to notice:
+
+1. **Field-level alignment.** A's and B's `stateDiff` arrays are merged on `field` (full union, sorted by absolute delta-of-delta descending — biggest A↔B divergence first). Fields touched by only one side render `—` for the other.
+2. **Before → After per side.** Renders as a single "X → Y" cell, not three columns; the eye reads "money flowed from 80k to 82.5k" in one glance. The framework already gives us this — we just stop discarding it.
+3. **Δ (B−A) of the delta.** The headline number: how much *more* (or less) did this field move under B than under A? `(B.after − B.before) − (A.after − A.before)`. Zero deltas are dimmed; non-zero are colored pos/neg like §5.2's KPI strip.
+
+Field paths come straight from `flattenNumericState`'s convention (dot-notation; already shared with the state-diff section in `scenario-compare-utils.js`), so the same paths show up across both sections — the user can match a field in the state-diff table to its journal-entry origin without translation.
+
+A-only and B-only rows keep the existing single-side style but render the entry's own `stateDiff` array beneath the action name (single column, no pairing). The user sees "this action happened *only* in B and it moved field X by Y."
+
+#### 5.4.3 Running net worth column
+
+A running, per-side net-worth value is rendered as a tiny gutter on the right of every paired *and* unpaired row:
+
+```
+…  WAGES (alice)        A: $1,840k    B: $1,862k    Δ +$22k
+```
+
+This is `computeNetWorthUsd(stateDiff after-image)` evaluated incrementally — except `stateDiff` is a delta, not a full state. Two implementations are viable:
+
+- **Cheap.** Re-derive net worth by walking each entry's `stateDiff`, keeping a running per-side dictionary of last-known balances and recomputing the sum each row. O(entries × fields-changed). No new infrastructure.
+- **Correct.** Replay snapshots — `Journal.addSnapshot` already records full state at each event; `Journal.snapshotBefore(seq)` returns the nearest. Use those as anchors and accumulate diffs between snapshots.
+
+V1 picks **cheap** — the only consumer is a display column; if the running value drifts from the true net worth, the right-hand KPI strip is the source of truth and we adjust later.
+
+#### 5.4.4 Filter modes
+
+The day-grouped overlay gets a small filter bar above the journal section:
+
+| Mode | Effect |
+|---|---|
+| **All** (default) | Every day with at least one A or B entry. |
+| **Differs** | Only days where at least one paired row has non-zero Δ, or where A-only / B-only rows exist. The common case after the user spots a deviation in the KPI strip. |
+| **After divergence** | Detects the **first-divergence date** — the earliest day on which a paired row has non-zero Δ, or an A-only / B-only row appears — and hides everything before it. The divergence date itself gets a banner row: `── First divergence: 2031-06-15 ──`. |
+| **Field path…** | A text filter; entries whose `stateDiff` doesn't touch a matching field are hidden. Reuses the same `contains` semantics as the existing journal-report plugin's predicate engine, so users get muscle-memory. |
+
+Filters compose with the day-collapse UI — collapsing a day still shows its `A:n B:m` count, which now also includes a `Δ:k` indicator (count of paired rows with non-zero delta).
+
+#### 5.4.5 What this still does *not* do
+
+Still inside the §5.3 budget:
+
+- **No causal walk.** The journal entry already carries `action.instanceId` and `emittedInstanceIds`; the user can right-click → "Open in lineage view" and the existing `lineage` plugin handles it. We don't render emit-edges inline.
+- **No state-bucketing or rounding.** Raw deltas, raw before/after.
+- **No automated "why did B's tax payment differ from A's?" explanation.** That's the deferred insight engine.
+- **No reactive cross-highlighting** between the state-diff table and the journal overlay. The shared field-path convention is the only coupling; if click-to-highlight proves useful later, it's a small additive change.
+
+#### 5.4.6 Data flow
+
+No change to `ScenarioCompareRunner` — it already returns `journalEntries` with `stateDiff` populated. The work is entirely in `scenario-compare-utils.js` (add `journalPairKey`, extend `buildJournalOverlay` to return paired-and-field-aligned rows instead of flat action lists, add `firstDivergenceDate`, add `runningNetWorth` helper) and `scenario-compare-presenter.js` (render the new row shape; add filter bar). The plugin's CSS picks up new classes for the field-level grid (`sc-journal-fields`, `sc-journal-field-row`, `sc-journal-arrow`, `sc-journal-nw-gutter`, `sc-journal-divergence-banner`).
+
 ---
 
 ## 6. Integration with Existing Designs
@@ -243,7 +332,7 @@ This design isn't in the roadmap (which is about financial-modeling depth). It's
 
 ## 7. Implementation Phases
 
-### Phase A — Scenario comparison (small)
+### ✅ Phase A — Scenario comparison (small)
 
 1. Add `scenario-compare` workbench plugin. Reads two scenario node IDs; renders side-by-side state panel + journal overlay + summary KPIs.
 2. Reuse existing `state-panel` and `timeline` rendering — the compare plugin is a thin coordinator that runs each scenario, captures its journal + final state, and renders the diff.
@@ -251,7 +340,7 @@ This design isn't in the roadmap (which is about financial-modeling depth). It's
 
 **Exit criteria**: user can select two saved scenarios and see them side-by-side with deltas highlighted.
 
-### Phase B — Decision-graph runner (medium)
+### ✅ Phase B — Decision-graph runner (medium)
 
 4. Add `DecisionPoint`, `DecisionGraph`, `DecisionGraphRegistry` (graph-backed, `layer: 'analysis'`).
 5. Add `DecisionGraphRunner` — calls existing MC runner per leaf; produces `DecisionGraphResult`.
@@ -261,11 +350,27 @@ This design isn't in the roadmap (which is about financial-modeling depth). It's
 
 **Exit criteria**: user can declare a decision graph (e.g. SS claim age × retire age), run it, see a ranked table of leaves with per-leaf MC summaries, and open any leaf in the comparison view from Phase A.
 
-### Phase C — Polishing (small)
+### ✅ Phase B.5 — Value-level journal diff (small)
 
-9. Decision-graph leaf persistence opt-in (default: cleared between runs to save storage).
-10. Per-decision-point probability weights UI.
-11. Export ranked results to CSV.
+Splices in between B and C; no dependency on decision-graph leaves (it lifts the comparison view on its own). Detail in §5.4.
+
+- A. ✅ **Pairing key** — `journalPairKey(entry)` in `scenario-compare-utils.js`; nodeId-first (priority 1), type-based fallback (priority 2–3), ordinal fallback (priority 4). *Landed 2026-06-04 ahead of phase to fix Phase A misalignment.*
+- B. ✅ **Paired-row builder** — `mergeEntryFieldRows(aEntry, bEntry)` added; `pairEntriesWithinDay` now attaches `fieldRows: [{ field, aBefore, aAfter, aDelta, bBefore, bAfter, bDelta, deltaOfDelta }]` to every pair, sorted by `|deltaOfDelta|` descending.
+- C. ✅ **Divergence detector** — `firstDivergenceDate(overlay)` exported from `scenario-compare-utils.js`; returns first ISO date with any unmatched pair or non-zero `deltaOfDelta`, or null.
+- D. ✅ **Running net-worth column** — `runningNetWorthSeries(entries)` exported; cheap accumulator summing `*.balance` fields from running `after` dict; returns one number per entry. Used as NW gutter in the presenter.
+- E. ✅ **Presenter** — `_buildJournalSection` refactored: per-day body replaces the two-column grid; each pair rendered via `_buildPairRowEl` with field-level grid, NW gutter, and A-only/B-only side stripe. Divergence banner inserted at first-divergence day.
+- F. ✅ **Filter bar** — `_buildJournalFilterBar()` added; All / Differs / After divergence / Field path text filter; triggers `_rebuildJournalSection()` on change.
+- G. ✅ **CSS** — new classes under `assets/css/plugins/scenario-compare.css`: `sc-journal-filter-bar`, `sc-filter-btn`, `sc-journal-day-body`, `sc-journal-divergence-banner`, `sc-journal-fields-hdr`, `sc-pair-row`, `sc-pair-row-header`, `sc-pair-action-name`, `sc-journal-nw-gutter`, `sc-journal-fields`, `sc-journal-field-row`, `sc-journal-arrow`, `sc-field-name`, `sc-field-delta`.
+
+**Test coverage**: `tests/unit/evt-scenario-compare-value-diff.test.mjs` — 24 tests covering all new utils functions and `pairEntriesWithinDay` fieldRows attachment (all pass 2026-06-04).
+
+**Exit criteria met**: opening Scenario Compare for two scenarios that differ shows, per day, paired action rows with `before → after` per side, `Δ (B−A)` per field, and a divergence banner at the first day where any paired row diverges. Filter bar narrows to differing-only and post-divergence views.
+
+### ✅ Phase C — Polishing (small)
+
+9. ✅ Decision-graph leaf persistence opt-in — `DecisionGraph.persistLeaves` flag; `DecisionGraphResultStorage`; "📋" load-last button in analysis list; "Persist results" checkbox in form; presenter saves on run / loads on request.
+10. ✅ Per-decision-point probability weights UI — "Enable weights" toggle per DP; weight input per option row (with splice on remove); Ranked/Weighted mode toggle in results panel; `expectedValue` banner in Weighted view.
+11. ✅ Export ranked results to CSV — `buildDecisionGraphCsv()` in `decision-graph-csv.js`; "↓ CSV" button in results panel; RFC 4180 escaping; columns: Rank + per-DP label + P10/P50/P90/Success Rate.
 
 ---
 
@@ -277,6 +382,7 @@ EVT-X test files under `tests/unit/`:
 |---|---|
 | `evt-scenario-compare-state.test.mjs` | Side-by-side state-panel diff. |
 | `evt-scenario-compare-timeline.test.mjs` | Journal overlay; divergence date marked. |
+| `evt-scenario-compare-value-diff.test.mjs` | §5.4 — `journalPairKey` resolves the three priority tiers; paired-row builder field-aligns `stateDiff`; A-only / B-only routing; `firstDivergenceDate` returns the first day with a non-zero paired Δ or unmatched row; `runningNetWorth` matches `computeNetWorthUsd` on the final state. |
 | `evt-decision-graph-expand.test.mjs` | Cartesian product is correct; each leaf has the expected param overrides; `DERIVES_FROM` edges land. |
 | `evt-decision-graph-mc-coupling.test.mjs` | Per-leaf MC runs reproducible from seed; two runs of the same analysis produce identical results. |
 | `evt-decision-graph-aggregation.test.mjs` | Ranked order matches objective; weighted-expectation matches manual calculation. |

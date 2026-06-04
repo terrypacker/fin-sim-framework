@@ -1,0 +1,505 @@
+/* Decision Graph plugin — config and results panels */
+
+/* ── Config panel ─────────────────────────────────────────────────────────── */
+
+.dg-root {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.dg-analysis-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.dg-empty-msg {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+
+.dg-analysis-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.dg-analysis-name {
+  flex: 1;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+}
+
+.dg-analysis-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.dg-run-btn,
+.dg-edit-btn,
+.dg-delete-btn {
+  font-size: 11px;
+  padding: 1px 5px;
+  background: var(--bg-panel2);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.dg-run-btn:hover    { border-color: var(--green);  color: var(--green);  }
+.dg-edit-btn:hover   { border-color: var(--blue);   color: var(--blue);   }
+.dg-delete-btn:hover { border-color: var(--red);    color: var(--red);    }
+
+.dg-new-btn { margin-top: 6px; }
+
+.dg-status-line {
+  font-size: 10px;
+  color: var(--text-muted);
+  min-height: 14px;
+}
+
+/* ── Edit form ───────────────────────────────────────────────────────────── */
+
+.dg-form-section { margin-top: 6px; }
+
+.dg-form-header {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+
+.dg-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dg-form .node-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dg-form .node-field label {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.dg-text-input,
+.dg-num-input,
+.dg-select {
+  font-size: 11px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 3px 6px;
+  border-radius: 3px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Schema-aware param picker ───────────────────────────────────────────── */
+
+.dg-dp-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.dg-param-select {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.dg-dp-schema-info {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-style: italic;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dg-dp-custom-fields {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.dg-dp-options-section { margin-top: 2px; }
+
+/* ── Type-aware option rows ──────────────────────────────────────────────── */
+
+.dg-num-option-input {
+  width: 100px;
+  font-size: 11px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+
+.dg-date-input {
+  font-size: 11px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+
+.dg-option-readonly {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ── Range builder ───────────────────────────────────────────────────────── */
+
+.dg-range-builder {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dg-range-toggle-btn {
+  font-size: 10px;
+  padding: 1px 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 2px;
+  align-self: flex-start;
+}
+
+.dg-range-toggle-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+.dg-range-fields {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 4px 0;
+}
+
+.dg-range-fields .dg-small-input { width: 60px; flex: none; }
+
+.dg-range-gen-btn {
+  font-size: 10px;
+  padding: 2px 8px;
+  background: var(--bg-panel2);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.dg-range-gen-btn:hover { border-color: var(--green); color: var(--green); }
+
+/* ── Original items below ────────────────────────────────────────────────── */
+
+.dg-dp-section-header {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 4px;
+}
+
+.dg-dp-item {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px;
+  margin-top: 4px;
+  background: var(--bg-panel2);
+}
+
+.dg-dp-header {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.dg-small-input {
+  flex: 1;
+  font-size: 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 2px 4px;
+  border-radius: 2px;
+  min-width: 0;
+}
+
+.dg-dp-remove-btn {
+  font-size: 10px;
+  padding: 1px 4px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 2px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.dg-dp-remove-btn:hover { border-color: var(--red); color: var(--red); }
+
+.dg-options-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin: 2px 0;
+}
+
+.dg-option-list { display: flex; flex-direction: column; gap: 2px; }
+
+.dg-option-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.dg-add-dp-btn,
+.dg-add-option-btn {
+  font-size: 10px;
+  padding: 2px 6px;
+  margin-top: 4px;
+  background: var(--bg-panel2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.dg-add-dp-btn:hover,
+.dg-add-option-btn:hover { border-color: var(--purple); color: var(--purple); }
+
+.dg-form-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── Persist checkbox ────────────────────────────────────────────────────── */
+
+.dg-persist-chk { vertical-align: middle; margin-right: 4px; cursor: pointer; }
+
+.dg-load-btn {
+  font-size: 11px;
+  padding: 1px 4px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.dg-load-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+/* ── Weights UI ──────────────────────────────────────────────────────────── */
+
+.dg-weights-section {
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--border);
+}
+
+.dg-weights-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+}
+
+.dg-weights-chk { cursor: pointer; }
+
+.dg-weight-input {
+  width: 52px;
+  font-size: 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 1px 3px;
+  border-radius: 2px;
+  text-align: right;
+}
+
+/* ── Results panel ───────────────────────────────────────────────────────── */
+
+.dg-results-root {
+  padding: 8px;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.dg-results-hdr-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.dg-results-title {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.dg-mode-group {
+  display: flex;
+  gap: 2px;
+}
+
+.dg-mode-btn {
+  font-size: 10px;
+  padding: 2px 8px;
+  background: var(--bg-panel2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.dg-mode-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+.dg-mode-btn.dg-mode-active {
+  border-color: var(--blue);
+  color: var(--blue);
+  background: var(--bg-hover);
+}
+
+.dg-mode-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.dg-csv-btn {
+  font-size: 10px;
+  padding: 2px 8px;
+  background: var(--bg-panel2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.dg-csv-btn:hover { border-color: var(--green); color: var(--green); }
+
+.dg-table-area { flex: 1; overflow-y: auto; }
+
+.dg-we-banner {
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--text-primary);
+  padding: 6px 4px;
+  margin-bottom: 8px;
+  border-left: 3px solid var(--blue);
+  padding-left: 8px;
+}
+
+.dg-idle-msg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 80px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.dg-results-header {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.dg-ranked-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.dg-ranked-table th {
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: normal;
+  font-size: 10px;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.dg-ranked-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.dg-ranked-table tr:hover td { background: var(--bg-hover); }
+
+.dg-best-badge { color: var(--green); font-weight: bold; }
+
+.dg-leaf-label {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dg-muted { color: var(--text-muted); }
+
+.dg-compare-btn {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: var(--bg-panel2);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.dg-compare-btn:hover { border-color: var(--purple); color: var(--purple); }

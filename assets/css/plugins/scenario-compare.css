@@ -1,0 +1,385 @@
+/* ── SCENARIO COMPARE PLUGIN ── */
+
+.sc-pane-fill {
+  height: 100%;
+}
+
+.sc-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── Selector bar ── */
+.sc-selector-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.sc-selector-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.sc-selector-select {
+  font-size: 11px;
+  background: var(--bg-input, var(--bg-panel2));
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 2px 6px;
+  min-width: 140px;
+  max-width: 220px;
+  flex: 1;
+}
+
+.sc-compare-btn {
+  font-size: 11px;
+  padding: 3px 10px;
+  background: var(--accent, #4f9de0);
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sc-compare-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sc-status {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  flex: 1;
+  text-align: right;
+}
+
+/* ── Results area ── */
+.sc-results {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sc-idle-msg {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+}
+.sc-idle-msg span {
+  color: var(--text-dim);
+  font-size: 13px;
+  font-family: var(--font-mono);
+  text-align: center;
+  padding: 16px;
+}
+
+/* ── Section headers ── */
+.sc-section-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 3px;
+  margin-bottom: 4px;
+}
+
+/* ── KPI table ── */
+.sc-kpi-table {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 2px 6px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+.sc-kpi-hdr {
+  font-size: 10px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border-subtle, var(--border));
+  padding-bottom: 2px;
+  text-align: right;
+}
+.sc-kpi-hdr:first-child { text-align: left; }
+
+.sc-kpi-field  { color: var(--text-muted); }
+.sc-kpi-val    { text-align: right; }
+.sc-kpi-delta  { text-align: right; }
+
+.sc-kpi-delta.pos { color: #34d399; }
+.sc-kpi-delta.neg { color: #f87171; }
+
+/* ── State diff table ── */
+.sc-diff-table {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 1px 6px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+}
+
+.sc-diff-hdr {
+  font-size: 10px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border-subtle, var(--border));
+  padding-bottom: 2px;
+  text-align: right;
+}
+.sc-diff-hdr:first-child { text-align: left; }
+
+.sc-diff-field {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sc-diff-val   { text-align: right; color: var(--text); }
+.sc-diff-delta { text-align: right; }
+
+.sc-diff-delta.pos { color: #34d399; }
+.sc-diff-delta.neg { color: #f87171; }
+.sc-diff-delta.zero { color: var(--text-dim); }
+
+/* ── Journal overlay ── */
+.sc-journal-overlay {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+}
+
+.sc-journal-day {
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.sc-journal-day-count {
+  color: var(--text-dim);
+}
+
+.sc-empty-msg {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.sc-journal-day-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  background: var(--bg-active, var(--bg-panel2));
+  color: var(--text-dim);
+  font-size: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.sc-journal-day-header:hover { background: var(--bg-panel2); }
+
+.sc-journal-day-toggle { font-size: 8px; }
+
+.sc-journal-day-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border-top: 1px solid var(--border);
+}
+
+.sc-journal-col-a,
+.sc-journal-col-b {
+  padding: 3px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sc-journal-col-a { border-right: 1px solid var(--border); }
+
+.sc-journal-entry {
+  padding: 1px 3px;
+  border-radius: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sc-journal-entry.a-only { color: #60a5fa; }
+.sc-journal-entry.b-only { color: #f472b6; }
+.sc-journal-entry.both   { color: var(--text-muted); }
+.sc-journal-entry.placeholder {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.sc-journal-col-label {
+  font-size: 9px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border-subtle, var(--border));
+  margin-bottom: 2px;
+  padding-bottom: 1px;
+}
+
+/* ── Phase B.5: filter bar ── */
+.sc-journal-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0 6px;
+  flex-wrap: wrap;
+}
+
+.sc-filter-btn {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-panel2);
+  color: var(--text-dim);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sc-filter-btn:hover { color: var(--text); }
+.sc-filter-btn.active {
+  background: var(--accent, #4f9de0);
+  color: #fff;
+  border-color: var(--accent, #4f9de0);
+}
+
+.sc-filter-field-input {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-input, var(--bg-panel2));
+  color: var(--text);
+  min-width: 120px;
+}
+
+/* ── Phase B.5: day body replaces day-grid ── */
+.sc-journal-day-body {
+  border-top: 1px solid var(--border);
+  padding: 4px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* ── Phase B.5: divergence banner ── */
+.sc-journal-divergence-banner {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: #f59e0b;
+  text-align: center;
+  padding: 3px 0;
+  border-top: 1px dashed #f59e0b44;
+  border-bottom: 1px dashed #f59e0b44;
+  margin: 2px 0;
+}
+
+/* ── Phase B.5: field-grid column header ── */
+.sc-journal-fields-hdr {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 1.5fr 1fr;
+  gap: 0 6px;
+  font-size: 9px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  padding: 1px 3px 3px;
+  border-bottom: 1px solid var(--border-subtle, var(--border));
+}
+
+/* ── Phase B.5: pair row ── */
+.sc-pair-row {
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.sc-pair-row.a-only { border-left: 2px solid #60a5fa; }
+.sc-pair-row.b-only { border-left: 2px solid #f472b6; }
+.sc-pair-row.paired { border-left: 2px solid var(--border); }
+
+.sc-pair-row-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  background: var(--bg-active, var(--bg-panel2));
+  cursor: default;
+}
+
+.sc-pair-action-name {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sc-pair-row.a-only .sc-pair-action-name { color: #60a5fa; }
+.sc-pair-row.b-only .sc-pair-action-name { color: #f472b6; }
+
+/* ── Phase B.5: running NW gutter ── */
+.sc-journal-nw-gutter {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Phase B.5: field grid ── */
+.sc-journal-fields {
+  padding: 2px 6px 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sc-journal-field-row {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 1.5fr 1fr;
+  gap: 0 6px;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--text);
+  align-items: baseline;
+}
+.sc-journal-field-row.zero-delta { opacity: 0.45; }
+
+.sc-field-name {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sc-journal-arrow {
+  text-align: right;
+  color: var(--text-dim);
+}
+.sc-journal-arrow.missing { color: var(--text-dim); opacity: 0.5; }
+
+.sc-field-delta { text-align: right; }
+.sc-field-delta.pos  { color: #34d399; }
+.sc-field-delta.neg  { color: #f87171; }
+.sc-field-delta.zero { color: var(--text-dim); }

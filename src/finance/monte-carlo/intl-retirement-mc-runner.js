@@ -157,7 +157,8 @@ export class IntlRetirementMcRunner {
         }
         new ScenarioLoader().load(cfg, registry);
 
-        scenario.sim.silent = true; // skip bus, clones, diffs — not needed in MC
+        scenario.sim.silent = true;           // skip bus, clones, diffs — not needed in MC
+        scenario.sim.journal.enabled = false; // skip journal — not needed in MC (would waste memory)
         return scenario.sim;
       },
       evaluate: (sim) => ({

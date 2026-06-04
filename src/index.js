@@ -39,6 +39,12 @@ import { InvestmentAccount, BrokerageAccount, FourOhOneKAccount, RothAccount, Tr
 import { RealProperty } from './finance/assets/real-property.js';
 import { AccountBuilder } from './finance/builders/account-builder.js';
 import { PersonBuilder } from './finance/builders/person-builder.js';
+import { buildDecisionGraphCsv } from './finance/decision-graph/decision-graph-csv.js';
+import { DecisionPoint, DecisionGraph } from './finance/decision-graph/decision-graph-models.js';
+import { DecisionGraphRegistry } from './finance/decision-graph/decision-graph-registry.js';
+import { DecisionGraphResultStorage } from './finance/decision-graph/decision-graph-result-storage.js';
+import { DecisionGraphRunner } from './finance/decision-graph/decision-graph-runner.js';
+import { DecisionGraphStorage } from './finance/decision-graph/decision-graph-storage.js';
 import { AddRegimeReducer } from './finance/economic-regimes/add-regime-reducer.js';
 import { EconomicRecoveryTickHandler } from './finance/economic-regimes/economic-recovery-tick-handler.js';
 import { EconomicShockHandler } from './finance/economic-regimes/economic-shock-handler.js';
@@ -95,6 +101,8 @@ import { SetOutOfFundsDateReducer } from './finance/reducers/set-out-of-funds-da
 import { StockDividendCashApplyReducer } from './finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { UsSavingsInterestCreditReducer } from './finance/reducers/us-savings-interest-credit-reducer.js';
 import { getResidency, isResident, residentsOf, getBirthDate } from './finance/residency-utils.js';
+import { ScenarioCompareRunner } from './finance/scenario-compare/scenario-compare-runner.js';
+import { flattenNumericState, computeStateDiff, journalPairKey, mergeEntryFieldRows, pairEntriesWithinDay, firstDivergenceDate, runningNetWorthSeries, buildJournalOverlay } from './finance/scenario-compare/scenario-compare-utils.js';
 import { AccountService } from './finance/services/account-service.js';
 import { AssetService } from './finance/services/asset-service.js';
 import { CollectibleService } from './finance/services/collectible-service.js';
@@ -228,6 +236,9 @@ import { MapFilterMultiSelect } from './visualization/components/map-filter-mult
 import { NodeEditModal } from './visualization/components/node-edit-modal.js';
 import { ReducerEditor } from './visualization/components/reducer-editor.js';
 import { ConfigurationListComponent } from './visualization/configuration/configuration-list.js';
+import { DecisionGraphPresenter } from './visualization/decision-graph/decision-graph-presenter.js';
+import { DgConfigPanel } from './visualization/decision-graph/dg-config-panel.js';
+import { DgResultsPanel } from './visualization/decision-graph/dg-results-panel.js';
 import { BaseGraphView } from './visualization/graph-builder/base-graph-view.js';
 import { detectMidXObstacles, chooseClearMidX } from './visualization/graph-builder/collision-detector.js';
 import { ColumnLayout } from './visualization/graph-builder/column-layout.js';
@@ -258,6 +269,7 @@ import { PersonEditor } from './visualization/people/person-editor.js';
 import { ScenarioTabController } from './visualization/scenario/scenario-tab-controller.js';
 import { ScenarioTabPresenter } from './visualization/scenario/scenario-tab-presenter.js';
 import { ScenarioTabView } from './visualization/scenario/scenario-tab-view.js';
+import { ScenarioComparePresenter } from './visualization/scenario-compare/scenario-compare-presenter.js';
 import { DashCardsComponent } from './visualization/simulation/dash-cards-component.js';
 import { PlaybackProgressComponent } from './visualization/simulation/playback-progress-component.js';
 import { SimulationAnimator } from './visualization/simulation/simulation-animator.js';
@@ -273,7 +285,7 @@ import { WorkbenchComponent } from './visualization/workbench/component.js';
 import { WorkbenchLayoutModel } from './visualization/workbench/layout-model.js';
 import { PluginRegistry } from './visualization/workbench/plugin-registry.js';
 import { PLUGIN_CATEGORIES, PLUGIN_PANES, definePlugin } from './visualization/workbench/plugin-sdk.js';
-import { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, JournalReportPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
+import { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, JournalReportPlugin, ScenarioComparePlugin, DgConfigPlugin, DgResultsPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
 import { SplitPane } from './visualization/workbench/split-pane.js';
 import { TabGroup } from './visualization/workbench/tab-group.js';
 import { WB_EVENTS, WorkbenchRuntime } from './visualization/workbench/workbench-runtime.js';
@@ -439,6 +451,13 @@ export const Finance = {
   RealProperty,
   AccountBuilder,
   PersonBuilder,
+  buildDecisionGraphCsv,
+  DecisionPoint,
+  DecisionGraph,
+  DecisionGraphRegistry,
+  DecisionGraphResultStorage,
+  DecisionGraphRunner,
+  DecisionGraphStorage,
   AddRegimeReducer,
   EconomicRecoveryTickHandler,
   EconomicShockHandler,
@@ -540,6 +559,15 @@ export const Finance = {
   isResident,
   residentsOf,
   getBirthDate,
+  ScenarioCompareRunner,
+  flattenNumericState,
+  computeStateDiff,
+  journalPairKey,
+  mergeEntryFieldRows,
+  pairEntriesWithinDay,
+  firstDivergenceDate,
+  runningNetWorthSeries,
+  buildJournalOverlay,
   AccountService,
   AssetService,
   CollectibleService,
@@ -755,6 +783,9 @@ export const Visualization = {
   NodeEditModal,
   ReducerEditor,
   ConfigurationListComponent,
+  DecisionGraphPresenter,
+  DgConfigPanel,
+  DgResultsPanel,
   BaseGraphView,
   detectMidXObstacles,
   chooseClearMidX,
@@ -806,6 +837,7 @@ export const Visualization = {
   ScenarioTabController,
   ScenarioTabPresenter,
   ScenarioTabView,
+  ScenarioComparePresenter,
   DashCardsComponent,
   PlaybackProgressComponent,
   SimulationAnimator,
@@ -857,6 +889,9 @@ export const FinancePlugins = {
   PerfPlugin,
   ActionDetailPlugin,
   JournalReportPlugin,
+  ScenarioComparePlugin,
+  DgConfigPlugin,
+  DgResultsPlugin,
   FINANCE_PLUGINS,
   FINANCE_DEFAULT_LAYOUT,
 };

@@ -67,6 +67,8 @@ import {
   FINANCE_DEFAULT_LAYOUT,
 } from '../visualization/workbench/plugins/finance/finance-plugin-package.js';
 import { WB_EVENTS } from '../visualization/workbench/workbench-runtime.js';
+import { ScenarioComparePresenter }  from '../visualization/scenario-compare/scenario-compare-presenter.js';
+import { DecisionGraphPresenter }    from '../visualization/decision-graph/decision-graph-presenter.js';
 
 const STORAGE_KEY = 'sim-workbench-layout-prod';
 
@@ -148,6 +150,8 @@ export class WorkbenchApp extends BaseComponent {
     this._animator             = null;
     this.mcPresenter           = null;
     this.optPresenter          = null;
+    this.comparePresenter      = null;
+    this.dgPresenter           = null;
     this._graphNodeInspector   = null;
     this._graphNodeExecHistory = null;
     this._graphNodeLineage     = null;
@@ -534,6 +538,34 @@ export class WorkbenchApp extends BaseComponent {
     });
     this.mcPresenter.onReplayRun = (run) => this._replayMcRun(run);
 
+    // ── Scenario Compare ─────────────────────────────────────────────────────
+    const comparePaneEl = document.getElementById('scenarioComparePane');
+    if (comparePaneEl) {
+      this.comparePresenter = new ScenarioComparePresenter({
+        containerEl:      comparePaneEl,
+        scenarioRegistry: registry.scenarioRegistry,
+      });
+    }
+
+    // ── Decision Graph ────────────────────────────────────────────────────────
+    const dgConfigEl   = document.getElementById('dgConfigPane');
+    const dgResultsEl  = document.getElementById('dgResultsPane');
+    if (dgConfigEl && dgResultsEl) {
+      this.dgPresenter = new DecisionGraphPresenter({
+        configContainerEl:  dgConfigEl,
+        resultsContainerEl: dgResultsEl,
+        dgRegistry:         registry.dgRegistry,
+        scenarioRegistry:   registry.scenarioRegistry,
+        resultStorage:      registry.dgResultStorage,
+      });
+      this.dgPresenter.onCompareLeaf = async (leafEntry, baseEntry) => {
+        if (this.comparePresenter) {
+          await this.comparePresenter.compareDirect(baseEntry, leafEntry);
+          this._wbShell?.activatePlugin('scenario-compare');
+        }
+      };
+    }
+
     // ── Optimization ──────────────────────────────────────────────────────────
     this.optPresenter = new OptimizationPresenter({
       controller: new OptimizationController(),
@@ -599,6 +631,8 @@ export class WorkbenchApp extends BaseComponent {
     if (this.timelinePresenter) this.timelinePresenter.destroy();
     if (this.mcPresenter)       this.mcPresenter.destroy();
     if (this.optPresenter)      this.optPresenter.destroy();
+    if (this.comparePresenter)  this.comparePresenter.destroy();
+    if (this.dgPresenter)       this.dgPresenter.destroy();
   }
 
   // ── Simulation controls ────────────────────────────────────────────────────
