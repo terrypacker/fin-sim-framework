@@ -69,6 +69,8 @@ export class ServiceRegistry {
     this.schemaRegistry     = new StateSchemaRegistry();
     this.scenarioRegistry   = new ScenarioRegistry(new ScenarioStorage(), this.graph);
     this.scenarioService    = new ScenarioService(this.bus, this.scenarioRegistry);
+    this.dgRegistry         = new DecisionGraphRegistry(new DecisionGraphStorage(), this.graph);
+    this.dgResultStorage    = new DecisionGraphResultStorage();
     this.simulationRegistry = new SimulationRegistry();
 
     this.simulationSync     = new SimulationSync({
