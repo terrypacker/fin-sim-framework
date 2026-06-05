@@ -292,6 +292,9 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
 
   call({ state }) {
     const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
+    // Dividends are paid pro-rata across holdings using the configured
+    // dividendRate (a future design 28 extension may swap this for a
+    // per-holding dividendYield; the substrate is ready for it).
     const { amount, holdingActions } = computeHoldingsGrowth({
       state, stateKey,
       rateOverride:    this.dividendRate,
@@ -529,6 +532,7 @@ export class SuperEarningsHandler extends HandlerEntry {
     const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
     const { amount, holdingActions } = computeHoldingsGrowth({
       state, stateKey,
+      // data.rate is a one-off override that bypasses the effective-rate map.
       rateOverride:    data?.rate ?? null,
       fallbackRate:    this.defaultRate,
       fallbackRateKey: this.rateKey,
