@@ -106,6 +106,10 @@ export const INTL_RETIREMENT_DEFAULTS = {
 
   // US Retirement — Social Security
   primarySsClaimAge: 67,  // FRA; varying has no effect until TODO #292 is resolved
+
+  // Real Property sale years (null = no planned sale; set to override property's own plannedSaleYear)
+  usHouseSaleYear: null,
+  auHouseSaleYear: null,
 };
 
 /**
@@ -296,6 +300,22 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     defaultValue: INTL_RETIREMENT_DEFAULTS.auSavingsMinBalance,
     description: 'Minimum AU cash reserve before drawing investments',
     node: { type: 'account', stateKey: 'auSavingsAccount', field: 'minimumBalance' },
+  },
+
+  // ── Real Properties ────────────────────────────────────────────────────────
+  {
+    key: 'usHouseSaleYear', label: 'US House Sale Year',
+    type: 'Number', group: 'Real Properties', mc: true, opt: true,
+    defaultValue: INTL_RETIREMENT_DEFAULTS.usHouseSaleYear,
+    description: 'Calendar year of planned US house sale (null = no planned sale)',
+    node: { type: 'realProperty', stateKey: 'usHouseProperty', field: 'plannedSaleYear' },
+  },
+  {
+    key: 'auHouseSaleYear', label: 'AU House Sale Year',
+    type: 'Number', group: 'Real Properties', mc: true, opt: true,
+    defaultValue: INTL_RETIREMENT_DEFAULTS.auHouseSaleYear,
+    description: 'Calendar year of planned AU house sale (null = no planned sale)',
+    node: { type: 'realProperty', stateKey: 'auHouseProperty', field: 'plannedSaleYear' },
   },
 
 ];
@@ -525,12 +545,14 @@ export class IntlRetirementScenario extends BaseScenario {
           value: 1_000_000, costBasis: 800_000, appreciationRate: 0.04,
           isPrimaryResidence: true, ownershipType: 'joint', ownerId: 'primary',
           country: 'US',
+          ...(p.usHouseSaleYear != null ? { plannedSaleYear: p.usHouseSaleYear } : {}),
         },
         {
           __type: 'RealProperty', name: 'AU House', stateKey: 'auHouseProperty',
           value: 1_000_000, costBasis: 900_000, appreciationRate: 0.04,
           isPrimaryResidence: true, ownershipType: 'joint', ownerId: 'primary',
           country: 'AU',
+          ...(p.auHouseSaleYear != null ? { plannedSaleYear: p.auHouseSaleYear } : {}),
         },
       ],
 
@@ -612,5 +634,29 @@ export class IntlRetirementScenario extends BaseScenario {
       simStart: simStart ?? new Date(Date.UTC(2026, 0, 1)),
       simEnd:   simEnd ?? new Date(Date.UTC(2041, 0, 1)),
     });
+  }
+}
+
+/**
+ * Patch real property sale year params into a serialized scenario cfg.
+ *
+ * When MC or OPT perturbs usHouseSaleYear / auHouseSaleYear, the perturbed
+ * value lives in params but the toolsets read from cfg.realProperties[i].plannedSaleYear.
+ * This function bridges that gap: it finds each property by stateKey and
+ * overwrites its plannedSaleYear when the corresponding param is non-null.
+ *
+ * Rounding to integer guards against floating-point samples from NORMAL distributions.
+ *
+ * @param {object} cfg    - Mutable clone of the serialized scenario config.
+ * @param {object} params - Perturbed parameter map.
+ */
+export function applyRealPropertySaleYearParams(cfg, params) {
+  if (!Array.isArray(cfg.realProperties)) return;
+  for (const prop of cfg.realProperties) {
+    if (prop.stateKey === 'usHouseProperty' && params.usHouseSaleYear != null) {
+      prop.plannedSaleYear = Math.round(params.usHouseSaleYear);
+    } else if (prop.stateKey === 'auHouseProperty' && params.auHouseSaleYear != null) {
+      prop.plannedSaleYear = Math.round(params.auHouseSaleYear);
+    }
   }
 }

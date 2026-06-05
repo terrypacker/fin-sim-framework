@@ -192,6 +192,14 @@ export class BaseScenario extends SimGraphNode {
         if (node.field === 'initialValue' && this.initialState?.[node.stateKey]) {
           this.initialState[node.stateKey].balance = val;
         }
+      } else if (node.type === 'realProperty') {
+        const realPropertyService = this.context?.realPropertyService;
+        const prop = realPropertyService?.getAll().find(p => p.stateKey === node.stateKey);
+        if (prop) {
+          realPropertyService.updateProperty(prop, {
+            [node.field]: val != null ? Math.round(val) : val,
+          });
+        }
       }
     }
   }
