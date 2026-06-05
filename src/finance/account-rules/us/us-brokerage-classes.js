@@ -32,12 +32,8 @@ export class FixedIncomeContributionApplyReducer extends AccountServiceReducer {
 
   reduce(state, action) {
     this.accountService.transaction(usCash(state), -action.amount, null);
-    return this.newState(state, {
-      fixedIncomeAccount: {
-        ...state.fixedIncomeAccount,
-        balance: state.fixedIncomeAccount.balance + action.amount,
-      },
-    });
+    this.accountService.transaction(state.fixedIncomeAccount, action.amount, null);
+    return this.newState(state, {});
   }
 }
 
@@ -55,12 +51,8 @@ export class FixedIncomeWithdrawalApplyReducer extends AccountServiceReducer {
 
   reduce(state, action) {
     this.accountService.transaction(usCash(state), action.amount, null);
-    return this.newState(state, {
-      fixedIncomeAccount: {
-        ...state.fixedIncomeAccount,
-        balance: state.fixedIncomeAccount.balance - action.amount,
-      },
-    });
+    this.accountService.transaction(state.fixedIncomeAccount, -action.amount, null);
+    return this.newState(state, {});
   }
 }
 
@@ -112,12 +104,9 @@ export class StockContributionApplyReducer extends AccountServiceReducer {
     this.accountService.transaction(usCash(state), -action.amount, null);
     const key = action.stateKey ?? 'usStockAccount';
     const sa = state[key];
+    this.accountService.transaction(sa, action.amount, null);
     return this.newState(state, {
-      [key]: {
-        ...sa,
-        balance:           sa.balance           + action.amount,
-        contributionBasis: sa.contributionBasis + action.amount,
-      },
+      [key]: { ...sa, contributionBasis: sa.contributionBasis + action.amount },
     });
   }
 }
