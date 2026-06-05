@@ -1,52 +1,49 @@
 # 25a — Monte Carlo Config: Nested Parameter Paths
 
-**Status**: Draft
+**Status**: Ready for implementation (priority — lands before designs 26/27)
 **Phase**: A — Substrate (per `design/24-financial-modeling-roadmap.md` §5; peer to `design/25-holding-level-state.md`)
-**Related**: `design/21-financial-shock-and-regime-framework.md` §15 (originally flagged the need for nested-path MC sweeps), `design/24-financial-modeling-roadmap.md` §4.4, `design/27-mortality-and-survivor-mechanics.md` (downstream consumer — per-person lifespan draws), `design/25-holding-level-state.md` (peer substrate piece; no direct dependency).
-**Author note**: Small, contained, shippable independently of design 25. Lands as shared substrate so design 21 Phase 2 (shock-MC) and design 27 (mortality-MC) don't each invent their own version. Touch surface is `IntlRetirementMcConfig` + the MC UI; the simulation engine itself is unaffected.
+**Driving consumer**: **Multi-shock MC sweeps.** The flat `shockSeverity` / `shockStartDate` overlay (a translation-era workaround) can only perturb `shocks[0]`. This design replaces that overlay with proper nested-path sweeping so a scenario carrying *N* shocks can sweep every shock's `severity` / `startDate` (and deeper fields) independently in one MC run.
+**Related**: `design/21-financial-shock-and-regime-framework.md` §15 (flagged nested-path MC sweeps), `design/24-financial-modeling-roadmap.md` §4.4, `design/26-dynamic-spending-strategies.md` §12 (healthcare-MC consumer), `design/27-mortality-and-survivor-mechanics.md` (per-person lifespan draws), `design/25-holding-level-state.md` (peer substrate; no direct dependency).
+**Author note**: Rescoped 2026-06-05. The original skeleton treated nested paths as future-proofing; the real, immediate need is fixing multi-shock MC. The runner section is corrected to match the actual two-stage param flow (`_resolveBaseParams` → `_perturb` → `createSimulation` merge), which the original pseudocode glossed over.
 
 ---
 
 ## 1. Purpose
 
-`IntlRetirementMcConfig` today only sweeps **flat top-level scenario parameters**: every `paramKey` in `DEFAULT_MC_VARIABLE_CONFIGS` is a string that maps directly to a key in the scenario's `parameters` map (`rothGrowthRate`, `usInflationRate`, `exchangeRateUsdToAud`, etc.). Two upcoming features need to sweep **structured** parameters that don't fit this flat-key shape:
+`IntlRetirementMcConfig` sweeps **flat top-level scenario parameters**: every `paramKey` in `DEFAULT_MC_VARIABLE_CONFIGS` maps directly to a key in the scenario's `parameters` map (`rothGrowthRate`, `usInflationRate`, …). The MC runner's choke point is a direct assignment `perturbed[cfg.paramKey] = sample` (`intl-retirement-mc-runner.js:227`).
 
-- **Shock-MC (design 21 Phase 2).** A scenario carries `scenarioParams.shocks: FinancialShock[]`. MC needs to perturb `shocks[0].severity`, `shocks[0].recovery.durationMonths`, `shocks[1].levelEffects.equityRevaluation.multiplier`, etc. — addresses inside a structured array, not top-level keys.
-- **Mortality-MC (design 27).** Each person on a scenario has a `lifeExpectancy` (and per-person actuarial draws are the whole point of MC mortality). MC needs to address `people.primary.lifeExpectancy`, `people.spouse.lifeExpectancy` independently and on a per-person basis.
+Two things don't fit the flat shape:
 
-A scoped extension of `IntlRetirementMcConfig` to understand **path-walking parameter keys** solves both consumers with the same primitive. This is the only design needed; `IntlRetirementOptConfig` follows the same path-walker once the contract is set, but its migration is its own follow-up.
+1. **Multi-shock sweeps (driving consumer).** A scenario carries `parameters.shocks: ShockEntry[]` (the `ShockList` param, `economic-regimes-toolset.js:196`). Today MC can only perturb the *first* shock, and only via two flat override keys (`shockSeverity`, `shockStartDate`) that `applyShockOverlay` maps onto `shocks[0]` (`economic-regimes-toolset.js:98-126`, `schedules()` line 259 — `if (i === 0)`). A scenario with two shocks (a 2030 equity crash *and* a 2035 rate spike) cannot sweep the second shock at all. **This is the feature that got mangled in translation and this design restores it.**
+2. **Per-person / nested future consumers.** Mortality-MC (design 27) wants `people.primary.lifeExpectancy`; healthcare-MC (design 26) wants `healthcare.*`. These ride the same primitive once it exists.
+
+A scoped extension of `IntlRetirementMcConfig` to understand **path-walking parameter keys** plus a **contributor hook** that generates one MC variable per shock-array entry solves the driving consumer and the future ones with the same primitive.
 
 ---
 
-## 2. Today's shape
+## 2. Today's shape (verified against code)
 
-`DEFAULT_MC_VARIABLE_CONFIGS` is a flat array of records. Each entry maps a top-level scenario param key to a distribution:
+`DEFAULT_MC_VARIABLE_CONFIGS` is a flat array; each record maps a top-level key to a distribution. The runner consumes them in `_perturb`:
 
 ```js
-// src/finance/monte-carlo/intl-retirement-mc-config.js (existing)
-{
-  paramKey: 'rothGrowthRate',
-  label:    'Roth IRA Growth Rate',
-  type:     DISTRIBUTION_TYPES.NORMAL,
-  mean:     D.rothGrowthRate,
-  stdDev:   0.03,
-  group:    'US Account Rates',
-  enabled:  true,
+// intl-retirement-mc-runner.js (current)
+_perturb(baseParams, i) {
+  const rng       = makeSeededRng(i + 1);
+  const perturbed = { ...baseParams };          // ← shallow spread
+  for (const cfg of this.variableConfigs) {
+    if (cfg.enabled)               perturbed[cfg.paramKey] = createDistribution(cfg).sample(rng);
+    else if (!(cfg.paramKey in baseParams)) perturbed[cfg.paramKey] = cfg.value ?? cfg.mean;
+  }
+  return perturbed;
 }
 ```
 
-The MC runner consumes these via something like:
+Two facts that shape the design:
 
-```js
-// pseudocode inside IntlRetirementMcRunner
-for (const cfg of variableConfigs) {
-  const value = sampleDistribution(cfg, rng);
-  params[cfg.paramKey] = value;
-}
-const cfg = IntlRetirementScenario.buildAndCompile({ params, … });
-```
+- **`baseParams` already carries structured values.** `monte-carlo-presenter._resolveBaseParams()` (line 97) flattens the scenario's `[{key,value}]` param array into `{ key: value }`. The `shocks` param is one such key, so **`baseParams.shocks` is the full `ShockEntry[]`** — the base tree for nested shock paths is already in hand; no need to reach into `cfgTemplate.parameters`.
+- **The shallow spread is a latent mutation bug for nested writes.** `perturbed.shocks` is the *same array reference* as `baseParams.shocks` (and the live scenario's). A direct `perturbed[cfg.paramKey] = …` flat write is safe, but a nested `set(perturbed, 'shocks[0].severity', v)` would mutate the shared array — leaking iteration state across runs and back into the user's scenario. `structuredClone` per iteration (§4) closes this.
 
-`params[cfg.paramKey] = value` is the choke point. It assumes `paramKey` is a top-level string key.
+Downstream, `createSimulation(params)` shallow-merges `cfg.parameters = { ...cfg.parameters, ...params }` (`intl-retirement-mc-runner.js:151`). When `params.shocks` is a fully-perturbed array, the shallow merge replaces `cfg.parameters.shocks` wholesale — correct, because the perturbed array is complete.
 
 ---
 
@@ -54,137 +51,145 @@ const cfg = IntlRetirementScenario.buildAndCompile({ params, … });
 
 ### 3.1 Path-walking `paramKey`
 
-`paramKey` is extended to accept a **path expression** addressing a value nested inside the scenario's parameters tree. Two surface forms are supported:
+`paramKey` accepts a **path expression** addressing a value nested inside the params tree:
 
-| Form | Example | Meaning |
+| Form | Example | Sets |
 |---|---|---|
-| Top-level (existing) | `rothGrowthRate` | Sets `params.rothGrowthRate` |
-| Dot path | `people.primary.lifeExpectancy` | Sets `params.people.primary.lifeExpectancy` |
-| Bracketed index | `shocks[0].severity` | Sets `params.shocks[0].severity` |
-| Mixed | `shocks[0].levelEffects.equityRevaluation.multiplier` | Sets the multiplier inside the first shock's equity-revaluation block |
+| Top-level (existing) | `rothGrowthRate` | `params.rothGrowthRate` |
+| Dot path | `people.primary.lifeExpectancy` | `params.people.primary.lifeExpectancy` |
+| Bracketed index | `shocks[0].severity` | `params.shocks[0].severity` |
+| Mixed / deep | `shocks[1].recovery.durationMonths` | the second shock's recovery duration |
 
-A small `set(obj, path, value)` helper walks the path, creating intermediate objects/arrays only when the segment after them already exists in the source `params` (no implicit shape inference — the source must already carry the structure being addressed). The reverse `get(obj, path)` is used by the UI to display current default values and by the runner to read base values during sweeps.
-
-Path parsing: `'people.primary.lifeExpectancy'.split(/\.|\[(\d+)\]\.?/).filter(Boolean)` yields `['people', 'primary', 'lifeExpectancy']`. Bracketed segments coerce to numeric array indices. A single regex covers the surface — no parser library, no recursive descent.
-
-### 3.2 Backward compatibility
-
-Every existing top-level `paramKey` continues to work unchanged — it's just a one-segment path. The `set`/`get` helpers degrade naturally to direct key writes on top-level paths. Nothing in `DEFAULT_MC_VARIABLE_CONFIGS` changes for the §2 entries; the new shape opens up additional entries that designs 21 / 27 will register through their own config-extension hooks (§3.4).
-
-### 3.3 Per-iteration default tree resolution
-
-For top-level params, `mean` / `value` in a `VariableConfig` reads from `INTL_RETIREMENT_DEFAULTS`. For nested params, the **default tree** also needs to come from somewhere structured:
-
-- **Shocks** — the scenario's `parameters.shocks` array is the source; `shocks[0].severity` defaults to whatever the scenario configured.
-- **People** — `parameters.people.primary.lifeExpectancy` defaults to the live `Person.lifeExpectancy` value at scenario-build time.
-
-`IntlRetirementMcConfig` grows a `resolveDefault(paramKey)` method that takes a path and returns the current value from the **base scenario's parameters tree**, computed once per MC sweep (not per iteration — the base tree doesn't change inside a sweep). This is the same idea as today's `D.rothGrowthRate` lookup, generalized to paths.
+A small `mc-param-paths.js` module exports `get(obj, path)` and `set(obj, path, value)`. Both parse via one regex:
 
 ```js
-// pseudocode
-resolveDefault(paramKey) {
-  return get(this.baseParams, paramKey);
-}
+const segments = path.split(/\.|\[(\d+)\]\.?/).filter(Boolean); // 'shocks[1].severity' → ['shocks','1','severity']
 ```
 
-`VariableConfig` records that omit `mean` / `value` and only carry a distribution shape (`stdDev`, `min`, `max`) read the mean from `resolveDefault(paramKey)`. This keeps the UI declarative: a config record can describe "a normal centered on whatever the scenario currently has, with stdDev 2 years" without baking the center value into the record.
+Numeric segments coerce to array indices. `set` walks the path and **only traverses segments that already exist** in the (cloned) source tree — no implicit shape inference. If an intermediate is missing, `set` is a no-op and `get` returns `undefined` (used by validation §5 to drop stale configs). Top-level paths degrade to direct key access, so every existing flat config keeps working unchanged.
 
-### 3.4 Config-extension hook
+### 3.2 Contributor hook + dynamic shock variables
 
-The current `DEFAULT_MC_VARIABLE_CONFIGS` is a hard-coded array; only `IntlRetirementScenario` contributes. Once shocks and mortality consumers exist, each wants to register their own MC variables. The hook is:
+`DEFAULT_MC_VARIABLE_CONFIGS` is hard-coded today. Add a contributor registry so a toolset can register MC variables computed from the live param tree:
 
 ```js
-// src/finance/monte-carlo/intl-retirement-mc-config.js (extended)
+// intl-retirement-mc-config.js (extended)
 export class IntlRetirementMcConfig {
   static contributors = [
-    () => DEFAULT_MC_VARIABLE_CONFIGS,   // existing top-level params
-    // design 21 Phase 2 registers:
-    //   ({ scenarioParams }) => buildShockMcConfigs(scenarioParams.shocks),
-    // design 27 registers:
-    //   ({ scenarioParams }) => buildMortalityMcConfigs(scenarioParams.people),
+    () => DEFAULT_MC_VARIABLE_CONFIGS,            // existing flat params
+    ({ params }) => buildShockMcConfigs(params),  // NEW — one set of vars per configured shock
+    // design 27: ({ params }) => buildMortalityMcConfigs(params),
   ];
 
-  buildVariables(scenarioParams) {
+  buildVariables(params) {
     return this.constructor.contributors
-      .flatMap(fn => fn({ scenarioParams }))
-      .map(cfg => ({
-        ...cfg,
-        defaultValue: get(scenarioParams, cfg.paramKey),
-      }));
+      .flatMap(fn => fn({ params }))
+      .filter(cfg => get(params, cfg.paramKey) !== undefined)   // drop unresolvable (warn)
+      .map(cfg => ({ ...cfg, defaultValue: get(params, cfg.paramKey) }));
   }
 }
 ```
 
-Contributors are registered by the owning module at import time, the same pattern `TypeRegistry` uses. The contract: a contributor returns `VariableConfig[]`; each record's `paramKey` is a path the §3.1 helpers can walk.
-
-### 3.5 Runner change
+`buildShockMcConfigs(params)` reads `params.shocks ?? []` and emits, **per shock index `i`**, a small set of nested-path variables:
 
 ```js
-// pseudocode inside IntlRetirementMcRunner
-const variables = mcConfig.buildVariables(baseParams);
-for (let i = 0; i < N; i++) {
-  const iterParams = structuredClone(baseParams);
-  for (const cfg of variables) {
-    if (!cfg.enabled) continue;
-    const value = sampleDistribution(cfg, rng);
-    set(iterParams, cfg.paramKey, value);
-  }
-  const result = IntlRetirementScenario.buildAndCompile({ params: iterParams, … });
-  // …record result…
+function buildShockMcConfigs(params) {
+  const shocks = params.shocks ?? [];
+  return shocks.flatMap((entry, i) => {
+    const label = entry.preset ?? entry.shockId ?? `Shock ${i + 1}`;
+    return [
+      { paramKey: `shocks[${i}].severity`,  label: `${label}: severity`,
+        type: NORMAL,       mean: undefined /* resolveDefault */, stdDev: 0.10,
+        group: 'Economic Shocks', enabled: false },
+      { paramKey: `shocks[${i}].startDate`, label: `${label}: start date`,
+        type: UNIFORM_DATE, min: '2028-01-01', max: '2035-01-01',
+        group: 'Economic Shocks', enabled: false },
+    ];
+  });
 }
 ```
 
-Two surface changes from today: (a) `structuredClone(baseParams)` per iteration so nested writes don't mutate the base tree; (b) `set(iterParams, cfg.paramKey, value)` replaces the direct key assignment. `buildAndCompile` already accepts a `params` object and threads it through; no change there.
+A record that omits `mean`/`value` reads its center from `resolveDefault(paramKey) = get(params, paramKey)` — so "normal centered on whatever the scenario configured for this shock, stdDev 0.10" needs no baked-in value. This is the generalization of today's `D.rothGrowthRate` lookup. Deeper fields (`recovery.durationMonths`, `levelEffects.equityRevaluation.multiplier`) are addable to the per-shock set later without runner changes.
 
-### 3.6 UI
+### 3.3 Runner change
 
-The MC config plugin (`mc-config` in the workbench) renders one row per variable config. Today the label / group / enabled toggle / distribution-type selector / mean / stdDev are surfaced. For nested paths:
+```js
+_perturb(baseParams, i) {
+  const rng         = makeSeededRng(i + 1);
+  const perturbed   = structuredClone(baseParams);          // (a) deep clone — nested writes can't leak
+  for (const cfg of this.variables) {                       // (b) this.variables = buildVariables(baseParams)
+    if (cfg.enabled)                       set(perturbed, cfg.paramKey, createDistribution(cfg).sample(rng));
+    else if (get(baseParams, cfg.paramKey) === undefined) set(perturbed, cfg.paramKey, cfg.value ?? cfg.mean);
+  }
+  return perturbed;
+}
+```
 
-- **Label** continues to be the human-readable name (`'Primary lifeExpectancy (years)'`, `'Shock #1: severity'`).
-- **Group** continues to be a flat string; nested paths can use natural groups like `'Mortality'`, `'Shocks'`.
-- **Default value** displays `resolveDefault(paramKey)` so a user sees the base they're perturbing around.
-- **Path** is **not** shown by default but is available in a tooltip / debug view so users can verify what they're sweeping.
+Three changes from today: (a) `structuredClone(baseParams)` replaces the shallow spread; (b) `set(perturbed, cfg.paramKey, …)` replaces direct assignment; (c) the runner resolves `this.variables` once via `buildVariables(baseParams)` so dynamic shock variables exist. `createSimulation`'s shallow merge is unchanged — a perturbed `shocks` array replaces the template's wholesale (§2).
 
-No new UI components. The existing rows accept paths the moment the config records do.
+### 3.4 Shock-handling fix (remove the `shocks[0]`-only overlay)
 
----
+The overlay derives `equityRevaluation.multiplier` from `severity` *only for shocks[0]* inside `applyShockOverrides`. To make a swept `shocks[i].severity` actually take effect for **any** `i`, move that derivation into shock **resolution**:
 
-## 4. Validation
+- **`resolveShockEntry(item)`** gains: when `item.severity != null`, set `severity` and derive `levelEffects.equityRevaluation.multiplier = -Math.abs(severity)` on the resolved shock. This makes `severity` the single canonical knob whether it came from the config or from an MC `set`.
+- **`schedules()`** drops the `if (i === 0) applyShockOverrides(...)` special case (line 259) — every entry is resolved uniformly; the perturbed value is already in `params.shocks[i]`.
+- **Delete** `applyShockOverrides`, and the flat `shockSeverity` / `shockStartDate` param-schema entries (`economic-regimes-toolset.js:206-227`).
 
-- **Path resolves on the base tree.** `IntlRetirementMcConfig.buildVariables()` walks every contributor's variables once; any path that fails to resolve via `get(baseParams, paramKey)` is dropped with a `console.warn` (matches today's "warn on duplicate `EventSeries` types" pattern). This prevents a stale shock-MC config from poisoning the run when the scenario no longer carries that shock.
-- **Distribution shape matches the target.** `lifeExpectancy` is a positive number; the `min` clamp (e.g. clamp to `[40, 110]`) is part of the distribution config, not enforced by the path walker. The path walker is type-agnostic.
-- **No path-walker mutation outside the runner.** `set` is called only inside `IntlRetirementMcRunner`'s per-iteration loop, on a `structuredClone(baseParams)`. The base scenario tree is never mutated by MC. This keeps single-run determinism intact and avoids the design 21 §15 footgun of MC accidentally leaking iteration state into the next run.
+### 3.5 UI
 
----
-
-## 5. Out of scope
-
-- **`IntlRetirementOptConfig` migration.** Optimization follows the same pattern; once §3 lands, the optimizer's variable-iteration loop swaps the same way. Tracked as a follow-up — it's mechanical once the helper exists, but it doesn't need to ship in lock-step with the MC change.
-- **General-purpose JSONPath support.** No wildcards, no recursive descent. The §3.1 grammar (dots, bracketed indices) is the closed surface. A future need for richer paths is a separate (small) design.
-- **Path-walking in the scenario param schema itself.** Param-schema entries today don't use nested paths either — they cascade structured edits via `node: { type, id|stateKey, field }` declarations (per `scenario-loader.js`). That mechanism is fine for what it does; this design doesn't unify the two surfaces.
-- **Path-walking for graph-node addressing.** `breakpointNodeIds` and the graph-query API use their own ID surface. Unrelated.
-
----
-
-## 6. Testing
-
-- `tests/unit/mc-nested-param-paths.test.mjs` — pure tests on `get` / `set` for every supported path shape (top-level, dot, bracketed, mixed); negative tests for malformed paths.
-- `tests/unit/intl-retirement-mc-runner.test.mjs` — adds a fixture variable config addressing a nested path (a fake `people.primary.lifeExpectancy` while design 27 is pending), asserts the iteration's `params` tree has the sampled value at the addressed path and that the base tree is unchanged.
-- `tests/unit/intl-retirement-mc-config.test.mjs` — `resolveDefault` returns the correct value for top-level and nested paths; missing paths warn and the variable is skipped.
-- Round-trip: `mc-config` UI state serializes / deserializes per-variable `paramKey` strings unchanged. No backward-incompat for saved MC configs.
+The `mc-config` workbench plugin renders one row per variable. Dynamic shock rows arrive through `buildVariables` like any other — label (`'MARKET_CRASH_2008_LITE: severity'`), group (`'Economic Shocks'`), enabled toggle, distribution type, and a **default value** shown from `resolveDefault`. No new components. The number of shock rows tracks the configured `shocks` array length automatically.
 
 ---
 
-## 7. Sequencing
+## 4. Migration & back-compat
 
-This design is **independent of design 25**. It can land before, after, or in parallel. The roadmap's Phase A groups them only because they're both "shared substrate"; they touch different files (`account.js` / handlers vs. `intl-retirement-mc-config.js` / `intl-retirement-mc-runner.js`).
-
-Recommended sequencing: ship 25a first if the next user-facing feature is a shock-MC or mortality-MC variable, ship 25 first if the next feature is per-account allocation. Either order works.
+- **Saved MC configs referencing `shockSeverity` / `shockStartDate`.** These paramKeys no longer resolve (`get(params,'shockSeverity') === undefined`) and would be silently dropped by §5 validation. Add a one-line migration in `buildVariables` (or config load): rewrite legacy `shockSeverity → shocks[0].severity`, `shockStartDate → shocks[0].startDate` before resolution, so an existing saved sweep keeps working against the first shock.
+- **`IntlRetirementOptConfig`** (`intl-retirement-opt-config.js:91`) also references `shockSeverity`. Deleting the param breaks the optimizer. **In scope for this change:** migrate the opt-config's shock variable to the same nested path (`shocks[0].severity`) and give `IntlRetirementOptConfig` the same `get`/`set` treatment in its iteration loop, OR keep a thin deprecated `shockSeverity` alias resolving to `shocks[0]` until the opt migration (its own follow-up) lands. Pick one at implementation; the clean option is migrating opt now since the helper already exists.
+- **No engine change.** `buildAndCompile` / `ScenarioLoader` already thread `parameters` through; only `IntlRetirementMcConfig`, the runner, and the regimes toolset change.
 
 ---
 
-## 8. Summary
+## 5. Validation
 
-`paramKey` becomes a path expression. `IntlRetirementMcConfig` grows a contributor hook so shocks and mortality can register their own MC variables. The MC runner uses `structuredClone` + `set` to keep the base tree pristine. Three small files change; no engine change; no breaking change to existing flat-key configs.
+- **Path resolves on the base tree.** `buildVariables` drops any variable whose `get(baseParams, paramKey)` is `undefined`, with a `console.warn` (matches the "warn on duplicate EventSeries type" pattern). A stale shock-MC config from a scenario that no longer carries that shock can't poison the run.
+- **No path-walker mutation outside the per-iteration clone.** `set` is called only inside `_perturb` on a `structuredClone(baseParams)`. The base tree and the live scenario are never mutated — preserves single-run determinism and prevents iteration-state leakage (the design 21 §15 footgun).
+- **Type-agnostic walker.** Clamps (`severity ∈ [0,1]`, lifespan ∈ `[40,110]`) live in the distribution config, not the walker.
 
-This unblocks design 21 Phase 2 (shock severity MC sweeps) and design 27 (per-person actuarial lifespan draws) without either of them needing to re-derive the substrate.
+---
+
+## 6. Out of scope
+
+- **General JSONPath** (wildcards, recursive descent). The §3.1 grammar (dots, bracketed indices) is the closed surface.
+- **Unifying with the `node:` cascade.** The scenario param schema cascades structured edits via `node: { type, id|stateKey, field }` (`scenario-loader.js:111-132`). That remains the mechanism for *fixed* person/account records (e.g. `primaryMonthlyWage → persons.primary.monthlyWage`); design 27 may use it for `lifeExpectancy` instead of a nested path. This design owns the *array-indexed* case (`shocks[N]`) the cascade can't express; the two surfaces coexist.
+- **Per-shock deep fields beyond severity/startDate** (`recovery.curve`, multi-field `levelEffects`). The contributor can grow these later; MVP ships `severity` + `startDate` per shock.
+
+---
+
+## 7. Implementation tasks
+
+1. **`src/finance/monte-carlo/mc-param-paths.js`** — `get(obj,path)`, `set(obj,path,value)`, path parser. Unit-tested standalone.
+2. **`intl-retirement-mc-config.js`** — add `contributors` registry, `buildVariables(params)`, `resolveDefault`, `buildShockMcConfigs(params)`; legacy `shockSeverity`/`shockStartDate` rewrite.
+3. **`intl-retirement-mc-runner.js`** — `structuredClone` in `_perturb`; resolve `this.variables = buildVariables(baseParams)` in `run()`; `set`-based writes.
+4. **`economic-regimes-toolset.js`** — move severity→multiplier derivation into `resolveShockEntry`; drop the `i === 0` overlay in `schedules()`; delete `applyShockOverrides` + flat param entries.
+5. **`intl-retirement-opt-config.js`** — migrate `shockSeverity → shocks[0].severity` (or alias; §4).
+6. **Tests** (§8).
+
+Sequence: 1 → 2/3 (parallel) → 4 → 5 → 6. Each step is independently testable.
+
+---
+
+## 8. Testing
+
+- `tests/unit/mc-param-paths.test.mjs` — `get`/`set` for top-level, dot, bracketed, mixed, and deep paths; negative tests for malformed/missing paths; assert `set` never mutates a sibling.
+- `tests/unit/intl-retirement-mc-config.test.mjs` — `buildShockMcConfigs` emits the right variable set for a 0-, 1-, and 2-shock scenario; `resolveDefault` returns configured values; legacy `shockSeverity` rewrite resolves to `shocks[0].severity`.
+- `tests/unit/intl-retirement-mc-runner.test.mjs` — **multi-shock sweep**: a 2-shock base tree, both `shocks[0].severity` and `shocks[1].severity` enabled, asserts each iteration's `params.shocks[i].severity` holds the sampled value, the derived `equityRevaluation.multiplier` matches, **and `baseParams.shocks` is unmutated** after the full run.
+- `tests/unit/evt-economic-shock.test.mjs` (or existing regime test) — confirm a swept `shocks[1]` actually schedules its `ECONOMIC_SHOCK` + recovery ticks and moves the regime, proving the overlay removal didn't regress single/first-shock behavior.
+- Round-trip: `mc-config` UI state serializes/deserializes nested `paramKey` strings unchanged.
+
+---
+
+## 9. Summary
+
+`paramKey` becomes a path expression; a contributor hook generates one MC variable per configured shock; the runner deep-clones per iteration and writes via `set`. The flat `shocks[0]`-only overlay is deleted and severity→multiplier derivation moves into shock resolution, so **every shock in a scenario is independently MC-sweepable**. Four source files change plus opt-config migration; no engine change; existing flat-key configs and (via a rewrite shim) saved shock sweeps keep working.
+
+This lands first — it restores multi-shock MC (the driving feature) and leaves the nested-path substrate in place for design 26 (healthcare-MC) and design 27 (per-person lifespan) to consume.
