@@ -12,6 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { getBirthDate } from '../../residency-utils.js';
+import { scaleHoldings } from '../../holdings/holding-utils.js';
 
 /** Resolve the US cash pool. */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -41,12 +42,14 @@ export class RothContributionApplyReducer extends AccountServiceReducer {
 
   reduce(state, action) {
     this.accountService.transaction(usCash(state), -action.amount, null);
-    const ra = state.rothAccount;
+    const ra         = state.rothAccount;
+    const newBalance = ra.balance + action.amount;
     return this.newState(state, {
       rothAccount: {
         ...ra,
-        balance:           ra.balance           + action.amount,
+        balance:           newBalance,
         contributionBasis: ra.contributionBasis + action.amount,
+        holdings:          scaleHoldings(ra.holdings, ra.balance, newBalance),
       },
     });
   }
@@ -69,12 +72,14 @@ export class RothWithdrawalContribApplyReducer extends AccountServiceReducer {
 
   reduce(state, action) {
     this.accountService.transaction(usCash(state), action.amount, null);
-    const ra = state.rothAccount;
+    const ra         = state.rothAccount;
+    const newBalance = ra.balance - action.amount;
     return this.newState(state, {
       rothAccount: {
         ...ra,
-        balance:           ra.balance           - action.amount,
+        balance:           newBalance,
         contributionBasis: ra.contributionBasis - action.amount,
+        holdings:          scaleHoldings(ra.holdings, ra.balance, newBalance),
       },
     });
   }
@@ -100,14 +105,16 @@ export class RothWithdrawalEarningsApplyReducer extends AccountServiceReducer {
   reduce(state, action) {
     const { amount, penaltyAmount, residency } = action;
     this.accountService.transaction(usCash(state), amount - penaltyAmount, null);
-    const ra = state.rothAccount;
+    const ra         = state.rothAccount;
+    const newBalance = ra.balance - amount;
     return this.newState(
       state,
       {
         rothAccount: {
           ...ra,
-          balance:       ra.balance       - amount,
+          balance:       newBalance,
           earningsBasis: ra.earningsBasis - amount,
+          holdings:      scaleHoldings(ra.holdings, ra.balance, newBalance),
         },
       },
       [{ type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount, penaltyAmount, residency }]

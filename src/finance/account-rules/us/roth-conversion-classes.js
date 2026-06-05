@@ -63,16 +63,33 @@ export class RothConversionApplyReducer extends AccountServiceReducer {
   reduce(state, action) {
     const { amount, iraKey, rothKey, residency } = action;
     const roth = state[rothKey];
+
+    // Maintain §4.4 invariant: scale Roth holdings up to absorb the incoming amount.
+    const newRoth = {
+      ...roth,
+      balance:              roth.balance                      + amount,
+      rolloverContribBasis: (roth.rolloverContribBasis ?? 0) + amount,
+    };
+    if (Array.isArray(roth.holdings) && roth.holdings.length > 0) {
+      if (roth.balance > 0) {
+        const rothFactor = (roth.balance + amount) / roth.balance;
+        newRoth.holdings = roth.holdings.map(h => ({
+          ...h,
+          marketValue: +((h.marketValue ?? 0) * rothFactor).toFixed(2),
+          costBasis:   +((h.costBasis   ?? 0) * rothFactor).toFixed(2),
+        }));
+      } else {
+        // Roth was at zero; set the first (bootstrap) holding to the conversion amount.
+        newRoth.holdings = roth.holdings.map((h, i) => i === 0
+          ? { ...h, marketValue: +amount.toFixed(2), costBasis: +amount.toFixed(2) }
+          : h
+        );
+      }
+    }
+
     return this.newState(
       state,
-      {
-        [iraKey]:  debitIra(state[iraKey], amount),
-        [rothKey]: {
-          ...roth,
-          balance:              roth.balance                      + amount,
-          rolloverContribBasis: (roth.rolloverContribBasis ?? 0) + amount,
-        },
-      },
+      { [iraKey]: debitIra(state[iraKey], amount), [rothKey]: newRoth },
       [{ type: 'ROTH_CONVERSION_TAX', amount, residency }]
     );
   }
