@@ -57,6 +57,24 @@ function collectBaseInterestRates(p) {
 }
 
 /**
+ * Apply a severity value to a resolved FinancialShock, re-deriving the
+ * equityRevaluation multiplier so severity is the single canonical knob.
+ */
+function applySeverity(shock, severity) {
+  const lv = shock.levelEffects?.equityRevaluation;
+  return {
+    ...shock,
+    severity,
+    ...(lv && {
+      levelEffects: {
+        ...shock.levelEffects,
+        equityRevaluation: { ...lv, multiplier: -Math.abs(severity) },
+      },
+    }),
+  };
+}
+
+/**
  * Resolve a single shock array entry into a full FinancialShock object.
  *
  * Two forms are accepted:
@@ -65,12 +83,16 @@ function collectBaseInterestRates(p) {
  *   { shockId: '...', startDate: ..., levelEffects: ..., ... }
  *     → used as-is (custom / legacy full-object form)
  *
+ * When item.severity is set (e.g. written by an MC sweep via set()), it is
+ * applied to the resolved shock and the equityRevaluation multiplier is
+ * re-derived.  This makes severity the single canonical knob for any shock index.
+ *
  * Returns null if the entry is empty or cannot be resolved.
  */
 function resolveShockEntry(item) {
   if (!item) return null;
 
-  // Library-reference form: { preset, startDate }
+  // Library-reference form: { preset, startDate[, severity] }
   if (item.preset && item.preset !== 'none') {
     const template = SHOCK_LIBRARY[item.preset];
     if (!template) return null;
@@ -78,51 +100,18 @@ function resolveShockEntry(item) {
       ? item.startDate
       : (item.startDate ? new Date(item.startDate) : null);
     if (!startDate || Number.isNaN(startDate.getTime())) return null;
-    return { ...template, startDate };
+    let resolved = { ...template, startDate };
+    if (item.severity != null) resolved = applySeverity(resolved, item.severity);
+    return resolved;
   }
 
-  // Full custom-object form: must have shockId and startDate
-  if (item.shockId) return item;
+  // Full custom-object form: must have shockId; apply severity if present
+  if (item.shockId) {
+    if (item.severity != null) return applySeverity(item, item.severity);
+    return item;
+  }
 
   return null;
-}
-
-/**
- * Apply flat MC override parameters to a resolved FinancialShock.
- *
- * Flat keys `shockSeverity` and `shockStartDate` override the first
- * configured shock (shocks[0]).  The severity override rescales the
- * equityRevaluation multiplier; the startDate override shifts the entire
- * shock/recovery schedule.
- */
-function applyShockOverrides(shock, p) {
-  let s = shock;
-
-  if (p.shockSeverity != null) {
-    const severity = p.shockSeverity;
-    const lv = s.levelEffects?.equityRevaluation;
-    s = {
-      ...s,
-      severity,
-      ...(lv && {
-        levelEffects: {
-          ...s.levelEffects,
-          equityRevaluation: { ...lv, multiplier: -Math.abs(severity) },
-        },
-      }),
-    };
-  }
-
-  if (p.shockStartDate != null) {
-    const startDate = p.shockStartDate instanceof Date
-      ? p.shockStartDate
-      : new Date(p.shockStartDate);
-    if (!Number.isNaN(startDate.getTime())) {
-      s = { ...s, startDate };
-    }
-  }
-
-  return s;
 }
 
 /**
@@ -197,33 +186,11 @@ export const ECONOMIC_REGIMES = {
         label:        'Economic Shocks',
         type:         'ShockList',
         group:        'Economic Shocks',
-        mc:           false,
-        opt:          false,
+        mc:           true,
+        opt:          true,
         options:      SHOCK_PRESET_OPTIONS,
         defaultValue: [],
         description:  'List of financial shocks to apply. Each entry can reference a library preset or define a custom shock.',
-      },
-      {
-        key:          'shockSeverity',
-        label:        'Shock Severity (shocks[0])',
-        type:         'Number',
-        group:        'Economic Shocks',
-        mc:           true,
-        opt:          true,
-        hidden:       true,
-        defaultValue: null,
-        description:  'Overrides the severity of the first configured shock (0–1). Scales equityRevaluation multiplier. Null = use shock default.',
-      },
-      {
-        key:          'shockStartDate',
-        label:        'Shock Start Date (shocks[0])',
-        type:         'Date',
-        group:        'Economic Shocks',
-        mc:           true,
-        opt:          true,
-        hidden:       true,
-        defaultValue: null,
-        description:  'Overrides the start date of the first configured shock. Shifts the entire shock and recovery schedule. Null = use shock default.',
       },
     ];
   },
@@ -253,10 +220,9 @@ export const ECONOMIC_REGIMES = {
   schedules(context) {
     const events = [];
     const shocks = context.parameters.shocks ?? [];
-    for (let i = 0; i < shocks.length; i++) {
-      let shock = resolveShockEntry(shocks[i]);
+    for (const entry of shocks) {
+      const shock = resolveShockEntry(entry);
       if (!shock) continue;
-      if (i === 0) shock = applyShockOverrides(shock, context.parameters);
       scheduleShock(shock, events);
     }
     return events;

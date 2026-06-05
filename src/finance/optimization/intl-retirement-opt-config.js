@@ -10,6 +10,7 @@
 
 import { OPT_PARAM_TYPES }            from './optimization-objectives.js';
 import { INTL_RETIREMENT_DEFAULTS }   from '../../scenarios/intl-retirement-scenario.js';
+import { SHOCK_LIBRARY }              from '../economic-shocks/shock-library.js';
 
 const D = INTL_RETIREMENT_DEFAULTS;
 
@@ -17,10 +18,10 @@ const D = INTL_RETIREMENT_DEFAULTS;
 const US_MFJ_BRACKET_RATES = [0.10, 0.12, 0.22, 0.24, 0.32, 0.35];
 
 /**
- * Default optimization variable configurations for the IntlRetirementScenario.
+ * Static optimization variable configurations for the IntlRetirementScenario.
  *
- * Each entry maps a scenario parameter key to a search-space definition.
- * Only params marked opt:true in INTL_RETIREMENT_PARAM_SCHEMA should appear here.
+ * Economic shock variables are NOT listed here — they are generated dynamically
+ * by buildOptVariables() based on the scenario's configured shocks array.
  *
  * enabled:true  → included in the search grid by default.
  * enabled:false → available in the UI for the user to toggle on.
@@ -86,16 +87,6 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
     enabled:  false,
   },
 
-  // ── Economic shocks ───────────────────────────────────────────────────────
-  {
-    paramKey: 'shockSeverity',
-    label:    'Shock Severity (shocks[0])',
-    type:     OPT_PARAM_TYPES.CONTINUOUS,
-    min: 0.10, max: 0.80, step: 0.10,
-    group:    'Economic Shocks',
-    enabled:  false,
-  },
-
   // ── Migration timing ──────────────────────────────────────────────────────
   {
     paramKey: 'moveYear',
@@ -106,3 +97,43 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
     enabled:  false,
   },
 ];
+
+/**
+ * Build one optimization severity variable per configured shock.
+ * The search range is centred on the shock's configured severity.
+ */
+function buildShockOptConfigs(params) {
+  const shocks = params.shocks ?? [];
+  return shocks.flatMap((entry, i) => {
+    if (!entry) return [];
+    const label         = entry.preset ?? entry.shockId ?? `Shock ${i + 1}`;
+    const libraryShock  = entry.preset ? (SHOCK_LIBRARY[entry.preset] ?? {}) : {};
+    const severityBase  = entry.severity ?? libraryShock.severity ?? 0.4;
+    return [
+      {
+        paramKey: `shocks[${i}].severity`,
+        label:    `${label}: severity`,
+        type:     OPT_PARAM_TYPES.CONTINUOUS,
+        min:      Math.max(0.05, parseFloat((severityBase - 0.30).toFixed(2))),
+        max:      Math.min(0.95, parseFloat((severityBase + 0.30).toFixed(2))),
+        step:     0.05,
+        group:    'Economic Shocks',
+        enabled:  false,
+      },
+    ];
+  });
+}
+
+/**
+ * Build the full optimization variable list for a given param snapshot.
+ *
+ * Returns DEFAULT_OPTIMIZATION_CONFIGS plus one severity entry per configured
+ * shock.  Shock entries only appear when the scenario actually has shocks,
+ * preventing stale rows for scenarios without ECONOMIC_REGIMES.
+ */
+export function buildOptVariables(params) {
+  return [
+    ...DEFAULT_OPTIMIZATION_CONFIGS,
+    ...buildShockOptConfigs(params),
+  ];
+}

@@ -14,7 +14,8 @@ import { ServiceRegistry }            from '../../services/service-registry.js';
 import { IntlRetirementScenario }     from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioLoader }             from '../../scenarios/scenario-loader.js';
 import { ScenarioSerializer }         from '../../scenarios/scenario-serializer.js';
-import { DEFAULT_MC_VARIABLE_CONFIGS } from './intl-retirement-mc-config.js';
+import { IntlRetirementMcConfig }     from './intl-retirement-mc-config.js';
+import { get, set }                   from './mc-param-paths.js';
 
 // USD account state keys
 const USD_ACCOUNT_KEYS = [
@@ -89,25 +90,25 @@ function makeSeededRng(seed) {
  */
 export class IntlRetirementMcRunner {
   /**
-   * @param {object}   opts
-   * @param {number}   [opts.n=100]               - Number of MC iterations.
-   * @param {Array}    [opts.variableConfigs]      - Distribution configs per param.
-   *                                                 Defaults to DEFAULT_MC_VARIABLE_CONFIGS.
-   * @param {Date}     [opts.simStart]             - Simulation start date.
-   * @param {Date}     [opts.simEnd]               - Simulation end date.
+   * @param {object}                    opts
+   * @param {number}                    [opts.n=100]          - Number of MC iterations.
+   * @param {IntlRetirementMcConfig}    [opts.mcConfig]       - Config that generates the
+   *                                                            variable list via buildVariables().
+   * @param {Date}                      [opts.simStart]       - Simulation start date.
+   * @param {Date}                      [opts.simEnd]         - Simulation end date.
    */
   constructor({
-    n              = 100,
-    variableConfigs = DEFAULT_MC_VARIABLE_CONFIGS,
-    simStart       = new Date(Date.UTC(2026, 0, 1)),
-    simEnd         = new Date(Date.UTC(2041, 0, 1)),
-    cfgTemplate    = null,
+    n           = 100,
+    mcConfig    = new IntlRetirementMcConfig(),
+    simStart    = new Date(Date.UTC(2026, 0, 1)),
+    simEnd      = new Date(Date.UTC(2041, 0, 1)),
+    cfgTemplate = null,
   } = {}) {
-    this.n               = n;
-    this.variableConfigs = variableConfigs;
-    this.simStart        = simStart;
-    this.simEnd          = simEnd;
-    this.cfgTemplate     = cfgTemplate;
+    this.n           = n;
+    this.mcConfig    = mcConfig;
+    this.simStart    = simStart;
+    this.simEnd      = simEnd;
+    this.cfgTemplate = cfgTemplate;
   }
 
   /**
@@ -171,10 +172,12 @@ export class IntlRetirementMcRunner {
       }),
     });
 
-    const base    = { ...baseParams, endDate: simEnd };
+    const base      = { ...baseParams, endDate: simEnd };
+    const variables = this.mcConfig.buildVariables(base);
+
     const mcRuns  = [];
     for (let i = 0; i < this.n; i++) {
-      const params = this._perturb(base, i);
+      const params = this._perturb(base, i, variables);
       const result = runner.runScenario(params, i + 1);
       mcRuns.push({ seed: i + 1, params, result });
       if (onProgress) onProgress(i + 1, this.n);
@@ -210,24 +213,23 @@ export class IntlRetirementMcRunner {
   /**
    * Produce a perturbed parameter object for iteration i.
    *
-   * Every variable config contributes to the output so that `r.params` is
-   * fully self-contained and does not rely on INTL_RETIREMENT_DEFAULTS:
-   *   - Enabled configs: sample from their distribution (consumes RNG calls).
-   *   - Disabled configs: use the constant value from the config (mean or value).
+   * Deep-clones baseParams so nested writes (e.g. shocks[N].severity) never
+   * leak back into the live scenario or adjacent iterations.
    *
-   * Values already supplied by the caller in baseParams take precedence over
-   * disabled-config defaults, but are always overridden by enabled configs.
+   * For every variable in the resolved list:
+   *   - Enabled: sample from its distribution and write via set().
+   *   - Disabled: if the path is absent from baseParams, fill the reference
+   *     value (cfg.value ?? cfg.mean) so r.params is self-contained.
    */
-  _perturb(baseParams, i) {
+  _perturb(baseParams, i, variables) {
     const rng       = makeSeededRng(i + 1);
-    const perturbed = { ...baseParams };
+    const perturbed = structuredClone(baseParams);
 
-    for (const cfg of this.variableConfigs) {
+    for (const cfg of variables) {
       if (cfg.enabled) {
-        perturbed[cfg.paramKey] = createDistribution(cfg).sample(rng);
-      } else if (!(cfg.paramKey in baseParams)) {
-        // Fill in the config's reference value so r.params is complete.
-        perturbed[cfg.paramKey] = cfg.value ?? cfg.mean;
+        set(perturbed, cfg.paramKey, createDistribution(cfg).sample(rng));
+      } else if (get(baseParams, cfg.paramKey) === undefined) {
+        set(perturbed, cfg.paramKey, cfg.value ?? cfg.mean);
       }
     }
 

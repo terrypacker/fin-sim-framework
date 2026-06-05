@@ -8,22 +8,22 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { DISTRIBUTION_TYPES } from '../../simulation-framework/distributions.js';
+import { DISTRIBUTION_TYPES }       from '../../simulation-framework/distributions.js';
 import { INTL_RETIREMENT_DEFAULTS } from '../../scenarios/intl-retirement-scenario.js';
+import { SHOCK_LIBRARY }            from '../economic-shocks/shock-library.js';
+import { get }                      from './mc-param-paths.js';
 
 const D = INTL_RETIREMENT_DEFAULTS;
 
 /**
- * Default Monte Carlo variable configurations for the IntlRetirementScenario.
+ * Static Monte Carlo variable configurations for the IntlRetirementScenario.
  *
- * Each entry maps a scenario parameter key to a distribution definition.
- * Only numeric parameters are included (Date, Boolean, and integer-step
- * params are handled separately in the UI).
+ * Each entry maps a flat scenario parameter key to a distribution definition.
+ * Shock variables are generated dynamically by buildShockMcConfigs() based on
+ * the scenario's configured shocks array.
  *
  * enabled:true  → perturbed by default when MC runs.
  * enabled:false → included in the UI for toggling; off by default.
- *
- * Distribution types reference DISTRIBUTION_TYPES constants.
  */
 export const DEFAULT_MC_VARIABLE_CONFIGS = [
 
@@ -146,18 +146,6 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
     group: 'People',                   enabled: false,
   },
 
-  // ── Economic shocks (disabled by default — only useful with ECONOMIC_REGIMES) ──
-  {
-    paramKey: 'shockSeverity',          label: 'Shock Severity (shocks[0])',
-    type: DISTRIBUTION_TYPES.NORMAL,    mean: 0.40, stdDev: 0.10,
-    group: 'Economic Shocks',           enabled: false,
-  },
-  {
-    paramKey: 'shockStartDate',         label: 'Shock Start Date (shocks[0])',
-    type: DISTRIBUTION_TYPES.UNIFORM_DATE, min: '2028-01-01', max: '2035-01-01',
-    group: 'Economic Shocks',           enabled: false,
-  },
-
   // ── Account balances (disabled by default — starting values are known) ────
   {
     paramKey: 'initialUsSavings',      label: 'US Savings Initial Balance (USD)',
@@ -225,3 +213,126 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
     group: 'Spouse Account Balances',  enabled: false,
   },
 ];
+
+/**
+ * Build one set of MC variables per configured shock.
+ *
+ * For preset-form entries ({ preset, startDate }), severity is read from the
+ * library template so the distribution has a meaningful default center even
+ * when the entry doesn't carry an explicit severity field.
+ */
+function buildShockMcConfigs(params) {
+  const shocks = params.shocks ?? [];
+  return shocks.flatMap((entry, i) => {
+    if (!entry) return [];
+    const label         = entry.preset ?? entry.shockId ?? `Shock ${i + 1}`;
+    const libraryShock  = entry.preset ? (SHOCK_LIBRARY[entry.preset] ?? {}) : {};
+    const severityDefault = entry.severity ?? libraryShock.severity ?? 0.4;
+    return [
+      {
+        paramKey: `shocks[${i}].severity`,
+        label:    `${label}: severity`,
+        type:     DISTRIBUTION_TYPES.NORMAL,
+        mean:     severityDefault,
+        stdDev:   0.10,
+        group:    'Economic Shocks',
+        enabled:  false,
+      },
+      {
+        paramKey: `shocks[${i}].startDate`,
+        label:    `${label}: start date`,
+        type:     DISTRIBUTION_TYPES.UNIFORM_DATE,
+        min:      '2028-01-01',
+        max:      '2035-01-01',
+        group:    'Economic Shocks',
+        enabled:  false,
+      },
+    ];
+  });
+}
+
+/**
+ * MC configuration for IntlRetirementScenario.
+ *
+ * Uses a contributor pattern so toolsets (design 26 healthcare, design 27
+ * mortality) can register dynamic variable sets without changing the runner.
+ *
+ * buildVariables(params) produces the full variable list for a given param
+ * snapshot, including dynamic per-shock variables from configured shocks[].
+ */
+export class IntlRetirementMcConfig {
+  static contributors = [
+    ()          => DEFAULT_MC_VARIABLE_CONFIGS,
+    ({ params }) => buildShockMcConfigs(params),
+  ];
+
+  constructor() {
+    // paramKey → user override object (enabled, mean, stdDev, etc.)
+    this._overrides = new Map();
+  }
+
+  /** Store a user override for a specific variable by paramKey. */
+  applyOverride(paramKey, override) {
+    // Strip paramKey from the override — it must never clobber the resolved path.
+    const { paramKey: _ignored, ...rest } = override;
+    this._overrides.set(paramKey, { ...(this._overrides.get(paramKey) ?? {}), ...rest });
+  }
+
+  /**
+   * Build the resolved variable list for a given param snapshot.
+   *
+   * - Runs all contributors with the params.
+   * - Drops variables whose path doesn't resolve in the params tree
+   *   (prevents stale shock[N] configs from poisoning a run).
+   * - Fills `defaultValue` and resolves `mean` from the scenario value
+   *   when the config omits it.
+   * - Applies any user overrides stored via applyOverride().
+   */
+  buildVariables(params) {
+    return this.constructor.contributors
+      .flatMap(fn => fn({ params }))
+      .filter(cfg => {
+        // Non-array-indexed keys (flat or dot-separated): always keep.
+        // Their cfg.value/cfg.mean acts as the reference when the key is absent
+        // from params, so r.params stays complete even with sparse baseParams.
+        if (!cfg.paramKey.includes('[')) return true;
+        // Array-indexed paths (e.g. shocks[0].severity): keep only when the
+        // parent array entry exists — drops stale shock[N] configs without error.
+        const val = get(params, cfg.paramKey);
+        if (val !== undefined) return true;
+        const arrayMatch = cfg.paramKey.match(/^(\w+\[\d+\])/);
+        if (arrayMatch) return get(params, arrayMatch[1]) !== undefined;
+        console.warn(`[IntlRetirementMcConfig] dropping unresolvable MC variable: ${cfg.paramKey}`);
+        return false;
+      })
+      .map(cfg => {
+        const defaultValue = get(params, cfg.paramKey);
+        const override     = this._overrides.get(cfg.paramKey) ?? {};
+        return {
+          ...cfg,
+          defaultValue,
+          mean: cfg.mean ?? defaultValue,
+          ...override,
+        };
+      });
+  }
+
+  /**
+   * Create an IntlRetirementMcConfig with user states loaded from a flat
+   * variableConfigs array (as produced by McConfigPanel).
+   *
+   * Rewrites legacy flat shock keys to nested paths:
+   *   shockSeverity  → shocks[0].severity
+   *   shockStartDate → shocks[0].startDate
+   */
+  static fromVariableConfigs(variableConfigs) {
+    const config = new IntlRetirementMcConfig();
+    for (const v of variableConfigs) {
+      let key = v.paramKey;
+      if (key === 'shockSeverity')  key = 'shocks[0].severity';
+      if (key === 'shockStartDate') key = 'shocks[0].startDate';
+      config.applyOverride(key, v);
+    }
+    return config;
+  }
+}

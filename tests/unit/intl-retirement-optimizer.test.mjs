@@ -328,6 +328,9 @@ describe('IntlRetirement combined param schema mc/opt flags', () => {
   test('DEFAULT_OPTIMIZATION_CONFIGS only contains opt:true combined-schema params', () => {
     const optKeys = new Set(COMBINED_SCHEMA.filter(e => e.opt).map(e => e.key));
     for (const cfg of DEFAULT_OPTIMIZATION_CONFIGS) {
+      // Nested path keys (e.g. shocks[0].severity) resolve into structured params
+      // rather than flat schema entries — skip the flat-schema check for them.
+      if (cfg.paramKey.includes('[')) continue;
       assert.ok(
         optKeys.has(cfg.paramKey),
         `${cfg.paramKey} in DEFAULT_OPTIMIZATION_CONFIGS must have opt:true in combined schema`

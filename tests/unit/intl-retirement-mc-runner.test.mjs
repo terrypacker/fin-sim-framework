@@ -19,7 +19,8 @@ import { test }  from 'node:test';
 import assert    from 'node:assert/strict';
 
 import { IntlRetirementMcRunner }    from '../../src/finance/monte-carlo/intl-retirement-mc-runner.js';
-import { DEFAULT_MC_VARIABLE_CONFIGS } from '../../src/finance/monte-carlo/intl-retirement-mc-config.js';
+import { IntlRetirementMcConfig,
+         DEFAULT_MC_VARIABLE_CONFIGS } from '../../src/finance/monte-carlo/intl-retirement-mc-config.js';
 import { DISTRIBUTION_TYPES }        from '../../src/simulation-framework/distributions.js';
 import { INTL_RETIREMENT_DEFAULTS, IntlRetirementScenario }
                                      from '../../src/scenarios/intl-retirement-scenario.js';
@@ -154,8 +155,9 @@ test('IntlRetirementMcRunner: constant-only config produces identical net worth 
     value:   cfg.mean ?? cfg.value,
     enabled: true,
   }));
+  const mcConfig = IntlRetirementMcConfig.fromVariableConfigs(constantConfigs);
 
-  const runner = makeRunner({ variableConfigs: constantConfigs });
+  const runner = makeRunner({ mcConfig });
   const { runs } = await runner.run();
 
   const first = runs[0].finalNetWorthUsd;
@@ -165,11 +167,13 @@ test('IntlRetirementMcRunner: constant-only config produces identical net worth 
   }
 });
 
-test('IntlRetirementMcRunner: no variable configs produces n identical runs', async () => {
-  const runner = makeRunner({ variableConfigs: [] });
+test('IntlRetirementMcRunner: all-disabled mcConfig produces n identical runs', async () => {
+  // All vars disabled → no sampling → every run uses the same param values
+  const allDisabled = DEFAULT_MC_VARIABLE_CONFIGS.map(c => ({ ...c, enabled: false }));
+  const mcConfig = IntlRetirementMcConfig.fromVariableConfigs(allDisabled);
+  const runner = makeRunner({ mcConfig });
   const { runs } = await runner.run();
   assert.strictEqual(runs.length, N);
-  // With no perturbation every run is identical
   const first = runs[0].finalNetWorthUsd;
   for (const r of runs) assert.strictEqual(r.finalNetWorthUsd, first);
 });
