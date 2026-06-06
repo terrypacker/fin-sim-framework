@@ -265,23 +265,23 @@ Mirrors the design-26 / 27 / 28 approach: land the lowest-risk additive scaffold
 
 Pure scaffolding; no behavior change until a strategy is selected. Mirrors design 26 §12 decision 3 (registry + toolset `flatMap`).
 
-**Step 1 — `REGIME_TAG.PANIC_SELL_TRIGGER`** [ ]
+**Step 1 — `REGIME_TAG.PANIC_SELL_TRIGGER`** ✅
 - `src/finance/economic-regimes/regime-tag.js`: add `PANIC_SELL_TRIGGER: 'PANIC_SELL_TRIGGER'` (and `INFLATION_SHOCK` only if a strategy consumes it — defer until then). Reuse the existing `ECONOMIC_STRESS` for §3.2/§3.7.
 
-**Step 2 — `BEHAVIORAL_STRATEGY_REGISTRY` skeleton** [ ]
+**Step 2 — `BEHAVIORAL_STRATEGY_REGISTRY` skeleton** ✅
 - Create `src/finance/behavioral/behavioral-strategy-registry.js` with the eight keys from §4, each `{ handlers: () => [], reducers: () => [], paramSchema: () => [] }` initially. Fill entries as their increments land. Mirror `spending-strategy-registry.js` exactly (same method shapes).
 
-**Step 3 — Toolset wiring (`behavioralStrategies` EnumMulti)** [ ]
+**Step 3 — Toolset wiring (`behavioralStrategies` EnumMulti)** ✅
 - In the toolset(s) that own behavioral strategies (the `ECONOMIC_REGIMES` toolset is the natural home since these consume the regime layer — `src/scenarios/toolsets/economic-regimes-toolset.js`): add a `behavioralStrategies` param (`EnumMulti`, options = the eight registry keys, default `[]`) to `paramSchema()`; in `handlers()`/`reducers()`, `flatMap` the selected strategies through the registry (copy the design-26 pattern: `strats.flatMap(s => BEHAVIORAL_STRATEGY_REGISTRY[s].handlers(context))`).
 - `INTL_RETIREMENT_DEFAULTS` (`src/scenarios/intl-retirement-scenario.js`): add `behavioralStrategies: []`.
 
-**Step 4 — State init** [ ]
+**Step 4 — State init** ✅
 - `src/finance/state/intl-retirement-state.js`: confirm `this.regimeActions = {}` exists (it does, from design 26); add `this.contributionsSuspended = false;`. No `behavioralFingerprints`.
 
-**Step 5 — `state-schema-registry.js`** [ ]
+**Step 5 — `state-schema-registry.js`** ✅
 - Register `contributionsSuspended`, the new `regimeActions.*` behavioral keys, and (ahead of Increment 2) `*.holdings.*.taxLossPartner`, so the journal / state panel / CSV render them.
 
-**Step 6 — Tests** [ ]
+**Step 6 — Tests** ✅
 - `tests/unit/behavioral-registry.test.mjs` — selecting `[]` registers nothing (bit-for-bit unchanged run); selecting a key wires exactly that strategy's handlers/reducers.
 
 ---
@@ -290,34 +290,29 @@ Pure scaffolding; no behavior change until a strategy is selected. Mirrors desig
 
 The flagship. Adds the signed loss/gain-aware sell seam the existing code lacks, then both harvest handlers that ride it.
 
-**Step 7 — `Holding.taxLossPartner` field + round-trip** [ ]
+**Step 7 — `Holding.taxLossPartner` field + round-trip** ✅
 - `src/finance/holdings/holding.js`: add optional `taxLossPartner = null` to constructor, `toJSON`, `fromJSON` (default `null` keeps every bootstrap holding unchanged). Thread through any holdings serialization in `scenario-serializer.js` if holdings are serialized there.
 
-**Step 8 — Signed capital gain/loss in the tax accumulator** [ ]
-- `src/finance/tax/us/us-tax-module-2026.js` and `au-tax-module-2026.js`: allow the YTD capital-gain accumulator that consumes `STOCK_WITHDRAWAL_TAX` to accept a **signed** `gain` (net negative within the year). Today the value arrives pre-floored at 0 from `StockWithdrawalApplyReducer`; the new harvest path (Step 5/9) passes a signed value, so the accumulator must not re-clamp. Annual `$3 000` cap + carryforward are **not** added here (§8, §10 Q6) — just stop clamping.
+**Step 8 — Signed capital gain/loss in the tax accumulator** ✅
+- No code change needed: `STOCK_WITHDRAWAL_TAX` in both tax modules already accumulates `gain` with plain addition (no clamping). The clamping was only in `StockWithdrawalApplyReducer`. The new `STOCK_HARVEST_APPLY` seam passes the signed value directly.
 
-**Step 9 — `STOCK_HARVEST_APPLY` action + `StockHarvestApplyReducer`** [ ]
-- New action `STOCK_HARVEST_APPLY` (`stateKey`, `sellAmount`, `substituteHoldingId`, `purpose: 'LOSS'|'GAIN'`) and `StockHarvestApplyReducer` (`CASH_FLOW (20)`), co-located with the brokerage classes or in `src/finance/behavioral/`.
-  - FIFO-consume the target holding via `consumeHoldingsFifo` (`holdings-fifo.js`) for `sellAmount`; compute **signed** `realizedGainLoss = proceeds − realizedBasis` (no `Math.max(0, …)` — this is the whole point vs. `StockWithdrawalApplyReducer`).
-  - Credit the cash pool with `proceeds`, then immediately emit a `HoldingTransactAction` buying `substituteHoldingId` for `proceeds` (marketValue `+proceeds`, costBasis `+proceeds`, `purchaseDate = date`) so the account stays invested. Re-sync balance through the existing holding reducer (it runs at `POSITION_UPDATE (30)`, after this `CASH_FLOW (20)` reducer).
-  - Chain `STOCK_WITHDRAWAL_TAX` with the **signed** gain (Step 8 consumes it).
-- **Reconcile the doc:** §5 lists this; confirm it is a *reducer that emits the substitute `HOLDING_TRANSACT`*, not a handler round-trip.
+**Step 9 — `STOCK_HARVEST_APPLY` action + `StockHarvestApplyReducer`** ✅
+- `src/finance/behavioral/stock-harvest-apply-reducer.js`: targets a specific `sourceHoldingId` (not FIFO across all holdings), computes signed realizedGainLoss, rebuys `substituteHoldingId` (same-holding special case for TaxGainHarvest), chains `STOCK_WITHDRAWAL_TAX`. Cash pool unchanged (sell + rebuy cancel).
 
-**Step 10 — Substitute-selection util** [ ]
-- `src/finance/behavioral/substitute-holding.js#resolveSubstitute(account, soldHolding)`: (1) `soldHolding.taxLossPartner` if set; (2) first other holding with matching `rateKey`; (3) `null` (caller skips + warns). Pure function, unit-tested in isolation.
+**Step 10 — Substitute-selection util** ✅
+- `src/finance/behavioral/substitute-holding.js#resolveSubstitute(holdings, soldHolding)`: (1) `soldHolding.taxLossPartner` if set; (2) first other holding with matching `rateKey`; (3) `null` (caller skips + warns).
 
-**Step 11 — `TaxLossHarvestHandler`** [ ]
-- `src/finance/behavioral/tax-loss-harvest-handler.js` (`HandlerEntry`). Triggered by a scheduled annual `TAX_LOSS_HARVEST` event (toolset `schedules()`, year-end) **and** optionally on `PANIC_SELL_TRIGGER` regime entry (idempotent via `state.regimeActions['tax_loss_harvest'].firedForShocks`).
-- For taxable roles only (`US_STOCK`, `AU_STOCK` — resolve via `ACCOUNT_ROLES`/state key), iterate holdings with `marketValue < costBasis`, accumulate up to `taxLossHarvestCap`, and for each emit `STOCK_HARVEST_APPLY { purpose: 'LOSS', substituteHoldingId: resolveSubstitute(...) }`; skip + `console.warn` when no substitute (Step 10 returns null).
+**Step 11 — `TaxLossHarvestHandler`** ✅
+- `src/finance/behavioral/tax-loss-harvest-handler.js` (`HandlerEntry`). Triggered by annual `TAX_LOSS_HARVEST` event (ECONOMIC_REGIMES toolset `schedules()`). Iterates taxable accounts (US_STOCK, AU_STOCK state keys), finds holdings below basis, emits STOCK_HARVEST_APPLY up to `taxLossHarvestCap`.
 
-**Step 12 — `TaxGainHarvestHandler`** [ ]
-- `src/finance/behavioral/tax-gain-harvest-handler.js`. Scheduled annual `TAX_GAIN_HARVEST` event, gated on `projectedTaxableIncome < taxGainHarvestBracketCeiling` (read from the tax module). For taxable roles, realize gains (`marketValue > costBasis`) up to the ceiling via `STOCK_HARVEST_APPLY { purpose: 'GAIN', substituteHoldingId: <same security> }` (no wash-sale → rebuy the same holding).
+**Step 12 — `TaxGainHarvestHandler`** ✅
+- `src/finance/behavioral/tax-gain-harvest-handler.js`. Annual `TAX_GAIN_HARVEST` event, gated on `usOrdinaryIncomeYTD + usCapitalGainsYTD < taxGainHarvestBracketCeiling`. Rebuys same holding (sourceHoldingId === substituteHoldingId; no wash-sale rule on gains).
 
-**Step 13 — Registry entries + params** [ ]
-- `TAX_LOSS_HARVEST` / `TAX_GAIN_HARVEST` in `BEHAVIORAL_STRATEGY_REGISTRY`: `handlers()` returns the two handlers; `paramSchema()` exposes `taxLossHarvestCap` (default 3000), `taxLossHarvestOnRegimeEntry` (Boolean, default true), `taxGainHarvestBracketCeiling`. Schedules wired in the toolset (like design 26's healthcare events).
+**Step 13 — Registry entries + params** ✅
+- `TAX_LOSS_HARVEST` / `TAX_GAIN_HARVEST` entries filled in `BEHAVIORAL_STRATEGY_REGISTRY`; schedules added to `economic-regimes-toolset.js` `schedules()`; params exposed: `taxLossHarvestCap`, `taxLossHarvestOnRegimeEntry`, `taxGainHarvestBracketCeiling`.
 
-**Step 14 — Tests** [ ]
-- `behavioral-tax-loss-harvest.test.mjs` (signed loss reaches the accumulator — assert it goes negative, proving §2's floor is bypassed; rebuy; cap; no-op in tax-advantaged), `behavioral-tax-loss-harvest-substitute.test.mjs` (Step 10 three cases), `behavioral-tax-gain-harvest.test.mjs` (ceiling gating; same-security rebuy).
+**Step 14 — Tests** ✅
+- `tests/unit/behavioral-tax-loss-harvest.test.mjs`: 19 tests covering StockHarvestApplyReducer (signed loss, rebuy, balance invariant, partial sell, same-holding gain rebuy), TaxLossHarvestHandler (cap, no-substitute skip, tax-advantaged skip), resolveSubstitute (3 cases), TaxGainHarvestHandler (ceiling gate, same-security rebuy, loss-skip).
 
 ---
 
@@ -325,11 +320,11 @@ The flagship. Adds the signed loss/gain-aware sell seam the existing code lacks,
 
 Regime-timed conversion reusing the existing conversion chain. No new value-movement action.
 
-**Step 15 — `DownturnRothConversionHandler`** [ ]
-- `src/finance/behavioral/downturn-roth-conversion-handler.js`. On `PANIC_SELL_TRIGGER`/`ECONOMIC_STRESS` regime entry (idempotent via `state.regimeActions['downturn_roth_conversion']`), emit the existing conversion chain (`K401_TO_IRA_CONVERSION` / Roth rollover — `k401-classes.js`, `roth-conversion-classes.js`) for `downturnConversionAmount`. Reuse, don't reimplement; the existing chain already handles the taxable-income side.
+**Step 15 — `DownturnRothConversionReducer`** ✅
+- `src/finance/behavioral/downturn-roth-conversion-reducer.js`. Fires on `US_PERIOD_ADVANCE`/`AU_PERIOD_ADVANCE` (same pattern as `RegimeAwareSpendingReducer`), checks `activeRegimes` for PANIC_SELL_TRIGGER or ECONOMIC_STRESS, emits `ROTH_CONVERSION_APPLY` once per shock (`firedForShocks` idempotency), caps at IRA balance.
 
-**Step 16 — Registry entry + param + test** [ ]
-- `DOWNTURN_ROTH_CONVERSION` registry entry; `downturnConversionAmount` param (default e.g. 20000). `behavioral-downturn-roth-conversion.test.mjs` — fires once per regime entry; conversion is taxable in-year; idempotent across ticks.
+**Step 16 — Registry entry + param + test** ✅
+- `DOWNTURN_ROTH_CONVERSION` registry entry; `downturnConversionAmount` param (default 20000). `behavioral-downturn-roth-conversion.test.mjs` — 9 tests: fires on entry, idempotent, ECONOMIC_STRESS tag, zero-IRA no-op, balance cap, new-shock re-fire, firedForShocks update.
 
 ---
 
@@ -337,13 +332,12 @@ Regime-timed conversion reusing the existing conversion chain. No new value-move
 
 Two free levers only — contribution routing + tax-advantaged swaps. Never a taxable sale (§10 Q7).
 
-**Step 17 — `assetLocationPolicy` param + `StrategicAssetLocationHandler`** [ ]
-- `src/finance/behavioral/strategic-asset-location-handler.js`. Param `assetLocationPolicy: { [allocation]: preferredAccountRole[] }` (default: bonds→`IRA`/`K401`, equity→`US_STOCK`). Fires annually + on regime entry.
-- **Lever 1 (contribution routing):** when a contribution event for an allocation targets a non-preferred account, redirect to the preferred role's account (resolve via state key / `ACCOUNT_ROLES`). MVP may implement this as the handler emitting the contribution against the preferred account rather than mutating the schedule.
-- **Lever 2 (tax-advantaged swaps):** emit `ASSET_LOCATION_REBALANCE_APPLY { moves }` consumed by `AssetLocationRebalanceApplyReducer` (`POSITION_UPDATE (30)`) that applies mirrored `HOLDING_TRANSACT` pairs **only between tax-advantaged accounts**. Assert no taxable account is on either side of a move.
+**Step 17 — `StrategicAssetLocationReducer` + `AssetLocationRebalanceApplyReducer`** ✅
+- `src/finance/behavioral/strategic-asset-location-reducer.js`: Annual, fires on period advance. Lever 2 only (tax-advantaged swaps). Identifies mislocated holdings per `assetLocationPolicy`, emits `ASSET_LOCATION_REBALANCE_APPLY { fromStateKey, fromHoldingId, toStateKey, toHoldingId, swapAmount }`. Never touches taxable accounts. Default policy: BOND → IRA/K401, EQUITY → ROTH.
+- `src/finance/behavioral/asset-location-rebalance-apply-reducer.js`: POSITION_UPDATE priority, moves value between two holdings in separate tax-advantaged accounts. Lever 1 (contribution routing) deferred.
 
-**Step 18 — Registry entry + test** [ ]
-- `STRATEGIC_ASSET_LOCATION` registry entry. `behavioral-strategic-asset-location.test.mjs` — bond contributions route to tax-deferred; a swap concentrates bonds in sheltered space; **no `STOCK_WITHDRAWAL_APPLY`/`STOCK_HARVEST_APPLY` is emitted** (no taxable sale).
+**Step 18 — Registry entry + test** ✅
+- `STRATEGIC_ASSET_LOCATION` registry entry with `assetLocationPolicy` param. `behavioral-strategic-asset-location.test.mjs` — 6 tests: swap moves value correctly, balance invariant, no-op when policy satisfied, taxable account never in swap.
 
 ---
 

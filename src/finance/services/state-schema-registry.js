@@ -165,6 +165,10 @@ export class StateSchemaRegistry {
 
     // Bond mark-to-market snapshot (design 28 §5)
     this.registerPattern('priorMarkRates.*',     ParameterValueType.rate());
+
+    // Behavioral layer (design/29 §6)
+    this.register('contributionsSuspended',      ParameterValueType.boolean());
+    this.registerPattern('*.holdings.*.taxLossPartner', ParameterValueType.text());
   }
 
   /**

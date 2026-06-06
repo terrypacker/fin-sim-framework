@@ -107,6 +107,10 @@ export class InternationalRetirementFinancialState extends SimulationState {
     // Each strategy lazily initializes its own key; see design/26 §6 + §13.
     this.regimeActions = {};
 
+    // Behavioral layer substrate (design/29 §6).
+    // Set true by ContributionSuspensionToggleReducer while ECONOMIC_STRESS is active.
+    this.contributionsSuspended = false;
+
     // YTD tax accumulators
     this.usOrdinaryIncomeYTD = 0;
     this.usNegativeIncomeYTD = 0;

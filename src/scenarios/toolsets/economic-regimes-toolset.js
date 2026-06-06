@@ -9,6 +9,7 @@
  */
 
 import { OneOffEvent }                    from '../../simulation-framework/events/one-off-event.js';
+import { EventSeries }                   from '../../simulation-framework/events/event-series.js';
 import { DateUtils }                      from '../../simulation-framework/date-utils.js';
 import { ValueType }                      from '../../simulation-framework/type-registry.js';
 import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY } from '../../finance/economic-regimes/rate-keys.js';
@@ -20,6 +21,7 @@ import { BondPriceAdjustReducer }         from '../../finance/economic-regimes/b
 import { EconomicShockHandler }           from '../../finance/economic-regimes/economic-shock-handler.js';
 import { EconomicRecoveryTickHandler }    from '../../finance/economic-regimes/economic-recovery-tick-handler.js';
 import { SHOCK_LIBRARY, SHOCK_PRESET_OPTIONS } from '../../finance/economic-shocks/shock-library.js';
+import { BEHAVIORAL_STRATEGY_REGISTRY }       from '../../finance/behavioral/behavioral-strategy-registry.js';
 
 /**
  * Resolve the rate key for a RealProperty or Collectible (design 28 §4, Step 8).
@@ -210,6 +212,7 @@ export const ECONOMIC_REGIMES = {
   },
 
   paramSchema(_context) {
+    const behavioralStrategyKeys = Object.keys(BEHAVIORAL_STRATEGY_REGISTRY);
     return [
       {
         key:          'shocks',
@@ -222,6 +225,18 @@ export const ECONOMIC_REGIMES = {
         defaultValue: [],
         description:  'List of financial shocks to apply. Each entry can reference a library preset or define a custom shock.',
       },
+      {
+        key:          'behavioralStrategies',
+        label:        'Behavioral Strategies',
+        type:         'EnumMulti',
+        group:        'Behavioral',
+        mc:           false,
+        opt:          true,
+        options:      behavioralStrategyKeys,
+        defaultValue: [],
+        description:  'Active behavioral strategies: portfolio reactions to regimes and tax opportunities (design/29). PANIC_SELL rotates equity to cash on crash entry; TAX_LOSS_HARVEST realizes losses at year-end; CONTRIBUTION_SUSPENSION halts contributions under stress; and more.',
+      },
+      ...behavioralStrategyKeys.flatMap(k => BEHAVIORAL_STRATEGY_REGISTRY[k].paramSchema()),
     ];
   },
 
@@ -249,13 +264,38 @@ export const ECONOMIC_REGIMES = {
   },
 
   schedules(context) {
-    const events = [];
-    const shocks = context.parameters.shocks ?? [];
+    const events    = [];
+    const shocks    = context.parameters.shocks ?? [];
+    const strats    = context.parameters.behavioralStrategies ?? [];
+
     for (const entry of shocks) {
       const shock = resolveShockEntry(entry);
       if (!shock) continue;
       scheduleShock(shock, events);
     }
+
+    if (strats.includes('TAX_LOSS_HARVEST')) {
+      events.push(new EventSeries({
+        name:     'Tax-Loss Harvest',
+        type:     'TAX_LOSS_HARVEST',
+        interval: 'year-end',
+        startOffset: 1,
+        enabled:  true,
+        color:    '#26A69A',
+      }));
+    }
+
+    if (strats.includes('TAX_GAIN_HARVEST')) {
+      events.push(new EventSeries({
+        name:     'Tax-Gain Harvest',
+        type:     'TAX_GAIN_HARVEST',
+        interval: 'year-end',
+        startOffset: 1,
+        enabled:  true,
+        color:    '#66BB6A',
+      }));
+    }
+
     return events;
   },
 
@@ -265,19 +305,25 @@ export const ECONOMIC_REGIMES = {
       context.realProperties ?? [],
       context.collectibles   ?? [],
     );
+    const behavioralHandlers = (context.parameters.behavioralStrategies ?? [])
+      .flatMap(k => BEHAVIORAL_STRATEGY_REGISTRY[k]?.handlers(context) ?? []);
     return [
       new EconomicShockHandler({ rateKeyToStateKeys }),
       new EconomicRecoveryTickHandler(),
+      ...behavioralHandlers,
     ];
   },
 
-  reducers(_context) {
+  reducers(context) {
+    const behavioralReducers = (context.parameters.behavioralStrategies ?? [])
+      .flatMap(k => BEHAVIORAL_STRATEGY_REGISTRY[k]?.reducers(context) ?? []);
     return [
       new RegimeApplyReducer(),
       new AddRegimeReducer(),
       new RemoveRegimeReducer(),
       new RevalueAssetReducer(),
       new BondPriceAdjustReducer(),
+      ...behavioralReducers,
     ];
   },
 };
