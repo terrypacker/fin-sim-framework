@@ -24,9 +24,12 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { RegimeApplyReducer }       from '../../src/finance/economic-regimes/regime-apply-reducer.js';
-import { DividendScheduledHandler } from '../../src/finance/handlers/dividend-scheduled-handler.js';
-import { RATE_KEYS }                from '../../src/finance/economic-regimes/rate-keys.js';
+import { RegimeApplyReducer }        from '../../src/finance/economic-regimes/regime-apply-reducer.js';
+import { DividendScheduledHandler }  from '../../src/finance/handlers/dividend-scheduled-handler.js';
+import { IntlAuStockDividendHandler} from '../../src/finance/handlers/earnings-handlers.js';
+import { computeHoldingsDividends }  from '../../src/finance/holdings/holdings-earnings.js';
+import { Holding }                   from '../../src/finance/holdings/holding.js';
+import { RATE_KEYS }                 from '../../src/finance/economic-regimes/rate-keys.js';
 import { ACCOUNT_ROLES }            from '../../src/finance/state/account-roles.js';
 import { ServiceRegistry }          from '../../src/services/service-registry.js';
 import { ScenarioLoader }           from '../../src/scenarios/scenario-loader.js';
@@ -284,4 +287,119 @@ test('EVT-DIV-CUT-4: effectiveDividendAdjustments resets to zero after regime ex
     `Expected effectiveDividendAdjustments.EQUITY_US ≈ 0 after regime expires, got ${adjAfter}`
   );
   assert.strictEqual(sim.state.activeRegimes.length, 0, 'Regime should be dropped after expiry');
+});
+
+// ─── Per-holding dividendYield (design 28 §7) ────────────────────────────────
+
+function holdingsState({ holdings, adjustments = null, balance = 0 }) {
+  return {
+    stockAccount: { balance, ownerId: null, holdings },
+    ...(adjustments && { effectiveDividendAdjustments: adjustments }),
+    people: {},
+  };
+}
+
+const mockRegistry = {
+  getStateKey: (_role, _ownerId) => 'stockAccount',
+  getAccount:  (state, _role, _ownerId) => state.stockAccount,
+};
+
+test('EVT-DIV-CUT-5: per-holding dividendYield drives the amount, overriding the account dividendRate', () => {
+  const handler = new DividendScheduledHandler({
+    stateRegistry: mockRegistry, role: ACCOUNT_ROLES.US_STOCK,
+    dividendRate: 0.04, reinvest: true,
+  });
+  const state = holdingsState({
+    holdings: [
+      new Holding({ id: 'h1', allocation: 'EQUITY', marketValue: 60000, rateKey: RATE_KEYS.EQUITY_US, dividendYield: 0.05 }),
+      new Holding({ id: 'h2', allocation: 'EQUITY', marketValue: 40000, rateKey: RATE_KEYS.EQUITY_US, dividendYield: 0.02 }),
+    ],
+  });
+
+  const apply = handler.call({ data: {}, state }).find(a => a.type === 'STOCK_DIVIDEND_APPLY');
+  const expected = +(60000 * 0.05 + 40000 * 0.02).toFixed(2);  // 3800, not 100000 × 0.04
+  assert.strictEqual(apply.amount, expected, `Expected per-holding ${expected}, got ${apply.amount}`);
+});
+
+test('EVT-DIV-CUT-6: a holding without dividendYield falls back to the account dividendRate', () => {
+  const handler = new DividendScheduledHandler({
+    stateRegistry: mockRegistry, role: ACCOUNT_ROLES.US_STOCK,
+    dividendRate: 0.04, reinvest: true,
+  });
+  const state = holdingsState({
+    holdings: [ new Holding({ id: 'h1', allocation: 'EQUITY', marketValue: 50000, rateKey: RATE_KEYS.EQUITY_US }) ],
+  });
+
+  const apply = handler.call({ data: {}, state }).find(a => a.type === 'STOCK_DIVIDEND_APPLY');
+  assert.strictEqual(apply.amount, +(50000 * 0.04).toFixed(2), `Expected fallback 2000, got ${apply.amount}`);
+});
+
+test('EVT-DIV-CUT-7: regime adjustment is looked up per holding rateKey', () => {
+  const handler = new DividendScheduledHandler({
+    stateRegistry: mockRegistry, role: ACCOUNT_ROLES.US_STOCK,
+    dividendRate: 0.04, reinvest: true,
+  });
+  // One US sleeve cut 50%, one AU sleeve untouched.
+  const state = holdingsState({
+    holdings: [
+      new Holding({ id: 'h1', allocation: 'EQUITY', marketValue: 50000, rateKey: RATE_KEYS.EQUITY_US }),
+      new Holding({ id: 'h2', allocation: 'EQUITY', marketValue: 50000, rateKey: RATE_KEYS.EQUITY_AU }),
+    ],
+    adjustments: { [RATE_KEYS.EQUITY_US]: -0.5, [RATE_KEYS.EQUITY_AU]: 0 },
+  });
+
+  const apply = handler.call({ data: {}, state }).find(a => a.type === 'STOCK_DIVIDEND_APPLY');
+  const expected = +(50000 * 0.04 * 0.5 + 50000 * 0.04 * 1.0).toFixed(2);  // 1000 + 2000 = 3000
+  assert.strictEqual(apply.amount, expected, `Expected mixed-rateKey ${expected}, got ${apply.amount}`);
+});
+
+test('EVT-DIV-CUT-8: computeHoldingsDividends floors each holding at zero (adj < -1)', () => {
+  const state = holdingsState({
+    holdings: [ new Holding({ id: 'h1', allocation: 'EQUITY', marketValue: 50000, rateKey: RATE_KEYS.EQUITY_US, dividendYield: 0.04 }) ],
+    adjustments: { [RATE_KEYS.EQUITY_US]: -1.5 },
+  });
+  const { amount, holdingActions } = computeHoldingsDividends({
+    state, stateKey: 'stockAccount', fallbackYield: 0.04, fallbackRateKey: RATE_KEYS.EQUITY_US,
+  });
+  assert.strictEqual(amount, 0, `Expected 0 (floored), got ${amount}`);
+  assert.strictEqual(holdingActions.length, 0, 'No holding action when the dividend floors to zero');
+});
+
+test('EVT-DIV-CUT-8b: computeHoldingsDividends no-holdings fallback uses balance × yield × (1 + adj)', () => {
+  const state = {
+    stockAccount: { balance: 100000, ownerId: null },  // no holdings array
+    effectiveDividendAdjustments: { [RATE_KEYS.EQUITY_US]: -0.25 },
+  };
+  const { amount } = computeHoldingsDividends({
+    state, stateKey: 'stockAccount', fallbackYield: 0.04, fallbackRateKey: RATE_KEYS.EQUITY_US,
+  });
+  assert.strictEqual(amount, +(100000 * 0.04 * 0.75).toFixed(2), `Expected 3000, got ${amount}`);
+});
+
+test('EVT-DIV-CUT-9: AU dividend handler applies the regime cut and reinvests into the sleeve', () => {
+  const handler = new IntlAuStockDividendHandler({
+    stateRegistry: mockRegistry, role: ACCOUNT_ROLES.AU_STOCK, dividendRate: 0.04,
+  });
+  const state = holdingsState({
+    holdings: [ new Holding({ id: 'h1', allocation: 'EQUITY', marketValue: 50000, rateKey: RATE_KEYS.EQUITY_AU }) ],
+    adjustments: { [RATE_KEYS.EQUITY_AU]: -0.30 },
+  });
+
+  const actions = handler.call({ state });
+  const apply   = actions.find(a => a.type?.startsWith('AU_DIVIDEND_FRANKED'));
+  const holding = actions.find(a => a.constructor?.name === 'HoldingTransactAction');
+
+  const expected = +(50000 * 0.04 * 0.70).toFixed(2);  // 1400
+  assert.strictEqual(apply.amount, expected, `Expected AU regime-cut ${expected}, got ${apply.amount}`);
+  assert.ok(holding, 'AU dividend should emit a HoldingTransactAction reinvesting into the sleeve');
+  assert.strictEqual(holding.marketValueDelta, expected, 'Reinvested delta should match the dividend');
+});
+
+test('EVT-DIV-CUT-10: Holding round-trips dividendYield through toJSON/fromJSON', () => {
+  const h = new Holding({ id: 'h1', allocation: 'EQUITY', marketValue: 1000, rateKey: RATE_KEYS.EQUITY_US, dividendYield: 0.037 });
+  const back = Holding.fromJSON(h.toJSON());
+  assert.strictEqual(back.dividendYield, 0.037, 'dividendYield should survive serialization');
+
+  const noneBack = Holding.fromJSON(new Holding({ allocation: 'EQUITY' }).toJSON());
+  assert.strictEqual(noneBack.dividendYield, null, 'absent dividendYield defaults to null');
 });

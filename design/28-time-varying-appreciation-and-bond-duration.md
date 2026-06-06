@@ -84,15 +84,17 @@ The Holdings model was designed for **investment accounts** specifically — man
 
 ## 7. Dividend-yield cuts under regimes — *spun out, do not implement here*
 
-**Status (2026-06-04): SPUN OUT.** Per §13 Q2 resolution, this section is *not* part of design 28's implementation. It ships as a standalone one-PR follow-up against design 21, tracked as Phase C deliverable #6 in [`24-financial-modeling-roadmap.md`](24-financial-modeling-roadmap.md) §5.
+**Status (2026-06-05): COMPLETE.** Spun out per §13 Q2 and shipped as a standalone follow-up against design 21 — *not* part of design 28's appreciation/duration work. Tracked as Phase C deliverable #6 in [`24-financial-modeling-roadmap.md`](24-financial-modeling-roadmap.md) §5. Landed in two parts:
+1. Commit `5e53dcc` (2026-06-04) — regime substrate: `EconomicRegime.dividendAdjustment`, `RegimeApplyReducer` → `state.effectiveDividendAdjustments` (scaled by `currentFactor`), `DividendScheduledHandler` scaling, `SHOCK_LIBRARY` presets, and `dividend-cuts-under-regime.test.mjs`. This part deferred the per-holding `dividendYield` field (the handler scaled the account-level rate).
+2. 2026-06-05 — the deferred per-holding piece: optional `Holding.dividendYield`, a shared `computeHoldingsDividends()` (`holdings-earnings.js`), and migration of **both** the US `DividendScheduledHandler` and the AU `IntlAuStockDividendHandler` to per-holding yield × per-rate-key adjustment (the AU path now also honors the regime cut, which it previously ignored).
 
-**What the spun-out PR will do** (kept here as the canonical implementation note since there is no dedicated `21a` doc):
+**What the spun-out PR did** (kept here as the canonical implementation note since there is no dedicated `21a` doc):
 
-- Extend `EconomicRegime` with `dividendAdjustment: { [rateKey]: number }` (alongside the existing `returnAdjustment`, `interestRateAdjustment`, `inflationAdjustment`, `appreciationAdjustment`, `fxAdjustment` fields built in `EconomicShockHandler`).
-- Add optional `holding.dividendYield` field; defaults to `DividendScheduledHandler`'s static per-account yield.
-- Migrate `DividendScheduledHandler` (already reads per-holding values post-design-25, per §6.5 of design 25) to compute `holding.dividendYield × (1 + regime.dividendAdjustment[holding.rateKey] × regime.currentFactor)`.
-- Carry `dividendAdjustment` through `Shock` schema and scenario serializer.
-- Test coverage in a new `dividend-cuts-under-regime.test.mjs`.
+- ✅ Extend `EconomicRegime` with `dividendAdjustment: { [rateKey]: number }` (alongside the existing `returnAdjustment`, `interestRateAdjustment`, `inflationAdjustment`, `appreciationAdjustment`, `fxAdjustment` fields built in `EconomicShockHandler`).
+- ✅ Add optional `Holding.dividendYield` field; falls back to the dividend handler's account-level `dividendRate` when null.
+- ✅ Migrate `DividendScheduledHandler` (US) **and** `IntlAuStockDividendHandler` (AU) to compute, per holding, `marketValue × (holding.dividendYield ?? dividendRate) × (1 + state.effectiveDividendAdjustments[holding.rateKey])` (the `× currentFactor` scaling already lives in `RegimeApplyReducer`), clamped ≥ 0 per holding. Shared seam: `computeHoldingsDividends()`, the dividend twin of `computeHoldingsGrowth()`.
+- ✅ Carry `dividendAdjustment` through the shock path and serializer — shocks are plain data in `parameters.shocks`; `resolveShockEntry` / `applySeverity` preserve `regime.dividendAdjustment`, and `SHOCK_LIBRARY` presets seed it.
+- ✅ Test coverage in `dividend-cuts-under-regime.test.mjs` (EVT-DIV-CUT-1…10, incl. per-holding yield, per-rate-key adjustment, AU reinvestment, and `Holding` round-trip).
 
 **Why spun out:** the change is 21-shaped (one more adjustment field on regime + small handler migration). Bundling it into design 28 would inflate this design's scope and gate a small, immediately-shippable improvement behind a Phase C design. Unblocked today (design 25 Holdings is complete); can ship before design 28 begins.
 

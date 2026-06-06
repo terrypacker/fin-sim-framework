@@ -78,7 +78,7 @@ import { HOLDING_ACTION_TYPES, HOLDING_ACTION_ENTRIES, HoldingTransactAction, Ho
 import { HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer, HoldingSplitReducer, HoldingRetitleReducer, HOLDING_REDUCER_CLASSES, _syncBalance } from './finance/holdings/holding-reducers.js';
 import { scaleHoldings } from './finance/holdings/holding-utils.js';
 import { Holding } from './finance/holdings/holding.js';
-import { computeHoldingsGrowth } from './finance/holdings/holdings-earnings.js';
+import { computeHoldingsGrowth, computeHoldingsDividends } from './finance/holdings/holdings-earnings.js';
 import { consumeHoldingsFifo } from './finance/holdings/holdings-fifo.js';
 import { JournalDataSource } from './finance/journal-data-source.js';
 import { JournalQueryApi } from './finance/journal-query-api.js';
@@ -544,6 +544,7 @@ export const Finance = {
   scaleHoldings,
   Holding,
   computeHoldingsGrowth,
+  computeHoldingsDividends,
   consumeHoldingsFifo,
   JournalDataSource,
   JournalQueryApi,

@@ -11,7 +11,7 @@
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
 import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
-import { computeHoldingsGrowth } from '../holdings/holdings-earnings.js';
+import { computeHoldingsGrowth, computeHoldingsDividends } from '../holdings/holdings-earnings.js';
 
 /**
  * Handles INTL_ROTH_EARNINGS events.
@@ -262,16 +262,18 @@ export class IntlAuStockEarningsHandler extends HandlerEntry {
  * Assumes fully franked dividends, which is typical for Australian equities.
  */
 export class IntlAuStockDividendHandler extends HandlerEntry {
-  static description = 'Computes annual AU stock dividends (balance × dividendRate) and routes to the franked-resident or franked-non-resident apply action based on residency.';
+  static description = 'Computes annual AU stock dividends per holding (marketValue × dividendYield, scaled by any active regime dividend adjustment) and routes to the franked-resident or franked-non-resident apply action based on residency.';
   static type        = 'IntlAuStockDividendHandler';
   static eventType   = 'INTL_AU_STOCK_DIVIDEND';
+  static rateKey     = RATE_KEYS.EQUITY_AU;
 
-  constructor({ stateRegistry, role, ownerId = null, dividendRate = 0.04 } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, dividendRate = 0.04, rateKey = null } = {}) {
     super(null, 'AU Stock Dividend');
     this.stateRegistry = stateRegistry;
     this.role          = role;
     this.ownerId       = ownerId;
     this.dividendRate  = dividendRate;
+    this.rateKey       = rateKey ?? new.target.rateKey;
     this.generatedActionTypes = [
       'AU_DIVIDEND_FRANKED_RESIDENT_APPLY',
       'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY',
@@ -281,25 +283,25 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, dividendRate: d.dividendRate ?? 0.04 });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, dividendRate: d.dividendRate ?? 0.04, rateKey: d.rateKey ?? null });
     h.id = d.id;
     return h;
   }
 
   toJSON() {
-    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, dividendRate: this.dividendRate };
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, dividendRate: this.dividendRate, rateKey: this.rateKey };
   }
 
   call({ state }) {
     const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
-    // Dividends are paid pro-rata across holdings using the configured
-    // dividendRate (a future design 28 extension may swap this for a
-    // per-holding dividendYield; the substrate is ready for it).
-    const { amount, holdingActions } = computeHoldingsGrowth({
+    // Per-holding dividends: each sleeve pays holding.dividendYield (falling back
+    // to the account-level dividendRate), scaled by the active regime's dividend
+    // adjustment for its rate key (design 28 §7). Reinvested into the sleeves via
+    // holdingActions, matching the franked-apply reducers' account-level credit.
+    const { amount, holdingActions } = computeHoldingsDividends({
       state, stateKey,
-      rateOverride:    this.dividendRate,
-      fallbackRate:    this.dividendRate,
-      fallbackRateKey: null,
+      fallbackYield:   this.dividendRate,
+      fallbackRateKey: this.rateKey,
     });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
 
