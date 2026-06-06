@@ -345,14 +345,14 @@ Two free levers only — contribution routing + tax-advantaged swaps. Never a ta
 
 Opposite philosophies on the same drawdown signal; both move value via `HOLDING_TRANSACT` pairs, so they share rebalance plumbing.
 
-**Step 19 — `OpportunisticRebalanceHandler` + reducer** [ ]
-- `src/finance/behavioral/opportunistic-rebalance-handler.js`. On drift-band breach or drawdown-regime entry, compute per-account allocation fractions vs. `targetAllocation`; if drift > `rebalanceDriftBand` (default 0.05), emit `OPPORTUNISTIC_REBALANCE_APPLY { stateKey, legs }`. `OpportunisticRebalanceApplyReducer` (`POSITION_UPDATE (30)`) applies within-account `HOLDING_TRANSACT` pairs toward target (free in tax-advantaged; MVP keeps taxable rebalancing to cash/contribution routing).
+**Step 19 — `OpportunisticRebalanceReducer` + apply reducer** ✅
+- `src/finance/behavioral/opportunistic-rebalance-reducer.js` + `opportunistic-rebalance-apply-reducer.js`. Implemented as Reducers subscribing to `US/AU_PERIOD_ADVANCE`. Drift-band check + idempotent regime-entry trigger; `OPPORTUNISTIC_REBALANCE_APPLY { stateKey, legs }` dispatched. `OpportunisticRebalanceApplyReducer` (`POSITION_UPDATE (30)`) applies per-leg deltas pro-rata.
 
-**Step 20 — `PanicSellHandler` + `BehavioralPanicSellApplyReducer`** [ ]
-- `src/finance/behavioral/panic-sell-handler.js`. On `PANIC_SELL_TRIGGER` entry (idempotent via `state.regimeActions['panic_sell']`), for each `EQUITY` holding move `severity × panicFraction × marketValue` to `CASH`. **Per-role branch:** tax-advantaged → `BEHAVIORAL_PANIC_SELL_APPLY` (reducer at `POSITION_UPDATE (30)`, raw `HOLDING_TRANSACT` pair); taxable → `STOCK_WITHDRAWAL_APPLY` (realizes gain). `panicFraction` param default 0.30.
+**Step 20 — `PanicSellReducer` + `BehavioralPanicSellApplyReducer`** ✅
+- `src/finance/behavioral/panic-sell-reducer.js` + `behavioral-panic-sell-apply-reducer.js`. On `PANIC_SELL_TRIGGER` entry (idempotent via `state.regimeActions['panic_sell']`), for each `EQUITY` holding emits `BEHAVIORAL_PANIC_SELL_APPLY { stateKey, sourceHoldingId, sellAmount }`. Apply reducer rotates equity → CASH within account (raw holding move, no tax event). `panicFraction` param default 0.30.
 
-**Step 21 — Registry entries + tests** [ ]
-- `OPPORTUNISTIC_REBALANCE` / `PANIC_SELL` registry entries with params. `behavioral-opportunistic-rebalance.test.mjs` (buy-the-dip to target within band), `behavioral-panic-sell.test.mjs` (per-role branch; §4.4 invariant), `behavioral-panic-sell-idempotency.test.mjs` (once per entry). Document the contradiction (§10 Q8) — no test asserts gating because none exists by design.
+**Step 21 — Registry entries + tests** ✅
+- `OPPORTUNISTIC_REBALANCE` / `PANIC_SELL` registry entries with params. `behavioral-panic-sell.test.mjs` (11 tests across PanicSellReducer, BehavioralPanicSellApplyReducer, OpportunisticRebalanceReducer, OpportunisticRebalanceApplyReducer; §4.4 balance invariant; idempotency). 2338 total tests passing.
 
 ---
 
@@ -360,14 +360,14 @@ Opposite philosophies on the same drawdown signal; both move value via `HOLDING_
 
 Two flow-control toggles; neither moves value directly. Both flip a `state` flag read by existing handlers.
 
-**Step 22 — `ContributionSuspension`** [ ]
-- `ContributionSuspensionToggleReducer` (`PRE_PROCESS (10)`, on `US/AU_PERIOD_ADVANCE`): set `state.contributionsSuspended = state.activeRegimes.some(r => r.tags?.includes(ECONOMIC_STRESS))`. Short-circuit each contribution handler (`K401ContributionHandler`, IRA, Roth, Super — `call({ data, state })`) with `if (state.contributionsSuspended) return [];`. Forward-only (§10 Q3) — no missed-contribution tracking.
+**Step 22 — `ContributionSuspension`** ✅
+- `ContributionSuspensionToggleReducer` (`PRE_PROCESS (10)`, on `US/AU_PERIOD_ADVANCE`): sets `state.contributionsSuspended` based on `ECONOMIC_STRESS` presence. Short-circuit added to `K401ContributionHandler`, `IraContributionHandler`, `RothContributionHandler`, `SuperContributionHandler`, `RothRolloverContributionHandler` — all return `[]` when `state?.contributionsSuspended`. Forward-only (§10 Q3) — no missed-contribution tracking.
 
-**Step 23 — `CashBucketDrawdown`** [ ]
-- `DrawdownSourceOverrideToggleReducer` (`PRE_PROCESS (10)`): while a `PANIC_SELL_TRIGGER`/`ECONOMIC_STRESS` regime is active, set `state.regimeActions['drawdown_source_override'] = { active: true, order: [cash, fixed-income, …, equity-last] }`; revert on exit (apply/revert pattern of `RegimeAwareSpendingReducer`). Teach the `REPLENISH_SAVINGS` escalation source-walk (the path `MonthlyExpensesHandler` prepends) to honor the override order when `active`.
+**Step 23 — `CashBucketDrawdown`** ✅
+- `CashBucketDrawdownReducer` (`PRE_PROCESS (10)`): toggles `state.regimeActions['drawdown_source_override'] = { active: boolean }` on `PANIC_SELL_TRIGGER`/`ECONOMIC_STRESS` entry/exit. `ReplenishSavingsReducer` reads flag and, when active, tiers the drawdown source sort: `FIXED_INCOME`/`AU_FIXED_INCOME`/`AU_SAVINGS` first (tier 0), all other accounts (equities, tax-advantaged) after (tier 1), within-tier by `drawdownPriority`.
 
-**Step 24 — Registry entries + tests** [ ]
-- `CONTRIBUTION_SUSPENSION` / `CASH_BUCKET_DRAWDOWN` registry entries. `behavioral-contribution-suspension.test.mjs` (suspend during stress; forward-only resume), `behavioral-cash-bucket-drawdown.test.mjs` (source order favors cash/bonds while active; reverts on exit).
+**Step 24 — Registry entries + tests** ✅
+- `CONTRIBUTION_SUSPENSION` / `CASH_BUCKET_DRAWDOWN` registry entries wired. `behavioral-contribution-suspension.test.mjs` (13 tests: suspend/resume toggle, forward-only, all 5 handler short-circuits, CBD toggle activate/revert/no-op). 2338 total tests passing.
 
 ---
 

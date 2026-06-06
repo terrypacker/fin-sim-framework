@@ -138,7 +138,8 @@ export class K401ContributionHandler extends HandlerEntry {
     this.generatedActionTypes = ['K401_CONTRIBUTION_APPLY', 'RECORD_BALANCE'];
   }
 
-  call({ data }) {
+  call({ data, state }) {
+    if (state?.contributionsSuspended) return [];
     return [
       { type: 'K401_CONTRIBUTION_APPLY', amount: data.amount },
       new RecordBalanceAction('k401Account.balance', 'k401Account'),

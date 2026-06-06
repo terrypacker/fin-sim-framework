@@ -18,6 +18,8 @@ import { OpportunisticRebalanceReducer }       from './opportunistic-rebalance-r
 import { OpportunisticRebalanceApplyReducer }  from './opportunistic-rebalance-apply-reducer.js';
 import { PanicSellReducer }                    from './panic-sell-reducer.js';
 import { BehavioralPanicSellApplyReducer }     from './behavioral-panic-sell-apply-reducer.js';
+import { ContributionSuspensionToggleReducer } from './contribution-suspension-toggle-reducer.js';
+import { CashBucketDrawdownReducer }           from './cash-bucket-drawdown-reducer.js';
 import { ACCOUNT_ROLES }                       from '../state/account-roles.js';
 
 /**
@@ -56,7 +58,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
 
   CONTRIBUTION_SUSPENSION: {
     handlers:    (_context) => [],
-    reducers:    (_context) => [],
+    reducers:    (_context) => [new ContributionSuspensionToggleReducer()],
     paramSchema: ()         => [],
   },
 
@@ -176,7 +178,7 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
 
   CASH_BUCKET_DRAWDOWN: {
     handlers:    (_context) => [],
-    reducers:    (_context) => [],
+    reducers:    (_context) => [new CashBucketDrawdownReducer()],
     paramSchema: ()         => [],
   },
 

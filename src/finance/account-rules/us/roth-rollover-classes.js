@@ -166,7 +166,8 @@ export class RothRolloverContributionHandler extends HandlerEntry {
     this.generatedActionTypes = ['ROTH_ROLLOVER_CONTRIBUTION_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
   }
 
-  call({ data }) {
+  call({ data, state }) {
+    if (state?.contributionsSuspended) return [];
     return [
       { type: 'ROTH_ROLLOVER_CONTRIBUTION_APPLY', amount: data.amount },
       new FieldValueAction('roth_rollover_contribution', 'Roth Rollover Contribution', data.amount),
