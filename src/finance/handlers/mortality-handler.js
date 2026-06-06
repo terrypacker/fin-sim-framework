@@ -37,6 +37,7 @@ export class MortalityHandler extends HandlerEntry {
     this.survivorDiscretionaryMultiplier = survivorDiscretionaryMultiplier;
     this.generatedActionTypes = [
       'PERSON_DIED_APPLY',
+      'HOLDING_SET_BASIS',
       'ACCOUNT_RETITLE_APPLY',
       'SPENDING_STRATEGY_APPLY',
       'SOCIAL_SECURITY_SURVIVOR_APPLY',
@@ -89,11 +90,38 @@ export class MortalityHandler extends HandlerEntry {
       deceasedSocialSecurityMonthly: person.socialSecurityMonthly ?? 0,
     });
 
+    // 2. US estate basis step-up: overwrite costBasis with marketValue for each
+    //    holding owned by the deceased. Runs before ACCOUNT_RETITLE_APPLY so the
+    //    stepped-up basis is what transfers to the survivor. AU CGT cost-base
+    //    carries over unchanged, so we emit nothing for AU.
+    if (taxJurisdiction === 'US') {
+      for (const [stateKey, value] of Object.entries(state)) {
+        if (
+          value &&
+          typeof value === 'object' &&
+          !Array.isArray(value) &&
+          value.ownerId === personId &&
+          Array.isArray(value.holdings)
+        ) {
+          for (const holding of value.holdings) {
+            if (holding && holding.id != null && holding.marketValue != null) {
+              actions.push({
+                type:      'HOLDING_SET_BASIS',
+                stateKey,
+                holdingId: holding.id,
+                costBasis: holding.marketValue,
+              });
+            }
+          }
+        }
+      }
+    }
+
     if (survivorId) {
-      // 2. Retitle solo-owned accounts to survivor
+      // 3. Retitle solo-owned accounts to survivor
       actions.push({ type: 'ACCOUNT_RETITLE_APPLY', deceasedId: personId, survivorId });
 
-      // 3. Per-slice survivor expense deltas (design/27 §10 Q2 Option B)
+      // 4. Per-slice survivor expense deltas (design/27 §10 Q2 Option B)
       const essential     = state.expenses?.essential     ?? 0;
       const discretionary = state.expenses?.discretionary ?? 0;
       actions.push({
@@ -109,7 +137,7 @@ export class MortalityHandler extends HandlerEntry {
         reason: 'survivor',
       });
 
-      // 4. Surviving spouse SS = max(self, deceased)
+      // 5. Surviving spouse SS = max(self, deceased)
       actions.push({
         type:      'SOCIAL_SECURITY_SURVIVOR_APPLY',
         survivorId,
@@ -117,7 +145,7 @@ export class MortalityHandler extends HandlerEntry {
       });
     }
 
-    // 5. Always check whether the scenario should terminate
+    // 6. Always check whether the scenario should terminate
     actions.push({ type: 'SCENARIO_COMPLETE_CHECK' });
 
     return actions;

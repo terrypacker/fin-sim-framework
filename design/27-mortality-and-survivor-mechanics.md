@@ -298,7 +298,7 @@ Per-person stochastic lifespan draws for MC sweeps; deterministic single runs ke
 
 The estate-law interaction layer (§7 Tax row, §10 Q3). Depends on design 25 holdings (live) and the tax/account module registry.
 
-**Step 18 — Basis step-up chain (US deceased only) — reuse design-25 holdings actions** [ ]
+**Step 18 — Basis step-up chain (US deceased only) — reuse design-25 holdings actions** ✅
 - **No new action or reducer needed.** Design 25 already ships `HoldingSetBasisAction` (action type `HOLDING_SET_BASIS`, `src/finance/holdings/holding-actions.js:187`) and `HoldingSetBasisReducer` (`src/finance/holdings/holding-reducers.js:132`, runs at `PRIORITY.COST_BASIS`, overwrites `holding.costBasis` with no balance impact). Their descriptions literally cite *"rollover step-up, residency reset"* — purpose-built for this. **Reconcile the doc:** §3 / §11 invented the name `HOLDING_SET_BASIS_APPLY`; the real action type is `HOLDING_SET_BASIS` — update those sections to match.
 - Extend `MortalityHandler` (Increment 1 Step 3, action #2): after `PERSON_DIED_APPLY`, dispatch into the tax/account module registry keyed on `state.deceased[personId].taxJurisdiction`. US jurisdiction → for each inherited holding, emit a `HoldingSetBasisAction({ stateKey, holdingId, costBasis: holding.marketValue })` (step basis up to date-of-death fair value; market value is unchanged so no `HoldingRevalueAction` is required). AU jurisdiction → emit nothing (CGT cost-base carries over). The US-vs-AU decision lives in the per-country tax module (TaxEngine + AccountRulesEngine pattern), **not** baked into the handler — the handler asks the module which holdings to step up.
 - Keys off the **deceased** only; the survivor's jurisdiction is irrelevant (§10 Q3 note). Ordering: basis step-up runs *before* `ACCOUNT_RETITLE_APPLY` so the stepped-up basis is what transfers to the survivor (the reducer's `COST_BASIS` priority already lands it after position updates within the chain).
@@ -306,5 +306,5 @@ The estate-law interaction layer (§7 Tax row, §10 Q3). Depends on design 25 ho
 **Step 19 — Filing-status change on widowhood** [ ]
 - Tax modules read `state.deceased` to switch filing status (married-joint → single) in the year after death. This is per-year-module policy work (§7 Tax row) — scope it as "tax modules consult `state.deceased`"; the actual bracket/standard-deduction changes are owned by each year's tax module, not this design.
 
-**Step 20 — Tests** [ ]
+**Step 20 — Tests** ✅
 - Extend `tests/unit/evt-person-died.test.mjs` (or a new `tests/unit/mortality-estate-basis.test.mjs`): US-resident-at-death produces a `HOLDING_SET_BASIS_APPLY` chain; AU-resident-at-death produces none; AU-resident widow inheriting from a US-resident deceased still gets the step-up (rule keys off deceased).
