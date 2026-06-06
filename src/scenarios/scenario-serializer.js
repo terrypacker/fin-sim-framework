@@ -66,6 +66,8 @@ import { SetOutOfFundsDateReducer }       from '../finance/reducers/set-out-of-f
 import { AccumulateDeficitReducer }       from '../finance/reducers/accumulate-deficit-reducer.js';
 import { OutOfFundsReducer }             from '../finance/reducers/out-of-funds-reducer.js';
 import { InflationAdjustReducer }        from '../finance/reducers/inflation-adjust-reducer.js';
+import { SpendingStrategyApplyReducer }  from '../finance/spending/spending-strategy-apply-reducer.js';
+import { RegimeAwareSpendingReducer }    from '../finance/spending/strategies/regime-aware-spending-reducer.js';
 import { EconomicShockHandler }          from '../finance/economic-regimes/economic-shock-handler.js';
 import { EconomicRecoveryTickHandler }   from '../finance/economic-regimes/economic-recovery-tick-handler.js';
 import { RegimeApplyReducer }            from '../finance/economic-regimes/regime-apply-reducer.js';
@@ -225,6 +227,7 @@ const _ALL_CLASSES = [
   IntlTransferApplyReducer, FxTransferApplyReducer, FxRefreshReducer,
   StockDividendCashApplyReducer, ChangeResidencyApplyReducer,
   SetOutOfFundsDateReducer, AccumulateDeficitReducer, OutOfFundsReducer, InflationAdjustReducer,
+  SpendingStrategyApplyReducer, RegimeAwareSpendingReducer,
   UsPeriodAdvanceReducer, AuPeriodAdvanceReducer,
   UsTaxSettleApplyReducer, AuTaxSettleApplyReducer,
   UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer,

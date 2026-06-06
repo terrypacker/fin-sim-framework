@@ -51,6 +51,7 @@ import { EconomicShockHandler } from './finance/economic-regimes/economic-shock-
 import { RATE_KEYS, ROLE_TO_RATE_KEY } from './finance/economic-regimes/rate-keys.js';
 import { RecoveryCurves } from './finance/economic-regimes/recovery-curves.js';
 import { RegimeApplyReducer } from './finance/economic-regimes/regime-apply-reducer.js';
+import { REGIME_TAG } from './finance/economic-regimes/regime-tag.js';
 import { RemoveRegimeReducer } from './finance/economic-regimes/remove-regime-reducer.js';
 import { RevalueAssetReducer } from './finance/economic-regimes/revalue-asset-reducer.js';
 import { SHOCK_LIBRARY, SHOCK_PRESET_OPTIONS } from './finance/economic-shocks/shock-library.js';
@@ -112,6 +113,9 @@ import { PersonService } from './finance/services/person-service.js';
 import { RealPropertyService } from './finance/services/real-property-service.js';
 import { StateRegistry } from './finance/services/state-registry.js';
 import { ParameterValueType, StateSchemaRegistry } from './finance/services/state-schema-registry.js';
+import { SpendingStrategyApplyReducer } from './finance/spending/spending-strategy-apply-reducer.js';
+import { SPENDING_STRATEGY_REGISTRY } from './finance/spending/spending-strategy-registry.js';
+import { RegimeAwareSpendingReducer } from './finance/spending/strategies/regime-aware-spending-reducer.js';
 import { ACCOUNT_ROLES } from './finance/state/account-roles.js';
 import { InternationalRetirementFinancialState } from './finance/state/intl-retirement-state.js';
 import { AuTaxDocument2024 } from './finance/tax/au/au-tax-document-2024.js';
@@ -149,7 +153,7 @@ import { Graph } from './graph/graph.js';
 import { SimGraphNode } from './graph/sim-graph-node.js';
 import { QueryApi } from './query/query-api.js';
 import { BaseScenario } from './scenarios/base-scenario.js';
-import { INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, IntlRetirementScenario } from './scenarios/intl-retirement-scenario.js';
+import { INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
 import { ScenarioLoader } from './scenarios/scenario-loader.js';
 import { ScenarioRegistry } from './scenarios/scenario-registry.js';
 import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
@@ -467,6 +471,7 @@ export const Finance = {
   ROLE_TO_RATE_KEY,
   RecoveryCurves,
   RegimeApplyReducer,
+  REGIME_TAG,
   RemoveRegimeReducer,
   RevalueAssetReducer,
   SHOCK_LIBRARY,
@@ -583,6 +588,9 @@ export const Finance = {
   StateRegistry,
   ParameterValueType,
   StateSchemaRegistry,
+  SpendingStrategyApplyReducer,
+  SPENDING_STRATEGY_REGISTRY,
+  RegimeAwareSpendingReducer,
   ACCOUNT_ROLES,
   InternationalRetirementFinancialState,
   AuTaxDocument2024,
@@ -723,6 +731,7 @@ export const Scenarios = {
   INTL_RETIREMENT_DEFAULTS,
   INTL_RETIREMENT_PARAM_SCHEMA,
   IntlRetirementScenario,
+  applyRealPropertySaleYearParams,
   ScenarioLoader,
   ScenarioRegistry,
   ScenarioSerializer,

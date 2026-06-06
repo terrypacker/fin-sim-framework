@@ -79,7 +79,8 @@ export const US_ROTH_CONVERSION = {
       },
       {
         key: 'rothConversionOwner', label: 'Roth Conversion Owner',
-        type: 'String', group: 'Roth Conversion', mc: false, opt: false,
+        type: 'Enum', group: 'Roth Conversion', mc: false, opt: false,
+        options: ['primary', 'spouse', 'both'],
         defaultValue: 'both',
         description: "Whose IRA to convert: 'primary', 'spouse', or 'both'",
       },

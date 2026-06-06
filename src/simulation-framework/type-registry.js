@@ -18,11 +18,13 @@ export class ValueType {
     this.opts = opts;
   }
 
-  static currency(code) { return new ValueType('currency', { code }); }
-  static text()          { return new ValueType('text'); }
-  static number()        { return new ValueType('number'); }
-  static boolean()       { return new ValueType('boolean'); }
-  static any()           { return new ValueType('any'); }
+  static currency(code)          { return new ValueType('currency', { code }); }
+  static text()                  { return new ValueType('text'); }
+  static number()                { return new ValueType('number'); }
+  static boolean()               { return new ValueType('boolean'); }
+  static any()                   { return new ValueType('any'); }
+  static enum(options)           { return new ValueType('enum',      { options }); }
+  static enumMulti(options)      { return new ValueType('enumMulti', { options }); }
 }
 
 // Fields that are always excluded by the fallback picker — durable framework names.

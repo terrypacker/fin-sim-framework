@@ -305,6 +305,17 @@ export class ScenarioTabView {
         valueInput.addEventListener('change', () => { param.value = valueInput.value; });
       } else if (param.type === 'ShockList') {
         valueInput = _buildShockListEditor(param);
+      } else if (param.type === 'Enum') {
+        valueInput = document.createElement('select');
+        (param.options ?? []).forEach(opt => {
+          const el = document.createElement('option');
+          el.value = opt; el.textContent = opt;
+          valueInput.appendChild(el);
+        });
+        valueInput.value = param.value ?? (param.options?.[0] ?? '');
+        valueInput.addEventListener('change', () => { param.value = valueInput.value; });
+      } else if (param.type === 'EnumMulti') {
+        valueInput = _buildEnumMultiEditor(param);
       } else {
         valueInput = document.createElement('input');
         valueInput.placeholder = 'value';
@@ -485,5 +496,46 @@ function _buildShockListEditor(param) {
   };
 
   render();
+  return container;
+}
+
+// ─── EnumMulti editor ─────────────────────────────────────────────────────────
+
+/**
+ * Build a checkbox-group editor for an EnumMulti parameter.
+ *
+ * param.value is an array of selected option strings (e.g. ['FIXED', 'REGIME_AWARE']).
+ * param.options is a string array of all available choices.
+ * Mutations write directly onto param.value so the scenario picks them up
+ * on the next rebuild.
+ *
+ * @param {object} param  The param descriptor ({ value, options, ... })
+ * @returns {HTMLElement}
+ */
+function _buildEnumMultiEditor(param) {
+  const container = document.createElement('div');
+  container.className = 'enum-multi-editor';
+
+  const selected = new Set(Array.isArray(param.value) ? param.value : []);
+  const options  = Array.isArray(param.options) ? param.options : [];
+
+  options.forEach(opt => {
+    const label = document.createElement('label');
+    label.className = 'enum-multi-option';
+
+    const cb = document.createElement('input');
+    cb.type    = 'checkbox';
+    cb.value   = opt;
+    cb.checked = selected.has(opt);
+    cb.addEventListener('change', () => {
+      if (cb.checked) selected.add(opt); else selected.delete(opt);
+      param.value = [...selected];
+    });
+
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(opt));
+    container.appendChild(label);
+  });
+
   return container;
 }

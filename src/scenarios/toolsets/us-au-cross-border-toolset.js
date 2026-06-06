@@ -81,7 +81,8 @@ export const US_AU_CROSS_BORDER = {
       },
       {
         key: 'startingResidency', label: 'Starting Residency',
-        type: 'Text', group: 'Cross Border', mc: false, opt: true,
+        type: 'Enum', group: 'Cross Border', mc: false, opt: true,
+        options: ['US', 'AUS'],
         defaultValue: null,
         description: 'Starting country of tax residency for all persons (e.g. "US", "AUS"). Defaults to "US" when unset.',
       },

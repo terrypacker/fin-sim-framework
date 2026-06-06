@@ -104,13 +104,13 @@ No top-level data-model surgery.
 
 ## 7. Interaction with existing designs
 
-| Design | Interaction |
-|---|---|
-| **25 Holdings** | Heavy: panic-sell moves equity → cash via `HOLDING_TRANSACT` pairs; tax-loss-harvest reads `holdingsByAllocation` + `unrealizedGainLoss`. |
-| **21 Regimes** | Heavy: every handler reads `state.activeRegimes`. Adds optional `regime.tags`. |
-| **26 Spending** | Independent but parallel architecture (strategy registry). |
-| **27 Mortality** | Independent. (A `PanicSellHandler` would fire at a regime, not at `PERSON_DIED`.) |
-| **23 FX** | None. |
+| Design | Interaction                                                                                                                                                               |
+|---|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **25 Holdings** | Heavy: panic-sell moves equity → cash via `HOLDING_TRANSACT` pairs; tax-loss-harvest reads `holdingsByAllocation` + `unrealizedGainLoss`.                                 |
+| **21 Regimes** | Heavy: every handler reads `state.activeRegimes`. Adds optional `regime.tags`.                                                                                            |
+| **26 Spending** | Independent but parallel architecture (strategy registry). However we did add the `state.regimeActions as it was needed and can be used here for state / regime awareness |                                                                    |
+| **27 Mortality** | Independent. (A `PanicSellHandler` would fire at a regime, not at `PERSON_DIED`.)                                                                                         |
+| **23 FX** | None.                                                                                                                                                                     |
 
 ---
 
