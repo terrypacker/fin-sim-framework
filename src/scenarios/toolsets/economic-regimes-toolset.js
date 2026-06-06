@@ -207,7 +207,44 @@ export const ECONOMIC_REGIMES = {
           targetStateKeys: ValueType.any(),
         },
       },
-      { type: 'RECOMPUTE_REGIMES',   fields: {} },
+      { type: 'RECOMPUTE_REGIMES', fields: {} },
+      // ── Behavioral strategy action types (design/29) ──────────────────────
+      {
+        type: 'STOCK_HARVEST_APPLY',
+        fields: {
+          stateKey:            ValueType.text(),
+          sellAmount:          ValueType.number(),
+          sourceHoldingId:     ValueType.text(),
+          substituteHoldingId: ValueType.text(),
+          purpose:             ValueType.text(),
+          residency:           ValueType.text(),
+        },
+      },
+      {
+        type: 'BEHAVIORAL_PANIC_SELL_APPLY',
+        fields: {
+          stateKey:        ValueType.text(),
+          sourceHoldingId: ValueType.text(),
+          sellAmount:      ValueType.number(),
+        },
+      },
+      {
+        type: 'OPPORTUNISTIC_REBALANCE_APPLY',
+        fields: {
+          stateKey: ValueType.text(),
+          legs:     ValueType.any(),
+        },
+      },
+      {
+        type: 'ASSET_LOCATION_REBALANCE_APPLY',
+        fields: {
+          fromStateKey:  ValueType.text(),
+          fromHoldingId: ValueType.text(),
+          toStateKey:    ValueType.text(),
+          toHoldingId:   ValueType.text(),
+          swapAmount:    ValueType.number(),
+        },
+      },
     ],
   },
 

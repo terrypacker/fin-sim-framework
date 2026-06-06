@@ -10,8 +10,9 @@
 
 import { BaseComponent } from '../components/base-component.js';
 
-const FIXED_COUNTRY   = new Set(['401k', 'roth', 'ira', 'super']);
+const FIXED_COUNTRY    = new Set(['401k', 'roth', 'ira', 'super']);
 const INVESTMENT_TYPES = new Set(['brokerage', '401k', 'roth', 'ira', 'super']);
+const ALLOCATIONS      = ['EQUITY', 'BOND', 'CASH', 'OTHER'];
 
 /**
  * AccountEditor — renders the account edit form from tpl-account-editor into
@@ -42,11 +43,17 @@ export class AccountEditor extends BaseComponent {
     this.onSave     = onSave    ?? null;
     this.onDelete   = onDelete  ?? null;
     this.onHistory  = onHistory ?? null;
+    this._holdings  = [];   // mutable working copy of the holdings array
+    this._tbodyEl   = null; // cached tbody reference for refreshes
+    this._rootEl    = null;
   }
 
   render() {
     const el     = this._getTemplate('tpl-account-editor');
     const isEdit = !!(this._node?.id);
+
+    // Initialise working holdings copy before anything touches the DOM
+    this._holdings = (this._node?.holdings ?? []).map(h => ({ ...h }));
 
     // Populate fields
     el.querySelector('[data-id="name"]').value    = this._node?.name ?? '';
@@ -73,8 +80,7 @@ export class AccountEditor extends BaseComponent {
     this._applyTypeVisibility(el, typeSelect.value);
     this.listen(typeSelect, 'change', () => this._applyTypeVisibility(el, typeSelect.value));
 
-    // Holdings table (read-only, design 25 §9). Editing flows ship later
-    // alongside per-holding appreciation schedules (design 28).
+    // Holdings — editable table (design 25 §9 + design 29 taxLossPartner)
     this._renderHoldings(el);
 
     // Delete / History buttons (edit only)
@@ -99,12 +105,141 @@ export class AccountEditor extends BaseComponent {
     this._rootEl = el;
   }
 
+  // ─── Holdings ───────────────────────────────────────────────────────────────
+
+  _renderHoldings(el) {
+    const section = el.querySelector('[data-id="holdingsSection"]');
+    const tbody   = el.querySelector('[data-id="holdingsTbody"]');
+    const addBtn  = el.querySelector('[data-id="addHoldingBtn"]');
+    if (!section || !tbody) return;
+
+    this._tbodyEl = tbody;
+
+    // Visibility: always show for investment account types
+    const type = this._node?.type ?? el.querySelector('[data-id="type"]')?.value ?? '';
+    section.style.display = (INVESTMENT_TYPES.has(type) || this._holdings.length > 0) ? '' : 'none';
+
+    this._refreshHoldingsTbody();
+    this._syncBalance(el);
+
+    if (addBtn) {
+      this.listen(addBtn, 'click', () => {
+        this._holdings.push({
+          id:             `h-${Date.now()}`,
+          label:          '',
+          allocation:     'EQUITY',
+          rateKey:        '',
+          marketValue:    0,
+          costBasis:      0,
+          taxLossPartner: null,
+          purchaseDate:   null,
+        });
+        this._refreshHoldingsTbody();
+        this._syncBalance(this._rootEl);
+      });
+    }
+  }
+
+  _refreshHoldingsTbody() {
+    const tbody = this._tbodyEl;
+    if (!tbody) return;
+    tbody.replaceChildren();
+
+    for (let i = 0; i < this._holdings.length; i++) {
+      const h = this._holdings[i];
+
+      // Build taxLossPartner options from sibling holdings
+      const partnerOpts = ['<option value="">— none —</option>',
+        ...this._holdings
+          .filter((_, j) => j !== i)
+          .map(other => {
+            const sel   = h.taxLossPartner === other.id ? ' selected' : '';
+            const label = _escape(other.label || other.id || '');
+            return `<option value="${_escape(other.id)}"${sel}>${label}</option>`;
+          }),
+      ].join('');
+
+      const allocOpts = ALLOCATIONS.map(a =>
+        `<option value="${a}"${h.allocation === a ? ' selected' : ''}>${a}</option>`
+      ).join('');
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input class="h-input" data-f="label" value="${_escape(h.label ?? '')}" placeholder="Label"/></td>
+        <td><select class="h-input" data-f="allocation">${allocOpts}</select></td>
+        <td><input class="h-input" data-f="rateKey" value="${_escape(h.rateKey ?? '')}" placeholder="e.g. EQUITY_US"/></td>
+        <td><input class="h-input h-num" type="number" data-f="marketValue" value="${h.marketValue ?? 0}"/></td>
+        <td><input class="h-input h-num" type="number" data-f="costBasis" value="${h.costBasis ?? 0}"/></td>
+        <td><select class="h-input" data-f="taxLossPartner">${partnerOpts}</select></td>
+        <td class="h-actions"><button class="btn btn-xs btn-warn h-delete" type="button">✕</button></td>
+      `;
+
+      // Wire all inputs
+      tr.querySelectorAll('[data-f]').forEach(input => {
+        const field   = input.dataset.f;
+        const isNum   = input.type === 'number';
+        const evtName = input.tagName === 'SELECT' ? 'change' : 'input';
+
+        input.addEventListener(evtName, () => {
+          if (field === 'taxLossPartner') {
+            this._holdings[i].taxLossPartner = input.value || null;
+          } else if (isNum) {
+            this._holdings[i][field] = Number(input.value) || 0;
+            if (field === 'marketValue') this._syncBalance(this._rootEl);
+          } else {
+            this._holdings[i][field] = input.value;
+          }
+        });
+      });
+
+      tr.querySelector('.h-delete').addEventListener('click', () => {
+        // Null out any taxLossPartner references to this holding
+        const removedId = this._holdings[i].id;
+        this._holdings.splice(i, 1);
+        for (const h2 of this._holdings) {
+          if (h2.taxLossPartner === removedId) h2.taxLossPartner = null;
+        }
+        this._refreshHoldingsTbody();
+        this._syncBalance(this._rootEl);
+      });
+
+      tbody.appendChild(tr);
+    }
+  }
+
+  _syncBalance(el) {
+    if (!el) return;
+    const balInput = el.querySelector('[data-id="balance"]');
+    if (!balInput) return;
+    if (this._holdings.length > 0) {
+      const total = this._holdings.reduce((s, h) => s + (Number(h.marketValue) || 0), 0);
+      balInput.value    = total.toFixed(2);
+      balInput.disabled = true;
+      balInput.title    = 'Computed from holdings — edit holdings to change';
+    } else {
+      balInput.disabled = false;
+      balInput.title    = '';
+    }
+  }
+
+  // ─── Form read ──────────────────────────────────────────────────────────────
+
   _readForm(el) {
+    const holdings = this._holdings.map(h => ({
+      ...h,
+      marketValue:    Number(h.marketValue)  || 0,
+      costBasis:      Number(h.costBasis)    || 0,
+      taxLossPartner: h.taxLossPartner || null,
+    }));
+    const balance = holdings.length > 0
+      ? holdings.reduce((s, h) => s + h.marketValue, 0)
+      : (Number(el.querySelector('[data-id="balance"]').value) || 0);
+
     return {
       id:               this._node?.id ?? null,
       name:             el.querySelector('[data-id="name"]').value.trim(),
       type:             el.querySelector('[data-id="type"]').value,
-      balance:          el.querySelector('[data-id="balance"]').value,
+      balance,
       country:          el.querySelector('[data-id="country"]').value,
       ownershipType:    el.querySelector('[data-id="ownershipType"]').value,
       ownerId:          el.querySelector('[data-id="ownerId"]').value || null,
@@ -112,40 +247,21 @@ export class AccountEditor extends BaseComponent {
       drawdownPriority: el.querySelector('[data-id="drawdownPriority"]').value,
       contributionBasis:el.querySelector('[data-id="contributionBasis"]').value,
       earningsBasis:    el.querySelector('[data-id="earningsBasis"]').value,
+      holdings,
     };
   }
+
+  // ─── Visibility ─────────────────────────────────────────────────────────────
 
   _applyTypeVisibility(el, type) {
     el.querySelector('[data-id="countryRow"]').style.display      = FIXED_COUNTRY.has(type)    ? 'none' : '';
     el.querySelector('[data-id="investmentFields"]').style.display = INVESTMENT_TYPES.has(type) ? ''    : 'none';
-  }
 
-  _renderHoldings(el) {
-    const section = el.querySelector('[data-id="holdingsSection"]');
-    const tbody   = el.querySelector('[data-id="holdingsTbody"]');
-    if (!section || !tbody) return;
-    const holdings = Array.isArray(this._node?.holdings) ? this._node.holdings : [];
-    if (holdings.length === 0) {
-      section.style.display = 'none';
-      return;
+    const holdingsSection = el.querySelector('[data-id="holdingsSection"]');
+    if (holdingsSection) {
+      holdingsSection.style.display = (INVESTMENT_TYPES.has(type) || this._holdings.length > 0) ? '' : 'none';
     }
-    section.style.display = '';
-    tbody.replaceChildren();
-    const currency = this._node?.currency?.symbol ?? '$';
-    for (const h of holdings) {
-      const tr  = document.createElement('tr');
-      const ugl = (h.marketValue ?? 0) - (h.costBasis ?? 0);
-      tr.innerHTML = `
-        <td>${_escape(h.label || h.id || '')}</td>
-        <td>${_escape(h.allocation ?? '')}</td>
-        <td>${_escape(h.rateKey ?? '')}</td>
-        <td class="num">${_money(currency, h.marketValue)}</td>
-        <td class="num">${_money(currency, h.costBasis)}</td>
-        <td class="num ${ugl >= 0 ? 'pos' : 'neg'}">${_money(currency, ugl)}</td>
-        <td>${_date(h.purchaseDate)}</td>
-      `;
-      tbody.appendChild(tr);
-    }
+    this._syncBalance(el);
   }
 
   _populateOwnerSelect(el, people, selectedId) {
@@ -170,16 +286,4 @@ function _escape(s) {
   return String(s ?? '').replace(/[&<>"]/g, c => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]
   ));
-}
-
-function _money(symbol, n) {
-  const v = Number(n ?? 0);
-  return `${symbol}${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function _date(d) {
-  if (!d) return '—';
-  const dt = d instanceof Date ? d : new Date(d);
-  if (Number.isNaN(dt.getTime())) return '—';
-  return dt.toISOString().slice(0, 10);
 }

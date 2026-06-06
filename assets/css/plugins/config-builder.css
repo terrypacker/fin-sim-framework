@@ -121,6 +121,9 @@
   padding-top: 8px;
 }
 .holdings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -149,6 +152,24 @@
 }
 .holdings-table td.pos { color: var(--ok, #4caf50); }
 .holdings-table td.neg { color: var(--err, #e57373); }
+
+/* Editable input cells */
+.holdings-table .h-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 2px 4px;
+  font-size: 11px;
+  background: var(--bg-input, #1e1e1e);
+  color: var(--text, #e0e0e0);
+  border: 1px solid var(--border, #444);
+  border-radius: 3px;
+}
+.holdings-table .h-input:focus {
+  outline: none;
+  border-color: var(--accent-primary, #7c6ff7);
+}
+.holdings-table .h-num { text-align: right; font-variant-numeric: tabular-nums; }
+.holdings-table td.h-actions { width: 28px; text-align: center; padding: 2px; }
 
 .node-field {
   display: flex;
