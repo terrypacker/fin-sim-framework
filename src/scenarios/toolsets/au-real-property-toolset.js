@@ -12,7 +12,10 @@ import { OneOffEvent }             from '../../simulation-framework/events/one-o
 import { EventSeries }             from '../../simulation-framework/events/event-series.js';
 import { AuHouseSaleHandler, AuHouseSaleApplyReducer } from '../../finance/account-rules/au/au-real-property-classes.js';
 import { AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer } from '../../finance/account-rules/mortgage-payment-classes.js';
+import { AssetAppreciationHandler } from '../../finance/handlers/asset-appreciation-handler.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
+
+const AU_REAL_PROPERTY_APPRECIATE_TYPE = 'AU_REAL_PROPERTY_APPRECIATE';
 
 /**
  * AU_REAL_PROPERTY toolset — wires AU house sale machinery.
@@ -35,7 +38,7 @@ export const AU_REAL_PROPERTY = {
   dependencies: ['AU_TAX'],
 
   types: {
-    handlers: [AuHouseSaleHandler, AuMortgagePaymentHandler],
+    handlers: [AuHouseSaleHandler, AuMortgagePaymentHandler, AssetAppreciationHandler],
     reducers: [AuHouseSaleApplyReducer, AuMortgagePaymentApplyReducer],
     actions: [
       { type: 'AU_HOUSE_SALE_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'AU',
@@ -83,6 +86,16 @@ export const AU_REAL_PROPERTY = {
         color:    '#4E342E',
       }));
     }
+    const appreciableProps = auProps.filter(p => p.stateKey && ((p.appreciationRate ?? 0) !== 0 || p.appreciationSchedule));
+    if (appreciableProps.length > 0) {
+      schedules.push(new EventSeries({
+        name:     'AU Real Property Appreciation',
+        type:     AU_REAL_PROPERTY_APPRECIATE_TYPE,
+        interval: 'annually',
+        enabled:  true,
+        color:    '#558B2F',
+      }));
+    }
     return schedules;
   },
 
@@ -95,6 +108,19 @@ export const AU_REAL_PROPERTY = {
       handlers.push(new AuMortgagePaymentHandler({
         properties: mortgagedProps.map(p => ({ stateKey: p.stateKey, monthlyMortgage: p.monthlyMortgage })),
       }));
+    }
+    const appreciableProps = props.filter(p => p.stateKey && ((p.appreciationRate ?? 0) !== 0 || p.appreciationSchedule));
+    const appreciateEvent  = context.schedulesById?.[AU_REAL_PROPERTY_APPRECIATE_TYPE];
+    if (appreciableProps.length > 0 && appreciateEvent) {
+      const handler = new AssetAppreciationHandler({
+        assets: appreciableProps.map(p => ({
+          stateKey:            p.stateKey,
+          appreciationRate:    p.appreciationRate ?? 0,
+          appreciationSchedule: p.appreciationSchedule ?? null,
+        })),
+      });
+      handler.handledEvents = [appreciateEvent];
+      handlers.push(handler);
     }
     return handlers;
   },
@@ -113,16 +139,18 @@ export const AU_REAL_PROPERTY = {
 
 function _propertyToStatePlain(prop) {
   return {
-    stateKey:           prop.stateKey,
-    value:              prop.value              ?? 0,
-    costBasis:          prop.costBasis          ?? 0,
-    mortgageBalance:    prop.mortgageBalance    ?? 0,
-    monthlyMortgage:    prop.monthlyMortgage    ?? 0,
-    appreciationRate:   prop.appreciationRate   ?? 0,
-    isPrimaryResidence: prop.isPrimaryResidence ?? false,
-    plannedSaleYear:    prop.plannedSaleYear    ?? null,
-    ownershipType:      prop.ownershipType      ?? 'sole',
-    ownerId:            prop.ownerId            ?? null,
-    country:            prop.country            ?? 'AU',
+    stateKey:            prop.stateKey,
+    value:               prop.value              ?? 0,
+    costBasis:           prop.costBasis          ?? 0,
+    mortgageBalance:     prop.mortgageBalance    ?? 0,
+    monthlyMortgage:     prop.monthlyMortgage    ?? 0,
+    appreciationRate:    prop.appreciationRate   ?? 0,
+    isPrimaryResidence:  prop.isPrimaryResidence ?? false,
+    plannedSaleYear:     prop.plannedSaleYear    ?? null,
+    ownershipType:       prop.ownershipType      ?? 'sole',
+    ownerId:             prop.ownerId            ?? null,
+    country:             prop.country            ?? 'AU',
+    appreciationSchedule: prop.appreciationSchedule ?? null,
+    market:              prop.market             ?? null,
   };
 }

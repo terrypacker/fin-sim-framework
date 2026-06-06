@@ -8,7 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { HoldingTransactAction } from './holding-actions.js';
+import { HoldingTransactAction }    from './holding-actions.js';
+import { resolveScheduledRate }     from './appreciation-schedule-utils.js';
 
 /**
  * Walk an account's holdings, compute per-holding growth using
@@ -51,6 +52,11 @@ import { HoldingTransactAction } from './holding-actions.js';
  *                                            bypassing the effective-rates map and
  *                                            per-holding rateKey entirely. Used by
  *                                            handlers that accept a `data.rate` one-off.
+ * @param {Date|null} [opts.currentDate=null]
+ *                                          - Current simulation date; used to resolve
+ *                                            per-holding appreciationSchedule entries.
+ *                                            When null, schedule lookup is skipped and
+ *                                            the effective rate is used directly.
  * @returns {{ amount: number, holdingActions: HoldingTransactAction[] }}
  */
 export function computeHoldingsGrowth({
@@ -61,6 +67,7 @@ export function computeHoldingsGrowth({
   rateSource   = 'effectiveGrowthRates',
   factor       = 1,
   rateOverride = null,
+  currentDate  = null,
 }) {
   const account  = state?.[stateKey];
   const holdings = account?.holdings ?? [];
@@ -79,9 +86,12 @@ export function computeHoldingsGrowth({
   for (const h of holdings) {
     if (!h) continue;
     const mv      = h.marketValue ?? 0;
-    const hRate   = rateOverride
+    const baseRate = rateOverride
       ?? (h.rateKey != null ? ratesMap[h.rateKey] : undefined)
       ?? fbRate;
+    const hRate   = (currentDate && h.appreciationSchedule)
+      ? resolveScheduledRate(h.appreciationSchedule, currentDate, baseRate)
+      : baseRate;
     const growth  = +(mv * hRate * factor).toFixed(2);
     total += growth;
     if (growth !== 0) {

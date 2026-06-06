@@ -38,6 +38,20 @@ export const RATE_KEYS = Object.freeze({
 });
 
 /**
+ * Per-rate-key metadata (design 28 §5). A sibling to RATE_KEYS (whose values
+ * are bare strings and cannot carry metadata). Keys must match RATE_KEYS values.
+ *
+ * defaultDuration: modified duration in years, used by BondPriceAdjustReducer
+ *   when a BOND holding has no explicit `holding.duration`. `?? 0` means the
+ *   absence of defaultDuration is a safe no-op for non-bond rate keys.
+ *   5.0 years = intermediate-Treasury proxy.
+ */
+export const RATE_KEY_META = Object.freeze({
+  [RATE_KEYS.FIXED_INCOME_US]: { defaultDuration: 5.0 },
+  [RATE_KEYS.FIXED_INCOME_AU]: { defaultDuration: 5.0 },
+});
+
+/**
  * Map from ACCOUNT_ROLES values to their corresponding RATE_KEYS entry.
  * Used by the ECONOMIC_REGIMES toolset to build rateKeyToStateKeys maps
  * from the scenario's registered accounts.
