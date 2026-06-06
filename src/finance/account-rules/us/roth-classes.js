@@ -160,7 +160,8 @@ export class RothContributionHandler extends HandlerEntry {
     this.generatedActionTypes = ['ROTH_CONTRIBUTION_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
   }
 
-  call({ data }) {
+  call({ data, state }) {
+    if (state?.contributionsSuspended) return [];
     return [
       { type: 'ROTH_CONTRIBUTION_APPLY', amount: data.amount },
       new FieldValueAction('roth_contribution', 'Roth Contribution', data.amount),

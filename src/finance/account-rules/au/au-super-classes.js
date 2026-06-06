@@ -167,7 +167,8 @@ export class SuperContributionHandler extends HandlerEntry {
     this.generatedActionTypes = ['SUPER_CONTRIBUTION_APPLY', 'RECORD_BALANCE'];
   }
 
-  call({ data }) {
+  call({ data, state }) {
+    if (state?.contributionsSuspended) return [];
     return [
       { type: 'SUPER_CONTRIBUTION_APPLY', amount: data.amount },
       new RecordBalanceAction('superAccount.balance', 'superAccount'),

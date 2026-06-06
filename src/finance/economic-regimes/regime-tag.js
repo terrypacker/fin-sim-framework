@@ -17,5 +17,6 @@
  * Check: state.activeRegimes.some(r => r.tags?.includes(REGIME_TAG.ECONOMIC_STRESS))
  */
 export const REGIME_TAG = Object.freeze({
-  ECONOMIC_STRESS: 'ECONOMIC_STRESS',
+  ECONOMIC_STRESS:    'ECONOMIC_STRESS',
+  PANIC_SELL_TRIGGER: 'PANIC_SELL_TRIGGER',
 });
