@@ -998,6 +998,10 @@ export class Simulation {
         }
         throw e;
       }
+
+      // Soft-end: a reducer set scenarioComplete (e.g. all persons deceased).
+      // simEnd remains the hard cap; this is Path A from design/27 §2.1.
+      if (this.state?.scenarioComplete) break;
     }
 
     this.currentDate = end;

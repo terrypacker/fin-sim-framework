@@ -132,8 +132,11 @@ export class StateSchemaRegistry {
     // ── Well-known exact fields ───────────────────────────────────────────────
     this.registerPattern('people.*.residency',    ParameterValueType.text());
     this.register('scenarioFailed',              ParameterValueType.boolean());
+    this.register('scenarioComplete',            ParameterValueType.boolean());
     this.register('superWithdrawalBlocked',      ParameterValueType.boolean());
     this.register('outOfFundsDate',              ParameterValueType.date());
+    this.registerPattern('deceased.*.date',           ParameterValueType.date());
+    this.registerPattern('deceased.*.taxJurisdiction', ParameterValueType.text());
     this.register('monthlyExpenses',             ParameterValueType.currency('USD'));
     this.register('expenses.essential',          ParameterValueType.currency('USD'));
     this.register('expenses.discretionary',      ParameterValueType.currency('USD'));

@@ -12,6 +12,7 @@ import { DISTRIBUTION_TYPES }       from '../../simulation-framework/distributio
 import { INTL_RETIREMENT_DEFAULTS } from '../../scenarios/intl-retirement-scenario.js';
 import { SHOCK_LIBRARY }            from '../economic-shocks/shock-library.js';
 import { get }                      from './mc-param-paths.js';
+import { lookupLifeTable }          from './life-tables.js';
 
 const D = INTL_RETIREMENT_DEFAULTS;
 
@@ -285,6 +286,36 @@ function buildShockMcConfigs(params) {
 }
 
 /**
+ * Build one MC variable per person for actuarial lifespan draws (design/27 §5).
+ *
+ * Table is residency-keyed at registration time (boot-time residency only;
+ * no mid-run redraw per §10 Q1 Path A).  Variables are enabled:false by default
+ * so single runs are unaffected — MC opt-in only.
+ *
+ * Expects params.people to be a { [personKey]: { lifeExpectancy, residency, sex } } map,
+ * as populated by buildDefaultConfig's people parameter patch.
+ */
+function buildMortalityMcConfigs(params) {
+  const people = params.people ?? {};
+  return Object.entries(people).flatMap(([personKey, person]) => {
+    if (person == null) return [];
+    const table      = lookupLifeTable(person.residency ?? 'US');
+    const sex        = person.sex ?? 'M';
+    const currentAge = person.currentAge ?? 0;
+    return [{
+      paramKey: `people.${personKey}.lifeExpectancy`,
+      label:    `${person.name ?? personKey} lifespan (years)`,
+      type:     DISTRIBUTION_TYPES.ACTUARIAL_LIFESPAN,
+      table,
+      sex,
+      currentAge,
+      group:    'Mortality',
+      enabled:  false,
+    }];
+  });
+}
+
+/**
  * MC configuration for IntlRetirementScenario.
  *
  * Uses a contributor pattern so toolsets (design 26 healthcare, design 27
@@ -298,6 +329,7 @@ export class IntlRetirementMcConfig {
     ()          => DEFAULT_MC_VARIABLE_CONFIGS,
     ({ params }) => buildShockMcConfigs(params),
     ({ params }) => buildRealPropertyMcConfigs(params),
+    ({ params }) => buildMortalityMcConfigs(params),
   ];
 
   constructor() {

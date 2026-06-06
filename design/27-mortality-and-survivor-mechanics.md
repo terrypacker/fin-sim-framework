@@ -171,13 +171,13 @@ Mirrors the design-26 approach: land the lowest-risk deterministic core first, v
 
 The deterministic single-run skeleton: schedule `PERSON_DIED` at boot, the handler + reducer chain, state additions, and scenario termination. Defers basis step-up (Increment 4) and MC draws (Increment 3).
 
-**Step 1 — State additions in `InternationalRetirementFinancialState`** [ ]
+**Step 1 — State additions in `InternationalRetirementFinancialState`** ✅
 - `src/finance/state/intl-retirement-state.js`:
   - `this.deceased = {};` — map `{ [personId]: { date, taxJurisdiction } }`; populated by `PersonDiedApplyReducer`.
   - `this.scenarioComplete = false;` — set true when no survivors remain.
   - Survivor multipliers (per §10 Q2 Option B — replaces the scalar `survivorMultiplier` from the §6 sketch): these are *parameters* consumed by the handler at death time, not running state, so they do **not** live on the state object — they flow in via the toolset (Step 7). No `state.survivorMultiplier` field is added.
 
-**Step 2 — `PERSON_DIED` lifecycle event scheduled at boot** [ ]
+**Step 2 — `PERSON_DIED` lifecycle event scheduled at boot** ✅
 - `src/scenarios/toolsets/us-retirement-toolset.js` (and `au-retirement-toolset.js`) `schedules()`:
   - For each person with a `lifeExpectancy`, push a `OneOffEvent`:
     ```js
@@ -193,7 +193,7 @@ The deterministic single-run skeleton: schedule `PERSON_DIED` at boot, the handl
   - Compute the death date from `person.birthDate + lifeExpectancy years` (UTC, mirror the `K401_TO_IRA_CONVERSION` date-math at lines 453–461). Skip if the computed date is past `simEnd` (no-op — `simEnd` is the hard cap, §10 Q4).
   - Gate on a new boolean param `mortalityEnabled` (default `true`) so existing scenarios/tests that don't expect termination can opt out.
 
-**Step 3 — `MortalityHandler`** [ ]
+**Step 3 — `MortalityHandler`** ✅
 - Create `src/finance/handlers/mortality-handler.js` (`HandlerEntry`, `static eventType = 'PERSON_DIED'`).
 - `call({ state, date })` reads `data.personId` from the event, looks up the person in `state.people`, determines the surviving spouse (the other entry in `state.people`, if any), and emits an ordered action chain:
   1. `{ type: 'PERSON_DIED_APPLY', personId, date, taxJurisdiction: person.residency }` — record death + jurisdiction (captured from `Person.residency` at time of death, §10 Q3) and remove from `state.people`.
@@ -205,20 +205,20 @@ The deterministic single-run skeleton: schedule `PERSON_DIED` at boot, the handl
 - `generatedActionTypes` lists all of the above.
 - Follows the `ChangeResidencyHandler` pure-emitter pattern (no queue mutation).
 
-**Step 4 — `PersonDiedApplyReducer`** [ ]
+**Step 4 — `PersonDiedApplyReducer`** ✅
 - Create `src/finance/reducers/person-died-apply-reducer.js` (`Reducer`, `actionType = 'PERSON_DIED_APPLY'`, priority `PRE_PROCESS (10)` so downstream reducers in the same chain see the updated `state.people`).
 - Writes `state.deceased[personId] = { date, taxJurisdiction }`; removes `personId` from `state.people` (clone-and-delete, do not mutate in place — mirror the design-20 `state.people` mutation pattern via `this.newState`).
 
-**Step 5 — `SocialSecuritySurvivorApplyReducer`** [ ]
+**Step 5 — `SocialSecuritySurvivorApplyReducer`** ✅
 - Create `src/finance/reducers/social-security-survivor-apply-reducer.js` (priority `PRE_PROCESS (10)`).
 - Sets `state.people[survivorId].socialSecurityMonthly = max(survivor.socialSecurityMonthly, deceased.socialSecurityMonthly)`. Read the deceased's value from `action` (the handler captured it pre-removal) since they are already gone from `state.people`.
 
-**Step 6 — `AccountRetitleApplyReducer`** [ ]
+**Step 6 — `AccountRetitleApplyReducer`** ✅
 - Create `src/finance/reducers/account-retitle-apply-reducer.js` (priority `PRE_PROCESS (10)`).
 - Minimum-viable estate handling (§3, §8): for each account state entry solo-owned by `deceasedId`, reassign `ownerId → survivorId`. Iterate the account state keys; do not touch jointly-owned accounts. Full estate/RMD/beneficiary machinery is explicitly out of scope.
 - **Holdings travel with their parent account** — ownership lives at the account-state level, so reassigning the account's `ownerId` carries its holdings to the survivor with no per-holding action. Do **not** reach for `HoldingRetitleAction` here: it patches holding *metadata* (allocation, rateKey, label) only and has no ownership semantics (verified `src/finance/holdings/holding-actions.js:259`).
 
-**Step 7 — `ScenarioCompleteReducer` + survivor-multiplier params** [ ]
+**Step 7 — `ScenarioCompleteReducer` + survivor-multiplier params** ✅
 - Create `src/finance/reducers/scenario-complete-reducer.js` (`actionType = 'SCENARIO_COMPLETE_CHECK'`, priority `POST_PROCESS` — runs after the rest of the chain).
 - If `Object.keys(state.people).length === 0`, set `state.scenarioComplete = true`.
 - Toolset wiring (`us-retirement-toolset.js` / `au-retirement-toolset.js`):
@@ -227,15 +227,15 @@ The deterministic single-run skeleton: schedule `PERSON_DIED` at boot, the handl
   - `handlers()`: when `mortalityEnabled`, register `MortalityHandler` and attach the `PERSON_DIED` schedules via `handledEvents` (mirror the `RetirementDateHandler` wiring at lines 684–692). Pass the survivor multipliers into the handler constructor.
 - `INTL_RETIREMENT_DEFAULTS` (`src/scenarios/intl-retirement-scenario.js`): add `survivorEssentialMultiplier: 0.85`, `survivorDiscretionaryMultiplier: 0.50`, `mortalityEnabled: true`.
 
-**Step 8 — Scenario termination in the run loop** [ ]
+**Step 8 — Scenario termination in the run loop** ✅
 - `src/simulation-framework/simulation.js` `stepTo()` (the `while (this.queue.size() > 0)` loop at ~line 951): after `this.execute(next)` returns, add `if (this.state?.scenarioComplete) break;`.
 - This is the only framework change and it honors §2.1 Path A: a reducer sets the flag, the loop reads it; no handler touches the queue. Remaining queued events are simply not processed (soft end). `simEnd` remains the hard cap.
 - Confirm the MC runner and any other `stepTo` callers tolerate an early break (they should — the queue draining naturally is equivalent to reaching `simEnd`).
 
-**Step 9 — `state-schema-registry.js`** [ ]
+**Step 9 — `state-schema-registry.js`** ✅
 - Register `deceased` and `scenarioComplete` so the journal / state panel / CSV export render them. `deceased` is a map of `{ date, taxJurisdiction }`; follow the nested-registration pattern used for `expenses` (design 26 Step 10).
 
-**Step 10 — Unit tests** [ ]
+**Step 10 — Unit tests** ✅
 - `tests/unit/evt-person-died.test.mjs` — single-spouse death triggers the full action chain in order; survivor SS becomes `max(self, deceased)`; survivor expense deltas applied per-slice; solo accounts retitled to survivor.
 - `tests/unit/mortality-scenario-complete.test.mjs` — orphan (last-survivor) death sets `state.scenarioComplete` and the run loop stops before `simEnd`.
 - Extend `tests/unit/intl-retirement-scenario.test.mjs` — a multi-decade run with both deaths terminates cleanly; `mortalityEnabled: false` preserves run-to-`simEnd` behavior (regression guard).
@@ -246,13 +246,13 @@ The deterministic single-run skeleton: schedule `PERSON_DIED` at boot, the handl
 
 Per-person elevated spending in the final N months before death (§4). Independent of Increments 3–4.
 
-**Step 11 — Late-life-care events scheduled at boot** [ ]
+**Step 11 — Late-life-care events scheduled at boot** ✅
 - Toolset `schedules()`: per-person params `lateLifeCareMonths` (default `0`) and `lateLifeCareFactor` (default `2.0`). When `lateLifeCareMonths > 0`, push two `OneOffEvent`s:
   - `LATE_LIFE_CARE_BEGIN` at `deathDate - lateLifeCareMonths` (data `{ personId, factor }`).
   - `LATE_LIFE_CARE_END` co-terminus with `PERSON_DIED` (data `{ personId }`).
 - Scheduled relative to the boot-time death date; does not shift on residency change (§2.1 Path A, §11 follow-up).
 
-**Step 12 — `LateLifeCareHandler` + reducer** [ ]
+**Step 12 — `LateLifeCareHandler` + reducer** ✅
 - Create `src/finance/spending/strategies/late-life-care-handler.js` handling both `LATE_LIFE_CARE_BEGIN`/`LATE_LIFE_CARE_END`, emitting `LATE_LIFE_CARE_APPLY { active, factor }`.
 - Create `src/finance/spending/strategies/late-life-care-apply-reducer.js` (priority `CASH_FLOW (20)`):
   - On `active: true`: multiply **both** slices uniformly (`expenses.essential *= factor`; `expenses.discretionary *= factor`) — late-life medical hits both (§11 follow-up: uniform, not per-slice). Store the applied factor in `state.lateLifeCare = { active, appliedFactor }` so the END event divides it back out cleanly (mirror the `RegimeAwareSpendingReducer` apply/revert pattern, design 26 Step 6).
@@ -261,7 +261,7 @@ Per-person elevated spending in the final N months before death (§4). Independe
 - Add `state.lateLifeCare = {}` init in `intl-retirement-state.js`.
 - Toolset `handlers()`/`reducers()`: register when any person has `lateLifeCareMonths > 0`.
 
-**Step 13 — Tests** [ ]
+**Step 13 — Tests** ✅
 - `tests/unit/late-life-care.test.mjs` — both slices multiplied by `factor` for the window, reverted at END; composes additively with an active `RegimeAware` cut and with the survivor multiplier (apply-order is well-defined and reversible).
 
 ---
@@ -270,11 +270,11 @@ Per-person elevated spending in the final N months before death (§4). Independe
 
 Per-person stochastic lifespan draws for MC sweeps; deterministic single runs keep the fixed `Person.lifeExpectancy` (§5, design-21 stance). Consumes design 25a nested param paths.
 
-**Step 14 — `ACTUARIAL_LIFESPAN` distribution + life tables** [ ]
+**Step 14 — `ACTUARIAL_LIFESPAN` distribution + life tables** ✅
 - `src/simulation-framework/distributions.js`: add `ACTUARIAL_LIFESPAN: 'actuarialLifespan'` to `DISTRIBUTION_TYPES`, an `ActuarialLifespanDistribution` class with `sample(rngFn)`, and a `createDistribution` case.
 - Create `src/finance/monte-carlo/life-tables.js` exporting `CDC_2024` (US) and an AU lifetable, plus a `lookupLifeTable(residency)` helper that returns `CDC_2024` as the fallback for any residency without a dedicated table (§10 Q1 answer). The distribution samples a remaining-years value conditioned on the person's current age and sex.
 
-**Step 15 — `buildMortalityMcConfigs` contributor** [ ]
+**Step 15 — `buildMortalityMcConfigs` contributor** ✅
 - `src/finance/monte-carlo/intl-retirement-mc-config.js`: add a `buildMortalityMcConfigs(params)` function and register it in `IntlRetirementMcConfig.contributors` (mirror `buildShockMcConfigs` / `buildRealPropertyMcConfigs`).
 - Emit one variable per person at nested paths `people.primary.lifeExpectancy` / `people.spouse.lifeExpectancy`:
   ```js
@@ -285,10 +285,10 @@ Per-person stochastic lifespan draws for MC sweeps; deterministic single runs ke
 - Table is **residency-keyed** and resolved **once at boot** from `Person.residency` (§10 Q1: no mid-run redraw). `enabled: false` by default (opt-in, like balances/wages).
 - Note: `Person` has no `sex` field today — add `sex` to `Person` (`src/finance/person.js`, default `'M'`) and thread it through the toolset people-build (line 288). Small prerequisite; call it out in the increment.
 
-**Step 16 — Runner applies per-person sampled lifespan** [ ]
+**Step 16 — Runner applies per-person sampled lifespan** ✅
 - `src/finance/monte-carlo/intl-retirement-mc-runner.js`: confirm the 25a `structuredClone` + `set()` path writes sampled `people.primary.lifeExpectancy` into the param tree, and that the toolset `schedules()` death-date math (Increment 1 Step 2) reads `params.people.<key>.lifeExpectancy` rather than the hardcoded scenario value. Round the sampled value to an integer before use (mirror the real-property sale-year rounding note in `buildRealPropertyMcConfigs`).
 
-**Step 17 — Tests** [ ]
+**Step 17 — Tests** ✅
 - `tests/unit/mortality-actuarial-draws.test.mjs` — actuarial draws produce sensible distributions; seeded RNG reproduces; residency selects the correct table.
 - Extend `tests/unit/intl-retirement-mc-runner.test.mjs` with a per-person lifespan sweep; assert each run's `PERSON_DIED` date tracks the sampled lifespan and that single (non-MC) runs are unaffected.
 
