@@ -12,7 +12,10 @@ import { OneOffEvent }           from '../../simulation-framework/events/one-off
 import { EventSeries }           from '../../simulation-framework/events/event-series.js';
 import { UsHouseSaleHandler, UsHouseSaleApplyReducer } from '../../finance/account-rules/us/us-real-property-classes.js';
 import { UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer } from '../../finance/account-rules/mortgage-payment-classes.js';
+import { AssetAppreciationHandler } from '../../finance/handlers/asset-appreciation-handler.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
+
+const US_REAL_PROPERTY_APPRECIATE_TYPE = 'US_REAL_PROPERTY_APPRECIATE';
 
 /**
  * US_REAL_PROPERTY toolset — wires US house sale machinery.
@@ -35,7 +38,7 @@ export const US_REAL_PROPERTY = {
   dependencies: ['US_TAX'],
 
   types: {
-    handlers: [UsHouseSaleHandler, UsMortgagePaymentHandler],
+    handlers: [UsHouseSaleHandler, UsMortgagePaymentHandler, AssetAppreciationHandler],
     reducers: [UsHouseSaleApplyReducer, UsMortgagePaymentApplyReducer],
     actions: [
       { type: 'US_HOUSE_SALE_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'US',
@@ -44,6 +47,8 @@ export const US_REAL_PROPERTY = {
         fields: { taxableGain: ValueType.number() } },
       { type: 'US_MORTGAGE_PAYMENT_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'US',
         fields: { amount: ValueType.currency('USD') } },
+      { type: 'ASSET_APPRECIATE_APPLY', family: 'REAL_PROPERTY_CASH', cc: null,
+        fields: { stateKey: ValueType.text(), delta: ValueType.number() } },
     ],
   },
 
@@ -83,6 +88,16 @@ export const US_REAL_PROPERTY = {
         color:    '#6D4C41',
       }));
     }
+    const appreciableProps = usProps.filter(p => p.stateKey && ((p.appreciationRate ?? 0) !== 0 || p.appreciationSchedule));
+    if (appreciableProps.length > 0) {
+      schedules.push(new EventSeries({
+        name:     'US Real Property Appreciation',
+        type:     US_REAL_PROPERTY_APPRECIATE_TYPE,
+        interval: 'annually',
+        enabled:  true,
+        color:    '#558B2F',
+      }));
+    }
     return schedules;
   },
 
@@ -95,6 +110,19 @@ export const US_REAL_PROPERTY = {
       handlers.push(new UsMortgagePaymentHandler({
         properties: mortgagedProps.map(p => ({ stateKey: p.stateKey, monthlyMortgage: p.monthlyMortgage })),
       }));
+    }
+    const appreciableProps = props.filter(p => p.stateKey && ((p.appreciationRate ?? 0) !== 0 || p.appreciationSchedule));
+    const appreciateEvent  = context.schedulesById?.[US_REAL_PROPERTY_APPRECIATE_TYPE];
+    if (appreciableProps.length > 0 && appreciateEvent) {
+      const handler = new AssetAppreciationHandler({
+        assets: appreciableProps.map(p => ({
+          stateKey:            p.stateKey,
+          appreciationRate:    p.appreciationRate ?? 0,
+          appreciationSchedule: p.appreciationSchedule ?? null,
+        })),
+      });
+      handler.handledEvents = [appreciateEvent];
+      handlers.push(handler);
     }
     return handlers;
   },
@@ -113,16 +141,18 @@ export const US_REAL_PROPERTY = {
 
 function _propertyToStatePlain(prop) {
   return {
-    stateKey:           prop.stateKey,
-    value:              prop.value              ?? 0,
-    costBasis:          prop.costBasis          ?? 0,
-    mortgageBalance:    prop.mortgageBalance    ?? 0,
-    monthlyMortgage:    prop.monthlyMortgage    ?? 0,
-    appreciationRate:   prop.appreciationRate   ?? 0,
-    isPrimaryResidence: prop.isPrimaryResidence ?? false,
-    plannedSaleYear:    prop.plannedSaleYear    ?? null,
-    ownershipType:      prop.ownershipType      ?? 'sole',
-    ownerId:            prop.ownerId            ?? null,
-    country:            prop.country            ?? 'US',
+    stateKey:            prop.stateKey,
+    value:               prop.value              ?? 0,
+    costBasis:           prop.costBasis          ?? 0,
+    mortgageBalance:     prop.mortgageBalance    ?? 0,
+    monthlyMortgage:     prop.monthlyMortgage    ?? 0,
+    appreciationRate:    prop.appreciationRate   ?? 0,
+    isPrimaryResidence:  prop.isPrimaryResidence ?? false,
+    plannedSaleYear:     prop.plannedSaleYear    ?? null,
+    ownershipType:       prop.ownershipType      ?? 'sole',
+    ownerId:             prop.ownerId            ?? null,
+    country:             prop.country            ?? 'US',
+    appreciationSchedule: prop.appreciationSchedule ?? null,
+    market:              prop.market             ?? null,
   };
 }

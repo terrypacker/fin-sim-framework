@@ -81,6 +81,8 @@ import { RegimeApplyReducer }            from '../finance/economic-regimes/regim
 import { AddRegimeReducer }              from '../finance/economic-regimes/add-regime-reducer.js';
 import { RemoveRegimeReducer }           from '../finance/economic-regimes/remove-regime-reducer.js';
 import { RevalueAssetReducer }           from '../finance/economic-regimes/revalue-asset-reducer.js';
+import { BondPriceAdjustReducer }        from '../finance/economic-regimes/bond-price-adjust-reducer.js';
+import { AssetAppreciationHandler, AssetAppreciateReducer } from '../finance/handlers/asset-appreciation-handler.js';
 
 // ─── Tax infrastructure ─────────────────────────────────────────────────────
 import { UsPeriodAdvanceHandler, AuPeriodAdvanceHandler, UsPeriodAdvanceReducer, AuPeriodAdvanceReducer } from '../finance/tax/period-advance-classes.js';
@@ -270,6 +272,9 @@ const _ALL_CLASSES = [
   // Economic regime handlers and reducers
   EconomicShockHandler, EconomicRecoveryTickHandler,
   RegimeApplyReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer,
+  BondPriceAdjustReducer,
+  // Asset appreciation (design 28)
+  AssetAppreciationHandler, AssetAppreciateReducer,
 ];
 
 /**
@@ -592,6 +597,13 @@ export class ScenarioSerializer {
       owners:               p.owners               ?? [],
       country:              p.country              ?? 'US',
       stateKey:             p.stateKey             ?? null,
+      appreciationSchedule: p.appreciationSchedule
+        ? p.appreciationSchedule.map(e => ({
+            date: e.date instanceof Date ? e.date.toISOString() : e.date,
+            rate: e.rate,
+          }))
+        : null,
+      market:               p.market               ?? null,
     };
   }
 
@@ -611,6 +623,10 @@ export class ScenarioSerializer {
       drawdownPriority:    d.drawdownPriority    ?? null,
       owners:              d.owners              ?? [],
       country:             d.country             ?? 'US',
+      appreciationSchedule: d.appreciationSchedule
+        ? d.appreciationSchedule.map(e => ({ date: new Date(e.date), rate: e.rate }))
+        : null,
+      market:              d.market              ?? null,
     });
     if (d.stateKey) prop.stateKey = d.stateKey;
     return prop;
@@ -632,6 +648,12 @@ export class ScenarioSerializer {
       owners:               c.owners               ?? [],
       country:              c.country              ?? 'US',
       stateKey:             c.stateKey             ?? null,
+      appreciationSchedule: c.appreciationSchedule
+        ? c.appreciationSchedule.map(e => ({
+            date: e.date instanceof Date ? e.date.toISOString() : e.date,
+            rate: e.rate,
+          }))
+        : null,
     };
   }
 
@@ -648,6 +670,9 @@ export class ScenarioSerializer {
       drawdownPriority:    d.drawdownPriority    ?? null,
       owners:              d.owners              ?? [],
       country:             d.country             ?? 'US',
+      appreciationSchedule: d.appreciationSchedule
+        ? d.appreciationSchedule.map(e => ({ date: new Date(e.date), rate: e.rate }))
+        : null,
     });
     if (d.stateKey) col.stateKey = d.stateKey;
     return col;

@@ -9,11 +9,15 @@
  */
 
 import { OneOffEvent }               from '../../simulation-framework/events/one-off-event.js';
+import { EventSeries }               from '../../simulation-framework/events/event-series.js';
 import {
   CollectibleSaleHandler, CollectibleSaleApplyReducer,
   CollectibleValueChangeHandler, CollectibleValueChangeApplyReducer,
 } from '../../finance/account-rules/us/us-collectible-classes.js';
+import { AssetAppreciationHandler } from '../../finance/handlers/asset-appreciation-handler.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
+
+const COLLECTIBLE_APPRECIATE_TYPE = 'COLLECTIBLE_APPRECIATE';
 
 /**
  * US_COLLECTIBLES toolset — wires US collectible sale machinery.
@@ -37,7 +41,7 @@ export const US_COLLECTIBLES = {
   dependencies: ['US_TAX'],
 
   types: {
-    handlers: [CollectibleSaleHandler, CollectibleValueChangeHandler],
+    handlers: [CollectibleSaleHandler, CollectibleValueChangeHandler, AssetAppreciationHandler],
     reducers: [CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer],
     actions: [
       { type: 'COLLECTIBLE_SALE_APPLY',
@@ -63,7 +67,7 @@ export const US_COLLECTIBLES = {
   },
 
   schedules(context) {
-    return (context.collectibles ?? [])
+    const schedules = (context.collectibles ?? [])
       .filter(c => c.plannedSaleYear != null)
       .map(c => new OneOffEvent({
         name:    `Sell ${c.name}`,
@@ -73,11 +77,36 @@ export const US_COLLECTIBLES = {
         enabled: true,
         color:   '#FF8F00',
       }));
+    const appreciableCols = (context.collectibles ?? []).filter(c => c.stateKey && ((c.appreciationRate ?? 0) !== 0 || c.appreciationSchedule));
+    if (appreciableCols.length > 0) {
+      schedules.push(new EventSeries({
+        name:     'Collectible Appreciation',
+        type:     COLLECTIBLE_APPRECIATE_TYPE,
+        interval: 'annually',
+        enabled:  true,
+        color:    '#FF8F00',
+      }));
+    }
+    return schedules;
   },
 
   handlers(context) {
     if ((context.collectibles ?? []).length === 0) return [];
-    return [new CollectibleSaleHandler(), new CollectibleValueChangeHandler()];
+    const handlers = [new CollectibleSaleHandler(), new CollectibleValueChangeHandler()];
+    const appreciableCols = (context.collectibles ?? []).filter(c => c.stateKey && ((c.appreciationRate ?? 0) !== 0 || c.appreciationSchedule));
+    const appreciateEvent = context.schedulesById?.[COLLECTIBLE_APPRECIATE_TYPE];
+    if (appreciableCols.length > 0 && appreciateEvent) {
+      const handler = new AssetAppreciationHandler({
+        assets: appreciableCols.map(c => ({
+          stateKey:            c.stateKey,
+          appreciationRate:    c.appreciationRate ?? 0,
+          appreciationSchedule: c.appreciationSchedule ?? null,
+        })),
+      });
+      handler.handledEvents = [appreciateEvent];
+      handlers.push(handler);
+    }
+    return handlers;
   },
 
   reducers(context) {
@@ -91,13 +120,14 @@ export const US_COLLECTIBLES = {
 
 function _collectibleToStatePlain(col) {
   return {
-    stateKey:         col.stateKey,
-    value:            col.value            ?? 0,
-    costBasis:        col.costBasis        ?? 0,
-    appreciationRate: col.appreciationRate ?? 0,
-    plannedSaleYear:  col.plannedSaleYear  ?? null,
-    ownershipType:    col.ownershipType    ?? 'sole',
-    ownerId:          col.ownerId          ?? null,
-    country:          col.country          ?? 'US',
+    stateKey:            col.stateKey,
+    value:               col.value            ?? 0,
+    costBasis:           col.costBasis        ?? 0,
+    appreciationRate:    col.appreciationRate ?? 0,
+    plannedSaleYear:     col.plannedSaleYear  ?? null,
+    ownershipType:       col.ownershipType    ?? 'sole',
+    ownerId:             col.ownerId          ?? null,
+    country:             col.country          ?? 'US',
+    appreciationSchedule: col.appreciationSchedule ?? null,
   };
 }

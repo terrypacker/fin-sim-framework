@@ -102,6 +102,27 @@ export const SHOCK_LIBRARY = Object.freeze({
     recovery: { profile: 'U', durationMonths: 12 },
   },
 
+  /**
+   * Regional Bay Area housing crash: −35 % level effect on properties with
+   * `market: 'US-SF-BAY'` only. Country-level real-estate properties unaffected.
+   * U-shaped recovery over 36 months. (Design 28 §4 §9 worked example.)
+   */
+  SF_BAY_HOUSING_CRASH: {
+    shockId:   'SF_BAY_HOUSING_CRASH',
+    name:      'SF Bay Housing Crash (−35 %)',
+    severity:  0.35,
+    levelEffects: {
+      realEstateRevaluation: {
+        rateKeys:   ['REAL_ESTATE_US-SF-BAY'],
+        multiplier: -0.35,
+      },
+    },
+    regime: {
+      appreciationAdjustment: { 'REAL_ESTATE_US-SF-BAY': -0.04 },
+    },
+    recovery: { profile: 'U', durationMonths: 36 },
+  },
+
 });
 
 /**
@@ -109,9 +130,10 @@ export const SHOCK_LIBRARY = Object.freeze({
  * The first entry is always the sentinel that means "no shock".
  */
 export const SHOCK_PRESET_OPTIONS = Object.freeze([
-  { value: 'none',                  label: 'None' },
+  { value: 'none',                   label: 'None' },
   { value: 'MARKET_CRASH_2008_LITE', label: 'Market Crash (GFC-style, −40 %)' },
   { value: 'STAGFLATION_1970S_LITE', label: 'Stagflation (1970s-style, 48 mo)' },
   { value: 'COVID_2020_LITE',        label: 'Pandemic Crash (COVID-style, −30 %)' },
   { value: 'MILD_CORRECTION',        label: 'Mild Correction (−15 % US equity)' },
+  { value: 'SF_BAY_HOUSING_CRASH',   label: 'SF Bay Housing Crash (−35 %, regional)' },
 ]);

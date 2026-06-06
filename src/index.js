@@ -46,9 +46,10 @@ import { DecisionGraphResultStorage } from './finance/decision-graph/decision-gr
 import { DecisionGraphRunner } from './finance/decision-graph/decision-graph-runner.js';
 import { DecisionGraphStorage } from './finance/decision-graph/decision-graph-storage.js';
 import { AddRegimeReducer } from './finance/economic-regimes/add-regime-reducer.js';
+import { BondPriceAdjustReducer } from './finance/economic-regimes/bond-price-adjust-reducer.js';
 import { EconomicRecoveryTickHandler } from './finance/economic-regimes/economic-recovery-tick-handler.js';
 import { EconomicShockHandler } from './finance/economic-regimes/economic-shock-handler.js';
-import { RATE_KEYS, ROLE_TO_RATE_KEY } from './finance/economic-regimes/rate-keys.js';
+import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY } from './finance/economic-regimes/rate-keys.js';
 import { RecoveryCurves } from './finance/economic-regimes/recovery-curves.js';
 import { RegimeApplyReducer } from './finance/economic-regimes/regime-apply-reducer.js';
 import { REGIME_TAG } from './finance/economic-regimes/regime-tag.js';
@@ -61,6 +62,7 @@ import { FxService } from './finance/fx/fx-service.js';
 import { FxTransferApplyReducer } from './finance/fx/fx-transfer-apply-reducer.js';
 import { FxTransferToHandler } from './finance/fx/fx-transfer-handler.js';
 import { UsdAudPair } from './finance/fx/usd-aud-pair.js';
+import { AssetAppreciationHandler, AssetAppreciateReducer } from './finance/handlers/asset-appreciation-handler.js';
 import { ChangeResidencyHandler } from './finance/handlers/change-residency-handler.js';
 import { DividendScheduledHandler } from './finance/handlers/dividend-scheduled-handler.js';
 import { IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler, IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler, AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler, FixedIncomeInterestHandler, SuperEarningsHandler } from './finance/handlers/earnings-handlers.js';
@@ -72,6 +74,7 @@ import { MortalityHandler } from './finance/handlers/mortality-handler.js';
 import { OutOfFundsHandler } from './finance/handlers/out-of-funds-handler.js';
 import { UsSavingsInterestMonthlyHandler } from './finance/handlers/us-savings-interest-handler.js';
 import { ALLOCATION, ALLOCATION_VALUES } from './finance/holdings/allocation.js';
+import { resolveScheduledRate } from './finance/holdings/appreciation-schedule-utils.js';
 import { bootstrapHoldingSplit } from './finance/holdings/bootstrap-holding-split.js';
 import { DEFAULT_ALLOCATION_BY_ROLE, DEFAULT_ALLOCATION_BY_TYPE, resolveDefaultAllocation, resolveRateKey } from './finance/holdings/default-allocations.js';
 import { HOLDING_ACTION_TYPES, HOLDING_ACTION_ENTRIES, HoldingTransactAction, HoldingRevalueAction, HoldingSetBasisAction, HoldingSplitAction, HoldingRetitleAction, HOLDING_ACTION_CLASSES, registerHoldingActionTypes } from './finance/holdings/holding-actions.js';
@@ -179,7 +182,7 @@ import { AU_INCOME } from './scenarios/toolsets/au-income-toolset.js';
 import { AU_REAL_PROPERTY } from './scenarios/toolsets/au-real-property-toolset.js';
 import { AU_RETIREMENT } from './scenarios/toolsets/au-retirement-toolset.js';
 import { AU_TAX } from './scenarios/toolsets/au-tax-toolset.js';
-import { ECONOMIC_REGIMES } from './scenarios/toolsets/economic-regimes-toolset.js';
+import { resolvePropertyRateKey, ECONOMIC_REGIMES } from './scenarios/toolsets/economic-regimes-toolset.js';
 import { ScenarioCompiler } from './scenarios/toolsets/scenario-compiler.js';
 import { ToolsetRegistry } from './scenarios/toolsets/toolset-registry.js';
 import { US_AU_CROSS_BORDER } from './scenarios/toolsets/us-au-cross-border-toolset.js';
@@ -480,9 +483,11 @@ export const Finance = {
   DecisionGraphRunner,
   DecisionGraphStorage,
   AddRegimeReducer,
+  BondPriceAdjustReducer,
   EconomicRecoveryTickHandler,
   EconomicShockHandler,
   RATE_KEYS,
+  RATE_KEY_META,
   ROLE_TO_RATE_KEY,
   RecoveryCurves,
   RegimeApplyReducer,
@@ -498,6 +503,8 @@ export const Finance = {
   FxTransferApplyReducer,
   FxTransferToHandler,
   UsdAudPair,
+  AssetAppreciationHandler,
+  AssetAppreciateReducer,
   ChangeResidencyHandler,
   DividendScheduledHandler,
   IntlRothEarningsHandler,
@@ -520,6 +527,7 @@ export const Finance = {
   UsSavingsInterestMonthlyHandler,
   ALLOCATION,
   ALLOCATION_VALUES,
+  resolveScheduledRate,
   bootstrapHoldingSplit,
   DEFAULT_ALLOCATION_BY_ROLE,
   DEFAULT_ALLOCATION_BY_TYPE,
@@ -776,6 +784,7 @@ export const Scenarios = {
   AU_REAL_PROPERTY,
   AU_RETIREMENT,
   AU_TAX,
+  resolvePropertyRateKey,
   ECONOMIC_REGIMES,
   ScenarioCompiler,
   ToolsetRegistry,

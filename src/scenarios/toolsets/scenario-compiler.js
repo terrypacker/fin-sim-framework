@@ -14,6 +14,7 @@ import {
   HOLDING_REDUCER_CLASSES,
 } from '../../finance/holdings/holding-reducers.js';
 import { registerHoldingActionTypes } from '../../finance/holdings/holding-actions.js';
+import { AssetAppreciateReducer } from '../../finance/handlers/asset-appreciation-handler.js';
 
 /**
  * ScenarioCompiler — consumes a declarative scenario definition and a
@@ -60,6 +61,11 @@ export class ScenarioCompiler {
       for (const ctor of Object.values(HOLDING_REDUCER_CLASSES)) {
         services.typeRegistry.registerClass(ctor);
       }
+      services.typeRegistry.registerClass(AssetAppreciateReducer);
+      services.typeRegistry.registerActionType({
+        type: 'ASSET_APPRECIATE_APPLY', family: 'REAL_PROPERTY_CASH', cc: null,
+        fields: { stateKey: {}, delta: {} },
+      });
     }
 
     const parameters = this._resolveParameters(definition, resolved);
@@ -171,6 +177,7 @@ function _frameworkSubstrateReducers() {
     new HoldingSetBasisReducer(),
     new HoldingSplitReducer(),
     new HoldingRetitleReducer(),
+    new AssetAppreciateReducer(),
   ];
 }
 

@@ -88,6 +88,7 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.effectiveInterestRates     = {};
     this.effectiveInflationRates    = {};
     this.effectiveAppreciationRates = {};
+    this.priorMarkRates         = {};
 
     this.inflationRates       = inflationRates ?? { US: 0.03, AU: 0.03 };
     this.inflationAccumulator = { US: 1.0, AU: 1.0 };

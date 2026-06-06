@@ -122,7 +122,9 @@ export class StateSchemaRegistry {
     this.registerPattern('*.holdings.*.rateKey',     ParameterValueType.text());
     this.registerPattern('*.holdings.*.label',       ParameterValueType.text());
     this.registerPattern('*.holdings.*.purchaseDate', ParameterValueType.date());
-    this.registerPattern('*.holdings.*.dividendYield', ParameterValueType.rate());
+    this.registerPattern('*.holdings.*.dividendYield',       ParameterValueType.rate());
+    this.registerPattern('*.holdings.*.duration',            ParameterValueType.decimal(2));
+    this.registerPattern('*.holdings.*.appreciationSchedule', ParameterValueType.unknown());
 
     // ── FX rate/fee maps ──────────────────────────────────────────────────────
     this.registerPattern('baseExchangeRates.*',      ParameterValueType.rate());
@@ -160,6 +162,9 @@ export class StateSchemaRegistry {
     this.register('auFrankingCreditYTD',         ParameterValueType.currency('AUD'));
 
     this.register('inflationAccumulator',        ParameterValueType.decimal(4));
+
+    // Bond mark-to-market snapshot (design 28 §5)
+    this.registerPattern('priorMarkRates.*',     ParameterValueType.rate());
   }
 
   /**
