@@ -89,7 +89,8 @@ export const INTL_RETIREMENT_DEFAULTS = {
   intlTransferFeeUsd:   15,    // fixed fee per transfer in USD
 
   // Expenses (local currency: USD pre-move, AUD post-move)
-  monthlyExpenses: 6_000,
+  monthlyExpenses:       6_000,
+  discretionarySharePct: 0.30,
 
   // Inflation rates (annual, per country)
   usInflationRate: 0.03,

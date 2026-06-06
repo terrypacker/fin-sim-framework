@@ -28,7 +28,9 @@ import { StockDividendCashApplyReducer }    from '../../finance/reducers/stock-d
 import { SetOutOfFundsDateReducer }     from '../../finance/reducers/set-out-of-funds-date-reducer.js';
 import { AccumulateDeficitReducer }     from '../../finance/reducers/accumulate-deficit-reducer.js';
 import { OutOfFundsReducer }            from '../../finance/reducers/out-of-funds-reducer.js';
-import { InflationAdjustReducer }       from '../../finance/reducers/inflation-adjust-reducer.js';
+import { InflationAdjustReducer }           from '../../finance/reducers/inflation-adjust-reducer.js';
+import { SpendingStrategyApplyReducer }     from '../../finance/spending/spending-strategy-apply-reducer.js';
+import { SPENDING_STRATEGY_REGISTRY }       from '../../finance/spending/spending-strategy-registry.js';
 import {
   RothContributionApplyReducer, RothWithdrawalContribApplyReducer,
   RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer,
@@ -256,6 +258,20 @@ export const US_RETIREMENT = {
         defaultValue: null,
         description: 'Year of the conversion; null = use the owner\'s retirement year',
       },
+      {
+        key: 'discretionarySharePct', label: 'Discretionary Share',
+        type: 'Number', group: 'Spending', mc: false, opt: true,
+        defaultValue: 0.30,
+        description: 'Fraction of monthly expenses treated as discretionary (0.30 = 30%)',
+      },
+      {
+        key: 'spendingStrategy', label: 'Spending Strategy',
+        type: 'EnumMulti', group: 'Spending', mc: false, opt: true,
+        options: ['FIXED', 'REGIME_AWARE'],
+        defaultValue: ['FIXED'],
+        description: 'Active spending strategies; FIXED = inflation-adjusted scalar (default), REGIME_AWARE = cut discretionary under economic-stress regimes',
+      },
+      ...SPENDING_STRATEGY_REGISTRY.REGIME_AWARE.paramSchema(),
     ];
   },
 
@@ -279,8 +295,16 @@ export const US_RETIREMENT = {
     }
 
     const metrics = {};
+    const monthlyExpenses       = p.monthlyExpenses;
+    const discretionarySharePct = p.discretionarySharePct ?? 0.30;
+
     const patches = {
-      monthlyExpenses:      p.monthlyExpenses,
+      monthlyExpenses,
+      discretionarySharePct,
+      expenses: {
+        essential:     monthlyExpenses * (1 - discretionarySharePct),
+        discretionary: monthlyExpenses * discretionarySharePct,
+      },
       inflationRates:       { US: p.inflationRate },
       inflationAccumulator: { US: 1.0 },
       metrics,
@@ -628,6 +652,15 @@ export const US_RETIREMENT = {
 
     if (p.inflationAdjust) {
       reducers.push(new InflationAdjustReducer());
+    }
+
+    reducers.push(new SpendingStrategyApplyReducer());
+
+    const strategies = p.spendingStrategy ?? ['FIXED'];
+    for (const stratKey of strategies) {
+      if (stratKey !== 'FIXED' && SPENDING_STRATEGY_REGISTRY[stratKey]) {
+        reducers.push(...SPENDING_STRATEGY_REGISTRY[stratKey].reducers(context));
+      }
     }
 
     // Roth IRA mechanics

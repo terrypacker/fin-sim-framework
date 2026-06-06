@@ -35,6 +35,7 @@ export class InternationalRetirementFinancialState extends SimulationState {
     collectibleAccount,
     inflationRates,
     monthlyExpenses,
+    discretionarySharePct,
     ...rest
   } = {}) {
     super(rest);
@@ -91,6 +92,19 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.inflationRates       = inflationRates ?? { US: 0.03, AU: 0.03 };
     this.inflationAccumulator = { US: 1.0, AU: 1.0 };
     this.monthlyExpenses      = monthlyExpenses ?? 6_000;
+
+    // Spending strategy substrate (design/26).
+    // state.expenses is the source of truth; state.monthlyExpenses is kept in
+    // sync as the sum so existing consumers continue to work unchanged.
+    this.discretionarySharePct = discretionarySharePct ?? 0.30;
+    this.expenses = {
+      essential:     this.monthlyExpenses * (1 - this.discretionarySharePct),
+      discretionary: this.monthlyExpenses * this.discretionarySharePct,
+    };
+
+    // General regime-effect tracking map shared by all regime-driven strategies.
+    // Each strategy lazily initializes its own key; see design/26 §6 + §13.
+    this.regimeActions = {};
 
     // YTD tax accumulators
     this.usOrdinaryIncomeYTD = 0;

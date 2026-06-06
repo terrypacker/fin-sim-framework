@@ -135,6 +135,8 @@ export class StateSchemaRegistry {
     this.register('superWithdrawalBlocked',      ParameterValueType.boolean());
     this.register('outOfFundsDate',              ParameterValueType.date());
     this.register('monthlyExpenses',             ParameterValueType.currency('USD'));
+    this.register('expenses.essential',          ParameterValueType.currency('USD'));
+    this.register('expenses.discretionary',      ParameterValueType.currency('USD'));
 
     // US YTD
     this.register('usOrdinaryIncomeYTD',         ParameterValueType.currency('USD'));

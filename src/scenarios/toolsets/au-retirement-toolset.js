@@ -26,7 +26,9 @@ import { ReplenishSavingsReducer }    from '../../finance/reducers/replenish-sav
 import { SetOutOfFundsDateReducer }   from '../../finance/reducers/set-out-of-funds-date-reducer.js';
 import { AccumulateDeficitReducer }   from '../../finance/reducers/accumulate-deficit-reducer.js';
 import { OutOfFundsReducer }          from '../../finance/reducers/out-of-funds-reducer.js';
-import { InflationAdjustReducer }     from '../../finance/reducers/inflation-adjust-reducer.js';
+import { InflationAdjustReducer }         from '../../finance/reducers/inflation-adjust-reducer.js';
+import { SpendingStrategyApplyReducer }   from '../../finance/spending/spending-strategy-apply-reducer.js';
+import { SPENDING_STRATEGY_REGISTRY }     from '../../finance/spending/spending-strategy-registry.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
 import {
   SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer,
@@ -124,6 +126,20 @@ export const AU_RETIREMENT = {
         defaultValue: true,
         description: 'If true, monthly expenses grow with inflation each year',
       },
+      {
+        key: 'discretionarySharePct', label: 'Discretionary Share',
+        type: 'Number', group: 'Spending', mc: false, opt: true,
+        defaultValue: 0.30,
+        description: 'Fraction of monthly expenses treated as discretionary (0.30 = 30%)',
+      },
+      {
+        key: 'spendingStrategy', label: 'Spending Strategy',
+        type: 'EnumMulti', group: 'Spending', mc: false, opt: true,
+        options: ['FIXED', 'REGIME_AWARE'],
+        defaultValue: ['FIXED'],
+        description: 'Active spending strategies; FIXED = inflation-adjusted scalar (default), REGIME_AWARE = cut discretionary under economic-stress regimes',
+      },
+      ...SPENDING_STRATEGY_REGISTRY.REGIME_AWARE.paramSchema(),
     ];
   },
 
@@ -158,10 +174,17 @@ export const AU_RETIREMENT = {
     };
 
     if (!sharedAlreadySetup) {
-      const metrics = {};
-      patches.monthlyExpenses = p.monthlyExpenses;
-      patches.metrics         = metrics;
-      patches.people          = people;
+      const metrics               = {};
+      const monthlyExpenses       = p.monthlyExpenses;
+      const discretionarySharePct = p.discretionarySharePct ?? 0.30;
+      patches.monthlyExpenses       = monthlyExpenses;
+      patches.discretionarySharePct = discretionarySharePct;
+      patches.expenses = {
+        essential:     monthlyExpenses * (1 - discretionarySharePct),
+        discretionary: monthlyExpenses * discretionarySharePct,
+      };
+      patches.metrics = metrics;
+      patches.people  = people;
       for (const account of context.accounts) {
         if (account.stateKey != null && account.balance != null) {
           metrics[account.stateKey] = account.balance;
@@ -343,6 +366,15 @@ export const AU_RETIREMENT = {
 
       if (p.inflationAdjust) {
         reducers.push(new InflationAdjustReducer());
+      }
+
+      reducers.push(new SpendingStrategyApplyReducer());
+
+      const strategies = p.spendingStrategy ?? ['FIXED'];
+      for (const stratKey of strategies) {
+        if (stratKey !== 'FIXED' && SPENDING_STRATEGY_REGISTRY[stratKey]) {
+          reducers.push(...SPENDING_STRATEGY_REGISTRY[stratKey].reducers(context));
+        }
       }
     }
 
