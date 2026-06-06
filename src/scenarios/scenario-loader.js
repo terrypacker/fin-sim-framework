@@ -227,12 +227,13 @@ export class ScenarioLoader {
     for (const p of cfg.params) {
       const s = schemaByKey.get(p.name);
       if (!s) continue;
-      if (p.label       === undefined && s.label)       p.label       = s.label;
-      if (p.group       === undefined && s.group)       p.group       = s.group;
-      if (p.type        === undefined && s.type)        p.type        = s.type;
-      if (p.description === undefined && s.description) p.description = s.description;
-      if (p.node        === undefined && s.node)        p.node        = s.node;
-      if (p.options      === undefined && s.options)    p.options     = s.options;
+      if (p.label       === undefined && s.label)            p.label       = s.label;
+      if (p.group       === undefined && s.group)            p.group       = s.group;
+      if (p.type        === undefined && s.type)             p.type        = s.type;
+      if (p.description === undefined && s.description)     p.description = s.description;
+      if (p.node        === undefined && s.node)             p.node        = s.node;
+      if (p.options     === undefined && s.options)          p.options     = s.options;
+      if (p.value       === undefined && s.defaultValue !== undefined) p.value = s.defaultValue;
     }
     const existing = new Set(cfg.params.map(p => p.name));
     for (const s of combinedSchema) {
