@@ -22,6 +22,8 @@ import {
   IntlUsStockEarningsHandler,
 } from '../../finance/handlers/earnings-handlers.js';
 import { OutOfFundsHandler }            from '../../finance/handlers/out-of-funds-handler.js';
+import { RetirementDateHandler }        from '../../finance/spending/strategies/retirement-date-handler.js';
+import { HealthcareEventHandler }       from '../../finance/spending/strategies/healthcare-event-handler.js';
 import { ExpenseDebitReducer }          from '../../finance/reducers/expense-debit-reducer.js';
 import { ReplenishSavingsReducer }      from '../../finance/reducers/replenish-savings-reducer.js';
 import { StockDividendCashApplyReducer }    from '../../finance/reducers/stock-dividend-cash-apply-reducer.js';
@@ -267,11 +269,13 @@ export const US_RETIREMENT = {
       {
         key: 'spendingStrategy', label: 'Spending Strategy',
         type: 'EnumMulti', group: 'Spending', mc: false, opt: true,
-        options: ['FIXED', 'REGIME_AWARE'],
+        options: ['FIXED', 'REGIME_AWARE', 'GUARDRAIL', 'HEALTHCARE'],
         defaultValue: ['FIXED'],
-        description: 'Active spending strategies; FIXED = inflation-adjusted scalar (default), REGIME_AWARE = cut discretionary under economic-stress regimes',
+        description: 'Active spending strategies; FIXED = inflation-adjusted scalar (default), REGIME_AWARE = cut discretionary under economic-stress regimes, GUARDRAIL = Guyton-Klinger withdrawal-rate bands, HEALTHCARE = one-off healthcare expense events',
       },
       ...SPENDING_STRATEGY_REGISTRY.REGIME_AWARE.paramSchema(),
+      ...SPENDING_STRATEGY_REGISTRY.GUARDRAIL.paramSchema(),
+      ...SPENDING_STRATEGY_REGISTRY.HEALTHCARE.paramSchema(),
     ];
   },
 
@@ -324,6 +328,30 @@ export const US_RETIREMENT = {
       }
       if (account.stateKey != null && account.balance != null) {
         metrics[account.stateKey] = account.balance;
+      }
+    }
+
+    // Guardrail pre-population for post-retirement scenarios (design/26 §12 step 12):
+    // if any person is already retired at sim start, capture the initial withdrawal
+    // rate immediately from the seeded account balances so GuardrailAnnualCheckReducer
+    // has a baseline without needing to wait for a future RETIREMENT_DATE_REACHED event.
+    const strategies = p.spendingStrategy ?? ['FIXED'];
+    if (strategies.includes('GUARDRAIL')) {
+      const simStart     = context.simStart ?? new Date();
+      const anyRetired   = context.people.some(pe => pe.retirementDate && new Date(pe.retirementDate) <= simStart);
+      if (anyRetired) {
+        const drawdownAccounts = context.accounts.filter(a => a.drawdownPriority != null);
+        const portfolioValue   = drawdownAccounts.reduce((sum, a) => sum + (a.balance ?? 0), 0);
+        const annualSpending   = monthlyExpenses * 12;
+        patches.guardrail = {
+          initialWithdrawalRate:       portfolioValue > 0 ? annualSpending / portfolioValue : 0,
+          portfolioValue,
+          annualSpending,
+          baselineDate:                simStart,
+          lastAdjustmentDate:          null,
+          lastAdjustmentCause:         null,
+          currentAdjustmentMultiplier: 1.0,
+        };
       }
     }
 
@@ -434,6 +462,43 @@ export const US_RETIREMENT = {
           data:    { k401Key: k401.stateKey, iraKey: ownerIra.stateKey },
           enabled: true,
           color:   '#BF360C',
+        }));
+      }
+    }
+
+    // Guardrail — schedule RETIREMENT_DATE_REACHED for future-retirement persons (design/26 step 12).
+    // Post-retirement persons are handled via state() patches (baseline captured at sim start).
+    const strategies = p.spendingStrategy ?? ['FIXED'];
+    if (strategies.includes('GUARDRAIL')) {
+      const simStart = context.simStart ?? new Date();
+      for (const person of people) {
+        if (!person.retirementDate) continue;
+        const retDate = new Date(person.retirementDate);
+        if (retDate > simStart) {
+          schedules.push(new OneOffEvent({
+            name:    `Retirement Date — ${person.name}`,
+            type:    'RETIREMENT_DATE_REACHED',
+            date:    retDate,
+            data:    { personId: person.id },
+            enabled: true,
+            color:   '#FF9800',
+          }));
+        }
+      }
+    }
+
+    // Healthcare — schedule HEALTHCARE_EXPENSE one-off events from parameters (design/26 step 16).
+    if (strategies.includes('HEALTHCARE')) {
+      const healthcareEvents = p.healthcareEvents ?? [];
+      for (const evt of healthcareEvents) {
+        if (!evt.date || !evt.amount) continue;
+        schedules.push(new OneOffEvent({
+          name:    `Healthcare Expense${evt.category ? ` — ${evt.category}` : ''}`,
+          type:    'HEALTHCARE_EXPENSE',
+          date:    new Date(evt.date),
+          data:    { amount: evt.amount, category: evt.category ?? 'healthcare', personId: evt.personId ?? null },
+          enabled: true,
+          color:   '#E91E63',
         }));
       }
     }
@@ -613,6 +678,33 @@ export const US_RETIREMENT = {
 
     // Out-of-funds handler (no event binding)
     handlers.push(new OutOfFundsHandler());
+
+    // Guardrail — RetirementDateHandler fires on RETIREMENT_DATE_REACHED (design/26 step 12).
+    const strategiesH = p.spendingStrategy ?? ['FIXED'];
+    if (strategiesH.includes('GUARDRAIL')) {
+      const retDateEvents = Object.values(context.schedulesById).filter(e => e?.type === 'RETIREMENT_DATE_REACHED');
+      if (retDateEvents.length > 0) {
+        const retH = new RetirementDateHandler({
+          baseCurrency: p.guardrailBaseCurrency ?? 'USD',
+        });
+        for (const evt of retDateEvents) retH.handledEvents.push(evt);
+        handlers.push(retH);
+      }
+    }
+
+    // Healthcare — HealthcareEventHandler fires on HEALTHCARE_EXPENSE (design/26 step 16).
+    if (strategiesH.includes('HEALTHCARE')) {
+      const hcEvents = Object.values(context.schedulesById).filter(e => e?.type === 'HEALTHCARE_EXPENSE');
+      if (hcEvents.length > 0) {
+        const hcH = new HealthcareEventHandler({
+          stateRegistry: sr,
+          usRole: ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
+          auRole: ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
+        });
+        for (const evt of hcEvents) hcH.handledEvents.push(evt);
+        handlers.push(hcH);
+      }
+    }
 
     return handlers;
   },

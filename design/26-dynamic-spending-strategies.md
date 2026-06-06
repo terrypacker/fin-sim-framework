@@ -1,6 +1,6 @@
 # 26 — Dynamic Spending Strategies
 
-**Status**: Ready for implementation (Phase B per `design/24-financial-modeling-roadmap.md` §5)
+**Status**: COMPLETE — both increments landed 2026-06-05
 **Phase dependencies**: Phase A substrate must land first — both `design/25-holding-level-state.md` (✅ landed) **and** `design/25a-mc-nested-param-paths.md` (⚠️ not yet landed; required for the `HealthcareEventDriven` MC sweep — see §12). This design doesn't read holdings directly but ships after the substrate is stable.
 **Related**: `design/24-financial-modeling-roadmap.md` §3.2, `design/21-financial-shock-and-regime-framework.md` (regime-aware strategies read `state.activeRegimes`), `design/23-fx-exchange.md` (Guardrail's portfolio sum is FX-converted to base currency), `design/15-config-as-source-of-truth.md` (strategy params live in the toolset param schema), `design/27-mortality-and-survivor-mechanics.md` (survivor + late-life-care multipliers write per-slice deltas onto the materialized `state.expenses`).
 **Author note**: Section bodies finalized 2026-06-05 from the §10 open-question answers and the §11 follow-up list. The implementation decisions (monthlyExpenses-as-derived-getter, 25a-first sequencing, increment scope) are recorded in §12.
@@ -271,38 +271,38 @@ Three load-bearing implementation choices, confirmed at finalization:
 
 ---
 
-### Increment 2 — Guardrail + HealthcareEventDriven (deferred)
+### Increment 2 — Guardrail + HealthcareEventDriven ✅
 
-*Blocked on: `RETIREMENT_DATE_REACHED` lifecycle event + FX portfolio sum (Guardrail); 25a MC healthcare sweep (HealthcareEventDriven).*
+**Step 12 — Emit `RETIREMENT_DATE_REACHED` lifecycle event** ✅
+- `RetirementDateHandler` (`src/finance/spending/strategies/retirement-date-handler.js`) handles `RETIREMENT_DATE_REACHED`.
+- Toolset `schedules()` registers a `OneOffEvent` at each person's future `retirementDate`.
+- If sim opens post-retirement, toolset `state()` pre-populates `state.guardrail.initialWithdrawalRate` from initial account balances.
+- Handler computes portfolio value via `computeGuardrailPortfolioValue` (FX-aware) and emits `GUARDRAIL_BASELINE_APPLY`.
 
-**Step 12 — Emit `RETIREMENT_DATE_REACHED` lifecycle event** [ ]
-- Schedule a `OneOffEvent` at each person's `retirementDate` at scenario boot.
-- `RetirementDateHandler` emits `GUARDRAIL_BASELINE_APPLY` (captured by `GuardrailBaselineApplyReducer`).
-- If sim opens post-retirement (current date > retirementDate), capture baseline at sim start instead.
+**Step 13 — `GuardrailBaselineApplyReducer`** ✅
+- `src/finance/spending/strategies/guardrail-baseline-apply-reducer.js`; priority `PRE_PROCESS (10)`.
+- Stores `initialWithdrawalRate`, `portfolioValue`, `annualSpending`, `baselineDate` in `state.guardrail`.
+- Resets `currentAdjustmentMultiplier = 1.0` and clears last-adjustment fields.
 
-**Step 13 — `GuardrailBaselineApplyReducer`** [ ]
-- Handles `GUARDRAIL_BASELINE_APPLY`; priority `PRE_PROCESS (10)`.
-- Writes `state.guardrail.initialWithdrawalRate = annualSpending / portfolioValue`.
-- `portfolioValue` = sum of `account.balance` for accounts where `drawdownPriority != null`, FX-converted to base currency via `FxService`.
+**Step 14 — `GuardrailAdjustApplyReducer`** ✅
+- `src/finance/spending/strategies/guardrail-adjust-apply-reducer.js`; priority `PRE_PROCESS (10)`.
+- Payload: `{ multiplier, cause }`. Multiplies `state.expenses.discretionary`; syncs `monthlyExpenses`.
+- Compounds `state.guardrail.currentAdjustmentMultiplier`.
 
-**Step 14 — `GuardrailAdjustApplyReducer`** [ ]
-- Handles `GUARDRAIL_ADJUST_APPLY`; priority `PRE_PROCESS (10)`.
-- Payload: `{ multiplier, cause }`.
-- Writes `state.expenses.discretionary *= multiplier`; syncs `monthlyExpenses`.
+**Step 15 — `GuardrailAnnualCheckReducer`** ✅
+- `src/finance/spending/strategies/guardrail-annual-check-reducer.js`; priority `PRE_PROCESS + 3`.
+- On each annual period advance: computes `currentRate = annualSpending / portfolioValue` (FX-converted).
+- Emits `GUARDRAIL_ADJUST_APPLY` via `state.next` if cut or raise threshold is breached.
+- Shared utility: `src/finance/spending/guardrail-portfolio-value.js`.
 
-**Step 15 — `GuardrailAnnualCheckReducer`** [ ]
-- Listens on `['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE']` at `PRE_PROCESS + 3`.
-- Once per year after `GUARDRAIL_BASELINE_APPLY` has fired:
-  - Computes current withdrawal rate; compares to `initialWithdrawalRate` bands.
-  - Emits `GUARDRAIL_ADJUST_APPLY` if cut or raise threshold is breached.
+**Step 16 — `HealthcareEventDriven` strategy** ✅
+- `HealthcareEventHandler` (`src/finance/spending/strategies/healthcare-event-handler.js`) handles `HEALTHCARE_EXPENSE` events; emits `EXPENSE_DEBIT` + `HEALTHCARE_EXPENSE_APPLY`.
+- `HealthcareExpenseApplyReducer` (`src/finance/spending/strategies/healthcare-expense-apply-reducer.js`); priority `CASH_FLOW (20)`; accumulates `healthcareSpendingYTD` + `healthcareSpendingTotal` (does NOT modify `state.expenses.essential` permanently — healthcare is a one-off debit, not a recurring budget change).
+- Deterministic `OneOffEvent`s scheduled from `parameters.healthcareEvents` array at toolset `schedules()` time.
+- MC sweep via 25a nested-path params is deferred to a future increment.
 
-**Step 16 — `HealthcareEventDriven` strategy** [ ]
-- `HealthcareExpenseApplyReducer` handles `HEALTHCARE_EXPENSE_APPLY`; priority `CASH_FLOW (20)`.
-- Deterministic `OneOffEvent`s scheduled from `state.healthcareEventsScheduled` at boot.
-- MC sweep via 25a nested-path params under `parameters.healthcare.*`.
-
-**Step 17 — Tests for Increment 2** [ ]
-- `tests/unit/spending-guardrail.test.mjs` — baseline capture, band triggers, cut/raise.
-- `tests/unit/spending-guardrail-fx.test.mjs` — multi-currency portfolio sum.
-- `tests/unit/spending-healthcare.test.mjs` — one-off event fires; essential slice updates.
-- `tests/evt/evt-spending-composition.test.mjs` — RegimeAware + Guardrail both adjusting discretionary; assert additive.
+**Step 17 — Tests for Increment 2** ✅
+- `tests/unit/spending-guardrail.test.mjs` — 14 tests: baseline capture, band triggers, cut/raise, handler rate calc.
+- `tests/unit/spending-guardrail-fx.test.mjs` — 7 tests: multi-currency portfolio sum, USD+AUD conversion.
+- `tests/unit/spending-healthcare.test.mjs` — 10 tests: one-off event fires, EXPENSE_DEBIT emitted, REPLENISH_SAVINGS when needed, AU-resident routing.
+- `tests/unit/spending-composition.test.mjs` — 4 tests: RegimeAware + Guardrail additive; Guardrail raise doesn't clobber regime cut.

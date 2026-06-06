@@ -10,8 +10,11 @@
 
 import { EventBuilder }               from '../../simulation-framework/builders/event-builder.js';
 import { ReducerBuilder }             from '../../simulation-framework/builders/reducer-builder.js';
+import { OneOffEvent }                from '../../simulation-framework/events/one-off-event.js';
 import { ACCOUNT_ROLES }              from '../../finance/state/account-roles.js';
 import { MonthlyExpensesHandler }     from '../../finance/handlers/monthly-expenses-handler.js';
+import { RetirementDateHandler }      from '../../finance/spending/strategies/retirement-date-handler.js';
+import { HealthcareEventHandler }     from '../../finance/spending/strategies/healthcare-event-handler.js';
 import { MonthlyWagesHandler }        from '../../finance/handlers/monthly-wages-handler.js';
 import { MonthlySocialSecurityHandler }
   from '../../finance/handlers/monthly-social-security-handler.js';
@@ -135,11 +138,13 @@ export const AU_RETIREMENT = {
       {
         key: 'spendingStrategy', label: 'Spending Strategy',
         type: 'EnumMulti', group: 'Spending', mc: false, opt: true,
-        options: ['FIXED', 'REGIME_AWARE'],
+        options: ['FIXED', 'REGIME_AWARE', 'GUARDRAIL', 'HEALTHCARE'],
         defaultValue: ['FIXED'],
-        description: 'Active spending strategies; FIXED = inflation-adjusted scalar (default), REGIME_AWARE = cut discretionary under economic-stress regimes',
+        description: 'Active spending strategies; FIXED = inflation-adjusted scalar (default), REGIME_AWARE = cut discretionary under economic-stress regimes, GUARDRAIL = Guyton-Klinger withdrawal-rate bands, HEALTHCARE = one-off healthcare expense events',
       },
       ...SPENDING_STRATEGY_REGISTRY.REGIME_AWARE.paramSchema(),
+      ...SPENDING_STRATEGY_REGISTRY.GUARDRAIL.paramSchema(),
+      ...SPENDING_STRATEGY_REGISTRY.HEALTHCARE.paramSchema(),
     ];
   },
 
@@ -255,6 +260,43 @@ export const AU_RETIREMENT = {
       );
     }
 
+    // Guardrail — RETIREMENT_DATE_REACHED (not delegated to US_RETIREMENT here).
+    const p        = context.parameters;
+    const strategies = p.spendingStrategy ?? ['FIXED'];
+    if (strategies.includes('GUARDRAIL') && !context._auSharedDelegated) {
+      const simStart = context.simStart ?? new Date();
+      for (const person of people) {
+        if (!person.retirementDate) continue;
+        const retDate = new Date(person.retirementDate);
+        if (retDate > simStart && !context.schedulesById['RETIREMENT_DATE_REACHED']) {
+          schedules.push(new OneOffEvent({
+            name:    `Retirement Date — ${person.name}`,
+            type:    'RETIREMENT_DATE_REACHED',
+            date:    retDate,
+            data:    { personId: person.id },
+            enabled: true,
+            color:   '#FF9800',
+          }));
+        }
+      }
+    }
+
+    // Healthcare — HEALTHCARE_EXPENSE one-off events.
+    if (strategies.includes('HEALTHCARE') && !context._auSharedDelegated) {
+      const healthcareEvents = p.healthcareEvents ?? [];
+      for (const evt of healthcareEvents) {
+        if (!evt.date || !evt.amount) continue;
+        schedules.push(new OneOffEvent({
+          name:    `Healthcare Expense${evt.category ? ` — ${evt.category}` : ''}`,
+          type:    'HEALTHCARE_EXPENSE',
+          date:    new Date(evt.date),
+          data:    { amount: evt.amount, category: evt.category ?? 'healthcare', personId: evt.personId ?? null },
+          enabled: true,
+          color:   '#E91E63',
+        }));
+      }
+    }
+
     return schedules;
   },
 
@@ -341,6 +383,33 @@ export const AU_RETIREMENT = {
         });
         divH.handledEvents.push(divEvent);
         handlers.push(divH);
+      }
+    }
+
+    // Guardrail + Healthcare handlers (only if not delegated to US_RETIREMENT).
+    if (!context._auSharedDelegated) {
+      const strategiesH = p.spendingStrategy ?? ['FIXED'];
+      if (strategiesH.includes('GUARDRAIL')) {
+        const retDateEvents = Object.values(context.schedulesById).filter(e => e?.type === 'RETIREMENT_DATE_REACHED');
+        if (retDateEvents.length > 0) {
+          const retH = new RetirementDateHandler({
+            baseCurrency: p.guardrailBaseCurrency ?? 'AUD',
+          });
+          for (const evt of retDateEvents) retH.handledEvents.push(evt);
+          handlers.push(retH);
+        }
+      }
+      if (strategiesH.includes('HEALTHCARE')) {
+        const hcEvents = Object.values(context.schedulesById).filter(e => e?.type === 'HEALTHCARE_EXPENSE');
+        if (hcEvents.length > 0) {
+          const hcH = new HealthcareEventHandler({
+            stateRegistry: sr,
+            usRole: ACCOUNT_ROLES.US_SAVINGS, usOwnerId: null,
+            auRole: ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
+          });
+          for (const evt of hcEvents) hcH.handledEvents.push(evt);
+          handlers.push(hcH);
+        }
       }
     }
 

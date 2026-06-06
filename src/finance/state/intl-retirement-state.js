@@ -131,6 +131,24 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.auPersonNonResidentWithholdingYTD  = _zeroes();
     this.auPersonSuperTaxYTD                = _zeroes();
 
+    // Guardrail strategy substrate (design/26 Increment 2).
+    // initialWithdrawalRate is null until RETIREMENT_DATE_REACHED fires (or pre-populated
+    // by the toolset when sim opens post-retirement).
+    this.guardrail = {
+      initialWithdrawalRate:        null,
+      portfolioValue:               null,
+      annualSpending:               null,
+      baselineDate:                 null,
+      lastAdjustmentDate:           null,
+      lastAdjustmentCause:          null,
+      currentAdjustmentMultiplier:  1.0,
+    };
+
+    // Healthcare tracking substrate (design/26 Increment 2).
+    this.healthcareEventsScheduled = [];
+    this.healthcareSpendingYTD     = 0;
+    this.healthcareSpendingTotal   = 0;
+
     this.superWithdrawalBlocked = false;
     this.outOfFundsDate = null;
     this.scenarioFailed = false;
