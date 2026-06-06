@@ -76,7 +76,7 @@
       "Bash(sed -n '24,34p' /Users/tpacker/IdeaProjects/fin-sim-framework/assets/css/plugins/dashboard.css)",
       "Bash(sed -n '153,168p' /Users/tpacker/IdeaProjects/fin-sim-framework/assets/css/plugins/modals.css)",
       "Bash(sed -n '75,90p' /Users/tpacker/IdeaProjects/fin-sim-framework/assets/css/plugins/config-graph.css)",
-      "Bash(CLAUDE_CODE_TMPDIR=/tmp grep *)",
+      "Bash(CLAUDE_CODE_TMPDIR=/tmp grep *)"
     ]
   },
   "hooks": {
