@@ -52,6 +52,9 @@ import { DividendScheduledHandler }       from '../finance/handlers/dividend-sch
 import { ChangeResidencyHandler }         from '../finance/handlers/change-residency-handler.js';
 import { OutOfFundsHandler }              from '../finance/handlers/out-of-funds-handler.js';
 import { MonthlySocialSecurityHandler }   from '../finance/handlers/monthly-social-security-handler.js';
+import { MortalityHandler }              from '../finance/handlers/mortality-handler.js';
+import { LateLifeCareHandler }          from '../finance/spending/strategies/late-life-care-handler.js';
+import { LateLifeCareApplyReducer }     from '../finance/spending/strategies/late-life-care-apply-reducer.js';
 
 // ─── Finance reducer classes ────────────────────────────────────────────────
 import { UsSavingsInterestCreditReducer } from '../finance/reducers/us-savings-interest-credit-reducer.js';
@@ -62,6 +65,10 @@ import { FxTransferApplyReducer }        from '../finance/fx/fx-transfer-apply-r
 import { FxRefreshReducer }              from '../finance/fx/fx-refresh-reducer.js';
 import { StockDividendCashApplyReducer }  from '../finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { ChangeResidencyApplyReducer }    from '../finance/reducers/change-residency-apply-reducer.js';
+import { PersonDiedApplyReducer }        from '../finance/reducers/person-died-apply-reducer.js';
+import { SocialSecuritySurvivorApplyReducer } from '../finance/reducers/social-security-survivor-apply-reducer.js';
+import { AccountRetitleApplyReducer }    from '../finance/reducers/account-retitle-apply-reducer.js';
+import { ScenarioCompleteReducer }       from '../finance/reducers/scenario-complete-reducer.js';
 import { SetOutOfFundsDateReducer }       from '../finance/reducers/set-out-of-funds-date-reducer.js';
 import { AccumulateDeficitReducer }       from '../finance/reducers/accumulate-deficit-reducer.js';
 import { OutOfFundsReducer }             from '../finance/reducers/out-of-funds-reducer.js';
@@ -196,6 +203,7 @@ const _ALL_CLASSES = [
   IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,
   IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
   DividendScheduledHandler, ChangeResidencyHandler, OutOfFundsHandler, MonthlySocialSecurityHandler,
+  MortalityHandler, LateLifeCareHandler,
   UsMortgagePaymentHandler, AuMortgagePaymentHandler,
   UsPeriodAdvanceHandler, AuPeriodAdvanceHandler,
   UsTaxSettleHandler, AuTaxSettleHandler,
@@ -226,6 +234,8 @@ const _ALL_CLASSES = [
   UsSavingsInterestCreditReducer, ExpenseDebitReducer, ReplenishSavingsReducer,
   IntlTransferApplyReducer, FxTransferApplyReducer, FxRefreshReducer,
   StockDividendCashApplyReducer, ChangeResidencyApplyReducer,
+  PersonDiedApplyReducer, SocialSecuritySurvivorApplyReducer, AccountRetitleApplyReducer, ScenarioCompleteReducer,
+  LateLifeCareApplyReducer,
   SetOutOfFundsDateReducer, AccumulateDeficitReducer, OutOfFundsReducer, InflationAdjustReducer,
   SpendingStrategyApplyReducer, RegimeAwareSpendingReducer,
   UsPeriodAdvanceReducer, AuPeriodAdvanceReducer,

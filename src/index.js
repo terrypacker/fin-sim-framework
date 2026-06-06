@@ -68,6 +68,7 @@ import { IntlTransferToUsHandler, IntlTransferToAuHandler } from './finance/hand
 import { MonthlyExpensesHandler } from './finance/handlers/monthly-expenses-handler.js';
 import { MonthlySocialSecurityHandler } from './finance/handlers/monthly-social-security-handler.js';
 import { MonthlyWagesHandler } from './finance/handlers/monthly-wages-handler.js';
+import { MortalityHandler } from './finance/handlers/mortality-handler.js';
 import { OutOfFundsHandler } from './finance/handlers/out-of-funds-handler.js';
 import { UsSavingsInterestMonthlyHandler } from './finance/handlers/us-savings-interest-handler.js';
 import { ALLOCATION, ALLOCATION_VALUES } from './finance/holdings/allocation.js';
@@ -85,6 +86,7 @@ import { ReportDefinition, ReportDefinitionRegistry } from './finance/journal-re
 import { JournalReportingService } from './finance/journal-reporting-service.js';
 import { DEFAULT_MC_VARIABLE_CONFIGS, IntlRetirementMcConfig } from './finance/monte-carlo/intl-retirement-mc-config.js';
 import { computeNetWorthUsd, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
+import { CDC_2024, AU_2022, lookupLifeTable } from './finance/monte-carlo/life-tables.js';
 import { get, set } from './finance/monte-carlo/mc-param-paths.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables } from './finance/optimization/intl-retirement-opt-config.js';
 import { valuesForConfig, IntlRetirementOptimizer } from './finance/optimization/intl-retirement-optimizer.js';
@@ -93,14 +95,18 @@ import { ownershipFractions, splitByOwnership, accumulateByOwnership } from './f
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
 import { Person } from './finance/person.js';
+import { AccountRetitleApplyReducer } from './finance/reducers/account-retitle-apply-reducer.js';
 import { AccumulateDeficitReducer } from './finance/reducers/accumulate-deficit-reducer.js';
 import { ChangeResidencyApplyReducer } from './finance/reducers/change-residency-apply-reducer.js';
 import { ExpenseDebitReducer } from './finance/reducers/expense-debit-reducer.js';
 import { InflationAdjustReducer } from './finance/reducers/inflation-adjust-reducer.js';
 import { IntlTransferApplyReducer } from './finance/reducers/intl-transfer-apply-reducer.js';
 import { OutOfFundsReducer } from './finance/reducers/out-of-funds-reducer.js';
+import { PersonDiedApplyReducer } from './finance/reducers/person-died-apply-reducer.js';
 import { ReplenishSavingsReducer } from './finance/reducers/replenish-savings-reducer.js';
+import { ScenarioCompleteReducer } from './finance/reducers/scenario-complete-reducer.js';
 import { SetOutOfFundsDateReducer } from './finance/reducers/set-out-of-funds-date-reducer.js';
+import { SocialSecuritySurvivorApplyReducer } from './finance/reducers/social-security-survivor-apply-reducer.js';
 import { StockDividendCashApplyReducer } from './finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { UsSavingsInterestCreditReducer } from './finance/reducers/us-savings-interest-credit-reducer.js';
 import { getResidency, isResident, residentsOf, getBirthDate } from './finance/residency-utils.js';
@@ -113,9 +119,18 @@ import { PersonService } from './finance/services/person-service.js';
 import { RealPropertyService } from './finance/services/real-property-service.js';
 import { StateRegistry } from './finance/services/state-registry.js';
 import { ParameterValueType, StateSchemaRegistry } from './finance/services/state-schema-registry.js';
+import { computeGuardrailPortfolioValue } from './finance/spending/guardrail-portfolio-value.js';
 import { SpendingStrategyApplyReducer } from './finance/spending/spending-strategy-apply-reducer.js';
 import { SPENDING_STRATEGY_REGISTRY } from './finance/spending/spending-strategy-registry.js';
+import { GuardrailAdjustApplyReducer } from './finance/spending/strategies/guardrail-adjust-apply-reducer.js';
+import { GuardrailAnnualCheckReducer } from './finance/spending/strategies/guardrail-annual-check-reducer.js';
+import { GuardrailBaselineApplyReducer } from './finance/spending/strategies/guardrail-baseline-apply-reducer.js';
+import { HealthcareEventHandler } from './finance/spending/strategies/healthcare-event-handler.js';
+import { HealthcareExpenseApplyReducer } from './finance/spending/strategies/healthcare-expense-apply-reducer.js';
+import { LateLifeCareApplyReducer } from './finance/spending/strategies/late-life-care-apply-reducer.js';
+import { LateLifeCareHandler } from './finance/spending/strategies/late-life-care-handler.js';
 import { RegimeAwareSpendingReducer } from './finance/spending/strategies/regime-aware-spending-reducer.js';
+import { RetirementDateHandler } from './finance/spending/strategies/retirement-date-handler.js';
 import { ACCOUNT_ROLES } from './finance/state/account-roles.js';
 import { InternationalRetirementFinancialState } from './finance/state/intl-retirement-state.js';
 import { AuTaxDocument2024 } from './finance/tax/au/au-tax-document-2024.js';
@@ -193,7 +208,7 @@ import { HandlerBuilder } from './simulation-framework/builders/handler-builder.
 import { ReducerBuilder } from './simulation-framework/builders/reducer-builder.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES, SIMULATION_BUS_MESSAGES, BusMessage, SimulationBusMessage, ExecutionBusMessage, BreakpointHitMessage, ServiceActionEvent, ServiceBulkActionEvent, ServiceEdgeActionEvent } from './simulation-framework/bus-messages.js';
 import { DateUtils } from './simulation-framework/date-utils.js';
-import { ConstantDistribution, UniformDistribution, NormalDistribution, LogNormalDistribution, BernoulliDistribution, UniformDateDistribution, DISTRIBUTION_TYPES, createDistribution } from './simulation-framework/distributions.js';
+import { ConstantDistribution, UniformDistribution, NormalDistribution, LogNormalDistribution, BernoulliDistribution, UniformDateDistribution, ActuarialLifespanDistribution, DISTRIBUTION_TYPES, createDistribution } from './simulation-framework/distributions.js';
 import { EventBus } from './simulation-framework/event-bus.js';
 import { BaseEvent } from './simulation-framework/events/base-event.js';
 import { EventSeries } from './simulation-framework/events/event-series.js';
@@ -500,6 +515,7 @@ export const Finance = {
   MonthlyExpensesHandler,
   MonthlySocialSecurityHandler,
   MonthlyWagesHandler,
+  MortalityHandler,
   OutOfFundsHandler,
   UsSavingsInterestMonthlyHandler,
   ALLOCATION,
@@ -538,6 +554,9 @@ export const Finance = {
   IntlRetirementMcConfig,
   computeNetWorthUsd,
   IntlRetirementMcRunner,
+  CDC_2024,
+  AU_2022,
+  lookupLifeTable,
   get,
   set,
   DEFAULT_OPTIMIZATION_CONFIGS,
@@ -557,14 +576,18 @@ export const Finance = {
   PeriodRelationship,
   PeriodService,
   Person,
+  AccountRetitleApplyReducer,
   AccumulateDeficitReducer,
   ChangeResidencyApplyReducer,
   ExpenseDebitReducer,
   InflationAdjustReducer,
   IntlTransferApplyReducer,
   OutOfFundsReducer,
+  PersonDiedApplyReducer,
   ReplenishSavingsReducer,
+  ScenarioCompleteReducer,
   SetOutOfFundsDateReducer,
+  SocialSecuritySurvivorApplyReducer,
   StockDividendCashApplyReducer,
   UsSavingsInterestCreditReducer,
   getResidency,
@@ -588,9 +611,18 @@ export const Finance = {
   StateRegistry,
   ParameterValueType,
   StateSchemaRegistry,
+  computeGuardrailPortfolioValue,
   SpendingStrategyApplyReducer,
   SPENDING_STRATEGY_REGISTRY,
+  GuardrailAdjustApplyReducer,
+  GuardrailAnnualCheckReducer,
+  GuardrailBaselineApplyReducer,
+  HealthcareEventHandler,
+  HealthcareExpenseApplyReducer,
+  LateLifeCareApplyReducer,
+  LateLifeCareHandler,
   RegimeAwareSpendingReducer,
+  RetirementDateHandler,
   ACCOUNT_ROLES,
   InternationalRetirementFinancialState,
   AuTaxDocument2024,
@@ -675,6 +707,7 @@ export const Engine = {
   LogNormalDistribution,
   BernoulliDistribution,
   UniformDateDistribution,
+  ActuarialLifespanDistribution,
   DISTRIBUTION_TYPES,
   createDistribution,
   EventBus,

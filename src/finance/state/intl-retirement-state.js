@@ -154,6 +154,13 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.scenarioFailed = false;
     this.cumulativeDeficit = 0;
     this.deficitMonths = 0;
+
+    // Mortality substrate (design/27).
+    // deceased: { [personId]: { date, taxJurisdiction } } — populated by PersonDiedApplyReducer.
+    // scenarioComplete: true when no survivors remain — causes the run loop to halt.
+    this.deceased         = {};
+    this.scenarioComplete = false;
+    this.lateLifeCare     = {};
   }
 }
 

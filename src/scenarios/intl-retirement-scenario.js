@@ -401,6 +401,19 @@ export class IntlRetirementScenario extends BaseScenario {
         superGrowthRate:          p.spouseSuperGrowthRate ?? 0.07,
         auStockGrowthRate:        p.auStockGrowthRate,
         auStockDividendRate:      p.auStockDividendRate,
+        // Mortality — per-person lifespan seed for MC actuarial draws (design/27 Step 15).
+        // The 'people' map mirrors context.people but lives in parameters so set()
+        // can overwrite individual lifeExpectancy values per MC iteration.
+        people: {
+          primary: {
+            name: 'Primary', residency: 'US', sex: 'M',
+            lifeExpectancy: p.primaryLifeExpectancy ?? 90,
+          },
+          spouse: {
+            name: 'Spouse', residency: 'US', sex: 'F',
+            lifeExpectancy: p.spouseLifeExpectancy ?? 90,
+          },
+        },
         // US_AU_CROSS_BORDER
         moveYear:                 p.moveYear,
         exchangeRateUsdToAud:     p.exchangeRateUsdToAud,
