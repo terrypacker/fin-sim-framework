@@ -303,7 +303,7 @@ The estate-law interaction layer (§7 Tax row, §10 Q3). Depends on design 25 ho
 - Extend `MortalityHandler` (Increment 1 Step 3, action #2): after `PERSON_DIED_APPLY`, dispatch into the tax/account module registry keyed on `state.deceased[personId].taxJurisdiction`. US jurisdiction → for each inherited holding, emit a `HoldingSetBasisAction({ stateKey, holdingId, costBasis: holding.marketValue })` (step basis up to date-of-death fair value; market value is unchanged so no `HoldingRevalueAction` is required). AU jurisdiction → emit nothing (CGT cost-base carries over). The US-vs-AU decision lives in the per-country tax module (TaxEngine + AccountRulesEngine pattern), **not** baked into the handler — the handler asks the module which holdings to step up.
 - Keys off the **deceased** only; the survivor's jurisdiction is irrelevant (§10 Q3 note). Ordering: basis step-up runs *before* `ACCOUNT_RETITLE_APPLY` so the stepped-up basis is what transfers to the survivor (the reducer's `COST_BASIS` priority already lands it after position updates within the chain).
 
-**Step 19 — Filing-status change on widowhood** [ ]
+**Step 19 — Filing-status change on widowhood** ✅
 - Tax modules read `state.deceased` to switch filing status (married-joint → single) in the year after death. This is per-year-module policy work (§7 Tax row) — scope it as "tax modules consult `state.deceased`"; the actual bracket/standard-deduction changes are owned by each year's tax module, not this design.
 
 **Step 20 — Tests** ✅

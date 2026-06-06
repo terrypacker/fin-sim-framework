@@ -134,6 +134,7 @@ export class StateSchemaRegistry {
     this.register('scenarioFailed',              ParameterValueType.boolean());
     this.register('scenarioComplete',            ParameterValueType.boolean());
     this.register('superWithdrawalBlocked',      ParameterValueType.boolean());
+    this.register('usFilingSingle',              ParameterValueType.boolean());
     this.register('outOfFundsDate',              ParameterValueType.date());
     this.registerPattern('deceased.*.date',           ParameterValueType.date());
     this.registerPattern('deceased.*.taxJurisdiction', ParameterValueType.text());
