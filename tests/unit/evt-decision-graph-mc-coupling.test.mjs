@@ -23,7 +23,9 @@
 import { test }  from 'node:test';
 import assert    from 'node:assert/strict';
 
-import { DecisionGraphRunner } from '../../src/finance/decision-graph/decision-graph-runner.js';
+import { DecisionGraphRunner }      from '../../src/finance/decision-graph/decision-graph-runner.js';
+import { IntlRetirementScenario }   from '../../src/scenarios/intl-retirement-scenario.js';
+import { ScenarioSerializer }       from '../../src/scenarios/scenario-serializer.js';
 
 function makeMockFactory(seedBased = false) {
   return (opts) => ({
@@ -156,4 +158,135 @@ test('onProgress is called at least once per leaf', async () => {
 
   assert.ok(progressCalls.length > 0, 'onProgress should have been called');
   assert.equal(progressCalls[0].leafTotal, 2, 'leafTotal should equal leaf count');
+});
+
+// ── Regression: _OffsetSeedMcRunner must forward `variables` to super._perturb ─
+
+/**
+ * Regression test for the bug where _OffsetSeedMcRunner._perturb dropped the
+ * `variables` argument when calling super._perturb(), causing:
+ *   TypeError: variables is not iterable
+ * at the first `for (const cfg of variables)` in IntlRetirementMcRunner._perturb.
+ *
+ * This test runs DecisionGraphRunner WITHOUT a mock factory so the real
+ * _OffsetSeedMcRunner is exercised end-to-end.
+ */
+test('DecisionGraphRunner with real runner: variables forwarded through _perturb (regression)', async () => {
+  const SIM_START = new Date(Date.UTC(2026, 0, 1));
+  const SIM_END   = new Date(Date.UTC(2027, 0, 1));
+
+  const rawTemplate = IntlRetirementScenario.buildDefaultConfig({}, SIM_START, SIM_END);
+  const baseEntry   = ScenarioSerializer.serializeScenario(rawTemplate);
+  baseEntry.id       = 'p:dg-regression';
+  baseEntry.simStart = SIM_START.toISOString();
+  baseEntry.simEnd   = SIM_END.toISOString();
+
+  const registry = { get: () => baseEntry };
+
+  const dg = {
+    id:             'dg:regression',
+    baseScenarioId: 'p:dg-regression',
+    decisionPoints: [
+      {
+        id: 'ret', label: 'Retirement Year', paramKey: 'retirementYear',
+        options: [{ value: 2028, label: '2028' }, { value: 2030, label: '2030' }],
+        weights: null,
+      },
+    ],
+    objective:      'finalBalance',
+    mcDrawsPerLeaf: 2,
+    mcSeed:         42,
+  };
+
+  const runner = new DecisionGraphRunner({ scenarioRegistry: registry });
+
+  // Should not throw "variables is not iterable"
+  let result;
+  await assert.doesNotReject(async () => {
+    result = await runner.run(dg);
+  }, 'DecisionGraphRunner.run() must not throw when using the real MC runner');
+
+  assert.equal(result.leaves.length, 2, 'should have one leaf per retirement year option');
+  for (const leaf of result.leaves) {
+    assert.ok(typeof leaf.mcSummary?.p50 === 'number', 'each leaf must have a numeric p50 summary');
+  }
+});
+
+// ── Regression: _makeLeafEntry must not mutate baseEntry.params ────────────────
+
+/**
+ * Regression test for the bug where _makeLeafEntry mutated baseEntry.params in
+ * place (serializeScenario returned params as a direct reference, not a clone).
+ *
+ * After the DG run, baseEntry.params must still hold the original default values,
+ * and each leaf entry's params must be an independent copy with only its own
+ * decision-point override applied.
+ */
+test('_makeLeafEntry does not mutate baseEntry.params (regression)', async () => {
+  const ORIGINAL_VALUE = 300_000;
+  const LEAF_VALUE_0   = 200_000;
+  const LEAF_VALUE_1   = 400_000;
+
+  const baseEntry = {
+    id: 'p:mutation-test', name: 'Test', layer: 'scenario',
+    simStart: '2026-01-01T00:00:00.000Z',
+    simEnd:   '2027-01-01T00:00:00.000Z',
+    params:   [{ name: 'k401Balance', value: ORIGINAL_VALUE, type: 'Number', label: '401k' }],
+    persons: [], accounts: [], events: [], handlers: [], actions: [], reducers: [],
+    toolsets: [], initialState: {},
+  };
+
+  const registry = { get: () => baseEntry };
+  const factory  = () => ({
+    async run() {
+      return {
+        runs: [],
+        summary: { mean: 0, p10: 0, p50: 0, p90: 0, successRate: 1, failureCount: 0 },
+      };
+    },
+  });
+
+  const dg = {
+    id: 'dg:mutation', baseScenarioId: 'p:mutation-test',
+    decisionPoints: [{
+      id: 'bal', label: 'Balance', paramKey: 'k401Balance',
+      options: [{ value: LEAF_VALUE_0, label: '200k' }, { value: LEAF_VALUE_1, label: '400k' }],
+      weights: null,
+    }],
+    objective: 'finalBalance', mcDrawsPerLeaf: 1, mcSeed: 42,
+  };
+
+  const runner = new DecisionGraphRunner({ scenarioRegistry: registry, mcRunnerFactory: factory });
+  const result = await runner.run(dg);
+
+  // baseEntry.params must be unmodified after the run
+  assert.equal(
+    baseEntry.params[0].value, ORIGINAL_VALUE,
+    `baseEntry.params must not be mutated; expected ${ORIGINAL_VALUE}, got ${baseEntry.params[0].value}`,
+  );
+
+  // Each leaf entry must carry only its own override
+  const leaf0 = result.leaves.find(l => l.optionVector.bal === LEAF_VALUE_0);
+  const leaf1 = result.leaves.find(l => l.optionVector.bal === LEAF_VALUE_1);
+  assert.ok(leaf0, 'leaf with k401Balance=200k not found');
+  assert.ok(leaf1, 'leaf with k401Balance=400k not found');
+
+  assert.equal(
+    leaf0.entry.params.find(p => p.name === 'k401Balance')?.value, LEAF_VALUE_0,
+    'leaf0.entry.params must have k401Balance=200k',
+  );
+  assert.equal(
+    leaf1.entry.params.find(p => p.name === 'k401Balance')?.value, LEAF_VALUE_1,
+    'leaf1.entry.params must have k401Balance=400k',
+  );
+
+  // The two leaf entries must be independent (not sharing the same params array)
+  assert.ok(
+    leaf0.entry.params !== leaf1.entry.params,
+    'leaf entries must not share the same params array reference',
+  );
+  assert.ok(
+    leaf0.entry.params !== baseEntry.params,
+    'leaf0 entry must not share baseEntry.params reference',
+  );
 });
