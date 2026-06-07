@@ -348,6 +348,7 @@ export class ChartView extends BaseComponent {
     this._ro.observe(this.container);
 
     this._applyBaseOptions();
+    if (this._seriesMap.size > 0) this._doChartUpdate();
   }
 
   _fmtTooltip(params) {
