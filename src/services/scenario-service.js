@@ -68,7 +68,7 @@ export class ScenarioService {
       name:           'New Scenario',
       order:          100,
       prebuilt:       false,
-      scenarioId:     fromScenario?.id ?? null,
+      scenarioId:     fromScenario?.scenarioId ?? fromScenario?.id ?? null,
       simStart:       ScenarioSerializer.toDateStr(fromScenario?.simStart ?? new Date(Date.UTC(2026, 0, 1))),
       simEnd:         ScenarioSerializer.toDateStr(fromScenario?.simEnd   ?? new Date(Date.UTC(2041, 0, 1))),
       events:         structuredClone(fromScenario?.events         ?? []),
