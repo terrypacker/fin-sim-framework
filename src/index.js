@@ -312,6 +312,8 @@ import { DashCardsComponent } from './visualization/simulation/dash-cards-compon
 import { PlaybackProgressComponent } from './visualization/simulation/playback-progress-component.js';
 import { SimulationAnimator } from './visualization/simulation/simulation-animator.js';
 import { StatePanelView } from './visualization/simulation/state-panel-view.js';
+import { FieldSeriesStore } from './visualization/state/field-series-store.js';
+import { flattenStatePaths, typeForPath, STATE_FIELD_GROUPS, groupFor } from './visualization/state/state-paths.js';
 import { readThemeColor, CHART_PALETTE } from './visualization/theme.js';
 import { TimeControls } from './visualization/time-controls.js';
 import { TaxDocumentModal } from './visualization/timeline/tax-document-modal.js';
@@ -929,6 +931,11 @@ export const Visualization = {
   PlaybackProgressComponent,
   SimulationAnimator,
   StatePanelView,
+  FieldSeriesStore,
+  flattenStatePaths,
+  typeForPath,
+  STATE_FIELD_GROUPS,
+  groupFor,
   readThemeColor,
   CHART_PALETTE,
   TimeControls,

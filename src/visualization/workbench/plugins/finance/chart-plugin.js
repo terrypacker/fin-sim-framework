@@ -7,8 +7,10 @@ export class ChartPlugin extends WorkbenchComponent {
     const root = document.createElement('div');
     root.className = 'wb-chart-root';
 
-    const filterContainer = document.createElement('div');
-    filterContainer.id = 'chartFilterContainer';
+    // Active-series chip strip (R7.3) — shows charted paths with click-to-remove.
+    const activeSeries = document.createElement('div');
+    activeSeries.id = 'chartActiveSeries';
+    activeSeries.className = 'wb-chart-active-series';
 
     const failureBanner = document.createElement('div');
     failureBanner.id = 'failureBanner';
@@ -29,7 +31,7 @@ export class ChartPlugin extends WorkbenchComponent {
     vizWrap.className = 'wb-chart-viz';
     vizWrap.id = 'chartContainer';
 
-    root.appendChild(filterContainer);
+    root.appendChild(activeSeries);
     root.appendChild(failureBanner);
     root.appendChild(vizWrap);
 

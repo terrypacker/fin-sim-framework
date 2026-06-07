@@ -8,58 +8,42 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import {QueryApi} from "../../query/query-api.js";
-
 /**
- * Tracks which metric keys are known and which are hidden.
- * Persists hidden-key selection across rewinds so the filter survives replay.
+ * Lightweight registry of known chart series (path → {id, name, group}).
+ *
+ * Design 31 / R2: the chart-filter multi-select was removed and selection moved
+ * to the State panel, so the controller no longer tracks visibility or serves a
+ * QueryApi. It now only records which paths have been activated (for labels and
+ * potential future surfaces). The active set itself lives on ChartPresenter.
  */
 export class ChartController {
   constructor() {
-    this._knownKeys = new Map(); // key → { id, name }
-    this._hiddenKeys = new Set();
+    this._knownKeys = new Map(); // key → { id, name, group }
   }
 
   /**
-   * Register a metric key on first encounter.
+   * Register a series key on first encounter.
+   * @param {string}      key   - dot-separated state path (e.g. 'metrics.netWorth')
+   * @param {string|null} group - curated group label (e.g. 'Metrics', 'FX')
    * @returns {boolean} true if the key was newly added
    */
-  discoverKey(key) {
+  discoverKey(key, group = null) {
     if (this._knownKeys.has(key)) return false;
-    const name = key
-      .replace(/([A-Z])/g, ' $1')
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, c => c.toUpperCase())
-      .trim();
-    this._knownKeys.set(key, { id: key, name });
+    this._knownKeys.set(key, { id: key, name: _pathToLabel(key), group: group ?? '' });
     return true;
-  }
-
-  isVisible(key) {
-    return !this._hiddenKeys.has(key);
-  }
-
-  setVisible(key, visible) {
-    if (visible) {
-      this._hiddenKeys.delete(key);
-    } else {
-      this._hiddenKeys.add(key);
-    }
-  }
-
-  clearHidden() {
-    this._hiddenKeys.clear();
   }
 
   getAllKeys() {
     return [...this._knownKeys.keys()];
   }
+}
 
-  /**
-   * Returns a duck-typed query API compatible with MapFilterMultiSelect.
-   * Each item is { id: key, name: humanLabel }.
-   */
-  getQueryApi() {
-    return new QueryApi({getAll: () => [...this._knownKeys.values()]});
-  }
+function _pathToLabel(key) {
+  return key.split('.')
+    .map(seg => seg
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, c => c.toUpperCase())
+      .trim())
+    .join(' › ');
 }

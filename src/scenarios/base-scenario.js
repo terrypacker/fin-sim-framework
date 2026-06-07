@@ -10,6 +10,7 @@
 
 import {SimGraphNode} from "../graph/sim-graph-node.js";
 import {Simulation} from "../simulation-framework/simulation.js";
+import {computeGuardrailPortfolioValue} from "../finance/spending/guardrail-portfolio-value.js";
 
 /**
  * Base class for simulation scenarios.
@@ -247,10 +248,21 @@ export class BaseScenario extends SimGraphNode {
       bus,
       graph,
       initialState: resolved,
+      // R12: expose a real `metrics.netWorth` (Σ liquid account balances in base
+      // currency) on every UI snapshot. Liquid-only (drawdown accounts) — real
+      // property is intentionally excluded to avoid double-counting (design 31).
+      opts: { deriveMetrics: BaseScenario._deriveNetWorth },
     });
 
     simulationRegistry.register('primary', sim);
     simulationSync.setSimStart(this.simStart);
+  }
+
+  /** Derive `state.metrics.netWorth` = Σ liquid account balances (base ccy). */
+  static _deriveNetWorth(state) {
+    const nw = computeGuardrailPortfolioValue(state, 'USD');
+    if (!state.metrics || typeof state.metrics !== 'object') state.metrics = {};
+    state.metrics.netWorth = +nw.toFixed(2);
   }
 
   /**

@@ -129,6 +129,15 @@ export class StateSchemaRegistry {
     // ── FX rate/fee maps ──────────────────────────────────────────────────────
     this.registerPattern('baseExchangeRates.*',      ParameterValueType.rate());
     this.registerPattern('effectiveExchangeRates.*', ParameterValueType.rate());
+
+    // ── Economic regime effective/base rates (design 21) ─────────────────────
+    this.registerPattern('effectiveInflationRates.*',    ParameterValueType.rate());
+    this.registerPattern('effectiveAppreciationRates.*', ParameterValueType.rate());
+    this.registerPattern('effectiveInterestRates.*',     ParameterValueType.rate());
+    this.registerPattern('baseInflationRates.*',         ParameterValueType.rate());
+    this.registerPattern('baseAppreciationRates.*',      ParameterValueType.rate());
+    this.registerPattern('baseInterestRates.*',          ParameterValueType.rate());
+    this.registerPattern('inflationRates.*',             ParameterValueType.rate());
     this.registerPattern('baseFxFees.*',             ParameterValueType.currency('USD'));
     this.registerPattern('effectiveFxFees.*',        ParameterValueType.currency('USD'));
 

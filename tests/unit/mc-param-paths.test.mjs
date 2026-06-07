@@ -102,3 +102,39 @@ test('set: structuredClone isolation — original untouched after clone+set', ()
   assert.strictEqual(original.shocks[0].severity, 0.4); // original unchanged
   assert.strictEqual(clone.shocks[0].severity,    0.9);
 });
+
+// ── get: key-matched array element [key=value] (design 31 / R11) ────────────────
+
+test('get: [key=value] matches an array element by field', () => {
+  const obj = { acct: { holdings: [{ id: 'a', marketValue: 1 }, { id: 'b', marketValue: 2 }] } };
+  assert.strictEqual(get(obj, 'acct.holdings[id=a].marketValue'), 1);
+  assert.strictEqual(get(obj, 'acct.holdings[id=b].marketValue'), 2);
+});
+
+test('get: [key=value] is stable when index shifts (the holdings-churn case)', () => {
+  const before = { holdings: [{ id: 'sf', mv: 100 }, { id: 'ny', mv: 200 }] };
+  const after  = { holdings: [{ id: 'ny', mv: 250 }] }; // 'sf' sold, index shifted
+  assert.strictEqual(get(before, 'holdings[id=ny].mv'), 200);
+  assert.strictEqual(get(after,  'holdings[id=ny].mv'), 250); // same path, still correct
+});
+
+test('get: [key=value] no match returns undefined', () => {
+  const obj = { holdings: [{ id: 'a', mv: 1 }] };
+  assert.strictEqual(get(obj, 'holdings[id=zzz].mv'), undefined);
+});
+
+test('get: [key=value] on a non-array returns undefined', () => {
+  assert.strictEqual(get({ holdings: { id: 'a' } }, 'holdings[id=a].mv'), undefined);
+});
+
+test('get: [key=value] matches numerically-valued fields by string equality', () => {
+  const obj = { rows: [{ year: 2024, v: 9 }, { year: 2025, v: 10 }] };
+  assert.strictEqual(get(obj, 'rows[year=2025].v'), 10);
+});
+
+test('set: [key=value] intermediate segment writes into the matched element', () => {
+  const obj = { holdings: [{ id: 'a', mv: 1 }, { id: 'b', mv: 2 }] };
+  set(obj, 'holdings[id=b].mv', 99);
+  assert.strictEqual(obj.holdings[1].mv, 99);
+  assert.strictEqual(obj.holdings[0].mv, 1); // sibling unaffected
+});

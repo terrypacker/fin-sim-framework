@@ -376,8 +376,9 @@ export class ScenarioSerializer {
       actions:  (scenario.actions ?? []).map(n => ScenarioSerializer._serializeAction(n)),
       reducers: (scenario.reducers ?? []).map(n => ScenarioSerializer._serializeReducer(n)),
       initialState: scenario.initialState ? structuredClone(scenario.initialState) : {},
-      params:   scenario.params ?? [],
-      toolsets: scenario?.toolsets ?? []
+      params:     scenario.params ?? [],
+      toolsets:   scenario?.toolsets ?? [],
+      watchlists: scenario.watchlists ?? [],
     };
   }
 

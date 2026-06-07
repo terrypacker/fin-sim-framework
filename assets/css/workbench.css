@@ -266,6 +266,39 @@
   position: relative;
 }
 
+/* Active-series chip strip (R7.3) — charted paths with click-to-remove. */
+.wb-chart-active-series {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 10px 0;
+}
+.wb-chart-active-series:empty { display: none; }
+
+.wb-series-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  padding: 1px 4px 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-dim);
+  background: var(--bg-panel2, #111);
+}
+.wb-series-chip.is-backfilled { border-style: dashed; }
+
+.wb-series-chip-x {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 9px;
+  padding: 0 1px;
+  line-height: 1;
+}
+.wb-series-chip-x:hover { color: var(--accent-red, #e55); }
+
 /* ECharts owns the sizing of #chartContainer — no explicit canvas rules needed. */
 
 /* ── Config graph — workbench context overrides ──────────── */
