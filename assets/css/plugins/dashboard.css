@@ -25,7 +25,7 @@
 .dash-card .dc-value {
   font-family: var(--font-mono);
   font-size: 16px;
-  color: var(--amber);
+  color: var(--accent-primary);
   line-height: 1.1;
 }
 

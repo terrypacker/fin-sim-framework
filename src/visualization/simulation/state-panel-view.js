@@ -12,6 +12,7 @@ import { $ } from '../ui-utils.js';
 import { BaseComponent } from '../components/base-component.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bus-messages.js';
 import { EXECUTION_EDGE_TYPES } from '../../simulation-framework/execution-graph.js';
+import { readThemeColor } from '../theme.js';
 
 /**
  * StatePanelView — pure DOM layer for state/metrics panels and node detail.
@@ -814,7 +815,12 @@ export class StatePanelView extends BaseComponent {
     if (seen.has(node.id)) return;
     seen.add(node.id);
 
-    const kindColor = { event: '#a78bfa', handler: '#6b7280', action: '#60a5fa', reducer: '#34d399' };
+    const kindColor = {
+      event:   readThemeColor('--kind-event')   || '#3b82f6',
+      handler: readThemeColor('--kind-handler') || '#10b981',
+      action:  readThemeColor('--kind-action')  || '#8b5cf6',
+      reducer: readThemeColor('--kind-reducer') || '#f59e0b',
+    };
     const color  = kindColor[node.kind] ?? 'var(--text-primary)';
     const isRoot = depth === 0;
 

@@ -57,7 +57,20 @@ export class AppDisplaySettings {
   }
 
   _applyThemeToDom() {
-    document.documentElement.dataset.theme = this.#state.theme;
+    const theme = this.#state.theme;
+    document.documentElement.dataset.theme = theme;
+
+    // Scanlines class only on amber theme
+    document.body.classList.toggle('scanlines', theme === 'amber');
+
+    // Lazy-load Barlow fonts only when amber theme is first selected
+    if (theme === 'amber' && !this._barlowLoaded) {
+      this._barlowLoaded = true;
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700;800;900&display=swap';
+      document.head.appendChild(link);
+    }
   }
 
   _loadFromStorage() {

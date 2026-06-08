@@ -47,6 +47,7 @@ export class ConfigGraphView extends BaseComponent {
    *   displayNodeStateChanges?:  function,
    *   bus?:                      import('../../simulation-framework/event-bus.js').EventBus,
    *   layout?:                   object,
+   *   displaySettings?:          import('../app-display-settings.js').AppDisplaySettings,
    * }}
    */
   constructor({
@@ -57,6 +58,7 @@ export class ConfigGraphView extends BaseComponent {
     displayNodeStateChanges,
     bus,
     layout,
+    displaySettings,
   }) {
     super({ parent });
 
@@ -76,6 +78,7 @@ export class ConfigGraphView extends BaseComponent {
       displayNodeStateChanges,
       bus,
       layout,
+      displaySettings,
     });
 
     this._baseGraphView = new BaseGraphView({

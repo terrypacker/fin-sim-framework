@@ -81,8 +81,8 @@
 .g-node:active { cursor: grabbing; }
 
 .g-node.selected {
-  border-color: var(--amber);
-  box-shadow: 0 0 0 1px var(--amber), 0 4px 12px rgba(0,0,0,0.6);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 1px var(--accent-primary), 0 4px 12px rgba(0,0,0,0.6);
 }
 
 .g-node.has-breakpoint {
@@ -91,8 +91,8 @@
 }
 
 .g-node.node-highlighted {
-  border-color: var(--amber);
-  box-shadow: 0 0 0 2px var(--amber-glow), 0 4px 12px rgba(0,0,0,0.6);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-primary-bg), 0 4px 12px rgba(0,0,0,0.6);
 }
 
 /* Node header */
@@ -108,6 +108,7 @@
 
 .g-header-text {
   flex: 1;
+  font-family: var(--font-mono-terminal);
   font-size: 9px;
   letter-spacing: 0.08em;
   color: var(--text-muted);
@@ -138,7 +139,7 @@
   border: 1px solid var(--bg-inset);
 }
 
-.g-port.in  { left: -6px;  background: var(--amber); }
+.g-port.in  { left: -6px;  background: var(--accent-primary); }
 .g-port.out { right: -6px; background: var(--purple); }
 
 .g-port.fired { background: var(--green); top: 6px; right: 2px; }
@@ -152,5 +153,5 @@
   opacity: 0.7;
 }
 
-#graphEdges path.active     { stroke: var(--amber); opacity: 1; }
-#graphEdges path.highlighted { stroke: var(--amber); stroke-width: 3; opacity: 1; }
+#graphEdges path.active      { stroke: var(--accent-primary); opacity: 1; }
+#graphEdges path.highlighted { stroke: var(--accent-primary); stroke-width: 3; opacity: 1; }

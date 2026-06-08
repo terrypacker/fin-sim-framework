@@ -28,7 +28,7 @@
   <script>
     try {
       var s = JSON.parse(localStorage.getItem('finsim.displaySettings.v1') || '{}');
-      document.documentElement.dataset.theme = (s.theme === 'light' || s.theme === 'dark') ? s.theme : 'dark';
+      document.documentElement.dataset.theme = (['dark','light','amber'].includes(s.theme)) ? s.theme : 'dark';
     } catch (e) { document.documentElement.dataset.theme = 'dark'; }
   </script>
 </head>
@@ -69,6 +69,7 @@
         <select id="themeSelect" class="toolbar-select" title="Color theme">
           <option value="dark">Dark</option>
           <option value="light">Light</option>
+          <option value="amber">Amber</option>
         </select>
       </div>
     </div>

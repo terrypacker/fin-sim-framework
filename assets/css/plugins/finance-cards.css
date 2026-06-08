@@ -1,0 +1,78 @@
+/*
+Copyright (c) 2026 Terry Packer.
+
+This file is part of Terry Packer's Work.
+See www.terrypacker.com for further info.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+/* =============================================================
+   FINANCE-CARDS.CSS
+   Merged from chart.css (failure banner) and dashboard.css (summary cards).
+   ============================================================= */
+
+/* ── FAILURE BANNER ── */
+.failure-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--red-glow);
+  border-bottom: 1px solid var(--red-border);
+  color: var(--red);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  flex-shrink: 0;
+}
+.failure-banner-icon    { font-size: 13px; }
+.failure-banner-deficit { color: var(--red); opacity: 0.75; margin-left: 12px; }
+.failure-banner-date    { margin-left: auto; color: var(--text-dim); }
+
+/* ── DASHBOARD SUMMARY CARDS ── */
+.fin-dash-cards {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  padding: 10px 14px;
+}
+
+.dash-card {
+  background: var(--bg-panel2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  text-align: center;
+}
+
+.dash-card .dc-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.dash-card .dc-value {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  color: var(--accent-primary);
+  line-height: 1.1;
+}
+
+.dash-card.dc-goal .dc-value { font-size: 11px; }
+.dc-goal:hover {
+  background: var(--bg-panel);
+  cursor: pointer;
+}

@@ -69,7 +69,13 @@
       "Bash(echo \"FAIL/TIMEOUT \\($?\\)\")",
       "Bash(awk '{print $3}')",
       "Bash(lsof -iTCP:5173 -sTCP:LISTEN)",
-      "mcp__chrome-devtools__wait_for"
+      "mcp__chrome-devtools__wait_for",
+      "Bash(sed -n '160,175p' /Users/tpacker/IdeaProjects/fin-sim-framework/assets/css/plugins/optimization.css)",
+      "Bash(sed -n '215,240p' /Users/tpacker/IdeaProjects/fin-sim-framework/assets/css/plugins/optimization.css)",
+      "Bash(sed -n '120,140p' /Users/tpacker/IdeaProjects/fin-sim-framework/assets/css/plugins/state-panel.css)",
+      "Bash(sed -n '24,34p' /Users/tpacker/IdeaProjects/fin-sim-framework/assets/css/plugins/dashboard.css)",
+      "Bash(sed -n '153,168p' /Users/tpacker/IdeaProjects/fin-sim-framework/assets/css/plugins/modals.css)",
+      "Bash(sed -n '75,90p' /Users/tpacker/IdeaProjects/fin-sim-framework/assets/css/plugins/config-graph.css)"
     ]
   },
   "hooks": {

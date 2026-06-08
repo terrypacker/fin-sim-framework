@@ -3,15 +3,13 @@
    ============================================================ */
 
 :root {
-  --wb-bg:        var(--bg-panel);
-  --wb-surface:   var(--bg-panel2);
-  --wb-surface2:  var(--bg-panel3);
-  --wb-border:    rgba(255, 255, 255, 0.07);
-  --wb-text:      var(--text-primary);
-  --wb-muted:     var(--text-dim);
-  --wb-accent:    #5aa2ff;
-  --wb-accent-bg: rgba(90, 162, 255, 0.14);
-  --wb-gutter-w:  5px;
+  --wb-bg:       var(--bg-panel);
+  --wb-surface:  var(--bg-panel2);
+  --wb-surface2: var(--bg-panel3);
+  --wb-border:   rgba(255, 255, 255, 0.07);
+  --wb-text:     var(--text-primary);
+  --wb-muted:    var(--text-dim);
+  --wb-gutter-w: 5px;
 }
 
 /* ── Shell root ──────────────────────────────────────────── */
@@ -61,8 +59,8 @@
 }
 
 .wb-btn:hover {
-  background: var(--wb-accent-bg);
-  border-color: var(--wb-accent);
+  background: var(--accent-primary-bg);
+  border-color: var(--accent-primary);
 }
 
 /* ── Split pane ──────────────────────────────────────────── */
@@ -103,7 +101,7 @@
 
 .wb-gutter:hover,
 .wb-gutter:active {
-  background: var(--wb-accent-bg);
+  background: var(--accent-primary-bg);
 }
 
 /* Bottom panel collapsed — hide the view area, keep tab bar */
@@ -121,7 +119,7 @@
 }
 
 .wb-tabgroup.wb-dragover {
-  outline: 2px dashed var(--wb-accent);
+  outline: 2px dashed var(--accent-primary);
   outline-offset: -4px;
 }
 
@@ -160,7 +158,8 @@
 }
 
 .wb-tab.active {
-  background: var(--wb-accent-bg);
+  border-bottom: 2px solid var(--accent-primary);
+  background: var(--wb-bg);
   color: var(--wb-text);
 }
 
@@ -199,7 +198,7 @@
   position: fixed;
   pointer-events: none;
   background: var(--wb-surface2);
-  border: 1px solid var(--wb-accent);
+  border: 1px solid var(--accent-primary);
   color: var(--wb-text);
   padding: 5px 10px;
   border-radius: 6px;
@@ -239,7 +238,7 @@
 }
 
 .wb-event-row.selected {
-  outline: 2px solid var(--wb-accent);
+  outline: 2px solid var(--accent-primary);
   outline-offset: -2px;
 }
 
@@ -314,9 +313,9 @@
 }
 
 .wb-btn--active {
-  background: var(--wb-accent-bg);
-  border-color: var(--wb-accent);
-  color: var(--wb-accent);
+  background: var(--accent-primary-bg);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
 }
 
 /* ── Center controls cluster ─────────────────────────────── */
@@ -343,7 +342,7 @@
 /* ── Tab reorder insertion indicator ─────────────────────── */
 
 .wb-tab--insert-before {
-  box-shadow: -3px 0 0 var(--wb-accent);
+  box-shadow: -3px 0 0 var(--accent-primary);
 }
 
 /* ── Scenario panel ──────────────────────────────────────── */
@@ -484,9 +483,10 @@
 }
 
 .perf-val {
+  font-family: var(--font-mono-terminal);
   font-size: 13px;
   font-weight: 600;
-  color: var(--wb-accent);
+  color: var(--accent-primary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -529,7 +529,8 @@
 }
 
 .perf-slow-dur {
-  color: var(--wb-accent);
+  font-family: var(--font-mono-terminal);
+  color: var(--accent-primary);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
   margin-left: 8px;

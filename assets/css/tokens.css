@@ -1,0 +1,299 @@
+/*
+Copyright (c) 2026 Terry Packer.
+
+This file is part of Terry Packer's Work.
+See www.terrypacker.com for further info.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+/* =============================================================
+   TOKENS.CSS
+   CSS custom property definitions for all themes.
+   No component rules — variables only.
+   Load first, before base.css or any component sheet.
+   ============================================================= */
+
+/* ── FINSIM DARK (default) ── */
+:root,
+:root[data-theme="dark"] {
+  /* Surfaces */
+  --bg-base:      #0b1220;
+  --bg-panel:     #111827;
+  --bg-panel2:    #1f2937;
+  --bg-panel3:    #273548;
+  --bg-input:     var(--bg-panel2);
+  --bg-active:    #2d3a4a;
+  --bg-deep:      #060910;
+  --bg-inset:     #0b1220;
+  --bg-subtle:    var(--bg-panel);
+  --bg-muted:     var(--bg-panel2);
+  --bg-overlay:   rgba(0, 0, 0, 0.55);
+
+  /* Aliases used by older components */
+  --bg:           var(--bg-panel);
+  --bg-well:      var(--bg-panel);
+  --node-bg:      var(--bg-panel2);
+
+  /* Borders */
+  --border:        #334155;
+  --border-hi:     #475569;
+  --border-light:  #1e293b;
+  --border-subtle: var(--border);
+
+  /* Accent (primary action / focus / selection) */
+  --accent-primary:    #6366f1;
+  --accent-primary-bg: rgba(99, 102, 241, 0.14);
+
+  /* Warning / attention */
+  --warning:     #f59e0b;
+  --warning-dim: #b45309;
+  --warning-bg:  rgba(245, 158, 11, 0.12);
+
+  /* Status palette */
+  --cyan:        #22d3ee;
+  --cyan-dim:    #0e7490;
+  --cyan-glow:   rgba(34, 211, 238, 0.10);
+  --green:       #34d399;
+  --green-dim:   #065f46;
+  --green-glow:  rgba(52, 211, 153, 0.10);
+  --red:         #fb7185;
+  --red-dim:     #9f1239;
+  --red-glow:    rgba(251, 113, 133, 0.10);
+  --red-border:  rgba(251, 113, 133, 0.35);
+  --purple:      #a78bfa;
+  --purple-dim:  #5b21b6;
+  --purple-glow: rgba(167, 139, 250, 0.10);
+  --blue:        #60a5fa;
+  --blue-dim:    #1e3a5f;
+  --blue-muted:  #60a5fa;
+  --blue-text:   #93c5fd;
+
+  /* Semantic aliases */
+  --accent:       var(--blue-muted);
+  --accent-green: var(--green);
+  --accent-red:   var(--red);
+  --diff-added:   var(--green);
+  --diff-removed: var(--red);
+  --row-hover:    rgba(99, 102, 241, 0.05);
+
+  /* Text */
+  --text-primary:   #f1f5f9;
+  --text-dim:       #94a3b8;
+  --text-muted:     #64748b;
+  --text:           var(--text-primary);
+  --color-text-dim: var(--text-dim);
+
+  /* Edge colors (graph builder) */
+  --edge-color:           #334155;
+  --edge-color-highlight: var(--accent-primary);
+
+  /* Semantic kind colors */
+  --kind-event:        #3b82f6;
+  --kind-action:       #8b5cf6;
+  --kind-handler:      #10b981;
+  --kind-reducer:      #f59e0b;
+  --kind-error:        #ef4444;
+  --kind-optimization: #06b6d4;
+
+  /* Typography */
+  --font-mono-terminal: 'Share Tech Mono', monospace;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-head: 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+
+  /* Spacing */
+  --radius:    4px;
+  --panel-gap: 10px;
+}
+
+/* ── FINSIM LIGHT ── */
+:root[data-theme="light"] {
+  /* Surfaces */
+  --bg-base:      #f8fafc;
+  --bg-panel:     #ffffff;
+  --bg-panel2:    #f1f5f9;
+  --bg-panel3:    #e2e8f0;
+  --bg-input:     #ffffff;
+  --bg-active:    #dde4ee;
+  --bg-deep:      #e2e8f0;
+  --bg-inset:     #f1f5f9;
+  --bg-subtle:    #f8fafc;
+  --bg-muted:     #e2e8f0;
+  --bg-overlay:   rgba(15, 23, 42, 0.40);
+
+  /* Borders */
+  --border:        #cbd5e1;
+  --border-hi:     #94a3b8;
+  --border-light:  #e2e8f0;
+  --border-subtle: var(--border);
+
+  /* Accent */
+  --accent-primary:    #4f46e5;
+  --accent-primary-bg: rgba(79, 70, 229, 0.08);
+
+  /* Warning / attention */
+  --warning:     #d97706;
+  --warning-dim: #92400e;
+  --warning-bg:  rgba(217, 119, 6, 0.10);
+
+  /* Status palette */
+  --blue:        #2563eb;
+  --blue-dim:    #bfdbfe;
+  --blue-muted:  #3b82f6;
+  --blue-text:   #1d4ed8;
+  --green:       #16a34a;
+  --green-dim:   #bbf7d0;
+  --green-glow:  rgba(22, 163, 74, 0.10);
+  --red:         #dc2626;
+  --red-glow:    rgba(220, 38, 38, 0.10);
+  --red-border:  rgba(220, 38, 38, 0.35);
+  --cyan-glow:   rgba(6, 182, 212, 0.10);
+  --purple-glow: rgba(124, 58, 237, 0.10);
+  --purple-dim:  #7c3aed;
+
+  /* Text */
+  --text-primary: #0f172a;
+  --text-dim:     #475569;
+  --text-muted:   #64748b;
+
+  /* Diff */
+  --diff-added:   #16a34a;
+  --diff-removed: #dc2626;
+
+  /* Row hover */
+  --row-hover: rgba(79, 70, 229, 0.05);
+
+  /* Edge colors */
+  --edge-color:           #cbd5e1;
+  --edge-color-highlight: var(--accent-primary);
+
+  /* Semantic kind colors — slightly darker for AA contrast on white */
+  --kind-event:        #2563eb;
+  --kind-action:       #7c3aed;
+  --kind-handler:      #059669;
+  --kind-reducer:      #d97706;
+  --kind-error:        #dc2626;
+  --kind-optimization: #0891b2;
+}
+
+/* ── AMBER TERMINAL ── */
+:root[data-theme="amber"] {
+  /* Surfaces — original dark-amber values */
+  --bg-base:      #0a0c0f;
+  --bg-panel:     #0f1217;
+  --bg-panel2:    #141820;
+  --bg-panel3:    #1f2630;
+  --bg-input:     #1a1f2a;
+  --bg-active:    #36383b;
+  --bg-deep:      #060910;
+  --bg-inset:     #080b10;
+  --bg-subtle:    #080b10;
+  --bg-muted:     #0a0c12;
+  --bg-overlay:   rgba(0, 0, 0, 0.55);
+
+  /* Aliases */
+  --bg:      var(--bg-panel);
+  --bg-well: var(--bg-panel);
+  --node-bg: var(--bg-panel2);
+
+  /* Borders */
+  --border:        #222a38;
+  --border-hi:     #2e3a50;
+  --border-light:  #111827;
+  --border-subtle: var(--border);
+
+  /* Accent — amber IS the primary here */
+  --amber:             #f0a500;
+  --amber-dim:         #a06a00;
+  --amber-glow:        rgba(240, 165, 0, 0.12);
+  --accent-primary:    #f0a500;
+  --accent-primary-bg: rgba(240, 165, 0, 0.12);
+
+  /* Warning — same hue as accent on this theme */
+  --warning:     #f0a500;
+  --warning-dim: #a06a00;
+  --warning-bg:  rgba(240, 165, 0, 0.12);
+
+  /* Status palette */
+  --cyan:        #00d4e8;
+  --cyan-dim:    #007080;
+  --cyan-glow:   rgba(0, 212, 232, 0.10);
+  --green:       #39e080;
+  --green-dim:   #1a6035;
+  --green-glow:  rgba(57, 224, 128, 0.10);
+  --red:         #ff4455;
+  --red-dim:     #7a1520;
+  --red-glow:    rgba(255, 68, 85, 0.10);
+  --red-border:  rgba(255, 68, 85, 0.35);
+  --purple:      #a080ff;
+  --purple-dim:  #604090;
+  --purple-glow: rgba(160, 128, 255, 0.10);
+  --blue:        #3b82f6;
+  --blue-dim:    #1e3a5f;
+  --blue-muted:  #60a5fa;
+  --blue-text:   #93c5fd;
+
+  /* Semantic aliases */
+  --accent:       var(--blue-muted);
+  --accent-green: var(--green);
+  --accent-red:   var(--red);
+  --diff-added:   var(--green);
+  --diff-removed: var(--red);
+  --row-hover:    #0f1a2a;
+
+  /* Text */
+  --text-primary:   #d8dde8;
+  --text-dim:       #8d98af;
+  --text-muted:     #8690ab;
+  --text:           var(--text-primary);
+  --color-text-dim: var(--text-dim);
+
+  /* Edge colors */
+  --edge-color:           #374151;
+  --edge-color-highlight: var(--amber);
+
+  /* Semantic kind colors */
+  --kind-event:        #60a5fa;
+  --kind-action:       #a78bfa;
+  --kind-handler:      #34d399;
+  --kind-reducer:      #f0a500;
+  --kind-error:        #ff4455;
+  --kind-optimization: #00d4e8;
+
+  /* Typography — terminal vibes */
+  --font-mono-terminal: 'Share Tech Mono', monospace;
+  --font-mono: 'Share Tech Mono', monospace;
+  --font-head: 'Barlow Condensed', sans-serif;
+  --font-body: 'Barlow', sans-serif;
+
+  /* Spacing */
+  --radius:    4px;
+  --panel-gap: 10px;
+}
+
+/* Scanlines — amber theme only */
+:root[data-theme="amber"] body.scanlines::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.06) 2px,
+      rgba(0, 0, 0, 0.06) 4px
+  );
+}
