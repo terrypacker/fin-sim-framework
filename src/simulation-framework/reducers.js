@@ -461,22 +461,16 @@ export class RepeatingReducer extends FieldReducer {
   reduce(state, action, date) {
     const count = typeof action._repeaterCounter === 'undefined' ? this.count == null ? this.fieldName == null ? 0 : action[this.fieldName] : this.count : action._repeaterCounter;
     if( count <= 0) {
-      return {... state};
+      return this.newState(state);
     }
     let newState = { ...state }
-    for(let i=0; i<this.reducers.length; i++) {
-      newState = this.reducers[i].reduce(newState, action, date);
+    for(const element of this.reducers) {
+      newState = element.reduce(newState, action, date);
     }
-
-    return {
-      state: newState,
-      next: [
-        {
-          ...action, //TODO Need to strip out the _ base fields
-          _repeaterCounter: count - 1
-        }
-      ]
-    };
+    this.newState(state, {}, {
+      ...action,
+      _repeaterCounter: count - 1
+    });
   }
 }
 
@@ -538,7 +532,6 @@ export class ScriptedReducer extends FieldReducer {
       return this.newState(state);
     }
     const base = this.newState(state);
-    //TODO is this ok?
     const path = this.getWriteFieldPath(action);
     if (path) {
       return this.setValueByPath(base, path, result);
