@@ -19,6 +19,25 @@
 
 Pointer: `Person.lifeExpectancy` (`src/finance/person.js`) is configured at scenario boot and read by some UI surfaces but not by any handler. `state.people` is mutated by `ChangeResidencyHandler` per design 20 — same pattern this design reuses.
 
+### 2.1 Scheduling-layer invariant (load-bearing for this design)
+
+The simulation framework currently maintains a strict separation between **config-time scheduling** and **runtime action emission**:
+
+- **Config-time (boot, scenario edits):** `SimulationAdapter._scheduleOneOffEvent` / `_scheduleEventSeries` reads each enabled `BaseEvent` from the config graph and calls `sim.schedule(event)`. The only runtime path back into queue mutation is `_applyEventChange` (triggered when the user edits an event in the graph), which calls `sim.unschedule(type)` then re-schedules.
+- **Runtime (during a simulation run):** Finance handlers (`HandlerEntry` subclasses in `src/finance/handlers/*`) return arrays of **actions** from `call({ state })`. They do **not** call `sim.schedule()` or `sim.unschedule()`. Grep-confirmed across `src/finance` and `src/services`: zero call sites.
+
+Several recent features (e.g. the OneOff→EventSeries refactor; `ChangeResidencyHandler`) were materially simpler because of this invariant: handlers are pure action emitters, the queue is a known-static set after boot, and the execution graph / journal / GraphRecorder don't have to model dynamic schedule churn.
+
+**Implication for this design:** any mechanism that needs to *change* a person's death date mid-simulation (e.g. redraw lifespan on residency change — see §10 Q1) conflicts with this invariant. Three resolution paths were considered:
+
+| Path | Mechanism | Cost |
+|---|---|---|
+| **A. Honor the invariant** *(chosen)* | Lifespan distribution is fixed at scenario boot from boot-time residency. Mid-life moves do not redraw. Users model residency-driven lifespan shifts via scenario branching (design 17) — branch from the move date with new residency baked in. | Loses the "AU residency adds years" realism in single-scenario runs. Acceptable if branching is already idiomatic. |
+| **B. Handler-driven queue mutation** | A new `ResidencyChangedMortalityHandler` (chains off `CHANGE_RESIDENCY_APPLY`) directly calls `sim.unschedule('PERSON_DIED')` and `sim.schedule(newDeathEvent)`. | First precedent of a finance handler touching the queue. Requires GraphRecorder / ExecutionGraph to model the cancel+reschedule edge (today they assume schedule-once-at-boot). Journal needs to log the mutation. |
+| **C. Action-driven queue mutation** | Introduce framework-level actions `SCHEDULE_EVENT_APPLY` / `UNSCHEDULE_EVENT_APPLY` whose reducers perform the queue mutation. Handlers stay pure; mutation is journaled and visible to the execution graph. | Larger substrate add (new actions, new reducers, new edge type in ExecutionGraph). Likely the *right* long-term shape if more designs need runtime rescheduling, but premature if this is the only consumer. |
+
+**Decision: Path A.** Scenario branching (design 17) already covers the residency-shift use case for users who care, and no other Phase B design currently needs runtime rescheduling. If implementation surfaces a concrete need to revise — e.g. design 26's `HealthcareEventDriven` strategy wanting to schedule events from a handler, or a Phase C feature needing dynamic event timing — revisit and likely jump to Path C (Path B remains the worst of both worlds). See §10 Q1 for the open thread.
+
 ---
 
 ## 3. Lifecycle event: `PERSON_DIED`
@@ -114,7 +133,19 @@ Sketch:
 
 > *Capture during Phase B kickoff. Initial seed:*
 
-- Which actuarial table (CDC 2024 vs. SSA vs. AU lifetables) is the default per country?
-- Does the survivor multiplier interact with `discretionarySharePct` from design 26, or override the whole household expense?
-- How does account retitling interact with the design 25 holdings model — does the surviving spouse's inherited holdings carry stepped-up basis (a `HOLDING_SET_BASIS` chain at death)?
-- Is `simEnd` redundant once MC lifespans drive termination? (Probably not — but worth deciding.)
+- Which actuarial table (CDC 2024 vs. SSA vs. AU lifetables) is the default per country? **Answer (table choice):** Table is keyed off `Person.residency`, not citizenship. CDC 2024 for US residency and as the fallback for any residency without a dedicated table; AU lifetables for AU residency. Single deterministic runs use the configured `Person.lifeExpectancy` directly and ignore residency for table selection — residency only matters when MC is drawing actuarially. **Answer (redraw on move): Path A from §2.1 — no runtime redraw.** Lifespan distribution is set once at scenario boot from boot-time residency. Mid-life `CHANGE_RESIDENCY_APPLY` does **not** re-roll the lifespan or shift `PERSON_DIED`. Users wanting to model residency-driven lifespan changes use scenario branching (design 17) — branch from the move date with the new residency baked in at boot. **Leave this thread open during implementation:** if a concrete need to revise surfaces (e.g. a Phase B/C feature requires runtime rescheduling, or the loss of redraw realism is more painful than expected in MC sweeps), jump to Path C rather than Path B.
+- Does the survivor multiplier interact with `discretionarySharePct` from design 26, or override the whole household expense? **Answer:** Per-slice multipliers (Option B). Replace the single `survivorMultiplier` with `survivorEssentialMultiplier` (default 0.85) and `survivorDiscretionaryMultiplier` (default 0.50); at `discretionarySharePct = 0.30` these blend to ~0.75, close to the original flat-0.70 default. The survivor reducer emits two `SPENDING_STRATEGY_APPLY` deltas — one per slice — so it composes cleanly with `Guardrail` / `RegimeAware` (which already operate on the discretionary slice only). **Hard dependency on design 26:** the essential/discretionary split must be materialized in state (e.g. `state.expenses = { essential, discretionary }`), not just an inline calc inside Guardrail/RegimeAware reducers. If 26 ships with `discretionarySharePct` as an ephemeral param only, this design must either (a) push back into 26 to materialize the split or (b) fall back to a single scalar multiplier with documented order-of-operations.
+- How does account retitling interact with the design 25 holdings model — does the surviving spouse's inherited holdings carry stepped-up basis (a `HOLDING_SET_BASIS` chain at death)? **Answer:** Yes, governed by **real US estate-tax law**: stepped-up basis applies when the **deceased's tax jurisdiction at time of death** is US. AU has no equivalent step-up (CGT cost-base carries over to the survivor), so an AU-resident-at-death produces no basis adjustment. The `MortalityHandler` reads `state.deceased[personId].taxJurisdiction` (captured at death from `Person.residency`) and dispatches into the tax/account module registry, which decides whether to emit a `HOLDING_SET_BASIS_APPLY` chain. The decision lives in the tax module per country, matching the existing TaxEngine + AccountRulesEngine pattern. Note: jurisdiction-at-death may differ from the surviving spouse's jurisdiction (e.g. AU-resident widow inheriting from US-resident deceased) — that's fine, the rule keys off the deceased only.
+- Is `simEnd` redundant once MC lifespans drive termination? (Probably not — but worth deciding.) **Answer:** No, keep it. Effective termination is `min(simEnd, last-survivor death)`. `simEnd` remains the hard cap; mortality is the soft end.
+
+---
+
+## 11. Doc-body follow-ups (from §10 answers)
+
+Sections to update before implementation begins:
+
+- **§3 mortality handler chain:** rename `SURVIVOR_EXPENSES_APPLY` to emit *two* deltas (essential + discretionary), or split into `SURVIVOR_ESSENTIAL_APPLY` + `SURVIVOR_DISCRETIONARY_APPLY`. Add `HOLDING_SET_BASIS_APPLY` chain (US deceased only) ahead of `ACCOUNT_RETITLE_APPLY`. No `ResidencyChangedMortalityHandler` (Path A from §2.1).
+- **§4 late-life care:** confirm the factor applies per-slice or as a uniform multiplier on the combined expense (probably uniform — late-life medical hits both essential and discretionary). Late-life care events are scheduled at boot relative to the boot-time death date and do not shift on residency change (consistent with §2.1 Path A).
+- **§5 MC:** lifespan distribution is residency-keyed at MC variable-registration time; `IntlRetirementMcConfig` consults `Person.residency` once at boot to pick `CDC_2024` vs. AU lifetables. No mid-run redraw on residency change.
+- **§6 state additions:** replace `state.survivorMultiplier` (scalar) with `state.survivorEssentialMultiplier` + `state.survivorDiscretionaryMultiplier`. Add `state.deceased[personId].taxJurisdiction`.
+- **§7 interaction table:** update **26 Spending** row to call out the materialized-slice dependency; update **Tax** row to specify deceased's jurisdiction drives basis step-up. Add a **Simulation framework** row noting that this design honors the §2.1 schedule-once-at-boot invariant; modeling residency-driven lifespan shifts is delegated to **17 Branching**.

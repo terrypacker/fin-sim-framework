@@ -233,7 +233,7 @@ These don't read Holdings directly, but they ship after Phase A so the substrate
 ### Phase C — Holdings consumers
 
 5. **Design 28 — Time-Varying Appreciation & Bond Duration.** Requires Holdings.
-6. **Dividend-yield cuts under regimes** — small extension to design 21: add `dividendAdjustment` to `EconomicRegime`, migrate `DividendScheduledHandler` to consume per-holding yield × regime adjustment. Could fold into design 28 or land as a one-PR follow-up.
+6. **Dividend-yield cuts under regimes** *(tracked Phase C deliverable, separate from design 28)* — small extension to design 21: add `dividendAdjustment: { [rateKey]: number }` to `EconomicRegime`, add optional `dividendYield` to `Holding`, migrate `DividendScheduledHandler` to consume per-holding yield × regime adjustment. **Decision (2026-06-04):** ship as a standalone one-PR follow-up against design 21, *not* folded into design 28 — the change is 21-shaped (adjustment field on regime) and would otherwise inflate 28's scope. Can land any time after design 25 (Holdings) is stable; technically unblocked today. Track to completion as its own line item even though there's no dedicated `21a` doc — see design 28 §7 for the implementation note and design 28 §13 Q2 for the resolution.
 
 ### Phase D — Behavior
 
