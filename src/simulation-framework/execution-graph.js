@@ -53,7 +53,7 @@ export class ExecutionGraph {
   getNode(id) { return this._graph.getNode(id); }
 
   getExecutionNodes() {
-    return this._graph.getNodes().filter(n => n.layer === 'execution');
+    return this._graph.byLayer('execution');
   }
 
   getChildren(id) {

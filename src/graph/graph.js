@@ -66,6 +66,10 @@ export class Graph {
     this.in.delete(id);
   }
 
+  byLayer(layer) {
+    return this.getNodes().filter(n => n.layer === layer);
+  }
+
   clearLayer(layer) {
     for (const node of [...this.nodes.values()]) {
       if (node.layer === layer) this.removeNode(node.id);
