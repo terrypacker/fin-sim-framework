@@ -31,7 +31,7 @@ beforeEach(() => {
 });
 
 // ─── Mock view ────────────────────────────────────────────────────────────────
-// A lightweight stand-in that records calls without needing Chart.js.
+// A lightweight stand-in that records calls without needing Chart library.
 
 function makeMockView(filterBarEl = null) {
   let _filterBarEl = filterBarEl;

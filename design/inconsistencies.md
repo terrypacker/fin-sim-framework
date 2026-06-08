@@ -153,27 +153,27 @@ There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; se
 - The dual paths share a base class but carry quite different fields and consumers. The memory note `project_bus_unification_plan.md` (8 phases tracking #87/#88/#93/#127) is the ongoing plan to unify them.
 - **Direction**: continue the plan in `project_bus_unification_plan.md`.
 
-### 4.4 Single `Graph` with two layers vs. two graphs
+### 4.4 Single `Graph` with two layers vs. two graphs (Git #366)
 - The codebase currently uses one `Graph` instance with config-layer and execution-layer nodes living side by side (`ExecutionGraph` is a thin wrapper). This is convenient for cross-layer queries (e.g. "which runtime nodes are instances of this handler?") but couples the lifetime of execution data to the config-graph.
 - **Direction**: keep the design, but make the layer split first-class — `graph.byLayer('execution')` should be a typed query rather than a `filter(n => n.layer === 'execution')` callout.
 
-### 4.5 Action ids default to `type`
+### 4.5 Action ids default to `type` (Git #367)
 - `Action` sets `id = type` so action lookup by id and lookup by type are the same. This works fine for built-in actions but is a footgun when two distinct action **definitions** want the same `type` discriminator (e.g. two versions of `WAGES_INCOME` in different toolsets).
 - **Direction**: confirm there's no risk of collisions across toolsets, or generate `id = ${toolsetId}:${type}`.
 
-### 4.6 `_pickActionData` allow-list is a maintenance burden
+### 4.6 `_pickActionData` allow-list is a maintenance burden (Git #202)
 - Every new action field that the timeline needs to display has to be added to the picker (currently 12 fields, scattered between simulation.js and StateSchemaRegistry). A reducer that emits a new field will see it dropped silently.
 - **Direction**: invert — let each action class declare its journal fields (or default to "all enumerable non-`_` fields"), with the picker as fallback only.
 
-### 4.7 Workbench plugin/runtime boundary is loosely typed
+### 4.7 Workbench plugin/runtime boundary is loosely typed (Git #368)
 - `WorkbenchRuntime` events (`scenarioReady`, `breakpointHit`) are called directly by `WorkbenchApp` rather than passing through the runtime as the only publisher. Plugins subscribe via the runtime's bus but the publishers vary.
 - **Direction**: make `WorkbenchRuntime.publish(event, payload)` the only way the app signals plugins; type the event names with constants.
 
-### 4.8 `chartSeries` is hard-coded in `SimulationWorkbench`
+### 4.8 `chartSeries` is hard-coded in `SimulationWorkbench` (Git #312)
 - `src/apps/simulation-workbench.js` lines 25–30 hard-code `usSavingsAccount.balance`, `auSavingsAccount.balance`, `superAccount.balance`, `stockAccount.balance` — these are state keys whose stability depends on the `IntlRetirementScenario`'s state shape. Once role-based state lookups are everywhere, these keys won't be canonical anymore.
 - **Direction**: derive the chart series from registered `ACCOUNT_ROLES` instead of state-key strings.
 
-### 4.9 `IntlRetirementScenario` is the only prebuilt
+### 4.9 `IntlRetirementScenario` is the only prebuilt (Git #280)
 - The `PREBUILT_SCENARIOS` array contains one entry. The plumbing (factory + class + descriptor) implies more were planned.
 - **Direction**: either commit to one canonical scenario and simplify the prebuilt path, or add the missing variants the workbench dropdown expects.
 
@@ -181,10 +181,14 @@ There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; se
 
 ## 5. Smaller Annoyances
 
+### 5.1 `INTERNAL_SCHEDULING_HANDLER_NAME` in `simulation.js`  (Git #369)
+- is declared but its usages should be reviewed — internal sentinels like this often outlive the path that needs them.
+
+### 5.2 Mixing cases
 - Mixed casing on toolset IDs vs. capabilities (`US_RETIREMENT` ID, lowercase `'retirement'` capability) — pick one.
+
+### 5.3 Header Block 
 - The header comment block (Apache 2.0 boilerplate) is copy/pasted across every file. Consider a build-time injection or just trust `LICENSE`.
-- `chart.js`, `chartjs-plugin-annotation`, `chartjs-plugin-zoom` are still referenced in some comments but are not in `package.json`; `echarts` is the actual chart library now.
-- `INTERNAL_SCHEDULING_HANDLER_NAME` in `simulation.js` is declared but its usages should be reviewed — internal sentinels like this often outlive the path that needs them.
 
 ---
 

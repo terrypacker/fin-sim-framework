@@ -374,7 +374,7 @@ The current finance plugin set, exported as `FINANCE_PLUGINS` + `FINANCE_DEFAULT
 | `inspector` | Edit | Selected-node editor (mounts the right `*-editor.js`) |
 | `config-graph` | Graph | The dockable SVG/echarts node-and-edge canvas |
 | `timeline` | Timeline | Journal timeline with filters + CSV download |
-| `chart` | Chart | Time-series chart (Chart.js / ECharts) of selected state series |
+| `chart` | Chart | Time-series chart (ECharts) of selected state series |
 | `state-panel` | State | Live state inspector + per-node state-change diffs |
 | `action-detail` | Action Detail | Selected journal-entry details + payload + before/after |
 | `exec-history` | Node History | Per-node execution history (uses ExecutionGraph) |
