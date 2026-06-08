@@ -122,6 +122,7 @@ export class StateSchemaRegistry {
     this.registerPattern('*.holdings.*.rateKey',     ParameterValueType.text());
     this.registerPattern('*.holdings.*.label',       ParameterValueType.text());
     this.registerPattern('*.holdings.*.purchaseDate', ParameterValueType.date());
+    this.registerPattern('*.holdings.*.dividendYield', ParameterValueType.rate());
 
     // ── FX rate/fee maps ──────────────────────────────────────────────────────
     this.registerPattern('baseExchangeRates.*',      ParameterValueType.rate());

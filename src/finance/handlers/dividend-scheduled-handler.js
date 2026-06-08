@@ -11,11 +11,15 @@
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
 import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
+import { computeHoldingsDividends } from '../holdings/holdings-earnings.js';
 
 /**
  * Handles DIVIDEND_SCHEDULED events.
  *
- * Computes the dividend amount as: stockAccount.balance × dividendRate.
+ * Computes the dividend amount per holding as:
+ *   Σ holding.marketValue × (holding.dividendYield ?? dividendRate)
+ *           × (1 + state.effectiveDividendAdjustments[holding.rateKey])
+ * (single-holding accounts collapse to balance × dividendRate × (1 + adj)).
  * Branches on the reinvest flag:
  *
  *   reinvest=true  → STOCK_DIVIDEND_APPLY (handled by UsAccountModule:
@@ -66,11 +70,15 @@ export class DividendScheduledHandler extends HandlerEntry {
   }
 
   call({ data, state }) {
-    const stateKey      = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const balance       = state[stateKey]?.balance ?? 0;
-    const adjustment    = state.effectiveDividendAdjustments?.[this.rateKey] ?? 0;
-    const effectiveRate = this.dividendRate * (1 + adjustment);
-    const amount        = +(balance * Math.max(0, effectiveRate)).toFixed(2);
+    const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
+    // Per-holding dividends: each sleeve pays holding.dividendYield (falling back
+    // to the account-level dividendRate), scaled by the active regime's dividend
+    // adjustment for its rate key (design 28 §7).
+    const { amount } = computeHoldingsDividends({
+      state, stateKey,
+      fallbackYield:   this.dividendRate,
+      fallbackRateKey: this.rateKey,
+    });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
 
     const reinvest   = data?.reinvest ?? this.reinvest;

@@ -95,3 +95,67 @@ export function computeHoldingsGrowth({
   }
   return { amount: +total.toFixed(2), holdingActions };
 }
+
+/**
+ * Walk an account's holdings and compute per-holding dividends under any active
+ * economic regime (design 28 §7 — dividend-yield cuts under regimes):
+ *
+ *   perHolding = marketValue × max(0, yield × (1 + adj))
+ *
+ * where `yield` is `holding.dividendYield ?? fallbackYield` and `adj` is the
+ * active regime dividend adjustment for the holding's rate key
+ * (`state.effectiveDividendAdjustments[holding.rateKey ?? fallbackRateKey] ?? 0`,
+ * already scaled by each regime's recovery factor in RegimeApplyReducer). The
+ * `max(0, …)` floors a full dividend suspension (adj ≤ -1) at zero.
+ *
+ * Returns the same `{ amount, holdingActions }` shape as computeHoldingsGrowth so
+ * a handler can either emit the per-holding reinvestment actions (AU franked
+ * dividends grow the sleeves) or use only the summed amount (US cash / account-
+ * level apply). `costBasisDelta` is 0 — reinvested-dividend basis is raised at
+ * the account level by the *_DIVIDEND_*_APPLY reducers, matching the
+ * computeHoldingsGrowth precedent.
+ *
+ * Single-holding accounts (and the no-holdings fallback) collapse to
+ * `balance × max(0, yield × (1 + adj))`, matching the pre-substrate code path
+ * when no regime is active.
+ *
+ * @param {object} opts
+ * @param {object} opts.state              - Current simulation state
+ * @param {string} opts.stateKey           - state[stateKey] is the account
+ * @param {number} opts.fallbackYield      - Account-level yield used when a holding has no dividendYield
+ * @param {string|null} opts.fallbackRateKey - Rate key used when a holding has no rateKey
+ * @returns {{ amount: number, holdingActions: HoldingTransactAction[] }}
+ */
+export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallbackRateKey }) {
+  const account  = state?.[stateKey];
+  const holdings = account?.holdings ?? [];
+  const adjMap   = state?.effectiveDividendAdjustments ?? {};
+
+  const effYield = (yld, rk) => Math.max(0, yld * (1 + (adjMap[rk] ?? 0)));
+
+  if (!holdings.length) {
+    const balance = account?.balance ?? 0;
+    const amount  = +(balance * effYield(fallbackYield, fallbackRateKey)).toFixed(2);
+    return { amount, holdingActions: [] };
+  }
+
+  let total = 0;
+  const holdingActions = [];
+  for (const h of holdings) {
+    if (!h) continue;
+    const mv  = h.marketValue ?? 0;
+    const yld = h.dividendYield ?? fallbackYield;
+    const rk  = h.rateKey ?? fallbackRateKey;
+    const div = +(mv * effYield(yld, rk)).toFixed(2);
+    total += div;
+    if (div !== 0) {
+      holdingActions.push(new HoldingTransactAction({
+        stateKey,
+        holdingId:        h.id,
+        marketValueDelta: div,
+        costBasisDelta:   0,
+      }));
+    }
+  }
+  return { amount: +total.toFixed(2), holdingActions };
+}

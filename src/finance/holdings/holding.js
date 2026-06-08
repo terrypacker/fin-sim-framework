@@ -33,23 +33,27 @@ export class Holding {
    * @param {Date|null}   [opts.purchaseDate=null]  - Acquisition date; null = "carried in from scenario boot"
    * @param {string|null} [opts.rateKey=null]       - Lookup into state.effectiveGrowthRates; resolved on register if null
    * @param {string}      [opts.label='']           - Optional display label ("ITOT", "BND")
+   * @param {number|null} [opts.dividendYield=null] - Per-holding annual dividend yield; null = fall back to the
+   *                                                  dividend handler's account-level rate (design 28 §7)
    */
   constructor({
-    id           = null,
+    id            = null,
     allocation,
-    marketValue  = 0,
-    costBasis    = 0,
-    purchaseDate = null,
-    rateKey      = null,
-    label        = '',
+    marketValue   = 0,
+    costBasis     = 0,
+    purchaseDate  = null,
+    rateKey       = null,
+    label         = '',
+    dividendYield = null,
   } = {}) {
-    this.id           = id;
-    this.allocation   = allocation;
-    this.marketValue  = marketValue;
-    this.costBasis    = costBasis;
-    this.purchaseDate = purchaseDate;
-    this.rateKey      = rateKey;
-    this.label        = label;
+    this.id            = id;
+    this.allocation    = allocation;
+    this.marketValue   = marketValue;
+    this.costBasis     = costBasis;
+    this.purchaseDate  = purchaseDate;
+    this.rateKey       = rateKey;
+    this.label         = label;
+    this.dividendYield = dividendYield;
   }
 
   toJSON() {
@@ -60,20 +64,22 @@ export class Holding {
       marketValue:  this.marketValue,
       costBasis:    this.costBasis,
       purchaseDate: this.purchaseDate ? this.purchaseDate.toISOString() : null,
-      rateKey:      this.rateKey,
-      label:        this.label,
+      rateKey:       this.rateKey,
+      label:         this.label,
+      dividendYield: this.dividendYield,
     };
   }
 
   static fromJSON(d, _ctx) {
     return new Holding({
-      id:           d.id ?? null,
-      allocation:   d.allocation,
-      marketValue:  d.marketValue ?? 0,
-      costBasis:    d.costBasis   ?? 0,
-      purchaseDate: d.purchaseDate ? new Date(d.purchaseDate) : null,
-      rateKey:      d.rateKey ?? null,
-      label:        d.label   ?? '',
+      id:            d.id ?? null,
+      allocation:    d.allocation,
+      marketValue:   d.marketValue ?? 0,
+      costBasis:     d.costBasis   ?? 0,
+      purchaseDate:  d.purchaseDate ? new Date(d.purchaseDate) : null,
+      rateKey:       d.rateKey ?? null,
+      label:         d.label   ?? '',
+      dividendYield: d.dividendYield ?? null,
     });
   }
 }
