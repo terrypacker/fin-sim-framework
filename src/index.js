@@ -42,7 +42,6 @@ import { PersonBuilder } from './finance/builders/person-builder.js';
 import { ChangeResidencyHandler } from './finance/handlers/change-residency-handler.js';
 import { DividendScheduledHandler } from './finance/handlers/dividend-scheduled-handler.js';
 import { IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler, IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler, AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler, FixedIncomeInterestHandler, SuperEarningsHandler } from './finance/handlers/earnings-handlers.js';
-import { IntlTransferToUsHandler, IntlTransferToAuHandler } from './finance/handlers/intl-transfer-handlers.js';
 import { MonthlyExpensesHandler } from './finance/handlers/monthly-expenses-handler.js';
 import { MonthlySocialSecurityHandler } from './finance/handlers/monthly-social-security-handler.js';
 import { MonthlyWagesHandler } from './finance/handlers/monthly-wages-handler.js';
@@ -427,8 +426,6 @@ export const Finance = {
   AuFixedIncomeInterestMonthlyHandler,
   FixedIncomeInterestHandler,
   SuperEarningsHandler,
-  IntlTransferToUsHandler,
-  IntlTransferToAuHandler,
   MonthlyExpensesHandler,
   MonthlySocialSecurityHandler,
   MonthlyWagesHandler,

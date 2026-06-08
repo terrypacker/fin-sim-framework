@@ -12,7 +12,7 @@ import { BaseService } from './base-service.js';
 import { HandlerEntry, HANDLER_CLASSES } from '../simulation-framework/handlers.js';
 import { UsSavingsInterestMonthlyHandler } from '../finance/handlers/us-savings-interest-handler.js';
 import { MonthlyExpensesHandler } from '../finance/handlers/monthly-expenses-handler.js';
-import { IntlTransferToUsHandler, IntlTransferToAuHandler } from '../finance/handlers/intl-transfer-handlers.js';
+import { FxTransferToHandler } from '../finance/fx/fx-transfer-handler.js';
 import { AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler, FixedIncomeInterestHandler, SuperEarningsHandler } from '../finance/handlers/earnings-handlers.js';
 import { DividendScheduledHandler } from '../finance/handlers/dividend-scheduled-handler.js';
 import { ChangeResidencyHandler } from '../finance/handlers/change-residency-handler.js';
@@ -27,8 +27,7 @@ import {Edge, EDGE_TYPES} from "../graph/edge.js";
 Object.assign(HANDLER_CLASSES, {
   UsSavingsInterestMonthlyHandler,
   MonthlyExpensesHandler,
-  IntlTransferToUsHandler,
-  IntlTransferToAuHandler,
+  FxTransferToHandler,
   AuSavingsInterestHandler,
   AuFixedIncomeInterestMonthlyHandler,
   FixedIncomeInterestHandler,
@@ -192,48 +191,6 @@ export class HandlerService extends BaseService {
    */
   createMonthlyExpensesHandler({ stateRegistry, monthlyExpenses = 6000, usRole, usOwnerId = null, auRole, auOwnerId = null, name = 'Monthly Expenses' } = {}) {
     const item = new MonthlyExpensesHandler({ stateRegistry, monthlyExpenses, usRole, usOwnerId, auRole, auOwnerId });
-    item.name = name;
-    item.id   = this._generateId('h');
-    this._register(item);
-    this._publish('CREATE', item);
-    this._wireNodeEdges(item);
-    return item;
-  }
-
-  /**
-   * Create and register an IntlTransferToUsHandler (AUD → USD, user-triggered).
-   *
-   * @param {object} opts
-   * @param {import('../finance/services/state-registry.js').StateRegistry} opts.stateRegistry
-   * @param {string} opts.auRole
-   * @param {string} [opts.auOwnerId]
-   * @param {string} opts.usRole
-   * @param {string} [opts.usOwnerId]
-   * @param {string} [opts.name='International Transfer to US']
-   */
-  createIntlTransferToUsHandler({ stateRegistry, auRole, auOwnerId = null, usRole, usOwnerId = null, name = 'International Transfer to US' } = {}) {
-    const item = new IntlTransferToUsHandler({ stateRegistry, auRole, auOwnerId, usRole, usOwnerId });
-    item.name = name;
-    item.id   = this._generateId('h');
-    this._register(item);
-    this._publish('CREATE', item);
-    this._wireNodeEdges(item);
-    return item;
-  }
-
-  /**
-   * Create and register an IntlTransferToAuHandler (USD → AUD, user-triggered).
-   *
-   * @param {object} opts
-   * @param {import('../finance/services/state-registry.js').StateRegistry} opts.stateRegistry
-   * @param {string} opts.usRole
-   * @param {string} [opts.usOwnerId]
-   * @param {string} opts.auRole
-   * @param {string} [opts.auOwnerId]
-   * @param {string} [opts.name='International Transfer to AU']
-   */
-  createIntlTransferToAuHandler({ stateRegistry, usRole, usOwnerId = null, auRole, auOwnerId = null, name = 'International Transfer to AU' } = {}) {
-    const item = new IntlTransferToAuHandler({ stateRegistry, usRole, usOwnerId, auRole, auOwnerId });
     item.name = name;
     item.id   = this._generateId('h');
     this._register(item);

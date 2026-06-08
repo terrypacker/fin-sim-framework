@@ -11,12 +11,24 @@
 import { ACCOUNT_ROLES }              from '../../finance/state/account-roles.js';
 import { OneOffEvent }                from '../../simulation-framework/events/one-off-event.js';
 import { ChangeResidencyHandler }     from '../../finance/handlers/change-residency-handler.js';
-import { IntlTransferToAuHandler,
-         IntlTransferToUsHandler }    from '../../finance/handlers/intl-transfer-handlers.js';
 import { ChangeResidencyApplyReducer }
   from '../../finance/reducers/change-residency-apply-reducer.js';
 import { IntlTransferApplyReducer }   from '../../finance/reducers/intl-transfer-apply-reducer.js';
-import { ValueType } from '../../simulation-framework/type-registry.js';
+import { ValueType }                  from '../../simulation-framework/type-registry.js';
+import { FxService }                  from '../../finance/fx/fx-service.js';
+import { FxTransferToHandler }        from '../../finance/fx/fx-transfer-handler.js';
+import { FxTransferApplyReducer }     from '../../finance/fx/fx-transfer-apply-reducer.js';
+import { FxRefreshReducer }           from '../../finance/fx/fx-refresh-reducer.js';
+
+/**
+ * Per-context FxService singleton (reused across state/handlers/reducers calls).
+ * @param {object} context
+ * @returns {FxService}
+ */
+function _getFxService(context) {
+  if (!context._fxService) context._fxService = new FxService();
+  return context._fxService;
+}
 
 /**
  * US_AU_CROSS_BORDER toolset — residency transition and bilateral transfer wiring.
@@ -39,11 +51,23 @@ export const US_AU_CROSS_BORDER = {
   dependencies: ['US_TAX', 'AU_TAX'],
 
   types: {
-    handlers: [ChangeResidencyHandler, IntlTransferToAuHandler, IntlTransferToUsHandler],
-    reducers: [ChangeResidencyApplyReducer, IntlTransferApplyReducer],
+    handlers: [ChangeResidencyHandler, FxTransferToHandler],
+    reducers: [ChangeResidencyApplyReducer, IntlTransferApplyReducer, FxTransferApplyReducer, FxRefreshReducer],
     actions: [
       { type: 'CHANGE_RESIDENCY_APPLY' },
-      { type: 'INTL_TRANSFER_APPLY', fields: { amount: ValueType.number() } },
+      // INTL_TRANSFER_APPLY is kept for ReplenishSavingsReducer cross-border escalation.
+      { type: 'INTL_TRANSFER_APPLY', fields: { targetDeficit: ValueType.number() } },
+      {
+        type: 'FX_TRANSFER_APPLY',
+        fields: {
+          from:       ValueType.text(),
+          to:         ValueType.text(),
+          fromAmount: ValueType.number(),
+          toAmount:   ValueType.number(),
+          rate:       ValueType.number(),
+          fee:        ValueType.currency('USD'),
+        },
+      },
     ],
   },
 
@@ -106,15 +130,19 @@ export const US_AU_CROSS_BORDER = {
       };
     }
 
+    // FX state patches: initialise base and effective rate/fee maps plus legacy flat fields.
+    const fxPatches = _getFxService(context)
+      .getContributions(['USD', 'AUD'], context.accountService, context.stateRegistry, p)
+      .statePatches;
+
     const patches = {
       ftcYTD:               0,
-      exchangeRateUsdToAud: p.exchangeRateUsdToAud ?? 1.55,
-      intlTransferFeeUsd:   p.intlTransferFeeUsd   ?? 15,
       inflationRates:       {
         US: p.inflationRate    ?? 0.03,
         AU: p.auInflationRate  ?? 0.03,
       },
       inflationAccumulator: { US: 1.0, AU: 1.0 },
+      ...fxPatches,
     };
 
     if (Object.keys(people).length > 0) patches.people = people;
@@ -150,18 +178,18 @@ export const US_AU_CROSS_BORDER = {
                      ?? (people[0]?.id ?? null);
     const handlers = [];
 
-    // Bilateral transfer handlers (no event binding — handle on-demand events)
     if (usSavAccts.length > 0 && auSavAccts.length > 0) {
-      handlers.push(new IntlTransferToAuHandler({
-        stateRegistry: sr,
-        usRole: ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
-        auRole: ACCOUNT_ROLES.AU_SAVINGS, auOwnerId: primaryId,
-      }));
-      handlers.push(new IntlTransferToUsHandler({
-        stateRegistry: sr,
-        usRole: ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
-        auRole: ACCOUNT_ROLES.AU_SAVINGS, auOwnerId: primaryId,
-      }));
+      // Register settlement accounts on the FxService so FxTransferToHandler
+      // can resolve source/destination keys from the currency code alone.
+      const fx = _getFxService(context);
+      fx.registerSettlement('USD', sr.getStateKey(ACCOUNT_ROLES.US_SAVINGS, primaryId));
+      fx.registerSettlement('AUD', sr.getStateKey(ACCOUNT_ROLES.AU_SAVINGS, primaryId));
+
+      // Direction-agnostic FX_TRANSFER handler.
+      const fxHandlers = fx.getContributions(
+        ['USD', 'AUD'], context.accountService, sr, p,
+      ).handlers;
+      handlers.push(...fxHandlers);
     }
 
     // Residency change handler
@@ -178,9 +206,16 @@ export const US_AU_CROSS_BORDER = {
   reducers(context) {
     const accountSvc = context.accountService;
     const sr         = context.stateRegistry;
+
+    // FX reducers from FxService (FxRefreshReducer + FxTransferApplyReducer).
+    const fxReducers = _getFxService(context)
+      .getContributions(['USD', 'AUD'], accountSvc, sr, context.parameters)
+      .reducers;
+
     return [
       new ChangeResidencyApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
       new IntlTransferApplyReducer({ accountService: accountSvc }),
+      ...fxReducers,
     ];
   },
 };

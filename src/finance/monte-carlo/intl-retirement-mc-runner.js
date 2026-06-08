@@ -35,7 +35,7 @@ const AUD_ACCOUNT_KEYS = [
 export function computeNetWorthUsd(state) {
   const usd = USD_ACCOUNT_KEYS.reduce((s, k) => s + (state[k]?.balance ?? 0), 0);
   const aud = AUD_ACCOUNT_KEYS.reduce((s, k) => s + (state[k]?.balance ?? 0), 0);
-  const rate = state.exchangeRateUsdToAud ?? 1.55;
+  const rate = state.effectiveExchangeRates?.USD_AUD ?? 1.55;
   return usd + aud / rate;
 }
 

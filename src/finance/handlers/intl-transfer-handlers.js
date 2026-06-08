@@ -58,8 +58,8 @@ export class IntlTransferToUsHandler extends HandlerEntry {
 
   call({ state, data }) {
     const amount        = data?.amount ?? 0;
-    const rate          = state.exchangeRateUsdToAud;
-    const fee           = state.intlTransferFeeUsd;
+    const rate          = state.effectiveExchangeRates?.USD_AUD ?? 1.55;
+    const fee           = state.effectiveFxFees?.USD_AUD        ?? 15;
     const auBalance     = this.stateRegistry.getAccount(state, this.auRole, this.auOwnerId)?.balance ?? 0;
     const audActual     = Math.min(amount, auBalance);
     const targetDeficit = Math.max(0, audActual / rate - fee);
@@ -119,8 +119,8 @@ export class IntlTransferToAuHandler extends HandlerEntry {
 
   call({ state, data }) {
     const amount        = data?.amount ?? 0;
-    const rate          = state.exchangeRateUsdToAud;
-    const fee           = state.intlTransferFeeUsd;
+    const rate          = state.effectiveExchangeRates?.USD_AUD ?? 1.55;
+    const fee           = state.effectiveFxFees?.USD_AUD        ?? 15;
     const usBalance     = this.stateRegistry.getAccount(state, this.usRole, this.usOwnerId)?.balance ?? 0;
     const usdActual     = Math.min(amount, usBalance);
     const targetDeficit = Math.max(0, (usdActual - fee) * rate);

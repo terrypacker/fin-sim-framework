@@ -38,7 +38,9 @@ import {
 import { UsSavingsInterestMonthlyHandler }              from '../finance/handlers/us-savings-interest-handler.js';
 import { MonthlyExpensesHandler }                       from '../finance/handlers/monthly-expenses-handler.js';
 import { MonthlyWagesHandler }                          from '../finance/handlers/monthly-wages-handler.js';
+// IntlTransferToUsHandler / IntlTransferToAuHandler kept for deserializing saved scenarios.
 import { IntlTransferToUsHandler, IntlTransferToAuHandler } from '../finance/handlers/intl-transfer-handlers.js';
+import { FxTransferToHandler }       from '../finance/fx/fx-transfer-handler.js';
 import {
   AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler,
   FixedIncomeInterestHandler, SuperEarningsHandler,
@@ -55,6 +57,8 @@ import { UsSavingsInterestCreditReducer } from '../finance/reducers/us-savings-i
 import { ExpenseDebitReducer }            from '../finance/reducers/expense-debit-reducer.js';
 import { ReplenishSavingsReducer }        from '../finance/reducers/replenish-savings-reducer.js';
 import { IntlTransferApplyReducer }       from '../finance/reducers/intl-transfer-apply-reducer.js';
+import { FxTransferApplyReducer }        from '../finance/fx/fx-transfer-apply-reducer.js';
+import { FxRefreshReducer }              from '../finance/fx/fx-refresh-reducer.js';
 import { StockDividendCashApplyReducer }  from '../finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { ChangeResidencyApplyReducer }    from '../finance/reducers/change-residency-apply-reducer.js';
 import { SetOutOfFundsDateReducer }       from '../finance/reducers/set-out-of-funds-date-reducer.js';
@@ -162,7 +166,7 @@ const _ALL_CLASSES = [
   ScriptedReducer, AccountTransactionReducer, AccountServiceReducer,
   // Finance handlers
   UsSavingsInterestMonthlyHandler, MonthlyExpensesHandler, MonthlyWagesHandler,
-  IntlTransferToUsHandler, IntlTransferToAuHandler,
+  IntlTransferToUsHandler, IntlTransferToAuHandler, FxTransferToHandler,
   AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler,
   FixedIncomeInterestHandler, SuperEarningsHandler,
   IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,
@@ -196,7 +200,8 @@ const _ALL_CLASSES = [
   AuHouseSaleHandler, AuSeIncomeHandler,
   // Finance reducers
   UsSavingsInterestCreditReducer, ExpenseDebitReducer, ReplenishSavingsReducer,
-  IntlTransferApplyReducer, StockDividendCashApplyReducer, ChangeResidencyApplyReducer,
+  IntlTransferApplyReducer, FxTransferApplyReducer, FxRefreshReducer,
+  StockDividendCashApplyReducer, ChangeResidencyApplyReducer,
   SetOutOfFundsDateReducer, AccumulateDeficitReducer, OutOfFundsReducer, InflationAdjustReducer,
   UsPeriodAdvanceReducer, AuPeriodAdvanceReducer,
   UsTaxSettleApplyReducer, AuTaxSettleApplyReducer,

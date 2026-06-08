@@ -36,8 +36,8 @@ import { getUsEarlyWithdrawalRules } from '../account-rules/us/us-early-withdraw
  * is topped up before the debit fires.
  *
  * State keys read:
- *   state.exchangeRateUsdToAud  — 1 USD = N AUD
- *   state.intlTransferFeeUsd    — fixed fee per transfer in USD
+ *   state.effectiveExchangeRates.USD_AUD  — 1 USD = N AUD (written by FxRefreshReducer)
+ *   state.effectiveFxFees.USD_AUD         — fixed fee per transfer in USD
  *
  * @param {object}   opts
  * @param {import('../../finance/services/account-service.js').AccountService} opts.accountService
@@ -72,8 +72,8 @@ export class IntlTransferApplyReducer extends Reducer {
 
   reduce(state, action, date) {
     const { direction, targetDeficit } = action;
-    const rate  = state.exchangeRateUsdToAud;
-    const fee   = state.intlTransferFeeUsd;
+    const rate  = state.effectiveExchangeRates?.USD_AUD ?? 1.55;
+    const fee   = state.effectiveFxFees?.USD_AUD ?? 15;
     const usAcc = state[this.usSavingsKey];
     const auAcc = state[this.auSavingsKey];
     const pendingTaxActions = [];
