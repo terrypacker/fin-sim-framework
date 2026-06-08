@@ -26,7 +26,7 @@ export class GraphNodeExecHistory extends BaseComponent {
   /**
    * @param {{
    *   container:     HTMLElement,
-   *   graphRenderer: import('../components/graph-renderer.js').GraphRenderer | null,
+   *   graphRenderer: import('../components/echarts-graph-renderer.js').EChartsGraphRenderer | null,
    *   graphQueryApi: import('../../graph/graph-query-api.js').GraphQueryApi | null,
    * }}
    */

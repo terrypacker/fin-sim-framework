@@ -32,7 +32,6 @@ export class TaxEngine {
     }
     const key = `${module.countryCode}_${module.year}`;
     this._modules[key] = module;
-    console.log(`[TaxEngine] Registered module: ${key}`);
   }
 
   /**

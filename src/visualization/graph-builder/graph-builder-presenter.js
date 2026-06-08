@@ -32,7 +32,7 @@ export class GraphBuilderPresenter {
 
   /**
    * @param {{
-   *   graphRenderer:  import('../components/graph-renderer.js').GraphRenderer,
+   *   graphRenderer:  import('../components/echarts-graph-renderer.js').EChartsGraphRenderer,
    *   eventService:   object,
    *   handlerService: object,
    *   actionService:  object,

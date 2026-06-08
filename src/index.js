@@ -196,7 +196,6 @@ import { NodeRenderKit } from './visualization/components/graph/rendering/node-r
 import { NodeRendererRegistry } from './visualization/components/graph/rendering/node-renderer-registry.js';
 import { ReducerNodeRenderer } from './visualization/components/graph/rendering/reducer-node-renderer.js';
 import { GraphNodeFilterMultiSelect } from './visualization/components/graph-node-filter-multi-select.js';
-import { GraphRenderer } from './visualization/components/graph-renderer.js';
 import { HandlerEditor } from './visualization/components/handler-editor.js';
 import { MapFilterMultiSelect } from './visualization/components/map-filter-multi-select.js';
 import { NodeEditModal } from './visualization/components/node-edit-modal.js';
@@ -663,7 +662,6 @@ export const Visualization = {
   NodeRendererRegistry,
   ReducerNodeRenderer,
   GraphNodeFilterMultiSelect,
-  GraphRenderer,
   HandlerEditor,
   MapFilterMultiSelect,
   NodeEditModal,

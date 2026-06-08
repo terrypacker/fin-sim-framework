@@ -27,7 +27,7 @@ export class BaseGraphView {
 
   /**
    * @param {{
-   *   graphRenderer: import('../components/graph-renderer.js').GraphRenderer,
+   *   graphRenderer: import('../components/echarts-graph-renderer.js').EChartsGraphRenderer,
    *   graphQueryApi: import('../../graph/graph-query-api.js').GraphQueryApi,
    *   layer?:        string,   // graph layer to query — defaults to 'config'
    * }}

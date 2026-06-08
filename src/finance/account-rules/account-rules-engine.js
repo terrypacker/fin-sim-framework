@@ -29,7 +29,6 @@ export class AccountRulesEngine {
     }
     const key = `${module.countryCode}_${module.year}`;
     this._modules[key] = module;
-    console.log(`[AccountRulesEngine] Registered module: ${key}`);
   }
 
   /**
