@@ -76,136 +76,172 @@ export class ScenarioLoader {
     if (!cfg) return;
 
     if (cfg.toolsets?.length > 0) {
-      // Design 15 §2.5: drift-merge persons/accounts/realProperties/collectibles
-      // before deserialization so that schema additions in buildDefaultConfig
-      // propagate into existing cfgs. Conservative: only appends entries whose
-      // key is absent; never replaces or reorders. Skipped when scenarioClass
-      // isn't on the cfg (e.g. raw JSON imports).
       this._driftMergeDomainRecords(cfg);
-
-      // Sync cfg.params (typed UI array) → cfg.parameters (plain key→value the compiler reads)
-      // before loading persons/accounts so any param-driven person fields are up to date.
-      if (Array.isArray(cfg.params) && cfg.params.length > 0) {
-        cfg.parameters = cfg.parameters ?? {};
-        for (const p of cfg.params) {
-          cfg.parameters[p.name] = (p.type === 'Date' && p.value) ? new Date(p.value) : p.value;
-        }
-      }
-
-      // Generic param→node cascade: each schema entry with a `node` declaration drives
-      // a field update on cfg.persons or cfg.accounts before compilation.
-      // Node is read from cfg.params[i].node (serialized alongside the param value) so
-      // the mapping survives round-trips without requiring scenarioClass to be present.
-      // Only explicitly declared fields are touched; all other person/account fields
-      // (e.g. lifeExpectancy, contributionBasis) remain authoritative from their records.
-      for (const p of (Array.isArray(cfg.params) ? cfg.params : [])) {
-        const node = p.node;
-        if (!node) continue;
-        const val = cfg.parameters?.[p.name];
-        if (val === undefined) continue;
-
-        if (node.type === 'person') {
-          const rec = (cfg.persons ?? []).find(r => r.id === node.id);
-          // Design 15: canonicalize Date values to full ISO strings so the
-          // cascaded field matches the serialized representation everywhere.
-          if (rec) rec[node.field] = val instanceof Date ? val.toISOString() : val;
-        } else if (node.type === 'account') {
-          const rec = (cfg.accounts ?? []).find(r => r.stateKey === node.stateKey);
-          if (rec) rec[node.field] = val;
-        }
-      }
+      this._normalizeParams(cfg);
     }
 
     ScenarioSerializer.deserializePersonsAccounts(cfg, services);
 
-    const sim = services.simulationRegistry?.getPrimary?.();
-
     if (cfg.toolsets?.length > 0) {
-      const { paramSchema: toolsetParamSchema, statePatches } =
-        new ScenarioCompiler(this._toolsetRegistry).compile(cfg, services);
-      cfg.initialState = statePatches;
-
-      // Snapshot the compiled graph back to cfg so the config is a complete
-      // serialized representation usable by newScenario() and import/export.
-      const { eventService, handlerService, reducerService,
-              personService, accountService, realPropertyService, collectibleService } = services;
-      cfg.events         = (eventService?.getAll()         ?? []).map(n => ScenarioSerializer._serializeEvent(n));
-      cfg.handlers       = (handlerService?.getAll()       ?? []).map(n => ScenarioSerializer._serializeHandler(n));
-      cfg.actions        = []; // action stubs are re-derived from handler generatedActionTypes at load time
-      cfg.reducers       = (reducerService?.getAll()       ?? []).map(n => ScenarioSerializer._serializeReducer(n));
-      cfg.persons        = (personService?.getAll()        ?? []).map(n => ScenarioSerializer._serializePerson(n));
-      cfg.accounts       = (accountService?.getAll()       ?? []).map(n => ScenarioSerializer._serializeAccount(n));
-      cfg.realProperties = (realPropertyService?.getAll()  ?? []).map(n => ScenarioSerializer._serializeRealProperty(n));
-      cfg.collectibles   = (collectibleService?.getAll()   ?? []).map(n => ScenarioSerializer._serializeCollectible(n));
-
-      // Normalize params to a typed schema array if the prebuilt hasn't done it yet (old saved cfg).
-      // The full schema is the scenario-class schema followed by any toolset params not already
-      // covered by the scenario. Scenario-level entries win on key collisions because they carry
-      // richer labels/groups and may include `node:` declarations for the param→field cascade.
-      // Within toolset entries the first occurrence wins (multiple toolsets may legitimately
-      // declare the same key — e.g. monthlyExpenses in both US_RETIREMENT and AU_RETIREMENT —
-      // and duplicates in cfg.params would break the cfg.params → cfg.parameters sync loop).
-      const scenarioSchema = cfg.scenarioClass?.getParamSchema?.() ?? [];
-      const scenarioKeys   = new Set(scenarioSchema.map(s => s.key));
-      const toolsetEntries = [];
-      const seenToolsetKeys = new Set();
-      for (const t of (toolsetParamSchema ?? [])) {
-        if (scenarioKeys.has(t.key) || seenToolsetKeys.has(t.key)) continue;
-        seenToolsetKeys.add(t.key);
-        toolsetEntries.push(t);
-      }
-      const combinedSchema = [...scenarioSchema, ...toolsetEntries];
-
-      // Seed entry.value from cfg.parameters when it carries an explicit value
-      // (e.g. set by buildDefaultConfig or a JSON import). Otherwise fall back
-      // to the schema's defaultValue. This keeps the UI representation aligned
-      // with the value the compiler actually used.
-      //
-      // Omit the `value` key entirely when both sources are undefined — some
-      // structured-clone implementations (notably jsdom's) drop undefined props,
-      // which would otherwise make active.params and structuredClone(active.params)
-      // unequal.
-      const _toEntry = s => {
-        const v = cfg.parameters?.[s.key];
-        const value = v !== undefined ? v : s.defaultValue;
-        const entry = { name: s.key, label: s.label, type: s.type, group: s.group };
-        if (value !== undefined) entry.value = value;
-        if (s.description) entry.description = s.description;
-        if (s.node) entry.node = s.node;
-        return entry;
-      };
-
-      if (!Array.isArray(cfg.params)) {
-        cfg.params = combinedSchema.map(_toEntry);
-      } else if (combinedSchema.length > 0) {
-        // Schema-drift guard:
-        //   - Backfill any metadata fields (label, group, type, description, node)
-        //     that are missing on existing cfg.params entries. This lets scenarios
-        //     saved before a metadata field was introduced (e.g. description for
-        //     UI tooltips) pick it up on the next load without losing user values.
-        //   - Append schema entries whose key isn't yet in cfg.params with the
-        //     schema's defaults.
-        const schemaByKey = new Map(combinedSchema.map(s => [s.key, s]));
-        for (const p of cfg.params) {
-          const s = schemaByKey.get(p.name);
-          if (!s) continue;
-          if (p.label       === undefined && s.label)       p.label       = s.label;
-          if (p.group       === undefined && s.group)       p.group       = s.group;
-          if (p.type        === undefined && s.type)        p.type        = s.type;
-          if (p.description === undefined && s.description) p.description = s.description;
-          if (p.node        === undefined && s.node)        p.node        = s.node;
-        }
-        const existing = new Set(cfg.params.map(p => p.name));
-        for (const s of combinedSchema) {
-          if (!existing.has(s.key)) cfg.params.push(_toEntry(s));
-        }
-      }
+      this._compileFromToolsets(cfg, services);
     } else if (ScenarioSerializer.hasSerializedGraph(cfg)) {
-      // Fallback for manually-built scenarios that have no toolset declaration.
-      ScenarioSerializer.deserializeGraph(cfg, services);
-      if (sim && cfg.initialState && Object.keys(cfg.initialState).length > 0) {
-        Object.assign(sim.state, _cloneState(cfg.initialState));
+      this._restoreFromGraph(cfg, services);
+    }
+  }
+
+  /**
+   * Sync cfg.params → cfg.parameters and cascade param values onto person/account
+   * records via each param's optional `node` declaration.
+   *
+   * Must run before deserializePersonsAccounts so that param-driven person fields
+   * (e.g. birthDate, monthlyWage) are up to date when the service reads the records.
+   * @private
+   */
+  _normalizeParams(cfg) {
+    // Sync cfg.params (typed UI array) → cfg.parameters (plain key→value the compiler reads).
+    if (Array.isArray(cfg.params) && cfg.params.length > 0) {
+      cfg.parameters = cfg.parameters ?? {};
+      for (const p of cfg.params) {
+        cfg.parameters[p.name] = (p.type === 'Date' && p.value) ? new Date(p.value) : p.value;
       }
+    }
+
+    // Generic param→node cascade: each schema entry with a `node` declaration drives
+    // a field update on cfg.persons or cfg.accounts before compilation.
+    // Node is read from cfg.params[i].node (serialized alongside the param value) so
+    // the mapping survives round-trips without requiring scenarioClass to be present.
+    // Only explicitly declared fields are touched; all other person/account fields
+    // (e.g. lifeExpectancy, contributionBasis) remain authoritative from their records.
+    for (const p of (Array.isArray(cfg.params) ? cfg.params : [])) {
+      const node = p.node;
+      if (!node) continue;
+      const val = cfg.parameters?.[p.name];
+      if (val === undefined) continue;
+
+      if (node.type === 'person') {
+        const rec = (cfg.persons ?? []).find(r => r.id === node.id);
+        // Design 15: canonicalize Date values to full ISO strings so the
+        // cascaded field matches the serialized representation everywhere.
+        if (rec) rec[node.field] = val instanceof Date ? val.toISOString() : val;
+      } else if (node.type === 'account') {
+        const rec = (cfg.accounts ?? []).find(r => r.stateKey === node.stateKey);
+        if (rec) rec[node.field] = val;
+      }
+    }
+  }
+
+  /**
+   * Compile the toolset declarations into the services, then snapshot the
+   * resulting graph back onto cfg and normalize cfg.params against the combined
+   * scenario + toolset param schema.
+   * @private
+   */
+  _compileFromToolsets(cfg, services) {
+    const { paramSchema: toolsetParamSchema, statePatches } =
+      new ScenarioCompiler(this._toolsetRegistry).compile(cfg, services);
+    cfg.initialState = statePatches;
+
+    // Snapshot the compiled graph back to cfg so the config is a complete
+    // serialized representation usable by newScenario() and import/export.
+    const { eventService, handlerService, reducerService,
+            personService, accountService, realPropertyService, collectibleService } = services;
+    cfg.events         = (eventService?.getAll()         ?? []).map(n => ScenarioSerializer._serializeEvent(n));
+    cfg.handlers       = (handlerService?.getAll()       ?? []).map(n => ScenarioSerializer._serializeHandler(n));
+    cfg.actions        = []; // action stubs are re-derived from handler generatedActionTypes at load time
+    cfg.reducers       = (reducerService?.getAll()       ?? []).map(n => ScenarioSerializer._serializeReducer(n));
+    cfg.persons        = (personService?.getAll()        ?? []).map(n => ScenarioSerializer._serializePerson(n));
+    cfg.accounts       = (accountService?.getAll()       ?? []).map(n => ScenarioSerializer._serializeAccount(n));
+    cfg.realProperties = (realPropertyService?.getAll()  ?? []).map(n => ScenarioSerializer._serializeRealProperty(n));
+    cfg.collectibles   = (collectibleService?.getAll()   ?? []).map(n => ScenarioSerializer._serializeCollectible(n));
+
+    this._mergeParamSchema(cfg, toolsetParamSchema);
+  }
+
+  /**
+   * Merge the combined scenario + toolset param schema into cfg.params.
+   *
+   * Three cases:
+   *   - cfg.params absent → build from scratch using schema defaults.
+   *   - cfg.params present → backfill missing metadata fields (schema drift) and
+   *     append any schema keys not yet in cfg.params.
+   *   - No schema entries → no-op.
+   *
+   * Scenario-class entries win on key collisions (richer labels/groups, node
+   * declarations). Within toolset entries the first occurrence wins so that
+   * shared keys (e.g. monthlyExpenses in both US_RETIREMENT and AU_RETIREMENT)
+   * don't create duplicates that would corrupt the params→parameters sync loop.
+   * @private
+   */
+  _mergeParamSchema(cfg, toolsetParamSchema) {
+    const scenarioSchema = cfg.scenarioClass?.getParamSchema?.() ?? [];
+    const scenarioKeys   = new Set(scenarioSchema.map(s => s.key));
+    const toolsetEntries = [];
+    const seenToolsetKeys = new Set();
+    for (const t of (toolsetParamSchema ?? [])) {
+      if (scenarioKeys.has(t.key) || seenToolsetKeys.has(t.key)) continue;
+      seenToolsetKeys.add(t.key);
+      toolsetEntries.push(t);
+    }
+    const combinedSchema = [...scenarioSchema, ...toolsetEntries];
+    if (combinedSchema.length === 0) return;
+
+    // Seed entry.value from cfg.parameters when it carries an explicit value
+    // (e.g. set by buildDefaultConfig or a JSON import). Otherwise fall back
+    // to the schema's defaultValue. This keeps the UI representation aligned
+    // with the value the compiler actually used.
+    //
+    // Omit the `value` key entirely when both sources are undefined — some
+    // structured-clone implementations (notably jsdom's) drop undefined props,
+    // which would otherwise make active.params and structuredClone(active.params)
+    // unequal.
+    const _toEntry = s => {
+      const v = cfg.parameters?.[s.key];
+      const value = v !== undefined ? v : s.defaultValue;
+      const entry = { name: s.key, label: s.label, type: s.type, group: s.group };
+      if (value !== undefined) entry.value = value;
+      if (s.description) entry.description = s.description;
+      if (s.node) entry.node = s.node;
+      return entry;
+    };
+
+    if (!Array.isArray(cfg.params)) {
+      cfg.params = combinedSchema.map(_toEntry);
+      return;
+    }
+
+    // Schema-drift guard:
+    //   - Backfill any metadata fields (label, group, type, description, node)
+    //     that are missing on existing cfg.params entries. This lets scenarios
+    //     saved before a metadata field was introduced (e.g. description for
+    //     UI tooltips) pick it up on the next load without losing user values.
+    //   - Append schema entries whose key isn't yet in cfg.params with the
+    //     schema's defaults.
+    const schemaByKey = new Map(combinedSchema.map(s => [s.key, s]));
+    for (const p of cfg.params) {
+      const s = schemaByKey.get(p.name);
+      if (!s) continue;
+      if (p.label       === undefined && s.label)       p.label       = s.label;
+      if (p.group       === undefined && s.group)       p.group       = s.group;
+      if (p.type        === undefined && s.type)        p.type        = s.type;
+      if (p.description === undefined && s.description) p.description = s.description;
+      if (p.node        === undefined && s.node)        p.node        = s.node;
+    }
+    const existing = new Set(cfg.params.map(p => p.name));
+    for (const s of combinedSchema) {
+      if (!existing.has(s.key)) cfg.params.push(_toEntry(s));
+    }
+  }
+
+  /**
+   * Restore a manually-built or previously-compiled scenario from its serialized
+   * graph snapshot, then rehydrate sim.state from cfg.initialState.
+   * @private
+   */
+  _restoreFromGraph(cfg, services) {
+    ScenarioSerializer.deserializeGraph(cfg, services);
+    const sim = services.simulationRegistry?.getPrimary?.();
+    if (sim && cfg.initialState && Object.keys(cfg.initialState).length > 0) {
+      Object.assign(sim.state, _cloneState(cfg.initialState));
     }
   }
 

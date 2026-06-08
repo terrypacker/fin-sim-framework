@@ -114,9 +114,8 @@ There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; se
 - **Partially resolved** by `design/19-type-registry.md`: `StateSchemaRegistry.pickActionData` deleted (picker dedup complete — `TypeRegistry.pickPayload` is the sole picker). The remaining issue — `StateSchemaRegistry` itself living in `src/finance/` despite being used by framework layers — is deferred. Full resolution (split into `JournalSchemaRegistry` + `FinanceStateSchemaRegistry`) is a follow-up design.
 - **Direction** (remaining): split into a framework-level `JournalSchemaRegistry` for the formatter contract, and a finance-level overlay that registers domain defaults on top.
 
-### 3.3 `ScenarioLoader` knows about both branches (Git #364)
-- `src/scenarios/scenario-loader.js` dispatches between toolset-compile and graph-deserialize. The branch logic is mixed with per-param node-cascade rules — a single 80-line method (`load`) that does I/O normalization, dispatch, and snapshot-back. It also mutates `cfg.params` / `cfg.parameters` / `cfg.events` / `cfg.handlers` / `cfg.actions` / `cfg.reducers` / `cfg.initialState` in place.
-- **Direction**: extract three pure helpers (`normalizeParams(cfg)`, `compileFromToolsets(cfg, services)`, `restoreFromGraph(cfg, services)`) and keep `load()` as a thin dispatcher.
+~~### 3.3 `ScenarioLoader` knows about both branches (Git #364)~~
+- **Resolved**: `load()` is now a thin dispatcher (~10 lines). Logic extracted into four private helpers: `_normalizeParams(cfg)` (params↔parameters sync + node cascade), `_compileFromToolsets(cfg, services)` (compiler call + graph snapshot), `_mergeParamSchema(cfg, toolsetParamSchema)` (schema merge + drift guard), and `_restoreFromGraph(cfg, services)` (deserialize + state rehydration).
 
 ### 3.4 `WorkbenchApp` reaches into presenter internals (Git #363)
 - `_replayMcRun`, `_applyOptCandidate`, `_showGraphEditTab` (in `base-app.js`) all rely on workbench-shell pane IDs (`activatePlugin('chart')` etc.) by hard-coded string. These coupling points live on the app, not on the runtime, and bypass the `WorkbenchRuntime` pub/sub.
