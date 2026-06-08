@@ -12,6 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { getBirthDate } from '../../residency-utils.js';
+import { scaleHoldings } from '../../holdings/holding-utils.js';
 
 /** Resolve the US cash pool. */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -46,14 +47,16 @@ export class IraContributionApplyReducer extends AccountServiceReducer {
 
   reduce(state, action) {
     this.accountService.transaction(usCash(state), -action.amount, null);
-    const ia = state.iraAccount;
+    const ia         = state.iraAccount;
+    const newBalance = ia.balance + action.amount;
     return this.newState(
       state,
       {
         iraAccount: {
           ...ia,
-          balance:           ia.balance           + action.amount,
+          balance:           newBalance,
           contributionBasis: ia.contributionBasis + action.amount,
+          holdings:          scaleHoldings(ia.holdings, ia.balance, newBalance),
         },
       },
       [{ type: 'IRA_CONTRIBUTION_TAX', amount: action.amount }]
@@ -80,14 +83,16 @@ export class IraWithdrawalContribApplyReducer extends AccountServiceReducer {
   reduce(state, action) {
     const { amount, penaltyAmount } = action;
     this.accountService.transaction(usCash(state), amount - penaltyAmount, null);
-    const ia = state.iraAccount;
+    const ia         = state.iraAccount;
+    const newBalance = ia.balance - amount;
     return this.newState(
       state,
       {
         iraAccount: {
           ...ia,
-          balance:           ia.balance           - amount,
+          balance:           newBalance,
           contributionBasis: ia.contributionBasis - amount,
+          holdings:          scaleHoldings(ia.holdings, ia.balance, newBalance),
         },
       },
       [{ type: 'IRA_WITHDRAWAL_CONTRIB_TAX', amount, penaltyAmount }]
@@ -114,14 +119,16 @@ export class IraWithdrawalEarningsApplyReducer extends AccountServiceReducer {
   reduce(state, action) {
     const { amount, penaltyAmount, residency } = action;
     this.accountService.transaction(usCash(state), amount - penaltyAmount, null);
-    const ia = state.iraAccount;
+    const ia         = state.iraAccount;
+    const newBalance = ia.balance - amount;
     return this.newState(
       state,
       {
         iraAccount: {
           ...ia,
-          balance:       ia.balance       - amount,
+          balance:       newBalance,
           earningsBasis: ia.earningsBasis - amount,
+          holdings:      scaleHoldings(ia.holdings, ia.balance, newBalance),
         },
       },
       [{ type: 'IRA_WITHDRAWAL_EARNINGS_TAX', amount, penaltyAmount, residency }]

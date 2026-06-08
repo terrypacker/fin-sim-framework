@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
+import { scaleHoldings } from '../../holdings/holding-utils.js';
 
 /** Resolve the US cash pool. */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -47,12 +48,14 @@ export class RothRolloverContributionApplyReducer extends AccountServiceReducer 
 
   reduce(state, action) {
     this.accountService.transaction(usCash(state), -action.amount, null);
-    const ra = state.rothAccount;
+    const ra         = state.rothAccount;
+    const newBalance = ra.balance + action.amount;
     return this.newState(state, {
       rothAccount: {
         ...ra,
-        balance:              ra.balance                            + action.amount,
-        rolloverContribBasis: (ra.rolloverContribBasis ?? 0)       + action.amount,
+        balance:              newBalance,
+        rolloverContribBasis: (ra.rolloverContribBasis ?? 0) + action.amount,
+        holdings:             scaleHoldings(ra.holdings, ra.balance, newBalance),
       },
     });
   }
@@ -101,12 +104,14 @@ export class RothRolloverWithdrawalContribApplyReducer extends AccountServiceRed
 
   reduce(state, action) {
     this.accountService.transaction(usCash(state), action.amount, null);
-    const ra = state.rothAccount;
+    const ra         = state.rothAccount;
+    const newBalance = ra.balance - action.amount;
     return this.newState(state, {
       rothAccount: {
         ...ra,
-        balance:              ra.balance                            - action.amount,
-        rolloverContribBasis: (ra.rolloverContribBasis ?? 0)       - action.amount,
+        balance:              newBalance,
+        rolloverContribBasis: (ra.rolloverContribBasis ?? 0) - action.amount,
+        holdings:             scaleHoldings(ra.holdings, ra.balance, newBalance),
       },
     });
   }
@@ -132,14 +137,16 @@ export class RothRolloverWithdrawalEarningsApplyReducer extends AccountServiceRe
   reduce(state, action) {
     const { amount, residency } = action;
     this.accountService.transaction(usCash(state), amount, null);
-    const ra = state.rothAccount;
+    const ra         = state.rothAccount;
+    const newBalance = ra.balance - amount;
     return this.newState(
       state,
       {
         rothAccount: {
           ...ra,
-          balance:               ra.balance                         - amount,
-          rolloverEarningsBasis: (ra.rolloverEarningsBasis ?? 0)   - amount,
+          balance:               newBalance,
+          rolloverEarningsBasis: (ra.rolloverEarningsBasis ?? 0) - amount,
+          holdings:              scaleHoldings(ra.holdings, ra.balance, newBalance),
         },
       },
       [{ type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX', amount, residency }]

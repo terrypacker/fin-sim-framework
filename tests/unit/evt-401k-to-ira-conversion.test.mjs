@@ -52,6 +52,8 @@ function makeConfig({
   conversionDay      = null,
   conversionYear     = null,
   includeIra         = true,
+  k401GrowthRate     = 0,
+  iraGrowthRate      = 0,
 } = {}) {
   const accounts = [
     {
@@ -85,7 +87,7 @@ function makeConfig({
     simEnd:   '2032-01-01',
     parameters: {
       monthlyExpenses: 0, inflationAdjust: false, inflationRate: 0,
-      rothGrowthRate: 0, iraGrowthRate: 0, k401GrowthRate: 0,
+      rothGrowthRate: 0, iraGrowthRate, k401GrowthRate,
       brokerageGrowthRate: 0, brokerageDividendRate: 0, fixedIncomeInterestRate: 0,
       usSavingsInterestRate: 0,
       k401ToIraConversionEnabled: conversionEnabled,
@@ -280,4 +282,68 @@ test('Toolset: partial overrides — only month set, year/day default to retirem
   sim.stepTo(new Date(2030, 11, 31));
   assert.strictEqual(sim.state.k401Account.balance, 0);
   assert.strictEqual(sim.state.iraAccount.balance, 100_000);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EVT-53: Holdings invariant (§4.4) — balance === Σ holdings[i].marketValue
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('EVT-53: full conversion zeroes k401 holdings so no ghost earnings fire', () => {
+  const { sim } = loadToolsetScenario(makeConfig({
+    k401Balance: 100_000, k401ContribBasis: 80_000, k401EarningsBasis: 20_000,
+    k401GrowthRate: 0.07,
+  }));
+  sim.schedule({
+    date: new Date(2026, 0, 15),
+    type: 'K401_TO_IRA_CONVERSION',
+    data: { k401Key: 'k401Account', iraKey: 'iraAccount' },
+  });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  // After full conversion the k401 holding must sum to 0 so earnings = 0.
+  const k401Holdings = sim.state.k401Account.holdings ?? [];
+  const k401HoldingsSum = k401Holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0);
+  assert.strictEqual(k401HoldingsSum, 0,
+    'k401 holdings must sum to 0 after full conversion (no ghost earnings)');
+});
+
+test('EVT-53: full conversion sets IRA holding to match IRA balance', () => {
+  const { sim } = loadToolsetScenario(makeConfig({
+    k401Balance: 100_000, k401ContribBasis: 80_000, k401EarningsBasis: 20_000,
+    iraBalance: 0,
+  }));
+  sim.schedule({
+    date: new Date(2026, 0, 15),
+    type: 'K401_TO_IRA_CONVERSION',
+    data: { k401Key: 'k401Account', iraKey: 'iraAccount' },
+  });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  const iraHoldings = sim.state.iraAccount.holdings ?? [];
+  const iraHoldingsSum = iraHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0);
+  assert.strictEqual(iraHoldingsSum, 100_000,
+    'IRA holdings must sum to match IRA balance after rollover');
+});
+
+test('EVT-53: k401 earnings stay at 0 after conversion with non-zero growth rate', () => {
+  // Regression: ghost k401 holdings caused earnings to compute on stale 250k balance.
+  const { sim } = loadToolsetScenario(makeConfig({
+    k401Balance:    250_000, k401ContribBasis: 250_000, k401EarningsBasis: 0,
+    iraBalance:     0,
+    k401GrowthRate: 0.07,
+    iraGrowthRate:  0.07,
+    conversionEnabled: true,
+    conversionYear:  2027, conversionMonth: 1, conversionDay: 1,
+  }));
+
+  // Step to just before year-end earnings fire
+  sim.stepTo(new Date(2027, 11, 31));
+
+  // 401k must remain at 0, not restore to ~267k via ghost earnings + _syncBalance
+  assert.strictEqual(sim.state.k401Account.balance, 0,
+    'k401 balance must stay at 0 after conversion even when growth rate > 0');
+
+  // IRA must hold ~267.5k (250k rollover × 1.07 for 2027 earnings)
+  assert.ok(sim.state.iraAccount.balance > 250_000,
+    'IRA balance must grow past rollover amount due to earnings');
 });

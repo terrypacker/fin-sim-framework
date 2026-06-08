@@ -13,6 +13,7 @@ import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { getUniformDistributionPeriod } from './us-rmd-uniform-table.js';
 import { getBirthDate } from '../../residency-utils.js';
+import { scaleHoldings } from '../../holdings/holding-utils.js';
 
 /** Resolve the US cash pool. */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -43,14 +44,16 @@ export class K401ContributionApplyReducer extends AccountServiceReducer {
 
   reduce(state, action) {
     this.accountService.transaction(usCash(state), -action.amount, null);
-    const ka = state.k401Account;
+    const ka         = state.k401Account;
+    const newBalance = ka.balance + action.amount;
     return this.newState(
       state,
       {
         k401Account: {
           ...ka,
-          balance:           ka.balance           + action.amount,
+          balance:           newBalance,
           contributionBasis: ka.contributionBasis + action.amount,
+          holdings:          scaleHoldings(ka.holdings, ka.balance, newBalance),
         },
       },
       [{ type: 'K401_CONTRIBUTION_TAX', amount: action.amount }]
@@ -103,17 +106,19 @@ export class K401WithdrawalApplyReducer extends AccountServiceReducer {
   reduce(state, action) {
     const { amount, penaltyAmount } = action;
     this.accountService.transaction(usCash(state), amount - penaltyAmount, null);
-    const ka = state.k401Account;
+    const ka           = state.k401Account;
     const fromEarnings = Math.min(amount, ka.earningsBasis);
     const fromContrib  = amount - fromEarnings;
+    const newBalance   = ka.balance - amount;
     return this.newState(
       state,
       {
         k401Account: {
           ...ka,
-          balance:           ka.balance           - amount,
+          balance:           newBalance,
           earningsBasis:     ka.earningsBasis     - fromEarnings,
           contributionBasis: ka.contributionBasis - fromContrib,
+          holdings:          scaleHoldings(ka.holdings, ka.balance, newBalance),
         },
       },
       [{ type: 'K401_WITHDRAWAL_TAX', amount, penaltyAmount }]
@@ -205,19 +210,21 @@ export class K401RmdApplyReducer extends AccountServiceReducer {
 
   reduce(state, action) {
     const { amount, residency } = action;
-    const stateKey    = action.stateKey ?? 'k401Account';
-    const ka          = state[stateKey];
+    const stateKey     = action.stateKey ?? 'k401Account';
+    const ka           = state[stateKey];
     const fromEarnings = Math.min(amount, ka.earningsBasis);
     const fromContrib  = amount - fromEarnings;
+    const newBalance   = ka.balance - amount;
     this.accountService.transaction(usCash(state), amount, null);
     return this.newState(
       state,
       {
         [stateKey]: {
           ...ka,
-          balance:           ka.balance           - amount,
+          balance:           newBalance,
           earningsBasis:     ka.earningsBasis     - fromEarnings,
           contributionBasis: ka.contributionBasis - fromContrib,
+          holdings:          scaleHoldings(ka.holdings, ka.balance, newBalance),
         },
       },
       [{ type: 'K401_RMD_TAX', amount, residency }]
@@ -329,20 +336,48 @@ export class K401ToIraConversionApplyReducer extends AccountServiceReducer {
     const fromContrib  = Math.min(amount, k401.contributionBasis);
     const fromEarnings = Math.min(amount - fromContrib, k401.earningsBasis);
 
-    return this.newState(state, {
-      [k401Key]: {
-        ...k401,
-        balance:           k401.balance           - amount,
-        contributionBasis: k401.contributionBasis - fromContrib,
-        earningsBasis:     k401.earningsBasis     - fromEarnings,
-      },
-      [iraKey]: {
-        ...ira,
-        balance:           ira.balance           + amount,
-        contributionBasis: ira.contributionBasis + fromContrib,
-        earningsBasis:     ira.earningsBasis     + fromEarnings,
-      },
-    });
+    // Maintain the §4.4 holdings invariant (balance === Σ holdings[i].marketValue).
+    // Scale k401 holdings down by the transfer ratio; scale IRA holdings up.
+    const transferRatio = k401.balance > 0 ? amount / k401.balance : 0;
+
+    const newK401 = {
+      ...k401,
+      balance:           k401.balance           - amount,
+      contributionBasis: k401.contributionBasis - fromContrib,
+      earningsBasis:     k401.earningsBasis     - fromEarnings,
+    };
+    if (Array.isArray(k401.holdings) && k401.holdings.length > 0) {
+      newK401.holdings = k401.holdings.map(h => ({
+        ...h,
+        marketValue: +((h.marketValue ?? 0) * (1 - transferRatio)).toFixed(2),
+        costBasis:   +((h.costBasis   ?? 0) * (1 - transferRatio)).toFixed(2),
+      }));
+    }
+
+    const newIra = {
+      ...ira,
+      balance:           ira.balance           + amount,
+      contributionBasis: ira.contributionBasis + fromContrib,
+      earningsBasis:     ira.earningsBasis     + fromEarnings,
+    };
+    if (Array.isArray(ira.holdings) && ira.holdings.length > 0) {
+      if (ira.balance > 0) {
+        const iraFactor = (ira.balance + amount) / ira.balance;
+        newIra.holdings = ira.holdings.map(h => ({
+          ...h,
+          marketValue: +((h.marketValue ?? 0) * iraFactor).toFixed(2),
+          costBasis:   +((h.costBasis   ?? 0) * iraFactor).toFixed(2),
+        }));
+      } else {
+        // IRA was at zero; set the first (bootstrap) holding to the rollover amount.
+        newIra.holdings = ira.holdings.map((h, i) => i === 0
+          ? { ...h, marketValue: +amount.toFixed(2), costBasis: +amount.toFixed(2) }
+          : h
+        );
+      }
+    }
+
+    return this.newState(state, { [k401Key]: newK401, [iraKey]: newIra });
   }
 }
 

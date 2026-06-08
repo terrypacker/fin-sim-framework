@@ -18,17 +18,31 @@ const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
 
 /**
  * Reduce IRA by `amount`, drawing from contributionBasis first then earningsBasis.
+ * Scales holdings proportionally to maintain the §4.4 invariant.
  * Returns the updated iraAccount object.
  */
 export function debitIra(ia, amount) {
   const fromContrib  = Math.min(amount, ia.contributionBasis);
   const fromEarnings = Math.min(amount - fromContrib, ia.earningsBasis);
-  return {
+  const newBalance   = ia.balance - amount;
+
+  const result = {
     ...ia,
-    balance:           ia.balance           - amount,
+    balance:           newBalance,
     contributionBasis: ia.contributionBasis - fromContrib,
     earningsBasis:     ia.earningsBasis     - fromEarnings,
   };
+
+  if (Array.isArray(ia.holdings) && ia.holdings.length > 0 && ia.balance > 0) {
+    const keepRatio = ia.balance > 0 ? newBalance / ia.balance : 0;
+    result.holdings = ia.holdings.map(h => ({
+      ...h,
+      marketValue: +((h.marketValue ?? 0) * keepRatio).toFixed(2),
+      costBasis:   +((h.costBasis   ?? 0) * keepRatio).toFixed(2),
+    }));
+  }
+
+  return result;
 }
 
 // ─── Reducers ─────────────────────────────────────────────────────────────────

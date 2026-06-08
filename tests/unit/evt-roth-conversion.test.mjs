@@ -56,6 +56,8 @@ function makeConversionConfig({
   spouseRothBalance      = 0,
   spouseRolloverContrib  = 0,
   isAuResident           = false,
+  rothGrowthRate         = 0,
+  iraGrowthRate          = 0,
 } = {}) {
   return {
     toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'US_ROTH_CONVERSION', 'US_AU_CROSS_BORDER'],
@@ -63,7 +65,7 @@ function makeConversionConfig({
     simEnd:   '2028-01-01',
     parameters: {
       monthlyExpenses: 0, inflationAdjust: false, inflationRate: 0,
-      rothGrowthRate: 0, iraGrowthRate: 0, k401GrowthRate: 0,
+      rothGrowthRate, iraGrowthRate, k401GrowthRate: 0,
       brokerageGrowthRate: 0, brokerageDividendRate: 0, fixedIncomeInterestRate: 0,
       usSavingsInterestRate: 0, auSavingsInterestRate: 0,
       superGrowthRate: 0, auStockGrowthRate: 0, auStockDividendRate: 0,
@@ -355,4 +357,39 @@ test('Bracket-fill policy — no actions when IRA balance is zero', () => {
 
   assert.strictEqual(sim.state.rothAccount.balance, 0);
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 30_000);        // unchanged
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Holdings invariant (§4.4) — conversion must keep balance === Σ holdings.marketValue
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('EVT-52: Roth conversion updates Roth holdings so subsequent earnings are not wiped', () => {
+  // Regression: ROTH_CONVERSION_APPLY credited roth.balance but not roth.holdings.
+  // When INTL_ROTH_EARNINGS fired next, computeHoldingsGrowth used stale holdings,
+  // and _syncBalance then overwrote the balance, erasing the conversion amount.
+  const { sim } = loadToolsetScenario(makeConversionConfig({
+    iraBalance:    250_000, iraContribBasis: 250_000,
+    rothBalance:   107_000, rolloverContribBasis: 107_000,
+    rothGrowthRate: 0.07, iraGrowthRate: 0.07,
+  }));
+
+  // Convert 238k from IRA → Roth on 2026-12-01
+  sim.schedule({
+    date: new Date(2026, 11, 1),
+    type: 'ROTH_CONVERSION',
+    data: { amount: 238_000, owner: 'primary' },
+  });
+
+  // Step through a full year-end earnings cycle
+  sim.stepTo(new Date(2027, 0, 1));
+
+  // Roth balance must include the 238k rollover (not be reset to pre-conversion value).
+  assert.ok(sim.state.rothAccount.balance > 107_000 + 238_000 - 1,
+    'Roth balance must retain the conversion amount after year-end earnings');
+
+  // IRA holdings must match IRA balance (invariant check).
+  const iraHoldings = sim.state.iraAccount.holdings ?? [];
+  const iraSum = iraHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0);
+  assert.ok(Math.abs(iraSum - sim.state.iraAccount.balance) < 1,
+    `IRA holdings sum ${iraSum} must match IRA balance ${sim.state.iraAccount.balance}`);
 });
