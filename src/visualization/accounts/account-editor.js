@@ -73,6 +73,10 @@ export class AccountEditor extends BaseComponent {
     this._applyTypeVisibility(el, typeSelect.value);
     this.listen(typeSelect, 'change', () => this._applyTypeVisibility(el, typeSelect.value));
 
+    // Holdings table (read-only, design 25 §9). Editing flows ship later
+    // alongside per-holding appreciation schedules (design 28).
+    this._renderHoldings(el);
+
     // Delete / History buttons (edit only)
     const deleteBtn  = el.querySelector('[data-id="deleteBtn"]');
     const historyBtn = el.querySelector('[data-id="historyBtn"]');
@@ -116,6 +120,34 @@ export class AccountEditor extends BaseComponent {
     el.querySelector('[data-id="investmentFields"]').style.display = INVESTMENT_TYPES.has(type) ? ''    : 'none';
   }
 
+  _renderHoldings(el) {
+    const section = el.querySelector('[data-id="holdingsSection"]');
+    const tbody   = el.querySelector('[data-id="holdingsTbody"]');
+    if (!section || !tbody) return;
+    const holdings = Array.isArray(this._node?.holdings) ? this._node.holdings : [];
+    if (holdings.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = '';
+    tbody.replaceChildren();
+    const currency = this._node?.currency?.symbol ?? '$';
+    for (const h of holdings) {
+      const tr  = document.createElement('tr');
+      const ugl = (h.marketValue ?? 0) - (h.costBasis ?? 0);
+      tr.innerHTML = `
+        <td>${_escape(h.label || h.id || '')}</td>
+        <td>${_escape(h.allocation ?? '')}</td>
+        <td>${_escape(h.rateKey ?? '')}</td>
+        <td class="num">${_money(currency, h.marketValue)}</td>
+        <td class="num">${_money(currency, h.costBasis)}</td>
+        <td class="num ${ugl >= 0 ? 'pos' : 'neg'}">${_money(currency, ugl)}</td>
+        <td>${_date(h.purchaseDate)}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+
   _populateOwnerSelect(el, people, selectedId) {
     const sel = el.querySelector('[data-id="ownerId"]');
     sel.innerHTML = '<option value="">— none —</option>';
@@ -132,4 +164,22 @@ export class AccountEditor extends BaseComponent {
     this._rootEl?.remove();
     super.destroy();
   }
+}
+
+function _escape(s) {
+  return String(s ?? '').replace(/[&<>"]/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]
+  ));
+}
+
+function _money(symbol, n) {
+  const v = Number(n ?? 0);
+  return `${symbol}${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function _date(d) {
+  if (!d) return '—';
+  const dt = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(dt.getTime())) return '—';
+  return dt.toISOString().slice(0, 10);
 }

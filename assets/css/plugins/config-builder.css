@@ -114,6 +114,42 @@
   gap: 6px;
 }
 
+/* Holdings table (design 25 §9 read-only display). */
+.holdings-section {
+  margin-top: 8px;
+  border-top: 1px solid var(--border, #444);
+  padding-top: 8px;
+}
+.holdings-header {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.holdings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.holdings-table th,
+.holdings-table td {
+  padding: 3px 6px;
+  text-align: left;
+  border-bottom: 1px solid var(--border, #333);
+}
+.holdings-table th {
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.holdings-table td.num,
+.holdings-table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.holdings-table td.pos { color: var(--ok, #4caf50); }
+.holdings-table td.neg { color: var(--err, #e57373); }
+
 .node-field {
   display: flex;
   flex-direction: column;

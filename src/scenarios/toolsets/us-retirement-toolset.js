@@ -72,6 +72,8 @@ function _accountToStatePlain(account) {
     minimumBalance:        account.minimumBalance        ?? 0,
     drawdownPriority:      account.drawdownPriority      ?? null,
     allowsEarlyWithdrawal: account.allowsEarlyWithdrawal ?? false,
+    // Holdings — plain-data array (no methods), structuredClone-safe.
+    holdings:              (account.holdings ?? []).map(h => ({ ...h })),
   };
   if (account.contributionBasis !== undefined) {
     plain.contributionBasis        = account.contributionBasis;

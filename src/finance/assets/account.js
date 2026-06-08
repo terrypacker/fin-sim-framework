@@ -98,6 +98,10 @@ export class Account extends Asset {
     this.role           = opts.role           ?? null;
     this.type           = opts.type           ?? null;
     this.balance        = initialValue;
+    // Holdings — populated by AccountService.register() default-holding bootstrap
+    // (see design 25 §5.4). Source of truth for asset allocation; balance is
+    // a denormalized scalar synced by holdings reducers (§4.4 invariant).
+    this.holdings       = opts.holdings ?? [];
     this.minimumBalance = opts.minimumBalance ?? 0;
     this.country        = opts.country        ?? null;
     this.currency       = opts.currency       ?? null;

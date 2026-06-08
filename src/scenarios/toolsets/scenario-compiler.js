@@ -8,6 +8,13 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import {
+  HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer,
+  HoldingSplitReducer, HoldingRetitleReducer,
+  HOLDING_REDUCER_CLASSES,
+} from '../../finance/holdings/holding-reducers.js';
+import { registerHoldingActionTypes } from '../../finance/holdings/holding-actions.js';
+
 /**
  * ScenarioCompiler — consumes a declarative scenario definition and a
  * ToolsetRegistry, resolves toolset dependencies, collects contributions
@@ -44,6 +51,15 @@ export class ScenarioCompiler {
     // populated when the simulation pipeline first runs.
     for (const toolset of resolved) {
       services.typeRegistry?.registerToolset(toolset);
+    }
+    // Framework-owned substrate (holdings, design 25) is not toolset-bound.
+    // Register here so any TypeRegistry instance (incl. test detectors that
+    // swap the registry after ServiceRegistry construction) sees it.
+    if (services.typeRegistry) {
+      registerHoldingActionTypes(services.typeRegistry);
+      for (const ctor of Object.values(HOLDING_REDUCER_CLASSES)) {
+        services.typeRegistry.registerClass(ctor);
+      }
     }
 
     const parameters = this._resolveParameters(definition, resolved);
@@ -92,6 +108,13 @@ export class ScenarioCompiler {
     for (const h of handlers)  services.handlerService.register(h);
     for (const r of reducers)  services.reducerService.register(r);
 
+    // Framework substrate reducers (design 25 holdings) — always present,
+    // not toolset-owned. Registered last so they live in the same pipeline
+    // and run at their declared priorities relative to toolset reducers.
+    for (const r of _frameworkSubstrateReducers()) {
+      services.reducerService.register(r);
+    }
+
     return { paramSchema, statePatches };
   }
 
@@ -134,6 +157,21 @@ export class ScenarioCompiler {
       schedulesById:  {},
     };
   }
+}
+
+/**
+ * Build fresh instances of the framework-owned (non-toolset) reducers.
+ * Currently: design 25 holdings substrate. Adding a new substrate reducer
+ * here is the standard extension point.
+ */
+function _frameworkSubstrateReducers() {
+  return [
+    new HoldingTransactReducer(),
+    new HoldingRevalueReducer(),
+    new HoldingSetBasisReducer(),
+    new HoldingSplitReducer(),
+    new HoldingRetitleReducer(),
+  ];
 }
 
 /**

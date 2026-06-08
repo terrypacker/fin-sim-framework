@@ -27,6 +27,8 @@ import { StateSchemaRegistry } from '../finance/services/state-schema-registry.j
 import { RealPropertyService } from '../finance/services/real-property-service.js';
 import { CollectibleService } from '../finance/services/collectible-service.js';
 import { TypeRegistry } from '../simulation-framework/type-registry.js';
+import { registerHoldingActionTypes } from '../finance/holdings/holding-actions.js';
+import { HOLDING_REDUCER_CLASSES } from '../finance/holdings/holding-reducers.js';
 
 /**
  * Central singleton registry for all application services, the shared
@@ -50,6 +52,7 @@ export class ServiceRegistry {
     this.bus.serviceRegistry = this;
     this.graph              = new Graph();
     this.typeRegistry       = new TypeRegistry();
+    _registerFrameworkSubstrate(this.typeRegistry);
     this.graphQueryApi      = new GraphQueryApi(this.graph);
     this.accountService         = new AccountService(this.graph, this.graphQueryApi, this.bus);
     this.actionService          = new ActionService(this.graph, this.graphQueryApi, this.bus);
@@ -107,6 +110,7 @@ export class ServiceRegistry {
     this.graph.clearLayer('execution');
     this.simulationRegistry.clear();
     this.typeRegistry = new TypeRegistry();
+    _registerFrameworkSubstrate(this.typeRegistry);
     this.simulationContext.typeRegistry = this.typeRegistry;
     this.bus.publish({ type: 'execution:reset' });
   }
@@ -138,5 +142,16 @@ export class ServiceRegistry {
    */
   static resetAll() {
     ServiceRegistry._instance = null;
+  }
+}
+
+/**
+ * Register framework-owned substrate (action types + reducer classes) that
+ * is not toolset-specific. Currently: design 25 holdings substrate.
+ */
+function _registerFrameworkSubstrate(typeRegistry) {
+  registerHoldingActionTypes(typeRegistry);
+  for (const ctor of Object.values(HOLDING_REDUCER_CLASSES)) {
+    typeRegistry.registerClass(ctor);
   }
 }
