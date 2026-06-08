@@ -23,6 +23,7 @@ import { DEFAULT_MC_VARIABLE_CONFIGS } from '../../src/finance/monte-carlo/intl-
 import { DISTRIBUTION_TYPES }        from '../../src/simulation-framework/distributions.js';
 import { INTL_RETIREMENT_DEFAULTS, IntlRetirementScenario }
                                      from '../../src/scenarios/intl-retirement-scenario.js';
+import { ServiceRegistry }           from '../../src/services/service-registry.js';
 
 // Short window: 2026-01-01 → 2028-01-01 (2 years — fast to run in tests)
 const SIM_START = new Date(Date.UTC(2026, 0, 1));
@@ -171,6 +172,35 @@ test('IntlRetirementMcRunner: no variable configs produces n identical runs', as
   // With no perturbation every run is identical
   const first = runs[0].finalNetWorthUsd;
   for (const r of runs) assert.strictEqual(r.finalNetWorthUsd, first);
+});
+
+// ─── Registry isolation ──────────────────────────────────────────────────────
+//
+// 4.1 (design/inconsistencies.md): MC must not mutate the singleton
+// ServiceRegistry. Before this fix, IntlRetirementMcRunner reset the singleton
+// and cleared its config layer per iteration, leaving the user's Dashboard /
+// Performance plugins disconnected from the live scenario.
+
+test('IntlRetirementMcRunner: does not mutate the singleton ServiceRegistry', async () => {
+  ServiceRegistry.resetAll();
+  const before = ServiceRegistry.getInstance();
+  const eventsBefore   = before.eventService.getAll().length;
+  const accountsBefore = before.accountService.getAll().length;
+  const configNodesBefore = before.graph.getNodes()
+    .filter(n => n.layer === 'config').length;
+
+  await makeRunner().run();
+
+  const after = ServiceRegistry.getInstance();
+  assert.strictEqual(after, before, 'singleton instance must not be replaced');
+  assert.strictEqual(after.eventService.getAll().length,   eventsBefore);
+  assert.strictEqual(after.accountService.getAll().length, accountsBefore);
+  assert.strictEqual(
+    after.graph.getNodes().filter(n => n.layer === 'config').length,
+    configNodesBefore,
+    'MC must not touch the singleton config-layer graph'
+  );
+  assert.strictEqual(after.simulationRegistry.getPrimary(), null);
 });
 
 // ─── Regression: template carrying functions/classes must not break clone ─────

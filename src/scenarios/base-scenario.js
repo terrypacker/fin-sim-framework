@@ -10,7 +10,6 @@
 
 import {SimGraphNode} from "../graph/sim-graph-node.js";
 import {Simulation} from "../simulation-framework/simulation.js";
-import {ServiceRegistry} from "../services/service-registry.js";
 
 /**
  * Base class for simulation scenarios.
@@ -164,7 +163,7 @@ export class BaseScenario extends SimGraphNode {
     }
 
     // Step 2+3 — apply node cascade to live config nodes
-    const { personService, accountService } = ServiceRegistry.getInstance();
+    const { personService, accountService } = this.context;
     for (const p of this.params) {
       const node = p.node;
       if (!node) continue;
@@ -209,7 +208,7 @@ export class BaseScenario extends SimGraphNode {
    *   current this.params values are used as-is.
    */
   rebuild(params) {
-    ServiceRegistry.reset();
+    this.context.services.reset();
     if (params) this.applyParams(params);
     this.buildSim();
   }
@@ -233,12 +232,12 @@ export class BaseScenario extends SimGraphNode {
     // Persist as a plain object so ScenarioTabPresenter can serialize it.
     this.initialState = typeof resolved?.toPlain === 'function' ? resolved.toPlain() : resolved;
 
-    const { simulationRegistry, simulationSync } = this.context;
+    const { simulationRegistry, simulationSync, bus, graph } = this.context;
     simulationRegistry.unregister('primary');
 
     const sim = new Simulation(this.simStart, {
-      bus:          ServiceRegistry.getInstance().bus,
-      graph:        ServiceRegistry.getInstance().graph,
+      bus,
+      graph,
       initialState: resolved,
     });
 

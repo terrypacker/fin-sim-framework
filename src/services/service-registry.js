@@ -80,8 +80,29 @@ export class ServiceRegistry {
       actionService: this.actionService,
       reducerService: this.reducerService,
       scenarioService: this.scenarioService,
-      scenarioRegistry: this.scenarioRegistry
+      scenarioRegistry: this.scenarioRegistry,
+      bus: this.bus,
+      graph: this.graph,
+      personService: this.personService,
+      accountService: this.accountService,
+      realPropertyService: this.realPropertyService,
+      collectibleService: this.collectibleService,
+      stateRegistry: this.stateRegistry,
+      schemaRegistry: this.schemaRegistry,
+      services: this,
     };
+  }
+
+  /**
+   * Instance-level rebuild reset: clear the execution layer + SimulationRegistry
+   * on THIS registry. Scenario and config nodes survive. Use this when the
+   * caller holds a non-singleton ServiceRegistry (Monte Carlo / optimization
+   * isolated registries, branching, parallel sims).
+   */
+  reset() {
+    this.graph.clearLayer('execution');
+    this.simulationRegistry.clear();
+    this.bus.publish({ type: 'execution:reset' });
   }
 
   /**
@@ -102,11 +123,7 @@ export class ServiceRegistry {
    * layer:'config' when they also need a fresh config graph.
    */
   static reset() {
-    const inst = ServiceRegistry._instance;
-    if (!inst) return;
-    inst.graph.clearLayer('execution');
-    inst.simulationRegistry.clear();
-    inst.bus.publish({ type: 'execution:reset' });
+    ServiceRegistry._instance?.reset();
   }
 
   /**

@@ -130,8 +130,9 @@ export class IntlRetirementOptimizer {
   }
 
   _runOne(params, cfgTemplate) {
-    ServiceRegistry.reset();
-    const registry = ServiceRegistry.getInstance();
+    // Isolated per-candidate registry: the user's active scenario + UI stay
+    // untouched while the grid search runs.
+    const registry = new ServiceRegistry();
     const scenario = new IntlRetirementScenario({
       context: registry.simulationContext,
       params,
