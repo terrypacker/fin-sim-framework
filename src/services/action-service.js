@@ -45,7 +45,12 @@ export class ActionService extends BaseService {
   }
 
   // ─── Query API ───────────────────────────────────────────────────────────────
-  //TODO Need a type index for this
+
+  /**
+   * Get Actions by Type
+   * @param type
+   * @return {*}
+   */
   getByType(type) {
     return this._query.getOneByKind('action', 'type', type);
   }

@@ -90,8 +90,7 @@ There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; se
 ### 2.8 `ScenarioStorage` API drift (Git #357)
 - `src/scenarios/scenario-storage.js` line 54: `//TODO Clean this up to be in the constructor`.
 
-### 2.9 Action service lacks a type index (Git #358)
-- `src/services/action-service.js` line 48: `//TODO Need a type index for this`.
+~~### 2.9 Action service lacks a type index (Git #358)~~
 
 ### 2.10 Many graph-renderer TODOs (Git #347 and #348)
 - `node-render-kit.js` line 13; GitIssue #347
