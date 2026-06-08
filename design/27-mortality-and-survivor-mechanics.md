@@ -102,7 +102,7 @@ Sketch:
 |---|---|
 | **25 Holdings** | None direct. Mortality acts on `state.people`, not on holdings. Sequencing only. |
 | **25a MC paths** | Per-person actuarial draws live at `people.primary.lifeExpectancy` etc.; consumes the path-walking substrate. |
-| **26 Spending** | Survivor multiplier + late-life-care factor compose with whichever spending strategies are active via additive `SPENDING_STRATEGY_APPLY` deltas. |
+| **26 Spending** | Survivor multiplier + late-life-care factor compose with whichever spending strategies are active via additive `SPENDING_STRATEGY_APPLY` deltas. **Dependency satisfied (2026-06-05):** design 26 was finalized to materialize the split as `state.expenses = { essential, discretionary }`, so the per-slice survivor multipliers (§10 Q2 Option B) are unblocked — no fallback to a scalar multiplier needed. |
 | **20 Residency** | When a spouse dies, the surviving spouse's residency is unchanged; the household's primary-residence determination falls back to the survivor. Reuses design 20's `state.people` mutation pattern. |
 | **17 Branching** | Branching off a pre-death save explores different MC death timings naturally — the lifespan param is part of the cfg. |
 | **Tax** | Filing-status change (married-joint → single) on widowhood is tax-significant. Mechanically handled by tax modules reading `state.deceased`; the rule policy is per-year-module work. |
