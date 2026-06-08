@@ -467,8 +467,12 @@ export class AccountService extends AssetService {
       const netFactor   = 1 - penaltyRate;
 
       if (account.type === ACCOUNT_TYPE.ROTH) {
-        // Phase 1 already drew contributions; only earningsBasis remains.
-        const earningsAvail = Math.min(account.earningsBasis ?? 0, account.balance);
+        // Phase 1 already drew contributions; any residual balance is earnings.
+        // Use the larger of tracked earningsBasis or implied earnings (balance minus
+        // remaining contributions) to handle accounts where earningsBasis was never
+        // explicitly initialised but the balance exceeds the contribution basis.
+        const impliedEarnings = Math.max(0, account.balance - (account.contributionBasis ?? 0));
+        const earningsAvail   = Math.min(Math.max(account.earningsBasis ?? 0, impliedEarnings), account.balance);
         if (earningsAvail <= 0) continue;
 
         // Gross up: to net `remaining` after penalty, we must withdraw remaining/netFactor.
@@ -479,7 +483,7 @@ export class AccountService extends AssetService {
 
         this.transaction(targetAccount, +net,   date);
         this.transaction(account,       -gross, date);
-        account.earningsBasis = (account.earningsBasis ?? 0) - gross;
+        account.earningsBasis = Math.max(0, (account.earningsBasis ?? 0) - gross);
         if (!drawnKeys.includes(key)) drawnKeys.push(key);
         pendingTaxActions.push({ type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount: gross, penaltyAmount: penalty, residency });
         remaining -= net;
