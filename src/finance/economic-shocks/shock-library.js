@@ -37,7 +37,8 @@ export const SHOCK_LIBRARY = Object.freeze({
       },
     },
     regime: {
-      returnAdjustment: { EQUITY_US: -0.03, EQUITY_AU: -0.025 },
+      returnAdjustment:   { EQUITY_US: -0.03, EQUITY_AU: -0.025 },
+      dividendAdjustment: { EQUITY_US: -0.40, EQUITY_AU: -0.35 },
     },
     recovery: { profile: 'V', durationMonths: 18 },
   },
@@ -75,6 +76,7 @@ export const SHOCK_LIBRARY = Object.freeze({
     regime: {
       returnAdjustment:    { EQUITY_US: -0.04, EQUITY_AU: -0.03 },
       inflationAdjustment: { US: 0.01 },
+      dividendAdjustment:  { EQUITY_US: -0.30, EQUITY_AU: -0.20 },
     },
     recovery: { profile: 'V', durationMonths: 6 },
   },
@@ -94,7 +96,8 @@ export const SHOCK_LIBRARY = Object.freeze({
       },
     },
     regime: {
-      returnAdjustment: { EQUITY_US: -0.02 },
+      returnAdjustment:   { EQUITY_US: -0.02 },
+      dividendAdjustment: { EQUITY_US: -0.10 },
     },
     recovery: { profile: 'U', durationMonths: 12 },
   },

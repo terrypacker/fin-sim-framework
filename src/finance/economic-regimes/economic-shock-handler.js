@@ -59,6 +59,7 @@ export class EconomicShockHandler extends HandlerEntry {
       inflationAdjustment:    shock.regime?.inflationAdjustment    ?? null,
       appreciationAdjustment: shock.regime?.appreciationAdjustment ?? null,
       fxAdjustment:           shock.regime?.fxAdjustment           ?? null,
+      dividendAdjustment:     shock.regime?.dividendAdjustment     ?? null,
     };
 
     const actions = [{ type: 'ADD_REGIME_APPLY', regime }];
