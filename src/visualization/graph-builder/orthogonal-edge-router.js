@@ -11,6 +11,45 @@
 import { BACKWARD_MARGIN, EDGE_SPACING, LANE_OFFSET } from './graph-metrics.js';
 
 /**
+ * Identify groups of forward edges that share the same target node.
+ * Only forward edges (source right anchor strictly left of target left anchor)
+ * are eligible; backward and same-column edges are excluded.
+ *
+ * Returns a Map from targetId → array of edge keys ("from->to") for targets
+ * that have 2 or more incoming forward edges.  Targets with fewer than 2 such
+ * edges are omitted — they render normally.
+ *
+ * @param {Array<{from:string, to:string}>} edges
+ * @param {Map<string,{x:number,y:number}>} positions  Node centre positions.
+ * @param {{ nodeWidth: number }} opts
+ * @returns {Map<string, string[]>}
+ */
+export function groupMergeTargets(edges, positions, { nodeWidth }) {
+  const byTarget = new Map();
+
+  for (const edge of edges) {
+    const src = positions.get(edge.from);
+    const tgt = positions.get(edge.to);
+    if (!src || !tgt) continue;
+
+    const sx = src.x + nodeWidth / 2;
+    const tx = tgt.x - nodeWidth / 2;
+    if (sx >= tx) continue;  // skip backward / same-column edges
+
+    const key = `${edge.from}->${edge.to}`;
+    if (!byTarget.has(edge.to)) byTarget.set(edge.to, []);
+    byTarget.get(edge.to).push(key);
+  }
+
+  // Keep only targets with 2+ incoming forward edges
+  for (const [to, keys] of byTarget) {
+    if (keys.length < 2) byTarget.delete(to);
+  }
+
+  return byTarget;
+}
+
+/**
  * Compute an orthogonal polyline connecting the right side of `source` to the
  * left side of `target`, using center-based node coordinates.
  *

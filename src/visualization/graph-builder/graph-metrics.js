@@ -23,6 +23,7 @@ export const BACKWARD_MARGIN  = 30;  // clearance past node edge when routing ba
 export const EDGE_SPACING     = 10;  // Y pixels between fan-out exit/entry anchors
 export const LANE_OFFSET      = 12;  // X pixels between lanes sharing the same midX column
 export const OBSTACLE_MARGIN  =  8;  // horizontal clearance added around node body for obstacle detection
+export const MERGE_OFFSET     = 40;  // length of the shared trunk segment before a merge target
 
 // ── Arrowhead ─────────────────────────────────────────────────────────────────
 export const ARROW_SIZE = 8;   // tip-to-base length
