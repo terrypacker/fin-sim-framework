@@ -785,8 +785,9 @@ export class Simulation {
 
       this.state = nextState;
 
+      let sd = null;
       if (!this.silent) {
-        const sd = useTracker ? MutationTracker.flush() : diffStates(prevState, this.state);
+        sd = useTracker ? MutationTracker.flush() : diffStates(prevState, this.state);
         if (reducerExecId) {
           this.bus.publish(new ExecutionBusMessage({
             phase:       EXECUTION_PHASES.END,
@@ -803,37 +804,40 @@ export class Simulation {
         if (this.graphRecorder && reducerNodeId) {
           this.graphRecorder.endNode(reducerNodeId, { stateDiff: sd });
         }
+      }
 
-        if (this.journal.enabled) {
-          this.journal.addEntry(new JournalEntry({
-            id:          crypto.randomUUID(),
-            date:        new Date(this.currentDate),
-            executionId: reducerExecId ?? null,
-            event: {
-              nodeId: sourceEvent?.id    ?? null,
-              type:   sourceEventType,
-              name:   sourceEvent?.name  ?? sourceEventType,
-              color:  sourceEvent?.color ?? null,
-            },
-            action: {
-              instanceId:   action._instanceId,
-              parentId:     action._parentInstanceId ?? null,
-              rootId:       action._rootInstanceId   ?? null,
-              siblingIndex: action.siblingIndex      ?? 0,
-              nodeId:       action._actionId         ?? null,
-              type:         action.type,
-              name:         action.name              ?? action.type,
-              data:         this._pickPayload(action),
-            },
-            reducer: {
-              nodeId: reducerWrapper.reducer?.id   ?? null,
-              name:   reducerWrapper.reducer?.name ?? reducerWrapper.reducer?.id ?? 'unknown',
-            },
-            stateDiff:          sd,
-            emittedInstanceIds: emitted.map(a => a._instanceId),
-            emittedTypes:       emitted.map(a => a.type),
-          }));
-        }
+      // Journal is recorded regardless of silent so that batch/MC-isolated runs
+      // (e.g. ScenarioCompareRunner) can still read journal entries. stateDiff is
+      // null in silent mode (state cloning is skipped for performance).
+      if (this.journal.enabled) {
+        this.journal.addEntry(new JournalEntry({
+          id:          crypto.randomUUID(),
+          date:        new Date(this.currentDate),
+          executionId: reducerExecId ?? null,
+          event: {
+            nodeId: sourceEvent?.id    ?? null,
+            type:   sourceEventType,
+            name:   sourceEvent?.name  ?? sourceEventType,
+            color:  sourceEvent?.color ?? null,
+          },
+          action: {
+            instanceId:   action._instanceId,
+            parentId:     action._parentInstanceId ?? null,
+            rootId:       action._rootInstanceId   ?? null,
+            siblingIndex: action.siblingIndex      ?? 0,
+            nodeId:       action._actionId         ?? null,
+            type:         action.type,
+            name:         action.name              ?? action.type,
+            data:         this._pickPayload(action),
+          },
+          reducer: {
+            nodeId: reducerWrapper.reducer?.id   ?? null,
+            name:   reducerWrapper.reducer?.name ?? reducerWrapper.reducer?.id ?? 'unknown',
+          },
+          stateDiff:          sd,
+          emittedInstanceIds: emitted.map(a => a._instanceId),
+          emittedTypes:       emitted.map(a => a.type),
+        }));
       }
     }
   }

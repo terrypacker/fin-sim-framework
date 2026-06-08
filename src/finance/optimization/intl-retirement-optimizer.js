@@ -150,6 +150,7 @@ export class IntlRetirementOptimizer {
     new ScenarioLoader().load(cfg, registry);
 
     scenario.sim.silent = true;
+    scenario.sim.journal.enabled = false;
     scenario.sim.stepTo(params.endDate);
     const state = scenario.sim.state;
     return {

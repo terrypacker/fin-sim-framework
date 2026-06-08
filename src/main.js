@@ -14,6 +14,8 @@ import '../assets/css/plugins/modals.css';
 import '../assets/css/plugins/journal-report.css';
 import '../assets/css/plugins/optimization.css';
 import '../assets/css/plugins/monte-carlo.css';
+import '../assets/css/plugins/scenario-compare.css';
+import '../assets/css/plugins/decision-graph.css';
 
 import { SimulationWorkbench } from './apps/simulation-workbench.js';
 import { ServiceRegistry }      from './services/service-registry.js';

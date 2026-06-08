@@ -23,14 +23,18 @@ import { ExecHistoryPlugin }     from './exec-history-plugin.js';
 import { LineagePlugin }         from './lineage-plugin.js';
 import { PerfPlugin }            from './perf-plugin.js';
 import { ActionDetailPlugin }    from './action-detail-plugin.js';
-import { JournalReportPlugin }   from './journal-report-plugin.js';
+import { JournalReportPlugin }     from './journal-report-plugin.js';
+import { ScenarioComparePlugin }   from './scenario-compare-plugin.js';
+import { DgConfigPlugin }          from './dg-config-plugin.js';
+import { DgResultsPlugin }         from './dg-results-plugin.js';
 
 export { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin,
          TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin,
          McConfigPlugin, McResultsPlugin, McRunsPlugin,
          OptConfigPlugin, OptResultsPlugin, OptRunsPlugin,
          ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin,
-         JournalReportPlugin };
+         JournalReportPlugin, ScenarioComparePlugin,
+         DgConfigPlugin, DgResultsPlugin };
 
 /** All finance plugin descriptors — pass directly to WorkbenchShell `plugins` option. */
 export const FINANCE_PLUGINS = [
@@ -50,7 +54,10 @@ export const FINANCE_PLUGINS = [
   { id: 'exec-history',   title: 'Node History',    component: ExecHistoryPlugin  },
   { id: 'lineage',        title: 'Lineage',         component: LineagePlugin      },
   { id: 'action-detail',  title: 'Action Detail',   component: ActionDetailPlugin },
-  { id: 'journal-report', title: 'Journal Report', component: JournalReportPlugin },
+  { id: 'journal-report',    title: 'Journal Report',    component: JournalReportPlugin  },
+  { id: 'scenario-compare',  title: 'Scenario Compare',  component: ScenarioComparePlugin },
+  { id: 'dg-config',   title: 'Decision Graph', component: DgConfigPlugin    },
+  { id: 'dg-results',  title: 'DG Results',    component: DgResultsPlugin   },
   { id: 'dashboard',    title: 'Dashboard',     component: DashboardPlugin   },
   { id: 'perf',         title: 'Performance',   component: PerfPlugin        },
 ];
@@ -59,11 +66,11 @@ export const FINANCE_PLUGINS = [
 export const FINANCE_DEFAULT_LAYOUT = {
   sizes: [1, 2, 1],
   left: {
-    tabs: ['scenario', 'mc-config', 'opt-config', 'config-list', 'inspector'],
+    tabs: ['scenario', 'mc-config', 'opt-config', 'dg-config', 'config-list', 'inspector'],
     active: 'scenario',
   },
   center: {
-    tabs: ['config-graph', 'timeline', 'chart', 'mc-results', 'opt-results'],
+    tabs: ['config-graph', 'timeline', 'chart', 'mc-results', 'opt-results', 'dg-results'],
     active: 'config-graph',
   },
   right: {
@@ -71,7 +78,7 @@ export const FINANCE_DEFAULT_LAYOUT = {
     active: 'state-panel',
   },
   bottom: {
-    tabs: ['journal-report', 'dashboard', 'perf'],
+    tabs: ['journal-report', 'scenario-compare', 'dashboard', 'perf'],
     active: 'journal-report',
   },
   bottomSize:       110,

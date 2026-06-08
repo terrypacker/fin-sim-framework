@@ -29,6 +29,9 @@ import { CollectibleService } from '../finance/services/collectible-service.js';
 import { TypeRegistry } from '../simulation-framework/type-registry.js';
 import { registerHoldingActionTypes } from '../finance/holdings/holding-actions.js';
 import { HOLDING_REDUCER_CLASSES } from '../finance/holdings/holding-reducers.js';
+import { DecisionGraphRegistry }       from '../finance/decision-graph/decision-graph-registry.js';
+import { DecisionGraphStorage }        from '../finance/decision-graph/decision-graph-storage.js';
+import { DecisionGraphResultStorage }  from '../finance/decision-graph/decision-graph-result-storage.js';
 
 /**
  * Central singleton registry for all application services, the shared
@@ -52,7 +55,6 @@ export class ServiceRegistry {
     this.bus.serviceRegistry = this;
     this.graph              = new Graph();
     this.typeRegistry       = new TypeRegistry();
-    _registerFrameworkSubstrate(this.typeRegistry);
     this.graphQueryApi      = new GraphQueryApi(this.graph);
     this.accountService         = new AccountService(this.graph, this.graphQueryApi, this.bus);
     this.actionService          = new ActionService(this.graph, this.graphQueryApi, this.bus);
@@ -110,7 +112,6 @@ export class ServiceRegistry {
     this.graph.clearLayer('execution');
     this.simulationRegistry.clear();
     this.typeRegistry = new TypeRegistry();
-    _registerFrameworkSubstrate(this.typeRegistry);
     this.simulationContext.typeRegistry = this.typeRegistry;
     this.bus.publish({ type: 'execution:reset' });
   }
@@ -142,16 +143,5 @@ export class ServiceRegistry {
    */
   static resetAll() {
     ServiceRegistry._instance = null;
-  }
-}
-
-/**
- * Register framework-owned substrate (action types + reducer classes) that
- * is not toolset-specific. Currently: design 25 holdings substrate.
- */
-function _registerFrameworkSubstrate(typeRegistry) {
-  registerHoldingActionTypes(typeRegistry);
-  for (const ctor of Object.values(HOLDING_REDUCER_CLASSES)) {
-    typeRegistry.registerClass(ctor);
   }
 }

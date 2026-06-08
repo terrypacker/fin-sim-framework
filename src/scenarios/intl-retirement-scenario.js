@@ -103,6 +103,9 @@ export const INTL_RETIREMENT_DEFAULTS = {
   rothConversionOwner:      'primary', // 'primary' | 'spouse' | 'both'
   rothConversionMonth:      12,        // month of policy evaluation (1–12)
   rothConversionDay:        1,         // day of policy evaluation
+
+  // US Retirement — Social Security
+  primarySsClaimAge: 67,  // FRA; varying has no effect until TODO #292 is resolved
 };
 
 /**
@@ -269,6 +272,14 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     type: 'Number', group: 'Spouse Account Rates', mc: true, opt: false,
     defaultValue: INTL_RETIREMENT_DEFAULTS.spouseSuperGrowthRate,
     description: 'Annual growth rate for spouse superannuation',
+  },
+
+  // ── US Retirement ─────────────────────────────────────────────────────────
+  {
+    key: 'primarySsClaimAge', label: 'Primary SS Claim Age',
+    type: 'Number', group: 'US Retirement', mc: false, opt: true,
+    defaultValue: INTL_RETIREMENT_DEFAULTS.primarySsClaimAge,
+    description: 'Age at which primary claims Social Security (62–70). Note: only age 67 (FRA) is modelled until TODO #292 is resolved.',
   },
 
   // ── Min Balances ───────────────────────────────────────────────────────────
