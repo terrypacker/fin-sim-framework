@@ -15,9 +15,14 @@ import '../assets/css/plugins/optimization.css';
 import '../assets/css/plugins/monte-carlo.css';
 
 import { SimulationWorkbench } from './apps/simulation-workbench.js';
+import { ServiceRegistry }      from './services/service-registry.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   const app = new SimulationWorkbench();
   app.initView();
   app.initScenario();
+
+  // Expose debug handles for console benchmarking.
+  window.ServiceRegistry = ServiceRegistry;
+  window.__app = app;
 });

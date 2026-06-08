@@ -47,7 +47,7 @@ import {Graph} from "../../src/graph/graph.js";
 //   index 1 → item2  value=10400 costBasis=400   gain=10000
 //   index 0 → item1  value=1200  costBasis=200   gain=1000
 //
-function buildFinancialSim({ seed = 1, assets, graph } = {}) {
+function buildFinancialSim({ seed = 1, assets, graph, bus } = {}) {
   const accountService = new AccountService(new Graph(), new EventBus());
 
   const defaultAssets = [
@@ -57,7 +57,7 @@ function buildFinancialSim({ seed = 1, assets, graph } = {}) {
     { name: 'item4', value: 9200,  costBasis: 1200 },
   ];
 
-  const sim = new Simulation(new Date(2025, 0, 1), { seed, graph, initialState: new SimulationState({
+  const sim = new Simulation(new Date(2025, 0, 1), { seed, graph, bus, initialState: new SimulationState({
     realizedGains: 0,
     savingsAccount: new Account(0),
     assets: assets ?? defaultAssets,
@@ -132,7 +132,7 @@ function buildFinancialSim({ seed = 1, assets, graph } = {}) {
 
 test('Simulate annual event for 2 years', () => {
   const startYear = 2025;
-  const sim = new Simulation(new Date(startYear, 0, 1));
+  const sim = new Simulation(new Date(startYear, 0, 1), { bus: new EventBus({ keepHistory: true }) });
   sim.scheduleAnnually({
     startDate: new Date(2025, 0, 1),
     type: 'ANNUAL_EVENT',
@@ -183,7 +183,7 @@ test('Simulate annual event for 2 years', () => {
 
 test('Simulate annual event for 2 years wildcard subscriber', () => {
   const startYear = 2025;
-  const sim = new Simulation(new Date(startYear, 0, 1));
+  const sim = new Simulation(new Date(startYear, 0, 1), { bus: new EventBus({ keepHistory: true }) });
   sim.scheduleAnnually({
     startDate: new Date(2025, 0, 1),
     type: 'ANNUAL_EVENT',
@@ -287,7 +287,7 @@ test('Simulate annual event for 2 years specific subscriber', () => {
 
 test('Simulate annual event for two years with handler', () => {
   const startYear = 2025;
-  const sim = new Simulation(new Date(startYear, 0, 1));
+  const sim = new Simulation(new Date(startYear, 0, 1), { bus: new EventBus({ keepHistory: true }) });
   sim.scheduleAnnually({
     startDate: new Date(2025, 0, 1),
     type: 'ANNUAL_EVENT',
@@ -585,7 +585,7 @@ test('applyActions throws when action chain exceeds MAX_ACTIONS limit', () => {
 // ─── Simulation class: snapshots & rewind ─────────────────────────────────────
 
 test('Snapshot is captured after each handled event', () => {
-  const sim = new Simulation(new Date(2025, 0, 1));
+  const sim = new Simulation(new Date(2025, 0, 1), { opts: { snapshotInterval: 1 } });
   sim.scheduleAnnually({ startDate: new Date(2025, 0, 1), type: 'TICK' });
   sim.register('TICK', () => []);
 
@@ -599,7 +599,7 @@ test('Snapshot is captured after each handled event', () => {
 });
 
 test('Snapshot captures state after the event is processed', () => {
-  const sim = new Simulation(new Date(2025, 0, 1), { initialState: { counter: 0 } });
+  const sim = new Simulation(new Date(2025, 0, 1), { initialState: { counter: 0 }, opts: { snapshotInterval: 1 } });
   sim.reducers.register('INCREMENT', (state) => ({ ...state, counter: state.counter + 1 }));
   sim.register('TICK', () => [{ type: 'INCREMENT' }]);
   sim.scheduleAnnually({ startDate: new Date(2025, 0, 1), type: 'TICK' });
@@ -613,7 +613,7 @@ test('Snapshot captures state after the event is processed', () => {
 });
 
 test('rewindToDate restores state to an earlier snapshot', () => {
-  const sim = new Simulation(new Date(2025, 0, 1), { initialState: { counter: 0 } });
+  const sim = new Simulation(new Date(2025, 0, 1), { initialState: { counter: 0 }, opts: { snapshotInterval: 1 } });
   sim.reducers.register('INCREMENT', (state) => ({ ...state, counter: state.counter + 1 }));
   sim.register('TICK', () => [{ type: 'INCREMENT' }]);
   sim.scheduleAnnually({ startDate: new Date(2025, 0, 1), type: 'TICK' });
@@ -626,7 +626,7 @@ test('rewindToDate restores state to an earlier snapshot', () => {
 });
 
 test('branch creates an independent deep clone of current snapshot state', () => {
-  const sim = new Simulation(new Date(2025, 0, 1), { initialState: { counter: 0 } });
+  const sim = new Simulation(new Date(2025, 0, 1), { initialState: { counter: 0 }, opts: { snapshotInterval: 1 } });
   sim.reducers.register('INCREMENT', (state) => ({ ...state, counter: state.counter + 1 }));
   sim.register('TICK', () => [{ type: 'INCREMENT' }]);
   sim.scheduleAnnually({ startDate: new Date(2025, 0, 1), type: 'TICK' });
@@ -810,7 +810,8 @@ test('ExecutionGraph: reducer end nodes carry stateDiff metadata', () => {
 // ─── Simulation class: EventBus history ──────────────────────────────────────
 
 test('EventBus history contains every event published during stepTo', () => {
-  const sim = new Simulation(new Date(2025, 0, 1));
+  const bus = new EventBus({ keepHistory: true });
+  const sim = new Simulation(new Date(2025, 0, 1), { bus });
   sim.scheduleAnnually({ startDate: new Date(2025, 0, 1), type: 'ANNUAL_EVENT' });
   sim.register('ANNUAL_EVENT', () => []);
 
@@ -821,7 +822,8 @@ test('EventBus history contains every event published during stepTo', () => {
 });
 
 test('EventBus history includes DEBUG_ACTION entries when reducers run', () => {
-  const { sim } = buildFinancialSim({ seed: 1 });
+  const bus = new EventBus({ keepHistory: true });
+  const { sim } = buildFinancialSim({ seed: 1, bus });
   sim.scheduleQuarterly({ startDate: new Date(2025, 0, 1), type: 'SELL_ASSET' });
   sim.stepTo(new Date(2025, 0, 1));
 

@@ -113,7 +113,7 @@ test('EventBus: multiple wildcard subscribers all fire', () => {
 // ─── History ──────────────────────────────────────────────────────────────────
 
 test('EventBus: getHistory returns all published events in order', () => {
-  const bus = new EventBus();
+  const bus = new EventBus({ keepHistory: true });
 
   bus.publish({ type: 'A', payload: 1 });
   bus.publish({ type: 'B', payload: 2 });
@@ -132,7 +132,7 @@ test('EventBus: getHistory starts empty on a new bus', () => {
 });
 
 test('EventBus: event is added to history even when no subscribers exist', () => {
-  const bus = new EventBus();
+  const bus = new EventBus({ keepHistory: true });
   bus.publish({ type: 'ORPHAN', payload: {} });
 
   assert.strictEqual(bus.getHistory().length, 1);
@@ -140,7 +140,7 @@ test('EventBus: event is added to history even when no subscribers exist', () =>
 });
 
 test('EventBus: history entry is the same object reference passed to publish', () => {
-  const bus   = new EventBus();
+  const bus   = new EventBus({ keepHistory: true });
   const event = { type: 'TICK', payload: { x: 1 } };
 
   bus.publish(event);

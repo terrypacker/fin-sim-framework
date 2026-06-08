@@ -177,6 +177,7 @@ import { diffStates } from './simulation-framework/state-utils.js';
 import { InMemoryStorage } from './storage/in-memory-storage.js';
 import { AccountEditor } from './visualization/accounts/account-editor.js';
 import { AccountsController } from './visualization/accounts/accounts-controller.js';
+import { AppDisplaySettings } from './visualization/app-display-settings.js';
 import { CollectibleEditor } from './visualization/assets/collectible-editor.js';
 import { RealPropertyEditor } from './visualization/assets/real-property-editor.js';
 import { ChartController } from './visualization/chart/chart-controller.js';
@@ -235,6 +236,7 @@ import { DashCardsComponent } from './visualization/simulation/dash-cards-compon
 import { PlaybackProgressComponent } from './visualization/simulation/playback-progress-component.js';
 import { SimulationAnimator } from './visualization/simulation/simulation-animator.js';
 import { StatePanelView } from './visualization/simulation/state-panel-view.js';
+import { readThemeColor, CHART_PALETTE } from './visualization/theme.js';
 import { TimeControls } from './visualization/time-controls.js';
 import { TaxDocumentModal } from './visualization/timeline/tax-document-modal.js';
 import { TimelineController } from './visualization/timeline/timeline-controller.js';
@@ -642,6 +644,7 @@ export const Services = {
 export const Visualization = {
   AccountEditor,
   AccountsController,
+  AppDisplaySettings,
   CollectibleEditor,
   RealPropertyEditor,
   ChartController,
@@ -722,6 +725,8 @@ export const Visualization = {
   PlaybackProgressComponent,
   SimulationAnimator,
   StatePanelView,
+  readThemeColor,
+  CHART_PALETTE,
   TimeControls,
   TaxDocumentModal,
   TimelineController,

@@ -11,6 +11,18 @@
 // ── Diff ──────────────────────────────────────────────────────────────────
 
 /**
+ * Shallow equality for leaf values (primitives, null, arrays of primitives).
+ * Avoids JSON.stringify for the common case.
+ */
+function _leafEqual(b, a) {
+  if (b === a) return true;
+  if (!Array.isArray(b) || !Array.isArray(a)) return false;
+  if (b.length !== a.length) return false;
+  for (let i = 0; i < b.length; i++) if (b[i] !== a[i]) return false;
+  return true;
+}
+
+/**
  * Compute the difference between two state snapshots.
  * Returns an array of { field, before, after, delta } records.
  */
@@ -31,7 +43,7 @@ export function diffStates(prev, next) {
       for (const key of new Set([...Object.keys(b), ...Object.keys(a)])) {
         walk(b[key], a[key], prefix ? `${prefix}.${key}` : key);
       }
-    } else if (JSON.stringify(b) !== JSON.stringify(a)) {
+    } else if (!_leafEqual(b, a)) {
       const delta = typeof a === 'number' && typeof b === 'number' ? a - b : null;
       changes.push({ field: prefix, before: b ?? null, after: a ?? null, delta });
     }

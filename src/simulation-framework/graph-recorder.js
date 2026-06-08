@@ -73,12 +73,10 @@ export class GraphRecorder {
    * Close an execution node, optionally attaching state diff data.
    * Removes the node from the open-node stack.
    */
-  endNode(uuid, { stateBefore = null, stateAfter = null, stateDiff = null } = {}) {
+  endNode(uuid, { stateDiff = null } = {}) {
     const node = this._eg.getNode(uuid);
     if (node) {
-      if (stateBefore !== null) node.stateBefore = stateBefore;
-      if (stateAfter  !== null) node.stateAfter  = stateAfter;
-      if (stateDiff   !== null) node.meta = { ...node.meta, stateDiff };
+      if (stateDiff !== null) node.meta = { ...node.meta, stateDiff };
     }
     const idx = this._nodeStack.lastIndexOf(uuid);
     if (idx !== -1) this._nodeStack.splice(idx, 1);

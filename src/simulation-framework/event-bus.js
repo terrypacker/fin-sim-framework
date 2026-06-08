@@ -18,9 +18,10 @@
  */
 
 export class EventBus {
-  constructor() {
+  constructor({ keepHistory = false } = {}) {
     this.listeners = new Map();
-    this.history = []; // optional (for replay/debug)
+    this._keepHistory = keepHistory;
+    this.history = []; // populated only when keepHistory is true
   }
 
   /**
@@ -59,7 +60,7 @@ export class EventBus {
   }
 
   publish(event) {
-    this.history.push(event);
+    if (this._keepHistory) this.history.push(event);
 
     // Snapshot before dispatch so subscribers added during delivery don't fire in this pass
     const entries = (this.listeners.get(event.type) || []).slice();

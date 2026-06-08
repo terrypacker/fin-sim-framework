@@ -24,8 +24,6 @@ export class SimGraphNode {
 
     // Runtime fields
     timestamp = null,
-    stateBefore = null,
-    stateAfter = null,
 
     // Free-form buckets
     data = {},
@@ -39,8 +37,6 @@ export class SimGraphNode {
     this.definitionId = definitionId;
 
     this.timestamp = timestamp;
-    this.stateBefore = stateBefore;
-    this.stateAfter = stateAfter;
 
     this.data = data;
     this.meta = meta;
