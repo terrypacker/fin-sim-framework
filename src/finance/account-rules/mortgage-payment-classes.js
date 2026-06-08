@@ -32,6 +32,8 @@ const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
  * @param {{ stateKey: string, monthlyMortgage: number }[]} opts.properties
  */
 export class UsMortgagePaymentHandler extends HandlerEntry {
+  static type        = 'UsMortgagePaymentHandler';
+  static category    = 'handler';
   static description = 'Dispatches REPLENISH_SAVINGS (if needed) then US_MORTGAGE_PAYMENT_APPLY for each US property with a remaining mortgage balance; payment capped to remaining balance so the last payment never overpays.';
   static eventType   = 'US_MORTGAGE_PAYMENT';
 
@@ -39,6 +41,12 @@ export class UsMortgagePaymentHandler extends HandlerEntry {
     super(null, 'US Mortgage Payment');
     this.properties = properties;
     this.generatedActionTypes = ['REPLENISH_SAVINGS', 'US_MORTGAGE_PAYMENT_APPLY', 'RECORD_BALANCE'];
+  }
+
+  static fromJSON(d, _services) {
+    const h = new this({ properties: d.properties ?? [] });
+    h.id = d.id;
+    return h;
   }
 
   call({ data, state }) {
@@ -78,6 +86,8 @@ export class UsMortgagePaymentHandler extends HandlerEntry {
  * @param {import('../../finance/services/account-service.js').AccountService} opts.accountService
  */
 export class UsMortgagePaymentApplyReducer extends Reducer {
+  static type        = 'UsMortgagePaymentApplyReducer';
+  static category    = 'reducer';
   static description = 'Debits the US cash pool (capped to available balance) and decrements mortgageBalance by the amount actually paid.';
   static actionType  = 'US_MORTGAGE_PAYMENT_APPLY';
 
@@ -86,6 +96,12 @@ export class UsMortgagePaymentApplyReducer extends Reducer {
     this.accountService = accountService;
     this.reducedActionTypes   = ['US_MORTGAGE_PAYMENT_APPLY'];
     this.generatedActionTypes = [];
+  }
+
+  static fromJSON(d, services) {
+    const r = new this({ accountService: services?.accountService });
+    r.id = d.id;
+    return r;
   }
 
   reduce(state, action) {
@@ -116,6 +132,8 @@ export class UsMortgagePaymentApplyReducer extends Reducer {
  * @param {{ stateKey: string, monthlyMortgage: number }[]} opts.properties
  */
 export class AuMortgagePaymentHandler extends HandlerEntry {
+  static type        = 'AuMortgagePaymentHandler';
+  static category    = 'handler';
   static description = 'Dispatches REPLENISH_SAVINGS (if needed) then AU_MORTGAGE_PAYMENT_APPLY for each AU property with a remaining mortgage balance; payment capped to remaining balance so the last payment never overpays.';
   static eventType   = 'AU_MORTGAGE_PAYMENT';
 
@@ -123,6 +141,12 @@ export class AuMortgagePaymentHandler extends HandlerEntry {
     super(null, 'AU Mortgage Payment');
     this.properties = properties;
     this.generatedActionTypes = ['REPLENISH_SAVINGS', 'AU_MORTGAGE_PAYMENT_APPLY', 'RECORD_BALANCE'];
+  }
+
+  static fromJSON(d, _services) {
+    const h = new this({ properties: d.properties ?? [] });
+    h.id = d.id;
+    return h;
   }
 
   call({ data, state }) {
@@ -162,6 +186,8 @@ export class AuMortgagePaymentHandler extends HandlerEntry {
  * @param {import('../../finance/services/account-service.js').AccountService} opts.accountService
  */
 export class AuMortgagePaymentApplyReducer extends Reducer {
+  static type        = 'AuMortgagePaymentApplyReducer';
+  static category    = 'reducer';
   static description = 'Debits the AU cash pool (capped to available balance) and decrements mortgageBalance by the amount actually paid.';
   static actionType  = 'AU_MORTGAGE_PAYMENT_APPLY';
 
@@ -170,6 +196,12 @@ export class AuMortgagePaymentApplyReducer extends Reducer {
     this.accountService = accountService;
     this.reducedActionTypes   = ['AU_MORTGAGE_PAYMENT_APPLY'];
     this.generatedActionTypes = [];
+  }
+
+  static fromJSON(d, services) {
+    const r = new this({ accountService: services?.accountService });
+    r.id = d.id;
+    return r;
   }
 
   reduce(state, action) {

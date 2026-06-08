@@ -18,7 +18,8 @@ import { TaxDocumentRegistry } from './tax/tax-document-registry.js';
  * entry.action.type and delegates to reporter.generate(entry).
  *
  * Built-in registrations:
- *   TAX_SETTLE_APPLY → TaxDocumentRegistry
+ *   US_TAX_SETTLE_APPLY → TaxDocumentRegistry
+ *   AU_TAX_SETTLE_APPLY → TaxDocumentRegistry
  *
  * Additional reporters can be registered via register() for future
  * event types (rebalancing summaries, withdrawal reports, etc.).
@@ -27,13 +28,15 @@ export class JournalReportingService {
   constructor() {
     /** @type {Map<string, { generate(entry): object|null }>} */
     this._reporters = new Map();
-    this.register('TAX_SETTLE_APPLY', new TaxDocumentRegistry());
+    const taxDocs = new TaxDocumentRegistry();
+    this.register('US_TAX_SETTLE_APPLY', taxDocs);
+    this.register('AU_TAX_SETTLE_APPLY', taxDocs);
   }
 
   /**
    * Register a reporter for a specific action type.
    *
-   * @param {string} actionType  e.g. 'TAX_SETTLE_APPLY'
+   * @param {string} actionType  e.g. 'US_TAX_SETTLE_APPLY'
    * @param {{ generate(entry): object|null }} reporter
    */
   register(actionType, reporter) {

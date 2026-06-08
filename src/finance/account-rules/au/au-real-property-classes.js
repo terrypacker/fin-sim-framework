@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
+import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 
@@ -31,7 +31,8 @@ const resolveDestinationKey = (state, saleDestinationAccount) => {
  * mortgage payoff, compute capital gain (unaffected by mortgage), and chain
  * AU_HOUSE_SALE_TAX.
  */
-export class AuHouseSaleApplyReducer extends Reducer {
+export class AuHouseSaleApplyReducer extends AccountServiceReducer {
+  static type        = 'AuHouseSaleApplyReducer';
   static description = 'Credits the destination account with net proceeds (salePrice − mortgage), zeroes mortgageBalance, and chains AU_HOUSE_SALE_TAX with the capital gain.';
   static actionType  = 'AU_HOUSE_SALE_APPLY';
 
@@ -67,6 +68,7 @@ export class AuHouseSaleApplyReducer extends Reducer {
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
 export class AuHouseSaleHandler extends HandlerEntry {
+  static type        = 'AuHouseSaleHandler';
   static description = 'Dispatches AU_HOUSE_SALE_APPLY with sale price, cost basis, current mortgage balance, and resolved destination account.';
   static eventType   = 'AU_HOUSE_SALE';
 

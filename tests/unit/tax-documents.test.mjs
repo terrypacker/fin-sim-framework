@@ -66,7 +66,7 @@ function auNrDetail(overrides = {}) {
 function makeEntry(cc, taxDetail, dateMs = Date.UTC(2026, 0, 1)) {
   return {
     date:   new Date(dateMs),
-    action: { type: 'TAX_SETTLE_APPLY', data: { cc, taxDetail } },
+    action: { type: `${cc}_TAX_SETTLE_APPLY`, data: { taxDetail } },
   };
 }
 
@@ -228,7 +228,7 @@ test('TaxDocumentRegistry: generates AU document for TAX_SETTLE_APPLY entry', ()
 
 test('TaxDocumentRegistry: returns null when taxDetail is absent', () => {
   const registry = new TaxDocumentRegistry();
-  const entry    = { date: new Date(), action: { type: 'TAX_SETTLE_APPLY', data: { cc: 'US' } } };
+  const entry    = { date: new Date(), action: { type: 'US_TAX_SETTLE_APPLY', data: {} } };
   assert.strictEqual(registry.generate(entry), null);
 });
 
@@ -257,9 +257,8 @@ test('TaxDocumentRegistry: returns array of documents for per-person AU settleme
   const entry = {
     date:   new Date(Date.UTC(2026, 0, 1)),
     action: {
-      type: 'TAX_SETTLE_APPLY',
+      type: 'AU_TAX_SETTLE_APPLY',
       data: {
-        cc:   'AU',
         taxDetail: null,
         personTaxDetails: [
           { personKey: 'primary', personName: 'Alice', taxDetail: aliceDetail },

@@ -11,6 +11,7 @@
 import {
   AuSeIncomeApplyReducer, AuSeIncomeHandler,
 } from '../../finance/account-rules/au/au-income-classes.js';
+import { ValueType } from '../../simulation-framework/type-registry.js';
 
 /**
  * AU_INCOME toolset — AU income event mechanics (self-employment income).
@@ -22,6 +23,15 @@ export const AU_INCOME = {
   id: 'AU_INCOME',
   capabilities: ['au-income'],
   dependencies: ['AU_TAX'],
+
+  types: {
+    handlers: [AuSeIncomeHandler],
+    reducers: [AuSeIncomeApplyReducer],
+    actions: [
+      { type: 'SE_INCOME_AU_APPLY', fields: { amount: ValueType.currency('AUD') } },
+      { type: 'AU_SE_INCOME_TAX',   fields: { amount: ValueType.currency('AUD'), isAuResident: ValueType.boolean(), personKey: ValueType.text() } },
+    ],
+  },
 
   paramSchema(context) { return []; },
   state(context) { return {}; },

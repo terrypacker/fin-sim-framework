@@ -104,6 +104,15 @@ export class JournalDataSource {
   }
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function _ccFromActionType(type) {
+  if (!type) return null;
+  if (type.startsWith('US_')) return 'US';
+  if (type.startsWith('AU_')) return 'AU';
+  return null;
+}
+
 // ─── Projection ───────────────────────────────────────────────────────────────
 
 function _project(entry) {
@@ -128,7 +137,7 @@ function _project(entry) {
     executionId:  entry.executionId    ?? null,
 
     // ── Common action.data fields ─────────────────────────────────────────────
-    cc:           d.cc            ?? null,
+    cc:           d.cc            ?? _ccFromActionType(entry.action?.type) ?? null,
     amount:       d.amount        ?? null,
     proceeds:     d.proceeds      ?? null,
     costBasis:    d.costBasis     ?? null,

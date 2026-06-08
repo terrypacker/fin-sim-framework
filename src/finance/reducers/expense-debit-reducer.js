@@ -30,8 +30,8 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  */
 export class ExpenseDebitReducer extends Reducer {
   static description = 'Debits the residence-appropriate savings account (resolved from action.targetKey, then constructor fallback); capped to available balance.';
-
-  static actionType = 'EXPENSE_DEBIT';
+  static type        = 'ExpenseDebitReducer';
+  static actionType  = 'EXPENSE_DEBIT';
 
   constructor({ accountService, usAccountKey = 'usSavingsAccount', auAccountKey = 'auSavingsAccount' } = {}) {
     super('Expense Debit', PRIORITY.CASH_FLOW);
@@ -39,6 +39,16 @@ export class ExpenseDebitReducer extends Reducer {
     this.usAccountKey   = usAccountKey;
     this.auAccountKey   = auAccountKey;
     this.reducedActionTypes = ['EXPENSE_DEBIT'];
+  }
+
+  static fromJSON(d, { accountService }) {
+    const r = new this({ accountService, usAccountKey: d.usAccountKey ?? 'usSavingsAccount', auAccountKey: d.auAccountKey ?? 'auSavingsAccount' });
+    r.id = d.id;
+    return r;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), usAccountKey: this.usAccountKey, auAccountKey: this.auAccountKey };
   }
 
   reduce(state, action, date) {

@@ -14,6 +14,7 @@ import {
   SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler,
   SeIncomeUsHandler, BonusHandler, CompanySaleHandler,
 } from '../../finance/account-rules/us/us-income-classes.js';
+import { ValueType } from '../../simulation-framework/type-registry.js';
 
 /**
  * US_INCOME toolset — US income event mechanics (SS, wages, SE, bonus, company sale).
@@ -28,6 +29,25 @@ export const US_INCOME = {
   id: 'US_INCOME',
   capabilities: ['us-income'],
   dependencies: ['US_TAX'],
+
+  types: {
+    handlers: [SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler, SeIncomeUsHandler, BonusHandler, CompanySaleHandler],
+    reducers: [SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer, SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer],
+    actions: [
+      { type: 'SS_INCOME_APPLY',     fields: { amount: ValueType.currency('USD'), isAuResident: ValueType.boolean() } },
+      { type: 'SS_INCOME_TAX',       fields: { amount: ValueType.currency('USD'), isAuResident: ValueType.boolean() } },
+      { type: 'WAGES_INCOME_APPLY',  fields: { amount: ValueType.currency('USD'), isAuResident: ValueType.boolean(), personKey: ValueType.text() } },
+      { type: 'WAGES_INCOME_TAX',    fields: { amount: ValueType.currency('USD'), isAuResident: ValueType.boolean(), personKey: ValueType.text() } },
+      { type: 'WAGES_WITHHELD_APPLY', fields: { amount: ValueType.currency('USD') } },
+      { type: 'SE_INCOME_US_APPLY',  fields: { amount: ValueType.currency('USD'), isAuResident: ValueType.boolean() } },
+      { type: 'SE_INCOME_US_TAX',    fields: { amount: ValueType.currency('USD'), isAuResident: ValueType.boolean() } },
+      { type: 'BONUS_APPLY',         fields: { amount: ValueType.currency('USD'), isAuResident: ValueType.boolean() } },
+      { type: 'BONUS_TAX',           fields: { amount: ValueType.currency('USD'), isAuResident: ValueType.boolean() } },
+      { type: 'COMPANY_SALE_APPLY',  fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), isAuResident: ValueType.boolean() } },
+      { type: 'COMPANY_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'US',
+        fields: { gain: ValueType.number(), isAuResident: ValueType.boolean() } },
+    ],
+  },
 
   paramSchema(context) { return []; },
   state(context) { return {}; },

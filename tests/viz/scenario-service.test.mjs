@@ -400,7 +400,7 @@ test('newScenario: active config has correct content after compile', () => {
     'every handler should have __type and id');
   assert.ok(active.handlers.some(h => h.__type === 'MonthlyExpensesHandler'),
     'MonthlyExpensesHandler should be present');
-  assert.ok(active.handlers.some(h => h.__type === 'PeriodAdvanceHandler'),
+  assert.ok(active.handlers.some(h => h.__type === 'UsPeriodAdvanceHandler' || h.__type === 'AuPeriodAdvanceHandler'),
     'PeriodAdvanceHandler should be present');
   assert.ok(active.handlers.some(h => h.__type === 'MonthlyWagesHandler'),
     'MonthlyWagesHandler should be present');

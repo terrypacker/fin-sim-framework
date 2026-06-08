@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
+import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 
@@ -34,7 +34,8 @@ const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
  * EVT-41: Roth Rollover Contribution — debit US cash pool, credit rolloverContribBasis.
  * No tax (income tax was paid at the IRA rollover step, EVT-35).
  */
-export class RothRolloverContributionApplyReducer extends Reducer {
+export class RothRolloverContributionApplyReducer extends AccountServiceReducer {
+  static type        = 'RothRolloverContributionApplyReducer';
   static description = 'Debits the US cash pool and credits rothAccount.rolloverContribBasis; no tax effect.';
   static actionType  = 'ROTH_ROLLOVER_CONTRIBUTION_APPLY';
 
@@ -61,7 +62,8 @@ export class RothRolloverContributionApplyReducer extends Reducer {
  * EVT-42: Roth Rollover Earnings — stays in account, credits rolloverEarningsBasis.
  * No tax.
  */
-export class RothRolloverEarningsApplyReducer extends Reducer {
+export class RothRolloverEarningsApplyReducer extends AccountServiceReducer {
+  static type        = 'RothRolloverEarningsApplyReducer';
   static description = 'Adds earnings to rothAccount.rolloverEarningsBasis; no tax effect.';
   static actionType  = 'ROTH_ROLLOVER_EARNINGS_APPLY';
 
@@ -86,7 +88,8 @@ export class RothRolloverEarningsApplyReducer extends Reducer {
  * EVT-43: Roth Rollover Withdrawal – Contributions — credit US cash pool,
  * debit rolloverContribBasis.  No tax.
  */
-export class RothRolloverWithdrawalContribApplyReducer extends Reducer {
+export class RothRolloverWithdrawalContribApplyReducer extends AccountServiceReducer {
+  static type        = 'RothRolloverWithdrawalContribApplyReducer';
   static description = 'Credits the US cash pool and debits rothAccount.rolloverContribBasis; no tax effect.';
   static actionType  = 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY';
 
@@ -114,7 +117,8 @@ export class RothRolloverWithdrawalContribApplyReducer extends Reducer {
  * debit rolloverEarningsBasis.  No US tax; chains ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX
  * for optional AU ordinary income.
  */
-export class RothRolloverWithdrawalEarningsApplyReducer extends Reducer {
+export class RothRolloverWithdrawalEarningsApplyReducer extends AccountServiceReducer {
+  static type        = 'RothRolloverWithdrawalEarningsApplyReducer';
   static description = 'Credits the US cash pool and debits rothAccount.rolloverEarningsBasis; chains ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX.';
   static actionType  = 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_APPLY';
 
@@ -146,6 +150,7 @@ export class RothRolloverWithdrawalEarningsApplyReducer extends Reducer {
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 export class RothRolloverContributionHandler extends HandlerEntry {
+  static type        = 'RothRolloverContributionHandler';
   static description = 'Dispatches ROTH_ROLLOVER_CONTRIBUTION_APPLY.';
   static eventType   = 'ROTH_ROLLOVER_CONTRIBUTION';
 
@@ -164,6 +169,7 @@ export class RothRolloverContributionHandler extends HandlerEntry {
 }
 
 export class RothRolloverEarningsHandler extends HandlerEntry {
+  static type        = 'RothRolloverEarningsHandler';
   static description = 'Dispatches ROTH_ROLLOVER_EARNINGS_APPLY.';
   static eventType   = 'ROTH_ROLLOVER_EARNINGS';
 
@@ -182,6 +188,7 @@ export class RothRolloverEarningsHandler extends HandlerEntry {
 }
 
 export class RothRolloverWithdrawalContributionsHandler extends HandlerEntry {
+  static type        = 'RothRolloverWithdrawalContributionsHandler';
   static description = 'Dispatches ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY; no tax.';
   static eventType   = 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIBUTIONS';
 
@@ -200,6 +207,7 @@ export class RothRolloverWithdrawalContributionsHandler extends HandlerEntry {
 }
 
 export class RothRolloverWithdrawalEarningsHandler extends HandlerEntry {
+  static type        = 'RothRolloverWithdrawalEarningsHandler';
   static description = 'Dispatches ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_APPLY with AU residency flag; no US tax.';
   static eventType   = 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS';
 

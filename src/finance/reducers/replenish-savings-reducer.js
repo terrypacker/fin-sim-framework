@@ -35,8 +35,8 @@ import { getUsEarlyWithdrawalRules } from '../account-rules/us/us-early-withdraw
  */
 export class ReplenishSavingsReducer extends Reducer {
   static description = 'Draws from domestic investment accounts (by drawdownPriority) to cover a savings deficit; includes early-withdrawal-eligible accounts (with penalty) before escalating to INTL_TRANSFER_APPLY.';
-
-  static actionType = 'REPLENISH_SAVINGS';
+  static type        = 'ReplenishSavingsReducer';
+  static actionType  = 'REPLENISH_SAVINGS';
 
   constructor({ accountService, earlyWithdrawalRulesFn = getUsEarlyWithdrawalRules } = {}) {
     super('Replenish Savings', PRIORITY.PRE_PROCESS);
@@ -44,6 +44,12 @@ export class ReplenishSavingsReducer extends Reducer {
     this.earlyWithdrawalRulesFn  = earlyWithdrawalRulesFn;
     this.reducedActionTypes      = ['REPLENISH_SAVINGS'];
     this.generatedActionTypes    = ['INTL_TRANSFER_APPLY', 'RECORD_BALANCE'];
+  }
+
+  static fromJSON(d, { accountService }) {
+    const r = new this({ accountService });
+    r.id = d.id;
+    return r;
   }
 
   reduce(state, action, date) {

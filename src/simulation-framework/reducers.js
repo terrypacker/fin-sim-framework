@@ -113,6 +113,8 @@ export const PRIORITY = {
  */
 export class Reducer extends SimGraphNode {
   static description = 'Abstract base class for all reducers; subclasses implement reduce(state, action, date) and register against an action type.';
+  static type        = 'Reducer';
+  static category    = 'reducer';
 
   constructor(name = 'anonymous', priority = PRIORITY.LOGGING) {
     super({id: null, kind: 'reducer', layer: 'config', name})
@@ -166,6 +168,34 @@ export class Reducer extends SimGraphNode {
     return this.constructor.getDescription();
   }
 
+  toJSON() {
+    const d = {
+      __type:                     this.constructor.type,
+      id:                         this.id,
+      name:                       this.name,
+      priority:                   this.priority  ?? null,
+      fieldName:                  this.fieldName ?? null,
+      value:                      this.value     ?? null,
+      reducedActionTypes:         [...(this.reducedActionTypes ?? [])],
+      generatedActionTypes:       [...(this.generatedActionTypes ?? [])],
+      generatedActionDefinitions: (this.generatedActionDefinitions ?? []).map(
+        def => ({ type: def.type, config: def.config })
+      ),
+    };
+    if (this.script !== undefined) d.script = this.script;
+    return d;
+  }
+
+  static fromJSON(d, _ctx) {
+    const r = new this(d.name);
+    r.id = d.id;
+    if (d.priority  != null)    r.priority  = d.priority;
+    if (d.fieldName != null)    r.fieldName = d.fieldName;
+    if (d.value     != null)    r.value     = d.value;
+    if (d.script    !== undefined) r.script  = d.script;
+    return r;
+  }
+
 }
 
 // ─── Common reducer subclasses ─────────────────────────────────────────────────
@@ -177,6 +207,7 @@ export class Reducer extends SimGraphNode {
  */
 export class NoOpReducer extends Reducer {
   static description = 'Returns state unchanged.';
+  static type        = 'NoOpReducer';
 
   constructor(name = 'No-Op', priority = PRIORITY.LOGGING + 5) {
     super(name, priority);
@@ -192,6 +223,7 @@ export class NoOpReducer extends Reducer {
  */
 export class FieldReducer extends Reducer {
   static description = 'Replaces the value at state[fieldName] with the action value or the existing state value.  If no field name it uses the fieldName field value of the action';
+  static type        = 'FieldReducer';
 
   constructor(name = 'Field Reducer', priority, fieldName = null) {
     super(name, priority);
@@ -301,6 +333,8 @@ export class FieldReducer extends Reducer {
  * Put a state field or action value into state.metrics
  */
 export class MetricReducer extends FieldReducer {
+  static type = 'MetricReducer';
+
   constructor(name = 'Metric Reducer', priority = PRIORITY.METRICS, fieldName = null) {
     super(name, priority, fieldName);
   }
@@ -324,6 +358,7 @@ export class MetricReducer extends FieldReducer {
  */
 export class BalanceSnapshotReducer extends FieldReducer {
   static description = 'Reads state[action.fieldPath] and writes the value to state.metrics[action.metricKey]; no-op when fieldPath is absent.';
+  static type        = 'BalanceSnapshotReducer';
 
   constructor(name = 'Balance Snapshot', priority = PRIORITY.METRICS) {
     super(name, priority, null);
@@ -340,6 +375,8 @@ export class BalanceSnapshotReducer extends FieldReducer {
 }
 
 export class FieldValueReducer extends FieldReducer {
+  static type = 'FieldValueReducer';
+
   constructor(name = 'Field Value Reducer', priority = PRIORITY.CASH_FLOW, fieldName = null, value = null) {
     super(name, priority, fieldName);
     this.value = value;
@@ -367,6 +404,7 @@ export class FieldValueReducer extends FieldReducer {
  */
 export class ArrayReducer extends FieldValueReducer {
   static description = 'Appends the action value to the array at state[fieldName], initialising the array if absent.';
+  static type        = 'ArrayReducer';
 
   constructor(name = 'Array Reducer', priority = PRIORITY.METRICS,
      fieldName, fieldValue) {
@@ -384,6 +422,7 @@ export class ArrayReducer extends FieldValueReducer {
 
 export class NumericSumReducer extends FieldValueReducer {
   static description = 'Accumulates a running numeric total at state[fieldName] by adding each action value to the existing sum.';
+  static type        = 'NumericSumReducer';
 
   constructor(name = 'Sum Reducer', priority = PRIORITY.METRICS,
       fieldName = null, value = null) {
@@ -400,6 +439,7 @@ export class NumericSumReducer extends FieldValueReducer {
 
 export class MultiplicativeReducer extends FieldValueReducer {
   static description = 'Multiplies the current value at state[fieldName] by the action value, accumulating a compounding product over time.';
+  static type        = 'MultiplicativeReducer';
 
   constructor(name = 'Multiplicative Reducer', priority = PRIORITY.METRICS,
       fieldName = null, value  = null) {
@@ -427,6 +467,7 @@ export class MultiplicativeReducer extends FieldValueReducer {
  */
 export class AccountTransactionReducer extends Reducer {
   static description = 'Applies a debit or credit transaction to a named account in state via AccountService, then returns the updated state.';
+  static type        = 'AccountTransactionReducer';
 
   constructor(name = 'Account Transaction', priority = PRIORITY.CASH_FLOW,
       { accountService, accountKey, getAmount = a => a.amount } = {}) {
@@ -465,6 +506,7 @@ export const REDUCER_CLASSES = {};  // populated after class declarations below
 
 export class RepeatingReducer extends FieldReducer {
   static description = 'Runs a set of child reducers N times in sequence (N from the action or a fixed count), re-emitting the action each iteration via next[].';
+  static type        = 'RepeatingReducer';
 
   constructor(name = 'Repeating Reducer', priority = PRIORITY.METRICS,
       reducers, fieldName = 'value', count = null) {
@@ -509,6 +551,7 @@ export class RepeatingReducer extends FieldReducer {
  */
 export class ScriptedReducer extends FieldReducer {
   static description = 'Prototype reducer: supply a JS script instead of a baked-in class. Script receives (state, action, date).';
+  static type        = 'ScriptedReducer';
 
   constructor(name = 'Scripted Reducer', priority = PRIORITY.POSITION_UPDATE,
       fieldName = '', script = '// return value (if fieldName set) or partial state object\nreturn {};') {
@@ -568,3 +611,21 @@ Object.assign(REDUCER_CLASSES, {
   AccountTransactionReducer,
   RepeatingReducer,
 });
+
+/**
+ * Base class for account-module reducers constructed with `{ accountService }`.
+ *
+ * Provides a shared `fromJSON` that passes the full services context to the
+ * constructor — each subclass destructures only the fields it needs.
+ * Subclasses add `static type` and inherit this fromJSON unchanged.
+ */
+export class AccountServiceReducer extends Reducer {
+  static description = 'Base for account-module reducers; fromJSON injects services so subclasses need only static type.';
+  static type        = 'AccountServiceReducer';
+
+  static fromJSON(d, services) {
+    const r = new this(services);
+    r.id = d.id;
+    return r;
+  }
+}

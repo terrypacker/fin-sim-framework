@@ -222,7 +222,7 @@ test('action breakpoint: control.paused is true when action node has a breakpoin
   let reducerCalled = false;
 
   //TODO ActionDefinition workaround see #134
-  const action =  { type: 'DO_WORK', id: 'act-1', actionId: 'act-1' };
+  const action =  { type: 'DO_WORK', id: 'act-1', _actionId: 'act-1' };
   sim.register('TICK', () => [action]);
   sim.reducers.register('DO_WORK', (s) => { reducerCalled = true; return s; }, 10, 'R1');
   sim.schedule({ type: 'TICK', date: START });
@@ -241,8 +241,8 @@ test('action breakpoint: resuming runs the action reducer and continues', () => 
   const log = [];
 
   //TODO ActionDefinition workaround see #134
-  const action1 = { type: 'FIRST',  id: 'act-first', actionId: 'act-first' };
-  const action2 = { type: 'SECOND', id: 'act-second', actionId: 'act-second' };
+  const action1 = { type: 'FIRST',  id: 'act-first', _actionId: 'act-first' };
+  const action2 = { type: 'SECOND', id: 'act-second', _actionId: 'act-second' };
   sim.register('TICK', () => [
     action1,
     action2,
@@ -265,8 +265,8 @@ test('action breakpoint: second action breakpoint fires after first is resumed',
   const log = [];
 
   //TODO ActionDefinition workaround see #134
-  const action1 = { type: 'FIRST',  id: 'act-first', actionId: 'act-first' };
-  const action2 = { type: 'SECOND', id: 'act-second', actionId: 'act-second' };
+  const action1 = { type: 'FIRST',  id: 'act-first', _actionId: 'act-first' };
+  const action2 = { type: 'SECOND', id: 'act-second', _actionId: 'act-second' };
   sim.register('TICK', () => [
     action1,
     action2,
@@ -380,7 +380,7 @@ test('mixed: event → handler → action → reducer breakpoints fire in order'
   const log = [];
 
   //TODO ActionDefinition workaround see #134
-  const action = { type: 'WORK', id: 'act-id', actionId: 'act-id'  };
+  const action = { type: 'WORK', id: 'act-id', _actionId: 'act-id'  };
   const handler = new HandlerEntry(
     () => { log.push('handler'); return [action]; },
     'H1'
@@ -563,7 +563,7 @@ test('pendingExecution.type is "handler" when paused at a handler', () => {
 test('pendingExecution.type is "action" when paused at an action', () => {
   const sim = new Simulation(START);
   //TODO ActionDefinition workaround See #134
-  const action = { type: 'WORK', id: 'a-pe', actionId: 'a-pe' };
+  const action = { type: 'WORK', id: 'a-pe', _actionId: 'a-pe' };
   sim.register('TICK', () => [action]);
   sim.reducers.register('WORK', (s) => s, 10, 'R');
   sim.schedule({ type: 'TICK', date: START });

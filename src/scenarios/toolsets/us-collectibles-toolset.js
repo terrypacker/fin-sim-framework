@@ -13,6 +13,7 @@ import {
   CollectibleSaleHandler, CollectibleSaleApplyReducer,
   CollectibleValueChangeHandler, CollectibleValueChangeApplyReducer,
 } from '../../finance/account-rules/us/us-collectible-classes.js';
+import { ValueType } from '../../simulation-framework/type-registry.js';
 
 /**
  * US_COLLECTIBLES toolset — wires US collectible sale machinery.
@@ -34,6 +35,18 @@ export const US_COLLECTIBLES = {
   id: 'US_COLLECTIBLES',
   capabilities: ['collectibles'],
   dependencies: ['US_TAX'],
+
+  types: {
+    handlers: [CollectibleSaleHandler, CollectibleValueChangeHandler],
+    reducers: [CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer],
+    actions: [
+      { type: 'COLLECTIBLE_SALE_APPLY',
+        fields: { salePrice: ValueType.number(), costBasis: ValueType.number() } },
+      { type: 'COLLECTIBLE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'US',
+        fields: { gain: ValueType.number(), isAuResident: ValueType.boolean() } },
+      { type: 'COLLECTIBLE_VALUE_CHANGE_APPLY', fields: { amount: ValueType.number() } },
+    ],
+  },
 
   paramSchema(context) {
     return [];

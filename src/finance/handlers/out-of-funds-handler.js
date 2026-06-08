@@ -28,8 +28,8 @@ import { RecordMetricAction, RecordBalanceAction } from '../../simulation-framew
  */
 export class OutOfFundsHandler extends HandlerEntry {
   static description = 'Records an out-of-funds metric and stamps the first occurrence date in state.';
-
-  static eventType = 'OUT_OF_FUNDS';
+  static type        = 'OutOfFundsHandler';
+  static eventType   = 'OUT_OF_FUNDS';
 
   constructor() {
     super(null, 'Out of Funds');

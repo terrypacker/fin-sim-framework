@@ -4,7 +4,7 @@ A running list of structural friction in the codebase — places where two ways 
 
 > Living document. Add to it whenever something surprising shows up while reading the code; remove or update entries as they get resolved.
 
-Last reviewed: 2026-05-29.
+Last reviewed: 2026-06-01.
 
 ---
 
@@ -37,10 +37,8 @@ Last reviewed: 2026-05-29.
 - `src/graph/graph-query-api.js` line 35: `this._graph = graph; //TODO This is also in the parent as _dataSource`.
 - **Direction**: pick one of `_graph` / `_dataSource`. The parent class probably owns the canonical reference.
 
-### 1.7 `_pickActionData` exists in two places (Git #202)
-- `src/simulation-framework/simulation.js` line 45 — module-local helper, called from `simulation.js`.
-- `src/finance/services/state-schema-registry.js` line 223 — `StateSchemaRegistry.pickActionData()` static method, labelled "Canonical public version" with a comment that `simulation.js` keeps a copy "to avoid cross-layer imports."
-- **Direction**: extract the canonical picker into a shared, dependency-free location (`src/simulation-framework/action-data.js` or similar) so both layers reference the same thing. The state-schema layer importing a finance-aware copy from `src/finance/` is the wrong dependency direction.
+### ~~1.7 `_pickActionData` exists in two places (Git #202)~~
+- **Resolved** by `design/19-type-registry.md`: `_pickActionData` deleted from `simulation.js`; `StateSchemaRegistry.pickActionData` deleted (had no callers). Replaced by `TypeRegistry.pickPayload(action)`, which consults per-type `fields` declarations registered in toolset manifests. Framework block-list (`FRAMEWORK_FIELDS` + `_*` prefix) is now exhaustive and finance-agnostic.
 
 ---
 
@@ -50,6 +48,15 @@ There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; se
 
 ~~### 2.1 `BaseApp` carries stale scenario state pending issue #146~~
 - Base app is gone now
+
+### 2.1b `primaryAmountField` fallback chain in `JournalReportPlugin` (Git #202 follow-up)
+- `src/finance/journal-reporting/journal-report-plugin.js` line ~565 resolves the display amount for a journal row via:
+  ```js
+  item.stateDelta ?? item.personTaxAmount ?? item.amount ?? item.proceeds
+  ```
+  This is the same family of hand-maintained allow-list problem as the now-resolved §1.7 / §4.6. Each new action type with a non-standard primary field silently falls through.
+- Now tractable: `TypeRegistry.ActionTypeEntry` already supports arbitrary metadata fields. Adding `primaryAmountField: 'proceeds'` (or similar) to a type's entry gives the journal plugin a stable lookup rather than a hardcoded chain.
+- **Direction**: add an optional `primaryAmountField` key to each `ActionTypeEntry` and replace the fallback chain with `entry.primaryAmountField ?? 'amount'`. Ride the existing registry without any new infrastructure.
 
 ### 2.2 RMD half-implementations (Git #304)
 - `src/finance/account-rules/us/ira-rollover-classes.js` lines 151, 154, 158 and `us/k401-classes.js` lines 221–223 all carry the same three TODOs:
@@ -101,14 +108,13 @@ There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; se
 
 ## 3. Leaky or Inverted Layer Boundaries
 
-### 3.1 `simulation.js` reaches into finance-domain fields (Git #202)
-- `_pickActionData()` in `simulation-framework/simulation.js` lines 45–61 knows about finance-specific fields (`tax`, `taxDetail`, `personTaxDetails`, `gain`, `proceeds`, `costBasis`, `cc`, `isLongTerm`, `isAuResident`, …).
-- The simulation framework is supposed to be domain-agnostic; this couples it directly to US/AU tax modelling.
-- **Direction**: invert the dependency — let actions opt in via a `toJournalPayload()` method or have the finance domain register field extractors with the framework at startup.
+### ~~3.1 `simulation.js` reaches into finance-domain fields (Git #202)~~
+- **Resolved** by `design/19-type-registry.md`: `_pickActionData()` deleted from `simulation.js`. The framework now calls `TypeRegistry.pickPayload(action)`, which is domain-agnostic — it consults per-type `fields` declarations that toolsets register. Finance fields are declared in toolset manifests, not hardcoded in the simulation engine.
 
 ### 3.2 `StateSchemaRegistry` lives in `src/finance/` but is used by the framework
 - The schema registry holds finance-specific defaults (`usOrdinaryIncomeYTD`, `auCapitalGainsYTD`, `intlTransferFeeUsd`, …) but its `pickActionData` static is positioned as the "canonical public version" of a framework helper.
-- **Direction**: split into two: a framework-level `JournalSchemaRegistry` for the picker contract, and a finance-level `FinanceStateSchemaRegistry` that registers the domain defaults on top.
+- **Partially resolved** by `design/19-type-registry.md`: `StateSchemaRegistry.pickActionData` deleted (picker dedup complete — `TypeRegistry.pickPayload` is the sole picker). The remaining issue — `StateSchemaRegistry` itself living in `src/finance/` despite being used by framework layers — is deferred. Full resolution (split into `JournalSchemaRegistry` + `FinanceStateSchemaRegistry`) is a follow-up design.
+- **Direction** (remaining): split into a framework-level `JournalSchemaRegistry` for the formatter contract, and a finance-level overlay that registers domain defaults on top.
 
 ### 3.3 `ScenarioLoader` knows about both branches (Git #364)
 - `src/scenarios/scenario-loader.js` dispatches between toolset-compile and graph-deserialize. The branch logic is mixed with per-param node-cascade rules — a single 80-line method (`load`) that does I/O normalization, dispatch, and snapshot-back. It also mutates `cfg.params` / `cfg.parameters` / `cfg.events` / `cfg.handlers` / `cfg.actions` / `cfg.reducers` / `cfg.initialState` in place.
@@ -122,9 +128,8 @@ There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; se
 - `ServiceRegistry` constructs `SimulationSync` with `{ bus, simulationRegistry, eventService, handlerService, actionService, reducerService }`, but `SimulationSync`'s constructor signature accepts only `{ bus, simulationRegistry }`. The extra services are silently dropped.
 - **Direction**: either consume them inside `SimulationSync` (currently it goes through the `SimulationAdapter`) or stop passing them in `service-registry.js` lines 75–82.
 
-### 3.6 Action / handler / reducer pre-registration string sets in the serializer (Git #361)
-- `src/scenarios/scenario-serializer.js` keeps three manually-maintained sets (`_ACCOUNT_SERVICE_REDUCERS`, `_NO_ARG_HANDLERS`, … ~70 class names total). Every new account-module class has to be remembered to be added here, or it silently fails to deserialize.
-- **Direction**: replace string sets with a self-registering `ClassRegistry.register(MyReducerClass)` so a new class type is registered alongside its definition. Same pattern would let us drop `actionClass`/`reducerType`/`handlerClass` constructor-name preservation, since the registry would carry the discriminator.
+### ~~3.6 Action / handler / reducer pre-registration string sets in the serializer (Git #361)~~
+- **Resolved** by `design/19-type-registry.md`: `_ACCOUNT_SERVICE_REDUCERS`, `_NO_ARG_HANDLERS`, and all ~70-name string sets deleted from `scenario-serializer.js`. The serializer now calls `services.typeRegistry.get(d.__type)` for all handler/reducer/action dispatch. Each class declares `static type` and `static fromJSON`; toolsets register their classes via `types: { handlers, reducers, actions }` blocks. Adding a new class only requires registering it in the owning toolset — no serializer edits needed.
 
 ### 3.7 `Person.isAuResident` is both stored and derived (Git #324)
 - `src/finance/person.js` line 35 sets `this.isAuResident = opts.isAuResident ?? this.citizen.includes('AUS')`. Memory notes that residency was supposed to move into a derived `state.isAuResident` flag (the `ChangeResidencyApplyReducer` flow), but Person still carries it as an opt-in init.
@@ -161,9 +166,8 @@ There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; se
 - `Action` sets `id = type` so action lookup by id and lookup by type are the same. This works fine for built-in actions but is a footgun when two distinct action **definitions** want the same `type` discriminator (e.g. two versions of `WAGES_INCOME` in different toolsets).
 - **Direction**: confirm there's no risk of collisions across toolsets, or generate `id = ${toolsetId}:${type}`.
 
-### 4.6 `_pickActionData` allow-list is a maintenance burden (Git #202)
-- Every new action field that the timeline needs to display has to be added to the picker (currently 12 fields, scattered between simulation.js and StateSchemaRegistry). A reducer that emits a new field will see it dropped silently.
-- **Direction**: invert — let each action class declare its journal fields (or default to "all enumerable non-`_` fields"), with the picker as fallback only.
+### ~~4.6 `_pickActionData` allow-list is a maintenance burden (Git #202)~~
+- **Resolved** by `design/19-type-registry.md`: the allow-list is gone. Each action type declares its `fields` in the owning toolset's `types.actions` block. `TypeRegistry.pickPayload(action)` reads those declarations; unregistered types fall back to "all non-framework, non-underscore fields" with a dev-mode warning. The three hand-maintained literal lists in `report-definition-registry.js` (`WITHDRAWAL_ACTION_TYPES`, `REAL_PROPERTY_ACTION_TYPES`, inline capital-gains list) are also deleted — replaced by `api.familyTypes(family, { cc })` calls.
 
 ### 4.7 Workbench plugin/runtime boundary is loosely typed (Git #368)
 - `WorkbenchRuntime` events (`scenarioReady`, `breakpointHit`) are called directly by `WorkbenchApp` rather than passing through the runtime as the only publisher. Plugins subscribe via the runtime's bus but the publishers vary.

@@ -12,6 +12,7 @@ import { OneOffEvent }           from '../../simulation-framework/events/one-off
 import { EventSeries }           from '../../simulation-framework/events/event-series.js';
 import { UsHouseSaleHandler, UsHouseSaleApplyReducer } from '../../finance/account-rules/us/us-real-property-classes.js';
 import { UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer } from '../../finance/account-rules/mortgage-payment-classes.js';
+import { ValueType } from '../../simulation-framework/type-registry.js';
 
 /**
  * US_REAL_PROPERTY toolset — wires US house sale machinery.
@@ -32,6 +33,19 @@ export const US_REAL_PROPERTY = {
   id: 'US_REAL_PROPERTY',
   capabilities: ['real-property'],
   dependencies: ['US_TAX'],
+
+  types: {
+    handlers: [UsHouseSaleHandler, UsMortgagePaymentHandler],
+    reducers: [UsHouseSaleApplyReducer, UsMortgagePaymentApplyReducer],
+    actions: [
+      { type: 'US_HOUSE_SALE_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'US',
+        fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), stateKey: ValueType.text() } },
+      { type: 'US_HOUSE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'US',
+        fields: { taxableGain: ValueType.number() } },
+      { type: 'US_MORTGAGE_PAYMENT_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'US',
+        fields: { amount: ValueType.currency('USD') } },
+    ],
+  },
 
   paramSchema(context) {
     return [];

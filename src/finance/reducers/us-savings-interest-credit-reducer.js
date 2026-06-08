@@ -27,8 +27,8 @@ import { ACCOUNT_ROLES } from '../state/account-roles.js';
  */
 export class UsSavingsInterestCreditReducer extends Reducer {
   static description = 'Credits interest to a US savings account and increments usOrdinaryIncomeYTD (plus auOrdinaryIncomeYTD/ftcYTD when AU-resident).';
-
-  static actionType = 'US_SAVINGS_INTEREST_CREDIT';
+  static type        = 'UsSavingsInterestCreditReducer';
+  static actionType  = 'US_SAVINGS_INTEREST_CREDIT';
 
   constructor({ accountService, stateRegistry, role = ACCOUNT_ROLES.US_SAVINGS, ownerId = null } = {}) {
     super('US Savings Interest Credit', PRIORITY.CASH_FLOW);
@@ -37,6 +37,16 @@ export class UsSavingsInterestCreditReducer extends Reducer {
     this.role           = role;
     this.ownerId        = ownerId;
     this.reducedActionTypes = ['US_SAVINGS_INTEREST_CREDIT'];
+  }
+
+  static fromJSON(d, { accountService, stateRegistry }) {
+    const r = new this({ accountService, stateRegistry, role: d.role ?? ACCOUNT_ROLES.US_SAVINGS, ownerId: d.ownerId ?? null });
+    r.id = d.id;
+    return r;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId };
   }
 
   reduce(state, action, date) {

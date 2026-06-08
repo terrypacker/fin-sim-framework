@@ -1,6 +1,6 @@
 # 19 — TypeRegistry, Action-Type Families, and the Per-Country Tax Split
 
-**Status**: Proposed (2026-05-31)
+**Status**: All phases complete (2026-06-01)
 **Resolves**: `inconsistencies.md` §3.1 (`simulation.js` reaches into finance fields), §3.2 (`StateSchemaRegistry.pickActionData` lives in the wrong layer — partial), §3.6 (handler/reducer string sets in the serializer), §4.6 (`_pickActionData` allow-list is a maintenance burden)
 **Related**: `design/9-toolset-compiler.md` (toolset shape this design extends), `design/15-config-as-source-of-truth.md` (the cfg → services contract), `design/17-scenario-as-graph-node.md` (ServiceRegistry layered reset model)
 **Author note**: Introduces a framework-level `TypeRegistry` that lets toolsets declare every class, action type, and field-schema they own in inert metadata. Removes three categories of hand-maintained string lists, deletes ~1,100 lines from `scenario-serializer.js`, and ends the implicit "first-toolset-wins" coupling between `US_TAX` and `AU_TAX`. Bakes in a small rename of framework-internal fields on `Action` so `_*` actually means "framework-internal" everywhere.
@@ -507,58 +507,62 @@ Today the project's vite config preserves class names because `Action.actionClas
 
 Ordered for testability — each step leaves the tree green.
 
-### Phase 0 — framework field rename
+### Phase 0 — framework field rename ✅
 
-1. Find/replace `instanceId/parentInstanceId/rootInstanceId/actionId` → `_instanceId/...` across `src/simulation-framework`, `src/visualization/workbench/plugins/finance/lineage-plugin.js`, `exec-history-plugin.js`, `graph-recorder.js`.
-2. Run `npm test`. Two reasonable expectation: `simulation-event-graph.test.mjs` and `simulation-breakpoints.test.mjs` exercise these fields most heavily.
+1. ✅ Find/replace `instanceId/parentInstanceId/rootInstanceId/actionId` → `_instanceId/...` across `src/simulation-framework/actions.js`, `simulation.js`, `graph-recorder.js`, and matching test fixtures in `simulation-breakpoints.test.mjs`, `action-definition.test.mjs`. Journal entry sub-objects (`entry.action.instanceId` etc.) are a separate schema and left unchanged.
+2. ✅ `npm test:all` — 1783 backend + 597 viz = 2380 tests, 0 failures.
 
-### Phase 1 — TypeRegistry primitive
+### Phase 1 — TypeRegistry primitive ✅
 
-3. Add `src/simulation-framework/type-registry.js` with no callers.
-4. Add `static type` + `static category` to `Action` and its subclasses, `HandlerEntry`, `Reducer` + base subclasses (the framework ones).
-5. Add default `toJSON` and `static fromJSON` to those base classes.
-6. Add `typeRegistry` property to `ServiceRegistry`. `reset()` / `resetAll()` recreate it.
-7. Unit-test `TypeRegistry` registration / lookup / family queries / `pickPayload` strict & permissive paths.
+3. ✅ `src/simulation-framework/type-registry.js` created (TypeRegistry + ValueType). No callers yet.
+4. ✅ `static type` + `static category` added to `Action`, `FieldAction`, `FieldValueAction`, `AmountAction`, `RecordBalanceAction`, `RecordMetricAction`, `ScriptedAction` in `actions.js`; `HandlerEntry` in `handlers.js`; `Reducer`, `NoOpReducer`, `FieldReducer`, `MetricReducer`, `BalanceSnapshotReducer`, `FieldValueReducer`, `ArrayReducer`, `NumericSumReducer`, `MultiplicativeReducer`, `AccountTransactionReducer`, `RepeatingReducer`, `ScriptedReducer` in `reducers.js`.
+5. ✅ Default `toJSON` / `static fromJSON` added to `HandlerEntry` and `Reducer` base classes.
+6. ✅ `typeRegistry` added to `ServiceRegistry` constructor, `simulationContext`, and instance `reset()`.
+7. ✅ `tests/unit/type-registry.test.mjs` — 29 tests covering registration, lookup, family queries, strict / permissive `pickPayload`, framework block-list, base class statics. All 2409 tests pass.
 
-### Phase 2 — country split
+### Phase 2 — country split ✅
 
-8. Refactor `TaxPaymentDebitReducer` / `TaxSettleApplyReducer` / `TaxSettleHandler` / `PeriodAdvanceReducer` / `PeriodAdvanceHandler` into base + per-country subclasses. Update emitters (`TaxSettleApplyReducer` chained action, `ChangeResidencyHandler`).
-9. Delete `TaxService.getSharedReducers()` and the context cache.
-10. Update US_TAX / AU_TAX toolsets to register their own per-country reducers directly.
-11. Regression: `evt-*` tests still pass; `intl-retirement-scenario.test.mjs` still passes; tax round-trip via `serializer-finance-roundtrip.test.mjs` still passes (after the next step touches the serializer).
+8. ✅ Refactored `TaxPaymentDebitReducer` / `TaxSettleApplyReducer` / `TaxSettleHandler` / `PeriodAdvanceReducer` / `PeriodAdvanceHandler` into base + per-country subclasses. Updated emitters (`TaxSettleApplyReducer` chained action, `ChangeResidencyHandler`).
+9. ✅ Deleted `TaxService.getSharedReducers()` and the context cache.
+10. ✅ Updated US_TAX / AU_TAX toolsets to register their own per-country reducers directly.
+11. ✅ Regression: `evt-*` tests still pass; `intl-retirement-scenario.test.mjs` still passes; tax round-trip via `serializer-finance-roundtrip.test.mjs` still passes.
 
-### Phase 3 — toolset manifests
+### Phase 3 — toolset manifests ✅
 
-12. Add `types: { handlers, reducers, actions }` blocks to every toolset (17 files in `src/scenarios/toolsets/`). The action entries are the migration of `_pickActionData` + the three report literal lists + new per-country tax variants.
-13. `ScenarioCompiler.compile()` calls `services.typeRegistry.registerToolset(t)` for each resolved toolset, as a new first step.
-14. `ScenarioLoader.load()` registers types from `cfg.toolsets` before dispatch, so the graph-deserialize path also sees a populated registry.
+12. ✅ Added `types: { handlers, reducers, actions }` blocks to all 17 toolsets in `src/scenarios/toolsets/`. Action entries cover all per-country tax variants, account-level withdrawal/deposit actions, and cross-border actions.
+13. ✅ `ScenarioCompiler.compile()` calls `services.typeRegistry.registerToolset(t)` for each resolved toolset as the first step.
+14. ✅ `ScenarioLoader.load()` graph-deserialize path covered via the compiler delegation — no separate change needed. All 597 tests pass.
 
-### Phase 4 — class statics + `fromJSON` for every subclass
+### Phase 4 — class statics + `fromJSON` for every subclass ✅
 
-15. Walk every finance handler, reducer, and action subclass listed in the deleted `_NO_ARG_HANDLERS` / `_ACCOUNT_SERVICE_REDUCERS`. Add `static type` and override `fromJSON` / `toJSON` only where they carry config beyond the base shape.
-16. Subclasses that only need the base behaviour add `static type` and inherit `fromJSON`. This is the bulk of the diff.
+15. ✅ Walk every finance handler, reducer, and action subclass listed in the deleted `_NO_ARG_HANDLERS` / `_ACCOUNT_SERVICE_REDUCERS`. Add `static type` and override `fromJSON` / `toJSON` only where they carry config beyond the base shape.
+16. ✅ Subclasses that only need the base behaviour add `static type` and inherit `fromJSON`. `AccountServiceReducer` intermediate class added to `reducers.js` — all 52 account-module reducers now extend it. Base `HandlerEntry.toJSON()` and `Reducer.toJSON()` updated to emit full graph fields for Phase 5 compatibility. `DynamicTaxReducer` given `fromJSON` with fresh `TaxService().taxEngine`. All 2409 tests pass.
 
-### Phase 5 — serializer rewrite
+### Phase 5 — serializer rewrite ✅
 
-17. Rewrite `scenario-serializer.js` per §9. Big-bang — delete the string sets and switches in one PR.
-18. Run the full test suite. The roundtrip suite is the regression net.
+17. ✅ Rewrite `scenario-serializer.js` per §9. Big-bang — delete the string sets and switches in one PR.
+18. ✅ Run the full test suite. The roundtrip suite is the regression net. All 1812 backend + 597 frontend tests pass.
 
-### Phase 6 — picker swap
+### Phase 6 — picker swap ✅
 
-19. Delete `_pickActionData` from `simulation.js`. Replace callsites with `this.bus.serviceRegistry?.typeRegistry?.pickPayload(action)`, with a small fallback when the sim is constructed without a `ServiceRegistry` (test fixtures).
-20. Delete `StateSchemaRegistry.pickActionData`.
-21. Update `JournalReportPlugin` and any other plugin reading directly from action objects to use `typeRegistry.getAction(type).fields`.
+19. ✅ Deleted `_pickActionData` from `simulation.js`. Replaced with `_pickPayload(action)` method using `this.bus.serviceRegistry?.typeRegistry?.pickPayload(action)`, with heuristic fallback (all non-framework, non-underscore fields) when no ServiceRegistry is present (test fixtures). `ServiceRegistry` now sets `this.bus.serviceRegistry = this` so the back-reference is available.
+20. ✅ Deleted `StateSchemaRegistry.pickActionData` (had no callers).
+21. ✅ JournalReportPlugin reads from flat projected rows (via journal-data-source.js) which read from `entry.action.data` — no direct action-object reads needed. Toolset action type declarations updated: missing `taxDetail`/`personTaxDetails` added to tax settle entries; ~20 chained `*_TAX` action types registered across brokerage, income, real-property, retirement, and banking toolsets. TypeRegistry now defaults to permissive (`_strict = false`) to allow smooth transition while not all types are declared.
 
-### Phase 7 — report families
+### Phase 7 — report families ✅
 
-22. Rewrite `WithdrawalsByAccountDef`, `RealPropertyCashFlowDef`, `CapitalGainsByDisposalDef`, `TaxPaidByYearDef`, `AuTaxByPersonYearDef` to use `api.familyTypes(family, { cc })` and the per-country tax types.
-23. Delete `WITHDRAWAL_ACTION_TYPES`, `REAL_PROPERTY_ACTION_TYPES`, and the inline capital-gains list.
+22. ✅ `JournalQueryApi` extended: constructor now accepts optional `typeRegistry`; `familyTypes(family, { cc })` method added that delegates to `typeRegistry.familyTypes()` (returns `[]` when no registry). `JournalReportPlugin._bindJournal()` passes `services.typeRegistry` when constructing the three API instances.
+23. ✅ `K401_TO_IRA_CONVERSION_APPLY` registered with `family: 'WITHDRAWAL', cc: 'US'` in `us-retirement-toolset.js` (was the only WITHDRAWAL-family gap).
+24. ✅ Rewrote `WithdrawalsByAccountDef`, `RealPropertyCashFlowDef`, `CapitalGainsByDisposalDef`, `TaxPaidByYearDef`, `AuTaxByPersonYearDef` to use `api.familyTypes(family, { cc })`.
+25. ✅ Deleted `WITHDRAWAL_ACTION_TYPES`, `REAL_PROPERTY_ACTION_TYPES`, and the inline capital-gains list from `report-definition-registry.js`.
+26. ✅ `report-definition-registry.test.mjs` updated to build a `TypeRegistry` from all 14 toolsets so `familyTypes()` resolves correctly in tests. All 1812 backend + 597 frontend tests pass.
 
-### Phase 8 — cleanup
+### Phase 8 — cleanup ✅
 
-24. Remove the class-name preservation note from README (§9.3).
-25. Update `design/inconsistencies.md` — mark §3.1, §3.6, §4.6 resolved; partial on §3.2 (picker dedup done; full split deferred).
-26. Add `design/19-type-registry.md` to README design index.
+24. ✅ Removed the class-name preservation section from README (§9.3); updated the `Action` module table entry to reference `static type` instead. Updated the Serialization section to reference `TypeRegistry` dispatch.
+25. ✅ Updated `design/inconsistencies.md`: §1.7, §3.1, §3.6, §4.6 marked resolved; §3.2 marked partially resolved (picker dedup done; `StateSchemaRegistry` location split deferred); `primaryAmountField` follow-up added as §2.1b.
+26. ✅ Added `design/15`–`design/19` to README design index.
+27. ✅ `tests/unit/action-payload-schema.test.mjs` written — drift detector runs full IntlRetirementScenario for 2 years, asserts no undeclared fields on registered types and no unregistered types encountered. Added `siblingIndex`, `data`, `meta` to FRAMEWORK_FIELDS (SimGraphNode / engine-assigned fields). Fixed 9 toolset manifest gaps discovered by the test: `US_PERIOD_ADVANCE`, `AU_PERIOD_ADVANCE`, `RECORD_BALANCE`, `RECORD_METRIC` (field name correction: `key` → `fieldName`), `REPLENISH_SAVINGS`, `AU_SAVINGS_EARNINGS_APPLY`, `AU_FIXED_INCOME_EARNINGS_APPLY`, `FIXED_INCOME_EARNINGS_APPLY`, `STOCK_EARNINGS_APPLY`, `STOCK_DIVIDEND_CASH_APPLY`, `ROTH_EARNINGS_APPLY`, `IRA_EARNINGS_APPLY`, `K401_EARNINGS_APPLY`, `SUPER_EARNINGS_APPLY`. All 1814 backend + 597 frontend tests pass.
 
 ---
 

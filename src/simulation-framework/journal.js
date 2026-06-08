@@ -35,8 +35,10 @@
  *   Temporal predecessor across the whole journal = entry at seq - 1.
  *   These are NOT the same concept.
  *
- * action.data holds selective action-instance payload fields needed for UI
- * display and reporting (sum row, tax document) without cloning the full object.
+ * action.data holds the action-instance payload fields needed for UI display
+ * and reporting — extracted via TypeRegistry.pickPayload (declared fields) or
+ * the heuristic fallback (all non-framework, non-underscore fields) when no
+ * TypeRegistry is available.
  *
  * emittedInstanceIds — UUID[] — causal forward-links to the execution graph.
  * emittedTypes       — string[] — type strings for display without graph lookup.
@@ -65,7 +67,7 @@ export class JournalEntry {
 
     // { instanceId: UUID, parentId: UUID|null, rootId: UUID|null,
     //   siblingIndex: number, nodeId: string|null, type: string, name: string,
-    //   data: { amount?, tax?, isLongTerm?, value?, cc?, taxDetail?, personTaxDetails? } }
+    //   data: { ...declared fields from TypeRegistry, or heuristic-picked fields } }
     this.action = action;
 
     // { nodeId: string|null, name: string }

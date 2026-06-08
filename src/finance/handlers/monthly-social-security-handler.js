@@ -31,6 +31,7 @@ import { ACCOUNT_ROLES } from '../state/account-roles.js';
  */
 export class MonthlySocialSecurityHandler extends HandlerEntry {
   static description = 'Credits the US cash pool with Social Security income for each eligible person; starts at their retirementDate.';
+  static type        = 'MonthlySocialSecurityHandler';
   static eventType   = 'MONTHLY_SS_INCOME';
 
   constructor({ stateRegistry, accountRulesEngine } = {}) {
@@ -38,6 +39,12 @@ export class MonthlySocialSecurityHandler extends HandlerEntry {
     this.stateRegistry      = stateRegistry;
     this.accountRulesEngine = accountRulesEngine ?? null;
     this.generatedActionTypes = ['SS_INCOME_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
+  }
+
+  static fromJSON(d, services) {
+    const h = new this({ stateRegistry: services?.stateRegistry, accountRulesEngine: services?.accountRulesEngine ?? null });
+    h.id = d.id;
+    return h;
   }
 
   call({ date, state }) {
@@ -76,10 +83,11 @@ export class MonthlySocialSecurityHandler extends HandlerEntry {
 
 /** Returns age in whole years as of asOfDate. */
 function getAge(birthDate, asOfDate) {
-  const years = asOfDate.getUTCFullYear() - birthDate.getUTCFullYear();
+  const bd = birthDate instanceof Date ? birthDate : new Date(birthDate);
+  const years = asOfDate.getUTCFullYear() - bd.getUTCFullYear();
   const hadBirthday =
-      asOfDate.getUTCMonth() > birthDate.getUTCMonth() ||
-      (asOfDate.getUTCMonth() === birthDate.getUTCMonth() &&
-          asOfDate.getUTCDate() >= birthDate.getUTCDate());
+      asOfDate.getUTCMonth() > bd.getUTCMonth() ||
+      (asOfDate.getUTCMonth() === bd.getUTCMonth() &&
+          asOfDate.getUTCDate() >= bd.getUTCDate());
   return hadBirthday ? years : years - 1;
 }

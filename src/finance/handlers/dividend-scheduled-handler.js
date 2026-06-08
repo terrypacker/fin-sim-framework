@@ -36,8 +36,8 @@ import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framew
  */
 export class DividendScheduledHandler extends HandlerEntry {
   static description = 'Computes stock dividends from balance × dividendRate and routes to STOCK_DIVIDEND_APPLY (reinvest) or STOCK_DIVIDEND_CASH_APPLY (cash payout).';
-
-  static eventType = 'DIVIDEND_SCHEDULED';
+  static type        = 'DividendScheduledHandler';
+  static eventType   = 'DIVIDEND_SCHEDULED';
 
   constructor({ stateRegistry, role, ownerId = null, stateKey = null, dividendRate = 0.02, reinvest = false } = {}) {
     super(null, 'Dividend Scheduled');
@@ -49,6 +49,16 @@ export class DividendScheduledHandler extends HandlerEntry {
     this.reinvest        = reinvest;
     // Declares both branches; actual type chosen at runtime based on reinvest flag
     this.generatedActionTypes = ['STOCK_DIVIDEND_APPLY', 'STOCK_DIVIDEND_CASH_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+  }
+
+  static fromJSON(d, { stateRegistry }) {
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, dividendRate: d.dividendRate ?? 0.02, reinvest: d.reinvest ?? false });
+    h.id = d.id;
+    return h;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, dividendRate: this.dividendRate, reinvest: this.reinvest };
   }
 
   call({ data, state }) {

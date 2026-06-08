@@ -16,6 +16,7 @@ import { IntlTransferToAuHandler,
 import { ChangeResidencyApplyReducer }
   from '../../finance/reducers/change-residency-apply-reducer.js';
 import { IntlTransferApplyReducer }   from '../../finance/reducers/intl-transfer-apply-reducer.js';
+import { ValueType } from '../../simulation-framework/type-registry.js';
 
 /**
  * US_AU_CROSS_BORDER toolset — residency transition and bilateral transfer wiring.
@@ -36,6 +37,15 @@ export const US_AU_CROSS_BORDER = {
   id: 'US_AU_CROSS_BORDER',
   capabilities: ['cross-border'],
   dependencies: ['US_TAX', 'AU_TAX'],
+
+  types: {
+    handlers: [ChangeResidencyHandler, IntlTransferToAuHandler, IntlTransferToUsHandler],
+    reducers: [ChangeResidencyApplyReducer, IntlTransferApplyReducer],
+    actions: [
+      { type: 'CHANGE_RESIDENCY_APPLY' },
+      { type: 'INTL_TRANSFER_APPLY', fields: { amount: ValueType.number() } },
+    ],
+  },
 
   paramSchema(context) {
     return [

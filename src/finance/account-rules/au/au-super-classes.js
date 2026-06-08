@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
+import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 
@@ -31,7 +31,8 @@ function getAge(birthDate, asOfDate) {
  * EVT-20: Super contribution — debit AU cash pool, credit contributionBasis.
  * Chains SUPER_CONTRIBUTION_TAX (AU super tax at 15%).
  */
-export class SuperContributionApplyReducer extends Reducer {
+export class SuperContributionApplyReducer extends AccountServiceReducer {
+  static type        = 'SuperContributionApplyReducer';
   static description = 'Debits the AU cash pool and credits superAccount contributionBasis; chains SUPER_CONTRIBUTION_TAX.';
   static actionType  = 'SUPER_CONTRIBUTION_APPLY';
 
@@ -63,7 +64,8 @@ export class SuperContributionApplyReducer extends Reducer {
  * EVT-21: Super contribution withdrawal — age-gated (blocked before 60).
  * No tax on successful withdrawal.
  */
-export class SuperWithdrawalContribApplyReducer extends Reducer {
+export class SuperWithdrawalContribApplyReducer extends AccountServiceReducer {
+  static type        = 'SuperWithdrawalContribApplyReducer';
   static description = 'Credits the AU cash pool and debits superAccount contributionBasis; blocks withdrawal if person is under 60.';
   static actionType  = 'SUPER_WITHDRAWAL_CONTRIB_APPLY';
 
@@ -95,7 +97,8 @@ export class SuperWithdrawalContribApplyReducer extends Reducer {
  * EVT-22: Super earnings withdrawal — age-gated.
  * Chains SUPER_WITHDRAWAL_EARNINGS_TAX (US ordinary income).
  */
-export class SuperWithdrawalEarningsApplyReducer extends Reducer {
+export class SuperWithdrawalEarningsApplyReducer extends AccountServiceReducer {
+  static type        = 'SuperWithdrawalEarningsApplyReducer';
   static description = 'Credits the AU cash pool and debits superAccount earningsBasis; chains SUPER_WITHDRAWAL_EARNINGS_TAX; blocks if under 60.';
   static actionType  = 'SUPER_WITHDRAWAL_EARNINGS_APPLY';
 
@@ -132,7 +135,8 @@ export class SuperWithdrawalEarningsApplyReducer extends Reducer {
  * EVT-23: Super earnings accrual — stay in account.
  * Chains SUPER_EARNINGS_TAX (AU super tax at 15%).
  */
-export class SuperEarningsApplyReducer extends Reducer {
+export class SuperEarningsApplyReducer extends AccountServiceReducer {
+  static type        = 'SuperEarningsApplyReducer';
   static description = 'Adds earnings to superAccount balance and earningsBasis; chains SUPER_EARNINGS_TAX.';
   static actionType  = 'SUPER_EARNINGS_APPLY';
 
@@ -162,6 +166,7 @@ export class SuperEarningsApplyReducer extends Reducer {
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 export class SuperContributionHandler extends HandlerEntry {
+  static type        = 'SuperContributionHandler';
   static description = 'Dispatches SUPER_CONTRIBUTION_APPLY.';
   static eventType   = 'SUPER_CONTRIBUTION';
 
@@ -179,6 +184,7 @@ export class SuperContributionHandler extends HandlerEntry {
 }
 
 export class SuperWithdrawalContributionsHandler extends HandlerEntry {
+  static type        = 'SuperWithdrawalContributionsHandler';
   static description = 'Age-gates the request (blocks under 60) and dispatches SUPER_WITHDRAWAL_CONTRIB_APPLY.';
   static eventType   = 'SUPER_WITHDRAWAL_CONTRIBUTIONS';
 
@@ -198,6 +204,7 @@ export class SuperWithdrawalContributionsHandler extends HandlerEntry {
 }
 
 export class SuperWithdrawalEarningsHandler extends HandlerEntry {
+  static type        = 'SuperWithdrawalEarningsHandler';
   static description = 'Age-gates the request (blocks under 60) and dispatches SUPER_WITHDRAWAL_EARNINGS_APPLY.';
   static eventType   = 'SUPER_WITHDRAWAL_EARNINGS';
 
@@ -217,6 +224,7 @@ export class SuperWithdrawalEarningsHandler extends HandlerEntry {
 }
 
 export class SuperEarningsDirectHandler extends HandlerEntry {
+  static type        = 'SuperEarningsDirectHandler';
   static description = 'Dispatches SUPER_EARNINGS_APPLY from a direct SUPER_EARNINGS event (as opposed to the scheduled INTL_SUPER_EARNINGS path).';
   static eventType   = 'SUPER_EARNINGS';
 

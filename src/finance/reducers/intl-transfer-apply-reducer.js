@@ -47,8 +47,8 @@ import { getUsEarlyWithdrawalRules } from '../account-rules/us/us-early-withdraw
  */
 export class IntlTransferApplyReducer extends Reducer {
   static description = 'Executes a cross-currency transfer (AU↔US) with exchange rate conversion and fee; chains OUT_OF_FUNDS if neither side can cover the deficit.';
-
-  static actionType = 'INTL_TRANSFER_APPLY';
+  static type        = 'IntlTransferApplyReducer';
+  static actionType  = 'INTL_TRANSFER_APPLY';
 
   constructor({ accountService, usSavingsKey = 'usSavingsAccount', auSavingsKey = 'auSavingsAccount', earlyWithdrawalRulesFn = getUsEarlyWithdrawalRules } = {}) {
     super('International Transfer Apply', PRIORITY.PRE_PROCESS);
@@ -58,6 +58,16 @@ export class IntlTransferApplyReducer extends Reducer {
     this.earlyWithdrawalRulesFn = earlyWithdrawalRulesFn;
     this.reducedActionTypes     = ['INTL_TRANSFER_APPLY'];
     this.generatedActionTypes   = ['OUT_OF_FUNDS'];
+  }
+
+  static fromJSON(d, { accountService }) {
+    const r = new this({ accountService, usSavingsKey: d.usSavingsKey ?? 'usSavingsAccount', auSavingsKey: d.auSavingsKey ?? 'auSavingsAccount' });
+    r.id = d.id;
+    return r;
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), usSavingsKey: this.usSavingsKey, auSavingsKey: this.auSavingsKey };
   }
 
   reduce(state, action, date) {

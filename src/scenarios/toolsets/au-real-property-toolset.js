@@ -12,6 +12,7 @@ import { OneOffEvent }             from '../../simulation-framework/events/one-o
 import { EventSeries }             from '../../simulation-framework/events/event-series.js';
 import { AuHouseSaleHandler, AuHouseSaleApplyReducer } from '../../finance/account-rules/au/au-real-property-classes.js';
 import { AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer } from '../../finance/account-rules/mortgage-payment-classes.js';
+import { ValueType } from '../../simulation-framework/type-registry.js';
 
 /**
  * AU_REAL_PROPERTY toolset — wires AU house sale machinery.
@@ -32,6 +33,19 @@ export const AU_REAL_PROPERTY = {
   id: 'AU_REAL_PROPERTY',
   capabilities: ['real-property'],
   dependencies: ['AU_TAX'],
+
+  types: {
+    handlers: [AuHouseSaleHandler, AuMortgagePaymentHandler],
+    reducers: [AuHouseSaleApplyReducer, AuMortgagePaymentApplyReducer],
+    actions: [
+      { type: 'AU_HOUSE_SALE_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'AU',
+        fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), stateKey: ValueType.text() } },
+      { type: 'AU_HOUSE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'AU',
+        fields: { gain: ValueType.number(), isAuResident: ValueType.boolean(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text() } },
+      { type: 'AU_MORTGAGE_PAYMENT_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'AU',
+        fields: { amount: ValueType.currency('AUD') } },
+    ],
+  },
 
   paramSchema(context) {
     return [];
