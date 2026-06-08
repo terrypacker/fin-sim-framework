@@ -599,3 +599,35 @@ test('replenishSavings: phase-1 draws eligible accounts before early-withdrawal 
   assert.deepStrictEqual(drawnKeys, ['eligibleAccount']);
   assert.strictEqual(locked.balance, 50000); // untouched — eligible account covered the deficit
 });
+
+test('replenishSavings: spouse super account age-gate uses spouse birthDate, not primary', () => {
+  // Regression: replenishSavings was using the target account owner's birthDate for ALL
+  // source accounts, so a spouse's super account (minimumAge=60) was unlocked when the
+  // PRIMARY person turned 60 even if the spouse was still 55.
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
+  // Primary is 60, spouse is 55 — sim date is primary's 60th birthday year.
+  const simDate    = new Date(2026, 6, 1);
+  const primaryDOB = new Date(1966, 0, 1);  // age ~60
+  const spouseDOB  = new Date(1971, 0, 1);  // age ~55
+
+  const auSavings   = new SavingsAccount(0,      { country: 'AU', currency: AUD, ownerId: 'primary' });
+  const spouseSuper = new SuperannuationAccount(100_000, { country: 'AU', currency: AUD, drawdownPriority: 1, ownerId: 'spouse' });
+  const state = {
+    auSavings,
+    spouseSuper,
+    people: {
+      primary: { birthDate: primaryDOB, residency: 'AUS' },
+      spouse:  { birthDate: spouseDOB,  residency: 'AUS' },
+    },
+  };
+
+  // The deficit cannot be covered — spouse super should be blocked (spouse < 60).
+  assert.throws(
+    () => svc.replenishSavings(state, 'auSavings', 10_000, simDate),
+    /InsufficientFunds/,
+    'spouse super must be blocked because the spouse is under 60'
+  );
+  assert.strictEqual(spouseSuper.balance, 100_000, 'spouse super balance must be unchanged');
+});

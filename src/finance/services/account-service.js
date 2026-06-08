@@ -393,7 +393,10 @@ export class AccountService extends AssetService {
     for (const [key, account] of sources) {
       if (remaining < 1e-9) break;
 
-      if (this.isWithdrawalEligible(account, { birthDate }, date)) {
+      const acctBirthDate1 = (account.ownerId && account.ownerId !== personKey)
+        ? (getBirthDate(state, account.ownerId) ?? birthDate)
+        : birthDate;
+      if (this.isWithdrawalEligible(account, { birthDate: acctBirthDate1 }, date)) {
         // Normal eligible withdrawal.
         if (account.balance <= 0) continue;
         const withdraw = Math.min(remaining, account.balance);
@@ -440,12 +443,16 @@ export class AccountService extends AssetService {
     for (const [key, account] of sources) {
       if (remaining < 1e-9) break;
       if (!account.allowsEarlyWithdrawal) continue;
-      if (this.isWithdrawalEligible(account, { birthDate }, date)) continue;
+      const acctBirthDate2 = (account.ownerId && account.ownerId !== personKey)
+        ? (getBirthDate(state, account.ownerId) ?? birthDate)
+        : birthDate;
+      const acctAgeDecimal = acctBirthDate2 ? (date - acctBirthDate2) / msPerYear : ageDecimal;
+      if (this.isWithdrawalEligible(account, { birthDate: acctBirthDate2 }, date)) continue;
 
       const rules = earlyWithdrawalRulesFn(account.type);
       if (!rules) continue;
 
-      const penaltyRate = ageDecimal < rules.ageThreshold ? rules.penaltyRate : 0;
+      const penaltyRate = acctAgeDecimal < rules.ageThreshold ? rules.penaltyRate : 0;
       const netFactor   = 1 - penaltyRate;
 
       if (account.type === ACCOUNT_TYPE.ROTH) {
