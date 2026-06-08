@@ -33,12 +33,10 @@ export class AuSavingsContributionApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const src  = state.checkingAccount ?? state.auSavingsAccount;
+    const src = state.checkingAccount ?? state.auSavingsAccount;
     this.accountService.transaction(src, -action.amount, null);
-    const prev = state.auSavingsAccount ?? {};
-    return this.newState(state, {
-      auSavingsAccount: { ...prev, balance: (prev.balance ?? 0) + action.amount },
-    });
+    this.accountService.transaction(state.auSavingsAccount, action.amount, null);
+    return this.newState(state, {});
   }
 }
 
@@ -57,12 +55,10 @@ export class AuSavingsWithdrawalApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const src  = state.checkingAccount ?? state.auSavingsAccount;
+    const src = state.checkingAccount ?? state.auSavingsAccount;
     this.accountService.transaction(src, action.amount, null);
-    const prev = state.auSavingsAccount ?? {};
-    return this.newState(state, {
-      auSavingsAccount: { ...prev, balance: (prev.balance ?? 0) - action.amount },
-    });
+    this.accountService.transaction(state.auSavingsAccount, -action.amount, null);
+    return this.newState(state, {});
   }
 }
 

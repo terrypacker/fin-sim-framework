@@ -47,14 +47,11 @@ export class SuperContributionApplyReducer extends AccountServiceReducer {
   reduce(state, action) {
     this.accountService.transaction(auCash(state), -action.amount, null);
     const sa = state.superAccount;
+    this.accountService.transaction(sa, action.amount, null);
     return this.newState(
       state,
       {
-        superAccount: {
-          ...sa,
-          balance:           sa.balance           + action.amount,
-          contributionBasis: sa.contributionBasis + action.amount,
-        },
+        superAccount: { ...sa, contributionBasis: sa.contributionBasis + action.amount },
       },
       [{ type: 'SUPER_CONTRIBUTION_TAX', amount: action.amount }]
     );
@@ -83,13 +80,10 @@ export class SuperWithdrawalContribApplyReducer extends AccountServiceReducer {
     }
     this.accountService.transaction(auCash(state), amount, null);
     const sa = state.superAccount;
+    this.accountService.transaction(sa, -amount, null);
     return this.newState(state, {
       superWithdrawalBlocked: false,
-      superAccount: {
-        ...sa,
-        balance:           sa.balance           - amount,
-        contributionBasis: sa.contributionBasis - amount,
-      },
+      superAccount: { ...sa, contributionBasis: sa.contributionBasis - amount },
     });
   }
 }
@@ -117,15 +111,12 @@ export class SuperWithdrawalEarningsApplyReducer extends AccountServiceReducer {
     }
     this.accountService.transaction(auCash(state), amount, null);
     const sa = state.superAccount;
+    this.accountService.transaction(sa, -amount, null);
     return this.newState(
       state,
       {
         superWithdrawalBlocked: false,
-        superAccount: {
-          ...sa,
-          balance:       sa.balance       - amount,
-          earningsBasis: sa.earningsBasis - amount,
-        },
+        superAccount: { ...sa, earningsBasis: sa.earningsBasis - amount },
       },
       [{ type: 'SUPER_WITHDRAWAL_EARNINGS_TAX', amount }]
     );
