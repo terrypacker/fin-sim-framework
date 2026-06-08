@@ -32,15 +32,26 @@ class PeriodAdvanceReducerBase extends Reducer {
 
 /**
  * Updates state.currentPeriods.US when a US_PERIOD_ADVANCE action fires.
- * Runs at PRE_PROCESS priority so the correct period is in state before
- * any tax or cash-flow reducers run on the same step.
+ * Also sets state.usFilingSingle based on state.deceased: once any person has
+ * died the surviving spouse files single starting the following tax year
+ * (design/27 §7 / Step 19).
+ * Runs at PRE_PROCESS priority so the correct period and filing status are in
+ * state before any tax or cash-flow reducers run on the same step.
  */
 export class UsPeriodAdvanceReducer extends PeriodAdvanceReducerBase {
   static type       = 'UsPeriodAdvanceReducer';
   static category   = 'reducer';
   static cc         = 'US';
   static actionType = 'US_PERIOD_ADVANCE';
-  static description = 'Updates state.currentPeriods.US to the new period when a US_PERIOD_ADVANCE action fires at a year boundary.';
+  static description = 'Updates state.currentPeriods.US to the new period when a US_PERIOD_ADVANCE action fires at a year boundary. Sets usFilingSingle=true when state.deceased is non-empty.';
+
+  reduce(state, action) {
+    const usFilingSingle = Object.keys(state.deceased ?? {}).length > 0;
+    return this.newState(state, {
+      currentPeriods: { ...state.currentPeriods, [this.constructor.cc]: action.period },
+      usFilingSingle,
+    });
+  }
 }
 
 /**

@@ -136,13 +136,44 @@ export class UniformDateDistribution {
   }
 }
 
+/**
+ * Actuarial lifespan distribution: samples a total-lifespan value (years from birth)
+ * conditioned on the person having already survived to `currentAge`.
+ *
+ * Uses a Box-Muller normal draw centred at the life-table mean (by sex), then
+ * clamps the result from below at max(currentAge + 0.5, draw) to ensure the
+ * sampled lifespan is always >= the person's current age.  The distribution
+ * is parameterised by { table, sex, currentAge }.
+ *
+ * `table` is a life-table object (e.g. CDC_2024) with per-sex { mean, stdDev }.
+ */
+export class ActuarialLifespanDistribution {
+  constructor({ table, sex = 'M', currentAge = 0 }) {
+    const row        = table?.[sex] ?? table?.default ?? { mean: 80, stdDev: 13 };
+    this._mean       = row.mean;
+    this._stdDev     = row.stdDev;
+    this._currentAge = currentAge;
+  }
+
+  sample(rngFn) {
+    if (this._stdDev === 0) return Math.max(this._mean, this._currentAge);
+    const u1 = Math.max(rngFn(), 1e-10);
+    const u2 = rngFn();
+    const z  = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    const raw = this._mean + this._stdDev * z;
+    // Clamp: sampled lifespan must exceed current age (already lived these years)
+    return Math.max(raw, this._currentAge + 1);
+  }
+}
+
 export const DISTRIBUTION_TYPES = {
-  CONSTANT:     'constant',
-  UNIFORM:      'uniform',
-  UNIFORM_DATE: 'uniformDate',
-  NORMAL:       'normal',
-  LOG_NORMAL:   'logNormal',
-  BERNOULLI:    'bernoulli',
+  CONSTANT:          'constant',
+  UNIFORM:           'uniform',
+  UNIFORM_DATE:      'uniformDate',
+  NORMAL:            'normal',
+  LOG_NORMAL:        'logNormal',
+  BERNOULLI:         'bernoulli',
+  ACTUARIAL_LIFESPAN: 'actuarialLifespan',
 };
 
 /**
@@ -156,7 +187,8 @@ export function createDistribution(config) {
     case DISTRIBUTION_TYPES.UNIFORM_DATE: return new UniformDateDistribution(config);
     case DISTRIBUTION_TYPES.NORMAL:       return new NormalDistribution(config);
     case DISTRIBUTION_TYPES.LOG_NORMAL:   return new LogNormalDistribution(config);
-    case DISTRIBUTION_TYPES.BERNOULLI:    return new BernoulliDistribution(config);
+    case DISTRIBUTION_TYPES.BERNOULLI:         return new BernoulliDistribution(config);
+    case DISTRIBUTION_TYPES.ACTUARIAL_LIFESPAN: return new ActuarialLifespanDistribution(config);
     default: throw new Error(`Unknown distribution type: ${config.type}`);
   }
 }

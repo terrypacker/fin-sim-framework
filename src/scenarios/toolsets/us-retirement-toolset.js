@@ -57,6 +57,13 @@ import {
 } from '../../finance/account-rules/us/ira-rollover-classes.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
 import { TaxService } from '../../finance/tax-service.js';
+import { MortalityHandler }                      from '../../finance/handlers/mortality-handler.js';
+import { PersonDiedApplyReducer }                from '../../finance/reducers/person-died-apply-reducer.js';
+import { SocialSecuritySurvivorApplyReducer }    from '../../finance/reducers/social-security-survivor-apply-reducer.js';
+import { AccountRetitleApplyReducer }            from '../../finance/reducers/account-retitle-apply-reducer.js';
+import { ScenarioCompleteReducer }               from '../../finance/reducers/scenario-complete-reducer.js';
+import { LateLifeCareHandler }                  from '../../finance/spending/strategies/late-life-care-handler.js';
+import { LateLifeCareApplyReducer }             from '../../finance/spending/strategies/late-life-care-apply-reducer.js';
 import {
   RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
   RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer,
@@ -276,6 +283,36 @@ export const US_RETIREMENT = {
       ...SPENDING_STRATEGY_REGISTRY.REGIME_AWARE.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.GUARDRAIL.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.HEALTHCARE.paramSchema(),
+      {
+        key: 'mortalityEnabled', label: 'Mortality Enabled',
+        type: 'Boolean', group: 'Mortality', mc: false, opt: true,
+        defaultValue: true,
+        description: 'If true, PERSON_DIED events are scheduled and processed; disable to run to simEnd regardless of lifespan',
+      },
+      {
+        key: 'survivorEssentialMultiplier', label: 'Survivor Essential Multiplier',
+        type: 'Number', group: 'Mortality', mc: false, opt: true,
+        defaultValue: 0.85,
+        description: 'Fraction of essential expenses retained after a spouse dies (default 0.85)',
+      },
+      {
+        key: 'survivorDiscretionaryMultiplier', label: 'Survivor Discretionary Multiplier',
+        type: 'Number', group: 'Mortality', mc: false, opt: true,
+        defaultValue: 0.50,
+        description: 'Fraction of discretionary expenses retained after a spouse dies (default 0.50)',
+      },
+      {
+        key: 'lateLifeCareMonths', label: 'Late-Life Care Window (months)',
+        type: 'Number', group: 'Mortality', mc: false, opt: true,
+        defaultValue: 0,
+        description: 'Number of months before death to apply the late-life care expense multiplier; 0 = disabled',
+      },
+      {
+        key: 'lateLifeCareFactor', label: 'Late-Life Care Factor',
+        type: 'Number', group: 'Mortality', mc: false, opt: true,
+        defaultValue: 2.0,
+        description: 'Multiplier applied to all monthly expenses during the late-life care window',
+      },
     ];
   },
 
@@ -503,6 +540,58 @@ export const US_RETIREMENT = {
       }
     }
 
+    // Mortality — PERSON_DIED one-off events (design/27 Increment 1 Step 2).
+    const mortalityEnabled   = p.mortalityEnabled ?? true;
+    const lateLifeCareMonths = p.lateLifeCareMonths ?? 0;
+    const lateLifeCareFactor = p.lateLifeCareFactor ?? 2.0;
+
+    if (mortalityEnabled) {
+      const simEnd = context.simEnd ? new Date(context.simEnd) : null;
+      for (const person of people) {
+        // Prefer the MC-perturbed lifeExpectancy from params.people if present;
+        // fall back to the person's own lifeExpectancy field (deterministic single runs).
+        const lifeExpectancy = p.people?.[person.id]?.lifeExpectancy ?? person.lifeExpectancy;
+        if (!person.birthDate || !lifeExpectancy) continue;
+        const birth     = new Date(person.birthDate);
+        const deathDate = new Date(Date.UTC(
+          birth.getUTCFullYear() + Math.round(lifeExpectancy),
+          birth.getUTCMonth(),
+          birth.getUTCDate(),
+        ));
+        if (simEnd && deathDate > simEnd) continue;
+        schedules.push(new OneOffEvent({
+          name:    `Death — ${person.name ?? person.id}`,
+          type:    'PERSON_DIED',
+          date:    deathDate,
+          data:    { personId: person.id },
+          enabled: true,
+          color:   '#37474F',
+        }));
+
+        // Late-life care window (design/27 Increment 2 Step 11).
+        if (lateLifeCareMonths > 0) {
+          const careBegin = new Date(deathDate);
+          careBegin.setUTCMonth(careBegin.getUTCMonth() - lateLifeCareMonths);
+          schedules.push(new OneOffEvent({
+            name:    `Late-Life Care Begin — ${person.name ?? person.id}`,
+            type:    'LATE_LIFE_CARE_BEGIN',
+            date:    careBegin,
+            data:    { personId: person.id, factor: lateLifeCareFactor },
+            enabled: true,
+            color:   '#BF360C',
+          }));
+          schedules.push(new OneOffEvent({
+            name:    `Late-Life Care End — ${person.name ?? person.id}`,
+            type:    'LATE_LIFE_CARE_END',
+            date:    new Date(deathDate),
+            data:    { personId: person.id },
+            enabled: true,
+            color:   '#BF360C',
+          }));
+        }
+      }
+    }
+
     return schedules;
   },
 
@@ -679,6 +768,29 @@ export const US_RETIREMENT = {
     // Out-of-funds handler (no event binding)
     handlers.push(new OutOfFundsHandler());
 
+    // Mortality — MortalityHandler fires on PERSON_DIED (design/27 Step 7).
+    const mortalityEnabled = p.mortalityEnabled ?? true;
+    if (mortalityEnabled) {
+      const deathEvents = Object.values(context.schedulesById).filter(e => e?.type === 'PERSON_DIED');
+      if (deathEvents.length > 0) {
+        const mortalityH = new MortalityHandler({
+          survivorEssentialMultiplier:     p.survivorEssentialMultiplier     ?? 0.85,
+          survivorDiscretionaryMultiplier: p.survivorDiscretionaryMultiplier ?? 0.50,
+        });
+        for (const evt of deathEvents) mortalityH.handledEvents.push(evt);
+        handlers.push(mortalityH);
+      }
+
+      // Late-life care handler (design/27 Increment 2 Step 12).
+      const llcBeginEvents = Object.values(context.schedulesById).filter(e => e?.type === 'LATE_LIFE_CARE_BEGIN');
+      const llcEndEvents   = Object.values(context.schedulesById).filter(e => e?.type === 'LATE_LIFE_CARE_END');
+      if (llcBeginEvents.length > 0 || llcEndEvents.length > 0) {
+        const llcH = new LateLifeCareHandler();
+        for (const evt of [...llcBeginEvents, ...llcEndEvents]) llcH.handledEvents.push(evt);
+        handlers.push(llcH);
+      }
+    }
+
     // Guardrail — RetirementDateHandler fires on RETIREMENT_DATE_REACHED (design/26 step 12).
     const strategiesH = p.spendingStrategy ?? ['FIXED'];
     if (strategiesH.includes('GUARDRAIL')) {
@@ -788,6 +900,20 @@ export const US_RETIREMENT = {
     // 401(k)→IRA conversion (no cash pool / tax — direct rollover)
     if (k401Accounts.length > 0 && iraAccounts.length > 0) {
       reducers.push(new K401ToIraConversionApplyReducer({ accountService: accountSvc }));
+    }
+
+    // Mortality reducers (design/27 Step 7).
+    const mortalityEnabledR = p.mortalityEnabled ?? true;
+    if (mortalityEnabledR) {
+      reducers.push(new PersonDiedApplyReducer());
+      reducers.push(new SocialSecuritySurvivorApplyReducer());
+      reducers.push(new AccountRetitleApplyReducer());
+      reducers.push(new ScenarioCompleteReducer());
+
+      // Late-life care reducer (design/27 Increment 2).
+      if ((p.lateLifeCareMonths ?? 0) > 0) {
+        reducers.push(new LateLifeCareApplyReducer());
+      }
     }
 
     return reducers;
