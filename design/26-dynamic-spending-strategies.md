@@ -1,6 +1,6 @@
 # 26 — Dynamic Spending Strategies
 
-**Status**: Ready for implementation (Phase B per `design/24-financial-modeling-roadmap.md` §5)
+**Status**: COMPLETE — both increments landed 2026-06-05
 **Phase dependencies**: Phase A substrate must land first — both `design/25-holding-level-state.md` (✅ landed) **and** `design/25a-mc-nested-param-paths.md` (⚠️ not yet landed; required for the `HealthcareEventDriven` MC sweep — see §12). This design doesn't read holdings directly but ships after the substrate is stable.
 **Related**: `design/24-financial-modeling-roadmap.md` §3.2, `design/21-financial-shock-and-regime-framework.md` (regime-aware strategies read `state.activeRegimes`), `design/23-fx-exchange.md` (Guardrail's portfolio sum is FX-converted to base currency), `design/15-config-as-source-of-truth.md` (strategy params live in the toolset param schema), `design/27-mortality-and-survivor-mechanics.md` (survivor + late-life-care multipliers write per-slice deltas onto the materialized `state.expenses`).
 **Author note**: Section bodies finalized 2026-06-05 from the §10 open-question answers and the §11 follow-up list. The implementation decisions (monthlyExpenses-as-derived-getter, 25a-first sequencing, increment scope) are recorded in §12.
@@ -106,6 +106,7 @@ Notes:
 - `state.guardrail = { initialWithdrawalRate, lastAdjustmentDate, currentAdjustmentMultiplier, portfolioAccountIds: string[] | null }`.
 - `state.healthcareEventsScheduled` — array; entries cleared as events fire.
 - `state.discretionarySharePct` — scalar; retained for reference / re-materialization, though the slices in `state.expenses` are authoritative after boot.
+- `state.regimeActions` — general regime-effect tracking map, keyed by action-type string. Each entry is `{ active: bool, appliedMultiplier: number|null, firedForShocks: string[] }`. Shared across all regime-driven strategies (spending, behavioral, etc.) so each strategy adds its own key rather than polluting top-level state. Initialized to `{}` at boot; each strategy lazily initializes its key. See §13 for the two patterns it supports (reversible-while-active vs. one-shot trigger).
 
 The `Shock` schema and the regime object gain `tags: string[]` (§7). No other change to the `state.activeRegimes` shape beyond a read; the `ECONOMIC_STRESS` tag check is one lookup per period.
 
@@ -182,3 +183,126 @@ Three load-bearing implementation choices, confirmed at finalization:
 3. **Increment scope — materialization + `FixedInflationAdjusted` + `RegimeAware` first.** Land `state.expenses` materialization, `SPENDING_STRATEGY_REGISTRY`, `FixedInflationAdjusted` (wrapping current behavior — the retargeted `InflationAdjustReducer`), and `RegimeAware` (needs only the `tags` plumbing + a read of `state.activeRegimes`). Defer `Guardrail` (needs `RETIREMENT_DATE_REACHED`, FX portfolio sum, baseline capture) and `HealthcareEventDriven` (needs 25a for MC) to a second increment. This validates the materialization migration with the two lowest-risk strategies before adding the event-driven machinery.
 
 **Build order:** `25a` → `26` increment 1 (materialization + Fixed + RegimeAware) → `26` increment 2 (Guardrail + Healthcare). Design 27 (Mortality) can interleave once increment 1's materialized slices land.
+
+---
+
+## 13. Step-by-step Implementation Plan (added 2026-06-05)
+
+### Status legend
+- [ ] not started  ✅ complete
+
+---
+
+### Increment 1 — Materialization + FixedInflationAdjusted + RegimeAware
+
+**Step 1 — `REGIME_TAG` const** ✅
+- Create `src/finance/economic-regimes/regime-tag.js`
+- `export const REGIME_TAG = Object.freeze({ ECONOMIC_STRESS: 'ECONOMIC_STRESS' });`
+- No other changes; just the vocabulary.
+
+**Step 2 — Add `tags` to `EconomicShockHandler`** ✅
+- `src/finance/economic-regimes/economic-shock-handler.js`: in the `regime` object literal built in `call()`, add `tags: shock.tags ?? []`.
+- `AddRegimeReducer` passes the regime object through unchanged — no edits needed there.
+
+**Step 3 — Materialize `state.expenses` in `InternationalRetirementFinancialState`** ✅
+- `src/finance/state/intl-retirement-state.js`:
+  - Add `discretionarySharePct` constructor param (default `0.30`); store as `this.discretionarySharePct`.
+  - Compute and store `this.expenses = { essential: monthlyExpenses * (1 - pct), discretionary: monthlyExpenses * pct }`.
+  - Add `this.regimeActions = {};` — general regime-effect tracking map shared by all regime-driven strategies; each strategy lazily initializes its own key.
+  - Keep `this.monthlyExpenses` as a plain scalar — it stays in sync (not a JS getter; state is structuredClone-safe plain object). Every reducer that writes to `state.expenses` must also update `state.monthlyExpenses = essential + discretionary`.
+
+**Step 4 — Retarget `InflationAdjustReducer` to inflate slices** ✅
+- `src/finance/reducers/inflation-adjust-reducer.js`:
+  - When `state.expenses` is defined: inflate `expenses.essential` and `expenses.discretionary` by `factor`; set `monthlyExpenses = essential + discretionary`.
+  - When `state.expenses` is absent (legacy scenarios without the new state shape): fall back to inflating `monthlyExpenses` directly (backward-compatible no-op for old snapshots/tests).
+
+**Step 5 — Create `SpendingStrategyApplyReducer`** ✅
+- Create `src/finance/spending/spending-strategy-apply-reducer.js`
+- Action type: `SPENDING_STRATEGY_APPLY`; priority: `CASH_FLOW (20)`.
+- Payload: `{ delta, slice ('essential'|'discretionary'), reason }`.
+- Logic: `expenses[slice] += delta`; then `monthlyExpenses = expenses.essential + expenses.discretionary`.
+
+**Step 6 — Create `RegimeAwareSpendingReducer`** ✅
+- Create `src/finance/spending/strategies/regime-aware-spending-reducer.js`
+- Listens on `['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE']`; priority `PRE_PROCESS + 3` (fires after `InflationAdjustReducer` at +2, so it sees already-inflated slices).
+- Constructor param: `regimeAwareCutPct = 0.15`.
+- State key: `state.regimeActions.spending_discretionary_cut = { active, appliedMultiplier, firedForShocks }` (lazily initialized).
+- Each annual advance:
+  - `isActive` = `state.activeRegimes.some(r => r.tags?.includes(REGIME_TAG.ECONOMIC_STRESS))`.
+  - If `isActive && !entry.active`:  
+    → `expenses.discretionary *= (1 - regimeAwareCutPct)`; store `appliedMultiplier = 1 - pct`; `active = true`.
+  - If `!isActive && entry.active`:  
+    → `expenses.discretionary /= entry.appliedMultiplier`; `active = false`; `appliedMultiplier = null`.
+  - Always sync: `monthlyExpenses = expenses.essential + expenses.discretionary`.
+
+**Step 7 — Create `SPENDING_STRATEGY_REGISTRY`** ✅
+- Create `src/finance/spending/spending-strategy-registry.js`
+- Exports `SPENDING_STRATEGY_REGISTRY` (plain object keyed by strategy id):
+  ```js
+  FIXED: {
+    reducers: () => [],         // InflationAdjustReducer is wired directly by the toolset
+    paramSchema: () => [],
+  },
+  REGIME_AWARE: {
+    reducers: (context) => [new RegimeAwareSpendingReducer({ regimeAwareCutPct: context.parameters.regimeAwareCutPct ?? 0.15 })],
+    paramSchema: () => [{ key: 'regimeAwareCutPct', ... }],
+  },
+  ```
+- Increment 2 will add `GUARDRAIL` and `HEALTHCARE` entries.
+
+**Step 8 — Add params + wire strategies in toolsets** ✅
+- `src/scenarios/toolsets/us-retirement-toolset.js` and `au-retirement-toolset.js`:
+  - `paramSchema()`: add `discretionarySharePct` (Number, default `0.30`, group `Spending`) and `regimeAwareCutPct` (Number, default `0.15`, group `Spending`).
+  - `state()`: add `discretionarySharePct: p.discretionarySharePct ?? 0.30` to patches.
+  - `reducers()`: always register `SpendingStrategyApplyReducer`; if `spendingStrategy` includes `'REGIME_AWARE'`, push `RegimeAwareSpendingReducer` from registry.
+- Note: `spendingStrategy` selection param deferred until EnumMulti UI support lands; for now the registry wiring is gated by `p.regimeAwareCutPct !== undefined` or a simple boolean param `regimeAwareSpending`.
+
+**Step 9 — Update `intl-retirement-scenario.js` defaults** ✅
+- Add `discretionarySharePct: 0.30` to `INTL_RETIREMENT_DEFAULTS`.
+
+**Step 10 — Update `state-schema-registry.js`** ✅
+- Register `expenses.essential` and `expenses.discretionary` as `ParameterValueType.currency(...)` (or nested registration if the registry supports it).
+
+**Step 11 — Unit tests** ✅
+- `tests/unit/spending-materialization.test.mjs` — boot math; derived `monthlyExpenses` sum; inflation correctly inflates both slices.
+- `tests/unit/spending-fixed.test.mjs` — existing inflation behavior unchanged; `monthlyExpenses` stays in sync.
+- `tests/unit/spending-regime-aware.test.mjs` — cut applies at regime activation; does not compound; reverts at regime end.
+- `tests/unit/spending-strategy-registry.test.mjs` — registry lookup for FIXED and REGIME_AWARE.
+
+---
+
+### Increment 2 — Guardrail + HealthcareEventDriven ✅
+
+**Step 12 — Emit `RETIREMENT_DATE_REACHED` lifecycle event** ✅
+- `RetirementDateHandler` (`src/finance/spending/strategies/retirement-date-handler.js`) handles `RETIREMENT_DATE_REACHED`.
+- Toolset `schedules()` registers a `OneOffEvent` at each person's future `retirementDate`.
+- If sim opens post-retirement, toolset `state()` pre-populates `state.guardrail.initialWithdrawalRate` from initial account balances.
+- Handler computes portfolio value via `computeGuardrailPortfolioValue` (FX-aware) and emits `GUARDRAIL_BASELINE_APPLY`.
+
+**Step 13 — `GuardrailBaselineApplyReducer`** ✅
+- `src/finance/spending/strategies/guardrail-baseline-apply-reducer.js`; priority `PRE_PROCESS (10)`.
+- Stores `initialWithdrawalRate`, `portfolioValue`, `annualSpending`, `baselineDate` in `state.guardrail`.
+- Resets `currentAdjustmentMultiplier = 1.0` and clears last-adjustment fields.
+
+**Step 14 — `GuardrailAdjustApplyReducer`** ✅
+- `src/finance/spending/strategies/guardrail-adjust-apply-reducer.js`; priority `PRE_PROCESS (10)`.
+- Payload: `{ multiplier, cause }`. Multiplies `state.expenses.discretionary`; syncs `monthlyExpenses`.
+- Compounds `state.guardrail.currentAdjustmentMultiplier`.
+
+**Step 15 — `GuardrailAnnualCheckReducer`** ✅
+- `src/finance/spending/strategies/guardrail-annual-check-reducer.js`; priority `PRE_PROCESS + 3`.
+- On each annual period advance: computes `currentRate = annualSpending / portfolioValue` (FX-converted).
+- Emits `GUARDRAIL_ADJUST_APPLY` via `state.next` if cut or raise threshold is breached.
+- Shared utility: `src/finance/spending/guardrail-portfolio-value.js`.
+
+**Step 16 — `HealthcareEventDriven` strategy** ✅
+- `HealthcareEventHandler` (`src/finance/spending/strategies/healthcare-event-handler.js`) handles `HEALTHCARE_EXPENSE` events; emits `EXPENSE_DEBIT` + `HEALTHCARE_EXPENSE_APPLY`.
+- `HealthcareExpenseApplyReducer` (`src/finance/spending/strategies/healthcare-expense-apply-reducer.js`); priority `CASH_FLOW (20)`; accumulates `healthcareSpendingYTD` + `healthcareSpendingTotal` (does NOT modify `state.expenses.essential` permanently — healthcare is a one-off debit, not a recurring budget change).
+- Deterministic `OneOffEvent`s scheduled from `parameters.healthcareEvents` array at toolset `schedules()` time.
+- MC sweep via 25a nested-path params is deferred to a future increment.
+
+**Step 17 — Tests for Increment 2** ✅
+- `tests/unit/spending-guardrail.test.mjs` — 14 tests: baseline capture, band triggers, cut/raise, handler rate calc.
+- `tests/unit/spending-guardrail-fx.test.mjs` — 7 tests: multi-currency portfolio sum, USD+AUD conversion.
+- `tests/unit/spending-healthcare.test.mjs` — 10 tests: one-off event fires, EXPENSE_DEBIT emitted, REPLENISH_SAVINGS when needed, AU-resident routing.
+- `tests/unit/spending-composition.test.mjs` — 4 tests: RegimeAware + Guardrail additive; Guardrail raise doesn't clobber regime cut.

@@ -35,6 +35,7 @@ export class InternationalRetirementFinancialState extends SimulationState {
     collectibleAccount,
     inflationRates,
     monthlyExpenses,
+    discretionarySharePct,
     ...rest
   } = {}) {
     super(rest);
@@ -92,6 +93,19 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.inflationAccumulator = { US: 1.0, AU: 1.0 };
     this.monthlyExpenses      = monthlyExpenses ?? 6_000;
 
+    // Spending strategy substrate (design/26).
+    // state.expenses is the source of truth; state.monthlyExpenses is kept in
+    // sync as the sum so existing consumers continue to work unchanged.
+    this.discretionarySharePct = discretionarySharePct ?? 0.30;
+    this.expenses = {
+      essential:     this.monthlyExpenses * (1 - this.discretionarySharePct),
+      discretionary: this.monthlyExpenses * this.discretionarySharePct,
+    };
+
+    // General regime-effect tracking map shared by all regime-driven strategies.
+    // Each strategy lazily initializes its own key; see design/26 §6 + §13.
+    this.regimeActions = {};
+
     // YTD tax accumulators
     this.usOrdinaryIncomeYTD = 0;
     this.usNegativeIncomeYTD = 0;
@@ -116,6 +130,24 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.auPersonFrankingCreditYTD          = _zeroes();
     this.auPersonNonResidentWithholdingYTD  = _zeroes();
     this.auPersonSuperTaxYTD                = _zeroes();
+
+    // Guardrail strategy substrate (design/26 Increment 2).
+    // initialWithdrawalRate is null until RETIREMENT_DATE_REACHED fires (or pre-populated
+    // by the toolset when sim opens post-retirement).
+    this.guardrail = {
+      initialWithdrawalRate:        null,
+      portfolioValue:               null,
+      annualSpending:               null,
+      baselineDate:                 null,
+      lastAdjustmentDate:           null,
+      lastAdjustmentCause:          null,
+      currentAdjustmentMultiplier:  1.0,
+    };
+
+    // Healthcare tracking substrate (design/26 Increment 2).
+    this.healthcareEventsScheduled = [];
+    this.healthcareSpendingYTD     = 0;
+    this.healthcareSpendingTotal   = 0;
 
     this.superWithdrawalBlocked = false;
     this.outOfFundsDate = null;

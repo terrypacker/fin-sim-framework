@@ -68,7 +68,17 @@ export class InflationAdjustReducer extends Reducer {
     const residency   = state.people?.[primaryKey]?.residency ?? null;
     const residenceCC = residency === 'AUS' ? 'AU' : 'US';
     if (cc === residenceCC) {
-      updates.monthlyExpenses = (state.monthlyExpenses ?? 0) * factor;
+      if (state.expenses) {
+        // Materialized-slice path (design/26): inflate both slices and keep the
+        // scalar in sync as their sum.
+        const essential     = (state.expenses.essential     ?? 0) * factor;
+        const discretionary = (state.expenses.discretionary ?? 0) * factor;
+        updates.expenses        = { essential, discretionary };
+        updates.monthlyExpenses = essential + discretionary;
+      } else {
+        // Legacy path: scalar only (pre-design-26 state or old snapshots).
+        updates.monthlyExpenses = (state.monthlyExpenses ?? 0) * factor;
+      }
     }
 
     return this.newState(state, updates);
