@@ -146,7 +146,7 @@ test('MORT-6: MortalityHandler emits full action chain when a spouse survives', 
   const state   = baseState();
   const event   = makeEvent('primary');
 
-  const actions = handler.call({ state, event });
+  const actions = handler.call({ state, data: event.data, date: event.date });
 
   const types = actions.map(a => a.type);
   assert.ok(types.includes('PERSON_DIED_APPLY'));
@@ -164,7 +164,7 @@ test('MORT-7: MortalityHandler emits only PERSON_DIED_APPLY + SCENARIO_COMPLETE_
   const state   = baseState({ people: { primary: basePeople().primary } });
   const event   = makeEvent('primary');
 
-  const actions = handler.call({ state, event });
+  const actions = handler.call({ state, data: event.data, date: event.date });
   const types   = actions.map(a => a.type);
 
   assert.ok(types.includes('PERSON_DIED_APPLY'));
@@ -181,7 +181,7 @@ test('MORT-8: MortalityHandler per-slice expense deltas match multipliers', () =
   const state   = baseState(); // essential=4200, discretionary=1800
   const event   = makeEvent('primary');
 
-  const actions    = handler.call({ state, event });
+  const actions    = handler.call({ state, data: event.data, date: event.date });
   const essAction  = actions.find(a => a.type === 'SPENDING_STRATEGY_APPLY' && a.slice === 'essential');
   const discAction = actions.find(a => a.type === 'SPENDING_STRATEGY_APPLY' && a.slice === 'discretionary');
 

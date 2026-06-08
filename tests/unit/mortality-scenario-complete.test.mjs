@@ -31,7 +31,7 @@ import { MortalityHandler }                  from '../../src/finance/handlers/mo
 // Apply the full action chain produced by MortalityHandler through each reducer
 function applyMortalityChain(initialState, event) {
   const handler = new MortalityHandler();
-  const actions = handler.call({ state: initialState, event });
+  const actions = handler.call({ state: initialState, data: event.data, date: event.date });
 
   const reducers = [
     new PersonDiedApplyReducer(),

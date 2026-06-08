@@ -56,7 +56,7 @@ function makeState({ deceasedResidency = 'US', survivorResidency = 'US', holding
 function callHandler(state, personId = 'primary') {
   const handler = new MortalityHandler();
   const event   = { type: 'PERSON_DIED', date: new Date('2045-06-01'), data: { personId } };
-  return handler.call({ state, event });
+  return handler.call({ state, data: event.data, date: event.date });
 }
 
 // ── EB-1 ──────────────────────────────────────────────────────────────────────

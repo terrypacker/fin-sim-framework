@@ -63,8 +63,8 @@ export class MortalityHandler extends HandlerEntry {
     };
   }
 
-  call({ state, event }) {
-    const personId = event?.data?.personId;
+  call({ state, data, date }) {
+    const personId = data?.personId;
     if (!personId) return [];
 
     const person = state.people?.[personId];
@@ -84,7 +84,7 @@ export class MortalityHandler extends HandlerEntry {
     actions.push({
       type:            'PERSON_DIED_APPLY',
       personId,
-      date:            event.date,
+      date,
       taxJurisdiction,
       // Carry the deceased SS value for use by the survivor reducer (person gone after this)
       deceasedSocialSecurityMonthly: person.socialSecurityMonthly ?? 0,
