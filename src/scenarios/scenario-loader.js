@@ -86,7 +86,11 @@ export class ScenarioLoader {
     // _mergeParamSchema can apply scenario-level schema even for re-imported JSONs
     // (serializeScenario writes a string id; the class reference isn't serializable).
     if (cfg.scenarioId && !cfg.scenarioClass) {
-      cfg.scenarioClass = SCENARIO_CLASS_BY_ID.get(cfg.scenarioId) ?? null;
+      // Handle both bare class IDs ('intl-retirement') and prefixed prebuilt IDs
+      // ('p:intl-retirement') — the latter is what newScenario() stores when copying
+      // a prebuilt, and what gets preserved when a user scenario is copied again.
+      const rawId = cfg.scenarioId.startsWith('p:') ? cfg.scenarioId.slice(2) : cfg.scenarioId;
+      cfg.scenarioClass = SCENARIO_CLASS_BY_ID.get(rawId) ?? SCENARIO_CLASS_BY_ID.get(cfg.scenarioId) ?? null;
     }
 
     if (cfg.toolsets?.length > 0) {
@@ -120,14 +124,34 @@ export class ScenarioLoader {
       }
     }
 
+    // Fallback node-lookup from scenario class schemas. Configs saved before the
+    // `node` declaration was introduced for a given param won't have it on the stored
+    // entry. The scenario schema is the ground truth; using it here means the cascade
+    // works on the first Rebuild of an old config, before _mergeParamSchema (which
+    // runs after compilation) has had a chance to backfill.
+    //
+    // When cfg.scenarioClass is unresolved (e.g. user-created scenarios whose
+    // scenarioId is a user-generated "u:N" ID rather than the class ID
+    // "intl-retirement"), fall back to ALL registered scenario classes so that
+    // params like usHouseSaleYear still cascade correctly.
+    const schemaNodeByKey = new Map();
+    const schemasToSearch = cfg.scenarioClass
+      ? [cfg.scenarioClass]
+      : [...SCENARIO_CLASS_BY_ID.values()];
+    for (const cls of schemasToSearch) {
+      for (const s of (cls?.getParamSchema?.() ?? [])) {
+        if (s.node && !schemaNodeByKey.has(s.key)) schemaNodeByKey.set(s.key, s.node);
+      }
+    }
+
     // Generic param→node cascade: each schema entry with a `node` declaration drives
-    // a field update on cfg.persons or cfg.accounts before compilation.
-    // Node is read from cfg.params[i].node (serialized alongside the param value) so
-    // the mapping survives round-trips without requiring scenarioClass to be present.
-    // Only explicitly declared fields are touched; all other person/account fields
-    // (e.g. lifeExpectancy, contributionBasis) remain authoritative from their records.
+    // a field update on cfg.persons, cfg.accounts, or cfg.realProperties before
+    // compilation. Node is read from cfg.params[i].node (serialized alongside the
+    // param value), falling back to the scenario schema for older configs.
+    // Only explicitly declared fields are touched; all other fields remain
+    // authoritative from their records.
     for (const p of (Array.isArray(cfg.params) ? cfg.params : [])) {
-      const node = p.node;
+      const node = p.node ?? schemaNodeByKey.get(p.name);
       if (!node) continue;
       const val = cfg.parameters?.[p.name];
       if (val === undefined) continue;
