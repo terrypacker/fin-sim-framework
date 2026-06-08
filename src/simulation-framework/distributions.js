@@ -115,12 +115,34 @@ export class BernoulliDistribution {
   }
 }
 
+/**
+ * Uniform distribution over a date range [min, max].
+ * Accepts min/max as ISO date strings or Date objects.
+ * Returns a YYYY-MM-DD string so it can be stored as a scenario param.
+ */
+export class UniformDateDistribution {
+  constructor({ min, max }) {
+    this._min = new Date(min).getTime();
+    this._max = new Date(max).getTime();
+    if (Number.isNaN(this._min) || Number.isNaN(this._max))
+      throw new RangeError('UniformDateDistribution: min and max must be valid dates');
+    if (this._min > this._max)
+      throw new RangeError('UniformDateDistribution: min must be <= max');
+  }
+
+  sample(rngFn) {
+    const ms = this._min + rngFn() * (this._max - this._min);
+    return new Date(ms).toISOString().slice(0, 10);
+  }
+}
+
 export const DISTRIBUTION_TYPES = {
-  CONSTANT:    'constant',
-  UNIFORM:     'uniform',
-  NORMAL:      'normal',
-  LOG_NORMAL:  'logNormal',
-  BERNOULLI:   'bernoulli',
+  CONSTANT:     'constant',
+  UNIFORM:      'uniform',
+  UNIFORM_DATE: 'uniformDate',
+  NORMAL:       'normal',
+  LOG_NORMAL:   'logNormal',
+  BERNOULLI:    'bernoulli',
 };
 
 /**
@@ -129,11 +151,12 @@ export const DISTRIBUTION_TYPES = {
  */
 export function createDistribution(config) {
   switch (config.type) {
-    case DISTRIBUTION_TYPES.CONSTANT:   return new ConstantDistribution(config);
-    case DISTRIBUTION_TYPES.UNIFORM:    return new UniformDistribution(config);
-    case DISTRIBUTION_TYPES.NORMAL:     return new NormalDistribution(config);
-    case DISTRIBUTION_TYPES.LOG_NORMAL: return new LogNormalDistribution(config);
-    case DISTRIBUTION_TYPES.BERNOULLI:  return new BernoulliDistribution(config);
+    case DISTRIBUTION_TYPES.CONSTANT:     return new ConstantDistribution(config);
+    case DISTRIBUTION_TYPES.UNIFORM:      return new UniformDistribution(config);
+    case DISTRIBUTION_TYPES.UNIFORM_DATE: return new UniformDateDistribution(config);
+    case DISTRIBUTION_TYPES.NORMAL:       return new NormalDistribution(config);
+    case DISTRIBUTION_TYPES.LOG_NORMAL:   return new LogNormalDistribution(config);
+    case DISTRIBUTION_TYPES.BERNOULLI:    return new BernoulliDistribution(config);
     default: throw new Error(`Unknown distribution type: ${config.type}`);
   }
 }

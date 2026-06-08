@@ -34,14 +34,13 @@ import assert   from 'node:assert/strict';
 
 import { Account }                  from '../../src/finance/assets/account.js';
 import { AccountService }           from '../../src/finance/services/account-service.js';
-import { FinancialState }           from '../../src/finance/state/financial-state.js';
+import { SimulationState }          from '../../src/simulation-framework/simulation-state.js';
 import { InvestmentAccount }        from '../../src/finance/assets/investment-account.js';
 import { AssetService }             from '../../src/finance/services/asset-service.js';
 import { Collectible }              from '../../src/finance/assets/collectible.js';
 import { CollectibleService }       from '../../src/finance/services/collectible-service.js';
 import { Person }                   from '../../src/finance/person.js';
 import { Simulation }               from '../../src/simulation-framework/simulation.js';
-import { SimulationState }          from '../../src/simulation-framework/simulation-state.js';
 import { PRIORITY } from '../../src/simulation-framework/reducers.js';
 import { RecordBalanceAction } from '../../src/simulation-framework/actions.js';
 import { ReducerBuilder } from '../../src/simulation-framework/builders/reducer-builder.js';
@@ -105,7 +104,7 @@ test('AR-10: Superannuation sole ownership — person has 100% of balance', () =
 // ══════════════════════════════════════════════════════════════════════════════
 
 function buildMinBalanceSim({ initialBalance = 1000, minimumBalance = 500 } = {}) {
-  const sim = new Simulation(new Date(2026, 0, 1), { initialState: new FinancialState({
+  const sim = new Simulation(new Date(2026, 0, 1), { initialState: new SimulationState({
     checkingAccount: new Account(initialBalance, { minimumBalance }),
   }) });
 
@@ -187,7 +186,7 @@ function buildResidencyTrackingSim({
   checkingBalance = 10000,
   superBalance    = 200000,
 } = {}) {
-  const sim = new Simulation(new Date(2026, 0, 1), { initialState: new FinancialState({
+  const sim = new Simulation(new Date(2026, 0, 1), { initialState: new SimulationState({
     person: new Person('primary', new Date(1966, 0, 1), { citizen: ['US'] }),
 
     // AR-1: NO residency tracking — plain Account (no balanceAtResidencyChange field)
@@ -342,7 +341,7 @@ function buildLoanSim({
   auStockBalance  = 100000,
   propertyValue   = 800000,
 } = {}) {
-  const sim = new Simulation(new Date(2026, 0, 1), { initialState: new FinancialState({
+  const sim = new Simulation(new Date(2026, 0, 1), { initialState: new SimulationState({
     checkingAccount: new Account(initialChecking),
     auStockAccount:  new InvestmentAccount(auStockBalance, { loanBalance: 0 }),
     realProperty:    { name: 'Primary Residence', value: propertyValue, costBasis: 300000, loanBalance: 0 },

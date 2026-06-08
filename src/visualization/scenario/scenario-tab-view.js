@@ -213,6 +213,8 @@ export class ScenarioTabView {
     let currentGroup = null;
 
     scenario.params.forEach((param, i) => {
+      if (param.hidden) return;
+
       // ── Group header ──────────────────────────────────────────────────────
       if (param.group && param.group !== currentGroup) {
         currentGroup = param.group;
@@ -301,6 +303,8 @@ export class ScenarioTabView {
           : String(param.value ?? '').slice(0, 10);
         valueInput.value = iso;
         valueInput.addEventListener('change', () => { param.value = valueInput.value; });
+      } else if (param.type === 'ShockList') {
+        valueInput = _buildShockListEditor(param);
       } else {
         valueInput = document.createElement('input');
         valueInput.placeholder = 'value';
@@ -395,4 +399,91 @@ export class ScenarioTabView {
     });
   }
 
+}
+
+// ─── ShockList editor ─────────────────────────────────────────────────────────
+
+/**
+ * Build a self-contained DOM editor for a ShockList parameter.
+ *
+ * Each entry in `param.value` (an array) is rendered as a row with:
+ *   - a preset <select> populated from `param.options`
+ *   - a date <input type="date"> for startDate
+ *   - a remove button
+ *
+ * An "Add Shock" button appends a blank entry `{ preset: 'none', startDate: '' }`.
+ * Mutations are written directly onto the param.value array in-place so the
+ * scenario picks them up on the next rebuild.
+ *
+ * @param {object} param  The param descriptor ({ value, options, ... })
+ * @returns {HTMLElement}
+ */
+function _buildShockListEditor(param) {
+  const options = Array.isArray(param.options) ? param.options : [];
+
+  const container = document.createElement('div');
+  container.className = 'shock-list-editor';
+
+  const render = () => {
+    container.innerHTML = '';
+    const shocks = Array.isArray(param.value) ? param.value : [];
+
+    shocks.forEach((shock, idx) => {
+      const row = document.createElement('div');
+      row.className = 'shock-list-row';
+
+      // Preset dropdown
+      const presetSel = document.createElement('select');
+      presetSel.className = 'shock-preset-select';
+      options.forEach(({ value, label }) => {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = label;
+        presetSel.appendChild(opt);
+      });
+      presetSel.value = shock.preset ?? 'none';
+      presetSel.addEventListener('change', () => { shock.preset = presetSel.value; });
+      row.appendChild(presetSel);
+
+      // Start date
+      const dateInput = document.createElement('input');
+      dateInput.type = 'date';
+      dateInput.className = 'shock-date-input';
+      const rawDate = shock.startDate;
+      dateInput.value = rawDate
+        ? (rawDate instanceof Date ? rawDate.toISOString() : String(rawDate)).slice(0, 10)
+        : '';
+      dateInput.addEventListener('change', () => { shock.startDate = dateInput.value; });
+      row.appendChild(dateInput);
+
+      // Remove button
+      const rmBtn = document.createElement('button');
+      rmBtn.type = 'button';
+      rmBtn.className = 'btn btn-warn btn-sm';
+      rmBtn.textContent = '✕';
+      rmBtn.addEventListener('click', () => {
+        shocks.splice(idx, 1);
+        param.value = shocks;
+        render();
+      });
+      row.appendChild(rmBtn);
+
+      container.appendChild(row);
+    });
+
+    // Add button
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn btn-sm shock-add-btn';
+    addBtn.textContent = '+ Add Shock';
+    addBtn.addEventListener('click', () => {
+      if (!Array.isArray(param.value)) param.value = [];
+      param.value.push({ preset: 'none', startDate: '' });
+      render();
+    });
+    container.appendChild(addBtn);
+  };
+
+  render();
+  return container;
 }

@@ -65,6 +65,12 @@ import { SetOutOfFundsDateReducer }       from '../finance/reducers/set-out-of-f
 import { AccumulateDeficitReducer }       from '../finance/reducers/accumulate-deficit-reducer.js';
 import { OutOfFundsReducer }             from '../finance/reducers/out-of-funds-reducer.js';
 import { InflationAdjustReducer }        from '../finance/reducers/inflation-adjust-reducer.js';
+import { EconomicShockHandler }          from '../finance/economic-regimes/economic-shock-handler.js';
+import { EconomicRecoveryTickHandler }   from '../finance/economic-regimes/economic-recovery-tick-handler.js';
+import { RegimeApplyReducer }            from '../finance/economic-regimes/regime-apply-reducer.js';
+import { AddRegimeReducer }              from '../finance/economic-regimes/add-regime-reducer.js';
+import { RemoveRegimeReducer }           from '../finance/economic-regimes/remove-regime-reducer.js';
+import { RevalueAssetReducer }           from '../finance/economic-regimes/revalue-asset-reducer.js';
 
 // ─── Tax infrastructure ─────────────────────────────────────────────────────
 import { UsPeriodAdvanceHandler, AuPeriodAdvanceHandler, UsPeriodAdvanceReducer, AuPeriodAdvanceReducer } from '../finance/tax/period-advance-classes.js';
@@ -232,6 +238,9 @@ const _ALL_CLASSES = [
   AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer,
   AuHouseSaleApplyReducer, AuSeIncomeApplyReducer,
   UsMortgagePaymentApplyReducer, AuMortgagePaymentApplyReducer,
+  // Economic regime handlers and reducers
+  EconomicShockHandler, EconomicRecoveryTickHandler,
+  RegimeApplyReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer,
 ];
 
 /**

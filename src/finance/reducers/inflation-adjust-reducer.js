@@ -32,13 +32,13 @@ export class InflationAdjustReducer extends Reducer {
   static actionType  = null;
 
   constructor() {
-    super('Inflation Adjust', PRIORITY.PRE_PROCESS + 1);
+    super('Inflation Adjust', PRIORITY.PRE_PROCESS + 2);
     this.reducedActionTypes = ['US_PERIOD_ADVANCE', 'AU_PERIOD_ADVANCE'];
   }
 
   reduce(state, action) {
     const cc = action.type === 'US_PERIOD_ADVANCE' ? 'US' : 'AU';
-    const rate = state.inflationRates?.[cc] ?? 0;
+    const rate = state.effectiveInflationRates?.[cc] ?? state.inflationRates?.[cc] ?? 0;
     if (rate === 0) return this.newState(state);
 
     const factor = 1 + rate;

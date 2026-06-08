@@ -39,9 +39,25 @@ import { InvestmentAccount, BrokerageAccount, FourOhOneKAccount, RothAccount, Tr
 import { RealProperty } from './finance/assets/real-property.js';
 import { AccountBuilder } from './finance/builders/account-builder.js';
 import { PersonBuilder } from './finance/builders/person-builder.js';
+import { AddRegimeReducer } from './finance/economic-regimes/add-regime-reducer.js';
+import { EconomicRecoveryTickHandler } from './finance/economic-regimes/economic-recovery-tick-handler.js';
+import { EconomicShockHandler } from './finance/economic-regimes/economic-shock-handler.js';
+import { RATE_KEYS, ROLE_TO_RATE_KEY } from './finance/economic-regimes/rate-keys.js';
+import { RecoveryCurves } from './finance/economic-regimes/recovery-curves.js';
+import { RegimeApplyReducer } from './finance/economic-regimes/regime-apply-reducer.js';
+import { RemoveRegimeReducer } from './finance/economic-regimes/remove-regime-reducer.js';
+import { RevalueAssetReducer } from './finance/economic-regimes/revalue-asset-reducer.js';
+import { SHOCK_LIBRARY, SHOCK_PRESET_OPTIONS } from './finance/economic-shocks/shock-library.js';
+import { CurrencyPair, FxEngine } from './finance/fx/fx-engine.js';
+import { FxRefreshReducer } from './finance/fx/fx-refresh-reducer.js';
+import { FxService } from './finance/fx/fx-service.js';
+import { FxTransferApplyReducer } from './finance/fx/fx-transfer-apply-reducer.js';
+import { FxTransferToHandler } from './finance/fx/fx-transfer-handler.js';
+import { UsdAudPair } from './finance/fx/usd-aud-pair.js';
 import { ChangeResidencyHandler } from './finance/handlers/change-residency-handler.js';
 import { DividendScheduledHandler } from './finance/handlers/dividend-scheduled-handler.js';
 import { IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler, IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler, AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler, FixedIncomeInterestHandler, SuperEarningsHandler } from './finance/handlers/earnings-handlers.js';
+import { IntlTransferToUsHandler, IntlTransferToAuHandler } from './finance/handlers/intl-transfer-handlers.js';
 import { MonthlyExpensesHandler } from './finance/handlers/monthly-expenses-handler.js';
 import { MonthlySocialSecurityHandler } from './finance/handlers/monthly-social-security-handler.js';
 import { MonthlyWagesHandler } from './finance/handlers/monthly-wages-handler.js';
@@ -79,7 +95,6 @@ import { RealPropertyService } from './finance/services/real-property-service.js
 import { StateRegistry } from './finance/services/state-registry.js';
 import { ParameterValueType, StateSchemaRegistry } from './finance/services/state-schema-registry.js';
 import { ACCOUNT_ROLES } from './finance/state/account-roles.js';
-import { FinancialState } from './finance/state/financial-state.js';
 import { InternationalRetirementFinancialState } from './finance/state/intl-retirement-state.js';
 import { AuTaxDocument2024 } from './finance/tax/au/au-tax-document-2024.js';
 import { AuTaxDocument2025 } from './finance/tax/au/au-tax-document-2025.js';
@@ -127,6 +142,7 @@ import { AU_INCOME } from './scenarios/toolsets/au-income-toolset.js';
 import { AU_REAL_PROPERTY } from './scenarios/toolsets/au-real-property-toolset.js';
 import { AU_RETIREMENT } from './scenarios/toolsets/au-retirement-toolset.js';
 import { AU_TAX } from './scenarios/toolsets/au-tax-toolset.js';
+import { ECONOMIC_REGIMES } from './scenarios/toolsets/economic-regimes-toolset.js';
 import { ScenarioCompiler } from './scenarios/toolsets/scenario-compiler.js';
 import { ToolsetRegistry } from './scenarios/toolsets/toolset-registry.js';
 import { US_AU_CROSS_BORDER } from './scenarios/toolsets/us-au-cross-border-toolset.js';
@@ -155,7 +171,7 @@ import { HandlerBuilder } from './simulation-framework/builders/handler-builder.
 import { ReducerBuilder } from './simulation-framework/builders/reducer-builder.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES, SIMULATION_BUS_MESSAGES, BusMessage, SimulationBusMessage, ExecutionBusMessage, BreakpointHitMessage, ServiceActionEvent, ServiceBulkActionEvent, ServiceEdgeActionEvent } from './simulation-framework/bus-messages.js';
 import { DateUtils } from './simulation-framework/date-utils.js';
-import { ConstantDistribution, UniformDistribution, NormalDistribution, LogNormalDistribution, BernoulliDistribution, DISTRIBUTION_TYPES, createDistribution } from './simulation-framework/distributions.js';
+import { ConstantDistribution, UniformDistribution, NormalDistribution, LogNormalDistribution, BernoulliDistribution, UniformDateDistribution, DISTRIBUTION_TYPES, createDistribution } from './simulation-framework/distributions.js';
 import { EventBus } from './simulation-framework/event-bus.js';
 import { BaseEvent } from './simulation-framework/events/base-event.js';
 import { EventSeries } from './simulation-framework/events/event-series.js';
@@ -189,6 +205,7 @@ import { ActionEditor } from './visualization/components/action-editor.js';
 import { BaseComponent } from './visualization/components/base-component.js';
 import { BaseNodeEditor } from './visualization/components/base-node-editor.js';
 import { EChartsGraphRenderer } from './visualization/components/echarts-graph-renderer.js';
+import { initEChartWhenReady } from './visualization/components/echarts-init.js';
 import { EventEditor } from './visualization/components/event-editor.js';
 import { ActionNodeRenderer } from './visualization/components/graph/rendering/action-node-renderer.js';
 import { DefaultNodeRenderer, NodeRenderGroup } from './visualization/components/graph/rendering/default-node-renderer.js';
@@ -414,6 +431,24 @@ export const Finance = {
   RealProperty,
   AccountBuilder,
   PersonBuilder,
+  AddRegimeReducer,
+  EconomicRecoveryTickHandler,
+  EconomicShockHandler,
+  RATE_KEYS,
+  ROLE_TO_RATE_KEY,
+  RecoveryCurves,
+  RegimeApplyReducer,
+  RemoveRegimeReducer,
+  RevalueAssetReducer,
+  SHOCK_LIBRARY,
+  SHOCK_PRESET_OPTIONS,
+  CurrencyPair,
+  FxEngine,
+  FxRefreshReducer,
+  FxService,
+  FxTransferApplyReducer,
+  FxTransferToHandler,
+  UsdAudPair,
   ChangeResidencyHandler,
   DividendScheduledHandler,
   IntlRothEarningsHandler,
@@ -426,6 +461,8 @@ export const Finance = {
   AuFixedIncomeInterestMonthlyHandler,
   FixedIncomeInterestHandler,
   SuperEarningsHandler,
+  IntlTransferToUsHandler,
+  IntlTransferToAuHandler,
   MonthlyExpensesHandler,
   MonthlySocialSecurityHandler,
   MonthlyWagesHandler,
@@ -478,7 +515,6 @@ export const Finance = {
   ParameterValueType,
   StateSchemaRegistry,
   ACCOUNT_ROLES,
-  FinancialState,
   InternationalRetirementFinancialState,
   AuTaxDocument2024,
   AuTaxDocument2025,
@@ -561,6 +597,7 @@ export const Engine = {
   NormalDistribution,
   LogNormalDistribution,
   BernoulliDistribution,
+  UniformDateDistribution,
   DISTRIBUTION_TYPES,
   createDistribution,
   EventBus,
@@ -627,6 +664,7 @@ export const Scenarios = {
   AU_REAL_PROPERTY,
   AU_RETIREMENT,
   AU_TAX,
+  ECONOMIC_REGIMES,
   ScenarioCompiler,
   ToolsetRegistry,
   US_AU_CROSS_BORDER,
@@ -667,6 +705,7 @@ export const Visualization = {
   BaseComponent,
   BaseNodeEditor,
   EChartsGraphRenderer,
+  initEChartWhenReady,
   EventEditor,
   ActionNodeRenderer,
   DefaultNodeRenderer,
