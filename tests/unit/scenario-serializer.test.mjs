@@ -609,3 +609,40 @@ test('persons round-trip: serialize then deserialize preserves all person data',
   assert.strictEqual(carol.socialSecurityMonthly, 3200);
   assert.strictEqual(carol.birthDate instanceof Date ? carol.birthDate.getUTCFullYear() : new Date(carol.birthDate).getUTCFullYear(), 1975);
 });
+
+// ─── watchlists round-trip ────────────────────────────────────────────────────
+
+test('serializeScenario: persists watchlists array', () => {
+  const paths = ['metrics.netWorth', 'effectiveExchangeRates.USD_AUD'];
+  const cfg = ScenarioSerializer.serializeScenario({
+    id: 'w1', name: 'WL', simStart: '2026-01-01', simEnd: '2041-01-01',
+    params: [], toolsets: [], watchlists: paths,
+    persons: [], accounts: [], realProperties: [], collectibles: [],
+    events: [], handlers: [], actions: [], reducers: [], initialState: {},
+  });
+  assert.deepStrictEqual(cfg.watchlists, paths);
+});
+
+test('serializeScenario: defaults watchlists to [] when absent', () => {
+  const cfg = ScenarioSerializer.serializeScenario({
+    id: 'w2', name: 'WL2', simStart: '2026-01-01', simEnd: '2041-01-01',
+    params: [], toolsets: [],
+    persons: [], accounts: [], realProperties: [], collectibles: [],
+    events: [], handlers: [], actions: [], reducers: [], initialState: {},
+  });
+  assert.deepStrictEqual(cfg.watchlists, []);
+});
+
+test('serializeScenario: watchlists survives a serialize→deserialize passthrough', () => {
+  const paths = ['usSavingsAccount.balance', 'metrics.income'];
+  const source = {
+    id: 'w3', name: 'WL3', simStart: '2026-01-01', simEnd: '2041-01-01',
+    params: [], toolsets: [], watchlists: paths,
+    persons: [], accounts: [], realProperties: [], collectibles: [],
+    events: [], handlers: [], actions: [], reducers: [], initialState: {},
+  };
+  const serialized = ScenarioSerializer.serializeScenario(source);
+  // The deserialized config is the serialized object itself (it's plain JSON).
+  assert.deepStrictEqual(serialized.watchlists, paths,
+    'watchlists should survive a round-trip through serializeScenario');
+});

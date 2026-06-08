@@ -332,3 +332,22 @@ test('rebuild: applies params before creating simulation', () => {
   const person = sr.personService.getAll().find(p => p.id === 'primary');
   assert.strictEqual(person.monthlyWage, 8000);
 });
+
+// ─── R12: derived metrics.netWorth ──────────────────────────────────────────────
+
+test('_deriveNetWorth: sums liquid (drawdown) account balances into metrics.netWorth', () => {
+  const state = {
+    checking: { drawdownPriority: 1, balance: 1000 },
+    savings:  { drawdownPriority: 2, balance: 2500 },
+    house:    { balance: 900000 },           // no drawdownPriority → excluded (not liquid)
+    metrics:  {},
+  };
+  BaseScenario._deriveNetWorth(state);
+  assert.strictEqual(state.metrics.netWorth, 3500, 'only liquid accounts counted');
+});
+
+test('_deriveNetWorth: creates metrics object when absent', () => {
+  const state = { checking: { drawdownPriority: 1, balance: 42 } };
+  BaseScenario._deriveNetWorth(state);
+  assert.strictEqual(state.metrics.netWorth, 42);
+});

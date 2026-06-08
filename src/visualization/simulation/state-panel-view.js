@@ -41,7 +41,12 @@ export class StatePanelView extends BaseComponent {
     this._journal           = null;
     this._executionGraph    = null;
     this._metricHistory     = new Map();
+    this._fieldSeriesStore  = null;
+    this._isPathCharted     = () => false;
+    this._onChartToggle     = null;
     this._stateCollapsed    = true;
+    this._filterText        = '';
+    this._expandedSections  = new Set();  // sectionPath → expanded; default (absent) = collapsed
 
     if (displaySettings) {
       this.onCleanup(displaySettings.subscribe(({ formatDate }) => {
@@ -78,6 +83,21 @@ export class StatePanelView extends BaseComponent {
   /** Inject the ExecutionGraph for the Execution Graph tab in metric modals. */
   set executionGraph(eg) {
     this._executionGraph = eg ?? null;
+  }
+
+  /** Inject a FieldSeriesStore for path-keyed backfill on non-metrics row clicks. */
+  set fieldSeriesStore(store) {
+    this._fieldSeriesStore = store ?? null;
+  }
+
+  /** Inject a predicate (path) → bool telling whether a path is currently charted. */
+  set isPathCharted(fn) {
+    this._isPathCharted = fn ?? (() => false);
+  }
+
+  /** Callback (path, shouldBeActive) when a row/header chart checkbox is toggled. */
+  set onChartToggle(fn) {
+    this._onChartToggle = fn ?? null;
   }
 
   // ── Simulation bus ────────────────────────────────────────────────────────────
@@ -131,18 +151,40 @@ export class StatePanelView extends BaseComponent {
     for (const [key, value] of Object.entries(metrics)) {
       if (typeof value !== 'number' || !isFinite(value)) continue;
       if (!this._metricHistory.has(key)) this._metricHistory.set(key, []);
-      const buf = this._metricHistory.get(key);
-      buf.push({ date: new Date(date), value });
-      if (buf.length > 200) buf.shift();
+      this._metricHistory.get(key).push({ date: new Date(date), value });  // unbounded (R10.2)
     }
+  }
+
+  /** Set the row filter substring (case-insensitive, matches full path). Re-renders. */
+  setFilter(text) {
+    this._filterText = (text ?? '').trim().toLowerCase();
+    if (this._pendingState) this._renderStatePanel(this._pendingDate, this._pendingState);
   }
 
   clearMetricHistory() {
     this._metricHistory.clear();
+    this._fieldSeriesStore?.clear();
   }
 
   /** Wire the collapse toggle for the State section. Called once from WorkbenchApp.initView(). */
   initLiveState() {
+    const filter = document.getElementById('lsp-panel-filter');
+    if (filter) filter.addEventListener('input', e => this.setFilter(e.target.value));
+
+    // R9.2: chart a path by name (lets you arm paths not present at t0, e.g. a
+    // holding bought mid-sim — it buffers live once it first appears).
+    const addInput = document.getElementById('lsp-add-path');
+    const addBtn   = document.getElementById('lsp-add-path-btn');
+    const addPath = () => {
+      const path = (addInput?.value ?? '').trim();
+      if (!path) return;
+      this._onChartToggle?.(path, true);
+      this._refreshRows();
+      if (addInput) addInput.value = '';
+    };
+    if (addBtn)   addBtn.addEventListener('click', addPath);
+    if (addInput) addInput.addEventListener('keydown', e => { if (e.key === 'Enter') addPath(); });
+
     const header  = document.getElementById('stateSectionHeader');
     const content = document.getElementById('currentStateContent');
     if (!header || !content) return;
@@ -205,34 +247,20 @@ export class StatePanelView extends BaseComponent {
     const frag = document.createDocumentFragment();
 
     for (const [k, v] of Object.entries(metrics)) {
+      const path = `metrics.${k}`;
       if (typeof v === 'number' && isFinite(v)) {
-        const row = document.createElement('div');
-        row.className = 'lsp-metric-row';
-
-        const label = document.createElement('span');
-        label.className = 'lsp-metric-label';
-        label.textContent = this.toLabel(k);
-
+        if (!this._matchesFilter(path)) continue;
         const hist = this._metricHistory.get(k);
-        if (hist && hist.length >= 2) {
-          row.append(label, this._renderMetricSparkline(hist));
-        } else {
-          row.append(label);
-        }
-
-        const val = document.createElement('span');
-        val.className = 'lsp-metric-value';
-        val.textContent = this._fmtChange(k, v);
-        row.append(val);
-
-        const capturedKey = k;
-        row.addEventListener('click', () => {
-          this._showMetricHistoryModal(capturedKey, this._metricHistory.get(capturedKey) ?? []);
-        });
-        frag.appendChild(row);
+        frag.appendChild(this._buildFieldRow({
+          path,
+          value:   v,
+          label:   this.toLabel(k),
+          history: hist,
+          onClick: () => this._showFieldHistoryModal(path, this._metricHistory.get(k) ?? [], false, this.toLabel(k)),
+        }));
       } else {
-        const detail = this.createStateDetails('tpl-state-details', null, { [k]: v });
-        if (detail) frag.appendChild(detail);
+        // Non-numeric metric (object/array): render its leaves like state.
+        this.renderState({ [k]: v }, frag, 'metrics');
       }
     }
     container.replaceChildren(frag);
@@ -283,57 +311,197 @@ export class StatePanelView extends BaseComponent {
     return svg;
   }
 
-  createStateDetails(templateId, date, state) {
-    if (!state) return;
-    const templateContent = document.querySelector(`#${templateId}`);
-    const clone = document.importNode(templateContent, true).content;
-    const statGrid = clone.querySelector('[data-stat-grid]');
-    this.renderState(state, statGrid);
-    return clone;
+  createStateDetails(_templateId, date, state) {
+    if (!state) return null;
+    const container = document.createElement('div');
+    container.className = 'lsp-state-grid';
+    this.renderState(state, container);
+    return container;
   }
 
-  renderState(obj, statGrid) {
+  /**
+   * Render an object's leaves into `container` as unified field rows (lsp-metric-row)
+   * with section headers. Recurses objects and arrays-of-objects (the latter via
+   * stable id-addressed paths, R11.3). Returns the list of numeric leaf paths
+   * rendered (so a parent header can drive a tri-state "select all", R5).
+   */
+  renderState(obj, container, prefix = '') {
+    const paths = [];
     for (const [k, v] of Object.entries(obj)) {
-      if (Array.isArray(v) && v.length > 0 && v[0] !== null && typeof v[0] === 'object') {
-        const arrayHeaderRow = this.renderHeaderRow(k);
-        statGrid.appendChild(arrayHeaderRow);
+      const topPath = prefix ? `${prefix}.${k}` : k;
+      const isObjArray = Array.isArray(v) && v.length > 0 && v[0] !== null && typeof v[0] === 'object';
+      const isObject   = v !== null && typeof v === 'object' && !Array.isArray(v) && !this.isDate(v);
 
-        let index = 0;
-        for (const item of v) {
-          let name, value;
-          if (this.isDate(item)) {
-            name  = '[' + index + ']';
-            value = this._formatDate(item);
-          } else {
-            name  = item.name ?? JSON.stringify(item);
-            value = item.value != null ? item.value : '';
-          }
-          const arrayRow = document.importNode(statGrid.querySelector('[data-stat-row]'), true);
-          arrayRow.style = '';
-          arrayRow.querySelector('.stat-label').innerText = name;
-          arrayRow.querySelector('.stat-value').innerText = value;
-          statGrid.appendChild(arrayRow);
-          index++;
-        }
-      } else if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
-        const objectHeaderRow = this.renderHeaderRow(k);
-        statGrid.appendChild(objectHeaderRow);
-        for (const [sk, sv] of Object.entries(v)) {
-          if (Array.isArray(sv) && sv.length > 0 && typeof sv[0] === 'object') continue;
-          const statRow = document.importNode(statGrid.querySelector('[data-stat-row]'), true);
-          statRow.style = '';
-          statRow.querySelector('.stat-label').innerText = this.toLabel(sk);
-          statRow.querySelector('.stat-value').innerText = typeof sv === 'object' ? this.renderObj(sv) : this._fmtChange(`${k}.${sk}`, sv);
-          statGrid.appendChild(statRow);
-        }
+      if (isObjArray || isObject) {
+        const subPaths = this._collectLeafPaths(v, topPath);
+        paths.push(...subPaths);
+        this._appendCollapsibleSection(container, {
+          label: k, sectionPath: topPath, subPaths,
+          renderBody: (body) => isObjArray ? this._renderObjectArray(v, topPath, body)
+                                           : this.renderState(v, body, topPath),
+        });
+
+      } else if (typeof v === 'number' && isFinite(v)) {
+        if (!this._matchesFilter(topPath)) continue;
+        container.appendChild(this._buildFieldRow({ path: topPath, value: v, label: this.toLabel(k) }));
+        paths.push(topPath);
+
       } else {
-        const statRow = document.importNode(statGrid.querySelector('[data-stat-row]'), true);
-        statRow.style = '';
-        statRow.querySelector('.stat-label').innerText = this.toLabel(k);
-        statRow.querySelector('.stat-value').innerText = typeof v === 'object' ? this.renderObj(v) : this._fmtChange(k, v);
-        statGrid.appendChild(statRow);
+        if (!this._matchesFilter(topPath)) continue;
+        container.appendChild(this._buildStaticRow(this.toLabel(k),
+          typeof v === 'object' ? this.renderObj(v) : this._fmtChange(topPath, v)));
       }
     }
+    return paths;
+  }
+
+  /** Render each object element of an array as its own collapsible section (stable id prefix). */
+  _renderObjectArray(arr, basePath, container) {
+    arr.forEach((item, idx) => {
+      if (item === null || typeof item !== 'object' || this.isDate(item)) return;
+      const id    = item.id;
+      const seg   = (id != null) ? `${basePath}[id=${id}]` : `${basePath}.${idx}`;
+      const label = item.label ?? item.rateKey ?? item.name ?? (id != null ? String(id) : `[${idx}]`);
+      this._appendCollapsibleSection(container, {
+        label, sectionPath: seg, subPaths: this._collectLeafPaths(item, seg), alreadyLabel: true,
+        renderBody: (body) => this.renderState(item, body, seg),
+      });
+    });
+  }
+
+  /**
+   * Append a foldable section: a header (caret + tri-state checkbox + label) and,
+   * when expanded, a body built lazily by `renderBody`. Sections are collapsed by
+   * default (D17-style) and auto-expanded while a filter is active. A section with
+   * no filter-matching descendant is omitted entirely.
+   */
+  _appendCollapsibleSection(container, { label, sectionPath, subPaths, renderBody, alreadyLabel = false }) {
+    if (this._filterText && !subPaths.some(p => this._matchesFilter(p))) return;
+    const expanded = this._filterText !== '' || this._expandedSections.has(sectionPath);
+    container.appendChild(this.renderHeaderRow(label, subPaths, alreadyLabel, sectionPath, expanded));
+    if (expanded) {
+      const body = document.createElement('div');
+      body.className = 'lsp-section-body';
+      renderBody(body);
+      container.appendChild(body);
+    }
+  }
+
+  /** Toggle a section's expanded state and re-render. */
+  _toggleSection(sectionPath) {
+    if (this._expandedSections.has(sectionPath)) this._expandedSections.delete(sectionPath);
+    else this._expandedSections.add(sectionPath);
+    this._refreshRows();
+  }
+
+  /** Re-render the panel from the last state so checkbox/tri-state/fold reflect current chart. */
+  _refreshRows() {
+    if (this._pendingState) this._renderStatePanel(this._pendingDate, this._pendingState);
+  }
+
+  /** Public: re-sync rows/checkboxes with the chart (e.g. after a chip removal). */
+  refresh() { this._refreshRows(); }
+
+  /**
+   * Collect numeric leaf paths under `node` (rooted at `prefix`) without building DOM,
+   * mirroring renderState's leaf rules incl. stable `[id=..]` array addressing.
+   * Used for header tri-state, filter section-matching, and select-all batches.
+   */
+  _collectLeafPaths(node, prefix) {
+    const out = [];
+    const walk = (n, p) => {
+      if (Array.isArray(n)) {
+        if (n.length > 0 && n[0] !== null && typeof n[0] === 'object') {
+          n.forEach((item, idx) => {
+            if (item === null || typeof item !== 'object' || this.isDate(item)) return;
+            walk(item, item.id != null ? `${p}[id=${item.id}]` : `${p}.${idx}`);
+          });
+        }
+        return;
+      }
+      if (n !== null && typeof n === 'object' && !this.isDate(n)) {
+        for (const [k, v] of Object.entries(n)) walk(v, p ? `${p}.${k}` : k);
+        return;
+      }
+      if (typeof n === 'number' && isFinite(n)) out.push(p);
+    };
+    walk(node, prefix);
+    return out;
+  }
+
+  /** Case-insensitive substring match of the filter against the full path. */
+  _matchesFilter(path) {
+    return !this._filterText || path.toLowerCase().includes(this._filterText);
+  }
+
+  /**
+   * Build a unified numeric-field row: [chart checkbox][label][sparkline][value].
+   * The checkbox reflects/drives the chart active set; row-click opens history.
+   */
+  _buildFieldRow({ path, value, label = null, history = null, onClick = null }) {
+    const row = document.createElement('div');
+    row.className = 'lsp-metric-row lsp-clickable-row';
+
+    row.appendChild(this._buildChartToggle(path));
+
+    const lbl = document.createElement('span');
+    lbl.className = 'lsp-metric-label';
+    lbl.textContent = label ?? this.toLabel(path.split('.').pop().replace(/\[.*?\]/g, ''));
+    lbl.title = path;
+    row.appendChild(lbl);
+
+    const spark = (history && history.length >= 2) ? this._renderMetricSparkline(history) : null;
+    const sparkCell = document.createElement('span');
+    sparkCell.className = 'lsp-metric-spark';
+    if (spark) sparkCell.appendChild(spark);
+    row.appendChild(sparkCell);
+
+    const val = document.createElement('span');
+    val.className = 'lsp-metric-value';
+    val.textContent = this._fmtChange(path, value);
+    row.appendChild(val);
+
+    const click = onClick ?? (() => this._onFieldRowClick(path));
+    row.addEventListener('click', click);
+    return row;
+  }
+
+  /** A non-numeric leaf row (label + value), no chart toggle. */
+  _buildStaticRow(label, valueText) {
+    const row = document.createElement('div');
+    row.className = 'lsp-metric-row lsp-static-row';
+    row.appendChild(document.createElement('span')); // checkbox column spacer
+    const lbl = document.createElement('span');
+    lbl.className = 'lsp-metric-label';
+    lbl.textContent = label;
+    const spark = document.createElement('span');
+    spark.className = 'lsp-metric-spark';
+    const val = document.createElement('span');
+    val.className = 'lsp-metric-value';
+    val.textContent = valueText;
+    row.append(lbl, spark, val);
+    return row;
+  }
+
+  /** A checkbox bound to the chart active set for a single path. */
+  _buildChartToggle(path) {
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'lsp-chart-toggle';
+    cb.title = 'Show on chart';
+    cb.checked = this._isPathCharted(path);
+    cb.addEventListener('click', e => e.stopPropagation());
+    cb.addEventListener('change', () => {
+      this._onChartToggle?.(path, cb.checked);
+      this._refreshRows();   // keep parent tri-state + chart in sync
+    });
+    return cb;
+  }
+
+  _onFieldRowClick(path) {
+    if (!this._fieldSeriesStore) return;
+    const { series, backfilled } = this._fieldSeriesStore.getOrBackfill(path);
+    this._showFieldHistoryModal(path, series, backfilled);
   }
 
   // ── Node detail panel ─────────────────────────────────────────────────────
@@ -505,7 +673,13 @@ export class StatePanelView extends BaseComponent {
     }
   }
 
-  _showMetricHistoryModal(key, history) {
+  /**
+   * Show the field history modal for any numeric state path.
+   * @param {string}  path       - dot-separated state path (used as key for formatting/label)
+   * @param {Array}   history    - [{date, value}] array
+   * @param {boolean} backfilled - true when series came from snapshot backfill (coarser resolution)
+   */
+  _showFieldHistoryModal(path, history, backfilled = false, label = null) {
     document.getElementById('metricHistoryModal')?.remove();
 
     const overlay = document.createElement('div');
@@ -521,7 +695,8 @@ export class StatePanelView extends BaseComponent {
     hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
     const title = document.createElement('span');
     title.style.cssText = 'font-size:12px;font-weight:600;';
-    title.textContent = `Metric History — ${this.toLabel(key)}`;
+    const backfilledNote = backfilled ? ' · snapshot resolution' : '';
+    title.textContent = `Field History — ${label ?? this.toLabel(path)}${backfilledNote}`;
     const closeBtn = document.createElement('button');
     closeBtn.className = 'btn btn-sm';
     closeBtn.textContent = '✕';
@@ -633,7 +808,7 @@ export class StatePanelView extends BaseComponent {
       const inactive = 'font-size:11px;padding:5px 14px;border:none;border-bottom:2px solid transparent;background:none;color:var(--text-muted);cursor:pointer;';
       chartTabBtn.style.cssText = isChart ? active : inactive;
       execTabBtn.style.cssText  = isChart ? inactive : active;
-      if (!isChart) this._renderExecGraphPane(execPane, getFiltered());
+      if (!isChart) this._renderExecGraphPane(execPane, getFiltered(), path);
     };
 
     chartTabBtn.addEventListener('click', () => activateTab('chart'));
@@ -660,15 +835,15 @@ export class StatePanelView extends BaseComponent {
         const net    = latest - values[0];
         statsEl.append(
           mkStat('Points',  String(filtered.length), ''),
-          mkStat('Current', this._fmtChange(key, latest), ''),
-          mkStat('Min',     this._fmtChange(key, min), '#f87171'),
-          mkStat('Max',     this._fmtChange(key, max), '#34d399'),
-          mkStat('Net Δ',   (net >= 0 ? '+' : '') + this._fmtChange(key, net), net > 0 ? '#34d399' : net < 0 ? '#f87171' : ''),
+          mkStat('Current', this._fmtChange(path, latest), ''),
+          mkStat('Min',     this._fmtChange(path, min), '#f87171'),
+          mkStat('Max',     this._fmtChange(path, max), '#34d399'),
+          mkStat('Net Δ',   (net >= 0 ? '+' : '') + this._fmtChange(path, net), net > 0 ? '#34d399' : net < 0 ? '#f87171' : ''),
         );
-        chartEl.appendChild(this._renderMetricChartSvg(filtered, key));
+        chartEl.appendChild(this._renderMetricChartSvg(filtered, path));
       }
 
-      if (activeTab === 'exec') this._renderExecGraphPane(execPane, filtered);
+      if (activeTab === 'exec') this._renderExecGraphPane(execPane, filtered, path);
     };
 
     fromInput.addEventListener('change', refreshChart);
@@ -755,7 +930,7 @@ export class StatePanelView extends BaseComponent {
 
   // ── Feature: execution graph pane (metric history modal tab) ─────────────
 
-  _renderExecGraphPane(pane, filteredHistory) {
+  _renderExecGraphPane(pane, filteredHistory, fieldPath = null) {
     pane.replaceChildren();
 
     if (!this._executionGraph) {
@@ -781,11 +956,22 @@ export class StatePanelView extends BaseComponent {
     const eg = this._executionGraph;
 
     // Find root event nodes (kind='event', no EXECUTES parent) in the date range.
-    const eventNodes = eg.getExecutionNodes()
+    let eventNodes = eg.getExecutionNodes()
       .filter(n => n.kind === 'event' && n.timestamp != null)
       .filter(n => { const t = toMs(n.timestamp); return t >= minT && t <= maxT; })
       .filter(n => eg.getParent(n.id) == null)
       .sort((a, b) => toMs(a.timestamp) - toMs(b.timestamp));
+
+    // When a specific field path is provided, keep only events whose subtree
+    // contains a reducer that wrote to that field.
+    const totalInRange = eventNodes.length;
+    if (fieldPath && eventNodes.length > 0) {
+      const pathFiltered = eventNodes.filter(n => this._subtreeTouchedPath(n, fieldPath, eg));
+      // Fall back to unfiltered if no nodes match (no diff data available).
+      if (pathFiltered.length > 0) {
+        eventNodes = pathFiltered;
+      }
+    }
 
     if (eventNodes.length === 0) {
       const msg = document.createElement('span');
@@ -800,15 +986,32 @@ export class StatePanelView extends BaseComponent {
 
     const infoBar = document.createElement('div');
     infoBar.style.cssText = 'font-size:10px;color:var(--text-muted);padding:2px 0 6px;border-bottom:1px solid var(--border);margin-bottom:4px;';
+    const filteredNote = (fieldPath && eventNodes.length < totalInRange)
+      ? ` (filtered to ${eventNodes.length} that wrote ${fieldPath.split('.').pop()})`
+      : '';
     infoBar.textContent = eventNodes.length > MAX_EVENTS
-      ? `Showing last ${MAX_EVENTS} of ${eventNodes.length} events in range`
-      : `${eventNodes.length} event${eventNodes.length !== 1 ? 's' : ''} in range`;
+      ? `Showing last ${MAX_EVENTS} of ${eventNodes.length} events in range${filteredNote}`
+      : `${eventNodes.length} event${eventNodes.length !== 1 ? 's' : ''} in range${filteredNote}`;
     pane.appendChild(infoBar);
 
     const seen = new Set();
     for (const evNode of shown) {
       this._renderExecTreeNode(pane, evNode, 0, eg, seen);
     }
+  }
+
+  /**
+   * Returns true if `node` or any descendant reducer in the execution tree
+   * has a stateDiff entry touching `fieldPath`.
+   */
+  _subtreeTouchedPath(node, fieldPath, eg) {
+    if (node.kind === 'reducer') {
+      return (node.meta?.stateDiff ?? []).some(d => d.field === fieldPath);
+    }
+    for (const child of (eg.getChildren?.(node.id) ?? [])) {
+      if (this._subtreeTouchedPath(child, fieldPath, eg)) return true;
+    }
+    return false;
   }
 
   _renderExecTreeNode(container, node, depth, eg, seen) {
@@ -1417,13 +1620,68 @@ export class StatePanelView extends BaseComponent {
     return String(v);
   }
 
-  renderHeaderRow(label) {
+  /**
+   * Section header row: a single flex line of [caret][tri-state checkbox][label].
+   * Clicking the row (not the checkbox) folds/unfolds the section; the checkbox
+   * (R5) is tri-state: checked = all descendants charted, indeterminate = some.
+   * @param {string}   label
+   * @param {string[]} [descendantPaths]
+   * @param {boolean}  [alreadyLabel] - true when label is already human-readable
+   * @param {string}   [sectionPath]  - stable key for fold state (enables the caret)
+   * @param {boolean}  [expanded]
+   */
+  renderHeaderRow(label, descendantPaths = null, alreadyLabel = false, sectionPath = null, expanded = false) {
     const headerRow = document.createElement('div');
-    headerRow.classList.add('data-row-header');
+    headerRow.className = 'lsp-section-header';
+
+    if (sectionPath != null) {
+      const caret = document.createElement('span');
+      caret.className = 'lsp-section-caret';
+      caret.textContent = expanded ? '▼' : '▶';
+      headerRow.appendChild(caret);
+    }
+
+    if (this._onChartToggle && Array.isArray(descendantPaths) && descendantPaths.length > 0) {
+      headerRow.appendChild(this._buildSectionToggle(descendantPaths));
+    }
+
     const header = document.createElement('span');
-    header.classList.add('single-row');
-    header.innerText = this.toLabel(label);
+    header.className = 'lsp-section-label';
+    header.textContent = alreadyLabel ? label : this.toLabel(label);
     headerRow.appendChild(header);
+
+    if (sectionPath != null) {
+      headerRow.addEventListener('click', (e) => {
+        if (e.target.classList.contains('lsp-chart-toggle')) return; // checkbox handles itself
+        this._toggleSection(sectionPath);
+      });
+    }
     return headerRow;
+  }
+
+  /** Tri-state checkbox that activates/deactivates every descendant path (R5). */
+  _buildSectionToggle(descendantPaths) {
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'lsp-chart-toggle lsp-section-toggle';
+    cb.title = 'Show all of these on chart';
+
+    const charted = descendantPaths.filter(p => this._isPathCharted(p)).length;
+    cb.checked       = charted === descendantPaths.length;
+    cb.indeterminate = charted > 0 && charted < descendantPaths.length;
+
+    cb.addEventListener('click', e => e.stopPropagation()); // don't fold the section
+    cb.addEventListener('change', () => {
+      const activate = cb.checked;
+      // Soft warning past a threshold — many mixed-type series hurt readability (D18).
+      if (activate && descendantPaths.length > 25 &&
+          !window.confirm(`Charting ${descendantPaths.length} series may be hard to read. Continue?`)) {
+        cb.checked = false;
+        return;
+      }
+      for (const p of descendantPaths) this._onChartToggle?.(p, activate);
+      this._refreshRows();   // reflect child checkboxes + tri-state after the batch
+    });
+    return cb;
   }
 }

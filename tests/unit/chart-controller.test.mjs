@@ -13,22 +13,21 @@ import assert   from 'node:assert/strict';
 
 import { ChartController } from '../../src/visualization/chart/chart-controller.js';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// Design 31 / R2: the chart-filter multi-select was removed; the controller is
+// now a lightweight registry of known series (discoverKey + getAllKeys). It no
+// longer tracks visibility or serves a QueryApi — selection lives on the
+// ChartPresenter active set instead.
 
 function makeCtrl() {
   return new ChartController();
 }
 
+const labelOf = (ctrl, key) => ctrl._knownKeys.get(key)?.name;
+
 // ─── Constructor ──────────────────────────────────────────────────────────────
 
 test('ChartController: starts with no known keys', () => {
   assert.strictEqual(makeCtrl().getAllKeys().length, 0);
-});
-
-test('ChartController: all keys visible by default', () => {
-  const ctrl = makeCtrl();
-  ctrl.discoverKey('foo');
-  assert.strictEqual(ctrl.isVisible('foo'), true);
 });
 
 // ─── discoverKey ──────────────────────────────────────────────────────────────
@@ -57,76 +56,36 @@ test('ChartController.discoverKey: multiple distinct keys accumulate', () => {
   assert.strictEqual(ctrl.getAllKeys().length, 3);
 });
 
-test('ChartController.discoverKey: generates human label from camelCase', async () => {
+test('ChartController.discoverKey: stores the curated group', () => {
+  const ctrl = makeCtrl();
+  ctrl.discoverKey('metrics.netWorth', 'Metrics');
+  assert.strictEqual(ctrl._knownKeys.get('metrics.netWorth').group, 'Metrics');
+});
+
+// ─── label generation ──────────────────────────────────────────────────────────
+
+test('ChartController.discoverKey: human label from camelCase', () => {
   const ctrl = makeCtrl();
   ctrl.discoverKey('totalBalance');
-  const { items } = await ctrl.getQueryApi().search({ query: '', offset: 0, limit: 50 });
-  const item = items.find(i => i.id === 'totalBalance');
-  assert.strictEqual(item.name, 'Total Balance');
+  assert.strictEqual(labelOf(ctrl, 'totalBalance'), 'Total Balance');
 });
 
-test('ChartController.discoverKey: generates human label from snake_case', async () => {
+test('ChartController.discoverKey: human label from snake_case', () => {
   const ctrl = makeCtrl();
   ctrl.discoverKey('gross_income');
-  const { items } = await ctrl.getQueryApi().search({ query: '', offset: 0, limit: 50 });
-  const item = items.find(i => i.id === 'gross_income');
-  assert.strictEqual(item.name, 'Gross Income');
+  assert.strictEqual(labelOf(ctrl, 'gross_income'), 'Gross Income');
 });
 
-test('ChartController.discoverKey: single-word key passes through capitalised', async () => {
+test('ChartController.discoverKey: single-word key passes through capitalised', () => {
   const ctrl = makeCtrl();
   ctrl.discoverKey('balance');
-  const { items } = await ctrl.getQueryApi().search({ query: '', offset: 0, limit: 50 });
-  assert.strictEqual(items[0].name, 'Balance');
+  assert.strictEqual(labelOf(ctrl, 'balance'), 'Balance');
 });
 
-// ─── isVisible / setVisible ───────────────────────────────────────────────────
-
-test('ChartController.isVisible: undiscovered key is visible', () => {
-  assert.strictEqual(makeCtrl().isVisible('unknown'), true);
-});
-
-test('ChartController.setVisible(false): marks key as hidden', () => {
+test('ChartController.discoverKey: dotted path label uses › separator', () => {
   const ctrl = makeCtrl();
-  ctrl.discoverKey('balance');
-  ctrl.setVisible('balance', false);
-  assert.strictEqual(ctrl.isVisible('balance'), false);
-});
-
-test('ChartController.setVisible(true): re-shows a hidden key', () => {
-  const ctrl = makeCtrl();
-  ctrl.discoverKey('balance');
-  ctrl.setVisible('balance', false);
-  ctrl.setVisible('balance', true);
-  assert.strictEqual(ctrl.isVisible('balance'), true);
-});
-
-test('ChartController.setVisible: does not affect other keys', () => {
-  const ctrl = makeCtrl();
-  ctrl.discoverKey('a');
-  ctrl.discoverKey('b');
-  ctrl.setVisible('a', false);
-  assert.strictEqual(ctrl.isVisible('b'), true);
-});
-
-// ─── clearHidden ─────────────────────────────────────────────────────────────
-
-test('ChartController.clearHidden: restores all hidden keys to visible', () => {
-  const ctrl = makeCtrl();
-  ctrl.discoverKey('a');
-  ctrl.discoverKey('b');
-  ctrl.setVisible('a', false);
-  ctrl.setVisible('b', false);
-  ctrl.clearHidden();
-  assert.strictEqual(ctrl.isVisible('a'), true);
-  assert.strictEqual(ctrl.isVisible('b'), true);
-});
-
-test('ChartController.clearHidden: no-op when nothing is hidden', () => {
-  const ctrl = makeCtrl();
-  ctrl.discoverKey('a');
-  assert.doesNotThrow(() => ctrl.clearHidden());
-  assert.strictEqual(ctrl.isVisible('a'), true);
+  ctrl.discoverKey('metrics.netWorth');
+  assert.strictEqual(labelOf(ctrl, 'metrics.netWorth'), 'Metrics › Net Worth');
 });
 
 // ─── getAllKeys ───────────────────────────────────────────────────────────────
@@ -141,70 +100,4 @@ test('ChartController.getAllKeys: returns all discovered keys in insertion order
   ctrl.discoverKey('a');
   ctrl.discoverKey('m');
   assert.deepStrictEqual(ctrl.getAllKeys(), ['z', 'a', 'm']);
-});
-
-// ─── getQueryApi ─────────────────────────────────────────────────────────────
-
-test('ChartController.getQueryApi: empty search returns all items', async () => {
-  const ctrl = makeCtrl();
-  ctrl.discoverKey('income');
-  ctrl.discoverKey('tax');
-  const { items, total } = await ctrl.getQueryApi().search({ query: '', offset: 0, limit: 50 });
-  assert.strictEqual(total, 2);
-  assert.strictEqual(items.length, 2);
-});
-
-test('ChartController.getQueryApi: items have id and name fields', async () => {
-  const ctrl = makeCtrl();
-  ctrl.discoverKey('netWorth');
-  const { items } = await ctrl.getQueryApi().search({ query: '', offset: 0, limit: 50 });
-  assert.ok(items[0].id,   'item should have id');
-  assert.ok(items[0].name, 'item should have name');
-  assert.strictEqual(items[0].id, 'netWorth');
-});
-
-test('ChartController.getQueryApi: search filters by name substring', async () => {
-  const ctrl = makeCtrl();
-  ctrl.discoverKey('taxOwed');
-  ctrl.discoverKey('income');
-  ctrl.discoverKey('taxPaid');
-  const { items, total } = await ctrl.getQueryApi().search({ query: 'contains(name,Tax)', offset: 0, limit: 50 });
-  assert.strictEqual(total, 2);
-  assert.ok(items.every(i => i.name.toLowerCase().includes('tax')));
-});
-
-test('ChartController.getQueryApi: search is case-insensitive', async () => {
-  const ctrl = makeCtrl();
-  ctrl.discoverKey('totalBalance');
-  const { items } = await ctrl.getQueryApi().search({ query: 'contains(name,TOTAL)', offset: 0, limit: 50 });
-  assert.strictEqual(items.length, 1);
-});
-
-test('ChartController.getQueryApi: pagination — offset and limit are applied', async () => {
-  const ctrl = makeCtrl();
-  for (let i = 0; i < 10; i++) ctrl.discoverKey(`key${i}`);
-  const { items, total } = await ctrl.getQueryApi().search({ query: '', offset: 3, limit: 4 });
-  assert.strictEqual(total, 10);
-  assert.strictEqual(items.length, 4);
-});
-
-test('ChartController.getQueryApi: results are sorted alphabetically by name', async () => {
-  const ctrl = makeCtrl();
-  ctrl.discoverKey('zzebra');
-  ctrl.discoverKey('apple');
-  ctrl.discoverKey('mango');
-  const { items } = await ctrl.getQueryApi().search({ query: '', sort: [{ field: 'name', dir: 'asc' }], offset: 0, limit: 50 });
-  const names = items.map(i => i.name);
-  assert.deepStrictEqual(names, [...names].sort((a, b) => a.localeCompare(b)));
-});
-
-test('ChartController.getQueryApi: reflects newly discovered keys without re-creating api', async () => {
-  const ctrl = makeCtrl();
-  const api = ctrl.getQueryApi();
-  ctrl.discoverKey('first');
-  const { total: t1 } = await api.search({ query: '', offset: 0, limit: 50 });
-  ctrl.discoverKey('second');
-  const { total: t2 } = await api.search({ query: '', offset: 0, limit: 50 });
-  assert.strictEqual(t1, 1);
-  assert.strictEqual(t2, 2);
 });

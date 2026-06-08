@@ -48,6 +48,7 @@ import { NodeEditModal }              from '../visualization/components/node-edi
 import { ConfigurationListComponent } from '../visualization/configuration/configuration-list.js';
 import { ScenarioTabPresenter }       from '../visualization/scenario/scenario-tab-presenter.js';
 import { StatePanelView }             from '../visualization/simulation/state-panel-view.js';
+import { FieldSeriesStore }           from '../visualization/state/field-series-store.js';
 import { SimulationAnimator }         from '../visualization/simulation/simulation-animator.js';
 import { ScenarioTabView }            from '../visualization/scenario/scenario-tab-view.js';
 import { JournalReportingService }    from '../finance/journal-reporting-service.js';
@@ -429,6 +430,7 @@ export class WorkbenchApp extends BaseComponent {
     // user has saved/edited. ScenarioLoader dispatches to deserializeGraph() (if
     // cfg carries a saved graph snapshot) or toolset compilation.
     const activeConfig = registry.scenarioService.getActive();
+    this.scenario.watchlists = activeConfig?.watchlists ?? [];
     new ScenarioLoader().load(activeConfig, registry);
 
     //TODO this should be wired to a bus event (AND removed from constructor of tab presenter)
@@ -437,6 +439,9 @@ export class WorkbenchApp extends BaseComponent {
     this._statePanelView.schemaRegistry = registry.schemaRegistry;
     this._statePanelView.journal        = this.scenario.sim.journal;
     this._statePanelView.executionGraph = this.scenario.sim.executionGraph;
+    const fieldStore = new FieldSeriesStore();
+    fieldStore.simulationHistory = this.scenario.sim.history;
+    this._statePanelView.fieldSeriesStore = fieldStore;
     this._statePanelView.onOpenNode     = (nodeId) => {
       const node = registry.graph.getNode(nodeId);
       if (node) this._editModal.open(node);
@@ -461,7 +466,32 @@ export class WorkbenchApp extends BaseComponent {
       series:    this.chartSeries ?? undefined,
     });
     this.chartPresenter = new ChartPresenter({ controller: chartController, view: chartView });
+    this.chartPresenter.fieldStore = fieldStore;   // R10.3: full-res live buffering for charted paths
     this.chartPresenter.startViz();
+
+    // R9.0/D15: default the chart to a single net-worth line when the scenario has
+    // no saved watchlist (all pre-existing scenarios). netWorth is a real metric (R12).
+    if (!this.scenario.watchlists || this.scenario.watchlists.length === 0) {
+      this.scenario.watchlists = ['metrics.netWorth'];
+    }
+
+    const setCharted = (path, active) => {
+      if (active) {
+        this.chartPresenter.activatePath(path, fieldStore);
+        if (!this.scenario.watchlists.includes(path)) this.scenario.watchlists.push(path);
+      } else {
+        this.chartPresenter.deactivatePath(path);
+        this.scenario.watchlists = this.scenario.watchlists.filter(p => p !== path);
+      }
+      // Persist the watchlist into the active config so it survives save/reload.
+      const cfg = registry.scenarioService.getActive();
+      if (cfg) cfg.watchlists = [...this.scenario.watchlists];
+    };
+    this._statePanelView.isPathCharted = (path) => this.chartPresenter.isPathActive(path);
+    this._statePanelView.onChartToggle = setCharted;
+    // Chip ✕ removes the series and re-syncs the state-panel checkboxes (R7.3).
+    this.chartPresenter.onChipRemove = (path) => { setCharted(path, false); this._statePanelView.refresh(); };
+    this.chartPresenter.seedWatchlist(this.scenario.watchlists, fieldStore);
 
     this.timelinePresenter = new TimelinePresenter({
       controller:    new TimelineController(),

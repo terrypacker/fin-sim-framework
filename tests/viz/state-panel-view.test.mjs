@@ -430,3 +430,227 @@ test('StatePanelView.showNodeDetail: renders content into #actionPanelDetails', 
     container.remove();
   }
 });
+
+// ─── _subtreeTouchedPath ──────────────────────────────────────────────────────
+
+function makeMockEg(nodes = [], childMap = {}) {
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+  return {
+    getExecutionNodes: () => nodes,
+    getChildren: (id) => (childMap[id] ?? []).map(cid => nodeMap.get(cid)).filter(Boolean),
+    getParent: (id) => null,
+  };
+}
+
+test('StatePanelView._subtreeTouchedPath: reducer node that touched the path returns true', () => {
+  const panel = makePanel();
+  const reducer = { id: 'r1', kind: 'reducer', meta: { stateDiff: [{ field: 'usSavingsAccount.balance', before: 100, after: 200 }] } };
+  const eg = makeMockEg([reducer], {});
+  assert.strictEqual(panel._subtreeTouchedPath(reducer, 'usSavingsAccount.balance', eg), true);
+});
+
+test('StatePanelView._subtreeTouchedPath: reducer node that did NOT touch the path returns false', () => {
+  const panel = makePanel();
+  const reducer = { id: 'r1', kind: 'reducer', meta: { stateDiff: [{ field: 'other.field', before: 1, after: 2 }] } };
+  const eg = makeMockEg([reducer], {});
+  assert.strictEqual(panel._subtreeTouchedPath(reducer, 'usSavingsAccount.balance', eg), false);
+});
+
+test('StatePanelView._subtreeTouchedPath: event node with child reducer that touched path returns true', () => {
+  const panel = makePanel();
+  const reducer = { id: 'r1', kind: 'reducer', meta: { stateDiff: [{ field: 'metrics.netWorth', before: 0, after: 500 }] } };
+  const handler = { id: 'h1', kind: 'handler', meta: {} };
+  const evNode  = { id: 'e1', kind: 'event', timestamp: new Date(), meta: {} };
+  const eg = makeMockEg([evNode, handler, reducer], { e1: ['h1'], h1: ['r1'] });
+  assert.strictEqual(panel._subtreeTouchedPath(evNode, 'metrics.netWorth', eg), true);
+});
+
+test('StatePanelView._subtreeTouchedPath: event node whose subtree only touches unrelated fields returns false', () => {
+  const panel = makePanel();
+  const reducer = { id: 'r1', kind: 'reducer', meta: { stateDiff: [{ field: 'unrelated', before: 1, after: 2 }] } };
+  const evNode  = { id: 'e1', kind: 'event', timestamp: new Date(), meta: {} };
+  const eg = makeMockEg([evNode, reducer], { e1: ['r1'] });
+  assert.strictEqual(panel._subtreeTouchedPath(evNode, 'metrics.netWorth', eg), false);
+});
+
+test('StatePanelView._subtreeTouchedPath: reducer with empty stateDiff returns false', () => {
+  const panel = makePanel();
+  const reducer = { id: 'r1', kind: 'reducer', meta: { stateDiff: [] } };
+  const eg = makeMockEg([reducer], {});
+  assert.strictEqual(panel._subtreeTouchedPath(reducer, 'metrics.netWorth', eg), false);
+});
+
+test('StatePanelView._subtreeTouchedPath: reducer with no meta returns false', () => {
+  const panel = makePanel();
+  const reducer = { id: 'r1', kind: 'reducer', meta: {} };
+  const eg = makeMockEg([reducer], {});
+  assert.strictEqual(panel._subtreeTouchedPath(reducer, 'metrics.netWorth', eg), false);
+});
+
+// ─── Unified field rows + chart toggle (design 31 / R3, R4) ─────────────────────
+
+test('renderState: numeric leaf becomes an lsp-metric-row with a chart toggle', () => {
+  const panel = makePanel();
+  const c = document.createElement('div');
+  panel.renderState({ cash: 100 }, c);
+  const row = c.querySelector('.lsp-metric-row');
+  assert.ok(row, 'a metric row should be produced');
+  assert.ok(row.querySelector('input.lsp-chart-toggle'), 'row has a chart toggle checkbox');
+  assert.ok(row.querySelector('.lsp-metric-value').textContent.length > 0, 'value rendered');
+});
+
+test('renderState: checkbox checked-state reflects isPathCharted', () => {
+  const panel = makePanel();
+  panel.isPathCharted = (p) => p === 'cash';
+  const c = document.createElement('div');
+  panel.renderState({ cash: 100, tax: 5 }, c);
+  const byLabel = (t) => [...c.querySelectorAll('.lsp-metric-row')]
+    .find(r => r.querySelector('.lsp-metric-label').textContent === t)
+    .querySelector('input.lsp-chart-toggle');
+  assert.strictEqual(byLabel('Cash').checked, true);
+  assert.strictEqual(byLabel('Tax').checked,  false);
+});
+
+test('renderState: toggling a row checkbox calls onChartToggle(path, active)', () => {
+  const panel = makePanel();
+  const calls = [];
+  panel.onChartToggle = (path, active) => calls.push([path, active]);
+  const c = document.createElement('div');
+  panel.renderState({ cash: 100 }, c);
+  const cb = c.querySelector('input.lsp-chart-toggle');
+  cb.checked = true;
+  cb.dispatchEvent(new Event('change'));
+  assert.deepStrictEqual(calls, [['cash', true]]);
+});
+
+test('renderState: row checkbox click does not bubble to the row history handler', () => {
+  const panel = makePanel();
+  panel.onChartToggle = () => {};
+  let rowClicked = false;
+  const c = document.createElement('div');
+  panel.renderState({ cash: 100 }, c);
+  const row = c.querySelector('.lsp-metric-row');
+  row.addEventListener('click', () => { rowClicked = true; });
+  row.querySelector('input.lsp-chart-toggle').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  assert.strictEqual(rowClicked, false, 'checkbox click is stopped from opening the modal');
+});
+
+// ─── Stable holdings paths (R11.3) ──────────────────────────────────────────────
+
+test('renderState: deep-renders array-of-objects with stable id-addressed paths', () => {
+  const panel = makePanel();
+  panel._expandedSections.add('acct');
+  panel._expandedSections.add('acct.holdings');
+  panel._expandedSections.add('acct.holdings[id=sf]');
+  const c = document.createElement('div');
+  panel.renderState({ acct: { holdings: [{ id: 'sf', label: 'SF Bay', marketValue: 999 }] } }, c);
+  const titles = [...c.querySelectorAll('.lsp-metric-label')].map(s => s.title);
+  assert.ok(titles.includes('acct.holdings[id=sf].marketValue'),
+    'holding numeric leaf uses a stable [id=..] path');
+});
+
+test('renderState: array element without id falls back to positional index', () => {
+  const panel = makePanel();
+  panel._expandedSections.add('rows');
+  panel._expandedSections.add('rows.0');
+  const c = document.createElement('div');
+  panel.renderState({ rows: [{ v: 7 }] }, c);
+  const titles = [...c.querySelectorAll('.lsp-metric-label')].map(s => s.title);
+  assert.ok(titles.includes('rows.0.v'));
+});
+
+// ─── Collapsible sections (folding) ─────────────────────────────────────────────
+
+test('renderState: sections are collapsed by default (header shown, body omitted)', () => {
+  const panel = makePanel();
+  const c = document.createElement('div');
+  panel.renderState({ acct: { balance: 5 } }, c);
+  assert.ok(c.querySelector('.lsp-section-header'), 'header is shown');
+  assert.strictEqual(c.querySelector('.lsp-section-body'), null, 'body not built while collapsed');
+  assert.strictEqual(c.querySelector('.lsp-section-caret').textContent, '▶');
+});
+
+test('renderState: an expanded section renders its body and a ▼ caret', () => {
+  const panel = makePanel();
+  panel._expandedSections.add('acct');
+  const c = document.createElement('div');
+  panel.renderState({ acct: { balance: 5 } }, c);
+  assert.ok(c.querySelector('.lsp-section-body'), 'body built when expanded');
+  assert.strictEqual(c.querySelector('.lsp-section-caret').textContent, '▼');
+  const titles = [...c.querySelectorAll('.lsp-metric-label')].map(s => s.title);
+  assert.ok(titles.includes('acct.balance'));
+});
+
+test('renderState: an active filter auto-expands matching sections', () => {
+  const panel = makePanel();           // nothing in _expandedSections
+  panel.setFilter('balance');
+  const c = document.createElement('div');
+  panel.renderState({ acct: { balance: 5 } }, c);
+  assert.ok(c.querySelector('.lsp-section-body'), 'filter forces the section open');
+  const labels = [...c.querySelectorAll('.lsp-metric-label')].map(s => s.textContent);
+  assert.ok(labels.includes('Balance'));
+});
+
+// ─── Filter (R6) ────────────────────────────────────────────────────────────────
+
+test('renderState: filter hides rows whose path does not match', () => {
+  const panel = makePanel();
+  panel.setFilter('marketValue');
+  const c = document.createElement('div');
+  panel.renderState({ acct: { holdings: [{ id: 'sf', marketValue: 999 }] }, cash: 5 }, c);
+  const labels = [...c.querySelectorAll('.lsp-metric-label')].map(s => s.textContent);
+  assert.ok(labels.includes('Market Value'), 'matching field shown');
+  assert.ok(!labels.includes('Cash'),        'non-matching field hidden');
+});
+
+test('renderState: a section whose every descendant is filtered out is omitted', () => {
+  const panel = makePanel();
+  panel.setFilter('zzz-no-match');
+  const c = document.createElement('div');
+  panel.renderState({ acct: { holdings: [{ id: 'sf', marketValue: 999 }] } }, c);
+  assert.strictEqual(c.querySelector('.lsp-section-header'), null, 'empty section header omitted');
+});
+
+// ─── Section tri-state select-all (R5) ──────────────────────────────────────────
+
+test('renderHeaderRow: select-all is indeterminate when some descendants are charted', () => {
+  const panel = makePanel();
+  panel.onChartToggle = () => {};
+  panel.isPathCharted = (p) => p === 'a.x';
+  const c = document.createElement('div');
+  panel.renderState({ a: { x: 1, y: 2 } }, c);
+  const cb = c.querySelector('.lsp-section-header input.lsp-section-toggle');
+  assert.ok(cb, 'section toggle present');
+  assert.strictEqual(cb.indeterminate, true);
+  assert.strictEqual(cb.checked, false);
+});
+
+test('renderHeaderRow: select-all checked when all descendants are charted', () => {
+  const panel = makePanel();
+  panel.onChartToggle = () => {};
+  panel.isPathCharted = () => true;
+  const c = document.createElement('div');
+  panel.renderState({ a: { x: 1, y: 2 } }, c);
+  const cb = c.querySelector('.lsp-section-toggle');
+  assert.strictEqual(cb.checked, true);
+  assert.strictEqual(cb.indeterminate, false);
+});
+
+test('renderHeaderRow: toggling select-all activates every descendant path', () => {
+  const panel = makePanel();
+  const calls = [];
+  panel.onChartToggle = (p, a) => calls.push([p, a]);
+  const c = document.createElement('div');
+  panel.renderState({ a: { x: 1, y: 2 } }, c);
+  const cb = c.querySelector('.lsp-section-toggle');
+  cb.checked = true;
+  cb.dispatchEvent(new Event('change'));
+  assert.deepStrictEqual(calls.sort(), [['a.x', true], ['a.y', true]]);
+});
+
+test('renderHeaderRow: no select-all checkbox when onChartToggle is not wired', () => {
+  const panel = makePanel();
+  const c = document.createElement('div');
+  panel.renderState({ a: { x: 1 } }, c);
+  assert.strictEqual(c.querySelector('.lsp-section-toggle'), null);
+});

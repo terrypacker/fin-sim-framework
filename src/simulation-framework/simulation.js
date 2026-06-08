@@ -101,6 +101,10 @@ export class Simulation {
     this.history.enableSnapshots = opts.enableSnapshots ?? true;
     this.history.snapshotInterval = opts.snapshotInterval ?? 12; // every N events (~1/year)
     this.debug = opts.debug ?? false;
+    // Optional hook to populate derived display metrics (e.g. netWorth) into
+    // state just before each EXECUTION_END snapshot. Domain-agnostic: the finance
+    // layer supplies the function via buildSim(). Only runs in non-silent (UI) runs.
+    this._deriveMetrics = opts.deriveMetrics ?? null;
     this.silent = opts.silent ?? false; // when true: skip bus, clones, diffs (MC/batch mode)
     this.journal = new Journal({enabled: true});
 
@@ -452,6 +456,7 @@ export class Simulation {
 
     // Publish EXECUTION_END(EVENT) with full state snapshot + diff.
     if (!this.silent) {
+      if (this._deriveMetrics) this._deriveMetrics(this.state);
       const stateSnapshot = structuredClone(this.state);
       const now = new Date(this.currentDate);
       this.bus.publish(new ExecutionBusMessage({

@@ -42,27 +42,16 @@ export class ChartView extends BaseComponent {
     this._colorIdx     = 0;
     this._annotations  = {};         // id → { date, label, color, position }
     this._hiddenSeries = new Set();
-    this._filterBarEl  = null;
 
     this._seriesConfig = new Map((series ?? []).map(s => [s.key, s]));
+    this._seriesKinds  = new Map(); // key → ParameterValueType.kind string
+    this._backfilledSeries = new Set(); // keys shown at snapshot resolution → dashed (R10.1)
   }
 
   // ── Resize ────────────────────────────────────────────────────────────────────
 
   resize() {
     this._chart?.resize();
-  }
-
-  // ── Filter bar ────────────────────────────────────────────────────────────────
-
-  mountFilterBar() {
-    if (this._filterBarEl) return this._filterBarEl;
-    const container = document.getElementById('chartFilterContainer');
-    if (!container) return null;
-    container.innerHTML = '';
-    this._filterBarEl = this._getTemplate('tpl-chart-filter-bar');
-    container.appendChild(this._filterBarEl);
-    return this._filterBarEl;
   }
 
   // ── Dataset visibility ────────────────────────────────────────────────────────
@@ -78,6 +67,39 @@ export class ChartView extends BaseComponent {
         legend: { selected: { [this._labelFor(key)]: visible } }
       });
     }
+  }
+
+  /**
+   * Remove a series entirely (its data and bookkeeping) and re-render so it is
+   * dropped from the chart. Uses replaceMerge so ECharts actually discards the
+   * stale series rather than index-merging it back. (Design 31 / R1.3.)
+   */
+  removeSeries(key) {
+    this._seriesMap.delete(key);
+    this._seriesKinds.delete(key);
+    this._hiddenSeries.delete(key);
+    this._backfilledSeries.delete(key);
+    if (!this._chart) return;
+    const { series, selected } = this._buildSeriesAndLegend();
+    this._chart.setOption(
+      { series, legend: { selected }, yAxis: this._buildYAxes() },
+      { replaceMerge: ['series'] }
+    );
+  }
+
+  /**
+   * Record the ParameterValueType.kind for a series so it can be bucketed
+   * onto the correct Y-axis (rate/percentage → right; currency/other → left).
+   */
+  setSeriesKind(key, kind) {
+    this._seriesKinds.set(key, kind ?? 'unknown');
+  }
+
+  /** Mark a series as backfilled (snapshot resolution) → rendered dashed (R10.1). */
+  setSeriesBackfilled(key, on) {
+    if (on) this._backfilledSeries.add(key);
+    else    this._backfilledSeries.delete(key);
+    if (this._chart) this.scheduleRender(() => this._doChartUpdate());
   }
 
   // ── Hook ─────────────────────────────────────────────────────────────────────
@@ -139,6 +161,8 @@ export class ChartView extends BaseComponent {
 
   resetHistory() {
     this._seriesMap.clear();
+    this._seriesKinds.clear();
+    this._backfilledSeries.clear();
     this._colorIdx    = 0;
     this._annotations = {};
     this._hiddenSeries.clear();
@@ -161,8 +185,6 @@ export class ChartView extends BaseComponent {
       this._chart.dispose();
       this._chart = null;
     }
-    this._filterBarEl?.remove();
-    this._filterBarEl = null;
   }
 
   // ── Private ──────────────────────────────────────────────────────────────────
@@ -181,22 +203,30 @@ export class ChartView extends BaseComponent {
       .trim();
   }
 
+  _kindToAxisIndex(kind) {
+    return (kind === 'rate' || kind === 'percentage') ? 1 : 0;
+  }
+
   _buildSeriesOption(key, dataArr) {
     const { colorIdx } = this._seriesMap.get(key);
-    const cfg   = this._seriesConfig.get(key);
-    const color = cfg?.color ?? this._colorFor(colorIdx);
+    const cfg        = this._seriesConfig.get(key);
+    const color      = cfg?.color ?? this._colorFor(colorIdx);
+    const kind       = this._seriesKinds.get(key) ?? 'unknown';
+    const yAxisIndex = this._kindToAxisIndex(kind);
+    const backfilled = this._backfilledSeries.has(key);
     return {
       type:           'line',
       id:             key,
-      name:           this._labelFor(key),
+      name:           this._labelFor(key),  // keep stable for legend.selected matching
       data:           dataArr,
+      yAxisIndex,
       smooth:         true,
       smoothMonotone: 'x',
       symbol:         'circle',
       symbolSize:     6,
       sampling:       'lttb',
       emphasis:       { focus: 'series' },
-      lineStyle:      { color, width: 2 },
+      lineStyle:      { color, width: 2, type: backfilled ? 'dashed' : 'solid' },
       itemStyle:      { color },
     };
   }
@@ -236,21 +266,60 @@ export class ChartView extends BaseComponent {
     };
   }
 
-  _doChartUpdate() {
-    if (!this._chart) return;
+  _buildYAxes() {
+    // Determine which axis indices are actually in use
+    const activeKinds = new Set([...this._seriesKinds.values()]);
+    const hasRateAxis = [...activeKinds].some(k => k === 'rate' || k === 'percentage');
 
+    const leftAxis = {
+      type:      'value',
+      position:  'left',
+      axisLabel: {
+        color:      readThemeColor('--text-dim'),
+        fontSize:   11,
+        fontFamily: 'monospace',
+        formatter:  (val) => Number(val).toLocaleString(),
+      },
+      splitLine: { lineStyle: { color: readThemeColor('--border-light'), width: 1 } },
+      axisLine:  { show: false },
+      axisTick:  { show: false },
+    };
+
+    if (!hasRateAxis) return leftAxis; // single axis — keep existing shape for ECharts
+
+    const rightAxis = {
+      type:      'value',
+      position:  'right',
+      axisLabel: {
+        color:      readThemeColor('--text-dim'),
+        fontSize:   11,
+        fontFamily: 'monospace',
+        formatter:  (val) => Number(val).toLocaleString('en-US', { maximumFractionDigits: 4 }),
+      },
+      splitLine: { show: false },
+      axisLine:  { show: false },
+      axisTick:  { show: false },
+    };
+
+    return [leftAxis, rightAxis];
+  }
+
+  _buildSeriesAndLegend() {
     const series = [];
     const selected = {};
-
     for (const [key, { dataArr }] of this._seriesMap) {
       series.push(this._buildSeriesOption(key, dataArr));
       selected[this._labelFor(key)] = !this._hiddenSeries.has(key);
     }
-
     const annSeries = this._buildAnnotationSeries();
     if (annSeries) series.push(annSeries);
+    return { series, selected };
+  }
 
-    this._chart.setOption({ series, legend: { selected } });
+  _doChartUpdate() {
+    if (!this._chart) return;
+    const { series, selected } = this._buildSeriesAndLegend();
+    this._chart.setOption({ series, legend: { selected }, yAxis: this._buildYAxes() });
   }
 
   _applyBaseOptions() {
@@ -293,18 +362,7 @@ export class ChartView extends BaseComponent {
         axisLine:  { lineStyle: { color: readThemeColor('--border') } },
         axisTick:  { lineStyle: { color: readThemeColor('--border') } },
       },
-      yAxis: {
-        type: 'value',
-        axisLabel: {
-          color:      readThemeColor('--text-dim'),
-          fontSize:   11,
-          fontFamily: 'monospace',
-          formatter:  (val) => Number(val).toLocaleString(),
-        },
-        splitLine: { lineStyle: { color: readThemeColor('--border-light'), width: 1 } },
-        axisLine:  { show: false },
-        axisTick:  { show: false },
-      },
+      yAxis: this._buildYAxes(),
       tooltip: {
         trigger:     'item',
         axisPointer: {

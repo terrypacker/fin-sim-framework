@@ -15,10 +15,10 @@
   color: var(--text-muted);
 }
 
-/* ── Metric rows in Live State ── */
+/* ── Metric / field rows in Live State ── */
 .lsp-metric-row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: auto 1fr auto auto;  /* checkbox · label · sparkline · value */
   align-items: center;
   gap: 6px;
   padding: 2px 10px;
@@ -31,6 +31,8 @@
   background: var(--bg-panel2);
   border-color: var(--border-subtle, var(--border));
 }
+.lsp-static-row { cursor: default; }
+.lsp-static-row:hover { background: none; border-color: transparent; }
 
 .lsp-metric-label {
   color: var(--text-muted);
@@ -39,10 +41,77 @@
   white-space: nowrap;
 }
 
+.lsp-metric-spark { display: inline-flex; align-items: center; }
+
 .lsp-metric-value {
   font-family: var(--font-mono);
   text-align: right;
 }
+
+/* Chart-toggle checkbox at the start of each numeric row / section header. */
+.lsp-chart-toggle {
+  margin: 0;
+  width: 12px;
+  height: 12px;
+  cursor: pointer;
+  accent-color: var(--accent-primary, #60a5fa);
+  flex-shrink: 0;
+}
+
+/* Section headers: a single flex row of caret + tri-state checkbox + label. */
+.lsp-section-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  margin-bottom: 2px;
+  border-radius: 2px;
+  background: var(--bg-active);
+  cursor: pointer;
+  user-select: none;
+}
+.lsp-section-header:hover { background: var(--bg-panel2); }
+
+.lsp-section-caret {
+  font-size: 8px;
+  color: var(--text-muted);
+  width: 8px;
+  flex-shrink: 0;
+}
+
+.lsp-section-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Nested section bodies indent slightly so the tree structure reads. */
+.lsp-section-body { padding-left: 10px; }
+
+/* Row filter input above the panel sections. */
+.lsp-panel-filter {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 2px 0 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  background: var(--bg-panel2, #111);
+  color: var(--text-primary, #e5e7eb);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+.lsp-panel-filter::placeholder { color: var(--text-muted); }
+
+/* "Chart a path by name" row (R9.2). */
+.lsp-add-path-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.lsp-add-path { margin: 0; flex: 1; }
 
 #actionPanelDetails {
   display: flex;

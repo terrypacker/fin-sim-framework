@@ -374,8 +374,8 @@ The current finance plugin set, exported as `FINANCE_PLUGINS` + `FINANCE_DEFAULT
 | `inspector` | Edit | Selected-node editor (mounts the right `*-editor.js`) |
 | `config-graph` | Graph | The dockable SVG/echarts node-and-edge canvas |
 | `timeline` | Timeline | Journal timeline with filters + CSV download |
-| `chart` | Chart | Time-series chart (ECharts) of selected state series |
-| `state-panel` | State | Live state inspector + per-node state-change diffs |
+| `chart` | Chart | Time-series chart (ECharts) of any numeric `sim.state` path; grouped filter + multi-axis |
+| `state-panel` | State | Live state inspector + per-node state-change diffs; click any numeric row to chart/promote it |
 | `action-detail` | Action Detail | Selected journal-entry details + payload + before/after |
 | `exec-history` | Node History | Per-node execution history (uses ExecutionGraph) |
 | `lineage` | Lineage | Upstream/downstream causal tracing for a selected execution node |
@@ -446,6 +446,7 @@ Notable suites:
 - **All UI mutations flow through services.** Editors call `service.updateX(id, changes)`; they never mutate domain objects in place. The bus + `SimulationSync` re-wires the active sim.
 - **Look up state by role, not by stateKey string.** Use `stateRegistry.getAccount(state, ACCOUNT_ROLES.ROTH, ownerId)` instead of `state.rothAccount`. This is what makes multi-person households work.
 - **Format state for display via `StateSchemaRegistry`.** Register exact paths or patterns when adding new state fields so the chart/state-panel/timeline render correct currency / precision.
+- **`RECORD_METRIC` is for derived/synthetic values only.** Any numeric field already in `sim.state` is directly chartable (design 31) — you do not need a `RECORD_METRIC` action to make it visible. Use `RECORD_METRIC` only for values that are computed from multiple sources and not naturally present as a single state field (e.g. cumulative income-flow accumulators, out-of-funds deficits, cross-account KPIs). `metrics.*` is one curated group among many in the chart filter.
 - **Prefer the toolset path over hand-built scenarios.** Add a new toolset when you need new domain mechanics; only fall back to hand-built `loadDefaults`/`ScenarioSerializer` shapes for one-offs.
 - **Imports use explicit `.js` extensions** (even from `.mjs` test files). Tests import directly from `src/`.
 - **`src/index.js` is auto-generated.** Run `npm run build:index` after restructuring exports.

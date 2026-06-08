@@ -9,23 +9,64 @@
  */
 
 /**
- * Path-walking helpers for nested MC parameter keys.
+ * Path-walking helpers for nested MC parameter keys (and, since design 31,
+ * general state-path addressing for the chart/state-panel).
  *
  * Accepted path forms:
  *   'rothGrowthRate'               → top-level key
  *   'people.primary.lifeExpectancy'→ dot-separated
- *   'shocks[0].severity'           → bracketed index + dot
+ *   'shocks[0].severity'           → bracketed positional index
  *   'shocks[1].recovery.durationMonths' → mixed
+ *   'usSavingsAccount.holdings[id=abc].marketValue' → key-matched array element
+ *
+ * The `[key=value]` form (design 31 / R11) addresses an array element by a
+ * stable field rather than position, so a watchlisted holding survives a sale
+ * that shifts indices. Matching is by string-equality on element[key].
  *
  * get/set are no-ops (return undefined / do nothing) when an intermediate
  * segment is missing — no implicit shape creation.
  */
 
+/**
+ * Parse a path into segments. Each segment is one of:
+ *   - string   → object key
+ *   - number   → positional array index
+ *   - {key,value} → array-element matcher (`[key=value]`)
+ */
 function parsePath(path) {
-  // Split on '.' or '[N]' (optionally followed by '.'), keeping captured indices.
-  // 'shocks[1].severity' → ['shocks', '1', 'severity']
-  return path.split(/\.|\[(\d+)\]\.?/).filter(Boolean)
-             .map(s => (/^\d+$/.test(s) ? Number(s) : s));
+  const segs = [];
+  let buf = '';
+  const flush = () => {
+    if (buf !== '') { segs.push(/^\d+$/.test(buf) ? Number(buf) : buf); buf = ''; }
+  };
+  for (let i = 0; i < path.length; i++) {
+    const c = path[i];
+    if (c === '.') {
+      flush();
+    } else if (c === '[') {
+      flush();
+      const end = path.indexOf(']', i);
+      if (end === -1) { buf += c; continue; }   // unterminated — treat literally
+      const inner = path.slice(i + 1, end);
+      const eq = inner.indexOf('=');
+      if (/^\d+$/.test(inner))      segs.push(Number(inner));
+      else if (eq >= 0)             segs.push({ key: inner.slice(0, eq), value: inner.slice(eq + 1) });
+      else                          segs.push(inner);
+      i = end;                                   // loop ++ moves past ']'
+    } else {
+      buf += c;
+    }
+  }
+  flush();
+  return segs;
+}
+
+function _step(cur, seg) {
+  if (typeof seg === 'object' && seg !== null) {
+    if (!Array.isArray(cur)) return undefined;
+    return cur.find(el => el != null && String(el[seg.key]) === seg.value);
+  }
+  return cur[seg];
 }
 
 /**
@@ -37,7 +78,7 @@ export function get(obj, path) {
   let cur = obj;
   for (const seg of segs) {
     if (cur == null) return undefined;
-    cur = cur[seg];
+    cur = _step(cur, seg);
   }
   return cur;
 }
@@ -45,6 +86,7 @@ export function get(obj, path) {
 /**
  * Write a value into obj at the given path expression.
  * No-op if any intermediate segment is missing (never creates nodes).
+ * A `[key=value]` matcher as the final segment is unsupported for set (no-op).
  * Only mutates obj — callers must pass a structuredClone if immutability is needed.
  */
 export function set(obj, path, value) {
@@ -52,8 +94,13 @@ export function set(obj, path, value) {
   if (segs.length === 0) return;
   let cur = obj;
   for (let i = 0; i < segs.length - 1; i++) {
-    if (cur[segs[i]] == null) return;
-    cur = cur[segs[i]];
+    if (cur == null) return;
+    const next = _step(cur, segs[i]);
+    if (next == null) return;
+    cur = next;
   }
-  cur[segs[segs.length - 1]] = value;
+  if (cur == null) return;
+  const last = segs[segs.length - 1];
+  if (typeof last === 'object' && last !== null) return;  // matcher-as-target unsupported
+  cur[last] = value;
 }

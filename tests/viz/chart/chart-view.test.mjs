@@ -20,12 +20,6 @@ beforeEach(() => {
     <div id="chartWrap">
       <canvas id="testCanvas"></canvas>
     </div>
-    <div id="chartFilterContainer"></div>
-    <template id="tpl-chart-filter-bar">
-      <div class="tl-filter-bar">
-        <div id="chart-metric-select"></div>
-      </div>
-    </template>
   `;
   global.requestAnimationFrame = cb => setTimeout(cb, 0);
   global.performance = global.performance ?? { now: () => Date.now() };
@@ -73,14 +67,6 @@ test('ChartView.stopViz: is safe before startViz', () => {
   assert.doesNotThrow(() => makeView().stopViz());
 });
 
-test('ChartView.stopViz: removes filter bar element from DOM', () => {
-  const view = makeView();
-  view.mountFilterBar();
-  assert.ok(view._filterBarEl !== null, 'filter bar should be mounted');
-  view.stopViz();
-  assert.strictEqual(view._filterBarEl, null);
-  assert.strictEqual(document.getElementById('chartFilterContainer').childElementCount, 0);
-});
 
 // ─── addSnapshot ─────────────────────────────────────────────────────────────
 
@@ -225,36 +211,31 @@ test('ChartView.resetHistory: is safe before startViz', () => {
   assert.doesNotThrow(() => makeView().resetHistory());
 });
 
-// ─── mountFilterBar ───────────────────────────────────────────────────────────
+// ─── removeSeries ─────────────────────────────────────────────────────────────
 
-test('ChartView.mountFilterBar: returns an element', () => {
+test('ChartView.removeSeries: deletes the series from _seriesMap', () => {
   const view = makeView();
-  const bar  = view.mountFilterBar();
-  assert.ok(bar instanceof Element, 'should return a DOM element');
+  view.startViz();
+  view.addSnapshot(D1, { a: 1, b: 2 });
+  view.removeSeries('a');
+  assert.strictEqual(view._seriesMap.has('a'), false);
+  assert.strictEqual(view._seriesMap.has('b'), true);
 });
 
-test('ChartView.mountFilterBar: second call returns the same element', () => {
+test('ChartView.removeSeries: clears kind and hidden bookkeeping', () => {
   const view = makeView();
-  const b1 = view.mountFilterBar();
-  const b2 = view.mountFilterBar();
-  assert.strictEqual(b1, b2);
+  view.startViz();
+  view.addSnapshot(D1, { a: 1 });
+  view.setSeriesKind('a', 'currency');
+  view.setDatasetVisible('a', false);
+  view.removeSeries('a');
+  assert.strictEqual(view._seriesKinds.has('a'),  false);
+  assert.strictEqual(view._hiddenSeries.has('a'), false);
 });
 
-test('ChartView.mountFilterBar: clears existing container content', () => {
-  document.getElementById('chartFilterContainer').innerHTML = '<p>old</p>';
+test('ChartView.removeSeries: is a no-op when chart is not initialised', () => {
   const view = makeView();
-  view.mountFilterBar();
-  assert.strictEqual(
-    document.getElementById('chartFilterContainer').querySelector('p'),
-    null,
-    'old content should be replaced'
-  );
-});
-
-test('ChartView.mountFilterBar: returned element contains #chart-metric-select', () => {
-  const view = makeView();
-  const bar  = view.mountFilterBar();
-  assert.ok(bar.querySelector('#chart-metric-select'), 'filter bar should include #chart-metric-select');
+  assert.doesNotThrow(() => view.removeSeries('a'));
 });
 
 // ─── setRenderThrottle ────────────────────────────────────────────────────────
