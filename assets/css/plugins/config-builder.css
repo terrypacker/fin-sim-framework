@@ -239,6 +239,23 @@
 }
 .param-group-header:first-child { border-top: none; margin-top: 0; }
 
+/* Linked-node click-through icon on params that target a person/account. */
+.param-link-btn {
+  margin-left: 4px;
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 1;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.param-link-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+/* Params whose declared node could not be resolved in the current scenario. */
+.param-row--unlinked label { color: var(--amber-dim); }
+
 .param-row input,
 .param-row select,
 .param-row textarea {

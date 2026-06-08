@@ -67,7 +67,9 @@
       "Bash(xargs sed -i '' 's/new ScenarioRegistry\\(new ScenarioStorage\\(\\)\\)/new ScenarioRegistry\\(new ScenarioStorage\\(\\), new Graph\\(\\)\\)/g')",
       "Bash(gtimeout 5 node --test \"tests/unit/account.test.mjs\")",
       "Bash(echo \"FAIL/TIMEOUT \\($?\\)\")",
-      "Bash(awk '{print $3}')"
+      "Bash(awk '{print $3}')",
+      "Bash(lsof -iTCP:5173 -sTCP:LISTEN)",
+      "mcp__chrome-devtools__wait_for"
     ]
   },
   "hooks": {

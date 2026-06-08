@@ -45,12 +45,52 @@ export class ScenarioTabPresenter {
    *   bus:        import('../../simulation-framework/event-bus.js').EventBus
    * }}
    */
-  constructor({ controller, view, bus, initScenario }) {
+  constructor({ controller, view, bus, initScenario, editModal }) {
     this._controller = controller;
     this._view = view;
     this._bus = bus;
     this._initScenario = initScenario;
+    this._editModal = editModal ?? null;
     this._activeScenario = null;
+
+    // Resolve a param's `node` declaration to the live account/person so the
+    // params panel can display the current name (not the frozen schema label).
+    this._view.nodeLookup = (paramNode) => {
+      if (!paramNode) return null;
+      const registry = ServiceRegistry.getInstance();
+      if (paramNode.type === 'account') {
+        const account = registry.accountService?.getAll?.()
+          .find(a => a.stateKey === paramNode.stateKey);
+        return account
+          ? { name: account.name ?? paramNode.stateKey, kind: 'account', node: account, found: true }
+          : { name: paramNode.stateKey, kind: 'account', node: null, found: false };
+      }
+      if (paramNode.type === 'person') {
+        const person = registry.personService?.getAll?.()
+          .find(p => p.id === paramNode.id);
+        return person
+          ? { name: person.name ?? paramNode.id, kind: 'person', node: person, found: true }
+          : { name: paramNode.id, kind: 'person', node: null, found: false };
+      }
+      return null;
+    };
+
+    // Click-through: open the linked account/person in the shared edit modal.
+    this._view.onOpenLinkedNode = (paramNode) => {
+      const info = this._view.nodeLookup?.(paramNode);
+      if (!info?.node || !this._editModal) return;
+      this._editModal.open(info.node);
+    };
+
+    // Re-render the params list when an account or person is renamed in the
+    // Configuration editor so the linked labels track the live names without
+    // requiring a scenario rebuild.
+    this._bus?.subscribe?.('SERVICE_ACTION', (msg) => {
+      const kind = msg?.item?.kind;
+      if (kind !== 'account' && kind !== 'person') return;
+      if (!this._activeScenario?.params?.length) return;
+      this._view._renderParamsList(this._activeScenario);
+    });
 
     this._view.onOpen = (id) => {
       this._controller.setActiveById(id);
