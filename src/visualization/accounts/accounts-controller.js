@@ -82,6 +82,19 @@ export class AccountsController {
       const dp = n.drawdownPriority;
       n.drawdownPriority = (dp === '' || dp == null) ? null : Number(dp);
     }
+    // Coerce holdings array: ensure numeric fields are numbers, drop empty arrays
+    if (Array.isArray(n.holdings)) {
+      if (n.holdings.length === 0) {
+        delete n.holdings; // preserve existing holdings when form clears (shouldn't happen)
+      } else {
+        n.holdings = n.holdings.map(h => ({
+          ...h,
+          marketValue: Number(h.marketValue) || 0,
+          costBasis:   Number(h.costBasis)   || 0,
+          taxLossPartner: h.taxLossPartner || null,
+        }));
+      }
+    }
     return this._service.updateAccount(id, n);
   }
 

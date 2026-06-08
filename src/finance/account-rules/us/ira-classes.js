@@ -174,7 +174,8 @@ export class IraContributionHandler extends HandlerEntry {
     this.generatedActionTypes = ['IRA_CONTRIBUTION_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
   }
 
-  call({ data }) {
+  call({ data, state }) {
+    if (state?.contributionsSuspended) return [];
     return [
       { type: 'IRA_CONTRIBUTION_APPLY', amount: data.amount },
       new FieldValueAction('ira_contribution', 'IRA Contribution', data.amount),

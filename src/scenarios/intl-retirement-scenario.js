@@ -31,6 +31,9 @@ import { ECONOMIC_REGIMES }    from './toolsets/economic-regimes-toolset.js';
 import { ServiceRegistry }     from '../services/service-registry.js';
 import { USD, AUD }            from '../finance/assets/account.js';
 import { ACCOUNT_ROLES }       from '../finance/state/account-roles.js';
+import { Holding }             from '../finance/holdings/holding.js';
+import { ALLOCATION }          from '../finance/holdings/allocation.js';
+import { RATE_KEYS }           from '../finance/economic-regimes/rate-keys.js';
 
 /**
  * Default parameters for the International Retirement scenario.
@@ -55,7 +58,10 @@ export const INTL_RETIREMENT_DEFAULTS = {
   rothBalance:   80_000,  rothBasis:   60_000,
   iraBalance:   200_000,  iraBasis:   150_000,
   k401Balance:  300_000,  k401Basis:  200_000,
-  stockBalance: 150_000,  stockBasis:  90_000,
+  stockBalance:    150_000,
+  stockSplitRatio:    0.60,   // fraction of stockBalance → domestic holding
+  stockBasisUS:   108_000,    // domestic cost basis — above market by default, triggers TLH
+  stockBasisIntl:  42_000,    // international cost basis — below market (gain position)
   stockDividendRate:    0.02,
   stockDividendReinvest: false,
   fixedIncomeBalance:   80_000,
@@ -189,8 +195,26 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     key: 'stockBalance', label: 'US Stock Balance (USD)',
     type: 'Number', group: 'US Account Balances', mc: true, opt: false,
     defaultValue: INTL_RETIREMENT_DEFAULTS.stockBalance,
-    description: 'Starting US brokerage stock balance',
+    description: 'Starting US brokerage stock balance (split into two holdings via stockSplitRatio)',
     node: { type: 'account', stateKey: 'usStockAccount', field: 'initialValue' },
+  },
+  {
+    key: 'stockSplitRatio', label: 'Stock Domestic Split (0–1)',
+    type: 'Number', group: 'US Account Balances', mc: false, opt: true,
+    defaultValue: INTL_RETIREMENT_DEFAULTS.stockSplitRatio,
+    description: 'Fraction of US stock balance allocated to the domestic equity holding (remainder goes to international). Default 0.6 = 60/40.',
+  },
+  {
+    key: 'stockBasisUS', label: 'Stock Basis — Domestic (USD)',
+    type: 'Number', group: 'US Account Balances', mc: false, opt: true,
+    defaultValue: INTL_RETIREMENT_DEFAULTS.stockBasisUS,
+    description: 'Cost basis for the domestic equity holding. Default exceeds market value so TLH fires immediately when enabled.',
+  },
+  {
+    key: 'stockBasisIntl', label: 'Stock Basis — International (USD)',
+    type: 'Number', group: 'US Account Balances', mc: false, opt: true,
+    defaultValue: INTL_RETIREMENT_DEFAULTS.stockBasisIntl,
+    description: 'Cost basis for the international equity holding. Default is below market value (gain position, TaxGainHarvest candidate).',
   },
   {
     key: 'fixedIncomeBalance', label: 'Fixed Income Balance (USD)',
@@ -469,9 +493,11 @@ export class IntlRetirementScenario extends BaseScenario {
         {
           __type: 'BrokerageAccount',     stateKey: 'usStockAccount',
           name: 'US Stock',               role: ACCOUNT_ROLES.US_STOCK,
-          initialValue: p.stockBalance,   contributionBasis: p.stockBasis,
+          initialValue: p.stockBalance,
+          contributionBasis: (p.stockBasisUS ?? 0) + (p.stockBasisIntl ?? 0),
           ownerId: 'primary',             drawdownPriority: 2,
           country: 'US', currency: USD,
+          holdings: _stockHoldings(p),
         },
         {
           __type: 'TraditionalIRAAccount', stateKey: 'iraAccount',
@@ -664,6 +690,42 @@ export class IntlRetirementScenario extends BaseScenario {
  * @param {object} cfg    - Mutable clone of the serialized scenario config.
  * @param {object} params - Perturbed parameter map.
  */
+/**
+ * Build the two-holding seed for usStockAccount.
+ *
+ * Domestic holding (rateKey EQUITY_US): stockSplitRatio × stockBalance, basis = stockBasisUS.
+ * International holding (rateKey EQUITY_US): remainder, basis = stockBasisIntl.
+ *
+ * Both use EQUITY_US so the TLH substitute-selection algorithm auto-selects the
+ * other holding (first sibling with the same rateKey). By default the domestic
+ * holding is above basis (loss position) and the international holding is below
+ * basis (gain position), so TLH fires immediately when enabled.
+ */
+function _stockHoldings(p) {
+  const ratio   = Math.min(1, Math.max(0, p.stockSplitRatio ?? 0.60));
+  const total   = p.stockBalance ?? 0;
+  const usMv    = +((total * ratio).toFixed(2));
+  const intlMv  = +((total - usMv).toFixed(2));
+  return [
+    new Holding({
+      id:          'h-us-equity',
+      label:       'US Equity (Domestic)',
+      allocation:  ALLOCATION.EQUITY,
+      rateKey:     RATE_KEYS.EQUITY_US,
+      marketValue: usMv,
+      costBasis:   p.stockBasisUS   ?? 108_000,
+    }),
+    new Holding({
+      id:          'h-intl-equity',
+      label:       'US Equity (International)',
+      allocation:  ALLOCATION.EQUITY,
+      rateKey:     RATE_KEYS.EQUITY_US,
+      marketValue: intlMv,
+      costBasis:   p.stockBasisIntl ?? 42_000,
+    }),
+  ];
+}
+
 export function applyRealPropertySaleYearParams(cfg, params) {
   if (!Array.isArray(cfg.realProperties)) return;
   for (const prop of cfg.realProperties) {

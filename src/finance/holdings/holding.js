@@ -39,6 +39,8 @@ export class Holding {
    *                                                - Step-wise appreciation schedule; null = use asset scalar rate
    * @param {number|null} [opts.duration=null]      - Modified duration in years (BOND holdings only);
    *                                                  null = fall back to RATE_KEY_META[rateKey].defaultDuration ?? 0
+   * @param {string|null} [opts.taxLossPartner=null] - Holding id of the substitute to rebuy after a tax-loss harvest
+   *                                                   (design 29 §3.3). Null = fall back to same-rateKey search.
    */
   constructor({
     id                   = null,
@@ -51,6 +53,7 @@ export class Holding {
     dividendYield        = null,
     appreciationSchedule = null,
     duration             = null,
+    taxLossPartner       = null,
   } = {}) {
     this.id                   = id;
     this.allocation           = allocation;
@@ -62,6 +65,7 @@ export class Holding {
     this.dividendYield        = dividendYield;
     this.appreciationSchedule = appreciationSchedule;
     this.duration             = duration;
+    this.taxLossPartner       = taxLossPartner;
   }
 
   toJSON() {
@@ -82,6 +86,7 @@ export class Holding {
           }))
         : null,
       duration:            this.duration,
+      taxLossPartner:      this.taxLossPartner,
     };
   }
 
@@ -99,6 +104,7 @@ export class Holding {
         ? d.appreciationSchedule.map(e => ({ date: new Date(e.date), rate: e.rate }))
         : null,
       duration:      d.duration ?? null,
+      taxLossPartner: d.taxLossPartner ?? null,
     });
   }
 }

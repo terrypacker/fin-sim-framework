@@ -15,6 +15,7 @@ import { getUsEarlyWithdrawalRules } from '../account-rules/us/us-early-withdraw
 import { getBirthDate, getResidency } from '../residency-utils.js';
 import { Holding } from '../holdings/holding.js';
 import { resolveDefaultAllocation, resolveRateKey } from '../holdings/default-allocations.js';
+import { ACCOUNT_ROLES } from '../state/account-roles.js';
 
 /**
  * AccountService — manages Account instances on the service bus and provides
@@ -372,6 +373,8 @@ export class AccountService extends AssetService {
     const residency     = getResidency(state, personKey);
 
     // Discover all drawdown sources in priority order.
+    const cashBucketActive = state.regimeActions?.drawdown_source_override?.active ?? false;
+    const _CASH_FIRST_ROLES = new Set([ACCOUNT_ROLES.FIXED_INCOME, ACCOUNT_ROLES.AU_FIXED_INCOME, ACCOUNT_ROLES.AU_SAVINGS]);
     const sources = Object.entries(state)
       .filter(([k, v]) =>
         k !== targetKey &&
@@ -383,7 +386,15 @@ export class AccountService extends AssetService {
         v.drawdownPriority !== null &&
         v.country === country
       )
-      .sort(([, a], [, b]) => a.drawdownPriority - b.drawdownPriority);
+      .sort(([, a], [, b]) => {
+        if (cashBucketActive) {
+          // Cash bucket: fixed income / savings first (tier 0), equities last (tier 1)
+          const tierA = _CASH_FIRST_ROLES.has(a.role) ? 0 : 1;
+          const tierB = _CASH_FIRST_ROLES.has(b.role) ? 0 : 1;
+          if (tierA !== tierB) return tierA - tierB;
+        }
+        return a.drawdownPriority - b.drawdownPriority;
+      });
 
     let remaining         = deficit;
     const drawnKeys       = [];

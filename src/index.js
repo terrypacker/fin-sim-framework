@@ -37,6 +37,20 @@ import { Asset } from './finance/assets/asset.js';
 import { Collectible } from './finance/assets/collectible.js';
 import { InvestmentAccount, BrokerageAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from './finance/assets/investment-account.js';
 import { RealProperty } from './finance/assets/real-property.js';
+import { AssetLocationRebalanceApplyReducer } from './finance/behavioral/asset-location-rebalance-apply-reducer.js';
+import { BehavioralPanicSellApplyReducer } from './finance/behavioral/behavioral-panic-sell-apply-reducer.js';
+import { BEHAVIORAL_STRATEGY_REGISTRY } from './finance/behavioral/behavioral-strategy-registry.js';
+import { CashBucketDrawdownReducer } from './finance/behavioral/cash-bucket-drawdown-reducer.js';
+import { ContributionSuspensionToggleReducer } from './finance/behavioral/contribution-suspension-toggle-reducer.js';
+import { DownturnRothConversionReducer } from './finance/behavioral/downturn-roth-conversion-reducer.js';
+import { OpportunisticRebalanceApplyReducer } from './finance/behavioral/opportunistic-rebalance-apply-reducer.js';
+import { OpportunisticRebalanceReducer } from './finance/behavioral/opportunistic-rebalance-reducer.js';
+import { PanicSellReducer } from './finance/behavioral/panic-sell-reducer.js';
+import { StockHarvestApplyReducer } from './finance/behavioral/stock-harvest-apply-reducer.js';
+import { StrategicAssetLocationReducer } from './finance/behavioral/strategic-asset-location-reducer.js';
+import { resolveSubstitute } from './finance/behavioral/substitute-holding.js';
+import { TaxGainHarvestHandler } from './finance/behavioral/tax-gain-harvest-handler.js';
+import { TaxLossHarvestHandler } from './finance/behavioral/tax-loss-harvest-handler.js';
 import { AccountBuilder } from './finance/builders/account-builder.js';
 import { PersonBuilder } from './finance/builders/person-builder.js';
 import { buildDecisionGraphCsv } from './finance/decision-graph/decision-graph-csv.js';
@@ -473,6 +487,20 @@ export const Finance = {
   TraditionalIRAAccount,
   SuperannuationAccount,
   RealProperty,
+  AssetLocationRebalanceApplyReducer,
+  BehavioralPanicSellApplyReducer,
+  BEHAVIORAL_STRATEGY_REGISTRY,
+  CashBucketDrawdownReducer,
+  ContributionSuspensionToggleReducer,
+  DownturnRothConversionReducer,
+  OpportunisticRebalanceApplyReducer,
+  OpportunisticRebalanceReducer,
+  PanicSellReducer,
+  StockHarvestApplyReducer,
+  StrategicAssetLocationReducer,
+  resolveSubstitute,
+  TaxGainHarvestHandler,
+  TaxLossHarvestHandler,
   AccountBuilder,
   PersonBuilder,
   buildDecisionGraphCsv,

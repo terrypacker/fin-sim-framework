@@ -74,7 +74,7 @@ test('Holdings invariant: holds after 10 years of IntlRetirementScenario', () =>
 
 // ─── Default holdings bootstrap ──────────────────────────────────────────────
 
-test('Holdings bootstrap: every registered account has exactly one default holding at boot', () => {
+test('Holdings bootstrap: every registered account satisfies §4.4 (balance = Σ holdings.marketValue) at boot', () => {
   const sim = setupScenario(new Date(Date.UTC(2025, 0, 1)), new Date(Date.UTC(2026, 0, 1)));
   let accountCount = 0;
   for (const [k, v] of Object.entries(sim.state)) {
@@ -82,12 +82,28 @@ test('Holdings bootstrap: every registered account has exactly one default holdi
     if (typeof v.balance !== 'number') continue;
     if (!Array.isArray(v.holdings)) continue;
     accountCount++;
-    assert.equal(v.holdings.length, 1, `${k} should have exactly 1 default holding after bootstrap`);
-    assert.equal(v.holdings[0].marketValue, v.balance, `${k} default holding marketValue must equal balance`);
-    assert.ok(v.holdings[0].allocation, `${k} default holding must carry an ALLOCATION`);
-    assert.ok(v.holdings[0].rateKey, `${k} default holding must carry a rateKey`);
+    assert.ok(v.holdings.length >= 1, `${k} should have at least one holding after bootstrap`);
+    const sum = +v.holdings.reduce((s, h) => s + (h.marketValue ?? 0), 0).toFixed(2);
+    assert.ok(Math.abs(sum - v.balance) < 0.01, `${k} §4.4: balance (${v.balance}) must equal Σ holdings.marketValue (${sum})`);
+    for (const h of v.holdings) {
+      assert.ok(h.allocation, `${k} every holding must carry an ALLOCATION`);
+      assert.ok(h.rateKey,    `${k} every holding must carry a rateKey`);
+    }
   }
   assert.ok(accountCount >= 10, `expected ≥10 production accounts, got ${accountCount}`);
+});
+
+test('Holdings bootstrap: usStockAccount has two pre-seeded holdings (domestic + international)', () => {
+  const sim = setupScenario(new Date(Date.UTC(2025, 0, 1)), new Date(Date.UTC(2026, 0, 1)));
+  const acct = sim.state.usStockAccount;
+  assert.ok(acct, 'usStockAccount must exist');
+  assert.equal(acct.holdings.length, 2, 'usStockAccount should have 2 holdings');
+  const labels = acct.holdings.map(h => h.label);
+  assert.ok(labels.some(l => l.includes('Domestic')),      'one holding should be domestic');
+  assert.ok(labels.some(l => l.includes('International')), 'one holding should be international');
+  // Domestic holding should be a loss position (basis > marketValue) for TLH testing
+  const domestic = acct.holdings.find(h => h.label.includes('Domestic'));
+  assert.ok(domestic.costBasis > domestic.marketValue, 'domestic holding should start above basis (loss position for TLH)');
 });
 
 // ─── Allocation & rateKey resolution per role ────────────────────────────────
