@@ -401,48 +401,50 @@ export class AccountService extends AssetService {
     const pendingTaxActions = [];
 
     // ── Phase 1: penalty-free sources ─────────────────────────────────────────
-    for (const [key, account] of sources) {
-      if (remaining < 1e-9) break;
-
-      const acctBirthDate1 = (account.ownerId && account.ownerId !== personKey)
+    // Resolve per-account withdrawal eligibility using the owner's birth date.
+    const eligibleOf = (account) => {
+      const acctBirthDate = (account.ownerId && account.ownerId !== personKey)
         ? (getBirthDate(state, account.ownerId) ?? birthDate)
         : birthDate;
-      if (this.isWithdrawalEligible(account, { birthDate: acctBirthDate1 }, date)) {
-        // Normal eligible withdrawal.
-        if (account.balance <= 0) continue;
-        const withdraw = Math.min(remaining, account.balance);
-        this.transaction(targetAccount, +withdraw, date);
-        this.transaction(account,       -withdraw, date);
+      return this.isWithdrawalEligible(account, { birthDate: acctBirthDate }, date);
+    };
 
-        // For brokerage accounts with unrealised gains: compute proportional
-        // capital gain, update basis, and emit STOCK_WITHDRAWAL_TAX so the gain
-        // is tracked for Form 8949 and the YTD capital-gains accumulator.
-        if (account.type === ACCOUNT_TYPE.BROKERAGE && 'earningsBasis' in account) {
-          const totalBal  = account.balance + withdraw; // balance before transaction
-          const gainRatio = totalBal > 0 ? (account.earningsBasis ?? 0) / totalBal : 0;
-          const gain      = withdraw * gainRatio;
-          const saleCost  = withdraw - gain;
-          account.earningsBasis     = Math.max(0, (account.earningsBasis ?? 0) - gain);
-          account.contributionBasis = Math.max(0, (account.contributionBasis ?? 0) - saleCost);
-          pendingTaxActions.push({
-            type: 'STOCK_WITHDRAWAL_TAX', gain, residency,
-            proceeds: withdraw, costBasis: saleCost, description: account.name || key,
-          });
+    if (state.drawdownMode === 'PROPORTIONAL') {
+      // Pro-rata: split the deficit across penalty-free available balances in
+      // proportion to each source's availability. Loop because per-account caps
+      // can leave a small residual after a pass; the guard + no-progress check
+      // prevent an infinite loop.
+      let guard = 0;
+      while (remaining >= 1e-9 && guard++ < 100) {
+        const avail = sources
+          .map(([key, account]) => {
+            const eligible = eligibleOf(account);
+            return { key, account, eligible, amt: this._penaltyFreeAvailable(account, eligible) };
+          })
+          .filter(s => s.amt > 1e-9);
+        const total = avail.reduce((sum, a) => sum + a.amt, 0);
+        if (total < 1e-9) break;
+
+        const target = Math.min(remaining, total);
+        let drawnThisPass = 0;
+        for (const s of avail) {
+          if (remaining < 1e-9) break;
+          const want = Math.min(target * (s.amt / total), remaining);
+          const got  = this._drawPenaltyFree(
+            targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions
+          );
+          remaining     -= got;
+          drawnThisPass += got;
         }
-
-        drawnKeys.push(key);
-        remaining -= withdraw;
-
-      } else if (account.type === ACCOUNT_TYPE.ROTH && (account.contributionBasis ?? 0) > 0) {
-        // Roth contributions are always accessible without penalty (EW-2).
-        const available = Math.min(account.contributionBasis, account.balance);
-        if (available <= 0) continue;
-        const withdraw = Math.min(remaining, available);
-        this.transaction(targetAccount, +withdraw, date);
-        this.transaction(account,       -withdraw, date);
-        account.contributionBasis -= withdraw;
-        if (!drawnKeys.includes(key)) drawnKeys.push(key);
-        remaining -= withdraw;
+        if (drawnThisPass < 1e-9) break;
+      }
+    } else {
+      // Ordered: walk sources in drawdownPriority order, draining each fully.
+      for (const [key, account] of sources) {
+        if (remaining < 1e-9) break;
+        remaining -= this._drawPenaltyFree(
+          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions
+        );
       }
     }
 
@@ -541,5 +543,70 @@ export class AccountService extends AssetService {
       throw new InsufficientFundsError(country, currency, remaining);
     }
     return { drawnKeys, pendingTaxActions };
+  }
+
+  /**
+   * Penalty-free amount currently withdrawable from a single account:
+   *   - eligible (age-gated) accounts → full balance
+   *   - Roth below minimumAge        → contribution basis (always penalty-free)
+   *   - everything else              → 0 (only reachable via phase-2 early withdrawal)
+   */
+  _penaltyFreeAvailable(account, eligible) {
+    if (eligible) return Math.max(0, account.balance);
+    if (account.type === ACCOUNT_TYPE.ROTH) {
+      return Math.max(0, Math.min(account.contributionBasis ?? 0, account.balance));
+    }
+    return 0;
+  }
+
+  /**
+   * Withdraw up to `want` from one account using only penalty-free sources,
+   * crediting `targetAccount`. Mirrors the legacy phase-1 logic (brokerage
+   * gain/basis tracking + STOCK_WITHDRAWAL_TAX, Roth contribution access) so the
+   * ordered and proportional drawdown paths share identical tax/basis handling.
+   * Appends any tax actions, records the key in drawnKeys, and returns the
+   * amount actually withdrawn.
+   */
+  _drawPenaltyFree(targetAccount, account, key, want, date, eligible, residency, drawnKeys, pendingTaxActions) {
+    if (want < 1e-9) return 0;
+
+    if (eligible) {
+      if (account.balance <= 0) return 0;
+      const withdraw = Math.min(want, account.balance);
+      this.transaction(targetAccount, +withdraw, date);
+      this.transaction(account,       -withdraw, date);
+
+      // Brokerage accounts with unrealised gains: proportional capital gain,
+      // basis update, and STOCK_WITHDRAWAL_TAX for Form 8949 / YTD accumulator.
+      if (account.type === ACCOUNT_TYPE.BROKERAGE && 'earningsBasis' in account) {
+        const totalBal  = account.balance + withdraw; // balance before transaction
+        const gainRatio = totalBal > 0 ? (account.earningsBasis ?? 0) / totalBal : 0;
+        const gain      = withdraw * gainRatio;
+        const saleCost  = withdraw - gain;
+        account.earningsBasis     = Math.max(0, (account.earningsBasis ?? 0) - gain);
+        account.contributionBasis = Math.max(0, (account.contributionBasis ?? 0) - saleCost);
+        pendingTaxActions.push({
+          type: 'STOCK_WITHDRAWAL_TAX', gain, residency,
+          proceeds: withdraw, costBasis: saleCost, description: account.name || key,
+        });
+      }
+
+      if (!drawnKeys.includes(key)) drawnKeys.push(key);
+      return withdraw;
+    }
+
+    if (account.type === ACCOUNT_TYPE.ROTH && (account.contributionBasis ?? 0) > 0) {
+      // Roth contributions are always accessible without penalty (EW-2).
+      const available = Math.min(account.contributionBasis, account.balance);
+      if (available <= 0) return 0;
+      const withdraw = Math.min(want, available);
+      this.transaction(targetAccount, +withdraw, date);
+      this.transaction(account,       -withdraw, date);
+      account.contributionBasis -= withdraw;
+      if (!drawnKeys.includes(key)) drawnKeys.push(key);
+      return withdraw;
+    }
+
+    return 0;
   }
 }

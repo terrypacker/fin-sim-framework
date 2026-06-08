@@ -146,27 +146,67 @@ export class ScenarioLoader {
 
     // Generic param→node cascade: each schema entry with a `node` declaration drives
     // a field update on cfg.persons, cfg.accounts, or cfg.realProperties before
-    // compilation. Node is read from cfg.params[i].node (serialized alongside the
-    // param value), falling back to the scenario schema for older configs.
-    // Only explicitly declared fields are touched; all other fields remain
-    // authoritative from their records.
+    // compilation. Only explicitly declared fields are touched; all other fields
+    // remain authoritative from their records.
+    //
+    // Values can arrive two ways and we honor both so node params apply regardless
+    // of how the cfg was assembled:
+    //   1. The typed cfg.params array (the UI / round-tripped path) — node read from
+    //      the entry, falling back to the scenario schema for older configs.
+    //   2. cfg.parameters only (the flat map) — e.g. templates from
+    //      buildDefaultConfig() that never materialized a params array, as used by
+    //      the optimizer's cfgTemplate fallback and library consumers. These are
+    //      caught by a second pass over the schema's node list.
+    const appliedKeys = new Set();
     for (const p of (Array.isArray(cfg.params) ? cfg.params : [])) {
       const node = p.node ?? schemaNodeByKey.get(p.name);
       if (!node) continue;
       const val = cfg.parameters?.[p.name];
       if (val === undefined) continue;
+      this._applyParamNode(cfg, node, val);
+      appliedKeys.add(p.name);
+    }
 
-      if (node.type === 'person') {
-        const rec = (cfg.persons ?? []).find(r => r.id === node.id);
-        // Design 15: canonicalize Date values to full ISO strings so the
-        // cascaded field matches the serialized representation everywhere.
-        if (rec) rec[node.field] = val instanceof Date ? val.toISOString() : val;
-      } else if (node.type === 'account') {
-        const rec = (cfg.accounts ?? []).find(r => r.stateKey === node.stateKey);
-        if (rec) rec[node.field] = val;
-      } else if (node.type === 'realProperty') {
-        const rec = (cfg.realProperties ?? []).find(r => r.stateKey === node.stateKey);
-        if (rec) rec[node.field] = val != null ? Math.round(val) : val;
+    // Second pass: schema-declared nodes whose value is present only in the flat
+    // cfg.parameters map (no typed array entry). Skips keys already handled above.
+    for (const [key, node] of schemaNodeByKey) {
+      if (appliedKeys.has(key)) continue;
+      const val = cfg.parameters?.[key];
+      if (val === undefined) continue;
+      this._applyParamNode(cfg, node, val);
+    }
+  }
+
+  /**
+   * Apply a single param value to the cfg record(s) named by its `node`.
+   * Pure dispatch over node.type; shared by both cascade passes in _normalizeParams.
+   * @private
+   */
+  _applyParamNode(cfg, node, val) {
+    if (node.type === 'person') {
+      const rec = (cfg.persons ?? []).find(r => r.id === node.id);
+      // Design 15: canonicalize Date values to full ISO strings so the
+      // cascaded field matches the serialized representation everywhere.
+      if (rec) rec[node.field] = val instanceof Date ? val.toISOString() : val;
+    } else if (node.type === 'account') {
+      const rec = (cfg.accounts ?? []).find(r => r.stateKey === node.stateKey);
+      if (rec) rec[node.field] = val;
+    } else if (node.type === 'realProperty') {
+      const rec = (cfg.realProperties ?? []).find(r => r.stateKey === node.stateKey);
+      if (rec) rec[node.field] = val != null ? Math.round(val) : val;
+    } else if (node.type === 'accountPriority') {
+      // Fan one categorical strategy value out to drawdownPriority across many
+      // accounts by role. Per-owner ranking (ownerOrder/ownerStride) keeps each
+      // owner's same-role buckets in a distinct band so the primary drains before
+      // the spouse. All scenario-specific data rides on the node, keeping this generic.
+      const priorities = node.strategies?.[val];
+      if (priorities) {
+        for (const rec of (cfg.accounts ?? [])) {
+          const base = priorities[rec.role];
+          if (base == null) continue;            // savings/target accounts stay null
+          const rank = Math.max(0, (node.ownerOrder ?? []).indexOf(rec.ownerId));
+          rec.drawdownPriority = base + rank * (node.ownerStride ?? 0);
+        }
       }
     }
   }

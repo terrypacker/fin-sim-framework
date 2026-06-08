@@ -36,6 +36,49 @@ import { ALLOCATION }          from '../finance/holdings/allocation.js';
 import { RATE_KEYS }           from '../finance/economic-regimes/rate-keys.js';
 
 /**
+ * Named drawdown strategies — the order accounts are liquidated to cover a
+ * spending shortfall. Values are per-role *base* priorities (lower = drawn
+ * first); savings roles are intentionally omitted (they are the drawdown
+ * *target*, so they keep a null priority). Drawdown is sorted per-country
+ * (AccountService.replenishSavings filters by country), so US and AU roles
+ * coexist in one map without interfering.
+ *
+ * Applied by the `accountPriority` node cascade in ScenarioLoader: each
+ * account's drawdownPriority becomes base + ownerRank * ownerStride, so the
+ * primary's buckets drain before the spouse's same-role buckets.
+ *
+ * PROPORTIONAL reuses the TAXABLE_FIRST eligibility map only to keep accounts
+ * non-null (eligible); its actual pro-rata behavior is driven at runtime by
+ * state.drawdownMode (see us-retirement-toolset + AccountService.replenishSavings).
+ */
+export const DRAWDOWN_STRATEGIES = {
+  TAXABLE_FIRST: {            // taxable brokerage/fixed-income, then tax-deferred, Roth last
+    [ACCOUNT_ROLES.FIXED_INCOME]: 1, [ACCOUNT_ROLES.US_STOCK]: 2,
+    [ACCOUNT_ROLES.IRA]: 3, [ACCOUNT_ROLES.K401]: 4, [ACCOUNT_ROLES.ROTH]: 5,
+    [ACCOUNT_ROLES.AU_FIXED_INCOME]: 1, [ACCOUNT_ROLES.AU_STOCK]: 2, [ACCOUNT_ROLES.SUPER]: 3,
+  },
+  TAX_DEFERRED_FIRST: {       // drain IRA/401k/Super early (bracket-fill, lower future RMDs)
+    [ACCOUNT_ROLES.IRA]: 1, [ACCOUNT_ROLES.K401]: 2,
+    [ACCOUNT_ROLES.FIXED_INCOME]: 3, [ACCOUNT_ROLES.US_STOCK]: 4, [ACCOUNT_ROLES.ROTH]: 5,
+    [ACCOUNT_ROLES.SUPER]: 1, [ACCOUNT_ROLES.AU_FIXED_INCOME]: 2, [ACCOUNT_ROLES.AU_STOCK]: 3,
+  },
+  ROTH_FIRST: {               // Roth/tax-free first (comparison baseline); AU mirrors taxable
+    [ACCOUNT_ROLES.ROTH]: 1, [ACCOUNT_ROLES.FIXED_INCOME]: 2, [ACCOUNT_ROLES.US_STOCK]: 3,
+    [ACCOUNT_ROLES.IRA]: 4, [ACCOUNT_ROLES.K401]: 5,
+    [ACCOUNT_ROLES.AU_FIXED_INCOME]: 1, [ACCOUNT_ROLES.AU_STOCK]: 2, [ACCOUNT_ROLES.SUPER]: 3,
+  },
+  PROPORTIONAL: {             // pro-rata across eligible buckets (runtime mode; see above)
+    [ACCOUNT_ROLES.FIXED_INCOME]: 1, [ACCOUNT_ROLES.US_STOCK]: 2,
+    [ACCOUNT_ROLES.IRA]: 3, [ACCOUNT_ROLES.K401]: 4, [ACCOUNT_ROLES.ROTH]: 5,
+    [ACCOUNT_ROLES.AU_FIXED_INCOME]: 1, [ACCOUNT_ROLES.AU_STOCK]: 2, [ACCOUNT_ROLES.SUPER]: 3,
+  },
+  // No mapping → the cascade is a no-op, so per-account drawdownPriority values
+  // authored in buildDefaultConfig (or hand-edited via the account editor) remain
+  // authoritative. Select this to hand-tune individual account ordering.
+  CUSTOM: null,
+};
+
+/**
  * Default parameters for the International Retirement scenario.
  * Any field can be overridden via the params argument to buildSim().
  */
@@ -97,6 +140,9 @@ export const INTL_RETIREMENT_DEFAULTS = {
   // Expenses (local currency: USD pre-move, AUD post-move)
   monthlyExpenses:       6_000,
   discretionarySharePct: 0.30,
+
+  // Drawdown order (key of DRAWDOWN_STRATEGIES) used to liquidate accounts for shortfalls
+  drawdownStrategy:      'TAXABLE_FIRST',
 
   // Inflation rates (annual, per country)
   usInflationRate: 0.03,
@@ -341,6 +387,16 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     defaultValue: INTL_RETIREMENT_DEFAULTS.auHouseSaleYear,
     description: 'Calendar year of planned AU house sale (null = no planned sale)',
     node: { type: 'realProperty', stateKey: 'auHouseProperty', field: 'plannedSaleYear' },
+  },
+
+  // ── Spending ───────────────────────────────────────────────────────────────
+  {
+    key: 'drawdownStrategy', label: 'Drawdown Strategy',
+    type: 'Enum', group: 'Spending', options: Object.keys(DRAWDOWN_STRATEGIES),
+    mc: false, opt: true, defaultValue: INTL_RETIREMENT_DEFAULTS.drawdownStrategy,
+    description: 'Order accounts are liquidated to cover spending shortfalls',
+    node: { type: 'accountPriority', strategies: DRAWDOWN_STRATEGIES,
+            ownerOrder: ['primary', 'spouse'], ownerStride: 100 },
   },
 
 ];

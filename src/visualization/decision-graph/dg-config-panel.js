@@ -378,6 +378,9 @@ export class DgConfigPanel extends BaseComponent {
         dp.paramKey = entry.key;
         if (entry.type === 'Boolean') {
           dp.options = [{ value: true, label: 'Yes' }, { value: false, label: 'No' }];
+        } else if (Array.isArray(entry.options) && entry.options.length) {
+          // Enum schema param: pre-fill the decision point with every choice.
+          dp.options = entry.options.map(o => ({ value: o, label: String(o) }));
         } else if (!dp.options.length) {
           dp.options = [{ value: '', label: '' }];
         }
