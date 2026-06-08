@@ -8,6 +8,33 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+// ── MutationTracker ───────────────────────────────────────────────────────
+//
+// Lightweight recorder used by FieldReducer.setValueByPath and
+// AccountTransactionReducer to capture exactly which fields changed,
+// replacing the per-reducer structuredClone + diffStates round-trip.
+//
+// Usage (simulation.js):
+//   MutationTracker.begin();
+//   reducerFn(state, action, date);
+//   const sd = MutationTracker.flush(); // [{field, before, after, delta}] or null
+
+let _mutations = null;
+
+export const MutationTracker = {
+  begin()                    { _mutations = []; },
+  record(field, before, after) {
+    const delta = typeof after === 'number' && typeof before === 'number' ? after - before : null;
+    _mutations.push({ field, before: before ?? null, after: after ?? null, delta });
+  },
+  flush() {
+    const m = _mutations;
+    _mutations = null;
+    return m && m.length > 0 ? m : null;
+  },
+  get isActive() { return _mutations !== null; },
+};
+
 // ── Diff ──────────────────────────────────────────────────────────────────
 
 /**
