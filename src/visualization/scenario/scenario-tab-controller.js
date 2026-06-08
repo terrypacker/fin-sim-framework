@@ -66,8 +66,8 @@ export class ScenarioTabController {
     return this._service.getUserScenarios();
   }
 
-  replaceUserScenarios(data) {
-    this._service.replaceUserScenarios(data);
+  upsertUserScenarios(data) {
+    this._service.upsertUserScenarios(data);
     return this._service.getActive();
   }
 }

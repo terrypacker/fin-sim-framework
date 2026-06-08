@@ -268,3 +268,76 @@ test('loadPrebuilt: schema node field is copied to param entry', () => {
   const param = r.getActive().params[0];
   assert.deepStrictEqual(param.node, { type: 'account', stateKey: 'savings', field: 'initialValue' });
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// _init — id preservation
+// ═════════════════════════════════════════════════════════════════════════════
+
+test('_init: preserves u: ids already stored in storage', () => {
+  setStorageData({
+    lastUsed: 'u:5',
+    scenarios: [
+      { id: 'u:5', name: 'Mine', simStart: '2026-01-01', simEnd: '2041-01-01' },
+    ],
+  });
+  const r = makeRegistry([makePrebuilt('alpha')]);
+  assert.ok(r.get('u:5'), 'u:5 should exist');
+  assert.strictEqual(r.getActive().id, 'u:5');
+});
+
+test('_init: assigns u:<i> id when storage record has no id (legacy)', () => {
+  setStorageData({ scenarios: [{ name: 'Legacy', simStart: '2026-01-01', simEnd: '2041-01-01' }] });
+  const r = makeRegistry([makePrebuilt('alpha')]);
+  assert.ok(r.get('u:0'), 'u:0 should be assigned for legacy record');
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// upsertUserScenarios
+// ═════════════════════════════════════════════════════════════════════════════
+
+test('upsertUserScenarios: adds new scenario without removing existing ones', () => {
+  setStorageData({ lastUsed: 'u:0', scenarios: [{ id: 'u:0', name: 'Existing', simStart: '2026-01-01', simEnd: '2041-01-01' }] });
+  const r = makeRegistry([makePrebuilt('alpha')]);
+  r.upsertUserScenarios({ scenarios: [{ id: 'u:1', name: 'Uploaded', simStart: '2026-01-01', simEnd: '2041-01-01' }] });
+  const user = r.getUserScenarios();
+  assert.strictEqual(user.length, 2);
+  assert.ok(user.find(s => s.id === 'u:0'), 'existing u:0 preserved');
+  assert.ok(user.find(s => s.id === 'u:1'), 'uploaded u:1 added');
+});
+
+test('upsertUserScenarios: updates existing scenario with matching id', () => {
+  setStorageData({ lastUsed: 'u:0', scenarios: [{ id: 'u:0', name: 'Old Name', simStart: '2026-01-01', simEnd: '2041-01-01' }] });
+  const r = makeRegistry([makePrebuilt('alpha')]);
+  r.upsertUserScenarios({ scenarios: [{ id: 'u:0', name: 'New Name', simStart: '2026-01-01', simEnd: '2041-01-01' }] });
+  const user = r.getUserScenarios();
+  assert.strictEqual(user.length, 1);
+  assert.strictEqual(user[0].name, 'New Name');
+});
+
+test('upsertUserScenarios: assigns fresh id to scenario without a u: id', () => {
+  setStorageData({ lastUsed: 'u:0', scenarios: [{ id: 'u:0', name: 'Existing', simStart: '2026-01-01', simEnd: '2041-01-01' }] });
+  const r = makeRegistry([makePrebuilt('alpha')]);
+  r.upsertUserScenarios({ scenarios: [{ name: 'No Id', simStart: '2026-01-01', simEnd: '2041-01-01' }] });
+  const user = r.getUserScenarios();
+  assert.strictEqual(user.length, 2);
+  const newOne = user.find(s => s.name === 'No Id');
+  assert.ok(newOne, 'scenario without id was added');
+  assert.ok(newOne.id.startsWith('u:'), 'new id has u: prefix');
+  assert.notStrictEqual(newOne.id, 'u:0', 'new id does not collide with existing');
+});
+
+test('upsertUserScenarios: active:true in upload changes active scenario', () => {
+  setStorageData({ lastUsed: 'u:0', scenarios: [{ id: 'u:0', name: 'A', simStart: '2026-01-01', simEnd: '2041-01-01' }] });
+  const r = makeRegistry([makePrebuilt('alpha')]);
+  r.upsertUserScenarios({ scenarios: [{ id: 'u:1', name: 'B', active: true, simStart: '2026-01-01', simEnd: '2041-01-01' }] });
+  assert.strictEqual(r.getActive().id, 'u:1');
+  assert.strictEqual(r.getAll().filter(s => s.active).length, 1);
+});
+
+test('upsertUserScenarios: no active flag in upload leaves current active unchanged', () => {
+  setStorageData({ lastUsed: 'u:0', scenarios: [{ id: 'u:0', name: 'A', simStart: '2026-01-01', simEnd: '2041-01-01' }] });
+  const r = makeRegistry([makePrebuilt('alpha')]);
+  r.setActiveById('u:0');
+  r.upsertUserScenarios({ scenarios: [{ id: 'u:1', name: 'B', simStart: '2026-01-01', simEnd: '2041-01-01' }] });
+  assert.strictEqual(r.getActive().id, 'u:0');
+});
