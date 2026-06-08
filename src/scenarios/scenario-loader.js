@@ -8,9 +8,10 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { ScenarioSerializer } from './scenario-serializer.js';
-import { ToolsetRegistry }    from './toolsets/toolset-registry.js';
-import { ScenarioCompiler }   from './toolsets/scenario-compiler.js';
+import { ScenarioSerializer }     from './scenario-serializer.js';
+import { ToolsetRegistry }         from './toolsets/toolset-registry.js';
+import { ScenarioCompiler }        from './toolsets/scenario-compiler.js';
+import { IntlRetirementScenario }  from './intl-retirement-scenario.js';
 import { US_BANKING }         from './toolsets/us-banking-toolset.js';
 import { US_TAX }             from './toolsets/us-tax-toolset.js';
 import { US_RETIREMENT }      from './toolsets/us-retirement-toolset.js';
@@ -27,6 +28,10 @@ import { AU_BROKERAGE }      from './toolsets/au-brokerage-toolset.js';
 import { US_INCOME }         from './toolsets/us-income-toolset.js';
 import { AU_INCOME }         from './toolsets/au-income-toolset.js';
 import { ECONOMIC_REGIMES }  from './toolsets/economic-regimes-toolset.js';
+
+const SCENARIO_CLASS_BY_ID = new Map([
+  [IntlRetirementScenario.scenarioId(), IntlRetirementScenario],
+]);
 
 const BUILT_IN_TOOLSETS = [
   US_BANKING, US_TAX, US_RETIREMENT,
@@ -76,6 +81,13 @@ export class ScenarioLoader {
    */
   load(cfg, services) {
     if (!cfg) return;
+
+    // Resolve scenarioId string → class so that _driftMergeDomainRecords and
+    // _mergeParamSchema can apply scenario-level schema even for re-imported JSONs
+    // (serializeScenario writes a string id; the class reference isn't serializable).
+    if (cfg.scenarioId && !cfg.scenarioClass) {
+      cfg.scenarioClass = SCENARIO_CLASS_BY_ID.get(cfg.scenarioId) ?? null;
+    }
 
     if (cfg.toolsets?.length > 0) {
       this._driftMergeDomainRecords(cfg);
