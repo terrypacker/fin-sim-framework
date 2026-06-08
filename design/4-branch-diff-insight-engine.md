@@ -1,6 +1,12 @@
 # Branch Diff Engine & Automated Insight Generation
 
-## Technical Design Document
+**Status**: **Superseded** by `design/30-decision-graph-analysis.md`.
+
+**Why this is superseded**: this doc proposed a heavy "Diff Engine + Causal Attribution Engine + Insight Engine" stack with a `top_driver` / `concentration` / `anomaly` / `cascade` / `structural_change` insight taxonomy. Two things have changed since: (1) the journal + execution graph (with hierarchical execution IDs and `EMITS` / `SCHEDULES` edges) already capture causality at fine grain, so the "Causal Attribution Engine" duplicates existing infrastructure; (2) the actual user need is a simple side-by-side scenario comparison view, not an automated insight engine. Design 30 absorbs the small surviving piece — a side-by-side state-panel + journal-overlay comparison — and treats the rest as out of scope until there's evidence the heavier insight machinery would be used. Kept in the tree as historical context.
+
+---
+
+## Technical Design Document (Superseded — see banner above)
 
 ---
 
