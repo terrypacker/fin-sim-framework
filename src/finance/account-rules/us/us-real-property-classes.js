@@ -88,7 +88,7 @@ export class UsHouseSaleHandler extends HandlerEntry {
         salePrice:       data.salePrice,
         costBasis:       data.costBasis,
         mortgageBalance,
-        isAuResident:    state.isAuResident,
+        residency:       state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null,
         stateKey:        data.stateKey ?? null,
         destinationKey,
       },

@@ -15,7 +15,7 @@ import { ACCOUNT_ROLES } from '../state/account-roles.js';
  * Handles STOCK_DIVIDEND_CASH_APPLY actions (cash payout path).
  *
  * Credits the dividend amount to the US savings account (resolved via StateRegistry),
- * then chains STOCK_DIVIDEND_TAX { amount, isAuResident } so the tax module
+ * then chains STOCK_DIVIDEND_TAX { amount, residency } so the tax module
  * can classify it as US ordinary income (and AU ordinary income when resident).
  *
  * The reinvest path (STOCK_DIVIDEND_APPLY) is handled by UsAccountModule and
@@ -54,9 +54,9 @@ export class StockDividendCashApplyReducer extends Reducer {
   }
 
   reduce(state, action, date) {
-    const { amount, isAuResident } = action;
+    const { amount, residency } = action;
     const key = this.stateRegistry.getStateKey(this.role, this.ownerId);
     this.accountService.transaction(state[key], amount, date);
-    return this.newState(state, {}, [{ type: 'STOCK_DIVIDEND_TAX', amount, isAuResident }]);
+    return this.newState(state, {}, [{ type: 'STOCK_DIVIDEND_TAX', amount, residency }]);
   }
 }

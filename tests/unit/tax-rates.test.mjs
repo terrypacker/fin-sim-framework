@@ -49,10 +49,10 @@ function usState(overrides = {}) {
   };
 }
 
-/** Minimal AU-only state for computeTax calls. */
+/** Minimal AU-only state for computeTax calls. Defaults to AU resident. */
 function auState(overrides = {}) {
   return {
-    isAuResident:               true,
+    people: { primary: { residency: 'AUS' } },
     auOrdinaryIncomeYTD:        0,
     auCapitalGainsYTD:          0,
     auNonResidentWithholdingYTD: 0,
@@ -108,21 +108,21 @@ test('TE-2: NR savings earnings classifier sets auNonResidentWithholdingYTD to g
   const auModule = new AuTaxModule2026();
   const fn = getFn(auModule, 'AU_SAVINGS_EARNINGS_TAX');
   const s0 = { usOrdinaryIncomeYTD: 0, auOrdinaryIncomeYTD: 0, auNonResidentWithholdingYTD: 0, ftcYTD: 0 };
-  const s1 = fn(s0, { amount: 600, isAuResident: false });
+  const s1 = fn(s0, { amount: 600, residency: null });
   assert.strictEqual(s1.auNonResidentWithholdingYTD, 600);
 });
 
 test('TE-2: rates module applies 15% to auNonResidentWithholdingYTD', () => {
   const { netLiability } = auRates.computeTax(auState({
-    isAuResident:               false,
+    people: { primary: { residency: 'US' } },
     auNonResidentWithholdingYTD: 10000,
   }));
   assert.strictEqual(netLiability, 1500); // 10000 * 0.15
 });
 
 test('TE-2: NR withholding rate is exactly 15%', () => {
-  const tax1000 = auRates.computeTax(auState({ isAuResident: false, auNonResidentWithholdingYTD: 1000 })).netLiability;
-  const tax5000 = auRates.computeTax(auState({ isAuResident: false, auNonResidentWithholdingYTD: 5000 })).netLiability;
+  const tax1000 = auRates.computeTax(auState({ people: { primary: { residency: 'US' } }, auNonResidentWithholdingYTD: 1000 })).netLiability;
+  const tax5000 = auRates.computeTax(auState({ people: { primary: { residency: 'US' } }, auNonResidentWithholdingYTD: 5000 })).netLiability;
   assert.strictEqual(tax1000, 150);
   assert.strictEqual(tax5000, 750);
 });
@@ -203,21 +203,21 @@ test('TE-4: AU CGT discount is exactly 50% (half the gain is taxable)', () => {
 
 test('TE-5: AU NR uses flat 32.5% bracket starting from $0 (no tax-free threshold)', () => {
   // $50k income: no tax-free threshold → 50000 * 0.325 = 16250
-  const { netLiability } = auRates.computeTax(auState({ isAuResident: false, auOrdinaryIncomeYTD: 50000 }));
+  const { netLiability } = auRates.computeTax(auState({ people: { primary: { residency: 'US' } }, auOrdinaryIncomeYTD: 50000 }));
   assert.strictEqual(netLiability, 16250);
 });
 
 test('TE-5: AU NR capital gains are NOT discounted (full gain taxed via NR brackets)', () => {
   // $100k CG, non-resident: no 50% discount → full 100000 * 0.325 = 32500
-  const taxNR       = auRates.computeTax(auState({ isAuResident: false, auCapitalGainsYTD: 100000 })).netLiability;
-  const taxResident = auRates.computeTax(auState({ isAuResident: true,  auCapitalGainsYTD: 100000 })).netLiability;
+  const taxNR       = auRates.computeTax(auState({ people: { primary: { residency: 'US' } },  auCapitalGainsYTD: 100000 })).netLiability;
+  const taxResident = auRates.computeTax(auState({ people: { primary: { residency: 'AUS' } }, auCapitalGainsYTD: 100000 })).netLiability;
   assert.strictEqual(taxNR, 32500);
   assert.ok(taxNR > taxResident, 'NR rate should exceed resident (discounted) rate');
 });
 
 test('TE-5: AU NR brackets differ from resident brackets at same income', () => {
-  const taxResident = auRates.computeTax(auState({ isAuResident: true,  auOrdinaryIncomeYTD: 50000 })).netLiability;
-  const taxNR       = auRates.computeTax(auState({ isAuResident: false, auOrdinaryIncomeYTD: 50000 })).netLiability;
+  const taxResident = auRates.computeTax(auState({ people: { primary: { residency: 'AUS' } }, auOrdinaryIncomeYTD: 50000 })).netLiability;
+  const taxNR       = auRates.computeTax(auState({ people: { primary: { residency: 'US' } },  auOrdinaryIncomeYTD: 50000 })).netLiability;
   // Resident 7592 (bracket + Medicare) vs NR 16250 (flat 32.5%)
   assert.ok(taxNR > taxResident, 'NR brackets produce higher tax on the same income');
 });
@@ -262,7 +262,7 @@ test('TE-7: US collectible sale classifier populates usCollectibleGainsYTD', () 
   const usModule = new UsTaxModule2026();
   const fn = getFn(usModule, 'COLLECTIBLE_SALE_TAX');
   const s0 = { usCollectibleGainsYTD: 0, auCapitalGainsYTD: 0, ftcYTD: 0 };
-  const s1 = fn(s0, { gain: 10000, isAuResident: false });
+  const s1 = fn(s0, { gain: 10000, residency: null });
   assert.strictEqual(s1.usCollectibleGainsYTD, 10000);
 });
 
@@ -295,7 +295,7 @@ test('TE-8: SS income classifier applies 85% rule to US ordinary income', () => 
   const usModule = new UsTaxModule2026();
   const fn = getFn(usModule, 'SS_INCOME_TAX');
   const s0 = { usOrdinaryIncomeYTD: 0, auOrdinaryIncomeYTD: 0, ftcYTD: 0 };
-  const s1 = fn(s0, { amount: 100000, isAuResident: false });
+  const s1 = fn(s0, { amount: 100000, residency: null });
   assert.strictEqual(s1.usOrdinaryIncomeYTD, 85000); // 100000 * 0.85
 });
 
@@ -303,7 +303,7 @@ test('TE-8: SS income classifier adds full amount to AU ordinary income for AU r
   const usModule = new UsTaxModule2026();
   const fn = getFn(usModule, 'SS_INCOME_TAX');
   const s0 = { usOrdinaryIncomeYTD: 0, auOrdinaryIncomeYTD: 0, ftcYTD: 0 };
-  const s1 = fn(s0, { amount: 100000, isAuResident: true });
+  const s1 = fn(s0, { amount: 100000, residency: 'AUS' });
   assert.strictEqual(s1.usOrdinaryIncomeYTD, 85000);  // 85% for US
   assert.strictEqual(s1.auOrdinaryIncomeYTD, 100000); // 100% for AU ordinary income
 });
@@ -319,7 +319,7 @@ test('TE-8: only 85% of SS benefit flows to US taxable income (not 100%)', () =>
   const usModule = new UsTaxModule2026();
   const fn = getFn(usModule, 'SS_INCOME_TAX');
   const s0 = { usOrdinaryIncomeYTD: 0, auOrdinaryIncomeYTD: 0, ftcYTD: 0 };
-  const s1 = fn(s0, { amount: 1000, isAuResident: false });
+  const s1 = fn(s0, { amount: 1000, residency: null });
   // Verify it's not 100% (full $1000) or 0% (exempt)
   assert.strictEqual(s1.usOrdinaryIncomeYTD, 850);
   assert.notEqual(s1.usOrdinaryIncomeYTD, 1000);
@@ -338,7 +338,7 @@ test('WAGES_INCOME_TAX with personKey updates auPersonOrdinaryIncomeYTD, not auO
     auPersonOrdinaryIncomeYTD: { primary: 0, spouse: 0 },
     ftcYTD: 0,
   };
-  const s1 = fn(s0, { amount: 8000, isAuResident: true, personKey: 'primary' });
+  const s1 = fn(s0, { amount: 8000, residency: 'AUS', personKey: 'primary' });
   assert.strictEqual(s1.usOrdinaryIncomeYTD, 8000);
   assert.strictEqual(s1.auPersonOrdinaryIncomeYTD.primary, 8000);
   assert.strictEqual(s1.auPersonOrdinaryIncomeYTD.spouse, 0);
@@ -350,7 +350,7 @@ test('WAGES_INCOME_TAX without personKey still updates auOrdinaryIncomeYTD (back
   const usModule = new UsTaxModule2026();
   const fn = getFn(usModule, 'WAGES_INCOME_TAX');
   const s0 = { usOrdinaryIncomeYTD: 0, auOrdinaryIncomeYTD: 0, ftcYTD: 0 };
-  const s1 = fn(s0, { amount: 5000, isAuResident: true });
+  const s1 = fn(s0, { amount: 5000, residency: 'AUS' });
   assert.strictEqual(s1.auOrdinaryIncomeYTD, 5000);
 });
 
@@ -363,9 +363,9 @@ test('WAGES_INCOME_TAX accumulates per person across multiple calls', () => {
     auPersonOrdinaryIncomeYTD: { primary: 0, spouse: 0 },
     ftcYTD: 0,
   };
-  const s1 = fn(s0, { amount: 6000, isAuResident: true, personKey: 'primary' });
-  const s2 = fn(s1, { amount: 4000, isAuResident: true, personKey: 'spouse' });
-  const s3 = fn(s2, { amount: 6000, isAuResident: true, personKey: 'primary' });
+  const s1 = fn(s0, { amount: 6000, residency: 'AUS', personKey: 'primary' });
+  const s2 = fn(s1, { amount: 4000, residency: 'AUS', personKey: 'spouse' });
+  const s3 = fn(s2, { amount: 6000, residency: 'AUS', personKey: 'primary' });
   assert.strictEqual(s3.auPersonOrdinaryIncomeYTD.primary, 12000);
   assert.strictEqual(s3.auPersonOrdinaryIncomeYTD.spouse, 4000);
   assert.strictEqual(s3.auOrdinaryIncomeYTD, 0);
@@ -374,10 +374,9 @@ test('WAGES_INCOME_TAX accumulates per person across multiple calls', () => {
 test('computeAuTaxPerPerson computes separate tax for each AU resident', () => {
   const service = new TaxSettleService();
   const state = {
-    isAuResident: true,
     people: {
-      primary: { name: 'Alice' },
-      spouse:  { name: 'Bob' },
+      primary: { name: 'Alice', residency: 'AUS' },
+      spouse:  { name: 'Bob',   residency: 'AUS' },
     },
     auPersonOrdinaryIncomeYTD: { primary: 90000, spouse: 40000 },
     auOrdinaryIncomeYTD:         0,
@@ -407,10 +406,9 @@ test('computeAuTaxPerPerson computes separate tax for each AU resident', () => {
 test('computeAuTaxPerPerson splits shared passive income equally', () => {
   const service = new TaxSettleService();
   const state = {
-    isAuResident: true,
     people: {
-      primary: { name: 'Alice' },
-      spouse:  { name: 'Bob' },
+      primary: { name: 'Alice', residency: 'AUS' },
+      spouse:  { name: 'Bob',   residency: 'AUS' },
     },
     auPersonOrdinaryIncomeYTD: { primary: 0, spouse: 0 },
     auOrdinaryIncomeYTD:         20000,  // shared passive income

@@ -33,9 +33,9 @@ function resolveKeys(owner) {
     : { iraKey: 'iraAccount',       rothKey: 'rothAccount' };
 }
 
-function conversionActions(amount, iraKey, rothKey, isAuResident) {
+function conversionActions(amount, iraKey, rothKey, residency) {
   return [
-    { type: 'ROTH_CONVERSION_APPLY', amount, iraKey, rothKey, isAuResident },
+    { type: 'ROTH_CONVERSION_APPLY', amount, iraKey, rothKey, residency },
     new FieldValueAction('roth_conversion', 'Roth Conversion', amount),
     new RecordBalanceAction(`${iraKey}.balance`,  iraKey),
     new RecordBalanceAction(`${rothKey}.balance`, rothKey),
@@ -61,7 +61,7 @@ export class RothConversionApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, iraKey, rothKey, isAuResident } = action;
+    const { amount, iraKey, rothKey, residency } = action;
     const roth = state[rothKey];
     return this.newState(
       state,
@@ -73,7 +73,7 @@ export class RothConversionApplyReducer extends AccountServiceReducer {
           rolloverContribBasis: (roth.rolloverContribBasis ?? 0) + amount,
         },
       },
-      [{ type: 'ROTH_CONVERSION_TAX', amount, isAuResident }]
+      [{ type: 'ROTH_CONVERSION_TAX', amount, residency }]
     );
   }
 }
@@ -101,7 +101,7 @@ export class RothConversionHandler extends HandlerEntry {
     if (amount > iraBalance) {
       throw new Error(`RothConversion: requested ${amount} exceeds ${iraKey} balance ${iraBalance}`);
     }
-    return conversionActions(amount, iraKey, rothKey, state.isAuResident);
+    return conversionActions(amount, iraKey, rothKey, state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null);
   }
 }
 
@@ -127,6 +127,6 @@ export class RothConversionPolicyHandler extends HandlerEntry {
     const iraBalance = state[iraKey]?.balance ?? 0;
     const amount     = Math.min(room, iraBalance);
     if (amount <= 0) return [];
-    return conversionActions(amount, iraKey, rothKey, state.isAuResident);
+    return conversionActions(amount, iraKey, rothKey, state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null);
   }
 }

@@ -25,13 +25,13 @@ import { ValueType } from '../../simulation-framework/type-registry.js';
  * Depends on: US_TAX, AU_TAX
  *
  * State ownership:
- *   Initializes: isAuResident (overrides AU_RETIREMENT's true default to false for
- *                US→AU migration scenarios), ftcYTD (reset to 0), combined
- *                inflationRates and inflationAccumulator for both countries
+ *   Initializes: people[*].residency (overrides per-person default to startingResidency),
+ *                ftcYTD (reset to 0), combined inflationRates and inflationAccumulator
+ *                for both countries
  *   Reads: us* keys from US_TAX; au* keys from AU_TAX
  *
  * Typical usage: toolsets: ["US_RETIREMENT", "AU_RETIREMENT", "US_AU_CROSS_BORDER"]
- * For AU→US migrants, override isAuResident: true in parameters.
+ * For AU→US migrants, set startingResidency: 'AUS' in parameters.
  */
 export const US_AU_CROSS_BORDER = {
   id: 'US_AU_CROSS_BORDER',
@@ -56,10 +56,10 @@ export const US_AU_CROSS_BORDER = {
         description: 'Calendar year of US→AU migration (Jul 1). Leave unset for no move.',
       },
       {
-        key: 'isAuResident', label: 'Starts as AU Resident',
-        type: 'Boolean', group: 'Cross Border', mc: false, opt: true,
-        defaultValue: false,
-        description: 'Initial residency status. Overrides AU_RETIREMENT default of true.',
+        key: 'startingResidency', label: 'Starting Residency',
+        type: 'Text', group: 'Cross Border', mc: false, opt: true,
+        defaultValue: null,
+        description: 'Starting country of tax residency for all persons (e.g. "US", "AUS"). Defaults to "US" when unset.',
       },
       {
         key: 'auInflationRate', label: 'AU Inflation Rate (cross-border)',
@@ -84,10 +84,29 @@ export const US_AU_CROSS_BORDER = {
 
   state(context) {
     const p = context.parameters;
-    // Override isAuResident (AU_RETIREMENT defaults to true; cross-border starts in US)
-    // Combined inflation rates for both jurisdictions
-    return {
-      isAuResident:         p.isAuResident ?? false,
+    const startingResidency = p.startingResidency ?? (p.isAuResident ? 'AUS' : 'US');
+
+    // Build a full people map from PersonService so we can override residency.
+    // context.state does not exist in the compiler — context.people is the source of truth.
+    // Because _mergeStatePatches does a shallow (key-level) merge for 'people', we must
+    // emit the complete person entries here; a partial { residency } object would discard
+    // fields set by US_RETIREMENT / AU_RETIREMENT.
+    const people = {};
+    for (const person of context.people) {
+      people[person.id] = {
+        id:                    person.id,
+        name:                  person.name,
+        birthDate:             person.birthDate,
+        monthlyWage:           person.monthlyWage           ?? 0,
+        retirementDate:        person.retirementDate        ?? null,
+        socialSecurityMonthly: person.socialSecurityMonthly ?? 0,
+        lifeExpectancy:        person.lifeExpectancy        ?? 90,
+        citizen:               person.citizen               ?? ['US'],
+        residency:             startingResidency,
+      };
+    }
+
+    const patches = {
       ftcYTD:               0,
       exchangeRateUsdToAud: p.exchangeRateUsdToAud ?? 1.55,
       intlTransferFeeUsd:   p.intlTransferFeeUsd   ?? 15,
@@ -97,6 +116,9 @@ export const US_AU_CROSS_BORDER = {
       },
       inflationAccumulator: { US: 1.0, AU: 1.0 },
     };
+
+    if (Object.keys(people).length > 0) patches.people = people;
+    return patches;
   },
 
   schedules(context) {

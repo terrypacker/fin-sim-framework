@@ -180,7 +180,7 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { salePrice, costBasis, isAuResident } = action;
+    const { salePrice, costBasis, residency } = action;
     const gain = Math.max(0, salePrice - costBasis);
     this.accountService.transaction(auCash(state), salePrice, null);
     const sa = state.auStockAccount;
@@ -197,7 +197,7 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
           contributionBasis: newContrib,
         },
       },
-      [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, isAuResident, proceeds: salePrice, costBasis, description: sa.name || 'auStockAccount' }]
+      [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, residency, proceeds: salePrice, costBasis, description: sa.name || 'auStockAccount' }]
     );
   }
 }
@@ -310,7 +310,7 @@ export class AuStockWithdrawalHandler extends HandlerEntry {
         type:         'AU_STOCK_WITHDRAWAL_APPLY',
         salePrice:    data.salePrice,
         costBasis:    data.costBasis,
-        isAuResident: state.isAuResident,
+        residency: state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null,
       },
       new RecordBalanceAction('auStockAccount.balance', 'auStockAccount'),
     ];

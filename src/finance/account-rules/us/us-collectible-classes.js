@@ -30,7 +30,7 @@ const resolveDestinationKey = (state, saleDestinationAccount) => {
  * EVT-36/46: Collectible Sale — credit destination account with sale proceeds,
  * zero out the collectible's stateKey value (if present), and chain
  * COLLECTIBLE_SALE_TAX. Gain = salePrice - costBasis; taxed at the 28%
- * collectibles rate (US) and/or as AU capital gain when isAuResident.
+ * collectibles rate (US) and/or as AU capital gain when resident in AUS.
  */
 export class CollectibleSaleApplyReducer extends AccountServiceReducer {
   static type        = 'CollectibleSaleApplyReducer';
@@ -45,7 +45,7 @@ export class CollectibleSaleApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { salePrice, costBasis, isAuResident, stateKey, destinationKey } = action;
+    const { salePrice, costBasis, residency, stateKey, destinationKey } = action;
     const gain    = Math.max(0, salePrice - costBasis);
     const destKey = destinationKey ?? defaultUsCashKey(state);
     this.accountService.transaction(state[destKey], salePrice, null);
@@ -57,7 +57,7 @@ export class CollectibleSaleApplyReducer extends AccountServiceReducer {
     return this.newState(
       state,
       stateUpdate,
-      [{ type: 'COLLECTIBLE_SALE_TAX', gain, isAuResident }]
+      [{ type: 'COLLECTIBLE_SALE_TAX', gain, residency }]
     );
   }
 }
@@ -103,7 +103,7 @@ export class CollectibleSaleHandler extends HandlerEntry {
         type:         'COLLECTIBLE_SALE_APPLY',
         salePrice:    data.salePrice,
         costBasis:    data.costBasis,
-        isAuResident: state.isAuResident,
+        residency: state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null,
         stateKey:     data.stateKey ?? null,
         destinationKey,
       },

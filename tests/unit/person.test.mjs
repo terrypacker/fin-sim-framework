@@ -63,9 +63,25 @@ test('Person: dual citizen stores both country codes', () => {
   assert.ok(p.citizen.includes('AUS'));
 });
 
-test('Person: AU residency derived from citizen when citizen includes AUS', () => {
+test('Person: residency defaults to first citizen entry', () => {
   const p = new Person('p1', new Date(1966, 0, 1), { citizen: ['AUS'] });
-  assert.ok(p.citizen.includes('AUS'));
+  assert.strictEqual(p.residency, 'AUS');
+});
+
+test('Person: dual citizen defaults residency to first entry (US)', () => {
+  const p = new Person('p1', new Date(1966, 0, 1), { citizen: ['US', 'AUS'] });
+  assert.strictEqual(p.residency, 'US');
+});
+
+test('Person: explicit residency overrides citizen default', () => {
+  const p = new Person('p1', new Date(1966, 0, 1), { citizen: ['US', 'AUS'], residency: 'AUS' });
+  assert.strictEqual(p.residency, 'AUS');
+  assert.deepStrictEqual(p.citizen, ['US', 'AUS']);
+});
+
+test('Person: dual citizen with US residency stays US even though AUS citizen', () => {
+  const p = new Person('p1', new Date(1966, 0, 1), { citizen: ['US', 'AUS'], residency: 'US' });
+  assert.strictEqual(p.residency, 'US');
 });
 
 test('Person: id defaults to null when not provided', () => {

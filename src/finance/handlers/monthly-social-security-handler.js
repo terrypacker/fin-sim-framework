@@ -68,7 +68,7 @@ export class MonthlySocialSecurityHandler extends HandlerEntry {
       if (retDate && date < new Date(retDate)) continue;
 
       actions.push(
-        { type: 'SS_INCOME_APPLY', amount: ssMonthly, isAuResident: state.isAuResident },
+        { type: 'SS_INCOME_APPLY', amount: ssMonthly, residency: person.residency ?? null },
         new FieldValueAction(`ss_income_${key}`, `${person.name || key} Social Security`, ssMonthly),
       );
     }

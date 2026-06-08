@@ -21,8 +21,8 @@ export class Person extends SimGraphNode {
    * @param {Date}        birthDate - Date of birth (used for age-gated rules)
    * @param {object}      [opts]
    * @param {string}      [opts.name='']
-   * @param {string[]}    [opts.citizen=['US']] - ISO country codes (e.g. 'US', 'AUS')
-   * @param {boolean}     [opts.isAuResident]   - AU tax-resident flag; defaults to citizen.includes('AUS')
+   * @param {string[]}    [opts.citizen=['US']] - ISO country codes (e.g. 'US', 'AUS'); stable, never mutated by a move
+   * @param {string}      [opts.residency]      - Current country of tax residency (e.g. 'US', 'AUS'); defaults to citizen[0]
    * @param {number}      [opts.lifeExpectancy=90]         - Expected years to live
    * @param {number}      [opts.socialSecurityMonthly=2800] - USD/month of SS at full retirement age
    * @param {number}      [opts.monthlyWage=0]             - USD/month gross wages (0 = not employed)
@@ -32,7 +32,7 @@ export class Person extends SimGraphNode {
     super({id: id, kind: 'person', layer: 'config', name: opts.name ?? ''});
     this.birthDate             = birthDate;
     this.citizen               = opts.citizen               ?? ['US'];
-    this.isAuResident          = opts.isAuResident          ?? this.citizen.includes('AUS');
+    this.residency             = opts.residency             ?? this.citizen[0] ?? 'US';
     this.lifeExpectancy        = opts.lifeExpectancy        ?? 90;
     this.socialSecurityMonthly = opts.socialSecurityMonthly ?? 2800;
     this.monthlyWage           = opts.monthlyWage           ?? 0;

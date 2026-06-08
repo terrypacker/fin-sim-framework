@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
+import { getBirthDate } from '../../residency-utils.js';
 
 /** Resolve the AU cash pool. */
 const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
@@ -188,13 +189,19 @@ export class SuperWithdrawalContributionsHandler extends HandlerEntry {
   static description = 'Age-gates the request (blocks under 60) and dispatches SUPER_WITHDRAWAL_CONTRIB_APPLY.';
   static eventType   = 'SUPER_WITHDRAWAL_CONTRIBUTIONS';
 
-  constructor() {
+  constructor({ ownerId = null } = {}) {
     super(null, 'Super Withdrawal Contributions');
+    this.ownerId = ownerId;
     this.generatedActionTypes = ['SUPER_WITHDRAWAL_CONTRIB_APPLY', 'RECORD_BALANCE'];
   }
 
+  static fromJSON(d, ctx) { const h = new this({ ownerId: d.ownerId ?? null }); h.id = d.id; return h; }
+  toJSON() { return { ...super.toJSON(), ownerId: this.ownerId }; }
+
   call({ date, state, data }) {
-    const age     = getAge(state.personBirthDate, date);
+    const personKey = this.ownerId ?? Object.keys(state.people ?? {})[0];
+    const birthDate = getBirthDate(state, personKey);
+    const age     = birthDate ? getAge(birthDate, date) : 0;
     const blocked = age < 60;
     return [
       { type: 'SUPER_WITHDRAWAL_CONTRIB_APPLY', amount: data.amount, blocked },
@@ -208,13 +215,19 @@ export class SuperWithdrawalEarningsHandler extends HandlerEntry {
   static description = 'Age-gates the request (blocks under 60) and dispatches SUPER_WITHDRAWAL_EARNINGS_APPLY.';
   static eventType   = 'SUPER_WITHDRAWAL_EARNINGS';
 
-  constructor() {
+  constructor({ ownerId = null } = {}) {
     super(null, 'Super Withdrawal Earnings');
+    this.ownerId = ownerId;
     this.generatedActionTypes = ['SUPER_WITHDRAWAL_EARNINGS_APPLY', 'RECORD_BALANCE'];
   }
 
+  static fromJSON(d, ctx) { const h = new this({ ownerId: d.ownerId ?? null }); h.id = d.id; return h; }
+  toJSON() { return { ...super.toJSON(), ownerId: this.ownerId }; }
+
   call({ date, state, data }) {
-    const age     = getAge(state.personBirthDate, date);
+    const personKey = this.ownerId ?? Object.keys(state.people ?? {})[0];
+    const birthDate = getBirthDate(state, personKey);
+    const age     = birthDate ? getAge(birthDate, date) : 0;
     const blocked = age < 60;
     return [
       { type: 'SUPER_WITHDRAWAL_EARNINGS_APPLY', amount: data.amount, blocked },

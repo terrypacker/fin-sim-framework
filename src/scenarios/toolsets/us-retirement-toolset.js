@@ -92,7 +92,7 @@ function _accountToStatePlain(account) {
  * Depends on: US_BANKING, US_TAX (pulled in automatically by the dependency graph)
  *
  * State ownership:
- *   Initializes: isAuResident, monthlyExpenses, inflationRates,
+ *   Initializes: people (with residency), monthlyExpenses, inflationRates,
  *                inflationAccumulator, metrics, people, per-account state entries
  *   Reads: us* keys from US_TAX; US_SAVINGS_INTEREST_MONTHLY from US_BANKING
  */
@@ -135,35 +135,35 @@ export const US_RETIREMENT = {
       { type: 'SET_OUT_OF_FUNDS_DATE', fields: { date: ValueType.any() } },
       { type: 'ACCUMULATE_DEFICIT',    fields: { amount: ValueType.number() } },
       { type: 'OUT_OF_FUNDS',          fields: { deficit: ValueType.number(), currency: ValueType.text() } },
-      { type: 'STOCK_DIVIDEND_CASH_APPLY',              fields: { amount: ValueType.currency('USD'), isAuResident: ValueType.boolean(), stateKey: ValueType.text() } },
+      { type: 'STOCK_DIVIDEND_CASH_APPLY',              fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), stateKey: ValueType.text() } },
       { type: 'ROTH_CONTRIBUTION_APPLY',                fields: { amount: ValueType.currency('USD') } },
       { type: 'ROTH_WITHDRAWAL_CONTRIB_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
       { type: 'ROTH_WITHDRAWAL_EARNINGS_APPLY', family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
-      { type: 'ROTH_WITHDRAWAL_EARNINGS_TAX',   fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), isAuResident: ValueType.boolean() } },
+      { type: 'ROTH_WITHDRAWAL_EARNINGS_TAX',   fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), residency: ValueType.text() } },
       { type: 'ROTH_EARNINGS_APPLY',                    fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text() } },
       { type: 'ROTH_ROLLOVER_CONTRIBUTION_APPLY',        fields: { amount: ValueType.currency('USD') } },
       { type: 'ROTH_ROLLOVER_EARNINGS_APPLY',            fields: { amount: ValueType.currency('USD') } },
       { type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
       { type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_APPLY', family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
-      { type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX',   fields: { amount: ValueType.currency('USD'), isAuResident: ValueType.boolean() } },
+      { type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX',   fields: { amount: ValueType.currency('USD'), residency: ValueType.text() } },
       { type: 'IRA_CONTRIBUTION_APPLY',                 fields: { amount: ValueType.currency('USD') } },
       { type: 'IRA_CONTRIBUTION_TAX',                   fields: { amount: ValueType.currency('USD') } },
       { type: 'IRA_WITHDRAWAL_CONTRIB_APPLY',   family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
       { type: 'IRA_WITHDRAWAL_CONTRIB_TAX',     fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number() } },
       { type: 'IRA_WITHDRAWAL_EARNINGS_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
-      { type: 'IRA_WITHDRAWAL_EARNINGS_TAX',    fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), isAuResident: ValueType.boolean() } },
+      { type: 'IRA_WITHDRAWAL_EARNINGS_TAX',    fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), residency: ValueType.text() } },
       { type: 'IRA_EARNINGS_APPLY',                     fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text() } },
       { type: 'IRA_ROLLOVER_WITHDRAWAL_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
-      { type: 'IRA_ROLLOVER_WITHDRAWAL_TAX',    fields: { amount: ValueType.currency('USD'), isAuResident: ValueType.boolean() } },
+      { type: 'IRA_ROLLOVER_WITHDRAWAL_TAX',    fields: { amount: ValueType.currency('USD'), residency: ValueType.text() } },
       { type: 'IRA_RMD_APPLY',                  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
-      { type: 'IRA_RMD_TAX',                    fields: { amount: ValueType.currency('USD'), isAuResident: ValueType.boolean() } },
+      { type: 'IRA_RMD_TAX',                    fields: { amount: ValueType.currency('USD'), residency: ValueType.text() } },
       { type: 'K401_CONTRIBUTION_APPLY',                fields: { amount: ValueType.currency('USD') } },
       { type: 'K401_CONTRIBUTION_TAX',                  fields: { amount: ValueType.currency('USD') } },
       { type: 'K401_EARNINGS_APPLY',                    fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text() } },
       { type: 'K401_WITHDRAWAL_APPLY',          family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
       { type: 'K401_WITHDRAWAL_TAX',            fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number() } },
       { type: 'K401_RMD_APPLY',                 family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
-      { type: 'K401_RMD_TAX',                   fields: { amount: ValueType.currency('USD'), isAuResident: ValueType.boolean() } },
+      { type: 'K401_RMD_TAX',                   fields: { amount: ValueType.currency('USD'), residency: ValueType.text() } },
       { type: 'K401_TO_IRA_CONVERSION_APPLY', family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
     ],
   },
@@ -272,11 +272,11 @@ export const US_RETIREMENT = {
         socialSecurityMonthly: person.socialSecurityMonthly ?? 0,
         lifeExpectancy:        person.lifeExpectancy        ?? 90,
         citizen:               person.citizen               ?? ['US'],
+        residency:             person.residency             ?? person.citizen?.[0] ?? 'US',
       };
     }
 
     const patches = {
-      isAuResident:         false,
       monthlyExpenses:      p.monthlyExpenses,
       inflationRates:       { US: p.inflationRate },
       inflationAccumulator: { US: 1.0 },

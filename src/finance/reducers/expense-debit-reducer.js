@@ -52,7 +52,9 @@ export class ExpenseDebitReducer extends Reducer {
   }
 
   reduce(state, action, date) {
-    const fallback   = state.isAuResident ? this.auAccountKey : this.usAccountKey;
+    const primaryKey = Object.keys(state.people ?? {})[0];
+    const residency  = state.people?.[primaryKey]?.residency ?? null;
+    const fallback   = residency === 'AUS' ? this.auAccountKey : this.usAccountKey;
     const accountKey = action.targetKey ?? fallback;
     const account    = state[accountKey];
     const debit      = Math.min(action.amount, Math.max(0, account.balance));

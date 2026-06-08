@@ -19,8 +19,8 @@ import { TaxSettleService } from '../tax-settle-service.js';
  * the US to AU. Closes the partial US tax year by computing a mid-year US tax
  * liability, then emits the full residency-change sequence:
  *
- *   1. CHANGE_RESIDENCY_APPLY — flips state.isAuResident, snapshots investment
- *      account balances, and adds AU citizenship to all people in state.
+ *   1. CHANGE_RESIDENCY_APPLY — flips residency to 'AUS' on all people and snapshots
+ *      investment account balances (citizen arrays are NOT modified).
  *
  *   2. TAX_SETTLE_APPLY { cc: 'US', tax } — processed by TaxService to reset
  *      YTD accumulators and emit a TAX_PAYMENT_DEBIT if tax > 0.

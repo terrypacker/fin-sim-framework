@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
+import { getBirthDate } from '../../residency-utils.js';
 
 /** Resolve the US cash pool. */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -111,7 +112,7 @@ export class IraWithdrawalEarningsApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, penaltyAmount, isAuResident } = action;
+    const { amount, penaltyAmount, residency } = action;
     this.accountService.transaction(usCash(state), amount - penaltyAmount, null);
     const ia = state.iraAccount;
     return this.newState(
@@ -123,7 +124,7 @@ export class IraWithdrawalEarningsApplyReducer extends AccountServiceReducer {
           earningsBasis: ia.earningsBasis - amount,
         },
       },
-      [{ type: 'IRA_WITHDRAWAL_EARNINGS_TAX', amount, penaltyAmount, isAuResident }]
+      [{ type: 'IRA_WITHDRAWAL_EARNINGS_TAX', amount, penaltyAmount, residency }]
     );
   }
 }
@@ -180,13 +181,19 @@ export class IraWithdrawalContributionsHandler extends HandlerEntry {
   static description = 'Applies 10% penalty for under-60 withdrawals and dispatches IRA_WITHDRAWAL_CONTRIB_APPLY.';
   static eventType   = 'IRA_WITHDRAWAL_CONTRIBUTIONS';
 
-  constructor() {
+  constructor({ ownerId = null } = {}) {
     super(null, 'IRA Withdrawal Contributions');
+    this.ownerId = ownerId;
     this.generatedActionTypes = ['IRA_WITHDRAWAL_CONTRIB_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
   }
 
+  static fromJSON(d, ctx) { const h = new this({ ownerId: d.ownerId ?? null }); h.id = d.id; return h; }
+  toJSON() { return { ...super.toJSON(), ownerId: this.ownerId }; }
+
   call({ date, state, data }) {
-    const age     = getAge(state.personBirthDate, date);
+    const personKey = this.ownerId ?? Object.keys(state.people ?? {})[0];
+    const birthDate = getBirthDate(state, personKey);
+    const age     = birthDate ? getAge(birthDate, date) : 0;
     const penalty = age < 60 ? data.amount * 0.10 : 0;
     return [
       { type: 'IRA_WITHDRAWAL_CONTRIB_APPLY', amount: data.amount, penaltyAmount: penalty },
@@ -201,20 +208,26 @@ export class IraWithdrawalEarningsHandler extends HandlerEntry {
   static description = 'Applies 10% penalty for under-60 withdrawals and dispatches IRA_WITHDRAWAL_EARNINGS_APPLY.';
   static eventType   = 'IRA_WITHDRAWAL_EARNINGS';
 
-  constructor() {
+  constructor({ ownerId = null } = {}) {
     super(null, 'IRA Withdrawal Earnings');
+    this.ownerId = ownerId;
     this.generatedActionTypes = ['IRA_WITHDRAWAL_EARNINGS_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
   }
 
+  static fromJSON(d, ctx) { const h = new this({ ownerId: d.ownerId ?? null }); h.id = d.id; return h; }
+  toJSON() { return { ...super.toJSON(), ownerId: this.ownerId }; }
+
   call({ date, state, data }) {
-    const age     = getAge(state.personBirthDate, date);
+    const personKey = this.ownerId ?? Object.keys(state.people ?? {})[0];
+    const birthDate = getBirthDate(state, personKey);
+    const age     = birthDate ? getAge(birthDate, date) : 0;
     const penalty = age < 60 ? data.amount * 0.10 : 0;
     return [
       {
         type: 'IRA_WITHDRAWAL_EARNINGS_APPLY',
         amount:        data.amount,
         penaltyAmount: penalty,
-        isAuResident:  state.isAuResident,
+        residency:     state.people?.[personKey]?.residency ?? null,
       },
       new FieldValueAction('ira_withdrawal_earnings', 'IRA Withdrawal Earnings', data.amount),
       new RecordBalanceAction('iraAccount.balance', 'iraAccount'),
