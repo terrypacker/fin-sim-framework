@@ -128,6 +128,9 @@ export class ScenarioLoader {
       } else if (node.type === 'account') {
         const rec = (cfg.accounts ?? []).find(r => r.stateKey === node.stateKey);
         if (rec) rec[node.field] = val;
+      } else if (node.type === 'realProperty') {
+        const rec = (cfg.realProperties ?? []).find(r => r.stateKey === node.stateKey);
+        if (rec) rec[node.field] = val != null ? Math.round(val) : val;
       }
     }
   }

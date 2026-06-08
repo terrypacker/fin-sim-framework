@@ -9,7 +9,7 @@
  */
 
 import { ServiceRegistry }          from '../../services/service-registry.js';
-import { IntlRetirementScenario }   from '../../scenarios/intl-retirement-scenario.js';
+import { IntlRetirementScenario, applyRealPropertySaleYearParams } from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioLoader }           from '../../scenarios/scenario-loader.js';
 import { ScenarioSerializer }       from '../../scenarios/scenario-serializer.js';
 import { computeNetWorthUsd }       from '../monte-carlo/intl-retirement-mc-runner.js';
@@ -162,6 +162,8 @@ export class IntlRetirementOptimizer {
     const cfg = structuredClone(cfgTemplate);
     // Merge perturbed params so ScenarioLoader reads nested path values correctly.
     cfg.parameters = { ...(cfg.parameters ?? {}), ...params };
+    // Patch real property sale years — toolsets read from cfg.realProperties, not cfg.parameters.
+    applyRealPropertySaleYearParams(cfg, params);
     if (Array.isArray(cfg.params)) {
       for (const p of cfg.params) {
         if (params[p.name] !== undefined) p.value = params[p.name];

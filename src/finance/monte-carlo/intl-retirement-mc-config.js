@@ -215,6 +215,39 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
 ];
 
 /**
+ * Build MC variables for real property sale years.
+ *
+ * Only emits a variable when the param is non-null — a null sale year has no
+ * meaningful distribution center, so there is nothing to perturb.
+ * stdDev of 1.5 years covers realistic uncertainty about timing (roughly ±3 yr
+ * at 2σ).  The runner rounds sampled values to integer before use.
+ */
+function buildRealPropertyMcConfigs(params) {
+  const vars = [];
+  if (params.usHouseSaleYear != null) {
+    vars.push({
+      paramKey: 'usHouseSaleYear', label: 'US House Sale Year',
+      type: DISTRIBUTION_TYPES.NORMAL,
+      mean:   params.usHouseSaleYear,
+      stdDev: 1.5,
+      group:  'Real Properties',
+      enabled: false,
+    });
+  }
+  if (params.auHouseSaleYear != null) {
+    vars.push({
+      paramKey: 'auHouseSaleYear', label: 'AU House Sale Year',
+      type: DISTRIBUTION_TYPES.NORMAL,
+      mean:   params.auHouseSaleYear,
+      stdDev: 1.5,
+      group:  'Real Properties',
+      enabled: false,
+    });
+  }
+  return vars;
+}
+
+/**
  * Build one set of MC variables per configured shock.
  *
  * For preset-form entries ({ preset, startDate }), severity is read from the
@@ -264,6 +297,7 @@ export class IntlRetirementMcConfig {
   static contributors = [
     ()          => DEFAULT_MC_VARIABLE_CONFIGS,
     ({ params }) => buildShockMcConfigs(params),
+    ({ params }) => buildRealPropertyMcConfigs(params),
   ];
 
   constructor() {

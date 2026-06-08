@@ -96,6 +96,24 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
     group:    'People',
     enabled:  false,
   },
+
+  // ── Real Property sale timing ─────────────────────────────────────────────
+  {
+    paramKey: 'usHouseSaleYear',
+    label:    'US House Sale Year',
+    type:     OPT_PARAM_TYPES.INTEGER,
+    min: 2027, max: 2045, step: 1,
+    group:    'Real Properties',
+    enabled:  false,
+  },
+  {
+    paramKey: 'auHouseSaleYear',
+    label:    'AU House Sale Year',
+    type:     OPT_PARAM_TYPES.INTEGER,
+    min: 2030, max: 2045, step: 1,
+    group:    'Real Properties',
+    enabled:  false,
+  },
 ];
 
 /**
