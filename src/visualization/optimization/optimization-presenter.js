@@ -8,9 +8,11 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { OptConfigPanel }  from './opt-config-panel.js';
-import { OptResultsPanel } from './opt-results-panel.js';
-import { OptRunsPanel }    from './opt-runs-panel.js';
+import { OptConfigPanel }     from './opt-config-panel.js';
+import { OptResultsPanel }    from './opt-results-panel.js';
+import { OptRunsPanel }       from './opt-runs-panel.js';
+import { buildOptVariables }  from '../../finance/optimization/intl-retirement-opt-config.js';
+import { set }                from '../../finance/monte-carlo/mc-param-paths.js';
 
 /**
  * OptimizationPresenter — wires OptConfigPanel callbacks to OptimizationController
@@ -39,6 +41,10 @@ export class OptimizationPresenter {
     this._runsPanel.onCandidateSelected  = (candidate) => {
       this.onApplyCandidate?.(this._mergeParams(candidate));
     };
+
+    // Populate panel with the full dynamic variable list (including per-shock rows)
+    const baseParams = this._resolveBaseParams();
+    this._configPanel.setVariables(buildOptVariables(baseParams));
 
     /** Set by WorkbenchApp: onApplyCandidate(mergedParams) */
     this.onApplyCandidate = null;
@@ -93,7 +99,11 @@ export class OptimizationPresenter {
    * to produce a full replay param set.
    */
   _mergeParams(candidateEntry) {
-    return { ...this._resolveBaseParams(), ...candidateEntry.candidate };
+    const base = this._resolveBaseParams();
+    for (const [k, v] of Object.entries(candidateEntry.candidate)) {
+      set(base, k, v);
+    }
+    return base;
   }
 
   _resolveBaseParams() {

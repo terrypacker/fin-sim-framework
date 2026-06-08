@@ -74,6 +74,7 @@ import { bootstrapHoldingSplit } from './finance/holdings/bootstrap-holding-spli
 import { DEFAULT_ALLOCATION_BY_ROLE, DEFAULT_ALLOCATION_BY_TYPE, resolveDefaultAllocation, resolveRateKey } from './finance/holdings/default-allocations.js';
 import { HOLDING_ACTION_TYPES, HOLDING_ACTION_ENTRIES, HoldingTransactAction, HoldingRevalueAction, HoldingSetBasisAction, HoldingSplitAction, HoldingRetitleAction, HOLDING_ACTION_CLASSES, registerHoldingActionTypes } from './finance/holdings/holding-actions.js';
 import { HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer, HoldingSplitReducer, HoldingRetitleReducer, HOLDING_REDUCER_CLASSES, _syncBalance } from './finance/holdings/holding-reducers.js';
+import { scaleHoldings } from './finance/holdings/holding-utils.js';
 import { Holding } from './finance/holdings/holding.js';
 import { computeHoldingsGrowth } from './finance/holdings/holdings-earnings.js';
 import { consumeHoldingsFifo } from './finance/holdings/holdings-fifo.js';
@@ -81,9 +82,10 @@ import { JournalDataSource } from './finance/journal-data-source.js';
 import { JournalQueryApi } from './finance/journal-query-api.js';
 import { ReportDefinition, ReportDefinitionRegistry } from './finance/journal-reporting/report-definition-registry.js';
 import { JournalReportingService } from './finance/journal-reporting-service.js';
-import { DEFAULT_MC_VARIABLE_CONFIGS } from './finance/monte-carlo/intl-retirement-mc-config.js';
+import { DEFAULT_MC_VARIABLE_CONFIGS, IntlRetirementMcConfig } from './finance/monte-carlo/intl-retirement-mc-config.js';
 import { computeNetWorthUsd, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
-import { DEFAULT_OPTIMIZATION_CONFIGS } from './finance/optimization/intl-retirement-opt-config.js';
+import { get, set } from './finance/monte-carlo/mc-param-paths.js';
+import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables } from './finance/optimization/intl-retirement-opt-config.js';
 import { valuesForConfig, IntlRetirementOptimizer } from './finance/optimization/intl-retirement-optimizer.js';
 import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES } from './finance/optimization/optimization-objectives.js';
 import { ownershipFractions, splitByOwnership, accumulateByOwnership } from './finance/ownership-utils.js';
@@ -518,6 +520,7 @@ export const Finance = {
   HoldingRetitleReducer,
   HOLDING_REDUCER_CLASSES,
   _syncBalance,
+  scaleHoldings,
   Holding,
   computeHoldingsGrowth,
   consumeHoldingsFifo,
@@ -527,9 +530,13 @@ export const Finance = {
   ReportDefinitionRegistry,
   JournalReportingService,
   DEFAULT_MC_VARIABLE_CONFIGS,
+  IntlRetirementMcConfig,
   computeNetWorthUsd,
   IntlRetirementMcRunner,
+  get,
+  set,
   DEFAULT_OPTIMIZATION_CONFIGS,
+  buildOptVariables,
   valuesForConfig,
   IntlRetirementOptimizer,
   OPT_PARAM_TYPES,

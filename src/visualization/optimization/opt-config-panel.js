@@ -21,6 +21,9 @@ import { valuesForConfig }              from '../../finance/optimization/intl-re
  * Renders the objective selector, run controls, and a grouped
  * search-space table into the provided container element.
  *
+ * Call setVariables(vars) after construction to populate with the full dynamic
+ * variable list (including per-shock rows from buildOptVariables()).
+ *
  * Callbacks:
  *   onRun({ optimizationConfigs, objective, objectiveKey, candidateCount })
  */
@@ -29,10 +32,12 @@ export class OptConfigPanel extends BaseComponent {
     super();
     this._container    = containerEl;
     this._rowMap       = new Map(); // paramKey → { enabledCb, rangeEl, minInp?, maxInp?, stepInp? }
+    this._variables    = DEFAULT_OPTIMIZATION_CONFIGS; // current variable list
     this._objectiveSel = null;
     this._countEl      = null;
     this._runBtn       = null;
     this._statusEl     = null;
+    this._section      = null;
     this.onRun         = null;
 
     this._render();
@@ -50,6 +55,25 @@ export class OptConfigPanel extends BaseComponent {
   }
 
   /**
+   * Replace the variable list with a fresh set (e.g. after scenario load).
+   * Preserves existing user state for rows whose paramKey is unchanged.
+   */
+  setVariables(variables) {
+    const savedState = this._snapshotState();
+
+    this._variables = variables;
+    this._rowMap.clear();
+
+    if (this._section) {
+      while (this._section.children.length > 1) {
+        this._section.removeChild(this._section.lastChild);
+      }
+      this._buildVarTable(this._section, variables, savedState);
+    }
+    this._updateCount();
+  }
+
+  /**
    * Returns the current panel configuration.
    * @returns {{ optimizationConfigs, objective, objectiveKey, candidateCount }}
    */
@@ -57,7 +81,7 @@ export class OptConfigPanel extends BaseComponent {
     const objectiveKey = this._objectiveSel?.value ?? 'MAX_NET_WORTH';
     const objective    = OPTIMIZATION_OBJECTIVES[objectiveKey] ?? OPTIMIZATION_OBJECTIVES.MAX_NET_WORTH;
 
-    const optimizationConfigs = DEFAULT_OPTIMIZATION_CONFIGS.map(cfg => {
+    const optimizationConfigs = this._variables.map(cfg => {
       const row = this._rowMap.get(cfg.paramKey);
       if (!row) return { ...cfg };
 
@@ -78,6 +102,22 @@ export class OptConfigPanel extends BaseComponent {
   }
 
   // ── Private ───────────────────────────────────────────────────────────────────
+
+  _snapshotState() {
+    const state = new Map();
+    for (const cfg of this._variables) {
+      const row = this._rowMap.get(cfg.paramKey);
+      if (!row) continue;
+      const snap = { enabled: row.enabledCb.checked };
+      if (cfg.type !== OPT_PARAM_TYPES.ENUM && row.minInp) {
+        snap.min  = parseFloat(row.minInp.value);
+        snap.max  = parseFloat(row.maxInp.value);
+        snap.step = parseFloat(row.stepInp.value);
+      }
+      state.set(cfg.paramKey, snap);
+    }
+    return state;
+  }
 
   _computeCount(configs) {
     const enabled = configs.filter(c => c.enabled);
@@ -123,19 +163,19 @@ export class OptConfigPanel extends BaseComponent {
     this._runBtn       = shell.querySelector('button');
     this._statusEl     = shell.querySelector('.opt-status');
     this._countEl      = shell.querySelector('.opt-count-label');
-    const section      = shell.querySelector('.opt-var-section');
+    this._section      = shell.querySelector('.opt-var-section');
 
     this.listen(this._runBtn, 'click', () => {
       if (this.onRun) this.onRun(this.getConfig());
     });
 
-    this._buildVarTable(section);
+    this._buildVarTable(this._section, this._variables, new Map());
     this._updateCount();
   }
 
-  _buildVarTable(section) {
+  _buildVarTable(section, variables, savedState) {
     const groups = new Map();
-    for (const cfg of DEFAULT_OPTIMIZATION_CONFIGS) {
+    for (const cfg of variables) {
       if (!groups.has(cfg.group)) groups.set(cfg.group, []);
       groups.get(cfg.group).push(cfg);
     }
@@ -147,7 +187,9 @@ export class OptConfigPanel extends BaseComponent {
       section.appendChild(header);
 
       for (const cfg of configs) {
-        const { el, refs } = this._buildVarRow(cfg);
+        const prior  = savedState.get(cfg.paramKey);
+        const merged = prior ? { ...cfg, ...prior } : cfg;
+        const { el, refs } = this._buildVarRow(merged);
         section.appendChild(el);
         this._rowMap.set(cfg.paramKey, refs);
       }
@@ -187,9 +229,9 @@ export class OptConfigPanel extends BaseComponent {
         `</div>`;
     } else {
       // Editable min / max / step inputs
-      const minInp  = this._numInput(String(cfg.min),  'min',  '54px');
-      const maxInp  = this._numInput(String(cfg.max),  'max',  '54px');
-      const stepInp = this._numInput(String(cfg.step), 'step', '42px');
+      const minInp  = this._numInput(String(cfg.min ?? ''),  'min',  '54px');
+      const maxInp  = this._numInput(String(cfg.max ?? ''),  'max',  '54px');
+      const stepInp = this._numInput(String(cfg.step ?? ''), 'step', '42px');
 
       const lbl = (t) => {
         const s = document.createElement('span');

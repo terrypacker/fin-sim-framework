@@ -18,6 +18,9 @@ import { DISTRIBUTION_TYPES }          from '../../simulation-framework/distribu
  * Renders the run controls (iterations, run button, status) and a grouped
  * variable-distribution table into the provided container element.
  *
+ * Call setVariables(vars) after construction to populate with the full dynamic
+ * variable list (including per-shock rows from buildVariables()).
+ *
  * Callbacks:
  *   onRun({ n, variableConfigs }) — fired when the Run button is clicked.
  */
@@ -26,9 +29,11 @@ export class McConfigPanel extends BaseComponent {
     super();
     this._container  = containerEl;
     this._rowMap     = new Map(); // paramKey → { enabledCb, typeSel, meanInp, stdDevInp, valueInp, minDateInp, maxDateInp }
+    this._variables  = DEFAULT_MC_VARIABLE_CONFIGS; // current variable list
     this._iterEl     = null;
     this._runBtn     = null;
     this._statusEl   = null;
+    this._section    = null;
     this.onRun       = null;
 
     this._render();
@@ -46,13 +51,34 @@ export class McConfigPanel extends BaseComponent {
   }
 
   /**
+   * Replace the variable list with a fresh set (e.g. after scenario load).
+   * Preserves existing user state for rows whose paramKey is unchanged.
+   */
+  setVariables(variables) {
+    // Snapshot current user state before wiping rows
+    const savedState = this._snapshotState();
+
+    this._variables = variables;
+    this._rowMap.clear();
+
+    // Clear just the variable rows, keep the header
+    if (this._section) {
+      // Remove everything after the section header
+      while (this._section.children.length > 1) {
+        this._section.removeChild(this._section.lastChild);
+      }
+      this._buildVarTable(this._section, variables, savedState);
+    }
+  }
+
+  /**
    * Returns the current panel configuration.
    * @returns {{ n: number, variableConfigs: Array }}
    */
   getConfig() {
     const n = Math.max(1, parseInt(this._iterEl?.value ?? '100', 10) || 100);
 
-    const variableConfigs = DEFAULT_MC_VARIABLE_CONFIGS.map(cfg => {
+    const variableConfigs = this._variables.map(cfg => {
       const row = this._rowMap.get(cfg.paramKey);
       if (!row) return { ...cfg };
 
@@ -80,6 +106,28 @@ export class McConfigPanel extends BaseComponent {
 
   // ── Private ───────────────────────────────────────────────────────────────────
 
+  /** Capture current UI state as a map paramKey → partial config, for preservation across setVariables. */
+  _snapshotState() {
+    const state = new Map();
+    for (const cfg of this._variables) {
+      const row = this._rowMap.get(cfg.paramKey);
+      if (!row) continue;
+      const type = row.typeSel.value;
+      const snap = { enabled: row.enabledCb.checked, type };
+      if (type === DISTRIBUTION_TYPES.CONSTANT) {
+        snap.value = row.valueInp.value;
+      } else if (type === DISTRIBUTION_TYPES.UNIFORM_DATE) {
+        snap.min = row.minDateInp.value;
+        snap.max = row.maxDateInp.value;
+      } else {
+        snap.mean   = row.meanInp.value;
+        snap.stdDev = row.stdDevInp.value;
+      }
+      state.set(cfg.paramKey, snap);
+    }
+    return state;
+  }
+
   _render() {
     const shell = document.createElement('div');
     shell.innerHTML = `
@@ -101,18 +149,18 @@ export class McConfigPanel extends BaseComponent {
     this._iterEl   = shell.querySelector('input[type="number"]');
     this._runBtn   = shell.querySelector('button');
     this._statusEl = shell.querySelector('.mc-status-el');
-    const section  = shell.querySelector('.mc-var-section');
+    this._section  = shell.querySelector('.mc-var-section');
 
     this.listen(this._runBtn, 'click', () => {
       if (this.onRun) this.onRun(this.getConfig());
     });
 
-    this._buildVarTable(section);
+    this._buildVarTable(this._section, this._variables, new Map());
   }
 
-  _buildVarTable(section) {
+  _buildVarTable(section, variables, savedState) {
     const groups = new Map();
-    for (const cfg of DEFAULT_MC_VARIABLE_CONFIGS) {
+    for (const cfg of variables) {
       if (!groups.has(cfg.group)) groups.set(cfg.group, []);
       groups.get(cfg.group).push(cfg);
     }
@@ -124,7 +172,10 @@ export class McConfigPanel extends BaseComponent {
       section.appendChild(header);
 
       for (const cfg of configs) {
-        const { el, refs } = this._buildVarRow(cfg);
+        // Merge saved state into cfg so the rebuilt row restores user values
+        const prior = savedState.get(cfg.paramKey);
+        const merged = prior ? { ...cfg, ...prior } : cfg;
+        const { el, refs } = this._buildVarRow(merged);
         section.appendChild(el);
         this._rowMap.set(cfg.paramKey, refs);
       }
@@ -164,7 +215,7 @@ export class McConfigPanel extends BaseComponent {
     meanInp.type  = 'number';
     meanInp.step  = 'any';
     meanInp.placeholder = 'mean';
-    meanInp.value = (isConst || isDate) ? '' : String(cfg.mean ?? '');
+    meanInp.value = (isConst || isDate) ? '' : String(cfg.mean ?? cfg.defaultValue ?? '');
     meanInp.className = 'mc-num-input';
     meanInp.style.width = '60px';
     meanInp.style.display = (isConst || isDate) ? 'none' : 'block';

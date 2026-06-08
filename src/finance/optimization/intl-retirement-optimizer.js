@@ -13,6 +13,7 @@ import { IntlRetirementScenario }   from '../../scenarios/intl-retirement-scenar
 import { ScenarioLoader }           from '../../scenarios/scenario-loader.js';
 import { ScenarioSerializer }       from '../../scenarios/scenario-serializer.js';
 import { computeNetWorthUsd }       from '../monte-carlo/intl-retirement-mc-runner.js';
+import { set }                       from '../monte-carlo/mc-param-paths.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS } from './intl-retirement-opt-config.js';
 import { OPTIMIZATION_OBJECTIVES, OPT_PARAM_TYPES } from './optimization-objectives.js';
 
@@ -21,8 +22,12 @@ import { OPTIMIZATION_OBJECTIVES, OPT_PARAM_TYPES } from './optimization-objecti
  */
 export function valuesForConfig(cfg) {
   if (cfg.type === OPT_PARAM_TYPES.ENUM) return cfg.values.slice();
+  const min  = Number(cfg.min);
+  const max  = Number(cfg.max);
+  const step = Number(cfg.step);
+  if (!isFinite(min) || !isFinite(max) || !isFinite(step) || step <= 0) return [];
   const vals = [];
-  for (let v = cfg.min; v <= cfg.max + 1e-9; v += cfg.step) {
+  for (let v = min; v <= max + 1e-9; v += step) {
     vals.push(cfg.type === OPT_PARAM_TYPES.INTEGER ? Math.round(v) : v);
   }
   return vals;
@@ -112,7 +117,7 @@ export class IntlRetirementOptimizer {
     const cfgTemplate = ScenarioSerializer.serializeScenario(rawTemplate);
 
     for (let i = 0; i < totalRuns; i++) {
-      const params = { ...baseParams, endDate: this.simEnd, ...candidates[i] };
+      const params = this._applyCandidate({ ...baseParams, endDate: this.simEnd }, candidates[i]);
       const result = this._runOne(params, cfgTemplate);
       const score  = sign * evaluate(result);
       results.push({ candidate: candidates[i], result, score });
@@ -129,6 +134,19 @@ export class IntlRetirementOptimizer {
     };
   }
 
+  /**
+   * Apply a candidate's paramKey→value pairs onto a deep clone of base using
+   * path-aware set(), so nested paths (e.g. shocks[0].severity) reach the
+   * correct location in the params tree.
+   */
+  _applyCandidate(base, candidate) {
+    const params = structuredClone(base);
+    for (const [k, v] of Object.entries(candidate)) {
+      set(params, k, v);
+    }
+    return params;
+  }
+
   _runOne(params, cfgTemplate) {
     // Isolated per-candidate registry: the user's active scenario + UI stay
     // untouched while the grid search runs.
@@ -142,6 +160,8 @@ export class IntlRetirementOptimizer {
     scenario.buildSim();
 
     const cfg = structuredClone(cfgTemplate);
+    // Merge perturbed params so ScenarioLoader reads nested path values correctly.
+    cfg.parameters = { ...(cfg.parameters ?? {}), ...params };
     if (Array.isArray(cfg.params)) {
       for (const p of cfg.params) {
         if (params[p.name] !== undefined) p.value = params[p.name];

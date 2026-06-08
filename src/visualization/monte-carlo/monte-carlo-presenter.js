@@ -8,9 +8,10 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { McConfigPanel }  from './mc-config-panel.js';
-import { McResultsPanel } from './mc-results-panel.js';
-import { McRunsPanel }    from './mc-runs-panel.js';
+import { McConfigPanel }           from './mc-config-panel.js';
+import { McResultsPanel }          from './mc-results-panel.js';
+import { McRunsPanel }             from './mc-runs-panel.js';
+import { IntlRetirementMcConfig }  from '../../finance/monte-carlo/intl-retirement-mc-config.js';
 
 /**
  * MonteCarloPresenter — wires McConfigPanel callbacks to MonteCarloController
@@ -39,6 +40,10 @@ export class MonteCarloPresenter {
     this._configPanel.onRun         = (config) => this._onRun(config);
     this._runsPanel.onRunSelected   = (run)    => this.onReplayRun?.(run);
 
+    // Populate panel with the full dynamic variable list (including per-shock rows)
+    const baseParams = this._resolveBaseParams();
+    this._configPanel.setVariables(new IntlRetirementMcConfig().buildVariables(baseParams));
+
     /** Set by WorkbenchApp to handle replay: onReplayRun(run) */
     this.onReplayRun = null;
   }
@@ -61,6 +66,7 @@ export class MonteCarloPresenter {
 
   _onRun(config) {
     const { n, variableConfigs } = config;
+    const mcConfig = IntlRetirementMcConfig.fromVariableConfigs(variableConfigs);
     this._configPanel.showProgress(`Running 0 / ${n}…`);
 
     // rAF lets the browser paint the "Running" status before async work starts.
@@ -69,7 +75,7 @@ export class MonteCarloPresenter {
         simStart:       this._scenario.simStart,
         simEnd:         this._scenario.simEnd,
         n,
-        variableConfigs,
+        mcConfig,
         baseParams:     this._resolveBaseParams(),
         onProgress:     (done, total) => {
           this._configPanel.showProgress(`Running ${done} / ${total}…`);

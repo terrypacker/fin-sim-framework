@@ -1,6 +1,6 @@
 # 25a — Monte Carlo Config: Nested Parameter Paths
 
-**Status**: Ready for implementation (priority — lands before designs 26/27)
+**Status**: COMPLETE (landed 2026-06-05)
 **Phase**: A — Substrate (per `design/24-financial-modeling-roadmap.md` §5; peer to `design/25-holding-level-state.md`)
 **Driving consumer**: **Multi-shock MC sweeps.** The flat `shockSeverity` / `shockStartDate` overlay (a translation-era workaround) can only perturb `shocks[0]`. This design replaces that overlay with proper nested-path sweeping so a scenario carrying *N* shocks can sweep every shock's `severity` / `startDate` (and deeper fields) independently in one MC run.
 **Related**: `design/21-financial-shock-and-regime-framework.md` §15 (flagged nested-path MC sweeps), `design/24-financial-modeling-roadmap.md` §4.4, `design/26-dynamic-spending-strategies.md` §12 (healthcare-MC consumer), `design/27-mortality-and-survivor-mechanics.md` (per-person lifespan draws), `design/25-holding-level-state.md` (peer substrate; no direct dependency).

@@ -9,7 +9,7 @@
  */
 
 import { IntlRetirementMcRunner }     from '../../finance/monte-carlo/intl-retirement-mc-runner.js';
-import { DEFAULT_MC_VARIABLE_CONFIGS } from '../../finance/monte-carlo/intl-retirement-mc-config.js';
+import { IntlRetirementMcConfig }     from '../../finance/monte-carlo/intl-retirement-mc-config.js';
 import { ServiceRegistry }             from '../../services/service-registry.js';
 
 /**
@@ -22,20 +22,20 @@ export class MonteCarloController {
   /**
    * Execute a Monte Carlo batch asynchronously.
    *
-   * @param {object}   opts
-   * @param {Date}     opts.simStart          - Simulation start date.
-   * @param {Date}     opts.simEnd            - Simulation end date.
-   * @param {number}   [opts.n=100]           - Iteration count.
-   * @param {Array}    [opts.variableConfigs] - Distribution configs (defaults to DEFAULT_MC_VARIABLE_CONFIGS).
-   * @param {object}   [opts.baseParams={}]   - Scenario params that override defaults.
-   * @param {Function} [opts.onProgress]      - Called with (completed, total) after each run.
+   * @param {object}                 opts
+   * @param {Date}                   opts.simStart       - Simulation start date.
+   * @param {Date}                   opts.simEnd         - Simulation end date.
+   * @param {number}                 [opts.n=100]        - Iteration count.
+   * @param {IntlRetirementMcConfig} [opts.mcConfig]     - Config that builds the variable list.
+   * @param {object}                 [opts.baseParams={}]- Scenario params that override defaults.
+   * @param {Function}               [opts.onProgress]   - Called with (completed, total) after each run.
    * @returns {Promise<{ runs: Array, summary: object }>}
    */
-  async runMonteCarlo({ simStart, simEnd, n = 100, variableConfigs = DEFAULT_MC_VARIABLE_CONFIGS, baseParams = {}, onProgress }) {
+  async runMonteCarlo({ simStart, simEnd, n = 100, mcConfig = new IntlRetirementMcConfig(), baseParams = {}, onProgress }) {
     // Design 15 §2.3: snapshot the active scenario cfg as the per-iteration template
     // so non-param edits (planned sale year, life expectancy, etc.) are honored.
     const cfgTemplate = ServiceRegistry.getInstance().scenarioService?.getActive() ?? null;
-    const runner = new IntlRetirementMcRunner({ n, variableConfigs, simStart, simEnd, cfgTemplate });
+    const runner = new IntlRetirementMcRunner({ n, mcConfig, simStart, simEnd, cfgTemplate });
     return runner.run(baseParams, onProgress);
   }
 }
