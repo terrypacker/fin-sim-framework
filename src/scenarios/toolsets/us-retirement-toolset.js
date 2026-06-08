@@ -278,11 +278,12 @@ export const US_RETIREMENT = {
       };
     }
 
+    const metrics = {};
     const patches = {
       monthlyExpenses:      p.monthlyExpenses,
       inflationRates:       { US: p.inflationRate },
       inflationAccumulator: { US: 1.0 },
-      metrics:              {},
+      metrics,
       people,
       outOfFundsDate:       null,
       scenarioFailed:       false,
@@ -291,10 +292,14 @@ export const US_RETIREMENT = {
       personBirthDate:      context.people[0]?.birthDate ?? null,
     };
 
-    // Account state entries (handlers read state[stateKey] for balance lookups)
+    // Account state entries + initial metrics snapshot so the chart shows
+    // correct balances at t=0 without waiting for the first RECORD_BALANCE.
     for (const account of context.accounts) {
       if (account.stateKey && patches[account.stateKey] === undefined) {
         patches[account.stateKey] = _accountToStatePlain(account);
+      }
+      if (account.stateKey != null && account.balance != null) {
+        metrics[account.stateKey] = account.balance;
       }
     }
 

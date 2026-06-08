@@ -158,9 +158,15 @@ export const AU_RETIREMENT = {
     };
 
     if (!sharedAlreadySetup) {
+      const metrics = {};
       patches.monthlyExpenses = p.monthlyExpenses;
-      patches.metrics         = {};
+      patches.metrics         = metrics;
       patches.people          = people;
+      for (const account of context.accounts) {
+        if (account.stateKey != null && account.balance != null) {
+          metrics[account.stateKey] = account.balance;
+        }
+      }
     }
 
     for (const account of context.accounts) {
