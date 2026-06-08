@@ -114,10 +114,26 @@ export class EChartsGraphRenderer extends BaseComponent {
 
   _mount() {
     this._container.innerHTML = '';
+    this._container.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    if (this._container.clientWidth > 0 || this._container.clientHeight > 0) {
+      this._initECharts();
+    } else {
+      this._ro = new ResizeObserver((entries) => {
+        const r = entries[0]?.contentRect;
+        if (r?.width > 0 || r?.height > 0) {
+          this._ro.disconnect();
+          this._ro = null;
+          this._initECharts();
+        }
+      });
+      this._ro.observe(this._container);
+    }
+  }
+
+  _initECharts() {
     this._chart = echarts.init(this._container, null, { renderer: 'canvas' });
     this._chart.setOption(this._buildBaseOption());
-
-    this._container.addEventListener('contextmenu', (e) => e.preventDefault());
 
     this._chart.on('contextmenu', (params) => {
       if (params.seriesId !== 'node-series') return;
@@ -146,6 +162,11 @@ export class EChartsGraphRenderer extends BaseComponent {
 
     this._ro = new ResizeObserver(() => this._chart?.resize());
     this._ro.observe(this._container);
+
+    if (this._pendingRender) {
+      this._pendingRender = false;
+      this.render();
+    }
   }
 
   /* ───────────────────────── External Action Listeners ───────────────────── */
@@ -196,6 +217,10 @@ export class EChartsGraphRenderer extends BaseComponent {
   /* ───────────────────────── Render ──────────────────────────────────────── */
 
   render() {
+    if (!this._chart) {
+      this._pendingRender = true;
+      return;
+    }
     this.scheduleRender(() => this._renderGraph());
   }
 

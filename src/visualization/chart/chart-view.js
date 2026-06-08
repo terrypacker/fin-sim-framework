@@ -328,6 +328,19 @@ export class ChartView extends BaseComponent {
   _initChart() {
     if (!this.container) return;
 
+    if (this.container.clientWidth === 0 && this.container.clientHeight === 0) {
+      this._ro = new ResizeObserver((entries) => {
+        const r = entries[0]?.contentRect;
+        if (r?.width > 0 || r?.height > 0) {
+          this._ro.disconnect();
+          this._ro = null;
+          this._initChart();
+        }
+      });
+      this._ro.observe(this.container);
+      return;
+    }
+
     this._chart = echarts.init(this.container, null, { renderer: 'canvas' });
 
     // Auto-resize when the container's dimensions change (covers tab-switch and pane-resize).

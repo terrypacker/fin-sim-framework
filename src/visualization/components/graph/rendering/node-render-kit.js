@@ -71,7 +71,6 @@ export class NodeRenderKit {
 
     const {
       textStyle,
-      api,
       width,
       height,
       x,
@@ -92,18 +91,18 @@ export class NodeRenderKit {
       // icon
       {
         type: 'text',
-        style: api.style({
+        style: {
           text: icon,
           x: x + padding,
           y: y + titleTextMetrics.height,
           fontSize: 14,
           textVerticalAlign: 'middle'
-        })
+        }
       },
       // title
       {
         type: 'text',
-        style: api.style({
+        style: {
           text: title,
           x: x + 30,
           y: y + 14,
@@ -113,7 +112,7 @@ export class NodeRenderKit {
           fontWeight: 'bold',
           textFill: ctx.colors?.text ?? '#e2e8f0',
           textVerticalAlign: 'middle'
-        })
+        }
       },
 
       // divider
@@ -138,7 +137,6 @@ export class NodeRenderKit {
   createBadgeSection(ctx) {
     const {
       textStyle,
-      api,
       width,
       height,
       x,
@@ -196,14 +194,14 @@ export class NodeRenderKit {
         },
         // CRITICAL FOR PAN/ZOOM: Clip the element to the current coordinate system
         clip: ctx.clip,
-        style: api.style({
+        style: {
           fill: badge.bg
-        })
+        }
       });
 
       children.push({
         type: 'text',
-        style: api.style({
+        style: {
           text: badge.text,
           x: badgeX + badgeWidth / 2,
           y: badgeY + badgeHeight / 2,
@@ -212,7 +210,7 @@ export class NodeRenderKit {
           fontSize: 8,
           fontWeight: 'bold',
           textFill: badge.fg
-        })
+        }
       });
     }
     return children;
@@ -222,7 +220,6 @@ export class NodeRenderKit {
 
     const {
       textStyle,
-      api,
       height,
       x,
       y,
@@ -251,19 +248,19 @@ export class NodeRenderKit {
         },
         // CRITICAL FOR PAN/ZOOM: Clip the element to the current coordinate system
         clip: ctx.clip,
-        style: api.style({
+        style: {
           fill: isActive
               ? (ctx.colors?.badgeFired ?? '#39e080')
               : (ctx.colors?.textMuted ?? '#6b7280'),
           shadowBlur: isActive ? 8 : 0,
           shadowColor: ctx.colors?.badgeFired ?? '#39e080'
-        })
+        }
       },
 
       // activity label
       {
         type: 'text',
-        style: api.style({
+        style: {
           text: activeText,
 
           x: x + padding + 14,
@@ -271,7 +268,7 @@ export class NodeRenderKit {
           fontSize: 9,
           textFill: ctx.colors?.textMuted ?? '#8690ab',
           textVerticalAlign: 'middle'
-        })
+        }
       }
     ];
   }
@@ -282,7 +279,6 @@ export class NodeRenderKit {
 
     const {
       textStyle,
-      api,
       width,
       height,
       x,
@@ -301,13 +297,13 @@ export class NodeRenderKit {
     return [
       {
         type: 'text',
-        style: api.style({
+        style: {
           text: metricsText,
           x: x + width - (padding + metrics.width),
           y: y + height - (padding + metrics.height),
           fontSize: 9,
           textFill: ctx.colors?.blueText ?? '#93c5fd'
-        })
+        }
       }
     ];
   }
@@ -318,7 +314,6 @@ export class NodeRenderKit {
 
     const {
       textStyle,
-      api,
       width,
       height,
       x,
@@ -339,7 +334,7 @@ export class NodeRenderKit {
     return [
       {
         type: 'text',
-        style: api.style({
+        style: {
           text: metricsText,
           x: x + width - (padding + metrics.width),
           y: y + height - (padding + metrics.height),
@@ -347,7 +342,7 @@ export class NodeRenderKit {
           textFill: emitted
               ? (ctx.colors?.green ?? '#39e080')
               : (ctx.colors?.textMuted ?? '#8690ab')
-        })
+        }
       }
     ];
   }
@@ -358,7 +353,6 @@ export class NodeRenderKit {
 
     const {
       textStyle,
-      api,
       width,
       height,
       x,
@@ -377,13 +371,13 @@ export class NodeRenderKit {
     return [
       {
         type: 'text',
-        style: api.style({
+        style: {
           text: metricsText,
           x: x + width -( padding + metrics.width),
           y: y + height - (padding + metrics.height),
           fontSize: 9,
           textFill: ctx.colors?.blueText ?? '#93c5fd'
-        })
+        }
       }
     ];
   }
@@ -394,7 +388,6 @@ export class NodeRenderKit {
 
     const {
       textStyle,
-      api,
       width,
       height,
       x,
@@ -416,7 +409,7 @@ export class NodeRenderKit {
     return [
       {
         type: 'text',
-        style: api.style({
+        style: {
           text: metricsText,
           x: x + width -( padding + metrics.width),
           y: y + height - (padding + metrics.height),
@@ -424,7 +417,7 @@ export class NodeRenderKit {
           textFill: slow
               ? (ctx.colors?.amber ?? '#f0a500')
               : (ctx.colors?.cyan  ?? '#00d4e8')
-        })
+        }
       }
     ];
   }
