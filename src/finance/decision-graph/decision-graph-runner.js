@@ -23,8 +23,8 @@ class _OffsetSeedMcRunner extends IntlRetirementMcRunner {
     this._seedOffset = seedOffset;
   }
 
-  _perturb(baseParams, i) {
-    return super._perturb(baseParams, i + this._seedOffset);
+  _perturb(baseParams, i, variables) {
+    return super._perturb(baseParams, i + this._seedOffset, variables);
   }
 }
 
@@ -212,6 +212,10 @@ export class DecisionGraphRunner {
     entry.id    = `dg-leaf:${leafIndex}`;
     entry.name  = leaf.label;
     entry.layer = 'analysis-leaf';
+
+    // serializeScenario returns params as a direct reference (not a clone), so
+    // we must clone before mutating to avoid corrupting baseEntry.params in place.
+    entry.params = (entry.params ?? []).map(p => ({ ...p }));
 
     if (Array.isArray(entry.params)) {
       for (const p of entry.params) {
