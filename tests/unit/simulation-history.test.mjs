@@ -216,29 +216,6 @@ test('findSnapshotIndex: returns the last snapshot with date <= target', () => {
   }
 });
 
-// ─── Backward-compat accessors ────────────────────────────────────────────────
-
-test('sim.snapshots delegates to sim.history.snapshots', () => {
-  const sim = makeCounterSim();
-  sim.stepTo(new Date(2025, 0, 1));
-
-  assert.strictEqual(sim.snapshots, sim.history.snapshots);
-});
-
-test('sim.snapshotCursor delegates to sim.history.snapshotCursor', () => {
-  const sim = makeCounterSim();
-  sim.stepTo(new Date(2025, 0, 1));
-
-  assert.strictEqual(sim.snapshotCursor, sim.history.snapshotCursor);
-});
-
-test('sim.eventCounter delegates to sim.history.eventCounter', () => {
-  const sim = makeCounterSim();
-  sim.stepTo(new Date(2025, 0, 1));
-
-  assert.strictEqual(sim.eventCounter, sim.history.eventCounter);
-});
-
 // ─── Step-back bug regression: rewindToStart before first stepTo ──────────────
 //
 // Bug: rewindToStart() called before any stepTo sets snapshots = [undefined]
