@@ -11,25 +11,55 @@
 import { OneOffEvent }                    from '../../simulation-framework/events/one-off-event.js';
 import { DateUtils }                      from '../../simulation-framework/date-utils.js';
 import { ValueType }                      from '../../simulation-framework/type-registry.js';
-import { RATE_KEYS, ROLE_TO_RATE_KEY }    from '../../finance/economic-regimes/rate-keys.js';
+import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY } from '../../finance/economic-regimes/rate-keys.js';
 import { RegimeApplyReducer }             from '../../finance/economic-regimes/regime-apply-reducer.js';
 import { AddRegimeReducer }               from '../../finance/economic-regimes/add-regime-reducer.js';
 import { RemoveRegimeReducer }            from '../../finance/economic-regimes/remove-regime-reducer.js';
 import { RevalueAssetReducer }            from '../../finance/economic-regimes/revalue-asset-reducer.js';
+import { BondPriceAdjustReducer }         from '../../finance/economic-regimes/bond-price-adjust-reducer.js';
 import { EconomicShockHandler }           from '../../finance/economic-regimes/economic-shock-handler.js';
 import { EconomicRecoveryTickHandler }    from '../../finance/economic-regimes/economic-recovery-tick-handler.js';
 import { SHOCK_LIBRARY, SHOCK_PRESET_OPTIONS } from '../../finance/economic-shocks/shock-library.js';
 
 /**
- * Build a rateKey → [stateKey, ...] map from the scenario's registered accounts.
+ * Resolve the rate key for a RealProperty or Collectible (design 28 §4, Step 8).
+ *
+ * When a RealProperty has a `market` code, the rate key is `REAL_ESTATE_{market}`,
+ * enabling regional shocks (e.g. `REAL_ESTATE_US-SF-BAY`). Falls back to the
+ * country-level key (`REAL_ESTATE_US` / `REAL_ESTATE_AU`) when `market` is null.
+ * Collectibles always use `RATE_KEYS.COLLECTIBLE`.
  */
-function buildRateKeyToStateKeys(accounts) {
+export function resolvePropertyRateKey(asset) {
+  if (asset.kind === 'collectible') return RATE_KEYS.COLLECTIBLE;
+  const country = (asset.country ?? 'US').toUpperCase();
+  if (asset.market) return `REAL_ESTATE_${asset.market}`;
+  return RATE_KEYS[`REAL_ESTATE_${country}`] ?? `REAL_ESTATE_${country}`;
+}
+
+/**
+ * Build a rateKey → [stateKey, ...] map from the scenario's registered accounts,
+ * real properties, and collectibles.
+ *
+ * Accounts: role → ROLE_TO_RATE_KEY → rateKey.
+ * Real properties: resolvePropertyRateKey() (market-aware; design 28 §4 Step 8).
+ * Collectibles: RATE_KEYS.COLLECTIBLE.
+ */
+function buildRateKeyToStateKeys(accounts, realProperties = [], collectibles = []) {
   const map = {};
-  for (const acct of accounts) {
-    const rateKey = ROLE_TO_RATE_KEY[acct.role];
-    if (!rateKey || !acct.stateKey) continue;
+  const addEntry = (rateKey, stateKey) => {
+    if (!rateKey || !stateKey) return;
     if (!map[rateKey]) map[rateKey] = [];
-    map[rateKey].push(acct.stateKey);
+    map[rateKey].push(stateKey);
+  };
+
+  for (const acct of accounts) {
+    addEntry(ROLE_TO_RATE_KEY[acct.role], acct.stateKey);
+  }
+  for (const prop of realProperties) {
+    addEntry(resolvePropertyRateKey(prop), prop.stateKey);
+  }
+  for (const col of collectibles) {
+    addEntry(resolvePropertyRateKey(col), col.stateKey);
   }
   return map;
 }
@@ -163,7 +193,7 @@ export const ECONOMIC_REGIMES = {
 
   types: {
     handlers: [EconomicShockHandler, EconomicRecoveryTickHandler],
-    reducers: [RegimeApplyReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer],
+    reducers: [RegimeApplyReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, BondPriceAdjustReducer],
     actions: [
       { type: 'ADD_REGIME_APPLY',    fields: { regime: ValueType.any() } },
       { type: 'REMOVE_REGIME_APPLY', fields: { regimeId: ValueType.text() } },
@@ -214,6 +244,7 @@ export const ECONOMIC_REGIMES = {
       effectiveInflationRates:     { ...baseInflationRates },
       effectiveAppreciationRates:  {},
       effectiveDividendAdjustments:{},
+      priorMarkRates:              {},
     };
   },
 
@@ -229,7 +260,11 @@ export const ECONOMIC_REGIMES = {
   },
 
   handlers(context) {
-    const rateKeyToStateKeys = buildRateKeyToStateKeys(context.accounts);
+    const rateKeyToStateKeys = buildRateKeyToStateKeys(
+      context.accounts,
+      context.realProperties ?? [],
+      context.collectibles   ?? [],
+    );
     return [
       new EconomicShockHandler({ rateKeyToStateKeys }),
       new EconomicRecoveryTickHandler(),
@@ -242,6 +277,7 @@ export const ECONOMIC_REGIMES = {
       new AddRegimeReducer(),
       new RemoveRegimeReducer(),
       new RevalueAssetReducer(),
+      new BondPriceAdjustReducer(),
     ];
   },
 };

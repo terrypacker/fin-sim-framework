@@ -35,38 +35,53 @@ export class Holding {
    * @param {string}      [opts.label='']           - Optional display label ("ITOT", "BND")
    * @param {number|null} [opts.dividendYield=null] - Per-holding annual dividend yield; null = fall back to the
    *                                                  dividend handler's account-level rate (design 28 §7)
+   * @param {Array<{date: Date|string, rate: number}>|null} [opts.appreciationSchedule=null]
+   *                                                - Step-wise appreciation schedule; null = use asset scalar rate
+   * @param {number|null} [opts.duration=null]      - Modified duration in years (BOND holdings only);
+   *                                                  null = fall back to RATE_KEY_META[rateKey].defaultDuration ?? 0
    */
   constructor({
-    id            = null,
+    id                   = null,
     allocation,
-    marketValue   = 0,
-    costBasis     = 0,
-    purchaseDate  = null,
-    rateKey       = null,
-    label         = '',
-    dividendYield = null,
+    marketValue          = 0,
+    costBasis            = 0,
+    purchaseDate         = null,
+    rateKey              = null,
+    label                = '',
+    dividendYield        = null,
+    appreciationSchedule = null,
+    duration             = null,
   } = {}) {
-    this.id            = id;
-    this.allocation    = allocation;
-    this.marketValue   = marketValue;
-    this.costBasis     = costBasis;
-    this.purchaseDate  = purchaseDate;
-    this.rateKey       = rateKey;
-    this.label         = label;
-    this.dividendYield = dividendYield;
+    this.id                   = id;
+    this.allocation           = allocation;
+    this.marketValue          = marketValue;
+    this.costBasis            = costBasis;
+    this.purchaseDate         = purchaseDate;
+    this.rateKey              = rateKey;
+    this.label                = label;
+    this.dividendYield        = dividendYield;
+    this.appreciationSchedule = appreciationSchedule;
+    this.duration             = duration;
   }
 
   toJSON() {
     return {
-      __type:       this.constructor.type,
-      id:           this.id,
-      allocation:   this.allocation,
-      marketValue:  this.marketValue,
-      costBasis:    this.costBasis,
-      purchaseDate: this.purchaseDate ? this.purchaseDate.toISOString() : null,
-      rateKey:       this.rateKey,
-      label:         this.label,
-      dividendYield: this.dividendYield,
+      __type:              this.constructor.type,
+      id:                  this.id,
+      allocation:          this.allocation,
+      marketValue:         this.marketValue,
+      costBasis:           this.costBasis,
+      purchaseDate:        this.purchaseDate ? this.purchaseDate.toISOString() : null,
+      rateKey:             this.rateKey,
+      label:               this.label,
+      dividendYield:       this.dividendYield,
+      appreciationSchedule: this.appreciationSchedule
+        ? this.appreciationSchedule.map(e => ({
+            date: e.date instanceof Date ? e.date.toISOString() : e.date,
+            rate: e.rate,
+          }))
+        : null,
+      duration:            this.duration,
     };
   }
 
@@ -80,6 +95,10 @@ export class Holding {
       rateKey:       d.rateKey ?? null,
       label:         d.label   ?? '',
       dividendYield: d.dividendYield ?? null,
+      appreciationSchedule: d.appreciationSchedule
+        ? d.appreciationSchedule.map(e => ({ date: new Date(e.date), rate: e.rate }))
+        : null,
+      duration:      d.duration ?? null,
     });
   }
 }

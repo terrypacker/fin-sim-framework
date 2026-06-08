@@ -47,6 +47,9 @@ export class RealProperty extends Asset {
    * @param {number|null}   [opts.balanceAtResidencyChange=null] - Value snapshot on first residency change
    * @param {string}        [opts.country='US']                 - 'US' | 'AU' — determines currency and sale tax treatment
    * @param {object|null}   [opts.currency=null]                - Currency descriptor (e.g. USD / AUD from account.js)
+   * @param {Array<{date: Date|string, rate: number}>|null} [opts.appreciationSchedule=null]
+   *                                                            - Step-wise appreciation schedule (design 28 §3)
+   * @param {string|null}   [opts.market=null]                  - Market code, e.g. 'US-SF-BAY' (design 28 §4)
    */
   constructor(initialValue = 0, opts = {}) {
     super(opts.name ?? '', { ...opts, kind: 'real-property' });
@@ -62,5 +65,7 @@ export class RealProperty extends Asset {
     this.balanceAtResidencyChange = opts.balanceAtResidencyChange ?? null;
     this.country                 = opts.country                 ?? 'US';
     this.currency                = opts.currency                ?? null;
+    this.appreciationSchedule    = opts.appreciationSchedule    ?? null;
+    this.market                  = opts.market                  ?? null;
   }
 }
