@@ -180,6 +180,9 @@ export class BaseService {
     this._publishBulkMessage('UPDATE', updated);
   }
 
+  nextId() {
+    return this._generateId(this._idPrefix);
+  }
 
   // ─── Internal helpers ─────────────────────────────────────────────────────
 

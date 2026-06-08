@@ -14,13 +14,9 @@ Last reviewed: 2026-05-29.
 - ~~`src/simulation-framework/simulation-event-graph.js` (`SimulationEventGraph`, `ActionNode`) — still exported from `src/index.js` but no in-tree caller imports it (only the test `simulation-event-graph.test.mjs` and the auto-generated `src/index.js`).~~
 - **Deleted**: `SimulationEventGraph`
 
-### 1.2 `ToolsetRegistry` vs. `ScenarioToolsetRegistry`
-- The header comment in `src/scenarios/toolsets/toolset-registry.js` references a `ScenarioToolsetRegistry` ("Unlike ScenarioToolsetRegistry…") that no longer exists in `src/`.
-- **Direction**: trim the comment or restore the second registry if it's still wanted. The comment is the only evidence it ever existed.
+~~### 1.2 `ToolsetRegistry` vs. `ScenarioToolsetRegistry`~~
 
-### 1.3 `bus` and `serviceBus` are the same EventBus
-- `src/simulation-framework/simulation.js` lines 99–100: `this.serviceBus = bus; this.bus = bus;` — same reference under two names.
-- **Direction**: pick one name. If the future intent is two buses (e.g. service vs. execution), make that real; otherwise drop `serviceBus`.
+~~### 1.3 `bus` and `serviceBus` are the same EventBus~~
 
 ### 1.4 `params` vs. `parameters` vs. `paramSchema`
 - The scenario config carries three overlapping concepts:
@@ -33,7 +29,6 @@ Last reviewed: 2026-05-29.
 ### 1.5 `getAll()` aliasing on `Graph`
 - `src/graph/graph.js` line 44–47:
   ```js
-  //TODO Remove once we get Rid of ConfigGraph as a data source
   getAll() { return this.getNodes(); }
   ```
 - **Direction**: remove `getAll()` once consumers migrate to `getNodes()`. Search for the remaining callers.
@@ -46,14 +41,6 @@ Last reviewed: 2026-05-29.
 - `src/simulation-framework/simulation.js` line 45 — module-local helper, called from `simulation.js`.
 - `src/finance/services/state-schema-registry.js` line 223 — `StateSchemaRegistry.pickActionData()` static method, labelled "Canonical public version" with a comment that `simulation.js` keeps a copy "to avoid cross-layer imports."
 - **Direction**: extract the canonical picker into a shared, dependency-free location (`src/simulation-framework/action-data.js` or similar) so both layers reference the same thing. The state-schema layer importing a finance-aware copy from `src/finance/` is the wrong dependency direction.
-
-### ~~1.8 `prebuilt-scenario.js` overlap with `BaseScenario`~~
-- ~~`src/scenarios/prebuilt-scenario.js` is a thin descriptor wrapper used only by `SimulationWorkbench.PREBUILT_SCENARIOS`. Its `factory` arg duplicates information `BaseScenario.buildDefaultConfig()` could derive.~~
-- **Resolved** by `design/17-scenario-as-graph-node.md`: `prebuilt-scenario.js` deleted; `SimulationWorkbench` now passes `{cls, order, active, simStart, simEnd}` entries; `ScenarioRegistry.loadPrebuilt` constructs scenario nodes directly from the class.
-
-### 1.9 `config-graph.js` no longer exists; `ConfigGraphView` does
-- README and many in-code comments reference `ConfigGraph` as a class. The actual file is `src/visualization/graph-builder/config-graph-view.js` (`ConfigGraphView`). There's no `config-graph.js`.
-- **Direction**: scrub stale "ConfigGraph" references in comments to read `ConfigGraphView`.
 
 ---
 
@@ -105,17 +92,15 @@ There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; se
 - `src/services/action-service.js` line 48: `//TODO Need a type index for this`.
 
 ### 2.10 Many graph-renderer TODOs
-- `src/visualization/components/graph-renderer.js` line 115; `echarts-graph-renderer.js` line 80; `node-render-kit.js` line 13; `graph-builder-controller.js` lines 73, 329 — all signal that the graph rendering layer has multiple unresolved seams (registering listeners, central UI dispatch, etc.).
+- `node-render-kit.js` line 13; GitIssue #347
+- `graph-builder-controller.js` lines 73, 329 — all signal that the graph rendering layer has multiple unresolved seams (registering listeners, central UI dispatch, etc.). GitIssue: #348
 
 ### 2.11 Timezone is unfinished
 - `src/visualization/scenario/scenario-tab-presenter.js` lines 88, 93 (`//TODO #268 Need to deal with timezone here`) and `scenario-tab-view.js` line 176 (`//TODO #268 this should be cleaned up to always be a date or UTC String`).
 - **Direction**: complete the UTC normalization (issue #268). Memory notes the UTC vs local toggle in the header but the persistence path still passes through inconsistent types.
 
 ### 2.12 `intl-retirement-state.js` carries removal-marked code
-- Lines 45, 73 — `//TODO Remove these this should not be needed.` / `//TODO Move to FX When available.` — implies a planned `FX` service.
-
-### 2.13 Five UI prototype HTMLs in `design/ui-prototypes/`
-- `sim-workbench-v1.html`…`sim-workbench-v5.html` — design references, fine to keep, but should be flagged as not-buildable and not part of the dev server. They are currently easy to mistake for runnable entry points.
+- Lines 45, 73 — `//TODO Remove these this should not be needed.` / `//TODO Move to FX When available.` — implies a planned `FX` service. Git Issue #349
 
 ---
 

@@ -11,8 +11,7 @@
 /**
  * ToolsetRegistry — maps toolset IDs to toolset objects for the ScenarioCompiler.
  *
- * Unlike ScenarioToolsetRegistry (which maps string names to classes with a
- * static setup() method), ToolsetRegistry maps uppercase IDs to plain toolset
+ * ToolsetRegistry maps uppercase IDs to plain toolset
  * objects with declarative state/schedules/handlers/reducers methods.
  */
 export class ToolsetRegistry {
