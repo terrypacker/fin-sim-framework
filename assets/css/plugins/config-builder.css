@@ -285,6 +285,9 @@
 .param-type-select { flex: 0 0 72px; align-self: flex-end; }
 .param-row .btn-warn { flex: 0 0 auto; align-self: flex-end; margin-bottom: 1px; }
 .param-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 0.75em;
   font-weight: 600;
   text-transform: uppercase;
@@ -293,8 +296,75 @@
   padding: 6px 4px 2px;
   border-top: 1px solid var(--border);
   margin-top: 4px;
+  cursor: pointer;
+  user-select: none;
 }
 .param-group-header:first-child { border-top: none; margin-top: 0; }
+.param-group-header:hover { color: var(--accent-primary, var(--accent)); }
+
+.param-group-caret {
+  font-size: 8px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Live filter row (text input + field-select dropdown) above the params list. */
+.param-filter-row {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  margin: 2px 0 6px;
+}
+.param-filter {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 3px 8px;
+  font-size: 11px;
+  background: var(--bg-panel2, #111);
+  color: var(--text-primary, #e5e7eb);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+.param-filter::placeholder { color: var(--text-muted); }
+
+/* Field-select multi-select dropdown to the right of the filter. */
+.param-filter-fields { position: relative; flex-shrink: 0; }
+.param-filter-fields-btn {
+  height: 100%;
+  padding: 3px 8px;
+  font-size: 11px;
+  white-space: nowrap;
+  background: var(--bg-panel2, #111);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.param-filter-fields-btn:hover { color: var(--text); border-color: var(--accent); }
+.param-filter-fields-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 2px);
+  z-index: 1000;
+  min-width: 140px;
+  padding: 4px;
+  background: var(--bg-panel, #1a1a1a);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.param-filter-fields-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  font-size: 11px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.param-filter-fields-option:hover { background: var(--bg-panel2); }
 
 /* Linked-node click-through icon on params that target a person/account. */
 .param-link-btn {

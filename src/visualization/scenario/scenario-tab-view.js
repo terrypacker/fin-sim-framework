@@ -48,6 +48,15 @@ export class ScenarioTabView {
     /** @type {function(file)|null} */
     this.onUploadJson = null;
 
+    // Parameters list: live filter substring + per-group expand state.
+    // Mirrors StatePanelView's filter/foldable-section behaviour. Groups are
+    // collapsed by default; absence from _expandedGroups means collapsed.
+    this._paramFilter       = '';
+    this._expandedGroups    = new Set();
+    // Which param fields the filter searches. Defaults to description only.
+    this._paramFilterFields = new Set(['description']);
+    this._activeScenario    = null;
+
     this._bound = false;
     // Bind immediately when DOM elements already exist (test environment).
     // In production the ScenarioPlugin hasn't mounted yet, so bind() must be
@@ -113,6 +122,13 @@ export class ScenarioTabView {
         e.target.style.borderColor = 'red';
       }
     });
+
+    document.getElementById('paramsFilter')?.addEventListener('input', (e) => {
+      this._paramFilter = (e.target.value ?? '').trim().toLowerCase();
+      if (this._activeScenario) this._renderParamsList(this._activeScenario);
+    });
+
+    this._buildFilterFieldSelect(document.getElementById('paramsFilterFields'));
 
     document.getElementById('addParamBtn')?.addEventListener('click', () => {
       if(this.onAddParameter) this.onAddParameter({ name: '', type: 'Number', value: 0 });
@@ -208,22 +224,144 @@ export class ScenarioTabView {
     const container = document.getElementById('paramsList');
     if (!container) return;
     container.innerHTML = '';
+    this._activeScenario = scenario;
     if (!scenario?.params?.length) return;
 
-    let currentGroup = null;
+    // Sort by group in place. Array.sort mutates, so the indices captured below
+    // stay valid for splice-on-delete.
+    scenario.params.sort((a, b) => (a.group ?? '').localeCompare(b.group ?? ''));
 
-    scenario.params.forEach((param, i) => {
+    const filter = this._paramFilter;
+
+    // Group visible params (preserving original index for delete) by group label.
+    const groups = new Map();   // group label → [{ param, index }]
+    scenario.params.forEach((param, index) => {
       if (param.hidden) return;
+      if (filter && !this._paramMatchesFilter(param, filter)) return;
+      const key = param.group || '';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push({ param, index });
+    });
 
-      // ── Group header ──────────────────────────────────────────────────────
-      if (param.group && param.group !== currentGroup) {
-        currentGroup = param.group;
-        const header = document.createElement('div');
-        header.className = 'param-group-header';
-        header.textContent = param.group;
-        container.appendChild(header);
+    for (const [group, entries] of groups) {
+      // Ungrouped params render directly with no (collapsible) header.
+      if (!group) {
+        entries.forEach(({ param, index }) =>
+          container.appendChild(this._buildParamRow(param, index, scenario)));
+        continue;
       }
 
+      // Groups are collapsed by default; an active filter force-expands matches.
+      const expanded = filter !== '' || this._expandedGroups.has(group);
+      container.appendChild(this._buildGroupHeader(group, expanded, scenario));
+      if (!expanded) continue;
+
+      entries.forEach(({ param, index }) =>
+        container.appendChild(this._buildParamRow(param, index, scenario)));
+    }
+  }
+
+  /**
+   * Case-insensitive substring match against the param fields the user opted into
+   * via the filter-field multi-select (defaults to description only).
+   */
+  _paramMatchesFilter(param, filter) {
+    const fields = this._paramFilterFields;
+    const parts = [];
+    if (fields.has('label'))       parts.push(param.label ?? '');
+    if (fields.has('name'))        parts.push(param.name ?? '');
+    if (fields.has('group'))       parts.push(param.group ?? '');
+    if (fields.has('description')) parts.push(param.description ?? '');
+    return parts.join(' ').toLowerCase().includes(filter);
+  }
+
+  /** Build a clickable, collapsible group header (caret + label). */
+  _buildGroupHeader(group, expanded, scenario) {
+    const header = document.createElement('div');
+    header.className = 'param-group-header';
+    if (!expanded) header.classList.add('param-group-header--collapsed');
+
+    const caret = document.createElement('span');
+    caret.className = 'param-group-caret';
+    caret.textContent = expanded ? '▼' : '▶';
+
+    const label = document.createElement('span');
+    label.textContent = group;
+
+    header.append(caret, label);
+    header.addEventListener('click', () => {
+      if (this._expandedGroups.has(group)) this._expandedGroups.delete(group);
+      else this._expandedGroups.add(group);
+      this._renderParamsList(scenario);
+    });
+    return header;
+  }
+
+  /**
+   * Build the filter-field multi-select dropdown — a toggle button plus a popup
+   * of checkboxes controlling which param fields _paramMatchesFilter searches.
+   * Self-contained (no BaseComponent) to match this view's plain-DOM style.
+   */
+  _buildFilterFieldSelect(container) {
+    if (!container) return;
+    container.innerHTML = '';
+
+    const FIELDS = [
+      { key: 'label',       label: 'Label' },
+      { key: 'name',        label: 'Name' },
+      { key: 'group',       label: 'Group' },
+      { key: 'description', label: 'Description' },
+    ];
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'param-filter-fields-btn';
+    btn.title = 'Choose which fields the filter searches';
+
+    const menu = document.createElement('div');
+    menu.className = 'param-filter-fields-menu';
+    menu.style.display = 'none';
+
+    const syncBtnLabel = () => {
+      const sel = FIELDS.filter(f => this._paramFilterFields.has(f.key)).map(f => f.label);
+      btn.textContent = (sel.length === 0 ? 'Search: none'
+        : sel.length === FIELDS.length ? 'Search: all'
+        : `Search: ${sel.join(', ')}`) + ' ▾';
+    };
+
+    FIELDS.forEach(({ key, label }) => {
+      const row = document.createElement('label');
+      row.className = 'param-filter-fields-option';
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = this._paramFilterFields.has(key);
+      cb.addEventListener('change', () => {
+        if (cb.checked) this._paramFilterFields.add(key);
+        else this._paramFilterFields.delete(key);
+        syncBtnLabel();
+        if (this._activeScenario) this._renderParamsList(this._activeScenario);
+      });
+
+      row.append(cb, document.createTextNode(label));
+      menu.appendChild(row);
+    });
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.style.display = menu.style.display === 'none' ? '' : 'none';
+    });
+    // Close when clicking outside the dropdown.
+    document.addEventListener('click', (e) => {
+      if (!container.contains(e.target)) menu.style.display = 'none';
+    });
+
+    syncBtnLabel();
+    container.append(btn, menu);
+  }
+
+  /** Build a single param row (label/value/type/delete). Returns the row element. */
+  _buildParamRow(param, i, scenario) {
       // ── Resolve linked-node label/state (account or person) ───────────────
       // For params with a `node` declaration, derive the displayed label from
       // the live account/person so that renaming an account in the
@@ -359,8 +497,7 @@ export class ScenarioTabView {
       });
       row.appendChild(delBtn);
 
-      container.appendChild(row);
-    });
+      return row;
   }
 
   /**

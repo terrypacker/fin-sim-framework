@@ -37,6 +37,11 @@ export class ScenarioPlugin extends WorkbenchComponent {
       <textarea id="initialStateJson" rows="5" class="wb-scenario-textarea"></textarea>
     </div>
     <div class="node-header">Parameters</div>
+    <div class="param-filter-row">
+      <input id="paramsFilter" class="param-filter" type="text"
+             placeholder="Filter parameters (e.g. inflation, wage, retirement)…" />
+      <div id="paramsFilterFields" class="param-filter-fields"></div>
+    </div>
     <div id="paramsList"></div>
     <div class="wb-scenario-param-add">
       <button class="btn btn-sm" id="addParamBtn">+ Add Parameter</button>

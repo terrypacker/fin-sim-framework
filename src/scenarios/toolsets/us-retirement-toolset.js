@@ -233,13 +233,13 @@ export const US_RETIREMENT = {
       },
       {
         key: 'monthlyExpenses', label: 'Monthly Expenses (USD)',
-        type: 'Number', group: 'US Retirement', mc: true, opt: true,
+        type: 'Number', group: 'Spending', mc: true, opt: true,
         defaultValue: 6_000,
         description: 'Monthly household expenses drawn from savings',
       },
       {
         key: 'inflationAdjust', label: 'Inflation-Adjust Expenses',
-        type: 'Boolean', group: 'US Retirement', mc: false, opt: true,
+        type: 'Boolean', group: 'Spending', mc: false, opt: true,
         defaultValue: true,
         description: 'If true, monthly expenses grow with inflation each year',
       },
