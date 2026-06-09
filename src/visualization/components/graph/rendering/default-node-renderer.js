@@ -31,7 +31,7 @@ export class DefaultNodeRenderer {
 export class NodeRenderGroup {
   constructor(...children) {
     this.type = 'group';
-
+    this.emphasisDisabled = true;
     this.children = children.flatMap(c => {
       if (!c) return [];
       if (Array.isArray(c)) return c;
