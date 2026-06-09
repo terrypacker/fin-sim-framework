@@ -14,6 +14,10 @@ import { NodeRenderKit } from "./node-render-kit.js";
 import {ActionNodeRenderer} from "./action-node-renderer.js";
 import {EventNodeRenderer} from "./event-node-renderer.js";
 import {HandlerNodeRenderer} from "./handler-node-renderer.js";
+import {PersonNodeRenderer} from "./person-node-renderer.js";
+import {AccountNodeRenderer} from "./account-node-renderer.js";
+import {RealPropertyNodeRenderer} from "./real-property-node-renderer.js";
+import {CollectibleNodeRenderer} from "./collectible-node-renderer.js";
 
 export class NodeRendererRegistry {
   constructor() {
@@ -48,6 +52,26 @@ export class NodeRendererRegistry {
     this.register(
         'reducer',
         new ReducerNodeRenderer(renderKit)
+    );
+
+    this.register(
+        'person',
+        new PersonNodeRenderer(renderKit)
+    );
+
+    this.register(
+        'account',
+        new AccountNodeRenderer(renderKit)
+    );
+
+    this.register(
+        'real-property',
+        new RealPropertyNodeRenderer(renderKit)
+    );
+
+    this.register(
+        'collectible',
+        new CollectibleNodeRenderer(renderKit)
     );
 
     this.register(
