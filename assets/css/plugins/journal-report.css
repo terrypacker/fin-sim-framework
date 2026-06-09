@@ -169,6 +169,30 @@
   text-align: right;
 }
 
+.jr-th--sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.jr-th--sortable:hover {
+  color: var(--text);
+}
+
+.jr-sort-icon {
+  font-size: 8px;
+  margin-left: 2px;
+  vertical-align: middle;
+}
+
+.jr-sort-icon--neutral {
+  opacity: 0.35;
+}
+
+.jr-sort-icon--asc,
+.jr-sort-icon--desc {
+  color: var(--blue-text);
+}
+
 .jr-td {
   padding: 3px 8px;
   color: var(--text);

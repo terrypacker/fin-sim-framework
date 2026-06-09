@@ -1,9 +1,10 @@
 # 16 — Journal Reporting Plugin
 
-> **Status:** Draft / discussion. Sections marked **OPEN** still need decisions before
-> implementation can start. The targeted problem (drill-down from US/AU tax modal)
-> is intentionally framed as Phase 1 of a larger Journal Reporting capability so
-> the small fix and the long-term shape stay consistent.
+> **Status: COMPLETE.** Phases 1–3 and §13 (Sort & Ordering) are all implemented
+> and live (May–June 2026). Phase 4 (saved user queries) remains deferred.
+> 9 ReportDefinitions registered; perDiff/perPerson projection modes; cc/period/
+> multiselect facets with cc-reactive period options; sortable column headers;
+> chronological child rows; CSV export. All OPEN questions resolved in-line below.
 
 ---
 
@@ -296,10 +297,7 @@ The first three are what the tax-modal drill-down opens. The fourth proves
 the plugin works as a standalone reporting view (validates we didn't
 accidentally overfit to tax docs).
 
-**OPEN — should `ReportDefinition` live in `src/finance/` or under
-`src/visualization/workbench/plugins/finance/`?** Leaning toward `src/finance/`
-since definitions are headless (they only describe queries and aggregations).
-The plugin only handles rendering.
+**Resolved:** `ReportDefinition` lives in `src/finance/journal-reporting/report-definition-registry.js` — the `src/finance/` location confirmed. Definitions are headless (queries and aggregations only); the plugin handles rendering.
 
 ---
 
@@ -415,7 +413,7 @@ Two reasons drove the "open the plugin" choice:
 
 Each phase is independently shippable.
 
-### Phase 1 — Targeted drill-down (smallest viable cut)
+### Phase 1 — Targeted drill-down ✓ COMPLETE (May 2026)
 
 Goal: clicking Ordinary Income / Capital Gains in the tax modal opens a
 working Journal Report panel pre-filtered.
@@ -439,7 +437,7 @@ working Journal Report panel pre-filtered.
      modal's Gross Ordinary Income line item (regression guard for
      §6.1's contract).
 
-### Phase 2 — Cash-flow report + state-diff projection
+### Phase 2 — Cash-flow report + state-diff projection ✓ COMPLETE (May 2026)
 
 Goal: prove the plugin is useful outside the tax drill-down.
 
@@ -451,10 +449,15 @@ Goal: prove the plugin is useful outside the tax drill-down.
 4. Add CSV export reusing the existing timeline-CSV flattening pattern
    (see `project_timeline_csv` memory).
 
-### Phase 3 — More definitions + faceted UX polish
+### Phase 3 — More definitions + faceted UX polish ✓ COMPLETE (May 2026)
+
+All four sub-tasks below shipped. Additional work done beyond the original
+spec: `perPerson` projection mode for AU per-person tax (`AuTaxByPersonYearDef`);
+`periodOfTaxYear()` helper splitting settle/payment semantics from income
+semantics (see §10.3 / Phase 3c-fix in implementation notes).
 
 1. Add definitions: *Withdrawals by Account*, *Tax Paid by Year*, *Roth
-   Conversions by Year*, *Real Property Cash Flow*.
+   Conversions by Year*, *Real Property Cash Flow*, *AU Tax by Person & Year*.
 2. `FacetPanel` improvements: account-stateKey multiselect powered by
    `StateRegistry`, person multiselect from `personService`.
    **Status (Phase 3B — done May 2026):** plugin gained a `multiselect` facet
@@ -554,20 +557,14 @@ drillable visually.
 
 Note: `TaxPaidByYearDef` no longer advertises a person facet — `TAX_PAYMENT_DEBIT` is structurally household-only (carries only `{ amount, cc }`). For per-person AU breakdowns, use `au-tax-by-person-year`.
 
-### 10.2 Per-person AU drill-down — Phase 1 falls back to household totals
+### 10.2 Per-person AU drill-down — ✓ Resolved (May 2026)
 
-`personTaxDetails` is an array; the modal renders one tab per person.
-Faithful per-person drill-down would require *every* AU income action type to
-populate `action.data.personKey` so the query can scope to one person's
-sources. Wages already does (per the `project_au_per_person_tax` memory) but
-the rest is not audited.
-
-**Phase 1 decision:** do not audit. Drill-down from a per-person AU tab
-opens the report with `cc: 'AU'` and **no** `personKey` facet set — i.e. it
-shows the household total breakdown. The plugin's facet panel exposes a
-person dropdown so the user can narrow it manually if they want; values
-that didn't populate `personKey` are bucketed under "Unattributed" rather
-than dropped. A later phase can audit and tighten the attribution.
+Per-person AU tax is handled by the dedicated `au-tax-by-person-year` report
+(see §10.2a above) rather than patching `ordinary-income-by-source`. Ordinary
+income drill-down from the AU per-person tab still opens with `cc: 'AU'` and
+no `personKey` set (household total), matching the Phase 1 decision. The
+`personKeys` multiselect on that report lets users narrow manually; entries
+lacking `personKey` bucket under "Unattributed."
 
 ### 10.3 Period facet across tax-year boundaries
 
@@ -591,34 +588,31 @@ most-recent settled period for that cc). `JOURNAL_REPORT_OPEN` selects the
 matching option, or injects a transient `Custom (<date>)` option when the
 drill-seeded period doesn't enumerate.
 
-### 10.4 Period boundaries when the user has rewound
+### 10.4 Period boundaries when the user has rewound — ✓ Resolved (May 2026)
 
-If the user has scrubbed back to mid-year, the trailing `TAX_SETTLE_APPLY`
-doesn't exist yet. `periodOf()` needs a "current period in progress" fallback:
-use `[prevSettleTs ?? simStart, now]`. Acceptable behavior; just call it out
-in the helper docs.
+`JournalQueryApi.currentInProgressPeriod(cc)` handles the mid-year scrub case:
+returns `{ fromEntryId: <lastSettleId>, toEntryId: null, label: 'Current (in progress)' }`
+when post-settle activity exists but no new settle has run. The `periodOf()`
+null-upper-bound path already treats this as "include everything after
+`fromSeq`." The plugin shows a "Current (in progress)" option in the period
+select in this state.
 
-### 10.5 Where `JournalReportingService` ends and the new registry begins
+### 10.5 Where `JournalReportingService` ends and the new registry begins — ✓ Resolved (May 2026)
 
-Two registries (`JournalReportingService` keyed by `action.type`,
-`ReportDefinitionRegistry` keyed by `reportId`) is more honest than
-overloading the existing service. Keep them separate. Phase 1 will instantiate
-both side-by-side in `BaseApp` (next to `_reportingService` and
-`_taxDocModal`).
+`ReportDefinitionRegistry` (keyed by `reportId`) ships as a separate registry
+alongside `JournalReportingService` (keyed by `action.type`). Both instantiated
+in `WorkbenchApp`. No overloading.
 
-### 10.6 `Journal.enabled` is opt-in
+### 10.6 `Journal.enabled` is opt-in — ✓ Resolved (May 2026)
 
-Today `Journal` defaults to `enabled: false`. `BaseApp` flips it on for the
-workbench. The plugin must hard-fail gracefully when the journal is empty
-(show a "Run a simulation to populate reports" placeholder). Tests should
-cover the `enabled:false` path.
+`Journal` defaults to `enabled: false`; `WorkbenchApp` flips it on. The plugin
+shows "Run a simulation to populate reports" when the journal is empty, covering
+the `enabled:false` path.
 
-### 10.6 Plugin lives in the finance package
+### 10.7 Plugin lives in the finance package — ✓ Resolved (May 2026)
 
-`FINANCE_PLUGINS` is the right home. The plugin reads tax-aware report
-definitions and `StateSchemaRegistry`-aware formatting, neither of which
-the generic workbench owns. Keeps the simulation-framework dependency-free
-of reporting concerns.
+`FINANCE_PLUGINS` is the home. Plugin registered in
+`src/visualization/workbench/plugins/finance/finance-plugin-package.js`.
 
 ---
 
@@ -651,6 +645,177 @@ of reporting concerns.
    `drillReport` even though its sign is flipped in the form. The plugin
    shows the underlying entries as positive amounts under a labelled
    heading. §6.2, §10.1.
+
+---
+
+## 13. Sort & Ordering Upgrade ✓ COMPLETE (June 2026)
+
+### 13.1 Problem
+
+Two ordering issues affect the current plugin:
+
+1. **Group rows** are sorted only by aggregate total descending (hardcoded in
+   `_runQuery()`). For time-series reports — *Tax Paid by Year*, *AU Tax by
+   Person & Year*, *Roth Conversions by Year* — descending-total order puts the
+   biggest year first, not the earliest, which is disorienting. Users also want
+   to be able to re-sort by count or by the group label on any report.
+
+2. **Child rows** (the expanded detail entries within a group) are in journal
+   traversal order (insertion / seq order). While broadly chronological, seq
+   order is not guaranteed to match wall-clock time when multiple events share
+   a date, and it is never labeled or exposed to the user. Chronological
+   (ascending `ts`) is the only natural order for these rows.
+
+### 13.2 `defaultSort` on `ReportDefinition`
+
+`ReportDefinition` gains one optional getter that describes the sort to apply
+to aggregate groups when the report first loads (or when a facet change
+re-runs the query):
+
+```js
+/**
+ * Default sort applied to aggregate groups.
+ * @returns {Array<{field: string, dir: 'asc'|'desc'}>}
+ */
+get defaultSort() { return [{ field: 'total', dir: 'desc' }]; }
+```
+
+The base-class default (`total desc`) preserves current behavior for income and
+capital-gains reports, where "biggest bucket first" is still the most useful
+initial view.
+
+**Overrides for time-series reports:**
+
+| Report | `defaultSort` |
+|---|---|
+| `tax-paid-by-year` | `[{ field: 'year', dir: 'asc' }]` |
+| `au-tax-by-person-year` | `[{ field: 'year', dir: 'asc' }]` |
+| `roth-conversions-by-year` | `[{ field: 'year', dir: 'asc' }]` |
+
+For these three, ascending year puts 2025 before 2026, which matches how users
+scan a tax history. The user can still click the header to flip to descending.
+
+### 13.3 User-controlled column sort (clickable headers)
+
+The `<thead>` row gains sortable column affordances. A single delegated click
+listener on `<thead>` handles all header clicks:
+
+- Click an **inactive** column → set it as the active sort, direction `asc`
+  (except `total` and `count` where descending is the natural first-click
+  direction).
+- Click the **active** column → toggle direction (`asc` ↔ `desc`).
+- The active column header displays a directional indicator (`▲` asc, `▼`
+  desc); inactive sortable columns display a neutral `⇅`.
+
+**Sortable columns:**
+
+| Column | Sort field | Notes |
+|---|---|---|
+| First group-by label (e.g. *Action Type*, *Year*) | The first `defaultGroupBy` field value as a string | Alphabetical / lexicographic |
+| **Count** | `count` | |
+| **Total / Change** | `total` (falls back to `gain` for capital-gains reports) | |
+
+Multi-field group-by reports (e.g. *Capital Gains by Disposal* groups by
+`['actionType', 'description']`) only make the first column sortable; the
+second column is informational.
+
+**Sort state in the plugin:**
+
+```js
+// New field — initialized from def.defaultSort when report activates
+this._sortState = null;   // { field: string, dir: 'asc'|'desc' } | null
+```
+
+`_sortState` is reset to `def.defaultSort[0]` when:
+- The user picks a new report from the picker.
+- `JOURNAL_REPORT_OPEN` activates a report.
+
+`_sortState` is **preserved** when the user changes a facet value (the groups
+are re-fetched but the user's chosen sort column stays active, since they
+presumably sorted to investigate something and changing a facet shouldn't
+reset their work).
+
+Sorting is applied in `_renderResults()` over a **shallow copy** of
+`this._groups` immediately before building the row HTML, so the canonical
+`_groups` array is never mutated. The `QueryApi.aggregate()` `sort` option
+is no longer used; the plugin owns the sort step entirely (simpler, avoids
+a round-trip through the async query path on every header click).
+
+```js
+// In _renderResults():
+const sorted = [...this._groups];
+if (this._sortState) {
+  const { field, dir } = this._sortState;
+  const sign = dir === 'asc' ? 1 : -1;
+  sorted.sort((a, b) => {
+    const av = _sortValue(a, field);
+    const bv = _sortValue(b, field);
+    return av < bv ? -sign : av > bv ? sign : 0;
+  });
+}
+```
+
+`_sortValue(group, field)` handles:
+- `'total'` → `group.total ?? group.gain ?? 0`
+- `'count'` → `group.count ?? 0`
+- Anything else (group-by key field) → `String(group.key[field] ?? '')` for
+  lexicographic comparison. Year-keyed reports benefit from this naturally
+  since `'2025' < '2026'` lexicographically.
+
+### 13.4 Child row ordering
+
+Child rows (`g.items`) are **always** sorted by `ts` ascending (chronological)
+regardless of the active group sort. This is done in `_renderResults()` over a
+sorted copy of `g.items`; the original group object is not mutated.
+
+```js
+// In _renderResults(), when rendering expanded items:
+const chronItems = [...g.items].sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0));
+for (const item of chronItems) { … }
+```
+
+This is a one-time sort per render; no async re-query is needed. For reports
+with hundreds of items per group the cost is negligible.
+
+### 13.5 CSV export
+
+`_generateCsv()` iterates `this._groups` directly (not the sorted copy in
+`_renderResults`). After this change it should use `_sortedGroups()` — a new
+private helper that applies the same sort logic — so the CSV matches what the
+user sees on screen. Child items within each group are emitted in the same
+chronological order as the expanded UI.
+
+### 13.6 Implementation tasks (in priority order)
+
+| # | Task | Scope | Notes |
+|---|---|---|---|
+| 1 | **Child rows: sort by `ts` ascending** | `_renderResults()` | Two-line change: `[...g.items].sort((a,b) => …)`. Smallest fix, highest value. |
+| 2 | **`defaultSort` getter on `ReportDefinition`** | `report-definition-registry.js` | Base class returns `[{ field:'total', dir:'desc' }]`; override in TaxPaidByYear, AuTaxByPersonYear, RothConversionsByYear to `[{ field:'year', dir:'asc' }]`. |
+| 3 | **`_sortState` field + `_sortedGroups()` helper** | `journal-report-plugin.js` | Initialize from `def.defaultSort[0]` on report activation; apply in `_renderResults()` and `_downloadCsv()`. |
+| 4 | **Clickable column headers** | `_renderResults()` + `onMount()` | Emit `<th>` with `data-sort-field`; single delegated `click` on `<thead>`; toggle/set `_sortState` then `_renderResults()`. |
+| 5 | **Tests** | `journal-report-plugin.test.mjs` | (a) child rows in date order after expand; (b) group sort by total/count/label; (c) header click toggles direction; (d) `defaultSort` of year-based reports shows ascending default. |
+
+### 13.7 Decisions
+
+1. **Sort owned by plugin, not `aggregate()`** — `aggregate()` already accepts
+   a `sort` option and the plugin currently passes `[{ field:'total', dir:'desc' }]`.
+   For interactive column sorting, re-running the full async query on each
+   header click would be wasteful. Moving sort responsibility to the plugin's
+   render step keeps it synchronous and avoids latency. The `aggregate()` `sort`
+   param will no longer be passed by the plugin; its own internal sort remains
+   for other future callers.
+
+2. **Child rows always chronological** — user-controlled sort on child rows
+   (e.g. "sort child entries by amount") is not in scope. The natural question
+   answered by expanding a group is "what happened and when?", which is
+   chronological order. If amount-sorted child rows become a request, it can be
+   added as a second-level sort affordance later.
+
+3. **`defaultSort` on `ReportDefinition` (not on facets)** — the sort is a
+   view-level concern, not a query/filter concern, so it belongs on the
+   definition alongside `defaultGroupBy` / `defaultAggregates`. This keeps
+   `buildQuery()` pure (predicates only) and the plugin responsible for all
+   presentation-layer decisions.
 
 ---
 

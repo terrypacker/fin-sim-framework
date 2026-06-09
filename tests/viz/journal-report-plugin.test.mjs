@@ -409,6 +409,161 @@ test('Period facet: JOURNAL_REPORT_OPEN selects the option matching incoming par
   expect(plugin._facetValues.period).toEqual({ fromEntryId: null, toEntryId: 'us-25' });
 });
 
+// ─── §13: Sort & Ordering Upgrade ─────────────────────────────────────────────
+
+test('Sort: child rows are rendered in chronological order (ts ascending) when a group is expanded', () => {
+  const { plugin, host } = makePlugin();
+  plugin._activeReportId = 'ordinary-income-by-source';
+  plugin._journal = { journal: [{}] };
+  // Items intentionally out of order: Mar, Jan, Feb.
+  // Use noon-UTC timestamps so toLocaleDateString never shifts to the prior day
+  // in UTC-behind timezones (e.g. US/Pacific).
+  const tsJan = Date.UTC(2030, 0, 15, 12);
+  const tsFeb = Date.UTC(2030, 1, 15, 12);
+  const tsMar = Date.UTC(2030, 2, 15, 12);
+  plugin._groups = [
+    {
+      key: { actionType: 'WAGES' },
+      count: 3,
+      total: 1500,
+      items: [
+        { ts: tsMar, date: new Date(tsMar), actionType: 'WAGES', description: 'c', amount: 500 },
+        { ts: tsJan, date: new Date(tsJan), actionType: 'WAGES', description: 'a', amount: 500 },
+        { ts: tsFeb, date: new Date(tsFeb), actionType: 'WAGES', description: 'b', amount: 500 },
+      ],
+    },
+  ];
+  plugin._grandTotal = 1500;
+  plugin._renderResults();
+
+  // Expand the row
+  const row = host.querySelector('.jr-group-row');
+  row.querySelector('.jr-expand-btn').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+  const childDates = [...host.querySelectorAll('.jr-child-date')].map(el => el.textContent.trim());
+  // Dates should appear in ascending chronological order
+  expect(childDates[0]).toMatch(/Jan/);
+  expect(childDates[1]).toMatch(/Feb/);
+  expect(childDates[2]).toMatch(/Mar/);
+});
+
+test('Sort: defaultSort is total desc for income reports, year asc for year-keyed reports', () => {
+  const { plugin } = makePlugin();
+
+  plugin._openReport('ordinary-income-by-source', {});
+  expect(plugin._sortState).toEqual({ field: 'total', dir: 'desc' });
+
+  plugin._openReport('tax-paid-by-year', {});
+  expect(plugin._sortState).toEqual({ field: 'year', dir: 'asc' });
+
+  plugin._openReport('au-tax-by-person-year', {});
+  expect(plugin._sortState).toEqual({ field: 'year', dir: 'asc' });
+
+  plugin._openReport('roth-conversions-by-year', {});
+  expect(plugin._sortState).toEqual({ field: 'year', dir: 'asc' });
+});
+
+test('Sort: clicking the Total column header sets sortState to total desc on first click, then toggles', () => {
+  const { plugin, host } = makePlugin();
+  seedThreeGroups(plugin);  // _sortState is null at this point
+
+  // First click on Total (not yet active) → default dir for 'total' = desc
+  let totalTh = host.querySelector('[data-sort-field="total"]');
+  totalTh.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(plugin._sortState).toEqual({ field: 'total', dir: 'desc' });
+
+  // Second click (now active) → toggle to asc. Re-query after re-render.
+  totalTh = host.querySelector('[data-sort-field="total"]');
+  totalTh.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(plugin._sortState).toEqual({ field: 'total', dir: 'asc' });
+
+  // Third click → toggle back to desc.
+  totalTh = host.querySelector('[data-sort-field="total"]');
+  totalTh.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(plugin._sortState).toEqual({ field: 'total', dir: 'desc' });
+});
+
+test('Sort: clicking the Count column header sets sort to count desc on first click', () => {
+  const { plugin, host } = makePlugin();
+  seedThreeGroups(plugin);
+
+  const countTh = host.querySelector('[data-sort-field="count"]');
+  countTh.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(plugin._sortState).toEqual({ field: 'count', dir: 'desc' });
+});
+
+test('Sort: clicking a label column header sets sort asc on first click, then toggles', () => {
+  const { plugin, host } = makePlugin();
+  seedThreeGroups(plugin);
+
+  // The first group-by field for ordinary-income-by-source is 'actionType'.
+  let labelTh = host.querySelector('[data-sort-field="actionType"]');
+  labelTh.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(plugin._sortState).toEqual({ field: 'actionType', dir: 'asc' });
+
+  // Toggle to desc — re-query after re-render so we click the live element.
+  labelTh = host.querySelector('[data-sort-field="actionType"]');
+  labelTh.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(plugin._sortState).toEqual({ field: 'actionType', dir: 'desc' });
+});
+
+test('Sort: group rows are rendered in the order dictated by _sortState', () => {
+  const { plugin, host } = makePlugin();
+  // Seed groups: WAGES=1000, INTEREST=250, DIVIDEND=750
+  // Explicitly start with total desc so the initial render is sorted.
+  plugin._activeReportId = 'ordinary-income-by-source';
+  plugin._journal = { journal: [{}] };
+  plugin._sortState = { field: 'total', dir: 'desc' };
+  plugin._groups = [
+    { key: { actionType: 'WAGES'    }, count: 2, total: 1000, items: [] },
+    { key: { actionType: 'INTEREST' }, count: 1, total:  250, items: [] },
+    { key: { actionType: 'DIVIDEND' }, count: 3, total:  750, items: [] },
+  ];
+  plugin._grandTotal = 2000;
+  plugin._renderResults();
+
+  const labels = () => [...host.querySelectorAll('.jr-group-label')].map(el => el.textContent);
+  // total desc: 1000, 750, 250
+  expect(labels()).toEqual(['WAGES', 'DIVIDEND', 'INTEREST']);
+
+  // Click total (active desc) → toggles to asc: 250, 750, 1000
+  host.querySelector('[data-sort-field="total"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(labels()).toEqual(['INTEREST', 'DIVIDEND', 'WAGES']);
+});
+
+test('Sort: _sortState is preserved when a facet changes (sort column survives query re-run)', () => {
+  const { plugin, host } = makePlugin();
+  seedThreeGroups(plugin);
+
+  // Sort by count desc
+  host.querySelector('[data-sort-field="count"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(plugin._sortState.field).toBe('count');
+
+  // Simulate facet change triggering _runQuery (we stub it to re-seed groups
+  // then re-render, just like a real query would).
+  plugin._groups = [
+    { key: { actionType: 'WAGES'    }, count: 5, total: 2000, items: [] },
+    { key: { actionType: 'INTEREST' }, count: 2, total:  500, items: [] },
+  ];
+  plugin._renderResults();
+
+  // Sort state should still be count desc after re-render.
+  expect(plugin._sortState).toEqual({ field: 'count', dir: 'desc' });
+  const labels = [...host.querySelectorAll('.jr-group-label')].map(el => el.textContent);
+  expect(labels).toEqual(['WAGES', 'INTEREST']);  // count 5, 2 → desc
+});
+
+test('Sort: active sort column shows directional indicator in header; inactive shows neutral', () => {
+  const { plugin, host } = makePlugin();
+  plugin._sortState = { field: 'total', dir: 'desc' };
+  seedThreeGroups(plugin);
+
+  const totalTh = host.querySelector('[data-sort-field="total"]');
+  const countTh = host.querySelector('[data-sort-field="count"]');
+  expect(totalTh.querySelector('.jr-sort-icon--desc')).not.toBeNull();
+  expect(countTh.querySelector('.jr-sort-icon--neutral')).not.toBeNull();
+});
+
 test('Period facet: JOURNAL_REPORT_OPEN with non-enumerated period injects a transient option', () => {
   const { plugin, host, runtime } = makePlugin();
   // The journal has us-25 + us-26 settles, but the drill targets a one-off
