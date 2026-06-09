@@ -614,19 +614,23 @@ export class EChartsGraphRenderer extends BaseComponent {
     // (NODE_WIDTH × NODE_HEIGHT) regardless of zoom, so checking data-space
     // distances would give an area that shrinks when zoomed out and grows
     // when zoomed in, making grabs unreliable.
-    // We already have a selected node to ONLY pixel test that one
-    const pos = this._positions.get(this.selectedNodeId);
-    if (!pos) return;
-    const [nodePx, nodePy] = this._dataToPixel(pos.x, pos.y);
-    const deltaX = Math.abs(nodePx - px);
-    //Give us a little extra as we don't need to be exact since we already have the tooltip + select logic helping
-    const xRange = (NODE_WIDTH + 10) /2;
-    const yRange = (NODE_HEIGHT + 10) /2;
-    const deltaY = Math.abs(nodePy - py);
-    if (deltaX <= xRange &&
-        deltaY <= yRange) {
-      this._dragNodeId = this.selectedNodeId;
-      return;
+    // ECharts' 'showTip' handler has already resolved which node is under the
+    // cursor (it handles layering/overlap cleanly) and stored it as
+    // selectedNodeId, so we only pixel-test that one node. If no node is
+    // selected, or the cursor missed it, we fall through to panning.
+    const pos = this.selectedNodeId ? this._positions.get(this.selectedNodeId) : null;
+    if (pos) {
+      const [nodePx, nodePy] = this._dataToPixel(pos.x, pos.y);
+      const deltaX = Math.abs(nodePx - px);
+      const deltaY = Math.abs(nodePy - py);
+      // A little extra slack — we don't need to be exact since the tooltip +
+      // select logic has already identified the intended node.
+      const xRange = (NODE_WIDTH  + 10) / 2;
+      const yRange = (NODE_HEIGHT + 10) / 2;
+      if (deltaX <= xRange && deltaY <= yRange) {
+        this._dragNodeId = this.selectedNodeId;
+        return;
+      }
     }
     const { xMin, xMax, yMin, yMax } = this._viewRange;
     this._panStart = { px, py, xMin, xMax, yMin, yMax };
