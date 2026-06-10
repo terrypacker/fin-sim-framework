@@ -24,42 +24,51 @@ function fmtK(v) {
   return sign + '$' + (abs / 1000).toFixed(0) + 'k';
 }
 
+const METRIC_FIELD = {
+  netWorthUsd:  'finalNetWorthUsd',
+  netLiquidity: 'finalNetLiquidity',
+};
+
+const METRIC_SERIES_FIELD = {
+  netWorthUsd:  'netWorthUsd',
+  netLiquidity: 'netLiquidity',
+};
+
 /**
  * Select at most 6 representative runs from the full MC results.
  * Deduplicates by seed so the same run doesn't appear twice.
- *
- * @param {Array}  runs    - Full runs array from IntlRetirementMcRunner.
- * @param {object} summary - Summary from ScenarioRunner.summarize().
- * @returns {Array<{ label: string, run: object }>}
+ * Representatives are chosen relative to the active metric.
  */
-function selectRepresentativeRuns(runs, summary) {
+function selectRepresentativeRuns(runs, summary, metric) {
   if (!runs.length) return [];
 
-  const sorted = [...runs].sort((a, b) => a.finalNetWorthUsd - b.finalNetWorthUsd);
+  const field = METRIC_FIELD[metric] ?? 'finalNetWorthUsd';
+  const sorted = [...runs].sort((a, b) => (a[field] ?? 0) - (b[field] ?? 0));
   const best   = sorted.at(-1);
   const worst  = sorted[0];
 
-  const p50    = summary.p50 ?? 0;
+  const p50 = summary.p50 ?? 0;
   const median = runs.reduce((c, r) =>
-    Math.abs(r.finalNetWorthUsd - p50) < Math.abs(c.finalNetWorthUsd - p50) ? r : c
+    Math.abs((r[field] ?? 0) - p50) < Math.abs((c[field] ?? 0) - p50) ? r : c
   );
 
+  const seriesField = METRIC_SERIES_FIELD[metric] ?? 'netWorthUsd';
   const mostVolatile = runs.reduce((most, r) => {
-    const a = stddev((r.timeSeries    ?? []).map(p => p.netWorthUsd));
-    const b = stddev((most.timeSeries ?? []).map(p => p.netWorthUsd));
+    const a = stddev((r.timeSeries    ?? []).map(p => p[seriesField] ?? 0));
+    const b = stddev((most.timeSeries ?? []).map(p => p[seriesField] ?? 0));
     return a > b ? r : most;
   });
 
-  const failures    = runs.filter(r => r.scenarioFailed && r.outOfFundsDate);
-  const earlyFail   = failures.length
+  const failures  = runs.filter(r => r.scenarioFailed && r.outOfFundsDate);
+  const earlyFail = failures.length
     ? failures.reduce((e, r) => r.outOfFundsDate < e.outOfFundsDate ? r : e)
     : null;
 
   const candidates = [
-    { label: 'Best',          run: best          },
-    { label: 'Worst',         run: worst         },
-    { label: 'Median',        run: median        },
-    { label: 'Most Volatile', run: mostVolatile  },
+    { label: 'Best',          run: best         },
+    { label: 'Worst',         run: worst        },
+    { label: 'Median',        run: median       },
+    { label: 'Most Volatile', run: mostVolatile },
   ];
   if (earlyFail) candidates.push({ label: 'Early Failure', run: earlyFail });
 
@@ -76,6 +85,7 @@ function selectRepresentativeRuns(runs, summary) {
  *
  * Displays up to 6 representative runs (Best, Worst, Median, Most Volatile,
  * Early Failure). Each row has a Replay button that fires onRunSelected(run).
+ * Representatives and displayed values respond to the active metric.
  *
  * Callbacks:
  *   onRunSelected(run) — fired when the user clicks Replay on a row.
@@ -96,9 +106,9 @@ export class McRunsPanel extends BaseComponent {
     this._renderIdle();
   }
 
-  showResults(summary, runs) {
+  showResults(summary, runs, metric = 'netWorthUsd') {
     this._container.innerHTML = '';
-    const reps = selectRepresentativeRuns(runs, summary);
+    const reps = selectRepresentativeRuns(runs, summary, metric);
 
     const wrapper = document.createElement('div');
     wrapper.className = 'mc-runs-wrapper';
@@ -115,7 +125,7 @@ export class McRunsPanel extends BaseComponent {
       wrapper.appendChild(empty);
     } else {
       for (const { label, run } of reps) {
-        wrapper.appendChild(this._buildRow(label, run));
+        wrapper.appendChild(this._buildRow(label, run, metric));
       }
     }
 
@@ -129,7 +139,9 @@ export class McRunsPanel extends BaseComponent {
       '<div class="mc-idle-msg"><span>Run Monte Carlo to see representative scenarios.</span></div>';
   }
 
-  _buildRow(label, run) {
+  _buildRow(label, run, metric) {
+    const field = METRIC_FIELD[metric] ?? 'finalNetWorthUsd';
+
     const card = document.createElement('div');
     card.className = 'mc-run-card';
 
@@ -155,11 +167,11 @@ export class McRunsPanel extends BaseComponent {
     const seedEl = document.createElement('span');
     seedEl.textContent = `seed ${run.seed}`;
 
-    const nwEl = document.createElement('span');
-    nwEl.className = run.scenarioFailed ? 'mc-run-nw mc-run-nw--fail' : 'mc-run-nw';
-    nwEl.textContent = fmtK(run.finalNetWorthUsd);
+    const valEl = document.createElement('span');
+    valEl.className = run.scenarioFailed ? 'mc-run-nw mc-run-nw--fail' : 'mc-run-nw';
+    valEl.textContent = fmtK(run[field]);
 
-    metricsRow.append(seedEl, nwEl);
+    metricsRow.append(seedEl, valEl);
 
     if (run.outOfFundsDate instanceof Date) {
       const failDate = document.createElement('span');
