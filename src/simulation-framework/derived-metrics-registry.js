@@ -37,8 +37,9 @@ export class DerivedMetricsRegistry {
   /**
    * Run all registered functions against state in insertion order.
    * @param {object} state — mutable simulation state
+   * @param {Date}   [date] — current simulation date; passed as second arg to each fn
    */
-  run(state) {
-    for (const fn of this._fns) fn(state);
+  run(state, date) {
+    for (const fn of this._fns) fn(state, date);
   }
 }

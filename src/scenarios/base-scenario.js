@@ -12,6 +12,7 @@ import {SimGraphNode} from "../graph/sim-graph-node.js";
 import {Simulation} from "../simulation-framework/simulation.js";
 import {DerivedMetricsRegistry} from "../simulation-framework/derived-metrics-registry.js";
 import {deriveNetWorth} from "../finance/derived-metrics/net-worth.js";
+import {deriveNetLiquidity} from "../finance/derived-metrics/net-liquidity.js";
 
 /**
  * Base class for simulation scenarios.
@@ -244,6 +245,7 @@ export class BaseScenario extends SimGraphNode {
 
     const derivedMetrics = new DerivedMetricsRegistry();
     derivedMetrics.register(deriveNetWorth);
+    derivedMetrics.register(deriveNetLiquidity);
 
     const sim = new Simulation(this.simStart, {
       bus,

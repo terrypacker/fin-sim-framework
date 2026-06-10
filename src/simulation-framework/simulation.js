@@ -459,8 +459,8 @@ export class Simulation {
     if (!this.silent) {
       if (this._derivedMetrics) {
         typeof this._derivedMetrics.run === 'function'
-          ? this._derivedMetrics.run(this.state)
-          : this._derivedMetrics(this.state);
+          ? this._derivedMetrics.run(this.state, this.currentDate)
+          : this._derivedMetrics(this.state, this.currentDate);
       }
       const stateSnapshot = structuredClone(this.state);
       const now = new Date(this.currentDate);
