@@ -447,7 +447,9 @@ export class ScenarioTabView {
         valueInput.value = String(param.value ?? '');
         valueInput.addEventListener('input', () => {
           const raw = valueInput.value;
-          param.value = param.type === 'Number' ? parseFloat(raw) : raw;
+          param.value = param.type === 'Number'
+            ? (raw.trim() === '' ? null : parseFloat(raw))
+            : raw;
         });
       }
       if (tooltip) valueInput.title = tooltip;
