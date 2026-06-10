@@ -38,8 +38,6 @@ export class ScenarioTabView {
     /** @type {function(Date)|null} */
     this.onEndChange = null;
     /** @type {function({})|null} */
-    this.onInitialStateChange = null;
-    /** @type {function({})|null} */
     this.onAddParameter = null;
     /** @type {function({scenario} */
     this.onSave   = null;
@@ -111,16 +109,6 @@ export class ScenarioTabView {
 
     document.getElementById('simEndInput')?.addEventListener('change', (e) => {
       if(this.onEndChange) this.onEndChange(e.target.value);
-    });
-
-    document.getElementById('initialStateJson')?.addEventListener('blur', (e) => {
-      try {
-        const initialState = JSON.parse(e.target.value);
-        if(this.onInitialStateChange) this.onInitialStateChange(initialState);
-        e.target.style.borderColor = '';
-      } catch {
-        e.target.style.borderColor = 'red';
-      }
     });
 
     document.getElementById('paramsFilter')?.addEventListener('input', (e) => {
@@ -213,10 +201,9 @@ export class ScenarioTabView {
     const simStart = toInputDate(scenario?.simStart, '2026-01-01');
     const simEnd   = toInputDate(scenario?.simEnd,   '2041-01-01');
 
-    set('scenarioName',     scenario?.name ?? scenario?.label ?? '');
-    set('simStartInput',    simStart);
-    set('simEndInput',      simEnd);
-    set('initialStateJson', JSON.stringify(scenario?.initialState ?? { metrics: { } }, null, 2));
+    set('scenarioName',  scenario?.name ?? scenario?.label ?? '');
+    set('simStartInput', simStart);
+    set('simEndInput',   simEnd);
     this._renderParamsList(scenario);
   }
 

@@ -32,10 +32,6 @@ export class ScenarioPlugin extends WorkbenchComponent {
       <label>End</label>
       <input type="date" id="simEndInput"/>
     </div>
-    <div class="node-header">Initial State (JSON)</div>
-    <div class="node-field">
-      <textarea id="initialStateJson" rows="5" class="wb-scenario-textarea"></textarea>
-    </div>
     <div class="node-header">Parameters</div>
     <div class="param-filter-row">
       <input id="paramsFilter" class="param-filter" type="text"
