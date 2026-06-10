@@ -15,6 +15,7 @@ import {
 } from '../../finance/holdings/holding-reducers.js';
 import { registerHoldingActionTypes } from '../../finance/holdings/holding-actions.js';
 import { AssetAppreciateReducer } from '../../finance/handlers/asset-appreciation-handler.js';
+import { PeriodService } from '../../finance/period/period-service.js';
 
 /**
  * ScenarioCompiler — consumes a declarative scenario definition and a
@@ -103,6 +104,13 @@ export class ScenarioCompiler {
       seenSeries.add(s.type);
     }
 
+    // Expose the shared period service built by tax toolsets so downstream
+    // consumers (e.g. JournalQueryApi / journal-report-plugin) can call
+    // PeriodService.aggregate() without re-deriving period boundaries.
+    if (context.periodService.getAllPeriods().length) {
+      services.periodService = context.periodService;
+    }
+
     // Register everything with the simulation services
     const sim = services.simulationRegistry.getPrimary();
     try {
@@ -161,6 +169,9 @@ export class ScenarioCompiler {
       stateRegistry:  services.stateRegistry,
       accountService: services.accountService,
       schedulesById:  {},
+      // Shared across toolsets — each tax toolset adds its periods here so
+      // US and AU periods end up in one service available for journal reports.
+      periodService:  new PeriodService(),
     };
   }
 }

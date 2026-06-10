@@ -73,6 +73,10 @@ export class ServiceRegistry {
     this.dgRegistry         = new DecisionGraphRegistry(new DecisionGraphStorage(), this.graph);
     this.dgResultStorage    = new DecisionGraphResultStorage();
     this.simulationRegistry = new SimulationRegistry();
+    // Populated by ScenarioCompiler.compile() with the merged US+AU PeriodService.
+    // Null until the first compile; cleared on reset() so stale period ranges
+    // from a previous scenario cannot bleed into a new compilation.
+    this.periodService      = null;
 
     this.simulationSync     = new SimulationSync({
       bus: this.bus,
@@ -114,6 +118,7 @@ export class ServiceRegistry {
   reset() {
     this.graph.clearLayer('execution');
     this.simulationRegistry.clear();
+    this.periodService = null;
     this.typeRegistry = new TypeRegistry();
     _registerFrameworkSubstrate(this.typeRegistry);
     this.simulationContext.typeRegistry = this.typeRegistry;

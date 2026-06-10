@@ -90,7 +90,9 @@ export const US_TAX = {
 
 function _getContributions(context) {
   if (context._usTaxCapture) return context._usTaxCapture;
-  const periodService = new PeriodService();
+  // Use the shared context.periodService when available (ScenarioCompiler injects
+  // one so US + AU periods end up in a single service for journal reporting).
+  const periodService = context.periodService ?? new PeriodService();
   const startYear = context.startDate.getUTCFullYear();
   const endYear   = context.endDate.getUTCFullYear();
   for (let y = startYear; y <= endYear; y++) applyTo(periodService, buildUsCalendarYear(y));

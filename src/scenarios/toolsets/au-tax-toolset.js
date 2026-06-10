@@ -99,8 +99,10 @@ export const AU_TAX = {
 function _getContributions(context) {
   if (context._auTaxCapture) return context._auTaxCapture;
   // AU fiscal year starts Jul 1: include the year before simStart to cover the
-  // initial period (e.g. simStart Jan 2026 → need FY2025: Jul 2025–Jun 2026)
-  const periodService = new PeriodService();
+  // initial period (e.g. simStart Jan 2026 → need FY2025: Jul 2025–Jun 2026).
+  // Use the shared context.periodService when available so AU fiscal years are
+  // merged with US calendar years in one service for journal reporting.
+  const periodService = context.periodService ?? new PeriodService();
   const startYear = context.startDate.getUTCFullYear();
   const endYear   = context.endDate.getUTCFullYear();
   for (let y = startYear - 1; y <= endYear; y++) applyTo(periodService, buildAuFiscalYear(y));

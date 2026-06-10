@@ -184,10 +184,12 @@ export class JournalReportPlugin extends WorkbenchComponent {
 
   _bindJournal(journal) {
     this._journal   = journal;
-    const typeRegistry = this._services()?.typeRegistry ?? null;
-    this._api       = journal ? new JournalQueryApi(new JournalDataSource(journal),                          typeRegistry) : null;
-    this._diffApi   = journal ? new JournalQueryApi(new JournalDataSource(journal, { perDiff:   true }),     typeRegistry) : null;
-    this._personApi = journal ? new JournalQueryApi(new JournalDataSource(journal, { perPerson: true }),     typeRegistry) : null;
+    const svc          = this._services();
+    const typeRegistry = svc?.typeRegistry  ?? null;
+    const periodService = svc?.periodService ?? null;
+    this._api       = journal ? new JournalQueryApi(new JournalDataSource(journal),                          typeRegistry, periodService) : null;
+    this._diffApi   = journal ? new JournalQueryApi(new JournalDataSource(journal, { perDiff:   true }),     typeRegistry, periodService) : null;
+    this._personApi = journal ? new JournalQueryApi(new JournalDataSource(journal, { perPerson: true }),     typeRegistry, periodService) : null;
     this._groups    = [];
     this._grandTotal = null;
     this._expandedKeys.clear();
@@ -230,12 +232,19 @@ export class JournalReportPlugin extends WorkbenchComponent {
     const api    = def.perPerson ? this._personApi
                  : def.perDiff   ? this._diffApi
                  :                 this._api;
-    const ast    = def.buildQuery(this._facetValues, api);
-    const result = await api.aggregate({
-      query:      ast,
-      groupBy:    def.defaultGroupBy,
-      aggregates: def.defaultAggregates,
-    });
+    const ast        = def.buildQuery(this._facetValues, api);
+    const periodType = def.periodTypeFor?.(this._facetValues) ?? null;
+    const result = periodType && api._periodService
+      ? await api.aggregateByYear({
+          query:      ast,
+          periodType,
+          aggregates: def.defaultAggregates,
+        })
+      : await api.aggregate({
+          query:      ast,
+          groupBy:    def.defaultGroupBy,
+          aggregates: def.defaultAggregates,
+        });
 
     this._groups     = def.decorate(result.groups);
     this._grandTotal = result.grandTotal;
