@@ -178,6 +178,10 @@ export const US_RETIREMENT = {
       { type: 'K401_RMD_APPLY',                 family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
       { type: 'K401_RMD_TAX',                   fields: { amount: ValueType.currency('USD'), residency: ValueType.text() } },
       { type: 'K401_TO_IRA_CONVERSION_APPLY', family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
+      { type: 'GUARDRAIL_BASELINE_APPLY',   fields: { initialWithdrawalRate: ValueType.number(), portfolioValue: ValueType.number(), annualSpending: ValueType.number(), date: ValueType.any() } },
+      { type: 'GUARDRAIL_ADJUST_APPLY',     fields: { multiplier: ValueType.number(), cause: ValueType.text(), date: ValueType.any() } },
+      { type: 'HEALTHCARE_EXPENSE_APPLY',   fields: { amount: ValueType.number() } },
+      { type: 'LATE_LIFE_CARE_APPLY',       fields: { active: ValueType.boolean(), factor: ValueType.number(), personId: ValueType.text() } },
     ],
   },
 
