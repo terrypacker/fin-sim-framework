@@ -55,7 +55,7 @@ function makeConversionConfig({
   spouseIraContribBasis  = 0,
   spouseRothBalance      = 0,
   spouseRolloverContrib  = 0,
-  isAuResident           = false,
+  startingResidency      = 'US',
   rothGrowthRate         = 0,
   iraGrowthRate          = 0,
 } = {}) {
@@ -70,7 +70,7 @@ function makeConversionConfig({
       usSavingsInterestRate: 0, auSavingsInterestRate: 0,
       superGrowthRate: 0, auStockGrowthRate: 0, auStockDividendRate: 0,
       rothConversionEnabled: false,
-      isAuResident,
+      startingResidency,
     },
     persons: [
       {
@@ -173,7 +173,7 @@ test('EVT-52: Roth Conversion — US ordinary income recorded', () => {
 });
 
 test('EVT-52: Roth Conversion — AU ordinary income recorded when isAuResident', () => {
-  const { sim } = loadToolsetScenario(makeConversionConfig({ iraBalance: 100_000, iraContribBasis: 100_000, isAuResident: true }));
+  const { sim } = loadToolsetScenario(makeConversionConfig({ iraBalance: 100_000, iraContribBasis: 100_000, startingResidency: 'AUS' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_CONVERSION', data: { amount: 20_000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -182,7 +182,7 @@ test('EVT-52: Roth Conversion — AU ordinary income recorded when isAuResident'
 });
 
 test('EVT-52: Roth Conversion — no AU income when not resident', () => {
-  const { sim } = loadToolsetScenario(makeConversionConfig({ iraBalance: 100_000, iraContribBasis: 100_000, isAuResident: false }));
+  const { sim } = loadToolsetScenario(makeConversionConfig({ iraBalance: 100_000, iraContribBasis: 100_000, startingResidency: 'US' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_CONVERSION', data: { amount: 20_000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
