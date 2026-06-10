@@ -246,7 +246,11 @@ test('EVT-33: AU house sale credits full sale proceeds to savings', () => {
   const journalEntry = sim.journal.getActions('AU_HOUSE_SALE_APPLY');
   assert.ok(journalEntry);
   assert.ok(journalEntry.length > 0);
-  assert.strictEqual(journalEntry[0].stateDiff[0].delta, AU_HOUSE_JSON.realProperties[0].value); //House value
+  const cashDiff = findDiff(journalEntry[0], 'auSavingsAccount.balance');
+  assert.strictEqual(cashDiff.delta, AU_HOUSE_JSON.realProperties[0].value);
+  const valueDiff = findDiff(journalEntry[0], 'auHouseProperty.value');
+  assert.ok(valueDiff, 'property value diff should be recorded');
+  assert.strictEqual(valueDiff.after, 0);
 });
 
 test('EVT-33: AU house sale records US capital gain (sale price - cost basis)', () => {
@@ -257,14 +261,16 @@ test('EVT-33: AU house sale records US capital gain (sale price - cost basis)', 
   const journalEntry = sim.journal.getActions('AU_HOUSE_SALE_APPLY');
   assert.ok(journalEntry);
   assert.ok(journalEntry.length > 0);
-  assert.strictEqual(journalEntry[0].stateDiff[0].delta, AU_HOUSE_JSON.realProperties[0].value); //House value
+  const cashDiff = findDiff(journalEntry[0], 'auSavingsAccount.balance');
+  assert.strictEqual(cashDiff.delta, AU_HOUSE_JSON.realProperties[0].value);
 
   const auTaxJournalEntry = sim.journal.getActions('AU_HOUSE_SALE_TAX');
   assert.ok(auTaxJournalEntry);
   assert.ok(auTaxJournalEntry.length > 0);
-  //state.usCaptialGainsYTD
-  assert.strictEqual(auTaxJournalEntry[0].stateDiff[2].field, 'usCapitalGainsYTD');
-  assert.strictEqual(auTaxJournalEntry[0].stateDiff[2].delta, AU_HOUSE_JSON.realProperties[0].value - AU_HOUSE_JSON.realProperties[0].costBasis);
+  //state.usCapitalGainsYTD
+  const cgDiff = findDiff(auTaxJournalEntry[0], 'usCapitalGainsYTD');
+  assert.ok(cgDiff, 'usCapitalGainsYTD diff should be recorded');
+  assert.strictEqual(cgDiff.delta, AU_HOUSE_JSON.realProperties[0].value - AU_HOUSE_JSON.realProperties[0].costBasis);
 });
 
 test('EVT-33: AU house sale is always AU taxable at non-resident withholding rate', () => {
@@ -275,14 +281,16 @@ test('EVT-33: AU house sale is always AU taxable at non-resident withholding rat
   const journalEntry = sim.journal.getActions('AU_HOUSE_SALE_APPLY');
   assert.ok(journalEntry);
   assert.ok(journalEntry.length > 0);
-  assert.strictEqual(journalEntry[0].stateDiff[0].delta, AU_HOUSE_JSON.realProperties[0].value); //House value
+  const cashDiff = findDiff(journalEntry[0], 'auSavingsAccount.balance');
+  assert.strictEqual(cashDiff.delta, AU_HOUSE_JSON.realProperties[0].value);
 
   const auTaxJournalEntry = sim.journal.getActions('AU_HOUSE_SALE_TAX');
   assert.ok(auTaxJournalEntry);
   assert.ok(auTaxJournalEntry.length > 0);
   //state.auPersonNonResidentWithholdingYTD.primary
-  assert.strictEqual(auTaxJournalEntry[0].stateDiff[1].field, 'auPersonNonResidentWithholdingYTD.primary');
-  assert.strictEqual(auTaxJournalEntry[0].stateDiff[1].delta, AU_HOUSE_JSON.realProperties[0].value - AU_HOUSE_JSON.realProperties[0].costBasis);
+  const nrDiff = findDiff(auTaxJournalEntry[0], 'auPersonNonResidentWithholdingYTD.primary');
+  assert.ok(nrDiff, 'auPersonNonResidentWithholdingYTD.primary diff should be recorded');
+  assert.strictEqual(nrDiff.delta, AU_HOUSE_JSON.realProperties[0].value - AU_HOUSE_JSON.realProperties[0].costBasis);
 });
 
 test('EVT-33: AU house sale generates a Foreign Tax Credit', () => {
@@ -294,14 +302,16 @@ test('EVT-33: AU house sale generates a Foreign Tax Credit', () => {
   const journalEntry = sim.journal.getActions('AU_HOUSE_SALE_APPLY');
   assert.ok(journalEntry);
   assert.ok(journalEntry.length > 0);
-  assert.strictEqual(journalEntry[0].stateDiff[0].delta, AU_HOUSE_JSON.realProperties[0].value); //House value
+  const cashDiff = findDiff(journalEntry[0], 'auSavingsAccount.balance');
+  assert.strictEqual(cashDiff.delta, AU_HOUSE_JSON.realProperties[0].value);
 
   const auTaxJournalEntry = sim.journal.getActions('AU_HOUSE_SALE_TAX');
   assert.ok(auTaxJournalEntry);
   assert.ok(auTaxJournalEntry.length > 0);
   //state.ftcYTD
-  assert.strictEqual(auTaxJournalEntry[0].stateDiff[0].field, 'ftcYTD');
-  assert.strictEqual(auTaxJournalEntry[0].stateDiff[0].delta, AU_HOUSE_JSON.realProperties[0].value - AU_HOUSE_JSON.realProperties[0].costBasis);
+  const ftcDiff = findDiff(auTaxJournalEntry[0], 'ftcYTD');
+  assert.ok(ftcDiff, 'ftcYTD diff should be recorded');
+  assert.strictEqual(ftcDiff.delta, AU_HOUSE_JSON.realProperties[0].value - AU_HOUSE_JSON.realProperties[0].costBasis);
 });
 
 test('EVT-33: AU house sale with no gain has zero capital gains tax exposure', () => {
@@ -315,7 +325,8 @@ test('EVT-33: AU house sale with no gain has zero capital gains tax exposure', (
   const journalEntry = sim.journal.getActions('AU_HOUSE_SALE_APPLY');
   assert.ok(journalEntry);
   assert.ok(journalEntry.length > 0);
-  assert.strictEqual(journalEntry[0].stateDiff[0].delta, AU_HOUSE_JSON.realProperties[0].value); //House value
+  const cashDiff = findDiff(journalEntry[0], 'auSavingsAccount.balance');
+  assert.strictEqual(cashDiff.delta, AU_HOUSE_JSON.realProperties[0].value);
 
   const auTaxJournalEntry = sim.journal.getActions('AU_HOUSE_SALE_TAX');
   assert.ok(auTaxJournalEntry);
@@ -338,7 +349,11 @@ test('EVT-34: US house sale credits full sale proceeds to savings', () => {
   const journalEntry = sim.journal.getActions('US_HOUSE_SALE_APPLY');
   assert.ok(journalEntry);
   assert.ok(journalEntry.length > 0);
-  assert.strictEqual(journalEntry[0].stateDiff[0].delta, US_HOUSE_JSON.realProperties[0].value); //House value
+  const cashDiff = findDiff(journalEntry[0], 'usSavingsAccount.balance');
+  assert.strictEqual(cashDiff.delta, US_HOUSE_JSON.realProperties[0].value);
+  const valueDiff = findDiff(journalEntry[0], 'usHouseProperty.value');
+  assert.ok(valueDiff, 'property value diff should be recorded');
+  assert.strictEqual(valueDiff.after, 0);
 });
 
 test('EVT-34: US house sale applies $500K primary residence exemption to capital gain', () => {
@@ -351,14 +366,16 @@ test('EVT-34: US house sale applies $500K primary residence exemption to capital
   const journalEntry = sim.journal.getActions('US_HOUSE_SALE_APPLY');
   assert.ok(journalEntry);
   assert.ok(journalEntry.length > 0);
-  assert.strictEqual(journalEntry[0].stateDiff[0].delta, config.realProperties[0].value); //House value
+  const cashDiff = findDiff(journalEntry[0], 'usSavingsAccount.balance');
+  assert.strictEqual(cashDiff.delta, config.realProperties[0].value);
 
   const usTaxJournalEntry = sim.journal.getActions('US_HOUSE_SALE_TAX');
   assert.ok(usTaxJournalEntry);
   assert.ok(usTaxJournalEntry.length > 0);
-  //state.usCaptialGainsYTD
-  assert.strictEqual(usTaxJournalEntry[0].stateDiff[0].field, 'usCapitalGainsYTD');
-  assert.strictEqual(usTaxJournalEntry[0].stateDiff[0].delta, (config.realProperties[0].value - config.realProperties[0].costBasis) - 500_000);
+  //state.usCapitalGainsYTD
+  const cgDiff = findDiff(usTaxJournalEntry[0], 'usCapitalGainsYTD');
+  assert.ok(cgDiff, 'usCapitalGainsYTD diff should be recorded');
+  assert.strictEqual(cgDiff.delta, (config.realProperties[0].value - config.realProperties[0].costBasis) - 500_000);
 });
 
 test('EVT-34: US house sale with gain under $500K has zero taxable capital gain', () => {
@@ -372,7 +389,8 @@ test('EVT-34: US house sale with gain under $500K has zero taxable capital gain'
   const journalEntry = sim.journal.getActions('US_HOUSE_SALE_APPLY');
   assert.ok(journalEntry);
   assert.ok(journalEntry.length > 0);
-  assert.strictEqual(journalEntry[0].stateDiff[0].delta, config.realProperties[0].value); //House value
+  const cashDiff = findDiff(journalEntry[0], 'usSavingsAccount.balance');
+  assert.strictEqual(cashDiff.delta, config.realProperties[0].value);
 
   const usTaxJournalEntry = sim.journal.getActions('US_HOUSE_SALE_TAX');
   assert.ok(usTaxJournalEntry);
@@ -392,7 +410,8 @@ test('EVT-34: US house sale with no gain has zero capital gains exposure', () =>
   const journalEntry = sim.journal.getActions('US_HOUSE_SALE_APPLY');
   assert.ok(journalEntry);
   assert.ok(journalEntry.length > 0);
-  assert.strictEqual(journalEntry[0].stateDiff[0].delta, config.realProperties[0].value); //House value
+  const cashDiff = findDiff(journalEntry[0], 'usSavingsAccount.balance');
+  assert.strictEqual(cashDiff.delta, config.realProperties[0].value);
 
   const usTaxJournalEntry = sim.journal.getActions('US_HOUSE_SALE_TAX');
   assert.ok(usTaxJournalEntry);

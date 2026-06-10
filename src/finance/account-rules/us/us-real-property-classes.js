@@ -56,7 +56,7 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     this.accountService.transaction(state[destKey], netProceeds, null);
     const updates = {};
     if (stateKey && state[stateKey]) {
-      updates[stateKey] = { ...state[stateKey], mortgageBalance: 0 };
+      updates[stateKey] = { ...state[stateKey], mortgageBalance: 0, value: 0 };
     }
     return this.newState(
       state,
