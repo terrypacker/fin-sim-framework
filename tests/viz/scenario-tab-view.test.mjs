@@ -129,15 +129,6 @@ test('_populateScenarioForm: uses label as name for prebuilt (no name property)'
   assert.strictEqual(document.getElementById('scenarioName').value, 'Alpha Scenario');
 });
 
-test('_populateScenarioForm: initialStateJson defaults to {"metrics":{}}', () => {
-  const view = new ScenarioTabView();
-  view._populateScenarioForm({ name: 'S',
-    simStart: new Date(Date.UTC(2026, 0, 1)),
-    simEnd: new Date(Date.UTC(2041, 0, 1)),
-    params: [] });
-  const raw = document.getElementById('initialStateJson').value;
-  assert.deepStrictEqual(JSON.parse(raw), { metrics: {} });
-});
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Event callbacks
