@@ -457,3 +457,105 @@ test('EVT-36: collectible sale with unknown saleDestinationAccount falls back to
   assert.ok(defaultDiff, 'should fall back to default usSavingsAccount');
   assert.strictEqual(defaultDiff.delta, config.collectibles[0].value);
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Multi-collectible: each gets its own state slot; sales are isolated
+// ══════════════════════════════════════════════════════════════════════════════
+
+const TWO_COLLECTIBLE_JSON = {
+  ...US_COLLECTIBLE_JSON,
+  collectibles: [
+    {
+      __type: 'Collectible', id: 'col1', name: 'Baseball Cards',
+      value: 10000, costBasis: 7000, appreciationRate: 0,
+      plannedSaleYear: 2027, ownershipType: 'sole', ownerId: 'primary',
+      country: 'US', stateKey: 'collectibleAccount',
+    },
+    {
+      __type: 'Collectible', id: 'col2', name: 'Gold',
+      value: 50000, costBasis: 30000, appreciationRate: 0,
+      plannedSaleYear: 2030, ownershipType: 'sole', ownerId: 'primary',
+      country: 'US', stateKey: 'goldCollectible',
+    },
+  ],
+};
+
+test('multi-collectible: each collectible gets its own state entry', () => {
+  const { sim } = loadToolsetScenario(TWO_COLLECTIBLE_JSON);
+  assert.strictEqual(sim.state.collectibleAccount.value, 10000);
+  assert.strictEqual(sim.state.goldCollectible.value, 50000);
+});
+
+test('multi-collectible: first sale zeroes only its own state entry', () => {
+  const { sim } = loadToolsetScenario(TWO_COLLECTIBLE_JSON);
+  assert.doesNotThrow(() => sim.stepTo(Q1_2028));
+
+  const applyEntries = sim.journal.getActions('COLLECTIBLE_SALE_APPLY');
+  assert.ok(applyEntries.length >= 1);
+  assert.strictEqual(sim.state.collectibleAccount.value, 0, 'Baseball Cards entry should be zeroed');
+  assert.strictEqual(sim.state.goldCollectible.value, 50000, 'Gold entry should be untouched');
+});
+
+test('multi-collectible: second sale zeroes only its own state entry', () => {
+  const Q1_2031 = new Date(Date.UTC(2031, 2, 31));
+  const { sim } = loadToolsetScenario(TWO_COLLECTIBLE_JSON);
+  assert.doesNotThrow(() => sim.stepTo(Q1_2031));
+
+  assert.strictEqual(sim.state.collectibleAccount.value, 0, 'Baseball Cards entry should be zeroed');
+  assert.strictEqual(sim.state.goldCollectible.value, 0, 'Gold entry should be zeroed after its sale');
+});
+
+test('multi-collectible: COLLECTIBLE_VALUE_CHANGE with stateKey targets correct entry', () => {
+  const config = structuredClone(TWO_COLLECTIBLE_JSON);
+  config.collectibles[0].plannedSaleYear = null;
+  config.collectibles[1].plannedSaleYear = null;
+  const { sim } = loadToolsetScenario(config);
+
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'COLLECTIBLE_VALUE_CHANGE',
+    data: { change: 5000, stateKey: 'goldCollectible' } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.collectibleAccount.value, 10000, 'Baseball Cards should be unchanged');
+  assert.strictEqual(sim.state.goldCollectible.value, 55000, 'Gold should reflect the change');
+});
+
+test('multi-collectible: COLLECTIBLE_VALUE_CHANGE without stateKey falls back to collectibleAccount', () => {
+  const config = structuredClone(TWO_COLLECTIBLE_JSON);
+  config.collectibles[0].plannedSaleYear = null;
+  config.collectibles[1].plannedSaleYear = null;
+  const { sim } = loadToolsetScenario(config);
+
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'COLLECTIBLE_VALUE_CHANGE',
+    data: { change: 2000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.collectibleAccount.value, 12000, 'should fall back to collectibleAccount');
+  assert.strictEqual(sim.state.goldCollectible.value, 50000, 'Gold should be unchanged');
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// YTD reset: usCollectibleGainsYTD must clear to 0 after tax settlement
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('EVT-36: usCollectibleGainsYTD resets to 0 after tax settlement', () => {
+  // Sale in 2027; settlement fires on 2027-12-31; step to end of 2028 to verify reset happened
+  const Q1_2029 = new Date(Date.UTC(2029, 2, 31));
+  const { sim } = loadToolsetScenario(US_COLLECTIBLE_JSON);
+  assert.doesNotThrow(() => sim.stepTo(Q1_2029));
+
+  assert.strictEqual(sim.state.usCollectibleGainsYTD, 0,
+    'usCollectibleGainsYTD must be zeroed after annual tax settlement');
+});
+
+test('EVT-36: usCollectibleGainsYTD does not carry forward to cause tax in subsequent years', () => {
+  // Sim end well past the sale year; collectible tax should only be charged once
+  const END = new Date(Date.UTC(2032, 0, 1));
+  const { sim } = loadToolsetScenario(US_COLLECTIBLE_JSON);
+  assert.doesNotThrow(() => sim.stepTo(END));
+
+  const taxEntries = sim.journal.getActions('COLLECTIBLE_SALE_TAX');
+  assert.strictEqual(taxEntries.length, 1, 'COLLECTIBLE_SALE_TAX should fire exactly once (on the sale date)');
+
+  // usCollectibleGainsYTD should be 0 in final state (long past the sale year)
+  assert.strictEqual(sim.state.usCollectibleGainsYTD, 0);
+});
