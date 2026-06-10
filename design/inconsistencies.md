@@ -72,11 +72,8 @@ There are ~50 `TODO` markers in `src/`. The dense clusters are flagged below; se
 - `src/finance/handlers/monthly-social-security-handler.js` line 47: `//TODO #292 Support Early or FRA, this is FRA only right now (Born 1960+ FRA is 67)`
 - **Direction**: tracked in issue #292.
 
-### 2.6 Scenario serializer hacks (Git #355)
-- `src/scenarios/scenario-serializer.js`:
-  - Lines 144–146: `//TODO Clean up API / Support toolsets export here? / Params vs parameters`.
-  - Line 360: `initialValue: account.balance ?? account.initialValue, //TODO Hack here since the field name is not the same as the constructor`.
-- **Direction**: rename `initialValue` to `balance` on the constructor side (or pick one canonical name) so the serializer doesn't have to translate.
+~~### 2.6 Scenario serializer hacks (Git #355)~~
+- **Resolved**: Account constructors renamed positional param `initialValue` → `balance`; serializer emits `balance:`; deserializer falls back to `d.balance ?? d.initialValue` for backward compat with old JSON. `AccountBuilder.initialValue()` renamed to `balance()`. Param schema entries updated from `field: 'initialValue'` to `field: 'balance'`; translation shim in `base-scenario.applyParams` removed.
 
 ~~### 2.7 `Simulation` carries test-only baggage (Git #356)~~
 - **Resolved**: backward-compat accessor shims removed from `simulation.js`. Tests now access `sim.history.snapshots`, `sim.history.snapshotCursor`, `sim.history.eventCounter` directly. Production code was already using the `sim.history.*` path.

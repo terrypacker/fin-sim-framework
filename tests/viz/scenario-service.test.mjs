@@ -357,23 +357,23 @@ test('newScenario: active config has correct content after compile', () => {
   // ── Accounts: key balances ────────────────────────────────────────────────
   const usSavings = active.accounts.find(a => a.stateKey === 'usSavingsAccount');
   assert.ok(usSavings,                                  'usSavingsAccount should exist');
-  assert.strictEqual(usSavings.initialValue, D.initialUsSavings);
+  assert.strictEqual(usSavings.balance, D.initialUsSavings);
 
   const roth = active.accounts.find(a => a.stateKey === 'rothAccount');
   assert.ok(roth,                                       'rothAccount should exist');
-  assert.strictEqual(roth.initialValue, D.rothBalance);
+  assert.strictEqual(roth.balance, D.rothBalance);
 
   const ira = active.accounts.find(a => a.stateKey === 'iraAccount');
   assert.ok(ira,                                        'iraAccount should exist');
-  assert.strictEqual(ira.initialValue, D.iraBalance);
+  assert.strictEqual(ira.balance, D.iraBalance);
 
   const k401 = active.accounts.find(a => a.stateKey === 'k401Account');
   assert.ok(k401,                                       'k401Account should exist');
-  assert.strictEqual(k401.initialValue, D.k401Balance);
+  assert.strictEqual(k401.balance, D.k401Balance);
 
   const superAcc = active.accounts.find(a => a.stateKey === 'superAccount');
   assert.ok(superAcc,                                   'superAccount should exist');
-  assert.strictEqual(superAcc.initialValue, D.superBalance);
+  assert.strictEqual(superAcc.balance, D.superBalance);
 
   // ── Real properties ───────────────────────────────────────────────────────
   assert.strictEqual(active.realProperties.length, 2);

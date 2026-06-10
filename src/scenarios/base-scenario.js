@@ -148,7 +148,7 @@ export class BaseScenario extends SimGraphNode {
    *   1. Write each key present in `params` back onto the matching `this.params[i].value`.
    *   2. For each typed-param entry that carries a `node` declaration, update the
    *      live config-layer person or account node in-place via the service APIs.
-   *   3. For account `initialValue` changes, also patch `this.initialState` so
+   *   3. For account `balance` changes, also patch `this.initialState` so
    *      that the next `buildSim()` starts with the correct opening balance.
    *
    * Subclasses may override for finer control (e.g. to also update event data).
@@ -184,14 +184,11 @@ export class BaseScenario extends SimGraphNode {
       } else if (node.type === 'account') {
         const account = accountService.getAll().find(a => a.stateKey === node.stateKey);
         if (account) {
-          // 'initialValue' is a constructor param, not a stored field — Account
-          // stores it as 'balance'. Map here so the live node stays serializable.
-          const liveField = node.field === 'initialValue' ? 'balance' : node.field;
-          accountService.updateAccount(account, { [liveField]: val });
+          accountService.updateAccount(account, { [node.field]: val });
         }
         // Keep initialState in sync for opening-balance params so buildSim()
         // starts the Simulation with the updated balance.
-        if (node.field === 'initialValue' && this.initialState?.[node.stateKey]) {
+        if (node.field === 'balance' && this.initialState?.[node.stateKey]) {
           this.initialState[node.stateKey].balance = val;
         }
       } else if (node.type === 'realProperty') {

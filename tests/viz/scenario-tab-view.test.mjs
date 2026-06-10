@@ -404,11 +404,11 @@ test('_renderParamsList: account-linked param uses live account name in label', 
     : null;
   const scenario = { params: [{
     name: 'rothBalance', label: 'Roth IRA Balance (USD)', type: 'Number', value: 80000,
-    node: { type: 'account', stateKey: 'rothAccount', field: 'initialValue' },
+    node: { type: 'account', stateKey: 'rothAccount', field: 'balance' },
   }] };
   view._renderParamsList(scenario);
   const label = document.querySelector('#paramsList .node-field label');
-  assert.strictEqual(label.firstChild.textContent, 'Spouse Backup Roth — Initial Balance');
+  assert.strictEqual(label.firstChild.textContent, 'Spouse Backup Roth — Balance');
 });
 
 test('_renderParamsList: person-linked param uses live person name in label', () => {
@@ -430,7 +430,7 @@ test('_renderParamsList: unresolved linked param marks row as unlinked', () => {
   view.nodeLookup = () => ({ name: 'rothAccount', kind: 'account', node: null, found: false });
   const scenario = { params: [{
     name: 'rothBalance', label: 'Roth IRA Balance (USD)', type: 'Number', value: 80000,
-    node: { type: 'account', stateKey: 'rothAccount', field: 'initialValue' },
+    node: { type: 'account', stateKey: 'rothAccount', field: 'balance' },
   }] };
   view._renderParamsList(scenario);
   const row = document.querySelector('#paramsList .param-row');
@@ -444,7 +444,7 @@ test('_renderParamsList: linked param renders open-node button that fires onOpen
   view.nodeLookup = (n) => ({ name: 'Roth IRA', kind: 'account', node: { kind: 'account', id: 'a1' }, found: true });
   const onOpen = jest.fn();
   view.onOpenLinkedNode = onOpen;
-  const paramNode = { type: 'account', stateKey: 'rothAccount', field: 'initialValue' };
+  const paramNode = { type: 'account', stateKey: 'rothAccount', field: 'balance' };
   const scenario = { params: [{ name: 'rothBalance', label: 'Roth IRA Balance', type: 'Number', value: 0, node: paramNode }] };
   view._renderParamsList(scenario);
   const linkBtn = document.querySelector('#paramsList .param-link-btn');
@@ -465,7 +465,6 @@ test('_renderParamsList: param without node declaration still uses static label'
 
 test('_humanizeField: known overrides and camelCase splitting', () => {
   const view = new ScenarioTabView();
-  assert.strictEqual(view._humanizeField('initialValue'),   'Initial Balance');
   assert.strictEqual(view._humanizeField('minimumBalance'), 'Min Balance');
   assert.strictEqual(view._humanizeField('balance'),        'Balance');
   assert.strictEqual(view._humanizeField('monthlyWage'),    'Monthly Wage');
