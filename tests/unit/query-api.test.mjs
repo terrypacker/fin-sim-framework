@@ -249,3 +249,47 @@ test('QueryApi: data source with zero items returns empty result', async () => {
   assert.strictEqual(total, 0);
   assert.strictEqual(items.length, 0);
 });
+
+// ─── Incremental index updates ────────────────────────────────────────────────
+
+test('QueryApi._addToIndexes: item appears in id and name indexes', () => {
+  const a = api();
+  a._buildIndexes();
+  const item = { id: '99', name: 'Durian', kind: 'fruit' };
+  a._addToIndexes(item);
+  assert.strictEqual(a.getById('99'), item);
+  const bucket = a.getByName('durian');
+  assert.ok(bucket && bucket.includes(item));
+});
+
+test('QueryApi._removeFromIndexes: item gone from id and name indexes', () => {
+  const a = api();
+  a._buildIndexes();
+  const item = a.getById('1');  // stored reference (what's in indexes)
+  a._removeFromIndexes(item);
+  assert.strictEqual(a.getById('1'), null);
+  assert.strictEqual(a.getByName('apple'), null);
+});
+
+test('QueryApi._updateIndexes: name change updates nameIndex (new-object pattern)', () => {
+  // mirrors how Graph.updateNode works: prev is the stored ref, item is a new object
+  const a = api();
+  a._buildIndexes();
+  const prev = a.getById('2');  // Banana — stored reference (what's in nameIndex)
+  const item = { ...prev, name: 'Blueberry' };  // new object
+  a._updateIndexes(item, prev);
+  assert.strictEqual(a.getByName('banana'), null);
+  const bucket = a.getByName('blueberry');
+  assert.ok(bucket && bucket.includes(item));
+});
+
+test('QueryApi._updateIndexes: id change updates idIndex', () => {
+  // prev is the stored ref; item is a new object with a different id
+  const a = api();
+  a._buildIndexes();
+  const prev = a.getById('3');  // Carrot
+  const item = { ...prev, id: '33' };
+  a._updateIndexes(item, prev);
+  assert.strictEqual(a.getById('3'),  null);
+  assert.strictEqual(a.getById('33'), item);
+});

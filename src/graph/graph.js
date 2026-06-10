@@ -13,17 +13,31 @@ export class Graph {
     this.edges = new Map();
     this.out   = new Map(); // nodeId -> Set<edgeId>
     this.in    = new Map(); // nodeId -> Set<edgeId>
+    this._indexObserver = null;
+  }
+
+  /**
+   * Register an observer that will be notified on node mutations.
+   * The observer must implement _addToIndexes(node), _removeFromIndexes(node),
+   * and _updateIndexes(node, prev).
+   */
+  setIndexObserver(observer) {
+    this._indexObserver = observer;
   }
 
   addNode(node) {
     if (!node.id) throw new Error("Node must have id");
 
-    if (!this.nodes.has(node.id)) {
+    const prev = this.nodes.get(node.id);
+    if (!prev) {
       this.out.set(node.id, new Set());
       this.in.set(node.id, new Set());
     }
 
     this.nodes.set(node.id, node);
+
+    if (prev) this._indexObserver?._updateIndexes(node, prev);
+    else      this._indexObserver?._addToIndexes(node);
   }
 
   getNode(id) {
@@ -34,7 +48,10 @@ export class Graph {
     if (id !== node.id) {
       throw new Error("Cannot change node id");
     }
+    const prev = this.nodes.get(id);
     this.nodes.set(id, node);
+    if (prev) this._indexObserver?._updateIndexes(node, prev);
+    else      this._indexObserver?._addToIndexes(node);
   }
 
   getNodes() {
@@ -58,6 +75,9 @@ export class Graph {
   }
 
   removeNode(id) {
+    const node = this.nodes.get(id);
+    if (node) this._indexObserver?._removeFromIndexes(node);
+
     for (const edge of this.getOutgoing(id)) this.removeEdge(edge.id);
     for (const edge of this.getIncoming(id)) this.removeEdge(edge.id);
 
