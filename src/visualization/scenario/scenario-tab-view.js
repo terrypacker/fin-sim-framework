@@ -204,6 +204,10 @@ export class ScenarioTabView {
     set('scenarioName',  scenario?.name ?? scenario?.label ?? '');
     set('simStartInput', simStart);
     set('simEndInput',   simEnd);
+
+    const addBtn = document.getElementById('addParamBtn');
+    if (addBtn) addBtn.disabled = !!scenario?.prebuilt;
+
     this._renderParamsList(scenario);
   }
 
