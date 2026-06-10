@@ -84,7 +84,7 @@ export class AuHouseSaleHandler extends HandlerEntry {
     return [
       {
         type:            'AU_HOUSE_SALE_APPLY',
-        salePrice:       data.salePrice,
+        salePrice:       data.salePrice ?? propState?.value ?? 0,
         costBasis:       data.costBasis,
         mortgageBalance,
         residency:       state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null,

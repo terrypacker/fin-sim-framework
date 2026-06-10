@@ -102,11 +102,12 @@ export class CollectibleSaleHandler extends HandlerEntry {
   }
 
   call({ data, state }) {
+    const colState       = data.stateKey ? state[data.stateKey] : null;
     const destinationKey = resolveDestinationKey(state, data.saleDestinationAccount);
     return [
       {
         type:         'COLLECTIBLE_SALE_APPLY',
-        salePrice:    data.salePrice,
+        salePrice:    data.salePrice ?? colState?.value ?? 0,
         costBasis:    data.costBasis,
         residency: state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null,
         stateKey:     data.stateKey ?? null,

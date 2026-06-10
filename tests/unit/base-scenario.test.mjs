@@ -35,6 +35,7 @@ import { FieldReducer } from '../../src/simulation-framework/reducers.js';
 import { ReducerBuilder } from '../../src/simulation-framework/builders/reducer-builder.js';
 import { CheckingAccount } from '../../src/finance/assets/account.js';
 import { Person }          from '../../src/finance/person.js';
+import { deriveNetWorth }  from '../../src/finance/derived-metrics/net-worth.js';
 import {
   GraphBuilderView
 } from "../../src/visualization/graph-builder/graph-builder-view.js";
@@ -335,19 +336,38 @@ test('rebuild: applies params before creating simulation', () => {
 
 // ─── R12: derived metrics.netWorth ──────────────────────────────────────────────
 
-test('_deriveNetWorth: sums liquid (drawdown) account balances into metrics.netWorth', () => {
+test('deriveNetWorth: sums all account balances into metrics.netWorth', () => {
   const state = {
-    checking: { drawdownPriority: 1, balance: 1000 },
+    checking: { balance: 1000 },
     savings:  { drawdownPriority: 2, balance: 2500 },
-    house:    { balance: 900000 },           // no drawdownPriority → excluded (not liquid)
     metrics:  {},
   };
-  BaseScenario._deriveNetWorth(state);
-  assert.strictEqual(state.metrics.netWorth, 3500, 'only liquid accounts counted');
+  deriveNetWorth(state);
+  assert.strictEqual(state.metrics.netWorth, 3500);
 });
 
-test('_deriveNetWorth: creates metrics object when absent', () => {
-  const state = { checking: { drawdownPriority: 1, balance: 42 } };
-  BaseScenario._deriveNetWorth(state);
+test('deriveNetWorth: includes real property equity (value − mortgage)', () => {
+  const state = {
+    savings: { balance: 5000 },
+    house:   { kind: 'real-property', value: 800000, mortgageBalance: 350000 },
+    metrics: {},
+  };
+  deriveNetWorth(state);
+  assert.strictEqual(state.metrics.netWorth, 455000);
+});
+
+test('deriveNetWorth: includes collectible market value', () => {
+  const state = {
+    savings:     { balance: 1000 },
+    painting:    { kind: 'collectible', value: 25000 },
+    metrics: {},
+  };
+  deriveNetWorth(state);
+  assert.strictEqual(state.metrics.netWorth, 26000);
+});
+
+test('deriveNetWorth: creates metrics object when absent', () => {
+  const state = { checking: { balance: 42 } };
+  deriveNetWorth(state);
   assert.strictEqual(state.metrics.netWorth, 42);
 });

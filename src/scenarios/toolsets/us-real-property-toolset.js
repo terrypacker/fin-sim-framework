@@ -74,7 +74,7 @@ export const US_REAL_PROPERTY = {
         name:    `Sell ${p.name}`,
         type:    'US_HOUSE_SALE',
         date:    new Date(Date.UTC(p.plannedSaleYear, 0, 15)),
-        data:    { salePrice: p.value, costBasis: p.costBasis, stateKey: p.stateKey, saleDestinationAccount: p.saleDestinationAccount },
+        data:    { costBasis: p.costBasis, stateKey: p.stateKey, saleDestinationAccount: p.saleDestinationAccount },
         enabled: true,
         color:   '#795548',
       }));
@@ -141,6 +141,7 @@ export const US_REAL_PROPERTY = {
 
 function _propertyToStatePlain(prop) {
   return {
+    kind:                'real-property',
     stateKey:            prop.stateKey,
     value:               prop.value              ?? 0,
     costBasis:           prop.costBasis          ?? 0,

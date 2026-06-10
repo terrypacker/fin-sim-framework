@@ -73,7 +73,7 @@ export const US_COLLECTIBLES = {
         name:    `Sell ${c.name}`,
         type:    'COLLECTIBLE_SALE',
         date:    new Date(Date.UTC(c.plannedSaleYear, 0, 15)),
-        data:    { salePrice: c.value, costBasis: c.costBasis, stateKey: c.stateKey, saleDestinationAccount: c.saleDestinationAccount },
+        data:    { costBasis: c.costBasis, stateKey: c.stateKey, saleDestinationAccount: c.saleDestinationAccount },
         enabled: true,
         color:   '#FF8F00',
       }));
@@ -120,6 +120,7 @@ export const US_COLLECTIBLES = {
 
 function _collectibleToStatePlain(col) {
   return {
+    kind:                'collectible',
     stateKey:            col.stateKey,
     value:               col.value            ?? 0,
     costBasis:           col.costBasis        ?? 0,
