@@ -588,7 +588,15 @@ export class StatePanelView extends BaseComponent {
       queryBtn.className = 'ad-history-btn';
       queryBtn.textContent = '⊞ Field × Action';
       queryBtn.title = 'Query how a state field changes across all instances of an action type';
-      this.listen(queryBtn, 'click', () => this._showCrossActionModal(changes[0]?.field ?? null, entry.action.type));
+      this.listen(queryBtn, 'click', () => {
+        const field      = changes[0]?.field ?? null;
+        const actionType = entry.action.type;
+        if (this.onOpenCrossActionQuery) {
+          this.onOpenCrossActionQuery(field, actionType);
+        } else {
+          this._showCrossActionModal(field, actionType);
+        }
+      });
       toolbar.appendChild(queryBtn);
       collapseHeader.parentNode.insertBefore(toolbar, collapseHeader);
     }

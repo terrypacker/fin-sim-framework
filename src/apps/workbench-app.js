@@ -198,6 +198,17 @@ export class WorkbenchApp extends BaseComponent {
       this._wbShell.activatePlugin('journal-report');
     });
 
+    // Activate the cross-action-query panel when ActionDetail fires the event.
+    this._wbShell.runtime.bus.subscribe(WB_EVENTS.CROSS_ACTION_QUERY_OPEN, () => {
+      this._wbShell.activatePlugin('cross-action-query');
+    });
+
+    // Show action detail when a row in the cross-action-query panel is clicked.
+    this._wbShell.runtime.bus.subscribe(WB_EVENTS.ACTION_ENTRY_OPEN, ({ entry }) => {
+      this._statePanelView.showNodeDetail(entry);
+      this._wbShell.activatePlugin('action-detail');
+    });
+
     // Bind scenario tab view now that ScenarioPlugin DOM exists
     this._scenarioTabView.bind();
 
@@ -448,6 +459,9 @@ export class WorkbenchApp extends BaseComponent {
     };
     this._statePanelView.onShowActionDetail = () => {
       this._wbShell?.activatePlugin('action-detail');
+    };
+    this._statePanelView.onOpenCrossActionQuery = (field, actionType) => {
+      this._wbShell?.runtime.bus.publish({ type: WB_EVENTS.CROSS_ACTION_QUERY_OPEN, field, actionType });
     };
 
     // ── Visualization views ───────────────────────────────────────────────────

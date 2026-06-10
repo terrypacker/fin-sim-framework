@@ -27,6 +27,7 @@ import { JournalReportPlugin }     from './journal-report-plugin.js';
 import { ScenarioComparePlugin }   from './scenario-compare-plugin.js';
 import { DgConfigPlugin }          from './dg-config-plugin.js';
 import { DgResultsPlugin }         from './dg-results-plugin.js';
+import { CrossActionQueryPlugin }  from './cross-action-query-plugin.js';
 
 export { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin,
          TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin,
@@ -34,7 +35,7 @@ export { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin,
          OptConfigPlugin, OptResultsPlugin, OptRunsPlugin,
          ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin,
          JournalReportPlugin, ScenarioComparePlugin,
-         DgConfigPlugin, DgResultsPlugin };
+         DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin };
 
 /** All finance plugin descriptors — pass directly to WorkbenchShell `plugins` option. */
 export const FINANCE_PLUGINS = [
@@ -54,7 +55,8 @@ export const FINANCE_PLUGINS = [
   { id: 'exec-history',   title: 'Node History',    component: ExecHistoryPlugin  },
   { id: 'lineage',        title: 'Lineage',         component: LineagePlugin      },
   { id: 'action-detail',  title: 'Action Detail',   component: ActionDetailPlugin },
-  { id: 'journal-report',    title: 'Journal Report',    component: JournalReportPlugin  },
+  { id: 'journal-report',       title: 'Journal Report',    component: JournalReportPlugin      },
+  { id: 'cross-action-query',  title: 'Field × Action',    component: CrossActionQueryPlugin   },
   { id: 'scenario-compare',  title: 'Scenario Compare',  component: ScenarioComparePlugin },
   { id: 'dg-config',   title: 'Decision Graph', component: DgConfigPlugin    },
   { id: 'dg-results',  title: 'DG Results',    component: DgResultsPlugin   },
@@ -78,7 +80,7 @@ export const FINANCE_DEFAULT_LAYOUT = {
     active: 'state-panel',
   },
   bottom: {
-    tabs: ['journal-report', 'scenario-compare', 'dashboard', 'perf'],
+    tabs: ['journal-report', 'cross-action-query', 'scenario-compare', 'dashboard', 'perf'],
     active: 'journal-report',
   },
   bottomSize:       110,

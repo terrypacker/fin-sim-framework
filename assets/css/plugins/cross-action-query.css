@@ -1,0 +1,93 @@
+/* ── Cross-Action Query Plugin ──────────────────────────────────────────────── */
+
+.caq-plugin {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+}
+
+.caq-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.caq-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.caq-input {
+  flex: 1;
+  min-width: 140px;
+  font-size: 11px;
+  padding: 2px 6px;
+  background: var(--bg-panel2, #111);
+  color: var(--text-primary, #e5e7eb);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: var(--font-mono, monospace);
+}
+
+.caq-results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 8px;
+}
+
+.caq-placeholder {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.caq-summary {
+  display: flex;
+  gap: 12px;
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+
+.caq-delta--pos { color: #34d399; }
+.caq-delta--neg { color: #f87171; }
+
+.caq-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.caq-table thead th {
+  text-align: left;
+  padding: 2px 6px;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.caq-row {
+  border-bottom: 1px solid var(--border-subtle, var(--border));
+  cursor: pointer;
+}
+
+.caq-row:hover {
+  background: var(--bg-hover, rgba(255,255,255,0.04));
+}
+
+.caq-row td {
+  padding: 3px 6px;
+  font-size: 11px;
+}
+
+.caq-cell--muted { color: var(--text-muted); }
+.caq-cell--mono  { font-family: var(--font-mono, monospace); }
