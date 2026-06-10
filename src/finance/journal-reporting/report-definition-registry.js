@@ -140,6 +140,39 @@ class OrdinaryIncomeBySourceDef extends ReportDefinition {
   }
 }
 
+class NrWithholdingIncomeBySourceDef extends ReportDefinition {
+  get id()          { return 'nr-withholding-income-by-source'; }
+  get title()       { return 'Non-Resident Withholding Income by Source'; }
+  get description() { return 'Journal entries that contributed to AU non-resident withholding income for the period.'; }
+
+  get facets() {
+    return [
+      { name: 'personKeys', label: 'People', kind: 'multiselect', optionsSource: 'person' },
+      { name: 'period',     label: 'Period', kind: 'period' },
+    ];
+  }
+
+  buildQuery(params, api) {
+    const { period, personKeys } = params;
+    const periodAst  = api.periodOf(period);
+    // Match both household (auNonResidentWithholdingYTD) and per-person
+    // (auPersonNonResidentWithholdingYTD) reducer paths — the latter is used
+    // when state.people is defined and the source account is non-null.
+    const conditions = [
+      periodAst,
+      {
+        op: 'or',
+        conditions: [
+          { op: 'contains', field: 'changedFields', value: 'auNonResidentWithholdingYTD'       },
+          { op: 'contains', field: 'changedFields', value: 'auPersonNonResidentWithholdingYTD' },
+        ],
+      },
+    ];
+    _appendInFilter(conditions, 'personKey', personKeys);
+    return { op: 'and', conditions };
+  }
+}
+
 class PretaxAdjustmentsBySourceDef extends ReportDefinition {
   get id()          { return 'pretax-adjustments-by-source'; }
   get title()       { return 'Pre-tax Contributions by Source'; }
@@ -442,6 +475,7 @@ export class ReportDefinitionRegistry {
 
     for (const def of [
       new OrdinaryIncomeBySourceDef(),
+      new NrWithholdingIncomeBySourceDef(),
       new PretaxAdjustmentsBySourceDef(),
       new CapitalGainsByDisposalDef(),
       new CashFlowByAccountDef(),

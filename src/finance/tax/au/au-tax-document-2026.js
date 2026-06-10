@@ -113,7 +113,7 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
             { label: 'Ordinary Income',                 amount: inputs.ordinaryIncome,           drillReport: drill('ordinary-income-by-source') },
             { label: 'Capital Gains (no CGT discount)', amount: inputs.capitalGains,             drillReport: drill('capital-gains-by-disposal') },
             { label: 'Total Assessable Income',         amount: taxDetail.assessableIncome },
-            { label: 'Non-Resident Withholding Income', amount: inputs.nonResidentWithholding,   drillReport: drill('ordinary-income-by-source') },
+            { label: 'Non-Resident Withholding Income', amount: inputs.nonResidentWithholding,   drillReport: drill('nr-withholding-income-by-source') },
           ],
         },
         {
