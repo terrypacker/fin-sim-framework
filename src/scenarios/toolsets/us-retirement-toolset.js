@@ -143,7 +143,7 @@ export const US_RETIREMENT = {
     ],
     actions: [
       { type: 'EXPENSE_DEBIT',         fields: { amount: ValueType.number(), targetKey: ValueType.text() } },
-      { type: 'REPLENISH_SAVINGS',  fields: { deficit: ValueType.number(), targetKey: ValueType.text() } },
+      { type: 'REPLENISH_SAVINGS',  family: 'WITHDRAWAL', fields: { deficit: ValueType.number(), targetKey: ValueType.text() } },
       { type: 'RECORD_METRIC',         fields: { fieldName: ValueType.text(), value: ValueType.number() } },
       { type: 'SET_OUT_OF_FUNDS_DATE', fields: { date: ValueType.any() } },
       { type: 'ACCUMULATE_DEFICIT',    fields: { amount: ValueType.number() } },

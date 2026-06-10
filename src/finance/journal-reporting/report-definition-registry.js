@@ -326,6 +326,76 @@ class WithdrawalsByAccountDef extends ReportDefinition {
   }
 }
 
+class CreditsToAccountDef extends ReportDefinition {
+  get id()          { return 'credits-to-account'; }
+  get title()       { return 'Credits to Account'; }
+  get description() { return 'All positive balance changes per account — replenishments, contributions, earnings, and transfers in.'; }
+  get perDiff()     { return true; }
+
+  get facets() {
+    return [
+      { name: 'accountStateKeys', label: 'Accounts', kind: 'multiselect', optionsSource: 'account' },
+      { name: 'period',           label: 'Period',   kind: 'period' },
+    ];
+  }
+
+  get defaultGroupBy()    { return ['stateKey']; }
+  get defaultAggregates() {
+    return {
+      total: { fn: 'sum', field: 'stateDelta' },
+      count: { fn: 'count'                    },
+      max:   { fn: 'max', field: 'stateDelta' },
+    };
+  }
+
+  buildQuery(params, api) {
+    const { period, accountStateKeys } = params;
+    const periodAst  = api.periodOfTaxYear(period);
+    const conditions = [
+      periodAst,
+      { op: 'contains', field: 'stateKey',   value: 'account.balance' },
+      { op: 'gt',       field: 'stateDelta', value: 0                 },
+    ];
+    _appendAccountStateKeyFilter(conditions, accountStateKeys);
+    return { op: 'and', conditions };
+  }
+}
+
+class DebitsFromAccountDef extends ReportDefinition {
+  get id()          { return 'debits-from-account'; }
+  get title()       { return 'Debits from Account'; }
+  get description() { return 'All negative balance changes per account — expenses, taxes, transfers out, and withdrawals.'; }
+  get perDiff()     { return true; }
+
+  get facets() {
+    return [
+      { name: 'accountStateKeys', label: 'Accounts', kind: 'multiselect', optionsSource: 'account' },
+      { name: 'period',           label: 'Period',   kind: 'period' },
+    ];
+  }
+
+  get defaultGroupBy()    { return ['stateKey']; }
+  get defaultAggregates() {
+    return {
+      total: { fn: 'sum', field: 'stateDelta' },
+      count: { fn: 'count'                    },
+      min:   { fn: 'min', field: 'stateDelta' },
+    };
+  }
+
+  buildQuery(params, api) {
+    const { period, accountStateKeys } = params;
+    const periodAst  = api.periodOfTaxYear(period);
+    const conditions = [
+      periodAst,
+      { op: 'contains', field: 'stateKey',   value: 'account.balance' },
+      { op: 'lt',       field: 'stateDelta', value: 0                 },
+    ];
+    _appendAccountStateKeyFilter(conditions, accountStateKeys);
+    return { op: 'and', conditions };
+  }
+}
+
 class TaxPaidByYearDef extends ReportDefinition {
   get id()          { return 'tax-paid-by-year'; }
   get title()       { return 'Tax Paid by Year'; }
@@ -503,6 +573,8 @@ export class ReportDefinitionRegistry {
       new CapitalGainsByDisposalDef(),
       new CashFlowByAccountDef(),
       new WithdrawalsByAccountDef(),
+      new CreditsToAccountDef(),
+      new DebitsFromAccountDef(),
       new TaxPaidByYearDef(),
       new AuTaxByPersonYearDef(),
       new RothConversionsByYearDef(),
