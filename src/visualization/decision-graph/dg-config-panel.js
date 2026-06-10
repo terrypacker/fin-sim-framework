@@ -172,8 +172,9 @@ export class DgConfigPanel extends BaseComponent {
         paramKey:  dp.paramKey,
         options:   [...(dp.options ?? [])],
         weights:   dp.weights ?? null,
-        _schemaKey: match?.key ?? '',
-        _type:      match?.type ?? null,
+        _schemaKey:   match?.key ?? '',
+        _type:        match?.type ?? null,
+        _enumOptions: match?.type === 'EnumMulti' ? (match?.options ?? []) : null,
       };
     });
     this._editingDg   = dg ? { ...dg } : null;
@@ -372,12 +373,18 @@ export class DgConfigPanel extends BaseComponent {
       const entry = this._paramSchema.find(s => s.key === key);
       dp._schemaKey = key;
       dp._type = entry?.type ?? null;
+      dp._enumOptions = entry?.type === 'EnumMulti' ? (entry?.options ?? []) : null;
       if (entry) {
         dp.id       = entry.key;
         dp.label    = entry.label;
         dp.paramKey = entry.key;
         if (entry.type === 'Boolean') {
           dp.options = [{ value: true, label: 'Yes' }, { value: false, label: 'No' }];
+        } else if (entry.type === 'EnumMulti' && Array.isArray(entry.options)) {
+          dp.options = [
+            { value: [], label: 'None' },
+            ...entry.options.map(o => ({ value: [o], label: String(o) })),
+          ];
         } else if (Array.isArray(entry.options) && entry.options.length) {
           // Enum schema param: pre-fill the decision point with every choice.
           dp.options = entry.options.map(o => ({ value: o, label: String(o) }));
@@ -441,16 +448,18 @@ export class DgConfigPanel extends BaseComponent {
   // ── Options section (type-aware) ────────────────────────────────────────────
 
   _renderOptionsSection(container, dp) {
-    const type   = dp._type;
-    const isNum  = type === 'Number';
-    const isBool = type === 'Boolean';
-    const isDate = type === 'Date';
+    const type        = dp._type;
+    const isNum       = type === 'Number';
+    const isBool      = type === 'Boolean';
+    const isDate      = type === 'Date';
+    const isEnumMulti = type === 'EnumMulti';
 
     const hdr = document.createElement('div');
     hdr.className = 'dg-options-label';
-    hdr.textContent = isBool ? 'Options (fixed):'
-      : isNum  ? 'Options (numbers):'
-      : isDate ? 'Options (dates):'
+    hdr.textContent = isBool      ? 'Options (fixed):'
+      : isEnumMulti ? 'Options (strategy sets):'
+      : isNum       ? 'Options (numbers):'
+      : isDate      ? 'Options (dates):'
       : 'Options (value | label):';
     container.appendChild(hdr);
 
@@ -469,6 +478,14 @@ export class DgConfigPanel extends BaseComponent {
           span.className = 'dg-option-readonly';
           span.textContent = opt.value === true ? 'Yes (true)' : 'No (false)';
           row.appendChild(span);
+        } else if (isEnumMulti) {
+          const arr = Array.isArray(opt.value) ? opt.value : [];
+          const span = document.createElement('span');
+          span.className = 'dg-option-readonly';
+          span.textContent = arr.length === 0 ? '[ None ]' : arr.join(', ');
+          span.title = JSON.stringify(arr);
+          const rmBtn = this._rmBtn(() => { dp.options.splice(oi, 1); if (dp.weights) dp.weights.splice(oi, 1); renderOptions(); });
+          row.append(span, ...this._weightInput(dp, oi), rmBtn);
         } else if (isNum) {
           const valInp = document.createElement('input');
           valInp.type = 'number';
@@ -507,15 +524,19 @@ export class DgConfigPanel extends BaseComponent {
     renderOptions();
 
     if (!isBool) {
-      const addOptBtn = document.createElement('button');
-      addOptBtn.className = 'btn dg-add-option-btn';
-      addOptBtn.textContent = '+ option';
-      this.listen(addOptBtn, 'click', () => {
-        dp.options.push(isNum ? { value: 0, label: '0' } : { value: '', label: '' });
-        if (dp.weights !== null) dp.weights.push(0);
-        renderOptions();
-      });
-      container.appendChild(addOptBtn);
+      if (isEnumMulti) {
+        container.appendChild(this._buildEnumMultiAdder(dp, renderOptions));
+      } else {
+        const addOptBtn = document.createElement('button');
+        addOptBtn.className = 'btn dg-add-option-btn';
+        addOptBtn.textContent = '+ option';
+        this.listen(addOptBtn, 'click', () => {
+          dp.options.push(isNum ? { value: 0, label: '0' } : { value: '', label: '' });
+          if (dp.weights !== null) dp.weights.push(0);
+          renderOptions();
+        });
+        container.appendChild(addOptBtn);
+      }
 
       if (isNum) {
         container.appendChild(this._buildRangeBuilder(dp, renderOptions));
@@ -604,6 +625,68 @@ export class DgConfigPanel extends BaseComponent {
     return wrapper;
   }
 
+  // ── EnumMulti adder ─────────────────────────────────────────────────────────
+
+  /**
+   * Build an inline strategy-picker that adds a new combo option to dp.options.
+   * Available strategies come from dp._enumOptions (stored when the schema param
+   * is selected).
+   */
+  _buildEnumMultiAdder(dp, renderOptions) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'dg-enum-multi-adder';
+
+    const available = dp._enumOptions ?? [];
+    if (!available.length) return wrapper;
+
+    const toggle = document.createElement('button');
+    toggle.className = 'btn dg-range-toggle-btn';
+    toggle.textContent = '+ Add strategy set';
+
+    const picker = document.createElement('div');
+    picker.className = 'dg-enum-multi-picker';
+    picker.style.display = 'none';
+
+    const checkboxes = available.map(key => {
+      const lbl = document.createElement('label');
+      lbl.className = 'dg-enum-multi-check-lbl';
+      const chk = document.createElement('input');
+      chk.type = 'checkbox';
+      chk.value = key;
+      const span = document.createElement('span');
+      span.textContent = key;
+      lbl.append(chk, span);
+      picker.appendChild(lbl);
+      return chk;
+    });
+
+    const addBtn = document.createElement('button');
+    addBtn.className = 'btn dg-range-gen-btn';
+    addBtn.textContent = 'Add';
+    this.listen(addBtn, 'click', () => {
+      const selected = checkboxes.filter(c => c.checked).map(c => c.value);
+      const arr = selected;
+      const label = arr.length === 0 ? 'None' : arr.join(', ');
+      dp.options.push({ value: arr, label });
+      if (dp.weights !== null) dp.weights.push(0);
+      checkboxes.forEach(c => { c.checked = false; });
+      renderOptions();
+      picker.style.display = 'none';
+      toggle.textContent = '+ Add strategy set';
+    });
+
+    picker.appendChild(addBtn);
+
+    this.listen(toggle, 'click', () => {
+      const open = picker.style.display !== 'none';
+      picker.style.display = open ? 'none' : '';
+      toggle.textContent = open ? '+ Add strategy set' : '+ Add strategy set ▲';
+    });
+
+    wrapper.append(toggle, picker);
+    return wrapper;
+  }
+
   // ── Save ────────────────────────────────────────────────────────────────────
 
   _saveForm(existingId, nameInput, baseSel, drawsInput, objSel, dpList, persistChk) {
@@ -618,7 +701,8 @@ export class DgConfigPanel extends BaseComponent {
       paramKey: dp.paramKey,
       options:  (dp.options ?? []).map(o => ({
         value: typeof o.value === 'boolean' ? o.value
-          : isNaN(Number(o.value)) ? o.value : Number(o.value),
+          : Array.isArray(o.value)          ? o.value
+          : isNaN(Number(o.value))          ? o.value : Number(o.value),
         label: String(o.label ?? o.value ?? ''),
       })),
       weights: dp.weights ?? null,
