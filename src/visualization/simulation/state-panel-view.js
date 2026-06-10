@@ -13,6 +13,7 @@ import { BaseComponent } from '../components/base-component.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bus-messages.js';
 import { EXECUTION_EDGE_TYPES } from '../../simulation-framework/execution-graph.js';
 import { readThemeColor } from '../theme.js';
+import { APP_EVENTS } from '../app-display-settings.js';
 
 /**
  * StatePanelView — pure DOM layer for state/metrics panels and node detail.
@@ -27,7 +28,7 @@ import { readThemeColor } from '../theme.js';
  */
 export class StatePanelView extends BaseComponent {
 
-  constructor({ displaySettings } = {}) {
+  constructor({ displaySettings, appBus } = {}) {
     super();
     this._formatDate        = displaySettings?.formatDate ?? (d => d.toDateString());
     this._schemaRegistry    = null;
@@ -48,10 +49,10 @@ export class StatePanelView extends BaseComponent {
     this._filterText        = '';
     this._expandedSections  = new Set();  // sectionPath → expanded; default (absent) = collapsed
 
-    if (displaySettings) {
-      this.onCleanup(displaySettings.subscribe(({ formatDate }) => {
+    if (appBus) {
+      appBus.subscribe(APP_EVENTS.DISPLAY_SETTINGS_CHANGED, ({ formatDate }) => {
         this._formatDate = formatDate;
-      }));
+      });
     }
   }
 

@@ -10,6 +10,7 @@
 
 import { BaseComponent }                   from '../components/base-component.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bus-messages.js';
+import { APP_EVENTS }                        from '../app-display-settings.js';
 
 /**
  * PlaybackProgressComponent — owns the time-slider and time-label updates.
@@ -24,7 +25,7 @@ import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bu
  */
 export class PlaybackProgressComponent extends BaseComponent {
 
-  constructor({ scenario, timeSlider, timeLabel, displaySettings, formatDate }) {
+  constructor({ scenario, timeSlider, timeLabel, displaySettings, formatDate, appBus }) {
     super();
     this._scenario       = scenario;
     this._timeSlider     = timeSlider;
@@ -33,8 +34,8 @@ export class PlaybackProgressComponent extends BaseComponent {
     this._pendingDate    = null;
     this._drainBeginMsgs = () => [];
 
-    if (displaySettings) {
-      this.onCleanup(displaySettings.subscribe(({ formatDate: fmt }) => {
+    if (appBus) {
+      this.onCleanup(appBus.subscribe(APP_EVENTS.DISPLAY_SETTINGS_CHANGED, ({ formatDate: fmt }) => {
         this._formatDate = fmt;
         if (this._pendingDate) this.render();
       }));

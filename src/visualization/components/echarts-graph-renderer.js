@@ -17,6 +17,7 @@ import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bu
 import { NodeRendererRegistry } from "./graph/rendering/node-renderer-registry.js";
 import { BACKWARD_MARGIN, MERGE_OFFSET } from '../graph-builder/graph-metrics.js';
 import { readThemeColor } from '../theme.js';
+import { APP_EVENTS } from '../app-display-settings.js';
 
 const NODE_WIDTH  = 180;
 const NODE_HEIGHT = 56;
@@ -66,11 +67,12 @@ export class EChartsGraphRenderer extends BaseComponent {
 
   constructor({ parent, graph, graphQueryApi, graphRoot,
     graphNodes, graphEdges, nodeDetailsTemplate,
-    displayNodeStateChanges, bus, layout, displaySettings }) {
+    displayNodeStateChanges, bus, layout, displaySettings, appBus }) {
     super({ parent });
 
     this._graphQueryApi     = graphQueryApi;
     this._displaySettings   = displaySettings ?? null;
+    this._appBus            = appBus ?? null;
     this._layout            = layout ?? new ColumnLayout();
     this._graphDataProvider = null;
     this._container         = graphRoot;
@@ -131,9 +133,9 @@ export class EChartsGraphRenderer extends BaseComponent {
       this._ro.observe(this._container);
     }
 
-    if (this._displaySettings) {
+    if (this._displaySettings && this._appBus) {
       let lastTheme = this._displaySettings.theme;
-      this.onCleanup(this._displaySettings.subscribe(({ theme }) => {
+      this.onCleanup(this._appBus.subscribe(APP_EVENTS.DISPLAY_SETTINGS_CHANGED, ({ theme }) => {
         if (theme === lastTheme) return;
         lastTheme = theme;
         this._colors = buildColors();

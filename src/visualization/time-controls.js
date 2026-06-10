@@ -10,9 +10,10 @@
 
 import { BaseComponent }              from './components/base-component.js';
 import { PlaybackProgressComponent } from './simulation/playback-progress-component.js';
+import { APP_EVENTS }                from './app-display-settings.js';
 
 export class TimeControls extends BaseComponent {
-  constructor({ scenario, configPresenter, timelineView, chartView, timeLabel, timeSlider, displaySettings, onReset }) {
+  constructor({ scenario, configPresenter, timelineView, chartView, timeLabel, timeSlider, displaySettings, appBus, onReset }) {
     super();
     this.scenario = scenario;
     this.configPresenter = configPresenter;
@@ -32,11 +33,12 @@ export class TimeControls extends BaseComponent {
       timeSlider:      this.timeSlider,
       timeLabel:       this.timeLabel,
       displaySettings: displaySettings,
+      appBus,
     });
     this._registerChild(this._progress);
 
-    if (displaySettings) {
-      this.onCleanup(displaySettings.subscribe(({ formatDate, currency }) => {
+    if (appBus) {
+      this.onCleanup(appBus.subscribe(APP_EVENTS.DISPLAY_SETTINGS_CHANGED, ({ formatDate, currency }) => {
         this.formatDate = formatDate;
         this.displayCurrency = currency;
         const current = this.scenario?.sim?.currentDate;

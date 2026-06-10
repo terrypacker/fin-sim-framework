@@ -59,8 +59,8 @@ import { DecisionGraphRegistry } from './finance/decision-graph/decision-graph-r
 import { DecisionGraphResultStorage } from './finance/decision-graph/decision-graph-result-storage.js';
 import { DecisionGraphRunner } from './finance/decision-graph/decision-graph-runner.js';
 import { DecisionGraphStorage } from './finance/decision-graph/decision-graph-storage.js';
-import { computeNetWorth, deriveNetWorth } from './finance/derived-metrics/net-worth.js';
 import { computeNetLiquidity, deriveNetLiquidity } from './finance/derived-metrics/net-liquidity.js';
+import { computeNetWorth, deriveNetWorth } from './finance/derived-metrics/net-worth.js';
 import { AddRegimeReducer } from './finance/economic-regimes/add-regime-reducer.js';
 import { BondPriceAdjustReducer } from './finance/economic-regimes/bond-price-adjust-reducer.js';
 import { EconomicRecoveryTickHandler } from './finance/economic-regimes/economic-recovery-tick-handler.js';
@@ -251,7 +251,7 @@ import { ValueType, TypeRegistry } from './simulation-framework/type-registry.js
 import { InMemoryStorage } from './storage/in-memory-storage.js';
 import { AccountEditor } from './visualization/accounts/account-editor.js';
 import { AccountsController } from './visualization/accounts/accounts-controller.js';
-import { AppDisplaySettings } from './visualization/app-display-settings.js';
+import { APP_EVENTS, AppDisplaySettings } from './visualization/app-display-settings.js';
 import { CollectibleEditor } from './visualization/assets/collectible-editor.js';
 import { RealPropertyEditor } from './visualization/assets/real-property-editor.js';
 import { ChartController } from './visualization/chart/chart-controller.js';
@@ -519,10 +519,10 @@ export const Finance = {
   DecisionGraphResultStorage,
   DecisionGraphRunner,
   DecisionGraphStorage,
-  computeNetWorth,
-  deriveNetWorth,
   computeNetLiquidity,
   deriveNetLiquidity,
+  computeNetWorth,
+  deriveNetWorth,
   AddRegimeReducer,
   BondPriceAdjustReducer,
   EconomicRecoveryTickHandler,
@@ -858,6 +858,7 @@ export const Services = {
 export const Visualization = {
   AccountEditor,
   AccountsController,
+  APP_EVENTS,
   AppDisplaySettings,
   CollectibleEditor,
   RealPropertyEditor,

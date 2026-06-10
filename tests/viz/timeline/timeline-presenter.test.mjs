@@ -13,6 +13,8 @@ import assert from 'node:assert/strict';
 import { TimelineController } from '../../../src/visualization/timeline/timeline-controller.js';
 import { TimelineView }       from '../../../src/visualization/timeline/timeline-view.js';
 import { TimelinePresenter }  from '../../../src/visualization/timeline/timeline-presenter.js';
+import { EventBus }           from '../../../src/simulation-framework/event-bus.js';
+import { APP_EVENTS }         from '../../../src/visualization/app-display-settings.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function makeFilterTemplate() {
@@ -398,4 +400,42 @@ test('TimelinePresenter: schemaRegistry setter coerces null/undefined to null on
   const { presenter, controller } = makePresenter();
   presenter.schemaRegistry = null;
   assert.strictEqual(controller.schemaRegistry, null);
+});
+
+// ─── appBus wiring ────────────────────────────────────────────────────────────
+
+test('TimelinePresenter: DISPLAY_SETTINGS_CHANGED updates _formatDate', () => {
+  makeFilterTemplate();
+  const appBus    = new EventBus();
+  const container = makeContainer();
+  const presenter = new TimelinePresenter({
+    controller: new TimelineController(),
+    view:       new TimelineView({ container }),
+    onDetail:   () => {},
+    appBus,
+  });
+  const newFmt = d => `fmt:${d.getFullYear()}`;
+
+  appBus.publish({ type: APP_EVENTS.DISPLAY_SETTINGS_CHANGED, formatDate: newFmt, currency: 'USD', theme: 'dark', timezone: 'utc' });
+
+  assert.strictEqual(presenter._formatDate, newFmt);
+});
+
+test('TimelinePresenter.destroy: unsubscribes from appBus so no further updates fire', () => {
+  makeFilterTemplate();
+  const appBus    = new EventBus();
+  const container = makeContainer();
+  const presenter = new TimelinePresenter({
+    controller: new TimelineController(),
+    view:       new TimelineView({ container }),
+    onDetail:   () => {},
+    appBus,
+  });
+  const originalFmt = presenter._formatDate;
+  presenter.destroy();
+
+  const newFmt = d => `post-destroy:${d.getFullYear()}`;
+  appBus.publish({ type: APP_EVENTS.DISPLAY_SETTINGS_CHANGED, formatDate: newFmt, currency: 'USD', theme: 'dark', timezone: 'utc' });
+
+  assert.strictEqual(presenter._formatDate, originalFmt, '_formatDate should not change after destroy');
 });
