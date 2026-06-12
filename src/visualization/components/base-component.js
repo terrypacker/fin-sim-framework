@@ -92,20 +92,27 @@ export class BaseComponent {
    * @param {string}    type      - Message type (e.g. 'SERVICE_ACTION')
    * @param {function}  renderFn  - Called when a message arrives (e.g. () => this.render())
    * @param {object}   [filter]   - Optional filter object { kind, subtype, instanceOf }
-   * @returns {function(): Array} drain — returns and clears the queued messages
+   * @returns {function(): Array} drain — returns and clears the queued messages.
+   *   The returned function also carries an `unsubscribe()` method that removes
+   *   the subscription from the bus (also run automatically on destroy()).
    */
   busQueue(bus, type, renderFn, filter) {
     const queue = [];
-    const drain = () => queue.splice(0);
     const subscriber = (msg) => {
       queue.push(msg);
       renderFn();
     };
-    if (filter) {
-      bus.subscribe(type, filter, subscriber);
-    } else {
-      bus.subscribe(type, subscriber);
-    }
+    const unsubscribe = filter
+      ? bus.subscribe(type, filter, subscriber)
+      : bus.subscribe(type, subscriber);
+
+    // Without this, subscribers accumulate on long-lived buses (the simulation
+    // shares the persistent ServiceRegistry bus), pinning whole component graphs
+    // — including prior simulations — across every scenario Rebuild.
+    this.onCleanup(unsubscribe);
+
+    const drain = () => queue.splice(0);
+    drain.unsubscribe = unsubscribe;
     return drain;
   }
 

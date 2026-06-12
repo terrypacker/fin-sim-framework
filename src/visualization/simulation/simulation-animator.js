@@ -160,6 +160,8 @@ export class SimulationAnimator {
     });
     this._dashCards.wireSimBus(bus, this._scenario?.sim);
 
+    // bus is the per-run sim bus; this subscription is collected when the sim
+    // (and its bus) is discarded on the next Rebuild.
     bus.subscribe('BREAKPOINT_HIT', (msg) => {
       this.showBreakpointPaused(msg);
     });
