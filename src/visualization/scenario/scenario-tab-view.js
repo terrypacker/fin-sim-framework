@@ -45,6 +45,10 @@ export class ScenarioTabView {
     this.onDownloadJson = null;
     /** @type {function(file)|null} */
     this.onUploadJson = null;
+    /** @type {function()|null} */
+    this.onDownloadCsv = null;
+    /** @type {function(file)|null} */
+    this.onUploadCsv = null;
 
     // Parameters list: live filter substring + per-group expand state.
     // Mirrors StatePanelView's filter/foldable-section behaviour. Groups are
@@ -138,6 +142,23 @@ export class ScenarioTabView {
           this.onUploadJson(file);
         } catch (err) {
           alert('Failed to parse JSON file: ' + err.message);
+        }
+        e.target.value = '';
+      }
+    });
+
+    document.getElementById('downloadCsvBtn')?.addEventListener('click', () => {
+      if(this.onDownloadCsv) this.onDownloadCsv();
+    });
+
+    document.getElementById('uploadCsvFileInput')?.addEventListener('change', async (e) => {
+      if(this.onUploadCsv) {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+          await this.onUploadCsv(file);
+        } catch (err) {
+          alert('Failed to import CSV: ' + err.message);
         }
         e.target.value = '';
       }
@@ -512,11 +533,16 @@ export class ScenarioTabView {
   }
 
   downloadJson(data) {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    this.downloadFile('fin-sim-scenarios.json', JSON.stringify(data, null, 2), 'application/json');
+  }
+
+  /** Trigger a browser download of arbitrary text content. */
+  downloadFile(filename, text, mime = 'text/plain') {
+    const blob = new Blob([text], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'fin-sim-scenarios.json';
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -524,18 +550,32 @@ export class ScenarioTabView {
   }
 
   readUploadedJson(file) {
+    return this.readUploadedText(file).then(JSON.parse);
+  }
+
+  /** Read an uploaded file as text. */
+  readUploadedText(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          resolve(JSON.parse(e.target.result));
-        } catch (err) {
-          reject(err);
-        }
-      };
+      reader.onload = (e) => resolve(e.target.result);
       reader.onerror = reject;
       reader.readAsText(file);
     });
+  }
+
+  /** Surface a CSV import summary ({ applied, skipped, errors } or { error }). */
+  reportCsvImport(result) {
+    if (!result) return;
+    if (result.error) { alert('CSV import failed: ' + result.error); return; }
+    const lines = [`Applied ${result.applied} parameter${result.applied === 1 ? '' : 's'}.`];
+    if (result.skipped?.length) {
+      lines.push(`Skipped ${result.skipped.length} unknown key${result.skipped.length === 1 ? '' : 's'}: ${result.skipped.join(', ')}`);
+    }
+    if (result.errors?.length) {
+      lines.push(`${result.errors.length} error${result.errors.length === 1 ? '' : 's'}:`, ...result.errors);
+    }
+    lines.push('', 'Click Rebuild Simulation to apply.');
+    alert(lines.join('\n'));
   }
 
 }

@@ -51,6 +51,11 @@ export class ScenarioPlugin extends WorkbenchComponent {
         Upload JSON
         <input type="file" id="uploadJsonFileInput" accept=".json" class="wb-hidden" />
       </label>
+      <button class="btn btn-sm" id="downloadCsvBtn">Download Params CSV</button>
+      <label class="btn btn-sm wb-upload-label">
+        Upload Params CSV
+        <input type="file" id="uploadCsvFileInput" accept=".csv,text/csv" class="wb-hidden" />
+      </label>
     </div>
     `;
     return root;

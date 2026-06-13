@@ -311,6 +311,7 @@ import { OptimizationPresenter } from './visualization/optimization/optimization
 import { OptimizationView } from './visualization/optimization/optimization-view.js';
 import { PeopleController } from './visualization/people/people-controller.js';
 import { PersonEditor } from './visualization/people/person-editor.js';
+import { CSV_SCALAR_TYPES, paramsToCsv, csvToParamUpdates, coerceParamValue } from './visualization/scenario/param-csv.js';
 import { ScenarioTabController } from './visualization/scenario/scenario-tab-controller.js';
 import { ScenarioTabPresenter } from './visualization/scenario/scenario-tab-presenter.js';
 import { ScenarioTabView } from './visualization/scenario/scenario-tab-view.js';
@@ -943,6 +944,10 @@ export const Visualization = {
   OptimizationView,
   PeopleController,
   PersonEditor,
+  CSV_SCALAR_TYPES,
+  paramsToCsv,
+  csvToParamUpdates,
+  coerceParamValue,
   ScenarioTabController,
   ScenarioTabPresenter,
   ScenarioTabView,
