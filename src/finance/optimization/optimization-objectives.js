@@ -51,4 +51,10 @@ export const OPTIMIZATION_OBJECTIVES = {
     direction: 'minimize',
     evaluate:  result => result.cumulativeDeficit,
   },
+
+  MAX_NET_LIQUIDITY: {
+    label:     'Maximize Final Net Liquidity (USD)',
+    direction: 'maximize',
+    evaluate:  result => result.finalNetLiquidity,
+  },
 };

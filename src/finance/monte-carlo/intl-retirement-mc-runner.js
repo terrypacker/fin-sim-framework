@@ -17,6 +17,7 @@ import { ScenarioSerializer }         from '../../scenarios/scenario-serializer.
 import { IntlRetirementMcConfig }     from './intl-retirement-mc-config.js';
 import { get, set }                   from './mc-param-paths.js';
 import { computeNetWorth }            from '../derived-metrics/net-worth.js';
+import { computeNetLiquidity }        from '../derived-metrics/net-liquidity.js';
 
 /** @deprecated Use computeNetWorth from derived-metrics/net-worth.js */
 export function computeNetWorthUsd(state) {
@@ -31,13 +32,14 @@ function extractYearlyTimeSeries(sim) {
   const byYear = new Map();
   for (const snap of sim.history.snapshots) {
     const year = snap.date.getUTCFullYear();
-    byYear.set(year, snap.state);
+    byYear.set(year, snap);
   }
   return [...byYear.entries()]
     .sort(([a], [b]) => a - b)
-    .map(([year, state]) => ({
-      date:        new Date(Date.UTC(year, 0, 1)),
-      netWorthUsd: computeNetWorthUsd(state),
+    .map(([year, snap]) => ({
+      date:         new Date(Date.UTC(year, 0, 1)),
+      netWorthUsd:  computeNetWorthUsd(snap.state),
+      netLiquidity: computeNetLiquidity(snap.state, snap.date),
     }));
 }
 
@@ -149,6 +151,7 @@ export class IntlRetirementMcRunner {
       },
       evaluate: (sim) => ({
         finalNetWorthUsd:  computeNetWorthUsd(sim.state),
+        finalNetLiquidity: computeNetLiquidity(sim.state, simEnd),
         scenarioFailed:    sim.state.scenarioFailed    ?? false,
         outOfFundsDate:    sim.state.outOfFundsDate    ?? null,
         cumulativeDeficit: sim.state.cumulativeDeficit ?? 0,
@@ -185,6 +188,7 @@ export class IntlRetirementMcRunner {
       seed:              r.seed,
       params:            r.params,
       finalNetWorthUsd:  r.result.finalNetWorthUsd,
+      finalNetLiquidity: r.result.finalNetLiquidity,
       scenarioFailed:    r.result.scenarioFailed,
       outOfFundsDate:    r.result.outOfFundsDate,
       cumulativeDeficit: r.result.cumulativeDeficit,

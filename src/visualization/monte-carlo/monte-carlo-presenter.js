@@ -37,8 +37,13 @@ export class MonteCarloPresenter {
     this._resultsPanel = new McResultsPanel(view.resultsPane);
     this._runsPanel    = new McRunsPanel(view.runsPane);
 
-    this._configPanel.onRun         = (config) => this._onRun(config);
-    this._runsPanel.onRunSelected   = (run)    => this.onReplayRun?.(run);
+    this._configPanel.onRun         = (config)  => this._onRun(config);
+    this._runsPanel.onRunSelected   = (run)     => this.onReplayRun?.(run);
+    this._resultsPanel.onMetricChange = (metric) => {
+      if (this._lastResult) {
+        this._runsPanel.showResults(this._lastResult.summary, this._lastResult.runs, metric);
+      }
+    };
 
     // Populate panel with the full dynamic variable list (including per-shock rows)
     const baseParams = this._resolveBaseParams();
@@ -85,7 +90,7 @@ export class MonteCarloPresenter {
         this._configPanel.showProgress(`Completed ${n} runs`);
         this._configPanel.enableRun();
         this._resultsPanel.showResults(result.summary, result.runs);
-        this._runsPanel.showResults(result.summary, result.runs);
+        this._runsPanel.showResults(result.summary, result.runs, this._resultsPanel._metric);
       }).catch(err => {
         this._configPanel.showProgress(`Error: ${err.message}`);
         this._configPanel.enableRun();
