@@ -11,11 +11,11 @@
 import * as echarts from 'echarts';
 import { BaseComponent } from './base-component.js';
 import { ColumnLayout } from '../graph-builder/column-layout.js';
-import { routeEdge, computeFanOutOffsets, computeLaneOffsets } from '../graph-builder/orthogonal-edge-router.js';
+import { routeEdge, computeFanOutOffsets, computeLaneOffsets, groupMergeTargets } from '../graph-builder/orthogonal-edge-router.js';
 import { chooseClearMidX } from '../graph-builder/collision-detector.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bus-messages.js';
 import { NodeRendererRegistry } from "./graph/rendering/node-renderer-registry.js";
-import { BACKWARD_MARGIN } from '../graph-builder/graph-metrics.js';
+import { BACKWARD_MARGIN, MERGE_OFFSET } from '../graph-builder/graph-metrics.js';
 import { readThemeColor } from '../theme.js';
 
 const NODE_WIDTH  = 180;
@@ -353,16 +353,49 @@ export class EChartsGraphRenderer extends BaseComponent {
     const { sourceOffsets, targetOffsets } = computeFanOutOffsets(edgesArray, this._positions);
     const midXOffsets = computeLaneOffsets(edgesArray, this._positions, { nodeWidth: NODE_WIDTH });
 
+    // Identify forward-edge groups that share a target and should be merged into
+    // a single arrowhead.  Branch items route to a merge point; a trunk item
+    // carries the single arrowhead from the merge point to the target.
+    const mergeGroups    = groupMergeTargets(edgesArray, this._positions, { nodeWidth: NODE_WIDTH });
+    const mergeEdgeKeys  = new Set([...mergeGroups.values()].flat());
+    const highlightedMergeTargets = new Set();
+
     // Edge data: [srcX, srcY, tgtX, tgtY, hl, srcYOff, tgtYOff, midXOff, loopY].
     //   midXOff  — obstacle-aware lane offset (computed below for forward edges)
     //   loopY    — pre-computed backward-edge floor in data space (-1 for forward edges)
+    //   pts      — pre-computed polyline in data space (overrides routing when present)
+    //   showArrow — false suppresses the arrowhead (used for merge branches)
     const edgeData = [];
     for (const [key, edge] of this._prevEdges) {
       const src = this._positions.get(edge.from);
       const tgt = this._positions.get(edge.to);
       if (!src || !tgt) continue;
 
-      const srcYOff      = sourceOffsets.get(key) ?? 0;
+      const srcYOff = sourceOffsets.get(key) ?? 0;
+      const hl      = this._highlightEdgeSet.has(key) ? 1 : 0;
+
+      if (mergeEdgeKeys.has(key)) {
+        // ── Merge branch: routes to the shared merge point, no arrowhead ─────────
+        const sx = src.x + NODE_WIDTH / 2;
+        const sy = src.y + srcYOff;
+        const tx = tgt.x - NODE_WIDTH / 2;
+        const ty = tgt.y;
+        const mergeX = tx - MERGE_OFFSET;
+
+        const pts = (sy === ty)
+          ? [[sx, sy], [mergeX, ty]]
+          : [[sx, sy], [mergeX, sy], [mergeX, ty]];
+
+        if (hl) highlightedMergeTargets.add(edge.to);
+
+        edgeData.push({
+          value: [src.x, src.y, tgt.x, tgt.y, hl, srcYOff, 0, 0, -1],
+          pts,
+          showArrow: false,
+        });
+        continue;
+      }
+
       const tgtYOff      = targetOffsets.get(key)  ?? 0;
       const baseMidXOff  = midXOffsets.get(key)    ?? 0;
 
@@ -399,9 +432,25 @@ export class EChartsGraphRenderer extends BaseComponent {
         value: [
           src.x, src.y,
           tgt.x, tgt.y,
-          this._highlightEdgeSet.has(key) ? 1 : 0,
+          hl,
           srcYOff, tgtYOff, finalMidXOff, loopY,
         ],
+      });
+    }
+
+    // ── Merge trunks: one per merge group, carries the single arrowhead ─────────
+    for (const [targetId] of mergeGroups) {
+      const tgt = this._positions.get(targetId);
+      if (!tgt) continue;
+      const tx     = tgt.x - NODE_WIDTH / 2;
+      const ty     = tgt.y;
+      const mergeX = tx - MERGE_OFFSET;
+      const hl     = highlightedMergeTargets.has(targetId) ? 1 : 0;
+
+      edgeData.push({
+        value: [mergeX, ty, tgt.x, ty, hl, 0, 0, 0, -1],
+        pts:   [[mergeX, ty], [tx, ty]],
+        showArrow: true,
       });
     }
 
@@ -681,46 +730,58 @@ export class EChartsGraphRenderer extends BaseComponent {
 
   /**
    * Render one edge as an orthogonal polyline + arrowhead polygon.
-   * Value dimensions: [srcX, srcY, tgtX, tgtY, highlighted(0|1)].
+   * Value dimensions: [srcX, srcY, tgtX, tgtY, highlighted(0|1), srcYOff, tgtYOff, midXOff, loopY].
+   *
+   * When params.data.pts is present (merge branches and trunks), the pre-computed
+   * data-space polyline is used directly instead of calling routeEdge.
+   * params.data.showArrow === false suppresses the arrowhead (merge branches).
    */
   _renderEdgeItem(params, api) {
-    const [sx, sy] = api.coord([api.value(0), api.value(1)]);
-    const [tx, ty] = api.coord([api.value(2), api.value(3)]);
-    const hl        = api.value(4) === 1;
-    const srcYOff   = api.value(5) ?? 0;
-    const tgtYOff   = api.value(6) ?? 0;
-    const midXOff   = api.value(7) ?? 0;
-    // dim 8: pre-computed backward-edge floor in data space (-1 = not applicable)
-    const loopYData = api.value(8) ?? -1;
-    const loopY     = loopYData >= 0 ? api.coord([0, loopYData])[1] : null;
-
-    const pts = routeEdge(
-      { x: sx, y: sy },
-      { x: tx, y: ty },
-      { nodeWidth: NODE_WIDTH, nodeHeight: NODE_HEIGHT, sourceYOffset: srcYOff, targetYOffset: tgtYOff, midXOffset: midXOff, loopY }
-    );
-
+    const hl      = api.value(4) === 1;
     const colors  = this._colors ?? buildColors();
     const stroke  = hl ? colors.edgeHighlight : colors.edge;
     const lw      = hl ? 3 : 2;
     const opacity = hl ? 1 : 0.7;
-    const [ex, ey] = pts.at(-1);
 
-    return {
-      type: 'group',
-      children: [
-        {
-          type:  'polyline',
-          shape: { points: pts },
-          style: { stroke, lineWidth: lw, opacity, fill: 'none', lineCap: 'round', lineJoin: 'round' },
-        },
-        {
-          type:  'polygon',
-          shape: { points: [[ex, ey], [ex - 8, ey - 5], [ex - 8, ey + 5]] },
-          style: { fill: stroke, opacity },
-        },
-      ],
-    };
+    let pts;
+    const precomputedPts = params.data?.pts;
+    if (precomputedPts) {
+      pts = precomputedPts.map(([x, y]) => api.coord([x, y]));
+    } else {
+      const [sx, sy] = api.coord([api.value(0), api.value(1)]);
+      const [tx, ty] = api.coord([api.value(2), api.value(3)]);
+      const srcYOff   = api.value(5) ?? 0;
+      const tgtYOff   = api.value(6) ?? 0;
+      const midXOff   = api.value(7) ?? 0;
+      const loopYData = api.value(8) ?? -1;
+      const loopY     = loopYData >= 0 ? api.coord([0, loopYData])[1] : null;
+      pts = routeEdge(
+        { x: sx, y: sy },
+        { x: tx, y: ty },
+        { nodeWidth: NODE_WIDTH, nodeHeight: NODE_HEIGHT, sourceYOffset: srcYOff, targetYOffset: tgtYOff, midXOffset: midXOff, loopY }
+      );
+    }
+
+    const showArrow = params.data?.showArrow !== false;
+    const [ex, ey]  = pts.at(-1);
+
+    const children = [
+      {
+        type:  'polyline',
+        shape: { points: pts },
+        style: { stroke, lineWidth: lw, opacity, fill: 'none', lineCap: 'round', lineJoin: 'round' },
+      },
+    ];
+
+    if (showArrow) {
+      children.push({
+        type:  'polygon',
+        shape: { points: [[ex, ey], [ex - 8, ey - 5], [ex - 8, ey + 5]] },
+        style: { fill: stroke, opacity },
+      });
+    }
+
+    return { type: 'group', children };
   }
 
   _buildBaseOption() {

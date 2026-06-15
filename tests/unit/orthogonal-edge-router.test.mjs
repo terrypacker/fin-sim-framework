@@ -11,7 +11,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { routeEdge, computeFanOutOffsets, computeLaneOffsets } from '../../src/visualization/graph-builder/orthogonal-edge-router.js';
+import { routeEdge, computeFanOutOffsets, computeLaneOffsets, groupMergeTargets } from '../../src/visualization/graph-builder/orthogonal-edge-router.js';
 
 const OPTS = { nodeWidth: 180, nodeHeight: 56 };
 
@@ -410,6 +410,115 @@ describe('computeLaneOffsets — laneOffset option', () => {
     const offsets = computeLaneOffsets(edges, positions, { nodeWidth: 180, laneOffset: 20 });
     assert.equal(offsets.get('a->d'), -10);
     assert.equal(offsets.get('b->d'),  10);
+  });
+
+});
+
+// ── groupMergeTargets ─────────────────────────────────────────────────────────
+
+const MERGE_OPTS = { nodeWidth: 180 };
+
+describe('groupMergeTargets — single forward edge per target', () => {
+
+  test('single edge returns empty map', () => {
+    const positions = new Map([COL0_ROW0, COL1_ROW0]);
+    const result = groupMergeTargets([{ from: 'a', to: 'd' }], positions, MERGE_OPTS);
+    assert.equal(result.size, 0);
+  });
+
+  test('two edges to different targets returns empty map', () => {
+    const positions = new Map([COL0_ROW0, COL1_ROW0, COL1_ROW1]);
+    const edges = [{ from: 'a', to: 'd' }, { from: 'a', to: 'e' }];
+    const result = groupMergeTargets(edges, positions, MERGE_OPTS);
+    assert.equal(result.size, 0);
+  });
+
+});
+
+describe('groupMergeTargets — two forward edges to same target', () => {
+
+  // a and b (both col0) → d (col1)
+  const positions = new Map([COL0_ROW0, COL0_ROW1, COL1_ROW0]);
+  const edges = [{ from: 'a', to: 'd' }, { from: 'b', to: 'd' }];
+
+  test('returns a map with the target id', () => {
+    const result = groupMergeTargets(edges, positions, MERGE_OPTS);
+    assert.ok(result.has('d'));
+  });
+
+  test('group contains both edge keys', () => {
+    const result = groupMergeTargets(edges, positions, MERGE_OPTS);
+    const keys = result.get('d');
+    assert.ok(keys.includes('a->d'));
+    assert.ok(keys.includes('b->d'));
+    assert.equal(keys.length, 2);
+  });
+
+});
+
+describe('groupMergeTargets — backward edges are excluded', () => {
+
+  // d (col1) → a (col0): backward, plus b (col0) → a (col0): same-column excluded
+  // Only one forward edge a→d total — should not merge
+  const positions = new Map([COL0_ROW0, COL0_ROW1, COL1_ROW0, COL1_ROW1]);
+  const edges = [
+    { from: 'a', to: 'd' },   // forward col0→col1
+    { from: 'e', to: 'd' },   // forward col1→col1 (same column, excluded)
+  ];
+
+  test('same-column edge is excluded from merge groups', () => {
+    const result = groupMergeTargets(edges, positions, MERGE_OPTS);
+    // Only one forward edge to 'd', so no merge
+    assert.equal(result.size, 0);
+  });
+
+  test('backward edge a→d where a is to the right of d is excluded', () => {
+    const bwdPositions = new Map([
+      ['a', { x: 450, y: 60 }],  // col1
+      ['b', { x: 450, y: 140 }], // col1
+      ['d', { x: 80,  y: 60 }],  // col0 — to the left, so edges from col1 are backward
+    ]);
+    const bwdEdges = [{ from: 'a', to: 'd' }, { from: 'b', to: 'd' }];
+    const result = groupMergeTargets(bwdEdges, bwdPositions, MERGE_OPTS);
+    assert.equal(result.size, 0, 'backward edges not merged');
+  });
+
+});
+
+describe('groupMergeTargets — three edges to same target', () => {
+
+  const positions = new Map([COL0_ROW0, COL0_ROW1, COL0_ROW2, COL1_ROW0]);
+  const edges = [
+    { from: 'a', to: 'd' },
+    { from: 'b', to: 'd' },
+    { from: 'c', to: 'd' },
+  ];
+
+  test('all three keys appear in the group', () => {
+    const result = groupMergeTargets(edges, positions, MERGE_OPTS);
+    const keys = result.get('d');
+    assert.equal(keys.length, 3);
+    assert.ok(keys.includes('a->d'));
+    assert.ok(keys.includes('b->d'));
+    assert.ok(keys.includes('c->d'));
+  });
+
+});
+
+describe('groupMergeTargets — mixed targets', () => {
+
+  // a→d, b→d (merge), c→e (no merge — only one edge to e)
+  const positions = new Map([COL0_ROW0, COL0_ROW1, COL0_ROW2, COL1_ROW0, COL1_ROW1]);
+  const edges = [
+    { from: 'a', to: 'd' },
+    { from: 'b', to: 'd' },
+    { from: 'c', to: 'e' },
+  ];
+
+  test('only the multi-edge target appears in the result', () => {
+    const result = groupMergeTargets(edges, positions, MERGE_OPTS);
+    assert.ok(result.has('d'));
+    assert.ok(!result.has('e'));
   });
 
 });
