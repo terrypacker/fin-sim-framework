@@ -80,7 +80,7 @@ export class InsufficientFundsError extends Error {
  */
 export class Account extends Asset {
   /**
-   * @param {number} initialValue - Starting balance (default 0)
+   * @param {number} balance - Starting balance (default 0)
    * @param {object} [opts]
    * @param {string|null}   [opts.id=null]               - Assigned by AccountService; null until registered
    * @param {string}        [opts.name='']               - Display name for UI
@@ -89,15 +89,15 @@ export class Account extends Asset {
    * @param {string}        [opts.ownershipType='sole']  - 'sole' | 'joint' (inherited from Asset)
    * @param {string|null}   [opts.ownerId=null]          - Person id of primary owner (inherited from Asset)
    * @param {number}        [opts.minimumBalance=0]      - Lowest allowed balance
-   * @param {number|null}   [opts.drawdownPriority=null] - Liquidation order; null = exclude from drawdown (inherited from Asset)
+   * @param {number|null]   [opts.drawdownPriority=null] - Liquidation order; null = exclude from drawdown (inherited from Asset)
    * @param {string|null}   [opts.country=null]          - ISO country code (e.g. 'US', 'AU')
    * @param {Currency|null} [opts.currency=null]         - Currency descriptor (e.g. USD, AUD)
    */
-  constructor(initialValue = 0, opts = {}) {
+  constructor(balance = 0, opts = {}) {
     super(opts.name ?? '', { ...opts, kind: 'account' });
     this.role           = opts.role           ?? null;
     this.type           = opts.type           ?? null;
-    this.balance        = initialValue;
+    this.balance        = balance;
     // Holdings — populated by AccountService.register() default-holding bootstrap
     // (see design 25 §5.4). Source of truth for asset allocation; balance is
     // a denormalized scalar synced by holdings reducers (§4.4 invariant).
@@ -115,11 +115,11 @@ export class Account extends Asset {
  */
 export class CheckingAccount extends Account {
   /**
-   * @param {number} initialValue
+   * @param {number} balance
    * @param {object} [opts] - All Account opts; type is set automatically
    */
-  constructor(initialValue = 0, opts = {}) {
-    super(initialValue, { ...opts, type: ACCOUNT_TYPE.CHECKING });
+  constructor(balance = 0, opts = {}) {
+    super(balance, { ...opts, type: ACCOUNT_TYPE.CHECKING });
   }
 }
 
@@ -130,10 +130,10 @@ export class CheckingAccount extends Account {
  */
 export class SavingsAccount extends Account {
   /**
-   * @param {number} initialValue
+   * @param {number} balance
    * @param {object} [opts] - All Account opts; type is set automatically
    */
-  constructor(initialValue = 0, opts = {}) {
-    super(initialValue, { ...opts, type: ACCOUNT_TYPE.SAVINGS });
+  constructor(balance = 0, opts = {}) {
+    super(balance, { ...opts, type: ACCOUNT_TYPE.SAVINGS });
   }
 }

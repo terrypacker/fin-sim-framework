@@ -552,7 +552,7 @@ export class ScenarioSerializer {
       type:             account.type             ?? null,
       role:             account.role             ?? null,
       stateKey:         account.stateKey         ?? null,
-      initialValue:     account.balance ?? account.initialValue, //TODO Hack here since the field name is not the same as the constructor
+      balance:          account.balance,
       ownershipType:    account.ownershipType    ?? 'sole',
       ownerId:          account.ownerId          ?? null,
       minimumBalance:   account.minimumBalance   ?? 0,
@@ -776,15 +776,15 @@ export class ScenarioSerializer {
     }
     let account;
     switch (d.__type) {
-      case 'CheckingAccount':       account = new CheckingAccount       (d.initialValue ?? 0, opts); break;
-      case 'SavingsAccount':        account = new SavingsAccount        (d.initialValue ?? 0, opts); break;
-      case 'BrokerageAccount':      account = new BrokerageAccount      (d.initialValue ?? 0, opts); break;
-      case 'FourOhOneKAccount':     account = new FourOhOneKAccount     (d.initialValue ?? 0, opts); break;
-      case 'RothAccount':           account = new RothAccount           (d.initialValue ?? 0, opts); break;
-      case 'TraditionalIRAAccount': account = new TraditionalIRAAccount (d.initialValue ?? 0, opts); break;
-      case 'SuperannuationAccount': account = new SuperannuationAccount (d.initialValue ?? 0, opts); break;
+      case 'CheckingAccount':       account = new CheckingAccount       ((d.balance ?? d.initialValue) ?? 0, opts); break;
+      case 'SavingsAccount':        account = new SavingsAccount        ((d.balance ?? d.initialValue) ?? 0, opts); break;
+      case 'BrokerageAccount':      account = new BrokerageAccount      ((d.balance ?? d.initialValue) ?? 0, opts); break;
+      case 'FourOhOneKAccount':     account = new FourOhOneKAccount     ((d.balance ?? d.initialValue) ?? 0, opts); break;
+      case 'RothAccount':           account = new RothAccount           ((d.balance ?? d.initialValue) ?? 0, opts); break;
+      case 'TraditionalIRAAccount': account = new TraditionalIRAAccount ((d.balance ?? d.initialValue) ?? 0, opts); break;
+      case 'SuperannuationAccount': account = new SuperannuationAccount ((d.balance ?? d.initialValue) ?? 0, opts); break;
       default:
-        account = new Account(d.initialValue ?? 0, opts);
+        account = new Account((d.balance ?? d.initialValue) ?? 0, opts);
     }
     if (d.stateKey) account.stateKey = d.stateKey;
     if (d.rolloverContribBasis  != null) account.rolloverContribBasis  = d.rolloverContribBasis;

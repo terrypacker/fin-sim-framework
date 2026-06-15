@@ -19,17 +19,17 @@ import { Account, AUD, USD, ACCOUNT_TYPE } from './account.js';
  */
 export class InvestmentAccount extends Account {
   /**
-   * @param {number} initialValue - Starting balance (default 0)
-   * @param {object} [opts]       - All Account opts, plus:
-   * @param {number}      [opts.contributionBasis]       - Defaults to initialValue
+   * @param {number} balance - Starting balance (default 0)
+   * @param {object} [opts]  - All Account opts, plus:
+   * @param {number}      [opts.contributionBasis]       - Defaults to balance
    * @param {number}      [opts.earningsBasis=0]
    * @param {number}      [opts.loanBalance=0]           - Outstanding loan (AR-5, AR-8 if applicable)
    * @param {number|null} [opts.minimumAge=null]         - Age gate in decimal years (e.g. 59.5, 60)
    * @param {boolean}     [opts.allowsEarlyWithdrawal=false] - True if pre-minimumAge drawdown is permitted (with penalty)
    */
-  constructor(initialValue = 0, opts = {}) {
-    super(initialValue, opts);
-    this.contributionBasis        = opts.contributionBasis    ?? initialValue;
+  constructor(balance = 0, opts = {}) {
+    super(balance, opts);
+    this.contributionBasis        = opts.contributionBasis    ?? balance;
     this.earningsBasis            = opts.earningsBasis        ?? 0;
     this.balanceAtResidencyChange = null;   // set by AccountService.recordResidencyChange
     this.loanBalance              = opts.loanBalance          ?? 0;
@@ -46,11 +46,11 @@ export class InvestmentAccount extends Account {
  */
 export class BrokerageAccount extends InvestmentAccount {
   /**
-   * @param {number} initialValue
+   * @param {number} balance
    * @param {object} [opts] - All InvestmentAccount opts; type is set automatically
    */
-  constructor(initialValue = 0, opts = {}) {
-    super(initialValue, { ...opts, type: ACCOUNT_TYPE.BROKERAGE });
+  constructor(balance = 0, opts = {}) {
+    super(balance, { ...opts, type: ACCOUNT_TYPE.BROKERAGE });
   }
 }
 
@@ -62,11 +62,11 @@ export class BrokerageAccount extends InvestmentAccount {
  */
 export class FourOhOneKAccount extends InvestmentAccount {
   /**
-   * @param {number} initialValue
+   * @param {number} balance
    * @param {object} [opts] - All InvestmentAccount opts; type, country, currency, minimumAge set automatically
    */
-  constructor(initialValue = 0, opts = {}) {
-    super(initialValue, {
+  constructor(balance = 0, opts = {}) {
+    super(balance, {
       country:               opts.country               ?? 'US',
       currency:              opts.currency              ?? USD,
       minimumAge:            opts.minimumAge            ?? 59.5,
@@ -85,11 +85,11 @@ export class FourOhOneKAccount extends InvestmentAccount {
  */
 export class RothAccount extends InvestmentAccount {
   /**
-   * @param {number} initialValue
+   * @param {number} balance
    * @param {object} [opts] - All InvestmentAccount opts; type, country, currency, minimumAge set automatically
    */
-  constructor(initialValue = 0, opts = {}) {
-    super(initialValue, {
+  constructor(balance = 0, opts = {}) {
+    super(balance, {
       country:               opts.country               ?? 'US',
       currency:              opts.currency              ?? USD,
       minimumAge:            opts.minimumAge            ?? 59.5,
@@ -108,11 +108,11 @@ export class RothAccount extends InvestmentAccount {
  */
 export class TraditionalIRAAccount extends InvestmentAccount {
   /**
-   * @param {number} initialValue
+   * @param {number} balance
    * @param {object} [opts] - All InvestmentAccount opts; type, country, currency, minimumAge set automatically
    */
-  constructor(initialValue = 0, opts = {}) {
-    super(initialValue, {
+  constructor(balance = 0, opts = {}) {
+    super(balance, {
       country:               opts.country               ?? 'US',
       currency:              opts.currency              ?? USD,
       minimumAge:            opts.minimumAge            ?? 60,
@@ -130,11 +130,11 @@ export class TraditionalIRAAccount extends InvestmentAccount {
  */
 export class SuperannuationAccount extends InvestmentAccount {
   /**
-   * @param {number} initialValue
+   * @param {number} balance
    * @param {object} [opts] - All InvestmentAccount opts; type, country, currency, minimumAge set automatically
    */
-  constructor(initialValue = 0, opts = {}) {
-    super(initialValue, {
+  constructor(balance = 0, opts = {}) {
+    super(balance, {
       country:    opts.country    ?? 'AU',
       currency:   opts.currency   ?? AUD,
       minimumAge: opts.minimumAge ?? 60,

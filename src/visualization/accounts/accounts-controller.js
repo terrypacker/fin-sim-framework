@@ -42,7 +42,7 @@ export class AccountsController {
 
     builder
       .name(data.name)
-      .initialValue(Number(data.balance) || 0)
+      .balance(Number(data.balance) || 0)
       .ownershipType(data.ownershipType || 'sole')
       .ownerId(data.ownerId || null)
       .minimumBalance(Number(data.minimumBalance) || 0);

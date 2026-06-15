@@ -261,7 +261,7 @@ function makeParamScenario() {
       { name: 'monthlyWage', type: 'Number', value: 5000,
         node: { type: 'person', id: 'primary', field: 'monthlyWage' } },
       { name: 'savingsBalance', type: 'Number', value: 10000,
-        node: { type: 'account', stateKey: 'mySavings', field: 'initialValue' } },
+        node: { type: 'account', stateKey: 'mySavings', field: 'balance' } },
     ],
     initialState: { mySavings: { balance: 10000 } },
   });
@@ -283,7 +283,7 @@ test('applyParams: updates person Number field', () => {
   assert.strictEqual(person.monthlyWage, 7500);
 });
 
-test('applyParams: updates account balance and initialState for initialValue param', () => {
+test('applyParams: updates account balance and initialState for balance param', () => {
   const { scenario, sr } = makeParamScenario();
   scenario.applyParams({ savingsBalance: 50000 });
   const account = sr.accountService.getAll().find(a => a.stateKey === 'mySavings');

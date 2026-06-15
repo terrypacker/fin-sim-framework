@@ -488,16 +488,14 @@ export class ScenarioTabView {
   }
 
   /**
-   * Turn a node field name (e.g. `initialValue`, `monthlyWage`) into a
+   * Turn a node field name (e.g. `balance`, `monthlyWage`) into a
    * human-readable label. A small overrides map handles fields whose plain
-   * camelCase split is misleading (`initialValue` → "Initial Balance", not
-   * "Initial Value"); everything else falls back to camelCase splitting.
+   * camelCase split is misleading; everything else falls back to camelCase splitting.
    * @private
    */
   _humanizeField(field) {
     if (!field) return '';
     const OVERRIDES = {
-      initialValue:   'Initial Balance',
       minimumBalance: 'Min Balance',
       balance:        'Balance',
     };

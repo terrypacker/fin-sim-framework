@@ -25,7 +25,7 @@ class BaseAccountBuilder {
   constructor() {
     this._id               = null;
     this._name             = '';
-    this._initialValue     = 0;
+    this._balance          = 0;
     this._ownershipType    = 'sole';
     this._ownerId          = null;
     this._minimumBalance   = 0;
@@ -36,7 +36,7 @@ class BaseAccountBuilder {
 
   id(v)               { this._id               = v; return this; }
   name(v)             { this._name             = v; return this; }
-  initialValue(v)     { this._initialValue     = v; return this; }
+  balance(v)          { this._balance          = v; return this; }
   ownershipType(v)    { this._ownershipType    = v; return this; }
   ownerId(v)          { this._ownerId          = v; return this; }
   minimumBalance(v)   { this._minimumBalance   = v; return this; }
@@ -68,7 +68,7 @@ class CheckingAccountBuilder extends BaseAccountBuilder {
   }
 
   build() {
-    return new CheckingAccount(this._initialValue, this._baseOpts());
+    return new CheckingAccount(this._balance, this._baseOpts());
   }
 }
 
@@ -82,7 +82,7 @@ class SavingsAccountBuilder extends BaseAccountBuilder {
   }
 
   build() {
-    return new SavingsAccount(this._initialValue, this._baseOpts());
+    return new SavingsAccount(this._balance, this._baseOpts());
   }
 }
 
@@ -91,7 +91,7 @@ class SavingsAccountBuilder extends BaseAccountBuilder {
 class BaseInvestmentBuilder extends BaseAccountBuilder {
   constructor() {
     super();
-    this._contributionBasis     = null; // defaults to initialValue in InvestmentAccount
+    this._contributionBasis     = null; // defaults to balance in InvestmentAccount
     this._earningsBasis         = 0;
     this._loanBalance           = 0;
     this._minimumAge            = null;
@@ -119,7 +119,7 @@ class BaseInvestmentBuilder extends BaseAccountBuilder {
 
 class BrokerageAccountBuilder extends BaseInvestmentBuilder {
   build() {
-    return new BrokerageAccount(this._initialValue, this._investmentOpts());
+    return new BrokerageAccount(this._balance, this._investmentOpts());
   }
 }
 
@@ -134,7 +134,7 @@ class FourOhOneKAccountBuilder extends BaseInvestmentBuilder {
   }
 
   build() {
-    return new FourOhOneKAccount(this._initialValue, this._investmentOpts());
+    return new FourOhOneKAccount(this._balance, this._investmentOpts());
   }
 }
 
@@ -149,7 +149,7 @@ class RothAccountBuilder extends BaseInvestmentBuilder {
   }
 
   build() {
-    return new RothAccount(this._initialValue, this._investmentOpts());
+    return new RothAccount(this._balance, this._investmentOpts());
   }
 }
 
@@ -164,7 +164,7 @@ class TraditionalIRAAccountBuilder extends BaseInvestmentBuilder {
   }
 
   build() {
-    return new TraditionalIRAAccount(this._initialValue, this._investmentOpts());
+    return new TraditionalIRAAccount(this._balance, this._investmentOpts());
   }
 }
 
@@ -179,7 +179,7 @@ class SuperannuationAccountBuilder extends BaseInvestmentBuilder {
   }
 
   build() {
-    return new SuperannuationAccount(this._initialValue, this._investmentOpts());
+    return new SuperannuationAccount(this._balance, this._investmentOpts());
   }
 }
 
@@ -191,7 +191,7 @@ class SuperannuationAccountBuilder extends BaseInvestmentBuilder {
  * Usage:
  *   const acct = AccountBuilder.checking()
  *     .name('Primary Checking')
- *     .initialValue(5000)
+ *     .balance(5000)
  *     .country('US')
  *     .currency(USD)
  *     .minimumBalance(500)

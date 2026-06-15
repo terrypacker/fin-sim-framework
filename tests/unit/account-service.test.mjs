@@ -174,7 +174,7 @@ test('FourOhOneKAccount country defaults to US (cannot be AU by accident)', () =
 // ─── AccountBuilder ────────────────────────────────────────────────────────────
 
 test('AccountBuilder.checking: builds CheckingAccount with correct type', () => {
-  const a = AccountBuilder.checking().initialValue(5000).name('Everyday').build();
+  const a = AccountBuilder.checking().balance(5000).name('Everyday').build();
   assert.ok(a instanceof CheckingAccount);
   assert.strictEqual(a.type, 'checking');
   assert.strictEqual(a.balance, 5000);
@@ -193,7 +193,7 @@ test('AccountBuilder.checking: minimumBalance and country flow through', () => {
 });
 
 test('AccountBuilder.savings: builds SavingsAccount', () => {
-  const a = AccountBuilder.savings().initialValue(10000).country('AU').currency(AUD).build();
+  const a = AccountBuilder.savings().balance(10000).country('AU').currency(AUD).build();
   assert.ok(a instanceof SavingsAccount);
   assert.strictEqual(a.type, 'savings');
   assert.strictEqual(a.balance, 10000);
@@ -201,7 +201,7 @@ test('AccountBuilder.savings: builds SavingsAccount', () => {
 
 test('AccountBuilder.brokerage: builds BrokerageAccount with investment fields', () => {
   const a = AccountBuilder.brokerage()
-    .initialValue(50000)
+    .balance(50000)
     .contributionBasis(40000)
     .drawdownPriority(4)
     .build();
@@ -212,7 +212,7 @@ test('AccountBuilder.brokerage: builds BrokerageAccount with investment fields',
 });
 
 test('AccountBuilder.fourOhOneK: builds FourOhOneKAccount with US defaults', () => {
-  const a = AccountBuilder.fourOhOneK().initialValue(120000).build();
+  const a = AccountBuilder.fourOhOneK().balance(120000).build();
   assert.ok(a instanceof FourOhOneKAccount);
   assert.strictEqual(a.type, '401k');
   assert.strictEqual(a.minimumAge, 59.5);
@@ -220,7 +220,7 @@ test('AccountBuilder.fourOhOneK: builds FourOhOneKAccount with US defaults', () 
 });
 
 test('AccountBuilder.roth: builds RothAccount with US defaults', () => {
-  const a = AccountBuilder.roth().initialValue(80000).build();
+  const a = AccountBuilder.roth().balance(80000).build();
   assert.ok(a instanceof RothAccount);
   assert.strictEqual(a.type, 'roth');
   assert.strictEqual(a.minimumAge, 59.5);
@@ -228,7 +228,7 @@ test('AccountBuilder.roth: builds RothAccount with US defaults', () => {
 });
 
 test('AccountBuilder.traditionalIRA: builds TraditionalIRAAccount with US defaults', () => {
-  const a = AccountBuilder.traditionalIRA().initialValue(60000).build();
+  const a = AccountBuilder.traditionalIRA().balance(60000).build();
   assert.ok(a instanceof TraditionalIRAAccount);
   assert.strictEqual(a.type, 'ira');
   assert.strictEqual(a.minimumAge, 60);
@@ -236,7 +236,7 @@ test('AccountBuilder.traditionalIRA: builds TraditionalIRAAccount with US defaul
 });
 
 test('AccountBuilder.super: builds SuperannuationAccount with AU defaults', () => {
-  const a = AccountBuilder.super().initialValue(200000).build();
+  const a = AccountBuilder.super().balance(200000).build();
   assert.ok(a instanceof SuperannuationAccount);
   assert.strictEqual(a.type, 'super');
   assert.strictEqual(a.minimumAge, 60);
