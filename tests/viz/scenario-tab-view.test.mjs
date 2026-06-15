@@ -301,8 +301,88 @@ test('_renderParamsList: group headers appear once per group', () => {
   view._renderParamsList(scenario);
   const headers = document.querySelectorAll('#paramsList .param-group-header');
   assert.strictEqual(headers.length, 2);
-  assert.strictEqual(headers[0].textContent, 'People');
-  assert.strictEqual(headers[1].textContent, 'Rates');
+  // Header text now includes a leading collapse caret; assert the group label.
+  assert.ok(headers[0].textContent.includes('People'));
+  assert.ok(headers[1].textContent.includes('Rates'));
+});
+
+test('_renderParamsList: groups are collapsed by default', () => {
+  const view = new ScenarioTabView();
+  const scenario = {
+    params: [
+      { name: 'a', type: 'Number', group: 'People', value: 1 },
+      { name: 'b', type: 'Number', group: 'Rates',  value: 2 },
+    ],
+  };
+  view._renderParamsList(scenario);
+  // Headers render, but no rows until a group is expanded.
+  assert.strictEqual(document.querySelectorAll('#paramsList .param-group-header').length, 2);
+  assert.strictEqual(document.querySelectorAll('#paramsList .param-row').length, 0);
+});
+
+test('_renderParamsList: filter hides non-matching params and groups', () => {
+  const view = new ScenarioTabView();
+  const scenario = {
+    params: [
+      { name: 'inflationRate', label: 'Inflation', type: 'Number', group: 'Rates',  value: 1 },
+      { name: 'wageGrowth',    label: 'Wage',      type: 'Number', group: 'People', value: 2 },
+    ],
+  };
+  view._paramFilterFields = new Set(['label', 'name', 'group', 'description']);
+  view._paramFilter = 'inflation';
+  view._renderParamsList(scenario);
+  // An active filter force-expands matching groups, so the matching row shows.
+  assert.strictEqual(document.querySelectorAll('#paramsList .param-row').length, 1);
+  const headers = document.querySelectorAll('#paramsList .param-group-header');
+  assert.strictEqual(headers.length, 1);
+  assert.ok(headers[0].textContent.includes('Rates'));
+});
+
+test('_renderParamsList: active filter force-expands collapsed groups', () => {
+  const view = new ScenarioTabView();
+  const scenario = {
+    params: [{ name: 'inflationRate', type: 'Number', group: 'Rates', value: 1 }],
+  };
+  // Default-collapsed; the filter overrides it so the matching row is visible.
+  view._paramFilterFields = new Set(['name']);
+  view._paramFilter = 'inflation';
+  view._renderParamsList(scenario);
+  assert.strictEqual(document.querySelectorAll('#paramsList .param-row').length, 1);
+});
+
+test('_renderParamsList: clicking a group header expands/collapses its rows', () => {
+  const view = new ScenarioTabView();
+  const scenario = {
+    params: [
+      { name: 'a', type: 'Number', group: 'People', value: 1 },
+      { name: 'b', type: 'Number', group: 'Rates',  value: 2 },
+    ],
+  };
+  view._renderParamsList(scenario);
+  // Collapsed by default — no rows.
+  assert.strictEqual(document.querySelectorAll('#paramsList .param-row').length, 0);
+
+  const peopleHeader = document.querySelector('#paramsList .param-group-header');
+  peopleHeader.click();   // expand "People"
+  assert.ok(view._expandedGroups.has('People'));
+  assert.strictEqual(document.querySelectorAll('#paramsList .param-row').length, 1);
+
+  document.querySelector('#paramsList .param-group-header').click();  // collapse again
+  assert.ok(!view._expandedGroups.has('People'));
+  assert.strictEqual(document.querySelectorAll('#paramsList .param-row').length, 0);
+});
+
+test('_paramMatchesFilter: defaults to description only', () => {
+  const view = new ScenarioTabView();
+  assert.deepStrictEqual([...view._paramFilterFields], ['description']);
+  const param = { name: 'inflationRate', label: 'Inflation', group: 'Rates', description: 'CPI growth' };
+  // Matches on description text…
+  assert.ok(view._paramMatchesFilter(param, 'cpi'));
+  // …but not on name/label/group while those fields are unselected.
+  assert.ok(!view._paramMatchesFilter(param, 'inflation'));
+  // Opting name in makes the name searchable.
+  view._paramFilterFields.add('name');
+  assert.ok(view._paramMatchesFilter(param, 'inflationrate'));
 });
 
 test('_renderParamsList: delete button removes param and re-renders', () => {
