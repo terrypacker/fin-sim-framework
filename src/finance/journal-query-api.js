@@ -30,10 +30,12 @@ export class JournalQueryApi extends QueryApi {
   /**
    * @param {import('../query/query-api.js').DataSource} dataSource
    * @param {import('../simulation-framework/type-registry.js').TypeRegistry} [typeRegistry]
+   * @param {import('./period/period-service.js').PeriodService} [periodService]
    */
-  constructor(dataSource, typeRegistry) {
+  constructor(dataSource, typeRegistry, periodService) {
     super(dataSource);
-    this._typeRegistry = typeRegistry ?? null;
+    this._typeRegistry  = typeRegistry  ?? null;
+    this._periodService = periodService ?? null;
   }
 
   /**
@@ -285,6 +287,72 @@ export class JournalQueryApi extends QueryApi {
     };
   }
 
+  // ─── Period-based aggregation ─────────────────────────────────────────────
+
+  /**
+   * Aggregate filtered journal rows into year-level groups, delegating the
+   * per-year rollup to PeriodService.aggregate() rather than ad-hoc date math.
+   *
+   * Each year period of `periodType` becomes one result group. Totals are
+   * rolled up from monthly leaf periods: for each row the owning MONTH period
+   * is found via PeriodService.getPeriodsAt(), then PeriodService.aggregate()
+   * sums leaf contributions up to the year level.
+   *
+   * Falls back to the generic QueryApi.aggregate() with `groupBy:['year']`
+   * when no PeriodService is available so callers need not branch.
+   *
+   * @param {object}   opts
+   * @param {string|object} opts.query         - DSL or pre-built AST
+   * @param {string}   opts.periodType         - 'YEAR_US' | 'YEAR_AU'
+   * @param {Record<string,{fn:string,field?:string}>} opts.aggregates
+   * @returns {Promise<{groups: Array, grandTotal: number|null}>}
+   */
+  async aggregateByYear({ query, periodType, aggregates }) {
+    if (!this._periodService) {
+      return this.aggregate({ query, groupBy: ['year'], aggregates });
+    }
+
+    const where     = typeof query === 'string' ? this._parse(query) : query;
+    const predicate = this._buildPredicate(where);
+    const rows      = this._dataSource.getAll().filter(predicate);
+
+    const yearPeriods = this._periodService.getAllPeriods()
+      .filter(p => p.type === periodType)
+      .sort((a, b) => a.startMs - b.startMs);
+
+    // Build a per-leaf (month) metric map from the filtered rows.
+    // Each row is assigned to the single MONTH period that contains its ts.
+    const leafTotals = new Map();
+    const leafCounts = new Map();
+    const sumField   = aggregates.total?.field;
+    for (const row of rows) {
+      const month = this._periodService.getPeriodsAt(row.ts).find(p => p.type === 'MONTH');
+      if (!month) continue;
+      const val = sumField != null ? (row[sumField] ?? 0) : 0;
+      if (typeof val === 'number') {
+        leafTotals.set(month.id, (leafTotals.get(month.id) ?? 0) + val);
+      }
+      leafCounts.set(month.id, (leafCounts.get(month.id) ?? 0) + 1);
+    }
+
+    // Roll up totals to the year level using PeriodService.aggregate(), then
+    // collect the raw row items so expanded drill-down rows work unchanged.
+    const groups = [];
+    for (const yp of yearPeriods) {
+      const total = this._periodService.aggregate(yp.id, p => leafTotals.get(p.id) ?? 0);
+      const count = this._periodService.aggregate(yp.id, p => leafCounts.get(p.id) ?? 0);
+      if (count === 0) continue;
+      const items = rows.filter(r => r.ts >= yp.startMs && r.ts < yp.endMs);
+      groups.push({ key: { year: _yearFromPeriod(yp) }, total, count, items });
+    }
+
+    const grandTotal = aggregates.total
+      ? groups.reduce((s, g) => s + (g.total ?? 0), 0)
+      : null;
+
+    return { groups, grandTotal };
+  }
+
   // ─── Index optimisation ────────────────────────────────────────────────────
 
   _buildIndexes() {
@@ -324,6 +392,18 @@ export class JournalQueryApi extends QueryApi {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Extract the display year (integer) from a YEAR_US or YEAR_AU period.
+ * US-2024 → 2024; AU-2023-2024 → 2024 (last numeric segment = FY end year).
+ * This matches the `year: dateObj.getUTCFullYear()` convention used in
+ * JournalDataSource._project() so the key format stays consistent with the
+ * generic groupBy:['year'] fallback path.
+ */
+function _yearFromPeriod(period) {
+  const parts = period.id.split('-').filter(s => /^\d+$/.test(s));
+  return parseInt(parts[parts.length - 1], 10);
+}
 
 const SETTLE_ACTION_TYPES = new Set(['US_TAX_SETTLE_APPLY', 'AU_TAX_SETTLE_APPLY']);
 

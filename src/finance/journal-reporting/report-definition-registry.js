@@ -47,6 +47,18 @@ export class ReportDefinition {
   get defaultSort() { return [{ field: 'total', dir: 'desc' }]; }
 
   /**
+   * Return the PeriodService period type ('YEAR_US' | 'YEAR_AU') to use for
+   * period-based aggregation, or null to use the generic groupBy path.
+   * Override in reports that group by year and have a fixed or facet-driven cc.
+   * When this returns a non-null value and a PeriodService is available,
+   * JournalQueryApi.aggregateByYear() is called instead of aggregate().
+   *
+   * @param {object} params - resolved facet values for this invocation
+   * @returns {'YEAR_US'|'YEAR_AU'|null}
+   */
+  periodTypeFor(_params) { return null; }
+
+  /**
    * When true, the plugin routes this report through a per-stateDiff JournalDataSource
    * (one row per stateDiff entry).  State-centric reports like cash-flow-by-account set this.
    */
@@ -335,6 +347,15 @@ class TaxPaidByYearDef extends ReportDefinition {
     };
   }
 
+  // Route through PeriodService.aggregate() when the cc is known; fall back to
+  // the generic groupBy:['year'] path when cc is '' (all countries) since the
+  // two national period hierarchies don't share a common parent period.
+  periodTypeFor(params) {
+    if (params?.cc === 'US') return 'YEAR_US';
+    if (params?.cc === 'AU') return 'YEAR_AU';
+    return null;
+  }
+
   buildQuery(params, api) {
     const { cc, period } = params;
     // Tax-year semantics: TAX_PAYMENT_DEBIT is chained from TAX_SETTLE_APPLY
@@ -406,6 +427,8 @@ class RothConversionsByYearDef extends ReportDefinition {
       count: { fn: 'count'                },
     };
   }
+
+  periodTypeFor(_params) { return 'YEAR_US'; }
 
   buildQuery(params, api) {
     const { period } = params;
