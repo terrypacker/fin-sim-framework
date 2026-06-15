@@ -79,7 +79,8 @@
       "Bash(CLAUDE_CODE_TMPDIR=/tmp grep *)",
       "Bash(export CLAUDE_CODE_TMPDIR=/Users/tpacker/.claude-tmp)",
       "Bash(mkdir -p /Users/tpacker/.claude-tmp)",
-      "Bash(TMPDIR=/tmp find *)"
+      "Bash(TMPDIR=/tmp find *)",
+      "Bash(export CLAUDE_CODE_TMPDIR=/tmp)"
     ]
   },
   "hooks": {

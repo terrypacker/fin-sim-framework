@@ -135,10 +135,6 @@ export class ScenarioTabPresenter {
       this._activeScenario.simEnd = ScenarioSerializer.toDateStr(endDate);
     }
 
-    this._view.onInitialStateChange = (initialState) => {
-      this._activeScenario.initialState = initialState;
-    }
-
     this._view.onAddParameter = (parameter) => {
       this._activeScenario.params.push(parameter);
       this._view._renderParamsList(this._activeScenario);
