@@ -146,6 +146,13 @@ export class EChartsGraphRenderer extends BaseComponent {
     this._chart = echarts.init(this._container, null, { renderer: 'canvas' });
     this._chart.setOption(this._buildBaseOption());
 
+    this._chart.on('showTip', params => {
+      const node = this._currentNodes[params.dataIndex];
+      if (!node) return;
+      this.selectedNodeId = node.id;
+      this.render();
+    });
+
     this._chart.on('contextmenu', (params) => {
       if (params.seriesId !== 'node-series') return;
       const node = this._currentNodes[params.dataIndex];
@@ -157,8 +164,9 @@ export class EChartsGraphRenderer extends BaseComponent {
     this._chart.on('click', (params) => {
       if (params.seriesId !== 'node-series') return;
       const node = this._currentNodes[params.dataIndex];
+      //Only allow clicking a node that has its tooltip shown
       if (!node) return;
-      this.selectedNodeId = node.id;
+      if(this.selectedNodeId !== node.id) return;
       this.nodeClickListeners.forEach(l => l(params.event?.event, node));
       this.render();
     });
@@ -606,15 +614,19 @@ export class EChartsGraphRenderer extends BaseComponent {
     // (NODE_WIDTH × NODE_HEIGHT) regardless of zoom, so checking data-space
     // distances would give an area that shrinks when zoomed out and grows
     // when zoomed in, making grabs unreliable.
-    for (const node of this._currentNodes) {
-      const pos = this._positions.get(node.id);
-      if (!pos) continue;
-      const [nodePx, nodePy] = this._dataToPixel(pos.x, pos.y);
-      if (Math.abs(nodePx - px) <= NODE_WIDTH  / 2 &&
-          Math.abs(nodePy - py) <= NODE_HEIGHT / 2) {
-        this._dragNodeId = node.id;
-        return;
-      }
+    // We already have a selected node to ONLY pixel test that one
+    const pos = this._positions.get(this.selectedNodeId);
+    if (!pos) return;
+    const [nodePx, nodePy] = this._dataToPixel(pos.x, pos.y);
+    const deltaX = Math.abs(nodePx - px);
+    //Give us a little extra as we don't need to be exact since we already have the tooltip + select logic helping
+    const xRange = (NODE_WIDTH + 10) /2;
+    const yRange = (NODE_HEIGHT + 10) /2;
+    const deltaY = Math.abs(nodePy - py);
+    if (deltaX <= xRange &&
+        deltaY <= yRange) {
+      this._dragNodeId = this.selectedNodeId;
+      return;
     }
     const { xMin, xMax, yMin, yMax } = this._viewRange;
     this._panStart = { px, py, xMin, xMax, yMin, yMax };
