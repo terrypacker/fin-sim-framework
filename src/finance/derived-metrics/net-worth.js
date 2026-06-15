@@ -61,6 +61,7 @@ export function computeNetWorth(state, baseCurrency = 'USD') {
  * @param {string} [baseCurrency='USD']
  */
 export function deriveNetWorth(state, baseCurrency = 'USD') {
+  if (typeof baseCurrency !== 'string') baseCurrency = 'USD'; // registry passes date as 2nd arg
   if (!state.metrics || typeof state.metrics !== 'object') state.metrics = {};
   state.metrics.netWorth = +computeNetWorth(state, baseCurrency).toFixed(2);
 }
