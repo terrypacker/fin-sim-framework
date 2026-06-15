@@ -271,11 +271,11 @@ limitations under the License.
   --kind-error:        #ff4455;
   --kind-optimization: #00d4e8;
 
-  /* Typography — terminal vibes */
+  /* Typography /
   --font-mono-terminal: 'Share Tech Mono', monospace;
-  --font-mono: 'Share Tech Mono', monospace;
-  --font-head: 'Barlow Condensed', sans-serif;
-  --font-body: 'Barlow', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-head: 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
 
   /* Spacing */
   --radius:    4px;
