@@ -78,7 +78,8 @@
       "Bash(sed -n '75,90p' /Users/tpacker/IdeaProjects/fin-sim-framework/assets/css/plugins/config-graph.css)",
       "Bash(CLAUDE_CODE_TMPDIR=/tmp grep *)",
       "Bash(export CLAUDE_CODE_TMPDIR=/Users/tpacker/.claude-tmp)",
-      "Bash(mkdir -p /Users/tpacker/.claude-tmp)"
+      "Bash(mkdir -p /Users/tpacker/.claude-tmp)",
+      "Bash(TMPDIR=/tmp find *)"
     ]
   },
   "hooks": {
