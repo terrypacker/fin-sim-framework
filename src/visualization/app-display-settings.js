@@ -12,20 +12,25 @@ import { fmtUTC, fmtLocal } from './ui-utils.js';
 
 const STORAGE_KEY = 'finsim.displaySettings.v1';
 
+export const APP_EVENTS = {
+  DISPLAY_SETTINGS_CHANGED: 'app.display.settings.changed',
+};
+
 /**
  * AppDisplaySettings — single source of truth for timezone, display currency, and theme.
  *
- * Components subscribe via subscribe(fn) to receive a snapshot whenever any value
- * changes. The returned function unsubscribes. Theme is applied by setting
- * document.documentElement.dataset.theme so the CSS cascade handles all plain
- * DOM components without any JS re-render. Settings persist to localStorage and
- * are rehydrated on construction.
+ * Publishes APP_EVENTS.DISPLAY_SETTINGS_CHANGED to the appBus whenever any value
+ * changes. Theme is applied by setting document.documentElement.dataset.theme so
+ * the CSS cascade handles all plain DOM components without any JS re-render.
+ * Settings persist to localStorage and are rehydrated on construction.
+ *
+ * @param {import('../simulation-framework/event-bus.js').EventBus} appBus
  */
 export class AppDisplaySettings {
   #state = { timezone: 'utc', currency: 'USD', theme: 'dark' };
-  #subscribers = new Set();
 
-  constructor() {
+  constructor(appBus) {
+    this._appBus = appBus;
     this._loadFromStorage();
     this._applyThemeToDom();
   }
@@ -41,12 +46,6 @@ export class AppDisplaySettings {
   setTimezone(tz)   { this._set('timezone', tz); }
   setCurrency(code) { this._set('currency', code); }
   setTheme(theme)   { if (this._set('theme', theme)) this._applyThemeToDom(); }
-
-  /** Returns an unsubscribe function. */
-  subscribe(fn) {
-    this.#subscribers.add(fn);
-    return () => this.#subscribers.delete(fn);
-  }
 
   _set(key, value) {
     if (this.#state[key] === value) return false;
@@ -95,12 +94,12 @@ export class AppDisplaySettings {
   }
 
   _notify() {
-    const snapshot = {
+    this._appBus.publish({
+      type:       APP_EVENTS.DISPLAY_SETTINGS_CHANGED,
       timezone:   this.#state.timezone,
       currency:   this.#state.currency,
       theme:      this.#state.theme,
       formatDate: this.formatDate,
-    };
-    for (const fn of this.#subscribers) fn(snapshot);
+    });
   }
 }

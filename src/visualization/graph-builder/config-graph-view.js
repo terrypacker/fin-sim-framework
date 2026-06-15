@@ -59,6 +59,7 @@ export class ConfigGraphView extends BaseComponent {
     bus,
     layout,
     displaySettings,
+    appBus,
   }) {
     super({ parent });
 
@@ -79,6 +80,7 @@ export class ConfigGraphView extends BaseComponent {
       bus,
       layout,
       displaySettings,
+      appBus,
     });
 
     this._baseGraphView = new BaseGraphView({

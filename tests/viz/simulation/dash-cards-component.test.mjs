@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import { DashCardsComponent } from '../../../src/visualization/simulation/dash-cards-component.js';
 import { EventBus }           from '../../../src/simulation-framework/event-bus.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../../src/simulation-framework/bus-messages.js';
+import { APP_EVENTS }         from '../../../src/visualization/app-display-settings.js';
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
 
@@ -164,4 +165,16 @@ test('DashCardsComponent.setRenderThrottle: sets _renderThrottleMs', () => {
   const comp = makeComponent();
   comp.setRenderThrottle(1000);
   assert.strictEqual(comp._renderThrottleMs, 1000);
+});
+
+// ─── appBus wiring ────────────────────────────────────────────────────────────
+
+test('DashCardsComponent: DISPLAY_SETTINGS_CHANGED updates _formatDate', () => {
+  const appBus = new EventBus();
+  const comp   = new DashCardsComponent({ appBus });
+  const newFmt = d => `custom:${d.getFullYear()}`;
+
+  appBus.publish({ type: APP_EVENTS.DISPLAY_SETTINGS_CHANGED, formatDate: newFmt, currency: 'USD', theme: 'dark', timezone: 'utc' });
+
+  assert.strictEqual(comp._formatDate, newFmt);
 });

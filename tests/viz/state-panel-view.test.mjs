@@ -12,6 +12,7 @@
 import { StatePanelView } from '../../src/visualization/simulation/state-panel-view.js';
 import { EventBus }       from '../../src/simulation-framework/event-bus.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../src/simulation-framework/bus-messages.js';
+import { APP_EVENTS }     from '../../src/visualization/app-display-settings.js';
 import assert from 'node:assert/strict';
 
 beforeEach(() => {
@@ -653,4 +654,24 @@ test('renderHeaderRow: no select-all checkbox when onChartToggle is not wired', 
   const c = document.createElement('div');
   panel.renderState({ a: { x: 1 } }, c);
   assert.strictEqual(c.querySelector('.lsp-section-toggle'), null);
+});
+
+// ─── appBus wiring ────────────────────────────────────────────────────────────
+
+test('StatePanelView: DISPLAY_SETTINGS_CHANGED updates _formatDate', () => {
+  const appBus = new EventBus();
+  const panel  = new StatePanelView({ appBus });
+  const newFmt = d => `Y:${d.getFullYear()}`;
+
+  appBus.publish({ type: APP_EVENTS.DISPLAY_SETTINGS_CHANGED, formatDate: newFmt, currency: 'USD', theme: 'dark', timezone: 'utc' });
+
+  assert.strictEqual(panel._formatDate, newFmt);
+});
+
+test('StatePanelView: initial _formatDate is taken from displaySettings.formatDate', () => {
+  const initialFmt = d => `init:${d.getFullYear()}`;
+  const fakeSettings = { formatDate: initialFmt };
+  const panel = new StatePanelView({ displaySettings: fakeSettings, appBus: new EventBus() });
+
+  assert.strictEqual(panel._formatDate, initialFmt);
 });

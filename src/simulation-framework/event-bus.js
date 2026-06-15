@@ -53,10 +53,18 @@ export class EventBus {
       fn = handler;
     }
 
+    const entry = { predicate, fn };
     if (!this.listeners.has(type)) {
       this.listeners.set(type, []);
     }
-    this.listeners.get(type).push({ predicate, fn });
+    this.listeners.get(type).push(entry);
+    return () => {
+      const arr = this.listeners.get(type);
+      if (arr) {
+        const idx = arr.indexOf(entry);
+        if (idx !== -1) arr.splice(idx, 1);
+      }
+    };
   }
 
   publish(event) {

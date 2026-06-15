@@ -10,9 +10,10 @@
 
 import { MapFilterMultiSelect } from '../components/map-filter-multi-select.js';
 import { QueryApi }             from '../../query/query-api.js';
+import { APP_EVENTS }           from '../app-display-settings.js';
 
 export class TimelinePresenter {
-  constructor({ controller, view, onDetail, onTaxDocument, onRewind, onNavigateToNode, displaySettings }) {
+  constructor({ controller, view, onDetail, onTaxDocument, onRewind, onNavigateToNode, displaySettings, appBus }) {
     this._controller = controller;
     this._view       = view;
     this._onRewind   = onRewind ?? null;
@@ -60,8 +61,8 @@ export class TimelinePresenter {
       view.onRewind = ts => onRewind(new Date(ts));
     }
 
-    if (displaySettings) {
-      this._unsubscribeSettings = displaySettings.subscribe(({ formatDate }) => {
+    if (appBus) {
+      this._unsubscribeSettings = appBus.subscribe(APP_EVENTS.DISPLAY_SETTINGS_CHANGED, ({ formatDate }) => {
         this._formatDate = formatDate;
         if (this._controller?.journal) this._render();
       });

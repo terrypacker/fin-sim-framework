@@ -32,7 +32,7 @@ const PLAYBACK_THROTTLE_MS = 1000;
 
 export class SimulationAnimator {
 
-  constructor({ scenario, timeControls, statePanelView, chartView, graphRenderer, accountsPresenter, displaySettings }) {
+  constructor({ scenario, timeControls, statePanelView, chartView, graphRenderer, accountsPresenter, displaySettings, appBus }) {
     this._scenario          = scenario;
     this._timeControls      = timeControls;
     this._statePanelView    = statePanelView;
@@ -40,6 +40,7 @@ export class SimulationAnimator {
     this._graphRenderer     = graphRenderer ?? null;
     this._accountsPresenter = accountsPresenter ?? null;
     this._displaySettings   = displaySettings ?? null;
+    this._appBus            = appBus ?? null;
     this._dashCards         = null;   // created in wireSimBus
 
     this.playing = false;
@@ -155,6 +156,7 @@ export class SimulationAnimator {
 
     this._dashCards = new DashCardsComponent({
       displaySettings: this._displaySettings,
+      appBus:          this._appBus,
     });
     this._dashCards.wireSimBus(bus, this._scenario?.sim);
 

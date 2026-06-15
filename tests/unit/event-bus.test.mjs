@@ -167,3 +167,41 @@ test('EventBus: publishing to an unsubscribed type does not throw', () => {
   const bus = new EventBus();
   assert.doesNotThrow(() => bus.publish({ type: 'UNKNOWN', payload: {} }));
 });
+
+// ─── Unsubscribe ──────────────────────────────────────────────────────────────
+
+test('EventBus: subscribe returns a function', () => {
+  const bus  = new EventBus();
+  const unsub = bus.subscribe('TICK', () => {});
+  assert.strictEqual(typeof unsub, 'function');
+});
+
+test('EventBus: calling the unsub function stops delivery', () => {
+  const bus   = new EventBus();
+  let count   = 0;
+  const unsub = bus.subscribe('TICK', () => { count++; });
+
+  bus.publish({ type: 'TICK' });
+  assert.strictEqual(count, 1);
+
+  unsub();
+  bus.publish({ type: 'TICK' });
+  assert.strictEqual(count, 1, 'handler should not fire after unsubscribe');
+});
+
+test('EventBus: unsubscribing one listener does not affect other listeners on the same type', () => {
+  const bus    = new EventBus();
+  let countA   = 0;
+  let countB   = 0;
+  const unsubA = bus.subscribe('TICK', () => { countA++; });
+  bus.subscribe('TICK', () => { countB++; });
+
+  bus.publish({ type: 'TICK' });
+  assert.strictEqual(countA, 1);
+  assert.strictEqual(countB, 1);
+
+  unsubA();
+  bus.publish({ type: 'TICK' });
+  assert.strictEqual(countA, 1, 'A should not fire after its unsub');
+  assert.strictEqual(countB, 2, 'B should still fire');
+});

@@ -11,6 +11,7 @@
 import { $ }                               from '../ui-utils.js';
 import { BaseComponent }                   from '../components/base-component.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../simulation-framework/bus-messages.js';
+import { APP_EVENTS }                        from '../app-display-settings.js';
 
 /**
  * DashCardsComponent — owns the five execution-count cards:
@@ -26,7 +27,7 @@ export class DashCardsComponent extends BaseComponent {
   /**
    * @param {{ displaySettings?: import('../app-display-settings.js').AppDisplaySettings, formatDate?: function }} opts
    */
-  constructor({ displaySettings, formatDate } = {}) {
+  constructor({ displaySettings, formatDate, appBus } = {}) {
     super();
     this._formatDate = displaySettings?.formatDate ?? formatDate ?? (d => d?.toDateString() ?? '');
     this._sim        = null;
@@ -36,8 +37,8 @@ export class DashCardsComponent extends BaseComponent {
     this._drainBeginMsgs = noop;
     this._drainEndMsgs   = noop;
 
-    if (displaySettings) {
-      this.onCleanup(displaySettings.subscribe(({ formatDate: fmt }) => {
+    if (appBus) {
+      this.onCleanup(appBus.subscribe(APP_EVENTS.DISPLAY_SETTINGS_CHANGED, ({ formatDate: fmt }) => {
         this._formatDate = fmt;
         this.render();
       }));

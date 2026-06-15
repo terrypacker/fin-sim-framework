@@ -20,7 +20,8 @@
 import { WorkbenchShell }              from '../visualization/workbench/workbench-shell.js';
 import { BaseComponent }               from '../visualization/components/base-component.js';
 import { $, fmtUTC }                   from '../visualization/ui-utils.js';
-import { AppDisplaySettings }          from '../visualization/app-display-settings.js';
+import { AppDisplaySettings, APP_EVENTS } from '../visualization/app-display-settings.js';
+import { EventBus }                      from '../simulation-framework/event-bus.js';
 import { ScenarioLoader }             from '../scenarios/scenario-loader.js';
 import { ChartController }            from '../visualization/chart/chart-controller.js';
 import { ChartView }                  from '../visualization/chart/chart-view.js';
@@ -157,11 +158,14 @@ export class WorkbenchApp extends BaseComponent {
     this._graphNodeExecHistory = null;
     this._graphNodeLineage     = null;
 
+    // App-lifetime event bus — shared across all app-level services and components.
+    this.appBus = new EventBus();
+
     // App-lifetime display settings service (timezone, currency, theme + persistence).
-    this.displaySettings = new AppDisplaySettings();
+    this.displaySettings = new AppDisplaySettings(this.appBus);
 
     // Created once — survive scenario rebuilds.
-    this._statePanelView   = new StatePanelView({ displaySettings: this.displaySettings });
+    this._statePanelView   = new StatePanelView({ displaySettings: this.displaySettings, appBus: this.appBus });
     this._scenarioTabView  = new ScenarioTabView();
     this._reportingService = new JournalReportingService();
     this._taxDocModal      = new TaxDocumentModal();
@@ -209,6 +213,15 @@ export class WorkbenchApp extends BaseComponent {
       this._wbShell.activatePlugin('action-detail');
     });
 
+    // Bridge app bus → workbench bus so plugins can subscribe without a direct
+    // reference to AppDisplaySettings.
+    this.appBus.subscribe(APP_EVENTS.DISPLAY_SETTINGS_CHANGED, (event) => {
+      this._wbShell.runtime.bus.publish({
+        type:     WB_EVENTS.DISPLAY_SETTINGS_CHANGED,
+        settings: event,
+      });
+    });
+
     // Bind scenario tab view now that ScenarioPlugin DOM exists
     this._scenarioTabView.bind();
 
@@ -235,6 +248,7 @@ export class WorkbenchApp extends BaseComponent {
       displayNodeStateChanges: (changes) => this._statePanelView.showNodeStateChanges(changes),
       bus:                     registry.bus,
       displaySettings:         this.displaySettings,
+      appBus:                  this.appBus,
     });
 
     this.configPresenter = new GraphBuilderPresenter({
@@ -510,6 +524,7 @@ export class WorkbenchApp extends BaseComponent {
     this.timelinePresenter = new TimelinePresenter({
       controller:    new TimelineController(),
       view:          new TimelineView({ container: $('timelineContainer') }),
+      appBus:        this.appBus,
       onDetail:      (entry) => this._statePanelView.showNodeDetail(entry),
       onTaxDocument: (entry, journal) => {
         const doc = this._reportingService.generate(entry, journal);
@@ -541,6 +556,7 @@ export class WorkbenchApp extends BaseComponent {
       timeLabel:       $('timeLabel'),
       timeSlider:      $('timeSlider'),
       displaySettings: this.displaySettings,
+      appBus:          this.appBus,
       onReset: (date, state) => {
         this._animator?.updateDashCards(date);
         this._statePanelView.updateStatePanel(date, state);
@@ -555,6 +571,7 @@ export class WorkbenchApp extends BaseComponent {
       chartView:       this.chartPresenter,
       graphRenderer:   this.configPresenter._graphRenderer,
       displaySettings: this.displaySettings,
+      appBus:          this.appBus,
     });
 
     this._animator.toggleBreakpoint();
