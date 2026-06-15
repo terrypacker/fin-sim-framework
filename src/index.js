@@ -261,12 +261,16 @@ import { BaseNodeEditor } from './visualization/components/base-node-editor.js';
 import { EChartsGraphRenderer } from './visualization/components/echarts-graph-renderer.js';
 import { initEChartWhenReady } from './visualization/components/echarts-init.js';
 import { EventEditor } from './visualization/components/event-editor.js';
+import { AccountNodeRenderer } from './visualization/components/graph/rendering/account-node-renderer.js';
 import { ActionNodeRenderer } from './visualization/components/graph/rendering/action-node-renderer.js';
+import { CollectibleNodeRenderer } from './visualization/components/graph/rendering/collectible-node-renderer.js';
 import { DefaultNodeRenderer, NodeRenderGroup } from './visualization/components/graph/rendering/default-node-renderer.js';
 import { EventNodeRenderer } from './visualization/components/graph/rendering/event-node-renderer.js';
 import { HandlerNodeRenderer } from './visualization/components/graph/rendering/handler-node-renderer.js';
 import { NodeRenderKit } from './visualization/components/graph/rendering/node-render-kit.js';
 import { NodeRendererRegistry } from './visualization/components/graph/rendering/node-renderer-registry.js';
+import { PersonNodeRenderer } from './visualization/components/graph/rendering/person-node-renderer.js';
+import { RealPropertyNodeRenderer } from './visualization/components/graph/rendering/real-property-node-renderer.js';
 import { ReducerNodeRenderer } from './visualization/components/graph/rendering/reducer-node-renderer.js';
 import { GraphNodeFilterMultiSelect } from './visualization/components/graph-node-filter-multi-select.js';
 import { HandlerEditor } from './visualization/components/handler-editor.js';
@@ -859,13 +863,17 @@ export const Visualization = {
   EChartsGraphRenderer,
   initEChartWhenReady,
   EventEditor,
+  AccountNodeRenderer,
   ActionNodeRenderer,
+  CollectibleNodeRenderer,
   DefaultNodeRenderer,
   NodeRenderGroup,
   EventNodeRenderer,
   HandlerNodeRenderer,
   NodeRenderKit,
   NodeRendererRegistry,
+  PersonNodeRenderer,
+  RealPropertyNodeRenderer,
   ReducerNodeRenderer,
   GraphNodeFilterMultiSelect,
   HandlerEditor,
