@@ -99,13 +99,15 @@ async function runDef(def, params, entries) {
 
 // ─── Registry composition ────────────────────────────────────────────────────
 
-test('ReportDefinitionRegistry registers the 10 built-in definitions', () => {
+test('ReportDefinitionRegistry registers the 12 built-in definitions', () => {
   const reg = new ReportDefinitionRegistry();
   const ids = reg.getAll().map(d => d.id).sort();
   assert.deepStrictEqual(ids, [
     'au-tax-by-person-year',
     'capital-gains-by-disposal',
     'cash-flow-by-account',
+    'credits-to-account',
+    'debits-from-account',
     'nr-withholding-income-by-source',
     'ordinary-income-by-source',
     'pretax-adjustments-by-source',
@@ -156,6 +158,82 @@ test('withdrawals-by-account: groups source-account debits by stateKey, excludes
   assert.ok(!('checkingAccount.balance' in byKey),
     'destination credits and unrelated debits must not appear');
   assert.strictEqual(grandTotal, -14000);
+});
+
+// ─── CreditsToAccountDef ─────────────────────────────────────────────────────
+
+test('credits-to-account: includes only positive balance deltas regardless of action type', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('credits-to-account');
+  assert.strictEqual(def.perDiff, true);
+
+  const entries = [
+    // REPLENISH_SAVINGS credits savings (+5000), debits IRA (-5000).
+    entry({
+      actionType: 'REPLENISH_SAVINGS',
+      data:       { deficit: 5000 },
+      stateDiff: [
+        { field: 'usSavingsAccount.balance', before: 1000,  after: 6000,  delta:  5000 },
+        { field: 'iraAccount.balance',       before: 80000, after: 75000, delta: -5000 },
+      ],
+    }),
+    // Wages: no account.balance field — must be excluded.
+    entry({
+      actionType: 'WAGES_INCOME_TAX',
+      data:       { amount: 9000, cc: 'US' },
+      stateDiff:  [{ field: 'usOrdinaryIncomeYTD', before: 0, after: 9000, delta: 9000 }],
+    }),
+  ];
+
+  const { groups, grandTotal } = await runDef(def, { period: null }, entries);
+  const byKey = Object.fromEntries(groups.map(g => [g.key.stateKey, g.total]));
+
+  assert.strictEqual(byKey['usSavingsAccount.balance'], 5000, 'savings credit must appear');
+  assert.ok(!('iraAccount.balance' in byKey), 'IRA debit must be excluded');
+  assert.ok(!('usOrdinaryIncomeYTD' in byKey), 'non-account field must be excluded');
+  assert.strictEqual(grandTotal, 5000);
+});
+
+// ─── DebitsFromAccountDef ─────────────────────────────────────────────────────
+
+test('debits-from-account: includes only negative balance deltas across all action types', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('debits-from-account');
+  assert.strictEqual(def.perDiff, true);
+
+  const entries = [
+    // EXPENSE_DEBIT debits savings (-3000).
+    entry({
+      actionType: 'EXPENSE_DEBIT',
+      data:       { amount: 3000 },
+      stateDiff: [
+        { field: 'usSavingsAccount.balance', before: 6000, after: 3000, delta: -3000 },
+      ],
+    }),
+    // REPLENISH_SAVINGS: savings credit (+5000) must be excluded, IRA debit (-5000) must appear.
+    entry({
+      actionType: 'REPLENISH_SAVINGS',
+      data:       { deficit: 5000 },
+      stateDiff: [
+        { field: 'usSavingsAccount.balance', before: 1000,  after: 6000,  delta:  5000 },
+        { field: 'iraAccount.balance',       before: 80000, after: 75000, delta: -5000 },
+      ],
+    }),
+    // Income field — must be excluded.
+    entry({
+      actionType: 'WAGES_INCOME_TAX',
+      data:       { amount: 9000, cc: 'US' },
+      stateDiff:  [{ field: 'usOrdinaryIncomeYTD', before: 0, after: 9000, delta: 9000 }],
+    }),
+  ];
+
+  const { groups, grandTotal } = await runDef(def, { period: null }, entries);
+  const byKey = Object.fromEntries(groups.map(g => [g.key.stateKey, g.total]));
+
+  assert.strictEqual(byKey['usSavingsAccount.balance'], -3000, 'savings expense debit must appear');
+  assert.strictEqual(byKey['iraAccount.balance'],       -5000, 'IRA drawdown debit must appear');
+  assert.ok(!('usOrdinaryIncomeYTD' in byKey), 'non-account field must be excluded');
+  assert.strictEqual(grandTotal, -8000);
 });
 
 // ─── TaxPaidByYearDef ────────────────────────────────────────────────────────
@@ -263,7 +341,7 @@ test('real-property-cash-flow: groups by actionType, sums account.balance diffs,
 
 test('new definitions all expose at least a period facet', () => {
   const reg = new ReportDefinitionRegistry();
-  for (const id of ['withdrawals-by-account', 'tax-paid-by-year', 'roth-conversions-by-year', 'real-property-cash-flow']) {
+  for (const id of ['withdrawals-by-account', 'credits-to-account', 'debits-from-account', 'tax-paid-by-year', 'roth-conversions-by-year', 'real-property-cash-flow']) {
     const def    = reg.get(id);
     const facets = def.facets;
     assert.ok(facets.some(f => f.kind === 'period'), `${id} should declare a period facet`);
@@ -274,7 +352,7 @@ test('new definitions all expose at least a period facet', () => {
 
 test('account-multiselect defs expose an "account" multiselect facet', () => {
   const reg = new ReportDefinitionRegistry();
-  for (const id of ['cash-flow-by-account', 'withdrawals-by-account', 'real-property-cash-flow']) {
+  for (const id of ['cash-flow-by-account', 'withdrawals-by-account', 'credits-to-account', 'debits-from-account', 'real-property-cash-flow']) {
     const def = reg.get(id);
     const f   = def.facets.find(x => x.name === 'accountStateKeys');
     assert.ok(f, `${id} should expose accountStateKeys facet`);
