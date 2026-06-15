@@ -41,6 +41,12 @@ export class ReportDefinition {
   get defaultAggregates() { return { total: { fn: 'sum', field: 'amount' }, count: { fn: 'count' } }; }
 
   /**
+   * Default sort for aggregate groups. Override in time-series (year-keyed) reports
+   * to show ascending chronological order instead of the largest-bucket-first default.
+   */
+  get defaultSort() { return [{ field: 'total', dir: 'desc' }]; }
+
+  /**
    * When true, the plugin routes this report through a per-stateDiff JournalDataSource
    * (one row per stateDiff entry).  State-centric reports like cash-flow-by-account set this.
    */
@@ -288,6 +294,7 @@ class TaxPaidByYearDef extends ReportDefinition {
   }
 
   get defaultGroupBy()    { return ['year']; }
+  get defaultSort()       { return [{ field: 'year', dir: 'asc' }]; }
   get defaultAggregates() {
     return {
       total: { fn: 'sum', field: 'amount' },
@@ -323,6 +330,7 @@ class AuTaxByPersonYearDef extends ReportDefinition {
   }
 
   get defaultGroupBy()    { return ['year', 'personName']; }
+  get defaultSort()       { return [{ field: 'year', dir: 'asc' }]; }
   get defaultAggregates() {
     return {
       total: { fn: 'sum', field: 'personTaxAmount' },
@@ -358,6 +366,7 @@ class RothConversionsByYearDef extends ReportDefinition {
   }
 
   get defaultGroupBy()    { return ['year']; }
+  get defaultSort()       { return [{ field: 'year', dir: 'asc' }]; }
   get defaultAggregates() {
     return {
       total: { fn: 'sum', field: 'amount' },

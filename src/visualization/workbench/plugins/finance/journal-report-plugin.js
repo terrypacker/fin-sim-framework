@@ -58,6 +58,7 @@ export class JournalReportPlugin extends WorkbenchComponent {
     this._groups         = [];
     this._grandTotal     = null;
     this._expandedKeys   = new Set();
+    this._sortState      = null;   // { field: string, dir: 'asc'|'desc' } | null
     // Cache of period option descriptors built per render. Indexed by `value`,
     // each entry carries `{ value, label, period: { fromEntryId, toEntryId } }`
     // so the select's change handler can resolve back to a period object
@@ -130,6 +131,8 @@ export class JournalReportPlugin extends WorkbenchComponent {
       this._activeReportId = picker.value || null;
       this._facetValues    = {};
       this._expandedKeys   = new Set();
+      const def = this._activeReportId ? this._registry.get(this._activeReportId) : null;
+      this._sortState = def?.defaultSort?.[0] ? { ...def.defaultSort[0] } : { field: 'total', dir: 'desc' };
       this._renderFacets();
       this._runQuery();
     });
@@ -142,6 +145,13 @@ export class JournalReportPlugin extends WorkbenchComponent {
     if (tbody && !tbody._jrToggleBound) {
       tbody.addEventListener('click', (e) => this._onGroupRowClick(e));
       tbody._jrToggleBound = true;
+    }
+
+    // Column sort delegate on thead — persists across header innerHTML rewrites.
+    const thead = this.el.querySelector('thead');
+    if (thead && !thead._jrSortBound) {
+      thead.addEventListener('click', (e) => this._onHeaderClick(e));
+      thead._jrSortBound = true;
     }
 
     // CSV download
@@ -194,6 +204,8 @@ export class JournalReportPlugin extends WorkbenchComponent {
     this._activeReportId = reportId;
     this._facetValues    = { ...(params ?? {}) };
     this._expandedKeys   = new Set();
+    const def = this._registry.get(reportId);
+    this._sortState = def?.defaultSort?.[0] ? { ...def.defaultSort[0] } : { field: 'total', dir: 'desc' };
 
     if (this._mounted) {
       const picker = this._q('picker');
@@ -223,7 +235,6 @@ export class JournalReportPlugin extends WorkbenchComponent {
       query:      ast,
       groupBy:    def.defaultGroupBy,
       aggregates: def.defaultAggregates,
-      sort:       [{ field: 'total', dir: 'desc' }],
     });
 
     this._groups     = def.decorate(result.groups);
@@ -524,15 +535,22 @@ export class JournalReportPlugin extends WorkbenchComponent {
     const def = this._registry.get(this._activeReportId);
     const groupByFields = def?.defaultGroupBy ?? ['actionType'];
 
-    // Header
-    const groupByCols = groupByFields.map(f =>
-      `<th class="jr-th">${_titleCase(f)}</th>`
-    ).join('');
-    theadRow.innerHTML = `${groupByCols}<th class="jr-th jr-th--num">Count</th><th class="jr-th jr-th--num">Total</th>`;
+    // Header — first group-by column + Count + Total are sortable
+    const activeSort  = this._sortState;
+    const groupByCols = groupByFields.map((f, i) => {
+      if (i === 0) {
+        return `<th class="jr-th jr-th--sortable" data-sort-field="${f}">${_titleCase(f)} ${_sortIndicator(f, activeSort)}</th>`;
+      }
+      return `<th class="jr-th">${_titleCase(f)}</th>`;
+    }).join('');
+    theadRow.innerHTML = `${groupByCols}` +
+      `<th class="jr-th jr-th--num jr-th--sortable" data-sort-field="count">Count ${_sortIndicator('count', activeSort)}</th>` +
+      `<th class="jr-th jr-th--num jr-th--sortable" data-sort-field="total">Total ${_sortIndicator('total', activeSort)}</th>`;
 
-    // Body
+    // Body — groups in user-chosen sort order
+    const sorted = this._sortedGroups();
     const rows = [];
-    for (const g of this._groups) {
+    for (const g of sorted) {
       const keyStr     = JSON.stringify(g.key);
       const isExpanded = this._expandedKeys.has(keyStr);
       const rowCls     = 'jr-group-row' + (isExpanded ? ' jr-group-row--expanded' : '');
@@ -555,7 +573,13 @@ export class JournalReportPlugin extends WorkbenchComponent {
         </tr>`);
 
       if (isExpanded && g.items?.length) {
-        for (const item of g.items) {
+        // Always show child entries in chronological order regardless of group sort.
+        const chronItems = [...g.items].sort((a, b) => {
+          const ta = a.ts ?? (a.date ? new Date(a.date).getTime() : 0);
+          const tb = b.ts ?? (b.date ? new Date(b.date).getTime() : 0);
+          return ta - tb;
+        });
+        for (const item of chronItems) {
           rows.push(`
             <tr class="jr-child-row">
               <td class="jr-td jr-td--child" colspan="${(def?.defaultGroupBy?.length ?? 1) + 2}">
@@ -580,9 +604,32 @@ export class JournalReportPlugin extends WorkbenchComponent {
     }
   }
 
+  _onHeaderClick(e) {
+    const th = e.target.closest('[data-sort-field]');
+    if (!th) return;
+    const field = th.dataset.sortField;
+    if (this._sortState?.field === field) {
+      this._sortState = { field, dir: this._sortState.dir === 'asc' ? 'desc' : 'asc' };
+    } else {
+      this._sortState = { field, dir: _defaultDirForField(field) };
+    }
+    this._renderResults();
+  }
+
+  _sortedGroups() {
+    if (!this._sortState || !this._groups.length) return this._groups;
+    const { field, dir } = this._sortState;
+    const sign = dir === 'asc' ? 1 : -1;
+    return [...this._groups].sort((a, b) => {
+      const av = _sortValue(a, field);
+      const bv = _sortValue(b, field);
+      return av < bv ? -sign : av > bv ? sign : 0;
+    });
+  }
+
   _downloadCsv() {
     const def = this._activeReportId ? this._registry.get(this._activeReportId) : null;
-    const csv = _generateCsv(this._groups, def);
+    const csv = _generateCsv(this._sortedGroups(), def);
     if (!csv) return;
 
     const reportTitle = def?.title ?? 'journal-report';
@@ -625,7 +672,12 @@ function _generateCsv(groups, def) {
     const keyObj = g.key ?? {};
 
     if (g.items?.length) {
-      for (const item of g.items) {
+      const chronItems = [...g.items].sort((a, b) => {
+        const ta = a.ts ?? (a.date ? new Date(a.date).getTime() : 0);
+        const tb = b.ts ?? (b.date ? new Date(b.date).getTime() : 0);
+        return ta - tb;
+      });
+      for (const item of chronItems) {
         const row = {};
         for (const f of groupByFields) row[f] = keyObj[f] ?? null;
         row.date        = item.date ? new Date(item.date).toISOString().slice(0, 10) : null;
@@ -663,6 +715,25 @@ function _generateCsv(groups, def) {
     cols.join(','),
     ...rows.map(row => cols.map(c => esc(row[c])).join(',')),
   ].join('\n');
+}
+
+function _sortValue(group, field) {
+  if (field === 'total') return group.total ?? group.gain ?? 0;
+  if (field === 'count') return group.count ?? 0;
+  return String(group.key?.[field] ?? '');
+}
+
+function _defaultDirForField(field) {
+  return (field === 'total' || field === 'count') ? 'desc' : 'asc';
+}
+
+function _sortIndicator(field, sortState) {
+  if (!sortState || sortState.field !== field) {
+    return '<span class="jr-sort-icon jr-sort-icon--neutral">⇅</span>';
+  }
+  return sortState.dir === 'asc'
+    ? '<span class="jr-sort-icon jr-sort-icon--asc">▲</span>'
+    : '<span class="jr-sort-icon jr-sort-icon--desc">▼</span>';
 }
 
 function _esc(s) {
