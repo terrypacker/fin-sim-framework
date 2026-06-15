@@ -112,6 +112,8 @@ export class StatePanelView extends BaseComponent {
    */
   wireSimBus(simBus, { chartPresenter } = {}) {
     this._chartPresenter = chartPresenter ?? null;
+    // simBus is the per-run sim bus; the prior subscription is discarded with the
+    // previous sim's bus on Rebuild, so no manual unsubscribe is needed here.
     this._drainExecEndMsgs = this.busQueue(
       simBus,
       `EXECUTION_${EXECUTION_PHASES.END}`,

@@ -10,6 +10,7 @@
 
 import {SimGraphNode} from "../graph/sim-graph-node.js";
 import {Simulation} from "../simulation-framework/simulation.js";
+import {EventBus} from "../simulation-framework/event-bus.js";
 import {DerivedMetricsRegistry} from "../simulation-framework/derived-metrics-registry.js";
 import {deriveNetWorth} from "../finance/derived-metrics/net-worth.js";
 import {deriveNetLiquidity} from "../finance/derived-metrics/net-liquidity.js";
@@ -240,15 +241,21 @@ export class BaseScenario extends SimGraphNode {
     // Persist as a plain object so ScenarioTabPresenter can serialize it.
     this.initialState = typeof resolved?.toPlain === 'function' ? resolved.toPlain() : resolved;
 
-    const { simulationRegistry, simulationSync, bus, graph } = this.context;
+    const { simulationRegistry, simulationSync, graph } = this.context;
     simulationRegistry.unregister('primary');
 
     const derivedMetrics = new DerivedMetricsRegistry();
     derivedMetrics.register(deriveNetWorth);
     derivedMetrics.register(deriveNetLiquidity);
 
+    // Per-run execution bus. The Simulation publishes execution telemetry
+    // (EXECUTION_*, BREAKPOINT_HIT) onto its own bus, NOT the persistent
+    // ServiceRegistry bus, so every telemetry subscription dies with the sim
+    // when the scenario is rebuilt — no manual cleanup required. The shared
+    // ServiceRegistry bus (context.bus) carries SERVICE_ACTION / config edits;
+    // SimulationSync reaches this sim via the registry, not the bus.
     const sim = new Simulation(this.simStart, {
-      bus,
+      bus: new EventBus(),
       graph,
       initialState: resolved,
       opts: { derivedMetrics },

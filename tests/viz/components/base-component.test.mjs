@@ -91,6 +91,39 @@ test('BaseComponent.busQueue: does not queue messages of other types', () => {
   assert.strictEqual(drain().length, 0);
 });
 
+// ─── busQueue — subscription cleanup (leak regression) ────────────────────────
+
+test('BaseComponent.busQueue: destroy() unsubscribes from the bus', () => {
+  const comp = new TestComponent();
+  const bus  = new EventBus();
+  const drain = comp.busQueue(bus, 'MY_EVENT', () => comp.render());
+  comp.destroy();
+  bus.publish({ type: 'MY_EVENT', value: 1 });
+  assert.strictEqual(drain().length, 0, 'no messages should queue after destroy');
+  assert.strictEqual(bus.listeners.get('MY_EVENT').length, 0, 'listener must be removed from the bus');
+});
+
+test('BaseComponent.busQueue: drain.unsubscribe() removes the subscription without destroy', () => {
+  const comp = new TestComponent();
+  const bus  = new EventBus();
+  const drain = comp.busQueue(bus, 'MY_EVENT', () => comp.render());
+  assert.strictEqual(typeof drain.unsubscribe, 'function');
+  drain.unsubscribe();
+  bus.publish({ type: 'MY_EVENT', value: 1 });
+  assert.strictEqual(drain().length, 0, 'unsubscribe should stop queuing');
+  assert.strictEqual(bus.listeners.get('MY_EVENT').length, 0);
+});
+
+test('BaseComponent.busQueue: subscriptions do not accumulate across repeated subscribe/destroy cycles', () => {
+  const bus = new EventBus();
+  for (let i = 0; i < 5; i++) {
+    const comp = new TestComponent();
+    comp.busQueue(bus, 'MY_EVENT', () => comp.render());
+    comp.destroy();
+  }
+  assert.strictEqual(bus.listeners.get('MY_EVENT').length, 0, 'no leaked listeners after destroy cycles');
+});
+
 // ─── busQueue — filter support ─────────────────────────────────────────────────
 
 test('BaseComponent.busQueue: kind filter allows matching messages', () => {

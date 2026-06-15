@@ -579,7 +579,8 @@ export class WorkbenchApp extends BaseComponent {
     this._graphNodeExecHistory?.wireSimBus(this.scenario.sim.bus);
     this._graphNodeLineage?.wireSimBus(this.scenario.sim.bus);
 
-    // Track _currentDate for subclass access.
+    // Track _currentDate for subclass access. Subscribes to the per-run sim bus,
+    // which is discarded (with this subscription) on the next Rebuild.
     this.scenario.sim.bus.subscribe(`EXECUTION_${EXECUTION_PHASES.BEGIN}`, { kind: EXECUTION_KINDS.EVENT }, ({ date }) => {
       this._currentDate = new Date(date);
     });
@@ -651,6 +652,7 @@ export class WorkbenchApp extends BaseComponent {
     });
 
     // Bridge sim-bus BREAKPOINT_HIT → workbench bus so timeline/graph plugins react.
+    // Subscribes to the per-run sim bus, discarded with it on the next Rebuild.
     this.scenario.sim.bus.subscribe('BREAKPOINT_HIT', (msg) => {
       runtime.breakpointHit({
         nodeId: msg.nodeId,
@@ -680,12 +682,15 @@ export class WorkbenchApp extends BaseComponent {
     this._statePanelView.clearMetricHistory();
 
     this._editModal?.close();
-    this._graphNodeInspector?.clear();
-    this._graphNodeExecHistory?.showNode(null);
-    this._graphNodeLineage?.showNode(null);
+    // These are recreated each initScenario and subscribe to the persistent
+    // ServiceRegistry bus — destroy() (not just clear/showNode) is required so
+    // their bus subscriptions are released and they don't pin prior simulations.
+    this._graphNodeInspector?.destroy();
+    this._graphNodeExecHistory?.destroy();
+    this._graphNodeLineage?.destroy();
     if (this._animator)         this._animator.destroy();
     if (this.timeControls)      this.timeControls.destroy();
-    if (this.chartPresenter)    this.chartPresenter.stopViz();
+    if (this.chartPresenter)  { this.chartPresenter.stopViz(); this.chartPresenter.destroy(); }
     if (this.configGraphView)   this.configGraphView.destroy();
     if (this.configPresenter)   this.configPresenter.destroy();
     if (this.configList)        this.configList.destroy();
