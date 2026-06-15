@@ -95,6 +95,10 @@ export const AU_RETIREMENT = {
       { type: 'SUPER_WITHDRAWAL_EARNINGS_TAX',   fields: { amount: ValueType.currency('AUD') } },
       { type: 'SUPER_EARNINGS_APPLY',              fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
       { type: 'SUPER_EARNINGS_TAX',               fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text() } },
+      { type: 'GUARDRAIL_BASELINE_APPLY',   fields: { initialWithdrawalRate: ValueType.number(), portfolioValue: ValueType.number(), annualSpending: ValueType.number(), date: ValueType.any() } },
+      { type: 'GUARDRAIL_ADJUST_APPLY',     fields: { multiplier: ValueType.number(), cause: ValueType.text(), date: ValueType.any() } },
+      { type: 'HEALTHCARE_EXPENSE_APPLY',   fields: { amount: ValueType.number() } },
+      { type: 'LATE_LIFE_CARE_APPLY',       fields: { active: ValueType.boolean(), factor: ValueType.number(), personId: ValueType.text() } },
     ],
   },
 
