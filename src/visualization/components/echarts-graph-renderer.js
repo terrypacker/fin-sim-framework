@@ -344,7 +344,12 @@ export class EChartsGraphRenderer extends BaseComponent {
     // by params.dataIndex into this._currentNodes (same order).
     const nodeData = nodes.map(n => {
       const pos = this._positions.get(n.id) || { x: 0, y: 0 };
-      return { value: [pos.x, pos.y] };
+      return {
+        value: [pos.x, pos.y],
+        kind: n.kind,
+        name: n.name,
+        id: n.id,
+      };
     });
 
     // Compute fan-out Y offsets (spread anchors when multiple edges share a node)
@@ -791,6 +796,10 @@ export class EChartsGraphRenderer extends BaseComponent {
     return {
       backgroundColor: 'transparent',
       animation:       false,
+      tooltip: {
+        show: true,
+        trigger: 'item'
+      },
       // Plot area fills the full container so coordinate [0,0] → canvas pixel (0,0).
       grid: { left: 0, right: 0, top: 0, bottom: 0, containLabel: false },
       xAxis: { show: false, type: 'value' },
@@ -812,9 +821,49 @@ export class EChartsGraphRenderer extends BaseComponent {
           type:       'custom',
           z:          2,
           clip:       false,
-          emphasis:   { disabled: true },
           renderItem: (params, api) => this._renderNodeItem(params, api),
           data:       [],
+          selectMode: 'single',
+          tooltip: {
+            show: true,
+            backgroundColor: 'transparent', // Clear the default wrapper background
+            borderWidth: 0,                 // Clear the default border wrapper
+            padding: 0,
+            formatter: params => {
+              const name = params.data.name;
+              const kind = params.data.kind;
+              let icon;
+              switch(kind) {
+                case 'event':
+                  icon = '🕔';
+                  break;
+                case 'action':
+                  icon = '⚡';
+                  break;
+                case 'handler':
+                  icon = '🛠';
+                  break;
+                case 'reducer':
+                  icon = '🧠';
+                  break;
+                case 'person':
+                  icon = '🚶';
+                  break;
+                case 'account':
+                  icon = '💰';
+                  break;
+                case 'real-property':
+                  icon = '🏠';
+                  break;
+                case 'collectible':
+                  icon = '💎';
+                  break;
+                default:
+                  icon = '•';
+              }
+              return `<div class='g-tooltip'>${icon} ${name}</div>`;
+            }
+          }
         },
       ],
     };

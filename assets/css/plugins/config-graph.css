@@ -145,6 +145,11 @@
 .g-port.fired { background: var(--green); top: 6px; right: 2px; }
 .g-port.off   { background: var(--red);   top: 6px; right: 2px; }
 
+.g-tooltip {
+  background: var(--bg-panel);
+  padding: 8px;
+  border-radius: var(--radius);
+}
 /* ── EDGES ── */
 #graphEdges path {
   stroke: var(--text-muted);
