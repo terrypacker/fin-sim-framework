@@ -99,13 +99,14 @@ async function runDef(def, params, entries) {
 
 // ─── Registry composition ────────────────────────────────────────────────────
 
-test('ReportDefinitionRegistry registers the 9 built-in definitions', () => {
+test('ReportDefinitionRegistry registers the 10 built-in definitions', () => {
   const reg = new ReportDefinitionRegistry();
   const ids = reg.getAll().map(d => d.id).sort();
   assert.deepStrictEqual(ids, [
     'au-tax-by-person-year',
     'capital-gains-by-disposal',
     'cash-flow-by-account',
+    'nr-withholding-income-by-source',
     'ordinary-income-by-source',
     'pretax-adjustments-by-source',
     'real-property-cash-flow',
@@ -448,6 +449,89 @@ test('au-tax-by-person-year: ignores entries that lack personTaxDetails', async 
   const { groups, grandTotal } = await runDef(def, { period: null }, entries);
   assert.strictEqual(groups.length, 0);
   assert.strictEqual(grandTotal, 0);
+});
+
+// ─── NrWithholdingIncomeBySourceDef ──────────────────────────────────────────
+
+test('nr-withholding-income-by-source: matches household-mode entries (auNonResidentWithholdingYTD)', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('nr-withholding-income-by-source');
+
+  // Household mode: reducer writes auNonResidentWithholdingYTD directly (state.people == null).
+  const savingsEntry = entry({
+    actionType: 'AU_SAVINGS_EARNINGS_TAX',
+    data:       { amount: 150, residency: 'USA' },
+    stateDiff: [
+      { field: 'auNonResidentWithholdingYTD', before: 0,   after: 150, delta: 150 },
+      { field: 'ftcYTD',                      before: 0,   after: 150, delta: 150 },
+    ],
+  });
+  const fixedEntry = entry({
+    actionType: 'AU_FIXED_INCOME_EARNINGS_TAX',
+    data:       { amount: 110.57, residency: 'USA' },
+    stateDiff: [
+      { field: 'auNonResidentWithholdingYTD', before: 150, after: 260.57, delta: 110.57 },
+      { field: 'ftcYTD',                      before: 150, after: 260.57, delta: 110.57 },
+    ],
+  });
+  // Ordinary income entry — must not appear in NR withholding report.
+  const ordinaryEntry = entry({
+    actionType: 'WAGES_INCOME_TAX',
+    data:       { amount: 5000 },
+    stateDiff: [
+      { field: 'auOrdinaryIncomeYTD', before: 0, after: 5000, delta: 5000 },
+    ],
+  });
+
+  const { groups, grandTotal } = await runDef(def, { period: null }, [savingsEntry, fixedEntry, ordinaryEntry]);
+  const types = groups.map(g => g.key.actionType).sort();
+  assert.ok(types.includes('AU_SAVINGS_EARNINGS_TAX'),     'savings withholding must appear');
+  assert.ok(types.includes('AU_FIXED_INCOME_EARNINGS_TAX'), 'fixed-income withholding must appear');
+  assert.ok(!types.includes('WAGES_INCOME_TAX'), 'ordinary income must be excluded');
+  assert.strictEqual(grandTotal, 260.57);
+});
+
+test('nr-withholding-income-by-source: matches per-person-mode entries (auPersonNonResidentWithholdingYTD)', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('nr-withholding-income-by-source');
+
+  // Per-person mode: reducer writes auPersonNonResidentWithholdingYTD (state.people != null).
+  const perPersonEntry = entry({
+    actionType: 'AU_SAVINGS_EARNINGS_TAX',
+    data:       { amount: 260.57, residency: 'USA', personKey: 'p-1' },
+    stateDiff: [
+      { field: 'auPersonNonResidentWithholdingYTD', before: 0, after: 260.57, delta: 260.57 },
+      { field: 'ftcYTD',                            before: 0, after: 260.57, delta: 260.57 },
+    ],
+  });
+
+  const { grandTotal } = await runDef(def, { period: null }, [perPersonEntry]);
+  assert.strictEqual(grandTotal, 260.57,
+    'per-person path (auPersonNonResidentWithholdingYTD) must be found by the report');
+});
+
+test('nr-withholding-income-by-source: personKeys facet filters correctly', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('nr-withholding-income-by-source');
+
+  const entries = [
+    entry({
+      actionType: 'AU_SAVINGS_EARNINGS_TAX',
+      data:       { amount: 200, residency: 'USA', personKey: 'p-1' },
+      stateDiff: [{ field: 'auNonResidentWithholdingYTD', before: 0,   after: 200, delta: 200 }],
+    }),
+    entry({
+      actionType: 'AU_SAVINGS_EARNINGS_TAX',
+      data:       { amount: 60.57, residency: 'USA', personKey: 'p-2' },
+      stateDiff: [{ field: 'auNonResidentWithholdingYTD', before: 200, after: 260.57, delta: 60.57 }],
+    }),
+  ];
+
+  const all = await runDef(def, { period: null }, entries);
+  assert.strictEqual(all.grandTotal, 260.57);
+
+  const p1Only = await runDef(def, { period: null, personKeys: ['p-1'] }, entries);
+  assert.strictEqual(p1Only.grandTotal, 200);
 });
 
 test('empty multiselect arrays act as "no filter"', async () => {
