@@ -331,8 +331,10 @@ test('newScenario: active config has correct content after compile', () => {
 
   const expensesParam = active.params.find(p => p.name === 'monthlyExpenses');
   assert.ok(expensesParam, 'monthlyExpenses (toolset-owned) param should exist in active.params');
-  assert.strictEqual(expensesParam.type,  'Number');
-  assert.strictEqual(expensesParam.value, D.monthlyExpenses);
+  // monthlyExpenses is a Money param (design 10 §Phase 5) — numeric value + currency.
+  assert.strictEqual(expensesParam.type,     'Money');
+  assert.strictEqual(expensesParam.value,    D.monthlyExpenses);
+  assert.strictEqual(expensesParam.currency, 'USD');
 
   const rothParam = active.params.find(p => p.name === 'rothBalance');
   assert.ok(rothParam,                                  'rothBalance param should exist');

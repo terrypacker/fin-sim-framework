@@ -52,6 +52,12 @@ export class StatePanelView extends BaseComponent {
     if (appBus) {
       appBus.subscribe(APP_EVENTS.DISPLAY_SETTINGS_CHANGED, ({ formatDate }) => {
         this._formatDate = formatDate;
+        // Re-render so currency-formatted rows pick up the new display currency
+        // (design 10 §Phase 4). No scenario rebuild — values reformat in place.
+        this.refresh();
+        // Also reformat an open Action Detail (state changes + payload) in place,
+        // without re-activating its tab.
+        if (this._lastDetailEntry) this.showNodeDetail(this._lastDetailEntry, { reveal: false });
       });
     }
   }
@@ -64,6 +70,11 @@ export class StatePanelView extends BaseComponent {
   /** Inject the StateSchemaRegistry for context-aware value formatting. */
   set schemaRegistry(r) {
     this._schemaRegistry = r ?? null;
+  }
+
+  /** Inject the TypeRegistry, used to resolve action-payload field currencies. */
+  set typeRegistry(r) {
+    this._typeRegistry = r ?? null;
   }
 
   /** Inject a callback to open a config-graph node in the edit modal. */
@@ -228,7 +239,7 @@ export class StatePanelView extends BaseComponent {
     if (oofDate) {
       const defSpan    = $('failureBannerDeficit');
       const monthsSpan = $('failureBannerMonths');
-      if (defSpan)    defSpan.textContent    = '$' + Math.round(stateSnapshot.cumulativeDeficit ?? 0).toLocaleString();
+      if (defSpan)    defSpan.textContent    = this._fmtChange('cumulativeDeficit', stateSnapshot.cumulativeDeficit ?? 0);
       if (monthsSpan) monthsSpan.textContent = stateSnapshot.deficitMonths ?? 0;
     }
   }
@@ -519,11 +530,12 @@ export class StatePanelView extends BaseComponent {
     actionDetails.replaceChildren(clone);
   }
 
-  showNodeDetail(entry) {
+  showNodeDetail(entry, { reveal = true } = {}) {
+    this._lastDetailEntry = entry;
     const { changes, emitted, actionPayload } = this.buildActionDetail(entry);
     const parentInfo = this._getParentInfo(entry);
     const el = this._buildActionDetailEl({ entry, changes, emitted, actionPayload, parentInfo });
-    this._onShowActionDetail?.();
+    if (reveal) this._onShowActionDetail?.();
     $('actionPanelDetails')?.replaceChildren(el);
   }
 
@@ -1552,11 +1564,30 @@ export class StatePanelView extends BaseComponent {
     const emitted = entry.emittedTypes?.length
       ? entry.emittedTypes.join(', ')
       : '(none)';
-    const actionPayload = JSON.stringify(
-      { ...entry.action, data: entry.action.data },
-      null, 2
-    );
+    const actionPayload = this._formatActionPayload(entry.action);
     return { changes, emitted, actionPayload };
+  }
+
+  /**
+   * Serialize an action for the payload view, annotating currency-typed data
+   * fields (per the TypeRegistry) with their display-currency value so money is
+   * legible in the active currency (design 10 §Phase 4). Non-money fields and
+   * the action structure are rendered verbatim. Falls back to a plain dump when
+   * no TypeRegistry/converter is wired.
+   */
+  _formatActionPayload(action) {
+    const fields  = this._typeRegistry?.getAction?.(action.type)?.fields ?? {};
+    const display = this._schemaRegistry?.displayCurrencyCode?.() ?? null;
+    const replacer = (key, val) => {
+      const vt = fields[key];
+      if (vt?.kind === 'currency' && vt.opts?.code && typeof val === 'number'
+          && display && display !== vt.opts.code) {
+        const disp = this._schemaRegistry.formatAmount(val, vt.opts.code);
+        if (disp) return `${val} ${vt.opts.code} → ${disp}`;
+      }
+      return val;
+    };
+    return JSON.stringify({ ...action, data: action.data }, replacer, 2);
   }
 
   getNodeDetail(node) {

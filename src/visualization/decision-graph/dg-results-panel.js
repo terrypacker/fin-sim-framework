@@ -11,10 +11,17 @@
 import { BaseComponent }          from '../components/base-component.js';
 import { DecisionGraphRunner }    from '../../finance/decision-graph/decision-graph-runner.js';
 import { buildDecisionGraphCsv }  from '../../finance/decision-graph/decision-graph-csv.js';
+import { ServiceRegistry }        from '../../services/service-registry.js';
 
 const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const PCT = v => v == null ? '—' : (v * 100).toFixed(1) + '%';
-const FMT = v => v == null ? '—' : USD.format(v);
+// Decision-graph objectives (final net worth, deficits) are USD-base aggregates;
+// convert to the active display currency (design 10 §Phase 4), whole dollars.
+const FMT = v => {
+  if (v == null) return '—';
+  const reg = ServiceRegistry.getInstance?.()?.schemaRegistry;
+  return reg?.formatAmount?.(v, 'USD', { maximumFractionDigits: 0 }) ?? USD.format(v);
+};
 
 /**
  * DgResultsPanel — center pane of the Decision Graph tab.

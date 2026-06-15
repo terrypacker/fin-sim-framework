@@ -15,6 +15,17 @@ const INVESTMENT_TYPES = new Set(['brokerage', '401k', 'roth', 'ira', 'super']);
 const ALLOCATIONS      = ['EQUITY', 'BOND', 'CASH', 'OTHER'];
 
 /**
+ * Default native currency for an account, by type then country. Fixed-country
+ * retirement accounts pin their currency (super→AUD; 401k/roth/ira→USD);
+ * variable-country accounts follow the selected country.
+ */
+function _defaultCurrency(type, country) {
+  if (type === 'super') return 'AUD';
+  if (FIXED_COUNTRY.has(type)) return 'USD';
+  return (country === 'AU' || country === 'AUS') ? 'AUD' : 'USD';
+}
+
+/**
  * AccountEditor — renders the account edit form from tpl-account-editor into
  * a given container (typically a modal body).
  *
@@ -64,6 +75,19 @@ export class AccountEditor extends BaseComponent {
     typeSelect.disabled      = isEdit; // type cannot change after creation
 
     el.querySelector('[data-id="country"]').value        = this._node?.country ?? 'US';
+
+    // Native currency (design 10 §Phase 5): default by type/country, overridable.
+    const curSelect = el.querySelector('[data-id="currency"]');
+    curSelect.value = this._node?.currency?.code
+      ?? _defaultCurrency(typeSelect.value, this._node?.country ?? 'US');
+    // Keep the currency default in sync when the country changes (variable-country
+    // accounts only); leaves an explicit user choice for fixed-country types.
+    this.listen(el.querySelector('[data-id="country"]'), 'change', (e) => {
+      if (!FIXED_COUNTRY.has(typeSelect.value)) {
+        curSelect.value = _defaultCurrency(typeSelect.value, e.target.value);
+      }
+    });
+
     el.querySelector('[data-id="ownershipType"]').value  = this._node?.ownershipType ?? 'sole';
     el.querySelector('[data-id="minimumBalance"]').value = this._node?.minimumBalance ?? 0;
 
@@ -78,7 +102,10 @@ export class AccountEditor extends BaseComponent {
 
     // Show/hide conditional sections
     this._applyTypeVisibility(el, typeSelect.value);
-    this.listen(typeSelect, 'change', () => this._applyTypeVisibility(el, typeSelect.value));
+    this.listen(typeSelect, 'change', () => {
+      this._applyTypeVisibility(el, typeSelect.value);
+      curSelect.value = _defaultCurrency(typeSelect.value, el.querySelector('[data-id="country"]').value);
+    });
 
     // Holdings — editable table (design 25 §9 + design 29 taxLossPartner)
     this._renderHoldings(el);
@@ -241,6 +268,7 @@ export class AccountEditor extends BaseComponent {
       type:             el.querySelector('[data-id="type"]').value,
       balance,
       country:          el.querySelector('[data-id="country"]').value,
+      currency:         el.querySelector('[data-id="currency"]').value, // code; mapped to descriptor in the controller
       ownershipType:    el.querySelector('[data-id="ownershipType"]').value,
       ownerId:          el.querySelector('[data-id="ownerId"]').value || null,
       minimumBalance:   el.querySelector('[data-id="minimumBalance"]').value,

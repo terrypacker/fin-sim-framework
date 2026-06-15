@@ -16,11 +16,12 @@
  * around these.
  *
  * Format: long form, one row per param, with a header row.
- *   key,group,type,label,value
+ *   key,group,type,label,value,currency
  * On export every scalar param becomes a row. On import only `key` + `value`
- * are authoritative — `group`/`type`/`label` are reference columns, ignored
- * when reading back (the live param's own `type` drives coercion). This keeps
- * the round-trip robust to reordering, relabeling, or dropped columns.
+ * (+ `currency` for Money params) are authoritative — `group`/`type`/`label`
+ * are reference columns, ignored when reading back (the live param's own `type`
+ * drives coercion). This keeps the round-trip robust to reordering, relabeling,
+ * or dropped columns.
  *
  * Runtime param shape (see ScenarioRegistry / ScenarioLoader._toEntry):
  *   { name, label, type, group, value, options?, node?, hidden? }
@@ -28,9 +29,9 @@
  */
 
 /** Param types that are flat scalars and therefore CSV-representable. */
-export const CSV_SCALAR_TYPES = new Set(['Number', 'String', 'Boolean', 'Date', 'Enum']);
+export const CSV_SCALAR_TYPES = new Set(['Number', 'String', 'Boolean', 'Date', 'Enum', 'Money']);
 
-const COLUMNS = ['key', 'group', 'type', 'label', 'value'];
+const COLUMNS = ['key', 'group', 'type', 'label', 'value', 'currency'];
 
 /** RFC-4180 field escaping: quote when the field contains ",\n\r and double inner quotes. */
 function escapeCsv(field) {
@@ -47,6 +48,7 @@ function formatValue(param) {
     case 'Boolean':
       return (v === true || v === 'true') ? 'true' : 'false';
     case 'Number':
+    case 'Money':
       return v == null ? '' : String(v);
     default:
       return v == null ? '' : String(v);
@@ -72,6 +74,7 @@ export function paramsToCsv(params = []) {
       escapeCsv(p.type ?? ''),
       escapeCsv(p.label ?? ''),
       escapeCsv(formatValue(p)),
+      escapeCsv(p.type === 'Money' ? (p.currency ?? '') : ''),
     ].join(','));
   }
   return lines.join('\r\n') + '\r\n';
@@ -109,12 +112,13 @@ function parseCsv(text) {
 }
 
 /**
- * Parse CSV text into `{ key, rawValue }` updates. Only the `key` and `value`
- * columns are read; all others are ignored. Blank lines and rows with an empty
- * key are skipped.
+ * Parse CSV text into `{ key, rawValue, rawCurrency }` updates. The `key` and
+ * `value` columns are required; `currency` is optional (read for Money params).
+ * All other columns are ignored. Blank lines and rows with an empty key are
+ * skipped.
  *
  * @param {string} text
- * @returns {Array<{key:string, rawValue:string}>}
+ * @returns {Array<{key:string, rawValue:string, rawCurrency:string}>}
  * @throws {Error} if the header lacks a `key` or `value` column
  */
 export function csvToParamUpdates(text) {
@@ -124,6 +128,7 @@ export function csvToParamUpdates(text) {
   const header = rows[0].map(h => h.trim().toLowerCase());
   const keyIdx = header.indexOf('key');
   const valIdx = header.indexOf('value');
+  const curIdx = header.indexOf('currency');
   if (keyIdx === -1 || valIdx === -1) {
     throw new Error('CSV must have a header row with "key" and "value" columns');
   }
@@ -133,7 +138,11 @@ export function csvToParamUpdates(text) {
     const cells = rows[r];
     const key = (cells[keyIdx] ?? '').trim();
     if (!key) continue;
-    updates.push({ key, rawValue: cells[valIdx] ?? '' });
+    updates.push({
+      key,
+      rawValue:    cells[valIdx] ?? '',
+      rawCurrency: curIdx === -1 ? '' : (cells[curIdx] ?? ''),
+    });
   }
   return updates;
 }
@@ -148,7 +157,8 @@ export function csvToParamUpdates(text) {
 export function coerceParamValue(param, rawValue) {
   const raw = String(rawValue ?? '').trim();
   switch (param.type) {
-    case 'Number': {
+    case 'Number':
+    case 'Money': {
       if (raw === '') return { ok: true, value: null };
       const n = Number(raw);
       if (!Number.isFinite(n)) return { ok: false, error: `not a number: "${raw}"` };

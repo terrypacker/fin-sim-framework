@@ -64,6 +64,14 @@ export class CrossActionQueryPlugin extends WorkbenchComponent {
     this._runtime.bus.subscribe(WB_EVENTS.CROSS_ACTION_QUERY_OPEN, ({ field, actionType }) => {
       this._openPreset(field, actionType);
     });
+
+    // Re-run on display-currency change so results reformat in the new currency
+    // (design 10 §Phase 4) — only when a query is already showing.
+    this._runtime.bus.subscribe(WB_EVENTS.DISPLAY_SETTINGS_CHANGED, () => {
+      if (this._mounted && this._q('field-input')?.value.trim() && this._q('action-input')?.value.trim()) {
+        this._runQuery();
+      }
+    });
   }
 
   onMount() {

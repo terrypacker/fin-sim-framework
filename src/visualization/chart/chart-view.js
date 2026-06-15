@@ -11,6 +11,7 @@
 import * as echarts from 'echarts';
 import { BaseComponent } from '../components/base-component.js';
 import { readThemeColor, CHART_PALETTE } from '../theme.js';
+import { APP_EVENTS } from '../app-display-settings.js';
 
 /**
  * ECharts rendering layer. Extends BaseComponent so it participates in
@@ -28,8 +29,14 @@ export class ChartView extends BaseComponent {
    * @param {Date}    opts.simStart
    * @param {Date}    opts.simEnd
    * @param {Array}   [opts.series]   - optional [{key, color, label}] overrides
+   * @param {object}  [opts.appBus]            - app event bus (display-settings changes)
+   * @param {object}  [opts.schemaRegistry]    - resolves each series' native currency code
+   * @param {object}  [opts.currencyConverter] - native → display conversion
+   * @param {object}  [opts.displaySettings]   - active display currency
+   * @param {function}[opts.rateStateProvider] - () => state carrying effectiveExchangeRates
    */
-  constructor({ container, simStart, simEnd, series }) {
+  constructor({ container, simStart, simEnd, series,
+                appBus, schemaRegistry, currencyConverter, displaySettings, rateStateProvider } = {}) {
     super();
     this.container = container;
     this.simStart  = simStart;
@@ -38,7 +45,7 @@ export class ChartView extends BaseComponent {
 
     this._chart        = null;
     this._ro           = null;
-    this._seriesMap    = new Map();  // key → { colorIdx, dataArr }
+    this._seriesMap    = new Map();  // key → { colorIdx, dataArr } — dataArr is NATIVE currency
     this._colorIdx     = 0;
     this._annotations  = {};         // id → { date, label, color, position }
     this._hiddenSeries = new Set();
@@ -46,6 +53,20 @@ export class ChartView extends BaseComponent {
     this._seriesConfig = new Map((series ?? []).map(s => [s.key, s]));
     this._seriesKinds  = new Map(); // key → ParameterValueType.kind string
     this._backfilledSeries = new Set(); // keys shown at snapshot resolution → dashed (R10.1)
+
+    // Display-currency conversion (design 10 §Phase 4). Currency series are stored
+    // native and converted to the display currency at build time, so switching
+    // currency only needs a re-render — never a re-run.
+    this._schemaRegistry    = schemaRegistry    ?? null;
+    this._currencyConverter = currencyConverter ?? null;
+    this._displaySettings   = displaySettings   ?? null;
+    this._rateStateProvider = rateStateProvider ?? null;
+    if (appBus?.subscribe) {
+      const unsub = appBus.subscribe(APP_EVENTS.DISPLAY_SETTINGS_CHANGED, () => {
+        if (this._chart) this.scheduleRender(() => this._doChartUpdate());
+      });
+      this.onCleanup?.(unsub);
+    }
   }
 
   // ── Resize ────────────────────────────────────────────────────────────────────
@@ -207,6 +228,62 @@ export class ChartView extends BaseComponent {
     return (kind === 'rate' || kind === 'percentage') ? 1 : 0;
   }
 
+  /** Currency symbol for a code, e.g. 'USD' → '$', 'AUD' → 'A$'. */
+  _symbolFor(code) {
+    if (!code) return '';
+    try {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: code })
+        .formatToParts(0).find(p => p.type === 'currency')?.value ?? '';
+    } catch { return ''; }
+  }
+
+  /**
+   * The display currency code to label the left (value) axis with — but only
+   * when conversion is wired and every left-axis series is a currency series, so
+   * the symbol is unambiguous. Returns null otherwise (axis stays plain numbers).
+   */
+  _leftAxisCurrencyCode() {
+    if (!this._displaySettings || !this._currencyConverter || !this._schemaRegistry) return null;
+    let hasCurrency = false;
+    for (const key of this._seriesMap.keys()) {
+      const axisKind = this._seriesKinds.get(key) ?? 'unknown';
+      if (this._kindToAxisIndex(axisKind) !== 0) continue; // only the left axis
+      if (this._isCurrencySeries(key)) hasCurrency = true;
+      else return null;                                    // mixed → ambiguous symbol
+    }
+    return hasCurrency ? (this._displaySettings.displayCurrency ?? null) : null;
+  }
+
+  /**
+   * Convert a native currency series to the active display currency (design 10
+   * §Phase 4). Returns `dataArr` unchanged for non-currency series, when display
+   * already equals native, or when no rate is available. A single current rate
+   * is applied across the series; per-point historical rates land with Phase 6
+   * (time-varying rates), at which point this reads the rate series instead.
+   */
+  _displaySeriesData(key, dataArr) {
+    const conv = this._currencyConverter, ds = this._displaySettings, reg = this._schemaRegistry;
+    if (!conv || !ds || !reg) return dataArr;
+    // Determine currency-ness and native code from the injected (stamped) registry,
+    // NOT _seriesKinds — that comes from state-paths' module registry, which lacks
+    // per-account stamps (e.g. metrics.<stateKey> balance series resolve to 'metric'
+    // there but are really the account's currency). design 10 §Phase 4.
+    const vt = reg.resolve(key);
+    if (vt?.kind !== 'currency') return dataArr;
+    const native  = vt.currencyCode;
+    const display = ds.displayCurrency;
+    if (!native || native === display) return dataArr;
+    const state  = this._rateStateProvider?.() ?? null;
+    const factor = conv.convert(1, native, display, state);
+    if (factor == null) return dataArr; // no recorded rate → plot native
+    return dataArr.map(([t, v]) => [t, v * factor]);
+  }
+
+  /** Whether a series key is a currency series per the injected (stamped) registry. */
+  _isCurrencySeries(key) {
+    return this._schemaRegistry?.resolve(key)?.kind === 'currency';
+  }
+
   _buildSeriesOption(key, dataArr) {
     const { colorIdx } = this._seriesMap.get(key);
     const cfg        = this._seriesConfig.get(key);
@@ -218,7 +295,7 @@ export class ChartView extends BaseComponent {
       type:           'line',
       id:             key,
       name:           this._labelFor(key),  // keep stable for legend.selected matching
-      data:           dataArr,
+      data:           this._displaySeriesData(key, dataArr),
       yAxisIndex,
       smooth:         true,
       smoothMonotone: 'x',
@@ -271,6 +348,7 @@ export class ChartView extends BaseComponent {
     const activeKinds = new Set([...this._seriesKinds.values()]);
     const hasRateAxis = [...activeKinds].some(k => k === 'rate' || k === 'percentage');
 
+    const leftSymbol = this._symbolFor(this._leftAxisCurrencyCode());
     const leftAxis = {
       type:      'value',
       position:  'left',
@@ -278,7 +356,7 @@ export class ChartView extends BaseComponent {
         color:      readThemeColor('--text-dim'),
         fontSize:   11,
         fontFamily: 'monospace',
-        formatter:  (val) => Number(val).toLocaleString(),
+        formatter:  (val) => leftSymbol + Number(val).toLocaleString(),
       },
       splitLine: { lineStyle: { color: readThemeColor('--border-light'), width: 1 } },
       axisLine:  { show: false },
@@ -458,7 +536,11 @@ export class ChartView extends BaseComponent {
       );
     }
 
-    // Series lines
+    // Series lines. Currency series carry the active display-currency symbol so
+    // the conversion is legible (design 10 §Phase 4); the value is already in
+    // display currency because the series data was converted at build time.
+    const displaySymbol = (this._displaySettings && this._currencyConverter)
+      ? this._symbolFor(this._displaySettings.displayCurrency) : '';
     for (const p of filtered) {
       let rawVal;
       if (Array.isArray(p.value)) {
@@ -466,9 +548,10 @@ export class ChartView extends BaseComponent {
       } else {
         rawVal = p.value;
       }
+      const isCurrency = this._isCurrencySeries(p.seriesId);
       const formattedVal =
           typeof rawVal === 'number'
-              ? rawVal.toLocaleString()
+              ? (isCurrency ? displaySymbol : '') + rawVal.toLocaleString()
               : rawVal;
       lines.push(
           `${p.marker}${p.seriesName}: <b>${formattedVal}</b>`

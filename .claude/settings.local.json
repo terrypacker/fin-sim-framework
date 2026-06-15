@@ -82,7 +82,10 @@
       "Bash(TMPDIR=/tmp find *)",
       "Bash(export CLAUDE_CODE_TMPDIR=/tmp)",
       "Bash(export TMPDIR=/tmp)",
-      "Bash(head -30 /Users/tpacker/IdeaProjects/fin-sim-framework/tests/unit/intl-retirement-optimizer.test.mjs)"
+      "Bash(head -30 /Users/tpacker/IdeaProjects/fin-sim-framework/tests/unit/intl-retirement-optimizer.test.mjs)",
+      "Bash(curl -s --max-time 3 http://localhost:9222/json)",
+      "Bash(curl -s --max-time 3 http://localhost:10001/index.html)",
+      "Bash(curl -s --max-time 3 -o /dev/null -w \"%{http_code}\" http://localhost:10001/src/main.js)"
     ]
   },
   "hooks": {

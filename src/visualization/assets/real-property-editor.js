@@ -16,6 +16,11 @@
 
 import { BaseComponent } from '../components/base-component.js';
 
+/** Map a country code to its default currency code (US→USD, AU/AUS→AUD). */
+function _countryCurrency(country) {
+  return (country === 'AU' || country === 'AUS') ? 'AUD' : 'USD';
+}
+
 /**
  * RealPropertyEditor — renders the real-property edit form from
  * tpl-real-property-editor into a given container.
@@ -54,6 +59,14 @@ export class RealPropertyEditor extends BaseComponent {
     el.querySelector('[data-id="value"]').value             = this._node?.value             ?? 0;
     el.querySelector('[data-id="costBasis"]').value         = this._node?.costBasis         ?? 0;
     el.querySelector('[data-id="country"]').value           = this._node?.country           ?? 'US';
+
+    // Native currency (design 10 §Phase 5): default by country, overridable.
+    const curSelect = el.querySelector('[data-id="currency"]');
+    curSelect.value = this._node?.currency?.code ?? _countryCurrency(this._node?.country ?? 'US');
+    this.listen(el.querySelector('[data-id="country"]'), 'change', (e) => {
+      curSelect.value = _countryCurrency(e.target.value);
+    });
+
     el.querySelector('[data-id="appreciationRate"]').value  = this._node?.appreciationRate  ?? 0.035;
     el.querySelector('[data-id="isPrimaryResidence"]').checked = this._node?.isPrimaryResidence ?? false;
     el.querySelector('[data-id="mortgageBalance"]').value   = this._node?.mortgageBalance   ?? 0;
@@ -90,6 +103,7 @@ export class RealPropertyEditor extends BaseComponent {
       value:                +el.querySelector('[data-id="value"]').value,
       costBasis:            +el.querySelector('[data-id="costBasis"]').value,
       country:              el.querySelector('[data-id="country"]').value,
+      currency:             el.querySelector('[data-id="currency"]').value, // code; mapped to descriptor on save
       appreciationRate:     +el.querySelector('[data-id="appreciationRate"]').value,
       isPrimaryResidence:   el.querySelector('[data-id="isPrimaryResidence"]').checked,
       mortgageBalance:      +el.querySelector('[data-id="mortgageBalance"]').value,

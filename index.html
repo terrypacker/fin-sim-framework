@@ -564,12 +564,26 @@
           <input type="number" data-id="lifeExpectancy" value="90"/>
         </div>
         <div class="node-field">
-          <label>SS $/mo</label>
+          <label>SS /mo</label>
           <input type="number" data-id="socialSecurityMonthly" value="2800"/>
         </div>
         <div class="node-field">
-          <label>Wage $/mo</label>
+          <label>SS Currency</label>
+          <select data-id="ssCurrency">
+            <option value="USD">USD</option>
+            <option value="AUD">AUD</option>
+          </select>
+        </div>
+        <div class="node-field">
+          <label>Wage /mo</label>
           <input type="number" data-id="monthlyWage" value="0" min="0"/>
+        </div>
+        <div class="node-field">
+          <label>Wage Currency</label>
+          <select data-id="wageCurrency">
+            <option value="USD">USD</option>
+            <option value="AUD">AUD</option>
+          </select>
         </div>
         <div class="node-field">
           <label>Retire Date</label>
@@ -615,6 +629,13 @@
           <select data-id="country">
             <option value="US">US</option>
             <option value="AU">AU</option>
+          </select>
+        </div>
+        <div class="node-field">
+          <label>Currency</label>
+          <select data-id="currency">
+            <option value="USD">USD</option>
+            <option value="AUD">AUD</option>
           </select>
         </div>
         <div class="node-field">
@@ -696,6 +717,13 @@
           </select>
         </div>
         <div class="node-field">
+          <label>Currency</label>
+          <select data-id="currency">
+            <option value="USD">USD</option>
+            <option value="AUD">AUD</option>
+          </select>
+        </div>
+        <div class="node-field">
           <label>Value</label>
           <input type="number" data-id="value" value="0"/>
         </div>
@@ -766,6 +794,13 @@
           <select data-id="country">
             <option value="US">US</option>
             <option value="AU">AU</option>
+          </select>
+        </div>
+        <div class="node-field">
+          <label>Currency</label>
+          <select data-id="currency">
+            <option value="USD">USD</option>
+            <option value="AUD">AUD</option>
           </select>
         </div>
         <div class="node-field">

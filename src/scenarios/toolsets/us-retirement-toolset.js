@@ -236,9 +236,13 @@ export const US_RETIREMENT = {
         description: 'Annual interest rate for fixed income accounts',
       },
       {
-        key: 'monthlyExpenses', label: 'Monthly Expenses (USD)',
-        type: 'Number', group: 'Spending', mc: true, opt: true,
+        key: 'monthlyExpenses', label: 'Monthly Expenses',
+        type: 'Money', group: 'Spending', mc: true, opt: true,
         defaultValue: 6_000,
+        // Native currency of the household-base expense figure (design 10 §Phase 5);
+        // stamps these state paths so the display layer converts them.
+        defaultCurrency: 'USD',
+        currencyStateKeys: ['monthlyExpenses', 'expenses.essential', 'expenses.discretionary'],
         description: 'Monthly household expenses drawn from savings',
       },
       {

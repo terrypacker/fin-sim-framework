@@ -466,6 +466,33 @@ export class ScenarioTabView {
         valueInput.addEventListener('change', () => { param.value = valueInput.value; });
       } else if (param.type === 'EnumMulti') {
         valueInput = _buildEnumMultiEditor(param);
+      } else if (param.type === 'Money') {
+        // Numeric value + inline native-currency selector (design 10 §Phase 5).
+        // The value stays numeric (the compiler reads it as-is); the chosen
+        // currency rides on param.currency and is stamped at load time.
+        valueInput = document.createElement('div');
+        valueInput.className = 'param-money';
+
+        const num = document.createElement('input');
+        num.type = 'number';
+        num.placeholder = 'value';
+        num.value = param.value ?? '';
+        num.addEventListener('input', () => {
+          const raw = num.value;
+          param.value = raw.trim() === '' ? null : parseFloat(raw);
+        });
+
+        const cur = document.createElement('select');
+        ['USD', 'AUD'].forEach(c => {
+          const o = document.createElement('option');
+          o.value = c; o.textContent = c;
+          cur.appendChild(o);
+        });
+        cur.value = param.currency ?? param.defaultCurrency ?? 'USD';
+        cur.addEventListener('change', () => { param.currency = cur.value; });
+
+        valueInput.appendChild(num);
+        valueInput.appendChild(cur);
       } else {
         valueInput = document.createElement('input');
         valueInput.placeholder = 'value';
@@ -483,7 +510,7 @@ export class ScenarioTabView {
 
       // ── Type select ───────────────────────────────────────────────────────
       const typeSelect = document.createElement('select');
-      ['Number', 'String', 'Boolean', 'Date'].forEach(t => {
+      ['Number', 'String', 'Boolean', 'Date', 'Money'].forEach(t => {
         const opt = document.createElement('option');
         opt.value = t; opt.textContent = t;
         typeSelect.appendChild(opt);

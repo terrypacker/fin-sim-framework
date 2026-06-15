@@ -207,12 +207,17 @@ export class ScenarioTabPresenter {
     let applied = 0;
     const skipped = [];
     const errors  = [];
-    for (const { key, rawValue } of updates) {
+    for (const { key, rawValue, rawCurrency } of updates) {
       const param = byKey.get(key);
       if (!param || !CSV_SCALAR_TYPES.has(param.type)) { skipped.push(key); continue; }
       const res = coerceParamValue(param, rawValue);
       if (!res.ok) { errors.push(`${key}: ${res.error}`); continue; }
       param.value = res.value;
+      // Money params round-trip their native currency from the `currency` column.
+      if (param.type === 'Money') {
+        const cur = String(rawCurrency ?? '').trim().toUpperCase();
+        if (cur === 'USD' || cur === 'AUD') param.currency = cur;
+      }
       applied++;
     }
     return { applied, skipped, errors };

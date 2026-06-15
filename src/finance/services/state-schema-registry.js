@@ -51,6 +51,33 @@ function _globToRegex(glob) {
   return new RegExp(`^${pattern}$`);
 }
 
+/** Map a country code to its currency code (display fallback for assets). */
+function _countryToCurrency(country) {
+  if (country === 'AU' || country === 'AUS') return 'AUD';
+  if (country === 'US') return 'USD';
+  return null;
+}
+
+/**
+ * Default income currency for a person — derived from residency, then first
+ * citizenship, falling back to USD. Used when a person carries no explicit
+ * wageCurrency / ssCurrency.
+ */
+function _personDefaultCurrency(person) {
+  return _countryToCurrency(person?.residency)
+    ?? _countryToCurrency(person?.citizen?.[0])
+    ?? 'USD';
+}
+
+/** Currency symbol for a code, e.g. 'USD' → '$', 'AUD' → 'A$'. */
+function _currencySymbol(code) {
+  if (!code) return '$';
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: code })
+      .formatToParts(0).find(p => p.type === 'currency')?.value ?? '$';
+  } catch { return '$'; }
+}
+
 function _fmt(vt, value) {
   if (value == null) return '—';
   switch (vt.kind) {
@@ -104,7 +131,14 @@ function _fmt(vt, value) {
 export class StateSchemaRegistry {
   constructor() {
     this._exact    = new Map(); // path → ParameterValueType
-    this._patterns = [];       // [{ re, vt }] ordered by registration
+    this._patterns = [];       // [{ glob, re, vt }] ordered by registration
+
+    // Display-currency conversion wiring (design 10 §Phase 4). Injected by the
+    // app layer; duck-typed so this finance-layer class needs no UI imports.
+    this._displaySettings    = null; // { get displayCurrency }
+    this._currencyConverter  = null; // CurrencyConverter
+    this._rateStateProvider  = null; // () => state snapshot carrying effectiveExchangeRates
+    this._warnedCodeless     = new Set(); // paths already warned about (dev)
 
     // ── Glob patterns ─────────────────────────────────────────────────────────
     this.registerPattern('*.balance',           ParameterValueType.currency());
@@ -112,6 +146,11 @@ export class StateSchemaRegistry {
     this.registerPattern('*.earningsBasis',     ParameterValueType.currency());
     this.registerPattern('*.minimumBalance',    ParameterValueType.currency());
     this.registerPattern('metrics.*',           ParameterValueType.metric());
+    // Money metrics are aggregates in the USD base currency (computeNetWorth /
+    // computeNetLiquidity). Type them as currency so the display layer converts
+    // them (design 10 §Phase 4); exact paths override the generic metrics.* glob.
+    this.register('metrics.netWorth',     ParameterValueType.currency('USD'));
+    this.register('metrics.netLiquidity', ParameterValueType.currency('USD'));
 
     // Holdings (design 25 §5.6). Per-account exact paths take precedence
     // when an account stamps them with its specific currency; globs cover
@@ -143,6 +182,10 @@ export class StateSchemaRegistry {
 
     // ── Well-known exact fields ───────────────────────────────────────────────
     this.registerPattern('people.*.residency',    ParameterValueType.text());
+    // Person income (monthlyWage / socialSecurityMonthly) is stamped per-person and
+    // per-field via registerPerson() (design 10 §Phase 5), keyed on each person's
+    // wageCurrency / ssCurrency. No code-less glob remains so an unstamped person
+    // surfaces as `unknown` (caught by the coverage guard) rather than a wrong code.
     this.register('scenarioFailed',              ParameterValueType.boolean());
     this.register('scenarioComplete',            ParameterValueType.boolean());
     this.register('superWithdrawalBlocked',      ParameterValueType.boolean());
@@ -170,6 +213,13 @@ export class StateSchemaRegistry {
     this.register('auSuperTaxYTD',               ParameterValueType.currency('AUD'));
     this.register('auFrankingCreditYTD',         ParameterValueType.currency('AUD'));
 
+    // AU per-person YTD (design 10 §Phase 3) — jurisdiction-fixed AUD
+    this.registerPattern('auPersonOrdinaryIncomeYTD.*',         ParameterValueType.currency('AUD'));
+    this.registerPattern('auPersonCapitalGainsYTD.*',           ParameterValueType.currency('AUD'));
+    this.registerPattern('auPersonFrankingCreditYTD.*',         ParameterValueType.currency('AUD'));
+    this.registerPattern('auPersonNonResidentWithholdingYTD.*', ParameterValueType.currency('AUD'));
+    this.registerPattern('auPersonSuperTaxYTD.*',               ParameterValueType.currency('AUD'));
+
     this.register('inflationAccumulator',        ParameterValueType.decimal(4));
 
     // Bond mark-to-market snapshot (design 28 §5)
@@ -192,9 +242,28 @@ export class StateSchemaRegistry {
    * Register a glob pattern → ValueType mapping.
    * Patterns are tested in registration order; first match wins.
    * Supported wildcards: `*` = one segment (no dots), `**` = any segments.
+   * Idempotent: re-registering the same glob replaces the prior entry (the
+   * registry is reused across scenario rebuilds, so callers may re-register).
    */
   registerPattern(glob, valueType) {
-    this._patterns.push({ re: _globToRegex(glob), vt: valueType });
+    this._removePattern(glob);
+    this._patterns.push({ glob, re: _globToRegex(glob), vt: valueType });
+  }
+
+  /**
+   * Like registerPattern but inserts at the front, so this glob is tested
+   * before any previously-registered (less specific) pattern. Used for
+   * per-account / per-asset holdings paths that must win over the generic
+   * code-less `*.holdings.*` globs registered in the constructor.
+   */
+  registerPatternFront(glob, valueType) {
+    this._removePattern(glob);
+    this._patterns.unshift({ glob, re: _globToRegex(glob), vt: valueType });
+  }
+
+  _removePattern(glob) {
+    const i = this._patterns.findIndex(p => p.glob === glob);
+    if (i !== -1) this._patterns.splice(i, 1);
   }
 
   /**
@@ -212,12 +281,72 @@ export class StateSchemaRegistry {
     this.register(`${stateKey}.contributionBasis`, vt);
     this.register(`${stateKey}.earningsBasis`,    vt);
     this.register(`${stateKey}.minimumBalance`,   vt);
+    this.register(`${stateKey}.loanBalance`,      vt);
+    // The per-account balance is also recorded into state.metrics[stateKey] via
+    // RecordBalanceAction(`${stateKey}.balance`, stateKey) for charting; type it
+    // as the account's currency so the chart/state-panel convert it (design 10
+    // §Phase 4) — otherwise it falls through the generic `metrics.*` → metric glob.
+    this.register(`metrics.${stateKey}`,          vt);
     if (account.type === ACCOUNT_TYPE.BROKERAGE && 'earningsBasis' in account) {
       this.register(`${stateKey}.earningsBasis`,   vt);
     }
     // Holdings per-account stamp with the account's currency (design 25 §5.6).
-    this.registerPattern(`${stateKey}.holdings.*.marketValue`, vt);
-    this.registerPattern(`${stateKey}.holdings.*.costBasis`,   vt);
+    // Front-inserted so the coded per-account pattern wins over the generic
+    // code-less `*.holdings.*` globs registered in the constructor.
+    this.registerPatternFront(`${stateKey}.holdings.*.marketValue`, vt);
+    this.registerPatternFront(`${stateKey}.holdings.*.costBasis`,   vt);
+  }
+
+  /**
+   * Register exact money field paths for a RealProperty / Collectible, using
+   * the asset's currency code (falling back to its country when the currency
+   * descriptor is absent). Mirrors registerAccount() for non-account assets so
+   * the display layer can resolve a native currency for conversion (design 10).
+   *
+   * @param {string} stateKey  - e.g. 'usHouseProperty'
+   * @param {object} asset     - RealProperty | Collectible; reads currency?.code or country
+   */
+  registerAsset(stateKey, asset) {
+    const code = asset?.currency?.code ?? _countryToCurrency(asset?.country);
+    const vt   = ParameterValueType.currency(code);
+    this.register(`${stateKey}.value`,                   vt);
+    this.register(`${stateKey}.costBasis`,               vt);
+    this.register(`${stateKey}.mortgageBalance`,         vt);
+    this.register(`${stateKey}.monthlyMortgage`,         vt);
+    this.register(`${stateKey}.balanceAtResidencyChange`, vt);
+  }
+
+  /**
+   * Register exact income field paths for a person, using the person's
+   * per-field native currency (design 10 §Phase 5). wageCurrency stamps
+   * `people.<id>.monthlyWage`; ssCurrency stamps
+   * `people.<id>.socialSecurityMonthly`. Each defaults from residency /
+   * citizenship when the person carries no explicit code.
+   *
+   * @param {object} person  Person instance; reads id, wageCurrency, ssCurrency
+   */
+  registerPerson(person) {
+    const id = person?.id;
+    if (!id) return;
+    const fallback = _personDefaultCurrency(person);
+    const wage = person.wageCurrency ?? fallback;
+    const ss   = person.ssCurrency   ?? fallback;
+    this.register(`people.${id}.monthlyWage`,           ParameterValueType.currency(wage));
+    this.register(`people.${id}.socialSecurityMonthly`, ParameterValueType.currency(ss));
+  }
+
+  /**
+   * Stamp a list of exact state paths to a single currency code. Used for
+   * free-standing money params (design 10 §Phase 5) whose native currency is
+   * chosen in the param editor (e.g. monthlyExpenses → its expense breakdown).
+   *
+   * @param {string[]} paths  exact state field paths
+   * @param {string}   code   currency code (e.g. 'USD' / 'AUD')
+   */
+  registerCurrencyPaths(paths, code) {
+    if (!code || !Array.isArray(paths)) return;
+    const vt = ParameterValueType.currency(code);
+    for (const path of paths) this.register(path, vt);
   }
 
   /**
@@ -236,21 +365,124 @@ export class StateSchemaRegistry {
     return ParameterValueType.unknown();
   }
 
+  /** Inject the AppDisplaySettings (read for the active display currency). */
+  set displaySettings(ds)   { this._displaySettings   = ds ?? null; }
+
+  /** Inject the CurrencyConverter used for native → display conversion. */
+  set currencyConverter(c)  { this._currencyConverter = c ?? null; }
+
+  /**
+   * Inject a provider returning the state snapshot whose recorded exchange
+   * rate should be used when a caller does not pass an explicit `{ state }`.
+   * Typically `() => sim.state`.
+   */
+  set rateStateProvider(fn) { this._rateStateProvider = fn ?? null; }
+
   /**
    * Format a value using its registered ValueType.
    * For unknown or non-numeric types that need richer formatting
    * (dates, objects, arrays), returns null so the caller can fall back
    * to its own renderer.
    *
+   * When a display currency is wired and differs from a currency field's native
+   * code, the value is converted (design 10 §Phase 4) and formatted with the
+   * display currency's symbol. Conversion uses `opts.state` when provided (the
+   * snapshot relevant to that value), else the injected rate-state provider. If
+   * no rate is available the value renders in its native currency unchanged.
+   *
    * @param {string} fieldPath
    * @param {*}      value
+   * @param {{ state?: object }} [opts]  state snapshot for the conversion rate
    * @returns {string|null}  formatted string, or null for unknown/non-scalar
    */
-  format(fieldPath, value) {
+  format(fieldPath, value, opts = {}) {
     if (value == null) return '—';
     const vt = this.resolve(fieldPath);
     if (vt.kind === 'unknown' && typeof value !== 'number') return null;
+    if (vt.kind === 'currency' && typeof value === 'number') {
+      const display = this._toDisplayCurrency(vt, fieldPath, value, opts.state);
+      if (display) return _fmt(display.vt, display.value);
+    }
     return _fmt(vt, value);
+  }
+
+  /**
+   * Resolve a currency value to the active display currency, or null when no
+   * conversion should apply (no display preference, already native, code-less
+   * source, or no rate available).
+   *
+   * @returns {{ vt: ParameterValueType, value: number } | null}
+   */
+  _toDisplayCurrency(vt, fieldPath, value, state) {
+    const display = this._displaySettings?.displayCurrency;
+    if (!display || !this._currencyConverter) return null;
+    const native = vt.currencyCode;
+    if (!native) { this._warnCodeless(fieldPath); return null; }
+    if (native === display) return null;
+    const src       = state ?? this._rateStateProvider?.() ?? null;
+    const converted = this._currencyConverter.convert(value, native, display, src);
+    if (converted == null) return null; // no recorded rate → render native
+    return { vt: ParameterValueType.currency(display), value: converted };
+  }
+
+  /** The active display currency code, or null when none is wired. */
+  displayCurrencyCode() { return this._displaySettings?.displayCurrency ?? null; }
+
+  /**
+   * Convert a raw amount from its native code to the active display currency,
+   * returning the pieces for callers that do their own (e.g. compact "$1.5M")
+   * formatting rather than full Intl currency output.
+   *
+   * @param {number} value
+   * @param {string} nativeCode  e.g. 'USD'
+   * @returns {{ value: number, code: string, symbol: string }}
+   */
+  convertForDisplay(value, nativeCode) {
+    let code = nativeCode, amount = value;
+    const display = this._displaySettings?.displayCurrency;
+    if (display && this._currencyConverter && display !== nativeCode) {
+      const state = this._rateStateProvider?.() ?? null;
+      const conv  = this._currencyConverter.convert(value, nativeCode, display, state);
+      if (conv != null) { code = display; amount = conv; }
+    }
+    return { value: amount, code, symbol: _currencySymbol(code) };
+  }
+
+  /**
+   * Format a raw amount given its native currency code (not a state path),
+   * converting to the active display currency when one is set and differs.
+   * Used for action-payload money fields whose currency comes from the
+   * TypeRegistry rather than a registered state path. Returns null for
+   * non-numeric input.
+   *
+   * @param {number} value
+   * @param {string} nativeCode  e.g. 'USD'
+   * @returns {string|null}
+   */
+  formatAmount(value, nativeCode, opts = {}) {
+    if (typeof value !== 'number' || !nativeCode) return null;
+    let code = nativeCode, amount = value;
+    const display = this._displaySettings?.displayCurrency;
+    if (display && this._currencyConverter && display !== nativeCode) {
+      const state = this._rateStateProvider?.() ?? null;
+      const conv  = this._currencyConverter.convert(value, nativeCode, display, state);
+      if (conv != null) { code = display; amount = conv; }
+    }
+    const max = opts.maximumFractionDigits ?? 2;
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency', currency: code,
+      minimumFractionDigits: Math.min(2, max), maximumFractionDigits: max,
+    }).format(amount);
+  }
+
+  /** Warn once per path when a currency value cannot be converted (no code). */
+  _warnCodeless(fieldPath) {
+    if (this._warnedCodeless.has(fieldPath)) return;
+    this._warnedCodeless.add(fieldPath);
+    console.warn(
+      `[StateSchemaRegistry] currency conversion requested for '${fieldPath}' but ` +
+      `no native currencyCode is registered; rendering native.`,
+    );
   }
 
 }

@@ -597,6 +597,7 @@ export class ScenarioSerializer {
       drawdownPriority:     p.drawdownPriority     ?? null,
       owners:               p.owners               ?? [],
       country:              p.country              ?? 'US',
+      currency:             p.currency             ?? null,
       stateKey:             p.stateKey             ?? null,
       appreciationSchedule: p.appreciationSchedule
         ? p.appreciationSchedule.map(e => ({
@@ -624,6 +625,7 @@ export class ScenarioSerializer {
       drawdownPriority:    d.drawdownPriority    ?? null,
       owners:              d.owners              ?? [],
       country:             d.country             ?? 'US',
+      currency:            d.currency            ?? null,
       appreciationSchedule: d.appreciationSchedule
         ? d.appreciationSchedule.map(e => ({ date: new Date(e.date), rate: e.rate }))
         : null,
@@ -648,6 +650,7 @@ export class ScenarioSerializer {
       drawdownPriority:     c.drawdownPriority     ?? null,
       owners:               c.owners               ?? [],
       country:              c.country              ?? 'US',
+      currency:             c.currency             ?? null,
       stateKey:             c.stateKey             ?? null,
       appreciationSchedule: c.appreciationSchedule
         ? c.appreciationSchedule.map(e => ({
@@ -671,6 +674,7 @@ export class ScenarioSerializer {
       drawdownPriority:    d.drawdownPriority    ?? null,
       owners:              d.owners              ?? [],
       country:             d.country             ?? 'US',
+      currency:            d.currency            ?? null,
       appreciationSchedule: d.appreciationSchedule
         ? d.appreciationSchedule.map(e => ({ date: new Date(e.date), rate: e.rate }))
         : null,
@@ -694,6 +698,8 @@ export class ScenarioSerializer {
       monthlyWage:           person.monthlyWage ?? 0,
       retirementDate:        ScenarioSerializer.toDateStr(person.retirementDate)
                                ?? new Date(Date.UTC(2040, 0, 1)).toISOString(),
+      wageCurrency:          person.wageCurrency ?? null,
+      ssCurrency:            person.ssCurrency   ?? null,
     };
   }
 
@@ -806,6 +812,8 @@ export class ScenarioSerializer {
       socialSecurityMonthly: d.socialSecurityMonthly ?? 2800,
       monthlyWage:           d.monthlyWage ?? 0,
       retirementDate:        d.retirementDate ? new Date(d.retirementDate) : new Date(Date.UTC(2040, 0, 1)),
+      wageCurrency:          d.wageCurrency ?? undefined,
+      ssCurrency:            d.ssCurrency   ?? undefined,
     });
     return person;
   }

@@ -10,6 +10,8 @@
 
 import assert from 'node:assert/strict';
 import { ChartView } from '../../../src/visualization/chart/chart-view.js';
+import { StateSchemaRegistry } from '../../../src/finance/services/state-schema-registry.js';
+import { CurrencyConverter }   from '../../../src/finance/fx/currency-converter.js';
 
 // ─── DOM setup ────────────────────────────────────────────────────────────────
 // Provide the two DOM fixtures ChartView needs: a canvas with a parent div
@@ -251,4 +253,78 @@ test('ChartView.setRenderThrottle: null resets to 0', () => {
   view.setRenderThrottle(500);
   view.setRenderThrottle(null);
   assert.strictEqual(view._renderThrottleMs, 0);
+});
+
+// ─── Display-currency conversion (design 10 §Phase 4) ──────────────────────────
+
+function wiredView(displayCurrency, rate = 1.5) {
+  const reg = new StateSchemaRegistry();
+  reg.registerAccount('usSavingsAccount', { currency: { code: 'USD' }, type: 'savings' });
+  const view = makeView({
+    schemaRegistry:    reg,
+    currencyConverter: new CurrencyConverter(),
+    displaySettings:   { displayCurrency },
+    rateStateProvider: () => ({ effectiveExchangeRates: { USD_AUD: rate } }),
+  });
+  view._seriesKinds.set('usSavingsAccount.balance', 'currency');
+  return view;
+}
+
+test('ChartView._displaySeriesData: converts a USD series to AUD display', () => {
+  const view = wiredView('AUD', 1.5);
+  const out = view._displaySeriesData('usSavingsAccount.balance', [[0, 1000], [1, 2000]]);
+  assert.deepStrictEqual(out, [[0, 1500], [1, 3000]]);
+});
+
+test('ChartView._displaySeriesData: native == display leaves data unchanged', () => {
+  const view = wiredView('USD');
+  const data = [[0, 1000]];
+  assert.strictEqual(view._displaySeriesData('usSavingsAccount.balance', data), data);
+});
+
+test('ChartView._displaySeriesData: non-currency series is unchanged', () => {
+  const view = wiredView('AUD');
+  view._seriesKinds.set('someRate', 'rate');
+  const data = [[0, 0.05]];
+  assert.strictEqual(view._displaySeriesData('someRate', data), data);
+});
+
+test('ChartView._displaySeriesData: no recorded rate leaves data native', () => {
+  const reg = new StateSchemaRegistry();
+  reg.registerAccount('usSavingsAccount', { currency: { code: 'USD' }, type: 'savings' });
+  const view = makeView({
+    schemaRegistry:    reg,
+    currencyConverter: new CurrencyConverter(),
+    displaySettings:   { displayCurrency: 'AUD' },
+    rateStateProvider: () => ({}),
+  });
+  view._seriesKinds.set('usSavingsAccount.balance', 'currency');
+  const data = [[0, 1000]];
+  assert.strictEqual(view._displaySeriesData('usSavingsAccount.balance', data), data);
+});
+
+test('ChartView._displaySeriesData: without conversion wiring, data is unchanged', () => {
+  const view = makeView();
+  view._seriesKinds.set('usSavingsAccount.balance', 'currency');
+  const data = [[0, 1000]];
+  assert.strictEqual(view._displaySeriesData('usSavingsAccount.balance', data), data);
+});
+
+test('ChartView._displaySeriesData: metrics.<account> converts via injected registry (kind says metric)', () => {
+  // design 10 §Phase 4 — RecordBalanceAction stores account balances under
+  // metrics.<stateKey>; state-paths types them 'metric', but registerAccount
+  // stamps them as the account currency. Conversion must use the injected registry.
+  const reg = new StateSchemaRegistry();
+  reg.registerAccount('usStockAccount', { currency: { code: 'USD' }, type: 'brokerage' });
+  assert.equal(reg.resolve('metrics.usStockAccount').currencyCode, 'USD');
+
+  const view = makeView({
+    schemaRegistry: reg,
+    currencyConverter: new CurrencyConverter(),
+    displaySettings: { displayCurrency: 'AUD' },
+    rateStateProvider: () => ({ effectiveExchangeRates: { USD_AUD: 1.55 } }),
+  });
+  view._seriesKinds.set('metrics.usStockAccount', 'metric'); // what typeForPath would set
+  const out = view._displaySeriesData('metrics.usStockAccount', [[0, 1000], [1, 2000]]);
+  assert.deepStrictEqual(out, [[0, 1550], [1, 3100]]);
 });

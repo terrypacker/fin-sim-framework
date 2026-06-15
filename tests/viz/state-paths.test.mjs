@@ -56,11 +56,20 @@ test('flattenStatePaths: returns unknown type for unregistered path', () => {
   assert.strictEqual(paths[0].type.kind, 'unknown');
 });
 
-test('flattenStatePaths: metrics.* paths get metric type', () => {
-  const state = { metrics: { netWorth: 500_000 } };
+test('flattenStatePaths: generic metrics.* paths get metric type', () => {
+  const state = { metrics: { sharpeRatio: 1.2 } };
   const paths = flattenStatePaths(state);
-  assert.strictEqual(paths[0].path, 'metrics.netWorth');
+  assert.strictEqual(paths[0].path, 'metrics.sharpeRatio');
   assert.strictEqual(paths[0].type.kind, 'metric');
+});
+
+test('flattenStatePaths: money metrics (netWorth/netLiquidity) are typed as currency', () => {
+  // design 10 §Phase 4 — money aggregates convert with the display currency.
+  const paths = flattenStatePaths({ metrics: { netWorth: 500_000, netLiquidity: 250_000 } });
+  for (const p of paths) {
+    assert.strictEqual(p.type.kind, 'currency', `${p.path} should be currency`);
+    assert.strictEqual(p.type.currencyCode, 'USD', `${p.path} should be USD`);
+  }
 });
 
 test('flattenStatePaths: handles empty state', () => {

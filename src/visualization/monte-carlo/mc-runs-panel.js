@@ -9,6 +9,7 @@
  */
 
 import { BaseComponent } from '../components/base-component.js';
+import { fmtCompact } from '../money-format.js';
 
 function stddev(values) {
   if (values.length < 2) return 0;
@@ -16,13 +17,7 @@ function stddev(values) {
   return Math.sqrt(values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length);
 }
 
-function fmtK(v) {
-  if (v == null) return '—';
-  const abs  = Math.abs(v);
-  const sign = v < 0 ? '-' : '';
-  if (abs >= 1_000_000) return sign + '$' + (abs / 1_000_000).toFixed(1) + 'M';
-  return sign + '$' + (abs / 1000).toFixed(0) + 'k';
-}
+const fmtK = (v) => fmtCompact(v);
 
 const METRIC_FIELD = {
   netWorthUsd:  'finalNetWorthUsd',

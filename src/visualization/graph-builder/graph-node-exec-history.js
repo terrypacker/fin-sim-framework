@@ -10,6 +10,7 @@
 
 import { BaseComponent } from '../components/base-component.js';
 import { readThemeColor } from '../theme.js';
+import { APP_EVENTS } from '../app-display-settings.js';
 
 /**
  * GraphNodeExecHistory — NODE HISTORY right-panel tab.
@@ -30,14 +31,19 @@ export class GraphNodeExecHistory extends BaseComponent {
    *   graphQueryApi: import('../../graph/graph-query-api.js').GraphQueryApi | null,
    * }}
    */
-  constructor({ container, graphRenderer, graphQueryApi }) {
+  constructor({ container, graphRenderer, graphQueryApi, schemaRegistry = null, appBus = null }) {
     super();
     this._container     = container;
     this._graphRenderer = graphRenderer;
     this._graphQueryApi = graphQueryApi;
+    this._schemaRegistry = schemaRegistry;
     this._selectedNode  = null;
     this._drainBegin    = () => [];
     this._drainEnd      = () => [];
+    // Re-render state-change values in the active display currency on change (design 10 §Phase 4).
+    if (appBus) {
+      this.onCleanup?.(appBus.subscribe(APP_EVENTS.DISPLAY_SETTINGS_CHANGED, () => this._render()));
+    }
     this._render();
   }
 
@@ -140,15 +146,15 @@ export class GraphNodeExecHistory extends BaseComponent {
       parts.push('<div class="node-header" style="margin-top:8px">Last State Changes</div>');
       for (const ch of diff) {
         const delta = ch.delta != null
-          ? `<span class="diff-pos">(${ch.delta > 0 ? '+' : ''}${this._fmt(ch.delta)})</span>`
+          ? `<span class="diff-pos">(${ch.delta > 0 ? '+' : ''}${this._fmtField(ch.field, ch.delta)})</span>`
           : '';
         parts.push(`
           <div class="node-field" style="flex-direction:column;align-items:flex-start;gap:2px;padding:4px 8px">
             <label style="font-weight:600;font-size:10px">${this._esc(ch.field)}</label>
             <div style="display:flex;gap:6px;font-size:11px;font-family:monospace;align-items:center">
-              <span class="diff-before">${this._fmt(ch.before)}</span>
+              <span class="diff-before">${this._fmtField(ch.field, ch.before)}</span>
               <span class="diff-field">→</span>
-              <span class="diff-after">${this._fmt(ch.after)}</span>
+              <span class="diff-after">${this._fmtField(ch.field, ch.after)}</span>
               ${delta}
             </div>
           </div>`);
@@ -158,15 +164,15 @@ export class GraphNodeExecHistory extends BaseComponent {
       parts.push('<div class="node-header" style="margin-top:8px">State Changes (live)</div>');
       for (const ch of exec.stateChanges) {
         const delta = ch.delta != null
-          ? `<span class="diff-pos">(${ch.delta > 0 ? '+' : ''}${this._fmt(ch.delta)})</span>`
+          ? `<span class="diff-pos">(${ch.delta > 0 ? '+' : ''}${this._fmtField(ch.field, ch.delta)})</span>`
           : '';
         parts.push(`
           <div class="node-field" style="flex-direction:column;align-items:flex-start;gap:2px;padding:4px 8px">
             <label style="font-weight:600;font-size:10px">${this._esc(ch.field)}</label>
             <div style="display:flex;gap:6px;font-size:11px;font-family:monospace;align-items:center">
-              <span class="diff-before">${this._fmt(ch.before)}</span>
+              <span class="diff-before">${this._fmtField(ch.field, ch.before)}</span>
               <span class="diff-field">→</span>
-              <span class="diff-after">${this._fmt(ch.after)}</span>
+              <span class="diff-after">${this._fmtField(ch.field, ch.after)}</span>
               ${delta}
             </div>
           </div>`);
@@ -225,6 +231,21 @@ export class GraphNodeExecHistory extends BaseComponent {
       case 'reducer': return node.reducerType  ?? 'Reducer';
       default:        return node.kind ?? null;
     }
+  }
+
+  /**
+   * Format a state-change value using the schema registry (currency conversion +
+   * symbol, design 10 §Phase 4), falling back to the plain formatter for
+   * unregistered / non-money fields.
+   */
+  _fmtField(field, v) {
+    // Only route currency fields through the registry (conversion + symbol);
+    // everything else keeps the plain formatter so integers stay integers.
+    if (this._schemaRegistry?.resolve?.(field)?.kind === 'currency') {
+      const s = this._schemaRegistry.format(field, v);
+      if (s != null) return this._esc(s);
+    }
+    return this._fmt(v);
   }
 
   _fmt(v) {

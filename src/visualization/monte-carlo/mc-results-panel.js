@@ -12,6 +12,7 @@ import * as echarts from 'echarts';
 import { BaseComponent } from '../components/base-component.js';
 import { readThemeColor } from '../theme.js';
 import { initEChartWhenReady } from '../components/echarts-init.js';
+import { fmtCompact, fmtWhole } from '../money-format.js';
 
 const HIST_BUCKETS = 20;
 
@@ -24,17 +25,8 @@ function quantile(sorted, q) {
   return sorted[lo] * (hi - idx) + sorted[hi] * (idx - lo);
 }
 
-function fmtK(v) {
-  const abs  = Math.abs(v);
-  const sign = v < 0 ? '-' : '';
-  if (abs >= 1_000_000) return sign + '$' + (abs / 1_000_000).toFixed(1) + 'M';
-  return sign + '$' + (abs / 1000).toFixed(0) + 'k';
-}
-
-function fmtDollar(v) {
-  if (v == null) return '—';
-  return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US', { maximumFractionDigits: 0 });
-}
+const fmtK      = (v) => fmtCompact(v);
+const fmtDollar = (v) => fmtWhole(v);
 
 function fmtPct(v) { return v == null ? '—' : (v * 100).toFixed(1) + '%'; }
 function fmtDate(v) { return v instanceof Date ? v.toISOString().slice(0, 7) : '—'; }

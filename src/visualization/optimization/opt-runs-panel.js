@@ -10,13 +10,11 @@
 
 import { BaseComponent }        from '../components/base-component.js';
 import { OPTIMIZATION_OBJECTIVES } from '../../finance/optimization/optimization-objectives.js';
+import { fmtWhole }             from '../money-format.js';
 
 const TOP_N = 5;
 
-function fmtDollar(v) {
-  if (v == null || !isFinite(v)) return '—';
-  return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US', { maximumFractionDigits: 0 });
-}
+const fmtDollar = (v) => fmtWhole(v);
 
 function fmtPct(v) {
   if (typeof v === 'number' && v > 0 && v < 1) return `${(v * 100).toFixed(0)}%`;

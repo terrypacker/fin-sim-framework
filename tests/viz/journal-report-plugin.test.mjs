@@ -591,3 +591,44 @@ test('Period facet: JOURNAL_REPORT_OPEN with non-enumerated period injects a tra
   expect(periodSel.value).toBe('__transient__:us-odd');
   expect(plugin._facetValues.period).toEqual({ fromEntryId: null, toEntryId: 'us-odd' });
 });
+
+// ─── _fmtMoney: cc-aware display-currency conversion (design 10 §Phase 4) ───────
+
+import { StateSchemaRegistry } from '../../src/finance/services/state-schema-registry.js';
+import { CurrencyConverter }   from '../../src/finance/fx/currency-converter.js';
+
+function wiredReg(displayCurrency, rate = 1.5) {
+  const reg = new StateSchemaRegistry();
+  reg.currencyConverter = new CurrencyConverter();
+  reg.displaySettings   = { displayCurrency };
+  reg.rateStateProvider = () => ({ effectiveExchangeRates: { USD_AUD: rate } });
+  return reg;
+}
+
+test('_fmtMoney: US report (cc=US) converts USD → AUD with sign', () => {
+  const { plugin } = makePlugin();
+  plugin.setServices({ schemaRegistry: wiredReg('AUD', 1.5) });
+  plugin._facetValues = { cc: 'US' };
+  expect(plugin._fmtMoney(1000)).toContain('A$1,500.00');
+  expect(plugin._fmtMoney(1000).startsWith('+')).toBe(true);
+  expect(plugin._fmtMoney(-1000).startsWith('-')).toBe(true);
+});
+
+test('_fmtMoney: AU report (cc=AU) stays native in AUD display', () => {
+  const { plugin } = makePlugin();
+  plugin.setServices({ schemaRegistry: wiredReg('AUD', 1.5) });
+  plugin._facetValues = { cc: 'AU' };
+  expect(plugin._fmtMoney(2000)).toContain('A$2,000.00');
+});
+
+test('_fmtMoney: AU report converts AUD → USD when display is USD', () => {
+  const { plugin } = makePlugin();
+  plugin.setServices({ schemaRegistry: wiredReg('USD', 1.5) });
+  plugin._facetValues = { cc: 'AU' };
+  expect(plugin._fmtMoney(1500)).toContain('$1,000.00');
+});
+
+test('_fmtMoney: null renders em dash', () => {
+  const { plugin } = makePlugin();
+  expect(plugin._fmtMoney(null)).toBe('—');
+});
