@@ -72,6 +72,7 @@ import { REGIME_TAG } from './finance/economic-regimes/regime-tag.js';
 import { RemoveRegimeReducer } from './finance/economic-regimes/remove-regime-reducer.js';
 import { RevalueAssetReducer } from './finance/economic-regimes/revalue-asset-reducer.js';
 import { SHOCK_LIBRARY, SHOCK_PRESET_OPTIONS } from './finance/economic-shocks/shock-library.js';
+import { CurrencyConverter } from './finance/fx/currency-converter.js';
 import { CurrencyPair, FxEngine } from './finance/fx/fx-engine.js';
 import { FxRefreshReducer } from './finance/fx/fx-refresh-reducer.js';
 import { FxService } from './finance/fx/fx-service.js';
@@ -297,6 +298,7 @@ import { GraphNodeExecHistory } from './visualization/graph-builder/graph-node-e
 import { GraphNodeInspectorPanel } from './visualization/graph-builder/graph-node-inspector-panel.js';
 import { GraphNodeLineage } from './visualization/graph-builder/graph-node-lineage.js';
 import { groupMergeTargets, routeEdge, computeFanOutOffsets, computeLaneOffsets } from './visualization/graph-builder/orthogonal-edge-router.js';
+import { fmtCompact, fmtWhole } from './visualization/money-format.js';
 import { McConfigPanel } from './visualization/monte-carlo/mc-config-panel.js';
 import { McResultsPanel } from './visualization/monte-carlo/mc-results-panel.js';
 import { McRunsPanel } from './visualization/monte-carlo/mc-runs-panel.js';
@@ -538,6 +540,7 @@ export const Finance = {
   RevalueAssetReducer,
   SHOCK_LIBRARY,
   SHOCK_PRESET_OPTIONS,
+  CurrencyConverter,
   CurrencyPair,
   FxEngine,
   FxRefreshReducer,
@@ -930,6 +933,8 @@ export const Visualization = {
   routeEdge,
   computeFanOutOffsets,
   computeLaneOffsets,
+  fmtCompact,
+  fmtWhole,
   McConfigPanel,
   McResultsPanel,
   McRunsPanel,

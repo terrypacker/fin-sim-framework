@@ -36,7 +36,7 @@ function sampleParams() {
 test('paramsToCsv emits a header and one row per scalar param', () => {
   const csv  = paramsToCsv(sampleParams());
   const rows = csv.trim().split('\r\n');
-  assert.equal(rows[0], 'key,group,type,label,value');
+  assert.equal(rows[0], 'key,group,type,label,value,currency');
   assert.equal(rows.length, 6); // header + 5 params
   assert.ok(rows.some(r => r.startsWith('iraGrowthRate,US Rates,Number,IRA Growth Rate,0.07')));
 });
@@ -68,7 +68,7 @@ test('paramsToCsv formats Boolean and empty Number consistently', () => {
     { name: 'n', label: 'N', type: 'Number',  group: 'g', value: null },
   ]);
   assert.ok(csv.includes('b,g,Boolean,B,true'));
-  assert.ok(csv.includes('n,g,Number,N,\r\n')); // empty value cell
+  assert.ok(csv.includes('n,g,Number,N,,\r\n')); // empty value cell + empty currency cell
 });
 
 // ─── Parse ────────────────────────────────────────────────────────────────────
@@ -76,7 +76,7 @@ test('paramsToCsv formats Boolean and empty Number consistently', () => {
 test('csvToParamUpdates reads only key and value, ignoring column order/extras', () => {
   const text = 'label,value,type,key\nIRA,0.065,Number,iraGrowthRate\n';
   const updates = csvToParamUpdates(text);
-  assert.deepEqual(updates, [{ key: 'iraGrowthRate', rawValue: '0.065' }]);
+  assert.deepEqual(updates, [{ key: 'iraGrowthRate', rawValue: '0.065', rawCurrency: '' }]);
 });
 
 test('csvToParamUpdates handles quoted fields with commas and newlines', () => {
@@ -90,7 +90,7 @@ test('csvToParamUpdates handles quoted fields with commas and newlines', () => {
 test('csvToParamUpdates skips blank lines and empty keys', () => {
   const text = 'key,value\n\niraGrowthRate,0.07\n,9\n';
   const updates = csvToParamUpdates(text);
-  assert.deepEqual(updates, [{ key: 'iraGrowthRate', rawValue: '0.07' }]);
+  assert.deepEqual(updates, [{ key: 'iraGrowthRate', rawValue: '0.07', rawCurrency: '' }]);
 });
 
 test('csvToParamUpdates throws when required columns are missing', () => {
@@ -99,7 +99,7 @@ test('csvToParamUpdates throws when required columns are missing', () => {
 
 test('csvToParamUpdates tolerates LF-only line endings and missing trailing newline', () => {
   const updates = csvToParamUpdates('key,value\niraGrowthRate,0.07');
-  assert.deepEqual(updates, [{ key: 'iraGrowthRate', rawValue: '0.07' }]);
+  assert.deepEqual(updates, [{ key: 'iraGrowthRate', rawValue: '0.07', rawCurrency: '' }]);
 });
 
 // ─── Coercion ─────────────────────────────────────────────────────────────────
@@ -125,6 +125,28 @@ test('coerceParamValue validates Enum membership when options are present', () =
   assert.equal(coerceParamValue(enumParam, 'BOGUS').ok, false);
   // No options → accept any string.
   assert.deepEqual(coerceParamValue({ type: 'Enum' }, 'anything'), { ok: true, value: 'anything' });
+});
+
+// ─── Money type ─────────────────────────────────────────────────────────────────
+
+test('Money param: value + currency export and round-trip (design 10 §Phase 5)', () => {
+  const params = [
+    { name: 'monthlyExpenses', label: 'Monthly Expenses', type: 'Money',
+      group: 'Spending', value: 6000, currency: 'AUD' },
+  ];
+  const csv = paramsToCsv(params);
+  // currency rides in its own column.
+  assert.ok(csv.includes('monthlyExpenses,Spending,Money,Monthly Expenses,6000,AUD'));
+
+  const [update] = csvToParamUpdates(csv);
+  assert.equal(update.key, 'monthlyExpenses');
+  assert.equal(update.rawValue, '6000');
+  assert.equal(update.rawCurrency, 'AUD');
+
+  // value coerces numerically, like Number.
+  assert.deepEqual(coerceParamValue({ type: 'Money' }, update.rawValue), { ok: true, value: 6000 });
+  assert.deepEqual(coerceParamValue({ type: 'Money' }, ''), { ok: true, value: null });
+  assert.ok(CSV_SCALAR_TYPES.has('Money'));
 });
 
 // ─── Round trip ───────────────────────────────────────────────────────────────

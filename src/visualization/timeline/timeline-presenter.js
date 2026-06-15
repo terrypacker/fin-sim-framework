@@ -20,6 +20,9 @@ export class TimelinePresenter {
     this._formatDate = displaySettings?.formatDate ?? (d => d.toDateString());
     this._unsubscribeSettings = null;
 
+    // Display-currency conversion of action-payload amounts (design 10 §Phase 4).
+    this._controller.displaySettings = displaySettings ?? null;
+
     if (onNavigateToNode) {
       view.onNavigateToNode = onNavigateToNode;
     }
@@ -71,6 +74,21 @@ export class TimelinePresenter {
 
   set schemaRegistry(r) {
     this._controller.schemaRegistry = r ?? null;
+  }
+
+  /** CurrencyConverter for converting action-payload amounts to display currency. */
+  set currencyConverter(c) {
+    this._controller.currencyConverter = c ?? null;
+  }
+
+  /** Provider returning the state snapshot whose recorded rate drives conversion. */
+  set rateStateProvider(fn) {
+    this._controller.rateStateProvider = fn ?? null;
+  }
+
+  /** TypeRegistry for resolving each action-payload field's native currency. */
+  set typeRegistry(r) {
+    this._controller.typeRegistry = r ?? null;
   }
 
   attach(journal) {

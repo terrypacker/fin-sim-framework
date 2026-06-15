@@ -24,6 +24,7 @@ import {ScenarioStorage} from "../scenarios/scenario-storage.js";
 import {ScenarioRegistry} from "../scenarios/scenario-registry.js";
 import { StateRegistry } from '../finance/services/state-registry.js';
 import { StateSchemaRegistry } from '../finance/services/state-schema-registry.js';
+import { CurrencyConverter } from '../finance/fx/currency-converter.js';
 import { RealPropertyService } from '../finance/services/real-property-service.js';
 import { CollectibleService } from '../finance/services/collectible-service.js';
 import { TypeRegistry } from '../simulation-framework/type-registry.js';
@@ -68,6 +69,8 @@ export class ServiceRegistry {
 
     this.stateRegistry      = new StateRegistry({ accountService: this.accountService });
     this.schemaRegistry     = new StateSchemaRegistry();
+    this.currencyConverter  = new CurrencyConverter();
+    this.schemaRegistry.currencyConverter = this.currencyConverter;
     this.scenarioRegistry   = new ScenarioRegistry(new ScenarioStorage(), this.graph);
     this.scenarioService    = new ScenarioService(this.bus, this.scenarioRegistry);
     this.dgRegistry         = new DecisionGraphRegistry(new DecisionGraphStorage(), this.graph);

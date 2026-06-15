@@ -17,6 +17,13 @@ const VARIABLE_COUNTRY = new Set(['checking', 'savings', 'brokerage']);
 // Account types that are investment accounts (have contributionBasis / earningsBasis).
 const INVESTMENT_TYPES = new Set(['brokerage', '401k', 'roth', 'ira', 'super']);
 
+/** Map a currency code string to its descriptor ({code, symbol}); null when unknown. */
+function _currencyDescriptor(code) {
+  if (code === 'AUD') return AUD;
+  if (code === 'USD') return USD;
+  return null;
+}
+
 /**
  * AccountsController — pure domain layer for Account CRUD.
  * No DOM, no bus, no globals — all dependencies injected.
@@ -52,7 +59,14 @@ export class AccountsController {
 
     if (VARIABLE_COUNTRY.has(data.type)) {
       const ctry = data.country || 'US';
-      builder.country(ctry).currency(ctry === 'AU' ? AUD : USD);
+      // Explicit currency override from the editor, else default by country.
+      const cur = _currencyDescriptor(data.currency) ?? (ctry === 'AU' ? AUD : USD);
+      builder.country(ctry).currency(cur);
+    } else {
+      // Fixed-country accounts (401k/roth/ira/super) still honor an explicit
+      // currency override when one was chosen; the builder otherwise pins it.
+      const cur = _currencyDescriptor(data.currency);
+      if (cur) builder.currency(cur);
     }
 
     if (INVESTMENT_TYPES.has(data.type)) {
@@ -81,6 +95,12 @@ export class AccountsController {
     if ('drawdownPriority' in n) {
       const dp = n.drawdownPriority;
       n.drawdownPriority = (dp === '' || dp == null) ? null : Number(dp);
+    }
+    // Currency arrives from the editor as a code string; the account stores a
+    // {code, symbol} descriptor. Map it, dropping an unknown/empty value.
+    if ('currency' in n) {
+      const cur = _currencyDescriptor(n.currency);
+      if (cur) n.currency = cur; else delete n.currency;
     }
     // Coerce holdings array: ensure numeric fields are numbers, drop empty arrays
     if (Array.isArray(n.holdings)) {

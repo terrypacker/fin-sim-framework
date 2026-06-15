@@ -10,8 +10,7 @@
 
 const COUNTRY_TO_CURRENCY = { AU: 'AUD', US: 'USD' };
 
-function fmtCurrency(n, cc) {
-  const currency = cc ? (COUNTRY_TO_CURRENCY[cc] ?? cc) : null;
+function fmtNative(n, currency) {
   if (!currency) return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n);
 }
@@ -27,6 +26,52 @@ export class TimelineController {
     this.expanded        = new Set();
     this._lastLen        = 0;
     this._lastDate       = null;
+
+    // Display-currency conversion (design 10 §Phase 4). Injected by the presenter.
+    this.currencyConverter = null;
+    this.displaySettings   = null;
+    this.rateStateProvider = null;
+    this.typeRegistry      = null;
+  }
+
+  /**
+   * Resolve an action-payload field's native currency code. The authoritative
+   * source is the TypeRegistry's registered field type (e.g. `amount` →
+   * ValueType.currency('AUD')); falls back to the action's country code
+   * (`data.cc` or the registered entry `cc`). Returns null when unknown.
+   */
+  _nativeCode(action, fieldName) {
+    const entry   = this.typeRegistry?.getAction?.(action?.type) ?? null;
+    const fieldVt = entry?.fields?.[fieldName];
+    if (fieldVt?.kind === 'currency' && fieldVt.opts?.code) return fieldVt.opts.code;
+    const d  = action?.data ?? {};
+    const cc = d.cc ?? entry?.cc ?? null;
+    if (cc) return COUNTRY_TO_CURRENCY[cc] ?? cc;
+    // Fall back to the currency of the account the action operates on. Covers
+    // amounts typed ValueType.number() (e.g. EXPENSE_DEBIT) that still target a
+    // known account whose balance currency is registered.
+    const acctKey = d.targetKey ?? d.destinationKey ?? d.stateKey ?? null;
+    if (acctKey && this.schemaRegistry) {
+      const code = this.schemaRegistry.resolve(`${acctKey}.balance`)?.currencyCode;
+      if (code) return code;
+    }
+    return null;
+  }
+
+  /**
+   * Format an action-payload amount given its native currency code, converting
+   * to the active display currency when one is set and a rate is available
+   * (design 10 §Phase 4). Falls back to the native currency when there is no
+   * display preference, no converter, or no recorded rate.
+   */
+  _fmtCurrency(n, native) {
+    const display = this.displaySettings?.displayCurrency;
+    if (native && display && display !== native && this.currencyConverter) {
+      const state     = this.rateStateProvider?.() ?? null;
+      const converted = this.currencyConverter.convert(n, native, display, state);
+      if (converted != null) return fmtNative(converted, display);
+    }
+    return fmtNative(n, native);
   }
 
   setJournal(journal) {
@@ -151,12 +196,11 @@ export class TimelineController {
 
   sum(action) {
     const d  = action.data ?? {};
-    const cc = d.cc ?? null;
     const parts = [];
-    if (d.amount     != null) parts.push(fmtCurrency(d.amount, cc));
-    if (d.tax        != null) parts.push('tax ' + fmtCurrency(d.tax, cc));
+    if (d.amount     != null) parts.push(this._fmtCurrency(d.amount, this._nativeCode(action, 'amount')));
+    if (d.tax        != null) parts.push('tax ' + this._fmtCurrency(d.tax, this._nativeCode(action, 'tax')));
     if (d.isLongTerm != null) parts.push(d.isLongTerm ? 'LT' : 'ST');
-    if (d.value      != null && typeof d.value === 'number') parts.push(fmtCurrency(d.value, cc));
+    if (d.value      != null && typeof d.value === 'number') parts.push(this._fmtCurrency(d.value, this._nativeCode(action, 'value')));
     if (d.value      != null && typeof d.value === 'string') parts.push('"' + d.value + '"');
     return parts.join(' · ');
   }

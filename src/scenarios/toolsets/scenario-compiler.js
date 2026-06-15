@@ -118,6 +118,10 @@ export class ScenarioCompiler {
     } catch {
       Object.assign(sim.state, JSON.parse(JSON.stringify(statePatches)));
     }
+
+    // Note: display-format currency codes for accounts/assets are stamped by
+    // ScenarioLoader._registerDisplayCurrencies() (covers both the compile and
+    // deserialize load paths), not here.
     for (const s of schedules) services.eventService.register(s);
     for (const h of handlers)  services.handlerService.register(h);
     for (const r of reducers)  services.reducerService.register(r);

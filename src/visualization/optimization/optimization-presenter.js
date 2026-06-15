@@ -13,6 +13,7 @@ import { OptResultsPanel }    from './opt-results-panel.js';
 import { OptRunsPanel }       from './opt-runs-panel.js';
 import { buildOptVariables }  from '../../finance/optimization/intl-retirement-opt-config.js';
 import { set }                from '../../finance/monte-carlo/mc-param-paths.js';
+import { APP_EVENTS }         from '../app-display-settings.js';
 
 /**
  * OptimizationPresenter — wires OptConfigPanel callbacks to OptimizationController
@@ -27,11 +28,12 @@ export class OptimizationPresenter {
    * @param {import('./optimization-view.js').OptimizationView}             opts.view
    * @param {object}                                                        opts.scenario
    */
-  constructor({ controller, view, scenario }) {
+  constructor({ controller, view, scenario, appBus = null }) {
     this._controller = controller;
     this._view       = view;
     this._scenario   = scenario;
     this._lastResult = null;
+    this._unsubSettings = null;
 
     this._configPanel  = new OptConfigPanel(view.configPane);
     this._resultsPanel = new OptResultsPanel(view.resultsPane);
@@ -48,11 +50,21 @@ export class OptimizationPresenter {
 
     /** Set by WorkbenchApp: onApplyCandidate(mergedParams) */
     this.onApplyCandidate = null;
+
+    // Re-render results in the active display currency on change (design 10 §Phase 4).
+    if (appBus) {
+      this._unsubSettings = appBus.subscribe(APP_EVENTS.DISPLAY_SETTINGS_CHANGED, () => {
+        if (!this._lastResult) return;
+        this._resultsPanel.showResults(this._lastResult);
+        this._runsPanel.showResults(this._lastResult);
+      });
+    }
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────────
 
   destroy() {
+    this._unsubSettings?.();
     this._configPanel.destroy();
     this._resultsPanel.destroy();
     this._runsPanel.destroy();

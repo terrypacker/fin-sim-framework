@@ -383,6 +383,11 @@
 /* Params whose declared node could not be resolved in the current scenario. */
 .param-row--unlinked label { color: var(--warning); }
 
+/* Money param: numeric value + a compact currency selector inline. */
+.param-money { display: flex; gap: 4px; align-items: center; }
+.param-money input { flex: 1 1 auto; }
+.param-money select { flex: 0 0 56px; }
+
 .param-row input,
 .param-row select,
 .param-row textarea {

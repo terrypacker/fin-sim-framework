@@ -29,10 +29,35 @@ export class TaxDocumentModal {
    */
   constructor({ runtime = null } = {}) {
     this._runtime = runtime;
+    this._schemaRegistry = null;
   }
 
   /** Wire (or replace) the WorkbenchRuntime after construction. */
   set runtime(r) { this._runtime = r; }
+
+  /**
+   * Inject the StateSchemaRegistry so amounts convert to the active display
+   * currency (design 10 §Phase 4). A tax document is denominated in its
+   * country's currency (doc.country / doc.currency).
+   */
+  set schemaRegistry(r) { this._schemaRegistry = r ?? null; }
+
+  /** Native currency code for a tax document. */
+  _docCurrency(doc) {
+    return COUNTRY_TO_CURRENCY[doc?.country] ?? doc?.currency ?? 'USD';
+  }
+
+  /**
+   * Format a tax-document amount in the document's native currency, converted
+   * to the active display currency. Accounting-style parentheses for negatives.
+   */
+  _fmtAmt(amount, code) {
+    if (amount == null) return '—';
+    const abs = Math.abs(amount);
+    const str = this._schemaRegistry?.formatAmount?.(abs, code)
+      ?? ('$' + abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+    return amount < 0 ? `(${str})` : str;
+  }
 
   /** @param {TaxDocument|TaxDocument[]} docOrDocs */
   open(docOrDocs) {
@@ -81,9 +106,10 @@ export class TaxDocumentModal {
   }
 
   _render(doc) {
+    const code = this._docCurrency(doc);
     const body = doc.table
-      ? this._renderTable(doc.table)
-      : doc.sections.map(s => this._renderSection(s)).join('') + (doc.summary ? this._renderSummary(doc.summary) : '');
+      ? this._renderTable(doc.table, code)
+      : doc.sections.map(s => this._renderSection(s, code)).join('') + (doc.summary ? this._renderSummary(doc.summary, code) : '');
     return `
       <div class="tax-doc-header">
         <div class="tax-doc-title-group">
@@ -98,20 +124,20 @@ export class TaxDocumentModal {
       </div>`;
   }
 
-  _renderTable({ heading, columns, rows, totals }) {
+  _renderTable({ heading, columns, rows, totals }, code) {
     const headerCells = columns.map(c => `<th class="tax-doc-tbl-th">${c}</th>`).join('');
     const dataRows = rows.map(row => {
       const cells = row.map((cell, i) => {
         const isAmt = typeof cell === 'number';
         const cls   = isAmt && cell < 0 ? 'tax-doc-tbl-td tax-doc-tbl-td--neg' : 'tax-doc-tbl-td';
-        return `<td class="${cls}">${isAmt ? _fmtAmt(cell) : (cell ?? '—')}</td>`;
+        return `<td class="${cls}">${isAmt ? this._fmtAmt(cell, code) : (cell ?? '—')}</td>`;
       }).join('');
       return `<tr class="tax-doc-tbl-row">${cells}</tr>`;
     }).join('');
     const totalCells = totals.map((cell, i) => {
       const isAmt = typeof cell === 'number';
       const cls   = isAmt && cell < 0 ? 'tax-doc-tbl-td tax-doc-tbl-total tax-doc-tbl-td--neg' : 'tax-doc-tbl-td tax-doc-tbl-total';
-      return `<td class="${cls}">${isAmt ? _fmtAmt(cell) : (cell ?? '')}</td>`;
+      return `<td class="${cls}">${isAmt ? this._fmtAmt(cell, code) : (cell ?? '')}</td>`;
     }).join('');
     return `
       <div class="tax-doc-section">
@@ -126,7 +152,7 @@ export class TaxDocumentModal {
       </div>`;
   }
 
-  _renderSection({ heading, lineItems }) {
+  _renderSection({ heading, lineItems }, code) {
     return `
       <div class="tax-doc-section">
         <div class="tax-doc-section-hdr">${heading}</div>
@@ -142,12 +168,12 @@ export class TaxDocumentModal {
               data-report-id="${li.drillReport.reportId}"
               data-params="${paramsAttr}">
               <span class="tax-doc-line-label">${li.label} ↗</span>
-              <span class="tax-doc-line-amount">${_fmtAmt(li.amount)}</span>
+              <span class="tax-doc-line-amount">${this._fmtAmt(li.amount, code)}</span>
             </button>`;
           }
           return `<div class="${cls}">
             <span class="tax-doc-line-label">${li.label}</span>
-            <span class="tax-doc-line-amount">${_fmtAmt(li.amount)}</span>
+            <span class="tax-doc-line-amount">${this._fmtAmt(li.amount, code)}</span>
           </div>`;
         }).join('')}
       </div>`;
@@ -165,25 +191,25 @@ export class TaxDocumentModal {
     });
   }
 
-  _renderSummary({ grossIncome, grossTax, credits, netLiability, effectiveRate, marginalRate }) {
+  _renderSummary({ grossIncome, grossTax, credits, netLiability, effectiveRate, marginalRate }, code) {
     return `
       <div class="tax-doc-summary">
         <div class="tax-doc-net-row">
           <span class="tax-doc-net-label">Net Tax Liability</span>
-          <span class="tax-doc-net-amount">${_fmtAmt(netLiability)}</span>
+          <span class="tax-doc-net-amount">${this._fmtAmt(netLiability, code)}</span>
         </div>
         <div class="tax-doc-summary-grid">
           <span class="tax-doc-summary-item">
             <span class="tax-doc-summary-key">Gross Income</span>
-            <span class="tax-doc-summary-val">${_fmtAmt(grossIncome)}</span>
+            <span class="tax-doc-summary-val">${this._fmtAmt(grossIncome, code)}</span>
           </span>
           <span class="tax-doc-summary-item">
             <span class="tax-doc-summary-key">Gross Tax</span>
-            <span class="tax-doc-summary-val">${_fmtAmt(grossTax)}</span>
+            <span class="tax-doc-summary-val">${this._fmtAmt(grossTax, code)}</span>
           </span>
           <span class="tax-doc-summary-item">
             <span class="tax-doc-summary-key">Credits</span>
-            <span class="tax-doc-summary-val">${_fmtAmt(credits)}</span>
+            <span class="tax-doc-summary-val">${this._fmtAmt(credits, code)}</span>
           </span>
           <span class="tax-doc-summary-item">
             <span class="tax-doc-summary-key">Effective Rate</span>
@@ -200,12 +226,7 @@ export class TaxDocumentModal {
 
 // ─── Module-level helpers ─────────────────────────────────────────────────────
 
-function _fmtAmt(amount) {
-  if (amount == null) return '—';
-  const abs = Math.abs(amount);
-  const str = '$' + abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return amount < 0 ? `(${str})` : str;
-}
+const COUNTRY_TO_CURRENCY = { US: 'USD', AU: 'AUD' };
 
 function _fmtPct(r) {
   if (!r) return '0.0%';

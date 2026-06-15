@@ -11,6 +11,7 @@
 import assert from 'node:assert/strict';
 
 import { TimelineController } from '../../../src/visualization/timeline/timeline-controller.js';
+import { CurrencyConverter }  from '../../../src/finance/fx/currency-converter.js';
 
 const fmtDate = d => d.toDateString();
 
@@ -728,4 +729,81 @@ test('TimelineController.causalGroups: filtered entries are excluded', () => {
   const nodes  = [...byEv.values()].flat();
   assert.equal(nodes.length, 1);
   assert.equal(nodes[0].entry.action.type, 'KEEP');
+});
+
+// ─── sum: display-currency conversion (design 10 §Phase 4) ─────────────────────
+
+function convertingController(displayCurrency, rate = 1.5) {
+  const ctrl = new TimelineController();
+  ctrl.currencyConverter = new CurrencyConverter();
+  ctrl.displaySettings   = { displayCurrency };
+  ctrl.rateStateProvider = () => ({ effectiveExchangeRates: { USD_AUD: rate } });
+  return ctrl;
+}
+
+test('sum: converts a US amount to AUD display', () => {
+  const s = convertingController('AUD', 1.5).sum({ type: 'ADD_CASH', data: { amount: 1000, cc: 'US' } });
+  assert.ok(s.includes('A$1,500.00'), `expected 'A$1,500.00' in "${s}"`);
+});
+
+test('sum: converts an AU amount to USD display (inverse rate)', () => {
+  const s = convertingController('USD', 1.5).sum({ type: 'ADD_CASH', data: { amount: 1500, cc: 'AU' } });
+  assert.ok(s.includes('$1,000.00'), `expected '$1,000.00' in "${s}"`);
+});
+
+test('sum: native == display leaves the amount unconverted', () => {
+  const s = convertingController('USD', 1.5).sum({ type: 'ADD_CASH', data: { amount: 1000, cc: 'US' } });
+  assert.ok(s.includes('$1,000.00'), `expected '$1,000.00' in "${s}"`);
+  assert.ok(!s.includes('A$'), `did not expect AUD symbol in "${s}"`);
+});
+
+test('sum: no recorded rate falls back to native currency', () => {
+  const ctrl = new TimelineController();
+  ctrl.currencyConverter = new CurrencyConverter();
+  ctrl.displaySettings   = { displayCurrency: 'AUD' };
+  ctrl.rateStateProvider = () => ({}); // no effectiveExchangeRates
+  const s = ctrl.sum({ type: 'ADD_CASH', data: { amount: 1000, cc: 'US' } });
+  assert.ok(s.includes('$1,000.00'), `expected native '$1,000.00' in "${s}"`);
+});
+
+test('sum: amount without a country code is unaffected by display currency', () => {
+  const s = convertingController('AUD', 1.5).sum({ type: 'ADD_CASH', data: { amount: 1000 } });
+  assert.ok(s.includes('$1,000.00'), `expected '$1,000.00' in "${s}"`);
+});
+
+test('sum: resolves native currency from the TypeRegistry when cc is absent', () => {
+  // SUPER_CONTRIBUTION_APPLY carries no cc but is registered as AUD.
+  const ctrl = convertingController('USD', 1.5);
+  ctrl.typeRegistry = {
+    getAction: () => ({ fields: { amount: { kind: 'currency', opts: { code: 'AUD' } } } }),
+  };
+  const s = ctrl.sum({ type: 'SUPER_CONTRIBUTION_APPLY', data: { amount: 1500 } });
+  assert.ok(s.includes('$1,000.00'), `expected USD '$1,000.00' in "${s}"`);
+  assert.ok(!s.includes('A$'), `did not expect AUD symbol in "${s}"`);
+});
+
+test('sum: TypeRegistry currency takes precedence over a stale cc', () => {
+  const ctrl = convertingController('AUD', 1.5);
+  ctrl.typeRegistry = {
+    getAction: () => ({ cc: 'US', fields: { amount: { kind: 'currency', opts: { code: 'USD' } } } }),
+  };
+  const s = ctrl.sum({ type: 'WAGES_INCOME_APPLY', data: { amount: 1000 } });
+  assert.ok(s.includes('A$1,500.00'), `expected 'A$1,500.00' in "${s}"`);
+});
+
+test('sum: number-typed amount converts via the target account currency (EXPENSE_DEBIT)', () => {
+  // EXPENSE_DEBIT.amount is ValueType.number() (no code) but targets an account.
+  const ctrl = convertingController('AUD', 1.5);
+  ctrl.typeRegistry  = { getAction: () => ({ fields: { amount: { kind: 'number' } } }) };
+  ctrl.schemaRegistry = { resolve: (p) => ({ currencyCode: p === 'usSavingsAccount.balance' ? 'USD' : null }) };
+  const s = ctrl.sum({ type: 'EXPENSE_DEBIT', data: { amount: 1000, targetKey: 'usSavingsAccount' } });
+  assert.ok(s.includes('A$1,500.00'), `expected 'A$1,500.00' in "${s}"`);
+});
+
+test('sum: unresolvable currency renders native with no conversion', () => {
+  const ctrl = convertingController('AUD', 1.5);
+  ctrl.typeRegistry   = { getAction: () => null };
+  ctrl.schemaRegistry = { resolve: () => ({ currencyCode: null }) };
+  const s = ctrl.sum({ type: 'MYSTERY', data: { amount: 1000 } });
+  assert.ok(s.includes('$1,000.00') && !s.includes('A$'), `expected native '$1,000.00' in "${s}"`);
 });

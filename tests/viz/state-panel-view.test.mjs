@@ -675,3 +675,42 @@ test('StatePanelView: initial _formatDate is taken from displaySettings.formatDa
 
   assert.strictEqual(panel._formatDate, initialFmt);
 });
+
+// ─── _formatActionPayload: currency annotation (design 10 §Phase 4) ─────────────
+
+import { StateSchemaRegistry } from '../../src/finance/services/state-schema-registry.js';
+import { CurrencyConverter }   from '../../src/finance/fx/currency-converter.js';
+
+function wiredPanel(displayCurrency, rate = 1.5) {
+  const panel = makePanel();
+  const reg = new StateSchemaRegistry();
+  reg.currencyConverter = new CurrencyConverter();
+  reg.displaySettings   = { displayCurrency };
+  reg.rateStateProvider = () => ({ effectiveExchangeRates: { USD_AUD: rate } });
+  panel.schemaRegistry = reg;
+  panel.typeRegistry = {
+    getAction: () => ({ fields: { amount: { kind: 'currency', opts: { code: 'USD' } } } }),
+  };
+  return panel;
+}
+
+test('_formatActionPayload: annotates a currency field with the display value', () => {
+  const panel = wiredPanel('AUD', 1.5);
+  const out = panel._formatActionPayload({ type: 'WAGES_INCOME_APPLY', data: { amount: 1000, residency: 'US' } });
+  assert.ok(out.includes('1000 USD → '), `expected native+code in "${out}"`);
+  assert.ok(/A\$1,500\.00/.test(out), `expected converted A$1,500.00 in "${out}"`);
+  assert.ok(out.includes('"residency": "US"'), 'non-money fields stay verbatim');
+});
+
+test('_formatActionPayload: no annotation when display equals native', () => {
+  const panel = wiredPanel('USD', 1.5);
+  const out = panel._formatActionPayload({ type: 'WAGES_INCOME_APPLY', data: { amount: 1000 } });
+  assert.ok(out.includes('"amount": 1000'), `expected raw amount in "${out}"`);
+  assert.ok(!out.includes('→'), 'no conversion arrow when native==display');
+});
+
+test('_formatActionPayload: falls back to plain dump without TypeRegistry', () => {
+  const panel = makePanel();
+  const out = panel._formatActionPayload({ type: 'X', data: { amount: 1000 } });
+  assert.ok(out.includes('"amount": 1000'));
+});

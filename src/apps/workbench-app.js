@@ -45,6 +45,7 @@ import { RealPropertyEditor }         from '../visualization/assets/real-propert
 import { CollectibleEditor }          from '../visualization/assets/collectible-editor.js';
 import { RealProperty }               from '../finance/assets/real-property.js';
 import { Collectible }                from '../finance/assets/collectible.js';
+import { USD, AUD }                   from '../finance/assets/account.js';
 import { NodeEditModal }              from '../visualization/components/node-edit-modal.js';
 import { ConfigurationListComponent } from '../visualization/configuration/configuration-list.js';
 import { ScenarioTabPresenter }       from '../visualization/scenario/scenario-tab-presenter.js';
@@ -73,6 +74,13 @@ import { ScenarioComparePresenter }  from '../visualization/scenario-compare/sce
 import { DecisionGraphPresenter }    from '../visualization/decision-graph/decision-graph-presenter.js';
 
 const STORAGE_KEY = 'sim-workbench-layout-prod';
+
+/** Map an asset currency code to its {code,symbol} descriptor; null when unknown. */
+function _assetCurrency(code) {
+  if (code === 'AUD') return AUD;
+  if (code === 'USD') return USD;
+  return null;
+}
 
 // ── Built-in workspace templates ────────────────────────────────────────────
 
@@ -359,6 +367,9 @@ export class WorkbenchApp extends BaseComponent {
           people,
           accounts,
           onSave: (data) => {
+            // Map the editor's currency code to a {code,symbol} descriptor (or
+            // null → registerAsset falls back to country). Design 10 §Phase 5.
+            data.currency = _assetCurrency(data.currency);
             if (data.id) {
               const { id, ...changes } = data;
               registry.realPropertyService.updateProperty(id, changes);
@@ -386,6 +397,7 @@ export class WorkbenchApp extends BaseComponent {
           people,
           accounts,
           onSave: (data) => {
+            data.currency = _assetCurrency(data.currency);
             if (data.id) {
               const { id, ...changes } = data;
               registry.collectibleService.updateCollectible(id, changes);
@@ -419,9 +431,11 @@ export class WorkbenchApp extends BaseComponent {
 
     // ── Graph node execution history (right column GRAPH group) ───────────────
     this._graphNodeExecHistory = new GraphNodeExecHistory({
-      container:     document.getElementById('graphNodeHistoryPane'),
-      graphRenderer: this.configGraphView.graphRenderer,
-      graphQueryApi: registry.graphQueryApi,
+      container:      document.getElementById('graphNodeHistoryPane'),
+      graphRenderer:  this.configGraphView.graphRenderer,
+      graphQueryApi:  registry.graphQueryApi,
+      schemaRegistry: registry.schemaRegistry,
+      appBus:         this.appBus,
     });
 
     this._graphNodeLineage = new GraphNodeLineage({
@@ -458,10 +472,18 @@ export class WorkbenchApp extends BaseComponent {
     this.scenario.watchlists = activeConfig?.watchlists ?? [];
     new ScenarioLoader().load(activeConfig, registry);
 
+    // Display-currency conversion (design 10 §Phase 4): give the schema registry
+    // the active display currency and a live rate source (the current sim state
+    // carries effectiveExchangeRates). Set each rebuild so the closure tracks the
+    // freshly built sim; the registry itself persists across rebuilds.
+    registry.schemaRegistry.displaySettings   = this.displaySettings;
+    registry.schemaRegistry.rateStateProvider = () => this.scenario?.sim?.state ?? null;
+
     //TODO this should be wired to a bus event (AND removed from constructor of tab presenter)
     this.scenarioTabPresenter._refresh();
 
     this._statePanelView.schemaRegistry = registry.schemaRegistry;
+    this._statePanelView.typeRegistry   = registry.typeRegistry;
     this._statePanelView.journal        = this.scenario.sim.journal;
     this._statePanelView.executionGraph = this.scenario.sim.executionGraph;
     const fieldStore = new FieldSeriesStore();
@@ -492,6 +514,12 @@ export class WorkbenchApp extends BaseComponent {
       simStart:  this.scenario.simStart,
       simEnd:    this.scenario.simEnd,
       series:    this.chartSeries ?? undefined,
+      // Display-currency conversion (design 10 §Phase 4)
+      appBus:            this.appBus,
+      schemaRegistry:    registry.schemaRegistry,
+      currencyConverter: registry.currencyConverter,
+      displaySettings:   this.displaySettings,
+      rateStateProvider: () => this.scenario?.sim?.state ?? null,
     });
     this.chartPresenter = new ChartPresenter({ controller: chartController, view: chartView });
     this.chartPresenter.fieldStore = fieldStore;   // R10.3: full-res live buffering for charted paths
@@ -547,6 +575,12 @@ export class WorkbenchApp extends BaseComponent {
     });
     this.timelinePresenter.attach(this.scenario.sim.journal);
     this.timelinePresenter.schemaRegistry = registry.schemaRegistry;
+    // Display-currency conversion of on-screen amounts (design 10 §Phase 4)
+    this.timelinePresenter.currencyConverter = registry.currencyConverter;
+    this.timelinePresenter.rateStateProvider = () => this.scenario?.sim?.state ?? null;
+    this.timelinePresenter.typeRegistry      = registry.typeRegistry;
+    // Tax-document modal converts amounts to the display currency (design 10 §Phase 4)
+    this._taxDocModal.schemaRegistry = registry.schemaRegistry;
 
     this.timeControls = new TimeControls({
       scenario:        this.scenario,
@@ -597,6 +631,7 @@ export class WorkbenchApp extends BaseComponent {
       controller: new MonteCarloController(),
       view:       new MonteCarloView(),
       scenario:   this.scenario,
+      appBus:     this.appBus,
     });
     this.mcPresenter.onReplayRun = (run) => this._replayMcRun(run);
 
@@ -633,6 +668,7 @@ export class WorkbenchApp extends BaseComponent {
       controller: new OptimizationController(),
       view:       new OptimizationView(),
       scenario:   this.scenario,
+      appBus:     this.appBus,
     });
     this.optPresenter.onApplyCandidate = (params) => this._applyOptCandidate(params);
 

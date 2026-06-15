@@ -13,21 +13,12 @@ import { BaseComponent }        from '../components/base-component.js';
 import { OPTIMIZATION_OBJECTIVES } from '../../finance/optimization/optimization-objectives.js';
 import { readThemeColor }       from '../theme.js';
 import { initEChartWhenReady }  from '../components/echarts-init.js';
+import { fmtCompact, fmtWhole } from '../money-format.js';
 
 const MAX_CHART_BARS = 30;
 
-function fmtDollar(v) {
-  if (v == null || !isFinite(v)) return '—';
-  return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US', { maximumFractionDigits: 0 });
-}
-
-function fmtK(v) {
-  if (!isFinite(v)) return '—';
-  const abs  = Math.abs(v);
-  const sign = v < 0 ? '-' : '';
-  if (abs >= 1_000_000) return sign + '$' + (abs / 1_000_000).toFixed(1) + 'M';
-  return sign + '$' + (abs / 1000).toFixed(0) + 'k';
-}
+const fmtDollar = (v) => fmtWhole(v);
+const fmtK      = (v) => fmtCompact(v);
 
 function fmtVal(v) {
   if (typeof v === 'number' && v > 0 && v < 1) return `${(v * 100).toFixed(0)}%`;

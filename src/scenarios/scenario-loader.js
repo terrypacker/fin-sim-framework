@@ -100,10 +100,49 @@ export class ScenarioLoader {
 
     ScenarioSerializer.deserializePersonsAccounts(cfg, services);
 
+    // Stamp display-format currency codes for every account/asset/person and
+    // free-standing money param (design 10 §Phase 3/4/5) here — after
+    // persons/accounts are registered but before the compile-vs-deserialize
+    // fork — so codes exist on BOTH load paths. (The deserialize path does not
+    // run the toolset compiler.)
+    this._registerDisplayCurrencies(cfg, services);
+
     if (cfg.toolsets?.length > 0) {
       this._compileFromToolsets(cfg, services);
     } else if (ScenarioSerializer.hasSerializedGraph(cfg)) {
       this._restoreFromGraph(cfg, services);
+    }
+  }
+
+  /**
+   * Register each account/asset/person native currency code, plus any
+   * free-standing money param's currency, with the schema registry so the
+   * display layer can convert money fields (design 10 §Phase 4/5). Runs on
+   * both the compile and deserialize paths.
+   * @private
+   */
+  _registerDisplayCurrencies(cfg, services) {
+    const reg = services.schemaRegistry;
+    if (!reg) return;
+    for (const a of services.accountService?.getAll() ?? []) {
+      if (a.stateKey) reg.registerAccount(a.stateKey, a);
+    }
+    for (const p of services.realPropertyService?.getAll() ?? []) {
+      if (p.stateKey) reg.registerAsset(p.stateKey, p);
+    }
+    for (const c of services.collectibleService?.getAll() ?? []) {
+      if (c.stateKey) reg.registerAsset(c.stateKey, c);
+    }
+    // Per-person income currency (monthlyWage / socialSecurityMonthly).
+    for (const person of services.personService?.getAll() ?? []) {
+      reg.registerPerson(person);
+    }
+    // Free-standing money params (e.g. monthlyExpenses) stamp the state paths
+    // they own with the currency chosen in the param editor.
+    for (const p of (Array.isArray(cfg?.params) ? cfg.params : [])) {
+      if (p?.type === 'Money' && Array.isArray(p.currencyStateKeys)) {
+        reg.registerCurrencyPaths(p.currencyStateKeys, p.currency ?? p.defaultCurrency);
+      }
     }
   }
 
@@ -121,6 +160,12 @@ export class ScenarioLoader {
       cfg.parameters = cfg.parameters ?? {};
       for (const p of cfg.params) {
         cfg.parameters[p.name] = (p.type === 'Date' && p.value) ? new Date(p.value) : p.value;
+        // Money params keep a numeric value (the compiler reads it as-is); their
+        // currency rides alongside on the param entry. Default it when absent so
+        // older configs (saved before Phase 5) acquire the schema's currency.
+        if (p.type === 'Money' && p.currency == null && p.defaultCurrency != null) {
+          p.currency = p.defaultCurrency;
+        }
       }
     }
 
@@ -284,6 +329,14 @@ export class ScenarioLoader {
       if (s.node)        entry.node        = s.node;
       if (s.options)     entry.options     = s.options;
       if (s.hidden)      entry.hidden      = s.hidden;
+      // Money param metadata (design 10 §Phase 5): seed the chosen currency from
+      // cfg.parameters' sibling override or the schema default; carry the state
+      // paths this param stamps and its default for re-seeding.
+      if (s.type === 'Money') {
+        entry.currency        = cfg.parameters?.[`${s.key}Currency`] ?? s.defaultCurrency ?? 'USD';
+        if (s.defaultCurrency)    entry.defaultCurrency    = s.defaultCurrency;
+        if (s.currencyStateKeys)  entry.currencyStateKeys  = s.currencyStateKeys;
+      }
       return entry;
     };
 
@@ -310,6 +363,16 @@ export class ScenarioLoader {
       if (p.node        === undefined && s.node)             p.node        = s.node;
       if (p.options     === undefined && s.options)          p.options     = s.options;
       if (p.value       === undefined && s.defaultValue !== undefined) p.value = s.defaultValue;
+      // Money metadata drift: a schema param that became Money (e.g. a config
+      // saved when monthlyExpenses was a Number) upgrades in place. The value is
+      // already numeric, so forcing the type is safe and is required for the
+      // editor to render the currency selector.
+      if (s.type === 'Money') {
+        p.type = 'Money';
+        if (p.currencyStateKeys === undefined && s.currencyStateKeys) p.currencyStateKeys = s.currencyStateKeys;
+        if (p.defaultCurrency  === undefined && s.defaultCurrency)    p.defaultCurrency   = s.defaultCurrency;
+        if (p.currency         === undefined)                  p.currency         = s.defaultCurrency ?? 'USD';
+      }
     }
     const existing = new Set(cfg.params.map(p => p.name));
     for (const s of combinedSchema) {

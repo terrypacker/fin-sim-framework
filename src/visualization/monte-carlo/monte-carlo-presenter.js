@@ -12,6 +12,7 @@ import { McConfigPanel }           from './mc-config-panel.js';
 import { McResultsPanel }          from './mc-results-panel.js';
 import { McRunsPanel }             from './mc-runs-panel.js';
 import { IntlRetirementMcConfig }  from '../../finance/monte-carlo/intl-retirement-mc-config.js';
+import { APP_EVENTS }              from '../app-display-settings.js';
 
 /**
  * MonteCarloPresenter — wires McConfigPanel callbacks to MonteCarloController
@@ -27,11 +28,12 @@ export class MonteCarloPresenter {
    * @param {import('./monte-carlo-view.js').MonteCarloView}             opts.view
    * @param {object}                                                     opts.scenario
    */
-  constructor({ controller, view, scenario }) {
+  constructor({ controller, view, scenario, appBus = null }) {
     this._controller    = controller;
     this._view          = view;
     this._scenario      = scenario;
     this._lastResult    = null;
+    this._unsubSettings = null;
 
     this._configPanel  = new McConfigPanel(view.configPane);
     this._resultsPanel = new McResultsPanel(view.resultsPane);
@@ -51,11 +53,21 @@ export class MonteCarloPresenter {
 
     /** Set by WorkbenchApp to handle replay: onReplayRun(run) */
     this.onReplayRun = null;
+
+    // Re-render results in the active display currency on change (design 10 §Phase 4).
+    if (appBus) {
+      this._unsubSettings = appBus.subscribe(APP_EVENTS.DISPLAY_SETTINGS_CHANGED, () => {
+        if (!this._lastResult) return;
+        this._resultsPanel.showResults(this._lastResult.summary, this._lastResult.runs);
+        this._runsPanel.showResults(this._lastResult.summary, this._lastResult.runs, this._resultsPanel._metric);
+      });
+    }
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────────
 
   destroy() {
+    this._unsubSettings?.();
     this._configPanel.destroy();
     this._resultsPanel.destroy();
     this._runsPanel.destroy();

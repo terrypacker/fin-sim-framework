@@ -10,6 +10,7 @@
 
 import { BaseComponent }           from '../components/base-component.js';
 import { ScenarioCompareRunner }   from '../../finance/scenario-compare/scenario-compare-runner.js';
+import { ServiceRegistry }         from '../../services/service-registry.js';
 import {
   computeStateDiff,
   buildJournalOverlay,
@@ -20,7 +21,13 @@ import {
 const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const NUM = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 
-function fmtUsd(n) { return n == null ? '—' : USD.format(n); }
+// Net worth / deficits are USD-base aggregates; convert to the active display
+// currency (design 10 §Phase 4), whole dollars.
+function fmtUsd(n) {
+  if (n == null) return '—';
+  const reg = ServiceRegistry.getInstance?.()?.schemaRegistry;
+  return reg?.formatAmount?.(n, 'USD', { maximumFractionDigits: 0 }) ?? USD.format(n);
+}
 function fmtNum(n) { return (n == null || !Number.isFinite(n)) ? '—' : NUM.format(n); }
 function fmtDate(d) {
   if (!d) return 'Never';

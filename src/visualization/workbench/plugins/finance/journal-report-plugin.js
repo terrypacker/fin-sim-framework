@@ -26,6 +26,9 @@ const _fmtN      = (n) => n == null ? '—' : _fmt.format(n);
 const _fmtSigned = (n) => n == null ? '—' : (n > 0 ? '+' : '') + _fmt.format(n);
 const _signCls   = (n) => n == null ? '' : n >= 0 ? 'jr-amount--pos' : 'jr-amount--neg';
 
+// Report amounts are denominated in the active country's currency (the `cc` facet).
+const JR_CC_TO_CUR = { US: 'USD', AU: 'AUD' };
+
 /**
  * JournalReportPlugin — workbench panel for journal-backed aggregate reports.
  *
@@ -80,6 +83,19 @@ export class JournalReportPlugin extends WorkbenchComponent {
     return this._servicesOverride ?? ServiceRegistry.getInstance();
   }
 
+  /**
+   * Format a signed report amount in the active report currency (per the `cc`
+   * facet), converted to the active display currency (design 10 §Phase 4).
+   * Keeps the +/- sign prefix of the original module formatter.
+   */
+  _fmtMoney(n) {
+    if (n == null) return '—';
+    const code = JR_CC_TO_CUR[this._facetValues?.cc] ?? 'USD';
+    const reg  = this._services()?.schemaRegistry;
+    const abs  = reg?.formatAmount?.(Math.abs(n), code) ?? _fmt.format(Math.abs(n));
+    return (n > 0 ? '+' : n < 0 ? '-' : '') + abs;
+  }
+
   render() {
     const root = document.createElement('div');
     root.className = 'jr-plugin wb-plugin-fill';
@@ -118,6 +134,9 @@ export class JournalReportPlugin extends WorkbenchComponent {
     this._runtime.bus.subscribe(WB_EVENTS.JOURNAL_REPORT_OPEN, ({ reportId, params }) => {
       this._openReport(reportId, params);
     });
+
+    // Reformat report amounts when the display currency changes (design 10 §Phase 4).
+    this._runtime.bus.subscribe(WB_EVENTS.DISPLAY_SETTINGS_CHANGED, () => this._renderResults());
   }
 
   onMount() {
@@ -578,7 +597,7 @@ export class JournalReportPlugin extends WorkbenchComponent {
         <tr class="${rowCls}" data-key='${_safeAttr(keyStr)}'>
           ${keyCells}
           <td class="jr-td jr-td--num">${g.count ?? '—'}</td>
-          <td class="jr-td jr-td--num ${_signCls(g.total ?? g.gain)}">${_fmtSigned(g.total ?? g.gain ?? null)}</td>
+          <td class="jr-td jr-td--num ${_signCls(g.total ?? g.gain)}">${this._fmtMoney(g.total ?? g.gain ?? null)}</td>
         </tr>`);
 
       if (isExpanded && g.items?.length) {
@@ -596,7 +615,7 @@ export class JournalReportPlugin extends WorkbenchComponent {
                   <span class="jr-child-date">${_fmtDate(item.date)}</span>
                   <span class="jr-child-type">${item.actionType ?? '—'}</span>
                   <span class="jr-child-desc">${_esc(item.description ?? '')}</span>
-                  <span class="jr-child-amount ${_signCls(item.stateDelta ?? item.personTaxAmount ?? item.amount ?? item.proceeds)}">${_fmtSigned(item.stateDelta ?? item.personTaxAmount ?? item.amount ?? item.proceeds ?? null)}</span>
+                  <span class="jr-child-amount ${_signCls(item.stateDelta ?? item.personTaxAmount ?? item.amount ?? item.proceeds)}">${this._fmtMoney(item.stateDelta ?? item.personTaxAmount ?? item.amount ?? item.proceeds ?? null)}</span>
                 </div>
               </td>
             </tr>`);
@@ -608,7 +627,7 @@ export class JournalReportPlugin extends WorkbenchComponent {
     // Grand total
     const gtEl = this._q('grand-total');
     if (gtEl) {
-      gtEl.textContent = _fmtSigned(this._grandTotal);
+      gtEl.textContent = this._fmtMoney(this._grandTotal);
       gtEl.className   = `jr-grand-total-value ${_signCls(this._grandTotal)}`;
     }
   }

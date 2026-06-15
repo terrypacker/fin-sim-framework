@@ -10,6 +10,12 @@
 
 import {SimGraphNode} from "../graph/sim-graph-node.js";
 
+/** Default currency for a country/residency code (e.g. 'US'→USD, 'AUS'/'AU'→AUD). */
+function _defaultCurrency(code) {
+  if (code === 'AU' || code === 'AUS') return 'AUD';
+  return 'USD';
+}
+
 /**
  * Person — plain data class representing a simulation participant.
  * No methods; safe for structuredClone snapshots.
@@ -25,8 +31,10 @@ export class Person extends SimGraphNode {
    * @param {string}      [opts.residency]      - Current country of tax residency (e.g. 'US', 'AUS'); defaults to citizen[0]
    * @param {number}      [opts.lifeExpectancy=90]         - Expected years to live
    * @param {number}      [opts.socialSecurityMonthly=2800] - USD/month of SS at full retirement age
-   * @param {number}      [opts.monthlyWage=0]             - USD/month gross wages (0 = not employed)
+   * @param {number}      [opts.monthlyWage=0]             - gross wages/month in wageCurrency (0 = not employed)
    * @param {Date}        [opts.retirementDate]            - Date wages stop; defaults to 2040-01-01
+   * @param {string}      [opts.wageCurrency]              - Native currency of monthlyWage; defaults from residency
+   * @param {string}      [opts.ssCurrency]                - Native currency of socialSecurityMonthly; defaults from residency
    */
   constructor(id = null, birthDate, opts = {}) {
     super({id: id, kind: 'person', layer: 'config', name: opts.name ?? ''});
@@ -37,5 +45,9 @@ export class Person extends SimGraphNode {
     this.socialSecurityMonthly = opts.socialSecurityMonthly ?? 2800;
     this.monthlyWage           = opts.monthlyWage           ?? 0;
     this.retirementDate        = opts.retirementDate        ?? new Date(Date.UTC(2040, 0, 1));
+    // Per-field native currency (design 10 §Phase 5), individually overridable;
+    // each defaults to the residency/citizenship currency.
+    this.wageCurrency          = opts.wageCurrency          ?? _defaultCurrency(this.residency);
+    this.ssCurrency            = opts.ssCurrency            ?? _defaultCurrency(this.residency);
   }
 }

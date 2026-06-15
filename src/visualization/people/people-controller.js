@@ -32,6 +32,8 @@ export class PeopleController {
       socialSecurityMonthly: Number(data.socialSecurityMonthly),
       monthlyWage:           Number(data.monthlyWage ?? 0),
       retirementDate:        data.retirementDate ? new Date(data.retirementDate) : new Date(Date.UTC(2040, 0, 1)),
+      wageCurrency:          data.wageCurrency,
+      ssCurrency:            data.ssCurrency,
     });
   }
 
