@@ -7,7 +7,9 @@ export const WB_EVENTS = {
   BREAKPOINT_HIT:      'workbench.breakpoint.hit',
   SCENARIO_READY:      'workbench.scenario.ready',
   LAYOUT_CHANGED:      'workbench.layout.changed',
-  JOURNAL_REPORT_OPEN: 'workbench.journal.report.open',
+  JOURNAL_REPORT_OPEN:      'workbench.journal.report.open',
+  CROSS_ACTION_QUERY_OPEN:  'workbench.cross.action.query.open',
+  ACTION_ENTRY_OPEN:        'workbench.action.entry.open',
 };
 
 /**
