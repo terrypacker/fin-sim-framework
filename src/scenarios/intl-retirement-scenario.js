@@ -424,6 +424,25 @@ export class IntlRetirementScenario extends BaseScenario {
 
   static getParamSchema() { return INTL_RETIREMENT_PARAM_SCHEMA; }
 
+  /**
+   * Full param schema: scenario-level params merged with all toolset paramSchema
+   * entries (deduplicating by key). Use this when you need the complete set of
+   * configurable params for UI pickers (e.g. Decision Graph, Optimization).
+   */
+  static buildFullParamSchema() {
+    const scenarioKeys = new Set(INTL_RETIREMENT_PARAM_SCHEMA.map(e => e.key));
+    const toolsets = [
+      US_BANKING, US_TAX, US_BROKERAGE, US_INCOME, US_RETIREMENT,
+      AU_BANKING, AU_TAX, AU_BROKERAGE, AU_INCOME, AU_RETIREMENT,
+      US_AU_CROSS_BORDER, US_REAL_PROPERTY, AU_REAL_PROPERTY,
+      US_COLLECTIBLES, US_ROTH_CONVERSION, ECONOMIC_REGIMES,
+    ];
+    const toolsetParams = toolsets
+      .flatMap(t => t.paramSchema?.({}) ?? [])
+      .filter(e => e?.key && !scenarioKeys.has(e.key));
+    return [...INTL_RETIREMENT_PARAM_SCHEMA, ...toolsetParams];
+  }
+
   static getToolsets() {
     return [
       'US_BANKING', 'US_TAX', 'US_BROKERAGE', 'US_INCOME', 'US_RETIREMENT',

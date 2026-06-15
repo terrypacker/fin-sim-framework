@@ -12,7 +12,7 @@ import { BaseComponent }                from '../components/base-component.js';
 import { DgConfigPanel }               from './dg-config-panel.js';
 import { DgResultsPanel }              from './dg-results-panel.js';
 import { DecisionGraphRunner }         from '../../finance/decision-graph/decision-graph-runner.js';
-import { INTL_RETIREMENT_PARAM_SCHEMA } from '../../scenarios/intl-retirement-scenario.js';
+import { IntlRetirementScenario } from '../../scenarios/intl-retirement-scenario.js';
 
 /**
  * DecisionGraphPresenter — orchestrates the DG config and results panels.
@@ -41,7 +41,7 @@ export class DecisionGraphPresenter extends BaseComponent {
     this.onCompareLeaf = null;
 
     this._configPanel  = configContainerEl
-      ? new DgConfigPanel(configContainerEl, dgRegistry, scenarioRegistry, INTL_RETIREMENT_PARAM_SCHEMA, resultStorage)
+      ? new DgConfigPanel(configContainerEl, dgRegistry, scenarioRegistry, IntlRetirementScenario.buildFullParamSchema(), resultStorage)
       : null;
     this._resultsPanel = resultsContainerEl
       ? new DgResultsPanel(resultsContainerEl)
