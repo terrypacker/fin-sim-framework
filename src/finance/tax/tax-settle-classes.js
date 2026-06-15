@@ -16,7 +16,7 @@ import { ACCOUNT_ROLES } from '../state/account-roles.js';
 
 // YTD fields reset to zero after each annual settlement, keyed by country code.
 const YTD_FIELDS = {
-  US: ['usOrdinaryIncomeYTD', 'usNegativeIncomeYTD', 'usCapitalGainsYTD', 'usPenaltyYTD', 'ftcYTD'],
+  US: ['usOrdinaryIncomeYTD', 'usNegativeIncomeYTD', 'usCapitalGainsYTD', 'usCollectibleGainsYTD', 'usPenaltyYTD', 'ftcYTD'],
   AU: ['auOrdinaryIncomeYTD', 'auCapitalGainsYTD', 'auNonResidentWithholdingYTD', 'auSuperTaxYTD', 'auFrankingCreditYTD'],
 };
 

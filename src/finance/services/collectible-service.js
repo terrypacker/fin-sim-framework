@@ -45,6 +45,9 @@ export class CollectibleService extends AssetService {
    */
   createCollectible(collectible) {
     collectible.id = this._generateId(this._idPrefix);
+    if (!collectible.stateKey) {
+      collectible.stateKey = collectible.id;
+    }
     this._register(collectible);
     this._publish('CREATE', collectible);
     this._wireNodeEdges(collectible);

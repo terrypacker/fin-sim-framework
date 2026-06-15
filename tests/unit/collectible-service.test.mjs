@@ -248,3 +248,33 @@ test('CollectibleService.appraise: can set value to zero (total loss)', () => {
   svc.appraise(col, 0);
   assert.strictEqual(col.value, 0);
 });
+
+// ── stateKey auto-assignment ───────────────────────────────────────────────────
+
+test('CollectibleService: createCollectible auto-assigns stateKey from id when none provided', () => {
+  captureEvents(({ collectibleService }) => {
+    const col = new Collectible(100_000, { name: 'Gold' });
+    assert.ok(!col.stateKey, 'stateKey should be absent before creation');
+    collectibleService.createCollectible(col);
+    assert.strictEqual(col.stateKey, col.id, 'stateKey should match the assigned id');
+  });
+});
+
+test('CollectibleService: createCollectible preserves an explicit stateKey', () => {
+  captureEvents(({ collectibleService }) => {
+    const col = new Collectible(100_000, { name: 'Gold' });
+    col.stateKey = 'collectibleAccount';
+    collectibleService.createCollectible(col);
+    assert.strictEqual(col.stateKey, 'collectibleAccount', 'explicit stateKey should not be overwritten');
+  });
+});
+
+test('CollectibleService: two createCollectible calls produce distinct stateKeys', () => {
+  captureEvents(({ collectibleService }) => {
+    const col1 = new Collectible(10_000, { name: 'Cards' });
+    const col2 = new Collectible(50_000, { name: 'Gold' });
+    collectibleService.createCollectible(col1);
+    collectibleService.createCollectible(col2);
+    assert.notStrictEqual(col1.stateKey, col2.stateKey, 'each collectible should have a unique stateKey');
+  });
+});

@@ -63,12 +63,15 @@ export class CollectibleSaleApplyReducer extends AccountServiceReducer {
 }
 
 /**
- * EVT-45/47: Collectible Value Change — apply +/− change to collectibleAccount.value.
+ * EVT-45/47: Collectible Value Change — apply +/− change to the targeted
+ * collectible's state entry.  action.stateKey identifies the collectible;
+ * falls back to 'collectibleAccount' for backward compatibility with manually
+ * scheduled events that pre-date multi-collectible support.
  * No tax effect (unrealized appreciation/depreciation).
  */
 export class CollectibleValueChangeApplyReducer extends AccountServiceReducer {
   static type        = 'CollectibleValueChangeApplyReducer';
-  static description = 'Applies a +/− change to collectibleAccount.value; no tax effect.';
+  static description = 'Applies a +/− change to the targeted collectible state entry; no tax effect.';
   static actionType  = 'COLLECTIBLE_VALUE_CHANGE_APPLY';
 
   constructor({ accountService }) {  // accountService unused but accepted for API symmetry
@@ -77,9 +80,11 @@ export class CollectibleValueChangeApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const ca = state.collectibleAccount;
+    const key = action.stateKey ?? 'collectibleAccount';
+    const ca  = state[key];
+    if (!ca) return this.newState(state);
     return this.newState(state, {
-      collectibleAccount: { ...ca, value: ca.value + action.change },
+      [key]: { ...ca, value: ca.value + action.change },
     });
   }
 }
@@ -124,7 +129,7 @@ export class CollectibleValueChangeHandler extends HandlerEntry {
 
   call({ data }) {
     return [
-      { type: 'COLLECTIBLE_VALUE_CHANGE_APPLY', change: data.change },
+      { type: 'COLLECTIBLE_VALUE_CHANGE_APPLY', change: data.change, stateKey: data.stateKey ?? null },
     ];
   }
 }
