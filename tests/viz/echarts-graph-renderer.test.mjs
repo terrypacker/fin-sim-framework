@@ -472,38 +472,68 @@ describe('_fitToView: viewport encloses all nodes', () => {
 
 describe('_onDown: pixel-space node hit detection', () => {
 
-  test('click at node visual centre grabs node at any zoom level', () => {
+  test('mousedown on the tooltip-selected node grabs it for drag at any zoom level', () => {
     const r = makeRenderer();
     // Place a node at data (400, 300), which at the 1:1 default view maps to
     // pixel (400, 300) — centre of the 800×600 container.
     r._positions    = new Map([['n', { x: 400, y: 300 }]]);
     r._currentNodes = [{ id: 'n' }];
     r._viewRange    = { xMin: 0, xMax: 800, yMin: 0, yMax: 600 };
+    // ECharts' showTip handler selects the hovered node before mousedown.
+    r.selectedNodeId = 'n';
     r._onDown({ offsetX: 400, offsetY: 300 });
     expect(r._dragNodeId).toBe('n');
     expect(r._panStart).toBeNull();
   });
 
-  test('click at visual node edge still grabs (pixel tolerance, not data tolerance)', () => {
+  test('mousedown at the selected node visual edge still grabs (pixel tolerance, not data tolerance)', () => {
     const r = makeRenderer();
     // Zoom out 4×: viewRange covers 0..3200 × 0..2400 but container is 800×600.
     // Node at data (400, 300) maps to pixel (400*800/3200, 300*600/2400) = (100, 75).
-    // Visual half-width = NODE_WIDTH/2 = 90 CSS px; right visual edge at pixel 190.
-    // Data-space hit at px=190 would be data x = 190/800*3200 = 760 → 360 away from 400.
+    // Visual half-width = (NODE_WIDTH + 10)/2 = 95 CSS px; right grab edge at pixel 195.
+    // Data-space hit at px=189 would be data x = 189/800*3200 = 756 → 356 away from 400.
     // The old data-space check (±90 data units) would MISS. The pixel check HITS.
     r._positions    = new Map([['n', { x: 400, y: 300 }]]);
     r._currentNodes = [{ id: 'n' }];
     r._viewRange    = { xMin: 0, xMax: 3200, yMin: 0, yMax: 2400 };
+    r.selectedNodeId = 'n';
     // Click at the right visual edge of the node.
     r._onDown({ offsetX: 100 + 89, offsetY: 75 });
     expect(r._dragNodeId).toBe('n');
   });
 
-  test('click in empty space starts pan', () => {
+  test('mousedown on a node that is NOT selected does not grab it (starts pan instead)', () => {
     const r = makeRenderer();
-    r._positions    = new Map([['n', { x: 400, y: 300 }]]);
-    r._currentNodes = [{ id: 'n' }];
-    r._viewRange    = { xMin: 0, xMax: 800, yMin: 0, yMax: 600 };
+    // Hit-detection is delegated to ECharts' tooltip: an unselected node under
+    // the cursor must not be draggable, so a click in a tight grouping cannot
+    // grab the wrong (z-ordered) node.
+    r._positions     = new Map([['n', { x: 400, y: 300 }]]);
+    r._currentNodes  = [{ id: 'n' }];
+    r._viewRange     = { xMin: 0, xMax: 800, yMin: 0, yMax: 600 };
+    r.selectedNodeId = null;
+    r._onDown({ offsetX: 400, offsetY: 300 });
+    expect(r._dragNodeId).toBeNull();
+    expect(r._panStart).not.toBeNull();
+  });
+
+  test('click in empty space starts pan (even with no node selected)', () => {
+    const r = makeRenderer();
+    // Regression guard: a null selectedNodeId must not short-circuit panning.
+    r._positions     = new Map([['n', { x: 400, y: 300 }]]);
+    r._currentNodes  = [{ id: 'n' }];
+    r._viewRange     = { xMin: 0, xMax: 800, yMin: 0, yMax: 600 };
+    r.selectedNodeId = null;
+    r._onDown({ offsetX: 10, offsetY: 10 });
+    expect(r._dragNodeId).toBeNull();
+    expect(r._panStart).not.toBeNull();
+  });
+
+  test('mousedown in empty space with a node selected still starts pan', () => {
+    const r = makeRenderer();
+    r._positions     = new Map([['n', { x: 400, y: 300 }]]);
+    r._currentNodes  = [{ id: 'n' }];
+    r._viewRange     = { xMin: 0, xMax: 800, yMin: 0, yMax: 600 };
+    r.selectedNodeId = 'n';
     r._onDown({ offsetX: 10, offsetY: 10 });
     expect(r._dragNodeId).toBeNull();
     expect(r._panStart).not.toBeNull();
