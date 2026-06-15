@@ -59,6 +59,7 @@ import { DecisionGraphRegistry } from './finance/decision-graph/decision-graph-r
 import { DecisionGraphResultStorage } from './finance/decision-graph/decision-graph-result-storage.js';
 import { DecisionGraphRunner } from './finance/decision-graph/decision-graph-runner.js';
 import { DecisionGraphStorage } from './finance/decision-graph/decision-graph-storage.js';
+import { computeNetWorth, deriveNetWorth } from './finance/derived-metrics/net-worth.js';
 import { AddRegimeReducer } from './finance/economic-regimes/add-regime-reducer.js';
 import { BondPriceAdjustReducer } from './finance/economic-regimes/bond-price-adjust-reducer.js';
 import { EconomicRecoveryTickHandler } from './finance/economic-regimes/economic-recovery-tick-handler.js';
@@ -225,6 +226,7 @@ import { HandlerBuilder } from './simulation-framework/builders/handler-builder.
 import { ReducerBuilder } from './simulation-framework/builders/reducer-builder.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES, SIMULATION_BUS_MESSAGES, BusMessage, SimulationBusMessage, ExecutionBusMessage, BreakpointHitMessage, ServiceActionEvent, ServiceBulkActionEvent, ServiceEdgeActionEvent } from './simulation-framework/bus-messages.js';
 import { DateUtils } from './simulation-framework/date-utils.js';
+import { DerivedMetricsRegistry } from './simulation-framework/derived-metrics-registry.js';
 import { ConstantDistribution, UniformDistribution, NormalDistribution, LogNormalDistribution, BernoulliDistribution, UniformDateDistribution, ActuarialLifespanDistribution, DISTRIBUTION_TYPES, createDistribution } from './simulation-framework/distributions.js';
 import { EventBus } from './simulation-framework/event-bus.js';
 import { BaseEvent } from './simulation-framework/events/base-event.js';
@@ -516,6 +518,8 @@ export const Finance = {
   DecisionGraphResultStorage,
   DecisionGraphRunner,
   DecisionGraphStorage,
+  computeNetWorth,
+  deriveNetWorth,
   AddRegimeReducer,
   BondPriceAdjustReducer,
   EconomicRecoveryTickHandler,
@@ -744,6 +748,7 @@ export const Engine = {
   ServiceBulkActionEvent,
   ServiceEdgeActionEvent,
   DateUtils,
+  DerivedMetricsRegistry,
   ConstantDistribution,
   UniformDistribution,
   NormalDistribution,

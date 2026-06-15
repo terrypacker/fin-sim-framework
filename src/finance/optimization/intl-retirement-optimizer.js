@@ -12,7 +12,7 @@ import { ServiceRegistry }          from '../../services/service-registry.js';
 import { IntlRetirementScenario, applyRealPropertySaleYearParams } from '../../scenarios/intl-retirement-scenario.js';
 import { ScenarioLoader }           from '../../scenarios/scenario-loader.js';
 import { ScenarioSerializer }       from '../../scenarios/scenario-serializer.js';
-import { computeNetWorthUsd }       from '../monte-carlo/intl-retirement-mc-runner.js';
+import { computeNetWorth }          from '../derived-metrics/net-worth.js';
 import { set }                       from '../monte-carlo/mc-param-paths.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS } from './intl-retirement-opt-config.js';
 import { OPTIMIZATION_OBJECTIVES, OPT_PARAM_TYPES } from './optimization-objectives.js';
@@ -176,7 +176,7 @@ export class IntlRetirementOptimizer {
     scenario.sim.stepTo(params.endDate);
     const state = scenario.sim.state;
     return {
-      finalNetWorthUsd:  computeNetWorthUsd(state),
+      finalNetWorthUsd:  computeNetWorth(state, 'USD'),
       scenarioFailed:    state.scenarioFailed    ?? false,
       cumulativeDeficit: state.cumulativeDeficit ?? 0,
       deficitMonths:     state.deficitMonths     ?? 0,

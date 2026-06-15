@@ -16,28 +16,11 @@ import { ScenarioLoader }             from '../../scenarios/scenario-loader.js';
 import { ScenarioSerializer }         from '../../scenarios/scenario-serializer.js';
 import { IntlRetirementMcConfig }     from './intl-retirement-mc-config.js';
 import { get, set }                   from './mc-param-paths.js';
+import { computeNetWorth }            from '../derived-metrics/net-worth.js';
 
-// USD account state keys
-const USD_ACCOUNT_KEYS = [
-  'usSavingsAccount', 'fixedIncomeAccount', 'usStockAccount',
-  'iraAccount', 'k401Account', 'rothAccount',
-  'spouseRothAccount', 'spouseIraAccount', 'spouseK401Account',
-];
-
-// AUD account state keys
-const AUD_ACCOUNT_KEYS = [
-  'auSavingsAccount', 'auStockAccount', 'superAccount', 'spouseSuperAccount',
-];
-
-/**
- * Total net worth in USD.
- * AUD accounts are converted using the simulation's final exchange rate.
- */
+/** @deprecated Use computeNetWorth from derived-metrics/net-worth.js */
 export function computeNetWorthUsd(state) {
-  const usd = USD_ACCOUNT_KEYS.reduce((s, k) => s + (state[k]?.balance ?? 0), 0);
-  const aud = AUD_ACCOUNT_KEYS.reduce((s, k) => s + (state[k]?.balance ?? 0), 0);
-  const rate = state.effectiveExchangeRates?.USD_AUD ?? 1.55;
-  return usd + aud / rate;
+  return computeNetWorth(state, 'USD');
 }
 
 /**

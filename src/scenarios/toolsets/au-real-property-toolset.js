@@ -72,7 +72,7 @@ export const AU_REAL_PROPERTY = {
         name:    `Sell ${p.name}`,
         type:    'AU_HOUSE_SALE',
         date:    new Date(Date.UTC(p.plannedSaleYear, 0, 15)),
-        data:    { salePrice: p.value, costBasis: p.costBasis, ownershipType: p.ownershipType, ownerId: p.ownerId, owners: p.owners, stateKey: p.stateKey, saleDestinationAccount: p.saleDestinationAccount },
+        data:    { costBasis: p.costBasis, ownershipType: p.ownershipType, ownerId: p.ownerId, owners: p.owners, stateKey: p.stateKey, saleDestinationAccount: p.saleDestinationAccount },
         enabled: true,
         color:   '#5D4037',
       }));
@@ -139,6 +139,7 @@ export const AU_REAL_PROPERTY = {
 
 function _propertyToStatePlain(prop) {
   return {
+    kind:                'real-property',
     stateKey:            prop.stateKey,
     value:               prop.value              ?? 0,
     costBasis:           prop.costBasis          ?? 0,

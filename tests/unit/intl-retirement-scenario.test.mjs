@@ -1239,12 +1239,13 @@ test('SALE-2: exactly one UsHouseSaleHandler is registered for US_HOUSE_SALE', (
 
 test('SALE-3: US_HOUSE_SALE credits savings exactly once (balance delta = salePrice)', () => {
   // Use a large initial savings to survive expenses/drawdowns through to the sale date.
-  const saleYear  = 2028;
-  const salePrice = 1_000_000; // default usHouseProperty.value
-  const { sim } = buildScenarioViaSaveReload({ usSaleYear: saleYear });
+  const saleYear = 2028;
+  const { sim }  = buildScenarioViaSaveReload({ usSaleYear: saleYear });
 
-  // Step to Jan 14 — the day before the scheduled sale (Jan 15)
+  // Step to Jan 14 — the day before the scheduled sale (Jan 15).
+  // Read the current appreciated state value as the expected sale price.
   stepWithGuard(sim, new Date(Date.UTC(saleYear, 0, 14)), 15000);
+  const salePrice    = sim.state.usHouseProperty?.value ?? 1_000_000;
   const balanceBefore = sim.state.usSavingsAccount.balance;
 
   // Step to Jan 15 — the sale date
