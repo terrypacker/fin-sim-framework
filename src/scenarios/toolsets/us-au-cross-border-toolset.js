@@ -109,7 +109,7 @@ export const US_AU_CROSS_BORDER = {
 
   state(context) {
     const p = context.parameters;
-    const startingResidency = p.startingResidency ?? (p.isAuResident ? 'AUS' : 'US');
+    const startingResidency = p.startingResidency ?? 'US';
 
     // Build a full people map from PersonService so we can override residency.
     // context.state does not exist in the compiler — context.people is the source of truth.

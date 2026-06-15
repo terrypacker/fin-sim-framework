@@ -51,7 +51,7 @@ function makeBrokerageConfig({
   stockBalance       = 0,
   stockContribBasis  = 0,
   stockEarningsBasis = 0,
-  isAuResident       = false,
+  startingResidency  = 'US',
 } = {}) {
   return {
     toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'US_AU_CROSS_BORDER'],
@@ -63,7 +63,7 @@ function makeBrokerageConfig({
       brokerageGrowthRate: 0, brokerageDividendRate: 0, fixedIncomeInterestRate: 0,
       usSavingsInterestRate: 0, auSavingsInterestRate: 0,
       superGrowthRate: 0, auStockGrowthRate: 0, auStockDividendRate: 0,
-      isAuResident,
+      startingResidency,
     },
     persons: [{
       __type: 'Person', id: 'primary', name: 'Primary', birthDate: '1966-01-01',
@@ -151,7 +151,7 @@ test('EVT-11: Fixed income earnings are US ordinary income taxable', () => {
 });
 
 test('EVT-11: Fixed income earnings ARE AU taxable if person is AU resident', () => {
-  const { sim } = loadToolsetScenario(makeBrokerageConfig({ fixedIncomeBalance: 20000, isAuResident: true }));
+  const { sim } = loadToolsetScenario(makeBrokerageConfig({ fixedIncomeBalance: 20000, startingResidency: 'AUS' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'FIXED_INCOME_EARNINGS', data: { amount: 400 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -160,7 +160,7 @@ test('EVT-11: Fixed income earnings ARE AU taxable if person is AU resident', ()
 });
 
 test('EVT-11: Fixed income earnings are NOT AU taxable if person is not AU resident', () => {
-  const { sim } = loadToolsetScenario(makeBrokerageConfig({ fixedIncomeBalance: 20000, isAuResident: false }));
+  const { sim } = loadToolsetScenario(makeBrokerageConfig({ fixedIncomeBalance: 20000, startingResidency: 'US' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'FIXED_INCOME_EARNINGS', data: { amount: 400 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -213,7 +213,7 @@ test('EVT-13: Stock dividend is US ordinary income taxable', () => {
 
 test('EVT-13: Stock dividend IS AU taxable if person is AU resident', () => {
   const { sim } = loadToolsetScenario(makeBrokerageConfig({
-    stockBalance: 50000, stockContribBasis: 50000, isAuResident: true,
+    stockBalance: 50000, stockContribBasis: 50000, startingResidency: 'AUS',
   }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'STOCK_DIVIDEND', data: { amount: 1000 } });
   sim.stepTo(new Date(2026, 0, 31));
@@ -224,7 +224,7 @@ test('EVT-13: Stock dividend IS AU taxable if person is AU resident', () => {
 
 test('EVT-13: Stock dividend is NOT AU taxable if person is not AU resident', () => {
   const { sim } = loadToolsetScenario(makeBrokerageConfig({
-    stockBalance: 50000, stockContribBasis: 50000, isAuResident: false,
+    stockBalance: 50000, stockContribBasis: 50000, startingResidency: 'US',
   }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'STOCK_DIVIDEND', data: { amount: 1000 } });
   sim.stepTo(new Date(2026, 0, 31));
@@ -241,7 +241,7 @@ test('EVT-14: Stock earnings stay in account, increase earningsBasis, no tax', (
     initialChecking: 5000,
     stockBalance: 50000,
     stockContribBasis: 50000,
-    isAuResident: true,
+    startingResidency: 'AUS',
   }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'STOCK_EARNINGS', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
@@ -290,7 +290,7 @@ test('EVT-15: Stock sale IS AU capital gains taxable if person is AU resident', 
     stockBalance: 20000,
     stockContribBasis: 10000,
     stockEarningsBasis: 10000,
-    isAuResident: true,
+    startingResidency: 'AUS',
   }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'STOCK_WITHDRAWAL',
     data: { salePrice: 15000, costBasis: 10000 } });
@@ -305,7 +305,7 @@ test('EVT-15: Stock sale is NOT AU taxable if person is not AU resident', () => 
     stockBalance: 20000,
     stockContribBasis: 10000,
     stockEarningsBasis: 10000,
-    isAuResident: false,
+    startingResidency: 'US',
   }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'STOCK_WITHDRAWAL',
     data: { salePrice: 15000, costBasis: 10000 } });

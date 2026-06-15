@@ -49,7 +49,7 @@ function loadToolsetScenario(config) {
 function makeAuSavingsConfig({
   initialChecking  = 20000,
   auSavingsBalance = 0,
-  isAuResident     = true,
+  startingResidency = 'AUS',
 } = {}) {
   return {
     toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'US_AU_CROSS_BORDER'],
@@ -61,7 +61,7 @@ function makeAuSavingsConfig({
       brokerageGrowthRate: 0, brokerageDividendRate: 0, fixedIncomeInterestRate: 0,
       usSavingsInterestRate: 0, auSavingsInterestRate: 0,
       superGrowthRate: 0, auStockGrowthRate: 0, auStockDividendRate: 0,
-      isAuResident,
+      startingResidency,
     },
     persons: [{
       __type: 'Person', id: 'primary', name: 'Primary', birthDate: '1966-01-01',
@@ -99,7 +99,7 @@ test('EVT-16: AU savings contribution increases auSavingsAccount and debits chec
 });
 
 test('EVT-16: AU savings contribution is not a US or AU taxable event', () => {
-  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ initialChecking: 10000, isAuResident: true }));
+  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ initialChecking: 10000, startingResidency: 'AUS' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_CONTRIBUTION', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -122,7 +122,7 @@ test('EVT-17: AU savings withdrawal decreases auSavingsAccount and credits check
 });
 
 test('EVT-17: AU savings withdrawal is not a US or AU taxable event', () => {
-  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ initialChecking: 5000, auSavingsBalance: 20000, isAuResident: true }));
+  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ initialChecking: 5000, auSavingsBalance: 20000, startingResidency: 'AUS' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_WITHDRAWAL', data: { amount: 8000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -136,7 +136,7 @@ test('EVT-17: AU savings withdrawal is not a US or AU taxable event', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-18: AU savings earnings (resident) stay in account', () => {
-  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ initialChecking: 5000, auSavingsBalance: 20000, isAuResident: true }));
+  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ initialChecking: 5000, auSavingsBalance: 20000, startingResidency: 'AUS' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_EARNINGS', data: { amount: 600 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -145,7 +145,7 @@ test('EVT-18: AU savings earnings (resident) stay in account', () => {
 });
 
 test('EVT-18: AU savings earnings (resident) are US ordinary income taxable', () => {
-  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ auSavingsBalance: 20000, isAuResident: true }));
+  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ auSavingsBalance: 20000, startingResidency: 'AUS' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_EARNINGS', data: { amount: 600 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -153,7 +153,7 @@ test('EVT-18: AU savings earnings (resident) are US ordinary income taxable', ()
 });
 
 test('EVT-18: AU savings earnings (resident) are ALWAYS AU taxable at ordinary income rate', () => {
-  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ auSavingsBalance: 20000, isAuResident: true }));
+  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ auSavingsBalance: 20000, startingResidency: 'AUS' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_EARNINGS', data: { amount: 600 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -168,7 +168,7 @@ test('EVT-18: AU savings earnings (resident) are ALWAYS AU taxable at ordinary i
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-19: AU savings earnings (non-resident) stay in account', () => {
-  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ initialChecking: 5000, auSavingsBalance: 20000, isAuResident: false }));
+  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ initialChecking: 5000, auSavingsBalance: 20000, startingResidency: 'US' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_EARNINGS', data: { amount: 600 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -177,7 +177,7 @@ test('EVT-19: AU savings earnings (non-resident) stay in account', () => {
 });
 
 test('EVT-19: AU savings earnings (non-resident) are US ordinary income taxable', () => {
-  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ auSavingsBalance: 20000, isAuResident: false }));
+  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ auSavingsBalance: 20000, startingResidency: 'US' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_EARNINGS', data: { amount: 600 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -185,7 +185,7 @@ test('EVT-19: AU savings earnings (non-resident) are US ordinary income taxable'
 });
 
 test('EVT-19: AU savings earnings (non-resident) are ALWAYS AU taxable at non-resident withholding rate', () => {
-  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ auSavingsBalance: 20000, isAuResident: false }));
+  const { sim } = loadToolsetScenario(makeAuSavingsConfig({ auSavingsBalance: 20000, startingResidency: 'US' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_EARNINGS', data: { amount: 600 } });
   sim.stepTo(new Date(2026, 0, 31));
 

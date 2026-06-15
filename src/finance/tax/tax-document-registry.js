@@ -171,7 +171,7 @@ function _extractAuSaleRecords(currentEntry, journal) {
     // Explicit AU stock or property sale via AU-specific action types.
     const isAuSaleAction = t === 'AU_STOCK_WITHDRAWAL_TAX' || t === 'AU_HOUSE_SALE_TAX';
     // Replenish-savings drawdown from any brokerage for an AU resident
-    // (STOCK_WITHDRAWAL_TAX with isAuResident covers both AU and US brokerage drawdowns;
+    // (STOCK_WITHDRAWAL_TAX with residency='AUS' covers both AU and US brokerage drawdowns;
     //  AU residents are taxed on worldwide capital gains).
     const isAuResidentSale = t === 'STOCK_WITHDRAWAL_TAX' && d.residency === 'AUS';
 

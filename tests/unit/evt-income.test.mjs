@@ -53,13 +53,13 @@ const COMMON_PARAMS = {
 function makeUsIncomeConfig({
   initialChecking  = 20000,
   initialAuSavings = 50000,
-  isAuResident     = false,
+  startingResidency = 'US',
 } = {}) {
   return {
     toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'US_AU_CROSS_BORDER'],
     simStart: '2026-01-01',
     simEnd:   '2028-01-01',
-    parameters: { ...COMMON_PARAMS, isAuResident },
+    parameters: { ...COMMON_PARAMS, startingResidency },
     persons: [{
       __type: 'Person', id: 'primary', name: 'Primary', birthDate: '1966-01-01',
       citizen: ['US'], lifeExpectancy: 90, monthlyWage: 0,
@@ -85,13 +85,13 @@ function makeUsIncomeConfig({
 function makeAuIncomeConfig({
   initialChecking  = 0,
   initialAuSavings = 0,
-  isAuResident     = true,
+  startingResidency = 'AUS',
 } = {}) {
   return {
     toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'AU_INCOME', 'US_AU_CROSS_BORDER'],
     simStart: '2026-01-01',
     simEnd:   '2028-01-01',
-    parameters: { ...COMMON_PARAMS, isAuResident },
+    parameters: { ...COMMON_PARAMS, startingResidency },
     persons: [{
       __type: 'Person', id: 'primary', name: 'Primary', birthDate: '1966-01-01',
       citizen: ['AU'], lifeExpectancy: 90, monthlyWage: 0,
@@ -135,7 +135,7 @@ test('EVT-37: SS income records only 85% as US ordinary income', () => {
 });
 
 test('EVT-37: SS income records full amount as AU ordinary income if AU resident', () => {
-  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ isAuResident: true }));
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ startingResidency: 'AUS' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SS_INCOME', data: { amount: 2000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -144,7 +144,7 @@ test('EVT-37: SS income records full amount as AU ordinary income if AU resident
 });
 
 test('EVT-37: SS income is not AU taxable if not AU resident', () => {
-  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ isAuResident: false }));
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ startingResidency: 'US' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SS_INCOME', data: { amount: 2000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -173,7 +173,7 @@ test('EVT-38: wages record full amount as US ordinary income', () => {
 });
 
 test('EVT-38: wages record full amount as AU ordinary income if AU resident', () => {
-  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ isAuResident: true }));
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ startingResidency: 'AUS' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'WAGES_INCOME', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -182,7 +182,7 @@ test('EVT-38: wages record full amount as AU ordinary income if AU resident', ()
 });
 
 test('EVT-38: wages are not AU taxable if not AU resident', () => {
-  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ isAuResident: false }));
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ startingResidency: 'US' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'WAGES_INCOME', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -211,7 +211,7 @@ test('EVT-39: wages withheld increments usWithheldYTD', () => {
 });
 
 test('EVT-39: wages withheld does not affect any income YTD field', () => {
-  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ initialChecking: 10000, isAuResident: true }));
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ initialChecking: 10000, startingResidency: 'AUS' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'WAGES_WITHHELD', data: { amount: 1500 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -241,7 +241,7 @@ test('EVT-48: US self-employment income is US ordinary income', () => {
 });
 
 test('EVT-48: US self-employment income is AU ordinary income if AU resident', () => {
-  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ isAuResident: true }));
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ startingResidency: 'AUS' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SE_INCOME_US', data: { amount: 4000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -250,7 +250,7 @@ test('EVT-48: US self-employment income is AU ordinary income if AU resident', (
 });
 
 test('EVT-48: US self-employment income is not AU taxable if not AU resident', () => {
-  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ isAuResident: false }));
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ startingResidency: 'US' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SE_INCOME_US', data: { amount: 4000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -271,7 +271,7 @@ test('EVT-49: AU self-employment income credits AU savings account', () => {
 });
 
 test('EVT-49: AU self-employment income is always US ordinary income', () => {
-  const { sim } = loadToolsetScenario(makeAuIncomeConfig({ isAuResident: false }));
+  const { sim } = loadToolsetScenario(makeAuIncomeConfig({ startingResidency: 'US' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SE_INCOME_AU', data: { amount: 3000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -279,7 +279,7 @@ test('EVT-49: AU self-employment income is always US ordinary income', () => {
 });
 
 test('EVT-49: AU self-employment income is AU ordinary income if AU resident', () => {
-  const { sim } = loadToolsetScenario(makeAuIncomeConfig({ isAuResident: true }));
+  const { sim } = loadToolsetScenario(makeAuIncomeConfig({ startingResidency: 'AUS' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SE_INCOME_AU', data: { amount: 3000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -288,7 +288,7 @@ test('EVT-49: AU self-employment income is AU ordinary income if AU resident', (
 });
 
 test('EVT-49: AU self-employment income is not AU taxable if not AU resident', () => {
-  const { sim } = loadToolsetScenario(makeAuIncomeConfig({ isAuResident: false }));
+  const { sim } = loadToolsetScenario(makeAuIncomeConfig({ startingResidency: 'US' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SE_INCOME_AU', data: { amount: 3000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -317,7 +317,7 @@ test('EVT-50: bonus is US ordinary income', () => {
 });
 
 test('EVT-50: bonus is AU ordinary income if AU resident', () => {
-  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ isAuResident: true }));
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ startingResidency: 'AUS' }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'BONUS', data: { amount: 10000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -326,7 +326,7 @@ test('EVT-50: bonus is AU ordinary income if AU resident', () => {
 });
 
 test('EVT-50: bonus is not AU taxable if not AU resident', () => {
-  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ isAuResident: false }));
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ startingResidency: 'US' }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'BONUS', data: { amount: 10000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
@@ -363,7 +363,7 @@ test('EVT-51: company sale records gain as US capital gain', () => {
 });
 
 test('EVT-51: company sale records gain as AU capital gain if AU resident', () => {
-  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ isAuResident: true }));
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ startingResidency: 'AUS' }));
   sim.schedule({
     date: new Date(2026, 1, 1),
     type: 'COMPANY_SALE',
@@ -376,7 +376,7 @@ test('EVT-51: company sale records gain as AU capital gain if AU resident', () =
 });
 
 test('EVT-51: company sale is not AU taxable if not AU resident', () => {
-  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ isAuResident: false }));
+  const { sim } = loadToolsetScenario(makeUsIncomeConfig({ startingResidency: 'US' }));
   sim.schedule({
     date: new Date(2026, 1, 1),
     type: 'COMPANY_SALE',

@@ -57,7 +57,7 @@ function makeIraConfig({
   iraContribBasis  = 0,
   iraEarningsBasis = 0,
   birthDate        = '1966-01-01',
-  isAuResident     = false,
+  startingResidency = 'US',
 } = {}) {
   return {
     toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'US_AU_CROSS_BORDER'],
@@ -69,7 +69,7 @@ function makeIraConfig({
       brokerageGrowthRate: 0, brokerageDividendRate: 0, fixedIncomeInterestRate: 0,
       usSavingsInterestRate: 0, auSavingsInterestRate: 0,
       superGrowthRate: 0, auStockGrowthRate: 0, auStockDividendRate: 0,
-      isAuResident,
+      startingResidency,
     },
     persons: [{
       __type: 'Person', id: 'primary', name: 'Primary', birthDate,
@@ -133,7 +133,7 @@ test('EVT-5: IRA contribution is a US negative income (deduction) event', () => 
 });
 
 test('EVT-5: IRA contribution is not an AU taxable event', () => {
-  const { sim } = loadToolsetScenario(makeIraConfig({ initialChecking: 10000, isAuResident: true }));
+  const { sim } = loadToolsetScenario(makeIraConfig({ initialChecking: 10000, startingResidency: 'AUS' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'IRA_CONTRIBUTION', data: { amount: 6500 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -190,7 +190,7 @@ test('EVT-6: IRA contribution withdrawal is not AU taxable', () => {
     initialChecking: 5000,
     iraBalance: 20000,
     iraContribBasis: 20000,
-    isAuResident: true,
+    startingResidency: 'AUS',
     birthDate: '1966-01-01',
   }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_WITHDRAWAL_CONTRIBUTIONS', data: { amount: 5000 } });
@@ -249,7 +249,7 @@ test('EVT-7: IRA earnings withdrawal IS AU taxable if person is AU resident', ()
     iraBalance: 20000,
     iraEarningsBasis: 20000,
     birthDate: '1966-01-01',
-    isAuResident: true,
+    startingResidency: 'AUS',
   }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_WITHDRAWAL_EARNINGS', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 1, 28));
@@ -264,7 +264,7 @@ test('EVT-7: IRA earnings withdrawal is NOT AU taxable if person is not AU resid
     iraBalance: 20000,
     iraEarningsBasis: 20000,
     birthDate: '1966-01-01',
-    isAuResident: false,
+    startingResidency: 'US',
   }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_WITHDRAWAL_EARNINGS', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 1, 28));
@@ -299,7 +299,7 @@ test('EVT-8: IRA earnings are not a US or AU taxable event', () => {
   const { sim } = loadToolsetScenario(makeIraConfig({
     iraBalance: 50000,
     iraContribBasis: 50000,
-    isAuResident: true,
+    startingResidency: 'AUS',
   }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'IRA_EARNINGS', data: { amount: 3000 } });
   sim.stepTo(new Date(2026, 0, 31));
@@ -363,7 +363,7 @@ test('EVT-35: IRA rollover withdrawal is AU ordinary income if AU resident', () 
   const { sim } = loadToolsetScenario(makeIraConfig({
     iraBalance: 20000,
     iraContribBasis: 20000,
-    isAuResident: true,
+    startingResidency: 'AUS',
   }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_ROLLOVER_WITHDRAWAL', data: { amount: 8000 } });
   sim.stepTo(new Date(2026, 1, 28));
@@ -376,7 +376,7 @@ test('EVT-35: IRA rollover withdrawal is not AU taxable if not AU resident', () 
   const { sim } = loadToolsetScenario(makeIraConfig({
     iraBalance: 20000,
     iraContribBasis: 20000,
-    isAuResident: false,
+    startingResidency: 'US',
   }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_ROLLOVER_WITHDRAWAL', data: { amount: 8000 } });
   sim.stepTo(new Date(2026, 1, 28));
@@ -434,7 +434,7 @@ test('EVT-40: IRA RMD is AU ordinary income if AU resident', () => {
     iraBalance: 500000,
     iraContribBasis: 500000,
     birthDate: '1954-01-01',
-    isAuResident: true,
+    startingResidency: 'AUS',
   }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_RMD', data: { amount: 20000 } });
   sim.stepTo(new Date(2026, 1, 28));
