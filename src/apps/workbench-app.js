@@ -23,6 +23,8 @@ import { $, fmtUTC }                   from '../visualization/ui-utils.js';
 import { AppDisplaySettings, APP_EVENTS } from '../visualization/app-display-settings.js';
 import { EventBus }                      from '../simulation-framework/event-bus.js';
 import { ScenarioLoader }             from '../scenarios/scenario-loader.js';
+import { ScenarioSerializer }         from '../scenarios/scenario-serializer.js';
+import { ParamFieldLinks }            from '../visualization/scenario/param-field-links.js';
 import { ChartController }            from '../visualization/chart/chart-controller.js';
 import { ChartView }                  from '../visualization/chart/chart-view.js';
 import { ChartPresenter }             from '../visualization/chart/chart-presenter.js';
@@ -304,11 +306,25 @@ export class WorkbenchApp extends BaseComponent {
     };
 
     // ── Shared editor factory (used by modal and inspector panel) ─────────────
+    // Param↔field linking (design/32): build a fresh links index per editor open
+    // from the active scenario's params, plus the callbacks an editor uses to
+    // write a linked field's param and to jump to it in the Scenario panel.
+    const paramLinkProps = () => ({
+      links: new ParamFieldLinks(this.scenarioTabPresenter?.getActiveParams?.() ?? []),
+      onParamChange: () => this.scenarioTabPresenter?.refreshParams(),
+      onOpenParam: (p) => {
+        this._editModal?.close();
+        this._wbShell?.activatePlugin('scenario');
+        this.scenarioTabPresenter?.revealParam(p);
+      },
+    });
+
     const editorFactory = (node, container) => {
       if (node?.kind === 'person') {
         const editor = new PersonEditor({
           container,
           node,
+          ...paramLinkProps(),
           onSave: (data) => {
             if (data.id) {
               const { id, ...changes } = data;
@@ -333,6 +349,7 @@ export class WorkbenchApp extends BaseComponent {
           container,
           node,
           people,
+          ...paramLinkProps(),
           onSave: (data) => {
             if (data.id) {
               const { id, type: _type, ...changes } = data;
@@ -366,6 +383,7 @@ export class WorkbenchApp extends BaseComponent {
           node,
           people,
           accounts,
+          ...paramLinkProps(),
           onSave: (data) => {
             // Map the editor's currency code to a {code,symbol} descriptor (or
             // null → registerAsset falls back to country). Design 10 §Phase 5.
@@ -396,6 +414,7 @@ export class WorkbenchApp extends BaseComponent {
           node,
           people,
           accounts,
+          ...paramLinkProps(),
           onSave: (data) => {
             data.currency = _assetCurrency(data.currency);
             if (data.id) {
@@ -710,7 +729,19 @@ export class WorkbenchApp extends BaseComponent {
    * Clears config + execution layers so ScenarioLoader starts with a fresh graph.
    */
   destroyScenario() {
-    ServiceRegistry.getInstance()?.graph.clearLayer('config');
+    const registry = ServiceRegistry.getInstance();
+
+    // Harvest in-flight free-field domain edits (currency, holdings, names, …)
+    // into the active scenario record BEFORE reset so Rebuild rebuilds what the
+    // user currently has configured (design/32), not the last-Saved cfg. Records
+    // only — not the graph — so ScenarioLoader still recompiles toolsets, and the
+    // param→node cascade re-applies node-linked fields from their params.
+    const activeCfg = registry?.scenarioService?.getActive?.();
+    if (activeCfg) {
+      Object.assign(activeCfg, ScenarioSerializer.snapshotDomainRecords(registry));
+    }
+
+    registry?.graph.clearLayer('config');
     ServiceRegistry.reset();
 
     $('currentStateContent').innerHTML      = '';

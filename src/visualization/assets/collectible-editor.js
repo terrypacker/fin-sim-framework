@@ -15,6 +15,7 @@
  */
 
 import { BaseComponent } from '../components/base-component.js';
+import { bindParamLinkedField } from '../scenario/param-linked-field.js';
 
 /** Map a country code to its default currency code (US→USD, AU/AUS→AUD). */
 function _countryCurrency(country) {
@@ -41,7 +42,8 @@ export class CollectibleEditor extends BaseComponent {
    *   onDelete:  function(string): void,
    * }}
    */
-  constructor({ parent, container, node, people = [], accounts = [], onSave, onDelete }) {
+  constructor({ parent, container, node, people = [], accounts = [], onSave, onDelete,
+                links = null, onParamChange = null, onOpenParam = null }) {
     super({ parent });
     this._container = container;
     this._node      = node;
@@ -49,6 +51,10 @@ export class CollectibleEditor extends BaseComponent {
     this._accounts  = accounts;
     this.onSave     = onSave   ?? null;
     this.onDelete   = onDelete ?? null;
+    this._links     = links;          // ParamFieldLinks (design/32)
+    this.onParamChange = onParamChange ?? null;
+    this.onOpenParam   = onOpenParam   ?? null;
+    this._linkedFields = new Set();
   }
 
   render() {
@@ -88,13 +94,34 @@ export class CollectibleEditor extends BaseComponent {
       if (this.onDelete && this._node?.id) this.onDelete(this._node.id);
     });
 
+    this._bindParamLinks(el);
+
     this._container.replaceChildren(el);
     this._rootEl = el;
   }
 
+  /** Route param-backed collectible fields through their param (design/32). */
+  _bindParamLinks(el) {
+    this._linkedFields = new Set();
+    const stateKey = this._node?.stateKey;
+    if (!stateKey || !this._links) return;
+
+    const param = this._links.getParamFor('collectible', stateKey, 'plannedSaleYear');
+    if (!param) return;
+    const input   = el.querySelector('[data-id="plannedSaleYear"]');
+    const labelEl = input?.closest('.node-field')?.querySelector('label');
+    bindParamLinkedField({
+      input, labelEl, param,
+      coerce:   (raw) => (raw === '' || raw == null) ? null : Math.round(Number(raw)),
+      onChange: () => this.onParamChange?.(),
+      onOpen:   (p) => this.onOpenParam?.(p),
+    });
+    this._linkedFields.add('plannedSaleYear');
+  }
+
   _readForm(el) {
     const saleYearRaw = el.querySelector('[data-id="plannedSaleYear"]').value;
-    return {
+    const data = {
       id:                   this._node?.id ?? null,
       name:                 el.querySelector('[data-id="name"]').value.trim(),
       value:                +el.querySelector('[data-id="value"]').value,
@@ -107,6 +134,9 @@ export class CollectibleEditor extends BaseComponent {
       ownershipType:        el.querySelector('[data-id="ownershipType"]').value,
       ownerId:              el.querySelector('[data-id="ownerId"]').value || null,
     };
+    // Param-backed fields are owned by their scenario param (design/32).
+    for (const f of this._linkedFields) delete data[f];
+    return data;
   }
 
   _populateOwnerSelect(el, people, selectedId) {

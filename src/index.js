@@ -314,6 +314,8 @@ import { OptimizationView } from './visualization/optimization/optimization-view
 import { PeopleController } from './visualization/people/people-controller.js';
 import { PersonEditor } from './visualization/people/person-editor.js';
 import { CSV_SCALAR_TYPES, paramsToCsv, csvToParamUpdates, coerceParamValue } from './visualization/scenario/param-csv.js';
+import { ParamFieldLinks } from './visualization/scenario/param-field-links.js';
+import { bindParamLinkedField } from './visualization/scenario/param-linked-field.js';
 import { ScenarioTabController } from './visualization/scenario/scenario-tab-controller.js';
 import { ScenarioTabPresenter } from './visualization/scenario/scenario-tab-presenter.js';
 import { ScenarioTabView } from './visualization/scenario/scenario-tab-view.js';
@@ -953,6 +955,8 @@ export const Visualization = {
   paramsToCsv,
   csvToParamUpdates,
   coerceParamValue,
+  ParamFieldLinks,
+  bindParamLinkedField,
   ScenarioTabController,
   ScenarioTabPresenter,
   ScenarioTabView,

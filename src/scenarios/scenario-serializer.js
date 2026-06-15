@@ -423,6 +423,30 @@ export class ScenarioSerializer {
   }
 
   /**
+   * Snapshot only the domain records (persons / accounts / real-properties /
+   * collectibles) from the services — NOT the events/handlers/actions/reducers
+   * graph. Used by the Rebuild path to harvest in-flight free-field edits (e.g.
+   * currency, holdings, names) into the active cfg before ServiceRegistry.reset()
+   * (design/32), without freezing the graph: omitting the graph keeps
+   * ScenarioLoader on the toolset-recompile branch (a full snapshotServices()
+   * would flip it to deserialize). Node-linked fields are still re-applied from
+   * params by the compile-time node cascade, so each field comes from its single
+   * owner.
+   *
+   * @param {{ personService, accountService, realPropertyService, collectibleService }} services
+   * @returns {{ persons, accounts, realProperties, collectibles }}
+   */
+  static snapshotDomainRecords(services) {
+    const { personService, accountService, realPropertyService, collectibleService } = services;
+    return {
+      persons:        (personService?.getAll()         ?? []).map(n => ScenarioSerializer._serializePerson(n)),
+      accounts:       (accountService?.getAll()        ?? []).map(n => ScenarioSerializer._serializeAccount(n)),
+      realProperties: (realPropertyService?.getAll()   ?? []).map(n => ScenarioSerializer._serializeRealProperty(n)),
+      collectibles:   (collectibleService?.getAll()    ?? []).map(n => ScenarioSerializer._serializeCollectible(n)),
+    };
+  }
+
+  /**
    * Load only the persons and accounts from a config into the services.
    * Used by the toolset path in WorkbenchApp when a custom JSON has persons/accounts
    * but no serialized events/handlers/actions/reducers.
