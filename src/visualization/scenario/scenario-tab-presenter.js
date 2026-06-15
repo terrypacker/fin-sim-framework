@@ -10,6 +10,7 @@
 
 import { ServiceRegistry }    from '../../services/service-registry.js';
 import { ScenarioSerializer } from '../../scenarios/scenario-serializer.js';
+import { paramsToCsv, csvToParamUpdates, coerceParamValue, CSV_SCALAR_TYPES } from './param-csv.js';
 
 /**
  * ScenarioTabPresenter — owns all scenario-tab UI and scenario CRUD.
@@ -168,6 +169,53 @@ export class ScenarioTabPresenter {
       this._loadActiveScenario();
     };
 
+    this._view.onDownloadCsv = () => {
+      if (!this._activeScenario) return;
+      const csv  = paramsToCsv(this._activeScenario.params);
+      const base = (this._activeScenario.name || 'scenario').replace(/[^\w.-]+/g, '-');
+      this._view.downloadFile(`${base}-params.csv`, csv, 'text/csv');
+    };
+
+    this._view.onUploadCsv = async (file) => {
+      const text   = await this._view.readUploadedText(file);
+      const result = this._applyParamCsv(text);
+      this._view._renderParamsList(this._activeScenario);
+      this._view.reportCsvImport(result);
+    };
+
+  }
+
+  /**
+   * Apply a parameter CSV to the active scenario's params, in place.
+   *
+   * Matches rows to live params by key (param.name); coerces each value by the
+   * live param's own type; skips unknown keys and non-scalar params; collects
+   * per-row errors. Does not rebuild — like the inline editor, the user hits
+   * Rebuild to push edits into the sim via the normal service path.
+   *
+   * @returns {{applied:number, skipped:string[], errors:string[]}|{error:string}}
+   * @private
+   */
+  _applyParamCsv(text) {
+    const params = this._activeScenario?.params ?? [];
+    const byKey  = new Map(params.map(p => [p.name, p]));
+
+    let updates;
+    try { updates = csvToParamUpdates(text); }
+    catch (e) { return { error: e.message }; }
+
+    let applied = 0;
+    const skipped = [];
+    const errors  = [];
+    for (const { key, rawValue } of updates) {
+      const param = byKey.get(key);
+      if (!param || !CSV_SCALAR_TYPES.has(param.type)) { skipped.push(key); continue; }
+      const res = coerceParamValue(param, rawValue);
+      if (!res.ok) { errors.push(`${key}: ${res.error}`); continue; }
+      param.value = res.value;
+      applied++;
+    }
+    return { applied, skipped, errors };
   }
 
   /**
