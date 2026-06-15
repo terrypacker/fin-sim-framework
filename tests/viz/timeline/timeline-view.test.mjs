@@ -27,13 +27,16 @@ function makeFilterTemplate() {
       <label class="tl-filter-label" for="tl-act-select">Action</label>
       <div class="reducer-chip-grid" id="tl-act-select"></div>
     </div>
-    <div class="tl-filter-group">
-      <label class="tl-filter-label" for="tl-date-start">From</label>
-      <input class="tl-filter-date" type="date" id="tl-date-start">
-    </div>
-    <div class="tl-filter-group">
-      <label class="tl-filter-label" for="tl-date-end">To</label>
-      <input class="tl-filter-date" type="date" id="tl-date-end">
+    <div class="tl-filter-group tl-date-slider-group">
+      <label class="tl-filter-label">Date Range</label>
+      <div class="tl-date-slider-labels">
+        <span id="tl-date-label-start" class="tl-date-slider-label-val"></span>
+        <span id="tl-date-label-end"   class="tl-date-slider-label-val"></span>
+      </div>
+      <div class="tl-date-slider-wrap">
+        <input type="range" id="tl-date-start" class="tl-date-slider" min="0" max="100" value="0"   disabled>
+        <input type="range" id="tl-date-end"   class="tl-date-slider" min="0" max="100" value="100" disabled>
+      </div>
     </div>
     <button class="btn btn-sm"    id="tl-filter-clear"    title="Clear all filters">✕</button>
     <button class="btn btn-sm"   id="tl-download-csv"   title="Download visible rows as CSV">⬇ CSV</button>
@@ -112,18 +115,26 @@ function makeCausalGroups(entries, formatDate = d => d.toDateString()) {
   return roots;
 }
 
+function localDayOffset(date) {
+  const local = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const base  = new Date(2000, 0, 1);
+  return Math.round((local.getTime() - base.getTime()) / 86400000);
+}
+
 function renderView(view, {
-  entries        = [],
-  expanded       = new Set(),
-  filterEvents   = new Set(),
-  filterActions  = new Set(),
-  filterDateStart = null,
-  filterDateEnd   = null,
-  hasRewind      = false,
+  entries          = [],
+  expanded         = new Set(),
+  filterEvents     = new Set(),
+  filterActions    = new Set(),
+  filterDateStart  = null,
+  filterDateEnd    = null,
+  dateBoundsStart  = null,
+  dateBoundsEnd    = null,
+  hasRewind        = false,
 } = {}) {
-  const groups      = makeGroups(entries);
+  const groups       = makeGroups(entries);
   const causalGroups = makeCausalGroups(entries);
-  view.render({ groups, causalGroups, options: emptyOptions, filterEvents, filterActions, filterDateStart, filterDateEnd, expanded, hasRewind });
+  view.render({ groups, causalGroups, options: emptyOptions, filterEvents, filterActions, filterDateStart, filterDateEnd, dateBoundsStart, dateBoundsEnd, expanded, hasRewind });
 }
 
 // ─── Constructor ──────────────────────────────────────────────────────────────
@@ -210,24 +221,26 @@ test('TimelineView.render: previously selected event options are marked selected
 });
 */
 
-test('TimelineView.render: date inputs reflect filterDateStart and filterDateEnd', () => {
-  const view = makeView();
-  const start = new Date(2025, 0, 15);  // Jan 15
-  const end   = new Date(2025, 5, 30);  // Jun 30
+test('TimelineView.render: date sliders reflect filterDateStart and filterDateEnd', () => {
+  const view   = makeView();
+  const start  = new Date(2025, 0, 15);  // Jan 15
+  const end    = new Date(2025, 5, 30);  // Jun 30
+  const bounds = { dateBoundsStart: new Date(2025, 0, 1), dateBoundsEnd: new Date(2025, 11, 31) };
   view.render({
     groups:          new Map(),
-    options:         emptyOptions,
+    causalGroups:    new Map(),
     filterEvents:    new Set(),
     filterActions:   new Set(),
     filterDateStart: start,
     filterDateEnd:   end,
+    ...bounds,
     expanded:        new Set(),
     hasRewind:       false,
   });
   const startIn  = view._filterBarEl.querySelector(`#tl-date-start`);
   const endIn    = view._filterBarEl.querySelector(`#tl-date-end`);
-  assert.strictEqual(startIn.value, '2025-01-15');
-  assert.strictEqual(endIn.value,   '2025-06-30');
+  assert.strictEqual(+startIn.value, localDayOffset(start));
+  assert.strictEqual(+endIn.value,   localDayOffset(end));
 });
 
 test('TimelineView.render: clear button hidden when no filters are active', () => {

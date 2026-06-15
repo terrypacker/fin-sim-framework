@@ -10,13 +10,20 @@
 
 import {BaseComponent} from "../components/base-component.js";
 
-// Format a Date to YYYY-MM-DD for <input type="date"> value
-function toDateInput(date) {
-  if (!date) return '';
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+const DAY_MS    = 86400000;
+const BASE_DATE = new Date(2000, 0, 1); // Jan 1 2000, local midnight
+
+function dateToDayOffset(date) {
+  const local = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  return Math.round((local.getTime() - BASE_DATE.getTime()) / DAY_MS);
+}
+
+function dayOffsetToDateStr(offset) {
+  const d = new Date(BASE_DATE.getTime() + offset * DAY_MS);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 // Estimated heights per item type (px) — used for virtual scroll offset calculation.
@@ -67,10 +74,10 @@ export class TimelineView extends BaseComponent {
     this.onNavigateToNode  = null; // (nodeId: string) => void
   }
 
-  // @param {{ groups, causalGroups, filterEvents, filterActions, filterDateStart, filterDateEnd, expanded, hasRewind }}
-  render({ groups, causalGroups, filterEvents, filterActions, filterDateStart, filterDateEnd, expanded, hasRewind }) {
+  // @param {{ groups, causalGroups, filterEvents, filterActions, filterDateStart, filterDateEnd, dateBoundsStart, dateBoundsEnd, expanded, hasRewind }}
+  render({ groups, causalGroups, filterEvents, filterActions, filterDateStart, filterDateEnd, dateBoundsStart, dateBoundsEnd, expanded, hasRewind }) {
     this._ensureStructure();
-    this._syncFilters(filterEvents, filterActions, filterDateStart, filterDateEnd);
+    this._syncFilters(filterEvents, filterActions, filterDateStart, filterDateEnd, dateBoundsStart, dateBoundsEnd);
     if (this._treeMode) {
       this._renderList({ groups: causalGroups, expanded, filterEvents, filterActions, filterDateStart, filterDateEnd, hasRewind, treeMode: true });
     } else {
@@ -89,12 +96,28 @@ export class TimelineView extends BaseComponent {
     this.container.appendChild(this._filterBarEl);
     this.container.appendChild(this._listEl);
 
-    const startIn  = this._filterBarEl.querySelector(`#tl-date-start`);
-    const endIn    = this._filterBarEl.querySelector(`#tl-date-end`);
-    const clearBtn = this._filterBarEl.querySelector(`#tl-filter-clear`);
+    const startSlider = this._filterBarEl.querySelector('#tl-date-start');
+    const endSlider   = this._filterBarEl.querySelector('#tl-date-end');
+    const clearBtn    = this._filterBarEl.querySelector('#tl-filter-clear');
 
-    startIn.addEventListener('change', () => this.onFilterDateStart?.(startIn.value));
-    endIn.addEventListener('change',   () => this.onFilterDateEnd?.(endIn.value));
+    startSlider.addEventListener('input', () => {
+      const sv = +startSlider.value;
+      const ev = +endSlider.value;
+      if (sv >= ev) { startSlider.value = String(ev - 1); return; }
+      this._updateSliderLabel('start', sv, +startSlider.min);
+      const dateStr = sv <= +startSlider.min ? null : dayOffsetToDateStr(sv);
+      this.onFilterDateStart?.(dateStr);
+    });
+
+    endSlider.addEventListener('input', () => {
+      const sv = +startSlider.value;
+      const ev = +endSlider.value;
+      if (ev <= sv) { endSlider.value = String(sv + 1); return; }
+      this._updateSliderLabel('end', ev, +endSlider.max);
+      const dateStr = ev >= +endSlider.max ? null : dayOffsetToDateStr(ev);
+      this.onFilterDateEnd?.(dateStr);
+    });
+
     clearBtn.addEventListener('click', () => this.onClearFilters?.());
 
     const csvBtn = this._filterBarEl.querySelector(`#tl-download-csv`);
@@ -116,18 +139,42 @@ export class TimelineView extends BaseComponent {
     csvBtn.insertAdjacentElement('afterend', modeBtn);
   }
 
-  _syncFilters(filterEvents, filterActions, filterDateStart, filterDateEnd) {
-    const startIn  = this._filterBarEl.querySelector(`#tl-date-start`);
-    const endIn    = this._filterBarEl.querySelector(`#tl-date-end`);
-    const clearBtn = this._filterBarEl.querySelector(`#tl-filter-clear`);
+  _syncFilters(filterEvents, filterActions, filterDateStart, filterDateEnd, dateBoundsStart, dateBoundsEnd) {
+    const startSlider = this._filterBarEl.querySelector('#tl-date-start');
+    const endSlider   = this._filterBarEl.querySelector('#tl-date-end');
+    const clearBtn    = this._filterBarEl.querySelector('#tl-filter-clear');
 
-    const startStr = toDateInput(filterDateStart);
-    const endStr   = toDateInput(filterDateEnd);
-    if (startIn.value !== startStr) startIn.value = startStr;
-    if (endIn.value   !== endStr)   endIn.value   = endStr;
+    const hasBounds = dateBoundsStart != null && dateBoundsEnd != null;
+    startSlider.disabled = !hasBounds;
+    endSlider.disabled   = !hasBounds;
+
+    if (hasBounds) {
+      const minDay = dateToDayOffset(dateBoundsStart);
+      let   maxDay = dateToDayOffset(dateBoundsEnd);
+      if (maxDay <= minDay) maxDay = minDay + 1;
+
+      startSlider.min = String(minDay);
+      startSlider.max = String(maxDay);
+      endSlider.min   = String(minDay);
+      endSlider.max   = String(maxDay);
+
+      const startDay = filterDateStart ? dateToDayOffset(filterDateStart) : minDay;
+      const endDay   = filterDateEnd   ? dateToDayOffset(filterDateEnd)   : maxDay;
+      startSlider.value = String(startDay);
+      endSlider.value   = String(endDay);
+
+      this._updateSliderLabel('start', startDay, minDay);
+      this._updateSliderLabel('end',   endDay,   maxDay);
+    }
 
     const hasFilter = filterEvents.size > 0 || filterActions.size > 0 || filterDateStart || filterDateEnd;
     clearBtn.style.display = hasFilter ? '' : 'none';
+  }
+
+  _updateSliderLabel(which, dayOffset, boundDay) {
+    const el = this._filterBarEl?.querySelector(`#tl-date-label-${which}`);
+    if (!el) return;
+    el.textContent = dayOffset !== boundDay ? dayOffsetToDateStr(dayOffset) : '';
   }
 
   _renderList({ groups, expanded, filterEvents, filterActions, filterDateStart, filterDateEnd, hasRewind, treeMode }) {

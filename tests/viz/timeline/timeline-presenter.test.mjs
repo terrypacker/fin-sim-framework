@@ -30,13 +30,16 @@ function makeFilterTemplate() {
       <label class="tl-filter-label" for="tl-act-select">Action</label>
       <div class="reducer-chip-grid" id="tl-act-select"></div>
     </div>
-    <div class="tl-filter-group">
-      <label class="tl-filter-label" for="tl-date-start">From</label>
-      <input class="tl-filter-date" type="date" id="tl-date-start">
-    </div>
-    <div class="tl-filter-group">
-      <label class="tl-filter-label" for="tl-date-end">To</label>
-      <input class="tl-filter-date" type="date" id="tl-date-end">
+    <div class="tl-filter-group tl-date-slider-group">
+      <label class="tl-filter-label">Date Range</label>
+      <div class="tl-date-slider-labels">
+        <span id="tl-date-label-start" class="tl-date-slider-label-val"></span>
+        <span id="tl-date-label-end"   class="tl-date-slider-label-val"></span>
+      </div>
+      <div class="tl-date-slider-wrap">
+        <input type="range" id="tl-date-start" class="tl-date-slider" min="0" max="100" value="0"   disabled>
+        <input type="range" id="tl-date-end"   class="tl-date-slider" min="0" max="100" value="100" disabled>
+      </div>
     </div>
     <button class="btn btn-sm"    id="tl-filter-clear"    title="Clear all filters">✕</button>
     <button class="btn btn-sm"   id="tl-download-csv"   title="Download visible rows as CSV">⬇ CSV</button>

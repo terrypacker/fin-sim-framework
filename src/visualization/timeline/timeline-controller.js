@@ -50,6 +50,18 @@ export class TimelineController {
     return true;
   }
 
+  dateBounds() {
+    const journal = this.journal?.journal;
+    if (!journal?.length) return { min: null, max: null };
+    let min = journal[0].date;
+    let max = journal[0].date;
+    for (const entry of journal) {
+      if (entry.date < min) min = entry.date;
+      if (entry.date > max) max = entry.date;
+    }
+    return { min, max };
+  }
+
   allOptions() {
     const events  = new Map();
     const actions = new Map();

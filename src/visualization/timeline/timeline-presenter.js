@@ -109,15 +109,18 @@ export class TimelinePresenter {
     const ctrl    = this._controller;
     const options = ctrl.allOptions();
 
+    const bounds = ctrl.dateBounds();
     this._view.render({
-      groups:          ctrl.groups(this._formatDate),
-      causalGroups:    ctrl.causalGroups(this._formatDate),
-      filterEvents:    ctrl.filterEvents,
-      filterActions:   ctrl.filterActions,
-      filterDateStart: ctrl.filterDateStart,
-      filterDateEnd:   ctrl.filterDateEnd,
-      expanded:        ctrl.expanded,
-      hasRewind:       !!this._onRewind,
+      groups:           ctrl.groups(this._formatDate),
+      causalGroups:     ctrl.causalGroups(this._formatDate),
+      filterEvents:     ctrl.filterEvents,
+      filterActions:    ctrl.filterActions,
+      filterDateStart:  ctrl.filterDateStart,
+      filterDateEnd:    ctrl.filterDateEnd,
+      dateBoundsStart:  bounds.min,
+      dateBoundsEnd:    bounds.max,
+      expanded:         ctrl.expanded,
+      hasRewind:        !!this._onRewind,
     });
 
     // Create multi-selects once the filter bar DOM exists (after first render)
