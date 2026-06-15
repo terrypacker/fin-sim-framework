@@ -185,7 +185,7 @@ import { Graph } from './graph/graph.js';
 import { SimGraphNode } from './graph/sim-graph-node.js';
 import { QueryApi } from './query/query-api.js';
 import { BaseScenario } from './scenarios/base-scenario.js';
-import { INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
+import { DRAWDOWN_STRATEGIES, INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
 import { ScenarioLoader } from './scenarios/scenario-loader.js';
 import { ScenarioRegistry } from './scenarios/scenario-registry.js';
 import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
@@ -285,11 +285,11 @@ import { GraphBuilderController } from './visualization/graph-builder/graph-buil
 import { GraphBuilderPresenter } from './visualization/graph-builder/graph-builder-presenter.js';
 import { GraphBuilderView } from './visualization/graph-builder/graph-builder-view.js';
 import { nodeBounds, nodeAnchors } from './visualization/graph-builder/graph-geometry.js';
-import { NODE_WIDTH, NODE_HEIGHT, COLUMN_GAP, ROW_GAP, PADDING_X, PADDING_Y, BACKWARD_MARGIN, EDGE_SPACING, LANE_OFFSET, OBSTACLE_MARGIN, ARROW_SIZE, ARROW_HALF, EDGE_COLOR, EDGE_COLOR_HIGHLIGHT, EDGE_WIDTH, EDGE_WIDTH_HIGHLIGHT, EDGE_OPACITY, EDGE_OPACITY_HIGHLIGHT } from './visualization/graph-builder/graph-metrics.js';
+import { NODE_WIDTH, NODE_HEIGHT, COLUMN_GAP, ROW_GAP, PADDING_X, PADDING_Y, BACKWARD_MARGIN, EDGE_SPACING, LANE_OFFSET, OBSTACLE_MARGIN, MERGE_OFFSET, ARROW_SIZE, ARROW_HALF, EDGE_COLOR, EDGE_COLOR_HIGHLIGHT, EDGE_WIDTH, EDGE_WIDTH_HIGHLIGHT, EDGE_OPACITY, EDGE_OPACITY_HIGHLIGHT } from './visualization/graph-builder/graph-metrics.js';
 import { GraphNodeExecHistory } from './visualization/graph-builder/graph-node-exec-history.js';
 import { GraphNodeInspectorPanel } from './visualization/graph-builder/graph-node-inspector-panel.js';
 import { GraphNodeLineage } from './visualization/graph-builder/graph-node-lineage.js';
-import { routeEdge, computeFanOutOffsets, computeLaneOffsets } from './visualization/graph-builder/orthogonal-edge-router.js';
+import { groupMergeTargets, routeEdge, computeFanOutOffsets, computeLaneOffsets } from './visualization/graph-builder/orthogonal-edge-router.js';
 import { McConfigPanel } from './visualization/monte-carlo/mc-config-panel.js';
 import { McResultsPanel } from './visualization/monte-carlo/mc-results-panel.js';
 import { McRunsPanel } from './visualization/monte-carlo/mc-runs-panel.js';
@@ -800,6 +800,7 @@ export const Engine = {
 
 export const Scenarios = {
   BaseScenario,
+  DRAWDOWN_STRATEGIES,
   INTL_RETIREMENT_DEFAULTS,
   INTL_RETIREMENT_PARAM_SCHEMA,
   IntlRetirementScenario,
@@ -895,6 +896,7 @@ export const Visualization = {
   EDGE_SPACING,
   LANE_OFFSET,
   OBSTACLE_MARGIN,
+  MERGE_OFFSET,
   ARROW_SIZE,
   ARROW_HALF,
   EDGE_COLOR,
@@ -906,6 +908,7 @@ export const Visualization = {
   GraphNodeExecHistory,
   GraphNodeInspectorPanel,
   GraphNodeLineage,
+  groupMergeTargets,
   routeEdge,
   computeFanOutOffsets,
   computeLaneOffsets,

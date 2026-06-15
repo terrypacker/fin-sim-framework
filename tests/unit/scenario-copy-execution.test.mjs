@@ -353,10 +353,16 @@ test('changing a non-param account field (drawdownPriority) is reflected in stat
   // are authoritative from cfg.accounts and survive the compile/load cycle unchanged.
   // Fields that DO have a param mapping (e.g. initialValue, minimumBalance) are controlled
   // by the param; direct edits to those fields on cfg.accounts are overridden by the
-  // param node sync.  This test validates the non-param field path.
+  // param node sync.  drawdownPriority is now driven by the `drawdownStrategy` param,
+  // so this test selects the CUSTOM strategy (a no-op cascade) under which per-account
+  // drawdownPriority remains authoritative — validating the non-param field path.
   const { services } = buildAndCompilePrebuilt();
   const active  = services.scenarioService.getActive();
   const created = services.scenarioService.newScenario(active);
+
+  // CUSTOM strategy → cascade leaves per-account drawdownPriority untouched.
+  const stratParam = created.params?.find(p => p.name === 'drawdownStrategy');
+  if (stratParam) stratParam.value = 'CUSTOM';
 
   const iraRec = created.accounts?.find(a => a.stateKey === 'iraAccount');
   assert.ok(iraRec, 'iraAccount must exist in scenario accounts array');

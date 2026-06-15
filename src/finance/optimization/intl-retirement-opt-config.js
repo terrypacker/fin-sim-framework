@@ -9,7 +9,7 @@
  */
 
 import { OPT_PARAM_TYPES }            from './optimization-objectives.js';
-import { INTL_RETIREMENT_DEFAULTS }   from '../../scenarios/intl-retirement-scenario.js';
+import { INTL_RETIREMENT_DEFAULTS, DRAWDOWN_STRATEGIES } from '../../scenarios/intl-retirement-scenario.js';
 import { SHOCK_LIBRARY }              from '../economic-shocks/shock-library.js';
 
 const D = INTL_RETIREMENT_DEFAULTS;
@@ -112,6 +112,16 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
     type:     OPT_PARAM_TYPES.INTEGER,
     min: 2030, max: 2045, step: 1,
     group:    'Real Properties',
+    enabled:  false,
+  },
+
+  // ── Drawdown order (decision lever) ───────────────────────────────────────
+  {
+    paramKey: 'drawdownStrategy',
+    label:    'Drawdown Strategy',
+    type:     OPT_PARAM_TYPES.ENUM,
+    values:   Object.keys(DRAWDOWN_STRATEGIES),
+    group:    'Spending',
     enabled:  false,
   },
 ];

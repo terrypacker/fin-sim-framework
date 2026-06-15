@@ -355,6 +355,9 @@ export const US_RETIREMENT = {
       cumulativeDeficit:    0,
       deficitMonths:        0,
       personBirthDate:      context.people[0]?.birthDate ?? null,
+      // Drawdown mode read by AccountService.replenishSavings. Ordered (default)
+      // honors drawdownPriority; PROPORTIONAL draws pro-rata across eligible buckets.
+      drawdownMode:         p.drawdownStrategy === 'PROPORTIONAL' ? 'PROPORTIONAL' : 'ORDERED',
     };
 
     // Account state entries + initial metrics snapshot so the chart shows
