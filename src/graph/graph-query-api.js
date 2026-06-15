@@ -24,17 +24,12 @@ import { EXECUTION_EDGE_TYPES } from '../simulation-framework/execution-graph.js
 
 export class GraphQueryApi extends QueryApi {
 
-  // Always rebuild — the graph mutates on every service operation and the
-  // dataset is small (tens of nodes), so caching indexes is not worth the
-  // complexity of invalidating them.
-  get rebuildIndexes() { return true; }
-  set rebuildIndexes(_) {}
-
   constructor(graph) {
     super(graph);
     this._graph = graph; //TODO This is also in the parent as _dataSource
-    this._kindIndex = new Map();
-    this._layerIndex = new Map();
+    this._kindIndex = new Map();  // kind  → Set<node>
+    this._layerIndex = new Map(); // layer → Set<node>
+    graph.setIndexObserver(this);
   }
 
   /**
@@ -56,12 +51,12 @@ export class GraphQueryApi extends QueryApi {
 
   getByKind(kind) {
     if(this.rebuildIndexes) this._buildIndexes();
-    return this._kindIndex.get(kind) || [];
+    return Array.from(this._kindIndex.get(kind) || []);
   }
 
   getByLayer(layer) {
     if(this.rebuildIndexes) this._buildIndexes();
-    return this._layerIndex.get(layer) || [];
+    return Array.from(this._layerIndex.get(layer) || []);
   }
 
   getOneByKind(kind, field, value) {
@@ -350,35 +345,92 @@ export class GraphQueryApi extends QueryApi {
   }
 
   // =========================================================
-  // Optimization
+  // Optimization — incremental index maintenance
   // =========================================================
 
   _buildIndexes() {
-    const all = this.getAll();
-
-    // Clear BEFORE populating
     this._kindIndex.clear();
     this._layerIndex.clear();
+    super._buildIndexes(); // calls _buildIndexesFrom → _addToIndexes (overridden below) for each item
+  }
 
-    for (const item of all) {
+  _addToIndexes(item) {
+    super._addToIndexes(item);
+    if (item.kind != null) {
+      const key = String(item.kind);
+      if (!this._kindIndex.has(key)) this._kindIndex.set(key, new Set());
+      this._kindIndex.get(key).add(item);
+    }
+    if (item.layer != null) {
+      const key = String(item.layer);
+      if (!this._layerIndex.has(key)) this._layerIndex.set(key, new Set());
+      this._layerIndex.get(key).add(item);
+    }
+  }
+
+  _removeFromIndexes(item) {
+    super._removeFromIndexes(item);
+    if (item.kind != null) {
+      const key = String(item.kind);
+      const set = this._kindIndex.get(key);
+      if (set) {
+        set.delete(item);
+        if (set.size === 0) this._kindIndex.delete(key);
+      }
+    }
+    if (item.layer != null) {
+      const key = String(item.layer);
+      const set = this._layerIndex.get(key);
+      if (set) {
+        set.delete(item);
+        if (set.size === 0) this._layerIndex.delete(key);
+      }
+    }
+  }
+
+  _updateIndexes(item, prev) {
+    super._updateIndexes(item, prev);
+    if (prev.kind !== item.kind) {
+      if (prev.kind != null) {
+        const key = String(prev.kind);
+        const set = this._kindIndex.get(key);
+        if (set) {
+          set.delete(prev);
+          if (set.size === 0) this._kindIndex.delete(key);
+        }
+      }
       if (item.kind != null) {
         const key = String(item.kind);
-        if (!this._kindIndex.has(key)) {
-          this._kindIndex.set(key, []);
-        }
-        this._kindIndex.get(key).push(item);
+        if (!this._kindIndex.has(key)) this._kindIndex.set(key, new Set());
+        this._kindIndex.get(key).add(item);
       }
-
+    }
+    if (prev.layer !== item.layer) {
+      if (prev.layer != null) {
+        const key = String(prev.layer);
+        const set = this._layerIndex.get(key);
+        if (set) {
+          set.delete(prev);
+          if (set.size === 0) this._layerIndex.delete(key);
+        }
+      }
       if (item.layer != null) {
         const key = String(item.layer);
-        if (!this._layerIndex.has(key)) {
-          this._layerIndex.set(key, []);
-        }
-        this._layerIndex.get(key).push(item);
+        if (!this._layerIndex.has(key)) this._layerIndex.set(key, new Set());
+        this._layerIndex.get(key).add(item);
       }
-
     }
-    super._buildIndexesFrom(all);
+  }
+
+  _validateIndexes() {
+    const rebuiltKind  = new Map();
+    const rebuiltLayer = new Map();
+    for (const item of this.getAll()) {
+      if (item.kind  != null) { const k = String(item.kind);  if (!rebuiltKind.has(k))  rebuiltKind.set(k,  new Set()); rebuiltKind.get(k).add(item);  }
+      if (item.layer != null) { const k = String(item.layer); if (!rebuiltLayer.has(k)) rebuiltLayer.set(k, new Set()); rebuiltLayer.get(k).add(item); }
+    }
+    for (const [key, set] of rebuiltKind)  { const actual = this._kindIndex.get(key);  if (!actual || actual.size !== set.size) console.warn('kindIndex mismatch',  key); }
+    for (const [key, set] of rebuiltLayer) { const actual = this._layerIndex.get(key); if (!actual || actual.size !== set.size) console.warn('layerIndex mismatch', key); }
   }
 
   _extractKind(node) {

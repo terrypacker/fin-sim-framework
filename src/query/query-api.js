@@ -143,7 +143,8 @@ export class QueryApi {
 
   getByName(name) {
     if(this.rebuildIndexes) this._buildIndexes();
-    return this._nameIndex.get(name) || null;
+    const set = this._nameIndex.get(name);
+    return set ? Array.from(set) : null;
   }
 
   getAll() {
@@ -557,25 +558,61 @@ export class QueryApi {
   _buildIndexes() {
     this._buildIndexesFrom(this.getAll());
   }
+
   _buildIndexesFrom(all) {
-    // Clear before rebuilding
     this._idIndex.clear();
     this._nameIndex.clear();
-
     for (const item of all) {
-      if (item.id != null) {
-        this._idIndex.set(String(item.id), item);
-      }
-
-      if (item.name != null) {
-        const key = String(item.name).toLowerCase();
-        if (!this._nameIndex.has(key)) {
-          this._nameIndex.set(key, []);
-        }
-        this._nameIndex.get(key).push(item);
-      }
+      this._addToIndexes(item);
     }
     this.rebuildIndexes = false;
+  }
+
+  _addToIndexes(item) {
+    if (item.id != null) {
+      this._idIndex.set(String(item.id), item);
+    }
+    if (item.name != null) {
+      const key = String(item.name).toLowerCase();
+      if (!this._nameIndex.has(key)) this._nameIndex.set(key, new Set());
+      this._nameIndex.get(key).add(item);
+    }
+  }
+
+  _removeFromIndexes(item) {
+    if (item.id != null) {
+      this._idIndex.delete(String(item.id));
+    }
+    if (item.name != null) {
+      const key = String(item.name).toLowerCase();
+      const set = this._nameIndex.get(key);
+      if (set) {
+        set.delete(item);
+        if (set.size === 0) this._nameIndex.delete(key);
+      }
+    }
+  }
+
+  _updateIndexes(item, prev) {
+    if (prev.id !== item.id) {
+      if (prev.id != null) this._idIndex.delete(String(prev.id));
+      if (item.id != null) this._idIndex.set(String(item.id), item);
+    }
+    if (prev.name !== item.name) {
+      if (prev.name != null) {
+        const key = String(prev.name).toLowerCase();
+        const set = this._nameIndex.get(key);
+        if (set) {
+          set.delete(prev);
+          if (set.size === 0) this._nameIndex.delete(key);
+        }
+      }
+      if (item.name != null) {
+        const key = String(item.name).toLowerCase();
+        if (!this._nameIndex.has(key)) this._nameIndex.set(key, new Set());
+        this._nameIndex.get(key).add(item);
+      }
+    }
   }
 
   _extractIndexCandidates(node) {
@@ -589,7 +626,8 @@ export class QueryApi {
 
     // name = X → exact match bucket
     if (node.op === 'eq' && node.field === 'name') {
-      return this._nameIndex.get(String(node.value).toLowerCase()) || [];
+      const set = this._nameIndex.get(String(node.value).toLowerCase());
+      return set ? Array.from(set) : [];
     }
 
     // AND → intersect candidates

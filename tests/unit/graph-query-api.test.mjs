@@ -238,3 +238,66 @@ describe('GraphQueryApi.diffExecution', () => {
     assert.ok(extra.includes('x1'), `expected x1 in extra, got ${extra}`);
   });
 });
+
+// ─── Incremental index maintenance via Graph observer ─────────────────────────
+
+describe('GraphQueryApi incremental indexes', () => {
+  test('addNode after first query is reflected without rebuild', () => {
+    const g = new Graph();
+    const q = new GraphQueryApi(g);
+    // warm indexes
+    assert.deepStrictEqual(q.getByKind('event'), []);
+    // add after warmup
+    g.addNode(configNode('ev2', 'event'));
+    assert.strictEqual(q.getByKind('event').length, 1);
+    assert.strictEqual(q.getByKind('event')[0].id, 'ev2');
+  });
+
+  test('removeNode is reflected in kind and layer indexes', () => {
+    const g = buildGraph();
+    const q = new GraphQueryApi(g);
+    // warm
+    assert.ok(q.getByKind('event').length > 0);
+    g.removeNode('ev1');
+    assert.ok(!q.getByKind('event').some(n => n.id === 'ev1'));
+    assert.ok(!q.getByLayer('config').some(n => n.id === 'ev1'));
+  });
+
+  test('updateNode kind change updates kindIndex', () => {
+    const g = new Graph();
+    const node = configNode('n1', 'handler');
+    g.addNode(node);
+    const q = new GraphQueryApi(g);
+    // warm
+    assert.strictEqual(q.getByKind('handler').length, 1);
+    assert.strictEqual(q.getByKind('event').length,   0);
+    // mutate via updateNode
+    const updated = { ...node, kind: 'event' };
+    g.updateNode('n1', updated);
+    assert.strictEqual(q.getByKind('handler').length, 0);
+    assert.strictEqual(q.getByKind('event').length,   1);
+  });
+
+  test('clearLayer removes all nodes from indexes', () => {
+    const g = buildGraph();
+    const q = new GraphQueryApi(g);
+    assert.ok(q.getByLayer('execution').length > 0);
+    g.clearLayer('execution');
+    assert.deepStrictEqual(q.getByLayer('execution'), []);
+  });
+
+  test('_validateIndexes raises no warnings on consistent state', () => {
+    const g = buildGraph();
+    const q = new GraphQueryApi(g);
+    // warm, then add + remove to exercise incremental path
+    q.getByKind('handler');
+    g.addNode(configNode('extra', 'reducer'));
+    g.removeNode('extra');
+    const warns = [];
+    const orig = console.warn;
+    console.warn = (...args) => warns.push(args);
+    q._validateIndexes();
+    console.warn = orig;
+    assert.strictEqual(warns.length, 0, `unexpected warnings: ${JSON.stringify(warns)}`);
+  });
+});
