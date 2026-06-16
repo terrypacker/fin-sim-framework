@@ -73,6 +73,7 @@ import { RemoveRegimeReducer } from './finance/economic-regimes/remove-regime-re
 import { RevalueAssetReducer } from './finance/economic-regimes/revalue-asset-reducer.js';
 import { SHOCK_LIBRARY, SHOCK_PRESET_OPTIONS } from './finance/economic-shocks/shock-library.js';
 import { CurrencyConverter } from './finance/fx/currency-converter.js';
+import { convertExpenseToAccount } from './finance/fx/expense-fx.js';
 import { CurrencyPair, FxEngine } from './finance/fx/fx-engine.js';
 import { FxRefreshReducer } from './finance/fx/fx-refresh-reducer.js';
 import { FxService } from './finance/fx/fx-service.js';
@@ -543,6 +544,7 @@ export const Finance = {
   SHOCK_LIBRARY,
   SHOCK_PRESET_OPTIONS,
   CurrencyConverter,
+  convertExpenseToAccount,
   CurrencyPair,
   FxEngine,
   FxRefreshReducer,

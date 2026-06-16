@@ -10,6 +10,7 @@
 
 import { HandlerEntry }                        from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction, RecordMetricAction } from '../../../simulation-framework/actions.js';
+import { convertExpenseToAccount }               from '../../fx/expense-fx.js';
 
 /**
  * HealthcareEventHandler — handles HEALTHCARE_EXPENSE one-off events.
@@ -20,27 +21,36 @@ import { RecordBalanceAction, RecordMetricAction } from '../../../simulation-fra
  *   2. Emits EXPENSE_DEBIT to debit from the residence-appropriate savings account.
  *   3. Emits HEALTHCARE_EXPENSE_APPLY for tracking in state.
  *
+ * The event amount is denominated in `expensesCurrency` (the household expense
+ * currency, USD by default) and converted into the target account's currency
+ * before debiting — so after the move a USD healthcare cost leaves the converted
+ * AUD magnitude from AU savings. The HEALTHCARE_EXPENSE_APPLY tracking total and
+ * the RECORD_METRIC value stay native for a consistent reporting series.
+ *
  * Event data: { amount, category, personId }
  *
  * @param {object} opts
  * @param {import('../../../finance/services/state-registry.js').StateRegistry} opts.stateRegistry
+ * @param {string} [opts.expensesCurrency='USD'] Native currency of the event amount
  * @param {string} opts.usRole       ACCOUNT_ROLES value for the USD cash pool
  * @param {string} [opts.usOwnerId]  Person id for US savings (null = any owner)
  * @param {string} opts.auRole       ACCOUNT_ROLES value for the AUD cash pool
  * @param {string} [opts.auOwnerId]  Person id for AU savings (null = any owner)
  */
 export class HealthcareEventHandler extends HandlerEntry {
-  static description = 'Handles HEALTHCARE_EXPENSE one-off events: debits the residence-appropriate savings account and emits HEALTHCARE_EXPENSE_APPLY for tracking.';
+  static description = 'Handles HEALTHCARE_EXPENSE one-off events: debits the residence-appropriate savings account (converting the native amount into the account currency) and emits HEALTHCARE_EXPENSE_APPLY for tracking.';
   static type        = 'HealthcareEventHandler';
   static eventType   = 'HEALTHCARE_EXPENSE';
 
   constructor({
     stateRegistry,
+    expensesCurrency = 'USD',
     usRole, usOwnerId = null,
     auRole, auOwnerId = null,
   } = {}) {
     super(null, 'Healthcare Expense');
     this.stateRegistry         = stateRegistry;
+    this.expensesCurrency      = expensesCurrency;
     this.usRole                = usRole;
     this.usOwnerId             = usOwnerId;
     this.auRole                = auRole;
@@ -65,12 +75,14 @@ export class HealthcareEventHandler extends HandlerEntry {
     const actions = [];
 
     if (account) {
-      const postDebitBal = account.balance - amount;
+      // Convert into the account currency so the withdrawal is the real-terms cost.
+      const debitAmount  = convertExpenseToAccount(amount, this.expensesCurrency, account, state);
+      const postDebitBal = account.balance - debitAmount;
       const deficit      = (account.minimumBalance ?? 0) - postDebitBal;
       if (deficit > 0) {
         actions.push({ type: 'REPLENISH_SAVINGS', deficit, targetKey });
       }
-      actions.push({ type: 'EXPENSE_DEBIT', amount, targetKey });
+      actions.push({ type: 'EXPENSE_DEBIT', amount: debitAmount, targetKey });
       actions.push(new RecordBalanceAction(`${targetKey}.balance`, targetKey));
     }
 

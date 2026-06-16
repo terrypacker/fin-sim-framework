@@ -626,10 +626,11 @@ export const US_RETIREMENT = {
 
     // Monthly Expenses
     const expensesHandler = new MonthlyExpensesHandler({
-      stateRegistry:   sr,
-      monthlyExpenses: p.monthlyExpenses,
-      usRole:          ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
-      auRole:          ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
+      stateRegistry:    sr,
+      monthlyExpenses:  p.monthlyExpenses,
+      expensesCurrency: p.monthlyExpensesCurrency ?? 'USD',
+      usRole:           ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
+      auRole:           ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
     });
     expensesHandler.handledEvents.push(context.schedulesById['MONTHLY_EXPENSES']);
     handlers.push(expensesHandler);
@@ -821,6 +822,7 @@ export const US_RETIREMENT = {
       if (hcEvents.length > 0) {
         const hcH = new HealthcareEventHandler({
           stateRegistry: sr,
+          expensesCurrency: p.monthlyExpensesCurrency ?? 'USD',
           usRole: ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
           auRole: ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
         });

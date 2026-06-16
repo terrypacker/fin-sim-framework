@@ -413,10 +413,11 @@ export const AU_RETIREMENT = {
     // Only register shared handlers if US_RETIREMENT did not already do so.
     if (!context._auSharedDelegated) {
       const expHandler = new MonthlyExpensesHandler({
-        stateRegistry:   sr,
-        monthlyExpenses: p.monthlyExpenses,
-        usRole:          ACCOUNT_ROLES.US_SAVINGS, usOwnerId: null,
-        auRole:          ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
+        stateRegistry:    sr,
+        monthlyExpenses:  p.monthlyExpenses,
+        expensesCurrency: p.monthlyExpensesCurrency ?? 'USD',
+        usRole:           ACCOUNT_ROLES.US_SAVINGS, usOwnerId: null,
+        auRole:           ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
       });
       expHandler.handledEvents.push(context.schedulesById['MONTHLY_EXPENSES']);
       handlers.push(expHandler);
@@ -501,6 +502,7 @@ export const AU_RETIREMENT = {
         if (hcEvents.length > 0) {
           const hcH = new HealthcareEventHandler({
             stateRegistry: sr,
+            expensesCurrency: p.monthlyExpensesCurrency ?? 'USD',
             usRole: ACCOUNT_ROLES.US_SAVINGS, usOwnerId: null,
             auRole: ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
           });
