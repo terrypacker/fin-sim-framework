@@ -232,6 +232,27 @@ export class ScenarioTabView {
     this._renderParamsList(scenario);
   }
 
+  /**
+   * Reveal a param: clear the filter, expand its group, re-render, then scroll
+   * the row into view and briefly highlight it. Backs an editor's 🔗 click-through
+   * (design/32).
+   */
+  revealParam(param, scenario) {
+    if (!param) return;
+    this._paramFilter = '';
+    const filterInput = document.getElementById('paramsFilter');
+    if (filterInput) filterInput.value = '';
+    if (param.group) this._expandedGroups.add(param.group);
+    this._renderParamsList(scenario);
+
+    const row = document.querySelector(`#paramsList .param-row[data-param-name="${CSS.escape(param.name)}"]`);
+    if (row) {
+      row.scrollIntoView({ block: 'center' });
+      row.classList.add('param-row--revealed');
+      setTimeout(() => row.classList.remove('param-row--revealed'), 1500);
+    }
+  }
+
   _renderParamsList(scenario) {
     const container = document.getElementById('paramsList');
     if (!container) return;
@@ -392,6 +413,7 @@ export class ScenarioTabView {
 
       const row = document.createElement('div');
       row.className = 'param-row';
+      row.dataset.paramName = param.name; // for revealParam() click-through (design/32)
       if (linkedFound === false) row.classList.add('param-row--unlinked');
 
       // ── node-field: label + value input ───────────────────────────────────

@@ -123,10 +123,16 @@ export const AU_RETIREMENT = {
         description: 'Annual dividend yield for AU stock accounts',
       },
       {
-        key: 'monthlyExpenses', label: 'Monthly Expenses (AUD)',
-        type: 'Number', group: 'AU Retirement', mc: true, opt: true,
+        // Shared key with US_RETIREMENT (merge dedupes by key). Kept identical in
+        // its Money metadata so the effective param is consistent regardless of
+        // toolset merge order (design/10 §Phase 5, design/32). Household-base,
+        // default USD; per-residency expense currency is a later phase.
+        key: 'monthlyExpenses', label: 'Monthly Expenses',
+        type: 'Money', group: 'Spending', mc: true, opt: true,
         defaultValue: 6_000,
-        description: 'Monthly household expenses drawn from AU savings',
+        defaultCurrency: 'USD',
+        currencyStateKeys: ['monthlyExpenses', 'expenses.essential', 'expenses.discretionary'],
+        description: 'Monthly household expenses drawn from savings',
       },
       {
         key: 'inflationRate', label: 'AU Inflation Rate',

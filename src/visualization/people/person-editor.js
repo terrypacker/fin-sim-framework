@@ -9,6 +9,7 @@
  */
 
 import { BaseComponent } from '../components/base-component.js';
+import { bindParamLinkedField } from '../scenario/param-linked-field.js';
 
 /** Default currency for a residency/citizenship code (e.g. 'US'→USD, 'AUS'/'AU'→AUD). */
 function _defaultCurrency(code) {
@@ -33,12 +34,17 @@ export class PersonEditor extends BaseComponent {
    *   onDelete:  function(string): void,
    * }}
    */
-  constructor({ parent, container, node, onSave, onDelete }) {
+  constructor({ parent, container, node, onSave, onDelete,
+                links = null, onParamChange = null, onOpenParam = null }) {
     super({ parent });
     this._container = container;
     this._node      = node;
     this.onSave     = onSave   ?? null;
     this.onDelete   = onDelete ?? null;
+    this._links     = links;          // ParamFieldLinks (design/32)
+    this.onParamChange = onParamChange ?? null;
+    this.onOpenParam   = onOpenParam   ?? null;
+    this._linkedFields = new Set();
   }
 
   render() {
@@ -85,13 +91,39 @@ export class PersonEditor extends BaseComponent {
       if (this.onDelete && this._node?.id) this.onDelete(this._node.id);
     });
 
+    this._bindParamLinks(el);
+
     this._container.replaceChildren(el);
     this._rootEl = el;
   }
 
+  /** Route param-backed person fields through their param (design/32). */
+  _bindParamLinks(el) {
+    this._linkedFields = new Set();
+    const id = this._node?.id;
+    if (!id || !this._links) return;
+
+    const candidates = [
+      { dataId: 'monthlyWage',    field: 'monthlyWage',    coerce: (raw) => Number(raw) || 0 },
+      { dataId: 'retirementDate', field: 'retirementDate', coerce: (raw) => raw },
+    ];
+    for (const { dataId, field, coerce } of candidates) {
+      const param = this._links.getParamFor('person', id, field);
+      if (!param) continue;
+      const input   = el.querySelector(`[data-id="${dataId}"]`);
+      const labelEl = input?.closest('.node-field')?.querySelector('label');
+      bindParamLinkedField({
+        input, labelEl, param, coerce,
+        onChange: () => this.onParamChange?.(),
+        onOpen:   (p) => this.onOpenParam?.(p),
+      });
+      this._linkedFields.add(field);
+    }
+  }
+
   _readForm(el) {
     const citizenSel = el.querySelector('[data-id="citizen"]');
-    return {
+    const data = {
       id:                    this._node?.id ?? null,
       name:                  el.querySelector('[data-id="name"]').value.trim(),
       birthDate:             el.querySelector('[data-id="birthDate"]').value,
@@ -103,6 +135,9 @@ export class PersonEditor extends BaseComponent {
       ssCurrency:            el.querySelector('[data-id="ssCurrency"]').value,
       wageCurrency:          el.querySelector('[data-id="wageCurrency"]').value,
     };
+    // Param-backed fields are owned by their scenario param (design/32).
+    for (const f of this._linkedFields) delete data[f];
+    return data;
   }
 
   destroy() {

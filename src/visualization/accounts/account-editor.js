@@ -9,6 +9,7 @@
  */
 
 import { BaseComponent } from '../components/base-component.js';
+import { bindParamLinkedField } from '../scenario/param-linked-field.js';
 
 const FIXED_COUNTRY    = new Set(['401k', 'roth', 'ira', 'super']);
 const INVESTMENT_TYPES = new Set(['brokerage', '401k', 'roth', 'ira', 'super']);
@@ -46,7 +47,8 @@ export class AccountEditor extends BaseComponent {
    *   onHistory: function(object): void,
    * }}
    */
-  constructor({ parent, container, node, people = [], onSave, onDelete, onHistory }) {
+  constructor({ parent, container, node, people = [], onSave, onDelete, onHistory,
+                links = null, onParamChange = null, onOpenParam = null }) {
     super({ parent });
     this._container = container;
     this._node      = node;
@@ -54,6 +56,10 @@ export class AccountEditor extends BaseComponent {
     this.onSave     = onSave    ?? null;
     this.onDelete   = onDelete  ?? null;
     this.onHistory  = onHistory ?? null;
+    this._links     = links;          // ParamFieldLinks — fields backed by a param (design/32)
+    this.onParamChange = onParamChange ?? null;
+    this.onOpenParam   = onOpenParam   ?? null;
+    this._linkedFields = new Set();   // domain fields routed through a param (excluded from save)
     this._holdings  = [];   // mutable working copy of the holdings array
     this._tbodyEl   = null; // cached tbody reference for refreshes
     this._rootEl    = null;
@@ -128,8 +134,41 @@ export class AccountEditor extends BaseComponent {
       if (this.onHistory) this.onHistory(this._node);
     });
 
+    this._bindParamLinks(el);
+
     this._container.replaceChildren(el);
     this._rootEl = el;
+  }
+
+  /**
+   * Route fields backed by a scenario param through that param (design/32):
+   * show the param value, write the param on change, badge + click-through, and
+   * record the field so _readForm omits it from the service payload. Only an
+   * existing account (with a stateKey) can match a node-linked param; a brand-new
+   * account never does. `balance` is only linked when it is a free scalar — when
+   * holdings drive the balance it is computed, so the param-link would mislead.
+   */
+  _bindParamLinks(el) {
+    this._linkedFields = new Set();
+    const stateKey = this._node?.stateKey;
+    if (!stateKey || !this._links) return;
+
+    const candidates = [{ dataId: 'minimumBalance', field: 'minimumBalance' }];
+    if (this._holdings.length === 0) candidates.push({ dataId: 'balance', field: 'balance' });
+
+    for (const { dataId, field } of candidates) {
+      const param = this._links.getParamFor('account', stateKey, field);
+      if (!param) continue;
+      const input   = el.querySelector(`[data-id="${dataId}"]`);
+      const labelEl = input?.closest('.node-field')?.querySelector('label');
+      bindParamLinkedField({
+        input, labelEl, param,
+        coerce:   (raw) => Number(raw) || 0,
+        onChange: () => this.onParamChange?.(),
+        onOpen:   (p) => this.onOpenParam?.(p),
+      });
+      this._linkedFields.add(field);
+    }
   }
 
   // ─── Holdings ───────────────────────────────────────────────────────────────
@@ -262,7 +301,7 @@ export class AccountEditor extends BaseComponent {
       ? holdings.reduce((s, h) => s + h.marketValue, 0)
       : (Number(el.querySelector('[data-id="balance"]').value) || 0);
 
-    return {
+    const data = {
       id:               this._node?.id ?? null,
       name:             el.querySelector('[data-id="name"]').value.trim(),
       type:             el.querySelector('[data-id="type"]').value,
@@ -277,6 +316,10 @@ export class AccountEditor extends BaseComponent {
       earningsBasis:    el.querySelector('[data-id="earningsBasis"]').value,
       holdings,
     };
+    // Param-backed fields are owned by their scenario param (design/32) — drop
+    // them so the service update doesn't write a competing value on the account.
+    for (const f of this._linkedFields) delete data[f];
+    return data;
   }
 
   // ─── Visibility ─────────────────────────────────────────────────────────────

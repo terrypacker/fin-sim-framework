@@ -380,8 +380,29 @@
 }
 .param-link-btn:hover { color: var(--accent); border-color: var(--accent); }
 
+/* 🔗 badge appended to a domain-editor field that is backed by a scenario
+   param (design/32) — click-throughs to that param in the Scenario panel. */
+.param-link-badge {
+  margin-left: 6px;
+  padding: 0 3px;
+  font-size: 10px;
+  line-height: 1;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0.8;
+}
+.param-link-badge:hover { opacity: 1; }
+
 /* Params whose declared node could not be resolved in the current scenario. */
 .param-row--unlinked label { color: var(--warning); }
+
+/* A param row freshly revealed via an editor's 🔗 click-through (design/32). */
+.param-row--revealed {
+  background: var(--bg-active, var(--bg-panel2));
+  outline: 1px solid var(--accent);
+  transition: background 0.4s ease, outline-color 0.4s ease;
+}
 
 /* Money param: numeric value + a compact currency selector inline. */
 .param-money { display: flex; gap: 4px; align-items: center; }

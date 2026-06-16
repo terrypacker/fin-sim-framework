@@ -244,6 +244,32 @@ export class ScenarioTabPresenter {
   }
 
   // ── Public ────────────────────────────────────────────────────────────────
+
+  /**
+   * The active scenario's live params array — the exact objects the params panel
+   * renders. Editors build a ParamFieldLinks from this and mutate these entries
+   * directly so a linked-field edit and the panel share one source (design/32).
+   * @returns {Array<object>}
+   */
+  getActiveParams() {
+    return this._activeScenario?.params ?? [];
+  }
+
+  /** Re-render the params list (e.g. after an editor wrote a linked param). */
+  refreshParams() {
+    if (this._activeScenario) this._view._renderParamsList(this._activeScenario);
+  }
+
+  /**
+   * Reveal a param in the panel: clear the filter, expand its group, and
+   * re-render so a click-through from an editor's 🔗 badge lands on it.
+   * @param {object} param
+   */
+  revealParam(param) {
+    if (!param || !this._activeScenario) return;
+    this._view.revealParam?.(param, this._activeScenario);
+  }
+
   //TODO These should go away, this information will be tracked on change elsewhere
   getSimStart() {
     const simStartString = document.getElementById('simStartInput')?.value; //this.getSimulationStartDate();
