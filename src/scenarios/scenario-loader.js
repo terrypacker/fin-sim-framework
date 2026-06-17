@@ -335,6 +335,7 @@ export class ScenarioLoader {
       if (s.description) entry.description = s.description;
       if (s.node)        entry.node        = s.node;
       if (s.options)     entry.options     = s.options;
+      if (s.visibleWhen) entry.visibleWhen = s.visibleWhen;
       if (s.hidden)      entry.hidden      = s.hidden;
       // Money param metadata (design 10 §Phase 5): seed the chosen currency from
       // cfg.parameters' sibling override or the schema default; carry the state
@@ -377,6 +378,10 @@ export class ScenarioLoader {
       // entries — not just backfill when absent. E.g. a new AGE_BANDED choice
       // added to spendingStrategy must surface on already-saved scenarios.
       if (s.options)                                         p.options     = s.options;
+      // visibleWhen is schema-owned UI metadata (conditional param visibility),
+      // so re-sync it too — adopt new conditions and clear ones the schema dropped.
+      if (s.visibleWhen)         p.visibleWhen = s.visibleWhen;
+      else if (p.visibleWhen)    delete p.visibleWhen;
       if (p.value       === undefined && s.defaultValue !== undefined) p.value = s.defaultValue;
       // Money metadata drift: a schema param that became Money (e.g. a config
       // saved when monthlyExpenses was a Number) upgrades in place. The value is

@@ -577,3 +577,93 @@ test('_renderParamsList: AgeBandList remove button uses the centered age-band-re
   // It must NOT carry btn-sm (whose padding overflows the narrow grid column).
   assert.ok(!rm.classList.contains('btn-sm'), 'band remove button should not use btn-sm padding');
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// visibleWhen — conditional param visibility (spending/behavioral strategies)
+// ═════════════════════════════════════════════════════════════════════════════
+
+function rowLabels() {
+  return [...document.querySelectorAll('#paramsList .param-row .node-field > label')]
+    .map(l => l.textContent);
+}
+
+test('_renderParamsList: visibleWhen hides a row when its controller does not include the value', () => {
+  const view = new ScenarioTabView();
+  view._expandedGroups.add('Spending'); // expand so rows render
+  const scenario = { params: [
+    { name: 'spendingStrategy', label: 'Spending Strategy', type: 'EnumMulti', group: 'Spending',
+      options: ['FIXED', 'AGE_BANDED'], value: ['FIXED'] },
+    { name: 'spendingAgeBands', label: 'Spending Age Bands', type: 'AgeBandList', group: 'Spending',
+      value: [], visibleWhen: { param: 'spendingStrategy', includes: 'AGE_BANDED' } },
+  ] };
+  view._renderParamsList(scenario);
+  assert.ok(!rowLabels().includes('Spending Age Bands'), 'band table hidden when AGE_BANDED not selected');
+});
+
+test('_renderParamsList: visibleWhen shows the row when its controller includes the value', () => {
+  const view = new ScenarioTabView();
+  view._expandedGroups.add('Spending');
+  const scenario = { params: [
+    { name: 'spendingStrategy', label: 'Spending Strategy', type: 'EnumMulti', group: 'Spending',
+      options: ['FIXED', 'AGE_BANDED'], value: ['FIXED', 'AGE_BANDED'] },
+    { name: 'spendingAgeBands', label: 'Spending Age Bands', type: 'AgeBandList', group: 'Spending',
+      value: [], visibleWhen: { param: 'spendingStrategy', includes: 'AGE_BANDED' } },
+  ] };
+  view._renderParamsList(scenario);
+  assert.ok(rowLabels().includes('Spending Age Bands'), 'band table shown when AGE_BANDED selected');
+});
+
+test('_renderParamsList: toggling the controller checkbox reveals dependents live', () => {
+  const view = new ScenarioTabView();
+  view._expandedGroups.add('Spending');
+  const scenario = { params: [
+    { name: 'spendingStrategy', label: 'Spending Strategy', type: 'EnumMulti', group: 'Spending',
+      options: ['FIXED', 'AGE_BANDED'], value: ['FIXED'] },
+    { name: 'spendingAgeBands', label: 'Spending Age Bands', type: 'AgeBandList', group: 'Spending',
+      value: [], visibleWhen: { param: 'spendingStrategy', includes: 'AGE_BANDED' } },
+  ] };
+  view._renderParamsList(scenario);
+  assert.ok(!rowLabels().includes('Spending Age Bands'), 'precondition: hidden');
+
+  // Tick the AGE_BANDED checkbox in the EnumMulti editor.
+  const ageBox = [...document.querySelectorAll('#paramsList .enum-multi-option input[type="checkbox"]')]
+    .find(cb => cb.value === 'AGE_BANDED');
+  assert.ok(ageBox, 'AGE_BANDED checkbox should render');
+  ageBox.checked = true;
+  ageBox.dispatchEvent(new Event('change'));
+
+  assert.deepStrictEqual(scenario.params[0].value, ['FIXED', 'AGE_BANDED']);
+  assert.ok(rowLabels().includes('Spending Age Bands'), 'dependent appears after toggling controller');
+});
+
+test('_renderParamsList: a group with only hidden params renders no group header', () => {
+  const view = new ScenarioTabView();
+  // Only a hidden-by-condition param in its own group → header should not appear.
+  const scenario = { params: [
+    { name: 'behavioralStrategies', label: 'Behavioral Strategies', type: 'EnumMulti', group: 'Behavioral',
+      options: ['PANIC_SELL'], value: [] },
+    { name: 'panicFraction', label: 'Panic Sell Fraction', type: 'Number', group: 'PanicCfg',
+      value: 0.3, visibleWhen: { param: 'behavioralStrategies', includes: 'PANIC_SELL' } },
+  ] };
+  view._renderParamsList(scenario);
+  const headers = [...document.querySelectorAll('#paramsList .param-group-header')].map(h => h.textContent);
+  assert.ok(!headers.some(h => h.includes('PanicCfg')), 'group with only hidden params should have no header');
+});
+
+test('_renderParamsList: equals condition matches a boolean controller', () => {
+  const view = new ScenarioTabView();
+  view._expandedGroups.add('G');
+  const scenario = { params: [
+    { name: 'advanced', label: 'Advanced', type: 'Boolean', group: 'G', value: false },
+    { name: 'knob', label: 'Knob', type: 'Number', group: 'G', value: 1,
+      visibleWhen: { param: 'advanced', equals: true } },
+  ] };
+  view._renderParamsList(scenario);
+  assert.ok(!rowLabels().includes('Knob'), 'hidden when boolean controller is false');
+
+  const boolSel = [...document.querySelectorAll('#paramsList .param-row select')]
+    .find(s => [...s.options].some(o => o.value === 'true'));
+  boolSel.value = 'true';
+  boolSel.dispatchEvent(new Event('change'));
+  assert.ok(rowLabels().includes('Knob'), 'shown after boolean controller flips true');
+});
