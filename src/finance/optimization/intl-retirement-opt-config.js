@@ -9,8 +9,17 @@
  */
 
 import { OPT_PARAM_TYPES }            from './optimization-objectives.js';
-import { INTL_RETIREMENT_DEFAULTS, DRAWDOWN_STRATEGIES } from '../../scenarios/intl-retirement-scenario.js';
+import { INTL_RETIREMENT_DEFAULTS, DRAWDOWN_STRATEGIES, IntlRetirementScenario } from '../../scenarios/intl-retirement-scenario.js';
 import { SHOCK_LIBRARY }              from '../economic-shocks/shock-library.js';
+import { indexParamSchema, resolveSweepVariables } from '../param-schema-utils.js';
+
+// Lazily index the full param schema by key so Opt variables can inherit identity
+// (label / options / visibleWhen) from it rather than duplicating it here.
+let _schemaByKey = null;
+function schemaByKey() {
+  if (!_schemaByKey) _schemaByKey = indexParamSchema(IntlRetirementScenario.buildFullParamSchema());
+  return _schemaByKey;
+}
 
 const D = INTL_RETIREMENT_DEFAULTS;
 
@@ -30,6 +39,12 @@ const US_MFJ_BRACKET_RATES = [0.10, 0.12, 0.22, 0.24, 0.32, 0.35];
  *   ENUM       — { values: [...] }
  *   INTEGER    — { min, max, step }
  *   CONTINUOUS — { min, max, step }   (discretised for grid search)
+ *
+ * Identity is the param schema's job: `visibleWhen` is always inherited from the
+ * schema by paramKey (buildOptVariables → resolveSweepVariables), and `label` is
+ * inherited when omitted here. A new entry needs only `paramKey` + sweep
+ * metadata (type/range/group/enabled); add `label` only to override the schema's
+ * or for orphan keys that have no schema entry.
  */
 export const DEFAULT_OPTIMIZATION_CONFIGS = [
 
@@ -271,8 +286,12 @@ function buildShockOptConfigs(params) {
  * preventing stale rows for scenarios without ECONOMIC_REGIMES.
  */
 export function buildOptVariables(params) {
-  return [
+  const list = [
     ...DEFAULT_OPTIMIZATION_CONFIGS,
     ...buildShockOptConfigs(params),
   ];
+  // Inherit identity (label / options / visibleWhen) from the param schema and
+  // drop variables hidden by an unsatisfied visibleWhen (e.g. a strategy knob
+  // whose strategy isn't selected). Identity is maintained once, in the schema.
+  return resolveSweepVariables(list, schemaByKey(), params);
 }

@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { isParamVisible } from '../../finance/param-schema-utils.js';
+
 export class ScenarioTabView {
   constructor() {
 
@@ -307,23 +309,13 @@ export class ScenarioTabView {
   }
 
   /**
-   * Evaluate a param's `visibleWhen` condition against the current param values.
-   * Returns true when there is no condition or the condition is satisfied.
-   *
-   * Condition shapes (extensible):
-   *   { param, includes: <value> } — controller value (an array) contains <value>
-   *   { param, equals:   <value> } — controller value strictly equals <value>
-   *
-   * @param {object} param         the param being tested
+   * Evaluate a param's `visibleWhen` condition against the current param values
+   * (shared evaluator — same DSL as the MC/Opt variable lists).
+   * @param {object} param  the param being tested
    * @param {Map<string,*>} valueByName  name → current value for every param
    */
   _paramVisible(param, valueByName) {
-    const cond = param.visibleWhen;
-    if (!cond || !cond.param) return true;
-    const v = valueByName.get(cond.param);
-    if ('includes' in cond) return Array.isArray(v) && v.includes(cond.includes);
-    if ('equals'   in cond) return v === cond.equals;
-    return true;
+    return isParamVisible(param, (name) => valueByName.get(name));
   }
 
   /**

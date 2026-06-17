@@ -254,3 +254,22 @@ test('DEFAULT_MC_VARIABLE_CONFIGS: enabled entries use Normal or LogNormal distr
     assert.ok(valid.has(t), `enabled config should use Normal or LogNormal, got ${t}`);
   }
 });
+
+// ── Alias cleanup: the renamed dividend variable now actually perturbs the sim ─
+
+test('IntlRetirementMcRunner: brokerageDividendRate perturbation reaches the sim (dead alias fixed)', async () => {
+  // Enable only the US stock dividend at a wide stdDev; everything else off. The
+  // toolset reads `brokerageDividendRate`, so the sampled value now affects net
+  // worth across runs. Under the old `stockDividendRate` key this was a no-op.
+  const configs = DEFAULT_MC_VARIABLE_CONFIGS.map(c => ({
+    ...c,
+    enabled: c.paramKey === 'brokerageDividendRate',
+    stdDev:  c.paramKey === 'brokerageDividendRate' ? 0.05 : c.stdDev,
+  }));
+  const mcConfig = IntlRetirementMcConfig.fromVariableConfigs(configs);
+  const { runs }  = await makeRunner({ n: 8, mcConfig }).run();
+
+  const worths  = runs.map(r => r.finalNetWorthUsd);
+  const allSame = worths.every(w => w === worths[0]);
+  assert.ok(!allSame, 'brokerageDividendRate must now affect finalNetWorth across runs');
+});

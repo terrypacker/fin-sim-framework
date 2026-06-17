@@ -26,7 +26,7 @@ const FLAT_PARAMS = {
   iraGrowthRate:         D.iraGrowthRate,
   k401GrowthRate:        D.k401GrowthRate,
   usStockGrowthRate:     D.usStockGrowthRate,
-  stockDividendRate:     D.stockDividendRate,
+  brokerageDividendRate: D.stockDividendRate,
   auStockGrowthRate:     D.auStockGrowthRate,
   auStockDividendRate:   D.auStockDividendRate,
   spouseRothGrowthRate:  D.spouseRothGrowthRate,
@@ -36,7 +36,7 @@ const FLAT_PARAMS = {
   usSavingsInterestRate: D.usSavingsInterestRate,
   fixedIncomeInterestRate: D.fixedIncomeInterestRate,
   auSavingsInterestRate: D.auSavingsInterestRate,
-  usInflationRate:       D.usInflationRate,
+  inflationRate:         D.usInflationRate,
   auInflationRate:       D.auInflationRate,
   exchangeRateUsdToAud:  D.exchangeRateUsdToAud,
   intlTransferFeeUsd:    D.intlTransferFeeUsd,
@@ -228,4 +228,33 @@ test('fromVariableConfigs: non-shock overrides are applied correctly', () => {
   assert.ok(roth, 'rothGrowthRate not found');
   assert.strictEqual(roth.enabled, false);
   assert.strictEqual(roth.mean, 0.05);
+});
+
+// ── Alias cleanup: dividend + inflation now key on the toolset params ─────────
+
+test('DEFAULT_MC_VARIABLE_CONFIGS: dividend/inflation use toolset keys (dead aliases fixed)', () => {
+  const keys = DEFAULT_MC_VARIABLE_CONFIGS.map(c => c.paramKey);
+  // Renamed to the keys the compiler actually reads (verified to take effect):
+  assert.ok(keys.includes('brokerageDividendRate'), 'brokerageDividendRate present');
+  assert.ok(keys.includes('inflationRate'),         'inflationRate present');
+  assert.ok(!keys.includes('stockDividendRate'),    'stockDividendRate alias removed');
+  assert.ok(!keys.includes('usInflationRate'),      'usInflationRate alias removed');
+  // usStockGrowthRate is intentionally retained: its no-op cause is the regime
+  // growth substrate (EQUITY_US ← rothGrowthRate), not the key name.
+  assert.ok(keys.includes('usStockGrowthRate'),     'usStockGrowthRate retained (regime no-op, documented)');
+});
+
+test('fromVariableConfigs: migrates legacy dividend/inflation alias keys from saved configs', () => {
+  const saved = [
+    { paramKey: 'stockDividendRate', enabled: true, mean: 0.03, stdDev: 0.01 },
+    { paramKey: 'usInflationRate',   enabled: true, mean: 0.04, stdDev: 0.01 },
+  ];
+  const cfg  = IntlRetirementMcConfig.fromVariableConfigs(saved);
+  const vars = cfg.buildVariables({ ...FLAT_PARAMS, shocks: [] });
+
+  const div  = vars.find(v => v.paramKey === 'brokerageDividendRate');
+  const infl = vars.find(v => v.paramKey === 'inflationRate');
+  assert.ok(div?.enabled, 'saved stockDividendRate setting migrated to brokerageDividendRate');
+  assert.ok(Math.abs(div.stdDev - 0.01) < 1e-9, 'migrated stdDev preserved');
+  assert.ok(infl?.enabled, 'saved usInflationRate setting migrated to inflationRate');
 });
