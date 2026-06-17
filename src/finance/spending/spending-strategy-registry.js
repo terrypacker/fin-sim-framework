@@ -13,6 +13,45 @@ import { GuardrailBaselineApplyReducer }   from './strategies/guardrail-baseline
 import { GuardrailAdjustApplyReducer }     from './strategies/guardrail-adjust-apply-reducer.js';
 import { GuardrailAnnualCheckReducer }     from './strategies/guardrail-annual-check-reducer.js';
 import { HealthcareExpenseApplyReducer }   from './strategies/healthcare-expense-apply-reducer.js';
+import { AgeBandedSpendingReducer, DEFAULT_AGE_BANDS } from './strategies/age-banded-spending-reducer.js';
+
+/**
+ * Whole years of age as of asOfDate (matches the RMD handlers' _getAge).
+ * Used to anchor the convenience `ageBandDeclineRate` knob to the primary
+ * person's retirement age (design/33 §10 Q4).
+ */
+function _ageAt(birthDate, asOfDate) {
+  const b = new Date(birthDate);
+  const d = new Date(asOfDate);
+  const years = d.getUTCFullYear() - b.getUTCFullYear();
+  const hadBirthday =
+    d.getUTCMonth() > b.getUTCMonth() ||
+    (d.getUTCMonth() === b.getUTCMonth() && d.getUTCDate() >= b.getUTCDate());
+  return hadBirthday ? years : years - 1;
+}
+
+/**
+ * Build the band table for the AGE_BANDED strategy. When the convenience
+ * `ageBandDeclineRate` scalar is set, synthesize a one-band table anchored at
+ * the primary person's retirement age (Blanchett's smooth glide from one
+ * number — MC/opt-able without design 25a). Otherwise use the full
+ * `spendingAgeBands` array (default DEFAULT_AGE_BANDS).
+ */
+function _ageBands(context) {
+  const p = context.parameters;
+  if (p.ageBandDeclineRate != null) {
+    const primary = context.people?.[0];
+    let anchor = 65;
+    if (primary?.birthDate && primary?.retirementDate) {
+      anchor = _ageAt(primary.birthDate, primary.retirementDate);
+    }
+    return [
+      { startAge: 0,      multiplier: 1.0, annualRealDrift: 0 },
+      { startAge: anchor, multiplier: 1.0, annualRealDrift: p.ageBandDeclineRate },
+    ];
+  }
+  return p.spendingAgeBands ?? DEFAULT_AGE_BANDS;
+}
 
 /**
  * Registry of pluggable spending strategies (design/26).
@@ -107,6 +146,36 @@ export const SPENDING_STRATEGY_REGISTRY = {
         type: 'Array', group: 'Spending', mc: false, opt: true,
         defaultValue: [],
         description: 'List of one-off healthcare events: [{ date, amount, category, personId }]',
+      },
+    ],
+  },
+
+  AGE_BANDED: {
+    reducers: (context) => [
+      new AgeBandedSpendingReducer({
+        bands: _ageBands(context),
+        slice: context.parameters.ageBandSpendingSlice ?? 'discretionary',
+      }),
+    ],
+    paramSchema: () => [
+      {
+        key: 'spendingAgeBands', label: 'Spending Age Bands',
+        type: 'AgeBandList', group: 'Spending', mc: false, opt: true,
+        defaultValue: DEFAULT_AGE_BANDS,
+        description: 'Age-band table for the retirement spending smile: each band is { startAge, multiplier, annualRealDrift }; multiplier is the relative step entering the band, annualRealDrift the within-band real glide',
+      },
+      {
+        key: 'ageBandSpendingSlice', label: 'Age-Band Spending Slice',
+        type: 'Enum', group: 'Spending', mc: false, opt: true,
+        options: ['discretionary', 'both'],
+        defaultValue: 'discretionary',
+        description: "Which expense slice the age factor bends: 'discretionary' (default) or 'both'",
+      },
+      {
+        key: 'ageBandDeclineRate', label: 'Age-Band Decline Rate',
+        type: 'Number', group: 'Spending', mc: true, opt: true,
+        defaultValue: null,
+        description: 'Convenience: a single real %/yr decline anchored at the primary person\'s retirement age. When set, overrides Spending Age Bands with a synthesized one-band glide (e.g. -0.01 = Blanchett\'s ~1%/yr smile)',
       },
     ],
   },

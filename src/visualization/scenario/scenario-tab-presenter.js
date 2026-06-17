@@ -116,6 +116,18 @@ export class ScenarioTabPresenter {
 
     this._view.onResetDefaults = () => {
       if (!this._activeScenario) return;
+      // Reset is destructive — it replaces the whole config (persons, accounts,
+      // and every parameter) with the prebuilt defaults and discards edits.
+      // Confirm first so it can't wipe a customized scenario by accident.
+      const name = this._activeScenario.name ?? 'this scenario';
+      const ok = (typeof window === 'undefined' || typeof window.confirm !== 'function')
+        ? true
+        : window.confirm(
+            `Reset "${name}" to prebuilt defaults?\n\n` +
+            `This discards ALL customizations — parameters, persons, and accounts — ` +
+            `and cannot be undone. Export to JSON first if you want to keep them.`
+          );
+      if (!ok) return;
       this._controller.resetToDefaults(this._activeScenario);
       this._view._populateScenarioForm(this._activeScenario);
       this._initScenario();

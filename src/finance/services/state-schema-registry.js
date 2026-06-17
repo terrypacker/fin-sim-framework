@@ -196,6 +196,7 @@ export class StateSchemaRegistry {
     this.register('monthlyExpenses',             ParameterValueType.currency('USD'));
     this.register('expenses.essential',          ParameterValueType.currency('USD'));
     this.register('expenses.discretionary',      ParameterValueType.currency('USD'));
+    this.register('ageBandSpending.appliedFactor', ParameterValueType.decimal(4));
 
     // US YTD
     this.register('usOrdinaryIncomeYTD',         ParameterValueType.currency('USD'));

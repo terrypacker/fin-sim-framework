@@ -155,13 +155,14 @@ export const AU_RETIREMENT = {
       {
         key: 'spendingStrategy', label: 'Spending Strategy',
         type: 'EnumMulti', group: 'Spending', mc: false, opt: true,
-        options: ['FIXED', 'REGIME_AWARE', 'GUARDRAIL', 'HEALTHCARE'],
+        options: ['FIXED', 'REGIME_AWARE', 'GUARDRAIL', 'HEALTHCARE', 'AGE_BANDED'],
         defaultValue: ['FIXED'],
-        description: 'Active spending strategies; FIXED = inflation-adjusted scalar (default), REGIME_AWARE = cut discretionary under economic-stress regimes, GUARDRAIL = Guyton-Klinger withdrawal-rate bands, HEALTHCARE = one-off healthcare expense events',
+        description: 'Active spending strategies; FIXED = inflation-adjusted scalar (default), REGIME_AWARE = cut discretionary under economic-stress regimes, GUARDRAIL = Guyton-Klinger withdrawal-rate bands, HEALTHCARE = one-off healthcare expense events, AGE_BANDED = age-driven real spending smile (go-go/slow-go/no-go)',
       },
       ...SPENDING_STRATEGY_REGISTRY.REGIME_AWARE.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.GUARDRAIL.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.HEALTHCARE.paramSchema(),
+      ...SPENDING_STRATEGY_REGISTRY.AGE_BANDED.paramSchema(),
       {
         key: 'mortalityEnabled', label: 'Mortality Enabled',
         type: 'Boolean', group: 'Mortality', mc: false, opt: true,

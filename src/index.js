@@ -140,9 +140,11 @@ import { PersonService } from './finance/services/person-service.js';
 import { RealPropertyService } from './finance/services/real-property-service.js';
 import { StateRegistry } from './finance/services/state-registry.js';
 import { ParameterValueType, StateSchemaRegistry } from './finance/services/state-schema-registry.js';
+import { ageBandStartAge, ageSpendingFactor } from './finance/spending/age-spending-factor.js';
 import { computeGuardrailPortfolioValue } from './finance/spending/guardrail-portfolio-value.js';
 import { SpendingStrategyApplyReducer } from './finance/spending/spending-strategy-apply-reducer.js';
 import { SPENDING_STRATEGY_REGISTRY } from './finance/spending/spending-strategy-registry.js';
+import { DEFAULT_AGE_BANDS, AgeBandedSpendingReducer } from './finance/spending/strategies/age-banded-spending-reducer.js';
 import { GuardrailAdjustApplyReducer } from './finance/spending/strategies/guardrail-adjust-apply-reducer.js';
 import { GuardrailAnnualCheckReducer } from './finance/spending/strategies/guardrail-annual-check-reducer.js';
 import { GuardrailBaselineApplyReducer } from './finance/spending/strategies/guardrail-baseline-apply-reducer.js';
@@ -669,9 +671,13 @@ export const Finance = {
   StateRegistry,
   ParameterValueType,
   StateSchemaRegistry,
+  ageBandStartAge,
+  ageSpendingFactor,
   computeGuardrailPortfolioValue,
   SpendingStrategyApplyReducer,
   SPENDING_STRATEGY_REGISTRY,
+  DEFAULT_AGE_BANDS,
+  AgeBandedSpendingReducer,
   GuardrailAdjustApplyReducer,
   GuardrailAnnualCheckReducer,
   GuardrailBaselineApplyReducer,
