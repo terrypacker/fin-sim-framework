@@ -24,6 +24,7 @@ import assert   from 'node:assert/strict';
 import { RegimeAwareSpendingReducer }    from '../../src/finance/spending/strategies/regime-aware-spending-reducer.js';
 import { GuardrailAdjustApplyReducer }   from '../../src/finance/spending/strategies/guardrail-adjust-apply-reducer.js';
 import { GuardrailAnnualCheckReducer }   from '../../src/finance/spending/strategies/guardrail-annual-check-reducer.js';
+import { AgeBandedSpendingReducer }      from '../../src/finance/spending/strategies/age-banded-spending-reducer.js';
 import { REGIME_TAG }                   from '../../src/finance/economic-regimes/regime-tag.js';
 
 const US_ADV = { type: 'US_PERIOD_ADVANCE' };
@@ -102,6 +103,31 @@ test('COMP-3: Guardrail raise does not affect RegimeAware cut tracking', () => {
 
   // RegimeAware tracking should still be active (regime is still on)
   assert.strictEqual(s.regimeActions.spending_discretionary_cut?.active, true);
+});
+
+test('COMP-5: AgeBanded and RegimeAware both adjust discretionary multiplicatively (neither clobbers)', () => {
+  // 20%/yr age decline band for clean math; primary born 1950, advance at age 66 → 0.80.
+  const ageReducer = new AgeBandedSpendingReducer({
+    bands: [
+      { startAge: 0,  multiplier: 1.0, annualRealDrift:  0.0  },
+      { startAge: 65, multiplier: 1.0, annualRealDrift: -0.20 },
+    ],
+  });
+  const ageAdv = { type: 'US_PERIOD_ADVANCE', date: new Date(Date.UTC(2016, 0, 2)) }; // age 66
+
+  let s = fullState({ activeRegimes: [stressRegime()] });
+  s = { ...s, people: { primary: { residency: 'US', birthDate: new Date(Date.UTC(1950, 0, 1)) } },
+        ageBandSpending: { appliedFactor: 1.0, currentBandStartAge: null } };
+
+  // RegimeAware cut (20%) then age-band factor (0.80) — both fold into discretionary.
+  s = raReducer.reduce(s, US_ADV);   // 3_000 → 2_400
+  s = ageReducer.reduce(s, ageAdv);  // 2_400 × 0.80 = 1_920
+
+  assert.ok(Math.abs(s.expenses.discretionary - 3_000 * 0.80 * 0.80) < 1e-3);
+  assert.ok(Math.abs(s.expenses.essential - 7_000) < 1e-3, 'essential unchanged');
+  // Each strategy keeps its own reconciled factor.
+  assert.strictEqual(s.regimeActions.spending_discretionary_cut.active, true);
+  assert.ok(Math.abs(s.ageBandSpending.appliedFactor - 0.80) < 1e-9);
 });
 
 test('COMP-4: Guardrail check fires after inflation (both strategies see inflated base)', () => {

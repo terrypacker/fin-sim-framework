@@ -477,6 +477,8 @@ export class ScenarioTabView {
         valueInput.addEventListener('change', () => { param.value = valueInput.value; });
       } else if (param.type === 'ShockList') {
         valueInput = _buildShockListEditor(param);
+      } else if (param.type === 'AgeBandList') {
+        valueInput = _buildAgeBandListEditor(param);
       } else if (param.type === 'Enum') {
         valueInput = document.createElement('select');
         (param.options ?? []).forEach(opt => {
@@ -530,35 +532,40 @@ export class ScenarioTabView {
       field.appendChild(valueInput);
       row.appendChild(field);
 
-      // ── Type select ───────────────────────────────────────────────────────
-      const typeSelect = document.createElement('select');
-      ['Number', 'String', 'Boolean', 'Date', 'Money'].forEach(t => {
-        const opt = document.createElement('option');
-        opt.value = t; opt.textContent = t;
-        typeSelect.appendChild(opt);
-      });
-      typeSelect.value = param.type ?? 'Number';
-      // Schema-defined params carry a label; prevent type changes on them to
-      // avoid corrupting numeric year/boolean fields with incompatible types.
-      if (param.label) {
-        typeSelect.disabled = true;
-      } else {
+      // ── Type select (custom params only) ──────────────────────────────────
+      // Schema-defined params (those carrying a label) have a fixed, non-editable
+      // type, so the type-select is always disabled for them — it just crowds the
+      // value field into a narrow first column. Show it only for custom,
+      // user-added params, where changing the type is meaningful.
+      if (!param.label) {
+        const typeSelect = document.createElement('select');
+        ['Number', 'String', 'Boolean', 'Date', 'Money'].forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t; opt.textContent = t;
+          typeSelect.appendChild(opt);
+        });
+        typeSelect.value = param.type ?? 'Number';
         typeSelect.addEventListener('change', () => {
           param.type = typeSelect.value;
           this._renderParamsList(scenario);
         });
+        row.appendChild(typeSelect);
       }
-      row.appendChild(typeSelect);
 
-      // ── Delete button ─────────────────────────────────────────────────────
-      const delBtn = document.createElement('button');
-      delBtn.className   = 'btn btn-warn btn-sm';
-      delBtn.textContent = '✕';
-      delBtn.addEventListener('click', () => {
-        scenario.params.splice(i, 1);
-        this._renderParamsList(scenario);
-      });
-      row.appendChild(delBtn);
+      // ── Delete button (custom params only) ────────────────────────────────
+      // Predefined (labeled) params are owned by the schema and regenerate on
+      // Rebuild, so deleting them is meaningless — only custom, user-added params
+      // get a delete button. This also lets the value field span the full row.
+      if (!param.label) {
+        const delBtn = document.createElement('button');
+        delBtn.className   = 'btn btn-warn btn-sm';
+        delBtn.textContent = '✕';
+        delBtn.addEventListener('click', () => {
+          scenario.params.splice(i, 1);
+          this._renderParamsList(scenario);
+        });
+        row.appendChild(delBtn);
+      }
 
       return row;
   }
@@ -707,6 +714,103 @@ function _buildShockListEditor(param) {
     addBtn.addEventListener('click', () => {
       if (!Array.isArray(param.value)) param.value = [];
       param.value.push({ preset: 'none', startDate: '' });
+      render();
+    });
+    container.appendChild(addBtn);
+  };
+
+  render();
+  return container;
+}
+
+// ─── AgeBandList editor ───────────────────────────────────────────────────────
+
+/**
+ * Build a self-contained DOM editor for an AgeBandList parameter (design/33).
+ *
+ * Each entry in `param.value` is a band `{ startAge, multiplier, annualRealDrift }`
+ * rendered as a row of three number inputs plus a remove button. An "Add Band"
+ * button appends a blank band. Bands are kept sorted by `startAge` on every edit
+ * so the runtime factor function (which assumes ascending order) stays correct.
+ *
+ * The incoming value is deep-cloned up front so we never mutate the shared
+ * DEFAULT_AGE_BANDS constant referenced by the schema default.
+ *
+ * @param {object} param  The param descriptor ({ value, ... })
+ * @returns {HTMLElement}
+ */
+function _buildAgeBandListEditor(param) {
+  // Clone so in-place edits don't corrupt the module-level default table.
+  param.value = (Array.isArray(param.value) ? param.value : []).map(b => ({ ...b }));
+
+  const container = document.createElement('div');
+  container.className = 'age-band-list-editor';
+
+  const COLUMNS = [
+    { field: 'startAge',        label: 'Start Age', step: '1'    },
+    { field: 'multiplier',      label: 'Multiplier', step: '0.01' },
+    { field: 'annualRealDrift', label: 'Drift/yr',  step: '0.001' },
+  ];
+
+  const render = () => {
+    container.innerHTML = '';
+    const bands = param.value;
+
+    // Column header
+    const header = document.createElement('div');
+    header.className = 'age-band-row age-band-header';
+    COLUMNS.forEach(({ label }) => {
+      const h = document.createElement('span');
+      h.className = 'age-band-col-label';
+      h.textContent = label;
+      header.appendChild(h);
+    });
+    header.appendChild(document.createElement('span')); // spacer over remove button
+    container.appendChild(header);
+
+    bands.forEach((band, idx) => {
+      const row = document.createElement('div');
+      row.className = 'age-band-row';
+
+      COLUMNS.forEach(({ field, step }) => {
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.step = step;
+        input.className = 'age-band-input';
+        input.value = band[field] ?? '';
+        input.addEventListener('change', () => {
+          const raw = input.value;
+          band[field] = raw.trim() === '' ? 0 : parseFloat(raw);
+          if (field === 'startAge') {
+            // Re-sort and re-render so the ascending-order invariant holds.
+            param.value.sort((a, b) => (a.startAge ?? 0) - (b.startAge ?? 0));
+            render();
+          }
+        });
+        row.appendChild(input);
+      });
+
+      const rmBtn = document.createElement('button');
+      rmBtn.type = 'button';
+      rmBtn.className = 'btn btn-warn age-band-remove';
+      rmBtn.textContent = '✕';
+      rmBtn.title = 'Remove band';
+      rmBtn.addEventListener('click', () => {
+        bands.splice(idx, 1);
+        render();
+      });
+      row.appendChild(rmBtn);
+
+      container.appendChild(row);
+    });
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn btn-sm age-band-add-btn';
+    addBtn.textContent = '+ Add Band';
+    addBtn.addEventListener('click', () => {
+      const lastAge = param.value.length ? (param.value[param.value.length - 1].startAge ?? 0) : 0;
+      param.value.push({ startAge: lastAge + 5, multiplier: 1.0, annualRealDrift: 0 });
       render();
     });
     container.appendChild(addBtn);

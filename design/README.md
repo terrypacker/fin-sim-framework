@@ -151,3 +151,21 @@ consumer is a drill-down from the US/AU tax-return modal:
 * Phased: targeted tax-modal drill-down first (Phase 1), then cash-flow
   report + state-diff projection, then more definitions + facet polish.
 
+---
+### [Age-Banded Spending](33-age-banded-spending.md)
+This document defines an `AGE_BANDED` spending strategy (a new entry in design
+26's `SPENDING_STRATEGY_REGISTRY`) that replaces flat inflation-only spending
+with the research-backed "retirement spending smile" (Blanchett; BLS CE; the
+go-go/slow-go/no-go three-phase model), by:
+
+* Adding a single `AgeBandedSpendingReducer` that layers a deterministic
+  **real** age multiplier on top of inflation, driven by a pure
+  `ageSpendingFactor(age, bands)` function over a configurable, round-tripped
+  `spendingAgeBands` table (step multipliers + intra-band annual real drift).
+* Reusing the materialized `state.expenses` slices and the
+  `RegimeAwareSpendingReducer` apply/revert idempotency pattern exactly — one
+  reducer, one `state.ageBandSpending` field, no new framework infrastructure.
+* Acting on the discretionary slice by default and deferring the late-life
+  health upturn to the `HEALTHCARE` strategy / design 27's late-life-care
+  factor, so the smile's terminal spike is not double-counted.
+

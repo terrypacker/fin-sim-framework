@@ -192,6 +192,36 @@ test('onDelete: does nothing when a prebuilt is active', () => {
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
+// onResetDefaults — destructive, confirmation-gated
+// ═════════════════════════════════════════════════════════════════════════════
+
+test('onResetDefaults: aborts without calling the controller when confirm is declined', () => {
+  const { controller, view } = makeStack({ prebuiltScenarios: [makePrebuilt('alpha')] });
+  const spy = jest.spyOn(controller, 'resetToDefaults');
+  const orig = window.confirm;
+  window.confirm = () => false; // user clicks Cancel
+  try {
+    view.onResetDefaults();
+  } finally {
+    window.confirm = orig;
+  }
+  assert.strictEqual(spy.mock.calls.length, 0, 'reset must not run when confirm is declined');
+});
+
+test('onResetDefaults: proceeds when confirm is accepted', () => {
+  const { controller, view } = makeStack({ prebuiltScenarios: [makePrebuilt('alpha')] });
+  const spy = jest.spyOn(controller, 'resetToDefaults');
+  const orig = window.confirm;
+  window.confirm = () => true; // user clicks OK
+  try {
+    view.onResetDefaults();
+  } finally {
+    window.confirm = orig;
+  }
+  assert.strictEqual(spy.mock.calls.length, 1, 'reset must run when confirm is accepted');
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
 // getSimStart / getSimEnd
 // ═════════════════════════════════════════════════════════════════════════════
 

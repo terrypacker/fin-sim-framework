@@ -1263,3 +1263,50 @@ test('SALE-3: US_HOUSE_SALE credits savings exactly once (balance delta = salePr
     `Bug: US_HOUSE_SALE fired ${effectiveCount} time(s) instead of once.`
   );
 });
+
+// ─── Age-banded spending (design/33) ─────────────────────────────────────────
+
+/**
+ * Build a scenario via ScenarioLoader.load() with an explicit spendingStrategy
+ * (and older primary), mirroring the UI param-form → compile path. The strategy
+ * knobs live in paramSchema, not buildDefaultConfig's parameters map, so we
+ * inject them into cfg.parameters directly the way the workbench form would.
+ */
+function buildSpendingScenario(spendingStrategy) {
+  ServiceRegistry.resetAll();
+  const registry = ServiceRegistry.getInstance();
+  const scenario = new IntlRetirementScenario({ context: registry.simulationContext });
+  scenario.buildSim();
+
+  const cfg = IntlRetirementScenario.buildDefaultConfig({
+    primaryBirthDate: new Date(Date.UTC(1955, 0, 1)), // ~71 at sim start (already declining)
+  });
+  cfg.parameters.spendingStrategy = spendingStrategy;
+
+  new ScenarioLoader().load(cfg, registry);
+  scenario.initialState = { ...scenario.sim.state };
+  return { scenario, sim: scenario.sim };
+}
+
+test('AGE-BAND-1: AGE_BANDED bends real discretionary spending down vs FIXED baseline', () => {
+  const target = new Date(Date.UTC(2030, 5, 1)); // primary age ~75
+
+  const { sim: fixedSim } = buildSpendingScenario(['FIXED']);
+  stepWithGuard(fixedSim, target, 20000);
+
+  const { sim: bandSim } = buildSpendingScenario(['FIXED', 'AGE_BANDED']);
+  stepWithGuard(bandSim, target, 20000);
+
+  // Inflation is identical in both runs, so a strictly lower nominal discretionary
+  // slice means the real age factor is doing its job.
+  assert.ok(
+    bandSim.state.expenses.discretionary < fixedSim.state.expenses.discretionary,
+    `AGE_BANDED discretionary (${bandSim.state.expenses.discretionary.toFixed(0)}) ` +
+    `should be below FIXED (${fixedSim.state.expenses.discretionary.toFixed(0)})`
+  );
+  // Essential is untouched by the default discretionary-only slice.
+  assert.ok(Math.abs(bandSim.state.expenses.essential - fixedSim.state.expenses.essential) < 1);
+  // The applied factor was pinned below baseline.
+  assert.ok(bandSim.state.ageBandSpending.appliedFactor < 1.0,
+    `appliedFactor ${bandSim.state.ageBandSpending?.appliedFactor} should be < 1.0`);
+});

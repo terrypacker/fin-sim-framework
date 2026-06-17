@@ -33,6 +33,7 @@ import { USD, AUD }            from '../finance/assets/account.js';
 import { ACCOUNT_ROLES }       from '../finance/state/account-roles.js';
 import { Holding }             from '../finance/holdings/holding.js';
 import { ALLOCATION }          from '../finance/holdings/allocation.js';
+import { DEFAULT_AGE_BANDS }   from '../finance/spending/strategies/age-banded-spending-reducer.js';
 import { RATE_KEYS }           from '../finance/economic-regimes/rate-keys.js';
 
 /**
@@ -140,6 +141,11 @@ export const INTL_RETIREMENT_DEFAULTS = {
   // Expenses (local currency: USD pre-move, AUD post-move)
   monthlyExpenses:       6_000,
   discretionarySharePct: 0.30,
+
+  // Age-banded spending (design/33) — opt-in via spendingStrategy AGE_BANDED.
+  spendingAgeBands:      DEFAULT_AGE_BANDS,
+  ageBandSpendingSlice:  'discretionary',
+  ageBandDeclineRate:    null,
 
   // Drawdown order (key of DRAWDOWN_STRATEGIES) used to liquidate accounts for shortfalls
   drawdownStrategy:      'TAXABLE_FIRST',
