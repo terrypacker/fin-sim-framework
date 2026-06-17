@@ -266,10 +266,22 @@ export class ScenarioTabView {
 
     const filter = this._paramFilter;
 
+    // Conditional visibility (visibleWhen): a param can declare it should only
+    // show when another param's value satisfies a predicate (e.g. a strategy
+    // config knob is shown only when its strategy is selected). Pure UI — the
+    // compiler still receives every param. valueByName resolves the controlling
+    // param's current value; controllerNames are the params others depend on, so
+    // a change to one re-renders the list to reveal/hide dependents.
+    const valueByName = new Map(scenario.params.map(p => [p.name, p.value]));
+    this._controllerNames = new Set(
+      scenario.params.map(p => p.visibleWhen?.param).filter(Boolean)
+    );
+
     // Group visible params (preserving original index for delete) by group label.
     const groups = new Map();   // group label → [{ param, index }]
     scenario.params.forEach((param, index) => {
       if (param.hidden) return;
+      if (!this._paramVisible(param, valueByName)) return;
       if (filter && !this._paramMatchesFilter(param, filter)) return;
       const key = param.group || '';
       if (!groups.has(key)) groups.set(key, []);
@@ -292,6 +304,35 @@ export class ScenarioTabView {
       entries.forEach(({ param, index }) =>
         container.appendChild(this._buildParamRow(param, index, scenario)));
     }
+  }
+
+  /**
+   * Evaluate a param's `visibleWhen` condition against the current param values.
+   * Returns true when there is no condition or the condition is satisfied.
+   *
+   * Condition shapes (extensible):
+   *   { param, includes: <value> } — controller value (an array) contains <value>
+   *   { param, equals:   <value> } — controller value strictly equals <value>
+   *
+   * @param {object} param         the param being tested
+   * @param {Map<string,*>} valueByName  name → current value for every param
+   */
+  _paramVisible(param, valueByName) {
+    const cond = param.visibleWhen;
+    if (!cond || !cond.param) return true;
+    const v = valueByName.get(cond.param);
+    if ('includes' in cond) return Array.isArray(v) && v.includes(cond.includes);
+    if ('equals'   in cond) return v === cond.equals;
+    return true;
+  }
+
+  /**
+   * Re-render the params list when a param that others' visibility depends on
+   * changes — so dependent rows appear/disappear live. No-op for params nothing
+   * depends on, keeping ordinary edits cheap.
+   */
+  _maybeRerenderForController(param, scenario) {
+    if (this._controllerNames?.has(param.name)) this._renderParamsList(scenario);
   }
 
   /**
@@ -466,7 +507,10 @@ export class ScenarioTabView {
           valueInput.appendChild(opt);
         });
         valueInput.value = String(param.value ?? 'false');
-        valueInput.addEventListener('change', () => { param.value = valueInput.value === 'true'; });
+        valueInput.addEventListener('change', () => {
+          param.value = valueInput.value === 'true';
+          this._maybeRerenderForController(param, scenario);
+        });
       } else if (param.type === 'Date') {
         valueInput = document.createElement('input');
         valueInput.type = 'date';
@@ -487,9 +531,12 @@ export class ScenarioTabView {
           valueInput.appendChild(el);
         });
         valueInput.value = param.value ?? (param.options?.[0] ?? '');
-        valueInput.addEventListener('change', () => { param.value = valueInput.value; });
+        valueInput.addEventListener('change', () => {
+          param.value = valueInput.value;
+          this._maybeRerenderForController(param, scenario);
+        });
       } else if (param.type === 'EnumMulti') {
-        valueInput = _buildEnumMultiEditor(param);
+        valueInput = _buildEnumMultiEditor(param, () => this._maybeRerenderForController(param, scenario));
       } else if (param.type === 'Money') {
         // Numeric value + inline native-currency selector (design 10 §Phase 5).
         // The value stays numeric (the compiler reads it as-is); the chosen
@@ -833,7 +880,7 @@ function _buildAgeBandListEditor(param) {
  * @param {object} param  The param descriptor ({ value, options, ... })
  * @returns {HTMLElement}
  */
-function _buildEnumMultiEditor(param) {
+function _buildEnumMultiEditor(param, onChange) {
   const container = document.createElement('div');
   container.className = 'enum-multi-editor';
 
@@ -851,6 +898,7 @@ function _buildEnumMultiEditor(param) {
     cb.addEventListener('change', () => {
       if (cb.checked) selected.add(opt); else selected.delete(opt);
       param.value = [...selected];
+      onChange?.();
     });
 
     label.appendChild(cb);

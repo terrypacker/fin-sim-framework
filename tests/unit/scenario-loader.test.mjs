@@ -665,3 +665,30 @@ test('toolset params: schema-drift re-syncs option lists onto saved enum params 
   assert.deepStrictEqual(strat.value, ['FIXED', 'GUARDRAIL'],
     'option-list re-sync must preserve the user\'s saved selection');
 });
+
+test('toolset params: visibleWhen is synced onto schema params (conditional visibility, design/33)', () => {
+  // A fresh load should stamp visibleWhen onto strategy config knobs from the schema.
+  const cfg = freshDeclarativeConfig();
+  loadIntoFreshServices(cfg);
+
+  const bands = cfg.params.find(p => p.name === 'spendingAgeBands');
+  assert.ok(bands, 'spendingAgeBands should be present');
+  assert.deepStrictEqual(bands.visibleWhen, { param: 'spendingStrategy', includes: 'AGE_BANDED' },
+    'spendingAgeBands must carry its visibleWhen condition');
+});
+
+test('toolset params: visibleWhen drift — saved param missing the condition gains it on load', () => {
+  const cfg = freshDeclarativeConfig();
+  // Simulate a scenario saved before visibleWhen existed: the key is present but
+  // carries no visibleWhen. The merge must stamp it from the schema.
+  cfg.params = [
+    { name: 'regimeAwareCutPct', label: 'Regime-Aware Spending Cut', type: 'Number',
+      group: 'Spending', value: 0.25 }, // user-edited value, no visibleWhen
+  ];
+  loadIntoFreshServices(cfg);
+
+  const cut = cfg.params.find(p => p.name === 'regimeAwareCutPct');
+  assert.deepStrictEqual(cut.visibleWhen, { param: 'spendingStrategy', includes: 'REGIME_AWARE' },
+    'visibleWhen should be stamped onto pre-existing entries that lack it');
+  assert.strictEqual(cut.value, 0.25, 'drift-sync must preserve the user value');
+});
