@@ -39,8 +39,9 @@ export class MonteCarloPresenter {
     this._resultsPanel = new McResultsPanel(view.resultsPane);
     this._runsPanel    = new McRunsPanel(view.runsPane);
 
-    this._configPanel.onRun         = (config)  => this._onRun(config);
-    this._runsPanel.onRunSelected   = (run)     => this.onReplayRun?.(run);
+    this._configPanel.onRun              = (config)  => this._onRun(config);
+    this._configPanel.onCopyFromScenario = ()        => this._onCopyFromScenario();
+    this._runsPanel.onRunSelected        = (run)     => this.onReplayRun?.(run);
     this._resultsPanel.onMetricChange = (metric) => {
       if (this._lastResult) {
         this._runsPanel.showResults(this._lastResult.summary, this._lastResult.runs, metric);
@@ -80,6 +81,23 @@ export class MonteCarloPresenter {
   getLastResult() { return this._lastResult; }
 
   // ── Private ───────────────────────────────────────────────────────────────────
+
+  /**
+   * Copy the live scenario parameter values into the MC variable centers.
+   *
+   * Rebuilds the variable list against the current scenario params so each
+   * variable carries a freshly-resolved `defaultValue` (the scenario value at its
+   * paramKey). Those become the panel's mean / value inputs. Fully generic: any
+   * MC variable, including ones added later, is covered because its scenario value
+   * flows through buildVariables() — no per-param wiring here.
+   */
+  _onCopyFromScenario() {
+    const params = this._resolveBaseParams();
+    const vars   = new IntlRetirementMcConfig().buildVariables(params);
+    const values = new Map(vars.map(v => [v.paramKey, v.defaultValue]));
+    const count  = this._configPanel.applyScenarioValues(values);
+    this._configPanel.setStatus(`Copied ${count} scenario value${count === 1 ? '' : 's'} into variable centers.`);
+  }
 
   _onRun(config) {
     const { n, variableConfigs } = config;
