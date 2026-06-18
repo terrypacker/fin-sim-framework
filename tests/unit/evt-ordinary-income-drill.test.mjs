@@ -168,5 +168,7 @@ test('EVT-DRILL-5: capital-gains-by-disposal report definition exists', () => {
   const def = registry.get('capital-gains-by-disposal');
   assert.ok(def, 'capital-gains-by-disposal should be registered');
   assert.strictEqual(def.id, 'capital-gains-by-disposal');
-  assert.ok(def.defaultAggregates.gain, 'should have a gain aggregate');
+  // The headline `total` aggregate sums realized gain so the report ties out to
+  // the tax document's "Capital Gains (before discount)" line (us/auCapitalGainsYTD).
+  assert.strictEqual(def.defaultAggregates.total.field, 'gain', 'headline total should sum the gain field');
 });

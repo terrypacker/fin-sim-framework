@@ -61,7 +61,17 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     return this.newState(
       state,
       updates,
-      [{ type: 'US_HOUSE_SALE_TAX', taxableGain }]
+      // Emit the realized gain under the family-standard `gain` field (shared by
+      // every CAPITAL_GAINS disposal type) so the Capital Gains by Disposal report
+      // aggregates it uniformly. proceeds/costBasis/description give the report a
+      // readable, drillable row.
+      [{
+        type:        'US_HOUSE_SALE_TAX',
+        gain:        taxableGain,
+        proceeds:    salePrice,
+        costBasis,
+        description: stateKey || 'usHouse',
+      }]
     );
   }
 }

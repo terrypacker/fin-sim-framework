@@ -615,7 +615,7 @@ export class JournalReportPlugin extends WorkbenchComponent {
                   <span class="jr-child-date">${_fmtDate(item.date)}</span>
                   <span class="jr-child-type">${item.actionType ?? '—'}</span>
                   <span class="jr-child-desc">${_esc(item.description ?? '')}</span>
-                  <span class="jr-child-amount ${_signCls(item.stateDelta ?? item.personTaxAmount ?? item.amount ?? item.proceeds)}">${this._fmtMoney(item.stateDelta ?? item.personTaxAmount ?? item.amount ?? item.proceeds ?? null)}</span>
+                  <span class="jr-child-amount ${_signCls(item.stateDelta ?? item.personTaxAmount ?? item.amount ?? item.gain ?? item.proceeds)}">${this._fmtMoney(item.stateDelta ?? item.personTaxAmount ?? item.amount ?? item.gain ?? item.proceeds ?? null)}</span>
                 </div>
               </td>
             </tr>`);

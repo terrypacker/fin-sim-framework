@@ -197,7 +197,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
       // EVT-34: US house sale — US capital gain after $500K exemption
       ['US_HOUSE_SALE_TAX', (state, action) => ({
         ...state,
-        usCapitalGainsYTD: state.usCapitalGainsYTD + action.taxableGain,
+        usCapitalGainsYTD: state.usCapitalGainsYTD + action.gain,
       })],
     ];
   }

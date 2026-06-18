@@ -226,21 +226,41 @@ class CapitalGainsByDisposalDef extends ReportDefinition {
   get defaultGroupBy()    { return ['actionType', 'description']; }
   get defaultAggregates() {
     return {
-      total:    { fn: 'sum', field: 'proceeds' },
-      gain:     { fn: 'sum', field: 'gain'     },
+      // `total` is the headline / sort key — it must be the realized gain so the
+      // report ties out to the tax document's "Capital Gains (before discount)"
+      // line (= us/auCapitalGainsYTD). Proceeds is a secondary, informational
+      // column and is null on gain-only disposal types (company/collectible sales).
+      total:    { fn: 'sum', field: 'gain'     },
+      proceeds: { fn: 'sum', field: 'proceeds' },
       count:    { fn: 'count'                  },
     };
   }
 
   buildQuery(params, api) {
     const { cc, period, personKeys } = params;
-    const periodAst   = api.periodOf(period);
-    const actionTypes = api.familyTypes('CAPITAL_GAINS', { cc });
-    const conditions = [
+    const periodAst = api.periodOf(period);
+    // Capital gains reach a jurisdiction's YTD total from disposals across BOTH
+    // ccs, not just the action's own cc — a US-asset sale realized while
+    // AU-resident feeds auCapitalGainsYTD as well (see us-tax-module-2026). So
+    // union the whole CAPITAL_GAINS family rather than scoping familyTypes by cc;
+    // the residency predicate below carves out the jurisdiction-specific slice.
+    //
+    // No numeric proceeds/gain filter: membership in the CAPITAL_GAINS family
+    // already restricts to realized-disposal tax actions (each carries a `gain`),
+    // and dropping the filter lets harvest *losses* through so the summed gain
+    // matches the signed YTD accumulator exactly.
+    const actionTypes = api.familyTypes('CAPITAL_GAINS');
+    const conditions  = [
       periodAst,
-      { op: 'in',  field: 'actionType', value: actionTypes },
-      { op: 'gt',  field: 'proceeds',   value: 0           },
+      { op: 'in', field: 'actionType', value: actionTypes },
     ];
+    // The AU capital-gains line is resident-only: non-resident disposals route to
+    // NR withholding (auNonResidentWithholdingYTD), never auCapitalGainsYTD. The
+    // US line, by contrast, accrues every disposal regardless of residency, so it
+    // takes no residency predicate.
+    if (cc === 'AU') {
+      conditions.push({ op: 'eq', field: 'residency', value: 'AU' });
+    }
     _appendInFilter(conditions, 'personKey', personKeys);
     return { op: 'and', conditions };
   }
