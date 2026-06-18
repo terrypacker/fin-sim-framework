@@ -170,6 +170,10 @@ export class StateSchemaRegistry {
     this.registerPattern('effectiveExchangeRates.*', ParameterValueType.rate());
 
     // ── Economic regime effective/base rates (design 21) ─────────────────────
+    // Growth rates are per-account-type (EQUITY_US_ROTH, EQUITY_US_IRA, …) so
+    // each account's effective rate is independently chartable.
+    this.registerPattern('effectiveGrowthRates.*',       ParameterValueType.rate());
+    this.registerPattern('baseGrowthRates.*',            ParameterValueType.rate());
     this.registerPattern('effectiveInflationRates.*',    ParameterValueType.rate());
     this.registerPattern('effectiveAppreciationRates.*', ParameterValueType.rate());
     this.registerPattern('effectiveInterestRates.*',     ParameterValueType.rate());

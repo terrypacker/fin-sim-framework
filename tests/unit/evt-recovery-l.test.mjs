@@ -107,9 +107,10 @@ test('EVT-RECOVERY-L-4: L-curve keeps effectiveGrowthRates depressed for full du
   };
   const { sim } = loadScenario({ rothGrowthRate: baseRate, shocks: [shock] });
 
-  // Mid-duration: factor = 1, full adjustment still applied
+  // Mid-duration: factor = 1, full adjustment still applied. The class shock
+  // fans out to the per-account member key (EQUITY_US_ROTH).
   sim.stepTo(new Date('2026-08-01'));
-  const rateMid = sim.state.effectiveGrowthRates?.EQUITY_US ?? NaN;
+  const rateMid = sim.state.effectiveGrowthRates?.EQUITY_US_ROTH ?? NaN;
   assert.ok(
     Math.abs(rateMid - (baseRate + adjustment)) < 0.001,
     `Mid-L rate should be ${baseRate + adjustment}, got ${rateMid}`
@@ -117,7 +118,7 @@ test('EVT-RECOVERY-L-4: L-curve keeps effectiveGrowthRates depressed for full du
 
   // After duration (>12 months from Feb 2026 = after Feb 2027): regime expires, rate returns to base
   sim.stepTo(new Date('2027-04-01'));
-  const rateAfter = sim.state.effectiveGrowthRates?.EQUITY_US ?? NaN;
+  const rateAfter = sim.state.effectiveGrowthRates?.EQUITY_US_ROTH ?? NaN;
   assert.ok(
     Math.abs(rateAfter - baseRate) < 0.001,
     `Post-L rate should return to base ${baseRate}, got ${rateAfter}`

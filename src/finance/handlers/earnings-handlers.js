@@ -21,7 +21,7 @@ export class IntlRothEarningsHandler extends HandlerEntry {
   static description = 'Computes annual growth on the Roth IRA (balance × growthRate) and dispatches ROTH_EARNINGS_APPLY.';
   static type        = 'IntlRothEarningsHandler';
   static eventType   = 'INTL_ROTH_EARNINGS';
-  static rateKey     = RATE_KEYS.EQUITY_US;
+  static rateKey     = RATE_KEYS.EQUITY_US_ROTH;
 
   constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = 0.07, rateKey = null } = {}) {
     super(null, 'Roth IRA Earnings');
@@ -69,7 +69,7 @@ export class IntlIraEarningsHandler extends HandlerEntry {
   static description = 'Computes annual growth on the Traditional IRA (balance × growthRate) and dispatches IRA_EARNINGS_APPLY.';
   static type        = 'IntlIraEarningsHandler';
   static eventType   = 'INTL_IRA_EARNINGS';
-  static rateKey     = RATE_KEYS.EQUITY_US;
+  static rateKey     = RATE_KEYS.EQUITY_US_IRA;
 
   constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = 0.07, rateKey = null } = {}) {
     super(null, 'IRA Earnings');
@@ -117,7 +117,7 @@ export class IntlK401EarningsHandler extends HandlerEntry {
   static description = 'Computes annual growth on the 401k (balance × growthRate) and dispatches K401_EARNINGS_APPLY.';
   static type        = 'IntlK401EarningsHandler';
   static eventType   = 'INTL_K401_EARNINGS';
-  static rateKey     = RATE_KEYS.EQUITY_US;
+  static rateKey     = RATE_KEYS.EQUITY_US_K401;
 
   constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = 0.07, rateKey = null } = {}) {
     super(null, '401k Earnings');
@@ -166,7 +166,7 @@ export class IntlUsStockEarningsHandler extends HandlerEntry {
   static description = 'Computes annual unrealized appreciation on the US stock account (balance × growthRate) and dispatches STOCK_EARNINGS_APPLY.';
   static type        = 'IntlUsStockEarningsHandler';
   static eventType   = 'INTL_STOCK_EARNINGS';
-  static rateKey     = RATE_KEYS.EQUITY_US;
+  static rateKey     = RATE_KEYS.EQUITY_US_BROKERAGE;
 
   constructor({ stateRegistry, role, ownerId = null, stateKey = null, growthRate = 0.05, rateKey = null } = {}) {
     super(null, 'US Stock Earnings');
@@ -215,7 +215,7 @@ export class IntlAuStockEarningsHandler extends HandlerEntry {
   static description = 'Computes annual unrealized appreciation on the AU stock account (balance × growthRate) and dispatches AU_STOCK_EARNINGS_APPLY.';
   static type        = 'IntlAuStockEarningsHandler';
   static eventType   = 'INTL_AU_STOCK_EARNINGS';
-  static rateKey     = RATE_KEYS.EQUITY_AU;
+  static rateKey     = RATE_KEYS.EQUITY_AU_STOCK;
 
   constructor({ stateRegistry, role, ownerId = null, growthRate = 0.06, rateKey = null } = {}) {
     super(null, 'AU Stock Earnings');
@@ -508,7 +508,7 @@ export class SuperEarningsHandler extends HandlerEntry {
   static description = 'Computes annual earnings on the superannuation account and emits SUPER_EARNINGS_APPLY (credited by AuAccountModule).';
   static type        = 'SuperEarningsHandler';
   static eventType   = 'INTL_SUPER_EARNINGS';
-  static rateKey     = RATE_KEYS.EQUITY_AU;
+  static rateKey     = RATE_KEYS.EQUITY_AU_SUPER;
 
   constructor({ stateRegistry, role, ownerId = null, defaultRate = 0.07, rateKey = null } = {}) {
     super(null, 'Super Earnings');

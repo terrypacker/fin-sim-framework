@@ -141,11 +141,19 @@ test('EVT-SHOCK-4: effectiveGrowthRates reflects regime returnAdjustment', () =>
 
   sim.stepTo(new Date('2026-03-01'));
 
-  // effectiveGrowthRates.EQUITY_US = baseRate + returnAdjustment = 0.07 - 0.04 = 0.03
-  const effectiveRate = sim.state.effectiveGrowthRates?.EQUITY_US;
-  assert.ok(effectiveRate !== undefined, 'effectiveGrowthRates.EQUITY_US must exist');
+  // A class-level EQUITY_US shock fans out to each per-account member key
+  // (design: per-account growth). effectiveGrowthRates.EQUITY_US_ROTH =
+  // base rothGrowthRate + returnAdjustment = 0.07 - 0.04 = 0.03.
+  const rothRate = sim.state.effectiveGrowthRates?.EQUITY_US_ROTH;
+  assert.ok(rothRate !== undefined, 'effectiveGrowthRates.EQUITY_US_ROTH must exist');
   assert.ok(
-    Math.abs(effectiveRate - 0.03) < 0.001,
-    `Expected effective rate ~0.03, got ${effectiveRate}`
+    Math.abs(rothRate - 0.03) < 0.001,
+    `Expected EQUITY_US_ROTH ~0.03, got ${rothRate}`
+  );
+  // Fan-out: the same class shock hits the 401k member too. Here k401GrowthRate
+  // is 0 (BASE_CFG), so EQUITY_US_K401 = base 0 + returnAdjustment −0.04 = −0.04.
+  assert.ok(
+    Math.abs((sim.state.effectiveGrowthRates?.EQUITY_US_K401 ?? NaN) - (-0.04)) < 0.001,
+    'class shock should fan out to EQUITY_US_K401',
   );
 });

@@ -19,9 +19,23 @@ import { ACCOUNT_ROLES } from '../state/account-roles.js';
  * FX uses currency pairs:                'USD_AUD'.
  */
 export const RATE_KEYS = Object.freeze({
-  // Equity (forward returns)
-  EQUITY_US:       'EQUITY_US',       // Roth, IRA, 401k earnings, US stock earnings
-  EQUITY_AU:       'EQUITY_AU',       // AU stock, Super earnings
+  // Equity (forward returns).
+  // EQUITY_US / EQUITY_AU are the asset-CLASS keys — used by shocks (which author
+  // class-level effects), dividends, and revaluation grouping (ROLE_TO_RATE_KEY).
+  // Each equity account TYPE also has its own member key below so it can carry an
+  // independent base growth rate; RegimeApplyReducer fans a class-level return
+  // shock out to all member keys (RATE_KEY_CLASS_MEMBERS), so a US-equity crash
+  // still hits every US-equity account on top of its own baseline.
+  EQUITY_US:       'EQUITY_US',       // class: Roth, IRA, 401k, US stock
+  EQUITY_AU:       'EQUITY_AU',       // class: AU stock, Super
+
+  // Per-account-type equity growth keys (members of the classes above).
+  EQUITY_US_ROTH:      'EQUITY_US_ROTH',
+  EQUITY_US_IRA:       'EQUITY_US_IRA',
+  EQUITY_US_K401:      'EQUITY_US_K401',
+  EQUITY_US_BROKERAGE: 'EQUITY_US_BROKERAGE',
+  EQUITY_AU_STOCK:     'EQUITY_AU_STOCK',
+  EQUITY_AU_SUPER:     'EQUITY_AU_SUPER',
 
   // Fixed income
   FIXED_INCOME_US: 'FIXED_INCOME_US', // FixedIncomeInterestHandler (US)
@@ -49,6 +63,23 @@ export const RATE_KEYS = Object.freeze({
 export const RATE_KEY_META = Object.freeze({
   [RATE_KEYS.FIXED_INCOME_US]: { defaultDuration: 5.0 },
   [RATE_KEYS.FIXED_INCOME_AU]: { defaultDuration: 5.0 },
+});
+
+/**
+ * Asset-class → member growth keys. RegimeApplyReducer uses this to fan a
+ * class-level return adjustment (e.g. a shock's `{ EQUITY_US: -0.30 }`) out to
+ * every member key in state.effectiveGrowthRates, so the class shock applies to
+ * each account type on top of its own seeded base rate. Classes not listed here
+ * (FIXED_INCOME_*, SAVINGS_*, …) have a single account type and need no fan-out.
+ */
+export const RATE_KEY_CLASS_MEMBERS = Object.freeze({
+  [RATE_KEYS.EQUITY_US]: [
+    RATE_KEYS.EQUITY_US_ROTH, RATE_KEYS.EQUITY_US_IRA,
+    RATE_KEYS.EQUITY_US_K401, RATE_KEYS.EQUITY_US_BROKERAGE,
+  ],
+  [RATE_KEYS.EQUITY_AU]: [
+    RATE_KEYS.EQUITY_AU_STOCK, RATE_KEYS.EQUITY_AU_SUPER,
+  ],
 });
 
 /**

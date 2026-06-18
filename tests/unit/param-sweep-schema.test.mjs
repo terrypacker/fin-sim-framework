@@ -29,11 +29,11 @@ import { DEFAULT_MC_VARIABLE_CONFIGS } from '../../src/finance/monte-carlo/intl-
 import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables }
   from '../../src/finance/optimization/intl-retirement-opt-config.js';
 
-// The dead dividend/inflation aliases were renamed to their toolset keys, so the
-// only remaining orphan is usStockGrowthRate — intentionally retained because its
-// no-op cause is the regime growth substrate (EQUITY_US ← rothGrowthRate), not a
-// key mismatch a rename could fix. Synthesized per-shock rows aren't in DEFAULT_*.
-const KNOWN_ORPHANS = new Set(['usStockGrowthRate']);
+// Every curated MC/Opt variable now keys on a real toolset param — the old
+// scenario-default aliases (usStockGrowthRate / stockDividendRate / usInflationRate)
+// were renamed to their toolset keys once the per-account growth refactor made
+// brokerageGrowthRate a live lever. Synthesized per-shock rows aren't in DEFAULT_*.
+const KNOWN_ORPHANS = new Set();
 
 // ── isParamVisible ─────────────────────────────────────────────────────────────
 

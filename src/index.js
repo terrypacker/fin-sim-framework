@@ -65,7 +65,7 @@ import { AddRegimeReducer } from './finance/economic-regimes/add-regime-reducer.
 import { BondPriceAdjustReducer } from './finance/economic-regimes/bond-price-adjust-reducer.js';
 import { EconomicRecoveryTickHandler } from './finance/economic-regimes/economic-recovery-tick-handler.js';
 import { EconomicShockHandler } from './finance/economic-regimes/economic-shock-handler.js';
-import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY } from './finance/economic-regimes/rate-keys.js';
+import { RATE_KEYS, RATE_KEY_META, RATE_KEY_CLASS_MEMBERS, ROLE_TO_RATE_KEY } from './finance/economic-regimes/rate-keys.js';
 import { RecoveryCurves } from './finance/economic-regimes/recovery-curves.js';
 import { RegimeApplyReducer } from './finance/economic-regimes/regime-apply-reducer.js';
 import { REGIME_TAG } from './finance/economic-regimes/regime-tag.js';
@@ -538,6 +538,7 @@ export const Finance = {
   EconomicShockHandler,
   RATE_KEYS,
   RATE_KEY_META,
+  RATE_KEY_CLASS_MEMBERS,
   ROLE_TO_RATE_KEY,
   RecoveryCurves,
   RegimeApplyReducer,
