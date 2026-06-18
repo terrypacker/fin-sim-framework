@@ -84,7 +84,7 @@ test('SPEND-MAT-5: InflationAdjustReducer does NOT inflate slices on AU advance 
 });
 
 test('SPEND-MAT-6: InflationAdjustReducer inflates slices on AU advance (AU resident)', () => {
-  const s    = stateWithExpenses({ monthlyExpenses: 10_000, rate: 0.04, residency: 'AUS' });
+  const s    = stateWithExpenses({ monthlyExpenses: 10_000, rate: 0.04, residency: 'AU' });
   const next = reducer.reduce(s, AU_ADV);
   assert.ok(Math.abs(next.expenses.essential     - 7_000 * 1.04) < 0.01);
   assert.ok(Math.abs(next.expenses.discretionary - 3_000 * 1.04) < 0.01);

@@ -43,7 +43,7 @@ function _getFxService(context) {
  *   Reads: us* keys from US_TAX; au* keys from AU_TAX
  *
  * Typical usage: toolsets: ["US_RETIREMENT", "AU_RETIREMENT", "US_AU_CROSS_BORDER"]
- * For AU→US migrants, set startingResidency: 'AUS' in parameters.
+ * For AU→US migrants, set startingResidency: 'AU' in parameters.
  */
 export const US_AU_CROSS_BORDER = {
   id: 'US_AU_CROSS_BORDER',
@@ -82,9 +82,9 @@ export const US_AU_CROSS_BORDER = {
       {
         key: 'startingResidency', label: 'Starting Residency',
         type: 'Enum', group: 'Cross Border', mc: false, opt: true,
-        options: ['US', 'AUS'],
+        options: ['US', 'AU'],
         defaultValue: null,
-        description: 'Starting country of tax residency for all persons (e.g. "US", "AUS"). Defaults to "US" when unset.',
+        description: 'Starting country of tax residency for all persons (e.g. "US", "AU"). Defaults to "US" when unset.',
       },
       {
         key: 'auInflationRate', label: 'AU Inflation Rate (cross-border)',

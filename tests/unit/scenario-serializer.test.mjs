@@ -532,7 +532,7 @@ test('serialize: persons array is included in the serialized output', () => {
   const sr = ServiceRegistry.getInstance();
 
   sr.personService.createPerson(new Date(Date.UTC(1980, 0, 1)), { name: 'Alice', citizen: ['US'] });
-  sr.personService.createPerson(new Date(Date.UTC(1985, 5, 15)), { name: 'Bob', citizen: ['AUS'] });
+  sr.personService.createPerson(new Date(Date.UTC(1985, 5, 15)), { name: 'Bob', citizen: ['AU'] });
 
   const cfg = serializeNow();
   assert.ok(Array.isArray(cfg.persons), 'persons should be an array');
@@ -566,7 +566,7 @@ test('deserialize: persons are registered into personService with correct fields
       { __type: 'Person', id: 'p1', name: 'Alice', birthDate: '1980-01-01',
         citizen: ['US'], lifeExpectancy: 90, socialSecurityMonthly: 2800 },
       { __type: 'Person', id: 'p2', name: 'Bob', birthDate: '1985-06-15',
-        citizen: ['AUS'], lifeExpectancy: 85, socialSecurityMonthly: 0 },
+        citizen: ['AU'], lifeExpectancy: 85, socialSecurityMonthly: 0 },
     ],
   };
 
@@ -581,7 +581,7 @@ test('deserialize: persons are registered into personService with correct fields
 
   const bob = sr.personService.get('p2');
   assert.strictEqual(bob.name, 'Bob');
-  assert.deepStrictEqual(bob.citizen, ['AUS']);
+  assert.deepStrictEqual(bob.citizen, ['AU']);
 });
 
 test('persons round-trip: serialize then deserialize preserves all person data', () => {
@@ -589,7 +589,7 @@ test('persons round-trip: serialize then deserialize preserves all person data',
   const sr = ServiceRegistry.getInstance();
 
   sr.personService.createPerson(new Date(Date.UTC(1975, 2, 10)), {
-    name: 'Carol', citizen: ['US', 'AUS'], lifeExpectancy: 92, socialSecurityMonthly: 3200,
+    name: 'Carol', citizen: ['US', 'AU'], lifeExpectancy: 92, socialSecurityMonthly: 3200,
   });
 
   const cfg = serializeNow('Round-Trip', {});
@@ -604,7 +604,7 @@ test('persons round-trip: serialize then deserialize preserves all person data',
 
   const carol = persons[0];
   assert.strictEqual(carol.name, 'Carol');
-  assert.deepStrictEqual(carol.citizen, ['US', 'AUS']);
+  assert.deepStrictEqual(carol.citizen, ['US', 'AU']);
   assert.strictEqual(carol.lifeExpectancy, 92);
   assert.strictEqual(carol.socialSecurityMonthly, 3200);
   assert.strictEqual(carol.birthDate instanceof Date ? carol.birthDate.getUTCFullYear() : new Date(carol.birthDate).getUTCFullYear(), 1975);

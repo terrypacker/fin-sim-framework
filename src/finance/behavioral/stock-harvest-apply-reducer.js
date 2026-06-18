@@ -30,7 +30,7 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  *   sourceHoldingId   - id of the holding to sell (must be < basis for LOSS; > for GAIN)
  *   substituteHoldingId - id of the holding to rebuy (same account; may equal source for GAIN)
  *   purpose           - 'LOSS' | 'GAIN'  (informational; no branch on this field)
- *   residency         - 'USA' | 'AUS'  (passed to STOCK_WITHDRAWAL_TAX)
+ *   residency         - 'US' | 'AU'  (passed to STOCK_WITHDRAWAL_TAX)
  */
 export class StockHarvestApplyReducer extends Reducer {
   static type        = 'StockHarvestApplyReducer';
@@ -116,7 +116,7 @@ export class StockHarvestApplyReducer extends Reducer {
       [{
         type:        'STOCK_WITHDRAWAL_TAX',
         gain:        realizedGainLoss,
-        residency:   residency ?? 'USA',
+        residency:   residency ?? 'US',
         proceeds:    consume,
         costBasis:   basisShare,
         description: `${purpose ?? 'HARVEST'} harvest on ${stateKey}`,

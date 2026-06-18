@@ -10,11 +10,7 @@
 
 import { BaseComponent } from '../components/base-component.js';
 import { bindParamLinkedField } from '../scenario/param-linked-field.js';
-
-/** Default currency for a residency/citizenship code (e.g. 'US'→USD, 'AUS'/'AU'→AUD). */
-function _defaultCurrency(code) {
-  return (code === 'AU' || code === 'AUS') ? 'AUD' : 'USD';
-}
+import { defaultCurrencyForCountry } from '../../finance/country-codes.js';
 
 /**
  * PersonEditor — renders the person edit form from tpl-person-editor into a
@@ -70,7 +66,7 @@ export class PersonEditor extends BaseComponent {
 
     // Per-field native currency (design 10 §Phase 5). Default from residency /
     // citizenship when the person carries no explicit code.
-    const defaultCur = _defaultCurrency(this._node?.residency ?? this._node?.citizen?.[0]);
+    const defaultCur = defaultCurrencyForCountry(this._node?.residency ?? this._node?.citizen?.[0]);
     el.querySelector('[data-id="ssCurrency"]').value   = this._node?.ssCurrency   ?? defaultCur;
     el.querySelector('[data-id="wageCurrency"]').value = this._node?.wageCurrency ?? defaultCur;
 

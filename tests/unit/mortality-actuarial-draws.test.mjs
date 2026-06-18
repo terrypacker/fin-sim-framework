@@ -16,7 +16,7 @@
  *  MC-1: ActuarialLifespanDistribution produces sensible values near the table mean
  *  MC-2: Seeded RNG reproduces the same draw
  *  MC-3: Sampled lifespan is always > currentAge (clamped from below)
- *  MC-4: lookupLifeTable returns CDC_2024 for US, AU_2022 for AUS, CDC_2024 as fallback
+ *  MC-4: lookupLifeTable returns CDC_2024 for US, AU_2022 for AU, CDC_2024 as fallback
  *  MC-5: buildMortalityMcConfigs emits one variable per person in params.people
  *  MC-6: Female sex uses table.F parameters (different from M)
  */
@@ -76,7 +76,7 @@ test('MC-3: sampled lifespan always exceeds currentAge (clamp)', () => {
 
 test('MC-4: lookupLifeTable returns correct table per residency', () => {
   assert.strictEqual(lookupLifeTable('US'),    CDC_2024, 'US → CDC_2024');
-  assert.strictEqual(lookupLifeTable('AUS'),   AU_2022,  'AUS → AU_2022');
+  assert.strictEqual(lookupLifeTable('AU'),   AU_2022,  'AU → AU_2022');
   assert.strictEqual(lookupLifeTable(),        CDC_2024, 'undefined → CDC_2024 fallback');
   assert.strictEqual(lookupLifeTable('OTHER'), CDC_2024, 'unknown → CDC_2024 fallback');
 });
@@ -89,7 +89,7 @@ test('MC-5: buildMortalityMcConfigs emits one variable per person in params.peop
   const params = {
     people: {
       primary: { name: 'Alice', residency: 'US',  sex: 'F', lifeExpectancy: 90, currentAge: 48 },
-      spouse:  { name: 'Bob',   residency: 'AUS', sex: 'M', lifeExpectancy: 90, currentAge: 43 },
+      spouse:  { name: 'Bob',   residency: 'AU', sex: 'M', lifeExpectancy: 90, currentAge: 43 },
     },
   };
   const cfg     = new IntlRetirementMcConfig();

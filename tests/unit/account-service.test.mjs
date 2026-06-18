@@ -618,8 +618,8 @@ test('replenishSavings: spouse super account age-gate uses spouse birthDate, not
     auSavings,
     spouseSuper,
     people: {
-      primary: { birthDate: primaryDOB, residency: 'AUS' },
-      spouse:  { birthDate: spouseDOB,  residency: 'AUS' },
+      primary: { birthDate: primaryDOB, residency: 'AU' },
+      spouse:  { birthDate: spouseDOB,  residency: 'AU' },
     },
   };
 

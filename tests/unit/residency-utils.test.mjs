@@ -29,7 +29,7 @@ function makeState(overrides = {}) {
   return {
     people: {
       primary: { residency: 'US', birthDate: BD },
-      spouse:  { residency: 'AUS', birthDate: new Date(Date.UTC(1970, 5, 15)) },
+      spouse:  { residency: 'AU', birthDate: new Date(Date.UTC(1970, 5, 15)) },
     },
     ...overrides,
   };
@@ -40,7 +40,7 @@ function makeState(overrides = {}) {
 test('getResidency: returns country code for known personKey', () => {
   const state = makeState();
   assert.strictEqual(getResidency(state, 'primary'), 'US');
-  assert.strictEqual(getResidency(state, 'spouse'),  'AUS');
+  assert.strictEqual(getResidency(state, 'spouse'),  'AU');
 });
 
 test('getResidency: returns null for unknown personKey', () => {
@@ -56,26 +56,26 @@ test('getResidency: returns null when state.people is missing', () => {
 
 test('isResident: true when residency matches country', () => {
   const state = makeState();
-  assert.ok(isResident(state, 'spouse', 'AUS'));
+  assert.ok(isResident(state, 'spouse', 'AU'));
   assert.ok(isResident(state, 'primary', 'US'));
 });
 
 test('isResident: false when residency does not match country', () => {
   const state = makeState();
-  assert.ok(!isResident(state, 'primary', 'AUS'));
+  assert.ok(!isResident(state, 'primary', 'AU'));
   assert.ok(!isResident(state, 'spouse',  'US'));
 });
 
 test('isResident: false for unknown personKey', () => {
   const state = makeState();
-  assert.ok(!isResident(state, 'child', 'AUS'));
+  assert.ok(!isResident(state, 'child', 'AU'));
 });
 
 // ── residentsOf ───────────────────────────────────────────────────────────────
 
 test('residentsOf: returns keys of all persons with matching residency', () => {
   const state = makeState();
-  assert.deepStrictEqual(residentsOf(state, 'AUS'), ['spouse']);
+  assert.deepStrictEqual(residentsOf(state, 'AU'), ['spouse']);
   assert.deepStrictEqual(residentsOf(state, 'US'),  ['primary']);
 });
 
@@ -85,17 +85,17 @@ test('residentsOf: returns empty array when no one matches', () => {
 });
 
 test('residentsOf: returns empty array when state.people is missing', () => {
-  assert.deepStrictEqual(residentsOf({}, 'AUS'), []);
+  assert.deepStrictEqual(residentsOf({}, 'AU'), []);
 });
 
 test('residentsOf: multiple residents of same country', () => {
   const state = {
     people: {
-      primary: { residency: 'AUS' },
-      spouse:  { residency: 'AUS' },
+      primary: { residency: 'AU' },
+      spouse:  { residency: 'AU' },
     },
   };
-  const keys = residentsOf(state, 'AUS').sort();
+  const keys = residentsOf(state, 'AU').sort();
   assert.deepStrictEqual(keys, ['primary', 'spouse']);
 });
 

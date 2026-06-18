@@ -20,7 +20,7 @@
  *
  * @param {object} state     - Simulation state containing state.people
  * @param {string} personKey - Key into state.people (e.g. 'primary', 'spouse')
- * @returns {string|null}    - Country code (e.g. 'US', 'AUS') or null if not found
+ * @returns {string|null}    - Country code (e.g. 'US', 'AU') or null if not found
  */
 export function getResidency(state, personKey) {
   return state.people?.[personKey]?.residency ?? null;
@@ -31,7 +31,7 @@ export function getResidency(state, personKey) {
  *
  * @param {object} state     - Simulation state
  * @param {string} personKey - Key into state.people
- * @param {string} country   - Country code to test (e.g. 'AUS')
+ * @param {string} country   - Country code to test (e.g. 'AU')
  * @returns {boolean}
  */
 export function isResident(state, personKey, country) {
@@ -42,7 +42,7 @@ export function isResident(state, personKey, country) {
  * Array of personKeys whose residency matches `country`.
  *
  * @param {object} state   - Simulation state
- * @param {string} country - Country code (e.g. 'AUS')
+ * @param {string} country - Country code (e.g. 'AU')
  * @returns {string[]}
  */
 export function residentsOf(state, country) {

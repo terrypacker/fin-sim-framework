@@ -51,7 +51,7 @@ describe('PanicSellReducer', () => {
       activeRegimes: [regime('shock1')],
       regimeActions: {},
       k401Account: account([h1]),
-      people: { primary: { residency: 'USA' } },
+      people: { primary: { residency: 'US' } },
     };
 
     const result = reducer.reduce(state, { type: 'US_PERIOD_ADVANCE' });

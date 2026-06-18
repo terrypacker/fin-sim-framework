@@ -54,7 +54,7 @@ import { LateLifeCareApplyReducer }             from '../../finance/spending/str
  * Depends on: AU_TAX, AU_BANKING
  *
  * State ownership:
- *   Initializes: people (with residency='AUS'), monthlyExpenses, inflationRates,
+ *   Initializes: people (with residency='AU'), monthlyExpenses, inflationRates,
  *                inflationAccumulator, metrics, per-account state entries
  *   Reads: au* YTD keys from AU_TAX; INTL_AU_SAVINGS_INTEREST from AU_BANKING
  *
@@ -215,8 +215,8 @@ export const AU_RETIREMENT = {
         retirementDate:        person.retirementDate        ?? null,
         socialSecurityMonthly: person.socialSecurityMonthly ?? 0,
         lifeExpectancy:        person.lifeExpectancy        ?? 90,
-        citizen:               person.citizen               ?? ['AUS'],
-        residency:             'AUS',
+        citizen:               person.citizen               ?? ['AU'],
+        residency:             'AU',
       };
     }
 

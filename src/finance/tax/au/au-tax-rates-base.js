@@ -60,9 +60,9 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       auFrankingCreditYTD         = 0,
     } = state;
 
-    // Resident if any person in state.people has residency === 'AUS'
+    // Resident if any person in state.people has residency === 'AU'
     const primaryKey   = Object.keys(state.people ?? {})[0];
-    const isAuResident = state.people?.[primaryKey]?.residency === 'AUS';
+    const isAuResident = state.people?.[primaryKey]?.residency === 'AU';
 
     if (isAuResident) {
       // Resident: apply 50% CGT discount (ATO Division 115)

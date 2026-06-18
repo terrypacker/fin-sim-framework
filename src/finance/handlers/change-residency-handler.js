@@ -17,7 +17,7 @@ import { RecordBalanceAction } from '../../simulation-framework/actions.js';
  * Triggered as a one-off event on the date the simulation person moves from
  * the US to AU. Emits the residency-change sequence:
  *
- *   1. CHANGE_RESIDENCY_APPLY — flips residency to 'AUS' on all people and snapshots
+ *   1. CHANGE_RESIDENCY_APPLY — flips residency to 'AU' on all people and snapshots
  *      investment account balances (citizen arrays are NOT modified).
  *
  *   2. RecordBalanceAction — captures the post-change stateAfter snapshot.

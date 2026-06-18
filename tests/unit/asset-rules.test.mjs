@@ -217,8 +217,8 @@ function buildResidencyTrackingSim({
   sim.reducers.register('RESIDENCY_CHANGE_APPLY', (state, action) => {
     // Update person citizen array to reflect new tax residency
     const newCitizen = action.isAuResident
-      ? [...new Set([...state.person.citizen, 'AUS'])]
-      : state.person.citizen.filter(c => c !== 'AUS');
+      ? [...new Set([...state.person.citizen, 'AU'])]
+      : state.person.citizen.filter(c => c !== 'AU');
     const newPerson = { ...state.person, citizen: newCitizen };
 
     // Snapshot applicable accounts (AR-4, AR-5, AR-6, AR-7, AR-8)
@@ -253,7 +253,7 @@ test('AR-4: US Brokerage Stocks records balance at residency change', () => {
   sim.stepTo(new Date(2026, 3, 30));
 
   assert.strictEqual(sim.state.stockAccount.balanceAtResidencyChange, 50000);
-  assert.ok(sim.state.person.citizen.includes('AUS'), 'person should be marked as AU tax resident');
+  assert.ok(sim.state.person.citizen.includes('AU'), 'person should be marked as AU tax resident');
 });
 
 test('AR-5: AU Brokerage Stocks records balance at residency change', () => {

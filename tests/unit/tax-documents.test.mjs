@@ -41,7 +41,7 @@ function usDetail(overrides = {}) {
 
 function auResidentDetail(overrides = {}) {
   return new AuTaxRates2025().computeTax({
-    people:                      { primary: { residency: 'AUS' } },
+    people:                      { primary: { residency: 'AU' } },
     auOrdinaryIncomeYTD:         80_000,
     auCapitalGainsYTD:           20_000,
     auNonResidentWithholdingYTD: 0,
@@ -448,14 +448,14 @@ test('TaxDocumentRegistry: AU entry with CG <= $10,000 returns single ITR', () =
   assert.strictEqual(doc.country, 'AU');
 });
 
-test('TaxDocumentRegistry: STOCK_WITHDRAWAL_TAX with residency=AUS included in AU CGT schedule', () => {
+test('TaxDocumentRegistry: STOCK_WITHDRAWAL_TAX with residency=AU included in AU CGT schedule', () => {
   const registry    = new TaxDocumentRegistry();
   const detail      = { ...auResidentDetail({ auCapitalGainsYTD: 20_000 }), taxYear: 2025 };
   const settleEntry = makeEntry('AU', detail, Date.UTC(2026, 6, 1));
   // replenishSavings emits STOCK_WITHDRAWAL_TAX (not AU_STOCK_WITHDRAWAL_TAX)
   const replenishSale = makeAuSaleJournalEntry('STOCK_WITHDRAWAL_TAX', {
     gain: 20_000, proceeds: 55_000, costBasis: 35_000,
-    description: 'AU Stock Account', residency: 'AUS',
+    description: 'AU Stock Account', residency: 'AU',
   });
   const journal = [replenishSale, settleEntry];
   const docs    = registry.generate(settleEntry, journal);

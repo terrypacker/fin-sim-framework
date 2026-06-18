@@ -374,10 +374,21 @@ clear local dev caches).
    model is correct; history is only needed if we want pretty timelines.
    **Recommendation**: skip for now, file as a follow-up.
 
-2. **Country-code spelling.** Citizenship currently uses `'AUS'` (3-letter)
+2. **Country-code spelling.** ~~Citizenship currently uses `'AUS'` (3-letter)
    alongside `'US'` (2-letter) — inconsistent. Residency adopts the same set
    for compatibility but we should normalize to ISO-3166-1 alpha-2 (`'US'`,
-   `'AU'`) project-wide in a separate cleanup. **Out of scope here.**
+   `'AU'`) project-wide in a separate cleanup.~~ **RESOLVED.** All country-coded
+   values (`citizen[]`, `residency`, `startingResidency`, tax/account `cc`,
+   account/property `country`) are now ISO-3166-1 alpha-2. The residency
+   namespace is identical to the tax `cc` namespace, so the `'AUS' ? 'AU' : 'US'`
+   bridge shims in `InflationAdjustReducer` / `AgeBandedSpendingReducer` were
+   removed, and the stray `'USA'` fallbacks in the behavioral layer collapsed to
+   `'US'`. Canonical constants + helpers (`currencyForCountry`,
+   `defaultCurrencyForCountry`, `normalizeCountryCode`) live in
+   `src/finance/country-codes.js`; the duplicated per-editor currency helpers now
+   delegate to it. `ScenarioLoader._normalizeCountryCodes` rewrites legacy
+   spellings on persisted scenarios at load (back-compat shim, removable once dev
+   caches clear).
 
 3. **`primaryPersonKey` wiring.** The household-wide handlers
    (`MonthlyExpensesHandler`, `ExpenseDebitReducer`, `InflationAdjustReducer`)

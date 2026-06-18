@@ -45,10 +45,10 @@ export const AU_2022 = {
  * Resolve the life table for a given residency string.
  * Returns CDC_2024 for US residency and as the fallback (§10 Q1).
  *
- * @param {string} [residency] - e.g. 'US', 'AUS'
+ * @param {string} [residency] - e.g. 'US', 'AU'
  * @returns {object} Life-table object
  */
 export function lookupLifeTable(residency) {
-  if (residency === 'AUS') return AU_2022;
+  if (residency === 'AU') return AU_2022;
   return CDC_2024;
 }

@@ -72,7 +72,7 @@ test('EB-1: US-resident-at-death produces HOLDING_SET_BASIS actions for each hol
 // ── EB-2 ──────────────────────────────────────────────────────────────────────
 
 test('EB-2: AU-resident-at-death produces no HOLDING_SET_BASIS actions', () => {
-  const actions = callHandler(makeState({ deceasedResidency: 'AUS' }));
+  const actions = callHandler(makeState({ deceasedResidency: 'AU' }));
   const basisActions = actions.filter(a => a.type === 'HOLDING_SET_BASIS');
   assert.strictEqual(basisActions.length, 0, 'AU CGT cost-base carries over; no step-up');
 });
@@ -91,8 +91,8 @@ test('EB-3: HOLDING_SET_BASIS sets costBasis to the holding marketValue', () => 
 // ── EB-4 ──────────────────────────────────────────────────────────────────────
 
 test('EB-4: AU-resident widow inheriting from US-resident deceased still gets step-up', () => {
-  // The rule keys off deceased taxJurisdiction (US), not survivor's residency (AUS)
-  const actions = callHandler(makeState({ deceasedResidency: 'US', survivorResidency: 'AUS' }));
+  // The rule keys off deceased taxJurisdiction (US), not survivor's residency (AU)
+  const actions = callHandler(makeState({ deceasedResidency: 'US', survivorResidency: 'AU' }));
   const basisActions = actions.filter(a => a.type === 'HOLDING_SET_BASIS');
   assert.strictEqual(basisActions.length, 2, 'step-up applies regardless of survivor residency');
 });

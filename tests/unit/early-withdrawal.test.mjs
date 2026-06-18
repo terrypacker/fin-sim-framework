@@ -163,7 +163,7 @@ test('EW-3: Roth earnings drawn in phase 2 after contributions exhausted', () =>
   assert.strictEqual(pendingTaxActions.length, 1);
   assert.strictEqual(pendingTaxActions[0].type, 'ROTH_WITHDRAWAL_EARNINGS_TAX');
   assert.ok(pendingTaxActions[0].penaltyAmount > 0);
-  assert.notStrictEqual(pendingTaxActions[0].residency, 'AUS');
+  assert.notStrictEqual(pendingTaxActions[0].residency, 'AU');
 });
 
 test('EW-3: Roth earnings penalty is 10% of gross withdrawal', () => {
@@ -188,11 +188,11 @@ test('EW-3: Roth earnings drawdown includes AU ordinary income when AU resident'
   const date   = new Date(2026, 0, 1);
   const target = new CheckingAccount(0, { country: 'US', currency: USD });
   const roth   = new RothAccount(10000, { contributionBasis: 0, earningsBasis: 10000, drawdownPriority: 1 });
-  const state  = { target, roth, people: { primary: { birthDate: new Date(1990, 0, 1), residency: 'AUS' } } };
+  const state  = { target, roth, people: { primary: { birthDate: new Date(1990, 0, 1), residency: 'AU' } } };
 
   const { pendingTaxActions } = svc.replenishSavings(state, 'target', 9000, date);
 
-  assert.strictEqual(pendingTaxActions[0].residency, 'AUS');
+  assert.strictEqual(pendingTaxActions[0].residency, 'AU');
 });
 
 test('EW-3: Roth earnings at or above age 59.5 — no penalty', () => {
@@ -252,13 +252,13 @@ test('EW-4: IRA earnings withdrawal includes AU ordinary income when AU resident
   const date   = new Date(2026, 0, 1);
   const target = new CheckingAccount(0, { country: 'US', currency: USD });
   const ira    = new TraditionalIRAAccount(20000, { contributionBasis: 0, earningsBasis: 20000, drawdownPriority: 1 });
-  const state  = { target, ira, people: { primary: { birthDate: new Date(1990, 0, 1), residency: 'AUS' } } };
+  const state  = { target, ira, people: { primary: { birthDate: new Date(1990, 0, 1), residency: 'AU' } } };
 
   const { pendingTaxActions } = svc.replenishSavings(state, 'target', 9000, date);
 
   const earningsTax = pendingTaxActions.find(a => a.type === 'IRA_WITHDRAWAL_EARNINGS_TAX');
   assert.ok(earningsTax, 'IRA_WITHDRAWAL_EARNINGS_TAX action expected');
-  assert.strictEqual(earningsTax.residency, 'AUS');
+  assert.strictEqual(earningsTax.residency, 'AU');
 });
 
 test('EW-4: IRA contribution withdrawal has no AU tax field', () => {

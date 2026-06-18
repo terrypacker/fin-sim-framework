@@ -44,7 +44,7 @@ describe('Phase 5 currency selectors', () => {
   test('PersonEditor defaults currency from residency when absent', () => {
     const editor = new PersonEditor({
       container: makeMockContainer(),
-      node: { id: 'p2', name: 'Bob', citizen: ['US'], residency: 'AUS' },
+      node: { id: 'p2', name: 'Bob', citizen: ['US'], residency: 'AU' },
     });
     editor.render();
     expect(editor._rootEl.querySelector('[data-id="wageCurrency"]').value).toBe('AUD');

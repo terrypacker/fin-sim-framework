@@ -70,7 +70,7 @@ test('registerPerson: wage/SS stamp per-field currency (design 10 §Phase 5)', (
   assert.equal(reg.resolve('people.p1.socialSecurityMonthly').currencyCode, 'USD');
 
   // Defaults from residency / citizenship when no explicit code is present.
-  reg.registerPerson({ id: 'p2', residency: 'AUS' });
+  reg.registerPerson({ id: 'p2', residency: 'AU' });
   assert.equal(reg.resolve('people.p2.monthlyWage').currencyCode, 'AUD');
   reg.registerPerson({ id: 'p3', citizen: ['US'] });
   assert.equal(reg.resolve('people.p3.monthlyWage').currencyCode, 'USD');

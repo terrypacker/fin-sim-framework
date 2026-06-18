@@ -17,7 +17,7 @@ import { convertExpenseToAccount } from '../fx/expense-fx.js';
  *
  * Reads primaryPersonKey's residency to determine whether expenses
  * come from the US savings account (USD, 'US' residency) or AU savings account
- * (AUD, 'AUS' residency).
+ * (AUD, 'AU' residency).
  *
  * The configured expense figure is denominated in `expensesCurrency` (the
  * currency chosen for the monthlyExpenses param, USD by default). Before
@@ -102,7 +102,7 @@ export class MonthlyExpensesHandler extends HandlerEntry {
     const nativeAmount = data?.amount ?? state.monthlyExpenses ?? this.monthlyExpenses;
     const personKey   = this.primaryPersonKey ?? Object.keys(state.people ?? {})[0];
     const residency   = state.people?.[personKey]?.residency ?? null;
-    const isAu        = residency === 'AUS';
+    const isAu        = residency === 'AU';
     const targetKey   = isAu
       ? this.stateRegistry.getStateKey(this.auRole, this.auOwnerId)
       : this.stateRegistry.getStateKey(this.usRole, this.usOwnerId);

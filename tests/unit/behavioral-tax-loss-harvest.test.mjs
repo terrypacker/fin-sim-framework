@@ -43,7 +43,7 @@ function account({ holdings = [], balance = null }) {
 }
 
 function makeState(stateKey, acct, extra = {}) {
-  return { [stateKey]: acct, usCapitalGainsYTD: 0, people: { primary: { residency: 'USA' } }, ...extra };
+  return { [stateKey]: acct, usCapitalGainsYTD: 0, people: { primary: { residency: 'US' } }, ...extra };
 }
 
 // ─── StockHarvestApplyReducer ─────────────────────────────────────────────────
@@ -64,7 +64,7 @@ describe('StockHarvestApplyReducer', () => {
       sourceHoldingId:     'h1',
       substituteHoldingId: 'h2',
       purpose:             'LOSS',
-      residency:           'USA',
+      residency:           'US',
     });
 
     // The chained STOCK_WITHDRAWAL_TAX action must carry a NEGATIVE gain
@@ -83,7 +83,7 @@ describe('StockHarvestApplyReducer', () => {
     const result = reducer.reduce(state, {
       type: 'STOCK_HARVEST_APPLY', stateKey: 'usStockAccount',
       sellAmount: 1000, sourceHoldingId: 'h1', substituteHoldingId: 'h2',
-      purpose: 'LOSS', residency: 'USA',
+      purpose: 'LOSS', residency: 'US',
     });
 
     const newHoldings = result.usStockAccount.holdings;
@@ -105,7 +105,7 @@ describe('StockHarvestApplyReducer', () => {
     const result = reducer.reduce(state, {
       type: 'STOCK_HARVEST_APPLY', stateKey: 'usStockAccount',
       sellAmount: 800, sourceHoldingId: 'h1', substituteHoldingId: 'h2',
-      purpose: 'LOSS', residency: 'USA',
+      purpose: 'LOSS', residency: 'US',
     });
 
     const newBalance = result.usStockAccount.balance;
@@ -124,7 +124,7 @@ describe('StockHarvestApplyReducer', () => {
     const result = reducer.reduce(state, {
       type: 'STOCK_HARVEST_APPLY', stateKey: 'usStockAccount',
       sellAmount: 500, sourceHoldingId: 'h1', substituteHoldingId: 'h2',
-      purpose: 'LOSS', residency: 'USA',
+      purpose: 'LOSS', residency: 'US',
     });
 
     const tax = result.next.find(a => a.type === 'STOCK_WITHDRAWAL_TAX');
@@ -139,7 +139,7 @@ describe('StockHarvestApplyReducer', () => {
     const result = reducer.reduce(state, {
       type: 'STOCK_HARVEST_APPLY', stateKey: 'usStockAccount',
       sellAmount: 1000, sourceHoldingId: 'nonexistent', substituteHoldingId: 'h2',
-      purpose: 'LOSS', residency: 'USA',
+      purpose: 'LOSS', residency: 'US',
     });
 
     assert.strictEqual(result, state, 'state must be unchanged when source holding not found');
@@ -152,7 +152,7 @@ describe('StockHarvestApplyReducer', () => {
     const result = reducer.reduce(state, {
       type: 'STOCK_HARVEST_APPLY', stateKey: 'noSuchAccount',
       sellAmount: 1000, sourceHoldingId: 'h1', substituteHoldingId: 'h2',
-      purpose: 'LOSS', residency: 'USA',
+      purpose: 'LOSS', residency: 'US',
     });
 
     assert.strictEqual(result, state);
@@ -167,7 +167,7 @@ describe('StockHarvestApplyReducer', () => {
     const result = reducer.reduce(state, {
       type: 'STOCK_HARVEST_APPLY', stateKey: 'usStockAccount',
       sellAmount: 2000, sourceHoldingId: 'h1', substituteHoldingId: 'h1',
-      purpose: 'GAIN', residency: 'USA',
+      purpose: 'GAIN', residency: 'US',
     });
 
     const tax = result.next.find(a => a.type === 'STOCK_WITHDRAWAL_TAX');
@@ -191,7 +191,7 @@ describe('TaxLossHarvestHandler', () => {
     const h1 = holding({ id: 'h1', mv: 1000, basis: 1500, rateKey: 'EQUITY_US' });
     const h2 = holding({ id: 'h2', mv: 2000, basis: 1800, rateKey: 'EQUITY_INTL' });  // above basis (no harvest)
     const h3 = holding({ id: 'h3', mv: 500,  basis: 800,  rateKey: 'EQUITY_US' });    // below basis, partner = h1
-    const state = { usStockAccount: account({ holdings: [h1, h2, h3] }), people: { primary: { residency: 'USA' } } };
+    const state = { usStockAccount: account({ holdings: [h1, h2, h3] }), people: { primary: { residency: 'US' } } };
 
     // Give h3 the partner (h1) and h1 the partner (h3) so substitutes resolve
     state.usStockAccount.holdings[0].taxLossPartner = 'h3';
@@ -212,7 +212,7 @@ describe('TaxLossHarvestHandler', () => {
     const h1 = holding({ id: 'h1', mv: 1000, basis: 2000, rateKey: 'EQUITY_US' });
     const h2 = holding({ id: 'h2', mv: 5000, basis: 5000, rateKey: 'EQUITY_INTL' });
     h1.taxLossPartner = 'h2';
-    const state = { usStockAccount: account({ holdings: [h1, h2] }), people: { primary: { residency: 'USA' } } };
+    const state = { usStockAccount: account({ holdings: [h1, h2] }), people: { primary: { residency: 'US' } } };
 
     const handler = new TaxLossHarvestHandler({ taxableStateKeys: ['usStockAccount'], taxLossHarvestCap: 600 });
     const actions = handler.call({ state });
@@ -235,7 +235,7 @@ describe('TaxLossHarvestHandler', () => {
   test('TLH-H-3: no substitute → action skipped (no crash)', () => {
     const h1 = holding({ id: 'h1', mv: 1000, basis: 1500, rateKey: 'EQUITY_US' });
     // No partner, no other holding with same rateKey
-    const state = { usStockAccount: account({ holdings: [h1] }), people: { primary: { residency: 'USA' } } };
+    const state = { usStockAccount: account({ holdings: [h1] }), people: { primary: { residency: 'US' } } };
 
     const handler = new TaxLossHarvestHandler({ taxableStateKeys: ['usStockAccount'], taxLossHarvestCap: 10000 });
     const actions = handler.call({ state });
@@ -245,7 +245,7 @@ describe('TaxLossHarvestHandler', () => {
 
   test('TLH-H-4: skips accounts not in taxableStateKeys (tax-advantaged are no-op)', () => {
     const h1 = holding({ id: 'h1', mv: 500, basis: 1000, rateKey: 'EQUITY_US' });
-    const state = { k401Account: account({ holdings: [h1] }), people: { primary: { residency: 'USA' } } };
+    const state = { k401Account: account({ holdings: [h1] }), people: { primary: { residency: 'US' } } };
 
     // taxableStateKeys does NOT include k401Account
     const handler = new TaxLossHarvestHandler({ taxableStateKeys: ['usStockAccount'], taxLossHarvestCap: 10000 });
@@ -295,7 +295,7 @@ describe('TaxGainHarvestHandler', () => {
     const state = {
       usStockAccount: account({ holdings: [h1] }),
       usOrdinaryIncomeYTD: 0, usCapitalGainsYTD: 0,
-      people: { primary: { residency: 'USA' } },
+      people: { primary: { residency: 'US' } },
     };
 
     const handler = new TaxGainHarvestHandler({
@@ -317,7 +317,7 @@ describe('TaxGainHarvestHandler', () => {
     const state = {
       usStockAccount: account({ holdings: [h1] }),
       usOrdinaryIncomeYTD: 0, usCapitalGainsYTD: 0,
-      people: { primary: { residency: 'USA' } },
+      people: { primary: { residency: 'US' } },
     };
 
     const handler = new TaxGainHarvestHandler({ taxableStateKeys: ['usStockAccount'], taxGainHarvestBracketCeiling: 0 });
@@ -329,7 +329,7 @@ describe('TaxGainHarvestHandler', () => {
     const state = {
       usStockAccount: account({ holdings: [h1] }),
       usOrdinaryIncomeYTD: 50000, usCapitalGainsYTD: 0,
-      people: { primary: { residency: 'USA' } },
+      people: { primary: { residency: 'US' } },
     };
 
     const handler = new TaxGainHarvestHandler({ taxableStateKeys: ['usStockAccount'], taxGainHarvestBracketCeiling: 47000 });
@@ -342,7 +342,7 @@ describe('TaxGainHarvestHandler', () => {
     const state = {
       usStockAccount: account({ holdings: [loss, gain] }),
       usOrdinaryIncomeYTD: 0, usCapitalGainsYTD: 0,
-      people: { primary: { residency: 'USA' } },
+      people: { primary: { residency: 'US' } },
     };
 
     const handler = new TaxGainHarvestHandler({ taxableStateKeys: ['usStockAccount'], taxGainHarvestBracketCeiling: 47000 });
