@@ -620,6 +620,8 @@ function _accountToStatePlain(account) {
     plain.balanceAtResidencyChange = account.balanceAtResidencyChange ?? null;
     if (account.rolloverContribBasis  !== undefined) plain.rolloverContribBasis  = account.rolloverContribBasis;
     if (account.rolloverEarningsBasis !== undefined) plain.rolloverEarningsBasis = account.rolloverEarningsBasis;
+    // Dated conversion lots backing the §408A(d)(3)(F) 5-year recapture (EVT-43).
+    if (account.rolloverContribBasis  !== undefined) plain.rolloverConversions   = (account.rolloverConversions ?? []).map(l => ({ ...l }));
   }
   return plain;
 }

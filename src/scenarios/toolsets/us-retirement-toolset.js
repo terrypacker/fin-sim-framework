@@ -94,6 +94,8 @@ function _accountToStatePlain(account) {
     plain.balanceAtResidencyChange = account.balanceAtResidencyChange ?? null;
     if (account.rolloverContribBasis  !== undefined) plain.rolloverContribBasis  = account.rolloverContribBasis;
     if (account.rolloverEarningsBasis !== undefined) plain.rolloverEarningsBasis = account.rolloverEarningsBasis;
+    // Dated conversion lots backing the §408A(d)(3)(F) 5-year recapture (EVT-43).
+    if (account.rolloverContribBasis  !== undefined) plain.rolloverConversions   = (account.rolloverConversions ?? []).map(l => ({ ...l }));
   }
   return plain;
 }
@@ -156,9 +158,10 @@ export const US_RETIREMENT = {
       { type: 'ROTH_EARNINGS_APPLY',                    fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text() } },
       { type: 'ROTH_ROLLOVER_CONTRIBUTION_APPLY',        fields: { amount: ValueType.currency('USD') } },
       { type: 'ROTH_ROLLOVER_EARNINGS_APPLY',            fields: { amount: ValueType.currency('USD') } },
-      { type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
-      { type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_APPLY', family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
-      { type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX',   fields: { amount: ValueType.currency('USD'), residency: ValueType.text() } },
+      { type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), auAssessableAmount: ValueType.number(), residency: ValueType.text(), rolloverConversions: ValueType.any() } },
+      { type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_TAX',    fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), auAssessableAmount: ValueType.number(), residency: ValueType.text() } },
+      { type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_APPLY', family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number() } },
+      { type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX',   fields: { amount: ValueType.currency('USD'), penaltyAmount: ValueType.number(), residency: ValueType.text() } },
       { type: 'IRA_CONTRIBUTION_APPLY',                 fields: { amount: ValueType.currency('USD') } },
       { type: 'IRA_CONTRIBUTION_TAX',                   fields: { amount: ValueType.currency('USD') } },
       { type: 'IRA_WITHDRAWAL_CONTRIB_APPLY',   family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },

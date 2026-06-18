@@ -591,6 +591,13 @@ export class ScenarioSerializer {
       d.loanBalance              = account.loanBalance              ?? 0;
       d.minimumAge               = account.minimumAge               ?? null;
       d.balanceAtResidencyChange = account.balanceAtResidencyChange ?? null;
+      // Roth rollover (conversion) buckets — only emitted when present so
+      // accounts without conversions round-trip unchanged.
+      if (account.rolloverContribBasis  != null) d.rolloverContribBasis  = account.rolloverContribBasis;
+      if (account.rolloverEarningsBasis != null) d.rolloverEarningsBasis = account.rolloverEarningsBasis;
+      if (Array.isArray(account.rolloverConversions) && account.rolloverConversions.length > 0) {
+        d.rolloverConversions = account.rolloverConversions.map(l => ({ ...l }));
+      }
     }
     // Holdings (design 25 §8). Round-trip via Holding.toJSON; null when
     // absent so legacy configs (no holdings field) round-trip unchanged
@@ -819,6 +826,7 @@ export class ScenarioSerializer {
     if (d.stateKey) account.stateKey = d.stateKey;
     if (d.rolloverContribBasis  != null) account.rolloverContribBasis  = d.rolloverContribBasis;
     if (d.rolloverEarningsBasis != null) account.rolloverEarningsBasis = d.rolloverEarningsBasis;
+    if (Array.isArray(d.rolloverConversions)) account.rolloverConversions = d.rolloverConversions.map(l => ({ ...l }));
     // Holdings (design 25 §8) — restored via Holding.fromJSON. When absent
     // the account's empty holdings array triggers AccountService.register()'s
     // default-holding bootstrap, preserving legacy single-sleeve behavior.
