@@ -488,6 +488,10 @@ export class WorkbenchApp extends BaseComponent {
     // user has saved/edited. ScenarioLoader dispatches to deserializeGraph() (if
     // cfg carries a saved graph snapshot) or toolset compilation.
     const activeConfig = registry.scenarioService.getActive();
+    // Remember which cfg is loaded into the services so destroyScenario() harvests
+    // in-flight edits back into THIS scenario, even after the active pointer moves
+    // to a different scenario on a switch (prevents cross-scenario holdings leak).
+    this._loadedCfg = activeConfig;
     this.scenario.watchlists = activeConfig?.watchlists ?? [];
     new ScenarioLoader().load(activeConfig, registry);
 
@@ -732,13 +736,18 @@ export class WorkbenchApp extends BaseComponent {
     const registry = ServiceRegistry.getInstance();
 
     // Harvest in-flight free-field domain edits (currency, holdings, names, …)
-    // into the active scenario record BEFORE reset so Rebuild rebuilds what the
-    // user currently has configured (design/32), not the last-Saved cfg. Records
-    // only — not the graph — so ScenarioLoader still recompiles toolsets, and the
+    // into the scenario record BEFORE reset so Rebuild rebuilds what the user
+    // currently has configured (design/32), not the last-Saved cfg. Records only
+    // — not the graph — so ScenarioLoader still recompiles toolsets, and the
     // param→node cascade re-applies node-linked fields from their params.
-    const activeCfg = registry?.scenarioService?.getActive?.();
-    if (activeCfg) {
-      Object.assign(activeCfg, ScenarioSerializer.snapshotDomainRecords(registry));
+    //
+    // Harvest into the cfg that is actually LOADED in the services (`_loadedCfg`),
+    // NOT scenarioService.getActive(): on a scenario switch the active pointer has
+    // already moved to the incoming scenario, so getActive() would write the
+    // outgoing scenario's live holdings into the incoming one (cross-scenario
+    // leak). On a Rebuild the two are identical, so this is a no-op difference.
+    if (this._loadedCfg) {
+      Object.assign(this._loadedCfg, ScenarioSerializer.snapshotDomainRecords(registry));
     }
 
     registry?.graph.clearLayer('config');

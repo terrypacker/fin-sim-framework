@@ -73,9 +73,12 @@ export class HoldingTransactReducer extends Reducer {
     const target = account.holdings.find(h => h?.id === holdingId);
     if (!target) return this.newState(state);
 
+    // Floor both at zero: a withdrawal delta must never drive a position (or its
+    // basis) negative. account.balance is re-synced to Σ marketValue below, so
+    // the §4.4 invariant is preserved after the floor.
     const patched = _patchHolding(target, {
-      marketValue: (target.marketValue ?? 0) + marketValueDelta,
-      costBasis:   (target.costBasis   ?? 0) + costBasisDelta,
+      marketValue: Math.max(0, (target.marketValue ?? 0) + marketValueDelta),
+      costBasis:   Math.max(0, (target.costBasis   ?? 0) + costBasisDelta),
     });
     const nextHoldings = _replaceHolding(account.holdings, holdingId, patched);
     const nextAccount  = _syncBalance({ ...account, holdings: nextHoldings });

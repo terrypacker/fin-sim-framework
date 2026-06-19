@@ -97,8 +97,9 @@ import { resolveScheduledRate } from './finance/holdings/appreciation-schedule-u
 import { bootstrapHoldingSplit } from './finance/holdings/bootstrap-holding-split.js';
 import { DEFAULT_ALLOCATION_BY_ROLE, DEFAULT_ALLOCATION_BY_TYPE, resolveDefaultAllocation, resolveRateKey } from './finance/holdings/default-allocations.js';
 import { HOLDING_ACTION_TYPES, HOLDING_ACTION_ENTRIES, HoldingTransactAction, HoldingRevalueAction, HoldingSetBasisAction, HoldingSplitAction, HoldingRetitleAction, HOLDING_ACTION_CLASSES, registerHoldingActionTypes } from './finance/holdings/holding-actions.js';
+import { HOLDING_ACTIVITY_KIND, snapshotHoldings, totalSnapshot, buildHoldingActivity } from './finance/holdings/holding-activity.js';
 import { HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer, HoldingSplitReducer, HoldingRetitleReducer, HOLDING_REDUCER_CLASSES, _syncBalance } from './finance/holdings/holding-reducers.js';
-import { scaleHoldings } from './finance/holdings/holding-utils.js';
+import { scaleHoldings, rescaleHoldingsToBalance, distributeHoldingsCredit, holdingsOutOfSync } from './finance/holdings/holding-utils.js';
 import { Holding } from './finance/holdings/holding.js';
 import { computeHoldingsGrowth, computeHoldingsDividends } from './finance/holdings/holdings-earnings.js';
 import { consumeHoldingsFifo } from './finance/holdings/holdings-fifo.js';
@@ -342,7 +343,7 @@ import { WorkbenchComponent } from './visualization/workbench/component.js';
 import { WorkbenchLayoutModel } from './visualization/workbench/layout-model.js';
 import { PluginRegistry } from './visualization/workbench/plugin-registry.js';
 import { PLUGIN_CATEGORIES, PLUGIN_PANES, definePlugin } from './visualization/workbench/plugin-sdk.js';
-import { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, JournalReportPlugin, ScenarioComparePlugin, DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
+import { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, JournalReportPlugin, ScenarioComparePlugin, DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
 import { SplitPane } from './visualization/workbench/split-pane.js';
 import { TabGroup } from './visualization/workbench/tab-group.js';
 import { WB_EVENTS, WorkbenchRuntime } from './visualization/workbench/workbench-runtime.js';
@@ -602,6 +603,10 @@ export const Finance = {
   HoldingRetitleAction,
   HOLDING_ACTION_CLASSES,
   registerHoldingActionTypes,
+  HOLDING_ACTIVITY_KIND,
+  snapshotHoldings,
+  totalSnapshot,
+  buildHoldingActivity,
   HoldingTransactReducer,
   HoldingRevalueReducer,
   HoldingSetBasisReducer,
@@ -610,6 +615,9 @@ export const Finance = {
   HOLDING_REDUCER_CLASSES,
   _syncBalance,
   scaleHoldings,
+  rescaleHoldingsToBalance,
+  distributeHoldingsCredit,
+  holdingsOutOfSync,
   Holding,
   computeHoldingsGrowth,
   computeHoldingsDividends,
@@ -1041,6 +1049,7 @@ export const FinancePlugins = {
   DgConfigPlugin,
   DgResultsPlugin,
   CrossActionQueryPlugin,
+  HoldingsPlugin,
   FINANCE_PLUGINS,
   FINANCE_DEFAULT_LAYOUT,
 };

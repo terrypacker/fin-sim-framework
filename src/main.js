@@ -17,6 +17,7 @@ import '../assets/css/plugins/monte-carlo.css';
 import '../assets/css/plugins/scenario-compare.css';
 import '../assets/css/plugins/decision-graph.css';
 import '../assets/css/plugins/cross-action-query.css';
+import '../assets/css/plugins/holdings.css';
 
 import { SimulationWorkbench } from './apps/simulation-workbench.js';
 import { ServiceRegistry }      from './services/service-registry.js';

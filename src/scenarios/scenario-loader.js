@@ -9,6 +9,7 @@
  */
 
 import { ScenarioSerializer }     from './scenario-serializer.js';
+import { rescaleHoldingsToBalance } from '../finance/holdings/holding-utils.js';
 import { ToolsetRegistry }         from './toolsets/toolset-registry.js';
 import { ScenarioCompiler }        from './toolsets/scenario-compiler.js';
 import { IntlRetirementScenario }  from './intl-retirement-scenario.js';
@@ -268,7 +269,15 @@ export class ScenarioLoader {
       if (rec) rec[node.field] = val instanceof Date ? val.toISOString() : val;
     } else if (node.type === 'account') {
       const rec = (cfg.accounts ?? []).find(r => r.stateKey === node.stateKey);
-      if (rec) rec[node.field] = val;
+      if (rec) {
+        rec[node.field] = val;
+        // §4.4 invariant: a balance cascade must rescale holdings to match,
+        // otherwise the holdings sum drifts away from the edited balance
+        // (design 25 §4.4 / holdings-balance desync).
+        if (node.field === 'balance' && Array.isArray(rec.holdings) && rec.holdings.length > 0) {
+          rescaleHoldingsToBalance(rec.holdings, val);
+        }
+      }
     } else if (node.type === 'realProperty') {
       const rec = (cfg.realProperties ?? []).find(r => r.stateKey === node.stateKey);
       if (rec) rec[node.field] = val != null ? Math.round(val) : val;

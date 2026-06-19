@@ -12,6 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { consumeHoldingsFifo } from '../../holdings/holdings-fifo.js';
+import { distributeHoldingsCredit } from '../../holdings/holding-utils.js';
 
 /** Resolve the US cash pool. */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
@@ -138,6 +139,11 @@ export class StockDividendApplyReducer extends AccountServiceReducer {
           balance:           sa.balance           + amount,
           contributionBasis: sa.contributionBasis + amount,
           earningsBasis:     sa.earningsBasis     + amount,
+          // Reinvest the dividend into the holdings so Σ marketValue tracks the
+          // balance credit (§4.4 invariant). Without this the scalar balance
+          // credit desyncs from holdings and is discarded by the next earnings
+          // _syncBalance. Basis rises with the reinvested cash.
+          holdings:          distributeHoldingsCredit(sa.holdings, amount),
         },
       },
       [{ type: 'STOCK_DIVIDEND_TAX', amount, residency }]
