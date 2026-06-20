@@ -22,8 +22,8 @@ import { BaseEvent } from './base-event.js';
  * regardless of simStart (e.g. month=6, day=30 → Jun 30 annually for AU tax settle).
  */
 export class EventSeries extends BaseEvent {
-  constructor({ id, name, type, enabled = true, color = '#888888', interval, startOffset = 0, month, day, data = {}, meta = {} } = {}) {
-    super({ id, name, type, enabled, color, data, meta });
+  constructor({ id, name, type, enabled = true, color = '#888888', order = 0, interval, startOffset = 0, month, day, data = {}, meta = {} } = {}) {
+    super({ id, name, type, enabled, color, order, data, meta });
     this.interval    = interval;
     this.startOffset = startOffset;
     if (month != null) this.month = month;

@@ -9,6 +9,7 @@
  */
 
 import { TaxDocumentRegistry } from './tax/tax-document-registry.js';
+import { StateTaxDocumentReporter } from './tax/state/state-tax-document.js';
 
 /**
  * JournalReportingService — dispatches journal entries to document reporters.
@@ -31,6 +32,7 @@ export class JournalReportingService {
     const taxDocs = new TaxDocumentRegistry();
     this.register('US_TAX_SETTLE_APPLY', taxDocs);
     this.register('AU_TAX_SETTLE_APPLY', taxDocs);
+    this.register('STATE_TAX_SETTLE_APPLY', new StateTaxDocumentReporter());
   }
 
   /**

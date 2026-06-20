@@ -16,8 +16,8 @@ import { BaseEvent } from './base-event.js';
  * @property {Date} date - The date on which this event fires
  */
 export class OneOffEvent extends BaseEvent {
-  constructor({ id, name, type, enabled = true, color = '#888888', date, data = {}, meta = {} } = {}) {
-    super({ id, name, type, enabled, color, data, meta });
+  constructor({ id, name, type, enabled = true, color = '#888888', order = 0, date, data = {}, meta = {} } = {}) {
+    super({ id, name, type, enabled, color, order, data, meta });
     this.date = date;
   }
 }

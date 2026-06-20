@@ -179,7 +179,8 @@ export class StateSchemaRegistry {
     this.registerPattern('effectiveFxFees.*',        ParameterValueType.currency('USD'));
 
     // ── Well-known exact fields ───────────────────────────────────────────────
-    this.registerPattern('people.*.residency',    ParameterValueType.text());
+    this.registerPattern('people.*.residency',      ParameterValueType.text());
+    this.registerPattern('people.*.residencyState', ParameterValueType.text());
     // Person income (monthlyWage / socialSecurityMonthly) is stamped per-person and
     // per-field via registerPerson() (design 10 §Phase 5), keyed on each person's
     // wageCurrency / ssCurrency. No code-less glob remains so an unstamped person
@@ -204,6 +205,12 @@ export class StateSchemaRegistry {
     this.register('usPenaltyYTD',                ParameterValueType.currency('USD'));
     this.register('ftcYTD',                      ParameterValueType.currency('USD'));
     this.register('cumulativeDeficit',           ParameterValueType.currency('USD'));
+
+    // US state income tax YTD (design 34) — USD
+    this.register('stateOrdinaryIncomeYTD',      ParameterValueType.currency('USD'));
+    this.register('statePensionIncomeYTD',       ParameterValueType.currency('USD'));
+    this.register('stateSsIncomeYTD',            ParameterValueType.currency('USD'));
+    this.register('stateCapitalGainsYTD',        ParameterValueType.currency('USD'));
 
     // AU YTD
     this.register('auOrdinaryIncomeYTD',         ParameterValueType.currency('AUD'));

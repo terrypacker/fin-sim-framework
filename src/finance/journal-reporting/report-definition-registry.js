@@ -419,7 +419,7 @@ class DebitsFromAccountDef extends ReportDefinition {
 class TaxPaidByYearDef extends ReportDefinition {
   get id()          { return 'tax-paid-by-year'; }
   get title()       { return 'Tax Paid by Year'; }
-  get description() { return 'Tax payments debited from cash by year (TAX_PAYMENT_DEBIT entries). Household-level — for per-person AU drill-down use the "AU Tax by Person & Year" report.'; }
+  get description() { return 'Tax payments debited from cash by year (TAX_PAYMENT_DEBIT entries). The US total includes federal AND state income tax; use "US State Tax by Year" to isolate the state portion, or "AU Tax by Person & Year" for the per-person AU drill-down.'; }
 
   get facets() {
     return [
@@ -456,6 +456,46 @@ class TaxPaidByYearDef extends ReportDefinition {
     return { op: 'and', conditions: [
       periodAst,
       { op: 'in', field: 'actionType', value: actionTypes },
+    ] };
+  }
+}
+
+/**
+ * US state income tax paid by year (design 34). STATE_TAX_PAYMENT_DEBIT shares the
+ * TAX_PAYMENT_DEBIT family (so it also rolls into "Tax Paid by Year" as part of the
+ * US total), but this report isolates the state portion on its own.
+ */
+class StateTaxByYearDef extends ReportDefinition {
+  get id()          { return 'state-tax-by-year'; }
+  get title()       { return 'US State Tax by Year'; }
+  get description() { return 'US state income tax debited from cash by year (STATE_TAX_PAYMENT_DEBIT entries). The active state follows the primary person\'s residency state.'; }
+
+  get facets() {
+    return [
+      { name: 'period', label: 'Period', kind: 'period' },
+    ];
+  }
+
+  get defaultGroupBy()    { return ['year']; }
+  get defaultSort()       { return [{ field: 'year', dir: 'asc' }]; }
+  get defaultAggregates() {
+    return {
+      total: { fn: 'sum', field: 'amount' },
+      count: { fn: 'count'                },
+    };
+  }
+
+  // State tax follows the US calendar year.
+  periodTypeFor(_params) { return 'YEAR_US'; }
+
+  buildQuery(params, api) {
+    const { period } = params;
+    // Tax-year semantics: STATE_TAX_PAYMENT_DEBIT is chained from
+    // STATE_TAX_SETTLE_APPLY (Dec 31) and shares its date with a higher seq.
+    const periodAst = api.periodOfTaxYear(period);
+    return { op: 'and', conditions: [
+      periodAst,
+      { op: 'eq', field: 'actionType', value: 'STATE_TAX_PAYMENT_DEBIT' },
     ] };
   }
 }
@@ -596,6 +636,7 @@ export class ReportDefinitionRegistry {
       new CreditsToAccountDef(),
       new DebitsFromAccountDef(),
       new TaxPaidByYearDef(),
+      new StateTaxByYearDef(),
       new AuTaxByPersonYearDef(),
       new RothConversionsByYearDef(),
       new RealPropertyCashFlowDef(),

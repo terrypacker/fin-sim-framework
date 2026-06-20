@@ -89,6 +89,8 @@ import { AssetAppreciationHandler, AssetAppreciateReducer } from '../finance/han
 import { UsPeriodAdvanceHandler, AuPeriodAdvanceHandler, UsPeriodAdvanceReducer, AuPeriodAdvanceReducer } from '../finance/tax/period-advance-classes.js';
 import { UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from '../finance/tax/tax-settle-classes.js';
 import { DynamicTaxReducer }  from '../finance/tax/dynamic-tax-reducer.js';
+import { StateTaxSettleHandler, StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer } from '../finance/tax/state/state-tax-settle-classes.js';
+import { StateIncomeClassificationReducer } from '../finance/tax/state/state-income-classification.js';
 
 // ─── US account-module handlers and reducers ────────────────────────────────
 import {
@@ -209,7 +211,7 @@ const _ALL_CLASSES = [
   MortalityHandler, LateLifeCareHandler,
   UsMortgagePaymentHandler, AuMortgagePaymentHandler,
   UsPeriodAdvanceHandler, AuPeriodAdvanceHandler,
-  UsTaxSettleHandler, AuTaxSettleHandler,
+  UsTaxSettleHandler, AuTaxSettleHandler, StateTaxSettleHandler,
   RothContributionHandler, RothWithdrawalContributionsHandler,
   RothWithdrawalEarningsHandler, RothEarningsHandler,
   IraContributionHandler, IraWithdrawalContributionsHandler,
@@ -245,6 +247,7 @@ const _ALL_CLASSES = [
   UsTaxSettleApplyReducer, AuTaxSettleApplyReducer,
   UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer,
   DynamicTaxReducer,
+  StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer, StateIncomeClassificationReducer,
   RothContributionApplyReducer, RothWithdrawalContribApplyReducer,
   RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer,
   IraContributionApplyReducer, IraWithdrawalContribApplyReducer,
@@ -725,6 +728,7 @@ export class ScenarioSerializer {
       // and YYYY-MM-DD, so existing payloads remain readable.
       birthDate:             ScenarioSerializer.toDateStr(person.birthDate),
       citizen:               person.citizen ?? ['US'],
+      residencyState:        person.residencyState ?? null,
       lifeExpectancy:        person.lifeExpectancy ?? 90,
       socialSecurityMonthly: person.socialSecurityMonthly ?? 2800,
       monthlyWage:           person.monthlyWage ?? 0,
@@ -745,6 +749,7 @@ export class ScenarioSerializer {
       enabled:  node.enabled ?? false,
       color:    node.color ?? '#888888',
     };
+    if (node.order) d.order = node.order;   // same-date tiebreak; omit when default 0
     if (node.eventType === 'OneOffEvent') {
       d.date = node.date instanceof Date ? node.date.toISOString() : node.date;
       if (node.data && Object.keys(node.data).length > 0) {
@@ -848,6 +853,7 @@ export class ScenarioSerializer {
     const person = new Person(d.id, new Date(d.birthDate), {
       name:                  d.name ?? '',
       citizen:               d.citizen ?? ['US'],
+      residencyState:        d.residencyState ?? null,
       lifeExpectancy:        d.lifeExpectancy ?? 90,
       socialSecurityMonthly: d.socialSecurityMonthly ?? 2800,
       monthlyWage:           d.monthlyWage ?? 0,
@@ -867,6 +873,7 @@ export class ScenarioSerializer {
         date:    d.date ? new Date(d.date) : new Date(),
         enabled: d.enabled ?? false,
         color:   d.color ?? '#888888',
+        order:   d.order ?? 0,
         data:    d.data ?? {},
       });
     } else if (d.__type == 'EventSeries') {
@@ -880,6 +887,7 @@ export class ScenarioSerializer {
         day:         d.day,
         enabled:     d.enabled ?? false,
         color:       d.color ?? '#888888',
+        order:       d.order ?? 0,
         data:        d.data ?? {},
       });
     } else {

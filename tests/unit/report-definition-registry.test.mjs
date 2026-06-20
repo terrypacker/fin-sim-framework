@@ -99,7 +99,7 @@ async function runDef(def, params, entries) {
 
 // ─── Registry composition ────────────────────────────────────────────────────
 
-test('ReportDefinitionRegistry registers the 12 built-in definitions', () => {
+test('ReportDefinitionRegistry registers the 13 built-in definitions', () => {
   const reg = new ReportDefinitionRegistry();
   const ids = reg.getAll().map(d => d.id).sort();
   assert.deepStrictEqual(ids, [
@@ -113,9 +113,29 @@ test('ReportDefinitionRegistry registers the 12 built-in definitions', () => {
     'pretax-adjustments-by-source',
     'real-property-cash-flow',
     'roth-conversions-by-year',
+    'state-tax-by-year',
     'tax-paid-by-year',
     'withdrawals-by-account',
   ]);
+});
+
+// ─── StateTaxByYearDef ───────────────────────────────────────────────────────
+
+test('state-tax-by-year: sums STATE_TAX_PAYMENT_DEBIT by year, ignoring federal tax payments', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('state-tax-by-year');
+
+  const state2026 = entry({ date: new Date(Date.UTC(2026, 11, 31)), actionType: 'STATE_TAX_PAYMENT_DEBIT', data: { amount: 3629 } });
+  const state2027 = entry({ date: new Date(Date.UTC(2027, 11, 31)), actionType: 'STATE_TAX_PAYMENT_DEBIT', data: { amount: 4100 } });
+  // Federal payment in the same year must NOT be counted by the state report.
+  const fed2026   = entry({ date: new Date(Date.UTC(2026, 11, 31)), actionType: 'US_TAX_PAYMENT_DEBIT',    data: { amount: 50000 } });
+
+  const { groups, grandTotal } = await runDef(def, { period: null }, [state2026, state2027, fed2026]);
+
+  const byYear = Object.fromEntries(groups.map(g => [g.key.year, g.total]));
+  assert.strictEqual(byYear[2026], 3629);
+  assert.strictEqual(byYear[2027], 4100);
+  assert.strictEqual(grandTotal, 7729, 'federal payment excluded');
 });
 
 // ─── WithdrawalsByAccountDef ─────────────────────────────────────────────────

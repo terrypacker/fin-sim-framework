@@ -14,6 +14,7 @@ import { ToolsetRegistry }     from './toolsets/toolset-registry.js';
 import { ScenarioCompiler }    from './toolsets/scenario-compiler.js';
 import { US_BANKING }          from './toolsets/us-banking-toolset.js';
 import { US_TAX }              from './toolsets/us-tax-toolset.js';
+import { US_STATE_TAX }        from './toolsets/us-state-tax-toolset.js';
 import { US_RETIREMENT }       from './toolsets/us-retirement-toolset.js';
 import { AU_BANKING }          from './toolsets/au-banking-toolset.js';
 import { AU_TAX }              from './toolsets/au-tax-toolset.js';
@@ -111,6 +112,9 @@ export const INTL_RETIREMENT_DEFAULTS = {
   fixedIncomeBalance:   80_000,
   fixedIncomeInterestRate: 0.04,
 
+  // US state income tax (design 34) — null = no state configured (no state tax)
+  residencyState:   null,
+
   // US investment growth rates (annual, separate from dividends)
   rothGrowthRate:   0.07,
   iraGrowthRate:    0.07,
@@ -198,6 +202,16 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     defaultValue: INTL_RETIREMENT_DEFAULTS.spouseRetirementDate.toISOString(),
     description: 'Date spouse stops working',
     node: { type: 'person', id: 'spouse', field: 'retirementDate' },
+  },
+  {
+    // US state of residency (design 34). Household active state is the primary's;
+    // '' / null = no state configured (no state income tax). The categorical
+    // options make it an optimization/MC axis (design 34 §9).
+    key: 'residencyState', label: 'US Residency State',
+    type: 'Enum', options: ['', 'NE', 'HI', 'SD'], group: 'US Tax', mc: true, opt: true,
+    defaultValue: INTL_RETIREMENT_DEFAULTS.residencyState ?? '',
+    description: 'US state of residency for state income tax (NE, HI, SD). Blank = none.',
+    node: { type: 'person', id: 'primary', field: 'residencyState' },
   },
   {
     key: 'primaryMonthlyWage', label: 'Primary Monthly Wage (USD)',
@@ -438,7 +452,7 @@ export class IntlRetirementScenario extends BaseScenario {
   static buildFullParamSchema() {
     const scenarioKeys = new Set(INTL_RETIREMENT_PARAM_SCHEMA.map(e => e.key));
     const toolsets = [
-      US_BANKING, US_TAX, US_BROKERAGE, US_INCOME, US_RETIREMENT,
+      US_BANKING, US_TAX, US_STATE_TAX, US_BROKERAGE, US_INCOME, US_RETIREMENT,
       AU_BANKING, AU_TAX, AU_BROKERAGE, AU_INCOME, AU_RETIREMENT,
       US_AU_CROSS_BORDER, US_REAL_PROPERTY, AU_REAL_PROPERTY,
       US_COLLECTIBLES, US_ROTH_CONVERSION, ECONOMIC_REGIMES,
@@ -451,7 +465,7 @@ export class IntlRetirementScenario extends BaseScenario {
 
   static getToolsets() {
     return [
-      'US_BANKING', 'US_TAX', 'US_BROKERAGE', 'US_INCOME', 'US_RETIREMENT',
+      'US_BANKING', 'US_TAX', 'US_STATE_TAX', 'US_BROKERAGE', 'US_INCOME', 'US_RETIREMENT',
       'AU_BANKING', 'AU_TAX', 'AU_BROKERAGE', 'AU_INCOME', 'AU_RETIREMENT',
       'US_AU_CROSS_BORDER',
       'US_REAL_PROPERTY', 'AU_REAL_PROPERTY',
@@ -485,6 +499,8 @@ export class IntlRetirementScenario extends BaseScenario {
 
       // ── Parameters (toolset-key names) ──────────────────────────────────────
       parameters: {
+        // US_STATE_TAX (design 34) — cascades onto the primary person's residencyState
+        residencyState:           p.residencyState || null,
         // US_BANKING
         usSavingsInterestRate:    p.usSavingsInterestRate,
         // US_RETIREMENT / AU_RETIREMENT share 'inflationRate'; US_AU_CROSS_BORDER uses both
@@ -512,10 +528,12 @@ export class IntlRetirementScenario extends BaseScenario {
         people: {
           primary: {
             name: 'Primary', residency: 'US', sex: 'M',
+            residencyState: p.residencyState || null,
             lifeExpectancy: p.primaryLifeExpectancy ?? 90,
           },
           spouse: {
             name: 'Spouse', residency: 'US', sex: 'F',
+            residencyState: p.residencyState || null,
             lifeExpectancy: p.spouseLifeExpectancy ?? 90,
           },
         },
@@ -540,6 +558,7 @@ export class IntlRetirementScenario extends BaseScenario {
           __type: 'Person', id: 'primary', name: 'Primary',
           birthDate:      isoDate(p.primaryBirthDate),
           citizen:        ['US'],
+          residencyState: p.residencyState || null,
           monthlyWage:    p.primaryMonthlyWage,
           retirementDate: isoDate(p.primaryRetirementDate),
           lifeExpectancy: 90, socialSecurityMonthly: 2000,
@@ -548,6 +567,7 @@ export class IntlRetirementScenario extends BaseScenario {
           __type: 'Person', id: 'spouse', name: 'Spouse',
           birthDate:      isoDate(p.spouseBirthDate),
           citizen:        ['US'],
+          residencyState: p.residencyState || null,   // spouse defaults to the primary's state (design 34 §4)
           monthlyWage:    p.spouseMonthlyWage,
           retirementDate: isoDate(p.spouseRetirementDate),
           lifeExpectancy: 90, socialSecurityMonthly: 1000,
@@ -725,6 +745,7 @@ export class IntlRetirementScenario extends BaseScenario {
     const toolsetRegistry = new ToolsetRegistry();
     toolsetRegistry.register(US_BANKING);
     toolsetRegistry.register(US_TAX);
+    toolsetRegistry.register(US_STATE_TAX);
     toolsetRegistry.register(US_RETIREMENT);
     toolsetRegistry.register(AU_BANKING);
     toolsetRegistry.register(AU_TAX);

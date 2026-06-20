@@ -84,7 +84,11 @@ export class Simulation {
   constructor(startDate, { bus = new EventBus(), seed = 1, initialState = {}, opts = {}, graph = null } = {}) {
     this.currentDate = this.normalizeDate(startDate);
 
-    this.queue = new IndexedMinHeap((a, b) => a.date - b.date,
+    // Total order: by date, then by event `order` (lower runs first). The order
+    // band makes same-date sequencing explicit — income/earnings default to 0 and
+    // tax settlements sit in a high band so they always process after the year's
+    // income (federal before state). See design 34 §13.
+    this.queue = new IndexedMinHeap((a, b) => (a.date - b.date) || ((a.order ?? 0) - (b.order ?? 0)),
             item => item.instanceId, item => item.type);
     this.bus = bus;
 

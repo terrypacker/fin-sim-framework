@@ -128,6 +128,7 @@ export const US_AU_CROSS_BORDER = {
         lifeExpectancy:        person.lifeExpectancy        ?? 90,
         citizen:               person.citizen               ?? ['US'],
         residency:             startingResidency,
+        residencyState:        person.residencyState         ?? null,  // US state of residency (design 34)
       };
     }
 
