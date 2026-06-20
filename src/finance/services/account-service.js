@@ -219,11 +219,23 @@ export class AccountService extends AssetService {
    * Positive amount → credit; negative amount → debit.
    *
    * Maintains the §4.4 holdings invariant (balance === Σ holdings.marketValue)
-   * for single-holding accounts — the bootstrap default. For multi-holding
-   * accounts (post-toolset-split, design §6.5), the caller is responsible for
-   * emitting an explicit HOLDING_TRANSACT specifying which sleeve to hit;
-   * `transaction()` does not pro-rate, because the right destination depends
-   * on the contribution allocation strategy.
+   * for accounts with ANY number of holdings by pro-rating the cash movement
+   * across the sleeves, weighted by each sleeve's current market value:
+   *   - Debit  → reduce each sleeve's marketValue (and its costBasis, in
+   *              proportion to the value removed), floored at zero.
+   *   - Credit → add to each sleeve's marketValue and costBasis (deposited cash
+   *              carries basis equal to its market value).
+   * The last sleeve absorbs the residual so Σ marketValue changes by exactly
+   * `amount`, keeping it in lockstep with the (unrounded) balance update — this
+   * matters because the next earnings event re-syncs balance to Σ marketValue
+   * (HoldingTransactReducer._syncBalance); without pro-rating, multi-holding
+   * drawdowns desync and the year-end re-sync silently restores the balance,
+   * erasing every within-year withdrawal.
+   *
+   * Pro-rata (rather than FIFO lot ordering) is the right default here because
+   * `transaction()` is the generic cash-movement primitive and does not compute
+   * realized gains; sale paths that need lot accounting use the dedicated
+   * STOCK_WITHDRAWAL reducer with consumeHoldingsFifo instead.
    *
    * @param {import('../account.js').Account} account
    * @param {number}  amount
@@ -231,27 +243,49 @@ export class AccountService extends AssetService {
    */
   transaction(account, amount, date) {
     account.balance = account.balance + amount;
-    if (Array.isArray(account.holdings) && account.holdings.length === 1) {
-      const h  = account.holdings[0];
-      const mv = h.marketValue ?? 0;
-      // Mirror the (unrounded) balance update exactly so marketValue stays in
-      // lockstep with balance — rounding mv here while balance is full-precision
-      // makes the two drift apart over many small credits (e.g. monthly interest).
-      if (amount < 0) {
-        // Debit (drawdown / transfer-out): consume cost basis in proportion to
-        // the market value removed, and never drive the position below zero.
-        // Without this the single-holding mirror strands costBasis and lets
-        // marketValue go negative on over-draws (holdings-balance desync).
-        const sold       = Math.min(-amount, Math.max(0, mv));
+
+    const holdings = account.holdings;
+    if (!Array.isArray(holdings) || holdings.length === 0 || amount === 0) return;
+
+    const last    = holdings.length - 1;
+    const totalMv = holdings.reduce((s, h) => s + Math.max(0, h?.marketValue ?? 0), 0);
+
+    if (amount < 0) {
+      // Debit (drawdown / transfer-out): pro-rate the withdrawal across sleeves
+      // by market value, consuming each sleeve's cost basis in proportion to the
+      // value removed, and never drive a position (or its basis) below zero.
+      if (totalMv <= 0) return;
+      const toRemove = Math.min(-amount, totalMv);
+      let removed = 0;
+      holdings.forEach((h, i) => {
+        const mv   = Math.max(0, h.marketValue ?? 0);
+        const sold = i === last
+          ? Math.min(mv, toRemove - removed)
+          : Math.min(mv, toRemove * (mv / totalMv));
+        removed += sold;
         const basisShare = mv > 0 ? (h.costBasis ?? 0) * (sold / mv) : 0;
-        h.marketValue = Math.max(0, mv + amount);
+        h.marketValue = Math.max(0, mv - sold);
         h.costBasis   = Math.max(0, (h.costBasis ?? 0) - basisShare);
-      } else {
-        // Credit (contribution / sale proceeds / transfer-in): the deposited
-        // cash carries basis equal to its market value.
-        h.marketValue = mv + amount;
-        h.costBasis   = (h.costBasis ?? 0) + amount;
+      });
+    } else {
+      // Credit (contribution / sale proceeds / transfer-in): distribute across
+      // sleeves by market value; the deposited cash carries basis equal to its
+      // market value. With no market value to weight against, land the whole
+      // credit in the first sleeve.
+      if (totalMv <= 0) {
+        const h = holdings[0];
+        h.marketValue = (h.marketValue ?? 0) + amount;
+        h.costBasis   = (h.costBasis   ?? 0) + amount;
+        return;
       }
+      let added = 0;
+      holdings.forEach((h, i) => {
+        const mv    = Math.max(0, h.marketValue ?? 0);
+        const share = i === last ? amount - added : amount * (mv / totalMv);
+        added += share;
+        h.marketValue = (h.marketValue ?? 0) + share;
+        h.costBasis   = (h.costBasis   ?? 0) + share;
+      });
     }
   }
 

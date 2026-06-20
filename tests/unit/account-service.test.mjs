@@ -91,16 +91,85 @@ test('transaction: credit adds basis equal to the deposited market value', () =>
   assert.strictEqual(account.holdings[0].costBasis, 15_000);
 });
 
-test('transaction: multi-holding accounts only move balance (caller owns the sleeve split)', () => {
+test('transaction: multi-holding debit pro-rates across sleeves, keeping Σmv == balance', () => {
+  const svc = new AccountService(new Graph(), new EventBus());
+  const account = { balance: 100_000, holdings: [
+    { id: 'a', marketValue: 60_000, costBasis: 60_000 }, // 60% sleeve
+    { id: 'b', marketValue: 40_000, costBasis: 40_000 }, // 40% sleeve
+  ] };
+  svc.transaction(account, -10_000, new Date());
+  assert.strictEqual(account.balance, 90_000);
+  assert.strictEqual(account.holdings[0].marketValue, 54_000); // 60% of the 10k withdrawal
+  assert.strictEqual(account.holdings[1].marketValue, 36_000); // 40% (residual)
+  assert.strictEqual(account.holdings[0].costBasis, 54_000);   // basis tracks value removed
+  assert.strictEqual(account.holdings[1].costBasis, 36_000);
+  const sumMv = account.holdings.reduce((s, h) => s + h.marketValue, 0);
+  assert.strictEqual(+sumMv.toFixed(2), account.balance);      // §4.4 invariant holds
+});
+
+test('transaction: multi-holding credit distributes across sleeves by market value', () => {
+  const svc = new AccountService(new Graph(), new EventBus());
+  const account = { balance: 100_000, holdings: [
+    { id: 'a', marketValue: 75_000, costBasis: 50_000 }, // 75% weight
+    { id: 'b', marketValue: 25_000, costBasis: 25_000 }, // 25% weight
+  ] };
+  svc.transaction(account, +1_000, new Date());
+  assert.strictEqual(account.balance, 101_000);
+  assert.strictEqual(account.holdings[0].marketValue, 75_750); // 75% of the credit
+  assert.strictEqual(account.holdings[1].marketValue, 25_250); // 25% (residual)
+  // Deposited cash carries basis equal to its market value.
+  assert.strictEqual(+(account.holdings[0].costBasis + account.holdings[1].costBasis).toFixed(2), 76_000);
+  const sumMv = account.holdings.reduce((s, h) => s + h.marketValue, 0);
+  assert.strictEqual(+sumMv.toFixed(2), account.balance);
+});
+
+test('transaction: multi-holding over-draw floors every sleeve at zero', () => {
   const svc = new AccountService(new Graph(), new EventBus());
   const account = { balance: 100_000, holdings: [
     { id: 'a', marketValue: 60_000, costBasis: 60_000 },
     { id: 'b', marketValue: 40_000, costBasis: 40_000 },
   ] };
-  svc.transaction(account, -10_000, new Date());
-  assert.strictEqual(account.balance, 90_000);
-  assert.strictEqual(account.holdings[0].marketValue, 60_000); // untouched
-  assert.strictEqual(account.holdings[1].marketValue, 40_000);
+  svc.transaction(account, -150_000, new Date());             // drains past the total
+  assert.strictEqual(account.holdings[0].marketValue, 0);
+  assert.strictEqual(account.holdings[1].marketValue, 0);
+  assert.strictEqual(account.holdings[0].costBasis, 0);
+  assert.strictEqual(account.holdings[1].costBasis, 0);
+});
+
+// Regression: a mid-year withdrawal from a multi-holding account must survive the
+// year-end earnings re-sync. Before the pro-rata fix, transaction() left holdings
+// untouched for multi-holding accounts, so HoldingTransactReducer._syncBalance
+// (balance = Σ marketValue) snapped the balance back up and erased the withdrawal.
+test('transaction: multi-holding withdrawal is NOT reversed by a year-end HOLDING_TRANSACT re-sync', async () => {
+  const { HoldingTransactReducer } = await import('../../src/finance/holdings/holding-reducers.js');
+  const { computeHoldingsGrowth }  = await import('../../src/finance/holdings/holdings-earnings.js');
+
+  const svc = new AccountService(new Graph(), new EventBus());
+  const account = { balance: 200_000, holdings: [
+    { id: 'a', marketValue: 120_000, costBasis: 120_000, rateKey: 'EQUITY_US' },
+    { id: 'b', marketValue: 80_000,  costBasis: 80_000,  rateKey: 'EQUITY_US' },
+  ] };
+
+  // Mid-year: draw 50k to fund spending.
+  svc.transaction(account, -50_000, new Date('2027-06-30'));
+  assert.strictEqual(account.balance, 150_000);
+
+  // Year-end earnings: compute per-holding growth and apply the HOLDING_TRANSACTs,
+  // which re-sync balance to Σ marketValue.
+  const state = { usStockAccount: account, effectiveGrowthRates: { EQUITY_US: 0.05 } };
+  const { amount, holdingActions } = computeHoldingsGrowth({
+    state, stateKey: 'usStockAccount', fallbackRate: 0.05, fallbackRateKey: 'EQUITY_US',
+  });
+  const reducer = new HoldingTransactReducer();
+  let s = state;
+  for (const a of holdingActions) s = reducer.reduce(s, a);
+  const after = s.usStockAccount;
+
+  // Growth is 5% of the *post-withdrawal* Σmv (150k), not the pre-withdrawal 200k.
+  assert.strictEqual(amount, 7_500);
+  assert.strictEqual(after.balance, 157_500); // 150k + 7.5k — the 50k draw stuck
+  const sumMv = after.holdings.reduce((sm, h) => sm + h.marketValue, 0);
+  assert.strictEqual(+sumMv.toFixed(2), after.balance);
 });
 
 // ─── Typed account constructors ───────────────────────────────────────────────
