@@ -114,6 +114,9 @@ export const INTL_RETIREMENT_DEFAULTS = {
 
   // US state income tax (design 34) — null = no state configured (no state tax)
   residencyState:   null,
+  // US state move (design 34 §9) — unset = no move; Jan-1 move to the destination
+  stateMoveYear:        undefined,
+  stateMoveDestination: null,
 
   // US investment growth rates (annual, separate from dividends)
   rothGrowthRate:   0.07,
@@ -501,6 +504,9 @@ export class IntlRetirementScenario extends BaseScenario {
       parameters: {
         // US_STATE_TAX (design 34) — cascades onto the primary person's residencyState
         residencyState:           p.residencyState || null,
+        // US_STATE_TAX state move (design 34 §9) — Jan-1 move to a destination state
+        stateMoveYear:            p.stateMoveYear ?? undefined,
+        stateMoveDestination:     p.stateMoveDestination || null,
         // US_BANKING
         usSavingsInterestRate:    p.usSavingsInterestRate,
         // US_RETIREMENT / AU_RETIREMENT share 'inflationRate'; US_AU_CROSS_BORDER uses both

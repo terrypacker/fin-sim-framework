@@ -83,6 +83,7 @@ import { FxTransferToHandler } from './finance/fx/fx-transfer-handler.js';
 import { UsdAudPair } from './finance/fx/usd-aud-pair.js';
 import { AssetAppreciationHandler, AssetAppreciateReducer } from './finance/handlers/asset-appreciation-handler.js';
 import { ChangeResidencyHandler } from './finance/handlers/change-residency-handler.js';
+import { ChangeStateResidencyHandler } from './finance/handlers/change-state-residency-handler.js';
 import { DividendScheduledHandler } from './finance/handlers/dividend-scheduled-handler.js';
 import { IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler, IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler, AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler, FixedIncomeInterestHandler, SuperEarningsHandler } from './finance/handlers/earnings-handlers.js';
 import { IntlTransferToUsHandler, IntlTransferToAuHandler } from './finance/handlers/intl-transfer-handlers.js';
@@ -122,6 +123,7 @@ import { Person } from './finance/person.js';
 import { AccountRetitleApplyReducer } from './finance/reducers/account-retitle-apply-reducer.js';
 import { AccumulateDeficitReducer } from './finance/reducers/accumulate-deficit-reducer.js';
 import { ChangeResidencyApplyReducer } from './finance/reducers/change-residency-apply-reducer.js';
+import { ChangeStateResidencyApplyReducer } from './finance/reducers/change-state-residency-apply-reducer.js';
 import { ExpenseDebitReducer } from './finance/reducers/expense-debit-reducer.js';
 import { InflationAdjustReducer } from './finance/reducers/inflation-adjust-reducer.js';
 import { IntlTransferApplyReducer } from './finance/reducers/intl-transfer-apply-reducer.js';
@@ -578,6 +580,7 @@ export const Finance = {
   AssetAppreciationHandler,
   AssetAppreciateReducer,
   ChangeResidencyHandler,
+  ChangeStateResidencyHandler,
   DividendScheduledHandler,
   IntlRothEarningsHandler,
   IntlIraEarningsHandler,
@@ -670,6 +673,7 @@ export const Finance = {
   AccountRetitleApplyReducer,
   AccumulateDeficitReducer,
   ChangeResidencyApplyReducer,
+  ChangeStateResidencyApplyReducer,
   ExpenseDebitReducer,
   InflationAdjustReducer,
   IntlTransferApplyReducer,

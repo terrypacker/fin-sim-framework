@@ -91,3 +91,41 @@ test('EVT-STATE-3: SD resident accrues income but pays zero state tax', () => {
   sim.stepTo(new Date(Date.UTC(2027, 0, 2)));
   assert.equal(paidState(sim), false, 'SD has no income tax ⇒ no payment');
 });
+
+const residencyStateOf = (sim) => sim.state.people.primary.residencyState ?? null;
+
+test('EVT-STATE-MOVE-1: no state, then a Jan-1 move to NE begins accrual + settle (design 34 §9)', () => {
+  const sim = run({ residencyState: '', stateMoveYear: 2028, stateMoveDestination: 'NE' });
+
+  // Before the move: no state configured ⇒ no accrual, no state set.
+  sim.stepTo(new Date(Date.UTC(2027, 11, 30)));
+  assert.equal(stateYtdSum(sim.state), 0, 'no accrual before the move');
+  assert.equal(residencyStateOf(sim), null, 'no residency state before the move');
+  assert.equal(paidState(sim), false, 'no state tax paid before the move');
+
+  // Cross the Jan-1-2028 move: every person flips to NE and accrual begins.
+  sim.stepTo(new Date(Date.UTC(2028, 5, 30)));
+  assert.equal(residencyStateOf(sim), 'NE', 'move flips the primary to NE');
+  assert.equal(sim.state.people.spouse.residencyState, 'NE', 'move flips the spouse too (design 34 §9)');
+  assert.ok(stateYtdSum(sim.state) > 0, 'NE accrual begins after the move');
+
+  // The 2028 year-end settle pays NE state tax.
+  sim.stepTo(new Date(Date.UTC(2029, 0, 2)));
+  assert.ok(paidState(sim), 'NE state tax settles for the move year');
+});
+
+test('EVT-STATE-MOVE-2: SD→HI move on Jan 1 activates taxation (zero before, paid after)', () => {
+  const sim = run({ residencyState: 'SD', stateMoveYear: 2029, stateMoveDestination: 'HI' });
+
+  // SD years: income classifies but settle pays zero.
+  sim.stepTo(new Date(Date.UTC(2028, 11, 30)));
+  assert.equal(residencyStateOf(sim), 'SD', 'starts in SD');
+  sim.stepTo(new Date(Date.UTC(2029, 0, 1, 12)));
+  assert.equal(paidState(sim), false, 'no state tax paid while SD-resident');
+
+  // After the Jan-1-2029 move to HI, the HI year-end settle pays state tax.
+  sim.stepTo(new Date(Date.UTC(2029, 5, 30)));
+  assert.equal(residencyStateOf(sim), 'HI', 'move flips SD → HI');
+  sim.stepTo(new Date(Date.UTC(2030, 0, 2)));
+  assert.ok(paidState(sim), 'HI state tax settles after the move');
+});

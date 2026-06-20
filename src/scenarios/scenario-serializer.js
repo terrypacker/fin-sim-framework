@@ -51,6 +51,7 @@ import {
 } from '../finance/handlers/earnings-handlers.js';
 import { DividendScheduledHandler }       from '../finance/handlers/dividend-scheduled-handler.js';
 import { ChangeResidencyHandler }         from '../finance/handlers/change-residency-handler.js';
+import { ChangeStateResidencyHandler }    from '../finance/handlers/change-state-residency-handler.js';
 import { OutOfFundsHandler }              from '../finance/handlers/out-of-funds-handler.js';
 import { MonthlySocialSecurityHandler }   from '../finance/handlers/monthly-social-security-handler.js';
 import { MortalityHandler }              from '../finance/handlers/mortality-handler.js';
@@ -66,6 +67,7 @@ import { FxTransferApplyReducer }        from '../finance/fx/fx-transfer-apply-r
 import { FxRefreshReducer }              from '../finance/fx/fx-refresh-reducer.js';
 import { StockDividendCashApplyReducer }  from '../finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { ChangeResidencyApplyReducer }    from '../finance/reducers/change-residency-apply-reducer.js';
+import { ChangeStateResidencyApplyReducer } from '../finance/reducers/change-state-residency-apply-reducer.js';
 import { PersonDiedApplyReducer }        from '../finance/reducers/person-died-apply-reducer.js';
 import { SocialSecuritySurvivorApplyReducer } from '../finance/reducers/social-security-survivor-apply-reducer.js';
 import { AccountRetitleApplyReducer }    from '../finance/reducers/account-retitle-apply-reducer.js';
@@ -207,7 +209,7 @@ const _ALL_CLASSES = [
   FixedIncomeInterestHandler, SuperEarningsHandler,
   IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,
   IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
-  DividendScheduledHandler, ChangeResidencyHandler, OutOfFundsHandler, MonthlySocialSecurityHandler,
+  DividendScheduledHandler, ChangeResidencyHandler, ChangeStateResidencyHandler, OutOfFundsHandler, MonthlySocialSecurityHandler,
   MortalityHandler, LateLifeCareHandler,
   UsMortgagePaymentHandler, AuMortgagePaymentHandler,
   UsPeriodAdvanceHandler, AuPeriodAdvanceHandler,
@@ -238,7 +240,7 @@ const _ALL_CLASSES = [
   // Finance reducers
   UsSavingsInterestCreditReducer, ExpenseDebitReducer, ReplenishSavingsReducer,
   IntlTransferApplyReducer, FxTransferApplyReducer, FxRefreshReducer,
-  StockDividendCashApplyReducer, ChangeResidencyApplyReducer,
+  StockDividendCashApplyReducer, ChangeResidencyApplyReducer, ChangeStateResidencyApplyReducer,
   PersonDiedApplyReducer, SocialSecuritySurvivorApplyReducer, AccountRetitleApplyReducer, ScenarioCompleteReducer,
   LateLifeCareApplyReducer,
   SetOutOfFundsDateReducer, AccumulateDeficitReducer, OutOfFundsReducer, InflationAdjustReducer,

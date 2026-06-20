@@ -335,6 +335,27 @@ function buildMortalityMcConfigs(params) {
 }
 
 /**
+ * Build the MC variable for a configured state move (design 34 §9).
+ *
+ * Only emits when `stateMoveYear` is set — an unset move has no distribution
+ * center to perturb. The destination state is categorical and intentionally NOT
+ * an MC variable (the framework has no categorical distribution; it is an
+ * optimization-only axis, mirroring moveYear/startingResidency). stdDev of 1.5
+ * years covers realistic uncertainty about timing; the runner rounds to integer.
+ */
+function buildStateMoveMcConfigs(params) {
+  if (params.stateMoveYear == null) return [];
+  return [{
+    paramKey: 'stateMoveYear', label: 'State Move Year',
+    type:     DISTRIBUTION_TYPES.NORMAL,
+    mean:     params.stateMoveYear,
+    stdDev:   1.5,
+    group:    'US Tax',
+    enabled:  false,
+  }];
+}
+
+/**
  * MC configuration for IntlRetirementScenario.
  *
  * Uses a contributor pattern so toolsets (design 26 healthcare, design 27
@@ -348,6 +369,7 @@ export class IntlRetirementMcConfig {
     ()          => DEFAULT_MC_VARIABLE_CONFIGS,
     ({ params }) => buildShockMcConfigs(params),
     ({ params }) => buildRealPropertyMcConfigs(params),
+    ({ params }) => buildStateMoveMcConfigs(params),
     ({ params }) => buildMortalityMcConfigs(params),
   ];
 
