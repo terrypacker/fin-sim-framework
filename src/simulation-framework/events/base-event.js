@@ -18,13 +18,19 @@ import {SimGraphNode} from "../../graph/sim-graph-node.js";
  * @property {string}  type    - Simulation event type string (e.g. 'MONTHLY_SALARY')
  * @property {boolean} enabled - Whether this event is active
  * @property {string}  color   - CSS color used for visualization (e.g. '#888888')
+ * @property {number}  order   - Same-date tiebreak: lower runs first. Default 0
+ *                               (income/earnings). Tax settlements use a high band
+ *                               so they always process after the year's income, and
+ *                               federal-before-state (design 34 §13). The event
+ *                               queue comparator is (date, then order).
  */
 export class BaseEvent extends SimGraphNode {
-  constructor({ id = null, name, type, enabled = true, color = '#888888', data = {}, meta = {} } = {}) {
+  constructor({ id = null, name, type, enabled = true, color = '#888888', order = 0, data = {}, meta = {} } = {}) {
     super({id: id, kind: 'event', layer: 'config', name})
     this.type    = type;
     this.enabled = enabled;
     this.color   = color;
+    this.order   = order;
     this.data    = data;
     this.meta    = meta;
   }

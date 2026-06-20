@@ -83,6 +83,7 @@ import { FxTransferToHandler } from './finance/fx/fx-transfer-handler.js';
 import { UsdAudPair } from './finance/fx/usd-aud-pair.js';
 import { AssetAppreciationHandler, AssetAppreciateReducer } from './finance/handlers/asset-appreciation-handler.js';
 import { ChangeResidencyHandler } from './finance/handlers/change-residency-handler.js';
+import { ChangeStateResidencyHandler } from './finance/handlers/change-state-residency-handler.js';
 import { DividendScheduledHandler } from './finance/handlers/dividend-scheduled-handler.js';
 import { IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler, IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler, AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler, FixedIncomeInterestHandler, SuperEarningsHandler } from './finance/handlers/earnings-handlers.js';
 import { IntlTransferToUsHandler, IntlTransferToAuHandler } from './finance/handlers/intl-transfer-handlers.js';
@@ -122,6 +123,7 @@ import { Person } from './finance/person.js';
 import { AccountRetitleApplyReducer } from './finance/reducers/account-retitle-apply-reducer.js';
 import { AccumulateDeficitReducer } from './finance/reducers/accumulate-deficit-reducer.js';
 import { ChangeResidencyApplyReducer } from './finance/reducers/change-residency-apply-reducer.js';
+import { ChangeStateResidencyApplyReducer } from './finance/reducers/change-state-residency-apply-reducer.js';
 import { ExpenseDebitReducer } from './finance/reducers/expense-debit-reducer.js';
 import { InflationAdjustReducer } from './finance/reducers/inflation-adjust-reducer.js';
 import { IntlTransferApplyReducer } from './finance/reducers/intl-transfer-apply-reducer.js';
@@ -133,7 +135,7 @@ import { SetOutOfFundsDateReducer } from './finance/reducers/set-out-of-funds-da
 import { SocialSecuritySurvivorApplyReducer } from './finance/reducers/social-security-survivor-apply-reducer.js';
 import { StockDividendCashApplyReducer } from './finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { UsSavingsInterestCreditReducer } from './finance/reducers/us-savings-interest-credit-reducer.js';
-import { getResidency, isResident, residentsOf, getBirthDate } from './finance/residency-utils.js';
+import { getResidency, isResident, residentsOf, primaryPersonKey, primaryResidencyState, getBirthDate } from './finance/residency-utils.js';
 import { ScenarioCompareRunner } from './finance/scenario-compare/scenario-compare-runner.js';
 import { flattenNumericState, computeStateDiff, journalPairKey, mergeEntryFieldRows, pairEntriesWithinDay, firstDivergenceDate, runningNetWorthSeries, buildJournalOverlay } from './finance/scenario-compare/scenario-compare-utils.js';
 import { AccountService } from './finance/services/account-service.js';
@@ -159,6 +161,7 @@ import { RegimeAwareSpendingReducer } from './finance/spending/strategies/regime
 import { RetirementDateHandler } from './finance/spending/strategies/retirement-date-handler.js';
 import { ACCOUNT_ROLES } from './finance/state/account-roles.js';
 import { InternationalRetirementFinancialState } from './finance/state/intl-retirement-state.js';
+import { StateTaxService } from './finance/state-tax-service.js';
 import { AuTaxDocument2024 } from './finance/tax/au/au-tax-document-2024.js';
 import { AuTaxDocument2025 } from './finance/tax/au/au-tax-document-2025.js';
 import { AuTaxDocument2026 } from './finance/tax/au/au-tax-document-2026.js';
@@ -174,6 +177,15 @@ import { BaseTaxRatesModule } from './finance/tax/base-tax-rates-module.js';
 import { DynamicTaxReducer } from './finance/tax/dynamic-tax-reducer.js';
 import { InflationAdjustedUsTaxRates, InflationAdjustedAuTaxRates } from './finance/tax/inflation-adjusted-tax-rates.js';
 import { UsPeriodAdvanceReducer, AuPeriodAdvanceReducer, UsPeriodAdvanceHandler, AuPeriodAdvanceHandler } from './finance/tax/period-advance-classes.js';
+import { BaseStateTaxRatesModule } from './finance/tax/state/base-state-tax-rates-module.js';
+import { HiStateTaxRates2024 } from './finance/tax/state/hi/hi-state-tax-rates-2024.js';
+import { NeStateTaxRates2024 } from './finance/tax/state/ne/ne-state-tax-rates-2024.js';
+import { NeStateTaxRates2025 } from './finance/tax/state/ne/ne-state-tax-rates-2025.js';
+import { SdStateTaxRates2024 } from './finance/tax/state/sd/sd-state-tax-rates-2024.js';
+import { STATE_INCOME_ROUTING, STATE_YTD_FIELDS, StateIncomeClassificationReducer, buildStateClassificationReducers } from './finance/tax/state/state-income-classification.js';
+import { StateTaxDocumentReporter } from './finance/tax/state/state-tax-document.js';
+import { StateTaxSettleHandler, StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer } from './finance/tax/state/state-tax-settle-classes.js';
+import { StateTaxSettleService } from './finance/tax/state/state-tax-settle-service.js';
 import { TaxDocumentRegistry } from './finance/tax/tax-document-registry.js';
 import { TaxEngine } from './finance/tax/tax-engine.js';
 import { UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from './finance/tax/tax-settle-classes.js';
@@ -216,6 +228,7 @@ import { US_INCOME } from './scenarios/toolsets/us-income-toolset.js';
 import { US_REAL_PROPERTY } from './scenarios/toolsets/us-real-property-toolset.js';
 import { US_RETIREMENT } from './scenarios/toolsets/us-retirement-toolset.js';
 import { US_ROTH_CONVERSION } from './scenarios/toolsets/us-roth-conversion-toolset.js';
+import { US_STATE_TAX } from './scenarios/toolsets/us-state-tax-toolset.js';
 import { US_TAX } from './scenarios/toolsets/us-tax-toolset.js';
 import { ActionService } from './services/action-service.js';
 import { BaseService } from './services/base-service.js';
@@ -567,6 +580,7 @@ export const Finance = {
   AssetAppreciationHandler,
   AssetAppreciateReducer,
   ChangeResidencyHandler,
+  ChangeStateResidencyHandler,
   DividendScheduledHandler,
   IntlRothEarningsHandler,
   IntlIraEarningsHandler,
@@ -659,6 +673,7 @@ export const Finance = {
   AccountRetitleApplyReducer,
   AccumulateDeficitReducer,
   ChangeResidencyApplyReducer,
+  ChangeStateResidencyApplyReducer,
   ExpenseDebitReducer,
   InflationAdjustReducer,
   IntlTransferApplyReducer,
@@ -673,6 +688,8 @@ export const Finance = {
   getResidency,
   isResident,
   residentsOf,
+  primaryPersonKey,
+  primaryResidencyState,
   getBirthDate,
   ScenarioCompareRunner,
   flattenNumericState,
@@ -709,6 +726,7 @@ export const Finance = {
   RetirementDateHandler,
   ACCOUNT_ROLES,
   InternationalRetirementFinancialState,
+  StateTaxService,
   AuTaxDocument2024,
   AuTaxDocument2025,
   AuTaxDocument2026,
@@ -728,6 +746,20 @@ export const Finance = {
   AuPeriodAdvanceReducer,
   UsPeriodAdvanceHandler,
   AuPeriodAdvanceHandler,
+  BaseStateTaxRatesModule,
+  HiStateTaxRates2024,
+  NeStateTaxRates2024,
+  NeStateTaxRates2025,
+  SdStateTaxRates2024,
+  STATE_INCOME_ROUTING,
+  STATE_YTD_FIELDS,
+  StateIncomeClassificationReducer,
+  buildStateClassificationReducers,
+  StateTaxDocumentReporter,
+  StateTaxSettleHandler,
+  StateTaxSettleApplyReducer,
+  StateTaxPaymentDebitReducer,
+  StateTaxSettleService,
   TaxDocumentRegistry,
   TaxEngine,
   UsTaxSettleHandler,
@@ -873,6 +905,7 @@ export const Scenarios = {
   US_REAL_PROPERTY,
   US_RETIREMENT,
   US_ROTH_CONVERSION,
+  US_STATE_TAX,
   US_TAX,
 };
 

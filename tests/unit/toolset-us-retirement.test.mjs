@@ -721,9 +721,14 @@ test('EVT-40: IRA RMD amount is taxable as ordinary income', () => {
   const endOf2033 = new Date(Date.UTC(2033, 11, 31));
   sim.stepTo(endOf2033);
 
+  // The year-end settle (order band, design 34 §13) now runs AFTER the RMD and
+  // resets usOrdinaryIncomeYTD, so the RMD's taxability is asserted on the
+  // settlement's captured gross ordinary income rather than the post-reset YTD.
   const expectedRmd = Math.round(iraBalance / 26.5 * 100) / 100;
-  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, expectedRmd,
-    'RMD should be fully recorded as US ordinary income (no exclusions for traditional IRA)');
+  const settle = sim.journal.journal.find(e =>
+    e.action?.type === 'US_TAX_SETTLE_APPLY' && new Date(e.date).getUTCFullYear() === 2033);
+  assert.strictEqual(settle?.action?.data?.taxDetail?.inputs?.grossOrdinaryIncome, expectedRmd,
+    'RMD should be fully taxed as US ordinary income in its year (no exclusions for traditional IRA)');
 });
 
 test('EVT-40: IRA RMD uses age-73 distribution period in first year and age-74 in second', () => {
@@ -851,8 +856,12 @@ test('EVT-40 (401k): 401(k) RMD is fully taxable as ordinary income', () => {
   const { sim } = loadToolsetScenario(config);
   sim.stepTo(new Date(Date.UTC(2033, 11, 31)));
   const expectedRmd = Math.round(k401Balance / 26.5 * 100) / 100;
-  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, expectedRmd,
-    '401(k) RMD should be fully recorded as US ordinary income');
+  // Settle runs after the RMD and resets YTD (design 34 §13) — assert taxability
+  // on the settlement's captured gross ordinary income.
+  const settle = sim.journal.journal.find(e =>
+    e.action?.type === 'US_TAX_SETTLE_APPLY' && new Date(e.date).getUTCFullYear() === 2033);
+  assert.strictEqual(settle?.action?.data?.taxDetail?.inputs?.grossOrdinaryIncome, expectedRmd,
+    '401(k) RMD should be fully taxed as US ordinary income in its year');
 });
 
 test('EVT-40 (401k): 401(k) RMD uses age-73 period in first year and age-74 in second', () => {

@@ -24,6 +24,9 @@ export class Person extends SimGraphNode {
    * @param {string}      [opts.name='']
    * @param {string[]}    [opts.citizen=['US']] - ISO country codes (e.g. 'US', 'AU'); stable, never mutated by a move
    * @param {string}      [opts.residency]      - Current country of tax residency (e.g. 'US', 'AU'); defaults to citizen[0]
+   * @param {string|null} [opts.residencyState=null] - US residency state (sub-jurisdiction of residency='US'),
+   *                                                   e.g. 'NE'|'HI'|'SD'. null = no US state configured.
+   *                                                   Household active state is derived from the primary (design 34).
    * @param {number}      [opts.lifeExpectancy=90]         - Expected years to live
    * @param {number}      [opts.socialSecurityMonthly=2800] - USD/month of SS at full retirement age
    * @param {number}      [opts.monthlyWage=0]             - gross wages/month in wageCurrency (0 = not employed)
@@ -36,6 +39,7 @@ export class Person extends SimGraphNode {
     this.birthDate             = birthDate;
     this.citizen               = opts.citizen               ?? ['US'];
     this.residency             = opts.residency             ?? this.citizen[0] ?? 'US';
+    this.residencyState        = opts.residencyState        ?? null;
     this.lifeExpectancy        = opts.lifeExpectancy        ?? 90;
     this.socialSecurityMonthly = opts.socialSecurityMonthly ?? 2800;
     this.monthlyWage           = opts.monthlyWage           ?? 0;

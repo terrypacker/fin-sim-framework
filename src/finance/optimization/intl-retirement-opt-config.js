@@ -112,6 +112,26 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
     enabled:  false,
   },
 
+  // ── State move (design 34 §9 — establish residency in a destination state) ─
+  {
+    paramKey: 'stateMoveYear',
+    label:    'State Move Year',
+    type:     OPT_PARAM_TYPES.INTEGER,
+    min: 2026, max: 2035, step: 1,
+    group:    'US Tax',
+    enabled:  false,
+  },
+  {
+    // Categorical axis — the destination state. SD (no income tax) is a valid
+    // choice, so the optimizer can land on "establish SD residency".
+    paramKey: 'stateMoveDestination',
+    label:    'State Move Destination',
+    type:     OPT_PARAM_TYPES.ENUM,
+    values:   ['NE', 'HI', 'SD'],
+    group:    'US Tax',
+    enabled:  false,
+  },
+
   // ── Real Property sale timing ─────────────────────────────────────────────
   {
     paramKey: 'usHouseSaleYear',
