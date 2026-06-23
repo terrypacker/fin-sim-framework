@@ -751,3 +751,47 @@ test('custom drawdown strategy: dynamicOptionsFrom is carried onto cfg.params', 
   assert.strictEqual(dd.dynamicOptionsFrom, 'customDrawdownStrategies',
     'drawdownStrategy must name its custom-strategy source for the UI dropdown');
 });
+
+test('custom drawdown strategy: stale persisted node (pre-customStrategiesKey) still cascades — schema node is authoritative', () => {
+  // Regression: a scenario saved BEFORE the accountPriority node gained
+  // `customStrategiesKey` froze the old node shape on its typed params entry.
+  // A persisted node must not shadow the live schema node; otherwise the custom
+  // strategies are never merged in, the selected custom name resolves to nothing,
+  // and the cascade silently leaves accounts on their authored defaults.
+  const cfg = IntlRetirementScenario.buildDefaultConfig({}, undefined, undefined);
+  cfg.scenarioClass = IntlRetirementScenario;
+  cfg.parameters.customDrawdownStrategies = [{ name: 'ROTH_ONLY', roles: { 'roth-ira': 1, 'ira': 2 } }];
+  cfg.parameters.drawdownStrategy = 'ROTH_ONLY';
+  cfg.params = [
+    { name: 'drawdownStrategy', label: 'Drawdown Strategy', type: 'Enum', group: 'Spending',
+      value: 'ROTH_ONLY',
+      // STALE node — the shape saved before customStrategiesKey existed.
+      node: { type: 'accountPriority', strategies: { TAXABLE_FIRST: { 'roth-ira': 5 } },
+              ownerOrder: ['primary', 'spouse'], ownerStride: 100 } },
+  ];
+
+  new ScenarioLoader()._normalizeParams(cfg);
+
+  const byKey = Object.fromEntries(cfg.accounts.map(a => [a.stateKey, a]));
+  assert.strictEqual(byKey.rothAccount.drawdownPriority, 1,
+    'custom ROTH_ONLY must apply despite a stale persisted node missing customStrategiesKey');
+  assert.strictEqual(byKey.iraAccount.drawdownPriority, 2, 'custom ira rank applies');
+});
+
+test('custom drawdown strategy: schema-drift re-syncs the accountPriority node onto saved params (gains customStrategiesKey)', () => {
+  // The persisted node is schema-owned metadata; a stale copy must be refreshed
+  // on load so a subsequent re-save no longer carries the broken shape.
+  const cfg = freshDeclarativeConfig();
+  cfg.scenarioClass = IntlRetirementScenario;
+  cfg.params = [
+    { name: 'drawdownStrategy', label: 'Drawdown Strategy', type: 'Enum', group: 'Spending',
+      value: 'TAXABLE_FIRST',
+      node: { type: 'accountPriority', strategies: {}, ownerOrder: ['primary', 'spouse'], ownerStride: 100 } },
+  ];
+
+  loadIntoFreshServices(cfg);
+
+  const dd = cfg.params.find(p => p.name === 'drawdownStrategy');
+  assert.strictEqual(dd.node.customStrategiesKey, 'customDrawdownStrategies',
+    'stale node must be re-synced from the schema so custom strategies resolve');
+});
