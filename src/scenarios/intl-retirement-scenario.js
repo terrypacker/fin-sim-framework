@@ -170,6 +170,8 @@ export const INTL_RETIREMENT_DEFAULTS = {
 
   // Drawdown order (key of DRAWDOWN_STRATEGIES) used to liquidate accounts for shortfalls
   drawdownStrategy:      'TAXABLE_FIRST',
+  // Per-owner drawdown banding within a strategy (design 35): PRIMARY_FIRST | SPOUSE_FIRST | POOLED
+  drawdownOwnerOrdering: 'PRIMARY_FIRST',
 
   // Inflation rates (annual, per country)
   usInflationRate: 0.03,
@@ -438,9 +440,33 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     description: 'Order accounts are liquidated to cover spending shortfalls',
     // customStrategiesKey lets the cascade merge user-authored strategies (stored
     // in that param) into `strategies` before resolving the selected name.
+    // ownerModeKey/ownerModes parameterize the per-owner banding (design 35): the
+    // selected `drawdownOwnerOrdering` mode overrides ownerOrder/ownerStride. The
+    // bare ownerOrder/ownerStride remain as PRIMARY_FIRST fallbacks.
     node: { type: 'accountPriority', strategies: DRAWDOWN_STRATEGIES,
             customStrategiesKey: 'customDrawdownStrategies',
-            ownerOrder: ['primary', 'spouse'], ownerStride: 100 },
+            ownerOrder: ['primary', 'spouse'], ownerStride: 100,
+            ownerModeKey: 'drawdownOwnerOrdering',
+            ownerModes: {
+              PRIMARY_FIRST: { ownerOrder: ['primary', 'spouse'], ownerStride: 100 },
+              SPOUSE_FIRST:  { ownerOrder: ['spouse', 'primary'], ownerStride: 100 },
+              POOLED:        { ownerStride: 0 },
+            } },
+  },
+  {
+    // Per-owner drawdown banding (design 35). Read by the drawdownStrategy node's
+    // accountPriority cascade (ownerModeKey), so this param carries no node of its
+    // own. PRIMARY_FIRST keeps the legacy behavior (primary's accounts drain fully
+    // before the spouse's); POOLED treats same-role accounts across owners as one
+    // tier so neither owner's bucket of a given role is starved.
+    key: 'drawdownOwnerOrdering', label: 'Drawdown Owner Ordering',
+    type: 'Enum', group: 'Spending',
+    options: ['PRIMARY_FIRST', 'SPOUSE_FIRST', 'POOLED'],
+    mc: false, opt: false, defaultValue: INTL_RETIREMENT_DEFAULTS.drawdownOwnerOrdering,
+    description: 'How accounts owned by different people are ordered within a drawdown strategy. ' +
+      'PRIMARY_FIRST: drain the primary\'s accounts entirely before the spouse\'s. ' +
+      'SPOUSE_FIRST: the reverse. ' +
+      'POOLED: same-role accounts across owners share one priority tier (e.g. both Roths drawn together in the strategy\'s role order).',
   },
   {
     // User-authored drawdown strategies (by role → rank). Each entry is

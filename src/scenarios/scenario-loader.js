@@ -316,14 +316,25 @@ export class ScenarioLoader {
         // so they keep their authored null. This keeps partial user-authored
         // strategies predictable (unranked roles drop out) and is a no-op for the
         // complete built-ins (which rank every eligible role).
+        // Per-owner banding (design 35): the selected drawdownOwnerOrdering mode
+        // overrides the node's default ownerOrder/ownerStride. POOLED uses stride 0
+        // so same-role accounts across owners share a priority tier.
+        let ownerOrder  = node.ownerOrder ?? [];
+        let ownerStride = node.ownerStride ?? 0;
+        const mode = node.ownerModeKey ? cfg.parameters?.[node.ownerModeKey] : null;
+        const modeCfg = (mode != null && node.ownerModes) ? node.ownerModes[mode] : null;
+        if (modeCfg) {
+          if (modeCfg.ownerOrder  != null) ownerOrder  = modeCfg.ownerOrder;
+          if (modeCfg.ownerStride != null) ownerStride = modeCfg.ownerStride;
+        }
         const eligible = new Set(
           Object.values(strategies).flatMap(m => (m ? Object.keys(m) : [])));
         for (const rec of (cfg.accounts ?? [])) {
           if (!eligible.has(rec.role)) continue;
           const base = priorities[rec.role];
           if (base == null) { rec.drawdownPriority = null; continue; }
-          const rank = Math.max(0, (node.ownerOrder ?? []).indexOf(rec.ownerId));
-          rec.drawdownPriority = base + rank * (node.ownerStride ?? 0);
+          const rank = Math.max(0, ownerOrder.indexOf(rec.ownerId));
+          rec.drawdownPriority = base + rank * ownerStride;
         }
       } else if (val != null && !(val in strategies)) {
         // Fail loud: the selected strategy name resolves to neither a built-in
