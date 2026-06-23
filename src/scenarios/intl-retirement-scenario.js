@@ -81,6 +81,20 @@ export const DRAWDOWN_STRATEGIES = {
 };
 
 /**
+ * Drawdown-eligible account roles — the union of roles that appear across the
+ * built-in DRAWDOWN_STRATEGIES maps. These are exactly the roles a user-authored
+ * strategy can rank (savings/target roles are intentionally absent, since they
+ * keep a null priority and are the drawdown destination). Used to seed the
+ * DrawdownStrategyList editor's role rows so users never author ranks for
+ * accounts that should stay out of drawdown.
+ */
+export const DRAWDOWN_ROLES = [...new Set(
+  Object.values(DRAWDOWN_STRATEGIES)
+    .filter(Boolean)
+    .flatMap(map => Object.keys(map)),
+)];
+
+/**
  * Default parameters for the International Retirement scenario.
  * Any field can be overridden via the params argument to buildSim().
  */
@@ -416,10 +430,27 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
   {
     key: 'drawdownStrategy', label: 'Drawdown Strategy',
     type: 'Enum', group: 'Spending', options: Object.keys(DRAWDOWN_STRATEGIES),
+    // The selectable set is the built-in strategies plus any user-authored ones
+    // in `customDrawdownStrategies`; the Scenario dropdown merges those names in
+    // live (see scenario-tab-view Enum rendering).
+    dynamicOptionsFrom: 'customDrawdownStrategies',
     mc: false, opt: true, defaultValue: INTL_RETIREMENT_DEFAULTS.drawdownStrategy,
     description: 'Order accounts are liquidated to cover spending shortfalls',
+    // customStrategiesKey lets the cascade merge user-authored strategies (stored
+    // in that param) into `strategies` before resolving the selected name.
     node: { type: 'accountPriority', strategies: DRAWDOWN_STRATEGIES,
+            customStrategiesKey: 'customDrawdownStrategies',
             ownerOrder: ['primary', 'spouse'], ownerStride: 100 },
+  },
+  {
+    // User-authored drawdown strategies (by role → rank). Each entry is
+    // { name, roles: { <role>: <order> } } and becomes selectable as a
+    // Drawdown Strategy (Scenario) and a sweep value (Optimize). `options`
+    // carries the drawdown-eligible roles the editor renders a rank input for.
+    key: 'customDrawdownStrategies', label: 'Custom Drawdown Strategies',
+    type: 'DrawdownStrategyList', group: 'Spending',
+    options: DRAWDOWN_ROLES, mc: false, opt: false, defaultValue: [],
+    description: 'Define named by-role drawdown orderings, then select one above or sweep them in Optimize',
   },
 
 ];

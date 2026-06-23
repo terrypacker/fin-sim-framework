@@ -282,9 +282,13 @@ export class ScenarioTabView {
     // param's current value; controllerNames are the params others depend on, so
     // a change to one re-renders the list to reveal/hide dependents.
     const valueByName = new Map(scenario.params.map(p => [p.name, p.value]));
-    this._controllerNames = new Set(
-      scenario.params.map(p => p.visibleWhen?.param).filter(Boolean)
-    );
+    // Controllers are params others depend on, so a change re-renders the list.
+    // Two dependency kinds: visibleWhen (reveal/hide) and dynamicOptionsFrom (an
+    // Enum whose selectable options are extended by a sibling list param).
+    this._controllerNames = new Set([
+      ...scenario.params.map(p => p.visibleWhen?.param).filter(Boolean),
+      ...scenario.params.map(p => p.dynamicOptionsFrom).filter(Boolean),
+    ]);
 
     // Group visible params (preserving original index for delete) by group label.
     const groups = new Map();   // group label → [{ param, index }]
@@ -524,9 +528,21 @@ export class ScenarioTabView {
         valueInput = _buildAgeBandListEditor(param);
       } else if (param.type === 'HealthcareEventList') {
         valueInput = _buildHealthcareEventListEditor(param, this.personsProvider);
+      } else if (param.type === 'DrawdownStrategyList') {
+        valueInput = _buildDrawdownStrategyListEditor(
+          param, () => this._maybeRerenderForController(param, scenario));
       } else if (param.type === 'Enum') {
         valueInput = document.createElement('select');
-        (param.options ?? []).forEach(opt => {
+        // Static schema options plus any names contributed by a sibling list
+        // param named in `dynamicOptionsFrom` (e.g. custom drawdown strategies).
+        let enumOptions = param.options ?? [];
+        if (param.dynamicOptionsFrom) {
+          const src = scenario.params.find(p => p.name === param.dynamicOptionsFrom);
+          const extra = Array.isArray(src?.value)
+            ? src.value.map(s => s?.name).filter(Boolean) : [];
+          enumOptions = [...enumOptions, ...extra];
+        }
+        enumOptions.forEach(opt => {
           const el = document.createElement('option');
           el.value = opt; el.textContent = opt;
           valueInput.appendChild(el);
@@ -991,6 +1007,117 @@ function _buildHealthcareEventListEditor(param, personsProvider) {
     addBtn.addEventListener('click', () => {
       param.value.push({ date: '', amount: null, category: '', personId: null });
       render();
+    });
+    container.appendChild(addBtn);
+  };
+
+  render();
+  return container;
+}
+
+// ─── DrawdownStrategyList editor ──────────────────────────────────────────────
+
+/**
+ * Build a self-contained DOM editor for a DrawdownStrategyList parameter.
+ *
+ * `param.value` is an array of user-authored strategies, each
+ * `{ name, roles: { <role>: <order> } }`. `param.options` is the list of
+ * drawdown-eligible roles to render a rank input for. Each strategy renders as a
+ * card: a name input + one numeric "order" input per role + a remove button. An
+ * "Add Strategy" button appends a blank strategy.
+ *
+ * The named strategies become selectable as the active Drawdown Strategy and as
+ * Optimize sweep values, so `onChange` (a list re-render) fires on structural
+ * edits — add / remove / rename — to refresh the sibling dropdown. Per-role rank
+ * edits mutate in place without a re-render so the input keeps focus.
+ *
+ * The incoming value is deep-cloned up front so in-place edits never corrupt the
+ * shared schema default (`[]`) or a round-tripped reference.
+ *
+ * @param {object}   param     The param descriptor ({ value, options, ... })
+ * @param {function} onChange  Called after structural edits to refresh siblings
+ * @returns {HTMLElement}
+ */
+function _buildDrawdownStrategyListEditor(param, onChange) {
+  const roles = Array.isArray(param.options) ? param.options : [];
+  // Clone so edits don't mutate the shared module-level default / saved value.
+  param.value = (Array.isArray(param.value) ? param.value : [])
+    .map(s => ({ name: s?.name ?? '', roles: { ...(s?.roles ?? {}) } }));
+
+  const container = document.createElement('div');
+  container.className = 'drawdown-strategy-list-editor';
+
+  const render = () => {
+    container.innerHTML = '';
+    const strategies = param.value;
+
+    strategies.forEach((strategy, idx) => {
+      const card = document.createElement('div');
+      card.className = 'drawdown-strategy-card';
+
+      // Header: name input + remove button
+      const head = document.createElement('div');
+      head.className = 'drawdown-strategy-head';
+
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.className = 'drawdown-strategy-name';
+      nameInput.placeholder = 'Strategy name';
+      nameInput.value = strategy.name ?? '';
+      nameInput.addEventListener('input', () => { strategy.name = nameInput.value; });
+      // Refresh the sibling dropdown only on blur, so typing keeps focus.
+      nameInput.addEventListener('change', () => onChange?.());
+      head.appendChild(nameInput);
+
+      const rmBtn = document.createElement('button');
+      rmBtn.type = 'button';
+      rmBtn.className = 'btn btn-warn btn-sm drawdown-strategy-remove';
+      rmBtn.textContent = '✕';
+      rmBtn.addEventListener('click', () => {
+        strategies.splice(idx, 1);
+        onChange?.();
+      });
+      head.appendChild(rmBtn);
+      card.appendChild(head);
+
+      // One rank input per drawdown-eligible role. Empty = excluded (stays null).
+      roles.forEach(role => {
+        const row = document.createElement('div');
+        row.className = 'drawdown-strategy-role-row';
+
+        const label = document.createElement('span');
+        label.className = 'drawdown-strategy-role-label';
+        label.textContent = role;
+        row.appendChild(label);
+
+        const rank = document.createElement('input');
+        rank.type = 'number';
+        rank.min = '1';
+        rank.step = '1';
+        rank.className = 'drawdown-strategy-rank';
+        rank.placeholder = '—';
+        const cur = strategy.roles?.[role];
+        rank.value = (cur == null ? '' : String(cur));
+        rank.addEventListener('input', () => {
+          const raw = rank.value.trim();
+          if (raw === '') delete strategy.roles[role];
+          else strategy.roles[role] = parseInt(raw, 10);
+        });
+        row.appendChild(rank);
+
+        card.appendChild(row);
+      });
+
+      container.appendChild(card);
+    });
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn btn-sm drawdown-strategy-add-btn';
+    addBtn.textContent = '+ Add Strategy';
+    addBtn.addEventListener('click', () => {
+      param.value.push({ name: 'New Strategy', roles: {} });
+      onChange?.();
     });
     container.appendChild(addBtn);
   };

@@ -672,3 +672,80 @@
   align-self: flex-start;
   margin-top: 2px;
 }
+
+/* ── DrawdownStrategyList param editor ── */
+.drawdown-strategy-list-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 0;
+  width: 100%;
+}
+
+.drawdown-strategy-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px;
+  border: 1px solid var(--border, #333);
+  border-radius: 4px;
+}
+
+.drawdown-strategy-head {
+  display: grid;
+  grid-template-columns: 1fr 26px;
+  gap: 6px;
+  align-items: center;
+}
+
+.drawdown-strategy-list-editor .drawdown-strategy-name {
+  flex: none;
+  width: 100%;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.drawdown-strategy-role-row {
+  display: grid;
+  grid-template-columns: 1fr 70px;
+  gap: 6px;
+  align-items: center;
+}
+
+.drawdown-strategy-role-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.drawdown-strategy-list-editor .drawdown-strategy-rank {
+  flex: none;
+  width: 100%;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* Square, centered remove button — overrides `.param-row .btn-warn`. */
+.drawdown-strategy-list-editor .drawdown-strategy-remove {
+  align-self: center;
+  justify-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 24px;
+  padding: 0;
+  margin: 0;
+  line-height: 1;
+  letter-spacing: 0;
+  font-size: 12px;
+}
+
+.drawdown-strategy-add-btn {
+  align-self: flex-start;
+  margin-top: 2px;
+}
