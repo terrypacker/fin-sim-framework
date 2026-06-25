@@ -177,6 +177,7 @@ import { BaseTaxRatesModule } from './finance/tax/base-tax-rates-module.js';
 import { DynamicTaxReducer } from './finance/tax/dynamic-tax-reducer.js';
 import { InflationAdjustedUsTaxRates, InflationAdjustedAuTaxRates } from './finance/tax/inflation-adjusted-tax-rates.js';
 import { UsPeriodAdvanceReducer, AuPeriodAdvanceReducer, UsPeriodAdvanceHandler, AuPeriodAdvanceHandler } from './finance/tax/period-advance-classes.js';
+import { RESIDENCY_COST_BASE_STEP_UP, stepsUpCostBaseOnResidency } from './finance/tax/residency-cost-base-policy.js';
 import { BaseStateTaxRatesModule } from './finance/tax/state/base-state-tax-rates-module.js';
 import { HiStateTaxRates2024 } from './finance/tax/state/hi/hi-state-tax-rates-2024.js';
 import { NeStateTaxRates2024 } from './finance/tax/state/ne/ne-state-tax-rates-2024.js';
@@ -746,6 +747,8 @@ export const Finance = {
   AuPeriodAdvanceReducer,
   UsPeriodAdvanceHandler,
   AuPeriodAdvanceHandler,
+  RESIDENCY_COST_BASE_STEP_UP,
+  stepsUpCostBaseOnResidency,
   BaseStateTaxRatesModule,
   HiStateTaxRates2024,
   NeStateTaxRates2024,

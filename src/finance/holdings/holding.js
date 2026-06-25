@@ -29,7 +29,13 @@ export class Holding {
    * @param {string|null} [opts.id=null]            - Assigned by AccountService on registration
    * @param {string}      opts.allocation           - ALLOCATION value (EQUITY | BOND | CASH | OTHER)
    * @param {number}      [opts.marketValue=0]      - Current market value
-   * @param {number}      [opts.costBasis=0]        - Tax basis for gain/loss computation
+   * @param {number}      [opts.costBasis=0]        - Tax basis for gain/loss computation (origin / universal basis)
+   * @param {Object<string,number>|null} [opts.costBaseByCountry=null]
+   *                                                - Per-country cost-base overrides, keyed by ISO country code,
+   *                                                  set when a jurisdiction steps up the basis on becoming
+   *                                                  resident (e.g. AU ITAA97 s855-45: market value at the move).
+   *                                                  null/absent for a country ⇒ that country uses `costBasis`.
+   *                                                  Country-agnostic; see design 36 §12.2.
    * @param {Date|null}   [opts.purchaseDate=null]  - Acquisition date; null = "carried in from scenario boot"
    * @param {string|null} [opts.rateKey=null]       - Lookup into state.effectiveGrowthRates; resolved on register if null
    * @param {string}      [opts.label='']           - Optional display label ("ITOT", "BND")
@@ -47,6 +53,7 @@ export class Holding {
     allocation,
     marketValue          = 0,
     costBasis            = 0,
+    costBaseByCountry    = null,
     purchaseDate         = null,
     rateKey              = null,
     label                = '',
@@ -59,6 +66,7 @@ export class Holding {
     this.allocation           = allocation;
     this.marketValue          = marketValue;
     this.costBasis            = costBasis;
+    this.costBaseByCountry    = costBaseByCountry;
     this.purchaseDate         = purchaseDate;
     this.rateKey              = rateKey;
     this.label                = label;
@@ -75,6 +83,7 @@ export class Holding {
       allocation:          this.allocation,
       marketValue:         this.marketValue,
       costBasis:           this.costBasis,
+      costBaseByCountry:   this.costBaseByCountry ? { ...this.costBaseByCountry } : null,
       purchaseDate:        this.purchaseDate ? this.purchaseDate.toISOString() : null,
       rateKey:             this.rateKey,
       label:               this.label,
@@ -96,6 +105,7 @@ export class Holding {
       allocation:    d.allocation,
       marketValue:   d.marketValue ?? 0,
       costBasis:     d.costBasis   ?? 0,
+      costBaseByCountry: /** @type {Object<string,number>|null} */ (d.costBaseByCountry ? { ...d.costBaseByCountry } : null),
       purchaseDate:  d.purchaseDate ? new Date(d.purchaseDate) : null,
       rateKey:       d.rateKey ?? null,
       label:         d.label   ?? '',

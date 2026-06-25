@@ -618,6 +618,8 @@ function _accountToStatePlain(account) {
     plain.loanBalance              = account.loanBalance   ?? 0;
     plain.minimumAge               = account.minimumAge    ?? null;
     plain.balanceAtResidencyChange = account.balanceAtResidencyChange ?? null;
+    // Per-country residency cost-base step-up (design 36 §12.2); null until a move.
+    plain.costBaseStepUpByCountry  = account.costBaseStepUpByCountry ?? null;
     if (account.rolloverContribBasis  !== undefined) plain.rolloverContribBasis  = account.rolloverContribBasis;
     if (account.rolloverEarningsBasis !== undefined) plain.rolloverEarningsBasis = account.rolloverEarningsBasis;
     // Dated conversion lots backing the §408A(d)(3)(F) 5-year recapture (EVT-43).

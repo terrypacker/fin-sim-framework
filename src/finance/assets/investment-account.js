@@ -32,6 +32,11 @@ export class InvestmentAccount extends Account {
     this.contributionBasis        = opts.contributionBasis    ?? balance;
     this.earningsBasis            = opts.earningsBasis        ?? 0;
     this.balanceAtResidencyChange = null;   // set by AccountService.recordResidencyChange
+    // Per-country pre-move unrealized gain forgiven by a residency cost-base
+    // step-up, keyed by ISO country code (design 36 §12.2). null until a move
+    // stamps it; only populated for BROKERAGE accounts (the proportional drawdown
+    // path). Country-agnostic; mirrors Holding.costBaseByCountry for the FIFO path.
+    this.costBaseStepUpByCountry  = null;
     this.loanBalance              = opts.loanBalance          ?? 0;
     this.minimumAge               = opts.minimumAge           ?? null;
     this.allowsEarlyWithdrawal    = opts.allowsEarlyWithdrawal ?? false;

@@ -175,16 +175,20 @@ export class UsTaxModule2026 extends BaseTaxModule {
         return next;
       }],
 
-      // EVT-15: stock withdrawal (sale) — US capital gain, AU capital gain if resident
+      // EVT-15: stock withdrawal (sale) — US capital gain, AU capital gain if resident.
+      // AU measures the gain from its stepped-up (s855-45) cost base, so auGain ≤ gain
+      // (design 36 §12.2). The pre-move appreciation (gain − auGain) is US-only — it is
+      // not double-taxed, so it earns no FTC (ftcYTD tracks auGain, not gain).
       ['STOCK_WITHDRAWAL_TAX', (state, action) => {
         const { gain, residency } = action;
+        const auGain = action.auGain ?? gain;
         const isAuResident = residency === 'AU';
         let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + gain };
         if (isAuResident) {
           next = {
             ...next,
-            auCapitalGainsYTD: state.auCapitalGainsYTD + gain,
-            ftcYTD:            state.ftcYTD            + gain,
+            auCapitalGainsYTD: state.auCapitalGainsYTD + auGain,
+            ftcYTD:            state.ftcYTD            + auGain,
           };
         }
         return next;

@@ -9,6 +9,7 @@
  */
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
+import { stepsUpCostBaseOnResidency } from '../tax/residency-cost-base-policy.js';
 
 /**
  * Handles CHANGE_RESIDENCY_APPLY actions.
@@ -48,9 +49,17 @@ export class ChangeResidencyApplyReducer extends Reducer {
   }
 
   reduce(state) {
-    // 1. Snapshot balanceAtResidencyChange on all registered accounts
+    // Destination of the move (matches the residency flip below). When the
+    // destination country steps up the cost base on becoming resident (AU
+    // ITAA97 s855-45, design 36 §12.2), recordResidencyChange resets the AU
+    // cost base for non-TAP CGT assets. Policy-driven — no hardcoded country.
+    const country = 'AU';
+    const stepUp  = stepsUpCostBaseOnResidency(country);
+
+    // 1. Snapshot balanceAtResidencyChange on all registered accounts (and the
+    //    residency cost-base step-up where the destination country applies one).
     for (const account of this.stateRegistry.getAccounts(state)) {
-      this.accountService.recordResidencyChange(account);
+      this.accountService.recordResidencyChange(account, { country, stepUp });
     }
 
     // 2. Flip residency to 'AU' for every person; citizen arrays unchanged

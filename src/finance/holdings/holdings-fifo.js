@@ -20,19 +20,33 @@
  * (consumed / marketValue) × costBasis. This matches the realized-gain
  * convention used by US/AU brokerage tax modules.
  *
+ * Per-country cost bases (design 36 §12.2): when a lot carries a
+ * `costBaseByCountry` map (a jurisdiction stepped up its basis on the resident's
+ * move), the realized basis is also tallied per country into
+ * `realizedBasisByCountry`. A lot with no entry for a country falls back to its
+ * universal `costBasis`, so the per-country tally is complete across mixed lots.
+ *
  * @param {Array}  holdings - account.holdings (not mutated)
  * @param {number} amount   - market-value dollars to consume; must be > 0
- * @returns {{ realizedBasis: number, newHoldings: Array, consumed: number }}
+ * @returns {{ realizedBasis: number, realizedBasisByCountry: Object<string,number>, newHoldings: Array, consumed: number }}
  *   `consumed` may be less than `amount` if the holdings total less.
  */
 export function consumeHoldingsFifo(holdings, amount) {
   if (!Array.isArray(holdings) || holdings.length === 0 || amount <= 0) {
-    return { realizedBasis: 0, newHoldings: holdings ?? [], consumed: 0 };
+    return { realizedBasis: 0, realizedBasisByCountry: {}, newHoldings: holdings ?? [], consumed: 0 };
+  }
+  // Union of step-up countries present across the lots, so the per-country tally
+  // covers every country even when only some lots were stepped up.
+  const countries = new Set();
+  for (const h of holdings) {
+    if (h?.costBaseByCountry) for (const c of Object.keys(h.costBaseByCountry)) countries.add(c);
   }
   const sorted = [...holdings].sort((a, b) => _purchaseTs(a) - _purchaseTs(b));
   let remaining     = amount;
   let realizedBasis = 0;
   let consumed      = 0;
+  const realizedBasisByCountry = {};
+  for (const c of countries) realizedBasisByCountry[c] = 0;
   const newHoldings = [];
 
   for (const h of sorted) {
@@ -43,22 +57,37 @@ export function consumeHoldingsFifo(holdings, amount) {
       continue;
     }
     const take = Math.min(remaining, mv);
-    const basisShare = (h.costBasis ?? 0) * (take / mv);
+    const fraction   = take / mv;
+    const basisShare = (h.costBasis ?? 0) * fraction;
     realizedBasis += basisShare;
+    for (const c of countries) {
+      const cb = h.costBaseByCountry?.[c] ?? (h.costBasis ?? 0);
+      realizedBasisByCountry[c] += cb * fraction;
+    }
     consumed      += take;
     remaining     -= take;
     const remainingMv = mv - take;
     if (remainingMv > 0.001) {
-      newHoldings.push({
+      const partial = {
         ...h,
         marketValue: +remainingMv.toFixed(2),
         costBasis:   +((h.costBasis ?? 0) - basisShare).toFixed(2),
-      });
+      };
+      // Deplete each per-country cost base by the same consumed fraction.
+      if (h.costBaseByCountry) {
+        partial.costBaseByCountry = {};
+        for (const c of Object.keys(h.costBaseByCountry)) {
+          partial.costBaseByCountry[c] = +(h.costBaseByCountry[c] * (remainingMv / mv)).toFixed(2);
+        }
+      }
+      newHoldings.push(partial);
     }
     // If fully consumed (remainingMv ≈ 0), the holding is dropped.
   }
+  for (const c of countries) realizedBasisByCountry[c] = +realizedBasisByCountry[c].toFixed(2);
   return {
     realizedBasis: +realizedBasis.toFixed(2),
+    realizedBasisByCountry,
     newHoldings,
     consumed:      +consumed.toFixed(2),
   };
