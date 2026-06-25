@@ -432,6 +432,30 @@ export class AccountService extends AssetService {
     const ageDecimal    = birthDate ? (date - birthDate) / msPerYear : 0;
     const residency     = getResidency(state, personKey);
 
+    // Cross-border drawdown policy (design: tax-efficient global drawdown).
+    // GLOBAL lets sources in either country compete in one drawdownPriority
+    // order; each cross-currency draw is converted to the target currency via
+    // fxToTarget. LOCAL_FIRST (default) keeps the historical same-country gating,
+    // escalating to INTL_TRANSFER once the local country is exhausted.
+    const globalDrawdown = state.crossBorderDrawdown === 'GLOBAL';
+    const usdAud         = state.effectiveExchangeRates?.USD_AUD ?? 1.55; // 1 USD = usdAud AUD
+    // Units of the target `currency` obtained per 1 unit of `srcCcy`.
+    const fxToTarget = (srcCcy) => {
+      const src = srcCcy ?? currency;
+      if (src === currency) return 1;
+      const usdPerUnit  = c => (c === 'AUD' ? 1 / usdAud : 1); // value of 1 unit in USD
+      const unitsPerUsd = c => (c === 'AUD' ? usdAud : 1);
+      return usdPerUnit(src) * unitsPerUsd(currency);
+    };
+    const fxOf = (account) =>
+      globalDrawdown ? fxToTarget(account.currency?.code ?? account.country) : 1;
+    // Fixed per-transfer FX fee (same source as IntlTransferApplyReducer: a flat
+    // USD amount), converted to the target currency and charged once per
+    // cross-border draw. Same-currency draws (fx === 1) pay nothing.
+    const fxFeeUsd  = state.effectiveFxFees?.USD_AUD ?? 15;
+    const fxFeeTgt  = fxFeeUsd * (currency === 'AUD' ? usdAud : 1);
+    const feeOf = (account) => (fxOf(account) !== 1 ? fxFeeTgt : 0);
+
     // Discover all drawdown sources in priority order.
     const cashBucketActive = state.regimeActions?.drawdown_source_override?.active ?? false;
     const _CASH_FIRST_ROLES = new Set([ACCOUNT_ROLES.FIXED_INCOME, ACCOUNT_ROLES.AU_FIXED_INCOME, ACCOUNT_ROLES.AU_SAVINGS]);
@@ -444,7 +468,7 @@ export class AccountService extends AssetService {
         'balance' in v &&
         'drawdownPriority' in v &&
         v.drawdownPriority !== null &&
-        v.country === country
+        (globalDrawdown || v.country === country)
       )
       .sort(([, a], [, b]) => {
         if (cashBucketActive) {
@@ -479,7 +503,10 @@ export class AccountService extends AssetService {
         const avail = sources
           .map(([key, account]) => {
             const eligible = eligibleOf(account);
-            return { key, account, eligible, amt: this._penaltyFreeAvailable(account, eligible) };
+            const fx = fxOf(account);
+            // _penaltyFreeAvailable is in the source currency; weight pro-rata by
+            // the target-currency value so cross-border sources contribute fairly.
+            return { key, account, eligible, fx, amt: this._penaltyFreeAvailable(account, eligible) * fx };
           })
           .filter(s => s.amt > 1e-9);
         const total = avail.reduce((sum, a) => sum + a.amt, 0);
@@ -491,7 +518,7 @@ export class AccountService extends AssetService {
           if (remaining < 1e-9) break;
           const want = Math.min(target * (s.amt / total), remaining);
           const got  = this._drawPenaltyFree(
-            targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions
+            targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions, s.fx, feeOf(s.account)
           );
           remaining     -= got;
           drawnThisPass += got;
@@ -503,7 +530,7 @@ export class AccountService extends AssetService {
       for (const [key, account] of sources) {
         if (remaining < 1e-9) break;
         remaining -= this._drawPenaltyFree(
-          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions
+          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, fxOf(account), feeOf(account)
         );
       }
     }
@@ -528,6 +555,14 @@ export class AccountService extends AssetService {
       const penaltyRate = acctAgeDecimal < rules.ageThreshold ? rules.penaltyRate : 0;
       const netFactor   = 1 - penaltyRate;
 
+      // Source amounts (gross/net/penalty/tax) stay in the account's own currency;
+      // only the cash that lands in the target savings and the `remaining` it
+      // covers are converted. netNeeded is the deficit (plus the cross-border fee)
+      // expressed in source currency, so a full draw nets `remaining` at the target.
+      const fx        = fxOf(account);
+      const fee       = feeOf(account);
+      const netNeeded = (remaining + fee) / fx;
+
       if (account.type === ACCOUNT_TYPE.ROTH) {
         // Phase 1 already drew contributions; any residual balance is earnings.
         // Use the larger of tracked earningsBasis or implied earnings (balance minus
@@ -537,23 +572,25 @@ export class AccountService extends AssetService {
         const earningsAvail   = Math.min(Math.max(account.earningsBasis ?? 0, impliedEarnings), account.balance);
         if (earningsAvail <= 0) continue;
 
-        // Gross up: to net `remaining` after penalty, we must withdraw remaining/netFactor.
-        const grossNeeded = netFactor > 0 ? remaining / netFactor : remaining;
+        // Gross up: to net `netNeeded` (source ccy) after penalty, withdraw netNeeded/netFactor.
+        const grossNeeded = netFactor > 0 ? netNeeded / netFactor : netNeeded;
         const gross       = Math.min(grossNeeded, earningsAvail);
         const net         = gross * netFactor;
         const penalty     = gross * penaltyRate;
 
-        this.transaction(targetAccount, +net,   date);
-        this.transaction(account,       -gross, date);
+        const credited = net * fx - fee; // target currency, net of cross-border fee
+        if (credited <= 0) continue;     // draw too small to clear the cross-border fee
+        this.transaction(targetAccount, +credited, date);
+        this.transaction(account,       -gross,    date);
         account.earningsBasis = Math.max(0, (account.earningsBasis ?? 0) - gross);
         if (!drawnKeys.includes(key)) drawnKeys.push(key);
         pendingTaxActions.push({ type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount: gross, penaltyAmount: penalty, residency });
-        remaining -= net;
+        remaining -= credited;
 
       } else if (account.type === ACCOUNT_TYPE.TRADITIONAL_IRA) {
         if (account.balance <= 0) continue;
 
-        const grossNeeded = netFactor > 0 ? remaining / netFactor : remaining;
+        const grossNeeded = netFactor > 0 ? netNeeded / netFactor : netNeeded;
         const grossCapped = Math.min(grossNeeded, account.balance);
 
         // Draw contributions first, then earnings.
@@ -563,8 +600,10 @@ export class AccountService extends AssetService {
         const net     = grossCapped * netFactor;
         const penalty = grossCapped * penaltyRate;
 
-        this.transaction(targetAccount, +net,        date);
-        this.transaction(account,       -grossCapped, date);
+        const credited = net * fx - fee; // target currency, net of cross-border fee
+        if (credited <= 0) continue;     // draw too small to clear the cross-border fee
+        this.transaction(targetAccount, +credited,     date);
+        this.transaction(account,       -grossCapped,  date);
         account.contributionBasis = (account.contributionBasis ?? 0) - contribPortion;
         account.earningsBasis     = (account.earningsBasis     ?? 0) - earningsPortion;
         if (!drawnKeys.includes(key)) drawnKeys.push(key);
@@ -575,12 +614,12 @@ export class AccountService extends AssetService {
         if (earningsPortion > 0) {
           pendingTaxActions.push({ type: 'IRA_WITHDRAWAL_EARNINGS_TAX', amount: earningsPortion, penaltyAmount: earningsPortion * penaltyRate, residency });
         }
-        remaining -= net;
+        remaining -= credited;
 
       } else if (account.type === ACCOUNT_TYPE.FOUR_OH_ONE_K) {
         if (account.balance <= 0) continue;
 
-        const grossNeeded = netFactor > 0 ? remaining / netFactor : remaining;
+        const grossNeeded = netFactor > 0 ? netNeeded / netFactor : netNeeded;
         const gross       = Math.min(grossNeeded, account.balance);
         const net         = gross * netFactor;
         const penalty     = gross * penaltyRate;
@@ -589,13 +628,15 @@ export class AccountService extends AssetService {
         const fromEarnings = Math.min(gross, account.earningsBasis ?? 0);
         const fromContrib  = gross - fromEarnings;
 
-        this.transaction(targetAccount, +net,   date);
-        this.transaction(account,       -gross, date);
+        const credited = net * fx - fee; // target currency, net of cross-border fee
+        if (credited <= 0) continue;     // draw too small to clear the cross-border fee
+        this.transaction(targetAccount, +credited, date);
+        this.transaction(account,       -gross,    date);
         account.earningsBasis     = (account.earningsBasis     ?? 0) - fromEarnings;
         account.contributionBasis = (account.contributionBasis ?? 0) - fromContrib;
         if (!drawnKeys.includes(key)) drawnKeys.push(key);
         pendingTaxActions.push({ type: 'K401_WITHDRAWAL_TAX', amount: gross, penaltyAmount: penalty });
-        remaining -= net;
+        remaining -= credited;
       }
     }
 
@@ -625,15 +666,29 @@ export class AccountService extends AssetService {
    * gain/basis tracking + STOCK_WITHDRAWAL_TAX, Roth contribution access) so the
    * ordered and proportional drawdown paths share identical tax/basis handling.
    * Appends any tax actions, records the key in drawnKeys, and returns the
-   * amount actually withdrawn.
+   * amount actually withdrawn, expressed in the TARGET account's currency.
+   *
+   * `fx` is the units-of-target-currency per 1 unit of the source account's
+   * currency (1 for same-currency / LOCAL_FIRST draws). `want` is in target
+   * currency; the source is debited in its own currency and the target credited
+   * the converted amount, less `fee` — a flat per-transfer FX cost in the target
+   * currency, charged only on cross-border draws (fee is 0 when fx === 1). The
+   * source draw is grossed up by the fee so the target still nets `want`.
+   * Source-currency figures (basis, STOCK_WITHDRAWAL_TAX proceeds/gain) are
+   * recorded natively so the source country's tax computation stays correct.
    */
-  _drawPenaltyFree(targetAccount, account, key, want, date, eligible, residency, drawnKeys, pendingTaxActions) {
+  _drawPenaltyFree(targetAccount, account, key, want, date, eligible, residency, drawnKeys, pendingTaxActions, fx = 1, fee = 0) {
     if (want < 1e-9) return 0;
+    // Gross up the source-side need by the fee so a full draw nets `want` at the
+    // target after the wire cost is paid.
+    const wantSrc = (want + fee) / fx;
 
     if (eligible) {
       if (account.balance <= 0) return 0;
-      const withdraw = Math.min(want, account.balance);
-      this.transaction(targetAccount, +withdraw, date);
+      const withdraw = Math.min(wantSrc, account.balance); // source currency
+      const credited = withdraw * fx - fee;                // target currency, net of fee
+      if (credited <= 0) return 0;                         // draw too small to clear the fee
+      this.transaction(targetAccount, +credited, date);
       this.transaction(account,       -withdraw, date);
 
       // Brokerage accounts with unrealised gains: proportional capital gain,
@@ -652,19 +707,21 @@ export class AccountService extends AssetService {
       }
 
       if (!drawnKeys.includes(key)) drawnKeys.push(key);
-      return withdraw;
+      return credited;
     }
 
     if (account.type === ACCOUNT_TYPE.ROTH && (account.contributionBasis ?? 0) > 0) {
       // Roth contributions are always accessible without penalty (EW-2).
       const available = Math.min(account.contributionBasis, account.balance);
       if (available <= 0) return 0;
-      const withdraw = Math.min(want, available);
-      this.transaction(targetAccount, +withdraw, date);
+      const withdraw = Math.min(wantSrc, available); // source currency
+      const credited = withdraw * fx - fee;          // target currency, net of fee
+      if (credited <= 0) return 0;
+      this.transaction(targetAccount, +credited, date);
       this.transaction(account,       -withdraw, date);
       account.contributionBasis -= withdraw;
       if (!drawnKeys.includes(key)) drawnKeys.push(key);
-      return withdraw;
+      return credited;
     }
 
     return 0;
