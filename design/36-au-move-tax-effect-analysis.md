@@ -83,7 +83,7 @@ Net: Roth and conversion treatment is correct and sophisticated (it models the s
 
 > Items 1 and 2 are model gaps with a step-by-step fix guide in **§12** (locations, statutory refs, implementation, tests, verification). Both over-tax the move scenario, so §3's "+28%" is a conservative floor.
 
-1. **Super pension-phase rate** — `SUPER_TAX_RATE = 0.15` is applied flat to super earnings with **no pension/preservation-phase check** (`au-tax-module-2026.js:14,128`). For retirees 60+ in pension phase, AU super earnings are **tax-free (0%)**. This over-taxes super in *both* scenarios (and slightly more in the move case, which preserves more super). Worth a fix; doesn't change the §3 direction. → **fix: §12.1**
+1. **Super pension-phase rate** — `SUPER_TAX_RATE = 0.15` is applied flat to super earnings with **no pension/preservation-phase check** (`au-tax-module-2026.js:14,128`). For retirees 60+ in pension phase, AU super earnings are **tax-free (0%)**. This over-taxes super in *both* scenarios (and slightly more in the move case, which preserves more super). Worth a fix; doesn't change the §3 direction. → **✅ FIXED — see §12.1**
 2. **Deemed-disposal / CGT cost-base reset at the move** — `ChangeResidencyApplyReducer` captures `balanceAtResidencyChange` but it is **never read** for CGT. So AU CGT on later sales is computed from the *original US* cost basis, taxing pre-move appreciation that AU would normally exclude (AU deems assets acquired at market value on becoming resident, ITAA97 s855-45). This **over-taxes the move** (move's $1.95M AU stock-gain base is inflated), so §3 is conservative — but it's a real gap. (The 50% CGT discount itself *is* correctly applied — see §12.2.) → **fix: §12.2**
 3. **Hawaii residency termination** assumed clean on emigration (realistic for a genuine relocation).
 4. **Foreign tax credits** assumed to fully relieve US federal once AU tax is paid (model drives federal → ~$0; reasonable).
@@ -145,8 +145,9 @@ The controllable lever is **Roth-conversion sequencing**, and the model says to 
 
 Both gaps push the result the *same* direction — they make the model **over-tax the move scenario**, so §3's "+28%" is a conservative floor. Fixing either should *increase* the measured move advantage. Pick up here.
 
-### 12.1 Super earnings taxed at 15% with no pension-phase exemption
+### 12.1 Super earnings taxed at 15% with no pension-phase exemption — ✅ FIXED (2026-06-25)
 
+- **Fix shipped**: `SuperEarningsHandler.call` (`src/finance/handlers/earnings-handlers.js`) now reads the firing `date`, computes the owner's age (`getBirthDate` + a local `getAge`, matching the super withdrawal handlers' age-60 gate), and stamps `taxRate: 0` on the emitted `SUPER_EARNINGS_APPLY` when age ≥ 60 (pension/retirement phase). `SuperEarningsApplyReducer` (`au-super-classes.js`) forwards `action.taxRate` onto `SUPER_EARNINGS_TAX`, and the `SUPER_EARNINGS_TAX` reducer (`au-tax-module-2026.js`) now uses `action.taxRate ?? SUPER_TAX_RATE` (0 in pension phase, flat 15% otherwise). Contributions tax (`SUPER_CONTRIBUTION_TAX`) untouched. Tests: `tests/unit/evt-super.test.mjs` — accumulation (member < 60) → 15% accrues to `auPersonSuperTaxYTD`; pension (member ≥ 60) → 0 while the balance still compounds. Note the `SUPER_EARNINGS` *direct* path (`SuperEarningsDirectHandler`) is unchanged — the gate lives on the scheduled `INTL_SUPER_EARNINGS` path used by real scenario runs.
 - **Direction**: over-taxes super earnings in **both** scenarios; slightly more in the move case (which preserves a larger super balance). Lowers absolute wealth in both; minor effect on the gap.
 - **What's wrong**: `SUPER_EARNINGS_TAX` is chained **unconditionally** and taxed at a flat 15%.
   - Rate constant: `src/finance/tax/au/au-tax-module-2026.js:14` — `const SUPER_TAX_RATE = 0.15`.
