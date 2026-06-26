@@ -8,9 +8,10 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { GridSearchSolver }   from './grid-search-solver.js';
-import { PatternSearchSolver } from './pattern-search-solver.js';
-import { RandomSolver }        from './random-solver.js';
+import { GridSearchSolver }         from './grid-search-solver.js';
+import { PatternSearchSolver }       from './pattern-search-solver.js';
+import { RandomSolver }              from './random-solver.js';
+import { SimulatedAnnealingSolver }  from './simulated-annealing-solver.js';
 
 /**
  * SOLVER_REGISTRY — named-things registry of search strategies (design/38 §3.2),
@@ -60,7 +61,20 @@ export const SOLVER_REGISTRY = {
     ],
   },
 
-  // SIMULATED_ANNEALING — design/38 Step 4.
+  SIMULATED_ANNEALING: {
+    label:   SimulatedAnnealingSolver.label,
+    factory: (options = {}) => new SimulatedAnnealingSolver(options),
+    optionSchema: [
+      { key: 'budget', label: 'Max Evaluations', type: 'Number', defaultValue: 300,
+        description: 'Hard cap on simulations to run.' },
+      { key: 'seed', label: 'Seed', type: 'Number', defaultValue: 1,
+        description: 'Seed for proposals and acceptance (reproducible).' },
+      { key: 'cooling', label: 'Cooling Rate', type: 'Number', defaultValue: 0.95,
+        description: 'Geometric temperature decay per iteration (0–1; lower cools faster).' },
+      { key: 'initialTemp', label: 'Initial Temperature', type: 'Number', defaultValue: 0,
+        description: 'Starting temperature in objective units (0 = auto-calibrate from a burn-in).' },
+    ],
+  },
 };
 
 /** Look up a solver factory by key, defaulting to GRID. */

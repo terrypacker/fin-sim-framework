@@ -254,7 +254,7 @@ Scoring leans entirely on the **state accumulators** of §5: the value of a conv
 **Step 3 — `PATTERN_SEARCH` + `RANDOM`** [x]
 - Coordinate/pattern search and seeded random/LHS. Toy-problem tests.
 
-**Step 4 — `SIMULATED_ANNEALING`** [ ]
+**Step 4 — `SIMULATED_ANNEALING`** [x]
 - Seeded Metropolis + cooling schedule; `optionSchema` (temperature, cooling, budget).
 
 **Step 5 — Objectives (pure-of-final-state) + `cumulativeTaxesPaid`** [ ]

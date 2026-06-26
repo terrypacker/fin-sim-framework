@@ -15,6 +15,7 @@ import { SOLVER_REGISTRY, createSolver } from '../../src/finance/optimization/so
 import { GridSearchSolver }   from '../../src/finance/optimization/solvers/grid-search-solver.js';
 import { PatternSearchSolver } from '../../src/finance/optimization/solvers/pattern-search-solver.js';
 import { RandomSolver }        from '../../src/finance/optimization/solvers/random-solver.js';
+import { SimulatedAnnealingSolver } from '../../src/finance/optimization/solvers/simulated-annealing-solver.js';
 import { OptimizationProblem } from '../../src/finance/optimization/optimization-problem.js';
 import { OPT_PARAM_TYPES } from '../../src/finance/optimization/optimization-objectives.js';
 
@@ -71,11 +72,13 @@ describe('SOLVER_REGISTRY', () => {
     assert.deepStrictEqual(entry.optionSchema, []);
   });
 
-  test('PATTERN_SEARCH and RANDOM entries are registered with option schemas', () => {
+  test('PATTERN_SEARCH, RANDOM, SIMULATED_ANNEALING entries are registered with option schemas', () => {
     assert.ok(SOLVER_REGISTRY.PATTERN_SEARCH.factory() instanceof PatternSearchSolver);
     assert.ok(SOLVER_REGISTRY.RANDOM.factory() instanceof RandomSolver);
+    assert.ok(SOLVER_REGISTRY.SIMULATED_ANNEALING.factory() instanceof SimulatedAnnealingSolver);
     assert.ok(SOLVER_REGISTRY.PATTERN_SEARCH.optionSchema.some(o => o.key === 'budget'));
     assert.ok(SOLVER_REGISTRY.RANDOM.optionSchema.some(o => o.key === 'sampling'));
+    assert.ok(SOLVER_REGISTRY.SIMULATED_ANNEALING.optionSchema.some(o => o.key === 'cooling'));
   });
 
   test('factory options thread through to the solver instance', () => {
@@ -208,5 +211,47 @@ describe('PatternSearchSolver', () => {
       .solve(analyticProblem(CONT_VARS));
     assert.ok(Math.abs(best.candidate.x - 2) < 0.05);
     assert.ok(Math.abs(best.candidate.y + 3) < 0.05);
+  });
+});
+
+// ─── SimulatedAnnealingSolver ─────────────────────────────────────────────────
+
+describe('SimulatedAnnealingSolver', () => {
+  test('converges toward the continuous optimum within budget', async () => {
+    const { best, evaluations, solver } =
+      await new SimulatedAnnealingSolver({ budget: 500, seed: 1 }).solve(analyticProblem(CONT_VARS));
+    assert.strictEqual(solver, 'SIMULATED_ANNEALING');
+    assert.ok(evaluations <= 500);
+    assert.ok(best.score > -0.5, `score ${best.score} should be near 0`);
+    assert.ok(Math.abs(best.candidate.x - 2) < 0.7);
+    assert.ok(Math.abs(best.candidate.y + 3) < 0.7);
+  });
+
+  test('auto-calibrates temperature to the objective scale (large net-worth-like values)', async () => {
+    // Same shape scaled up by 1e6 — proves T0 calibration is scale-free.
+    const p = new OptimizationProblem({ variables: CONT_VARS });
+    p.evaluate = (c) => {
+      const score = -1e6 * ((c.x - 2) ** 2 + (c.y + 3) ** 2);
+      return { result: { ...c, score }, score };
+    };
+    const { best } = await new SimulatedAnnealingSolver({ budget: 500, seed: 1 }).solve(p);
+    assert.ok(Math.abs(best.candidate.x - 2) < 0.7);
+    assert.ok(Math.abs(best.candidate.y + 3) < 0.7);
+  });
+
+  test('is deterministic for a given seed', async () => {
+    const a = await new SimulatedAnnealingSolver({ budget: 300, seed: 8 }).solve(analyticProblem(CONT_VARS));
+    const b = await new SimulatedAnnealingSolver({ budget: 300, seed: 8 }).solve(analyticProblem(CONT_VARS));
+    assert.deepStrictEqual(a.best.candidate, b.best.candidate);
+    assert.strictEqual(a.best.score, b.best.score);
+  });
+
+  test('respects an explicit initial temperature (skips burn-in calibration)', async () => {
+    const { best, evaluations } =
+      await new SimulatedAnnealingSolver({ budget: 500, seed: 3, initialTemp: 5, cooling: 0.97 })
+        .solve(analyticProblem(CONT_VARS));
+    assert.ok(evaluations <= 500);
+    assert.ok(best.candidate.x >= -5 && best.candidate.x <= 5);
+    assert.ok(best.score > -1.0); // settles in the optimum's neighbourhood
   });
 });

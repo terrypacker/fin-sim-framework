@@ -120,6 +120,7 @@ import { OptimizationProblem } from './finance/optimization/optimization-problem
 import { GridSearchSolver } from './finance/optimization/solvers/grid-search-solver.js';
 import { PatternSearchSolver } from './finance/optimization/solvers/pattern-search-solver.js';
 import { RandomSolver } from './finance/optimization/solvers/random-solver.js';
+import { SimulatedAnnealingSolver } from './finance/optimization/solvers/simulated-annealing-solver.js';
 import { SOLVER_REGISTRY, createSolver } from './finance/optimization/solvers/solver-registry.js';
 import { makeSeededRng, EvalLedger } from './finance/optimization/solvers/solver-support.js';
 import { ownershipFractions, splitByOwnership, accumulateByOwnership } from './finance/ownership-utils.js';
@@ -669,6 +670,7 @@ export const Finance = {
   GridSearchSolver,
   PatternSearchSolver,
   RandomSolver,
+  SimulatedAnnealingSolver,
   SOLVER_REGISTRY,
   createSolver,
   makeSeededRng,
