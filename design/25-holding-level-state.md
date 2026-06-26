@@ -146,6 +146,9 @@ This is enforced by `_syncBalance(account)`, called at the tail of every reducer
 
 Tests assert this invariant in two places: (a) a generic `holdings-invariant.test.mjs` walks every account after every reducer step and asserts the sum; (b) round-trip serialization tests assert the invariant holds before and after `toJSON`/`fromJSON`.
 
+> ~~**TODO** — Per-reducer postconditions: each reducer should assert its local invariants (§4.4 `balance == Σ marketValue`, `basis ≥ 0`, `mv ≥ 0`, money-conservation for transfers). Added for `transaction`/holdings; the pattern generalizes to every reducer.~~
+> **Done / superseded.** Generalized into **[design 37 — Reducer Test Framework & Postcondition Coverage](37-reducer-test-framework.md)**: an invariant taxonomy (I1–I10), a reusable harness (`tests/helpers/reducer-postconditions.js` + `reducer-fixtures.js`), and a per-reducer coverage checklist for all 128 reducer classes. The holdings/transaction postconditions described above are the seed rows.
+
 ---
 
 ## 5. Data Model Changes
@@ -446,6 +449,7 @@ Rollback story: the migration is large but contained to (a) `Account` shape, (b)
 - `tests/unit/holdings-allocation-bootstrap.test.mjs` — every account class registers with the correct default holding (`allocation`, `rateKey`).
 - `tests/unit/holdings-toolset-split.test.mjs` — declaring a 60/40 split in a toolset produces two holdings at boot, each carrying its expected `rateKey`.
 - `tests/unit/holdings-cost-basis-fifo.test.mjs` — `STOCK_WITHDRAWAL` consumes holdings in purchase-date order; realized basis matches the FIFO ledger.
+- `tests/unit/reducer-postconditions.test.mjs` — generalized per-reducer postcondition table (see [design 37](37-reducer-test-framework.md)); seeded with the holdings/transaction/no-op reducers, burns down to every reducer class.
 
 ### 12.2 Extended tests
 
