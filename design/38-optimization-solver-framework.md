@@ -257,7 +257,7 @@ Scoring leans entirely on the **state accumulators** of §5: the value of a conv
 **Step 4 — `SIMULATED_ANNEALING`** [x]
 - Seeded Metropolis + cooling schedule; `optionSchema` (temperature, cooling, budget).
 
-**Step 5 — Objectives (pure-of-final-state) + `cumulativeTaxesPaid`** [ ]
+**Step 5 — Objectives (pure-of-final-state) + `cumulativeTaxesPaid`** [x]
 - Keep `evaluate(result, { snapshot })` shape; add `DIE_WITH_TARGET`, `MIN_LIFETIME_TAXES` reading cumulative accumulators; windowed delta = terminal − snapshot accumulator. `AccumulateTaxesPaidReducer` (mirrors `AccumulateDeficitReducer`) + schema registration. **No** per-step objective callback.
 
 **Step 6 — Spending + Roth-conversion controls** [ ]

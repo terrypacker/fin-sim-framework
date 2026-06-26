@@ -277,6 +277,8 @@ disposal variants add **I6**. **Swept ✅** — isolated postcondition tests in 
 | `ReplenishSavingsReducer` | I1 I3 I5 I7 | ✅ `reducer-postconditions-finance` (not I1 — §7.3) |
 | `OutOfFundsReducer` | I1 I7 | ✅ `out-of-funds-reducer` |
 | `AccumulateDeficitReducer` | I1 I9 | ✅ `accumulate-deficit-reducer` |
+| `AccumulateTaxesPaidReducer` | I1 I9 | ✅ `accumulate-reducers` |
+| `AccumulateConsumptionReducer` | I1 I9 | ✅ `accumulate-reducers` |
 | `SetOutOfFundsDateReducer` | I1 I10 | ✅ `set-out-of-funds-date-reducer` |
 | `InflationAdjustReducer` | I1 I2 | ✅ `reducer-postconditions-finance` |
 | `ChangeResidencyApplyReducer` | I1 I7 | ✅ `reducer-postconditions-finance` |

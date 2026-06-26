@@ -75,6 +75,8 @@ export const COVERED = [
 
   // D — top-level finance (dedicated tests)
   'AccumulateDeficitReducer', 'OutOfFundsReducer', 'SetOutOfFundsDateReducer',
+  // Lifetime running accumulators (design 38 §5) — accumulate-reducers.test.mjs
+  'AccumulateTaxesPaidReducer', 'AccumulateConsumptionReducer',
 
   // D — top-level finance (reducer-postconditions-finance.test.mjs)
   'ExpenseDebitReducer', 'ReplenishSavingsReducer', 'InflationAdjustReducer',

@@ -115,7 +115,7 @@ import { get, set } from './finance/monte-carlo/mc-param-paths.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables } from './finance/optimization/intl-retirement-opt-config.js';
 import { IntlRetirementOptimizer } from './finance/optimization/intl-retirement-optimizer.js';
 import { valuesForConfig, cartesianProduct } from './finance/optimization/opt-values.js';
-import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES } from './finance/optimization/optimization-objectives.js';
+import { OPT_PARAM_TYPES, DEFAULT_TERMINAL_WEALTH_PENALTY, OPTIMIZATION_OBJECTIVES } from './finance/optimization/optimization-objectives.js';
 import { OptimizationProblem } from './finance/optimization/optimization-problem.js';
 import { GridSearchSolver } from './finance/optimization/solvers/grid-search-solver.js';
 import { PatternSearchSolver } from './finance/optimization/solvers/pattern-search-solver.js';
@@ -129,7 +129,9 @@ import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } fro
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
 import { Person } from './finance/person.js';
 import { AccountRetitleApplyReducer } from './finance/reducers/account-retitle-apply-reducer.js';
+import { AccumulateConsumptionReducer } from './finance/reducers/accumulate-consumption-reducer.js';
 import { AccumulateDeficitReducer } from './finance/reducers/accumulate-deficit-reducer.js';
+import { AccumulateTaxesPaidReducer } from './finance/reducers/accumulate-taxes-paid-reducer.js';
 import { ChangeResidencyApplyReducer } from './finance/reducers/change-residency-apply-reducer.js';
 import { ChangeStateResidencyApplyReducer } from './finance/reducers/change-state-residency-apply-reducer.js';
 import { ExpenseDebitReducer } from './finance/reducers/expense-debit-reducer.js';
@@ -665,6 +667,7 @@ export const Finance = {
   valuesForConfig,
   cartesianProduct,
   OPT_PARAM_TYPES,
+  DEFAULT_TERMINAL_WEALTH_PENALTY,
   OPTIMIZATION_OBJECTIVES,
   OptimizationProblem,
   GridSearchSolver,
@@ -691,7 +694,9 @@ export const Finance = {
   PeriodService,
   Person,
   AccountRetitleApplyReducer,
+  AccumulateConsumptionReducer,
   AccumulateDeficitReducer,
+  AccumulateTaxesPaidReducer,
   ChangeResidencyApplyReducer,
   ChangeStateResidencyApplyReducer,
   ExpenseDebitReducer,

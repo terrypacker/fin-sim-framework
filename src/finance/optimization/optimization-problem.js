@@ -248,11 +248,11 @@ export class OptimizationProblem {
     sim.silent = true;
     sim.journal.enabled = false;
     sim.stepTo(params.endDate);
-    return this._readResult(sim.state, params.endDate);
+    return this._readResult(sim.state, params.endDate, params);
   }
 
   /** Terminal + cumulative metrics read from the final sim state. */
-  _readResult(state, endDate) {
+  _readResult(state, endDate, params = {}) {
     return {
       finalNetWorthUsd:  computeNetWorth(state, 'USD'),
       finalNetLiquidity: computeNetLiquidity(state, endDate),
@@ -260,6 +260,12 @@ export class OptimizationProblem {
       cumulativeDeficit: state.cumulativeDeficit ?? 0,
       deficitMonths:     state.deficitMonths     ?? 0,
       rothFinalBalance:  (state.rothAccount?.balance ?? 0) + (state.spouseRothAccount?.balance ?? 0),
+      // Lifetime running accumulators (design 38 §5), USD-normalized.
+      cumulativeTaxesPaid:  state.cumulativeTaxesPaid   ?? 0,
+      lifetimeConsumption:  state.cumulativeConsumption ?? 0,
+      // Objective parameters carried through so pure objectives can read them.
+      terminalWealthTarget:        params.terminalWealthTarget ?? 0,
+      terminalWealthTargetPenalty: params.terminalWealthTargetPenalty,
     };
   }
 }
