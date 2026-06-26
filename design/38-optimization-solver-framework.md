@@ -1,6 +1,6 @@
 # 38 — Optimization Solver Framework
 
-**Status**: Proposed (draft 2026-06-26)
+**Status**: Implemented (2026-06-26) — Steps 1–8 complete; CMA-ES/GA and worker-parallel rollouts remain as documented follow-ups.
 **Related**: `design/33-age-banded-spending.md` (the expense-band parameterization this reuses), `design/25a-mc-nested-param-paths.md` (nested decision-variable paths — already implemented), `design/30-decision-graph-analysis.md` (combinatorial exploration surface), `design/39-mpc-financial-controller.md` (the closed-loop driver that reuses this engine as its inner solve), `design/15-config-as-source-of-truth.md` (round-tripped params).
 
 ---
@@ -267,7 +267,7 @@ Scoring leans entirely on the **state accumulators** of §5: the value of a conv
 **Step 7 — UI: Solver select + options block** [x]
 - `OptConfigPanel` Solver `<select>` + `optionSchema` renderer; `getConfig()` returns `solverKey`/`solverOptions`; presenter/controller thread them through.
 
-**Step 8 — Browser verification** [ ]
+**Step 8 — Browser verification** [x]
 - Per CLAUDE.md: run the dev server; on the expense-band problem confirm `PATTERN_SEARCH`/`SIMULATED_ANNEALING` reach near-`GRID` optima at a fraction of the evaluations; confirm `DIE_WITH_TARGET` lands terminal NW on target.
 
 ### Out of this plan (tracked elsewhere)
