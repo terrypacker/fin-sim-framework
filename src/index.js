@@ -113,15 +113,25 @@ import { computeNetWorthUsd, IntlRetirementMcRunner } from './finance/monte-carl
 import { CDC_2024, AU_2022, lookupLifeTable } from './finance/monte-carlo/life-tables.js';
 import { get, set } from './finance/monte-carlo/mc-param-paths.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables } from './finance/optimization/intl-retirement-opt-config.js';
-import { valuesForConfig, IntlRetirementOptimizer } from './finance/optimization/intl-retirement-optimizer.js';
-import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES } from './finance/optimization/optimization-objectives.js';
+import { IntlRetirementOptimizer } from './finance/optimization/intl-retirement-optimizer.js';
+import { valuesForConfig, cartesianProduct } from './finance/optimization/opt-values.js';
+import { OPT_PARAM_TYPES, DEFAULT_TERMINAL_WEALTH_PENALTY, OPTIMIZATION_OBJECTIVES } from './finance/optimization/optimization-objectives.js';
+import { OptimizationProblem } from './finance/optimization/optimization-problem.js';
+import { GridSearchSolver } from './finance/optimization/solvers/grid-search-solver.js';
+import { PatternSearchSolver } from './finance/optimization/solvers/pattern-search-solver.js';
+import { RandomSolver } from './finance/optimization/solvers/random-solver.js';
+import { SimulatedAnnealingSolver } from './finance/optimization/solvers/simulated-annealing-solver.js';
+import { SOLVER_REGISTRY, createSolver } from './finance/optimization/solvers/solver-registry.js';
+import { makeSeededRng, EvalLedger } from './finance/optimization/solvers/solver-support.js';
 import { ownershipFractions, splitByOwnership, accumulateByOwnership } from './finance/ownership-utils.js';
-import { isParamVisible, indexParamSchema, resolveSweepVariables } from './finance/param-schema-utils.js';
+import { isParamVisible, controllableVariables, indexParamSchema, resolveSweepVariables } from './finance/param-schema-utils.js';
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
 import { Person } from './finance/person.js';
 import { AccountRetitleApplyReducer } from './finance/reducers/account-retitle-apply-reducer.js';
+import { AccumulateConsumptionReducer } from './finance/reducers/accumulate-consumption-reducer.js';
 import { AccumulateDeficitReducer } from './finance/reducers/accumulate-deficit-reducer.js';
+import { AccumulateTaxesPaidReducer } from './finance/reducers/accumulate-taxes-paid-reducer.js';
 import { ChangeResidencyApplyReducer } from './finance/reducers/change-residency-apply-reducer.js';
 import { ChangeStateResidencyApplyReducer } from './finance/reducers/change-state-residency-apply-reducer.js';
 import { ExpenseDebitReducer } from './finance/reducers/expense-debit-reducer.js';
@@ -150,6 +160,7 @@ import { computeGuardrailPortfolioValue } from './finance/spending/guardrail-por
 import { SpendingStrategyApplyReducer } from './finance/spending/spending-strategy-apply-reducer.js';
 import { SPENDING_STRATEGY_REGISTRY } from './finance/spending/spending-strategy-registry.js';
 import { DEFAULT_AGE_BANDS, AgeBandedSpendingReducer } from './finance/spending/strategies/age-banded-spending-reducer.js';
+import { DEFAULT_EXPENSE_BANDS, ExplicitBandsSpendingReducer } from './finance/spending/strategies/explicit-bands-spending-reducer.js';
 import { GuardrailAdjustApplyReducer } from './finance/spending/strategies/guardrail-adjust-apply-reducer.js';
 import { GuardrailAnnualCheckReducer } from './finance/spending/strategies/guardrail-annual-check-reducer.js';
 import { GuardrailBaselineApplyReducer } from './finance/spending/strategies/guardrail-baseline-apply-reducer.js';
@@ -653,14 +664,26 @@ export const Finance = {
   set,
   DEFAULT_OPTIMIZATION_CONFIGS,
   buildOptVariables,
-  valuesForConfig,
   IntlRetirementOptimizer,
+  valuesForConfig,
+  cartesianProduct,
   OPT_PARAM_TYPES,
+  DEFAULT_TERMINAL_WEALTH_PENALTY,
   OPTIMIZATION_OBJECTIVES,
+  OptimizationProblem,
+  GridSearchSolver,
+  PatternSearchSolver,
+  RandomSolver,
+  SimulatedAnnealingSolver,
+  SOLVER_REGISTRY,
+  createSolver,
+  makeSeededRng,
+  EvalLedger,
   ownershipFractions,
   splitByOwnership,
   accumulateByOwnership,
   isParamVisible,
+  controllableVariables,
   indexParamSchema,
   resolveSweepVariables,
   buildMonthPeriod,
@@ -672,7 +695,9 @@ export const Finance = {
   PeriodService,
   Person,
   AccountRetitleApplyReducer,
+  AccumulateConsumptionReducer,
   AccumulateDeficitReducer,
+  AccumulateTaxesPaidReducer,
   ChangeResidencyApplyReducer,
   ChangeStateResidencyApplyReducer,
   ExpenseDebitReducer,
@@ -716,6 +741,8 @@ export const Finance = {
   SPENDING_STRATEGY_REGISTRY,
   DEFAULT_AGE_BANDS,
   AgeBandedSpendingReducer,
+  DEFAULT_EXPENSE_BANDS,
+  ExplicitBandsSpendingReducer,
   GuardrailAdjustApplyReducer,
   GuardrailAnnualCheckReducer,
   GuardrailBaselineApplyReducer,

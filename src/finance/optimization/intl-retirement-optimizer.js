@@ -8,52 +8,28 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { ServiceRegistry }          from '../../services/service-registry.js';
-import { IntlRetirementScenario, applyRealPropertySaleYearParams } from '../../scenarios/intl-retirement-scenario.js';
-import { ScenarioLoader }           from '../../scenarios/scenario-loader.js';
-import { ScenarioSerializer }       from '../../scenarios/scenario-serializer.js';
-import { computeNetWorth }          from '../derived-metrics/net-worth.js';
-import { computeNetLiquidity }      from '../derived-metrics/net-liquidity.js';
-import { set }                       from '../monte-carlo/mc-param-paths.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS } from './intl-retirement-opt-config.js';
-import { OPTIMIZATION_OBJECTIVES, OPT_PARAM_TYPES } from './optimization-objectives.js';
-
-/**
- * Expand a single optimization config into the concrete values it covers.
- */
-export function valuesForConfig(cfg) {
-  if (cfg.type === OPT_PARAM_TYPES.ENUM) return cfg.values.slice();
-  const min  = Number(cfg.min);
-  const max  = Number(cfg.max);
-  const step = Number(cfg.step);
-  if (!isFinite(min) || !isFinite(max) || !isFinite(step) || step <= 0) return [];
-  const vals = [];
-  for (let v = min; v <= max + 1e-9; v += step) {
-    vals.push(cfg.type === OPT_PARAM_TYPES.INTEGER ? Math.round(v) : v);
-  }
-  return vals;
-}
-
-function cartesianProduct(arrays) {
-  if (arrays.length === 0) return [[]];
-  return arrays.reduce(
-    (acc, arr) => acc.flatMap(a => arr.map(b => [...a, b])),
-    [[]]
-  );
-}
+import { OPTIMIZATION_OBJECTIVES }      from './optimization-objectives.js';
+import { valuesForConfig }              from './opt-values.js';
+import { OptimizationProblem }          from './optimization-problem.js';
+import { GridSearchSolver }             from './solvers/grid-search-solver.js';
 
 /**
  * Grid-search optimizer for the IntlRetirementScenario.
  *
- * Enumerates the Cartesian product of all enabled optimization config ranges,
- * runs a deterministic simulation for each candidate, and returns results
- * sorted by objective score (best first).
+ * Now a thin shim over the design/38 seams: it constructs an
+ * `OptimizationProblem` from its current args (the enabled configs become the
+ * problem's search-space variables) and runs a `GridSearchSolver`. All the
+ * isolated-registry simulation work lives in `OptimizationProblem.evaluate`; the
+ * Cartesian enumeration lives in `GridSearchSolver`. Behaviour and return shape
+ * are unchanged so existing callers (OptimizationController, the OPT panel) and
+ * tests keep working with the default solver.
  *
  * Each run result:
  *   candidate          — the param overrides that were applied
- *   result             — { finalNetWorthUsd, scenarioFailed, cumulativeDeficit,
- *                          deficitMonths, rothFinalBalance }
- *   score              — raw objective value (unsigned; direction already applied internally)
+ *   result             — { finalNetWorthUsd, finalNetLiquidity, scenarioFailed,
+ *                          cumulativeDeficit, deficitMonths, rothFinalBalance }
+ *   score              — objective value (sign already applied; higher is better)
  *
  * The aggregate return value:
  *   { candidates, best, totalRuns, objective }
@@ -67,6 +43,7 @@ export class IntlRetirementOptimizer {
    *                                                 Defaults to MAX_NET_WORTH.
    * @param {Date}     [opts.simStart]             - Simulation start date.
    * @param {Date}     [opts.simEnd]               - Simulation end date.
+   * @param {object}   [opts.cfgTemplate]          - Active scenario cfg to clone per run.
    */
   constructor({
     optimizationConfigs = DEFAULT_OPTIMIZATION_CONFIGS,
@@ -82,122 +59,56 @@ export class IntlRetirementOptimizer {
     this.cfgTemplate         = cfgTemplate;
   }
 
+  /** Enabled configs only — these are the problem's search-space variables. */
+  _enabledVariables() {
+    return this.optimizationConfigs.filter(c => c.enabled);
+  }
+
   /**
-   * Total number of simulation runs that will be executed.
+   * Total number of simulation runs that will be executed (exhaustive grid).
    * Useful for displaying progress before the run starts.
    */
   candidateCount() {
-    const enabled = this.optimizationConfigs.filter(c => c.enabled);
+    const enabled = this._enabledVariables();
     if (enabled.length === 0) return 1;
     return enabled.reduce((n, cfg) => n * valuesForConfig(cfg).length, 1);
   }
 
   /**
-   * Run the grid search asynchronously, yielding between iterations for UI responsiveness.
+   * Run the grid search asynchronously, yielding between iterations for UI
+   * responsiveness.
    *
    * @param {object}   [baseParams={}]  - Scenario params applied to every candidate.
    * @param {Function} [onProgress]     - Called with (completed, total) after each run.
    * @returns {Promise<{ candidates, best, totalRuns, objective }>}
    */
   async run(baseParams = {}, onProgress) {
-    const candidates   = this._generateCandidates();
-    const totalRuns    = candidates.length;
-    const results      = [];
-    const { evaluate, direction } = this.objective;
-    const sign         = direction === 'minimize' ? -1 : 1;
+    const problem = new OptimizationProblem({
+      variables:    this._enabledVariables(),
+      baseParams,
+      objective:    this.objective,
+      simStart:     this.simStart,
+      simEnd:       this.simEnd,
+      initialState: { kind: 'compile', cfgTemplate: this.cfgTemplate },
+    });
 
-    // Design 15 §2.3: clone the active scenario cfg per iteration. Tests / library
-    // consumers that don't wire a ServiceRegistry-backed active scenario get a
-    // fresh defaults cfg.
-    //
-    // Pipe through serializeScenario so the template is a plain JSON-safe object
-    // — registry entries carry `factory`/`scenarioClass` which `structuredClone`
-    // would reject.
-    const rawTemplate = this.cfgTemplate
-      ?? IntlRetirementScenario.buildDefaultConfig({}, this.simStart, this.simEnd);
-    const cfgTemplate = ScenarioSerializer.serializeScenario(rawTemplate);
+    const solver = new GridSearchSolver();
+    const { candidates, best, evaluations } = await solver.solve(problem, { onProgress });
 
-    for (let i = 0; i < totalRuns; i++) {
-      const params = this._applyCandidate({ ...baseParams, endDate: this.simEnd }, candidates[i]);
-      const result = this._runOne(params, cfgTemplate);
-      const score  = sign * evaluate(result);
-      results.push({ candidate: candidates[i], result, score });
-      if (onProgress) onProgress(i + 1, totalRuns);
-      await new Promise(resolve => setTimeout(resolve, 0));
-    }
-
-    results.sort((a, b) => b.score - a.score);
     return {
-      candidates:  results,
-      best:        results[0] ?? null,
-      totalRuns,
-      objective:   this.objective.label,
+      candidates,
+      best,
+      totalRuns: evaluations,
+      objective: this.objective.label,
     };
   }
 
   /**
-   * Apply a candidate's paramKey→value pairs onto a deep clone of base using
-   * path-aware set(), so nested paths (e.g. shocks[0].severity) reach the
-   * correct location in the params tree.
+   * Candidate list for the enabled configs (Cartesian product). Retained for
+   * callers/tests that inspect enumeration directly; `run()` enumerates via the
+   * GridSearchSolver over the same variables.
    */
-  _applyCandidate(base, candidate) {
-    const params = structuredClone(base);
-    for (const [k, v] of Object.entries(candidate)) {
-      set(params, k, v);
-    }
-    return params;
-  }
-
-  _runOne(params, cfgTemplate) {
-    // Isolated per-candidate registry: the user's active scenario + UI stay
-    // untouched while the grid search runs.
-    const registry = new ServiceRegistry();
-    const scenario = new IntlRetirementScenario({
-      context: registry.simulationContext,
-      params,
-      simStart: this.simStart,
-      simEnd:   this.simEnd,
-    });
-    scenario.buildSim();
-
-    const cfg = structuredClone(cfgTemplate);
-    // Merge perturbed params so ScenarioLoader reads nested path values correctly.
-    cfg.parameters = { ...(cfg.parameters ?? {}), ...params };
-    // Patch real property sale years — toolsets read from cfg.realProperties, not cfg.parameters.
-    applyRealPropertySaleYearParams(cfg, params);
-    if (Array.isArray(cfg.params)) {
-      for (const p of cfg.params) {
-        if (params[p.name] !== undefined) p.value = params[p.name];
-      }
-    }
-    new ScenarioLoader().load(cfg, registry);
-
-    scenario.sim.silent = true;
-    scenario.sim.journal.enabled = false;
-    scenario.sim.stepTo(params.endDate);
-    const state = scenario.sim.state;
-    return {
-      finalNetWorthUsd:  computeNetWorth(state, 'USD'),
-      finalNetLiquidity: computeNetLiquidity(state, params.endDate),
-      scenarioFailed:    state.scenarioFailed    ?? false,
-      cumulativeDeficit: state.cumulativeDeficit ?? 0,
-      deficitMonths:     state.deficitMonths     ?? 0,
-      rothFinalBalance:  (state.rothAccount?.balance ?? 0) + (state.spouseRothAccount?.balance ?? 0),
-    };
-  }
-
   _generateCandidates() {
-    const enabled   = this.optimizationConfigs.filter(c => c.enabled);
-    if (enabled.length === 0) return [{}];
-
-    const paramKeys = enabled.map(c => c.paramKey);
-    const valueSets = enabled.map(c => valuesForConfig(c));
-    const combos    = cartesianProduct(valueSets);
-
-    return combos.map(combo => {
-      const candidate = {};
-      paramKeys.forEach((k, i) => { candidate[k] = combo[i]; });
-      return candidate;
-    });
+    return GridSearchSolver.enumerate(this._enabledVariables());
   }
 }

@@ -1,6 +1,6 @@
 # 38 — Optimization Solver Framework
 
-**Status**: Proposed (draft 2026-06-26)
+**Status**: Implemented (2026-06-26) — Steps 1–8 complete; CMA-ES/GA and worker-parallel rollouts remain as documented follow-ups.
 **Related**: `design/33-age-banded-spending.md` (the expense-band parameterization this reuses), `design/25a-mc-nested-param-paths.md` (nested decision-variable paths — already implemented), `design/30-decision-graph-analysis.md` (combinatorial exploration surface), `design/39-mpc-financial-controller.md` (the closed-loop driver that reuses this engine as its inner solve), `design/15-config-as-source-of-truth.md` (round-tripped params).
 
 ---
@@ -243,31 +243,31 @@ Scoring leans entirely on the **state accumulators** of §5: the value of a conv
 ### Status legend
 - [ ] not started · [x] done
 
-**Step 1 — `OptimizationProblem` + initial-state provider** [ ]
+**Step 1 — `OptimizationProblem` + initial-state provider** [x]
 - `src/finance/optimization/optimization-problem.js`: lift `_runOne` + objective scoring into `evaluate`; add `encode`/`decode`/`randomCandidate`/`candidateCount`. Pure of any search strategy.
 - Implement the `initialState` strategy: `kind: 'compile'` (today's t₀ build) and `kind: 'snapshot'` (compile wiring + inject `state`/queue, step forward). Add a **deterministic-compile-across-registries** test (same cfg → identical `stateKey` slots + wiring) — the invariant design 39 stands on.
 - Add the `controllable` facet to the param schema (consumed by design 39; inert here).
 
-**Step 2 — Solver interface + registry + `GridSearchSolver`** [ ]
+**Step 2 — Solver interface + registry + `GridSearchSolver`** [x]
 - `src/finance/optimization/solvers/` (`grid-search-solver.js`, `solver-registry.js`). `GridSearchSolver` reproduces today's enumeration on top of `problem.evaluate`. Re-point `IntlRetirementOptimizer` at it (shim) — backward-compat gate (Step from §9).
 
-**Step 3 — `PATTERN_SEARCH` + `RANDOM`** [ ]
+**Step 3 — `PATTERN_SEARCH` + `RANDOM`** [x]
 - Coordinate/pattern search and seeded random/LHS. Toy-problem tests.
 
-**Step 4 — `SIMULATED_ANNEALING`** [ ]
+**Step 4 — `SIMULATED_ANNEALING`** [x]
 - Seeded Metropolis + cooling schedule; `optionSchema` (temperature, cooling, budget).
 
-**Step 5 — Objectives (pure-of-final-state) + `cumulativeTaxesPaid`** [ ]
+**Step 5 — Objectives (pure-of-final-state) + `cumulativeTaxesPaid`** [x]
 - Keep `evaluate(result, { snapshot })` shape; add `DIE_WITH_TARGET`, `MIN_LIFETIME_TAXES` reading cumulative accumulators; windowed delta = terminal − snapshot accumulator. `AccumulateTaxesPaidReducer` (mirrors `AccumulateDeficitReducer`) + schema registration. **No** per-step objective callback.
 
-**Step 6 — Spending + Roth-conversion controls** [ ]
+**Step 6 — Spending + Roth-conversion controls** [x]
 - `EXPLICIT_BANDS` spending strategy (design-33 sibling reducer) + `buildExpenseBandOptConfigs`; mark band-amount vars `controllable`.
 - Roth: ensure `rothConversionMaxBracket`/`StartYear`/`EndYear` are sweepable batch vars; spec the per-year `rothConversionSchedule` array as the design-39 control form (mark `controllable`). Wire both into `buildOptVariables`.
 
-**Step 7 — UI: Solver select + options block** [ ]
+**Step 7 — UI: Solver select + options block** [x]
 - `OptConfigPanel` Solver `<select>` + `optionSchema` renderer; `getConfig()` returns `solverKey`/`solverOptions`; presenter/controller thread them through.
 
-**Step 8 — Browser verification** [ ]
+**Step 8 — Browser verification** [x]
 - Per CLAUDE.md: run the dev server; on the expense-band problem confirm `PATTERN_SEARCH`/`SIMULATED_ANNEALING` reach near-`GRID` optima at a fraction of the evaluations; confirm `DIE_WITH_TARGET` lands terminal NW on target.
 
 ### Out of this plan (tracked elsewhere)
