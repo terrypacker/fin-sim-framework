@@ -619,6 +619,10 @@ export class WorkbenchApp extends BaseComponent {
         this._statePanelView.updateStatePanel(date, state);
       },
     });
+    // Expose the live time controls to plugins (e.g. the MPC cockpit drives the
+    // real clock through this — design 39 Step 5a). Re-assigned each rebuild
+    // since TimeControls is recreated, while the runtime persists.
+    this._wbShell.runtime.timeControls = this.timeControls;
 
     // ── Simulation animator ───────────────────────────────────────────────────
     this._animator = new SimulationAnimator({

@@ -29,6 +29,7 @@ import { DgConfigPlugin }          from './dg-config-plugin.js';
 import { DgResultsPlugin }         from './dg-results-plugin.js';
 import { CrossActionQueryPlugin }  from './cross-action-query-plugin.js';
 import { HoldingsPlugin }          from './holdings-plugin.js';
+import { MpcCockpitPlugin }        from './mpc-cockpit-plugin.js';
 
 export { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin,
          TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin,
@@ -36,7 +37,8 @@ export { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin,
          OptConfigPlugin, OptResultsPlugin, OptRunsPlugin,
          ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin,
          JournalReportPlugin, ScenarioComparePlugin,
-         DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin };
+         DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin,
+         MpcCockpitPlugin };
 
 /** All finance plugin descriptors — pass directly to WorkbenchShell `plugins` option. */
 export const FINANCE_PLUGINS = [
@@ -62,6 +64,7 @@ export const FINANCE_PLUGINS = [
   { id: 'scenario-compare',  title: 'Scenario Compare',  component: ScenarioComparePlugin },
   { id: 'dg-config',   title: 'Decision Graph', component: DgConfigPlugin    },
   { id: 'dg-results',  title: 'DG Results',    component: DgResultsPlugin   },
+  { id: 'mpc-cockpit', title: 'MPC Cockpit',   component: MpcCockpitPlugin  },
   { id: 'dashboard',    title: 'Dashboard',     component: DashboardPlugin   },
   { id: 'perf',         title: 'Performance',   component: PerfPlugin        },
 ];
@@ -74,7 +77,7 @@ export const FINANCE_DEFAULT_LAYOUT = {
     active: 'scenario',
   },
   center: {
-    tabs: ['config-graph', 'timeline', 'chart', 'holdings', 'mc-results', 'opt-results', 'dg-results'],
+    tabs: ['config-graph', 'timeline', 'chart', 'holdings', 'mpc-cockpit', 'mc-results', 'opt-results', 'dg-results'],
     active: 'config-graph',
   },
   right: {

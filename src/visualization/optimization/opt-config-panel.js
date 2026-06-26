@@ -10,7 +10,10 @@
 
 import { BaseComponent }                from '../components/base-component.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS } from '../../finance/optimization/intl-retirement-opt-config.js';
-import { OPTIMIZATION_OBJECTIVES, OPT_PARAM_TYPES } from '../../finance/optimization/optimization-objectives.js';
+import {
+  OPTIMIZATION_OBJECTIVES, OPT_PARAM_TYPES, groupedObjectiveOptions,
+  DIE_WITH_TARGET_AXES, resolveDieWithTargetKey,
+} from '../../finance/optimization/optimization-objectives.js';
 import { valuesForConfig }              from '../../finance/optimization/opt-values.js';
 import { SOLVER_REGISTRY }              from '../../finance/optimization/solvers/solver-registry.js';
 
@@ -82,7 +85,7 @@ export class OptConfigPanel extends BaseComponent {
    * @returns {{ optimizationConfigs, objective, objectiveKey, candidateCount, solverKey, solverOptions }}
    */
   getConfig() {
-    const objectiveKey = this._objectiveSel?.value ?? 'MAX_NET_WORTH';
+    const objectiveKey = this._objectiveKey();
     const objective    = OPTIMIZATION_OBJECTIVES[objectiveKey] ?? OPTIMIZATION_OBJECTIVES.MAX_NET_WORTH;
     const solverKey    = this._solverSel?.value ?? 'GRID';
     const solverOptions = this._readSolverOptions();
@@ -108,6 +111,25 @@ export class OptConfigPanel extends BaseComponent {
   }
 
   // ── Private ───────────────────────────────────────────────────────────────────
+
+  /** Resolve the selected objective KEY, folding a grouped family + its axis sub-selects. */
+  _objectiveKey() {
+    const val = this._objectiveSel?.value ?? 'MAX_NET_WORTH';
+    if (val.startsWith('family:')) {
+      return resolveDieWithTargetKey({
+        running:  this._axisRunning?.value,
+        terminal: this._axisTerminal?.value,
+      });
+    }
+    return val;
+  }
+
+  /** Show the Basis/Terminal axis sub-selects only when a grouped family goal is chosen. */
+  _syncObjectiveAxes() {
+    if (this._axesEl) {
+      this._axesEl.style.display = (this._objectiveSel?.value ?? '').startsWith('family:') ? '' : 'none';
+    }
+  }
 
   _snapshotState() {
     const state = new Map();
@@ -148,9 +170,13 @@ export class OptConfigPanel extends BaseComponent {
   }
 
   _render() {
-    const objectiveOptions = Object.entries(OPTIMIZATION_OBJECTIVES)
-      .map(([k, v]) => `<option value="${k}">${v.label}</option>`)
+    const objectiveOptions = groupedObjectiveOptions()
+      .map(o => o.kind === 'family'
+        ? `<option value="family:${o.family}">${o.label}</option>`
+        : `<option value="${o.key}">${o.label}</option>`)
       .join('');
+    const axisOptions = (axis) => DIE_WITH_TARGET_AXES[axis]
+      .map(a => `<option value="${a.value}">${a.label}</option>`).join('');
     const solverOptions = Object.entries(SOLVER_REGISTRY)
       .map(([k, v]) => `<option value="${k}">${v.label}</option>`)
       .join('');
@@ -164,6 +190,12 @@ export class OptConfigPanel extends BaseComponent {
           <select class="toolbar-select opt-objective-select" style="flex:1">
             ${objectiveOptions}
           </select>
+        </div>
+        <div class="node-field opt-objective-axes" style="display:none">
+          <label>Basis</label>
+          <select class="toolbar-select opt-axis-running" style="flex:1">${axisOptions('running')}</select>
+          <label>Terminal</label>
+          <select class="toolbar-select opt-axis-terminal" style="flex:1">${axisOptions('terminal')}</select>
         </div>
         <div class="node-field">
           <label>Solver</label>
@@ -185,6 +217,9 @@ export class OptConfigPanel extends BaseComponent {
     this.append(this._container, shell);
 
     this._objectiveSel = shell.querySelector('.opt-objective-select');
+    this._axesEl       = shell.querySelector('.opt-objective-axes');
+    this._axisRunning  = shell.querySelector('.opt-axis-running');
+    this._axisTerminal = shell.querySelector('.opt-axis-terminal');
     this._solverSel    = shell.querySelector('.opt-solver-select');
     this._solverOptsEl = shell.querySelector('.opt-solver-options');
     this._runBtn       = shell.querySelector('button');
@@ -199,7 +234,9 @@ export class OptConfigPanel extends BaseComponent {
       this._renderSolverOptions();
       this._updateCount();
     });
+    this.listen(this._objectiveSel, 'change', () => this._syncObjectiveAxes());
 
+    this._syncObjectiveAxes();
     this._renderSolverOptions();
     this._buildVarTable(this._section, this._variables, new Map());
     this._updateCount();

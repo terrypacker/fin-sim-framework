@@ -1,0 +1,203 @@
+/*
+ * MPC Cockpit (design 39 §7) — closed-loop advisor surface.
+ */
+
+.mpc-cockpit {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  overflow: auto;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.mpc-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.mpc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* .wb-input has no global base (only .wb-select does) — give cockpit inputs the
+   same compact, bordered look as the selects so they sit consistently. */
+.mpc-cockpit .wb-input {
+  background: var(--bg-input);
+  color: var(--text-dim);
+  border: 1px solid var(--border-hi);
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-family: monospace;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.mpc-cockpit .wb-input:focus { border-color: var(--accent-primary); }
+.mpc-cockpit .wb-input:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.mpc-field .wb-select { min-width: 150px; }
+.mpc-override .wb-input { width: 110px; }
+
+.mpc-range { gap: 12px; }
+.mpc-range-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  align-self: center;
+}
+.mpc-range .mpc-field { flex-direction: row; align-items: center; gap: 6px; text-transform: none; }
+.mpc-num { width: 78px; }
+/* Trim the chunky native number spinners for a tidier compact field. */
+.mpc-num::-webkit-outer-spin-button,
+.mpc-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.mpc-num { -moz-appearance: textfield; }
+
+/* Buttons reuse the shared .btn / .btn-sm / .btn-primary styles (components.css);
+   only the disabled affordance (during an in-flight Advise) is cockpit-local. */
+.mpc-cockpit .btn:disabled { opacity: 0.55; cursor: default; }
+.mpc-cockpit .btn:disabled:hover { border-color: var(--border-hi); color: var(--text-dim); }
+
+/* "Stopping…" affordance: the autopilot may be mid-solve when Stop is clicked, so
+   the button pulses to show the stop is acknowledged and in progress (overrides the
+   dimmed :disabled look above so it stays clearly active, not greyed out). */
+.mpc-cockpit .btn.mpc-stopping,
+.mpc-cockpit .btn.mpc-stopping:hover {
+  opacity: 1;
+  border-color: var(--red);
+  color: var(--red);
+  background: rgba(255, 68, 85, 0.12);
+  cursor: progress;
+  animation: mpc-stopping-pulse 0.7s ease-in-out infinite;
+}
+@keyframes mpc-stopping-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+.mpc-now {
+  font-size: 13px;
+  color: var(--text-dim);
+  padding: 4px 2px;
+}
+
+.mpc-card {
+  border: 1px solid var(--accent-primary);
+  background: var(--accent-primary-bg);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mpc-card-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-primary);
+  font-weight: 700;
+}
+.mpc-card-move {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+.mpc-card-outcome { font-size: 13px; color: var(--text-dim); }
+.mpc-card-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+/* flex-shrink:0 — the inner SVG is a fixed 220px; without this the flex column
+   shrinks the fan's box under it once the card + fan + save-points overflow, and
+   the SVG spills out and overlaps the save-points list below. Let it keep its
+   height and let .mpc-cockpit's overflow:auto scroll instead. */
+.mpc-fan { width: 100%; min-height: 120px; flex-shrink: 0; }
+.mpc-fan-svg { width: 100%; height: 220px; display: block; }
+
+.mpc-axis,
+.mpc-now-div { stroke: var(--border); stroke-width: 1; }
+.mpc-now-div { stroke-dasharray: 3 3; }
+
+.mpc-line {
+  fill: none;
+  stroke: var(--text-dim);
+  stroke-width: 1;
+  opacity: 0.5;
+}
+.mpc-line--rec {
+  stroke: var(--accent-primary);
+  stroke-width: 2.5;
+  opacity: 1;
+}
+
+.mpc-fan-lbl {
+  fill: var(--text-dim);
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+}
+.mpc-fan-lbl--end { text-anchor: end; }
+
+/* MPC Save Points — the session decision log (design 39 Step 5c).
+   Inspect-only; deliberately distinct from the scenario picker. */
+.mpc-savepoints {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.mpc-savepoints-head {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.mpc-savepoints-sub {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  opacity: 0.7;
+}
+.mpc-savepoints-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.mpc-savepoint {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: baseline;
+  padding: 4px 0;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.mpc-sp-date {
+  color: var(--text-dim);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.mpc-sp-move {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mpc-sp-nw {
+  color: var(--accent-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

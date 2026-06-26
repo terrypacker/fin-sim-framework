@@ -15,6 +15,7 @@ import { ScenarioSerializer }  from '../../scenarios/scenario-serializer.js';
 import { computeNetWorth }     from '../derived-metrics/net-worth.js';
 import { computeNetLiquidity } from '../derived-metrics/net-liquidity.js';
 import { set }                 from '../monte-carlo/mc-param-paths.js';
+import { repinExpensesIfChanged } from '../spending/strategies/explicit-bands-spending-reducer.js';
 import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES } from './optimization-objectives.js';
 import { valuesForConfig }     from './opt-values.js';
 
@@ -224,31 +225,108 @@ export class OptimizationProblem {
     return scenario.sim;
   }
 
-  /** Roll the simulation forward per the initial-state strategy and read terminal metrics. */
-  _rollout(params) {
+  /**
+   * Inject a now-snapshot's state + event queue into a freshly-compiled sim,
+   * instead of re-simulating the past. The freshly-compiled wiring + stateKeys
+   * line up by the shared deterministic-compile invariant (design 39 §10 Q4).
+   */
+  _injectSnapshot(sim, snap) {
+    sim.state = structuredClone(snap.state);
+    const queue = (snap.queue ?? []).map(e => ({ ...e, date: new Date(e.date) }));
+    sim.queue.restoreData(queue);
+    sim.currentDate = sim.normalizeDate(new Date(snap.date));
+    // Carry the snapshot's RNG cursor forward so a rollout seeded from "now"
+    // continues the same draw sequence (faithful for stochastic rollouts —
+    // design 39 §10 Q5). SimulationHistory.takeSnapshot() captures rngState;
+    // honour it when present, otherwise keep the fresh compile's seed.
+    if (snap.rngState !== undefined) sim.rngState = snap.rngState;
+    // Keep the instanceId counter ahead of any restored event so recurring
+    // re-schedules never collide with a queued event in the indexed heap.
+    const maxId = queue.reduce((m, e) => Math.max(m, e.instanceId ?? -1), -1);
+    sim.nextEventInstanceId = Math.max(sim.nextEventInstanceId, maxId + 1);
+    sim.history.snapshots.length = 0;
+    sim.history.snapshotCursor   = -1;
+  }
+
+  /**
+   * Compile the scenario and seed it per the initial-state strategy (inject the
+   * snapshot for `kind:'snapshot'`), returning a silent, journal-off sim that is
+   * ready to step but has NOT been stepped. Shared by `_rollout` (steps to
+   * simEnd) and `rollToSnapshot` (steps to an intermediate epoch).
+   */
+  _seededSim(params) {
     const sim = this._compile(params);
-
     if (this.initialState?.kind === 'snapshot') {
-      const snap = this.initialState.snapshot;
-      // Inject the snapshot's state + event queue instead of re-simulating the
-      // past. The freshly-compiled wiring + stateKeys line up by the shared
-      // deterministic-compile invariant.
-      sim.state = structuredClone(snap.state);
-      const queue = (snap.queue ?? []).map(e => ({ ...e, date: new Date(e.date) }));
-      sim.queue.restoreData(queue);
-      sim.currentDate = sim.normalizeDate(new Date(snap.date));
-      // Keep the instanceId counter ahead of any restored event so recurring
-      // re-schedules never collide with a queued event in the indexed heap.
-      const maxId = queue.reduce((m, e) => Math.max(m, e.instanceId ?? -1), -1);
-      sim.nextEventInstanceId = Math.max(sim.nextEventInstanceId, maxId + 1);
-      sim.history.snapshots.length = 0;
-      sim.history.snapshotCursor   = -1;
+      this._injectSnapshot(sim, this.initialState.snapshot);
+      // Forward-effective EXPLICIT_BANDS edit (design 39 §5 / Step 5b): when the
+      // controls changed the band active at "now" vs the injected snapshot's pin,
+      // actuate it immediately rather than waiting for the next annual period
+      // advance — so the current year reflects the decision and the projection
+      // matches the live Apply (which re-pins the same way). No-op otherwise.
+      const patch = repinExpensesIfChanged(
+        sim.state, params.spendingExpenseBands, new Date(sim.currentDate).getTime());
+      if (patch) sim.state = { ...sim.state, ...patch };
     }
-
     sim.silent = true;
     sim.journal.enabled = false;
+    return sim;
+  }
+
+  /** Roll the simulation forward per the initial-state strategy and read terminal metrics. */
+  _rollout(params) {
+    const sim = this._seededSim(params);
     sim.stepTo(params.endDate);
     return this._readResult(sim.state, params.endDate, params);
+  }
+
+  /**
+   * Roll forward to an intermediate date and capture a fresh now-snapshot — the
+   * receding-horizon "advance" of design 39 Step 3. Applies `candidate` (the
+   * committed first-segment controls) on top of baseParams, seeds from the
+   * initial state (a snapshot or a t0 compile), steps to `toDate`, and returns a
+   * snapshot in the SimulationHistory.takeSnapshot() shape for the next epoch.
+   *
+   * @param {object} candidate - committed control params for this segment.
+   * @param {Date}   toDate    - the next decision epoch.
+   * @returns {{ date: Date, state: object, queue: Array, rngState: number }}
+   */
+  rollToSnapshot(candidate, toDate) {
+    const params = this._applyCandidate({ ...this.baseParams, endDate: this.simEnd }, candidate ?? {});
+    const sim = this._seededSim(params);
+    sim.stepTo(toDate);
+    return {
+      date:     new Date(sim.currentDate),
+      state:    structuredClone(sim.state),
+      queue:    sim.cloneQueue(),
+      rngState: sim.rngState,
+    };
+  }
+
+  /**
+   * Roll forward sampling net worth at evenly spaced dates — the per-step
+   * trajectory the MPC cockpit's "futures fan" draws (design 39 §7). Reuses the
+   * initial-state strategy (snapshot or compile), so a candidate's fan line
+   * starts at "now". Returns the sampled series plus the terminal result.
+   *
+   * @param {object} candidate
+   * @param {number} [points=24] number of samples from the start date to simEnd.
+   * @returns {{ dates: Date[], netWorth: number[], result: object }}
+   */
+  rolloutSeries(candidate, { points = 24 } = {}) {
+    const params = this._applyCandidate({ ...this.baseParams, endDate: this.simEnd }, candidate ?? {});
+    const sim    = this._seededSim(params);
+    const startMs = sim.currentDate.getTime();
+    const endMs   = this.simEnd.getTime();
+    const n       = Math.max(2, points);
+    const dates = [];
+    const netWorth = [];
+    for (let i = 0; i < n; i++) {
+      const t = new Date(startMs + (endMs - startMs) * (i / (n - 1)));
+      sim.stepTo(t);
+      dates.push(new Date(sim.currentDate));
+      netWorth.push(computeNetWorth(sim.state, 'USD'));
+    }
+    return { dates, netWorth, result: this._readResult(sim.state, this.simEnd, params) };
   }
 
   /** Terminal + cumulative metrics read from the final sim state. */
@@ -263,9 +341,18 @@ export class OptimizationProblem {
       // Lifetime running accumulators (design 38 §5), USD-normalized.
       cumulativeTaxesPaid:  state.cumulativeTaxesPaid   ?? 0,
       lifetimeConsumption:  state.cumulativeConsumption ?? 0,
+      // CRRA running utility of consumption (design 39 §4).
+      lifetimeConsumptionUtility: state.cumulativeConsumptionUtility ?? 0,
+      // Run's average marginal utility u'(c̄) — the dollars→utils shadow price that
+      // auto-scales the CRRA Die-With-Target λ (design 39 §11). Null when no
+      // consumption was recorded.
+      consumptionMarginalUtility: (state.cumulativeConsumptionUtilityCount ?? 0) > 0
+        ? (state.cumulativeConsumptionMarginalUtility ?? 0) / state.cumulativeConsumptionUtilityCount
+        : null,
       // Objective parameters carried through so pure objectives can read them.
       terminalWealthTarget:        params.terminalWealthTarget ?? 0,
       terminalWealthTargetPenalty: params.terminalWealthTargetPenalty,
+      deficitPenalty:              params.deficitPenalty,
     };
   }
 }

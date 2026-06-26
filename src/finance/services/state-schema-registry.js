@@ -152,6 +152,8 @@ export class StateSchemaRegistry {
     // so the chart/state-panel format them as money.
     this.register('cumulativeTaxesPaid',   ParameterValueType.currency('USD'));
     this.register('cumulativeConsumption', ParameterValueType.currency('USD'));
+    // CRRA running utility of consumption (design 39 §4) — a unitless utility sum.
+    this.register('cumulativeConsumptionUtility', ParameterValueType.decimal(2));
 
     // Holdings (design 25 §5.6). Per-account exact paths take precedence
     // when an account stamps them with its specific currency; globs cover

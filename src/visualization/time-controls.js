@@ -136,6 +136,19 @@ export class TimeControls extends BaseComponent {
     return targetTime;
   }
 
+  /**
+   * Step the live sim forward to a specific date (forward-only, like stepTo).
+   * Used by the MPC cockpit's Advance so the real clock + all panels move in
+   * lockstep with the cockpit (design 39 Step 5a). Clamped to [simStart, simEnd].
+   */
+  stepToDate(date) {
+    const start = this.scenario.simStart.getTime();
+    const end   = this.scenario.simEnd.getTime();
+    if (end <= start) return this.scenario.sim.currentDate;
+    const t = Math.max(start, Math.min(end, new Date(date).getTime()));
+    return this.stepTo((t - start) / (end - start));
+  }
+
   rewindTo(pct) {
     // Manual slider/timeline rewind clears the stepForward history since the
     // user is now navigating freely, not stepping event-by-event.

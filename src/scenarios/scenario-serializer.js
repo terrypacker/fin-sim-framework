@@ -76,6 +76,7 @@ import { SetOutOfFundsDateReducer }       from '../finance/reducers/set-out-of-f
 import { AccumulateDeficitReducer }       from '../finance/reducers/accumulate-deficit-reducer.js';
 import { AccumulateTaxesPaidReducer }     from '../finance/reducers/accumulate-taxes-paid-reducer.js';
 import { AccumulateConsumptionReducer }   from '../finance/reducers/accumulate-consumption-reducer.js';
+import { AccumulateConsumptionUtilityReducer } from '../finance/reducers/accumulate-consumption-utility-reducer.js';
 import { OutOfFundsReducer }             from '../finance/reducers/out-of-funds-reducer.js';
 import { InflationAdjustReducer }        from '../finance/reducers/inflation-adjust-reducer.js';
 import { SpendingStrategyApplyReducer }  from '../finance/spending/spending-strategy-apply-reducer.js';
@@ -246,6 +247,7 @@ const _ALL_CLASSES = [
   PersonDiedApplyReducer, SocialSecuritySurvivorApplyReducer, AccountRetitleApplyReducer, ScenarioCompleteReducer,
   LateLifeCareApplyReducer,
   SetOutOfFundsDateReducer, AccumulateDeficitReducer, AccumulateTaxesPaidReducer, AccumulateConsumptionReducer,
+  AccumulateConsumptionUtilityReducer,
   OutOfFundsReducer, InflationAdjustReducer,
   SpendingStrategyApplyReducer, RegimeAwareSpendingReducer,
   UsPeriodAdvanceReducer, AuPeriodAdvanceReducer,
