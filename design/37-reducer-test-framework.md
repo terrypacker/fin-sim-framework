@@ -337,6 +337,7 @@ I3/I4/I5 applies here.
 |---|---|
 | `SpendingStrategyApplyReducer` | ✅ |
 | `AgeBandedSpendingReducer` | ✅ |
+| `ExplicitBandsSpendingReducer` | ✅ |
 | `GuardrailBaselineApply` / `GuardrailAnnualCheck` / `GuardrailAdjustApply` | ✅ |
 | `HealthcareExpenseApplyReducer` | ✅ (I9 monotonic accumulator) |
 | `LateLifeCareApplyReducer` | ✅ (apply/revert round-trip) |

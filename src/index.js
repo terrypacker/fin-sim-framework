@@ -160,6 +160,7 @@ import { computeGuardrailPortfolioValue } from './finance/spending/guardrail-por
 import { SpendingStrategyApplyReducer } from './finance/spending/spending-strategy-apply-reducer.js';
 import { SPENDING_STRATEGY_REGISTRY } from './finance/spending/spending-strategy-registry.js';
 import { DEFAULT_AGE_BANDS, AgeBandedSpendingReducer } from './finance/spending/strategies/age-banded-spending-reducer.js';
+import { DEFAULT_EXPENSE_BANDS, ExplicitBandsSpendingReducer } from './finance/spending/strategies/explicit-bands-spending-reducer.js';
 import { GuardrailAdjustApplyReducer } from './finance/spending/strategies/guardrail-adjust-apply-reducer.js';
 import { GuardrailAnnualCheckReducer } from './finance/spending/strategies/guardrail-annual-check-reducer.js';
 import { GuardrailBaselineApplyReducer } from './finance/spending/strategies/guardrail-baseline-apply-reducer.js';
@@ -740,6 +741,8 @@ export const Finance = {
   SPENDING_STRATEGY_REGISTRY,
   DEFAULT_AGE_BANDS,
   AgeBandedSpendingReducer,
+  DEFAULT_EXPENSE_BANDS,
+  ExplicitBandsSpendingReducer,
   GuardrailAdjustApplyReducer,
   GuardrailAnnualCheckReducer,
   GuardrailBaselineApplyReducer,

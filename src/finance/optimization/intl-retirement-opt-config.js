@@ -56,6 +56,9 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
     values:   US_MFJ_BRACKET_RATES,
     group:    'Roth Conversion',
     enabled:  true,
+    // The bracket ceiling is forward-adjustable each year (design 38 §6.0/§6.3),
+    // so design 39's MPC can re-decide it from realized state.
+    controllable: true,
   },
   {
     paramKey: 'rothConversionStartYear',
@@ -299,11 +302,41 @@ function buildShockOptConfigs(params) {
 }
 
 /**
+ * Build one optimization variable per EXPLICIT_BANDS expense band (design 38
+ * §6.2), sibling of buildShockOptConfigs. Each emits a nested-path variable
+ * `spendingExpenseBands[i].monthlyAmount` that _applyCandidate's set() routes
+ * correctly — no engine change. The search range is centred on the band's
+ * configured amount. Marked `controllable` (design 38 §6.0): a band's monthly
+ * amount is forward-adjustable mid-run, so design 39's MPC can actuate it.
+ */
+function buildExpenseBandOptConfigs(params) {
+  const bands = params.spendingExpenseBands ?? [];
+  return bands.flatMap((band, i) => {
+    if (!band) return [];
+    const base = band.monthlyAmount ?? 5000;
+    return [
+      {
+        paramKey:     `spendingExpenseBands[${i}].monthlyAmount`,
+        label:        `Band ${i + 1} (age ${band.startAge ?? '?'}+): monthly amount`,
+        type:         OPT_PARAM_TYPES.INTEGER,
+        min:          Math.max(0, Math.round((base * 0.5) / 500) * 500),
+        max:          Math.round((base * 1.5) / 500) * 500,
+        step:         500,
+        group:        'Spending Bands',
+        enabled:      false,
+        controllable: true,
+        visibleWhen:  { param: 'spendingStrategy', includes: 'EXPLICIT_BANDS' },
+      },
+    ];
+  });
+}
+
+/**
  * Build the full optimization variable list for a given param snapshot.
  *
  * Returns DEFAULT_OPTIMIZATION_CONFIGS plus one severity entry per configured
- * shock.  Shock entries only appear when the scenario actually has shocks,
- * preventing stale rows for scenarios without ECONOMIC_REGIMES.
+ * shock and one monthly-amount entry per configured expense band.  Shock and
+ * band entries only appear when the scenario actually has them.
  */
 export function buildOptVariables(params) {
   // User-authored drawdown strategies (intl-retirement-scenario customDrawdownStrategies)
@@ -317,6 +350,7 @@ export function buildOptVariables(params) {
         ? { ...cfg, values: [...Object.keys(DRAWDOWN_STRATEGIES), ...customDrawdownNames] }
         : cfg),
     ...buildShockOptConfigs(params),
+    ...buildExpenseBandOptConfigs(params),
   ];
   // Inherit identity (label / options / visibleWhen) from the param schema and
   // drop variables hidden by an unsatisfied visibleWhen (e.g. a strategy knob

@@ -97,6 +97,8 @@ export const COVERED = [
   'SpendingStrategyApplyReducer', 'AgeBandedSpendingReducer', 'GuardrailBaselineApplyReducer',
   'GuardrailAnnualCheckReducer', 'GuardrailAdjustApplyReducer', 'HealthcareExpenseApplyReducer',
   'LateLifeCareApplyReducer', 'RegimeAwareSpendingReducer',
+  // EXPLICIT_BANDS strategy (design 38 §6.1) — spending-explicit-bands.test.mjs
+  'ExplicitBandsSpendingReducer',
 
   // I — tax / period (reducer-postconditions-tax.test.mjs)
   'DynamicTaxReducer', 'UsPeriodAdvanceReducer', 'AuPeriodAdvanceReducer',

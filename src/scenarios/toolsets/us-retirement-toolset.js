@@ -291,14 +291,15 @@ export const US_RETIREMENT = {
       {
         key: 'spendingStrategy', label: 'Spending Strategy',
         type: 'EnumMulti', group: 'Spending', mc: false, opt: true,
-        options: ['FIXED', 'REGIME_AWARE', 'GUARDRAIL', 'HEALTHCARE', 'AGE_BANDED'],
+        options: ['FIXED', 'REGIME_AWARE', 'GUARDRAIL', 'HEALTHCARE', 'AGE_BANDED', 'EXPLICIT_BANDS'],
         defaultValue: ['FIXED'],
-        description: 'Active spending strategies; FIXED = inflation-adjusted scalar (default), REGIME_AWARE = cut discretionary under economic-stress regimes, GUARDRAIL = Guyton-Klinger withdrawal-rate bands, HEALTHCARE = one-off healthcare expense events, AGE_BANDED = age-driven real spending smile (go-go/slow-go/no-go)',
+        description: 'Active spending strategies; FIXED = inflation-adjusted scalar (default), REGIME_AWARE = cut discretionary under economic-stress regimes, GUARDRAIL = Guyton-Klinger withdrawal-rate bands, HEALTHCARE = one-off healthcare expense events, AGE_BANDED = age-driven real spending smile (go-go/slow-go/no-go), EXPLICIT_BANDS = absolute monthly amount per age band (design 38 §6.1)',
       },
       ...SPENDING_STRATEGY_REGISTRY.REGIME_AWARE.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.GUARDRAIL.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.HEALTHCARE.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.AGE_BANDED.paramSchema(),
+      ...SPENDING_STRATEGY_REGISTRY.EXPLICIT_BANDS.paramSchema(),
       {
         key: 'mortalityEnabled', label: 'Mortality Enabled',
         type: 'Boolean', group: 'Mortality', mc: false, opt: true,

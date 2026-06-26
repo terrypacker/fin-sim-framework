@@ -14,6 +14,7 @@ import { GuardrailAdjustApplyReducer }     from './strategies/guardrail-adjust-a
 import { GuardrailAnnualCheckReducer }     from './strategies/guardrail-annual-check-reducer.js';
 import { HealthcareExpenseApplyReducer }   from './strategies/healthcare-expense-apply-reducer.js';
 import { AgeBandedSpendingReducer, DEFAULT_AGE_BANDS } from './strategies/age-banded-spending-reducer.js';
+import { ExplicitBandsSpendingReducer, DEFAULT_EXPENSE_BANDS } from './strategies/explicit-bands-spending-reducer.js';
 
 /**
  * Whole years of age as of asOfDate (matches the RMD handlers' _getAge).
@@ -153,6 +154,24 @@ export const SPENDING_STRATEGY_REGISTRY = {
         defaultValue: [],
         description: 'List of one-off healthcare events: [{ date, amount, category, personId }]',
         visibleWhen: { param: 'spendingStrategy', includes: 'HEALTHCARE' },
+      },
+    ],
+  },
+
+  EXPLICIT_BANDS: {
+    reducers: (context) => [
+      new ExplicitBandsSpendingReducer({
+        bands:              context.parameters.spendingExpenseBands ?? DEFAULT_EXPENSE_BANDS,
+        discretionaryShare: context.parameters.discretionarySharePct ?? 0.30,
+      }),
+    ],
+    paramSchema: () => [
+      {
+        key: 'spendingExpenseBands', label: 'Spending Expense Bands',
+        type: 'ExpenseBandList', group: 'Spending', mc: false, opt: true,
+        defaultValue: DEFAULT_EXPENSE_BANDS,
+        description: 'Absolute monthly spend per age band: each band is { startAge, monthlyAmount } in base-year currency; compounded to nominal by the residence price level at band transitions. The lever for "optimal monthly expense amount per age band" (design 38 §6.1).',
+        visibleWhen: { param: 'spendingStrategy', includes: 'EXPLICIT_BANDS' },
       },
     ],
   },

@@ -260,7 +260,7 @@ Scoring leans entirely on the **state accumulators** of §5: the value of a conv
 **Step 5 — Objectives (pure-of-final-state) + `cumulativeTaxesPaid`** [x]
 - Keep `evaluate(result, { snapshot })` shape; add `DIE_WITH_TARGET`, `MIN_LIFETIME_TAXES` reading cumulative accumulators; windowed delta = terminal − snapshot accumulator. `AccumulateTaxesPaidReducer` (mirrors `AccumulateDeficitReducer`) + schema registration. **No** per-step objective callback.
 
-**Step 6 — Spending + Roth-conversion controls** [ ]
+**Step 6 — Spending + Roth-conversion controls** [x]
 - `EXPLICIT_BANDS` spending strategy (design-33 sibling reducer) + `buildExpenseBandOptConfigs`; mark band-amount vars `controllable`.
 - Roth: ensure `rothConversionMaxBracket`/`StartYear`/`EndYear` are sweepable batch vars; spec the per-year `rothConversionSchedule` array as the design-39 control form (mark `controllable`). Wire both into `buildOptVariables`.
 
