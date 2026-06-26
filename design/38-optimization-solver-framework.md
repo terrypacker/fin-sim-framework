@@ -251,7 +251,7 @@ Scoring leans entirely on the **state accumulators** of §5: the value of a conv
 **Step 2 — Solver interface + registry + `GridSearchSolver`** [x]
 - `src/finance/optimization/solvers/` (`grid-search-solver.js`, `solver-registry.js`). `GridSearchSolver` reproduces today's enumeration on top of `problem.evaluate`. Re-point `IntlRetirementOptimizer` at it (shim) — backward-compat gate (Step from §9).
 
-**Step 3 — `PATTERN_SEARCH` + `RANDOM`** [ ]
+**Step 3 — `PATTERN_SEARCH` + `RANDOM`** [x]
 - Coordinate/pattern search and seeded random/LHS. Toy-problem tests.
 
 **Step 4 — `SIMULATED_ANNEALING`** [ ]

@@ -12,7 +12,10 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { SOLVER_REGISTRY, createSolver } from '../../src/finance/optimization/solvers/solver-registry.js';
-import { GridSearchSolver } from '../../src/finance/optimization/solvers/grid-search-solver.js';
+import { GridSearchSolver }   from '../../src/finance/optimization/solvers/grid-search-solver.js';
+import { PatternSearchSolver } from '../../src/finance/optimization/solvers/pattern-search-solver.js';
+import { RandomSolver }        from '../../src/finance/optimization/solvers/random-solver.js';
+import { OptimizationProblem } from '../../src/finance/optimization/optimization-problem.js';
 import { OPT_PARAM_TYPES } from '../../src/finance/optimization/optimization-objectives.js';
 
 /**
@@ -35,6 +38,29 @@ function toyQuadratic() {
   };
 }
 
+/**
+ * Real OptimizationProblem (for its encode/decode/randomCandidate/candidateCount
+ * codec) with `evaluate` swapped for a cheap analytic concave function peaking at
+ * (x=2, y=-3). Lets the vector-oriented solvers run without a simulation.
+ */
+function analyticProblem(variables) {
+  const p = new OptimizationProblem({ variables });
+  p.evaluate = (c) => {
+    const score = -((c.x - 2) ** 2 + (c.y + 3) ** 2);
+    return { result: { ...c, score }, score };
+  };
+  return p;
+}
+
+const INT_VARS = [
+  { paramKey: 'x', type: OPT_PARAM_TYPES.INTEGER, min: -5, max: 5, step: 1 },
+  { paramKey: 'y', type: OPT_PARAM_TYPES.INTEGER, min: -5, max: 5, step: 1 },
+];
+const CONT_VARS = [
+  { paramKey: 'x', type: OPT_PARAM_TYPES.CONTINUOUS, min: -5, max: 5, step: 0.01 },
+  { paramKey: 'y', type: OPT_PARAM_TYPES.CONTINUOUS, min: -5, max: 5, step: 0.01 },
+];
+
 // ─── registry lookup ──────────────────────────────────────────────────────────
 
 describe('SOLVER_REGISTRY', () => {
@@ -45,8 +71,24 @@ describe('SOLVER_REGISTRY', () => {
     assert.deepStrictEqual(entry.optionSchema, []);
   });
 
+  test('PATTERN_SEARCH and RANDOM entries are registered with option schemas', () => {
+    assert.ok(SOLVER_REGISTRY.PATTERN_SEARCH.factory() instanceof PatternSearchSolver);
+    assert.ok(SOLVER_REGISTRY.RANDOM.factory() instanceof RandomSolver);
+    assert.ok(SOLVER_REGISTRY.PATTERN_SEARCH.optionSchema.some(o => o.key === 'budget'));
+    assert.ok(SOLVER_REGISTRY.RANDOM.optionSchema.some(o => o.key === 'sampling'));
+  });
+
+  test('factory options thread through to the solver instance', () => {
+    const s = SOLVER_REGISTRY.RANDOM.factory({ budget: 99, seed: 7, sampling: 'uniform' });
+    assert.strictEqual(s.budget, 99);
+    assert.strictEqual(s.seed, 7);
+    assert.strictEqual(s.sampling, 'uniform');
+  });
+
   test('createSolver returns the requested solver, defaulting to GRID', () => {
     assert.ok(createSolver('GRID') instanceof GridSearchSolver);
+    assert.ok(createSolver('PATTERN_SEARCH') instanceof PatternSearchSolver);
+    assert.ok(createSolver('RANDOM') instanceof RandomSolver);
     assert.ok(createSolver('NONEXISTENT') instanceof GridSearchSolver);
   });
 });
@@ -93,5 +135,78 @@ describe('GridSearchSolver', () => {
     assert.strictEqual(evaluations, 1);
     assert.deepStrictEqual(candidates[0].candidate, {});
     assert.strictEqual(best.score, 42);
+  });
+});
+
+// ─── RandomSolver ─────────────────────────────────────────────────────────────
+
+describe('RandomSolver', () => {
+  test('samples within the budget and only legal values', async () => {
+    const { candidates, evaluations, solver } =
+      await new RandomSolver({ budget: 40, seed: 3 }).solve(analyticProblem(INT_VARS));
+    assert.strictEqual(solver, 'RANDOM');
+    assert.ok(evaluations <= 40);
+    for (const { candidate } of candidates) {
+      assert.ok(candidate.x >= -5 && candidate.x <= 5 && Number.isInteger(candidate.x));
+      assert.ok(candidate.y >= -5 && candidate.y <= 5 && Number.isInteger(candidate.y));
+    }
+  });
+
+  test('is deterministic for a given seed', async () => {
+    const a = await new RandomSolver({ budget: 30, seed: 11 }).solve(analyticProblem(CONT_VARS));
+    const b = await new RandomSolver({ budget: 30, seed: 11 }).solve(analyticProblem(CONT_VARS));
+    assert.deepStrictEqual(a.best.candidate, b.best.candidate);
+    assert.strictEqual(a.best.score, b.best.score);
+  });
+
+  test('never exceeds the unique grid size (∞-safe budget)', async () => {
+    // 11×11 = 121 unique integer points; ask for far more.
+    const { evaluations } = await new RandomSolver({ budget: 10_000, seed: 1, sampling: 'uniform' })
+      .solve(analyticProblem(INT_VARS));
+    assert.ok(evaluations <= 121, `expected ≤121 unique evals, got ${evaluations}`);
+  });
+
+  test('LHS covers the space well enough to land near the optimum', async () => {
+    const { best } = await new RandomSolver({ budget: 120, seed: 5, sampling: 'lhs' })
+      .solve(analyticProblem(CONT_VARS));
+    assert.ok(Math.abs(best.candidate.x - 2) < 1.5);
+    assert.ok(Math.abs(best.candidate.y + 3) < 1.5);
+  });
+});
+
+// ─── PatternSearchSolver ──────────────────────────────────────────────────────
+
+describe('PatternSearchSolver', () => {
+  test('converges near the continuous optimum at a fraction of the grid', async () => {
+    const { best, evaluations, solver } =
+      await new PatternSearchSolver({ budget: 400, seed: 2 }).solve(analyticProblem(CONT_VARS));
+    assert.strictEqual(solver, 'PATTERN_SEARCH');
+    assert.ok(best.score > -0.01, `score ${best.score} should be near 0`);
+    assert.ok(Math.abs(best.candidate.x - 2) < 0.05);
+    assert.ok(Math.abs(best.candidate.y + 3) < 0.05);
+    // A full 0.01-step grid over 2 vars would be ~10⁶ evals; pattern search is tiny.
+    assert.ok(evaluations <= 400);
+  });
+
+  test('finds the exact integer optimum', async () => {
+    const { best } = await new PatternSearchSolver({ budget: 300, seed: 4 })
+      .solve(analyticProblem(INT_VARS));
+    assert.deepStrictEqual(best.candidate, { x: 2, y: -3 });
+    assert.ok(best.score === 0);
+  });
+
+  test('is deterministic for a given seed', async () => {
+    const a = await new PatternSearchSolver({ budget: 200, seed: 9 }).solve(analyticProblem(CONT_VARS));
+    const b = await new PatternSearchSolver({ budget: 200, seed: 9 }).solve(analyticProblem(CONT_VARS));
+    assert.deepStrictEqual(a.best.candidate, b.best.candidate);
+  });
+
+  test('honours a warm-start point', async () => {
+    // Starting already at the optimum, the first exploration should fail to
+    // improve and the solver should stay put.
+    const { best } = await new PatternSearchSolver({ budget: 100, seed: 1, start: { x: 2, y: -3 } })
+      .solve(analyticProblem(CONT_VARS));
+    assert.ok(Math.abs(best.candidate.x - 2) < 0.05);
+    assert.ok(Math.abs(best.candidate.y + 3) < 0.05);
   });
 });

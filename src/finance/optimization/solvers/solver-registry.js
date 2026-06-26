@@ -8,7 +8,9 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { GridSearchSolver } from './grid-search-solver.js';
+import { GridSearchSolver }   from './grid-search-solver.js';
+import { PatternSearchSolver } from './pattern-search-solver.js';
+import { RandomSolver }        from './random-solver.js';
 
 /**
  * SOLVER_REGISTRY — named-things registry of search strategies (design/38 §3.2),
@@ -30,7 +32,35 @@ export const SOLVER_REGISTRY = {
     factory:      (_options = {}) => new GridSearchSolver(),
     optionSchema: [],
   },
-  // PATTERN_SEARCH, SIMULATED_ANNEALING, RANDOM — design/38 Steps 3–4.
+
+  PATTERN_SEARCH: {
+    label:   PatternSearchSolver.label,
+    factory: (options = {}) => new PatternSearchSolver(options),
+    optionSchema: [
+      { key: 'budget', label: 'Max Evaluations', type: 'Number', defaultValue: 200,
+        description: 'Hard cap on simulations to run.' },
+      { key: 'seed', label: 'Seed', type: 'Number', defaultValue: 1,
+        description: 'Seed for the random start point (reproducible).' },
+      { key: 'noImproveLimit', label: 'Convergence Patience', type: 'Number', defaultValue: 60,
+        description: 'Stop after this many consecutive evaluations without a new best (0 = off).' },
+    ],
+  },
+
+  RANDOM: {
+    label:   RandomSolver.label,
+    factory: (options = {}) => new RandomSolver(options),
+    optionSchema: [
+      { key: 'budget', label: 'Samples', type: 'Number', defaultValue: 64,
+        description: 'Number of points to sample.' },
+      { key: 'seed', label: 'Seed', type: 'Number', defaultValue: 1,
+        description: 'Seed for sampling (reproducible).' },
+      { key: 'sampling', label: 'Sampling', type: 'Enum', options: ['lhs', 'uniform'],
+        defaultValue: 'lhs',
+        description: 'Latin-hypercube (even coverage) or plain uniform sampling.' },
+    ],
+  },
+
+  // SIMULATED_ANNEALING — design/38 Step 4.
 };
 
 /** Look up a solver factory by key, defaulting to GRID. */

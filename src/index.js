@@ -118,7 +118,10 @@ import { valuesForConfig, cartesianProduct } from './finance/optimization/opt-va
 import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES } from './finance/optimization/optimization-objectives.js';
 import { OptimizationProblem } from './finance/optimization/optimization-problem.js';
 import { GridSearchSolver } from './finance/optimization/solvers/grid-search-solver.js';
+import { PatternSearchSolver } from './finance/optimization/solvers/pattern-search-solver.js';
+import { RandomSolver } from './finance/optimization/solvers/random-solver.js';
 import { SOLVER_REGISTRY, createSolver } from './finance/optimization/solvers/solver-registry.js';
+import { makeSeededRng, EvalLedger } from './finance/optimization/solvers/solver-support.js';
 import { ownershipFractions, splitByOwnership, accumulateByOwnership } from './finance/ownership-utils.js';
 import { isParamVisible, controllableVariables, indexParamSchema, resolveSweepVariables } from './finance/param-schema-utils.js';
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
@@ -664,8 +667,12 @@ export const Finance = {
   OPTIMIZATION_OBJECTIVES,
   OptimizationProblem,
   GridSearchSolver,
+  PatternSearchSolver,
+  RandomSolver,
   SOLVER_REGISTRY,
   createSolver,
+  makeSeededRng,
+  EvalLedger,
   ownershipFractions,
   splitByOwnership,
   accumulateByOwnership,
