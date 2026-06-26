@@ -25,6 +25,7 @@ import assert   from 'node:assert/strict';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
 import { BaseScenario }    from '../../src/index.js';
+import { computeNetWorth } from '../../src/finance/derived-metrics/net-worth.js';
 
 beforeEach(() => ServiceRegistry.resetAll());
 
@@ -563,4 +564,52 @@ test('EVT-33: AU house sale credits saleDestinationAccount instead of default ca
 
   const defaultDiff = findDiff(apply, 'auSavingsAccount.balance');
   assert.strictEqual(defaultDiff, undefined, 'default auSavingsAccount should not be touched');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EVT-33/34: real-property state carries an FX currency so net worth converts it
+//
+// Regression: _propertyToStatePlain() omitted `currency`, so an AUD-denominated
+// AU house was summed 1:1 as USD in computeNetWorth (and net-liquidity / spending
+// guardrails), inflating net worth by the FX factor.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('EVT-33: AU house projects an AUD currency tag into state', () => {
+  const { sim } = loadToolsetScenario(AU_HOUSE_JSON);
+  assert.strictEqual(sim.state.auHouseProperty.currency?.code, 'AUD',
+    'AU property state must carry an AUD currency so net worth FX-converts it');
+});
+
+test('EVT-34: US house projects a USD currency tag into state', () => {
+  const { sim } = loadToolsetScenario(US_HOUSE_JSON);
+  assert.strictEqual(sim.state.usHouseProperty.currency?.code, 'USD',
+    'US property state must carry a USD currency');
+});
+
+test('EVT-33: AU house net-worth contribution is FX-converted to USD, not counted 1:1', () => {
+  const { sim } = loadToolsetScenario(AU_HOUSE_JSON);
+  const rate = 1.55; // AUD per USD
+  // Isolate the property so the assertion is independent of other seeded accounts.
+  const isolated = {
+    auHouseProperty:        sim.state.auHouseProperty,
+    effectiveExchangeRates: { USD_AUD: rate },
+  };
+  const value = AU_HOUSE_JSON.realProperties[0].value; // 1,200,000 AUD, no mortgage
+  const expectedUsd = value / rate;
+  const actual = computeNetWorth(isolated, 'USD');
+  assert.ok(Math.abs(actual - expectedUsd) < 1,
+    `AU house should contribute ${expectedUsd.toFixed(0)} USD (value/rate), got ${actual.toFixed(0)}`);
+  assert.ok(actual < value,
+    'converted USD contribution must be less than the raw AUD value (the bug counted it 1:1)');
+});
+
+test('EVT-34: US house net-worth contribution is its full USD value (no conversion)', () => {
+  const { sim } = loadToolsetScenario(US_HOUSE_JSON);
+  const isolated = {
+    usHouseProperty:        sim.state.usHouseProperty,
+    effectiveExchangeRates: { USD_AUD: 1.55 },
+  };
+  const value = US_HOUSE_JSON.realProperties[0].value; // 1,000,000 USD, no mortgage
+  assert.ok(Math.abs(computeNetWorth(isolated, 'USD') - value) < 1,
+    'US house should contribute its full USD value with no FX conversion');
 });
