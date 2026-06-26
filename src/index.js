@@ -113,10 +113,14 @@ import { computeNetWorthUsd, IntlRetirementMcRunner } from './finance/monte-carl
 import { CDC_2024, AU_2022, lookupLifeTable } from './finance/monte-carlo/life-tables.js';
 import { get, set } from './finance/monte-carlo/mc-param-paths.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables } from './finance/optimization/intl-retirement-opt-config.js';
-import { valuesForConfig, IntlRetirementOptimizer } from './finance/optimization/intl-retirement-optimizer.js';
+import { IntlRetirementOptimizer } from './finance/optimization/intl-retirement-optimizer.js';
+import { valuesForConfig, cartesianProduct } from './finance/optimization/opt-values.js';
 import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES } from './finance/optimization/optimization-objectives.js';
+import { OptimizationProblem } from './finance/optimization/optimization-problem.js';
+import { GridSearchSolver } from './finance/optimization/solvers/grid-search-solver.js';
+import { SOLVER_REGISTRY, createSolver } from './finance/optimization/solvers/solver-registry.js';
 import { ownershipFractions, splitByOwnership, accumulateByOwnership } from './finance/ownership-utils.js';
-import { isParamVisible, indexParamSchema, resolveSweepVariables } from './finance/param-schema-utils.js';
+import { isParamVisible, controllableVariables, indexParamSchema, resolveSweepVariables } from './finance/param-schema-utils.js';
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
 import { Person } from './finance/person.js';
@@ -653,14 +657,20 @@ export const Finance = {
   set,
   DEFAULT_OPTIMIZATION_CONFIGS,
   buildOptVariables,
-  valuesForConfig,
   IntlRetirementOptimizer,
+  valuesForConfig,
+  cartesianProduct,
   OPT_PARAM_TYPES,
   OPTIMIZATION_OBJECTIVES,
+  OptimizationProblem,
+  GridSearchSolver,
+  SOLVER_REGISTRY,
+  createSolver,
   ownershipFractions,
   splitByOwnership,
   accumulateByOwnership,
   isParamVisible,
+  controllableVariables,
   indexParamSchema,
   resolveSweepVariables,
   buildMonthPeriod,

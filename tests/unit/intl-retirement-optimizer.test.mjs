@@ -13,8 +13,10 @@ import assert from 'node:assert/strict';
 
 import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES }
   from '../../src/finance/optimization/optimization-objectives.js';
-import { valuesForConfig, IntlRetirementOptimizer }
+import { IntlRetirementOptimizer }
   from '../../src/finance/optimization/intl-retirement-optimizer.js';
+import { valuesForConfig }
+  from '../../src/finance/optimization/opt-values.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS }
   from '../../src/finance/optimization/intl-retirement-opt-config.js';
 import { INTL_RETIREMENT_PARAM_SCHEMA, IntlRetirementScenario }

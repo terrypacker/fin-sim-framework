@@ -243,12 +243,12 @@ Scoring leans entirely on the **state accumulators** of §5: the value of a conv
 ### Status legend
 - [ ] not started · [x] done
 
-**Step 1 — `OptimizationProblem` + initial-state provider** [ ]
+**Step 1 — `OptimizationProblem` + initial-state provider** [x]
 - `src/finance/optimization/optimization-problem.js`: lift `_runOne` + objective scoring into `evaluate`; add `encode`/`decode`/`randomCandidate`/`candidateCount`. Pure of any search strategy.
 - Implement the `initialState` strategy: `kind: 'compile'` (today's t₀ build) and `kind: 'snapshot'` (compile wiring + inject `state`/queue, step forward). Add a **deterministic-compile-across-registries** test (same cfg → identical `stateKey` slots + wiring) — the invariant design 39 stands on.
 - Add the `controllable` facet to the param schema (consumed by design 39; inert here).
 
-**Step 2 — Solver interface + registry + `GridSearchSolver`** [ ]
+**Step 2 — Solver interface + registry + `GridSearchSolver`** [x]
 - `src/finance/optimization/solvers/` (`grid-search-solver.js`, `solver-registry.js`). `GridSearchSolver` reproduces today's enumeration on top of `problem.evaluate`. Re-point `IntlRetirementOptimizer` at it (shim) — backward-compat gate (Step from §9).
 
 **Step 3 — `PATTERN_SEARCH` + `RANDOM`** [ ]

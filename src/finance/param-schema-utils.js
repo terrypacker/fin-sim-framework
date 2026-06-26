@@ -41,6 +41,27 @@ export function isParamVisible(meta, valueOf) {
   return true;
 }
 
+/**
+ * The `controllable` param facet (design/38 §6.0).
+ *
+ * The batch optimizer searches over every param flagged `opt`. The MPC
+ * controller (design/39) can only actuate the subset that is *forward-adjustable
+ * at runtime* — you can re-decide next year's spending or this year's Roth
+ * conversion, but you cannot re-decide a birth date or un-sell a house already
+ * sold at the current "now". A schema/variable entry marks itself with
+ * `controllable: true` to opt into that control set; the control vector is
+ * therefore `controllable ⊆ opt`.
+ *
+ * Defined here because it is a property of the variable. It is INERT in design
+ * 38 (nothing reads it yet) and merely consumed by design 39.
+ *
+ * @param {Array} entries  param-schema or sweep-variable entries.
+ * @returns {Array} the subset flagged `controllable: true`.
+ */
+export function controllableVariables(entries = []) {
+  return entries.filter(e => e?.controllable === true);
+}
+
 /** Index a flat param schema array by its `key` for O(1) identity lookups. */
 export function indexParamSchema(schema = []) {
   return new Map(schema.map(e => [e.key, e]));

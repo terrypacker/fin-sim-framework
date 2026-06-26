@@ -11,7 +11,7 @@
 import { BaseComponent }                from '../components/base-component.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS } from '../../finance/optimization/intl-retirement-opt-config.js';
 import { OPTIMIZATION_OBJECTIVES, OPT_PARAM_TYPES } from '../../finance/optimization/optimization-objectives.js';
-import { valuesForConfig }              from '../../finance/optimization/intl-retirement-optimizer.js';
+import { valuesForConfig }              from '../../finance/optimization/opt-values.js';
 
 
 
