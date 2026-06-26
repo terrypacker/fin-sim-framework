@@ -264,7 +264,7 @@ Scoring leans entirely on the **state accumulators** of §5: the value of a conv
 - `EXPLICIT_BANDS` spending strategy (design-33 sibling reducer) + `buildExpenseBandOptConfigs`; mark band-amount vars `controllable`.
 - Roth: ensure `rothConversionMaxBracket`/`StartYear`/`EndYear` are sweepable batch vars; spec the per-year `rothConversionSchedule` array as the design-39 control form (mark `controllable`). Wire both into `buildOptVariables`.
 
-**Step 7 — UI: Solver select + options block** [ ]
+**Step 7 — UI: Solver select + options block** [x]
 - `OptConfigPanel` Solver `<select>` + `optionSchema` renderer; `getConfig()` returns `solverKey`/`solverOptions`; presenter/controller thread them through.
 
 **Step 8 — Browser verification** [ ]

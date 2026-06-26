@@ -78,7 +78,7 @@ export class OptimizationPresenter {
   // ── Private ───────────────────────────────────────────────────────────────────
 
   _onRun(config) {
-    const { optimizationConfigs, objective, objectiveKey, candidateCount } = config;
+    const { optimizationConfigs, objective, objectiveKey, candidateCount, solverKey, solverOptions } = config;
     this._configPanel.showProgress(`Running 0 / ${candidateCount}…`);
 
     requestAnimationFrame(() => {
@@ -86,6 +86,8 @@ export class OptimizationPresenter {
         optimizationConfigs,
         objective,
         objectiveKey,
+        solverKey,
+        solverOptions,
         baseParams:  this._resolveBaseParams(),
         simStart:    this._scenario.simStart,
         simEnd:      this._scenario.simEnd,
