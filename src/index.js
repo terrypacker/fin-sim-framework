@@ -60,7 +60,7 @@ import { DecisionGraphRegistry } from './finance/decision-graph/decision-graph-r
 import { DecisionGraphResultStorage } from './finance/decision-graph/decision-graph-result-storage.js';
 import { DecisionGraphRunner } from './finance/decision-graph/decision-graph-runner.js';
 import { DecisionGraphStorage } from './finance/decision-graph/decision-graph-storage.js';
-import { TAX_CLASS, taxClassForRole, defaultRateProvider, computeAfterTaxValue, computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, deriveAfterTaxNetWorth, deriveAfterTaxNetLiquidity } from './finance/derived-metrics/after-tax.js';
+import { TAX_CLASS, taxClassForRole, defaultRateProvider, liquidationRateProvider, computeAfterTaxValue, computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, deriveAfterTaxNetWorth, deriveAfterTaxNetLiquidity } from './finance/derived-metrics/after-tax.js';
 import { isDrawdownAccessible, computeNetLiquidity, deriveNetLiquidity } from './finance/derived-metrics/net-liquidity.js';
 import { computeNetWorth, deriveNetWorth } from './finance/derived-metrics/net-worth.js';
 import { AddRegimeReducer } from './finance/economic-regimes/add-regime-reducer.js';
@@ -571,6 +571,7 @@ export const Finance = {
   TAX_CLASS,
   taxClassForRole,
   defaultRateProvider,
+  liquidationRateProvider,
   computeAfterTaxValue,
   computeAfterTaxNetWorth,
   computeAfterTaxNetLiquidity,
