@@ -9,7 +9,7 @@
  */
 
 import { OptimizationProblem }     from '../optimization/optimization-problem.js';
-import { OPTIMIZATION_OBJECTIVES } from '../optimization/optimization-objectives.js';
+import { OPTIMIZATION_OBJECTIVES, objectivePrimaryMetric } from '../optimization/optimization-objectives.js';
 import { createSolver }            from '../optimization/solvers/solver-registry.js';
 import { OPT_PARAM_TYPES }         from '../optimization/optimization-objectives.js';
 import { rollForwardWithControls, recordDecisionRecord } from './apply-forward.js';
@@ -366,11 +366,16 @@ export class CockpitController {
     let recordId = null;
     if (this.graph) {
       recordId = `mpc:${this._applyCount++}:${+new Date(this.snapshot.date)}`;
+      // Tag the record with the goal's primary metric so the save-points log can
+      // show the value the goal anchored on (not just net worth) — even after the
+      // user switches goals (records made under different goals stay correct).
+      const metric = objectivePrimaryMetric(this.objective);
       recordDecisionRecord({
         graph: this.graph, parentId: this.parentId, id: recordId,
         name: this.control.describe(candidate ?? {}, this._variables()),
         controlParams: candidate, asOfDate: this.snapshot.date,
         simStart: this.simStart, simEnd: this.simEnd, result,
+        extra: { goalMetric: { key: metric.key, label: metric.label } },
       });
     }
     return { result, committedParams: { ...this.committed }, recordId };
