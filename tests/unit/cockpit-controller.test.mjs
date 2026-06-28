@@ -100,6 +100,21 @@ describe('CockpitController — apply + advance', () => {
     const edges = graph.getOutgoing(recordId, EDGE_TYPES.DERIVES_FROM);
     assert.equal(edges.length, 1);
     assert.equal(edges[0].to, 'p:base', 'decision record points back to its parent');
+
+    // The record carries the goal's primary metric (design/40) so the save-points
+    // log can show the goal-anchored value, not just net worth.
+    assert.deepEqual(graph.getNode(recordId).goalMetric,
+      { key: 'finalNetWorthUsd', label: 'Net Worth' });
+  });
+
+  test('apply records the goal metric for a non-net-worth objective', () => {
+    const graph = new Graph();
+    graph.addNode({ id: 'p:base', layer: 'scenario', name: 'Base' });
+    const c = makeController(graph, 'p:base');
+    c.setObjective(OPTIMIZATION_OBJECTIVES.MAX_NET_LIQUIDITY);
+    const { recordId } = c.apply({ 'spendingExpenseBands[0].monthlyAmount': 8000 });
+    assert.deepEqual(graph.getNode(recordId).goalMetric,
+      { key: 'finalNetLiquidity', label: 'Net Liquidity' });
   });
 
   test('SPENDING.buildVariables targets the band active at "now", not the last band', () => {

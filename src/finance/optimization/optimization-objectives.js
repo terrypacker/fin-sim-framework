@@ -154,6 +154,8 @@ function makeDieWithTarget({ running, terminal, label }) {
     direction: 'maximize',
     family:    DIE_WITH_TARGET_FAMILY,
     variant:   { running, terminal },
+    // The terminal anchor this goal targets — what the save-points log / card show.
+    metric:    { key: t.resultKey, label: t.label },
     evaluate(result, { snapshot } = {}) {
       const reward = (result[r.resultKey] ?? 0) - (snapshot?.state?.[r.cumKey] ?? 0);
       const target = result.terminalWealthTarget ?? 0;
@@ -193,24 +195,28 @@ export const OPTIMIZATION_OBJECTIVES = {
   MAX_NET_WORTH: {
     label:     'Maximize Final Net Worth (USD)',
     direction: 'maximize',
+    metric:    { key: 'finalNetWorthUsd', label: 'Net Worth' },
     evaluate:  result => result.finalNetWorthUsd,
   },
 
   MAX_ROTH_BALANCE: {
     label:     'Maximize Final Roth Balance (USD)',
     direction: 'maximize',
+    metric:    { key: 'rothFinalBalance', label: 'Roth Balance' },
     evaluate:  result => result.rothFinalBalance,
   },
 
   MIN_DEFICIT: {
     label:     'Minimize Cumulative Deficit',
     direction: 'minimize',
+    metric:    { key: 'cumulativeDeficit', label: 'Cumulative Deficit' },
     evaluate:  result => result.cumulativeDeficit,
   },
 
   MAX_NET_LIQUIDITY: {
     label:     'Maximize Final Net Liquidity (USD)',
     direction: 'maximize',
+    metric:    { key: 'finalNetLiquidity', label: 'Net Liquidity' },
     evaluate:  result => result.finalNetLiquidity,
   },
 
@@ -221,12 +227,14 @@ export const OPTIMIZATION_OBJECTIVES = {
   MAX_AFTER_TAX_NET_WORTH: {
     label:     'Maximize After-Tax Net Worth (USD)',
     direction: 'maximize',
+    metric:    { key: 'finalAfterTaxNetWorth', label: 'After-Tax Net Worth' },
     evaluate:  result => result.finalAfterTaxNetWorth,
   },
 
   MAX_AFTER_TAX_NET_LIQUIDITY: {
     label:     'Maximize After-Tax Net Liquidity (USD)',
     direction: 'maximize',
+    metric:    { key: 'finalAfterTaxNetLiquidity', label: 'After-Tax Net Liquidity' },
     evaluate:  result => result.finalAfterTaxNetLiquidity,
   },
 
@@ -270,6 +278,7 @@ export const OPTIMIZATION_OBJECTIVES = {
   MIN_LIFETIME_TAXES: {
     label:     'Minimize Lifetime Taxes (USD)',
     direction: 'minimize',
+    metric:    { key: 'cumulativeTaxesPaid', label: 'Lifetime Taxes' },
     evaluate(result, { snapshot } = {}) {
       return (result.cumulativeTaxesPaid ?? 0) - (snapshot?.state?.cumulativeTaxesPaid ?? 0);
     },
@@ -283,6 +292,7 @@ export const OPTIMIZATION_OBJECTIVES = {
   MAX_CRRA_UTILITY: {
     label:     'Maximize CRRA Consumption Utility',
     direction: 'maximize',
+    metric:    { key: 'lifetimeConsumptionUtility', label: 'CRRA Utility' },
     evaluate(result, { snapshot } = {}) {
       return (result.lifetimeConsumptionUtility ?? 0)
         - (snapshot?.state?.cumulativeConsumptionUtility ?? 0);
@@ -305,6 +315,16 @@ export const OPTIMIZATION_OBJECTIVES = {
 export const OBJECTIVE_FAMILY_LABELS = {
   [DIE_WITH_TARGET_FAMILY]: 'Die With Target',
 };
+
+/**
+ * The primary terminal/running metric a goal optimizes — `{ key, label }` over the
+ * `result` object — used by the cockpit save-points log and move card to show the
+ * value the goal actually anchors on (not just net worth). Falls back to net worth
+ * for any objective that hasn't tagged a metric.
+ */
+export function objectivePrimaryMetric(objective) {
+  return objective?.metric ?? { key: 'finalNetWorthUsd', label: 'Net Worth' };
+}
 
 /** The objective key for a Die-With-Target (running, terminal) variant pair. */
 export function resolveDieWithTargetKey({ running = 'consumption', terminal = 'worth' } = {}) {

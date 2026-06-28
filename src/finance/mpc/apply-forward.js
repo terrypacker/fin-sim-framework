@@ -135,11 +135,12 @@ export function recordDecisionRecord({
  * of any one CockpitController's lifecycle. Not loadable scenarios — just a log.
  *
  * @param {object} graph - the shared Graph.
- * @returns {Array<{ id: string, asOfDate: string, move: string, result: object|null }>}
+ * @returns {Array<{ id: string, asOfDate: string, move: string, result: object|null, goalMetric: {key:string,label:string}|null }>}
  */
 export function readDecisionRecords(graph) {
   if (!graph) return [];
   return graph.byLayer('decision')
-    .map(n => ({ id: n.id, asOfDate: n.asOfDate, move: n.name, result: n.result ?? null }))
+    .map(n => ({ id: n.id, asOfDate: n.asOfDate, move: n.name, result: n.result ?? null,
+                 goalMetric: n.goalMetric ?? null }))
     .sort((a, b) => String(a.asOfDate).localeCompare(String(b.asOfDate)));
 }
