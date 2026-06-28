@@ -51,20 +51,29 @@ test('MpcCockpitPlugin: objective select groups the die-with-target family with 
   assert.ok(!opts.includes('CRRA_DIE_WITH_TARGET'), 'family members are not flat options');
   assert.ok(opts.includes('MAX_NET_WORTH') && opts.includes('MIN_LIFETIME_TAXES'), 'standalone goals remain');
 
-  const running  = [...el.querySelectorAll('[data-mpc="axis-running"]  option')].map(o => o.value).sort();
-  const terminal = [...el.querySelectorAll('[data-mpc="axis-terminal"] option')].map(o => o.value).sort();
-  assert.deepStrictEqual(running,  ['consumption', 'crra'],  'basis axis offers consumption + CRRA');
-  assert.deepStrictEqual(terminal, ['liquid', 'worth'],      'terminal axis offers worth + liquidity');
+  const running = [...el.querySelectorAll('[data-mpc="axis-running"] option')].map(o => o.value).sort();
+  const scope   = [...el.querySelectorAll('[data-mpc="axis-scope"]   option')].map(o => o.value).sort();
+  const basis   = [...el.querySelectorAll('[data-mpc="axis-basis"]   option')].map(o => o.value).sort();
+  assert.deepStrictEqual(running, ['consumption', 'crra'],     'basis axis offers consumption + CRRA');
+  assert.deepStrictEqual(scope,   ['liquid', 'worth'],          'scope axis offers worth + liquidity');
+  assert.deepStrictEqual(basis,   ['afterTax', 'nominal'],      'tax-basis axis offers nominal + after-tax');
+  // The Roth-lever default + after-tax maximizers are in the curated goal list.
+  assert.ok(opts.includes('MAX_AFTER_TAX_NET_WORTH'), 'after-tax maximizer offered as a standalone goal');
 });
 
 test('MpcCockpitPlugin: family + axis selects resolve to the concrete objective key', () => {
   const plugin = mountPlugin();
-  plugin._q('objective').value     = 'family:DIE_WITH_TARGET';
-  plugin._q('axis-running').value  = 'crra';
-  plugin._q('axis-terminal').value = 'liquid';
+  plugin._q('objective').value    = 'family:DIE_WITH_TARGET';
+  plugin._q('axis-running').value = 'crra';
+  plugin._q('axis-scope').value   = 'liquid';
+  plugin._q('axis-basis').value   = 'nominal';
   plugin._syncObjectiveAxes();
   assert.equal(plugin._q('axes').style.display, '', 'axis sub-selects shown for a family goal');
   assert.equal(plugin._currentObjectiveKey(), 'CRRA_DIE_WITH_TARGET_LIQUID');
+
+  // Flip tax-basis to after-tax → resolves to the after-tax variant.
+  plugin._q('axis-basis').value = 'afterTax';
+  assert.equal(plugin._currentObjectiveKey(), 'CRRA_DIE_WITH_TARGET_AFTERTAX_LIQUID');
 
   // A standalone goal hides the axes and resolves directly.
   plugin._q('objective').value = 'MAX_NET_WORTH';

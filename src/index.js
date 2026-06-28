@@ -60,7 +60,8 @@ import { DecisionGraphRegistry } from './finance/decision-graph/decision-graph-r
 import { DecisionGraphResultStorage } from './finance/decision-graph/decision-graph-result-storage.js';
 import { DecisionGraphRunner } from './finance/decision-graph/decision-graph-runner.js';
 import { DecisionGraphStorage } from './finance/decision-graph/decision-graph-storage.js';
-import { computeNetLiquidity, deriveNetLiquidity } from './finance/derived-metrics/net-liquidity.js';
+import { TAX_CLASS, taxClassForRole, defaultRateProvider, computeAfterTaxValue, computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, deriveAfterTaxNetWorth, deriveAfterTaxNetLiquidity } from './finance/derived-metrics/after-tax.js';
+import { isDrawdownAccessible, computeNetLiquidity, deriveNetLiquidity } from './finance/derived-metrics/net-liquidity.js';
 import { computeNetWorth, deriveNetWorth } from './finance/derived-metrics/net-worth.js';
 import { AddRegimeReducer } from './finance/economic-regimes/add-regime-reducer.js';
 import { BondPriceAdjustReducer } from './finance/economic-regimes/bond-price-adjust-reducer.js';
@@ -118,11 +119,12 @@ import { runMpc, makeInitialSnapshot } from './finance/mpc/mpc-controller.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables } from './finance/optimization/intl-retirement-opt-config.js';
 import { IntlRetirementOptimizer } from './finance/optimization/intl-retirement-optimizer.js';
 import { valuesForConfig, cartesianProduct } from './finance/optimization/opt-values.js';
-import { OPT_PARAM_TYPES, DEFAULT_TERMINAL_WEALTH_PENALTY, OPTIMIZATION_OBJECTIVES } from './finance/optimization/optimization-objectives.js';
+import { OPT_PARAM_TYPES, DEFAULT_TERMINAL_WEALTH_PENALTY, DEFAULT_DEFICIT_PENALTY, DIE_WITH_TARGET_FAMILY, DIE_WITH_TARGET_AXES, resolveTerminalKey, terminalAxesFor, OPTIMIZATION_OBJECTIVES, OBJECTIVE_FAMILY_LABELS, resolveDieWithTargetKey, groupedObjectiveOptions } from './finance/optimization/optimization-objectives.js';
 import { OptimizationProblem } from './finance/optimization/optimization-problem.js';
 import { CemSolver } from './finance/optimization/solvers/cem-solver.js';
 import { GridSearchSolver } from './finance/optimization/solvers/grid-search-solver.js';
 import { PatternSearchSolver } from './finance/optimization/solvers/pattern-search-solver.js';
+import { qpPolish, QpPolishSolver } from './finance/optimization/solvers/qp-polish.js';
 import { RandomSolver } from './finance/optimization/solvers/random-solver.js';
 import { SimulatedAnnealingSolver } from './finance/optimization/solvers/simulated-annealing-solver.js';
 import { SOLVER_REGISTRY, createSolver } from './finance/optimization/solvers/solver-registry.js';
@@ -165,7 +167,7 @@ import { computeGuardrailPortfolioValue } from './finance/spending/guardrail-por
 import { SpendingStrategyApplyReducer } from './finance/spending/spending-strategy-apply-reducer.js';
 import { SPENDING_STRATEGY_REGISTRY } from './finance/spending/spending-strategy-registry.js';
 import { DEFAULT_AGE_BANDS, AgeBandedSpendingReducer } from './finance/spending/strategies/age-banded-spending-reducer.js';
-import { DEFAULT_EXPENSE_BANDS, ExplicitBandsSpendingReducer } from './finance/spending/strategies/explicit-bands-spending-reducer.js';
+import { DEFAULT_EXPENSE_BANDS, pinExpensesForBand, repinExpensesIfChanged, ExplicitBandsSpendingReducer } from './finance/spending/strategies/explicit-bands-spending-reducer.js';
 import { GuardrailAdjustApplyReducer } from './finance/spending/strategies/guardrail-adjust-apply-reducer.js';
 import { GuardrailAnnualCheckReducer } from './finance/spending/strategies/guardrail-annual-check-reducer.js';
 import { GuardrailBaselineApplyReducer } from './finance/spending/strategies/guardrail-baseline-apply-reducer.js';
@@ -566,6 +568,15 @@ export const Finance = {
   DecisionGraphResultStorage,
   DecisionGraphRunner,
   DecisionGraphStorage,
+  TAX_CLASS,
+  taxClassForRole,
+  defaultRateProvider,
+  computeAfterTaxValue,
+  computeAfterTaxNetWorth,
+  computeAfterTaxNetLiquidity,
+  deriveAfterTaxNetWorth,
+  deriveAfterTaxNetLiquidity,
+  isDrawdownAccessible,
   computeNetLiquidity,
   deriveNetLiquidity,
   computeNetWorth,
@@ -681,11 +692,21 @@ export const Finance = {
   cartesianProduct,
   OPT_PARAM_TYPES,
   DEFAULT_TERMINAL_WEALTH_PENALTY,
+  DEFAULT_DEFICIT_PENALTY,
+  DIE_WITH_TARGET_FAMILY,
+  DIE_WITH_TARGET_AXES,
+  resolveTerminalKey,
+  terminalAxesFor,
   OPTIMIZATION_OBJECTIVES,
+  OBJECTIVE_FAMILY_LABELS,
+  resolveDieWithTargetKey,
+  groupedObjectiveOptions,
   OptimizationProblem,
   CemSolver,
   GridSearchSolver,
   PatternSearchSolver,
+  qpPolish,
+  QpPolishSolver,
   RandomSolver,
   SimulatedAnnealingSolver,
   SOLVER_REGISTRY,
@@ -756,6 +777,8 @@ export const Finance = {
   DEFAULT_AGE_BANDS,
   AgeBandedSpendingReducer,
   DEFAULT_EXPENSE_BANDS,
+  pinExpensesForBand,
+  repinExpensesIfChanged,
   ExplicitBandsSpendingReducer,
   GuardrailAdjustApplyReducer,
   GuardrailAnnualCheckReducer,

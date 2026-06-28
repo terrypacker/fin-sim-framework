@@ -14,6 +14,7 @@ import assert from 'node:assert/strict';
 import {
   OPTIMIZATION_OBJECTIVES, DEFAULT_TERMINAL_WEALTH_PENALTY, DEFAULT_DEFICIT_PENALTY,
   DIE_WITH_TARGET_FAMILY, resolveDieWithTargetKey, groupedObjectiveOptions,
+  resolveTerminalKey, terminalAxesFor,
 } from '../../src/finance/optimization/optimization-objectives.js';
 import { OptimizationProblem } from '../../src/finance/optimization/optimization-problem.js';
 
@@ -136,13 +137,17 @@ describe('MIN_LIFETIME_TAXES objective', () => {
 // ─── Die-With-Target family (2×2 grouping, design/39) ────────────────────────
 
 describe('Die-With-Target family', () => {
-  test('is a complete 2×2 over running × terminal, all tagged with family + variant', () => {
+  test('is a complete 2×2×2 over running × scope × tax-basis, all tagged with family + variant', () => {
     const family = Object.entries(OPTIMIZATION_OBJECTIVES)
       .filter(([, o]) => o.family === DIE_WITH_TARGET_FAMILY);
-    assert.equal(family.length, 4, 'four variants');
+    assert.equal(family.length, 8, 'eight variants (running × {worth,liquid} × {nominal,afterTax})');
     const variants = family.map(([, o]) => `${o.variant.running}|${o.variant.terminal}`).sort();
-    assert.deepStrictEqual(variants,
-      ['consumption|liquid', 'consumption|worth', 'crra|liquid', 'crra|worth']);
+    assert.deepStrictEqual(variants, [
+      'consumption|afterTaxLiquid', 'consumption|afterTaxWorth',
+      'consumption|liquid',        'consumption|worth',
+      'crra|afterTaxLiquid',       'crra|afterTaxWorth',
+      'crra|liquid',               'crra|worth',
+    ]);
   });
 
   test('resolveDieWithTargetKey maps each axis pair to its concrete key', () => {
@@ -150,7 +155,37 @@ describe('Die-With-Target family', () => {
     assert.equal(resolveDieWithTargetKey({ running: 'consumption', terminal: 'liquid' }), 'DIE_WITH_TARGET_LIQUID');
     assert.equal(resolveDieWithTargetKey({ running: 'crra',        terminal: 'worth'  }), 'CRRA_DIE_WITH_TARGET');
     assert.equal(resolveDieWithTargetKey({ running: 'crra',        terminal: 'liquid' }), 'CRRA_DIE_WITH_TARGET_LIQUID');
+    assert.equal(resolveDieWithTargetKey({ running: 'consumption', terminal: 'afterTaxWorth'  }), 'DIE_WITH_TARGET_AFTERTAX');
+    assert.equal(resolveDieWithTargetKey({ running: 'consumption', terminal: 'afterTaxLiquid' }), 'DIE_WITH_TARGET_AFTERTAX_LIQUID');
+    assert.equal(resolveDieWithTargetKey({ running: 'crra',        terminal: 'afterTaxWorth'  }), 'CRRA_DIE_WITH_TARGET_AFTERTAX');
     assert.equal(resolveDieWithTargetKey({}), 'DIE_WITH_TARGET', 'defaults to consumption×worth');
+  });
+
+  test('resolveTerminalKey folds (scope, basis) to the terminal-measure key; terminalAxesFor inverts it', () => {
+    assert.equal(resolveTerminalKey({ scope: 'worth',  basis: 'nominal'  }), 'worth');
+    assert.equal(resolveTerminalKey({ scope: 'liquid', basis: 'nominal'  }), 'liquid');
+    assert.equal(resolveTerminalKey({ scope: 'worth',  basis: 'afterTax' }), 'afterTaxWorth');
+    assert.equal(resolveTerminalKey({ scope: 'liquid', basis: 'afterTax' }), 'afterTaxLiquid');
+    assert.equal(resolveTerminalKey({}), 'worth', 'defaults to worth×nominal');
+    assert.deepStrictEqual(terminalAxesFor('afterTaxLiquid'), { scope: 'liquid', basis: 'afterTax' });
+    assert.deepStrictEqual(terminalAxesFor('worth'),          { scope: 'worth',  basis: 'nominal'  });
+  });
+
+  test('after-tax variants anchor on the after-tax terminal result keys', () => {
+    const base = { lifetimeConsumption: 1000, terminalWealthTarget: 500_000, terminalWealthTargetPenalty: 10,
+                   finalNetWorthUsd: 9e9, finalNetLiquidity: 9e9 };   // nominal keys must be ignored
+    const worth = OPTIMIZATION_OBJECTIVES.DIE_WITH_TARGET_AFTERTAX.evaluate(
+      { ...base, finalAfterTaxNetWorth: 500_000 });
+    assert.strictEqual(worth, 1000, 'after-tax worth on target → pure reward, ignores nominal worth');
+    const liquid = OPTIMIZATION_OBJECTIVES.DIE_WITH_TARGET_AFTERTAX_LIQUID.evaluate(
+      { ...base, finalAfterTaxNetLiquidity: 400_000 });
+    assert.strictEqual(liquid, 1000 - 10 * 100_000, 'penalty is on the after-tax liquidity miss');
+  });
+
+  test('MAX_AFTER_TAX_* maximizers read the after-tax result keys', () => {
+    assert.equal(OPTIMIZATION_OBJECTIVES.MAX_AFTER_TAX_NET_WORTH.direction, 'maximize');
+    assert.equal(OPTIMIZATION_OBJECTIVES.MAX_AFTER_TAX_NET_WORTH.evaluate({ finalAfterTaxNetWorth: 1234 }), 1234);
+    assert.equal(OPTIMIZATION_OBJECTIVES.MAX_AFTER_TAX_NET_LIQUIDITY.evaluate({ finalAfterTaxNetLiquidity: 77 }), 77);
   });
 
   test('the new CRRA × Liquid variant: utility reward, anchored on terminal liquidity', () => {

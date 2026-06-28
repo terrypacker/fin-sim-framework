@@ -43,6 +43,23 @@ function isAccessible(account, state, date) {
 }
 
 /**
+ * The single source of truth for "is this account in the lever-reachable
+ * (drawdownable) pool right now": it must opt into drawdown (`drawdownPriority`
+ * non-null) AND be age-accessible. Shared by `computeNetLiquidity` and the
+ * after-tax liquidity metric (design/40 §4) so the scope rule never drifts.
+ *
+ * @param {object}    account
+ * @param {object}    state
+ * @param {Date|null} date
+ * @returns {boolean}
+ */
+export function isDrawdownAccessible(account, state, date) {
+  if (account == null || typeof account.balance !== 'number') return false;
+  if (account.drawdownPriority == null) return false;
+  return isAccessible(account, state, date);
+}
+
+/**
  * Compute total net liquidity from simulation state.
  *
  * Net liquidity is the sum of balances of all accounts that the drawdown
@@ -67,9 +84,7 @@ export function computeNetLiquidity(state, date = null, baseCurrency = 'USD') {
 
   for (const val of Object.values(state)) {
     if (val == null || typeof val !== 'object') continue;
-    if (typeof val.balance !== 'number') continue;
-    if (val.drawdownPriority == null) continue;
-    if (!isAccessible(val, state, date)) continue;
+    if (!isDrawdownAccessible(val, state, date)) continue;
 
     const currency = val.currency?.code ?? val.currency ?? baseCurrency;
 
