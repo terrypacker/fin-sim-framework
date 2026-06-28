@@ -12,7 +12,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  TAX_CLASS, taxClassForRole, defaultRateProvider,
+  TAX_CLASS, taxClassForRole, defaultRateProvider, liquidationRateProvider,
   computeAfterTaxValue, computeAfterTaxNetWorth, computeAfterTaxNetLiquidity,
   deriveAfterTaxNetWorth, deriveAfterTaxNetLiquidity,
 } from '../../src/finance/derived-metrics/after-tax.js';
@@ -198,6 +198,73 @@ describe('after-tax net worth gives the Roth conversion lever a real gradient', 
     assert.ok(d22 > 0, `with a 22% liability, conversion should be rewarded: Δ=${d22}`);
     assert.ok(d40 > d22 && d22 > d0,
       `reward should grow with the assumed liability: d40=${d40} d22=${d22} d0=${d0}`);
+  });
+});
+
+describe('afterTaxRateMethod selects Option C (liquidation waterfall) end-to-end (design 40 Phase 3)', () => {
+  const KEY = 'rothConversionSchedule[0].incomeTarget';
+  const evalWith = (afterTaxRateMethod) => {
+    const problem = new OptimizationProblem({
+      variables: [{ paramKey: KEY, type: OPT_PARAM_TYPES.CONTINUOUS, min: 0, max: 400_000, step: 1_000 }],
+      baseParams: {
+        rothConversionEnabled: true, rothConversionSchedule: [{ year: 2030, incomeTarget: 0 }],
+        afterTaxOrdinaryRate: 0.22, afterTaxRateMethod,
+      },
+      simStart: new Date(Date.UTC(2026, 0, 1)),
+      simEnd:   new Date(Date.UTC(2046, 0, 1)),   // pre-tax pile survives to the terminal
+      initialState: { kind: 'compile' },
+    });
+    return problem.evaluate({ [KEY]: 0 }).result.finalAfterTaxNetWorth;
+  };
+
+  test('liquidation method prices the pre-tax pile differently from a flat 22% (uses the real brackets)', () => {
+    const configured = evalWith('configured');   // flat 22% on every pre-tax dollar
+    const liquidation = evalWith('liquidation'); // bracket-stacked effective rate
+    assert.ok(Number.isFinite(configured) && Number.isFinite(liquidation));
+    assert.notEqual(Math.round(configured), Math.round(liquidation),
+      'Option C should value the terminal pre-tax pile at a different (bracket-stacked) rate than flat 22%');
+  });
+});
+
+describe('liquidationRateProvider (Option C) — the tax-engine waterfall', () => {
+  const usIra = acct('ira', 100_000);                 // USD pre-tax
+  const auSuper = acct('super', 100_000, { currency: 'AUD' });
+  const usStock = acct('us-stock', 100_000);
+
+  test('US ordinary: returns the engine effective rate, bracket-stacked on realized income', () => {
+    const rp = liquidationRateProvider({ ordinaryRate: 0.99 });   // configured fallback would be 0.99
+    const state = { usOrdinaryIncomeYTD: 50_000 };                // low realized income
+    const r = rp.ordinaryLiquidationRate(usIra, 100_000, state, LATE);
+    // Stacking $100k on $50k income fills the 10/12/22 brackets ⇒ an effective rate
+    // well below the 22% top it touches and far from the bogus 0.99 fallback.
+    assert.ok(r > 0.10 && r < 0.22, `effective rate in bracket-fill range, got ${r}`);
+    assert.notEqual(r, 0.99, 'used the engine, not the configured fallback');
+  });
+
+  test('progressive: a larger liquidation lands a higher effective rate', () => {
+    const rp = liquidationRateProvider();
+    const state = { usOrdinaryIncomeYTD: 50_000 };
+    const small = rp.ordinaryLiquidationRate(usIra, 20_000,  state, LATE);
+    const big   = rp.ordinaryLiquidationRate(usIra, 400_000, state, LATE);
+    assert.ok(big > small, `progressive: big=${big} small=${small}`);
+  });
+
+  test('US brokerage cap-gains go through the engine LTCG brackets', () => {
+    const rp = liquidationRateProvider({ capGainsRate: 0.99 });
+    const r = rp.capGainsLiquidationRate(usStock, 50_000, { usOrdinaryIncomeYTD: 40_000 }, LATE);
+    assert.ok(r >= 0 && r <= 0.20, `LTCG effective rate in range, got ${r}`);
+    assert.notEqual(r, 0.99);
+  });
+
+  test('AU/super falls back to the configured Option-A rate (engine path is US-only here)', () => {
+    const rp = liquidationRateProvider({ ordinaryRateAu: 0.15 });
+    assert.equal(rp.ordinaryLiquidationRate(auSuper, 100_000, { usOrdinaryIncomeYTD: 0 }, LATE), 0.15);
+  });
+
+  test('graceful fallback: missing state / tiny amount → configured rate, never throws', () => {
+    const rp = liquidationRateProvider({ ordinaryRate: 0.22 });
+    assert.equal(rp.ordinaryLiquidationRate(usIra, 100_000, null, LATE), 0.22, 'no state → fallback');
+    assert.equal(rp.ordinaryLiquidationRate(usIra, 0, { usOrdinaryIncomeYTD: 0 }, LATE), 0.22, 'tiny amount → fallback');
   });
 });
 
