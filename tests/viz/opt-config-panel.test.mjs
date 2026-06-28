@@ -52,10 +52,15 @@ describe('OptConfigPanel — Objective grouping (Die-With-Target family)', () =>
 
     const axes = container.querySelector('.opt-objective-axes');
     expect(axes.style.display).not.toBe('none');           // shown for a family goal
-    container.querySelector('.opt-axis-running').value  = 'crra';
-    container.querySelector('.opt-axis-terminal').value = 'liquid';
+    container.querySelector('.opt-axis-running').value = 'crra';
+    container.querySelector('.opt-axis-scope').value   = 'liquid';
+    container.querySelector('.opt-axis-basis').value   = 'nominal';
 
     expect(panel.getConfig().objectiveKey).toBe('CRRA_DIE_WITH_TARGET_LIQUID');
+
+    // Tax-basis → after-tax resolves to the after-tax variant.
+    container.querySelector('.opt-axis-basis').value = 'afterTax';
+    expect(panel.getConfig().objectiveKey).toBe('CRRA_DIE_WITH_TARGET_AFTERTAX_LIQUID');
 
     // A standalone goal hides the axes and resolves directly.
     objSel.value = 'MAX_NET_WORTH';

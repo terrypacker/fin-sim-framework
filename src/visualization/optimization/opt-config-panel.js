@@ -12,7 +12,7 @@ import { BaseComponent }                from '../components/base-component.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS } from '../../finance/optimization/intl-retirement-opt-config.js';
 import {
   OPTIMIZATION_OBJECTIVES, OPT_PARAM_TYPES, groupedObjectiveOptions,
-  DIE_WITH_TARGET_AXES, resolveDieWithTargetKey,
+  DIE_WITH_TARGET_AXES, resolveDieWithTargetKey, resolveTerminalKey,
 } from '../../finance/optimization/optimization-objectives.js';
 import { valuesForConfig }              from '../../finance/optimization/opt-values.js';
 import { SOLVER_REGISTRY }              from '../../finance/optimization/solvers/solver-registry.js';
@@ -116,10 +116,11 @@ export class OptConfigPanel extends BaseComponent {
   _objectiveKey() {
     const val = this._objectiveSel?.value ?? 'MAX_NET_WORTH';
     if (val.startsWith('family:')) {
-      return resolveDieWithTargetKey({
-        running:  this._axisRunning?.value,
-        terminal: this._axisTerminal?.value,
+      const terminal = resolveTerminalKey({
+        scope: this._axisScope?.value,
+        basis: this._axisBasis?.value,
       });
+      return resolveDieWithTargetKey({ running: this._axisRunning?.value, terminal });
     }
     return val;
   }
@@ -195,7 +196,9 @@ export class OptConfigPanel extends BaseComponent {
           <label>Basis</label>
           <select class="toolbar-select opt-axis-running" style="flex:1">${axisOptions('running')}</select>
           <label>Terminal</label>
-          <select class="toolbar-select opt-axis-terminal" style="flex:1">${axisOptions('terminal')}</select>
+          <select class="toolbar-select opt-axis-scope" style="flex:1">${axisOptions('scope')}</select>
+          <label>Tax basis</label>
+          <select class="toolbar-select opt-axis-basis" style="flex:1">${axisOptions('basis')}</select>
         </div>
         <div class="node-field">
           <label>Solver</label>
@@ -219,7 +222,8 @@ export class OptConfigPanel extends BaseComponent {
     this._objectiveSel = shell.querySelector('.opt-objective-select');
     this._axesEl       = shell.querySelector('.opt-objective-axes');
     this._axisRunning  = shell.querySelector('.opt-axis-running');
-    this._axisTerminal = shell.querySelector('.opt-axis-terminal');
+    this._axisScope    = shell.querySelector('.opt-axis-scope');
+    this._axisBasis    = shell.querySelector('.opt-axis-basis');
     this._solverSel    = shell.querySelector('.opt-solver-select');
     this._solverOptsEl = shell.querySelector('.opt-solver-options');
     this._runBtn       = shell.querySelector('button');

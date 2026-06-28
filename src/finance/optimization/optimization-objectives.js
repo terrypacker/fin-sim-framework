@@ -75,16 +75,48 @@ const _RUNNING_TERMS = {
   consumption: { label: 'Consumption ($)', resultKey: 'lifetimeConsumption',        cumKey: 'cumulativeConsumption' },
   crra:        { label: 'CRRA utility',    resultKey: 'lifetimeConsumptionUtility', cumKey: 'cumulativeConsumptionUtility' },
 };
+// The terminal anchor is a 2×2 over two orthogonal axes (design/40 §2.0):
+//   scope : worth (all assets) vs liquid (lever-reachable pool)
+//   basis : nominal (at par) vs afterTax (net of the embedded liquidation tax)
+// The UI renders the two axes as separate sub-selects; `resolveTerminalKey`
+// maps a (scope, basis) pair back to the concrete measure key here.
 const _TERMINAL_MEASURES = {
-  worth:  { label: 'Net Worth',     resultKey: 'finalNetWorthUsd' },
-  liquid: { label: 'Net Liquidity', resultKey: 'finalNetLiquidity' },
+  worth:          { label: 'Net Worth',               resultKey: 'finalNetWorthUsd',          scope: 'worth',  basis: 'nominal'  },
+  liquid:         { label: 'Net Liquidity',           resultKey: 'finalNetLiquidity',         scope: 'liquid', basis: 'nominal'  },
+  afterTaxWorth:  { label: 'After-Tax Net Worth',     resultKey: 'finalAfterTaxNetWorth',     scope: 'worth',  basis: 'afterTax' },
+  afterTaxLiquid: { label: 'After-Tax Net Liquidity', resultKey: 'finalAfterTaxNetLiquidity', scope: 'liquid', basis: 'afterTax' },
 };
 
-/** The axis menus the UI renders as sub-options for the Die-With-Target family. */
+/**
+ * The axis menus the UI renders as sub-options for the Die-With-Target family.
+ * `terminal` is kept (flat list) for back-compat; `scope`/`basis` are the two
+ * orthogonal sub-axes the cockpit/OPT panels render (design/40 §4).
+ */
 export const DIE_WITH_TARGET_AXES = {
   running:  Object.entries(_RUNNING_TERMS).map(([value, m])     => ({ value, label: m.label })),
   terminal: Object.entries(_TERMINAL_MEASURES).map(([value, m]) => ({ value, label: m.label })),
+  scope: [
+    { value: 'worth',  label: 'Net Worth' },
+    { value: 'liquid', label: 'Net Liquidity' },
+  ],
+  basis: [
+    { value: 'nominal',  label: 'Nominal' },
+    { value: 'afterTax', label: 'After-tax' },
+  ],
 };
+
+/** Resolve a (scope, basis) pair to the concrete terminal-measure key. */
+export function resolveTerminalKey({ scope = 'worth', basis = 'nominal' } = {}) {
+  const hit = Object.entries(_TERMINAL_MEASURES).find(
+    ([, m]) => m.scope === scope && m.basis === basis);
+  return hit?.[0] ?? 'worth';
+}
+
+/** The (scope, basis) pair for a terminal-measure key — inverse of resolveTerminalKey. */
+export function terminalAxesFor(terminal) {
+  const m = _TERMINAL_MEASURES[terminal];
+  return { scope: m?.scope ?? 'worth', basis: m?.basis ?? 'nominal' };
+}
 
 /**
  * Per-variant default λ so switching basis needs no re-tune (design/39 §11).
@@ -182,6 +214,22 @@ export const OPTIMIZATION_OBJECTIVES = {
     evaluate:  result => result.finalNetLiquidity,
   },
 
+  // ── After-tax maximizers (design/40 §4). The *maximize* form for the Roth
+  //    lever — no targeting-trap, and where the conversion signal is strongest
+  //    (converting a discounted pre-tax dollar to a par Roth dollar raises this).
+  //    MAX_AFTER_TAX_NET_WORTH is the design/40 D2 default for the Roth lever.
+  MAX_AFTER_TAX_NET_WORTH: {
+    label:     'Maximize After-Tax Net Worth (USD)',
+    direction: 'maximize',
+    evaluate:  result => result.finalAfterTaxNetWorth,
+  },
+
+  MAX_AFTER_TAX_NET_LIQUIDITY: {
+    label:     'Maximize After-Tax Net Liquidity (USD)',
+    direction: 'maximize',
+    evaluate:  result => result.finalAfterTaxNetLiquidity,
+  },
+
   // ── "Die With Target" family (2×2 over running × terminal, design/38 §5.2,
   //    design/39). Generated from makeDieWithTarget; grouped in the UI via the
   //    `family`/`variant` tags. Prefer the LIQUID terminal when the lever set
@@ -198,6 +246,25 @@ export const OPTIMIZATION_OBJECTIVES = {
   CRRA_DIE_WITH_TARGET_LIQUID:
     makeDieWithTarget({ running: 'crra', terminal: 'liquid',
       label: 'Die With Target — Liquid (CRRA utility)' }),
+
+  // After-tax terminal variants (design/40 §2.0): the same family with the
+  // embedded liquidation tax priced into the terminal anchor. Backward-compatible
+  // keys; the UI surfaces these via the Scope × Tax-basis sub-axes.
+  DIE_WITH_TARGET_AFTERTAX:
+    makeDieWithTarget({ running: 'consumption', terminal: 'afterTaxWorth',
+      label: 'Die With Target — After-Tax (max consumption, hit terminal after-tax wealth)' }),
+
+  DIE_WITH_TARGET_AFTERTAX_LIQUID:
+    makeDieWithTarget({ running: 'consumption', terminal: 'afterTaxLiquid',
+      label: 'Die With Target — After-Tax Liquid (max consumption, hit terminal after-tax liquidity)' }),
+
+  CRRA_DIE_WITH_TARGET_AFTERTAX:
+    makeDieWithTarget({ running: 'crra', terminal: 'afterTaxWorth',
+      label: 'Die With Target — After-Tax (CRRA utility)' }),
+
+  CRRA_DIE_WITH_TARGET_AFTERTAX_LIQUID:
+    makeDieWithTarget({ running: 'crra', terminal: 'afterTaxLiquid',
+      label: 'Die With Target — After-Tax Liquid (CRRA utility)' }),
 
   // ── Lifetime taxes (running accumulator, design/38 §5.3) ─────────────────
   MIN_LIFETIME_TAXES: {
