@@ -18,8 +18,10 @@ import { computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, defaultRateProvid
   from '../derived-metrics/after-tax.js';
 import { set }                 from '../monte-carlo/mc-param-paths.js';
 import { repinExpensesIfChanged } from '../spending/strategies/explicit-bands-spending-reducer.js';
-import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES } from './optimization-objectives.js';
+import { retargetRothConversionEvents } from '../../scenarios/toolsets/us-roth-conversion-toolset.js';
+import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES, objectiveIsWindowable } from './optimization-objectives.js';
 import { valuesForConfig }     from './opt-values.js';
+import { DateUtils }           from '../../simulation-framework/date-utils.js';
 
 /** Deep-ish equality good enough for ENUM value matching (primitives + arrays of primitives). */
 function _eq(a, b) {
@@ -84,6 +86,7 @@ export class OptimizationProblem {
     simStart     = new Date(Date.UTC(2026, 0, 1)),
     simEnd       = new Date(Date.UTC(2041, 0, 1)),
     initialState = { kind: 'compile', cfgTemplate: null },
+    horizonYears = null,   // sliding window length H (design 41); null/0 = full horizon
   } = {}) {
     this.variables    = variables;
     this.baseParams   = baseParams;
@@ -91,7 +94,27 @@ export class OptimizationProblem {
     this.simStart     = simStart;
     this.simEnd       = simEnd;
     this.initialState = initialState;
+    this.horizonYears = horizonYears;
     this._serializedTemplate = null;
+  }
+
+  /**
+   * The date each candidate rolls-and-scores to (design 41). With a sliding window
+   * `horizonYears` (H), it is `min(now + H, simEnd)` — slides with "now," clamps at
+   * simEnd, shrinks over the final H years. Forced to `simEnd` when H is unset OR
+   * the objective isn't windowable (running-accumulator / death-anchored goals are
+   * full-horizon, §41 §4/D1), so a non-continuation-value score is never windowed.
+   * `H = remaining` ⇒ simEnd ⇒ identical to the full-horizon path. The COMMIT step
+   * (rollToSnapshot) is independent — this governs only how far each solve looks.
+   */
+  _scoreEnd() {
+    const H = this.horizonYears;
+    if (!H || H <= 0 || !objectiveIsWindowable(this.objective)) return this.simEnd;
+    const now  = this.initialState?.kind === 'snapshot' && this.initialState.snapshot?.date
+      ? new Date(this.initialState.snapshot.date)
+      : this.simStart;
+    const edge = DateUtils.addYears(new Date(now), H);
+    return edge < this.simEnd ? edge : this.simEnd;
   }
 
   // ── Vector ⇄ candidate codec ──────────────────────────────────────────────
@@ -168,7 +191,7 @@ export class OptimizationProblem {
    * @returns {{ result: object, score: number }}
    */
   evaluate(candidate) {
-    const params = this._applyCandidate({ ...this.baseParams, endDate: this.simEnd }, candidate ?? {});
+    const params = this._applyCandidate({ ...this.baseParams, endDate: this._scoreEnd() }, candidate ?? {});
     const result = this._rollout(params);
 
     const { evaluate, direction } = this.objective;
@@ -268,6 +291,16 @@ export class OptimizationProblem {
       const patch = repinExpensesIfChanged(
         sim.state, params.spendingExpenseBands, new Date(sim.currentDate).getTime());
       if (patch) sim.state = { ...sim.state, ...patch };
+
+      // Forward-effective Roth re-target (design 42): the injected snapshot queue
+      // holds the conversion events frozen at compile-time targets, so the
+      // rothConversionSchedule param alone wouldn't move the rollout. Rewrite the
+      // future queued conversions for the scheduled years to the committed targets
+      // (the rollout-side twin of the live ROTH.actuate). No-op when empty.
+      retargetRothConversionEvents(sim.queue?.data, params.rothConversionSchedule ?? [], {
+        inflationRate: params.inflationRate ?? 0.03,
+        nowMs:         new Date(sim.currentDate).getTime(),
+      });
     }
     sim.silent = true;
     sim.journal.enabled = false;
@@ -315,10 +348,13 @@ export class OptimizationProblem {
    * @returns {{ dates: Date[], netWorth: number[], result: object }}
    */
   rolloutSeries(candidate, { points = 24 } = {}) {
-    const params = this._applyCandidate({ ...this.baseParams, endDate: this.simEnd }, candidate ?? {});
+    // The fan spans the scored window [now, scoreEnd] (design 41) so the user sees
+    // the horizon being optimized over, not always out to simEnd.
+    const scoreEnd = this._scoreEnd();
+    const params = this._applyCandidate({ ...this.baseParams, endDate: scoreEnd }, candidate ?? {});
     const sim    = this._seededSim(params);
     const startMs = sim.currentDate.getTime();
-    const endMs   = this.simEnd.getTime();
+    const endMs   = scoreEnd.getTime();
     const n       = Math.max(2, points);
     const dates = [];
     const netWorth = [];
@@ -328,7 +364,7 @@ export class OptimizationProblem {
       dates.push(new Date(sim.currentDate));
       netWorth.push(computeNetWorth(sim.state, 'USD'));
     }
-    return { dates, netWorth, result: this._readResult(sim.state, this.simEnd, params) };
+    return { dates, netWorth, result: this._readResult(sim.state, scoreEnd, params) };
   }
 
   /** Terminal + cumulative metrics read from the final sim state. */

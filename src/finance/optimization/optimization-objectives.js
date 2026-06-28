@@ -196,6 +196,7 @@ export const OPTIMIZATION_OBJECTIVES = {
     label:     'Maximize Final Net Worth (USD)',
     direction: 'maximize',
     metric:    { key: 'finalNetWorthUsd', label: 'Net Worth' },
+    windowable: true,                    // terminal stock = continuation value (design 41 §4)
     evaluate:  result => result.finalNetWorthUsd,
   },
 
@@ -203,6 +204,7 @@ export const OPTIMIZATION_OBJECTIVES = {
     label:     'Maximize Final Roth Balance (USD)',
     direction: 'maximize',
     metric:    { key: 'rothFinalBalance', label: 'Roth Balance' },
+    windowable: true,
     evaluate:  result => result.rothFinalBalance,
   },
 
@@ -217,6 +219,7 @@ export const OPTIMIZATION_OBJECTIVES = {
     label:     'Maximize Final Net Liquidity (USD)',
     direction: 'maximize',
     metric:    { key: 'finalNetLiquidity', label: 'Net Liquidity' },
+    windowable: true,
     evaluate:  result => result.finalNetLiquidity,
   },
 
@@ -228,6 +231,7 @@ export const OPTIMIZATION_OBJECTIVES = {
     label:     'Maximize After-Tax Net Worth (USD)',
     direction: 'maximize',
     metric:    { key: 'finalAfterTaxNetWorth', label: 'After-Tax Net Worth' },
+    windowable: true,                    // the Roth flagship: edge stock sees conversion value
     evaluate:  result => result.finalAfterTaxNetWorth,
   },
 
@@ -235,6 +239,7 @@ export const OPTIMIZATION_OBJECTIVES = {
     label:     'Maximize After-Tax Net Liquidity (USD)',
     direction: 'maximize',
     metric:    { key: 'finalAfterTaxNetLiquidity', label: 'After-Tax Net Liquidity' },
+    windowable: true,
     evaluate:  result => result.finalAfterTaxNetLiquidity,
   },
 
@@ -324,6 +329,20 @@ export const OBJECTIVE_FAMILY_LABELS = {
  */
 export function objectivePrimaryMetric(objective) {
   return objective?.metric ?? { key: 'finalNetWorthUsd', label: 'Net Worth' };
+}
+
+/**
+ * Whether an objective may be scored over a sliding window shorter than the full
+ * horizon (design 41 §4). True only for pure terminal-stock MAXIMIZERS, whose
+ * value at any end date IS a faithful continuation value (the stock you hold).
+ * False (the default) for pure running accumulators (MIN_LIFETIME_TAXES,
+ * MAX_CRRA_UTILITY — windowing drops the out-of-window value) and death-anchored
+ * goals (the DIE_WITH_TARGET family — its penalty is meaningless off the death
+ * date; needs a terminal value, design 41 §7). Non-windowable goals are scored at
+ * the full horizon regardless of the requested window.
+ */
+export function objectiveIsWindowable(objective) {
+  return objective?.windowable === true;
 }
 
 /** The objective key for a Die-With-Target (running, terminal) variant pair. */
