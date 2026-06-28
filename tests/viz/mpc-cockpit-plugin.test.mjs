@@ -44,6 +44,45 @@ test('MpcCockpitPlugin: lever select lists both built-in controls', () => {
   assert.deepStrictEqual(opts.sort(), ['ROTH', 'SPENDING']);
 });
 
+test('MpcCockpitPlugin: Horizon field enables for windowable goals, disables + hints otherwise (design 41)', () => {
+  const plugin = mountPlugin();
+  const input = plugin._q('horizon');
+  assert.ok(input, 'horizon field rendered');
+
+  // A windowable goal (terminal-stock maximizer) enables the window.
+  plugin._q('objective').value = 'MAX_AFTER_TAX_NET_WORTH';
+  plugin._q('objective').dispatchEvent(new Event('change'));
+  assert.equal(input.disabled, false, 'windowable goal enables the horizon field');
+
+  // Switching to a non-windowable goal disables the field, clears the stale value
+  // (so a greyed-out "8" doesn't read as an active horizon), and hints why.
+  input.value = '8';
+  plugin._q('objective').value = 'MIN_LIFETIME_TAXES';
+  plugin._q('objective').dispatchEvent(new Event('change'));
+  assert.equal(input.disabled, true, 'non-windowable goal disables the horizon field');
+  assert.equal(input.value, '', 'stale window value is reset to Full');
+  assert.match(plugin._q('horizon-field').title, /full horizon/i);
+
+  // The family (die-with-target) is death-anchored → not windowable.
+  plugin._q('objective').value = 'family:DIE_WITH_TARGET';
+  plugin._q('objective').dispatchEvent(new Event('change'));
+  assert.equal(input.disabled, true, 'die-with-target disables the horizon field');
+});
+
+test('MpcCockpitPlugin._currentHorizon: parses positive ints, null when blank/disabled', () => {
+  const plugin = mountPlugin();
+  plugin._q('objective').value = 'MAX_NET_WORTH';   // windowable → enabled
+  plugin._q('objective').dispatchEvent(new Event('change'));
+  const input = plugin._q('horizon');
+  input.value = '10';
+  assert.equal(plugin._currentHorizon(), 10);
+  input.value = '';
+  assert.equal(plugin._currentHorizon(), null, 'blank ⇒ full horizon');
+  input.value = '10';
+  input.disabled = true;
+  assert.equal(plugin._currentHorizon(), null, 'disabled ⇒ ignored');
+});
+
 test('MpcCockpitPlugin: objective select groups the die-with-target family with axis sub-selects', () => {
   const el = new MpcCockpitPlugin(fakeRuntime()).render();
   const opts = [...el.querySelectorAll('[data-mpc="objective"] option')].map(o => o.value);

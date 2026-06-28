@@ -14,6 +14,7 @@ import { createSolver }            from '../optimization/solvers/solver-registry
 import { OPT_PARAM_TYPES }         from '../optimization/optimization-objectives.js';
 import { rollForwardWithControls, recordDecisionRecord } from './apply-forward.js';
 import { repinExpensesIfChanged }  from '../spending/strategies/explicit-bands-spending-reducer.js';
+import { retargetRothConversionEvents } from '../../scenarios/toolsets/us-roth-conversion-toolset.js';
 import { set }                     from '../monte-carlo/mc-param-paths.js';
 import { DateUtils }               from '../../simulation-framework/date-utils.js';
 import { UsTaxRates2025 }          from '../tax/us/us-tax-rates-2025.js';
@@ -114,7 +115,10 @@ export const COCKPIT_CONTROLS = {
     // entry index is stable. Idempotent.
     prepareBaseParams: ({ baseParams, asOf }) => {
       if (!asOf) return baseParams;
-      const year  = new Date(asOf).getUTCFullYear();
+      // The NEXT actionable conversion year — not the calendar year of "now": at
+      // Dec 31 the year's conversion date (default Dec 1) has already passed, so
+      // tuning it is inert (design 42). Pick the next year whose date is future.
+      const year  = _nextConversionYear(asOf, baseParams);
       const sched = Array.isArray(baseParams?.rothConversionSchedule)
         ? baseParams.rothConversionSchedule.slice()
         : [];
@@ -123,9 +127,10 @@ export const COCKPIT_CONTROLS = {
       return { ...baseParams, rothConversionSchedule: sched };
     },
     buildVariables: ({ baseParams, range, asOf }) => {
-      // Decide THIS year's income-fill target (annual epoch, §6). The receding-
-      // horizon loop re-decides each subsequent year as "now" advances.
-      const year  = asOf ? new Date(asOf).getUTCFullYear() : null;
+      // Decide the NEXT actionable year's income-fill target (annual epoch, §6;
+      // next-future-date year, design 42). The receding-horizon loop re-decides
+      // each subsequent year as "now" advances.
+      const year  = asOf ? _nextConversionYear(asOf, baseParams) : null;
       const sched = baseParams?.rothConversionSchedule ?? [];
       const found = year != null ? sched.findIndex(e => e?.year === year) : -1;
       const idx   = found >= 0 ? found : Math.max(0, sched.length - 1);
@@ -183,26 +188,17 @@ export const COCKPIT_CONTROLS = {
         p.value = sched;
       }
 
-      // 2) Live re-wire: mutate the future queued conversion events for the year.
+      // 2) Live re-wire: mutate the future queued conversion events for the year,
+      //    via the SAME shared helper the advise rollout uses (advise == apply).
       const sim = services?.simulationRegistry?.getPrimary?.();
       const queue = sim?.queue?.data;
       if (!Array.isArray(queue)) return false;
 
-      const inflationRate = paramOf('inflationRate')?.value ?? 0.03;
-      const nominalTarget = realTarget * Math.pow(1 + inflationRate, year - ROTH_BASE_YEAR);
-      const nowMs = new Date(sim.currentDate).getTime();
-
-      let hit = 0;
-      for (const item of queue) {
-        if (item?.type === 'ROTH_CONVERSION_POLICY_EVALUATE'
-            && item.data
-            && new Date(item.date).getUTCFullYear() === year
-            && new Date(item.date).getTime() > nowMs) {
-          item.data.targetIncome = nominalTarget;
-          hit++;
-        }
-      }
-      return hit > 0;
+      const hits = retargetRothConversionEvents(queue, [{ year, incomeTarget: realTarget }], {
+        inflationRate: paramOf('inflationRate')?.value ?? 0.03,
+        nowMs:         new Date(sim.currentDate).getTime(),
+      });
+      return hits > 0;
     },
   },
 };
@@ -233,6 +229,7 @@ export class CockpitController {
     controlRange = null,       // { min, max, step } for numeric levers; null = spec default
     graph        = null,       // optional Graph for DERIVES_FROM recording
     parentId     = null,       // parent scenario id for the audit trail
+    horizonYears = null,       // sliding prediction window H (design 41); null = full horizon
   } = {}) {
     this.simStart     = simStart;
     this.simEnd       = simEnd;
@@ -244,6 +241,7 @@ export class CockpitController {
     this.controlRange = controlRange;
     this.graph        = graph;
     this.parentId     = parentId;
+    this.horizonYears = horizonYears;
 
     this.snapshot    = null;   // the "now"
     this.lastAdvice  = null;
@@ -253,6 +251,8 @@ export class CockpitController {
   setObjective(objective) { this.objective = objective; }
   setControl(control)     { this.control = control; }
   setControlRange(range)  { this.controlRange = range; }
+  /** Sliding prediction window H in years (design 41); null/0 = full horizon. */
+  setHorizonYears(h)      { this.horizonYears = (h == null || h <= 0) ? null : h; }
 
   /** Seed "now" from a SimulationHistory-shaped snapshot ({ date, state, queue, rngState }). */
   setSnapshot(snapshot) { this.snapshot = snapshot; return this; }
@@ -289,6 +289,7 @@ export class CockpitController {
       objective:    this.objective,
       simStart:     this.simStart,
       simEnd:       this.simEnd,
+      horizonYears: this.horizonYears,   // sliding window for scoring + fan (design 41)
       initialState: { kind: 'snapshot', snapshot: this.snapshot, cfgTemplate: this.cfgTemplate },
     });
   }
@@ -446,10 +447,29 @@ function fmtUsd(n) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 }
 
-// Base year for the Roth income-target schedule (matches the toolset's
-// BRACKET_BASE_YEAR / usBracketGrossIncomeCeiling): real targets are quoted in
-// this year's USD and compounded by inflation to a year's nominal ceiling.
-const ROTH_BASE_YEAR = 2025;
+/**
+ * The next ACTIONABLE Roth-conversion year at `asOf` (design 42): the earliest
+ * year that (a) whose conversion date (rothConversionMonth/Day, default Dec 1) is
+ * still in the future AND (b) is actually a conversion year for this scenario — a
+ * scheduled year, or within the legacy window [start, end]. Without (a) the lever
+ * tunes an event that already fired (e.g. at Dec 31); without (b) it tunes a year
+ * the scenario never converts (e.g. standing at 2026 when the window starts 2028)
+ * — either way an inert, confusing flat result. Falls back to the date-only year.
+ */
+function _nextConversionYear(asOf, baseParams) {
+  const month = (baseParams?.rothConversionMonth ?? 12) - 1;   // 0-based
+  const day   = baseParams?.rothConversionDay ?? 1;
+  const now   = new Date(asOf);
+  let year = now.getUTCFullYear();
+  if (Date.UTC(year, month, day) <= now.getTime()) year += 1;   // this year's already fired
+
+  // (b) If standing before the legacy window opens, jump to its start — keyed off
+  // the STABLE window param, not the schedule (which prepareBaseParams mutates, so
+  // reading it here would make prepareBaseParams and buildVariables disagree).
+  const start = baseParams?.rothConversionStartYear;
+  if (Number.isFinite(start) && year < start) year = start;
+  return year;
+}
 
 // Marginal MFJ bracket a REAL (base-year) ordinary income lands in, for the
 // recommended-move card. Real target vs base-year brackets is inflation-free:

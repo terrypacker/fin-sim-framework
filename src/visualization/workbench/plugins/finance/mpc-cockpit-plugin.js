@@ -16,6 +16,7 @@ import { readDecisionRecords } from '../../../../finance/mpc/apply-forward.js';
 import {
   OPTIMIZATION_OBJECTIVES, DIE_WITH_TARGET_AXES, DIE_WITH_TARGET_FAMILY,
   OBJECTIVE_FAMILY_LABELS, resolveDieWithTargetKey, resolveTerminalKey, terminalAxesFor,
+  objectiveIsWindowable,
 } from '../../../../finance/optimization/optimization-objectives.js';
 import { DateUtils }          from '../../../../simulation-framework/date-utils.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../../../simulation-framework/bus-messages.js';
@@ -101,6 +102,9 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
             ${SOLVER_OPTIONS.map(k => `<option value="${k}">${_esc(k)}</option>`).join('')}
           </select>
         </label>
+        <label class="mpc-field" data-mpc="horizon-field" title="Prediction window: how many years ahead each solve looks (blank = to end of plan)">Horizon (yrs)
+          <input class="wb-input mpc-num" type="number" min="1" step="1" data-mpc="horizon" placeholder="Full">
+        </label>
         <button class="btn btn-sm btn-primary" data-mpc="advise">Advise next move</button>
         <button class="btn btn-sm" data-mpc="advance" title="Step &quot;now&quot; forward one year and re-plan">Advance ▶</button>
         <button class="btn btn-sm" data-mpc="auto" title="Auto-accept the recommended move and advance each year to the end of the run">Auto ▶▶</button>
@@ -157,18 +161,52 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     this._bind('objective','change',() => {
       this._syncObjectiveAxes();
       this._controller?.setObjective(this._currentObjective());
+      this._syncHorizonEnabled();        // some goals can't use a window (full-horizon only)
     });
-    this._bind('axis-running', 'change', () => this._controller?.setObjective(this._currentObjective()));
-    this._bind('axis-scope',   'change', () => this._controller?.setObjective(this._currentObjective()));
-    this._bind('axis-basis',   'change', () => this._controller?.setObjective(this._currentObjective()));
+    this._bind('axis-running', 'change', () => { this._controller?.setObjective(this._currentObjective()); this._syncHorizonEnabled(); });
+    this._bind('axis-scope',   'change', () => { this._controller?.setObjective(this._currentObjective()); this._syncHorizonEnabled(); });
+    this._bind('axis-basis',   'change', () => { this._controller?.setObjective(this._currentObjective()); this._syncHorizonEnabled(); });
+    this._bind('horizon', 'change', () => this._controller?.setHorizonYears(this._currentHorizon()));
     for (const n of ['rmin', 'rmax', 'rstep']) {
       this._bind(n, 'change', () => { this._controller?.setControlRange(this._currentRange()); });
     }
     this._applyControlDefaultRange();   // seed the range inputs for the initial lever
     this._syncRangeEnabled();
     this._syncObjectiveAxes();          // show the axis sub-selects iff a family is chosen
+    this._syncHorizonEnabled();         // disable the window for full-horizon-only goals
     this._syncLeverApplicability();
     this._renderSavePoints();
+  }
+
+  /**
+   * The window field is only meaningful for windowable goals (terminal-stock
+   * maximizers, design 41 §4). For running / die-with-target goals it's disabled
+   * with a hint, since the solve is forced to the full horizon regardless.
+   */
+  _syncHorizonEnabled() {
+    const input = this._q('horizon');
+    const field = this._q('horizon-field');
+    if (!input || !field) return;
+    const ok = objectiveIsWindowable(this._currentObjective());
+    input.disabled = !ok;
+    // Clear a stale value when the goal can't use a window — a greyed-out "8 yrs"
+    // reads as an active horizon. Reset to Full (empty) and sync the controller.
+    if (!ok && input.value !== '') {
+      input.value = '';
+      this._controller?.setHorizonYears(null);
+    }
+    field.title = ok
+      ? 'Prediction window: how many years ahead each solve looks (blank = to end of plan)'
+      : 'Full horizon — this goal scores at end of plan; the window does not apply.';
+    field.classList.toggle('mpc-field--disabled', !ok);
+  }
+
+  /** The window length H (years) from the input — null when blank / non-positive / disabled. */
+  _currentHorizon() {
+    const input = this._q('horizon');
+    if (!input || input.disabled) return null;
+    const v = parseInt(input.value, 10);
+    return Number.isFinite(v) && v > 0 ? v : null;
   }
 
   /** Show the Basis/Terminal axis sub-selects only when a grouped family goal is chosen. */
@@ -325,6 +363,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
       objective:    this._currentObjective(),
       control:      this._currentControl(),
       controlRange: this._currentRange(),
+      horizonYears: this._currentHorizon(),   // sliding prediction window (design 41)
       graph:       svc?.graph ?? null,
       parentId:    scenario.id ?? null,
     });

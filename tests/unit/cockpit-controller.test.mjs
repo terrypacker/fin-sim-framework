@@ -41,6 +41,58 @@ function makeController(graph, parentId) {
   return c;
 }
 
+describe('COCKPIT_CONTROLS.ROTH — next actionable conversion year (design 42)', () => {
+  const bp = { rothConversionMonth: 12, rothConversionDay: 1 };   // Dec 1 conversions
+
+  test('at Dec 31 (this year already fired) the lever targets NEXT year', () => {
+    const asOf = new Date(Date.UTC(2027, 11, 31));
+    const committed = COCKPIT_CONTROLS.ROTH.prepareBaseParams({ baseParams: bp, asOf });
+    assert.ok(committed.rothConversionSchedule.some(e => e.year === 2028), 'schedule entry for 2028');
+    assert.ok(!committed.rothConversionSchedule.some(e => e.year === 2027), 'not the already-fired 2027');
+    const vars = COCKPIT_CONTROLS.ROTH.buildVariables({ baseParams: committed, asOf });
+    assert.equal(vars[0]._year, 2028, 'variable targets 2028');
+  });
+
+  test('early in the year (before the conversion date) targets THIS year', () => {
+    const asOf = new Date(Date.UTC(2027, 0, 15));   // Jan 15 — Dec 1 still ahead
+    const vars = COCKPIT_CONTROLS.ROTH.buildVariables({
+      baseParams: COCKPIT_CONTROLS.ROTH.prepareBaseParams({ baseParams: bp, asOf }), asOf });
+    assert.equal(vars[0]._year, 2027);
+  });
+
+  test('skips to the window start when standing before it (2026 → window 2028)', () => {
+    const asOf = new Date(Date.UTC(2026, 0, 1));
+    const windowed = { ...bp, rothConversionStartYear: 2028, rothConversionEndYear: 2035 };
+    const committed = COCKPIT_CONTROLS.ROTH.prepareBaseParams({ baseParams: windowed, asOf });
+    const vars = COCKPIT_CONTROLS.ROTH.buildVariables({ baseParams: committed, asOf });
+    assert.equal(vars[0]._year, 2028, 'targets the first window year, not the inert 2026');
+  });
+});
+
+describe('CockpitController — windowed horizon (design 41)', () => {
+  test('setHorizonYears flows into the problem _scoreEnd (clamped to simEnd, gated by objective)', () => {
+    const c = makeController();   // NOW=2029, simEnd=2033, objective MAX_NET_WORTH (windowable)
+    c.setHorizonYears(2);
+    assert.equal(+c._problem([])._scoreEnd(), +new Date(Date.UTC(2031, 0, 1)), 'now + H');
+    c.setHorizonYears(10);
+    assert.equal(+c._problem([])._scoreEnd(), +SIM_END, 'clamped to simEnd');
+    c.setHorizonYears(null);
+    assert.equal(+c._problem([])._scoreEnd(), +SIM_END, 'full horizon when unset');
+    // A non-windowable goal ignores the window entirely.
+    c.setHorizonYears(2);
+    c.setObjective(OPTIMIZATION_OBJECTIVES.MIN_LIFETIME_TAXES);
+    assert.equal(+c._problem([])._scoreEnd(), +SIM_END, 'non-windowable goal forced to full horizon');
+  });
+
+  test('setHorizonYears normalizes non-positive to null (full horizon)', () => {
+    const c = makeController();
+    c.setHorizonYears(0);
+    assert.equal(c.horizonYears, null);
+    c.setHorizonYears(-3);
+    assert.equal(c.horizonYears, null);
+  });
+});
+
 describe('CockpitController — advise', () => {
   test('returns a recommended move + a fan of per-step trajectories', async () => {
     const c = makeController();
