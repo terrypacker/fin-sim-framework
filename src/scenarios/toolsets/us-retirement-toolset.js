@@ -31,6 +31,7 @@ import { SetOutOfFundsDateReducer }     from '../../finance/reducers/set-out-of-
 import { AccumulateDeficitReducer }     from '../../finance/reducers/accumulate-deficit-reducer.js';
 import { AccumulateTaxesPaidReducer }   from '../../finance/reducers/accumulate-taxes-paid-reducer.js';
 import { AccumulateConsumptionReducer } from '../../finance/reducers/accumulate-consumption-reducer.js';
+import { AccumulateConsumptionUtilityReducer } from '../../finance/reducers/accumulate-consumption-utility-reducer.js';
 import { OutOfFundsReducer }            from '../../finance/reducers/out-of-funds-reducer.js';
 import { InflationAdjustReducer }           from '../../finance/reducers/inflation-adjust-reducer.js';
 import { SpendingStrategyApplyReducer }     from '../../finance/spending/spending-strategy-apply-reducer.js';
@@ -301,6 +302,12 @@ export const US_RETIREMENT = {
       ...SPENDING_STRATEGY_REGISTRY.AGE_BANDED.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.EXPLICIT_BANDS.paramSchema(),
       {
+        key: 'crraGamma', label: 'CRRA Risk Aversion (γ)',
+        type: 'Number', group: 'Spending', mc: false, opt: false,
+        defaultValue: 1.5,
+        description: 'Relative risk aversion for the CRRA consumption-utility accumulator (design 39 §4). γ=1 ⇒ log utility; higher γ ⇒ stronger preference for smooth real spending.',
+      },
+      {
         key: 'mortalityEnabled', label: 'Mortality Enabled',
         type: 'Boolean', group: 'Mortality', mc: false, opt: true,
         defaultValue: true,
@@ -373,6 +380,7 @@ export const US_RETIREMENT = {
       deficitMonths:        0,
       cumulativeTaxesPaid:  0,
       cumulativeConsumption: 0,
+      cumulativeConsumptionUtility: 0,
       personBirthDate:      context.people[0]?.birthDate ?? null,
       // Drawdown mode read by AccountService.replenishSavings. Ordered (default)
       // honors drawdownPriority; PROPORTIONAL draws pro-rata across eligible buckets.
@@ -886,6 +894,7 @@ export const US_RETIREMENT = {
     reducers.push(new AccumulateDeficitReducer());
     reducers.push(new AccumulateTaxesPaidReducer());
     reducers.push(new AccumulateConsumptionReducer());
+    reducers.push(new AccumulateConsumptionUtilityReducer({ gamma: p.crraGamma ?? 1.5 }));
     reducers.push(new OutOfFundsReducer());
 
     if (p.inflationAdjust) {

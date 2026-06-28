@@ -34,6 +34,38 @@ function selectSolver(container, key) {
   return sel;
 }
 
+describe('OptConfigPanel — Objective grouping (Die-With-Target family)', () => {
+  test('collapses the family into one option with Basis/Terminal sub-selects', () => {
+    const { container, panel } = makePanel();
+    const objSel = container.querySelector('.opt-objective-select');
+    const keys = [...objSel.options].map(o => o.value);
+    expect(keys).toEqual(expect.arrayContaining(['family:DIE_WITH_TARGET', 'MAX_NET_WORTH']));
+    expect(keys).not.toContain('CRRA_DIE_WITH_TARGET');     // grouped, not flat
+    panel.destroy();
+  });
+
+  test('getConfig resolves the family + axes to the concrete objective key', () => {
+    const { container, panel } = makePanel();
+    const objSel = container.querySelector('.opt-objective-select');
+    objSel.value = 'family:DIE_WITH_TARGET';
+    objSel.dispatchEvent(new Event('change'));
+
+    const axes = container.querySelector('.opt-objective-axes');
+    expect(axes.style.display).not.toBe('none');           // shown for a family goal
+    container.querySelector('.opt-axis-running').value  = 'crra';
+    container.querySelector('.opt-axis-terminal').value = 'liquid';
+
+    expect(panel.getConfig().objectiveKey).toBe('CRRA_DIE_WITH_TARGET_LIQUID');
+
+    // A standalone goal hides the axes and resolves directly.
+    objSel.value = 'MAX_NET_WORTH';
+    objSel.dispatchEvent(new Event('change'));
+    expect(axes.style.display).toBe('none');
+    expect(panel.getConfig().objectiveKey).toBe('MAX_NET_WORTH');
+    panel.destroy();
+  });
+});
+
 describe('OptConfigPanel — Solver selector', () => {
   test('renders a Solver select populated from SOLVER_REGISTRY', () => {
     const { container, panel } = makePanel();

@@ -526,6 +526,8 @@ export class ScenarioTabView {
         valueInput = _buildShockListEditor(param);
       } else if (param.type === 'AgeBandList') {
         valueInput = _buildAgeBandListEditor(param);
+      } else if (param.type === 'ExpenseBandList') {
+        valueInput = _buildExpenseBandListEditor(param);
       } else if (param.type === 'HealthcareEventList') {
         valueInput = _buildHealthcareEventListEditor(param, this.personsProvider);
       } else if (param.type === 'DrawdownStrategyList') {
@@ -876,6 +878,97 @@ function _buildAgeBandListEditor(param) {
     addBtn.addEventListener('click', () => {
       const lastAge = param.value.length ? (param.value[param.value.length - 1].startAge ?? 0) : 0;
       param.value.push({ startAge: lastAge + 5, multiplier: 1.0, annualRealDrift: 0 });
+      render();
+    });
+    container.appendChild(addBtn);
+  };
+
+  render();
+  return container;
+}
+
+// ─── ExpenseBandList editor (EXPLICIT_BANDS spending, design 38 §6.1) ─────────
+
+/**
+ * Build a self-contained DOM editor for an ExpenseBandList parameter
+ * (`spendingExpenseBands`). Each band is `{ startAge, monthlyAmount }` (base-year
+ * currency), rendered as a two-column row (Start Age, Monthly Amount) plus a
+ * remove button, with an "Add Band" button. Mirrors the AgeBandList editor but
+ * with the two fields this strategy uses — so it is no longer a raw text input
+ * showing "[object Object]".
+ */
+function _buildExpenseBandListEditor(param) {
+  param.value = (Array.isArray(param.value) ? param.value : []).map(b => ({ ...b }));
+
+  const container = document.createElement('div');
+  container.className = 'age-band-list-editor';   // reuse the shared band-editor styles
+
+  const COLUMNS = [
+    { field: 'startAge',      label: 'Start Age',     step: '1'  },
+    { field: 'monthlyAmount', label: 'Monthly Amount', step: '100' },
+  ];
+  const GRID = '1fr 1fr 26px';   // two fields + remove (overrides the 3-col default)
+
+  const render = () => {
+    container.innerHTML = '';
+    const bands = param.value;
+
+    const header = document.createElement('div');
+    header.className = 'age-band-row age-band-header';
+    header.style.gridTemplateColumns = GRID;
+    COLUMNS.forEach(({ label }) => {
+      const h = document.createElement('span');
+      h.className = 'age-band-col-label';
+      h.textContent = label;
+      header.appendChild(h);
+    });
+    header.appendChild(document.createElement('span')); // spacer over remove button
+    container.appendChild(header);
+
+    bands.forEach((band, idx) => {
+      const row = document.createElement('div');
+      row.className = 'age-band-row';
+      row.style.gridTemplateColumns = GRID;
+
+      COLUMNS.forEach(({ field, step }) => {
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.step = step;
+        input.min = '0';
+        input.className = 'age-band-input';
+        input.value = band[field] ?? '';
+        input.addEventListener('change', () => {
+          const raw = input.value;
+          band[field] = raw.trim() === '' ? 0 : parseFloat(raw);
+          if (field === 'startAge') {
+            param.value.sort((a, b) => (a.startAge ?? 0) - (b.startAge ?? 0));
+            render();
+          }
+        });
+        row.appendChild(input);
+      });
+
+      const rmBtn = document.createElement('button');
+      rmBtn.type = 'button';
+      rmBtn.className = 'btn btn-warn age-band-remove';
+      rmBtn.textContent = '✕';
+      rmBtn.title = 'Remove band';
+      rmBtn.addEventListener('click', () => { bands.splice(idx, 1); render(); });
+      row.appendChild(rmBtn);
+
+      container.appendChild(row);
+    });
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn btn-sm age-band-add-btn';
+    addBtn.textContent = '+ Add Band';
+    addBtn.addEventListener('click', () => {
+      const last = param.value[param.value.length - 1];
+      param.value.push({
+        startAge:      (last?.startAge ?? 60) + 10,
+        monthlyAmount: last?.monthlyAmount ?? 6000,
+      });
       render();
     });
     container.appendChild(addBtn);

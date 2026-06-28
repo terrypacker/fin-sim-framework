@@ -601,6 +601,7 @@ test('no duplicate reducers when US_RETIREMENT, US_INCOME, and US_BROKERAGE are 
   const INTENTIONAL_COMPANIONS = new Set([
     'AccumulateTaxesPaidReducer',
     'AccumulateConsumptionReducer',
+    'AccumulateConsumptionUtilityReducer',   // design 39 §4 — CRRA companion on EXPENSE_DEBIT
   ]);
 
   const duplicates = [...actionTypeMap.entries()]

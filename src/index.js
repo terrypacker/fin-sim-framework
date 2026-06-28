@@ -112,11 +112,15 @@ import { DEFAULT_MC_VARIABLE_CONFIGS, IntlRetirementMcConfig } from './finance/m
 import { computeNetWorthUsd, IntlRetirementMcRunner } from './finance/monte-carlo/intl-retirement-mc-runner.js';
 import { CDC_2024, AU_2022, lookupLifeTable } from './finance/monte-carlo/life-tables.js';
 import { get, set } from './finance/monte-carlo/mc-param-paths.js';
+import { rollForwardWithControls, recordDecisionRecord, readDecisionRecords } from './finance/mpc/apply-forward.js';
+import { COCKPIT_CONTROLS, CockpitController } from './finance/mpc/cockpit-controller.js';
+import { runMpc, makeInitialSnapshot } from './finance/mpc/mpc-controller.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables } from './finance/optimization/intl-retirement-opt-config.js';
 import { IntlRetirementOptimizer } from './finance/optimization/intl-retirement-optimizer.js';
 import { valuesForConfig, cartesianProduct } from './finance/optimization/opt-values.js';
 import { OPT_PARAM_TYPES, DEFAULT_TERMINAL_WEALTH_PENALTY, OPTIMIZATION_OBJECTIVES } from './finance/optimization/optimization-objectives.js';
 import { OptimizationProblem } from './finance/optimization/optimization-problem.js';
+import { CemSolver } from './finance/optimization/solvers/cem-solver.js';
 import { GridSearchSolver } from './finance/optimization/solvers/grid-search-solver.js';
 import { PatternSearchSolver } from './finance/optimization/solvers/pattern-search-solver.js';
 import { RandomSolver } from './finance/optimization/solvers/random-solver.js';
@@ -130,6 +134,7 @@ import { Period, PeriodRelationship, PeriodService } from './finance/period/peri
 import { Person } from './finance/person.js';
 import { AccountRetitleApplyReducer } from './finance/reducers/account-retitle-apply-reducer.js';
 import { AccumulateConsumptionReducer } from './finance/reducers/accumulate-consumption-reducer.js';
+import { AccumulateConsumptionUtilityReducer } from './finance/reducers/accumulate-consumption-utility-reducer.js';
 import { AccumulateDeficitReducer } from './finance/reducers/accumulate-deficit-reducer.js';
 import { AccumulateTaxesPaidReducer } from './finance/reducers/accumulate-taxes-paid-reducer.js';
 import { ChangeResidencyApplyReducer } from './finance/reducers/change-residency-apply-reducer.js';
@@ -368,7 +373,7 @@ import { WorkbenchComponent } from './visualization/workbench/component.js';
 import { WorkbenchLayoutModel } from './visualization/workbench/layout-model.js';
 import { PluginRegistry } from './visualization/workbench/plugin-registry.js';
 import { PLUGIN_CATEGORIES, PLUGIN_PANES, definePlugin } from './visualization/workbench/plugin-sdk.js';
-import { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, JournalReportPlugin, ScenarioComparePlugin, DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
+import { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin, TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin, McConfigPlugin, McResultsPlugin, McRunsPlugin, OptConfigPlugin, OptResultsPlugin, OptRunsPlugin, ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin, JournalReportPlugin, ScenarioComparePlugin, DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin, MpcCockpitPlugin, FINANCE_PLUGINS, FINANCE_DEFAULT_LAYOUT } from './visualization/workbench/plugins/finance/finance-plugin-package.js';
 import { SplitPane } from './visualization/workbench/split-pane.js';
 import { TabGroup } from './visualization/workbench/tab-group.js';
 import { WB_EVENTS, WorkbenchRuntime } from './visualization/workbench/workbench-runtime.js';
@@ -662,6 +667,13 @@ export const Finance = {
   lookupLifeTable,
   get,
   set,
+  rollForwardWithControls,
+  recordDecisionRecord,
+  readDecisionRecords,
+  COCKPIT_CONTROLS,
+  CockpitController,
+  runMpc,
+  makeInitialSnapshot,
   DEFAULT_OPTIMIZATION_CONFIGS,
   buildOptVariables,
   IntlRetirementOptimizer,
@@ -671,6 +683,7 @@ export const Finance = {
   DEFAULT_TERMINAL_WEALTH_PENALTY,
   OPTIMIZATION_OBJECTIVES,
   OptimizationProblem,
+  CemSolver,
   GridSearchSolver,
   PatternSearchSolver,
   RandomSolver,
@@ -696,6 +709,7 @@ export const Finance = {
   Person,
   AccountRetitleApplyReducer,
   AccumulateConsumptionReducer,
+  AccumulateConsumptionUtilityReducer,
   AccumulateDeficitReducer,
   AccumulateTaxesPaidReducer,
   ChangeResidencyApplyReducer,
@@ -1114,6 +1128,7 @@ export const FinancePlugins = {
   DgResultsPlugin,
   CrossActionQueryPlugin,
   HoldingsPlugin,
+  MpcCockpitPlugin,
   FINANCE_PLUGINS,
   FINANCE_DEFAULT_LAYOUT,
 };

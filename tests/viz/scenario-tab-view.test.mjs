@@ -218,6 +218,33 @@ test('_renderParamsList: editing Number input updates param.value as a number', 
   assert.strictEqual(scenario.params[0].value, 0.07);
 });
 
+test('_renderParamsList: ExpenseBandList renders a 2-column band editor, not a text input', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'spendingExpenseBands', type: 'ExpenseBandList',
+    value: [{ startAge: 65, monthlyAmount: 7000 }, { startAge: 75, monthlyAmount: 6000 }] }] };
+  view._renderParamsList(scenario);
+  const editor = document.querySelector('#paramsList .age-band-list-editor');
+  assert.ok(editor, 'expected a band editor, not a raw text input');
+  assert.deepStrictEqual(
+    [...editor.querySelectorAll('.age-band-col-label')].map(e => e.textContent),
+    ['Start Age', 'Monthly Amount']);
+  assert.strictEqual(editor.querySelectorAll('input[type="number"]').length, 4, 'two fields × two bands');
+  const broken = [...document.querySelectorAll('#paramsList input')].some(i => String(i.value).includes('[object Object]'));
+  assert.strictEqual(broken, false, 'no [object Object] text input');
+});
+
+test('_renderParamsList: editing an ExpenseBandList amount updates param.value', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'spendingExpenseBands', type: 'ExpenseBandList',
+    value: [{ startAge: 65, monthlyAmount: 7000 }] }] };
+  view._renderParamsList(scenario);
+  const amountInput = [...document.querySelectorAll('#paramsList .age-band-input')].find(i => i.value === '7000');
+  assert.ok(amountInput);
+  amountInput.value = '9000';
+  amountInput.dispatchEvent(new Event('change'));
+  assert.strictEqual(scenario.params[0].value[0].monthlyAmount, 9000);
+});
+
 test('_renderParamsList: Date param renders an <input type="date">', () => {
   const view = new ScenarioTabView();
   const scenario = { params: [{ name: 'primaryRetirementDate', type: 'Date', value: '2040-01-01' }] };
