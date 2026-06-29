@@ -739,3 +739,82 @@ test('replenishSavings: spouse super account age-gate uses spouse birthDate, not
   );
   assert.strictEqual(spouseSuper.balance, 100_000, 'spouse super balance must be unchanged');
 });
+
+// ─── reduceLedgerForWithdrawal (design 43 §3) ─────────────────────────────────
+
+const mkSvc = () => {
+  const graph = new Graph();
+  return new AccountService(graph, new GraphQueryApi(graph), new EventBus());
+};
+
+test('reduceLedgerForWithdrawal: ROTH draws contributions first, then earnings', () => {
+  const svc = mkSvc();
+  const roth = new RothAccount(100_000, { contributionBasis: 60_000, earningsBasis: 40_000 });
+  svc.reduceLedgerForWithdrawal(roth, 50_000); // wholly from contributions
+  assert.strictEqual(roth.contributionBasis, 10_000);
+  assert.strictEqual(roth.earningsBasis,     40_000);
+  svc.reduceLedgerForWithdrawal(roth, 30_000); // 10k contrib remaining, then 20k earnings
+  assert.strictEqual(roth.contributionBasis, 0);
+  assert.strictEqual(roth.earningsBasis,     20_000);
+});
+
+test('reduceLedgerForWithdrawal: 401k draws earnings first, then contributions', () => {
+  const svc = mkSvc();
+  const k = new FourOhOneKAccount(100_000, { contributionBasis: 70_000, earningsBasis: 30_000 });
+  svc.reduceLedgerForWithdrawal(k, 50_000);
+  assert.strictEqual(k.earningsBasis,     0);
+  assert.strictEqual(k.contributionBasis, 50_000);
+});
+
+test('reduceLedgerForWithdrawal: super reduces both components proportionally', () => {
+  const svc = mkSvc();
+  const s = new SuperannuationAccount(200_000, { contributionBasis: 150_000, earningsBasis: 50_000 });
+  svc.reduceLedgerForWithdrawal(s, 100_000); // 75% / 25% split
+  assert.strictEqual(s.contributionBasis, 75_000);
+  assert.strictEqual(s.earningsBasis,     25_000);
+});
+
+test('reduceLedgerForWithdrawal: draw exceeding the ledger floors both at zero', () => {
+  const svc = mkSvc();
+  const s = new SuperannuationAccount(40_000, { contributionBasis: 30_000, earningsBasis: 10_000 });
+  svc.reduceLedgerForWithdrawal(s, 1_000_000);
+  assert.strictEqual(s.contributionBasis, 0);
+  assert.strictEqual(s.earningsBasis,     0);
+});
+
+test('reduceLedgerForWithdrawal: no-op on a plain cash account (no ledger fields)', () => {
+  const svc = mkSvc();
+  const cash = new CheckingAccount(50_000, { country: 'US', currency: USD });
+  assert.doesNotThrow(() => svc.reduceLedgerForWithdrawal(cash, 10_000));
+  assert.ok(!('contributionBasis' in cash), 'must not add ledger fields to a cash account');
+});
+
+test('replenishSavings: eligible super drawdown keeps the ledger tied to balance (design 43)', () => {
+  // Trigger regression: an age-eligible super/IRA/401k drawn via the drawdown
+  // engine moved `balance` but left contributionBasis/earningsBasis frozen,
+  // producing e.g. contributionBasis 180k vs balance 39k.
+  const svc = mkSvc();
+  const simDate = new Date(2026, 6, 1);
+  const dob = new Date(1956, 0, 1); // age ~70, past the 60 preservation age
+
+  const auSavings = new SavingsAccount(0, { country: 'AU', currency: AUD, ownerId: 'primary' });
+  const superAcct = new SuperannuationAccount(100_000, {
+    country: 'AU', currency: AUD, drawdownPriority: 1, ownerId: 'primary',
+    contributionBasis: 80_000, earningsBasis: 20_000,
+  });
+  const state = {
+    auSavings,
+    superAcct,
+    people: { primary: { birthDate: dob, residency: 'AU' } },
+  };
+
+  svc.replenishSavings(state, 'auSavings', 30_000, simDate);
+
+  assert.strictEqual(superAcct.balance, 70_000);
+  assert.ok(
+    Math.abs((superAcct.contributionBasis + superAcct.earningsBasis) - superAcct.balance) < 0.01,
+    'contributionBasis + earningsBasis must equal balance after an eligible super draw'
+  );
+  assert.strictEqual(superAcct.contributionBasis, 56_000); // 80% of 70k (proportional)
+  assert.strictEqual(superAcct.earningsBasis,     14_000); // 20% of 70k
+});

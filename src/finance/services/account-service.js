@@ -687,6 +687,59 @@ export class AccountService extends AssetService {
   }
 
   /**
+   * Reduce a ledger-bearing account's contribution/earnings basis to reflect a
+   * withdrawal of `amount` (in the account's own currency), using the same
+   * per-type ordering the dedicated withdrawal reducers apply (design 43 §3):
+   *   - ROTH / TRADITIONAL_IRA → contributions first, then earnings
+   *   - FOUR_OH_ONE_K          → earnings first, then contributions
+   *   - SUPER / default        → proportional (pro-rata across both components)
+   *
+   * No-op for accounts without the ledger fields (plain cash/savings). This is
+   * for the GENERIC drawdown paths (replenishSavings eligible draws) that bypass
+   * the type-specific reducers; those reducers remain the authority where
+   * withdrawals flow through them and must NOT also call this (double-count).
+   * BROKERAGE is handled inline in `_drawPenaltyFree` (gain ratio + step-up).
+   *
+   * Keeps invariant 1 (contributionBasis + earningsBasis == balance): when the
+   * ledger ties to balance before the draw, reducing both by the same `amount`
+   * the balance fell by preserves it.
+   *
+   * @param {import('../account.js').Account} account
+   * @param {number} amount - positive withdrawal size, account currency
+   */
+  reduceLedgerForWithdrawal(account, amount) {
+    if (!account || !(amount > 0)) return;
+    if (!('contributionBasis' in account) || !('earningsBasis' in account)) return;
+    const contrib  = account.contributionBasis ?? 0;
+    const earnings = account.earningsBasis ?? 0;
+    const total    = contrib + earnings;
+    if (total <= 0) return;
+    const draw = Math.min(amount, total);
+
+    let fromContrib;
+    let fromEarnings;
+    switch (account.type) {
+      case ACCOUNT_TYPE.ROTH:
+      case ACCOUNT_TYPE.TRADITIONAL_IRA:
+        fromContrib  = Math.min(draw, contrib);
+        fromEarnings = draw - fromContrib;
+        break;
+      case ACCOUNT_TYPE.FOUR_OH_ONE_K:
+        fromEarnings = Math.min(draw, earnings);
+        fromContrib  = draw - fromEarnings;
+        break;
+      default: // SUPER and any other ledger-bearing account → proportional
+        fromContrib  = draw * (contrib / total);
+        fromEarnings = draw - fromContrib;
+    }
+    // Unrounded (like the type-specific reducers): the reduction sums to exactly
+    // `draw`, so when the ledger tied to balance before the draw it still ties
+    // after (inv-1), with no per-withdrawal cent drift.
+    account.contributionBasis = Math.max(0, contrib  - fromContrib);
+    account.earningsBasis     = Math.max(0, earnings - fromEarnings);
+  }
+
+  /**
    * Penalty-free amount currently withdrawable from a single account:
    *   - eligible (age-gated) accounts → full balance
    *   - Roth below minimumAge        → contribution basis (always penalty-free)
@@ -764,6 +817,14 @@ export class AccountService extends AssetService {
           type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, residency,
           proceeds: withdraw, costBasis: saleCost, description: account.name || key,
         });
+      } else if ('contributionBasis' in account && 'earningsBasis' in account) {
+        // Ledger-bearing retirement/super account drawn while age-eligible (super
+        // ≥60, IRA ≥60, 401k ≥59.5). The generic transaction() above moved the
+        // balance but not the contribution/earnings ledger; keep them in step so
+        // it doesn't drift (the trigger: super contributionBasis stuck above
+        // balance). See design 43 §2/§5. NOTE: this path still emits no
+        // withdrawal-tax action for super/IRA/401k — a separate, pre-existing gap.
+        this.reduceLedgerForWithdrawal(account, withdraw);
       }
 
       if (!drawnKeys.includes(key)) drawnKeys.push(key);

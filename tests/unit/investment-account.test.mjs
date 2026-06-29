@@ -17,7 +17,7 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { InvestmentAccount } from '../../src/finance/assets/investment-account.js';
+import { InvestmentAccount, reconcileLedgerToBalance } from '../../src/finance/assets/investment-account.js';
 
 // ── Construction ──────────────────────────────────────────────────────────────
 
@@ -107,4 +107,43 @@ test('InvestmentAccount: is structuredClone-safe', () => {
   assert.strictEqual(a2.minimumAge,                60);
   assert.strictEqual(a2.loanBalance,               5000);
   assert.strictEqual(a2.ownershipType,             'joint');
+});
+
+// ── reconcileLedgerToBalance (design 43 §5 Phase 3) ───────────────────────────
+
+test('reconcileLedgerToBalance: clamps an over-stated ledger to balance, preserving earnings fraction', () => {
+  // The trigger: super drawn to 39k but contributionBasis stuck at 180k.
+  const a = { balance: 39_000, contributionBasis: 180_000, earningsBasis: 0, type: 'super' };
+  assert.strictEqual(reconcileLedgerToBalance(a), true);
+  assert.strictEqual(a.contributionBasis, 39_000);
+  assert.strictEqual(a.earningsBasis,     0);
+});
+
+test('reconcileLedgerToBalance: preserves the earnings fraction when clamping down', () => {
+  const a = { balance: 50_000, contributionBasis: 75_000, earningsBasis: 25_000 }; // 25% earnings
+  assert.strictEqual(reconcileLedgerToBalance(a), true);
+  assert.strictEqual(a.earningsBasis,     12_500); // 25% of 50k
+  assert.strictEqual(a.contributionBasis, 37_500);
+});
+
+test('reconcileLedgerToBalance: zero/negative balance zeroes the ledger', () => {
+  const a = { balance: 0, contributionBasis: 180_000, earningsBasis: 5_000 };
+  assert.strictEqual(reconcileLedgerToBalance(a), true);
+  assert.strictEqual(a.contributionBasis, 0);
+  assert.strictEqual(a.earningsBasis,     0);
+});
+
+test('reconcileLedgerToBalance: leaves an under-stated ledger alone (earnings not yet recorded)', () => {
+  const a = { balance: 100_000, contributionBasis: 60_000, earningsBasis: 0 };
+  assert.strictEqual(reconcileLedgerToBalance(a), false);
+  assert.strictEqual(a.contributionBasis, 60_000);
+  assert.strictEqual(a.earningsBasis,     0);
+});
+
+test('reconcileLedgerToBalance: no-op on a tied ledger and on accounts without the fields', () => {
+  const tied = { balance: 100_000, contributionBasis: 70_000, earningsBasis: 30_000 };
+  assert.strictEqual(reconcileLedgerToBalance(tied), false);
+  const cash = { balance: 100_000 };
+  assert.strictEqual(reconcileLedgerToBalance(cash), false);
+  assert.ok(!('contributionBasis' in cash));
 });

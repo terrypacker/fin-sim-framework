@@ -11,6 +11,41 @@
 import { Account, AUD, USD, ACCOUNT_TYPE } from './account.js';
 
 /**
+ * Reconcile a ledger-bearing account's contribution/earnings basis to balance
+ * (design 43 §4 invariant 1, §5 Phase 3), preserving the earnings fraction.
+ * Repairs already-drifted SAVED states on load — e.g. a super account left at
+ * `contributionBasis 180k` after a drawdown took `balance` to 39k.
+ *
+ * Scoped to the corruption signature: only fires when the ledger OVER-states
+ * balance (`contributionBasis + earningsBasis > balance`), which is what a
+ * drawdown that moved balance but not the ledger produces. An UNDER-stated
+ * ledger (`total < balance`) is the benign "earnings not yet recorded" case the
+ * after-tax metric already tolerates, so it is left untouched. No-op for
+ * accounts without the ledger fields (plain cash/savings).
+ *
+ * @param {object} account - account record ({ balance, contributionBasis, earningsBasis })
+ * @returns {boolean} true if a correction was applied
+ */
+export function reconcileLedgerToBalance(account) {
+  if (!account) return false;
+  if (!('contributionBasis' in account) || !('earningsBasis' in account)) return false;
+  const balance  = account.balance ?? 0;
+  const contrib  = account.contributionBasis ?? 0;
+  const earnings = account.earningsBasis ?? 0;
+  const total    = contrib + earnings;
+  if (total <= balance + 0.01) return false;
+  if (balance <= 0) {
+    account.contributionBasis = 0;
+    account.earningsBasis     = 0;
+    return true;
+  }
+  const earningsFraction = total > 0 ? Math.max(0, earnings) / total : 0;
+  account.earningsBasis     = +(balance * earningsFraction).toFixed(2);
+  account.contributionBasis = +(balance - account.earningsBasis).toFixed(2);
+  return true;
+}
+
+/**
  * InvestmentAccount — extends Account with fields for investment-type accounts
  * (Roth, IRA, 401k, US/AU brokerage stocks, Superannuation).
  *

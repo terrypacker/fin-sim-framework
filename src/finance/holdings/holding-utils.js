@@ -45,14 +45,18 @@ export function scaleHoldings(holdings, oldBalance, newBalance) {
  * balance. Mutates each holding in place so it works on both plain serialized
  * records and Holding class instances (preserving the class for later toJSON).
  *
- * Reconciliation rules (design 25 §4.4):
+ * Reconciliation rules (design 25 §4.4, design 43 §3 invariant 3):
  *   - empty / no holdings           → no-op
- *   - single holding                → marketValue = costBasis = targetBalance
  *   - Σ current marketValue > 0     → scale every holding's marketValue AND
  *                                     costBasis by targetBalance / Σmv,
  *                                     preserving the sleeve mix and gain ratio
+ *                                     (this includes the single-holding case —
+ *                                     a balance edit must NOT reset cost basis to
+ *                                     market value and wipe the unrealized gain)
  *   - Σ current marketValue == 0    → assign the full targetBalance to the
- *                                     first holding (marketValue = costBasis)
+ *                                     first holding (marketValue = costBasis); the
+ *                                     only branch where costBasis is set to target,
+ *                                     since there is no gain ratio to preserve
  * Penny rounding drift is absorbed by the largest-marketValue holding.
  *
  * @param {Array}  holdings      - account.holdings (plain records or Holding[])
@@ -62,12 +66,6 @@ export function scaleHoldings(holdings, oldBalance, newBalance) {
 export function rescaleHoldingsToBalance(holdings, targetBalance) {
   if (!Array.isArray(holdings) || holdings.length === 0) return holdings;
   const target = +(+(targetBalance ?? 0)).toFixed(2);
-
-  if (holdings.length === 1) {
-    holdings[0].marketValue = target;
-    holdings[0].costBasis   = target;
-    return holdings;
-  }
 
   const curSum = holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0);
 

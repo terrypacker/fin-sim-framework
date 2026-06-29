@@ -39,11 +39,33 @@ test('rescale preserves the sleeve mix proportionally for multi-holding accounts
   assert.equal(holdings[0].costBasis, 216_000);   // basis scaled pro-rata
 });
 
-test('rescale resets a single holding to balance for both market value and basis', () => {
+test('rescale of a single holding with no gain ties basis to the new balance', () => {
   const holdings = [{ marketValue: 900_000, costBasis: 900_000 }];
   rescaleHoldingsToBalance(holdings, 150_000);
   assert.equal(holdings[0].marketValue, 150_000);
   assert.equal(holdings[0].costBasis, 150_000);
+});
+
+test('rescale of a single holding PRESERVES the unrealized gain ratio (design 43 §3 inv-3)', () => {
+  // costBasis 60k vs marketValue 100k → 40% unrealized gain. A balance edit must
+  // not wipe that gain by resetting basis to the new balance.
+  const holdings = [{ marketValue: 100_000, costBasis: 60_000 }];
+  rescaleHoldingsToBalance(holdings, 50_000);
+  assert.equal(holdings[0].marketValue, 50_000);
+  assert.equal(holdings[0].costBasis, 30_000); // 60% of market value preserved
+});
+
+test('rescale preserves each lot costBasis/marketValue ratio across holdings (inv-3)', () => {
+  const holdings = [
+    { marketValue: 100_000, costBasis: 60_000 }, // 0.60
+    { marketValue: 50_000,  costBasis: 65_000 }, // 1.30 (loss lot)
+  ];
+  const ratios = holdings.map(h => h.costBasis / h.marketValue);
+  rescaleHoldingsToBalance(holdings, 300_000);
+  holdings.forEach((h, i) => {
+    assert.ok(Math.abs(h.costBasis / h.marketValue - ratios[i]) < 1e-9,
+      `lot ${i} gain ratio drifted`);
+  });
 });
 
 test('rescale of an all-zero multi-holding account lands the balance in the first sleeve', () => {
