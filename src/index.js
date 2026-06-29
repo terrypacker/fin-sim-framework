@@ -246,7 +246,7 @@ import { US_COLLECTIBLES } from './scenarios/toolsets/us-collectibles-toolset.js
 import { US_INCOME } from './scenarios/toolsets/us-income-toolset.js';
 import { US_REAL_PROPERTY } from './scenarios/toolsets/us-real-property-toolset.js';
 import { US_RETIREMENT } from './scenarios/toolsets/us-retirement-toolset.js';
-import { retargetRothConversionEvents, US_ROTH_CONVERSION } from './scenarios/toolsets/us-roth-conversion-toolset.js';
+import { BRACKET_BASE_YEAR, retargetRothConversionEvents, US_ROTH_CONVERSION } from './scenarios/toolsets/us-roth-conversion-toolset.js';
 import { US_STATE_TAX } from './scenarios/toolsets/us-state-tax-toolset.js';
 import { US_TAX } from './scenarios/toolsets/us-tax-toolset.js';
 import { ActionService } from './services/action-service.js';
@@ -975,6 +975,7 @@ export const Scenarios = {
   US_INCOME,
   US_REAL_PROPERTY,
   US_RETIREMENT,
+  BRACKET_BASE_YEAR,
   retargetRothConversionEvents,
   US_ROTH_CONVERSION,
   US_STATE_TAX,
