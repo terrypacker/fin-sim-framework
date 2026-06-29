@@ -50,6 +50,7 @@ export const COVERED = [
   'K401WithdrawalApplyReducer', 'K401ToIraConversionApplyReducer',
   'RothContributionApplyReducer', 'RothEarningsApplyReducer', 'RothWithdrawalContribApplyReducer',
   'RothWithdrawalEarningsApplyReducer', 'RothConversionApplyReducer',
+  'ScheduledEarlyWithdrawalApplyReducer',   // tests/unit/early-withdrawal-decant.test.mjs (design 45)
   'RothRolloverContributionApplyReducer', 'RothRolloverEarningsApplyReducer',
   'RothRolloverWithdrawalContribApplyReducer', 'RothRolloverWithdrawalEarningsApplyReducer',
 

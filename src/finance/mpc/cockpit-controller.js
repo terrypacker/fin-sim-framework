@@ -15,6 +15,7 @@ import { OPT_PARAM_TYPES }         from '../optimization/optimization-objectives
 import { rollForwardWithControls, recordDecisionRecord } from './apply-forward.js';
 import { repinExpensesIfChanged }  from '../spending/strategies/explicit-bands-spending-reducer.js';
 import { retargetRothConversionEvents, BRACKET_BASE_YEAR } from '../../scenarios/toolsets/us-roth-conversion-toolset.js';
+import { retargetEarlyWithdrawalEvents } from '../../scenarios/toolsets/us-early-withdrawal-toolset.js';
 import { set }                     from '../monte-carlo/mc-param-paths.js';
 import { DateUtils }               from '../../simulation-framework/date-utils.js';
 import { UsTaxRates2025 }          from '../tax/us/us-tax-rates-2025.js';
@@ -233,6 +234,115 @@ export const COCKPIT_CONTROLS = {
       return hits > 0;
     },
   },
+
+  EARLY_WITHDRAWAL: {
+    key:     'EARLY_WITHDRAWAL',
+    label:   'Early Withdrawal (Decant)',
+    numeric: true,
+    // Two control variables — tax-deferred and Roth GROSS draw, real base-year USD
+    // (the toolset compounds to the year's nominal). 0 = OFF for the class.
+    defaultRange: { min: 0, max: 500_000, step: 5_000 },
+    liveActuatable: true,
+    appliesTo: (bp) => bp?.earlyWithdrawalEnabled === true,
+    requirement: 'Enable early withdrawals and set an optimization window (Scenario panel) to use this lever.',
+    // The next actionable withdrawal year needs a schedule entry before the solver
+    // can address its amounts (`set()` never creates nodes). Append + keep
+    // chronological so the entry index is stable. Idempotent.
+    prepareBaseParams: ({ baseParams, asOf }) => {
+      if (!asOf) return baseParams;
+      const year  = _nextEarlyWithdrawalYear(asOf, baseParams);
+      const sched = Array.isArray(baseParams?.earlyWithdrawalSchedule)
+        ? baseParams.earlyWithdrawalSchedule.slice()
+        : [];
+      if (!sched.some(e => e?.year === year)) sched.push({ year, taxDeferredAmount: 0, rothAmount: 0 });
+      sched.sort((a, b) => (a?.year ?? 0) - (b?.year ?? 0));
+      return { ...baseParams, earlyWithdrawalSchedule: sched };
+    },
+    buildVariables: ({ baseParams, range, asOf, state }) => {
+      const year  = asOf ? _nextEarlyWithdrawalYear(asOf, baseParams) : null;
+      const sched = baseParams?.earlyWithdrawalSchedule ?? [];
+      const found = year != null ? sched.findIndex(e => e?.year === year) : -1;
+      const idx   = found >= 0 ? found : Math.max(0, sched.length - 1);
+
+      const userMin = range?.min ?? 0;
+      const userMax = range?.max ?? 500_000;
+      const step    = range?.step ?? 5_000;
+      // Cap each class to its drawable balance (real base-year), and to 0 above the
+      // age gate where the lever provides no benefit (design 45 §5 / Q6) — mirrors
+      // the Roth lever capping to the convertible IRA.
+      const caps = _earlyWithdrawalRealCaps(state, baseParams, year);
+      const mk = (field, cap) => {
+        const max = Math.max(0, Math.min(userMax, cap));
+        const min = Math.min(userMin, max);
+        return {
+          paramKey: `earlyWithdrawalSchedule[${idx}].${field}`,
+          type: OPT_PARAM_TYPES.INTEGER,
+          min, max, step, group: 'Early Withdrawal', _year: year,
+        };
+      };
+      return [mk('taxDeferredAmount', caps.taxDeferred), mk('rothAmount', caps.roth)];
+    },
+    describe: (candidate, vars) => {
+      const td = vars?.find(v => v.paramKey.endsWith('.taxDeferredAmount'));
+      const rt = vars?.find(v => v.paramKey.endsWith('.rothAmount'));
+      const tdAmt = td ? (candidate?.[td.paramKey] ?? 0) : 0;
+      const rtAmt = rt ? (candidate?.[rt.paramKey] ?? 0) : 0;
+      if (tdAmt <= 0 && rtAmt <= 0) return 'No early withdrawal this year';
+      const parts = [];
+      if (tdAmt > 0) parts.push(`${fmtUsd(tdAmt)} tax-deferred`);
+      if (rtAmt > 0) parts.push(`${fmtUsd(rtAmt)} Roth`);
+      // Penalty floor: 10% of the always-penalized tax-deferred draw (Roth
+      // contributions are penalty-free, so its penalty depends on the unknown
+      // earnings split — shown as a "+").
+      const penalty = 0.10 * tdAmt;
+      const pen = penalty > 0 ? ` (≈${fmtUsd(penalty)}+ penalty)` : '';
+      return `Withdraw ${parts.join(' + ')} early${pen} → brokerage (real $)`;
+    },
+    /**
+     * Forward-effective live actuation (design 45 Phase 3), mirroring ROTH: (1)
+     * persist the chosen real per-class amounts into the scenario's
+     * earlyWithdrawalSchedule param, and (2) re-wire the future queued
+     * SCHEDULED_EARLY_WITHDRAWAL events for the year via the SAME shared helper the
+     * rollout uses (advise == apply). Returns true when it moved a live event.
+     */
+    actuate: ({ services, scenario, candidate, vars }) => {
+      const td = vars?.find(v => v.paramKey.endsWith('.taxDeferredAmount'));
+      const rt = vars?.find(v => v.paramKey.endsWith('.rothAmount'));
+      const year = td?._year ?? rt?._year ?? null;
+      if (year == null) return false;
+      const tdAmt = td ? (candidate?.[td.paramKey] ?? 0) : 0;
+      const rtAmt = rt ? (candidate?.[rt.paramKey] ?? 0) : 0;
+
+      const paramOf = (key) => (scenario?.params ?? []).find(pp => (pp.key ?? pp.name) === key);
+
+      // 1) Persist the real amounts to the scenario schedule param. Both ≤ 0 cancels
+      //    a prior entry (absence == no withdrawal), so no-op years don't clutter it.
+      const p = paramOf('earlyWithdrawalSchedule');
+      if (p) {
+        const sched = Array.isArray(p.value) ? p.value.slice() : [];
+        const idx   = sched.findIndex(e => e?.year === year);
+        if (tdAmt > 0 || rtAmt > 0) {
+          const entry = { year, taxDeferredAmount: tdAmt, rothAmount: rtAmt };
+          if (idx >= 0) sched[idx] = { ...sched[idx], ...entry };
+          else          sched.push(entry);
+        } else if (idx >= 0) {
+          sched.splice(idx, 1);
+        }
+        sched.sort((a, b) => (a?.year ?? 0) - (b?.year ?? 0));
+        p.value = sched;
+      }
+
+      // 2) Live re-wire the future queued events for the year (rollout-side twin).
+      const sim = services?.simulationRegistry?.getPrimary?.();
+      const queue = sim?.queue?.data;
+      if (!Array.isArray(queue)) return false;
+      const hits = retargetEarlyWithdrawalEvents(queue, [{ year, taxDeferredAmount: tdAmt, rothAmount: rtAmt }], {
+        inflationRate: paramOf('inflationRate')?.value ?? 0.03,
+        nowMs:         new Date(sim.currentDate).getTime(),
+      });
+      return hits > 0;
+    },
+  },
 };
 
 /**
@@ -258,7 +368,9 @@ export class CockpitController {
     cfgTemplate = null,
     objective    = OPTIMIZATION_OBJECTIVES.DIE_WITH_TARGET,
     control      = COCKPIT_CONTROLS.SPENDING,
+    controls     = null,       // multi-lever set (design 45 Phase 4); null ⇒ [control]
     controlRange = null,       // { min, max, step } for numeric levers; null = spec default
+    controlRanges = null,      // per-control { [key]: { min, max, step } } overrides (multi-lever)
     graph        = null,       // optional Graph for DERIVES_FROM recording
     parentId     = null,       // parent scenario id for the audit trail
     horizonYears = null,       // sliding prediction window H (design 41); null = full horizon
@@ -269,8 +381,13 @@ export class CockpitController {
     this.committed    = { ...baseParams };
     this.cfgTemplate  = cfgTemplate;
     this.objective    = objective;
-    this.control      = control;
+    // Multi-lever (design 45 §8): the controller searches a SET of controls whose
+    // decision variables union into one vector and commit together each epoch.
+    // `controls` (array) wins; otherwise the single `control` (back-compat). The
+    // `control` getter returns the first for legacy single-lever callers.
+    this.controls     = Array.isArray(controls) && controls.length ? controls.slice() : [control];
     this.controlRange = controlRange;
+    this.controlRanges = controlRanges ?? {};
     this.graph        = graph;
     this.parentId     = parentId;
     this.horizonYears = horizonYears;
@@ -281,8 +398,14 @@ export class CockpitController {
   }
 
   setObjective(objective) { this.objective = objective; }
-  setControl(control)     { this.control = control; }
+  /** Legacy single-lever read: the first active control. */
+  get control()           { return this.controls[0]; }
+  setControl(control)     { this.controls = [control]; }
+  /** Activate a SET of levers searched jointly (design 45 §8). */
+  setControls(controls)   { this.controls = (Array.isArray(controls) && controls.length) ? controls.slice() : this.controls; }
   setControlRange(range)  { this.controlRange = range; }
+  /** Per-control range override for the multi-lever search (by control key). */
+  setControlRangeFor(key, range) { this.controlRanges = { ...this.controlRanges, [key]: range }; }
   /** Sliding prediction window H in years (design 41); null/0 = full horizon. */
   setHorizonYears(h)      { this.horizonYears = (h == null || h <= 0) ? null : h; }
 
@@ -296,22 +419,41 @@ export class CockpitController {
    * controls without a `prepareBaseParams` hook.
    */
   _prepareControl() {
-    if (this.control?.prepareBaseParams && this.snapshot) {
-      this.committed = this.control.prepareBaseParams({
-        baseParams: this.committed,
-        asOf:       this.snapshot.date,
-      });
+    if (!this.snapshot) return;
+    // Compose every active control's scaffold (design 45 §8.2): each returns a new
+    // baseParams; they address distinct schedule params (rothConversionSchedule,
+    // earlyWithdrawalSchedule, spendingExpenseBands) so they don't clobber.
+    for (const control of this.controls) {
+      if (control?.prepareBaseParams) {
+        this.committed = control.prepareBaseParams({ baseParams: this.committed, asOf: this.snapshot.date });
+      }
     }
   }
 
-  /** The control variables for the current epoch, sized to the realized "now". */
+  /** The range a control searches: the legacy single range only in single-lever
+   *  mode, else a per-control override, else the spec default. */
+  _rangeFor(control) {
+    if (this.controls.length === 1 && this.controlRange) return this.controlRange;
+    return this.controlRanges?.[control.key] ?? control.defaultRange ?? null;
+  }
+
+  /**
+   * The joint decision vector for the current epoch (design 45 §8.1–§8.2): the
+   * union of every active control's variables, each tagged with its `_controlKey`
+   * so describe/record can route a candidate back to the control that owns it.
+   */
   _variables() {
-    return this.control.buildVariables({
-      asOf:       this.snapshot?.date,
-      state:      this.snapshot?.state,
-      baseParams: this.committed,
-      range:      this.controlRange ?? this.control.defaultRange ?? null,
-    }) ?? [];
+    const out = [];
+    for (const control of this.controls) {
+      const vars = control.buildVariables({
+        asOf:       this.snapshot?.date,
+        state:      this.snapshot?.state,
+        baseParams: this.committed,
+        range:      this._rangeFor(control),
+      }) ?? [];
+      for (const v of vars) out.push({ ...v, _controlKey: control.key });
+    }
+    return out;
   }
 
   /**
@@ -320,7 +462,9 @@ export class CockpitController {
    * nominal value at "now". Single source for the card, save-points, and Apply.
    */
   describeMove(candidate, variables = this._variables()) {
-    return this.control.describe(candidate, variables, this._describeCtx());
+    const ctx = this._describeCtx();
+    if (this.controls.length === 1) return this.controls[0].describe(candidate, variables, ctx);
+    return this._describeJoint(candidate, variables, ctx, c => c.describe);
   }
 
   /**
@@ -329,8 +473,25 @@ export class CockpitController {
    * without a dedicated record description.
    */
   describeRecordMove(candidate, variables = this._variables()) {
-    const fn = this.control.describeRecord ?? this.control.describe;
-    return fn(candidate, variables, this._describeCtx());
+    const ctx = this._describeCtx();
+    if (this.controls.length === 1) {
+      const fn = this.controls[0].describeRecord ?? this.controls[0].describe;
+      return fn(candidate, variables, ctx);
+    }
+    return this._describeJoint(candidate, variables, ctx, c => c.describeRecord ?? c.describe);
+  }
+
+  /** Join each active control's label (over its own variable subset) for a
+   *  multi-lever move. Drops empty/"no change" labels so the card stays terse. */
+  _describeJoint(candidate, variables, ctx, pick) {
+    const parts = [];
+    for (const control of this.controls) {
+      const subset = variables.filter(v => v._controlKey === control.key);
+      if (subset.length === 0) continue;
+      const label = pick(control)(candidate, subset, ctx);
+      if (label && !/^No /.test(label)) parts.push(label);
+    }
+    return parts.join(' · ');
   }
 
   /** Inflation context a lever needs to map its real base-year amount to nominal. */
@@ -548,6 +709,80 @@ function _convertibleRealCap(state, baseParams, year) {
   const infl   = baseParams?.inflationRate ?? 0.03;
   const factor = Math.pow(1 + infl, year - BRACKET_BASE_YEAR);
   return (ordYtd + ira) / (factor > 0 ? factor : 1);
+}
+
+/**
+ * The next ACTIONABLE early-withdrawal year at `asOf` (design 45 Phase 3): the
+ * earliest year whose withdrawal date (earlyWithdrawalMonth/Day, default Dec 1) is
+ * still in the future, clamped up to the opt-in optimization window's start so the
+ * lever tunes a year the toolset actually seeded an event for. Mirrors
+ * `_nextConversionYear`.
+ */
+function _nextEarlyWithdrawalYear(asOf, baseParams) {
+  const month = (baseParams?.earlyWithdrawalMonth ?? 12) - 1;
+  const day   = baseParams?.earlyWithdrawalDay ?? 1;
+  const now   = new Date(asOf);
+  let year = now.getUTCFullYear();
+  if (Date.UTC(year, month, day) <= now.getTime()) year += 1;   // this year's already fired
+  const start = baseParams?.earlyWithdrawalStartYear;
+  if (Number.isFinite(start) && year < start) year = start;
+  return year;
+}
+
+/** Younger relevant owner's decimal age at the `year` withdrawal date (gates the
+ *  per-class caps below). For 'both', the younger keeps the window open longer. */
+function _ownerDecimalAgeAt(state, baseParams, year) {
+  const people = state?.people ?? {};
+  const keys = Object.keys(people);
+  if (keys.length === 0 || !Number.isFinite(year)) return null;
+  const owner = baseParams?.earlyWithdrawalOwner ?? 'primary';
+  const month = (baseParams?.earlyWithdrawalMonth ?? 12) - 1;
+  const day   = baseParams?.earlyWithdrawalDay ?? 1;
+  const atMs  = Date.UTC(year, month, day);
+  const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
+  const ageOf = (k) => {
+    const bd = people[k]?.birthDate;
+    return bd ? (atMs - new Date(bd).getTime()) / msPerYear : null;
+  };
+  if (owner === 'spouse') return keys[1] ? ageOf(keys[1]) : ageOf(keys[0]);
+  if (owner === 'both') {
+    const ages = keys.map(ageOf).filter(a => a != null);
+    return ages.length ? Math.min(...ages) : null;
+  }
+  return ageOf(keys[0]);
+}
+
+/**
+ * Real (base-year) per-class drawable caps for the early-withdrawal lever at
+ * `year`: the owner's tax-deferred (IRA + 401k) and Roth balances, deflated to
+ * base-year USD (the lever's units). Capped to 0 above the age gate, where normal
+ * drawdown is already penalty-free so the decant lever provides no benefit
+ * (design 45 §5 / Q6). +Infinity when state is unavailable (preserve the range).
+ */
+function _earlyWithdrawalRealCaps(state, baseParams, year) {
+  if (!state || !Number.isFinite(year)) return { taxDeferred: Infinity, roth: Infinity };
+  const owner = baseParams?.earlyWithdrawalOwner ?? 'primary';
+  const wantPrimary = owner === 'primary' || owner === 'both';
+  const wantSpouse  = owner === 'spouse'  || owner === 'both';
+  let taxDeferred = 0;
+  let roth = 0;
+  if (wantPrimary) {
+    taxDeferred += (state.iraAccount?.balance ?? 0) + (state.k401Account?.balance ?? 0);
+    roth        += (state.rothAccount?.balance ?? 0);
+  }
+  if (wantSpouse) {
+    taxDeferred += (state.spouseIraAccount?.balance ?? 0) + (state.spouseK401Account?.balance ?? 0);
+    roth        += (state.spouseRothAccount?.balance ?? 0);
+  }
+  const age = _ownerDecimalAgeAt(state, baseParams, year);
+  if (age != null) {
+    if (age >= 60.0) taxDeferred = 0;   // IRA/401k penalty-free by 60
+    if (age >= 59.5) roth = 0;          // Roth earnings penalty-free at 59.5
+  }
+  const infl   = baseParams?.inflationRate ?? 0.03;
+  const factor = Math.pow(1 + infl, year - BRACKET_BASE_YEAR);
+  const f = factor > 0 ? factor : 1;
+  return { taxDeferred: taxDeferred / f, roth: roth / f };
 }
 
 // Marginal MFJ bracket a REAL (base-year) ordinary income lands in, for the

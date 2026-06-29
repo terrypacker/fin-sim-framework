@@ -25,6 +25,7 @@ import { US_REAL_PROPERTY }   from './toolsets/us-real-property-toolset.js';
 import { AU_REAL_PROPERTY }   from './toolsets/au-real-property-toolset.js';
 import { US_COLLECTIBLES }    from './toolsets/us-collectibles-toolset.js';
 import { US_ROTH_CONVERSION } from './toolsets/us-roth-conversion-toolset.js';
+import { US_EARLY_WITHDRAWAL } from './toolsets/us-early-withdrawal-toolset.js';
 import { US_BROKERAGE }      from './toolsets/us-brokerage-toolset.js';
 import { AU_BROKERAGE }      from './toolsets/au-brokerage-toolset.js';
 import { US_INCOME }         from './toolsets/us-income-toolset.js';
@@ -41,7 +42,7 @@ const BUILT_IN_TOOLSETS = [
   AU_BANKING, AU_TAX, AU_RETIREMENT,
   US_AU_CROSS_BORDER,
   US_REAL_PROPERTY, AU_REAL_PROPERTY,
-  US_COLLECTIBLES, US_ROTH_CONVERSION,
+  US_COLLECTIBLES, US_ROTH_CONVERSION, US_EARLY_WITHDRAWAL,
   US_BROKERAGE, AU_BROKERAGE, US_INCOME, AU_INCOME,
   ECONOMIC_REGIMES,
 ];

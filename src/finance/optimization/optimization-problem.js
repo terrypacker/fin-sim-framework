@@ -19,6 +19,7 @@ import { computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, defaultRateProvid
 import { set }                 from '../monte-carlo/mc-param-paths.js';
 import { repinExpensesIfChanged } from '../spending/strategies/explicit-bands-spending-reducer.js';
 import { retargetRothConversionEvents } from '../../scenarios/toolsets/us-roth-conversion-toolset.js';
+import { retargetEarlyWithdrawalEvents } from '../../scenarios/toolsets/us-early-withdrawal-toolset.js';
 import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES, objectiveIsWindowable } from './optimization-objectives.js';
 import { valuesForConfig }     from './opt-values.js';
 import { DateUtils }           from '../../simulation-framework/date-utils.js';
@@ -298,6 +299,15 @@ export class OptimizationProblem {
       // future queued conversions for the scheduled years to the committed targets
       // (the rollout-side twin of the live ROTH.actuate). No-op when empty.
       retargetRothConversionEvents(sim.queue?.data, params.rothConversionSchedule ?? [], {
+        inflationRate: params.inflationRate ?? 0.03,
+        nowMs:         new Date(sim.currentDate).getTime(),
+      });
+
+      // Forward-effective early-withdrawal re-target (design 45 Phase 3): same as
+      // the Roth twin above — rewrite the future queued SCHEDULED_EARLY_WITHDRAWAL
+      // events (seeded by the schedule or the opt-in optimization window) to the
+      // committed per-class amounts so the EARLY_WITHDRAWAL lever moves the rollout.
+      retargetEarlyWithdrawalEvents(sim.queue?.data, params.earlyWithdrawalSchedule ?? [], {
         inflationRate: params.inflationRate ?? 0.03,
         nowMs:         new Date(sim.currentDate).getTime(),
       });

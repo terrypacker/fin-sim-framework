@@ -32,6 +32,7 @@ import { US_BROKERAGE }    from '../../src/scenarios/toolsets/us-brokerage-tools
 import { US_REAL_PROPERTY } from '../../src/scenarios/toolsets/us-real-property-toolset.js';
 import { US_COLLECTIBLES } from '../../src/scenarios/toolsets/us-collectibles-toolset.js';
 import { US_ROTH_CONVERSION } from '../../src/scenarios/toolsets/us-roth-conversion-toolset.js';
+import { US_EARLY_WITHDRAWAL } from '../../src/scenarios/toolsets/us-early-withdrawal-toolset.js';
 import { AU_BANKING }      from '../../src/scenarios/toolsets/au-banking-toolset.js';
 import { AU_TAX }          from '../../src/scenarios/toolsets/au-tax-toolset.js';
 import { AU_RETIREMENT }   from '../../src/scenarios/toolsets/au-retirement-toolset.js';
@@ -49,7 +50,7 @@ function buildCombinedSchema() {
   const registry = new ToolsetRegistry();
   for (const t of [
     US_BANKING, US_TAX, US_STATE_TAX, US_RETIREMENT, US_INCOME, US_BROKERAGE,
-    US_REAL_PROPERTY, US_COLLECTIBLES, US_ROTH_CONVERSION,
+    US_REAL_PROPERTY, US_COLLECTIBLES, US_ROTH_CONVERSION, US_EARLY_WITHDRAWAL,
     AU_BANKING, AU_TAX, AU_RETIREMENT, AU_INCOME, AU_BROKERAGE,
     AU_REAL_PROPERTY, US_AU_CROSS_BORDER, ECONOMIC_REGIMES,
   ]) registry.register(t);
@@ -347,7 +348,7 @@ describe('IntlRetirement combined param schema mc/opt flags', () => {
     const registry = new ToolsetRegistry();
     for (const t of [
       US_BANKING, US_TAX, US_STATE_TAX, US_RETIREMENT, US_INCOME, US_BROKERAGE,
-      US_REAL_PROPERTY, US_COLLECTIBLES, US_ROTH_CONVERSION,
+      US_REAL_PROPERTY, US_COLLECTIBLES, US_ROTH_CONVERSION, US_EARLY_WITHDRAWAL,
       AU_BANKING, AU_TAX, AU_RETIREMENT, AU_INCOME, AU_BROKERAGE,
       AU_REAL_PROPERTY, US_AU_CROSS_BORDER, ECONOMIC_REGIMES,
     ]) registry.register(t);

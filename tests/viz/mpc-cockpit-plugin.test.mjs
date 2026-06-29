@@ -38,10 +38,47 @@ test('MpcCockpitPlugin.render: root + toolbar selects + action buttons', () => {
   assert.ok(el.querySelector('[data-mpc="auto"]'),     'auto button');
 });
 
-test('MpcCockpitPlugin: lever select lists both built-in controls', () => {
+test('MpcCockpitPlugin: lever select lists the built-in controls', () => {
   const el = new MpcCockpitPlugin(fakeRuntime()).render();
   const opts = [...el.querySelectorAll('[data-mpc="control"] option')].map(o => o.value);
-  assert.deepStrictEqual(opts.sort(), ['ROTH', 'SPENDING']);
+  assert.deepStrictEqual(opts.sort(), ['EARLY_WITHDRAWAL', 'ROTH', 'SPENDING']);
+});
+
+// ─── multi-lever selection (design 45 §8 / Phase 4) ──────────────────────────
+
+test('MpcCockpitPlugin: lever select is multi-select with Spending selected by default', () => {
+  const plugin = mountPlugin();
+  const sel = plugin._q('control');
+  assert.equal(sel.multiple, true, 'multi-select widget');
+  assert.deepStrictEqual([...sel.selectedOptions].map(o => o.value), ['SPENDING']);
+  assert.deepStrictEqual(plugin._currentControls().map(c => c.key), ['SPENDING']);
+  assert.equal(plugin._isMultiLever(), false);
+});
+
+test('MpcCockpitPlugin: selecting several levers yields a joint control set', () => {
+  const plugin = mountPlugin();
+  const sel = plugin._q('control');
+  for (const o of sel.options) o.selected = ['ROTH', 'EARLY_WITHDRAWAL'].includes(o.value);
+  assert.deepStrictEqual(plugin._currentControls().map(c => c.key), ['ROTH', 'EARLY_WITHDRAWAL']);
+  assert.equal(plugin._isMultiLever(), true);
+});
+
+test('MpcCockpitPlugin: multi-lever greys the manual range row (per-lever defaults)', () => {
+  const plugin = mountPlugin();
+  const sel = plugin._q('control');
+  for (const o of sel.options) o.selected = ['SPENDING', 'ROTH'].includes(o.value);
+  plugin._syncRangeEnabled();
+  assert.equal(plugin._q('rmin').disabled, true, 'range disabled across multiple levers');
+  assert.match(plugin._q('range-title').textContent, /per-lever/i);
+});
+
+test('MpcCockpitPlugin: a joint search requires every selected lever to apply (reports the first inert)', () => {
+  const plugin = mountPlugin();   // no active scenario ⇒ baseParams {} ⇒ Roth/EarlyWithdrawal inert
+  const sel = plugin._q('control');
+  for (const o of sel.options) o.selected = ['ROTH', 'EARLY_WITHDRAWAL'].includes(o.value);
+  const applies = plugin._leverApplies();
+  assert.equal(applies.ok, false);
+  assert.equal(applies.label, COCKPIT_CONTROLS.ROTH.label);   // first selected inert lever
 });
 
 test('MpcCockpitPlugin: Horizon field enables for windowable goals, disables + hints otherwise (design 41)', () => {
