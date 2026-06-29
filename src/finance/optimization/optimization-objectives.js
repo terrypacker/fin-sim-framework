@@ -158,10 +158,22 @@ function makeDieWithTarget({ running, terminal, label }) {
     metric:    { key: t.resultKey, label: t.label },
     evaluate(result, { snapshot } = {}) {
       const reward = (result[r.resultKey] ?? 0) - (snapshot?.state?.[r.cumKey] ?? 0);
+      // Deflate the terminal anchor to REAL base-year USD so the |terminal − target|
+      // penalty shares units with the real consumption reward. The terminal measures
+      // (worth/liquidity, nominal & after-tax) are nominal USD at the score date;
+      // dividing by the run's terminal price level (∏(1+inflation) to that date)
+      // expresses them in base-year dollars. `terminalWealthTarget` is therefore a
+      // REAL base-year ("today's dollars") figure. Without this the objective traded
+      // a real consumption dollar against a nominal terminal dollar, so as inflation
+      // compounded it progressively starved late-life real spending to defend a fixed
+      // nominal target — the unrealistic MPC drop. Defaults to 1 (no deflation) when
+      // the result carries no price level, keeping pure-unit callers/tests unchanged.
+      const priceLevel   = result.terminalPriceLevel || 1;
+      const realTerminal = (result[t.resultKey] ?? 0) / priceLevel;
       const target = result.terminalWealthTarget ?? 0;
       const lambda = result.terminalWealthTargetPenalty ?? _defaultLambda(running, result);
       return reward
-        - lambda * Math.abs((result[t.resultKey] ?? 0) - target)
+        - lambda * Math.abs(realTerminal - target)
         - _deficitPenalty(result, snapshot);
     },
   };

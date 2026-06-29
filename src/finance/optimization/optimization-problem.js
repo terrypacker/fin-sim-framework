@@ -388,6 +388,13 @@ export class OptimizationProblem {
       finalNetLiquidity: computeNetLiquidity(state, endDate),
       finalAfterTaxNetWorth:     computeAfterTaxNetWorth(state, endDate, afterTaxOpts),
       finalAfterTaxNetLiquidity: computeAfterTaxNetLiquidity(state, endDate, afterTaxOpts),
+      // Terminal price level (base-year USD deflator at the score date). The terminal
+      // measures above are NOMINAL USD at `endDate`; the Die-With-Target objectives
+      // divide by this to express the |terminal − target| penalty in the same real
+      // base-year units as the (deflated) consumption reward, so the spend⇄bequest
+      // trade-off is inflation-neutral and late-life spending isn't starved to defend
+      // a fixed nominal target. 1.0 ⇒ no deflation (sim start / no accumulator).
+      terminalPriceLevel: state.inflationAccumulator?.US ?? 1,
       scenarioFailed:    state.scenarioFailed    ?? false,
       cumulativeDeficit: state.cumulativeDeficit ?? 0,
       deficitMonths:     state.deficitMonths     ?? 0,

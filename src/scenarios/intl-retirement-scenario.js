@@ -518,10 +518,10 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     // First-class scenario param so it round-trips (design 15) and is reusable
     // by the MPC terminal cost (design 39). Consumed by the DIE_WITH_TARGET
     // objective; inert otherwise.
-    key: 'terminalWealthTarget', label: 'Terminal Wealth Target (USD)',
+    key: 'terminalWealthTarget', label: 'Terminal Wealth Target (today\'s USD)',
     type: 'Number', group: 'Optimization', mc: false, opt: false,
     defaultValue: 0,
-    description: 'Net worth to land on at the end of plan ("die with zero, or with $XX"). Used by the Die With Target objective.',
+    description: 'Net worth to land on at the end of plan ("die with zero, or with $XX"), in REAL base-year (today\'s) dollars. The Die With Target objective deflates the nominal terminal wealth by accumulated inflation before comparing, so this matches the real consumption it trades against.',
   },
   {
     key: 'terminalWealthTargetPenalty', label: 'Terminal Wealth Penalty (λ)',
