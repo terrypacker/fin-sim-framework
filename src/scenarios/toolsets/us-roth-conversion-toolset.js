@@ -20,7 +20,7 @@ import { ValueType } from '../../simulation-framework/type-registry.js';
 // Base year for the per-year income-target schedule (design 39 §12.3): real
 // targets are quoted in this year's USD and compounded by inflation, matching
 // the base usBracketGrossIncomeCeiling indexes the statutory brackets from.
-const BRACKET_BASE_YEAR = 2025;
+export const BRACKET_BASE_YEAR = 2025;
 
 /**
  * Forward-effective re-target of queued Roth-conversion events from a per-year

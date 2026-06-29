@@ -14,7 +14,7 @@ import { createSolver }            from '../optimization/solvers/solver-registry
 import { OPT_PARAM_TYPES }         from '../optimization/optimization-objectives.js';
 import { rollForwardWithControls, recordDecisionRecord } from './apply-forward.js';
 import { repinExpensesIfChanged }  from '../spending/strategies/explicit-bands-spending-reducer.js';
-import { retargetRothConversionEvents } from '../../scenarios/toolsets/us-roth-conversion-toolset.js';
+import { retargetRothConversionEvents, BRACKET_BASE_YEAR } from '../../scenarios/toolsets/us-roth-conversion-toolset.js';
 import { set }                     from '../monte-carlo/mc-param-paths.js';
 import { DateUtils }               from '../../simulation-framework/date-utils.js';
 import { UsTaxRates2025 }          from '../tax/us/us-tax-rates-2025.js';
@@ -126,7 +126,7 @@ export const COCKPIT_CONTROLS = {
       sched.sort((a, b) => (a?.year ?? 0) - (b?.year ?? 0));
       return { ...baseParams, rothConversionSchedule: sched };
     },
-    buildVariables: ({ baseParams, range, asOf }) => {
+    buildVariables: ({ baseParams, range, asOf, state }) => {
       // Decide the NEXT actionable year's income-fill target (annual epoch, §6;
       // next-future-date year, design 42). The receding-horizon loop re-decides
       // each subsequent year as "now" advances.
@@ -134,11 +134,24 @@ export const COCKPIT_CONTROLS = {
       const sched = baseParams?.rothConversionSchedule ?? [];
       const found = year != null ? sched.findIndex(e => e?.year === year) : -1;
       const idx   = found >= 0 ? found : Math.max(0, sched.length - 1);
+
+      // Cap the search to what the IRA(s) can ACTUALLY convert this year so the
+      // cockpit never recommends filling income to a level no dollar of which is
+      // reachable. The policy handler converts min(nominalTarget − ordIncomeYTD,
+      // iraBalance) per owner; any target beyond that headroom is inert. Once the
+      // convertible IRA is drained the cap is ~0, so the recommendation collapses
+      // to "no conversion this year" instead of a degenerate top-of-range fill the
+      // handler would no-op anyway (the flat-objective artifact). Infinity = no
+      // state ⇒ preserve the user's range unchanged.
+      const userMin = range?.min ?? 0;
+      const userMax = range?.max ?? 500_000;
+      const reachable = _convertibleRealCap(state, baseParams, year);
+      const max = Math.max(0, Math.min(userMax, reachable));
+      const min = Math.min(userMin, max);   // keep min ≤ max when the cap bites
       return [{
         paramKey: `rothConversionSchedule[${idx}].incomeTarget`,
         type: OPT_PARAM_TYPES.CONTINUOUS,
-        min:  range?.min  ?? 0,
-        max:  range?.max  ?? 500_000,
+        min, max,
         step: range?.step ?? 5_000,
         group: 'Roth', _year: year,
       }];
@@ -178,12 +191,21 @@ export const COCKPIT_CONTROLS = {
       const paramOf = (key) => (scenario?.params ?? []).find(pp => (pp.key ?? pp.name) === key);
 
       // 1) Persist the real base-year target to the scenario schedule param.
+      //    A non-positive target is "no conversion this year", which the toolset
+      //    already represents by the YEAR BEING ABSENT (skip-year). So don't append
+      //    a redundant 0-entry — that's exactly the per-year clutter the cockpit
+      //    used to pile up once the IRA was drained. We still clear a pre-existing
+      //    entry for the year so a previously committed conversion is cancelled.
       const p = paramOf('rothConversionSchedule');
       if (p) {
         const sched = Array.isArray(p.value) ? p.value.slice() : [];
         const idx   = sched.findIndex(e => e?.year === year);
-        if (idx >= 0) sched[idx] = { ...sched[idx], incomeTarget: realTarget };
-        else          sched.push({ year, incomeTarget: realTarget });
+        if (realTarget > 0) {
+          if (idx >= 0) sched[idx] = { ...sched[idx], incomeTarget: realTarget };
+          else          sched.push({ year, incomeTarget: realTarget });
+        } else if (idx >= 0) {
+          sched.splice(idx, 1);   // cancel a prior conversion; absence == skip-year
+        }
         sched.sort((a, b) => (a?.year ?? 0) - (b?.year ?? 0));
         p.value = sched;
       }
@@ -469,6 +491,29 @@ function _nextConversionYear(asOf, baseParams) {
   const start = baseParams?.rothConversionStartYear;
   if (Number.isFinite(start) && year < start) year = start;
   return year;
+}
+
+/**
+ * The largest REAL (base-year) income-fill target that could actually convert a
+ * dollar at `year`, given the snapshot's convertible IRA balances. The policy
+ * handler (RothConversionPolicyHandler) converts
+ * `min(nominalTarget − usOrdinaryIncomeYTD, iraBalance)` per conversion owner, so
+ * any target beyond `(ordIncomeYTD + Σ convertible IRA)` is inert. We deflate
+ * that nominal headroom back to real base-year USD — the lever's units — by the
+ * same inflation path the toolset compounds with. The conversion draws the IRA
+ * only (a 401(k) must be rolled to the IRA first), so only IRA balances count.
+ * Returns +Infinity when state is unavailable so the user's range is preserved.
+ */
+function _convertibleRealCap(state, baseParams, year) {
+  if (!state || !Number.isFinite(year)) return Infinity;
+  const owner = baseParams?.rothConversionOwner ?? 'both';
+  let ira = 0;
+  if (owner === 'primary' || owner === 'both') ira += state.iraAccount?.balance       ?? 0;
+  if (owner === 'spouse'  || owner === 'both') ira += state.spouseIraAccount?.balance ?? 0;
+  const ordYtd = state.usOrdinaryIncomeYTD ?? 0;
+  const infl   = baseParams?.inflationRate ?? 0.03;
+  const factor = Math.pow(1 + infl, year - BRACKET_BASE_YEAR);
+  return (ordYtd + ira) / (factor > 0 ? factor : 1);
 }
 
 // Marginal MFJ bracket a REAL (base-year) ordinary income lands in, for the
