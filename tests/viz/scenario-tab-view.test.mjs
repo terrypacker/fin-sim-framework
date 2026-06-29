@@ -245,6 +245,58 @@ test('_renderParamsList: editing an ExpenseBandList amount updates param.value',
   assert.strictEqual(scenario.params[0].value[0].monthlyAmount, 9000);
 });
 
+test('_renderParamsList: RothScheduleList renders a 2-column year/target editor, not a text input', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'rothConversionSchedule', type: 'RothScheduleList',
+    value: [{ year: 2027, incomeTarget: 106595 }, { year: 2028, incomeTarget: 108996 }] }] };
+  view._renderParamsList(scenario);
+  const editor = document.querySelector('#paramsList .age-band-list-editor');
+  assert.ok(editor, 'expected a schedule editor, not a raw text input');
+  assert.deepStrictEqual(
+    [...editor.querySelectorAll('.age-band-col-label')].map(e => e.textContent),
+    ['Year', 'Income Target (real $)']);
+  assert.strictEqual(editor.querySelectorAll('input[type="number"]').length, 4, 'two fields × two years');
+  const broken = [...document.querySelectorAll('#paramsList input')].some(i => String(i.value).includes('[object Object]'));
+  assert.strictEqual(broken, false, 'no [object Object] text input');
+});
+
+test('_renderParamsList: editing a RothScheduleList target updates param.value', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'rothConversionSchedule', type: 'RothScheduleList',
+    value: [{ year: 2027, incomeTarget: 106595 }] }] };
+  view._renderParamsList(scenario);
+  const targetInput = [...document.querySelectorAll('#paramsList .age-band-input')].find(i => i.value === '106595');
+  assert.ok(targetInput);
+  targetInput.value = '120000';
+  targetInput.dispatchEvent(new Event('change'));
+  assert.strictEqual(scenario.params[0].value[0].incomeTarget, 120000);
+});
+
+test('_renderParamsList: RothScheduleList coerces a stale string value to an empty list', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'rothConversionSchedule', type: 'RothScheduleList',
+    value: '[object Object],[object Object]' }] };
+  view._renderParamsList(scenario);
+  const editor = document.querySelector('#paramsList .age-band-list-editor');
+  assert.ok(editor, 'expected a schedule editor');
+  assert.deepStrictEqual(scenario.params[0].value, [], 'stale string coerced to []');
+  const broken = [...document.querySelectorAll('#paramsList input')].some(i => String(i.value).includes('[object Object]'));
+  assert.strictEqual(broken, false);
+});
+
+test('_renderParamsList: RothScheduleList "Add Year" appends a year and keeps order sorted', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'rothConversionSchedule', type: 'RothScheduleList',
+    value: [{ year: 2030, incomeTarget: 0 }] }] };
+  view._renderParamsList(scenario);
+  const addBtn = [...document.querySelectorAll('#paramsList button')].find(b => /Add Year/.test(b.textContent));
+  assert.ok(addBtn);
+  addBtn.dispatchEvent(new Event('click'));
+  assert.strictEqual(scenario.params[0].value.length, 2);
+  const years = scenario.params[0].value.map(e => e.year);
+  assert.deepStrictEqual([...years].sort((a, b) => a - b), years, 'entries stay sorted by year');
+});
+
 test('_renderParamsList: Date param renders an <input type="date">', () => {
   const view = new ScenarioTabView();
   const scenario = { params: [{ name: 'primaryRetirementDate', type: 'Date', value: '2040-01-01' }] };
