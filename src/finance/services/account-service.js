@@ -17,6 +17,7 @@ import { Holding } from '../holdings/holding.js';
 import { resolveDefaultAllocation, resolveRateKey } from '../holdings/default-allocations.js';
 import { rescaleHoldingsToBalance } from '../holdings/holding-utils.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
+import { fxRate, fxFeeIn } from '../fx/fx-conversion.js';
 
 // Cash/savings roles: drawn before investments (cash band) and liquid across the
 // currency border in replenishSavings, and only ever drawn down to minimumBalance.
@@ -445,7 +446,9 @@ export class AccountService extends AssetService {
    * @param {number}   deficit    - Amount that must be deposited into targetKey
    * @param {Date}     date       - As-of date (used for age-gate checks)
    * @param {Function|object} [opts] - Legacy: earlyWithdrawalRulesFn. New: { personKey?, earlyWithdrawalRulesFn? }
-   * @returns {{ drawnKeys: string[], pendingTaxActions: object[] }}
+   * @returns {{ drawnKeys: string[], pendingTaxActions: object[], crossBorderTransfers: object[] }}
+   *   crossBorderTransfers are INTL_TRANSFER_RECORD action objects for each
+   *   cross-currency cash leg swept inline (design 44 Gap A / A2).
    * @throws {InsufficientFundsError}
    */
   replenishSavings(state, targetKey, deficit, date, opts = {}) {
@@ -470,24 +473,13 @@ export class AccountService extends AssetService {
     // escalating to INTL_TRANSFER once the local country is exhausted.
     const globalDrawdown = state.crossBorderDrawdown === 'GLOBAL';
     const usdAud         = state.effectiveExchangeRates?.USD_AUD ?? 1.55; // 1 USD = usdAud AUD
-    // Units of the target `currency` obtained per 1 unit of `srcCcy`.
-    const fxToTarget = (srcCcy) => {
-      const src = srcCcy ?? currency;
-      if (src === currency) return 1;
-      const usdPerUnit  = c => (c === 'AUD' ? 1 / usdAud : 1); // value of 1 unit in USD
-      const unitsPerUsd = c => (c === 'AUD' ? usdAud : 1);
-      return usdPerUnit(src) * unitsPerUsd(currency);
-    };
-    // Always use the true conversion factor (1 for same-currency). Cross-currency
-    // draws happen under GLOBAL and for cross-border cash sweeps under LOCAL_FIRST,
-    // so this can't be gated on globalDrawdown.
-    const fxOf = (account) => fxToTarget(account.currency?.code ?? account.country);
-    // Fixed per-transfer FX fee (same source as IntlTransferApplyReducer: a flat
-    // USD amount), converted to the target currency and charged once per
-    // cross-border draw. Same-currency draws (fx === 1) pay nothing.
-    const fxFeeUsd  = state.effectiveFxFees?.USD_AUD ?? 15;
-    const fxFeeTgt  = fxFeeUsd * (currency === 'AUD' ? usdAud : 1);
-    const feeOf = (account) => (fxOf(account) !== 1 ? fxFeeTgt : 0);
+    const fxFeeUsd       = state.effectiveFxFees?.USD_AUD ?? 15;          // flat per-transfer fee, USD
+    const srcCcyOf       = (account) => account.currency?.code ?? account.country;
+    // Shared USD↔AUD conversion (design 44 §5a): units of the target `currency`
+    // per 1 unit of the source, and the flat fee in target currency (0 for a
+    // same-currency draw). Identical math to IntlTransferApplyReducer.
+    const fxOf  = (account) => fxRate(srcCcyOf(account), currency, usdAud);
+    const feeOf = (account) => fxFeeIn(currency, srcCcyOf(account), usdAud, fxFeeUsd);
 
     // Cash/savings roles are liquid everywhere: idle cash is spent before
     // investments (cash band, drawdownPriority 0) and is reachable across the
@@ -523,6 +515,26 @@ export class AccountService extends AssetService {
     let remaining         = deficit;
     const drawnKeys       = [];
     const pendingTaxActions = [];
+    // Cross-border cash sweeps are executed INLINE here (the stranding fix keeps
+    // idle foreign cash spent before domestic investments). Collect a journalable
+    // record for each cross-currency leg so the transfer is visible — emitted as
+    // INTL_TRANSFER_RECORD by ReplenishSavingsReducer (design 44 Gap A / A2).
+    const crossBorderTransfers = [];
+    const pushTransfer = (srcAccount, srcKey, sourceAmount, targetAmount, fee) => {
+      const fromCcy = srcAccount.currency?.code ?? srcAccount.country;
+      if (fromCcy === currency) return; // same-currency draw is not a transfer
+      crossBorderTransfers.push({
+        type:       'INTL_TRANSFER_RECORD',
+        direction:  fromCcy === 'AUD' ? 'AU_TO_US' : 'US_TO_AU',
+        srcKey,
+        dstKey:     targetKey,
+        from:       fromCcy,
+        to:         currency,
+        fromAmount: +(+sourceAmount).toFixed(2),
+        toAmount:   +(+targetAmount).toFixed(2),
+        fee:        +(+fee).toFixed(2),
+      });
+    };
 
     // ── Phase 1: penalty-free sources ─────────────────────────────────────────
     // Resolve per-account withdrawal eligibility using the owner's birth date.
@@ -558,7 +570,7 @@ export class AccountService extends AssetService {
           if (remaining < 1e-9) break;
           const want = Math.min(target * (s.amt / total), remaining);
           const got  = this._drawPenaltyFree(
-            targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions, s.fx, feeOf(s.account)
+            targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, s.fx, feeOf(s.account)
           );
           remaining     -= got;
           drawnThisPass += got;
@@ -570,13 +582,13 @@ export class AccountService extends AssetService {
       for (const [key, account] of sources) {
         if (remaining < 1e-9) break;
         remaining -= this._drawPenaltyFree(
-          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, fxOf(account), feeOf(account)
+          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account)
         );
       }
     }
 
     if (remaining < 1e-9) {
-      return { drawnKeys, pendingTaxActions };
+      return { drawnKeys, pendingTaxActions, crossBorderTransfers };
     }
 
     // ── Phase 2: early withdrawal (with penalty) ──────────────────────────────
@@ -622,6 +634,7 @@ export class AccountService extends AssetService {
         if (credited <= 0) continue;     // draw too small to clear the cross-border fee
         this.transaction(targetAccount, +credited, date);
         this.transaction(account,       -gross,    date);
+        pushTransfer(account, key, gross, credited, fee);
         account.earningsBasis = Math.max(0, (account.earningsBasis ?? 0) - gross);
         if (!drawnKeys.includes(key)) drawnKeys.push(key);
         pendingTaxActions.push({ type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount: gross, penaltyAmount: penalty, residency });
@@ -644,6 +657,7 @@ export class AccountService extends AssetService {
         if (credited <= 0) continue;     // draw too small to clear the cross-border fee
         this.transaction(targetAccount, +credited,     date);
         this.transaction(account,       -grossCapped,  date);
+        pushTransfer(account, key, grossCapped, credited, fee);
         account.contributionBasis = (account.contributionBasis ?? 0) - contribPortion;
         account.earningsBasis     = (account.earningsBasis     ?? 0) - earningsPortion;
         if (!drawnKeys.includes(key)) drawnKeys.push(key);
@@ -672,6 +686,7 @@ export class AccountService extends AssetService {
         if (credited <= 0) continue;     // draw too small to clear the cross-border fee
         this.transaction(targetAccount, +credited, date);
         this.transaction(account,       -gross,    date);
+        pushTransfer(account, key, gross, credited, fee);
         account.earningsBasis     = (account.earningsBasis     ?? 0) - fromEarnings;
         account.contributionBasis = (account.contributionBasis ?? 0) - fromContrib;
         if (!drawnKeys.includes(key)) drawnKeys.push(key);
@@ -683,7 +698,7 @@ export class AccountService extends AssetService {
     if (remaining > 1e-9) {
       throw new InsufficientFundsError(country, currency, remaining);
     }
-    return { drawnKeys, pendingTaxActions };
+    return { drawnKeys, pendingTaxActions, crossBorderTransfers };
   }
 
   /**
@@ -706,14 +721,18 @@ export class AccountService extends AssetService {
    *
    * @param {import('../account.js').Account} account
    * @param {number} amount - positive withdrawal size, account currency
+   * @returns {{ fromContrib: number, fromEarnings: number }} the split actually
+   *          applied (zeros when there is no ledger to reduce) — callers use it
+   *          to emit matching withdrawal-tax actions (design 44 Gap B).
    */
   reduceLedgerForWithdrawal(account, amount) {
-    if (!account || !(amount > 0)) return;
-    if (!('contributionBasis' in account) || !('earningsBasis' in account)) return;
+    const none = { fromContrib: 0, fromEarnings: 0 };
+    if (!account || !(amount > 0)) return none;
+    if (!('contributionBasis' in account) || !('earningsBasis' in account)) return none;
     const contrib  = account.contributionBasis ?? 0;
     const earnings = account.earningsBasis ?? 0;
     const total    = contrib + earnings;
-    if (total <= 0) return;
+    if (total <= 0) return none;
     const draw = Math.min(amount, total);
 
     let fromContrib;
@@ -737,6 +756,7 @@ export class AccountService extends AssetService {
     // after (inv-1), with no per-withdrawal cent drift.
     account.contributionBasis = Math.max(0, contrib  - fromContrib);
     account.earningsBasis     = Math.max(0, earnings - fromEarnings);
+    return { fromContrib, fromEarnings };
   }
 
   /**
@@ -778,7 +798,7 @@ export class AccountService extends AssetService {
    * Source-currency figures (basis, STOCK_WITHDRAWAL_TAX proceeds/gain) are
    * recorded natively so the source country's tax computation stays correct.
    */
-  _drawPenaltyFree(targetAccount, account, key, want, date, eligible, residency, drawnKeys, pendingTaxActions, fx = 1, fee = 0) {
+  _drawPenaltyFree(targetAccount, account, key, want, date, eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, fx = 1, fee = 0) {
     if (want < 1e-9) return 0;
     // Gross up the source-side need by the fee so a full draw nets `want` at the
     // target after the wire cost is paid.
@@ -792,6 +812,7 @@ export class AccountService extends AssetService {
       if (credited <= 0) return 0;                         // draw too small to clear the fee
       this.transaction(targetAccount, +credited, date);
       this.transaction(account,       -withdraw, date);
+      pushTransfer(account, key, withdraw, credited, fee); // journal the cross-currency leg (no-op same-ccy)
 
       // Brokerage accounts with unrealised gains: proportional capital gain,
       // basis update, and STOCK_WITHDRAWAL_TAX for Form 8949 / YTD accumulator.
@@ -819,12 +840,27 @@ export class AccountService extends AssetService {
         });
       } else if ('contributionBasis' in account && 'earningsBasis' in account) {
         // Ledger-bearing retirement/super account drawn while age-eligible (super
-        // ≥60, IRA ≥60, 401k ≥59.5). The generic transaction() above moved the
-        // balance but not the contribution/earnings ledger; keep them in step so
-        // it doesn't drift (the trigger: super contributionBasis stuck above
-        // balance). See design 43 §2/§5. NOTE: this path still emits no
-        // withdrawal-tax action for super/IRA/401k — a separate, pre-existing gap.
-        this.reduceLedgerForWithdrawal(account, withdraw);
+        // ≥60, IRA ≥60, 401k ≥59.5). Keep the contribution/earnings ledger in
+        // step with the balance (design 43 §2/§5) AND emit the withdrawal-tax
+        // action the type-specific reducers would (design 44 Gap B) — otherwise
+        // an eligible IRA/401k/super drawn by the engine escapes income tax.
+        // Amounts are in the source account's currency, matching Phase 2 below
+        // and the STOCK_WITHDRAWAL_TAX path above. A qualified Roth withdrawal is
+        // tax-free, so it (correctly) emits nothing.
+        const { fromContrib, fromEarnings } = this.reduceLedgerForWithdrawal(account, withdraw);
+        switch (account.type) {
+          case ACCOUNT_TYPE.TRADITIONAL_IRA:
+            if (fromContrib > 0)  pendingTaxActions.push({ type: 'IRA_WITHDRAWAL_CONTRIB_TAX',   amount: fromContrib,  penaltyAmount: 0 });
+            if (fromEarnings > 0) pendingTaxActions.push({ type: 'IRA_WITHDRAWAL_EARNINGS_TAX',  amount: fromEarnings, penaltyAmount: 0, residency });
+            break;
+          case ACCOUNT_TYPE.FOUR_OH_ONE_K:
+            pendingTaxActions.push({ type: 'K401_WITHDRAWAL_TAX', amount: withdraw, penaltyAmount: 0 });
+            break;
+          case ACCOUNT_TYPE.SUPER:
+            if (fromEarnings > 0) pendingTaxActions.push({ type: 'SUPER_WITHDRAWAL_EARNINGS_TAX', amount: fromEarnings });
+            break;
+          // ROTH (qualified, age-eligible) is tax-free → no action.
+        }
       }
 
       if (!drawnKeys.includes(key)) drawnKeys.push(key);
@@ -840,6 +876,7 @@ export class AccountService extends AssetService {
       if (credited <= 0) return 0;
       this.transaction(targetAccount, +credited, date);
       this.transaction(account,       -withdraw, date);
+      pushTransfer(account, key, withdraw, credited, fee);
       account.contributionBasis -= withdraw;
       if (!drawnKeys.includes(key)) drawnKeys.push(key);
       return credited;

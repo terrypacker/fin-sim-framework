@@ -91,6 +91,7 @@ export class StateTaxPaymentDebitReducer extends Reducer {
     this.accountService = accountService;
     this.stateRegistry  = stateRegistry;
     this.reducedActionTypes = ['STATE_TAX_PAYMENT_DEBIT'];
+    this.generatedActionTypes = ['INTL_TRANSFER_RECORD'];
   }
 
   static fromJSON(d, services) {
@@ -104,9 +105,11 @@ export class StateTaxPaymentDebitReducer extends Reducer {
     const cashAccount = state[accountKey];
     const shortfall   = action.amount - Math.max(0, cashAccount.balance);
 
+    let crossBorderTransfers = [];
     if (shortfall > 0) {
       try {
-        this.accountService.replenishSavings(state, accountKey, shortfall, date);
+        // Journal any cross-currency leg of the top-up (design 44 Gap A).
+        ({ crossBorderTransfers = [] } = this.accountService.replenishSavings(state, accountKey, shortfall, date));
       } catch (e) {
         if (!(e instanceof InsufficientFundsError)) throw e;
         // Partial payment — pay what's available.
@@ -120,6 +123,6 @@ export class StateTaxPaymentDebitReducer extends Reducer {
 
     return this.newState(state, {
       [accountKey]: { ...cashAccount },   // explicit new reference so the balance change shows in diffs
-    });
+    }, crossBorderTransfers);
   }
 }

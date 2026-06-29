@@ -35,7 +35,7 @@ export class FxTransferToHandler extends HandlerEntry {
     super(null, 'FX Transfer');
     this.fxService      = fxService;
     this.accountService = accountService;
-    this.generatedActionTypes = ['FX_TRANSFER_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['FX_TRANSFER_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE', 'INTL_TRANSFER_RECORD'];
   }
 
   static fromJSON(d, { fxService, accountService }) {
@@ -59,10 +59,13 @@ export class FxTransferToHandler extends HandlerEntry {
     const srcBal = state[srcKey]?.balance ?? 0;
 
     const pendingTax = [];
+    const transferRecords = [];
     if (amount > srcBal) {
       try {
         const r = this.accountService.replenishSavings(state, srcKey, amount - srcBal, date);
         pendingTax.push(...r.pendingTaxActions);
+        // A cross-currency leg of the source top-up is journaled too (design 44 Gap A).
+        transferRecords.push(...(r.crossBorderTransfers ?? []));
       } catch (e) {
         if (!(e instanceof InsufficientFundsError)) throw e;
       }
@@ -82,6 +85,7 @@ export class FxTransferToHandler extends HandlerEntry {
       },
       new RecordMetricAction(`fx_transfer_${from}_${to}`, toCredit),
       new RecordBalanceAction(`${dstKey}.balance`, dstKey),
+      ...transferRecords,
       ...pendingTax,
     ];
   }

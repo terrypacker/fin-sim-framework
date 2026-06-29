@@ -183,6 +183,7 @@ class TaxPaymentDebitReducerBase extends Reducer {
     this.accountService = accountService;
     this.stateRegistry  = stateRegistry;
     this.reducedActionTypes = [new.target.actionType];
+    this.generatedActionTypes = ['INTL_TRANSFER_RECORD'];
   }
 
   reduce(state, action, date) {
@@ -191,9 +192,12 @@ class TaxPaymentDebitReducerBase extends Reducer {
     const cashAccount = state[accountKey];
     const shortfall   = action.amount - Math.max(0, cashAccount.balance);
 
+    let crossBorderTransfers = [];
     if (shortfall > 0) {
       try {
-        this.accountService.replenishSavings(state, accountKey, shortfall, date);
+        // A cross-currency cash sweep here (e.g. AU cash topping up US savings to
+        // pay US tax) is journaled via INTL_TRANSFER_RECORD (design 44 Gap A).
+        ({ crossBorderTransfers = [] } = this.accountService.replenishSavings(state, accountKey, shortfall, date));
       } catch (e) {
         if (!(e instanceof InsufficientFundsError)) throw e;
         // Proceed with partial payment — pay what's available.
@@ -207,7 +211,7 @@ class TaxPaymentDebitReducerBase extends Reducer {
 
     return this.newState(state, {
       [accountKey]: { ...cashAccount },   // explicit new reference so balance change is visible in state diffs
-    });
+    }, crossBorderTransfers);
   }
 }
 

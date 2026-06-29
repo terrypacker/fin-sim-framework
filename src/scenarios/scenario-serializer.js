@@ -63,7 +63,7 @@ import { LateLifeCareApplyReducer }     from '../finance/spending/strategies/lat
 import { UsSavingsInterestCreditReducer } from '../finance/reducers/us-savings-interest-credit-reducer.js';
 import { ExpenseDebitReducer }            from '../finance/reducers/expense-debit-reducer.js';
 import { ReplenishSavingsReducer }        from '../finance/reducers/replenish-savings-reducer.js';
-import { IntlTransferApplyReducer }       from '../finance/reducers/intl-transfer-apply-reducer.js';
+import { IntlTransferApplyReducer, IntlTransferRecordReducer }       from '../finance/reducers/intl-transfer-apply-reducer.js';
 import { FxTransferApplyReducer }        from '../finance/fx/fx-transfer-apply-reducer.js';
 import { FxRefreshReducer }              from '../finance/fx/fx-refresh-reducer.js';
 import { StockDividendCashApplyReducer }  from '../finance/reducers/stock-dividend-cash-apply-reducer.js';
@@ -243,7 +243,7 @@ const _ALL_CLASSES = [
   AuHouseSaleHandler, AuSeIncomeHandler,
   // Finance reducers
   UsSavingsInterestCreditReducer, ExpenseDebitReducer, ReplenishSavingsReducer,
-  IntlTransferApplyReducer, FxTransferApplyReducer, FxRefreshReducer,
+  IntlTransferApplyReducer, IntlTransferRecordReducer, FxTransferApplyReducer, FxRefreshReducer,
   StockDividendCashApplyReducer, ChangeResidencyApplyReducer, ChangeStateResidencyApplyReducer,
   PersonDiedApplyReducer, SocialSecuritySurvivorApplyReducer, AccountRetitleApplyReducer, ScenarioCompleteReducer,
   LateLifeCareApplyReducer,
