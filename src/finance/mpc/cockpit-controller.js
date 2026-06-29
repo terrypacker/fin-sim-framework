@@ -51,9 +51,19 @@ export const COCKPIT_CONTROLS = {
         group: 'Spending', _bandIndex: i,
       }];
     },
-    describe: (candidate, vars) => {
+    describe: (candidate, vars, ctx) => {
       const v = vars[0];
-      return `Set monthly spend to ${fmtUsd(candidate[v.paramKey])}`;
+      const real = candidate[v.paramKey];
+      // The band amount is REAL base-year USD; the reducer compounds it to nominal
+      // by inflationAccumulator (explicit-bands-spending-reducer.js). Show both so
+      // a late-life "$8,000" isn't misread as a nominal collapse.
+      return `Set monthly spend to ${fmtUsd(real)}${_nominalSuffix(real, ctx, '/mo')}`;
+    },
+    // The save-points log is a record of what applied AT that date, so it reads the
+    // single nominal amount the plan actually spent then — no real/nominal pairing.
+    describeRecord: (candidate, vars, ctx) => {
+      const v = vars[0];
+      return `Set monthly spend to ${fmtUsd(_toNominal(candidate[v.paramKey], ctx))}/mo`;
     },
     liveActuatable: true,
     /**
@@ -304,6 +314,30 @@ export class CockpitController {
     }) ?? [];
   }
 
+  /**
+   * Human-legible label for a candidate move, with the inflation context ("now"
+   * year + rate) the lever needs to annotate real base-year amounts with their
+   * nominal value at "now". Single source for the card, save-points, and Apply.
+   */
+  describeMove(candidate, variables = this._variables()) {
+    return this.control.describe(candidate, variables, this._describeCtx());
+  }
+
+  /**
+   * Label for the save-points decision log: the nominal amount that applied at
+   * "now" (no real/nominal pairing). Falls back to the card form for controls
+   * without a dedicated record description.
+   */
+  describeRecordMove(candidate, variables = this._variables()) {
+    const fn = this.control.describeRecord ?? this.control.describe;
+    return fn(candidate, variables, this._describeCtx());
+  }
+
+  /** Inflation context a lever needs to map its real base-year amount to nominal. */
+  _describeCtx() {
+    return { asOf: this.snapshot?.date, inflationRate: this.committed?.inflationRate };
+  }
+
   _problem(variables) {
     return new OptimizationProblem({
       variables,
@@ -337,7 +371,7 @@ export class CockpitController {
     const solution  = await solver.solve(problem, { ...solverOptions });
 
     const best = solution.best ?? { candidate: {}, result: null, score: -Infinity };
-    const recommended = { ...best, label: this.control.describe(best.candidate, variables) };
+    const recommended = { ...best, label: this.describeMove(best.candidate, variables) };
 
     // Fan: per-step trajectories for the top-K distinct candidates (recommended
     // first), so the UI can draw realized-past → diverging futures.
@@ -395,7 +429,7 @@ export class CockpitController {
       const metric = objectivePrimaryMetric(this.objective);
       recordDecisionRecord({
         graph: this.graph, parentId: this.parentId, id: recordId,
-        name: this.control.describe(candidate ?? {}, this._variables()),
+        name: this.describeRecordMove(candidate ?? {}, this._variables()),
         controlParams: candidate, asOfDate: this.snapshot.date,
         simStart: this.simStart, simEnd: this.simEnd, result,
         extra: { goalMetric: { key: metric.key, label: metric.label } },
@@ -528,6 +562,34 @@ function _bracketLabelForRealIncome(realIncome) {
     if (taxable >= threshold) rate = r; else break;
   }
   return rate == null ? null : `${Math.round(rate * 100)}% bracket`;
+}
+
+/**
+ * Suffix annotating a REAL base-year amount with its nominal value at the "now"
+ * year, so a real-dollars recommendation (the spending band amount) isn't misread
+ * as a nominal collapse late in life. Uses the same inflation path the reducer
+ * compounds with (`(1+infl)^(year − BRACKET_BASE_YEAR)`). Near the base year the
+ * two coincide, so it just tags "(today's $)".
+ */
+function _nominalFactor(ctx) {
+  const asOf = ctx?.asOf ? new Date(ctx.asOf) : null;
+  if (!asOf || Number.isNaN(asOf.getTime())) return null;
+  const year = asOf.getUTCFullYear();
+  const infl = ctx?.inflationRate ?? 0.03;
+  return { factor: Math.pow(1 + infl, year - BRACKET_BASE_YEAR), year };
+}
+
+function _nominalSuffix(real, ctx, unit = '') {
+  if (!Number.isFinite(real)) return '';
+  const nf = _nominalFactor(ctx);
+  if (!nf || !(nf.factor > 1.001)) return ' (today’s $)';
+  return ` (today’s $) ≈ ${fmtUsd(real * nf.factor)}${unit} in ${nf.year}`;
+}
+
+/** Real base-year amount expressed in nominal "now"-year dollars (falls back to real). */
+function _toNominal(real, ctx) {
+  const nf = _nominalFactor(ctx);
+  return nf ? real * nf.factor : real;
 }
 
 /** True when `strategy` (array or string) includes `key`. */

@@ -334,6 +334,7 @@ test('MpcCockpitPlugin._apply: actuates a live-actuatable control and reports it
     control,
     lastAdvice: { recommended: { candidate: { k: 9000 } }, variables: [{ paramKey: 'k' }] },
     apply: () => ({ result: { finalNetWorthUsd: 1 } }),
+    describeMove: (cand, vars) => control.describe(cand, vars),
   };
   plugin._apply();
   assert.equal(actuateCalled, true, 'control.actuate invoked');
