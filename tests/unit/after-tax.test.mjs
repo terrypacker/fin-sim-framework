@@ -53,9 +53,15 @@ describe('computeAfterTaxValue — per-class discount', () => {
     assert.equal(computeAfterTaxValue(acct('us-savings', 50_000), {}, LATE, { rateProvider: rp }), 50_000);
   });
 
-  test('SUPER uses the AU ordinary rate (Phase 1 treats super as pre-tax)', () => {
+  test('SUPER without basis info taxes the whole balance (back-compat)', () => {
     const a = acct('super', 100_000, { currency: 'AUD' });
     assert.equal(computeAfterTaxValue(a, {}, LATE, { rateProvider: rp }), 85_000);
+  });
+
+  test('SUPER with earningsBasis: contribution is par, only earnings are taxed (design 40 Phase 2)', () => {
+    const a = acct('super', 100_000, { currency: 'AUD', earningsBasis: 40_000 });
+    // contribution 60k (par) + earnings 40k·(1 − 0.15) = 60k + 34k = 94k
+    assert.equal(computeAfterTaxValue(a, {}, LATE, { rateProvider: rp }), 94_000);
   });
 
   test('TAXABLE_BASIS discounts only the UNREALIZED GAIN, from holdings', () => {
@@ -256,9 +262,23 @@ describe('liquidationRateProvider (Option C) — the tax-engine waterfall', () =
     assert.notEqual(r, 0.99);
   });
 
-  test('AU/super falls back to the configured Option-A rate (engine path is US-only here)', () => {
-    const rp = liquidationRateProvider({ ordinaryRateAu: 0.15 });
-    assert.equal(rp.ordinaryLiquidationRate(auSuper, 100_000, { usOrdinaryIncomeYTD: 0 }, LATE), 0.15);
+  test('super earnings route through the US ordinary engine (taxed as US ordinary income, §model)', () => {
+    const rp = liquidationRateProvider({ ordinaryRateAu: 0.99 });   // fallback would be 0.99
+    // $100k of super earnings stacked on $0 US income fills the low US brackets ⇒
+    // an effective rate well under 0.22 and far from the bogus AU fallback.
+    const r = rp.ordinaryLiquidationRate(auSuper, 100_000, { usOrdinaryIncomeYTD: 0 }, LATE);
+    assert.ok(r > 0 && r < 0.20, `super earnings at the US effective rate, got ${r}`);
+    assert.notEqual(r, 0.99, 'used the US engine, not the configured AU fallback');
+  });
+
+  test('AU brokerage cap-gains route through computeAuTax (50% CGT discount)', () => {
+    const rp = liquidationRateProvider({ capGainsRate: 0.99 });
+    const auStock = acct('au-stock', 100_000, { currency: 'AUD' });
+    const state = { auOrdinaryIncomeYTD: 0, people: { p: { residency: 'AU' } } };
+    const r = rp.capGainsLiquidationRate(auStock, 100_000, state, LATE);
+    // 50% discount + AU resident brackets ⇒ a modest effective rate, not 0.99.
+    assert.ok(r >= 0 && r < 0.30, `AU CGT effective rate in range, got ${r}`);
+    assert.notEqual(r, 0.99, 'used the AU engine, not the configured fallback');
   });
 
   test('graceful fallback: missing state / tiny amount → configured rate, never throws', () => {
