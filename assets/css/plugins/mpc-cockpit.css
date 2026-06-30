@@ -177,6 +177,9 @@
   padding-top: 10px;
 }
 .mpc-savepoints-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
@@ -189,6 +192,11 @@
   letter-spacing: 0;
   opacity: 0.7;
 }
+.mpc-savepoints-clear {
+  margin-left: auto;        /* push to the right edge of the header row */
+  text-transform: none;
+  letter-spacing: 0;
+}
 /* ONE shared grid for the whole list — header + every data row are items of the
    same grid (rows are display:contents), so the columns line up across rows. With
    a per-row grid the header's auto columns sized to the labels and each data row's
@@ -199,8 +207,15 @@
   padding: 0;
   display: grid;
   grid-template-columns: auto 1fr auto auto;
-  align-items: baseline;
+  /* stretch (not baseline): when the Move cell wraps tall, every other cell in the
+     row stretches to the same height so their bottom borders line up as one rule —
+     baseline left the short cells (and their separators) at their own short height. */
+  align-items: stretch;
   font-size: 13px;
+  /* Long multi-lever Move text wraps (see .mpc-sp-move) so rows grow taller; cap
+     the list and scroll vertically rather than pushing the panel off-screen. */
+  max-height: 320px;
+  overflow-y: auto;
 }
 .mpc-savepoint { display: contents; }
 /* Cells own the row separator + vertical padding (the row box is gone under
@@ -227,11 +242,16 @@
   white-space: nowrap;
 }
 .mpc-savepoint--head .mpc-sp-date { font-size: 10px; }
+/* Wrap the Move text instead of truncating it — with all levers active the joint
+   description is long, and an ellipsis (or hover-only tooltip) makes it unreadable.
+   Let the cell wrap onto multiple lines so the row grows taller and every word is
+   visible at a glance. */
 .mpc-sp-move {
   color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.35;
 }
 .mpc-sp-nw {
   color: var(--accent-primary);

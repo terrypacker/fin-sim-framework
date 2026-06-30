@@ -134,7 +134,9 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
       <div class="mpc-fan" data-mpc="fan" style="display:none"></div>
 
       <div class="mpc-savepoints" data-mpc="savepoints" style="display:none">
-        <div class="mpc-savepoints-head">MPC Save Points <span class="mpc-savepoints-sub">decision log · inspect only</span></div>
+        <div class="mpc-savepoints-head">MPC Save Points <span class="mpc-savepoints-sub">decision log · inspect only</span>
+          <button class="btn btn-sm btn-warn mpc-savepoints-clear" data-mpc="clear-savepoints" title="Delete the decision log. The log persists across Rebuilds by design; this empties it on demand.">Delete</button>
+        </div>
         <ul class="mpc-savepoints-list" data-mpc="savepoints-list"></ul>
       </div>
     `;
@@ -175,6 +177,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     this._syncObjectiveAxes();          // show the axis sub-selects iff a family is chosen
     this._syncHorizonEnabled();         // disable the window for full-horizon-only goals
     this._syncLeverApplicability();
+    this._bind('clear-savepoints', 'click', () => this._clearSavePoints());
     this._renderSavePoints();
   }
 
@@ -691,6 +694,18 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
    * read straight from the shared `decision` graph layer. Inspect-only — date ·
    * move · projected terminal — NOT loadable scenarios. Hidden when empty.
    */
+  /**
+   * Empty the MPC decision log on demand. The `decision` graph layer persists
+   * across scenario Rebuilds by design (the save-points log is the source of
+   * truth independent of any CockpitController's lifecycle), so there is no
+   * automatic clear — this button is the manual escape hatch when the user wants
+   * a clean slate without reloading the page.
+   */
+  _clearSavePoints() {
+    this._services()?.graph?.clearLayer('decision');
+    this._renderSavePoints();
+  }
+
   _renderSavePoints() {
     const wrap = this._q('savepoints');
     const list = this._q('savepoints-list');
