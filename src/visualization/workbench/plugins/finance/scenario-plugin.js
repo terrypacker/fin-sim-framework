@@ -12,7 +12,10 @@ export class ScenarioPlugin extends WorkbenchComponent {
     </div>
     <div class="wb-scenario-btn-row">
       <button class="btn btn-sm" id="loadScenarioBtn">Load</button>
-      <button class="btn btn-sm" id="newScenarioBtn">+ New</button>
+      <button class="btn btn-sm" id="newScenarioBtn"
+              title="Copy the current scenario into a new editable user scenario.">Copy</button>
+      <button class="btn btn-sm" id="newBlankScenarioBtn"
+              title="Create an empty scenario — no persons, accounts, or parameters — as a blank canvas to add and link nodes by hand.">+ New</button>
       <button class="btn btn-sm btn-warn" id="deleteScenarioBtn">Delete</button>
     </div>
     <div class="wb-scenario-btn-row">

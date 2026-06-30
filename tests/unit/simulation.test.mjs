@@ -838,6 +838,30 @@ test('EventBus history includes DEBUG_ACTION entries when reducers run', () => {
   );
 });
 
+test('EXECUTION_END(ACTION) for an action WITH a reducer carries the action _actionId as nodeId', () => {
+  const bus = new EventBus({ keepHistory: true });
+  const sim = new Simulation(new Date(2025, 0, 1), { bus, initialState: { metrics: {} } });
+
+  // A reducer is registered for the type → the action takes the "with reducers"
+  // END branch (the one that used `action.actionId` and published nodeId:null).
+  sim.reducers.register('SET_VALUE', (state, action) => ({
+    ...state,
+    metrics: { ...state.metrics, value: action.value },
+  }));
+
+  // Handler emits an action tagged with its config-graph node id.
+  sim.register('TICK', () => [{ type: 'SET_VALUE', _actionId: 'a1', value: 100 }]);
+  sim.schedule({ date: new Date(2025, 0, 1), type: 'TICK' });
+  sim.stepTo(new Date(2025, 0, 1));
+
+  const actionEnds = sim.bus.getHistory().filter(e => e.type === 'EXECUTION_END' && e.kind === 'ACTION');
+  assert.ok(actionEnds.length > 0, 'should publish EXECUTION_END(ACTION)');
+  assert.ok(
+    actionEnds.every(e => e.nodeId === 'a1'),
+    'EXECUTION_END(ACTION) must carry the action _actionId as nodeId so the graph node shows fired'
+  );
+});
+
 // ─── Handler chaining ─────────────────────────────────────────────────────────
 //
 // Handler chaining lets one handler delegate to another by scheduling a new

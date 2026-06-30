@@ -224,6 +224,46 @@ test('newScenario: pre-populates params from scenarioClass.getParamSchema()', ()
   assert.deepStrictEqual(created.params[2], { name: 'reinvest',        label: 'Reinvest',         type: 'Boolean', group: 'People', value: false });
 });
 
+// ═════════════════════════════════════════════════════════════════════════════
+// newBlankScenario()
+// ═════════════════════════════════════════════════════════════════════════════
+
+test('newBlankScenario: returns new active u:0 scenario bound to BlankScenario', () => {
+  const pb = makePrebuilt('alpha');
+  const { registry, service } = makeStack({ prebuiltScenarios: [pb] });
+  const created = service.newBlankScenario(registry.getActive());
+  assert.strictEqual(created.id, 'u:0');
+  // Bound to the no-op BlankScenario class, NOT the source scenario's class.
+  assert.strictEqual(created.scenarioId, 'blank');
+  assert.strictEqual(created.scenarioClass?.scenarioId?.(), 'blank');
+  assert.strictEqual(created.prebuilt, false);
+  assert.strictEqual(registry.getActive().id, 'u:0');
+});
+
+test('newBlankScenario: copies simStart and simEnd from fromScenario', () => {
+  const pb = makePrebuilt('alpha');
+  const { registry, service } = makeStack({ prebuiltScenarios: [pb] });
+  const fromScenario = registry.getActive();
+  const created = service.newBlankScenario(fromScenario);
+  assert.strictEqual(created.simStart, fromScenario.simStart);
+  assert.strictEqual(created.simEnd,   fromScenario.simEnd);
+});
+
+test('newBlankScenario: all config collections are empty (blank canvas)', () => {
+  const { registry } = buildAndCompilePrebuilt();
+  const active  = registry.scenarioRegistry.getActive();
+  const created = registry.scenarioService.newBlankScenario(active);
+
+  // Even when copied from a fully-compiled prebuilt, the blank scenario keeps
+  // no domain data, params, toolsets, or graph snapshot.
+  for (const key of ['params', 'events', 'handlers', 'actions', 'reducers',
+                     'toolsets', 'persons', 'accounts', 'realProperties', 'collectibles']) {
+    assert.ok(Array.isArray(created[key]), `${key} should be an array`);
+    assert.strictEqual(created[key].length, 0, `${key} should be empty`);
+  }
+  assert.deepStrictEqual(created.initialState, {});
+});
+
 // ── Shared setup for full-copy tests ─────────────────────────────────────────
 
 function buildAndCompilePrebuilt() {

@@ -226,6 +226,7 @@ import { Graph } from './graph/graph.js';
 import { SimGraphNode } from './graph/sim-graph-node.js';
 import { QueryApi } from './query/query-api.js';
 import { BaseScenario } from './scenarios/base-scenario.js';
+import { BlankScenario } from './scenarios/blank-scenario.js';
 import { DRAWDOWN_STRATEGIES, DRAWDOWN_ROLES, INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
 import { ScenarioLoader } from './scenarios/scenario-loader.js';
 import { ScenarioRegistry } from './scenarios/scenario-registry.js';
@@ -956,6 +957,7 @@ export const Engine = {
 
 export const Scenarios = {
   BaseScenario,
+  BlankScenario,
   DRAWDOWN_STRATEGIES,
   DRAWDOWN_ROLES,
   INTL_RETIREMENT_DEFAULTS,

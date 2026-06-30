@@ -33,10 +33,17 @@ export class ScenarioTabController {
   }
 
   /**
-   * Create a new user scenario based on fromScenario.
+   * Create a new user scenario based on fromScenario (copies all config).
    */
   newScenario(fromScenario) {
     return this._service.newScenario(fromScenario);
+  }
+
+  /**
+   * Create a new empty user scenario (blank canvas — no config copied).
+   */
+  newBlankScenario(fromScenario) {
+    return this._service.newBlankScenario(fromScenario);
   }
 
   /**

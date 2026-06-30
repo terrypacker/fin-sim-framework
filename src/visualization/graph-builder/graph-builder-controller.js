@@ -176,15 +176,26 @@ export class GraphBuilderController {
    */
   addActionDefinition(node, defData) {
     const def = new ActionDefinition({ type: defData.type, config: defData.config });
-    const generatedActionDefinitions = [...node.generatedActionDefinitions];
-    generatedActionDefinitions.push(def);
 
+    // Materialize a graph action node for this type (creating one if it doesn't
+    // exist yet) so the generated action is visible in the graph and selectable
+    // as a reducer input.
+    const actionNode = this.actionService.ensureActionForType(def.type);
+
+    // Link the definition to that node via _actionId so the runtime action it
+    // emits carries the config-graph node id. Execution telemetry publishes that
+    // id as nodeId (the #134 workaround in simulation.js), which is what lights
+    // the action node up as "fired" — without it the action runs but the node
+    // reports nodeId:null and never shows as fired. Mirrors ActionDefinition.fromAction.
+    def.config = { ...def.config, _actionId: actionNode.id };
+
+    const generatedActionDefinitions = [...node.generatedActionDefinitions, def];
+
+    // Declare the type so updateNode's edge rebuild wires the handler/reducer →
+    // action edge.
     const generatedActionTypes = [...node.generatedActionTypes];
     if (!generatedActionTypes.includes(def.type)) {
-      const actionNode = this.actionService.getByType(def.type);
-      if (actionNode) {
-        generatedActionTypes.push(def.type);
-      }
+      generatedActionTypes.push(def.type);
     }
     this.updateNode(node, {
       generatedActionDefinitions: generatedActionDefinitions,
@@ -262,66 +273,73 @@ export class GraphBuilderController {
 
   // ── Graph edge mutations ───────────────────────────────────────────────────
 
-  /** Add a graph edge and sync the canonical relationship array. */
+  /** Add a link between two config nodes (direction-agnostic). */
   linkNodes(node, selectedNode, kind, linkTo) {
-    switch(node.kind) {
-      case 'event':
-        if(selectedNode.kind === 'handler') {
-          this.handlerService.linkEventToHandler(node.id, selectedNode.id);
-        }
-      break;
-       case 'handler':
-         if(selectedNode.kind === 'event'){
-           this.handlerService.linkEventToHandler(selectedNode.id, node.id);
-         }else if(selectedNode.kind === 'action') {
-          this.handlerService.linkHandlerToAction(node.id, selectedNode.id);
-        }
-        break;
-      case 'action':
-        if(selectedNode.kind === 'handler'){
-          this.handlerService.linkHandlerToAction(selectedNode.id, node.id);
-        }else if(selectedNode.kind === 'reducer') {
-          this.reducerService.linkReducesAction(node.id, selectedNode.id);
-        }
-        break;
-      case 'reducer':
-        if(selectedNode.kind === 'action') {
-          this.reducerService.linkReducesAction(selectedNode.id, node.id);
-        }
-        break;
+    this._syncLink(node, selectedNode, true);
+  }
+
+  /** Remove a link between two config nodes (direction-agnostic). */
+  unlinkNodes(node, selectedNode, kind, linkTo) {
+    this._syncLink(node, selectedNode, false);
+  }
+
+  /**
+   * Add or remove a link by syncing the CANONICAL relationship array on the
+   * owning node, then routing through the service update path. That update
+   * rebuilds the graph edge (_rewireEdges) AND re-wires the running sim
+   * (UPDATE → SimulationSync._applyHandlerChange / _applyReducerChange).
+   *
+   * The canonical arrays — not the raw graph edges — are what gets serialized
+   * by toJSON and what drives runtime wiring (_wireHandler reads handledEvents;
+   * _wireReducer reads reducedActionTypes). The previous implementation only
+   * added/removed the graph edge, so hand-built links neither survived a reload
+   * (toJSON saw empty arrays) nor executed (the sim never wired them) — the
+   * event fired but nothing downstream ran.
+   *
+   * @param {object}  node          - the node being edited
+   * @param {object}  selectedNode  - the node it is being linked to/from
+   * @param {boolean} add           - true to link, false to unlink
+   * @private
+   */
+  _syncLink(node, selectedNode, add) {
+    // Resolve the pair by kind regardless of which end the drag started from.
+    const byKind = { [node.kind]: node, [selectedNode.kind]: selectedNode };
+    const { event, handler, action, reducer } = byKind;
+
+    if (handler && event) {
+      this._syncHandlerEvents(handler, event, add);
+    } else if (handler && action) {
+      this._syncHandlerActionTypes(handler, action, add);
+    } else if (reducer && action) {
+      this._syncReducerActionTypes(reducer, action, add);
     }
   }
 
-  /** Remove a graph edge and sync the canonical relationship array. */
-  unlinkNodes(node, selectedNode, kind, linkTo) {
-    switch(node.kind) {
-      case 'event':
-        if(selectedNode.kind === 'handler') {
-          //Unlink event from handler
-          this.handlerService.unlinkEventFromHandler(node.id, selectedNode.id);
-        }
-        break;
-      case 'handler':
-        if(selectedNode.kind === 'action') {
-          //Unlink action from handler
-          this.handlerService.unlinkHandlerFromAction(node.id, selectedNode.id);
-        }else if(selectedNode.kind === 'event') {
-          this.handlerService.unlinkEventFromHandler(selectedNode.id, node.id);
-        }
-        break;
-      case 'action':
-        if(selectedNode.kind === 'handler'){
-          this.handlerService.unlinkHandlerFromAction(selectedNode.id, node.id);
-        }else if(selectedNode.kind === 'reducer') {
-          this.reducerService.unlinkReducesAction(node.id, selectedNode.id);
-        }
-        break;
-      case 'reducer':
-        if(selectedNode.kind === 'action') {
-          this.reducerService.unlinkReducesAction(selectedNode.id, node.id);
-        }
-        break;
-    }
+  /** Sync an event into/out of a handler's handledEvents (event→handler edge). */
+  _syncHandlerEvents(handler, event, add) {
+    const events = [...(handler.handledEvents ?? [])];
+    const idx = events.findIndex(e => e.id === event.id);
+    if (add) { if (idx !== -1) return; events.push(event); }
+    else     { if (idx === -1) return; events.splice(idx, 1); }
+    this.handlerService.updateHandler(handler.id, { handledEvents: events });
+  }
+
+  /** Sync an action type into/out of a handler's generatedActionTypes (handler→action edge). */
+  _syncHandlerActionTypes(handler, action, add) {
+    const types = [...(handler.generatedActionTypes ?? [])];
+    const idx = types.indexOf(action.type);
+    if (add) { if (idx !== -1) return; types.push(action.type); }
+    else     { if (idx === -1) return; types.splice(idx, 1); }
+    this.handlerService.updateHandler(handler.id, { generatedActionTypes: types });
+  }
+
+  /** Sync an action type into/out of a reducer's reducedActionTypes (action→reducer edge). */
+  _syncReducerActionTypes(reducer, action, add) {
+    const types = [...(reducer.reducedActionTypes ?? [])];
+    const idx = types.indexOf(action.type);
+    if (add) { if (idx !== -1) return; types.push(action.type); }
+    else     { if (idx === -1) return; types.splice(idx, 1); }
+    this.reducerService.updateReducer(reducer.id, { reducedActionTypes: types });
   }
 
   // ── Configuration Lifecycle ─────────────────────────────

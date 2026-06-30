@@ -34,6 +34,8 @@ export class ScenarioTabView {
     this.personsProvider = null;
     /** @type {function()|null} */
     this.onNew = null;
+    /** @type {function()|null} */
+    this.onNewBlank = null;
     /** @type {function(string)|null} */
     this.onDelete = null;
     /** @type {function()|null} */
@@ -102,6 +104,10 @@ export class ScenarioTabView {
 
     document.getElementById('newScenarioBtn')?.addEventListener('click', () => {
       if(this.onNew) this.onNew();
+    });
+
+    document.getElementById('newBlankScenarioBtn')?.addEventListener('click', () => {
+      if(this.onNewBlank) this.onNewBlank();
     });
 
     document.getElementById('deleteScenarioBtn')?.addEventListener('click', () => {

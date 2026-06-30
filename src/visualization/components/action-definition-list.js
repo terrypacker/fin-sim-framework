@@ -69,6 +69,16 @@ export class ActionDefinitionList extends BaseComponent {
 
     row.appendChild(typeInput);
 
+    // Editable config fields (value, name, key, fieldName, script, …) so the
+    // emitted action can actually be configured here — not just its type.
+    // actionClass is fixed by the template and internal (_-prefixed) keys are
+    // not user-editable, so both are skipped.
+    const config = def.config ?? {};
+    for (const key of Object.keys(config)) {
+      if (key === 'actionClass' || key.startsWith('_')) continue;
+      row.appendChild(this._renderConfigField(def, key, config[key]));
+    }
+
     const removeBtn = document.createElement('button');
     removeBtn.className = 'btn btn-warn btn-sm';
     removeBtn.style.cssText = 'flex: .1';
@@ -83,6 +93,46 @@ export class ActionDefinitionList extends BaseComponent {
     row.appendChild(removeBtn);
 
     return row;
+  }
+
+  /**
+   * Render a labelled input for one ActionDefinition config field.
+   *
+   * Numeric fields (those whose current value is a number, e.g. AmountAction's
+   * `value`) are coerced back to a number on edit so the reducer reads a numeric
+   * amount — unless the user types a `$`-expression, which is passed through as a
+   * string for ActionDefinition.instantiate() to evaluate at runtime.
+   *
+   * @param {ActionDefinition} def
+   * @param {string} key
+   * @param {*} currentValue
+   * @private
+   */
+  _renderConfigField(def, key, currentValue) {
+    const wrap = document.createElement('label');
+    wrap.className = 'action-definition-config';
+    wrap.style.cssText = 'flex:.7;display:flex;flex-direction:column;font-size:10px;color:var(--muted,#888);';
+    wrap.append(key);
+
+    const input = document.createElement('input');
+    input.className = 'form-control form-control-sm';
+    input.value = currentValue ?? '';
+    input.placeholder = key;
+
+    const wasNumber = typeof currentValue === 'number';
+    this.listen(input, 'input', () => {
+      if (!this.onUpdate) return;
+      const raw = input.value;
+      const trimmed = raw.trim();
+      const num = Number(trimmed);
+      const coerced = (wasNumber && trimmed !== '' && !trimmed.startsWith('$') && Number.isFinite(num))
+        ? num
+        : raw;
+      this.onUpdate(this._node, def.id, key, coerced);
+    });
+
+    wrap.appendChild(input);
+    return wrap;
   }
 
   _renderAddForm() {

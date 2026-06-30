@@ -657,7 +657,11 @@ export class Simulation {
           kind:        EXECUTION_KINDS.ACTION,
           executionId: actionExecId,
           parentId:    handlerExecId ?? null,
-          nodeId:      action.actionId ?? null,
+          // _actionId (config-graph node id), consistent with the BEGIN and the
+          // no-reducer END above. Using `actionId` (no underscore) — a field that
+          // doesn't exist — published nodeId:null, so an action WITH reducers
+          // never lit up as "fired" in the graph overlay even though it ran.
+          nodeId:      action._actionId ?? null,
           date:        new Date(this.currentDate),
           sim:         this,
           data:        { action, sourceEvent }
