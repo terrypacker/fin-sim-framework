@@ -243,7 +243,19 @@ export const COCKPIT_CONTROLS = {
     // (the toolset compounds to the year's nominal). 0 = OFF for the class.
     defaultRange: { min: 0, max: 500_000, step: 5_000 },
     liveActuatable: true,
-    appliesTo: (bp) => bp?.earlyWithdrawalEnabled === true,
+    // Enabling is necessary but NOT sufficient: the toolset's schedules() only
+    // seeds tunable SCHEDULED_EARLY_WITHDRAWAL events when there's a non-empty
+    // schedule OR a valid optimization window (us-early-withdrawal-toolset.js
+    // §189). Without events to re-target, the lever advises moves it can't
+    // execute (save-point text ≠ behavior). Mirror that gate here so the cockpit
+    // refuses the inert case and surfaces `requirement` — unlike ROTH, whose
+    // annual evaluate events exist whenever rothConversionEnabled is true.
+    appliesTo: (bp) => bp?.earlyWithdrawalEnabled === true && (
+      (Array.isArray(bp?.earlyWithdrawalSchedule) && bp.earlyWithdrawalSchedule.length > 0) ||
+      (Number.isFinite(bp?.earlyWithdrawalStartYear) &&
+       Number.isFinite(bp?.earlyWithdrawalEndYear) &&
+       bp.earlyWithdrawalEndYear >= bp.earlyWithdrawalStartYear)
+    ),
     requirement: 'Enable early withdrawals and set an optimization window (Scenario panel) to use this lever.',
     // The next actionable withdrawal year needs a schedule entry before the solver
     // can address its amounts (`set()` never creates nodes). Append + keep

@@ -197,11 +197,24 @@ describe('COCKPIT_CONTROLS.EARLY_WITHDRAWAL.actuate — persists both classes + 
   const mkServices = (queue = []) => ({ simulationRegistry: { getPrimary: () => ({ currentDate: new Date(Date.UTC(2033, 0, 1)), queue: { data: queue } }) } });
   const cand = (td, rt) => ({ 'earlyWithdrawalSchedule[0].taxDeferredAmount': td, 'earlyWithdrawalSchedule[0].rothAmount': rt });
 
-  test('appliesTo gates on earlyWithdrawalEnabled; lever is live-actuatable', () => {
-    assert.equal(COCKPIT_CONTROLS.EARLY_WITHDRAWAL.appliesTo({ earlyWithdrawalEnabled: true }),  true);
-    assert.equal(COCKPIT_CONTROLS.EARLY_WITHDRAWAL.appliesTo({ earlyWithdrawalEnabled: false }), false);
-    assert.equal(COCKPIT_CONTROLS.EARLY_WITHDRAWAL.liveActuatable, true);
-    assert.equal(typeof COCKPIT_CONTROLS.EARLY_WITHDRAWAL.actuate, 'function');
+  test('appliesTo needs enabled AND a tunable source (schedule or window); lever is live-actuatable', () => {
+    const EW = COCKPIT_CONTROLS.EARLY_WITHDRAWAL;
+    // Disabled is always inert.
+    assert.equal(EW.appliesTo({ earlyWithdrawalEnabled: false }), false);
+    // Enabled but NO schedule and NO window → inert (the toolset seeds no events
+    // to re-target, so the lever can't execute what it advises — design 45 gate).
+    assert.equal(EW.appliesTo({ earlyWithdrawalEnabled: true }), false);
+    assert.equal(EW.appliesTo({ earlyWithdrawalEnabled: true, earlyWithdrawalSchedule: [] }), false);
+    // Enabled + a non-empty schedule → applies.
+    assert.equal(EW.appliesTo({ earlyWithdrawalEnabled: true, earlyWithdrawalSchedule: [{ year: 2029 }] }), true);
+    // Enabled + a valid optimization window → applies.
+    assert.equal(EW.appliesTo({ earlyWithdrawalEnabled: true, earlyWithdrawalStartYear: 2027, earlyWithdrawalEndYear: 2030 }), true);
+    // A degenerate window (end < start) is not valid → inert.
+    assert.equal(EW.appliesTo({ earlyWithdrawalEnabled: true, earlyWithdrawalStartYear: 2030, earlyWithdrawalEndYear: 2027 }), false);
+    // A half-set window (only start) is not valid → inert.
+    assert.equal(EW.appliesTo({ earlyWithdrawalEnabled: true, earlyWithdrawalStartYear: 2027 }), false);
+    assert.equal(EW.liveActuatable, true);
+    assert.equal(typeof EW.actuate, 'function');
   });
 
   test('a positive recommendation persists both per-class amounts', () => {
