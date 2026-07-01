@@ -58,13 +58,13 @@ export const COCKPIT_CONTROLS = {
       // The band amount is REAL base-year USD; the reducer compounds it to nominal
       // by inflationAccumulator (explicit-bands-spending-reducer.js). Show both so
       // a late-life "$8,000" isn't misread as a nominal collapse.
-      return `Set monthly spend to ${fmtUsd(real)}${_nominalSuffix(real, ctx, '/mo')}`;
+      return `Set monthly spend to ${fmtUsd(real)}${_nominalSuffix(real, _nowYear(ctx), ctx, '/mo')}`;
     },
     // The save-points log is a record of what applied AT that date, so it reads the
     // single nominal amount the plan actually spent then — no real/nominal pairing.
     describeRecord: (candidate, vars, ctx) => {
       const v = vars[0];
-      return `Set monthly spend to ${fmtUsd(_toNominal(candidate[v.paramKey], ctx))}/mo`;
+      return `Set monthly spend to ${fmtUsd(_toNominal(candidate[v.paramKey], _nowYear(ctx), ctx))}/mo`;
     },
     liveActuatable: true,
     /**
@@ -167,14 +167,26 @@ export const COCKPIT_CONTROLS = {
         group: 'Roth', _year: year,
       }];
     },
-    describe: (candidate, vars) => {
+    describe: (candidate, vars, ctx) => {
       const v = vars?.[0];
       const t = v ? candidate?.[v.paramKey] : null;
       if (t == null || t <= 0) return 'No Roth conversion this year';
       const br = _bracketLabelForRealIncome(t);
+      // The target is REAL base-year USD; the toolset compounds it to the YEAR's
+      // nominal ceiling. Annotate with that nominal value (keyed off the event year,
+      // not "now") so a late-life "$100,000" isn't misread as today's dollars.
+      const suffix = _nominalSuffix(t, v?._year, ctx, '/yr');
       return br
-        ? `Fill ordinary income to ${fmtUsd(t)}/yr (real) — ${br}`
-        : `Fill ordinary income to ${fmtUsd(t)}/yr (real)`;
+        ? `Fill ordinary income to ${fmtUsd(t)}/yr (real) — ${br}${suffix}`
+        : `Fill ordinary income to ${fmtUsd(t)}/yr (real)${suffix}`;
+    },
+    // Save-points log: the nominal ceiling the conversion actually filled to at the
+    // event year (mirrors SPENDING.describeRecord — no real/nominal pairing).
+    describeRecord: (candidate, vars, ctx) => {
+      const v = vars?.[0];
+      const t = v ? candidate?.[v.paramKey] : null;
+      if (t == null || t <= 0) return 'No Roth conversion this year';
+      return `Fill ordinary income to ${fmtUsd(_toNominal(t, v?._year, ctx))}/yr`;
     },
     /**
      * Forward-effective live actuation (design 39 Step 10). Unlike SPENDING (a
@@ -294,7 +306,7 @@ export const COCKPIT_CONTROLS = {
       };
       return [mk('taxDeferredAmount', caps.taxDeferred), mk('rothAmount', caps.roth)];
     },
-    describe: (candidate, vars) => {
+    describe: (candidate, vars, ctx) => {
       const td = vars?.find(v => v.paramKey.endsWith('.taxDeferredAmount'));
       const rt = vars?.find(v => v.paramKey.endsWith('.rothAmount'));
       const tdAmt = td ? (candidate?.[td.paramKey] ?? 0) : 0;
@@ -308,7 +320,27 @@ export const COCKPIT_CONTROLS = {
       // earnings split — shown as a "+").
       const penalty = 0.10 * tdAmt;
       const pen = penalty > 0 ? ` (≈${fmtUsd(penalty)}+ penalty)` : '';
-      return `Withdraw ${parts.join(' + ')} early${pen} → brokerage (real $)`;
+      // Amounts are REAL base-year USD; the toolset compounds them to the event
+      // year's nominal gross draw. Annotate the combined draw's nominal value (keyed
+      // off the event year) so a late-life real "$50,000" isn't read as today's $.
+      const year = td?._year ?? rt?._year ?? null;
+      const suffix = _nominalSuffix(tdAmt + rtAmt, year, ctx);
+      return `Withdraw ${parts.join(' + ')} early${pen} → brokerage (real $)${suffix}`;
+    },
+    // Save-points log: the nominal per-class cash that actually left the accounts at
+    // the event year (mirrors SPENDING.describeRecord — the audit log records what
+    // moved, not the real base-year input).
+    describeRecord: (candidate, vars, ctx) => {
+      const td = vars?.find(v => v.paramKey.endsWith('.taxDeferredAmount'));
+      const rt = vars?.find(v => v.paramKey.endsWith('.rothAmount'));
+      const tdAmt = td ? (candidate?.[td.paramKey] ?? 0) : 0;
+      const rtAmt = rt ? (candidate?.[rt.paramKey] ?? 0) : 0;
+      if (tdAmt <= 0 && rtAmt <= 0) return 'No early withdrawal this year';
+      const year = td?._year ?? rt?._year ?? null;
+      const parts = [];
+      if (tdAmt > 0) parts.push(`${fmtUsd(_toNominal(tdAmt, year, ctx))} tax-deferred`);
+      if (rtAmt > 0) parts.push(`${fmtUsd(_toNominal(rtAmt, year, ctx))} Roth`);
+      return `Withdraw ${parts.join(' + ')} early → brokerage`;
     },
     /**
      * Forward-effective live actuation (design 45 Phase 3), mirroring ROTH: (1)
@@ -818,24 +850,31 @@ function _bracketLabelForRealIncome(realIncome) {
  * compounds with (`(1+infl)^(year − BRACKET_BASE_YEAR)`). Near the base year the
  * two coincide, so it just tags "(today's $)".
  */
-function _nominalFactor(ctx) {
-  const asOf = ctx?.asOf ? new Date(ctx.asOf) : null;
-  if (!asOf || Number.isNaN(asOf.getTime())) return null;
-  const year = asOf.getUTCFullYear();
+function _nominalFactor(year, ctx) {
+  if (!Number.isFinite(year)) return null;
   const infl = ctx?.inflationRate ?? 0.03;
   return { factor: Math.pow(1 + infl, year - BRACKET_BASE_YEAR), year };
 }
 
-function _nominalSuffix(real, ctx, unit = '') {
+/** The "now" calendar year from ctx.asOf — for levers whose amount applies now
+ *  (SPENDING). Roth/early-withdrawal amounts fire in a FUTURE event year, so those
+ *  pass that event year (the variable's `_year`) explicitly instead. */
+function _nowYear(ctx) {
+  const asOf = ctx?.asOf ? new Date(ctx.asOf) : null;
+  if (!asOf || Number.isNaN(asOf.getTime())) return null;
+  return asOf.getUTCFullYear();
+}
+
+function _nominalSuffix(real, year, ctx, unit = '') {
   if (!Number.isFinite(real)) return '';
-  const nf = _nominalFactor(ctx);
+  const nf = _nominalFactor(year, ctx);
   if (!nf || !(nf.factor > 1.001)) return ' (today’s $)';
   return ` (today’s $) ≈ ${fmtUsd(real * nf.factor)}${unit} in ${nf.year}`;
 }
 
-/** Real base-year amount expressed in nominal "now"-year dollars (falls back to real). */
-function _toNominal(real, ctx) {
-  const nf = _nominalFactor(ctx);
+/** Real base-year amount expressed in nominal `year` dollars (falls back to real). */
+function _toNominal(real, year, ctx) {
+  const nf = _nominalFactor(year, ctx);
   return nf ? real * nf.factor : real;
 }
 
