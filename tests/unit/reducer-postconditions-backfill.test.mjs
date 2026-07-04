@@ -44,6 +44,7 @@ import { AuFixedIncomeEarningsApplyReducer } from '../../src/finance/account-rul
 import { StateIncomeClassificationReducer } from '../../src/finance/tax/state/state-income-classification.js';
 import { StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer } from '../../src/finance/tax/state/state-tax-settle-classes.js';
 import { UsMortgagePaymentApplyReducer, AuMortgagePaymentApplyReducer } from '../../src/finance/account-rules/mortgage-payment-classes.js';
+import { UsRentalIncomeApplyReducer, AuRentalIncomeApplyReducer } from '../../src/finance/account-rules/rental-income-classes.js';
 
 const DATE = new Date('2030-06-15');
 
@@ -262,6 +263,45 @@ for (const [label, Reducer, type] of [
       DATE, { checkNoMutation: false, balance: true, nonNegative: true });
     assert.equal(next.cash.balance, 0);
     assert.equal(next.house.mortgageBalance, 199500); // only 500 actually paid
+  });
+}
+
+// ─── K — Rental income (design 48; service-backed cash credit) ────────────────
+
+for (const [label, Reducer, type] of [
+  ['UsRentalIncomeApplyReducer', UsRentalIncomeApplyReducer, 'US_RENTAL_INCOME_APPLY'],
+  ['AuRentalIncomeApplyReducer', AuRentalIncomeApplyReducer, 'AU_RENTAL_INCOME_APPLY'],
+]) {
+  test(`${label}: credits net cash, accrues depreciation, chains _TAX with the taxable net`, () => {
+    const services = makeServices();
+    const r = new Reducer(services);
+    const state = {
+      house: { value: 1_000_000, accumulatedDepreciation: 500 },
+      cash: makeAccount({ stateKey: 'cash', holdings: [{ id: 'c1', marketValue: 8000, costBasis: 8000 }] }),
+    };
+    const prev = structuredClone(state);
+    const next = runReducer(r, state,
+      makeAction(type, { stateKey: 'house', netCash: 2025, taxableRental: 1025, monthlyDepreciation: 1000, cashKey: 'cash', residency: 'US' }),
+      DATE, { checkNoMutation: false, balance: true, nonNegative: true });
+    assert.equal(next.cash.balance, 10025, 'cash credited by netCash');
+    assert.equal(next.cash.balance - prev.cash.balance, 2025, 'credit == netCash');
+    assert.equal(next.house.accumulatedDepreciation, 1500, 'depreciation accrued');
+    assert.equal(next.next[0].type, `${type.replace('_APPLY', '_TAX')}`);
+    assert.equal(next.next[0].amount, 1025, 'chained taxable net');
+  });
+
+  test(`${label}: a taxable loss (negative net) is chained through unclamped`, () => {
+    const services = makeServices();
+    const r = new Reducer(services);
+    const state = {
+      house: { value: 1_000_000, accumulatedDepreciation: 0 },
+      cash: makeAccount({ stateKey: 'cash', holdings: [{ id: 'c1', marketValue: 8000, costBasis: 8000 }] }),
+    };
+    const next = runReducer(r, state,
+      makeAction(type, { stateKey: 'house', netCash: 750, taxableRental: -2750, monthlyDepreciation: 1000, cashKey: 'cash', residency: 'US' }),
+      DATE, { checkNoMutation: false, balance: true, nonNegative: true });
+    assert.equal(next.cash.balance, 8750, 'cash still credited by positive netCash');
+    assert.equal(next.next[0].amount, -2750, 'taxable loss passes through negative');
   });
 }
 

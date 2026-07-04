@@ -36,6 +36,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
       ...this._k401ReducerFns(),
       ...this._usBrokerageReducerFns(),
       ...this._realPropertyReducerFns(),
+      ...this._rentalReducerFns(),
       ...this._incomeReducerFns(),
       ...this._collectibleReducerFns(),
       ...this._iraRolloverReducerFns(),
@@ -203,6 +204,27 @@ export class UsTaxModule2026 extends BaseTaxModule {
         ...state,
         usCapitalGainsYTD: state.usCapitalGainsYTD + action.gain,
       })],
+    ];
+  }
+
+  _rentalReducerFns() {
+    return [
+      // Design 48: US rental income — net rental income (may be negative) is US
+      // ordinary income (US-sourced). For an AU resident it is also AU ordinary
+      // income with an FTC for the US tax; FTC never goes negative in a loss year.
+      ['US_RENTAL_INCOME_TAX', (state, action) => {
+        const { amount, residency } = action;
+        const isAuResident = residency === 'AU';
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        if (isAuResident) {
+          next = {
+            ...next,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            ftcYTD:              state.ftcYTD              + Math.max(0, amount),
+          };
+        }
+        return next;
+      }],
     ];
   }
 

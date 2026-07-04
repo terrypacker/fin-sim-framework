@@ -50,7 +50,12 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     const { salePrice, costBasis, mortgageBalance, stateKey, destinationKey } = action;
     const mortgage    = mortgageBalance ?? 0;
     const netProceeds = Math.max(0, salePrice - mortgage);
-    const rawGain     = Math.max(0, salePrice - costBasis);
+    // Depreciation taken during the hold reduces the tax basis, so the gain is
+    // larger (design 48 §4.5). accumulatedDepreciation is 0 for non-rental
+    // properties, so this is a no-op there.
+    const accumulatedDep = (stateKey && state[stateKey]?.accumulatedDepreciation) ?? 0;
+    const adjustedBasis  = Math.max(0, costBasis - accumulatedDep);
+    const rawGain     = Math.max(0, salePrice - adjustedBasis);
     const taxableGain = Math.max(0, rawGain - US_PRIMARY_HOME_EXEMPTION);
     const destKey     = destinationKey ?? defaultUsCashKey(state);
     this.accountService.transaction(state[destKey], netProceeds, null);
@@ -69,7 +74,7 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
         type:        'US_HOUSE_SALE_TAX',
         gain:        taxableGain,
         proceeds:    salePrice,
-        costBasis,
+        costBasis:   adjustedBasis,
         description: stateKey || 'usHouse',
       }]
     );

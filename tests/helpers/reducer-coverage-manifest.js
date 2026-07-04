@@ -118,6 +118,9 @@ export const COVERED = [
   'AddRegimeReducer', 'RevalueAssetReducer', 'AssetAppreciateReducer', 'FxTransferApplyReducer',
   'StateIncomeClassificationReducer', 'StateTaxSettleApplyReducer', 'StateTaxPaymentDebitReducer',
   'UsMortgagePaymentApplyReducer', 'AuMortgagePaymentApplyReducer',
+
+  // K — rental income (design 48; reducer-postconditions-backfill.test.mjs)
+  'UsRentalIncomeApplyReducer', 'AuRentalIncomeApplyReducer',
 ];
 
 /**

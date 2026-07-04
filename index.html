@@ -770,6 +770,34 @@
             <option value="">— none —</option>
           </select>
         </div>
+        <div class="node-field">
+          <label>Rental Income</label>
+          <input type="checkbox" data-id="rentalEnabled"/>
+        </div>
+        <div class="node-field">
+          <label>Monthly Rent</label>
+          <input type="number" data-id="monthlyRent" value="0" title="Gross rent at 100% occupancy"/>
+        </div>
+        <div class="node-field">
+          <label>Occupancy</label>
+          <input type="number" data-id="occupancyRate" value="0.95" step="0.01" title="Fraction realized (LTR ≈ 0.95, STR ≈ 0.55)"/>
+        </div>
+        <div class="node-field">
+          <label>Expense Ratio</label>
+          <input type="number" data-id="rentalExpenseRatio" value="0.25" step="0.01" title="Deductible cash opex as a fraction of gross rent"/>
+        </div>
+        <div class="node-field">
+          <label>Mtg. Int. Rate</label>
+          <input type="number" data-id="mortgageInterestRate" value="0" step="0.001" title="Annual mortgage interest rate (deductible)"/>
+        </div>
+        <div class="node-field">
+          <label>Land Value %</label>
+          <input type="number" data-id="landValueRatio" value="0.2" step="0.01" title="Non-depreciable land fraction of cost basis"/>
+        </div>
+        <div class="node-field">
+          <label>Deprec. Override</label>
+          <input type="number" data-id="annualDepreciationOverride" placeholder="blank = derive" title="Explicit annual depreciation $; blank derives per-country"/>
+        </div>
       </div>
       <div class="node-buttons">
         <button class="btn btn-sm btn-primary" data-id="saveBtn">Save</button>

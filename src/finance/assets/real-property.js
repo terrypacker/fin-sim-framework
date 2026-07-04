@@ -50,6 +50,16 @@ export class RealProperty extends Asset {
    * @param {Array<{date: Date|string, rate: number}>|null} [opts.appreciationSchedule=null]
    *                                                            - Step-wise appreciation schedule (design 28 §3)
    * @param {string|null}   [opts.market=null]                  - Market code, e.g. 'US-SF-BAY' (design 28 §4)
+   *
+   * Rental income (design 48). All optional; inert when rentalEnabled is false.
+   * @param {boolean}       [opts.rentalEnabled=false]          - Master switch for the rental income series
+   * @param {number}        [opts.monthlyRent=0]                - Gross fully-occupied monthly rent (property currency)
+   * @param {number}        [opts.occupancyRate=0.95]           - Fraction of potential realized (LTR ≈ 0.95, STR ≈ 0.55)
+   * @param {number}        [opts.rentalExpenseRatio=0.25]      - Deductible cash opex as a fraction of effective gross rent
+   * @param {number}        [opts.mortgageInterestRate=0]       - Annual mortgage interest rate; deductible interest = balance × rate / 12
+   * @param {number}        [opts.landValueRatio=0.2]           - Non-depreciable land fraction of costBasis
+   * @param {number|null}   [opts.annualDepreciationOverride=null] - Explicit annual depreciation $; overrides per-country derivation
+   * @param {number}        [opts.accumulatedDepreciation=0]    - Running total of depreciation taken; reduces basis at sale (§4.5)
    */
   constructor(initialValue = 0, opts = {}) {
     super(opts.name ?? '', { ...opts, kind: 'real-property' });
@@ -67,5 +77,14 @@ export class RealProperty extends Asset {
     this.currency                = opts.currency                ?? null;
     this.appreciationSchedule    = opts.appreciationSchedule    ?? null;
     this.market                  = opts.market                  ?? null;
+    // Rental income (design 48)
+    this.rentalEnabled              = opts.rentalEnabled              ?? false;
+    this.monthlyRent                = opts.monthlyRent                ?? 0;
+    this.occupancyRate              = opts.occupancyRate              ?? 0.95;
+    this.rentalExpenseRatio         = opts.rentalExpenseRatio         ?? 0.25;
+    this.mortgageInterestRate       = opts.mortgageInterestRate       ?? 0;
+    this.landValueRatio             = opts.landValueRatio             ?? 0.2;
+    this.annualDepreciationOverride = opts.annualDepreciationOverride ?? null;
+    this.accumulatedDepreciation    = opts.accumulatedDepreciation    ?? 0;
   }
 }

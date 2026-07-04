@@ -12,11 +12,23 @@ import { OneOffEvent }           from '../../simulation-framework/events/one-off
 import { EventSeries }           from '../../simulation-framework/events/event-series.js';
 import { UsHouseSaleHandler, UsHouseSaleApplyReducer } from '../../finance/account-rules/us/us-real-property-classes.js';
 import { UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer } from '../../finance/account-rules/mortgage-payment-classes.js';
+import { UsRentalIncomeHandler, UsRentalIncomeApplyReducer } from '../../finance/account-rules/rental-income-classes.js';
 import { AssetAppreciationHandler } from '../../finance/handlers/asset-appreciation-handler.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
 import { USD, AUD } from '../../finance/assets/account.js';
 
 const US_REAL_PROPERTY_APPRECIATE_TYPE = 'US_REAL_PROPERTY_APPRECIATE';
+
+/** Per-property rental param projection consumed by the rental handler. */
+const _rentalParams = (p) => ({
+  stateKey:                   p.stateKey,
+  monthlyRent:                p.monthlyRent                ?? 0,
+  occupancyRate:              p.occupancyRate              ?? 0.95,
+  rentalExpenseRatio:         p.rentalExpenseRatio         ?? 0.25,
+  mortgageInterestRate:       p.mortgageInterestRate       ?? 0,
+  landValueRatio:             p.landValueRatio             ?? 0.2,
+  annualDepreciationOverride: p.annualDepreciationOverride ?? null,
+});
 
 /**
  * US_REAL_PROPERTY toolset — wires US house sale machinery.
@@ -39,8 +51,8 @@ export const US_REAL_PROPERTY = {
   dependencies: ['US_TAX'],
 
   types: {
-    handlers: [UsHouseSaleHandler, UsMortgagePaymentHandler, AssetAppreciationHandler],
-    reducers: [UsHouseSaleApplyReducer, UsMortgagePaymentApplyReducer],
+    handlers: [UsHouseSaleHandler, UsMortgagePaymentHandler, UsRentalIncomeHandler, AssetAppreciationHandler],
+    reducers: [UsHouseSaleApplyReducer, UsMortgagePaymentApplyReducer, UsRentalIncomeApplyReducer],
     actions: [
       { type: 'US_HOUSE_SALE_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'US',
         fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), stateKey: ValueType.text() } },
@@ -48,6 +60,10 @@ export const US_REAL_PROPERTY = {
         fields: { gain: ValueType.number(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text() } },
       { type: 'US_MORTGAGE_PAYMENT_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'US',
         fields: { amount: ValueType.currency('USD') } },
+      { type: 'US_RENTAL_INCOME_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'US',
+        fields: { netCash: ValueType.currency('USD'), taxableRental: ValueType.number(), monthlyDepreciation: ValueType.number(), stateKey: ValueType.text(), residency: ValueType.text() } },
+      { type: 'US_RENTAL_INCOME_TAX', cc: 'US',
+        fields: { amount: ValueType.number(), residency: ValueType.text() } },
       { type: 'ASSET_APPRECIATE_APPLY', family: 'REAL_PROPERTY_CASH', cc: null,
         fields: { stateKey: ValueType.text(), delta: ValueType.number() } },
     ],
@@ -89,6 +105,16 @@ export const US_REAL_PROPERTY = {
         color:    '#6D4C41',
       }));
     }
+    const rentalProps = usProps.filter(p => p.stateKey && p.rentalEnabled && (p.monthlyRent ?? 0) > 0);
+    if (rentalProps.length > 0) {
+      schedules.push(new EventSeries({
+        name:     'US Rental Income',
+        type:     'US_RENTAL_INCOME',
+        interval: 'month-end',
+        enabled:  true,
+        color:    '#2E7D32',
+      }));
+    }
     const appreciableProps = usProps.filter(p => p.stateKey && ((p.appreciationRate ?? 0) !== 0 || p.appreciationSchedule));
     if (appreciableProps.length > 0) {
       schedules.push(new EventSeries({
@@ -111,6 +137,10 @@ export const US_REAL_PROPERTY = {
       handlers.push(new UsMortgagePaymentHandler({
         properties: mortgagedProps.map(p => ({ stateKey: p.stateKey, monthlyMortgage: p.monthlyMortgage })),
       }));
+    }
+    const rentalProps = props.filter(p => p.stateKey && p.rentalEnabled && (p.monthlyRent ?? 0) > 0);
+    if (rentalProps.length > 0) {
+      handlers.push(new UsRentalIncomeHandler({ properties: rentalProps.map(_rentalParams) }));
     }
     const appreciableProps = props.filter(p => p.stateKey && ((p.appreciationRate ?? 0) !== 0 || p.appreciationSchedule));
     const appreciateEvent  = context.schedulesById?.[US_REAL_PROPERTY_APPRECIATE_TYPE];
@@ -136,6 +166,10 @@ export const US_REAL_PROPERTY = {
     if (mortgagedProps.length > 0) {
       reducers.push(new UsMortgagePaymentApplyReducer({ accountService: context.accountService }));
     }
+    const rentalProps = props.filter(p => p.stateKey && p.rentalEnabled && (p.monthlyRent ?? 0) > 0);
+    if (rentalProps.length > 0) {
+      reducers.push(new UsRentalIncomeApplyReducer({ accountService: context.accountService }));
+    }
     return reducers;
   },
 };
@@ -159,5 +193,14 @@ function _propertyToStatePlain(prop) {
     currency:            prop.currency           ?? (prop.country === 'AU' ? AUD : USD),
     appreciationSchedule: prop.appreciationSchedule ?? null,
     market:              prop.market             ?? null,
+    // Rental income (design 48)
+    rentalEnabled:              prop.rentalEnabled              ?? false,
+    monthlyRent:                prop.monthlyRent                ?? 0,
+    occupancyRate:              prop.occupancyRate              ?? 0.95,
+    rentalExpenseRatio:         prop.rentalExpenseRatio         ?? 0.25,
+    mortgageInterestRate:       prop.mortgageInterestRate       ?? 0,
+    landValueRatio:             prop.landValueRatio             ?? 0.2,
+    annualDepreciationOverride: prop.annualDepreciationOverride ?? null,
+    accumulatedDepreciation:    prop.accumulatedDepreciation    ?? 0,
   };
 }
