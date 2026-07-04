@@ -45,8 +45,10 @@ import { AccountsController }         from '../visualization/accounts/accounts-c
 import { AccountEditor }              from '../visualization/accounts/account-editor.js';
 import { RealPropertyEditor }         from '../visualization/assets/real-property-editor.js';
 import { CollectibleEditor }          from '../visualization/assets/collectible-editor.js';
+import { CompanyEquityEditor }        from '../visualization/assets/company-equity-editor.js';
 import { RealProperty }               from '../finance/assets/real-property.js';
 import { Collectible }                from '../finance/assets/collectible.js';
+import { CompanyEquity }              from '../finance/assets/company-equity.js';
 import { USD, AUD }                   from '../finance/assets/account.js';
 import { NodeEditModal }              from '../visualization/components/node-edit-modal.js';
 import { ConfigurationListComponent } from '../visualization/configuration/configuration-list.js';
@@ -299,6 +301,8 @@ export class WorkbenchApp extends BaseComponent {
         this._editModal.open({ kind: 'real-property', id: null, name: 'New Property' });
       } else if (kind === 'collectible') {
         this._editModal.open({ kind: 'collectible', id: null, name: 'New Collectible' });
+      } else if (kind === 'company') {
+        this._editModal.open({ kind: 'company', id: null, name: 'New Company Equity' });
       } else {
         const newNode = this.configPresenter.createNode(kind, null);
         this._editModal.open(newNode);
@@ -428,6 +432,35 @@ export class WorkbenchApp extends BaseComponent {
           },
           onDelete: (id) => {
             registry.collectibleService.deleteCollectible(id);
+            this._editModal.close();
+          },
+        });
+        editor.render();
+        return editor;
+      }
+
+      if (node?.kind === 'company') {
+        const people   = registry.graphQueryApi.getByKind('person');
+        const accounts = registry.graphQueryApi.getByKind('account');
+        const editor = new CompanyEquityEditor({
+          container,
+          node,
+          people,
+          accounts,
+          ...paramLinkProps(),
+          onSave: (data) => {
+            data.currency = _assetCurrency(data.currency);
+            if (data.id) {
+              const { id, ...changes } = data;
+              registry.companyEquityService.updateCompanyEquity(id, changes);
+            } else {
+              const eq = new CompanyEquity(data.value ?? 0, data);
+              registry.companyEquityService.createCompanyEquity(eq);
+            }
+            this._editModal.close();
+          },
+          onDelete: (id) => {
+            registry.companyEquityService.deleteCompanyEquity(id);
             this._editModal.close();
           },
         });

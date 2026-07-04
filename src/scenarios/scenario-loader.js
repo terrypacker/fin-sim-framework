@@ -30,6 +30,7 @@ import { US_EARLY_WITHDRAWAL } from './toolsets/us-early-withdrawal-toolset.js';
 import { US_BROKERAGE }      from './toolsets/us-brokerage-toolset.js';
 import { AU_BROKERAGE }      from './toolsets/au-brokerage-toolset.js';
 import { US_INCOME }         from './toolsets/us-income-toolset.js';
+import { US_COMPANY_SALE }   from './toolsets/us-company-sale-toolset.js';
 import { AU_INCOME }         from './toolsets/au-income-toolset.js';
 import { ECONOMIC_REGIMES }  from './toolsets/economic-regimes-toolset.js';
 import { normalizeCountryCode } from '../finance/country-codes.js';
@@ -45,7 +46,7 @@ const BUILT_IN_TOOLSETS = [
   US_AU_CROSS_BORDER,
   US_REAL_PROPERTY, AU_REAL_PROPERTY,
   US_COLLECTIBLES, US_ROTH_CONVERSION, US_EARLY_WITHDRAWAL,
-  US_BROKERAGE, AU_BROKERAGE, US_INCOME, AU_INCOME,
+  US_BROKERAGE, AU_BROKERAGE, US_INCOME, AU_INCOME, US_COMPANY_SALE,
   ECONOMIC_REGIMES,
 ];
 
@@ -138,6 +139,9 @@ export class ScenarioLoader {
     }
     for (const c of services.collectibleService?.getAll() ?? []) {
       if (c.stateKey) reg.registerAsset(c.stateKey, c);
+    }
+    for (const e of services.companyEquityService?.getAll() ?? []) {
+      if (e.stateKey) reg.registerAsset(e.stateKey, e);
     }
     // Per-person income currency (monthlyWage / socialSecurityMonthly).
     for (const person of services.personService?.getAll() ?? []) {
@@ -292,6 +296,9 @@ export class ScenarioLoader {
     } else if (node.type === 'realProperty') {
       const rec = (cfg.realProperties ?? []).find(r => r.stateKey === node.stateKey);
       if (rec) rec[node.field] = val != null ? Math.round(val) : val;
+    } else if (node.type === 'companyEquity') {
+      const rec = (cfg.companyEquities ?? []).find(r => r.stateKey === node.stateKey);
+      if (rec) rec[node.field] = val != null ? Math.round(val) : val;
     } else if (node.type === 'accountPriority') {
       // Fan one categorical strategy value out to drawdownPriority across many
       // accounts by role. Per-owner ranking (ownerOrder/ownerStride) keeps each
@@ -369,7 +376,7 @@ export class ScenarioLoader {
     // Snapshot the compiled graph back to cfg so the config is a complete
     // serialized representation usable by newScenario() and import/export.
     const { eventService, handlerService, reducerService,
-            personService, accountService, realPropertyService, collectibleService } = services;
+            personService, accountService, realPropertyService, collectibleService, companyEquityService } = services;
     cfg.events         = (eventService?.getAll()         ?? []).map(n => ScenarioSerializer._serializeEvent(n));
     cfg.handlers       = (handlerService?.getAll()       ?? []).map(n => ScenarioSerializer._serializeHandler(n));
     cfg.actions        = []; // action stubs are re-derived from handler generatedActionTypes at load time
@@ -378,6 +385,7 @@ export class ScenarioLoader {
     cfg.accounts       = (accountService?.getAll()       ?? []).map(n => ScenarioSerializer._serializeAccount(n));
     cfg.realProperties = (realPropertyService?.getAll()  ?? []).map(n => ScenarioSerializer._serializeRealProperty(n));
     cfg.collectibles   = (collectibleService?.getAll()   ?? []).map(n => ScenarioSerializer._serializeCollectible(n));
+    cfg.companyEquities = (companyEquityService?.getAll() ?? []).map(n => ScenarioSerializer._serializeCompanyEquity(n));
 
     this._mergeParamSchema(cfg, toolsetParamSchema);
   }
@@ -558,6 +566,7 @@ export class ScenarioLoader {
     cfg.accounts       = append(cfg.accounts,       defaults.accounts,       r => r.stateKey);
     cfg.realProperties = append(cfg.realProperties, defaults.realProperties, r => r.stateKey);
     cfg.collectibles   = append(cfg.collectibles,   defaults.collectibles,   r => r.stateKey);
+    cfg.companyEquities = append(cfg.companyEquities, defaults.companyEquities, r => r.stateKey);
   }
 }
 

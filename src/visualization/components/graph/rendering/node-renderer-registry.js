@@ -18,6 +18,7 @@ import {PersonNodeRenderer} from "./person-node-renderer.js";
 import {AccountNodeRenderer} from "./account-node-renderer.js";
 import {RealPropertyNodeRenderer} from "./real-property-node-renderer.js";
 import {CollectibleNodeRenderer} from "./collectible-node-renderer.js";
+import {CompanyEquityNodeRenderer} from "./company-equity-node-renderer.js";
 
 export class NodeRendererRegistry {
   constructor() {
@@ -72,6 +73,11 @@ export class NodeRendererRegistry {
     this.register(
         'collectible',
         new CollectibleNodeRenderer(renderKit)
+    );
+
+    this.register(
+        'company',
+        new CompanyEquityNodeRenderer(renderKit)
     );
 
     this.register(

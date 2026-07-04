@@ -28,6 +28,7 @@ import { US_EARLY_WITHDRAWAL } from './toolsets/us-early-withdrawal-toolset.js';
 import { US_BROKERAGE }        from './toolsets/us-brokerage-toolset.js';
 import { AU_BROKERAGE }        from './toolsets/au-brokerage-toolset.js';
 import { US_INCOME }           from './toolsets/us-income-toolset.js';
+import { US_COMPANY_SALE }     from './toolsets/us-company-sale-toolset.js';
 import { AU_INCOME }           from './toolsets/au-income-toolset.js';
 import { ECONOMIC_REGIMES }    from './toolsets/economic-regimes-toolset.js';
 import { ServiceRegistry }     from '../services/service-registry.js';
@@ -227,6 +228,9 @@ export const INTL_RETIREMENT_DEFAULTS = {
   // Real Property sale years (null = no planned sale; set to override property's own plannedSaleYear)
   usHouseSaleYear: null,
   auHouseSaleYear: null,
+
+  // Company equity sale year (null = no planned sale)
+  companySaleYear: 2033,
 };
 
 /**
@@ -463,6 +467,15 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     node: { type: 'realProperty', stateKey: 'auHouseProperty', field: 'plannedSaleYear' },
   },
 
+  // ── Company Equity ───────────────────────────────────────────────────────
+  {
+    key: 'companySaleYear', label: 'Company Sale Year',
+    type: 'Number', group: 'Company Equity', mc: false, opt: false,
+    defaultValue: INTL_RETIREMENT_DEFAULTS.companySaleYear,
+    description: 'Calendar year the company equity stake is sold (null = no planned sale)',
+    node: { type: 'companyEquity', stateKey: 'companyEquityAccount', field: 'plannedSaleYear' },
+  },
+
   // ── Spending ───────────────────────────────────────────────────────────────
   {
     key: 'drawdownStrategy', label: 'Drawdown Strategy',
@@ -603,7 +616,7 @@ export class IntlRetirementScenario extends BaseScenario {
       US_BANKING, US_TAX, US_STATE_TAX, US_BROKERAGE, US_INCOME, US_RETIREMENT,
       AU_BANKING, AU_TAX, AU_BROKERAGE, AU_INCOME, AU_RETIREMENT,
       US_AU_CROSS_BORDER, US_REAL_PROPERTY, AU_REAL_PROPERTY,
-      US_COLLECTIBLES, US_ROTH_CONVERSION, US_EARLY_WITHDRAWAL, ECONOMIC_REGIMES,
+      US_COLLECTIBLES, US_ROTH_CONVERSION, US_EARLY_WITHDRAWAL, US_COMPANY_SALE, ECONOMIC_REGIMES,
     ];
     const toolsetParams = toolsets
       .flatMap(t => t.paramSchema?.({}) ?? [])
@@ -618,6 +631,7 @@ export class IntlRetirementScenario extends BaseScenario {
       'US_AU_CROSS_BORDER',
       'US_REAL_PROPERTY', 'AU_REAL_PROPERTY',
       'US_COLLECTIBLES', 'US_ROTH_CONVERSION', 'US_EARLY_WITHDRAWAL',
+      'US_COMPANY_SALE',
       'ECONOMIC_REGIMES',
     ];
   }
@@ -862,6 +876,17 @@ export class IntlRetirementScenario extends BaseScenario {
           ownershipType: 'sole', ownerId: 'primary', country: 'US',
         },
       ],
+
+      // ── Company Equity ───────────────────────────────────────────────────────
+      companyEquities: [
+        {
+          __type: 'CompanyEquity', name: 'Startup Equity', stateKey: 'companyEquityAccount',
+          value: 500_000, costBasis: 50_000, appreciationRate: 0.08,
+          ownershipType: 'sole', ownerId: 'primary', country: 'US',
+          saleDestinationAccount: 'usSavingsAccount',
+          ...(p.companySaleYear != null ? { plannedSaleYear: p.companySaleYear } : {}),
+        },
+      ],
     };
   }
 
@@ -917,6 +942,7 @@ export class IntlRetirementScenario extends BaseScenario {
     toolsetRegistry.register(AU_BROKERAGE);
     toolsetRegistry.register(US_INCOME);
     toolsetRegistry.register(AU_INCOME);
+    toolsetRegistry.register(US_COMPANY_SALE);
     toolsetRegistry.register(ECONOMIC_REGIMES);
     new ScenarioCompiler(toolsetRegistry).compile(cfg, registry);
 

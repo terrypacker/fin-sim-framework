@@ -17,6 +17,7 @@ import { AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuS
 import { SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer, SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperContributionHandler, SuperWithdrawalContributionsHandler, SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler } from './finance/account-rules/au/au-super-classes.js';
 import { BaseAccountModule } from './finance/account-rules/base-account-module.js';
 import { UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer, AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer } from './finance/account-rules/mortgage-payment-classes.js';
+import { computeRentalMonth, UsRentalIncomeHandler, UsRentalIncomeApplyReducer, AuRentalIncomeHandler, AuRentalIncomeApplyReducer } from './finance/account-rules/rental-income-classes.js';
 import { ScheduledEarlyWithdrawalApplyReducer, EarlyWithdrawalPolicyHandler } from './finance/account-rules/us/early-withdrawal-classes.js';
 import { IraContributionApplyReducer, IraWithdrawalContribApplyReducer, IraWithdrawalEarningsApplyReducer, IraEarningsApplyReducer, IraContributionHandler, IraWithdrawalContributionsHandler, IraWithdrawalEarningsHandler, IraEarningsHandler } from './finance/account-rules/us/ira-classes.js';
 import { debitIra, IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer, IraRolloverWithdrawalHandler, IraRmdHandler, IraAnnualRmdHandler } from './finance/account-rules/us/ira-rollover-classes.js';
@@ -36,6 +37,7 @@ import { getUniformDistributionPeriod } from './finance/account-rules/us/us-rmd-
 import { USD, AUD, ACCOUNT_TYPE, InsufficientFundsError, Account, CheckingAccount, SavingsAccount } from './finance/assets/account.js';
 import { Asset } from './finance/assets/asset.js';
 import { Collectible } from './finance/assets/collectible.js';
+import { CompanyEquity } from './finance/assets/company-equity.js';
 import { reconcileLedgerToBalance, InvestmentAccount, BrokerageAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from './finance/assets/investment-account.js';
 import { RealProperty } from './finance/assets/real-property.js';
 import { AssetLocationRebalanceApplyReducer } from './finance/behavioral/asset-location-rebalance-apply-reducer.js';
@@ -167,6 +169,7 @@ import { flattenNumericState, computeStateDiff, journalPairKey, mergeEntryFieldR
 import { AccountService } from './finance/services/account-service.js';
 import { AssetService } from './finance/services/asset-service.js';
 import { CollectibleService } from './finance/services/collectible-service.js';
+import { CompanyEquityService } from './finance/services/company-equity-service.js';
 import { PersonService } from './finance/services/person-service.js';
 import { RealPropertyService } from './finance/services/real-property-service.js';
 import { StateRegistry } from './finance/services/state-registry.js';
@@ -253,6 +256,7 @@ import { US_AU_CROSS_BORDER } from './scenarios/toolsets/us-au-cross-border-tool
 import { US_BANKING } from './scenarios/toolsets/us-banking-toolset.js';
 import { US_BROKERAGE } from './scenarios/toolsets/us-brokerage-toolset.js';
 import { US_COLLECTIBLES } from './scenarios/toolsets/us-collectibles-toolset.js';
+import { US_COMPANY_SALE } from './scenarios/toolsets/us-company-sale-toolset.js';
 import { retargetEarlyWithdrawalEvents, US_EARLY_WITHDRAWAL } from './scenarios/toolsets/us-early-withdrawal-toolset.js';
 import { US_INCOME } from './scenarios/toolsets/us-income-toolset.js';
 import { US_REAL_PROPERTY } from './scenarios/toolsets/us-real-property-toolset.js';
@@ -303,6 +307,7 @@ import { AccountEditor } from './visualization/accounts/account-editor.js';
 import { AccountsController } from './visualization/accounts/accounts-controller.js';
 import { APP_EVENTS, AppDisplaySettings } from './visualization/app-display-settings.js';
 import { CollectibleEditor } from './visualization/assets/collectible-editor.js';
+import { CompanyEquityEditor } from './visualization/assets/company-equity-editor.js';
 import { RealPropertyEditor } from './visualization/assets/real-property-editor.js';
 import { ChartController } from './visualization/chart/chart-controller.js';
 import { ChartPresenter } from './visualization/chart/chart-presenter.js';
@@ -317,6 +322,7 @@ import { EventEditor } from './visualization/components/event-editor.js';
 import { AccountNodeRenderer } from './visualization/components/graph/rendering/account-node-renderer.js';
 import { ActionNodeRenderer } from './visualization/components/graph/rendering/action-node-renderer.js';
 import { CollectibleNodeRenderer } from './visualization/components/graph/rendering/collectible-node-renderer.js';
+import { CompanyEquityNodeRenderer } from './visualization/components/graph/rendering/company-equity-node-renderer.js';
 import { DefaultNodeRenderer, NodeRenderGroup } from './visualization/components/graph/rendering/default-node-renderer.js';
 import { EventNodeRenderer } from './visualization/components/graph/rendering/event-node-renderer.js';
 import { HandlerNodeRenderer } from './visualization/components/graph/rendering/handler-node-renderer.js';
@@ -454,6 +460,11 @@ export const Finance = {
   UsMortgagePaymentApplyReducer,
   AuMortgagePaymentHandler,
   AuMortgagePaymentApplyReducer,
+  computeRentalMonth,
+  UsRentalIncomeHandler,
+  UsRentalIncomeApplyReducer,
+  AuRentalIncomeHandler,
+  AuRentalIncomeApplyReducer,
   ScheduledEarlyWithdrawalApplyReducer,
   EarlyWithdrawalPolicyHandler,
   IraContributionApplyReducer,
@@ -545,6 +556,7 @@ export const Finance = {
   SavingsAccount,
   Asset,
   Collectible,
+  CompanyEquity,
   reconcileLedgerToBalance,
   InvestmentAccount,
   BrokerageAccount,
@@ -799,6 +811,7 @@ export const Finance = {
   AccountService,
   AssetService,
   CollectibleService,
+  CompanyEquityService,
   PersonService,
   RealPropertyService,
   StateRegistry,
@@ -1005,6 +1018,7 @@ export const Scenarios = {
   US_BANKING,
   US_BROKERAGE,
   US_COLLECTIBLES,
+  US_COMPANY_SALE,
   retargetEarlyWithdrawalEvents,
   US_EARLY_WITHDRAWAL,
   US_INCOME,
@@ -1036,6 +1050,7 @@ export const Visualization = {
   APP_EVENTS,
   AppDisplaySettings,
   CollectibleEditor,
+  CompanyEquityEditor,
   RealPropertyEditor,
   ChartController,
   ChartPresenter,
@@ -1050,6 +1065,7 @@ export const Visualization = {
   AccountNodeRenderer,
   ActionNodeRenderer,
   CollectibleNodeRenderer,
+  CompanyEquityNodeRenderer,
   DefaultNodeRenderer,
   NodeRenderGroup,
   EventNodeRenderer,
