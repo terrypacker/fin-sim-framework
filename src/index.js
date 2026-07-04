@@ -17,6 +17,7 @@ import { AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuS
 import { SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer, SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperContributionHandler, SuperWithdrawalContributionsHandler, SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler } from './finance/account-rules/au/au-super-classes.js';
 import { BaseAccountModule } from './finance/account-rules/base-account-module.js';
 import { UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer, AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer } from './finance/account-rules/mortgage-payment-classes.js';
+import { ScheduledEarlyWithdrawalApplyReducer, EarlyWithdrawalPolicyHandler } from './finance/account-rules/us/early-withdrawal-classes.js';
 import { IraContributionApplyReducer, IraWithdrawalContribApplyReducer, IraWithdrawalEarningsApplyReducer, IraEarningsApplyReducer, IraContributionHandler, IraWithdrawalContributionsHandler, IraWithdrawalEarningsHandler, IraEarningsHandler } from './finance/account-rules/us/ira-classes.js';
 import { debitIra, IraRolloverWithdrawalApplyReducer, IraRmdApplyReducer, IraRolloverWithdrawalHandler, IraRmdHandler, IraAnnualRmdHandler } from './finance/account-rules/us/ira-rollover-classes.js';
 import { K401ContributionApplyReducer, K401EarningsApplyReducer, K401WithdrawalApplyReducer, K401ContributionHandler, K401EarningsHandler, K401WithdrawalHandler, K401RmdApplyReducer, K401AnnualRmdHandler, K401ToIraConversionApplyReducer, K401ToIraConversionHandler } from './finance/account-rules/us/k401-classes.js';
@@ -78,8 +79,12 @@ import { CurrencyConverter } from './finance/fx/currency-converter.js';
 import { convertExpenseToAccount } from './finance/fx/expense-fx.js';
 import { fxRate, fxFeeIn, convertNetOfFee, grossUpForTarget } from './finance/fx/fx-conversion.js';
 import { CurrencyPair, FxEngine } from './finance/fx/fx-engine.js';
+import { FX_PROCESS_MODELS, FX_PROCESS_MODEL_IDS, gaussianFrom } from './finance/fx/fx-process-models.js';
+import { FxProcessReducer } from './finance/fx/fx-process-reducer.js';
 import { FxRefreshReducer } from './finance/fx/fx-refresh-reducer.js';
 import { FxService } from './finance/fx/fx-service.js';
+import { FxStepApplyReducer } from './finance/fx/fx-step-apply-reducer.js';
+import { FxTickHandler } from './finance/fx/fx-tick-handler.js';
 import { FxTransferApplyReducer } from './finance/fx/fx-transfer-apply-reducer.js';
 import { FxTransferToHandler } from './finance/fx/fx-transfer-handler.js';
 import { UsdAudPair } from './finance/fx/usd-aud-pair.js';
@@ -245,11 +250,11 @@ import { US_AU_CROSS_BORDER } from './scenarios/toolsets/us-au-cross-border-tool
 import { US_BANKING } from './scenarios/toolsets/us-banking-toolset.js';
 import { US_BROKERAGE } from './scenarios/toolsets/us-brokerage-toolset.js';
 import { US_COLLECTIBLES } from './scenarios/toolsets/us-collectibles-toolset.js';
+import { retargetEarlyWithdrawalEvents, US_EARLY_WITHDRAWAL } from './scenarios/toolsets/us-early-withdrawal-toolset.js';
 import { US_INCOME } from './scenarios/toolsets/us-income-toolset.js';
 import { US_REAL_PROPERTY } from './scenarios/toolsets/us-real-property-toolset.js';
 import { US_RETIREMENT } from './scenarios/toolsets/us-retirement-toolset.js';
 import { BRACKET_BASE_YEAR, retargetRothConversionEvents, US_ROTH_CONVERSION } from './scenarios/toolsets/us-roth-conversion-toolset.js';
-import { US_EARLY_WITHDRAWAL } from './scenarios/toolsets/us-early-withdrawal-toolset.js';
 import { US_STATE_TAX } from './scenarios/toolsets/us-state-tax-toolset.js';
 import { US_TAX } from './scenarios/toolsets/us-tax-toolset.js';
 import { ActionService } from './services/action-service.js';
@@ -446,6 +451,8 @@ export const Finance = {
   UsMortgagePaymentApplyReducer,
   AuMortgagePaymentHandler,
   AuMortgagePaymentApplyReducer,
+  ScheduledEarlyWithdrawalApplyReducer,
+  EarlyWithdrawalPolicyHandler,
   IraContributionApplyReducer,
   IraWithdrawalContribApplyReducer,
   IraWithdrawalEarningsApplyReducer,
@@ -609,8 +616,14 @@ export const Finance = {
   grossUpForTarget,
   CurrencyPair,
   FxEngine,
+  FX_PROCESS_MODELS,
+  FX_PROCESS_MODEL_IDS,
+  gaussianFrom,
+  FxProcessReducer,
   FxRefreshReducer,
   FxService,
+  FxStepApplyReducer,
+  FxTickHandler,
   FxTransferApplyReducer,
   FxTransferToHandler,
   UsdAudPair,
@@ -982,13 +995,14 @@ export const Scenarios = {
   US_BANKING,
   US_BROKERAGE,
   US_COLLECTIBLES,
+  retargetEarlyWithdrawalEvents,
+  US_EARLY_WITHDRAWAL,
   US_INCOME,
   US_REAL_PROPERTY,
   US_RETIREMENT,
   BRACKET_BASE_YEAR,
   retargetRothConversionEvents,
   US_ROTH_CONVERSION,
-  US_EARLY_WITHDRAWAL,
   US_STATE_TAX,
   US_TAX,
 };

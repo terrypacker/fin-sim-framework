@@ -23,7 +23,7 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  * then acts as the first pass that the regime overwrites.
  */
 export class FxRefreshReducer extends Reducer {
-  static description = 'Mirrors baseExchangeRates → effectiveExchangeRates and baseFxFees → effectiveFxFees on each period advance; also syncs legacy flat fields.';
+  static description = 'Mirrors baseExchangeRates → effectiveExchangeRates, baseFxFees → effectiveFxFees, and baseFxVol → effectiveFxVol on each period advance.';
   static type        = 'FxRefreshReducer';
 
   constructor() {
@@ -39,14 +39,23 @@ export class FxRefreshReducer extends Reducer {
   }
 
   reduce(state, _action, _date) {
-    if (!state.baseExchangeRates && !state.baseFxFees) return this.newState(state);
+    if (!state.baseExchangeRates && !state.baseFxFees && !state.baseFxVol) {
+      return this.newState(state);
+    }
 
     const effectiveRates = { ...(state.baseExchangeRates ?? {}) };
     const effectiveFees  = { ...(state.baseFxFees        ?? {}) };
 
-    return this.newState(state, {
+    const patch = {
       effectiveExchangeRates: effectiveRates,
       effectiveFxFees:        effectiveFees,
-    });
+    };
+
+    // Mirror base → effective volatility so RegimeApplyReducer (when loaded)
+    // can modulate it, and FxTickHandler always reads a defined sigma
+    // (design 47 §6.4). Only touched when the FX vol field exists.
+    if (state.baseFxVol) patch.effectiveFxVol = { ...state.baseFxVol };
+
+    return this.newState(state, patch);
   }
 }

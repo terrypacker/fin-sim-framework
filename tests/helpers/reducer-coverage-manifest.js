@@ -96,6 +96,8 @@ export const COVERED = [
 
   // F/G — economic regimes + FX (reducer-postconditions-regimes-fx.test.mjs)
   'RemoveRegimeReducer', 'RegimeApplyReducer', 'BondPriceAdjustReducer', 'FxRefreshReducer',
+  // Time-varying FX (design 47) — evt-fx-process.test.mjs
+  'FxProcessReducer', 'FxStepApplyReducer',
 
   // H — spending (reducer-postconditions-spending.test.mjs)
   'SpendingStrategyApplyReducer', 'AgeBandedSpendingReducer', 'GuardrailBaselineApplyReducer',

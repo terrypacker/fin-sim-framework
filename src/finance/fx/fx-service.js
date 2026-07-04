@@ -13,6 +13,17 @@ import { UsdAudPair }            from './usd-aud-pair.js';
 import { FxTransferToHandler }    from './fx-transfer-handler.js';
 import { FxTransferApplyReducer } from './fx-transfer-apply-reducer.js';
 import { FxRefreshReducer }       from './fx-refresh-reducer.js';
+import { FxTickHandler }          from './fx-tick-handler.js';
+import { FxStepApplyReducer }     from './fx-step-apply-reducer.js';
+import { FxProcessReducer }       from './fx-process-reducer.js';
+import { EventSeries }            from '../../simulation-framework/events/event-series.js';
+
+/** Default per-step FX volatility (annualized log-vol) when a process model is active. */
+const DEFAULT_FX_VOLATILITY = 0.06;
+/** Default mean-reversion speed (per year) for the MEAN_REVERTING model. */
+const DEFAULT_FX_REVERSION  = 0.5;
+/** Default FX tick interval in years (monthly). */
+const FX_TICK_DT            = 1 / 12;
 
 /**
  * FxService — coordinator for currency-pair registration, rate/fee state
@@ -80,15 +91,28 @@ export class FxService {
   getContributions(currencies, accountService, _stateRegistry, parameters) {
     const pairs = this._collectPairs(currencies);
 
-    const baseRates = {};
-    const baseFees  = {};
+    const model      = parameters?.fxProcessModel ?? 'NONE';
+    const fxActive   = model !== 'NONE';
+    const volatility = parameters?.fxVolatility     ?? DEFAULT_FX_VOLATILITY;
+    const reversion  = parameters?.fxReversionSpeed ?? DEFAULT_FX_REVERSION;
+
+    const baseRates  = {};
+    const baseFees   = {};
+    const baseVol    = {};
+    const deviation  = {};
+    const pairIds    = [];
 
     for (const pair of pairs) {
       const pairId = pair.constructor.id;
+      pairIds.push(pairId);
       if (pairId === 'USD_AUD') {
         baseRates[pairId] = parameters?.exchangeRateUsdToAud ?? 1.55;
         baseFees[pairId]  = parameters?.intlTransferFeeUsd   ?? 15;
       }
+      // Volatility only seeds when a stochastic model is active; otherwise 0
+      // so FxProcessReducer's exp(0) leaves the rate exactly at its anchor.
+      baseVol[pairId]   = fxActive ? volatility : 0;
+      deviation[pairId] = 0;
     }
 
     const statePatches = {
@@ -96,6 +120,11 @@ export class FxService {
       baseFxFees:             baseFees,
       effectiveExchangeRates: { ...baseRates },
       effectiveFxFees:        { ...baseFees },
+      // Time-varying FX layer (design 47).
+      baseFxVol:      baseVol,
+      effectiveFxVol: { ...baseVol },
+      fxDeviation:    deviation,
+      fxAnchorRates:  { ...baseRates },
     };
 
     const handlers = [
@@ -105,9 +134,40 @@ export class FxService {
     const reducers = [
       new FxRefreshReducer(),
       new FxTransferApplyReducer({ accountService }),
+      // Always registered — no-ops when fxDeviation stays 0 (NONE model).
+      new FxProcessReducer(),
+      new FxStepApplyReducer(),
     ];
 
-    return { statePatches, events: [], handlers, reducers };
+    const events = [];
+    if (fxActive) {
+      // The FX tick is the only in-loop RNG consumer; scheduled only when a
+      // stochastic model is active so default scenarios draw no randomness.
+      handlers.push(new FxTickHandler({
+        model, reversionSpeed: reversion, dt: FX_TICK_DT, pairs: pairIds,
+      }));
+      events.push(this._buildFxTickSeries());
+    }
+
+    return { statePatches, events, handlers, reducers };
+  }
+
+  /**
+   * Monthly FX_TICK EventSeries, anchored at simulation start over the full
+   * horizon. Ordered low so it fires before the period advance that recomposes
+   * the rate. Same declarative pre-scheduling pattern as ECONOMIC_RECOVERY_TICK.
+   * @returns {EventSeries}
+   */
+  _buildFxTickSeries() {
+    return new EventSeries({
+      name:        'FX Tick',
+      type:        'FX_TICK',
+      interval:    'monthly',
+      startOffset: 0,
+      order:       1,
+      enabled:     true,
+      color:       '#7E57C2',
+    });
   }
 
   /**

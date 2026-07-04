@@ -74,6 +74,17 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.effectiveExchangeRates = { ...this.baseExchangeRates };
     this.effectiveFxFees        = { ...this.baseFxFees };
 
+    // Time-varying FX stochastic layer (design 47). All O(1) scalar maps —
+    // no path array. fxDeviation is a mean-0 log-space walk stepped by
+    // FxTickHandler; effectiveExchangeRates = fxAnchorRates × exp(fxDeviation),
+    // composed by FxProcessReducer. baseFxVol seeds the process volatility,
+    // effectiveFxVol is regime-modulated. When fxProcessModel is NONE these
+    // stay 0 and the rate is left at its anchor (bit-for-bit today).
+    this.fxDeviation            = {};
+    this.baseFxVol              = {};
+    this.effectiveFxVol         = { ...this.baseFxVol };
+    this.fxAnchorRates          = { ...this.baseExchangeRates };
+
     // Regime substrate (ECONOMIC_REGIMES toolset, design/21).
     // baseGrowthRates / base*Rates are seeded by the toolset's state() method
     // at compile time. effectiveGrowthRates / effective*Rates are written by
