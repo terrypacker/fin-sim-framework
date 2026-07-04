@@ -76,6 +76,7 @@ export class CemSolver {
 
   async solve(problem, {
     onProgress, signal,
+    workerPool     = null,   // design 46 Phase 0.5: parallel rollout pool for a generation
     budget         = this.budget,
     seed           = this.seed,
     population     = this.population,
@@ -88,7 +89,7 @@ export class CemSolver {
   } = {}) {
     const rng      = makeSeededRng(seed);
     const patience = noImproveLimit > 0 ? noImproveLimit : Infinity;
-    const ledger   = new EvalLedger(problem, { onProgress, budget, noImproveLimit: patience, signal });
+    const ledger   = new EvalLedger(problem, { onProgress, budget, noImproveLimit: patience, signal, workerPool });
     const vars     = problem.variables;
     const n        = vars.length;
 
@@ -121,15 +122,14 @@ export class CemSolver {
         popVecs.push(vec);
       }
 
-      const scored = [];
-      let novel = 0;
-      const before = ledger.evaluations.length;
-      for (const vec of popVecs) {
-        if (ledger.exhausted) break;
-        const entry = await ledger.evaluate(problem.decode(vec));
-        scored.push({ vec, score: entry.score });
-      }
-      novel = ledger.evaluations.length - before;
+      // Evaluate the whole generation as one batch (design 46 Phase 0.5): parallel
+      // across the worker pool when wired, else sequential in-process — either way
+      // bit-identical to per-candidate `evaluate` (order-preserving fold). The
+      // returned entries are in popVecs order, truncated where the budget exhausts.
+      const before  = ledger.evaluations.length;
+      const entries = await ledger.evaluateBatch(popVecs.map(v => problem.decode(v)));
+      const scored  = entries.map((entry, i) => ({ vec: popVecs[i], score: entry.score }));
+      const novel   = ledger.evaluations.length - before;
       if (scored.length === 0) break;
 
       // Refit μ/σ to the elite set (top-scoring vectors).

@@ -566,14 +566,16 @@ export class CockpitController {
    *   fan: Array<{ candidate, dates: Date[], netWorth: number[], recommended: boolean }>,
    * }>}
    */
-  async advise({ solverKey = 'CEM', solverOptions = {}, fanSize = 5, seriesPoints = 24 } = {}) {
+  async advise({ solverKey = 'CEM', solverOptions = {}, workerPool = null, fanSize = 5, seriesPoints = 24 } = {}) {
     if (!this.snapshot) throw new Error('CockpitController.advise: call setSnapshot(now) first');
 
     this._prepareControl();
     const variables = this._variables();
     const problem   = this._problem(variables);
     const solver    = createSolver(solverKey, solverOptions);
-    const solution  = await solver.solve(problem, { ...solverOptions });
+    // `workerPool` (design 46 Phase 0.5) parallelizes a generation's rollouts;
+    // batchable solvers (CEM) use it, others ignore it. Bit-identical to sequential.
+    const solution  = await solver.solve(problem, { ...solverOptions, workerPool });
 
     const best = solution.best ?? { candidate: {}, result: null, score: -Infinity };
     const recommended = { ...best, label: this.describeMove(best.candidate, variables) };
@@ -581,15 +583,23 @@ export class CockpitController {
     // Fan: per-step trajectories for the top-K distinct candidates (recommended
     // first), so the UI can draw realized-past → diverging futures.
     const top = (solution.candidates ?? []).slice(0, Math.max(1, fanSize));
-    const fan = top.map(c => {
-      const series = problem.rolloutSeries(c.candidate, { points: seriesPoints });
-      return {
-        candidate:   c.candidate,
-        dates:       series.dates,
-        netWorth:    series.netWorth,
-        recommended: c.candidate === best.candidate,
-      };
+    const mkFan = (c, series) => ({
+      candidate:   c.candidate,
+      dates:       series.dates,
+      netWorth:    series.netWorth,
+      recommended: c.candidate === best.candidate,
     });
+    let fan;
+    if (workerPool) {
+      // Parallelize the fan too (design 46 Phase 0.5 P-d): the top-K series rollouts
+      // are independent. Same pool + context as the solve (setProblem ref-dedupes to
+      // one broadcast; also seeds the context if a non-batching solver skipped it).
+      workerPool.setProblem(problem);
+      const seriesList = await workerPool.mapSeries(top.map(c => c.candidate), { points: seriesPoints });
+      fan = top.map((c, i) => mkFan(c, seriesList[i]));
+    } else {
+      fan = top.map(c => mkFan(c, problem.rolloutSeries(c.candidate, { points: seriesPoints })));
+    }
 
     this.lastAdvice = {
       now: { date: this.snapshot.date, netWorth: fan[0]?.netWorth?.[0] ?? null },
@@ -677,7 +687,7 @@ export class CockpitController {
    * @param {function}[opts.onEpoch]       - optional async ({ epoch, date, candidate, advice, applied }) callback.
    * @returns {Promise<Array<{ epoch, date, candidate, advice, applied }>>} the epoch log.
    */
-  async autoRun({ solverKey = 'CEM', solverOptions = {}, stepYears = 1, shouldStop = null, onEpoch = null } = {}) {
+  async autoRun({ solverKey = 'CEM', solverOptions = {}, workerPool = null, stepYears = 1, shouldStop = null, onEpoch = null } = {}) {
     if (!this.snapshot) throw new Error('CockpitController.autoRun: call setSnapshot(now) first');
     const endMs = +new Date(this.simEnd);
     const log = [];
@@ -686,7 +696,7 @@ export class CockpitController {
     while (+new Date(this.snapshot.date) < endMs) {
       if (shouldStop && shouldStop()) break;
 
-      const advice    = await this.advise({ solverKey, solverOptions });
+      const advice    = await this.advise({ solverKey, solverOptions, workerPool });
       const candidate = advice.recommended?.candidate ?? {};
       const date      = this.snapshot.date;
       const applied   = this.apply(candidate);

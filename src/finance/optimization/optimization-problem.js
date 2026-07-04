@@ -23,6 +23,7 @@ import { retargetEarlyWithdrawalEvents } from '../../scenarios/toolsets/us-early
 import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES, objectiveIsWindowable } from './optimization-objectives.js';
 import { valuesForConfig }     from './opt-values.js';
 import { DateUtils }           from '../../simulation-framework/date-utils.js';
+import { rolloutProfiler }     from './rollout-profiler.js';
 
 /** Deep-ish equality good enough for ENUM value matching (primitives + arrays of primitives). */
 function _eq(a, b) {
@@ -192,14 +193,33 @@ export class OptimizationProblem {
    * @returns {{ result: object, score: number }}
    */
   evaluate(candidate) {
-    const params = this._applyCandidate({ ...this.baseParams, endDate: this._scoreEnd() }, candidate ?? {});
-    const result = this._rollout(params);
+    const result = this._rolloutResult(candidate);
+    return { result, score: this._scoreResult(result) };
+  }
 
+  /**
+   * The expensive half of `evaluate` (design 46 Phase 0.5): build the candidate's
+   * params and roll one isolated simulation to the score date, returning the
+   * pure-data metrics `result`. Deterministic in `(candidate, snapshot)` and free
+   * of the objective — so it is the unit a Web Worker runs off the main thread.
+   */
+  _rolloutResult(candidate) {
+    const params = this._applyCandidate({ ...this.baseParams, endDate: this._scoreEnd() }, candidate ?? {});
+    return this._rollout(params);
+  }
+
+  /**
+   * The cheap half of `evaluate`: apply the objective to a `result`, sign-adjusted
+   * so higher is always better (minimize objectives negated), windowed by the
+   * snapshot accumulator when scoring from a mid-run snapshot. Pure and
+   * objective-bound, so it stays on the main thread even when `_rolloutResult` ran
+   * in a worker (objectives carry functions and don't cross the worker boundary).
+   */
+  _scoreResult(result) {
     const { evaluate, direction } = this.objective;
     const sign  = direction === 'minimize' ? -1 : 1;
     const snapshot = this.initialState?.kind === 'snapshot' ? this.initialState.snapshot : undefined;
-    const score = sign * evaluate(result, { snapshot });
-    return { result, score };
+    return sign * evaluate(result, { snapshot });
   }
 
   // ── Internals ─────────────────────────────────────────────────────────────
@@ -319,9 +339,13 @@ export class OptimizationProblem {
 
   /** Roll the simulation forward per the initial-state strategy and read terminal metrics. */
   _rollout(params) {
-    const sim = this._seededSim(params);
-    sim.stepTo(params.endDate);
-    return this._readResult(sim.state, params.endDate, params);
+    // Phase-0 profiling (design/46 §1): split setup / forward-step / metrics per
+    // rollout. No-op overhead unless `__rolloutProfiler.enable()` was called.
+    const sim = rolloutProfiler.time('compile', () => this._seededSim(params));
+    rolloutProfiler.time('step', () => sim.stepTo(params.endDate));
+    const result = rolloutProfiler.time('objective', () => this._readResult(sim.state, params.endDate, params));
+    rolloutProfiler.countRollout();
+    return result;
   }
 
   /**
