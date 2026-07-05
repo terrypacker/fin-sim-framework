@@ -47,6 +47,9 @@
 
 .mpc-field .wb-select { min-width: 150px; }
 .mpc-override .wb-input { width: 110px; }
+/* Horizon field dims its label when the goal can't use a window (design 41). */
+.mpc-field--disabled { opacity: 0.45; }
+[data-mpc="horizon"] { width: 72px; }
 
 /* The Die-With-Target axis sub-selects (Basis / Terminal / Tax basis) live inside
    a wrapper span so they can be shown/hidden as a group. `display:contents` lets

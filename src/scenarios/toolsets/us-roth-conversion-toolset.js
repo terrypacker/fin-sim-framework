@@ -23,6 +23,51 @@ import { ValueType } from '../../simulation-framework/type-registry.js';
 const BRACKET_BASE_YEAR = 2025;
 
 /**
+ * Forward-effective re-target of queued Roth-conversion events from a per-year
+ * income-target schedule (design 42). Roth conversions are scheduled
+ * `ROTH_CONVERSION_POLICY_EVALUATE` events; in a snapshot-seeded rollout those
+ * events are frozen in the injected queue, so editing `rothConversionSchedule`
+ * params alone does nothing. This rewrites the **future** (`date > nowMs`) queued
+ * events for each scheduled year to that year's nominal target — the same
+ * real→nominal inflation path `schedules()` uses — so the income-target lever
+ * actually moves the rollout. It is the rollout-side twin of the live
+ * `COCKPIT_CONTROLS.ROTH.actuate`, and both now share this one implementation.
+ *
+ * Years absent from `schedule` keep their queued (window/default) target — the
+ * controller overrides only the years it is deciding. A finite target of `0`
+ * (or negative) is applied as-is, i.e. a genuine "skip this year" (the policy
+ * handler converts `min(IRA, target − YTD)` ⇒ 0). Past/already-fired events and
+ * other event types are untouched.
+ *
+ * @param {Array}  queue    - the heap's backing array (e.g. `sim.queue.data`).
+ * @param {Array}  schedule - [{ year, incomeTarget }] in real base-year USD.
+ * @param {object} [opts]
+ * @param {number} [opts.inflationRate=0.03]
+ * @param {number} [opts.nowMs=-Infinity] - only events strictly after this fire forward.
+ * @returns {number} count of events re-targeted.
+ */
+export function retargetRothConversionEvents(queue, schedule, { inflationRate = 0.03, nowMs = -Infinity } = {}) {
+  if (!Array.isArray(queue) || !Array.isArray(schedule) || schedule.length === 0) return 0;
+  const byYear = new Map();
+  for (const e of schedule) {
+    if (e && Number.isFinite(e.year) && Number.isFinite(e.incomeTarget)) byYear.set(e.year, e.incomeTarget);
+  }
+  if (byYear.size === 0) return 0;
+
+  let hits = 0;
+  for (const item of queue) {
+    if (item?.type !== 'ROTH_CONVERSION_POLICY_EVALUATE' || !item.data) continue;
+    const d = new Date(item.date);
+    if (d.getTime() <= nowMs) continue;                 // forward-effective only
+    const year = d.getUTCFullYear();
+    if (!byYear.has(year)) continue;                    // year not controlled → keep window
+    item.data.targetIncome = byYear.get(year) * Math.pow(1 + inflationRate, year - BRACKET_BASE_YEAR);
+    hits++;
+  }
+  return hits;
+}
+
+/**
  * US_ROTH_CONVERSION toolset — bracket-fill Roth conversion policy scheduling.
  *
  * Capabilities: roth-conversion
