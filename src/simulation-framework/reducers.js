@@ -505,7 +505,7 @@ export class AccountTransactionReducer extends Reducer {
 export const REDUCER_CLASSES = {};  // populated after class declarations below
 
 export class RepeatingReducer extends FieldReducer {
-  static description = 'Runs a set of child reducers N times in sequence (N from the action or a fixed count), re-emitting the action each iteration via next[].';
+  static description = 'Runs its child reducers N times in sequence (N from a fixed count or action[fieldName]), threading a combined state through every child and iteration and returning their merged emitted actions.';
   static type        = 'RepeatingReducer';
 
   constructor(name = 'Repeating Reducer', priority = PRIORITY.METRICS,
@@ -515,19 +515,46 @@ export class RepeatingReducer extends FieldReducer {
     this.count = count;
   }
 
+  /**
+   * Resolve the repeat count: a fixed `this.count` wins; otherwise read it from
+   * `action[fieldName]` (the FieldReducer field). Absent both ⇒ 0.
+   */
+  _resolveCount(action) {
+    if (this.count != null) return this.count;
+    if (this.fieldName != null) return action[this.fieldName] ?? 0;
+    return 0;
+  }
+
   reduce(state, action, date) {
-    const count = typeof action._repeaterCounter === 'undefined' ? this.count == null ? this.fieldName == null ? 0 : action[this.fieldName] : this.count : action._repeaterCounter;
-    if( count <= 0) {
+    const count = this._resolveCount(action);
+    if (!(count > 0)) {
       return this.newState(state);
     }
-    let newState = { ...state }
-    for(const element of this.reducers) {
-      newState = element.reduce(newState, action, date);
+
+    // Run the whole action `count` times, threading one combined state through
+    // every child and every iteration: each child reduces the running state and
+    // its result propagates to the next child and the next pass. A reducer return
+    // exposes a single `next` array, so child-emitted actions are collected across
+    // all iterations and returned together — the engine then queues every one.
+    let threaded = state;
+    const collectedNext = [];
+
+    for (let i = 0; i < count; i++) {
+      for (const element of this.reducers) {
+        const result = element.reduce(threaded, action, date);
+        if (!result) continue;                 // child opted out — no state change
+        if (result.next != null) {
+          const arr = Array.isArray(result.next) ? result.next : [result.next];
+          collectedNext.push(...arr);
+          const { next: _next, ...clean } = result;
+          threaded = clean;
+        } else {
+          threaded = result;
+        }
+      }
     }
-    this.newState(state, {}, {
-      ...action,
-      _repeaterCounter: count - 1
-    });
+
+    return this.newState(threaded, {}, collectedNext);
   }
 }
 
