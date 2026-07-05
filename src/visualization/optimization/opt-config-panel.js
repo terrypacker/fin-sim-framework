@@ -11,7 +11,8 @@
 import { BaseComponent }                from '../components/base-component.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS } from '../../finance/optimization/intl-retirement-opt-config.js';
 import { OPTIMIZATION_OBJECTIVES, OPT_PARAM_TYPES } from '../../finance/optimization/optimization-objectives.js';
-import { valuesForConfig }              from '../../finance/optimization/intl-retirement-optimizer.js';
+import { valuesForConfig }              from '../../finance/optimization/opt-values.js';
+import { SOLVER_REGISTRY }              from '../../finance/optimization/solvers/solver-registry.js';
 
 
 
@@ -34,6 +35,9 @@ export class OptConfigPanel extends BaseComponent {
     this._rowMap       = new Map(); // paramKey → { enabledCb, rangeEl, minInp?, maxInp?, stepInp? }
     this._variables    = DEFAULT_OPTIMIZATION_CONFIGS; // current variable list
     this._objectiveSel = null;
+    this._solverSel    = null;
+    this._solverOptsEl = null;
+    this._solverOptInputs = new Map(); // optionKey → { input, type }
     this._countEl      = null;
     this._runBtn       = null;
     this._statusEl     = null;
@@ -75,11 +79,13 @@ export class OptConfigPanel extends BaseComponent {
 
   /**
    * Returns the current panel configuration.
-   * @returns {{ optimizationConfigs, objective, objectiveKey, candidateCount }}
+   * @returns {{ optimizationConfigs, objective, objectiveKey, candidateCount, solverKey, solverOptions }}
    */
   getConfig() {
     const objectiveKey = this._objectiveSel?.value ?? 'MAX_NET_WORTH';
     const objective    = OPTIMIZATION_OBJECTIVES[objectiveKey] ?? OPTIMIZATION_OBJECTIVES.MAX_NET_WORTH;
+    const solverKey    = this._solverSel?.value ?? 'GRID';
+    const solverOptions = this._readSolverOptions();
 
     const optimizationConfigs = this._variables.map(cfg => {
       const row = this._rowMap.get(cfg.paramKey);
@@ -98,7 +104,7 @@ export class OptConfigPanel extends BaseComponent {
     });
 
     const candidateCount = this._computeCount(optimizationConfigs);
-    return { optimizationConfigs, objective, objectiveKey, candidateCount };
+    return { optimizationConfigs, objective, objectiveKey, candidateCount, solverKey, solverOptions };
   }
 
   // ── Private ───────────────────────────────────────────────────────────────────
@@ -127,13 +133,25 @@ export class OptConfigPanel extends BaseComponent {
 
   _updateCount() {
     if (!this._countEl) return;
-    const { optimizationConfigs } = this.getConfig();
-    const n = this._computeCount(optimizationConfigs);
-    this._countEl.textContent = `${n} candidate${n !== 1 ? 's' : ''}`;
+    const { optimizationConfigs, solverKey, solverOptions } = this.getConfig();
+    const exhaustive = this._computeCount(optimizationConfigs);
+
+    if (solverKey === 'GRID') {
+      // Exhaustive Cartesian enumeration.
+      this._countEl.textContent = `${exhaustive} candidate${exhaustive !== 1 ? 's' : ''} (exhaustive)`;
+    } else {
+      // Budgeted solver: cap is the smaller of the budget and the exhaustive grid.
+      const budget = Number.isFinite(solverOptions.budget) ? solverOptions.budget : exhaustive;
+      const n = Math.min(budget, exhaustive);
+      this._countEl.textContent = `≤ ${n} evaluation${n !== 1 ? 's' : ''}`;
+    }
   }
 
   _render() {
     const objectiveOptions = Object.entries(OPTIMIZATION_OBJECTIVES)
+      .map(([k, v]) => `<option value="${k}">${v.label}</option>`)
+      .join('');
+    const solverOptions = Object.entries(SOLVER_REGISTRY)
       .map(([k, v]) => `<option value="${k}">${v.label}</option>`)
       .join('');
 
@@ -143,10 +161,17 @@ export class OptConfigPanel extends BaseComponent {
       <div class="opt-controls">
         <div class="node-field">
           <label>Objective</label>
-          <select class="toolbar-select" style="flex:1">
+          <select class="toolbar-select opt-objective-select" style="flex:1">
             ${objectiveOptions}
           </select>
         </div>
+        <div class="node-field">
+          <label>Solver</label>
+          <select class="toolbar-select opt-solver-select" style="flex:1">
+            ${solverOptions}
+          </select>
+        </div>
+        <div class="opt-solver-options"></div>
         <div class="opt-controls-row">
           <button class="btn btn-primary" style="flex:1">⚡ Run Optimization</button>
           <span class="opt-count-label">— candidates</span>
@@ -159,7 +184,9 @@ export class OptConfigPanel extends BaseComponent {
     `;
     this.append(this._container, shell);
 
-    this._objectiveSel = shell.querySelector('select');
+    this._objectiveSel = shell.querySelector('.opt-objective-select');
+    this._solverSel    = shell.querySelector('.opt-solver-select');
+    this._solverOptsEl = shell.querySelector('.opt-solver-options');
     this._runBtn       = shell.querySelector('button');
     this._statusEl     = shell.querySelector('.opt-status');
     this._countEl      = shell.querySelector('.opt-count-label');
@@ -168,9 +195,75 @@ export class OptConfigPanel extends BaseComponent {
     this.listen(this._runBtn, 'click', () => {
       if (this.onRun) this.onRun(this.getConfig());
     });
+    this.listen(this._solverSel, 'change', () => {
+      this._renderSolverOptions();
+      this._updateCount();
+    });
 
+    this._renderSolverOptions();
     this._buildVarTable(this._section, this._variables, new Map());
     this._updateCount();
+  }
+
+  /**
+   * Render the selected solver's option knobs from its optionSchema (same shape
+   * the spending strategies use), so each solver's budget/seed/etc. are editable
+   * generically. GRID has no options → the block is empty.
+   */
+  _renderSolverOptions() {
+    this._solverOptInputs.clear();
+    if (!this._solverOptsEl) return;
+    this._solverOptsEl.innerHTML = '';
+
+    const key    = this._solverSel?.value ?? 'GRID';
+    const schema = SOLVER_REGISTRY[key]?.optionSchema ?? [];
+
+    for (const opt of schema) {
+      const field = document.createElement('div');
+      field.className = 'node-field';
+
+      const label = document.createElement('label');
+      label.textContent = opt.label ?? opt.key;
+      if (opt.description) label.title = opt.description;
+      field.appendChild(label);
+
+      let input;
+      if (opt.type === 'Enum') {
+        input = document.createElement('select');
+        input.className = 'toolbar-select';
+        input.style.flex = '1';
+        input.innerHTML = (opt.options ?? [])
+          .map(o => `<option value="${o}">${o}</option>`).join('');
+        input.value = opt.defaultValue ?? (opt.options?.[0] ?? '');
+      } else {
+        input = document.createElement('input');
+        input.type = opt.type === 'Number' ? 'number' : 'text';
+        if (opt.type === 'Number') input.step = 'any';
+        input.className = 'opt-num-input';
+        input.style.flex = '1';
+        input.value = opt.defaultValue ?? '';
+      }
+      this.listen(input, 'input',  () => this._updateCount());
+      this.listen(input, 'change', () => this._updateCount());
+
+      this._solverOptInputs.set(opt.key, { input, type: opt.type });
+      field.appendChild(input);
+      this._solverOptsEl.appendChild(field);
+    }
+  }
+
+  /** Read the solver option inputs into a typed { key: value } object. */
+  _readSolverOptions() {
+    const out = {};
+    for (const [key, { input, type }] of this._solverOptInputs) {
+      if (type === 'Number') {
+        const n = parseFloat(input.value);
+        if (isFinite(n)) out[key] = n;
+      } else {
+        out[key] = input.value;
+      }
+    }
+    return out;
   }
 
   _buildVarTable(section, variables, savedState) {

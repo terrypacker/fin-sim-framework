@@ -74,6 +74,7 @@ export const US_ROTH_CONVERSION = {
       {
         key: 'rothConversionMaxBracket', label: 'Roth Conversion Max Bracket Rate',
         type: 'Number', group: 'Roth Conversion', mc: false, opt: true,
+        controllable: true,
         defaultValue: 0.22,
         description: 'Fill ordinary income up to top of this marginal bracket',
       },
@@ -95,6 +96,20 @@ export const US_ROTH_CONVERSION = {
         type: 'Number', group: 'Roth Conversion', mc: false, opt: false,
         defaultValue: 1,
         description: 'Day of month when the policy fires',
+      },
+      {
+        // Design 39 control form (design 38 §6.3, Q6): a per-year bracket-ceiling
+        // schedule — the EXPLICIT_BANDS analog for conversions — so the MPC
+        // controller can re-decide each year's ceiling from realized state
+        // instead of committing to one window. The batch optimizer keeps using
+        // the cheap start/end/maxBracket triple above; this array is the
+        // higher-resolution form the controller actuates. `controllable` and
+        // round-tripped here; consumed by design 39 (inert in batch).
+        key: 'rothConversionSchedule', label: 'Roth Conversion Schedule (per-year ceilings)',
+        type: 'RothScheduleList', group: 'Roth Conversion', mc: false, opt: false,
+        controllable: true,
+        defaultValue: [],
+        description: 'Per-year bracket-ceiling schedule [{ year, bracketCeiling }] for the closed-loop controller (design 39). Empty = use the start/end/maxBracket window.',
       },
     ];
   },

@@ -148,6 +148,10 @@ export class StateSchemaRegistry {
     // them (design 10 §Phase 4); exact paths override the generic metrics.* glob.
     this.register('metrics.netWorth',     ParameterValueType.currency('USD'));
     this.register('metrics.netLiquidity', ParameterValueType.currency('USD'));
+    // Lifetime running accumulators, USD-normalized (design 38 §5). Exact paths
+    // so the chart/state-panel format them as money.
+    this.register('cumulativeTaxesPaid',   ParameterValueType.currency('USD'));
+    this.register('cumulativeConsumption', ParameterValueType.currency('USD'));
 
     // Holdings (design 25 §5.6). Per-account exact paths take precedence
     // when an account stamps them with its specific currency; globs cover

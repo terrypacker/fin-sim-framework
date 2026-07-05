@@ -593,7 +593,18 @@ test('no duplicate reducers when US_RETIREMENT, US_INCOME, and US_BROKERAGE are 
     }
   }
 
+  // Intentional companion reducers (design 38 §5): lifetime accumulators that
+  // deliberately piggyback on an existing action so they observe every emitter
+  // (e.g. consumption must count healthcare EXPENSE_DEBITs too). These are
+  // distinct, additive reducers — NOT the accidental toolset-overlap duplication
+  // this guard exists to catch.
+  const INTENTIONAL_COMPANIONS = new Set([
+    'AccumulateTaxesPaidReducer',
+    'AccumulateConsumptionReducer',
+  ]);
+
   const duplicates = [...actionTypeMap.entries()]
+    .map(([type, names]) => [type, names.filter(n => !INTENTIONAL_COMPANIONS.has(n))])
     .filter(([, names]) => names.length > 1)
     .map(([type, names]) => `${type}: [${names.join(', ')}]`);
 

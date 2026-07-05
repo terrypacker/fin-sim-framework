@@ -29,6 +29,8 @@ import { ReplenishSavingsReducer }      from '../../finance/reducers/replenish-s
 import { StockDividendCashApplyReducer }    from '../../finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { SetOutOfFundsDateReducer }     from '../../finance/reducers/set-out-of-funds-date-reducer.js';
 import { AccumulateDeficitReducer }     from '../../finance/reducers/accumulate-deficit-reducer.js';
+import { AccumulateTaxesPaidReducer }   from '../../finance/reducers/accumulate-taxes-paid-reducer.js';
+import { AccumulateConsumptionReducer } from '../../finance/reducers/accumulate-consumption-reducer.js';
 import { OutOfFundsReducer }            from '../../finance/reducers/out-of-funds-reducer.js';
 import { InflationAdjustReducer }           from '../../finance/reducers/inflation-adjust-reducer.js';
 import { SpendingStrategyApplyReducer }     from '../../finance/spending/spending-strategy-apply-reducer.js';
@@ -289,14 +291,15 @@ export const US_RETIREMENT = {
       {
         key: 'spendingStrategy', label: 'Spending Strategy',
         type: 'EnumMulti', group: 'Spending', mc: false, opt: true,
-        options: ['FIXED', 'REGIME_AWARE', 'GUARDRAIL', 'HEALTHCARE', 'AGE_BANDED'],
+        options: ['FIXED', 'REGIME_AWARE', 'GUARDRAIL', 'HEALTHCARE', 'AGE_BANDED', 'EXPLICIT_BANDS'],
         defaultValue: ['FIXED'],
-        description: 'Active spending strategies; FIXED = inflation-adjusted scalar (default), REGIME_AWARE = cut discretionary under economic-stress regimes, GUARDRAIL = Guyton-Klinger withdrawal-rate bands, HEALTHCARE = one-off healthcare expense events, AGE_BANDED = age-driven real spending smile (go-go/slow-go/no-go)',
+        description: 'Active spending strategies; FIXED = inflation-adjusted scalar (default), REGIME_AWARE = cut discretionary under economic-stress regimes, GUARDRAIL = Guyton-Klinger withdrawal-rate bands, HEALTHCARE = one-off healthcare expense events, AGE_BANDED = age-driven real spending smile (go-go/slow-go/no-go), EXPLICIT_BANDS = absolute monthly amount per age band (design 38 §6.1)',
       },
       ...SPENDING_STRATEGY_REGISTRY.REGIME_AWARE.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.GUARDRAIL.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.HEALTHCARE.paramSchema(),
       ...SPENDING_STRATEGY_REGISTRY.AGE_BANDED.paramSchema(),
+      ...SPENDING_STRATEGY_REGISTRY.EXPLICIT_BANDS.paramSchema(),
       {
         key: 'mortalityEnabled', label: 'Mortality Enabled',
         type: 'Boolean', group: 'Mortality', mc: false, opt: true,
@@ -368,6 +371,8 @@ export const US_RETIREMENT = {
       scenarioFailed:       false,
       cumulativeDeficit:    0,
       deficitMonths:        0,
+      cumulativeTaxesPaid:  0,
+      cumulativeConsumption: 0,
       personBirthDate:      context.people[0]?.birthDate ?? null,
       // Drawdown mode read by AccountService.replenishSavings. Ordered (default)
       // honors drawdownPriority; PROPORTIONAL draws pro-rata across eligible buckets.
@@ -879,6 +884,8 @@ export const US_RETIREMENT = {
 
     reducers.push(new SetOutOfFundsDateReducer());
     reducers.push(new AccumulateDeficitReducer());
+    reducers.push(new AccumulateTaxesPaidReducer());
+    reducers.push(new AccumulateConsumptionReducer());
     reducers.push(new OutOfFundsReducer());
 
     if (p.inflationAdjust) {

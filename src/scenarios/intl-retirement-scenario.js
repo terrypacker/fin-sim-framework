@@ -513,6 +513,23 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     description: 'Define named by-role drawdown orderings, then select one above or sweep them in Optimize',
   },
 
+  // ── Optimization planning targets (design 38 §5.2, Q5) ──────────────────────
+  {
+    // First-class scenario param so it round-trips (design 15) and is reusable
+    // by the MPC terminal cost (design 39). Consumed by the DIE_WITH_TARGET
+    // objective; inert otherwise.
+    key: 'terminalWealthTarget', label: 'Terminal Wealth Target (USD)',
+    type: 'Number', group: 'Optimization', mc: false, opt: false,
+    defaultValue: 0,
+    description: 'Net worth to land on at the end of plan ("die with zero, or with $XX"). Used by the Die With Target objective.',
+  },
+  {
+    key: 'terminalWealthTargetPenalty', label: 'Terminal Wealth Penalty (λ)',
+    type: 'Number', group: 'Optimization', mc: false, opt: false,
+    defaultValue: 10,
+    description: 'Penalty weight on missing the terminal wealth target; larger makes the target binding (Die With Target objective).',
+  },
+
 ];
 
 /**
