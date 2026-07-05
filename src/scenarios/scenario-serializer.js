@@ -22,6 +22,7 @@ import {
   RothAccount, TraditionalIRAAccount, SuperannuationAccount,
 } from '../finance/assets/investment-account.js';
 import { Holding } from '../finance/holdings/holding.js';
+import { rescaleHoldingsToBalance, holdingsOutOfSync } from '../finance/holdings/holding-utils.js';
 import { RealProperty }  from '../finance/assets/real-property.js';
 import { Collectible }   from '../finance/assets/collectible.js';
 
@@ -832,6 +833,13 @@ export class ScenarioSerializer {
     // default-holding bootstrap, preserving legacy single-sleeve behavior.
     if (Array.isArray(d.holdings) && d.holdings.length > 0) {
       account.holdings = d.holdings.map(h => Holding.fromJSON(h));
+      // Auto-heal the §4.4 invariant on load: scenarios saved before balance
+      // edits kept holdings in sync (holdings-balance desync) can carry a
+      // holdings sum that disagrees with account.balance. Treat the stored
+      // balance as authoritative and rescale the holdings to match.
+      if (holdingsOutOfSync(account)) {
+        rescaleHoldingsToBalance(account.holdings, account.balance);
+      }
     }
     return account;
   }

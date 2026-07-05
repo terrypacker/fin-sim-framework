@@ -28,6 +28,7 @@ import { ScenarioComparePlugin }   from './scenario-compare-plugin.js';
 import { DgConfigPlugin }          from './dg-config-plugin.js';
 import { DgResultsPlugin }         from './dg-results-plugin.js';
 import { CrossActionQueryPlugin }  from './cross-action-query-plugin.js';
+import { HoldingsPlugin }          from './holdings-plugin.js';
 
 export { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin,
          TimelinePlugin, ChartPlugin, StatePanelPlugin, DashboardPlugin,
@@ -35,7 +36,7 @@ export { ScenarioPlugin, ConfigGraphPlugin, ConfigListPlugin, InspectorPlugin,
          OptConfigPlugin, OptResultsPlugin, OptRunsPlugin,
          ExecHistoryPlugin, LineagePlugin, PerfPlugin, ActionDetailPlugin,
          JournalReportPlugin, ScenarioComparePlugin,
-         DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin };
+         DgConfigPlugin, DgResultsPlugin, CrossActionQueryPlugin, HoldingsPlugin };
 
 /** All finance plugin descriptors — pass directly to WorkbenchShell `plugins` option. */
 export const FINANCE_PLUGINS = [
@@ -50,6 +51,7 @@ export const FINANCE_PLUGINS = [
   { id: 'mc-results',   title: 'MC Results',    component: McResultsPlugin   },
   { id: 'opt-results',  title: 'OPT Results',   component: OptResultsPlugin  },
   { id: 'state-panel',  title: 'State',         component: StatePanelPlugin  },
+  { id: 'holdings',     title: 'Holdings',      component: HoldingsPlugin    },
   { id: 'mc-runs',      title: 'MC Runs',       component: McRunsPlugin      },
   { id: 'opt-runs',     title: 'OPT Runs',      component: OptRunsPlugin     },
   { id: 'exec-history',   title: 'Node History',    component: ExecHistoryPlugin  },
@@ -72,7 +74,7 @@ export const FINANCE_DEFAULT_LAYOUT = {
     active: 'scenario',
   },
   center: {
-    tabs: ['config-graph', 'timeline', 'chart', 'mc-results', 'opt-results', 'dg-results'],
+    tabs: ['config-graph', 'timeline', 'chart', 'holdings', 'mc-results', 'opt-results', 'dg-results'],
     active: 'config-graph',
   },
   right: {

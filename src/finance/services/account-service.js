@@ -15,6 +15,7 @@ import { getUsEarlyWithdrawalRules } from '../account-rules/us/us-early-withdraw
 import { getBirthDate, getResidency } from '../residency-utils.js';
 import { Holding } from '../holdings/holding.js';
 import { resolveDefaultAllocation, resolveRateKey } from '../holdings/default-allocations.js';
+import { rescaleHoldingsToBalance } from '../holdings/holding-utils.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
 
 /**
@@ -85,6 +86,13 @@ export class AccountService extends AssetService {
     const account = this._resolve(idOrAccount);
     const original = { ...account };
     this.mergeChanges(account, changes);
+    // §4.4 invariant: a balance edit that doesn't also supply holdings (e.g. a
+    // param cascade or programmatic balance change) must rescale holdings to the
+    // new balance, otherwise Σ marketValue drifts away from account.balance.
+    if ('balance' in changes && !('holdings' in changes) &&
+        Array.isArray(account.holdings) && account.holdings.length > 0) {
+      rescaleHoldingsToBalance(account.holdings, account.balance);
+    }
     this._publish('UPDATE', account, original);
     this._wireNodeEdges(account);
     return account;
@@ -224,8 +232,23 @@ export class AccountService extends AssetService {
   transaction(account, amount, date) {
     account.balance = account.balance + amount;
     if (Array.isArray(account.holdings) && account.holdings.length === 1) {
-      const h = account.holdings[0];
-      h.marketValue = (h.marketValue ?? 0) + amount;
+      const h  = account.holdings[0];
+      const mv = h.marketValue ?? 0;
+      if (amount < 0) {
+        // Debit (drawdown / transfer-out): consume cost basis in proportion to
+        // the market value removed, and never drive the position below zero.
+        // Without this the single-holding mirror strands costBasis and lets
+        // marketValue go negative on over-draws (holdings-balance desync).
+        const sold       = Math.min(-amount, Math.max(0, mv));
+        const basisShare = mv > 0 ? (h.costBasis ?? 0) * (sold / mv) : 0;
+        h.marketValue = +Math.max(0, mv + amount).toFixed(2);
+        h.costBasis   = +Math.max(0, (h.costBasis ?? 0) - basisShare).toFixed(2);
+      } else {
+        // Credit (contribution / sale proceeds / transfer-in): the deposited
+        // cash carries basis equal to its market value.
+        h.marketValue = +(mv + amount).toFixed(2);
+        h.costBasis   = +((h.costBasis ?? 0) + amount).toFixed(2);
+      }
     }
   }
 

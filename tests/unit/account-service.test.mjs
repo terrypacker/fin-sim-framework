@@ -64,6 +64,45 @@ test('ACCOUNT_TYPE: is frozen (cannot be mutated)', () => {
   assert.throws(() => { ACCOUNT_TYPE.NEW_TYPE = 'test'; }, TypeError);
 });
 
+// ─── transaction(): single-holding basis + zero-floor (holdings-balance fix) ─────
+
+test('transaction: debit consumes single-holding cost basis proportionally', () => {
+  const svc = new AccountService(new Graph(), new EventBus());
+  const account = { balance: 100_000, holdings: [{ id: 'h1', marketValue: 100_000, costBasis: 60_000 }] };
+  svc.transaction(account, -25_000, new Date());          // sell 25% of the position
+  assert.strictEqual(account.balance, 75_000);
+  assert.strictEqual(account.holdings[0].marketValue, 75_000);
+  assert.strictEqual(account.holdings[0].costBasis, 45_000); // 60k − 25% = 45k (basis tracks)
+});
+
+test('transaction: debit floors marketValue at zero and never strands negative basis', () => {
+  const svc = new AccountService(new Graph(), new EventBus());
+  const account = { balance: 5_000, holdings: [{ id: 'h1', marketValue: 5_000, costBasis: 5_000 }] };
+  svc.transaction(account, -8_000, new Date());           // over-draw beyond available
+  assert.strictEqual(account.holdings[0].marketValue, 0); // floored, not negative
+  assert.strictEqual(account.holdings[0].costBasis, 0);
+});
+
+test('transaction: credit adds basis equal to the deposited market value', () => {
+  const svc = new AccountService(new Graph(), new EventBus());
+  const account = { balance: 10_000, holdings: [{ id: 'h1', marketValue: 10_000, costBasis: 10_000 }] };
+  svc.transaction(account, +5_000, new Date());
+  assert.strictEqual(account.holdings[0].marketValue, 15_000);
+  assert.strictEqual(account.holdings[0].costBasis, 15_000);
+});
+
+test('transaction: multi-holding accounts only move balance (caller owns the sleeve split)', () => {
+  const svc = new AccountService(new Graph(), new EventBus());
+  const account = { balance: 100_000, holdings: [
+    { id: 'a', marketValue: 60_000, costBasis: 60_000 },
+    { id: 'b', marketValue: 40_000, costBasis: 40_000 },
+  ] };
+  svc.transaction(account, -10_000, new Date());
+  assert.strictEqual(account.balance, 90_000);
+  assert.strictEqual(account.holdings[0].marketValue, 60_000); // untouched
+  assert.strictEqual(account.holdings[1].marketValue, 40_000);
+});
+
 // ─── Typed account constructors ───────────────────────────────────────────────
 
 test('CheckingAccount: type is checking', () => {

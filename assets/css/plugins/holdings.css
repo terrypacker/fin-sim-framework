@@ -1,0 +1,159 @@
+/* ── Holdings Plugin ───────────────────────────────────────────────────────── */
+
+.hld-plugin {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+}
+
+.hld-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.hld-account {
+  flex: 1;
+  min-width: 0;
+}
+
+.hld-asof {
+  color: var(--text-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.hld-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.hld-placeholder {
+  color: var(--text-muted);
+  padding: 16px 12px;
+  font-style: italic;
+}
+
+.hld-section {
+  padding: 4px 0 8px;
+}
+
+.hld-section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 4px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+.hld-section-title {
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.hld-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.hld-toggle input { margin: 0; }
+
+.hld-csv-btn {
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.hld-csv-btn:hover {
+  border-color: var(--blue-text);
+  color: var(--blue-text);
+}
+
+.hld-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.hld-th {
+  padding: 4px 8px;
+  text-align: left;
+  background: var(--bg-panel2);
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.hld-th--num { text-align: right; }
+
+.hld-td {
+  padding: 3px 8px;
+  color: var(--text);
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: middle;
+}
+
+.hld-td--num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.hld-alloc { color: var(--text-muted); font-size: 10px; }
+
+.hld-act-date { color: var(--text-muted); white-space: nowrap; }
+
+.hld-empty {
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: center;
+}
+
+.hld-total-row td {
+  border-top: 1px solid var(--border);
+  background: var(--bg-subtle);
+  font-weight: 600;
+}
+
+/* Signed-value coloring */
+.hld-amount--pos { color: var(--diff-added); }
+.hld-amount--neg { color: var(--diff-removed); }
+
+/* Activity kind chips */
+.hld-kind {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+}
+
+.hld-kind--buy    { color: var(--diff-added);   border-color: var(--diff-added); }
+.hld-kind--sell   { color: var(--diff-removed); border-color: var(--diff-removed); }
+.hld-kind--growth { color: var(--text-muted);   border-color: var(--border); }
