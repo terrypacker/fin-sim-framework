@@ -95,12 +95,13 @@ test('EVT-REGIME-STACK-1: two overlapping shocks stack additively on effectiveGr
 
   sim.stepTo(new Date('2026-05-01'));
 
-  // effectiveGrowthRates.EQUITY_US = 0.07 - 0.02 - 0.01 = 0.04
-  const effectiveRate = sim.state.effectiveGrowthRates?.EQUITY_US;
-  assert.ok(effectiveRate !== undefined, 'effectiveGrowthRates.EQUITY_US must exist');
+  // Per-account member key: EQUITY_US_ROTH = base 0.07 − 0.02 − 0.01 = 0.04
+  // (both class shocks fan out and stack additively on each member).
+  const effectiveRate = sim.state.effectiveGrowthRates?.EQUITY_US_ROTH;
+  assert.ok(effectiveRate !== undefined, 'effectiveGrowthRates.EQUITY_US_ROTH must exist');
   assert.ok(
     Math.abs(effectiveRate - 0.04) < 0.001,
-    `Expected effective rate ~0.04 (stacked), got ${effectiveRate}`
+    `Expected EQUITY_US_ROTH ~0.04 (stacked), got ${effectiveRate}`
   );
   assert.strictEqual(sim.state.activeRegimes.length, 2, 'Both regimes should be active');
 });
@@ -120,11 +121,11 @@ test('EVT-REGIME-STACK-2: expired V-curve regime is dropped from state.activeReg
   const active = sim.state.activeRegimes ?? [];
   assert.strictEqual(active.length, 0, 'Expired V-curve regime should be dropped');
 
-  // Effective rate should return to base
-  const effectiveRate = sim.state.effectiveGrowthRates?.EQUITY_US;
+  // Effective rate should return to base (per-account member key)
+  const effectiveRate = sim.state.effectiveGrowthRates?.EQUITY_US_ROTH;
   assert.ok(
     Math.abs(effectiveRate - 0.07) < 0.001,
-    `Effective rate should return to base 0.07 after expiry, got ${effectiveRate}`
+    `EQUITY_US_ROTH should return to base 0.07 after expiry, got ${effectiveRate}`
   );
 });
 

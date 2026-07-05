@@ -36,11 +36,9 @@ function schemaByKey() {
  * enabled:false → included in the UI for toggling; off by default.
  *
  * `paramKey` MUST be the toolset parameter key the compiler reads (e.g.
- * `brokerageDividendRate`, not the `stockDividendRate` scenario-default alias) —
+ * `brokerageGrowthRate`, not the `usStockGrowthRate` scenario-default alias) —
  * the runner writes the sampled value to `cfg.parameters[paramKey]`, so a
  * non-toolset key is silently discarded. `label` may differ for clarity.
- * (Exception: `usStockGrowthRate` is intentionally left — its no-op cause is the
- * regime growth substrate, not the key; see its note below.)
  *
  * Identity is the param schema's job: `visibleWhen` is always inherited from the
  * schema by paramKey (buildVariables → resolveSweepVariables), and `label` is
@@ -66,12 +64,7 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
     group: 'US Account Rates',         enabled: true,
   },
   {
-    // NOTE: no-op under ECONOMIC_REGIMES — US equity growth is the single
-    // effectiveGrowthRates[EQUITY_US] rate, sourced from rothGrowthRate (see
-    // economic-regimes-toolset collectBaseGrowthRates). Left as-is pending a
-    // decision on the regime growth-rate substrate (it can't be fixed by a key
-    // rename; iraGrowthRate / k401GrowthRate are no-ops for the same reason).
-    paramKey: 'usStockGrowthRate',     label: 'US Stock Growth Rate',
+    paramKey: 'brokerageGrowthRate',   label: 'US Stock Growth Rate',
     type: DISTRIBUTION_TYPES.NORMAL,   mean: D.usStockGrowthRate, stdDev: 0.03,
     group: 'US Account Rates',         enabled: true,
   },
@@ -425,6 +418,7 @@ export class IntlRetirementMcConfig {
    * And legacy scenario-default aliases to the toolset keys the compiler reads
    * (these MC variables were silently no-ops under the old keys), so a saved MC
    * config keeps the user's enabled/distribution settings after the fix:
+   *   usStockGrowthRate → brokerageGrowthRate
    *   stockDividendRate → brokerageDividendRate
    *   usInflationRate   → inflationRate
    */
@@ -432,6 +426,7 @@ export class IntlRetirementMcConfig {
     const ALIASES = {
       shockSeverity:     'shocks[0].severity',
       shockStartDate:    'shocks[0].startDate',
+      usStockGrowthRate: 'brokerageGrowthRate',
       stockDividendRate: 'brokerageDividendRate',
       usInflationRate:   'inflationRate',
     };

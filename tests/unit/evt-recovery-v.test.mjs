@@ -111,15 +111,15 @@ test('EVT-RECOVERY-V-4: V-curve recovery gradually reduces regime impact over ti
 
   // Just after shock: factor ~1, effective rate ~0.06 + (-0.06) = 0
   sim.stepTo(new Date('2026-02-15'));
-  const rateNearStart = sim.state.effectiveGrowthRates?.EQUITY_US ?? NaN;
+  const rateNearStart = sim.state.effectiveGrowthRates?.EQUITY_US_ROTH ?? NaN;
 
   // Halfway through recovery: factor ~0.5, effective rate ~0.06 + (-0.03) = 0.03
   sim.stepTo(new Date('2026-05-01'));
-  const rateMid = sim.state.effectiveGrowthRates?.EQUITY_US ?? NaN;
+  const rateMid = sim.state.effectiveGrowthRates?.EQUITY_US_ROTH ?? NaN;
 
   // After recovery complete: factor = 0, effective rate = base
   sim.stepTo(new Date('2026-09-01'));
-  const rateAfter = sim.state.effectiveGrowthRates?.EQUITY_US ?? NaN;
+  const rateAfter = sim.state.effectiveGrowthRates?.EQUITY_US_ROTH ?? NaN;
 
   assert.ok(rateNearStart < 0.02, `Near-start effective rate should be near 0, got ${rateNearStart}`);
   assert.ok(rateMid > rateNearStart, `Mid rate (${rateMid}) should be > near-start rate (${rateNearStart})`);

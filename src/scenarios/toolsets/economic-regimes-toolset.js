@@ -71,8 +71,16 @@ function buildRateKeyToStateKeys(accounts, realProperties = [], collectibles = [
  */
 function collectBaseGrowthRates(p) {
   return {
-    [RATE_KEYS.EQUITY_US]: p.rothGrowthRate ?? p.iraGrowthRate ?? 0.07,
-    [RATE_KEYS.EQUITY_AU]: p.auStockGrowthRate ?? p.spouseSuperGrowthRate ?? 0.07,
+    // Per-account-type base growth (members of EQUITY_US / EQUITY_AU). Each
+    // account keeps its own baseline; RegimeApplyReducer fans a class-level
+    // return shock out to all members, so a US-equity crash still hits every
+    // US-equity account on top of its own rate.
+    [RATE_KEYS.EQUITY_US_ROTH]:      p.rothGrowthRate      ?? 0.07,
+    [RATE_KEYS.EQUITY_US_IRA]:       p.iraGrowthRate       ?? 0.07,
+    [RATE_KEYS.EQUITY_US_K401]:      p.k401GrowthRate      ?? 0.07,
+    [RATE_KEYS.EQUITY_US_BROKERAGE]: p.brokerageGrowthRate ?? 0.05,
+    [RATE_KEYS.EQUITY_AU_STOCK]:     p.auStockGrowthRate   ?? 0.06,
+    [RATE_KEYS.EQUITY_AU_SUPER]:     p.superGrowthRate     ?? p.spouseSuperGrowthRate ?? 0.07,
   };
 }
 
