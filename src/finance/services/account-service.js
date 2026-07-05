@@ -234,6 +234,9 @@ export class AccountService extends AssetService {
     if (Array.isArray(account.holdings) && account.holdings.length === 1) {
       const h  = account.holdings[0];
       const mv = h.marketValue ?? 0;
+      // Mirror the (unrounded) balance update exactly so marketValue stays in
+      // lockstep with balance — rounding mv here while balance is full-precision
+      // makes the two drift apart over many small credits (e.g. monthly interest).
       if (amount < 0) {
         // Debit (drawdown / transfer-out): consume cost basis in proportion to
         // the market value removed, and never drive the position below zero.
@@ -241,13 +244,13 @@ export class AccountService extends AssetService {
         // marketValue go negative on over-draws (holdings-balance desync).
         const sold       = Math.min(-amount, Math.max(0, mv));
         const basisShare = mv > 0 ? (h.costBasis ?? 0) * (sold / mv) : 0;
-        h.marketValue = +Math.max(0, mv + amount).toFixed(2);
-        h.costBasis   = +Math.max(0, (h.costBasis ?? 0) - basisShare).toFixed(2);
+        h.marketValue = Math.max(0, mv + amount);
+        h.costBasis   = Math.max(0, (h.costBasis ?? 0) - basisShare);
       } else {
         // Credit (contribution / sale proceeds / transfer-in): the deposited
         // cash carries basis equal to its market value.
-        h.marketValue = +(mv + amount).toFixed(2);
-        h.costBasis   = +((h.costBasis ?? 0) + amount).toFixed(2);
+        h.marketValue = mv + amount;
+        h.costBasis   = (h.costBasis ?? 0) + amount;
       }
     }
   }
