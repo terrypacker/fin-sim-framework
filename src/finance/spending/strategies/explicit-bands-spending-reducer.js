@@ -42,6 +42,60 @@ function bandForAge(age, bands) {
 }
 
 /**
+ * Compute the spending state patch for a band: `monthlyExpenses = monthlyAmount ×
+ * residence price level`, with the essential/discretionary split preserving the
+ * current ratio (falling back to `discretionaryShare`). Pure; shared by the
+ * reducer's period-advance re-pin and the immediate re-pin below.
+ */
+export function pinExpensesForBand(state, band, cc, discretionaryShare = 0.30) {
+  const priceLevel = state.inflationAccumulator?.[cc] ?? 1;
+  const nominal    = band.monthlyAmount * priceLevel;
+  const cur        = state.expenses ?? {};
+  const curTotal   = (cur.essential ?? 0) + (cur.discretionary ?? 0);
+  const ratio      = curTotal > 0 ? (cur.discretionary ?? 0) / curTotal : discretionaryShare;
+  return {
+    expenses: { ...cur, essential: nominal * (1 - ratio), discretionary: nominal * ratio },
+    monthlyExpenses: nominal,
+    explicitBandSpending: { appliedStartAge: band.startAge, appliedAmount: band.monthlyAmount },
+  };
+}
+
+/**
+ * Re-pin spending for the band active at `asOfMs` **immediately**, off the period-
+ * advance grid — the actuation primitive for a forward-effective EXPLICIT_BANDS
+ * edit at "now" (design 39 §5 / Step 5b). The reducer only re-pins at the annual
+ * `*_PERIOD_ADVANCE`, so a mid-year edit would otherwise not bite until the next
+ * year boundary; this lets the cockpit's live Apply and the projection rollout
+ * both actuate from "now" instead, keeping them matched.
+ *
+ * Returns the state patch, or **null** when there's nothing to do — no active
+ * EXPLICIT_BANDS pin yet (`state.explicitBandSpending` absent ⇒ not an
+ * EXPLICIT_BANDS run, or the first period advance hasn't pinned), or the active
+ * band is unchanged (same startAge AND amount) so reactive within-band
+ * adjustments must be preserved. Mirrors the reducer's own skip condition.
+ *
+ * @param {object} state   live or snapshot sim state.
+ * @param {Array}  bands   the NEW band table (post-edit).
+ * @param {number} asOfMs  "now" in epoch ms.
+ */
+export function repinExpensesIfChanged(state, bands, asOfMs, { discretionaryShare = 0.30 } = {}) {
+  if (!state?.expenses || asOfMs == null || !Array.isArray(bands)) return null;
+  const applied = state.explicitBandSpending;
+  if (!applied) return null;                       // not an active EXPLICIT_BANDS pin → leave alone
+  const primaryKey  = Object.keys(state.people ?? {})[0];
+  const residenceCC = state.people?.[primaryKey]?.residency ?? 'US';
+  const birthDate   = state.people?.[primaryKey]?.birthDate;
+  if (!birthDate) return null;
+  const age  = getAge(new Date(birthDate), new Date(asOfMs));
+  const band = bandForAge(age, bands);
+  if (!band) return null;
+  if (band.startAge === applied.appliedStartAge && band.monthlyAmount === applied.appliedAmount) {
+    return null;                                   // unchanged → preserve reactive within-band drift
+  }
+  return pinExpensesForBand(state, band, residenceCC, discretionaryShare);
+}
+
+/**
  * ExplicitBandsSpendingReducer — the EXPLICIT_BANDS spending strategy (design/38
  * §6.1), a design-33 sibling of AgeBandedSpendingReducer.
  *
@@ -97,28 +151,18 @@ export class ExplicitBandsSpendingReducer extends Reducer {
     const band = bandForAge(age, this.bands);
     if (!band) return this.newState(state);
 
-    // Re-pin only on entering a new band; within a band, defer to inflation +
-    // the reactive strategies.
-    const applied = state.explicitBandSpending?.appliedStartAge;
-    if (band.startAge === applied) return this.newState(state);
+    // Re-pin on entering a new band OR when the band's amount itself changed —
+    // the latter is how a forward-effective edit at "now" (apply-forward / MPC
+    // cockpit, design 39 §5) actuates an already-entered band: the freshly
+    // compiled reducer carries the new amount, the injected snapshot still holds
+    // the old appliedAmount, so the next period advance re-pins. Within an
+    // unchanged band it stays hands-off (amount is constant ⇒ no re-pin), so
+    // inflation + the reactive strategies keep their say.
+    const applied = state.explicitBandSpending;
+    if (band.startAge === applied?.appliedStartAge && band.monthlyAmount === applied?.appliedAmount) {
+      return this.newState(state);
+    }
 
-    const priceLevel = state.inflationAccumulator?.[cc] ?? 1;
-    const nominal    = band.monthlyAmount * priceLevel;
-
-    const cur      = state.expenses;
-    const curTotal = (cur.essential ?? 0) + (cur.discretionary ?? 0);
-    const ratio    = curTotal > 0 ? (cur.discretionary ?? 0) / curTotal : this.discretionaryShare;
-
-    const expenses = {
-      ...cur,
-      essential:     nominal * (1 - ratio),
-      discretionary: nominal * ratio,
-    };
-
-    return this.newState(state, {
-      expenses,
-      monthlyExpenses: nominal,
-      explicitBandSpending: { appliedStartAge: band.startAge },
-    });
+    return this.newState(state, pinExpensesForBand(state, band, cc, this.discretionaryShare));
   }
 }

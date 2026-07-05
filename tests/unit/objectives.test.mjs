@@ -11,11 +11,14 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { OPTIMIZATION_OBJECTIVES, DEFAULT_TERMINAL_WEALTH_PENALTY }
-  from '../../src/finance/optimization/optimization-objectives.js';
+import {
+  OPTIMIZATION_OBJECTIVES, DEFAULT_TERMINAL_WEALTH_PENALTY, DEFAULT_DEFICIT_PENALTY,
+  DIE_WITH_TARGET_FAMILY, resolveDieWithTargetKey, groupedObjectiveOptions,
+} from '../../src/finance/optimization/optimization-objectives.js';
 import { OptimizationProblem } from '../../src/finance/optimization/optimization-problem.js';
 
-const { DIE_WITH_TARGET, MIN_LIFETIME_TAXES, MAX_NET_WORTH } = OPTIMIZATION_OBJECTIVES;
+const { DIE_WITH_TARGET, DIE_WITH_TARGET_LIQUID, CRRA_DIE_WITH_TARGET, MIN_LIFETIME_TAXES, MAX_NET_WORTH }
+  = OPTIMIZATION_OBJECTIVES;
 
 // ─── DIE_WITH_TARGET ──────────────────────────────────────────────────────────
 
@@ -51,6 +54,68 @@ describe('DIE_WITH_TARGET objective', () => {
     const snapshot = { state: { cumulativeConsumption: 200_000 } };
     assert.strictEqual(DIE_WITH_TARGET.evaluate(result, { snapshot }), 800_000);
   });
+
+  test('a solvent plan (no deficit) is unaffected by the deficit penalty', () => {
+    // cumulativeDeficit defaults to 0 → penalty term is 0, so the score is exactly
+    // the original consumption − λ·|NW − target| formula (interior optimum intact).
+    const score = DIE_WITH_TARGET.evaluate({
+      lifetimeConsumption: 1_000_000, finalNetWorthUsd: 600_000,
+      terminalWealthTarget: 500_000, terminalWealthTargetPenalty: 10 });
+    assert.strictEqual(score, 1_000_000 - 10 * 100_000);
+  });
+});
+
+// ─── Deficit penalty: "die with target" must not reward insolvency (design/39) ─
+
+describe('die-with-target deficit penalty', () => {
+  // Reproduces the live bug: a $30k-spend rollout drove finalNetLiquidity to 0
+  // (floored) next to a $5k target while running $23M into deficit. Without a
+  // solvency term the optimizer preferred going broke; with it, a safe plan wins.
+  const bankrupt = {
+    lifetimeConsumption: 12_095_394, finalNetWorthUsd: 0, finalNetLiquidity: 0,
+    cumulativeDeficit: 23_209_136, scenarioFailed: true,
+    terminalWealthTarget: 5_000, terminalWealthTargetPenalty: 10,
+  };
+  const solvent = {
+    lifetimeConsumption: 4_000_000, finalNetWorthUsd: 1_000_000, finalNetLiquidity: 1_000_000,
+    cumulativeDeficit: 0, scenarioFailed: false,
+    terminalWealthTarget: 5_000, terminalWealthTargetPenalty: 10,
+  };
+
+  test('LIQUID: a solvent plan now beats the bankrupting max-spend plan', () => {
+    assert.ok(
+      DIE_WITH_TARGET_LIQUID.evaluate(solvent) > DIE_WITH_TARGET_LIQUID.evaluate(bankrupt),
+      'the deficit penalty must dominate the spurious near-target reward of going broke');
+  });
+
+  test('LIQUID: without the deficit the bankrupt-shaped plan would have won (documents the bug)', () => {
+    // Strip the deficit → the old formula, under which insolvency scored best.
+    const wasWinning = { ...bankrupt, cumulativeDeficit: 0 };
+    assert.ok(
+      DIE_WITH_TARGET_LIQUID.evaluate(wasWinning) > DIE_WITH_TARGET_LIQUID.evaluate(solvent),
+      'absent any deficit, max-spend-to-target out-scores the safe plan — the original behavior');
+  });
+
+  test('penalty applies to DIE_WITH_TARGET and CRRA_DIE_WITH_TARGET too', () => {
+    assert.ok(DIE_WITH_TARGET.evaluate(solvent) > DIE_WITH_TARGET.evaluate(bankrupt));
+    const u = { lifetimeConsumptionUtility: 1000 };
+    assert.ok(
+      CRRA_DIE_WITH_TARGET.evaluate({ ...solvent, ...u }) >
+      CRRA_DIE_WITH_TARGET.evaluate({ ...bankrupt, ...u }));
+  });
+
+  test('penalty is μ·deficit, windowed by the snapshot accumulator', () => {
+    const result   = { lifetimeConsumption: 0, finalNetWorthUsd: 0, terminalWealthTarget: 0,
+                       terminalWealthTargetPenalty: 10, cumulativeDeficit: 1_000 };
+    const snapshot = { state: { cumulativeDeficit: 400 } };       // 600 incurred in-window
+    assert.strictEqual(DIE_WITH_TARGET.evaluate(result, { snapshot }), -DEFAULT_DEFICIT_PENALTY * 600);
+  });
+
+  test('deficitPenalty param overrides the default weight', () => {
+    const result = { lifetimeConsumption: 0, finalNetWorthUsd: 0, terminalWealthTarget: 0,
+                     terminalWealthTargetPenalty: 10, cumulativeDeficit: 100, deficitPenalty: 7 };
+    assert.strictEqual(DIE_WITH_TARGET.evaluate(result), -7 * 100);
+  });
 });
 
 // ─── MIN_LIFETIME_TAXES ───────────────────────────────────────────────────────
@@ -65,6 +130,83 @@ describe('MIN_LIFETIME_TAXES objective', () => {
     const result   = { cumulativeTaxesPaid: 50_000 };
     const snapshot = { state: { cumulativeTaxesPaid: 20_000 } };
     assert.strictEqual(MIN_LIFETIME_TAXES.evaluate(result, { snapshot }), 30_000);
+  });
+});
+
+// ─── Die-With-Target family (2×2 grouping, design/39) ────────────────────────
+
+describe('Die-With-Target family', () => {
+  test('is a complete 2×2 over running × terminal, all tagged with family + variant', () => {
+    const family = Object.entries(OPTIMIZATION_OBJECTIVES)
+      .filter(([, o]) => o.family === DIE_WITH_TARGET_FAMILY);
+    assert.equal(family.length, 4, 'four variants');
+    const variants = family.map(([, o]) => `${o.variant.running}|${o.variant.terminal}`).sort();
+    assert.deepStrictEqual(variants,
+      ['consumption|liquid', 'consumption|worth', 'crra|liquid', 'crra|worth']);
+  });
+
+  test('resolveDieWithTargetKey maps each axis pair to its concrete key', () => {
+    assert.equal(resolveDieWithTargetKey({ running: 'consumption', terminal: 'worth'  }), 'DIE_WITH_TARGET');
+    assert.equal(resolveDieWithTargetKey({ running: 'consumption', terminal: 'liquid' }), 'DIE_WITH_TARGET_LIQUID');
+    assert.equal(resolveDieWithTargetKey({ running: 'crra',        terminal: 'worth'  }), 'CRRA_DIE_WITH_TARGET');
+    assert.equal(resolveDieWithTargetKey({ running: 'crra',        terminal: 'liquid' }), 'CRRA_DIE_WITH_TARGET_LIQUID');
+    assert.equal(resolveDieWithTargetKey({}), 'DIE_WITH_TARGET', 'defaults to consumption×worth');
+  });
+
+  test('the new CRRA × Liquid variant: utility reward, anchored on terminal liquidity', () => {
+    const obj = OPTIMIZATION_OBJECTIVES.CRRA_DIE_WITH_TARGET_LIQUID;
+    assert.equal(obj.direction, 'maximize');
+    // Reward = lifetimeConsumptionUtility; penalty on |finalNetLiquidity − target|;
+    // finalNetWorthUsd must NOT enter (that's the worth variant).
+    const base = {
+      lifetimeConsumptionUtility: 1000, terminalWealthTarget: 500_000,
+      terminalWealthTargetPenalty: 10, finalNetWorthUsd: 9_999_999,
+    };
+    const onTarget  = obj.evaluate({ ...base, finalNetLiquidity: 500_000 });
+    const offTarget = obj.evaluate({ ...base, finalNetLiquidity: 400_000 });
+    assert.strictEqual(onTarget, 1000, 'on-liquidity-target → pure utility, ignores net worth');
+    assert.strictEqual(offTarget, 1000 - 10 * 100_000, 'penalty is on the liquidity miss');
+  });
+
+  test('CRRA default λ auto-scales by the run marginal utility (no re-tune on basis switch)', () => {
+    const crra = OPTIMIZATION_OBJECTIVES.CRRA_DIE_WITH_TARGET;
+    const mu   = 2e-6;   // dollars→utils shadow price for this run
+    const base = { lifetimeConsumptionUtility: 1000, terminalWealthTarget: 500_000,
+                   consumptionMarginalUtility: mu };
+    const onTarget  = crra.evaluate({ ...base, finalNetWorthUsd: 500_000 });
+    const offTarget = crra.evaluate({ ...base, finalNetWorthUsd: 400_000 });
+    assert.strictEqual(onTarget, 1000, 'on target → pure utility');
+    assert.strictEqual(offTarget, 1000 - (DEFAULT_TERMINAL_WEALTH_PENALTY * mu) * 100_000,
+      'λ defaulted to DEFAULT·u′(c̄), converting the dollar miss into utils');
+  });
+
+  test('consumption basis ignores marginal utility (λ stays the dollar default)', () => {
+    const off = OPTIMIZATION_OBJECTIVES.DIE_WITH_TARGET.evaluate({
+      lifetimeConsumption: 1_000_000, terminalWealthTarget: 500_000,
+      finalNetWorthUsd: 400_000, consumptionMarginalUtility: 2e-6,   // present but unused
+    });
+    assert.strictEqual(off, 1_000_000 - DEFAULT_TERMINAL_WEALTH_PENALTY * 100_000);
+  });
+
+  test('explicit terminalWealthTargetPenalty still overrides the CRRA auto-scale', () => {
+    const off = OPTIMIZATION_OBJECTIVES.CRRA_DIE_WITH_TARGET.evaluate({
+      lifetimeConsumptionUtility: 1000, terminalWealthTarget: 500_000, finalNetWorthUsd: 400_000,
+      consumptionMarginalUtility: 2e-6, terminalWealthTargetPenalty: 3,
+    });
+    assert.strictEqual(off, 1000 - 3 * 100_000);
+  });
+
+  test('groupedObjectiveOptions collapses the family into one entry, keeps singles', () => {
+    const grouped = groupedObjectiveOptions();
+    const families = grouped.filter(o => o.kind === 'family');
+    assert.equal(families.length, 1, 'one collapsed family entry');
+    assert.equal(families[0].family, DIE_WITH_TARGET_FAMILY);
+    // None of the four concrete family keys appear as standalone entries.
+    const singleKeys = grouped.filter(o => o.kind === 'single').map(o => o.key);
+    for (const k of ['DIE_WITH_TARGET', 'DIE_WITH_TARGET_LIQUID', 'CRRA_DIE_WITH_TARGET', 'CRRA_DIE_WITH_TARGET_LIQUID']) {
+      assert.ok(!singleKeys.includes(k), `${k} is grouped, not standalone`);
+    }
+    assert.ok(singleKeys.includes('MAX_NET_WORTH'), 'standalone objectives still listed');
   });
 });
 

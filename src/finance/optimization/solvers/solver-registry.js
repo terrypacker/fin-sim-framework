@@ -12,6 +12,8 @@ import { GridSearchSolver }         from './grid-search-solver.js';
 import { PatternSearchSolver }       from './pattern-search-solver.js';
 import { RandomSolver }              from './random-solver.js';
 import { SimulatedAnnealingSolver }  from './simulated-annealing-solver.js';
+import { CemSolver }                 from './cem-solver.js';
+import { QpPolishSolver }             from './qp-polish.js';
 
 /**
  * SOLVER_REGISTRY — named-things registry of search strategies (design/38 §3.2),
@@ -73,6 +75,46 @@ export const SOLVER_REGISTRY = {
         description: 'Geometric temperature decay per iteration (0–1; lower cools faster).' },
       { key: 'initialTemp', label: 'Initial Temperature', type: 'Number', defaultValue: 0,
         description: 'Starting temperature in objective units (0 = auto-calibrate from a burn-in).' },
+    ],
+  },
+
+  CEM: {
+    label:   CemSolver.label,
+    factory: (options = {}) => new CemSolver(options),
+    optionSchema: [
+      { key: 'budget', label: 'Max Evaluations', type: 'Number', defaultValue: 256,
+        description: 'Hard cap on simulations to run.' },
+      { key: 'seed', label: 'Seed', type: 'Number', defaultValue: 1,
+        description: 'Seed for sampling (reproducible).' },
+      { key: 'population', label: 'Population', type: 'Number', defaultValue: 32,
+        description: 'Candidate control vectors sampled per generation.' },
+      { key: 'eliteFrac', label: 'Elite Fraction', type: 'Number', defaultValue: 0.25,
+        description: 'Top fraction of each generation refit into the next sampling distribution.' },
+      { key: 'sigma0', label: 'Initial Spread', type: 'Number', defaultValue: 0.5,
+        description: 'Initial std as a fraction of each variable’s range (higher = broader first generation).' },
+    ],
+  },
+
+  QP_POLISH: {
+    label:   QpPolishSolver.label,
+    // Opt-in second stage (design 39 §4 / Step 6): a sampling backbone refined by
+    // a local QP on the continuous sub-vector. The base solver is wired here (in
+    // the same module as createSolver) to avoid a registry import cycle in
+    // qp-polish.js; `base` !== 'QP_POLISH' is forced to dodge self-recursion.
+    factory: (options = {}) => {
+      const base = options.base && options.base !== 'QP_POLISH' ? options.base : 'CEM';
+      return new QpPolishSolver({ ...options, baseSolver: createSolver(base, options) });
+    },
+    optionSchema: [
+      { key: 'base', label: 'Base Solver', type: 'Enum', options: ['CEM', 'RANDOM', 'SIMULATED_ANNEALING', 'PATTERN_SEARCH'],
+        defaultValue: 'CEM',
+        description: 'Sampling solver whose elite is polished.' },
+      { key: 'budget', label: 'Base Max Evaluations', type: 'Number', defaultValue: 256,
+        description: 'Evaluation cap for the base sampling stage.' },
+      { key: 'polishBudget', label: 'Polish Max Evaluations', type: 'Number', defaultValue: 80,
+        description: 'Evaluation cap for the local QP-polish stage.' },
+      { key: 'seed', label: 'Seed', type: 'Number', defaultValue: 1,
+        description: 'Seed for the base sampling stage (reproducible).' },
     ],
   },
 };

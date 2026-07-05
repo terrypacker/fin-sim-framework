@@ -46,6 +46,18 @@ export class ScenarioRegistry {
    */
   _init() {
     this._scenarioData = this._scenarioStorage.load();
+    // One-time cleanup (design/39 Step 5c): early MPC builds wrote decision records
+    // into the scenario layer, so they leaked into `fin-sim-scenarios` storage and
+    // got re-stamped to u:<N> on reload — un-loadable junk in the picker. Decision
+    // records now live in their own `decision` layer and never touch this storage;
+    // purge any already-persisted ones (mpc:-origin id or derived flag) and re-save.
+    const cleaned = this._scenarioData.scenarios.filter(
+      s => !(s?.derived || (typeof s?.id === 'string' && s.id.startsWith('mpc:'))),
+    );
+    if (cleaned.length !== this._scenarioData.scenarios.length) {
+      this._scenarioData.scenarios = cleaned;
+      this._scenarioStorage.save(this._scenarioData);
+    }
     this._scenarioData.scenarios.forEach((s, i) => {
       if (!s.id || !s.id.startsWith('u:')) s.id = 'u:' + i;
       s.prebuilt = false;

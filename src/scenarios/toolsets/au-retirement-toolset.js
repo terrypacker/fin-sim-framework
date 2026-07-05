@@ -30,6 +30,7 @@ import { SetOutOfFundsDateReducer }   from '../../finance/reducers/set-out-of-fu
 import { AccumulateDeficitReducer }   from '../../finance/reducers/accumulate-deficit-reducer.js';
 import { AccumulateTaxesPaidReducer } from '../../finance/reducers/accumulate-taxes-paid-reducer.js';
 import { AccumulateConsumptionReducer } from '../../finance/reducers/accumulate-consumption-reducer.js';
+import { AccumulateConsumptionUtilityReducer } from '../../finance/reducers/accumulate-consumption-utility-reducer.js';
 import { OutOfFundsReducer }          from '../../finance/reducers/out-of-funds-reducer.js';
 import { InflationAdjustReducer }         from '../../finance/reducers/inflation-adjust-reducer.js';
 import { SpendingStrategyApplyReducer }   from '../../finance/spending/spending-strategy-apply-reducer.js';
@@ -559,6 +560,7 @@ export const AU_RETIREMENT = {
       reducers.push(new AccumulateDeficitReducer());
       reducers.push(new AccumulateTaxesPaidReducer());
       reducers.push(new AccumulateConsumptionReducer());
+      reducers.push(new AccumulateConsumptionUtilityReducer({ gamma: p.crraGamma ?? 1.5 }));
       reducers.push(new OutOfFundsReducer());
 
       if (p.inflationAdjust) {

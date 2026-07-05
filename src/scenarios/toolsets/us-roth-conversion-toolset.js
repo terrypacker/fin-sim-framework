@@ -17,6 +17,11 @@ import {
 } from '../../finance/account-rules/us/roth-conversion-classes.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
 
+// Base year for the per-year income-target schedule (design 39 §12.3): real
+// targets are quoted in this year's USD and compounded by inflation, matching
+// the base usBracketGrossIncomeCeiling indexes the statutory brackets from.
+const BRACKET_BASE_YEAR = 2025;
+
 /**
  * US_ROTH_CONVERSION toolset — bracket-fill Roth conversion policy scheduling.
  *
@@ -105,11 +110,11 @@ export const US_ROTH_CONVERSION = {
         // the cheap start/end/maxBracket triple above; this array is the
         // higher-resolution form the controller actuates. `controllable` and
         // round-tripped here; consumed by design 39 (inert in batch).
-        key: 'rothConversionSchedule', label: 'Roth Conversion Schedule (per-year ceilings)',
+        key: 'rothConversionSchedule', label: 'Roth Conversion Schedule (per-year income targets)',
         type: 'RothScheduleList', group: 'Roth Conversion', mc: false, opt: false,
         controllable: true,
         defaultValue: [],
-        description: 'Per-year bracket-ceiling schedule [{ year, bracketCeiling }] for the closed-loop controller (design 39). Empty = use the start/end/maxBracket window.',
+        description: 'Per-year income-fill schedule [{ year, incomeTarget }] for the closed-loop controller (design 39 §12). incomeTarget is real base-year (2025) USD, compounded by inflation to the year\'s nominal ordinary-income ceiling. Years absent = not converted (skip-years). Legacy { year, bracketCeiling } (statutory rate) entries are still accepted. Empty = use the start/end/maxBracket window.',
       },
     ];
   },
@@ -125,20 +130,8 @@ export const US_ROTH_CONVERSION = {
     const people   = context.people   ?? [];
     const accounts = context.accounts ?? [];
 
-    const toFiniteYear = (v, fallback) =>
-      (typeof v === 'number' && Number.isFinite(v)) ? v : fallback;
-
     const primary = people[0];
     const spouse  = people[1];
-
-    const defaultStartYear = primary?.retirementDate
-      ? new Date(primary.retirementDate).getUTCFullYear()
-      : context.startDate.getUTCFullYear();
-
-    const defaultEndYear = new Date(primary?.birthDate ?? context.startDate).getUTCFullYear() + 72;
-
-    const convStartYear = toFiniteYear(p.rothConversionStartYear, defaultStartYear);
-    const convEndYear   = toFiniteYear(p.rothConversionEndYear,   defaultEndYear);
 
     const ownersToConvert = p.rothConversionOwner === 'both'
       ? [primary, spouse].filter(Boolean)
@@ -150,10 +143,13 @@ export const US_ROTH_CONVERSION = {
     const day   = p.rothConversionDay   ?? 1;
     const inflationRate = p.inflationRate ?? 0.03;
 
+    // Emit one ROTH_CONVERSION_POLICY_EVALUATE per (year, owner) at the given
+    // gross-income ceiling. Shared by the legacy window path and the per-year
+    // schedule path. A non-finite/negative target is skipped (no conversion);
+    // the policy handler also no-ops when there is no bracket room left.
     const events = [];
-    for (let year = convStartYear; year <= convEndYear; year++) {
-      const targetIncome = usBracketGrossIncomeCeiling(p.rothConversionMaxBracket, year, inflationRate);
-
+    const emitYear = (year, targetIncome) => {
+      if (!(Number.isFinite(targetIncome) && targetIncome >= 0)) return;
       for (const person of ownersToConvert) {
         const iraAcct  = accounts.find(a => a.role === ACCOUNT_ROLES.IRA  && a.ownerId === person.id);
         const rothAcct = accounts.find(a => a.role === ACCOUNT_ROLES.ROTH && a.ownerId === person.id);
@@ -168,6 +164,44 @@ export const US_ROTH_CONVERSION = {
           color:   '#7E57C2',
         }));
       }
+    };
+
+    // Per-year income-target form (design 39 §12) — the closed-loop controller's
+    // higher-resolution control. Each entry is { year, incomeTarget } in REAL
+    // base-year USD, compounded to the year's nominal ceiling by the same
+    // inflation path the brackets use (usBracketGrossIncomeCeiling). A legacy
+    // { year, bracketCeiling } entry (statutory marginal rate) is still accepted
+    // and resolved through usBracketGrossIncomeCeiling. Years absent from the
+    // schedule are simply not converted (skip-years), so the schedule expresses
+    // both "which years" and "how much". Empty schedule ⇒ the legacy window below.
+    const schedule = Array.isArray(p.rothConversionSchedule) ? p.rothConversionSchedule : [];
+    if (schedule.length > 0) {
+      for (const entry of schedule) {
+        if (!entry || !Number.isFinite(entry.year)) continue;
+        const targetIncome = Number.isFinite(entry.incomeTarget)
+          ? entry.incomeTarget * Math.pow(1 + inflationRate, entry.year - BRACKET_BASE_YEAR)
+          : Number.isFinite(entry.bracketCeiling)
+            ? usBracketGrossIncomeCeiling(entry.bracketCeiling, entry.year, inflationRate)
+            : NaN;
+        emitYear(entry.year, targetIncome);
+      }
+      return events;
+    }
+
+    // Legacy window form: one bracket ceiling applied every year in [start, end].
+    const toFiniteYear = (v, fallback) =>
+      (typeof v === 'number' && Number.isFinite(v)) ? v : fallback;
+
+    const defaultStartYear = primary?.retirementDate
+      ? new Date(primary.retirementDate).getUTCFullYear()
+      : context.startDate.getUTCFullYear();
+    const defaultEndYear = new Date(primary?.birthDate ?? context.startDate).getUTCFullYear() + 72;
+
+    const convStartYear = toFiniteYear(p.rothConversionStartYear, defaultStartYear);
+    const convEndYear   = toFiniteYear(p.rothConversionEndYear,   defaultEndYear);
+
+    for (let year = convStartYear; year <= convEndYear; year++) {
+      emitYear(year, usBracketGrossIncomeCeiling(p.rothConversionMaxBracket, year, inflationRate));
     }
     return events;
   },

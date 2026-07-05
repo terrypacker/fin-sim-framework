@@ -77,6 +77,8 @@ export const COVERED = [
   'AccumulateDeficitReducer', 'OutOfFundsReducer', 'SetOutOfFundsDateReducer',
   // Lifetime running accumulators (design 38 §5) — accumulate-reducers.test.mjs
   'AccumulateTaxesPaidReducer', 'AccumulateConsumptionReducer',
+  // CRRA consumption utility (design 39 §4) — crra-objective.test.mjs
+  'AccumulateConsumptionUtilityReducer',
 
   // D — top-level finance (reducer-postconditions-finance.test.mjs)
   'ExpenseDebitReducer', 'ReplenishSavingsReducer', 'InflationAdjustReducer',

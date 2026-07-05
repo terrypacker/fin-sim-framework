@@ -332,6 +332,36 @@ function buildExpenseBandOptConfigs(params) {
 }
 
 /**
+ * Build one optimization variable per `rothConversionSchedule` entry (design 39
+ * §12 / Step 9), sibling of buildExpenseBandOptConfigs. Each emits a continuous
+ * `rothConversionSchedule[i].incomeTarget` variable (real base-year USD income
+ * fill level) that the batch optimizer (design 38) can sweep alongside — or
+ * instead of — the legacy single `rothConversionMaxBracket` ENUM. `min: 0`
+ * encodes "no conversion that year" (OFF). Marked `controllable` so design 39's
+ * MPC can actuate it; `enabled: false` so it only appears when the scenario
+ * carries a per-year schedule.
+ */
+function buildRothScheduleOptConfigs(params) {
+  const schedule = params.rothConversionSchedule ?? [];
+  return schedule.flatMap((entry, i) => {
+    if (!entry) return [];
+    return [
+      {
+        paramKey:     `rothConversionSchedule[${i}].incomeTarget`,
+        label:        `Roth ${entry.year ?? '?'}: income fill target (real $)`,
+        type:         OPT_PARAM_TYPES.CONTINUOUS,
+        min:          0,
+        max:          500_000,
+        step:         5_000,
+        group:        'Roth Conversion Schedule',
+        enabled:      false,
+        controllable: true,
+      },
+    ];
+  });
+}
+
+/**
  * Build the full optimization variable list for a given param snapshot.
  *
  * Returns DEFAULT_OPTIMIZATION_CONFIGS plus one severity entry per configured
@@ -351,6 +381,7 @@ export function buildOptVariables(params) {
         : cfg),
     ...buildShockOptConfigs(params),
     ...buildExpenseBandOptConfigs(params),
+    ...buildRothScheduleOptConfigs(params),
   ];
   // Inherit identity (label / options / visibleWhen) from the param schema and
   // drop variables hidden by an unsatisfied visibleWhen (e.g. a strategy knob

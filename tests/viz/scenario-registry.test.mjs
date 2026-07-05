@@ -291,6 +291,29 @@ test('_init: assigns u:<i> id when storage record has no id (legacy)', () => {
   assert.ok(r.get('u:0'), 'u:0 should be assigned for legacy record');
 });
 
+test('_init: purges leaked MPC decision records from scenario storage (design 39 Step 5c)', () => {
+  // Early MPC builds wrote decision records into scenario storage. _init must
+  // drop them (mpc:-id or derived flag) AND re-save the cleaned list, so they
+  // never reappear in the picker or get re-stamped to u:<N>.
+  setStorageData({
+    scenarios: [
+      { id: 'u:0', name: 'Real', simStart: '2026-01-01', simEnd: '2041-01-01' },
+      { id: 'mpc:0:1830297600000', name: 'Move @ 2028', derived: true },
+      { id: 'mpc:1:1861920000000', name: 'Move @ 2029', derived: true },
+    ],
+  });
+  const r = makeRegistry([makePrebuilt('alpha')]);
+
+  assert.strictEqual(r.getUserScenarios().length, 1, 'only the real user scenario survives');
+  assert.ok(r.get('u:0'), 'real scenario preserved');
+  assert.strictEqual(r.get('mpc:0:1830297600000'), undefined, 'decision record not loaded');
+
+  // The purge is persisted back to storage, not just filtered in memory.
+  const persisted = JSON.parse(localStorage.getItem(ScenarioStorage.STORAGE_KEY));
+  assert.strictEqual(persisted.scenarios.length, 1);
+  assert.ok(persisted.scenarios.every(s => !s.derived && !s.id.startsWith('mpc:')));
+});
+
 // ═════════════════════════════════════════════════════════════════════════════
 // upsertUserScenarios
 // ═════════════════════════════════════════════════════════════════════════════
