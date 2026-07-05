@@ -46,6 +46,15 @@
 .mpc-cockpit .wb-input:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .mpc-field .wb-select { min-width: 150px; }
+/* Multi-lever listbox (design 45 §8): a few visible rows so 1+ levers can be
+   Ctrl/Cmd-clicked, sized to its options rather than the toolbar height. */
+.mpc-field .mpc-multi { min-width: 168px; height: auto; padding: 2px; }
+.mpc-field .mpc-multi option { padding: 2px 6px; }
+.mpc-field .mpc-multi option:checked {
+  background: var(--accent-primary, #7E57C2);
+  color: #fff;
+}
+.mpc-hint { font-size: 0.78em; opacity: 0.6; text-transform: none; font-weight: normal; }
 .mpc-override .wb-input { width: 110px; }
 /* Horizon field dims its label when the goal can't use a window (design 41). */
 .mpc-field--disabled { opacity: 0.45; }

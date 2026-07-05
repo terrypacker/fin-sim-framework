@@ -148,6 +148,9 @@ import {
   RothConversionHandler, RothConversionPolicyHandler,
   RothConversionApplyReducer,
 } from '../finance/account-rules/us/roth-conversion-classes.js';
+import {
+  EarlyWithdrawalPolicyHandler, ScheduledEarlyWithdrawalApplyReducer,
+} from '../finance/account-rules/us/early-withdrawal-classes.js';
 
 // ─── AU account-module handlers and reducers ────────────────────────────────
 import {
@@ -234,6 +237,7 @@ const _ALL_CLASSES = [
   RothRolloverContributionHandler, RothRolloverEarningsHandler,
   RothRolloverWithdrawalContributionsHandler, RothRolloverWithdrawalEarningsHandler,
   RothConversionHandler, RothConversionPolicyHandler,
+  EarlyWithdrawalPolicyHandler,
   AuSavingsContributionHandler, AuSavingsWithdrawalHandler, AuSavingsEarningsHandler,
   SuperContributionHandler, SuperWithdrawalContributionsHandler,
   SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler,
@@ -272,6 +276,7 @@ const _ALL_CLASSES = [
   RothRolloverContributionApplyReducer, RothRolloverEarningsApplyReducer,
   RothRolloverWithdrawalContribApplyReducer, RothRolloverWithdrawalEarningsApplyReducer,
   RothConversionApplyReducer,
+  ScheduledEarlyWithdrawalApplyReducer,
   AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer,
   AuFixedIncomeEarningsApplyReducer,
   SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer,

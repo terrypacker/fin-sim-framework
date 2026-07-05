@@ -536,6 +536,17 @@ export class AccountService extends AssetService {
       });
     };
 
+    // Early-withdrawal-before-brokerage (design 45 (B), §7). When set, hold
+    // taxable brokerage back from the penalty-free Phase 1 so the Phase 2 early
+    // withdrawal (10% penalty) runs FIRST — trading the penalty for NOT realizing
+    // capital gains / draining the buffer. The held-back taxable accounts then
+    // backstop in Phase 3 if the penalty draw can't cover the deficit. Default off
+    // (brokerage drawn first, the historical strictly-last early-withdrawal order).
+    // `type === BROKERAGE` covers the gain-realizing taxable bucket (us-stock and
+    // fixed-income), the accounts whose Phase-1 draw emits STOCK_WITHDRAWAL_TAX.
+    const earlyBeforeBrokerage = state.earlyWithdrawalBeforeBrokerage === true;
+    const isDeferredTaxable    = (account) => earlyBeforeBrokerage && account.type === ACCOUNT_TYPE.BROKERAGE;
+
     // ── Phase 1: penalty-free sources ─────────────────────────────────────────
     // Resolve per-account withdrawal eligibility using the owner's birth date.
     const eligibleOf = (account) => {
@@ -560,7 +571,7 @@ export class AccountService extends AssetService {
             // the target-currency value so cross-border sources contribute fairly.
             return { key, account, eligible, fx, amt: this._penaltyFreeAvailable(account, eligible) * fx };
           })
-          .filter(s => s.amt > 1e-9);
+          .filter(s => s.amt > 1e-9 && !isDeferredTaxable(s.account));
         const total = avail.reduce((sum, a) => sum + a.amt, 0);
         if (total < 1e-9) break;
 
@@ -581,6 +592,7 @@ export class AccountService extends AssetService {
       // Ordered: walk sources in drawdownPriority order, draining each fully.
       for (const [key, account] of sources) {
         if (remaining < 1e-9) break;
+        if (isDeferredTaxable(account)) continue;   // held back for Phase 3 (design 45 (B))
         remaining -= this._drawPenaltyFree(
           targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account)
         );
@@ -628,7 +640,6 @@ export class AccountService extends AssetService {
         const grossNeeded = netFactor > 0 ? netNeeded / netFactor : netNeeded;
         const gross       = Math.min(grossNeeded, earningsAvail);
         const net         = gross * netFactor;
-        const penalty     = gross * penaltyRate;
 
         const credited = net * fx - fee; // target currency, net of cross-border fee
         if (credited <= 0) continue;     // draw too small to clear the cross-border fee
@@ -637,7 +648,9 @@ export class AccountService extends AssetService {
         pushTransfer(account, key, gross, credited, fee);
         account.earningsBasis = Math.max(0, (account.earningsBasis ?? 0) - gross);
         if (!drawnKeys.includes(key)) drawnKeys.push(key);
-        pendingTaxActions.push({ type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount: gross, penaltyAmount: penalty, residency });
+        // Phase 2 Roth draws earnings only (contributions went in Phase 1), so the
+        // whole gross is the earnings portion (design 45 §6 shared shapes).
+        pendingTaxActions.push(...this.earlyWithdrawalTaxActions(account, { fromEarnings: gross, penaltyRate, residency }).taxActions);
         remaining -= credited;
 
       } else if (account.type === ACCOUNT_TYPE.TRADITIONAL_IRA) {
@@ -651,7 +664,6 @@ export class AccountService extends AssetService {
         const earningsPortion = grossCapped - contribPortion;
 
         const net     = grossCapped * netFactor;
-        const penalty = grossCapped * penaltyRate;
 
         const credited = net * fx - fee; // target currency, net of cross-border fee
         if (credited <= 0) continue;     // draw too small to clear the cross-border fee
@@ -662,12 +674,7 @@ export class AccountService extends AssetService {
         account.earningsBasis     = (account.earningsBasis     ?? 0) - earningsPortion;
         if (!drawnKeys.includes(key)) drawnKeys.push(key);
 
-        if (contribPortion > 0) {
-          pendingTaxActions.push({ type: 'IRA_WITHDRAWAL_CONTRIB_TAX', amount: contribPortion, penaltyAmount: contribPortion * penaltyRate });
-        }
-        if (earningsPortion > 0) {
-          pendingTaxActions.push({ type: 'IRA_WITHDRAWAL_EARNINGS_TAX', amount: earningsPortion, penaltyAmount: earningsPortion * penaltyRate, residency });
-        }
+        pendingTaxActions.push(...this.earlyWithdrawalTaxActions(account, { fromContrib: contribPortion, fromEarnings: earningsPortion, penaltyRate, residency }).taxActions);
         remaining -= credited;
 
       } else if (account.type === ACCOUNT_TYPE.FOUR_OH_ONE_K) {
@@ -676,7 +683,6 @@ export class AccountService extends AssetService {
         const grossNeeded = netFactor > 0 ? netNeeded / netFactor : netNeeded;
         const gross       = Math.min(grossNeeded, account.balance);
         const net         = gross * netFactor;
-        const penalty     = gross * penaltyRate;
 
         // 401k draws earnings first, then contributions (mirrors K401WithdrawalApplyReducer).
         const fromEarnings = Math.min(gross, account.earningsBasis ?? 0);
@@ -690,8 +696,24 @@ export class AccountService extends AssetService {
         account.earningsBasis     = (account.earningsBasis     ?? 0) - fromEarnings;
         account.contributionBasis = (account.contributionBasis ?? 0) - fromContrib;
         if (!drawnKeys.includes(key)) drawnKeys.push(key);
-        pendingTaxActions.push({ type: 'K401_WITHDRAWAL_TAX', amount: gross, penaltyAmount: penalty });
+        pendingTaxActions.push(...this.earlyWithdrawalTaxActions(account, { fromContrib, fromEarnings, penaltyRate }).taxActions);
         remaining -= credited;
+      }
+    }
+
+    // ── Phase 3: deferred taxable backstop (design 45 (B), §7) ────────────────
+    // Reached only when early-withdrawal-before-brokerage held taxable accounts
+    // back from Phase 1: now that the penalty draw is exhausted, realize gains to
+    // cover any residual deficit, via the same penalty-free path Phase 1 uses.
+    // (B) is deficit-sized against post-Phase-2 balances, so it never double-draws
+    // what the scheduled decant (A) or the penalty draw already took (§9 Q3).
+    if (earlyBeforeBrokerage && remaining >= 1e-9) {
+      for (const [key, account] of sources) {
+        if (remaining < 1e-9) break;
+        if (!isDeferredTaxable(account)) continue;
+        remaining -= this._drawPenaltyFree(
+          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account)
+        );
       }
     }
 
@@ -757,6 +779,62 @@ export class AccountService extends AssetService {
     account.contributionBasis = Math.max(0, contrib  - fromContrib);
     account.earningsBasis     = Math.max(0, earnings - fromEarnings);
     return { fromContrib, fromEarnings };
+  }
+
+  /**
+   * Early-withdrawal penalty + withdrawal-tax action core (design 45 §6).
+   *
+   * Given a gross early withdrawal already split into its contribution and
+   * earnings portions (the type's ordering — see `reduceLedgerForWithdrawal`),
+   * build the penalty and the `*_WITHDRAWAL_*` tax action(s) to chain. This is
+   * the single source for the action SHAPES (design 44 Gap B) shared by the
+   * involuntary `replenishSavings` Phase 2 fallback and the scheduled decant
+   * reducer (design 45) so the two can NEVER diverge on what tax/penalty a given
+   * early draw emits. Pure: it moves no cash and mutates no ledger — callers cap
+   * the draw and reduce the basis their own way, then pass the split here.
+   *
+   * Penalty rule by type:
+   *   - ROTH          → contributions are penalty/tax free; only the earnings
+   *                     portion is penalized + reported (ROTH_WITHDRAWAL_EARNINGS_TAX).
+   *   - TRADITIONAL_IRA → whole gross is ordinary income + penalty, reported as
+   *                     CONTRIB + EARNINGS actions (each carrying its own penalty).
+   *   - FOUR_OH_ONE_K  → whole gross is ordinary income + penalty, one action.
+   *
+   * @param {import('../account.js').Account} account
+   * @param {object} split
+   * @param {number} split.fromContrib  - contribution portion of the gross (account ccy)
+   * @param {number} split.fromEarnings - earnings portion of the gross (account ccy)
+   * @param {number} split.penaltyRate  - 0..1 (0 above the age gate)
+   * @param {string} [split.residency]  - stamped on the AU-assessable earnings actions
+   * @returns {{ penalty: number, taxActions: Array<object> }}
+   */
+  earlyWithdrawalTaxActions(account, { fromContrib = 0, fromEarnings = 0, penaltyRate = 0, residency } = {}) {
+    const gross      = fromContrib + fromEarnings;
+    const taxActions = [];
+    let   penalty    = 0;
+    switch (account?.type) {
+      case ACCOUNT_TYPE.ROTH:
+        // Contributions out first are penalty/tax free; earnings carry the penalty.
+        penalty = fromEarnings * penaltyRate;
+        if (fromEarnings > 0) {
+          taxActions.push({ type: 'ROTH_WITHDRAWAL_EARNINGS_TAX', amount: fromEarnings, penaltyAmount: penalty, residency });
+        }
+        break;
+      case ACCOUNT_TYPE.TRADITIONAL_IRA:
+        penalty = gross * penaltyRate;
+        if (fromContrib > 0) {
+          taxActions.push({ type: 'IRA_WITHDRAWAL_CONTRIB_TAX',  amount: fromContrib,  penaltyAmount: fromContrib  * penaltyRate });
+        }
+        if (fromEarnings > 0) {
+          taxActions.push({ type: 'IRA_WITHDRAWAL_EARNINGS_TAX', amount: fromEarnings, penaltyAmount: fromEarnings * penaltyRate, residency });
+        }
+        break;
+      case ACCOUNT_TYPE.FOUR_OH_ONE_K:
+        penalty = gross * penaltyRate;
+        taxActions.push({ type: 'K401_WITHDRAWAL_TAX', amount: gross, penaltyAmount: penalty });
+        break;
+    }
+    return { penalty, taxActions };
   }
 
   /**

@@ -68,9 +68,9 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     root.className = 'mpc-cockpit wb-plugin-fill';
     root.innerHTML = `
       <div class="mpc-toolbar">
-        <label class="mpc-field">Lever
-          <select class="wb-select" data-mpc="control">
-            ${Object.values(COCKPIT_CONTROLS).map(c => `<option value="${c.key}">${_esc(c.label)}</option>`).join('')}
+        <label class="mpc-field" title="Pick one lever, or Ctrl/Cmd-click to search several jointly (design 45 §8)">Levers <span class="mpc-hint">(pick 1+)</span>
+          <select class="wb-select mpc-multi" data-mpc="control" multiple size="${Object.keys(COCKPIT_CONTROLS).length}">
+            ${Object.values(COCKPIT_CONTROLS).map(c => `<option value="${c.key}"${c.key === 'SPENDING' ? ' selected' : ''}>${_esc(c.label)}</option>`).join('')}
           </select>
         </label>
         <label class="mpc-field">Goal
@@ -111,7 +111,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
       </div>
 
       <div class="mpc-toolbar mpc-range" data-mpc="range-row">
-        <span class="mpc-range-title" title="Limits are in real, base-year (today's) dollars — the reducer compounds them to nominal by inflation, so they stay fixed across the run.">Search range (today’s $)</span>
+        <span class="mpc-range-title" data-mpc="range-title" title="Limits are in real, base-year (today's) dollars — the reducer compounds them to nominal by inflation, so they stay fixed across the run.">Search range (today’s $)</span>
         <label class="mpc-field">Min <input class="wb-input mpc-num" type="number" step="500" data-mpc="rmin" value="3000"></label>
         <label class="mpc-field">Max <input class="wb-input mpc-num" type="number" step="500" data-mpc="rmax" value="12000"></label>
         <label class="mpc-field">Step <input class="wb-input mpc-num" type="number" step="100" data-mpc="rstep" value="500"></label>
@@ -152,7 +152,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     this._bind('auto',    'click',  () => this._auto());
     this._bind('apply',   'click',  () => this._apply());
     this._bind('control', 'change', () => {
-      this._controller?.setControl(this._currentControl());
+      this._controller?.setControls(this._currentControls());
       this._applyControlDefaultRange();   // each lever has its own natural range
       this._controller?.setControlRange(this._currentRange());
       this._syncRangeEnabled();
@@ -228,11 +228,16 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     return _paramsToMap(this._services()?.scenarioService?.getActive?.()?.params);
   }
 
-  /** Whether the selected lever actually affects the active scenario. */
+  /** Whether the selected lever(s) actually affect the active scenario — for a
+   *  joint search every active lever must apply; report the first inert one. */
   _leverApplies() {
-    const c = this._currentControl();
-    if (typeof c?.appliesTo !== 'function') return { ok: true };
-    return { ok: !!c.appliesTo(this._baseParams()), requirement: c.requirement, label: c.label };
+    const params = this._baseParams();
+    for (const c of this._currentControls()) {
+      if (typeof c?.appliesTo === 'function' && !c.appliesTo(params)) {
+        return { ok: false, requirement: c.requirement, label: c.label };
+      }
+    }
+    return { ok: true };
   }
 
   /**
@@ -258,11 +263,23 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     }
   }
 
-  /** Range inputs only apply to numeric levers (e.g. Spending), not ENUM (Roth). */
+  /**
+   * The manual Min/Max/Step row applies only to a SINGLE numeric lever. With
+   * several levers selected the controller searches each lever's own default
+   * range (one shared min/max would be meaningless across Spending vs Roth), so
+   * the row is greyed and the title says so.
+   */
   _syncRangeEnabled() {
-    const numeric = !!this._currentControl()?.numeric;
-    const row = this._q('range-row');
+    const multi   = this._isMultiLever();
+    const numeric = !multi && !!this._currentControl()?.numeric;
+    const row   = this._q('range-row');
     if (row) row.style.opacity = numeric ? '' : '0.4';
+    const title = this._q('range-title');
+    if (title) {
+      title.textContent = multi
+        ? 'Search range — per-lever defaults (multi-lever)'
+        : 'Search range (today’s $)';
+    }
     for (const n of ['rmin', 'rmax', 'rstep']) {
       const el = this._q(n);
       if (el) el.disabled = !numeric;
@@ -321,7 +338,17 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     this._syncLeverApplicability();
   }
 
-  _currentControl()   { return COCKPIT_CONTROLS[this._q('control')?.value] ?? COCKPIT_CONTROLS.SPENDING; }
+  /** All selected levers (design 45 §8 multi-lever); falls back to Spending when none picked. */
+  _currentControls() {
+    const sel = this._q('control');
+    const keys = sel ? [...sel.selectedOptions].map(o => o.value) : [];
+    const controls = keys.map(k => COCKPIT_CONTROLS[k]).filter(Boolean);
+    return controls.length ? controls : [COCKPIT_CONTROLS.SPENDING];
+  }
+  /** The primary (first) selected lever — drives the single-lever range/applicability UI. */
+  _currentControl()   { return this._currentControls()[0]; }
+  /** True when the joint search spans more than one lever (per-lever default ranges). */
+  _isMultiLever()     { return this._currentControls().length > 1; }
   /** Resolve the selected objective KEY, folding a grouped family + its axis sub-selects. */
   _currentObjectiveKey() {
     const val = this._q('objective')?.value ?? '';
@@ -361,7 +388,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
       baseParams,
       cfgTemplate:  scenario,
       objective:    this._currentObjective(),
-      control:      this._currentControl(),
+      controls:     this._currentControls(),     // joint lever set (design 45 §8)
       controlRange: this._currentRange(),
       horizonYears: this._currentHorizon(),   // sliding prediction window (design 41)
       graph:       svc?.graph ?? null,
@@ -408,30 +435,39 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     // Record the projection + DERIVES_FROM audit (isolated).
     const { result } = c.apply(candidate);
 
-    // Phase B (design 39 Step 5b): actuate the chosen control on the LIVE sim
+    // Phase B (design 39 Step 5b): actuate EACH active control on the LIVE sim
     // forward, so the realized trajectory bakes in the decision and every panel
-    // reflects it once advanced.
-    const control = c.control;
+    // reflects it once advanced. Each control gets ONLY its own variable subset
+    // (its actuate reads vars[0] / its own paramKeys), routed by `_controlKey`.
+    const allVars = c.lastAdvice.variables ?? [];
+    const controls = c.controls ?? [c.control];
     let actuated = false;
-    if (control?.liveActuatable && typeof control.actuate === 'function') {
-      try {
-        actuated = control.actuate({
+    try {
+      for (const control of controls) {
+        if (!control?.liveActuatable || typeof control.actuate !== 'function') continue;
+        const subset = allVars.some(v => v._controlKey)
+          ? allVars.filter(v => v._controlKey === control.key)
+          : allVars;
+        if (subset.length === 0) continue;
+        const hit = control.actuate({
           services: this._services(),
           scenario: this._services()?.scenarioService?.getActive?.() ?? null,
           candidate,
-          vars:     c.lastAdvice.variables,
+          vars:     subset,
         });
-      } catch (err) {
-        this._setNow(`Apply failed: ${err?.message ?? err}`);
-        return false;
+        actuated = actuated || !!hit;
       }
+    } catch (err) {
+      this._setNow(`Apply failed: ${err?.message ?? err}`);
+      return false;
     }
 
     if (actuated) {
       this._controller = null;   // next Advise re-snapshots against the actuated plan
-      this._setNow(`Applied to the live plan: ${c.describeMove(candidate, c.lastAdvice.variables)} — Advance to see it unfold.`);
+      this._setNow(`Applied to the live plan: ${c.describeMove(candidate, allVars)} — Advance to see it unfold.`);
     } else {
-      this._setNow(`Recorded projection (terminal ${_usd(result.finalNetWorthUsd)}); “${control.label}” isn’t live-actuatable yet.`);
+      const names = controls.map(ct => ct.label).join(' + ');
+      this._setNow(`Recorded projection (terminal ${_usd(result.finalNetWorthUsd)}); “${names}” isn’t live-actuatable yet.`);
     }
     this._clearCard({ keepFan: this._autoRunning });   // keep the fan visible through auto
     this._renderSavePoints();   // the just-recorded decision joins the log

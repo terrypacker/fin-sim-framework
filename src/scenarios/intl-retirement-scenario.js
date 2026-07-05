@@ -24,6 +24,7 @@ import { US_REAL_PROPERTY }    from './toolsets/us-real-property-toolset.js';
 import { AU_REAL_PROPERTY }    from './toolsets/au-real-property-toolset.js';
 import { US_COLLECTIBLES }     from './toolsets/us-collectibles-toolset.js';
 import { US_ROTH_CONVERSION }  from './toolsets/us-roth-conversion-toolset.js';
+import { US_EARLY_WITHDRAWAL } from './toolsets/us-early-withdrawal-toolset.js';
 import { US_BROKERAGE }        from './toolsets/us-brokerage-toolset.js';
 import { AU_BROKERAGE }        from './toolsets/au-brokerage-toolset.js';
 import { US_INCOME }           from './toolsets/us-income-toolset.js';
@@ -602,7 +603,7 @@ export class IntlRetirementScenario extends BaseScenario {
       US_BANKING, US_TAX, US_STATE_TAX, US_BROKERAGE, US_INCOME, US_RETIREMENT,
       AU_BANKING, AU_TAX, AU_BROKERAGE, AU_INCOME, AU_RETIREMENT,
       US_AU_CROSS_BORDER, US_REAL_PROPERTY, AU_REAL_PROPERTY,
-      US_COLLECTIBLES, US_ROTH_CONVERSION, ECONOMIC_REGIMES,
+      US_COLLECTIBLES, US_ROTH_CONVERSION, US_EARLY_WITHDRAWAL, ECONOMIC_REGIMES,
     ];
     const toolsetParams = toolsets
       .flatMap(t => t.paramSchema?.({}) ?? [])
@@ -616,7 +617,7 @@ export class IntlRetirementScenario extends BaseScenario {
       'AU_BANKING', 'AU_TAX', 'AU_BROKERAGE', 'AU_INCOME', 'AU_RETIREMENT',
       'US_AU_CROSS_BORDER',
       'US_REAL_PROPERTY', 'AU_REAL_PROPERTY',
-      'US_COLLECTIBLES', 'US_ROTH_CONVERSION',
+      'US_COLLECTIBLES', 'US_ROTH_CONVERSION', 'US_EARLY_WITHDRAWAL',
       'ECONOMIC_REGIMES',
     ];
   }
@@ -911,6 +912,7 @@ export class IntlRetirementScenario extends BaseScenario {
     toolsetRegistry.register(AU_REAL_PROPERTY);
     toolsetRegistry.register(US_COLLECTIBLES);
     toolsetRegistry.register(US_ROTH_CONVERSION);
+    toolsetRegistry.register(US_EARLY_WITHDRAWAL);
     toolsetRegistry.register(US_BROKERAGE);
     toolsetRegistry.register(AU_BROKERAGE);
     toolsetRegistry.register(US_INCOME);

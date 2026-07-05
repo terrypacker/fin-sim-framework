@@ -128,6 +128,194 @@ describe('COCKPIT_CONTROLS.ROTH.actuate — no-op years do not clutter the sched
   });
 });
 
+describe('COCKPIT_CONTROLS.EARLY_WITHDRAWAL — two per-class variables, capped to drawable balance (design 45 Phase 3)', () => {
+  const bp = { earlyWithdrawalMonth: 12, earlyWithdrawalDay: 1, earlyWithdrawalOwner: 'primary', inflationRate: 0.03 };
+  const asOf = new Date(Date.UTC(2032, 0, 1));               // before Dec 1 → targets 2032
+  const young = { p1: { birthDate: new Date(Date.UTC(1985, 0, 1)) } };   // age ~47 in 2032
+  const range = { min: 0, max: 500_000, step: 5_000 };
+  const f = Math.pow(1.03, 2032 - 2025);
+  const tdOf = (vars) => vars.find(v => v.paramKey.endsWith('.taxDeferredAmount'));
+  const rtOf = (vars) => vars.find(v => v.paramKey.endsWith('.rothAmount'));
+
+  test('prepareBaseParams appends a 0-entry; buildVariables yields one variable per class for that year', () => {
+    const committed = COCKPIT_CONTROLS.EARLY_WITHDRAWAL.prepareBaseParams({ baseParams: bp, asOf });
+    assert.ok(committed.earlyWithdrawalSchedule.some(e => e.year === 2032), 'schedule entry for 2032');
+    const vars = COCKPIT_CONTROLS.EARLY_WITHDRAWAL.buildVariables({ baseParams: committed, asOf });
+    assert.equal(vars.length, 2);
+    assert.ok(vars.every(v => v._year === 2032));
+    assert.ok(tdOf(vars) && rtOf(vars), 'one tax-deferred + one Roth variable');
+  });
+
+  test('no state ⇒ range preserved (back-compat)', () => {
+    const vars = COCKPIT_CONTROLS.EARLY_WITHDRAWAL.buildVariables({ baseParams: bp, asOf, range });
+    assert.equal(tdOf(vars).max, 500_000);
+    assert.equal(rtOf(vars).max, 500_000);
+  });
+
+  test('caps each class to the owner’s real-deflated drawable balance below the gate', () => {
+    const state = { people: young, iraAccount: { balance: 60_000 }, k401Account: { balance: 40_000 }, rothAccount: { balance: 30_000 } };
+    const vars = COCKPIT_CONTROLS.EARLY_WITHDRAWAL.buildVariables({ baseParams: bp, asOf, state, range });
+    assert.ok(Math.abs(tdOf(vars).max - 100_000 / f) < 1, `tax-deferred cap ≈ ${100_000 / f}, got ${tdOf(vars).max}`);
+    assert.ok(Math.abs(rtOf(vars).max -  30_000 / f) < 1, `roth cap ≈ ${30_000 / f}, got ${rtOf(vars).max}`);
+  });
+
+  test('above the age gate the caps collapse to 0 (lever off — normal drawdown is penalty-free)', () => {
+    const old = { p1: { birthDate: new Date(Date.UTC(1968, 0, 1)) } };   // age ~64 in 2032
+    const state = { people: old, iraAccount: { balance: 100_000 }, rothAccount: { balance: 50_000 } };
+    const vars = COCKPIT_CONTROLS.EARLY_WITHDRAWAL.buildVariables({ baseParams: bp, asOf, state, range });
+    assert.equal(tdOf(vars).max, 0);
+    assert.equal(rtOf(vars).max, 0);
+  });
+
+  test('drained accounts ⇒ caps collapse to 0', () => {
+    const state = { people: young, iraAccount: { balance: 0 }, k401Account: { balance: 0 }, rothAccount: { balance: 0 } };
+    const vars = COCKPIT_CONTROLS.EARLY_WITHDRAWAL.buildVariables({ baseParams: bp, asOf, state, range });
+    assert.ok(vars.every(v => v.max === 0));
+  });
+
+  test('owner=primary ignores spouse accounts', () => {
+    const state = { people: young, iraAccount: { balance: 50_000 }, spouseIraAccount: { balance: 999_999 }, rothAccount: { balance: 0 } };
+    const vars = COCKPIT_CONTROLS.EARLY_WITHDRAWAL.buildVariables({ baseParams: { ...bp, earlyWithdrawalOwner: 'primary' }, asOf, state, range });
+    assert.ok(Math.abs(tdOf(vars).max - 50_000 / f) < 1, `primary-only cap ≈ ${50_000 / f}, got ${tdOf(vars).max}`);
+  });
+
+  test('describe summarizes both classes and notes the penalty floor', () => {
+    const vars = [{ paramKey: 'earlyWithdrawalSchedule[0].taxDeferredAmount', _year: 2032 }, { paramKey: 'earlyWithdrawalSchedule[0].rothAmount', _year: 2032 }];
+    const label = COCKPIT_CONTROLS.EARLY_WITHDRAWAL.describe({ 'earlyWithdrawalSchedule[0].taxDeferredAmount': 30_000, 'earlyWithdrawalSchedule[0].rothAmount': 10_000 }, vars);
+    assert.match(label, /tax-deferred/);
+    assert.match(label, /Roth/);
+    assert.match(label, /penalty/);
+    assert.equal(COCKPIT_CONTROLS.EARLY_WITHDRAWAL.describe({}, vars), 'No early withdrawal this year');
+  });
+});
+
+describe('COCKPIT_CONTROLS.EARLY_WITHDRAWAL.actuate — persists both classes + re-wires events', () => {
+  const vars = [
+    { paramKey: 'earlyWithdrawalSchedule[0].taxDeferredAmount', _year: 2033 },
+    { paramKey: 'earlyWithdrawalSchedule[0].rothAmount',        _year: 2033 },
+  ];
+  const mkServices = (queue = []) => ({ simulationRegistry: { getPrimary: () => ({ currentDate: new Date(Date.UTC(2033, 0, 1)), queue: { data: queue } }) } });
+  const cand = (td, rt) => ({ 'earlyWithdrawalSchedule[0].taxDeferredAmount': td, 'earlyWithdrawalSchedule[0].rothAmount': rt });
+
+  test('appliesTo gates on earlyWithdrawalEnabled; lever is live-actuatable', () => {
+    assert.equal(COCKPIT_CONTROLS.EARLY_WITHDRAWAL.appliesTo({ earlyWithdrawalEnabled: true }),  true);
+    assert.equal(COCKPIT_CONTROLS.EARLY_WITHDRAWAL.appliesTo({ earlyWithdrawalEnabled: false }), false);
+    assert.equal(COCKPIT_CONTROLS.EARLY_WITHDRAWAL.liveActuatable, true);
+    assert.equal(typeof COCKPIT_CONTROLS.EARLY_WITHDRAWAL.actuate, 'function');
+  });
+
+  test('a positive recommendation persists both per-class amounts', () => {
+    const scenario = { params: [{ name: 'earlyWithdrawalSchedule', value: [] }] };
+    COCKPIT_CONTROLS.EARLY_WITHDRAWAL.actuate({ services: mkServices(), scenario, candidate: cand(30_000, 10_000), vars });
+    assert.deepEqual(scenario.params[0].value, [{ year: 2033, taxDeferredAmount: 30_000, rothAmount: 10_000 }]);
+  });
+
+  test('a 0/0 recommendation cancels a previously committed withdrawal for that year', () => {
+    const scenario = { params: [{ name: 'earlyWithdrawalSchedule', value: [{ year: 2033, taxDeferredAmount: 50_000, rothAmount: 0 }] }] };
+    COCKPIT_CONTROLS.EARLY_WITHDRAWAL.actuate({ services: mkServices(), scenario, candidate: cand(0, 0), vars });
+    assert.ok(!scenario.params[0].value.some(e => e.year === 2033), 'committed withdrawal cancelled (absence == no withdrawal)');
+  });
+
+  test('re-wires a future queued event for the year (real→nominal) and returns true', () => {
+    const evt = { type: 'SCHEDULED_EARLY_WITHDRAWAL', date: new Date(Date.UTC(2033, 11, 1)), data: { taxDeferredAmount: 0, rothAmount: 0 } };
+    const scenario = { params: [{ name: 'earlyWithdrawalSchedule', value: [] }, { name: 'inflationRate', value: 0 }] };
+    const ok = COCKPIT_CONTROLS.EARLY_WITHDRAWAL.actuate({ services: mkServices([evt]), scenario, candidate: cand(30_000, 10_000), vars });
+    assert.equal(ok, true);
+    assert.ok(Math.abs(evt.data.taxDeferredAmount - 30_000) < 1);   // inflation 0 → nominal == real
+    assert.ok(Math.abs(evt.data.rothAmount        - 10_000) < 1);
+  });
+
+  test('returns false (graceful) when there is no live event to re-wire', () => {
+    const scenario = { params: [{ name: 'earlyWithdrawalSchedule', value: [] }] };
+    const ok = COCKPIT_CONTROLS.EARLY_WITHDRAWAL.actuate({ services: mkServices([]), scenario, candidate: cand(30_000, 0), vars });
+    assert.equal(ok, false);
+  });
+});
+
+describe('CockpitController — multi-lever set (design 45 §8 / Phase 4)', () => {
+  const M_START = new Date(Date.UTC(2026, 0, 1));
+  const M_END   = new Date(Date.UTC(2040, 0, 1));
+  const M_NOW   = new Date(Date.UTC(2029, 0, 1));   // before Dec 1 → conversion/withdrawal year 2029
+  const M_BASE = {
+    spendingStrategy: ['EXPLICIT_BANDS'],
+    spendingExpenseBands: [{ startAge: 48, monthlyAmount: 5000 }],
+    rothConversionEnabled: true, rothConversionMonth: 12, rothConversionDay: 1,
+    earlyWithdrawalEnabled: true, earlyWithdrawalMonth: 12, earlyWithdrawalDay: 1, earlyWithdrawalOwner: 'primary',
+    inflationRate: 0.03,
+  };
+  function ctrl(controls) {
+    const snapshot = makeInitialSnapshot({ simStart: M_START, simEnd: M_END, asOfDate: M_NOW, baseParams: M_BASE });
+    const c = new CockpitController({
+      simStart: M_START, simEnd: M_END, baseParams: M_BASE,
+      objective: OPTIMIZATION_OBJECTIVES.MAX_NET_WORTH, controls,
+    });
+    return c.setSnapshot(snapshot);
+  }
+  const ROTH = COCKPIT_CONTROLS.ROTH, EW = COCKPIT_CONTROLS.EARLY_WITHDRAWAL, SP = COCKPIT_CONTROLS.SPENDING;
+
+  test('prepareBaseParams composes every active control without clobbering schedule params (§8.2)', () => {
+    const c = ctrl([ROTH, EW]);
+    c._prepareControl();
+    assert.ok(c.committed.rothConversionSchedule?.some(e => e.year === 2029), 'roth schedule scaffolded');
+    assert.ok(c.committed.earlyWithdrawalSchedule?.some(e => e.year === 2029), 'early-withdrawal schedule scaffolded');
+  });
+
+  test('the decision vector is the union of both controls’ variables, tagged by control (§8.1)', () => {
+    const c = ctrl([ROTH, EW]);
+    c._prepareControl();
+    const vars = c._variables();
+    assert.deepStrictEqual([...new Set(vars.map(v => v._controlKey))].sort(), ['EARLY_WITHDRAWAL', 'ROTH']);
+    assert.equal(vars.filter(v => v._controlKey === 'ROTH').length, 1);             // incomeTarget
+    assert.equal(vars.filter(v => v._controlKey === 'EARLY_WITHDRAWAL').length, 2); // td + roth
+  });
+
+  test('each control searches its own default range, not one shared range', () => {
+    const c = ctrl([SP, ROTH]);
+    c._prepareControl();
+    const vars = c._variables();
+    assert.equal(vars.find(v => v._controlKey === 'SPENDING').max, SP.defaultRange.max);  // 12000
+    assert.ok(vars.find(v => v._controlKey === 'ROTH').max <= ROTH.defaultRange.max);
+  });
+
+  test('describeMove joins each control’s label over its own variable subset', () => {
+    const c = ctrl([ROTH, EW]);
+    c._prepareControl();
+    const vars = c._variables();
+    const cand = {};
+    for (const v of vars) {
+      cand[v.paramKey] = v.paramKey.includes('incomeTarget') ? 80_000
+        : v.paramKey.endsWith('.taxDeferredAmount') ? 30_000 : 0;
+    }
+    const label = c.describeMove(cand, vars);
+    assert.match(label, /income/i);       // Roth part
+    assert.match(label, /tax-deferred/);  // early-withdrawal part
+    assert.match(label, / · /);           // joined
+  });
+
+  test('apply commits every active control’s variables into committed (per-epoch commit, §8.4)', () => {
+    const c = ctrl([ROTH, EW]);
+    c._prepareControl();
+    const vars = c._variables();
+    const cand = {};
+    for (const v of vars) {
+      cand[v.paramKey] = v.paramKey.includes('incomeTarget') ? 60_000
+        : v.paramKey.endsWith('.taxDeferredAmount') ? 25_000 : 0;
+    }
+    c.apply(cand);
+    assert.equal(c.committed.rothConversionSchedule.find(e => e.year === 2029).incomeTarget, 60_000);
+    assert.equal(c.committed.earlyWithdrawalSchedule.find(e => e.year === 2029).taxDeferredAmount, 25_000);
+  });
+
+  test('single-lever mode is unchanged (back-compat): one control, no _controlKey routing needed', () => {
+    const c = ctrl([SP]);
+    assert.equal(c.control, SP);                 // legacy getter returns the first
+    c._prepareControl();
+    const vars = c._variables();
+    assert.ok(vars.every(v => v._controlKey === 'SPENDING'));
+    assert.match(c.describeMove({ [vars[0].paramKey]: 7000 }, vars), /monthly spend/i);
+  });
+});
+
 describe('CockpitController — windowed horizon (design 41)', () => {
   test('setHorizonYears flows into the problem _scoreEnd (clamped to simEnd, gated by objective)', () => {
     const c = makeController();   // NOW=2029, simEnd=2033, objective MAX_NET_WORTH (windowable)
