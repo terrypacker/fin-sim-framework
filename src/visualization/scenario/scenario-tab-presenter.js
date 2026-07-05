@@ -76,6 +76,13 @@ export class ScenarioTabPresenter {
       return null;
     };
 
+    // Supply persons to person-picker param editors (e.g. HealthcareEventList).
+    this._view.personsProvider = () => {
+      const registry = ServiceRegistry.getInstance();
+      return (registry.personService?.getAll?.() ?? [])
+        .map(p => ({ id: p.id, name: p.name ?? p.id }));
+    };
+
     // Click-through: open the linked account/person in the shared edit modal.
     this._view.onOpenLinkedNode = (paramNode) => {
       const info = this._view.nodeLookup?.(paramNode);

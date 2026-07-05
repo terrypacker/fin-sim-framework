@@ -25,6 +25,13 @@ export class ScenarioTabView {
     this.nodeLookup = null;
     /** @type {function(object): void} */
     this.onOpenLinkedNode = null;
+    /**
+     * Supplies the list of persons for person-picker param editors (e.g. the
+     * HealthcareEventList Person column). The presenter wires this from the
+     * personService so the view stays service-agnostic.
+     * @type {function(): Array<{id:string,name:string}>|null}
+     */
+    this.personsProvider = null;
     /** @type {function()|null} */
     this.onNew = null;
     /** @type {function(string)|null} */
@@ -515,6 +522,8 @@ export class ScenarioTabView {
         valueInput = _buildShockListEditor(param);
       } else if (param.type === 'AgeBandList') {
         valueInput = _buildAgeBandListEditor(param);
+      } else if (param.type === 'HealthcareEventList') {
+        valueInput = _buildHealthcareEventListEditor(param, this.personsProvider);
       } else if (param.type === 'Enum') {
         valueInput = document.createElement('select');
         (param.options ?? []).forEach(opt => {
@@ -850,6 +859,137 @@ function _buildAgeBandListEditor(param) {
     addBtn.addEventListener('click', () => {
       const lastAge = param.value.length ? (param.value[param.value.length - 1].startAge ?? 0) : 0;
       param.value.push({ startAge: lastAge + 5, multiplier: 1.0, annualRealDrift: 0 });
+      render();
+    });
+    container.appendChild(addBtn);
+  };
+
+  render();
+  return container;
+}
+
+// ─── HealthcareEventList editor ───────────────────────────────────────────────
+
+/**
+ * Build a self-contained DOM editor for a HealthcareEventList parameter.
+ *
+ * Each entry in `param.value` is a one-off healthcare event
+ * `{ date, amount, category, personId }` rendered as a row of inputs (date,
+ * amount, category, person id) plus a remove button. An "Add Event" button
+ * appends a blank event. Mutations are written in-place onto the cloned
+ * `param.value` array so the scenario picks them up on the next rebuild.
+ *
+ * The incoming value is deep-cloned up front so in-place edits never mutate the
+ * shared schema default (an empty array, but cloned for consistency with the
+ * AgeBandList editor). A non-array value (e.g. a stale string from the old
+ * free-text input) is coerced to an empty list.
+ *
+ * The Person column is a <select> populated from `personsProvider` (each event's
+ * personId picks whose residency drives the debited savings account). It is
+ * optional — a blank "— Any —" option leaves personId null so the handler falls
+ * back to the first person.
+ *
+ * @param {object} param  The param descriptor ({ value, ... })
+ * @param {function(): Array<{id:string,name:string}>} [personsProvider]
+ * @returns {HTMLElement}
+ */
+function _buildHealthcareEventListEditor(param, personsProvider) {
+  param.value = (Array.isArray(param.value) ? param.value : []).map(e => ({ ...e }));
+
+  const container = document.createElement('div');
+  container.className = 'healthcare-event-list-editor';
+
+  const persons = (typeof personsProvider === 'function' ? personsProvider() : null) ?? [];
+
+  const COLUMNS = [
+    { field: 'date',     label: 'Date',     type: 'date'   },
+    { field: 'amount',   label: 'Amount',   type: 'number', step: '100' },
+    { field: 'category', label: 'Category', type: 'text',   placeholder: 'e.g. surgery' },
+    { field: 'personId', label: 'Person',   type: 'person' },
+  ];
+
+  const render = () => {
+    container.innerHTML = '';
+    const events = param.value;
+
+    // Column header
+    const header = document.createElement('div');
+    header.className = 'healthcare-event-row healthcare-event-header';
+    COLUMNS.forEach(({ label }) => {
+      const h = document.createElement('span');
+      h.className = 'healthcare-event-col-label';
+      h.textContent = label;
+      header.appendChild(h);
+    });
+    header.appendChild(document.createElement('span')); // spacer over remove button
+    container.appendChild(header);
+
+    events.forEach((evt, idx) => {
+      const row = document.createElement('div');
+      row.className = 'healthcare-event-row';
+
+      COLUMNS.forEach(({ field, type, step, placeholder }) => {
+        if (type === 'person') {
+          const sel = document.createElement('select');
+          sel.className = 'healthcare-event-input';
+          const anyOpt = document.createElement('option');
+          anyOpt.value = '';
+          anyOpt.textContent = '— Any —';
+          sel.appendChild(anyOpt);
+          persons.forEach(({ id, name }) => {
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = name ?? id;
+            sel.appendChild(opt);
+          });
+          sel.value = evt.personId ?? '';
+          sel.addEventListener('change', () => {
+            evt.personId = sel.value === '' ? null : sel.value;
+          });
+          row.appendChild(sel);
+          return;
+        }
+
+        const input = document.createElement('input');
+        input.type = type;
+        if (step) input.step = step;
+        if (placeholder) input.placeholder = placeholder;
+        input.className = 'healthcare-event-input';
+        const raw = evt[field];
+        input.value = field === 'date'
+          ? (raw ? (raw instanceof Date ? raw.toISOString() : String(raw)).slice(0, 10) : '')
+          : (raw ?? '');
+        input.addEventListener('change', () => {
+          const v = input.value;
+          if (field === 'amount') {
+            evt.amount = v.trim() === '' ? null : parseFloat(v);
+          } else {
+            evt[field] = v.trim() === '' ? '' : v;
+          }
+        });
+        row.appendChild(input);
+      });
+
+      const rmBtn = document.createElement('button');
+      rmBtn.type = 'button';
+      rmBtn.className = 'btn btn-warn healthcare-event-remove';
+      rmBtn.textContent = '✕';
+      rmBtn.title = 'Remove event';
+      rmBtn.addEventListener('click', () => {
+        events.splice(idx, 1);
+        render();
+      });
+      row.appendChild(rmBtn);
+
+      container.appendChild(row);
+    });
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn btn-sm healthcare-event-add-btn';
+    addBtn.textContent = '+ Add Event';
+    addBtn.addEventListener('click', () => {
+      param.value.push({ date: '', amount: null, category: '', personId: null });
       render();
     });
     container.appendChild(addBtn);

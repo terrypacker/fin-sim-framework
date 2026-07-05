@@ -149,7 +149,7 @@ export const SPENDING_STRATEGY_REGISTRY = {
     paramSchema: () => [
       {
         key: 'healthcareEvents', label: 'Healthcare Events',
-        type: 'Array', group: 'Spending', mc: false, opt: true,
+        type: 'HealthcareEventList', group: 'Spending', mc: false, opt: true,
         defaultValue: [],
         description: 'List of one-off healthcare events: [{ date, amount, category, personId }]',
         visibleWhen: { param: 'spendingStrategy', includes: 'HEALTHCARE' },
