@@ -14,6 +14,7 @@ import { AuHouseSaleHandler, AuHouseSaleApplyReducer } from '../../finance/accou
 import { AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer } from '../../finance/account-rules/mortgage-payment-classes.js';
 import { AssetAppreciationHandler } from '../../finance/handlers/asset-appreciation-handler.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
+import { USD, AUD } from '../../finance/assets/account.js';
 
 const AU_REAL_PROPERTY_APPRECIATE_TYPE = 'AU_REAL_PROPERTY_APPRECIATE';
 
@@ -151,6 +152,9 @@ function _propertyToStatePlain(prop) {
     ownershipType:       prop.ownershipType      ?? 'sole',
     ownerId:             prop.ownerId            ?? null,
     country:             prop.country            ?? 'AU',
+    // Tag the FX currency so net-worth / net-liquidity / spending guardrails
+    // convert an AUD-denominated property instead of counting it 1:1 as USD.
+    currency:            prop.currency           ?? (prop.country === 'US' ? USD : AUD),
     appreciationSchedule: prop.appreciationSchedule ?? null,
     market:              prop.market             ?? null,
   };
