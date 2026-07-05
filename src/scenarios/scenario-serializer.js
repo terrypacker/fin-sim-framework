@@ -597,6 +597,11 @@ export class ScenarioSerializer {
       d.loanBalance              = account.loanBalance              ?? 0;
       d.minimumAge               = account.minimumAge               ?? null;
       d.balanceAtResidencyChange = account.balanceAtResidencyChange ?? null;
+      // Per-country residency cost-base step-up (design 36 §12.2) — only emitted
+      // when present (set at a move) so pre-move configs round-trip unchanged.
+      if (account.costBaseStepUpByCountry != null) {
+        d.costBaseStepUpByCountry = { ...account.costBaseStepUpByCountry };
+      }
       // Roth rollover (conversion) buckets — only emitted when present so
       // accounts without conversions round-trip unchanged.
       if (account.rolloverContribBasis  != null) d.rolloverContribBasis  = account.rolloverContribBasis;
@@ -832,6 +837,7 @@ export class ScenarioSerializer {
         account = new Account((d.balance ?? d.initialValue) ?? 0, opts);
     }
     if (d.stateKey) account.stateKey = d.stateKey;
+    if (d.costBaseStepUpByCountry != null) account.costBaseStepUpByCountry = { ...d.costBaseStepUpByCountry };
     if (d.rolloverContribBasis  != null) account.rolloverContribBasis  = d.rolloverContribBasis;
     if (d.rolloverEarningsBasis != null) account.rolloverEarningsBasis = d.rolloverEarningsBasis;
     if (Array.isArray(d.rolloverConversions)) account.rolloverConversions = d.rolloverConversions.map(l => ({ ...l }));

@@ -138,6 +138,9 @@ export class StateSchemaRegistry {
     this.registerPattern('*.balance',           ParameterValueType.currency());
     this.registerPattern('*.contributionBasis', ParameterValueType.currency());
     this.registerPattern('*.earningsBasis',     ParameterValueType.currency());
+    // Per-country residency cost-base step-up / per-lot AU cost base (design 36 §12.2).
+    this.registerPattern('*.costBaseStepUpByCountry.*',   ParameterValueType.currency());
+    this.registerPattern('*.holdings.*.costBaseByCountry.*', ParameterValueType.currency());
     this.registerPattern('*.minimumBalance',    ParameterValueType.currency());
     this.registerPattern('metrics.*',           ParameterValueType.metric());
     // Money metrics are aggregates in the USD base currency (computeNetWorth /

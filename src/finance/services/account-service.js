@@ -363,11 +363,38 @@ export class AccountService extends AssetService {
    * Snapshots the current balance as balanceAtResidencyChange (one-time capture).
    * Only operates on accounts that carry the balanceAtResidencyChange field
    * (i.e. InvestmentAccount instances).  No-op on plain Account objects.
+   *
+   * When the destination country steps up the cost base on becoming resident
+   * (`opts.stepUp`, e.g. AU ITAA97 s855-45), also resets the AU-style cost base
+   * for non-TAP CGT assets — i.e. taxable BROKERAGE accounts only — to market
+   * value at the move (design 36 §12.2). Two representations are stamped, one per
+   * sale path: per-lot `holding.costBaseByCountry[country] = marketValue` for the
+   * FIFO reducers, and the account-level `costBaseStepUpByCountry[country]` =
+   * pre-move unrealized gain (`earningsBasis`) for the proportional drawdown path.
+   * Retirement accounts (not CGT-taxed) and real property in the destination
+   * country (TAP — handled by the RealPropertyService override) are not stepped up.
+   *
    * @param {import('../account.js').Account} account
+   * @param {{ country?: string, stepUp?: boolean }} [opts] - destination country and its step-up policy
    */
-  recordResidencyChange(account) {
+  recordResidencyChange(account, { country, stepUp } = {}) {
     if ('balanceAtResidencyChange' in account && account.balanceAtResidencyChange === null) {
       account.balanceAtResidencyChange = account.balance;
+    }
+    if (stepUp && country && account.type === ACCOUNT_TYPE.BROKERAGE) {
+      account.costBaseStepUpByCountry = account.costBaseStepUpByCountry ?? {};
+      if (account.costBaseStepUpByCountry[country] == null) {
+        account.costBaseStepUpByCountry[country] = account.earningsBasis ?? 0;
+      }
+      if (Array.isArray(account.holdings)) {
+        for (const h of account.holdings) {
+          if (!h) continue;
+          h.costBaseByCountry = h.costBaseByCountry ?? {};
+          if (h.costBaseByCountry[country] == null) {
+            h.costBaseByCountry[country] = h.marketValue ?? 0;
+          }
+        }
+      }
     }
   }
 
@@ -722,8 +749,19 @@ export class AccountService extends AssetService {
         const saleCost  = withdraw - gain;
         account.earningsBasis     = Math.max(0, (account.earningsBasis ?? 0) - gain);
         account.contributionBasis = Math.max(0, (account.contributionBasis ?? 0) - saleCost);
+        // AU CGT cost-base reset (design 36 §12.2): deplete the residency
+        // step-up (pre-move forgiven gain) proportionally to this sale, so the
+        // AU gain excludes the slice of pre-move appreciation AU forgave. No
+        // step-up recorded ⇒ auGain === gain.
+        let auGain = gain;
+        const stepUp = account.costBaseStepUpByCountry?.AU;
+        if (stepUp != null && totalBal > 0) {
+          const stepUpConsumed = stepUp * (withdraw / totalBal);
+          account.costBaseStepUpByCountry.AU = Math.max(0, stepUp - stepUpConsumed);
+          auGain = Math.max(0, gain - stepUpConsumed);
+        }
         pendingTaxActions.push({
-          type: 'STOCK_WITHDRAWAL_TAX', gain, residency,
+          type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, residency,
           proceeds: withdraw, costBasis: saleCost, description: account.name || key,
         });
       }

@@ -182,9 +182,12 @@ export class AuTaxModule2026 extends BaseTaxModule {
       }],
 
       // EVT-31/32: AU stock withdrawal — always US capital gain;
-      //   AU capital gain + FTC for residents only
+      //   AU capital gain + FTC for residents only. AU measures the gain from its
+      //   stepped-up (s855-45) cost base, so auGain ≤ gain (design 36 §12.2); the
+      //   pre-move appreciation is US-only and earns no FTC (ftcYTD tracks auGain).
       ['AU_STOCK_WITHDRAWAL_TAX', (state, action) => {
         const { gain, residency } = action;
+        const auGain = action.auGain ?? gain;
         const isAuResident = residency === 'AU';
         const perPerson = state.people != null && state.auStockAccount != null;
         let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + gain };
@@ -192,9 +195,9 @@ export class AuTaxModule2026 extends BaseTaxModule {
           next = {
             ...next,
             ...(perPerson
-              ? { auPersonCapitalGainsYTD: accumulateByOwnership(state.auPersonCapitalGainsYTD ?? {}, state.auStockAccount, gain, state.people) }
-              : { auCapitalGainsYTD: state.auCapitalGainsYTD + gain }),
-            ftcYTD: state.ftcYTD + gain,
+              ? { auPersonCapitalGainsYTD: accumulateByOwnership(state.auPersonCapitalGainsYTD ?? {}, state.auStockAccount, auGain, state.people) }
+              : { auCapitalGainsYTD: state.auCapitalGainsYTD + auGain }),
+            ftcYTD: state.ftcYTD + auGain,
           };
         }
         return next;
