@@ -49,6 +49,7 @@ function makeSuperConfig({
   superBalance       = 0,
   superContribBasis  = 0,
   superEarningsBasis = 0,
+  superGrowthRate    = 0,
   birthDate          = '1966-01-01', // turns 60 on 2026-01-01
 } = {}) {
   return {
@@ -60,7 +61,7 @@ function makeSuperConfig({
       rothGrowthRate: 0, iraGrowthRate: 0, k401GrowthRate: 0,
       brokerageGrowthRate: 0, brokerageDividendRate: 0, fixedIncomeInterestRate: 0,
       usSavingsInterestRate: 0, auSavingsInterestRate: 0,
-      superGrowthRate: 0, auStockGrowthRate: 0, auStockDividendRate: 0,
+      superGrowthRate, auStockGrowthRate: 0, auStockDividendRate: 0,
     },
     persons: [{
       __type: 'Person', id: 'primary', name: 'Primary', birthDate,
@@ -283,4 +284,42 @@ test('EVT-23: Super earnings are not US taxable', () => {
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EVT-23: Pension-phase exemption (design/36 §12.1)
+//
+// Super fund earnings are taxed 15% in accumulation phase, but 0% once the
+// member reaches pension/retirement phase (age ≥ 60, condition-of-release proxy).
+// These exercise the real scheduled INTL_SUPER_EARNINGS → SuperEarningsHandler
+// path (the toolset wires it year-end, startOffset 1, so the first accrual lands
+// in the second sim year, ~end of 2027).
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('EVT-23: super earnings taxed at 15% in accumulation phase (member < 60)', () => {
+  const { sim } = loadToolsetScenario(makeSuperConfig({
+    superBalance: 100000, superContribBasis: 100000,
+    superGrowthRate: 0.07,
+    birthDate: '1990-01-01', // age ~37 — accumulation phase
+  }));
+  sim.stepTo(new Date(2027, 11, 31));
+
+  // 7000 of earnings accrued and grew the balance...
+  assert.strictEqual(sim.state.superAccount.balance, 107000);
+  // ...and were taxed at the flat 15% super rate.
+  assert.strictEqual(sim.state.auPersonSuperTaxYTD?.['primary'], 1050); // 15% of 7000
+});
+
+test('EVT-23: super earnings tax-free in pension phase (member ≥ 60)', () => {
+  const { sim } = loadToolsetScenario(makeSuperConfig({
+    superBalance: 100000, superContribBasis: 100000,
+    superGrowthRate: 0.07,
+    birthDate: '1962-01-01', // age ~65 — pension/retirement phase
+  }));
+  sim.stepTo(new Date(2027, 11, 31));
+
+  // Earnings still accrue and compound...
+  assert.strictEqual(sim.state.superAccount.balance, 107000);
+  // ...but attract NO super earnings tax (pension-phase exemption).
+  assert.strictEqual(sim.state.auPersonSuperTaxYTD?.['primary'], 0);
 });

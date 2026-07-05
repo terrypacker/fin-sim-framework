@@ -150,7 +150,7 @@ export class SuperEarningsApplyReducer extends AccountServiceReducer {
           earningsBasis: sa.earningsBasis + action.amount,
         },
       },
-      [{ type: 'SUPER_EARNINGS_TAX', amount: action.amount, stateKey: key }]
+      [{ type: 'SUPER_EARNINGS_TAX', amount: action.amount, stateKey: key, taxRate: action.taxRate }]
     );
   }
 }

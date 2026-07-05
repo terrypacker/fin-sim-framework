@@ -123,9 +123,10 @@ export class AuTaxModule2026 extends BaseTaxModule {
         usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + action.amount,
       })],
 
-      // EVT-23: super earnings — AU super tax at 15%, no US tax
+      // EVT-23: super earnings — AU super tax at 15% in accumulation phase;
+      //   0% in pension/retirement phase (member ≥ 60), signalled by action.taxRate.
       ['SUPER_EARNINGS_TAX', (state, action) => {
-        const superTax = action.amount * SUPER_TAX_RATE;
+        const superTax = action.amount * (action.taxRate ?? SUPER_TAX_RATE);
         const accountKey = action.stateKey ?? 'superAccount';
         const account = state[accountKey];
         const perPerson = state.people != null && account != null;

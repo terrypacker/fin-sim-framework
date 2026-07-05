@@ -12,6 +12,17 @@ import { HandlerEntry } from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
 import { RATE_KEYS } from '../economic-regimes/rate-keys.js';
 import { computeHoldingsGrowth, computeHoldingsDividends } from '../holdings/holdings-earnings.js';
+import { getBirthDate } from '../residency-utils.js';
+
+/** Whole years of age as of asOfDate (matches the super withdrawal handlers' getAge). */
+function getAge(birthDate, asOfDate) {
+  const years = asOfDate.getUTCFullYear() - birthDate.getUTCFullYear();
+  const hadBirthday =
+    asOfDate.getUTCMonth() > birthDate.getUTCMonth() ||
+    (asOfDate.getUTCMonth() === birthDate.getUTCMonth() &&
+     asOfDate.getUTCDate() >= birthDate.getUTCDate());
+  return hadBirthday ? years : years - 1;
+}
 
 /**
  * Handles INTL_ROTH_EARNINGS events.
@@ -530,7 +541,7 @@ export class SuperEarningsHandler extends HandlerEntry {
     return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, defaultRate: this.defaultRate };
   }
 
-  call({ data, state }) {
+  call({ data, state, date }) {
     const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
     const { amount, holdingActions } = computeHoldingsGrowth({
       state, stateKey,
@@ -540,8 +551,15 @@ export class SuperEarningsHandler extends HandlerEntry {
       fallbackRateKey: this.rateKey,
     });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
+    // Pension/retirement phase (member ≥ 60, condition-of-release proxy — same
+    // gate the super withdrawal handlers use): fund earnings are tax-free (0%).
+    // Accumulation phase (< 60): earnings taxed at the flat 15% super rate.
+    const personKey = this.ownerId ?? Object.keys(state.people ?? {})[0];
+    const birthDate = getBirthDate(state, personKey);
+    const age       = birthDate && date ? getAge(birthDate, date) : 0;
+    const taxRate   = age >= 60 ? 0 : undefined;
     return [
-      { type: 'SUPER_EARNINGS_APPLY', amount, stateKey },
+      { type: 'SUPER_EARNINGS_APPLY', amount, stateKey, taxRate },
       ...holdingActions,
       new RecordMetricAction('super_earnings', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
