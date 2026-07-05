@@ -332,7 +332,8 @@ test('MpcCockpitPlugin._renderSavePoints: lists decision records from the decisi
   recordDecisionRecord({
     graph, parentId: 'p:base', id: 'mpc:0:1',
     name: 'Set monthly spend to $6,000', asOfDate: new Date(Date.UTC(2030, 0, 1)),
-    result: { finalNetWorthUsd: 1_250_000 },
+    result: { finalNetWorthUsd: 1_250_000, finalNetLiquidity: 800_000 },
+    extra: { goalMetric: { key: 'finalNetLiquidity', label: 'Net Liquidity' } },
   });
   recordDecisionRecord({
     graph, parentId: 'p:base', id: 'mpc:1:2',
@@ -348,13 +349,21 @@ test('MpcCockpitPlugin._renderSavePoints: lists decision records from the decisi
 
   const wrap = plugin._q('savepoints');
   assert.equal(wrap.style.display, '', 'section shown when records exist');
-  const rows = plugin._q('savepoints-list').querySelectorAll('.mpc-savepoint');
+  // Data rows only (exclude the header row).
+  const rows = plugin._q('savepoints-list').querySelectorAll('.mpc-savepoint:not(.mpc-savepoint--head)');
   assert.equal(rows.length, 2, 'one row per decision record');
   // Oldest "now" first (sorted by asOfDate).
   assert.match(rows[0].querySelector('.mpc-sp-date').textContent, /2030/);
   assert.match(rows[0].querySelector('.mpc-sp-move').textContent, /\$6,000/);
   assert.match(rows[0].querySelector('.mpc-sp-nw').textContent, /1,250,000/);
   assert.match(rows[1].querySelector('.mpc-sp-date').textContent, /2031/);
+  // Goal-metric column: shows the goal's own metric (Net Liquidity) beside net worth.
+  assert.match(rows[0].querySelector('.mpc-sp-goal').textContent, /Net Liquidity/);
+  assert.match(rows[0].querySelector('.mpc-sp-goal').textContent, /800,000/);
+  // A record whose goal metric IS net worth shows no redundant goal value.
+  assert.ok(rows[1].querySelector('.mpc-sp-goal--na'), 'net-worth goal needs no extra column');
+  // The header row labels the value columns.
+  assert.ok(plugin._q('savepoints-list').querySelector('.mpc-savepoint--head'), 'header row rendered');
 });
 
 // ─── override parsing ────────────────────────────────────────────────────────

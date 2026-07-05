@@ -119,7 +119,7 @@ import { runMpc, makeInitialSnapshot } from './finance/mpc/mpc-controller.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables } from './finance/optimization/intl-retirement-opt-config.js';
 import { IntlRetirementOptimizer } from './finance/optimization/intl-retirement-optimizer.js';
 import { valuesForConfig, cartesianProduct } from './finance/optimization/opt-values.js';
-import { OPT_PARAM_TYPES, DEFAULT_TERMINAL_WEALTH_PENALTY, DEFAULT_DEFICIT_PENALTY, DIE_WITH_TARGET_FAMILY, DIE_WITH_TARGET_AXES, resolveTerminalKey, terminalAxesFor, OPTIMIZATION_OBJECTIVES, OBJECTIVE_FAMILY_LABELS, resolveDieWithTargetKey, groupedObjectiveOptions } from './finance/optimization/optimization-objectives.js';
+import { OPT_PARAM_TYPES, DEFAULT_TERMINAL_WEALTH_PENALTY, DEFAULT_DEFICIT_PENALTY, DIE_WITH_TARGET_FAMILY, DIE_WITH_TARGET_AXES, resolveTerminalKey, terminalAxesFor, OPTIMIZATION_OBJECTIVES, OBJECTIVE_FAMILY_LABELS, objectivePrimaryMetric, resolveDieWithTargetKey, groupedObjectiveOptions } from './finance/optimization/optimization-objectives.js';
 import { OptimizationProblem } from './finance/optimization/optimization-problem.js';
 import { CemSolver } from './finance/optimization/solvers/cem-solver.js';
 import { GridSearchSolver } from './finance/optimization/solvers/grid-search-solver.js';
@@ -699,6 +699,7 @@ export const Finance = {
   terminalAxesFor,
   OPTIMIZATION_OBJECTIVES,
   OBJECTIVE_FAMILY_LABELS,
+  objectivePrimaryMetric,
   resolveDieWithTargetKey,
   groupedObjectiveOptions,
   OptimizationProblem,

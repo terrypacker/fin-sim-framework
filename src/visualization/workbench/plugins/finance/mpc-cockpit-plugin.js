@@ -127,7 +127,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
         </div>
       </div>
 
-      <div class="mpc-fan" data-mpc="fan"></div>
+      <div class="mpc-fan" data-mpc="fan" style="display:none"></div>
 
       <div class="mpc-savepoints" data-mpc="savepoints" style="display:none">
         <div class="mpc-savepoints-head">MPC Save Points <span class="mpc-savepoints-sub">decision log · inspect only</span></div>
@@ -575,7 +575,11 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
   _renderFan(fan) {
     const host = this._q('fan');
     if (!host) return;
-    if (!fan?.length) { host.innerHTML = ''; return; }
+    // Collapse the (fixed-height) chart box when there's nothing to draw — e.g.
+    // between Auto epochs or before the first Advise — so it doesn't reserve a
+    // blank band. It is re-shown the moment a fan renders (on Advise / each epoch).
+    if (!fan?.length) { host.innerHTML = ''; host.style.display = 'none'; return; }
+    host.style.display = '';
 
     const W = Math.max(320, host.clientWidth || 600), H = 220, P = 28;
     const allNw = fan.flatMap(f => f.netWorth);
@@ -615,12 +619,29 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     const records = readDecisionRecords(this._services()?.graph ?? null);
     if (!records.length) { wrap.style.display = 'none'; list.innerHTML = ''; return; }
     wrap.style.display = '';
-    list.innerHTML = records.map(r => {
+    // Header row so the value columns read as a table (net worth + the goal metric).
+    const head = `<li class="mpc-savepoint mpc-savepoint--head">`
+      + `<span class="mpc-sp-date">As of</span>`
+      + `<span class="mpc-sp-move">Move</span>`
+      + `<span class="mpc-sp-nw">Net Worth</span>`
+      + `<span class="mpc-sp-goal">Goal metric</span>`
+      + `</li>`;
+    list.innerHTML = head + records.map(r => {
       const nw = r.result?.finalNetWorthUsd;
-      return `<li class="mpc-savepoint" title="${_esc(r.move)}">`
+      // The goal's own metric (design/40) — shown alongside net worth so a Net
+      // Liquidity / After-Tax / Lifetime-Taxes goal isn't mis-reported as net worth.
+      const gm = r.goalMetric;
+      const goalVal = gm && r.result ? r.result[gm.key] : null;
+      const showGoal = gm && gm.key !== 'finalNetWorthUsd' && goalVal != null;
+      const goalCell = showGoal
+        ? `<span class="mpc-sp-goal" title="${_esc(gm.label)}">`
+          + `<span class="mpc-sp-goal-lbl">${_esc(gm.label)}</span> ${_fmtMetric(gm.key, goalVal)}</span>`
+        : `<span class="mpc-sp-goal mpc-sp-goal--na">—</span>`;
+      return `<li class="mpc-savepoint">`
         + `<span class="mpc-sp-date">${_fmtDate(r.asOfDate)}</span>`
-        + `<span class="mpc-sp-move">${_esc(r.move)}</span>`
+        + `<span class="mpc-sp-move" title="${_esc(r.move)}">${_esc(r.move)}</span>`
         + `<span class="mpc-sp-nw">${_usd(nw)}</span>`
+        + goalCell
         + `</li>`;
     }).join('');
   }
@@ -629,7 +650,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     const card = this._q('card');
     if (card) card.style.display = 'none';
     const fan = this._q('fan');
-    if (fan) fan.innerHTML = '';
+    if (fan) { fan.innerHTML = ''; fan.style.display = 'none'; }
   }
 
   _setBusy(busy, msg) {
@@ -653,6 +674,14 @@ function _paramsToMap(raw) {
 function _usd(n) {
   if (n == null || !Number.isFinite(n)) return '—';
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+}
+/** Format a goal metric by its result key — USD for money fields, plain number for unitless utility. */
+function _fmtMetric(key, n) {
+  if (n == null || !Number.isFinite(n)) return '—';
+  if (key === 'lifetimeConsumptionUtility') {
+    return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(n);
+  }
+  return _usd(n);
 }
 function _fmtDate(d) {
   if (!d) return '—';

@@ -48,6 +48,13 @@
 .mpc-field .wb-select { min-width: 150px; }
 .mpc-override .wb-input { width: 110px; }
 
+/* The Die-With-Target axis sub-selects (Basis / Terminal / Tax basis) live inside
+   a wrapper span so they can be shown/hidden as a group. `display:contents` lets
+   the three labels flow as first-class toolbar items — inline with Lever/Goal/
+   Search and wrapping naturally — instead of bunching into a column off to the
+   right when the panel is wide. The JS toggles inline display:none to hide. */
+.mpc-cockpit .mpc-axes { display: contents; }
+
 .mpc-range { gap: 12px; }
 .mpc-range-title {
   font-size: 11px;
@@ -170,19 +177,36 @@
   letter-spacing: 0;
   opacity: 0.7;
 }
+/* ONE shared grid for the whole list — header + every data row are items of the
+   same grid (rows are display:contents), so the columns line up across rows. With
+   a per-row grid the header's auto columns sized to the labels and each data row's
+   to its own values, so they drifted out of alignment. */
 .mpc-savepoints-list {
   list-style: none;
   margin: 8px 0 0;
   padding: 0;
-}
-.mpc-savepoint {
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 12px;
+  grid-template-columns: auto 1fr auto auto;
   align-items: baseline;
-  padding: 4px 0;
   font-size: 13px;
+}
+.mpc-savepoint { display: contents; }
+/* Cells own the row separator + vertical padding (the row box is gone under
+   display:contents). No column-gap so the bottom borders read as one line;
+   horizontal spacing comes from per-cell right padding instead. */
+.mpc-savepoint > * {
+  padding: 4px 0;
   border-bottom: 1px solid var(--border);
+}
+.mpc-sp-date, .mpc-sp-move, .mpc-sp-nw { padding-right: 14px; }
+
+/* Header row: column labels for the value columns (net worth + goal metric).
+   color/font are inherited by the cells (display:contents passes inherited props). */
+.mpc-savepoint--head {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
 }
 .mpc-sp-date {
   color: var(--text-dim);
@@ -190,6 +214,7 @@
   font-size: 12px;
   white-space: nowrap;
 }
+.mpc-savepoint--head .mpc-sp-date { font-size: 10px; }
 .mpc-sp-move {
   color: var(--text);
   overflow: hidden;
@@ -200,4 +225,23 @@
   color: var(--accent-primary);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  text-align: right;
 }
+/* The goal's own metric, beside net worth (design/40) — a small dim label + value
+   so a Net Liquidity / After-Tax / Lifetime-Taxes goal reads correctly per row. */
+.mpc-sp-goal {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+}
+.mpc-sp-goal-lbl {
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.mpc-sp-goal--na { color: var(--text-dim); opacity: 0.5; }
+.mpc-savepoint--head .mpc-sp-move,
+.mpc-savepoint--head .mpc-sp-nw,
+.mpc-savepoint--head .mpc-sp-goal { color: var(--text-dim); }
