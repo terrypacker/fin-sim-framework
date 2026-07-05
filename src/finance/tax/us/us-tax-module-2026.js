@@ -46,8 +46,19 @@ export class UsTaxModule2026 extends BaseTaxModule {
 
   _rothReducerFns() {
     return [
-      // EVT-3: Roth withdrawal of earnings — penalty only (no US income tax),
-      //        AU ordinary income if resident
+      // EVT-3: Roth withdrawal of earnings.
+      //   US:  A qualified Roth distribution is excluded from gross income —
+      //        IRC §408A(d)(1). Earnings are never US ordinary income here; the
+      //        only US-side charge is the IRC §72(t) 10% additional tax when the
+      //        distribution is non-qualified (age < 59.5), computed upstream.
+      //   AU:  The ATO treats a US Roth IRA as a foreign trust and does not
+      //        recognise its US tax-free status. For an AU resident the earnings
+      //        (i.e. trust income, not corpus) are assessable as ordinary income
+      //        on distribution under s99B ITAA 1936.
+      //   FTC: None. Because the US imposes no income tax on the earnings, there
+      //        is no foreign tax for AU to credit (and nothing to relieve on the
+      //        US side). This is the well-documented Roth "double-tax with no
+      //        relief" outcome for Australian residents — do NOT add to ftcYTD.
       ['ROTH_WITHDRAWAL_EARNINGS_TAX', (state, action) => {
         const { amount, penaltyAmount, residency } = action;
         const isAuResident = residency === 'AU';
@@ -56,7 +67,6 @@ export class UsTaxModule2026 extends BaseTaxModule {
           next = {
             ...next,
             auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
-            ftcYTD:              state.ftcYTD              + amount,
           };
         }
         return next;
@@ -333,36 +343,71 @@ export class UsTaxModule2026 extends BaseTaxModule {
 
   _rothRolloverReducerFns() {
     return [
-      // EVT-44: Roth rollover earnings withdrawal — no US tax or penalty;
-      //         AU ordinary income if resident
+      // EVT-43: Roth rollover (converted) principal withdrawal.
+      //   US:  No income tax — the US taxed the conversion at EVT-52. The only
+      //        US charge is the IRC §408A(d)(3)(F) 5-year recapture: a
+      //        distribution of converted dollars within the 5-taxable-year window
+      //        (from Jan 1 of the conversion year) incurs the IRC §72(t) 10%
+      //        additional tax when the owner is under 59½.
+      //   AU:  The IRA-contribution-sourced portion is corpus (s99B-exempt), but
+      //        the IRA-earnings-sourced portion (auAssessableAmount) is pre-tax
+      //        money that would have been assessable if derived directly, so it
+      //        does NOT qualify for the corpus exemption and is assessable as
+      //        ordinary income under s99B ITAA 1936 when an AU resident draws it.
+      //        This defers — rather than eliminates — AU tax on converted IRA
+      //        earnings. The per-lot window test, penalty base, and AU-assessable
+      //        share are computed upstream (roth-rollover-classes.js).
+      //   FTC: None — no US income tax is levied on this distribution.
+      ['ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_TAX', (state, action) => {
+        const { penaltyAmount = 0, auAssessableAmount = 0, residency } = action;
+        let next = { ...state, usPenaltyYTD: state.usPenaltyYTD + penaltyAmount };
+        if (residency === 'AU' && auAssessableAmount > 0) {
+          next = { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + auAssessableAmount };
+        }
+        return next;
+      }],
+
+      // EVT-44: Roth rollover earnings withdrawal — earnings that accrued inside
+      //         the Roth on rolled-over (converted) principal.
+      //   US:  Tax-free as a qualified Roth distribution (IRC §408A(d)(1)); the
+      //        only US charge is the IRC §72(t) 10% additional tax on a
+      //        non-qualified (age < 59½) distribution of earnings, computed
+      //        upstream. The converted principal is corpus (EVT-43); only
+      //        post-conversion growth is earnings.
+      //   AU:  Assessable to an AU resident as ordinary income under s99B
+      //        ITAA 1936 (foreign-trust earnings; corpus excluded).
+      //   FTC: None — the US levies no income tax on the earnings, so there is no
+      //        foreign tax to credit. Matches the EVT-44 spec row (FTC = N).
       ['ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX', (state, action) => {
-        const { amount, residency } = action;
-        if (residency !== 'AU') return state;
-        return {
-          ...state,
-          auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
-          ftcYTD:              state.ftcYTD              + amount,
-        };
+        const { amount, penaltyAmount = 0, residency } = action;
+        let next = { ...state, usPenaltyYTD: state.usPenaltyYTD + penaltyAmount };
+        if (residency === 'AU') {
+          next = { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount };
+        }
+        return next;
       }],
     ];
   }
 
   _rothConversionReducerFns() {
     return [
-      // EVT-52: Roth conversion — US ordinary income; AU ordinary income if resident
-      ['ROTH_CONVERSION_TAX', (state, action) => {
-        const { amount, residency } = action;
-        const isAuResident = residency === 'AU';
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
-        if (isAuResident) {
-          next = {
-            ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
-            ftcYTD:              state.ftcYTD              + amount,
-          };
-        }
-        return next;
-      }],
+      // EVT-52: IRA→Roth conversion.
+      //   US:  Ordinary income at conversion — the converted pre-tax amount is
+      //        included in gross income (IRC §408A(d)(3)(A); §408(d)(1)). This is
+      //        a US event for the account owner regardless of AU residency.
+      //   AU:  No tax at conversion. s99B ITAA 1936 assesses only amounts "paid
+      //        to, or applied for the benefit of" an Australian-resident
+      //        beneficiary — i.e. an actual distribution received by the person.
+      //        A conversion merely moves funds within the US retirement system
+      //        (IRA trust → Roth trust); nothing is paid to or made available to
+      //        the individual, so there is no s99B receipt and no assessable
+      //        amount. AU tax arises only on later distribution from the Roth
+      //        (corpus EVT-43 = not assessable; earnings EVT-44 = s99B income).
+      //   FTC: None — no AU tax is levied at conversion, so do NOT add to ftcYTD.
+      ['ROTH_CONVERSION_TAX', (state, action) => ({
+        ...state,
+        usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + action.amount,
+      })],
     ];
   }
 }

@@ -36,7 +36,7 @@ Columns: Account · Event description · Balance direction · Balance part · Ea
 |----|---------|-------|-----------|--------|--------|-----|--------|
 | EVT-1 | Roth | Contribution | + contribution | N | N | N | ✅ |
 | EVT-2 | Roth | Withdrawal – Contributions | − contribution | N | N | N | ✅ |
-| EVT-3 | Roth | Withdrawal – Earnings | − earnings | N (10% penalty if age < 59.5) | Ordinary Income if resident | Y | ✅ |
+| EVT-3 | Roth | Withdrawal – Earnings | − earnings | N (10% penalty if age < 59.5) | Ordinary Income if resident (s99B) | N | ✅ |
 | EVT-4 | Roth | Earnings | + earnings | N | N | N | ✅ |
 | EVT-5 | IRA | Contribution | + contribution | Negative Income | N | N | ✅ |
 | EVT-6 | IRA | Withdrawal – Contributions | − contribution | Ordinary Income | N | N | ✅ |
@@ -76,8 +76,8 @@ Columns: Account · Event description · Balance direction · Balance part · Ea
 | EVT-40 | IRA | IRA Withdrawal – RMD | − contribution & earnings | Ordinary Income (required at age 72) | Ordinary Income if resident | N | ✅ |
 | EVT-41 | Roth | Roth Rollover Contribution | + contribution | N | N | N | ✅ |
 | EVT-42 | Roth | Roth Rollover Earnings | + earnings | N | N | N | ✅ |
-| EVT-43 | Roth | Roth Rollover Withdrawal – Contributions | − rollover contribution | N | N | N | ✅ |
-| EVT-44 | Roth | Roth Rollover Withdrawal – Earnings | − rollover earnings | N | Ordinary Income if resident | N | ✅ |
+| EVT-43 | Roth | Roth Rollover Withdrawal – Contributions | − rollover contribution | N income tax (10% §408A(d)(3)(F) recapture if age < 59½ and within 5 yrs of the conversion) | Ordinary Income if resident on the converted IRA-earnings portion (s99B); IRA-contribution portion is corpus (N) | N | ✅ |
+| EVT-44 | Roth | Roth Rollover Withdrawal – Earnings | − rollover earnings | N income tax (10% §72(t) penalty if age < 59½) | Ordinary Income if resident (s99B) | N | ✅ |
 | EVT-45 | Collectible | Change in Value – Baseball Cards | +/− balance | N | N | N | ✅ |
 | EVT-46 | Collectible | Sale – Gold | − contribution & basis | Collectible (28%) | Capital Gain if resident | N | ✅ |
 | EVT-47 | Collectible | Change in Value – Gold | +/− balance | N | N | N | ✅ |
@@ -85,9 +85,89 @@ Columns: Account · Event description · Balance direction · Balance part · Ea
 | EVT-49 | AU Savings | Self-Employment Income | + $ amount/month | Ordinary Income | Ordinary Income if resident | N | ✅ |
 | EVT-50 | US Checking | Bonus | + $ amount | Ordinary Income | Ordinary Income if resident | N | ✅ |
 | EVT-51 | US Checking | Company Sale | + $ amount | Capital Gain | Capital Gain if resident | N | ✅ |
-| EVT-52 | Roth Conversion | IRA → Roth Conversion | −IRA, +Roth rollover contribs | Ordinary Income | Ordinary Income if resident | N | ✅ |
+| EVT-52 | Roth Conversion | IRA → Roth Conversion | −IRA, +Roth rollover contribs | Ordinary Income | N (s99B — no distribution received) | N | ✅ |
 
 **EVT coverage: 52 / 52 tested**
+
+### Roth IRA cross-border tax treatment (EVT-1 to 4, EVT-41 to 44, EVT-52)
+
+The Roth events model a US Roth IRA held by a person who may be a US citizen and/or
+an Australian tax resident. The two jurisdictions treat the same account very
+differently, and the cross-border interaction is the source of the rules below.
+
+**United States — tax-free, even on the gains.**
+A *qualified* Roth distribution (holder age ≥ 59½ and the 5-year rule met) is
+excluded from gross income in full, including earnings — **IRC §408A(d)(1)**.
+The model therefore never books US ordinary income on a Roth withdrawal. The only
+US-side charge is the **IRC §72(t)** 10% additional tax on an early (non-qualified,
+age < 59½) distribution of *earnings* (EVT-3 and EVT-44). Contributions and
+converted principal come out first under the ordering rules (**IRC §408A(d)(4)**)
+and are never income-taxed on withdrawal.
+
+**The 5-year conversion recapture (EVT-43).**
+Converted principal is normally penalty-free, but **IRC §408A(d)(3)(F)** imposes the
+§72(t) 10% additional tax on converted dollars withdrawn within the 5-taxable-year
+window that begins Jan 1 of the conversion year, when the owner is under 59½ (at/after
+59½ the exception removes it). Each conversion runs its **own** clock (a 2026
+conversion clears on 1 Jan 2031). The model records a dated FIFO **conversion lot**
+on every IRA→Roth conversion (EVT-52) and consumes those lots oldest-first on EVT-43,
+penalising only the still-in-window portion. Lots with no recorded conversion date
+(directly-seeded basis) are treated as seasoned.
+
+**Australia — taxed as a foreign trust, on the gains only.**
+The ATO does **not** recognise the US Roth's tax-free status. A US IRA/Roth IRA is
+treated as a **foreign trust**, and a distribution to an Australian-resident
+beneficiary is assessable as ordinary income under **s99B ITAA 1936** to the extent
+it represents trust *income* (the earnings/appreciation). Amounts representing
+**corpus** — the original after-tax contributions, and (per the note below) rolled-in
+converted principal — are excluded from s99B (s99B(2)(a)). Net effect: AU taxes the
+**gains only**, as ordinary income, when the resident draws them (EVT-3, EVT-44).
+There is no CGT 50% discount — s99B amounts are ordinary income, not a capital gain.
+
+**Roth conversions are corpus, not gains — and are not an AU event.**
+An IRA→Roth conversion (EVT-52) is taxed as **US** ordinary income at the time of
+conversion (IRC §408A(d)(3)(A) / §408(d)(1)) — a US event for the account owner
+regardless of residency. It is **not** an Australian taxable event, even for an
+AU resident: **s99B ITAA 1936** assesses only amounts *paid to, or applied for the
+benefit of* the resident beneficiary — an actual distribution received by the
+person. A conversion merely moves funds within the US retirement system (IRA
+trust → Roth trust); nothing is paid to or made available to the individual, so
+there is no s99B receipt and nothing to assess (and no FTC, since no AU tax is
+levied). Inside the Roth the converted amount is tracked as **rollover
+contribution basis** (corpus). Its later treatment depends on its *provenance*
+(see below); only the *post-conversion* growth is earnings (EVT-42/EVT-44),
+assessable under s99B on distribution if resident.
+
+**Converted IRA earnings stay AU-assessable (stricter s99B view).**
+The s99B corpus exemption excludes amounts that *would have been assessable if
+derived directly by a resident*. A Traditional IRA is pre-tax money: its earnings,
+if distributed straight to a resident, are s99B income (cf. EVT-7). Converting
+them to a Roth defers AU tax — it does not erase it. The model therefore records,
+on each conversion lot, the **IRA-earnings-sourced portion** (`taxableAmount`,
+i.e. the part of the conversion drawn from IRA `earningsBasis` rather than
+`contributionBasis`). When that converted principal is later withdrawn (EVT-43),
+the earnings-sourced share is consumed FIFO/pro-rata and assessed as **AU ordinary
+income under s99B** for a resident, while the contribution-sourced share remains
+corpus (AU-free). There is no US income tax on the EVT-43 distribution (the US
+taxed the conversion at EVT-52) and therefore no FTC. Directly-seeded
+`rolloverContribBasis` with no conversion lots is of unknown provenance and is
+treated as corpus (AU-free) for backward compatibility.
+
+**No Foreign Tax Credit on Roth earnings (FTC = N for EVT-3 and EVT-44).**
+FTC relieves *double* taxation by crediting foreign tax against the home-country
+charge. Because the US levies **no** income tax on a qualified Roth distribution,
+there is no foreign tax for Australia to credit and nothing to relieve on the US
+side. The AU s99B charge therefore stands alone — the documented Roth
+"double-tax-with-no-relief" outcome for Australian residents. Earlier revisions
+incorrectly accumulated `ftcYTD` on these events, which spuriously offset US tax on
+*unrelated* income; this is now corrected.
+
+> **Tax-law sources:** IRC §408A(d)(1) (qualified distributions excluded from
+> income), IRC §408A(d)(4) (distribution ordering: contributions → conversions →
+> earnings), IRC §72(t) (10% additional tax on early distributions),
+> s99B Income Tax Assessment Act 1936 (Cth) and ATO guidance "Receiving payments
+> or assets from foreign trusts" (foreign-trust distributions to resident
+> beneficiaries; corpus exclusion under s99B(2)).
 
 ---
 
@@ -162,7 +242,7 @@ Columns: Account · Rule · Net cash to target · US Tax · AU Tax · Basis trac
 |----|---------|------|---------------|--------|--------|---------------|--------|
 | EW-1 | Roth, IRA, 401k | `allowsEarlyWithdrawal: true` flag on account. `replenishSavings` considers these accounts (after exhausting non-age-gated accounts) when person is below `minimumAge`. Super stays `false`. | — | — | — | — | ✅ |
 | EW-2 | Roth | Early drawdown phase 1: draw from `contributionBasis` first. No age gate, no penalty, no US tax, no AU tax. | gross = net | N | N | contributionBasis − amount | ✅ |
-| EW-3 | Roth | Early drawdown phase 2: draw from `earningsBasis` only after contributions exhausted. 10% penalty if age < 59.5. No US income tax; AU ordinary income if resident + FTC. | gross × 0.9 | penalty only | Ord. Income if resident | earningsBasis − amount | ✅ |
+| EW-3 | Roth | Early drawdown phase 2: draw from `earningsBasis` only after contributions exhausted. 10% penalty if age < 59.5. No US income tax; AU ordinary income if resident (s99B, no FTC — see EVT-3 note). | gross × 0.9 | penalty only | Ord. Income if resident | earningsBasis − amount | ✅ |
 | EW-4 | IRA | All early draws: US ordinary income + 10% penalty if age < 59.5. Draw contributions first for basis tracking; earnings next (same tax treatment). AU ordinary income if resident + FTC. | gross × 0.9 | Ord. Income + penalty | Ord. Income if resident | contrib/earningsBasis decremented | ✅ |
 | EW-5 | 401k | All early draws: US ordinary income + 10% penalty if age < 59.5. No AU tax. | gross × 0.9 | Ord. Income + penalty | N | contrib/earningsBasis decremented | ✅ |
 | EW-6 | All early-eligible | Target savings account is credited with `net` (gross − penalty). Penalty is never deposited — tracked via `usPenaltyYTD`. | net only | — | — | — | ✅ |

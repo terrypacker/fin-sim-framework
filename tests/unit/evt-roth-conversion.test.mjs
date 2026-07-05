@@ -12,7 +12,7 @@
  * evt-roth-conversion.test.mjs
  * Tests for EVT-52: Roth Conversion (IRA → Roth, direct transfer, bracket-fill policy)
  *
- * EVT-52  Roth Conversion  −IRA, +Roth rolloverContribBasis  US: ordinary income  AU: ordinary income if resident  No penalty
+ * EVT-52  Roth Conversion  −IRA, +Roth rolloverContribBasis  US: ordinary income  AU: not assessable (s99B — no distribution received)  No penalty
  *
  * Run with: node --test tests/unit/evt-roth-conversion.test.mjs
  */
@@ -172,13 +172,17 @@ test('EVT-52: Roth Conversion — US ordinary income recorded', () => {
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 20_000);
 });
 
-test('EVT-52: Roth Conversion — AU ordinary income recorded when isAuResident', () => {
+test('EVT-52: Roth Conversion — NOT an AU taxable event for an AU resident (s99B: no distribution received)', () => {
+  // A conversion moves funds within the US retirement system (IRA → Roth); no
+  // amount is paid to or applied for the benefit of the resident, so s99B ITAA
+  // 1936 does not assess it. AU tax arises only on later Roth distribution.
   const { sim } = loadToolsetScenario(makeConversionConfig({ iraBalance: 100_000, iraContribBasis: 100_000, startingResidency: 'AU' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_CONVERSION', data: { amount: 20_000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 20_000);
-  assert.strictEqual(sim.state.ftcYTD, 20_000);
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 20_000); // US still taxes the conversion
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
+  assert.strictEqual(sim.state.ftcYTD, 0);
 });
 
 test('EVT-52: Roth Conversion — no AU income when not resident', () => {
@@ -196,6 +200,42 @@ test('EVT-52: Roth Conversion — no penalty', () => {
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.usPenaltyYTD, 0);
+});
+
+test('EVT-52/EVT-43: Roth Conversion stamps a dated lot for the §408A(d)(3)(F) recapture clock', () => {
+  // End-to-end: a real conversion records a FIFO lot tagged with its conversion
+  // year, which EVT-43 reads to apply the 5-year recapture. (Penalty math itself
+  // is covered by the seeded-lot cases in evt-roth.test.mjs.)
+  const { sim } = loadToolsetScenario(makeConversionConfig({ iraBalance: 100_000, iraContribBasis: 100_000 }));
+  sim.schedule({ date: new Date(2026, 5, 1), type: 'ROTH_CONVERSION', data: { amount: 20_000 } });
+  sim.stepTo(new Date(2026, 5, 30));
+
+  const lots = sim.state.rothAccount.rolloverConversions;
+  assert.strictEqual(lots.length, 1);
+  assert.strictEqual(lots[0].amount, 20_000);
+  assert.strictEqual(new Date(lots[0].conversionMs).getUTCFullYear(), 2026);
+});
+
+test('EVT-52→EVT-43: converted IRA earnings stay AU-assessable, deferred to Roth withdrawal (stricter s99B)', () => {
+  // AU resident converts 70k from an IRA that is 60k contributions + 40k earnings,
+  // so 10k of the conversion is IRA-earnings-sourced. The conversion itself is not
+  // an AU event; when the converted principal is later withdrawn, that 10k is
+  // assessed as AU ordinary income under s99B (the 60k corpus stays AU-free).
+  const { sim } = loadToolsetScenario(makeConversionConfig({
+    initialChecking: 5_000,
+    iraBalance: 100_000, iraContribBasis: 60_000, iraEarningsBasis: 40_000,
+    startingResidency: 'AU',
+  }));
+  sim.schedule({ date: new Date(2026, 2, 1), type: 'ROTH_CONVERSION', data: { amount: 70_000 } });
+  sim.schedule({ date: new Date(2026, 4, 1), type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIBUTIONS', data: { amount: 70_000 } });
+  sim.stepTo(new Date(2026, 4, 31));
+
+  // Conversion: US ordinary income on the full 70k; no AU event at conversion.
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 70_000);
+  // Withdrawal: only the 10k IRA-earnings-sourced share is AU ordinary income.
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 10_000);
+  assert.strictEqual(sim.state.ftcYTD, 0);
+  assert.strictEqual(sim.state.usPenaltyYTD, 0); // primary is age 60
 });
 
 test('EVT-52: Roth Conversion — debit draws from contributionBasis first then earningsBasis', () => {

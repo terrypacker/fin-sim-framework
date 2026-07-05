@@ -60,15 +60,30 @@ export class RothConversionApplyReducer extends AccountServiceReducer {
     this.generatedActionTypes = ['ROTH_CONVERSION_TAX'];
   }
 
-  reduce(state, action) {
+  reduce(state, action, date) {
     const { amount, iraKey, rothKey, residency } = action;
     const roth = state[rothKey];
+    const ira  = state[iraKey];
+
+    // Stamp a dated conversion lot so EVT-43 can apply the IRC §408A(d)(3)(F)
+    // 5-year recapture per conversion (each conversion runs its own clock from
+    // Jan 1 of its conversion year). Lots are kept in chronological (FIFO) order.
+    const conversionMs = date instanceof Date ? date.getTime() : (date ?? null);
+
+    // s99B provenance: the conversion draws IRA contributions first, then earnings
+    // (mirrors debitIra). The IRA-earnings portion is pre-tax money that "would
+    // have been assessable if derived directly by an AU resident", so it does NOT
+    // qualify for the s99B corpus exemption — record it as the lot's taxableAmount
+    // so EVT-43 can assess it in AU when that converted principal is later drawn.
+    const fromContrib   = Math.min(amount, ira?.contributionBasis ?? 0);
+    const taxableAmount = +Math.min(amount - fromContrib, ira?.earningsBasis ?? 0).toFixed(2);
 
     // Maintain §4.4 invariant: scale Roth holdings up to absorb the incoming amount.
     const newRoth = {
       ...roth,
       balance:              roth.balance                      + amount,
       rolloverContribBasis: (roth.rolloverContribBasis ?? 0) + amount,
+      rolloverConversions:  [ ...(roth.rolloverConversions ?? []), { amount, conversionMs, taxableAmount } ],
     };
     if (Array.isArray(roth.holdings) && roth.holdings.length > 0) {
       if (roth.balance > 0) {

@@ -56,6 +56,7 @@ function makeRothConfig({
   rothEarningsBasis     = 0,
   rolloverContribBasis  = 0,
   rolloverEarningsBasis = 0,
+  rolloverConversions   = undefined,
   birthDate             = '1966-01-01',
   startingResidency     = 'US',
 } = {}) {
@@ -95,6 +96,7 @@ function makeRothConfig({
         initialValue: rothBalance, contributionBasis: rothContribBasis,
         earningsBasis: rothEarningsBasis,
         rolloverContribBasis, rolloverEarningsBasis,
+        ...(rolloverConversions !== undefined ? { rolloverConversions } : {}),
         ownershipType: 'sole', ownerId: 'primary',
         country: 'US', currency: { code: 'USD', symbol: '$' },
       },
@@ -273,7 +275,9 @@ test('EVT-3: Roth earnings withdrawal IS AU taxable if person is AU resident', (
   sim.stepTo(new Date(2026, 1, 28));
 
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 4000);
-  assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded when AU tax applies');
+  // No FTC: the US does not tax a Roth earnings distribution (IRC §408A(d)(1)),
+  // so there is no foreign tax for AU to credit — the s99B charge stands alone.
+  assert.strictEqual(sim.state.ftcYTD, 0, 'No FTC — US levies no tax on Roth earnings');
 });
 
 test('EVT-3: Roth earnings withdrawal is NOT AU taxable if person is NOT AU resident', () => {
@@ -435,6 +439,158 @@ test('EVT-43: Roth rollover contribution withdrawal is not a US or AU taxable ev
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
 });
 
+// EVT-43: IRC §408A(d)(3)(F) 5-year conversion recapture
+// A distribution of converted principal within the 5-taxable-year window that
+// began Jan 1 of the conversion year incurs the §72(t) 10% additional tax when
+// the owner is under 59½. At/after 59½ the exception removes it.
+
+test('EVT-43: recapture penalty applies when under 59.5 and within the 5-year window', () => {
+  const { sim } = loadToolsetScenario(makeRothConfig({
+    initialChecking: 5000,
+    rothBalance: 10000,
+    rolloverContribBasis: 10000,
+    birthDate: '1990-01-01', // under 59.5
+    // Converted in 2024 → window clears 1 Jan 2029; a 2026 withdrawal is inside it.
+    rolloverConversions: [{ amount: 10000, conversionMs: Date.UTC(2024, 0, 1) }],
+  }));
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIBUTIONS', data: { amount: 4000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.usPenaltyYTD, 400);             // 10% of 4000
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0);        // corpus — no income tax
+  assert.strictEqual(sim.state.checkingAccount.balance, 8600); // 5000 + 3600 net of penalty
+  assert.strictEqual(sim.state.rothAccount.rolloverContribBasis, 6000);
+  assert.strictEqual(sim.state.rothAccount.rolloverConversions[0].amount, 6000); // lot FIFO-consumed
+});
+
+test('EVT-43: no recapture penalty once age 59.5+, even within the 5-year window', () => {
+  const { sim } = loadToolsetScenario(makeRothConfig({
+    initialChecking: 5000,
+    rothBalance: 10000,
+    rolloverContribBasis: 10000,
+    birthDate: '1966-01-01', // age 60 — §72(t) exception
+    rolloverConversions: [{ amount: 10000, conversionMs: Date.UTC(2024, 0, 1) }],
+  }));
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIBUTIONS', data: { amount: 4000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.usPenaltyYTD, 0);
+  assert.strictEqual(sim.state.checkingAccount.balance, 9000); // full 4000 credited
+});
+
+test('EVT-43: no recapture penalty once the conversion has seasoned 5 years', () => {
+  const { sim } = loadToolsetScenario(makeRothConfig({
+    initialChecking: 5000,
+    rothBalance: 10000,
+    rolloverContribBasis: 10000,
+    birthDate: '1990-01-01', // under 59.5
+    // Converted in 2020 → window cleared 1 Jan 2025; a 2026 withdrawal is seasoned.
+    rolloverConversions: [{ amount: 10000, conversionMs: Date.UTC(2020, 0, 1) }],
+  }));
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIBUTIONS', data: { amount: 4000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.usPenaltyYTD, 0);
+  assert.strictEqual(sim.state.checkingAccount.balance, 9000);
+});
+
+test('EVT-43: recapture penalises only the in-window portion across FIFO lots', () => {
+  const { sim } = loadToolsetScenario(makeRothConfig({
+    initialChecking: 5000,
+    rothBalance: 12000,
+    rolloverContribBasis: 12000,
+    birthDate: '1990-01-01', // under 59.5
+    rolloverConversions: [
+      { amount: 5000, conversionMs: Date.UTC(2020, 0, 1) }, // seasoned (FIFO first)
+      { amount: 7000, conversionMs: Date.UTC(2024, 0, 1) }, // in-window
+    ],
+  }));
+  // Withdraw 8000: consumes the 5000 seasoned lot (no penalty) + 3000 of the
+  // in-window lot (penalised) → penalty = 10% × 3000 = 300.
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIBUTIONS', data: { amount: 8000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.usPenaltyYTD, 300);
+  assert.strictEqual(sim.state.rothAccount.rolloverContribBasis, 4000);
+  assert.strictEqual(sim.state.rothAccount.rolloverConversions.length, 1); // seasoned lot fully consumed
+  assert.strictEqual(sim.state.rothAccount.rolloverConversions[0].amount, 4000);
+});
+
+// EVT-43: s99B on the IRA-earnings-sourced portion of converted principal.
+// The contribution-sourced share is corpus (AU-free); the earnings-sourced share
+// (lot.taxableAmount) is assessable as AU ordinary income when a resident draws it
+// — AU tax deferred from the conversion (EVT-52) to the distribution.
+
+test('EVT-43: converted IRA-earnings portion is AU ordinary income for a resident (pro-rata)', () => {
+  const { sim } = loadToolsetScenario(makeRothConfig({
+    initialChecking: 5000,
+    rothBalance: 10000,
+    rolloverContribBasis: 10000,
+    birthDate: '1966-01-01',   // age 60 — isolate from §72(t) penalty
+    startingResidency: 'AU',
+    // Lot is 40% IRA-earnings-sourced (4000 of 10000 is taxableAmount).
+    rolloverConversions: [{ amount: 10000, conversionMs: Date.UTC(2024, 0, 1), taxableAmount: 4000 }],
+  }));
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIBUTIONS', data: { amount: 5000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 2000);     // 4000 × (5000/10000)
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0);        // US taxed it at conversion, not now
+  assert.strictEqual(sim.state.usPenaltyYTD, 0);
+  assert.strictEqual(sim.state.ftcYTD, 0);                     // no US tax → no FTC
+  assert.strictEqual(sim.state.checkingAccount.balance, 10000);
+  assert.strictEqual(sim.state.rothAccount.rolloverConversions[0].amount, 5000);
+  assert.strictEqual(sim.state.rothAccount.rolloverConversions[0].taxableAmount, 2000); // remaining taxable share
+});
+
+test('EVT-43: converted IRA-earnings portion is NOT AU income for a non-resident', () => {
+  const { sim } = loadToolsetScenario(makeRothConfig({
+    initialChecking: 5000,
+    rothBalance: 10000,
+    rolloverContribBasis: 10000,
+    birthDate: '1966-01-01',
+    startingResidency: 'US',
+    rolloverConversions: [{ amount: 10000, conversionMs: Date.UTC(2024, 0, 1), taxableAmount: 4000 }],
+  }));
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIBUTIONS', data: { amount: 5000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
+});
+
+test('EVT-43: directly-seeded basis with no lots stays AU-free corpus', () => {
+  const { sim } = loadToolsetScenario(makeRothConfig({
+    initialChecking: 5000,
+    rothBalance: 10000,
+    rolloverContribBasis: 10000,  // no rolloverConversions → unknown provenance
+    birthDate: '1990-01-01',
+    startingResidency: 'AU',
+  }));
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIBUTIONS', data: { amount: 4000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
+  assert.strictEqual(sim.state.usPenaltyYTD, 0);
+});
+
+test('EVT-43: under-59.5 AU resident incurs BOTH the recapture penalty and s99B income', () => {
+  const { sim } = loadToolsetScenario(makeRothConfig({
+    initialChecking: 5000,
+    rothBalance: 10000,
+    rolloverContribBasis: 10000,
+    birthDate: '1990-01-01',   // under 59.5, within window
+    startingResidency: 'AU',
+    // Fully IRA-earnings-sourced conversion.
+    rolloverConversions: [{ amount: 10000, conversionMs: Date.UTC(2024, 0, 1), taxableAmount: 10000 }],
+  }));
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIBUTIONS', data: { amount: 4000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.usPenaltyYTD, 400);            // §72(t): 10% of 4000
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 4000);   // s99B: full slice is earnings-sourced
+  assert.strictEqual(sim.state.checkingAccount.balance, 8600); // 5000 + 3600 net of penalty
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 // EVT-44: Roth Rollover Withdrawal – Earnings
 // ══════════════════════════════════════════════════════════════════════════════
@@ -453,18 +609,34 @@ test('EVT-44: Roth rollover earnings withdrawal credits checking and reduces rol
   assert.strictEqual(sim.state.rothAccount.rolloverEarningsBasis, 7000);
 });
 
-test('EVT-44: Roth rollover earnings withdrawal has no US ordinary income or penalty', () => {
+test('EVT-44: Roth rollover earnings withdrawal at age 59.5+ has no US tax or penalty', () => {
   const { sim } = loadToolsetScenario(makeRothConfig({
     initialChecking: 5000,
     rothBalance: 10000,
     rolloverEarningsBasis: 10000,
-    birthDate: '1990-01-01', // under 60
+    birthDate: '1966-01-01', // age 60
   }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS', data: { amount: 3000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0);
   assert.strictEqual(sim.state.usPenaltyYTD, 0);
+  assert.strictEqual(sim.state.checkingAccount.balance, 8000); // full 3000 credited
+});
+
+test('EVT-44: Roth rollover earnings withdrawal before age 59.5 incurs 10% §72(t) penalty, no US income tax', () => {
+  const { sim } = loadToolsetScenario(makeRothConfig({
+    initialChecking: 5000,
+    rothBalance: 10000,
+    rolloverEarningsBasis: 10000,
+    birthDate: '1990-01-01', // under 59.5
+  }));
+  sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS', data: { amount: 3000 } });
+  sim.stepTo(new Date(2026, 0, 31));
+
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0);    // still US income-tax-free
+  assert.strictEqual(sim.state.usPenaltyYTD, 300);         // 10% of 3000
+  assert.strictEqual(sim.state.checkingAccount.balance, 7700); // 5000 + 2700 net
 });
 
 test('EVT-44: Roth rollover earnings withdrawal IS AU ordinary income if AU resident', () => {
@@ -478,7 +650,9 @@ test('EVT-44: Roth rollover earnings withdrawal IS AU ordinary income if AU resi
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 3000);
-  assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded for AU resident');
+  // No FTC (EVT-44 spec row): the US does not tax Roth rollover earnings, so
+  // there is no foreign tax for AU to credit.
+  assert.strictEqual(sim.state.ftcYTD, 0, 'No FTC — US levies no tax on Roth rollover earnings');
 });
 
 test('EVT-44: Roth rollover earnings withdrawal is NOT AU taxable if not AU resident', () => {

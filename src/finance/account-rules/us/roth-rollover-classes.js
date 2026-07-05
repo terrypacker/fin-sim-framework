@@ -11,10 +11,79 @@
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
+import { getBirthDate } from '../../residency-utils.js';
 import { scaleHoldings } from '../../holdings/holding-utils.js';
 
 /** Resolve the US cash pool. */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
+
+/** IRC §72(t) early-distribution additional tax rate and age threshold. */
+const PENALTY_RATE  = 0.10;
+const AGE_THRESHOLD = 59.5;
+
+/** Age as a decimal (years + fractional months) for the 59.5 threshold. */
+function getAgeDecimal(birthDate, asOfDate) {
+  const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
+  return (asOfDate - birthDate) / msPerYear;
+}
+
+/** Resolve the as-of person's decimal age, or 0 when no birth date is known. */
+function ownerAgeDecimal(state, date) {
+  const personKey = Object.keys(state.people ?? {})[0];
+  const birthDate = getBirthDate(state, personKey);
+  return birthDate ? getAgeDecimal(birthDate, date) : 0;
+}
+
+/**
+ * Consume converted-principal lots for an EVT-43 withdrawal, computing both the
+ * US recapture penalty and the AU-assessable (s99B) portion.
+ *
+ * FIFO-consumes `amount` from the Roth's dated conversion lots. For each consumed
+ * slice:
+ *   - US recapture (IRC §408A(d)(3)(F)): the slice is penalised when the owner is
+ *     under 59½ AND the withdrawal falls inside the 5-taxable-year window that
+ *     began Jan 1 of that lot's conversion year (a 2026 conversion clears on
+ *     1 Jan 2031, so withdrawalYear − conversionYear < 5 is inside the window).
+ *     At/after 59½ the §72(t) exception removes the penalty.
+ *   - AU s99B: the slice's IRA-earnings-sourced share (its `taxableAmount`,
+ *     consumed pro-rata) is assessable income — pre-tax IRA earnings do not
+ *     qualify for the corpus exemption. The IRA-contribution-sourced share is
+ *     corpus and stays AU-free.
+ *
+ * Lots with no conversion date and/or no `taxableAmount` (legacy / directly-seeded
+ * basis of unknown provenance) are treated as seasoned corpus — no penalty, no AU
+ * assessment.
+ *
+ * @returns {{ penaltyAmount:number, auAssessableAmount:number, newLots:object[] }}
+ */
+function computeConversionRecapture(lots, amount, date, ageDecimal) {
+  const withdrawalYear = (date instanceof Date ? date : new Date(date)).getUTCFullYear();
+  const underAge       = ageDecimal < AGE_THRESHOLD;
+  let remaining      = amount;
+  let penalisedBase  = 0;
+  let auAssessable   = 0;
+  const newLots      = [];
+  for (const lot of (lots ?? [])) {
+    if (remaining <= 1e-9) { newLots.push(lot); continue; }
+    const take    = Math.min(lot.amount, remaining);
+    const taxable = lot.amount > 0 ? (lot.taxableAmount ?? 0) * (take / lot.amount) : 0;
+    remaining    -= take;
+    auAssessable += taxable;
+    if (underAge && lot.conversionMs != null) {
+      const conversionYear = new Date(lot.conversionMs).getUTCFullYear();
+      if (withdrawalYear - conversionYear < 5) penalisedBase += take;
+    }
+    const left = lot.amount - take;
+    if (left > 1e-9) {
+      newLots.push({ ...lot, amount: left, taxableAmount: +((lot.taxableAmount ?? 0) - taxable).toFixed(2) });
+    }
+  }
+  return {
+    penaltyAmount:      +(penalisedBase * PENALTY_RATE).toFixed(2),
+    auAssessableAmount: +auAssessable.toFixed(2),
+    newLots,
+  };
+}
 
 /**
  * Roth Rollover account — tracks amounts converted from a Traditional IRA separately
@@ -88,43 +157,53 @@ export class RothRolloverEarningsApplyReducer extends AccountServiceReducer {
 }
 
 /**
- * EVT-43: Roth Rollover Withdrawal – Contributions — credit US cash pool,
- * debit rolloverContribBasis.  No tax.
+ * EVT-43: Roth Rollover Withdrawal – Contributions — credit US cash pool (net of
+ * any §408A(d)(3)(F) recapture penalty), debit rolloverContribBasis, and consume
+ * the FIFO conversion lots. No US income tax (US taxed the conversion at EVT-52).
+ * Chains ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_TAX when a recapture penalty applies or
+ * the consumed principal carries an AU-assessable (IRA-earnings-sourced) portion.
  */
 export class RothRolloverWithdrawalContribApplyReducer extends AccountServiceReducer {
   static type        = 'RothRolloverWithdrawalContribApplyReducer';
-  static description = 'Credits the US cash pool and debits rothAccount.rolloverContribBasis; no tax effect.';
+  static description = 'Credits the US cash pool net of any §408A(d)(3)(F) recapture penalty, debits rolloverContribBasis, consumes conversion lots; chains ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_TAX for the penalty and/or the AU-assessable converted-earnings portion.';
   static actionType  = 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY';
 
   constructor({ accountService }) {
     super('Roth Rollover Withdrawal Contrib Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
-    this.reducedActionTypes = ['ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY'];
+    this.reducedActionTypes   = ['ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY'];
+    this.generatedActionTypes = ['ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_TAX'];
   }
 
   reduce(state, action) {
-    this.accountService.transaction(usCash(state), action.amount, null);
+    const { amount, penaltyAmount = 0, auAssessableAmount = 0, residency, rolloverConversions } = action;
+    this.accountService.transaction(usCash(state), amount - penaltyAmount, null);
     const ra         = state.rothAccount;
-    const newBalance = ra.balance - action.amount;
-    return this.newState(state, {
-      rothAccount: {
-        ...ra,
-        balance:              newBalance,
-        rolloverContribBasis: (ra.rolloverContribBasis ?? 0) - action.amount,
-        holdings:             scaleHoldings(ra.holdings, ra.balance, newBalance),
-      },
-    });
+    const newBalance = ra.balance - amount;
+    const rothAccount = {
+      ...ra,
+      balance:              newBalance,
+      rolloverContribBasis: (ra.rolloverContribBasis ?? 0) - amount,
+      holdings:             scaleHoldings(ra.holdings, ra.balance, newBalance),
+    };
+    if (rolloverConversions !== undefined) rothAccount.rolloverConversions = rolloverConversions;
+    const auAssessable = residency === 'AU' ? auAssessableAmount : 0;
+    const next = (penaltyAmount > 0 || auAssessable > 0)
+      ? [{ type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_TAX', amount, penaltyAmount, auAssessableAmount, residency }]
+      : [];
+    return this.newState(state, { rothAccount }, next);
   }
 }
 
 /**
- * EVT-44: Roth Rollover Withdrawal – Earnings — credit US cash pool,
- * debit rolloverEarningsBasis.  No US tax; chains ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX
- * for optional AU ordinary income.
+ * EVT-44: Roth Rollover Withdrawal – Earnings — credit US cash pool (net of any
+ * §72(t) early-distribution penalty), debit rolloverEarningsBasis. No US income
+ * tax; chains ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX for the penalty and optional
+ * AU ordinary income.
  */
 export class RothRolloverWithdrawalEarningsApplyReducer extends AccountServiceReducer {
   static type        = 'RothRolloverWithdrawalEarningsApplyReducer';
-  static description = 'Credits the US cash pool and debits rothAccount.rolloverEarningsBasis; chains ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX.';
+  static description = 'Credits the US cash pool net of any §72(t) penalty and debits rothAccount.rolloverEarningsBasis; chains ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX.';
   static actionType  = 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_APPLY';
 
   constructor({ accountService }) {
@@ -135,8 +214,8 @@ export class RothRolloverWithdrawalEarningsApplyReducer extends AccountServiceRe
   }
 
   reduce(state, action) {
-    const { amount, residency } = action;
-    this.accountService.transaction(usCash(state), amount, null);
+    const { amount, penaltyAmount = 0, residency } = action;
+    this.accountService.transaction(usCash(state), amount - penaltyAmount, null);
     const ra         = state.rothAccount;
     const newBalance = ra.balance - amount;
     return this.newState(
@@ -149,7 +228,7 @@ export class RothRolloverWithdrawalEarningsApplyReducer extends AccountServiceRe
           holdings:              scaleHoldings(ra.holdings, ra.balance, newBalance),
         },
       },
-      [{ type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX', amount, residency }]
+      [{ type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX', amount, penaltyAmount, residency }]
     );
   }
 }
@@ -197,7 +276,7 @@ export class RothRolloverEarningsHandler extends HandlerEntry {
 
 export class RothRolloverWithdrawalContributionsHandler extends HandlerEntry {
   static type        = 'RothRolloverWithdrawalContributionsHandler';
-  static description = 'Dispatches ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY; no tax.';
+  static description = 'Computes the §408A(d)(3)(F) 5-year recapture penalty from the FIFO conversion lots and dispatches ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY.';
   static eventType   = 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIBUTIONS';
 
   constructor() {
@@ -205,9 +284,20 @@ export class RothRolloverWithdrawalContributionsHandler extends HandlerEntry {
     this.generatedActionTypes = ['ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
   }
 
-  call({ data }) {
+  call({ date, state, data }) {
+    const personKey = Object.keys(state.people ?? {})[0];
+    const age       = ownerAgeDecimal(state, date);
+    const { penaltyAmount, auAssessableAmount, newLots } =
+      computeConversionRecapture(state.rothAccount?.rolloverConversions, data.amount, date, age);
     return [
-      { type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY', amount: data.amount },
+      {
+        type:               'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY',
+        amount:             data.amount,
+        penaltyAmount,
+        auAssessableAmount,
+        residency:          state.people?.[personKey]?.residency ?? null,
+        rolloverConversions: newLots,
+      },
       new FieldValueAction('roth_rollover_withdrawal_contributions', 'Roth Rollover Withdrawal', data.amount),
       new RecordBalanceAction('rothAccount.balance', 'rothAccount'),
     ];
@@ -216,7 +306,7 @@ export class RothRolloverWithdrawalContributionsHandler extends HandlerEntry {
 
 export class RothRolloverWithdrawalEarningsHandler extends HandlerEntry {
   static type        = 'RothRolloverWithdrawalEarningsHandler';
-  static description = 'Dispatches ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_APPLY with AU residency flag; no US tax.';
+  static description = 'Applies the §72(t) 10% penalty for under-59½ withdrawals and dispatches ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_APPLY with the AU residency flag; no US income tax.';
   static eventType   = 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS';
 
   constructor() {
@@ -224,12 +314,16 @@ export class RothRolloverWithdrawalEarningsHandler extends HandlerEntry {
     this.generatedActionTypes = ['ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
   }
 
-  call({ state, data }) {
+  call({ date, state, data }) {
+    const personKey = Object.keys(state.people ?? {})[0];
+    const age       = ownerAgeDecimal(state, date);
+    const penalty   = age < AGE_THRESHOLD ? data.amount * PENALTY_RATE : 0;
     return [
       {
-        type:         'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_APPLY',
-        amount:       data.amount,
-        residency: state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null,
+        type:          'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_APPLY',
+        amount:        data.amount,
+        penaltyAmount: penalty,
+        residency:     state.people?.[personKey]?.residency ?? null,
       },
       new FieldValueAction('roth_rollover_withdrawal_earnings', 'Roth Rollover Withdrawal Earnings', data.amount),
       new RecordBalanceAction('rothAccount.balance', 'rothAccount'),
