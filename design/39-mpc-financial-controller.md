@@ -1,7 +1,7 @@
 # 39 — MPC Financial Controller (closed-loop advisor cockpit)
 
 **Status**: Proposed (draft 2026-06-26)
-**Related**: `design/38-optimization-solver-framework.md` (**hard dependency** — the controller's inner solve *is* an `OptimizationProblem` + solver), `design/30-decision-graph-analysis.md` (the implemented scenario-comparison surface the "futures fan" rides on), `design/17-scenario-as-graph-node.md` (`DERIVES_FROM` parent edges — how a candidate future is recorded as a scenario derived from "now"), `design/33-age-banded-spending.md` / `EXPLICIT_BANDS` (the spending control lever), `design/18-performance-enhancements.md` (rollout cost).
+**Related**: `design/38-optimization-solver-framework.md` (**hard dependency** — the controller's inner solve *is* an `OptimizationProblem` + solver), `design/40-after-tax-net-worth.md` (**prerequisite for the Roth flagship** — the objective re-pricing that gives the conversion lever a gradient; see §12.5), `design/30-decision-graph-analysis.md` (the implemented scenario-comparison surface the "futures fan" rides on), `design/17-scenario-as-graph-node.md` (`DERIVES_FROM` parent edges — how a candidate future is recorded as a scenario derived from "now"), `design/33-age-banded-spending.md` / `EXPLICIT_BANDS` (the spending control lever), `design/18-performance-enhancements.md` (rollout cost).
 
 > **Reading note**: design 38 is the *engine* (search over a horizon, offline). This is the *driver* — a closed-loop, receding-horizon controller that calls that engine repeatedly as life unfolds, and a cockpit UI to drive it. They share one `evaluate`/objective core; nothing here re-implements search.
 
@@ -295,6 +295,8 @@ The income target **dominates**: it keeps the state-reactive amount-derivation t
 ### 12.5 Objective
 
 The user wants "various goals," so the lever stays objective-agnostic and user-selectable in the cockpit: `DIE_WITH_TARGET` / `MAX_NET_WORTH` (wealth/bequest), **minimize lifetime taxes** (the purest test of conversion value — consumes `cumulativeTaxesPaid`, design 38 §5.3), `MAX_CRRA_UTILITY` (smooth lifetime spendable). Roth's payoff is *purely intertemporal tax/wealth*, so it surfaces as higher terminal wealth or lower lifetime tax depending on the chosen objective.
+
+> **⚠️ Objective blindness — see `design/40-after-tax-net-worth.md`.** As implemented through Step 11, **none of the cockpit's wealth/consumption objectives can actually see Roth conversion value**, so the lever is degenerate (browser-confirmed 2026-06-28: on *Die With Target → Consumption → Net Liquidity* it recommends the **max** income-fill target every epoch with an identical terminal across all save points). The root cause: `computeNetWorth`/`computeNetLiquidity` price a pre-tax IRA/401(k) dollar **at par** with a Roth dollar, so a conversion looks like pure tax loss (net-worth objectives → convert nothing) or pure noise (liquidity/consumption → flat → boundary/"max"). **Design 40** adds after-tax re-pricing as a *modifier orthogonal to the worth/liquidity scope* (a 2×2 of terminal measures) plus `MAX_AFTER_TAX_NET_WORTH`, giving the lever a real gradient. **Decision (design 40 D2):** the Roth lever defaults to `MAX_AFTER_TAX_NET_WORTH` (maximize — no targeting-trap), while die-with-target stays on the lever-reachable **liquid** scope. Design 40 is the prerequisite for this flagship lever being non-degenerate.
 
 ### 12.6 Testing sketch (detailed in §11 Steps 8–10)
 
