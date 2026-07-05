@@ -454,6 +454,21 @@ test('EVT-34: US house sale credits net proceeds (sale price − mortgage) and z
   assert.strictEqual(loanDiff.delta, -mortgage);
 });
 
+test('EVT-34: US house sale records the loan payoff into its metric series (chart shows 0)', () => {
+  // Regression: the sale zeroes the loan in state, but the loan's metric series is
+  // otherwise only recorded by LOAN_PAYMENT — which skips a zero-balance loan — so
+  // without an explicit snapshot the chart froze at the pre-sale balance while the
+  // real balance was 0. The sale handler now emits a RECORD_BALANCE for the loan.
+  const config = structuredClone(US_HOUSE_JSON);
+  config.realProperties[0].mortgageBalance = 300_000;
+  const { sim } = loadToolsetScenario(config);
+  assert.doesNotThrow(() => sim.stepTo(Q1_2028), 'stepTo should not throw');
+
+  assert.strictEqual(sim.state.usHousePropertyLoan.balance, 0, 'loan state balance zeroed');
+  assert.strictEqual(sim.state.metrics.usHousePropertyLoan, 0,
+    'loan metric series should reflect the payoff, not freeze at the pre-sale balance');
+});
+
 test('EVT-34: US house sale taxable gain is unaffected by mortgage payoff', () => {
   const config = structuredClone(US_HOUSE_JSON);
   config.realProperties[0].costBasis       = config.realProperties[0].value - 600_000;
@@ -489,6 +504,17 @@ test('EVT-33: AU house sale credits net proceeds (sale price − mortgage) and z
   assert.ok(loanDiff, 'should record loan payoff to 0');
   assert.strictEqual(loanDiff.after, 0);
   assert.strictEqual(loanDiff.delta, -mortgage);
+});
+
+test('EVT-33: AU house sale records the loan payoff into its metric series (chart shows 0)', () => {
+  const config = structuredClone(AU_HOUSE_JSON);
+  config.realProperties[0].mortgageBalance = 400_000;
+  const { sim } = loadToolsetScenario(config);
+  assert.doesNotThrow(() => sim.stepTo(Q1_2028), 'stepTo should not throw');
+
+  assert.strictEqual(sim.state.auHousePropertyLoan.balance, 0, 'loan state balance zeroed');
+  assert.strictEqual(sim.state.metrics.auHousePropertyLoan, 0,
+    'loan metric series should reflect the payoff, not freeze at the pre-sale balance');
 });
 
 test('EVT-33: AU house sale capital gain is unaffected by mortgage payoff', () => {
