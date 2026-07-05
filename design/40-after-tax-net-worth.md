@@ -178,7 +178,7 @@ The after-tax metric is still correct and necessary — it removes the **par-val
   - The **Roth** lever defaults to **`MIN_LIFETIME_TAXES`** — over a full-life **spend-down** plan the conversion's value is a *flow* (the pre-tax pile is gone by death, so terminal stocks are flat for it; §5.1). After-tax terminal **worth** (`MAX_AFTER_TAX_NET_WORTH` / the `*_AFTERTAX` die-with-target variants) is offered for **bequest** plans (pre-tax survives) or a **windowed** horizon. *(Originally D2 defaulted to `MAX_AFTER_TAX_NET_WORTH`; browser verification showed that is flat on a full-life spend-down — see §5.1.)*
   - **Die-with-target** stays on the after-tax **liquid** scope — the controller can't actuate illiquid assets, so a worth target binds on unreachable wealth (§2.0/§1).
   - All four terminal measures (scope × basis) + `MIN_LIFETIME_TAXES` remain user-selectable; only the *defaults* are fixed here.
-  - *Follow-up:* a **windowed** Roth-lever horizon (design 39 §10 Q1) so terminal-stock objectives bite within the window; and the cockpit's curated-goal ordering should lead with `MIN_LIFETIME_TAXES` for the Roth lever.
+  - *Follow-up:* a **windowed** prediction horizon (**now specified in `design/41-windowed-prediction-horizon.md`**) so terminal-stock objectives bite within the window — `MAX_AFTER_TAX_NET_WORTH` on a window is the alternative to `MIN_LIFETIME_TAXES` for surfacing Roth value; and the cockpit's curated-goal ordering should lead with `MIN_LIFETIME_TAXES` for the Roth lever.
 
 ### Open questions
 
