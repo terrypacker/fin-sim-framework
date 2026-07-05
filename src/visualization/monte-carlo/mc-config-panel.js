@@ -32,9 +32,11 @@ export class McConfigPanel extends BaseComponent {
     this._variables  = DEFAULT_MC_VARIABLE_CONFIGS; // current variable list
     this._iterEl     = null;
     this._runBtn     = null;
+    this._copyBtn    = null;
     this._statusEl   = null;
     this._section    = null;
     this.onRun       = null;
+    this.onCopyFromScenario = null;
 
     this._render();
   }
@@ -48,6 +50,46 @@ export class McConfigPanel extends BaseComponent {
 
   enableRun() {
     if (this._runBtn) this._runBtn.disabled = false;
+  }
+
+  /** Show a transient status message without touching the Run button state. */
+  setStatus(msg) {
+    if (this._statusEl) this._statusEl.textContent = msg;
+  }
+
+  /**
+   * Overwrite each variable row's distribution center with the current scenario
+   * parameter value: `mean` for distribution types, `value` for CONSTANT. The
+   * enabled flag, distribution type, and stdDev are left untouched so the user's
+   * configured perturbation/spread survives the copy.
+   *
+   * `values` is a Map paramKey → value. Rows whose paramKey is absent (or maps to
+   * null/undefined) are left as-is. Generic by design: any MC variable — present
+   * or future — is matched by its resolved paramKey with no per-key wiring.
+   *
+   * @returns {number} count of rows updated
+   */
+  applyScenarioValues(values) {
+    let updated = 0;
+    for (const cfg of this._variables) {
+      if (!values.has(cfg.paramKey)) continue;
+      const v = values.get(cfg.paramKey);
+      if (v === undefined || v === null) continue;
+      const row = this._rowMap.get(cfg.paramKey);
+      if (!row) continue;
+      const type = row.typeSel.value;
+      if (type === DISTRIBUTION_TYPES.CONSTANT) {
+        row.valueInp.value = String(v);
+      } else if (type === DISTRIBUTION_TYPES.UNIFORM_DATE) {
+        // Date-valued params have no single numeric center to copy into a [min,max]
+        // window — leave the user-set bounds alone.
+        continue;
+      } else {
+        row.meanInp.value = String(v);
+      }
+      updated++;
+    }
+    return updated;
   }
 
   /**
@@ -141,18 +183,27 @@ export class McConfigPanel extends BaseComponent {
       </div>
       <div class="mc-status-el"></div>
       <div class="mc-var-section">
-        <div class="mc-var-header">Variable Distributions</div>
+        <div class="mc-var-header">
+          <span>Variable Distributions</span>
+          <button class="btn btn-xs btn-ghost mc-copy-scenario-btn"
+            title="Copy the current scenario parameter values into the variable centers (mean / value)">Copy from Scenario</button>
+        </div>
       </div>
     `;
     this.append(this._container, shell);
 
-    this._iterEl   = shell.querySelector('input[type="number"]');
-    this._runBtn   = shell.querySelector('button');
+    this._iterEl   = shell.querySelector('.mc-iters-input');
+    this._runBtn   = shell.querySelector('.btn-primary');
+    this._copyBtn  = shell.querySelector('.mc-copy-scenario-btn');
     this._statusEl = shell.querySelector('.mc-status-el');
     this._section  = shell.querySelector('.mc-var-section');
 
     this.listen(this._runBtn, 'click', () => {
       if (this.onRun) this.onRun(this.getConfig());
+    });
+
+    this.listen(this._copyBtn, 'click', () => {
+      if (this.onCopyFromScenario) this.onCopyFromScenario();
     });
 
     this._buildVarTable(this._section, this._variables, new Map());

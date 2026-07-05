@@ -146,6 +146,16 @@
   border-top: 1px solid var(--border);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mc-copy-scenario-btn {
+  text-transform: none;
+  letter-spacing: normal;
+  flex-shrink: 0;
 }
 
 .mc-group-header {
