@@ -51,6 +51,16 @@ describe('buildRothScheduleOptConfigs (via buildOptVariables)', () => {
   test('no schedule variables when the scenario has no per-year schedule', () => {
     assert.equal(rothVars(buildOptVariables({})).length, 0);
   });
+
+  // Regression: a stale non-array value (e.g. the "[object Object],…" string a
+  // pre-RothScheduleList free-text editor could persist) must NOT throw
+  // `flatMap is not a function` and abort the whole sim/opt build — it degrades
+  // to "no schedule". Same guard covers spendingExpenseBands.
+  test('a non-array (stale string) schedule yields no variables instead of throwing', () => {
+    assert.doesNotThrow(() => buildOptVariables({ rothConversionSchedule: '[object Object],[object Object]' }));
+    assert.equal(rothVars(buildOptVariables({ rothConversionSchedule: '[object Object],[object Object]' })).length, 0);
+    assert.doesNotThrow(() => buildOptVariables({ spendingExpenseBands: '[object Object]' }));
+  });
 });
 
 describe('nested-path routing', () => {

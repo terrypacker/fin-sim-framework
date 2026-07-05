@@ -310,7 +310,9 @@ function buildShockOptConfigs(params) {
  * amount is forward-adjustable mid-run, so design 39's MPC can actuate it.
  */
 function buildExpenseBandOptConfigs(params) {
-  const bands = params.spendingExpenseBands ?? [];
+  // Array.isArray guard (not `?? []`): a stale non-array value can't reach
+  // .flatMap and abort the sim build — degrade to "no bands" instead.
+  const bands = Array.isArray(params.spendingExpenseBands) ? params.spendingExpenseBands : [];
   return bands.flatMap((band, i) => {
     if (!band) return [];
     const base = band.monthlyAmount ?? 5000;
@@ -342,7 +344,12 @@ function buildExpenseBandOptConfigs(params) {
  * carries a per-year schedule.
  */
 function buildRothScheduleOptConfigs(params) {
-  const schedule = params.rothConversionSchedule ?? [];
+  // Guard with Array.isArray, not `?? []`: a stale non-array value (e.g. the
+  // "[object Object],…" string a pre-RothScheduleList free-text editor could
+  // write) would otherwise throw `flatMap is not a function` and abort the whole
+  // sim build. A malformed schedule means "no schedule", not a crash. (The
+  // toolset's schedules() and the cockpit controller already guard the same way.)
+  const schedule = Array.isArray(params.rothConversionSchedule) ? params.rothConversionSchedule : [];
   return schedule.flatMap((entry, i) => {
     if (!entry) return [];
     return [
