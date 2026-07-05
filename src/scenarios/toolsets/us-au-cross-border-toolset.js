@@ -19,6 +19,10 @@ import { FxService }                  from '../../finance/fx/fx-service.js';
 import { FxTransferToHandler }        from '../../finance/fx/fx-transfer-handler.js';
 import { FxTransferApplyReducer }     from '../../finance/fx/fx-transfer-apply-reducer.js';
 import { FxRefreshReducer }           from '../../finance/fx/fx-refresh-reducer.js';
+import { FxTickHandler }              from '../../finance/fx/fx-tick-handler.js';
+import { FxStepApplyReducer }         from '../../finance/fx/fx-step-apply-reducer.js';
+import { FxProcessReducer }           from '../../finance/fx/fx-process-reducer.js';
+import { FX_PROCESS_MODEL_IDS }       from '../../finance/fx/fx-process-models.js';
 
 /**
  * Per-context FxService singleton (reused across state/handlers/reducers calls).
@@ -51,8 +55,8 @@ export const US_AU_CROSS_BORDER = {
   dependencies: ['US_TAX', 'AU_TAX'],
 
   types: {
-    handlers: [ChangeResidencyHandler, FxTransferToHandler],
-    reducers: [ChangeResidencyApplyReducer, IntlTransferApplyReducer, IntlTransferRecordReducer, FxTransferApplyReducer, FxRefreshReducer],
+    handlers: [ChangeResidencyHandler, FxTransferToHandler, FxTickHandler],
+    reducers: [ChangeResidencyApplyReducer, IntlTransferApplyReducer, IntlTransferRecordReducer, FxTransferApplyReducer, FxRefreshReducer, FxProcessReducer, FxStepApplyReducer],
     actions: [
       { type: 'CHANGE_RESIDENCY_APPLY' },
       // INTL_TRANSFER_APPLY is kept for ReplenishSavingsReducer cross-border escalation.
@@ -81,6 +85,14 @@ export const US_AU_CROSS_BORDER = {
           toAmount:   ValueType.number(),
           rate:       ValueType.number(),
           fee:        ValueType.currency('USD'),
+        },
+      },
+      // Time-varying FX walk step (design 47). pair id + new log-deviation.
+      {
+        type: 'FX_STEP_APPLY',
+        fields: {
+          pair:      ValueType.text(),
+          deviation: ValueType.number(),
         },
       },
     ],
@@ -118,6 +130,26 @@ export const US_AU_CROSS_BORDER = {
         type: 'Number', group: 'Cross Border', mc: true, opt: false,
         defaultValue: 15,
         description: 'Fixed fee per international wire transfer in USD',
+      },
+      {
+        key: 'fxProcessModel', label: 'FX Rate Process',
+        type: 'Enum', group: 'FX', mc: false, opt: false,
+        options: FX_PROCESS_MODEL_IDS,
+        defaultValue: 'NONE',
+        description: 'Time-varying FX model (design 47). NONE = flat (today). '
+          + 'MEAN_REVERTING/RANDOM_WALK/WHITE_NOISE vary the rate over time via the seeded RNG.',
+      },
+      {
+        key: 'fxVolatility', label: 'FX Volatility (annualized)',
+        type: 'Number', group: 'FX', mc: true, opt: false,
+        defaultValue: 0.06,
+        description: 'Annualized log-volatility of the FX rate when a process model is active.',
+      },
+      {
+        key: 'fxReversionSpeed', label: 'FX Reversion Speed (per year)',
+        type: 'Number', group: 'FX', mc: true, opt: false,
+        defaultValue: 0.5,
+        description: 'Mean-reversion speed toward the anchor for the MEAN_REVERTING model.',
       },
     ];
   },
@@ -167,20 +199,31 @@ export const US_AU_CROSS_BORDER = {
   },
 
   schedules(context) {
+    const events = [];
+
+    // FX tick series (design 47) — present only when a stochastic FX model is
+    // selected. getContributions returns the pre-built EventSeries.
+    events.push(...(
+      _getFxService(context)
+        .getContributions(['USD', 'AUD'], context.accountService, context.stateRegistry, context.parameters)
+        .events
+    ));
+
     const moveYear = context.parameters.moveYear;
-    if (!moveYear) return [];
-    // CHANGE_RESIDENCY fires on Jul 1 of moveYear (matches IntlRetirementScenario)
-    const moveDate = new Date(Date.UTC(moveYear, 6, 1));
-    return [
-      new OneOffEvent({
+    if (moveYear) {
+      // CHANGE_RESIDENCY fires on Jul 1 of moveYear (matches IntlRetirementScenario)
+      const moveDate = new Date(Date.UTC(moveYear, 6, 1));
+      events.push(new OneOffEvent({
         name:    'Change Residency',
         type:    'CHANGE_RESIDENCY',
         date:    moveDate,
         data:    {},
         enabled: true,
         color:   '#FF5722',
-      }),
-    ];
+      }));
+    }
+
+    return events;
   },
 
   handlers(context) {

@@ -39,6 +39,10 @@ export const SHOCK_LIBRARY = Object.freeze({
     regime: {
       returnAdjustment:   { EQUITY_US: -0.03, EQUITY_AU: -0.025 },
       dividendAdjustment: { EQUITY_US: -0.40, EQUITY_AU: -0.35 },
+      // Risk-off: USD safe-haven bid, AUD depreciates → USD_AUD drifts up, and
+      // the pair gets choppier (design 47). Both scale by the recovery factor.
+      fxAdjustment:       { USD_AUD: 0.08 },
+      fxVolAdjustment:    { USD_AUD: 0.5 },
     },
     recovery: { profile: 'V', durationMonths: 18 },
   },
@@ -55,6 +59,11 @@ export const SHOCK_LIBRARY = Object.freeze({
     regime: {
       returnAdjustment:    { EQUITY_US: -0.02, EQUITY_AU: -0.02 },
       inflationAdjustment: { US: 0.05, AU: 0.04 },
+      // Broad USD weakness (1970s-style): USD_AUD drifts down — 1 USD buys fewer
+      // AUD — plus sustained choppiness (design 47). Opposite drift sign to the
+      // risk-off GFC/COVID presets.
+      fxAdjustment:        { USD_AUD: -0.10 },
+      fxVolAdjustment:     { USD_AUD: 0.4 },
     },
     recovery: { profile: 'L', durationMonths: 48 },
   },
@@ -77,6 +86,10 @@ export const SHOCK_LIBRARY = Object.freeze({
       returnAdjustment:    { EQUITY_US: -0.04, EQUITY_AU: -0.03 },
       inflationAdjustment: { US: 0.01 },
       dividendAdjustment:  { EQUITY_US: -0.30, EQUITY_AU: -0.20 },
+      // Sharp risk-off spike: strong AUD depreciation and a big vol jump that
+      // both recover quickly (V, 6mo) (design 47).
+      fxAdjustment:        { USD_AUD: 0.10 },
+      fxVolAdjustment:     { USD_AUD: 1.0 },
     },
     recovery: { profile: 'V', durationMonths: 6 },
   },

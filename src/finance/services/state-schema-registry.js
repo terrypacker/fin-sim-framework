@@ -174,6 +174,11 @@ export class StateSchemaRegistry {
     // ── FX rate/fee maps ──────────────────────────────────────────────────────
     this.registerPattern('baseExchangeRates.*',      ParameterValueType.rate());
     this.registerPattern('effectiveExchangeRates.*', ParameterValueType.rate());
+    // Time-varying FX stochastic layer (design 47) — unitless scalars.
+    this.registerPattern('fxDeviation.*',    ParameterValueType.decimal(4));
+    this.registerPattern('baseFxVol.*',      ParameterValueType.decimal(4));
+    this.registerPattern('effectiveFxVol.*', ParameterValueType.decimal(4));
+    this.registerPattern('fxAnchorRates.*',  ParameterValueType.rate());
 
     // ── Economic regime effective/base rates (design 21) ─────────────────────
     // Growth rates are per-account-type (EQUITY_US_ROTH, EQUITY_US_IRA, …) so

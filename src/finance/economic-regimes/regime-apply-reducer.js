@@ -69,6 +69,8 @@ export class RegimeApplyReducer extends Reducer {
       effectiveDividendAdjustments:{},
       ...(state.baseExchangeRates && { effectiveExchangeRates: { ...state.baseExchangeRates } }),
       ...(state.baseFxFees        && { effectiveFxFees:        { ...state.baseFxFees } }),
+      // FX process volatility (design 47) — regime-modulated multiplicatively.
+      ...(state.baseFxVol         && { effectiveFxVol:         { ...state.baseFxVol } }),
     };
 
     for (const r of live) {
@@ -83,6 +85,12 @@ export class RegimeApplyReducer extends Reducer {
       if (effective.effectiveExchangeRates) {
         _addScaled(effective.effectiveExchangeRates, r.fxAdjustment, r.currentFactor);
       }
+      // Volatility scales multiplicatively: baseFxVol × Π(1 + adj × factor).
+      // A regime with only fxVolAdjustment makes FX choppier without directional
+      // drift; one with only fxAdjustment shifts the anchor with no extra vol.
+      if (effective.effectiveFxVol) {
+        _mulScaled(effective.effectiveFxVol, r.fxVolAdjustment, r.currentFactor);
+      }
     }
 
     return this.newState(state, { activeRegimes: live, ...effective });
@@ -93,6 +101,18 @@ function _addScaled(target, source, factor) {
   if (!source) return;
   for (const [k, v] of Object.entries(source)) {
     target[k] = (target[k] ?? 0) + v * factor;
+  }
+}
+
+/**
+ * Multiplicative scale — used for FX volatility so several regimes compose as
+ * baseFxVol × Π(1 + adj × factor). A zero base stays zero (no vol to amplify
+ * when no FX process is active).
+ */
+function _mulScaled(target, source, factor) {
+  if (!source) return;
+  for (const [k, v] of Object.entries(source)) {
+    target[k] = (target[k] ?? 0) * (1 + v * factor);
   }
 }
 

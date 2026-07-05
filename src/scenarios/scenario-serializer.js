@@ -44,6 +44,7 @@ import { MonthlyWagesHandler }                          from '../finance/handler
 // IntlTransferToUsHandler / IntlTransferToAuHandler kept for deserializing saved scenarios.
 import { IntlTransferToUsHandler, IntlTransferToAuHandler } from '../finance/handlers/intl-transfer-handlers.js';
 import { FxTransferToHandler }       from '../finance/fx/fx-transfer-handler.js';
+import { FxTickHandler }             from '../finance/fx/fx-tick-handler.js';
 import {
   AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler,
   FixedIncomeInterestHandler, SuperEarningsHandler,
@@ -66,6 +67,8 @@ import { ReplenishSavingsReducer }        from '../finance/reducers/replenish-sa
 import { IntlTransferApplyReducer, IntlTransferRecordReducer }       from '../finance/reducers/intl-transfer-apply-reducer.js';
 import { FxTransferApplyReducer }        from '../finance/fx/fx-transfer-apply-reducer.js';
 import { FxRefreshReducer }              from '../finance/fx/fx-refresh-reducer.js';
+import { FxProcessReducer }              from '../finance/fx/fx-process-reducer.js';
+import { FxStepApplyReducer }            from '../finance/fx/fx-step-apply-reducer.js';
 import { StockDividendCashApplyReducer }  from '../finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { ChangeResidencyApplyReducer }    from '../finance/reducers/change-residency-apply-reducer.js';
 import { ChangeStateResidencyApplyReducer } from '../finance/reducers/change-state-residency-apply-reducer.js';
@@ -211,7 +214,7 @@ const _ALL_CLASSES = [
   ScriptedReducer, AccountTransactionReducer, AccountServiceReducer,
   // Finance handlers
   UsSavingsInterestMonthlyHandler, MonthlyExpensesHandler, MonthlyWagesHandler,
-  IntlTransferToUsHandler, IntlTransferToAuHandler, FxTransferToHandler,
+  IntlTransferToUsHandler, IntlTransferToAuHandler, FxTransferToHandler, FxTickHandler,
   AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler,
   FixedIncomeInterestHandler, SuperEarningsHandler,
   IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,
@@ -248,6 +251,7 @@ const _ALL_CLASSES = [
   // Finance reducers
   UsSavingsInterestCreditReducer, ExpenseDebitReducer, ReplenishSavingsReducer,
   IntlTransferApplyReducer, IntlTransferRecordReducer, FxTransferApplyReducer, FxRefreshReducer,
+  FxProcessReducer, FxStepApplyReducer,
   StockDividendCashApplyReducer, ChangeResidencyApplyReducer, ChangeStateResidencyApplyReducer,
   PersonDiedApplyReducer, SocialSecuritySurvivorApplyReducer, AccountRetitleApplyReducer, ScenarioCompleteReducer,
   LateLifeCareApplyReducer,
