@@ -530,7 +530,8 @@ export class ScenarioTabView {
         valueInput = _buildHealthcareEventListEditor(param, this.personsProvider);
       } else if (param.type === 'DrawdownStrategyList') {
         valueInput = _buildDrawdownStrategyListEditor(
-          param, () => this._maybeRerenderForController(param, scenario));
+          param, () => this._maybeRerenderForController(param, scenario),
+          scenario.params);
       } else if (param.type === 'Enum') {
         valueInput = document.createElement('select');
         // Static schema options plus any names contributed by a sibling list
@@ -1034,11 +1035,15 @@ function _buildHealthcareEventListEditor(param, personsProvider) {
  * The incoming value is deep-cloned up front so in-place edits never corrupt the
  * shared schema default (`[]`) or a round-tripped reference.
  *
- * @param {object}   param     The param descriptor ({ value, options, ... })
- * @param {function} onChange  Called after structural edits to refresh siblings
+ * @param {object}   param         The param descriptor ({ value, options, ... })
+ * @param {function} onChange      Called after structural edits to refresh siblings
+ * @param {Array}    [siblingParams] The scenario's full params array — used to
+ *   follow a rename through to any Enum that selected this strategy by name
+ *   (e.g. the Drawdown Strategy dropdown), so the selection doesn't dangle on
+ *   the old name and silently fall back to authored defaults.
  * @returns {HTMLElement}
  */
-function _buildDrawdownStrategyListEditor(param, onChange) {
+function _buildDrawdownStrategyListEditor(param, onChange, siblingParams) {
   const roles = Array.isArray(param.options) ? param.options : [];
   // Clone so edits don't mutate the shared module-level default / saved value.
   param.value = (Array.isArray(param.value) ? param.value : [])
@@ -1064,9 +1069,25 @@ function _buildDrawdownStrategyListEditor(param, onChange) {
       nameInput.className = 'drawdown-strategy-name';
       nameInput.placeholder = 'Strategy name';
       nameInput.value = strategy.name ?? '';
+      // Last committed name, so a rename can be propagated to any sibling Enum
+      // that selected this strategy. Tracked across multiple blurs without a
+      // re-render (the input handler mutates strategy.name live on each keystroke).
+      let committedName = strategy.name ?? '';
       nameInput.addEventListener('input', () => { strategy.name = nameInput.value; });
-      // Refresh the sibling dropdown only on blur, so typing keeps focus.
-      nameInput.addEventListener('change', () => onChange?.());
+      // On blur: follow the rename through to any sibling selection, then refresh
+      // the sibling dropdown. Done on blur (not per-keystroke) so typing keeps focus.
+      nameInput.addEventListener('change', () => {
+        const newName = nameInput.value;
+        if (committedName && newName && committedName !== newName && Array.isArray(siblingParams)) {
+          for (const sp of siblingParams) {
+            if (sp?.dynamicOptionsFrom === param.name && sp.value === committedName) {
+              sp.value = newName;
+            }
+          }
+        }
+        committedName = newName;
+        onChange?.();
+      });
       head.appendChild(nameInput);
 
       const rmBtn = document.createElement('button');

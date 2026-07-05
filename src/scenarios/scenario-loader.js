@@ -231,15 +231,22 @@ export class ScenarioLoader {
     //
     // Values can arrive two ways and we honor both so node params apply regardless
     // of how the cfg was assembled:
-    //   1. The typed cfg.params array (the UI / round-tripped path) — node read from
-    //      the entry, falling back to the scenario schema for older configs.
+    //   1. The typed cfg.params array (the UI / round-tripped path) — the node is
+    //      schema-owned metadata (cascade declaration, built-in strategy maps,
+    //      owner stride), never user-edited, so the live schema node is
+    //      authoritative; the entry's persisted node is only a fallback for
+    //      user scenarios whose class can't be resolved. Preferring the schema
+    //      node here also heals schema drift on the FIRST load (before
+    //      _mergeParamSchema re-syncs the persisted entry), e.g. a scenario saved
+    //      before the accountPriority node gained `customStrategiesKey` — which
+    //      otherwise silently drops every custom drawdown strategy.
     //   2. cfg.parameters only (the flat map) — e.g. templates from
     //      buildDefaultConfig() that never materialized a params array, as used by
     //      the optimizer's cfgTemplate fallback and library consumers. These are
     //      caught by a second pass over the schema's node list.
     const appliedKeys = new Set();
     for (const p of (Array.isArray(cfg.params) ? cfg.params : [])) {
-      const node = p.node ?? schemaNodeByKey.get(p.name);
+      const node = schemaNodeByKey.get(p.name) ?? p.node;
       if (!node) continue;
       const val = cfg.parameters?.[p.name];
       if (val === undefined) continue;
@@ -318,6 +325,18 @@ export class ScenarioLoader {
           const rank = Math.max(0, (node.ownerOrder ?? []).indexOf(rec.ownerId));
           rec.drawdownPriority = base + rank * (node.ownerStride ?? 0);
         }
+      } else if (val != null && !(val in strategies)) {
+        // Fail loud: the selected strategy name resolves to neither a built-in
+        // nor a custom strategy (typo, or a custom strategy renamed after it was
+        // selected — the selection didn't follow the rename). Without this the
+        // cascade is a silent no-op and accounts keep stale/authored priorities,
+        // which looks like the drawdown order is simply being ignored. (A present
+        // key with a null value — e.g. the built-in CUSTOM — is an intentional
+        // hand-tune no-op and is not warned.)
+        console.warn(
+          `[ScenarioLoader] Drawdown strategy "${val}" is not defined ` +
+          `(no built-in or custom strategy by that name). Account drawdown ` +
+          `priorities left unchanged. Available: ${Object.keys(strategies).join(', ')}`);
       }
     }
   }
@@ -432,7 +451,13 @@ export class ScenarioLoader {
       // backfilled when absent.
       if (s.type        && p.type !== s.type)                p.type        = s.type;
       if (p.description === undefined && s.description)     p.description = s.description;
-      if (p.node        === undefined && s.node)             p.node        = s.node;
+      // The node is schema-owned metadata (the param→record cascade declaration),
+      // not user data — so re-sync it from the schema rather than only backfilling
+      // when absent. This propagates node-shape changes onto already-persisted
+      // entries (e.g. the accountPriority node gaining `customStrategiesKey`),
+      // which a stale persisted node would otherwise shadow, silently breaking
+      // custom drawdown strategies. Mirrors the type/options/dynamicOptionsFrom drift handling.
+      if (s.node)                                            p.node        = s.node;
       // Options are schema-owned (the available choices; the user's selection
       // lives in `value`), so adopt schema option-list changes onto persisted
       // entries — not just backfill when absent. E.g. a new AGE_BANDED choice
