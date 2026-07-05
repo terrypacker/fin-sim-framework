@@ -19,6 +19,7 @@
  * EVT-RENT-6  Round-trip: rental fields survive serialize → deserialize
  * EVT-RENT-7  Depreciation accrues into accumulatedDepreciation
  * EVT-RENT-8  At sale, accumulated depreciation reduces the tax basis (larger gain)
+ * EVT-RENT-9  Rent is indexed to the effective inflation accumulator (design 48 §4.6)
  *
  * Run with: node --test tests/unit/evt-rental-income.test.mjs
  */
@@ -51,6 +52,7 @@ const approx   = (a, b, eps = 0.01) => Math.abs(a - b) <= eps;
 
 const FEB_2026 = new Date(Date.UTC(2026, 1, 15));   // after the Jan month-end
 const JAN_2027 = new Date(Date.UTC(2027, 0, 10));   // after 12 month-ends of 2026
+const FEB_2027 = new Date(Date.UTC(2027, 1, 15));   // after the first annual advance + a 2027 month-end
 const MAR_2027 = new Date(Date.UTC(2027, 2, 1));    // after a Jan 15 2027 sale
 
 const primary = {
@@ -217,6 +219,32 @@ test('EVT-RENT-7: depreciation accrues into accumulatedDepreciation over 12 mont
   // 12 month-ends of 2026 × (12000/12) = 12000
   assert.ok(approx(sim.state.usHouseProperty.accumulatedDepreciation, 12000, 0.5),
     `expected ~12000, got ${sim.state.usHouseProperty.accumulatedDepreciation}`);
+});
+
+test('EVT-RENT-9: rent is indexed to the effective inflation accumulator', () => {
+  // 10% annual inflation, no mortgage/depreciation noise. Month-1 (accumulator
+  // 1.0) is un-indexed; after the first annual advance (accumulator 1.10) the
+  // same base rent yields 10% more cash — the effective (regime-adjusted) rate
+  // is what compounds inflationAccumulator, so this is regime-aware by construction.
+  const config = usConfig(
+    { monthlyRent: 3000, occupancyRate: 0.9, rentalExpenseRatio: 0.25, annualDepreciationOverride: 0 },
+  );
+  config.parameters = { inflationRate: 0.10 };
+  const { sim } = loadToolsetScenario(config);
+  assert.doesNotThrow(() => sim.stepTo(FEB_2027));
+
+  const applies = sim.journal.getActions('US_RENTAL_INCOME_APPLY');
+  assert.ok(applies.length >= 13, 'expected 12 (2026) + at least one 2027 month-end');
+
+  // First month-end (Jan 2026): accumulator 1.0 → 3000*0.9*0.75 = 2025.
+  const firstCash = findDiff(applies[0], 'usSavingsAccount.balance').delta;
+  assert.strictEqual(firstCash, 2025);
+
+  // After the Jan 2027 annual advance: accumulator 1.10 → 2025 * 1.10 = 2227.5.
+  assert.ok(approx(sim.state.inflationAccumulator.US, 1.10, 1e-9),
+    `accumulator should be 1.10, got ${sim.state.inflationAccumulator.US}`);
+  const lastCash = findDiff(applies[applies.length - 1], 'usSavingsAccount.balance').delta;
+  assert.ok(approx(lastCash, 2227.5, 0.01), `expected ~2227.5, got ${lastCash}`);
 });
 
 test('EVT-RENT-8: accumulated depreciation reduces the tax basis at sale (larger gain)', () => {
