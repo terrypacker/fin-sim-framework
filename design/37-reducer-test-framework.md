@@ -2,6 +2,9 @@
 
 > Status: **Complete** — every concrete reducer has an isolated postcondition test; the coverage gate
 > (§8.5) enforces it. The `INDIRECT` burn-down is empty (§9). One latent bug surfaced & fixed (§7.4).
+> The lone remaining §7.2 follow-up (the colocated `*EarningsHandler` classes) was reviewed 2026-06-30
+> and **closed as "retain"**: they are production-dormant but load-bearing for ~31 `evt-*` bare-event
+> tests, so they are kept, not deleted — see §7.2 for the corrected rationale and the guard suggestion.
 > Origin: Design 25 (Holding-Level State) §4.4 left a TODO:
 >
 > > *Per-reducer postconditions (unit tests) — each reducer asserts local invariants: §4.4
@@ -397,11 +400,18 @@ why the production holdings-invariant test is green.
 Two things made this look like a bug at first glance:
 - Every account bootstraps a holding, so the earnings reducer *alone* leaves `balance ≠ Σ mv`
   mid-batch — true, but transient; the paired `HOLDING_TRANSACT` closes it before the tick ends.
-- There is a **second, legacy** set of colocated handlers (`RothEarningsHandler`, `IraEarningsHandler`,
+- There is a **second, colocated** set of handlers (`RothEarningsHandler`, `IraEarningsHandler`,
   `StockEarningsHandler`, … inside `account-rules/*-classes.js`) that emit `*_EARNINGS_APPLY` **without**
-  holding actions. These bind to the bare events (`ROTH_EARNINGS`, …); production schedules the
-  holdings-aware `INTL_*`/interest events instead, and the legacy handlers are pushed **with no event
-  bound** — so they never fire. They are dormant duplicates (a footgun, not an active bug).
+  holding actions, bound to the **bare** events (`ROTH_EARNINGS`, …). Production schedules the
+  holdings-aware `INTL_*`/interest events instead and **never schedules a bare `*_EARNINGS` event**, so
+  in the app these handlers **never fire** — the no-holdings path is unreachable in production.
+  (Note: they are *not* "unbound." `_wireHandler` (`simulation-adapter.js:203`) registers any handler
+  with an empty `handledEvents` on its static `eventType`, so each is live on its bare event key — it
+  simply has no scheduled event to trigger it in production.) They are **production-dormant but
+  test-load-bearing**: the `evt-*.test.mjs` suite (`evt-roth`, `evt-ira`, `evt-401k`, `evt-super`,
+  `evt-au-savings`, `evt-au-brokerage`, `evt-us-brokerage`) `sim.schedule(...)`s the bare events
+  directly to unit-test account-module mechanics — ~31 cases whose entry point is exactly these
+  handlers (incl. the group's own penalty/age-gate logic in the `*WithdrawalEarningsHandler` variants).
 
 **Consequence for the framework:** §4.4 (I3) for the earnings family is an **event-level** invariant
 (reducer + paired `HOLDING_TRANSACT`), not a reducer-local one. It is pinned that way in
@@ -410,8 +420,15 @@ earnings reducers to touch holdings themselves: the handler already emits the ho
 reducer-side update would **double-apply** and break §4.4 the other way. The reducer's own row asserts
 only its scalar contract + I1.
 
-> Open follow-up (low priority, not a correctness bug): delete the dormant legacy colocated
-> `*EarningsHandler` classes so no future wiring can schedule the no-holdings path by accident.
+> Follow-up (investigated 2026-06-30, **do not simply delete**): these colocated `*EarningsHandler`
+> classes look like deletable dead code, but they are the entry point for ~31 `evt-*` bare-event tests
+> (and the `*WithdrawalEarningsHandler` variants carry real penalty/age-gate logic those tests pin).
+> Removing them is a test-migration exercise (rewire the `evt-*` cases onto the `INTL_*`/service paths,
+> or drop the bare-event coverage), **not** a free cleanup — a scoped deletion attempt broke 31 tests.
+> The residual footgun (a future dev scheduling a bare `*_EARNINGS` event, or renaming an `INTL_*`
+> schedule to the bare type, would fire the no-holdings path) is worth a **guard** rather than a
+> deletion: e.g. assert in the compiler/loader that no bare `*_EARNINGS` event type is ever scheduled.
+> Tracked separately; out of scope for design 37.
 
 > Caveat: a grep hit only proves the *name* appears in a test — it does not prove a postcondition is
 > asserted. The 🟡 rows must each be opened and verified, not trusted. The point of this doc is to
