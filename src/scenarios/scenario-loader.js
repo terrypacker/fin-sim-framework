@@ -13,6 +13,7 @@ import { rescaleHoldingsToBalance } from '../finance/holdings/holding-utils.js';
 import { ToolsetRegistry }         from './toolsets/toolset-registry.js';
 import { ScenarioCompiler }        from './toolsets/scenario-compiler.js';
 import { IntlRetirementScenario }  from './intl-retirement-scenario.js';
+import { BlankScenario }           from './blank-scenario.js';
 import { US_BANKING }         from './toolsets/us-banking-toolset.js';
 import { US_TAX }             from './toolsets/us-tax-toolset.js';
 import { US_STATE_TAX }       from './toolsets/us-state-tax-toolset.js';
@@ -35,6 +36,7 @@ import { normalizeCountryCode } from '../finance/country-codes.js';
 
 const SCENARIO_CLASS_BY_ID = new Map([
   [IntlRetirementScenario.scenarioId(), IntlRetirementScenario],
+  [BlankScenario.scenarioId(),          BlankScenario],
 ]);
 
 const BUILT_IN_TOOLSETS = [

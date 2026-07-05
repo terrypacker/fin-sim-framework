@@ -153,7 +153,11 @@ export class BaseNodeEditor extends BaseComponent {
       countEl: countSpan,
       selectedItems: related,
       graphQueryApi: this._graphRenderer._graphQueryApi,
-      defaultCondition: `kind=${kind}`,
+      // Restrict to config-layer nodes. Without the layer filter the picker also
+      // lists every execution-layer runtime instance the recorder creates as the
+      // sim steps (one per node per cycle), flooding the dropdown with repeated
+      // entries. Linking only ever targets config nodes.
+      defaultCondition: `kind=${kind} & layer=config`,
       onToggle: (selectedItem, toggleOn) => {
         if (this.onLinkToggle) {
           this.onLinkToggle(node, selectedItem, kind, linkTo, toggleOn);

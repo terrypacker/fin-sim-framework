@@ -194,15 +194,24 @@ export class ActionService extends BaseService {
    */
   _ensureActionTypes(types) {
     if (!types || types.length === 0) return;
+    for (const type of types) this.ensureActionForType(type);
+  }
 
-    const existing = new Set(this.getAll().map(a => a.type));
-
-    for (const type of types) {
-      if (!existing.has(type)) {
-        this.register(new Action(type, type));
-        existing.add(type);
-      }
-    }
+  /**
+   * Ensure a graph action node exists for `type`, creating a base Action node if
+   * none is present. Returns the existing or newly-created node.
+   *
+   * Mirrors the auto-creation that runs when a handler/reducer is first created
+   * (the CREATE subscriptions above), so action types added later — e.g. via the
+   * ActionDefinition editor on an existing handler — also get a node. Without
+   * this such types are invisible in the graph and can't be selected as reducer
+   * inputs.
+   *
+   * @param {string} type
+   * @returns {Action}
+   */
+  ensureActionForType(type) {
+    return this.getByType(type) ?? this.register(new Action(type, type));
   }
 
 }

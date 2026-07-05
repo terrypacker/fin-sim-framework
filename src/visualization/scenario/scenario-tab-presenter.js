@@ -115,6 +115,11 @@ export class ScenarioTabPresenter {
       this._loadActiveScenario();
     };
 
+    this._view.onNewBlank = () => {
+      this._activeScenario = this._controller.newBlankScenario(this._activeScenario);
+      this._loadActiveScenario();
+    };
+
     this._view.onDelete = () => {
       if (!this._activeScenario || this._activeScenario.prebuilt) return;
       this._activeScenario = this._controller.delete(this._activeScenario);

@@ -9,6 +9,7 @@
  */
 
 import {ScenarioSerializer} from "../scenarios/scenario-serializer.js";
+import {BlankScenario}      from "../scenarios/blank-scenario.js";
 
 /**
  * Scenario id format:
@@ -89,6 +90,44 @@ export class ScenarioService {
   }
 
   /**
+   * Create a new EMPTY user scenario — no persons, accounts, properties,
+   * params, toolsets, or compiled graph. The result is a blank canvas the user
+   * can populate by adding nodes and linking them by hand.
+   *
+   * The scenario is bound to BlankScenario — a minimal no-op class — rather than
+   * inheriting fromScenario's class, so none of that scenario's finance config
+   * (persons, accounts, params) leaks in. With empty toolsets and no saved graph,
+   * ScenarioLoader.load() skips both the compile and deserialize branches and
+   * leaves the graph empty. Only the sim dates are carried over from fromScenario.
+   */
+  newBlankScenario(fromScenario) {
+    const newId = `u:${this._registry.getNextUserScenarioId()}`;
+    const scenario = {
+      id:             newId,
+      name:           'Blank Scenario',
+      order:          100,
+      prebuilt:       false,
+      scenarioId:     BlankScenario.scenarioId(),
+      simStart:       ScenarioSerializer.toDateStr(fromScenario?.simStart ?? new Date(Date.UTC(2026, 0, 1))),
+      simEnd:         ScenarioSerializer.toDateStr(fromScenario?.simEnd   ?? new Date(Date.UTC(2041, 0, 1))),
+      events:         [],
+      handlers:       [],
+      actions:        [],
+      reducers:       [],
+      initialState:   {},
+      toolsets:       [],
+      scenarioClass:  BlankScenario,
+      persons:        [],
+      accounts:       [],
+      realProperties: [],
+      collectibles:   [],
+      params:         [],
+    };
+    this._registry.save(scenario, true);
+    return scenario;
+  }
+
+  /**
    * Reset each param's value to the schema's defaultValue for that key.
    * Params not present in the schema (user-added) are left untouched.
    */
@@ -163,6 +202,10 @@ export class ScenarioService {
     const cls =
       active.scenarioClass
       ?? this._registry.get(active.scenarioId)?.scenarioClass
+      // Blank scenarios carry scenarioId 'blank' but no prebuilt record. On a
+      // reload from storage scenarioClass isn't serialized, so resolve it here
+      // before the generic "first prebuilt" fallback drags in a finance class.
+      ?? (active.scenarioId === BlankScenario.scenarioId() ? BlankScenario : null)
       ?? this._registry.getPrebuiltScenarios()[0]?.scenarioClass;
     if (!cls) throw new Error('No scenario class available');
 

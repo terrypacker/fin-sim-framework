@@ -29,31 +29,31 @@
 export const ACTION_TEMPLATES = [
   {
     id:            'record-metric',
-    label:         'Record Metric',
+    label:         'Record Metric (RecordMetricAction)',
     actionClass:   'RecordMetricAction',
     defaultConfig: { key: '', value: 0 },
   },
   {
     id:            'transfer-amount',
-    label:         'Transfer Amount',
+    label:         'Transfer Amount (AmountAction)',
     actionClass:   'AmountAction',
     defaultConfig: { name: '', value: 0 },
   },
   {
     id:            'set-field-value',
-    label:         'Set Field Value',
+    label:         'Set Field Value (FieldValueAction)',
     actionClass:   'FieldValueAction',
     defaultConfig: { fieldName: '', value: 0 },
   },
   {
     id:            'record-balance',
-    label:         'Record Balance',
+    label:         'Record Balance (RecordBalanceAction)',
     actionClass:   'RecordBalanceAction',
     defaultConfig: {},
   },
   {
     id:            'scripted',
-    label:         'Scripted Action',
+    label:         'Scripted Action (ScriptedAction)',
     actionClass:   'ScriptedAction',
     defaultConfig: { fieldName: '', script: '// return computed value\nreturn 0;' },
   },
