@@ -530,6 +530,35 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     description: 'Penalty weight on missing the terminal wealth target; larger makes the target binding (Die With Target objective).',
   },
 
+  // ── After-tax re-pricing rates (design/40 — Option A configured effective
+  //    rates). Consumed by the after-tax net-worth/liquidity metrics so the Roth
+  //    conversion lever has a gradient; inert for nominal objectives. Phase 3
+  //    replaces these with a liquidation-waterfall through the tax engine.
+  {
+    key: 'afterTaxOrdinaryRate', label: 'After-Tax Ordinary Rate (US)',
+    type: 'Number', group: 'Optimization', mc: false, opt: false,
+    defaultValue: 0.22,
+    description: 'Assumed effective ordinary-income rate to liquidate a US pre-tax IRA/401(k) dollar (after-tax net-worth metric, design 40).',
+  },
+  {
+    key: 'afterTaxOrdinaryRateAu', label: 'After-Tax Ordinary Rate (AU/super)',
+    type: 'Number', group: 'Optimization', mc: false, opt: false,
+    defaultValue: 0.15,
+    description: 'Assumed effective rate to liquidate an AU pre-tax / superannuation dollar (after-tax net-worth metric, design 40).',
+  },
+  {
+    key: 'afterTaxCapGainsRate', label: 'After-Tax Cap-Gains Rate',
+    type: 'Number', group: 'Optimization', mc: false, opt: false,
+    defaultValue: 0.15,
+    description: 'Assumed effective long-term capital-gains rate on unrealized brokerage gains (after-tax net-worth metric, design 40).',
+  },
+  {
+    key: 'assumedGainFraction', label: 'Assumed Gain Fraction',
+    type: 'Number', group: 'Optimization', mc: false, opt: false,
+    defaultValue: 0.5,
+    description: 'Fraction of a taxable balance treated as unrealized gain when per-lot cost basis is unavailable (after-tax net-worth metric, design 40).',
+  },
+
 ];
 
 /**

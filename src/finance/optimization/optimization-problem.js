@@ -14,6 +14,8 @@ import { ScenarioLoader }      from '../../scenarios/scenario-loader.js';
 import { ScenarioSerializer }  from '../../scenarios/scenario-serializer.js';
 import { computeNetWorth }     from '../derived-metrics/net-worth.js';
 import { computeNetLiquidity } from '../derived-metrics/net-liquidity.js';
+import { computeAfterTaxNetWorth, computeAfterTaxNetLiquidity, defaultRateProvider }
+  from '../derived-metrics/after-tax.js';
 import { set }                 from '../monte-carlo/mc-param-paths.js';
 import { repinExpensesIfChanged } from '../spending/strategies/explicit-bands-spending-reducer.js';
 import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES } from './optimization-objectives.js';
@@ -331,9 +333,20 @@ export class OptimizationProblem {
 
   /** Terminal + cumulative metrics read from the final sim state. */
   _readResult(state, endDate, params = {}) {
+    // After-tax re-pricing (design/40): values pre-tax IRA/401k/super dollars net
+    // of their embedded liquidation tax so the Roth lever has a gradient. Option A
+    // (configured effective rates) behind the C-shaped provider seam.
+    const rateProvider = defaultRateProvider({
+      ordinaryRate:   params.afterTaxOrdinaryRate,
+      ordinaryRateAu: params.afterTaxOrdinaryRateAu,
+      capGainsRate:   params.afterTaxCapGainsRate,
+    });
+    const afterTaxOpts = { rateProvider, assumedGainFraction: params.assumedGainFraction };
     return {
       finalNetWorthUsd:  computeNetWorth(state, 'USD'),
       finalNetLiquidity: computeNetLiquidity(state, endDate),
+      finalAfterTaxNetWorth:     computeAfterTaxNetWorth(state, endDate, afterTaxOpts),
+      finalAfterTaxNetLiquidity: computeAfterTaxNetLiquidity(state, endDate, afterTaxOpts),
       scenarioFailed:    state.scenarioFailed    ?? false,
       cumulativeDeficit: state.cumulativeDeficit ?? 0,
       deficitMonths:     state.deficitMonths     ?? 0,

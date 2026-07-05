@@ -148,6 +148,9 @@ export class StateSchemaRegistry {
     // them (design 10 §Phase 4); exact paths override the generic metrics.* glob.
     this.register('metrics.netWorth',     ParameterValueType.currency('USD'));
     this.register('metrics.netLiquidity', ParameterValueType.currency('USD'));
+    // After-tax re-priced aggregates (design/40) — USD-normalized like the above.
+    this.register('metrics.afterTaxNetWorth',     ParameterValueType.currency('USD'));
+    this.register('metrics.afterTaxNetLiquidity', ParameterValueType.currency('USD'));
     // Lifetime running accumulators, USD-normalized (design 38 §5). Exact paths
     // so the chart/state-panel format them as money.
     this.register('cumulativeTaxesPaid',   ParameterValueType.currency('USD'));

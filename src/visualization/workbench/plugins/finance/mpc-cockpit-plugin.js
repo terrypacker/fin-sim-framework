@@ -15,17 +15,20 @@ import { CockpitController, COCKPIT_CONTROLS } from '../../../../finance/mpc/coc
 import { readDecisionRecords } from '../../../../finance/mpc/apply-forward.js';
 import {
   OPTIMIZATION_OBJECTIVES, DIE_WITH_TARGET_AXES, DIE_WITH_TARGET_FAMILY,
-  OBJECTIVE_FAMILY_LABELS, resolveDieWithTargetKey,
+  OBJECTIVE_FAMILY_LABELS, resolveDieWithTargetKey, resolveTerminalKey, terminalAxesFor,
 } from '../../../../finance/optimization/optimization-objectives.js';
 import { DateUtils }          from '../../../../simulation-framework/date-utils.js';
 import { EXECUTION_KINDS, EXECUTION_PHASES } from '../../../../simulation-framework/bus-messages.js';
 
-// Curated cockpit goals: the grouped Die-With-Target family (basis × terminal
-// sub-options) plus the standalone objectives that make sense as MPC goals.
+// Curated cockpit goals: the grouped Die-With-Target family (running × scope ×
+// tax-basis sub-options) plus the standalone objectives that make sense as MPC
+// goals. MAX_AFTER_TAX_NET_WORTH is the design/40 D2 default for the Roth lever.
 const OBJECTIVE_OPTIONS = [
   { kind: 'family', family: DIE_WITH_TARGET_FAMILY },
   { kind: 'single', key: 'MAX_NET_WORTH' },
   { kind: 'single', key: 'MAX_NET_LIQUIDITY' },
+  { kind: 'single', key: 'MAX_AFTER_TAX_NET_WORTH' },
+  { kind: 'single', key: 'MAX_AFTER_TAX_NET_LIQUIDITY' },
   { kind: 'single', key: 'MAX_CRRA_UTILITY' },
   { kind: 'single', key: 'MIN_LIFETIME_TAXES' },
 ];
@@ -83,8 +86,13 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
             </select>
           </label>
           <label class="mpc-field">Terminal
-            <select class="wb-select" data-mpc="axis-terminal">
-              ${DIE_WITH_TARGET_AXES.terminal.map(a => `<option value="${a.value}">${_esc(a.label)}</option>`).join('')}
+            <select class="wb-select" data-mpc="axis-scope">
+              ${DIE_WITH_TARGET_AXES.scope.map(a => `<option value="${a.value}">${_esc(a.label)}</option>`).join('')}
+            </select>
+          </label>
+          <label class="mpc-field">Tax basis
+            <select class="wb-select" data-mpc="axis-basis">
+              ${DIE_WITH_TARGET_AXES.basis.map(a => `<option value="${a.value}">${_esc(a.label)}</option>`).join('')}
             </select>
           </label>
         </span>
@@ -151,7 +159,8 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
       this._controller?.setObjective(this._currentObjective());
     });
     this._bind('axis-running', 'change', () => this._controller?.setObjective(this._currentObjective()));
-    this._bind('axis-terminal','change', () => this._controller?.setObjective(this._currentObjective()));
+    this._bind('axis-scope',   'change', () => this._controller?.setObjective(this._currentObjective()));
+    this._bind('axis-basis',   'change', () => this._controller?.setObjective(this._currentObjective()));
     for (const n of ['rmin', 'rmax', 'rstep']) {
       this._bind(n, 'change', () => { this._controller?.setControlRange(this._currentRange()); });
     }
@@ -279,11 +288,13 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
   _currentObjectiveKey() {
     const val = this._q('objective')?.value ?? '';
     if (val.startsWith('family:')) {
-      // Only DIE_WITH_TARGET is grouped today; resolve via the two axis selects.
-      return resolveDieWithTargetKey({
-        running:  this._q('axis-running')?.value,
-        terminal: this._q('axis-terminal')?.value,
+      // Only DIE_WITH_TARGET is grouped today; resolve via the three axis selects
+      // (running × scope × tax-basis). Scope+basis fold to the terminal key first.
+      const terminal = resolveTerminalKey({
+        scope: this._q('axis-scope')?.value,
+        basis: this._q('axis-basis')?.value,
       });
+      return resolveDieWithTargetKey({ running: this._q('axis-running')?.value, terminal });
     }
     return val;
   }
@@ -532,12 +543,25 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     this._q('move').textContent = advice.recommended.label;
     const r = advice.recommended.result ?? {};
     const target = r.terminalWealthTarget ?? 0;
-    // Annotate the target with the terminal basis the chosen goal anchors to.
-    const basis = this._currentObjective()?.variant?.terminal;
-    const targetLabel = basis === 'liquid' ? 'liquid target' : basis === 'worth' ? 'net-worth target' : 'target';
+    // Annotate the target with the terminal anchor the chosen goal uses
+    // (scope × tax-basis, design/40). Surface the after-tax figures whenever the
+    // goal anchors on them — a Die-With-Target after-tax *variant* OR a standalone
+    // MAX_AFTER_TAX_* maximizer — so the user sees the metric being optimized.
+    const terminal = this._currentObjective()?.variant?.terminal;
+    const { scope, basis } = terminal ? terminalAxesFor(terminal) : {};
+    const scopeWord  = scope === 'liquid' ? 'liquid' : scope === 'worth' ? 'net-worth' : null;
+    const targetLabel = scopeWord
+      ? `${basis === 'afterTax' ? 'after-tax ' : ''}${scopeWord} target` : 'target';
+    const usesAfterTax = basis === 'afterTax'
+      || /AFTER_TAX/.test(this._currentObjectiveKey());
+    const afterTaxBits = usesAfterTax
+      ? ` &nbsp;·&nbsp; after-tax worth <b>${_usd(r.finalAfterTaxNetWorth)}</b>` +
+        ` &nbsp;·&nbsp; after-tax liquid <b>${_usd(r.finalAfterTaxNetLiquidity)}</b>`
+      : '';
     this._q('outcome').innerHTML =
       `Projected terminal net worth <b>${_usd(r.finalNetWorthUsd)}</b>` +
       ` &nbsp;·&nbsp; liquid <b>${_usd(r.finalNetLiquidity)}</b>` +
+      afterTaxBits +
       (target ? ` &nbsp;·&nbsp; ${targetLabel} ${_usd(target)}` : '') +
       ` &nbsp;·&nbsp; as of ${_fmtDate(advice.now.date)}`;
     const ov = this._q('override');
