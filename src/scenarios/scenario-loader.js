@@ -287,11 +287,34 @@ export class ScenarioLoader {
       // accounts by role. Per-owner ranking (ownerOrder/ownerStride) keeps each
       // owner's same-role buckets in a distinct band so the primary drains before
       // the spouse. All scenario-specific data rides on the node, keeping this generic.
-      const priorities = node.strategies?.[val];
+      //
+      // User-authored strategies (stored in cfg.parameters[customStrategiesKey] as
+      // [{ name, roles }]) are merged over the built-in `strategies` map so a custom
+      // name resolves identically to a built-in one.
+      let strategies = node.strategies ?? {};
+      const custom = node.customStrategiesKey
+        ? cfg.parameters?.[node.customStrategiesKey] : null;
+      if (Array.isArray(custom) && custom.length > 0) {
+        strategies = { ...strategies };
+        for (const s of custom) {
+          if (s?.name) strategies[s.name] = s.roles ?? {};
+        }
+      }
+      const priorities = strategies[val];
       if (priorities) {
+        // A selected strategy is authoritative over drawdown-eligible accounts:
+        // each gets its mapped rank (+ owner band) or is cleared to null when the
+        // strategy doesn't rank its role (excluded from drawdown). "Eligible" is
+        // any role that appears in some strategy; savings/target roles never do,
+        // so they keep their authored null. This keeps partial user-authored
+        // strategies predictable (unranked roles drop out) and is a no-op for the
+        // complete built-ins (which rank every eligible role).
+        const eligible = new Set(
+          Object.values(strategies).flatMap(m => (m ? Object.keys(m) : [])));
         for (const rec of (cfg.accounts ?? [])) {
+          if (!eligible.has(rec.role)) continue;
           const base = priorities[rec.role];
-          if (base == null) continue;            // savings/target accounts stay null
+          if (base == null) { rec.drawdownPriority = null; continue; }
           const rank = Math.max(0, (node.ownerOrder ?? []).indexOf(rec.ownerId));
           rec.drawdownPriority = base + rank * (node.ownerStride ?? 0);
         }
@@ -371,6 +394,7 @@ export class ScenarioLoader {
       if (s.description) entry.description = s.description;
       if (s.node)        entry.node        = s.node;
       if (s.options)     entry.options     = s.options;
+      if (s.dynamicOptionsFrom) entry.dynamicOptionsFrom = s.dynamicOptionsFrom;
       if (s.visibleWhen) entry.visibleWhen = s.visibleWhen;
       if (s.hidden)      entry.hidden      = s.hidden;
       // Money param metadata (design 10 §Phase 5): seed the chosen currency from
@@ -414,6 +438,10 @@ export class ScenarioLoader {
       // entries — not just backfill when absent. E.g. a new AGE_BANDED choice
       // added to spendingStrategy must surface on already-saved scenarios.
       if (s.options)                                         p.options     = s.options;
+      // dynamicOptionsFrom is schema-owned (names the sibling list param whose
+      // entries extend this param's selectable options live in the UI).
+      if (s.dynamicOptionsFrom)  p.dynamicOptionsFrom = s.dynamicOptionsFrom;
+      else if (p.dynamicOptionsFrom) delete p.dynamicOptionsFrom;
       // visibleWhen is schema-owned UI metadata (conditional param visibility),
       // so re-sync it too — adopt new conditions and clear ones the schema dropped.
       if (s.visibleWhen)         p.visibleWhen = s.visibleWhen;

@@ -306,8 +306,16 @@ function buildShockOptConfigs(params) {
  * preventing stale rows for scenarios without ECONOMIC_REGIMES.
  */
 export function buildOptVariables(params) {
+  // User-authored drawdown strategies (intl-retirement-scenario customDrawdownStrategies)
+  // become additional sweep values for the drawdownStrategy ENUM, alongside the
+  // built-ins. Non-mutating: clone the one affected config entry.
+  const customDrawdownNames = (params?.customDrawdownStrategies ?? [])
+    .map(s => s?.name).filter(Boolean);
   const list = [
-    ...DEFAULT_OPTIMIZATION_CONFIGS,
+    ...DEFAULT_OPTIMIZATION_CONFIGS.map(cfg =>
+      cfg.paramKey === 'drawdownStrategy' && customDrawdownNames.length > 0
+        ? { ...cfg, values: [...Object.keys(DRAWDOWN_STRATEGIES), ...customDrawdownNames] }
+        : cfg),
     ...buildShockOptConfigs(params),
   ];
   // Inherit identity (label / options / visibleWhen) from the param schema and

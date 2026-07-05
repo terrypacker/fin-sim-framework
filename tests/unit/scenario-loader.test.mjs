@@ -692,3 +692,62 @@ test('toolset params: visibleWhen drift — saved param missing the condition ga
     'visibleWhen should be stamped onto pre-existing entries that lack it');
   assert.strictEqual(cut.value, 0.25, 'drift-sync must preserve the user value');
 });
+
+// ── Custom drawdown strategies (user-authored by-role orderings) ───────────────
+//
+// customDrawdownStrategies is a DrawdownStrategyList param: [{ name, roles }].
+// A selected custom name must resolve through the same accountPriority cascade as
+// the built-ins, be authoritative (unranked eligible roles drop to null), and
+// surface as an Optimize sweep value.
+
+test('custom drawdown strategy: cascade applies by-role ranks with owner banding', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({}, undefined, undefined);
+  cfg.scenarioClass = IntlRetirementScenario;
+  cfg.parameters.customDrawdownStrategies = [{ name: 'ROTH_ONLY', roles: { 'roth-ira': 1, 'ira': 2 } }];
+  cfg.parameters.drawdownStrategy = 'ROTH_ONLY';
+
+  new ScenarioLoader()._normalizeParams(cfg);
+
+  const byKey = Object.fromEntries(cfg.accounts.map(a => [a.stateKey, a]));
+  assert.strictEqual(byKey.rothAccount.drawdownPriority, 1, 'primary roth ranked 1');
+  assert.strictEqual(byKey.iraAccount.drawdownPriority, 2, 'primary ira ranked 2');
+  // Owner banding (ownerStride 100) keeps the spouse's same-role buckets distinct.
+  assert.strictEqual(byKey.spouseRothAccount.drawdownPriority, 101, 'spouse roth banded +100');
+  assert.strictEqual(byKey.spouseIraAccount.drawdownPriority, 102, 'spouse ira banded +100');
+});
+
+test('custom drawdown strategy: unranked eligible roles are excluded (null), not left as authored', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({}, undefined, undefined);
+  cfg.scenarioClass = IntlRetirementScenario;
+  // ROTH_ONLY omits us-stock / fixed-income; a custom strategy is authoritative,
+  // so those drop out of drawdown rather than retaining their authored defaults.
+  cfg.parameters.customDrawdownStrategies = [{ name: 'ROTH_ONLY', roles: { 'roth-ira': 1, 'ira': 2 } }];
+  cfg.parameters.drawdownStrategy = 'ROTH_ONLY';
+
+  new ScenarioLoader()._normalizeParams(cfg);
+
+  const byKey = Object.fromEntries(cfg.accounts.map(a => [a.stateKey, a]));
+  assert.strictEqual(byKey.usStockAccount.drawdownPriority, null, 'unranked us-stock excluded');
+  assert.strictEqual(byKey.fixedIncomeAccount.drawdownPriority, null, 'unranked fixed-income excluded');
+});
+
+test('custom drawdown strategy: built-in strategies still cascade unchanged', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({}, undefined, undefined);
+  cfg.scenarioClass = IntlRetirementScenario;
+  cfg.parameters.drawdownStrategy = 'TAXABLE_FIRST';
+
+  new ScenarioLoader()._normalizeParams(cfg);
+
+  const byKey = Object.fromEntries(cfg.accounts.map(a => [a.stateKey, a]));
+  assert.strictEqual(byKey.fixedIncomeAccount.drawdownPriority, 1, 'TAXABLE_FIRST drains fixed-income first');
+  assert.strictEqual(byKey.rothAccount.drawdownPriority, 5, 'TAXABLE_FIRST drains roth last');
+});
+
+test('custom drawdown strategy: dynamicOptionsFrom is carried onto cfg.params', () => {
+  const cfg = freshDeclarativeConfig();
+  cfg.scenarioClass = IntlRetirementScenario; // so the scenario schema (owns drawdownStrategy) merges
+  loadIntoFreshServices(cfg);
+  const dd = cfg.params.find(p => p.name === 'drawdownStrategy');
+  assert.strictEqual(dd.dynamicOptionsFrom, 'customDrawdownStrategies',
+    'drawdownStrategy must name its custom-strategy source for the UI dropdown');
+});
