@@ -254,7 +254,7 @@ test('EVT-7: IRA earnings withdrawal IS AU taxable if person is AU resident', ()
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_WITHDRAWAL_EARNINGS', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
-  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 5000);
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 5000 * sim.state.effectiveExchangeRates.USD_AUD); // design 51: USD-source → AUD bucket
   assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded when AU tax applies');
 });
 
@@ -368,7 +368,7 @@ test('EVT-35: IRA rollover withdrawal is AU ordinary income if AU resident', () 
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_ROLLOVER_WITHDRAWAL', data: { amount: 8000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
-  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 8000);
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 8000 * sim.state.effectiveExchangeRates.USD_AUD); // design 51: USD-source → AUD bucket
   assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded for AU resident');
 });
 
@@ -439,6 +439,6 @@ test('EVT-40: IRA RMD is AU ordinary income if AU resident', () => {
   sim.schedule({ date: new Date(2026, 1, 1), type: 'IRA_RMD', data: { amount: 20000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
-  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 20000);
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 20000 * sim.state.effectiveExchangeRates.USD_AUD); // design 51: USD-source → AUD bucket
   assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded for AU resident');
 });

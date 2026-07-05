@@ -10,6 +10,7 @@
 
 import { Reducer, PRIORITY } from '../../../simulation-framework/reducers.js';
 import { primaryResidencyState, primaryPersonKey, getResidency } from '../../residency-utils.js';
+import { toCcy } from '../tax-fx.js';
 
 /**
  * State income classification (design 34 §5).
@@ -45,8 +46,10 @@ export const STATE_INCOME_ROUTING = Object.freeze({
   // reducer — but is state-taxable all the same. The reconciliation guard in
   // state-tax-rates / accounting tests keeps this list complete vs. the federal base.
   US_SAVINGS_INTEREST_CREDIT:  { bucket: 'stateOrdinaryIncomeYTD', field: 'amount' },
-  AU_SAVINGS_EARNINGS_TAX:     { bucket: 'stateOrdinaryIncomeYTD', field: 'amount' },
-  AU_FIXED_INCOME_EARNINGS_TAX:{ bucket: 'stateOrdinaryIncomeYTD', field: 'amount' },
+  // AU-source interest is AUD; the state accumulator is USD-canonical (design 51),
+  // so these rows carry `ccy: 'AUD'` to convert the amount before folding it in.
+  AU_SAVINGS_EARNINGS_TAX:     { bucket: 'stateOrdinaryIncomeYTD', field: 'amount', ccy: 'AUD' },
+  AU_FIXED_INCOME_EARNINGS_TAX:{ bucket: 'stateOrdinaryIncomeYTD', field: 'amount', ccy: 'AUD' },
 
   // ── Pension / retirement distributions (action.amount), segregated for exclusions ──
   IRA_WITHDRAWAL_CONTRIB_TAX:  { bucket: 'statePensionIncomeYTD', field: 'amount' },
@@ -92,6 +95,7 @@ export class StateIncomeClassificationReducer extends Reducer {
     this.reducedActionTypes = [actionType];
     this._bucket = route.bucket;
     this._field  = route.field;
+    this._ccy    = route.ccy ?? 'USD';   // native currency of the routed amount (design 51)
   }
 
   static fromJSON(d) {
@@ -105,8 +109,10 @@ export class StateIncomeClassificationReducer extends Reducer {
     if (!primaryResidencyState(state)) return state;                 // no state configured
     const residency = action.residency ?? getResidency(state, primaryPersonKey(state));
     if (residency !== 'US') return state;                            // not US-resident income
-    const v = action[this._field] ?? 0;
-    if (!v) return state;
+    const raw = action[this._field] ?? 0;
+    if (!raw) return state;
+    // State buckets are USD-canonical; convert an AU-source amount at the event rate.
+    const v = toCcy(raw, this._ccy, 'USD', state);
     return { ...state, [this._bucket]: (state[this._bucket] ?? 0) + v };
   }
 }

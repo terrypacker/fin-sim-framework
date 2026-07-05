@@ -112,7 +112,7 @@ test('EVT-26: Franked dividend (resident) is US ordinary income taxable', () => 
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_DIVIDEND_FRANKED_RESIDENT', data: { amount: 1000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 1000);
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 1000 / sim.state.effectiveExchangeRates.USD_AUD); // design 51: AUD-source → USD bucket
 });
 
 test('EVT-26: Franked dividend (resident) generates AU franking credit', () => {
@@ -169,7 +169,7 @@ test('EVT-28: Unfranked dividend (resident) is US ordinary income taxable', () =
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_DIVIDEND_UNFRANKED_RESIDENT', data: { amount: 1000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 1000);
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 1000 / sim.state.effectiveExchangeRates.USD_AUD); // design 51: AUD-source → USD bucket
 });
 
 test('EVT-28: Unfranked dividend (resident) is AU ordinary income taxable', () => {
@@ -200,7 +200,7 @@ test('EVT-29: Unfranked dividend (non-resident) is US ordinary income taxable', 
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_DIVIDEND_UNFRANKED_NONRESIDENT', data: { amount: 1000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 1000);
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 1000 / sim.state.effectiveExchangeRates.USD_AUD); // design 51: AUD-source → USD bucket
 });
 
 test('EVT-29: Unfranked dividend (non-resident) is AU non-resident withholding taxable', () => {
@@ -269,7 +269,7 @@ test('EVT-31: AU stock sale (resident) records US and AU capital gains', () => {
     data: { salePrice: 15000, costBasis: 10000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.usCapitalGainsYTD, 5000);
+  assert.strictEqual(sim.state.usCapitalGainsYTD, 5000 / sim.state.effectiveExchangeRates.USD_AUD); // design 51: AUD-source → USD bucket
   // In the toolset path, state.people and state.auStockAccount are non-null → per-person maps used
   assert.strictEqual(sim.state.auPersonCapitalGainsYTD?.['primary'], 5000);
   assert.ok(sim.state.ftcYTD > 0);
@@ -290,7 +290,7 @@ test('EVT-32: AU stock sale (non-resident) records US capital gain only — no A
     data: { salePrice: 15000, costBasis: 10000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.usCapitalGainsYTD, 5000);
+  assert.strictEqual(sim.state.usCapitalGainsYTD, 5000 / sim.state.effectiveExchangeRates.USD_AUD); // design 51: AUD-source → USD bucket
   assert.strictEqual(sim.state.auCapitalGainsYTD, 0);
   assert.strictEqual(sim.state.ftcYTD, 0);
 });

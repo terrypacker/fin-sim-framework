@@ -10,6 +10,7 @@
 
 import { BaseTaxModule } from '../base-tax-module.js';
 import { accumulateByOwnership } from '../../ownership-utils.js';
+import { toUSD } from '../tax-fx.js';
 
 const SUPER_TAX_RATE = 0.15;
 
@@ -53,7 +54,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
       ['AU_WAGES_INCOME_TAX', (state, action) => {
         const { amount, residency, personKey } = action;
         const isAuResident = residency === 'AU';
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + toUSD(amount, 'AUD', state) };
         if (isAuResident) {
           const usePerPerson = personKey != null && state.auPersonOrdinaryIncomeYTD != null;
           next = {
@@ -61,7 +62,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
             ...(usePerPerson
               ? { auPersonOrdinaryIncomeYTD: { ...state.auPersonOrdinaryIncomeYTD, [personKey]: (state.auPersonOrdinaryIncomeYTD[personKey] ?? 0) + amount } }
               : { auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount }),
-            ftcYTD: state.ftcYTD + amount,
+            ftcYTD: state.ftcYTD + toUSD(amount, 'AUD', state),
           };
         } else {
           const usePerPerson = personKey != null && state.auPersonNonResidentWithholdingYTD != null;
@@ -70,7 +71,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
             ...(usePerPerson
               ? { auPersonNonResidentWithholdingYTD: { ...state.auPersonNonResidentWithholdingYTD, [personKey]: (state.auPersonNonResidentWithholdingYTD[personKey] ?? 0) + amount } }
               : { auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + amount }),
-            ftcYTD: state.ftcYTD + amount,
+            ftcYTD: state.ftcYTD + toUSD(amount, 'AUD', state),
           };
         }
         return next;
@@ -86,12 +87,12 @@ export class AuTaxModule2026 extends BaseTaxModule {
       ['AU_RENTAL_INCOME_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + toUSD(amount, 'AUD', state) };
         if (isAuResident) {
           next = {
             ...next,
             auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
-            ftcYTD:              state.ftcYTD              + Math.max(0, amount),
+            ftcYTD:              state.ftcYTD              + toUSD(Math.max(0, amount), 'AUD', state),
           };
         }
         return next;
@@ -107,14 +108,14 @@ export class AuTaxModule2026 extends BaseTaxModule {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
         const perPerson = state.people != null && state.auSavingsAccount != null;
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + toUSD(amount, 'AUD', state) };
         if (isAuResident) {
           next = {
             ...next,
             ...(perPerson
               ? { auPersonOrdinaryIncomeYTD: accumulateByOwnership(state.auPersonOrdinaryIncomeYTD ?? {}, state.auSavingsAccount, amount, state.people) }
               : { auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount }),
-            ftcYTD: state.ftcYTD + amount,
+            ftcYTD: state.ftcYTD + toUSD(amount, 'AUD', state),
           };
         } else {
           next = {
@@ -122,7 +123,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
             ...(perPerson
               ? { auPersonNonResidentWithholdingYTD: accumulateByOwnership(state.auPersonNonResidentWithholdingYTD ?? {}, state.auSavingsAccount, amount, state.people) }
               : { auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + amount }),
-            ftcYTD: state.ftcYTD + amount,
+            ftcYTD: state.ftcYTD + toUSD(amount, 'AUD', state),
           };
         }
         return next;
@@ -138,14 +139,14 @@ export class AuTaxModule2026 extends BaseTaxModule {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
         const perPerson = state.people != null && state.auFixedIncomeAccount != null;
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + toUSD(amount, 'AUD', state) };
         if (isAuResident) {
           next = {
             ...next,
             ...(perPerson
               ? { auPersonOrdinaryIncomeYTD: accumulateByOwnership(state.auPersonOrdinaryIncomeYTD ?? {}, state.auFixedIncomeAccount, amount, state.people) }
               : { auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount }),
-            ftcYTD: state.ftcYTD + amount,
+            ftcYTD: state.ftcYTD + toUSD(amount, 'AUD', state),
           };
         } else {
           next = {
@@ -153,7 +154,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
             ...(perPerson
               ? { auPersonNonResidentWithholdingYTD: accumulateByOwnership(state.auPersonNonResidentWithholdingYTD ?? {}, state.auFixedIncomeAccount, amount, state.people) }
               : { auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + amount }),
-            ftcYTD: state.ftcYTD + amount,
+            ftcYTD: state.ftcYTD + toUSD(amount, 'AUD', state),
           };
         }
         return next;
@@ -178,7 +179,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
       // EVT-22: super withdrawal of earnings — US ordinary income, no AU tax
       ['SUPER_WITHDRAWAL_EARNINGS_TAX', (state, action) => ({
         ...state,
-        usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + action.amount,
+        usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + toUSD(action.amount, 'AUD', state),
       })],
 
       // EVT-23: super earnings — AU super tax at 15% in accumulation phase;
@@ -205,11 +206,11 @@ export class AuTaxModule2026 extends BaseTaxModule {
         const perPerson = state.people != null && state.auStockAccount != null;
         return {
           ...state,
-          usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + action.amount,
+          usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + toUSD(action.amount, 'AUD', state),
           ...(perPerson
             ? { auPersonFrankingCreditYTD: accumulateByOwnership(state.auPersonFrankingCreditYTD ?? {}, state.auStockAccount, action.amount, state.people) }
             : { auFrankingCreditYTD: state.auFrankingCreditYTD + action.amount }),
-          ftcYTD: state.ftcYTD + action.amount,
+          ftcYTD: state.ftcYTD + toUSD(action.amount, 'AUD', state),
         };
       }],
 
@@ -218,11 +219,11 @@ export class AuTaxModule2026 extends BaseTaxModule {
         const perPerson = state.people != null && state.auStockAccount != null;
         return {
           ...state,
-          usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + action.amount,
+          usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + toUSD(action.amount, 'AUD', state),
           ...(perPerson
             ? { auPersonOrdinaryIncomeYTD: accumulateByOwnership(state.auPersonOrdinaryIncomeYTD ?? {}, state.auStockAccount, action.amount, state.people) }
             : { auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + action.amount }),
-          ftcYTD: state.ftcYTD + action.amount,
+          ftcYTD: state.ftcYTD + toUSD(action.amount, 'AUD', state),
         };
       }],
 
@@ -231,11 +232,11 @@ export class AuTaxModule2026 extends BaseTaxModule {
         const perPerson = state.people != null && state.auStockAccount != null;
         return {
           ...state,
-          usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + action.amount,
+          usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + toUSD(action.amount, 'AUD', state),
           ...(perPerson
             ? { auPersonNonResidentWithholdingYTD: accumulateByOwnership(state.auPersonNonResidentWithholdingYTD ?? {}, state.auStockAccount, action.amount, state.people) }
             : { auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + action.amount }),
-          ftcYTD: state.ftcYTD + action.amount,
+          ftcYTD: state.ftcYTD + toUSD(action.amount, 'AUD', state),
         };
       }],
 
@@ -248,14 +249,14 @@ export class AuTaxModule2026 extends BaseTaxModule {
         const auGain = action.auGain ?? gain;
         const isAuResident = residency === 'AU';
         const perPerson = state.people != null && state.auStockAccount != null;
-        let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + gain };
+        let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + toUSD(gain, 'AUD', state) };
         if (isAuResident) {
           next = {
             ...next,
             ...(perPerson
               ? { auPersonCapitalGainsYTD: accumulateByOwnership(state.auPersonCapitalGainsYTD ?? {}, state.auStockAccount, auGain, state.people) }
               : { auCapitalGainsYTD: state.auCapitalGainsYTD + auGain }),
-            ftcYTD: state.ftcYTD + auGain,
+            ftcYTD: state.ftcYTD + toUSD(auGain, 'AUD', state),
           };
         }
         return next;
@@ -271,20 +272,20 @@ export class AuTaxModule2026 extends BaseTaxModule {
         const { gain, residency, ownershipType, ownerId, owners } = action;
         const isAuResident = residency === 'AU';
         const perPerson = state.people != null;
-        let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + gain };
+        let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + toUSD(gain, 'AUD', state) };
         if (perPerson) {
           const asset = { ownershipType, ownerId, owners };
           if (isAuResident) {
             next = {
               ...next,
               auPersonCapitalGainsYTD: accumulateByOwnership(state.auPersonCapitalGainsYTD ?? {}, asset, gain, state.people),
-              ftcYTD: state.ftcYTD + gain,
+              ftcYTD: state.ftcYTD + toUSD(gain, 'AUD', state),
             };
           } else {
             next = {
               ...next,
               auPersonNonResidentWithholdingYTD: accumulateByOwnership(state.auPersonNonResidentWithholdingYTD ?? {}, asset, gain, state.people),
-              ftcYTD: state.ftcYTD + gain,
+              ftcYTD: state.ftcYTD + toUSD(gain, 'AUD', state),
             };
           }
         } else {
@@ -293,7 +294,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
             ...(isAuResident
               ? { auCapitalGainsYTD: state.auCapitalGainsYTD + gain }
               : { auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + gain }),
-            ftcYTD: state.ftcYTD + gain,
+            ftcYTD: state.ftcYTD + toUSD(gain, 'AUD', state),
           };
         }
         return next;
@@ -307,7 +308,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
       ['AU_SE_INCOME_TAX', (state, action) => {
         const { amount, residency, personKey } = action;
         const isAuResident = residency === 'AU';
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + toUSD(amount, 'AUD', state) };
         if (isAuResident) {
           const usePerPerson = personKey != null && state.auPersonOrdinaryIncomeYTD != null;
           next = {
@@ -315,7 +316,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
             ...(usePerPerson
               ? { auPersonOrdinaryIncomeYTD: { ...state.auPersonOrdinaryIncomeYTD, [personKey]: (state.auPersonOrdinaryIncomeYTD[personKey] ?? 0) + amount } }
               : { auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount }),
-            ftcYTD: state.ftcYTD + amount,
+            ftcYTD: state.ftcYTD + toUSD(amount, 'AUD', state),
           };
         }
         return next;
