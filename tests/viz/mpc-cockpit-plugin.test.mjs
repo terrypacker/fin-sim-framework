@@ -443,6 +443,34 @@ test('MpcCockpitPlugin._renderSavePoints: lists decision records from the decisi
   assert.ok(plugin._q('savepoints-list').querySelector('.mpc-savepoint--head'), 'header row rendered');
 });
 
+test('MpcCockpitPlugin: Clear button empties the decision layer and re-renders the log', () => {
+  const graph = new Graph();
+  graph.addNode({ id: 'p:base', layer: 'scenario', name: 'Base' });
+  recordDecisionRecord({
+    graph, parentId: 'p:base', id: 'mpc:0:1',
+    name: 'Set monthly spend to $6,000', asOfDate: new Date(Date.UTC(2030, 0, 1)),
+    result: { finalNetWorthUsd: 1_250_000 },
+  });
+
+  const plugin = new MpcCockpitPlugin(fakeRuntime());
+  plugin.setServices({ graph });
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  plugin.mount(container);   // onMount renders the one record + binds the Clear button
+
+  assert.equal(plugin._q('savepoints').style.display, '', 'section shown with a record');
+  assert.equal(
+    plugin._q('savepoints-list').querySelectorAll('.mpc-savepoint:not(.mpc-savepoint--head)').length, 1);
+
+  plugin._q('clear-savepoints').dispatchEvent(new Event('click'));
+
+  // The decision layer is emptied (other layers untouched) and the section collapses.
+  assert.equal(graph.byLayer('decision').length, 0, 'decision records cleared');
+  assert.ok(graph.getNode('p:base'), 'scenario layer untouched');
+  assert.equal(plugin._q('savepoints').style.display, 'none', 'section hidden once empty');
+  assert.equal(plugin._q('savepoints-list').innerHTML, '');
+});
+
 // ─── override parsing ────────────────────────────────────────────────────────
 
 test('MpcCockpitPlugin._overrideCandidate: maps the input to the recommended control key', () => {
