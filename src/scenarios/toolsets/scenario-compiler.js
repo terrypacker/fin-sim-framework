@@ -168,6 +168,7 @@ export class ScenarioCompiler {
       accounts:       services.accountService?.getAll()        ?? [],
       realProperties: services.realPropertyService?.getAll()   ?? [],
       collectibles:   services.collectibleService?.getAll()    ?? [],
+      companyEquities: services.companyEquityService?.getAll() ?? [],
       parameters,
       paramSchema,
       stateRegistry:  services.stateRegistry,

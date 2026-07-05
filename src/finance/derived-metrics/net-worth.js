@@ -11,10 +11,11 @@
 /**
  * Compute total net worth from simulation state.
  *
- * Includes all three asset categories, FX-converted to baseCurrency:
- *   - Accounts      — any state entry with a numeric `balance`
- *   - Real property — state entries with kind === 'real-property'; contributes equity (value − mortgageBalance)
- *   - Collectibles  — state entries with kind === 'collectible'; contributes market value
+ * Includes all asset categories, FX-converted to baseCurrency:
+ *   - Accounts       — any state entry with a numeric `balance`
+ *   - Real property  — state entries with kind === 'real-property'; contributes equity (value − mortgageBalance)
+ *   - Collectibles   — state entries with kind === 'collectible'; contributes market value
+ *   - Company equity — state entries with kind === 'company'; contributes market value
  *
  * @param {object} state
  * @param {string} [baseCurrency='USD']
@@ -36,6 +37,8 @@ export function computeNetWorth(state, baseCurrency = 'USD') {
       // RealProperty: equity only
       contribution = val.value - (val.mortgageBalance ?? 0);
     } else if (val.kind === 'collectible' && typeof val.value === 'number') {
+      contribution = val.value;
+    } else if (val.kind === 'company' && typeof val.value === 'number') {
       contribution = val.value;
     } else {
       continue;

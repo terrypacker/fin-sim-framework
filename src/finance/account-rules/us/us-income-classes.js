@@ -15,6 +15,18 @@ import { FieldValueAction, RecordBalanceAction } from '../../../simulation-frame
 /** Resolve the US cash pool. */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
 
+/** Default US cash pool key when no saleDestinationAccount is provided. */
+const defaultUsCashKey = (state) =>
+  state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
+
+/** Resolve the destination state key, falling back to the default US cash pool. */
+const resolveDestinationKey = (state, saleDestinationAccount) => {
+  if (saleDestinationAccount && state[saleDestinationAccount] != null) {
+    return saleDestinationAccount;
+  }
+  return defaultUsCashKey(state);
+};
+
 // ─── Reducers ─────────────────────────────────────────────────────────────────
 
 /**
@@ -130,12 +142,14 @@ export class BonusApplyReducer extends AccountServiceReducer {
 }
 
 /**
- * EVT-51: Company Sale — credit US cash pool, chain COMPANY_SALE_TAX.
- * Gain = salePrice - costBasis.
+ * EVT-51: Company Sale — credit the destination account with the sale proceeds,
+ * zero out the CompanyEquity asset (when the sale is asset-backed), and chain
+ * COMPANY_SALE_TAX with the capital gain. Gain = salePrice - costBasis; taxed as
+ * a US long-term capital gain (and an AU capital gain when AU-resident).
  */
 export class CompanySaleApplyReducer extends AccountServiceReducer {
   static type        = 'CompanySaleApplyReducer';
-  static description = 'Credits the US cash pool with the company sale proceeds; chains COMPANY_SALE_TAX with the capital gain.';
+  static description = 'Credits the destination account with company sale proceeds, zeroes the CompanyEquity asset, and chains COMPANY_SALE_TAX with the capital gain.';
   static actionType  = 'COMPANY_SALE_APPLY';
 
   constructor({ accountService }) {
@@ -146,10 +160,15 @@ export class CompanySaleApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { salePrice, costBasis, residency } = action;
-    const gain = Math.max(0, salePrice - costBasis);
-    this.accountService.transaction(usCash(state), salePrice, null);
-    return this.newState(state, {}, [{ type: 'COMPANY_SALE_TAX', gain, residency }]);
+    const { salePrice, costBasis, residency, stateKey, destinationKey } = action;
+    const gain    = Math.max(0, salePrice - costBasis);
+    const destKey = destinationKey ?? defaultUsCashKey(state);
+    this.accountService.transaction(state[destKey], salePrice, null);
+    const stateUpdate = {};
+    if (stateKey && state[stateKey] != null) {
+      stateUpdate[stateKey] = { ...state[stateKey], value: 0 };
+    }
+    return this.newState(state, stateUpdate, [{ type: 'COMPANY_SALE_TAX', gain, residency }]);
   }
 }
 
@@ -257,7 +276,7 @@ export class BonusHandler extends HandlerEntry {
 
 export class CompanySaleHandler extends HandlerEntry {
   static type        = 'CompanySaleHandler';
-  static description = 'Dispatches COMPANY_SALE_APPLY with sale price, cost basis, and AU residency flag.';
+  static description = 'Dispatches COMPANY_SALE_APPLY with sale price, cost basis, residency, backing asset stateKey, and resolved destination account.';
   static eventType   = 'COMPANY_SALE';
 
   constructor() {
@@ -266,15 +285,18 @@ export class CompanySaleHandler extends HandlerEntry {
   }
 
   call({ data, state }) {
-    const cashKey = state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
+    const equityState    = data.stateKey ? state[data.stateKey] : null;
+    const destinationKey = resolveDestinationKey(state, data.saleDestinationAccount);
     return [
       {
         type:         'COMPANY_SALE_APPLY',
-        salePrice:    data.salePrice,
+        salePrice:    data.salePrice ?? equityState?.value ?? 0,
         costBasis:    data.costBasis,
-        residency: state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null,
+        residency:    state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null,
+        stateKey:     data.stateKey ?? null,
+        destinationKey,
       },
-      new RecordBalanceAction(`${cashKey}.balance`, cashKey),
+      new RecordBalanceAction(`${destinationKey}.balance`, destinationKey),
     ];
   }
 }

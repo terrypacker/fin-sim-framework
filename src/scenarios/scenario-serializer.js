@@ -26,6 +26,7 @@ import { Holding } from '../finance/holdings/holding.js';
 import { rescaleHoldingsToBalance, holdingsOutOfSync } from '../finance/holdings/holding-utils.js';
 import { RealProperty }  from '../finance/assets/real-property.js';
 import { Collectible }   from '../finance/assets/collectible.js';
+import { CompanyEquity } from '../finance/assets/company-equity.js';
 
 // ─── Framework classes ──────────────────────────────────────────────────────
 import { HandlerEntry }   from '../simulation-framework/handlers.js';
@@ -392,6 +393,7 @@ export class ScenarioSerializer {
       accounts:       (scenario.accounts ?? []).map(n => ScenarioSerializer._serializeAccount(n)),
       realProperties: (scenario.realProperties ?? []).map(n => ScenarioSerializer._serializeRealProperty(n)),
       collectibles:   (scenario.collectibles ?? []).map(n => ScenarioSerializer._serializeCollectible(n)),
+      companyEquities: (scenario.companyEquities ?? []).map(n => ScenarioSerializer._serializeCompanyEquity(n)),
       events:   (scenario.events ?? []).map(n => ScenarioSerializer._serializeEvent(n)),
       handlers: (scenario.handlers ?? []).map(n => ScenarioSerializer._serializeHandler(n)),
       actions:  (scenario.actions ?? []).map(n => ScenarioSerializer._serializeAction(n)),
@@ -429,13 +431,14 @@ export class ScenarioSerializer {
   static snapshotServices(services) {
     const {
       eventService, handlerService, actionService, reducerService,
-      personService, accountService, realPropertyService, collectibleService,
+      personService, accountService, realPropertyService, collectibleService, companyEquityService,
     } = services;
     return {
       persons:        (personService?.getAll()         ?? []).map(n => ScenarioSerializer._serializePerson(n)),
       accounts:       (accountService?.getAll()        ?? []).map(n => ScenarioSerializer._serializeAccount(n)),
       realProperties: (realPropertyService?.getAll()   ?? []).map(n => ScenarioSerializer._serializeRealProperty(n)),
       collectibles:   (collectibleService?.getAll()    ?? []).map(n => ScenarioSerializer._serializeCollectible(n)),
+      companyEquities: (companyEquityService?.getAll() ?? []).map(n => ScenarioSerializer._serializeCompanyEquity(n)),
       events:         (eventService?.getAll()          ?? []).map(n => ScenarioSerializer._serializeEvent(n)),
       handlers:       (handlerService?.getAll()        ?? []).map(n => ScenarioSerializer._serializeHandler(n)),
       actions:        (actionService?.getAll()         ?? []).map(n => ScenarioSerializer._serializeAction(n)),
@@ -458,12 +461,13 @@ export class ScenarioSerializer {
    * @returns {{ persons, accounts, realProperties, collectibles }}
    */
   static snapshotDomainRecords(services) {
-    const { personService, accountService, realPropertyService, collectibleService } = services;
+    const { personService, accountService, realPropertyService, collectibleService, companyEquityService } = services;
     return {
       persons:        (personService?.getAll()         ?? []).map(n => ScenarioSerializer._serializePerson(n)),
       accounts:       (accountService?.getAll()        ?? []).map(n => ScenarioSerializer._serializeAccount(n)),
       realProperties: (realPropertyService?.getAll()   ?? []).map(n => ScenarioSerializer._serializeRealProperty(n)),
       collectibles:   (collectibleService?.getAll()    ?? []).map(n => ScenarioSerializer._serializeCollectible(n)),
+      companyEquities: (companyEquityService?.getAll() ?? []).map(n => ScenarioSerializer._serializeCompanyEquity(n)),
     };
   }
 
@@ -476,7 +480,7 @@ export class ScenarioSerializer {
    * @param {object} services - ServiceRegistry instance
    */
   static deserializePersonsAccounts(config, services) {
-    const { personService, accountService, realPropertyService, collectibleService } = services;
+    const { personService, accountService, realPropertyService, collectibleService, companyEquityService } = services;
     if (personService) {
       for (const d of (config.persons ?? [])) {
         const person = ScenarioSerializer._makePerson(d);
@@ -499,6 +503,12 @@ export class ScenarioSerializer {
       for (const d of (config.collectibles ?? [])) {
         const col = ScenarioSerializer._makeCollectible(d);
         collectibleService.createCollectible(col);
+      }
+    }
+    if (companyEquityService) {
+      for (const d of (config.companyEquities ?? [])) {
+        const eq = ScenarioSerializer._makeCompanyEquity(d);
+        companyEquityService.createCompanyEquity(eq);
       }
     }
   }
@@ -756,6 +766,54 @@ export class ScenarioSerializer {
     });
     if (d.stateKey) col.stateKey = d.stateKey;
     return col;
+  }
+
+  static _serializeCompanyEquity(c) {
+    return {
+      __type:               'CompanyEquity',
+      id:                   c.id,
+      name:                 c.name                 ?? '',
+      value:                c.value                ?? 0,
+      costBasis:            c.costBasis            ?? 0,
+      appreciationRate:     c.appreciationRate     ?? 0.08,
+      plannedSaleYear:      c.plannedSaleYear      ?? null,
+      saleDestinationAccount: c.saleDestinationAccount ?? null,
+      ownershipType:        c.ownershipType        ?? 'sole',
+      ownerId:              c.ownerId              ?? null,
+      drawdownPriority:     c.drawdownPriority     ?? null,
+      owners:               c.owners               ?? [],
+      country:              c.country              ?? 'US',
+      currency:             c.currency             ?? null,
+      stateKey:             c.stateKey             ?? null,
+      appreciationSchedule: c.appreciationSchedule
+        ? c.appreciationSchedule.map(e => ({
+            date: e.date instanceof Date ? e.date.toISOString() : e.date,
+            rate: e.rate,
+          }))
+        : null,
+    };
+  }
+
+  static _makeCompanyEquity(d) {
+    const eq = new CompanyEquity(d.value ?? 0, {
+      id:                  d.id,
+      name:                d.name                ?? '',
+      costBasis:           d.costBasis           ?? 0,
+      appreciationRate:    d.appreciationRate    ?? 0.08,
+      plannedSaleYear:     d.plannedSaleYear     ?? null,
+      saleDestinationAccount: d.saleDestinationAccount ?? null,
+      ownershipType:       d.ownershipType       ?? 'sole',
+      ownerId:             d.ownerId             ?? null,
+      drawdownPriority:    d.drawdownPriority    ?? null,
+      owners:              d.owners              ?? [],
+      country:             d.country             ?? 'US',
+      currency:            d.currency            ?? null,
+      appreciationSchedule: d.appreciationSchedule
+        ? d.appreciationSchedule.map(e => ({ date: new Date(e.date), rate: e.rate }))
+        : null,
+    });
+    if (d.stateKey) eq.stateKey = d.stateKey;
+    return eq;
   }
 
   static _serializePerson(person) {
