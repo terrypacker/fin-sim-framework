@@ -12,6 +12,7 @@ import { WorkbenchComponent } from '../../component.js';
 import { WB_EVENTS }          from '../../workbench-runtime.js';
 import { ServiceRegistry }    from '../../../../services/service-registry.js';
 import { CockpitController, COCKPIT_CONTROLS } from '../../../../finance/mpc/cockpit-controller.js';
+import { RolloutWorkerPool } from '../../../../finance/optimization/parallel/rollout-worker-pool.js';
 import { readDecisionRecords } from '../../../../finance/mpc/apply-forward.js';
 import {
   OPTIMIZATION_OBJECTIVES, DIE_WITH_TARGET_AXES, DIE_WITH_TARGET_FAMILY,
@@ -58,10 +59,31 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     this._unsubSimBus      = null;   // per-run sim-bus subscription (live "now" tracking)
     this._stepQueued       = false;  // rAF debounce for step bursts
     this._autoRunning      = false;  // autopilot loop active
+    this._workerPool       = undefined;  // design 46 Phase 0.5: lazy, plugin-owned, reused across epochs
+    this._parallel         = true;   // parallelize solver rollouts (bit-identical; toggle for A/B)
   }
 
   setServices(services) { this._servicesOverride = services ?? null; }
   _services() { return this._servicesOverride ?? ServiceRegistry.getInstance(); }
+
+  /**
+   * The plugin-owned rollout worker pool (design 46 Phase 0.5 P-c). Created lazily
+   * and only where Web Workers exist (never in Node tests / SSR), then reused across
+   * epochs AND controller re-creations (the pool outlives `this._controller = null`
+   * resets). `setContext` re-broadcasts each solve's snapshot, so reuse is safe.
+   * Returns null when parallelism is off or unavailable → solvers run in-process.
+   */
+  _pool() {
+    if (!this._parallel || typeof Worker === 'undefined') return null;
+    if (this._workerPool === undefined) this._workerPool = new RolloutWorkerPool();
+    return this._workerPool;
+  }
+
+  /** Terminate the pool on teardown so worker threads don't leak. */
+  destroy() {
+    if (this._workerPool) { this._workerPool.terminate(); this._workerPool = undefined; }
+    super.destroy();
+  }
 
   render() {
     const root = document.createElement('div');
@@ -409,7 +431,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     if (!c) { this._setNow('Build/run a scenario first.'); return; }
     this._setBusy(true, 'Searching for the best next move…');
     try {
-      const advice = await c.advise({ solverKey: this._currentSolver(), solverOptions: { budget: 64, seed: 1 }, fanSize: 6, seriesPoints: 20 });
+      const advice = await c.advise({ solverKey: this._currentSolver(), solverOptions: { budget: 64, seed: 1 }, workerPool: this._pool(), fanSize: 6, seriesPoints: 20 });
       this._renderAdvice(advice);
     } catch (err) {
       this._setNow(`Advice failed: ${err?.message ?? err}`);
@@ -543,7 +565,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
 
         let advice;
         try {
-          advice = await c.advise({ solverKey: this._currentSolver(), solverOptions: { budget: 64, seed: 1 }, fanSize: 6, seriesPoints: 20 });
+          advice = await c.advise({ solverKey: this._currentSolver(), solverOptions: { budget: 64, seed: 1 }, workerPool: this._pool(), fanSize: 6, seriesPoints: 20 });
         } catch (err) {
           this._setNow(`Auto stopped — advice failed: ${err?.message ?? err}`);
           break;

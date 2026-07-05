@@ -127,6 +127,9 @@ import { IntlRetirementOptimizer } from './finance/optimization/intl-retirement-
 import { valuesForConfig, cartesianProduct } from './finance/optimization/opt-values.js';
 import { OPT_PARAM_TYPES, DEFAULT_TERMINAL_WEALTH_PENALTY, DEFAULT_DEFICIT_PENALTY, DIE_WITH_TARGET_FAMILY, DIE_WITH_TARGET_AXES, resolveTerminalKey, terminalAxesFor, OPTIMIZATION_OBJECTIVES, OBJECTIVE_FAMILY_LABELS, objectivePrimaryMetric, objectiveIsWindowable, resolveDieWithTargetKey, groupedObjectiveOptions } from './finance/optimization/optimization-objectives.js';
 import { OptimizationProblem } from './finance/optimization/optimization-problem.js';
+import { initProblem, runTask, runSeriesTask } from './finance/optimization/parallel/rollout-worker-core.js';
+import { rolloutContext, browserRolloutSpawn, RolloutWorkerPool } from './finance/optimization/parallel/rollout-worker-pool.js';
+import { rolloutProfiler } from './finance/optimization/rollout-profiler.js';
 import { CemSolver } from './finance/optimization/solvers/cem-solver.js';
 import { GridSearchSolver } from './finance/optimization/solvers/grid-search-solver.js';
 import { PatternSearchSolver } from './finance/optimization/solvers/pattern-search-solver.js';
@@ -726,6 +729,13 @@ export const Finance = {
   resolveDieWithTargetKey,
   groupedObjectiveOptions,
   OptimizationProblem,
+  initProblem,
+  runTask,
+  runSeriesTask,
+  rolloutContext,
+  browserRolloutSpawn,
+  RolloutWorkerPool,
+  rolloutProfiler,
   CemSolver,
   GridSearchSolver,
   PatternSearchSolver,
