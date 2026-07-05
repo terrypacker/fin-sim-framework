@@ -51,6 +51,7 @@ import {
 } from '../finance/handlers/earnings-handlers.js';
 import { DividendScheduledHandler }       from '../finance/handlers/dividend-scheduled-handler.js';
 import { ChangeResidencyHandler }         from '../finance/handlers/change-residency-handler.js';
+import { ChangeStateResidencyHandler }    from '../finance/handlers/change-state-residency-handler.js';
 import { OutOfFundsHandler }              from '../finance/handlers/out-of-funds-handler.js';
 import { MonthlySocialSecurityHandler }   from '../finance/handlers/monthly-social-security-handler.js';
 import { MortalityHandler }              from '../finance/handlers/mortality-handler.js';
@@ -66,6 +67,7 @@ import { FxTransferApplyReducer }        from '../finance/fx/fx-transfer-apply-r
 import { FxRefreshReducer }              from '../finance/fx/fx-refresh-reducer.js';
 import { StockDividendCashApplyReducer }  from '../finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { ChangeResidencyApplyReducer }    from '../finance/reducers/change-residency-apply-reducer.js';
+import { ChangeStateResidencyApplyReducer } from '../finance/reducers/change-state-residency-apply-reducer.js';
 import { PersonDiedApplyReducer }        from '../finance/reducers/person-died-apply-reducer.js';
 import { SocialSecuritySurvivorApplyReducer } from '../finance/reducers/social-security-survivor-apply-reducer.js';
 import { AccountRetitleApplyReducer }    from '../finance/reducers/account-retitle-apply-reducer.js';
@@ -89,6 +91,8 @@ import { AssetAppreciationHandler, AssetAppreciateReducer } from '../finance/han
 import { UsPeriodAdvanceHandler, AuPeriodAdvanceHandler, UsPeriodAdvanceReducer, AuPeriodAdvanceReducer } from '../finance/tax/period-advance-classes.js';
 import { UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from '../finance/tax/tax-settle-classes.js';
 import { DynamicTaxReducer }  from '../finance/tax/dynamic-tax-reducer.js';
+import { StateTaxSettleHandler, StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer } from '../finance/tax/state/state-tax-settle-classes.js';
+import { StateIncomeClassificationReducer } from '../finance/tax/state/state-income-classification.js';
 
 // ─── US account-module handlers and reducers ────────────────────────────────
 import {
@@ -205,11 +209,11 @@ const _ALL_CLASSES = [
   FixedIncomeInterestHandler, SuperEarningsHandler,
   IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,
   IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
-  DividendScheduledHandler, ChangeResidencyHandler, OutOfFundsHandler, MonthlySocialSecurityHandler,
+  DividendScheduledHandler, ChangeResidencyHandler, ChangeStateResidencyHandler, OutOfFundsHandler, MonthlySocialSecurityHandler,
   MortalityHandler, LateLifeCareHandler,
   UsMortgagePaymentHandler, AuMortgagePaymentHandler,
   UsPeriodAdvanceHandler, AuPeriodAdvanceHandler,
-  UsTaxSettleHandler, AuTaxSettleHandler,
+  UsTaxSettleHandler, AuTaxSettleHandler, StateTaxSettleHandler,
   RothContributionHandler, RothWithdrawalContributionsHandler,
   RothWithdrawalEarningsHandler, RothEarningsHandler,
   IraContributionHandler, IraWithdrawalContributionsHandler,
@@ -236,7 +240,7 @@ const _ALL_CLASSES = [
   // Finance reducers
   UsSavingsInterestCreditReducer, ExpenseDebitReducer, ReplenishSavingsReducer,
   IntlTransferApplyReducer, FxTransferApplyReducer, FxRefreshReducer,
-  StockDividendCashApplyReducer, ChangeResidencyApplyReducer,
+  StockDividendCashApplyReducer, ChangeResidencyApplyReducer, ChangeStateResidencyApplyReducer,
   PersonDiedApplyReducer, SocialSecuritySurvivorApplyReducer, AccountRetitleApplyReducer, ScenarioCompleteReducer,
   LateLifeCareApplyReducer,
   SetOutOfFundsDateReducer, AccumulateDeficitReducer, OutOfFundsReducer, InflationAdjustReducer,
@@ -245,6 +249,7 @@ const _ALL_CLASSES = [
   UsTaxSettleApplyReducer, AuTaxSettleApplyReducer,
   UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer,
   DynamicTaxReducer,
+  StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer, StateIncomeClassificationReducer,
   RothContributionApplyReducer, RothWithdrawalContribApplyReducer,
   RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer,
   IraContributionApplyReducer, IraWithdrawalContribApplyReducer,
@@ -725,6 +730,7 @@ export class ScenarioSerializer {
       // and YYYY-MM-DD, so existing payloads remain readable.
       birthDate:             ScenarioSerializer.toDateStr(person.birthDate),
       citizen:               person.citizen ?? ['US'],
+      residencyState:        person.residencyState ?? null,
       lifeExpectancy:        person.lifeExpectancy ?? 90,
       socialSecurityMonthly: person.socialSecurityMonthly ?? 2800,
       monthlyWage:           person.monthlyWage ?? 0,
@@ -745,6 +751,7 @@ export class ScenarioSerializer {
       enabled:  node.enabled ?? false,
       color:    node.color ?? '#888888',
     };
+    if (node.order) d.order = node.order;   // same-date tiebreak; omit when default 0
     if (node.eventType === 'OneOffEvent') {
       d.date = node.date instanceof Date ? node.date.toISOString() : node.date;
       if (node.data && Object.keys(node.data).length > 0) {
@@ -848,6 +855,7 @@ export class ScenarioSerializer {
     const person = new Person(d.id, new Date(d.birthDate), {
       name:                  d.name ?? '',
       citizen:               d.citizen ?? ['US'],
+      residencyState:        d.residencyState ?? null,
       lifeExpectancy:        d.lifeExpectancy ?? 90,
       socialSecurityMonthly: d.socialSecurityMonthly ?? 2800,
       monthlyWage:           d.monthlyWage ?? 0,
@@ -867,6 +875,7 @@ export class ScenarioSerializer {
         date:    d.date ? new Date(d.date) : new Date(),
         enabled: d.enabled ?? false,
         color:   d.color ?? '#888888',
+        order:   d.order ?? 0,
         data:    d.data ?? {},
       });
     } else if (d.__type == 'EventSeries') {
@@ -880,6 +889,7 @@ export class ScenarioSerializer {
         day:         d.day,
         enabled:     d.enabled ?? false,
         color:       d.color ?? '#888888',
+        order:       d.order ?? 0,
         data:        d.data ?? {},
       });
     } else {

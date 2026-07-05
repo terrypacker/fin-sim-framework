@@ -53,6 +53,33 @@ export function residentsOf(state, country) {
 }
 
 /**
+ * Primary person's key — the first entry in state.people. Matches the
+ * "first person is primary" convention used elsewhere (e.g. TaxLossHarvestHandler's
+ * _primaryResidency, replenishSavings' default personKey).
+ *
+ * @param {object} state - Simulation state
+ * @returns {string|null}
+ */
+export function primaryPersonKey(state) {
+  const keys = Object.keys(state.people ?? {});
+  return keys.length > 0 ? keys[0] : null;
+}
+
+/**
+ * Household US residency state, derived from the PRIMARY person (design 34 §4).
+ * Both people are assumed to share a state, so only the primary is consulted;
+ * the spouse's residencyState exists for a future per-person model but is not
+ * read here. Returns null when no state is configured (⇒ no state income tax).
+ *
+ * @param {object} state - Simulation state
+ * @returns {string|null}  e.g. 'NE' | 'HI' | 'SD' | null
+ */
+export function primaryResidencyState(state) {
+  const key = primaryPersonKey(state);
+  return key ? (state.people[key]?.residencyState ?? null) : null;
+}
+
+/**
  * Birth date of the person identified by `personKey`.
  * Replaces the single-valued `state.personBirthDate` field.
  *

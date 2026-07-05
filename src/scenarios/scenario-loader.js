@@ -15,6 +15,7 @@ import { ScenarioCompiler }        from './toolsets/scenario-compiler.js';
 import { IntlRetirementScenario }  from './intl-retirement-scenario.js';
 import { US_BANKING }         from './toolsets/us-banking-toolset.js';
 import { US_TAX }             from './toolsets/us-tax-toolset.js';
+import { US_STATE_TAX }       from './toolsets/us-state-tax-toolset.js';
 import { US_RETIREMENT }      from './toolsets/us-retirement-toolset.js';
 import { AU_BANKING }         from './toolsets/au-banking-toolset.js';
 import { AU_TAX }             from './toolsets/au-tax-toolset.js';
@@ -36,7 +37,7 @@ const SCENARIO_CLASS_BY_ID = new Map([
 ]);
 
 const BUILT_IN_TOOLSETS = [
-  US_BANKING, US_TAX, US_RETIREMENT,
+  US_BANKING, US_TAX, US_STATE_TAX, US_RETIREMENT,
   AU_BANKING, AU_TAX, AU_RETIREMENT,
   US_AU_CROSS_BORDER,
   US_REAL_PROPERTY, AU_REAL_PROPERTY,

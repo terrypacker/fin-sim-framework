@@ -23,6 +23,7 @@ import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { ToolsetRegistry } from '../../src/scenarios/toolsets/toolset-registry.js';
 import { US_BANKING }      from '../../src/scenarios/toolsets/us-banking-toolset.js';
 import { US_TAX }          from '../../src/scenarios/toolsets/us-tax-toolset.js';
+import { US_STATE_TAX }    from '../../src/scenarios/toolsets/us-state-tax-toolset.js';
 import { US_RETIREMENT }   from '../../src/scenarios/toolsets/us-retirement-toolset.js';
 import { US_INCOME }       from '../../src/scenarios/toolsets/us-income-toolset.js';
 import { US_BROKERAGE }    from '../../src/scenarios/toolsets/us-brokerage-toolset.js';
@@ -45,7 +46,7 @@ import { ECONOMIC_REGIMES }  from '../../src/scenarios/toolsets/economic-regimes
 function buildCombinedSchema() {
   const registry = new ToolsetRegistry();
   for (const t of [
-    US_BANKING, US_TAX, US_RETIREMENT, US_INCOME, US_BROKERAGE,
+    US_BANKING, US_TAX, US_STATE_TAX, US_RETIREMENT, US_INCOME, US_BROKERAGE,
     US_REAL_PROPERTY, US_COLLECTIBLES, US_ROTH_CONVERSION,
     AU_BANKING, AU_TAX, AU_RETIREMENT, AU_INCOME, AU_BROKERAGE,
     AU_REAL_PROPERTY, US_AU_CROSS_BORDER, ECONOMIC_REGIMES,
@@ -343,7 +344,7 @@ describe('IntlRetirement combined param schema mc/opt flags', () => {
     // scenario level. Such drift caused the original missing-params-in-UI bug.
     const registry = new ToolsetRegistry();
     for (const t of [
-      US_BANKING, US_TAX, US_RETIREMENT, US_INCOME, US_BROKERAGE,
+      US_BANKING, US_TAX, US_STATE_TAX, US_RETIREMENT, US_INCOME, US_BROKERAGE,
       US_REAL_PROPERTY, US_COLLECTIBLES, US_ROTH_CONVERSION,
       AU_BANKING, AU_TAX, AU_RETIREMENT, AU_INCOME, AU_BROKERAGE,
       AU_REAL_PROPERTY, US_AU_CROSS_BORDER, ECONOMIC_REGIMES,

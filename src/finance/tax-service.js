@@ -148,6 +148,7 @@ export class TaxService {
         data:     { cc },
         enabled:  true,
         color:    '#FF7043',
+        order:    100,   // settle band: always after the year's income (design 34 §13)
       });
       events.push(tsSeries);
 
