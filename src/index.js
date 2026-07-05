@@ -35,7 +35,7 @@ import { getUniformDistributionPeriod } from './finance/account-rules/us/us-rmd-
 import { USD, AUD, ACCOUNT_TYPE, InsufficientFundsError, Account, CheckingAccount, SavingsAccount } from './finance/assets/account.js';
 import { Asset } from './finance/assets/asset.js';
 import { Collectible } from './finance/assets/collectible.js';
-import { InvestmentAccount, BrokerageAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from './finance/assets/investment-account.js';
+import { reconcileLedgerToBalance, InvestmentAccount, BrokerageAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from './finance/assets/investment-account.js';
 import { RealProperty } from './finance/assets/real-property.js';
 import { AssetLocationRebalanceApplyReducer } from './finance/behavioral/asset-location-rebalance-apply-reducer.js';
 import { BehavioralPanicSellApplyReducer } from './finance/behavioral/behavioral-panic-sell-apply-reducer.js';
@@ -76,6 +76,7 @@ import { RevalueAssetReducer } from './finance/economic-regimes/revalue-asset-re
 import { SHOCK_LIBRARY, SHOCK_PRESET_OPTIONS } from './finance/economic-shocks/shock-library.js';
 import { CurrencyConverter } from './finance/fx/currency-converter.js';
 import { convertExpenseToAccount } from './finance/fx/expense-fx.js';
+import { fxRate, fxFeeIn, convertNetOfFee, grossUpForTarget } from './finance/fx/fx-conversion.js';
 import { CurrencyPair, FxEngine } from './finance/fx/fx-engine.js';
 import { FxRefreshReducer } from './finance/fx/fx-refresh-reducer.js';
 import { FxService } from './finance/fx/fx-service.js';
@@ -143,7 +144,7 @@ import { ChangeResidencyApplyReducer } from './finance/reducers/change-residency
 import { ChangeStateResidencyApplyReducer } from './finance/reducers/change-state-residency-apply-reducer.js';
 import { ExpenseDebitReducer } from './finance/reducers/expense-debit-reducer.js';
 import { InflationAdjustReducer } from './finance/reducers/inflation-adjust-reducer.js';
-import { IntlTransferApplyReducer } from './finance/reducers/intl-transfer-apply-reducer.js';
+import { IntlTransferApplyReducer, IntlTransferRecordReducer } from './finance/reducers/intl-transfer-apply-reducer.js';
 import { OutOfFundsReducer } from './finance/reducers/out-of-funds-reducer.js';
 import { PersonDiedApplyReducer } from './finance/reducers/person-died-apply-reducer.js';
 import { ReplenishSavingsReducer } from './finance/reducers/replenish-savings-reducer.js';
@@ -532,6 +533,7 @@ export const Finance = {
   SavingsAccount,
   Asset,
   Collectible,
+  reconcileLedgerToBalance,
   InvestmentAccount,
   BrokerageAccount,
   FourOhOneKAccount,
@@ -599,6 +601,10 @@ export const Finance = {
   SHOCK_PRESET_OPTIONS,
   CurrencyConverter,
   convertExpenseToAccount,
+  fxRate,
+  fxFeeIn,
+  convertNetOfFee,
+  grossUpForTarget,
   CurrencyPair,
   FxEngine,
   FxRefreshReducer,
@@ -741,6 +747,7 @@ export const Finance = {
   ExpenseDebitReducer,
   InflationAdjustReducer,
   IntlTransferApplyReducer,
+  IntlTransferRecordReducer,
   OutOfFundsReducer,
   PersonDiedApplyReducer,
   ReplenishSavingsReducer,

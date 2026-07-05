@@ -818,3 +818,66 @@ test('replenishSavings: eligible super drawdown keeps the ledger tied to balance
   assert.strictEqual(superAcct.contributionBasis, 56_000); // 80% of 70k (proportional)
   assert.strictEqual(superAcct.earningsBasis,     14_000); // 20% of 70k
 });
+
+// ─── eligible-withdrawal tax actions (design 44 Gap B) ────────────────────────
+
+const eligibleState = (sourceKey, sourceAcct, residency = 'US', targetCcy = USD, targetCountry = 'US') => ({
+  targetSavings: new SavingsAccount(0, { country: targetCountry, currency: targetCcy, ownerId: 'primary' }),
+  [sourceKey]:   sourceAcct,
+  people: { primary: { birthDate: new Date(1956, 0, 1), residency } }, // age ~70, eligible everywhere
+});
+
+test('replenishSavings: eligible IRA draw emits ordinary-income tax actions (contrib + earnings)', () => {
+  const svc = mkSvc();
+  const ira = new TraditionalIRAAccount(100_000, {
+    country: 'US', currency: USD, drawdownPriority: 1, ownerId: 'primary',
+    contributionBasis: 60_000, earningsBasis: 40_000,
+  });
+  const state = eligibleState('ira', ira);
+  const { pendingTaxActions } = svc.replenishSavings(state, 'targetSavings', 80_000, new Date(2026, 6, 1));
+  const contrib  = pendingTaxActions.find(a => a.type === 'IRA_WITHDRAWAL_CONTRIB_TAX');
+  const earnings = pendingTaxActions.find(a => a.type === 'IRA_WITHDRAWAL_EARNINGS_TAX');
+  assert.ok(contrib && earnings, 'both IRA tax actions emitted');
+  assert.strictEqual(contrib.amount,  60_000);  // contributions drawn first
+  assert.strictEqual(earnings.amount, 20_000);  // then earnings
+  assert.strictEqual(contrib.penaltyAmount, 0); // no penalty when eligible
+  assert.strictEqual(earnings.penaltyAmount, 0);
+});
+
+test('replenishSavings: eligible 401k draw emits a single ordinary-income tax action on the gross', () => {
+  const svc = mkSvc();
+  const k = new FourOhOneKAccount(100_000, {
+    country: 'US', currency: USD, drawdownPriority: 1, ownerId: 'primary',
+    contributionBasis: 70_000, earningsBasis: 30_000,
+  });
+  const state = eligibleState('k401', k);
+  const { pendingTaxActions } = svc.replenishSavings(state, 'targetSavings', 40_000, new Date(2026, 6, 1));
+  const tax = pendingTaxActions.filter(a => a.type === 'K401_WITHDRAWAL_TAX');
+  assert.strictEqual(tax.length, 1);
+  assert.strictEqual(tax[0].amount, 40_000);
+  assert.strictEqual(tax[0].penaltyAmount, 0);
+});
+
+test('replenishSavings: eligible super draw taxes only the earnings portion', () => {
+  const svc = mkSvc();
+  const superAcct = new SuperannuationAccount(100_000, {
+    country: 'AU', currency: AUD, drawdownPriority: 1, ownerId: 'primary',
+    contributionBasis: 80_000, earningsBasis: 20_000,
+  });
+  const state = eligibleState('superAcct', superAcct, 'AU', AUD, 'AU');
+  const { pendingTaxActions } = svc.replenishSavings(state, 'targetSavings', 30_000, new Date(2026, 6, 1));
+  const tax = pendingTaxActions.filter(a => a.type === 'SUPER_WITHDRAWAL_EARNINGS_TAX');
+  assert.strictEqual(tax.length, 1);
+  assert.strictEqual(tax[0].amount, 6_000); // 20% of 30k (proportional earnings portion)
+});
+
+test('replenishSavings: eligible (qualified) Roth draw emits NO tax action', () => {
+  const svc = mkSvc();
+  const roth = new RothAccount(100_000, {
+    country: 'US', currency: USD, drawdownPriority: 1, ownerId: 'primary',
+    contributionBasis: 60_000, earningsBasis: 40_000,
+  });
+  const state = eligibleState('roth', roth);
+  const { pendingTaxActions } = svc.replenishSavings(state, 'targetSavings', 50_000, new Date(2026, 6, 1));
+  assert.strictEqual(pendingTaxActions.length, 0, 'qualified Roth withdrawal is tax-free');
+});

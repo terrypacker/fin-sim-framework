@@ -83,6 +83,7 @@ export const COVERED = [
   // D — top-level finance (reducer-postconditions-finance.test.mjs)
   'ExpenseDebitReducer', 'ReplenishSavingsReducer', 'InflationAdjustReducer',
   'ChangeResidencyApplyReducer', 'ChangeStateResidencyApplyReducer', 'IntlTransferApplyReducer',
+  'IntlTransferRecordReducer',
   'AccountRetitleApplyReducer', 'PersonDiedApplyReducer', 'SocialSecuritySurvivorApplyReducer',
   'StockDividendCashApplyReducer', 'UsSavingsInterestCreditReducer', 'ScenarioCompleteReducer',
 

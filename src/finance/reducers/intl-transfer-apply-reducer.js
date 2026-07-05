@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { InsufficientFundsError } from '../assets/account.js';
 import { getUsEarlyWithdrawalRules } from '../account-rules/us/us-early-withdrawal-rules.js';
+import { convertNetOfFee, grossUpForTarget } from '../fx/fx-conversion.js';
 
 /**
  * Handles the INTL_TRANSFER_APPLY action.
@@ -79,18 +80,18 @@ export class IntlTransferApplyReducer extends Reducer {
     const pendingTaxActions = [];
 
     if (direction === 'AU_TO_US') {
-      const audNeeded = (targetDeficit + fee) * rate;
+      const audNeeded = grossUpForTarget(targetDeficit, 'AUD', 'USD', rate, fee);
       const shortfall = audNeeded - auAcc.balance;
       if (shortfall > 0) {
         try {
           const result = this.accountService.replenishSavings(state, this.auSavingsKey, shortfall, date, this.earlyWithdrawalRulesFn);
-          pendingTaxActions.push(...result.pendingTaxActions);
+          pendingTaxActions.push(...result.pendingTaxActions, ...(result.crossBorderTransfers ?? []));
         } catch (e) {
           if (!(e instanceof InsufficientFundsError)) throw e;
         }
       }
       const audActual   = Math.min(audNeeded, auAcc.balance);
-      const usdReceived = Math.max(0, audActual / rate - fee);
+      const usdReceived = Math.max(0, convertNetOfFee(audActual, 'AUD', 'USD', rate, fee));
       if (audActual > 0) {
         this.accountService.transaction(auAcc, -audActual,   date);
         this.accountService.transaction(usAcc, +usdReceived, date);
@@ -101,18 +102,18 @@ export class IntlTransferApplyReducer extends Reducer {
       }
 
     } else {
-      const usdNeeded = targetDeficit / rate + fee;
+      const usdNeeded = grossUpForTarget(targetDeficit, 'USD', 'AUD', rate, fee);
       const shortfall = usdNeeded - usAcc.balance;
       if (shortfall > 0) {
         try {
           const result = this.accountService.replenishSavings(state, this.usSavingsKey, shortfall, date, this.earlyWithdrawalRulesFn);
-          pendingTaxActions.push(...result.pendingTaxActions);
+          pendingTaxActions.push(...result.pendingTaxActions, ...(result.crossBorderTransfers ?? []));
         } catch (e) {
           if (!(e instanceof InsufficientFundsError)) throw e;
         }
       }
       const usdActual   = Math.min(usdNeeded, usAcc.balance);
-      const audReceived = Math.max(0, (usdActual - fee) * rate);
+      const audReceived = Math.max(0, convertNetOfFee(usdActual, 'USD', 'AUD', rate, fee));
       if (usdActual > 0) {
         this.accountService.transaction(usAcc, -usdActual,   date);
         this.accountService.transaction(auAcc, +audReceived, date);
@@ -126,5 +127,39 @@ export class IntlTransferApplyReducer extends Reducer {
     return pendingTaxActions.length > 0
       ? this.newState(state, {}, pendingTaxActions)
       : this.newState(state);
+  }
+}
+
+/**
+ * Handles INTL_TRANSFER_RECORD — a journal/telemetry-only marker for a
+ * cross-currency cash sweep that `AccountService.replenishSavings` already
+ * executed inline (the "stranding fix" spends idle foreign cash before domestic
+ * investments, so the conversion must happen synchronously inside the drawdown
+ * loop rather than via a chained INTL_TRANSFER_APPLY). This reducer makes that
+ * leg visible in the journal without moving money — the transfer is already
+ * done. Design 44 Gap A / A2.
+ *
+ * Action fields (all informational): direction, srcKey, dstKey, from, to,
+ *   fromAmount, toAmount, fee.
+ */
+export class IntlTransferRecordReducer extends Reducer {
+  static description = 'Journal/telemetry-only record of a cross-border cash sweep already executed inline by replenishSavings; no state change.';
+  static type        = 'IntlTransferRecordReducer';
+  static actionType  = 'INTL_TRANSFER_RECORD';
+
+  constructor() {
+    super('International Transfer Record', PRIORITY.CASH_FLOW);
+    this.reducedActionTypes   = ['INTL_TRANSFER_RECORD'];
+    this.generatedActionTypes = [];
+  }
+
+  static fromJSON(d) {
+    const r = new this();
+    r.id = d.id;
+    return r;
+  }
+
+  reduce(state) {
+    return this.newState(state);
   }
 }

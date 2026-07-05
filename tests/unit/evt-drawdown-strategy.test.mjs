@@ -282,3 +282,37 @@ test('EVT-DRAWDOWN: non-residence cash is repatriated even under LOCAL_FIRST', (
   assert.ok(Math.abs(auCash.balance - 2000) < 1e-6, `AU cash ${auCash.balance}`); // A$3000 drawn (= US$2000)
   assert.ok(Math.abs(usSav.balance - 2000) < 1e-6, `US savings ${usSav.balance}`);
 });
+
+// ─── cross-border transfer record (design 44 Gap A / A2) ──────────────────────
+
+test('EVT-DRAWDOWN: a cross-currency sweep returns an INTL_TRANSFER_RECORD', () => {
+  const svc    = new AccountService(new Graph(), new GraphQueryApi(new Graph()), new EventBus());
+  const auSav  = new CheckingAccount(0, { country: 'AU', currency: AUD }); // AU target
+  const usCash = new CheckingAccount(5000, { country: 'US', currency: USD, role: ACCOUNT_ROLES.US_SAVINGS, minimumBalance: 0, drawdownPriority: 0 });
+  const state  = {
+    auSavingsAccount: auSav, usSavingsAccount: usCash,
+    personBirthDate: new Date(1970, 0, 1),
+    effectiveExchangeRates: { USD_AUD: 1.5 },
+    effectiveFxFees:        { USD_AUD: 0 },
+  };
+  const { crossBorderTransfers } = svc.replenishSavings(state, 'auSavingsAccount', 3000, new Date(2026, 0, 1));
+  assert.strictEqual(crossBorderTransfers.length, 1);
+  const t = crossBorderTransfers[0];
+  assert.strictEqual(t.type, 'INTL_TRANSFER_RECORD');
+  assert.strictEqual(t.direction, 'US_TO_AU');
+  assert.strictEqual(t.from, 'USD');
+  assert.strictEqual(t.to, 'AUD');
+  assert.strictEqual(t.srcKey, 'usSavingsAccount');
+  assert.strictEqual(t.dstKey, 'auSavingsAccount');
+  assert.ok(Math.abs(t.toAmount   - 3000) < 0.01, `toAmount ${t.toAmount}`);   // A$3000 net
+  assert.ok(Math.abs(t.fromAmount - 2000) < 0.01, `fromAmount ${t.fromAmount}`); // US$2000 drawn
+});
+
+test('EVT-DRAWDOWN: a same-currency draw produces no transfer record', () => {
+  const svc    = new AccountService(new Graph(), new GraphQueryApi(new Graph()), new EventBus());
+  const usSav  = new CheckingAccount(0, { country: 'US', currency: USD });
+  const usCash = new CheckingAccount(5000, { country: 'US', currency: USD, role: ACCOUNT_ROLES.US_SAVINGS, minimumBalance: 0, drawdownPriority: 0 });
+  const state  = { usSavingsAccount: usSav, extraCash: usCash, personBirthDate: new Date(1970, 0, 1) };
+  const { crossBorderTransfers } = svc.replenishSavings(state, 'usSavingsAccount', 2000, new Date(2026, 0, 1));
+  assert.strictEqual(crossBorderTransfers.length, 0);
+});

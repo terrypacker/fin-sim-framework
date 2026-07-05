@@ -43,7 +43,7 @@ export class ReplenishSavingsReducer extends Reducer {
     this.accountService          = accountService;
     this.earlyWithdrawalRulesFn  = earlyWithdrawalRulesFn;
     this.reducedActionTypes      = ['REPLENISH_SAVINGS'];
-    this.generatedActionTypes    = ['INTL_TRANSFER_APPLY', 'RECORD_BALANCE'];
+    this.generatedActionTypes    = ['INTL_TRANSFER_APPLY', 'INTL_TRANSFER_RECORD', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { accountService }) {
@@ -57,11 +57,13 @@ export class ReplenishSavingsReducer extends Reducer {
     const isAu = state[targetKey]?.country === 'AU';
 
     try {
-      const { drawnKeys, pendingTaxActions } = this.accountService.replenishSavings(
+      const { drawnKeys, pendingTaxActions, crossBorderTransfers = [] } = this.accountService.replenishSavings(
         state, targetKey, deficit, date, this.earlyWithdrawalRulesFn
       );
       const balanceActions = drawnKeys.map(k => new RecordBalanceAction(`${k}.balance`, k));
-      return this.newState(state, {}, [...balanceActions, ...pendingTaxActions]);
+      // crossBorderTransfers are INTL_TRANSFER_RECORD markers for cash legs the
+      // drawdown already converted inline — journaled for visibility (design 44).
+      return this.newState(state, {}, [...balanceActions, ...crossBorderTransfers, ...pendingTaxActions]);
     } catch (e) {
       if (!(e instanceof InsufficientFundsError)) throw e;
       return this.newState(state, {}, [{

@@ -13,7 +13,7 @@ import { OneOffEvent }                from '../../simulation-framework/events/on
 import { ChangeResidencyHandler }     from '../../finance/handlers/change-residency-handler.js';
 import { ChangeResidencyApplyReducer }
   from '../../finance/reducers/change-residency-apply-reducer.js';
-import { IntlTransferApplyReducer }   from '../../finance/reducers/intl-transfer-apply-reducer.js';
+import { IntlTransferApplyReducer, IntlTransferRecordReducer }   from '../../finance/reducers/intl-transfer-apply-reducer.js';
 import { ValueType }                  from '../../simulation-framework/type-registry.js';
 import { FxService }                  from '../../finance/fx/fx-service.js';
 import { FxTransferToHandler }        from '../../finance/fx/fx-transfer-handler.js';
@@ -52,11 +52,26 @@ export const US_AU_CROSS_BORDER = {
 
   types: {
     handlers: [ChangeResidencyHandler, FxTransferToHandler],
-    reducers: [ChangeResidencyApplyReducer, IntlTransferApplyReducer, FxTransferApplyReducer, FxRefreshReducer],
+    reducers: [ChangeResidencyApplyReducer, IntlTransferApplyReducer, IntlTransferRecordReducer, FxTransferApplyReducer, FxRefreshReducer],
     actions: [
       { type: 'CHANGE_RESIDENCY_APPLY' },
       // INTL_TRANSFER_APPLY is kept for ReplenishSavingsReducer cross-border escalation.
       { type: 'INTL_TRANSFER_APPLY', fields: { targetDeficit: ValueType.number() } },
+      // INTL_TRANSFER_RECORD: journal-only marker for inline cross-border cash
+      // sweeps in replenishSavings (design 44 Gap A / A2).
+      {
+        type: 'INTL_TRANSFER_RECORD',
+        fields: {
+          direction:  ValueType.text(),
+          srcKey:     ValueType.text(),
+          dstKey:     ValueType.text(),
+          from:       ValueType.text(),
+          to:         ValueType.text(),
+          fromAmount: ValueType.number(),
+          toAmount:   ValueType.number(),
+          fee:        ValueType.number(),
+        },
+      },
       {
         type: 'FX_TRANSFER_APPLY',
         fields: {
@@ -217,6 +232,7 @@ export const US_AU_CROSS_BORDER = {
     return [
       new ChangeResidencyApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
       new IntlTransferApplyReducer({ accountService: accountSvc }),
+      new IntlTransferRecordReducer(),
       ...fxReducers,
     ];
   },
