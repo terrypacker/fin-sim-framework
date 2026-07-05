@@ -337,6 +337,71 @@ test('real-property-cash-flow: groups by actionType, sums account.balance diffs,
   assert.strictEqual(grandTotal, 700000 + -800000 + -2500);
 });
 
+// ─── CapitalGainsByDisposalDef ───────────────────────────────────────────────
+
+test('capital-gains-by-disposal: AU report includes US-asset disposals realized while AU-resident (cross-border)', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('capital-gains-by-disposal');
+
+  const entries = [
+    // US stock sale realized while AU-resident — feeds auCapitalGainsYTD via the
+    // US tax module's isAuResident branch, but the action is cc 'US'. The old
+    // `familyTypes('CAPITAL_GAINS', { cc: 'AU' })` filter dropped it; it must
+    // appear now.
+    entry({ actionType: 'STOCK_WITHDRAWAL_TAX',    data: { gain: 40000,    proceeds: 100000, residency: 'AU', description: 'usStockAccount' } }),
+    // Native AU stock sale, AU-resident.
+    entry({ actionType: 'AU_STOCK_WITHDRAWAL_TAX', data: { gain: 23371.89, proceeds:  60000, residency: 'AU', description: 'auStockAccount' } }),
+  ];
+
+  const { groups, grandTotal } = await runDef(def, { cc: 'AU', period: null }, entries);
+  const types = groups.map(g => g.key.actionType).sort();
+  assert.ok(types.includes('STOCK_WITHDRAWAL_TAX'),    'US-cc disposal must appear in the AU report');
+  assert.ok(types.includes('AU_STOCK_WITHDRAWAL_TAX'), 'AU-cc disposal must appear in the AU report');
+  // Ties out to the "Capital Gains (before discount)" line (= auCapitalGainsYTD).
+  assert.strictEqual(Math.round(grandTotal * 100) / 100, 63371.89);
+});
+
+test('capital-gains-by-disposal: AU report excludes non-resident disposals (they route to NR withholding)', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('capital-gains-by-disposal');
+
+  const entries = [
+    entry({ actionType: 'AU_STOCK_WITHDRAWAL_TAX', data: { gain: 10000, proceeds: 30000, residency: 'AU' } }),
+    // Non-resident disposal: gain accrues to auNonResidentWithholdingYTD, not
+    // auCapitalGainsYTD — must NOT show on the AU capital-gains report.
+    entry({ actionType: 'AU_STOCK_WITHDRAWAL_TAX', data: { gain:  5000, proceeds: 20000, residency: 'US' } }),
+  ];
+
+  const { grandTotal } = await runDef(def, { cc: 'AU', period: null }, entries);
+  assert.strictEqual(grandTotal, 10000, 'only resident-realized gains belong to the AU line');
+});
+
+test('capital-gains-by-disposal: US report sums every disposal incl gain-only types, regardless of residency', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('capital-gains-by-disposal');
+
+  const entries = [
+    entry({ actionType: 'STOCK_WITHDRAWAL_TAX',  data: { gain: 40000, proceeds: 100000, residency: 'AU', description: 'usStockAccount' } }),
+    // House sale carries no `residency` and (historically) no `proceeds` field —
+    // the old `proceeds > 0` filter dropped it. After normalising taxableGain →
+    // gain it must be summed.
+    entry({ actionType: 'US_HOUSE_SALE_TAX',     data: { gain: 50000, proceeds: 800000, description: 'usHouse' } }),
+    // Collectible sale carries gain but no proceeds — also previously dropped.
+    entry({ actionType: 'COLLECTIBLE_SALE_TAX',  data: { gain:  5000, residency: 'US' } }),
+  ];
+
+  const { groups, grandTotal } = await runDef(def, { cc: 'US', period: null }, entries);
+  const types = groups.map(g => g.key.actionType).sort();
+  assert.deepStrictEqual(types, ['COLLECTIBLE_SALE_TAX', 'STOCK_WITHDRAWAL_TAX', 'US_HOUSE_SALE_TAX']);
+  // Ties out to usCapitalGainsYTD (every disposal, every residency).
+  assert.strictEqual(grandTotal, 95000);
+
+  // proceeds is a secondary column: gain-only rows contribute null and are
+  // skipped by the sum, so only the two proceeds-bearing rows count.
+  const collectible = groups.find(g => g.key.actionType === 'COLLECTIBLE_SALE_TAX');
+  assert.strictEqual(collectible.proceeds, 0, 'gain-only row sums to 0 proceeds, not NaN');
+});
+
 // ─── Facet sanity ────────────────────────────────────────────────────────────
 
 test('new definitions all expose at least a period facet', () => {

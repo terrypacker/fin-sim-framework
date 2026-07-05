@@ -44,7 +44,7 @@ export const US_REAL_PROPERTY = {
       { type: 'US_HOUSE_SALE_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'US',
         fields: { salePrice: ValueType.number(), costBasis: ValueType.number(), stateKey: ValueType.text() } },
       { type: 'US_HOUSE_SALE_TAX', family: 'CAPITAL_GAINS', cc: 'US',
-        fields: { taxableGain: ValueType.number() } },
+        fields: { gain: ValueType.number(), proceeds: ValueType.number(), costBasis: ValueType.number(), description: ValueType.text() } },
       { type: 'US_MORTGAGE_PAYMENT_APPLY', family: 'REAL_PROPERTY_CASH', cc: 'US',
         fields: { amount: ValueType.currency('USD') } },
       { type: 'ASSET_APPRECIATE_APPLY', family: 'REAL_PROPERTY_CASH', cc: null,
