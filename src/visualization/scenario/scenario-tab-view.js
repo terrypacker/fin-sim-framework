@@ -530,6 +530,8 @@ export class ScenarioTabView {
         valueInput = _buildExpenseBandListEditor(param);
       } else if (param.type === 'RothScheduleList') {
         valueInput = _buildRothScheduleListEditor(param);
+      } else if (param.type === 'EarlyWithdrawalScheduleList') {
+        valueInput = _buildEarlyWithdrawalScheduleListEditor(param);
       } else if (param.type === 'HealthcareEventList') {
         valueInput = _buildHealthcareEventListEditor(param, this.personsProvider);
       } else if (param.type === 'DrawdownStrategyList') {
@@ -1070,6 +1072,110 @@ function _buildRothScheduleListEditor(param) {
       param.value.push({
         year:         (last?.year ?? new Date().getUTCFullYear()) + 1,
         incomeTarget: 0,
+      });
+      param.value.sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
+      render();
+    });
+    container.appendChild(addBtn);
+  };
+
+  render();
+  return container;
+}
+
+// ─── EarlyWithdrawalScheduleList editor (per-year per-class decant, design 45) ─
+
+/**
+ * Build a self-contained DOM editor for an EarlyWithdrawalScheduleList parameter
+ * (`earlyWithdrawalSchedule`). Each entry is
+ * `{ year, taxDeferredAmount, rothAmount, destinationKey? }` — the per-class GROSS
+ * draw for that year in real base-year (2025) USD, the per-year control form the
+ * MPC cockpit's EARLY_WITHDRAWAL lever actuates. Rendered as a three-column row
+ * (Year, Tax-Deferred, Roth) plus a remove button, with an "Add Year" button.
+ * Mirrors the RothScheduleList editor (entries kept sorted by `year`) so it is no
+ * longer a raw text input showing "[object Object],[object Object],…".
+ *
+ * `destinationKey` (an optional brokerage-account override; default the owner's US
+ * brokerage) is not surfaced as a column — it is preserved through the up-front
+ * clone for any entry that already carries one, and left unset on new entries.
+ *
+ * The incoming value is cloned up front so in-place edits never mutate a shared
+ * schema default; a non-array value (e.g. a stale string from the old free-text
+ * input) is coerced to an empty list.
+ */
+function _buildEarlyWithdrawalScheduleListEditor(param) {
+  param.value = (Array.isArray(param.value) ? param.value : []).map(e => ({ ...e }));
+
+  const container = document.createElement('div');
+  container.className = 'age-band-list-editor';   // reuse the shared band-editor styles
+
+  const COLUMNS = [
+    { field: 'year',              label: 'Year',                  step: '1',    min: '1900' },
+    { field: 'taxDeferredAmount', label: 'Tax-Deferred (real $)', step: '1000', min: '0' },
+    { field: 'rothAmount',        label: 'Roth (real $)',         step: '1000', min: '0' },
+  ];
+  const GRID = '1fr 1fr 1fr 26px';   // three fields + remove
+
+  const render = () => {
+    container.innerHTML = '';
+    const entries = param.value;
+
+    const header = document.createElement('div');
+    header.className = 'age-band-row age-band-header';
+    header.style.gridTemplateColumns = GRID;
+    COLUMNS.forEach(({ label }) => {
+      const h = document.createElement('span');
+      h.className = 'age-band-col-label';
+      h.textContent = label;
+      header.appendChild(h);
+    });
+    header.appendChild(document.createElement('span')); // spacer over remove button
+    container.appendChild(header);
+
+    entries.forEach((entry, idx) => {
+      const row = document.createElement('div');
+      row.className = 'age-band-row';
+      row.style.gridTemplateColumns = GRID;
+
+      COLUMNS.forEach(({ field, step, min }) => {
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.step = step;
+        input.min = min;
+        input.className = 'age-band-input';
+        input.value = entry[field] ?? '';
+        input.addEventListener('change', () => {
+          const raw = input.value;
+          entry[field] = raw.trim() === '' ? 0 : parseFloat(raw);
+          if (field === 'year') {
+            param.value.sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
+            render();
+          }
+        });
+        row.appendChild(input);
+      });
+
+      const rmBtn = document.createElement('button');
+      rmBtn.type = 'button';
+      rmBtn.className = 'btn btn-warn age-band-remove';
+      rmBtn.textContent = '✕';
+      rmBtn.title = 'Remove year';
+      rmBtn.addEventListener('click', () => { entries.splice(idx, 1); render(); });
+      row.appendChild(rmBtn);
+
+      container.appendChild(row);
+    });
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn btn-sm age-band-add-btn';
+    addBtn.textContent = '+ Add Year';
+    addBtn.addEventListener('click', () => {
+      const last = param.value[param.value.length - 1];
+      param.value.push({
+        year:              (last?.year ?? new Date().getUTCFullYear()) + 1,
+        taxDeferredAmount: 0,
+        rothAmount:        0,
       });
       param.value.sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
       render();
