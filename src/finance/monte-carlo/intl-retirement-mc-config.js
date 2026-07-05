@@ -9,12 +9,21 @@
  */
 
 import { DISTRIBUTION_TYPES }       from '../../simulation-framework/distributions.js';
-import { INTL_RETIREMENT_DEFAULTS } from '../../scenarios/intl-retirement-scenario.js';
+import { INTL_RETIREMENT_DEFAULTS, IntlRetirementScenario } from '../../scenarios/intl-retirement-scenario.js';
 import { SHOCK_LIBRARY }            from '../economic-shocks/shock-library.js';
 import { get }                      from './mc-param-paths.js';
 import { lookupLifeTable }          from './life-tables.js';
+import { indexParamSchema, resolveSweepVariables } from '../param-schema-utils.js';
 
 const D = INTL_RETIREMENT_DEFAULTS;
+
+// Lazily index the full param schema by key so MC variables can inherit identity
+// (label / options / visibleWhen) from it rather than duplicating it here.
+let _schemaByKey = null;
+function schemaByKey() {
+  if (!_schemaByKey) _schemaByKey = indexParamSchema(IntlRetirementScenario.buildFullParamSchema());
+  return _schemaByKey;
+}
 
 /**
  * Static Monte Carlo variable configurations for the IntlRetirementScenario.
@@ -25,6 +34,18 @@ const D = INTL_RETIREMENT_DEFAULTS;
  *
  * enabled:true  → perturbed by default when MC runs.
  * enabled:false → included in the UI for toggling; off by default.
+ *
+ * `paramKey` MUST be the toolset parameter key the compiler reads (e.g.
+ * `brokerageDividendRate`, not the `stockDividendRate` scenario-default alias) —
+ * the runner writes the sampled value to `cfg.parameters[paramKey]`, so a
+ * non-toolset key is silently discarded. `label` may differ for clarity.
+ * (Exception: `usStockGrowthRate` is intentionally left — its no-op cause is the
+ * regime growth substrate, not the key; see its note below.)
+ *
+ * Identity is the param schema's job: `visibleWhen` is always inherited from the
+ * schema by paramKey (buildVariables → resolveSweepVariables), and `label` is
+ * inherited when omitted here. A new entry needs only `paramKey` + distribution
+ * metadata; add `label` only to override the schema's.
  */
 export const DEFAULT_MC_VARIABLE_CONFIGS = [
 
@@ -45,12 +66,17 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
     group: 'US Account Rates',         enabled: true,
   },
   {
+    // NOTE: no-op under ECONOMIC_REGIMES — US equity growth is the single
+    // effectiveGrowthRates[EQUITY_US] rate, sourced from rothGrowthRate (see
+    // economic-regimes-toolset collectBaseGrowthRates). Left as-is pending a
+    // decision on the regime growth-rate substrate (it can't be fixed by a key
+    // rename; iraGrowthRate / k401GrowthRate are no-ops for the same reason).
     paramKey: 'usStockGrowthRate',     label: 'US Stock Growth Rate',
     type: DISTRIBUTION_TYPES.NORMAL,   mean: D.usStockGrowthRate, stdDev: 0.03,
     group: 'US Account Rates',         enabled: true,
   },
   {
-    paramKey: 'stockDividendRate',     label: 'US Stock Dividend Rate',
+    paramKey: 'brokerageDividendRate', label: 'US Stock Dividend Rate',
     type: DISTRIBUTION_TYPES.NORMAL,   mean: D.stockDividendRate, stdDev: 0.005,
     group: 'US Account Rates',         enabled: true,
   },
@@ -106,7 +132,7 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
 
   // ── Inflation rates ───────────────────────────────────────────────────────
   {
-    paramKey: 'usInflationRate',       label: 'US Inflation Rate',
+    paramKey: 'inflationRate',         label: 'US Inflation Rate',
     type: DISTRIBUTION_TYPES.NORMAL,   mean: D.usInflationRate, stdDev: 0.01,
     group: 'Inflation',                enabled: true,
   },
@@ -355,7 +381,7 @@ export class IntlRetirementMcConfig {
    * - Applies any user overrides stored via applyOverride().
    */
   buildVariables(params) {
-    return this.constructor.contributors
+    const resolved = this.constructor.contributors
       .flatMap(fn => fn({ params }))
       .filter(cfg => {
         // Non-array-indexed keys (flat or dot-separated): always keep.
@@ -381,6 +407,11 @@ export class IntlRetirementMcConfig {
           ...override,
         };
       });
+
+    // Inherit identity (label / options / visibleWhen) from the param schema and
+    // drop variables hidden by an unsatisfied visibleWhen (e.g. a strategy knob
+    // whose strategy isn't selected). Identity is maintained once, in the schema.
+    return resolveSweepVariables(resolved, schemaByKey(), params);
   }
 
   /**
@@ -390,13 +421,23 @@ export class IntlRetirementMcConfig {
    * Rewrites legacy flat shock keys to nested paths:
    *   shockSeverity  → shocks[0].severity
    *   shockStartDate → shocks[0].startDate
+   *
+   * And legacy scenario-default aliases to the toolset keys the compiler reads
+   * (these MC variables were silently no-ops under the old keys), so a saved MC
+   * config keeps the user's enabled/distribution settings after the fix:
+   *   stockDividendRate → brokerageDividendRate
+   *   usInflationRate   → inflationRate
    */
   static fromVariableConfigs(variableConfigs) {
+    const ALIASES = {
+      shockSeverity:     'shocks[0].severity',
+      shockStartDate:    'shocks[0].startDate',
+      stockDividendRate: 'brokerageDividendRate',
+      usInflationRate:   'inflationRate',
+    };
     const config = new IntlRetirementMcConfig();
     for (const v of variableConfigs) {
-      let key = v.paramKey;
-      if (key === 'shockSeverity')  key = 'shocks[0].severity';
-      if (key === 'shockStartDate') key = 'shocks[0].startDate';
+      const key = ALIASES[v.paramKey] ?? v.paramKey;
       config.applyOverride(key, v);
     }
     return config;

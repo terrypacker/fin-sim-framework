@@ -113,6 +113,7 @@ import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables } from './finance/optim
 import { valuesForConfig, IntlRetirementOptimizer } from './finance/optimization/intl-retirement-optimizer.js';
 import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES } from './finance/optimization/optimization-objectives.js';
 import { ownershipFractions, splitByOwnership, accumulateByOwnership } from './finance/ownership-utils.js';
+import { isParamVisible, indexParamSchema, resolveSweepVariables } from './finance/param-schema-utils.js';
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
 import { Person } from './finance/person.js';
@@ -628,6 +629,9 @@ export const Finance = {
   ownershipFractions,
   splitByOwnership,
   accumulateByOwnership,
+  isParamVisible,
+  indexParamSchema,
+  resolveSweepVariables,
   buildMonthPeriod,
   buildUsCalendarYear,
   buildAuFiscalYear,
