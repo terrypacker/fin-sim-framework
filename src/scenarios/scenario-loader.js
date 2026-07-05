@@ -163,8 +163,15 @@ export class ScenarioLoader {
         // Money params keep a numeric value (the compiler reads it as-is); their
         // currency rides alongside on the param entry. Default it when absent so
         // older configs (saved before Phase 5) acquire the schema's currency.
-        if (p.type === 'Money' && p.currency == null && p.defaultCurrency != null) {
-          p.currency = p.defaultCurrency;
+        if (p.type === 'Money') {
+          if (p.currency == null && p.defaultCurrency != null) {
+            p.currency = p.defaultCurrency;
+          }
+          // Expose the chosen native currency to the compiler/toolsets under a
+          // sibling `<key>Currency` key, since cfg.parameters is a flat number
+          // map that otherwise drops it. Handlers that debit a Money figure
+          // (expenses, healthcare) convert it into the target account currency.
+          cfg.parameters[`${p.name}Currency`] = p.currency ?? p.defaultCurrency ?? null;
         }
       }
     }

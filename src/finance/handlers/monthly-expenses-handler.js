@@ -10,6 +10,7 @@
 
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framework/actions.js';
+import { convertExpenseToAccount } from '../fx/expense-fx.js';
 
 /**
  * Handles the MONTHLY_EXPENSES event.
@@ -18,15 +19,25 @@ import { RecordBalanceAction, RecordMetricAction } from '../../simulation-framew
  * come from the US savings account (USD, 'US' residency) or AU savings account
  * (AUD, 'AUS' residency).
  *
- * If the target savings account would fall below its minimumBalance after the
- * debit, a REPLENISH_SAVINGS action is prepended to trigger the drawdown
- * cascade before the debit fires.
+ * The configured expense figure is denominated in `expensesCurrency` (the
+ * currency chosen for the monthlyExpenses param, USD by default). Before
+ * debiting, it is converted into the *target account's* currency via the run's
+ * recorded exchange rate — so after the move a USD expense leaves the converted
+ * AUD magnitude from AU savings (e.g. $10k @ 1.5 → A$15k), not the raw number.
+ * The RECORD_METRIC 'monthly_expenses' value stays in the native currency so
+ * the expense-level series reads consistently across the move.
  *
- * data.amount overrides the configured monthlyExpenses for one-off adjustments.
+ * If the target savings account would fall below its minimumBalance after the
+ * (converted) debit, a REPLENISH_SAVINGS action is prepended to trigger the
+ * drawdown cascade before the debit fires.
+ *
+ * data.amount overrides the configured monthlyExpenses for one-off adjustments;
+ * it is treated as already being in `expensesCurrency`.
  *
  * @param {object} opts
  * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry
  * @param {number} [opts.monthlyExpenses=6000]
+ * @param {string} [opts.expensesCurrency='USD'] - Native currency of the expense figure
  * @param {string} opts.usRole           - ACCOUNT_ROLES value for the USD cash pool
  * @param {string} [opts.usOwnerId]      - Person id for US savings (null = any owner)
  * @param {string} opts.auRole           - ACCOUNT_ROLES value for the AUD cash pool
@@ -41,6 +52,7 @@ export class MonthlyExpensesHandler extends HandlerEntry {
   constructor({
     stateRegistry,
     monthlyExpenses = 6000,
+    expensesCurrency = 'USD',
     usRole, usOwnerId = null,
     auRole, auOwnerId = null,
     primaryPersonKey = null,
@@ -48,6 +60,7 @@ export class MonthlyExpensesHandler extends HandlerEntry {
     super(null, 'Monthly Expenses');
     this.stateRegistry      = stateRegistry;
     this.monthlyExpenses    = monthlyExpenses;
+    this.expensesCurrency   = expensesCurrency;
     this.usRole             = usRole;
     this.usOwnerId          = usOwnerId;
     this.auRole             = auRole;
@@ -60,6 +73,7 @@ export class MonthlyExpensesHandler extends HandlerEntry {
     const h = new this({
       stateRegistry,
       monthlyExpenses:  d.monthlyExpenses  ?? 6000,
+      expensesCurrency: d.expensesCurrency ?? 'USD',
       usRole:           d.usRole           ?? null,
       usOwnerId:        d.usOwnerId        ?? null,
       auRole:           d.auRole           ?? null,
@@ -74,6 +88,7 @@ export class MonthlyExpensesHandler extends HandlerEntry {
     return {
       ...super.toJSON(),
       monthlyExpenses:  this.monthlyExpenses,
+      expensesCurrency: this.expensesCurrency,
       usRole:           this.usRole,
       usOwnerId:        this.usOwnerId,
       auRole:           this.auRole,
@@ -83,7 +98,8 @@ export class MonthlyExpensesHandler extends HandlerEntry {
   }
 
   call({ data, state }) {
-    const amount      = data?.amount ?? state.monthlyExpenses ?? this.monthlyExpenses;
+    // Native expense figure (in expensesCurrency); the metric records this.
+    const nativeAmount = data?.amount ?? state.monthlyExpenses ?? this.monthlyExpenses;
     const personKey   = this.primaryPersonKey ?? Object.keys(state.people ?? {})[0];
     const residency   = state.people?.[personKey]?.residency ?? null;
     const isAu        = residency === 'AUS';
@@ -92,17 +108,21 @@ export class MonthlyExpensesHandler extends HandlerEntry {
       : this.stateRegistry.getStateKey(this.usRole, this.usOwnerId);
     const account   = state[targetKey];
 
+    // Convert into the target account's currency so the actual withdrawal is
+    // the real-terms cost (e.g. USD expense from AUD savings after the move).
+    const debitAmount = convertExpenseToAccount(nativeAmount, this.expensesCurrency, account, state);
+
     const actions = [];
 
-    const postDebitBal = account.balance - amount;
+    const postDebitBal = account.balance - debitAmount;
     const deficit      = (account.minimumBalance ?? 0) - postDebitBal;
     if (deficit > 0) {
       actions.push({ type: 'REPLENISH_SAVINGS', deficit, targetKey });
     }
 
     actions.push(
-      { type: 'EXPENSE_DEBIT', amount, targetKey },
-      new RecordMetricAction('monthly_expenses', amount),
+      { type: 'EXPENSE_DEBIT', amount: debitAmount, targetKey },
+      new RecordMetricAction('monthly_expenses', nativeAmount),
       new RecordBalanceAction(`${targetKey}.balance`, targetKey),
     );
     return actions;
