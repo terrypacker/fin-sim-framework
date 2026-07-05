@@ -176,7 +176,7 @@ import {
   AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer,
 } from '../finance/account-rules/au/au-brokerage-classes.js';
 import { AuHouseSaleHandler, AuHouseSaleApplyReducer } from '../finance/account-rules/au/au-real-property-classes.js';
-import { AuSeIncomeHandler, AuSeIncomeApplyReducer }   from '../finance/account-rules/au/au-income-classes.js';
+import { AuSeIncomeHandler, AuSeIncomeApplyReducer, AuWagesIncomeApplyReducer }   from '../finance/account-rules/au/au-income-classes.js';
 import { AuFixedIncomeEarningsApplyReducer }            from '../finance/account-rules/au/au-fixed-income-classes.js';
 import {
   UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer,
@@ -289,7 +289,7 @@ const _ALL_CLASSES = [
   AuDividendFrankedResidentApplyReducer, AuDividendFrankedNonResidentApplyReducer,
   AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer,
   AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer,
-  AuHouseSaleApplyReducer, AuSeIncomeApplyReducer,
+  AuHouseSaleApplyReducer, AuSeIncomeApplyReducer, AuWagesIncomeApplyReducer,
   UsMortgagePaymentApplyReducer, AuMortgagePaymentApplyReducer,
   // Economic regime handlers and reducers
   EconomicShockHandler, EconomicRecoveryTickHandler,

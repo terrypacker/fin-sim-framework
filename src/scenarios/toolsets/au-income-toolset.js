@@ -10,11 +10,17 @@
 
 import {
   AuSeIncomeApplyReducer, AuSeIncomeHandler,
+  AuWagesIncomeApplyReducer,
 } from '../../finance/account-rules/au/au-income-classes.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
 
 /**
- * AU_INCOME toolset — AU income event mechanics (self-employment income).
+ * AU_INCOME toolset — AU income event mechanics (self-employment income,
+ * AU-source wages).
+ *
+ * The AU wage apply reducer (design 50) is dispatched by MonthlyWagesHandler
+ * (registered by the retirement toolsets) for any person whose wageCurrency is
+ * AUD, so it credits the AUD account and chains AU_WAGES_INCOME_TAX.
  *
  * Capabilities: au-income
  * Depends on: AU_TAX
@@ -26,10 +32,12 @@ export const AU_INCOME = {
 
   types: {
     handlers: [AuSeIncomeHandler],
-    reducers: [AuSeIncomeApplyReducer],
+    reducers: [AuSeIncomeApplyReducer, AuWagesIncomeApplyReducer],
     actions: [
-      { type: 'SE_INCOME_AU_APPLY', fields: { amount: ValueType.currency('AUD') } },
-      { type: 'AU_SE_INCOME_TAX',   fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), personKey: ValueType.text() } },
+      { type: 'SE_INCOME_AU_APPLY',    fields: { amount: ValueType.currency('AUD') } },
+      { type: 'AU_SE_INCOME_TAX',      fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), personKey: ValueType.text() } },
+      { type: 'AU_WAGES_INCOME_APPLY', fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), personKey: ValueType.text() } },
+      { type: 'AU_WAGES_INCOME_TAX',   fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), personKey: ValueType.text() } },
     ],
   },
 
@@ -42,6 +50,9 @@ export const AU_INCOME = {
   },
 
   reducers(context) {
-    return [new AuSeIncomeApplyReducer({ accountService: context.accountService })];
+    return [
+      new AuSeIncomeApplyReducer({ accountService: context.accountService }),
+      new AuWagesIncomeApplyReducer({ accountService: context.accountService }),
+    ];
   },
 };
