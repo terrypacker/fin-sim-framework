@@ -56,6 +56,30 @@ describe('DIE_WITH_TARGET objective', () => {
     assert.strictEqual(DIE_WITH_TARGET.evaluate(result, { snapshot }), 800_000);
   });
 
+  test('deflates the terminal anchor to real base-year before penalizing the miss', () => {
+    // terminalPriceLevel = 2 ⇒ a $1.0M NOMINAL terminal is $500k REAL; against a
+    // $500k real target the miss is zero → pure consumption reward. The target is
+    // now interpreted in base-year ("today's") dollars, matching the real reward.
+    const onRealTarget = DIE_WITH_TARGET.evaluate({
+      lifetimeConsumption: 1_000_000, finalNetWorthUsd: 1_000_000,
+      terminalPriceLevel: 2, terminalWealthTarget: 500_000, terminalWealthTargetPenalty: 10 });
+    assert.strictEqual(onRealTarget, 1_000_000, 'nominal $1M / 2 = real $500k == target → no penalty');
+
+    // The same nominal terminal is OVER the target in real terms by $100k when the
+    // target is $400k real: penalty = λ·100k, deflated miss (not the nominal $600k).
+    const offRealTarget = DIE_WITH_TARGET.evaluate({
+      lifetimeConsumption: 1_000_000, finalNetWorthUsd: 1_000_000,
+      terminalPriceLevel: 2, terminalWealthTarget: 400_000, terminalWealthTargetPenalty: 10 });
+    assert.strictEqual(offRealTarget, 1_000_000 - 10 * 100_000, 'penalty is on the REAL $100k miss');
+  });
+
+  test('absent a price level the terminal anchor is taken at par (backward compatible)', () => {
+    const score = DIE_WITH_TARGET.evaluate({
+      lifetimeConsumption: 1_000_000, finalNetWorthUsd: 600_000,
+      terminalWealthTarget: 500_000, terminalWealthTargetPenalty: 10 });
+    assert.strictEqual(score, 1_000_000 - 10 * 100_000, 'no terminalPriceLevel ⇒ deflator 1');
+  });
+
   test('a solvent plan (no deficit) is unaffected by the deficit penalty', () => {
     // cumulativeDeficit defaults to 0 → penalty term is 0, so the score is exactly
     // the original consumption − λ·|NW − target| formula (interior optimum intact).
