@@ -33,7 +33,7 @@ import {
 import { ScenarioLoader } from '../../src/scenarios/scenario-loader.js';
 import { ACCOUNT_ROLES }  from '../../src/finance/state/account-roles.js';
 import { AccountService } from '../../src/finance/services/account-service.js';
-import { CheckingAccount, USD } from '../../src/finance/assets/account.js';
+import { CheckingAccount, USD, AUD } from '../../src/finance/assets/account.js';
 import { BrokerageAccount }     from '../../src/finance/assets/investment-account.js';
 import { EventBus }       from '../../src/simulation-framework/event-bus.js';
 import { Graph }          from '../../src/graph/graph.js';
@@ -41,10 +41,10 @@ import { GraphQueryApi }  from '../../src/graph/graph-query-api.js';
 
 // ─── Schema / defaults ────────────────────────────────────────────────────────
 
-test('EVT-DRAWDOWN: DRAWDOWN_STRATEGIES exposes the four ordered strategies + CUSTOM', () => {
+test('EVT-DRAWDOWN: DRAWDOWN_STRATEGIES exposes the ordered strategies + CUSTOM', () => {
   assert.deepStrictEqual(
     Object.keys(DRAWDOWN_STRATEGIES).sort(),
-    ['CUSTOM', 'PROPORTIONAL', 'ROTH_FIRST', 'TAXABLE_FIRST', 'TAX_DEFERRED_FIRST'].sort(),
+    ['CUSTOM', 'PROPORTIONAL', 'ROTH_FIRST', 'TAXABLE_FIRST', 'TAX_DEFERRED_FIRST', 'TAX_EFFICIENT'].sort(),
   );
   // CUSTOM is a no-op sentinel (no priority map).
   assert.strictEqual(DRAWDOWN_STRATEGIES.CUSTOM, null);
@@ -52,6 +52,15 @@ test('EVT-DRAWDOWN: DRAWDOWN_STRATEGIES exposes the four ordered strategies + CU
   const t = DRAWDOWN_STRATEGIES.TAXABLE_FIRST;
   assert.ok(t[ACCOUNT_ROLES.FIXED_INCOME] < t[ACCOUNT_ROLES.IRA]);
   assert.ok(t[ACCOUNT_ROLES.IRA]          < t[ACCOUNT_ROLES.ROTH]);
+  // TAX_EFFICIENT is a single GLOBAL order: every US and AU role gets a distinct
+  // rank (no per-country collisions), taxable → tax-deferred → tax-free last.
+  const e = DRAWDOWN_STRATEGIES.TAX_EFFICIENT;
+  const ranks = Object.values(e);
+  assert.strictEqual(new Set(ranks).size, ranks.length, 'ranks must be globally distinct');
+  assert.ok(e[ACCOUNT_ROLES.US_STOCK]        < e[ACCOUNT_ROLES.IRA]);   // taxable before tax-deferred
+  assert.ok(e[ACCOUNT_ROLES.AU_STOCK]        < e[ACCOUNT_ROLES.IRA]);   // AU taxable before US tax-deferred
+  assert.ok(e[ACCOUNT_ROLES.K401]            < e[ACCOUNT_ROLES.SUPER]); // tax-deferred before tax-free
+  assert.ok(e[ACCOUNT_ROLES.SUPER]           < e[ACCOUNT_ROLES.ROTH]);  // Roth drawn dead last
 });
 
 test('EVT-DRAWDOWN: schema entry + default are wired (Enum, mc:false, opt:true)', () => {
@@ -166,4 +175,58 @@ test('EVT-DRAWDOWN: PROPORTIONAL splits the deficit pro-rata across equal bucket
   // Equal balances → ~half from each.
   assert.ok(Math.abs(a.balance - 8000) < 1e-6, `accountA balance ${a.balance}`);
   assert.ok(Math.abs(b.balance - 8000) < 1e-6, `accountB balance ${b.balance}`);
+});
+
+// ─── replenishSavings: cross-border (crossBorderDrawdown=GLOBAL) ───────────────
+
+test('EVT-DRAWDOWN: LOCAL_FIRST (default) ignores other-country accounts', () => {
+  const svc     = new AccountService(new Graph(), new GraphQueryApi(new Graph()), new EventBus());
+  const auSav   = new CheckingAccount(0, { country: 'AU', currency: AUD });
+  const usBroker = new BrokerageAccount(10_000, { country: 'US', currency: USD, drawdownPriority: 1 });
+  const state = {
+    auSavingsAccount: auSav, usStock: usBroker,
+    personBirthDate: new Date(1970, 0, 1),
+    effectiveExchangeRates: { USD_AUD: 1.5 },
+    // crossBorderDrawdown unset → LOCAL_FIRST: AU target can't reach the US account.
+  };
+  assert.throws(
+    () => svc.replenishSavings(state, 'auSavingsAccount', 3000, new Date(2026, 0, 1)),
+    /Insufficient/i,
+  );
+  assert.strictEqual(usBroker.balance, 10_000); // untouched across the border
+});
+
+test('EVT-DRAWDOWN: GLOBAL draws a US account to fund an AU target with FX + fee', () => {
+  const svc     = new AccountService(new Graph(), new GraphQueryApi(new Graph()), new EventBus());
+  const auSav   = new CheckingAccount(0, { country: 'AU', currency: AUD });
+  const usBroker = new BrokerageAccount(10_000, { country: 'US', currency: USD, drawdownPriority: 1 });
+  const state = {
+    auSavingsAccount: auSav, usStock: usBroker,
+    personBirthDate: new Date(1970, 0, 1),
+    effectiveExchangeRates: { USD_AUD: 1.5 }, // 1 USD = 1.5 AUD
+    effectiveFxFees:        { USD_AUD: 10 },  // US$10 flat per cross-border transfer
+    crossBorderDrawdown: 'GLOBAL',
+  };
+  // Need A$3000 net at the AU savings. The US$10 fee is A$15 at 1.5, so the
+  // transfer must deliver A$3015 ⇒ draw US$2010; AU savings nets exactly A$3000.
+  const { drawnKeys } = svc.replenishSavings(state, 'auSavingsAccount', 3000, new Date(2026, 0, 1));
+  assert.deepStrictEqual(drawnKeys, ['usStock']);
+  assert.ok(Math.abs(auSav.balance - 3000) < 1e-6, `AU savings ${auSav.balance}`);     // target nets the deficit
+  assert.ok(Math.abs(usBroker.balance - 7990) < 1e-6, `US broker ${usBroker.balance}`); // US$2010 drawn (incl. fee)
+});
+
+test('EVT-DRAWDOWN: GLOBAL same-currency draw pays no FX fee', () => {
+  const svc     = new AccountService(new Graph(), new GraphQueryApi(new Graph()), new EventBus());
+  const usSav   = new CheckingAccount(0, { country: 'US', currency: USD });
+  const usBroker = new BrokerageAccount(10_000, { country: 'US', currency: USD, drawdownPriority: 1 });
+  const state = {
+    usSavingsAccount: usSav, usStock: usBroker,
+    personBirthDate: new Date(1970, 0, 1),
+    effectiveExchangeRates: { USD_AUD: 1.5 },
+    effectiveFxFees:        { USD_AUD: 10 },
+    crossBorderDrawdown: 'GLOBAL',
+  };
+  svc.replenishSavings(state, 'usSavingsAccount', 3000, new Date(2026, 0, 1));
+  assert.ok(Math.abs(usSav.balance - 3000) < 1e-6, `US savings ${usSav.balance}`);
+  assert.ok(Math.abs(usBroker.balance - 7000) < 1e-6, `US broker ${usBroker.balance}`); // exactly $3000, no fee
 });

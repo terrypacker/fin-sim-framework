@@ -370,6 +370,14 @@ export const US_RETIREMENT = {
       // Drawdown mode read by AccountService.replenishSavings. Ordered (default)
       // honors drawdownPriority; PROPORTIONAL draws pro-rata across eligible buckets.
       drawdownMode:         p.drawdownStrategy === 'PROPORTIONAL' ? 'PROPORTIONAL' : 'ORDERED',
+      // Cross-border drawdown policy read by AccountService.replenishSavings.
+      // LOCAL_FIRST (default): drain only same-country accounts to cover a savings
+      // deficit, escalating to INTL_TRANSFER as a last resort (avoids an FX wire on
+      // every top-up). GLOBAL: draw from accounts in either country in one global
+      // drawdownPriority order, converting AUD↔USD per draw — used by the
+      // TAX_EFFICIENT strategy so the residency country no longer dictates which
+      // accounts drain first.
+      crossBorderDrawdown:  p.drawdownStrategy === 'TAX_EFFICIENT' ? 'GLOBAL' : 'LOCAL_FIRST',
     };
 
     // Account state entries + initial metrics snapshot so the chart shows

@@ -74,6 +74,19 @@ export const DRAWDOWN_STRATEGIES = {
     [ACCOUNT_ROLES.IRA]: 3, [ACCOUNT_ROLES.K401]: 4, [ACCOUNT_ROLES.ROTH]: 5,
     [ACCOUNT_ROLES.AU_FIXED_INCOME]: 1, [ACCOUNT_ROLES.AU_STOCK]: 2, [ACCOUNT_ROLES.SUPER]: 3,
   },
+  TAX_EFFICIENT: {            // GLOBAL order across BOTH countries by tax treatment.
+    // Unlike the per-country strategies above (whose US/AU ranks deliberately
+    // overlap because replenishSavings sorts each country separately), this map
+    // assigns a single distinct rank per role so US and AU accounts interleave
+    // into one global drawdown order. It only behaves as intended when paired
+    // with crossBorderDrawdown=GLOBAL (set by the us-retirement toolset when this
+    // strategy is selected), which lets replenishSavings cross the currency
+    // border in priority order instead of draining the residency country first.
+    [ACCOUNT_ROLES.FIXED_INCOME]: 1, [ACCOUNT_ROLES.US_STOCK]: 2,        // taxable: only gains taxed
+    [ACCOUNT_ROLES.AU_FIXED_INCOME]: 3, [ACCOUNT_ROLES.AU_STOCK]: 4,     //   (basis already taxed) → drain first
+    [ACCOUNT_ROLES.IRA]: 5, [ACCOUNT_ROLES.K401]: 6,                     // tax-deferred: ordinary income on withdrawal
+    [ACCOUNT_ROLES.SUPER]: 7, [ACCOUNT_ROLES.ROTH]: 8,                   // tax-free: preserve longest (super tax-free 60+, Roth)
+  },
   // No mapping → the cascade is a no-op, so per-account drawdownPriority values
   // authored in buildDefaultConfig (or hand-edited via the account editor) remain
   // authoritative. Select this to hand-tune individual account ordering.
