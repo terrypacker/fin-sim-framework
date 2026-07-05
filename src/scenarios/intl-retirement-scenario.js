@@ -558,6 +558,13 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     defaultValue: 0.5,
     description: 'Fraction of a taxable balance treated as unrealized gain when per-lot cost basis is unavailable (after-tax net-worth metric, design 40).',
   },
+  {
+    key: 'afterTaxRateMethod', label: 'After-Tax Rate Method',
+    type: 'Enum', group: 'Optimization', mc: false, opt: false,
+    options: ['configured', 'liquidation'],
+    defaultValue: 'configured',
+    description: 'How the after-tax metrics price the embedded liquidation tax: "configured" uses fixed effective rates; "liquidation" stacks the balance through the real tax engine for an effective rate (design 40 Phase 3, US accounts).',
+  },
 
 ];
 

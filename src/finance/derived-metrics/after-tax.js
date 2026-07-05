@@ -9,6 +9,7 @@
  */
 
 import { isDrawdownAccessible } from './net-liquidity.js';
+import { TaxSettleService }     from '../tax-settle-service.js';
 
 /**
  * After-tax re-pricing (design/40).
@@ -72,6 +73,8 @@ function _isAu(account) {
   const code = account?.currency?.code ?? account?.currency ?? null;
   return code === 'AUD' || account?.country === 'AU';
 }
+/** True for US-domiciled accounts (IRA/401k/US brokerage) — the Option-C engine path. */
+function _isUs(account) { return !_isAu(account); }
 
 /**
  * The C-shaped rate-provider contract (design/40 §3, D1). A provider answers the
@@ -100,6 +103,57 @@ export function defaultRateProvider({
     },
     capGainsLiquidationRate(/* account, unrealizedGain, state, date */) {
       return cg;
+    },
+  };
+}
+
+/**
+ * Option C — the liquidation-waterfall provider (design 40 §3, Phase 3). The
+ * real-world-faithful rate: it runs the candidate liquidation through the SAME
+ * inflation-adjusted, year-resolved tax engine the sim settles with
+ * (`TaxSettleService.computeUsTax`), stacked on the realized income at the
+ * valuation date, and returns the **effective** rate `(tax_after − tax_before)/amount`.
+ *
+ * Because the contract already passes `account`+`amount`+`state`+`date`, this is a
+ * drop-in for the Option-A default — landing it is swapping the provider, no metric
+ * change (design 40 D1). Scope: **US** pre-tax (ordinary) and US brokerage (LTCG)
+ * go through the engine (the dominant pre-tax pile and the Roth jurisdiction —
+ * the US taxes IRA/401k distributions regardless of residency, §2.3). **AU/super**
+ * fall back to the configured Option-A rates (AU super is concessionally taxed,
+ * not ordinary income — its engine path is the design 40 Phase 2 follow-up). Any
+ * error or non-finite result also falls back, so the metric never throws.
+ *
+ * Approximation (documented): each account is valued at its own marginal stack on
+ * realized income (not a joint multi-account liquidation), matching the per-entry
+ * metric. Joint-liquidation ordering is a later refinement.
+ */
+export function liquidationRateProvider({ ordinaryRate, ordinaryRateAu, capGainsRate } = {}) {
+  const fallback = defaultRateProvider({ ordinaryRate, ordinaryRateAu, capGainsRate });
+  const svc = new TaxSettleService();
+  const MIN_AMOUNT = 1;   // below this the effective-rate delta is numerically meaningless
+
+  // Effective rate of stacking `amount` onto `state.<field>` through computeUsTax,
+  // read from the engine result's `resultKey`. Falls back on any trouble.
+  const usDelta = (field, resultKey, account, amount, state, fallbackFn) => {
+    if (!_isUs(account) || !state || !(amount > MIN_AMOUNT)) return fallbackFn();
+    try {
+      const before = svc.computeUsTax(state)?.[resultKey] ?? 0;
+      const after  = svc.computeUsTax({ ...state, [field]: (state[field] ?? 0) + amount })?.[resultKey] ?? 0;
+      const r = (after - before) / amount;
+      return Number.isFinite(r) ? Math.min(1, Math.max(0, r)) : fallbackFn();
+    } catch {
+      return fallbackFn();
+    }
+  };
+
+  return {
+    ordinaryLiquidationRate(account, amount, state, date) {
+      return usDelta('usOrdinaryIncomeYTD', 'ordinaryTax', account, amount, state,
+        () => fallback.ordinaryLiquidationRate(account, amount, state, date));
+    },
+    capGainsLiquidationRate(account, gain, state, date) {
+      return usDelta('usCapitalGainsYTD', 'capitalGainsTax', account, gain, state,
+        () => fallback.capGainsLiquidationRate(account, gain, state, date));
     },
   };
 }
