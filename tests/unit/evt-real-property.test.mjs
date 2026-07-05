@@ -446,10 +446,12 @@ test('EVT-34: US house sale credits net proceeds (sale price − mortgage) and z
   assert.ok(cashDiff, 'should credit usSavingsAccount with net proceeds');
   assert.strictEqual(cashDiff.delta, config.realProperties[0].value - mortgage);
 
-  const mortgageDiff = findDiff(apply, 'usHouseProperty.mortgageBalance');
-  assert.ok(mortgageDiff, 'should record mortgage payoff to 0');
-  assert.strictEqual(mortgageDiff.after, 0);
-  assert.strictEqual(mortgageDiff.delta, -mortgage);
+  // Design 54 P2: the mortgage is a linked Loan, so the sale pays off the loan
+  // balance (the property's own mortgageBalance scalar is retired / already 0).
+  const loanDiff = findDiff(apply, 'usHousePropertyLoan.balance');
+  assert.ok(loanDiff, 'should record loan payoff to 0');
+  assert.strictEqual(loanDiff.after, 0);
+  assert.strictEqual(loanDiff.delta, -mortgage);
 });
 
 test('EVT-34: US house sale taxable gain is unaffected by mortgage payoff', () => {
@@ -481,10 +483,12 @@ test('EVT-33: AU house sale credits net proceeds (sale price − mortgage) and z
   assert.ok(cashDiff, 'should credit auSavingsAccount with net proceeds');
   assert.strictEqual(cashDiff.delta, config.realProperties[0].value - mortgage);
 
-  const mortgageDiff = findDiff(apply, 'auHouseProperty.mortgageBalance');
-  assert.ok(mortgageDiff, 'should record mortgage payoff to 0');
-  assert.strictEqual(mortgageDiff.after, 0);
-  assert.strictEqual(mortgageDiff.delta, -mortgage);
+  // Design 54 P2: the mortgage is a linked Loan, so the sale pays off the loan
+  // balance (the property's own mortgageBalance scalar is retired / already 0).
+  const loanDiff = findDiff(apply, 'auHousePropertyLoan.balance');
+  assert.ok(loanDiff, 'should record loan payoff to 0');
+  assert.strictEqual(loanDiff.after, 0);
+  assert.strictEqual(loanDiff.delta, -mortgage);
 });
 
 test('EVT-33: AU house sale capital gain is unaffected by mortgage payoff', () => {

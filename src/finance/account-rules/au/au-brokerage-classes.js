@@ -40,9 +40,7 @@ export class AuDividendFrankedResidentApplyReducer extends AccountServiceReducer
       {
         auStockAccount: {
           ...sa,
-          balance:           sa.balance           + action.amount,
-          contributionBasis: sa.contributionBasis + action.amount,
-          earningsBasis:     sa.earningsBasis     + action.amount,
+          balance: sa.balance + action.amount,
         },
       },
       [{ type: 'AU_DIVIDEND_FRANKED_RESIDENT_TAX', amount: action.amount }]
@@ -98,9 +96,7 @@ export class AuDividendUnfrankedResidentApplyReducer extends AccountServiceReduc
       {
         auStockAccount: {
           ...sa,
-          balance:           sa.balance           + action.amount,
-          contributionBasis: sa.contributionBasis + action.amount,
-          earningsBasis:     sa.earningsBasis     + action.amount,
+          balance: sa.balance + action.amount,
         },
       },
       [{ type: 'AU_DIVIDEND_UNFRANKED_RESIDENT_TAX', amount: action.amount }]
@@ -130,9 +126,7 @@ export class AuDividendUnfrankedNonResidentApplyReducer extends AccountServiceRe
       {
         auStockAccount: {
           ...sa,
-          balance:           sa.balance           + action.amount,
-          contributionBasis: sa.contributionBasis + action.amount,
-          earningsBasis:     sa.earningsBasis     + action.amount,
+          balance: sa.balance + action.amount,
         },
       },
       [{ type: 'AU_DIVIDEND_UNFRANKED_NONRESIDENT_TAX', amount: action.amount }]
@@ -143,7 +137,7 @@ export class AuDividendUnfrankedNonResidentApplyReducer extends AccountServiceRe
 /** EVT-30: AU stock unrealized earnings — stay in account, no tax. */
 export class AuStockEarningsApplyReducer extends AccountServiceReducer {
   static type        = 'AuStockEarningsApplyReducer';
-  static description = 'Adds unrealized earnings to auStockAccount balance and earningsBasis; no tax effect.';
+  static description = 'Adds unrealized earnings to auStockAccount balance; no tax effect.';
   static actionType  = 'AU_STOCK_EARNINGS_APPLY';
 
   constructor({ accountService }) {  // accountService unused but accepted for API symmetry
@@ -154,11 +148,7 @@ export class AuStockEarningsApplyReducer extends AccountServiceReducer {
   reduce(state, action) {
     const sa = state.auStockAccount;
     return this.newState(state, {
-      auStockAccount: {
-        ...sa,
-        balance:       sa.balance       + action.amount,
-        earningsBasis: sa.earningsBasis + action.amount,
-      },
+      auStockAccount: { ...sa, balance: sa.balance + action.amount },
     });
   }
 }
@@ -196,18 +186,16 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
 
     this.accountService.transaction(auCash(state), salePrice, null);
 
-    const newBalance  = +newHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
-    const newEarnings = Math.max(0, (sa.earningsBasis ?? 0) - gain);
-    const newContrib  = newBalance - newEarnings;
+    const newBalance = +newHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
+    // Brokerage basis is no longer tracked (design 53 P1) — the FIFO realizedBasis
+    // above is the authoritative CGT source.
     return this.newState(
       state,
       {
         auStockAccount: {
           ...sa,
-          balance:           newBalance,
-          holdings:          newHoldings,
-          earningsBasis:     newEarnings,
-          contributionBasis: newContrib,
+          balance:  newBalance,
+          holdings: newHoldings,
         },
       },
       [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, auGain, residency, proceeds: salePrice, costBasis: realizedBasis, description: sa.name || 'auStockAccount' }]

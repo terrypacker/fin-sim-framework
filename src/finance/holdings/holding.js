@@ -41,6 +41,12 @@ export class Holding {
    * @param {string}      [opts.label='']           - Optional display label ("ITOT", "BND")
    * @param {number|null} [opts.dividendYield=null] - Per-holding annual dividend yield; null = fall back to the
    *                                                  dividend handler's account-level rate (design 28 §7)
+   * @param {number|null} [opts.couponRate=null]    - Per-holding annual bond coupon rate (BOND holdings only).
+   *                                                  Non-null = a FIXED contractual coupon that is NOT re-adjusted
+   *                                                  by state.effectiveInterestRates regime moves (its price still
+   *                                                  marks to market via `duration`, design 28). null = fall back to
+   *                                                  the regime-adjusted rateKey rate (today's floating behavior).
+   *                                                  The bond twin of `dividendYield` (design 53 §4).
    * @param {Array<{date: Date|string, rate: number}>|null} [opts.appreciationSchedule=null]
    *                                                - Step-wise appreciation schedule; null = use asset scalar rate
    * @param {number|null} [opts.duration=null]      - Modified duration in years (BOND holdings only);
@@ -58,6 +64,7 @@ export class Holding {
     rateKey              = null,
     label                = '',
     dividendYield        = null,
+    couponRate           = null,
     appreciationSchedule = null,
     duration             = null,
     taxLossPartner       = null,
@@ -71,6 +78,7 @@ export class Holding {
     this.rateKey              = rateKey;
     this.label                = label;
     this.dividendYield        = dividendYield;
+    this.couponRate           = couponRate;
     this.appreciationSchedule = appreciationSchedule;
     this.duration             = duration;
     this.taxLossPartner       = taxLossPartner;
@@ -88,6 +96,7 @@ export class Holding {
       rateKey:             this.rateKey,
       label:               this.label,
       dividendYield:       this.dividendYield,
+      couponRate:          this.couponRate,
       appreciationSchedule: this.appreciationSchedule
         ? this.appreciationSchedule.map(e => ({
             date: e.date instanceof Date ? e.date.toISOString() : e.date,
@@ -110,6 +119,7 @@ export class Holding {
       rateKey:       d.rateKey ?? null,
       label:         d.label   ?? '',
       dividendYield: d.dividendYield ?? null,
+      couponRate:    d.couponRate ?? null,
       appreciationSchedule: d.appreciationSchedule
         ? d.appreciationSchedule.map(e => ({ date: new Date(e.date), rate: e.rate }))
         : null,

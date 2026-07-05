@@ -17,7 +17,6 @@
  * limitations under the License.
  */
 
-import {ACCOUNT_TYPE} from "../assets/account.js";
 import {currencyForCountry} from "../country-codes.js";
 
 /**
@@ -168,6 +167,7 @@ export class StateSchemaRegistry {
     this.registerPattern('*.holdings.*.label',       ParameterValueType.text());
     this.registerPattern('*.holdings.*.purchaseDate', ParameterValueType.date());
     this.registerPattern('*.holdings.*.dividendYield',       ParameterValueType.rate());
+    this.registerPattern('*.holdings.*.couponRate',          ParameterValueType.rate());
     this.registerPattern('*.holdings.*.duration',            ParameterValueType.decimal(2));
     this.registerPattern('*.holdings.*.appreciationSchedule', ParameterValueType.unknown());
 
@@ -301,8 +301,12 @@ export class StateSchemaRegistry {
     const code = account?.currency?.code ?? null;
     const vt   = ParameterValueType.currency(code);
     this.register(`${stateKey}.balance`,          vt);
-    this.register(`${stateKey}.contributionBasis`, vt);
-    this.register(`${stateKey}.earningsBasis`,    vt);
+    // The contribution/earnings ledger lives only on RetirementAccount (design 53 §2);
+    // register its display paths only when the account actually carries them.
+    if ('contributionBasis' in account) this.register(`${stateKey}.contributionBasis`, vt);
+    if ('earningsBasis' in account)     this.register(`${stateKey}.earningsBasis`,     vt);
+    // Loan (liability) interest rate (design 54).
+    if ('interestRate' in account)      this.register(`${stateKey}.interestRate`, ParameterValueType.rate());
     this.register(`${stateKey}.minimumBalance`,   vt);
     this.register(`${stateKey}.loanBalance`,      vt);
     // The per-account balance is also recorded into state.metrics[stateKey] via
@@ -310,9 +314,6 @@ export class StateSchemaRegistry {
     // as the account's currency so the chart/state-panel convert it (design 10
     // §Phase 4) — otherwise it falls through the generic `metrics.*` → metric glob.
     this.register(`metrics.${stateKey}`,          vt);
-    if (account.type === ACCOUNT_TYPE.BROKERAGE && 'earningsBasis' in account) {
-      this.register(`${stateKey}.earningsBasis`,   vt);
-    }
     // Holdings per-account stamp with the account's currency (design 25 §5.6).
     // Front-inserted so the coded per-account pattern wins over the generic
     // code-less `*.holdings.*` globs registered in the constructor.

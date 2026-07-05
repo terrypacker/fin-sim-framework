@@ -97,12 +97,13 @@ test('consumeHoldingsFifo: mixed lots — lot without AU entry falls back to cos
 
 // ── recordResidencyChange gating ─────────────────────────────────────────────
 
-test('recordResidencyChange: BROKERAGE step-up stamps account + per-lot AU base', () => {
+test('recordResidencyChange: BROKERAGE step-up stamps per-lot AU base (design 53 P1)', () => {
   const svc = makeSvc();
   const brok = new BrokerageAccount(1000, { earningsBasis: 600, contributionBasis: 400 });
   brok.holdings = [{ allocation: 'EQUITY', marketValue: 1000, costBasis: 400 }];
   svc.recordResidencyChange(brok, { country: 'AU', stepUp: true });
-  assert.ok(near(brok.costBaseStepUpByCountry.AU, 600)); // pre-move unrealized gain
+  // Design 53 P1: the AU step-up is stamped per-lot only (the account-level
+  // costBaseStepUpByCountry snapshot was retired when the drawdown moved to FIFO).
   assert.ok(near(brok.holdings[0].costBaseByCountry.AU, 1000)); // market value at move
   assert.ok(near(brok.balanceAtResidencyChange, 1000));
 });
@@ -130,11 +131,9 @@ test('recordResidencyChange: second call does not overwrite the step-up snapshot
   const brok = new BrokerageAccount(1000, { earningsBasis: 600 });
   brok.holdings = [{ allocation: 'EQUITY', marketValue: 1000, costBasis: 400 }];
   svc.recordResidencyChange(brok, { country: 'AU', stepUp: true });
-  brok.earningsBasis = 1234;             // pretend earnings grew after the move
-  brok.holdings[0].marketValue = 5000;
+  brok.holdings[0].marketValue = 5000;   // pretend the lot grew after the move
   svc.recordResidencyChange(brok, { country: 'AU', stepUp: true }); // no-op
-  assert.ok(near(brok.costBaseStepUpByCountry.AU, 600));
-  assert.ok(near(brok.holdings[0].costBaseByCountry.AU, 1000));
+  assert.ok(near(brok.holdings[0].costBaseByCountry.AU, 1000)); // per-lot base unchanged
 });
 
 // ── Account-level proportional drawdown (the §3 analysis path) ────────────────
@@ -147,11 +146,13 @@ test('replenishSavings: AU drawdown excludes pre-move appreciation (auGain < gai
     country: 'US', currency: USD, drawdownPriority: 1,
     earningsBasis: 8000, contributionBasis: 12000,
   });
-  // Move: AU forgives the 8000 pre-move unrealized gain.
+  // US basis 12000, market value 20000 → 8000 pre-move unrealized gain.
+  brok.holdings = [{ id: 'h1', allocation: 'EQUITY', marketValue: 20000, costBasis: 12000 }];
+  // Move: AU forgives the pre-move gain by stepping the per-lot AU base up to 20000.
   svc.recordResidencyChange(brok, { country: 'AU', stepUp: true });
-  // Post-move appreciation: +4000 (balance & earningsBasis grow; step-up fixed).
-  brok.balance       += 4000;
-  brok.earningsBasis += 4000;            // now balance 24000, earningsBasis 12000
+  // Post-move appreciation: +4000 (balance & lot marketValue grow; bases fixed).
+  brok.balance += 4000;
+  brok.holdings[0].marketValue += 4000;  // now balance 24000, lot mv 24000
 
   const state = {
     target, brok,
@@ -161,12 +162,12 @@ test('replenishSavings: AU drawdown excludes pre-move appreciation (auGain < gai
   const { pendingTaxActions } = svc.replenishSavings(state, 'target', 6000, date);
   const tax = pendingTaxActions.find(a => a.type === 'STOCK_WITHDRAWAL_TAX');
   assert.ok(tax, 'emits STOCK_WITHDRAWAL_TAX');
-  // withdraw 6000 of 24000: gain = 6000 * (12000/24000) = 3000.
+  // withdraw 6000 of 24000 (25%): FIFO realizedBasis = 12000 * 0.25 = 3000 → gain 3000.
   assert.ok(near(tax.gain, 3000), `gain ${tax.gain}`);
-  // step-up consumed = 8000 * (6000/24000) = 2000 → auGain = 3000 - 2000 = 1000.
+  // AU base consumed = 20000 * 0.25 = 5000 → auGain = 6000 - 5000 = 1000.
   assert.ok(near(tax.auGain, 1000), `auGain ${tax.auGain}`);
-  // step-up depletes 8000 → 6000.
-  assert.ok(near(brok.costBaseStepUpByCountry.AU, 6000));
+  // Remaining lot keeps 75% of the stepped-up AU base: 20000 * 0.75 = 15000.
+  assert.ok(near(brok.holdings[0].costBaseByCountry.AU, 15000));
 });
 
 test('replenishSavings: no step-up recorded → auGain equals gain', () => {
@@ -177,11 +178,14 @@ test('replenishSavings: no step-up recorded → auGain equals gain', () => {
     country: 'US', currency: USD, drawdownPriority: 1,
     earningsBasis: 8000, contributionBasis: 12000,
   });
+  // US basis 12000, market value 20000; no residency step-up (no per-lot AU base).
+  brok.holdings = [{ id: 'h1', allocation: 'EQUITY', marketValue: 20000, costBasis: 12000 }];
   const state = { target, brok, people: { primary: { residency: 'US', birthDate: new Date(1960, 0, 1) } } };
   const { pendingTaxActions } = svc.replenishSavings(state, 'target', 5000, date);
   const tax = pendingTaxActions.find(a => a.type === 'STOCK_WITHDRAWAL_TAX');
+  // withdraw 5000 of 20000 (25%): FIFO realizedBasis = 12000 * 0.25 = 3000 → gain 2000.
   assert.ok(near(tax.gain, 2000));
-  assert.ok(near(tax.auGain, 2000)); // no reset → auGain === gain
+  assert.ok(near(tax.auGain, 2000)); // no AU base → auGain === gain
 });
 
 // ── Tax-module routing ───────────────────────────────────────────────────────

@@ -139,32 +139,38 @@ test('decant: source ledgers stay tied to balance (design 43 inv-1)', () => {
   assert.ok(ties(result.rothAccount));
 });
 
-test('decant: cash lands in brokerage at cost basis = market (zero unrealized gain)', () => {
+test('decant: cash lands in brokerage (all cost, zero unrealized gain)', () => {
   const state = makeState();
   const { result } = apply(state, { taxDeferredAmount: 50_000 });
   const brok = result.brokerage;
   const net  = 45_000; // 50k × 0.9
 
-  assert.ok(Math.abs(brok.balance           - net) < 1e-6);
-  assert.ok(Math.abs(brok.contributionBasis - net) < 1e-6);  // deposited cash is all cost
-  assert.ok(Math.abs(brok.earningsBasis     - 0)   < 1e-6);  // no gain at deposit
-  assert.ok(ties(brok));
+  assert.ok(Math.abs(brok.balance - net) < 1e-6);
+  // Brokerage no longer carries a basis ledger (design 53 §2); the deposited cash is
+  // tracked at cost in holdings (costBasis == marketValue) via the bootstrap holding
+  // in production, so a later FIFO sale realizes zero gain on the decanted principal.
+  assert.ok(!('contributionBasis' in brok));
 });
 
 test('decant: pre-move growth on the decanted cash is forgiven by the AU step-up (§2)', () => {
   const state = makeState();
   const { svc, result } = apply(state, { taxDeferredAmount: 50_000 });
-  const brok = result.brokerage;            // 45k net, basis = market, gain 0
+  const brok = result.brokerage;            // 45k net, deposited at cost, gain 0
+  // Decanted cash lands as a lot carried at cost (in production the bootstrap holding
+  // absorbs the credit at costBasis == marketValue; design 53 P1 makes holdings the
+  // sole CGT basis source).
+  brok.holdings = [{ id: 'd1', allocation: 'EQUITY', marketValue: brok.balance, costBasis: brok.balance }];
 
-  // Simulate pre-move appreciation: 45k → 65k (20k unrealized gain).
-  brok.balance       += 20_000;
-  brok.earningsBasis += 20_000;
+  // Simulate pre-move appreciation: 45k → 65k (20k unrealized gain; costBasis fixed).
+  brok.balance += 20_000;
+  brok.holdings[0].marketValue += 20_000;
 
   // Move to AU with the residency cost-base step-up (design 36 §12.2).
   svc.recordResidencyChange(brok, { country: 'AU', stepUp: true });
 
-  // The whole pre-move gain (the 20k that grew while US-resident) is forgiven for AU.
-  assert.ok(Math.abs(brok.costBaseStepUpByCountry.AU - 20_000) < 1e-6);
+  // The whole pre-move gain is forgiven for AU: the per-lot AU base steps up to the
+  // full market value (65k), so a later AU sale realizes none of the pre-move gain.
+  assert.ok(Math.abs(brok.holdings[0].costBaseByCountry.AU - 65_000) < 1e-6);
 });
 
 // ── Cap to drawable; no-op guards ──────────────────────────────────────────────

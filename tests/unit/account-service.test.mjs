@@ -217,14 +217,16 @@ test('BrokerageAccount: type is brokerage and extends InvestmentAccount', () => 
   assert.ok(a instanceof Account);
 });
 
-test('BrokerageAccount: investment fields initialized', () => {
-  const a = new BrokerageAccount(50000, { contributionBasis: 40000 });
+test('BrokerageAccount: holdings-only investment fields (no basis ledger)', () => {
+  const a = new BrokerageAccount(50000);
   assert.strictEqual(a.balance, 50000);
-  assert.strictEqual(a.contributionBasis, 40000);
-  assert.strictEqual(a.earningsBasis, 0);
   assert.strictEqual(a.loanBalance, 0);
-  assert.strictEqual(a.minimumAge, null);
   assert.strictEqual(a.balanceAtResidencyChange, null);
+  // Design 53 §2: the contribution/earnings ledger and age gate moved to
+  // RetirementAccount; brokerage carries neither (CGT comes from holdings FIFO).
+  assert.ok(!('contributionBasis' in a));
+  assert.ok(!('earningsBasis' in a));
+  assert.ok(!('minimumAge' in a));
 });
 
 test('FourOhOneKAccount: type, country, currency, minimumAge defaults', () => {
@@ -307,16 +309,17 @@ test('AccountBuilder.savings: builds SavingsAccount', () => {
   assert.strictEqual(a.balance, 10000);
 });
 
-test('AccountBuilder.brokerage: builds BrokerageAccount with investment fields', () => {
+test('AccountBuilder.brokerage: builds BrokerageAccount (holdings-only, loan supported)', () => {
   const a = AccountBuilder.brokerage()
     .balance(50000)
-    .contributionBasis(40000)
+    .loanBalance(10000)
     .drawdownPriority(4)
     .build();
   assert.ok(a instanceof BrokerageAccount);
   assert.strictEqual(a.type, 'brokerage');
-  assert.strictEqual(a.contributionBasis, 40000);
+  assert.strictEqual(a.loanBalance, 10000);
   assert.strictEqual(a.drawdownPriority, 4);
+  assert.ok(!('contributionBasis' in a)); // design 53 §2: no basis ledger on brokerage
 });
 
 test('AccountBuilder.fourOhOneK: builds FourOhOneKAccount with US defaults', () => {

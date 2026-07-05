@@ -16,12 +16,18 @@ import { getBirthDate, getResidency } from '../residency-utils.js';
 import { Holding } from '../holdings/holding.js';
 import { resolveDefaultAllocation, resolveRateKey } from '../holdings/default-allocations.js';
 import { rescaleHoldingsToBalance } from '../holdings/holding-utils.js';
+import { consumeHoldingsFifo } from '../holdings/holdings-fifo.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
 import { fxRate, fxFeeIn } from '../fx/fx-conversion.js';
 
 // Cash/savings roles: drawn before investments (cash band) and liquid across the
 // currency border in replenishSavings, and only ever drawn down to minimumBalance.
-const SAVINGS_ROLES = new Set([ACCOUNT_ROLES.US_SAVINGS, ACCOUNT_ROLES.AU_SAVINGS]);
+// Offset accounts (design 53 §3) are cash-like and liquid — they participate in
+// the country cash pool for drawdown/replenish exactly like savings.
+const SAVINGS_ROLES = new Set([
+  ACCOUNT_ROLES.US_SAVINGS, ACCOUNT_ROLES.AU_SAVINGS,
+  ACCOUNT_ROLES.US_OFFSET,  ACCOUNT_ROLES.AU_OFFSET,
+]);
 
 /**
  * AccountService — manages Account instances on the service bus and provides
@@ -133,6 +139,8 @@ export class AccountService extends AssetService {
     if (!account) return;
     if (!Array.isArray(account.holdings)) account.holdings = [];
     if (account.holdings.length > 0) return;
+    // Loans are scalar liabilities (design 54) — no asset allocation / holdings.
+    if (account.type === ACCOUNT_TYPE.LOAN) return;
     const allocation = resolveDefaultAllocation(account);
     const rateKey    = resolveRateKey(account.country, allocation, account.role);
     const holding    = new Holding({
@@ -368,10 +376,9 @@ export class AccountService extends AssetService {
    * When the destination country steps up the cost base on becoming resident
    * (`opts.stepUp`, e.g. AU ITAA97 s855-45), also resets the AU-style cost base
    * for non-TAP CGT assets — i.e. taxable BROKERAGE accounts only — to market
-   * value at the move (design 36 §12.2). Two representations are stamped, one per
-   * sale path: per-lot `holding.costBaseByCountry[country] = marketValue` for the
-   * FIFO reducers, and the account-level `costBaseStepUpByCountry[country]` =
-   * pre-move unrealized gain (`earningsBasis`) for the proportional drawdown path.
+   * value at the move (design 36 §12.2). The step-up is stamped per-lot as
+   * `holding.costBaseByCountry[country] = marketValue`; both the FIFO reducers and
+   * the auto-liquidation drawdown path (design 53 Phase 1) read that per-lot base.
    * Retirement accounts (not CGT-taxed) and real property in the destination
    * country (TAP — handled by the RealPropertyService override) are not stepped up.
    *
@@ -383,10 +390,6 @@ export class AccountService extends AssetService {
       account.balanceAtResidencyChange = account.balance;
     }
     if (stepUp && country && account.type === ACCOUNT_TYPE.BROKERAGE) {
-      account.costBaseStepUpByCountry = account.costBaseStepUpByCountry ?? {};
-      if (account.costBaseStepUpByCountry[country] == null) {
-        account.costBaseStepUpByCountry[country] = account.earningsBasis ?? 0;
-      }
       if (Array.isArray(account.holdings)) {
         for (const h of account.holdings) {
           if (!h) continue;
@@ -498,6 +501,7 @@ export class AccountService extends AssetService {
         typeof v === 'object' &&
         !Array.isArray(v) &&
         'balance' in v &&
+        v.type !== ACCOUNT_TYPE.LOAN &&   // liabilities are never a source of cash (design 54 §8)
         'drawdownPriority' in v &&
         v.drawdownPriority !== null &&
         (globalDrawdown || v.country === country || isCashRole(v))
@@ -888,33 +892,35 @@ export class AccountService extends AssetService {
       const withdraw = Math.min(wantSrc, drawable); // source currency
       const credited = withdraw * fx - fee;                // target currency, net of fee
       if (credited <= 0) return 0;                         // draw too small to clear the fee
+
+      // Brokerage CGT is realized from holdings FIFO (design 53 Phase 1) — the same
+      // basis source the event-driven STOCK_WITHDRAWAL_APPLY reducer uses. Snapshot
+      // the FIFO consumption BEFORE the debit, because transaction() below pro-rata-
+      // consumes the lots in place; we then overwrite holdings with the FIFO result so
+      // the remaining lots reflect FIFO (and their per-country cost bases deplete
+      // correctly). `withdraw` is the sale proceeds in the source account's currency.
+      const brokerageFifo = account.type === ACCOUNT_TYPE.BROKERAGE
+        ? consumeHoldingsFifo(account.holdings ?? [], withdraw)
+        : null;
+
       this.transaction(targetAccount, +credited, date);
       this.transaction(account,       -withdraw, date);
       pushTransfer(account, key, withdraw, credited, fee); // journal the cross-currency leg (no-op same-ccy)
 
-      // Brokerage accounts with unrealised gains: proportional capital gain,
-      // basis update, and STOCK_WITHDRAWAL_TAX for Form 8949 / YTD accumulator.
-      if (account.type === ACCOUNT_TYPE.BROKERAGE && 'earningsBasis' in account) {
-        const totalBal  = account.balance + withdraw; // balance before transaction
-        const gainRatio = totalBal > 0 ? (account.earningsBasis ?? 0) / totalBal : 0;
-        const gain      = withdraw * gainRatio;
-        const saleCost  = withdraw - gain;
-        account.earningsBasis     = Math.max(0, (account.earningsBasis ?? 0) - gain);
-        account.contributionBasis = Math.max(0, (account.contributionBasis ?? 0) - saleCost);
-        // AU CGT cost-base reset (design 36 §12.2): deplete the residency
-        // step-up (pre-move forgiven gain) proportionally to this sale, so the
-        // AU gain excludes the slice of pre-move appreciation AU forgave. No
-        // step-up recorded ⇒ auGain === gain.
-        let auGain = gain;
-        const stepUp = account.costBaseStepUpByCountry?.AU;
-        if (stepUp != null && totalBal > 0) {
-          const stepUpConsumed = stepUp * (withdraw / totalBal);
-          account.costBaseStepUpByCountry.AU = Math.max(0, stepUp - stepUpConsumed);
-          auGain = Math.max(0, gain - stepUpConsumed);
-        }
+      // Brokerage accounts: realize the FIFO capital gain and emit STOCK_WITHDRAWAL_TAX
+      // for Form 8949 / YTD accumulator.
+      if (account.type === ACCOUNT_TYPE.BROKERAGE) {
+        const realizedBasis   = brokerageFifo.realizedBasis;
+        // AU CGT cost-base reset (design 36 §12.2): the realized AU basis sums each
+        // lot's stepped-up cost base (per-lot costBaseByCountry, stamped at the move by
+        // recordResidencyChange); no step-up ⇒ falls back to realizedBasis (auGain === gain).
+        const realizedAuBasis = brokerageFifo.realizedBasisByCountry?.AU ?? realizedBasis;
+        const gain   = Math.max(0, withdraw - realizedBasis);
+        const auGain = Math.max(0, withdraw - realizedAuBasis);
+        account.holdings = brokerageFifo.newHoldings; // FIFO-consumed lots override transaction()'s pro-rata pass
         pendingTaxActions.push({
           type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, residency,
-          proceeds: withdraw, costBasis: saleCost, description: account.name || key,
+          proceeds: withdraw, costBasis: realizedBasis, description: account.name || key,
         });
       } else if ('contributionBasis' in account && 'earningsBasis' in account) {
         // Ledger-bearing retirement/super account drawn while age-eligible (super

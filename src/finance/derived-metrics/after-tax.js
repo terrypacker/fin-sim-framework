@@ -259,7 +259,13 @@ function _sumAfterTax(state, date, opts, { includeAccount, includeIlliquid }) {
     if (val == null || typeof val !== 'object') continue;
 
     let contribution;
-    if (typeof val.balance === 'number') {
+    if (val.type === 'loan' && typeof val.balance === 'number') {
+      // Liability (design 54): owed principal reduces the worth scope at par. A loan
+      // is not a liquid asset, so — like real property — it is only counted when
+      // includeIlliquid (worth), never in the net-liquidity scope.
+      if (!includeIlliquid) continue;
+      contribution = -val.balance;
+    } else if (typeof val.balance === 'number') {
       if (!includeAccount(val)) continue;
       contribution = computeAfterTaxValue(val, state, date, opts);
     } else if (includeIlliquid && val.kind === 'real-property' && typeof val.value === 'number') {

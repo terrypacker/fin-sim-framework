@@ -317,6 +317,17 @@ test('account: RothAccount round-trip preserves contributionBasis', () => {
   assert.strictEqual(restored.stateKey,          'rothAccount');
 });
 
+test('account: BrokerageAccount round-trip preserves loanBalance (design 53 §2 regression guard)', () => {
+  // Brokerage lost its basis ledger in design 53 §2; the serializer must NOT gate
+  // loanBalance (the AU margin loan) on the now-absent contributionBasis field.
+  const a = new BrokerageAccount(50000, { id: 'accB', name: 'AU Margin', country: 'AU', loanBalance: 12000 });
+  a.stateKey = 'auStockAccount';
+  const { d, account: restored } = accountRoundTrip(a);
+  assert.strictEqual(d.loanBalance,       12000, 'loanBalance is serialized');
+  assert.strictEqual(restored.loanBalance, 12000, 'loanBalance survives the round-trip');
+  assert.ok(!('contributionBasis' in restored), 'brokerage carries no basis ledger');
+});
+
 test('account: stateKey null when not set', () => {
   const a = new SavingsAccount(1000, { id: 'acc3', name: 'No Key' });
   const { d } = accountRoundTrip(a);

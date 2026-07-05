@@ -66,8 +66,10 @@ test('EW-9: SuperannuationAccount has allowsEarlyWithdrawal false', () => {
   assert.strictEqual(new SuperannuationAccount(0).allowsEarlyWithdrawal, false);
 });
 
-test('EW-1: BrokerageAccount has allowsEarlyWithdrawal false', () => {
-  assert.strictEqual(new BrokerageAccount(0).allowsEarlyWithdrawal, false);
+test('EW-1: BrokerageAccount is not an early-withdrawal (penalty) account', () => {
+  // Brokerage no longer carries allowsEarlyWithdrawal (design 53 §2); absent → falsy,
+  // so the early-withdrawal penalty drawdown loop skips it.
+  assert.ok(!new BrokerageAccount(0).allowsEarlyWithdrawal);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -364,8 +366,11 @@ test('EW-7: pendingTaxActions contains STOCK_WITHDRAWAL_TAX for phase-1 brokerag
   const svc    = makeSvc();
   const date   = new Date(2026, 0, 1);
   const target = new CheckingAccount(0, { country: 'US', currency: USD });
-  // earningsBasis defaults to 0 (all cost basis) — gain=0 but sale still tracked for Form 8949
+  // Holding carried at cost (costBasis == marketValue, as _bootstrapDefaultHolding
+  // seeds it) — gain=0 but the sale is still tracked for Form 8949. Brokerage CGT now
+  // comes from holdings FIFO (design 53 P1), not earningsBasis.
   const brok   = new BrokerageAccount(20000, { country: 'US', currency: USD, drawdownPriority: 1 });
+  brok.holdings = [{ id: 'h1', marketValue: 20000, costBasis: 20000 }];
   const state  = { target, brok, personBirthDate: new Date(1990, 0, 1) };
 
   const { pendingTaxActions } = svc.replenishSavings(state, 'target', 5000, date);
