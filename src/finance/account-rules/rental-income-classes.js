@@ -28,12 +28,22 @@ const firstResidency = (state) =>
  * ordinary-income figure, net of the non-cash depreciation and mortgage-interest
  * wedges; it may be NEGATIVE (a taxable loss that offsets other income).
  *
+ * `monthlyRent` is a **base-year nominal** input (like `person.monthlyWage`).
+ * It is scaled by `inflationFactor` — the property country's cumulative
+ * inflation accumulator (`state.inflationAccumulator[cc]`), which compounds the
+ * *effective* (regime-adjusted) inflation rate each year (design 48 §4.6). So
+ * rent rises through an inflationary regime and flattens / falls under a
+ * deflationary one. Only rent is indexed: `cashOpex` is a ratio of the (already
+ * indexed) effective rent; `deductibleInterest` tracks the live mortgage
+ * balance; depreciation is on the *historical* `costBasis` and must not inflate.
+ *
  * @param {object} p        Per-property rental params from the handler projection
  * @param {object} propState Live property state (reads mortgageBalance, costBasis)
  * @param {'US'|'AU'} country
+ * @param {number} inflationFactor  Cumulative effective-inflation factor (default 1 = no indexing)
  */
-export function computeRentalMonth(p, propState, country) {
-  const monthlyRent   = p.monthlyRent          ?? 0;
+export function computeRentalMonth(p, propState, country, inflationFactor = 1) {
+  const monthlyRent   = (p.monthlyRent         ?? 0) * (inflationFactor || 1);
   const occupancy     = p.occupancyRate         ?? 0.95;
   const expenseRatio  = p.rentalExpenseRatio    ?? 0.25;
   const mortgageRate  = p.mortgageInterestRate  ?? 0;
@@ -87,6 +97,8 @@ export class UsRentalIncomeHandler extends HandlerEntry {
   call({ state }) {
     const cashKey   = usCashKey(state);
     const residency = firstResidency(state);
+    // Index rent to the effective (regime-adjusted) US inflation path.
+    const inflationFactor = state.inflationAccumulator?.US ?? 1;
     const actions   = [];
     let anyRent = 0;
 
@@ -94,7 +106,7 @@ export class UsRentalIncomeHandler extends HandlerEntry {
       const propState = state[p.stateKey];
       // Skip when there is no rent, or the property has been sold (value zeroed).
       if (!propState || (propState.value ?? 0) <= 0 || (p.monthlyRent ?? 0) <= 0) continue;
-      const m = computeRentalMonth(p, propState, 'US');
+      const m = computeRentalMonth(p, propState, 'US', inflationFactor);
       anyRent += m.netCash;
       actions.push({
         type:                'US_RENTAL_INCOME_APPLY',
@@ -172,6 +184,8 @@ export class AuRentalIncomeHandler extends HandlerEntry {
   call({ state }) {
     const cashKey   = auCashKey(state);
     const residency = firstResidency(state);
+    // Index rent to the effective (regime-adjusted) AU inflation path.
+    const inflationFactor = state.inflationAccumulator?.AU ?? 1;
     const actions   = [];
     let anyRent = 0;
 
@@ -179,7 +193,7 @@ export class AuRentalIncomeHandler extends HandlerEntry {
       const propState = state[p.stateKey];
       // Skip when there is no rent, or the property has been sold (value zeroed).
       if (!propState || (propState.value ?? 0) <= 0 || (p.monthlyRent ?? 0) <= 0) continue;
-      const m = computeRentalMonth(p, propState, 'AU');
+      const m = computeRentalMonth(p, propState, 'AU', inflationFactor);
       anyRent += m.netCash;
       actions.push({
         type:                'AU_RENTAL_INCOME_APPLY',

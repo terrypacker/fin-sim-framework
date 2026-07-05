@@ -1,6 +1,6 @@
 # 48 — Rental Income on Real Property (dual-country, occupancy-driven, tax-aware)
 
-**Status**: **Implemented.** All ten checklist items (§10) landed; product decisions per §2.1. `evt-rental-income.test.mjs` (EVT-RENT-1..8) + isolated reducer postconditions green; full unit suite (3095) passes; production build clean; editor round-trip browser-verified. Deferred: US §1250 recapture *rate* (§9.1), rent growth, multi-owner attribution.
+**Status**: **Implemented.** All ten checklist items (§10) landed; product decisions per §2.1. Rent is **inflation-indexed** to the effective (regime-adjusted) inflation path (§4.6). `evt-rental-income.test.mjs` (EVT-RENT-1..9) + isolated reducer postconditions green; full unit suite passes; production build clean; editor round-trip browser-verified. Deferred: US §1250 recapture *rate* (§9.1), rent inflation *pass-through* knob (partial indexing), multi-owner attribution.
 
 **Builds on**:
 - `design/28-time-varying-appreciation-and-bond-duration.md` — the `RealProperty` node and its per-property annual appreciation series are the sibling mechanic; rental income is a *new monthly series* on the same node.
@@ -37,12 +37,13 @@ Requirements (from the design conversation):
 - **Both-country tax**: US-property rent is US ordinary income (+ AU ordinary income + FTC when AU-resident); AU-property rent is AU ordinary income when resident and always US ordinary income (worldwide). Mirrors the wages / AU-SE conventions already in the tax modules.
 - **Depreciation** modeled as a non-cash deduction (US 27.5-yr straight-line on building basis; AU capital-works ~2.5%/yr), lowering taxable rental income (§4.3).
 - **Negative gearing / loss offset**: a net rental loss reduces other ordinary income that year (§4.4).
+- **Inflation-indexed rent**: `monthlyRent` is a base-year nominal figure that is scaled each period by the property country's cumulative *effective* (regime-adjusted) inflation factor, so rent rises through inflationary regimes and flattens / falls under deflationary ones (§4.6).
 
 ### Non-Goals (deferred — see §9)
 
 - **US §1250 recapture *rate*** (taxing the recaptured slice at up to 25% ordinary instead of the LTCG rate). v1 **does** reduce basis by accumulated depreciation at sale (§4.5) — so the extra gain is taxed — but taxes it at the ordinary capital-gains rate. Only the US-specific 25% rate differential is deferred. (Appreciation itself never touches `costBasis` — `AssetAppreciateReducer` is mark-to-market on `value` only — so there is no basis-inflation interaction; depreciation is the *only* thing that moves basis, and it moves it **down**.)
 - **Fractional / per-room rental**, multiple tenancies, or lease-term scheduling. One unit, one occupancy scalar.
-- **Rent growth over time.** `monthlyRent` is nominal-fixed in v1. A `rentGrowthRate` piggybacking the annual appreciation tick is a clean Phase 2 (§9).
+- **Rent inflation *pass-through* / real growth.** Rent tracks effective inflation **1:1** (§4.6). A configurable pass-through (`rentInflationPassThrough < 1` for sticky rents) or a real-growth premium on top of inflation is a clean Phase 2 (§9). *(Note: nominal-fixed rent — the original v1 non-goal — was superseded; rent is now inflation-indexed.)*
 - **US passive-activity-loss (PAL) limitation nuance.** We take the simple "loss offsets ordinary income" model (approximating the §469 $25k active-participation allowance) rather than a full PAL carryforward engine.
 - **Ownership-split attribution of rental income across `owners[]`.** v1 attributes to the primary `ownerId` (per-person maps) or the shared accumulator; multi-owner split mirrors the house-sale `accumulateByOwnership` path as Phase 2.
 - **State-level (US state) rental income tax.** Follows whatever `design/34` state-income classification already does for ordinary income; no rental-specific state rule.
@@ -90,7 +91,8 @@ Let `P = state[stateKey]` be the property's plain state.
 ### 4.1 Effective rent and cash flow (the APPLY side)
 
 ```
-effectiveRent = P.monthlyRent × P.occupancyRate
+indexedRent   = P.monthlyRent × state.inflationAccumulator[cc]   // §4.6
+effectiveRent = indexedRent × P.occupancyRate
 cashOpex      = effectiveRent × P.rentalExpenseRatio
 netCash       = effectiveRent − cashOpex                 // credited to the cash pool
 ```
@@ -138,6 +140,22 @@ gain          = max(0, salePrice − adjustedBasis)        // was: salePrice −
 - **US — mostly correct, one deferral.** The larger `gain` is taxed via `US_HOUSE_SALE_TAX` (after the $500K primary-residence exemption, which rental properties won't qualify for). The only simplification vs. the IRC is that the recaptured slice (min(gain, accumulatedDepreciation)) is taxed at the ordinary **capital-gains** rate rather than the up-to-25% unrecaptured-§1250 rate. That rate differential is the sole deferred item (§9.1) — the *dollars* are captured now.
 
 Both sale reducers already zero the property `value`/`mortgageBalance`; `accumulatedDepreciation` can be left as-is (property is disposed) or zeroed — cosmetic.
+
+### 4.6 Inflation-indexed rent (effective, regime-aware)
+
+`monthlyRent` is a **base-year nominal** input — the same convention `person.monthlyWage` uses. Each month the handler scales it by the property country's cumulative inflation factor before any other arithmetic:
+
+```
+indexedRent = P.monthlyRent × (state.inflationAccumulator[cc] ?? 1)
+```
+
+- **Why `inflationAccumulator[cc]` and not a fresh compounding?** `InflationAdjustReducer` already maintains `state.inflationAccumulator[cc]` — a running factor seeded at `1.0` and multiplied by `1 + state.effectiveInflationRates[cc]` on each annual `*_PERIOD_ADVANCE`. That effective rate is the **regime-adjusted** inflation from design 21 (`effectiveInflationRates` falls back to `inflationRates` when no regime is active). So the accumulator already integrates the *effective* inflation path over time — reading it is the whole mechanism. No new plumbing into the regime stack, no separate rent-growth series.
+- **Regime asymmetry falls out for free.** An inflationary regime (`inflationAdjustment[cc] > 0`) lifts the effective rate, so the accumulator compounds faster and rent rises. A deflationary regime can push `effectiveInflationRates[cc]` **negative**, making the annual factor `< 1`, so the accumulator (and rent) **flatten or fall** — exactly the requested behavior.
+- **Only rent is indexed.** `cashOpex` is a ratio of the already-indexed `effectiveRent`, so it scales automatically. `deductibleInterest` is derived from the live `mortgageBalance`. Depreciation is on the **historical** `costBasis` and must *not* inflate (basis is fixed at acquisition). So indexing `monthlyRent` alone keeps every downstream figure consistent.
+- **Read-time scaling, no mutation.** Unlike wages (which `InflationAdjustReducer` mutates in `state.people`), rent is indexed at read time inside `computeRentalMonth(p, propState, cc, inflationFactor)`. The stored `monthlyRent` stays the base-year figure, so serialize round-trips and the editor always show the user's entered value; nothing double-counts at sale (basis is untouched by rent indexing).
+- **Determinism & back-compat.** `inflationAccumulator[cc]` is `1.0` until the first annual advance, so month-1 behavior is unchanged. A scenario with zero inflation and no regime keeps the accumulator at `1.0` forever — rent is nominal-flat, identical to the pre-indexing behavior.
+
+**Pass-through is 1:1 in v1.** Real-world rents are sticky and often lag CPI; a `rentInflationPassThrough ∈ [0,1]` knob (scaling `inflationFactor` toward `1.0`) is the natural Phase 2 refinement (§9) but is out of scope here — the locked decision is full pass-through.
 
 ---
 
@@ -244,6 +262,7 @@ No change to net-worth or after-tax derived metrics: rental cash lands in the ca
 - **EVT-RENT-6 (round-trip):** serialize → deserialize a rental property; all seven fields survive.
 - **EVT-RENT-7 (depreciation accrual):** `accumulatedDepreciation` grows by `annualDepreciation/12` each month and matches `annualDepreciation` after 12 months.
 - **EVT-RENT-8 (basis reduction at sale):** hold a rental property N years then sell; assert `US_HOUSE_SALE_TAX.gain` uses `costBasis − accumulatedDepreciation` (larger than the no-depreciation gain by exactly the accumulated amount, pre-exemption). AU variant asserts the same on `AU_HOUSE_SALE_TAX.gain`.
+- **EVT-RENT-9 (inflation-indexed rent):** with a nonzero inflation rate, step past an annual `*_PERIOD_ADVANCE`; assert the monthly `netCash` credited scales by `inflationAccumulator[cc]` (rent > month-1 rent), and that month-1 (accumulator `1.0`) matches the un-indexed figure (§4.6).
 
 Run `npm run test:unit` + `npm run requirements`, then browser-verify the editor's new Rental fieldset and a rental scenario end-to-end (README convention: UI changes need browser verification).
 
@@ -252,7 +271,7 @@ Run `npm run test:unit` + `npm run requirements`, then browser-verify the editor
 ## 9. Future enhancements (explicitly deferred)
 
 1. **US §1250 recapture rate** — v1 already reduces basis by `accumulatedDepreciation` at sale (§4.5), so the extra gain is taxed; this phase only splits that recaptured slice out to the up-to-25% unrecaptured-§1250 rate (new tax accumulator + rate handling in the capital-gains calc) instead of the ordinary LTCG rate. Bounded rate differential, not a missing-dollars gap.
-2. **Rent growth** — a `rentGrowthRate` applied on the existing annual appreciation tick (nominal → real).
+2. **Rent inflation pass-through / real growth** — rent already tracks *effective* inflation 1:1 (§4.6). This phase adds a `rentInflationPassThrough ∈ [0,1]` (sticky-rent lag) and/or a real-growth premium layered on top of the inflation factor.
 3. **Multi-owner attribution** — split rental income across `owners[]` via the house-sale `accumulateByOwnership` helper.
 4. **US passive-activity-loss carryforward** — replace the simple loss-offset with a §469 suspended-loss engine.
 5. **Vacancy stochasticity** — drive `occupancyRate` off `sim.rng` / a regime for MC (parallels design 47's approach).
