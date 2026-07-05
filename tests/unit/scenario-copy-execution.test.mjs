@@ -298,8 +298,8 @@ test('direct event date edits in cfg.events are overridden by param-driven recom
   const primaryResidency = Object.values(sim.state.people ?? {})[0]?.residency;
   assert.notStrictEqual(
     primaryResidency,
-    'AUS',
-    `Direct event date edit is overridden by recompile; moveYear=2031 so residency should not be AUS at TARGET, got ${primaryResidency}`,
+    'AU',
+    `Direct event date edit is overridden by recompile; moveYear=2031 so residency should not be AU at TARGET, got ${primaryResidency}`,
   );
 });
 
@@ -322,8 +322,8 @@ test('changing moveYear param updates the CHANGE_RESIDENCY event date via initia
   const primaryResidency = Object.values(sim.state.people ?? {})[0]?.residency;
   assert.strictEqual(
     primaryResidency,
-    'AUS',
-    `residency should be AUS at TARGET after moveYear param changed to 2027, got ${primaryResidency}`,
+    'AU',
+    `residency should be AU at TARGET after moveYear param changed to 2027, got ${primaryResidency}`,
   );
 });
 

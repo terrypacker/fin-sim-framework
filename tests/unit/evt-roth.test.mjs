@@ -125,7 +125,7 @@ test('EVT-1: Roth contribution debits checking account', () => {
 });
 
 test('EVT-1: Roth contribution is not a US or AU taxable event', () => {
-  const { sim } = loadToolsetScenario(makeRothConfig({ initialChecking: 10000, startingResidency: 'AUS' }));
+  const { sim } = loadToolsetScenario(makeRothConfig({ initialChecking: 10000, startingResidency: 'AU' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_CONTRIBUTION', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -173,7 +173,7 @@ test('EVT-2: Roth contribution withdrawal is not a US or AU taxable event', () =
     initialChecking: 5000,
     rothBalance: 10000,
     rothContribBasis: 10000,
-    startingResidency: 'AUS',
+    startingResidency: 'AU',
   }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_WITHDRAWAL_CONTRIBUTIONS', data: { amount: 3000 } });
   sim.stepTo(new Date(2026, 0, 31));
@@ -267,7 +267,7 @@ test('EVT-3: Roth earnings withdrawal IS AU taxable if person is AU resident', (
     rothBalance: 10000,
     rothEarningsBasis: 10000,
     birthDate: '1966-01-01',
-    startingResidency: 'AUS',
+    startingResidency: 'AU',
   }));
   sim.schedule({ date: new Date(2026, 1, 1), type: 'ROTH_WITHDRAWAL_EARNINGS', data: { amount: 4000 } });
   sim.stepTo(new Date(2026, 1, 28));
@@ -324,7 +324,7 @@ test('EVT-4: Roth earnings are not a US or AU taxable event', () => {
   const { sim } = loadToolsetScenario(makeRothConfig({
     rothBalance: 10000,
     rothContribBasis: 10000,
-    startingResidency: 'AUS',
+    startingResidency: 'AU',
   }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_EARNINGS', data: { amount: 800 } });
   sim.stepTo(new Date(2026, 0, 31));
@@ -356,7 +356,7 @@ test('EVT-41: Roth rollover contribution debits checking account', () => {
 });
 
 test('EVT-41: Roth rollover contribution is not a US or AU taxable event', () => {
-  const { sim } = loadToolsetScenario(makeRothConfig({ initialChecking: 20000, startingResidency: 'AUS' }));
+  const { sim } = loadToolsetScenario(makeRothConfig({ initialChecking: 20000, startingResidency: 'AU' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_CONTRIBUTION', data: { amount: 10000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -393,7 +393,7 @@ test('EVT-42: Roth rollover earnings are not a US or AU taxable event', () => {
   const { sim } = loadToolsetScenario(makeRothConfig({
     rothBalance: 10000,
     rolloverContribBasis: 10000,
-    startingResidency: 'AUS',
+    startingResidency: 'AU',
   }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_EARNINGS', data: { amount: 500 } });
   sim.stepTo(new Date(2026, 0, 31));
@@ -425,7 +425,7 @@ test('EVT-43: Roth rollover contribution withdrawal is not a US or AU taxable ev
     initialChecking: 5000,
     rothBalance: 10000,
     rolloverContribBasis: 10000,
-    startingResidency: 'AUS',
+    startingResidency: 'AU',
   }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIBUTIONS', data: { amount: 4000 } });
   sim.stepTo(new Date(2026, 0, 31));
@@ -472,7 +472,7 @@ test('EVT-44: Roth rollover earnings withdrawal IS AU ordinary income if AU resi
     initialChecking: 5000,
     rothBalance: 10000,
     rolloverEarningsBasis: 10000,
-    startingResidency: 'AUS',
+    startingResidency: 'AU',
   }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS', data: { amount: 3000 } });
   sim.stepTo(new Date(2026, 0, 31));

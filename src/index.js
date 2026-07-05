@@ -53,6 +53,7 @@ import { TaxGainHarvestHandler } from './finance/behavioral/tax-gain-harvest-han
 import { TaxLossHarvestHandler } from './finance/behavioral/tax-loss-harvest-handler.js';
 import { AccountBuilder } from './finance/builders/account-builder.js';
 import { PersonBuilder } from './finance/builders/person-builder.js';
+import { US, AU, COUNTRY_CODES, currencyForCountry, defaultCurrencyForCountry, normalizeCountryCode } from './finance/country-codes.js';
 import { buildDecisionGraphCsv } from './finance/decision-graph/decision-graph-csv.js';
 import { DecisionPoint, DecisionGraph } from './finance/decision-graph/decision-graph-models.js';
 import { DecisionGraphRegistry } from './finance/decision-graph/decision-graph-registry.js';
@@ -521,6 +522,12 @@ export const Finance = {
   TaxLossHarvestHandler,
   AccountBuilder,
   PersonBuilder,
+  US,
+  AU,
+  COUNTRY_CODES,
+  currencyForCountry,
+  defaultCurrencyForCountry,
+  normalizeCountryCode,
   buildDecisionGraphCsv,
   DecisionPoint,
   DecisionGraph,

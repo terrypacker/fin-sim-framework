@@ -113,5 +113,5 @@ function _primaryResidency(state) {
   for (const p of Object.values(people)) {
     if (p?.residency) return p.residency;
   }
-  return 'USA';
+  return 'US';
 }

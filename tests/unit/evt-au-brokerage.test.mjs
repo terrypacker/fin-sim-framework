@@ -50,7 +50,7 @@ function makeAuBrokerageConfig({
   auStockBalance       = 0,
   auStockContribBasis  = 0,
   auStockEarningsBasis = 0,
-  startingResidency    = 'AUS',
+  startingResidency    = 'AU',
 } = {}) {
   return {
     toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'AU_BROKERAGE', 'US_AU_CROSS_BORDER'],
@@ -99,7 +99,7 @@ function makeAuBrokerageConfig({
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-26: Franked dividend (resident) stays in account', () => {
-  const { sim } = loadToolsetScenario(makeAuBrokerageConfig({ auStockBalance: 50000, auStockContribBasis: 50000, startingResidency: 'AUS' }));
+  const { sim } = loadToolsetScenario(makeAuBrokerageConfig({ auStockBalance: 50000, auStockContribBasis: 50000, startingResidency: 'AU' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_DIVIDEND_FRANKED_RESIDENT', data: { amount: 1000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -108,7 +108,7 @@ test('EVT-26: Franked dividend (resident) stays in account', () => {
 });
 
 test('EVT-26: Franked dividend (resident) is US ordinary income taxable', () => {
-  const { sim } = loadToolsetScenario(makeAuBrokerageConfig({ auStockBalance: 50000, auStockContribBasis: 50000, startingResidency: 'AUS' }));
+  const { sim } = loadToolsetScenario(makeAuBrokerageConfig({ auStockBalance: 50000, auStockContribBasis: 50000, startingResidency: 'AU' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_DIVIDEND_FRANKED_RESIDENT', data: { amount: 1000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -116,7 +116,7 @@ test('EVT-26: Franked dividend (resident) is US ordinary income taxable', () => 
 });
 
 test('EVT-26: Franked dividend (resident) generates AU franking credit', () => {
-  const { sim } = loadToolsetScenario(makeAuBrokerageConfig({ auStockBalance: 50000, auStockContribBasis: 50000, startingResidency: 'AUS' }));
+  const { sim } = loadToolsetScenario(makeAuBrokerageConfig({ auStockBalance: 50000, auStockContribBasis: 50000, startingResidency: 'AU' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_DIVIDEND_FRANKED_RESIDENT', data: { amount: 1000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -156,7 +156,7 @@ test('EVT-27: Franked dividend (non-resident) has no AU tax', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 test('EVT-28: Unfranked dividend (resident) stays in account', () => {
-  const { sim } = loadToolsetScenario(makeAuBrokerageConfig({ auStockBalance: 50000, auStockContribBasis: 50000, startingResidency: 'AUS' }));
+  const { sim } = loadToolsetScenario(makeAuBrokerageConfig({ auStockBalance: 50000, auStockContribBasis: 50000, startingResidency: 'AU' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_DIVIDEND_UNFRANKED_RESIDENT', data: { amount: 1000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -165,7 +165,7 @@ test('EVT-28: Unfranked dividend (resident) stays in account', () => {
 });
 
 test('EVT-28: Unfranked dividend (resident) is US ordinary income taxable', () => {
-  const { sim } = loadToolsetScenario(makeAuBrokerageConfig({ auStockBalance: 50000, auStockContribBasis: 50000, startingResidency: 'AUS' }));
+  const { sim } = loadToolsetScenario(makeAuBrokerageConfig({ auStockBalance: 50000, auStockContribBasis: 50000, startingResidency: 'AU' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_DIVIDEND_UNFRANKED_RESIDENT', data: { amount: 1000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -173,7 +173,7 @@ test('EVT-28: Unfranked dividend (resident) is US ordinary income taxable', () =
 });
 
 test('EVT-28: Unfranked dividend (resident) is AU ordinary income taxable', () => {
-  const { sim } = loadToolsetScenario(makeAuBrokerageConfig({ auStockBalance: 50000, auStockContribBasis: 50000, startingResidency: 'AUS' }));
+  const { sim } = loadToolsetScenario(makeAuBrokerageConfig({ auStockBalance: 50000, auStockContribBasis: 50000, startingResidency: 'AU' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_DIVIDEND_UNFRANKED_RESIDENT', data: { amount: 1000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
@@ -223,7 +223,7 @@ test('EVT-30: AU stock earnings stay in account, no tax event', () => {
     initialChecking: 5000,
     auStockBalance: 50000,
     auStockContribBasis: 50000,
-    startingResidency: 'AUS',
+    startingResidency: 'AU',
   }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_STOCK_EARNINGS', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
@@ -247,7 +247,7 @@ test('EVT-31: AU stock sale (resident) credits AU cash pool with sale proceeds',
     auStockBalance: 30000,
     auStockContribBasis: 20000,
     auStockEarningsBasis: 10000,
-    startingResidency: 'AUS',
+    startingResidency: 'AU',
   }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_STOCK_WITHDRAWAL',
     data: { salePrice: 15000, costBasis: 10000 } });
@@ -263,7 +263,7 @@ test('EVT-31: AU stock sale (resident) records US and AU capital gains', () => {
     auStockBalance: 30000,
     auStockContribBasis: 20000,
     auStockEarningsBasis: 10000,
-    startingResidency: 'AUS',
+    startingResidency: 'AU',
   }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_STOCK_WITHDRAWAL',
     data: { salePrice: 15000, costBasis: 10000 } });

@@ -56,8 +56,8 @@ function auBaseState(overrides = {}) {
   return {
     ...baseState(overrides),
     people: {
-      primary: { monthlyWage: 8_000, socialSecurityMonthly: 2_800, residency: 'AUS' },
-      spouse:  { monthlyWage: 4_000, socialSecurityMonthly: 1_500, residency: 'AUS' },
+      primary: { monthlyWage: 8_000, socialSecurityMonthly: 2_800, residency: 'AU' },
+      spouse:  { monthlyWage: 4_000, socialSecurityMonthly: 1_500, residency: 'AU' },
     },
   };
 }
@@ -76,7 +76,7 @@ function usState(overrides = {}) {
 
 function auState(overrides = {}) {
   return {
-    people: { primary: { residency: 'AUS' } },
+    people: { primary: { residency: 'AU' } },
     auOrdinaryIncomeYTD:         0,
     auCapitalGainsYTD:           0,
     auNonResidentWithholdingYTD: 0,
@@ -230,11 +230,11 @@ test('INFL-4: expenses compound after residency switch from US to AU', () => {
   state = reducer.reduce(state, { type: 'US_PERIOD_ADVANCE', period: { startMs: Date.UTC(2027, 0, 1) } });
   state = reducer.reduce(state, { type: 'US_PERIOD_ADVANCE', period: { startMs: Date.UTC(2028, 0, 1) } });
 
-  // Switch to AU residency (flip all people to AUS)
+  // Switch to AU residency (flip all people to AU)
   state = {
     ...state,
     people: Object.fromEntries(
-      Object.entries(state.people).map(([k, p]) => [k, { ...p, residency: 'AUS' }])
+      Object.entries(state.people).map(([k, p]) => [k, { ...p, residency: 'AU' }])
     ),
   };
 

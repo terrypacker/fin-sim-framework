@@ -66,7 +66,7 @@ export class HealthcareEventHandler extends HandlerEntry {
 
     const personKey  = personId ?? Object.keys(state.people ?? {})[0];
     const residency  = state.people?.[personKey]?.residency ?? null;
-    const isAu       = residency === 'AUS';
+    const isAu       = residency === 'AU';
     const targetKey  = isAu
       ? this.stateRegistry.getStateKey(this.auRole, this.auOwnerId)
       : this.stateRegistry.getStateKey(this.usRole, this.usOwnerId);

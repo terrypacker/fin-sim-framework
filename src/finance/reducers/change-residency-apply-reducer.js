@@ -19,7 +19,7 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  *      via AccountService.recordResidencyChange (one-time capture; no-op on
  *      plain Account objects that lack the field).
  *
- *   2. Sets residency = 'AUS' on every person in state.people.
+ *   2. Sets residency = 'AU' on every person in state.people.
  *      Citizen arrays are NOT modified — moving countries does not change citizenship.
  *
  * Runs at PRIORITY.PRE_PROCESS — before any CASH_FLOW reducers that may
@@ -30,7 +30,7 @@ import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
  * @param {import('../../finance/services/state-registry.js').StateRegistry} opts.stateRegistry
  */
 export class ChangeResidencyApplyReducer extends Reducer {
-  static description = 'Flips residency to AUS on all people, snapshots investment account balances at residency change; does NOT modify citizen arrays.';
+  static description = 'Flips residency to AU on all people, snapshots investment account balances at residency change; does NOT modify citizen arrays.';
   static type        = 'ChangeResidencyApplyReducer';
   static actionType  = 'CHANGE_RESIDENCY_APPLY';
 
@@ -53,11 +53,11 @@ export class ChangeResidencyApplyReducer extends Reducer {
       this.accountService.recordResidencyChange(account);
     }
 
-    // 2. Flip residency to 'AUS' for every person; citizen arrays unchanged
+    // 2. Flip residency to 'AU' for every person; citizen arrays unchanged
     const updatedPeople = {};
     if (state.people) {
       for (const [personKey, person] of Object.entries(state.people)) {
-        updatedPeople[personKey] = { ...person, residency: 'AUS' };
+        updatedPeople[personKey] = { ...person, residency: 'AU' };
       }
     }
 

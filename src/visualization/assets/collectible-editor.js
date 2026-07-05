@@ -16,11 +16,7 @@
 
 import { BaseComponent } from '../components/base-component.js';
 import { bindParamLinkedField } from '../scenario/param-linked-field.js';
-
-/** Map a country code to its default currency code (US→USD, AU/AUS→AUD). */
-function _countryCurrency(country) {
-  return (country === 'AU' || country === 'AUS') ? 'AUD' : 'USD';
-}
+import { defaultCurrencyForCountry as _countryCurrency } from '../../finance/country-codes.js';
 
 /**
  * CollectibleEditor — renders the collectible edit form from

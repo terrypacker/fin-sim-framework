@@ -248,10 +248,10 @@ test('AU_RETIREMENT: scenario loads and runs 3 months without error', () => {
   assert.strictEqual(sim.currentDate.toISOString(), Q1_2026.toISOString());
 });
 
-test('AU_RETIREMENT: primary person residency is AUS', () => {
+test('AU_RETIREMENT: primary person residency is AU', () => {
   const { sim } = loadAuRetirementScenario(AU_JSON);
   const primary = Object.values(sim.state.people ?? {})[0];
-  assert.strictEqual(primary?.residency, 'AUS');
+  assert.strictEqual(primary?.residency, 'AU');
 });
 
 test('AU_RETIREMENT: auSavingsAccount exists with correct initial balance', () => {

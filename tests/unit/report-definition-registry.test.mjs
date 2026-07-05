@@ -538,7 +538,7 @@ test('nr-withholding-income-by-source: matches household-mode entries (auNonResi
   // Household mode: reducer writes auNonResidentWithholdingYTD directly (state.people == null).
   const savingsEntry = entry({
     actionType: 'AU_SAVINGS_EARNINGS_TAX',
-    data:       { amount: 150, residency: 'USA' },
+    data:       { amount: 150, residency: 'US' },
     stateDiff: [
       { field: 'auNonResidentWithholdingYTD', before: 0,   after: 150, delta: 150 },
       { field: 'ftcYTD',                      before: 0,   after: 150, delta: 150 },
@@ -546,7 +546,7 @@ test('nr-withholding-income-by-source: matches household-mode entries (auNonResi
   });
   const fixedEntry = entry({
     actionType: 'AU_FIXED_INCOME_EARNINGS_TAX',
-    data:       { amount: 110.57, residency: 'USA' },
+    data:       { amount: 110.57, residency: 'US' },
     stateDiff: [
       { field: 'auNonResidentWithholdingYTD', before: 150, after: 260.57, delta: 110.57 },
       { field: 'ftcYTD',                      before: 150, after: 260.57, delta: 110.57 },
@@ -576,7 +576,7 @@ test('nr-withholding-income-by-source: matches per-person-mode entries (auPerson
   // Per-person mode: reducer writes auPersonNonResidentWithholdingYTD (state.people != null).
   const perPersonEntry = entry({
     actionType: 'AU_SAVINGS_EARNINGS_TAX',
-    data:       { amount: 260.57, residency: 'USA', personKey: 'p-1' },
+    data:       { amount: 260.57, residency: 'US', personKey: 'p-1' },
     stateDiff: [
       { field: 'auPersonNonResidentWithholdingYTD', before: 0, after: 260.57, delta: 260.57 },
       { field: 'ftcYTD',                            before: 0, after: 260.57, delta: 260.57 },
@@ -595,12 +595,12 @@ test('nr-withholding-income-by-source: personKeys facet filters correctly', asyn
   const entries = [
     entry({
       actionType: 'AU_SAVINGS_EARNINGS_TAX',
-      data:       { amount: 200, residency: 'USA', personKey: 'p-1' },
+      data:       { amount: 200, residency: 'US', personKey: 'p-1' },
       stateDiff: [{ field: 'auNonResidentWithholdingYTD', before: 0,   after: 200, delta: 200 }],
     }),
     entry({
       actionType: 'AU_SAVINGS_EARNINGS_TAX',
-      data:       { amount: 60.57, residency: 'USA', personKey: 'p-2' },
+      data:       { amount: 60.57, residency: 'US', personKey: 'p-2' },
       stateDiff: [{ field: 'auNonResidentWithholdingYTD', before: 200, after: 260.57, delta: 60.57 }],
     }),
   ];

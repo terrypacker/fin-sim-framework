@@ -66,7 +66,7 @@ test('EVT-EXPENSE-FX-2: post-move, USD expense debits AU savings at converted (A
     stateRegistry, monthlyExpenses: 6_000, expensesCurrency: 'USD',
     usRole: US_ROLE, auRole: AU_ROLE,
   });
-  const actions = h.call({ data: {}, state: makeState({ residency: 'AUS', fxRate: 1.5 }) });
+  const actions = h.call({ data: {}, state: makeState({ residency: 'AU', fxRate: 1.5 }) });
   const debit = debitOf(actions);
   assert.strictEqual(debit.targetKey, 'auSavingsAccount');
   assert.ok(Math.abs(debit.amount - 9_000) < 1e-6, `expected A$9000, got ${debit.amount}`);
@@ -78,7 +78,7 @@ test('EVT-EXPENSE-FX-3: post-move deficit/replenish uses the converted amount', 
     stateRegistry, monthlyExpenses: 6_000, expensesCurrency: 'USD',
     usRole: US_ROLE, auRole: AU_ROLE,
   });
-  const state = makeState({ residency: 'AUS', fxRate: 1.5 });
+  const state = makeState({ residency: 'AU', fxRate: 1.5 });
   // AU savings just above the native figure but below the converted one →
   // a deficit must be detected against the converted A$9k, not the native $6k.
   state.auSavingsAccount.balance        = 8_000;
@@ -96,7 +96,7 @@ test('EVT-EXPENSE-FX-4: post-move healthcare expense debits AU savings at conver
     stateRegistry, expensesCurrency: 'USD', usRole: US_ROLE, auRole: AU_ROLE,
   });
   const actions = h.call({
-    state: makeState({ residency: 'AUS', fxRate: 1.5 }),
+    state: makeState({ residency: 'AU', fxRate: 1.5 }),
     data:  { amount: 6_000, category: 'healthcare', personId: 'primary' },
   });
   const debit = debitOf(actions);

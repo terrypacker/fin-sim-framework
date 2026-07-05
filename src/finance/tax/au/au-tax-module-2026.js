@@ -47,7 +47,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
       //   AU ordinary income for residents, AU NR withholding for non-residents
       ['AU_SAVINGS_EARNINGS_TAX', (state, action) => {
         const { amount, residency } = action;
-        const isAuResident = residency === 'AUS';
+        const isAuResident = residency === 'AU';
         const perPerson = state.people != null && state.auSavingsAccount != null;
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
@@ -78,7 +78,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
       //   AU ordinary income for residents, AU NR withholding for non-residents
       ['AU_FIXED_INCOME_EARNINGS_TAX', (state, action) => {
         const { amount, residency } = action;
-        const isAuResident = residency === 'AUS';
+        const isAuResident = residency === 'AU';
         const perPerson = state.people != null && state.auFixedIncomeAccount != null;
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
@@ -184,7 +184,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
       //   AU capital gain + FTC for residents only
       ['AU_STOCK_WITHDRAWAL_TAX', (state, action) => {
         const { gain, residency } = action;
-        const isAuResident = residency === 'AUS';
+        const isAuResident = residency === 'AU';
         const perPerson = state.people != null && state.auStockAccount != null;
         let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + gain };
         if (isAuResident) {
@@ -207,7 +207,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
       //   resident: AU capital gain + FTC; non-resident: AU NR withholding + FTC
       ['AU_HOUSE_SALE_TAX', (state, action) => {
         const { gain, residency, ownershipType, ownerId, owners } = action;
-        const isAuResident = residency === 'AUS';
+        const isAuResident = residency === 'AU';
         const perPerson = state.people != null;
         let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + gain };
         if (perPerson) {
@@ -244,7 +244,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
       // EVT-49: AU self-employment income — always US ordinary income; AU ordinary income if resident
       ['AU_SE_INCOME_TAX', (state, action) => {
         const { amount, residency, personKey } = action;
-        const isAuResident = residency === 'AUS';
+        const isAuResident = residency === 'AU';
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
           const usePerPerson = personKey != null && state.auPersonOrdinaryIncomeYTD != null;

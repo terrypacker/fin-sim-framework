@@ -36,7 +36,7 @@ function makeState({ regimes = [], regimeActions = {}, iraBalance = 100000 } = {
     regimeActions,
     iraAccount:    { balance: iraBalance },
     rothAccount:   { balance: 50000 },
-    people:        { primary: { residency: 'USA' } },
+    people:        { primary: { residency: 'US' } },
   };
 }
 

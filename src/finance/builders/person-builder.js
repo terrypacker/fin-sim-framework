@@ -41,7 +41,7 @@ class PersonBuilderInstance {
   id(v)                    { this._id = v;                    return this; }
   birthDate(v)             { this._birthDate = v;             return this; }
   name(v)                  { this._name = v;                  return this; }
-  /** @param {string[]} v - ISO country codes, e.g. ['US'], ['AUS'], ['US','AUS'] */
+  /** @param {string[]} v - ISO country codes, e.g. ['US'], ['AU'], ['US','AU'] */
   citizen(v)               { this._citizen = v;               return this; }
   lifeExpectancy(v)        { this._lifeExpectancy = v;        return this; }
   socialSecurityMonthly(v) { this._socialSecurityMonthly = v; return this; }

@@ -10,6 +10,7 @@
 
 import { BaseComponent } from '../components/base-component.js';
 import { bindParamLinkedField } from '../scenario/param-linked-field.js';
+import { defaultCurrencyForCountry } from '../../finance/country-codes.js';
 
 const FIXED_COUNTRY    = new Set(['401k', 'roth', 'ira', 'super']);
 const INVESTMENT_TYPES = new Set(['brokerage', '401k', 'roth', 'ira', 'super']);
@@ -23,7 +24,7 @@ const ALLOCATIONS      = ['EQUITY', 'BOND', 'CASH', 'OTHER'];
 function _defaultCurrency(type, country) {
   if (type === 'super') return 'AUD';
   if (FIXED_COUNTRY.has(type)) return 'USD';
-  return (country === 'AU' || country === 'AUS') ? 'AUD' : 'USD';
+  return defaultCurrencyForCountry(country);
 }
 
 /**

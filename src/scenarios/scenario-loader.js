@@ -28,6 +28,7 @@ import { AU_BROKERAGE }      from './toolsets/au-brokerage-toolset.js';
 import { US_INCOME }         from './toolsets/us-income-toolset.js';
 import { AU_INCOME }         from './toolsets/au-income-toolset.js';
 import { ECONOMIC_REGIMES }  from './toolsets/economic-regimes-toolset.js';
+import { normalizeCountryCode } from '../finance/country-codes.js';
 
 const SCENARIO_CLASS_BY_ID = new Map([
   [IntlRetirementScenario.scenarioId(), IntlRetirementScenario],
@@ -147,6 +148,29 @@ export class ScenarioLoader {
   }
 
   /**
+   * Back-compat shim: rewrite legacy country-code spellings ('AUS'→'AU', 'USA'→'US')
+   * on persisted scenarios to the canonical ISO-3166-1 alpha-2 form (design 20 §10.2).
+   * Covers the country-coded fields that ride on a saved cfg: person residency/citizen
+   * records and the `startingResidency` parameter (both the flat map and the typed
+   * params array). Can be removed once local dev caches predating the rename are gone.
+   * @private
+   */
+  _normalizeCountryCodes(cfg) {
+    for (const rec of (cfg.persons ?? [])) {
+      if (rec.residency != null) rec.residency = normalizeCountryCode(rec.residency);
+      if (Array.isArray(rec.citizen)) rec.citizen = rec.citizen.map(normalizeCountryCode);
+    }
+    if (cfg.parameters?.startingResidency != null) {
+      cfg.parameters.startingResidency = normalizeCountryCode(cfg.parameters.startingResidency);
+    }
+    for (const p of (Array.isArray(cfg.params) ? cfg.params : [])) {
+      if (p?.name === 'startingResidency' && p.value != null) {
+        p.value = normalizeCountryCode(p.value);
+      }
+    }
+  }
+
+  /**
    * Sync cfg.params → cfg.parameters and cascade param values onto person/account
    * records via each param's optional `node` declaration.
    *
@@ -155,6 +179,8 @@ export class ScenarioLoader {
    * @private
    */
   _normalizeParams(cfg) {
+    this._normalizeCountryCodes(cfg);
+
     // Sync cfg.params (typed UI array) → cfg.parameters (plain key→value the compiler reads).
     if (Array.isArray(cfg.params) && cfg.params.length > 0) {
       cfg.parameters = cfg.parameters ?? {};

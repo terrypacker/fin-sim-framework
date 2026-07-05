@@ -46,9 +46,9 @@ test('Person: defaults lifeExpectancy to 90 and socialSecurityMonthly to 2800', 
 });
 
 test('Person: opts override name and citizen', () => {
-  const p = new Person('p2', new Date(1970, 5, 15), { name: 'Alice', citizen: ['AUS'] });
+  const p = new Person('p2', new Date(1970, 5, 15), { name: 'Alice', citizen: ['AU'] });
   assert.strictEqual(p.name, 'Alice');
-  assert.deepStrictEqual(p.citizen, ['AUS']);
+  assert.deepStrictEqual(p.citizen, ['AU']);
 });
 
 test('Person: opts override lifeExpectancy and socialSecurityMonthly', () => {
@@ -58,29 +58,29 @@ test('Person: opts override lifeExpectancy and socialSecurityMonthly', () => {
 });
 
 test('Person: dual citizen stores both country codes', () => {
-  const p = new Person('p3', new Date(1975, 0, 1), { citizen: ['US', 'AUS'] });
+  const p = new Person('p3', new Date(1975, 0, 1), { citizen: ['US', 'AU'] });
   assert.ok(p.citizen.includes('US'));
-  assert.ok(p.citizen.includes('AUS'));
+  assert.ok(p.citizen.includes('AU'));
 });
 
 test('Person: residency defaults to first citizen entry', () => {
-  const p = new Person('p1', new Date(1966, 0, 1), { citizen: ['AUS'] });
-  assert.strictEqual(p.residency, 'AUS');
+  const p = new Person('p1', new Date(1966, 0, 1), { citizen: ['AU'] });
+  assert.strictEqual(p.residency, 'AU');
 });
 
 test('Person: dual citizen defaults residency to first entry (US)', () => {
-  const p = new Person('p1', new Date(1966, 0, 1), { citizen: ['US', 'AUS'] });
+  const p = new Person('p1', new Date(1966, 0, 1), { citizen: ['US', 'AU'] });
   assert.strictEqual(p.residency, 'US');
 });
 
 test('Person: explicit residency overrides citizen default', () => {
-  const p = new Person('p1', new Date(1966, 0, 1), { citizen: ['US', 'AUS'], residency: 'AUS' });
-  assert.strictEqual(p.residency, 'AUS');
-  assert.deepStrictEqual(p.citizen, ['US', 'AUS']);
+  const p = new Person('p1', new Date(1966, 0, 1), { citizen: ['US', 'AU'], residency: 'AU' });
+  assert.strictEqual(p.residency, 'AU');
+  assert.deepStrictEqual(p.citizen, ['US', 'AU']);
 });
 
-test('Person: dual citizen with US residency stays US even though AUS citizen', () => {
-  const p = new Person('p1', new Date(1966, 0, 1), { citizen: ['US', 'AUS'], residency: 'US' });
+test('Person: dual citizen with US residency stays US even though AU citizen', () => {
+  const p = new Person('p1', new Date(1966, 0, 1), { citizen: ['US', 'AU'], residency: 'US' });
   assert.strictEqual(p.residency, 'US');
 });
 
@@ -91,12 +91,12 @@ test('Person: id defaults to null when not provided', () => {
 
 test('Person: is structuredClone-safe (plain data, no prototype methods)', () => {
   const p  = new Person('p1', new Date(1966, 0, 1), {
-    name: 'Bob', citizen: ['AUS'], lifeExpectancy: 85, socialSecurityMonthly: 3000,
+    name: 'Bob', citizen: ['AU'], lifeExpectancy: 85, socialSecurityMonthly: 3000,
   });
   const p2 = structuredClone(p);
   assert.strictEqual(p2.id,                    'p1');
   assert.strictEqual(p2.name,                  'Bob');
-  assert.deepStrictEqual(p2.citizen,           ['AUS']);
+  assert.deepStrictEqual(p2.citizen,           ['AU']);
   assert.strictEqual(p2.lifeExpectancy,        85);
   assert.strictEqual(p2.socialSecurityMonthly, 3000);
   assert.deepStrictEqual(p2.birthDate,         p.birthDate);
@@ -264,14 +264,14 @@ test('PersonBuilder: fluent setters populate all fields', () => {
   const p  = PersonBuilder.person()
     .name('Diana')
     .birthDate(bd)
-    .citizen(['US', 'AUS'])
+    .citizen(['US', 'AU'])
     .lifeExpectancy(88)
     .socialSecurityMonthly(3100)
     .build();
 
   assert.strictEqual(p.name, 'Diana');
   assert.deepStrictEqual(p.birthDate, bd);
-  assert.deepStrictEqual(p.citizen, ['US', 'AUS']);
+  assert.deepStrictEqual(p.citizen, ['US', 'AU']);
   assert.strictEqual(p.lifeExpectancy, 88);
   assert.strictEqual(p.socialSecurityMonthly, 3100);
 });
@@ -288,7 +288,7 @@ test('PersonBuilder: built person can be registered with PersonService', () => {
   const p   = PersonBuilder.person()
     .name('Eve')
     .birthDate(new Date(Date.UTC(1982, 3, 20)))
-    .citizen(['AUS'])
+    .citizen(['AU'])
     .build();
 
   svc.register(p);

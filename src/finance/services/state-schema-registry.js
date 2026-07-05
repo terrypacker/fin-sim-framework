@@ -18,6 +18,7 @@
  */
 
 import {ACCOUNT_TYPE} from "../assets/account.js";
+import {currencyForCountry} from "../country-codes.js";
 
 /**
  * Descriptor for how a state field value should be interpreted and displayed.
@@ -51,21 +52,14 @@ function _globToRegex(glob) {
   return new RegExp(`^${pattern}$`);
 }
 
-/** Map a country code to its currency code (display fallback for assets). */
-function _countryToCurrency(country) {
-  if (country === 'AU' || country === 'AUS') return 'AUD';
-  if (country === 'US') return 'USD';
-  return null;
-}
-
 /**
  * Default income currency for a person — derived from residency, then first
  * citizenship, falling back to USD. Used when a person carries no explicit
  * wageCurrency / ssCurrency.
  */
 function _personDefaultCurrency(person) {
-  return _countryToCurrency(person?.residency)
-    ?? _countryToCurrency(person?.citizen?.[0])
+  return currencyForCountry(person?.residency)
+    ?? currencyForCountry(person?.citizen?.[0])
     ?? 'USD';
 }
 
@@ -312,7 +306,7 @@ export class StateSchemaRegistry {
    * @param {object} asset     - RealProperty | Collectible; reads currency?.code or country
    */
   registerAsset(stateKey, asset) {
-    const code = asset?.currency?.code ?? _countryToCurrency(asset?.country);
+    const code = asset?.currency?.code ?? currencyForCountry(asset?.country);
     const vt   = ParameterValueType.currency(code);
     this.register(`${stateKey}.value`,                   vt);
     this.register(`${stateKey}.costBasis`,               vt);

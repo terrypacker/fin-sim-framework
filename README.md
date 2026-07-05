@@ -309,7 +309,7 @@ The production scenario. Combines all US + AU + cross-border toolsets, exposes ~
 
 ### People and assets (`src/finance/assets/`, `src/finance/person.js`)
 
-- `Person` — `birthDate`, `lifeExpectancy`, `citizen` (array, e.g. `['US']` or `['US','AUS']`), `monthlyWage`, `socialSecurityMonthly`, `retirementDate`. Residency is *derived* from `state.isAuResident`, not stored on Person.
+- `Person` — `birthDate`, `lifeExpectancy`, `citizen` (array of ISO-3166-1 alpha-2 codes, e.g. `['US']` or `['US','AU']`), `residency` (current alpha-2 country of tax residency), `monthlyWage`, `socialSecurityMonthly`, `retirementDate`. Country codes are alpha-2 (`'US'`, `'AU'`) project-wide and share the tax `cc` namespace — canonical constants and helpers live in `src/finance/country-codes.js`.
 - `Account` / `CheckingAccount` / `SavingsAccount` / `InvestmentAccount` / `BrokerageAccount` / `FourOhOneKAccount` / `RothAccount` / `TraditionalIRAAccount` / `SuperannuationAccount`.
 - `RealProperty` and `Collectible` — appreciation, planned sale year, primary-residence handling.
 - Each account is stamped at registration with: `stateKey` (slot in `sim.state`), `currency` (`USD` / `AUD`), `role` (`ACCOUNT_ROLES` value), and ownership (`ownerId`, `ownershipType`).

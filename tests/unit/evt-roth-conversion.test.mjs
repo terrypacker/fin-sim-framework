@@ -173,7 +173,7 @@ test('EVT-52: Roth Conversion — US ordinary income recorded', () => {
 });
 
 test('EVT-52: Roth Conversion — AU ordinary income recorded when isAuResident', () => {
-  const { sim } = loadToolsetScenario(makeConversionConfig({ iraBalance: 100_000, iraContribBasis: 100_000, startingResidency: 'AUS' }));
+  const { sim } = loadToolsetScenario(makeConversionConfig({ iraBalance: 100_000, iraContribBasis: 100_000, startingResidency: 'AU' }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'ROTH_CONVERSION', data: { amount: 20_000 } });
   sim.stepTo(new Date(2026, 0, 31));
 

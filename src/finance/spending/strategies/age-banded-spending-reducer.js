@@ -75,8 +75,8 @@ export class AgeBandedSpendingReducer extends Reducer {
     // Residence gate — identical to InflationAdjustReducer.
     const cc          = action.type === 'US_PERIOD_ADVANCE' ? 'US' : 'AU';
     const primaryKey  = Object.keys(state.people ?? {})[0];
-    const residency   = state.people?.[primaryKey]?.residency ?? null;
-    const residenceCC = residency === 'AUS' ? 'AU' : 'US';
+    // Residency is in the tax `cc` namespace ('US'|'AU'); default to US when absent.
+    const residenceCC = state.people?.[primaryKey]?.residency ?? 'US';
     if (cc !== residenceCC) return this.newState(state);
 
     const birthDate = state.people?.[primaryKey]?.birthDate;

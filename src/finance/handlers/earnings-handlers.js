@@ -307,7 +307,7 @@ export class IntlAuStockDividendHandler extends HandlerEntry {
 
     const personKey  = this.ownerId ?? Object.keys(state.people ?? {})[0];
     const residency  = state.people?.[personKey]?.residency ?? null;
-    const actionType = residency === 'AUS'
+    const actionType = residency === 'AU'
       ? 'AU_DIVIDEND_FRANKED_RESIDENT_APPLY'
       : 'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY';
 

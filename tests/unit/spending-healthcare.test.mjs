@@ -133,7 +133,7 @@ test('HC-8: HealthcareEventHandler emits REPLENISH_SAVINGS when balance would fa
 test('HC-9: HealthcareEventHandler uses AU savings for AU-resident person', () => {
   const state = {
     ...stateWithAccounts(),
-    people: { primary: { residency: 'AUS' } },
+    people: { primary: { residency: 'AU' } },
   };
   const actions = handler.call({ state, data: { amount: 3_000, category: 'physio' } });
   const debit   = actions.find(a => a.type === 'EXPENSE_DEBIT');

@@ -30,7 +30,7 @@ const resolveDestinationKey = (state, saleDestinationAccount) => {
  * EVT-36/46: Collectible Sale — credit destination account with sale proceeds,
  * zero out the collectible's stateKey value (if present), and chain
  * COLLECTIBLE_SALE_TAX. Gain = salePrice - costBasis; taxed at the 28%
- * collectibles rate (US) and/or as AU capital gain when resident in AUS.
+ * collectibles rate (US) and/or as AU capital gain when resident in AU.
  */
 export class CollectibleSaleApplyReducer extends AccountServiceReducer {
   static type        = 'CollectibleSaleApplyReducer';

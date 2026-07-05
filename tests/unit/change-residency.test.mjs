@@ -12,7 +12,7 @@
  * change-residency.test.mjs
  *
  * Verifies that CHANGE_RESIDENCY_APPLY:
- *   - Flips every person's residency to 'AUS'
+ *   - Flips every person's residency to 'AU'
  *   - Does NOT mutate citizen arrays
  *   - A US-only citizen who moves stays citizen: ['US']
  *
@@ -35,25 +35,25 @@ function makeState(peopleOverrides = {}) {
   return {
     people: {
       primary: { citizen: ['US'],       residency: 'US', ...peopleOverrides.primary },
-      spouse:  { citizen: ['US', 'AUS'], residency: 'US', ...peopleOverrides.spouse  },
+      spouse:  { citizen: ['US', 'AU'], residency: 'US', ...peopleOverrides.spouse  },
     },
   };
 }
 
-test('CHANGE_RESIDENCY_APPLY: flips every person residency to AUS', () => {
+test('CHANGE_RESIDENCY_APPLY: flips every person residency to AU', () => {
   const reducer = makeReducer();
   const state   = makeState();
   const next    = reducer.reduce(state);
-  assert.strictEqual(next.people.primary.residency, 'AUS');
-  assert.strictEqual(next.people.spouse.residency,  'AUS');
+  assert.strictEqual(next.people.primary.residency, 'AU');
+  assert.strictEqual(next.people.spouse.residency,  'AU');
 });
 
-test('CHANGE_RESIDENCY_APPLY: does NOT add AUS to citizen arrays', () => {
+test('CHANGE_RESIDENCY_APPLY: does NOT add AU to citizen arrays', () => {
   const reducer = makeReducer();
   const state   = makeState();
   const next    = reducer.reduce(state);
   assert.deepStrictEqual(next.people.primary.citizen, ['US']);
-  assert.deepStrictEqual(next.people.spouse.citizen,  ['US', 'AUS']);
+  assert.deepStrictEqual(next.people.spouse.citizen,  ['US', 'AU']);
 });
 
 test('CHANGE_RESIDENCY_APPLY: US-only citizen who moves stays citizen [US]', () => {
@@ -61,15 +61,15 @@ test('CHANGE_RESIDENCY_APPLY: US-only citizen who moves stays citizen [US]', () 
   const state   = makeState({ primary: { citizen: ['US'], residency: 'US' } });
   const next    = reducer.reduce(state);
   assert.deepStrictEqual(next.people.primary.citizen, ['US']);
-  assert.strictEqual(next.people.primary.residency, 'AUS');
+  assert.strictEqual(next.people.primary.residency, 'AU');
 });
 
-test('CHANGE_RESIDENCY_APPLY: idempotent — applying twice keeps residency AUS', () => {
+test('CHANGE_RESIDENCY_APPLY: idempotent — applying twice keeps residency AU', () => {
   const reducer = makeReducer();
   const state   = makeState();
   const once    = reducer.reduce(state);
   const twice   = reducer.reduce(once);
-  assert.strictEqual(twice.people.primary.residency, 'AUS');
+  assert.strictEqual(twice.people.primary.residency, 'AU');
 });
 
 test('CHANGE_RESIDENCY_APPLY: state without people is handled gracefully', () => {
