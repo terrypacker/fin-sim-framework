@@ -778,6 +778,83 @@ test('custom drawdown strategy: stale persisted node (pre-customStrategiesKey) s
   assert.strictEqual(byKey.iraAccount.drawdownPriority, 2, 'custom ira rank applies');
 });
 
+// ── Per-owner drawdown banding (design 35) ─────────────────────────────────────
+//
+// drawdownOwnerOrdering controls how same-role accounts owned by different people
+// are ordered within a drawdown strategy. The accountPriority cascade resolves the
+// mode → ownerOrder/ownerStride and applies `base + ownerRank * ownerStride`.
+
+test('owner ordering: PRIMARY_FIRST bands the spouse after the primary (+ownerStride)', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({}, undefined, undefined);
+  cfg.scenarioClass = IntlRetirementScenario;
+  cfg.parameters.drawdownStrategy = 'TAXABLE_FIRST';
+  cfg.parameters.drawdownOwnerOrdering = 'PRIMARY_FIRST';
+
+  new ScenarioLoader()._normalizeParams(cfg);
+
+  const byKey = Object.fromEntries(cfg.accounts.map(a => [a.stateKey, a]));
+  assert.strictEqual(byKey.rothAccount.drawdownPriority, 5, 'primary roth at its base rank');
+  assert.strictEqual(byKey.spouseRothAccount.drawdownPriority, 105, 'spouse roth banded +100');
+});
+
+test('owner ordering: POOLED gives same-role accounts across owners an equal priority', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({}, undefined, undefined);
+  cfg.scenarioClass = IntlRetirementScenario;
+  cfg.parameters.drawdownStrategy = 'TAXABLE_FIRST';
+  cfg.parameters.drawdownOwnerOrdering = 'POOLED';
+
+  new ScenarioLoader()._normalizeParams(cfg);
+
+  const byKey = Object.fromEntries(cfg.accounts.map(a => [a.stateKey, a]));
+  assert.strictEqual(byKey.rothAccount.drawdownPriority, 5, 'primary roth at base rank');
+  assert.strictEqual(byKey.spouseRothAccount.drawdownPriority, 5,
+    'POOLED: spouse roth shares the primary roth tier (no +100 band)');
+  assert.strictEqual(byKey.iraAccount.drawdownPriority, byKey.spouseIraAccount.drawdownPriority,
+    'POOLED: both IRAs share a tier too');
+});
+
+test('owner ordering: SPOUSE_FIRST bands the primary after the spouse', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({}, undefined, undefined);
+  cfg.scenarioClass = IntlRetirementScenario;
+  cfg.parameters.drawdownStrategy = 'TAXABLE_FIRST';
+  cfg.parameters.drawdownOwnerOrdering = 'SPOUSE_FIRST';
+
+  new ScenarioLoader()._normalizeParams(cfg);
+
+  const byKey = Object.fromEntries(cfg.accounts.map(a => [a.stateKey, a]));
+  assert.strictEqual(byKey.spouseRothAccount.drawdownPriority, 5, 'spouse roth at base rank (drawn first)');
+  assert.strictEqual(byKey.rothAccount.drawdownPriority, 105, 'primary roth banded +100');
+});
+
+test('owner ordering: default is PRIMARY_FIRST when the param is absent (back-compat)', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({}, undefined, undefined);
+  cfg.scenarioClass = IntlRetirementScenario;
+  cfg.parameters.drawdownStrategy = 'TAXABLE_FIRST';
+  delete cfg.parameters.drawdownOwnerOrdering; // simulate a scenario saved before design 35
+
+  new ScenarioLoader()._normalizeParams(cfg);
+
+  const byKey = Object.fromEntries(cfg.accounts.map(a => [a.stateKey, a]));
+  assert.strictEqual(byKey.spouseRothAccount.drawdownPriority, 105,
+    'missing mode falls back to the node default banding (+100), preserving legacy behavior');
+});
+
+test('owner ordering: drawdownOwnerOrdering param is appended to saved cfg.params with its default', () => {
+  const cfg = freshDeclarativeConfig();
+  cfg.scenarioClass = IntlRetirementScenario;
+  cfg.params = [
+    { name: 'drawdownStrategy', label: 'Drawdown Strategy', type: 'Enum', group: 'Spending',
+      value: 'TAXABLE_FIRST' }, // a sparse older save with no drawdownOwnerOrdering entry
+  ];
+
+  loadIntoFreshServices(cfg);
+
+  const owner = cfg.params.find(p => p.name === 'drawdownOwnerOrdering');
+  assert.ok(owner, 'schema-drift guard must append the new drawdownOwnerOrdering param');
+  assert.strictEqual(owner.value, 'PRIMARY_FIRST', 'appended with the legacy-preserving default');
+  assert.deepStrictEqual(owner.options, ['PRIMARY_FIRST', 'SPOUSE_FIRST', 'POOLED']);
+});
+
 test('custom drawdown strategy: schema-drift re-syncs the accountPriority node onto saved params (gains customStrategiesKey)', () => {
   // The persisted node is schema-owned metadata; a stale copy must be refreshed
   // on load so a subsequent re-save no longer carries the broken shape.
