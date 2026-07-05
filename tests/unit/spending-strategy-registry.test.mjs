@@ -24,6 +24,7 @@ import assert   from 'node:assert/strict';
 
 import { SPENDING_STRATEGY_REGISTRY } from '../../src/finance/spending/spending-strategy-registry.js';
 import { RegimeAwareSpendingReducer } from '../../src/finance/spending/strategies/regime-aware-spending-reducer.js';
+import { AgeBandedSpendingReducer, DEFAULT_AGE_BANDS } from '../../src/finance/spending/strategies/age-banded-spending-reducer.js';
 
 const context = { parameters: {} };
 
@@ -67,6 +68,42 @@ test('SPEND-REG-7: REGIME_AWARE.paramSchema returns regimeAwareCutPct entry', ()
   assert.strictEqual(schema[0].key, 'regimeAwareCutPct');
   assert.strictEqual(schema[0].type, 'Number');
   assert.ok(Math.abs(schema[0].defaultValue - 0.15) < 1e-10);
+});
+
+test('SPEND-REG-9: AGE_BANDED.reducers returns one AgeBandedSpendingReducer with default bands', () => {
+  const reducers = SPENDING_STRATEGY_REGISTRY.AGE_BANDED.reducers(context);
+  assert.strictEqual(reducers.length, 1);
+  assert.ok(reducers[0] instanceof AgeBandedSpendingReducer);
+  assert.strictEqual(reducers[0].bands, DEFAULT_AGE_BANDS);
+  assert.strictEqual(reducers[0].slice, 'discretionary');
+});
+
+test('SPEND-REG-10: AGE_BANDED respects spendingAgeBands and ageBandSpendingSlice params', () => {
+  const bands = [{ startAge: 70, multiplier: 0.8, annualRealDrift: -0.02 }];
+  const ctx = { parameters: { spendingAgeBands: bands, ageBandSpendingSlice: 'both' } };
+  const reducers = SPENDING_STRATEGY_REGISTRY.AGE_BANDED.reducers(ctx);
+  assert.strictEqual(reducers[0].bands, bands);
+  assert.strictEqual(reducers[0].slice, 'both');
+});
+
+test('SPEND-REG-11: ageBandDeclineRate synthesizes a one-band glide anchored at retirement age', () => {
+  const ctx = {
+    parameters: { ageBandDeclineRate: -0.015 },
+    people: [{ birthDate: new Date(Date.UTC(1960, 0, 1)), retirementDate: new Date(Date.UTC(2025, 0, 1)) }],
+  };
+  const reducers = SPENDING_STRATEGY_REGISTRY.AGE_BANDED.reducers(ctx);
+  const bands = reducers[0].bands;
+  assert.strictEqual(bands.length, 2);
+  assert.strictEqual(bands[1].startAge, 65); // 2025 − 1960
+  assert.ok(Math.abs(bands[1].annualRealDrift - (-0.015)) < 1e-12);
+});
+
+test('SPEND-REG-12: AGE_BANDED.paramSchema exposes the three knobs', () => {
+  const schema = SPENDING_STRATEGY_REGISTRY.AGE_BANDED.paramSchema();
+  const keys = schema.map(s => s.key);
+  assert.ok(keys.includes('spendingAgeBands'));
+  assert.ok(keys.includes('ageBandSpendingSlice'));
+  assert.ok(keys.includes('ageBandDeclineRate'));
 });
 
 test('SPEND-REG-8: each entry exposes reducers and paramSchema', () => {

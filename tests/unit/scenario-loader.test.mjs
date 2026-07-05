@@ -643,3 +643,25 @@ test('toolset params: schema-drift adds newly-introduced toolset keys to existin
   assert.ok(names.has('superGrowthRate'),
     'schema-drift guard should append AU_RETIREMENT params missing from saved cfg.params');
 });
+
+test('toolset params: schema-drift re-syncs option lists onto saved enum params (design/33 AGE_BANDED)', () => {
+  // Simulate a scenario saved BEFORE AGE_BANDED existed: spendingStrategy carries
+  // the old option list and a user-edited selection. On load the loader must
+  // refresh the option list (so AGE_BANDED becomes selectable) WITHOUT touching
+  // the user's saved selection.
+  const cfg = freshDeclarativeConfig();
+  cfg.params = [
+    { name: 'spendingStrategy', label: 'Spending Strategy', type: 'EnumMulti',
+      group: 'Spending',
+      options: ['FIXED', 'REGIME_AWARE', 'GUARDRAIL', 'HEALTHCARE'], // stale (pre-AGE_BANDED)
+      value:   ['FIXED', 'GUARDRAIL'] },                              // user selection
+  ];
+
+  loadIntoFreshServices(cfg);
+
+  const strat = cfg.params.find(p => p.name === 'spendingStrategy');
+  assert.ok(strat.options.includes('AGE_BANDED'),
+    'stale option list must be refreshed to include the newly-added AGE_BANDED choice');
+  assert.deepStrictEqual(strat.value, ['FIXED', 'GUARDRAIL'],
+    'option-list re-sync must preserve the user\'s saved selection');
+});

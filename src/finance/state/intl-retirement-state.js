@@ -154,6 +154,11 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.healthcareSpendingYTD     = 0;
     this.healthcareSpendingTotal   = 0;
 
+    // Age-banded spending substrate (design/33). appliedFactor is the real
+    // age multiplier currently folded into the expense slice; the reducer
+    // reconciles against it each year so the factor never compounds.
+    this.ageBandSpending = { appliedFactor: 1.0, currentBandStartAge: null };
+
     this.superWithdrawalBlocked = false;
     this.outOfFundsDate = null;
     this.scenarioFailed = false;

@@ -481,3 +481,99 @@ test('_renderParamsList: type dropdown includes Date as an option', () => {
   assert.ok(options.includes('Date'), 'Date should be a type option');
   assert.ok(options.includes('Boolean'), 'Boolean should be a type option');
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Predefined params hide the type-select; AgeBandList + Enum editors (design/33)
+// ═════════════════════════════════════════════════════════════════════════════
+
+test('_renderParamsList: predefined (labeled) param does NOT render a type-select', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'monthlyExpenses', label: 'Monthly Expenses', type: 'Number', value: 6000 }] };
+  view._renderParamsList(scenario);
+  const row = document.querySelector('#paramsList .param-row');
+  // The only control here is the value input (+ delete button) — no type <select>.
+  assert.strictEqual(row.querySelector('select'), null, 'labeled params should not show the type dropdown');
+});
+
+test('_renderParamsList: custom (unlabeled) param still renders the type-select', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'customParam', type: 'Number', value: 1 }] };
+  view._renderParamsList(scenario);
+  const row = document.querySelector('#paramsList .param-row');
+  assert.ok(row.querySelector('select'), 'custom params keep the type dropdown');
+});
+
+test('_renderParamsList: AgeBandList renders a row per band with start/multiplier/drift inputs', () => {
+  const view = new ScenarioTabView();
+  const bands = [
+    { startAge: 0,  multiplier: 1.0, annualRealDrift: 0.0  },
+    { startAge: 65, multiplier: 1.0, annualRealDrift: -0.01 },
+  ];
+  const scenario = { params: [{ name: 'spendingAgeBands', label: 'Spending Age Bands', type: 'AgeBandList', value: bands }] };
+  view._renderParamsList(scenario);
+  const editor = document.querySelector('#paramsList .age-band-list-editor');
+  assert.ok(editor, 'expected an age-band-list-editor');
+  const bandRows = editor.querySelectorAll('.age-band-row:not(.age-band-header)');
+  assert.strictEqual(bandRows.length, 2, 'one row per band');
+  assert.strictEqual(bandRows[0].querySelectorAll('input[type="number"]').length, 3, '3 numeric inputs per band');
+});
+
+test('_renderParamsList: AgeBandList clones the input value (no shared-reference mutation)', () => {
+  const view = new ScenarioTabView();
+  const shared = [{ startAge: 0, multiplier: 1.0, annualRealDrift: 0 }];
+  const scenario = { params: [{ name: 'spendingAgeBands', label: 'Spending Age Bands', type: 'AgeBandList', value: shared }] };
+  view._renderParamsList(scenario);
+  assert.notStrictEqual(scenario.params[0].value, shared, 'param.value should be a fresh array');
+  assert.notStrictEqual(scenario.params[0].value[0], shared[0], 'each band should be a fresh object');
+});
+
+test('_renderParamsList: AgeBandList "Add Band" appends a band and keeps order sorted', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'spendingAgeBands', label: 'Spending Age Bands', type: 'AgeBandList', value: [{ startAge: 65, multiplier: 1, annualRealDrift: -0.01 }] }] };
+  view._renderParamsList(scenario);
+  const addBtn = [...document.querySelectorAll('#paramsList button')].find(b => /Add Band/.test(b.textContent));
+  assert.ok(addBtn, 'expected an Add Band button');
+  addBtn.click();
+  assert.strictEqual(scenario.params[0].value.length, 2);
+  assert.ok(scenario.params[0].value[1].startAge >= scenario.params[0].value[0].startAge, 'bands stay ascending');
+});
+
+test('_renderParamsList: editing a band input writes a number back to param.value', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'spendingAgeBands', label: 'Spending Age Bands', type: 'AgeBandList', value: [{ startAge: 65, multiplier: 1, annualRealDrift: -0.01 }] }] };
+  view._renderParamsList(scenario);
+  const driftInput = document.querySelectorAll('#paramsList .age-band-row:not(.age-band-header) input[type="number"]')[2];
+  driftInput.value = '-0.02';
+  driftInput.dispatchEvent(new Event('change'));
+  assert.strictEqual(scenario.params[0].value[0].annualRealDrift, -0.02);
+});
+
+test('_renderParamsList: Enum param renders a select with its options', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'ageBandSpendingSlice', label: 'Age-Band Spending Slice', type: 'Enum', value: 'discretionary', options: ['discretionary', 'both'] }] };
+  view._renderParamsList(scenario);
+  const row = document.querySelector('#paramsList .param-row');
+  const valueSelect = row.querySelector('select');
+  assert.ok(valueSelect, 'expected a value <select>');
+  const opts = [...valueSelect.options].map(o => o.value);
+  assert.deepStrictEqual(opts, ['discretionary', 'both']);
+  assert.strictEqual(valueSelect.value, 'discretionary');
+});
+
+test('_renderParamsList: predefined (labeled) param renders no delete button', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'monthlyExpenses', label: 'Monthly Expenses', type: 'Number', value: 6000 }] };
+  view._renderParamsList(scenario);
+  const row = document.querySelector('#paramsList .param-row');
+  assert.strictEqual(row.querySelector('.btn-warn'), null, 'labeled params should not show a delete button');
+});
+
+test('_renderParamsList: AgeBandList remove button uses the centered age-band-remove class', () => {
+  const view = new ScenarioTabView();
+  const scenario = { params: [{ name: 'spendingAgeBands', label: 'Spending Age Bands', type: 'AgeBandList', value: [{ startAge: 65, multiplier: 1, annualRealDrift: -0.01 }] }] };
+  view._renderParamsList(scenario);
+  const rm = document.querySelector('#paramsList .age-band-row:not(.age-band-header) .age-band-remove');
+  assert.ok(rm, 'each band row has an age-band-remove button');
+  // It must NOT carry btn-sm (whose padding overflows the narrow grid column).
+  assert.ok(!rm.classList.contains('btn-sm'), 'band remove button should not use btn-sm padding');
+});

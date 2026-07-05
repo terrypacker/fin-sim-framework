@@ -365,10 +365,18 @@ export class ScenarioLoader {
       if (!s) continue;
       if (p.label       === undefined && s.label)            p.label       = s.label;
       if (p.group       === undefined && s.group)            p.group       = s.group;
-      if (p.type        === undefined && s.type)             p.type        = s.type;
+      // Type is schema-owned metadata (the UI type selector is disabled for
+      // schema params), so a schema type change (e.g. Array→AgeBandList,
+      // Text→Enum) must propagate onto already-persisted entries — not just be
+      // backfilled when absent.
+      if (s.type        && p.type !== s.type)                p.type        = s.type;
       if (p.description === undefined && s.description)     p.description = s.description;
       if (p.node        === undefined && s.node)             p.node        = s.node;
-      if (p.options     === undefined && s.options)          p.options     = s.options;
+      // Options are schema-owned (the available choices; the user's selection
+      // lives in `value`), so adopt schema option-list changes onto persisted
+      // entries — not just backfill when absent. E.g. a new AGE_BANDED choice
+      // added to spendingStrategy must surface on already-saved scenarios.
+      if (s.options)                                         p.options     = s.options;
       if (p.value       === undefined && s.defaultValue !== undefined) p.value = s.defaultValue;
       // Money metadata drift: a schema param that became Money (e.g. a config
       // saved when monthlyExpenses was a Number) upgrades in place. The value is
