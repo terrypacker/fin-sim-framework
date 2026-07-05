@@ -69,6 +69,65 @@ describe('COCKPIT_CONTROLS.ROTH — next actionable conversion year (design 42)'
   });
 });
 
+describe('COCKPIT_CONTROLS.ROTH — cap the fill to the reachable IRA (no unreachable suggestions)', () => {
+  const bp = { rothConversionMonth: 12, rothConversionDay: 1, rothConversionOwner: 'both', inflationRate: 0.03 };
+  const asOf = new Date(Date.UTC(2032, 0, 1));   // before Dec 1 → targets 2032
+
+  test('no state ⇒ range is preserved (back-compat)', () => {
+    const vars = COCKPIT_CONTROLS.ROTH.buildVariables({ baseParams: bp, asOf, range: { min: 0, max: 500_000, step: 5_000 } });
+    assert.equal(vars[0].min, 0);
+    assert.equal(vars[0].max, 500_000);
+  });
+
+  test('drained IRAs ⇒ cap collapses to 0 (recommendation becomes "no conversion")', () => {
+    const state = { iraAccount: { balance: 0 }, spouseIraAccount: { balance: 0 }, usOrdinaryIncomeYTD: 0 };
+    const vars = COCKPIT_CONTROLS.ROTH.buildVariables({ baseParams: bp, asOf, state, range: { min: 0, max: 500_000, step: 5_000 } });
+    assert.equal(vars[0].max, 0, 'nothing convertible ⇒ max 0');
+    assert.equal(vars[0].min, 0);
+  });
+
+  test('partial IRA ⇒ cap is the real-deflated convertible headroom, below the user max', () => {
+    const state = { iraAccount: { balance: 60_000 }, spouseIraAccount: { balance: 40_000 }, usOrdinaryIncomeYTD: 0 };
+    const vars = COCKPIT_CONTROLS.ROTH.buildVariables({ baseParams: bp, asOf, state, range: { min: 0, max: 500_000, step: 5_000 } });
+    const factor = Math.pow(1.03, 2032 - 2025);
+    const expected = 100_000 / factor;   // (0 ordYtd + 100k IRA) deflated to real base-year
+    assert.ok(Math.abs(vars[0].max - expected) < 1, `cap ≈ ${expected}, got ${vars[0].max}`);
+    assert.ok(vars[0].max < 500_000, 'capped below the user max');
+  });
+
+  test('owner=primary counts only the primary IRA', () => {
+    const state = { iraAccount: { balance: 50_000 }, spouseIraAccount: { balance: 999_999 }, usOrdinaryIncomeYTD: 0 };
+    const vars = COCKPIT_CONTROLS.ROTH.buildVariables({ baseParams: { ...bp, rothConversionOwner: 'primary' }, asOf, state, range: { min: 0, max: 500_000, step: 5_000 } });
+    const expected = 50_000 / Math.pow(1.03, 2032 - 2025);
+    assert.ok(Math.abs(vars[0].max - expected) < 1, `primary-only cap ≈ ${expected}, got ${vars[0].max}`);
+  });
+});
+
+describe('COCKPIT_CONTROLS.ROTH.actuate — no-op years do not clutter the schedule param', () => {
+  const vars = [{ paramKey: 'rothConversionSchedule[0].incomeTarget', _year: 2033 }];
+  const mkServices = () => ({ simulationRegistry: { getPrimary: () => ({ currentDate: new Date(Date.UTC(2033, 0, 1)), queue: { data: [] } }) } });
+
+  test('a 0 (no-conversion) recommendation is NOT appended as a redundant schedule entry', () => {
+    const scenario = { params: [{ name: 'rothConversionSchedule', value: [{ year: 2031, incomeTarget: 80_000 }] }] };
+    COCKPIT_CONTROLS.ROTH.actuate({ services: mkServices(), scenario, candidate: { 'rothConversionSchedule[0].incomeTarget': 0 }, vars });
+    const sched = scenario.params[0].value;
+    assert.ok(!sched.some(e => e.year === 2033), 'no 0-entry added for the drained year');
+    assert.ok(sched.some(e => e.year === 2031 && e.incomeTarget === 80_000), 'prior years untouched');
+  });
+
+  test('a positive recommendation is still persisted', () => {
+    const scenario = { params: [{ name: 'rothConversionSchedule', value: [] }] };
+    COCKPIT_CONTROLS.ROTH.actuate({ services: mkServices(), scenario, candidate: { 'rothConversionSchedule[0].incomeTarget': 120_000 }, vars });
+    assert.deepEqual(scenario.params[0].value, [{ year: 2033, incomeTarget: 120_000 }]);
+  });
+
+  test('a 0 recommendation cancels a previously committed conversion for that year', () => {
+    const scenario = { params: [{ name: 'rothConversionSchedule', value: [{ year: 2033, incomeTarget: 90_000 }] }] };
+    COCKPIT_CONTROLS.ROTH.actuate({ services: mkServices(), scenario, candidate: { 'rothConversionSchedule[0].incomeTarget': 0 }, vars });
+    assert.ok(!scenario.params[0].value.some(e => e.year === 2033), 'committed conversion cancelled (absence == skip-year)');
+  });
+});
+
 describe('CockpitController — windowed horizon (design 41)', () => {
   test('setHorizonYears flows into the problem _scoreEnd (clamped to simEnd, gated by objective)', () => {
     const c = makeController();   // NOW=2029, simEnd=2033, objective MAX_NET_WORTH (windowable)
