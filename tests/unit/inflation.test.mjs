@@ -204,17 +204,19 @@ test('INFL-4: expenses inflate at US rate when US resident on US PERIOD_ADVANCE'
   assert.ok(Math.abs(next.monthlyExpenses - 6_000 * 1.03) < 0.01);
 });
 
-test('INFL-4: expenses NOT adjusted on US PERIOD_ADVANCE when AU resident', () => {
-  const state = auBaseState();
+test('INFL-4: expenses inflate at the residence (AU) rate on the US advance when AU resident', () => {
+  // Transition-skip fix: expenses ride the annual US advance (which always fires)
+  // at the *residence* country's rate, so a mid-year US→AU move can't drop a year's
+  // increment at the US(Jan)→AU(Jul) period handoff.
+  const state = auBaseState({ inflationRates: { US: 0.03, AU: 0.04 } });
   const next = reducer.reduce(state, US_PERIOD_2027);
-  // Residence is AU so only AU advance should adjust AUD expenses
-  assert.strictEqual(next.monthlyExpenses, 6_000);
+  assert.ok(Math.abs(next.monthlyExpenses - 6_000 * 1.04) < 0.01); // residence (AU) rate
 });
 
-test('INFL-4: expenses inflate at AU rate when AU resident on AU PERIOD_ADVANCE', () => {
+test('INFL-4: AU PERIOD_ADVANCE no longer adjusts expenses (they ride the US advance)', () => {
   const state = auBaseState({ inflationRates: { US: 0.03, AU: 0.04 } });
   const next = reducer.reduce(state, AU_PERIOD_2027);
-  assert.ok(Math.abs(next.monthlyExpenses - 6_000 * 1.04) < 0.01);
+  assert.strictEqual(next.monthlyExpenses, 6_000); // unchanged on the AU advance
 });
 
 test('INFL-4: AU PERIOD_ADVANCE does NOT adjust expenses when US resident', () => {
@@ -223,10 +225,10 @@ test('INFL-4: AU PERIOD_ADVANCE does NOT adjust expenses when US resident', () =
   assert.strictEqual(next.monthlyExpenses, 6_000);
 });
 
-test('INFL-4: expenses compound after residency switch from US to AU', () => {
+test('INFL-4: expenses compound across a US→AU residency switch without dropping a year', () => {
   let state = baseState({ inflationRates: { US: 0.03, AU: 0.04 } });
 
-  // Two US-based years (2027, 2028)
+  // Two US-resident years at the US rate (driven by the annual US advance).
   state = reducer.reduce(state, { type: 'US_PERIOD_ADVANCE', period: { startMs: Date.UTC(2027, 0, 1) } });
   state = reducer.reduce(state, { type: 'US_PERIOD_ADVANCE', period: { startMs: Date.UTC(2028, 0, 1) } });
 
@@ -238,12 +240,32 @@ test('INFL-4: expenses compound after residency switch from US to AU', () => {
     ),
   };
 
-  // Two AU-based years (2028, 2029 fiscal)
-  state = reducer.reduce(state, { type: 'AU_PERIOD_ADVANCE', period: { startMs: Date.UTC(2028, 6, 1) } });
-  state = reducer.reduce(state, { type: 'AU_PERIOD_ADVANCE', period: { startMs: Date.UTC(2029, 6, 1) } });
+  // Two AU-resident years at the AU rate — still driven by the US advance, so the
+  // transition year is not skipped (the bug this fix targets).
+  state = reducer.reduce(state, { type: 'US_PERIOD_ADVANCE', period: { startMs: Date.UTC(2029, 0, 1) } });
+  state = reducer.reduce(state, { type: 'US_PERIOD_ADVANCE', period: { startMs: Date.UTC(2030, 0, 1) } });
 
   const expected = 6_000 * 1.03 ** 2 * 1.04 ** 2;
   assert.ok(Math.abs(state.monthlyExpenses - expected) < 0.01);
+});
+
+test('INFL-4: a mid-year US→AU move drops no expense increment (regression)', () => {
+  // Before the fix, the post-move US advance was skipped (residence already AU)
+  // while the AU period had not completed a cycle, losing one year's inflation
+  // permanently. Now every annual US advance inflates at the residence rate.
+  const rates = { US: 0.03, AU: 0.03 };
+  const advance = (s, y) => reducer.reduce(s, { type: 'US_PERIOD_ADVANCE', period: { startMs: Date.UTC(y, 0, 1) } });
+  // No move: three US advances.
+  let stay = baseState({ inflationRates: rates });
+  for (const y of [2027, 2028, 2029]) stay = advance(stay, y);
+  // Move: AU residency from the second advance on; same three advances.
+  let move = baseState({ inflationRates: rates });
+  move = advance(move, 2027);
+  move = { ...move, people: Object.fromEntries(Object.entries(move.people).map(([k, p]) => [k, { ...p, residency: 'AU' }])) };
+  move = advance(move, 2028);
+  move = advance(move, 2029);
+  // Equal rates → identical expenses; no dropped step at the residency change.
+  assert.ok(Math.abs(move.monthlyExpenses - stay.monthlyExpenses) < 0.01);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -38,12 +38,28 @@ import { DEFAULT_AGE_BANDS }   from '../finance/spending/strategies/age-banded-s
 import { RATE_KEYS }           from '../finance/economic-regimes/rate-keys.js';
 
 /**
+ * Cash band — savings/checking roles are ranked ahead of every investment role
+ * (priority 0) in the built-in strategies, so idle cash is spent before any
+ * growth asset is liquidated ("spend non-investment money first"). Two runtime
+ * rules in AccountService.replenishSavings give cash its distinct behaviour:
+ *   1. a cash source is drawn down only to its `minimumBalance` (keeps a buffer);
+ *   2. cash is liquid everywhere — it bypasses the LOCAL_FIRST same-country gate,
+ *      so idle cash in the non-residence country is repatriated (FX fee applies)
+ *      instead of stranding while growth assets are sold.
+ * Because the savings roles live in the maps, a user-authored strategy can rank
+ * cash later to model preserving a cash buffer.
+ */
+const CASH_BAND = {
+  [ACCOUNT_ROLES.US_SAVINGS]: 0, [ACCOUNT_ROLES.AU_SAVINGS]: 0,
+};
+
+/**
  * Named drawdown strategies — the order accounts are liquidated to cover a
  * spending shortfall. Values are per-role *base* priorities (lower = drawn
- * first); savings roles are intentionally omitted (they are the drawdown
- * *target*, so they keep a null priority). Drawdown is sorted per-country
- * (AccountService.replenishSavings filters by country), so US and AU roles
- * coexist in one map without interfering.
+ * first). Every built-in strategy spreads in CASH_BAND so cash drains first;
+ * investment roles follow. Within investments the per-country strategies use
+ * overlapping US/AU ranks (sorted per-country under LOCAL_FIRST); TAX_EFFICIENT
+ * uses a single distinct global rank per role.
  *
  * Applied by the `accountPriority` node cascade in ScenarioLoader: each
  * account's drawdownPriority becomes base + ownerRank * ownerStride, so the
@@ -54,34 +70,39 @@ import { RATE_KEYS }           from '../finance/economic-regimes/rate-keys.js';
  * state.drawdownMode (see us-retirement-toolset + AccountService.replenishSavings).
  */
 export const DRAWDOWN_STRATEGIES = {
-  TAXABLE_FIRST: {            // taxable brokerage/fixed-income, then tax-deferred, Roth last
+  TAXABLE_FIRST: {            // cash, then taxable brokerage/fixed-income, then tax-deferred, Roth last
+    ...CASH_BAND,
     [ACCOUNT_ROLES.FIXED_INCOME]: 1, [ACCOUNT_ROLES.US_STOCK]: 2,
     [ACCOUNT_ROLES.IRA]: 3, [ACCOUNT_ROLES.K401]: 4, [ACCOUNT_ROLES.ROTH]: 5,
     [ACCOUNT_ROLES.AU_FIXED_INCOME]: 1, [ACCOUNT_ROLES.AU_STOCK]: 2, [ACCOUNT_ROLES.SUPER]: 3,
   },
-  TAX_DEFERRED_FIRST: {       // drain IRA/401k/Super early (bracket-fill, lower future RMDs)
+  TAX_DEFERRED_FIRST: {       // cash, then drain IRA/401k/Super early (bracket-fill, lower future RMDs)
+    ...CASH_BAND,
     [ACCOUNT_ROLES.IRA]: 1, [ACCOUNT_ROLES.K401]: 2,
     [ACCOUNT_ROLES.FIXED_INCOME]: 3, [ACCOUNT_ROLES.US_STOCK]: 4, [ACCOUNT_ROLES.ROTH]: 5,
     [ACCOUNT_ROLES.SUPER]: 1, [ACCOUNT_ROLES.AU_FIXED_INCOME]: 2, [ACCOUNT_ROLES.AU_STOCK]: 3,
   },
-  ROTH_FIRST: {               // Roth/tax-free first (comparison baseline); AU mirrors taxable
+  ROTH_FIRST: {               // cash, then Roth/tax-free first (comparison baseline); AU mirrors taxable
+    ...CASH_BAND,
     [ACCOUNT_ROLES.ROTH]: 1, [ACCOUNT_ROLES.FIXED_INCOME]: 2, [ACCOUNT_ROLES.US_STOCK]: 3,
     [ACCOUNT_ROLES.IRA]: 4, [ACCOUNT_ROLES.K401]: 5,
     [ACCOUNT_ROLES.AU_FIXED_INCOME]: 1, [ACCOUNT_ROLES.AU_STOCK]: 2, [ACCOUNT_ROLES.SUPER]: 3,
   },
   PROPORTIONAL: {             // pro-rata across eligible buckets (runtime mode; see above)
+    ...CASH_BAND,
     [ACCOUNT_ROLES.FIXED_INCOME]: 1, [ACCOUNT_ROLES.US_STOCK]: 2,
     [ACCOUNT_ROLES.IRA]: 3, [ACCOUNT_ROLES.K401]: 4, [ACCOUNT_ROLES.ROTH]: 5,
     [ACCOUNT_ROLES.AU_FIXED_INCOME]: 1, [ACCOUNT_ROLES.AU_STOCK]: 2, [ACCOUNT_ROLES.SUPER]: 3,
   },
   TAX_EFFICIENT: {            // GLOBAL order across BOTH countries by tax treatment.
-    // Unlike the per-country strategies above (whose US/AU ranks deliberately
-    // overlap because replenishSavings sorts each country separately), this map
-    // assigns a single distinct rank per role so US and AU accounts interleave
-    // into one global drawdown order. It only behaves as intended when paired
-    // with crossBorderDrawdown=GLOBAL (set by the us-retirement toolset when this
-    // strategy is selected), which lets replenishSavings cross the currency
-    // border in priority order instead of draining the residency country first.
+    // Cash first (CASH_BAND), then a single distinct rank per investment role so
+    // US and AU accounts interleave into one global drawdown order. Unlike the
+    // per-country strategies above (whose US/AU ranks deliberately overlap because
+    // replenishSavings sorts each country separately), this pairs with
+    // crossBorderDrawdown=GLOBAL (set by the us-retirement toolset when selected),
+    // letting replenishSavings cross the currency border in priority order
+    // instead of draining the residency country first.
+    ...CASH_BAND,
     [ACCOUNT_ROLES.FIXED_INCOME]: 1, [ACCOUNT_ROLES.US_STOCK]: 2,        // taxable: only gains taxed
     [ACCOUNT_ROLES.AU_FIXED_INCOME]: 3, [ACCOUNT_ROLES.AU_STOCK]: 4,     //   (basis already taxed) → drain first
     [ACCOUNT_ROLES.IRA]: 5, [ACCOUNT_ROLES.K401]: 6,                     // tax-deferred: ordinary income on withdrawal
@@ -95,11 +116,11 @@ export const DRAWDOWN_STRATEGIES = {
 
 /**
  * Drawdown-eligible account roles — the union of roles that appear across the
- * built-in DRAWDOWN_STRATEGIES maps. These are exactly the roles a user-authored
- * strategy can rank (savings/target roles are intentionally absent, since they
- * keep a null priority and are the drawdown destination). Used to seed the
- * DrawdownStrategyList editor's role rows so users never author ranks for
- * accounts that should stay out of drawdown.
+ * built-in DRAWDOWN_STRATEGIES maps. Includes the cash/savings roles (CASH_BAND),
+ * which are now first-class members of the drawdown order (spent first by default,
+ * but rankable like any other role). Used to seed the DrawdownStrategyList editor's
+ * role rows. The active savings *target* account is still never drained below its
+ * minimum — that's enforced at runtime in replenishSavings, not by omission here.
  */
 export const DRAWDOWN_ROLES = [...new Set(
   Object.values(DRAWDOWN_STRATEGIES)
@@ -659,6 +680,9 @@ export class IntlRetirementScenario extends BaseScenario {
           name: 'US Savings',             role: ACCOUNT_ROLES.US_SAVINGS,
           balance: p.initialUsSavings, ownershipType: 'joint', ownerId: 'primary',
           minimumBalance: p.usSavingsMinBalance, country: 'US', currency: USD,
+          // Cash band: spent before investments (down to minimumBalance). The
+          // active spending target is excluded as a source at runtime regardless.
+          drawdownPriority: 0,
         },
         {
           __type: 'BrokerageAccount',              stateKey: 'fixedIncomeAccount',
@@ -702,6 +726,9 @@ export class IntlRetirementScenario extends BaseScenario {
           name: 'AU Savings',             role: ACCOUNT_ROLES.AU_SAVINGS,
           balance: p.auSavingsBalance, ownershipType: 'joint', ownerId: 'primary',
           minimumBalance: p.auSavingsMinBalance, country: 'AU', currency: AUD,
+          // Cash band: spent before investments (down to minimumBalance), and
+          // repatriated cross-border when it is the non-residence cash pool.
+          drawdownPriority: 0,
         },
         {
           __type: 'BrokerageAccount',     stateKey: 'auFixedIncomeAccount',

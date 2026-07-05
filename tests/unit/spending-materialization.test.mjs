@@ -83,12 +83,22 @@ test('SPEND-MAT-5: InflationAdjustReducer does NOT inflate slices on AU advance 
   assert.ok(Math.abs(next.monthlyExpenses - 10_000) < 0.01);
 });
 
-test('SPEND-MAT-6: InflationAdjustReducer inflates slices on AU advance (AU resident)', () => {
+test('SPEND-MAT-6: InflationAdjustReducer inflates slices on the US advance at the residence (AU) rate', () => {
+  // Expenses ride the annual US advance at the residence rate (transition-skip fix);
+  // the AU advance no longer touches expenses (see SPEND-MAT-5b).
   const s    = stateWithExpenses({ monthlyExpenses: 10_000, rate: 0.04, residency: 'AU' });
-  const next = reducer.reduce(s, AU_ADV);
+  const next = reducer.reduce(s, US_ADV);
   assert.ok(Math.abs(next.expenses.essential     - 7_000 * 1.04) < 0.01);
   assert.ok(Math.abs(next.expenses.discretionary - 3_000 * 1.04) < 0.01);
   assert.ok(Math.abs(next.monthlyExpenses - 10_000 * 1.04) < 0.01);
+});
+
+test('SPEND-MAT-5b: AU advance leaves slices unchanged even for an AU resident', () => {
+  const s    = stateWithExpenses({ monthlyExpenses: 10_000, rate: 0.04, residency: 'AU' });
+  const next = reducer.reduce(s, AU_ADV);
+  assert.ok(Math.abs(next.expenses.essential     - 7_000) < 0.01);
+  assert.ok(Math.abs(next.expenses.discretionary - 3_000) < 0.01);
+  assert.ok(Math.abs(next.monthlyExpenses - 10_000) < 0.01);
 });
 
 test('SPEND-MAT-7: slices compound correctly over multiple years', () => {

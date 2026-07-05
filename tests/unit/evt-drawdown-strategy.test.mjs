@@ -48,15 +48,28 @@ test('EVT-DRAWDOWN: DRAWDOWN_STRATEGIES exposes the ordered strategies + CUSTOM'
   );
   // CUSTOM is a no-op sentinel (no priority map).
   assert.strictEqual(DRAWDOWN_STRATEGIES.CUSTOM, null);
-  // TAXABLE_FIRST draws taxable buckets before tax-deferred before Roth.
+  // TAXABLE_FIRST draws cash first, then taxable, then tax-deferred, Roth last.
   const t = DRAWDOWN_STRATEGIES.TAXABLE_FIRST;
+  assert.ok(t[ACCOUNT_ROLES.US_SAVINGS]   < t[ACCOUNT_ROLES.FIXED_INCOME]); // cash band first
+  assert.ok(t[ACCOUNT_ROLES.AU_SAVINGS]   < t[ACCOUNT_ROLES.FIXED_INCOME]);
   assert.ok(t[ACCOUNT_ROLES.FIXED_INCOME] < t[ACCOUNT_ROLES.IRA]);
   assert.ok(t[ACCOUNT_ROLES.IRA]          < t[ACCOUNT_ROLES.ROTH]);
-  // TAX_EFFICIENT is a single GLOBAL order: every US and AU role gets a distinct
-  // rank (no per-country collisions), taxable → tax-deferred → tax-free last.
+  // Every built-in strategy ranks both cash roles ahead of all investments.
+  for (const name of ['TAXABLE_FIRST', 'TAX_DEFERRED_FIRST', 'ROTH_FIRST', 'PROPORTIONAL', 'TAX_EFFICIENT']) {
+    const m = DRAWDOWN_STRATEGIES[name];
+    const invMin = Math.min(...Object.entries(m)
+      .filter(([r]) => r !== ACCOUNT_ROLES.US_SAVINGS && r !== ACCOUNT_ROLES.AU_SAVINGS)
+      .map(([, v]) => v));
+    assert.ok(m[ACCOUNT_ROLES.US_SAVINGS] < invMin, `${name}: cash before investments`);
+    assert.ok(m[ACCOUNT_ROLES.AU_SAVINGS] < invMin, `${name}: cash before investments`);
+  }
+  // TAX_EFFICIENT is a single GLOBAL order: every *investment* role gets a distinct
+  // rank (the two cash roles share the cash band), taxable → tax-deferred → tax-free.
   const e = DRAWDOWN_STRATEGIES.TAX_EFFICIENT;
-  const ranks = Object.values(e);
-  assert.strictEqual(new Set(ranks).size, ranks.length, 'ranks must be globally distinct');
+  const invRanks = Object.entries(e)
+    .filter(([r]) => r !== ACCOUNT_ROLES.US_SAVINGS && r !== ACCOUNT_ROLES.AU_SAVINGS)
+    .map(([, v]) => v);
+  assert.strictEqual(new Set(invRanks).size, invRanks.length, 'investment ranks must be globally distinct');
   assert.ok(e[ACCOUNT_ROLES.US_STOCK]        < e[ACCOUNT_ROLES.IRA]);   // taxable before tax-deferred
   assert.ok(e[ACCOUNT_ROLES.AU_STOCK]        < e[ACCOUNT_ROLES.IRA]);   // AU taxable before US tax-deferred
   assert.ok(e[ACCOUNT_ROLES.K401]            < e[ACCOUNT_ROLES.SUPER]); // tax-deferred before tax-free
@@ -101,8 +114,9 @@ test('EVT-DRAWDOWN: TAXABLE_FIRST cascade assigns role priorities + spouse offse
   assert.strictEqual(by.rothAccount,      DRAWDOWN_STRATEGIES.TAXABLE_FIRST[ACCOUNT_ROLES.ROTH]); // 5
   // Spouse same-role bucket sits a full stride (100) above the primary's.
   assert.strictEqual(by.spouseIraAccount, by.iraAccount + 100);
-  // Savings (target) account keeps a null priority.
-  assert.strictEqual(by.usSavingsAccount, undefined);
+  // Savings now ranks in the cash band (0) — drawn first; the active target
+  // account is excluded as a source at runtime, not by a null priority here.
+  assert.strictEqual(by.usSavingsAccount, DRAWDOWN_STRATEGIES.TAXABLE_FIRST[ACCOUNT_ROLES.US_SAVINGS]); // 0
 });
 
 test('EVT-DRAWDOWN: TAX_DEFERRED_FIRST reorders IRA ahead of taxable', () => {
@@ -229,4 +243,42 @@ test('EVT-DRAWDOWN: GLOBAL same-currency draw pays no FX fee', () => {
   svc.replenishSavings(state, 'usSavingsAccount', 3000, new Date(2026, 0, 1));
   assert.ok(Math.abs(usSav.balance - 3000) < 1e-6, `US savings ${usSav.balance}`);
   assert.ok(Math.abs(usBroker.balance - 7000) < 1e-6, `US broker ${usBroker.balance}`); // exactly $3000, no fee
+});
+
+// ─── cash band: spend cash first, down to minimumBalance ──────────────────────
+
+test('EVT-DRAWDOWN: idle cash is drawn before investments and only to its minimum', () => {
+  const svc      = new AccountService(new Graph(), new GraphQueryApi(new Graph()), new EventBus());
+  const usSav    = new CheckingAccount(0, { country: 'US', currency: USD }); // target
+  const cash     = new CheckingAccount(5000, { country: 'US', currency: USD, role: ACCOUNT_ROLES.US_SAVINGS, minimumBalance: 3000, drawdownPriority: 0 });
+  const usBroker = new BrokerageAccount(10_000, { country: 'US', currency: USD, drawdownPriority: 1 });
+  const state = {
+    usSavingsAccount: usSav, extraCash: cash, usStock: usBroker,
+    personBirthDate: new Date(1970, 0, 1),
+  };
+  const { drawnKeys } = svc.replenishSavings(state, 'usSavingsAccount', 4000, new Date(2026, 0, 1));
+  // Cash band (priority 0) drains first but stops at its $3000 floor (→ $2000 drawn),
+  // then the investment covers the remaining $2000.
+  assert.deepStrictEqual(drawnKeys, ['extraCash', 'usStock']);
+  assert.strictEqual(cash.balance, 3000);     // floored at minimumBalance
+  assert.strictEqual(usBroker.balance, 8000); // remaining $2000 from investment
+  assert.strictEqual(usSav.balance, 4000);
+});
+
+test('EVT-DRAWDOWN: non-residence cash is repatriated even under LOCAL_FIRST', () => {
+  const svc    = new AccountService(new Graph(), new GraphQueryApi(new Graph()), new EventBus());
+  const usSav  = new CheckingAccount(0, { country: 'US', currency: USD }); // residence target
+  const auCash = new CheckingAccount(5000, { country: 'AU', currency: AUD, role: ACCOUNT_ROLES.AU_SAVINGS, minimumBalance: 0, drawdownPriority: 0 });
+  const state = {
+    usSavingsAccount: usSav, auSavingsAccount: auCash,
+    personBirthDate: new Date(1970, 0, 1),
+    effectiveExchangeRates: { USD_AUD: 1.5 }, // 1 USD = 1.5 AUD
+    effectiveFxFees:        { USD_AUD: 0 },
+    // crossBorderDrawdown unset → LOCAL_FIRST. Cash still crosses the border
+    // (the stranding fix); a US-resident spends idle AU cash before investments.
+  };
+  const { drawnKeys } = svc.replenishSavings(state, 'usSavingsAccount', 2000, new Date(2026, 0, 1));
+  assert.deepStrictEqual(drawnKeys, ['auSavingsAccount']);
+  assert.ok(Math.abs(auCash.balance - 2000) < 1e-6, `AU cash ${auCash.balance}`); // A$3000 drawn (= US$2000)
+  assert.ok(Math.abs(usSav.balance - 2000) < 1e-6, `US savings ${usSav.balance}`);
 });

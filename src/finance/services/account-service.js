@@ -18,6 +18,10 @@ import { resolveDefaultAllocation, resolveRateKey } from '../holdings/default-al
 import { rescaleHoldingsToBalance } from '../holdings/holding-utils.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
 
+// Cash/savings roles: drawn before investments (cash band) and liquid across the
+// currency border in replenishSavings, and only ever drawn down to minimumBalance.
+const SAVINGS_ROLES = new Set([ACCOUNT_ROLES.US_SAVINGS, ACCOUNT_ROLES.AU_SAVINGS]);
+
 /**
  * AccountService — manages Account instances on the service bus and provides
  * stateless ledger operations.
@@ -447,14 +451,23 @@ export class AccountService extends AssetService {
       const unitsPerUsd = c => (c === 'AUD' ? usdAud : 1);
       return usdPerUnit(src) * unitsPerUsd(currency);
     };
-    const fxOf = (account) =>
-      globalDrawdown ? fxToTarget(account.currency?.code ?? account.country) : 1;
+    // Always use the true conversion factor (1 for same-currency). Cross-currency
+    // draws happen under GLOBAL and for cross-border cash sweeps under LOCAL_FIRST,
+    // so this can't be gated on globalDrawdown.
+    const fxOf = (account) => fxToTarget(account.currency?.code ?? account.country);
     // Fixed per-transfer FX fee (same source as IntlTransferApplyReducer: a flat
     // USD amount), converted to the target currency and charged once per
     // cross-border draw. Same-currency draws (fx === 1) pay nothing.
     const fxFeeUsd  = state.effectiveFxFees?.USD_AUD ?? 15;
     const fxFeeTgt  = fxFeeUsd * (currency === 'AUD' ? usdAud : 1);
     const feeOf = (account) => (fxOf(account) !== 1 ? fxFeeTgt : 0);
+
+    // Cash/savings roles are liquid everywhere: idle cash is spent before
+    // investments (cash band, drawdownPriority 0) and is reachable across the
+    // currency border even under LOCAL_FIRST — the non-residence cash pool is
+    // repatriated (fxOf/feeOf apply) rather than left to strand. The active
+    // target savings is still excluded below (k !== targetKey).
+    const isCashRole = (v) => SAVINGS_ROLES.has(v.role);
 
     // Discover all drawdown sources in priority order.
     const cashBucketActive = state.regimeActions?.drawdown_source_override?.active ?? false;
@@ -468,7 +481,7 @@ export class AccountService extends AssetService {
         'balance' in v &&
         'drawdownPriority' in v &&
         v.drawdownPriority !== null &&
-        (globalDrawdown || v.country === country)
+        (globalDrawdown || v.country === country || isCashRole(v))
       )
       .sort(([, a], [, b]) => {
         if (cashBucketActive) {
@@ -653,11 +666,19 @@ export class AccountService extends AssetService {
    *   - everything else              → 0 (only reachable via phase-2 early withdrawal)
    */
   _penaltyFreeAvailable(account, eligible) {
-    if (eligible) return Math.max(0, account.balance);
+    // Cash/savings keep their minimumBalance buffer; investments have min 0 so
+    // this is a no-op for them. `_drawableBalance` applies the same floor.
+    const drawable = this._drawableBalance(account);
+    if (eligible) return Math.max(0, drawable);
     if (account.type === ACCOUNT_TYPE.ROTH) {
-      return Math.max(0, Math.min(account.contributionBasis ?? 0, account.balance));
+      return Math.max(0, Math.min(account.contributionBasis ?? 0, drawable));
     }
     return 0;
+  }
+
+  /** Balance a source may give up: everything above its minimumBalance floor. */
+  _drawableBalance(account) {
+    return Math.max(0, (account.balance ?? 0) - (account.minimumBalance ?? 0));
   }
 
   /**
@@ -684,8 +705,9 @@ export class AccountService extends AssetService {
     const wantSrc = (want + fee) / fx;
 
     if (eligible) {
-      if (account.balance <= 0) return 0;
-      const withdraw = Math.min(wantSrc, account.balance); // source currency
+      const drawable = this._drawableBalance(account); // floored at minimumBalance (cash buffer)
+      if (drawable <= 0) return 0;
+      const withdraw = Math.min(wantSrc, drawable); // source currency
       const credited = withdraw * fx - fee;                // target currency, net of fee
       if (credited <= 0) return 0;                         // draw too small to clear the fee
       this.transaction(targetAccount, +credited, date);
@@ -712,7 +734,7 @@ export class AccountService extends AssetService {
 
     if (account.type === ACCOUNT_TYPE.ROTH && (account.contributionBasis ?? 0) > 0) {
       // Roth contributions are always accessible without penalty (EW-2).
-      const available = Math.min(account.contributionBasis, account.balance);
+      const available = Math.min(account.contributionBasis, this._drawableBalance(account));
       if (available <= 0) return 0;
       const withdraw = Math.min(wantSrc, available); // source currency
       const credited = withdraw * fx - fee;          // target currency, net of fee
