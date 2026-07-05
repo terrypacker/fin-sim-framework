@@ -73,8 +73,6 @@ function _isAu(account) {
   const code = account?.currency?.code ?? account?.currency ?? null;
   return code === 'AUD' || account?.country === 'AU';
 }
-/** True for US-domiciled accounts (IRA/401k/US brokerage) — the Option-C engine path. */
-function _isUs(account) { return !_isAu(account); }
 
 /**
  * The C-shaped rate-provider contract (design/40 §3, D1). A provider answers the
@@ -132,28 +130,43 @@ export function liquidationRateProvider({ ordinaryRate, ordinaryRateAu, capGains
   const svc = new TaxSettleService();
   const MIN_AMOUNT = 1;   // below this the effective-rate delta is numerically meaningless
 
-  // Effective rate of stacking `amount` onto `state.<field>` through computeUsTax,
-  // read from the engine result's `resultKey`. Falls back on any trouble.
-  const usDelta = (field, resultKey, account, amount, state, fallbackFn) => {
-    if (!_isUs(account) || !state || !(amount > MIN_AMOUNT)) return fallbackFn();
+  // Effective MARGINAL rate of stacking `amount` onto `state.<field>` through a tax
+  // engine (computeUsTax / computeAuTax), read off netLiability — the true marginal
+  // total tax (brackets, Medicare, CGT discount, FTC interaction all included).
+  // Falls back on any trouble so the metric never throws.
+  const engineDelta = (computeFn, field, amount, state, fallbackFn) => {
+    if (!state || !(amount > MIN_AMOUNT)) return fallbackFn();
     try {
-      const before = svc.computeUsTax(state)?.[resultKey] ?? 0;
-      const after  = svc.computeUsTax({ ...state, [field]: (state[field] ?? 0) + amount })?.[resultKey] ?? 0;
+      const before = computeFn(state)?.netLiability ?? 0;
+      const after  = computeFn({ ...state, [field]: (state[field] ?? 0) + amount })?.netLiability ?? 0;
       const r = (after - before) / amount;
       return Number.isFinite(r) ? Math.min(1, Math.max(0, r)) : fallbackFn();
     } catch {
       return fallbackFn();
     }
   };
+  const computeUs = (s) => svc.computeUsTax(s);
+  const computeAu = (s) => svc.computeAuTax(s);
 
   return {
     ordinaryLiquidationRate(account, amount, state, date) {
-      return usDelta('usOrdinaryIncomeYTD', 'ordinaryTax', account, amount, state,
-        () => fallback.ordinaryLiquidationRate(account, amount, state, date));
+      const fb = () => fallback.ordinaryLiquidationRate(account, amount, state, date);
+      const cls = taxClassForRole(account?.role);
+      // PRE_TAX (US IRA/401k) AND SUPER both liquidate as US ordinary income — the
+      // model taxes super EARNINGS withdrawals as US ordinary, no AU tax (§model).
+      if (cls === TAX_CLASS.PRE_TAX || cls === TAX_CLASS.SUPER) {
+        return engineDelta(computeUs, 'usOrdinaryIncomeYTD', amount, state, fb);
+      }
+      return fb();
     },
     capGainsLiquidationRate(account, gain, state, date) {
-      return usDelta('usCapitalGainsYTD', 'capitalGainsTax', account, gain, state,
-        () => fallback.capGainsLiquidationRate(account, gain, state, date));
+      const fb = () => fallback.capGainsLiquidationRate(account, gain, state, date);
+      // AU brokerage → AU CGT (50% discount + brackets + Medicare, via computeAuTax).
+      // US brokerage → US LTCG. NB the cross-border case (the runtime adds AU-stock
+      // gains to BOTH usCapitalGainsYTD and auCapitalGainsYTD, reconciled by FTC) is
+      // approximated here by the AU side only — a documented refinement (design 40).
+      if (_isAu(account)) return engineDelta(computeAu, 'auCapitalGainsYTD', gain, state, fb);
+      return engineDelta(computeUs, 'usCapitalGainsYTD', gain, state, fb);
     },
   };
 }
@@ -197,11 +210,22 @@ export function computeAfterTaxValue(account, state, date, {
       // Cash: already taxed. Both at par.
       return balance;
 
-    case TAX_CLASS.PRE_TAX:
-    case TAX_CLASS.SUPER: {
-      // Phase 1 treats super as PRE_TAX at the AU ordinary rate (design/40 Q4).
+    case TAX_CLASS.PRE_TAX: {
+      // Every dollar is taxed as ordinary income on withdrawal.
       const r = rateProvider.ordinaryLiquidationRate(account, balance, state, date);
       return balance * (1 - clampRate(r));
+    }
+
+    case TAX_CLASS.SUPER: {
+      // AU super (design/40 Phase 2): post-preservation-age, only the EARNINGS
+      // portion is taxed (as US ordinary income, §model) — the contribution basis
+      // comes out tax-free. So value = contribution (par) + earnings·(1 − r). When
+      // earningsBasis is unknown, fall back to taxing the whole balance (back-compat).
+      const eb = account?.earningsBasis;
+      const earnings = Number.isFinite(eb) ? Math.min(Math.max(0, eb), balance) : balance;
+      const contrib = balance - earnings;
+      const r = rateProvider.ordinaryLiquidationRate(account, earnings, state, date);
+      return contrib + earnings * (1 - clampRate(r));
     }
 
     case TAX_CLASS.TAXABLE_BASIS: {
