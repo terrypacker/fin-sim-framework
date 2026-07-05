@@ -37,8 +37,30 @@ export class AuTaxModule2026 extends BaseTaxModule {
       ...this._superReducerFns(),
       ...this._auBrokerageReducerFns(),
       ...this._realPropertyReducerFns(),
+      ...this._rentalReducerFns(),
       ...this._auIncomeReducerFns(),
     ]);
+  }
+
+  _rentalReducerFns() {
+    return [
+      // Design 48: AU rental income — net rental income (may be negative) is
+      // AU-sourced; always US ordinary income (worldwide), and AU ordinary income
+      // with an FTC when the owner is an AU resident. FTC never goes negative.
+      ['AU_RENTAL_INCOME_TAX', (state, action) => {
+        const { amount, residency } = action;
+        const isAuResident = residency === 'AU';
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        if (isAuResident) {
+          next = {
+            ...next,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            ftcYTD:              state.ftcYTD              + Math.max(0, amount),
+          };
+        }
+        return next;
+      }],
+    ];
   }
 
   _auSavingsReducerFns() {

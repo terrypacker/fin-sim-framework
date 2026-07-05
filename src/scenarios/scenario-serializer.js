@@ -663,6 +663,15 @@ export class ScenarioSerializer {
           }))
         : null,
       market:               p.market               ?? null,
+      // Rental income (design 48)
+      rentalEnabled:              p.rentalEnabled              ?? false,
+      monthlyRent:                p.monthlyRent                ?? 0,
+      occupancyRate:              p.occupancyRate              ?? 0.95,
+      rentalExpenseRatio:         p.rentalExpenseRatio         ?? 0.25,
+      mortgageInterestRate:       p.mortgageInterestRate       ?? 0,
+      landValueRatio:             p.landValueRatio             ?? 0.2,
+      annualDepreciationOverride: p.annualDepreciationOverride ?? null,
+      accumulatedDepreciation:    p.accumulatedDepreciation    ?? 0,
     };
   }
 
@@ -687,6 +696,15 @@ export class ScenarioSerializer {
         ? d.appreciationSchedule.map(e => ({ date: new Date(e.date), rate: e.rate }))
         : null,
       market:              d.market              ?? null,
+      // Rental income (design 48)
+      rentalEnabled:              d.rentalEnabled              ?? false,
+      monthlyRent:                d.monthlyRent                ?? 0,
+      occupancyRate:              d.occupancyRate              ?? 0.95,
+      rentalExpenseRatio:         d.rentalExpenseRatio         ?? 0.25,
+      mortgageInterestRate:       d.mortgageInterestRate       ?? 0,
+      landValueRatio:             d.landValueRatio             ?? 0.2,
+      annualDepreciationOverride: d.annualDepreciationOverride ?? null,
+      accumulatedDepreciation:    d.accumulatedDepreciation    ?? 0,
     });
     if (d.stateKey) prop.stateKey = d.stateKey;
     return prop;

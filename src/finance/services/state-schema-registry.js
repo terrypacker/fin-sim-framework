@@ -337,6 +337,13 @@ export class StateSchemaRegistry {
     this.register(`${stateKey}.mortgageBalance`,         vt);
     this.register(`${stateKey}.monthlyMortgage`,         vt);
     this.register(`${stateKey}.balanceAtResidencyChange`, vt);
+    // Rental income (design 48)
+    this.register(`${stateKey}.monthlyRent`,             vt);
+    this.register(`${stateKey}.accumulatedDepreciation`, vt);
+    this.register(`${stateKey}.occupancyRate`,           ParameterValueType.rate());
+    this.register(`${stateKey}.rentalExpenseRatio`,      ParameterValueType.rate());
+    this.register(`${stateKey}.mortgageInterestRate`,    ParameterValueType.rate());
+    this.register(`${stateKey}.landValueRatio`,          ParameterValueType.rate());
   }
 
   /**

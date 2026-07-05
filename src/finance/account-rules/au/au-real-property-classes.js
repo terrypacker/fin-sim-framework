@@ -47,7 +47,12 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
     const { salePrice, costBasis, mortgageBalance, residency, ownershipType, ownerId, owners, stateKey, destinationKey } = action;
     const mortgage    = mortgageBalance ?? 0;
     const netProceeds = Math.max(0, salePrice - mortgage);
-    const gain        = Math.max(0, salePrice - costBasis);
+    // Div 43 capital-works deductions taken during the hold reduce the CGT cost
+    // base, so the gain is larger (design 48 §4.5). accumulatedDepreciation is 0
+    // for non-rental properties, so this is a no-op there.
+    const accumulatedDep = (stateKey && state[stateKey]?.accumulatedDepreciation) ?? 0;
+    const adjustedBasis  = Math.max(0, costBasis - accumulatedDep);
+    const gain        = Math.max(0, salePrice - adjustedBasis);
     const destKey     = destinationKey ?? defaultAuCashKey(state);
     this.accountService.transaction(state[destKey], netProceeds, null);
     const updates = {};
@@ -60,7 +65,7 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
     return this.newState(
       state,
       updates,
-      [{ type: 'AU_HOUSE_SALE_TAX', gain, residency, ownershipType, ownerId, owners, proceeds: salePrice, costBasis, description }]
+      [{ type: 'AU_HOUSE_SALE_TAX', gain, residency, ownershipType, ownerId, owners, proceeds: salePrice, costBasis: adjustedBasis, description }]
     );
   }
 }

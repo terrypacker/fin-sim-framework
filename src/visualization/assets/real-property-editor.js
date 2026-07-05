@@ -79,6 +79,16 @@ export class RealPropertyEditor extends BaseComponent {
 
     el.querySelector('[data-id="ownershipType"]').value = this._node?.ownershipType ?? 'sole';
 
+    // Rental income (design 48)
+    el.querySelector('[data-id="rentalEnabled"]').checked      = this._node?.rentalEnabled      ?? false;
+    el.querySelector('[data-id="monthlyRent"]').value          = this._node?.monthlyRent          ?? 0;
+    el.querySelector('[data-id="occupancyRate"]').value        = this._node?.occupancyRate         ?? 0.95;
+    el.querySelector('[data-id="rentalExpenseRatio"]').value   = this._node?.rentalExpenseRatio    ?? 0.25;
+    el.querySelector('[data-id="mortgageInterestRate"]').value = this._node?.mortgageInterestRate  ?? 0;
+    el.querySelector('[data-id="landValueRatio"]').value       = this._node?.landValueRatio         ?? 0.2;
+    el.querySelector('[data-id="annualDepreciationOverride"]').value =
+      this._node?.annualDepreciationOverride ?? '';
+
     this._populateOwnerSelect(el, this._people, this._node?.ownerId ?? null);
     this._populateAccountSelect(el, this._accounts, this._node?.saleDestinationAccount ?? null);
 
@@ -135,6 +145,17 @@ export class RealPropertyEditor extends BaseComponent {
       saleDestinationAccount: el.querySelector('[data-id="saleDestinationAccount"]').value || null,
       ownershipType:        el.querySelector('[data-id="ownershipType"]').value,
       ownerId:              el.querySelector('[data-id="ownerId"]').value || null,
+      // Rental income (design 48)
+      rentalEnabled:        el.querySelector('[data-id="rentalEnabled"]').checked,
+      monthlyRent:          +el.querySelector('[data-id="monthlyRent"]').value,
+      occupancyRate:        +el.querySelector('[data-id="occupancyRate"]').value,
+      rentalExpenseRatio:   +el.querySelector('[data-id="rentalExpenseRatio"]').value,
+      mortgageInterestRate: +el.querySelector('[data-id="mortgageInterestRate"]').value,
+      landValueRatio:       +el.querySelector('[data-id="landValueRatio"]').value,
+      annualDepreciationOverride:
+        el.querySelector('[data-id="annualDepreciationOverride"]').value === ''
+          ? null
+          : +el.querySelector('[data-id="annualDepreciationOverride"]').value,
     };
     // Param-backed fields are owned by their scenario param (design/32).
     for (const f of this._linkedFields) delete data[f];
