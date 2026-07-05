@@ -20,6 +20,7 @@ import { Account, CheckingAccount, SavingsAccount } from '../finance/assets/acco
 import {
   InvestmentAccount, BrokerageAccount, FourOhOneKAccount,
   RothAccount, TraditionalIRAAccount, SuperannuationAccount,
+  reconcileLedgerToBalance,
 } from '../finance/assets/investment-account.js';
 import { Holding } from '../finance/holdings/holding.js';
 import { rescaleHoldingsToBalance, holdingsOutOfSync } from '../finance/holdings/holding-utils.js';
@@ -859,6 +860,12 @@ export class ScenarioSerializer {
         rescaleHoldingsToBalance(account.holdings, account.balance);
       }
     }
+    // Auto-heal the basis ledger (design 43 §5 Phase 3): saved states drifted by
+    // a pre-fix drawdown can carry contributionBasis/earningsBasis that over-state
+    // balance (e.g. super contributionBasis 180k vs balance 39k). Clamp to balance
+    // preserving the earnings fraction, before any consumer (scenario-compare,
+    // after-tax metric) reads the ledger. No-op for cash and already-tied ledgers.
+    reconcileLedgerToBalance(account);
     return account;
   }
 
