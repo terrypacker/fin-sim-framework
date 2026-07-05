@@ -356,6 +356,7 @@ export const US_RETIREMENT = {
         name:                  person.name,
         birthDate:             person.birthDate,
         monthlyWage:           person.monthlyWage           ?? 0,
+        wageCurrency:          person.wageCurrency          ?? 'USD',
         retirementDate:        person.retirementDate        ?? null,
         socialSecurityMonthly: person.socialSecurityMonthly ?? 0,
         lifeExpectancy:        person.lifeExpectancy        ?? 90,
@@ -687,7 +688,7 @@ export const US_RETIREMENT = {
         const h = new IntlIraEarningsHandler({
           stateRegistry: sr, role: ACCOUNT_ROLES.IRA,
           ownerId: acct.ownerId, stateKey: acct.stateKey,
-          growthRate: p.iraGrowthRate,
+          growthRate: acct.growthRate ?? p.iraGrowthRate,
         });
         h.handledEvents.push(iraEvent);
         handlers.push(h);
@@ -711,7 +712,7 @@ export const US_RETIREMENT = {
         const h = new IntlRothEarningsHandler({
           stateRegistry: sr, role: ACCOUNT_ROLES.ROTH,
           ownerId: acct.ownerId, stateKey: acct.stateKey,
-          growthRate: p.rothGrowthRate,
+          growthRate: acct.growthRate ?? p.rothGrowthRate,
         });
         h.handledEvents.push(rothEvent);
         handlers.push(h);
@@ -726,7 +727,7 @@ export const US_RETIREMENT = {
         const h = new IntlK401EarningsHandler({
           stateRegistry: sr, role: ACCOUNT_ROLES.K401,
           ownerId: acct.ownerId, stateKey: acct.stateKey,
-          growthRate: p.k401GrowthRate,
+          growthRate: acct.growthRate ?? p.k401GrowthRate,
         });
         h.handledEvents.push(k401Event);
         handlers.push(h);
@@ -751,7 +752,7 @@ export const US_RETIREMENT = {
         const earningsH = new IntlUsStockEarningsHandler({
           stateRegistry: sr, role: ACCOUNT_ROLES.US_STOCK,
           ownerId: acct.ownerId, stateKey: acct.stateKey,
-          growthRate: p.brokerageGrowthRate,
+          growthRate: acct.growthRate ?? p.brokerageGrowthRate,
         });
         earningsH.handledEvents.push(stockEvent);
         handlers.push(earningsH);
@@ -759,7 +760,7 @@ export const US_RETIREMENT = {
         const divH = new DividendScheduledHandler({
           stateRegistry: sr, role: ACCOUNT_ROLES.US_STOCK,
           ownerId: acct.ownerId, stateKey: acct.stateKey,
-          dividendRate: p.brokerageDividendRate,
+          dividendRate: acct.dividendRate ?? p.brokerageDividendRate,
           reinvest:     p.dividendReinvest,
         });
         divH.handledEvents.push(divEvent);
@@ -774,7 +775,7 @@ export const US_RETIREMENT = {
         const h = new FixedIncomeInterestHandler({
           stateRegistry: sr, role: ACCOUNT_ROLES.FIXED_INCOME,
           ownerId: acct.ownerId, stateKey: acct.stateKey,
-          interestRate: p.fixedIncomeInterestRate,
+          interestRate: acct.interestRate ?? p.fixedIncomeInterestRate,
         });
         h.handledEvents.push(fiEvent);
         handlers.push(h);
@@ -885,8 +886,8 @@ export const US_RETIREMENT = {
     recordMetricReducer.reducedActionTypes = ['RECORD_METRIC'];
     reducers.push(recordMetricReducer);
 
-    reducers.push(new ExpenseDebitReducer({ accountService: accountSvc }));
-    reducers.push(new ReplenishSavingsReducer({ accountService: accountSvc }));
+    reducers.push(new ExpenseDebitReducer({ accountService: accountSvc, stateRegistry: sr }));
+    reducers.push(new ReplenishSavingsReducer({ accountService: accountSvc, stateRegistry: sr }));
 
     if (usStockAccounts.length > 0) {
       reducers.push(new StockDividendCashApplyReducer({
@@ -917,37 +918,37 @@ export const US_RETIREMENT = {
 
     // Roth IRA mechanics
     if (rothAccounts.length > 0) reducers.push(
-      new RothContributionApplyReducer({ accountService: accountSvc }),
-      new RothWithdrawalContribApplyReducer({ accountService: accountSvc }),
-      new RothWithdrawalEarningsApplyReducer({ accountService: accountSvc }),
-      new RothEarningsApplyReducer({ accountService: accountSvc }),
-      new RothRolloverContributionApplyReducer({ accountService: accountSvc }),
-      new RothRolloverEarningsApplyReducer({ accountService: accountSvc }),
-      new RothRolloverWithdrawalContribApplyReducer({ accountService: accountSvc }),
-      new RothRolloverWithdrawalEarningsApplyReducer({ accountService: accountSvc }),
+      new RothContributionApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new RothWithdrawalContribApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new RothWithdrawalEarningsApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new RothEarningsApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new RothRolloverContributionApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new RothRolloverEarningsApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new RothRolloverWithdrawalContribApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new RothRolloverWithdrawalEarningsApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
     );
 
     // Traditional IRA mechanics
     if (iraAccounts.length > 0) reducers.push(
-      new IraContributionApplyReducer({ accountService: accountSvc }),
-      new IraWithdrawalContribApplyReducer({ accountService: accountSvc }),
-      new IraWithdrawalEarningsApplyReducer({ accountService: accountSvc }),
-      new IraEarningsApplyReducer({ accountService: accountSvc }),
-      new IraRolloverWithdrawalApplyReducer({ accountService: accountSvc }),
-      new IraRmdApplyReducer({ accountService: accountSvc }),
+      new IraContributionApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new IraWithdrawalContribApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new IraWithdrawalEarningsApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new IraEarningsApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new IraRolloverWithdrawalApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new IraRmdApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
     );
 
     // 401(k) mechanics
     if (k401Accounts.length > 0) reducers.push(
-      new K401ContributionApplyReducer({ accountService: accountSvc }),
-      new K401EarningsApplyReducer({ accountService: accountSvc }),
-      new K401WithdrawalApplyReducer({ accountService: accountSvc }),
-      new K401RmdApplyReducer({ accountService: accountSvc }),
+      new K401ContributionApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new K401EarningsApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new K401WithdrawalApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new K401RmdApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
     );
 
     // 401(k)→IRA conversion (no cash pool / tax — direct rollover)
     if (k401Accounts.length > 0 && iraAccounts.length > 0) {
-      reducers.push(new K401ToIraConversionApplyReducer({ accountService: accountSvc }));
+      reducers.push(new K401ToIraConversionApplyReducer({ accountService: accountSvc, stateRegistry: sr }));
     }
 
     // Mortality reducers (design/27 Step 7).

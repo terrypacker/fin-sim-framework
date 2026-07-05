@@ -19,8 +19,9 @@ import { valuesForConfig }
   from '../../src/finance/optimization/opt-values.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS }
   from '../../src/finance/optimization/intl-retirement-opt-config.js';
-import { INTL_RETIREMENT_PARAM_SCHEMA, IntlRetirementScenario }
+import { INTL_RETIREMENT_PARAM_SCHEMA, IntlRetirementScenario, INTL_RETIREMENT_PARAM_ALIASES }
   from '../../src/scenarios/intl-retirement-scenario.js';
+import { ScenarioParamGenerator } from '../../src/scenarios/params/scenario-param-generator.js';
 import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { ToolsetRegistry } from '../../src/scenarios/toolsets/toolset-registry.js';
 import { US_BANKING }      from '../../src/scenarios/toolsets/us-banking-toolset.js';
@@ -331,13 +332,22 @@ describe('IntlRetirement combined param schema mc/opt flags', () => {
   });
 
   test('DEFAULT_OPTIMIZATION_CONFIGS only contains opt:true combined-schema params', () => {
-    const optKeys = new Set(COMBINED_SCHEMA.filter(e => e.opt).map(e => e.key));
+    // Design 55: per-record opt targets (e.g. usHouseSaleYear) are now generated
+    // from the records rather than living in the static schema. Include the
+    // generated params (as the loader does) and resolve legacy alias keys to their
+    // generated equivalents before checking opt-eligibility.
+    const defaultCfg = IntlRetirementScenario.buildDefaultConfig(
+      {}, new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)));
+    const generated = ScenarioParamGenerator.generate(defaultCfg);
+    const optKeys = new Set(
+      [...COMBINED_SCHEMA, ...generated].filter(e => e.opt).map(e => e.key));
     for (const cfg of DEFAULT_OPTIMIZATION_CONFIGS) {
       // Nested path keys (e.g. shocks[0].severity) resolve into structured params
       // rather than flat schema entries — skip the flat-schema check for them.
       if (cfg.paramKey.includes('[')) continue;
+      const resolved = INTL_RETIREMENT_PARAM_ALIASES[cfg.paramKey] ?? cfg.paramKey;
       assert.ok(
-        optKeys.has(cfg.paramKey),
+        optKeys.has(resolved),
         `${cfg.paramKey} in DEFAULT_OPTIMIZATION_CONFIGS must have opt:true in combined schema`
       );
     }

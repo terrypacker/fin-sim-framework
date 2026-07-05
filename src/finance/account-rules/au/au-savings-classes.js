@@ -79,11 +79,16 @@ export class AuSavingsEarningsApplyReducer extends AccountServiceReducer {
 
   reduce(state, action) {
     const { amount, residency } = action;
-    const cashPool = auCash(state);
+    // Per-account (design 55 §7): credit the account the handler stamped, not a
+    // hardcoded key. Fall back to the canonical single-account key for legacy
+    // bare-event dispatchers and pre-stateKey saved actions. (Also fixes a latent
+    // bug where the balance was rebased on auCash(state) rather than the account.)
+    const key  = action.stateKey ?? 'auSavingsAccount';
+    const acct = state[key];
     return this.newState(
       state,
       {
-        auSavingsAccount: { ...state.auSavingsAccount, balance: cashPool.balance + amount },
+        [key]: { ...acct, balance: acct.balance + amount },
       },
       [{ type: 'AU_SAVINGS_EARNINGS_TAX', amount, residency }]
     );

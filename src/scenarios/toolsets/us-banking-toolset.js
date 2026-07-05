@@ -36,7 +36,7 @@ export const US_BANKING = {
     handlers: [UsSavingsInterestMonthlyHandler],
     reducers: [UsSavingsInterestCreditReducer],
     actions: [
-      { type: 'US_SAVINGS_INTEREST_CREDIT', fields: { amount: ValueType.currency('USD') } },
+      { type: 'US_SAVINGS_INTEREST_CREDIT', fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text() } },
     ],
   },
 
@@ -76,7 +76,8 @@ export const US_BANKING = {
         stateRegistry: context.stateRegistry,
         role: ACCOUNT_ROLES.US_SAVINGS,
         ownerId: acct.ownerId,
-        interestRate: rate,
+        stateKey: acct.stateKey,
+        interestRate: acct.interestRate ?? rate,
       });
       h.handledEvents.push(intEvent);
       return h;

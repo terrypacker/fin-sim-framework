@@ -10,6 +10,7 @@
 
 import { ServiceRegistry }    from '../../services/service-registry.js';
 import { ScenarioSerializer } from '../../scenarios/scenario-serializer.js';
+import { ScenarioLoader }     from '../../scenarios/scenario-loader.js';
 import { paramsToCsv, csvToParamUpdates, coerceParamValue, CSV_SCALAR_TYPES } from './param-csv.js';
 
 /**
@@ -172,6 +173,9 @@ export class ScenarioTabPresenter {
       // yet rebuilt. The graph snapshot also forces subsequent loads through
       // the deserialize branch rather than recompiling from toolsets.
       Object.assign(this._activeScenario, ScenarioSerializer.snapshotServices(ServiceRegistry.getInstance()));
+      // Persist which default records the user has deleted (absent from the just-
+      // harvested live set) so a later Rebuild's drift-merge does not re-add them.
+      ScenarioLoader.recordDeletedDefaults(this._activeScenario);
       this._controller.save(this._activeScenario);
       this._view._refreshScenarioSelect(this._controller.getAll(), this._activeScenario);
     };

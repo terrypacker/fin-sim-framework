@@ -112,8 +112,8 @@ export const US_COLLECTIBLES = {
   reducers(context) {
     if ((context.collectibles ?? []).length === 0) return [];
     return [
-      new CollectibleSaleApplyReducer({ accountService: context.accountService }),
-      new CollectibleValueChangeApplyReducer({ accountService: context.accountService }),
+      new CollectibleSaleApplyReducer({ accountService: context.accountService, stateRegistry: context.stateRegistry }),
+      new CollectibleValueChangeApplyReducer({ accountService: context.accountService, stateRegistry: context.stateRegistry }),
     ];
   },
 };

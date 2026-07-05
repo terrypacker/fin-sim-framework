@@ -248,20 +248,6 @@ export const INTL_RETIREMENT_DEFAULTS = {
 export const INTL_RETIREMENT_PARAM_SCHEMA = [
   // ── People ─────────────────────────────────────────────────────────────────
   {
-    key: 'primaryRetirementDate', label: 'Primary Retirement Date',
-    type: 'Date', group: 'People', mc: false, opt: true,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.primaryRetirementDate.toISOString(),
-    description: 'Date primary person stops working',
-    node: { type: 'person', id: 'primary', field: 'retirementDate' },
-  },
-  {
-    key: 'spouseRetirementDate', label: 'Spouse Retirement Date',
-    type: 'Date', group: 'People', mc: false, opt: true,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseRetirementDate.toISOString(),
-    description: 'Date spouse stops working',
-    node: { type: 'person', id: 'spouse', field: 'retirementDate' },
-  },
-  {
     // US state of residency (design 34). Household active state is the primary's;
     // '' / null = no state configured (no state income tax). The categorical
     // options make it an optimization/MC axis (design 34 §9).
@@ -271,57 +257,11 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     description: 'US state of residency for state income tax (NE, HI, SD). Blank = none.',
     node: { type: 'person', id: 'primary', field: 'residencyState' },
   },
-  {
-    key: 'primaryMonthlyWage', label: 'Primary Monthly Wage (USD)',
-    type: 'Number', group: 'People', mc: true, opt: true,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.primaryMonthlyWage,
-    description: 'Gross monthly wage for primary before retirement',
-    node: { type: 'person', id: 'primary', field: 'monthlyWage' },
-  },
-  {
-    key: 'spouseMonthlyWage', label: 'Spouse Monthly Wage (USD)',
-    type: 'Number', group: 'People', mc: true, opt: true,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseMonthlyWage,
-    description: 'Gross monthly wage for spouse before retirement',
-    node: { type: 'person', id: 'spouse', field: 'monthlyWage' },
-  },
 
   // ── US Account Balances ────────────────────────────────────────────────────
-  {
-    key: 'initialUsSavings', label: 'US Savings Initial Balance (USD)',
-    type: 'Number', group: 'US Account Balances', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.initialUsSavings,
-    description: 'Starting US cash savings balance',
-    node: { type: 'account', stateKey: 'usSavingsAccount', field: 'balance' },
-  },
-  {
-    key: 'rothBalance', label: 'Roth IRA Balance (USD)',
-    type: 'Number', group: 'US Account Balances', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.rothBalance,
-    description: 'Starting Roth IRA balance',
-    node: { type: 'account', stateKey: 'rothAccount', field: 'balance' },
-  },
-  {
-    key: 'iraBalance', label: 'Traditional IRA Balance (USD)',
-    type: 'Number', group: 'US Account Balances', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.iraBalance,
-    description: 'Starting Traditional IRA balance',
-    node: { type: 'account', stateKey: 'iraAccount', field: 'balance' },
-  },
-  {
-    key: 'k401Balance', label: '401(k) Balance (USD)',
-    type: 'Number', group: 'US Account Balances', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.k401Balance,
-    description: 'Starting 401(k) balance',
-    node: { type: 'account', stateKey: 'k401Account', field: 'balance' },
-  },
-  {
-    key: 'stockBalance', label: 'US Stock Balance (USD)',
-    type: 'Number', group: 'US Account Balances', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.stockBalance,
-    description: 'Starting US brokerage stock balance (split into two holdings via stockSplitRatio)',
-    node: { type: 'account', stateKey: 'usStockAccount', field: 'balance' },
-  },
+  // Per-record balance params (initialUsSavings, rothBalance, iraBalance,
+  // k401Balance, stockBalance, fixedIncomeBalance) are now generated from the
+  // account records (design 55); only the derived stock split/basis knobs remain.
   {
     key: 'stockSplitRatio', label: 'Stock Domestic Split (0–1)',
     type: 'Number', group: 'US Account Balances', mc: false, opt: true,
@@ -340,66 +280,10 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     defaultValue: INTL_RETIREMENT_DEFAULTS.stockBasisIntl,
     description: 'Cost basis for the international equity holding. Default is below market value (gain position, TaxGainHarvest candidate).',
   },
-  {
-    key: 'fixedIncomeBalance', label: 'Fixed Income Balance (USD)',
-    type: 'Number', group: 'US Account Balances', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.fixedIncomeBalance,
-    description: 'Starting fixed income account balance',
-    node: { type: 'account', stateKey: 'fixedIncomeAccount', field: 'balance' },
-  },
 
-  // ── AU Account Balances ────────────────────────────────────────────────────
-  {
-    key: 'auSavingsBalance', label: 'AU Savings Initial Balance (AUD)',
-    type: 'Number', group: 'AU Account Balances', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.auSavingsBalance,
-    description: 'Starting AU cash savings balance',
-    node: { type: 'account', stateKey: 'auSavingsAccount', field: 'balance' },
-  },
-  {
-    key: 'superBalance', label: 'Superannuation Balance (AUD)',
-    type: 'Number', group: 'AU Account Balances', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.superBalance,
-    description: 'Starting superannuation balance',
-    node: { type: 'account', stateKey: 'superAccount', field: 'balance' },
-  },
-  {
-    key: 'auStockBalance', label: 'AU Stock Balance (AUD)',
-    type: 'Number', group: 'AU Account Balances', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.auStockBalance,
-    description: 'Starting AU brokerage stock balance',
-    node: { type: 'account', stateKey: 'auStockAccount', field: 'balance' },
-  },
-
-  // ── Spouse Account Balances ────────────────────────────────────────────────
-  {
-    key: 'spouseRothBalance', label: 'Spouse Roth IRA Balance (USD)',
-    type: 'Number', group: 'Spouse Account Balances', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseRothBalance,
-    description: 'Starting Roth IRA balance for spouse',
-    node: { type: 'account', stateKey: 'spouseRothAccount', field: 'balance' },
-  },
-  {
-    key: 'spouseIraBalance', label: 'Spouse Traditional IRA Balance (USD)',
-    type: 'Number', group: 'Spouse Account Balances', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseIraBalance,
-    description: 'Starting Traditional IRA balance for spouse',
-    node: { type: 'account', stateKey: 'spouseIraAccount', field: 'balance' },
-  },
-  {
-    key: 'spouseK401Balance', label: 'Spouse 401(k) Balance (USD)',
-    type: 'Number', group: 'Spouse Account Balances', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseK401Balance,
-    description: 'Starting 401(k) balance for spouse',
-    node: { type: 'account', stateKey: 'spouseK401Account', field: 'balance' },
-  },
-  {
-    key: 'spouseSuperBalance', label: 'Spouse Superannuation Balance (AUD)',
-    type: 'Number', group: 'Spouse Account Balances', mc: true, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.spouseSuperBalance,
-    description: 'Starting superannuation balance for spouse',
-    node: { type: 'account', stateKey: 'spouseSuperAccount', field: 'balance' },
-  },
+  // AU + Spouse per-record balances (auSavingsBalance, superBalance,
+  // auStockBalance, spouse{Roth,Ira,K401,Super}Balance) are generated from their
+  // account records (design 55). Their growth rates remain global params below.
 
   // ── Spouse Account Rates ───────────────────────────────────────────────────
   {
@@ -451,21 +335,9 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     node: { type: 'account', stateKey: 'auSavingsAccount', field: 'minimumBalance' },
   },
 
-  // ── Real Properties ────────────────────────────────────────────────────────
-  {
-    key: 'usHouseSaleYear', label: 'US House Sale Year',
-    type: 'Number', group: 'Real Properties', mc: true, opt: true,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.usHouseSaleYear,
-    description: 'Calendar year of planned US house sale (null = no planned sale)',
-    node: { type: 'realProperty', stateKey: 'usHouseProperty', field: 'plannedSaleYear' },
-  },
-  {
-    key: 'auHouseSaleYear', label: 'AU House Sale Year',
-    type: 'Number', group: 'Real Properties', mc: true, opt: true,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.auHouseSaleYear,
-    description: 'Calendar year of planned AU house sale (null = no planned sale)',
-    node: { type: 'realProperty', stateKey: 'auHouseProperty', field: 'plannedSaleYear' },
-  },
+  // Real-property value / appreciation / sale-year params are generated from the
+  // property records (design 55). companySaleYear stays static until the
+  // company-equity template is populated (Phase 4).
 
   // ── Company Equity ───────────────────────────────────────────────────────
   {
@@ -583,6 +455,41 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
 ];
 
 /**
+ * Design 55 §11: map retired per-record param keys → their generated equivalents.
+ * `ScenarioLoader._applyParamAliases` consults this so saved scenarios and MC/Opt
+ * configs that still reference the old flat keys (`rothBalance`, `usHouseSaleYear`,
+ * …) keep working after the static entries were removed above. The generated key's
+ * `node` is byte-identical to the old one, so the param→record cascade is unchanged.
+ * Aliases can be dropped after a deprecation window.
+ */
+export const INTL_RETIREMENT_PARAM_ALIASES = Object.freeze({
+  // People
+  primaryRetirementDate: 'person.primary.retirementDate',
+  spouseRetirementDate:  'person.spouse.retirementDate',
+  primaryMonthlyWage:    'person.primary.monthlyWage',
+  spouseMonthlyWage:     'person.spouse.monthlyWage',
+  // US account balances
+  initialUsSavings:      'acct.usSavingsAccount.balance',
+  rothBalance:           'acct.rothAccount.balance',
+  iraBalance:            'acct.iraAccount.balance',
+  k401Balance:           'acct.k401Account.balance',
+  stockBalance:          'acct.usStockAccount.balance',
+  fixedIncomeBalance:    'acct.fixedIncomeAccount.balance',
+  // AU account balances
+  auSavingsBalance:      'acct.auSavingsAccount.balance',
+  superBalance:          'acct.superAccount.balance',
+  auStockBalance:        'acct.auStockAccount.balance',
+  // Spouse account balances
+  spouseRothBalance:     'acct.spouseRothAccount.balance',
+  spouseIraBalance:      'acct.spouseIraAccount.balance',
+  spouseK401Balance:     'acct.spouseK401Account.balance',
+  spouseSuperBalance:    'acct.spouseSuperAccount.balance',
+  // Real property
+  usHouseSaleYear:       'prop.usHouseProperty.plannedSaleYear',
+  auHouseSaleYear:       'prop.auHouseProperty.plannedSaleYear',
+});
+
+/**
  * IntlRetirementScenario — International two-person retirement simulation.
  *
  * Two people (primary + spouse), US→AU migration on Jul 1 of moveYear.
@@ -604,6 +511,9 @@ export class IntlRetirementScenario extends BaseScenario {
   }
 
   static getParamSchema() { return INTL_RETIREMENT_PARAM_SCHEMA; }
+
+  /** Design 55 §11: legacy param key → generated key, for back-compat migration. */
+  static getParamAliases() { return INTL_RETIREMENT_PARAM_ALIASES; }
 
   /**
    * Full param schema: scenario-level params merged with all toolset paramSchema

@@ -12,7 +12,7 @@ import { OneOffEvent }                    from '../../simulation-framework/event
 import { EventSeries }                   from '../../simulation-framework/events/event-series.js';
 import { DateUtils }                      from '../../simulation-framework/date-utils.js';
 import { ValueType }                      from '../../simulation-framework/type-registry.js';
-import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY } from '../../finance/economic-regimes/rate-keys.js';
+import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS } from '../../finance/economic-regimes/rate-keys.js';
 import { RegimeApplyReducer }             from '../../finance/economic-regimes/regime-apply-reducer.js';
 import { AddRegimeReducer }               from '../../finance/economic-regimes/add-regime-reducer.js';
 import { RemoveRegimeReducer }            from '../../finance/economic-regimes/remove-regime-reducer.js';
@@ -94,6 +94,32 @@ function collectBaseInterestRates(p) {
   if (p.auSavingsInterestRate    != null) rates[RATE_KEYS.SAVINGS_AU]      = p.auSavingsInterestRate;
   if (p.auFixedIncomeInterestRate != null) rates[RATE_KEYS.FIXED_INCOME_AU] = p.auFixedIncomeInterestRate;
   return rates;
+}
+
+/**
+ * Seed per-account rate keys `<memberKey>::<stateKey>` (design 55 §8) into the
+ * already-built base growth/interest maps. Each account's own `growthRate` /
+ * `interestRate` (set via its generated per-account param) overrides the shared
+ * type-level baseline; an unset rate inherits the baseline, so single-rate
+ * scenarios stay byte-for-byte identical. `computeHoldingsGrowth` reads the
+ * `<memberKey>::<stateKey>` key and RegimeApplyReducer fans class shocks onto it,
+ * so per-account rates coexist with regimes.
+ *
+ * Mutates `baseGrowthRates` / `baseInterestRates` in place.
+ */
+function seedPerAccountRates(accounts, baseGrowthRates, baseInterestRates) {
+  for (const acct of accounts ?? []) {
+    const stateKey  = acct?.stateKey;
+    const memberKey = MEMBER_RATE_KEY_BY_ROLE[acct?.role];
+    if (!stateKey || !memberKey) continue;
+    const isInterest = INTEREST_RATE_KEYS.has(memberKey);
+    const baseMap    = isInterest ? baseInterestRates : baseGrowthRates;
+    const ownRate    = isInterest ? acct.interestRate : acct.growthRate;
+    // Fall back to the shared baseline when the account has no explicit rate.
+    const perVal = ownRate ?? baseMap[memberKey];
+    if (perVal == null) continue;
+    baseMap[`${memberKey}::${stateKey}`] = perVal;
+  }
 }
 
 /**
@@ -289,6 +315,9 @@ export const ECONOMIC_REGIMES = {
     const p = context.parameters;
     const baseGrowthRates    = collectBaseGrowthRates(p);
     const baseInterestRates  = collectBaseInterestRates(p);
+    // Per-account rate overrides (design 55 §8) — extend the base maps with
+    // `<memberKey>::<stateKey>` entries derived from each account's own rate.
+    seedPerAccountRates(context.accounts, baseGrowthRates, baseInterestRates);
     const baseInflationRates = {
       US: p.usInflationRate ?? p.inflationRate ?? 0.03,
       AU: p.auInflationRate ?? p.inflationRate ?? 0.03,

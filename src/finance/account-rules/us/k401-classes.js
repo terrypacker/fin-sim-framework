@@ -14,8 +14,9 @@ import { FieldValueAction, RecordBalanceAction } from '../../../simulation-frame
 import { getUniformDistributionPeriod } from './us-rmd-uniform-table.js';
 import { getBirthDate } from '../../residency-utils.js';
 import { scaleHoldings } from '../../holdings/holding-utils.js';
+import { resolveCashKey } from '../cash-routing.js';
 
-/** Resolve the US cash pool. */
+/** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
 
 /** Returns age as a decimal (years + fractional months) for the 59.5 threshold. */
@@ -35,15 +36,16 @@ export class K401ContributionApplyReducer extends AccountServiceReducer {
   static description = 'Debits the US cash pool and credits 401k contributionBasis; chains K401_CONTRIBUTION_TAX.';
   static actionType  = 'K401_CONTRIBUTION_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('401k Contribution Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['K401_CONTRIBUTION_APPLY'];
     this.generatedActionTypes = ['K401_CONTRIBUTION_TAX'];
   }
 
   reduce(state, action) {
-    this.accountService.transaction(usCash(state), -action.amount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], -action.amount, null);
     const ka         = state.k401Account;
     const newBalance = ka.balance + action.amount;
     return this.newState(
@@ -96,16 +98,17 @@ export class K401WithdrawalApplyReducer extends AccountServiceReducer {
   static description = 'Credits the US cash pool net of penalty and debits the 401k account; chains K401_WITHDRAWAL_TAX.';
   static actionType  = 'K401_WITHDRAWAL_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('401k Withdrawal Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['K401_WITHDRAWAL_APPLY'];
     this.generatedActionTypes = ['K401_WITHDRAWAL_TAX'];
   }
 
   reduce(state, action) {
     const { amount, penaltyAmount } = action;
-    this.accountService.transaction(usCash(state), amount - penaltyAmount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount - penaltyAmount, null);
     const ka           = state.k401Account;
     const fromEarnings = Math.min(amount, ka.earningsBasis);
     const fromContrib  = amount - fromEarnings;
@@ -202,9 +205,10 @@ export class K401RmdApplyReducer extends AccountServiceReducer {
   static description = 'Credits the US cash pool and debits the 401(k) for the required minimum distribution (no penalty); chains K401_RMD_TAX.';
   static actionType  = 'K401_RMD_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('401k RMD Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['K401_RMD_APPLY'];
     this.generatedActionTypes = ['K401_RMD_TAX'];
   }
@@ -216,7 +220,7 @@ export class K401RmdApplyReducer extends AccountServiceReducer {
     const fromEarnings = Math.min(amount, ka.earningsBasis);
     const fromContrib  = amount - fromEarnings;
     const newBalance   = ka.balance - amount;
-    this.accountService.transaction(usCash(state), amount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
     return this.newState(
       state,
       {
@@ -294,7 +298,7 @@ export class K401AnnualRmdHandler extends HandlerEntry {
     const rmdAmount = Math.round(k401.balance / distributionPeriod * 100) / 100;
     if (rmdAmount <= 0) return [];
 
-    const cashKey = state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
+    const cashKey = resolveCashKey(this.stateRegistry, 'US', state, this.ownerId);
     const label   = `${person.name ?? this.ownerId} 401(k) RMD`;
     return [
       { type: 'K401_RMD_APPLY', amount: rmdAmount, stateKey: resolvedKey, residency: person.residency ?? null },

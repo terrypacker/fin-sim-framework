@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { HandlerEntry }      from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, FieldValueAction } from '../../simulation-framework/actions.js';
+import { resolveCashKey } from './cash-routing.js';
 
 /** Deterministic state key for the loan synthesized from a property's mortgage (design 54 P2). */
 export function loanKeyForProperty(propStateKey) {
@@ -56,12 +57,13 @@ export function synthesizeLoanForProperty(prop) {
 
 /**
  * Resolve the cash pool a loan's payment is drawn from: an explicit
- * `paymentSourceKey`, else the loan country's savings pool (checking fallback).
+ * `paymentSourceKey` wins; otherwise route through the shared cash resolver so a
+ * flagged transaction account is honored (design 55 Phase 6b), falling back to the
+ * loan country's savings pool then checking.
  */
-function resolveCashKey(state, loan) {
+function resolveLoanCashKey(stateRegistry, state, loan) {
   if (loan.paymentSourceKey && state[loan.paymentSourceKey]) return loan.paymentSourceKey;
-  if (loan.country === 'AU') return state.auSavingsAccount != null ? 'auSavingsAccount' : 'checkingAccount';
-  return state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
+  return resolveCashKey(stateRegistry, loan.country === 'AU' ? 'AU' : 'US', state);
 }
 
 /** Currency code of an account/loan state entry ('USD'/'AUD'), tolerant of shape. */
@@ -130,14 +132,15 @@ export class LoanPaymentHandler extends HandlerEntry {
    *   filtering lets the US and AU real-property toolsets each schedule their own
    *   `US_LOAN_PAYMENT` / `AU_LOAN_PAYMENT` event without double-paying (design 54 P2).
    */
-  constructor({ country = null } = {}) {
+  constructor({ country = null, stateRegistry = null } = {}) {
     super(null, 'Loan Payment');
     this.country = country;
+    this.stateRegistry = stateRegistry;
     this.generatedActionTypes = ['REPLENISH_SAVINGS', 'LOAN_PAYMENT_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
   }
 
-  static fromJSON(d, _services) {
-    const h = new this({ country: d.country ?? null });
+  static fromJSON(d, services) {
+    const h = new this({ country: d.country ?? null, stateRegistry: services?.stateRegistry });
     h.id = d.id;
     return h;
   }
@@ -150,7 +153,7 @@ export class LoanPaymentHandler extends HandlerEntry {
       const balance = loan.balance ?? 0;
       if (balance <= 0) continue;
 
-      const cashKey   = resolveCashKey(state, loan);
+      const cashKey   = resolveLoanCashKey(this.stateRegistry, state, loan);
       const interest  = Math.max(0, effectivePrincipal(state, loanKey, loan) * (loan.interestRate ?? 0) / 12);
       // Never pay past payoff: cap at the balance plus this month's interest.
       const payment   = Math.min(loan.monthlyPayment ?? 0, balance + interest);
@@ -186,8 +189,8 @@ export class UsLoanPaymentHandler extends LoanPaymentHandler {
   static description = 'Pays US loans (design 54 P2): the shared LoanPaymentHandler scan filtered to country === US, fired by US_LOAN_PAYMENT.';
   static eventType   = 'US_LOAN_PAYMENT';
 
-  constructor() {
-    super({ country: 'US' });
+  constructor({ stateRegistry = null } = {}) {
+    super({ country: 'US', stateRegistry });
     this.name = 'US Loan Payment';
   }
 }
@@ -202,8 +205,8 @@ export class AuLoanPaymentHandler extends LoanPaymentHandler {
   static description = 'Pays AU loans (design 54 P2): the shared LoanPaymentHandler scan filtered to country === AU, fired by AU_LOAN_PAYMENT.';
   static eventType   = 'AU_LOAN_PAYMENT';
 
-  constructor() {
-    super({ country: 'AU' });
+  constructor({ stateRegistry = null } = {}) {
+    super({ country: 'AU', stateRegistry });
     this.name = 'AU Loan Payment';
   }
 }

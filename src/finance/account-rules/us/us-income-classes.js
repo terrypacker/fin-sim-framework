@@ -11,8 +11,9 @@
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
+import { resolveCashKey } from '../cash-routing.js';
 
-/** Resolve the US cash pool. */
+/** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
 
 /** Default US cash pool key when no saleDestinationAccount is provided. */
@@ -38,16 +39,17 @@ export class SsIncomeApplyReducer extends AccountServiceReducer {
   static description = 'Credits the US cash pool with SS income; chains SS_INCOME_TAX (85% taxable).';
   static actionType  = 'SS_INCOME_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('SS Income Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['SS_INCOME_APPLY'];
     this.generatedActionTypes = ['SS_INCOME_TAX'];
   }
 
   reduce(state, action) {
     const { amount, residency } = action;
-    this.accountService.transaction(usCash(state), amount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
     return this.newState(state, {}, [{ type: 'SS_INCOME_TAX', amount, residency }]);
   }
 }
@@ -60,16 +62,19 @@ export class WagesIncomeApplyReducer extends AccountServiceReducer {
   static description = 'Credits the US cash pool with gross wages; chains WAGES_INCOME_TAX.';
   static actionType  = 'WAGES_INCOME_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('Wages Income Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['WAGES_INCOME_APPLY'];
     this.generatedActionTypes = ['WAGES_INCOME_TAX'];
   }
 
   reduce(state, action) {
-    const { amount, residency, personKey } = action;
-    this.accountService.transaction(usCash(state), amount, null);
+    const { amount, residency, personKey, targetKey } = action;
+    // Credit the transaction account the handler resolved; fall back to the single
+    // US cash pool for legacy actions saved without a targetKey.
+    this.accountService.transaction(state[targetKey] ?? state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
     return this.newState(state, {}, [{ type: 'WAGES_INCOME_TAX', amount, residency, personKey }]);
   }
 }
@@ -83,14 +88,15 @@ export class WagesWithheldApplyReducer extends AccountServiceReducer {
   static description = 'Debits the US cash pool by the withheld amount and increments usWithheldYTD.';
   static actionType  = 'WAGES_WITHHELD_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('Wages Withheld Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes = ['WAGES_WITHHELD_APPLY'];
   }
 
   reduce(state, action) {
-    this.accountService.transaction(usCash(state), -action.amount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], -action.amount, null);
     return this.newState(state, {
       usWithheldYTD: (state.usWithheldYTD ?? 0) + action.amount,
     });
@@ -105,16 +111,17 @@ export class SeIncomeUsApplyReducer extends AccountServiceReducer {
   static description = 'Credits the US cash pool with US self-employment income; chains SE_INCOME_US_TAX.';
   static actionType  = 'SE_INCOME_US_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('SE Income US Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['SE_INCOME_US_APPLY'];
     this.generatedActionTypes = ['SE_INCOME_US_TAX'];
   }
 
   reduce(state, action) {
     const { amount, residency } = action;
-    this.accountService.transaction(usCash(state), amount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
     return this.newState(state, {}, [{ type: 'SE_INCOME_US_TAX', amount, residency }]);
   }
 }
@@ -127,16 +134,17 @@ export class BonusApplyReducer extends AccountServiceReducer {
   static description = 'Credits the US cash pool with the bonus amount; chains BONUS_TAX.';
   static actionType  = 'BONUS_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('Bonus Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['BONUS_APPLY'];
     this.generatedActionTypes = ['BONUS_TAX'];
   }
 
   reduce(state, action) {
     const { amount, residency } = action;
-    this.accountService.transaction(usCash(state), amount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
     return this.newState(state, {}, [{ type: 'BONUS_TAX', amount, residency }]);
   }
 }
@@ -152,9 +160,10 @@ export class CompanySaleApplyReducer extends AccountServiceReducer {
   static description = 'Credits the destination account with company sale proceeds, zeroes the CompanyEquity asset, and chains COMPANY_SALE_TAX with the capital gain.';
   static actionType  = 'COMPANY_SALE_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('Company Sale Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['COMPANY_SALE_APPLY'];
     this.generatedActionTypes = ['COMPANY_SALE_TAX'];
   }
@@ -162,7 +171,7 @@ export class CompanySaleApplyReducer extends AccountServiceReducer {
   reduce(state, action) {
     const { salePrice, costBasis, residency, stateKey, destinationKey } = action;
     const gain    = Math.max(0, salePrice - costBasis);
-    const destKey = destinationKey ?? defaultUsCashKey(state);
+    const destKey = destinationKey ?? resolveCashKey(this.stateRegistry, 'US', state);
     this.accountService.transaction(state[destKey], salePrice, null);
     const stateUpdate = {};
     if (stateKey && state[stateKey] != null) {

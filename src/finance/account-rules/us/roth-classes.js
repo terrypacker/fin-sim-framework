@@ -13,8 +13,9 @@ import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { getBirthDate } from '../../residency-utils.js';
 import { scaleHoldings } from '../../holdings/holding-utils.js';
+import { resolveCashKey } from '../cash-routing.js';
 
-/** Resolve the US cash pool. */
+/** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
 
 /** Returns age as a decimal (years + fractional months) for the 59.5 threshold. */
@@ -34,14 +35,15 @@ export class RothContributionApplyReducer extends AccountServiceReducer {
   static description = 'Debits the US cash pool and credits Roth contributionBasis; no tax effect.';
   static actionType  = 'ROTH_CONTRIBUTION_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('Roth Contribution Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes = ['ROTH_CONTRIBUTION_APPLY'];
   }
 
   reduce(state, action) {
-    this.accountService.transaction(usCash(state), -action.amount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], -action.amount, null);
     const ra         = state.rothAccount;
     const newBalance = ra.balance + action.amount;
     return this.newState(state, {
@@ -64,14 +66,15 @@ export class RothWithdrawalContribApplyReducer extends AccountServiceReducer {
   static description = 'Credits the US cash pool and debits Roth contributionBasis; no tax effect.';
   static actionType  = 'ROTH_WITHDRAWAL_CONTRIB_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('Roth Contribution Withdrawal Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes = ['ROTH_WITHDRAWAL_CONTRIB_APPLY'];
   }
 
   reduce(state, action) {
-    this.accountService.transaction(usCash(state), action.amount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], action.amount, null);
     const ra         = state.rothAccount;
     const newBalance = ra.balance - action.amount;
     return this.newState(state, {
@@ -95,16 +98,17 @@ export class RothWithdrawalEarningsApplyReducer extends AccountServiceReducer {
   static description = 'Credits the US cash pool net of penalty and debits Roth earningsBasis; chains ROTH_WITHDRAWAL_EARNINGS_TAX.';
   static actionType  = 'ROTH_WITHDRAWAL_EARNINGS_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('Roth Withdrawal Earnings Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['ROTH_WITHDRAWAL_EARNINGS_APPLY'];
     this.generatedActionTypes = ['ROTH_WITHDRAWAL_EARNINGS_TAX'];
   }
 
   reduce(state, action) {
     const { amount, penaltyAmount, residency } = action;
-    this.accountService.transaction(usCash(state), amount - penaltyAmount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount - penaltyAmount, null);
     const ra         = state.rothAccount;
     const newBalance = ra.balance - amount;
     return this.newState(

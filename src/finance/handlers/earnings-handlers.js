@@ -349,28 +349,31 @@ export class AuSavingsInterestHandler extends HandlerEntry {
   static eventType   = 'INTL_AU_SAVINGS_INTEREST';
   static rateKey     = RATE_KEYS.SAVINGS_AU;
 
-  constructor({ stateRegistry, role, ownerId = null, interestRate = 0.045, rateKey = null } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, stateKey = null, interestRate = 0.045, rateKey = null } = {}) {
     super(null, 'AU Savings Interest');
     this.stateRegistry = stateRegistry;
     this.role          = role;
     this.ownerId       = ownerId;
+    // Per-account (design 55 §7): the specific account this handler accrues to.
+    // Falls back to role+owner lookup for legacy handlers saved without it.
+    this.stateKey      = stateKey;
     this.interestRate  = interestRate;
     this.rateKey       = rateKey ?? new.target.rateKey;
     this.generatedActionTypes = ['AU_SAVINGS_EARNINGS_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, interestRate: d.interestRate ?? 0.045 });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, interestRate: d.interestRate ?? 0.045 });
     h.id = d.id;
     return h;
   }
 
   toJSON() {
-    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, interestRate: this.interestRate };
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, stateKey: this.stateKey, interestRate: this.interestRate };
   }
 
   call({ state }) {
-    const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
+    const stateKey = this.stateKey ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
     const { amount, holdingActions } = computeHoldingsGrowth({
       state, stateKey,
       fallbackRate:    this.interestRate,
@@ -380,7 +383,7 @@ export class AuSavingsInterestHandler extends HandlerEntry {
     });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'AU_SAVINGS_EARNINGS_APPLY', amount, residency: state.people?.[this.ownerId ?? Object.keys(state.people ?? {})[0]]?.residency ?? null },
+      { type: 'AU_SAVINGS_EARNINGS_APPLY', amount, stateKey, residency: state.people?.[this.ownerId ?? Object.keys(state.people ?? {})[0]]?.residency ?? null },
       ...holdingActions,
       new RecordMetricAction('au_savings_interest', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
@@ -437,7 +440,7 @@ export class AuFixedIncomeInterestMonthlyHandler extends HandlerEntry {
     });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'AU_FIXED_INCOME_EARNINGS_APPLY', amount, residency: state.people?.[this.ownerId ?? Object.keys(state.people ?? {})[0]]?.residency ?? null },
+      { type: 'AU_FIXED_INCOME_EARNINGS_APPLY', amount, stateKey, residency: state.people?.[this.ownerId ?? Object.keys(state.people ?? {})[0]]?.residency ?? null },
       ...holdingActions,
       new RecordMetricAction('au_fixed_income_interest', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
@@ -494,7 +497,7 @@ export class FixedIncomeInterestHandler extends HandlerEntry {
     });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     return [
-      { type: 'FIXED_INCOME_EARNINGS_APPLY', amount, residency: state.people?.[this.ownerId ?? Object.keys(state.people ?? {})[0]]?.residency ?? null },
+      { type: 'FIXED_INCOME_EARNINGS_APPLY', amount, stateKey, residency: state.people?.[this.ownerId ?? Object.keys(state.people ?? {})[0]]?.residency ?? null },
       ...holdingActions,
       new RecordMetricAction('fixed_income_interest', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),

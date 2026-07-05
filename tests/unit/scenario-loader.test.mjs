@@ -556,10 +556,12 @@ test('toolset params: cfg.params[].description is propagated from schema for UI 
     'k401ToIraConversionEnabled.description must be populated from US_RETIREMENT.paramSchema');
 
   // Scenario-owned key (node-bound) — description must come from the scenario schema.
-  const primaryWage = cfg.params.find(p => p.name === 'primaryMonthlyWage');
-  assert.ok(primaryWage);
-  assert.ok(primaryWage.description && primaryWage.description.length > 0,
-    'primaryMonthlyWage.description must be populated from the scenario schema');
+  // (Per-record balance/wage params are now generated from records and carry no
+  // description; usSavingsMinBalance is a retained static node-bound param.)
+  const minBal = cfg.params.find(p => p.name === 'usSavingsMinBalance');
+  assert.ok(minBal);
+  assert.ok(minBal.description && minBal.description.length > 0,
+    'usSavingsMinBalance.description must be populated from the scenario schema');
 });
 
 test('toolset params: drift guard backfills missing description on pre-existing cfg.params entries', () => {
@@ -569,9 +571,9 @@ test('toolset params: drift guard backfills missing description on pre-existing 
   const cfg = freshDeclarativeConfig();
   cfg.scenarioClass = IntlRetirementScenario;
   cfg.params = [
-    { name: 'primaryMonthlyWage', label: 'Primary Monthly Wage (USD)',
-      type: 'Number', group: 'People', value: 8000,
-      node: { type: 'person', id: 'primary', field: 'monthlyWage' } },
+    { name: 'usSavingsMinBalance', label: 'US Savings Min Balance (USD)',
+      type: 'Number', group: 'Min Balances', value: 20000,
+      node: { type: 'account', stateKey: 'usSavingsAccount', field: 'minimumBalance' } },
     // saved value the user edited — must not be reset by backfill
     { name: 'monthlyExpenses', label: 'Monthly Expenses (USD)',
       type: 'Number', group: 'US Retirement', value: 7500 },
@@ -579,8 +581,8 @@ test('toolset params: drift guard backfills missing description on pre-existing 
 
   loadIntoFreshServices(cfg);
 
-  const wage = cfg.params.find(p => p.name === 'primaryMonthlyWage');
-  assert.ok(wage?.description?.length > 0,
+  const minBal = cfg.params.find(p => p.name === 'usSavingsMinBalance');
+  assert.ok(minBal?.description?.length > 0,
     'scenario-schema description should be backfilled onto pre-existing entries');
 
   const expenses = cfg.params.find(p => p.name === 'monthlyExpenses');
@@ -871,4 +873,96 @@ test('custom drawdown strategy: schema-drift re-syncs the accountPriority node o
   const dd = cfg.params.find(p => p.name === 'drawdownStrategy');
   assert.strictEqual(dd.node.customStrategiesKey, 'customDrawdownStrategies',
     'stale node must be re-synced from the schema so custom strategies resolve');
+});
+
+// ─── deleted-default tombstones (drift-merge suppression) ──────────────────────
+
+test('drift-merge: a deleted default WITHOUT a tombstone is re-added (forward-fill)', () => {
+  // Baseline: this is the pre-tombstone behavior that surprised the user — a
+  // deliberately-deleted default account reappears on Rebuild.
+  const cfg = IntlRetirementScenario.buildDefaultConfig({}, undefined, undefined);
+  cfg.scenarioClass = IntlRetirementScenario;
+  cfg.accounts = cfg.accounts.filter(a => a.stateKey !== 'usSavingsAccount');
+
+  new ScenarioLoader()._driftMergeDomainRecords(cfg);
+
+  assert.ok(cfg.accounts.some(a => a.stateKey === 'usSavingsAccount'),
+    'an untombstoned missing default is filled back in');
+});
+
+test('drift-merge: a tombstoned default account is NOT re-added', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({}, undefined, undefined);
+  cfg.scenarioClass = IntlRetirementScenario;
+  cfg.accounts = cfg.accounts.filter(a => a.stateKey !== 'usSavingsAccount');
+  cfg.deletedDefaults = { accounts: ['usSavingsAccount'] };
+
+  new ScenarioLoader()._driftMergeDomainRecords(cfg);
+
+  assert.ok(!cfg.accounts.some(a => a.stateKey === 'usSavingsAccount'),
+    'a tombstoned default must stay deleted across drift-merge');
+});
+
+test('drift-merge: a genuinely-new default is still filled in despite other tombstones', () => {
+  // Tombstoning one account must not suppress a different, untombstoned default.
+  const cfg = IntlRetirementScenario.buildDefaultConfig({}, undefined, undefined);
+  cfg.scenarioClass = IntlRetirementScenario;
+  cfg.accounts = cfg.accounts.filter(
+    a => a.stateKey !== 'usSavingsAccount' && a.stateKey !== 'auStockAccount');
+  cfg.deletedDefaults = { accounts: ['usSavingsAccount'] };
+
+  new ScenarioLoader()._driftMergeDomainRecords(cfg);
+
+  assert.ok(!cfg.accounts.some(a => a.stateKey === 'usSavingsAccount'),
+    'tombstoned default stays deleted');
+  assert.ok(cfg.accounts.some(a => a.stateKey === 'auStockAccount'),
+    'untombstoned missing default is still filled in');
+});
+
+test('recordDeletedDefaults: records default accounts absent from cfg', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({}, undefined, undefined);
+  cfg.scenarioClass = IntlRetirementScenario;
+  cfg.accounts = cfg.accounts.filter(
+    a => a.stateKey !== 'usSavingsAccount' && a.stateKey !== 'auStockAccount');
+
+  ScenarioLoader.recordDeletedDefaults(cfg);
+
+  assert.deepStrictEqual([...cfg.deletedDefaults.accounts].sort(),
+    ['auStockAccount', 'usSavingsAccount'],
+    'both deleted defaults are tombstoned');
+});
+
+test('recordDeletedDefaults: is self-correcting — a present default is pruned from the tombstone', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({}, undefined, undefined);
+  cfg.scenarioClass = IntlRetirementScenario;
+  // usSavingsAccount is present in the default cfg; a stale tombstone must clear.
+  cfg.deletedDefaults = { accounts: ['usSavingsAccount'] };
+
+  ScenarioLoader.recordDeletedDefaults(cfg);
+
+  assert.ok(!cfg.deletedDefaults.accounts.includes('usSavingsAccount'),
+    're-adding a default drops it from the tombstone');
+});
+
+test('recordDeletedDefaults: resolves the class from scenarioId when scenarioClass is absent', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({}, undefined, undefined);
+  cfg.scenarioId = 'p:intl-retirement';        // prefixed prebuilt id, no scenarioClass
+  cfg.accounts = cfg.accounts.filter(a => a.stateKey !== 'usSavingsAccount');
+
+  ScenarioLoader.recordDeletedDefaults(cfg);
+
+  assert.ok(cfg.deletedDefaults.accounts.includes('usSavingsAccount'),
+    'class resolves from the p:-prefixed scenarioId');
+});
+
+test('load (compile branch): a tombstoned default account never reaches the services', () => {
+  const cfg = freshDeclarativeConfig();
+  cfg.scenarioId = 'p:intl-retirement';
+  cfg.accounts = cfg.accounts.filter(a => a.stateKey !== 'usSavingsAccount');
+  cfg.deletedDefaults = { accounts: ['usSavingsAccount'] };
+
+  const { services } = loadIntoFreshServices(cfg);
+
+  const keys = services.accountService.getAll().map(a => a.stateKey);
+  assert.ok(!keys.includes('usSavingsAccount'),
+    'the tombstoned default is absent from the compiled services');
 });

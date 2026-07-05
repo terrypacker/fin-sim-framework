@@ -235,8 +235,8 @@ test('changing primaryRetirementDate param is reflected in state.people via init
   const created = services.scenarioService.newScenario(active);
 
   // Mutate the param — the initialization flow must propagate this into state.people
-  const retParam = created.params?.find(p => p.name === 'primaryRetirementDate');
-  assert.ok(retParam, 'primaryRetirementDate param must exist in the copy');
+  const retParam = created.params?.find(p => p.name === 'person.primary.retirementDate');
+  assert.ok(retParam, 'person.primary.retirementDate param must exist in the copy');
   retParam.value = '2027-01-01';
 
   const sim = loadCopyIntoFreshServices(created);
@@ -390,8 +390,8 @@ test('changing primaryMonthlyWage param cascades to person via schema node', () 
   const active  = services.scenarioService.getActive();
   const created = services.scenarioService.newScenario(active);
 
-  const wageParam = created.params?.find(p => p.name === 'primaryMonthlyWage');
-  assert.ok(wageParam, 'primaryMonthlyWage param must exist in the copy');
+  const wageParam = created.params?.find(p => p.name === 'person.primary.monthlyWage');
+  assert.ok(wageParam, 'person.primary.monthlyWage param must exist in the copy');
   wageParam.value = 12_345;
 
   const sim = loadCopyIntoFreshServices(created);
@@ -410,8 +410,8 @@ test('changing spouseMonthlyWage param cascades to person via schema node', () =
   const active  = services.scenarioService.getActive();
   const created = services.scenarioService.newScenario(active);
 
-  const wageParam = created.params?.find(p => p.name === 'spouseMonthlyWage');
-  assert.ok(wageParam, 'spouseMonthlyWage param must exist in the copy');
+  const wageParam = created.params?.find(p => p.name === 'person.spouse.monthlyWage');
+  assert.ok(wageParam, 'person.spouse.monthlyWage param must exist in the copy');
   wageParam.value = 6_789;
 
   const sim = loadCopyIntoFreshServices(created);
@@ -430,8 +430,8 @@ test('changing initialUsSavings param cascades to account initialValue via schem
   const active  = services.scenarioService.getActive();
   const created = services.scenarioService.newScenario(active);
 
-  const param = created.params?.find(p => p.name === 'initialUsSavings');
-  assert.ok(param, 'initialUsSavings param must exist in the copy');
+  const param = created.params?.find(p => p.name === 'acct.usSavingsAccount.balance');
+  assert.ok(param, 'acct.usSavingsAccount.balance param must exist in the copy');
   param.value = 77_777;
 
   const sim = loadCopyIntoFreshServices(created);
@@ -448,8 +448,8 @@ test('changing rothBalance param cascades to account initialValue via schema nod
   const active  = services.scenarioService.getActive();
   const created = services.scenarioService.newScenario(active);
 
-  const param = created.params?.find(p => p.name === 'rothBalance');
-  assert.ok(param, 'rothBalance param must exist in the copy');
+  const param = created.params?.find(p => p.name === 'acct.rothAccount.balance');
+  assert.ok(param, 'acct.rothAccount.balance param must exist in the copy');
   param.value = 55_555;
 
   const sim = loadCopyIntoFreshServices(created);
@@ -484,8 +484,8 @@ test('changing spouseRothBalance param cascades to account initialValue via sche
   const active  = services.scenarioService.getActive();
   const created = services.scenarioService.newScenario(active);
 
-  const param = created.params?.find(p => p.name === 'spouseRothBalance');
-  assert.ok(param, 'spouseRothBalance param must exist in the copy');
+  const param = created.params?.find(p => p.name === 'acct.spouseRothAccount.balance');
+  assert.ok(param, 'acct.spouseRothAccount.balance param must exist in the copy');
   param.value = 33_333;
 
   const sim = loadCopyIntoFreshServices(created);

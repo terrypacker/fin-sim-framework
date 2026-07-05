@@ -103,9 +103,14 @@ export class MonthlyExpensesHandler extends HandlerEntry {
     const personKey   = this.primaryPersonKey ?? Object.keys(state.people ?? {})[0];
     const residency   = state.people?.[personKey]?.residency ?? null;
     const isAu        = residency === 'AU';
-    const targetKey   = isAu
-      ? this.stateRegistry.getStateKey(this.auRole, this.auOwnerId)
-      : this.stateRegistry.getStateKey(this.usRole, this.usOwnerId);
+    const country     = isAu ? 'AU' : 'US';
+    const role        = isAu ? this.auRole    : this.usRole;
+    const ownerId     = isAu ? this.auOwnerId : this.usOwnerId;
+    // Design 55 §7: prefer the account flagged as the country's transaction
+    // account; fall back to the SAVINGS-role lookup when none is flagged so
+    // pre-flag scenarios are unchanged.
+    const targetKey   = this.stateRegistry.resolveTransactionAccountKey?.(country, ownerId)
+      ?? this.stateRegistry.getStateKey(role, ownerId);
     const account   = state[targetKey];
 
     // Convert into the target account's currency so the actual withdrawal is

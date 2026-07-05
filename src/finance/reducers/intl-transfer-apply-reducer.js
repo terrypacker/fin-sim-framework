@@ -51,9 +51,10 @@ export class IntlTransferApplyReducer extends Reducer {
   static type        = 'IntlTransferApplyReducer';
   static actionType  = 'INTL_TRANSFER_APPLY';
 
-  constructor({ accountService, usSavingsKey = 'usSavingsAccount', auSavingsKey = 'auSavingsAccount', earlyWithdrawalRulesFn = getUsEarlyWithdrawalRules } = {}) {
+  constructor({ accountService, stateRegistry = null, usSavingsKey = 'usSavingsAccount', auSavingsKey = 'auSavingsAccount', earlyWithdrawalRulesFn = getUsEarlyWithdrawalRules } = {}) {
     super('International Transfer Apply', PRIORITY.PRE_PROCESS);
     this.accountService         = accountService;
+    this.stateRegistry          = stateRegistry;
     this.usSavingsKey           = usSavingsKey;
     this.auSavingsKey           = auSavingsKey;
     this.earlyWithdrawalRulesFn = earlyWithdrawalRulesFn;
@@ -61,8 +62,8 @@ export class IntlTransferApplyReducer extends Reducer {
     this.generatedActionTypes   = ['OUT_OF_FUNDS'];
   }
 
-  static fromJSON(d, { accountService }) {
-    const r = new this({ accountService, usSavingsKey: d.usSavingsKey ?? 'usSavingsAccount', auSavingsKey: d.auSavingsKey ?? 'auSavingsAccount' });
+  static fromJSON(d, { accountService, stateRegistry } = {}) {
+    const r = new this({ accountService, stateRegistry, usSavingsKey: d.usSavingsKey ?? 'usSavingsAccount', auSavingsKey: d.auSavingsKey ?? 'auSavingsAccount' });
     r.id = d.id;
     return r;
   }
@@ -75,8 +76,12 @@ export class IntlTransferApplyReducer extends Reducer {
     const { direction, targetDeficit } = action;
     const rate  = state.effectiveExchangeRates?.USD_AUD ?? 1.55;
     const fee   = state.effectiveFxFees?.USD_AUD ?? 15;
-    const usAcc = state[this.usSavingsKey];
-    const auAcc = state[this.auSavingsKey];
+    // Design 55 §7: sweep the account flagged as each country's transaction account
+    // when present; otherwise the configured savings key (back-compat, unchanged).
+    const usKey = this.stateRegistry?.resolveTransactionAccountKey?.('US') ?? this.usSavingsKey;
+    const auKey = this.stateRegistry?.resolveTransactionAccountKey?.('AU') ?? this.auSavingsKey;
+    const usAcc = state[usKey];
+    const auAcc = state[auKey];
     const pendingTaxActions = [];
 
     if (direction === 'AU_TO_US') {
@@ -84,7 +89,7 @@ export class IntlTransferApplyReducer extends Reducer {
       const shortfall = audNeeded - auAcc.balance;
       if (shortfall > 0) {
         try {
-          const result = this.accountService.replenishSavings(state, this.auSavingsKey, shortfall, date, this.earlyWithdrawalRulesFn);
+          const result = this.accountService.replenishSavings(state, auKey, shortfall, date, this.earlyWithdrawalRulesFn);
           pendingTaxActions.push(...result.pendingTaxActions, ...(result.crossBorderTransfers ?? []));
         } catch (e) {
           if (!(e instanceof InsufficientFundsError)) throw e;
@@ -106,7 +111,7 @@ export class IntlTransferApplyReducer extends Reducer {
       const shortfall = usdNeeded - usAcc.balance;
       if (shortfall > 0) {
         try {
-          const result = this.accountService.replenishSavings(state, this.usSavingsKey, shortfall, date, this.earlyWithdrawalRulesFn);
+          const result = this.accountService.replenishSavings(state, usKey, shortfall, date, this.earlyWithdrawalRulesFn);
           pendingTaxActions.push(...result.pendingTaxActions, ...(result.crossBorderTransfers ?? []));
         } catch (e) {
           if (!(e instanceof InsufficientFundsError)) throw e;

@@ -72,7 +72,18 @@ export function computeHoldingsGrowth({
   const account  = state?.[stateKey];
   const holdings = account?.holdings ?? [];
   const ratesMap = state?.[rateSource] ?? {};
-  const fbRate   = rateOverride ?? ratesMap[fallbackRateKey] ?? fallbackRate;
+  // Per-account rate key (design 55 §8): `<rateKey>::<stateKey>`. When the regime
+  // toolset has seeded a per-account entry (from the account's own growth/interest
+  // rate, regime-adjusted), it wins over the shared type-level key so two same-type
+  // accounts can grow at different rates while still responding to regime shocks.
+  // Absent (legacy / single-rate scenarios) → falls through to the shared key and
+  // the arithmetic is byte-for-byte identical.
+  const perAcctKey = (fallbackRateKey != null && stateKey != null)
+    ? `${fallbackRateKey}::${stateKey}` : null;
+  const fbRate   = rateOverride
+    ?? (perAcctKey != null ? ratesMap[perAcctKey] : undefined)
+    ?? ratesMap[fallbackRateKey]
+    ?? fallbackRate;
 
   if (!holdings.length) {
     // No holdings (defensive): fall back to the scalar-balance code path.

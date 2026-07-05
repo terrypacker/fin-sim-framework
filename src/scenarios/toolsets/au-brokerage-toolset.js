@@ -70,13 +70,14 @@ export const AU_BROKERAGE = {
   reducers(context) {
     if (!context.accounts.some(a => a.role === ACCOUNT_ROLES.AU_STOCK)) return [];
     const accountService = context.accountService;
+    const stateRegistry  = context.stateRegistry;
     return [
-      new AuDividendFrankedResidentApplyReducer({ accountService }),
-      new AuDividendFrankedNonResidentApplyReducer({ accountService }),
-      new AuDividendUnfrankedResidentApplyReducer({ accountService }),
-      new AuDividendUnfrankedNonResidentApplyReducer({ accountService }),
-      new AuStockEarningsApplyReducer({ accountService }),
-      new AuStockWithdrawalApplyReducer({ accountService }),
+      new AuDividendFrankedResidentApplyReducer({ accountService, stateRegistry }),
+      new AuDividendFrankedNonResidentApplyReducer({ accountService, stateRegistry }),
+      new AuDividendUnfrankedResidentApplyReducer({ accountService, stateRegistry }),
+      new AuDividendUnfrankedNonResidentApplyReducer({ accountService, stateRegistry }),
+      new AuStockEarningsApplyReducer({ accountService, stateRegistry }),
+      new AuStockWithdrawalApplyReducer({ accountService, stateRegistry }),
     ];
   },
 };

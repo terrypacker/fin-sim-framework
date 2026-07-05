@@ -405,6 +405,9 @@ export class ScenarioSerializer {
       params:     scenario.params ?? [],
       toolsets:   scenario?.toolsets ?? [],
       watchlists: scenario.watchlists ?? [],
+      // Tombstones of deleted default records (design 55 follow-up) — carried so a
+      // downloaded/re-imported JSON keeps deletions sticky across Rebuild.
+      ...(scenario.deletedDefaults ? { deletedDefaults: scenario.deletedDefaults } : {}),
     };
   }
 
@@ -657,6 +660,16 @@ export class ScenarioSerializer {
     if (account.type === 'offset') {
       d.offsetsPropertyKey = account.offsetsPropertyKey ?? null;
     }
+    // Per-account earnings rates (design 55 §8) — only emitted when explicitly set
+    // so legacy accounts (null → global fallback) round-trip byte-for-byte. The
+    // loan branch above already owns `interestRate` for its loan rate, so the
+    // generic earnings interestRate is skipped for loans.
+    if (account.growthRate   != null) d.growthRate   = account.growthRate;
+    if (account.dividendRate != null) d.dividendRate = account.dividendRate;
+    if (account.type !== 'loan' && account.interestRate != null) d.interestRate = account.interestRate;
+    // Transaction-account flag (design 55 §7) — emitted only when true so legacy
+    // accounts (default false) round-trip byte-for-byte.
+    if (account.isTransactionAccount) d.isTransactionAccount = true;
     // Holdings (design 25 §8). Round-trip via Holding.toJSON; null when
     // absent so legacy configs (no holdings field) round-trip unchanged
     // and AccountService.register() re-bootstraps a default holding.
@@ -950,6 +963,13 @@ export class ScenarioSerializer {
     if (d.__type === 'OffsetAccount') {
       opts.offsetsPropertyKey = d.offsetsPropertyKey ?? null;
     }
+    // Per-account earnings rates (design 55 §8). Skip interestRate for loans — the
+    // LoanAccount branch above already set it from the loan rate.
+    if (d.growthRate   !== undefined) opts.growthRate   = d.growthRate;
+    if (d.dividendRate !== undefined) opts.dividendRate = d.dividendRate;
+    if (d.__type !== 'LoanAccount' && d.interestRate !== undefined) opts.interestRate = d.interestRate;
+    // Transaction-account flag (design 55 §7) — absent on legacy saves → false.
+    if (d.isTransactionAccount !== undefined) opts.isTransactionAccount = d.isTransactionAccount;
     let account;
     switch (d.__type) {
       case 'CheckingAccount':       account = new CheckingAccount       ((d.balance ?? d.initialValue) ?? 0, opts); break;

@@ -12,8 +12,9 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { consumeHoldingsFifo } from '../../holdings/holdings-fifo.js';
+import { resolveCashKey } from '../cash-routing.js';
 
-/** Resolve the AU cash pool. */
+/** Resolve the AU cash pool (legacy tail; prefer resolveCashKey for routing). */
 const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
 
 // ─── Reducers ─────────────────────────────────────────────────────────────────
@@ -27,7 +28,7 @@ export class AuDividendFrankedResidentApplyReducer extends AccountServiceReducer
   static description = 'Adds franked dividend to auStockAccount; chains AU_DIVIDEND_FRANKED_RESIDENT_TAX.';
   static actionType  = 'AU_DIVIDEND_FRANKED_RESIDENT_APPLY';
 
-  constructor({ accountService }) {  // accountService unused but accepted for API symmetry
+  constructor({ accountService, stateRegistry }) {  // accountService unused but accepted for API symmetry
     super('AU Franked Dividend Resident Apply', PRIORITY.CASH_FLOW);
     this.reducedActionTypes   = ['AU_DIVIDEND_FRANKED_RESIDENT_APPLY'];
     this.generatedActionTypes = ['AU_DIVIDEND_FRANKED_RESIDENT_TAX'];
@@ -56,7 +57,7 @@ export class AuDividendFrankedNonResidentApplyReducer extends AccountServiceRedu
   static description = 'Adds franked dividend to auStockAccount for non-residents; no AU tax chained.';
   static actionType  = 'AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY';
 
-  constructor({ accountService }) {  // accountService unused but accepted for API symmetry
+  constructor({ accountService, stateRegistry }) {  // accountService unused but accepted for API symmetry
     super('AU Franked Dividend Non-Resident Apply', PRIORITY.CASH_FLOW);
     this.reducedActionTypes = ['AU_DIVIDEND_FRANKED_NONRESIDENT_APPLY'];
   }
@@ -83,7 +84,7 @@ export class AuDividendUnfrankedResidentApplyReducer extends AccountServiceReduc
   static description = 'Adds unfranked dividend to auStockAccount; chains AU_DIVIDEND_UNFRANKED_RESIDENT_TAX.';
   static actionType  = 'AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY';
 
-  constructor({ accountService }) {  // accountService unused but accepted for API symmetry
+  constructor({ accountService, stateRegistry }) {  // accountService unused but accepted for API symmetry
     super('AU Unfranked Dividend Resident Apply', PRIORITY.CASH_FLOW);
     this.reducedActionTypes   = ['AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY'];
     this.generatedActionTypes = ['AU_DIVIDEND_UNFRANKED_RESIDENT_TAX'];
@@ -113,7 +114,7 @@ export class AuDividendUnfrankedNonResidentApplyReducer extends AccountServiceRe
   static description = 'Adds unfranked dividend to auStockAccount for non-residents; chains AU_DIVIDEND_UNFRANKED_NONRESIDENT_TAX.';
   static actionType  = 'AU_DIVIDEND_UNFRANKED_NONRESIDENT_APPLY';
 
-  constructor({ accountService }) {  // accountService unused but accepted for API symmetry
+  constructor({ accountService, stateRegistry }) {  // accountService unused but accepted for API symmetry
     super('AU Unfranked Dividend Non-Resident Apply', PRIORITY.CASH_FLOW);
     this.reducedActionTypes   = ['AU_DIVIDEND_UNFRANKED_NONRESIDENT_APPLY'];
     this.generatedActionTypes = ['AU_DIVIDEND_UNFRANKED_NONRESIDENT_TAX'];
@@ -140,7 +141,7 @@ export class AuStockEarningsApplyReducer extends AccountServiceReducer {
   static description = 'Adds unrealized earnings to auStockAccount balance; no tax effect.';
   static actionType  = 'AU_STOCK_EARNINGS_APPLY';
 
-  constructor({ accountService }) {  // accountService unused but accepted for API symmetry
+  constructor({ accountService, stateRegistry }) {  // accountService unused but accepted for API symmetry
     super('AU Stock Earnings Apply', PRIORITY.CASH_FLOW);
     this.reducedActionTypes = ['AU_STOCK_EARNINGS_APPLY'];
   }
@@ -163,9 +164,10 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
   static description = 'Credits AU cash pool with sale proceeds, FIFO-consumes auStockAccount.holdings (design 25 §6.4), and chains AU_STOCK_WITHDRAWAL_TAX with the realized basis.';
   static actionType  = 'AU_STOCK_WITHDRAWAL_APPLY';
 
-  constructor({ accountService, costBasisStrategy = 'FIFO' }) {
+  constructor({ accountService, costBasisStrategy = 'FIFO', stateRegistry }) {
     super('AU Stock Withdrawal Apply', PRIORITY.CASH_FLOW);
     this.accountService    = accountService;
+    this.stateRegistry     = stateRegistry;
     this.costBasisStrategy = costBasisStrategy;
     this.reducedActionTypes   = ['AU_STOCK_WITHDRAWAL_APPLY'];
     this.generatedActionTypes = ['AU_STOCK_WITHDRAWAL_TAX'];
@@ -184,7 +186,7 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
     const gain   = Math.max(0, salePrice - realizedBasis);
     const auGain = Math.max(0, salePrice - realizedAuBasis);
 
-    this.accountService.transaction(auCash(state), salePrice, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'AU', state)], salePrice, null);
 
     const newBalance = +newHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
     // Brokerage basis is no longer tracked (design 53 P1) — the FIFO realizedBasis

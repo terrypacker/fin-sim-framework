@@ -12,6 +12,7 @@ import { PRIORITY, AccountServiceReducer } from '../../simulation-framework/redu
 import { HandlerEntry }       from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, FieldValueAction } from '../../simulation-framework/actions.js';
 import { findLoanForProperty, effectivePrincipal } from './loan-classes.js';
+import { resolveCashKey } from './cash-routing.js';
 
 /** Resolve the US / AU cash pools (savings first, checking fallback). */
 const usCashKey = (state) => (state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount');
@@ -91,20 +92,21 @@ export class UsRentalIncomeHandler extends HandlerEntry {
   static description = 'Credits the US cash pool with net rental cash and chains US_RENTAL_INCOME_TAX (taxable net of interest + depreciation) for each enabled US property.';
   static eventType   = 'US_RENTAL_INCOME';
 
-  constructor({ properties = [] } = {}) {
+  constructor({ properties = [], stateRegistry } = {}) {
     super(null, 'US Rental Income');
     this.properties = properties;
+    this.stateRegistry = stateRegistry;
     this.generatedActionTypes = ['US_RENTAL_INCOME_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
   }
 
-  static fromJSON(d, _services) {
-    const h = new this({ properties: d.properties ?? [] });
+  static fromJSON(d, services) {
+    const h = new this({ properties: d.properties ?? [], stateRegistry: services?.stateRegistry });
     h.id = d.id;
     return h;
   }
 
   call({ state }) {
-    const cashKey   = usCashKey(state);
+    const cashKey   = resolveCashKey(this.stateRegistry, 'US', state);
     const residency = firstResidency(state);
     // Index rent to the effective (regime-adjusted) US inflation path.
     const inflationFactor = state.inflationAccumulator?.US ?? 1;
@@ -179,20 +181,21 @@ export class AuRentalIncomeHandler extends HandlerEntry {
   static description = 'Credits the AU cash pool with net rental cash and chains AU_RENTAL_INCOME_TAX (taxable net of interest + depreciation) for each enabled AU property.';
   static eventType   = 'AU_RENTAL_INCOME';
 
-  constructor({ properties = [] } = {}) {
+  constructor({ properties = [], stateRegistry } = {}) {
     super(null, 'AU Rental Income');
     this.properties = properties;
+    this.stateRegistry = stateRegistry;
     this.generatedActionTypes = ['AU_RENTAL_INCOME_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
   }
 
-  static fromJSON(d, _services) {
-    const h = new this({ properties: d.properties ?? [] });
+  static fromJSON(d, services) {
+    const h = new this({ properties: d.properties ?? [], stateRegistry: services?.stateRegistry });
     h.id = d.id;
     return h;
   }
 
   call({ state }) {
-    const cashKey   = auCashKey(state);
+    const cashKey   = resolveCashKey(this.stateRegistry, 'AU', state);
     const residency = firstResidency(state);
     // Index rent to the effective (regime-adjusted) AU inflation path.
     const inflationFactor = state.inflationAccumulator?.AU ?? 1;

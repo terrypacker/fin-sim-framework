@@ -38,7 +38,7 @@ export const US_BROKERAGE = {
     actions: [
       { type: 'FIXED_INCOME_CONTRIBUTION_APPLY', fields: { amount: ValueType.currency('USD') } },
       { type: 'FIXED_INCOME_WITHDRAWAL_APPLY', family: 'WITHDRAWAL', fields: { amount: ValueType.currency('USD') } },
-      { type: 'FIXED_INCOME_EARNINGS_APPLY',   fields: { amount: ValueType.currency('USD'), residency: ValueType.text() } },
+      { type: 'FIXED_INCOME_EARNINGS_APPLY',   fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), residency: ValueType.text() } },
       { type: 'STOCK_CONTRIBUTION_APPLY',       fields: { amount: ValueType.currency('USD') } },
       { type: 'STOCK_DIVIDEND_APPLY',           fields: { amount: ValueType.currency('USD') } },
       { type: 'STOCK_DIVIDEND_TAX',             fields: { amount: ValueType.currency('USD'), residency: ValueType.text() } },
@@ -80,17 +80,18 @@ export const US_BROKERAGE = {
     const hasST = context.accounts.some(a => a.role === ACCOUNT_ROLES.US_STOCK);
     if (!hasFI && !hasST) return [];
     const accountService = context.accountService;
+    const stateRegistry  = context.stateRegistry;
     const reducers = [];
     if (hasFI) reducers.push(
-      new FixedIncomeContributionApplyReducer({ accountService }),
-      new FixedIncomeWithdrawalApplyReducer({ accountService }),
-      new FixedIncomeEarningsApplyReducer({ accountService }),
+      new FixedIncomeContributionApplyReducer({ accountService, stateRegistry }),
+      new FixedIncomeWithdrawalApplyReducer({ accountService, stateRegistry }),
+      new FixedIncomeEarningsApplyReducer({ accountService, stateRegistry }),
     );
     if (hasST) reducers.push(
-      new StockContributionApplyReducer({ accountService }),
-      new StockDividendApplyReducer({ accountService }),
-      new StockEarningsApplyReducer({ accountService }),
-      new StockWithdrawalApplyReducer({ accountService }),
+      new StockContributionApplyReducer({ accountService, stateRegistry }),
+      new StockDividendApplyReducer({ accountService, stateRegistry }),
+      new StockEarningsApplyReducer({ accountService, stateRegistry }),
+      new StockWithdrawalApplyReducer({ accountService, stateRegistry }),
     );
     return reducers;
   },

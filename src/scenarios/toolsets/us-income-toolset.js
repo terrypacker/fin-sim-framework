@@ -36,7 +36,7 @@ export const US_INCOME = {
     actions: [
       { type: 'SS_INCOME_APPLY',     fields: { amount: ValueType.currency('USD'), residency: ValueType.text() } },
       { type: 'SS_INCOME_TAX',       fields: { amount: ValueType.currency('USD'), residency: ValueType.text() } },
-      { type: 'WAGES_INCOME_APPLY',  fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text() } },
+      { type: 'WAGES_INCOME_APPLY',  fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text(), targetKey: ValueType.text() } },
       { type: 'WAGES_INCOME_TAX',    fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), personKey: ValueType.text() } },
       { type: 'WAGES_WITHHELD_APPLY', fields: { amount: ValueType.currency('USD') } },
       { type: 'SE_INCOME_US_APPLY',  fields: { amount: ValueType.currency('USD'), residency: ValueType.text() } },
@@ -66,13 +66,14 @@ export const US_INCOME = {
 
   reducers(context) {
     const accountService = context.accountService;
+    const stateRegistry  = context.stateRegistry;
     return [
-      new SsIncomeApplyReducer({ accountService }),
-      new WagesIncomeApplyReducer({ accountService }),
-      new WagesWithheldApplyReducer({ accountService }),
-      new SeIncomeUsApplyReducer({ accountService }),
-      new BonusApplyReducer({ accountService }),
-      new CompanySaleApplyReducer({ accountService }),
+      new SsIncomeApplyReducer({ accountService, stateRegistry }),
+      new WagesIncomeApplyReducer({ accountService, stateRegistry }),
+      new WagesWithheldApplyReducer({ accountService, stateRegistry }),
+      new SeIncomeUsApplyReducer({ accountService, stateRegistry }),
+      new BonusApplyReducer({ accountService, stateRegistry }),
+      new CompanySaleApplyReducer({ accountService, stateRegistry }),
     ];
   },
 };

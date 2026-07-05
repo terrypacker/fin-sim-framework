@@ -13,8 +13,9 @@ import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { getBirthDate } from '../../residency-utils.js';
 import { scaleHoldings } from '../../holdings/holding-utils.js';
+import { resolveCashKey } from '../cash-routing.js';
 
-/** Resolve the US cash pool. */
+/** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
 
 /** Returns age in whole years as of asOfDate. */
@@ -38,15 +39,16 @@ export class IraContributionApplyReducer extends AccountServiceReducer {
   static description = 'Debits the US cash pool and credits IRA contributionBasis; chains IRA_CONTRIBUTION_TAX.';
   static actionType  = 'IRA_CONTRIBUTION_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('IRA Contribution Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['IRA_CONTRIBUTION_APPLY'];
     this.generatedActionTypes = ['IRA_CONTRIBUTION_TAX'];
   }
 
   reduce(state, action) {
-    this.accountService.transaction(usCash(state), -action.amount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], -action.amount, null);
     const ia         = state.iraAccount;
     const newBalance = ia.balance + action.amount;
     return this.newState(
@@ -73,16 +75,17 @@ export class IraWithdrawalContribApplyReducer extends AccountServiceReducer {
   static description = 'Credits the US cash pool net of penalty and debits IRA contributionBasis; chains IRA_WITHDRAWAL_CONTRIB_TAX.';
   static actionType  = 'IRA_WITHDRAWAL_CONTRIB_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('IRA Contribution Withdrawal Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['IRA_WITHDRAWAL_CONTRIB_APPLY'];
     this.generatedActionTypes = ['IRA_WITHDRAWAL_CONTRIB_TAX'];
   }
 
   reduce(state, action) {
     const { amount, penaltyAmount } = action;
-    this.accountService.transaction(usCash(state), amount - penaltyAmount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount - penaltyAmount, null);
     const ia         = state.iraAccount;
     const newBalance = ia.balance - amount;
     return this.newState(
@@ -109,16 +112,17 @@ export class IraWithdrawalEarningsApplyReducer extends AccountServiceReducer {
   static description = 'Credits the US cash pool net of penalty and debits IRA earningsBasis; chains IRA_WITHDRAWAL_EARNINGS_TAX.';
   static actionType  = 'IRA_WITHDRAWAL_EARNINGS_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('IRA Withdrawal Earnings Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['IRA_WITHDRAWAL_EARNINGS_APPLY'];
     this.generatedActionTypes = ['IRA_WITHDRAWAL_EARNINGS_TAX'];
   }
 
   reduce(state, action) {
     const { amount, penaltyAmount, residency } = action;
-    this.accountService.transaction(usCash(state), amount - penaltyAmount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount - penaltyAmount, null);
     const ia         = state.iraAccount;
     const newBalance = ia.balance - amount;
     return this.newState(

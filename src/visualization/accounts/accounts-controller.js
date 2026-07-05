@@ -10,9 +10,37 @@
 
 import { AccountBuilder } from '../../finance/builders/account-builder.js';
 import { USD, AUD }       from '../../finance/assets/account.js';
+import { ACCOUNT_ROLES }  from '../../finance/state/account-roles.js';
 
 // Account types whose country/currency are variable (US or AU).
 const VARIABLE_COUNTRY = new Set(['checking', 'savings', 'brokerage', 'offset']);
+
+/**
+ * Derive the semantic {@link ACCOUNT_ROLES} role for a UI-created account from its
+ * editor `type` (+ country for the variable-country types). Without a role an
+ * account is invisible to the engine — every toolset selects accounts by role
+ * (`accounts.filter(a => a.role === …)`), so a roleless account never gets a
+ * state entry, growth, drawdown, or a net-worth contribution.
+ *
+ * Note: the editor's single "brokerage" type maps to the STOCK role (the common
+ * case); a fixed-income brokerage cannot be distinguished from the form, so it
+ * must be set on the record directly if needed. Checking is treated as a cash
+ * account (savings role — the cash band / transaction pool).
+ */
+function _deriveRole(type, country) {
+  const au = country === 'AU';
+  switch (type) {
+    case 'checking':
+    case 'savings':   return au ? ACCOUNT_ROLES.AU_SAVINGS : ACCOUNT_ROLES.US_SAVINGS;
+    case 'brokerage': return au ? ACCOUNT_ROLES.AU_STOCK   : ACCOUNT_ROLES.US_STOCK;
+    case '401k':      return ACCOUNT_ROLES.K401;
+    case 'roth':      return ACCOUNT_ROLES.ROTH;
+    case 'ira':       return ACCOUNT_ROLES.IRA;
+    case 'super':     return ACCOUNT_ROLES.SUPER;
+    case 'offset':    return au ? ACCOUNT_ROLES.AU_OFFSET : ACCOUNT_ROLES.US_OFFSET;
+    default:          return null;
+  }
+}
 
 // Retirement account types — the only ones carrying the contribution/earnings
 // ledger (design 53 §2). Brokerage is holdings-only and its builder has no basis
@@ -83,7 +111,33 @@ export class AccountsController {
       builder.offsetsPropertyKey(data.offsetsPropertyKey || null);
     }
 
-    return this._service.createAccount(builder.build());
+    const account = builder.build();
+    // Wire the account into the engine: a role selects its behavior, a stateKey
+    // is where its balance lives in sim.state. The builder sets neither, so a
+    // created account is inert until we stamp them here (design 55 §3.1 —
+    // stateKey-at-creation).
+    account.role     = _deriveRole(data.type, data.country);
+    account.stateKey = this._generateStateKey(account.role, account.ownerId);
+    return this._service.createAccount(account);
+  }
+
+  /**
+   * Generate a scenario-unique, camelCase stateKey for a new account. Based on the
+   * role + owner so it reads like the built-in keys (e.g. `usStockAccount`,
+   * `superSpouseAccount`), with a numeric suffix to avoid colliding with an
+   * existing key (including the prebuilt defaults).
+   * @private
+   */
+  _generateStateKey(role, ownerId) {
+    const existing  = new Set((this._service?.getAll?.() ?? []).map(a => a.stateKey).filter(Boolean));
+    const roleCamel = (role ?? 'account').replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+    const ownerPart = ownerId && ownerId !== 'primary'
+      ? ownerId.charAt(0).toUpperCase() + ownerId.slice(1)
+      : '';
+    const base = `${roleCamel}${ownerPart}`;
+    let key = `${base}Account`;
+    for (let n = 2; existing.has(key); n++) key = `${base}${n}Account`;
+    return key;
   }
 
   /**

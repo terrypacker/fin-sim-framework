@@ -24,7 +24,9 @@ import assert   from 'node:assert/strict';
 
 import { isParamVisible, indexParamSchema, resolveSweepVariables }
   from '../../src/finance/param-schema-utils.js';
-import { IntlRetirementScenario }     from '../../src/scenarios/intl-retirement-scenario.js';
+import { IntlRetirementScenario, INTL_RETIREMENT_PARAM_ALIASES }
+  from '../../src/scenarios/intl-retirement-scenario.js';
+import { ScenarioParamGenerator } from '../../src/scenarios/params/scenario-param-generator.js';
 import { DEFAULT_MC_VARIABLE_CONFIGS } from '../../src/finance/monte-carlo/intl-retirement-mc-config.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables }
   from '../../src/finance/optimization/intl-retirement-opt-config.js';
@@ -34,6 +36,20 @@ import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables }
 // were renamed to their toolset keys once the per-account growth refactor made
 // brokerageGrowthRate a live lever. Synthesized per-shock rows aren't in DEFAULT_*.
 const KNOWN_ORPHANS = new Set();
+
+// Design 55: per-record params (rothBalance, usHouseSaleYear, primaryMonthlyWage…)
+// are generated from records rather than living in the static schema. Build the
+// eligibility index the way the loader presents it — static schema + generated
+// params — and resolve legacy alias keys to their generated equivalents.
+function buildEligibilityIndex() {
+  const defaultCfg = IntlRetirementScenario.buildDefaultConfig(
+    {}, new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)));
+  return indexParamSchema([
+    ...IntlRetirementScenario.buildFullParamSchema(),
+    ...ScenarioParamGenerator.generate(defaultCfg),
+  ]);
+}
+const resolveAlias = k => INTL_RETIREMENT_PARAM_ALIASES[k] ?? k;
 
 // ── isParamVisible ─────────────────────────────────────────────────────────────
 
@@ -126,10 +142,10 @@ test('SWEEP-9: Opt shows strategy knobs (with inherited visibleWhen) when select
 // ── Validation: the repurposed mc:/opt: flags ──────────────────────────────────
 
 test('SWEEP-10: every curated Opt variable is schema-eligible (opt:true) or a known orphan', () => {
-  const byKey = indexParamSchema(IntlRetirementScenario.buildFullParamSchema());
+  const byKey = buildEligibilityIndex();
   const offenders = DEFAULT_OPTIMIZATION_CONFIGS.filter(v => {
     if (KNOWN_ORPHANS.has(v.paramKey)) return false;
-    const s = byKey.get(v.paramKey);
+    const s = byKey.get(resolveAlias(v.paramKey));
     return !s || !s.opt;
   }).map(v => v.paramKey);
   assert.deepStrictEqual(offenders, [],
@@ -137,10 +153,10 @@ test('SWEEP-10: every curated Opt variable is schema-eligible (opt:true) or a kn
 });
 
 test('SWEEP-11: every curated MC variable is schema-eligible (mc:true) or a known orphan', () => {
-  const byKey = indexParamSchema(IntlRetirementScenario.buildFullParamSchema());
+  const byKey = buildEligibilityIndex();
   const offenders = DEFAULT_MC_VARIABLE_CONFIGS.filter(v => {
     if (KNOWN_ORPHANS.has(v.paramKey)) return false;
-    const s = byKey.get(v.paramKey);
+    const s = byKey.get(resolveAlias(v.paramKey));
     return !s || !s.mc;
   }).map(v => v.paramKey);
   assert.deepStrictEqual(offenders, [],

@@ -94,6 +94,17 @@ export class Account extends Asset {
    * @param {number|null]   [opts.drawdownPriority=null] - Liquidation order; null = exclude from drawdown (inherited from Asset)
    * @param {string|null}   [opts.country=null]          - ISO country code (e.g. 'US', 'AU')
    * @param {Currency|null} [opts.currency=null]         - Currency descriptor (e.g. USD, AUD)
+   * @param {number|null}   [opts.growthRate=null]       - Per-account annual equity growth rate (design 55 §8);
+   *                                                       null = fall back to the toolset's global rate.
+   * @param {number|null}   [opts.dividendRate=null]     - Per-account annual dividend yield (design 55 §8); null = global.
+   * @param {number|null}   [opts.interestRate=null]     - Per-account annual interest rate for cash/fixed-income earnings
+   *                                                       (design 55 §8); null = global. NOTE: LoanAccount reuses
+   *                                                       `interestRate` for its *loan* rate (a different meaning).
+   * @param {boolean}       [opts.isTransactionAccount=false] - Marks this account as the withdraw-from ("transaction")
+   *                                                       account for its country of residence (design 55 §7). Exactly
+   *                                                       one per country should carry it; MonthlyExpensesHandler /
+   *                                                       IntlTransferApplyReducer resolve the debit/replenish target
+   *                                                       from it, falling back to the SAVINGS role when none is flagged.
    */
   constructor(balance = 0, opts = {}) {
     super(opts.name ?? '', { ...opts, kind: 'account' });
@@ -107,6 +118,18 @@ export class Account extends Asset {
     this.minimumBalance = opts.minimumBalance ?? 0;
     this.country        = opts.country        ?? null;
     this.currency       = opts.currency       ?? null;
+    // Per-account earnings rates (design 55 §8). Default null → the earnings
+    // handler falls back to the toolset's global rate, so legacy accounts are
+    // byte-for-byte unchanged. When set, the account grows/earns at its own rate
+    // (still regime-adjusted via the per-account rate key). LoanAccount overrides
+    // `interestRate` in its own constructor with a loan-specific default.
+    this.growthRate     = opts.growthRate     ?? null;
+    this.dividendRate   = opts.dividendRate   ?? null;
+    this.interestRate   = opts.interestRate   ?? null;
+    // Transaction-account flag (design 55 §7). Default false → the debit/replenish
+    // target resolver falls back to the SAVINGS role, so legacy scenarios are
+    // unchanged. Serialized only when true (see ScenarioSerializer._serializeAccount).
+    this.isTransactionAccount = opts.isTransactionAccount ?? false;
   }
 }
 

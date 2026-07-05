@@ -170,6 +170,9 @@ export const US_AU_CROSS_BORDER = {
         name:                  person.name,
         birthDate:             person.birthDate,
         monthlyWage:           person.monthlyWage           ?? 0,
+        // Native currency of the wage (design 50) — drives MonthlyWagesHandler's
+        // US vs AU routing. MUST be projected here or every wage reads as USD.
+        wageCurrency:          person.wageCurrency          ?? 'USD',
         retirementDate:        person.retirementDate        ?? null,
         socialSecurityMonthly: person.socialSecurityMonthly ?? 0,
         lifeExpectancy:        person.lifeExpectancy        ?? 90,
@@ -274,7 +277,7 @@ export const US_AU_CROSS_BORDER = {
 
     return [
       new ChangeResidencyApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
-      new IntlTransferApplyReducer({ accountService: accountSvc }),
+      new IntlTransferApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
       new IntlTransferRecordReducer(),
       ...fxReducers,
     ];
