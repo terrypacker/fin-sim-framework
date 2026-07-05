@@ -111,7 +111,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
       </div>
 
       <div class="mpc-toolbar mpc-range" data-mpc="range-row">
-        <span class="mpc-range-title">Search range</span>
+        <span class="mpc-range-title" title="Limits are in real, base-year (today's) dollars — the reducer compounds them to nominal by inflation, so they stay fixed across the run.">Search range (today’s $)</span>
         <label class="mpc-field">Min <input class="wb-input mpc-num" type="number" step="500" data-mpc="rmin" value="3000"></label>
         <label class="mpc-field">Max <input class="wb-input mpc-num" type="number" step="500" data-mpc="rmax" value="12000"></label>
         <label class="mpc-field">Step <input class="wb-input mpc-num" type="number" step="100" data-mpc="rstep" value="500"></label>
@@ -126,7 +126,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
         <div class="mpc-card-actions">
           <button class="btn btn-sm btn-primary" data-mpc="apply">Apply</button>
           <label class="mpc-field mpc-override">Override
-            <input class="wb-input" type="number" step="500" data-mpc="override" placeholder="value">
+            <input class="wb-input" type="number" step="500" data-mpc="override" placeholder="today’s $">
           </label>
         </div>
       </div>
@@ -317,7 +317,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
   _onSimStep() {
     if (!this._mounted) return;
     this._controller = null;   // next Advise re-snapshots the new "now"
-    this._clearCard();
+    this._clearCard({ keepFan: this._autoRunning });   // keep the fan visible through auto
     this._syncLeverApplicability();
   }
 
@@ -429,11 +429,11 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
 
     if (actuated) {
       this._controller = null;   // next Advise re-snapshots against the actuated plan
-      this._setNow(`Applied to the live plan: ${control.describe(candidate, c.lastAdvice.variables)} — Advance to see it unfold.`);
+      this._setNow(`Applied to the live plan: ${c.describeMove(candidate, c.lastAdvice.variables)} — Advance to see it unfold.`);
     } else {
       this._setNow(`Recorded projection (terminal ${_usd(result.finalNetWorthUsd)}); “${control.label}” isn’t live-actuatable yet.`);
     }
-    this._clearCard();
+    this._clearCard({ keepFan: this._autoRunning });   // keep the fan visible through auto
     this._renderSavePoints();   // the just-recorded decision joins the log
     return actuated;
   }
@@ -517,7 +517,11 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
 
         const beforeMs = +new Date(sim.currentDate);
         this._stepLiveForward();
-        await _nextFrame();   // let _onSimStep settle + panels repaint between epochs
+        // Wait for the chart to actually PAINT before the next (blocking) solve, so
+        // the user watches the timeline advance year by year. The chart updates via
+        // a 2-rAF chain (presenter _doRender → view _doChartUpdate), so a single
+        // frame resumes and re-blocks before paint — _afterPaint clears the chain.
+        await _afterPaint();
         if (+new Date(this._sim?.currentDate ?? beforeMs) <= beforeMs) {
           this._setNow('Auto stopped — the clock could not advance further.');
           break;   // stall guard: the live sim didn't move forward
@@ -685,9 +689,15 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
     }).join('');
   }
 
-  _clearCard() {
+  /**
+   * Hide the recommended-move card. By default also clears the futures fan, but
+   * `keepFan` leaves the last fan up — used during auto so the chart stays visible
+   * (and "walks forward") through the long next-epoch solve instead of blanking.
+   */
+  _clearCard({ keepFan = false } = {}) {
     const card = this._q('card');
     if (card) card.style.display = 'none';
+    if (keepFan) return;
     const fan = this._q('fan');
     if (fan) { fan.innerHTML = ''; fan.style.display = 'none'; }
   }
@@ -737,5 +747,25 @@ function _nextFrame() {
   return new Promise(resolve => {
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => resolve());
     else setTimeout(resolve, 0);
+  });
+}
+/**
+ * Resolve AFTER the browser has painted, having cleared the chart's two-stage rAF
+ * render chain. Two rAFs let presenter._doRender (frame 1) and view._doChartUpdate
+ * (frame 2) both flush; the trailing macrotask resolves after frame 2's paint
+ * rather than in the pre-paint rAF microtask — so a long synchronous task scheduled
+ * next (the solve) doesn't pre-empt the paint.
+ */
+function _afterPaint() {
+  return new Promise(resolve => {
+    let done = false;
+    const finish = () => { if (!done) { done = true; resolve(); } };
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(finish, 0)));
+    }
+    // Fallback: rAF is throttled to zero in a backgrounded tab, which would stall
+    // the auto loop indefinitely. A timeout guarantees progress; when the tab is
+    // visible the (faster) rAF path wins and the paint still lands first.
+    setTimeout(finish, 120);
   });
 }
