@@ -194,8 +194,9 @@ unchanged — existing scenarios are unaffected.
 ## 7. Future enhancements (deferred)
 
 1. **General currency→pool routing** for a third currency (via `FxService.settlement`).
-2. **Tax-bucket FX normalization** — convert every AU-source amount into USD at tax
-   time across all `AU_*_TAX` reducers (removes the 1:1 bucket simplification, §2).
+2. **Tax-bucket FX normalization** — convert every cross-currency amount into each
+   accumulator's canonical currency at tax time across all `*_TAX` reducers (removes
+   the 1:1 bucket simplification, §2). **Specced as `design/51-tax-bucket-fx-normalization.md`.**
 3. **Withholding on the AUD wage itself** (PAYG) — a `AU_WAGES_WITHHELD` sibling to the
    US `WAGES_WITHHELD` path.
 4. **UI**: surface `wageCurrency` prominently in the person editor with a note that it
