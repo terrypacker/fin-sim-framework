@@ -72,7 +72,7 @@ export const COVERED = [
   'AuDividendFrankedResidentApplyReducer', 'AuDividendFrankedNonResidentApplyReducer',
   'AuDividendUnfrankedResidentApplyReducer', 'AuDividendUnfrankedNonResidentApplyReducer',
   'AuStockEarningsApplyReducer', 'AuStockWithdrawalApplyReducer',
-  'AuFixedIncomeEarningsApplyReducer', 'AuSeIncomeApplyReducer', 'AuHouseSaleApplyReducer',
+  'AuFixedIncomeEarningsApplyReducer', 'AuSeIncomeApplyReducer', 'AuWagesIncomeApplyReducer', 'AuHouseSaleApplyReducer',
 
   // D — top-level finance (dedicated tests)
   'AccumulateDeficitReducer', 'OutOfFundsReducer', 'SetOutOfFundsDateReducer',

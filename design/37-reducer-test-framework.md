@@ -268,6 +268,7 @@ disposal variants add **I6**. **Swept ✅** — isolated postcondition tests in 
 | `au/au-brokerage-classes.js` | AuStockEarnings, AuStockWithdrawal, Au Dividend {Franked,Unfranked}×{Resident,NonResident} | ✅ |
 | `au/au-fixed-income-classes.js` | AuFixedIncomeEarnings | ✅ scalar contract + event-level §4.4 (`earnings-holdings-sync`) |
 | `au/au-income-classes.js` | AuSeIncome | ✅ |
+| `au/au-income-classes.js` | AuWagesIncome | ✅ credits AUD pool (design 50) |
 | `au/au-real-property-classes.js` | AuHouseSale | ✅ |
 | `au/au-savings-classes.js` | AuSavingsContribution, AuSavingsEarnings, AuSavingsWithdrawal | ✅ |
 | `au/au-super-classes.js` | SuperContribution, SuperEarnings, SuperWithdrawalContrib, SuperWithdrawalEarnings | ✅ |

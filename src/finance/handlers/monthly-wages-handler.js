@@ -15,25 +15,31 @@ import { ACCOUNT_ROLES } from '../state/account-roles.js';
 /**
  * Handles the MONTHLY_WAGES event.
  *
- * Iterates over all people in state.people and dispatches WAGES_INCOME_APPLY
+ * Iterates over all people in state.people and dispatches an income-apply action
  * for each person whose monthlyWage > 0 and whose retirementDate has not yet
  * been reached. Stops emitting wages for a person on or after their retirementDate.
  *
- * The WagesIncomeApplyReducer (registered via the US account module) handles the
- * actual cash credit and tax chaining.
+ * The wage is routed by the person's `wageCurrency` (design 50), which is the
+ * *source/denomination* of the wage and is independent of the earner's residency:
+ *   - USD wage → WAGES_INCOME_APPLY → US cash pool (US-source ordinary income).
+ *   - AUD wage → AU_WAGES_INCOME_APPLY → AU cash pool as native AUD (AU-source).
+ * The matching *ApplyReducer credits the correct-currency account and chains the
+ * per-country tax action; the tax module keys AU treatment off the earner's
+ * residency (non-resident withholding for a US resident, ordinary income for an
+ * AU resident). The deposit is the native wage figure — no FX coercion.
  *
  * @param {object} [opts]
  * @param {import('../services/state-registry.js').StateRegistry} opts.stateRegistry
  */
 export class MonthlyWagesHandler extends HandlerEntry {
-  static description = 'Credits the US cash pool with gross wages for each employed person; stops at their retirementDate.';
+  static description = 'Credits each employed person\'s wage to the cash pool matching their wageCurrency (USD→US, AUD→AU); stops at their retirementDate.';
   static type        = 'MonthlyWagesHandler';
   static eventType   = 'MONTHLY_WAGES';
 
   constructor({ stateRegistry } = {}) {
     super(null, 'Monthly Wages');
     this.stateRegistry = stateRegistry;
-    this.generatedActionTypes = ['WAGES_INCOME_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['WAGES_INCOME_APPLY', 'AU_WAGES_INCOME_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
@@ -44,7 +50,10 @@ export class MonthlyWagesHandler extends HandlerEntry {
 
   call({ date, state }) {
     const actions = [];
-    const cashKey = this.stateRegistry?.getStateKey(ACCOUNT_ROLES.US_SAVINGS) ?? 'usSavingsAccount';
+    const usCashKey = this.stateRegistry?.getStateKey(ACCOUNT_ROLES.US_SAVINGS) ?? 'usSavingsAccount';
+    const auCashKey = this.stateRegistry?.getStateKey(ACCOUNT_ROLES.AU_SAVINGS) ?? 'auSavingsAccount';
+    // Cash pools actually credited this tick, so we RECORD_BALANCE each exactly once.
+    const touched = new Set();
 
     for (const [key, person] of Object.entries(state.people ?? {})) {
       const wage = person.monthlyWage ?? 0;
@@ -52,13 +61,17 @@ export class MonthlyWagesHandler extends HandlerEntry {
       const retDate = person.retirementDate;
       if (retDate && date >= retDate) continue;
 
+      const isAud = person.wageCurrency === 'AUD';
       actions.push(
-        { type: 'WAGES_INCOME_APPLY', amount: wage, residency: person.residency ?? null, personKey: key },
+        isAud
+          ? { type: 'AU_WAGES_INCOME_APPLY', amount: wage, residency: person.residency ?? null, personKey: key }
+          : { type: 'WAGES_INCOME_APPLY',    amount: wage, residency: person.residency ?? null, personKey: key },
         new FieldValueAction(`wages_${key}`, `${person.name || key} Wages`, wage),
       );
+      touched.add(isAud ? auCashKey : usCashKey);
     }
 
-    if (actions.length > 0) {
+    for (const cashKey of touched) {
       actions.push(new RecordBalanceAction(`${cashKey}.balance`, cashKey));
     }
 

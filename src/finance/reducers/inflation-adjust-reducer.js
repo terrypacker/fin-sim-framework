@@ -53,12 +53,20 @@ export class InflationAdjustReducer extends Reducer {
     const updates = { inflationAccumulator };
 
     if (cc === 'US') {
-      // Wages and SS are USD amounts — inflate at the US rate
+      // Driven off the always-annual US advance. Social Security is a USD amount,
+      // inflated at the US rate. Wages are inflated at the rate of the *wage
+      // currency's* country (design 50): a USD wage tracks US CPI, an AUD wage
+      // tracks AU CPI — so an AU-source wage doesn't drift with US inflation.
+      const rateFor = (code) => {
+        const wcc = code === 'AUD' ? 'AU' : 'US';
+        return state.effectiveInflationRates?.[wcc] ?? state.inflationRates?.[wcc] ?? 0;
+      };
       const people = {};
       for (const [key, person] of Object.entries(state.people ?? {})) {
+        const wageFactor = 1 + rateFor(person.wageCurrency);
         people[key] = {
           ...person,
-          monthlyWage:           (person.monthlyWage           ?? 0) * factor,
+          monthlyWage:           (person.monthlyWage           ?? 0) * wageFactor,
           socialSecurityMonthly: (person.socialSecurityMonthly ?? 0) * factor,
         };
       }

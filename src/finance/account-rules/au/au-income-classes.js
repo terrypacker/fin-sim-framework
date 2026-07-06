@@ -41,6 +41,36 @@ export class AuSeIncomeApplyReducer extends AccountServiceReducer {
   }
 }
 
+/**
+ * Design 50: AU-source Wages — credit AU cash pool (native AUD), chain
+ * AU_WAGES_INCOME_TAX.
+ *
+ * Fired by MonthlyWagesHandler for any person whose `wageCurrency` is AUD, so an
+ * AU-denominated wage lands in the AUD savings account as AUD (not coerced into
+ * USD in the US pool). The chained AU_WAGES_INCOME_TAX carries the earner's
+ * `personKey` and `residency`: a US-resident earner takes the AU non-resident
+ * withholding path, an AU-resident earner takes the AU ordinary-income path —
+ * both always also feed US worldwide ordinary income.
+ */
+export class AuWagesIncomeApplyReducer extends AccountServiceReducer {
+  static type        = 'AuWagesIncomeApplyReducer';
+  static description = 'Credits the AU cash pool with AU-source wages (native AUD); chains AU_WAGES_INCOME_TAX.';
+  static actionType  = 'AU_WAGES_INCOME_APPLY';
+
+  constructor({ accountService }) {
+    super('AU Wages Income Apply', PRIORITY.CASH_FLOW);
+    this.accountService = accountService;
+    this.reducedActionTypes   = ['AU_WAGES_INCOME_APPLY'];
+    this.generatedActionTypes = ['AU_WAGES_INCOME_TAX'];
+  }
+
+  reduce(state, action) {
+    const { amount, residency, personKey } = action;
+    this.accountService.transaction(auCash(state), amount, null);
+    return this.newState(state, {}, [{ type: 'AU_WAGES_INCOME_TAX', amount, residency, personKey }]);
+  }
+}
+
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
 export class AuSeIncomeHandler extends HandlerEntry {

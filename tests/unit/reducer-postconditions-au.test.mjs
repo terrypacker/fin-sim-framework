@@ -39,7 +39,7 @@ import {
   AuDividendUnfrankedResidentApplyReducer, AuDividendUnfrankedNonResidentApplyReducer,
   AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer,
 } from '../../src/finance/account-rules/au/au-brokerage-classes.js';
-import { AuSeIncomeApplyReducer } from '../../src/finance/account-rules/au/au-income-classes.js';
+import { AuSeIncomeApplyReducer, AuWagesIncomeApplyReducer } from '../../src/finance/account-rules/au/au-income-classes.js';
 import { AuHouseSaleApplyReducer } from '../../src/finance/account-rules/au/au-real-property-classes.js';
 
 const DATE = new Date('2030-06-15');
@@ -164,6 +164,12 @@ test('AuSeIncome: credits AU cash pool, keeps §4.4 on cash (I3)', () => {
   const state = { auSavingsAccount: acct('auSavingsAccount', 10000) };
   const { next } = runAcct(new AuSeIncomeApplyReducer(makeServices()), state, { type: 'SE_INCOME_AU_APPLY', amount: 4000, residency: 'AU' });
   assert.equal(next.auSavingsAccount.balance, 14000);
+});
+
+test('AuWagesIncome: credits AU cash pool with native AUD (I3)', () => {
+  const state = { auSavingsAccount: acct('auSavingsAccount', 10000) };
+  const { next } = runAcct(new AuWagesIncomeApplyReducer(makeServices()), state, { type: 'AU_WAGES_INCOME_APPLY', amount: 2000, residency: 'US', personKey: 'spouse' });
+  assert.equal(next.auSavingsAccount.balance, 12000);
 });
 
 test('AuHouseSale: credits net proceeds to AU cash, zeroes property (I3)', () => {

@@ -39,7 +39,43 @@ export class AuTaxModule2026 extends BaseTaxModule {
       ...this._realPropertyReducerFns(),
       ...this._rentalReducerFns(),
       ...this._auIncomeReducerFns(),
+      ...this._auWagesReducerFns(),
     ]);
+  }
+
+  _auWagesReducerFns() {
+    return [
+      // Design 50: AU-source wages — always US ordinary income (worldwide).
+      // Earner is AU resident → AU ordinary income + FTC; earner is a non-resident
+      // (e.g. a US-resident spouse paid in AUD) → AU non-resident withholding + FTC.
+      // Attributed to the *earner* via personKey (like AU_SE_INCOME_TAX), not to
+      // the AU account's owner — the wage belongs to the person who earned it.
+      ['AU_WAGES_INCOME_TAX', (state, action) => {
+        const { amount, residency, personKey } = action;
+        const isAuResident = residency === 'AU';
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        if (isAuResident) {
+          const usePerPerson = personKey != null && state.auPersonOrdinaryIncomeYTD != null;
+          next = {
+            ...next,
+            ...(usePerPerson
+              ? { auPersonOrdinaryIncomeYTD: { ...state.auPersonOrdinaryIncomeYTD, [personKey]: (state.auPersonOrdinaryIncomeYTD[personKey] ?? 0) + amount } }
+              : { auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount }),
+            ftcYTD: state.ftcYTD + amount,
+          };
+        } else {
+          const usePerPerson = personKey != null && state.auPersonNonResidentWithholdingYTD != null;
+          next = {
+            ...next,
+            ...(usePerPerson
+              ? { auPersonNonResidentWithholdingYTD: { ...state.auPersonNonResidentWithholdingYTD, [personKey]: (state.auPersonNonResidentWithholdingYTD[personKey] ?? 0) + amount } }
+              : { auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + amount }),
+            ftcYTD: state.ftcYTD + amount,
+          };
+        }
+        return next;
+      }],
+    ];
   }
 
   _rentalReducerFns() {
