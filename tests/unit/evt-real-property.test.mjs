@@ -312,7 +312,8 @@ test('EVT-33: AU house sale generates a Foreign Tax Credit', () => {
   //state.ftcYTD
   const ftcDiff = findDiff(auTaxJournalEntry[0], 'ftcYTD');
   assert.ok(ftcDiff, 'ftcYTD diff should be recorded');
-  assert.strictEqual(ftcDiff.delta, AU_HOUSE_JSON.realProperties[0].value - AU_HOUSE_JSON.realProperties[0].costBasis);
+  // design 51: the AUD capital gain is normalized into the USD ftcYTD bucket.
+  assert.strictEqual(ftcDiff.delta, (AU_HOUSE_JSON.realProperties[0].value - AU_HOUSE_JSON.realProperties[0].costBasis) / sim.state.effectiveExchangeRates.USD_AUD);
 });
 
 test('EVT-33: AU house sale with no gain has zero capital gains tax exposure', () => {

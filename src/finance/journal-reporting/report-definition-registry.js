@@ -139,13 +139,26 @@ class OrdinaryIncomeBySourceDef extends ReportDefinition {
     ];
   }
 
+  // design 51: sum each entry's *contribution* to the ordinary-income accumulator
+  // (its stateDelta on `incomeField`) rather than the action's native `amount`.
+  // Cross-border income (AU-source in AUD, US-source in AUD-resident branch) is
+  // normalized into the accumulator's canonical currency at accrual, so the raw
+  // `amount` no longer equals the taxable contribution — the stateDelta does, and
+  // it is what the Form 1040 / AU return gross line reports.
+  get perDiff()           { return true; }
+  get defaultGroupBy()    { return ['actionType']; }
+  get defaultAggregates() { return { total: { fn: 'sum', field: 'stateDelta' }, count: { fn: 'count' } }; }
+
   buildQuery(params, api) {
     const { cc, period, personKeys } = params;
     const periodAst   = api.periodOf(period);
     const incomeField = cc === 'AU' ? 'auOrdinaryIncomeYTD' : 'usOrdinaryIncomeYTD';
     const conditions  = [
       periodAst,
-      { op: 'contains', field: 'changedFields', value: incomeField },
+      { op: 'eq',  field: 'stateKey', value: incomeField },
+      // Exclude the annual settle, whose diff resets the accumulator to 0 (a large
+      // negative delta that would cancel the gross income total).
+      { op: 'not', condition: { op: 'eq', field: 'actionType', value: `${cc}_TAX_SETTLE_APPLY` } },
     ];
     _appendInFilter(conditions, 'personKey', personKeys);
     return { op: 'and', conditions };

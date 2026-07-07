@@ -9,6 +9,7 @@
  */
 
 import { BaseTaxModule } from '../base-tax-module.js';
+import { toAUD } from '../tax-fx.js';
 
 /**
  * UsTaxModule2026 — US tax classification rules for 2026.
@@ -67,7 +68,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
         if (isAuResident) {
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
           };
         }
         return next;
@@ -103,7 +104,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
         if (isAuResident) {
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
             ftcYTD:              state.ftcYTD              + amount,
           };
         }
@@ -135,7 +136,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
         if (isAuResident) {
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
             ftcYTD:              state.ftcYTD              + amount,
           };
         }
@@ -154,7 +155,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
         if (isAuResident) {
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
             ftcYTD:              state.ftcYTD              + amount,
           };
         }
@@ -169,7 +170,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
         if (isAuResident) {
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
             ftcYTD:              state.ftcYTD              + amount,
           };
         }
@@ -188,7 +189,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
         if (isAuResident) {
           next = {
             ...next,
-            auCapitalGainsYTD: state.auCapitalGainsYTD + auGain,
+            auCapitalGainsYTD: state.auCapitalGainsYTD + toAUD(auGain, 'USD', state),
             ftcYTD:            state.ftcYTD            + auGain,
           };
         }
@@ -219,7 +220,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
         if (isAuResident) {
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
             ftcYTD:              state.ftcYTD              + Math.max(0, amount),
           };
         }
@@ -239,7 +240,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
         if (isAuResident) {
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
             ftcYTD:              state.ftcYTD              + taxable,
           };
         }
@@ -253,12 +254,13 @@ export class UsTaxModule2026 extends BaseTaxModule {
         const isAuResident = residency === 'AU';
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
+          const audAmount = toAUD(amount, 'USD', state);
           if (personKey && state.auPersonOrdinaryIncomeYTD) {
             const personMap = { ...state.auPersonOrdinaryIncomeYTD };
-            personMap[personKey] = (personMap[personKey] ?? 0) + amount;
+            personMap[personKey] = (personMap[personKey] ?? 0) + audAmount;
             next = { ...next, auPersonOrdinaryIncomeYTD: personMap, ftcYTD: state.ftcYTD + amount };
           } else {
-            next = { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount, ftcYTD: state.ftcYTD + amount };
+            next = { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + audAmount, ftcYTD: state.ftcYTD + amount };
           }
         }
         return next;
@@ -272,7 +274,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
         if (isAuResident) {
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
             ftcYTD:              state.ftcYTD              + amount,
           };
         }
@@ -287,7 +289,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
         if (isAuResident) {
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
             ftcYTD:              state.ftcYTD              + amount,
           };
         }
@@ -302,7 +304,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
         if (isAuResident) {
           next = {
             ...next,
-            auCapitalGainsYTD: (state.auCapitalGainsYTD ?? 0) + gain,
+            auCapitalGainsYTD: (state.auCapitalGainsYTD ?? 0) + toAUD(gain, 'USD', state),
             ftcYTD:            state.ftcYTD                   + gain,
           };
         }
@@ -324,7 +326,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
         if (isAuResident) {
           next = {
             ...next,
-            auCapitalGainsYTD: (state.auCapitalGainsYTD ?? 0) + gain,
+            auCapitalGainsYTD: (state.auCapitalGainsYTD ?? 0) + toAUD(gain, 'USD', state),
             ftcYTD:            (state.ftcYTD ?? 0)            + gain,
           };
         }
@@ -343,7 +345,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
         if (isAuResident) {
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
             ftcYTD:              state.ftcYTD              + amount,
           };
         }
@@ -358,7 +360,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
         if (isAuResident) {
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
+            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
             ftcYTD:              state.ftcYTD              + amount,
           };
         }
@@ -388,7 +390,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
         const { penaltyAmount = 0, auAssessableAmount = 0, residency } = action;
         let next = { ...state, usPenaltyYTD: state.usPenaltyYTD + penaltyAmount };
         if (residency === 'AU' && auAssessableAmount > 0) {
-          next = { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + auAssessableAmount };
+          next = { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(auAssessableAmount, 'USD', state) };
         }
         return next;
       }],
@@ -408,7 +410,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
         const { amount, penaltyAmount = 0, residency } = action;
         let next = { ...state, usPenaltyYTD: state.usPenaltyYTD + penaltyAmount };
         if (residency === 'AU') {
-          next = { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount };
+          next = { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state) };
         }
         return next;
       }],

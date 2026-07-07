@@ -100,11 +100,13 @@ test('EVT-DRILL-2: drill query total matches Form 1040 Gross Ordinary Income', a
   const modalAmount = grossLine.amount;
   assert.ok(modalAmount > 0, 'Gross Ordinary Income should be positive');
 
-  // Run the drill query.
-  const api      = new JournalQueryApi(new JournalDataSource(journal));
+  // Run the drill query. Honor def.perDiff exactly as the journal-report plugin
+  // does (design 51: ordinary-income-by-source now sums the per-stateDiff income
+  // contribution, which is FX-normalized, rather than the action's native amount).
   const registry = new ReportDefinitionRegistry();
   const def      = registry.get('ordinary-income-by-source');
   assert.ok(def, 'ordinary-income-by-source definition should be registered');
+  const api      = new JournalQueryApi(new JournalDataSource(journal, { perDiff: def.perDiff === true }));
 
   const ast    = def.buildQuery(grossLine.drillReport.params, api);
   const result = await api.aggregate({

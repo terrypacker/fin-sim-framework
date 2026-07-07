@@ -1,8 +1,15 @@
 # 51 — Tax-bucket FX normalization (single canonical currency per accumulator)
 
-**Status**: **Proposed** (design only; not implemented). Follow-up to
-`design/50-au-source-wages.md` §2/§7, which deliberately matched the pre-existing
-1:1 tax-bucket currency mixing rather than fixing it. This design fixes it.
+**Status**: **Implemented.** `src/finance/tax/tax-fx.js` (`toCcy`/`toUSD`/`toAUD`)
+normalizes every cross-currency write in the US and AU tax modules and the state
+income classifier into each accumulator's canonical currency at the event rate.
+The `ordinary-income-by-source` drill now sums the FX-normalized `usOrdinaryIncomeYTD`
+stateDelta (per-diff) rather than the native `amount`, so it still matches the Form
+1040 gross line. Full unit suite green (3094 + new `tax-fx-normalization.test.mjs`,
+8 cases), viz 831, requirements 84/84, build clean; the cross-border evt/tax goldens
+were regolded to the converted figures (each reads the rate from
+`sim.state.effectiveExchangeRates.USD_AUD`); browser-verified a US+AU scenario end to
+end (no console errors). Follow-up to `design/50-au-source-wages.md` §2/§7.
 
 **Builds on**:
 - `design/10` currency infrastructure — `CurrencyConverter` (`src/finance/fx/currency-converter.js`)

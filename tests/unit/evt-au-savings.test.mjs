@@ -149,7 +149,7 @@ test('EVT-18: AU savings earnings (resident) are US ordinary income taxable', ()
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_EARNINGS', data: { amount: 600 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 600);
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 600 / sim.state.effectiveExchangeRates.USD_AUD); // design 51: AUD-source → USD bucket
 });
 
 test('EVT-18: AU savings earnings (resident) are ALWAYS AU taxable at ordinary income rate', () => {
@@ -181,7 +181,7 @@ test('EVT-19: AU savings earnings (non-resident) are US ordinary income taxable'
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_EARNINGS', data: { amount: 600 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 600);
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 600 / sim.state.effectiveExchangeRates.USD_AUD); // design 51: AUD-source → USD bucket
 });
 
 test('EVT-19: AU savings earnings (non-resident) are ALWAYS AU taxable at non-resident withholding rate', () => {

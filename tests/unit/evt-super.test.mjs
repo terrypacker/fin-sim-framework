@@ -226,7 +226,7 @@ test('EVT-22: Super earnings withdrawal is US ordinary income taxable', () => {
   sim.schedule({ date: new Date(2026, 1, 1), type: 'SUPER_WITHDRAWAL_EARNINGS', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
-  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 5000);
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 5000 / sim.state.effectiveExchangeRates.USD_AUD); // design 51: AUD-source → USD bucket
 });
 
 test('EVT-22: Super earnings withdrawal has no AU tax', () => {

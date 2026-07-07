@@ -139,7 +139,8 @@ test('EVT-37: SS income records full amount as AU ordinary income if AU resident
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SS_INCOME', data: { amount: 2000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 2000);
+  // design 51: US-source SS (USD) is normalized into the AUD auOrdinaryIncomeYTD bucket.
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 2000 * sim.state.effectiveExchangeRates.USD_AUD);
   assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded for AU resident');
 });
 
@@ -177,7 +178,8 @@ test('EVT-38: wages record full amount as AU ordinary income if AU resident', ()
   sim.schedule({ date: new Date(2026, 0, 15), type: 'WAGES_INCOME', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 5000);
+  // design 51: US-source wages (USD) are normalized into the AUD bucket.
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 5000 * sim.state.effectiveExchangeRates.USD_AUD);
   assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded for AU resident');
 });
 
@@ -245,7 +247,8 @@ test('EVT-48: US self-employment income is AU ordinary income if AU resident', (
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SE_INCOME_US', data: { amount: 4000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 4000);
+  // design 51: US-source SE income (USD) is normalized into the AUD bucket.
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 4000 * sim.state.effectiveExchangeRates.USD_AUD);
   assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded for AU resident');
 });
 
@@ -275,7 +278,8 @@ test('EVT-49: AU self-employment income is always US ordinary income', () => {
   sim.schedule({ date: new Date(2026, 0, 15), type: 'SE_INCOME_AU', data: { amount: 3000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 3000);
+  // design 51: AU-source SE income (AUD) is normalized into the USD worldwide bucket.
+  assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 3000 / sim.state.effectiveExchangeRates.USD_AUD);
 });
 
 test('EVT-49: AU self-employment income is AU ordinary income if AU resident', () => {
@@ -321,7 +325,8 @@ test('EVT-50: bonus is AU ordinary income if AU resident', () => {
   sim.schedule({ date: new Date(2026, 1, 1), type: 'BONUS', data: { amount: 10000 } });
   sim.stepTo(new Date(2026, 1, 28));
 
-  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 10000);
+  // design 51: US-source bonus (USD) is normalized into the AUD bucket.
+  assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 10000 * sim.state.effectiveExchangeRates.USD_AUD);
   assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded for AU resident');
 });
 
@@ -371,7 +376,8 @@ test('EVT-51: company sale records gain as AU capital gain if AU resident', () =
   });
   sim.stepTo(new Date(2026, 1, 28));
 
-  assert.strictEqual(sim.state.auCapitalGainsYTD, 120000);
+  // design 51: US-source company-sale gain (USD) is normalized into the AUD CGT bucket.
+  assert.strictEqual(sim.state.auCapitalGainsYTD, 120000 * sim.state.effectiveExchangeRates.USD_AUD);
   assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded for AU resident');
 });
 
