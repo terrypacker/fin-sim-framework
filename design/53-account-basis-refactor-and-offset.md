@@ -2,6 +2,13 @@
 
 **Status**: **Proposed** (design only).
 
+**Follow-up**: `design/54-loan-liability-accounts.md` builds on this doc's `OffsetAccount`
+(§3). It introduces a first-class **Loan** (liability) account that accrues interest, and
+**re-targets** the offset link from a property (`offsetsPropertyKey`, §3.3) to a Loan
+account (`offsetsLoanKey`). That is what makes an offset bite on **owner-occupied** loans
+and enables a true interest/principal amortization split — the two limitations §3.2 / §7
+document as out-of-scope here. Ship 53 first; 54 is the natural next step.
+
 Four related changes to the `Account` / `Holding` model, driven by four questions:
 
 1. Are `contributionBasis` / `earningsBasis` on `InvestmentAccount` still needed now
@@ -365,13 +372,18 @@ brokerage state.
 *Q1 / Q2 structural change.*
 
 1. New `RetirementAccount extends InvestmentAccount` carrying `contributionBasis`,
-   `earningsBasis`, `minimumAge`, `allowsEarlyWithdrawal` + `reconcileLedgerToBalance`
-   moves alongside it (or stays a free function — it already guards on field presence).
+   `earningsBasis`, `minimumAge`, `allowsEarlyWithdrawal`. `reconcileLedgerToBalance`
+   **stays a free function** (decided) — it already guards on field presence, and the
+   state-is-plain-data rule means it can't live as a method on the state object anyway;
+   moving it onto the class buys nothing.
 2. Reparent `FourOhOneKAccount` / `RothAccount` / `TraditionalIRAAccount` /
    `SuperannuationAccount` to `RetirementAccount`. Remove the four fields from
    `InvestmentAccount`; `BrokerageAccount` now inherits none of them.
-3. Builder: split `BaseInvestmentBuilder` — a lean brokerage builder (holdings, loan,
-   country/currency) and a `RetirementBuilder` (adds the basis + age setters).
+3. Builder split (`account-builder.js:91`): `BaseInvestmentBuilder` **keeps** the
+   `loanBalance` setter (brokerage's AU margin loan) and drops the four retirement setters;
+   `BrokerageAccountBuilder` extends it directly. A new `RetirementBuilder extends
+   BaseInvestmentBuilder` re-adds `contributionBasis` / `earningsBasis` / `minimumAge` /
+   `allowsEarlyWithdrawal`, and the four retirement builders extend `RetirementBuilder`.
 4. Serializer round-trip: the `in account` guards (`scenario-serializer.js:619`,
    `910`) already degrade gracefully; confirm the retirement classes still hydrate the
    fields and brokerage no longer carries them. `scenario-roundtrip` +
@@ -459,7 +471,9 @@ scenario with `dividendYield`/`couponRate`/`duration` round-trips and is now edi
   identically. Worth an explicit round-trip test with a legacy brokerage fixture.
 - **Owner-occupied offset has no effect today** (§3.2). This is intended under the
   interest-reduction-only scope; flag it in the editor help text so it isn't read as a
-  bug. Full interest-cost modeling is the future extension that makes it bite.
+  bug. Full interest-cost modeling is the future extension that makes it bite — that is
+  `design/54-loan-liability-accounts.md`, where a first-class Loan account accrues real
+  interest each period and the offset re-targets to it (`offsetsLoanKey`).
 - **Multiple offsets / partial offset.** `offsetBalanceForProperty` sums all offset
   accounts linked to a property and clamps at `mortgageBalance`; a single offset is the
   common case.
