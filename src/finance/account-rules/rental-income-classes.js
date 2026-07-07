@@ -11,6 +11,7 @@
 import { PRIORITY, AccountServiceReducer } from '../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, FieldValueAction } from '../../simulation-framework/actions.js';
+import { findLoanForProperty, effectivePrincipal } from './loan-classes.js';
 
 /** Resolve the US / AU cash pools (savings first, checking fallback). */
 const usCashKey = (state) => (state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount');
@@ -34,19 +35,26 @@ const firstResidency = (state) =>
  * *effective* (regime-adjusted) inflation rate each year (design 48 §4.6). So
  * rent rises through an inflationary regime and flattens / falls under a
  * deflationary one. Only rent is indexed: `cashOpex` is a ratio of the (already
- * indexed) effective rent; `deductibleInterest` tracks the live mortgage
- * balance; depreciation is on the *historical* `costBasis` and must not inflate.
+ * indexed) effective rent; `deductibleInterest` tracks the linked loan's live
+ * (offset-reduced) principal; depreciation is on the *historical* `costBasis` and
+ * must not inflate.
+ *
+ * The mortgage-interest deduction reads the linked Loan (design 54 P2) — its
+ * effective principal × the loan's rate — not the retired `propState.mortgageBalance`
+ * scalar (now always 0). `loan` is null when the property has no mortgage, giving
+ * a 0 deduction, identical to the pre-migration zero-balance case.
  *
  * @param {object} p        Per-property rental params from the handler projection
- * @param {object} propState Live property state (reads mortgageBalance, costBasis)
+ * @param {object} propState Live property state (reads costBasis)
  * @param {'US'|'AU'} country
  * @param {number} inflationFactor  Cumulative effective-inflation factor (default 1 = no indexing)
+ * @param {object|null} loan  Linked loan state entry (findLoanForProperty), or null
+ * @param {object} [state]    Full runtime state, for the Phase-3 offset hook in effectivePrincipal
  */
-export function computeRentalMonth(p, propState, country, inflationFactor = 1) {
+export function computeRentalMonth(p, propState, country, inflationFactor = 1, loan = null, state = null) {
   const monthlyRent   = (p.monthlyRent         ?? 0) * (inflationFactor || 1);
   const occupancy     = p.occupancyRate         ?? 0.95;
   const expenseRatio  = p.rentalExpenseRatio    ?? 0.25;
-  const mortgageRate  = p.mortgageInterestRate  ?? 0;
   const landRatio     = p.landValueRatio        ?? 0.2;
   const override      = p.annualDepreciationOverride ?? null;
 
@@ -54,7 +62,8 @@ export function computeRentalMonth(p, propState, country, inflationFactor = 1) {
   const cashOpex      = effectiveRent * expenseRatio;
   const netCash       = effectiveRent - cashOpex;
 
-  const deductibleInterest = Math.max(0, (propState.mortgageBalance ?? 0) * mortgageRate / 12);
+  const loanPrincipal      = loan ? effectivePrincipal(state, loan.stateKey, loan) : 0;
+  const deductibleInterest = Math.max(0, loanPrincipal * (loan?.interestRate ?? 0) / 12);
 
   const buildingBasis = Math.max(0, (propState.costBasis ?? 0) * (1 - landRatio));
   const annualDep     = override != null
@@ -106,7 +115,8 @@ export class UsRentalIncomeHandler extends HandlerEntry {
       const propState = state[p.stateKey];
       // Skip when there is no rent, or the property has been sold (value zeroed).
       if (!propState || (propState.value ?? 0) <= 0 || (p.monthlyRent ?? 0) <= 0) continue;
-      const m = computeRentalMonth(p, propState, 'US', inflationFactor);
+      const loan = findLoanForProperty(state, p.stateKey);
+      const m = computeRentalMonth(p, propState, 'US', inflationFactor, loan, state);
       anyRent += m.netCash;
       actions.push({
         type:                'US_RENTAL_INCOME_APPLY',
@@ -193,7 +203,8 @@ export class AuRentalIncomeHandler extends HandlerEntry {
       const propState = state[p.stateKey];
       // Skip when there is no rent, or the property has been sold (value zeroed).
       if (!propState || (propState.value ?? 0) <= 0 || (p.monthlyRent ?? 0) <= 0) continue;
-      const m = computeRentalMonth(p, propState, 'AU', inflationFactor);
+      const loan = findLoanForProperty(state, p.stateKey);
+      const m = computeRentalMonth(p, propState, 'AU', inflationFactor, loan, state);
       anyRent += m.netCash;
       actions.push({
         type:                'AU_RENTAL_INCOME_APPLY',

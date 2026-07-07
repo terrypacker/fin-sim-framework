@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
+import { findLoanForProperty } from '../loan-classes.js';
 
 /** Default AU cash pool key when no saleDestinationAccount is provided. */
 const defaultAuCashKey = (state) =>
@@ -59,6 +60,12 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
     if (stateKey && state[stateKey]) {
       updates[stateKey] = { ...state[stateKey], mortgageBalance: 0, value: 0 };
     }
+    // Design 54 P2: the debt lives on the linked Loan — the sale pays it off, so
+    // close the loan (balance 0) alongside zeroing the property value.
+    const loan = stateKey ? findLoanForProperty(state, stateKey) : null;
+    if (loan) {
+      updates[loan.stateKey] = { ...loan, balance: 0 };
+    }
     const description = stateKey && state[stateKey]?.name
       ? state[stateKey].name
       : (stateKey ?? 'AU Real Property');
@@ -84,7 +91,10 @@ export class AuHouseSaleHandler extends HandlerEntry {
 
   call({ data, state }) {
     const propState       = data.stateKey ? state[data.stateKey] : null;
-    const mortgageBalance = propState?.mortgageBalance ?? 0;
+    // Design 54 P2: the payoff amount is the linked Loan's balance, not the
+    // retired property scalar (now always 0).
+    const loan            = data.stateKey ? findLoanForProperty(state, data.stateKey) : null;
+    const mortgageBalance = loan?.balance ?? propState?.mortgageBalance ?? 0;
     const destinationKey  = resolveDestinationKey(state, data.saleDestinationAccount);
     return [
       {

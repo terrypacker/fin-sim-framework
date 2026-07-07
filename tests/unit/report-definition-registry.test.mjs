@@ -332,8 +332,8 @@ test('real-property-cash-flow: groups by actionType, sums account.balance diffs,
       ],
     }),
     entry({
-      actionType: 'US_MORTGAGE_PAYMENT_APPLY',
-      data:       { amount: 2500 },
+      actionType: 'LOAN_PAYMENT_APPLY',
+      data:       { payment: 2500, interest: 0 },
       stateDiff: [
         { field: 'checkingAccount.balance', before: 20000, after: 17500, delta: -2500 },
       ],
@@ -352,7 +352,7 @@ test('real-property-cash-flow: groups by actionType, sums account.balance diffs,
   // House sale: both the credit to savings (+700000) and the house account debit (-800000)
   // are included since both stateKeys contain 'account.balance'.
   assert.strictEqual(totalsByType['US_HOUSE_SALE_APPLY'], 700000 + -800000);
-  assert.strictEqual(totalsByType['US_MORTGAGE_PAYMENT_APPLY'], -2500);
+  assert.strictEqual(totalsByType['LOAN_PAYMENT_APPLY'], -2500);
   assert.ok(!('WAGES_INCOME_TAX' in totalsByType), 'off-domain action types must be excluded');
   assert.strictEqual(grandTotal, 700000 + -800000 + -2500);
 });

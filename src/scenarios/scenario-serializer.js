@@ -182,7 +182,7 @@ import {
   UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer,
   AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer,
 } from '../finance/account-rules/mortgage-payment-classes.js';
-import { LoanPaymentHandler, LoanPaymentApplyReducer } from '../finance/account-rules/loan-classes.js';
+import { LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer } from '../finance/account-rules/loan-classes.js';
 
 // ─── Holdings substrate (design 25) ─────────────────────────────────────────
 import {
@@ -293,7 +293,7 @@ const _ALL_CLASSES = [
   AuHouseSaleApplyReducer, AuSeIncomeApplyReducer, AuWagesIncomeApplyReducer,
   UsMortgagePaymentApplyReducer, AuMortgagePaymentApplyReducer,
   // Loan (liability) accounts (design 54)
-  LoanPaymentHandler, LoanPaymentApplyReducer,
+  LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer,
   // Economic regime handlers and reducers
   EconomicShockHandler, EconomicRecoveryTickHandler,
   RegimeApplyReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer,

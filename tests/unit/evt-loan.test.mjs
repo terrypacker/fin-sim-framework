@@ -29,7 +29,7 @@ import { Graph }          from '../../src/graph/graph.js';
 import { GraphQueryApi }  from '../../src/graph/graph-query-api.js';
 import { AccountService } from '../../src/finance/services/account-service.js';
 import { USD, CheckingAccount, SavingsAccount, LoanAccount } from '../../src/finance/assets/account.js';
-import { LoanPaymentHandler, LoanPaymentApplyReducer } from '../../src/finance/account-rules/loan-classes.js';
+import { LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer } from '../../src/finance/account-rules/loan-classes.js';
 import { computeNetWorth } from '../../src/finance/derived-metrics/net-worth.js';
 import { ScenarioSerializer } from '../../src/scenarios/scenario-serializer.js';
 
@@ -130,6 +130,58 @@ test('LOAN: is never a source of drawdown cash', () => {
   );
   assert.strictEqual(state.loan.balance, before, 'loan balance untouched by drawdown');
   assert.strictEqual(state.loan.drawdownPriority, null, 'loan is excluded from drawdown');
+});
+
+// ── Per-country wiring (design 54 P2) ─────────────────────────────────────────
+
+test('LOAN: country-scoped handlers each pay only their own country (no double-pay)', () => {
+  const svc = makeSvc();
+  const baseState = () => ({
+    usSavingsAccount: new SavingsAccount(50_000, { country: 'US', currency: USD }),
+    auSavingsAccount: new SavingsAccount(50_000, { country: 'AU', currency: USD }),
+    usLoan: new LoanAccount(100_000, { country: 'US', currency: USD, interestRate: 0.06, monthlyPayment: 1_000 }),
+    auLoan: new LoanAccount(100_000, { country: 'AU', currency: USD, interestRate: 0.06, monthlyPayment: 1_000 }),
+  });
+
+  const usHandler = new UsLoanPaymentHandler();
+  assert.strictEqual(UsLoanPaymentHandler.eventType, 'US_LOAN_PAYMENT');
+  assert.strictEqual(usHandler.country, 'US');
+  let state = baseState();
+  const reducer = new LoanPaymentApplyReducer({ accountService: svc });
+  for (const a of usHandler.call({ state })) {
+    if (a.type === 'LOAN_PAYMENT_APPLY') state = reducer.reduce(state, a);
+  }
+  // US loan amortized (99500); AU loan untouched.
+  assert.ok(near(state.usLoan.balance, 99_500), `us ${state.usLoan.balance}`);
+  assert.strictEqual(state.auLoan.balance, 100_000, 'AU loan untouched by US handler');
+
+  const auHandler = new AuLoanPaymentHandler();
+  assert.strictEqual(AuLoanPaymentHandler.eventType, 'AU_LOAN_PAYMENT');
+  assert.strictEqual(auHandler.country, 'AU');
+  state = baseState();
+  for (const a of auHandler.call({ state })) {
+    if (a.type === 'LOAN_PAYMENT_APPLY') state = reducer.reduce(state, a);
+  }
+  assert.ok(near(state.auLoan.balance, 99_500), `au ${state.auLoan.balance}`);
+  assert.strictEqual(state.usLoan.balance, 100_000, 'US loan untouched by AU handler');
+});
+
+test('LOAN: the base handler (country=null) still pays every loan', () => {
+  const svc = makeSvc();
+  const handler = new LoanPaymentHandler();
+  assert.strictEqual(handler.country, null);
+  let state = {
+    usSavingsAccount: new SavingsAccount(50_000, { country: 'US', currency: USD }),
+    auSavingsAccount: new SavingsAccount(50_000, { country: 'AU', currency: USD }),
+    usLoan: new LoanAccount(100_000, { country: 'US', currency: USD, interestRate: 0.06, monthlyPayment: 1_000 }),
+    auLoan: new LoanAccount(100_000, { country: 'AU', currency: USD, interestRate: 0.06, monthlyPayment: 1_000 }),
+  };
+  const reducer = new LoanPaymentApplyReducer({ accountService: svc });
+  for (const a of handler.call({ state })) {
+    if (a.type === 'LOAN_PAYMENT_APPLY') state = reducer.reduce(state, a);
+  }
+  assert.ok(near(state.usLoan.balance, 99_500), `us ${state.usLoan.balance}`);
+  assert.ok(near(state.auLoan.balance, 99_500), `au ${state.auLoan.balance}`);
 });
 
 // ── Serializer round-trip ─────────────────────────────────────────────────────

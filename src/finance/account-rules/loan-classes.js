@@ -87,13 +87,21 @@ export class LoanPaymentHandler extends HandlerEntry {
   static description = 'For each loan with a positive balance: accrues monthly interest, dispatches REPLENISH_SAVINGS (if needed) then LOAN_PAYMENT_APPLY, and flags negative amortization when the payment is below the accrued interest.';
   static eventType   = 'LOAN_PAYMENT';
 
-  constructor() {
+  /**
+   * @param {object} [opts]
+   * @param {string|null} [opts.country=null] - ISO country code; when set, only loans
+   *   whose `country` matches are paid. Null pays every loan (P1 behavior). Per-country
+   *   filtering lets the US and AU real-property toolsets each schedule their own
+   *   `US_LOAN_PAYMENT` / `AU_LOAN_PAYMENT` event without double-paying (design 54 P2).
+   */
+  constructor({ country = null } = {}) {
     super(null, 'Loan Payment');
+    this.country = country;
     this.generatedActionTypes = ['REPLENISH_SAVINGS', 'LOAN_PAYMENT_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, _services) {
-    const h = new this();
+    const h = new this({ country: d.country ?? null });
     h.id = d.id;
     return h;
   }
@@ -102,6 +110,7 @@ export class LoanPaymentHandler extends HandlerEntry {
     const actions = [];
     for (const [loanKey, loan] of Object.entries(state)) {
       if (!loan || typeof loan !== 'object' || loan.type !== 'loan') continue;
+      if (this.country && loan.country !== this.country) continue;
       const balance = loan.balance ?? 0;
       if (balance <= 0) continue;
 
@@ -127,6 +136,39 @@ export class LoanPaymentHandler extends HandlerEntry {
       actions.push(new RecordBalanceAction(`${loanKey}.balance`, loanKey));
     }
     return actions;
+  }
+}
+
+/**
+ * US-scoped LoanPaymentHandler (design 54 P2). Fires on `US_LOAN_PAYMENT` and pays
+ * only US loans, so the US real-property toolset can schedule loan payments without
+ * touching AU loans. Shares the base scan/amortization and `LoanPaymentApplyReducer`.
+ */
+export class UsLoanPaymentHandler extends LoanPaymentHandler {
+  static type        = 'UsLoanPaymentHandler';
+  static category    = 'handler';
+  static description = 'Pays US loans (design 54 P2): the shared LoanPaymentHandler scan filtered to country === US, fired by US_LOAN_PAYMENT.';
+  static eventType   = 'US_LOAN_PAYMENT';
+
+  constructor() {
+    super({ country: 'US' });
+    this.name = 'US Loan Payment';
+  }
+}
+
+/**
+ * AU-scoped LoanPaymentHandler (design 54 P2). Mirrors {@link UsLoanPaymentHandler}
+ * for AU loans; fires on `AU_LOAN_PAYMENT`.
+ */
+export class AuLoanPaymentHandler extends LoanPaymentHandler {
+  static type        = 'AuLoanPaymentHandler';
+  static category    = 'handler';
+  static description = 'Pays AU loans (design 54 P2): the shared LoanPaymentHandler scan filtered to country === AU, fired by AU_LOAN_PAYMENT.';
+  static eventType   = 'AU_LOAN_PAYMENT';
+
+  constructor() {
+    super({ country: 'AU' });
+    this.name = 'AU Loan Payment';
   }
 }
 

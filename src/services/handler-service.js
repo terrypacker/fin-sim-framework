@@ -18,7 +18,7 @@ import { DividendScheduledHandler } from '../finance/handlers/dividend-scheduled
 import { ChangeResidencyHandler } from '../finance/handlers/change-residency-handler.js';
 import { OutOfFundsHandler } from '../finance/handlers/out-of-funds-handler.js';
 import { UsMortgagePaymentHandler, AuMortgagePaymentHandler } from '../finance/account-rules/mortgage-payment-classes.js';
-import { LoanPaymentHandler } from '../finance/account-rules/loan-classes.js';
+import { LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler } from '../finance/account-rules/loan-classes.js';
 import { UsRentalIncomeHandler, AuRentalIncomeHandler } from '../finance/account-rules/rental-income-classes.js';
 import { AssetAppreciationHandler } from '../finance/handlers/asset-appreciation-handler.js';
 import {Edge, EDGE_TYPES} from "../graph/edge.js";
@@ -41,6 +41,8 @@ Object.assign(HANDLER_CLASSES, {
   UsMortgagePaymentHandler,
   AuMortgagePaymentHandler,
   LoanPaymentHandler,
+  UsLoanPaymentHandler,
+  AuLoanPaymentHandler,
   UsRentalIncomeHandler,
   AuRentalIncomeHandler,
   AssetAppreciationHandler,
