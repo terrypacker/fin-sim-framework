@@ -16,7 +16,7 @@ import {
 } from '../simulation-framework/actions.js';
 import { ACCOUNT_ROLES }  from '../finance/state/account-roles.js';
 import { Person }         from '../finance/person.js';
-import { Account, CheckingAccount, SavingsAccount } from '../finance/assets/account.js';
+import { Account, CheckingAccount, SavingsAccount, LoanAccount } from '../finance/assets/account.js';
 import {
   InvestmentAccount, BrokerageAccount, FourOhOneKAccount,
   RothAccount, TraditionalIRAAccount, SuperannuationAccount,
@@ -182,6 +182,7 @@ import {
   UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer,
   AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer,
 } from '../finance/account-rules/mortgage-payment-classes.js';
+import { LoanPaymentHandler, LoanPaymentApplyReducer } from '../finance/account-rules/loan-classes.js';
 
 // ─── Holdings substrate (design 25) ─────────────────────────────────────────
 import {
@@ -291,6 +292,8 @@ const _ALL_CLASSES = [
   AuStockEarningsApplyReducer, AuStockWithdrawalApplyReducer,
   AuHouseSaleApplyReducer, AuSeIncomeApplyReducer, AuWagesIncomeApplyReducer,
   UsMortgagePaymentApplyReducer, AuMortgagePaymentApplyReducer,
+  // Loan (liability) accounts (design 54)
+  LoanPaymentHandler, LoanPaymentApplyReducer,
   // Economic regime handlers and reducers
   EconomicShockHandler, EconomicRecoveryTickHandler,
   RegimeApplyReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer,
@@ -598,6 +601,7 @@ export class ScenarioSerializer {
       'roth':     'RothAccount',
       'ira':      'TraditionalIRAAccount',
       'super':    'SuperannuationAccount',
+      'loan':     'LoanAccount',
     };
     const __type = typeToClass[account.type] ?? account.constructor?.name ?? 'Account';
     const d = {
@@ -615,18 +619,24 @@ export class ScenarioSerializer {
       country:          account.country          ?? null,
       currency:         account.currency         ?? null,
     };
-    // InvestmentAccount-specific fields
-    if ('contributionBasis' in account) {
-      d.contributionBasis        = account.contributionBasis;
-      d.earningsBasis            = account.earningsBasis            ?? 0;
+    // InvestmentAccount base fields (brokerage + retirement). Gated on loanBalance
+    // presence, NOT contributionBasis — brokerage keeps these but no longer carries
+    // the basis ledger (design 53 §2), so an earlier contributionBasis gate silently
+    // dropped a brokerage's AU margin loanBalance / balanceAtResidencyChange.
+    if ('loanBalance' in account) {
       d.loanBalance              = account.loanBalance              ?? 0;
-      d.minimumAge               = account.minimumAge               ?? null;
       d.balanceAtResidencyChange = account.balanceAtResidencyChange ?? null;
       // Per-country residency cost-base step-up (design 36 §12.2) — only emitted
       // when present (set at a move) so pre-move configs round-trip unchanged.
       if (account.costBaseStepUpByCountry != null) {
         d.costBaseStepUpByCountry = { ...account.costBaseStepUpByCountry };
       }
+    }
+    // RetirementAccount ledger fields (design 53 §2).
+    if ('contributionBasis' in account) {
+      d.contributionBasis = account.contributionBasis;
+      d.earningsBasis     = account.earningsBasis ?? 0;
+      d.minimumAge        = account.minimumAge    ?? null;
       // Roth rollover (conversion) buckets — only emitted when present so
       // accounts without conversions round-trip unchanged.
       if (account.rolloverContribBasis  != null) d.rolloverContribBasis  = account.rolloverContribBasis;
@@ -634,6 +644,13 @@ export class ScenarioSerializer {
       if (Array.isArray(account.rolloverConversions) && account.rolloverConversions.length > 0) {
         d.rolloverConversions = account.rolloverConversions.map(l => ({ ...l }));
       }
+    }
+    // LoanAccount (liability) fields (design 54).
+    if (account.type === 'loan') {
+      d.interestRate      = account.interestRate      ?? 0;
+      d.monthlyPayment    = account.monthlyPayment    ?? 0;
+      d.linkedPropertyKey = account.linkedPropertyKey ?? null;
+      d.paymentSourceKey  = account.paymentSourceKey  ?? null;
     }
     // Holdings (design 25 §8). Round-trip via Holding.toJSON; null when
     // absent so legacy configs (no holdings field) round-trip unchanged
@@ -906,19 +923,29 @@ export class ScenarioSerializer {
       country:          d.country          ?? null,
       currency:         d.currency         ?? null,
     };
-    // Investment-specific opts
+    // InvestmentAccount base opt (brokerage + retirement) — independent of the
+    // basis ledger (design 53 §2).
+    if (d.loanBalance !== undefined) opts.loanBalance = d.loanBalance;
+    // RetirementAccount ledger opts.
     if (d.contributionBasis !== undefined) {
       opts.contributionBasis = d.contributionBasis;
       opts.earningsBasis     = d.earningsBasis ?? 0;
-      opts.loanBalance       = d.loanBalance   ?? 0;
       // Only set minimumAge when the serialized value is non-null; otherwise let
       // the subclass constructor apply its own default (59.5, 60, etc.).
       if (d.minimumAge != null) opts.minimumAge = d.minimumAge;
+    }
+    // LoanAccount (liability) opts (design 54).
+    if (d.__type === 'LoanAccount') {
+      opts.interestRate      = d.interestRate      ?? 0;
+      opts.monthlyPayment    = d.monthlyPayment    ?? 0;
+      opts.linkedPropertyKey = d.linkedPropertyKey ?? null;
+      opts.paymentSourceKey  = d.paymentSourceKey  ?? null;
     }
     let account;
     switch (d.__type) {
       case 'CheckingAccount':       account = new CheckingAccount       ((d.balance ?? d.initialValue) ?? 0, opts); break;
       case 'SavingsAccount':        account = new SavingsAccount        ((d.balance ?? d.initialValue) ?? 0, opts); break;
+      case 'LoanAccount':           account = new LoanAccount           ((d.balance ?? d.initialValue) ?? 0, opts); break;
       case 'BrokerageAccount':      account = new BrokerageAccount      ((d.balance ?? d.initialValue) ?? 0, opts); break;
       case 'FourOhOneKAccount':     account = new FourOhOneKAccount     ((d.balance ?? d.initialValue) ?? 0, opts); break;
       case 'RothAccount':           account = new RothAccount           ((d.balance ?? d.initialValue) ?? 0, opts); break;

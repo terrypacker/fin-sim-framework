@@ -13,7 +13,11 @@ import { bindParamLinkedField } from '../scenario/param-linked-field.js';
 import { defaultCurrencyForCountry } from '../../finance/country-codes.js';
 
 const FIXED_COUNTRY    = new Set(['401k', 'roth', 'ira', 'super']);
+// Holdings-bearing types (brokerage + retirement) — drive holdings-editor visibility.
 const INVESTMENT_TYPES = new Set(['brokerage', '401k', 'roth', 'ira', 'super']);
+// Types carrying the contribution/earnings ledger — the only ones that show (and
+// persist) the basis fields (design 53 §2). Brokerage is holdings-only.
+const RETIREMENT_TYPES = new Set(['401k', 'roth', 'ira', 'super']);
 const ALLOCATIONS      = ['EQUITY', 'BOND', 'CASH', 'OTHER'];
 
 /**
@@ -313,10 +317,15 @@ export class AccountEditor extends BaseComponent {
       ownerId:          el.querySelector('[data-id="ownerId"]').value || null,
       minimumBalance:   el.querySelector('[data-id="minimumBalance"]').value,
       drawdownPriority: el.querySelector('[data-id="drawdownPriority"]').value,
-      contributionBasis:el.querySelector('[data-id="contributionBasis"]').value,
-      earningsBasis:    el.querySelector('[data-id="earningsBasis"]').value,
       holdings,
     };
+    // Basis ledger only exists on retirement accounts (design 53 §2); emitting it for
+    // a brokerage would re-add the field via the update path. Gate on type.
+    const type = data.type;
+    if (RETIREMENT_TYPES.has(type)) {
+      data.contributionBasis = el.querySelector('[data-id="contributionBasis"]').value;
+      data.earningsBasis     = el.querySelector('[data-id="earningsBasis"]').value;
+    }
     // Param-backed fields are owned by their scenario param (design/32) — drop
     // them so the service update doesn't write a competing value on the account.
     for (const f of this._linkedFields) delete data[f];
@@ -327,7 +336,7 @@ export class AccountEditor extends BaseComponent {
 
   _applyTypeVisibility(el, type) {
     el.querySelector('[data-id="countryRow"]').style.display      = FIXED_COUNTRY.has(type)    ? 'none' : '';
-    el.querySelector('[data-id="investmentFields"]').style.display = INVESTMENT_TYPES.has(type) ? ''    : 'none';
+    el.querySelector('[data-id="investmentFields"]').style.display = RETIREMENT_TYPES.has(type) ? ''    : 'none';
 
     const holdingsSection = el.querySelector('[data-id="holdingsSection"]');
     if (holdingsSection) {

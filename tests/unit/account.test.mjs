@@ -18,7 +18,7 @@ import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
 import { Account } from '../../src/finance/assets/account.js';
-import { InvestmentAccount } from '../../src/finance/assets/investment-account.js';
+import { InvestmentAccount, RetirementAccount } from '../../src/finance/assets/investment-account.js';
 import { AccountService }   from '../../src/finance/services/account-service.js';
 import { Person }           from '../../src/finance/person.js';
 import {Graph} from "../../src/graph/graph.js";
@@ -231,21 +231,21 @@ test('AccountService.isWithdrawalEligible: returns true when account has no mini
 
 test('AccountService.isWithdrawalEligible: returns false below minimumAge', () => {
   const svc2  = new AccountService(new Graph(), new EventBus());
-  const roth  = new InvestmentAccount(50000, { minimumAge: 60 });
+  const roth  = new RetirementAccount(50000, { minimumAge: 60 });
   const young = new Person('p1', new Date(1990, 0, 1)); // age 36 in 2026
   assert.strictEqual(svc2.isWithdrawalEligible(roth, young, new Date(2026, 0, 15)), false);
 });
 
 test('AccountService.isWithdrawalEligible: returns true at or above minimumAge', () => {
   const svc2 = new AccountService(new Graph(), new EventBus());
-  const roth = new InvestmentAccount(50000, { minimumAge: 60 });
+  const roth = new RetirementAccount(50000, { minimumAge: 60 });
   const p    = new Person('p1', new Date(1966, 0, 1)); // turns 60 on 2026-01-01
   assert.strictEqual(svc2.isWithdrawalEligible(roth, p, new Date(2026, 1, 1)), true);
 });
 
 test('AccountService.isWithdrawalEligible: 59.5 gate for 401k style accounts', () => {
   const svc2 = new AccountService(new Graph(), new EventBus());
-  const k401 = new InvestmentAccount(100000, { minimumAge: 59.5 });
+  const k401 = new RetirementAccount(100000, { minimumAge: 59.5 });
   // Clearly above 59.5 — born 1966, age ~60 in 2026
   const older   = new Person('p1', new Date(1966, 0, 1));
   assert.strictEqual(svc2.isWithdrawalEligible(k401, older, new Date(2026, 3, 1)), true);

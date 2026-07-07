@@ -47,6 +47,7 @@ export const ACCOUNT_TYPE = Object.freeze({
   ROTH:            'roth',
   TRADITIONAL_IRA: 'ira',
   SUPER:           'super',
+  LOAN:            'loan',
 });
 
 /**
@@ -135,5 +136,35 @@ export class SavingsAccount extends Account {
    */
   constructor(balance = 0, opts = {}) {
     super(balance, { ...opts, type: ACCOUNT_TYPE.SAVINGS });
+  }
+}
+
+/**
+ * LoanAccount — a *liability* account (design 54). `balance` holds the outstanding
+ * principal as a POSITIVE number (owed); the sign is applied by the wealth metrics,
+ * which subtract a `type === 'loan'` account's balance (design 54 §2/§7). Accrues
+ * interest each period and amortizes into interest vs principal (LOAN_PAYMENT).
+ *
+ * Never a source of drawdown cash: `drawdownPriority` is forced null and the
+ * drawdown/replenish pools exclude loans by type (design 54 §8).
+ *
+ * No methods; safe for structuredClone snapshots.
+ */
+export class LoanAccount extends Account {
+  /**
+   * @param {number} balance - Outstanding principal (positive; default 0)
+   * @param {object} [opts]  - All Account opts, plus:
+   * @param {number}      [opts.interestRate=0]        - Annual interest rate (decimal)
+   * @param {number}      [opts.monthlyPayment=0]      - Fixed monthly P&I payment
+   * @param {string|null} [opts.linkedPropertyKey=null] - stateKey of a property this loan finances (design 54 P2)
+   * @param {string|null} [opts.paymentSourceKey=null]  - cash pool the payment debits (default: country cash)
+   */
+  constructor(balance = 0, opts = {}) {
+    super(balance, { ...opts, type: ACCOUNT_TYPE.LOAN });
+    this.interestRate      = opts.interestRate      ?? 0;
+    this.monthlyPayment    = opts.monthlyPayment    ?? 0;
+    this.linkedPropertyKey = opts.linkedPropertyKey ?? null;
+    this.paymentSourceKey  = opts.paymentSourceKey  ?? null;
+    this.drawdownPriority   = null; // a liability is never a source of drawdown cash
   }
 }

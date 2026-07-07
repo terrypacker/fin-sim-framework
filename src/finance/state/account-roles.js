@@ -29,4 +29,7 @@ export const ACCOUNT_ROLES = Object.freeze({
   AU_FIXED_INCOME: 'au-fixed-income',
   AU_STOCK:        'au-stock',
   SUPER:           'super',
+  // Liability accounts (design 54) — per country for currency + cash-pool resolution.
+  US_LOAN:         'us-loan',
+  AU_LOAN:         'au-loan',
 });

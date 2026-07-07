@@ -89,10 +89,10 @@ export class FixedIncomeEarningsApplyReducer extends AccountServiceReducer {
 
 // ─── Stock Reducers ───────────────────────────────────────────────────────────
 
-/** EVT-12: Stock contribution — debit US cash pool, credit contributionBasis, no tax. */
+/** EVT-12: Stock contribution — debit US cash pool, credit the stock account, no tax. */
 export class StockContributionApplyReducer extends AccountServiceReducer {
   static type        = 'StockContributionApplyReducer';
-  static description = 'Debits the US cash pool and credits stock contributionBasis; no tax effect.';
+  static description = 'Debits the US cash pool and credits the stock account (balance + holdings); no tax effect.';
   static actionType  = 'STOCK_CONTRIBUTION_APPLY';
 
   constructor({ accountService }) {
@@ -104,21 +104,20 @@ export class StockContributionApplyReducer extends AccountServiceReducer {
   reduce(state, action) {
     this.accountService.transaction(usCash(state), -action.amount, null);
     const key = action.stateKey ?? 'usStockAccount';
-    const sa = state[key];
-    this.accountService.transaction(sa, action.amount, null);
-    return this.newState(state, {
-      [key]: { ...sa, contributionBasis: sa.contributionBasis + action.amount },
-    });
+    // transaction() credits balance and distributes to holdings in place (design 25).
+    // Brokerage basis is no longer tracked here — CGT comes from holdings (design 53 P1).
+    this.accountService.transaction(state[key], action.amount, null);
+    return this.newState(state, {});
   }
 }
 
 /**
- * EVT-13: Stock dividend — stays in account, increases both bases.
+ * EVT-13: Stock dividend — stays in account (reinvested into holdings).
  * Chains STOCK_DIVIDEND_TAX (US ordinary income, AU ordinary if resident).
  */
 export class StockDividendApplyReducer extends AccountServiceReducer {
   static type        = 'StockDividendApplyReducer';
-  static description = 'Adds dividend to stock balance and both bases; chains STOCK_DIVIDEND_TAX.';
+  static description = 'Adds dividend to stock balance and reinvests into holdings; chains STOCK_DIVIDEND_TAX.';
   static actionType  = 'STOCK_DIVIDEND_APPLY';
 
   constructor({ accountService }) {  // accountService unused but accepted for API symmetry
@@ -136,14 +135,12 @@ export class StockDividendApplyReducer extends AccountServiceReducer {
       {
         [key]: {
           ...sa,
-          balance:           sa.balance           + amount,
-          contributionBasis: sa.contributionBasis + amount,
-          earningsBasis:     sa.earningsBasis     + amount,
+          balance:  sa.balance + amount,
           // Reinvest the dividend into the holdings so Σ marketValue tracks the
           // balance credit (§4.4 invariant). Without this the scalar balance
           // credit desyncs from holdings and is discarded by the next earnings
-          // _syncBalance. Basis rises with the reinvested cash.
-          holdings:          distributeHoldingsCredit(sa.holdings, amount),
+          // _syncBalance. (Brokerage basis is no longer tracked — design 53 P1.)
+          holdings: distributeHoldingsCredit(sa.holdings, amount),
         },
       },
       [{ type: 'STOCK_DIVIDEND_TAX', amount, residency }]
@@ -154,7 +151,7 @@ export class StockDividendApplyReducer extends AccountServiceReducer {
 /** EVT-14: Stock earnings (unrealized) — stay in account, no tax. */
 export class StockEarningsApplyReducer extends AccountServiceReducer {
   static type        = 'StockEarningsApplyReducer';
-  static description = 'Adds unrealized earnings to stock balance and earningsBasis; no tax effect.';
+  static description = 'Adds unrealized earnings to stock balance; no tax effect.';
   static actionType  = 'STOCK_EARNINGS_APPLY';
 
   constructor({ accountService }) {  // accountService unused but accepted for API symmetry
@@ -166,11 +163,7 @@ export class StockEarningsApplyReducer extends AccountServiceReducer {
     const key = action.stateKey ?? 'usStockAccount';
     const sa = state[key];
     return this.newState(state, {
-      [key]: {
-        ...sa,
-        balance:       sa.balance       + action.amount,
-        earningsBasis: sa.earningsBasis + action.amount,
-      },
+      [key]: { ...sa, balance: sa.balance + action.amount },
     });
   }
 }
@@ -210,18 +203,16 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
 
     this.accountService.transaction(usCash(state), salePrice, null);
 
-    const newBalance  = +newHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
-    const newEarnings = Math.max(0, (sa.earningsBasis ?? 0) - gain);
-    const newContrib  = newBalance - newEarnings;
+    const newBalance = +newHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
+    // Brokerage basis is no longer tracked (design 53 P1) — the FIFO realizedBasis
+    // above is the authoritative CGT source.
     return this.newState(
       state,
       {
         [key]: {
           ...sa,
-          balance:           newBalance,
-          holdings:          newHoldings,
-          contributionBasis: newContrib,
-          earningsBasis:     newEarnings,
+          balance:  newBalance,
+          holdings: newHoldings,
         },
       },
       [{ type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, residency, proceeds: salePrice, costBasis: realizedBasis, description: sa.name || key }]

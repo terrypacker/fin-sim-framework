@@ -30,8 +30,11 @@ export function computeNetWorth(state, baseCurrency = 'USD') {
     const currency = val.currency?.code ?? val.currency ?? baseCurrency;
     let contribution = 0;
 
-    if (typeof val.balance === 'number') {
-      // Account
+    if (val.type === 'loan' && typeof val.balance === 'number') {
+      // Liability (design 54): owed principal reduces net worth.
+      contribution = -val.balance;
+    } else if (typeof val.balance === 'number') {
+      // Account (asset)
       contribution = val.balance;
     } else if (val.kind === 'real-property' && typeof val.value === 'number') {
       // RealProperty: equity only

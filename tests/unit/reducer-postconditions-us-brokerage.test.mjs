@@ -81,29 +81,27 @@ test('FixedIncomeEarnings: scalar balance increment, input not mutated (I1)', ()
 
 // ─── Stock ────────────────────────────────────────────────────────────────────
 
-test('StockContribution: cash debit + account credit (+basis), synced + conserved (I3/I5)', () => {
-  const state = { usSavingsAccount: usCashAcct(20000), usStockAccount: acct('usStockAccount', 40000, { contributionBasis: 40000, earningsBasis: 0 }) };
+test('StockContribution: cash debit + account credit, synced + conserved (I3/I5)', () => {
+  const state = { usSavingsAccount: usCashAcct(20000), usStockAccount: acct('usStockAccount', 40000) };
   const { next } = runAcct(new StockContributionApplyReducer(makeServices()), state,
     { type: 'STOCK_CONTRIBUTION_APPLY', amount: 6000 }, { conserve: ['usSavingsAccount', 'usStockAccount'], fee: 0 });
   assert.equal(next.usStockAccount.balance, 46000);
-  assert.equal(next.usStockAccount.contributionBasis, 46000);
+  // Brokerage basis is no longer tracked (design 53 P1) — balance is holdings-backed.
+  assert.equal(sumHoldings(next.usStockAccount), 46000);
 });
 
 test('StockDividend: reinvested into holdings, balance == Σmv (§4.4, single account)', () => {
-  const state = { usStockAccount: acct('usStockAccount', 40000, { contributionBasis: 30000, earningsBasis: 10000 }) };
+  const state = { usStockAccount: acct('usStockAccount', 40000) };
   const { next } = runAcct(new StockDividendApplyReducer({}), state,
     { type: 'STOCK_DIVIDEND_APPLY', amount: 800, residency: 'US' });
   assert.equal(next.usStockAccount.balance, 40800);
   assert.equal(sumHoldings(next.usStockAccount), 40800);
-  assert.equal(next.usStockAccount.contributionBasis, 30800);
-  assert.equal(next.usStockAccount.earningsBasis, 10800);
 });
 
-test('StockEarnings: scalar balance + earningsBasis, input not mutated (I1)', () => {
-  const state = { usStockAccount: acct('usStockAccount', 40000, { earningsBasis: 0 }) };
+test('StockEarnings: scalar balance increment, input not mutated (I1)', () => {
+  const state = { usStockAccount: acct('usStockAccount', 40000) };
   const next = new StockEarningsApplyReducer({}).reduce(state, { type: 'STOCK_EARNINGS_APPLY', amount: 4000, stateKey: 'usStockAccount' });
   assert.equal(next.usStockAccount.balance, 44000);
-  assert.equal(next.usStockAccount.earningsBasis, 4000);
   assert.equal(state.usStockAccount.balance, 40000, 'I1');
 });
 

@@ -128,21 +128,19 @@ for (const [label, Reducer, type] of [
   ['AuDividendUnfrankedResident', AuDividendUnfrankedResidentApplyReducer, 'AU_DIVIDEND_UNFRANKED_RESIDENT_APPLY'],
   ['AuDividendUnfrankedNonResident', AuDividendUnfrankedNonResidentApplyReducer, 'AU_DIVIDEND_UNFRANKED_NONRESIDENT_APPLY'],
 ]) {
-  test(`${label}: scalar balance + both bases, input not mutated (I1; §4.4 event-level)`, () => {
-    const state = { auStockAccount: acct('auStockAccount', 40000, 'AUD', { contributionBasis: 30000, earningsBasis: 10000 }) };
+  test(`${label}: scalar balance increment, input not mutated (I1; §4.4 event-level)`, () => {
+    const state = { auStockAccount: acct('auStockAccount', 40000, 'AUD') };
     const next = new Reducer({}).reduce(state, { type, amount: 700 });
+    // Brokerage basis is no longer tracked (design 53 P1).
     assert.equal(next.auStockAccount.balance, 40700);
-    assert.equal(next.auStockAccount.contributionBasis, 30700);
-    assert.equal(next.auStockAccount.earningsBasis, 10700);
     assert.equal(state.auStockAccount.balance, 40000, 'I1');
   });
 }
 
-test('AuStockEarnings: scalar balance + earningsBasis, input not mutated (I1)', () => {
-  const state = { auStockAccount: acct('auStockAccount', 40000, 'AUD', { earningsBasis: 0 }) };
+test('AuStockEarnings: scalar balance increment, input not mutated (I1)', () => {
+  const state = { auStockAccount: acct('auStockAccount', 40000, 'AUD') };
   const next = new AuStockEarningsApplyReducer({}).reduce(state, { type: 'AU_STOCK_EARNINGS_APPLY', amount: 3500 });
   assert.equal(next.auStockAccount.balance, 43500);
-  assert.equal(next.auStockAccount.earningsBasis, 3500);
   assert.equal(state.auStockAccount.balance, 40000, 'I1');
 });
 

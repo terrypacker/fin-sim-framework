@@ -16,6 +16,7 @@ import { AuHouseSaleApplyReducer, AuHouseSaleHandler } from './finance/account-r
 import { AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer, AuSavingsContributionHandler, AuSavingsWithdrawalHandler, AuSavingsEarningsHandler } from './finance/account-rules/au/au-savings-classes.js';
 import { SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer, SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperContributionHandler, SuperWithdrawalContributionsHandler, SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler } from './finance/account-rules/au/au-super-classes.js';
 import { BaseAccountModule } from './finance/account-rules/base-account-module.js';
+import { LoanPaymentHandler, LoanPaymentApplyReducer } from './finance/account-rules/loan-classes.js';
 import { UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer, AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer } from './finance/account-rules/mortgage-payment-classes.js';
 import { computeRentalMonth, UsRentalIncomeHandler, UsRentalIncomeApplyReducer, AuRentalIncomeHandler, AuRentalIncomeApplyReducer } from './finance/account-rules/rental-income-classes.js';
 import { ScheduledEarlyWithdrawalApplyReducer, EarlyWithdrawalPolicyHandler } from './finance/account-rules/us/early-withdrawal-classes.js';
@@ -34,11 +35,11 @@ import { getUsEarlyWithdrawalRules } from './finance/account-rules/us/us-early-w
 import { SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer, SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer, SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler, SeIncomeUsHandler, BonusHandler, CompanySaleHandler } from './finance/account-rules/us/us-income-classes.js';
 import { UsHouseSaleApplyReducer, UsHouseSaleHandler } from './finance/account-rules/us/us-real-property-classes.js';
 import { getUniformDistributionPeriod } from './finance/account-rules/us/us-rmd-uniform-table.js';
-import { USD, AUD, ACCOUNT_TYPE, InsufficientFundsError, Account, CheckingAccount, SavingsAccount } from './finance/assets/account.js';
+import { USD, AUD, ACCOUNT_TYPE, InsufficientFundsError, Account, CheckingAccount, SavingsAccount, LoanAccount } from './finance/assets/account.js';
 import { Asset } from './finance/assets/asset.js';
 import { Collectible } from './finance/assets/collectible.js';
 import { CompanyEquity } from './finance/assets/company-equity.js';
-import { reconcileLedgerToBalance, InvestmentAccount, BrokerageAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from './finance/assets/investment-account.js';
+import { reconcileLedgerToBalance, InvestmentAccount, BrokerageAccount, RetirementAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from './finance/assets/investment-account.js';
 import { RealProperty } from './finance/assets/real-property.js';
 import { AssetLocationRebalanceApplyReducer } from './finance/behavioral/asset-location-rebalance-apply-reducer.js';
 import { BehavioralPanicSellApplyReducer } from './finance/behavioral/behavioral-panic-sell-apply-reducer.js';
@@ -219,6 +220,7 @@ import { StateTaxSettleHandler, StateTaxSettleApplyReducer, StateTaxPaymentDebit
 import { StateTaxSettleService } from './finance/tax/state/state-tax-settle-service.js';
 import { TaxDocumentRegistry } from './finance/tax/tax-document-registry.js';
 import { TaxEngine } from './finance/tax/tax-engine.js';
+import { toCcy, toUSD, toAUD } from './finance/tax/tax-fx.js';
 import { UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from './finance/tax/tax-settle-classes.js';
 import { UsTaxDocument2024 } from './finance/tax/us/us-tax-document-2024.js';
 import { UsTaxDocument2025 } from './finance/tax/us/us-tax-document-2025.js';
@@ -457,6 +459,8 @@ export const Finance = {
   SuperWithdrawalEarningsHandler,
   SuperEarningsDirectHandler,
   BaseAccountModule,
+  LoanPaymentHandler,
+  LoanPaymentApplyReducer,
   UsMortgagePaymentHandler,
   UsMortgagePaymentApplyReducer,
   AuMortgagePaymentHandler,
@@ -555,12 +559,14 @@ export const Finance = {
   Account,
   CheckingAccount,
   SavingsAccount,
+  LoanAccount,
   Asset,
   Collectible,
   CompanyEquity,
   reconcileLedgerToBalance,
   InvestmentAccount,
   BrokerageAccount,
+  RetirementAccount,
   FourOhOneKAccount,
   RothAccount,
   TraditionalIRAAccount,
@@ -878,6 +884,9 @@ export const Finance = {
   StateTaxSettleService,
   TaxDocumentRegistry,
   TaxEngine,
+  toCcy,
+  toUSD,
+  toAUD,
   UsTaxSettleHandler,
   AuTaxSettleHandler,
   UsTaxSettleApplyReducer,

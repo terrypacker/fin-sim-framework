@@ -1,6 +1,13 @@
 # 54 — Loan (liability) accounts + offset re-targeting
 
-**Status**: **Proposed** (design only).
+**Status**: **Phase 1 implemented** (2026-07-07); Phases 2–3 proposed.
+
+Phase 1 landed: `LoanAccount` (liability, `ACCOUNT_TYPE.LOAN`, `US_LOAN`/`AU_LOAN` roles),
+the `LOAN_PAYMENT` handler+reducer (interest/principal split + negative-amort flag),
+net-worth/after-tax liability branches, drawdown/replenish exclusion, serializer +
+schema-registry wiring, and `tests/unit/evt-loan.test.mjs`. Also fixed a design-53-§2
+serializer regression (brokerage `loanBalance` was gated on the now-absent
+`contributionBasis`).
 
 Promote a mortgage from three scalar fields on `RealProperty` to a first-class **Loan**
 account: a *liability* that accrues real interest each period and amortizes into interest
@@ -220,20 +227,49 @@ loan balance; drawdown never draws from a loan.
 
 ### Phase 2 — Property migration
 *Move property mortgages onto linked loans; keep existing figures intact.*
+**Status (2026-07-07): analysis + scaffolding landed; the invasive migration is pending.**
 
-1. `linkedPropertyKey` linkage + editor (property picker on a loan; loan picker / auto-link
-   on a property).
-2. Migrate `UsMortgagePaymentHandler` / `AuMortgagePaymentHandler` to operate on the linked
-   `LoanAccount` (§5.1); wire the rental deductible-interest line to the linked loan (§5.2).
-3. Migration-on-load shim (§5.5) + double-count guard (§7).
-4. Bootstrap: toolset seeding creates a linked `LoanAccount` instead of scalar mortgage
-   fields.
-5. Tests: `evt-real-property` rental + payment figures **unchanged** after migration (a
-   synthesized/linked loan reproduces today's numbers); a legacy-scalar property fixture
-   round-trips and upgrades on load without changing net worth.
+Findings from grounding the plan in the code (these refine §5):
 
-**Exit test**: `evt-real-property` green with the loan as the mortgage source of truth; a
-legacy save loads, upgrades, and reports identical net worth.
+- **Blast radius is safe.** No *tested* config combines `mortgageInterestRate > 0` with
+  monthly payments: rental tests use `monthlyMortgage: 0` (interest only for the deduction),
+  payment tests use `mortgageInterestRate: 0` (interest-free amortization). So a faithful
+  loan keeps every current figure identical; real amortization diverges only in the
+  currently-untested rate>0-plus-payments case (which becomes correct).
+- **Loan as a plain state entry.** The toolset synthesizes the loan the way it synthesizes
+  a property — a plain state entry keyed `${propKey}Loan` (helper `synthesizeLoanForProperty`,
+  looked up by `findLoanForProperty`, both in `loan-classes.js`). Not a registered Account;
+  net-worth / payment / drawdown all key on `type === 'loan'`, not the class.
+- **Zero the property scalars → no guard.** `_propertyToStatePlain` zeroes
+  `mortgageBalance` / `monthlyMortgage` (and drops `mortgageInterestRate` into the loan), so
+  `value − mortgageBalance` = `value − 0` and the loan's `−balance` is the sole debt. No
+  double-count, no §7 guard needed.
+- **Extra touch point (not in the original §5):** the **house-sale payoff** reads
+  `property.mortgageBalance` in `us/au-real-property-classes.js` and `real-property-service.js`
+  — zeroing the scalar breaks it, so the sale must pay off / close the linked loan too.
+- **Per-country event wiring.** The P1 `LoanPaymentHandler` scans *all* loans, so scheduling
+  it from both US and AU real-property toolsets would double-pay. Mirror the existing
+  `US_MORTGAGE_PAYMENT` / `AU_MORTGAGE_PAYMENT` split: distinct `US_LOAN_PAYMENT` /
+  `AU_LOAN_PAYMENT` events with a **country-filtered** `LoanPaymentHandler({ country })`
+  (default null = all loans, preserving P1). One shared `LoanPaymentApplyReducer`.
+
+Remaining work (atomic — can't be cleanly half-done):
+1. US + AU real-property toolsets: synthesize the loan state entry, zero the property mortgage
+   scalars, schedule `US_LOAN_PAYMENT` / `AU_LOAN_PAYMENT`, wire the country-filtered handler
+   + shared reducer, register the loan types; retire the US/AU mortgage-payment classes for
+   properties.
+2. `computeRentalMonth` → read `findLoanForProperty(...).effPrincipal × rate / 12`.
+3. House sale (US/AU classes + `real-property-service.js`) → pay off / close the linked loan.
+4. Migration-on-load shim (§5.5): a saved property with a legacy `mortgageBalance` and no
+   linked loan synthesizes one on deserialize.
+5. Tests: move mortgage-payment + house-sale assertions from `property.mortgageBalance` to the
+   loan balance (figures identical); legacy-scalar fixture upgrades on load.
+
+**Landed scaffolding (green, unused):** `loanKeyForProperty`, `findLoanForProperty`,
+`synthesizeLoanForProperty`, and an exported `effectivePrincipal` in `loan-classes.js`.
+
+**Exit test**: `evt-real-property` + `toolset-mortgage-payment` green with the loan as the
+mortgage source of truth; a legacy save loads, upgrades, and reports identical net worth.
 
 ### Phase 3 — Offset re-target (design 53 → loan)
 *Depends on 53's `OffsetAccount` existing.*

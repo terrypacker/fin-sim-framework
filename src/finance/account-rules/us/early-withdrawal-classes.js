@@ -126,15 +126,14 @@ export class ScheduledEarlyWithdrawalApplyReducer extends AccountServiceReducer 
     // ROTH class: contributions first (penalty-free), then earnings (penalty).
     drawFrom(rothKey, rothAmount);
 
-    // Land the net cash in the destination. Brokerage carries a contribution/
-    // earnings ledger separate from holdings: the deposited cash is all cost
-    // basis (zero unrealized gain), so it bumps contributionBasis only — which
-    // is exactly what the AU step-up (design 36 §12.2) keys off at the move.
+    // Land the net cash in the destination brokerage. The deposit is all cost
+    // basis (zero unrealized gain): svc.transaction credits balance and the
+    // holdings absorb the cash at costBasis == marketValue (design 53 P1), which
+    // is what the AU residency step-up (design 36 §12.2) keys off per-lot at the
+    // move. Brokerage no longer carries a contribution/earnings ledger (design 53 §2).
     if (netTotal > 1e-9) {
       svc.transaction(dest, +netTotal, date);
-      patch[destinationKey] = ('contributionBasis' in dest)
-        ? { ...dest, contributionBasis: (dest.contributionBasis ?? 0) + netTotal }
-        : { ...dest };
+      patch[destinationKey] = { ...dest };
     }
 
     return this.newState(state, patch, taxActions);

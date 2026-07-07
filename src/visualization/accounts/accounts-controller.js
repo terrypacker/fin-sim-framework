@@ -14,8 +14,10 @@ import { USD, AUD }       from '../../finance/assets/account.js';
 // Account types whose country/currency are variable (US or AU).
 const VARIABLE_COUNTRY = new Set(['checking', 'savings', 'brokerage']);
 
-// Account types that are investment accounts (have contributionBasis / earningsBasis).
-const INVESTMENT_TYPES = new Set(['brokerage', '401k', 'roth', 'ira', 'super']);
+// Retirement account types — the only ones carrying the contribution/earnings
+// ledger (design 53 §2). Brokerage is holdings-only and its builder has no basis
+// setters, so it must be excluded from the basis-write path below.
+const RETIREMENT_TYPES = new Set(['401k', 'roth', 'ira', 'super']);
 
 /** Map a currency code string to its descriptor ({code, symbol}); null when unknown. */
 function _currencyDescriptor(code) {
@@ -69,7 +71,7 @@ export class AccountsController {
       if (cur) builder.currency(cur);
     }
 
-    if (INVESTMENT_TYPES.has(data.type)) {
+    if (RETIREMENT_TYPES.has(data.type)) {
       if (data.contributionBasis != null && data.contributionBasis !== '') {
         builder.contributionBasis(Number(data.contributionBasis));
       }

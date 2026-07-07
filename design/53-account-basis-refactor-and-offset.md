@@ -43,15 +43,28 @@ The codebase tracks **two** things called "basis" that answer different tax ques
 Holdings cannot replace the contribution/earnings split for retirement accounts —
 those accounts pay ordinary income on the *growth* portion, not capital gains, so
 `costBasis` is the wrong quantity. Conversely, for **brokerage** the split is now
-**dead**: since holdings landed, `STOCK_WITHDRAWAL_APPLY` computes the real CGT from
-`consumeHoldingsFifo(sa.holdings, salePrice)` (`us-brokerage-classes.js:202-208`), and
-the after-tax `TAXABLE_BASIS` path reads holdings (`_unrealizedGain`, `after-tax.js:175`).
-The brokerage reducers still *write* `contributionBasis` / `earningsBasis` in parallel
-(`newContrib = newBalance − newEarnings`, `us-brokerage-classes.js:214-224`;
-`au-brokerage-classes.js:200-210`) but nothing *reads* them for tax. They are
-**write-only bookkeeping** — the redundancy behind the confusing `C.Basis` / `E.Basis`
-fields the editor shows for *every* investment type (`index.html:662-671`, gated by
-`INVESTMENT_TYPES` in `accounts-controller.js:18`).
+*redundant* with holdings — but **not fully dead**, and the original draft of this doc
+was wrong to call it "write-only bookkeeping." Two paths still **read** brokerage
+`earningsBasis` (verified 2026-07-07, correcting the claim):
+
+- **Engine auto-liquidation** — `AccountService._drawPenaltyFree` (`account-service.js:897`)
+  computes a *proportional* capital gain from `earningsBasis / balance` when the sim draws
+  down a brokerage account for cash, emits `STOCK_WITHDRAWAL_TAX`, and updates both basis
+  fields. This is distinct from the event-driven `STOCK_WITHDRAWAL_APPLY` reducer, which
+  *does* use holdings FIFO.
+- **Residency cost-base step-up** — `recordResidencyChange` (`account-service.js:388`)
+  stamps `costBaseStepUpByCountry[country] = earningsBasis` (pre-move unrealized gain) for
+  that same proportional path.
+
+So the true state is: the *manual-sale* reducer (`consumeHoldingsFifo`,
+`us-brokerage-classes.js:202-208`) and the after-tax `TAXABLE_BASIS` path (`_unrealizedGain`,
+`after-tax.js:175`) are holdings-based, but the *auto-liquidation* path still keys CGT off
+`earningsBasis`. **Phase 1 therefore has to migrate those two readers to holdings FIFO
+(the same `consumeHoldingsFifo` the reducer uses) before the writes can be removed** — see
+the expanded Phase 1 below. Only then is brokerage basis genuinely unread. The editor's
+`C.Basis` / `E.Basis` fields (`index.html:662-671`, gated by `INVESTMENT_TYPES` in
+`accounts-controller.js:18`) show for *every* investment type — the confusing redundancy §2
+removes.
 
 ### Current hierarchy
 
@@ -350,23 +363,38 @@ row's allocation (decided — §5.3).
 Ordered so each phase is independently shippable and green.
 
 ### Phase 1 — Decouple brokerage from contribution/earnings basis
-*Prerequisite for Q2. No hierarchy change yet.*
+*Prerequisite for Q2. No hierarchy change yet.* **Scope expanded** after finding two live
+readers (§1) — this phase must migrate them to holdings FIFO, not just delete writes.
 
-1. Rewrite `StockWithdrawalApplyReducer` (US + AU) to drop the parallel
-   `contributionBasis` / `earningsBasis` writes — they already compute the authoritative
-   result from holdings. Keep the `holdings` + `balance` writes.
-2. Same for the contribution / dividend / earnings apply reducers: stop maintaining the
-   two basis fields on brokerage state (`us-brokerage-classes.js:110,140-141,172,214-224`;
+1. **Migrate the auto-liquidation reader to FIFO** (`account-service.js:_drawPenaltyFree`,
+   the brokerage branch ~`:897`): replace the `earningsBasis / balance` gain-ratio with
+   `consumeHoldingsFifo(account.holdings, withdraw)` computed **before** the debit (the
+   `transaction()` debit at `:892` already pro-rata-consumes holdings, so snapshot the FIFO
+   result first, then overwrite `account.holdings` with `newHoldings`). Derive `gain` /
+   `auGain` from `realizedBasis` / `realizedBasisByCountry.AU`, exactly as the reducer does.
+   Drop the `earningsBasis` / `contributionBasis` / `costBaseStepUpByCountry` mutations.
+2. **Drop the residency step-up's account-level stamp** (`account-service.js:388`): the
+   per-lot `holding.costBaseByCountry` stamp (`:390-397`) already feeds FIFO, so the
+   account-level `costBaseStepUpByCountry = earningsBasis` line is now dead — remove it.
+   `costBaseStepUpByCountry` keeps only its (harmless, unread) persisted/display presence.
+3. Rewrite `StockWithdrawalApplyReducer` (US + AU) to drop the parallel
+   `contributionBasis` / `earningsBasis` writes — the FIFO result is authoritative. Keep the
+   `holdings` + `balance` writes.
+4. Same for the contribution / dividend / earnings apply reducers: stop maintaining the two
+   basis fields on brokerage state (`us-brokerage-classes.js:110,140-141,172,214-224`;
    `au-brokerage-classes.js:44-45,72-73,102-103,134-135,160,200-210`).
-3. Verify nothing reads brokerage `earningsBasis` / `contributionBasis`: after-tax
-   `TAXABLE_BASIS` uses holdings; CGT uses FIFO. Grep + a targeted brokerage evt test to
-   confirm tax unchanged (`evt-us-brokerage`, `evt-au-brokerage`, `basis-invariants`,
-   `reducer-postconditions-*-brokerage`).
-4. Stop serializing the two fields for brokerage (`scenario-serializer.js:619-621`,
-   toolset `_serialize*` helpers) — leave the retirement path untouched.
+5. Update the brokerage evt tests that assert basis **outputs** (`evt-us-brokerage`
+   EVT-12/13/14; `evt-au-brokerage` EVT-30) to assert balance/holdings instead; basis as
+   **input config** stays. `basis-invariants` is retirement-only and untouched.
+6. **Deferred to Phase 2** (documented reordering): serializer (`scenario-serializer.js:619`)
+   and schema/display (`state-schema-registry.js:313`) removal. In Phase 1 the field still
+   physically exists on the brokerage prototype (via `InvestmentAccount`), so serializing a
+   frozen, unread value is harmless; the field — and thus its serialization/display — leaves
+   naturally when Phase 2 reparents `BrokerageAccount`.
 
-**Exit test**: brokerage evt suites + basis-invariants green with the fields absent from
-brokerage state.
+**Exit test**: brokerage evt suites + `basis-invariants` + the residency/cross-border
+drawdown suites (`change-residency`, `toolset-cross-border`, `evt-drawdown-strategy`) green,
+with no code path reading brokerage `earningsBasis` / `contributionBasis`.
 
 ### Phase 2 — Introduce `RetirementAccount`, move the fields
 *Q1 / Q2 structural change.*

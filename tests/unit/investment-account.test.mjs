@@ -17,23 +17,13 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { InvestmentAccount, reconcileLedgerToBalance } from '../../src/finance/assets/investment-account.js';
+import { InvestmentAccount, RetirementAccount, reconcileLedgerToBalance } from '../../src/finance/assets/investment-account.js';
 
-// ── Construction ──────────────────────────────────────────────────────────────
+// ── InvestmentAccount construction (base: holdings-bearing, no basis ledger) ────
 
 test('InvestmentAccount: sets balance from initialValue', () => {
   const a = new InvestmentAccount(50000);
   assert.strictEqual(a.balance, 50000);
-});
-
-test('InvestmentAccount: contributionBasis defaults to initialValue', () => {
-  const a = new InvestmentAccount(50000);
-  assert.strictEqual(a.contributionBasis, 50000);
-});
-
-test('InvestmentAccount: earningsBasis defaults to 0', () => {
-  const a = new InvestmentAccount(50000);
-  assert.strictEqual(a.earningsBasis, 0);
 });
 
 test('InvestmentAccount: balanceAtResidencyChange is null by default', () => {
@@ -46,28 +36,54 @@ test('InvestmentAccount: loanBalance defaults to 0', () => {
   assert.strictEqual(a.loanBalance, 0);
 });
 
-test('InvestmentAccount: minimumAge defaults to null', () => {
+test('InvestmentAccount: opts set loanBalance for accounts that allow loans', () => {
+  const a = new InvestmentAccount(100000, { loanBalance: 20000 });
+  assert.strictEqual(a.loanBalance, 20000);
+});
+
+test('InvestmentAccount: does NOT carry the basis ledger or age gate (design 53 §2)', () => {
   const a = new InvestmentAccount(50000);
+  assert.ok(!('contributionBasis' in a));
+  assert.ok(!('earningsBasis' in a));
+  assert.ok(!('minimumAge' in a));
+  assert.ok(!('allowsEarlyWithdrawal' in a));
+});
+
+// ── RetirementAccount construction (adds the basis ledger + age gate) ──────────
+
+test('RetirementAccount: contributionBasis defaults to initialValue', () => {
+  const a = new RetirementAccount(50000);
+  assert.strictEqual(a.contributionBasis, 50000);
+});
+
+test('RetirementAccount: earningsBasis defaults to 0', () => {
+  const a = new RetirementAccount(50000);
+  assert.strictEqual(a.earningsBasis, 0);
+});
+
+test('RetirementAccount: minimumAge defaults to null', () => {
+  const a = new RetirementAccount(50000);
   assert.strictEqual(a.minimumAge, null);
 });
 
-test('InvestmentAccount: opts override contributionBasis and earningsBasis', () => {
-  const a = new InvestmentAccount(80000, { contributionBasis: 60000, earningsBasis: 20000 });
+test('RetirementAccount: opts override contributionBasis and earningsBasis', () => {
+  const a = new RetirementAccount(80000, { contributionBasis: 60000, earningsBasis: 20000 });
   assert.strictEqual(a.contributionBasis, 60000);
   assert.strictEqual(a.earningsBasis, 20000);
 });
 
-test('InvestmentAccount: opts set minimumAge', () => {
-  const roth = new InvestmentAccount(100000, { minimumAge: 60 });
+test('RetirementAccount: opts set minimumAge', () => {
+  const roth = new RetirementAccount(100000, { minimumAge: 60 });
   assert.strictEqual(roth.minimumAge, 60);
 
-  const k401 = new InvestmentAccount(200000, { minimumAge: 59.5 });
+  const k401 = new RetirementAccount(200000, { minimumAge: 59.5 });
   assert.strictEqual(k401.minimumAge, 59.5);
 });
 
-test('InvestmentAccount: opts set loanBalance for accounts that allow loans', () => {
-  const a = new InvestmentAccount(100000, { loanBalance: 20000 });
-  assert.strictEqual(a.loanBalance, 20000);
+test('RetirementAccount: is a subclass of InvestmentAccount (inherits loanBalance)', () => {
+  const a = new RetirementAccount(100000, { loanBalance: 5000 });
+  assert.ok(a instanceof InvestmentAccount);
+  assert.strictEqual(a.loanBalance, 5000);
 });
 
 // ── Inheritance from Account ──────────────────────────────────────────────────
@@ -90,8 +106,8 @@ test('InvestmentAccount: inherits minimumBalance and drawdownPriority from Accou
 
 // ── structuredClone safety ────────────────────────────────────────────────────
 
-test('InvestmentAccount: is structuredClone-safe', () => {
-  const a  = new InvestmentAccount(50000, {
+test('RetirementAccount: is structuredClone-safe', () => {
+  const a  = new RetirementAccount(50000, {
     contributionBasis: 40000,
     earningsBasis:     10000,
     minimumAge:        60,

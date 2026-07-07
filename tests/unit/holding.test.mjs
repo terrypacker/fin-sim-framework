@@ -166,8 +166,12 @@ test('resolveRateKey: unknown country → null', () => {
 
 // ─── Map coverage ─────────────────────────────────────────────────────────────
 
-test('DEFAULT_ALLOCATION_BY_ROLE: covers every ACCOUNT_ROLE', () => {
+test('DEFAULT_ALLOCATION_BY_ROLE: covers every holdings-bearing ACCOUNT_ROLE', () => {
+  // Loan (liability) roles hold no asset allocation — they carry no holdings
+  // (design 54); the bootstrap skips them, so no default allocation is needed.
+  const LIABILITY_ROLES = new Set([ACCOUNT_ROLES.US_LOAN, ACCOUNT_ROLES.AU_LOAN]);
   for (const role of Object.values(ACCOUNT_ROLES)) {
+    if (LIABILITY_ROLES.has(role)) continue;
     assert.ok(DEFAULT_ALLOCATION_BY_ROLE[role], `missing default allocation for role: ${role}`);
   }
 });
