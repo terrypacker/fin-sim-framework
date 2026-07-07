@@ -2,13 +2,17 @@
 
 **Status**: **Proposed** (design only).
 
-Three related changes to the `Account` class family, driven by three questions:
+Four related changes to the `Account` / `Holding` model, driven by four questions:
 
 1. Are `contributionBasis` / `earningsBasis` on `InvestmentAccount` still needed now
    that every account carries `holdings` (design 25)?
 2. The contribution/earnings split is a *retirement-account* concept — should it live
    on a narrower subclass rather than on the base `InvestmentAccount`?
 3. Add an AUD **offset account** that offsets a home loan's interest.
+4. A **bond holding** is parameterized by its *interest (coupon) rate*, but today that
+   rate is implicit (shared `rateKey` → regime-adjusted `effectiveInterestRates`, or the
+   handler fallback). Give bond holdings an explicit per-holding coupon rate — the twin
+   of the per-holding `dividendYield` equities already have.
 
 **Builds on**:
 - `design/25-holding-level-state.md` — per-holding `costBasis`, the FIFO consumption
@@ -163,7 +167,178 @@ state entries). Kept in one helper so both AU and (future) US rental paths share
 
 ---
 
-## 4. Phased plan
+## 4. Q4 — per-holding bond coupon rate
+
+### 4.1 What a bond holding is today
+
+Bonds are not a class — they are `allocation === ALLOCATION.BOND` **holdings**
+(`allocation.js:21`; `FIXED_INCOME_*` roles map to `BOND` in `default-allocations.js`).
+Their economics come from three existing surfaces:
+
+| Field / source | Role | Where |
+|---|---|---|
+| `holding.rateKey` → `state.effectiveInterestRates[rateKey]` | the **coupon rate**, *regime-adjusted* | `computeHoldingsGrowth` (`holdings-earnings.js:88-91`), via `FixedIncomeInterestHandler` / `AuFixedIncomeInterestMonthlyHandler` |
+| handler `interestRate` (default `0.04`) | fallback coupon when no rate-key entry | `earnings-handlers.js:490` |
+| `holding.duration` | rate-sensitivity → mark-to-market `Δprice = −D·Δr·MV` | `BondPriceAdjustReducer` (design 28 §5) |
+| `holding.costBasis` | **CGT on sale**: `gain = salePrice − FIFO(costBasis)` | `consumeHoldingsFifo` |
+
+Two clarifications that shaped this design:
+
+- **The interest rate is implicit today.** A bond holding has *no per-holding coupon
+  field*. Its coupon is whatever the shared `rateKey` resolves to (or the handler
+  fallback). Equities, by contrast, already got a per-holding knob — `Holding.dividendYield`
+  (design 28 §7), nullable, falling back to the account rate. Bonds have no twin. **That
+  gap is Q4.**
+- **Bond holdings keep `costBasis`.** Duration mark-to-market moves `marketValue`, so a
+  bond sold after rates move realizes a capital gain/loss = `salePrice − costBasis`.
+  Stripping `costBasis` from bonds would delete design 28's mark-to-market CGT. What bonds
+  legitimately lack is `earningsBasis` — but so does *every* holding: `earningsBasis` is an
+  **account-level** retirement field (the very thing §2 moves onto `RetirementAccount`).
+  "Bonds don't have cost/earnings basis" conflated a holding-level field bonds keep with an
+  account-level one no holding has. **Decision: add `couponRate`, keep `costBasis`.**
+
+### 4.2 The field — `Holding.couponRate`
+
+Optional per-holding coupon rate, the exact mirror of `dividendYield`:
+
+```js
+// holding.couponRate  (new optional field, BOND holdings)
+holding.couponRate: number | null   // annual coupon rate; null = fall back to rateKey / handler
+```
+
+- **Fixed, contractual coupon.** A non-null `couponRate` is the bond's *own* coupon and is
+  **not** re-adjusted by `state.effectiveInterestRates` regime moves — a fixed-coupon bond
+  pays its stated coupon regardless of where market rates go. Its **price** still moves via
+  `duration` mark-to-market (design 28). This composes correctly: rates rise ⇒ coupon
+  unchanged, `marketValue` falls. Leaving `couponRate` null preserves today's behavior
+  exactly — the coupon floats with the regime-adjusted rate-key rate (a rolling-reinvestment
+  proxy). This is the one genuine *behavioral* choice in Q4, and it is opt-in per holding.
+
+### 4.3 Where it reads through
+
+Bond coupons flow through `computeHoldingsGrowth` (`holdings-earnings.js`) with
+`rateSource: 'effectiveInterestRates'` (the fixed-income callers). Add the per-holding
+override there, **gated on the interest-bearing path** so it never contaminates equity
+growth:
+
+```
+// inside computeHoldingsGrowth's per-holding loop, when rateSource === 'effectiveInterestRates':
+const baseRate = rateOverride
+  ?? (h.couponRate ?? (h.rateKey != null ? ratesMap[h.rateKey] : undefined))
+  ?? fbRate;
+```
+
+The `rateOverride` (a handler's one-off `data.rate`) still wins, matching the existing
+precedence. On the equity path (`effectiveGrowthRates`) `couponRate` is ignored — it is a
+bond concept. Gate by the existing `rateSource` argument rather than adding a new flag.
+
+### 4.4 Touch points (all mirror `dividendYield` / `duration`)
+
+1. `holding.js` — add `couponRate = null` to constructor, `toJSON`, `fromJSON`.
+2. `holdings-earnings.js` — the §4.3 override, gated on `rateSource === 'effectiveInterestRates'`.
+3. `state-schema-registry.js` — `registerPattern('*.holdings.*.couponRate', ParameterValueType.rate())`
+   next to the `dividendYield` line (`:170`).
+4. `account-editor.js` — add a `couponRate` input to the holdings row (`:234-242`), shown for
+   BOND allocation; keep the existing `costBasis` input. (Non-bond rows may hide it, but the
+   simplest correct behavior is to always render it and let it stay null for equities.)
+5. **No serializer change** — holdings round-trip via `Holding.toJSON()`
+   (`scenario-serializer.js:641-642`), so the field rides along automatically.
+
+---
+
+## 5. Holdings editor — per-allocation inputs
+
+Surfacing `couponRate` (§4) exposes a pre-existing problem: the holdings editor gives
+**every** allocation the *same* fixed input set, so several per-holding fields that the
+engine reads have **no editor at all**, and several shown fields are meaningless for the
+row's allocation.
+
+### 5.1 The gap today
+
+The holdings table is a fixed 7-column grid — Label, Allocation, Rate Key, Market Value,
+Cost Basis, Loss Partner, ✕ (`index.html:678-686`; row render
+`account-editor.js:234-242`), identical for all four allocations. Consequences:
+
+- **Unreachable fields.** `Holding.dividendYield` (design 28 §7), `Holding.duration`
+  (design 28 §5), and the new `Holding.couponRate` (§4) all exist and are read by the
+  engine but have **no input** — you cannot set a dividend yield, a bond duration, or a
+  coupon from the UI at all. They're only settable via saved-scenario JSON or toolset
+  bootstrap.
+- **Meaningless-but-shown fields.** `Cost Basis` and `Loss Partner` render on **CASH**
+  rows (cash has no CGT and isn't tax-loss-harvested); `Loss Partner` renders on **BOND**
+  rows though the behavioral TLH / panic-sell path is equity-only
+  (`panic-sell-reducer.js:79` filters `allocation === EQUITY`; `substitute-holding.js`).
+
+### 5.2 Ideal input set per allocation
+
+`Rate Key` and `Market Value` are universal (Market Value drives the balance invariant;
+Rate Key resolves the regime-adjusted rate for **every** allocation, including CASH →
+`SAVINGS_*` per `default-allocations.js:59,64`, and BOND, where it's required for the
+duration mark even when `couponRate` is fixed).
+
+| Field | EQUITY | BOND | CASH | OTHER | Notes |
+|---|---|---|---|---|---|
+| Label | ✓ | ✓ | ✓ | ✓ | identity |
+| Allocation | ✓ | ✓ | ✓ | ✓ | the selector itself |
+| Rate Key | ✓ | ✓ | ✓ | ✓ | growth/interest/savings rate; **required for BOND** (duration mark) |
+| Market Value | ✓ | ✓ | ✓ | ✓ | drives `balance = Σ marketValue` |
+| Cost Basis | ✓ | *hidden* | ✗ | ✓ | CGT basis; **BOND: hidden, defaulted to MV** (§5.3); cash has no CGT |
+| Dividend Yield | ✓ | ✗ | ✗ | ✗ | `dividendYield`, regime-adjusted (design 28 §7) |
+| Coupon Rate | ✗ | ✓ | ✗ | ✗ | `couponRate`, fixed contractual (§4.2) |
+| Duration | ✗ | ✓ | ✗ | ✗ | `duration`, mark-to-market sensitivity (design 28 §5) |
+| Loss Partner | ✓ | ✗ | ✗ | ✓ | `taxLossPartner`; TLH is equity-oriented today |
+
+`OTHER` is the escape hatch — the general set (Label, Rate Key, MV, Cost Basis, Loss
+Partner) minus the class-specific income/duration knobs. `Dividend Yield` and `Coupon
+Rate` are mutually exclusive by construction (an EQUITY vs a BOND), so they **share one**
+table **column** ("Income Rate") that binds to `dividendYield` or `couponRate` by the
+row's allocation (decided — §5.3).
+
+### 5.3 UI realization
+
+1. **Per-cell gating, not per-row layout.** Keep one table with a superset of columns;
+   each row renders an input only in the cells its allocation uses (per §5.2), leaving the
+   others empty. Binding stays trivial — each non-income cell maps to exactly one `Holding`
+   field. The income-rate column is the one allocation-switched cell (next point).
+2. **Single merged income-rate column (decided).** One `Income Rate` column whose input
+   binds to `h.dividendYield` when `allocation === EQUITY` and `h.couponRate` when
+   `=== BOND`, and is blank/disabled otherwise. Header stays "Income Rate"; a per-row
+   title/placeholder ("Dividend yield" / "Coupon rate") disambiguates. Two mechanical
+   consequences to honor: (a) the allocation-change re-render (§5.3.3) must rebind this
+   cell to the new target field and repaint its current value; (b) switching EQUITY↔BOND
+   does **not** carry the rate across — `dividendYield` and `couponRate` are distinct
+   fields, so the cell reads whichever the new allocation owns (null ⇒ empty), leaving the
+   other untouched in the data.
+3. **Re-render the row on allocation change.** Changing a row's `Allocation` select
+   re-renders that row's inputs to the new allocation's set (basis/income/duration/partner
+   appear or disappear). This already needs a partial hook — today the whole tbody
+   re-renders on add/delete; extend that to fire on the per-row allocation `change`.
+4. **Bond Cost Basis — hidden, defaulted to Market Value.** Per the Q4 decision, BOND
+   rows do **not** show a Cost Basis input. Two rules keep it correct:
+   - **On create / on switch to BOND**: set `costBasis = marketValue`.
+   - **Editor-time MV edits** (config authoring, pre-run): while basis is hidden, keep
+     `costBasis` synced to `marketValue` so no accidental embedded gain is authored ("a
+     bond bought at par today"). This sync is **editor-only** — at runtime the duration
+     mark moves `marketValue` while `costBasis` stays fixed, which is exactly how the
+     capital gain accrues. A premium/discount bond (basis ≠ MV) is the documented
+     exception: model it as `OTHER`, or via saved JSON, until an explicit "advanced" toggle
+     is added.
+
+### 5.4 Touch points
+
+1. `index.html:678-686` — the `<thead>` column set (add Income Rate + Duration; the
+   others already exist as headers).
+2. `account-editor.js` — the row template (`:234-242`), the add-holding default
+   (`:194-203`; seed `dividendYield/couponRate/duration = null`, and `costBasis = marketValue`
+   for a bond default), per-cell gating by `h.allocation`, and the allocation-change
+   re-render (§5.3.3) + bond basis-sync rule (§5.3.4).
+3. No new engine or serializer work — all four fields already round-trip and are read by
+   the engine; this section only makes them **reachable and allocation-appropriate** in the
+   editor.
+
+---
+
+## 6. Phased plan
 
 Ordered so each phase is independently shippable and green.
 
@@ -229,9 +404,50 @@ evt suites unchanged.
 **Exit test**: `evt-au-offset` green; existing `evt-real-property` rental figures
 unchanged when no offset is present.
 
+### Phase 4 — Per-holding bond coupon rate
+*Q4. Independent of Phases 1–3; pure-additive, can land in any order.*
+
+1. `Holding.couponRate` field (constructor + `toJSON` + `fromJSON`), default `null`
+   (`holding.js`).
+2. `computeHoldingsGrowth` per-holding override, gated on
+   `rateSource === 'effectiveInterestRates'` so only the fixed-income callers consult it
+   (`holdings-earnings.js`); precedence `rateOverride ?? couponRate ?? rateKey-lookup ?? fallback`.
+3. `state-schema-registry.js` pattern for `*.holdings.*.couponRate`
+   (`ParameterValueType.rate()`), beside `dividendYield` (`:170`).
+4. Editor: coupon-rate input on the holdings row, keeping `costBasis`
+   (`account-editor.js:234-242`).
+5. New `tests/unit/bond-coupon-rate.test.mjs`: a BOND holding with an explicit
+   `couponRate` pays `MV × couponRate / 12` regardless of an active
+   `effectiveInterestRates` regime shift, while a null-`couponRate` bond still floats with
+   the regime-adjusted rate-key rate (today's behavior, unchanged); assert `duration`
+   mark-to-market still applies to price and `costBasis` is untouched; assert an equity
+   holding with a stray `couponRate` is unaffected (gated off the growth path).
+
+**Exit test**: `bond-coupon-rate` green; existing `evt-us-brokerage` / fixed-income
+interest suites unchanged when no `couponRate` is set (null ⇒ bit-for-bit today).
+
+### Phase 5 — Holdings editor per-allocation inputs
+*§5. UI-only. Depends on Phase 4 (the `couponRate` field must exist); otherwise
+independent. No engine/serializer change.*
+
+1. Add the `Income Rate` and `Duration` columns to the holdings `<thead>`
+   (`index.html:678-686`).
+2. Per-cell gating by `h.allocation` in the row template (`account-editor.js:234-242`) per
+   the §5.2 matrix; merge the income-rate cell to bind `dividendYield` (EQUITY) /
+   `couponRate` (BOND) (§5.3.2).
+3. Re-render the row on `Allocation` change (§5.3.3); seed new-holding defaults
+   (`account-editor.js:194-203`) with `dividendYield/couponRate/duration = null`.
+4. Bond Cost Basis hidden + `costBasis = marketValue` on create/switch-to-BOND and on
+   editor-time MV edits (§5.3.4).
+
+**Exit test**: manual editor pass — each allocation shows exactly its §5.2 inputs; a bond
+row hides Cost Basis and keeps it equal to Market Value across editor edits; a saved
+scenario with `dividendYield`/`couponRate`/`duration` round-trips and is now editable.
+(No unit-suite delta expected; add a light editor DOM test if the harness supports it.)
+
 ---
 
-## 5. Risks / open questions
+## 7. Risks / open questions
 
 - **Phase 1 dead-read assumption.** The claim "nothing reads brokerage
   `contributionBasis`/`earningsBasis`" is from a grep + reading the sale/after-tax paths.
@@ -247,3 +463,14 @@ unchanged when no offset is present.
 - **Multiple offsets / partial offset.** `offsetBalanceForProperty` sums all offset
   accounts linked to a property and clamps at `mortgageBalance`; a single offset is the
   common case.
+- **Fixed vs floating coupon (§4.2).** A non-null `couponRate` deliberately bypasses the
+  regime-adjusted `effectiveInterestRates`, so a fixed-coupon bond ignores the very rate
+  shocks that (via `duration`) move its price. That is correct for a real fixed-coupon
+  bond, but it means two knobs now describe one instrument (`couponRate` = income,
+  `duration` = price sensitivity) and they must be set consistently. A bond with
+  `duration` set but `couponRate` still null keeps floating its coupon — that is the
+  back-compat default, not a bug.
+- **Field name.** `couponRate` (chosen) vs `interestRate` (matches the handler's
+  account-level field, but reads as generic on a `Holding` and collides conceptually with
+  the account rate). `couponRate` is the bond twin of `dividendYield` and is unambiguous;
+  revisit only if a non-coupon interest-bearing holding type appears.
