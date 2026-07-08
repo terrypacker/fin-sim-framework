@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { USD, AUD, CheckingAccount, SavingsAccount } from '../assets/account.js';
+import { USD, AUD, CheckingAccount, SavingsAccount, LoanAccount, OffsetAccount } from '../assets/account.js';
 import {
   BrokerageAccount,
   FourOhOneKAccount,
@@ -86,29 +86,91 @@ class SavingsAccountBuilder extends BaseAccountBuilder {
   }
 }
 
+// ─── Loan (liability) ─────────────────────────────────────────────────────────
+
+class LoanAccountBuilder extends BaseAccountBuilder {
+  constructor() {
+    super();
+    this._interestRate      = 0;
+    this._monthlyPayment    = 0;
+    this._linkedPropertyKey = null;
+    this._paymentSourceKey  = null;
+  }
+
+  interestRate(v)      { this._interestRate      = v; return this; }
+  monthlyPayment(v)    { this._monthlyPayment    = v; return this; }
+  linkedPropertyKey(v) { this._linkedPropertyKey = v; return this; }
+  paymentSourceKey(v)  { this._paymentSourceKey  = v; return this; }
+
+  build() {
+    return new LoanAccount(this._balance, {
+      ...this._baseOpts(),
+      interestRate:      this._interestRate,
+      monthlyPayment:    this._monthlyPayment,
+      linkedPropertyKey: this._linkedPropertyKey,
+      paymentSourceKey:  this._paymentSourceKey,
+    });
+  }
+}
+
+// ─── Offset (cash-like, linked) ───────────────────────────────────────────────
+
+class OffsetAccountBuilder extends BaseAccountBuilder {
+  constructor() {
+    super();
+    this._offsetsPropertyKey = null;
+  }
+
+  offsetsPropertyKey(v) { this._offsetsPropertyKey = v; return this; }
+
+  build() {
+    return new OffsetAccount(this._balance, {
+      ...this._baseOpts(),
+      offsetsPropertyKey: this._offsetsPropertyKey,
+    });
+  }
+}
+
 // ─── Investment base builder (adds investment-specific fields) ────────────────
 
 class BaseInvestmentBuilder extends BaseAccountBuilder {
   constructor() {
     super();
-    this._contributionBasis     = null; // defaults to balance in InvestmentAccount
+    this._loanBalance = 0;
+  }
+
+  loanBalance(v) { this._loanBalance = v; return this; }
+
+  _investmentOpts() {
+    const opts = this._baseOpts();
+    opts.loanBalance = this._loanBalance;
+    return opts;
+  }
+}
+
+/**
+ * RetirementBuilder — adds the contribution/earnings ledger and age-gate setters
+ * that live on RetirementAccount (design 53 §2). Brokerage extends the lean
+ * BaseInvestmentBuilder and carries none of these.
+ */
+class RetirementBuilder extends BaseInvestmentBuilder {
+  constructor() {
+    super();
+    this._contributionBasis     = null; // defaults to balance in RetirementAccount
     this._earningsBasis         = 0;
-    this._loanBalance           = 0;
     this._minimumAge            = null;
     this._allowsEarlyWithdrawal = null; // null = defer to account class default
   }
 
-  contributionBasis(v)       { this._contributionBasis       = v; return this; }
-  earningsBasis(v)           { this._earningsBasis           = v; return this; }
-  loanBalance(v)             { this._loanBalance             = v; return this; }
-  minimumAge(v)              { this._minimumAge              = v; return this; }
-  allowsEarlyWithdrawal(v)   { this._allowsEarlyWithdrawal   = v; return this; }
+  contributionBasis(v)     { this._contributionBasis     = v; return this; }
+  earningsBasis(v)         { this._earningsBasis         = v; return this; }
+  minimumAge(v)            { this._minimumAge            = v; return this; }
+  allowsEarlyWithdrawal(v) { this._allowsEarlyWithdrawal = v; return this; }
 
-  _investmentOpts() {
-    const opts = this._baseOpts();
+  _retirementOpts() {
+    const opts = this._investmentOpts();
     if (this._contributionBasis !== null) opts.contributionBasis = this._contributionBasis;
     opts.earningsBasis = this._earningsBasis;
-    opts.loanBalance   = this._loanBalance;
     if (this._minimumAge !== null) opts.minimumAge = this._minimumAge;
     if (this._allowsEarlyWithdrawal !== null) opts.allowsEarlyWithdrawal = this._allowsEarlyWithdrawal;
     return opts;
@@ -125,7 +187,7 @@ class BrokerageAccountBuilder extends BaseInvestmentBuilder {
 
 // ─── 401k ─────────────────────────────────────────────────────────────────────
 
-class FourOhOneKAccountBuilder extends BaseInvestmentBuilder {
+class FourOhOneKAccountBuilder extends RetirementBuilder {
   constructor() {
     super();
     this._country    = 'US';
@@ -134,13 +196,13 @@ class FourOhOneKAccountBuilder extends BaseInvestmentBuilder {
   }
 
   build() {
-    return new FourOhOneKAccount(this._balance, this._investmentOpts());
+    return new FourOhOneKAccount(this._balance, this._retirementOpts());
   }
 }
 
 // ─── Roth ─────────────────────────────────────────────────────────────────────
 
-class RothAccountBuilder extends BaseInvestmentBuilder {
+class RothAccountBuilder extends RetirementBuilder {
   constructor() {
     super();
     this._country    = 'US';
@@ -149,13 +211,13 @@ class RothAccountBuilder extends BaseInvestmentBuilder {
   }
 
   build() {
-    return new RothAccount(this._balance, this._investmentOpts());
+    return new RothAccount(this._balance, this._retirementOpts());
   }
 }
 
 // ─── Traditional IRA ──────────────────────────────────────────────────────────
 
-class TraditionalIRAAccountBuilder extends BaseInvestmentBuilder {
+class TraditionalIRAAccountBuilder extends RetirementBuilder {
   constructor() {
     super();
     this._country    = 'US';
@@ -164,13 +226,13 @@ class TraditionalIRAAccountBuilder extends BaseInvestmentBuilder {
   }
 
   build() {
-    return new TraditionalIRAAccount(this._balance, this._investmentOpts());
+    return new TraditionalIRAAccount(this._balance, this._retirementOpts());
   }
 }
 
 // ─── Superannuation ───────────────────────────────────────────────────────────
 
-class SuperannuationAccountBuilder extends BaseInvestmentBuilder {
+class SuperannuationAccountBuilder extends RetirementBuilder {
   constructor() {
     super();
     this._country    = 'AU';
@@ -179,7 +241,7 @@ class SuperannuationAccountBuilder extends BaseInvestmentBuilder {
   }
 
   build() {
-    return new SuperannuationAccount(this._balance, this._investmentOpts());
+    return new SuperannuationAccount(this._balance, this._retirementOpts());
   }
 }
 
@@ -222,4 +284,10 @@ export class AccountBuilder {
 
   /** AU Superannuation retirement account (minimumAge 60). */
   static super()          { return new SuperannuationAccountBuilder(); }
+
+  /** Loan (liability) account — accrues interest, amortizes (design 54). */
+  static loan()           { return new LoanAccountBuilder();           }
+
+  /** Offset account — cash-like, suppresses a linked loan's interest (design 53 §3 / 54 P3). */
+  static offset()         { return new OffsetAccountBuilder();         }
 }

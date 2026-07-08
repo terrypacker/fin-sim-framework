@@ -52,6 +52,45 @@ function buildPrebuilt() {
 const yearEnd = (y) => new Date(Date.UTC(y, 11, 31));
 const sumMv   = (h) => (h ?? []).reduce((s, x) => s + (x?.marketValue ?? 0), 0);
 
+/**
+ * Prebuilt scenario, but the AU house carries an owner-occupied mortgage so there
+ * is real interest to offset, and (when `offset`) a config-declared OffsetAccount
+ * linked to it. A config account carries an explicit `stateKey`, so this is
+ * independent of the editor-created-account stateKey gap (design 55 §3.1).
+ */
+function buildPrebuiltAuLoan({ offset = false } = {}) {
+  ServiceRegistry.resetAll();
+  const services = ServiceRegistry.getInstance();
+  const cfg = IntlRetirementScenario.buildDefaultConfig({}, undefined, undefined);
+
+  // Owner-occupied AU mortgage → a synthesized `auHousePropertyLoan` (design 54 P2).
+  const auHouse = cfg.realProperties.find(r => r.stateKey === 'auHouseProperty');
+  auHouse.mortgageBalance      = 400_000;
+  auHouse.monthlyMortgage      = 3_000;
+  auHouse.mortgageInterestRate = 0.05;
+
+  if (offset) {
+    cfg.accounts.push({
+      __type: 'OffsetAccount', stateKey: 'auOffsetAccount', type: 'offset',
+      name: 'AU Offset', role: 'au-offset',
+      balance: 200_000, ownershipType: 'sole', ownerId: 'primary',
+      minimumBalance: 0, country: 'AU', currency: { code: 'AUD', symbol: 'A$' },
+      offsetsPropertyKey: 'auHouseProperty',
+      drawdownPriority: null, // liquid but not a drawdown source → stays put, keeps the offset stable
+    });
+  }
+
+  const scenario = new BaseScenario({
+    context:      services.simulationContext,
+    initialState: cfg.initialState ?? {},
+    simStart:     new Date(cfg.simStart),
+    simEnd:       new Date(cfg.simEnd),
+  });
+  scenario.buildSim();
+  new ScenarioLoader().load(cfg, services);
+  return { sim: scenario.sim, cfg };
+}
+
 // ── 1. Per-account compounding ────────────────────────────────────────────────
 
 test('per-account: untouched accounts compound at exactly their configured rate', () => {
@@ -118,4 +157,57 @@ test('integrity: §4.4 invariant holds and no negative value/basis across the wh
   }
 
   assert.deepEqual(violations, [], `holdings integrity violations:\n  ${violations.join('\n  ')}`);
+});
+
+// ── 3. Offset account, end-to-end in the full prebuilt sim ─────────────────────
+
+test('offset (integration): AU offset lands in state, speeds owner-occupied payoff, and preserves §4.4 integrity across the full run', () => {
+  const LOAN_KEY = 'auHousePropertyLoan'; // loanKeyForProperty('auHouseProperty')
+
+  const base = buildPrebuiltAuLoan({ offset: false });
+  const off  = buildPrebuiltAuLoan({ offset: true });
+
+  // The offset must reach runtime state end-to-end (the _accountToStatePlain
+  // projection carries offsetsPropertyKey — design 53 §3 / 54 P3) and the AU loan
+  // must have synthesized from the injected mortgage.
+  const offAcct = off.sim.state.auOffsetAccount;
+  assert.ok(offAcct, 'offset account is present in sim.state');
+  assert.strictEqual(offAcct.type, 'offset');
+  assert.strictEqual(offAcct.offsetsPropertyKey, 'auHouseProperty');
+  assert.ok(off.sim.state[LOAN_KEY]?.balance > 0, 'AU loan synthesized with a positive balance');
+
+  // Step both to a fixed early year-end (accumulation phase, loan still active in
+  // both). The offset suppresses interest, so more of each payment hits principal
+  // → the offset run's loan balance is strictly lower.
+  const compareYear = new Date(base.cfg.simStart).getUTCFullYear() + 5;
+  base.sim.stepTo(yearEnd(compareYear));
+  off.sim.stepTo(yearEnd(compareYear));
+
+  const baseLoan = base.sim.state[LOAN_KEY]?.balance ?? 0;
+  const offLoan  = off.sim.state[LOAN_KEY]?.balance ?? 0;
+  assert.ok(baseLoan > 0, `baseline AU loan still active at ${compareYear} (${baseLoan})`);
+  assert.ok(offLoan < baseLoan, `offset speeds payoff: offset loan ${offLoan.toFixed(0)} < baseline ${baseLoan.toFixed(0)}`);
+  // The offset cash itself is untouched (not a drawdown source, nothing debits it).
+  assert.ok(Math.abs(off.sim.state.auOffsetAccount.balance - 200_000) < 0.01, 'offset balance stays liquid at 200k');
+
+  // Continue the offset run to the end, sweeping the §4.4 invariant every year —
+  // an offset must not corrupt accounting anywhere in the full simulation.
+  const endMs   = new Date(off.cfg.simEnd).getTime();
+  const endYear = new Date(off.cfg.simEnd).getUTCFullYear();
+  const violations = [];
+  for (let year = compareYear + 1; year <= endYear; year++) {
+    if (off.sim.currentDate.getTime() >= endMs) break;
+    off.sim.stepTo(yearEnd(year));
+    for (const [key, acct] of Object.entries(off.sim.state)) {
+      const holdings = acct?.holdings;
+      if (!Array.isArray(holdings) || holdings.length === 0) continue;
+      const gap = Math.abs((acct.balance ?? 0) - sumMv(holdings));
+      if (gap > 0.05) violations.push(`${year} ${key}: balance ${acct.balance} ≠ Σmv ${sumMv(holdings).toFixed(2)} (gap ${gap.toFixed(2)})`);
+      for (const h of holdings) {
+        if ((h.marketValue ?? 0) < -0.01) violations.push(`${year} ${key}/${h.id}: negative marketValue ${h.marketValue}`);
+        if ((h.costBasis   ?? 0) < -0.01) violations.push(`${year} ${key}/${h.id}: negative costBasis ${h.costBasis}`);
+      }
+    }
+  }
+  assert.deepEqual(violations, [], `offset-run integrity violations:\n  ${violations.join('\n  ')}`);
 });

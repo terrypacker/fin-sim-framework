@@ -1,6 +1,11 @@
 # 53 — Account basis refactor + AU offset account
 
-**Status**: **Proposed** (design only).
+**Status**: **IMPLEMENTED** — all 5 phases complete and green on branch `wip/accounts-and-loans`.
+Phases 1–3 committed (`888adca`, `6886590`, `f9e4b75`); Phases 4–5 (bond coupon + holdings
+editor) done and green, **uncommitted** at time of writing. See §6 for per-phase status and
+the deviations from the original plan (notably: Q3's offset was **co-implemented with
+design 54 Phase 3** and re-targeted onto the *loan* rather than the property scalar, since
+design 54 P2 retired that scalar). One follow-up remains outstanding — see §6 "Outstanding".
 
 **Follow-up**: `design/54-loan-liability-accounts.md` builds on this doc's `OffsetAccount`
 (§3). It introduces a first-class **Loan** (liability) account that accrues interest, and
@@ -43,15 +48,28 @@ The codebase tracks **two** things called "basis" that answer different tax ques
 Holdings cannot replace the contribution/earnings split for retirement accounts —
 those accounts pay ordinary income on the *growth* portion, not capital gains, so
 `costBasis` is the wrong quantity. Conversely, for **brokerage** the split is now
-**dead**: since holdings landed, `STOCK_WITHDRAWAL_APPLY` computes the real CGT from
-`consumeHoldingsFifo(sa.holdings, salePrice)` (`us-brokerage-classes.js:202-208`), and
-the after-tax `TAXABLE_BASIS` path reads holdings (`_unrealizedGain`, `after-tax.js:175`).
-The brokerage reducers still *write* `contributionBasis` / `earningsBasis` in parallel
-(`newContrib = newBalance − newEarnings`, `us-brokerage-classes.js:214-224`;
-`au-brokerage-classes.js:200-210`) but nothing *reads* them for tax. They are
-**write-only bookkeeping** — the redundancy behind the confusing `C.Basis` / `E.Basis`
-fields the editor shows for *every* investment type (`index.html:662-671`, gated by
-`INVESTMENT_TYPES` in `accounts-controller.js:18`).
+*redundant* with holdings — but **not fully dead**, and the original draft of this doc
+was wrong to call it "write-only bookkeeping." Two paths still **read** brokerage
+`earningsBasis` (verified 2026-07-07, correcting the claim):
+
+- **Engine auto-liquidation** — `AccountService._drawPenaltyFree` (`account-service.js:897`)
+  computes a *proportional* capital gain from `earningsBasis / balance` when the sim draws
+  down a brokerage account for cash, emits `STOCK_WITHDRAWAL_TAX`, and updates both basis
+  fields. This is distinct from the event-driven `STOCK_WITHDRAWAL_APPLY` reducer, which
+  *does* use holdings FIFO.
+- **Residency cost-base step-up** — `recordResidencyChange` (`account-service.js:388`)
+  stamps `costBaseStepUpByCountry[country] = earningsBasis` (pre-move unrealized gain) for
+  that same proportional path.
+
+So the true state is: the *manual-sale* reducer (`consumeHoldingsFifo`,
+`us-brokerage-classes.js:202-208`) and the after-tax `TAXABLE_BASIS` path (`_unrealizedGain`,
+`after-tax.js:175`) are holdings-based, but the *auto-liquidation* path still keys CGT off
+`earningsBasis`. **Phase 1 therefore has to migrate those two readers to holdings FIFO
+(the same `consumeHoldingsFifo` the reducer uses) before the writes can be removed** — see
+the expanded Phase 1 below. Only then is brokerage basis genuinely unread. The editor's
+`C.Basis` / `E.Basis` fields (`index.html:662-671`, gated by `INVESTMENT_TYPES` in
+`accounts-controller.js:18`) show for *every* investment type — the confusing redundancy §2
+removes.
 
 ### Current hierarchy
 
@@ -350,23 +368,42 @@ row's allocation (decided — §5.3).
 Ordered so each phase is independently shippable and green.
 
 ### Phase 1 — Decouple brokerage from contribution/earnings basis
-*Prerequisite for Q2. No hierarchy change yet.*
+*Prerequisite for Q2. No hierarchy change yet.* **Scope expanded** after finding two live
+readers (§1) — this phase must migrate them to holdings FIFO, not just delete writes.
 
-1. Rewrite `StockWithdrawalApplyReducer` (US + AU) to drop the parallel
-   `contributionBasis` / `earningsBasis` writes — they already compute the authoritative
-   result from holdings. Keep the `holdings` + `balance` writes.
-2. Same for the contribution / dividend / earnings apply reducers: stop maintaining the
-   two basis fields on brokerage state (`us-brokerage-classes.js:110,140-141,172,214-224`;
+1. **Migrate the auto-liquidation reader to FIFO** (`account-service.js:_drawPenaltyFree`,
+   the brokerage branch ~`:897`): replace the `earningsBasis / balance` gain-ratio with
+   `consumeHoldingsFifo(account.holdings, withdraw)` computed **before** the debit (the
+   `transaction()` debit at `:892` already pro-rata-consumes holdings, so snapshot the FIFO
+   result first, then overwrite `account.holdings` with `newHoldings`). Derive `gain` /
+   `auGain` from `realizedBasis` / `realizedBasisByCountry.AU`, exactly as the reducer does.
+   Drop the `earningsBasis` / `contributionBasis` / `costBaseStepUpByCountry` mutations.
+2. **Drop the residency step-up's account-level stamp** (`account-service.js:388`): the
+   per-lot `holding.costBaseByCountry` stamp (`:390-397`) already feeds FIFO, so the
+   account-level `costBaseStepUpByCountry = earningsBasis` line is now dead — remove it.
+   `costBaseStepUpByCountry` keeps only its (harmless, unread) persisted/display presence.
+3. Rewrite `StockWithdrawalApplyReducer` (US + AU) to drop the parallel
+   `contributionBasis` / `earningsBasis` writes — the FIFO result is authoritative. Keep the
+   `holdings` + `balance` writes.
+4. Same for the contribution / dividend / earnings apply reducers: stop maintaining the two
+   basis fields on brokerage state (`us-brokerage-classes.js:110,140-141,172,214-224`;
    `au-brokerage-classes.js:44-45,72-73,102-103,134-135,160,200-210`).
-3. Verify nothing reads brokerage `earningsBasis` / `contributionBasis`: after-tax
-   `TAXABLE_BASIS` uses holdings; CGT uses FIFO. Grep + a targeted brokerage evt test to
-   confirm tax unchanged (`evt-us-brokerage`, `evt-au-brokerage`, `basis-invariants`,
-   `reducer-postconditions-*-brokerage`).
-4. Stop serializing the two fields for brokerage (`scenario-serializer.js:619-621`,
-   toolset `_serialize*` helpers) — leave the retirement path untouched.
+5. Update the brokerage evt tests that assert basis **outputs** (`evt-us-brokerage`
+   EVT-12/13/14; `evt-au-brokerage` EVT-30) to assert balance/holdings instead; basis as
+   **input config** stays. `basis-invariants` is retirement-only and untouched.
+6. **Deferred to Phase 2** (documented reordering): serializer (`scenario-serializer.js:619`)
+   and schema/display (`state-schema-registry.js:313`) removal. In Phase 1 the field still
+   physically exists on the brokerage prototype (via `InvestmentAccount`), so serializing a
+   frozen, unread value is harmless; the field — and thus its serialization/display — leaves
+   naturally when Phase 2 reparents `BrokerageAccount`.
 
-**Exit test**: brokerage evt suites + basis-invariants green with the fields absent from
-brokerage state.
+**Exit test**: brokerage evt suites + `basis-invariants` + the residency/cross-border
+drawdown suites (`change-residency`, `toolset-cross-border`, `evt-drawdown-strategy`) green,
+with no code path reading brokerage `earningsBasis` / `contributionBasis`.
+
+**✅ DONE (committed `888adca`).** Both live readers migrated to holdings FIFO as scoped.
+Correction to the original premise: brokerage basis was **not** write-only dead — those two
+readers (`_drawPenaltyFree`, residency step-up) had to be migrated, which this phase did.
 
 ### Phase 2 — Introduce `RetirementAccount`, move the fields
 *Q1 / Q2 structural change.*
@@ -397,6 +434,10 @@ brokerage state.
 **Exit test**: full unit suite green; brokerage state has no basis fields; retirement
 evt suites unchanged.
 
+**✅ DONE (committed `888adca`).** `RetirementAccount` introduced; the 4 retirement classes
+reparented; `BrokerageAccount` is holdings-only; builder split + `RETIREMENT_TYPES` UI gate
+landed as scoped.
+
 ### Phase 3 — AU offset account
 *Q3. Independent of Phases 1–2; can land in parallel.*
 
@@ -415,6 +456,30 @@ evt suites unchanged.
 
 **Exit test**: `evt-au-offset` green; existing `evt-real-property` rental figures
 unchanged when no offset is present.
+
+**✅ DONE (committed `f9e4b75`), but re-scoped — co-implemented with design 54 Phase 3.**
+Deviations from the plan above, all forced by design 54 landing first:
+- **Reads through the loan, not the property scalar.** Design 54 P2 retired the property's
+  `mortgageBalance` scalar and routed *both* the rental deductible-interest line and the
+  monthly loan-payment interest accrual through `LoanAccount`'s `effectivePrincipal`. So the
+  offset wires into **`offsetBalanceForLoan(state, loan)` inside `effectivePrincipal`**
+  (`loan-classes.js`), not `offsetBalanceForProperty` / `computeRentalTaxables`. One wiring
+  point ⇒ the offset bites on **rental deduction AND owner-occupied interest/payoff** in one
+  change (this absorbed design 54 Phase 3, "offset↔loan re-target").
+- **US + AU, not AU-only.** Added both `ACCOUNT_ROLES.US_OFFSET` and `AU_OFFSET`;
+  `OffsetAccount` defaults AU/AUD but is currency-agnostic. A **same-currency guard** in
+  `offsetBalanceForLoan` stops a cross-currency offset from wrongly reducing principal 1:1.
+- **Link key kept as `offsetsPropertyKey`** (offset → property → its synthesized loan), not a
+  literal `offsetsLoanKey`, since loan keys are synthetic.
+- **Liquidity:** `US_/AU_OFFSET` added to `SAVINGS_ROLES` so the offset is a drawdown-eligible
+  cross-border cash-pool participant (opposite of a loan).
+- **Tests:** `tests/unit/evt-offset.test.mjs` (unit + compile-path), plus a full-sim
+  integration test in `accounting-integrity.test.mjs`.
+- **⚠️ Outstanding blocker (deferred to design 55):** an **editor-created** offset gets no
+  `stateKey` (only prebuilt-enumerated accounts do, via `SimulationState._assignAccount`), so
+  it never reaches `sim.state` and silently does nothing. Config-declared offsets (explicit
+  `stateKey`) work end-to-end. Fix documented in `design/55-configuration-driven-parameters.md`
+  §3.1 (stateKey assignment for editor/Config-List records).
 
 ### Phase 4 — Per-holding bond coupon rate
 *Q4. Independent of Phases 1–3; pure-additive, can land in any order.*
@@ -438,6 +503,13 @@ unchanged when no offset is present.
 **Exit test**: `bond-coupon-rate` green; existing `evt-us-brokerage` / fixed-income
 interest suites unchanged when no `couponRate` is set (null ⇒ bit-for-bit today).
 
+**✅ DONE (green, uncommitted).** Landed as scoped. The `computeHoldingsGrowth` override uses
+an explicit `useCoupon = rateSource === 'effectiveInterestRates'` gate:
+`rateOverride ?? (useCoupon ? (h.couponRate ?? undefined) : undefined) ?? (h.rateKey!=null ?
+ratesMap[h.rateKey] : undefined) ?? fbRate`. New `tests/unit/bond-coupon-rate.test.mjs`
+(10 tests) incl. composition with `BondPriceAdjustReducer` (fixed coupon holds across a rate
+regime move while price marks via `duration`).
+
 ### Phase 5 — Holdings editor per-allocation inputs
 *§5. UI-only. Depends on Phase 4 (the `couponRate` field must exist); otherwise
 independent. No engine/serializer change.*
@@ -456,6 +528,27 @@ independent. No engine/serializer change.*
 row hides Cost Basis and keeps it equal to Market Value across editor edits; a saved
 scenario with `dividendYield`/`couponRate`/`duration` round-trips and is now editable.
 (No unit-suite delta expected; add a light editor DOM test if the harness supports it.)
+
+**✅ DONE (green, uncommitted).** Per-cell gating by allocation per the §5.2 matrix; merged
+Income Rate column; Duration column (BOND); Cost Basis + Loss Partner hidden where
+meaningless; allocation-change re-render (whole tbody, which also repaints the grouped Rate
+Key `<select>` added in a prior pass); bond `costBasis`↔`marketValue` sync. Instead of a
+"manual editor pass," covered by `tests/viz/editors/holdings-allocation-inputs.test.mjs`
+(8 jsdom tests). Also note: the **Rate Key** cell was converted from free-text to a grouped
+`<select>` in the same push (a usability fix surfaced while building this phase).
+
+### Outstanding (post-rollout)
+
+All 5 phases are functionally complete and green. Known follow-ups, none blocking:
+- **Editor-created offset accounts don't reach `sim.state`** (Phase 3 blocker above): a
+  record created in the editor gets no `stateKey`, so the runtime-state projection can't see
+  it. Config-declared offsets work. Fix owned by **design 55 §3.1** (stateKey assignment for
+  editor/Config-List records) — the offset is its motivating case.
+- **Commit Phases 4–5.** Done + green in the working tree; not yet committed.
+- **Premium/discount bonds** (basis ≠ market value) remain out of scope for the editor
+  (§5.3.4): model as `OTHER` or via saved JSON until an "advanced" toggle is added.
+- **Optional live Chrome pass** of the holdings editor — validated via the jsdom viz harness,
+  not a manual browser check.
 
 ---
 

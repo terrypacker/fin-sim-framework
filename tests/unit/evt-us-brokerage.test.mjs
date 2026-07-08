@@ -172,14 +172,15 @@ test('EVT-11: Fixed income earnings are NOT AU taxable if person is not AU resid
 // EVT-12: Stock Contribution
 // ══════════════════════════════════════════════════════════════════════════════
 
-test('EVT-12: Stock contribution increases usStockAccount contributionBasis and debits checking', () => {
+test('EVT-12: Stock contribution increases usStockAccount balance/holdings and debits checking', () => {
   const { sim } = loadToolsetScenario(makeBrokerageConfig({ initialChecking: 10000 }));
   sim.schedule({ date: new Date(2026, 0, 15), type: 'STOCK_CONTRIBUTION', data: { amount: 5000 } });
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.usStockAccount.balance, 5000);
-  assert.strictEqual(sim.state.usStockAccount.contributionBasis, 5000);
-  assert.strictEqual(sim.state.usStockAccount.earningsBasis, 0);
+  // Balance is backed by holdings (§4.4 invariant); brokerage basis is no longer tracked (design 53 P1).
+  const mv = sim.state.usStockAccount.holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0);
+  assert.ok(Math.abs(mv - 5000) <= 0.05);
   assert.strictEqual(sim.state.checkingAccount.balance, 5000);
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0);
 });
@@ -188,7 +189,7 @@ test('EVT-12: Stock contribution increases usStockAccount contributionBasis and 
 // EVT-13: Stock Dividend Yield
 // ══════════════════════════════════════════════════════════════════════════════
 
-test('EVT-13: Stock dividend stays in account and increases both basis fields', () => {
+test('EVT-13: Stock dividend stays in account (reinvested into holdings)', () => {
   const { sim } = loadToolsetScenario(makeBrokerageConfig({
     initialChecking: 5000,
     stockBalance: 50000,
@@ -198,8 +199,9 @@ test('EVT-13: Stock dividend stays in account and increases both basis fields', 
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.usStockAccount.balance, 51000);
-  assert.strictEqual(sim.state.usStockAccount.contributionBasis, 51000);
-  assert.strictEqual(sim.state.usStockAccount.earningsBasis, 1000);
+  // Dividend reinvested into holdings so Σ marketValue tracks balance (§4.4).
+  const mv = sim.state.usStockAccount.holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0);
+  assert.ok(Math.abs(mv - 51000) <= 0.05);
   assert.strictEqual(sim.state.checkingAccount.balance, 5000); // unchanged
 });
 
@@ -236,7 +238,7 @@ test('EVT-13: Stock dividend is NOT AU taxable if person is not AU resident', ()
 // EVT-14: Stock Earnings (Unrealized)
 // ══════════════════════════════════════════════════════════════════════════════
 
-test('EVT-14: Stock earnings stay in account, increase earningsBasis, no tax', () => {
+test('EVT-14: Stock earnings stay in account, no tax', () => {
   const { sim } = loadToolsetScenario(makeBrokerageConfig({
     initialChecking: 5000,
     stockBalance: 50000,
@@ -247,7 +249,6 @@ test('EVT-14: Stock earnings stay in account, increase earningsBasis, no tax', (
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.usStockAccount.balance, 55000);
-  assert.strictEqual(sim.state.usStockAccount.earningsBasis, 5000);
   assert.strictEqual(sim.state.checkingAccount.balance, 5000); // unchanged
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0);
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);

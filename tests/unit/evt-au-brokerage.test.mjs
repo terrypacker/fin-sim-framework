@@ -229,7 +229,6 @@ test('EVT-30: AU stock earnings stay in account, no tax event', () => {
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.auStockAccount.balance, 55000);
-  assert.strictEqual(sim.state.auStockAccount.earningsBasis, 5000);
   assert.strictEqual(sim.state.checkingAccount.balance, 5000);   // unchanged
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0);
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);

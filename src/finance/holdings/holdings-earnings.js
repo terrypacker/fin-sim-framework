@@ -81,12 +81,22 @@ export function computeHoldingsGrowth({
     return { amount, holdingActions: [] };
   }
 
+  // On the fixed-income path, a non-null per-holding `couponRate` is a FIXED
+  // contractual coupon — it is NOT re-adjusted by state.effectiveInterestRates
+  // regime moves (a fixed-coupon bond pays its stated coupon regardless of where
+  // market rates go; its price still marks to market via `duration`). It slots in
+  // just ahead of the rateKey lookup, below the handler's one-off rateOverride,
+  // matching the existing precedence. On the equity growth path (effectiveGrowthRates)
+  // couponRate is a bond concept and is ignored. (design 53 §4)
+  const useCoupon = rateSource === 'effectiveInterestRates';
+
   let total = 0;
   const holdingActions = [];
   for (const h of holdings) {
     if (!h) continue;
     const mv      = h.marketValue ?? 0;
     const baseRate = rateOverride
+      ?? (useCoupon ? (h.couponRate ?? undefined) : undefined)
       ?? (h.rateKey != null ? ratesMap[h.rateKey] : undefined)
       ?? fbRate;
     const hRate   = (currentDate && h.appreciationSchedule)

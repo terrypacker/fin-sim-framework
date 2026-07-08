@@ -144,9 +144,13 @@ test('integration: a scheduled decant draws the IRA and lands net cash in broker
   assert.ok(near(sim.state.usStockAccount.balance, 45_000), `brokerage ${sim.state.usStockAccount.balance}`);
   // The whole traditional-IRA draw was recognized as US ordinary income (tax chain fired).
   assert.ok(sim.state.usOrdinaryIncomeYTD > 0, 'IRA withdrawal recognized as ordinary income');
-  // Cash landed at market basis: all cost, zero unrealized gain.
-  assert.ok(near(sim.state.usStockAccount.contributionBasis, 45_000));
-  assert.ok(near(sim.state.usStockAccount.earningsBasis,          0));
+  // Cash landed at cost: holdings back the balance with zero unrealized gain (design 53 §2;
+  // basis ledger retired, holdings are the CGT source).
+  const brok = sim.state.usStockAccount;
+  const mv = brok.holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0);
+  const cb = brok.holdings.reduce((s, h) => s + (h?.costBasis ?? 0), 0);
+  assert.ok(near(mv, brok.balance), `Σmv ${mv} == balance ${brok.balance}`);
+  assert.ok(near(mv - cb, 0), `unrealized gain ${mv - cb} should be ~0`);
 });
 
 // ── B. Q2 ordering: conversion applies before the same-date withdrawal ──────────
@@ -182,9 +186,12 @@ test('integration: pre-move growth on the decant is forgiven by the AU step-up a
   const brok = sim.state.usStockAccount;
   // The 45k decant grew while US-resident, so there is a real pre-move gain...
   assert.ok(brok.balance > 45_000, `brokerage grew past the 45k decant: ${brok.balance}`);
-  // ...and the AU residency cost-base step-up forgave it (design 36 §12.2):
-  // the stamped step-up equals the pre-move unrealized gain at the move.
-  assert.ok(brok.costBaseStepUpByCountry?.AU > 0, 'AU step-up forgives the pre-move gain on the decant');
+  // ...and the AU residency cost-base step-up forgave it (design 36 §12.2). Under the
+  // per-lot mechanism (design 53 P1) the step-up stamps each lot's AU base up to market
+  // value at the move, so the AU basis exceeds the (original) US cost basis.
+  const auBase  = brok.holdings.reduce((s, h) => s + (h.costBaseByCountry?.AU ?? 0), 0);
+  const usBasis = brok.holdings.reduce((s, h) => s + (h.costBasis ?? 0), 0);
+  assert.ok(auBase > usBasis, `AU step-up basis (${auBase}) exceeds US cost basis (${usBasis}) → pre-move gain forgiven for AU`);
 });
 
 // ── (B) drawdown-ordering variant through the engine (design 45 §7) ─────────────

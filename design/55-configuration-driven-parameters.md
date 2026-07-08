@@ -1,4 +1,4 @@
-# 54 — Configuration-driven (dynamic) parameters
+# 55 — Configuration-driven (dynamic) parameters
 
 **Status**: **Proposed** (design only).
 
@@ -125,6 +125,34 @@ off the **record** (via the node cascade), not off `cfg.parameters[key]`. So a
 generated key only has to be unique and carry a `node` — it never needs to match a
 name the toolset reads. This is the clean separation that keeps the generator
 decoupled from toolset internals.
+
+### 3.1 Prerequisite — every record must have a `stateKey`
+
+This scheme keys params off `stateKey`/`id`, and — separately — the **runtime-state
+projection** keys `sim.state` entries off `stateKey` too (`_accountToStatePlain` in
+the retirement toolsets seeds `state[account.stateKey]`; `SimulationState._assignAccount`
+stamps the key). Today a `stateKey` is stamped **only for accounts the prebuilt
+scenario wires by name** (`_assignAccount` is called with a literal key like
+`usSavingsAccount`). A record created through the **account editor** or a Config-List
+"add" gets **no `stateKey`**, so it never lands in `sim.state` *and* generates no
+params — the "add a record + Rebuild → it works" premise silently fails for it.
+
+This design therefore **depends on `stateKey` assignment at record creation**: when a
+record is created without one, derive a unique, stable, camelCase slug (e.g. from the
+display name, deduped against existing keys), stamp it on the record, and serialize it
+so it stays stable across Rebuilds (the stability §3 relies on). Assign it at the
+create path (`AccountsController.create` / the service `createAccount`) or as a
+compile-time normalization pass over `cfg.accounts`/`persons`/`realProperties` before
+generation — the latter also heals older saves.
+
+**Concrete instance that surfaced this** (design 53 §3 OffsetAccount): a user created
+an `OffsetAccount` in the editor with `offsetsPropertyKey` set correctly, but with no
+`stateKey` it never entered `sim.state`, so `offsetBalanceForLoan` couldn't find it and
+the offset silently did nothing — the engine wiring was correct; only the record→state
+bridge was missing. (Note also: the same `_accountToStatePlain` projection must carry
+any **new per-account field the handlers read at runtime** — §8's `growthRate` etc.,
+and design 53's `offsetsPropertyKey` — not just `toJSON`; a field present on the record
+but dropped by the projection is invisible to handlers.)
 
 ---
 
@@ -432,6 +460,15 @@ static ones they replace.*
 - **Two records sharing a stateKey** would collide on key. That's already a latent
   bug (stateKeys must be unique); the generator should `console.warn` and skip dupes
   rather than silently overwrite.
+- **stateKey assignment for new records (hard prerequisite — see §3.1).** The whole
+  "add a record + Rebuild → it works" premise requires every record to carry a unique
+  `stateKey`, but today only prebuilt-enumerated accounts get one (`_assignAccount`);
+  editor / Config-List-created records get none and never reach `sim.state` or the
+  param surface. Assign a deduped camelCase slug at creation (or in a compile-time
+  normalization pass) and serialize it. Surfaced concretely by the design 53
+  OffsetAccount, which was created in the editor but never took effect for lack of a
+  `stateKey`. Related: any new per-account field handlers read at runtime (§8) must be
+  carried by the `_accountToStatePlain` state projection, not just `toJSON`.
 - **Global-rate shadowing for MC (§10).** Sweeping a global rate silently no-ops on
   accounts with explicit per-account values. Documented, not fixed — the per-account
   key is the correct target once rates are per-account.

@@ -89,6 +89,11 @@ function _accountToStatePlain(account) {
     // Holdings — plain-data array (no methods), structuredClone-safe.
     holdings:              (account.holdings ?? []).map(h => ({ ...h })),
   };
+  // OffsetAccount link (design 53 §3 / 54 P3): carry the property key into runtime
+  // state so offsetBalanceForLoan() can find it — otherwise the offset is invisible.
+  if (account.offsetsPropertyKey !== undefined) {
+    plain.offsetsPropertyKey = account.offsetsPropertyKey ?? null;
+  }
   if (account.contributionBasis !== undefined) {
     plain.contributionBasis        = account.contributionBasis;
     plain.earningsBasis            = account.earningsBasis ?? 0;

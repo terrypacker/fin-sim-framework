@@ -15,6 +15,7 @@ import {
 } from '../../finance/holdings/holding-reducers.js';
 import { registerHoldingActionTypes } from '../../finance/holdings/holding-actions.js';
 import { AssetAppreciateReducer } from '../../finance/handlers/asset-appreciation-handler.js';
+import { LoanPaymentApplyReducer } from '../../finance/account-rules/loan-classes.js';
 import { PeriodService } from '../../finance/period/period-service.js';
 
 /**
@@ -129,7 +130,7 @@ export class ScenarioCompiler {
     // Framework substrate reducers (design 25 holdings) — always present,
     // not toolset-owned. Registered last so they live in the same pipeline
     // and run at their declared priorities relative to toolset reducers.
-    for (const r of _frameworkSubstrateReducers()) {
+    for (const r of _frameworkSubstrateReducers(services)) {
       services.reducerService.register(r);
     }
 
@@ -183,10 +184,14 @@ export class ScenarioCompiler {
 
 /**
  * Build fresh instances of the framework-owned (non-toolset) reducers.
- * Currently: design 25 holdings substrate. Adding a new substrate reducer
- * here is the standard extension point.
+ * Currently: design 25 holdings substrate, plus the country-agnostic loan
+ * payment reducer (design 54) — shared by US_LOAN_PAYMENT / AU_LOAN_PAYMENT, so
+ * it is registered once here rather than per real-property toolset. Adding a new
+ * substrate reducer here is the standard extension point.
+ *
+ * @param {object} services — ServiceRegistry (for the shared accountService)
  */
-function _frameworkSubstrateReducers() {
+function _frameworkSubstrateReducers(services) {
   return [
     new HoldingTransactReducer(),
     new HoldingRevalueReducer(),
@@ -194,6 +199,7 @@ function _frameworkSubstrateReducers() {
     new HoldingSplitReducer(),
     new HoldingRetitleReducer(),
     new AssetAppreciateReducer(),
+    new LoanPaymentApplyReducer({ accountService: services?.accountService }),
   ];
 }
 

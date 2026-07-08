@@ -349,10 +349,12 @@ export class WorkbenchApp extends BaseComponent {
 
       if (node?.kind === 'account') {
         const people = registry.graphQueryApi.getByKind('person');
+        const realProperties = registry.graphQueryApi.getByKind('real-property');
         const editor = new AccountEditor({
           container,
           node,
           people,
+          realProperties,
           ...paramLinkProps(),
           onSave: (data) => {
             if (data.id) {

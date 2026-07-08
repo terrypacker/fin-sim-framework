@@ -180,7 +180,7 @@ test('Mortgage-US-1: Monthly mortgage payments are made each month while mortgag
   const threeMonths = new Date(Date.UTC(2026, 2, 31));
   assert.doesNotThrow(() => sim.stepTo(threeMonths));
 
-  const payments = sim.journal.getActions('US_MORTGAGE_PAYMENT_APPLY');
+  const payments = sim.journal.getActions('LOAN_PAYMENT_APPLY');
   assert.ok(payments.length >= 3, `Expected at least 3 payments; got ${payments.length}`);
 
   // Each payment should debit 2000 from the cash account
@@ -203,18 +203,18 @@ test('Mortgage-US-2: The last mortgage payment does not overpay (capped to remai
   const twoMonths = new Date(Date.UTC(2026, 1, 28));
   assert.doesNotThrow(() => sim.stepTo(twoMonths));
 
-  const payments = sim.journal.getActions('US_MORTGAGE_PAYMENT_APPLY');
+  const payments = sim.journal.getActions('LOAN_PAYMENT_APPLY');
   assert.strictEqual(payments.length, 2, `Expected exactly 2 payments; got ${payments.length}`);
 
   // First payment: 2000
-  const firstMortgageDiff = payments[0].stateDiff.find(d => d.field === 'usHouseProperty.mortgageBalance');
-  assert.ok(firstMortgageDiff, 'First payment should update usHouseProperty.mortgageBalance');
+  const firstMortgageDiff = payments[0].stateDiff.find(d => d.field === 'usHousePropertyLoan.balance');
+  assert.ok(firstMortgageDiff, 'First payment should update usHousePropertyLoan.balance');
   assert.strictEqual(firstMortgageDiff.delta, -2_000, 'First payment should reduce balance by 2000');
   assert.strictEqual(firstMortgageDiff.after,  1_000, 'Balance after first payment should be 1000');
 
   // Second (last) payment: 1000, not 2000
-  const lastMortgageDiff = payments[1].stateDiff.find(d => d.field === 'usHouseProperty.mortgageBalance');
-  assert.ok(lastMortgageDiff, 'Last payment should update usHouseProperty.mortgageBalance');
+  const lastMortgageDiff = payments[1].stateDiff.find(d => d.field === 'usHousePropertyLoan.balance');
+  assert.ok(lastMortgageDiff, 'Last payment should update usHousePropertyLoan.balance');
   assert.strictEqual(lastMortgageDiff.delta, -1_000, 'Last payment should only pay remaining 1000, not the full 2000');
   assert.strictEqual(lastMortgageDiff.after,      0, 'Mortgage balance should reach zero after last payment');
 });
@@ -234,10 +234,10 @@ test('Mortgage-US-3: Mortgage payments stop once mortgageBalance reaches zero', 
   const threeMonths = new Date(Date.UTC(2026, 2, 31));
   assert.doesNotThrow(() => sim.stepTo(threeMonths));
 
-  const payments = sim.journal.getActions('US_MORTGAGE_PAYMENT_APPLY');
+  const payments = sim.journal.getActions('LOAN_PAYMENT_APPLY');
   assert.strictEqual(payments.length, 1, `Expected exactly 1 payment before balance hits zero; got ${payments.length}`);
 
-  const mortgageDiff = payments[0].stateDiff.find(d => d.field === 'usHouseProperty.mortgageBalance');
+  const mortgageDiff = payments[0].stateDiff.find(d => d.field === 'usHousePropertyLoan.balance');
   assert.strictEqual(mortgageDiff.after, 0, 'Balance should be zero after the single payment');
 });
 
@@ -257,7 +257,7 @@ test('Mortgage-US-4: Mortgage payments stop after the house is sold', () => {
   const endQ1_2026 = new Date(Date.UTC(2026, 2, 31));
   assert.doesNotThrow(() => sim.stepTo(endQ1_2026));
 
-  const payments = sim.journal.getActions('US_MORTGAGE_PAYMENT_APPLY');
+  const payments = sim.journal.getActions('LOAN_PAYMENT_APPLY');
   // Dec 31, 2025: 1 payment before the sale
   // Jan 31, Feb 28, Mar 31 2026: NO payments (house sold Jan 15, mortgage cleared)
   assert.strictEqual(payments.length, 1, `Expected 1 payment (Dec 2025 only); got ${payments.length}`);
@@ -265,7 +265,7 @@ test('Mortgage-US-4: Mortgage payments stop after the house is sold', () => {
   // Confirm the sale zeroed the mortgage
   const saleActions = sim.journal.getActions('US_HOUSE_SALE_APPLY');
   assert.ok(saleActions.length > 0, 'House sale should have been applied');
-  const saleStateDiff = saleActions[0].stateDiff.find(d => d.field === 'usHouseProperty.mortgageBalance');
+  const saleStateDiff = saleActions[0].stateDiff.find(d => d.field === 'usHousePropertyLoan.balance');
   assert.ok(saleStateDiff, 'Sale should clear mortgageBalance in property state');
   assert.strictEqual(saleStateDiff.after, 0, 'mortgageBalance should be 0 after sale');
 });
@@ -285,7 +285,7 @@ test('Mortgage-AU-1: Monthly AU mortgage payments are made each month while mort
   const threeMonths = new Date(Date.UTC(2026, 2, 31));
   assert.doesNotThrow(() => sim.stepTo(threeMonths));
 
-  const payments = sim.journal.getActions('AU_MORTGAGE_PAYMENT_APPLY');
+  const payments = sim.journal.getActions('LOAN_PAYMENT_APPLY');
   assert.ok(payments.length >= 3, `Expected at least 3 AU payments; got ${payments.length}`);
 
   const cashDiff = payments[0].stateDiff.find(d => d.field === 'auSavingsAccount.balance');
@@ -304,11 +304,11 @@ test('Mortgage-AU-2: The last AU mortgage payment does not overpay', () => {
   const twoMonths = new Date(Date.UTC(2026, 1, 28));
   assert.doesNotThrow(() => sim.stepTo(twoMonths));
 
-  const payments = sim.journal.getActions('AU_MORTGAGE_PAYMENT_APPLY');
+  const payments = sim.journal.getActions('LOAN_PAYMENT_APPLY');
   assert.strictEqual(payments.length, 2);
 
-  const lastMortgageDiff = payments[1].stateDiff.find(d => d.field === 'auHouseProperty.mortgageBalance');
-  assert.ok(lastMortgageDiff, 'Last AU payment should update auHouseProperty.mortgageBalance');
+  const lastMortgageDiff = payments[1].stateDiff.find(d => d.field === 'auHousePropertyLoan.balance');
+  assert.ok(lastMortgageDiff, 'Last AU payment should update auHousePropertyLoan.balance');
   assert.strictEqual(lastMortgageDiff.delta, -1_000, 'Last AU payment should only pay the remaining 1000');
   assert.strictEqual(lastMortgageDiff.after,      0, 'AU mortgage balance should reach zero');
 });
@@ -324,10 +324,10 @@ test('Mortgage-AU-3: AU mortgage payments stop once mortgageBalance reaches zero
   const threeMonths = new Date(Date.UTC(2026, 2, 31));
   assert.doesNotThrow(() => sim.stepTo(threeMonths));
 
-  const payments = sim.journal.getActions('AU_MORTGAGE_PAYMENT_APPLY');
+  const payments = sim.journal.getActions('LOAN_PAYMENT_APPLY');
   assert.strictEqual(payments.length, 1, `Expected exactly 1 AU payment; got ${payments.length}`);
 
-  const mortgageDiff = payments[0].stateDiff.find(d => d.field === 'auHouseProperty.mortgageBalance');
+  const mortgageDiff = payments[0].stateDiff.find(d => d.field === 'auHousePropertyLoan.balance');
   assert.strictEqual(mortgageDiff.after, 0, 'AU mortgage balance should be zero after the single payment');
 });
 
@@ -343,12 +343,12 @@ test('Mortgage-AU-4: AU mortgage payments stop after the house is sold', () => {
   const endQ1_2026 = new Date(Date.UTC(2026, 2, 31));
   assert.doesNotThrow(() => sim.stepTo(endQ1_2026));
 
-  const payments = sim.journal.getActions('AU_MORTGAGE_PAYMENT_APPLY');
+  const payments = sim.journal.getActions('LOAN_PAYMENT_APPLY');
   assert.strictEqual(payments.length, 1, `Expected 1 AU payment (Dec 2025 only); got ${payments.length}`);
 
   const saleActions = sim.journal.getActions('AU_HOUSE_SALE_APPLY');
   assert.ok(saleActions.length > 0, 'AU house sale should have been applied');
-  const saleStateDiff = saleActions[0].stateDiff.find(d => d.field === 'auHouseProperty.mortgageBalance');
+  const saleStateDiff = saleActions[0].stateDiff.find(d => d.field === 'auHousePropertyLoan.balance');
   assert.ok(saleStateDiff, 'AU sale should clear mortgageBalance in property state');
   assert.strictEqual(saleStateDiff.after, 0, 'AU mortgageBalance should be 0 after sale');
 });
@@ -383,7 +383,7 @@ test('Mortgage-US-5: REPLENISH_SAVINGS is dispatched and US savings account neve
   assert.ok(sim.state.usSavingsAccount.balance >= 0, 'US savings account must not go below zero');
 
   // A payment action was still attempted
-  const payments = sim.journal.getActions('US_MORTGAGE_PAYMENT_APPLY');
+  const payments = sim.journal.getActions('LOAN_PAYMENT_APPLY');
   assert.ok(payments.length > 0, 'A US mortgage payment action should still have been dispatched');
 });
 
@@ -406,6 +406,6 @@ test('Mortgage-AU-5: REPLENISH_SAVINGS is dispatched and AU savings account neve
 
   assert.ok(sim.state.auSavingsAccount.balance >= 0, 'AU savings account must not go below zero');
 
-  const payments = sim.journal.getActions('AU_MORTGAGE_PAYMENT_APPLY');
+  const payments = sim.journal.getActions('LOAN_PAYMENT_APPLY');
   assert.ok(payments.length > 0, 'An AU mortgage payment action should still have been dispatched');
 });
