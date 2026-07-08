@@ -1,6 +1,8 @@
 # 54 — Loan (liability) accounts + offset re-targeting
 
-**Status**: **Phase 1 implemented** (2026-07-07); Phases 2–3 proposed.
+**Status**: **IMPLEMENTED** — all 3 phases complete and green on branch
+`wip/accounts-and-loans` (P1 `d1e9464`/`888adca`, P2 `6886590`, P3 `f9e4b75`). Phase 3
+(offset re-target) was **co-implemented with design 53 Q3/Phase 3** — see §9 per-phase status.
 
 Phase 1 landed: `LoanAccount` (liability, `ACCOUNT_TYPE.LOAN`, `US_LOAN`/`AU_LOAN` roles),
 the `LOAN_PAYMENT` handler+reducer (interest/principal split + negative-amort flag),
@@ -225,9 +227,26 @@ keep loans out of the cash pools. Confirm both paths skip liabilities (a loan wi
 **Exit test**: `evt-loan` green; net worth of a scenario with a loan is asset-total minus the
 loan balance; drawdown never draws from a loan.
 
+**✅ DONE (committed `d1e9464` / `888adca`).** Landed as scoped — `LoanAccount` is the
+codebase's first liability account; positive `balance` = owed principal, negative sign applied
+by the wealth metrics (not stored); excluded from drawdown; `LOAN_PAYMENT` interest/principal
+split + negative-amortization flag.
+
 ### Phase 2 — Property migration
 *Move property mortgages onto linked loans; keep existing figures intact.*
-**Status (2026-07-07): analysis + scaffolding landed; the invasive migration is pending.**
+**✅ DONE (committed `6886590`).** The invasive migration below all landed; figures identical
+(loan `interestRate` defaults 0 → pure-principal amortization = the old mortgage math). Live-
+validated in Chrome (loan synthesized, payments amortize, house sale closes the loan). Two
+deviations from the plan below: **(a)** per-country wiring used **subclasses**
+`UsLoanPaymentHandler` / `AuLoanPaymentHandler` (each `static eventType`, auto-wired) over the
+base `LoanPaymentHandler({country})` — cleaner than instance config; the shared
+`LoanPaymentApplyReducer` is registered **once** by the compiler substrate (both toolsets
+registering it would double-reduce). **(b)** The **migration-on-load shim (item 4) was
+deferred** — no legacy saves exist on this branch, and new scenarios' snapshots already carry
+the synthesized loan (round-trip tests green). Add it if a real pre-migration fixture appears;
+hook = where `initialState` is applied to `sim.state` on the deserialize path.
+
+*Original analysis + scaffolding notes (retained for reference):*
 
 Findings from grounding the plan in the code (these refine §5):
 
@@ -270,6 +289,7 @@ Remaining work (atomic — can't be cleanly half-done):
 
 **Exit test**: `evt-real-property` + `toolset-mortgage-payment` green with the loan as the
 mortgage source of truth; a legacy save loads, upgrades, and reports identical net worth.
+*(Met, except the legacy-save-upgrade clause — deferred with the item-4 shim above.)*
 
 ### Phase 3 — Offset re-target (design 53 → loan)
 *Depends on 53's `OffsetAccount` existing.*
@@ -289,6 +309,23 @@ mortgage source of truth; a legacy save loads, upgrades, and reports identical n
 **Exit test**: offset suites green for AU **and** US, each covering owner-occupied (new:
 interest + payoff effect) and — where applicable — rental (53's effect, preserved); offset
 balance stays liquid/drawdown-eligible.
+
+**✅ DONE (committed `f9e4b75`), co-implemented with design 53 Q3/Phase 3.** Because 53's
+`OffsetAccount` and this re-target landed together, the offset went straight to the loan (no
+intermediate property-scalar wiring). Deviations from the plan above:
+- **Kept `offsetsPropertyKey`, did *not* rename to `offsetsLoanKey`** (item 1). The offset
+  links to a *property*; resolution is property → its synthesized loan → offset, since loan
+  keys are synthetic (`${propKey}Loan`). `offsetBalanceForLoan(state, loan)` matches offsets
+  on `offsetsPropertyKey === loan.linkedPropertyKey`, with a **same-currency guard**.
+- Item 2 (owner-occupied interest/payoff) works because `effectivePrincipal` is consulted by
+  **both** the rental line and the monthly `LOAN_PAYMENT` accrual (from P2).
+- Item 3 (drop AU-only gate) done — `US_OFFSET` + `AU_OFFSET` roles; offset is currency-
+  agnostic; added to `SAVINGS_ROLES` for liquidity.
+- Tests: `evt-offset.test.mjs` (AU + US, owner-occupied + rental + drawdown-eligibility) plus
+  a full-sim integration test in `accounting-integrity.test.mjs`.
+- **⚠️ Outstanding:** editor-created offsets get no `stateKey` and don't reach `sim.state`
+  (config-declared ones work). Deferred to **design 55 §3.1**. Full detail in design 53 §6
+  Phase 3 "Outstanding".
 
 ---
 

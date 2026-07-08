@@ -1,6 +1,11 @@
 # 53 — Account basis refactor + AU offset account
 
-**Status**: **Proposed** (design only).
+**Status**: **IMPLEMENTED** — all 5 phases complete and green on branch `wip/accounts-and-loans`.
+Phases 1–3 committed (`888adca`, `6886590`, `f9e4b75`); Phases 4–5 (bond coupon + holdings
+editor) done and green, **uncommitted** at time of writing. See §6 for per-phase status and
+the deviations from the original plan (notably: Q3's offset was **co-implemented with
+design 54 Phase 3** and re-targeted onto the *loan* rather than the property scalar, since
+design 54 P2 retired that scalar). One follow-up remains outstanding — see §6 "Outstanding".
 
 **Follow-up**: `design/54-loan-liability-accounts.md` builds on this doc's `OffsetAccount`
 (§3). It introduces a first-class **Loan** (liability) account that accrues interest, and
@@ -396,6 +401,10 @@ readers (§1) — this phase must migrate them to holdings FIFO, not just delete
 drawdown suites (`change-residency`, `toolset-cross-border`, `evt-drawdown-strategy`) green,
 with no code path reading brokerage `earningsBasis` / `contributionBasis`.
 
+**✅ DONE (committed `888adca`).** Both live readers migrated to holdings FIFO as scoped.
+Correction to the original premise: brokerage basis was **not** write-only dead — those two
+readers (`_drawPenaltyFree`, residency step-up) had to be migrated, which this phase did.
+
 ### Phase 2 — Introduce `RetirementAccount`, move the fields
 *Q1 / Q2 structural change.*
 
@@ -425,6 +434,10 @@ with no code path reading brokerage `earningsBasis` / `contributionBasis`.
 **Exit test**: full unit suite green; brokerage state has no basis fields; retirement
 evt suites unchanged.
 
+**✅ DONE (committed `888adca`).** `RetirementAccount` introduced; the 4 retirement classes
+reparented; `BrokerageAccount` is holdings-only; builder split + `RETIREMENT_TYPES` UI gate
+landed as scoped.
+
 ### Phase 3 — AU offset account
 *Q3. Independent of Phases 1–2; can land in parallel.*
 
@@ -443,6 +456,30 @@ evt suites unchanged.
 
 **Exit test**: `evt-au-offset` green; existing `evt-real-property` rental figures
 unchanged when no offset is present.
+
+**✅ DONE (committed `f9e4b75`), but re-scoped — co-implemented with design 54 Phase 3.**
+Deviations from the plan above, all forced by design 54 landing first:
+- **Reads through the loan, not the property scalar.** Design 54 P2 retired the property's
+  `mortgageBalance` scalar and routed *both* the rental deductible-interest line and the
+  monthly loan-payment interest accrual through `LoanAccount`'s `effectivePrincipal`. So the
+  offset wires into **`offsetBalanceForLoan(state, loan)` inside `effectivePrincipal`**
+  (`loan-classes.js`), not `offsetBalanceForProperty` / `computeRentalTaxables`. One wiring
+  point ⇒ the offset bites on **rental deduction AND owner-occupied interest/payoff** in one
+  change (this absorbed design 54 Phase 3, "offset↔loan re-target").
+- **US + AU, not AU-only.** Added both `ACCOUNT_ROLES.US_OFFSET` and `AU_OFFSET`;
+  `OffsetAccount` defaults AU/AUD but is currency-agnostic. A **same-currency guard** in
+  `offsetBalanceForLoan` stops a cross-currency offset from wrongly reducing principal 1:1.
+- **Link key kept as `offsetsPropertyKey`** (offset → property → its synthesized loan), not a
+  literal `offsetsLoanKey`, since loan keys are synthetic.
+- **Liquidity:** `US_/AU_OFFSET` added to `SAVINGS_ROLES` so the offset is a drawdown-eligible
+  cross-border cash-pool participant (opposite of a loan).
+- **Tests:** `tests/unit/evt-offset.test.mjs` (unit + compile-path), plus a full-sim
+  integration test in `accounting-integrity.test.mjs`.
+- **⚠️ Outstanding blocker (deferred to design 55):** an **editor-created** offset gets no
+  `stateKey` (only prebuilt-enumerated accounts do, via `SimulationState._assignAccount`), so
+  it never reaches `sim.state` and silently does nothing. Config-declared offsets (explicit
+  `stateKey`) work end-to-end. Fix documented in `design/55-configuration-driven-parameters.md`
+  §3.1 (stateKey assignment for editor/Config-List records).
 
 ### Phase 4 — Per-holding bond coupon rate
 *Q4. Independent of Phases 1–3; pure-additive, can land in any order.*
@@ -466,6 +503,13 @@ unchanged when no offset is present.
 **Exit test**: `bond-coupon-rate` green; existing `evt-us-brokerage` / fixed-income
 interest suites unchanged when no `couponRate` is set (null ⇒ bit-for-bit today).
 
+**✅ DONE (green, uncommitted).** Landed as scoped. The `computeHoldingsGrowth` override uses
+an explicit `useCoupon = rateSource === 'effectiveInterestRates'` gate:
+`rateOverride ?? (useCoupon ? (h.couponRate ?? undefined) : undefined) ?? (h.rateKey!=null ?
+ratesMap[h.rateKey] : undefined) ?? fbRate`. New `tests/unit/bond-coupon-rate.test.mjs`
+(10 tests) incl. composition with `BondPriceAdjustReducer` (fixed coupon holds across a rate
+regime move while price marks via `duration`).
+
 ### Phase 5 — Holdings editor per-allocation inputs
 *§5. UI-only. Depends on Phase 4 (the `couponRate` field must exist); otherwise
 independent. No engine/serializer change.*
@@ -484,6 +528,27 @@ independent. No engine/serializer change.*
 row hides Cost Basis and keeps it equal to Market Value across editor edits; a saved
 scenario with `dividendYield`/`couponRate`/`duration` round-trips and is now editable.
 (No unit-suite delta expected; add a light editor DOM test if the harness supports it.)
+
+**✅ DONE (green, uncommitted).** Per-cell gating by allocation per the §5.2 matrix; merged
+Income Rate column; Duration column (BOND); Cost Basis + Loss Partner hidden where
+meaningless; allocation-change re-render (whole tbody, which also repaints the grouped Rate
+Key `<select>` added in a prior pass); bond `costBasis`↔`marketValue` sync. Instead of a
+"manual editor pass," covered by `tests/viz/editors/holdings-allocation-inputs.test.mjs`
+(8 jsdom tests). Also note: the **Rate Key** cell was converted from free-text to a grouped
+`<select>` in the same push (a usability fix surfaced while building this phase).
+
+### Outstanding (post-rollout)
+
+All 5 phases are functionally complete and green. Known follow-ups, none blocking:
+- **Editor-created offset accounts don't reach `sim.state`** (Phase 3 blocker above): a
+  record created in the editor gets no `stateKey`, so the runtime-state projection can't see
+  it. Config-declared offsets work. Fix owned by **design 55 §3.1** (stateKey assignment for
+  editor/Config-List records) — the offset is its motivating case.
+- **Commit Phases 4–5.** Done + green in the working tree; not yet committed.
+- **Premium/discount bonds** (basis ≠ market value) remain out of scope for the editor
+  (§5.3.4): model as `OTHER` or via saved JSON until an "advanced" toggle is added.
+- **Optional live Chrome pass** of the holdings editor — validated via the jsdom viz harness,
+  not a manual browser check.
 
 ---
 

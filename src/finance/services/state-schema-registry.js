@@ -167,6 +167,7 @@ export class StateSchemaRegistry {
     this.registerPattern('*.holdings.*.label',       ParameterValueType.text());
     this.registerPattern('*.holdings.*.purchaseDate', ParameterValueType.date());
     this.registerPattern('*.holdings.*.dividendYield',       ParameterValueType.rate());
+    this.registerPattern('*.holdings.*.couponRate',          ParameterValueType.rate());
     this.registerPattern('*.holdings.*.duration',            ParameterValueType.decimal(2));
     this.registerPattern('*.holdings.*.appreciationSchedule', ParameterValueType.unknown());
 

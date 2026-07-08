@@ -227,6 +227,9 @@ export class AccountEditor extends BaseComponent {
           rateKey:        '',
           marketValue:    0,
           costBasis:      0,
+          dividendYield:  null,
+          couponRate:     null,
+          duration:       null,
           taxLossPartner: null,
           purchaseDate:   null,
         });
@@ -259,16 +262,48 @@ export class AccountEditor extends BaseComponent {
         `<option value="${a}"${h.allocation === a ? ' selected' : ''}>${a}</option>`
       ).join('');
 
+      const alloc = h.allocation ?? 'EQUITY';
+      // Per-cell gating by allocation (design 53 §5.2). Fields the allocation
+      // doesn't use render an empty cell rather than a stray input.
+      const showCostBasis = alloc === 'EQUITY' || alloc === 'OTHER';   // BOND: hidden (=MV); CASH: no CGT
+      const showPartner   = alloc === 'EQUITY' || alloc === 'OTHER';   // TLH is equity-oriented
+      const showDuration  = alloc === 'BOND';                          // mark-to-market sensitivity
+      // The merged "Income Rate" cell binds dividendYield (EQUITY) or couponRate (BOND).
+      const incomeField   = alloc === 'EQUITY' ? 'dividendYield'
+                          : alloc === 'BOND'   ? 'couponRate'
+                          : null;
+      const incomeVal     = incomeField ? (h[incomeField] ?? '') : '';
+      const incomeTitle   = alloc === 'EQUITY' ? 'Dividend yield' : 'Coupon rate';
+
+      const costBasisCell = showCostBasis
+        ? `<td><input class="h-input h-num" type="number" data-f="costBasis" value="${h.costBasis ?? 0}"/></td>`
+        : '<td class="h-cell-na"></td>';
+      const incomeCell = incomeField
+        ? `<td><input class="h-input h-num" type="number" step="0.001" data-f="${incomeField}" value="${incomeVal}" title="${incomeTitle}" placeholder="${incomeTitle}"/></td>`
+        : '<td class="h-cell-na"></td>';
+      const durationCell = showDuration
+        ? `<td><input class="h-input h-num" type="number" step="0.1" data-f="duration" value="${h.duration ?? ''}" title="Modified duration (years)" placeholder="Duration"/></td>`
+        : '<td class="h-cell-na"></td>';
+      const partnerCell = showPartner
+        ? `<td><select class="h-input" data-f="taxLossPartner">${partnerOpts}</select></td>`
+        : '<td class="h-cell-na"></td>';
+
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td><input class="h-input" data-f="label" value="${_escape(h.label ?? '')}" placeholder="Label"/></td>
         <td><select class="h-input" data-f="allocation">${allocOpts}</select></td>
         <td><select class="h-input" data-f="rateKey">${_rateKeyOptionsHtml(h.rateKey ?? '')}</select></td>
         <td><input class="h-input h-num" type="number" data-f="marketValue" value="${h.marketValue ?? 0}"/></td>
-        <td><input class="h-input h-num" type="number" data-f="costBasis" value="${h.costBasis ?? 0}"/></td>
-        <td><select class="h-input" data-f="taxLossPartner">${partnerOpts}</select></td>
+        ${costBasisCell}
+        ${incomeCell}
+        ${durationCell}
+        ${partnerCell}
         <td class="h-actions"><button class="btn btn-xs btn-warn h-delete" type="button">✕</button></td>
       `;
+
+      // Nullable per-holding number fields: an empty input means "unset" (fall back
+      // to the account/regime default), not 0.
+      const NULLABLE_NUM = new Set(['dividendYield', 'couponRate', 'duration']);
 
       // Wire all inputs
       tr.querySelectorAll('[data-f]').forEach(input => {
@@ -277,11 +312,31 @@ export class AccountEditor extends BaseComponent {
         const evtName = input.tagName === 'SELECT' ? 'change' : 'input';
 
         input.addEventListener(evtName, () => {
-          if (field === 'taxLossPartner') {
+          if (field === 'allocation') {
+            this._holdings[i].allocation = input.value;
+            // Bond Cost Basis is hidden and defaulted to Market Value (§5.3.4):
+            // on switch to BOND, snap basis to MV so no embedded gain is authored.
+            if (input.value === 'BOND') {
+              this._holdings[i].costBasis = Number(this._holdings[i].marketValue) || 0;
+            }
+            // Re-render so the row shows exactly this allocation's inputs.
+            this._refreshHoldingsTbody();
+            this._syncBalance(this._rootEl);
+          } else if (field === 'taxLossPartner') {
             this._holdings[i].taxLossPartner = input.value || null;
           } else if (isNum) {
-            this._holdings[i][field] = Number(input.value) || 0;
-            if (field === 'marketValue') this._syncBalance(this._rootEl);
+            if (NULLABLE_NUM.has(field)) {
+              this._holdings[i][field] = input.value === '' ? null : Number(input.value);
+            } else {
+              this._holdings[i][field] = Number(input.value) || 0;
+            }
+            if (field === 'marketValue') {
+              // Editor-time MV edit on a BOND keeps costBasis synced to MV (§5.3.4).
+              if (this._holdings[i].allocation === 'BOND') {
+                this._holdings[i].costBasis = Number(input.value) || 0;
+              }
+              this._syncBalance(this._rootEl);
+            }
           } else {
             this._holdings[i][field] = input.value;
           }
