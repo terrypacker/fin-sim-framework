@@ -99,3 +99,32 @@ export const ROLE_TO_RATE_KEY = Object.freeze({
   [ACCOUNT_ROLES.US_SAVINGS]:     RATE_KEYS.SAVINGS_US,
   [ACCOUNT_ROLES.AU_SAVINGS]:     RATE_KEYS.SAVINGS_AU,
 });
+
+/**
+ * Map from ACCOUNT_ROLES to the per-account-type *member* rate key — i.e. the
+ * `static rateKey` its earnings/interest handler carries and looks up (design 55 §8).
+ * This differs from ROLE_TO_RATE_KEY, which returns the class key a regime shock
+ * *targets* (EQUITY_US): the member key is the leaf the class fans out to
+ * (EQUITY_US_ROTH), and the one the ECONOMIC_REGIMES toolset extends with a
+ * per-account entry `<memberKey>::<stateKey>`. Keeping this aligned with each
+ * handler's `static rateKey` is what makes per-account seeding and the
+ * `computeHoldingsGrowth` lookup agree.
+ */
+export const MEMBER_RATE_KEY_BY_ROLE = Object.freeze({
+  [ACCOUNT_ROLES.ROTH]:            RATE_KEYS.EQUITY_US_ROTH,
+  [ACCOUNT_ROLES.IRA]:             RATE_KEYS.EQUITY_US_IRA,
+  [ACCOUNT_ROLES.K401]:            RATE_KEYS.EQUITY_US_K401,
+  [ACCOUNT_ROLES.US_STOCK]:        RATE_KEYS.EQUITY_US_BROKERAGE,
+  [ACCOUNT_ROLES.AU_STOCK]:        RATE_KEYS.EQUITY_AU_STOCK,
+  [ACCOUNT_ROLES.SUPER]:           RATE_KEYS.EQUITY_AU_SUPER,
+  [ACCOUNT_ROLES.FIXED_INCOME]:    RATE_KEYS.FIXED_INCOME_US,
+  [ACCOUNT_ROLES.AU_FIXED_INCOME]: RATE_KEYS.FIXED_INCOME_AU,
+  [ACCOUNT_ROLES.US_SAVINGS]:      RATE_KEYS.SAVINGS_US,
+  [ACCOUNT_ROLES.AU_SAVINGS]:      RATE_KEYS.SAVINGS_AU,
+});
+
+/** RATE_KEYS entries that live in `effectiveInterestRates` (vs `effectiveGrowthRates`). */
+export const INTEREST_RATE_KEYS = Object.freeze(new Set([
+  RATE_KEYS.FIXED_INCOME_US, RATE_KEYS.FIXED_INCOME_AU,
+  RATE_KEYS.SAVINGS_US,      RATE_KEYS.SAVINGS_AU,
+]));

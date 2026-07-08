@@ -50,8 +50,6 @@ export class MonthlyWagesHandler extends HandlerEntry {
 
   call({ date, state }) {
     const actions = [];
-    const usCashKey = this.stateRegistry?.getStateKey(ACCOUNT_ROLES.US_SAVINGS) ?? 'usSavingsAccount';
-    const auCashKey = this.stateRegistry?.getStateKey(ACCOUNT_ROLES.AU_SAVINGS) ?? 'auSavingsAccount';
     // Cash pools actually credited this tick, so we RECORD_BALANCE each exactly once.
     const touched = new Set();
 
@@ -61,14 +59,24 @@ export class MonthlyWagesHandler extends HandlerEntry {
       const retDate = person.retirementDate;
       if (retDate && date >= retDate) continue;
 
-      const isAud = person.wageCurrency === 'AUD';
+      const isAud   = person.wageCurrency === 'AUD';
+      // Wages land in the designated transaction account (design 55 §7), preferring
+      // the earner's own flagged account, then the household's; falling back to the
+      // country's savings role (legacy single-pool behavior) so unflagged scenarios
+      // are unchanged. targetKey is stamped so the apply reducer credits it directly.
+      const country   = isAud ? 'AU' : 'US';
+      const role      = isAud ? ACCOUNT_ROLES.AU_SAVINGS : ACCOUNT_ROLES.US_SAVINGS;
+      const targetKey = this.stateRegistry?.resolveTransactionAccountKey?.(country, key)
+        ?? this.stateRegistry?.getStateKey(role, key)
+        ?? this.stateRegistry?.getStateKey(role)
+        ?? (isAud ? 'auSavingsAccount' : 'usSavingsAccount');
       actions.push(
         isAud
-          ? { type: 'AU_WAGES_INCOME_APPLY', amount: wage, residency: person.residency ?? null, personKey: key }
-          : { type: 'WAGES_INCOME_APPLY',    amount: wage, residency: person.residency ?? null, personKey: key },
+          ? { type: 'AU_WAGES_INCOME_APPLY', amount: wage, residency: person.residency ?? null, personKey: key, targetKey }
+          : { type: 'WAGES_INCOME_APPLY',    amount: wage, residency: person.residency ?? null, personKey: key, targetKey },
         new FieldValueAction(`wages_${key}`, `${person.name || key} Wages`, wage),
       );
-      touched.add(isAud ? auCashKey : usCashKey);
+      touched.add(targetKey);
     }
 
     for (const cashKey of touched) {

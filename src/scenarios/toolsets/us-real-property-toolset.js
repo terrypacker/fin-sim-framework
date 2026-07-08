@@ -151,11 +151,11 @@ export const US_REAL_PROPERTY = {
     if (mortgagedProps.length > 0) {
       // Country-filtered so it pays only US loans; the shared LoanPaymentApplyReducer
       // is registered once by the compiler substrate (design 54 P2).
-      handlers.push(new UsLoanPaymentHandler());
+      handlers.push(new UsLoanPaymentHandler({ stateRegistry: context.stateRegistry }));
     }
     const rentalProps = props.filter(p => p.stateKey && p.rentalEnabled && (p.monthlyRent ?? 0) > 0);
     if (rentalProps.length > 0) {
-      handlers.push(new UsRentalIncomeHandler({ properties: rentalProps.map(_rentalParams) }));
+      handlers.push(new UsRentalIncomeHandler({ properties: rentalProps.map(_rentalParams), stateRegistry: context.stateRegistry }));
     }
     const appreciableProps = props.filter(p => p.stateKey && ((p.appreciationRate ?? 0) !== 0 || p.appreciationSchedule));
     const appreciateEvent  = context.schedulesById?.[US_REAL_PROPERTY_APPRECIATE_TYPE];
@@ -176,13 +176,13 @@ export const US_REAL_PROPERTY = {
   reducers(context) {
     const props = (context.realProperties ?? []).filter(p => p.country === 'US');
     if (props.length === 0) return [];
-    const reducers = [new UsHouseSaleApplyReducer({ accountService: context.accountService })];
+    const reducers = [new UsHouseSaleApplyReducer({ accountService: context.accountService, stateRegistry: context.stateRegistry })];
     // Loan payments apply via the shared LoanPaymentApplyReducer registered once
     // by the compiler substrate (design 54 P2) — not per toolset, which would
     // double-reduce every LOAN_PAYMENT_APPLY.
     const rentalProps = props.filter(p => p.stateKey && p.rentalEnabled && (p.monthlyRent ?? 0) > 0);
     if (rentalProps.length > 0) {
-      reducers.push(new UsRentalIncomeApplyReducer({ accountService: context.accountService }));
+      reducers.push(new UsRentalIncomeApplyReducer({ accountService: context.accountService, stateRegistry: context.stateRegistry }));
     }
     return reducers;
   },

@@ -30,11 +30,15 @@ export class AuFixedIncomeEarningsApplyReducer extends AccountServiceReducer {
 
   reduce(state, action) {
     const { amount, residency } = action;
-    const prev = state.auFixedIncomeAccount ?? {};
+    // Honor a handler-stamped stateKey so multiple / renamed AU fixed-income
+    // accounts each accrue their own earnings; fall back to the canonical key for
+    // legacy bare-event dispatchers and old saves (mirrors the US fix in 8e50fdb).
+    const key  = action.stateKey ?? 'auFixedIncomeAccount';
+    const prev = state[key] ?? {};
     return this.newState(
       state,
       {
-        auFixedIncomeAccount: { ...prev, balance: (prev.balance ?? 0) + amount },
+        [key]: { ...prev, balance: (prev.balance ?? 0) + amount },
       },
       [{ type: 'AU_FIXED_INCOME_EARNINGS_TAX', amount, residency }]
     );

@@ -12,6 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { findLoanForProperty } from '../loan-classes.js';
+import { resolveCashKey } from '../cash-routing.js';
 
 /** Default AU cash pool key when no saleDestinationAccount is provided. */
 const defaultAuCashKey = (state) =>
@@ -37,9 +38,10 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
   static description = 'Credits the destination account with net proceeds (salePrice − mortgage), zeroes mortgageBalance, and chains AU_HOUSE_SALE_TAX with the capital gain.';
   static actionType  = 'AU_HOUSE_SALE_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('AU House Sale Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['AU_HOUSE_SALE_APPLY'];
     this.generatedActionTypes = ['AU_HOUSE_SALE_TAX'];
   }
@@ -54,7 +56,7 @@ export class AuHouseSaleApplyReducer extends AccountServiceReducer {
     const accumulatedDep = (stateKey && state[stateKey]?.accumulatedDepreciation) ?? 0;
     const adjustedBasis  = Math.max(0, costBasis - accumulatedDep);
     const gain        = Math.max(0, salePrice - adjustedBasis);
-    const destKey     = destinationKey ?? defaultAuCashKey(state);
+    const destKey     = destinationKey ?? resolveCashKey(this.stateRegistry, 'AU', state);
     this.accountService.transaction(state[destKey], netProceeds, null);
     const updates = {};
     if (stateKey && state[stateKey]) {

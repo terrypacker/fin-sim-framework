@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
+import { resolveCashKey } from '../cash-routing.js';
 
 /** Default US cash pool key when no saleDestinationAccount is provided. */
 const defaultUsCashKey = (state) =>
@@ -37,9 +38,10 @@ export class CollectibleSaleApplyReducer extends AccountServiceReducer {
   static description = 'Credits the destination account with collectible sale proceeds, zeroes the collectible value, and chains COLLECTIBLE_SALE_TAX with the gain.';
   static actionType  = 'COLLECTIBLE_SALE_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('Collectible Sale Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['COLLECTIBLE_SALE_APPLY'];
     this.generatedActionTypes = ['COLLECTIBLE_SALE_TAX'];
   }
@@ -47,7 +49,7 @@ export class CollectibleSaleApplyReducer extends AccountServiceReducer {
   reduce(state, action) {
     const { salePrice, costBasis, residency, stateKey, destinationKey } = action;
     const gain    = Math.max(0, salePrice - costBasis);
-    const destKey = destinationKey ?? defaultUsCashKey(state);
+    const destKey = destinationKey ?? resolveCashKey(this.stateRegistry, 'US', state);
     this.accountService.transaction(state[destKey], salePrice, null);
     const stateUpdate = {};
     const key = stateKey ?? 'collectibleAccount';

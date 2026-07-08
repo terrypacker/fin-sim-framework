@@ -78,7 +78,11 @@ export class RegimeApplyReducer extends Reducer {
       // out to every per-account member key, so each equity account is shocked
       // on top of its own seeded base rate.
       _addScaledExpandingClasses(effective.effectiveGrowthRates, r.returnAdjustment, r.currentFactor);
-      _addScaled(effective.effectiveInterestRates,      r.interestRateAdjustment, r.currentFactor);
+      // Interest also fans onto per-account keys (design 55 §8). Interest keys are
+      // not classes, so this reduces to the legacy direct-key add plus a
+      // `<key>::<stateKey>` prefix sweep — byte-for-byte identical when no
+      // per-account interest key is seeded.
+      _addScaledExpandingClasses(effective.effectiveInterestRates, r.interestRateAdjustment, r.currentFactor);
       _addScaled(effective.effectiveInflationRates,     r.inflationAdjustment,    r.currentFactor);
       _addScaled(effective.effectiveAppreciationRates,  r.appreciationAdjustment, r.currentFactor);
       _addScaled(effective.effectiveDividendAdjustments,r.dividendAdjustment,     r.currentFactor);
@@ -124,12 +128,22 @@ function _mulScaled(target, source, factor) {
  */
 function _addScaledExpandingClasses(target, source, factor) {
   if (!source) return;
+  // Snapshot keys before mutating so the per-account `<leaf>::<stateKey>` sweep
+  // sees a stable set (we only ever read pre-existing seeded keys).
+  const targetKeys = Object.keys(target);
   for (const [k, v] of Object.entries(source)) {
-    const members = RATE_KEY_CLASS_MEMBERS[k];
-    if (members) {
-      for (const m of members) target[m] = (target[m] ?? 0) + v * factor;
-    } else {
-      target[k] = (target[k] ?? 0) + v * factor;
+    // A class key (EQUITY_US) fans out to its member keys; a leaf key (SAVINGS_US,
+    // EQUITY_US_ROTH) is its own single "member".
+    const leaves = RATE_KEY_CLASS_MEMBERS[k] ?? [k];
+    for (const leaf of leaves) {
+      target[leaf] = (target[leaf] ?? 0) + v * factor;
+      // Per-account rate keys (design 55 §8): `<leaf>::<stateKey>`. Shock every
+      // seeded per-account member so a class crash still hits each account on top
+      // of its own baseline. No-op when no per-account keys are seeded.
+      const prefix = leaf + '::';
+      for (const tk of targetKeys) {
+        if (tk.startsWith(prefix)) target[tk] = (target[tk] ?? 0) + v * factor;
+      }
     }
   }
 }

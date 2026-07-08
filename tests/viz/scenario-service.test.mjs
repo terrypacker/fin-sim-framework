@@ -376,12 +376,14 @@ test('newScenario: active config has correct content after compile', () => {
   assert.strictEqual(expensesParam.value,    D.monthlyExpenses);
   assert.strictEqual(expensesParam.currency, 'USD');
 
-  const rothParam = active.params.find(p => p.name === 'rothBalance');
-  assert.ok(rothParam,                                  'rothBalance param should exist');
+  // Per-record balance/retirement-date params are now generated from the records
+  // (design 55), keyed acct.<stateKey>.<field> / person.<id>.<field>.
+  const rothParam = active.params.find(p => p.name === 'acct.rothAccount.balance');
+  assert.ok(rothParam,                                  'acct.rothAccount.balance param should exist');
   assert.strictEqual(rothParam.value, D.rothBalance);
 
-  const retirementDateParam = active.params.find(p => p.name === 'primaryRetirementDate');
-  assert.ok(retirementDateParam,                        'primaryRetirementDate param should exist');
+  const retirementDateParam = active.params.find(p => p.name === 'person.primary.retirementDate');
+  assert.ok(retirementDateParam,                        'person.primary.retirementDate param should exist');
   assert.strictEqual(retirementDateParam.type, 'Date');
 
   // ── Persons ───────────────────────────────────────────────────────────────

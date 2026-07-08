@@ -261,6 +261,16 @@ Persons / accounts / real-properties / collectibles are restored via `ScenarioSe
 
 `cfg.params` is also param→node-cascaded: any param schema entry with a `node` declaration (e.g. `{ type: 'person', id: …, field: 'birthDate' }`) drives a field update on the matching `cfg.persons` / `cfg.accounts` record before compilation, so edited UI params propagate into the compiled scenario.
 
+### Adding a scenario parameter
+
+There are two ways a parameter enters the surface — pick by whether it is **per-record** or **global**:
+
+1. **Per-record fields → the template-driven path (preferred; design 55).** Balance, growth/dividend/interest rate, contribution basis, wage, retirement date, property value/appreciation/sale-year, the `isTransactionAccount` flag, … are **generated from the live records** at Build/Rebuild, one param per (record × template-field). To expose a new per-record field, add a one-line entry to the relevant template in `src/scenarios/params/record-param-templates.js` (`{ field, label, type, mc, opt, money?, nullable? }`) — nothing else. `ScenarioParamGenerator.generate(cfg)` emits a namespaced, node-carrying entry (`acct.<stateKey>.<field>`, `person.<id>.<field>`, `prop.<stateKey>.<field>`, `coll.…`, `equity.…`) that seeds from the record and cascades back onto it, so account/person/property **counts and types stay flexible without touching any schema**. The collectible / company-equity templates ship empty but are already wired, so a field added there auto-generates params too. The generated key carries its own `node`, so the existing cascade + the design-32 **harvest-on-Rebuild** rule (record→param before param→record) protect a direct domain edit from being clobbered.
+
+2. **Global / optimization / cross-border params → static schema entries.** Keys that are not per-record (`inflationRate`, `moveYear`, `monthlyExpenses`, global fallback rates like `iraGrowthRate`, optimizer targets) stay hand-authored in a toolset's `paramSchema(context)` or the scenario class's `getParamSchema()`. A per-account rate override *shadows* its global fallback once set — the global remains the default seed for newly-added accounts.
+
+Retiring a former per-record static key: add it to the scenario class's `getParamAliases()` map (`{ legacyKey: 'acct.<stateKey>.<field>' }`) so saved scenarios and MC/Opt configs rewrite to the generated key on load. See `design/55-configuration-driven-parameters.md`, `design/13-prebuilt-scenario-parameters.md` (typed param round-tripping), and `design/32-param-field-linking.md` (linked fields + harvest-on-Rebuild).
+
 ### Toolsets (`src/scenarios/toolsets/`)
 
 A toolset is a plain object:

@@ -13,8 +13,9 @@ import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { consumeHoldingsFifo } from '../../holdings/holdings-fifo.js';
 import { distributeHoldingsCredit } from '../../holdings/holding-utils.js';
+import { resolveCashKey } from '../cash-routing.js';
 
-/** Resolve the US cash pool. */
+/** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
 
 // ─── Fixed Income Reducers ────────────────────────────────────────────────────
@@ -25,14 +26,15 @@ export class FixedIncomeContributionApplyReducer extends AccountServiceReducer {
   static description = 'Debits the US cash pool and credits the fixed income account balance; no tax effect.';
   static actionType  = 'FIXED_INCOME_CONTRIBUTION_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('Fixed Income Contribution Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes = ['FIXED_INCOME_CONTRIBUTION_APPLY'];
   }
 
   reduce(state, action) {
-    this.accountService.transaction(usCash(state), -action.amount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], -action.amount, null);
     this.accountService.transaction(state.fixedIncomeAccount, action.amount, null);
     return this.newState(state, {});
   }
@@ -44,14 +46,15 @@ export class FixedIncomeWithdrawalApplyReducer extends AccountServiceReducer {
   static description = 'Credits the US cash pool and debits the fixed income account balance; no tax effect.';
   static actionType  = 'FIXED_INCOME_WITHDRAWAL_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('Fixed Income Withdrawal Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes = ['FIXED_INCOME_WITHDRAWAL_APPLY'];
   }
 
   reduce(state, action) {
-    this.accountService.transaction(usCash(state), action.amount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], action.amount, null);
     this.accountService.transaction(state.fixedIncomeAccount, -action.amount, null);
     return this.newState(state, {});
   }
@@ -66,7 +69,7 @@ export class FixedIncomeEarningsApplyReducer extends AccountServiceReducer {
   static description = 'Adds earnings to fixed income account; chains FIXED_INCOME_EARNINGS_TAX.';
   static actionType  = 'FIXED_INCOME_EARNINGS_APPLY';
 
-  constructor({ accountService }) {  // accountService unused but accepted for API symmetry
+  constructor({ accountService, stateRegistry }) {  // accountService unused but accepted for API symmetry
     super('Fixed Income Earnings Apply', PRIORITY.CASH_FLOW);
     this.reducedActionTypes   = ['FIXED_INCOME_EARNINGS_APPLY'];
     this.generatedActionTypes = ['FIXED_INCOME_EARNINGS_TAX'];
@@ -74,12 +77,17 @@ export class FixedIncomeEarningsApplyReducer extends AccountServiceReducer {
 
   reduce(state, action) {
     const { amount, residency } = action;
+    // Per-account (design 55): the handler stamps the earning account's stateKey.
+    // Fall back to the canonical single-account key so legacy bare-event dispatchers
+    // (and pre-stateKey saved actions) still resolve.
+    const key   = action.stateKey ?? 'fixedIncomeAccount';
+    const acct  = state[key];
     return this.newState(
       state,
       {
-        fixedIncomeAccount: {
-          ...state.fixedIncomeAccount,
-          balance: state.fixedIncomeAccount.balance + amount,
+        [key]: {
+          ...acct,
+          balance: acct.balance + amount,
         },
       },
       [{ type: 'FIXED_INCOME_EARNINGS_TAX', amount, residency }]
@@ -95,14 +103,15 @@ export class StockContributionApplyReducer extends AccountServiceReducer {
   static description = 'Debits the US cash pool and credits the stock account (balance + holdings); no tax effect.';
   static actionType  = 'STOCK_CONTRIBUTION_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('Stock Contribution Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes = ['STOCK_CONTRIBUTION_APPLY'];
   }
 
   reduce(state, action) {
-    this.accountService.transaction(usCash(state), -action.amount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], -action.amount, null);
     const key = action.stateKey ?? 'usStockAccount';
     // transaction() credits balance and distributes to holdings in place (design 25).
     // Brokerage basis is no longer tracked here — CGT comes from holdings (design 53 P1).
@@ -120,7 +129,7 @@ export class StockDividendApplyReducer extends AccountServiceReducer {
   static description = 'Adds dividend to stock balance and reinvests into holdings; chains STOCK_DIVIDEND_TAX.';
   static actionType  = 'STOCK_DIVIDEND_APPLY';
 
-  constructor({ accountService }) {  // accountService unused but accepted for API symmetry
+  constructor({ accountService, stateRegistry }) {  // accountService unused but accepted for API symmetry
     super('Stock Dividend Apply', PRIORITY.CASH_FLOW);
     this.reducedActionTypes   = ['STOCK_DIVIDEND_APPLY'];
     this.generatedActionTypes = ['STOCK_DIVIDEND_TAX'];
@@ -154,7 +163,7 @@ export class StockEarningsApplyReducer extends AccountServiceReducer {
   static description = 'Adds unrealized earnings to stock balance; no tax effect.';
   static actionType  = 'STOCK_EARNINGS_APPLY';
 
-  constructor({ accountService }) {  // accountService unused but accepted for API symmetry
+  constructor({ accountService, stateRegistry }) {  // accountService unused but accepted for API symmetry
     super('Stock Earnings Apply', PRIORITY.CASH_FLOW);
     this.reducedActionTypes = ['STOCK_EARNINGS_APPLY'];
   }
@@ -177,9 +186,10 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
   static description = 'Credits the US cash pool with sale proceeds, FIFO-consumes the stock account\'s holdings (design 25 §6.4), and chains STOCK_WITHDRAWAL_TAX with the realized basis.';
   static actionType  = 'STOCK_WITHDRAWAL_APPLY';
 
-  constructor({ accountService, costBasisStrategy = 'FIFO' }) {
+  constructor({ accountService, costBasisStrategy = 'FIFO', stateRegistry }) {
     super('Stock Withdrawal Apply', PRIORITY.CASH_FLOW);
     this.accountService    = accountService;
+    this.stateRegistry     = stateRegistry;
     this.costBasisStrategy = costBasisStrategy; // 'FIFO' | 'LIFO' | 'SPECIFIC' (per design §6.4)
     this.reducedActionTypes   = ['STOCK_WITHDRAWAL_APPLY'];
     this.generatedActionTypes = ['STOCK_WITHDRAWAL_TAX'];
@@ -201,7 +211,7 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
     const gain   = Math.max(0, salePrice - realizedBasis);
     const auGain = Math.max(0, salePrice - realizedAuBasis);
 
-    this.accountService.transaction(usCash(state), salePrice, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], salePrice, null);
 
     const newBalance = +newHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
     // Brokerage basis is no longer tracked (design 53 P1) — the FIFO realizedBasis

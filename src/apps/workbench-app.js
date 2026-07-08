@@ -787,6 +787,11 @@ export class WorkbenchApp extends BaseComponent {
     // leak). On a Rebuild the two are identical, so this is a no-op difference.
     if (this._loadedCfg) {
       Object.assign(this._loadedCfg, ScenarioSerializer.snapshotDomainRecords(registry));
+      // Record which default records the user has deleted (absent from the just-
+      // harvested live set) so the upcoming toolset recompile's drift-merge does
+      // not re-add them. Runs here — after the harvest, before ScenarioLoader.load
+      // runs drift-merge — so "absent" means a real deletion.
+      ScenarioLoader.recordDeletedDefaults(this._loadedCfg);
     }
 
     registry?.graph.clearLayer('config');

@@ -44,7 +44,7 @@ export const AU_BANKING = {
       { type: 'AU_SAVINGS_CONTRIBUTION_APPLY', fields: { amount: ValueType.currency('AUD') } },
       { type: 'AU_SAVINGS_WITHDRAWAL_APPLY', family: 'WITHDRAWAL', cc: 'AU',
         fields: { amount: ValueType.currency('AUD') } },
-      { type: 'AU_SAVINGS_EARNINGS_APPLY',   fields: { amount: ValueType.currency('AUD'), residency: ValueType.text() } },
+      { type: 'AU_SAVINGS_EARNINGS_APPLY',   fields: { amount: ValueType.currency('AUD'), stateKey: ValueType.text(), residency: ValueType.text() } },
       { type: 'AU_SAVINGS_EARNINGS_TAX',     fields: { amount: ValueType.currency('AUD'), residency: ValueType.text() } },
       { type: 'AU_FIXED_INCOME_EARNINGS_APPLY', fields: { amount: ValueType.currency('AUD'), residency: ValueType.text() } },
       { type: 'AU_FIXED_INCOME_EARNINGS_TAX',   fields: { amount: ValueType.currency('AUD'), residency: ValueType.text() } },
@@ -109,7 +109,8 @@ export const AU_BANKING = {
           stateRegistry: context.stateRegistry,
           role:          ACCOUNT_ROLES.AU_SAVINGS,
           ownerId:       acct.ownerId,
-          interestRate:  rate,
+          stateKey:      acct.stateKey,
+          interestRate:  acct.interestRate ?? rate,
         });
         h.handledEvents.push(event);
         handlers.push(h);
@@ -124,7 +125,7 @@ export const AU_BANKING = {
           stateRegistry: context.stateRegistry,
           role:          ACCOUNT_ROLES.AU_FIXED_INCOME,
           ownerId:       acct.ownerId,
-          interestRate:  rate,
+          interestRate:  acct.interestRate ?? rate,
         });
         h.handledEvents.push(event);
         handlers.push(h);

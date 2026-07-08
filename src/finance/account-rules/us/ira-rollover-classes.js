@@ -12,8 +12,9 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { getUniformDistributionPeriod } from './us-rmd-uniform-table.js';
+import { resolveCashKey } from '../cash-routing.js';
 
-/** Resolve the US cash pool. */
+/** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
 
 /**
@@ -57,16 +58,17 @@ export class IraRolloverWithdrawalApplyReducer extends AccountServiceReducer {
   static description = 'Credits the US cash pool and debits the IRA (no penalty); chains IRA_ROLLOVER_WITHDRAWAL_TAX.';
   static actionType  = 'IRA_ROLLOVER_WITHDRAWAL_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('IRA Rollover Withdrawal Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['IRA_ROLLOVER_WITHDRAWAL_APPLY'];
     this.generatedActionTypes = ['IRA_ROLLOVER_WITHDRAWAL_TAX'];
   }
 
   reduce(state, action) {
     const { amount, residency } = action;
-    this.accountService.transaction(usCash(state), amount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
     return this.newState(
       state,
       { iraAccount: debitIra(state.iraAccount, amount) },
@@ -85,9 +87,10 @@ export class IraRmdApplyReducer extends AccountServiceReducer {
   static description = 'Credits the US cash pool and debits the IRA for the required minimum distribution; chains IRA_RMD_TAX.';
   static actionType  = 'IRA_RMD_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('IRA RMD Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['IRA_RMD_APPLY'];
     this.generatedActionTypes = ['IRA_RMD_TAX'];
   }
@@ -95,7 +98,7 @@ export class IraRmdApplyReducer extends AccountServiceReducer {
   reduce(state, action) {
     const { amount, residency } = action;
     const stateKey = action.stateKey ?? 'iraAccount';
-    this.accountService.transaction(usCash(state), amount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
     return this.newState(
       state,
       { [stateKey]: debitIra(state[stateKey], amount) },

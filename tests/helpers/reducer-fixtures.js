@@ -120,6 +120,9 @@ export function makeServices({ stateKeyByRole = {} } = {}) {
     accountService: new AccountService(),
     stateRegistry: {
       getStateKey: (role) => stateKeyByRole[role] ?? role,
+      // Design 55 §7: no account flagged in the fixture → null → callers fall back
+      // to their SAVINGS-role / fixed savings key (unchanged pre-flag behavior).
+      resolveTransactionAccountKey: () => null,
     },
   };
 }

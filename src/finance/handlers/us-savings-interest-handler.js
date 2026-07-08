@@ -31,30 +31,38 @@ export class UsSavingsInterestMonthlyHandler extends HandlerEntry {
   static eventType   = 'US_SAVINGS_INTEREST_MONTHLY';
   static rateKey     = RATE_KEYS.SAVINGS_US;
 
-  constructor({ stateRegistry, role, ownerId = null, interestRate = 0.03, rateKey = null } = {}) {
+  constructor({ stateRegistry, role, ownerId = null, stateKey = null, interestRate = 0.03, rateKey = null } = {}) {
     super(null, 'Monthly US Savings Interest');
     this.stateRegistry = stateRegistry;
     this.role          = role;
     this.ownerId       = ownerId;
+    // Per-account (design 55 §7): the specific account this handler accrues to.
+    // Falls back to role+owner lookup for legacy handlers saved without it.
+    this.stateKey      = stateKey;
     this.interestRate  = interestRate;
     this.rateKey       = rateKey ?? new.target.rateKey;
     this.generatedActionTypes = ['US_SAVINGS_INTEREST_CREDIT', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
-    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, interestRate: d.interestRate ?? 0.03 });
+    const h = new this({ stateRegistry, role: d.role, ownerId: d.ownerId ?? null, stateKey: d.stateKey ?? null, interestRate: d.interestRate ?? 0.03 });
     h.id = d.id;
     return h;
   }
 
   toJSON() {
-    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, interestRate: this.interestRate };
+    return { ...super.toJSON(), role: this.role, ownerId: this.ownerId, stateKey: this.stateKey, interestRate: this.interestRate };
   }
 
   call({ state }) {
-    const stateKey = this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const balance  = this.stateRegistry.getAccount(state, this.role, this.ownerId)?.balance ?? 0;
-    const rate     = state.effectiveInterestRates?.[this.rateKey] ?? this.interestRate;
+    const stateKey = this.stateKey ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
+    const balance  = state[stateKey]?.balance ?? 0;
+    // Per-account rate key (design 55 §8): `<rateKey>::<stateKey>` wins over the
+    // shared SAVINGS_US key when the account carries its own interestRate; both
+    // fall through to the constructor rate. This handler computes interest inline
+    // (not via computeHoldingsGrowth), so the per-account lookup is mirrored here.
+    const rates    = state.effectiveInterestRates ?? {};
+    const rate     = rates[`${this.rateKey}::${stateKey}`] ?? rates[this.rateKey] ?? this.interestRate;
     const amount   = +(balance * rate / 12).toFixed(2);
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
     // US_SAVINGS_INTEREST_CREDIT is reduced via UsSavingsInterestCreditReducer
@@ -62,7 +70,7 @@ export class UsSavingsInterestMonthlyHandler extends HandlerEntry {
     // maintains the §4.4 holdings invariant for single-holding accounts —
     // emitting HOLDING_TRANSACT here would double-count.
     return [
-      { type: 'US_SAVINGS_INTEREST_CREDIT', amount },
+      { type: 'US_SAVINGS_INTEREST_CREDIT', amount, stateKey },
       new RecordMetricAction('us_savings_interest', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),
     ];

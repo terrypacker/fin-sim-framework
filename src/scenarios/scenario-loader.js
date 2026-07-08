@@ -12,6 +12,8 @@ import { ScenarioSerializer }     from './scenario-serializer.js';
 import { rescaleHoldingsToBalance } from '../finance/holdings/holding-utils.js';
 import { ToolsetRegistry }         from './toolsets/toolset-registry.js';
 import { ScenarioCompiler }        from './toolsets/scenario-compiler.js';
+import { ScenarioParamGenerator, isGeneratedParamKey, decodeGeneratedParamKey } from './params/scenario-param-generator.js';
+import { StateRegistry }          from '../finance/services/state-registry.js';
 import { IntlRetirementScenario }  from './intl-retirement-scenario.js';
 import { BlankScenario }           from './blank-scenario.js';
 import { US_BANKING }         from './toolsets/us-banking-toolset.js';
@@ -49,6 +51,19 @@ const BUILT_IN_TOOLSETS = [
   US_BROKERAGE, AU_BROKERAGE, US_INCOME, AU_INCOME, US_COMPANY_SALE,
   ECONOMIC_REGIMES,
 ];
+
+/**
+ * Real-property / company-equity fields the param cascade should round to a whole
+ * number (dollar value, calendar year). Fractional fields (rates, ratios) are
+ * passed through unrounded — Math.round on a 0.04 rate would zero it.
+ */
+const WHOLE_NUMBER_RECORD_FIELDS = new Set([
+  'value', 'plannedSaleYear', 'costBasis', 'mortgageBalance',
+]);
+function _roundRecordField(field, val) {
+  if (val == null) return val;
+  return WHOLE_NUMBER_RECORD_FIELDS.has(field) ? Math.round(val) : val;
+}
 
 /**
  * ScenarioLoader — single entry point for restoring a scenario configuration
@@ -189,6 +204,7 @@ export class ScenarioLoader {
    */
   _normalizeParams(cfg) {
     this._normalizeCountryCodes(cfg);
+    this._applyParamAliases(cfg);
 
     // Sync cfg.params (typed UI array) → cfg.parameters (plain key→value the compiler reads).
     if (Array.isArray(cfg.params) && cfg.params.length > 0) {
@@ -269,6 +285,71 @@ export class ScenarioLoader {
       if (val === undefined) continue;
       this._applyParamNode(cfg, node, val);
     }
+
+    // Third pass (design 55 §3): generated per-record keys in the flat map with no
+    // typed-array entry yet — the first-load path for MC/Opt/import overrides and
+    // aliased legacy keys, before _mergeParamSchema materializes the generated
+    // schema post-compile. The node is decoded from the key itself.
+    for (const key of Object.keys(cfg.parameters ?? {})) {
+      if (appliedKeys.has(key) || !isGeneratedParamKey(key)) continue;
+      const node = decodeGeneratedParamKey(key);
+      const val  = cfg.parameters[key];
+      if (!node || val === undefined) continue;
+      this._applyParamNode(cfg, node, val);
+    }
+  }
+
+  /**
+   * Design 55 §11: rewrite retired flat per-record param keys to their generated
+   * equivalents so saved scenarios and MC/Opt configs stay alive after the static
+   * entries are removed from the schema. The alias map ({ legacyKey → generatedKey })
+   * is scenario-class-owned; when cfg.scenarioClass is unresolved (user scenarios)
+   * we union the maps of all registered classes, mirroring the schemaNode fallback.
+   *
+   * A legacy key's value is carried onto the generated key. Because a renamed
+   * persisted param keeps its old `node` — which is byte-identical to the generated
+   * node — the param→record cascade is unaffected. Runs before the params→parameters
+   * sync so both the typed array and the flat map are normalized in one pass.
+   * @private
+   */
+  _applyParamAliases(cfg) {
+    const aliases = new Map();
+    const classes = cfg.scenarioClass ? [cfg.scenarioClass] : [...SCENARIO_CLASS_BY_ID.values()];
+    for (const cls of classes) {
+      const map = cls?.getParamAliases?.() ?? null;
+      if (!map) continue;
+      for (const [legacy, target] of Object.entries(map)) {
+        if (!aliases.has(legacy)) aliases.set(legacy, target);
+      }
+    }
+    if (aliases.size === 0) return;
+
+    // Typed params: rename legacy → generated key. Drop a legacy entry when the
+    // generated key is already present (avoid a duplicate key corrupting the
+    // params→parameters sync); otherwise the generated entry wins.
+    if (Array.isArray(cfg.params)) {
+      const names = new Set(cfg.params.map(p => p.name));
+      const kept = [];
+      for (const p of cfg.params) {
+        const target = aliases.get(p.name);
+        if (!target) { kept.push(p); continue; }
+        if (names.has(target)) continue;   // generated entry already present → drop legacy dup
+        p.name = target;
+        names.add(target);
+        kept.push(p);
+      }
+      cfg.params = kept;
+    }
+
+    // Flat map (MC/Opt overrides, raw imports): move the value to the generated key
+    // unless one is already set, then drop the legacy key.
+    if (cfg.parameters && typeof cfg.parameters === 'object') {
+      for (const [legacy, target] of aliases) {
+        if (!(legacy in cfg.parameters)) continue;
+        if (!(target in cfg.parameters)) cfg.parameters[target] = cfg.parameters[legacy];
+        delete cfg.parameters[legacy];
+      }
+    }
   }
 
   /**
@@ -295,10 +376,13 @@ export class ScenarioLoader {
       }
     } else if (node.type === 'realProperty') {
       const rec = (cfg.realProperties ?? []).find(r => r.stateKey === node.stateKey);
-      if (rec) rec[node.field] = val != null ? Math.round(val) : val;
+      // Round whole-number fields (dollar value, sale year) but NOT fractional
+      // rates like appreciationRate (design 55 property template) — Math.round on a
+      // 0.04 rate would zero it, corrupting appreciation on Rebuild.
+      if (rec) rec[node.field] = _roundRecordField(node.field, val);
     } else if (node.type === 'companyEquity') {
       const rec = (cfg.companyEquities ?? []).find(r => r.stateKey === node.stateKey);
-      if (rec) rec[node.field] = val != null ? Math.round(val) : val;
+      if (rec) rec[node.field] = _roundRecordField(node.field, val);
     } else if (node.type === 'accountPriority') {
       // Fan one categorical strategy value out to drawdownPriority across many
       // accounts by role. Per-owner ranking (ownerOrder/ownerStride) keeps each
@@ -387,7 +471,17 @@ export class ScenarioLoader {
     cfg.collectibles   = (collectibleService?.getAll()   ?? []).map(n => ScenarioSerializer._serializeCollectible(n));
     cfg.companyEquities = (companyEquityService?.getAll() ?? []).map(n => ScenarioSerializer._serializeCompanyEquity(n));
 
-    this._mergeParamSchema(cfg, toolsetParamSchema);
+    // Design 55 §7.3: warn when a country carries more than one transaction account
+    // (ambiguous debit target). Zero flagged is fine — the SAVINGS-role fallback covers it.
+    StateRegistry.validateTransactionAccounts(cfg.accounts);
+
+    // Design 55: derive one param per (record × template-field) from the live,
+    // just-re-snapshotted records and merge them into the schema. Ranked after
+    // scenario-class + toolset entries; generated keys are namespaced so they
+    // never collide with the retained static/global keys. `defaultValue` is the
+    // current record value, which is also the §6 harvest for changed records.
+    const generatedSchema = ScenarioParamGenerator.generate(cfg);
+    this._mergeParamSchema(cfg, [...(toolsetParamSchema ?? []), ...generatedSchema]);
   }
 
   /**
@@ -465,8 +559,18 @@ export class ScenarioLoader {
     for (const p of cfg.params) {
       const s = schemaByKey.get(p.name);
       if (!s) continue;
-      if (p.label       === undefined && s.label)            p.label       = s.label;
-      if (p.group       === undefined && s.group)            p.group       = s.group;
+      // Generated per-record params derive their label/group from the record
+      // (design 55 §4), so they are schema-owned — re-sync them rather than only
+      // backfilling. This keeps a migrated legacy entry (aliased from e.g.
+      // rothBalance, which kept the old "US Account Balances" group) consistent
+      // with freshly-generated siblings under the per-record group.
+      if (isGeneratedParamKey(p.name)) {
+        if (s.label) p.label = s.label;
+        if (s.group) p.group = s.group;
+      } else {
+        if (p.label === undefined && s.label)                p.label       = s.label;
+        if (p.group === undefined && s.group)                p.group       = s.group;
+      }
       // Type is schema-owned metadata (the UI type selector is disabled for
       // schema params), so a schema type change (e.g. Array→AgeBandList,
       // Text→Enum) must propagate onto already-persisted entries — not just be
@@ -493,7 +597,18 @@ export class ScenarioLoader {
       // so re-sync it too — adopt new conditions and clear ones the schema dropped.
       if (s.visibleWhen)         p.visibleWhen = s.visibleWhen;
       else if (p.visibleWhen)    delete p.visibleWhen;
-      if (p.value       === undefined && s.defaultValue !== undefined) p.value = s.defaultValue;
+      // Design 55 §6 harvest: a generated per-record param is a linked field whose
+      // record is authoritative after the param→record cascade + compile
+      // re-snapshot. `s.defaultValue` is the current record value, so refresh
+      // p.value from it rather than leaving a stale persisted value — otherwise a
+      // direct domain edit (harvested into the record) would be shadowed by the
+      // old param value on the next Rebuild. A targeted exception to the
+      // "backfill only when undefined" rule below, scoped to generated keys.
+      if (isGeneratedParamKey(p.name)) {
+        if (s.defaultValue !== undefined) p.value = s.defaultValue;
+      } else if (p.value === undefined && s.defaultValue !== undefined) {
+        p.value = s.defaultValue;
+      }
       // Money metadata drift: a schema param that became Money (e.g. a config
       // saved when monthlyExpenses was a Number) upgrades in place. The value is
       // already numeric, so forcing the type is safe and is required for the
@@ -528,9 +643,15 @@ export class ScenarioLoader {
    * Drift-merge domain records (persons / accounts / realProperties / collectibles)
    * from cfg.scenarioClass.buildDefaultConfig() into cfg. Append-only: a default
    * entry is added when its key (id for persons, stateKey for the others) is
-   * absent from cfg. Never replaces, removes, or reorders existing entries —
-   * if a user deleted a default account, drift merge will NOT re-add it
-   * (presence is keyed by stateKey, so renames also count as new entries).
+   * absent from cfg. Never replaces, removes, or reorders existing entries.
+   *
+   * Deleted-default tombstones (`cfg.deletedDefaults`, keyed the same way) suppress
+   * re-adds: a default whose key is tombstoned is skipped even though it is absent.
+   * This is how a deliberately-deleted default account stays deleted across Rebuild,
+   * while genuinely-new defaults (added to the scenario class after the user saved,
+   * and therefore never tombstoned) still get filled in. The tombstone is recorded
+   * at harvest time by {@link ScenarioLoader.recordDeletedDefaults}, so it always
+   * reflects the user's latest live account set before this merge runs.
    *
    * No-op when cfg has no scenarioClass (raw JSON imports without class metadata).
    * @private
@@ -549,24 +670,74 @@ export class ScenarioLoader {
     }
     if (!defaults) return;
 
-    const append = (cfgList, defaultList, keyFn) => {
+    const tombstones = cfg.deletedDefaults ?? {};
+    const append = (cfgList, defaultList, keyFn, deletedKeys) => {
       if (!Array.isArray(defaultList) || defaultList.length === 0) return cfgList;
       const out = Array.isArray(cfgList) ? cfgList : [];
       const present = new Set(out.map(keyFn).filter(k => k != null));
+      const deleted = new Set(deletedKeys ?? []);
       for (const def of defaultList) {
         const k = keyFn(def);
-        if (k == null || present.has(k)) continue;
+        if (k == null || present.has(k) || deleted.has(k)) continue;
         out.push(structuredClone(def));
         present.add(k);
       }
       return out;
     };
 
-    cfg.persons        = append(cfg.persons,        defaults.persons,        r => r.id);
-    cfg.accounts       = append(cfg.accounts,       defaults.accounts,       r => r.stateKey);
-    cfg.realProperties = append(cfg.realProperties, defaults.realProperties, r => r.stateKey);
-    cfg.collectibles   = append(cfg.collectibles,   defaults.collectibles,   r => r.stateKey);
-    cfg.companyEquities = append(cfg.companyEquities, defaults.companyEquities, r => r.stateKey);
+    cfg.persons        = append(cfg.persons,        defaults.persons,        r => r.id,       tombstones.persons);
+    cfg.accounts       = append(cfg.accounts,       defaults.accounts,       r => r.stateKey, tombstones.accounts);
+    cfg.realProperties = append(cfg.realProperties, defaults.realProperties, r => r.stateKey, tombstones.realProperties);
+    cfg.collectibles   = append(cfg.collectibles,   defaults.collectibles,   r => r.stateKey, tombstones.collectibles);
+    cfg.companyEquities = append(cfg.companyEquities, defaults.companyEquities, r => r.stateKey, tombstones.companyEquities);
+  }
+
+  /**
+   * Record which of the scenario class's default domain records are absent from
+   * `cfg` — i.e. the user deleted them — into `cfg.deletedDefaults`, so the next
+   * {@link ScenarioLoader#_driftMergeDomainRecords} does not re-add them.
+   *
+   * Recomputed (not unioned) from `defaults − present` each call, so it is
+   * self-correcting: re-adding a previously-deleted default drops it from the
+   * tombstone automatically. MUST be called from a harvest point (after the live
+   * services are snapshotted back into `cfg`) so "absent" reflects a real user
+   * deletion rather than a genuinely-new default that drift-merge has not yet
+   * filled in. No-op when cfg has no resolvable scenario class.
+   *
+   * @param {object} cfg — scenario config whose domain lists reflect live state
+   */
+  static recordDeletedDefaults(cfg) {
+    if (!cfg) return;
+    let ScenarioCls = cfg.scenarioClass;
+    if (!ScenarioCls && cfg.scenarioId) {
+      const rawId = cfg.scenarioId.startsWith('p:') ? cfg.scenarioId.slice(2) : cfg.scenarioId;
+      ScenarioCls = SCENARIO_CLASS_BY_ID.get(rawId) ?? SCENARIO_CLASS_BY_ID.get(cfg.scenarioId) ?? null;
+    }
+    if (typeof ScenarioCls?.buildDefaultConfig !== 'function') return;
+
+    const schema = ScenarioCls.getParamSchema?.() ?? [];
+    const defaultParams = Object.fromEntries(schema.map(s => [s.key, s.defaultValue]));
+    let defaults;
+    try {
+      defaults = ScenarioCls.buildDefaultConfig(defaultParams, cfg.simStart, cfg.simEnd);
+    } catch {
+      return;
+    }
+    if (!defaults) return;
+
+    const missing = (defaultList, cfgList, keyFn) => {
+      if (!Array.isArray(defaultList) || defaultList.length === 0) return [];
+      const present = new Set((cfgList ?? []).map(keyFn).filter(k => k != null));
+      return defaultList.map(keyFn).filter(k => k != null && !present.has(k));
+    };
+
+    cfg.deletedDefaults = {
+      persons:         missing(defaults.persons,          cfg.persons,         r => r.id),
+      accounts:        missing(defaults.accounts,         cfg.accounts,        r => r.stateKey),
+      realProperties:  missing(defaults.realProperties,   cfg.realProperties,  r => r.stateKey),
+      collectibles:    missing(defaults.collectibles,     cfg.collectibles,    r => r.stateKey),
+      companyEquities: missing(defaults.companyEquities,  cfg.companyEquities, r => r.stateKey),
+    };
   }
 }
 

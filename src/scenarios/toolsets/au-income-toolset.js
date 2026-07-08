@@ -36,7 +36,7 @@ export const AU_INCOME = {
     actions: [
       { type: 'SE_INCOME_AU_APPLY',    fields: { amount: ValueType.currency('AUD') } },
       { type: 'AU_SE_INCOME_TAX',      fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), personKey: ValueType.text() } },
-      { type: 'AU_WAGES_INCOME_APPLY', fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), personKey: ValueType.text() } },
+      { type: 'AU_WAGES_INCOME_APPLY', fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), personKey: ValueType.text(), targetKey: ValueType.text() } },
       { type: 'AU_WAGES_INCOME_TAX',   fields: { amount: ValueType.currency('AUD'), residency: ValueType.text(), personKey: ValueType.text() } },
     ],
   },
@@ -51,8 +51,8 @@ export const AU_INCOME = {
 
   reducers(context) {
     return [
-      new AuSeIncomeApplyReducer({ accountService: context.accountService }),
-      new AuWagesIncomeApplyReducer({ accountService: context.accountService }),
+      new AuSeIncomeApplyReducer({ accountService: context.accountService, stateRegistry: context.stateRegistry }),
+      new AuWagesIncomeApplyReducer({ accountService: context.accountService, stateRegistry: context.stateRegistry }),
     ];
   },
 };

@@ -13,8 +13,9 @@ import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { FieldValueAction, RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { getBirthDate } from '../../residency-utils.js';
 import { scaleHoldings } from '../../holdings/holding-utils.js';
+import { resolveCashKey } from '../cash-routing.js';
 
-/** Resolve the US cash pool. */
+/** Resolve the US cash pool (legacy tail; prefer resolveCashKey for routing). */
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
 
 /** IRC §72(t) early-distribution additional tax rate and age threshold. */
@@ -109,14 +110,15 @@ export class RothRolloverContributionApplyReducer extends AccountServiceReducer 
   static description = 'Debits the US cash pool and credits rothAccount.rolloverContribBasis; no tax effect.';
   static actionType  = 'ROTH_ROLLOVER_CONTRIBUTION_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('Roth Rollover Contribution Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes = ['ROTH_ROLLOVER_CONTRIBUTION_APPLY'];
   }
 
   reduce(state, action) {
-    this.accountService.transaction(usCash(state), -action.amount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], -action.amount, null);
     const ra         = state.rothAccount;
     const newBalance = ra.balance + action.amount;
     return this.newState(state, {
@@ -139,7 +141,7 @@ export class RothRolloverEarningsApplyReducer extends AccountServiceReducer {
   static description = 'Adds earnings to rothAccount.rolloverEarningsBasis; no tax effect.';
   static actionType  = 'ROTH_ROLLOVER_EARNINGS_APPLY';
 
-  constructor({ accountService }) {  // accountService unused but accepted for API symmetry
+  constructor({ accountService, stateRegistry }) {  // accountService unused but accepted for API symmetry
     super('Roth Rollover Earnings Apply', PRIORITY.CASH_FLOW);
     this.reducedActionTypes = ['ROTH_ROLLOVER_EARNINGS_APPLY'];
   }
@@ -168,16 +170,17 @@ export class RothRolloverWithdrawalContribApplyReducer extends AccountServiceRed
   static description = 'Credits the US cash pool net of any §408A(d)(3)(F) recapture penalty, debits rolloverContribBasis, consumes conversion lots; chains ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_TAX for the penalty and/or the AU-assessable converted-earnings portion.';
   static actionType  = 'ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('Roth Rollover Withdrawal Contrib Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_APPLY'];
     this.generatedActionTypes = ['ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_TAX'];
   }
 
   reduce(state, action) {
     const { amount, penaltyAmount = 0, auAssessableAmount = 0, residency, rolloverConversions } = action;
-    this.accountService.transaction(usCash(state), amount - penaltyAmount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount - penaltyAmount, null);
     const ra         = state.rothAccount;
     const newBalance = ra.balance - amount;
     const rothAccount = {
@@ -206,16 +209,17 @@ export class RothRolloverWithdrawalEarningsApplyReducer extends AccountServiceRe
   static description = 'Credits the US cash pool net of any §72(t) penalty and debits rothAccount.rolloverEarningsBasis; chains ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX.';
   static actionType  = 'ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('Roth Rollover Withdrawal Earnings Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_APPLY'];
     this.generatedActionTypes = ['ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX'];
   }
 
   reduce(state, action) {
     const { amount, penaltyAmount = 0, residency } = action;
-    this.accountService.transaction(usCash(state), amount - penaltyAmount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount - penaltyAmount, null);
     const ra         = state.rothAccount;
     const newBalance = ra.balance - amount;
     return this.newState(

@@ -12,6 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { findLoanForProperty } from '../loan-classes.js';
+import { resolveCashKey } from '../cash-routing.js';
 
 const US_PRIMARY_HOME_EXEMPTION = 500_000;
 
@@ -40,9 +41,10 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
   static description = 'Credits the destination account with net proceeds (salePrice − mortgage), zeroes mortgageBalance, and chains US_HOUSE_SALE_TAX with the post-exemption taxable gain.';
   static actionType  = 'US_HOUSE_SALE_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('US House Sale Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['US_HOUSE_SALE_APPLY'];
     this.generatedActionTypes = ['US_HOUSE_SALE_TAX'];
   }
@@ -58,7 +60,7 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     const adjustedBasis  = Math.max(0, costBasis - accumulatedDep);
     const rawGain     = Math.max(0, salePrice - adjustedBasis);
     const taxableGain = Math.max(0, rawGain - US_PRIMARY_HOME_EXEMPTION);
-    const destKey     = destinationKey ?? defaultUsCashKey(state);
+    const destKey     = destinationKey ?? resolveCashKey(this.stateRegistry, 'US', state);
     this.accountService.transaction(state[destKey], netProceeds, null);
     const updates = {};
     if (stateKey && state[stateKey]) {

@@ -79,6 +79,19 @@ test('FixedIncomeEarnings: scalar balance increment, input not mutated (I1)', ()
   assert.equal(state.fixedIncomeAccount.balance, 30000, 'I1');
 });
 
+test('FixedIncomeEarnings: credits the account named by action.stateKey (per-account)', () => {
+  // Two fixed-income accounts under different (non-default) stateKeys: the earning
+  // must land on the one the handler stamped, not the hardcoded fixedIncomeAccount.
+  const state = {
+    treasuryDirectAccount:       acct('treasuryDirectAccount', 10000),
+    spouseTreasuryDirectAccount: acct('spouseTreasuryDirectAccount', 20000),
+  };
+  const next = new FixedIncomeEarningsApplyReducer({}).reduce(
+    state, { type: 'FIXED_INCOME_EARNINGS_APPLY', amount: 100, stateKey: 'spouseTreasuryDirectAccount', residency: 'US' });
+  assert.equal(next.spouseTreasuryDirectAccount.balance, 20100, 'stamped account is credited');
+  assert.equal(next.treasuryDirectAccount.balance, 10000, 'the other account is untouched');
+});
+
 // ─── Stock ────────────────────────────────────────────────────────────────────
 
 test('StockContribution: cash debit + account credit, synced + conserved (I3/I5)', () => {

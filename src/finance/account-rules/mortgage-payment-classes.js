@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../simulation-framework/actions.js';
+import { resolveCashKey } from './cash-routing.js';
 
 const usCash = (state) => state.usSavingsAccount ?? state.checkingAccount;
 const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
@@ -37,20 +38,21 @@ export class UsMortgagePaymentHandler extends HandlerEntry {
   static description = 'Dispatches REPLENISH_SAVINGS (if needed) then US_MORTGAGE_PAYMENT_APPLY for each US property with a remaining mortgage balance; payment capped to remaining balance so the last payment never overpays.';
   static eventType   = 'US_MORTGAGE_PAYMENT';
 
-  constructor({ properties = [] } = {}) {
+  constructor({ properties = [], stateRegistry } = {}) {
     super(null, 'US Mortgage Payment');
     this.properties = properties;
+    this.stateRegistry = stateRegistry;
     this.generatedActionTypes = ['REPLENISH_SAVINGS', 'US_MORTGAGE_PAYMENT_APPLY', 'RECORD_BALANCE'];
   }
 
-  static fromJSON(d, _services) {
-    const h = new this({ properties: d.properties ?? [] });
+  static fromJSON(d, services) {
+    const h = new this({ properties: d.properties ?? [], stateRegistry: services?.stateRegistry });
     h.id = d.id;
     return h;
   }
 
   call({ data, state }) {
-    const cashKey = state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
+    const cashKey = resolveCashKey(this.stateRegistry, 'US', state);
     const account = state[cashKey];
     const actions = [];
 
@@ -137,20 +139,21 @@ export class AuMortgagePaymentHandler extends HandlerEntry {
   static description = 'Dispatches REPLENISH_SAVINGS (if needed) then AU_MORTGAGE_PAYMENT_APPLY for each AU property with a remaining mortgage balance; payment capped to remaining balance so the last payment never overpays.';
   static eventType   = 'AU_MORTGAGE_PAYMENT';
 
-  constructor({ properties = [] } = {}) {
+  constructor({ properties = [], stateRegistry } = {}) {
     super(null, 'AU Mortgage Payment');
     this.properties = properties;
+    this.stateRegistry = stateRegistry;
     this.generatedActionTypes = ['REPLENISH_SAVINGS', 'AU_MORTGAGE_PAYMENT_APPLY', 'RECORD_BALANCE'];
   }
 
-  static fromJSON(d, _services) {
-    const h = new this({ properties: d.properties ?? [] });
+  static fromJSON(d, services) {
+    const h = new this({ properties: d.properties ?? [], stateRegistry: services?.stateRegistry });
     h.id = d.id;
     return h;
   }
 
   call({ data, state }) {
-    const cashKey = state.auSavingsAccount != null ? 'auSavingsAccount' : 'checkingAccount';
+    const cashKey = resolveCashKey(this.stateRegistry, 'AU', state);
     const account = state[cashKey];
     const actions = [];
 

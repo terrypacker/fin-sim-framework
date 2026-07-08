@@ -1,6 +1,10 @@
 # 55 — Configuration-driven (dynamic) parameters
 
-**Status**: **Proposed** (design only).
+**Status**: **Implemented** through Phase 6b. Phases 1–4 shipped as designed; §7's
+transaction account was then extended from "expenses + intl-transfer only" to the
+**whole-household cash hub** by Phases 6a/6b (see §7.4 and §12). There was never a
+Phase 5 — the numbering jumps 4 → 6a/6b because 6 groups the "make the flag actually
+apply everywhere" follow-ups that surfaced during real-scenario testing.
 
 Make the exposed parameter surface a **function of the configuration** instead of a
 hand-maintained static list. Today `INTL_RETIREMENT_PARAM_SCHEMA` hard-codes ~50
@@ -333,6 +337,69 @@ Because the flag lives on the account and the resolver scans by country, a **Che
 account** the user adds and flags becomes the transaction account with no code
 change — satisfying "a Savings or Checking account of the user's choosing."
 
+### 7.4 The transaction account is the whole-household cash hub (Phases 6a/6b)
+
+§7.2 as originally shipped (Phase 3) only rerouted **two** flows — `MonthlyExpensesHandler`
+(expenses out) and `IntlTransferApplyReducer` (cross-border sweeps). Every *other*
+cash movement still hit the canonical `state.usSavingsAccount ?? state.checkingAccount`
+literal, so a flagged non-default account was honored for expenses but **bypassed** for
+wages, contributions, withdrawals, taxes, sales, and mortgage/loan payments. Real-scenario
+testing (a Checking account flagged as the hub) exposed this. Phases 6a and 6b close it so
+the flag applies to *both* directions of *every* household cash flow.
+
+**Phase 6a — inflow + per-account savings interest.**
+- **Wages route in** to the flag: `MonthlyWagesHandler` resolves
+  `resolveTransactionAccountKey(country, personKey) ?? getStateKey(role) ?? default` and
+  stamps `targetKey` on `WAGES_INCOME_APPLY` / `AU_WAGES_INCOME_APPLY`; the reducers credit
+  `state[targetKey] ?? usCash/auCash(state)`. The hub now receives wages **and** pays
+  expenses (Phase 3 was expenses-only).
+- **Savings interest is per-account.** The interest handlers/reducers take a `stateKey`
+  (ctor arg + stamped on `US_SAVINGS_INTEREST_CREDIT` / `AU_SAVINGS_EARNINGS_APPLY`) and
+  credit `action.stateKey ?? canonicalKey`, so a second/renamed savings account (e.g. a
+  spouse's) earns its **own** interest instead of having it misattributed to the single
+  canonical key. Same latent single-key bug fixed for US fixed-income here and AU
+  fixed-income in 6b.
+
+**Phase 6b — route the remaining ~55 debit/credit sites through one helper.**
+New `src/finance/account-rules/cash-routing.js`:
+
+```js
+resolveCashKey(stateRegistry, country, state, ownerId = null)
+// resolveTransactionAccountKey?.(country, ownerId)          // the flag (owner-preferred)
+//   ?? getStateKey?.(savingsRole, ownerId) ?? getStateKey?.(savingsRole)   // savings role
+//   ?? legacy usSavingsAccount/auSavingsAccount ?? checkingAccount         // pre-flag tail
+// guarded so a resolved key absent from `state` falls back to the legacy literal;
+// returns a key guaranteed present, so call sites are just state[resolveCashKey(...)].
+```
+
+`state` is a parameter (the sketch in §7.2 omitted it) because both the `checkingAccount`
+tail and the existence guard read live state. Method-level `?.()` is load-bearing — several
+test stubs supply a partial `stateRegistry` with only `getStateKey`.
+
+Two wiring patterns, matching how each site already worked:
+- **Reducer-resolves** (contributions, withdrawals, RMDs, brokerage buys/sells, super,
+  income credits, house/collectible sales): the `usCash(state)`/`auCash(state)` /
+  `destinationKey ?? default` debit is replaced by `resolveCashKey`. `stateRegistry` is
+  threaded into the reducer constructor — cheap because `AccountServiceReducer.fromJSON`
+  already passes the full `services` context (so deserialized reducers get it for free); the
+  toolsets pass `stateRegistry: sr` at fresh-compile construction.
+- **Stamp-on-action** (`UsMortgagePaymentHandler` legacy, `Us/AuRentalIncomeHandler`, and the
+  active design-54 `LoanPaymentHandler`): the *handler* resolves and stamps `cashKey` on the
+  APPLY action (it also drives `REPLENISH_SAVINGS` + the min-balance check); the reducer keeps
+  `state[action.cashKey] ?? legacy`. The loan handler's local resolver became
+  `resolveLoanCashKey(sr, state, loan)` = `paymentSourceKey ?? resolveCashKey(...)` so an
+  explicit per-loan payment source still wins.
+
+**Deliberately left legacy:** the *journal* `RecordBalanceAction` in the stateless income
+handlers still names the canonical savings key. That is cosmetic (a per-event balance
+snapshot for reporting) — the **reducer** does the real money routing, and year-end syncs
+capture the true balances. This matches the precedent 6a set for `WagesIncomeHandler`.
+
+**Net effect:** flag any one account per country and *all* of that country's cash — in and
+out — flows through it; the former default savings account is spared (accrues its own
+interest only). With nothing flagged the chain returns the SAVINGS-role key, so pre-flag
+scenarios are byte-for-byte unchanged.
+
 ---
 
 ## 8. Per-account rates
@@ -448,6 +515,36 @@ static ones they replace.*
 3. Docs: README "Add a scenario parameter" section updated to describe the
    template-driven path; `design/13`/`design/32` cross-links.
 
+*(No Phase 5 was scoped — see §7.4 for why the numbering jumps to Phase 6.)*
+
+### Phase 6 — Transaction account as the whole-household cash hub
+*Follow-up surfaced in real-scenario testing: the Phase-3 flag only rerouted expenses +
+intl-transfers; every other cash flow bypassed it (§7.4).*
+
+**Phase 6a — inflow + per-account savings interest.**
+1. `MonthlyWagesHandler` resolves the transaction account per person and stamps `targetKey`
+   on the wages APPLY actions; the wages reducers credit `state[targetKey] ?? cash(state)`.
+2. Savings-interest handlers/reducers take a `stateKey` and credit `action.stateKey ??
+   canonicalKey` (per-account); fold in the US fixed-income single-key fix.
+3. **Exit test**: a spouse's second savings account earns its own interest; the flagged hub
+   receives wages *and* pays expenses. `evt-transaction-account.test.mjs` (EVT-TXN-1/2
+   updated), new `evt-multi-savings.test.mjs`.
+
+**Phase 6b — route the remaining ~55 debit/credit sites through `resolveCashKey`.**
+1. New `cash-routing.js` `resolveCashKey(stateRegistry, country, state, ownerId)` — the
+   flag → savings-role → legacy chain with a state-existence guard (§7.4).
+2. Reducer-resolves sites: swap `usCash/auCash(state)` / `destinationKey ?? default` for
+   `resolveCashKey`; thread `stateRegistry` into reducer constructors and pass it at
+   toolset construction (deserialization is free via `AccountServiceReducer.fromJSON`).
+3. Stamp-on-action sites: route the handler's `cashKey` (mortgage/rental legacy +
+   the active design-54 `LoanPaymentHandler`, whose local resolver keeps `paymentSourceKey`
+   precedence). Fold in the AU fixed-income single-key fix.
+4. **Exit test**: `evt-cash-routing.test.mjs` (CASH-1..7) — flagged account debited/credited
+   by 401k/IRA/Roth/super/stock/loan; `paymentSourceKey` precedence; unflagged parity;
+   AU-FI per-account round-trip. Full unit + viz green. In-app verification: flagging a
+   Checking account makes it the hub (drained by expenses+contributions+taxes+mortgage)
+   while the former savings hub is spared; unflagged run byte-for-byte unchanged.
+
 ---
 
 ## 13. Risks / open questions
@@ -475,6 +572,11 @@ static ones they replace.*
 - **Basis/holdings stay out of the param surface.** Per-lot cost basis and holdings
   remain in the account editor (design 25); only the scalar `contributionBasis`
   (retirement) is flattened. Flattening holdings to params is explicitly out of scope.
+- **`minimumBalance` is still static (open, post-6b).** The replenish threshold that drives
+  `REPLENISH_SAVINGS` is not yet templated — it remains the global `usSavingsMinBalance` /
+  `auSavingsMinBalance` params rather than a per-account generated field. Once the transaction
+  account can be any flagged account (§7.4), its floor should travel with it; folding
+  `minimumBalance` into the SAVINGS/CHECKING template is the natural next per-account field.
 - **Prebuilt scenario role.** `buildDefaultConfig` remains the *seed* (the default
   records + global params); it is no longer the *enumerator* of per-record params.
   The Overview's "pivot away from rigid prebuilts" is realized by making the record

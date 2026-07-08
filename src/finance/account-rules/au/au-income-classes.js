@@ -11,8 +11,9 @@
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
+import { resolveCashKey } from '../cash-routing.js';
 
-/** Resolve the AU cash pool. */
+/** Resolve the AU cash pool (legacy tail; prefer resolveCashKey for routing). */
 const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
 
 // ─── Reducer ─────────────────────────────────────────────────────────────────
@@ -27,16 +28,17 @@ export class AuSeIncomeApplyReducer extends AccountServiceReducer {
   static description = 'Credits the AU cash pool with self-employment income; chains AU_SE_INCOME_TAX.';
   static actionType  = 'SE_INCOME_AU_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('AU SE Income Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['SE_INCOME_AU_APPLY'];
     this.generatedActionTypes = ['AU_SE_INCOME_TAX'];
   }
 
   reduce(state, action) {
     const { amount, residency, personKey } = action;
-    this.accountService.transaction(auCash(state), amount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'AU', state)], amount, null);
     return this.newState(state, {}, [{ type: 'AU_SE_INCOME_TAX', amount, residency, personKey }]);
   }
 }
@@ -57,16 +59,19 @@ export class AuWagesIncomeApplyReducer extends AccountServiceReducer {
   static description = 'Credits the AU cash pool with AU-source wages (native AUD); chains AU_WAGES_INCOME_TAX.';
   static actionType  = 'AU_WAGES_INCOME_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('AU Wages Income Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['AU_WAGES_INCOME_APPLY'];
     this.generatedActionTypes = ['AU_WAGES_INCOME_TAX'];
   }
 
   reduce(state, action) {
-    const { amount, residency, personKey } = action;
-    this.accountService.transaction(auCash(state), amount, null);
+    const { amount, residency, personKey, targetKey } = action;
+    // Credit the transaction account the handler resolved; fall back to the single
+    // AU cash pool for legacy actions saved without a targetKey.
+    this.accountService.transaction(state[targetKey] ?? state[resolveCashKey(this.stateRegistry, 'AU', state)], amount, null);
     return this.newState(state, {}, [{ type: 'AU_WAGES_INCOME_TAX', amount, residency, personKey }]);
   }
 }

@@ -71,7 +71,7 @@ import { AddRegimeReducer } from './finance/economic-regimes/add-regime-reducer.
 import { BondPriceAdjustReducer } from './finance/economic-regimes/bond-price-adjust-reducer.js';
 import { EconomicRecoveryTickHandler } from './finance/economic-regimes/economic-recovery-tick-handler.js';
 import { EconomicShockHandler } from './finance/economic-regimes/economic-shock-handler.js';
-import { RATE_KEYS, RATE_KEY_META, RATE_KEY_CLASS_MEMBERS, ROLE_TO_RATE_KEY } from './finance/economic-regimes/rate-keys.js';
+import { RATE_KEYS, RATE_KEY_META, RATE_KEY_CLASS_MEMBERS, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS } from './finance/economic-regimes/rate-keys.js';
 import { RecoveryCurves } from './finance/economic-regimes/recovery-curves.js';
 import { RegimeApplyReducer } from './finance/economic-regimes/regime-apply-reducer.js';
 import { REGIME_TAG } from './finance/economic-regimes/regime-tag.js';
@@ -240,7 +240,9 @@ import { SimGraphNode } from './graph/sim-graph-node.js';
 import { QueryApi } from './query/query-api.js';
 import { BaseScenario } from './scenarios/base-scenario.js';
 import { BlankScenario } from './scenarios/blank-scenario.js';
-import { DRAWDOWN_STRATEGIES, DRAWDOWN_ROLES, INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
+import { DRAWDOWN_STRATEGIES, DRAWDOWN_ROLES, INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, INTL_RETIREMENT_PARAM_ALIASES, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
+import { ACCOUNT_PARAM_TEMPLATES, PERSON_PARAM_TEMPLATE, REAL_PROPERTY_PARAM_TEMPLATE, COLLECTIBLE_PARAM_TEMPLATE, COMPANY_EQUITY_PARAM_TEMPLATE } from './scenarios/params/record-param-templates.js';
+import { GENERATED_KEY_PREFIXES, isGeneratedParamKey, decodeGeneratedParamKey, ScenarioParamGenerator } from './scenarios/params/scenario-param-generator.js';
 import { ScenarioLoader } from './scenarios/scenario-loader.js';
 import { ScenarioRegistry } from './scenarios/scenario-registry.js';
 import { ScenarioSerializer } from './scenarios/scenario-serializer.js';
@@ -631,6 +633,8 @@ export const Finance = {
   RATE_KEY_META,
   RATE_KEY_CLASS_MEMBERS,
   ROLE_TO_RATE_KEY,
+  MEMBER_RATE_KEY_BY_ROLE,
+  INTEREST_RATE_KEYS,
   RecoveryCurves,
   RegimeApplyReducer,
   REGIME_TAG,
@@ -1016,8 +1020,18 @@ export const Scenarios = {
   DRAWDOWN_ROLES,
   INTL_RETIREMENT_DEFAULTS,
   INTL_RETIREMENT_PARAM_SCHEMA,
+  INTL_RETIREMENT_PARAM_ALIASES,
   IntlRetirementScenario,
   applyRealPropertySaleYearParams,
+  ACCOUNT_PARAM_TEMPLATES,
+  PERSON_PARAM_TEMPLATE,
+  REAL_PROPERTY_PARAM_TEMPLATE,
+  COLLECTIBLE_PARAM_TEMPLATE,
+  COMPANY_EQUITY_PARAM_TEMPLATE,
+  GENERATED_KEY_PREFIXES,
+  isGeneratedParamKey,
+  decodeGeneratedParamKey,
+  ScenarioParamGenerator,
   ScenarioLoader,
   ScenarioRegistry,
   ScenarioSerializer,

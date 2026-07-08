@@ -89,4 +89,54 @@ export class StateRegistry {
     }
     return results;
   }
+
+  /**
+   * Resolve the stateKey of the "transaction account" (the withdraw-from account)
+   * for a country of residence (design 55 §7). Scans registered accounts for one
+   * flagged `isTransactionAccount === true` in `country`, preferring an ownerId
+   * match, then falling back to any owner. Returns null when none is flagged so the
+   * caller can apply its own back-compat fallback (the SAVINGS-role lookup) — this
+   * keeps scenarios that predate the flag byte-for-byte unchanged.
+   *
+   * @param {string|null} country - ISO country code ('US', 'AU'); null matches any
+   * @param {string|null} [ownerId=null] - Preferred owner; null = any owner
+   * @returns {string|null} stateKey of the flagged account, or null if none
+   */
+  resolveTransactionAccountKey(country, ownerId = null) {
+    let anyOwnerKey = null;
+    for (const account of this._accountService.getAll()) {
+      if (account.isTransactionAccount !== true) continue;
+      if (country != null && account.country != null && account.country !== country) continue;
+      if (ownerId !== null && account.ownerId === ownerId) return account.stateKey ?? null;
+      if (anyOwnerKey === null) anyOwnerKey = account.stateKey ?? null;
+    }
+    return anyOwnerKey;
+  }
+
+  /**
+   * Validate the transaction-account flags across a set of account records
+   * (design 55 §7.3). Warns when a country carries more than one flagged account —
+   * an ambiguous configuration whose debit target then depends on account order.
+   * Zero flagged accounts is intentionally NOT warned: it is the legacy default and
+   * `resolveTransactionAccountKey` handles it via the SAVINGS-role fallback, so a
+   * warning there would fire for every pre-flag scenario.
+   *
+   * @param {Array<{country?:string, isTransactionAccount?:boolean, name?:string, stateKey?:string}>} accounts
+   */
+  static validateTransactionAccounts(accounts) {
+    const byCountry = new Map();
+    for (const a of accounts ?? []) {
+      if (a?.isTransactionAccount !== true) continue;
+      const c = a.country ?? '(none)';
+      (byCountry.get(c) ?? byCountry.set(c, []).get(c)).push(a.name || a.stateKey || '?');
+    }
+    for (const [country, names] of byCountry) {
+      if (names.length > 1) {
+        console.warn(
+          `[StateRegistry] ${names.length} accounts in "${country}" are flagged as the ` +
+          `transaction account (${names.join(', ')}); exactly one is expected. The debit ` +
+          `target will depend on account order until this is resolved.`);
+      }
+    }
+  }
 }

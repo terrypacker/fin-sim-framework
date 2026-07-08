@@ -50,7 +50,11 @@ export class UsSavingsInterestCreditReducer extends Reducer {
   }
 
   reduce(state, action, date) {
-    const key = this.stateRegistry.getStateKey(this.role, this.ownerId);
+    // Per-account (design 55 §7): credit the account the handler stamped, so a
+    // single reducer routes each account's interest correctly (a spouse's credit
+    // no longer lands on the primary's account). Fall back to role+owner lookup
+    // for pre-stateKey saved actions.
+    const key = action.stateKey ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
     this.accountService.transaction(state[key], action.amount, date);
 
     const usNext = (state.usOrdinaryIncomeYTD ?? 0) + action.amount;

@@ -216,6 +216,7 @@ export const AU_RETIREMENT = {
         name:                  person.name,
         birthDate:             person.birthDate,
         monthlyWage:           person.monthlyWage           ?? 0,
+        wageCurrency:          person.wageCurrency          ?? 'AUD',
         retirementDate:        person.retirementDate        ?? null,
         socialSecurityMonthly: person.socialSecurityMonthly ?? 0,
         lifeExpectancy:        person.lifeExpectancy        ?? 90,
@@ -457,7 +458,7 @@ export const AU_RETIREMENT = {
           stateRegistry: sr,
           role:          ACCOUNT_ROLES.SUPER,
           ownerId:       acct.ownerId,
-          defaultRate:   p.superGrowthRate,
+          defaultRate:   acct.growthRate ?? p.superGrowthRate,
         });
         h.handledEvents.push(superEvent);
         handlers.push(h);
@@ -473,7 +474,7 @@ export const AU_RETIREMENT = {
           stateRegistry: sr,
           role:          ACCOUNT_ROLES.AU_STOCK,
           ownerId:       acct.ownerId,
-          growthRate:    p.auStockGrowthRate,
+          growthRate:    acct.growthRate ?? p.auStockGrowthRate,
         });
         earningsH.handledEvents.push(stockEvent);
         handlers.push(earningsH);
@@ -482,7 +483,7 @@ export const AU_RETIREMENT = {
           stateRegistry: sr,
           role:          ACCOUNT_ROLES.AU_STOCK,
           ownerId:       acct.ownerId,
-          dividendRate:  p.auStockDividendRate,
+          dividendRate:  acct.dividendRate ?? p.auStockDividendRate,
         });
         divH.handledEvents.push(divEvent);
         handlers.push(divH);
@@ -546,6 +547,7 @@ export const AU_RETIREMENT = {
   reducers(context) {
     const p          = context.parameters;
     const accountSvc = context.accountService;
+    const sr         = context.stateRegistry;
     const reducers   = [];
 
     // Skip reducers already registered by US_RETIREMENT.
@@ -554,8 +556,8 @@ export const AU_RETIREMENT = {
       recordMetricReducer.reducedActionTypes = ['RECORD_METRIC'];
       reducers.push(recordMetricReducer);
 
-      reducers.push(new ExpenseDebitReducer({ accountService: accountSvc }));
-      reducers.push(new ReplenishSavingsReducer({ accountService: accountSvc }));
+      reducers.push(new ExpenseDebitReducer({ accountService: accountSvc, stateRegistry: sr }));
+      reducers.push(new ReplenishSavingsReducer({ accountService: accountSvc, stateRegistry: sr }));
       reducers.push(new SetOutOfFundsDateReducer());
       reducers.push(new AccumulateDeficitReducer());
       reducers.push(new AccumulateTaxesPaidReducer());
@@ -580,10 +582,10 @@ export const AU_RETIREMENT = {
     // Super account mechanics
     const superAccts = context.accounts.filter(a => a.role === ACCOUNT_ROLES.SUPER);
     if (superAccts.length > 0) reducers.push(
-      new SuperContributionApplyReducer({ accountService: accountSvc }),
-      new SuperWithdrawalContribApplyReducer({ accountService: accountSvc }),
-      new SuperWithdrawalEarningsApplyReducer({ accountService: accountSvc }),
-      new SuperEarningsApplyReducer({ accountService: accountSvc }),
+      new SuperContributionApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new SuperWithdrawalContribApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new SuperWithdrawalEarningsApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
+      new SuperEarningsApplyReducer({ accountService: accountSvc, stateRegistry: sr }),
     );
 
     // Mortality reducers (only if not already registered by US_RETIREMENT).

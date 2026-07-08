@@ -12,8 +12,9 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { getBirthDate } from '../../residency-utils.js';
+import { resolveCashKey } from '../cash-routing.js';
 
-/** Resolve the AU cash pool. */
+/** Resolve the AU cash pool (legacy tail; prefer resolveCashKey for routing). */
 const auCash = (state) => state.auSavingsAccount ?? state.checkingAccount;
 
 /** Returns age in whole years as of asOfDate. */
@@ -37,15 +38,16 @@ export class SuperContributionApplyReducer extends AccountServiceReducer {
   static description = 'Debits the AU cash pool and credits superAccount contributionBasis; chains SUPER_CONTRIBUTION_TAX.';
   static actionType  = 'SUPER_CONTRIBUTION_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('Super Contribution Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['SUPER_CONTRIBUTION_APPLY'];
     this.generatedActionTypes = ['SUPER_CONTRIBUTION_TAX'];
   }
 
   reduce(state, action) {
-    this.accountService.transaction(auCash(state), -action.amount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'AU', state)], -action.amount, null);
     const sa = state.superAccount;
     this.accountService.transaction(sa, action.amount, null);
     return this.newState(
@@ -67,9 +69,10 @@ export class SuperWithdrawalContribApplyReducer extends AccountServiceReducer {
   static description = 'Credits the AU cash pool and debits superAccount contributionBasis; blocks withdrawal if person is under 60.';
   static actionType  = 'SUPER_WITHDRAWAL_CONTRIB_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('Super Contribution Withdrawal Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes = ['SUPER_WITHDRAWAL_CONTRIB_APPLY'];
   }
 
@@ -78,7 +81,7 @@ export class SuperWithdrawalContribApplyReducer extends AccountServiceReducer {
     if (blocked) {
       return this.newState(state, { superWithdrawalBlocked: true });
     }
-    this.accountService.transaction(auCash(state), amount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'AU', state)], amount, null);
     const sa = state.superAccount;
     this.accountService.transaction(sa, -amount, null);
     return this.newState(state, {
@@ -97,9 +100,10 @@ export class SuperWithdrawalEarningsApplyReducer extends AccountServiceReducer {
   static description = 'Credits the AU cash pool and debits superAccount earningsBasis; chains SUPER_WITHDRAWAL_EARNINGS_TAX; blocks if under 60.';
   static actionType  = 'SUPER_WITHDRAWAL_EARNINGS_APPLY';
 
-  constructor({ accountService }) {
+  constructor({ accountService, stateRegistry }) {
     super('Super Withdrawal Earnings Apply', PRIORITY.CASH_FLOW);
     this.accountService = accountService;
+    this.stateRegistry  = stateRegistry;
     this.reducedActionTypes   = ['SUPER_WITHDRAWAL_EARNINGS_APPLY'];
     this.generatedActionTypes = ['SUPER_WITHDRAWAL_EARNINGS_TAX'];
   }
@@ -109,7 +113,7 @@ export class SuperWithdrawalEarningsApplyReducer extends AccountServiceReducer {
     if (blocked) {
       return this.newState(state, { superWithdrawalBlocked: true });
     }
-    this.accountService.transaction(auCash(state), amount, null);
+    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'AU', state)], amount, null);
     const sa = state.superAccount;
     this.accountService.transaction(sa, -amount, null);
     return this.newState(
@@ -132,7 +136,7 @@ export class SuperEarningsApplyReducer extends AccountServiceReducer {
   static description = 'Adds earnings to superAccount balance and earningsBasis; chains SUPER_EARNINGS_TAX.';
   static actionType  = 'SUPER_EARNINGS_APPLY';
 
-  constructor({ accountService }) {  // accountService unused but accepted for API symmetry
+  constructor({ accountService, stateRegistry }) {  // accountService unused but accepted for API symmetry
     super('Super Earnings Apply', PRIORITY.CASH_FLOW);
     this.reducedActionTypes   = ['SUPER_EARNINGS_APPLY'];
     this.generatedActionTypes = ['SUPER_EARNINGS_TAX'];
