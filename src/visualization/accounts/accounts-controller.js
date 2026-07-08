@@ -12,7 +12,7 @@ import { AccountBuilder } from '../../finance/builders/account-builder.js';
 import { USD, AUD }       from '../../finance/assets/account.js';
 
 // Account types whose country/currency are variable (US or AU).
-const VARIABLE_COUNTRY = new Set(['checking', 'savings', 'brokerage']);
+const VARIABLE_COUNTRY = new Set(['checking', 'savings', 'brokerage', 'offset']);
 
 // Retirement account types — the only ones carrying the contribution/earnings
 // ledger (design 53 §2). Brokerage is holdings-only and its builder has no basis
@@ -76,6 +76,11 @@ export class AccountsController {
         builder.contributionBasis(Number(data.contributionBasis));
       }
       builder.earningsBasis(Number(data.earningsBasis) || 0);
+    }
+
+    // Offset account (design 53 §3 / 54 P3): links to the property whose loan it offsets.
+    if (data.type === 'offset') {
+      builder.offsetsPropertyKey(data.offsetsPropertyKey || null);
     }
 
     return this._service.createAccount(builder.build());
@@ -150,6 +155,7 @@ export class AccountsController {
       case 'roth':     return AccountBuilder.roth();
       case 'ira':      return AccountBuilder.traditionalIRA();
       case 'super':    return AccountBuilder.super();
+      case 'offset':   return AccountBuilder.offset();
       default:         throw new Error(`AccountsController: unknown account type "${type}"`);
     }
   }

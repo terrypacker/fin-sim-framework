@@ -32,4 +32,8 @@ export const ACCOUNT_ROLES = Object.freeze({
   // Liability accounts (design 54) — per country for currency + cash-pool resolution.
   US_LOAN:         'us-loan',
   AU_LOAN:         'au-loan',
+  // Offset accounts (design 53 §3 / 54 P3) — cash-like, liquid; suppress a linked
+  // loan's interest-bearing principal. Per country for currency + cash-pool.
+  US_OFFSET:       'us-offset',
+  AU_OFFSET:       'au-offset',
 });

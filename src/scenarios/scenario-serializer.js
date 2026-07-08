@@ -16,7 +16,7 @@ import {
 } from '../simulation-framework/actions.js';
 import { ACCOUNT_ROLES }  from '../finance/state/account-roles.js';
 import { Person }         from '../finance/person.js';
-import { Account, CheckingAccount, SavingsAccount, LoanAccount } from '../finance/assets/account.js';
+import { Account, CheckingAccount, SavingsAccount, LoanAccount, OffsetAccount } from '../finance/assets/account.js';
 import {
   InvestmentAccount, BrokerageAccount, FourOhOneKAccount,
   RothAccount, TraditionalIRAAccount, SuperannuationAccount,
@@ -602,6 +602,7 @@ export class ScenarioSerializer {
       'ira':      'TraditionalIRAAccount',
       'super':    'SuperannuationAccount',
       'loan':     'LoanAccount',
+      'offset':   'OffsetAccount',
     };
     const __type = typeToClass[account.type] ?? account.constructor?.name ?? 'Account';
     const d = {
@@ -651,6 +652,10 @@ export class ScenarioSerializer {
       d.monthlyPayment    = account.monthlyPayment    ?? 0;
       d.linkedPropertyKey = account.linkedPropertyKey ?? null;
       d.paymentSourceKey  = account.paymentSourceKey  ?? null;
+    }
+    // OffsetAccount (cash-like, linked) field (design 53 §3 / 54 P3).
+    if (account.type === 'offset') {
+      d.offsetsPropertyKey = account.offsetsPropertyKey ?? null;
     }
     // Holdings (design 25 §8). Round-trip via Holding.toJSON; null when
     // absent so legacy configs (no holdings field) round-trip unchanged
@@ -941,11 +946,16 @@ export class ScenarioSerializer {
       opts.linkedPropertyKey = d.linkedPropertyKey ?? null;
       opts.paymentSourceKey  = d.paymentSourceKey  ?? null;
     }
+    // OffsetAccount (cash-like, linked) opts (design 53 §3 / 54 P3).
+    if (d.__type === 'OffsetAccount') {
+      opts.offsetsPropertyKey = d.offsetsPropertyKey ?? null;
+    }
     let account;
     switch (d.__type) {
       case 'CheckingAccount':       account = new CheckingAccount       ((d.balance ?? d.initialValue) ?? 0, opts); break;
       case 'SavingsAccount':        account = new SavingsAccount        ((d.balance ?? d.initialValue) ?? 0, opts); break;
       case 'LoanAccount':           account = new LoanAccount           ((d.balance ?? d.initialValue) ?? 0, opts); break;
+      case 'OffsetAccount':         account = new OffsetAccount         ((d.balance ?? d.initialValue) ?? 0, opts); break;
       case 'BrokerageAccount':      account = new BrokerageAccount      ((d.balance ?? d.initialValue) ?? 0, opts); break;
       case 'FourOhOneKAccount':     account = new FourOhOneKAccount     ((d.balance ?? d.initialValue) ?? 0, opts); break;
       case 'RothAccount':           account = new RothAccount           ((d.balance ?? d.initialValue) ?? 0, opts); break;

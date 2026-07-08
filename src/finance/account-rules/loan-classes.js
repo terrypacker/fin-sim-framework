@@ -64,14 +64,50 @@ function resolveCashKey(state, loan) {
   return state.usSavingsAccount != null ? 'usSavingsAccount' : 'checkingAccount';
 }
 
+/** Currency code of an account/loan state entry ('USD'/'AUD'), tolerant of shape. */
+function currencyCode(entry) {
+  return entry?.currency?.code ?? entry?.currency ?? null;
+}
+
 /**
- * The interest-bearing principal of a loan. In design 54 Phase 1 this is simply
- * the outstanding balance; Phase 3 subtracts the linked offset account balance
- * here (`effPrincipal = max(0, balance − offsetBalanceForLoan(state, loanKey))`).
+ * Σ balances of the offset accounts that reduce a given loan's interest-bearing
+ * principal (design 53 §3 / 54 P3). An `OffsetAccount` links to a *property*
+ * (`offsetsPropertyKey`); a loan links to the same property (`linkedPropertyKey`),
+ * so the join is property-keyed. Only same-currency offsets count — an offset and
+ * its linked loan share a currency by construction, and the guard stops a
+ * misconfigured cross-currency offset from wrongly suppressing principal 1:1
+ * (ignoring FX). Multiple offsets on one property sum; the caller clamps at the
+ * loan balance.
+ *
+ * @param {object} state
+ * @param {object} loan   The loan state entry (reads linkedPropertyKey + currency)
+ * @returns {number} total offsetting cash (>= 0)
+ */
+export function offsetBalanceForLoan(state, loan) {
+  const propKey = loan?.linkedPropertyKey;
+  if (!propKey || !state) return 0;
+  const loanCcy = currencyCode(loan);
+  let total = 0;
+  for (const v of Object.values(state)) {
+    if (v && typeof v === 'object' && v.type === 'offset'
+        && v.offsetsPropertyKey === propKey
+        && (loanCcy == null || currencyCode(v) === loanCcy)) {
+      total += Math.max(0, v.balance ?? 0);
+    }
+  }
+  return total;
+}
+
+/**
+ * The interest-bearing principal of a loan: outstanding balance less the linked
+ * offset accounts' cash (design 53 §3 / 54 P3), clamped at 0. Read by BOTH the
+ * rental deductible-interest line (`computeRentalMonth`) and the monthly
+ * `LOAN_PAYMENT` interest accrual, so an offset lowers interest on rental *and*
+ * owner-occupied loans and speeds owner-occupied payoff.
  */
 export function effectivePrincipal(state, _loanKey, loan) {
-  // Phase 3 hook: subtract offsetBalanceForLoan(state, _loanKey) once offsets link to loans.
-  return Math.max(0, loan.balance ?? 0);
+  const offset = offsetBalanceForLoan(state, loan);
+  return Math.max(0, (loan.balance ?? 0) - offset);
 }
 
 /**

@@ -16,7 +16,7 @@ import { AuHouseSaleApplyReducer, AuHouseSaleHandler } from './finance/account-r
 import { AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuSavingsEarningsApplyReducer, AuSavingsContributionHandler, AuSavingsWithdrawalHandler, AuSavingsEarningsHandler } from './finance/account-rules/au/au-savings-classes.js';
 import { SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer, SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperContributionHandler, SuperWithdrawalContributionsHandler, SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler } from './finance/account-rules/au/au-super-classes.js';
 import { BaseAccountModule } from './finance/account-rules/base-account-module.js';
-import { LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer } from './finance/account-rules/loan-classes.js';
+import { loanKeyForProperty, findLoanForProperty, synthesizeLoanForProperty, offsetBalanceForLoan, effectivePrincipal, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer } from './finance/account-rules/loan-classes.js';
 import { UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer, AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer } from './finance/account-rules/mortgage-payment-classes.js';
 import { computeRentalMonth, UsRentalIncomeHandler, UsRentalIncomeApplyReducer, AuRentalIncomeHandler, AuRentalIncomeApplyReducer } from './finance/account-rules/rental-income-classes.js';
 import { ScheduledEarlyWithdrawalApplyReducer, EarlyWithdrawalPolicyHandler } from './finance/account-rules/us/early-withdrawal-classes.js';
@@ -35,7 +35,7 @@ import { getUsEarlyWithdrawalRules } from './finance/account-rules/us/us-early-w
 import { SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer, SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer, SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler, SeIncomeUsHandler, BonusHandler, CompanySaleHandler } from './finance/account-rules/us/us-income-classes.js';
 import { UsHouseSaleApplyReducer, UsHouseSaleHandler } from './finance/account-rules/us/us-real-property-classes.js';
 import { getUniformDistributionPeriod } from './finance/account-rules/us/us-rmd-uniform-table.js';
-import { USD, AUD, ACCOUNT_TYPE, InsufficientFundsError, Account, CheckingAccount, SavingsAccount, LoanAccount } from './finance/assets/account.js';
+import { USD, AUD, ACCOUNT_TYPE, InsufficientFundsError, Account, CheckingAccount, SavingsAccount, LoanAccount, OffsetAccount } from './finance/assets/account.js';
 import { Asset } from './finance/assets/asset.js';
 import { Collectible } from './finance/assets/collectible.js';
 import { CompanyEquity } from './finance/assets/company-equity.js';
@@ -459,6 +459,11 @@ export const Finance = {
   SuperWithdrawalEarningsHandler,
   SuperEarningsDirectHandler,
   BaseAccountModule,
+  loanKeyForProperty,
+  findLoanForProperty,
+  synthesizeLoanForProperty,
+  offsetBalanceForLoan,
+  effectivePrincipal,
   LoanPaymentHandler,
   UsLoanPaymentHandler,
   AuLoanPaymentHandler,
@@ -562,6 +567,7 @@ export const Finance = {
   CheckingAccount,
   SavingsAccount,
   LoanAccount,
+  OffsetAccount,
   Asset,
   Collectible,
   CompanyEquity,

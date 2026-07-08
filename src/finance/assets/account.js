@@ -48,6 +48,7 @@ export const ACCOUNT_TYPE = Object.freeze({
   TRADITIONAL_IRA: 'ira',
   SUPER:           'super',
   LOAN:            'loan',
+  OFFSET:          'offset',
 });
 
 /**
@@ -166,5 +167,40 @@ export class LoanAccount extends Account {
     this.linkedPropertyKey = opts.linkedPropertyKey ?? null;
     this.paymentSourceKey  = opts.paymentSourceKey  ?? null;
     this.drawdownPriority   = null; // a liability is never a source of drawdown cash
+  }
+}
+
+/**
+ * OffsetAccount — a cash-like *asset* account (design 53 §3) whose balance
+ * suppresses the interest-bearing principal of a linked home loan without paying
+ * it down: `effectivePrincipal = max(0, loanBalance − offsetBalance)`. The cash
+ * stays fully liquid and spendable; while parked it "earns" the loan rate by
+ * reducing accrued interest (rental deduction and, for owner-occupied loans, the
+ * monthly interest/payoff — design 54 P3).
+ *
+ * Extends Account (NOT InvestmentAccount): it holds cash, has no holdings-driven
+ * allocation and no contribution/earnings split. It behaves like a savings account
+ * for drawdown/replenish (liquid, participates in the country cash pool), plus one
+ * extra field `offsetsPropertyKey` linking it to the property whose loan it offsets.
+ *
+ * Currency-agnostic: defaults to AU/AUD (the original AU offset use case) but a
+ * US/USD offset against a US owner-occupied loan is equally valid (design 54 P3).
+ *
+ * No methods; safe for structuredClone snapshots.
+ */
+export class OffsetAccount extends Account {
+  /**
+   * @param {number} balance - Cash balance (default 0)
+   * @param {object} [opts]  - All Account opts, plus:
+   * @param {string|null} [opts.offsetsPropertyKey=null] - stateKey of the property whose loan this offsets
+   */
+  constructor(balance = 0, opts = {}) {
+    super(balance, {
+      country:  opts.country  ?? 'AU',
+      currency: opts.currency ?? AUD,
+      ...opts,
+      type: ACCOUNT_TYPE.OFFSET,
+    });
+    this.offsetsPropertyKey = opts.offsetsPropertyKey ?? null;
   }
 }

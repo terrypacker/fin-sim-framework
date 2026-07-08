@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { USD, AUD, CheckingAccount, SavingsAccount, LoanAccount } from '../assets/account.js';
+import { USD, AUD, CheckingAccount, SavingsAccount, LoanAccount, OffsetAccount } from '../assets/account.js';
 import {
   BrokerageAccount,
   FourOhOneKAccount,
@@ -109,6 +109,24 @@ class LoanAccountBuilder extends BaseAccountBuilder {
       monthlyPayment:    this._monthlyPayment,
       linkedPropertyKey: this._linkedPropertyKey,
       paymentSourceKey:  this._paymentSourceKey,
+    });
+  }
+}
+
+// ─── Offset (cash-like, linked) ───────────────────────────────────────────────
+
+class OffsetAccountBuilder extends BaseAccountBuilder {
+  constructor() {
+    super();
+    this._offsetsPropertyKey = null;
+  }
+
+  offsetsPropertyKey(v) { this._offsetsPropertyKey = v; return this; }
+
+  build() {
+    return new OffsetAccount(this._balance, {
+      ...this._baseOpts(),
+      offsetsPropertyKey: this._offsetsPropertyKey,
     });
   }
 }
@@ -269,4 +287,7 @@ export class AccountBuilder {
 
   /** Loan (liability) account — accrues interest, amortizes (design 54). */
   static loan()           { return new LoanAccountBuilder();           }
+
+  /** Offset account — cash-like, suppresses a linked loan's interest (design 53 §3 / 54 P3). */
+  static offset()         { return new OffsetAccountBuilder();         }
 }

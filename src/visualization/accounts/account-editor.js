@@ -11,6 +11,7 @@
 import { BaseComponent } from '../components/base-component.js';
 import { bindParamLinkedField } from '../scenario/param-linked-field.js';
 import { defaultCurrencyForCountry } from '../../finance/country-codes.js';
+import { RATE_KEYS } from '../../finance/economic-regimes/rate-keys.js';
 
 const FIXED_COUNTRY    = new Set(['401k', 'roth', 'ira', 'super']);
 // Holdings-bearing types (brokerage + retirement) — drive holdings-editor visibility.
@@ -19,6 +20,25 @@ const INVESTMENT_TYPES = new Set(['brokerage', '401k', 'roth', 'ira', 'super']);
 // persist) the basis fields (design 53 §2). Brokerage is holdings-only.
 const RETIREMENT_TYPES = new Set(['401k', 'roth', 'ira', 'super']);
 const ALLOCATIONS      = ['EQUITY', 'BOND', 'CASH', 'OTHER'];
+
+// Rate Key choices for the holdings editor, grouped by asset category. A holding's
+// rateKey selects which market-return series drives its growth (state.effective*
+// Rates[rateKey]) and is the handle shocks/regimes author effects on. The class
+// keys (EQUITY_US/AU) and their per-account-type members are all valid override
+// targets (see rate-keys.js). Blank = leave unset (the account resolves a default
+// at creation). A free-text typo silently fell back to a generic rate — this list
+// makes the valid set discoverable and prevents that.
+const RATE_KEY_GROUPS = [
+  { label: 'Equity — class',         keys: [RATE_KEYS.EQUITY_US, RATE_KEYS.EQUITY_AU] },
+  { label: 'Equity — US by account', keys: [RATE_KEYS.EQUITY_US_ROTH, RATE_KEYS.EQUITY_US_IRA, RATE_KEYS.EQUITY_US_K401, RATE_KEYS.EQUITY_US_BROKERAGE] },
+  { label: 'Equity — AU by account', keys: [RATE_KEYS.EQUITY_AU_STOCK, RATE_KEYS.EQUITY_AU_SUPER] },
+  { label: 'Fixed income',           keys: [RATE_KEYS.FIXED_INCOME_US, RATE_KEYS.FIXED_INCOME_AU] },
+  { label: 'Savings',                keys: [RATE_KEYS.SAVINGS_US, RATE_KEYS.SAVINGS_AU] },
+  { label: 'Real estate / other',    keys: [RATE_KEYS.REAL_ESTATE_US, RATE_KEYS.REAL_ESTATE_AU, RATE_KEYS.COLLECTIBLE] },
+];
+// Flat set of known keys, for detecting an out-of-enum (custom/legacy) value so the
+// dropdown preserves it instead of silently dropping it on edit.
+const KNOWN_RATE_KEYS = new Set(RATE_KEY_GROUPS.flatMap(g => g.keys));
 
 /**
  * Default native currency for an account, by type then country. Fixed-country
@@ -47,17 +67,19 @@ export class AccountEditor extends BaseComponent {
    *   container: HTMLElement,
    *   node:      object|null,    — Account graph node, or null for a new account
    *   people:    object[],       — Person graph nodes for owner dropdown
+   *   realProperties: object[],  — RealProperty nodes for the offset property picker
    *   onSave:    function(object): void,
    *   onDelete:  function(string): void,
    *   onHistory: function(object): void,
    * }}
    */
-  constructor({ parent, container, node, people = [], onSave, onDelete, onHistory,
+  constructor({ parent, container, node, people = [], realProperties = [], onSave, onDelete, onHistory,
                 links = null, onParamChange = null, onOpenParam = null }) {
     super({ parent });
     this._container = container;
     this._node      = node;
     this._people    = people;
+    this._realProperties = realProperties;
     this.onSave     = onSave    ?? null;
     this.onDelete   = onDelete  ?? null;
     this.onHistory  = onHistory ?? null;
@@ -110,6 +132,9 @@ export class AccountEditor extends BaseComponent {
 
     // Owner dropdown
     this._populateOwnerSelect(el, this._people, this._node?.ownerId ?? null);
+
+    // Offset → property picker (design 53 §3 / 54 P3)
+    this._populatePropertySelect(el, this._realProperties, this._node?.offsetsPropertyKey ?? null);
 
     // Show/hide conditional sections
     this._applyTypeVisibility(el, typeSelect.value);
@@ -238,7 +263,7 @@ export class AccountEditor extends BaseComponent {
       tr.innerHTML = `
         <td><input class="h-input" data-f="label" value="${_escape(h.label ?? '')}" placeholder="Label"/></td>
         <td><select class="h-input" data-f="allocation">${allocOpts}</select></td>
-        <td><input class="h-input" data-f="rateKey" value="${_escape(h.rateKey ?? '')}" placeholder="e.g. EQUITY_US"/></td>
+        <td><select class="h-input" data-f="rateKey">${_rateKeyOptionsHtml(h.rateKey ?? '')}</select></td>
         <td><input class="h-input h-num" type="number" data-f="marketValue" value="${h.marketValue ?? 0}"/></td>
         <td><input class="h-input h-num" type="number" data-f="costBasis" value="${h.costBasis ?? 0}"/></td>
         <td><select class="h-input" data-f="taxLossPartner">${partnerOpts}</select></td>
@@ -326,6 +351,10 @@ export class AccountEditor extends BaseComponent {
       data.contributionBasis = el.querySelector('[data-id="contributionBasis"]').value;
       data.earningsBasis     = el.querySelector('[data-id="earningsBasis"]').value;
     }
+    // Offset link (design 53 §3 / 54 P3) — the property whose loan this offset reduces.
+    if (type === 'offset') {
+      data.offsetsPropertyKey = el.querySelector('[data-id="offsetsPropertyKey"]').value || null;
+    }
     // Param-backed fields are owned by their scenario param (design/32) — drop
     // them so the service update doesn't write a competing value on the account.
     for (const f of this._linkedFields) delete data[f];
@@ -337,6 +366,8 @@ export class AccountEditor extends BaseComponent {
   _applyTypeVisibility(el, type) {
     el.querySelector('[data-id="countryRow"]').style.display      = FIXED_COUNTRY.has(type)    ? 'none' : '';
     el.querySelector('[data-id="investmentFields"]').style.display = RETIREMENT_TYPES.has(type) ? ''    : 'none';
+    const offsetFields = el.querySelector('[data-id="offsetFields"]');
+    if (offsetFields) offsetFields.style.display = type === 'offset' ? '' : 'none';
 
     const holdingsSection = el.querySelector('[data-id="holdingsSection"]');
     if (holdingsSection) {
@@ -357,6 +388,25 @@ export class AccountEditor extends BaseComponent {
     }
   }
 
+  /**
+   * Populate the offset property picker. Options are keyed by the property's
+   * stateKey (what `offsetsPropertyKey` stores); the offset reduces that
+   * property's linked loan interest (design 53 §3 / 54 P3).
+   */
+  _populatePropertySelect(el, properties, selectedKey) {
+    const sel = el.querySelector('[data-id="offsetsPropertyKey"]');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— none —</option>';
+    for (const p of properties) {
+      if (!p?.stateKey) continue;
+      const opt       = document.createElement('option');
+      opt.value       = p.stateKey;
+      opt.textContent = p.name || p.stateKey;
+      if (p.stateKey === selectedKey) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+
   destroy() {
     this._rootEl?.remove();
     super.destroy();
@@ -367,4 +417,29 @@ function _escape(s) {
   return String(s ?? '').replace(/[&<>"]/g, c => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]
   ));
+}
+
+/**
+ * Build the <option>/<optgroup> markup for a holding's Rate Key select.
+ * Blank first (leave unset), then the known keys grouped by category. An
+ * out-of-enum current value (custom/legacy) is preserved as a selected option so
+ * editing a holding never silently drops it.
+ *
+ * @param {string} selected - the holding's current rateKey ('' when unset)
+ * @returns {string} inner HTML for the <select>
+ */
+function _rateKeyOptionsHtml(selected) {
+  const cur   = selected ?? '';
+  const blank = `<option value=""${cur === '' ? ' selected' : ''}>— none —</option>`;
+  const groups = RATE_KEY_GROUPS.map(g => {
+    const opts = g.keys.map(k =>
+      `<option value="${_escape(k)}"${k === cur ? ' selected' : ''}>${_escape(k)}</option>`
+    ).join('');
+    return `<optgroup label="${_escape(g.label)}">${opts}</optgroup>`;
+  }).join('');
+  // Preserve an unrecognized current value (never drop what the user had).
+  const custom = (cur !== '' && !KNOWN_RATE_KEYS.has(cur))
+    ? `<optgroup label="Custom"><option value="${_escape(cur)}" selected>${_escape(cur)}</option></optgroup>`
+    : '';
+  return blank + groups + custom;
 }

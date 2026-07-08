@@ -618,6 +618,7 @@
             <option value="roth">Roth IRA</option>
             <option value="ira">Traditional IRA</option>
             <option value="super">Superannuation</option>
+            <option value="offset">Offset</option>
           </select>
         </div>
         <div class="node-field">
@@ -667,6 +668,14 @@
           <div class="node-field">
             <label>Earnings Basis</label>
             <input type="number" data-id="earningsBasis" value="0"/>
+          </div>
+        </div>
+        <div data-id="offsetFields" style="display:none">
+          <div class="node-field">
+            <label>Offsets Property</label>
+            <select data-id="offsetsPropertyKey">
+              <option value="">— none —</option>
+            </select>
           </div>
         </div>
         <div data-id="holdingsSection" class="holdings-section" style="display:none">

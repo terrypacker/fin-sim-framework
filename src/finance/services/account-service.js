@@ -22,7 +22,12 @@ import { fxRate, fxFeeIn } from '../fx/fx-conversion.js';
 
 // Cash/savings roles: drawn before investments (cash band) and liquid across the
 // currency border in replenishSavings, and only ever drawn down to minimumBalance.
-const SAVINGS_ROLES = new Set([ACCOUNT_ROLES.US_SAVINGS, ACCOUNT_ROLES.AU_SAVINGS]);
+// Offset accounts (design 53 §3) are cash-like and liquid — they participate in
+// the country cash pool for drawdown/replenish exactly like savings.
+const SAVINGS_ROLES = new Set([
+  ACCOUNT_ROLES.US_SAVINGS, ACCOUNT_ROLES.AU_SAVINGS,
+  ACCOUNT_ROLES.US_OFFSET,  ACCOUNT_ROLES.AU_OFFSET,
+]);
 
 /**
  * AccountService — manages Account instances on the service bus and provides
