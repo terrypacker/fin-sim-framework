@@ -187,8 +187,12 @@ test('offset (integration): AU offset lands in state, speeds owner-occupied payo
   const offLoan  = off.sim.state[LOAN_KEY]?.balance ?? 0;
   assert.ok(baseLoan > 0, `baseline AU loan still active at ${compareYear} (${baseLoan})`);
   assert.ok(offLoan < baseLoan, `offset speeds payoff: offset loan ${offLoan.toFixed(0)} < baseline ${baseLoan.toFixed(0)}`);
-  // The offset cash itself is untouched (not a drawdown source, nothing debits it).
-  assert.ok(Math.abs(off.sim.state.auOffsetAccount.balance - 200_000) < 0.01, 'offset balance stays liquid at 200k');
+  // Design 54 P4: the linked offset is now the loan's payment source, so each monthly
+  // P&I debits it — over 5 years of A$3,000 payments it drains well below its 200k start
+  // (while never going negative).
+  const offCash = off.sim.state.auOffsetAccount.balance;
+  assert.ok(offCash < 200_000, `offset debited as the loan payment source (${offCash.toFixed(0)})`);
+  assert.ok(offCash >= -0.01,  `offset never goes negative (${offCash.toFixed(0)})`);
 
   // Continue the offset run to the end, sweeping the §4.4 invariant every year —
   // an offset must not corrupt accounting anywhere in the full simulation.

@@ -107,7 +107,7 @@ test('OFFSET: effectivePrincipal subtracts the offset, clamped at 0', () => {
 
 // ── Owner-occupied: interest reduction + faster payoff ──────────────────────
 
-test('OFFSET: an offset lowers monthly interest and speeds payoff; offset cash is untouched', () => {
+test('OFFSET: an offset lowers monthly interest and speeds payoff (paying from savings leaves it untouched)', () => {
   const svc = makeSvc();
   const reducer = new LoanPaymentApplyReducer({ accountService: svc });
   const handler = new LoanPaymentHandler();
@@ -127,16 +127,48 @@ test('OFFSET: an offset lowers monthly interest and speeds payoff; offset cash i
   });
   assert.ok(near(baseline.hLoan.balance, 99_500), `baseline ${baseline.hLoan.balance}`);
 
-  // With a 40k offset: effPrincipal 60000; interest 300; principal 700 → 99300.
+  // With a 40k offset but paying explicitly from savings (design 54 P4 lets an
+  // explicit paymentSourceKey override the auto-prefer-offset default): effPrincipal
+  // 60000; interest 300; principal 700 → 99300. This isolates the interest effect.
   const withOffset = runMonth({
     usSavingsAccount: new SavingsAccount(50_000, { country: 'US', currency: USD }),
-    hLoan: loanEntry(),
+    hLoan: loanEntry({ paymentSourceKey: 'usSavingsAccount' }),
     off:   offsetEntry({ balance: 40_000 }),
   });
   assert.ok(near(withOffset.hLoan.balance, 99_300), `offset ${withOffset.hLoan.balance}`);
   assert.ok(withOffset.hLoan.balance < baseline.hLoan.balance, 'offset speeds principal payoff');
-  // The offset cash is not spent — it stays fully liquid.
-  assert.strictEqual(withOffset.off.balance, 40_000, 'offset balance untouched by the payment');
+  // Paying from savings leaves the offset cash fully liquid.
+  assert.strictEqual(withOffset.off.balance, 40_000, 'offset untouched when the payment is sourced from savings');
+});
+
+// ── Payment source: auto-prefer the linked offset (design 54 P4) ─────────────
+
+test('OFFSET: the monthly payment auto-debits the linked offset (no explicit source)', () => {
+  const svc = makeSvc();
+  const reducer = new LoanPaymentApplyReducer({ accountService: svc });
+  const handler = new LoanPaymentHandler();
+
+  let state = {
+    usSavingsAccount: new SavingsAccount(50_000, { country: 'US', currency: USD }),
+    hLoan: loanEntry(),                       // no paymentSourceKey → auto-prefer offset
+    off:   offsetEntry({ balance: 40_000 }),
+  };
+  const actions = handler.call({ state });
+  for (const a of actions) {
+    if (a.type === 'LOAN_PAYMENT_APPLY') state = reducer.reduce(state, a);
+  }
+  // effPrincipal 60000 → interest 300, principal 700 → loan 99300.
+  assert.ok(near(state.hLoan.balance, 99_300), `loan ${state.hLoan.balance}`);
+  // The full P&I (1000) leaves the OFFSET, not savings.
+  assert.strictEqual(state.off.balance, 39_000, 'offset debited by the payment');
+  assert.strictEqual(state.usSavingsAccount.balance, 50_000, 'savings untouched');
+  // The debited offset must emit its own RECORD_BALANCE (design 54 P4): the offset has
+  // no other monthly event, so without this its charted metric would freeze while its
+  // balance drops. Guards the "metric not updating" regression.
+  assert.ok(
+    actions.some(a => a.type === 'RECORD_BALANCE' && a.metricKey === 'off'),
+    'a RECORD_BALANCE snapshot is emitted for the debited offset',
+  );
 });
 
 // ── Liquidity: offset is a valid drawdown source (unlike a loan) ────────────
