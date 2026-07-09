@@ -35,7 +35,17 @@ import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables }
 // scenario-default aliases (usStockGrowthRate / stockDividendRate / usInflationRate)
 // were renamed to their toolset keys once the per-account growth refactor made
 // brokerageGrowthRate a live lever. Synthesized per-shock rows aren't in DEFAULT_*.
-const KNOWN_ORPHANS = new Set();
+const KNOWN_ORPHANS = new Set([
+  // stockBalance → acct.usStockAccount.balance. A holdings-bearing account's balance is
+  // derived from Σ holdings and is intentionally NOT generated as a param (design 55
+  // §13: holdings/basis stay out of the param surface), so sweeping an account's total
+  // balance is not currently supported. This index is built from the RAW default config
+  // where only usStockAccount carries holdings; in the compiled app EVERY account
+  // bootstraps a holding, so the other *Balance MC levers (rothBalance, iraBalance, …)
+  // are effectively orphaned too. They are all disabled by default (enabled: false) and
+  // tracked as a known limitation in GH #511 alongside the interest-rate-sweep concern.
+  'stockBalance',
+]);
 
 // Design 55: per-record params (rothBalance, usHouseSaleYear, primaryMonthlyWage…)
 // are generated from records rather than living in the static schema. Build the

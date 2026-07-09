@@ -135,7 +135,14 @@ export class ScenarioParamGenerator {
     }
     const recordName = record.name || identity;
     const group = record.country ? `${record.country} · ${recordName}` : recordName;
-    return template.map((t) => {
+    // A holdings-bearing account's balance is DERIVED from Σ holdings.marketValue (the
+    // account editor disables the balance field and refuses to param-link it), and
+    // holdings/basis are explicitly out of the param surface (design 55 §13). So skip
+    // the `balance` field whenever the account has holdings — exposing it as a param
+    // (and MC target) would let a stale value rescale the holdings on Rebuild. Only a
+    // holdings-free account keeps a scalar `balance` param.
+    const hasHoldings = Array.isArray(record.holdings) && record.holdings.length > 0;
+    return template.filter((t) => !(t.field === 'balance' && hasHoldings)).map((t) => {
       const node = nodeType === 'person'
         ? { type: 'person', id: identity, field: t.field }
         : { type: nodeType, stateKey: identity, field: t.field };

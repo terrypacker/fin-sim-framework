@@ -572,6 +572,21 @@ intl-transfers; every other cash flow bypassed it (§7.4).*
 - **Basis/holdings stay out of the param surface.** Per-lot cost basis and holdings
   remain in the account editor (design 25); only the scalar `contributionBasis`
   (retirement) is flattened. Flattening holdings to params is explicitly out of scope.
+- **Holdings-bearing `balance` is derived, not a param (fixed; MC limitation → GH #511).**
+  A `balance` param on any account that has holdings is destructive: the balance is
+  derived from Σ holdings, the account editor disables the field, and editor saves
+  update the record but not the persisted param — so on the next Rebuild the stale param
+  cascaded/rescaled the holdings back to it, silently reverting edits (this bit *every*
+  account, since each bootstraps at least one holding at compile time). Fix: the
+  generator no longer emits `balance` for an account with holdings, and the param→record
+  cascade re-derives `balance` from Σ holdings (never rescales) whenever holdings exist.
+  Only a holdings-free account keeps a scalar `balance` param. To change a
+  holdings-bearing account's value, edit its holding(s) in the account editor. Retirement
+  `contributionBasis` remains a generated scalar param and is now param-linked in the
+  editor so edits survive Rebuild. Consequence: the (disabled-by-default) `*Balance` MC
+  levers (`stockBalance`, `rothBalance`, `iraBalance`, …) can no longer sweep an
+  account's total balance — parked as known orphans in `param-sweep-schema.test.mjs` and
+  tracked in GH #511 alongside the interest-rate-sweep concern.
 - **`minimumBalance` is still static (open, post-6b).** The replenish threshold that drives
   `REPLENISH_SAVINGS` is not yet templated — it remains the global `usSavingsMinBalance` /
   `auSavingsMinBalance` params rather than a per-account generated field. Once the transaction

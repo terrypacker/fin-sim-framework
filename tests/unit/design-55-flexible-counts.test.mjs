@@ -77,7 +77,11 @@ test('FLEX-2: a third account of an existing type generates its own params and i
   });
 
   const names = paramNames(cfg);
-  assert.ok(names.includes('acct.rothAccount3.balance'), 'the 3rd account gets a balance param');
+  // balance is derived from holdings (design 55 §13) so it is NOT generated; the 3rd
+  // account still gets its own contributionBasis + growthRate params.
+  assert.ok(!names.includes('acct.rothAccount3.balance'),
+    'holdings-bearing account gets no balance param (balance derives from holdings)');
+  assert.ok(names.includes('acct.rothAccount3.contributionBasis'), 'the 3rd account gets a contributionBasis param');
   assert.ok(names.includes('acct.rothAccount3.growthRate'), 'the 3rd account gets a growthRate param');
 
   // It is a real, compiled, running account — present in state and grown past its seed.

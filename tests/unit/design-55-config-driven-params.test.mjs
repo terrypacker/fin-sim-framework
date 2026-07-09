@@ -59,10 +59,18 @@ test('D55-1: generated per-record params appear, seeded from the record values',
   const cfg = freshCfg();
   loadCfg(cfg);
 
-  const roth = paramNamed(cfg, 'acct.rothAccount.balance');
-  assert.ok(roth, 'generated Roth balance param exists');
-  assert.strictEqual(roth.value, INTL_RETIREMENT_DEFAULTS.rothBalance);
-  assert.deepStrictEqual(roth.node, { type: 'account', stateKey: 'rothAccount', field: 'balance' });
+  // contributionBasis is the retirement scalar exposed as a generated param. (balance
+  // is NOT — a holdings-bearing account's balance is derived from Σ holdings, so no
+  // balance param is generated for it; see the assertion below.)
+  const roth = paramNamed(cfg, 'acct.rothAccount.contributionBasis');
+  assert.ok(roth, 'generated Roth contributionBasis param exists');
+  assert.strictEqual(roth.value, INTL_RETIREMENT_DEFAULTS.rothBasis);
+  assert.deepStrictEqual(roth.node,
+    { type: 'account', stateKey: 'rothAccount', field: 'contributionBasis' });
+
+  // A holdings-bearing account's balance is derived (design 55 §13) — no balance param.
+  assert.strictEqual(paramNamed(cfg, 'acct.rothAccount.balance'), undefined,
+    'holdings-bearing account exposes no balance param (balance derives from holdings)');
 
   // The retired static keys are gone from the surface.
   assert.strictEqual(paramNamed(cfg, 'rothBalance'), undefined);
@@ -85,22 +93,27 @@ test('D55-2: legacy flat key in cfg.parameters aliases to the generated key and 
 // ── Alias back-compat: persisted typed params (saved scenario) ──────────────────
 
 test('D55-3: persisted legacy typed param is renamed to its generated key and cascades', () => {
+  // Uses the property sale-year alias (a generated key that survives the holdings
+  // model — balance aliases now target a derived, non-generated field). Exercises the
+  // same rename + per-record group/label re-sync path (design 55 §4).
   const cfg = freshCfg();
   cfg.params = [
-    { name: 'rothBalance', label: 'Roth IRA Balance (USD)', type: 'Number',
-      group: 'US Account Balances', value: 42_000,
-      node: { type: 'account', stateKey: 'rothAccount', field: 'balance' } },
+    { name: 'usHouseSaleYear', label: 'US House Sale Year', type: 'Number',
+      group: 'Real Estate', value: 2_035,
+      node: { type: 'realProperty', stateKey: 'usHouseProperty', field: 'plannedSaleYear' } },
   ];
   loadCfg(cfg);
 
-  assert.strictEqual(paramNamed(cfg, 'rothBalance'), undefined, 'legacy entry renamed away');
-  const gen = paramNamed(cfg, 'acct.rothAccount.balance');
+  assert.strictEqual(paramNamed(cfg, 'usHouseSaleYear'), undefined, 'legacy entry renamed away');
+  const gen = paramNamed(cfg, 'prop.usHouseProperty.plannedSaleYear');
   assert.ok(gen, 'generated key present after rename');
-  assert.strictEqual(acct(cfg, 'rothAccount').balance, 42_000, 'renamed entry still cascades');
+  assert.strictEqual(
+    (cfg.realProperties ?? []).find(r => r.stateKey === 'usHouseProperty').plannedSaleYear, 2_035,
+    'renamed entry still cascades');
   // The migrated entry adopts the per-record group/label (design 55 §4), not the
-  // stale "US Account Balances" group it carried as a static param.
-  assert.strictEqual(gen.group, 'US · Roth IRA', 'migrated entry re-syncs to the per-record group');
-  assert.strictEqual(gen.label, 'Roth IRA — Balance', 'migrated entry re-syncs its derived label');
+  // stale "Real Estate" group it carried as a static param.
+  assert.strictEqual(gen.group, 'US · US House', 'migrated entry re-syncs to the per-record group');
+  assert.strictEqual(gen.label, 'US House — Planned Sale Year', 'migrated entry re-syncs its derived label');
 });
 
 // ── Editing a generated param drives the record and survives Rebuild (§6) ────────
@@ -110,13 +123,14 @@ test('D55-4: editing a generated param cascades to the record and survives Rebui
   loadCfg(cfg);
 
   // Edit the linked param (as the account editor does via bindParamLinkedField).
-  paramNamed(cfg, 'acct.rothAccount.balance').value = 71_000;
+  // contributionBasis is the retirement scalar that is param-linked in the editor.
+  paramNamed(cfg, 'acct.rothAccount.contributionBasis').value = 71_000;
 
   // Rebuild on the same cfg (params already populated).
   loadCfg(cfg);
 
-  assert.strictEqual(acct(cfg, 'rothAccount').balance, 71_000, 'edit cascaded to record');
-  assert.strictEqual(paramNamed(cfg, 'acct.rothAccount.balance').value, 71_000,
+  assert.strictEqual(acct(cfg, 'rothAccount').contributionBasis, 71_000, 'edit cascaded to record');
+  assert.strictEqual(paramNamed(cfg, 'acct.rothAccount.contributionBasis').value, 71_000,
     'param value round-trips (harvest keeps it in sync with the record)');
 });
 
@@ -127,9 +141,9 @@ test('D55-5: ParamFieldLinks resolves the editor field to its generated param', 
   loadCfg(cfg);
 
   const links = new ParamFieldLinks(cfg.params);
-  const rothLink = links.getParamFor('account', 'rothAccount', 'balance');
-  assert.ok(rothLink, 'account balance field links to a generated param');
-  assert.strictEqual(rothLink.name, 'acct.rothAccount.balance');
+  const rothLink = links.getParamFor('account', 'rothAccount', 'contributionBasis');
+  assert.ok(rothLink, 'account contributionBasis field links to a generated param');
+  assert.strictEqual(rothLink.name, 'acct.rothAccount.contributionBasis');
 
   const wageLink = links.getParamFor('person', 'primary', 'monthlyWage');
   assert.ok(wageLink, 'person wage field links to a generated param');

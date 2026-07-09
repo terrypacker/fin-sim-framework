@@ -183,7 +183,18 @@ export class AccountEditor extends BaseComponent {
     const stateKey = this._node?.stateKey;
     if (!stateKey || !this._links) return;
 
-    const candidates = [{ dataId: 'minimumBalance', field: 'minimumBalance' }];
+    // contributionBasis is a generated param (design 55) on retirement accounts;
+    // linking it routes edits through the param so the param→record cascade applies
+    // the user's value on Rebuild instead of overwriting it with the stale param.
+    // getParamFor returns null for account types without the param, so listing it
+    // unconditionally is safe.
+    const candidates = [
+      { dataId: 'minimumBalance',    field: 'minimumBalance' },
+      { dataId: 'contributionBasis', field: 'contributionBasis' },
+    ];
+    // `balance` is param-linked only when it is a free scalar. When holdings drive the
+    // balance it is computed (and no balance param is generated), so linking would
+    // mislead — see _syncBalance / the generator skip.
     if (this._holdings.length === 0) candidates.push({ dataId: 'balance', field: 'balance' });
 
     for (const { dataId, field } of candidates) {
