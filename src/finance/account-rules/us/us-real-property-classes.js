@@ -109,7 +109,7 @@ export class UsHouseSaleHandler extends HandlerEntry {
     const loan            = data.stateKey ? findLoanForProperty(state, data.stateKey) : null;
     const mortgageBalance = loan?.balance ?? propState?.mortgageBalance ?? 0;
     const destinationKey  = resolveDestinationKey(state, data.saleDestinationAccount);
-    return [
+    const actions = [
       {
         type:            'US_HOUSE_SALE_APPLY',
         salePrice:       data.salePrice ?? propState?.value ?? 0,
@@ -121,5 +121,12 @@ export class UsHouseSaleHandler extends HandlerEntry {
       },
       new RecordBalanceAction(`${destinationKey}.balance`, destinationKey),
     ];
+    // Design 54 P2: the sale pays off the linked loan (balance → 0). The loan's
+    // metric series is otherwise only recorded by LOAN_PAYMENT, which skips a
+    // zero-balance loan, so its chart would freeze at the pre-sale balance.
+    // Snapshot the loan here (after US_HOUSE_SALE_APPLY zeroes it) so the payoff
+    // shows on the chart.
+    if (loan) actions.push(new RecordBalanceAction(`${loan.stateKey}.balance`, loan.stateKey));
+    return actions;
   }
 }
