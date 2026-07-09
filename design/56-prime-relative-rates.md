@@ -1,0 +1,350 @@
+# 56 — Prime-relative rates (central-bank anchored cash & loan rates)
+
+**Status**: **Proposed**.
+
+Model the real-world relationship between a central bank's **Prime** (policy) rate and
+the rates a household actually pays and earns. Today every cash-interest and loan rate
+is an **absolute, independent** number: two accounts, a mortgage, and an offset all
+carry their own hand-entered rate, and nothing links them. In reality a commercial bank
+sets each product a **spread over the central-bank rate** — when the RBA/Fed moves,
+every variable savings rate and mortgage moves with it. This design introduces a
+per-country **Prime rate** and reframes each cash account's and loan's rate as a
+**spread over Prime**, so a single Prime move (a rate scenario, an MC draw, a scheduled
+hike) fans out to every prime-linked product at once.
+
+Equity and bond holdings keep their own decoupled return rates (a stock's forward
+return and a fixed bond's coupon do not track the policy rate the way a savings rate
+does). A new **Gold** holding type is added with its own commodity-style growth and
+US-collectibles CGT.
+
+**Builds on**:
+- `design/28-economic-regimes.md` — the `state.effective{Growth,Interest}Rates[rateKey]`
+  substrate + `RegimeApplyReducer`. Prime is a new rate series that lives here, so
+  regimes/shocks/schedules move it for free.
+- `design/55-configuration-driven-parameters.md` §8 — per-account rates via the
+  `<memberKey>::<stateKey>` seeding in `seedPerAccountRates`
+  (`economic-regimes-toolset.js:110`). This is the exact hook the spread plugs into.
+- `design/54-loan-liability-accounts.md` — `LoanAccount.interestRate`
+  (`loan-classes.js:157`), which becomes Prime-relative.
+- `design/53-account-basis-refactor-and-offset.md` §4 — per-lot `Holding` growth via
+  `computeHoldingsGrowth` (`holdings-earnings.js:62`) + the fixed-coupon BOND path;
+  Gold slots in as a new `ALLOCATION`.
+- `design/25` holdings + `design/29` collectibles — Gold reuses the collectible
+  disposal/CGT machinery for its 28% US rate.
+
+### Decisions locked (from design review)
+1. **Per-country Prime.** `PRIME_US` and `PRIME_AU` are independent rate series (real
+   central banks move independently). Time-varying through the design-28 regime
+   substrate (seed → schedule/shock/MC-adjust → effective).
+2. **Store the spread; enter the absolute.** The canonical per-account field is the
+   **spread over Prime**; the editor input is the **absolute rate the bank quotes**,
+   converted to a spread on entry. `effectiveRate(t) = Prime(t) + spread`.
+3. **Spread is account-level, for cash & loans only.** Cash (savings/checking/offset)
+   interest and loan interest are Prime-relative. Equity and bond holdings keep their
+   own rates; bonds are explicitly excluded.
+4. **Cash holdings inherit the account cash rate.** A `CASH` holding has no rate field
+   today; it earns the account's Prime-relative cash rate.
+5. **Gold is a new holding type** with commodity-style growth and **US collectibles
+   (28%) CGT** (AU: ordinary CGT); it reuses the collectible tax path.
+
+---
+
+## 1. Problem — rates are absolute and unlinked
+
+- **No shared anchor.** `SAVINGS_US`, `SAVINGS_AU`, `FIXED_INCOME_*`, and each
+  `LoanAccount.interestRate` are independent seeded numbers (`rate-keys.js`,
+  `loan-classes.js:157`). There is no way to express "all my variable rates move when
+  the central bank moves," which is how households actually experience rates.
+- **Rate scenarios are clumsy.** To model a hiking cycle you must hand-move every
+  savings and mortgage rate in lockstep — and MC/optimization can only sweep them
+  independently, which is not how a policy rate propagates.
+- **Two central banks, one knob.** The US→AU household straddles the Fed and the RBA,
+  which set materially different policy rates; the model has no per-country policy rate
+  to hang the spreads off.
+- **Cash holdings can't carry a rate.** A `CASH`-allocation holding
+  (`allocation.js`) resolves to the account's `SAVINGS_*` key but exposes no rate of
+  its own, so a multi-sleeve cash account has nowhere to put a rate — the account
+  setting is the natural home.
+
+The design-28 substrate already carries time-varying, regime-adjustable, MC-samplable
+rate series keyed by `rateKey`. Prime should be **one more series in that substrate**,
+and the per-account rate should be **derived from it**, not independent of it.
+
+---
+
+## 2. Core idea — Prime × spread ⇒ effective rate
+
+```
+   central bank (per country)        commercial spread (per account)      effective
+   ──────────────────────────   +   ───────────────────────────────   =  ─────────────
+   PRIME_US(t)  (Fed policy)          usSavings.primeSpread  (+2.1%)       account cash rate(t)
+   PRIME_AU(t)  (RBA policy)          mortgage.primeSpread   (+1.8%)       loan rate(t)
+                                      auSavings.primeSpread  (+2.5%)       …
+```
+
+`effectiveRate(stateKey, t) = Prime(country, t) + account.primeSpread`.
+
+Because Prime lives in `state.effectiveInterestRates` (design 28), a scheduled hike, a
+shock, or an MC draw on `PRIME_US` propagates to **every** US cash account and
+US variable loan in the same period, each keeping its own spread. Turn the spread
+mechanism off (spread absent) and the account falls back to its absolute rate — pre-56
+scenarios are byte-for-byte unchanged.
+
+---
+
+## 3. The Prime rate series
+
+Two new `RATE_KEYS` entries, both in `INTEREST_RATE_KEYS` (they live in
+`effectiveInterestRates`):
+
+```js
+PRIME_US: 'PRIME_US',   // Fed policy rate
+PRIME_AU: 'PRIME_AU',   // RBA policy rate
+```
+
+- **Seed.** Two new global params `usPrimeRate` / `auPrimeRate` (defaults ≈ current
+  policy, e.g. US 0.045 / AU 0.0435), seeded into `baseInterestRates[PRIME_US|PRIME_AU]`
+  at compile in the ECONOMIC_REGIMES toolset alongside the other base rates.
+- **Time-varying.** Prime is a first-class regime target: a `FinancialShock` or a
+  scheduled step can author `{ PRIME_US: +0.01 }` and `RegimeApplyReducer` moves the
+  effective value, exactly as it does for equity/inflation today. A dedicated
+  **rate-schedule** (an optional `[{ year, PRIME_US, PRIME_AU }]` param) is the clean
+  way to express a hiking/easing path; it compiles into scheduled adjustments.
+- **MC / Opt.** `usPrimeRate`/`auPrimeRate` are valid MC/Opt targets — sweeping Prime
+  now moves the whole cash+loan complex coherently (the point).
+- **Per-country independence** is automatic: two keys, two params, two effective
+  entries; nothing couples `PRIME_US` and `PRIME_AU`.
+
+---
+
+## 4. Account-level spread (cash + loans)
+
+### 4.1 Storage — the spread is canonical
+A prime-linked account/loan carries `primeSpread: number` (annual, e.g. `0.021`). The
+**effective** rate is never stored; it is `Prime(country, t) + primeSpread`.
+
+`primeSpread` replaces the load-bearing role of the absolute per-account
+`interestRate` (design 55 §8) for **cash** accounts and of `LoanAccount.interestRate`
+for **loans**. The absolute field is retained only as the migration source (§10) and as
+the fallback when no Prime is configured.
+
+### 4.2 Editing — the user enters the absolute rate
+Decision 2: the user types **the rate the bank quotes** (absolute). On commit the
+editor converts it to a spread against the country's Prime at **sim start** (`t0`):
+
+```
+primeSpread = enteredAbsoluteRate − Prime(country, t0)
+```
+
+and stores `primeSpread`. Re-opening the editor shows
+`absolute = Prime(country, t0) + primeSpread` as the editable value, plus a read-only
+hint `“= Prime (4.50%) + 2.10%”` so the relationship is visible (this is the "both" —
+the absolute is the input, the spread is the derived, shown, quantity). Editing Prime
+therefore shifts every linked account's displayed absolute — correct, and the whole
+point.
+
+*(Alternative considered: store the absolute + a per-account `primeBaselineAtEntry` and
+compute `effective = absolute + (Prime(t) − baseline)`. Equivalent math, two fields,
+more drift surface. Rejected for the single-field spread.)*
+
+### 4.3 Which accounts
+`primeSpread` applies to `SAVINGS`, `CHECKING`, `OFFSET` (cash) and `LOAN` (liability).
+Equity/bond/retirement accounts never carry it (their earnings are growth-rate driven).
+
+---
+
+## 5. Effective-rate computation — one change in `seedPerAccountRates`
+
+The plug-in point already exists (`economic-regimes-toolset.js:110`). Today it seeds
+`baseInterestRates[`SAVINGS_US::usSavingsAccount`] = acct.interestRate`. Design 56:
+
+```js
+// for a cash account with a primeSpread:
+const prime = baseInterestRates[primeKeyFor(acct.country)];         // PRIME_US | PRIME_AU
+const perVal = (acct.primeSpread != null && prime != null)
+  ? prime + acct.primeSpread                                        // Prime-relative
+  : (acct.interestRate ?? baseMap[memberKey]);                      // legacy absolute / baseline
+baseMap[`${memberKey}::${stateKey}`] = perVal;
+```
+
+- `computeHoldingsGrowth` already reads `<memberKey>::<stateKey>` first
+  (`holdings-earnings.js:81`), so cash-holding interest picks up the Prime-relative
+  value with **no handler change**.
+- `RegimeApplyReducer` still fans class-level interest shocks onto the per-account key,
+  so a Prime move and a separate savings-market shock compose.
+- **Loans** are not in the earnings substrate. `LoanPaymentHandler`
+  (`loan-classes.js:157`) reads `loan.interestRate` directly; change it to resolve
+  `Prime(country, t) + loan.primeSpread` from `state.effectiveInterestRates`
+  (falling back to the absolute `interestRate`). This makes a variable-rate mortgage
+  track Prime period-by-period; a `primeSpread`-less loan stays fixed (back-compat).
+
+**Recompute cadence.** Because the effective map is rebuilt each period from Prime,
+a mid-simulation Prime change flows into the very next interest/payment event with no
+extra plumbing.
+
+---
+
+## 6. Cash holdings inherit the account cash rate
+
+A `CASH` holding has no rate field and resolves to the account's `SAVINGS_*` key
+(`default-allocations.js`). With §5 seeding the per-account `SAVINGS_*::stateKey` to
+`Prime + spread`, a cash sleeve earns the account's Prime-relative rate automatically —
+closing the "cash holdings can't carry a rate" gap by making the **account** the single
+place a cash rate is set (per Decision 4). No per-holding cash-rate field is added.
+
+---
+
+## 7. Gold holding — new allocation, commodity growth, collectibles CGT
+
+### 7.1 Allocation & growth
+Add `GOLD` to `ALLOCATION` (`allocation.js`) and a `GOLD` rate key (a commodity return
+series in `effectiveGrowthRates`, seeded from a global `goldGrowthRate`, regime-
+adjustable like equity but on its **own** key — Gold does not track Prime and is not a
+bond). `computeHoldingsGrowth` already grows any holding by
+`state.effectiveGrowthRates[holding.rateKey]`, so a Gold sleeve with `rateKey: 'GOLD'`
+grows with no handler change. Per-holding `growthRate`/`appreciationSchedule` overrides
+work as they do for equity.
+
+### 7.2 Tax — US collectibles 28% (AU: ordinary CGT)
+Decision 5: on disposal, Gold is taxed at the **US 28% collectibles rate**, reusing the
+`COLLECTIBLE_SALE`/`COLLECTIBLE_SALE_TAX` machinery (`us-collectible-classes.js`) rather
+than the 15/20% brokerage CGT. Because Gold is a **holding inside an account** (not a
+standalone collectible asset), the account's disposal path must route a `GOLD`-sleeve
+sale through the 28% tax computation. Two options for the design phase:
+  - **(a)** Tag the holding (`taxClass: 'COLLECTIBLE'`) and branch the brokerage sale
+    reducer to emit `COLLECTIBLE_SALE_TAX` for gold lots (localized, keeps Gold in the
+    account).
+  - **(b)** Model Gold sleeves as first-class collectibles and reuse the existing
+    disposal reducer wholesale (more reuse, but Gold then isn't an account holding).
+
+Recommend **(a)** — it honors "Gold *holding*" and confines the change to the disposal
+reducer's tax branch. AU disposal uses the standard AU CGT path (Gold is an ordinary
+CGT asset in AU).
+
+### 7.3 After-tax metric
+Add a `GOLD`→collectible mapping to `after-tax.js`'s `TAX_CLASS` so the embedded-CGT
+net-worth metric sizes gold's latent 28% liability correctly.
+
+---
+
+## 8. Equity & bond holdings — unchanged
+
+Equity forward returns (`EQUITY_*`) and fixed-bond coupons (`Holding.couponRate`,
+design 53 §4) stay on their own keys, decoupled from Prime (Decision 3). No change; this
+section exists to pin the scope boundary.
+
+---
+
+## 9. `earningsBasis` — explicitly out of scope
+
+`earningsBasis` is the earnings half of the retirement deferred-tax ledger
+(`contributionBasis + earningsBasis == balance`), read by every retirement
+withdrawal/conversion and the after-tax metric. It is **load-bearing and unrelated to
+rates**, so it stays as-is and is not touched here. (The orthogonal cleanup — deriving
+the contribution/earnings split instead of hand-editing it — belongs to design 53, not
+56.)
+
+---
+
+## 10. UI
+
+- **Prime**: two global params (`usPrimeRate`, `auPrimeRate`) render in the Scenario
+  editor like any rate; an optional Prime **schedule** editor (year → rate) is the
+  time-path affordance. No new panel.
+- **Account editor**: the cash `interestRate` field becomes an **absolute-rate input**
+  with a read-only `“= Prime (x%) + spread”` hint; on save it stores `primeSpread`
+  (§4.2). Shown for cash types only. Loans gain the same absolute-input/spread-store
+  treatment on their rate field.
+- **Holdings editor**: `GOLD` joins the allocation dropdown; a gold sleeve shows the
+  growth-rate cell (like equity), not the coupon cell.
+
+---
+
+## 11. Serialization, back-compat, migration
+
+- **New fields**: `Account.primeSpread`, `LoanAccount.primeSpread` in
+  `toJSON`/`fromJSON` + the account serializer. Absent → the resolver uses the legacy
+  absolute `interestRate`, so old saves are byte-for-byte unchanged.
+- **New rate keys** `PRIME_US`/`PRIME_AU`/`GOLD` + `goldGrowthRate`/`usPrimeRate`/
+  `auPrimeRate` params. Absent on old saves → Prime defaults seed in; no spread means no
+  account is Prime-relative until re-edited.
+- **Migration (opt-in, non-destructive)**: a one-time pass can convert existing cash
+  `interestRate`/loan `interestRate` to `primeSpread = interestRate − primeDefault`
+  and drop the absolute — but only when Prime is configured. Default is to **leave
+  legacy absolutes untouched** (they still work via the fallback) and let the user opt
+  a given account into Prime-linking by editing it.
+- **`GOLD` ALLOCATION** is additive to `ALLOCATION_VALUES`; schema validation and the
+  allocation→rateKey map gain the entry.
+- Round-trip tests extend `holdings-roundtrip` (gold sleeve) and a legacy fixture
+  (absolute rates, no Prime) asserting identical sim output.
+
+---
+
+## 12. Phased plan
+
+### Phase 1 — Prime series + cash spread (no gold, no loans)
+1. `PRIME_US`/`PRIME_AU` rate keys + `usPrimeRate`/`auPrimeRate` params; seed into
+   `baseInterestRates`.
+2. `Account.primeSpread` + serializer; `seedPerAccountRates` computes
+   `Prime + spread` for cash accounts (§5), absolute fallback retained.
+3. Account editor: absolute-input / spread-store + Prime hint.
+4. **Exit test**: a savings account with `primeSpread` earns `Prime + spread`; moving
+   `usPrimeRate` moves it; an unset spread is byte-for-byte legacy. Cash-holding
+   interest tracks it.
+
+### Phase 2 — Time-varying Prime (regimes / schedule / MC)
+1. Prime as a `RegimeApplyReducer` target; optional Prime schedule param → scheduled
+   adjustments.
+2. `usPrimeRate`/`auPrimeRate` as MC/Opt targets.
+3. **Exit test**: a scheduled hike raises every US cash rate in the hike year; an MC
+   draw on Prime moves the whole cash complex coherently.
+
+### Phase 3 — Loans track Prime
+1. `LoanAccount.primeSpread` + serializer; `LoanPaymentHandler` resolves
+   `Prime(country, t) + primeSpread` (fallback to absolute `interestRate`).
+2. Loan editor absolute-input/spread-store.
+3. **Exit test**: a variable-rate mortgage's monthly interest rises with Prime; a
+   fixed (spread-less) loan is unchanged.
+
+### Phase 4 — Gold holding
+1. `GOLD` allocation + rate key + `goldGrowthRate`; holdings editor entry.
+2. Disposal 28% US collectibles tax branch (§7.2a) + AU CGT; `after-tax` mapping.
+3. **Exit test**: a gold sleeve grows at the gold rate (not Prime); a US sale is taxed
+   at 28%; net-worth after-tax sizes the gold liability.
+
+---
+
+## 13. Risks / open questions
+
+- **Spread display when Prime changes.** Storing the spread means the account editor's
+  displayed absolute shifts if the user edits Prime afterward. Correct behavior, but
+  potentially surprising — the Prime hint mitigates it. Confirm this is the desired UX.
+- **`t0` for the spread conversion.** `primeSpread = absolute − Prime(t0)` uses Prime at
+  sim start. If a scenario's start date or `usPrimeRate` changes after accounts are
+  entered, previously-entered spreads keep their old baseline (they encode a spread, not
+  an absolute) — which is the intended semantics, but worth a doc note.
+- **Gold as holding vs collectible (§7.2).** Option (a) keeps Gold an account holding
+  but threads a `taxClass` branch into the brokerage disposal reducer; (b) is more reuse
+  but relocates Gold out of accounts. Locked to (a) pending implementation friction.
+- **Loan effective-rate source.** Loans are outside the earnings substrate; Phase 3
+  reads Prime from `state.effectiveInterestRates` directly. Ensure the loan payment
+  event fires after the period's effective map is built (ordering, design 34 §13).
+- **Offset accounts.** `OFFSET` is cash and could carry a spread, but an offset's
+  economic effect is reducing loan interest, not earning — confirm whether an offset
+  needs its own Prime-relative earn rate or simply inherits 0/none.
+- **MC double-move.** Sweeping `PRIME_US` and a per-account spread simultaneously in MC
+  compounds; document that Prime is the systemic knob and the spread the idiosyncratic
+  one (mirrors design 55 §10's global-vs-per-account shadowing note).
+
+---
+
+## Decisions
+
+| # | Question | Decision |
+|---|----------|----------|
+| 1 | Prime scope | **Per-country** `PRIME_US` / `PRIME_AU`, independent, time-varying via the design-28 regime substrate. |
+| 2 | Stored field | **The spread** (`primeSpread`); the editor input is the **absolute** bank rate, converted on entry. `effective = Prime(t) + spread`. |
+| 3 | Spread granularity | **Account-level, cash + loans only.** Equity/bond holdings keep their own rates; bonds excluded. |
+| 4 | Cash-holding rate | **Inherits the account cash rate** (Prime + spread); no per-holding cash-rate field. |
+| 5 | Gold | **New `GOLD` holding type**, commodity growth on its own key; **US 28% collectibles CGT** (AU ordinary CGT), reusing the collectible tax path. |
+| 6 | `earningsBasis` | **Untouched, out of scope** — retirement deferred-tax ledger, unrelated to rates. |
