@@ -465,13 +465,15 @@ test('changing rothAccount contributionBasis param cascades to state via schema 
   );
 });
 
-test('changing usSavingsMinBalance param cascades to account minimumBalance via schema node', () => {
+test('changing per-account savings minimumBalance param cascades to account minimumBalance via schema node', () => {
   const { services } = buildAndCompilePrebuilt();
   const active  = services.scenarioService.getActive();
   const created = services.scenarioService.newScenario(active);
 
-  const param = created.params?.find(p => p.name === 'usSavingsMinBalance');
-  assert.ok(param, 'usSavingsMinBalance param must exist in the copy');
+  // Design 55 §7/§13: the floor is generated per-account (acct.<stateKey>.minimumBalance),
+  // replacing the old global usSavingsMinBalance param (retired behind an alias).
+  const param = created.params?.find(p => p.name === 'acct.usSavingsAccount.minimumBalance');
+  assert.ok(param, 'acct.usSavingsAccount.minimumBalance param must exist in the copy');
   param.value = 8_888;
 
   const sim = loadCopyIntoFreshServices(created);

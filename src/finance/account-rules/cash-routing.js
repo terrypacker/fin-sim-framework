@@ -55,3 +55,27 @@ export function resolveCashKey(stateRegistry, country, state, ownerId = null) {
 
   return (resolved != null && state[resolved] != null) ? resolved : legacyKey;
 }
+
+/**
+ * Resolve the destination cash key for a proceeds credit (asset/property/company
+ * sale) that carries an optional pre-stamped `destinationKey` (design 55 §7.4).
+ *
+ * An explicit, still-valid `destinationKey` (a user-chosen sale destination) wins;
+ * but a stamped key that is **absent from `state`** — e.g. a stale canonical
+ * `usSavingsAccount`/`checkingAccount` baked by a handler after the account was
+ * deleted or the transaction account was reflagged — must NOT be trusted. The bare
+ * `destinationKey ?? resolveCashKey(...)` idiom only caught `null`, so an absent-but-
+ * non-null key slipped through and hit `transaction(undefined)`. This existence
+ * guard routes such a key back through the flag-aware {@link resolveCashKey} chain.
+ *
+ * @param {object} stateRegistry
+ * @param {string} country
+ * @param {object} state
+ * @param {string|null|undefined} destinationKey - the action's stamped destination
+ * @param {string|null} [ownerId=null]
+ * @returns {string}
+ */
+export function resolveDestinationCashKey(stateRegistry, country, state, destinationKey, ownerId = null) {
+  if (destinationKey != null && state[destinationKey] != null) return destinationKey;
+  return resolveCashKey(stateRegistry, country, state, ownerId);
+}

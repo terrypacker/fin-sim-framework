@@ -194,3 +194,33 @@ test('GEN-11: a populated collectible/equity template field generates the coll./
   assert.deepStrictEqual(decodeGeneratedParamKey(eq.key),
     { type: 'companyEquity', stateKey: 'companyEquityAccount', field: 'plannedSaleYear' });
 });
+
+test('GEN-12: minimumBalance is a per-account SAVINGS/CHECKING param (floor travels with the flagged account, §7/§13)', () => {
+  // Design 55 §13: the replenish floor is no longer the global us/auSavingsMinBalance
+  // pinned to the canonical savings account — it is generated per-account so a
+  // non-canonical flagged transaction account (e.g. a Checking account) can carry
+  // and edit its own floor. The runtime already reads the resolved account's own
+  // minimumBalance; this closes the parameter-surface gap.
+  const cfg = {
+    accounts: [
+      { stateKey: 'usSavingsAccount', type: 'savings',  name: 'US Savings', country: 'US', balance: 30000, minimumBalance: 3000 },
+      { stateKey: 'usChecking',       type: 'checking', name: 'US Checking', country: 'US', balance: 5000, minimumBalance: 1500, isTransactionAccount: true },
+      { stateKey: 'rothAccount',      type: 'roth',     name: 'Roth IRA',   country: 'US', balance: 80000, contributionBasis: 60000 },
+    ],
+  };
+  const byKey = new Map(ScenarioParamGenerator.generate(cfg).map(e => [e.key, e]));
+
+  // Both cash accounts — canonical savings AND the flagged non-canonical checking —
+  // get their own floor param, seeded from the record, opt-eligible but not MC.
+  for (const [key, floor] of [['acct.usSavingsAccount.minimumBalance', 3000],
+                              ['acct.usChecking.minimumBalance', 1500]]) {
+    const entry = byKey.get(key);
+    assert.ok(entry, `${key} should be generated`);
+    assert.strictEqual(entry.defaultValue, floor, 'floor seeds from the record');
+    assert.deepStrictEqual(entry.node, { type: 'account', stateKey: key.split('.')[1], field: 'minimumBalance' });
+    assert.strictEqual(entry.mc, false);
+    assert.strictEqual(entry.opt, true);
+  }
+  // Non-cash accounts do not expose a floor.
+  assert.ok(!byKey.has('acct.rothAccount.minimumBalance'), 'roth has no minimumBalance param');
+});

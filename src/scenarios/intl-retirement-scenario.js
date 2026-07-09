@@ -319,21 +319,10 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     description: 'Age at which primary claims Social Security (62–70). Note: only age 67 (FRA) is modelled until TODO #292 is resolved.',
   },
 
-  // ── Min Balances ───────────────────────────────────────────────────────────
-  {
-    key: 'usSavingsMinBalance', label: 'US Savings Min Balance (USD)',
-    type: 'Number', group: 'Min Balances', mc: false, opt: true,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.usSavingsMinBalance,
-    description: 'Minimum US cash reserve before drawing investments',
-    node: { type: 'account', stateKey: 'usSavingsAccount', field: 'minimumBalance' },
-  },
-  {
-    key: 'auSavingsMinBalance', label: 'AU Savings Min Balance (AUD)',
-    type: 'Number', group: 'Min Balances', mc: false, opt: true,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.auSavingsMinBalance,
-    description: 'Minimum AU cash reserve before drawing investments',
-    node: { type: 'account', stateKey: 'auSavingsAccount', field: 'minimumBalance' },
-  },
+  // Min-balance (cash floor) params are generated per-account from the
+  // SAVINGS/CHECKING template (design 55 §7/§13) so the floor travels with the
+  // flagged transaction account. The old global usSavingsMinBalance /
+  // auSavingsMinBalance keys retire behind aliases (see INTL_RETIREMENT_PARAM_ALIASES).
 
   // Real-property value / appreciation / sale-year params are generated from the
   // property records (design 55). companySaleYear stays static until the
@@ -487,6 +476,9 @@ export const INTL_RETIREMENT_PARAM_ALIASES = Object.freeze({
   // Real property
   usHouseSaleYear:       'prop.usHouseProperty.plannedSaleYear',
   auHouseSaleYear:       'prop.auHouseProperty.plannedSaleYear',
+  // Cash floors (design 55 §7/§13) — now per-account on the canonical savings accounts
+  usSavingsMinBalance:   'acct.usSavingsAccount.minimumBalance',
+  auSavingsMinBalance:   'acct.auSavingsAccount.minimumBalance',
 });
 
 /**

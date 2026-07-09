@@ -25,7 +25,9 @@
  *
  * Phase 1 (design 55 §12) covered balances/basis, person wage/retirementDate, and
  * property value/appreciation/sale-year; Phase 2 added the per-account rates; Phase 3
- * adds the SAVINGS/CHECKING isTransactionAccount flag. minimumBalance is still deferred.
+ * adds the SAVINGS/CHECKING isTransactionAccount flag; minimumBalance is now a
+ * per-account SAVINGS/CHECKING field so the cash floor travels with the flagged
+ * transaction account (§7.4) instead of the old global us/auSavingsMinBalance params.
  */
 import { ACCOUNT_TYPE } from '../../finance/assets/account.js';
 
@@ -38,6 +40,14 @@ const CONTRIBUTION_BASIS = {
 
 // Cash / investment balance — the field every account type exposes.
 const BALANCE = { field: 'balance', label: 'Balance', type: 'Number', mc: true, opt: false };
+
+// Cash floor (design 55 §7 / §13). The replenish threshold that drives
+// REPLENISH_SAVINGS. Per-account so it travels with the flagged transaction
+// account (§7.4) instead of being pinned to the canonical savings account by the
+// old global usSavingsMinBalance / auSavingsMinBalance params. Plain Number: the
+// floor is always in the account's native currency (no cross-currency display
+// conversion), so the currency is inferred from the account, not the param.
+const MINIMUM_BALANCE = { field: 'minimumBalance', label: 'Minimum Balance', type: 'Number', mc: false, opt: true };
 
 // Per-account earnings rates (design 55 §8 / Phase 2). An unset rate on the record
 // (null) means "use the toolset's global rate"; the generated param therefore starts
@@ -57,8 +67,8 @@ const IS_TRANSACTION_ACCOUNT = {
 };
 
 export const ACCOUNT_PARAM_TEMPLATES = {
-  [ACCOUNT_TYPE.CHECKING]:        [BALANCE, INTEREST_RATE, IS_TRANSACTION_ACCOUNT],
-  [ACCOUNT_TYPE.SAVINGS]:         [BALANCE, INTEREST_RATE, IS_TRANSACTION_ACCOUNT],
+  [ACCOUNT_TYPE.CHECKING]:        [BALANCE, MINIMUM_BALANCE, INTEREST_RATE, IS_TRANSACTION_ACCOUNT],
+  [ACCOUNT_TYPE.SAVINGS]:         [BALANCE, MINIMUM_BALANCE, INTEREST_RATE, IS_TRANSACTION_ACCOUNT],
   [ACCOUNT_TYPE.BROKERAGE]:       [BALANCE, GROWTH_RATE, DIVIDEND_RATE],
   [ACCOUNT_TYPE.ROTH]:            [BALANCE, CONTRIBUTION_BASIS, GROWTH_RATE],
   [ACCOUNT_TYPE.TRADITIONAL_IRA]: [BALANCE, CONTRIBUTION_BASIS, GROWTH_RATE],

@@ -313,10 +313,16 @@ describe('IntlRetirement combined param schema mc/opt flags', () => {
     }
   });
 
-  test('usSavingsMinBalance and auSavingsMinBalance have mc:false, opt:true', () => {
-    for (const k of ['usSavingsMinBalance', 'auSavingsMinBalance']) {
-      const entry = COMBINED_SCHEMA.find(e => e.key === k);
-      assert.ok(entry);
+  test('per-account savings minimumBalance params have mc:false, opt:true', () => {
+    // Design 55 §7/§13: the cash floor is now generated per-account from the
+    // SAVINGS/CHECKING template (the old global us/auSavingsMinBalance retired
+    // behind aliases), so assert on the generated keys rather than the static schema.
+    const defaultCfg = IntlRetirementScenario.buildDefaultConfig(
+      {}, new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)));
+    const generated = ScenarioParamGenerator.generate(defaultCfg);
+    for (const k of ['acct.usSavingsAccount.minimumBalance', 'acct.auSavingsAccount.minimumBalance']) {
+      const entry = generated.find(e => e.key === k);
+      assert.ok(entry, `${k} must be generated`);
       assert.strictEqual(entry.mc,  false);
       assert.strictEqual(entry.opt, true);
     }

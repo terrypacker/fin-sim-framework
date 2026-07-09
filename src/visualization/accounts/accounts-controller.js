@@ -118,6 +118,10 @@ export class AccountsController {
     // stateKey-at-creation).
     account.role     = _deriveRole(data.type, data.country);
     account.stateKey = this._generateStateKey(account.role, account.ownerId);
+    // Transaction-account flag (design 55 §7). Cash accounts only; the editor omits
+    // the field for other types. A new account has no generated param yet, so the
+    // flag rides the create payload rather than the param cascade.
+    if ('isTransactionAccount' in data) account.isTransactionAccount = !!data.isTransactionAccount;
     return this._service.createAccount(account);
   }
 
@@ -157,6 +161,7 @@ export class AccountsController {
       const dp = n.drawdownPriority;
       n.drawdownPriority = (dp === '' || dp == null) ? null : Number(dp);
     }
+    if ('isTransactionAccount' in n) n.isTransactionAccount = !!n.isTransactionAccount;
     // Currency arrives from the editor as a code string; the account stores a
     // {code, symbol} descriptor. Map it, dropping an unknown/empty value.
     if ('currency' in n) {

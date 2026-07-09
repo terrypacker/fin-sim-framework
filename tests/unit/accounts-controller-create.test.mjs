@@ -99,3 +99,23 @@ test('create: a non-primary owner is reflected in the stateKey', () => {
   const a = ctl.create({ type: '401k', name: 'Spouse 401k', balance: 0, ownerId: 'spouse' });
   assert.strictEqual(a.stateKey, 'k401SpouseAccount');
 });
+
+test('create: isTransactionAccount flag rides the create payload (design 55 §7)', () => {
+  const { ctl } = createCtl();
+  const flagged = ctl.create({ type: 'checking', name: 'Shared Checking', balance: 5000,
+    country: 'US', ownerId: 'primary', isTransactionAccount: true });
+  assert.strictEqual(flagged.isTransactionAccount, true);
+  // Absent flag defaults to false (Account ctor default), never undefined.
+  const plain = ctl.create({ type: 'savings', name: 'Plain', balance: 100, country: 'US', ownerId: 'primary' });
+  assert.strictEqual(plain.isTransactionAccount, false);
+});
+
+test('update: isTransactionAccount is coerced to a boolean', () => {
+  const svc = makeService();
+  const acct = { id: 'ac1', stateKey: 'usChecking', isTransactionAccount: false };
+  svc.accounts.push(acct);
+  svc.updateAccount = (id, changes) => { Object.assign(acct, changes); return acct; };
+  const ctl = new AccountsController({ accountService: svc });
+  const out = ctl.update('ac1', { isTransactionAccount: 'on' });
+  assert.strictEqual(out.isTransactionAccount, true);
+});

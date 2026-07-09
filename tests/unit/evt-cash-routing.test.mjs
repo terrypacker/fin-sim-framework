@@ -32,7 +32,8 @@ import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
 import { makeAccount, makeServices } from '../helpers/reducer-fixtures.js';
-import { resolveCashKey }            from '../../src/finance/account-rules/cash-routing.js';
+import { resolveCashKey, resolveDestinationCashKey } from '../../src/finance/account-rules/cash-routing.js';
+import { CompanySaleApplyReducer }   from '../../src/finance/account-rules/us/us-income-classes.js';
 
 import { K401ContributionApplyReducer, K401WithdrawalApplyReducer } from '../../src/finance/account-rules/us/k401-classes.js';
 import { IraContributionApplyReducer }   from '../../src/finance/account-rules/us/ira-classes.js';
@@ -182,4 +183,35 @@ test('CASH-7: AU fixed-income earnings credit the account named by action.stateK
     { auFixedIncomeAccount: { balance: 50000 } },
     { type: 'AU_FIXED_INCOME_EARNINGS_APPLY', amount: 100, residency: 'AU' });
   assert.equal(legacy.auFixedIncomeAccount.balance, 50100, 'no stateKey → canonical key (legacy dispatchers)');
+});
+
+// ─── CASH-8: a stamped-but-absent destinationKey routes back to the flagged hub ─
+// Regression: a sale handler stamps a legacy destinationKey (e.g. the canonical
+// `usSavingsAccount`) that is later DELETED or reflagged. The bare
+// `destinationKey ?? resolveCashKey(...)` idiom only caught null, so an absent-but-
+// non-null key hit `transaction(undefined)` → "Cannot read properties of undefined
+// (reading 'balance')". resolveDestinationCashKey guards existence and re-resolves
+// through the flag-aware chain.
+
+test('CASH-8: resolveDestinationCashKey guards a stale/absent stamped destinationKey', () => {
+  const state = { usSavings2Account: { balance: 100 } };            // only the flagged hub exists
+  const reg   = { resolveTransactionAccountKey: (c) => (c === 'US' ? 'usSavings2Account' : null) };
+
+  // A valid explicit destination still wins.
+  assert.equal(resolveDestinationCashKey(reg, 'US', state, 'usSavings2Account'), 'usSavings2Account');
+  // A stamped key absent from state (the deleted canonical savings) is discarded
+  // for the flag-aware resolution — NOT trusted just because it is non-null.
+  assert.equal(resolveDestinationCashKey(reg, 'US', state, 'usSavingsAccount'), 'usSavings2Account');
+  // No stamped key → resolve from scratch.
+  assert.equal(resolveDestinationCashKey(reg, 'US', state, null), 'usSavings2Account');
+});
+
+test('CASH-8: CompanySaleApplyReducer credits the flagged hub when destinationKey was deleted', () => {
+  const svc   = services('usSavings2Account');
+  const state = { usSavings2Account: makeAccount({ stateKey: 'usSavings2Account', balance: 30000 }) };
+  // The action carries a stale destinationKey pointing at the now-deleted savings account.
+  const next = new CompanySaleApplyReducer({ accountService: svc.accountService, stateRegistry: svc.stateRegistry })
+    .reduce(state, { salePrice: 500000, costBasis: 100000, residency: null,
+                     stateKey: null, destinationKey: 'usSavingsAccount' });
+  assert.equal(bal(next, 'usSavings2Account'), 530000, 'proceeds land in the flagged hub, no crash');
 });

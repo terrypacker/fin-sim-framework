@@ -556,12 +556,12 @@ test('toolset params: cfg.params[].description is propagated from schema for UI 
     'k401ToIraConversionEnabled.description must be populated from US_RETIREMENT.paramSchema');
 
   // Scenario-owned key (node-bound) — description must come from the scenario schema.
-  // (Per-record balance/wage params are now generated from records and carry no
-  // description; usSavingsMinBalance is a retained static node-bound param.)
-  const minBal = cfg.params.find(p => p.name === 'usSavingsMinBalance');
-  assert.ok(minBal);
-  assert.ok(minBal.description && minBal.description.length > 0,
-    'usSavingsMinBalance.description must be populated from the scenario schema');
+  // (Per-record balance/wage/min-balance params are now generated from records and
+  // carry no description; companySaleYear is a retained static node-bound param.)
+  const saleYear = cfg.params.find(p => p.name === 'companySaleYear');
+  assert.ok(saleYear);
+  assert.ok(saleYear.description && saleYear.description.length > 0,
+    'companySaleYear.description must be populated from the scenario schema');
 });
 
 test('toolset params: drift guard backfills missing description on pre-existing cfg.params entries', () => {
@@ -571,9 +571,9 @@ test('toolset params: drift guard backfills missing description on pre-existing 
   const cfg = freshDeclarativeConfig();
   cfg.scenarioClass = IntlRetirementScenario;
   cfg.params = [
-    { name: 'usSavingsMinBalance', label: 'US Savings Min Balance (USD)',
-      type: 'Number', group: 'Min Balances', value: 20000,
-      node: { type: 'account', stateKey: 'usSavingsAccount', field: 'minimumBalance' } },
+    { name: 'companySaleYear', label: 'Company Sale Year',
+      type: 'Number', group: 'Company Equity', value: 2035,
+      node: { type: 'companyEquity', stateKey: 'companyEquityAccount', field: 'plannedSaleYear' } },
     // saved value the user edited — must not be reset by backfill
     { name: 'monthlyExpenses', label: 'Monthly Expenses (USD)',
       type: 'Number', group: 'US Retirement', value: 7500 },
@@ -581,8 +581,8 @@ test('toolset params: drift guard backfills missing description on pre-existing 
 
   loadIntoFreshServices(cfg);
 
-  const minBal = cfg.params.find(p => p.name === 'usSavingsMinBalance');
-  assert.ok(minBal?.description?.length > 0,
+  const saleYear = cfg.params.find(p => p.name === 'companySaleYear');
+  assert.ok(saleYear?.description?.length > 0,
     'scenario-schema description should be backfilled onto pre-existing entries');
 
   const expenses = cfg.params.find(p => p.name === 'monthlyExpenses');
