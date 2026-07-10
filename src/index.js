@@ -203,6 +203,7 @@ import { AuTaxModule2025 } from './finance/tax/au/au-tax-module-2025.js';
 import { AuTaxModule2026 } from './finance/tax/au/au-tax-module-2026.js';
 import { AuTaxRates2024 } from './finance/tax/au/au-tax-rates-2024.js';
 import { AuTaxRates2025 } from './finance/tax/au/au-tax-rates-2025.js';
+import { AuTaxRates2026 } from './finance/tax/au/au-tax-rates-2026.js';
 import { AuTaxRatesBase } from './finance/tax/au/au-tax-rates-base.js';
 import { BaseTaxDocumentModule } from './finance/tax/base-tax-document-module.js';
 import { BaseTaxModule } from './finance/tax/base-tax-module.js';
@@ -879,6 +880,7 @@ export const Finance = {
   AuTaxModule2026,
   AuTaxRates2024,
   AuTaxRates2025,
+  AuTaxRates2026,
   AuTaxRatesBase,
   BaseTaxDocumentModule,
   BaseTaxModule,

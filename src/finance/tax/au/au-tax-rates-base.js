@@ -50,6 +50,28 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
    *   phaseInRate:    rate applied to (income − lowerThreshold) in the phase-in band
    */
   _medicareLevy = { rate: 0.02, lowerThreshold: 26_000, phaseInRate: 0.10 };
+  /** Flat CGT discount rate (ATO Division 115). FY≤2026 = 50%. */
+  _cgtDiscountRate = 0.5;
+
+  /**
+   * Year-specific CGT relief for resident net capital gains.
+   *
+   * Base implementation: a flat Division 115 discount at `_cgtDiscountRate`.
+   * FY2027+ overrides this to replace the discount with cost-base indexation
+   * and a minimum-tax floor (design 57 §6.3).
+   *
+   * @param {object} state             Simulation state snapshot
+   * @param {number} auCapitalGainsYTD Gross AU resident capital gains for the period
+   * @returns {{ netTaxableGain: number, reliefAmount: number, minTaxFloor: number }}
+   *   netTaxableGain — portion added to assessable income after relief;
+   *   reliefAmount   — the reduction (gross − taxable), for display;
+   *   minTaxFloor    — floor applied to the net tax liability (0 = no floor).
+   */
+  _cgtRelief(state, auCapitalGainsYTD) {
+    const reliefAmount   = auCapitalGainsYTD * this._cgtDiscountRate;
+    const netTaxableGain = auCapitalGainsYTD - reliefAmount;
+    return { netTaxableGain, reliefAmount, minTaxFloor: 0 };
+  }
 
   computeTax(state) {
     const {
@@ -65,15 +87,19 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
     const isAuResident = state.people?.[primaryKey]?.residency === 'AU';
 
     if (isAuResident) {
-      // Resident: apply 50% CGT discount (ATO Division 115)
-      const cgtDiscount        = auCapitalGainsYTD * 0.5;
-      const discountedIncome   = auOrdinaryIncomeYTD + cgtDiscount;
+      // Resident: apply the year's CGT relief (base = flat 50% Div 115 discount).
+      // `_cgtRelief` returns the net taxable gain added to assessable income, the
+      // relief (reduction) amount for display, and any minimum-tax floor on the
+      // net liability (0 for years without a floor — see design 57 §6.1).
+      const { netTaxableGain, reliefAmount: cgtDiscount, minTaxFloor } =
+        this._cgtRelief(state, auCapitalGainsYTD);
+      const discountedIncome   = auOrdinaryIncomeYTD + netTaxableGain;
       const assessableIncome   = Math.max(0, discountedIncome);
       const baseTax            = _applyBrackets(assessableIncome, this._brackets);
       const medicareLevy       = this._computeMedicareLevy(discountedIncome);
       const frankingOffset     = Math.min(auFrankingCreditYTD, baseTax);
       const grossTax           = Math.max(0, baseTax + medicareLevy - frankingOffset) + auSuperTaxYTD;
-      const netLiability       = grossTax;
+      const netLiability       = Math.max(grossTax, minTaxFloor);
 
       const totalGrossIncome   = auOrdinaryIncomeYTD + auCapitalGainsYTD;
       const effectiveRate      = totalGrossIncome > 0 ? netLiability / totalGrossIncome : 0;
@@ -90,7 +116,7 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         },
         isResident:               true,
         cgtDiscount,
-        discountedCapitalGains:   cgtDiscount,
+        discountedCapitalGains:   netTaxableGain,
         assessableIncome,
         baseTax,
         medicareLevy,
@@ -105,7 +131,7 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
           { label: 'Ordinary Income',               amount:  auOrdinaryIncomeYTD },
           { label: 'Capital Gains (before discount)', amount: auCapitalGainsYTD },
           { label: 'CGT 50% Discount',              amount: -cgtDiscount },
-          { label: 'Net Capital Gains',             amount:  cgtDiscount },
+          { label: 'Net Capital Gains',             amount:  netTaxableGain },
           { label: 'Total Assessable Income',       amount:  assessableIncome },
           { label: 'Tax on Income',                 amount:  baseTax },
           { label: 'Medicare Levy',                 amount:  medicareLevy },
