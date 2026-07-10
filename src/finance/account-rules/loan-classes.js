@@ -13,6 +13,7 @@ import { HandlerEntry }      from '../../simulation-framework/handlers.js';
 import { RecordBalanceAction, FieldValueAction } from '../../simulation-framework/actions.js';
 import { resolveCashKey } from './cash-routing.js';
 import { fxRate }         from '../fx/fx-conversion.js';
+import { PRIME_KEY_BY_COUNTRY } from '../economic-regimes/rate-keys.js';
 
 /** Deterministic state key for the loan synthesized from a property's mortgage (design 54 P2). */
 export function loanKeyForProperty(propStateKey) {
@@ -46,6 +47,10 @@ export function synthesizeLoanForProperty(prop) {
     stateKey:          loanKeyForProperty(prop.stateKey),
     balance,
     interestRate:      prop.mortgageInterestRate ?? 0,
+    // Prime-relative loan rate (design 56 Phase 3): when the mortgage carries a
+    // `mortgagePrimeSpread`, the loan tracks `Prime(country,t) + spread` (resolveLoanRate);
+    // null keeps the fixed absolute `interestRate` (back-compat).
+    primeSpread:       prop.mortgagePrimeSpread ?? null,
     monthlyPayment:    prop.monthlyMortgage      ?? 0,
     linkedPropertyKey: prop.stateKey,
     country:           prop.country ?? 'US',
@@ -142,6 +147,22 @@ export function effectivePrincipal(state, _loanKey, loan) {
 }
 
 /**
+ * The loan's effective annual interest rate (design 56 Phase 3). A Prime-linked loan
+ * (non-null `primeSpread`) tracks `Prime(country,t) + primeSpread`, read live from
+ * `state.effectiveInterestRates[PRIME_{country}]` — so a variable-rate mortgage moves
+ * with the central bank period-by-period (time-varying Prime comes free from Phase 2b,
+ * which keeps `PRIME_*` current in the effective map). Absent a spread (or a missing
+ * Prime series) it falls back to the fixed absolute `interestRate`, so a spread-less
+ * loan is byte-for-byte the pre-56 fixed loan.
+ */
+export function resolveLoanRate(state, loan) {
+  const primeKey = PRIME_KEY_BY_COUNTRY[loan?.country] ?? PRIME_KEY_BY_COUNTRY.US;
+  const prime    = state?.effectiveInterestRates?.[primeKey];
+  if (loan?.primeSpread != null && prime != null) return prime + loan.primeSpread;
+  return loan?.interestRate ?? 0;
+}
+
+/**
  * Handles LOAN_PAYMENT events (design 54 §4). For each liability account with a
  * positive balance, accrues one month of interest on the effective (offset-reduced)
  * principal, computes the fixed payment (capped so the last payment never overpays
@@ -184,7 +205,7 @@ export class LoanPaymentHandler extends HandlerEntry {
 
       const cashKey   = resolveLoanCashKey(this.stateRegistry, state, loan);
       const cash      = state[cashKey];
-      const interest  = Math.max(0, effectivePrincipal(state, loanKey, loan) * (loan.interestRate ?? 0) / 12);
+      const interest  = Math.max(0, effectivePrincipal(state, loanKey, loan) * resolveLoanRate(state, loan) / 12);
       // Never pay past payoff: cap at the balance plus this month's interest. All
       // loan-side figures (interest, payment, balance) are in the LOAN's currency.
       const payment   = Math.min(loan.monthlyPayment ?? 0, balance + interest);

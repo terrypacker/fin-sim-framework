@@ -131,7 +131,12 @@ test('EVT-PAIR-5: per-account interestRate drives US savings interest (no dead w
   // the credited-interest metric, which is a clean per-account signal.
   const interestMetric = (rate) => {
     const state = run(cfg => {
-      cfg.accounts.find(a => a.stateKey === 'usSavingsAccount').interestRate = rate;
+      const acct = cfg.accounts.find(a => a.stateKey === 'usSavingsAccount');
+      // Design 56: the prebuilt US savings is Prime-linked (primeSpread), which
+      // shadows the absolute interestRate. Un-link it to exercise the legacy
+      // per-account interestRate wire this test guards.
+      acct.primeSpread  = null;
+      acct.interestRate = rate;
     });
     // Per-account key must be seeded distinctly from the shared class key.
     assert.ok(Math.abs((state.effectiveInterestRates?.['SAVINGS_US::usSavingsAccount'] ?? NaN) - rate) < 1e-9,

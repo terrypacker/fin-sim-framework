@@ -106,10 +106,14 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
     group: 'Spouse Account Rates',     enabled: true,
   },
 
-  // ── Cash / fixed income rates (lower uncertainty) ─────────────────────────
+  // ── Central-bank Prime rates — THE systemic rate sweep (design 56 Decision 6 / §3.1) ──
+  // One draw on Prime moves every Prime-linked cash account (and, in Phase 3, variable
+  // loan) coherently via the per-account re-seed. The per-account/global savings interest
+  // MC levers are RETIRED (replaced by Prime, not kept alongside — avoids the double-move);
+  // fixed-income keeps its own rate knob (bonds are excluded from Prime, Decision 3).
   {
-    paramKey: 'usSavingsInterestRate', label: 'US Savings Interest Rate',
-    type: DISTRIBUTION_TYPES.NORMAL,   mean: D.usSavingsInterestRate, stdDev: 0.01,
+    paramKey: 'usPrimeRate',           label: 'US Prime Rate (Fed policy)',
+    type: DISTRIBUTION_TYPES.NORMAL,   mean: D.usPrimeRate, stdDev: 0.01,
     group: 'US Account Rates',         enabled: true,
   },
   {
@@ -118,8 +122,8 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
     group: 'US Account Rates',         enabled: true,
   },
   {
-    paramKey: 'auSavingsInterestRate', label: 'AU Savings Interest Rate',
-    type: DISTRIBUTION_TYPES.NORMAL,   mean: D.auSavingsInterestRate, stdDev: 0.01,
+    paramKey: 'auPrimeRate',           label: 'AU Prime Rate (RBA policy)',
+    type: DISTRIBUTION_TYPES.NORMAL,   mean: D.auPrimeRate, stdDev: 0.01,
     group: 'AU Account Rates',         enabled: true,
   },
 

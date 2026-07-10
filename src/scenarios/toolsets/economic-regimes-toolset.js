@@ -12,8 +12,9 @@ import { OneOffEvent }                    from '../../simulation-framework/event
 import { EventSeries }                   from '../../simulation-framework/events/event-series.js';
 import { DateUtils }                      from '../../simulation-framework/date-utils.js';
 import { ValueType }                      from '../../simulation-framework/type-registry.js';
-import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS } from '../../finance/economic-regimes/rate-keys.js';
+import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY } from '../../finance/economic-regimes/rate-keys.js';
 import { RegimeApplyReducer }             from '../../finance/economic-regimes/regime-apply-reducer.js';
+import { PrimeRelinkReducer }             from '../../finance/economic-regimes/prime-relink-reducer.js';
 import { AddRegimeReducer }               from '../../finance/economic-regimes/add-regime-reducer.js';
 import { RemoveRegimeReducer }            from '../../finance/economic-regimes/remove-regime-reducer.js';
 import { RevalueAssetReducer }            from '../../finance/economic-regimes/revalue-asset-reducer.js';
@@ -81,6 +82,11 @@ function collectBaseGrowthRates(p) {
     [RATE_KEYS.EQUITY_US_BROKERAGE]: p.brokerageGrowthRate ?? 0.05,
     [RATE_KEYS.EQUITY_AU_STOCK]:     p.auStockGrowthRate   ?? 0.06,
     [RATE_KEYS.EQUITY_AU_SUPER]:     p.superGrowthRate     ?? p.spouseSuperGrowthRate ?? 0.07,
+    // Gold (design 56 §7) — a commodity return on its own key, decoupled from equity
+    // and Prime. A GOLD holding (rateKey='GOLD') grows at this rate via
+    // computeHoldingsGrowth; regime shocks may target GOLD directly (it is not a
+    // member of any equity class, so an equity crash does not touch it).
+    [RATE_KEYS.GOLD]:                p.goldGrowthRate      ?? 0.05,
   };
 }
 
@@ -93,6 +99,11 @@ function collectBaseInterestRates(p) {
   if (p.fixedIncomeInterestRate  != null) rates[RATE_KEYS.FIXED_INCOME_US] = p.fixedIncomeInterestRate;
   if (p.auSavingsInterestRate    != null) rates[RATE_KEYS.SAVINGS_AU]      = p.auSavingsInterestRate;
   if (p.auFixedIncomeInterestRate != null) rates[RATE_KEYS.FIXED_INCOME_AU] = p.auFixedIncomeInterestRate;
+  // Central-bank Prime rates (design 56 §3). Seeded here so the per-account
+  // `Prime + primeSpread` derivation (seedPerAccountRates) and, in Phase 2,
+  // RegimeApplyReducer can move them like any other interest series.
+  if (p.usPrimeRate              != null) rates[RATE_KEYS.PRIME_US]        = p.usPrimeRate;
+  if (p.auPrimeRate              != null) rates[RATE_KEYS.PRIME_AU]        = p.auPrimeRate;
   return rates;
 }
 
@@ -105,21 +116,67 @@ function collectBaseInterestRates(p) {
  * `<memberKey>::<stateKey>` key and RegimeApplyReducer fans class shocks onto it,
  * so per-account rates coexist with regimes.
  *
+ * Prime-relative cash (design 56 §5): when a cash account's member key is
+ * Prime-linkable (`CASH_PRIME_KEY_BY_RATE_KEY`) and it carries a `primeSpread`, the
+ * per-account rate is `Prime(country) + primeSpread` instead of its absolute
+ * `interestRate` — so a Prime move fans out to every linked cash account. The Prime
+ * series must already be seeded into `baseInterestRates` (collectBaseInterestRates
+ * runs first). An absent spread (or missing Prime) falls back to the legacy absolute
+ * path, keeping pre-56 scenarios byte-for-byte identical.
+ *
+ * Returns the Prime **links** — `{ stateKey, savKey, primeKey, spread }` for every cash
+ * key seeded as `Prime + spread` — so PrimeRelinkReducer can re-derive each account's
+ * effective rate when Prime moves at runtime (design 56 §5, Phase 2b). Cash accounts
+ * (step 1) and cash sleeves on non-cash accounts (step 2) both produce a link.
+ *
  * Mutates `baseGrowthRates` / `baseInterestRates` in place.
  */
 function seedPerAccountRates(accounts, baseGrowthRates, baseInterestRates) {
+  const primeLinks = [];
   for (const acct of accounts ?? []) {
     const stateKey  = acct?.stateKey;
+    if (!stateKey) continue;
     const memberKey = MEMBER_RATE_KEY_BY_ROLE[acct?.role];
-    if (!stateKey || !memberKey) continue;
-    const isInterest = INTEREST_RATE_KEYS.has(memberKey);
-    const baseMap    = isInterest ? baseInterestRates : baseGrowthRates;
-    const ownRate    = isInterest ? acct.interestRate : acct.growthRate;
-    // Fall back to the shared baseline when the account has no explicit rate.
-    const perVal = ownRate ?? baseMap[memberKey];
-    if (perVal == null) continue;
-    baseMap[`${memberKey}::${stateKey}`] = perVal;
+
+    // 1. Primary sleeve rate from the account's role member key (equity growth, or
+    //    savings/fixed-income interest). Cash accounts take their `Prime + primeSpread`
+    //    here (their member key is a cash key); everything else uses its absolute rate.
+    if (memberKey) {
+      const isInterest = INTEREST_RATE_KEYS.has(memberKey);
+      const baseMap    = isInterest ? baseInterestRates : baseGrowthRates;
+      const primeKey = CASH_PRIME_KEY_BY_RATE_KEY[memberKey];
+      const prime    = primeKey != null ? baseInterestRates[primeKey] : undefined;
+      let perVal;
+      if (primeKey != null && acct.primeSpread != null && prime != null) {
+        perVal = prime + acct.primeSpread;
+        primeLinks.push({ stateKey, savKey: memberKey, primeKey, spread: acct.primeSpread });
+      } else {
+        const ownRate = isInterest ? acct.interestRate : acct.growthRate;
+        perVal = ownRate ?? baseMap[memberKey];
+      }
+      if (perVal != null) baseMap[`${memberKey}::${stateKey}`] = perVal;
+    }
+
+    // 2. Cash-sleeve rate for a NON-cash account carrying a `primeSpread` (design 56 §6):
+    //    a `CASH` holding resolves to `SAVINGS_{country}` and reads the per-account key,
+    //    so seed `SAVINGS_{country}::<stateKey> = Prime + primeSpread`. Cash accounts
+    //    already covered this in step 1 (their member key IS the cash key).
+    // A loan's `primeSpread` is a *loan* rate resolved by LoanPaymentHandler
+    // (design 56 Phase 3), NOT a cash-sleeve earnings rate — skip it here so it never
+    // seeds a bogus `SAVINGS_*::<loanKey>`. Offsets carry no primeSpread (Decision 7).
+    const isCashAccount = CASH_PRIME_KEY_BY_RATE_KEY[memberKey] != null;
+    const isLiability   = acct.type === 'loan' || acct.type === 'offset';
+    if (acct.primeSpread != null && !isCashAccount && !isLiability) {
+      const savKey   = SAVINGS_KEY_BY_COUNTRY[acct.country];
+      const primeKey = savKey ? CASH_PRIME_KEY_BY_RATE_KEY[savKey] : null;
+      const prime    = primeKey != null ? baseInterestRates[primeKey] : undefined;
+      if (savKey && prime != null) {
+        baseInterestRates[`${savKey}::${stateKey}`] = prime + acct.primeSpread;
+        primeLinks.push({ stateKey, savKey, primeKey, spread: acct.primeSpread });
+      }
+    }
   }
+  return primeLinks;
 }
 
 /**
@@ -209,6 +266,50 @@ function scheduleShock(shock, events) {
 }
 
 /**
+ * Compile an optional Prime **schedule** (design 56 §3/§5, Phase 2b item 3) into scheduled
+ * regime adjustments on `PRIME_US`/`PRIME_AU`. The schedule is an array of
+ * `[{ year, PRIME_US, PRIME_AU }]` **absolute** policy rates, each taking effect at the
+ * start of its `year` and holding until the next entry (a step / boxcar path).
+ *
+ * Each entry becomes a permanent (L-profile) regime spanning `[year_i, year_{i+1})` whose
+ * `interestRateAdjustment` is the entry's absolute rate **minus the Prime seed**
+ * (`usPrimeRate`/`auPrimeRate`). Because the windows don't overlap, exactly one is active
+ * at a time, so `effective[PRIME] = seed + (absolute − seed) = absolute` during its window
+ * — and PrimeRelinkReducer then fans that move onto every linked cash account. An entry
+ * names only the countries it moves; the last entry runs through sim end. Reuses the shock
+ * scheduling path (EconomicShockHandler → ADD_REGIME_APPLY), so no new event type.
+ */
+function schedulePrimeRateSteps(schedule, p, startDate, endDate, events) {
+  if (!Array.isArray(schedule) || schedule.length === 0) return;
+  const seed = { PRIME_US: p.usPrimeRate ?? 0.045, PRIME_AU: p.auPrimeRate ?? 0.0435 };
+  const entries = schedule
+    .filter(e => e && Number.isFinite(e.year))
+    .sort((a, b) => a.year - b.year);
+  const endBoundYear = endDate.getUTCFullYear() + 1;   // cover through the final period
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry    = entries[i];
+    const nextYear = (i + 1 < entries.length) ? entries[i + 1].year : endBoundYear;
+    const durationMonths = (nextYear - entry.year) * 12;
+    if (durationMonths <= 0) continue;                 // duplicate / out-of-order year
+
+    const interestRateAdjustment = {};
+    for (const key of ['PRIME_US', 'PRIME_AU']) {
+      if (entry[key] != null) interestRateAdjustment[key] = entry[key] - seed[key];
+    }
+    if (Object.keys(interestRateAdjustment).length === 0) continue;
+
+    scheduleShock({
+      shockId:   `PRIME_SCHED_${entry.year}`,
+      name:      `Prime Schedule ${entry.year}`,
+      startDate: new Date(Date.UTC(entry.year, 0, 1)),
+      regime:    { interestRateAdjustment },
+      recovery:  { profile: 'L', durationMonths },
+    }, events);
+  }
+}
+
+/**
  * ECONOMIC_REGIMES toolset — adds a shock-and-regime layer on top of the
  * existing pipeline.
  *
@@ -229,7 +330,7 @@ export const ECONOMIC_REGIMES = {
 
   types: {
     handlers: [EconomicShockHandler, EconomicRecoveryTickHandler],
-    reducers: [RegimeApplyReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, BondPriceAdjustReducer],
+    reducers: [RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, BondPriceAdjustReducer],
     actions: [
       { type: 'ADD_REGIME_APPLY',    fields: { regime: ValueType.any() } },
       { type: 'REMOVE_REGIME_APPLY', fields: { regimeId: ValueType.text() } },
@@ -297,6 +398,16 @@ export const ECONOMIC_REGIMES = {
         description:  'List of financial shocks to apply. Each entry can reference a library preset or define a custom shock.',
       },
       {
+        key:          'primeSchedule',
+        label:        'Prime Rate Schedule',
+        type:         'PrimeScheduleList',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: [],
+        description:  'Optional per-year central-bank policy path: each row sets the absolute PRIME_US / PRIME_AU rate taking effect that year and holding until the next row. A step compiles into a scheduled Prime move that fans out to every Prime-linked cash account and variable loan (design 56 §5).',
+      },
+      {
         key:          'behavioralStrategies',
         label:        'Behavioral Strategies',
         type:         'EnumMulti',
@@ -316,14 +427,17 @@ export const ECONOMIC_REGIMES = {
     const baseGrowthRates    = collectBaseGrowthRates(p);
     const baseInterestRates  = collectBaseInterestRates(p);
     // Per-account rate overrides (design 55 §8) — extend the base maps with
-    // `<memberKey>::<stateKey>` entries derived from each account's own rate.
-    seedPerAccountRates(context.accounts, baseGrowthRates, baseInterestRates);
+    // `<memberKey>::<stateKey>` entries derived from each account's own rate. The
+    // returned Prime links let PrimeRelinkReducer re-derive linked cash keys when
+    // Prime moves at runtime (design 56 §5, Phase 2b).
+    const primeLinks = seedPerAccountRates(context.accounts, baseGrowthRates, baseInterestRates);
     const baseInflationRates = {
       US: p.usInflationRate ?? p.inflationRate ?? 0.03,
       AU: p.auInflationRate ?? p.inflationRate ?? 0.03,
     };
     return {
       activeRegimes:               [],
+      primeLinks,
       baseGrowthRates,
       baseInterestRates,
       baseInflationRates,
@@ -339,14 +453,18 @@ export const ECONOMIC_REGIMES = {
 
   schedules(context) {
     const events    = [];
-    const shocks    = context.parameters.shocks ?? [];
-    const strats    = context.parameters.behavioralStrategies ?? [];
+    const p         = context.parameters;
+    const shocks    = p.shocks ?? [];
+    const strats    = p.behavioralStrategies ?? [];
 
     for (const entry of shocks) {
       const shock = resolveShockEntry(entry);
       if (!shock) continue;
       scheduleShock(shock, events);
     }
+
+    // Optional Prime rate path (design 56 §5, Phase 2b) → scheduled PRIME_* moves.
+    schedulePrimeRateSteps(p.primeSchedule, p, context.startDate, context.endDate, events);
 
     if (strats.includes('TAX_LOSS_HARVEST')) {
       events.push(new EventSeries({
@@ -393,6 +511,7 @@ export const ECONOMIC_REGIMES = {
       .flatMap(k => BEHAVIORAL_STRATEGY_REGISTRY[k]?.reducers(context) ?? []);
     return [
       new RegimeApplyReducer(),
+      new PrimeRelinkReducer(),
       new AddRegimeReducer(),
       new RemoveRegimeReducer(),
       new RevalueAssetReducer(),

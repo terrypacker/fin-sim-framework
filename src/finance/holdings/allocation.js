@@ -20,8 +20,24 @@ export const ALLOCATION = Object.freeze({
   EQUITY: 'EQUITY',
   BOND:   'BOND',
   CASH:   'CASH',
+  GOLD:   'GOLD',
   OTHER:  'OTHER',
 });
 
 /** Tuple of every legal ALLOCATION value — useful for schema validation. */
 export const ALLOCATION_VALUES = Object.freeze(Object.values(ALLOCATION));
+
+/**
+ * Allocations whose disposal is taxed as a **collectible** (design 56 §7.2):
+ * GOLD is a commodity holding that carries the US 28% collectibles CGT rate (and
+ * AU ordinary CGT when resident). The disposal reducer and the after-tax metric
+ * branch on this set rather than a separately-stored `taxClass` field — the
+ * allocation is the single, unambiguous signal (GOLD is the only collectible
+ * holding today) and can never drift from a redundant tag.
+ */
+export const COLLECTIBLE_ALLOCATIONS = Object.freeze(new Set([ALLOCATION.GOLD]));
+
+/** True when a holding's ALLOCATION disposes as a collectible (US 28% CGT). */
+export function isCollectibleAllocation(allocation) {
+  return COLLECTIBLE_ALLOCATIONS.has(allocation);
+}

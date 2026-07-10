@@ -55,7 +55,11 @@ const MINIMUM_BALANCE = { field: 'minimumBalance', label: 'Minimum Balance', typ
 // earnings handler reads it via the per-account rate key so regimes still apply.
 const GROWTH_RATE   = { field: 'growthRate',   label: 'Growth Rate',   type: 'Number', mc: true, opt: false };
 const DIVIDEND_RATE = { field: 'dividendRate', label: 'Dividend Rate', type: 'Number', mc: true, opt: false };
-const INTEREST_RATE = { field: 'interestRate', label: 'Interest Rate', type: 'Number', mc: true, opt: false };
+// Per-account cash interest rate (CHECKING/SAVINGS). Retired as an MC lever (design 56
+// Decision 6 / §3.1): a cash account's rate is now Prime + primeSpread, so the systemic
+// rate sweep is Prime, not this per-account knob — retiring it removes the MC double-move
+// at the source. Still a live editable/seed field (mc:false, opt:false).
+const INTEREST_RATE = { field: 'interestRate', label: 'Interest Rate', type: 'Number', mc: false, opt: false };
 
 // Transaction-account flag (design 55 §7 / Phase 3). Marks the cash account that
 // expenses debit and cross-border sweeps replenish for its country of residence.

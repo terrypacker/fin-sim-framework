@@ -94,11 +94,12 @@ test('Holding: round-trip handles null purchaseDate', () => {
 
 // ─── ALLOCATION enum ──────────────────────────────────────────────────────────
 
-test('ALLOCATION: frozen enum with 4 values', () => {
-  assert.equal(Object.keys(ALLOCATION).length, 4);
+test('ALLOCATION: frozen enum with 5 values', () => {
+  assert.equal(Object.keys(ALLOCATION).length, 5);
   assert.equal(ALLOCATION.EQUITY, 'EQUITY');
   assert.equal(ALLOCATION.BOND,   'BOND');
   assert.equal(ALLOCATION.CASH,   'CASH');
+  assert.equal(ALLOCATION.GOLD,   'GOLD');   // design 56 §7 — commodity, 28% US collectibles CGT
   assert.equal(ALLOCATION.OTHER,  'OTHER');
   assert.throws(() => { ALLOCATION.NEW = 'NEW'; }, /Cannot|read only/);
 });

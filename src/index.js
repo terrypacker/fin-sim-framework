@@ -17,7 +17,7 @@ import { AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuS
 import { SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer, SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperContributionHandler, SuperWithdrawalContributionsHandler, SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler } from './finance/account-rules/au/au-super-classes.js';
 import { BaseAccountModule } from './finance/account-rules/base-account-module.js';
 import { resolveCashKey, resolveDestinationCashKey } from './finance/account-rules/cash-routing.js';
-import { loanKeyForProperty, findLoanForProperty, synthesizeLoanForProperty, offsetBalanceForLoan, effectivePrincipal, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer } from './finance/account-rules/loan-classes.js';
+import { loanKeyForProperty, findLoanForProperty, synthesizeLoanForProperty, offsetBalanceForLoan, effectivePrincipal, resolveLoanRate, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer } from './finance/account-rules/loan-classes.js';
 import { UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer, AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer } from './finance/account-rules/mortgage-payment-classes.js';
 import { computeRentalMonth, UsRentalIncomeHandler, UsRentalIncomeApplyReducer, AuRentalIncomeHandler, AuRentalIncomeApplyReducer } from './finance/account-rules/rental-income-classes.js';
 import { ScheduledEarlyWithdrawalApplyReducer, EarlyWithdrawalPolicyHandler } from './finance/account-rules/us/early-withdrawal-classes.js';
@@ -72,7 +72,8 @@ import { AddRegimeReducer } from './finance/economic-regimes/add-regime-reducer.
 import { BondPriceAdjustReducer } from './finance/economic-regimes/bond-price-adjust-reducer.js';
 import { EconomicRecoveryTickHandler } from './finance/economic-regimes/economic-recovery-tick-handler.js';
 import { EconomicShockHandler } from './finance/economic-regimes/economic-shock-handler.js';
-import { RATE_KEYS, RATE_KEY_META, RATE_KEY_CLASS_MEMBERS, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS } from './finance/economic-regimes/rate-keys.js';
+import { PrimeRelinkReducer } from './finance/economic-regimes/prime-relink-reducer.js';
+import { RATE_KEYS, RATE_KEY_META, RATE_KEY_CLASS_MEMBERS, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY, PRIME_KEY_BY_COUNTRY } from './finance/economic-regimes/rate-keys.js';
 import { RecoveryCurves } from './finance/economic-regimes/recovery-curves.js';
 import { RegimeApplyReducer } from './finance/economic-regimes/regime-apply-reducer.js';
 import { REGIME_TAG } from './finance/economic-regimes/regime-tag.js';
@@ -104,7 +105,7 @@ import { MonthlyWagesHandler } from './finance/handlers/monthly-wages-handler.js
 import { MortalityHandler } from './finance/handlers/mortality-handler.js';
 import { OutOfFundsHandler } from './finance/handlers/out-of-funds-handler.js';
 import { UsSavingsInterestMonthlyHandler } from './finance/handlers/us-savings-interest-handler.js';
-import { ALLOCATION, ALLOCATION_VALUES } from './finance/holdings/allocation.js';
+import { ALLOCATION, ALLOCATION_VALUES, COLLECTIBLE_ALLOCATIONS, isCollectibleAllocation } from './finance/holdings/allocation.js';
 import { resolveScheduledRate } from './finance/holdings/appreciation-schedule-utils.js';
 import { bootstrapHoldingSplit } from './finance/holdings/bootstrap-holding-split.js';
 import { DEFAULT_ALLOCATION_BY_ROLE, DEFAULT_ALLOCATION_BY_TYPE, resolveDefaultAllocation, resolveRateKey } from './finance/holdings/default-allocations.js';
@@ -469,6 +470,7 @@ export const Finance = {
   synthesizeLoanForProperty,
   offsetBalanceForLoan,
   effectivePrincipal,
+  resolveLoanRate,
   LoanPaymentHandler,
   UsLoanPaymentHandler,
   AuLoanPaymentHandler,
@@ -633,12 +635,16 @@ export const Finance = {
   BondPriceAdjustReducer,
   EconomicRecoveryTickHandler,
   EconomicShockHandler,
+  PrimeRelinkReducer,
   RATE_KEYS,
   RATE_KEY_META,
   RATE_KEY_CLASS_MEMBERS,
   ROLE_TO_RATE_KEY,
   MEMBER_RATE_KEY_BY_ROLE,
   INTEREST_RATE_KEYS,
+  CASH_PRIME_KEY_BY_RATE_KEY,
+  SAVINGS_KEY_BY_COUNTRY,
+  PRIME_KEY_BY_COUNTRY,
   RecoveryCurves,
   RegimeApplyReducer,
   REGIME_TAG,
@@ -690,6 +696,8 @@ export const Finance = {
   UsSavingsInterestMonthlyHandler,
   ALLOCATION,
   ALLOCATION_VALUES,
+  COLLECTIBLE_ALLOCATIONS,
+  isCollectibleAllocation,
   resolveScheduledRate,
   bootstrapHoldingSplit,
   DEFAULT_ALLOCATION_BY_ROLE,
