@@ -48,6 +48,16 @@ export const US_BANKING = {
         defaultValue: 0.03,
         description: 'Annual interest rate for US savings accounts',
       },
+      {
+        // Central-bank Prime rate (design 56). Prime-linked cash accounts and loans
+        // derive their effective rate as Prime + primeSpread; a single Prime move fans
+        // out to all of them. mc/opt are false in Phase 1 and become true in Phase 2
+        // (Prime becomes THE systemic rate sweep; per-account rate levers retire).
+        key: 'usPrimeRate', label: 'US Prime Rate (Fed policy)',
+        type: 'Number', group: 'US Banking', mc: false, opt: false,
+        defaultValue: 0.045,
+        description: 'US central-bank (Fed) policy rate. Prime-linked cash accounts and variable loans earn/pay Prime + their spread.',
+      },
     ];
   },
 

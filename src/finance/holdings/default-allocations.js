@@ -97,6 +97,13 @@ export function resolveDefaultAllocation(account) {
  * @returns {string|null}
  */
 export function resolveRateKey(country, allocation, role = null) {
+  // CASH always earns a cash rate (design 56 §6): a cash sleeve in a non-cash account
+  // (e.g. a BROKERAGE holding some CASH) must resolve to SAVINGS_{country}, NOT the
+  // account role's equity/bond key. So the allocation wins over the role for CASH.
+  // (Behavioral panic-sell cash passes rateKey:null and bypasses this resolver.)
+  if (allocation === ALLOCATION.CASH) {
+    return RATE_KEY_BY_COUNTRY_ALLOCATION[country]?.[ALLOCATION.CASH] ?? null;
+  }
   if (role && ROLE_TO_RATE_KEY[role]) return ROLE_TO_RATE_KEY[role];
   return RATE_KEY_BY_COUNTRY_ALLOCATION[country]?.[allocation] ?? null;
 }

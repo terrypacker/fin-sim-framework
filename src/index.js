@@ -72,7 +72,7 @@ import { AddRegimeReducer } from './finance/economic-regimes/add-regime-reducer.
 import { BondPriceAdjustReducer } from './finance/economic-regimes/bond-price-adjust-reducer.js';
 import { EconomicRecoveryTickHandler } from './finance/economic-regimes/economic-recovery-tick-handler.js';
 import { EconomicShockHandler } from './finance/economic-regimes/economic-shock-handler.js';
-import { RATE_KEYS, RATE_KEY_META, RATE_KEY_CLASS_MEMBERS, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS } from './finance/economic-regimes/rate-keys.js';
+import { RATE_KEYS, RATE_KEY_META, RATE_KEY_CLASS_MEMBERS, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY } from './finance/economic-regimes/rate-keys.js';
 import { RecoveryCurves } from './finance/economic-regimes/recovery-curves.js';
 import { RegimeApplyReducer } from './finance/economic-regimes/regime-apply-reducer.js';
 import { REGIME_TAG } from './finance/economic-regimes/regime-tag.js';
@@ -639,6 +639,8 @@ export const Finance = {
   ROLE_TO_RATE_KEY,
   MEMBER_RATE_KEY_BY_ROLE,
   INTEREST_RATE_KEYS,
+  CASH_PRIME_KEY_BY_RATE_KEY,
+  SAVINGS_KEY_BY_COUNTRY,
   RecoveryCurves,
   RegimeApplyReducer,
   REGIME_TAG,

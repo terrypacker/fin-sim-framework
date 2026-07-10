@@ -24,6 +24,11 @@ US-collectibles CGT.
 - `design/55-configuration-driven-parameters.md` §8 — per-account rates via the
   `<memberKey>::<stateKey>` seeding in `seedPerAccountRates`
   (`economic-regimes-toolset.js:110`). This is the exact hook the spread plugs into.
+  §10/§13 also log the **MC-sweep concern this design exists to fix**: once rates went
+  per-account, sweeping a *global* rate silently no-ops on any account with an explicit
+  value, so there is no coherent "move all my rates" knob (GH #511's rate half). Prime
+  restores exactly that knob — see §3.1. (The *balance* half of #511 — sweeping a
+  holdings-derived balance — is a separate, non-rate problem and stays out of scope.)
 - `design/54-loan-liability-accounts.md` — `LoanAccount.interestRate`
   (`loan-classes.js:157`), which becomes Prime-relative.
 - `design/53-account-basis-refactor-and-offset.md` §4 — per-lot `Holding` growth via
@@ -46,6 +51,18 @@ US-collectibles CGT.
    today; it earns the account's Prime-relative cash rate.
 5. **Gold is a new holding type** with commodity-style growth and **US collectibles
    (28%) CGT** (AU: ordinary CGT); it reuses the collectible tax path.
+6. **Prime is THE rate sweep.** `usPrimeRate`/`auPrimeRate` become the systemic MC/Opt
+   rate targets and the **per-account interest-rate MC levers are retired** — sweeping a
+   rate now means sweeping Prime, which fans out coherently (§3.1). The per-account
+   `primeSpread` remains an editable/opt target (idiosyncratic residual), not a
+   systemic-rate sweep.
+7. **Offset earns nothing.** `OFFSET` is cash but its economic effect is reducing loan
+   interest, not earning; it carries **no `primeSpread`** and inherits a 0 earn rate.
+8. **The prebuilt scenario auto-links; loaded saves do not.** To make Prime MC work
+   out of the box, `buildDefaultConfig`'s cash accounts + loan are seeded with a
+   value-preserving `primeSpread` (`spread = currentAbsolute − primeDefault`) at build.
+   Arbitrary *loaded* user saves stay legacy-absolute and only opt in on re-edit (§11) —
+   full back-compat. (Chosen over a blanket auto-migration; scoped to the seed only.)
 
 ---
 
@@ -90,6 +107,10 @@ US variable loan in the same period, each keeping its own spread. Turn the sprea
 mechanism off (spread absent) and the account falls back to its absolute rate — pre-56
 scenarios are byte-for-byte unchanged.
 
+This is the **MC-coherence fix** (design 55 §13): one Prime draw is the systemic rate
+knob that moves the whole cash+loan complex together, replacing the fragmented
+per-account rate levers that couldn't express a policy move. See §3.1.
+
 ---
 
 ## 3. The Prime rate series
@@ -110,10 +131,37 @@ PRIME_AU: 'PRIME_AU',   // RBA policy rate
   effective value, exactly as it does for equity/inflation today. A dedicated
   **rate-schedule** (an optional `[{ year, PRIME_US, PRIME_AU }]` param) is the clean
   way to express a hiking/easing path; it compiles into scheduled adjustments.
-- **MC / Opt.** `usPrimeRate`/`auPrimeRate` are valid MC/Opt targets — sweeping Prime
-  now moves the whole cash+loan complex coherently (the point).
+- **MC / Opt.** `usPrimeRate`/`auPrimeRate` are the MC/Opt rate targets — sweeping Prime
+  moves the whole cash+loan complex coherently (§3.1, the point).
 - **Per-country independence** is automatic: two keys, two params, two effective
   entries; nothing couples `PRIME_US` and `PRIME_AU`.
+
+### 3.1 Monte Carlo & Optimization — Prime is the rate sweep
+
+This is the concern design 55 §13 parks (the rate half of GH #511). Once 55 §8 made
+interest rates per-account, sweeping a *global* rate silently no-ops on any account with
+an explicit value (55 §10 shadowing rule), so there was no coherent way to MC "all my
+rates move." Design 56 resolves it (Decision 6):
+
+- **`usPrimeRate` / `auPrimeRate` are the systemic rate targets.** One draw moves
+  `PRIME_US`/`PRIME_AU` in the effective substrate; every Prime-linked cash account and
+  variable loan re-derives `Prime + spread` in the same period. Two knobs (one per
+  central bank) sweep the entire rate complex, per-country-independently.
+- **The per-account interest-rate MC levers are retired.** They no longer appear as
+  MC/Opt rate targets — the old fragmented per-account rate sweep is *replaced* by
+  Prime, not kept alongside it. This removes the "MC double-move" foot-gun (a global
+  and a per-account rate compounding) at the source rather than documenting it.
+- **`primeSpread` stays an editable / Opt target**, but as the *idiosyncratic residual*
+  (this bank's markup over policy), never a systemic-rate sweep. An optimizer may still
+  tune a single account's spread; only the *shared* rate move is Prime's job.
+- **Out of the box (Decision 8).** Because the prebuilt scenario auto-links its cash
+  accounts + loan (§11), a Prime sweep on a freshly-built prebuilt scenario moves those
+  rates immediately — no per-account configuration required. A loaded legacy save whose
+  accounts are still absolute is simply not swept by Prime until those accounts are
+  re-edited (they carry no spread, so `Prime + spread` never applies) — the intended,
+  back-compatible behavior.
+- **Balances stay out.** The *balance* half of GH #511 (sweeping a holdings-derived
+  balance) is unrelated to rates and is not addressed here.
 
 ---
 
@@ -148,8 +196,19 @@ compute `effective = absolute + (Prime(t) − baseline)`. Equivalent math, two f
 more drift surface. Rejected for the single-field spread.)*
 
 ### 4.3 Which accounts
-`primeSpread` applies to `SAVINGS`, `CHECKING`, `OFFSET` (cash) and `LOAN` (liability).
-Equity/bond/retirement accounts never carry it (their earnings are growth-rate driven).
+`primeSpread` applies to `SAVINGS`, `CHECKING` (cash) and `LOAN` (liability). It also
+applies to a **holdings account that carries a `CASH` sleeve** (e.g. `BROKERAGE`): there
+the account's `primeSpread` is the rate on its *cash* holdings only (its equity/bond
+sleeves keep their own growth/coupon rates). This closes the "cash holdings can't carry
+a rate" gap (§6) with a single account-level input rather than a per-holding field. An
+equity/bond/retirement account with no cash sleeve simply never sets it.
+
+**`OFFSET` earns nothing (Decision 7).** An offset is cash, but its economic effect is
+reducing the linked loan's interest, not earning interest of its own. It carries **no
+`primeSpread`** and contributes a 0 earn rate — the offset's benefit already flows
+through the loan's Prime-relative interest (§5). (If a future design wants an offset to
+earn on any un-offset excess, that is an additive `primeSpread` on `OFFSET`; explicitly
+not in 56.)
 
 ---
 
@@ -186,11 +245,30 @@ extra plumbing.
 
 ## 6. Cash holdings inherit the account cash rate
 
-A `CASH` holding has no rate field and resolves to the account's `SAVINGS_*` key
-(`default-allocations.js`). With §5 seeding the per-account `SAVINGS_*::stateKey` to
-`Prime + spread`, a cash sleeve earns the account's Prime-relative rate automatically —
-closing the "cash holdings can't carry a rate" gap by making the **account** the single
-place a cash rate is set (per Decision 4). No per-holding cash-rate field is added.
+A `CASH` holding has no rate field and resolves to a `SAVINGS_*` key. With §5 seeding the
+per-account `SAVINGS_*::stateKey` to `Prime + spread`, a cash sleeve earns the account's
+Prime-relative rate automatically — closing the "cash holdings can't carry a rate" gap by
+making the **account** the single place a cash rate is set (per Decision 4). No
+per-holding cash-rate field is added.
+
+**Two mechanics make this work for a cash sleeve in a *non-cash* account (e.g. a
+`BROKERAGE` holding some `CASH`):**
+
+1. **`resolveRateKey` routes `CASH` to `SAVINGS_{country}` regardless of role.**
+   Previously the account *role* won (`default-allocations.js`), so a `CASH` sleeve in a
+   `US_STOCK` brokerage resolved to `EQUITY_US` and would grow at the equity rate. A
+   `CASH`-allocation carve-out (checked before the role) makes any cash sleeve resolve to
+   the country's cash key. (Behavioral panic-sell cash is created with `rateKey: null`
+   and bypasses the resolver, so it is unaffected — it stays zero-growth by design.)
+2. **`seedPerAccountRates` seeds `SAVINGS_{country}::<stateKey>` from a non-cash
+   account's `primeSpread`.** A cash account already seeds this via its primary (savings)
+   branch; a brokerage's primary branch is its equity growth key, so its cash-sleeve rate
+   is seeded separately from `primeSpread`. Absent `primeSpread`, the sleeve falls back to
+   the shared `SAVINGS_{country}` baseline (the global savings rate) — a sensible default.
+
+The **account editor** exposes the same absolute-entry / spread-store field on
+`BROKERAGE` (labelled as the cash-sleeve rate); the mechanism is account-type-agnostic,
+so extending it to other holdings accounts is additive.
 
 ---
 
@@ -268,11 +346,19 @@ the contribution/earnings split instead of hand-editing it — belongs to design
 - **New rate keys** `PRIME_US`/`PRIME_AU`/`GOLD` + `goldGrowthRate`/`usPrimeRate`/
   `auPrimeRate` params. Absent on old saves → Prime defaults seed in; no spread means no
   account is Prime-relative until re-edited.
-- **Migration (opt-in, non-destructive)**: a one-time pass can convert existing cash
-  `interestRate`/loan `interestRate` to `primeSpread = interestRate − primeDefault`
-  and drop the absolute — but only when Prime is configured. Default is to **leave
-  legacy absolutes untouched** (they still work via the fallback) and let the user opt
-  a given account into Prime-linking by editing it.
+- **Prebuilt seed auto-links (Decision 8).** `buildDefaultConfig` seeds its cash
+  accounts + loan with a **value-preserving** `primeSpread` at build time —
+  `primeSpread = currentAbsoluteRate − primeDefault(country)` — so the shipped prebuilt
+  scenario is Prime-linked out of the box: a Prime MC sweep (§3.1) moves its rates with
+  no manual configuration, and because the spread is derived to reproduce the current
+  absolute at `t0`, the *un-swept* prebuilt sim is byte-for-byte unchanged. This is the
+  **only** place migration is automatic.
+- **Loaded user saves stay legacy (opt-in, non-destructive)**: a save's existing cash
+  `interestRate`/loan `interestRate` is **left untouched** — it still works via the
+  absolute fallback (§5) and only becomes Prime-linked when the user re-edits that
+  account (§4.2 converts the entered absolute to a spread). No blanket auto-migration of
+  loaded saves. (A one-time convert-all pass — `primeSpread = interestRate − primeDefault`,
+  drop the absolute — remains available as an explicit user action but is not the default.)
 - **`GOLD` ALLOCATION** is additive to `ALLOCATION_VALUES`; schema validation and the
   allocation→rateKey map gain the entry.
 - Round-trip tests extend `holdings-roundtrip` (gold sleeve) and a legacy fixture
@@ -282,22 +368,31 @@ the contribution/earnings split instead of hand-editing it — belongs to design
 
 ## 12. Phased plan
 
-### Phase 1 — Prime series + cash spread (no gold, no loans)
+### Phase 1 — Prime series + cash spread + prebuilt auto-link (no gold, no loans)
 1. `PRIME_US`/`PRIME_AU` rate keys + `usPrimeRate`/`auPrimeRate` params; seed into
    `baseInterestRates`.
 2. `Account.primeSpread` + serializer; `seedPerAccountRates` computes
    `Prime + spread` for cash accounts (§5), absolute fallback retained.
 3. Account editor: absolute-input / spread-store + Prime hint.
-4. **Exit test**: a savings account with `primeSpread` earns `Prime + spread`; moving
+4. **Prebuilt auto-link (Decision 8, §11)**: `buildDefaultConfig` seeds its cash accounts
+   with a value-preserving `primeSpread = currentAbsolute − primeDefault`, so the shipped
+   scenario is Prime-linked out of the box.
+5. **Exit test**: a savings account with `primeSpread` earns `Prime + spread`; moving
    `usPrimeRate` moves it; an unset spread is byte-for-byte legacy. Cash-holding
-   interest tracks it.
+   interest tracks it. **The freshly-built prebuilt scenario is Prime-linked, and its
+   un-swept sim is byte-for-byte identical to pre-56** (value-preserving conversion).
 
-### Phase 2 — Time-varying Prime (regimes / schedule / MC)
+### Phase 2 — Time-varying Prime + the MC-coherence fix (regimes / schedule / MC)
+*This phase is where the design-55 §13 rate-sweep concern is actually resolved (§3.1).*
 1. Prime as a `RegimeApplyReducer` target; optional Prime schedule param → scheduled
    adjustments.
-2. `usPrimeRate`/`auPrimeRate` as MC/Opt targets.
-3. **Exit test**: a scheduled hike raises every US cash rate in the hike year; an MC
-   draw on Prime moves the whole cash complex coherently.
+2. `usPrimeRate`/`auPrimeRate` as the MC/Opt rate targets; **retire the per-account
+   interest-rate MC levers** (Decision 6) — remove them from the MC/Opt target surface,
+   leaving `primeSpread` as an idiosyncratic Opt-only residual.
+3. **Exit test** (the spine): a scheduled hike raises every US cash rate in the hike
+   year; **a single MC draw on `PRIME_US` moves the whole US cash complex coherently in
+   one sweep on the prebuilt scenario** (the 55 §13 fix, verified end-to-end); the old
+   per-account rate levers no longer appear as MC rate targets.
 
 ### Phase 3 — Loans track Prime
 1. `LoanAccount.primeSpread` + serializer; `LoanPaymentHandler` resolves
@@ -329,12 +424,19 @@ the contribution/earnings split instead of hand-editing it — belongs to design
 - **Loan effective-rate source.** Loans are outside the earnings substrate; Phase 3
   reads Prime from `state.effectiveInterestRates` directly. Ensure the loan payment
   event fires after the period's effective map is built (ordering, design 34 §13).
-- **Offset accounts.** `OFFSET` is cash and could carry a spread, but an offset's
-  economic effect is reducing loan interest, not earning — confirm whether an offset
-  needs its own Prime-relative earn rate or simply inherits 0/none.
-- **MC double-move.** Sweeping `PRIME_US` and a per-account spread simultaneously in MC
-  compounds; document that Prime is the systemic knob and the spread the idiosyncratic
-  one (mirrors design 55 §10's global-vs-per-account shadowing note).
+- **Offset accounts — resolved (Decision 7).** `OFFSET` carries **no `primeSpread`** and
+  earns nothing; its benefit flows through the linked loan's Prime-relative interest
+  (§4.3). An earn-on-excess-offset rate is a future additive change, not in 56.
+- **MC double-move — resolved at the source (Decision 6).** Rather than *document* that
+  sweeping `PRIME_US` and a per-account rate compounds (55 §10's shadowing note), 56
+  **retires the per-account interest-rate MC levers** (§3.1): Prime is the only systemic
+  rate sweep, so there is no second rate knob to double-move. `primeSpread` remains an
+  Opt-only idiosyncratic residual, never a systemic-rate MC target.
+- **Fresh-scenario rate sweep — resolved (Decision 8).** Retiring the per-account rate
+  levers would otherwise leave a *loaded-legacy* save with no rate MC target until its
+  accounts are re-linked. Accepted for arbitrary saves (they opt in on re-edit); the
+  **prebuilt** scenario avoids the gap entirely by auto-linking at build (§11), so the
+  flagship scenario always has a working Prime sweep.
 
 ---
 
@@ -347,4 +449,7 @@ the contribution/earnings split instead of hand-editing it — belongs to design
 | 3 | Spread granularity | **Account-level, cash + loans only.** Equity/bond holdings keep their own rates; bonds excluded. |
 | 4 | Cash-holding rate | **Inherits the account cash rate** (Prime + spread); no per-holding cash-rate field. |
 | 5 | Gold | **New `GOLD` holding type**, commodity growth on its own key; **US 28% collectibles CGT** (AU ordinary CGT), reusing the collectible tax path. |
-| 6 | `earningsBasis` | **Untouched, out of scope** — retirement deferred-tax ledger, unrelated to rates. |
+| 6 | MC rate sweep | **Prime is THE rate sweep**; `usPrimeRate`/`auPrimeRate` are the systemic MC/Opt targets and the per-account interest-rate MC levers are **retired** (§3.1, fixes 55 §13). `primeSpread` stays an idiosyncratic Opt residual. |
+| 7 | Offset earn rate | **None.** `OFFSET` carries no `primeSpread`, earns 0; its benefit flows through the linked loan's Prime-relative interest. |
+| 8 | Fresh-scenario linking | **Prebuilt auto-links; loaded saves opt in.** `buildDefaultConfig` seeds value-preserving `primeSpread` so the prebuilt Prime sweep works out of the box; arbitrary saves stay legacy-absolute until re-edited. |
+| 9 | `earningsBasis` | **Untouched, out of scope** — retirement deferred-tax ledger, unrelated to rates. |

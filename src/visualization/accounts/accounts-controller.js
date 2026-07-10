@@ -127,6 +127,11 @@ export class AccountsController {
     // the field for other types. A new account has no generated param yet, so the
     // flag rides the create payload rather than the param cascade.
     if ('isTransactionAccount' in data) account.isTransactionAccount = !!data.isTransactionAccount;
+    // Prime-relative cash rate (design 56). The editor sends the derived spread (or a
+    // legacy absolute when no Prime is configured); the builder has no setter, so stamp
+    // them directly. null → not Prime-linked / unset (global default).
+    if ('primeSpread'  in data) account.primeSpread  = data.primeSpread  == null ? null : Number(data.primeSpread);
+    if ('interestRate' in data) account.interestRate = data.interestRate == null ? null : Number(data.interestRate);
     return this._service.createAccount(account);
   }
 
@@ -170,6 +175,9 @@ export class AccountsController {
       n.drawdownPriority = (dp === '' || dp == null) ? null : Number(dp);
     }
     if ('isTransactionAccount' in n) n.isTransactionAccount = !!n.isTransactionAccount;
+    // Prime-relative cash rate (design 56) — spread (or legacy absolute), null clears.
+    if ('primeSpread'  in n) n.primeSpread  = (n.primeSpread  == null) ? null : Number(n.primeSpread);
+    if ('interestRate' in n) n.interestRate = (n.interestRate == null) ? null : Number(n.interestRate);
     // Currency arrives from the editor as a code string; the account stores a
     // {code, symbol} descriptor. Map it, dropping an unknown/empty value.
     if ('currency' in n) {

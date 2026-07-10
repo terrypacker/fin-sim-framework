@@ -12,7 +12,7 @@ import { OneOffEvent }                    from '../../simulation-framework/event
 import { EventSeries }                   from '../../simulation-framework/events/event-series.js';
 import { DateUtils }                      from '../../simulation-framework/date-utils.js';
 import { ValueType }                      from '../../simulation-framework/type-registry.js';
-import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS } from '../../finance/economic-regimes/rate-keys.js';
+import { RATE_KEYS, RATE_KEY_META, ROLE_TO_RATE_KEY, MEMBER_RATE_KEY_BY_ROLE, INTEREST_RATE_KEYS, CASH_PRIME_KEY_BY_RATE_KEY, SAVINGS_KEY_BY_COUNTRY } from '../../finance/economic-regimes/rate-keys.js';
 import { RegimeApplyReducer }             from '../../finance/economic-regimes/regime-apply-reducer.js';
 import { AddRegimeReducer }               from '../../finance/economic-regimes/add-regime-reducer.js';
 import { RemoveRegimeReducer }            from '../../finance/economic-regimes/remove-regime-reducer.js';
@@ -93,6 +93,11 @@ function collectBaseInterestRates(p) {
   if (p.fixedIncomeInterestRate  != null) rates[RATE_KEYS.FIXED_INCOME_US] = p.fixedIncomeInterestRate;
   if (p.auSavingsInterestRate    != null) rates[RATE_KEYS.SAVINGS_AU]      = p.auSavingsInterestRate;
   if (p.auFixedIncomeInterestRate != null) rates[RATE_KEYS.FIXED_INCOME_AU] = p.auFixedIncomeInterestRate;
+  // Central-bank Prime rates (design 56 §3). Seeded here so the per-account
+  // `Prime + primeSpread` derivation (seedPerAccountRates) and, in Phase 2,
+  // RegimeApplyReducer can move them like any other interest series.
+  if (p.usPrimeRate              != null) rates[RATE_KEYS.PRIME_US]        = p.usPrimeRate;
+  if (p.auPrimeRate              != null) rates[RATE_KEYS.PRIME_AU]        = p.auPrimeRate;
   return rates;
 }
 
@@ -105,20 +110,53 @@ function collectBaseInterestRates(p) {
  * `<memberKey>::<stateKey>` key and RegimeApplyReducer fans class shocks onto it,
  * so per-account rates coexist with regimes.
  *
+ * Prime-relative cash (design 56 §5): when a cash account's member key is
+ * Prime-linkable (`CASH_PRIME_KEY_BY_RATE_KEY`) and it carries a `primeSpread`, the
+ * per-account rate is `Prime(country) + primeSpread` instead of its absolute
+ * `interestRate` — so a Prime move fans out to every linked cash account. The Prime
+ * series must already be seeded into `baseInterestRates` (collectBaseInterestRates
+ * runs first). An absent spread (or missing Prime) falls back to the legacy absolute
+ * path, keeping pre-56 scenarios byte-for-byte identical.
+ *
  * Mutates `baseGrowthRates` / `baseInterestRates` in place.
  */
 function seedPerAccountRates(accounts, baseGrowthRates, baseInterestRates) {
   for (const acct of accounts ?? []) {
     const stateKey  = acct?.stateKey;
+    if (!stateKey) continue;
     const memberKey = MEMBER_RATE_KEY_BY_ROLE[acct?.role];
-    if (!stateKey || !memberKey) continue;
-    const isInterest = INTEREST_RATE_KEYS.has(memberKey);
-    const baseMap    = isInterest ? baseInterestRates : baseGrowthRates;
-    const ownRate    = isInterest ? acct.interestRate : acct.growthRate;
-    // Fall back to the shared baseline when the account has no explicit rate.
-    const perVal = ownRate ?? baseMap[memberKey];
-    if (perVal == null) continue;
-    baseMap[`${memberKey}::${stateKey}`] = perVal;
+
+    // 1. Primary sleeve rate from the account's role member key (equity growth, or
+    //    savings/fixed-income interest). Cash accounts take their `Prime + primeSpread`
+    //    here (their member key is a cash key); everything else uses its absolute rate.
+    if (memberKey) {
+      const isInterest = INTEREST_RATE_KEYS.has(memberKey);
+      const baseMap    = isInterest ? baseInterestRates : baseGrowthRates;
+      const primeKey = CASH_PRIME_KEY_BY_RATE_KEY[memberKey];
+      const prime    = primeKey != null ? baseInterestRates[primeKey] : undefined;
+      let perVal;
+      if (primeKey != null && acct.primeSpread != null && prime != null) {
+        perVal = prime + acct.primeSpread;
+      } else {
+        const ownRate = isInterest ? acct.interestRate : acct.growthRate;
+        perVal = ownRate ?? baseMap[memberKey];
+      }
+      if (perVal != null) baseMap[`${memberKey}::${stateKey}`] = perVal;
+    }
+
+    // 2. Cash-sleeve rate for a NON-cash account carrying a `primeSpread` (design 56 §6):
+    //    a `CASH` holding resolves to `SAVINGS_{country}` and reads the per-account key,
+    //    so seed `SAVINGS_{country}::<stateKey> = Prime + primeSpread`. Cash accounts
+    //    already covered this in step 1 (their member key IS the cash key).
+    const isCashAccount = CASH_PRIME_KEY_BY_RATE_KEY[memberKey] != null;
+    if (acct.primeSpread != null && !isCashAccount) {
+      const savKey   = SAVINGS_KEY_BY_COUNTRY[acct.country];
+      const primeKey = savKey ? CASH_PRIME_KEY_BY_RATE_KEY[savKey] : null;
+      const prime    = primeKey != null ? baseInterestRates[primeKey] : undefined;
+      if (savKey && prime != null) {
+        baseInterestRates[`${savKey}::${stateKey}`] = prime + acct.primeSpread;
+      }
+    }
   }
 }
 

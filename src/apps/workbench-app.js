@@ -350,11 +350,16 @@ export class WorkbenchApp extends BaseComponent {
       if (node?.kind === 'account') {
         const people = registry.graphQueryApi.getByKind('person');
         const realProperties = registry.graphQueryApi.getByKind('real-property');
+        // Prime rates (design 56) — the cash rate field edits an absolute (Prime +
+        // spread) and stores the spread, so it needs the current per-country Prime.
+        const activeParams = registry.scenarioService.getActive()?.parameters ?? {};
+        const primeRates = { US: activeParams.usPrimeRate, AU: activeParams.auPrimeRate };
         const editor = new AccountEditor({
           container,
           node,
           people,
           realProperties,
+          primeRates,
           ...paramLinkProps(),
           onSave: (data) => {
             if (data.id) {

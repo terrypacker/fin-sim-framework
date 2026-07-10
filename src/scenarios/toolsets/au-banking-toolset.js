@@ -65,6 +65,14 @@ export const AU_BANKING = {
         defaultValue: 0.04,
         description: 'Annual interest rate for AU fixed income accounts',
       },
+      {
+        // RBA policy ("Prime") rate (design 56) — see usPrimeRate. mc/opt false in
+        // Phase 1, true in Phase 2.
+        key: 'auPrimeRate', label: 'AU Prime Rate (RBA policy)',
+        type: 'Number', group: 'AU Banking', mc: false, opt: false,
+        defaultValue: 0.0435,
+        description: 'AU central-bank (RBA) policy rate. Prime-linked cash accounts and variable loans earn/pay Prime + their spread.',
+      },
     ];
   },
 

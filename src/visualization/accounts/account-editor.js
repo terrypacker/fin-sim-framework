@@ -17,6 +17,9 @@ const FIXED_COUNTRY    = new Set(['401k', 'roth', 'ira', 'super']);
 // Cash account types eligible to be flagged the country's transaction account
 // (design 55 §7). Only these expose the isTransactionAccount checkbox + param.
 const CASH_TYPES       = new Set(['checking', 'savings']);
+// Account types that expose the Prime-relative cash-rate field (design 56). Cash
+// accounts (the whole balance is cash) plus brokerage (its CASH sleeve, if any).
+const CASH_RATE_TYPES  = new Set(['checking', 'savings', 'brokerage']);
 // Holdings-bearing types (brokerage + retirement) — drive holdings-editor visibility.
 const INVESTMENT_TYPES = new Set(['brokerage', '401k', 'roth', 'ira', 'super']);
 // Types carrying the contribution/earnings ledger — the only ones that show (and
@@ -77,12 +80,16 @@ export class AccountEditor extends BaseComponent {
    * }}
    */
   constructor({ parent, container, node, people = [], realProperties = [], onSave, onDelete, onHistory,
-                links = null, onParamChange = null, onOpenParam = null }) {
+                links = null, onParamChange = null, onOpenParam = null, primeRates = {} }) {
     super({ parent });
     this._container = container;
     this._node      = node;
     this._people    = people;
     this._realProperties = realProperties;
+    // Central-bank Prime rates by country (design 56), e.g. { US: 0.045, AU: 0.0435 }.
+    // Used to render the cash "Interest Rate" field as an absolute (Prime + spread)
+    // and to convert the entered absolute back to a stored `primeSpread` on save.
+    this._primeRates = primeRates ?? {};
     this.onSave     = onSave    ?? null;
     this.onDelete   = onDelete  ?? null;
     this.onHistory  = onHistory ?? null;
@@ -122,11 +129,23 @@ export class AccountEditor extends BaseComponent {
       if (!FIXED_COUNTRY.has(typeSelect.value)) {
         curSelect.value = _defaultCurrency(typeSelect.value, e.target.value);
       }
+      // The Prime baseline is country-specific, so the "= Prime + spread" hint
+      // (and the absolute the entered value implies) shifts when the country does.
+      this._refreshCashRateHint(el);
     });
 
     el.querySelector('[data-id="ownershipType"]').value  = this._node?.ownershipType ?? 'sole';
     el.querySelector('[data-id="minimumBalance"]').value = this._node?.minimumBalance ?? 0;
     el.querySelector('[data-id="isTransactionAccount"]').checked = !!this._node?.isTransactionAccount;
+
+    // Cash "Interest Rate" (design 56): the user edits the ABSOLUTE rate; on save it
+    // is stored as `primeSpread = absolute − Prime(country)`. Show the absolute the
+    // account currently implies (Prime + spread, or its legacy absolute interestRate).
+    const cashRateInput = el.querySelector('[data-id="cashRate"]');
+    const absNow = this._cashRateAbsolute(this._node, this._node?.country ?? 'US');
+    cashRateInput.value = absNow == null ? '' : +absNow.toFixed(6);
+    this.listen(cashRateInput, 'input', () => this._refreshCashRateHint(el));
+    this._refreshCashRateHint(el);
 
     const dp = this._node?.drawdownPriority;
     el.querySelector('[data-id="drawdownPriority"]').value = dp ?? '';
@@ -463,6 +482,26 @@ export class AccountEditor extends BaseComponent {
     if (CASH_TYPES.has(type)) {
       data.isTransactionAccount = el.querySelector('[data-id="isTransactionAccount"]').checked;
     }
+    // Prime-relative cash rate (design 56): the input is the ABSOLUTE rate the bank
+    // quotes; store it as `primeSpread = absolute − Prime(country)` so a Prime move fans
+    // out to this account. primeSpread wins over interestRate in seeding, so a linked
+    // account clears its absolute. Blank → unset (global default). When no Prime is
+    // configured, fall back to storing the absolute interestRate. On a brokerage this is
+    // the rate for its CASH sleeve; its equity/bond holdings keep their own rates.
+    if (CASH_RATE_TYPES.has(type)) {
+      const raw   = el.querySelector('[data-id="cashRate"]').value;
+      const prime = this._primeRates?.[data.country];
+      if (raw === '' || raw == null) {
+        data.primeSpread  = null;
+        data.interestRate = null;
+      } else if (prime != null) {
+        data.primeSpread  = Number(raw) - prime;
+        data.interestRate = null;
+      } else {
+        data.primeSpread  = null;
+        data.interestRate = Number(raw);
+      }
+    }
     // Offset link (design 53 §3 / 54 P3) — the property whose loan this offset reduces.
     if (type === 'offset') {
       data.offsetsPropertyKey = el.querySelector('[data-id="offsetsPropertyKey"]').value || null;
@@ -473,6 +512,43 @@ export class AccountEditor extends BaseComponent {
     return data;
   }
 
+  // ─── Prime-relative cash rate (design 56) ───────────────────────────────────
+
+  /** Format a decimal rate as a percent string, e.g. 0.045 → "4.50%". */
+  _fmtPct(x) { return `${(x * 100).toFixed(2)}%`; }
+
+  /**
+   * The absolute cash rate an account currently implies (design 56): Prime(country) +
+   * primeSpread when Prime-linked, else the legacy absolute interestRate, else null
+   * (unset → the account's global default applies). `node` may be null (new account).
+   */
+  _cashRateAbsolute(node, country) {
+    const prime = this._primeRates?.[country];
+    if (node?.primeSpread != null && prime != null) return prime + node.primeSpread;
+    if (node?.interestRate != null) return node.interestRate;
+    return null;
+  }
+
+  /** Update the "= Prime (x%) + spread" hint from the current country + input value. */
+  _refreshCashRateHint(el) {
+    const hint = el.querySelector('[data-id="cashRateHint"]');
+    if (!hint) return;
+    const country = el.querySelector('[data-id="country"]').value;
+    const prime   = this._primeRates?.[country];
+    const raw     = el.querySelector('[data-id="cashRate"]').value;
+    if (raw === '' || raw == null) {
+      hint.textContent = prime != null
+        ? `Prime (${this._fmtPct(prime)}) — blank uses the account's default rate`
+        : '';
+      return;
+    }
+    const abs = Number(raw);
+    if (!Number.isFinite(abs)) { hint.textContent = ''; return; }
+    if (prime == null) { hint.textContent = 'Prime not configured — stored as an absolute rate'; return; }
+    const spread = abs - prime;
+    hint.textContent = `= Prime (${this._fmtPct(prime)}) ${spread >= 0 ? '+' : '−'} ${this._fmtPct(Math.abs(spread))}`;
+  }
+
   // ─── Visibility ─────────────────────────────────────────────────────────────
 
   _applyTypeVisibility(el, type) {
@@ -481,6 +557,19 @@ export class AccountEditor extends BaseComponent {
     // The transaction-account flag only applies to cash accounts (§7).
     const txnRow = el.querySelector('[data-id="transactionAccountRow"]');
     if (txnRow) txnRow.style.display = CASH_TYPES.has(type) ? '' : 'none';
+    // Prime-relative cash rate (design 56) — cash accounts + a brokerage's cash sleeve.
+    const cashRateRow = el.querySelector('[data-id="cashRateRow"]');
+    if (cashRateRow) {
+      const showRate = CASH_RATE_TYPES.has(type);
+      cashRateRow.style.display = showRate ? '' : 'none';
+      if (showRate) {
+        // On a brokerage the field is the rate for its CASH holdings only; on a cash
+        // account it is the whole-account rate. Label accordingly.
+        const label = cashRateRow.querySelector('label');
+        if (label) label.textContent = type === 'brokerage' ? 'Cash Rate' : 'Interest Rate';
+        this._refreshCashRateHint(el);
+      }
+    }
     const offsetFields = el.querySelector('[data-id="offsetFields"]');
     if (offsetFields) offsetFields.style.display = type === 'offset' ? '' : 'none';
 
