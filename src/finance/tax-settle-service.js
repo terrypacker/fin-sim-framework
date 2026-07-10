@@ -13,6 +13,7 @@ import { UsTaxRates2025 } from './tax/us/us-tax-rates-2025.js';
 import { AuTaxRates2024 } from './tax/au/au-tax-rates-2024.js';
 import { AuTaxRates2025 } from './tax/au/au-tax-rates-2025.js';
 import { AuTaxRates2026 } from './tax/au/au-tax-rates-2026.js';
+import { AuTaxRates2027 } from './tax/au/au-tax-rates-2027.js';
 import {
   InflationAdjustedUsTaxRates,
   InflationAdjustedAuTaxRates,
@@ -31,6 +32,7 @@ import {
  *   AU 2024  — ATO FY2024-25 (Stage 3 tax cuts)
  *   AU 2025  — ATO FY2025-26 (30% bracket extended to $135k)
  *   AU 2026  — ATO FY2026-27 ($18,201–$45,000 band cut 16% → 15%; CGT unchanged)
+ *   AU 2027  — ATO FY2027-28 (CGT reform: 50% discount removed + 30% min tax; band 15% → 14%)
  *
  * For years beyond the highest registered year, the highest available module
  * is used as a forward-compatibility fallback.
@@ -46,6 +48,7 @@ export class TaxSettleService {
       new AuTaxRates2024(),
       new AuTaxRates2025(),
       new AuTaxRates2026(),
+      new AuTaxRates2027(),
     ]) {
       this._modules[`${m.countryCode}_${m.year}`] = m;
     }

@@ -1,7 +1,13 @@
 # 57 — AU CGT reform: indexation + 30% minimum tax (from 1 July 2027)
 
-**Status**: **PLANNED** — design only; no code written yet. Scope, fidelity, and the §11
-questions are resolved (see **Decisions locked** below); ready to start Phase 1.
+**Status**: **IN PROGRESS** — Phases 1–2 implemented and green (3261 unit + 864 viz;
+reference scenario runs clean to 2070). Phases 3–5 pending. Scope, fidelity, and the §11
+questions are resolved (see **Decisions locked** below).
+
+- **Phase 1 (done)** — `_cgtRelief` hook on `AuTaxRatesBase` + `AuTaxRates2026` (band 16%→15%).
+- **Phase 2 (done)** — `AuTaxRates2027`: 50% discount removed + 30% minimum tax (un-indexed
+  gains) + band 15%→14%. Min-tax is an **incremental** floor on the gain's own marginal tax
+  (see §6.1/§6.3 — refined from the initial whole-liability `max()` sketch).
 
 ### Decisions locked (review, 2026-07-10)
 
@@ -136,19 +142,30 @@ bulk of the work and the main fidelity decision.
 
 ### 6.1 Lift the CGT discount to an overridable hook
 
-In `AuTaxRatesBase`, replace the inline `auCapitalGainsYTD * 0.5` with a protected method:
+**As built.** In `AuTaxRatesBase`, the inline `auCapitalGainsYTD * 0.5` became a protected
+hook returning the net taxable gain, the display relief amount, and a **minimum-tax rate**:
 
 ```js
-// FY≤2026: flat Div 115 discount. Returns { discountedGains, minTaxFloor }.
+_cgtDiscountRate = 0.5;                       // FY≤2026 flat Div 115 discount
 _cgtRelief(state, auCapitalGainsYTD) {
-  return { discountedGains: auCapitalGainsYTD * this._cgtDiscountRate, minTaxFloor: 0 };
+  const reliefAmount   = auCapitalGainsYTD * this._cgtDiscountRate;
+  const netTaxableGain = auCapitalGainsYTD - reliefAmount;
+  return { netTaxableGain, reliefAmount, minTaxRate: 0 };   // 0 = no floor
 }
-_cgtDiscountRate = 0.5;
+_cgtReliefLabel() { return 'CGT 50% Discount'; }   // FY2027 overrides the label
 ```
 
-`computeTax` calls `_cgtRelief` and, after computing `baseTax`, applies
-`netLiability = max(grossTax, minTaxFloor)`. For FY≤2026, `minTaxFloor = 0` ⇒ identical
-output (regression-safe; the existing `au-tax-rates` tests must stay byte-identical).
+`computeTax` adds `netTaxableGain` to assessable income and, when `minTaxRate > 0`, applies
+an **incremental** minimum-tax top-up (§6.3) — *not* a floor on the whole liability. For
+FY≤2026, `minTaxRate = 0` ⇒ byte-identical output (the existing `au-tax-rates` /
+`tax-documents` tests stay green).
+
+> **Refinement vs. the original sketch.** The first draft floored the *entire* net liability
+> at `minTaxRate × gain` (`max(grossTax, minTaxFloor)`). That over-taxes whenever the
+> taxpayer has meaningful ordinary income (ordinary tax alone can already exceed the floor,
+> suppressing a top-up the gain should still get) and mismatches the reform, which floors the
+> tax **on the gain**. The built version computes the gain's own marginal tax and tops *that*
+> up — see §6.3.
 
 ### 6.2 `AuTaxRates2026` (FY2026-27) — bracket cut, no CGT change
 
@@ -181,8 +198,13 @@ the **$18,201–$45,000 band 15% → 14%** — *confirm*) and overrides `_cgtRel
   proceeds_lot − indexedBase_lot)` where `indexedBase = costBase × idx(disposal)/idx(acq)`
   for lots held ≥12 months (un-indexed cost base otherwise), never below the raw gain of 0
   (indexation can't create a loss). No 50% discount.
-- **30% floor**: `minTaxFloor = 0.30 × realNetGain` (for non-exempt taxpayers). `computeTax`
-  tops the whole liability up to this floor.
+- **30% floor (as built, incremental)**: `computeTax` derives the gain's own marginal tax as
+  `taxOnGain = brackets(ordinary + netTaxableGain) − brackets(ordinary)`, then adds a top-up
+  `max(0, 0.30 × netTaxableGain − taxOnGain)`. The floor therefore bites **only** when the
+  gain's marginal rate is below 30%, and vanishes once ordinary income pushes the gain into
+  the ≥30% brackets — matching the reform. Exposed as `result.cgtMinimumTaxTopUp` and a
+  `CGT Minimum Tax Top-up (30%)` line item. (For non-exempt taxpayers; the Age Pension /
+  JobSeeker exemption in §6.6 sets `minTaxRate` to 0.)
 
 **Placement decision — where is the indexed gain computed?**
 
@@ -315,10 +337,9 @@ Register `auRealCapitalGainsYTD` in `StateSchemaRegistry` (currency AUD) so it c
 
 ## 10. Phased rollout
 
-- **Phase 1** — §6.1 hook refactor + `AuTaxRates2026` (no behavior change). Regression-safe;
-  lands independently.
-- **Phase 2** — 30% minimum-tax floor in `AuTaxRates2027` on the existing `auGain` (no
-  indexation yet). Small, testable.
+- **Phase 1 ✅ done** — §6.1 hook refactor + `AuTaxRates2026` (band 16%→15%). Regression-safe.
+- **Phase 2 ✅ done** — `AuTaxRates2027`: 50% discount removed + incremental 30% minimum-tax
+  floor on the un-indexed gain + band 15%→14%. Tested (`AU-2027` suite).
 - **Phase 3** — indexation: `acquisitionPriceLevel` stamping + Option-A per-lot indexed gain
   + `auRealCapitalGainsYTD` + `AuTaxModule2027`.
 - **Phase 4** — 1 July 2027 deemed cost base reset (Method 1) + the Age Pension / JobSeeker
