@@ -54,7 +54,7 @@ function buildTypeRegistry() {
 
 let _seq = 0;
 
-function entry({ id, date, actionType, data, stateDiff } = {}) {
+function entry({ id, date, actionType, data, stateDiff, instanceId } = {}) {
   return new JournalEntry({
     id:          id ?? `e-${_seq}`,
     seq:         _seq++,
@@ -62,7 +62,9 @@ function entry({ id, date, actionType, data, stateDiff } = {}) {
     executionId: 'e1.1',
     event:  { nodeId: null, type: 'EVT', name: 'Evt', color: null },
     action: {
-      instanceId:   `i-${_seq}`,
+      // Shared across the entries a single action emits (one per reducer); pass
+      // an explicit instanceId to simulate that action×reducer fan-out.
+      instanceId:   instanceId ?? `i-${_seq}`,
       parentId:     null,
       rootId:       null,
       siblingIndex: 0,
@@ -99,7 +101,7 @@ async function runDef(def, params, entries) {
 
 // ─── Registry composition ────────────────────────────────────────────────────
 
-test('ReportDefinitionRegistry registers the 13 built-in definitions', () => {
+test('ReportDefinitionRegistry registers the 15 built-in definitions', () => {
   const reg = new ReportDefinitionRegistry();
   const ids = reg.getAll().map(d => d.id).sort();
   assert.deepStrictEqual(ids, [
@@ -108,6 +110,8 @@ test('ReportDefinitionRegistry registers the 13 built-in definitions', () => {
     'cash-flow-by-account',
     'credits-to-account',
     'debits-from-account',
+    'journal-composition',
+    'money-moved-by-action',
     'nr-withholding-income-by-source',
     'ordinary-income-by-source',
     'pretax-adjustments-by-source',
@@ -117,6 +121,89 @@ test('ReportDefinitionRegistry registers the 13 built-in definitions', () => {
     'tax-paid-by-year',
     'withdrawals-by-account',
   ]);
+});
+
+// ─── JournalCompositionDef ───────────────────────────────────────────────────
+
+test('journal-composition: counts journal entries per action type, one row per entry (not per action)', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('journal-composition');
+  assert.strictEqual(def.perDiff, false, 'primary composition view is a bare-entry census');
+
+  // ONE action, run through two reducers → two entries sharing an instanceId.
+  // `count` must see both; `actions` (distinct instanceId) must collapse to 1.
+  const convTax1 = entry({ actionType: 'ROTH_CONVERSION_TAX', data: { amount: 1000 }, instanceId: 'conv-tax-1' });
+  const convTax2 = entry({ actionType: 'ROTH_CONVERSION_TAX', data: { amount: 1000 }, instanceId: 'conv-tax-1' });
+  const convApply = entry({ actionType: 'ROTH_CONVERSION_APPLY', data: { amount: 40000 } });
+  // An entry that carries no `amount` — count still increments, amount sum ignores it.
+  const recordBal = entry({ actionType: 'RECORD_BALANCE' });
+
+  const api = buildApi([convTax1, convTax2, convApply, recordBal], { perDiff: def.perDiff });
+  const { groups } = await api.aggregate({
+    query:      def.buildQuery({ period: null }, api),
+    groupBy:    def.defaultGroupBy,
+    aggregates: def.defaultAggregates,
+    sort:       def.defaultSort,
+  });
+
+  const byType = Object.fromEntries(groups.map(g => [g.key.actionType, g]));
+  assert.strictEqual(byType.ROTH_CONVERSION_TAX.count, 2, 'both reducer entries counted');
+  assert.strictEqual(byType.ROTH_CONVERSION_TAX.actions, 1, 'distinct instanceId collapses reducer fan-out');
+  assert.strictEqual(byType.ROTH_CONVERSION_APPLY.count, 1);
+  assert.strictEqual(byType.ROTH_CONVERSION_APPLY.actions, 1);
+  assert.strictEqual(byType.RECORD_BALANCE.count, 1);
+  assert.strictEqual(byType.ROTH_CONVERSION_TAX.amount, 2000, 'amount summed across entries');
+  // count-desc default sort → the two-entry type leads.
+  assert.strictEqual(groups[0].key.actionType, 'ROTH_CONVERSION_TAX');
+});
+
+// ─── MoneyMovedByActionDef ───────────────────────────────────────────────────
+
+test('money-moved-by-action: gross sums |Δ| so offsetting legs do not cancel; net keeps sign', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('money-moved-by-action');
+  assert.strictEqual(def.perDiff, true);
+
+  // A rebalance that moves $5k out of one holding-account leg and $5k into
+  // another within the same account: net ≈ 0 but gross = $10k of real movement.
+  const rebalance = entry({
+    actionType: 'HOLDING_TRANSACT',
+    stateDiff: [
+      { field: 'brokerageAccount.balance', before: 100000, after: 95000,  delta: -5000 },
+      { field: 'brokerageAccount.balance', before: 95000,  after: 100000, delta:  5000 },
+    ],
+  });
+  // A plain withdrawal debit of $8k.
+  const withdrawal = entry({
+    actionType: 'STOCK_WITHDRAWAL_APPLY',
+    stateDiff: [
+      { field: 'brokerageAccount.balance', before: 100000, after: 92000, delta: -8000 },
+    ],
+  });
+  // A non-account diff (YTD accumulator) must be excluded by the account.balance filter.
+  const taxAccrual = entry({
+    actionType: 'STOCK_WITHDRAWAL_TAX',
+    stateDiff: [
+      { field: 'usOrdinaryIncomeYTD', before: 0, after: 2000, delta: 2000 },
+    ],
+  });
+
+  const api = buildApi([rebalance, withdrawal, taxAccrual], { perDiff: def.perDiff });
+  const { groups } = await api.aggregate({
+    query:      def.buildQuery({ period: null, accountStateKeys: [] }, api),
+    groupBy:    def.defaultGroupBy,
+    aggregates: def.defaultAggregates,
+    sort:       def.defaultSort,
+  });
+
+  const byType = Object.fromEntries(groups.map(g => [g.key.actionType, g]));
+  assert.strictEqual(byType.HOLDING_TRANSACT.gross, 10000, 'gross = |−5000| + |5000|');
+  assert.strictEqual(byType.HOLDING_TRANSACT.net, 0,       'net cancels');
+  assert.strictEqual(byType.STOCK_WITHDRAWAL_APPLY.gross, 8000);
+  assert.strictEqual(byType.STOCK_WITHDRAWAL_APPLY.out, -8000, 'largest single debit');
+  assert.ok(!('STOCK_WITHDRAWAL_TAX' in byType), 'non-account diffs excluded');
+  // gross-desc default sort → the rebalance leads.
+  assert.strictEqual(groups[0].key.actionType, 'HOLDING_TRANSACT');
 });
 
 // ─── StateTaxByYearDef ───────────────────────────────────────────────────────

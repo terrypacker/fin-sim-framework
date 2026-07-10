@@ -626,6 +626,95 @@ class RealPropertyCashFlowDef extends ReportDefinition {
   }
 }
 
+// ─── QA / diagnostics definitions ─────────────────────────────────────────────
+
+class JournalCompositionDef extends ReportDefinition {
+  get id()          { return 'journal-composition'; }
+  get title()       { return 'Journal Composition by Action Type'; }
+  get description() {
+    return 'Count of journal entries per action type for the period — a QA lens for '
+         + 'spotting missing, extra, or unexpectedly-frequent actions after a change. '
+         + 'Counts are journal ENTRIES (one per action×reducer execution), not distinct '
+         + 'actions, so an action run through two reducers is counted twice.';
+  }
+
+  // Period-only: this is a whole-window census so that an action type is visible
+  // by its *absence*. Account scoping is a per-stateDiff concept (it filters on the
+  // dotted `stateKey` path, which bare entry rows don't carry) — left to a
+  // per-diff "money moved by action type" variant.
+  get facets() {
+    return [
+      { name: 'period', label: 'Period', kind: 'period' },
+    ];
+  }
+
+  // One row per journal entry (the default, non-perDiff data source), grouped by
+  // action type. `amount` is the action's native payload amount and is summed for
+  // reference only — its meaning varies by action type and is null on entries that
+  // carry no amount — so `count` is the headline and the default sort key.
+  // `count`   — journal entries (action×reducer), the raw census.
+  // `actions` — distinct actions (collapses the reducer fan-out via instanceId),
+  //             so ROTH_CONVERSION_TAX reads 3 here but 6 under `count`.
+  // `amount`  — Σ native payload amount; heterogeneous, reference only.
+  get defaultGroupBy()    { return ['actionType']; }
+  get defaultAggregates() {
+    return {
+      count:   { fn: 'count'                    },
+      actions: { fn: 'distinct', field: 'instanceId' },
+      amount:  { fn: 'sum',      field: 'amount' },
+    };
+  }
+  get defaultSort() { return [{ field: 'count', dir: 'desc' }]; }
+
+  buildQuery(params, api) {
+    // No actionType/stateKey predicate: we want every entry in the window so
+    // that absent action types stand out. Date-based tax-year bounds keep
+    // same-day settle chains inside the period the user picked, consistent with
+    // the other "what happened this CY/FY" reports.
+    return { op: 'and', conditions: [api.periodOfTaxYear(params.period)] };
+  }
+}
+
+class MoneyMovedByActionDef extends ReportDefinition {
+  get id()          { return 'money-moved-by-action'; }
+  get title()       { return 'Money Moved by Action Type'; }
+  get description() {
+    return 'How much cash each action type moved through account balances in the period. '
+         + '`gross` is the magnitude moved (|Δ| summed, so offsetting legs like a rebalance '
+         + 'do not cancel); `net` is the signed sum; `out`/`in` are the largest single debit/credit.';
+  }
+  get perDiff()     { return true; }
+
+  get facets() {
+    return [
+      { name: 'accountStateKeys', label: 'Accounts', kind: 'multiselect', optionsSource: 'account' },
+      { name: 'period',           label: 'Period',   kind: 'period' },
+    ];
+  }
+
+  get defaultGroupBy()    { return ['actionType']; }
+  get defaultAggregates() {
+    return {
+      count: { fn: 'count'                       },
+      gross: { fn: 'sum', field: 'absStateDelta' },
+      net:   { fn: 'sum', field: 'stateDelta'    },
+      out:   { fn: 'min', field: 'stateDelta'    },
+      in:    { fn: 'max', field: 'stateDelta'    },
+    };
+  }
+  get defaultSort() { return [{ field: 'gross', dir: 'desc' }]; }
+
+  buildQuery(params, api) {
+    const { period, accountStateKeys } = params;
+    const conditions = [
+      api.periodOfTaxYear(period),
+      { op: 'contains', field: 'stateKey', value: 'account.balance' },
+    ];
+    _appendAccountStateKeyFilter(conditions, accountStateKeys);
+    return { op: 'and', conditions };
+  }
+}
+
 // ─── Registry ─────────────────────────────────────────────────────────────────
 
 /**
@@ -653,6 +742,8 @@ export class ReportDefinitionRegistry {
       new AuTaxByPersonYearDef(),
       new RothConversionsByYearDef(),
       new RealPropertyCashFlowDef(),
+      new JournalCompositionDef(),
+      new MoneyMovedByActionDef(),
     ]) {
       this.register(def);
     }

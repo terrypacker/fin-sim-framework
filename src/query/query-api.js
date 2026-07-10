@@ -667,6 +667,10 @@ export class QueryApi {
 
 function _fold(fn, field, items) {
   if (fn === 'count') return items.length;
+  // distinct → number of unique non-null values of `field` (works on any type,
+  // e.g. count distinct actionType or instanceId). Kept before the numeric
+  // coercion below since its values need not be numbers.
+  if (fn === 'distinct') return new Set(items.map(x => x[field]).filter(v => v != null)).size;
   const vals = items.map(x => x[field]).filter(v => v != null && typeof v === 'number');
   if (!vals.length) return fn === 'sum' ? 0 : null;
   switch (fn) {
