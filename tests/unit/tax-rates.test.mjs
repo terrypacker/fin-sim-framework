@@ -27,8 +27,11 @@ import assert   from 'node:assert/strict';
 
 import { UsTaxRates2025 } from '../../src/finance/tax/us/us-tax-rates-2025.js';
 import { AuTaxRates2025 } from '../../src/finance/tax/au/au-tax-rates-2025.js';
+import { AuTaxRates2026 } from '../../src/finance/tax/au/au-tax-rates-2026.js';
+import { AuTaxRates2027 } from '../../src/finance/tax/au/au-tax-rates-2027.js';
 import { UsTaxModule2026 } from '../../src/finance/tax/us/us-tax-module-2026.js';
 import { AuTaxModule2026 } from '../../src/finance/tax/au/au-tax-module-2026.js';
+import { AuTaxModule2027 } from '../../src/finance/tax/au/au-tax-module-2027.js';
 import { TaxSettleService } from '../../src/finance/tax-settle-service.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -483,4 +486,154 @@ test('US single filer LTCG 0% bracket threshold is $48,350 (not $96,700 MFJ)', (
   const singleTax = usRates.computeTax(usState({ usCapitalGainsYTD: 60_000, usFilingSingle: true })).netLiability;
   assert.strictEqual(mfjTax, 0, 'MFJ: $60k CG is below $96,700 0% threshold');
   assert.ok(singleTax > 0, 'Single: $60k CG exceeds $48,350 0% threshold');
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AU-2026: FY2026-27 — $18,201–$45,000 band cut 16% → 15%; CGT discount unchanged
+//   (design 57 Phase 1)
+// ══════════════════════════════════════════════════════════════════════════════
+
+const auRates2026 = new AuTaxRates2026();
+
+test('AU-2026: FY2026-27 lowest band is 15% (down from FY2025-26 19% in-code)', () => {
+  // $30k ordinary income: [18200, 30000] @ 15% = 11800 * 0.15 = 1770 base tax
+  //   + Medicare phase-in (30000 - 26000) * 0.10 = 400 → netLiability 2170
+  const { netLiability } = auRates2026.computeTax(auState({ auOrdinaryIncomeYTD: 30_000 }));
+  assert.strictEqual(netLiability, 2170);
+});
+
+test('AU-2026: 15% band lowers tax vs the 19% carried in AuTaxRates2025', () => {
+  const tax2026 = auRates2026.computeTax(auState({ auOrdinaryIncomeYTD: 30_000 })).netLiability;
+  const tax2025 = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 30_000 })).netLiability;
+  assert.ok(tax2026 < tax2025, `FY2026-27 (${tax2026}) should be below FY2025-26 (${tax2025})`);
+});
+
+test('AU-2026: 50% CGT discount still applies (resident)', () => {
+  // $100k capital gains, resident: netTaxableGain = 50000
+  //   [18200, 45000] @ 15% = 26800 * 0.15 = 4020 | [45000, 50000] @ 30% = 1500 → baseTax 5520
+  //   Medicare 50000 * 0.02 = 1000 → netLiability 6520
+  const result = auRates2026.computeTax(auState({ auCapitalGainsYTD: 100_000 }));
+  assert.strictEqual(result.netLiability, 6520);
+  assert.strictEqual(result.cgtDiscount, 50_000, 'discount reduction is 50% of the gain');
+  assert.strictEqual(result.discountedCapitalGains, 50_000, 'net taxable gain is 50% of the gain');
+});
+
+test('AU-2026: CGT-discounted gain taxed like equal ordinary income', () => {
+  const taxWithDiscount    = auRates2026.computeTax(auState({ auCapitalGainsYTD: 100_000 })).netLiability;
+  const taxWithoutDiscount = auRates2026.computeTax(auState({ auOrdinaryIncomeYTD: 50_000 })).netLiability;
+  assert.strictEqual(taxWithDiscount, taxWithoutDiscount);
+});
+
+test('AU-2026: TaxSettleService selects FY2026-27 module for a July-2026 period', () => {
+  const svc   = new TaxSettleService();
+  const state = auState({
+    auOrdinaryIncomeYTD: 30_000,
+    currentPeriods: { AU: { startMs: Date.UTC(2026, 6, 1) } },
+  });
+  const result = svc.computeAuTax(state);
+  assert.strictEqual(result.taxYear, 2026);
+  assert.strictEqual(result.netLiability, 2170); // 15% band (1770) + Medicare phase-in (400)
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AU-2027: FY2027-28 CGT reform — 50% discount removed + 30% minimum tax;
+//   band 15% → 14% (design 57 Phase 2, un-indexed gains)
+// ══════════════════════════════════════════════════════════════════════════════
+
+const auRates2027 = new AuTaxRates2027();
+
+test('AU-2027: 50% CGT discount removed — full gain assessable', () => {
+  const result = auRates2027.computeTax(auState({ auCapitalGainsYTD: 100_000 }));
+  assert.strictEqual(result.cgtDiscount, 0, 'no discount reduction');
+  assert.strictEqual(result.discountedCapitalGains, 100_000, 'full gain is taxable');
+});
+
+test('AU-2027: 30% minimum tax tops up a gain taxed below 30% at the margin', () => {
+  // $100k gain, no other income. Marginal bracket tax:
+  //   [18200,45000] @ 14% = 3752 | [45000,100000] @ 30% = 16500 → taxOnGain 20252
+  //   30% floor = 30000 → top-up 9748. Medicare 100000 * 0.02 = 2000.
+  //   netLiability = 20252 + 2000 + 9748 = 32000
+  const result = auRates2027.computeTax(auState({ auCapitalGainsYTD: 100_000 }));
+  assert.strictEqual(result.cgtMinimumTaxTopUp, 9748);
+  assert.strictEqual(result.netLiability, 32000);
+  assert.ok(
+    result.lineItems.some(li => li.label === 'CGT Minimum Tax Top-up (30%)' && li.amount === 9748),
+    'min-tax top-up line item present',
+  );
+});
+
+test('AU-2027: small gain with no other income is taxed at exactly 30%', () => {
+  // $10k gain below the tax-free threshold → 0 bracket tax → full 30% top-up
+  const result = auRates2027.computeTax(auState({ auCapitalGainsYTD: 10_000 }));
+  assert.strictEqual(result.cgtMinimumTaxTopUp, 3000);
+  assert.strictEqual(result.netLiability, 3000);
+});
+
+test('AU-2027: no top-up when the gain is already taxed at ≥30% at the margin', () => {
+  // $200k ordinary income puts the gain in the 45% bracket → marginal tax > 30%
+  const result = auRates2027.computeTax(auState({ auOrdinaryIncomeYTD: 200_000, auCapitalGainsYTD: 100_000 }));
+  assert.strictEqual(result.cgtMinimumTaxTopUp, 0, '45% marginal already exceeds the 30% floor');
+});
+
+test('AU-2027: reform makes a resident gain cost more than the FY2026-27 discounted gain', () => {
+  const tax2027 = auRates2027.computeTax(auState({ auCapitalGainsYTD: 100_000 })).netLiability;
+  const tax2026 = auRates2026.computeTax(auState({ auCapitalGainsYTD: 100_000 })).netLiability;
+  assert.ok(tax2027 > tax2026, `FY2027-28 (${tax2027}) should exceed FY2026-27 (${tax2026})`);
+});
+
+test('AU-2027: lowest band is 14% (down from FY2026-27 15%)', () => {
+  const tax2027 = auRates2027.computeTax(auState({ auOrdinaryIncomeYTD: 30_000 })).netLiability;
+  const tax2026 = auRates2026.computeTax(auState({ auOrdinaryIncomeYTD: 30_000 })).netLiability;
+  assert.ok(tax2027 < tax2026, `FY2027-28 (${tax2027}) should be below FY2026-27 (${tax2026})`);
+});
+
+test('AU-2027: non-resident still gets no discount (unchanged) and no min-tax floor', () => {
+  // Non-residents already had no discount; the reform machinery must not add a floor for them.
+  const result = auRates2027.computeTax(auState({ people: { primary: { residency: 'US' } }, auCapitalGainsYTD: 100_000 }));
+  assert.strictEqual(result.isResident, false);
+  assert.strictEqual(result.cgtMinimumTaxTopUp, undefined, 'non-resident path has no top-up field');
+});
+
+test('AU-2027: TaxSettleService selects FY2027-28 module for a July-2027 period', () => {
+  const svc   = new TaxSettleService();
+  const state = auState({
+    auOrdinaryIncomeYTD: 30_000,
+    currentPeriods: { AU: { startMs: Date.UTC(2027, 6, 1) } },
+  });
+  const result = svc.computeAuTax(state);
+  assert.strictEqual(result.taxYear, 2027);
+  // [18200,30000] @ 14% = 1652 + Medicare phase-in 400 = 2052
+  assert.strictEqual(result.netLiability, 2052);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AU-2027 indexation — AuTaxModule2027 routes the indexed gain into
+//   auRealCapitalGainsYTD, which AuTaxRates2027 taxes (design 57 Phase 3)
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('AU-2027 classify: resident stock sale records indexed gain into the real bucket', () => {
+  const fn = getFn(new AuTaxModule2027(), 'AU_STOCK_WITHDRAWAL_TAX');
+  const s0 = { usCapitalGainsYTD: 0, auCapitalGainsYTD: 0, auRealCapitalGainsYTD: 0, ftcYTD: 0 };
+  const s1 = fn(s0, { gain: 100_000, auGain: 100_000, auIndexedGain: 70_000, residency: 'AU' });
+  assert.strictEqual(s1.auCapitalGainsYTD, 100_000, 'gross gain still tracked');
+  assert.strictEqual(s1.auRealCapitalGainsYTD, 70_000, 'indexed gain routed to real bucket');
+});
+
+test('AU-2027 classify: non-resident stock sale writes no real bucket', () => {
+  const fn = getFn(new AuTaxModule2027(), 'AU_STOCK_WITHDRAWAL_TAX');
+  const s0 = { usCapitalGainsYTD: 0, auCapitalGainsYTD: 0, auRealCapitalGainsYTD: 0, auNonResidentWithholdingYTD: 0, ftcYTD: 0 };
+  const s1 = fn(s0, { gain: 100_000, auGain: 100_000, auIndexedGain: 70_000, residency: 'US' });
+  assert.strictEqual(s1.auRealCapitalGainsYTD, 0, 'non-resident: no real-gain bucket');
+});
+
+test('AU-2027 rates: indexation reduces the assessed gain and the tax', () => {
+  // Real (indexed) gain 70k vs gross 100k. baseTax(70000) = 3752 + 25000*0.30 = 11252;
+  //   30% floor on 70k = 21000 → top-up 9748; Medicare 70000*0.02 = 1400 → 22400.
+  const result = auRates2027.computeTax(auState({ auCapitalGainsYTD: 100_000, auRealCapitalGainsYTD: 70_000 }));
+  assert.strictEqual(result.discountedCapitalGains, 70_000, 'taxable gain is the indexed gain');
+  assert.strictEqual(result.cgtDiscount, 30_000, 'indexation relief = gross − indexed');
+  assert.strictEqual(result.cgtMinimumTaxTopUp, 9748);
+  assert.strictEqual(result.netLiability, 22400);
+  const unindexed = auRates2027.computeTax(auState({ auCapitalGainsYTD: 100_000 })).netLiability;
+  assert.ok(result.netLiability < unindexed, `indexed (${result.netLiability}) < un-indexed (${unindexed})`);
 });

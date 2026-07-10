@@ -177,14 +177,22 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
     const { salePrice, residency } = action;
     const sa = state.auStockAccount;
 
-    const r = consumeHoldingsFifo(sa.holdings ?? [], salePrice);
+    // CGT cost-base indexation context (design 57 §6.3): current AU price level and
+    // the as-of (sale) date from the current AU period. FIFO returns an indexed AU
+    // basis alongside the un-indexed one; lots with no acquisitionPriceLevel index at
+    // factor 1, so auIndexedGain === auGain until the 1 Jul 2027 reset stamps levels.
+    const auLevel   = state.inflationAccumulator?.AU ?? 1;
+    const asOfMs    = state.currentPeriods?.AU?.startMs ?? Date.now();
+    const r = consumeHoldingsFifo(sa.holdings ?? [], salePrice, { level: auLevel, asOfMs, country: 'AU' });
     const realizedBasis = action.costBasis != null ? action.costBasis : r.realizedBasis;
     const newHoldings   = r.newHoldings;
     // AU cost-base reset (design 36 §12.2): realized AU basis from each lot's
     // stepped-up cost base; no step-up ⇒ falls back to realizedBasis (auGain === gain).
-    const realizedAuBasis = r.realizedBasisByCountry?.AU ?? realizedBasis;
-    const gain   = Math.max(0, salePrice - realizedBasis);
-    const auGain = Math.max(0, salePrice - realizedAuBasis);
+    const realizedAuBasis        = r.realizedBasisByCountry?.AU ?? realizedBasis;
+    const realizedIndexedAuBasis = r.realizedIndexedBasisByCountry?.AU ?? realizedAuBasis;
+    const gain        = Math.max(0, salePrice - realizedBasis);
+    const auGain      = Math.max(0, salePrice - realizedAuBasis);
+    const auIndexedGain = Math.max(0, salePrice - realizedIndexedAuBasis);
 
     this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'AU', state)], salePrice, null);
 
@@ -200,7 +208,7 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
           holdings: newHoldings,
         },
       },
-      [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, auGain, residency, proceeds: salePrice, costBasis: realizedBasis, description: sa.name || 'auStockAccount' }]
+      [{ type: 'AU_STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, residency, proceeds: salePrice, costBasis: realizedBasis, description: sa.name || 'auStockAccount' }]
     );
   }
 }

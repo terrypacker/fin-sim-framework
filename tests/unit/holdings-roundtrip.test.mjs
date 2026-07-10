@@ -30,7 +30,8 @@ function makeStockAccount() {
     holdings: [
       new Holding({
         id: 'hldA', allocation: ALLOCATION.EQUITY, marketValue: 12_000, costBasis: 9_000,
-        purchaseDate: new Date(Date.UTC(2020, 5, 15)), rateKey: 'EQUITY_US', label: 'ITOT',
+        purchaseDate: new Date(Date.UTC(2020, 5, 15)), acquisitionPriceLevel: 1.08,
+        rateKey: 'EQUITY_US', label: 'ITOT',
       }),
       new Holding({
         id: 'hldB', allocation: ALLOCATION.EQUITY, marketValue: 8_000, costBasis: 7_000,
@@ -62,6 +63,7 @@ test('Holdings round-trip: serialize → deserialize preserves multi-sleeve hold
   assert.equal(restored.holdings[0].rateKey,      'EQUITY_US');
   assert.equal(restored.holdings[0].label,        'ITOT');
   assert.equal(restored.holdings[0].purchaseDate.toISOString(), original.holdings[0].purchaseDate.toISOString());
+  assert.equal(restored.holdings[0].acquisitionPriceLevel, 1.08);
   assert.equal(restored.holdings[1].id, 'hldB');
 });
 
