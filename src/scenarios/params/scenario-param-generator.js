@@ -24,6 +24,7 @@ import {
   REAL_PROPERTY_PARAM_TEMPLATE,
   COLLECTIBLE_PARAM_TEMPLATE,
   COMPANY_EQUITY_PARAM_TEMPLATE,
+  BALANCE_TARGET,
 } from './record-param-templates.js';
 
 /** Namespaces the generator owns. A param key with one of these prefixes is
@@ -137,12 +138,13 @@ export class ScenarioParamGenerator {
     const group = record.country ? `${record.country} · ${recordName}` : recordName;
     // A holdings-bearing account's balance is DERIVED from Σ holdings.marketValue (the
     // account editor disables the balance field and refuses to param-link it), and
-    // holdings/basis are explicitly out of the param surface (design 55 §13). So skip
-    // the `balance` field whenever the account has holdings — exposing it as a param
-    // (and MC target) would let a stale value rescale the holdings on Rebuild. Only a
-    // holdings-free account keeps a scalar `balance` param.
+    // holdings/basis are explicitly out of the param surface (design 55 §13). So a plain
+    // scalar `balance` param would let a stale value rescale the holdings on Rebuild.
+    // When the account has holdings we therefore SWAP the `balance` template field for a
+    // hidden, compile-only `balanceTarget` MC/Opt lever (BALANCE_TARGET) that the loader
+    // cascade honors non-destructively; a holdings-free account keeps its scalar `balance`.
     const hasHoldings = Array.isArray(record.holdings) && record.holdings.length > 0;
-    return template.filter((t) => !(t.field === 'balance' && hasHoldings)).map((t) => {
+    return template.map((t) => (t.field === 'balance' && hasHoldings) ? BALANCE_TARGET : t).map((t) => {
       const node = nodeType === 'person'
         ? { type: 'person', id: identity, field: t.field }
         : { type: nodeType, stateKey: identity, field: t.field };
@@ -151,11 +153,12 @@ export class ScenarioParamGenerator {
         label:        `${recordName} — ${t.label}`,
         type:         t.money ? 'Money' : t.type,
         group,
-        defaultValue: record[t.field],
+        defaultValue: record[t.deriveDefaultFrom ?? t.field],
         node,
         mc:           t.mc  ?? false,
         opt:          t.opt ?? false,
       };
+      if (t.hidden)  entry.hidden  = t.hidden;
       if (t.options) entry.options = t.options;
       // design-10 Money seeding (§4). Deferred in Phase 1 (all templates Number),
       // but supported so a later phase flips `money: true` on a template field.

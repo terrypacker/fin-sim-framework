@@ -36,6 +36,7 @@ import { AU_INCOME }         from './toolsets/au-income-toolset.js';
 import { ECONOMIC_REGIMES }  from './toolsets/economic-regimes-toolset.js';
 import { normalizeCountryCode } from '../finance/country-codes.js';
 import { deriveEarningsBasis } from '../finance/assets/investment-account.js';
+import { rescaleHoldingsToBalance } from '../finance/holdings/holding-utils.js';
 import { ACCOUNT_ROLES } from '../finance/state/account-roles.js';
 
 // Retirement roles carry the contribution/earnings basis ledger (design 53 §2)
@@ -410,6 +411,21 @@ export class ScenarioLoader {
         const holdings = Array.isArray(rec.holdings) ? rec.holdings : null;
         if (node.field === 'balance' && holdings && holdings.length > 0) {
           rec.balance = +holdings.reduce((s, h) => s + (Number(h?.marketValue) || 0), 0).toFixed(2);
+        } else if (node.field === 'balanceTarget') {
+          // Design 55 §13: the hidden, compile-only MC/Opt lever for a holdings-bearing
+          // account's total balance. It is never persisted (see _mergeParamSchema), so its
+          // presence here means the MC/Opt runner injected a sampled value into
+          // cfg.parameters — realize it non-destructively. When holdings already exist
+          // (a re-loaded/serialized graph), rescale them so Σ marketValue === target,
+          // preserving the sleeve mix and gain ratio; otherwise (a fresh compile, before
+          // the toolset bootstraps holdings) set the scalar balance the compiler seeds
+          // holdings from. Either way re-derive `balance` so the §4.4 invariant holds.
+          if (holdings && holdings.length > 0) {
+            rescaleHoldingsToBalance(rec.holdings, val);
+            rec.balance = +rec.holdings.reduce((s, h) => s + (Number(h?.marketValue) || 0), 0).toFixed(2);
+          } else {
+            rec.balance = val;
+          }
         } else {
           rec[node.field] = val;
         }
@@ -552,6 +568,16 @@ export class ScenarioLoader {
     const combinedSchema = [...scenarioSchema, ...toolsetEntries];
     if (combinedSchema.length === 0) return;
 
+    // Design 55 §13: a hidden generated per-record param (e.g. `balanceTarget`) is a
+    // compile-only MC/Opt lever. It must NOT be materialized into cfg.params, because a
+    // persisted value would sync into cfg.parameters and rescale the holdings on the next
+    // Rebuild — reverting direct holding edits (the exact bug the derived-balance fix
+    // avoids). Keeping it out of cfg.params leaves it present ONLY when the MC/Opt runner
+    // transiently injects it into cfg.parameters. It stays in the generated schema (via
+    // ScenarioParamGenerator.generate) so the MC/Opt eligibility index still discovers it.
+    const isCompileOnly = s => s.hidden && isGeneratedParamKey(s.key);
+    const persistableSchema = combinedSchema.filter(s => !isCompileOnly(s));
+
     // Seed entry.value from cfg.parameters when it carries an explicit value
     // (e.g. set by buildDefaultConfig or a JSON import). Otherwise fall back
     // to the schema's defaultValue. This keeps the UI representation aligned
@@ -584,7 +610,7 @@ export class ScenarioLoader {
     };
 
     if (!Array.isArray(cfg.params)) {
-      cfg.params = combinedSchema.map(_toEntry);
+      cfg.params = persistableSchema.map(_toEntry);
       return;
     }
 
@@ -661,7 +687,7 @@ export class ScenarioLoader {
       }
     }
     const existing = new Set(cfg.params.map(p => p.name));
-    for (const s of combinedSchema) {
+    for (const s of persistableSchema) {
       if (!existing.has(s.key)) cfg.params.push(_toEntry(s));
     }
   }

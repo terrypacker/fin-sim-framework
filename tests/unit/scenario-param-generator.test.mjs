@@ -224,3 +224,32 @@ test('GEN-12: minimumBalance is a per-account SAVINGS/CHECKING param (floor trav
   // Non-cash accounts do not expose a floor.
   assert.ok(!byKey.has('acct.rothAccount.minimumBalance'), 'roth has no minimumBalance param');
 });
+
+test('GEN-13: a holdings-bearing account swaps `balance` for a hidden `balanceTarget` MC lever (§13)', () => {
+  // Holdings-free account → plain scalar `balance` param (the MC lever works directly).
+  // Holdings-bearing account → `balance` is derived from Σ holdings, so it is swapped for a
+  // hidden, compile-only `balanceTarget` whose defaultValue seeds from the record balance.
+  const cfg = {
+    accounts: [
+      { stateKey: 'usSavingsAccount', type: 'savings', name: 'US Savings', country: 'US', balance: 30000 },
+      { stateKey: 'usStockAccount',   type: 'brokerage', name: 'US Stock', country: 'US', balance: 150000,
+        holdings: [{ marketValue: 90000, costBasis: 60000 }, { marketValue: 60000, costBasis: 40000 }] },
+    ],
+  };
+  const byKey = new Map(ScenarioParamGenerator.generate(cfg).map(e => [e.key, e]));
+
+  // Holdings-free savings keeps its scalar balance param (mc:true), no balanceTarget.
+  assert.ok(byKey.has('acct.usSavingsAccount.balance'), 'holdings-free account keeps scalar balance');
+  assert.strictEqual(byKey.get('acct.usSavingsAccount.balance').mc, true);
+  assert.ok(!byKey.has('acct.usSavingsAccount.balanceTarget'), 'holdings-free account has no balanceTarget');
+
+  // Holdings-bearing brokerage: no scalar balance, a hidden balanceTarget instead.
+  assert.ok(!byKey.has('acct.usStockAccount.balance'), 'holdings-bearing account drops scalar balance');
+  const target = byKey.get('acct.usStockAccount.balanceTarget');
+  assert.ok(target, 'holdings-bearing account emits balanceTarget');
+  assert.strictEqual(target.hidden, true, 'balanceTarget is hidden (compile-only, not editor/persisted)');
+  assert.strictEqual(target.mc, true, 'balanceTarget is an MC lever');
+  assert.strictEqual(target.opt, false);
+  assert.strictEqual(target.defaultValue, 150000, 'balanceTarget seeds from the record balance');
+  assert.deepStrictEqual(target.node, { type: 'account', stateKey: 'usStockAccount', field: 'balanceTarget' });
+});

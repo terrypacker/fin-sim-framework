@@ -12,6 +12,8 @@ import { McConfigPanel }           from './mc-config-panel.js';
 import { McResultsPanel }          from './mc-results-panel.js';
 import { McRunsPanel }             from './mc-runs-panel.js';
 import { IntlRetirementMcConfig }  from '../../finance/monte-carlo/intl-retirement-mc-config.js';
+import { resolveBalanceCenters }   from '../../scenarios/intl-retirement-scenario.js';
+import { ServiceRegistry }         from '../../services/service-registry.js';
 import { APP_EVENTS }              from '../app-display-settings.js';
 
 /**
@@ -137,10 +139,17 @@ export class MonteCarloPresenter {
    */
   _resolveBaseParams() {
     const raw = this._scenario?.params;
-    if (!raw) return {};
+    let params = {};
     if (Array.isArray(raw)) {
-      return Object.fromEntries(raw.map(p => [p.key, p.value]));
+      params = Object.fromEntries(raw.map(p => [p.key, p.value]));
+    } else if (raw && typeof raw === 'object') {
+      params = { ...raw };
     }
-    return typeof raw === 'object' ? { ...raw } : {};
+    // Balance MC levers key on legacy flat keys whose value lives on the account records
+    // (a holdings-bearing balance isn't a plain param), so resolve them from the active
+    // scenario cfg. This makes the panel presets + Copy-from-Scenario show real balances.
+    // Explicit params win over the derived centers.
+    const activeCfg = ServiceRegistry.getInstance()?.scenarioService?.getActive?.() ?? null;
+    return { ...resolveBalanceCenters(activeCfg), ...params };
   }
 }

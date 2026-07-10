@@ -41,6 +41,21 @@ const CONTRIBUTION_BASIS = {
 // Cash / investment balance — the field every account type exposes.
 const BALANCE = { field: 'balance', label: 'Balance', type: 'Number', mc: true, opt: false };
 
+// Holdings-bearing balance MC/Opt lever (design 55 §13). A holdings-bearing account's
+// `balance` is DERIVED from Σ holdings.marketValue and is therefore NOT emitted as a
+// plain param (a stale `balance` would rescale holdings on Rebuild and revert editor
+// edits — the very bug design 55 fixed). To still let Monte-Carlo sweep an account's
+// total, the generator swaps the skipped `balance` field for this hidden, compile-only
+// `balanceTarget`: it is honored ONLY when explicitly injected into cfg.parameters (by
+// the MC/Opt runner), where the loader cascade rescales the holdings to it
+// non-destructively. `hidden: true` keeps it out of the param editor AND out of the
+// persisted cfg.params (see ScenarioLoader._mergeParamSchema), so it never round-trips
+// as a stale value. The generator seeds its defaultValue from the record's balance.
+export const BALANCE_TARGET = {
+  field: 'balanceTarget', label: 'Balance', type: 'Number',
+  mc: true, opt: false, hidden: true, deriveDefaultFrom: 'balance',
+};
+
 // Cash floor (design 55 §7 / §13). The replenish threshold that drives
 // REPLENISH_SAVINGS. Per-account so it travels with the flagged transaction
 // account (§7.4) instead of being pinned to the canonical savings account by the

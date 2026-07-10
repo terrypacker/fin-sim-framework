@@ -16,7 +16,7 @@ import {
   DEFAULT_MC_VARIABLE_CONFIGS,
 } from '../../src/finance/monte-carlo/intl-retirement-mc-config.js';
 import { DISTRIBUTION_TYPES } from '../../src/simulation-framework/distributions.js';
-import { INTL_RETIREMENT_DEFAULTS } from '../../src/scenarios/intl-retirement-scenario.js';
+import { INTL_RETIREMENT_DEFAULTS, resolveBalanceCenters } from '../../src/scenarios/intl-retirement-scenario.js';
 
 const D = INTL_RETIREMENT_DEFAULTS;
 
@@ -152,6 +152,28 @@ test('buildVariables: 2-shock scenario emits 4 shock rows', () => {
   assert.ok(keys.includes('shocks[1].startDate'));
 });
 
+// ── resolveBalanceCenters ──────────────────────────────────────────────────────
+
+test('resolveBalanceCenters: maps legacy balance keys to live account balances', () => {
+  const cfg = { accounts: [
+    { stateKey: 'usStockAccount', balance: 600_000 },
+    { stateKey: 'rothAccount',    balance: 90_000  },
+    { stateKey: 'usSavingsAccount', balance: 12_000 },
+  ] };
+  const centers = resolveBalanceCenters(cfg);
+  assert.strictEqual(centers.stockBalance,     600_000, 'stockBalance ← usStockAccount');
+  assert.strictEqual(centers.rothBalance,      90_000,  'rothBalance ← rothAccount');
+  assert.strictEqual(centers.initialUsSavings, 12_000,  'initialUsSavings ← usSavingsAccount');
+  // Accounts absent from the cfg produce no center (rather than a bogus 0).
+  assert.ok(!('iraBalance' in centers), 'missing account → no center key');
+});
+
+test('resolveBalanceCenters: tolerates a missing/empty cfg', () => {
+  assert.deepStrictEqual(resolveBalanceCenters(null), {});
+  assert.deepStrictEqual(resolveBalanceCenters({}), {});
+  assert.deepStrictEqual(resolveBalanceCenters({ accounts: [] }), {});
+});
+
 // ── buildVariables: resolveDefault ────────────────────────────────────────────
 
 test('buildVariables: defaultValue is set to the scenario param value', () => {
@@ -160,6 +182,29 @@ test('buildVariables: defaultValue is set to the scenario param value', () => {
   const roth = vars.find(v => v.paramKey === 'rothGrowthRate');
   assert.ok(roth, 'rothGrowthRate variable not found');
   assert.strictEqual(roth.defaultValue, D.rothGrowthRate);
+});
+
+test('buildVariables: presets mean/value from the live scenario value (config wins over hardcoded default)', () => {
+  const cfg  = new IntlRetirementMcConfig();
+  // A config whose stock balance and growth rate differ from the template defaults.
+  const vars = cfg.buildVariables({
+    ...FLAT_PARAMS, shocks: [],
+    stockBalance: 600_000,        // holdings-bearing balance, resolved from account records
+    brokerageGrowthRate: 0.09,    // per-account/global rate from the config
+  });
+  const bal = vars.find(v => v.paramKey === 'stockBalance');
+  assert.strictEqual(bal.value, 600_000, 'CONSTANT balance lever presets its value from config');
+  assert.strictEqual(bal.mean,  600_000, 'balance lever mean also tracks config');
+
+  const gr = vars.find(v => v.paramKey === 'brokerageGrowthRate');
+  assert.strictEqual(gr.mean, 0.09, 'rate lever mean presets from the config value, not D default');
+});
+
+test('buildVariables: falls back to the hardcoded default when the param is absent from params', () => {
+  const cfg  = new IntlRetirementMcConfig();
+  const vars = cfg.buildVariables({ shocks: [] });   // sparse params: nothing resolves
+  const gr = vars.find(v => v.paramKey === 'rothGrowthRate');
+  assert.strictEqual(gr.mean, D.rothGrowthRate, 'unresolvable lever keeps its template default mean');
 });
 
 test('buildVariables: explicit shock severity is used as mean', () => {

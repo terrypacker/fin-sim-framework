@@ -242,8 +242,8 @@ import { SimGraphNode } from './graph/sim-graph-node.js';
 import { QueryApi } from './query/query-api.js';
 import { BaseScenario } from './scenarios/base-scenario.js';
 import { BlankScenario } from './scenarios/blank-scenario.js';
-import { DRAWDOWN_STRATEGIES, DRAWDOWN_ROLES, INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, INTL_RETIREMENT_PARAM_ALIASES, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
-import { ACCOUNT_PARAM_TEMPLATES, PERSON_PARAM_TEMPLATE, REAL_PROPERTY_PARAM_TEMPLATE, COLLECTIBLE_PARAM_TEMPLATE, COMPANY_EQUITY_PARAM_TEMPLATE } from './scenarios/params/record-param-templates.js';
+import { DRAWDOWN_STRATEGIES, DRAWDOWN_ROLES, INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, INTL_RETIREMENT_PARAM_ALIASES, resolveBalanceCenters, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
+import { BALANCE_TARGET, ACCOUNT_PARAM_TEMPLATES, PERSON_PARAM_TEMPLATE, REAL_PROPERTY_PARAM_TEMPLATE, COLLECTIBLE_PARAM_TEMPLATE, COMPANY_EQUITY_PARAM_TEMPLATE } from './scenarios/params/record-param-templates.js';
 import { GENERATED_KEY_PREFIXES, isGeneratedParamKey, decodeGeneratedParamKey, ScenarioParamGenerator } from './scenarios/params/scenario-param-generator.js';
 import { ScenarioLoader } from './scenarios/scenario-loader.js';
 import { ScenarioRegistry } from './scenarios/scenario-registry.js';
@@ -1033,8 +1033,10 @@ export const Scenarios = {
   INTL_RETIREMENT_DEFAULTS,
   INTL_RETIREMENT_PARAM_SCHEMA,
   INTL_RETIREMENT_PARAM_ALIASES,
+  resolveBalanceCenters,
   IntlRetirementScenario,
   applyRealPropertySaleYearParams,
+  BALANCE_TARGET,
   ACCOUNT_PARAM_TEMPLATES,
   PERSON_PARAM_TEMPLATE,
   REAL_PROPERTY_PARAM_TEMPLATE,

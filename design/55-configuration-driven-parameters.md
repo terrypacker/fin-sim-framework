@@ -588,21 +588,57 @@ intl-transfers; every other cash flow bypassed it (§7.4).*
 - **Basis/holdings stay out of the param surface.** Per-lot cost basis and holdings
   remain in the account editor (design 25); only the scalar `contributionBasis`
   (retirement) is flattened. Flattening holdings to params is explicitly out of scope.
-- **Holdings-bearing `balance` is derived, not a param (fixed; MC limitation → GH #511).**
+- **Holdings-bearing `balance` is derived, not a param; MC sweeps it via a hidden
+  `balanceTarget` (resolved).**
   A `balance` param on any account that has holdings is destructive: the balance is
   derived from Σ holdings, the account editor disables the field, and editor saves
   update the record but not the persisted param — so on the next Rebuild the stale param
   cascaded/rescaled the holdings back to it, silently reverting edits (this bit *every*
   account, since each bootstraps at least one holding at compile time). Fix: the
-  generator no longer emits `balance` for an account with holdings, and the param→record
-  cascade re-derives `balance` from Σ holdings (never rescales) whenever holdings exist.
-  Only a holdings-free account keeps a scalar `balance` param. To change a
-  holdings-bearing account's value, edit its holding(s) in the account editor. Retirement
-  `contributionBasis` remains a generated scalar param and is now param-linked in the
-  editor so edits survive Rebuild. Consequence: the (disabled-by-default) `*Balance` MC
-  levers (`stockBalance`, `rothBalance`, `iraBalance`, …) can no longer sweep an
-  account's total balance — parked as known orphans in `param-sweep-schema.test.mjs` and
-  tracked in GH #511 alongside the interest-rate-sweep concern.
+  generator no longer emits a plain `balance` param for an account with holdings, and the
+  param→record cascade re-derives `balance` from Σ holdings (never rescales) whenever a
+  `balance` value is present. Only a holdings-free account keeps a scalar `balance` param.
+  To change a holdings-bearing account's value interactively, edit its holding(s) in the
+  account editor. Retirement `contributionBasis` remains a generated scalar param, now
+  param-linked in the editor so edits survive Rebuild.
+
+  To still let **Monte-Carlo / optimization** sweep a holdings-bearing account's total,
+  the generator swaps the skipped `balance` field for a hidden, compile-only
+  `acct.<stateKey>.balanceTarget` param (`hidden: true`, `mc: true`,
+  `defaultValue = record.balance`). It is the non-destructive mechanism §13 anticipated:
+  - **Never persisted.** `_mergeParamSchema` excludes hidden generated params from
+    `cfg.params`, so `balanceTarget` never round-trips as a stale value and cannot revert
+    holding edits on Rebuild. It exists only while the MC/Opt runner transiently injects a
+    sampled value into `cfg.parameters`.
+  - **Rescales, doesn't overwrite.** When the cascade sees a `balanceTarget` value it calls
+    `rescaleHoldingsToBalance` (holdings present) so Σ marketValue == the sampled dollar
+    total while the sleeve mix and gain ratio are preserved; on a fresh pre-compile pass
+    (holdings not yet bootstrapped) it sets the scalar balance the compiler seeds holdings
+    from. Either way `balance` is re-derived (the §4.4 invariant holds).
+  - **Wiring.** The curated `*Balance` MC levers keep their flat legacy keys
+    (`stockBalance`, `rothBalance`, …) — a dotted key would be misread as a nested path by
+    `mc-param-paths` `set()` — and `INTL_RETIREMENT_PARAM_ALIASES` resolves each to the
+    generated `acct.<stateKey>.balanceTarget`. The sampled value is still an absolute
+    balance in the account's native currency, so existing dollar distributions are
+    unchanged. A pre-design-55 save carrying a legacy balance key now rescales its
+    (consistent) holdings to the stored value — a no-op — instead of being ignored.
+
+  - **Lever centers track the live config.** Because a balance isn't a flat param, the MC
+    panel can't read it from the params map. `resolveBalanceCenters(cfg)` inverts the
+    balance aliases and reads each account's balance off `cfg.accounts`, and that map is
+    merged into the MC params snapshot (runner `base` and the presenter's baseParams). Two
+    consequences: the panel inputs (and *Copy from Scenario*) preset to the real balances
+    and rates instead of hardcoded template defaults (`buildVariables` now prefers the
+    resolved value over `cfg.mean`/`cfg.value`); and a **disabled** balance lever no longer
+    falls back to a hardcoded default that the runner would write and rescale the holdings
+    to — it centers on the account's own balance, so a customized starting balance survives
+    an MC run untouched.
+
+  Covered by `scenario-param-generator.test.mjs` GEN-13, `param-sweep-schema.test.mjs`
+  SWEEP-11 (whose eligibility index is now built from the *compiled* config so it reflects
+  the real per-account holdings; `KNOWN_ORPHANS` is empty), and `intl-retirement-mc-config`
+  / `intl-retirement-mc-runner` tests (preset + no-clobber). Basis and per-lot holdings
+  themselves remain out of the param surface (design 25).
 - **`minimumBalance` is now per-account (resolved, post-6b).** ~~The replenish threshold that
   drives `REPLENISH_SAVINGS` is not yet templated.~~ `minimumBalance` is folded into the
   SAVINGS/CHECKING template as a plain-`Number`, `mc:false`/`opt:true` generated field

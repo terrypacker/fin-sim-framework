@@ -27,36 +27,38 @@ import { isParamVisible, indexParamSchema, resolveSweepVariables }
 import { IntlRetirementScenario, INTL_RETIREMENT_PARAM_ALIASES }
   from '../../src/scenarios/intl-retirement-scenario.js';
 import { ScenarioParamGenerator } from '../../src/scenarios/params/scenario-param-generator.js';
+import { ScenarioLoader }     from '../../src/scenarios/scenario-loader.js';
+import { ScenarioSerializer } from '../../src/scenarios/scenario-serializer.js';
+import { ServiceRegistry }    from '../../src/services/service-registry.js';
 import { DEFAULT_MC_VARIABLE_CONFIGS } from '../../src/finance/monte-carlo/intl-retirement-mc-config.js';
 import { DEFAULT_OPTIMIZATION_CONFIGS, buildOptVariables }
   from '../../src/finance/optimization/intl-retirement-opt-config.js';
 
-// Every curated MC/Opt variable now keys on a real toolset param — the old
-// scenario-default aliases (usStockGrowthRate / stockDividendRate / usInflationRate)
-// were renamed to their toolset keys once the per-account growth refactor made
-// brokerageGrowthRate a live lever. Synthesized per-shock rows aren't in DEFAULT_*.
-const KNOWN_ORPHANS = new Set([
-  // stockBalance → acct.usStockAccount.balance. A holdings-bearing account's balance is
-  // derived from Σ holdings and is intentionally NOT generated as a param (design 55
-  // §13: holdings/basis stay out of the param surface), so sweeping an account's total
-  // balance is not currently supported. This index is built from the RAW default config
-  // where only usStockAccount carries holdings; in the compiled app EVERY account
-  // bootstraps a holding, so the other *Balance MC levers (rothBalance, iraBalance, …)
-  // are effectively orphaned too. They are all disabled by default (enabled: false) and
-  // tracked as a known limitation in GH #511 alongside the interest-rate-sweep concern.
-  'stockBalance',
-]);
+// Every curated MC/Opt variable now keys on a real toolset or generated per-record param.
+// The *Balance MC levers alias to the hidden, compile-only `acct.<stateKey>.balanceTarget`
+// (design 55 §13), which the generator emits for every holdings-bearing account — so once
+// the eligibility index is built from the COMPILED config (below), there are no orphans.
+const KNOWN_ORPHANS = new Set([]);
 
-// Design 55: per-record params (rothBalance, usHouseSaleYear, primaryMonthlyWage…)
-// are generated from records rather than living in the static schema. Build the
-// eligibility index the way the loader presents it — static schema + generated
-// params — and resolve legacy alias keys to their generated equivalents.
+// Design 55: per-record params (rothBalance→balanceTarget, usHouseSaleYear, primaryMonthlyWage…)
+// are generated from records rather than living in the static schema, and the generator keys
+// the swap off whether an account carries holdings. That is only true post-COMPILE (every
+// account bootstraps a holding), so build the eligibility index from a compiled config —
+// static schema + generated params — exactly as the loader presents it, then resolve legacy
+// alias keys to their generated equivalents.
 function buildEligibilityIndex() {
-  const defaultCfg = IntlRetirementScenario.buildDefaultConfig(
-    {}, new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)));
+  const simStart = new Date(Date.UTC(2026, 0, 1));
+  const simEnd   = new Date(Date.UTC(2041, 0, 1));
+  const registry = new ServiceRegistry();
+  const scenario = new IntlRetirementScenario({
+    context: registry.simulationContext, params: {}, simStart, simEnd });
+  scenario.buildSim();
+  const cfg = ScenarioSerializer.serializeScenario(
+    IntlRetirementScenario.buildDefaultConfig({}, simStart, simEnd));
+  new ScenarioLoader().load(cfg, registry);   // compiles: bootstraps holdings on every account
   return indexParamSchema([
     ...IntlRetirementScenario.buildFullParamSchema(),
-    ...ScenarioParamGenerator.generate(defaultCfg),
+    ...ScenarioParamGenerator.generate(cfg),
   ]);
 }
 const resolveAlias = k => INTL_RETIREMENT_PARAM_ALIASES[k] ?? k;
