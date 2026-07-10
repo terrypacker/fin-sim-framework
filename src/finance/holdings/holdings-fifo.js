@@ -35,14 +35,26 @@ import { isCollectibleAllocation } from './allocation.js';
  * collectibles-CGT path while the rest keeps ordinary brokerage CGT. Both are 0 when
  * no consumed lot is collectible, so non-gold callers are unaffected.
  *
+ * CGT cost-base indexation (design 57 §6.3): when `indexation = { level, asOfMs,
+ * country }` is supplied, the realized cost base for that country is ALSO tallied
+ * with each lot's basis scaled by a per-lot CPI index factor
+ * `max(1, level / lot.acquisitionPriceLevel)`, but only for lots held at least 12
+ * months (`asOfMs − purchaseDate`). Lots with no `acquisitionPriceLevel` (or held
+ * <12 months) index at factor 1, so `realizedIndexedBasisByCountry[country]` then
+ * equals the un-indexed `realizedBasisByCountry[country]`. The result is `{}` when
+ * no indexation context is passed, so non-AU / pre-2027 callers are unaffected.
+ *
  * @param {Array}  holdings - account.holdings (not mutated)
  * @param {number} amount   - market-value dollars to consume; must be > 0
- * @returns {{ realizedBasis: number, realizedBasisByCountry: Object<string,number>, collectibleProceeds: number, collectibleBasis: number, newHoldings: Array, consumed: number }}
+ * @param {{ level: number, asOfMs: number, country: string }|null} [indexation=null]
+ * @returns {{ realizedBasis: number, realizedBasisByCountry: Object<string,number>, realizedIndexedBasisByCountry: Object<string,number>, collectibleProceeds: number, collectibleBasis: number, newHoldings: Array, consumed: number }}
  *   `consumed` may be less than `amount` if the holdings total less.
  */
-export function consumeHoldingsFifo(holdings, amount) {
+const TWELVE_MONTHS_MS = 365 * 24 * 60 * 60 * 1000;
+
+export function consumeHoldingsFifo(holdings, amount, indexation = null) {
   if (!Array.isArray(holdings) || holdings.length === 0 || amount <= 0) {
-    return { realizedBasis: 0, realizedBasisByCountry: {}, collectibleProceeds: 0, collectibleBasis: 0, newHoldings: holdings ?? [], consumed: 0 };
+    return { realizedBasis: 0, realizedBasisByCountry: {}, realizedIndexedBasisByCountry: {}, collectibleProceeds: 0, collectibleBasis: 0, newHoldings: holdings ?? [], consumed: 0 };
   }
   // Union of step-up countries present across the lots, so the per-country tally
   // covers every country even when only some lots were stepped up.
@@ -58,6 +70,11 @@ export function consumeHoldingsFifo(holdings, amount) {
   let collectibleBasis    = 0;
   const realizedBasisByCountry = {};
   for (const c of countries) realizedBasisByCountry[c] = 0;
+  // Indexed cost base for the reform country (design 57): tallied only when an
+  // indexation context is supplied. Seed the country key so it is present even if
+  // no lot carries a per-country override.
+  const idxCountry = indexation?.country ?? null;
+  const realizedIndexedBasisByCountry = idxCountry ? { [idxCountry]: 0 } : {};
   const newHoldings = [];
 
   for (const h of sorted) {
@@ -78,6 +95,16 @@ export function consumeHoldingsFifo(holdings, amount) {
     for (const c of countries) {
       const cb = h.costBaseByCountry?.[c] ?? (h.costBasis ?? 0);
       realizedBasisByCountry[c] += cb * fraction;
+    }
+    if (idxCountry) {
+      const cb        = h.costBaseByCountry?.[idxCountry] ?? (h.costBasis ?? 0);
+      const lotLevel  = h.acquisitionPriceLevel;
+      const held12mo  = (indexation.asOfMs - _purchaseTs(h)) >= TWELVE_MONTHS_MS;
+      // CPI index factor ≥ 1 (indexation only ratchets the basis up; never a loss).
+      const factor    = (held12mo && lotLevel != null && lotLevel > 0 && indexation.level > 0)
+        ? Math.max(1, indexation.level / lotLevel)
+        : 1;
+      realizedIndexedBasisByCountry[idxCountry] += cb * fraction * factor;
     }
     consumed      += take;
     remaining     -= take;
@@ -100,9 +127,11 @@ export function consumeHoldingsFifo(holdings, amount) {
     // If fully consumed (remainingMv ≈ 0), the holding is dropped.
   }
   for (const c of countries) realizedBasisByCountry[c] = +realizedBasisByCountry[c].toFixed(2);
+  if (idxCountry) realizedIndexedBasisByCountry[idxCountry] = +realizedIndexedBasisByCountry[idxCountry].toFixed(2);
   return {
     realizedBasis: +realizedBasis.toFixed(2),
     realizedBasisByCountry,
+    realizedIndexedBasisByCountry,
     collectibleProceeds: +collectibleProceeds.toFixed(2),
     collectibleBasis:    +collectibleBasis.toFixed(2),
     newHoldings,

@@ -31,6 +31,7 @@ import { AuTaxRates2026 } from '../../src/finance/tax/au/au-tax-rates-2026.js';
 import { AuTaxRates2027 } from '../../src/finance/tax/au/au-tax-rates-2027.js';
 import { UsTaxModule2026 } from '../../src/finance/tax/us/us-tax-module-2026.js';
 import { AuTaxModule2026 } from '../../src/finance/tax/au/au-tax-module-2026.js';
+import { AuTaxModule2027 } from '../../src/finance/tax/au/au-tax-module-2027.js';
 import { TaxSettleService } from '../../src/finance/tax-settle-service.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -603,4 +604,36 @@ test('AU-2027: TaxSettleService selects FY2027-28 module for a July-2027 period'
   assert.strictEqual(result.taxYear, 2027);
   // [18200,30000] @ 14% = 1652 + Medicare phase-in 400 = 2052
   assert.strictEqual(result.netLiability, 2052);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AU-2027 indexation — AuTaxModule2027 routes the indexed gain into
+//   auRealCapitalGainsYTD, which AuTaxRates2027 taxes (design 57 Phase 3)
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('AU-2027 classify: resident stock sale records indexed gain into the real bucket', () => {
+  const fn = getFn(new AuTaxModule2027(), 'AU_STOCK_WITHDRAWAL_TAX');
+  const s0 = { usCapitalGainsYTD: 0, auCapitalGainsYTD: 0, auRealCapitalGainsYTD: 0, ftcYTD: 0 };
+  const s1 = fn(s0, { gain: 100_000, auGain: 100_000, auIndexedGain: 70_000, residency: 'AU' });
+  assert.strictEqual(s1.auCapitalGainsYTD, 100_000, 'gross gain still tracked');
+  assert.strictEqual(s1.auRealCapitalGainsYTD, 70_000, 'indexed gain routed to real bucket');
+});
+
+test('AU-2027 classify: non-resident stock sale writes no real bucket', () => {
+  const fn = getFn(new AuTaxModule2027(), 'AU_STOCK_WITHDRAWAL_TAX');
+  const s0 = { usCapitalGainsYTD: 0, auCapitalGainsYTD: 0, auRealCapitalGainsYTD: 0, auNonResidentWithholdingYTD: 0, ftcYTD: 0 };
+  const s1 = fn(s0, { gain: 100_000, auGain: 100_000, auIndexedGain: 70_000, residency: 'US' });
+  assert.strictEqual(s1.auRealCapitalGainsYTD, 0, 'non-resident: no real-gain bucket');
+});
+
+test('AU-2027 rates: indexation reduces the assessed gain and the tax', () => {
+  // Real (indexed) gain 70k vs gross 100k. baseTax(70000) = 3752 + 25000*0.30 = 11252;
+  //   30% floor on 70k = 21000 → top-up 9748; Medicare 70000*0.02 = 1400 → 22400.
+  const result = auRates2027.computeTax(auState({ auCapitalGainsYTD: 100_000, auRealCapitalGainsYTD: 70_000 }));
+  assert.strictEqual(result.discountedCapitalGains, 70_000, 'taxable gain is the indexed gain');
+  assert.strictEqual(result.cgtDiscount, 30_000, 'indexation relief = gross − indexed');
+  assert.strictEqual(result.cgtMinimumTaxTopUp, 9748);
+  assert.strictEqual(result.netLiability, 22400);
+  const unindexed = auRates2027.computeTax(auState({ auCapitalGainsYTD: 100_000 })).netLiability;
+  assert.ok(result.netLiability < unindexed, `indexed (${result.netLiability}) < un-indexed (${unindexed})`);
 });

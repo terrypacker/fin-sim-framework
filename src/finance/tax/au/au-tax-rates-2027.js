@@ -65,14 +65,19 @@ export class AuTaxRates2027 extends AuTaxRatesBase {
   }
 
   /**
-   * CGT reform relief: no discount, full gain assessable, 30% minimum-tax floor.
-   * (Cost-base indexation, design 57 Phase 3, will later reduce the assessable
-   * gain before this runs.)
+   * CGT reform relief: no 50% discount; the assessable gain is the *real
+   * (post-indexation) gain* — `state.auRealCapitalGainsYTD`, populated by
+   * AuTaxModule2027 from the per-lot indexed gain (design 57 §6.3/§6.5). When that
+   * bucket is absent (e.g. a synthetic state or a gain that never ran through the
+   * FY2027 classifier), it falls back to the gross gain, so indexation is a no-op
+   * rather than a crash. The reliefAmount shown is the indexation reduction
+   * (gross − real). A 30% minimum-tax floor applies to the real gain.
    */
-  _cgtRelief(_state, auCapitalGainsYTD) {
+  _cgtRelief(state, auCapitalGainsYTD) {
+    const realGain = state?.auRealCapitalGainsYTD ?? auCapitalGainsYTD;
     return {
-      netTaxableGain: auCapitalGainsYTD,
-      reliefAmount:   0,
+      netTaxableGain: realGain,
+      reliefAmount:   auCapitalGainsYTD - realGain,
       minTaxRate:     AuTaxRates2027.MIN_CGT_RATE,
     };
   }

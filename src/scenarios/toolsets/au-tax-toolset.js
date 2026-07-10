@@ -60,12 +60,14 @@ export const AU_TAX = {
       ...capture.statePatches,
       auOrdinaryIncomeYTD:              0,
       auCapitalGainsYTD:                0,
+      auRealCapitalGainsYTD:            0,   // FY2027 reform: post-indexation gain (design 57)
       auNonResidentWithholdingYTD:      0,
       auSuperTaxYTD:                    0,
       auFrankingCreditYTD:              0,
       ftcYTD:                           0,
       auPersonOrdinaryIncomeYTD:        {},
       auPersonCapitalGainsYTD:          {},
+      auPersonRealCapitalGainsYTD:      {},
       auPersonNonResidentWithholdingYTD:{},
       auPersonSuperTaxYTD:              {},
       auPersonFrankingCreditYTD:        {},
@@ -75,6 +77,7 @@ export const AU_TAX = {
     context.people.forEach(p => {
       state.auPersonOrdinaryIncomeYTD[p.id] = 0;
       state.auPersonCapitalGainsYTD[p.id] = 0;
+      state.auPersonRealCapitalGainsYTD[p.id] = 0;
       state.auPersonNonResidentWithholdingYTD[p.id] = 0;
       state.auPersonSuperTaxYTD[p.id] = 0;
       state.auPersonFrankingCreditYTD[p.id] = 0;

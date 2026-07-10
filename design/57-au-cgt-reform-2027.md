@@ -1,13 +1,21 @@
 # 57 — AU CGT reform: indexation + 30% minimum tax (from 1 July 2027)
 
-**Status**: **IN PROGRESS** — Phases 1–2 implemented and green (3261 unit + 864 viz;
-reference scenario runs clean to 2070). Phases 3–5 pending. Scope, fidelity, and the §11
+**Status**: **IN PROGRESS** — Phases 1–3 implemented and green (3269 unit + 864 viz;
+reference scenario runs clean to 2070). Phases 4–5 pending. Scope, fidelity, and the §11
 questions are resolved (see **Decisions locked** below).
 
 - **Phase 1 (done)** — `_cgtRelief` hook on `AuTaxRatesBase` + `AuTaxRates2026` (band 16%→15%).
 - **Phase 2 (done)** — `AuTaxRates2027`: 50% discount removed + 30% minimum tax (un-indexed
   gains) + band 15%→14%. Min-tax is an **incremental** floor on the gain's own marginal tax
   (see §6.1/§6.3 — refined from the initial whole-liability `max()` sketch).
+- **Phase 3 (done)** — per-lot cost-base indexation: `Holding.acquisitionPriceLevel`,
+  indexed AU basis in `consumeHoldingsFifo`, `auIndexedGain` on the AU stock sale action,
+  `AuTaxModule2027` → `auRealCapitalGainsYTD` (+ per-person map, YTD reset, per-person
+  slicing, schema), and `AuTaxRates2027._cgtRelief` taxing the indexed gain. **Additive /
+  behavior-neutral until Phase 4**: no lot carries an acquisition level yet, so
+  `auIndexedGain === auGain` and the reference scenario is unchanged. Property (house)
+  indexation is intentionally deferred (§6.4) — house gains route into the real bucket
+  un-indexed, so the discount-removal + 30% floor still apply.
 
 ### Decisions locked (review, 2026-07-10)
 
@@ -340,10 +348,13 @@ Register `auRealCapitalGainsYTD` in `StateSchemaRegistry` (currency AUD) so it c
 - **Phase 1 ✅ done** — §6.1 hook refactor + `AuTaxRates2026` (band 16%→15%). Regression-safe.
 - **Phase 2 ✅ done** — `AuTaxRates2027`: 50% discount removed + incremental 30% minimum-tax
   floor on the un-indexed gain + band 15%→14%. Tested (`AU-2027` suite).
-- **Phase 3** — indexation: `acquisitionPriceLevel` stamping + Option-A per-lot indexed gain
-  + `auRealCapitalGainsYTD` + `AuTaxModule2027`.
-- **Phase 4** — 1 July 2027 deemed cost base reset (Method 1) + the Age Pension / JobSeeker
-  exemption flag (§6.6, in scope).
+- **Phase 3 ✅ done** — indexation: `Holding.acquisitionPriceLevel` + Option-A per-lot indexed
+  gain (`consumeHoldingsFifo` + AU stock sale reducer) + `auRealCapitalGainsYTD` +
+  `AuTaxModule2027` + `AuTaxRates2027._cgtRelief` taxing the indexed gain. Property indexation
+  deferred to §6.4. Behavior-neutral until Phase 4 stamps acquisition levels.
+- **Phase 4** — 1 July 2027 deemed cost base reset (Method 1: restamps `costBaseByCountry.AU`
+  + `acquisitionPriceLevel`) + the Age Pension / JobSeeker exemption flag (§6.6, in scope).
+  This is what makes indexation actually reduce gains.
 - **Phase 5 (deferred)** — apportionment Method 2 election, new-build election, dedicated
   ATO CPI series.
 
