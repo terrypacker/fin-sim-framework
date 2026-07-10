@@ -810,7 +810,8 @@
         </div>
         <div class="node-field">
           <label>Mtg. Int. Rate</label>
-          <input type="number" data-id="mortgageInterestRate" value="0" step="0.001" title="Annual mortgage interest rate (deductible)"/>
+          <input type="number" data-id="mortgageInterestRate" value="0" step="0.001" title="Annual mortgage interest rate the bank quotes (deductible). When Prime is configured it is stored as a spread over Prime (design 56), so a Prime move re-rates the loan."/>
+          <div class="field-hint" data-id="mortgageRateHint" style="font-size:0.8em;opacity:0.7"></div>
         </div>
         <div class="node-field">
           <label>Land Value %</label>

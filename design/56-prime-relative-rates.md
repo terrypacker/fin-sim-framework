@@ -445,12 +445,30 @@ the contribution/earnings split instead of hand-editing it — belongs to design
    injecting a shock's recovery-tick events perturbs event ordering by a few cents
    regardless of the rate; the effective **rate** is the clean, unconfounded signal.)*
 
-### Phase 3 — Loans track Prime
-1. `LoanAccount.primeSpread` + serializer; `LoanPaymentHandler` resolves
-   `Prime(country, t) + primeSpread` (fallback to absolute `interestRate`).
-2. Loan editor absolute-input/spread-store.
-3. **Exit test**: a variable-rate mortgage's monthly interest rises with Prime; a
-   fixed (spread-less) loan is unchanged.
+### Phase 3 — Loans track Prime — DONE.
+*The prebuilt loan is **synthesized from a property mortgage** (`synthesizeLoanForProperty`),
+not a standalone `LoanAccount`, so Prime-linking threads through the property's mortgage.
+The default prebuilt has **no** mortgaged property (both houses are unmortgaged), so there is
+no prebuilt loan to auto-link (Decision 8's "+ loan" is moot for the shipped default); a user
+Prime-links a mortgage by entering its rate in the property editor.*
+1. **Done.** `RealProperty.mortgagePrimeSpread` + serializer; `synthesizeLoanForProperty`
+   threads it onto the loan as `primeSpread`. New `resolveLoanRate(state, loan)` resolves
+   `Prime(country,t) + primeSpread` from `state.effectiveInterestRates[PRIME_{country}]`
+   (`PRIME_KEY_BY_COUNTRY`), fallback to the absolute `interestRate`. Used by BOTH the
+   `LoanPaymentHandler` interest accrual **and** the rental deductible-interest line
+   (`computeRentalMonth`) so the two never diverge for a variable rental mortgage.
+   Time-varying comes free from Phase 2b (PRIME_* stays current in the effective map; the
+   loan reads it directly each month). A standalone `LoanAccount` inherits `primeSpread` from
+   `Account` and round-trips via the account serializer; `seedPerAccountRates` step 2 now
+   skips liabilities so a loan never seeds a bogus `SAVINGS_*::<loanKey>`.
+2. **Done.** Property editor (`real-property-editor.js`) mortgage-rate field is
+   absolute-input / spread-store with a `= Prime (x%) + spread` hint (mirrors the Phase 1
+   account editor); `primeRates` threaded from `workbench-app.js`. Viz test
+   `tests/viz/editors/mortgage-prime-rate-field.test.mjs`.
+3. **Done.** Exit test `tests/unit/evt-prime-loans.test.mjs` (PRIME-LOAN-1..3 e2e on a
+   mortgaged prebuilt property + PRIME-LOAN-U1..2 isolated `resolveLoanRate`): a mid-run
+   PRIME_US hike raises a linked mortgage's effective rate and ending balance (slower paydown);
+   a spread-less mortgage is byte-for-byte unchanged.
 
 ### Phase 4 — Gold holding
 1. `GOLD` allocation + rate key + `goldGrowthRate`; holdings editor entry.

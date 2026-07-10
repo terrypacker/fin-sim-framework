@@ -157,3 +157,13 @@ export const SAVINGS_KEY_BY_COUNTRY = Object.freeze({
   US: RATE_KEYS.SAVINGS_US,
   AU: RATE_KEYS.SAVINGS_AU,
 });
+
+/**
+ * Country → its central-bank Prime key. Loans read Prime directly from
+ * `state.effectiveInterestRates[PRIME_{country}]` (they are outside the earnings
+ * substrate — design 56 §5 / Phase 3), deriving `Prime(country,t) + loan.primeSpread`.
+ */
+export const PRIME_KEY_BY_COUNTRY = Object.freeze({
+  US: RATE_KEYS.PRIME_US,
+  AU: RATE_KEYS.PRIME_AU,
+});

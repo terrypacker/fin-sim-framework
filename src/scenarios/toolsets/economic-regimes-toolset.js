@@ -156,8 +156,12 @@ function seedPerAccountRates(accounts, baseGrowthRates, baseInterestRates) {
     //    a `CASH` holding resolves to `SAVINGS_{country}` and reads the per-account key,
     //    so seed `SAVINGS_{country}::<stateKey> = Prime + primeSpread`. Cash accounts
     //    already covered this in step 1 (their member key IS the cash key).
+    // A loan's `primeSpread` is a *loan* rate resolved by LoanPaymentHandler
+    // (design 56 Phase 3), NOT a cash-sleeve earnings rate — skip it here so it never
+    // seeds a bogus `SAVINGS_*::<loanKey>`. Offsets carry no primeSpread (Decision 7).
     const isCashAccount = CASH_PRIME_KEY_BY_RATE_KEY[memberKey] != null;
-    if (acct.primeSpread != null && !isCashAccount) {
+    const isLiability   = acct.type === 'loan' || acct.type === 'offset';
+    if (acct.primeSpread != null && !isCashAccount && !isLiability) {
       const savKey   = SAVINGS_KEY_BY_COUNTRY[acct.country];
       const primeKey = savKey ? CASH_PRIME_KEY_BY_RATE_KEY[savKey] : null;
       const prime    = primeKey != null ? baseInterestRates[primeKey] : undefined;

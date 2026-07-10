@@ -83,6 +83,10 @@ export class RealProperty extends Asset {
     this.occupancyRate              = opts.occupancyRate              ?? 0.95;
     this.rentalExpenseRatio         = opts.rentalExpenseRatio         ?? 0.25;
     this.mortgageInterestRate       = opts.mortgageInterestRate       ?? 0;
+    // Prime-relative mortgage rate (design 56 Phase 3). When set, the synthesized loan
+    // (synthesizeLoanForProperty) carries this as its `primeSpread` and pays
+    // `Prime(country,t) + spread`; null → the fixed absolute `mortgageInterestRate`.
+    this.mortgagePrimeSpread        = opts.mortgagePrimeSpread        ?? null;
     this.landValueRatio             = opts.landValueRatio             ?? 0.2;
     this.annualDepreciationOverride = opts.annualDepreciationOverride ?? null;
     this.accumulatedDepreciation    = opts.accumulatedDepreciation    ?? 0;
