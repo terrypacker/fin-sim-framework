@@ -112,6 +112,8 @@ export const COVERED = [
   'DynamicTaxReducer', 'UsPeriodAdvanceReducer', 'AuPeriodAdvanceReducer',
   'UsTaxSettleApplyReducer', 'AuTaxSettleApplyReducer', 'UsTaxPaymentDebitReducer',
   'AuTaxPaymentDebitReducer',
+  // AU CGT reform 1 Jul 2027 deemed cost base reset (design 57 §6.4) — evt-au-cgt-reform.test.mjs
+  'AuCgtBasisResetReducer',
 
   // A — framework primitives (reducer-postconditions-framework-primitives.test.mjs)
   'BalanceSnapshotReducer', 'ScriptedReducer', 'RepeatingReducer',

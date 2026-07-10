@@ -126,6 +126,9 @@ export class TaxSettleService {
         auNonResidentWithholdingYTD: perPersonShare(state.auPersonNonResidentWithholdingYTD,  state.auNonResidentWithholdingYTD),
         auSuperTaxYTD:               perPersonShare(state.auPersonSuperTaxYTD,                state.auSuperTaxYTD),
         auFrankingCreditYTD:         perPersonShare(state.auPersonFrankingCreditYTD,          state.auFrankingCreditYTD),
+        // AU CGT reform (design 57 §6.6): this person's Age Pension / JobSeeker
+        // exemption from the 30% CGT minimum tax; read by AuTaxRates2027._cgtRelief.
+        auMinTaxExempt:              person.incomeSupportRecipient === true,
       };
 
       const taxDetail = auModule.computeTax(personState);

@@ -1,8 +1,8 @@
 # 57 — AU CGT reform: indexation + 30% minimum tax (from 1 July 2027)
 
-**Status**: **IN PROGRESS** — Phases 1–3 implemented and green (3269 unit + 864 viz;
-reference scenario runs clean to 2070). Phases 4–5 pending. Scope, fidelity, and the §11
-questions are resolved (see **Decisions locked** below).
+**Status**: **IN PROGRESS** — Phases 1–4 implemented and green (3272 unit + 864 viz;
+reference scenario runs clean to 2070). Phase 5 (deferred refinements) is optional. Scope,
+fidelity, and the §11 questions are resolved (see **Decisions locked** below).
 
 - **Phase 1 (done)** — `_cgtRelief` hook on `AuTaxRatesBase` + `AuTaxRates2026` (band 16%→15%).
 - **Phase 2 (done)** — `AuTaxRates2027`: 50% discount removed + 30% minimum tax (un-indexed
@@ -16,6 +16,16 @@ questions are resolved (see **Decisions locked** below).
   `auIndexedGain === auGain` and the reference scenario is unchanged. Property (house)
   indexation is intentionally deferred (§6.4) — house gains route into the real bucket
   un-indexed, so the discount-removal + 30% floor still apply.
+- **Phase 4 (done)** — activates the reform: the **1 July 2027 deemed cost base reset**
+  (`AuCgtBasisResetReducer` + `AuCgtBasisResetHandler`, scheduled by the `AU_TAX` toolset
+  only when the sim spans the date) restamps each AU_STOCK lot's `costBaseByCountry.AU` to
+  market value and `acquisitionPriceLevel` to the July-2027 level (keeping `purchaseDate` for
+  the 12-month test); and the **Age Pension / JobSeeker exemption** (`Person.incomeSupportRecipient`
+  → projected into `state.people` → `computeAuTaxPerPerson` stamps `auMinTaxExempt` →
+  `AuTaxRates2027._cgtRelief` zeroes `minTaxRate`). New classes are registered in the
+  serializer's framework-class list and the reducer coverage manifest. **Reference scenario
+  net worth moves $10,978,107 → $10,914,370** — the reform now bites on post-2027 AU-resident
+  gains (exemption of pre-2027 gains, offset by discount removal + 30% floor).
 
 ### Decisions locked (review, 2026-07-10)
 
@@ -352,9 +362,10 @@ Register `auRealCapitalGainsYTD` in `StateSchemaRegistry` (currency AUD) so it c
   gain (`consumeHoldingsFifo` + AU stock sale reducer) + `auRealCapitalGainsYTD` +
   `AuTaxModule2027` + `AuTaxRates2027._cgtRelief` taxing the indexed gain. Property indexation
   deferred to §6.4. Behavior-neutral until Phase 4 stamps acquisition levels.
-- **Phase 4** — 1 July 2027 deemed cost base reset (Method 1: restamps `costBaseByCountry.AU`
-  + `acquisitionPriceLevel`) + the Age Pension / JobSeeker exemption flag (§6.6, in scope).
-  This is what makes indexation actually reduce gains.
+- **Phase 4 ✅ done** — 1 July 2027 deemed cost base reset (Method 1: restamps
+  `costBaseByCountry.AU` + `acquisitionPriceLevel`, scheduled only when the sim spans the
+  date) + the Age Pension / JobSeeker exemption flag (§6.6). This activates indexation and
+  moves the reference scenario's ending net worth (−$63.7k).
 - **Phase 5 (deferred)** — apportionment Method 2 election, new-build election, dedicated
   ATO CPI series.
 

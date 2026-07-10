@@ -75,10 +75,14 @@ export class AuTaxRates2027 extends AuTaxRatesBase {
    */
   _cgtRelief(state, auCapitalGainsYTD) {
     const realGain = state?.auRealCapitalGainsYTD ?? auCapitalGainsYTD;
+    // Age Pension / JobSeeker recipients are exempt from the 30% minimum tax
+    // (design 57 §6.6) — they still pay marginal-rate CGT on the real gain, just
+    // no floor. auMinTaxExempt is stamped per-person by computeAuTaxPerPerson.
+    const minTaxRate = state?.auMinTaxExempt ? 0 : AuTaxRates2027.MIN_CGT_RATE;
     return {
       netTaxableGain: realGain,
       reliefAmount:   auCapitalGainsYTD - realGain,
-      minTaxRate:     AuTaxRates2027.MIN_CGT_RATE,
+      minTaxRate,
     };
   }
 

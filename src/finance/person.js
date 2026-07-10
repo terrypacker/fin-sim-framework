@@ -48,5 +48,8 @@ export class Person extends SimGraphNode {
     // each defaults to the residency/citizenship currency.
     this.wageCurrency          = opts.wageCurrency          ?? defaultCurrencyForCountry(this.residency);
     this.ssCurrency            = opts.ssCurrency            ?? defaultCurrencyForCountry(this.residency);
+    // AU CGT reform (design 57 §6.6): recipients of means-tested income support
+    // (Age Pension / JobSeeker) are exempt from the 30% CGT minimum tax.
+    this.incomeSupportRecipient = opts.incomeSupportRecipient ?? false;
   }
 }

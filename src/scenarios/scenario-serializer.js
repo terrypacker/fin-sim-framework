@@ -99,6 +99,7 @@ import { AssetAppreciationHandler, AssetAppreciateReducer } from '../finance/han
 // ─── Tax infrastructure ─────────────────────────────────────────────────────
 import { UsPeriodAdvanceHandler, AuPeriodAdvanceHandler, UsPeriodAdvanceReducer, AuPeriodAdvanceReducer } from '../finance/tax/period-advance-classes.js';
 import { UsTaxSettleHandler, AuTaxSettleHandler, UsTaxSettleApplyReducer, AuTaxSettleApplyReducer, UsTaxPaymentDebitReducer, AuTaxPaymentDebitReducer } from '../finance/tax/tax-settle-classes.js';
+import { AuCgtBasisResetHandler, AuCgtBasisResetReducer } from '../finance/account-rules/au/au-cgt-reset-classes.js';
 import { DynamicTaxReducer }  from '../finance/tax/dynamic-tax-reducer.js';
 import { StateTaxSettleHandler, StateTaxSettleApplyReducer, StateTaxPaymentDebitReducer } from '../finance/tax/state/state-tax-settle-classes.js';
 import { StateIncomeClassificationReducer } from '../finance/tax/state/state-income-classification.js';
@@ -227,6 +228,7 @@ const _ALL_CLASSES = [
   UsMortgagePaymentHandler, AuMortgagePaymentHandler,
   UsPeriodAdvanceHandler, AuPeriodAdvanceHandler,
   UsTaxSettleHandler, AuTaxSettleHandler, StateTaxSettleHandler,
+  AuCgtBasisResetHandler, AuCgtBasisResetReducer,
   RothContributionHandler, RothWithdrawalContributionsHandler,
   RothWithdrawalEarningsHandler, RothEarningsHandler,
   IraContributionHandler, IraWithdrawalContributionsHandler,
@@ -875,6 +877,7 @@ export class ScenarioSerializer {
                                ?? new Date(Date.UTC(2040, 0, 1)).toISOString(),
       wageCurrency:          person.wageCurrency ?? null,
       ssCurrency:            person.ssCurrency   ?? null,
+      incomeSupportRecipient: person.incomeSupportRecipient ?? false,
     };
   }
 
@@ -1030,6 +1033,7 @@ export class ScenarioSerializer {
       retirementDate:        d.retirementDate ? new Date(d.retirementDate) : new Date(Date.UTC(2040, 0, 1)),
       wageCurrency:          d.wageCurrency ?? undefined,
       ssCurrency:            d.ssCurrency   ?? undefined,
+      incomeSupportRecipient: d.incomeSupportRecipient ?? false,
     });
     return person;
   }
