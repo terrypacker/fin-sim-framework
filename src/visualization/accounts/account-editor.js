@@ -131,8 +131,11 @@ export class AccountEditor extends BaseComponent {
     const dp = this._node?.drawdownPriority;
     el.querySelector('[data-id="drawdownPriority"]').value = dp ?? '';
 
-    el.querySelector('[data-id="contributionBasis"]').value = this._node?.contributionBasis ?? 0;
-    el.querySelector('[data-id="earningsBasis"]').value     = this._node?.earningsBasis     ?? 0;
+    // contributionBasis: a NEW account is left blank (placeholder "= balance"), so the
+    // derived earningsBasis defaults to 0 — "all principal" (design 53 §8, the chosen
+    // default). An existing account shows its stored contributions. earningsBasis is
+    // computed read-only from balance − contributionBasis; _syncEarningsBasis owns it.
+    el.querySelector('[data-id="contributionBasis"]').value = this._node?.contributionBasis ?? '';
 
     // Owner dropdown
     this._populateOwnerSelect(el, this._people, this._node?.ownerId ?? null);
@@ -146,6 +149,12 @@ export class AccountEditor extends BaseComponent {
       this._applyTypeVisibility(el, typeSelect.value);
       curSelect.value = _defaultCurrency(typeSelect.value, el.querySelector('[data-id="country"]').value);
     });
+
+    // earningsBasis is derived (design 53 §8): recompute it live whenever either
+    // input — a free-scalar balance or the contributions — changes. (Holdings-driven
+    // balance edits cascade through _syncBalance, which also calls _syncEarningsBasis.)
+    this.listen(el.querySelector('[data-id="balance"]'),          'input', () => this._syncEarningsBasis(el));
+    this.listen(el.querySelector('[data-id="contributionBasis"]'), 'input', () => this._syncEarningsBasis(el));
 
     // Holdings — editable table (design 25 §9 + design 29 taxLossPartner)
     this._renderHoldings(el);
@@ -388,6 +397,30 @@ export class AccountEditor extends BaseComponent {
       balInput.disabled = false;
       balInput.title    = '';
     }
+    // Balance drives the derived earnings; keep it in step (design 53 §8).
+    this._syncEarningsBasis(el);
+  }
+
+  /**
+   * earningsBasis is DERIVED, read-only (design 53 §8): the deferred-tax remainder
+   * the user cannot know directly, just as `balance` is the remainder of Σ holdings.
+   * Compute `earningsBasis = max(0, balance − contributionBasis)` from the live
+   * balance (holdings-computed or free-scalar) and contributions, disable the input,
+   * and hint the formula. A blank contributions field means "= balance" → earnings 0
+   * ("all principal", the chosen default). No-op for non-retirement types (the field
+   * is hidden and omitted from the payload).
+   */
+  _syncEarningsBasis(el) {
+    if (!el) return;
+    const earnInput = el.querySelector('[data-id="earningsBasis"]');
+    if (!earnInput) return;
+    const balance    = Number(el.querySelector('[data-id="balance"]').value) || 0;
+    const contribRaw = el.querySelector('[data-id="contributionBasis"]').value;
+    const contrib    = contribRaw === '' ? balance : (Number(contribRaw) || 0);
+    const earnings   = Math.max(0, balance - contrib);
+    earnInput.value    = earnings.toFixed(2);
+    earnInput.disabled = true;
+    earnInput.title    = 'Computed = balance − contributions';
   }
 
   // ─── Form read ──────────────────────────────────────────────────────────────
@@ -417,11 +450,12 @@ export class AccountEditor extends BaseComponent {
       holdings,
     };
     // Basis ledger only exists on retirement accounts (design 53 §2); emitting it for
-    // a brokerage would re-add the field via the update path. Gate on type.
+    // a brokerage would re-add the field via the update path. Gate on type. Only
+    // `contributionBasis` is an input — `earningsBasis` is DERIVED (design 53 §8) by
+    // the controller/service from balance − contributions, so it is NOT emitted here.
     const type = data.type;
     if (RETIREMENT_TYPES.has(type)) {
       data.contributionBasis = el.querySelector('[data-id="contributionBasis"]').value;
-      data.earningsBasis     = el.querySelector('[data-id="earningsBasis"]').value;
     }
     // Transaction-account flag (design 55 §7) — cash accounts only. When param-linked
     // it is dropped below (owned by the scenario param); a brand-new account has no

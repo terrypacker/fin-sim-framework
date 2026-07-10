@@ -422,6 +422,33 @@ test('AccountService.updateAccount: applies changes and publishes UPDATE', () =>
   assert.ok(updateFired);
 });
 
+test('AccountService.updateAccount: re-derives earningsBasis on a retirement balance edit (design 53 §8)', () => {
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
+  const k = new FourOhOneKAccount(50_000, { contributionBasis: 40_000, earningsBasis: 10_000 });
+  svc.createAccount(k);
+
+  // Raise balance to 80k; contributions unchanged → earnings must derive to 40k.
+  svc.updateAccount(k.id, { balance: 80_000 });
+  assert.strictEqual(k.earningsBasis, 40_000);
+
+  // Lower contributions to 30k; balance unchanged → earnings must derive to 50k.
+  svc.updateAccount(k.id, { contributionBasis: 30_000 });
+  assert.strictEqual(k.earningsBasis, 50_000);
+});
+
+test('AccountService.updateAccount: an unrelated edit does NOT re-derive earningsBasis', () => {
+  const bus = new EventBus();
+  const graph = new Graph();
+  const svc = new AccountService(graph, new GraphQueryApi(graph), bus);
+  const k = new FourOhOneKAccount(50_000, { contributionBasis: 40_000, earningsBasis: 10_000 });
+  svc.createAccount(k);
+
+  svc.updateAccount(k.id, { name: 'Renamed' });
+  assert.strictEqual(k.earningsBasis, 10_000); // untouched — no balance/contribution change
+});
+
 test('AccountService.deleteAccount: removes from map and publishes DELETE', () => {
   const bus = new EventBus();
   const graph = new Graph();

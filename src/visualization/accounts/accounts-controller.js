@@ -11,6 +11,7 @@
 import { AccountBuilder } from '../../finance/builders/account-builder.js';
 import { USD, AUD }       from '../../finance/assets/account.js';
 import { ACCOUNT_ROLES }  from '../../finance/state/account-roles.js';
+import { deriveEarningsBasis } from '../../finance/assets/investment-account.js';
 
 // Account types whose country/currency are variable (US or AU).
 const VARIABLE_COUNTRY = new Set(['checking', 'savings', 'brokerage', 'offset']);
@@ -103,7 +104,8 @@ export class AccountsController {
       if (data.contributionBasis != null && data.contributionBasis !== '') {
         builder.contributionBasis(Number(data.contributionBasis));
       }
-      builder.earningsBasis(Number(data.earningsBasis) || 0);
+      // earningsBasis is DERIVED, never read from the form (design 53 §8) — see
+      // deriveEarningsBasis after build(). The builder seeds it to 0; we overwrite.
     }
 
     // Offset account (design 53 §3 / 54 P3): links to the property whose loan it offsets.
@@ -112,6 +114,9 @@ export class AccountsController {
     }
 
     const account = builder.build();
+    // earningsBasis = max(0, balance − contributionBasis) (design 53 §8). Derived
+    // from the seed the user can actually know; the builder's default-0 is replaced.
+    if (RETIREMENT_TYPES.has(data.type)) deriveEarningsBasis(account);
     // Wire the account into the engine: a role selects its behavior, a stateKey
     // is where its balance lives in sim.state. The builder sets neither, so a
     // created account is inert until we stamp them here (design 55 §3.1 —
@@ -156,7 +161,10 @@ export class AccountsController {
     if ('balance'          in n) n.balance          = Number(n.balance)          || 0;
     if ('minimumBalance'   in n) n.minimumBalance   = Number(n.minimumBalance)   || 0;
     if ('contributionBasis'in n) n.contributionBasis= Number(n.contributionBasis)|| 0;
-    if ('earningsBasis'    in n) n.earningsBasis    = Number(n.earningsBasis)    || 0;
+    // earningsBasis is NOT an input (design 53 §8): the editor omits it, and the
+    // service re-derives it from balance − contributionBasis after mergeChanges. Drop
+    // any stray value so a caller can't reassert a hand-set earnings on update.
+    if ('earningsBasis' in n) delete n.earningsBasis;
     if ('drawdownPriority' in n) {
       const dp = n.drawdownPriority;
       n.drawdownPriority = (dp === '' || dp == null) ? null : Number(dp);

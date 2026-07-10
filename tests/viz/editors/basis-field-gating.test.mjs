@@ -39,7 +39,7 @@ describe('design 53 §2 — basis fields gated to retirement accounts', () => {
     expect('earningsBasis' in data).toBe(false);
   });
 
-  test('401k: shows basis fields and emits them from _readForm', () => {
+  test('401k: shows basis fields and emits contributionBasis (earningsBasis derived, omitted)', () => {
     const editor = editorFor({ id: 'k1', name: '401k', type: '401k',
                                contributionBasis: 40000, earningsBasis: 10000 });
     const root = editor._rootEl;
@@ -47,6 +47,49 @@ describe('design 53 §2 — basis fields gated to retirement accounts', () => {
 
     const data = editor._readForm(root);
     expect('contributionBasis' in data).toBe(true);
-    expect('earningsBasis' in data).toBe(true);
+    // earningsBasis is DERIVED (design 53 §8) — never an input, never in the payload.
+    expect('earningsBasis' in data).toBe(false);
+  });
+});
+
+describe('design 53 §8 — earningsBasis is derived, read-only', () => {
+  beforeEach(() => loadHtml('../../index.html'));
+
+  test('401k: earnings input is disabled and computed = balance − contributions', () => {
+    const editor = editorFor({ id: 'k1', name: '401k', type: '401k',
+                               balance: 50000, contributionBasis: 40000, earningsBasis: 999 });
+    const root = editor._rootEl;
+    const earn = root.querySelector('[data-id="earningsBasis"]');
+    expect(earn.disabled).toBe(true);
+    // Derived from balance − contributions, ignoring the stored/entered earnings.
+    expect(Number(earn.value)).toBe(10000);
+  });
+
+  test('editing contributions live-recomputes earnings', () => {
+    const editor = editorFor({ id: 'k1', name: '401k', type: '401k',
+                               balance: 50000, contributionBasis: 40000 });
+    const root = editor._rootEl;
+    const contrib = root.querySelector('[data-id="contributionBasis"]');
+    contrib.value = 30000;
+    contrib.dispatchEvent(new root.ownerDocument.defaultView.Event('input'));
+    expect(Number(root.querySelector('[data-id="earningsBasis"]').value)).toBe(20000);
+  });
+
+  test('contributions > balance clamps earnings at 0', () => {
+    const editor = editorFor({ id: 'k1', name: '401k', type: '401k',
+                               balance: 30000, contributionBasis: 40000 });
+    const root = editor._rootEl;
+    expect(Number(root.querySelector('[data-id="earningsBasis"]').value)).toBe(0);
+  });
+
+  test('new retirement account: blank contributions → earnings 0 (all principal)', () => {
+    const editor = editorFor({ name: 'New IRA', type: 'ira' });
+    const root = editor._rootEl;
+    // Blank contributions field; a typed balance implies contributions = balance.
+    expect(root.querySelector('[data-id="contributionBasis"]').value).toBe('');
+    const bal = root.querySelector('[data-id="balance"]');
+    bal.value = 25000;
+    bal.dispatchEvent(new root.ownerDocument.defaultView.Event('input'));
+    expect(Number(root.querySelector('[data-id="earningsBasis"]').value)).toBe(0);
   });
 });
