@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { isCollectibleAllocation } from './allocation.js';
+
 /**
  * FIFO consumption of an account's holdings to satisfy a sale of `amount`
  * dollars at marketValue. Returns the realized cost basis and the new
@@ -26,14 +28,21 @@
  * `realizedBasisByCountry`. A lot with no entry for a country falls back to its
  * universal `costBasis`, so the per-country tally is complete across mixed lots.
  *
+ * Collectible split (design 56 §7.2): the proceeds and realized basis attributable
+ * to consumed **collectible** lots (`isCollectibleAllocation` — GOLD) are tallied
+ * separately into `collectibleProceeds` / `collectibleBasis`, so the caller (the US
+ * brokerage disposal reducer) can route the gold portion of the gain through the 28%
+ * collectibles-CGT path while the rest keeps ordinary brokerage CGT. Both are 0 when
+ * no consumed lot is collectible, so non-gold callers are unaffected.
+ *
  * @param {Array}  holdings - account.holdings (not mutated)
  * @param {number} amount   - market-value dollars to consume; must be > 0
- * @returns {{ realizedBasis: number, realizedBasisByCountry: Object<string,number>, newHoldings: Array, consumed: number }}
+ * @returns {{ realizedBasis: number, realizedBasisByCountry: Object<string,number>, collectibleProceeds: number, collectibleBasis: number, newHoldings: Array, consumed: number }}
  *   `consumed` may be less than `amount` if the holdings total less.
  */
 export function consumeHoldingsFifo(holdings, amount) {
   if (!Array.isArray(holdings) || holdings.length === 0 || amount <= 0) {
-    return { realizedBasis: 0, realizedBasisByCountry: {}, newHoldings: holdings ?? [], consumed: 0 };
+    return { realizedBasis: 0, realizedBasisByCountry: {}, collectibleProceeds: 0, collectibleBasis: 0, newHoldings: holdings ?? [], consumed: 0 };
   }
   // Union of step-up countries present across the lots, so the per-country tally
   // covers every country even when only some lots were stepped up.
@@ -45,6 +54,8 @@ export function consumeHoldingsFifo(holdings, amount) {
   let remaining     = amount;
   let realizedBasis = 0;
   let consumed      = 0;
+  let collectibleProceeds = 0;
+  let collectibleBasis    = 0;
   const realizedBasisByCountry = {};
   for (const c of countries) realizedBasisByCountry[c] = 0;
   const newHoldings = [];
@@ -60,6 +71,10 @@ export function consumeHoldingsFifo(holdings, amount) {
     const fraction   = take / mv;
     const basisShare = (h.costBasis ?? 0) * fraction;
     realizedBasis += basisShare;
+    if (isCollectibleAllocation(h.allocation)) {
+      collectibleProceeds += take;
+      collectibleBasis    += basisShare;
+    }
     for (const c of countries) {
       const cb = h.costBaseByCountry?.[c] ?? (h.costBasis ?? 0);
       realizedBasisByCountry[c] += cb * fraction;
@@ -88,6 +103,8 @@ export function consumeHoldingsFifo(holdings, amount) {
   return {
     realizedBasis: +realizedBasis.toFixed(2),
     realizedBasisByCountry,
+    collectibleProceeds: +collectibleProceeds.toFixed(2),
+    collectibleBasis:    +collectibleBasis.toFixed(2),
     newHoldings,
     consumed:      +consumed.toFixed(2),
   };

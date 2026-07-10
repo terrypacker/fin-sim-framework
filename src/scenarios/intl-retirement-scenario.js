@@ -177,6 +177,9 @@ export const INTL_RETIREMENT_DEFAULTS = {
   iraGrowthRate:    0.07,
   k401GrowthRate:   0.07,
   usStockGrowthRate: 0.05,
+  // Gold commodity growth (design 56 §7) — seeds effectiveGrowthRates.GOLD; a GOLD
+  // holding grows at this rate, decoupled from equity returns and Prime.
+  goldGrowthRate:   0.05,
 
   // Spouse retirement accounts (US)
   spouseRothBalance:  40_000,  spouseRothBasis:  30_000,  spouseRothGrowthRate:  0.07,
@@ -586,6 +589,7 @@ export class IntlRetirementScenario extends BaseScenario {
         rothGrowthRate:           p.rothGrowthRate,
         k401GrowthRate:           p.k401GrowthRate,
         brokerageGrowthRate:      p.usStockGrowthRate,
+        goldGrowthRate:           p.goldGrowthRate,
         brokerageDividendRate:    p.stockDividendRate,
         dividendReinvest:         p.stockDividendReinvest,
         fixedIncomeInterestRate:  p.fixedIncomeInterestRate,

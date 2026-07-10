@@ -1,6 +1,10 @@
 # 56 — Prime-relative rates (central-bank anchored cash & loan rates)
 
-**Status**: **Proposed**.
+**Status**: **COMPLETE** — all phases (1, 2a, 2b, 3, 4) implemented and green
+(3242 unit + 864 viz + build). Verified end-to-end against `scenarios/terry-jeanne-evaluation.json`
+via `scripts/run-scenario.mjs`: the sim runs cleanly to 2070 and its net worth is
+**byte-for-byte identical to the stored baseline** ($10,970,797.43), confirming the
+capability-only Gold work (Phase 4) is non-disruptive to a gold-free scenario.
 
 Model the real-world relationship between a central bank's **Prime** (policy) rate and
 the rates a household actually pays and earns. Today every cash-interest and loan rate
@@ -470,11 +474,33 @@ Prime-links a mortgage by entering its rate in the property editor.*
    PRIME_US hike raises a linked mortgage's effective rate and ending balance (slower paydown);
    a spread-less mortgage is byte-for-byte unchanged.
 
-### Phase 4 — Gold holding
-1. `GOLD` allocation + rate key + `goldGrowthRate`; holdings editor entry.
-2. Disposal 28% US collectibles tax branch (§7.2a) + AU CGT; `after-tax` mapping.
-3. **Exit test**: a gold sleeve grows at the gold rate (not Prime); a US sale is taxed
-   at 28%; net-worth after-tax sizes the gold liability.
+### Phase 4 — Gold holding — DONE.
+1. **Done.** `GOLD` added to `ALLOCATION` (+`isCollectibleAllocation`/`COLLECTIBLE_ALLOCATIONS`
+   in `allocation.js`); `RATE_KEYS.GOLD` (a commodity series in `effectiveGrowthRates`);
+   `resolveRateKey` routes `GOLD → RATE_KEYS.GOLD` before the role check (country-agnostic,
+   like the CASH carve-out) so a gold sleeve in a US_STOCK brokerage grows on its own key,
+   not equity. `collectBaseGrowthRates` seeds `GOLD` from the new global `goldGrowthRate`
+   param (default 0.05, `us-retirement-toolset` paramSchema, mc/opt=true) + DEFAULT +
+   passthrough. `computeHoldingsGrowth` grows a `rateKey:'GOLD'` sleeve with no handler
+   change. Holdings editor (`account-editor.js`): `GOLD` in the allocation dropdown +
+   rate-key group; equity-style cell gating (cost basis shown for CGT, no coupon/duration/
+   dividend); switching to GOLD pins `rateKey='GOLD'`.
+2. **Done.** Disposal 28% branch (§7.2a): `consumeHoldingsFifo` now also returns
+   `collectibleProceeds`/`collectibleBasis` (the consumed GOLD-lot slice); the US brokerage
+   disposal — BOTH `StockWithdrawalApplyReducer` (event path) and the `account-service`
+   `_drawPenaltyFree` drawdown engine — splits the gold gain into `COLLECTIBLE_SALE_TAX`
+   (→ `usCollectibleGainsYTD` @ 28%, +AU CGT if resident) and keeps the rest on
+   `STOCK_WITHDRAWAL_TAX` (ordinary brokerage CGT). AU brokerage disposal is unchanged
+   (gold in an AU brokerage is already ordinary AU CGT). `after-tax.js`: `TAX_CLASS.COLLECTIBLE`
+   + a gold/ordinary gain split in the `TAXABLE_BASIS` branch (gold @ 28% via a new
+   `collectibleLiquidationRate` on both providers; AU-domiciled gold @ AU CGT); a gold-less
+   account is byte-for-byte the pre-56 single-rate discount.
+3. **Done.** Exit test `tests/unit/evt-prime-gold.test.mjs` (GOLD-1..6): GOLD resolves to
+   its own key regardless of role; `effectiveGrowthRates.GOLD` tracks `goldGrowthRate`
+   independently of equity/Prime; a gold sleeve grows at the GOLD rate; FIFO tallies the
+   collectible slice; a US sale routes the gold gain → `COLLECTIBLE_SALE_TAX` (28%) and the
+   rest → `STOCK_WITHDRAWAL_TAX`; `computeAfterTaxValue` sizes the gold liability at 28% and
+   the equity gain at 15%, gold-less unchanged.
 
 ---
 

@@ -104,6 +104,10 @@ export function resolveRateKey(country, allocation, role = null) {
   if (allocation === ALLOCATION.CASH) {
     return RATE_KEY_BY_COUNTRY_ALLOCATION[country]?.[ALLOCATION.CASH] ?? null;
   }
+  // GOLD earns the country-agnostic commodity rate (design 56 §7): a gold sleeve in
+  // any account (e.g. a US_STOCK brokerage) resolves to the single GOLD series, NOT
+  // the account role's equity key. Allocation wins over the role, like CASH.
+  if (allocation === ALLOCATION.GOLD) return RATE_KEYS.GOLD;
   if (role && ROLE_TO_RATE_KEY[role]) return ROLE_TO_RATE_KEY[role];
   return RATE_KEY_BY_COUNTRY_ALLOCATION[country]?.[allocation] ?? null;
 }

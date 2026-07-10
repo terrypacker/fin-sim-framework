@@ -55,6 +55,12 @@ export const RATE_KEYS = Object.freeze({
   REAL_ESTATE_US:  'REAL_ESTATE_US',
   REAL_ESTATE_AU:  'REAL_ESTATE_AU',
   COLLECTIBLE:     'COLLECTIBLE',
+
+  // Gold (design 56 §7) — a commodity return series on its own key, decoupled
+  // from equity forward returns and central-bank Prime. Lives in
+  // effectiveGrowthRates (seeded from the global `goldGrowthRate`), regime-
+  // adjustable like equity but never fanned out from an equity-class shock.
+  GOLD:            'GOLD',
 });
 
 /**

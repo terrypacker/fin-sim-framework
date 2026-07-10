@@ -25,7 +25,7 @@ const INVESTMENT_TYPES = new Set(['brokerage', '401k', 'roth', 'ira', 'super']);
 // Types carrying the contribution/earnings ledger — the only ones that show (and
 // persist) the basis fields (design 53 §2). Brokerage is holdings-only.
 const RETIREMENT_TYPES = new Set(['401k', 'roth', 'ira', 'super']);
-const ALLOCATIONS      = ['EQUITY', 'BOND', 'CASH', 'OTHER'];
+const ALLOCATIONS      = ['EQUITY', 'BOND', 'CASH', 'GOLD', 'OTHER'];
 
 // Rate Key choices for the holdings editor, grouped by asset category. A holding's
 // rateKey selects which market-return series drives its growth (state.effective*
@@ -40,6 +40,7 @@ const RATE_KEY_GROUPS = [
   { label: 'Equity — AU by account', keys: [RATE_KEYS.EQUITY_AU_STOCK, RATE_KEYS.EQUITY_AU_SUPER] },
   { label: 'Fixed income',           keys: [RATE_KEYS.FIXED_INCOME_US, RATE_KEYS.FIXED_INCOME_AU] },
   { label: 'Savings',                keys: [RATE_KEYS.SAVINGS_US, RATE_KEYS.SAVINGS_AU] },
+  { label: 'Gold',                   keys: [RATE_KEYS.GOLD] },
   { label: 'Real estate / other',    keys: [RATE_KEYS.REAL_ESTATE_US, RATE_KEYS.REAL_ESTATE_AU, RATE_KEYS.COLLECTIBLE] },
 ];
 // Flat set of known keys, for detecting an out-of-enum (custom/legacy) value so the
@@ -310,10 +311,14 @@ export class AccountEditor extends BaseComponent {
       const alloc = h.allocation ?? 'EQUITY';
       // Per-cell gating by allocation (design 53 §5.2). Fields the allocation
       // doesn't use render an empty cell rather than a stray input.
-      const showCostBasis = alloc === 'EQUITY' || alloc === 'OTHER';   // BOND: hidden (=MV); CASH: no CGT
+      // GOLD (design 56 §7): a commodity sleeve — like equity it carries a cost basis
+      // (for the 28% collectibles CGT on disposal) but pays no dividend/coupon and has
+      // no duration; it grows via its GOLD rate key.
+      const showCostBasis = alloc === 'EQUITY' || alloc === 'OTHER' || alloc === 'GOLD'; // BOND: hidden (=MV); CASH: no CGT
       const showPartner   = alloc === 'EQUITY' || alloc === 'OTHER';   // TLH is equity-oriented
       const showDuration  = alloc === 'BOND';                          // mark-to-market sensitivity
-      // The merged "Income Rate" cell binds dividendYield (EQUITY) or couponRate (BOND).
+      // The merged "Income Rate" cell binds dividendYield (EQUITY) or couponRate (BOND);
+      // GOLD/CASH/OTHER earn no periodic income, so the cell is N/A.
       const incomeField   = alloc === 'EQUITY' ? 'dividendYield'
                           : alloc === 'BOND'   ? 'couponRate'
                           : null;
@@ -363,6 +368,12 @@ export class AccountEditor extends BaseComponent {
             // on switch to BOND, snap basis to MV so no embedded gain is authored.
             if (input.value === 'BOND') {
               this._holdings[i].costBasis = Number(this._holdings[i].marketValue) || 0;
+            }
+            // GOLD grows on its own commodity series (design 56 §7): pin the rate key to
+            // GOLD so the sleeve doesn't inherit the account's equity/cash rate. (An empty
+            // rateKey would fall through to the account default at growth time.)
+            if (input.value === 'GOLD') {
+              this._holdings[i].rateKey = RATE_KEYS.GOLD;
             }
             // Re-render so the row shows exactly this allocation's inputs.
             this._refreshHoldingsTbody();
