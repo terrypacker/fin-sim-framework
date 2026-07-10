@@ -44,17 +44,21 @@ export const US_BANKING = {
     return [
       {
         key: 'usSavingsInterestRate', label: 'US Savings Interest Rate',
-        type: 'Number', group: 'US Banking', mc: true, opt: true,
+        // Retired as an MC/Opt rate knob (design 56 Decision 6 / §3.1): Prime is now the
+        // systemic rate sweep, so this is no longer a rate target (avoids the MC double-move).
+        // It still works as a seed param — the fallback baseline when no primeSpread is set.
+        type: 'Number', group: 'US Banking', mc: false, opt: false,
         defaultValue: 0.03,
-        description: 'Annual interest rate for US savings accounts',
+        description: 'Annual interest rate for US savings accounts (seed / fallback baseline; rate sweeps go through US Prime — design 56).',
       },
       {
         // Central-bank Prime rate (design 56). Prime-linked cash accounts and loans
         // derive their effective rate as Prime + primeSpread; a single Prime move fans
-        // out to all of them. mc/opt are false in Phase 1 and become true in Phase 2
-        // (Prime becomes THE systemic rate sweep; per-account rate levers retire).
+        // out to all of them. Prime is THE systemic rate sweep (Decision 6 / §3.1):
+        // mc/opt are true (Phase 2a), and the per-account interest-rate levers are retired
+        // so sweeping a rate means sweeping Prime, which fans out coherently.
         key: 'usPrimeRate', label: 'US Prime Rate (Fed policy)',
-        type: 'Number', group: 'US Banking', mc: false, opt: false,
+        type: 'Number', group: 'US Banking', mc: true, opt: true,
         defaultValue: 0.045,
         description: 'US central-bank (Fed) policy rate. Prime-linked cash accounts and variable loans earn/pay Prime + their spread.',
       },

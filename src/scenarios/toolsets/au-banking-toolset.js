@@ -55,9 +55,11 @@ export const AU_BANKING = {
     return [
       {
         key: 'auSavingsInterestRate', label: 'AU Savings Interest Rate',
-        type: 'Number', group: 'AU Banking', mc: true, opt: true,
+        // Retired as an MC/Opt rate knob (design 56 Decision 6 / §3.1): Prime is now the
+        // systemic rate sweep. Still a seed param — the fallback baseline when no primeSpread.
+        type: 'Number', group: 'AU Banking', mc: false, opt: false,
         defaultValue: 0.045,
-        description: 'Annual interest rate for AU savings accounts',
+        description: 'Annual interest rate for AU savings accounts (seed / fallback baseline; rate sweeps go through AU Prime — design 56).',
       },
       {
         key: 'auFixedIncomeInterestRate', label: 'AU Fixed Income Interest Rate',
@@ -66,10 +68,11 @@ export const AU_BANKING = {
         description: 'Annual interest rate for AU fixed income accounts',
       },
       {
-        // RBA policy ("Prime") rate (design 56) — see usPrimeRate. mc/opt false in
-        // Phase 1, true in Phase 2.
+        // RBA policy ("Prime") rate (design 56) — see usPrimeRate. Prime is THE systemic
+        // rate sweep (Decision 6 / §3.1): mc/opt true in Phase 2a; per-account rate levers
+        // retire so a rate sweep is a Prime sweep, fanning out coherently.
         key: 'auPrimeRate', label: 'AU Prime Rate (RBA policy)',
-        type: 'Number', group: 'AU Banking', mc: false, opt: false,
+        type: 'Number', group: 'AU Banking', mc: true, opt: true,
         defaultValue: 0.0435,
         description: 'AU central-bank (RBA) policy rate. Prime-linked cash accounts and variable loans earn/pay Prime + their spread.',
       },

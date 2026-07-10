@@ -402,20 +402,26 @@ the contribution/earnings split instead of hand-editing it — belongs to design
 *This phase is where the design-55 §13 rate-sweep concern is actually resolved (§3.1).*
 *Split into 2a (targets — mostly config) and 2b (runtime propagation — the real work).*
 
-**Phase 2a — MC/Opt targets + retire the per-account rate levers (Decision 6).**
-1. Flip `usPrimeRate`/`auPrimeRate` to `mc:true, opt:true` (`us-banking-toolset.js` /
-   `au-banking-toolset.js` paramSchema) and add them to `intl-retirement-mc-config.js`
-   (NORMAL, mean = default, stdDev ≈ 0.01) as the rate MC targets.
-2. **Retire the per-account interest-rate levers**: flip the generated `INTEREST_RATE`
-   template to `mc:false` (`record-param-templates.js:58`); and retire the global
-   `usSavingsInterestRate`/`auSavingsInterestRate` MC targets (`intl-retirement-mc-config.js:111,121`)
-   — replaced by Prime, not kept alongside (avoids the double-move). Keep them working as
-   seed params (fallback baseline), just not as MC rate knobs.
-3. Keep `param-sweep-schema.test.mjs` in sync (SWEEP-10/11 assert every curated MC/Opt
-   var is `mc:`/`opt:true` or a known orphan) — retired vars become known orphans.
-4. **Exit test (MC coherence)**: on the prebuilt, a single MC draw on `PRIME_US` moves
-   the whole US cash complex coherently (re-seed path, already proven by PRIME-2); the
-   per-account rate levers no longer appear as MC rate targets.
+**Phase 2a — MC/Opt targets + retire the per-account rate levers (Decision 6). — DONE.**
+1. **Done.** `usPrimeRate`/`auPrimeRate` are `mc:true, opt:true` (`us-`/`au-banking-toolset.js`
+   paramSchema) + curated MC targets in `intl-retirement-mc-config.js` (NORMAL, mean = default,
+   stdDev 0.01) + curated Opt targets in `intl-retirement-opt-config.js` (CONTINUOUS 0–0.10,
+   step 0.005, enabled:false).
+2. **Done.** Per-account interest-rate levers retired: the generated `INTEREST_RATE` template
+   is `mc:false` (`record-param-templates.js`; feeds CHECKING/SAVINGS only, so fixed-income is
+   untouched — bonds excluded per Decision 3); the global `usSavingsInterestRate`/
+   `auSavingsInterestRate` are removed from the MC config **and** flipped to `mc:false, opt:false`
+   in the toolset schema (so they can't be re-added as a rate knob in the UI — kills the
+   double-move at the source, not just in the default set). Both still work as seed / fallback
+   params. `fixedIncomeInterestRate` stays an MC target.
+3. **Done.** `param-sweep-schema.test.mjs` SWEEP-10/11 stay green (Prime is now the curated
+   MC/Opt rate target with `mc:`/`opt:true`; the retired savings rates simply left the curated
+   lists).
+4. **Done.** Exit test `tests/unit/prime-mc-coherence.test.mjs` (MCC-1…4): Prime is an
+   enabled MC + Opt target, the savings-rate + generated per-account interest levers are
+   `mc:false`, and one `usPrimeRate` move lifts the **whole** US cash complex (savings + a
+   linked brokerage cash sleeve) by exactly the same Δ while the AU complex is untouched — the
+   coherent "move all my rates" knob GH #511 lacked.
 
 **Phase 2b — time-varying Prime WITHIN a run (the real plumbing; see §5 ⚠). — DONE.**
 1. **Done.** `seedPerAccountRates` now returns the prime links (`{ stateKey, savKey,
