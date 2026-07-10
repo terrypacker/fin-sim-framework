@@ -89,6 +89,7 @@ import { RegimeAwareSpendingReducer }    from '../finance/spending/strategies/re
 import { EconomicShockHandler }          from '../finance/economic-regimes/economic-shock-handler.js';
 import { EconomicRecoveryTickHandler }   from '../finance/economic-regimes/economic-recovery-tick-handler.js';
 import { RegimeApplyReducer }            from '../finance/economic-regimes/regime-apply-reducer.js';
+import { PrimeRelinkReducer }            from '../finance/economic-regimes/prime-relink-reducer.js';
 import { AddRegimeReducer }              from '../finance/economic-regimes/add-regime-reducer.js';
 import { RemoveRegimeReducer }           from '../finance/economic-regimes/remove-regime-reducer.js';
 import { RevalueAssetReducer }           from '../finance/economic-regimes/revalue-asset-reducer.js';
@@ -296,7 +297,7 @@ const _ALL_CLASSES = [
   LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer,
   // Economic regime handlers and reducers
   EconomicShockHandler, EconomicRecoveryTickHandler,
-  RegimeApplyReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer,
+  RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer,
   BondPriceAdjustReducer,
   // Asset appreciation (design 28)
   AssetAppreciationHandler, AssetAppreciateReducer,

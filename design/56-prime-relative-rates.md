@@ -237,9 +237,25 @@ baseMap[`${memberKey}::${stateKey}`] = perVal;
   (falling back to the absolute `interestRate`). This makes a variable-rate mortgage
   track Prime period-by-period; a `primeSpread`-less loan stays fixed (back-compat).
 
-**Recompute cadence.** Because the effective map is rebuilt each period from Prime,
-a mid-simulation Prime change flows into the very next interest/payment event with no
-extra plumbing.
+**Recompute cadence — ⚠ NOT free; the core Phase 2 task.** This claim is *aspirational*,
+not what Phase 1 built. `seedPerAccountRates` runs **once at compile** and bakes
+`SAVINGS_*::<stateKey> = Prime_seed + spread` into `baseInterestRates`. `RegimeApplyReducer`
+rebuilds `effectiveInterestRates` from `baseInterestRates` each period and applies
+`interestRateAdjustment`s — but a `PRIME_US` adjustment moves `effectiveInterestRates[PRIME_US]`,
+which **nobody reads at runtime** (handlers read the derived `SAVINGS_*::<stateKey>`, and
+PRIME→SAVINGS is not a class-member fan-out in `RATE_KEY_CLASS_MEMBERS`). So a
+**time-varying Prime within a single run does NOT reach cash accounts today.**
+
+- **MC/Opt on `usPrimeRate` works** already, because each MC iteration re-compiles and
+  `seedPerAccountRates` re-derives `Prime_new + spread` (this is what Phase 1's PRIME-2
+  test exercises — a *param* change, not a runtime move).
+- **Time-varying-within-a-run** (schedules/shocks moving `PRIME_US` mid-sim) needs new
+  plumbing (Phase 2b): store the per-account prime link in state (`{ stateKey, savKey,
+  primeKey, spread }`) and, after `RegimeApplyReducer` has set `effectiveInterestRates`,
+  recompute `effectiveInterestRates[`savKey::stateKey`] = effective[primeKey] + spread`
+  each period. Fold into `RegimeApplyReducer` (it already owns the base→effective rebuild)
+  or a dedicated reducer ordered after it. Loans (Phase 3) read Prime from
+  `effectiveInterestRates` directly, so they get this for free once Prime is time-varying.
 
 ---
 
@@ -329,10 +345,10 @@ the contribution/earnings split instead of hand-editing it — belongs to design
 - **Prime**: two global params (`usPrimeRate`, `auPrimeRate`) render in the Scenario
   editor like any rate; an optional Prime **schedule** editor (year → rate) is the
   time-path affordance. No new panel.
-- **Account editor**: the cash `interestRate` field becomes an **absolute-rate input**
-  with a read-only `“= Prime (x%) + spread”` hint; on save it stores `primeSpread`
-  (§4.2). Shown for cash types only. Loans gain the same absolute-input/spread-store
-  treatment on their rate field.
+- **Account editor** *(Phase 1 done)*: an **absolute-rate input** with a read-only
+  `“= Prime (x%) + spread”` hint; on save it stores `primeSpread` (§4.2). Shown for cash
+  types (label "Interest Rate") **and `BROKERAGE`** (label "Cash Rate" — it sets the rate
+  on the account's `CASH` sleeve, §6). Loans gain the same treatment in Phase 3.
 - **Holdings editor**: `GOLD` joins the allocation dropdown; a gold sleeve shows the
   growth-rate cell (like equity), not the coupon cell.
 
@@ -384,15 +400,44 @@ the contribution/earnings split instead of hand-editing it — belongs to design
 
 ### Phase 2 — Time-varying Prime + the MC-coherence fix (regimes / schedule / MC)
 *This phase is where the design-55 §13 rate-sweep concern is actually resolved (§3.1).*
-1. Prime as a `RegimeApplyReducer` target; optional Prime schedule param → scheduled
-   adjustments.
-2. `usPrimeRate`/`auPrimeRate` as the MC/Opt rate targets; **retire the per-account
-   interest-rate MC levers** (Decision 6) — remove them from the MC/Opt target surface,
-   leaving `primeSpread` as an idiosyncratic Opt-only residual.
-3. **Exit test** (the spine): a scheduled hike raises every US cash rate in the hike
-   year; **a single MC draw on `PRIME_US` moves the whole US cash complex coherently in
-   one sweep on the prebuilt scenario** (the 55 §13 fix, verified end-to-end); the old
+*Split into 2a (targets — mostly config) and 2b (runtime propagation — the real work).*
+
+**Phase 2a — MC/Opt targets + retire the per-account rate levers (Decision 6).**
+1. Flip `usPrimeRate`/`auPrimeRate` to `mc:true, opt:true` (`us-banking-toolset.js` /
+   `au-banking-toolset.js` paramSchema) and add them to `intl-retirement-mc-config.js`
+   (NORMAL, mean = default, stdDev ≈ 0.01) as the rate MC targets.
+2. **Retire the per-account interest-rate levers**: flip the generated `INTEREST_RATE`
+   template to `mc:false` (`record-param-templates.js:58`); and retire the global
+   `usSavingsInterestRate`/`auSavingsInterestRate` MC targets (`intl-retirement-mc-config.js:111,121`)
+   — replaced by Prime, not kept alongside (avoids the double-move). Keep them working as
+   seed params (fallback baseline), just not as MC rate knobs.
+3. Keep `param-sweep-schema.test.mjs` in sync (SWEEP-10/11 assert every curated MC/Opt
+   var is `mc:`/`opt:true` or a known orphan) — retired vars become known orphans.
+4. **Exit test (MC coherence)**: on the prebuilt, a single MC draw on `PRIME_US` moves
+   the whole US cash complex coherently (re-seed path, already proven by PRIME-2); the
    per-account rate levers no longer appear as MC rate targets.
+
+**Phase 2b — time-varying Prime WITHIN a run (the real plumbing; see §5 ⚠). — DONE.**
+1. **Done.** `seedPerAccountRates` now returns the prime links (`{ stateKey, savKey,
+   primeKey, spread }`, both cash-account and cash-sleeve cases); `state()` stores them as
+   `state.primeLinks`.
+2. **Done.** New `PrimeRelinkReducer` (`prime-relink-reducer.js`) at `PRE_PROCESS + 2`
+   (after `RegimeApplyReducer` at +1), on the same action types. It adds the runtime Prime
+   **delta** (`effective[primeKey] − base[primeKey]`) onto each linked
+   `effective[savKey::stateKey]` — using the delta (not an overwrite with `Prime + spread`)
+   so the baked-in spread **and** any SAVINGS-class market shock `RegimeApplyReducer` fanned
+   onto the key both survive and *compose* (§5). Zero delta ⇒ no-op (byte-for-byte legacy).
+3. **Done.** `primeSchedule` param `[{ year, PRIME_US, PRIME_AU }]` (absolute rates) compiles
+   in `schedules()` via `schedulePrimeRateSteps` into non-overlapping L-profile regime steps
+   (`adjustment = absolute − seed`) authored through the existing shock path; a
+   `PrimeScheduleList` editor renders it.
+4. **Done.** Exit test `tests/unit/evt-prime-timevarying.test.mjs` (PRIME-TV-1…5 end-to-end
+   on the prebuilt + PRIME-TVU-1…4 isolated `reduce()` postconditions): a mid-run
+   shock/schedule `PRIME_US` hike lifts every linked US cash rate by exactly the move and
+   credits more interest; a spread-less account and the independent AU series are unchanged.
+   *(Note: comparing credited interest across a with-shock vs no-shock run is confounded —
+   injecting a shock's recovery-tick events perturbs event ordering by a few cents
+   regardless of the rate; the effective **rate** is the clean, unconfounded signal.)*
 
 ### Phase 3 — Loans track Prime
 1. `LoanAccount.primeSpread` + serializer; `LoanPaymentHandler` resolves
@@ -411,6 +456,11 @@ the contribution/earnings split instead of hand-editing it — belongs to design
 
 ## 13. Risks / open questions
 
+- **⚠ Static seed vs time-varying Prime (the Phase 2b crux).** Phase 1 bakes
+  `SAVINGS_*::<stateKey> = Prime_seed + spread` into `baseInterestRates` once at compile.
+  MC/param changes re-seed (work), but a Prime move *within a run* (schedule/shock) does
+  **not** reach cash accounts without new plumbing — see §5's corrected "Recompute
+  cadence" and Phase 2b. This is the single biggest under-statement in the original draft.
 - **Spread display when Prime changes.** Storing the spread means the account editor's
   displayed absolute shifts if the user edits Prime afterward. Correct behavior, but
   potentially surprising — the Prime hint mitigates it. Confirm this is the desired UX.
