@@ -156,7 +156,7 @@ test('EVT-11: Fixed income earnings ARE AU taxable if person is AU resident', ()
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 400 * sim.state.effectiveExchangeRates.USD_AUD); // design 51: USD-source → AUD bucket
-  assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded');
+  assert.ok(sim.state.usSourceOrdinaryUsdYTD > 0, 'FTC should be recorded');
 });
 
 test('EVT-11: Fixed income earnings are NOT AU taxable if person is not AU resident', () => {
@@ -165,7 +165,7 @@ test('EVT-11: Fixed income earnings are NOT AU taxable if person is not AU resid
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
-  assert.strictEqual(sim.state.ftcYTD, 0);
+  assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD, 0);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -221,7 +221,7 @@ test('EVT-13: Stock dividend IS AU taxable if person is AU resident', () => {
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 1000 * sim.state.effectiveExchangeRates.USD_AUD); // design 51: USD-source → AUD bucket
-  assert.ok(sim.state.ftcYTD > 0);
+  assert.ok(sim.state.usSourceOrdinaryUsdYTD > 0);
 });
 
 test('EVT-13: Stock dividend is NOT AU taxable if person is not AU resident', () => {
@@ -298,7 +298,7 @@ test('EVT-15: Stock sale IS AU capital gains taxable if person is AU resident', 
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.auCapitalGainsYTD, 5000 * sim.state.effectiveExchangeRates.USD_AUD); // design 51: USD-source → AUD bucket
-  assert.ok(sim.state.ftcYTD > 0);
+  assert.ok(sim.state.usSourceCapGainsUsdYTD > 0);
 });
 
 test('EVT-15: Stock sale is NOT AU taxable if person is not AU resident', () => {

@@ -114,6 +114,14 @@ export const US_AU_CROSS_BORDER = {
         description: 'Starting country of tax residency for all persons (e.g. "US", "AU"). Defaults to "US" when unset.',
       },
       {
+        key: 'usFeieElected', label: 'US FEIE Elected (Form 2555)',
+        type: 'Boolean', group: 'Cross Border', mc: false, opt: true,
+        defaultValue: false,
+        description: 'Elect the US Foreign Earned Income Exclusion on AU-source '
+          + 'earned income (design 52 §4.2). Off by default; a future lever bound '
+          + 'by the 5-year revocation lock.',
+      },
+      {
         key: 'auInflationRate', label: 'AU Inflation Rate (cross-border)',
         type: 'Number', group: 'Cross Border', mc: true, opt: true,
         defaultValue: 0.03,
@@ -189,7 +197,7 @@ export const US_AU_CROSS_BORDER = {
       .statePatches;
 
     const patches = {
-      ftcYTD:               0,
+      usFeieElected:        p.usFeieElected ?? false,
       inflationRates:       {
         US: p.inflationRate    ?? 0.03,
         AU: p.auInflationRate  ?? 0.03,

@@ -122,7 +122,7 @@ test('EVT-26: Franked dividend (resident) generates AU franking credit', () => {
 
   // In the toolset path, state.people and state.auStockAccount are non-null → per-person maps used
   assert.strictEqual(sim.state.auPersonFrankingCreditYTD?.['primary'], 1000);
-  assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded');
+  assert.ok(sim.state.foreignPassiveIncomeYTD > 0, 'FTC should be recorded');
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -179,7 +179,7 @@ test('EVT-28: Unfranked dividend (resident) is AU ordinary income taxable', () =
 
   // In the toolset path, state.people and state.auStockAccount are non-null → per-person maps used
   assert.strictEqual(sim.state.auPersonOrdinaryIncomeYTD?.['primary'], 1000);
-  assert.ok(sim.state.ftcYTD > 0);
+  assert.ok(sim.state.foreignPassiveIncomeYTD > 0);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -211,7 +211,7 @@ test('EVT-29: Unfranked dividend (non-resident) is AU non-resident withholding t
   // In the toolset path, state.people and state.auStockAccount are non-null → per-person maps used
   assert.strictEqual(sim.state.auPersonNonResidentWithholdingYTD?.['primary'], 1000);
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
-  assert.ok(sim.state.ftcYTD > 0);
+  assert.ok(sim.state.foreignPassiveIncomeYTD > 0);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -271,7 +271,7 @@ test('EVT-31: AU stock sale (resident) records US and AU capital gains', () => {
   assert.strictEqual(sim.state.usCapitalGainsYTD, 5000 / sim.state.effectiveExchangeRates.USD_AUD); // design 51: AUD-source → USD bucket
   // In the toolset path, state.people and state.auStockAccount are non-null → per-person maps used
   assert.strictEqual(sim.state.auPersonCapitalGainsYTD?.['primary'], 5000);
-  assert.ok(sim.state.ftcYTD > 0);
+  assert.ok(sim.state.foreignPassiveIncomeYTD > 0);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -291,5 +291,5 @@ test('EVT-32: AU stock sale (non-resident) records US capital gain only — no A
 
   assert.strictEqual(sim.state.usCapitalGainsYTD, 5000 / sim.state.effectiveExchangeRates.USD_AUD); // design 51: AUD-source → USD bucket
   assert.strictEqual(sim.state.auCapitalGainsYTD, 0);
-  assert.strictEqual(sim.state.ftcYTD, 0);
+  assert.strictEqual(sim.state.foreignPassiveIncomeYTD, 0);
 });

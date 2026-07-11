@@ -60,7 +60,7 @@ test('AU_WAGES_INCOME_TAX (US-resident earner): AUD wage normalized into USD buc
   const fn = auFns.get('AU_WAGES_INCOME_TAX');
   const next = fn(withRate(zeroTax()), { type: 'AU_WAGES_INCOME_TAX', amount: 2000, residency: 'US', personKey: 'spouse' });
   assert.strictEqual(next.usOrdinaryIncomeYTD, 2000 / RATE);            // AUD → USD
-  assert.strictEqual(next.ftcYTD, 2000 / RATE);                        // ftc is USD-canonical
+  assert.strictEqual(next.foreignGeneralIncomeYTD, 2000 / RATE);                        // ftc is USD-canonical
   assert.strictEqual(next.auNonResidentWithholdingYTD, 2000);          // AU bucket stays native AUD
 });
 
@@ -68,7 +68,7 @@ test('AU_SAVINGS_EARNINGS_TAX (AU resident): AUD interest → USD worldwide buck
   const fn = auFns.get('AU_SAVINGS_EARNINGS_TAX');
   const next = fn(withRate(zeroTax()), { type: 'AU_SAVINGS_EARNINGS_TAX', amount: 1000, residency: 'AU' });
   assert.strictEqual(next.usOrdinaryIncomeYTD, 1000 / RATE);
-  assert.strictEqual(next.ftcYTD, 1000 / RATE);
+  assert.strictEqual(next.foreignPassiveIncomeYTD, 1000 / RATE);
   assert.strictEqual(next.auOrdinaryIncomeYTD, 1000);                  // native AUD
 });
 
@@ -80,7 +80,7 @@ test('WAGES_INCOME_TAX (AU resident): USD wage normalized into AUD bucket, US bu
   const next = fn(withRate(zeroTax()), { type: 'WAGES_INCOME_TAX', amount: 8000, residency: 'AU' });
   assert.strictEqual(next.usOrdinaryIncomeYTD, 8000);                  // USD native
   assert.strictEqual(next.auOrdinaryIncomeYTD, 8000 * RATE);          // USD → AUD
-  assert.strictEqual(next.ftcYTD, 8000);                              // ftc is USD-canonical
+  assert.strictEqual(next.usSourceOrdinaryUsdYTD, 8000);                              // ftc is USD-canonical
 });
 
 test('STOCK_WITHDRAWAL_TAX (AU resident): USD gain → AUD CGT bucket converted, US CGT native', () => {

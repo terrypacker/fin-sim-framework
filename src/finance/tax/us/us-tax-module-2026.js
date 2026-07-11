@@ -25,6 +25,13 @@ import { toAUD } from '../tax-fx.js';
  *   EVT-24/25    401k
  *   EVT-34       US House Sale
  *   EVT-52       Roth Conversion
+ *
+ * Design 52 — cross-border relief. US-source income booked while AU-resident is
+ * relieved on the *AU* return via FITO (not by a US FTC — that was the old
+ * `ftcYTD` over-relief hack). Each such dollar is now recorded into the FITO
+ * "without" removal set, in both currencies:
+ *   usSourceOrdinaryUsdYTD / usSourceCapGainsUsdYTD  (USD, §4.6 US marginal pass)
+ *   usSourceOrdinaryAudYTD / usSourceCapGainsAudYTD  (AUD, §4.5 AU limit)
  */
 export class UsTaxModule2026 extends BaseTaxModule {
   get countryCode() { return 'US'; }
@@ -57,10 +64,9 @@ export class UsTaxModule2026 extends BaseTaxModule {
       //        recognise its US tax-free status. For an AU resident the earnings
       //        (i.e. trust income, not corpus) are assessable as ordinary income
       //        on distribution under s99B ITAA 1936.
-      //   FTC: None. Because the US imposes no income tax on the earnings, there
-      //        is no foreign tax for AU to credit (and nothing to relieve on the
-      //        US side). This is the well-documented Roth "double-tax with no
-      //        relief" outcome for Australian residents — do NOT add to ftcYTD.
+      //   Relief: None. The US imposes no income tax on the earnings, so there is
+      //        no US tax for AU to relieve via FITO. This is the well-documented
+      //        Roth "double-tax with no relief" outcome for Australian residents.
       ['ROTH_WITHDRAWAL_EARNINGS_TAX', (state, action) => {
         const { amount, penaltyAmount, residency } = action;
         const isAuResident = residency === 'AU';
@@ -91,8 +97,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
         usPenaltyYTD:        state.usPenaltyYTD        + action.penaltyAmount,
       })],
 
-      // EVT-7: IRA withdrawal of earnings — US ordinary income + optional penalty,
-      //        AU ordinary income if resident
+      // EVT-7: IRA withdrawal of earnings — US-source ordinary income + optional
+      //        penalty; AU ordinary income (worldwide) if resident, relieved by FITO.
       ['IRA_WITHDRAWAL_EARNINGS_TAX', (state, action) => {
         const { amount, penaltyAmount, residency } = action;
         const isAuResident = residency === 'AU';
@@ -102,10 +108,12 @@ export class UsTaxModule2026 extends BaseTaxModule {
           usPenaltyYTD:        state.usPenaltyYTD        + penaltyAmount,
         };
         if (isAuResident) {
+          const aud = toAUD(amount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
-            ftcYTD:              state.ftcYTD              + amount,
+            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
+            usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
         }
         return next;
@@ -128,16 +136,19 @@ export class UsTaxModule2026 extends BaseTaxModule {
         usPenaltyYTD:        state.usPenaltyYTD        + action.penaltyAmount,
       })],
 
-      // EVT-40 (401k RMD): US ordinary income, no penalty; AU ordinary income if resident
+      // EVT-40 (401k RMD): US-source ordinary income, no penalty; AU ordinary
+      //        income (worldwide) if resident, relieved by FITO.
       ['K401_RMD_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
+          const aud = toAUD(amount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
-            ftcYTD:              state.ftcYTD              + amount,
+            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
+            usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
         }
         return next;
@@ -147,50 +158,59 @@ export class UsTaxModule2026 extends BaseTaxModule {
 
   _usBrokerageReducerFns() {
     return [
-      // EVT-11: fixed income earnings — US ordinary income, AU ordinary income if resident
+      // EVT-11: fixed income earnings — US-source ordinary income; AU ordinary
+      //         income if resident, relieved by FITO.
       ['FIXED_INCOME_EARNINGS_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
+          const aud = toAUD(amount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
-            ftcYTD:              state.ftcYTD              + amount,
+            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
+            usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
         }
         return next;
       }],
 
-      // EVT-13: stock dividend — US ordinary income, AU ordinary income if resident
+      // EVT-13: stock dividend — US-source ordinary income; AU ordinary income if
+      //         resident, relieved by FITO.
       ['STOCK_DIVIDEND_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
+          const aud = toAUD(amount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
-            ftcYTD:              state.ftcYTD              + amount,
+            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
+            usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
         }
         return next;
       }],
 
-      // EVT-15: stock withdrawal (sale) — US capital gain, AU capital gain if resident.
-      // AU measures the gain from its stepped-up (s855-45) cost base, so auGain ≤ gain
-      // (design 36 §12.2). The pre-move appreciation (gain − auGain) is US-only — it is
-      // not double-taxed, so it earns no FTC (ftcYTD tracks auGain, not gain).
+      // EVT-15: stock withdrawal (sale) — US-source capital gain; AU capital gain
+      // if resident (relieved by FITO). AU measures the gain from its stepped-up
+      // (s855-45) cost base, so auGain ≤ gain (design 36 §12.2). The pre-move
+      // appreciation (gain − auGain) is US-only. The FITO removal set records the
+      // full US gain (USD) and the AU-taxed slice (AUD).
       ['STOCK_WITHDRAWAL_TAX', (state, action) => {
         const { gain, residency } = action;
         const auGain = action.auGain ?? gain;
         const isAuResident = residency === 'AU';
         let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + gain };
         if (isAuResident) {
+          const audGain = toAUD(auGain, 'USD', state);
           next = {
             ...next,
-            auCapitalGainsYTD: state.auCapitalGainsYTD + toAUD(auGain, 'USD', state),
-            ftcYTD:            state.ftcYTD            + auGain,
+            auCapitalGainsYTD:      state.auCapitalGainsYTD + audGain,
+            usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + gain,
+            usSourceCapGainsAudYTD: (state.usSourceCapGainsAudYTD ?? 0) + audGain,
           };
         }
         return next;
@@ -200,7 +220,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
 
   _realPropertyReducerFns() {
     return [
-      // EVT-34: US house sale — US capital gain after $500K exemption
+      // EVT-34: US house sale — US capital gain after $500K exemption. US-source,
+      // US-only under the current model (no AU assessment), so no FITO removal.
       ['US_HOUSE_SALE_TAX', (state, action) => ({
         ...state,
         usCapitalGainsYTD: state.usCapitalGainsYTD + action.gain,
@@ -210,18 +231,21 @@ export class UsTaxModule2026 extends BaseTaxModule {
 
   _rentalReducerFns() {
     return [
-      // Design 48: US rental income — net rental income (may be negative) is US
-      // ordinary income (US-sourced). For an AU resident it is also AU ordinary
-      // income with an FTC for the US tax; FTC never goes negative in a loss year.
+      // Design 48: US rental income — net rental income (may be negative) is
+      // US-source ordinary income. For an AU resident it is also AU ordinary
+      // income (worldwide), relieved by FITO. The FITO removal set records the
+      // actual (possibly negative) income so the with/without marginal pass is exact.
       ['US_RENTAL_INCOME_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
+          const aud = toAUD(amount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
-            ftcYTD:              state.ftcYTD              + Math.max(0, amount),
+            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
+            usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
         }
         return next;
@@ -231,81 +255,98 @@ export class UsTaxModule2026 extends BaseTaxModule {
 
   _incomeReducerFns() {
     return [
-      // EVT-37: SS income — 85% taxable as US ordinary income; AU ordinary income if resident
+      // EVT-37: SS income — 85% taxable as US-source ordinary income; AU ordinary
+      // income (full amount) if resident, relieved by FITO. US slice = taxable
+      // (85%); AU slice = full amount — each removal set matches its own bucket.
       ['SS_INCOME_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
         const taxable = amount * 0.85;
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + taxable };
         if (isAuResident) {
+          const aud = toAUD(amount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
-            ftcYTD:              state.ftcYTD              + taxable,
+            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
+            usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + taxable,
+            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
         }
         return next;
       }],
 
-      // EVT-38: wages — US ordinary income; AU per-person income if resident + personKey,
-      //         otherwise AU shared income (backward compat for non-monthly-wages events)
+      // EVT-38: US wages — US-source ordinary income; AU per-person income if
+      //         resident + personKey, else AU shared income. Relieved by FITO.
       ['WAGES_INCOME_TAX', (state, action) => {
         const { amount, residency, personKey } = action;
         const isAuResident = residency === 'AU';
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
           const audAmount = toAUD(amount, 'USD', state);
+          const removal = {
+            usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + audAmount,
+          };
           if (personKey && state.auPersonOrdinaryIncomeYTD) {
             const personMap = { ...state.auPersonOrdinaryIncomeYTD };
             personMap[personKey] = (personMap[personKey] ?? 0) + audAmount;
-            next = { ...next, auPersonOrdinaryIncomeYTD: personMap, ftcYTD: state.ftcYTD + amount };
+            next = { ...next, auPersonOrdinaryIncomeYTD: personMap, ...removal };
           } else {
-            next = { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + audAmount, ftcYTD: state.ftcYTD + amount };
+            next = { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + audAmount, ...removal };
           }
         }
         return next;
       }],
 
-      // EVT-48: US self-employment income — US ordinary income; AU ordinary income if resident
+      // EVT-48: US self-employment income — US-source ordinary income; AU ordinary
+      //         income if resident, relieved by FITO.
       ['SE_INCOME_US_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
+          const aud = toAUD(amount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
-            ftcYTD:              state.ftcYTD              + amount,
+            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
+            usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
         }
         return next;
       }],
 
-      // EVT-50: bonus — US ordinary income; AU ordinary income if resident
+      // EVT-50: bonus — US-source ordinary income; AU ordinary income if resident,
+      //         relieved by FITO.
       ['BONUS_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
+          const aud = toAUD(amount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
-            ftcYTD:              state.ftcYTD              + amount,
+            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
+            usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
         }
         return next;
       }],
 
-      // EVT-51: company sale — US capital gain; AU capital gain if resident
+      // EVT-51: company sale — US-source capital gain; AU capital gain if resident,
+      //         relieved by FITO.
       ['COMPANY_SALE_TAX', (state, action) => {
         const { gain, residency } = action;
         const isAuResident = residency === 'AU';
         let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + gain };
         if (isAuResident) {
+          const audGain = toAUD(gain, 'USD', state);
           next = {
             ...next,
-            auCapitalGainsYTD: (state.auCapitalGainsYTD ?? 0) + toAUD(gain, 'USD', state),
-            ftcYTD:            state.ftcYTD                   + gain,
+            auCapitalGainsYTD:      (state.auCapitalGainsYTD ?? 0) + audGain,
+            usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + gain,
+            usSourceCapGainsAudYTD: (state.usSourceCapGainsAudYTD ?? 0) + audGain,
           };
         }
         return next;
@@ -315,7 +356,13 @@ export class UsTaxModule2026 extends BaseTaxModule {
 
   _collectibleReducerFns() {
     return [
-      // EVT-36/46: collectible sale — US collectible gain (28% rate); AU capital gain if resident
+      // EVT-36/46: collectible sale — US-source collectible gain (28% rate); AU
+      // capital gain if resident, relieved by FITO. The US collectible bucket is
+      // separate from usCapitalGainsYTD, but the design's FITO removal set carries
+      // only ordinary/capGains pairs; the collectible slice is folded into the
+      // capGains removal set (the AU-side FITO limit is exact — AU taxes it as a
+      // capital gain; the US §4.6 marginal pass is a conservative approximation for
+      // this rare AU-resident-collectible-sale case).
       ['COLLECTIBLE_SALE_TAX', (state, action) => {
         const { gain, residency } = action;
         const isAuResident = residency === 'AU';
@@ -324,10 +371,12 @@ export class UsTaxModule2026 extends BaseTaxModule {
           usCollectibleGainsYTD: (state.usCollectibleGainsYTD ?? 0) + gain,
         };
         if (isAuResident) {
+          const audGain = toAUD(gain, 'USD', state);
           next = {
             ...next,
-            auCapitalGainsYTD: (state.auCapitalGainsYTD ?? 0) + toAUD(gain, 'USD', state),
-            ftcYTD:            (state.ftcYTD ?? 0)            + gain,
+            auCapitalGainsYTD:      (state.auCapitalGainsYTD ?? 0) + audGain,
+            usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + gain,
+            usSourceCapGainsAudYTD: (state.usSourceCapGainsAudYTD ?? 0) + audGain,
           };
         }
         return next;
@@ -337,31 +386,37 @@ export class UsTaxModule2026 extends BaseTaxModule {
 
   _iraRolloverReducerFns() {
     return [
-      // EVT-35: IRA rollover withdrawal — US ordinary income (no penalty); AU ordinary income if resident
+      // EVT-35: IRA rollover withdrawal — US-source ordinary income (no penalty);
+      //         AU ordinary income if resident, relieved by FITO.
       ['IRA_ROLLOVER_WITHDRAWAL_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
+          const aud = toAUD(amount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
-            ftcYTD:              state.ftcYTD              + amount,
+            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
+            usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
         }
         return next;
       }],
 
-      // EVT-40: IRA RMD — US ordinary income (no penalty); AU ordinary income if resident
+      // EVT-40: IRA RMD — US-source ordinary income (no penalty); AU ordinary
+      //         income if resident, relieved by FITO.
       ['IRA_RMD_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
         let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
         if (isAuResident) {
+          const aud = toAUD(amount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + toAUD(amount, 'USD', state),
-            ftcYTD:              state.ftcYTD              + amount,
+            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
+            usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
           };
         }
         return next;
@@ -385,7 +440,7 @@ export class UsTaxModule2026 extends BaseTaxModule {
       //        This defers — rather than eliminates — AU tax on converted IRA
       //        earnings. The per-lot window test, penalty base, and AU-assessable
       //        share are computed upstream (roth-rollover-classes.js).
-      //   FTC: None — no US income tax is levied on this distribution.
+      //   Relief: None — no US income tax is levied on this distribution.
       ['ROTH_ROLLOVER_WITHDRAWAL_CONTRIB_TAX', (state, action) => {
         const { penaltyAmount = 0, auAssessableAmount = 0, residency } = action;
         let next = { ...state, usPenaltyYTD: state.usPenaltyYTD + penaltyAmount };
@@ -404,8 +459,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
       //        post-conversion growth is earnings.
       //   AU:  Assessable to an AU resident as ordinary income under s99B
       //        ITAA 1936 (foreign-trust earnings; corpus excluded).
-      //   FTC: None — the US levies no income tax on the earnings, so there is no
-      //        foreign tax to credit. Matches the EVT-44 spec row (FTC = N).
+      //   Relief: None — the US levies no income tax on the earnings, so there is
+      //        no US tax to relieve via FITO. Matches the EVT-44 spec row.
       ['ROTH_ROLLOVER_WITHDRAWAL_EARNINGS_TAX', (state, action) => {
         const { amount, penaltyAmount = 0, residency } = action;
         let next = { ...state, usPenaltyYTD: state.usPenaltyYTD + penaltyAmount };
@@ -431,7 +486,8 @@ export class UsTaxModule2026 extends BaseTaxModule {
       //        the individual, so there is no s99B receipt and no assessable
       //        amount. AU tax arises only on later distribution from the Roth
       //        (corpus EVT-43 = not assessable; earnings EVT-44 = s99B income).
-      //   FTC: None — no AU tax is levied at conversion, so do NOT add to ftcYTD.
+      //   Relief: None — no AU tax is levied at conversion; the US tax on the
+      //        conversion is not US-source-vs-AU double taxation to relieve.
       ['ROTH_CONVERSION_TAX', (state, action) => ({
         ...state,
         usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + action.amount,

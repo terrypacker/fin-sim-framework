@@ -55,6 +55,9 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
             { label: 'Adjustments (Pre-tax Contributions)', amount: -inputs.adjustments,          drillReport: drill('pretax-adjustments-by-source')  },
             { label: 'Adjusted Gross Income',               amount:  taxDetail.adjustedGrossIncome },
             { label: 'Standard Deduction',                  amount: -inputs.standardDeduction },
+            ...(taxDetail.feieExcluded > 0
+              ? [{ label: 'Foreign Earned Income Exclusion (Form 2555)', amount: -taxDetail.feieExcluded }]
+              : []),
             { label: 'Taxable Ordinary Income',             amount:  taxDetail.taxableIncome },
             { label: 'Long-Term Capital Gains (Sch. D)',    amount:  inputs.capitalGains,         drillReport: drill('capital-gains-by-disposal')     },
             { label: 'Collectible Gains',                   amount:  inputs.collectibleGains },
@@ -72,9 +75,23 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
         },
         {
           heading: 'Credits',
-          lineItems: [
-            { label: 'Foreign Tax Credit', amount: -taxDetail.credits },
-          ],
+          // Per-§904-basket Foreign Tax Credit (design 52 §6): each basket shows
+          // the credit taken plus its remaining carryforward pool. Falls back to a
+          // single line when there is no foreign activity (pure-US returns).
+          lineItems: taxDetail.ftc?.hasActivity
+            ? [
+                { label: 'Foreign Tax Credit — General (§904)', amount: -taxDetail.ftc.general.credit },
+                ...(taxDetail.ftc.general.carryforwardRemaining > 0
+                  ? [{ label: '  General carryforward remaining', amount: taxDetail.ftc.general.carryforwardRemaining }]
+                  : []),
+                { label: 'Foreign Tax Credit — Passive (§904)', amount: -taxDetail.ftc.passive.credit },
+                ...(taxDetail.ftc.passive.carryforwardRemaining > 0
+                  ? [{ label: '  Passive carryforward remaining', amount: taxDetail.ftc.passive.carryforwardRemaining }]
+                  : []),
+              ]
+            : [
+                { label: 'Foreign Tax Credit', amount: -taxDetail.credits },
+              ],
         },
       ],
       summary: {

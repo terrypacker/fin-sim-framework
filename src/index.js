@@ -236,7 +236,7 @@ import { UsTaxModule2025 } from './finance/tax/us/us-tax-module-2025.js';
 import { UsTaxModule2026 } from './finance/tax/us/us-tax-module-2026.js';
 import { UsTaxRates2024 } from './finance/tax/us/us-tax-rates-2024.js';
 import { usBracketGrossIncomeCeiling, UsTaxRates2025 } from './finance/tax/us/us-tax-rates-2025.js';
-import { UsTaxRatesBase } from './finance/tax/us/us-tax-rates-base.js';
+import { UsTaxRatesBase, _drawDownBasket } from './finance/tax/us/us-tax-rates-base.js';
 import { TaxService } from './finance/tax-service.js';
 import { TaxSettleService } from './finance/tax-settle-service.js';
 import { EDGE_TYPES, createEdgeId, Edge } from './graph/edge.js';
@@ -936,6 +936,7 @@ export const Finance = {
   usBracketGrossIncomeCeiling,
   UsTaxRates2025,
   UsTaxRatesBase,
+  _drawDownBasket,
   TaxService,
   TaxSettleService,
 };

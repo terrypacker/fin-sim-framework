@@ -224,7 +224,7 @@ test('EVT-36: collectible sale records gain as AU capital gain if AU resident', 
   const auGainsDiff = taxEntries[0].stateDiff.find(d => d.field === 'auCapitalGainsYTD');
   const expectedGain = AU_COLLECTIBLE_JSON.collectibles[0].value - AU_COLLECTIBLE_JSON.collectibles[0].costBasis;
   assert.strictEqual(auGainsDiff.delta, expectedGain);
-  const ftcDiff = taxEntries[0].stateDiff.find(d => d.field === 'ftcYTD');
+  const ftcDiff = taxEntries[0].stateDiff.find(d => d.field === 'usSourceCapGainsUsdYTD');
   assert.ok(ftcDiff != null && ftcDiff.delta > 0, 'FTC should be recorded for AU resident');
 });
 
@@ -236,7 +236,7 @@ test('EVT-36: collectible sale is not AU taxable if not AU resident', () => {
   assert.ok(taxEntries.length > 0);
   const auGainsDiff = taxEntries[0].stateDiff.find(d => d.field === 'auCapitalGainsYTD');
   assert.ok(auGainsDiff == null, 'no AU capital gain for non-AU resident');
-  const ftcDiff = taxEntries[0].stateDiff.find(d => d.field === 'ftcYTD');
+  const ftcDiff = taxEntries[0].stateDiff.find(d => d.field === 'usSourceCapGainsUsdYTD');
   assert.ok(ftcDiff == null, 'no FTC for non-AU resident');
 });
 
@@ -340,7 +340,7 @@ test('EVT-46: gold collectible sale records AU capital gain if AU resident', () 
   assert.ok(taxEntries.length > 0);
   const auGainsDiff = taxEntries[0].stateDiff.find(d => d.field === 'auCapitalGainsYTD');
   assert.strictEqual(auGainsDiff.delta, 20000);
-  const ftcDiff = taxEntries[0].stateDiff.find(d => d.field === 'ftcYTD');
+  const ftcDiff = taxEntries[0].stateDiff.find(d => d.field === 'usSourceCapGainsUsdYTD');
   assert.ok(ftcDiff != null && ftcDiff.delta > 0, 'FTC should be recorded for AU resident');
 });
 
@@ -373,7 +373,7 @@ test('EVT-47: gold collectible value change is not a US or AU taxable event', ()
 
   assert.strictEqual(sim.state.usCollectibleGainsYTD, 0);
   assert.strictEqual(sim.state.auCapitalGainsYTD ?? 0, 0);
-  assert.strictEqual(sim.state.ftcYTD ?? 0, 0);
+  assert.strictEqual(sim.state.usSourceCapGainsUsdYTD ?? 0, 0);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

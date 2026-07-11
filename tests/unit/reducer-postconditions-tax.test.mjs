@@ -108,9 +108,9 @@ test('AuPeriodAdvanceReducer: sets currentPeriods.AU without disturbing US (I1)'
 
 test('UsTaxSettleApplyReducer: resets US YTD fields and chains US_TAX_PAYMENT_DEBIT when tax>0 (I1)', () => {
   const r = new UsTaxSettleApplyReducer();
-  const state = { usOrdinaryIncomeYTD: 50000, usCapitalGainsYTD: 8000, ftcYTD: 1200 };
+  const state = { usOrdinaryIncomeYTD: 50000, usCapitalGainsYTD: 8000, foreignPassiveIncomeYTD: 1200 };
   const next = runReducer(r, state, makeAction('US_TAX_SETTLE_APPLY', { tax: 9000 }), DATE);
-  for (const f of ['usOrdinaryIncomeYTD', 'usCapitalGainsYTD', 'ftcYTD']) {
+  for (const f of ['usOrdinaryIncomeYTD', 'usCapitalGainsYTD', 'foreignPassiveIncomeYTD']) {
     assert.equal(next[f], 0, `${f} reset`);
   }
   const debit = next.next.find(a => a.type === 'US_TAX_PAYMENT_DEBIT');

@@ -34,6 +34,9 @@ export class InflationAdjustedUsTaxRates extends UsTaxRatesBase {
     this._ltcg_single        = baseRates._ltcg_single.map(([t, r]) => [t * cumulativeFactor, r]);
     this._stdDeduction_single = baseRates._stdDeduction_single * cumulativeFactor;
     this._ficaWageBase       = baseRates._ficaWageBase     * cumulativeFactor;
+    // FEIE cap is inflation-indexed like the brackets (design 52 §4.2); 2026+
+    // derive from the 2025 base × the cumulative factor.
+    this._feieCap            = baseRates._feieCap          * cumulativeFactor;
     this._baseYear           = baseRates.year;
   }
 
