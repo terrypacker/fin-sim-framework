@@ -255,7 +255,7 @@ test('EVT-7: IRA earnings withdrawal IS AU taxable if person is AU resident', ()
   sim.stepTo(new Date(2026, 1, 28));
 
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 5000 * sim.state.effectiveExchangeRates.USD_AUD); // design 51: USD-source → AUD bucket
-  assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded when AU tax applies');
+  assert.ok(sim.state.usSourceOrdinaryUsdYTD > 0, 'FTC should be recorded when AU tax applies');
 });
 
 test('EVT-7: IRA earnings withdrawal is NOT AU taxable if person is not AU resident', () => {
@@ -270,7 +270,7 @@ test('EVT-7: IRA earnings withdrawal is NOT AU taxable if person is not AU resid
   sim.stepTo(new Date(2026, 1, 28));
 
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
-  assert.strictEqual(sim.state.ftcYTD, 0);
+  assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD, 0);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -369,7 +369,7 @@ test('EVT-35: IRA rollover withdrawal is AU ordinary income if AU resident', () 
   sim.stepTo(new Date(2026, 1, 28));
 
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 8000 * sim.state.effectiveExchangeRates.USD_AUD); // design 51: USD-source → AUD bucket
-  assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded for AU resident');
+  assert.ok(sim.state.usSourceOrdinaryUsdYTD > 0, 'FTC should be recorded for AU resident');
 });
 
 test('EVT-35: IRA rollover withdrawal is not AU taxable if not AU resident', () => {
@@ -382,7 +382,7 @@ test('EVT-35: IRA rollover withdrawal is not AU taxable if not AU resident', () 
   sim.stepTo(new Date(2026, 1, 28));
 
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
-  assert.strictEqual(sim.state.ftcYTD, 0);
+  assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD, 0);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -440,5 +440,5 @@ test('EVT-40: IRA RMD is AU ordinary income if AU resident', () => {
   sim.stepTo(new Date(2026, 1, 28));
 
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 20000 * sim.state.effectiveExchangeRates.USD_AUD); // design 51: USD-source → AUD bucket
-  assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded for AU resident');
+  assert.ok(sim.state.usSourceOrdinaryUsdYTD > 0, 'FTC should be recorded for AU resident');
 });

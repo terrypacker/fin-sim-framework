@@ -167,7 +167,7 @@ test('EVT-RENT-3: AU rental (resident) accrues both AU and US ordinary income + 
   // taxable = 2700 - 675 - 1000 = 1025 (AU dep 12000/12 override)
   assert.strictEqual(findDiff(taxes[0], 'auOrdinaryIncomeYTD').delta, 1025);
   assert.strictEqual(findDiff(taxes[0], 'usOrdinaryIncomeYTD').delta, 1025);
-  assert.strictEqual(findDiff(taxes[0], 'ftcYTD').delta, 1025);
+  assert.strictEqual(findDiff(taxes[0], 'foreignPassiveIncomeYTD').delta, 1025);
 });
 
 test('EVT-RENT-4: occupancy rate scales the effective rent / cash', () => {

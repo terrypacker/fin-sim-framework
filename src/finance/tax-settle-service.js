@@ -126,6 +126,12 @@ export class TaxSettleService {
         auNonResidentWithholdingYTD: perPersonShare(state.auPersonNonResidentWithholdingYTD,  state.auNonResidentWithholdingYTD),
         auSuperTaxYTD:               perPersonShare(state.auPersonSuperTaxYTD,                state.auSuperTaxYTD),
         auFrankingCreditYTD:         perPersonShare(state.auPersonFrankingCreditYTD,          state.auFrankingCreditYTD),
+        // FITO (design 52 §4.5): the US-source removal set and the US-tax-paid
+        // input are household scalars — split evenly across residents so each
+        // person's return applies its own share of the offset + with/without limit.
+        usSourceOrdinaryAudYTD:      (state.usSourceOrdinaryAudYTD ?? 0) / numResidents,
+        usSourceCapGainsAudYTD:      (state.usSourceCapGainsAudYTD ?? 0) / numResidents,
+        usTaxPaidOnUsSourceAud:      (state.usTaxPaidOnUsSourceAud ?? 0) / numResidents,
         // AU CGT reform (design 57 §6.6): this person's Age Pension / JobSeeker
         // exemption from the 30% CGT minimum tax; read by AuTaxRates2027._cgtRelief.
         auMinTaxExempt:              person.incomeSupportRecipient === true,

@@ -86,6 +86,12 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
             heading: 'Credits',
             lineItems: [
               { label: 'Franking Credits', amount: -taxDetail.frankingOffset },
+              // Foreign Income Tax Offset (design 52 §6) — US tax paid on US-source
+              // income, single bucket, no carryforward. The de-minimis flag marks
+              // the A$1,000 shortcut (limit calc skipped).
+              ...(taxDetail.fito > 0
+                ? [{ label: `Foreign Income Tax Offset${taxDetail.fitoDeMinimis ? ' (de-minimis)' : ''}`, amount: -taxDetail.fito }]
+                : []),
             ],
           },
         ],

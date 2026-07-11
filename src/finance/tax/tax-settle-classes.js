@@ -13,11 +13,27 @@ import { HandlerEntry }        from '../../simulation-framework/handlers.js';
 import { TaxSettleService }    from '../tax-settle-service.js';
 import { InsufficientFundsError } from '../assets/account.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
+import { toUSD, toAUD }  from './tax-fx.js';
+
+/** Sum the numeric values of a { key: number } map (per-person accumulators). */
+function _sumMap(map) {
+  return map ? Object.values(map).reduce((s, v) => s + (v ?? 0), 0) : 0;
+}
 
 // YTD fields reset to zero after each annual settlement, keyed by country code.
+//
+// Design 52 reset asymmetry (§5): the §904/FITO income numerators and the
+// current-year foreign-tax handoff reset at their own settle; the carryforward
+// pools (ftcPoolGeneral/ftcPoolPassive) and the single-year usTaxPaidOnUsSourceAud
+// handoff are DELIBERATELY excluded — the pools carry forward (drawn down + aged
+// >10y at the US settle), and usTaxPaidOnUsSourceAud is overwritten each US settle
+// and consumed (excess lost) at the next AU settle.
 const YTD_FIELDS = {
-  US: ['usOrdinaryIncomeYTD', 'usNegativeIncomeYTD', 'usCapitalGainsYTD', 'usCollectibleGainsYTD', 'usPenaltyYTD', 'ftcYTD'],
-  AU: ['auOrdinaryIncomeYTD', 'auCapitalGainsYTD', 'auRealCapitalGainsYTD', 'auNonResidentWithholdingYTD', 'auSuperTaxYTD', 'auFrankingCreditYTD'],
+  US: ['usOrdinaryIncomeYTD', 'usNegativeIncomeYTD', 'usCapitalGainsYTD', 'usCollectibleGainsYTD', 'usPenaltyYTD',
+       'foreignGeneralIncomeYTD', 'foreignPassiveIncomeYTD', 'usSourceOrdinaryUsdYTD', 'usSourceCapGainsUsdYTD',
+       'ftcCurrentGeneral', 'ftcCurrentPassive'],
+  AU: ['auOrdinaryIncomeYTD', 'auCapitalGainsYTD', 'auRealCapitalGainsYTD', 'auNonResidentWithholdingYTD', 'auSuperTaxYTD', 'auFrankingCreditYTD',
+       'usSourceOrdinaryAudYTD', 'usSourceCapGainsAudYTD'],
 };
 
 // Per-person AU accumulator maps reset to zero after each AU settlement.
@@ -28,6 +44,7 @@ const PER_PERSON_AU_FIELDS = [
   'auPersonFrankingCreditYTD',
   'auPersonNonResidentWithholdingYTD',
   'auPersonSuperTaxYTD',
+  'auPersonEarnedIncomeYTD',
 ];
 
 // ─── TaxSettleHandler base + per-country subclasses ───────────────────────────
@@ -60,8 +77,24 @@ export class UsTaxSettleHandler extends TaxSettleHandlerBase {
 
   call({ state }) {
     const taxDetail = this._settleService.computeUsTax(state);
+
+    // Design 52 §4.6 — fund the AU FITO. Measure the *marginal* US tax caused by
+    // US-source income via a second pure pass (disregard the US-source removal
+    // set), and hand it to the AU side in AUD for the next AU FY settle. The
+    // with/without pass is exact where a proportional split is not: it holds FEIE
+    // and the AU-source FTC constant and reflects that US-source income consumes
+    // §904 headroom (removing it raises the foreign fraction in the "without" pass).
+    const withoutState = {
+      ...state,
+      usOrdinaryIncomeYTD: (state.usOrdinaryIncomeYTD ?? 0) - (state.usSourceOrdinaryUsdYTD ?? 0),
+      usCapitalGainsYTD:   (state.usCapitalGainsYTD   ?? 0) - (state.usSourceCapGainsUsdYTD ?? 0),
+    };
+    const usTaxWithout   = this._settleService.computeUsTax(withoutState).netLiability;
+    const usTaxOnUsSource = Math.max(0, taxDetail.netLiability - usTaxWithout);
+    const usTaxPaidOnUsSourceAud = toAUD(usTaxOnUsSource, 'USD', state);
+
     return [
-      { type: 'US_TAX_SETTLE_APPLY', tax: taxDetail.netLiability, taxDetail },
+      { type: 'US_TAX_SETTLE_APPLY', tax: taxDetail.netLiability, taxDetail, usTaxPaidOnUsSourceAud },
       { type: 'RECORD_BALANCE' },
     ];
   }
@@ -131,11 +164,19 @@ class TaxSettleApplyReducerBase extends Reducer {
         }
       }
     }
+    const extra = this._extraStatePatches(state, action);
     if (tax > 0) {
-      return this.newState({ ...state, ...resets }, {}, [{ type: this.constructor.debitActionType, amount: tax }]);
+      return this.newState({ ...state, ...resets, ...extra }, {}, [{ type: this.constructor.debitActionType, amount: tax }]);
     }
-    return this.newState({ ...state, ...resets });
+    return this.newState({ ...state, ...resets, ...extra });
   }
+
+  /**
+   * Per-country cross-border-relief state written at the settle, *outside* the
+   * YTD reset set (design 52). Default: none. US persists the drawn-down FTC
+   * pools + the FITO handoff; AU funds the US §904 current-year foreign tax.
+   */
+  _extraStatePatches(_state, _action) { return {}; }
 }
 
 /**
@@ -148,7 +189,26 @@ export class UsTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
   static cc              = 'US';
   static applyActionType = 'US_TAX_SETTLE_APPLY';
   static debitActionType = 'US_TAX_PAYMENT_DEBIT';
-  static description     = 'Resets US YTD tax fields after settlement; chains US_TAX_PAYMENT_DEBIT when tax > 0.';
+  static description     = 'Resets US YTD tax fields after settlement; persists the drawn-down §904 FTC pools + FITO handoff; chains US_TAX_PAYMENT_DEBIT when tax > 0.';
+
+  /**
+   * Persist the per-basket FTC carryforward pools (drawn down + aged in
+   * computeTax, design 52 §4.3) and the FITO handoff usTaxPaidOnUsSourceAud
+   * (§4.6). ftcCurrent* were consumed and reset with the other YTD fields; their
+   * unused remainder is already banked into the pool vintages here.
+   */
+  _extraStatePatches(state, action) {
+    const patches = {};
+    const ftc = action.taxDetail?.ftc;
+    if (ftc) {
+      patches.ftcPoolGeneral = ftc.nextPoolGeneral ?? {};
+      patches.ftcPoolPassive = ftc.nextPoolPassive ?? {};
+    }
+    if (action.usTaxPaidOnUsSourceAud != null) {
+      patches.usTaxPaidOnUsSourceAud = action.usTaxPaidOnUsSourceAud;
+    }
+    return patches;
+  }
 }
 
 /**
@@ -162,7 +222,29 @@ export class AuTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
   static cc              = 'AU';
   static applyActionType = 'AU_TAX_SETTLE_APPLY';
   static debitActionType = 'AU_TAX_PAYMENT_DEBIT';
-  static description     = 'Resets AU YTD tax fields after settlement; chains AU_TAX_PAYMENT_DEBIT when tax > 0.';
+  static description     = 'Resets AU YTD tax fields after settlement; funds the US §904 current-year foreign tax per basket; chains AU_TAX_PAYMENT_DEBIT when tax > 0.';
+
+  /**
+   * Fund the US §904 pools (design 52 §4.4). Apportion the (post-FITO) AU net
+   * liability — less super tax, which is not a creditable foreign income tax —
+   * to the two baskets by AU-source income share, convert to USD, and stage it
+   * as the current-year foreign tax the next US settle consumes. Because FITO has
+   * already reduced the AU liability by the US tax on US-source income, the
+   * residual is predominantly the AU tax on AU-source income (the anti-double-
+   * relief seam, §8).
+   */
+  _extraStatePatches(state, action) {
+    const superTax     = (state.auSuperTaxYTD ?? 0) + _sumMap(state.auPersonSuperTaxYTD);
+    const auCreditable = Math.max(0, (action.tax ?? 0) - superTax);
+    const gen   = state.foreignGeneralIncomeYTD ?? 0;
+    const pass  = state.foreignPassiveIncomeYTD ?? 0;
+    const denom = gen + pass;
+    const generalShare = denom > 0 ? gen / denom : 0;
+    return {
+      ftcCurrentGeneral: toUSD(auCreditable * generalShare,       'AUD', state),
+      ftcCurrentPassive: toUSD(auCreditable * (1 - generalShare), 'AUD', state),
+    };
+  }
 }
 
 // ─── TaxPaymentDebitReducer base + per-country subclasses ────────────────────

@@ -79,6 +79,55 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
     return 'CGT 50% Discount';
   }
 
+  /**
+   * Resident income-tax assessment BEFORE the Foreign Income Tax Offset
+   * (design 52 §4.5). Pure and FITO-free so it can be evaluated twice — once on
+   * the full state and once with the US-source removal set disregarded — to
+   * derive the FITO "step 1 − step 2" limit without recursion. Returns the
+   * component figures plus `netLiabilityPreFito`.
+   */
+  _assessResidentPreFito(state) {
+    const {
+      auOrdinaryIncomeYTD = 0,
+      auCapitalGainsYTD   = 0,
+      auSuperTaxYTD       = 0,
+      auFrankingCreditYTD = 0,
+    } = state;
+
+    // Apply the year's CGT relief. Base = flat 50% Div 115 discount and no
+    // minimum-tax floor (minTaxRate 0). FY2027+ removes the discount and sets
+    // minTaxRate to 0.30 (design 57 §6.3).
+    const { netTaxableGain, reliefAmount: cgtDiscount, minTaxRate } =
+      this._cgtRelief(state, auCapitalGainsYTD);
+    const discountedIncome = auOrdinaryIncomeYTD + netTaxableGain;
+    const assessableIncome = Math.max(0, discountedIncome);
+    const baseTax          = _applyBrackets(assessableIncome, this._brackets);
+    const medicareLevy     = this._computeMedicareLevy(discountedIncome);
+    const frankingOffset   = Math.min(auFrankingCreditYTD, baseTax);
+
+    // Div 115C minimum tax (FY2027+): floor the tax *attributable to the net
+    // capital gain* at minTaxRate × that gain — an incremental floor on the gain's
+    // own marginal tax (baseTax with the gain − baseTax without it), not the whole
+    // liability, so it only bites when the marginal rate on the gain is below
+    // minTaxRate. 0 for FY≤2026.
+    const ordinaryOnlyTax  = _applyBrackets(Math.max(0, auOrdinaryIncomeYTD), this._brackets);
+    const taxOnGain        = Math.max(0, baseTax - ordinaryOnlyTax);
+    const minTaxTopUp      = minTaxRate > 0
+      ? Math.max(0, minTaxRate * netTaxableGain - taxOnGain)
+      : 0;
+
+    const netLiabilityPreFito = Math.max(0, baseTax + medicareLevy - frankingOffset)
+                              + auSuperTaxYTD + minTaxTopUp;
+
+    return {
+      netTaxableGain, cgtDiscount, minTaxRate, minTaxTopUp,
+      assessableIncome, baseTax, medicareLevy, frankingOffset,
+      superTax: auSuperTaxYTD,
+      marginalRate: _marginalBracketRate(assessableIncome, this._brackets),
+      netLiabilityPreFito,
+    };
+  }
+
   computeTax(state) {
     const {
       auOrdinaryIncomeYTD         = 0,
@@ -93,34 +142,38 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
     const isAuResident = state.people?.[primaryKey]?.residency === 'AU';
 
     if (isAuResident) {
-      // Resident: apply the year's CGT relief. Base = flat 50% Div 115 discount and
-      // no minimum-tax floor (minTaxRate 0). FY2027+ removes the discount and sets
-      // minTaxRate to 0.30 (design 57 §6.3).
-      const { netTaxableGain, reliefAmount: cgtDiscount, minTaxRate } =
-        this._cgtRelief(state, auCapitalGainsYTD);
-      const discountedIncome   = auOrdinaryIncomeYTD + netTaxableGain;
-      const assessableIncome   = Math.max(0, discountedIncome);
-      const baseTax            = _applyBrackets(assessableIncome, this._brackets);
-      const medicareLevy       = this._computeMedicareLevy(discountedIncome);
-      const frankingOffset     = Math.min(auFrankingCreditYTD, baseTax);
+      const a = this._assessResidentPreFito(state);
 
-      // Div 115C minimum tax (FY2027+): floor the tax *attributable to the net
-      // capital gain* at minTaxRate × that gain. This is an incremental floor on
-      // the gain's own marginal tax (baseTax with the gain − baseTax without it),
-      // not a floor on the whole liability, so it only bites when the taxpayer's
-      // marginal rate on the gain is below minTaxRate. 0 for FY≤2026.
-      const ordinaryOnlyTax    = _applyBrackets(Math.max(0, auOrdinaryIncomeYTD), this._brackets);
-      const taxOnGain          = Math.max(0, baseTax - ordinaryOnlyTax);
-      const minTaxTopUp        = minTaxRate > 0
-        ? Math.max(0, minTaxRate * netTaxableGain - taxOnGain)
-        : 0;
+      // Design 52 §4.5 — Foreign Income Tax Offset (FITO). Offset AU tax by the US
+      // tax paid on US-source income (usTaxPaidOnUsSourceAud), single bucket, NO
+      // carryforward (excess is lost — the deliberate asymmetry with the US FTC).
+      // A$1,000 de-minimis skips the limit; above it the limit is the marginal AU
+      // tax on the US-source income (ATO "step 1 − step 2"), computed by
+      // re-assessing pre-FITO with the US-source removal set disregarded. The
+      // ordinary/CG split matters because AU taxes them differently (CGT discount),
+      // so each US-source slice is removed from its own bucket.
+      const foreignTaxAud = Math.max(0, state.usTaxPaidOnUsSourceAud ?? 0);
+      let fito = 0, fitoLimit = null, fitoDeMinimis = false;
+      if (foreignTaxAud > 0) {
+        if (foreignTaxAud <= 1000) {
+          fito = foreignTaxAud;
+          fitoDeMinimis = true;
+        } else {
+          const without = this._assessResidentPreFito({
+            ...state,
+            auOrdinaryIncomeYTD: (state.auOrdinaryIncomeYTD ?? 0) - (state.usSourceOrdinaryAudYTD ?? 0),
+            auCapitalGainsYTD:   (state.auCapitalGainsYTD   ?? 0) - (state.usSourceCapGainsAudYTD ?? 0),
+          }).netLiabilityPreFito;
+          fitoLimit = Math.max(0, a.netLiabilityPreFito - without);
+          fito      = Math.min(foreignTaxAud, fitoLimit);
+        }
+      }
 
-      const grossTax           = Math.max(0, baseTax + medicareLevy - frankingOffset) + auSuperTaxYTD + minTaxTopUp;
-      const netLiability       = grossTax;
+      const netLiability = Math.max(0, a.baseTax + a.medicareLevy - a.frankingOffset - fito)
+                         + a.superTax + a.minTaxTopUp;
 
-      const totalGrossIncome   = auOrdinaryIncomeYTD + auCapitalGainsYTD;
-      const effectiveRate      = totalGrossIncome > 0 ? netLiability / totalGrossIncome : 0;
-      const marginalRate       = _marginalBracketRate(assessableIncome, this._brackets);
+      const totalGrossIncome = auOrdinaryIncomeYTD + auCapitalGainsYTD;
+      const effectiveRate    = totalGrossIncome > 0 ? netLiability / totalGrossIncome : 0;
 
       return {
         inputs: {
@@ -129,36 +182,43 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
           nonResidentWithholding: auNonResidentWithholdingYTD,
           superTax:               auSuperTaxYTD,
           frankingCredits:        auFrankingCreditYTD,
+          foreignIncomeTaxOffset: foreignTaxAud,
           isResident:             true,
         },
         isResident:               true,
-        cgtDiscount,
-        discountedCapitalGains:   netTaxableGain,
-        cgtMinimumTaxTopUp:       minTaxTopUp,
-        assessableIncome,
-        baseTax,
-        medicareLevy,
-        frankingOffset,
+        cgtDiscount:              a.cgtDiscount,
+        discountedCapitalGains:   a.netTaxableGain,
+        cgtMinimumTaxTopUp:       a.minTaxTopUp,
+        assessableIncome:         a.assessableIncome,
+        baseTax:                  a.baseTax,
+        medicareLevy:             a.medicareLevy,
+        frankingOffset:           a.frankingOffset,
+        fito,
+        fitoLimit,
+        fitoDeMinimis,
         nonResidentWithholdingTax: 0,
-        grossTax:                 baseTax + medicareLevy + auSuperTaxYTD + minTaxTopUp,
-        credits:                  frankingOffset,
+        grossTax:                 a.baseTax + a.medicareLevy + a.superTax + a.minTaxTopUp,
+        credits:                  a.frankingOffset,
         netLiability,
         effectiveRate,
-        marginalRate,
+        marginalRate:             a.marginalRate,
         lineItems: [
           { label: 'Ordinary Income',               amount:  auOrdinaryIncomeYTD },
           { label: 'Capital Gains (before relief)', amount:  auCapitalGainsYTD },
-          { label: this._cgtReliefLabel(),          amount: -cgtDiscount },
-          { label: 'Net Capital Gains',             amount:  netTaxableGain },
-          { label: 'Total Assessable Income',       amount:  assessableIncome },
-          { label: 'Tax on Income',                 amount:  baseTax },
-          { label: 'Medicare Levy',                 amount:  medicareLevy },
-          ...(minTaxTopUp > 0
-            ? [{ label: `CGT Minimum Tax Top-up (${Math.round(minTaxRate * 100)}%)`, amount: minTaxTopUp }]
+          { label: this._cgtReliefLabel(),          amount: -a.cgtDiscount },
+          { label: 'Net Capital Gains',             amount:  a.netTaxableGain },
+          { label: 'Total Assessable Income',       amount:  a.assessableIncome },
+          { label: 'Tax on Income',                 amount:  a.baseTax },
+          { label: 'Medicare Levy',                 amount:  a.medicareLevy },
+          ...(a.minTaxTopUp > 0
+            ? [{ label: `CGT Minimum Tax Top-up (${Math.round(a.minTaxRate * 100)}%)`, amount: a.minTaxTopUp }]
             : []),
           { label: 'Super Tax',                     amount:  auSuperTaxYTD },
-          { label: 'Gross Tax',                     amount:  baseTax + medicareLevy + auSuperTaxYTD + minTaxTopUp },
-          { label: 'Franking Credits',              amount: -frankingOffset },
+          { label: 'Gross Tax',                     amount:  a.baseTax + a.medicareLevy + a.superTax + a.minTaxTopUp },
+          { label: 'Franking Credits',              amount: -a.frankingOffset },
+          ...(fito > 0
+            ? [{ label: `Foreign Income Tax Offset${fitoDeMinimis ? ' (de-minimis)' : ''}`, amount: -fito }]
+            : []),
           { label: 'Net Tax Liability',             amount:  netLiability },
         ],
       };

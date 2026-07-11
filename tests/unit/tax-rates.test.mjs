@@ -346,7 +346,7 @@ test('WAGES_INCOME_TAX with personKey updates auPersonOrdinaryIncomeYTD, not auO
   assert.strictEqual(s1.auPersonOrdinaryIncomeYTD.primary, 8000);
   assert.strictEqual(s1.auPersonOrdinaryIncomeYTD.spouse, 0);
   assert.strictEqual(s1.auOrdinaryIncomeYTD, 0);  // not updated when personKey present
-  assert.ok(s1.ftcYTD > 0);
+  assert.ok(s1.usSourceOrdinaryUsdYTD > 0);
 });
 
 test('WAGES_INCOME_TAX without personKey still updates auOrdinaryIncomeYTD (backward compat)', () => {

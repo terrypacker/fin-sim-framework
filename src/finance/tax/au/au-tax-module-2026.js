@@ -26,6 +26,12 @@ const SUPER_TAX_RATE = 0.15;
  *   EVT-20 to 23  Superannuation
  *   EVT-26 to 32  AU Brokerage
  *   EVT-33        AU House Sale
+ *
+ * Design 52 — cross-border relief. Each AU-source dollar (taxed by the US on a
+ * citizen's worldwide return) is now tagged into a §904 basket numerator, in USD:
+ *   General  — AU wages / self-employment (also FEIE-earned; per-person cap)
+ *   Passive  — AU rental, interest, dividends, brokerage/property capital gains
+ * These numerators feed the per-basket §904 FTC on the US return (design 52 §4.3).
  */
 export class AuTaxModule2026 extends BaseTaxModule {
   get countryCode() { return 'AU'; }
@@ -51,18 +57,27 @@ export class AuTaxModule2026 extends BaseTaxModule {
       // (e.g. a US-resident spouse paid in AUD) → AU non-resident withholding + FTC.
       // Attributed to the *earner* via personKey (like AU_SE_INCOME_TAX), not to
       // the AU account's owner — the wage belongs to the person who earned it.
+      // Design 52: AU-source earned income → §904 General numerator; the resident
+      // earner's slice also feeds the per-person FEIE cap accumulator.
       ['AU_WAGES_INCOME_TAX', (state, action) => {
         const { amount, residency, personKey } = action;
         const isAuResident = residency === 'AU';
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + toUSD(amount, 'AUD', state) };
+        const usd = toUSD(amount, 'AUD', state);
+        let next = {
+          ...state,
+          usOrdinaryIncomeYTD:      state.usOrdinaryIncomeYTD + usd,
+          foreignGeneralIncomeYTD:  (state.foreignGeneralIncomeYTD ?? 0) + usd,
+        };
         if (isAuResident) {
           const usePerPerson = personKey != null && state.auPersonOrdinaryIncomeYTD != null;
           next = {
             ...next,
             ...(usePerPerson
-              ? { auPersonOrdinaryIncomeYTD: { ...state.auPersonOrdinaryIncomeYTD, [personKey]: (state.auPersonOrdinaryIncomeYTD[personKey] ?? 0) + amount } }
+              ? {
+                  auPersonOrdinaryIncomeYTD: { ...state.auPersonOrdinaryIncomeYTD, [personKey]: (state.auPersonOrdinaryIncomeYTD[personKey] ?? 0) + amount },
+                  auPersonEarnedIncomeYTD:   { ...(state.auPersonEarnedIncomeYTD ?? {}), [personKey]: ((state.auPersonEarnedIncomeYTD?.[personKey]) ?? 0) + amount },
+                }
               : { auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount }),
-            ftcYTD: state.ftcYTD + toUSD(amount, 'AUD', state),
           };
         } else {
           const usePerPerson = personKey != null && state.auPersonNonResidentWithholdingYTD != null;
@@ -71,7 +86,6 @@ export class AuTaxModule2026 extends BaseTaxModule {
             ...(usePerPerson
               ? { auPersonNonResidentWithholdingYTD: { ...state.auPersonNonResidentWithholdingYTD, [personKey]: (state.auPersonNonResidentWithholdingYTD[personKey] ?? 0) + amount } }
               : { auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + amount }),
-            ftcYTD: state.ftcYTD + toUSD(amount, 'AUD', state),
           };
         }
         return next;
@@ -84,6 +98,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
       // Design 48: AU rental income — net rental income (may be negative) is
       // AU-sourced; always US ordinary income (worldwide), and AU ordinary income
       // with an FTC when the owner is an AU resident. FTC never goes negative.
+      // Design 52: AU-source → §904 Passive numerator (loss years contribute 0).
       ['AU_RENTAL_INCOME_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
@@ -91,8 +106,8 @@ export class AuTaxModule2026 extends BaseTaxModule {
         if (isAuResident) {
           next = {
             ...next,
-            auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount,
-            ftcYTD:              state.ftcYTD              + toUSD(Math.max(0, amount), 'AUD', state),
+            auOrdinaryIncomeYTD:      state.auOrdinaryIncomeYTD + amount,
+            foreignPassiveIncomeYTD:  (state.foreignPassiveIncomeYTD ?? 0) + toUSD(Math.max(0, amount), 'AUD', state),
           };
         }
         return next;
@@ -103,19 +118,24 @@ export class AuTaxModule2026 extends BaseTaxModule {
   _auSavingsReducerFns() {
     return [
       // EVT-18/19: AU savings earnings — always US ordinary income;
-      //   AU ordinary income for residents, AU NR withholding for non-residents
+      //   AU ordinary income for residents, AU NR withholding for non-residents.
+      // Design 52: AU-source interest → §904 Passive numerator.
       ['AU_SAVINGS_EARNINGS_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
         const perPerson = state.people != null && state.auSavingsAccount != null;
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + toUSD(amount, 'AUD', state) };
+        const usd = toUSD(amount, 'AUD', state);
+        let next = {
+          ...state,
+          usOrdinaryIncomeYTD:     state.usOrdinaryIncomeYTD + usd,
+          foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + usd,
+        };
         if (isAuResident) {
           next = {
             ...next,
             ...(perPerson
               ? { auPersonOrdinaryIncomeYTD: accumulateByOwnership(state.auPersonOrdinaryIncomeYTD ?? {}, state.auSavingsAccount, amount, state.people) }
               : { auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount }),
-            ftcYTD: state.ftcYTD + toUSD(amount, 'AUD', state),
           };
         } else {
           next = {
@@ -123,7 +143,6 @@ export class AuTaxModule2026 extends BaseTaxModule {
             ...(perPerson
               ? { auPersonNonResidentWithholdingYTD: accumulateByOwnership(state.auPersonNonResidentWithholdingYTD ?? {}, state.auSavingsAccount, amount, state.people) }
               : { auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + amount }),
-            ftcYTD: state.ftcYTD + toUSD(amount, 'AUD', state),
           };
         }
         return next;
@@ -134,19 +153,24 @@ export class AuTaxModule2026 extends BaseTaxModule {
   _auFixedIncomeReducerFns() {
     return [
       // AU fixed income interest — always US ordinary income;
-      //   AU ordinary income for residents, AU NR withholding for non-residents
+      //   AU ordinary income for residents, AU NR withholding for non-residents.
+      // Design 52: AU-source interest → §904 Passive numerator.
       ['AU_FIXED_INCOME_EARNINGS_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
         const perPerson = state.people != null && state.auFixedIncomeAccount != null;
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + toUSD(amount, 'AUD', state) };
+        const usd = toUSD(amount, 'AUD', state);
+        let next = {
+          ...state,
+          usOrdinaryIncomeYTD:     state.usOrdinaryIncomeYTD + usd,
+          foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + usd,
+        };
         if (isAuResident) {
           next = {
             ...next,
             ...(perPerson
               ? { auPersonOrdinaryIncomeYTD: accumulateByOwnership(state.auPersonOrdinaryIncomeYTD ?? {}, state.auFixedIncomeAccount, amount, state.people) }
               : { auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount }),
-            ftcYTD: state.ftcYTD + toUSD(amount, 'AUD', state),
           };
         } else {
           next = {
@@ -154,7 +178,6 @@ export class AuTaxModule2026 extends BaseTaxModule {
             ...(perPerson
               ? { auPersonNonResidentWithholdingYTD: accumulateByOwnership(state.auPersonNonResidentWithholdingYTD ?? {}, state.auFixedIncomeAccount, amount, state.people) }
               : { auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + amount }),
-            ftcYTD: state.ftcYTD + toUSD(amount, 'AUD', state),
           };
         }
         return next;
@@ -201,49 +224,57 @@ export class AuTaxModule2026 extends BaseTaxModule {
 
   _auBrokerageReducerFns() {
     return [
-      // EVT-26: franked dividend (resident) — US ordinary income, AU franking credit, FTC
+      // EVT-26: franked dividend (resident) — US ordinary income, AU franking credit, FTC.
+      // Design 52: AU-source dividend → §904 Passive numerator.
       ['AU_DIVIDEND_FRANKED_RESIDENT_TAX', (state, action) => {
         const perPerson = state.people != null && state.auStockAccount != null;
+        const usd = toUSD(action.amount, 'AUD', state);
         return {
           ...state,
-          usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + toUSD(action.amount, 'AUD', state),
+          usOrdinaryIncomeYTD:     state.usOrdinaryIncomeYTD + usd,
+          foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + usd,
           ...(perPerson
             ? { auPersonFrankingCreditYTD: accumulateByOwnership(state.auPersonFrankingCreditYTD ?? {}, state.auStockAccount, action.amount, state.people) }
             : { auFrankingCreditYTD: state.auFrankingCreditYTD + action.amount }),
-          ftcYTD: state.ftcYTD + toUSD(action.amount, 'AUD', state),
         };
       }],
 
-      // EVT-28: unfranked dividend (resident) — US ordinary income, AU ordinary income, FTC
+      // EVT-28: unfranked dividend (resident) — US ordinary income, AU ordinary income, FTC.
+      // Design 52: AU-source dividend → §904 Passive numerator.
       ['AU_DIVIDEND_UNFRANKED_RESIDENT_TAX', (state, action) => {
         const perPerson = state.people != null && state.auStockAccount != null;
+        const usd = toUSD(action.amount, 'AUD', state);
         return {
           ...state,
-          usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + toUSD(action.amount, 'AUD', state),
+          usOrdinaryIncomeYTD:     state.usOrdinaryIncomeYTD + usd,
+          foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + usd,
           ...(perPerson
             ? { auPersonOrdinaryIncomeYTD: accumulateByOwnership(state.auPersonOrdinaryIncomeYTD ?? {}, state.auStockAccount, action.amount, state.people) }
             : { auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + action.amount }),
-          ftcYTD: state.ftcYTD + toUSD(action.amount, 'AUD', state),
         };
       }],
 
-      // EVT-29: unfranked dividend (non-resident) — US ordinary income, AU NR withholding, FTC
+      // EVT-29: unfranked dividend (non-resident) — US ordinary income, AU NR withholding, FTC.
+      // Design 52: AU-source dividend → §904 Passive numerator.
       ['AU_DIVIDEND_UNFRANKED_NONRESIDENT_TAX', (state, action) => {
         const perPerson = state.people != null && state.auStockAccount != null;
+        const usd = toUSD(action.amount, 'AUD', state);
         return {
           ...state,
-          usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + toUSD(action.amount, 'AUD', state),
+          usOrdinaryIncomeYTD:     state.usOrdinaryIncomeYTD + usd,
+          foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + usd,
           ...(perPerson
             ? { auPersonNonResidentWithholdingYTD: accumulateByOwnership(state.auPersonNonResidentWithholdingYTD ?? {}, state.auStockAccount, action.amount, state.people) }
             : { auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + action.amount }),
-          ftcYTD: state.ftcYTD + toUSD(action.amount, 'AUD', state),
         };
       }],
 
       // EVT-31/32: AU stock withdrawal — always US capital gain;
       //   AU capital gain + FTC for residents only. AU measures the gain from its
       //   stepped-up (s855-45) cost base, so auGain ≤ gain (design 36 §12.2); the
-      //   pre-move appreciation is US-only and earns no FTC (ftcYTD tracks auGain).
+      //   pre-move appreciation is US-only and earns no FTC (only auGain feeds the
+      //   §904 Passive numerator).
+      // Design 52: AU-source capital gain → §904 Passive numerator (auGain, USD).
       ['AU_STOCK_WITHDRAWAL_TAX', (state, action) => {
         const { gain, residency } = action;
         const auGain = action.auGain ?? gain;
@@ -256,7 +287,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
             ...(perPerson
               ? { auPersonCapitalGainsYTD: accumulateByOwnership(state.auPersonCapitalGainsYTD ?? {}, state.auStockAccount, auGain, state.people) }
               : { auCapitalGainsYTD: state.auCapitalGainsYTD + auGain }),
-            ftcYTD: state.ftcYTD + toUSD(auGain, 'AUD', state),
+            foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + toUSD(auGain, 'AUD', state),
           };
         }
         return next;
@@ -267,25 +298,29 @@ export class AuTaxModule2026 extends BaseTaxModule {
   _realPropertyReducerFns() {
     return [
       // EVT-33: AU house sale — always US capital gain;
-      //   resident: AU capital gain + FTC; non-resident: AU NR withholding + FTC
+      //   resident: AU capital gain + FTC; non-resident: AU NR withholding + FTC.
+      // Design 52: AU-source capital gain → §904 Passive numerator.
       ['AU_HOUSE_SALE_TAX', (state, action) => {
         const { gain, residency, ownershipType, ownerId, owners } = action;
         const isAuResident = residency === 'AU';
         const perPerson = state.people != null;
-        let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + toUSD(gain, 'AUD', state) };
+        const usdGain = toUSD(gain, 'AUD', state);
+        let next = {
+          ...state,
+          usCapitalGainsYTD:       state.usCapitalGainsYTD + usdGain,
+          foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + usdGain,
+        };
         if (perPerson) {
           const asset = { ownershipType, ownerId, owners };
           if (isAuResident) {
             next = {
               ...next,
               auPersonCapitalGainsYTD: accumulateByOwnership(state.auPersonCapitalGainsYTD ?? {}, asset, gain, state.people),
-              ftcYTD: state.ftcYTD + toUSD(gain, 'AUD', state),
             };
           } else {
             next = {
               ...next,
               auPersonNonResidentWithholdingYTD: accumulateByOwnership(state.auPersonNonResidentWithholdingYTD ?? {}, asset, gain, state.people),
-              ftcYTD: state.ftcYTD + toUSD(gain, 'AUD', state),
             };
           }
         } else {
@@ -294,7 +329,6 @@ export class AuTaxModule2026 extends BaseTaxModule {
             ...(isAuResident
               ? { auCapitalGainsYTD: state.auCapitalGainsYTD + gain }
               : { auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + gain }),
-            ftcYTD: state.ftcYTD + toUSD(gain, 'AUD', state),
           };
         }
         return next;
@@ -304,19 +338,27 @@ export class AuTaxModule2026 extends BaseTaxModule {
 
   _auIncomeReducerFns() {
     return [
-      // EVT-49: AU self-employment income — always US ordinary income; AU ordinary income if resident
+      // EVT-49: AU self-employment income — always US ordinary income; AU ordinary income if resident.
+      // Design 52: AU-source earned income → §904 General numerator + per-person FEIE cap.
       ['AU_SE_INCOME_TAX', (state, action) => {
         const { amount, residency, personKey } = action;
         const isAuResident = residency === 'AU';
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + toUSD(amount, 'AUD', state) };
+        const usd = toUSD(amount, 'AUD', state);
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + usd };
         if (isAuResident) {
+          // §904 General numerator only when AU taxes it (resident) — a
+          // non-resident's AU-source SE income is not AU-assessed in this model,
+          // so there is no foreign tax to credit (matches the pre-52 ftcYTD gate).
           const usePerPerson = personKey != null && state.auPersonOrdinaryIncomeYTD != null;
           next = {
             ...next,
+            foreignGeneralIncomeYTD: (state.foreignGeneralIncomeYTD ?? 0) + usd,
             ...(usePerPerson
-              ? { auPersonOrdinaryIncomeYTD: { ...state.auPersonOrdinaryIncomeYTD, [personKey]: (state.auPersonOrdinaryIncomeYTD[personKey] ?? 0) + amount } }
+              ? {
+                  auPersonOrdinaryIncomeYTD: { ...state.auPersonOrdinaryIncomeYTD, [personKey]: (state.auPersonOrdinaryIncomeYTD[personKey] ?? 0) + amount },
+                  auPersonEarnedIncomeYTD:   { ...(state.auPersonEarnedIncomeYTD ?? {}), [personKey]: ((state.auPersonEarnedIncomeYTD?.[personKey]) ?? 0) + amount },
+                }
               : { auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount }),
-            ftcYTD: state.ftcYTD + toUSD(amount, 'AUD', state),
           };
         }
         return next;

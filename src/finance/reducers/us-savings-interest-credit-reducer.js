@@ -16,8 +16,9 @@ import { ACCOUNT_ROLES } from '../state/account-roles.js';
  *
  * Credits action.amount to the US savings account (resolved via StateRegistry)
  * then increments usOrdinaryIncomeYTD. When the person is already an AU
- * resident, the same amount is also added to auOrdinaryIncomeYTD and ftcYTD
- * (foreign-tax-credit tracking for cross-country tax reconciliation).
+ * resident, the same amount is also added to auOrdinaryIncomeYTD (worldwide) and
+ * to the FITO removal set (usSourceOrdinary{Usd,Aud}YTD) — US-source interest is
+ * relieved on the AU return via FITO, not by a US FTC (design 52).
  *
  * @param {object} opts
  * @param {import('../../finance/services/account-service.js').AccountService} opts.accountService
@@ -26,7 +27,7 @@ import { ACCOUNT_ROLES } from '../state/account-roles.js';
  * @param {string|null} [opts.ownerId=null]
  */
 export class UsSavingsInterestCreditReducer extends Reducer {
-  static description = 'Credits interest to a US savings account and increments usOrdinaryIncomeYTD (plus auOrdinaryIncomeYTD/ftcYTD when AU-resident).';
+  static description = 'Credits interest to a US savings account and increments usOrdinaryIncomeYTD (plus auOrdinaryIncomeYTD + the FITO removal set when AU-resident).';
   static type        = 'UsSavingsInterestCreditReducer';
   static actionType  = 'US_SAVINGS_INTEREST_CREDIT';
 
@@ -62,10 +63,17 @@ export class UsSavingsInterestCreditReducer extends Reducer {
 
     const personKey = this.ownerId ?? Object.keys(state.people ?? {})[0];
     if (state.people?.[personKey]?.residency === 'AU') {
+      // US-source interest booked while AU-resident: AU taxes it (worldwide) and
+      // relieves the US tax via FITO (design 52). Record the FITO removal set to
+      // match exactly what landed in each bucket (usOrdinaryIncomeYTD USD and
+      // auOrdinaryIncomeYTD as-written) so the §4.5/§4.6 with/without passes stay
+      // self-consistent. (auOrdinaryIncomeYTD is added unconverted here, a
+      // pre-existing quirk independent of design 52 — preserved as-is.)
       return this.newState({
         ...base,
-        auOrdinaryIncomeYTD: (state.auOrdinaryIncomeYTD ?? 0) + action.amount,
-        ftcYTD:              (state.ftcYTD ?? 0) + action.amount,
+        auOrdinaryIncomeYTD:    (state.auOrdinaryIncomeYTD ?? 0) + action.amount,
+        usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + action.amount,
+        usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + action.amount,
       });
     }
     return this.newState(base);

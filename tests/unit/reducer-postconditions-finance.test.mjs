@@ -201,20 +201,20 @@ test('UsSavingsInterestCreditReducer: credits savings, bumps usOrdinaryIncomeYTD
   assert.equal(next.auOrdinaryIncomeYTD, undefined, 'US resident: no AU classification');
 });
 
-test('UsSavingsInterestCreditReducer: AU resident also accrues auOrdinaryIncomeYTD + ftcYTD', () => {
+test('UsSavingsInterestCreditReducer: AU resident also accrues auOrdinaryIncomeYTD + usSourceOrdinaryUsdYTD', () => {
   const services = makeServices();
   services.stateRegistry.getStateKey = () => 'usSavingsAccount';
   const r = new UsSavingsInterestCreditReducer(services);
   const state = {
     people: makePeople({ residency: 'AU' }),
-    usOrdinaryIncomeYTD: 0, auOrdinaryIncomeYTD: 0, ftcYTD: 0,
+    usOrdinaryIncomeYTD: 0, auOrdinaryIncomeYTD: 0, usSourceOrdinaryUsdYTD: 0,
     usSavingsAccount: makeAccount({ stateKey: 'usSavingsAccount', holdings: [{ id: 's1', marketValue: 5000, costBasis: 5000 }] }),
   };
   const next = runReducer(r, state, makeAction('US_SAVINGS_INTEREST_CREDIT', { amount: 200 }),
     DATE, { checkNoMutation: false, balance: true, nonNegative: true });
   assert.equal(next.usOrdinaryIncomeYTD, 200);
   assert.equal(next.auOrdinaryIncomeYTD, 200);
-  assert.equal(next.ftcYTD, 200);
+  assert.equal(next.usSourceOrdinaryUsdYTD, 200);
 });
 
 // ─── InflationAdjustReducer (pure; I1/I2) ──────────────────────────────────────

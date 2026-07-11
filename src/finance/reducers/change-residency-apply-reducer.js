@@ -48,7 +48,7 @@ export class ChangeResidencyApplyReducer extends Reducer {
     return r;
   }
 
-  reduce(state) {
+  reduce(state, action, date) {
     // Destination of the move (matches the residency flip below). When the
     // destination country steps up the cost base on becoming resident (AU
     // ITAA97 s855-45, design 36 §12.2), recordResidencyChange resets the AU
@@ -62,11 +62,19 @@ export class ChangeResidencyApplyReducer extends Reducer {
       this.accountService.recordResidencyChange(account, { country, stepUp });
     }
 
-    // 2. Flip residency to 'AU' for every person; citizen arrays unchanged
+    // 2. Flip residency to 'AU' for every person; citizen arrays unchanged.
+    //    Stamp residencySinceMs (the move date) so the FEIE full-qualifying-year
+    //    gate can suppress the exclusion for the partial move-in year (design 52
+    //    §4.2). Only stamp when not already resident, so a re-entry doesn't reset
+    //    an existing qualifying period; leave prior stamps intact.
+    const moveMs = date instanceof Date ? date.getTime() : (typeof date === 'number' ? date : null);
     const updatedPeople = {};
     if (state.people) {
       for (const [personKey, person] of Object.entries(state.people)) {
-        updatedPeople[personKey] = { ...person, residency: 'AU' };
+        const residencySinceMs = person.residency === 'AU'
+          ? (person.residencySinceMs ?? moveMs)
+          : moveMs;
+        updatedPeople[personKey] = { ...person, residency: 'AU', residencySinceMs };
       }
     }
 

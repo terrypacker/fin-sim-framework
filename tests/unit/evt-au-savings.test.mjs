@@ -160,7 +160,7 @@ test('EVT-18: AU savings earnings (resident) are ALWAYS AU taxable at ordinary i
   // In the toolset path, state.people is non-null → per-person maps are used instead of flat YTD fields
   assert.strictEqual(sim.state.auPersonOrdinaryIncomeYTD?.['primary'], 600);
   assert.strictEqual(sim.state.auNonResidentWithholdingYTD, 0); // resident pays ordinary rate
-  assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded');
+  assert.ok(sim.state.foreignPassiveIncomeYTD > 0, 'FTC should be recorded');
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -192,5 +192,5 @@ test('EVT-19: AU savings earnings (non-resident) are ALWAYS AU taxable at non-re
   // In the toolset path, state.people is non-null → per-person maps are used instead of flat YTD fields
   assert.strictEqual(sim.state.auPersonNonResidentWithholdingYTD?.['primary'], 600);
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0); // non-resident pays withholding rate
-  assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded');
+  assert.ok(sim.state.foreignPassiveIncomeYTD > 0, 'FTC should be recorded');
 });

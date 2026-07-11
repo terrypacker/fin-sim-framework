@@ -141,7 +141,7 @@ test('EVT-37: SS income records full amount as AU ordinary income if AU resident
 
   // design 51: US-source SS (USD) is normalized into the AUD auOrdinaryIncomeYTD bucket.
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 2000 * sim.state.effectiveExchangeRates.USD_AUD);
-  assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded for AU resident');
+  assert.ok(sim.state.usSourceOrdinaryUsdYTD > 0, 'FTC should be recorded for AU resident');
 });
 
 test('EVT-37: SS income is not AU taxable if not AU resident', () => {
@@ -150,7 +150,7 @@ test('EVT-37: SS income is not AU taxable if not AU resident', () => {
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
-  assert.strictEqual(sim.state.ftcYTD, 0);
+  assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD, 0);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -180,7 +180,7 @@ test('EVT-38: wages record full amount as AU ordinary income if AU resident', ()
 
   // design 51: US-source wages (USD) are normalized into the AUD bucket.
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 5000 * sim.state.effectiveExchangeRates.USD_AUD);
-  assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded for AU resident');
+  assert.ok(sim.state.usSourceOrdinaryUsdYTD > 0, 'FTC should be recorded for AU resident');
 });
 
 test('EVT-38: wages are not AU taxable if not AU resident', () => {
@@ -189,7 +189,7 @@ test('EVT-38: wages are not AU taxable if not AU resident', () => {
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
-  assert.strictEqual(sim.state.ftcYTD, 0);
+  assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD, 0);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -219,7 +219,7 @@ test('EVT-39: wages withheld does not affect any income YTD field', () => {
 
   assert.strictEqual(sim.state.usOrdinaryIncomeYTD, 0);
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
-  assert.strictEqual(sim.state.ftcYTD, 0);
+  assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD, 0);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -249,7 +249,7 @@ test('EVT-48: US self-employment income is AU ordinary income if AU resident', (
 
   // design 51: US-source SE income (USD) is normalized into the AUD bucket.
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 4000 * sim.state.effectiveExchangeRates.USD_AUD);
-  assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded for AU resident');
+  assert.ok(sim.state.usSourceOrdinaryUsdYTD > 0, 'FTC should be recorded for AU resident');
 });
 
 test('EVT-48: US self-employment income is not AU taxable if not AU resident', () => {
@@ -258,7 +258,7 @@ test('EVT-48: US self-employment income is not AU taxable if not AU resident', (
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
-  assert.strictEqual(sim.state.ftcYTD, 0);
+  assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD, 0);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -288,7 +288,7 @@ test('EVT-49: AU self-employment income is AU ordinary income if AU resident', (
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 3000);
-  assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded for AU resident');
+  assert.ok(sim.state.foreignGeneralIncomeYTD > 0, 'FTC should be recorded for AU resident');
 });
 
 test('EVT-49: AU self-employment income is not AU taxable if not AU resident', () => {
@@ -297,7 +297,7 @@ test('EVT-49: AU self-employment income is not AU taxable if not AU resident', (
   sim.stepTo(new Date(2026, 0, 31));
 
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
-  assert.strictEqual(sim.state.ftcYTD, 0);
+  assert.strictEqual(sim.state.foreignGeneralIncomeYTD, 0);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -327,7 +327,7 @@ test('EVT-50: bonus is AU ordinary income if AU resident', () => {
 
   // design 51: US-source bonus (USD) is normalized into the AUD bucket.
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 10000 * sim.state.effectiveExchangeRates.USD_AUD);
-  assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded for AU resident');
+  assert.ok(sim.state.usSourceOrdinaryUsdYTD > 0, 'FTC should be recorded for AU resident');
 });
 
 test('EVT-50: bonus is not AU taxable if not AU resident', () => {
@@ -336,7 +336,7 @@ test('EVT-50: bonus is not AU taxable if not AU resident', () => {
   sim.stepTo(new Date(2026, 1, 28));
 
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0);
-  assert.strictEqual(sim.state.ftcYTD, 0);
+  assert.strictEqual(sim.state.usSourceOrdinaryUsdYTD, 0);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -378,7 +378,7 @@ test('EVT-51: company sale records gain as AU capital gain if AU resident', () =
 
   // design 51: US-source company-sale gain (USD) is normalized into the AUD CGT bucket.
   assert.strictEqual(sim.state.auCapitalGainsYTD, 120000 * sim.state.effectiveExchangeRates.USD_AUD);
-  assert.ok(sim.state.ftcYTD > 0, 'FTC should be recorded for AU resident');
+  assert.ok(sim.state.usSourceCapGainsUsdYTD > 0, 'FTC should be recorded for AU resident');
 });
 
 test('EVT-51: company sale is not AU taxable if not AU resident', () => {
@@ -391,7 +391,7 @@ test('EVT-51: company sale is not AU taxable if not AU resident', () => {
   sim.stepTo(new Date(2026, 1, 28));
 
   assert.strictEqual(sim.state.auCapitalGainsYTD, 0);
-  assert.strictEqual(sim.state.ftcYTD, 0);
+  assert.strictEqual(sim.state.usSourceCapGainsUsdYTD, 0);
 });
 
 test('EVT-51: company sale with no gain records zero capital gain', () => {
