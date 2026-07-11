@@ -21,11 +21,22 @@
 
 let _mutations = null;
 
+/**
+ * Detach an object/array leaf from live state before it is recorded in the
+ * journal. The journal is a durable historical record: a diff's `before`/`after`
+ * must not alias a live state object, or a later in-place mutation (e.g. a
+ * synthetic holding whose marketValue is rescaled each event) silently rewrites
+ * every past entry to the final value. Primitives are immutable — pass through.
+ */
+function _snapshot(v) {
+  return (v !== null && typeof v === 'object') ? structuredClone(v) : v;
+}
+
 export const MutationTracker = {
   begin()                    { _mutations = []; },
   record(field, before, after) {
     const delta = typeof after === 'number' && typeof before === 'number' ? after - before : null;
-    _mutations.push({ field, before: before ?? null, after: after ?? null, delta });
+    _mutations.push({ field, before: _snapshot(before ?? null), after: _snapshot(after ?? null), delta });
   },
   flush() {
     const m = _mutations;
@@ -100,7 +111,10 @@ export function diffStates(prev, next) {
       }
     } else if (!_leafEqual(b, a)) {
       const delta = typeof a === 'number' && typeof b === 'number' ? a - b : null;
-      changes.push({ field: prefix, before: b ?? null, after: a ?? null, delta });
+      // `a` is a live reference into this.state; `b` may be too depending on the
+      // caller. Snapshot object/array leaves so the recorded diff can't be
+      // rewritten by later in-place mutation of the same object.
+      changes.push({ field: prefix, before: _snapshot(b ?? null), after: _snapshot(a ?? null), delta });
     }
   };
 

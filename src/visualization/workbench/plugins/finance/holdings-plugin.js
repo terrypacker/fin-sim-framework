@@ -232,7 +232,7 @@ export class HoldingsPlugin extends WorkbenchComponent {
     if (!this._mounted) return;
 
     const asof = this._q('asof');
-    if (asof) asof.textContent = this._sim?.currentDate ? `as of ${_fmtDate(this._sim.currentDate)}` : '—';
+    if (asof) asof.textContent = this._sim?.currentDate ? `as of ${this._fmtDate(this._sim.currentDate)}` : '—';
 
     const account = this._stateKey ? this._sim?.state?.[this._stateKey] : null;
     const empty   = !this._sim || !this._stateKey || !account;
@@ -324,7 +324,7 @@ export class HoldingsPlugin extends WorkbenchComponent {
   _activityRowHtml(r) {
     return `
       <tr>
-        <td class="hld-td hld-act-date">${_fmtDate(r.date)}</td>
+        <td class="hld-td hld-act-date">${this._fmtDate(r.date)}</td>
         <td class="hld-td"><span class="hld-kind hld-kind--${r.kind.toLowerCase()}">${r.kind}</span></td>
         <td class="hld-td">${_esc(r.label)}</td>
         <td class="hld-td hld-td--num ${_signCls(r.mvDelta)}">${this._fmtSigned(r.mvDelta)}</td>
@@ -357,6 +357,19 @@ export class HoldingsPlugin extends WorkbenchComponent {
     URL.revokeObjectURL(url);
   }
 
+  /**
+   * Format a date honoring the app timezone dropdown (AppDisplaySettings.formatDate,
+   * exposed on schemaRegistry.displaySettings). Without it — dates rendered in the
+   * browser's local zone shift a UTC-midnight timestamp to the prior day. Falls
+   * back to a local format only when display settings aren't wired (tests).
+   */
+  _fmtDate(d) {
+    const fmt = this._services()?.schemaRegistry?.displaySettings?.formatDate;
+    if (!fmt || !d) return _fmtDateLocal(d);
+    const date = d instanceof Date ? d : new Date(d);
+    return Number.isNaN(date.getTime()) ? _fmtDateLocal(d) : fmt(date);
+  }
+
   _q(name) { return this.el?.querySelector(`[data-hld="${name}"]`) ?? null; }
 }
 
@@ -366,7 +379,7 @@ function _signCls(n) { return n == null || n === 0 ? '' : n > 0 ? 'hld-amount--p
 function _esc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
-function _fmtDate(d) {
+function _fmtDateLocal(d) {
   if (!d) return '—';
   try { return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); }
   catch { return String(d); }

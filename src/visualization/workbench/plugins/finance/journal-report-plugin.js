@@ -96,6 +96,20 @@ export class JournalReportPlugin extends WorkbenchComponent {
     return (n > 0 ? '+' : n < 0 ? '-' : '') + abs;
   }
 
+  /**
+   * Format a date honoring the app timezone dropdown (AppDisplaySettings.formatDate,
+   * exposed on schemaRegistry.displaySettings). Without it, a UTC-midnight timestamp
+   * renders in the browser's local zone and can shift to the prior day — the source
+   * of the report-vs-timeline date mismatch. Falls back to a local format only when
+   * display settings aren't wired (tests).
+   */
+  _fmtDate(d) {
+    const fmt = this._services()?.schemaRegistry?.displaySettings?.formatDate;
+    if (!fmt || !d) return _fmtDateLocal(d);
+    const date = d instanceof Date ? d : new Date(d);
+    return Number.isNaN(date.getTime()) ? _fmtDateLocal(d) : fmt(date);
+  }
+
   render() {
     const root = document.createElement('div');
     root.className = 'jr-plugin wb-plugin-fill';
@@ -467,7 +481,7 @@ export class JournalReportPlugin extends WorkbenchComponent {
     if (!entry) return null;
     return {
       value:  `__transient__:${period.toEntryId}`,
-      label:  `Custom (${_fmtDate(entry.date)})`,
+      label:  `Custom (${this._fmtDate(entry.date)})`,
       period: { ...period },
     };
   }
@@ -612,7 +626,7 @@ export class JournalReportPlugin extends WorkbenchComponent {
             <tr class="jr-child-row">
               <td class="jr-td jr-td--child" colspan="${(def?.defaultGroupBy?.length ?? 1) + 2}">
                 <div class="jr-child-inner">
-                  <span class="jr-child-date">${_fmtDate(item.date)}</span>
+                  <span class="jr-child-date">${this._fmtDate(item.date)}</span>
                   <span class="jr-child-type">${item.actionType ?? '—'}</span>
                   <span class="jr-child-desc">${_esc(item.description ?? '')}</span>
                   <span class="jr-child-amount ${_signCls(item.stateDelta ?? item.personTaxAmount ?? item.amount ?? item.gain ?? item.proceeds)}">${this._fmtMoney(item.stateDelta ?? item.personTaxAmount ?? item.amount ?? item.gain ?? item.proceeds ?? null)}</span>
@@ -790,7 +804,7 @@ function _safeAttr(s) {
 function _titleCase(s) {
   return s.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase());
 }
-function _fmtDate(d) {
+function _fmtDateLocal(d) {
   if (!d) return '—';
   try {
     return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });

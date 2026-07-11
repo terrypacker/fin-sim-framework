@@ -434,6 +434,9 @@ export class StateSchemaRegistry {
 
   /** Inject the AppDisplaySettings (read for the active display currency). */
   set displaySettings(ds)   { this._displaySettings   = ds ?? null; }
+  /** The injected AppDisplaySettings, or null. Read by plugins for timezone-aware
+   *  date formatting (formatDate) and the active display currency. */
+  get displaySettings()     { return this._displaySettings; }
 
   /** Inject the CurrencyConverter used for native → display conversion. */
   set currencyConverter(c)  { this._currencyConverter = c ?? null; }
