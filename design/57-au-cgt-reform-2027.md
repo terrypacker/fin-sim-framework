@@ -150,7 +150,37 @@ tracking on `Collectible`), and the FY2027 FITO-limit "without" pass reducing th
 
 ---
 
-### 📋 PART 2 — ACCURACY PASS (planned 2026-07-11; resume here next session)
+### ✅ PART 2 — ACCURACY PASS (COMPLETE 2026-07-12)
+
+**All four items (A CPI · D FITO · C standalone gold · B remove reset) implemented + green:
+3327 unit + 864 viz.** The reference golden (`cross-border-relief-scenario.test.mjs`, moveYear
+2031) did **NOT move** — exactly as predicted (CPI defaults to inflation, byte-identical; FITO
+limit doesn't bind; standalone gold isn't sold). Runtime-verified: `cpiAccumulator.AU ===
+inflationAccumulator.AU` end-to-end, and the reference Gold collectible is stepped up at the 2031
+move (AU basis + acquisition CPI level stamped).
+
+What landed:
+- **A (CPI):** `state.cpiRates` + `state.cpiAccumulator`, compounded in `InflationAdjustReducer`
+  (falls back to the effective inflation rate when a country's CPI is unset → no golden movement).
+  All indexation reads (`us-/au-brokerage`, residency step-up, gold sale) switched to
+  `cpiAccumulator.AU ?? inflationAccumulator.AU ?? 1`. New `auCpiRate` param (AU_TAX toolset);
+  registered in `StateSchemaRegistry` + shallow-merge keys; round-trips.
+- **D (FITO):** `usSourceRealCapGainsAudYTD` populated by the 3 AU-2027 cross-border reducers;
+  the FY2027 FITO "without" pass now reduces `auRealCapitalGainsYTD` by it (the CG slice of the
+  limit tracks the real gain). Init/YTD-reset/schema/per-person-split all wired.
+- **C (standalone gold):** `Collectible.isGold/costBaseByCountry/acquisitionPriceLevel`;
+  `CollectibleService.recordResidencyChange` steps up gold at the AU move (via a new collectibles
+  loop in `ChangeResidencyApplyReducer` — `collectibleService` threaded through the compiler
+  context + reducer fromJSON); `CollectibleSaleApplyReducer` computes `auGain`/`auIndexedGain`/
+  `isGold` on `COLLECTIBLE_SALE_TAX`. Serializer + state-projection carry the fields.
+- **B (remove reset):** deleted `au-cgt-reset-classes.js` + `AU_CGT_BASIS_RESET*` wiring from
+  `AU_TAX`; removed the dead EVT-CGT-RESET tests + coverage-manifest entry. A straddling lot now
+  keeps its residency-step-up AU basis and applies the new regime to its **whole** gain (no
+  apportionment, no pre-2027 carve-out) — covered by the new STRADDLE unit test.
+
+---
+
+#### 📋 Original Part 2 plan (kept for provenance)
 
 **Part 1 (the two coupled bugs) is committed on a branch.** Part 2 makes the reform *accurate*:
 four deferred items. **Decisions are LOCKED** (asked & answered 2026-07-11):

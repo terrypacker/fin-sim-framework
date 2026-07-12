@@ -181,7 +181,9 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
     // the as-of (sale) date from the current AU period. FIFO returns an indexed AU
     // basis alongside the un-indexed one; lots with no acquisitionPriceLevel index at
     // factor 1, so auIndexedGain === auGain until the 1 Jul 2027 reset stamps levels.
-    const auLevel   = state.inflationAccumulator?.AU ?? 1;
+    // Indexation reads the dedicated ATO CPI series (design 57 Part 2, Item A),
+    // falling back to inflationAccumulator (and 1) for old saves.
+    const auLevel   = state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1;
     const asOfMs    = state.currentPeriods?.AU?.startMs ?? Date.now();
     const r = consumeHoldingsFifo(sa.holdings ?? [], salePrice, { level: auLevel, asOfMs, country: 'AU' });
     const realizedBasis = action.costBasis != null ? action.costBasis : r.realizedBasis;

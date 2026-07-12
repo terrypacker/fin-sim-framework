@@ -131,6 +131,47 @@ test('INFL-1: accumulator compounds across multiple years', () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
+// INFL-6: Dedicated ATO CPI indexation series (design 57 Part 2, Item A)
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('INFL-6: cpiAccumulator tracks inflationAccumulator when cpiRates is unset', () => {
+  const state = baseState({ inflationRates: { US: 0.025, AU: 0.035 } });
+  const next = reducer.reduce(state, AU_PERIOD_2027);
+  // No cpiRates.AU ⇒ CPI falls back to the effective inflation rate ⇒ identical.
+  assert.ok(Math.abs(next.cpiAccumulator.AU - next.inflationAccumulator.AU) < 1e-12);
+  assert.ok(Math.abs(next.cpiAccumulator.AU - 1.035) < 1e-10);
+});
+
+test('INFL-6: cpiAccumulator compounds at a distinct cpiRates.AU', () => {
+  const state = baseState({
+    inflationRates: { US: 0.03, AU: 0.03 },
+    cpiRates:       { AU: 0.05 },
+  });
+  const next = reducer.reduce(state, AU_PERIOD_2027);
+  assert.ok(Math.abs(next.inflationAccumulator.AU - 1.03) < 1e-10);
+  assert.ok(Math.abs(next.cpiAccumulator.AU - 1.05) < 1e-10);
+  // Distinct series diverge.
+  assert.ok(next.cpiAccumulator.AU > next.inflationAccumulator.AU);
+});
+
+test('INFL-6: distinct AU CPI compounds even when AU inflation is zero', () => {
+  const state = baseState({
+    inflationRates: { US: 0.03, AU: 0.0 },
+    cpiRates:       { AU: 0.04 },
+  });
+  const next = reducer.reduce(state, AU_PERIOD_2027);
+  assert.strictEqual(next.inflationAccumulator.AU, 1.0);
+  assert.ok(Math.abs(next.cpiAccumulator.AU - 1.04) < 1e-10);
+});
+
+test('INFL-6: cpiAccumulator compounds across multiple AU advances', () => {
+  let state = baseState({ inflationRates: { US: 0.03, AU: 0.03 }, cpiRates: { AU: 0.05 } });
+  state = reducer.reduce(state, { type: 'AU_PERIOD_ADVANCE', period: { startMs: Date.UTC(2032, 6, 1) } });
+  state = reducer.reduce(state, { type: 'AU_PERIOD_ADVANCE', period: { startMs: Date.UTC(2033, 6, 1) } });
+  assert.ok(Math.abs(state.cpiAccumulator.AU - 1.05 ** 2) < 1e-10);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
 // INFL-2: Social Security Income — increases at US inflation rate
 // ══════════════════════════════════════════════════════════════════════════════
 

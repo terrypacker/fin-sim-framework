@@ -33,7 +33,7 @@ const YTD_FIELDS = {
        'foreignGeneralIncomeYTD', 'foreignPassiveIncomeYTD', 'usSourceOrdinaryUsdYTD', 'usSourceCapGainsUsdYTD',
        'ftcCurrentGeneral', 'ftcCurrentPassive'],
   AU: ['auOrdinaryIncomeYTD', 'auCapitalGainsYTD', 'auRealCapitalGainsYTD', 'auNonResidentWithholdingYTD', 'auSuperTaxYTD', 'auFrankingCreditYTD',
-       'usSourceOrdinaryAudYTD', 'usSourceCapGainsAudYTD'],
+       'usSourceOrdinaryAudYTD', 'usSourceCapGainsAudYTD', 'usSourceRealCapGainsAudYTD'],
 };
 
 // Per-person AU accumulator maps reset to zero after each AU settlement.

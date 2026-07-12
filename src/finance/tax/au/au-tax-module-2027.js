@@ -70,19 +70,26 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
     });
 
     // ── Cross-border (US-source) resident capital gains ──────────────────────
+    // These three are ALL US-source, so besides the worldwide real bucket they
+    // also feed usSourceRealCapGainsAudYTD — the FY2027 FITO "without" pass reduces
+    // the real bucket by this to size the CG slice of the FITO limit (design 57
+    // Part 2, Item D). AU-native AU_STOCK/AU_HOUSE above are AU-source ⇒ excluded.
+    //
     // US brokerage stock: indexed AU gain (deemed acquisition = residency date,
     // design 57 §6.3), stepped-up auGain, else the US gain — converted to AUD.
     fns.set('STOCK_WITHDRAWAL_TAX', (state, action) => {
       if (action.residency !== 'AU') return state;
       const realGainUsd = action.auIndexedGain ?? action.auGain ?? action.gain ?? 0;
-      return this._recordRealGain(state, state, toAUD(realGainUsd, 'USD', state), null);
+      const realGainAud = toAUD(realGainUsd, 'USD', state);
+      return this._recordUsSourceRealGain(this._recordRealGain(state, state, realGainAud, null), realGainAud);
     });
 
     // Company equity: no AU cost-base step-up / indexation — the full US gain is
     // the real gain (design 57 §6.4 "company → full gain").
     fns.set('COMPANY_SALE_TAX', (state, action) => {
       if (action.residency !== 'AU') return state;
-      return this._recordRealGain(state, state, toAUD(action.gain ?? 0, 'USD', state), null);
+      const realGainAud = toAUD(action.gain ?? 0, 'USD', state);
+      return this._recordUsSourceRealGain(this._recordRealGain(state, state, realGainAud, null), realGainAud);
     });
 
     // Collectibles: bullion (isGold) is an ordinary AU CGT asset → indexed like
@@ -92,10 +99,21 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
       const realGainUsd = action.isGold
         ? (action.auIndexedGain ?? action.auGain ?? action.gain ?? 0)
         : (action.auGain ?? action.gain ?? 0);
-      return this._recordRealGain(state, state, toAUD(realGainUsd, 'USD', state), null);
+      const realGainAud = toAUD(realGainUsd, 'USD', state);
+      return this._recordUsSourceRealGain(this._recordRealGain(state, state, realGainAud, null), realGainAud);
     });
 
     return fns;
+  }
+
+  /**
+   * Track the US-source slice of the real (indexed) AU capital gain (AUD). Feeds
+   * the FY2027 FITO "without US-source" pass so the CG component of the FITO limit
+   * tracks the *real* gain the reform assesses (design 57 Part 2, Item D). Shared
+   * household scalar — split per-person at settle like usSourceCapGainsAudYTD.
+   */
+  _recordUsSourceRealGain(next, realGainAud) {
+    return { ...next, usSourceRealCapGainsAudYTD: (next.usSourceRealCapGainsAudYTD ?? 0) + realGainAud };
   }
 
   /**

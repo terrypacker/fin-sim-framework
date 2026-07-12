@@ -174,6 +174,9 @@ export class ScenarioCompiler {
       paramSchema,
       stateRegistry:  services.stateRegistry,
       accountService: services.accountService,
+      // Needed by ChangeResidencyApplyReducer to step up gold collectibles at the
+      // AU move (design 57 Part 2, Item C).
+      collectibleService: services.collectibleService,
       schedulesById:  {},
       // Shared across toolsets — each tax toolset adds its periods here so
       // US and AU periods end up in one service available for journal reports.
@@ -223,6 +226,10 @@ function _mergeStatePatches(acc, patches) {
     'currentPeriods',
     'inflationRates',
     'inflationAccumulator',
+    // Dedicated ATO CPI series (design 57 Part 2, Item A) — AU_TAX seeds { AU },
+    // other toolsets may contribute per-country entries; merge rather than clobber.
+    'cpiRates',
+    'cpiAccumulator',
   ]);
   for (const [key, value] of Object.entries(patches)) {
     if (SHALLOW_MERGE_KEYS.has(key) && acc[key] != null && typeof acc[key] === 'object'

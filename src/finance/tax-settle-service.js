@@ -131,6 +131,7 @@ export class TaxSettleService {
         // person's return applies its own share of the offset + with/without limit.
         usSourceOrdinaryAudYTD:      (state.usSourceOrdinaryAudYTD ?? 0) / numResidents,
         usSourceCapGainsAudYTD:      (state.usSourceCapGainsAudYTD ?? 0) / numResidents,
+        usSourceRealCapGainsAudYTD:  (state.usSourceRealCapGainsAudYTD ?? 0) / numResidents,
         usTaxPaidOnUsSourceAud:      (state.usTaxPaidOnUsSourceAud ?? 0) / numResidents,
         // AU CGT reform (design 57 §6.6): this person's Age Pension / JobSeeker
         // exemption from the 30% CGT minimum tax; read by AuTaxRates2027._cgtRelief.

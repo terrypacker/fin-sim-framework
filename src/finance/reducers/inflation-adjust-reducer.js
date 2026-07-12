@@ -41,16 +41,27 @@ export class InflationAdjustReducer extends Reducer {
   reduce(state, action) {
     const cc = action.type === 'US_PERIOD_ADVANCE' ? 'US' : 'AU';
     const rate = state.effectiveInflationRates?.[cc] ?? state.inflationRates?.[cc] ?? 0;
-    if (rate === 0) return this.newState(state);
+    // Dedicated ATO CPI indexation series (design 57 Part 2, Item A). A per-country
+    // cpiRates decouples the CGT cost-base index from household wage/expense
+    // inflation. When cpiRates[cc] is unset it falls back to the *same* effective
+    // inflation `rate`, so cpiAccumulator stays byte-identical to inflationAccumulator
+    // until a distinct CPI is chosen.
+    const cpiRate = state.cpiRates?.[cc] ?? rate;
+    if (rate === 0 && cpiRate === 0) return this.newState(state);
 
-    const factor = 1 + rate;
+    const factor    = 1 + rate;
+    const cpiFactor = 1 + cpiRate;
 
     const inflationAccumulator = {
       ...(state.inflationAccumulator ?? {}),
       [cc]: ((state.inflationAccumulator?.[cc]) ?? 1.0) * factor,
     };
+    const cpiAccumulator = {
+      ...(state.cpiAccumulator ?? {}),
+      [cc]: ((state.cpiAccumulator?.[cc]) ?? 1.0) * cpiFactor,
+    };
 
-    const updates = { inflationAccumulator };
+    const updates = { inflationAccumulator, cpiAccumulator };
 
     if (cc === 'US') {
       // Driven off the always-annual US advance. Social Security is a USD amount,

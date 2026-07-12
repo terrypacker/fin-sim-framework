@@ -17,13 +17,7 @@ import { AuPeriodAdvanceHandler, AuPeriodAdvanceReducer }
   from '../../finance/tax/period-advance-classes.js';
 import { AuTaxSettleHandler, AuTaxSettleApplyReducer, AuTaxPaymentDebitReducer }
   from '../../finance/tax/tax-settle-classes.js';
-import { AuCgtBasisResetHandler, AuCgtBasisResetReducer }
-  from '../../finance/account-rules/au/au-cgt-reset-classes.js';
-import { OneOffEvent } from '../../simulation-framework/events/one-off-event.js';
 import { ValueType } from '../../simulation-framework/type-registry.js';
-
-// AU CGT reform (design 57 §6.4): the 1 July 2027 deemed cost base reset.
-const AU_CGT_RESET_DATE = new Date(Date.UTC(2027, 6, 1));
 
 /**
  * AU_TAX toolset — declarative shell around TaxService for AU.
@@ -44,11 +38,10 @@ export const AU_TAX = {
   dependencies: ['AU_BANKING'],
 
   types: {
-    handlers: [AuPeriodAdvanceHandler, AuTaxSettleHandler, AuCgtBasisResetHandler],
-    reducers: [AuPeriodAdvanceReducer, AuTaxSettleApplyReducer, AuTaxPaymentDebitReducer, BalanceSnapshotReducer, AuCgtBasisResetReducer],
+    handlers: [AuPeriodAdvanceHandler, AuTaxSettleHandler],
+    reducers: [AuPeriodAdvanceReducer, AuTaxSettleApplyReducer, AuTaxPaymentDebitReducer, BalanceSnapshotReducer],
     actions: [
       { type: 'AU_PERIOD_ADVANCE',  fields: { period: ValueType.any() } },
-      { type: 'AU_CGT_BASIS_RESET_APPLY', fields: {} },
       { type: 'AU_TAX_SETTLE_APPLY', family: 'TAX_SETTLE_APPLY', cc: 'AU',
         fields: { tax: ValueType.number(), taxDetail: ValueType.any(), personTaxDetails: ValueType.any() } },
       { type: 'AU_TAX_PAYMENT_DEBIT', family: 'TAX_PAYMENT_DEBIT', cc: 'AU',
@@ -58,13 +51,32 @@ export const AU_TAX = {
   },
 
   paramSchema(context) {
-    return [];
+    return [
+      {
+        // Dedicated ATO CPI indexation rate for AU CGT cost-base indexation
+        // (design 57 Part 2, Item A). Unset ⇒ the InflationAdjustReducer falls
+        // back to the effective AU inflation rate, so indexation is byte-identical
+        // to using inflationAccumulator. Set a distinct value to decouple the CGT
+        // index from household wage/expense inflation.
+        key: 'auCpiRate', label: 'AU CGT Indexation (CPI) Rate',
+        type: 'Number', group: 'AU Tax', mc: true, opt: true,
+        defaultValue: undefined,
+        description: 'Annual ATO CPI rate used to index AU capital-gains cost bases (FY2027+). '
+          + 'Leave unset to track the AU inflation rate.',
+      },
+    ];
   },
 
   state(context) {
     const capture = _getContributions(context);
+    const auCpiRate = context.parameters?.auCpiRate;
     const state = {
       ...capture.statePatches,
+      // Dedicated ATO CPI series (design 57 Part 2, Item A). Only seed cpiRates.AU
+      // when an explicit rate is given; otherwise leave it absent so the reducer
+      // falls back to the effective AU inflation rate (no golden movement).
+      cpiRates:                         (auCpiRate != null ? { AU: auCpiRate } : {}),
+      cpiAccumulator:                   { AU: 1.0 },
       auOrdinaryIncomeYTD:              0,
       auCapitalGainsYTD:                0,
       auRealCapitalGainsYTD:            0,   // FY2027 reform: post-indexation gain (design 57)
@@ -95,45 +107,20 @@ export const AU_TAX = {
   },
 
   schedules(context) {
-    return [..._getContributions(context).events, ..._cgtResetEvents(context)];
+    return [..._getContributions(context).events];
   },
 
   handlers(context) {
-    // The reset handler is only registered when its event is actually scheduled;
-    // otherwise the handler→event edge would reference a missing event node.
-    const resetHandlers = _spansCgtReset(context) ? [new AuCgtBasisResetHandler()] : [];
-    return [..._getContributions(context).handlers, ...resetHandlers];
+    return [..._getContributions(context).handlers];
   },
 
   reducers(context) {
     return [
       ..._getContributions(context).reducers,
       ..._getBalanceSnapshotReducer(context),
-      new AuCgtBasisResetReducer({ accountService: context.accountService }),
     ];
   },
 };
-
-/**
- * True when the simulation spans the 1 July 2027 reform date (starts before it
- * and ends on/after it). A sim that starts after the reform needs no reset — its
- * lots are already post-reform.
- */
-function _spansCgtReset(context) {
-  return context.startDate < AU_CGT_RESET_DATE && context.endDate >= AU_CGT_RESET_DATE;
-}
-
-/** The 1 July 2027 deemed cost base reset event, scheduled once when in range. */
-function _cgtResetEvents(context) {
-  if (!_spansCgtReset(context)) return [];
-  return [new OneOffEvent({
-    name:    'AU CGT Cost Base Reset (1 Jul 2027)',
-    type:    'AU_CGT_BASIS_RESET',
-    date:    AU_CGT_RESET_DATE,
-    enabled: true,
-    color:   '#8E24AA',
-  })];
-}
 
 function _getContributions(context) {
   if (context._auTaxCapture) return context._auTaxCapture;

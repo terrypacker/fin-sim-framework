@@ -207,7 +207,10 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
     // basis. Lots with no acquisitionPriceLevel (never stepped up / bootstrapped)
     // index at factor 1, so auIndexedGain === auGain until the residency step-up
     // (design 57 §6.3) stamps the deemed-acquisition level.
-    const auLevel = state.inflationAccumulator?.AU ?? 1;
+    // Indexation reads the dedicated ATO CPI series (design 57 Part 2, Item A),
+    // falling back to inflationAccumulator (and 1) for old saves. The stamp
+    // (residency step-up) reads the same accumulator so the ratio is consistent.
+    const auLevel = state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1;
     const asOfMs  = state.currentPeriods?.AU?.startMs ?? Date.now();
     const r = consumeHoldingsFifo(sa.holdings ?? [], salePrice, { level: auLevel, asOfMs, country: 'AU' });
     const realizedBasis = action.costBasis != null ? action.costBasis : r.realizedBasis;

@@ -365,3 +365,27 @@ test('finance round-trip: increasing monthlyExpenses in config+state reduces US 
     `expected reduction ~$9000; got ${reduction.toFixed(2)} ` +
     `(base=${baseBalance.toFixed(2)}, modified=${modBalance.toFixed(2)})`);
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Test 5: Dedicated ATO CPI series round-trips (design 57 Part 2, Item A)
+// ═════════════════════════════════════════════════════════════════════════════
+
+test('finance round-trip: cpiRates + cpiAccumulator survive serialize/restore', () => {
+  const initialState = {
+    isAuResident: false,
+    monthlyExpenses: 6000,
+    people: { primary: { name: 'Primary' } },
+    inflationRates:       { US: 0.03, AU: 0.03 },
+    inflationAccumulator: { US: 1.0,  AU: 1.0  },
+    cpiRates:             { AU: 0.05 },
+    cpiAccumulator:       { AU: 1.2155 },
+  };
+
+  const { config } = buildAndSerialize(initialState, () => {});
+  assert.deepStrictEqual(config.initialState.cpiRates, { AU: 0.05 });
+  assert.deepStrictEqual(config.initialState.cpiAccumulator, { AU: 1.2155 });
+
+  const { sim } = restoreFromConfig(config);
+  assert.deepStrictEqual(sim.state.cpiRates, { AU: 0.05 });
+  assert.deepStrictEqual(sim.state.cpiAccumulator, { AU: 1.2155 });
+});
