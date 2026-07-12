@@ -146,6 +146,147 @@ is covered by `evt-au-cgt-reform.test.mjs` unit tests instead.
 dedicated ATO CPI series, standalone-`Collectible` (non-sleeve) gold indexation (needs AU-basis
 tracking on `Collectible`), and the FY2027 FITO-limit "without" pass reducing the real bucket
 (immaterial here — the limit doesn't bind when US tax paid < AU marginal tax on the gain).
+**See PART 2 plan below.**
+
+---
+
+### 📋 PART 2 — ACCURACY PASS (planned 2026-07-11; resume here next session)
+
+**Part 1 (the two coupled bugs) is committed on a branch.** Part 2 makes the reform *accurate*:
+four deferred items. **Decisions are LOCKED** (asked & answered 2026-07-11):
+
+- **CPI model = separate rate + accumulator.** Decouple the indexation index from household
+  wage/expense inflation via a per-country `cpiRates.{cc}` param (default = the inflation rate,
+  so byte-identical until a distinct CPI is set) compounded into a new `cpiAccumulator.{cc}`.
+- **Transition = new rule on the full gain (no apportionment / no election).** A lot straddling
+  1 Jul 2027 applies the FY2027+ regime (no 50% discount, cost-base indexation, 30% floor) to its
+  **whole** AU gain — do NOT carve out a pre-2027 portion. Simpler than apportionment and it still
+  fixes today's over-relief (the deemed 2027 reset currently **exempts** pre-2027 gains).
+  Mechanically this means **remove the deemed cost-base reset** (Part 1's `AuCgtBasisResetReducer`)
+  so a straddling lot keeps its original / residency-step-up AU basis + acquisition level and flows
+  through the new-regime indexation path already built in Part 1. **No** `auPre2027CapitalGainsYTD`
+  bucket, **no** Method-1/Method-2 split, **no** two-component `_cgtRelief`, **no** election.
+
+Suggested order: **A (CPI) → D (FITO) → C (standalone gold) → B (remove reset)** — A sets the index
+everything else reads; B is now a small deletion + test.
+
+Note on the reference scenario: moveYear is **2031 (> 2027)**, so its lots are all
+post-2027 (no straddle) ⇒ straddling-lot handling isn't exercised there and the golden should
+**NOT move** (CPI defaults to inflation; FITO limit doesn't bind; standalone gold isn't sold).
+Cover the straddle path with a **new** unit/fixture where the person is AU-resident *before*
+1 Jul 2027.
+
+---
+
+#### Item A — Dedicated ATO CPI series (separate rate + accumulator)
+
+1. **State:** add `state.cpiRates` (`{AU: <rate>}`) and `state.cpiAccumulator` (`{}`, lazily
+   1.0). Init in `au-tax-toolset.js` + `intl-retirement-state.js`; default `cpiRates.AU` = the
+   AU inflation rate so nothing moves until a distinct CPI is chosen.
+2. **Compound:** in `InflationAdjustReducer.reduce` (`src/finance/reducers/inflation-adjust-reducer.js`)
+   also do `cpiAccumulator[cc] *= (1 + (state.cpiRates?.[cc] ?? rate))` on each `*_PERIOD_ADVANCE`
+   (mirror `inflationAccumulator`). Keep it static for now (no `effectiveCpiRates` MC variant yet).
+3. **Read sites** — switch every *indexation* level read from `inflationAccumulator.AU` to
+   `cpiAccumulator.AU ?? inflationAccumulator.AU ?? 1` (fallback keeps old saves working). Both
+   the *stamp* and the *sale* must read the same accumulator so the ratio is consistent:
+   - `us-brokerage-classes.js` (`auLevel`), `au-brokerage-classes.js` (`auLevel`),
+   - `au-cgt-reset-classes.js` (the reset-level stamp) — skip if you do Item B first, which
+     deletes this file,
+   - `change-residency-apply-reducer.js` (`priceLevel`).
+4. **Scenario param:** add an `auCpiRate` param (design-55 config-driven style) defaulting to the
+   AU inflation rate; expose in `intl-retirement-scenario.js`.
+5. **Schema/serialize:** register `cpiAccumulator.*` + `cpiRates.*` in `StateSchemaRegistry`;
+   round-trip in `intl-retirement-state.js` toJSON/fromJSON + a serializer test.
+6. **Tests:** cpiAccumulator compounds independently of inflationAccumulator; indexation uses
+   CPI; default (CPI == inflation) ⇒ figures unchanged.
+
+#### Item D — FITO "without"-pass real-bucket reduction (small, self-contained)
+
+Today `au-tax-rates-base.js` `computeTax` builds the FITO "without US-source" pass by reducing
+`auCapitalGainsYTD`, but FY2027 `_cgtRelief` reads `auRealCapitalGainsYTD` (unreduced) ⇒ the CG
+slice of the FITO limit is ~0. Immaterial in the reference (limit doesn't bind) but wrong.
+
+1. **State:** add `usSourceRealCapGainsAudYTD` (household scalar) — toolset init, YTD reset in
+   `tax-settle-classes.js` (`YTD_FIELDS.AU`), schema (AUD), serializer.
+2. **Populate:** in the 3 AU-2027 cross-border reducers (`STOCK_WITHDRAWAL_TAX`,
+   `COMPANY_SALE_TAX`, `COLLECTIBLE_SALE_TAX` in `au-tax-module-2027.js`), add the same AUD real
+   gain to `usSourceRealCapGainsAudYTD` (all three are US-source). AU-native `AU_STOCK`/`AU_HOUSE`
+   are AU-source ⇒ do NOT add.
+3. **Use:** in the `_assessResidentPreFito({...state, ...})` "without" override add
+   `auRealCapitalGainsYTD: (state.auRealCapitalGainsYTD ?? 0) - (state.usSourceRealCapGainsAudYTD ?? 0)`.
+   (`_cgtRelief`'s `'auRealCapitalGainsYTD' in state` check stays true ⇒ reads the reduced value.)
+4. **Per-person:** in `computeAuTaxPerPerson` split `usSourceRealCapGainsAudYTD` evenly like
+   `usSourceCapGainsAudYTD`.
+5. **Test:** a FY2027 resident whose CG is entirely US-source ⇒ the FITO limit's CG slice tracks
+   the real (indexed) gain.
+
+#### Item C — Standalone `Collectible` gold indexation (self-contained)
+
+Standalone gold is a `Collectible` (scalar `value` + event `costBasis`), sold via
+`us-collectible-classes.js` → `COLLECTIBLE_SALE_TAX` with only `{gain, residency}` (no
+`auGain`/`auIndexedGain`/`isGold`). `CollectibleService.recordResidencyChange` snapshots `value`
+only. The AU-2027 `COLLECTIBLE_SALE_TAX` reducer already indexes when `isGold` + `auIndexedGain`
+are present — so just feed it those.
+
+1. **Collectible fields:** add `isGold` (mark the reference "Gold" collectible true; others
+   false), `costBaseByCountry`, `acquisitionPriceLevel` (+ constructor/toJSON/fromJSON).
+2. **Step-up:** `CollectibleService.recordResidencyChange` — for a gold collectible, stamp
+   `costBaseByCountry.AU = value` and `acquisitionPriceLevel = cpiAccumulator.AU` at the move
+   (thread the level through like `AccountService.recordResidencyChange` in Part 1; confirm the
+   `ChangeResidencyApplyReducer` loop reaches collectibles — it iterates
+   `stateRegistry.getAccounts`, so add a parallel collectibles loop if they aren't included).
+3. **2027 reset:** extend the reset to gold collectibles too (use the Item-B non-destructive
+   fields for consistency), or reset `costBaseByCountry.AU` + level if not straddle-eligible.
+4. **Sale reducer:** `CollectibleSaleApplyReducer` — compute `auGain` (from AU basis) and
+   `auIndexedGain` (indexed from the stamped level to `cpiAccumulator.AU` at sale), set
+   `isGold`, pass all on `COLLECTIBLE_SALE_TAX`. Non-gold collectibles stay un-indexed.
+5. **Tests:** standalone gold sale as AU resident post-2027 ⇒ indexed real gain; non-gold ⇒
+   un-indexed.
+
+#### Item B — Straddling lots apply the new regime to the full gain (remove the deemed reset)
+
+**Decision: holdings crossing 1 Jul 2027 default to the FY2027+ rule on their whole AU gain** — no
+50% discount, cost-base indexation, 30% floor. No apportionment, no pre-2027 carve-out, no
+election. Simpler than Method-1/2 and it removes the current over-relief (the deemed reset
+**exempts** pre-2027 gains today). Only lot-based holdings held across the date are in question;
+company sales (basis-0) and standalone collectibles already route their full gain to the real
+bucket.
+
+1. **Remove the deemed 2027 cost-base reset.** Delete / neutralize `AuCgtBasisResetReducer` +
+   `AuCgtBasisResetHandler` (`src/finance/account-rules/au/au-cgt-reset-classes.js`) and unwire the
+   `AU_CGT_BASIS_RESET` schedule/handler/reducer/types from the `AU_TAX` toolset. With no reset, a
+   straddling lot keeps its **original / residency-step-up** `costBaseByCountry.AU` and its
+   `acquisitionPriceLevel`, so its **whole** gain (proceeds − AU basis) is realized and indexed
+   from the acquisition/residency level to the sale CPI — the exact new-regime path Part 1 already
+   built. Pre-2027 appreciation is therefore taxed under the new rule (no longer exempt).
+2. **No new buckets or rate-module changes.** The existing `auRealCapitalGainsYTD` +
+   `AuTaxRates2027._cgtRelief` already tax the full indexed gain at the 30% floor. Do NOT add
+   `auPre2027CapitalGainsYTD` or a two-component `_cgtRelief`.
+3. **Remove the now-dead reset tests** in `evt-au-cgt-reform.test.mjs` (`EVT-CGT-RESET: …`) and any
+   `Holding.acquisitionPriceLevel`-reset assertions that depended on the 2027 reset. Keep the
+   residency-step-up stamping tests (those still drive indexation).
+4. **New test (needs a pre-2027 AU-resident fixture):** an AU resident before 1 Jul 2027 holding a
+   lot across the date, sold after 2027 ⇒ the FULL AU gain (incl. pre-2027 appreciation) is
+   assessed with no 50% discount, indexed from the acquisition level, with the 30% floor applied —
+   and pre-2027 gain is NOT exempt.
+
+> Rationale for the simplification: cost-base indexation already relieves the *inflationary* part
+> of the whole holding period, and the 30% floor caps the effective rate, so taxing the full gain
+> under the new regime is a defensible, conservative treatment without the per-lot apportionment +
+> election machinery. If exact pre/post apportionment is ever wanted, it is re-addable behind a
+> straddle flag (the removed Method-1/2 design is preserved in git history + §6.4).
+
+#### Cross-cutting close-out
+
+- **Regold:** re-run `cross-border-relief-scenario.test.mjs` — expect **no change** (move 2031).
+  If it moves, something leaked into the post-2027-only path; investigate before re-golding.
+- `npm run test:unit` + `test:viz` + `npm run build:index` (new exported classes, if any).
+- Update the "✅ COMPLETE" note above + memory [[inflation-wrapper-drops-cgt-reform]] when done.
+- **New state fields to register everywhere (toolset init · StateSchemaRegistry · YTD reset in
+  `tax-settle-classes.js` · serializer round-trip):** `cpiRates.{cc}`, `cpiAccumulator.{cc}`
+  (unitless), `usSourceRealCapGainsAudYTD` (AUD). **New Collectible fields:** `isGold`,
+  `costBaseByCountry`, `acquisitionPriceLevel`. (Item B adds **no** new fields — it removes the
+  reset; `auPre2027CapitalGainsYTD` and the `Holding.cgtReset*` fields are **not** needed.)
 
 ---
 
