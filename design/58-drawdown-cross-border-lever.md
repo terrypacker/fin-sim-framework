@@ -289,13 +289,75 @@ warm-start from the named presets; UI (advanced "tune order" panel).
 
 ## 9. Phased rollout
 
-- **Phase 1 — Lever A** (cross-border mode param + resolver + OPT/MC axis). Small,
-  back-compat-safe; unblocks `CUSTOM + GLOBAL` immediately.
-- **Phase 2 — Lever C** (within-tier `SEQUENTIAL`/`EQUAL`/`PROPORTIONAL`; reframe
-  global PROPORTIONAL). The "draw both Roths together" capability + more accurate
-  sibling-account modeling.
-- **Phase 3 — Lever B** (optimizable role-weight order). The largest piece — new
-  continuous OPT axes + solver warm-starts + UI.
+- **Phase 1 — Lever A ✅ DONE (2026-07-12).** `crossBorderDrawdown` scenario param
+  (`AUTO`/`LOCAL_FIRST`/`GLOBAL`, default `AUTO`) + the `AUTO` resolver in
+  `us-retirement-toolset.state()` + the OPT ENUM axis. Golden unchanged (3330 unit +
+  864 viz green). Verified end-to-end on the reference scenario: `AUTO` ⇒
+  `LOCAL_FIRST` (byte-identical); `GLOBAL + CUSTOM` now honors the authored order
+  across the border (net worth 12.15M → 4.80M — the lever bites). Resolver matrix +
+  schema tests in `evt-drawdown-strategy.test.mjs`.
+- **Phase 2 — Lever C ✅ DONE (2026-07-12).** `withinTierDraw` scenario param
+  (`SEQUENTIAL`/`EQUAL`/`PROPORTIONAL`, default `SEQUENTIAL`) + resolver in
+  `us-retirement-toolset.state()` + the OPT ENUM axis. `replenishSavings`'s ORDERED
+  path now groups already-sorted sources into effective-priority tiers and, for
+  `EQUAL`/`PROPORTIONAL`, splits each tier's draw across its members (residual
+  redistributes when a member is capped) — each leg still runs through
+  `_drawPenaltyFree`, so per-account eligibility, `minimumBalance` floors,
+  cross-border fx/fee, and tax actions apply per leg. `SEQUENTIAL` is byte-identical;
+  the global `drawdownMode==='PROPORTIONAL'` switch is left untouched as the
+  single-flat-tier alias. RMDs are event-driven (account-rules), independent of this
+  deficit path, so OQ4's per-account RMD floor is unaffected. Golden unchanged (3341
+  unit + 864 viz). Verified: `EQUAL` splits a tier 50/50 with residual
+  redistribution, `PROPORTIONAL` by balance, tiers never reshuffle across each other;
+  resolver wires end-to-end. Tests in `evt-drawdown-strategy.test.mjs`.
+- **Phase 3 — Lever B ✅ DONE (2026-07-12).** `WEIGHTED` drawdown mode: per-role
+  continuous `drawdownWeight.<role>` params (0–1) whose ascending sort synthesizes
+  the `accountPriority` cascade's role→rank map (`_synthesizeWeightedPriorities` in
+  scenario-loader), so the optimizer *searches* the order instead of picking a
+  preset. `drawdownWeightsFromStrategy()` converts each named strategy into a
+  warm-start weight vector; the default weights (seeded from `TAX_EFFICIENT`)
+  reproduce that strategy **to the dollar** (verified). 8 CONTINUOUS OPT axes
+  (`enabled:false`), gated by `visibleWhen: drawdownStrategy=WEIGHTED`. Same-role
+  siblings share a weight → one tier (Lever C splits it); owner banding + Lever A
+  compose unchanged. Golden unchanged (3335 unit + 864 viz). Verified end-to-end:
+  `WEIGHTED` default ≡ `TAX_EFFICIENT`; a Roth-first weight vector ends ~$48k poorer
+  at moderate spend — the lever bites. Tests in `evt-drawdown-strategy.test.mjs`.
+  *(Deferred: a dedicated drag-to-reorder "tune order" UI panel — the generic
+  continuous-slider params render under Spending when `WEIGHTED` is selected.)*
+
+**MPC track (parallel, see §11)** — the levers above are *static* scenario params +
+*one-shot* optimizer axes. Making them *online* controls (re-decided each epoch in
+the receding-horizon cockpit — the "build the optimum order over time" goal) is a
+separate actuation surface, phased to shadow the levers:
+
+- **Phase 1-MPC — Lever A online ✅ DONE (2026-07-12).** `DRAWDOWN_XBORDER`
+  categorical cockpit control (`numeric:false`, ENUM `LOCAL_FIRST`/`GLOBAL`) +
+  forward-effective `actuate` (state re-stamp + param persist) + the `_seededSim`
+  re-stamp shim (`FORWARD_DRAWDOWN_STATE_FIELDS`, covers `crossBorderDrawdown` AND
+  `withinTierDraw`, so Phase 2-MPC's projection is already wired). The plugin
+  auto-lists the lever (`Object.values(COCKPIT_CONTROLS)`). Verified end-to-end: the
+  grid solver searches both modes and recommends the higher-net-worth one; the
+  committed mode now **bites under a snapshot-seeded rollout** where it was inert
+  before (`scripts/verify-mpc-lever.mjs` GAP→PASS; guarded by
+  `tests/unit/mpc-drawdown-xborder.test.mjs`). 3346 unit + 864 viz green.
+- **Phase 2-MPC — Lever C online ✅ DONE (2026-07-12).** `DRAWDOWN_WITHINTIER`
+  categorical control (`numeric:false`, ENUM `SEQUENTIAL`/`EQUAL`/`PROPORTIONAL`) +
+  forward-effective `actuate`. The projection shim was already wired in Phase 1-MPC
+  (`withinTierDraw` ∈ `FORWARD_DRAWDOWN_STATE_FIELDS`), so this was just the control
+  spec + actuate + tests. Harness PASS; guarded by `mpc-drawdown-xborder.test.mjs`.
+- **Phase 3-MPC — Lever B online (flagship) ✅ DONE (2026-07-12).** `DRAWDOWN_WEIGHTS`
+  cockpit control: 8 CONTINUOUS weight variables (one per investment role, `::`-keyed
+  so `set()` writes them flat), gated on `drawdownStrategy=WEIGHTED`. `describe` renders
+  the resulting draw order; `actuate` re-stamps the live sim's per-account
+  `drawdownPriority` from the committed weights via the exported
+  `synthesizeWeightedPriorities` + owner banding (so advise/apply/live can't drift).
+  The `_seededSim` shim captures the compile-resolved per-account priorities before
+  injection and re-stamps them after. **Root-cause fix:** the weight keys were
+  `drawdownWeight.<role>` (dotted), which `set()` silently drops (it never creates the
+  missing `drawdownWeight` parent) — so the Lever-B axis was inert through the one-shot
+  optimizer AND MPC. Switching to `::` made it bite in both (verified Δ≈$35k). CEM
+  `advise()` searches the 8-dim order and returns a full recommended order + fan.
+  Harness `drawdownWeights` PASS; guarded by `mpc-drawdown-xborder.test.mjs`.
 
 ---
 
@@ -320,3 +382,95 @@ warm-start from the named presets; UI (advanced "tune order" panel).
    floor on its split leg before `EQUAL`/`PROPORTIONAL` distributes the remainder.
 5. ✅ **RESOLVED — names match state fields** (`crossBorderDrawdown`, `withinTierDraw`,
    and the Lever-B field TBD with its granularity) to avoid mapping layers.
+6. ✅ **RESOLVED — MPC design (see §11).** (a) **Primary use = online adaptation under
+   uncertainty**: MPC-B is built to re-solve the order over *stochastic* epochs
+   (paired with the Monte-Carlo layers), where the realized state diverges from
+   forecast and re-planning genuinely beats a fixed order — so it is evaluated/tested
+   against MC paths, not just a deterministic golden. (b) **Yes — a hold-band
+   switching cost**: the controller keeps the current order unless the projected gain
+   clears a threshold ε (`score(new) − score(current) > ε`), so it doesn't flip-flop
+   epoch-to-epoch and realize needless tax/FX churn. ε is a tunable knob (default TBD;
+   calibrate so only material re-orderings fire).
+
+---
+
+## 11. MPC / Cockpit integration — "build the optimum order online over time"
+
+Phases 1–3 deliver the levers as **static** scenario params and **one-shot**
+optimizer axes. The end goal — the controller *re-deciding the drawdown order as
+the plan unfolds* — lives in the MPC cockpit (design 39): a receding-horizon loop
+(`mpc-controller.js`) that re-solves the controls at each epoch, plus a live
+forward-effective "Apply" (`apply-forward.js` / SimulationSync). Phase 1 did **not**
+touch this surface — hence this section.
+
+### 11.1 The gap: snapshot injection clobbers state-resident controls
+
+The MPC/apply-forward rollout seeds from a **now-snapshot**: `_seededSim` does
+`sim.state = clone(snap.state)` to freeze the realized past. That verbatim inject
+**overwrites any compile-time state field with its OLD value** — including
+`crossBorderDrawdown` (Lever A), `withinTierDraw` (Lever C), and the per-account
+`drawdownPriority` the Lever-B cascade bakes in. So a committed candidate is **inert
+under MPC** unless a **forward-effective shim** re-applies it after injection — the
+twin of the existing `repinExpensesIfChanged` / `retargetRothConversionEvents` /
+`retargetEarlyWithdrawalEvents` shims in `_seededSim` (optimization-problem.js
+~L312–333).
+
+> One-shot OPT uses `initialState.kind:'compile'` (no injection), so **Phase 1's
+> optimizer axis already works there** — verified. MPC uses `kind:'snapshot'`, so it
+> needs the shim. This is precisely why MPC is separate work, not free.
+
+### 11.2 The triad per online lever
+
+1. **`COCKPIT_CONTROLS` spec** (`cockpit-controller.js`): `buildVariables(ctx)`
+   returns the control's decision variables (paramKeys); `describe`/`describeRecord`
+   for the recommendation + save-points log; `appliesTo`/`requirement` gating.
+2. **Projection shim** in `_seededSim`: after snapshot injection, re-apply the
+   committed control to `sim.state` — a scalar re-stamp for Lever A/C; re-run the
+   role→`drawdownPriority` cascade on the injected accounts for Lever B.
+3. **Live actuate** (`actuate({ services, scenario, candidate, vars })`): write the
+   state field forward-effective on the running sim (SimulationSync) **and** persist
+   the scenario param, so subsequent Advise rollouts and the live sim agree
+   (mirrors the SPENDING control's three-step actuate).
+
+### 11.3 Phasing
+
+- **Phase 1-MPC — Lever A online ✅ DONE.** `DRAWDOWN_XBORDER` control over
+  `crossBorderDrawdown` (`LOCAL_FIRST`/`GLOBAL`; categorical, `numeric:false`). The
+  `_seededSim` shim captures the compile-resolved `FORWARD_DRAWDOWN_STATE_FIELDS`
+  (`crossBorderDrawdown`, `withinTierDraw`) BEFORE injection and re-stamps them
+  after (reading the compiled state avoids re-implementing the AUTO resolver). Live
+  actuate = `sim.state = { ...sim.state, crossBorderDrawdown }` + param persist. A
+  headless harness (`scripts/verify-mpc-lever.mjs`) proves the gap and the fix by
+  comparing the compile vs snapshot paths.
+- **Phase 2-MPC — Lever C online ✅ DONE.** `DRAWDOWN_WITHINTIER` control —
+  identical scalar pattern; the `_seededSim` re-stamp already covers `withinTierDraw`
+  (added alongside Phase 1-MPC), so only the control spec + actuate + tests remained.
+- **Phase 3-MPC — Lever B online (flagship) ✅ DONE.** The role-weight vector as a
+  multi-variable online control (`DRAWDOWN_WEIGHTS`): each epoch the controller
+  re-solves the drawdown **order** from the realized state. Instead of re-running the
+  full cascade, the `_seededSim` shim captures the compile-resolved per-account
+  `drawdownPriority` before injection and re-stamps it after (equivalent, cheaper).
+  The live `actuate` recomputes priorities from the committed weights via the exported
+  `synthesizeWeightedPriorities`. The literal "optimum order online over time."
+  **Note:** weight keys MUST use `::` (not `.`) — `set()` drops dotted keys whose
+  parent object doesn't pre-exist, which had left the axis inert.
+
+### 11.4 Design decisions (OQ6 — locked)
+
+- **Target = online under uncertainty (locked).** MPC-B is designed to re-solve the
+  order over **stochastic epochs** — pair it with the Monte-Carlo layers so the
+  realized state at each epoch diverges from forecast and re-planning adds real value
+  (on a single deterministic path it would merely re-confirm the static Lever-B
+  order). Consequence: MPC-B is validated against **MC ensembles** (does the adaptive
+  order beat the best fixed order across paths?), not a single deterministic golden.
+- **Switching cost = hold-band hysteresis (locked).** The controller keeps the
+  committed order unless the projected improvement clears a threshold:
+  `score(new) − score(current) > ε`. This prevents epoch-to-epoch flip-flop
+  (`GLOBAL`↔`LOCAL_FIRST`, tier reshuffles) and the tax/FX churn it would realize. ε
+  is a tunable knob (its own scenario/opt param); default calibrated so only material
+  re-orderings fire. Applies to the categorical Lever-A/C flips and to Lever-B order
+  changes (compare the sorted role order, not raw weights, so sub-threshold weight
+  drift that doesn't change the order is free).
+- **Solver fit.** Lever B weights are continuous (CEM-friendly); Lever A/C are
+  categorical (pattern-search-friendly). A mixed control vector is supported but
+  nudges the default solver choice.

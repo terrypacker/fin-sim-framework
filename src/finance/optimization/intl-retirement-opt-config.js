@@ -9,7 +9,7 @@
  */
 
 import { OPT_PARAM_TYPES }            from './optimization-objectives.js';
-import { INTL_RETIREMENT_DEFAULTS, DRAWDOWN_STRATEGIES, IntlRetirementScenario } from '../../scenarios/intl-retirement-scenario.js';
+import { INTL_RETIREMENT_DEFAULTS, DRAWDOWN_STRATEGIES, buildDrawdownWeightSchema, IntlRetirementScenario } from '../../scenarios/intl-retirement-scenario.js';
 import { SHOCK_LIBRARY }              from '../economic-shocks/shock-library.js';
 import { indexParamSchema, resolveSweepVariables } from '../param-schema-utils.js';
 
@@ -184,6 +184,41 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
     group:    'Spending',
     enabled:  false,
   },
+  // Cross-border drawdown mode (design 58 Lever A). Sweep LOCAL_FIRST vs GLOBAL —
+  // AUTO is omitted as a sweep value since it just resolves to one of the two via
+  // the strategy; the optimizer should search the actual behaviors.
+  {
+    paramKey: 'crossBorderDrawdown',
+    label:    'Cross-Border Drawdown',
+    type:     OPT_PARAM_TYPES.ENUM,
+    values:   ['LOCAL_FIRST', 'GLOBAL'],
+    group:    'Spending',
+    enabled:  false,
+  },
+  // Within-tier draw policy (design 58 Lever C). Categorical sweep over how a
+  // shared drawdown tier is split; SEQUENTIAL is the byte-identical default.
+  {
+    paramKey: 'withinTierDraw',
+    label:    'Within-Tier Draw',
+    type:     OPT_PARAM_TYPES.ENUM,
+    values:   ['SEQUENTIAL', 'EQUAL', 'PROPORTIONAL'],
+    group:    'Spending',
+    enabled:  false,
+  },
+  // Drawdown weights (design 58 Lever B — optimize-the-order mode). One CONTINUOUS
+  // axis per investment role; the draw order is the ascending sort of the weights,
+  // so the solver *searches* the order rather than picking a preset. These are
+  // gated by the schema's visibleWhen (drawdownStrategy=WEIGHTED), so they drop out
+  // of the sweep unless WEIGHTED is the selected strategy. The named strategies are
+  // warm-starts (drawdownWeightsFromStrategy); each is one setting of these weights.
+  ...buildDrawdownWeightSchema().map(s => ({
+    paramKey: s.key,
+    label:    s.label,
+    type:     OPT_PARAM_TYPES.CONTINUOUS,
+    min:      s.min, max: s.max, step: s.step,
+    group:    'Spending',
+    enabled:  false,
+  })),
 
   // ── Spending Strategies ────────────────────────────────────────────────────
   // Each ENUM value is an array — matches the EnumMulti param type.
