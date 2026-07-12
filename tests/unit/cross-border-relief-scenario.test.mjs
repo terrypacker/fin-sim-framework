@@ -55,6 +55,11 @@ function runDefaultIntlRetirement() {
 // real relief raises lifetime tax to ~895,088 (+15.5%) and lowers ending wealth
 // to ~11,852,976 (-1.6%). A ±1% band absorbs incidental FX/rounding drift while
 // still catching a return of the over-relief (which would swing tax ~13% low).
+//
+// NOTE (design 57): these figures currently reflect the AU CGT reform being
+// silently reverted to the base 50% discount for inflation-adjusted years (see
+// design/57 §"Post-implementation correction" — two coupled bugs). The correct
+// figures are pending that fix; do not treat these as reform-correct.
 const EXPECTED_LIFETIME_TAX = 895_088;
 const EXPECTED_NET_WORTH     = 11_852_976;
 const TOL = 0.01;

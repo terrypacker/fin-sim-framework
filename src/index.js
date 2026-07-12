@@ -199,6 +199,7 @@ import { StateTaxService } from './finance/state-tax-service.js';
 import { AuTaxDocument2024 } from './finance/tax/au/au-tax-document-2024.js';
 import { AuTaxDocument2025 } from './finance/tax/au/au-tax-document-2025.js';
 import { AuTaxDocument2026 } from './finance/tax/au/au-tax-document-2026.js';
+import { AuTaxDocument2027 } from './finance/tax/au/au-tax-document-2027.js';
 import { AuTaxModule2024 } from './finance/tax/au/au-tax-module-2024.js';
 import { AuTaxModule2025 } from './finance/tax/au/au-tax-module-2025.js';
 import { AuTaxModule2026 } from './finance/tax/au/au-tax-module-2026.js';
@@ -880,6 +881,7 @@ export const Finance = {
   AuTaxDocument2024,
   AuTaxDocument2025,
   AuTaxDocument2026,
+  AuTaxDocument2027,
   AuTaxModule2024,
   AuTaxModule2025,
   AuTaxModule2026,

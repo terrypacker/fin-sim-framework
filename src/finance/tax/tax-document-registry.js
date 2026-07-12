@@ -15,6 +15,7 @@ import { UsTaxDocument2026 }     from './us/us-tax-document-2026.js';
 import { AuTaxDocument2024 }     from './au/au-tax-document-2024.js';
 import { AuTaxDocument2025 }     from './au/au-tax-document-2025.js';
 import { AuTaxDocument2026 }     from './au/au-tax-document-2026.js';
+import { AuTaxDocument2027 }     from './au/au-tax-document-2027.js';
 
 /**
  * TaxDocumentRegistry — registry for BaseTaxDocumentModule instances.
@@ -38,6 +39,7 @@ export class TaxDocumentRegistry {
       new AuTaxDocument2024(),
       new AuTaxDocument2025(),
       new AuTaxDocument2026(),
+      new AuTaxDocument2027(),
     ]) {
       this._modules[`${m.countryCode}_${m.year}`] = m;
     }

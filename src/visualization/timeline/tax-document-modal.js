@@ -157,11 +157,12 @@ export class TaxDocumentModal {
       <div class="tax-doc-section">
         <div class="tax-doc-section-hdr">${heading}</div>
         ${lineItems.map(li => {
-          const cls = li.amount < 0
+          let cls = li.amount < 0
             ? 'tax-doc-line tax-doc-line--neg'
             : li.amount === 0
               ? 'tax-doc-line tax-doc-line--zero'
               : 'tax-doc-line';
+          if (li.sub) cls += ' tax-doc-line--sub';
           if (li.drillReport && this._runtime) {
             const paramsAttr = JSON.stringify(li.drillReport.params ?? {}).replace(/"/g, '&quot;');
             return `<button class="tax-doc-line-btn ${cls} tax-doc-line-drill"

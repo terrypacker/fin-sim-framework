@@ -20,10 +20,12 @@ import assert    from 'node:assert/strict';
 
 import { UsTaxDocument2026 }      from '../../src/finance/tax/us/us-tax-document-2026.js';
 import { AuTaxDocument2026 }      from '../../src/finance/tax/au/au-tax-document-2026.js';
+import { AuTaxDocument2027 }      from '../../src/finance/tax/au/au-tax-document-2027.js';
 import { TaxDocumentRegistry }    from '../../src/finance/tax/tax-document-registry.js';
 import { JournalReportingService } from '../../src/finance/journal-reporting-service.js';
 import { UsTaxRates2025 }         from '../../src/finance/tax/us/us-tax-rates-2025.js';
 import { AuTaxRates2025 }         from '../../src/finance/tax/au/au-tax-rates-2025.js';
+import { AuTaxRates2027 }         from '../../src/finance/tax/au/au-tax-rates-2027.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -202,6 +204,110 @@ test('AuTaxDocument2026 resident: Franking Credits line is negative', () => {
   const credits = doc.sections.find(s => s.heading === 'Credits');
   const fc      = credits.lineItems.find(li => li.label === 'Franking Credits');
   assert.ok(fc.amount <= 0, 'Franking Credits should be <= 0 (reduces tax)');
+});
+
+test('AuTaxDocument2026 resident: Tax on Income splits into ordinary + capital gains sub-rows summing to the total', () => {
+  const doc  = new AuTaxDocument2026().generate(auResidentDetail(), 2025);
+  const comp = doc.sections.find(s => s.heading === 'Tax Computation');
+  const total = comp.lineItems.find(li => li.label === 'Tax on Income').amount;
+  const ord   = comp.lineItems.find(li => li.label === 'Tax on Ordinary Income');
+  const cg    = comp.lineItems.find(li => li.label === 'Tax on Capital Gains');
+  assert.ok(ord?.sub && cg?.sub, 'both breakdown rows present and flagged sub');
+  assert.ok(Math.abs((ord.amount + cg.amount) - total) < 1e-6, 'sub-rows sum to Tax on Income');
+  assert.ok(cg.amount > 0, 'a positive capital gain adds incremental bracket tax');
+});
+
+test('AuTaxDocument2026 resident: no breakdown sub-rows when there are no capital gains', () => {
+  const doc  = new AuTaxDocument2026().generate(auResidentDetail({ auCapitalGainsYTD: 0 }), 2025);
+  const comp = doc.sections.find(s => s.heading === 'Tax Computation');
+  assert.ok(!comp.lineItems.some(li => li.sub), 'no sub-rows without a capital gain');
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AuTaxDocument2027 — CGT reform (design 57): indexation relief + 30% min-tax
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Gain sits in the 30% bracket (ordinary 80k), so no min-tax top-up. realGain
+// 12k < gross 20k ⇒ 8k of cost-base indexation relief.
+function au2027Detail(overrides = {}) {
+  return new AuTaxRates2027().computeTax({
+    people:                      { primary: { residency: 'AU' } },
+    auOrdinaryIncomeYTD:         80_000,
+    auCapitalGainsYTD:           20_000,
+    auRealCapitalGainsYTD:       12_000,
+    auNonResidentWithholdingYTD: 0,
+    auSuperTaxYTD:               1_500,
+    auFrankingCreditYTD:         2_000,
+    ...overrides,
+  });
+}
+
+test('AuTaxDocument2027 resident: relabels relief as Cost-Base Indexation, no "50% Discount" line', () => {
+  const doc    = new AuTaxDocument2027().generate(au2027Detail(), 2027);
+  const income = doc.sections.find(s => s.heading === 'Income');
+  assert.ok(income.lineItems.some(li => li.label === 'Cost-Base Indexation Relief'),
+    'expected a Cost-Base Indexation Relief line');
+  assert.ok(!income.lineItems.some(li => li.label === 'CGT 50% Discount'),
+    'must not show the removed 50% discount label for FY2027+');
+});
+
+test('AuTaxDocument2027 resident: relief = gross − indexed real gain, and it is negative', () => {
+  const detail = au2027Detail();
+  const doc    = new AuTaxDocument2027().generate(detail, 2027);
+  const income = doc.sections.find(s => s.heading === 'Income');
+  const relief = income.lineItems.find(li => li.label === 'Cost-Base Indexation Relief');
+  const net    = income.lineItems.find(li => li.label === 'Net Capital Gains (indexed)');
+  assert.equal(relief.amount, -8_000, 'relief = -(20k gross − 12k indexed)');
+  assert.ok(relief.amount < 0, 'relief reduces assessable income');
+  assert.equal(net.amount, 12_000, 'net capital gains = indexed real gain');
+});
+
+test('AuTaxDocument2027 resident: Tax Computation reconciles to Gross Tax with min-tax top-up', () => {
+  // Low ordinary income ⇒ the gain's marginal rate is below 30% ⇒ a top-up fires.
+  const detail = au2027Detail({ auOrdinaryIncomeYTD: 0, auCapitalGainsYTD: 30_000, auRealCapitalGainsYTD: 30_000, auFrankingCreditYTD: 0 });
+  assert.ok(detail.cgtMinimumTaxTopUp > 0, 'fixture should produce a 30% min-tax top-up');
+  const doc  = new AuTaxDocument2027().generate(detail, 2027);
+  const comp = doc.sections.find(s => s.heading === 'Tax Computation');
+  const topUp = comp.lineItems.find(li => li.label === 'CGT Minimum Tax Top-up (30%)');
+  assert.ok(topUp, 'expected a CGT Minimum Tax Top-up line');
+  const gross = comp.lineItems.find(li => li.label === 'Gross Tax').amount;
+  // Exclude the Gross Tax total itself and the breakdown sub-rows (which restate
+  // "Tax on Income", they are not additional amounts).
+  const sumOfParts = comp.lineItems
+    .filter(li => li.label !== 'Gross Tax' && !li.sub)
+    .reduce((s, li) => s + li.amount, 0);
+  assert.ok(Math.abs(sumOfParts - gross) < 1e-6, 'section line items must sum to Gross Tax');
+});
+
+test('AuTaxDocument2027 resident: no top-up line when the gain is already taxed at >= 30%', () => {
+  const doc  = new AuTaxDocument2027().generate(au2027Detail(), 2027);
+  const comp = doc.sections.find(s => s.heading === 'Tax Computation');
+  assert.ok(!comp.lineItems.some(li => li.label === 'CGT Minimum Tax Top-up (30%)'),
+    'no top-up when marginal rate on the gain already >= 30%');
+});
+
+test('AuTaxDocument2027 resident: Tax on Income breakdown sub-rows sum to the total (top-up excluded)', () => {
+  // Low-ordinary case: baseTax split still sums to Tax on Income; the 30% top-up
+  // is a separate line and must NOT be folded into the capital-gains sub-row.
+  const detail = au2027Detail({ auOrdinaryIncomeYTD: 0, auCapitalGainsYTD: 30_000, auRealCapitalGainsYTD: 30_000, auFrankingCreditYTD: 0 });
+  const doc    = new AuTaxDocument2027().generate(detail, 2027);
+  const comp   = doc.sections.find(s => s.heading === 'Tax Computation');
+  const total  = comp.lineItems.find(li => li.label === 'Tax on Income').amount;
+  const ord    = comp.lineItems.find(li => li.label === 'Tax on Ordinary Income').amount;
+  const cg     = comp.lineItems.find(li => li.label === 'Tax on Capital Gains').amount;
+  assert.ok(Math.abs((ord + cg) - total) < 1e-6, 'sub-rows sum to Tax on Income');
+  // The CG sub-row is only the marginal bracket tax on the gain — below the 30%
+  // floor (that gap is exactly why the top-up fires) and reported as a distinct line.
+  assert.ok(cg < 0.30 * 30_000, 'CG sub-row is the sub-30% marginal bracket tax, not the floored amount');
+  assert.ok(comp.lineItems.some(li => li.label === 'CGT Minimum Tax Top-up (30%)'), 'top-up is its own line');
+});
+
+test('TaxDocumentRegistry: an FY2027+ AU settle entry resolves to the AuTaxDocument2027 formatter', () => {
+  const entry = makeEntry('AU', au2027Detail(), Date.UTC(2068, 0, 1)); // FY2067-68 → highest ≤ = 2027
+  const doc   = new TaxDocumentRegistry().generate(entry);
+  const income = doc.sections.find(s => s.heading === 'Income');
+  assert.ok(income.lineItems.some(li => li.label === 'Cost-Base Indexation Relief'),
+    'registry should pick AuTaxDocument2027 (reform labels), not the 2026 fallback');
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

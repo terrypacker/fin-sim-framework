@@ -119,9 +119,21 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
     const netLiabilityPreFito = Math.max(0, baseTax + medicareLevy - frankingOffset)
                               + auSuperTaxYTD + minTaxTopUp;
 
+    // Split baseTax into its ordinary-income and capital-gain components for
+    // display (design 57 report breakdown). AU has no separate CGT schedule of
+    // rates: the relieved gain is stacked on top of ordinary income and taxed at
+    // the resulting marginal brackets. So the gain's share is the *incremental*
+    // bracket tax it adds — baseTax(ordinary+gain) − baseTax(ordinary) = taxOnGain
+    // — and the two components sum exactly to baseTax (brackets are monotonic, so
+    // ordinaryOnlyTax ≤ baseTax). This is the same taxOnGain used by the min-tax
+    // floor above; the 30% top-up (when any) is reported as its own line.
+    const ordinaryIncomeTax = ordinaryOnlyTax;
+    const capitalGainsTax   = taxOnGain;
+
     return {
       netTaxableGain, cgtDiscount, minTaxRate, minTaxTopUp,
       assessableIncome, baseTax, medicareLevy, frankingOffset,
+      ordinaryIncomeTax, capitalGainsTax,
       superTax: auSuperTaxYTD,
       marginalRate: _marginalBracketRate(assessableIncome, this._brackets),
       netLiabilityPreFito,
@@ -191,6 +203,8 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         cgtMinimumTaxTopUp:       a.minTaxTopUp,
         assessableIncome:         a.assessableIncome,
         baseTax:                  a.baseTax,
+        ordinaryIncomeTax:        a.ordinaryIncomeTax,
+        capitalGainsTax:          a.capitalGainsTax,
         medicareLevy:             a.medicareLevy,
         frankingOffset:           a.frankingOffset,
         fito,
