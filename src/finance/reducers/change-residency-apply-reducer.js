@@ -55,11 +55,16 @@ export class ChangeResidencyApplyReducer extends Reducer {
     // cost base for non-TAP CGT assets. Policy-driven — no hardcoded country.
     const country = 'AU';
     const stepUp  = stepsUpCostBaseOnResidency(country);
+    // AU CGT-reform indexation base (design 57 §6.3): the destination country's
+    // price level at the move is the deemed-acquisition level for stepped-up
+    // cross-border lots. 1.0 when no accumulator is present (sim start).
+    const priceLevel = state.inflationAccumulator?.[country] ?? 1;
 
     // 1. Snapshot balanceAtResidencyChange on all registered accounts (and the
-    //    residency cost-base step-up where the destination country applies one).
+    //    residency cost-base step-up + indexation-base stamp where the destination
+    //    country applies one).
     for (const account of this.stateRegistry.getAccounts(state)) {
-      this.accountService.recordResidencyChange(account, { country, stepUp });
+      this.accountService.recordResidencyChange(account, { country, stepUp, priceLevel });
     }
 
     // 2. Flip residency to 'AU' for every person; citizen arrays unchanged.

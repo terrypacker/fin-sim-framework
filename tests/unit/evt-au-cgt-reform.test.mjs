@@ -23,7 +23,19 @@ import assert   from 'node:assert/strict';
 
 import { AuCgtBasisResetReducer } from '../../src/finance/account-rules/au/au-cgt-reset-classes.js';
 import { AuTaxRates2027 } from '../../src/finance/tax/au/au-tax-rates-2027.js';
+import { AuTaxModule2027 } from '../../src/finance/tax/au/au-tax-module-2027.js';
+import { InflationAdjustedAuTaxRates } from '../../src/finance/tax/inflation-adjusted-tax-rates.js';
+import { AuTaxRates2026 } from '../../src/finance/tax/au/au-tax-rates-2026.js';
+import { AccountService } from '../../src/finance/services/account-service.js';
+import { Graph } from '../../src/graph/graph.js';
+import { EventBus } from '../../src/simulation-framework/event-bus.js';
+import { consumeHoldingsFifo } from '../../src/finance/holdings/holdings-fifo.js';
+import { ACCOUNT_TYPE } from '../../src/finance/assets/account.js';
 import { ACCOUNT_ROLES } from '../../src/finance/state/account-roles.js';
+import { ALLOCATION } from '../../src/finance/holdings/allocation.js';
+
+/** Extract a named reducer fn from a tax module instance. */
+const getFn = (module, actionType) => module.getReducerFns().get(actionType);
 
 // ─── Deemed cost base reset (design 57 §6.4, Method 1) ───────────────────────
 
@@ -89,4 +101,100 @@ test('EXEMPT: income-support recipient pays no 30% minimum-tax top-up', () => {
   assert.ok(taxed.cgtMinimumTaxTopUp > 0, 'non-exempt gets a top-up');
   assert.strictEqual(exempt.cgtMinimumTaxTopUp, 0, 'exempt gets no top-up');
   assert.ok(exempt.netLiability < taxed.netLiability, 'exemption lowers the liability');
+});
+
+// ─── Bug 1: inflation wrapper must preserve the FY2027 reform (design 57 §6.1) ─
+
+test('BUG1: inflation-adjusted FY2027 rates keep the reform (no reversion to 50% discount)', () => {
+  const wrapped = new InflationAdjustedAuTaxRates(new AuTaxRates2027(), 1.25);
+  // Real bucket populated by the classifier: the wrapper must remove the discount
+  // (relief 0, reform label) rather than silently applying the base 50% discount.
+  const relief = wrapped._cgtRelief({ auRealCapitalGainsYTD: 100_000 }, 100_000);
+  assert.strictEqual(relief.netTaxableGain, 100_000, 'full real gain assessable (no 50% discount)');
+  assert.strictEqual(relief.reliefAmount, 0);
+  assert.strictEqual(relief.minTaxRate, AuTaxRates2027.MIN_CGT_RATE, '30% minimum tax preserved');
+  assert.match(wrapped._cgtReliefLabel(), /Discount Removed/);
+});
+
+test('BUG1: inflation-wrapped FY2026 keeps the 50% discount (regression)', () => {
+  const wrapped = new InflationAdjustedAuTaxRates(new AuTaxRates2026(), 1.1);
+  const relief = wrapped._cgtRelief({}, 100_000);
+  assert.strictEqual(relief.netTaxableGain, 50_000, 'FY2026 still discounts 50%');
+  assert.strictEqual(relief.minTaxRate, 0);
+});
+
+// ─── Bug 2: cross-border resident gains populate the real bucket (§6.5) ──────
+
+test('CROSS-BORDER: US-brokerage STOCK_WITHDRAWAL_TAX records indexed AUD gain for AU resident', () => {
+  const fn = getFn(new AuTaxModule2027(), 'STOCK_WITHDRAWAL_TAX');
+  const s0 = { auRealCapitalGainsYTD: 0 };
+  // auIndexedGain (< auGain) is the reform real gain; 1:1 FX (no rate in state).
+  const s1 = fn(s0, { residency: 'AU', gain: 100_000, auGain: 80_000, auIndexedGain: 70_000 });
+  assert.strictEqual(s1.auRealCapitalGainsYTD, 70_000, 'indexed gain into shared real bucket');
+});
+
+test('CROSS-BORDER: STOCK_WITHDRAWAL_TAX no-ops for a non-AU resident', () => {
+  const fn = getFn(new AuTaxModule2027(), 'STOCK_WITHDRAWAL_TAX');
+  const s0 = { auRealCapitalGainsYTD: 0 };
+  const s1 = fn(s0, { residency: 'US', gain: 100_000, auGain: 80_000, auIndexedGain: 70_000 });
+  assert.strictEqual(s1.auRealCapitalGainsYTD, 0, 'no real gain for non-resident');
+});
+
+test('CROSS-BORDER: COMPANY_SALE_TAX records the full gain (no indexation) for AU resident', () => {
+  const fn = getFn(new AuTaxModule2027(), 'COMPANY_SALE_TAX');
+  const s1 = fn({ auRealCapitalGainsYTD: 0 }, { residency: 'AU', gain: 450_000 });
+  assert.strictEqual(s1.auRealCapitalGainsYTD, 450_000);
+});
+
+test('CROSS-BORDER: COLLECTIBLE_SALE_TAX indexes gold but not true collectibles', () => {
+  const fn = getFn(new AuTaxModule2027(), 'COLLECTIBLE_SALE_TAX');
+  // Gold (isGold): the indexed gain is assessable.
+  const gold = fn({ auRealCapitalGainsYTD: 0 },
+    { residency: 'AU', isGold: true, gain: 20_000, auGain: 18_000, auIndexedGain: 15_000 });
+  assert.strictEqual(gold.auRealCapitalGainsYTD, 15_000, 'gold indexes');
+  // True collectible (no isGold): un-indexed AU gain.
+  const art = fn({ auRealCapitalGainsYTD: 0 },
+    { residency: 'AU', gain: 20_000, auGain: 18_000, auIndexedGain: 15_000 });
+  assert.strictEqual(art.auRealCapitalGainsYTD, 18_000, 'true collectible is not indexed');
+});
+
+// ─── C3: residency step-up stamps the indexation base level (§6.3) ───────────
+
+test('STEP-UP: residency change stamps costBaseByCountry.AU and acquisitionPriceLevel', () => {
+  const svc = new AccountService(new Graph(), new EventBus());
+  const account = {
+    type: ACCOUNT_TYPE.BROKERAGE, balance: 1500, balanceAtResidencyChange: null,
+    holdings: [
+      { marketValue: 1000, costBasis: 600, costBaseByCountry: null, acquisitionPriceLevel: null },
+      { marketValue: 500,  costBasis: 400, costBaseByCountry: null, acquisitionPriceLevel: null },
+    ],
+  };
+  svc.recordResidencyChange(account, { country: 'AU', stepUp: true, priceLevel: 1.28 });
+  assert.strictEqual(account.holdings[0].costBaseByCountry.AU, 1000, 'AU base = market value at move');
+  assert.strictEqual(account.holdings[0].acquisitionPriceLevel, 1.28, 'indexation base = AU level at move');
+  assert.strictEqual(account.holdings[1].acquisitionPriceLevel, 1.28);
+});
+
+test('STEP-UP: an already-stamped level is not overwritten on re-entry', () => {
+  const svc = new AccountService(new Graph(), new EventBus());
+  const account = {
+    type: ACCOUNT_TYPE.BROKERAGE, balance: 1000, balanceAtResidencyChange: 999,
+    holdings: [{ marketValue: 1000, costBasis: 600, costBaseByCountry: { AU: 700 }, acquisitionPriceLevel: 1.1 }],
+  };
+  svc.recordResidencyChange(account, { country: 'AU', stepUp: true, priceLevel: 1.5 });
+  assert.strictEqual(account.holdings[0].costBaseByCountry.AU, 700, 'existing AU base kept');
+  assert.strictEqual(account.holdings[0].acquisitionPriceLevel, 1.1, 'existing level kept');
+});
+
+// ─── C2/C4: FIFO indexes the gold (collectible) slice (§6.3) ─────────────────
+
+test('FIFO: collectible (gold) slice is indexed from its acquisition level', () => {
+  const holdings = [{
+    marketValue: 1000, costBasis: 400, allocation: ALLOCATION.GOLD,
+    costBaseByCountry: { AU: 500 }, acquisitionPriceLevel: 1.0,
+    purchaseDate: new Date(Date.UTC(2020, 0, 1)),
+  }];
+  const r = consumeHoldingsFifo(holdings, 1000, { level: 1.2, asOfMs: Date.UTC(2028, 0, 1), country: 'AU' });
+  assert.strictEqual(r.collectibleBasisByCountry.AU, 500, 'un-indexed AU collectible basis');
+  assert.strictEqual(r.collectibleIndexedBasisByCountry.AU, 600, 'indexed = 500 × 1.2/1.0');
 });

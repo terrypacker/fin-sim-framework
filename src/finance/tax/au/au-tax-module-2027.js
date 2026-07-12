@@ -10,6 +10,7 @@
 
 import { AuTaxModule2026 } from './au-tax-module-2026.js';
 import { accumulateByOwnership } from '../../ownership-utils.js';
+import { toAUD } from '../tax-fx.js';
 
 /**
  * AuTaxModule2027 — AU tax classification for FY starting July 2027.
@@ -30,6 +31,19 @@ import { accumulateByOwnership } from '../../ownership-utils.js';
  *          stamps acquisition price levels, auIndexedGain === auGain.
  *   House: property indexation is deferred (§6.4); the raw gain is used, so the
  *          reform's discount removal + 30% floor still apply to house sales.
+ *
+ * Cross-border (US-source) resident capital gains matter just as much: an AU
+ * resident's US-brokerage sales, company-equity sales, and gold/collectible sales
+ * are assessed by AU on the worldwide basis (relieved by FITO). Those flow through
+ * the *US* module's action types (STOCK_WITHDRAWAL_TAX / COMPANY_SALE_TAX /
+ * COLLECTIBLE_SALE_TAX), which stamp the gross auCapitalGainsYTD but know nothing
+ * of the reform's real bucket. We register ADDITIVE AU reducers for those same
+ * action types — DynamicTaxReducer registers one reducer per (country, action-type),
+ * so the US and AU reducers both run — recording the AUD real (indexed) gain into
+ * auRealCapitalGainsYTD in lockstep. Without this, the real bucket stays a present
+ * zero and AuTaxRates2027 would grant a spurious 100% CGT relief (design 57 Bug 2).
+ * These gains are US-source and land in the shared bucket (no per-person split),
+ * mirroring the US module's shared auCapitalGainsYTD stamping.
  */
 export class AuTaxModule2027 extends AuTaxModule2026 {
   get year() { return 2027; }
@@ -53,6 +67,32 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
       const realGain = action.auIndexedGain ?? action.gain ?? 0;
       const asset = { ownershipType: action.ownershipType, ownerId: action.ownerId, owners: action.owners };
       return this._recordRealGain(next, state, realGain, asset);
+    });
+
+    // ── Cross-border (US-source) resident capital gains ──────────────────────
+    // US brokerage stock: indexed AU gain (deemed acquisition = residency date,
+    // design 57 §6.3), stepped-up auGain, else the US gain — converted to AUD.
+    fns.set('STOCK_WITHDRAWAL_TAX', (state, action) => {
+      if (action.residency !== 'AU') return state;
+      const realGainUsd = action.auIndexedGain ?? action.auGain ?? action.gain ?? 0;
+      return this._recordRealGain(state, state, toAUD(realGainUsd, 'USD', state), null);
+    });
+
+    // Company equity: no AU cost-base step-up / indexation — the full US gain is
+    // the real gain (design 57 §6.4 "company → full gain").
+    fns.set('COMPANY_SALE_TAX', (state, action) => {
+      if (action.residency !== 'AU') return state;
+      return this._recordRealGain(state, state, toAUD(action.gain ?? 0, 'USD', state), null);
+    });
+
+    // Collectibles: bullion (isGold) is an ordinary AU CGT asset → indexed like
+    // equity; true collectibles are NOT indexed under the reform (design 57 §6.4).
+    fns.set('COLLECTIBLE_SALE_TAX', (state, action) => {
+      if (action.residency !== 'AU') return state;
+      const realGainUsd = action.isGold
+        ? (action.auIndexedGain ?? action.auGain ?? action.gain ?? 0)
+        : (action.auGain ?? action.gain ?? 0);
+      return this._recordRealGain(state, state, toAUD(realGainUsd, 'USD', state), null);
     });
 
     return fns;

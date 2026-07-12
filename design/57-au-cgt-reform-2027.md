@@ -113,10 +113,45 @@ AU side it must be *indexed*, unlike true collectibles.
 
 ---
 
-### 📋 SESSION HANDOFF — resume here (2026-07-11)
+### ✅ COMPLETE (2026-07-11) — both coupled bugs fixed
 
-**All decisions are locked. Gold = INDEXED (confirmed).** Nothing below needs re-litigating;
-this is ready to implement in a fresh session.
+The 7-point checklist below is **done**; `npm run test:unit` (3318) + `test:viz` (864) are
+GREEN. The AU CGT reform now applies to inflation-adjusted post-2027 years for AU residents:
+
+- **Bug 1 fixed** — `InflationAdjustedAuTaxRates` now stores `this._base` and delegates
+  `_cgtRelief` / `_cgtReliefLabel` (and copies `_cgtDiscountRate`), so wrapping FY2027 no
+  longer reverts to the base 50% discount.
+- **Bug 2 fixed** — the US-module cross-border CGT actions (`STOCK_WITHDRAWAL_TAX`,
+  `COMPANY_SALE_TAX`, `COLLECTIBLE_SALE_TAX`) now feed the reform real bucket via **additive**
+  `AuTaxModule2027` reducers (DynamicTaxReducer registers per (country, action-type), so the
+  US + AU reducers both run), so `auRealCapitalGainsYTD` is populated in lockstep with the
+  gross bucket — no more present-zero → 100% relief. `_cgtRelief` reads the bucket directly
+  (`'auRealCapitalGainsYTD' in state`), gross fallback only for truly-absent synthetic states.
+- **Indexation wiring** — residency step-up stamps `acquisitionPriceLevel` (= AU price level at
+  the move) alongside the s855-45 cost-base step-up; the US-brokerage sale reducer computes
+  `auIndexedGain` (equity + gold sleeve, `isGold` marker); `consumeHoldingsFifo` returns the
+  collectible slice's un-indexed + indexed AU basis so bullion indexes while true collectibles
+  don't.
+
+**Verified (reference `IntlRetirementScenario`, moveYear 2031, simEnd 2050):** the only
+AU-assessed capital gain is the 2033 company-equity sale (correctly full-gain / un-indexed).
+Post-fix headline: **lifetime tax ~1,068,129** (was 895,088 with the buggy 50% discount),
+**ending net worth ~11,563,957**. Per-person FY2032 settle shows label
+`CGT Discount Removed (FY2027+)`, relief 0, real gain assessed (not zeroed), FITO applied.
+`cross-border-relief-scenario.test.mjs` re-golded to these figures. Indexation of
+US-brokerage stock / gold is **not** exercised by this scenario (no such AU-resident sales); it
+is covered by `evt-au-cgt-reform.test.mjs` unit tests instead.
+
+**Not built (deferred, unchanged from below):** Method-2 apportionment, new-build election,
+dedicated ATO CPI series, standalone-`Collectible` (non-sleeve) gold indexation (needs AU-basis
+tracking on `Collectible`), and the FY2027 FITO-limit "without" pass reducing the real bucket
+(immaterial here — the limit doesn't bind when US tax paid < AU marginal tax on the gain).
+
+---
+
+### 📋 ORIGINAL SESSION HANDOFF (2026-07-11) — kept for provenance
+
+**All decisions are locked. Gold = INDEXED (confirmed).** Nothing below needs re-litigating.
 
 **Working-tree state (uncommitted on `main`; 3272-ish → now 3309 unit + 864 viz GREEN):**
 

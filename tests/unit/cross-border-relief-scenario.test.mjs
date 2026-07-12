@@ -52,16 +52,19 @@ function runDefaultIntlRetirement() {
 
 // Post-flip figures (design 52, moveYear 2031 → AU-resident 2031-2050). The
 // pre-flip ftcYTD hack produced ~774,882 lifetime tax / ~12,046,007 net worth;
-// real relief raises lifetime tax to ~895,088 (+15.5%) and lowers ending wealth
-// to ~11,852,976 (-1.6%). A ±1% band absorbs incidental FX/rounding drift while
-// still catching a return of the over-relief (which would swing tax ~13% low).
+// real design-52 relief raised lifetime tax to ~895,088.
 //
-// NOTE (design 57): these figures currently reflect the AU CGT reform being
-// silently reverted to the base 50% discount for inflation-adjusted years (see
-// design/57 §"Post-implementation correction" — two coupled bugs). The correct
-// figures are pending that fix; do not treat these as reform-correct.
-const EXPECTED_LIFETIME_TAX = 895_088;
-const EXPECTED_NET_WORTH     = 11_852_976;
+// Design 57 (AU CGT reform, FY2027+) then correctly applies to this AU resident's
+// 2033 company-equity sale: the 50% CGT discount is removed (the full real gain is
+// assessable) and the 30% minimum tax can bite. That lifts lifetime tax to
+// ~1,068,129 (+19.3% vs the discounted figure) and lowers ending wealth to
+// ~11,563,957 (-2.4%). These are the reform-correct figures — the two coupled
+// design-57 bugs (inflation-wrapper dropping the reform + the real-bucket
+// present-zero trap) are fixed. A large downward swing in tax would mean the 50%
+// discount (or a spurious 100% CGT relief) has silently returned. A ±1% band
+// absorbs incidental FX/rounding drift.
+const EXPECTED_LIFETIME_TAX = 1_068_129;
+const EXPECTED_NET_WORTH     = 11_563_957;
 const TOL = 0.01;
 
 test('design 52 lock-in: default US→AU retiree lifetime tax reflects real §904 FTC + FITO', () => {
