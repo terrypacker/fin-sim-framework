@@ -110,6 +110,15 @@ export const DRAWDOWN_STRATEGIES = {
     [ACCOUNT_ROLES.IRA]: 5, [ACCOUNT_ROLES.K401]: 6,                     // tax-deferred: ordinary income on withdrawal
     [ACCOUNT_ROLES.SUPER]: 7, [ACCOUNT_ROLES.ROTH]: 8,                   // tax-free: preserve longest (super tax-free 60+, Roth)
   },
+  // Lever B (design 58 §4-B): the cascade *synthesizes* the role→rank map from the
+  // per-role `drawdownWeight.<role>` params (ascending sort = draw order) rather
+  // than a fixed table here — see DRAWDOWN_WEIGHT_ROLES / drawdownWeightsFromStrategy
+  // and the accountPriority cascade's `weightMode` branch. Null here because the map
+  // is computed at cascade time from the live weights, not stored. This is the
+  // optimizer's "search the order" mode: each named strategy above is one setting
+  // of the weights, so they serve as warm-starts. Key kept in sync with
+  // DRAWDOWN_WEIGHT_MODE below.
+  WEIGHTED: null,
   // No mapping → the cascade is a no-op, so per-account drawdownPriority values
   // authored in buildDefaultConfig (or hand-edited via the account editor) remain
   // authoritative. Select this to hand-tune individual account ordering.
@@ -129,6 +138,124 @@ export const DRAWDOWN_ROLES = [...new Set(
     .filter(Boolean)
     .flatMap(map => Object.keys(map)),
 )];
+
+// ─── Lever B — optimizable role-weight order (design 58 §4-B) ─────────────────
+
+/**
+ * The `drawdownStrategy` sentinel that activates the Lever-B weight vector. When
+ * selected, the accountPriority cascade synthesizes a role→rank map from the
+ * per-role `drawdownWeight.<role>` params instead of reading a fixed strategy
+ * table (see scenario-loader's `weightMode` branch). Kept in sync with the
+ * `WEIGHTED` key in DRAWDOWN_STRATEGIES above.
+ */
+export const DRAWDOWN_WEIGHT_MODE = 'WEIGHTED';
+
+/** Param-key prefix for the per-role Lever-B weights. */
+export const DRAWDOWN_WEIGHT_PREFIX = 'drawdownWeight';
+
+/**
+ * Separator between the prefix and the role in a weight key, giving
+ * `drawdownWeight::roth-ira`. A `::` (not a `.`) is REQUIRED: the MC/Opt/MPC
+ * candidate path applies params through `set()`, which splits keys on `.`/`[` and
+ * refuses to create intermediate nodes — so a dotted `drawdownWeight.roth-ira`
+ * would be silently dropped (its `drawdownWeight` parent never pre-exists) and the
+ * Lever-B axis would be inert through the solver and under MPC. `::` keeps the key
+ * a single flat token that `set()` writes directly (matches the design-55 generated
+ * `<member>::<field>` convention).
+ */
+export const DRAWDOWN_WEIGHT_SEP = '::';
+
+/** The param key for a role's Lever-B weight, e.g. `drawdownWeight::roth-ira`. */
+export function drawdownWeightKey(role) {
+  return `${DRAWDOWN_WEIGHT_PREFIX}${DRAWDOWN_WEIGHT_SEP}${role}`;
+}
+
+/**
+ * The investment roles Lever B weights (design 58 §4-B). Each gets a continuous
+ * weight in [0,1]; the drawdown order is the ascending sort of the weights (lowest
+ * drawn first). This is a smooth search space the optimizer can tune directly, and
+ * it is stable across account edits because it keys on *roles*, not account ids.
+ * Same-role siblings (e.g. two Roths) share one weight → one drawdown tier, whose
+ * internal split is Lever C's job (design 58 §4-C).
+ *
+ * The two cash roles are intentionally excluded — they always drain first (the
+ * CASH_BAND, rank 0) and are not part of the search.
+ */
+export const DRAWDOWN_WEIGHT_ROLES = [
+  ACCOUNT_ROLES.FIXED_INCOME, ACCOUNT_ROLES.US_STOCK,
+  ACCOUNT_ROLES.IRA, ACCOUNT_ROLES.K401, ACCOUNT_ROLES.ROTH,
+  ACCOUNT_ROLES.AU_FIXED_INCOME, ACCOUNT_ROLES.AU_STOCK, ACCOUNT_ROLES.SUPER,
+];
+
+/** Cash roles that always drain first under Lever B (rank 0, the CASH_BAND). */
+export const DRAWDOWN_CASH_ROLES = [ACCOUNT_ROLES.US_SAVINGS, ACCOUNT_ROLES.AU_SAVINGS];
+
+/**
+ * Human-readable labels for the weighted roles (UI param labels / "tune order").
+ */
+export const DRAWDOWN_ROLE_LABELS = {
+  [ACCOUNT_ROLES.FIXED_INCOME]:    'US Fixed Income',
+  [ACCOUNT_ROLES.US_STOCK]:        'US Stock',
+  [ACCOUNT_ROLES.IRA]:             'Traditional IRA',
+  [ACCOUNT_ROLES.K401]:            '401(k)',
+  [ACCOUNT_ROLES.ROTH]:            'Roth IRA',
+  [ACCOUNT_ROLES.AU_FIXED_INCOME]: 'AU Fixed Income',
+  [ACCOUNT_ROLES.AU_STOCK]:        'AU Stock',
+  [ACCOUNT_ROLES.SUPER]:           'Superannuation',
+};
+
+/**
+ * Convert a named strategy into a Lever-B weight vector (role → weight in (0,1))
+ * whose ascending sort reproduces the strategy's investment-role order. Each named
+ * strategy is therefore one point in the weight space — this is what lets the
+ * solver **warm-start** from a preset (design 58 §4-B / §7). Roles the strategy
+ * doesn't rank sort last (Infinity, stable tie-break by declaration order).
+ * Returns null for a strategy with no role map (CUSTOM, WEIGHTED, unknown).
+ */
+export function drawdownWeightsFromStrategy(strategyName, roles = DRAWDOWN_WEIGHT_ROLES) {
+  const map = DRAWDOWN_STRATEGIES[strategyName];
+  if (!map) return null;
+  const ranked = [...roles].sort(
+    (a, b) => (map[a] ?? Infinity) - (map[b] ?? Infinity));
+  const out = {};
+  ranked.forEach((role, i) => { out[role] = +((i + 1) / (ranked.length + 1)).toFixed(4); });
+  return out;
+}
+
+/**
+ * Default per-role drawdown weights — seeded from TAX_EFFICIENT (the existing
+ * global-order strategy) so selecting WEIGHTED without tuning reproduces a sensible
+ * taxable→tax-deferred→tax-free global order. Only consulted when
+ * `drawdownStrategy === 'WEIGHTED'`; the default strategy is TAXABLE_FIRST, so
+ * existing scenarios are unaffected (byte-identical).
+ */
+export const DEFAULT_DRAWDOWN_WEIGHTS = drawdownWeightsFromStrategy('TAX_EFFICIENT');
+
+/**
+ * Build the per-role `drawdownWeight.<role>` param-schema entries (design 58 §4-B).
+ * Continuous [0,1] Number params, opt-swept, gated on `drawdownStrategy=WEIGHTED`.
+ */
+export function buildDrawdownWeightSchema() {
+  return DRAWDOWN_WEIGHT_ROLES.map(role => ({
+    key: drawdownWeightKey(role),
+    label: `Drawdown Weight — ${DRAWDOWN_ROLE_LABELS[role] ?? role}`,
+    type: 'Number', group: 'Spending',
+    min: 0, max: 1, step: 0.05,
+    mc: false, opt: true,
+    defaultValue: DEFAULT_DRAWDOWN_WEIGHTS[role],
+    // Only meaningful under the WEIGHTED strategy — hide/skip otherwise.
+    visibleWhen: { param: 'drawdownStrategy', equals: DRAWDOWN_WEIGHT_MODE },
+    description: `Drawdown weight for ${DRAWDOWN_ROLE_LABELS[role] ?? role} accounts ` +
+      `(0–1; lower = drawn earlier). Active only when Drawdown Strategy is WEIGHTED; ` +
+      `the draw order is the ascending sort of all role weights. Same-role siblings ` +
+      `share this weight (one tier).`,
+  }));
+}
+
+/** Flat map of the default `drawdownWeight::<role>` param key → value. */
+export const DEFAULT_DRAWDOWN_WEIGHT_PARAMS = Object.fromEntries(
+  Object.entries(DEFAULT_DRAWDOWN_WEIGHTS).map(
+    ([role, w]) => [drawdownWeightKey(role), w]));
 
 /**
  * Default parameters for the International Retirement scenario.
@@ -217,6 +344,17 @@ export const INTL_RETIREMENT_DEFAULTS = {
   drawdownStrategy:      'TAXABLE_FIRST',
   // Per-owner drawdown banding within a strategy (design 35): PRIMARY_FIRST | SPOUSE_FIRST | POOLED
   drawdownOwnerOrdering: 'PRIMARY_FIRST',
+  // Cross-border drawdown mode (design 58 Lever A): AUTO | LOCAL_FIRST | GLOBAL.
+  // AUTO keeps the legacy coupling (TAX_EFFICIENT ⇒ GLOBAL, else LOCAL_FIRST).
+  crossBorderDrawdown:   'AUTO',
+  // Per-role drawdown weights (design 58 Lever B). Only consulted when
+  // drawdownStrategy === 'WEIGHTED'; seeded from TAX_EFFICIENT's global order so
+  // the default strategy (TAXABLE_FIRST) is unaffected. Keys: drawdownWeight.<role>.
+  ...DEFAULT_DRAWDOWN_WEIGHT_PARAMS,
+  // Within-tier draw policy (design 58 Lever C): SEQUENTIAL | EQUAL | PROPORTIONAL.
+  // How accounts sharing one drawdown tier (equal effective priority) split a draw.
+  // SEQUENTIAL (default) drains one fully before the next — byte-identical.
+  withinTierDraw:        'SEQUENTIAL',
 
   // Inflation rates (annual, per country)
   usInflationRate: 0.03,
@@ -366,6 +504,17 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     // bare ownerOrder/ownerStride remain as PRIMARY_FIRST fallbacks.
     node: { type: 'accountPriority', strategies: DRAWDOWN_STRATEGIES,
             customStrategiesKey: 'customDrawdownStrategies',
+            // Lever B (design 58 §4-B): the WEIGHTED sentinel makes the cascade
+            // synthesize the role→rank map from the per-role drawdownWeight.<role>
+            // params (ascending sort = draw order) instead of a fixed strategy
+            // table. weightRoles are the investment roles searched; cashRoles
+            // always rank 0 (drawn first). weightDefaults backstop a missing key.
+            weightMode: DRAWDOWN_WEIGHT_MODE,
+            weightKeyPrefix: DRAWDOWN_WEIGHT_PREFIX,
+            weightKeySep: DRAWDOWN_WEIGHT_SEP,
+            weightRoles: DRAWDOWN_WEIGHT_ROLES,
+            cashRoles: DRAWDOWN_CASH_ROLES,
+            weightDefaults: DEFAULT_DRAWDOWN_WEIGHTS,
             ownerOrder: ['primary', 'spouse'], ownerStride: 100,
             ownerModeKey: 'drawdownOwnerOrdering',
             ownerModes: {
@@ -390,6 +539,37 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
       'POOLED: same-role accounts across owners share one priority tier (e.g. both Roths drawn together in the strategy\'s role order).',
   },
   {
+    // Cross-border drawdown mode (design 58 Lever A). Feeds state.crossBorderDrawdown
+    // (resolved in the US_RETIREMENT toolset) — no node cascade; the toolset reads it
+    // directly. AUTO preserves the legacy TAX_EFFICIENT⇒GLOBAL coupling so existing
+    // scenarios are byte-identical; GLOBAL lets CUSTOM (or any strategy) honor the
+    // authored drawdownPriority order across the US↔AU border.
+    key: 'crossBorderDrawdown', label: 'Cross-Border Drawdown',
+    type: 'Enum', group: 'Spending',
+    options: ['AUTO', 'LOCAL_FIRST', 'GLOBAL'],
+    mc: false, opt: true, defaultValue: INTL_RETIREMENT_DEFAULTS.crossBorderDrawdown,
+    description: 'How the non-residence country\'s accounts are ordered for drawdown. ' +
+      'AUTO follows the strategy (TAX_EFFICIENT is global, others residence-first). ' +
+      'LOCAL_FIRST drains the current residence country first. ' +
+      'GLOBAL lets both countries\' accounts compete in one drawdownPriority order — pair with CUSTOM to force a hand-authored cross-border order.',
+  },
+  {
+    // Within-tier draw policy (design 58 Lever C). Feeds state.withinTierDraw
+    // (resolved in the US_RETIREMENT toolset) — no node cascade; AccountService
+    // .replenishSavings reads it directly to decide how accounts sharing one
+    // drawdown tier (e.g. two Roths under POOLED, or two roles tied by a Lever-B
+    // weight) split a draw. SEQUENTIAL preserves the legacy per-tier drain so
+    // existing scenarios are byte-identical.
+    key: 'withinTierDraw', label: 'Within-Tier Draw',
+    type: 'Enum', group: 'Spending',
+    options: ['SEQUENTIAL', 'EQUAL', 'PROPORTIONAL'],
+    mc: false, opt: true, defaultValue: INTL_RETIREMENT_DEFAULTS.withinTierDraw,
+    description: 'How accounts sharing one drawdown tier (equal priority) split a withdrawal. ' +
+      'SEQUENTIAL drains one member fully before the next (default). ' +
+      'EQUAL splits the tier\'s draw evenly across members (residual redistributes when one is capped). ' +
+      'PROPORTIONAL splits by each member\'s available balance — e.g. draw two Roths together pro-rata.',
+  },
+  {
     // User-authored drawdown strategies (by role → rank). Each entry is
     // { name, roles: { <role>: <order> } } and becomes selectable as a
     // Drawdown Strategy (Scenario) and a sweep value (Optimize). `options`
@@ -399,6 +579,14 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     options: DRAWDOWN_ROLES, mc: false, opt: false, defaultValue: [],
     description: 'Define named by-role drawdown orderings, then select one above or sweep them in Optimize',
   },
+  // ── Drawdown weights (design 58 Lever B — optimizable role-weight order) ──────
+  // One continuous [0,1] weight per investment role; the draw order is the
+  // ascending sort of the weights. Read by the drawdownStrategy node's
+  // accountPriority cascade (weightMode), active only when the WEIGHTED strategy is
+  // selected — so these carry no node of their own and are byte-identical no-ops
+  // under every other strategy. Generated from DRAWDOWN_WEIGHT_ROLES so the list
+  // stays in sync with the roles the cascade synthesizes.
+  ...buildDrawdownWeightSchema(),
 
   // ── Optimization planning targets (design 38 §5.2, Q5) ──────────────────────
   {
@@ -634,6 +822,12 @@ export class IntlRetirementScenario extends BaseScenario {
         fixedIncomeInterestRate:  p.fixedIncomeInterestRate,
         monthlyExpenses:          p.monthlyExpenses,
         inflationAdjust:          true,
+        // US_RETIREMENT — cross-border drawdown mode (design 58 Lever A). AUTO
+        // default preserves the legacy TAX_EFFICIENT⇒GLOBAL coupling.
+        crossBorderDrawdown:      p.crossBorderDrawdown ?? 'AUTO',
+        // US_RETIREMENT — within-tier draw policy (design 58 Lever C). SEQUENTIAL
+        // default preserves the legacy per-tier drain.
+        withinTierDraw:           p.withinTierDraw ?? 'SEQUENTIAL',
         // AU_BANKING
         auSavingsInterestRate:    p.auSavingsInterestRate,
         auFixedIncomeInterestRate: p.auFixedIncomeInterestRate,

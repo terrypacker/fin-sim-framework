@@ -300,6 +300,10 @@ export const US_RETIREMENT = {
         defaultValue: 0.30,
         description: 'Fraction of monthly expenses treated as discretionary (0.30 = 30%)',
       },
+      // Cross-border drawdown mode (design 58 Lever A) is a scenario-level param
+      // (INTL_RETIREMENT_PARAM_SCHEMA) — this toolset only *reads*
+      // context.parameters.crossBorderDrawdown in state(). Declaring it here too
+      // would duplicate the key (drift guard in intl-retirement-optimizer.test).
       {
         key: 'spendingStrategy', label: 'Spending Strategy',
         type: 'EnumMulti', group: 'Spending', mc: false, opt: true,
@@ -397,14 +401,30 @@ export const US_RETIREMENT = {
       // Drawdown mode read by AccountService.replenishSavings. Ordered (default)
       // honors drawdownPriority; PROPORTIONAL draws pro-rata across eligible buckets.
       drawdownMode:         p.drawdownStrategy === 'PROPORTIONAL' ? 'PROPORTIONAL' : 'ORDERED',
-      // Cross-border drawdown policy read by AccountService.replenishSavings.
-      // LOCAL_FIRST (default): drain only same-country accounts to cover a savings
-      // deficit, escalating to INTL_TRANSFER as a last resort (avoids an FX wire on
-      // every top-up). GLOBAL: draw from accounts in either country in one global
-      // drawdownPriority order, converting AUD↔USD per draw — used by the
-      // TAX_EFFICIENT strategy so the residency country no longer dictates which
-      // accounts drain first.
-      crossBorderDrawdown:  p.drawdownStrategy === 'TAX_EFFICIENT' ? 'GLOBAL' : 'LOCAL_FIRST',
+      // Cross-border drawdown policy read by AccountService.replenishSavings
+      // (design 58 Lever A). LOCAL_FIRST: drain only same-country accounts to cover
+      // a savings deficit, escalating to INTL_TRANSFER as a last resort (avoids an
+      // FX wire on every top-up). GLOBAL: draw from accounts in either country in
+      // one global drawdownPriority order, converting AUD↔USD per draw — lets any
+      // strategy (incl. CUSTOM) honor the authored priority across the border.
+      //
+      // Now a standalone `crossBorderDrawdown` param: an explicit LOCAL_FIRST/GLOBAL
+      // wins; AUTO (the default) and any unknown value preserve the legacy coupling
+      // (TAX_EFFICIENT ⇒ GLOBAL, else LOCAL_FIRST), so existing scenarios are
+      // byte-identical.
+      crossBorderDrawdown:
+        (p.crossBorderDrawdown === 'LOCAL_FIRST' || p.crossBorderDrawdown === 'GLOBAL')
+          ? p.crossBorderDrawdown
+          : (p.drawdownStrategy === 'TAX_EFFICIENT' ? 'GLOBAL' : 'LOCAL_FIRST'),
+      // Within-tier draw policy read by AccountService.replenishSavings (design 58
+      // Lever C). How accounts sharing one drawdown tier (equal effective priority)
+      // split a draw: SEQUENTIAL (default) drains one fully before the next;
+      // EQUAL splits evenly; PROPORTIONAL splits by available balance. An unknown
+      // value falls back to SEQUENTIAL so existing scenarios are byte-identical.
+      withinTierDraw:
+        (p.withinTierDraw === 'EQUAL' || p.withinTierDraw === 'PROPORTIONAL')
+          ? p.withinTierDraw
+          : 'SEQUENTIAL',
     };
 
     // Account state entries + initial metrics snapshot so the chart shows

@@ -25,6 +25,18 @@ import { valuesForConfig }     from './opt-values.js';
 import { DateUtils }           from '../../simulation-framework/date-utils.js';
 import { rolloutProfiler }     from './rollout-profiler.js';
 
+/**
+ * Design 58 §11.2 — compile-time drawdown-control state fields a committed online
+ * control must re-stamp AFTER snapshot injection. `_injectSnapshot` overwrites the
+ * whole state with the now-snapshot, whose values reflect the OLD control from when
+ * the snapshot was taken; without re-stamping, a committed Lever-A/C candidate is
+ * inert under MPC (verified by scripts/verify-mpc-lever.mjs). These are scalar
+ * toolset-resolved state fields (crossBorderDrawdown = Lever A; withinTierDraw =
+ * Lever C). The Lever-B role-weight order bakes into per-account drawdownPriority
+ * and needs a cascade re-run instead (§11.3 Phase 3-MPC), handled separately.
+ */
+const FORWARD_DRAWDOWN_STATE_FIELDS = ['crossBorderDrawdown', 'withinTierDraw'];
+
 /** Deep-ish equality good enough for ENUM value matching (primitives + arrays of primitives). */
 function _eq(a, b) {
   if (a === b) return true;
@@ -303,7 +315,53 @@ export class OptimizationProblem {
   _seededSim(params) {
     const sim = this._compile(params);
     if (this.initialState?.kind === 'snapshot') {
+      // Design 58 §11.2 — capture the compile-time RESOLVED drawdown-control state
+      // fields (the toolset already turned the candidate params into these via
+      // state()) BEFORE snapshot injection overwrites them with the snapshot's OLD
+      // values. Reading the compiled state avoids re-implementing the AUTO→coupling
+      // / unknown-value resolver here.
+      const forwardDrawdown = {};
+      for (const f of FORWARD_DRAWDOWN_STATE_FIELDS) {
+        if (sim.state?.[f] !== undefined) forwardDrawdown[f] = sim.state[f];
+      }
+      // Design 58 §11.3 Phase 3-MPC (Lever B online): the role-weight order bakes
+      // into per-account `drawdownPriority` via the compile cascade — there is no
+      // scalar state field to re-stamp. Capture the compile-resolved priorities
+      // (already correct for the committed weights) so we can re-apply them onto the
+      // injected snapshot's accounts, which carry the OLD order. Only under WEIGHTED:
+      // every other strategy fixes the order at authoring/compile time and the
+      // candidate never changes it, so the injected priorities are already right.
+      let forwardPriorities = null;
+      if (params.drawdownStrategy === 'WEIGHTED') {
+        forwardPriorities = {};
+        for (const [k, v] of Object.entries(sim.state)) {
+          if (v && typeof v === 'object' && !Array.isArray(v) && 'drawdownPriority' in v) {
+            forwardPriorities[k] = v.drawdownPriority;
+          }
+        }
+      }
       this._injectSnapshot(sim, this.initialState.snapshot);
+      // Re-stamp the committed drawdown controls forward-effective (design 58 Lever
+      // A/C online) so the rollout from "now" honors the candidate instead of the
+      // snapshot's stale value. A no-op when the candidate didn't change them.
+      if (Object.keys(forwardDrawdown).length > 0) {
+        sim.state = { ...sim.state, ...forwardDrawdown };
+      }
+      // Re-stamp per-account drawdownPriority (Lever B online). Guard each key: the
+      // injected snapshot and the fresh compile share stateKeys by the
+      // deterministic-compile invariant, but skip any account absent on either side.
+      if (forwardPriorities) {
+        const patched = { ...sim.state };
+        let changed = false;
+        for (const [k, pr] of Object.entries(forwardPriorities)) {
+          const acct = patched[k];
+          if (acct && typeof acct === 'object' && acct.drawdownPriority !== pr) {
+            patched[k] = { ...acct, drawdownPriority: pr };
+            changed = true;
+          }
+        }
+        if (changed) sim.state = patched;
+      }
       // Forward-effective EXPLICIT_BANDS edit (design 39 §5 / Step 5b): when the
       // controls changed the band active at "now" vs the injected snapshot's pin,
       // actuate it immediately rather than waiting for the next annual period

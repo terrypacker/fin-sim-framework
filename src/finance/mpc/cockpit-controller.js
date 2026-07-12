@@ -19,6 +19,12 @@ import { retargetEarlyWithdrawalEvents } from '../../scenarios/toolsets/us-early
 import { set }                     from '../monte-carlo/mc-param-paths.js';
 import { DateUtils }               from '../../simulation-framework/date-utils.js';
 import { UsTaxRates2025 }          from '../tax/us/us-tax-rates-2025.js';
+import { synthesizeWeightedPriorities } from '../../scenarios/scenario-loader.js';
+import {
+  DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_CASH_ROLES, DEFAULT_DRAWDOWN_WEIGHTS,
+  DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP, DRAWDOWN_WEIGHT_MODE,
+  DRAWDOWN_ROLE_LABELS, drawdownWeightKey,
+} from '../../scenarios/intl-retirement-scenario.js';
 
 /**
  * Built-in control specs for the cockpit (design 39 §7). A control spec maps the
@@ -385,6 +391,183 @@ export const COCKPIT_CONTROLS = {
         nowMs:         new Date(sim.currentDate).getTime(),
       });
       return hits > 0;
+    },
+  },
+
+  // ── Cross-border drawdown mode (design 58 §11.3 Phase 1-MPC — Lever A online) ──
+  DRAWDOWN_XBORDER: {
+    key:     'DRAWDOWN_XBORDER',
+    label:   'Cross-Border Drawdown',
+    numeric: false,                      // categorical — no min/max/step range
+    liveActuatable: true,
+    // Always applicable in the cross-border scenario: which country's accounts
+    // compete for a draw is a valid decision whenever the plan spans both. The
+    // lever is inert only when the horizon never draws across the border — a data
+    // condition, not a config one — so there is no scenario-param gate.
+    appliesTo: () => true,
+    // One categorical decision variable over the state-resident policy field. The
+    // solver encodes/decodes ENUMs by index; a 2-value lever is fully covered by a
+    // grid/pattern search. AUTO is not a search value — the online lever chooses a
+    // concrete behavior (the toolset AUTO coupling is the static default only).
+    buildVariables: () => [{
+      paramKey: 'crossBorderDrawdown',
+      type:     OPT_PARAM_TYPES.ENUM,
+      values:   ['LOCAL_FIRST', 'GLOBAL'],
+      group:    'Spending',
+    }],
+    describe: (candidate, vars) => {
+      const v = vars?.[0];
+      const mode = v ? candidate?.[v.paramKey] : null;
+      return mode === 'GLOBAL'
+        ? 'Draw across the US↔AU border in one global priority order'
+        : 'Drain the current residence country first (LOCAL_FIRST)';
+    },
+    /**
+     * Forward-effective live actuation (design 58 §11.2, leg 3): re-stamp the
+     * running sim's `crossBorderDrawdown` state field so AccountService
+     * .replenishSavings honors the committed mode from the next draw, and persist
+     * it to the active scenario param so future Advise rollouts (which recompile
+     * from params) and the live sim agree. The realized past is untouched — the
+     * change bites forward, mirroring the projection's `_seededSim` re-stamp.
+     */
+    actuate: ({ services, scenario, candidate, vars }) => {
+      const v = vars?.[0];
+      const mode = v ? candidate?.[v.paramKey] : null;
+      if (mode !== 'LOCAL_FIRST' && mode !== 'GLOBAL') return false;
+      // 1) Re-stamp the live sim state forward-effective.
+      const sim = services?.simulationRegistry?.getPrimary?.();
+      if (!sim?.state) return false;
+      sim.state = { ...sim.state, crossBorderDrawdown: mode };
+      // 2) Persist to the active scenario param so Advise/Rebuild stay consistent.
+      const p = (scenario?.params ?? []).find(pp => (pp.key ?? pp.name) === 'crossBorderDrawdown');
+      if (p) p.value = mode;
+      return true;
+    },
+  },
+
+  // ── Within-tier draw policy (design 58 §11.3 Phase 2-MPC — Lever C online) ─────
+  DRAWDOWN_WITHINTIER: {
+    key:     'DRAWDOWN_WITHINTIER',
+    label:   'Within-Tier Draw',
+    numeric: false,                      // categorical — no min/max/step range
+    liveActuatable: true,
+    // Always applicable: how accounts sharing a drawdown tier split a draw is a
+    // valid decision whenever a tier has ≥2 members. Inert only when every tier is
+    // a singleton — a data condition, not a config one — so no scenario-param gate.
+    appliesTo: () => true,
+    buildVariables: () => [{
+      paramKey: 'withinTierDraw',
+      type:     OPT_PARAM_TYPES.ENUM,
+      values:   ['SEQUENTIAL', 'EQUAL', 'PROPORTIONAL'],
+      group:    'Spending',
+    }],
+    describe: (candidate, vars) => {
+      const v = vars?.[0];
+      switch (v ? candidate?.[v.paramKey] : null) {
+        case 'EQUAL':        return 'Split each drawdown tier evenly across its accounts';
+        case 'PROPORTIONAL': return 'Split each drawdown tier by account balance';
+        default:             return 'Drain one account per tier fully before the next (SEQUENTIAL)';
+      }
+    },
+    /**
+     * Forward-effective live actuation (design 58 §11.2, leg 3): re-stamp the
+     * running sim's `withinTierDraw` state field so AccountService.replenishSavings
+     * splits shared tiers by the committed policy from the next draw, and persist
+     * it to the active scenario param. Realized past untouched — the projection's
+     * `_seededSim` re-stamp is the twin.
+     */
+    actuate: ({ services, scenario, candidate, vars }) => {
+      const v = vars?.[0];
+      const mode = v ? candidate?.[v.paramKey] : null;
+      if (!['SEQUENTIAL', 'EQUAL', 'PROPORTIONAL'].includes(mode)) return false;
+      const sim = services?.simulationRegistry?.getPrimary?.();
+      if (!sim?.state) return false;
+      sim.state = { ...sim.state, withinTierDraw: mode };
+      const p = (scenario?.params ?? []).find(pp => (pp.key ?? pp.name) === 'withinTierDraw');
+      if (p) p.value = mode;
+      return true;
+    },
+  },
+
+  // ── Drawdown order weights (design 58 §11.3 Phase 3-MPC — Lever B online) ──────
+  // The flagship: each epoch the controller re-solves the drawdown ORDER from the
+  // realized state. The order is encoded as one continuous weight per investment
+  // role (ascending sort = draw order), so the solver searches the order directly.
+  DRAWDOWN_WEIGHTS: {
+    key:     'DRAWDOWN_WEIGHTS',
+    label:   'Drawdown Order (weights)',
+    numeric: true,                       // the [0,1] range applies to every weight
+    defaultRange: { min: 0, max: 1, step: 0.05 },
+    liveActuatable: true,
+    // Only meaningful under the WEIGHTED strategy — the weights synthesize the order
+    // only then (every other strategy fixes it). Gate + surface the requirement.
+    appliesTo: (bp) => bp?.drawdownStrategy === DRAWDOWN_WEIGHT_MODE,
+    requirement: 'Set Drawdown Strategy to WEIGHTED (Scenario panel) to tune the drawdown order online.',
+    // One CONTINUOUS variable per investment role; the draw order is the ascending
+    // sort of the committed weights. Same-role siblings share a weight → one tier.
+    buildVariables: ({ range }) => DRAWDOWN_WEIGHT_ROLES.map(role => ({
+      paramKey: drawdownWeightKey(role),
+      type:     OPT_PARAM_TYPES.CONTINUOUS,
+      min:      range?.min  ?? 0,
+      max:      range?.max  ?? 1,
+      step:     range?.step ?? 0.05,
+      group:    'Spending', _role: role,
+    })),
+    describe: (candidate, vars) => {
+      // Show the resulting draw order (roles ascending by committed weight).
+      const ranked = vars
+        .map(v => ({ role: v._role, w: Number(candidate?.[v.paramKey]) }))
+        .filter(r => Number.isFinite(r.w))
+        .sort((a, b) => a.w - b.w)
+        .map(r => DRAWDOWN_ROLE_LABELS[r.role] ?? r.role);
+      return ranked.length ? `Draw order: ${ranked.join(' → ')}` : 'Drawdown order unchanged';
+    },
+    /**
+     * Forward-effective live actuation (design 58 §11.3 leg 3): persist each
+     * committed weight to its scenario param, and re-stamp the running sim's
+     * per-account `drawdownPriority` from the weights using the SAME role→rank
+     * synthesis the compile cascade uses (synthesizeWeightedPriorities) + the
+     * configured owner banding — so replenishSavings honors the new order from the
+     * next draw. Realized past untouched; the projection's `_seededSim` per-account
+     * re-stamp is the twin.
+     */
+    actuate: ({ services, scenario, candidate, vars }) => {
+      if (!vars?.length) return false;
+      const sim = services?.simulationRegistry?.getPrimary?.();
+      if (!sim?.state) return false;
+
+      // 1) Persist each committed weight to its scenario param.
+      for (const v of vars) {
+        const w = candidate?.[v.paramKey];
+        if (w == null) continue;
+        const p = (scenario?.params ?? []).find(pp => (pp.key ?? pp.name) === v.paramKey);
+        if (p) p.value = w;
+      }
+
+      // 2) Synthesize role → rank from the committed weights (missing roles fall back
+      //    to the shipped defaults), then apply owner banding to match the cascade.
+      const roleRank = synthesizeWeightedPriorities({
+        weightKeyPrefix: DRAWDOWN_WEIGHT_PREFIX, weightKeySep: DRAWDOWN_WEIGHT_SEP,
+        weightRoles: DRAWDOWN_WEIGHT_ROLES, cashRoles: DRAWDOWN_CASH_ROLES,
+        weightDefaults: DEFAULT_DRAWDOWN_WEIGHTS,
+      }, candidate ?? {});
+
+      const mode = (scenario?.params ?? []).find(pp => (pp.key ?? pp.name) === 'drawdownOwnerOrdering')?.value;
+      const ownerOrder  = mode === 'SPOUSE_FIRST' ? ['spouse', 'primary'] : ['primary', 'spouse'];
+      const ownerStride = mode === 'POOLED' ? 0 : 100;
+
+      // 3) Re-stamp each drawdown-eligible live account forward-effective.
+      const next = { ...sim.state };
+      let changed = false;
+      for (const [k, acct] of Object.entries(next)) {
+        if (!acct || typeof acct !== 'object' || Array.isArray(acct)) continue;
+        if (!('drawdownPriority' in acct) || roleRank[acct.role] == null) continue;
+        const rank = Math.max(0, ownerOrder.indexOf(acct.ownerId));
+        const pr = roleRank[acct.role] + rank * ownerStride;
+        if (acct.drawdownPriority !== pr) { next[k] = { ...acct, drawdownPriority: pr }; changed = true; }
+      }
+      if (changed) sim.state = next;
+      return true;
     },
   },
 };
