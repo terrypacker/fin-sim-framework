@@ -35,15 +35,16 @@ export class ChangeResidencyApplyReducer extends Reducer {
   static type        = 'ChangeResidencyApplyReducer';
   static actionType  = 'CHANGE_RESIDENCY_APPLY';
 
-  constructor({ accountService, stateRegistry } = {}) {
+  constructor({ accountService, stateRegistry, collectibleService } = {}) {
     super('Change Residency Apply', PRIORITY.PRE_PROCESS);
-    this.accountService  = accountService;
-    this.stateRegistry   = stateRegistry;
+    this.accountService     = accountService;
+    this.stateRegistry      = stateRegistry;
+    this.collectibleService = collectibleService;
     this.reducedActionTypes = ['CHANGE_RESIDENCY_APPLY'];
   }
 
-  static fromJSON(d, { accountService, stateRegistry }) {
-    const r = new this({ accountService, stateRegistry });
+  static fromJSON(d, { accountService, stateRegistry, collectibleService }) {
+    const r = new this({ accountService, stateRegistry, collectibleService });
     r.id = d.id;
     return r;
   }
@@ -55,11 +56,30 @@ export class ChangeResidencyApplyReducer extends Reducer {
     // cost base for non-TAP CGT assets. Policy-driven — no hardcoded country.
     const country = 'AU';
     const stepUp  = stepsUpCostBaseOnResidency(country);
+    // AU CGT-reform indexation base (design 57 §6.3): the destination country's
+    // price level at the move is the deemed-acquisition level for stepped-up
+    // cross-border lots. Reads the dedicated ATO CPI series (design 57 Part 2,
+    // Item A), matching the sale-side read, so the indexation ratio is consistent.
+    // 1.0 when no accumulator is present (sim start).
+    const priceLevel = state.cpiAccumulator?.[country] ?? state.inflationAccumulator?.[country] ?? 1;
 
     // 1. Snapshot balanceAtResidencyChange on all registered accounts (and the
-    //    residency cost-base step-up where the destination country applies one).
+    //    residency cost-base step-up + indexation-base stamp where the destination
+    //    country applies one).
     for (const account of this.stateRegistry.getAccounts(state)) {
-      this.accountService.recordResidencyChange(account, { country, stepUp });
+      this.accountService.recordResidencyChange(account, { country, stepUp, priceLevel });
+    }
+
+    // 1b. Gold collectibles get the same step-up (design 57 Part 2, Item C):
+    //     stateRegistry.getAccounts only covers accounts, so iterate collectibles
+    //     directly and stamp their AU cost base + indexation level in place on the
+    //     live state entry (mirrors the account holdings step-up above).
+    if (stepUp && this.collectibleService) {
+      for (const col of this.collectibleService.getAll()) {
+        const cs = col.stateKey ? state[col.stateKey] : null;
+        if (cs == null) continue;
+        this.collectibleService.recordResidencyChange(cs, { country, stepUp, priceLevel });
+      }
     }
 
     // 2. Flip residency to 'AU' for every person; citizen arrays unchanged.

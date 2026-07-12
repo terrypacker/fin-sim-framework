@@ -393,9 +393,11 @@ export class AccountService extends AssetService {
    * country (TAP — handled by the RealPropertyService override) are not stepped up.
    *
    * @param {import('../account.js').Account} account
-   * @param {{ country?: string, stepUp?: boolean }} [opts] - destination country and its step-up policy
+   * @param {{ country?: string, stepUp?: boolean, priceLevel?: number }} [opts]
+   *   destination country, its step-up policy, and the destination country's price
+   *   level at the move (for the AU CGT-reform indexation base, design 57 §6.3).
    */
-  recordResidencyChange(account, { country, stepUp } = {}) {
+  recordResidencyChange(account, { country, stepUp, priceLevel } = {}) {
     if ('balanceAtResidencyChange' in account && account.balanceAtResidencyChange === null) {
       account.balanceAtResidencyChange = account.balance;
     }
@@ -406,6 +408,15 @@ export class AccountService extends AssetService {
           h.costBaseByCountry = h.costBaseByCountry ?? {};
           if (h.costBaseByCountry[country] == null) {
             h.costBaseByCountry[country] = h.marketValue ?? 0;
+            // AU CGT reform (design 57 §6.3): the s855-45 step-up is the AU-deemed
+            // acquisition, so the indexation base level is the AU price level at the
+            // move. Stamp it alongside the stepped-up cost base (both gated on the
+            // one-time step-up) so a later post-2027 sale indexes each cross-border
+            // (US-brokerage equity + gold) sleeve from the residency date. Only
+            // stamp when a level is supplied and none is already recorded.
+            if (priceLevel != null && h.acquisitionPriceLevel == null) {
+              h.acquisitionPriceLevel = priceLevel;
+            }
           }
         }
       }

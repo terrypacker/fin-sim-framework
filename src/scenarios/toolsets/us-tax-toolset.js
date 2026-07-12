@@ -81,6 +81,9 @@ export const US_TAX = {
       usSourceCapGainsUsdYTD:  0,
       usSourceOrdinaryAudYTD:  0,
       usSourceCapGainsAudYTD:  0,
+      // US-source *real* (indexed) AU cap gain (AUD) — funds the FY2027 FITO
+      // "without" pass's CG slice (design 57 Part 2, Item D).
+      usSourceRealCapGainsAudYTD: 0,
       ftcCurrentGeneral:       0,
       ftcCurrentPassive:       0,
       ftcPoolGeneral:          {},

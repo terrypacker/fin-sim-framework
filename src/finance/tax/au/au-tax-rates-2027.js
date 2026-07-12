@@ -66,15 +66,25 @@ export class AuTaxRates2027 extends AuTaxRatesBase {
 
   /**
    * CGT reform relief: no 50% discount; the assessable gain is the *real
-   * (post-indexation) gain* — `state.auRealCapitalGainsYTD`, populated by
-   * AuTaxModule2027 from the per-lot indexed gain (design 57 §6.3/§6.5). When that
-   * bucket is absent (e.g. a synthetic state or a gain that never ran through the
-   * FY2027 classifier), it falls back to the gross gain, so indexation is a no-op
-   * rather than a crash. The reliefAmount shown is the indexation reduction
-   * (gross − real). A 30% minimum-tax floor applies to the real gain.
+   * (post-indexation) gain* in `state.auRealCapitalGainsYTD`.
+   *
+   * That bucket is AUTHORITATIVE and read directly — NOT via `?? auCapitalGainsYTD`.
+   * Every resident capital-gains classifier populates it in lockstep with the gross
+   * bucket: the AU-native AU_STOCK/AU_HOUSE reducers and the US-module cross-border
+   * STOCK_WITHDRAWAL_TAX / COMPANY_SALE_TAX / COLLECTIBLE_SALE_TAX reducers
+   * (design 57 §6.5). Falling back to the gross gain on a *present zero* would
+   * silently tax a gain that was fully indexed away (or is entirely pre-2027) at
+   * 100% — the design-57 present-zero trap. So a present real bucket (even 0) wins;
+   * only a *truly absent* bucket — a synthetic rate-only state that never ran a
+   * classifier — degrades to the gross gain so the rate math still has an input.
+   *
+   * The reliefAmount shown is the indexation reduction (gross − real). A 30%
+   * minimum-tax floor applies to the real gain.
    */
   _cgtRelief(state, auCapitalGainsYTD) {
-    const realGain = state?.auRealCapitalGainsYTD ?? auCapitalGainsYTD;
+    const realGain = state != null && 'auRealCapitalGainsYTD' in state
+      ? (state.auRealCapitalGainsYTD ?? 0)
+      : auCapitalGainsYTD;
     // Age Pension / JobSeeker recipients are exempt from the 30% minimum tax
     // (design 57 §6.6) — they still pay marginal-rate CGT on the real gain, just
     // no floor. auMinTaxExempt is stamped per-person by computeAuTaxPerPerson.

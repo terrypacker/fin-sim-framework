@@ -175,6 +175,13 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
             ...state,
             auOrdinaryIncomeYTD: (state.auOrdinaryIncomeYTD ?? 0) - (state.usSourceOrdinaryAudYTD ?? 0),
             auCapitalGainsYTD:   (state.auCapitalGainsYTD   ?? 0) - (state.usSourceCapGainsAudYTD ?? 0),
+            // FY2027+ assesses the *real* (indexed) bucket, so the "without" pass
+            // must remove the US-source slice from it too — else the CG component
+            // of the FITO limit reads ~0 (design 57 Part 2, Item D). Only present
+            // when a FY2027 classifier populated it; absent ⇒ the spread is 0.
+            ...('auRealCapitalGainsYTD' in state
+              ? { auRealCapitalGainsYTD: (state.auRealCapitalGainsYTD ?? 0) - (state.usSourceRealCapGainsAudYTD ?? 0) }
+              : {}),
           }).netLiabilityPreFito;
           fitoLimit = Math.max(0, a.netLiabilityPreFito - without);
           fito      = Math.min(foreignTaxAud, fitoLimit);

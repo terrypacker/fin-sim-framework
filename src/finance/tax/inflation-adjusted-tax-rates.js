@@ -57,15 +57,28 @@ export class InflationAdjustedUsTaxRates extends UsTaxRatesBase {
 export class InflationAdjustedAuTaxRates extends AuTaxRatesBase {
   constructor(baseRates, cumulativeFactor) {
     super();
+    // Keep a reference to the wrapped year module so year-specific CGT policy
+    // (the FY2027+ reform: discount removal + indexation + 30% minimum tax) is
+    // NOT lost when the brackets are inflated. Without this delegation the wrapper
+    // silently reverts every inflation-adjusted year to AuTaxRatesBase's flat 50%
+    // discount (design 57 Bug 1 — the reform never fires past the base year).
+    this._base = baseRates;
     this._brackets            = baseRates._brackets.map(([t, r]) => [t * cumulativeFactor, r]);
     this._nonResidentBrackets = baseRates._nonResidentBrackets.map(([t, r]) => [t * cumulativeFactor, r]);
     this._medicareLevy = {
       ...baseRates._medicareLevy,
       lowerThreshold: baseRates._medicareLevy.lowerThreshold * cumulativeFactor,
     };
+    this._cgtDiscountRate = baseRates._cgtDiscountRate;
     this._baseYear = baseRates.year;
   }
 
   get year()        { return this._baseYear; }
   get countryCode() { return 'AU'; }
+
+  // Delegate the per-year CGT relief hook (and its label) to the wrapped module so
+  // the FY2027 indexation + minimum-tax regime survives inflation adjustment
+  // (design 57 §6.1/§6.3). Bracket inflation is orthogonal to CGT relief.
+  _cgtRelief(state, auCapitalGainsYTD) { return this._base._cgtRelief(state, auCapitalGainsYTD); }
+  _cgtReliefLabel()                    { return this._base._cgtReliefLabel(); }
 }

@@ -100,13 +100,28 @@ export class CollectibleService extends AssetService {
   }
 
   /**
-   * Snapshots the current value on first residency change (one-time capture).
-   * No-op if already set.
+   * Snapshots the current value on first residency change (one-time capture), and
+   * — for investment bullion (isGold) moving to a country that steps up the cost
+   * base (AU s855-45) — stamps the AU-deemed cost base and indexation level so a
+   * later post-2027 sale indexes the AU gain from the residency date (design 57
+   * Part 2, Item C). Mirrors AccountService.recordResidencyChange for holdings.
+   * All one-time captures: no-op once set.
+   *
    * @param {import('../assets/collectible.js').Collectible} collectible
+   * @param {{ country?: string, stepUp?: boolean, priceLevel?: number }} [opts]
    */
-  recordResidencyChange(collectible) {
-    if (collectible.balanceAtResidencyChange === null) {
+  recordResidencyChange(collectible, { country, stepUp, priceLevel } = {}) {
+    if (collectible.balanceAtResidencyChange == null) {
       collectible.balanceAtResidencyChange = collectible.value;
+    }
+    if (stepUp && country && collectible.isGold === true) {
+      collectible.costBaseByCountry = collectible.costBaseByCountry ?? {};
+      if (collectible.costBaseByCountry[country] == null) {
+        collectible.costBaseByCountry[country] = collectible.value ?? 0;
+        if (priceLevel != null && collectible.acquisitionPriceLevel == null) {
+          collectible.acquisitionPriceLevel = priceLevel;
+        }
+      }
     }
   }
 

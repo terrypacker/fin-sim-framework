@@ -202,12 +202,23 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
 
     // Resolve realized cost basis. Action-supplied costBasis wins for backward
     // compatibility (event-data API); otherwise consume holdings FIFO from state.
-    const r = consumeHoldingsFifo(sa.holdings ?? [], salePrice);
+    // AU CGT-reform indexation context (design 57 §6.3): the current AU price level
+    // and the as-of (sale) date, so FIFO also returns a per-lot CPI-indexed AU
+    // basis. Lots with no acquisitionPriceLevel (never stepped up / bootstrapped)
+    // index at factor 1, so auIndexedGain === auGain until the residency step-up
+    // (design 57 §6.3) stamps the deemed-acquisition level.
+    // Indexation reads the dedicated ATO CPI series (design 57 Part 2, Item A),
+    // falling back to inflationAccumulator (and 1) for old saves. The stamp
+    // (residency step-up) reads the same accumulator so the ratio is consistent.
+    const auLevel = state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1;
+    const asOfMs  = state.currentPeriods?.AU?.startMs ?? Date.now();
+    const r = consumeHoldingsFifo(sa.holdings ?? [], salePrice, { level: auLevel, asOfMs, country: 'AU' });
     const realizedBasis = action.costBasis != null ? action.costBasis : r.realizedBasis;
     const newHoldings   = r.newHoldings;
     // AU cost-base reset (design 36 §12.2): the realized AU basis sums each lot's
     // stepped-up cost base; no step-up ⇒ falls back to realizedBasis (auGain === gain).
-    const realizedAuBasis = r.realizedBasisByCountry?.AU ?? realizedBasis;
+    const realizedAuBasis        = r.realizedBasisByCountry?.AU ?? realizedBasis;
+    const realizedIndexedAuBasis = r.realizedIndexedBasisByCountry?.AU ?? realizedAuBasis;
 
     // Collectible split (design 56 §7.2): the proceeds/basis attributable to consumed
     // GOLD lots are taxed at the US 28% collectibles rate (and AU CGT if resident) via
@@ -217,24 +228,36 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
     const collectibleProceeds = action.costBasis != null ? 0 : r.collectibleProceeds;
     const collectibleBasis    = action.costBasis != null ? 0 : r.collectibleBasis;
     const collectibleGain     = Math.max(0, collectibleProceeds - collectibleBasis);
+    // Gold (collectible) AU cost base — stepped-up and CPI-indexed (design 57 §6.3).
+    // A bullion sleeve is an ordinary AU CGT asset, so it indexes like equity; a
+    // sale with no per-country override falls back to the US collectible basis.
+    const collectibleAuBasis        = r.collectibleBasisByCountry?.AU        ?? collectibleBasis;
+    const collectibleIndexedAuBasis = r.collectibleIndexedBasisByCountry?.AU ?? collectibleAuBasis;
+    const collectibleAuGain        = Math.max(0, collectibleProceeds - collectibleAuBasis);
+    const collectibleIndexedAuGain = Math.max(0, collectibleProceeds - collectibleIndexedAuBasis);
 
     // The equity (non-collectible) portion is the total less the collectible slice.
-    const equityProceeds = +(salePrice - collectibleProceeds).toFixed(2);
-    const equityBasis    = +(realizedBasis - collectibleBasis).toFixed(2);
-    const equityAuBasis  = +(realizedAuBasis - collectibleBasis).toFixed(2);
-    const gain   = Math.max(0, equityProceeds - equityBasis);
-    const auGain = Math.max(0, equityProceeds - equityAuBasis);
+    const equityProceeds        = +(salePrice - collectibleProceeds).toFixed(2);
+    const equityBasis           = +(realizedBasis - collectibleBasis).toFixed(2);
+    const equityAuBasis         = +(realizedAuBasis - collectibleAuBasis).toFixed(2);
+    const equityIndexedAuBasis  = +(realizedIndexedAuBasis - collectibleIndexedAuBasis).toFixed(2);
+    const gain          = Math.max(0, equityProceeds - equityBasis);
+    const auGain        = Math.max(0, equityProceeds - equityAuBasis);
+    const auIndexedGain = Math.max(0, equityProceeds - equityIndexedAuBasis);
 
     this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], salePrice, null);
 
     const newBalance = +newHoldings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
     // Brokerage basis is no longer tracked (design 53 P1) — the FIFO realizedBasis
-    // above is the authoritative CGT source.
+    // above is the authoritative CGT source. auIndexedGain carries the AU CGT-reform
+    // real gain (design 57) alongside the stepped-up auGain and the US gain.
     const taxActions = [
-      { type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, residency, proceeds: equityProceeds, costBasis: equityBasis, description: sa.name || key },
+      { type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auIndexedGain, residency, proceeds: equityProceeds, costBasis: equityBasis, description: sa.name || key },
     ];
     if (collectibleGain > 0) {
-      taxActions.push({ type: 'COLLECTIBLE_SALE_TAX', gain: collectibleGain, residency });
+      // isGold flags this collectible slice as bullion so the AU FY2027 classifier
+      // indexes it (ordinary AU CGT), unlike true collectibles (design 57 §6.4/§7.2).
+      taxActions.push({ type: 'COLLECTIBLE_SALE_TAX', gain: collectibleGain, auGain: collectibleAuGain, auIndexedGain: collectibleIndexedAuGain, isGold: true, residency });
     }
     return this.newState(
       state,

@@ -221,6 +221,9 @@ export const INTL_RETIREMENT_DEFAULTS = {
   // Inflation rates (annual, per country)
   usInflationRate: 0.03,
   auInflationRate: 0.03,
+  // AU CGT cost-base indexation (CPI) rate (design 57 Part 2, Item A). Unset =
+  // track the AU inflation rate (byte-identical to the pre-Part-2 behaviour).
+  auCpiRate: undefined,
 
   // Roth conversion strategy — bracket-fill policy
   rothConversionEnabled:    false,     // master switch
@@ -618,6 +621,9 @@ export class IntlRetirementScenario extends BaseScenario {
         // US_RETIREMENT / AU_RETIREMENT share 'inflationRate'; US_AU_CROSS_BORDER uses both
         inflationRate:            p.usInflationRate,
         auInflationRate:          p.auInflationRate,
+        // AU_TAX — dedicated ATO CPI indexation rate (design 57 Part 2, Item A).
+        // Only forwarded when set; unset ⇒ tracks AU inflation.
+        ...(p.auCpiRate != null ? { auCpiRate: p.auCpiRate } : {}),
         iraGrowthRate:            p.iraGrowthRate,
         rothGrowthRate:           p.rothGrowthRate,
         k401GrowthRate:           p.k401GrowthRate,
@@ -827,6 +833,9 @@ export class IntlRetirementScenario extends BaseScenario {
           __type: 'Collectible', name: 'Gold', stateKey: 'collectibleAccount',
           value: 100_000, costBasis: 60_000, appreciationRate: 0.03,
           ownershipType: 'sole', ownerId: 'primary', country: 'US',
+          // Investment bullion: an ordinary AU CGT asset → AU gain is cost-base
+          // indexed under the FY2027 reform (design 57 Part 2, Item C).
+          isGold: true,
         },
       ],
 

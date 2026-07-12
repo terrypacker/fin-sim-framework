@@ -130,5 +130,11 @@ function _collectibleToStatePlain(col) {
     ownerId:             col.ownerId          ?? null,
     country:             col.country          ?? 'US',
     appreciationSchedule: col.appreciationSchedule ?? null,
+    // AU CGT reform (design 57 Part 2, Item C): bullion marker + AU basis/level,
+    // stamped at the residency step-up and read by the sale reducer to index the
+    // AU gain. Projected here so the live state entry carries them.
+    isGold:              col.isGold           ?? false,
+    costBaseByCountry:   col.costBaseByCountry ?? null,
+    acquisitionPriceLevel: col.acquisitionPriceLevel ?? null,
   };
 }

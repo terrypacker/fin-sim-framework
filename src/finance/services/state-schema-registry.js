@@ -248,6 +248,9 @@ export class StateSchemaRegistry {
     // Cross-border relief — AU side, canonical AUD (design 52).
     this.register('usSourceOrdinaryAudYTD',      ParameterValueType.currency('AUD'));
     this.register('usSourceCapGainsAudYTD',      ParameterValueType.currency('AUD'));
+    // US-source *real* (indexed) AU cap gain (AUD) — FY2027 FITO "without" CG slice
+    // (design 57 Part 2, Item D).
+    this.register('usSourceRealCapGainsAudYTD',  ParameterValueType.currency('AUD'));
     // US tax paid on US-source income (AUD), the FITO input; single-year handoff.
     this.register('usTaxPaidOnUsSourceAud',      ParameterValueType.currency('AUD'));
     // FEIE election (param): whether the Foreign Earned Income Exclusion is elected.
@@ -280,6 +283,10 @@ export class StateSchemaRegistry {
     this.registerPattern('auPersonEarnedIncomeYTD.*',           ParameterValueType.currency('AUD'));
 
     this.register('inflationAccumulator',        ParameterValueType.decimal(4));
+    // Dedicated ATO CPI indexation series (design 57 Part 2, Item A) — unitless
+    // price level + per-country rate for AU CGT cost-base indexation.
+    this.register('cpiAccumulator',              ParameterValueType.decimal(4));
+    this.registerPattern('cpiRates.*',           ParameterValueType.rate());
 
     // Bond mark-to-market snapshot (design 28 §5)
     this.registerPattern('priorMarkRates.*',     ParameterValueType.rate());
