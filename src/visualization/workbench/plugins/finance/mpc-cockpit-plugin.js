@@ -139,6 +139,11 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
         <label class="mpc-field">Step <input class="wb-input mpc-num" type="number" step="100" data-mpc="rstep" value="500"></label>
       </div>
 
+      <!-- Per-lever ranges for a multi-lever search: one Min/Max/Step row per
+           selected NUMERIC lever, since a single shared range can't span their
+           different unit scales (design 45 §8; design 58). Built dynamically. -->
+      <div class="mpc-toolbar mpc-range mpc-range-multi" data-mpc="range-multi" style="display:none"></div>
+
       <div class="mpc-now" data-mpc="now">Run a simulation, then ask for advice.</div>
 
       <div class="mpc-card" data-mpc="card" style="display:none">
@@ -289,26 +294,107 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
   }
 
   /**
-   * The manual Min/Max/Step row applies only to a SINGLE numeric lever. With
-   * several levers selected the controller searches each lever's own default
-   * range (one shared min/max would be meaningless across Spending vs Roth), so
-   * the row is greyed and the title says so.
+   * Range editor visibility. A SINGLE numeric lever uses the shared Min/Max/Step
+   * row (greyed for a categorical lever, which has no range). With several levers
+   * selected a single shared range would be meaningless across their different unit
+   * scales (Spending $ vs Roth $ vs weights 0–1), so the shared row is swapped for a
+   * per-lever editor — one row per selected numeric lever (design 45 §8 / design 58).
    */
   _syncRangeEnabled() {
-    const multi   = this._isMultiLever();
-    const numeric = !multi && !!this._currentControl()?.numeric;
-    const row   = this._q('range-row');
-    if (row) row.style.opacity = numeric ? '' : '0.4';
+    const multi     = this._isMultiLever();
+    const singleRow = this._q('range-row');
+    const multiRow  = this._q('range-multi');
+    if (singleRow) singleRow.style.display = multi ? 'none' : '';
+    if (multiRow)  multiRow.style.display  = multi ? '' : 'none';
+    if (multi) { this._renderMultiRanges(); return; }
+
+    const numeric = !!this._currentControl()?.numeric;
+    if (singleRow) singleRow.style.opacity = numeric ? '' : '0.4';
     const title = this._q('range-title');
-    if (title) {
-      title.textContent = multi
-        ? 'Search range — per-lever defaults (multi-lever)'
-        : 'Search range (today’s $)';
-    }
+    if (title) title.textContent = 'Search range (today’s $)';
     for (const n of ['rmin', 'rmax', 'rstep']) {
       const el = this._q(n);
       if (el) el.disabled = !numeric;
     }
+  }
+
+  /**
+   * Build the per-lever range editor for a multi-lever search: one Min/Max/Step row
+   * per selected NUMERIC lever, seeded from the controller's current per-control
+   * range (or the lever's defaultRange). Each row wires straight to
+   * `setControlRangeFor(key, …)`, and is seeded into the controller on build so the
+   * first Advise honors the shown values without waiting for an edit. Categorical
+   * levers (no range) are listed as a note.
+   */
+  _renderMultiRanges() {
+    const container = this._q('range-multi');
+    if (!container) return;
+    // Preserve any ranges the user already edited across a re-render (e.g. adding
+    // another lever): capture the current DOM values BEFORE clearing.
+    const prev = this._currentControlRanges();
+    container.innerHTML = '';
+
+    const controls    = this._currentControls();
+    const numeric     = controls.filter(c => c?.numeric);
+    const categorical = controls.filter(c => c && !c.numeric);
+
+    const title = document.createElement('span');
+    title.className = 'mpc-range-title';
+    title.textContent = 'Per-lever search ranges';
+    container.appendChild(title);
+
+    for (const c of numeric) {
+      const seed = prev[c.key] ?? this._controller?.controlRanges?.[c.key] ?? c.defaultRange ?? { min: 0, max: 1, step: 1 };
+      const row = document.createElement('span');
+      row.className = 'mpc-lever-range';
+      row.dataset.mpcLever = c.key;
+      row.innerHTML =
+        `<span class="mpc-lever-range-label">${_esc(c.label)}</span>` +
+        `<label class="mpc-field">Min <input class="wb-input mpc-num" type="number" data-r="min" value="${seed.min}"></label>` +
+        `<label class="mpc-field">Max <input class="wb-input mpc-num" type="number" data-r="max" value="${seed.max}"></label>` +
+        `<label class="mpc-field">Step <input class="wb-input mpc-num" type="number" data-r="step" value="${seed.step}"></label>`;
+      const readRow = () => {
+        const g = (k, d) => { const v = Number(row.querySelector(`[data-r="${k}"]`)?.value); return Number.isFinite(v) ? v : d; };
+        let min = g('min', seed.min), max = g('max', seed.max);
+        const step = Math.max(1e-9, g('step', seed.step));
+        if (max < min) [min, max] = [max, min];
+        return { min, max, step };
+      };
+      for (const inp of row.querySelectorAll('input')) {
+        inp.addEventListener('change', () => this._controller?.setControlRangeFor(c.key, readRow()));
+      }
+      // Seed the controller now so an un-edited row still contributes its shown range.
+      this._controller?.setControlRangeFor(c.key, { ...seed });
+      container.appendChild(row);
+    }
+
+    if (categorical.length) {
+      const note = document.createElement('span');
+      note.className = 'mpc-hint';
+      note.textContent = `${categorical.map(c => c.label).join(', ')}: categorical (no range)`;
+      container.appendChild(note);
+    }
+  }
+
+  /**
+   * Per-lever ranges from the multi-lever editor rows, as `{ [key]: {min,max,step} }`.
+   * Empty in single-lever mode (the editor is hidden). Read at controller creation so
+   * a range set before the first Advise still takes effect.
+   */
+  _currentControlRanges() {
+    const container = this._q('range-multi');
+    const out = {};
+    if (!container) return out;
+    for (const row of container.querySelectorAll('[data-mpc-lever]')) {
+      const key = row.dataset.mpcLever;
+      const g = (k) => Number(row.querySelector(`[data-r="${k}"]`)?.value);
+      let min = g('min'), max = g('max');
+      const step = g('step');
+      if (!Number.isFinite(min) || !Number.isFinite(max)) continue;
+      if (max < min) [min, max] = [max, min];
+      out[key] = { min, max, step: Number.isFinite(step) ? Math.max(1e-9, step) : 1 };
+    }
+    return out;
   }
 
   /** Current search range from the inputs (sane fallbacks; min<max enforced). */
@@ -415,6 +501,7 @@ export class MpcCockpitPlugin extends WorkbenchComponent {
       objective:    this._currentObjective(),
       controls:     this._currentControls(),     // joint lever set (design 45 §8)
       controlRange: this._currentRange(),
+      controlRanges: this._currentControlRanges(), // per-lever ranges (multi-lever editor)
       horizonYears: this._currentHorizon(),   // sliding prediction window (design 41)
       graph:       svc?.graph ?? null,
       parentId:    scenario.id ?? null,
