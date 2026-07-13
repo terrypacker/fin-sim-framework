@@ -24,10 +24,12 @@ import assert   from 'node:assert/strict';
 
 import { isParamVisible, indexParamSchema, resolveSweepVariables }
   from '../../src/finance/param-schema-utils.js';
-import { IntlRetirementScenario, INTL_RETIREMENT_PARAM_ALIASES }
+import { IntlRetirementScenario, INTL_RETIREMENT_PARAM_ALIASES,
+         DRAWDOWN_WEIGHT_ROLES, drawdownWeightKey, presentDrawdownWeightRoles }
   from '../../src/scenarios/intl-retirement-scenario.js';
+import { ACCOUNT_ROLES }      from '../../src/finance/state/account-roles.js';
 import { ScenarioParamGenerator } from '../../src/scenarios/params/scenario-param-generator.js';
-import { ScenarioLoader }     from '../../src/scenarios/scenario-loader.js';
+import { ScenarioLoader, synthesizeWeightedPriorities } from '../../src/scenarios/scenario-loader.js';
 import { ScenarioSerializer } from '../../src/scenarios/scenario-serializer.js';
 import { ServiceRegistry }    from '../../src/services/service-registry.js';
 import { DEFAULT_MC_VARIABLE_CONFIGS } from '../../src/finance/monte-carlo/intl-retirement-mc-config.js';
@@ -149,6 +151,64 @@ test('SWEEP-9: Opt shows strategy knobs (with inherited visibleWhen) when select
   assert.deepStrictEqual(g.visibleWhen, { param: 'spendingStrategy', includes: 'GUARDRAIL' });
   assert.ok(p, 'panicFraction visible under PANIC_SELL');
   assert.deepStrictEqual(p.visibleWhen, { param: 'behavioralStrategies', includes: 'PANIC_SELL' });
+});
+
+// ── Opt integration: Lever-B drawdown weights pruned to backed roles (design 58) ─
+
+const WEIGHTED_BASE = {
+  drawdownStrategy: 'WEIGHTED', spendingStrategy: ['FIXED'], behavioralStrategies: [],
+};
+
+test('SWEEP-12: no accounts arg → every drawdown-weight axis is present (back-compat)', () => {
+  const keys = new Set(buildOptVariables(WEIGHTED_BASE).map(v => v.paramKey));
+  for (const role of DRAWDOWN_WEIGHT_ROLES) {
+    assert.ok(keys.has(drawdownWeightKey(role)), `expected weight axis for ${role}`);
+  }
+});
+
+test('SWEEP-13: accounts arg prunes drawdown-weight axes to roles an account backs', () => {
+  // Only IRA + Roth accounts exist — the other six weighted roles are phantom.
+  const accounts = [
+    { role: ACCOUNT_ROLES.IRA }, { role: ACCOUNT_ROLES.ROTH },
+    { role: ACCOUNT_ROLES.US_SAVINGS },   // cash role: never a weight axis
+  ];
+  const swept = new Set(buildOptVariables(WEIGHTED_BASE, accounts).map(v => v.paramKey));
+  const presentKeys = presentDrawdownWeightRoles(accounts.map(a => a.role)).map(drawdownWeightKey);
+
+  // Exactly the two backed investment roles are swept…
+  assert.deepStrictEqual(
+    presentKeys.sort(),
+    [drawdownWeightKey(ACCOUNT_ROLES.IRA), drawdownWeightKey(ACCOUNT_ROLES.ROTH)].sort());
+  for (const k of presentKeys) assert.ok(swept.has(k), `expected swept axis ${k}`);
+  // …and no phantom-role axis survives.
+  for (const role of DRAWDOWN_WEIGHT_ROLES) {
+    if (role === ACCOUNT_ROLES.IRA || role === ACCOUNT_ROLES.ROTH) continue;
+    assert.ok(!swept.has(drawdownWeightKey(role)), `phantom weight axis leaked: ${role}`);
+  }
+});
+
+test('SWEEP-14: synthesizeWeightedPriorities drops phantom roles yet keeps real order', () => {
+  const node = {
+    weightKeyPrefix: 'drawdownWeight', weightKeySep: '::',
+    weightRoles: [ACCOUNT_ROLES.IRA, ACCOUNT_ROLES.K401, ACCOUNT_ROLES.ROTH],
+    cashRoles: [ACCOUNT_ROLES.US_SAVINGS],
+    weightDefaults: {},
+  };
+  // Weights: Roth(0.2) < IRA(0.5) < 401k(0.8) → real draw order roth, ira (401k phantom).
+  const params = {
+    [drawdownWeightKey(ACCOUNT_ROLES.ROTH)]: 0.2,
+    [drawdownWeightKey(ACCOUNT_ROLES.IRA)]:  0.5,
+    [drawdownWeightKey(ACCOUNT_ROLES.K401)]: 0.8,
+  };
+  const present = new Set([ACCOUNT_ROLES.IRA, ACCOUNT_ROLES.ROTH, ACCOUNT_ROLES.US_SAVINGS]);
+  const pri = synthesizeWeightedPriorities(node, params, present);
+
+  assert.ok(!(ACCOUNT_ROLES.K401 in pri), 'phantom 401k must not appear in the map');
+  // Ranks are compressed (no gaps) and preserve the real relative order roth < ira.
+  assert.strictEqual(pri[ACCOUNT_ROLES.US_SAVINGS], 0, 'cash drawn first');
+  assert.ok(pri[ACCOUNT_ROLES.ROTH] < pri[ACCOUNT_ROLES.IRA], 'roth ranked before ira');
+  assert.strictEqual(pri[ACCOUNT_ROLES.ROTH], 1);
+  assert.strictEqual(pri[ACCOUNT_ROLES.IRA], 2);
 });
 
 // ── Validation: the repurposed mc:/opt: flags ──────────────────────────────────

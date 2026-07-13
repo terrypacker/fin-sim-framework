@@ -27,6 +27,20 @@ import {
 } from '../../scenarios/intl-retirement-scenario.js';
 
 /**
+ * The set of account roles actually present in a live sim state — every entry
+ * that looks like an account (an object carrying a `role`). Used to prune the
+ * Lever-B drawdown-weight lever to roles an account backs (design 58 build-time
+ * filter), so the online path matches the compile cascade.
+ */
+function _presentRolesFromState(state) {
+  const roles = new Set();
+  for (const v of Object.values(state ?? {})) {
+    if (v && typeof v === 'object' && !Array.isArray(v) && v.role) roles.add(v.role);
+  }
+  return roles;
+}
+
+/**
  * Built-in control specs for the cockpit (design 39 §7). A control spec maps the
  * UI's chosen lever to (a) the decision variables to search and (b) a
  * human-legible description of a chosen value for the recommended-move card.
@@ -505,14 +519,21 @@ export const COCKPIT_CONTROLS = {
     requirement: 'Set Drawdown Strategy to WEIGHTED (Scenario panel) to tune the drawdown order online.',
     // One CONTINUOUS variable per investment role; the draw order is the ascending
     // sort of the committed weights. Same-role siblings share a weight → one tier.
-    buildVariables: ({ range }) => DRAWDOWN_WEIGHT_ROLES.map(role => ({
-      paramKey: drawdownWeightKey(role),
-      type:     OPT_PARAM_TYPES.CONTINUOUS,
-      min:      range?.min  ?? 0,
-      max:      range?.max  ?? 1,
-      step:     range?.step ?? 0.05,
-      group:    'Spending', _role: role,
-    })),
+    // One CONTINUOUS variable per investment role an account backs (design 58
+    // build-time filter): a phantom role is a flat search dimension and would only
+    // clutter the recommended-order card, so prune it from the live search too.
+    buildVariables: ({ range, state }) => {
+      const present = _presentRolesFromState(state);
+      const roles = DRAWDOWN_WEIGHT_ROLES.filter(role => present.size === 0 || present.has(role));
+      return roles.map(role => ({
+        paramKey: drawdownWeightKey(role),
+        type:     OPT_PARAM_TYPES.CONTINUOUS,
+        min:      range?.min  ?? 0,
+        max:      range?.max  ?? 1,
+        step:     range?.step ?? 0.05,
+        group:    'Spending', _role: role,
+      }));
+    },
     describe: (candidate, vars) => {
       // Show the resulting draw order (roles ascending by committed weight).
       const ranked = vars
@@ -550,7 +571,7 @@ export const COCKPIT_CONTROLS = {
         weightKeyPrefix: DRAWDOWN_WEIGHT_PREFIX, weightKeySep: DRAWDOWN_WEIGHT_SEP,
         weightRoles: DRAWDOWN_WEIGHT_ROLES, cashRoles: DRAWDOWN_CASH_ROLES,
         weightDefaults: DEFAULT_DRAWDOWN_WEIGHTS,
-      }, candidate ?? {});
+      }, candidate ?? {}, _presentRolesFromState(sim.state));
 
       const mode = (scenario?.params ?? []).find(pp => (pp.key ?? pp.name) === 'drawdownOwnerOrdering')?.value;
       const ownerOrder  = mode === 'SPOUSE_FIRST' ? ['spouse', 'primary'] : ['primary', 'spouse'];
