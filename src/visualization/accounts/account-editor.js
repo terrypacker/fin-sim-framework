@@ -277,6 +277,7 @@ export class AccountEditor extends BaseComponent {
           couponRate:     null,
           duration:       null,
           taxLossPartner: null,
+          treasury:       false,
           purchaseDate:   null,
         });
         this._refreshHoldingsTbody();
@@ -334,6 +335,12 @@ export class AccountEditor extends BaseComponent {
       const durationCell = showDuration
         ? `<td><input class="h-input h-num" type="number" step="0.1" data-f="duration" value="${h.duration ?? ''}" title="Modified duration (years)" placeholder="Duration"/></td>`
         : '<td class="h-cell-na"></td>';
+      // Treasury flag (design 59): BOND holdings only. Checked ⇒ direct U.S.
+      // Treasury obligation — coupon is federally taxable but exempt from US state
+      // income tax (31 U.S.C. § 3124). N/A for non-bond allocations.
+      const treasuryCell = alloc === 'BOND'
+        ? `<td class="h-cell-check"><input class="h-check" type="checkbox" data-f="treasury"${h.treasury ? ' checked' : ''} title="Direct U.S. Treasury obligation (state-tax exempt)"/></td>`
+        : '<td class="h-cell-na"></td>';
       const partnerCell = showPartner
         ? `<td><select class="h-input" data-f="taxLossPartner">${partnerOpts}</select></td>`
         : '<td class="h-cell-na"></td>';
@@ -347,6 +354,7 @@ export class AccountEditor extends BaseComponent {
         ${costBasisCell}
         ${incomeCell}
         ${durationCell}
+        ${treasuryCell}
         ${partnerCell}
         <td class="h-actions"><button class="btn btn-xs btn-warn h-delete" type="button">✕</button></td>
       `;
@@ -359,10 +367,14 @@ export class AccountEditor extends BaseComponent {
       tr.querySelectorAll('[data-f]').forEach(input => {
         const field   = input.dataset.f;
         const isNum   = input.type === 'number';
-        const evtName = input.tagName === 'SELECT' ? 'change' : 'input';
+        const isCheck = input.type === 'checkbox';
+        const evtName = (input.tagName === 'SELECT' || isCheck) ? 'change' : 'input';
 
         input.addEventListener(evtName, () => {
-          if (field === 'allocation') {
+          if (isCheck) {
+            // Boolean per-holding flag (e.g. treasury) — read `.checked`.
+            this._holdings[i][field] = input.checked;
+          } else if (field === 'allocation') {
             this._holdings[i].allocation = input.value;
             // Bond Cost Basis is hidden and defaulted to Market Value (§5.3.4):
             // on switch to BOND, snap basis to MV so no embedded gain is authored.

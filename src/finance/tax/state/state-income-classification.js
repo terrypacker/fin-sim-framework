@@ -46,6 +46,11 @@ export const STATE_INCOME_ROUTING = Object.freeze({
   // reducer — but is state-taxable all the same. The reconciliation guard in
   // state-tax-rates / accounting tests keeps this list complete vs. the federal base.
   US_SAVINGS_INTEREST_CREDIT:  { bucket: 'stateOrdinaryIncomeYTD', field: 'amount' },
+  // Bond coupon interest (design 59). Routes on `stateTaxableAmount` — the coupon
+  // EXCLUDING direct U.S. Treasury holdings, which are state-exempt (31 U.S.C.
+  // § 3124) — with `amount` as the fallback for any coupon action stamped without
+  // the split. Federally the full `amount` is taxed (see the US tax module).
+  BOND_COUPON_TAX:             { bucket: 'stateOrdinaryIncomeYTD', field: 'stateTaxableAmount', fallbackField: 'amount' },
   // AU-source interest is AUD; the state accumulator is USD-canonical (design 51),
   // so these rows carry `ccy: 'AUD'` to convert the amount before folding it in.
   AU_SAVINGS_EARNINGS_TAX:     { bucket: 'stateOrdinaryIncomeYTD', field: 'amount', ccy: 'AUD' },
@@ -95,6 +100,7 @@ export class StateIncomeClassificationReducer extends Reducer {
     this.reducedActionTypes = [actionType];
     this._bucket = route.bucket;
     this._field  = route.field;
+    this._fallbackField = route.fallbackField ?? null;  // used when the primary field is absent (design 59)
     this._ccy    = route.ccy ?? 'USD';   // native currency of the routed amount (design 51)
   }
 
@@ -109,7 +115,11 @@ export class StateIncomeClassificationReducer extends Reducer {
     if (!primaryResidencyState(state)) return state;                 // no state configured
     const residency = action.residency ?? getResidency(state, primaryPersonKey(state));
     if (residency !== 'US') return state;                            // not US-resident income
-    const raw = action[this._field] ?? 0;
+    // Prefer the primary field; fall back only when it's genuinely absent (not when
+    // it's a legitimate 0 — a fully-Treasury coupon is state-exempt, i.e. 0). (design 59)
+    let raw = action[this._field];
+    if (raw == null && this._fallbackField) raw = action[this._fallbackField];
+    raw = raw ?? 0;
     if (!raw) return state;
     // State buckets are USD-canonical; convert an AU-source amount at the event rate.
     const v = toCcy(raw, this._ccy, 'USD', state);
