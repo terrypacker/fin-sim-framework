@@ -194,6 +194,26 @@ export class UsTaxModule2026 extends BaseTaxModule {
         return next;
       }],
 
+      // Bond coupon interest (design 59) — US-source ordinary income; AU ordinary
+      // income if resident, relieved by FITO. The FULL coupon is federally taxable
+      // even for Treasury holdings — the Treasury exemption is state-only
+      // (31 U.S.C. § 3124); the state carve-out lives in state classification.
+      ['BOND_COUPON_TAX', (state, action) => {
+        const { amount, residency } = action;
+        const isAuResident = residency === 'AU';
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + amount };
+        if (isAuResident) {
+          const aud = toAUD(amount, 'USD', state);
+          next = {
+            ...next,
+            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
+            usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
+            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
+          };
+        }
+        return next;
+      }],
+
       // EVT-15: stock withdrawal (sale) — US-source capital gain; AU capital gain
       // if resident (relieved by FITO). AU measures the gain from its stepped-up
       // (s855-45) cost base, so auGain ≤ gain (design 36 §12.2). The pre-move
