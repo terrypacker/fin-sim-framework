@@ -42,11 +42,15 @@ export function scaleHoldings(holdings, oldBalance, newBalance) {
  * Reconcile a balance edit to the holdings so the §4.4 invariant
  * (Σ holdings[i].marketValue === balance) holds, scaling by the holdings'
  * CURRENT market-value sum rather than a (possibly already-stale) stored
- * balance. Mutates each holding in place so it works on both plain serialized
- * records and Holding class instances (preserving the class for later toJSON).
+ * balance. Pure: returns a NEW array of NEW holding objects and never mutates
+ * the input holdings (so a holding already recorded in the journal can't be
+ * rewritten by a later rescale — the journal-aliasing invariant). Callers must
+ * assign the result back (`account.holdings = rescaleHoldingsToBalance(...)`).
+ * The spread produces plain records; the serializer wraps any non-Holding leaf
+ * in `new Holding(h)` before toJSON, so the class is not required here.
  *
  * Reconciliation rules (design 25 §4.4, design 43 §3 invariant 3):
- *   - empty / no holdings           → no-op
+ *   - empty / no holdings           → no-op (input array returned unchanged)
  *   - Σ current marketValue > 0     → scale every holding's marketValue AND
  *                                     costBasis by targetBalance / Σmv,
  *                                     preserving the sleeve mix and gain ratio
@@ -61,7 +65,7 @@ export function scaleHoldings(holdings, oldBalance, newBalance) {
  *
  * @param {Array}  holdings      - account.holdings (plain records or Holding[])
  * @param {number} targetBalance - the new account balance to match
- * @returns {Array} the same array reference (mutated)
+ * @returns {Array} a new holdings array (input returned as-is only when empty)
  */
 export function rescaleHoldingsToBalance(holdings, targetBalance) {
   if (!Array.isArray(holdings) || holdings.length === 0) return holdings;
@@ -70,27 +74,31 @@ export function rescaleHoldingsToBalance(holdings, targetBalance) {
   const curSum = holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0);
 
   if (curSum <= 0) {
-    holdings.forEach((h, i) => {
-      h.marketValue = i === 0 ? target : 0;
-      h.costBasis   = i === 0 ? target : 0;
-    });
-    return holdings;
+    return holdings.map((h, i) => ({
+      ...h,
+      marketValue: i === 0 ? target : 0,
+      costBasis:   i === 0 ? target : 0,
+    }));
   }
 
   const factor = target / curSum;
-  for (const h of holdings) {
-    h.marketValue = +((h.marketValue ?? 0) * factor).toFixed(2);
-    h.costBasis   = +((h.costBasis   ?? 0) * factor).toFixed(2);
-  }
+  const scaled = holdings.map(h => ({
+    ...h,
+    marketValue: +((h.marketValue ?? 0) * factor).toFixed(2),
+    costBasis:   +((h.costBasis   ?? 0) * factor).toFixed(2),
+  }));
 
   // Absorb rounding drift into the largest-marketValue holding.
-  const newSum = +holdings.reduce((s, h) => s + (h.marketValue ?? 0), 0).toFixed(2);
+  const newSum = +scaled.reduce((s, h) => s + (h.marketValue ?? 0), 0).toFixed(2);
   const drift  = +(target - newSum).toFixed(2);
   if (drift !== 0) {
-    const largest = holdings.reduce((a, b) => ((b.marketValue ?? 0) > (a.marketValue ?? 0) ? b : a));
-    largest.marketValue = +((largest.marketValue ?? 0) + drift).toFixed(2);
+    let li = 0;
+    for (let i = 1; i < scaled.length; i++) {
+      if ((scaled[i].marketValue ?? 0) > (scaled[li].marketValue ?? 0)) li = i;
+    }
+    scaled[li] = { ...scaled[li], marketValue: +((scaled[li].marketValue ?? 0) + drift).toFixed(2) };
   }
-  return holdings;
+  return scaled;
 }
 
 /**

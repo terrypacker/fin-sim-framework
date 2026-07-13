@@ -106,60 +106,63 @@ test('diffStates: structural sharing — same primitive reference short-circuits
   assert.deepEqual(diffStates(prev, next), []);
 });
 
-// ─── Journal immutability: object/array leaves must be detached from live state ──
+// ─── Journal immutability: recorded leaves are frozen so mutation is forbidden ──
 //
-// Regression for the holdings-activity bug: a savings account's single synthetic
-// holding is rescaled in place (holdings[0].marketValue = …) on every event. The
-// journal's stateDiff `after` used to store a live reference to that array, so a
-// later in-place mutation silently rewrote every past entry to the final value —
+// Regression for the holdings-activity bug: a holding rescaled in place on a later
+// event used to silently rewrite every past journal `after` to the final value —
 // making the Holdings "Activity" ledger show wrong deltas / BUY-vs-SELL kinds.
+//
+// The real fix made the holdings mutation paths copy-on-write; state-utils now
+// ENFORCES that invariant. In STRICT mode (dev + test) _snapshot deep-freezes the
+// recorded object/array leaf, so ANY later in-place write throws a TypeError at
+// the culprit site instead of corrupting the record. These tests exercise the
+// tripwire directly. (In a FAST production build _snapshot is identity — the
+// invariant is trusted, proven by this STRICT test run.)
 
-test('diffStates: object/array `after` is a detached snapshot, immune to later in-place mutation', () => {
+test('diffStates: a recorded object/array leaf is frozen against later in-place mutation', () => {
   const prev = { acct: { holdings: [{ id: 'h1', marketValue: 100 }] } };
   const liveHolding = { id: 'h1', marketValue: 200 };
   const next = { acct: { holdings: [liveHolding] } };   // `next.acct.holdings` is live state
 
-  const changes = diffStates(prev, next);
-  const diff = changes.find(c => c.field === 'acct.holdings');
+  const diff = diffStates(prev, next).find(c => c.field === 'acct.holdings');
   assert.ok(diff, 'holdings change is recorded');
   assert.strictEqual(diff.after[0].marketValue, 200, 'after reflects value at diff time');
-  assert.notStrictEqual(diff.after, next.acct.holdings, 'after must not alias the live array');
 
-  // A later event rescales the same holding in place and adds another holding.
-  liveHolding.marketValue = 999;
-  next.acct.holdings.push({ id: 'h2', marketValue: 1 });
+  // The recorded leaf is frozen: a later in-place rewrite throws at the mutation
+  // site (strict mode), and structural mutation of the array is likewise rejected.
+  assert.throws(() => { liveHolding.marketValue = 999; }, TypeError, 'in-place holding write is forbidden');
+  assert.throws(() => { next.acct.holdings.push({ id: 'h2', marketValue: 1 }); }, TypeError, 'array growth is forbidden');
 
-  // The recorded diff is a durable historical record and must NOT change.
-  assert.strictEqual(diff.after.length, 1, 'after array is detached from the live array');
+  // The durable record is therefore unchanged.
+  assert.strictEqual(diff.after.length, 1);
   assert.strictEqual(diff.after[0].marketValue, 200, 'after value is frozen at diff time');
 });
 
-test('diffStates: object `before` is also detached from a live prev reference', () => {
+test('diffStates: the recorded `before` leaf is frozen too', () => {
   const liveBefore = { balance: 100, holdings: [{ id: 'h1', marketValue: 100 }] };
   const prev = { acct: liveBefore };
   const next = { acct: { balance: 200, holdings: [{ id: 'h1', marketValue: 200 }] } };
 
   const diff = diffStates(prev, next).find(c => c.field === 'acct.holdings');
   assert.ok(diff);
-  liveBefore.holdings[0].marketValue = 777;   // mutate the live prev afterwards
+  assert.throws(() => { liveBefore.holdings[0].marketValue = 777; }, TypeError);
   assert.strictEqual(diff.before[0].marketValue, 100, 'before is frozen at diff time');
 });
 
 // ─── MutationTracker ────────────────────────────────────────────────────────────
 
-test('MutationTracker: object before/after are detached snapshots', () => {
+test('MutationTracker: recorded object leaves are frozen against later mutation', () => {
   MutationTracker.begin();
   const before = [{ id: 'h1', marketValue: 100 }];
   const after  = [{ id: 'h1', marketValue: 200 }];
   MutationTracker.record('acct.holdings', before, after);
-  // Mutate the live arrays after recording but before flush.
-  after[0].marketValue = 999;
-  before[0].marketValue = 777;
+  // A later in-place write to a recorded leaf is forbidden (strict-mode throw).
+  assert.throws(() => { after[0].marketValue = 999; }, TypeError);
+  assert.throws(() => { before[0].marketValue = 777; }, TypeError);
   const sd = MutationTracker.flush();
 
-  assert.strictEqual(sd[0].after[0].marketValue, 200, 'after snapshot is frozen at record time');
-  assert.strictEqual(sd[0].before[0].marketValue, 100, 'before snapshot is frozen at record time');
-  assert.notStrictEqual(sd[0].after, after, 'after must not alias the live array');
+  assert.strictEqual(sd[0].after[0].marketValue, 200, 'after value is frozen at record time');
+  assert.strictEqual(sd[0].before[0].marketValue, 100, 'before value is frozen at record time');
 });
 
 test('MutationTracker: primitive values pass through unchanged with delta', () => {

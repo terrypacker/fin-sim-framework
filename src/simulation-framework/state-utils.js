@@ -22,14 +22,66 @@
 let _mutations = null;
 
 /**
- * Detach an object/array leaf from live state before it is recorded in the
- * journal. The journal is a durable historical record: a diff's `before`/`after`
- * must not alias a live state object, or a later in-place mutation (e.g. a
- * synthetic holding whose marketValue is rescaled each event) silently rewrites
- * every past entry to the final value. Primitives are immutable — pass through.
+ * Journal-immutability enforcement.
+ *
+ * The journal is a durable historical record: once a diff records an object/array
+ * leaf of state, that leaf must never change again, or the past entry is silently
+ * rewritten. We enforce that invariant instead of defending against its violation:
+ *
+ *   STRICT (dev + tests): _snapshot deep-FREEZES the recorded leaf. Because ES
+ *     modules run in strict mode, any later in-place write to it
+ *     (holding.marketValue = …, holdings.push(…), costBaseByCountry[c] = …) throws
+ *     a TypeError AT THE MUTATION SITE — turning a would-be silent corruption into
+ *     a loud, stack-traced failure the first time that reducer path runs. Running
+ *     the suite (and the dev app) is therefore a proof, over every exercised path,
+ *     that no reducer mutates recorded state in place. No clone, no allocation.
+ *
+ *   FAST (production build): _snapshot is the identity function — zero overhead.
+ *     Safe because the STRICT run in CI has proven the copy-on-write invariant.
+ *
+ * Rationale over the old "structuredClone to tolerate mutation": the clone paid a
+ * full deep copy on every changed object leaf, forever, to hide bugs rather than
+ * surface them. Freeze-in-dev makes the invariant testable; identity-in-prod
+ * removes the cost. Override with JOURNAL_STRICT=on|off.
+ */
+const _JOURNAL_STRICT = _detectStrict();
+
+function _detectStrict() {
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      if (process.env.JOURNAL_STRICT === 'off') return false;
+      if (process.env.JOURNAL_STRICT === 'on')  return true;
+      if (process.env.NODE_ENV === 'production') return false;
+    }
+  } catch { /* no process (browser) */ }
+  try {
+    // Bundlers (Vite) statically replace import.meta.env; bare Node ESM leaves it
+    // undefined. A PROD build runs FAST; dev / test / SSR run STRICT.
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.PROD) return false;
+  } catch { /* import.meta.env absent */ }
+  return true; // default: enforce (dev + Node/Jest test runners)
+}
+
+/** Recursively Object.freeze an object/array leaf; skips already-frozen subtrees. */
+function _deepFreeze(v) {
+  if (v === null || typeof v !== 'object' || Object.isFrozen(v)) return v;
+  Object.freeze(v);
+  if (Array.isArray(v)) {
+    for (const el of v) _deepFreeze(el);
+  } else {
+    for (const k of Object.keys(v)) _deepFreeze(v[k]);
+  }
+  return v;
+}
+
+/**
+ * Record-time guard for an object/array leaf. STRICT: freeze it so any later
+ * in-place mutation throws at the culprit. FAST: return it untouched (identity).
+ * Primitives are immutable — pass through either way.
  */
 function _snapshot(v) {
-  return (v !== null && typeof v === 'object') ? structuredClone(v) : v;
+  if (v === null || typeof v !== 'object') return v;
+  return _JOURNAL_STRICT ? _deepFreeze(v) : v;
 }
 
 export const MutationTracker = {

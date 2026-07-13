@@ -9,15 +9,15 @@
     }
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "JOURNAL_STRICT=on vite",
     "build": "vite build",
     "build:lib": "vite build --config vite.lib.config.js",
     "build:all": "npm run build && npm run build:lib",
     "preview": "vite preview",
     "clean": "rm -rf dist dist-lib",
     "build:index": "node scripts/build-index.js",
-    "test:unit": "node --test \"tests/unit/**/*.test.mjs\"",
-    "test:viz": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs",
+    "test:unit": "JOURNAL_STRICT=on node --test \"tests/unit/**/*.test.mjs\"",
+    "test:viz": "JOURNAL_STRICT=on NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs",
     "test": "npm run test:unit && npm run test:viz",
     "test:all": "npm run test:unit && npm run test:viz",
     "requirements": "node scripts/check-requirements.js",
