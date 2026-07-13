@@ -1,7 +1,9 @@
 # 62 — Residency-change CGT fidelity (deemed-acquisition holding period + foreign real property)
 
-**Status**: **PROPOSED** (no code). Gaps validated against the ATO guidance and the live
-codebase via `scripts/probe-residency-cgt.mjs` (`npm run probe:residency-cgt`).
+**Status**: **Gap 1 IMPLEMENTED + green** (3371 unit + 865 viz; `npm run probe:residency-cgt`
+passes as a regression check). Gap 3 PLANNED (§5, not yet built). Gaps 2/4/5 documented only.
+Gaps validated against the ATO guidance and the live codebase via
+`scripts/probe-residency-cgt.mjs`.
 
 **Scope decision (locked with requester):** *plan* implementations for **Gap 1** (deemed-
 acquisition holding period) and **Gap 3** (foreign real property AU assessment). *Document
@@ -139,18 +141,41 @@ into YTD buckets the rates module reads.
 FY2027+ (`AuTaxRates2027`) already removed the discount, so its `_cgtRelief` is unaffected —
 but its **indexation** ≥12-month test now benefits from Step 2 (correct clock).
 
-### 4.3 Phases
+### 4.3 Phases — ALL DONE (green: 3371 unit + 865 viz)
 
-- **P1** — `Holding.acquisitionDateByCountry` + `Collectible` equivalent (constructor / toJSON
-  / fromJSON / TypeRegistry round-trip); stamp it in both `recordResidencyChange` paths.
-- **P2** — `consumeHoldingsFifo`: AU effective-acquisition date drives the ≥12-month test
-  (fixes 1b); add the discountable/non-discountable per-country split (additive return keys).
-- **P3** — sale reducers emit `auDiscountableGain`/`auNonDiscountableGain`; classification
-  modules route to buckets; `AuTaxRatesBase._cgtRelief` discounts only the eligible portion
-  (with full-gain fallback).
-- **P4** — tests (§7) + regold. Reference scenario (moveYear 2031, all post-2027, discount
-  already gone) should **not move** on the discount change; the **indexation clock** fix (Step
-  2) only moves it if a lot is sold <12 months after the 2031 move — verify.
+- **P1 ✅** — `Holding.acquisitionDateByCountry` (+ `Collectible` equivalent): constructor /
+  toJSON / fromJSON / serializer + state-projection carry sites. Stamped in both
+  `AccountService.recordResidencyChange` and `CollectibleService.recordResidencyChange`
+  (move date threaded from `ChangeResidencyApplyReducer` as `asOfMs`). `purchaseDate` is left
+  unchanged.
+- **P2 ✅** — `consumeHoldingsFifo`: the AU ≥12-month test now runs from
+  `acquisitionDateByCountry[c] ?? purchaseDate` (fixes 1b for indexation too); added
+  `realizedDiscountableGainByCountry` (equity/bond lots held ≥12mo from the deemed-acquisition
+  date, per-lot floored). The `level`-less `{ asOfMs, country }` form lets the auto-liquidation
+  drawdown path compute the split without triggering indexation. The auto-liquidation path
+  passes the AU context **only for AU residents**, so US-only runs are byte-identical.
+- **P3 ✅** — the two brokerage sale paths (`au-brokerage-classes` AU_STOCK_WITHDRAWAL_TAX and
+  `AccountService._drawPenaltyFree` STOCK_WITHDRAWAL_TAX) emit `auDiscountableGain =
+  min(auGain, realizedDiscountableGainByCountry.AU)`. Classification modules route it into a new
+  `auDiscountableGainsYTD` (+ `auPersonDiscountableGainsYTD`) bucket, in lockstep with
+  `auCapitalGainsYTD`. `AuTaxRatesBase._cgtRelief` discounts only `min(gain,
+  auDiscountableGainsYTD)`, with a full-gain fallback when the field is absent (old saves /
+  synthetic states). Wired through: AU_TAX state init, YTD reset (`tax-settle-classes`),
+  per-person slice (`computeAuTaxPerPerson`), `StateSchemaRegistry`, `intl-retirement-state`.
+- **P4 ✅** — `tests/unit/evt-residency-cgt.test.mjs` (8 cases, EVT-62); `probe-residency-cgt.mjs`
+  reworked into a pass/fail regression check (Lot A <12mo denied, Lot B ≥12mo allowed, over-
+  relief $4,800 recovered on a $30k gain). Reference golden (`cross-border-relief-scenario`,
+  moveYear 2031) did **not move** — post-2027 (discount already gone) and no <12-month post-move
+  sale trips the indexation-clock fix, exactly as predicted.
+
+> **Scope note — non-residency holding-period gating (company / collectible / TAP property).**
+> The residency deemed-acquisition gate targets **brokerage lots**, the assets s855-45 steps up.
+> The other AU-capital-gain paths (`COMPANY_SALE_TAX`, `COLLECTIBLE_SALE_TAX`, `AU_HOUSE_SALE_TAX`)
+> carry no per-lot 12-month tracking here, so they default their **full** gain into
+> `auDiscountableGainsYTD` — preserving today's behavior (they keep the 50% discount). Gating
+> those on their own acquisition-vs-sale holding period is a separate, non-residency refinement,
+> deliberately **out of Gap 1's scope** (and it does not touch the reference scenario, whose only
+> such sale is the post-2027 company-equity disposal where the discount is already removed).
 
 ---
 
@@ -195,8 +220,9 @@ only. Australia's main-residence exemption for a *foreign* dwelling has its own 
 foreign residents lost it from 2020, but here the seller is an AU *resident*). Options:
 (a) treat the US house as fully AU-assessable from the stepped-up base (conservative, simplest);
 (b) apply an AU main-residence exemption when `isPrimaryResidence` (needs the AU
-proportional/absence rules). **Recommend (a) for v1**, flag (b) as a refinement — the stepped-up
-base already removes pre-move gain, so over-taxation is bounded to post-move appreciation.
+proportional/absence rules). **DECIDED: (b) — model the AU main-residence rules** (§8.1). The
+stepped-up base removes pre-move gain; the AU main-residence proportional exemption + 6-year
+absence rule then apply to the post-move gain on the dwelling.
 
 ### 5.3 Phases
 
@@ -257,13 +283,13 @@ indexation-clock fix). `npm run test:unit` + `npm run test:viz` + `npm run build
 
 ---
 
-## 8. Open questions
+## 8. Resolved decisions
 
-1. **AU main-residence exemption for the foreign (US) house** (§5.3): v1 = fully assessable
-   from stepped-up base (recommended), or model the AU main-residence rules? *Assumed (a).*
-2. **Discount-split placement:** compute `auDiscountableGain` inside `consumeHoldingsFifo`
-   (per-lot, most accurate — recommended) vs approximate in the rates module (loses per-lot
-   dates). *Assumed the former, consistent with design 57 Option A.*
-3. **New field naming:** `Holding.acquisitionDateByCountry` (parallels `costBaseByCountry`) vs a
-   scalar `deemedAcquisitionMs`. *Assumed the per-country map for consistency + future multi-
-   jurisdiction moves.*
+1. **AU main-residence exemption for the foreign (US) house** (§5.3): **model the AU main-
+   residence rules** (not the fully-assessable simplification). Gap 3 / §5.3 option (b). The AU
+   proportional main-residence exemption + absence rule apply to the foreign dwelling; the US
+   $250k/$500k exclusion stays US-side only.
+2. **Discount-split placement:** compute `auDiscountableGain` inside `consumeHoldingsFifo` (per-
+   lot, most accurate), consistent with design 57 Option A. **Confirmed.**
+3. **New field naming:** `Holding.acquisitionDateByCountry` (parallels `costBaseByCountry`), a
+   per-country map for consistency + future multi-jurisdiction moves. **Confirmed.**

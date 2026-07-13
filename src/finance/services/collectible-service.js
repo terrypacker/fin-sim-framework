@@ -108,9 +108,11 @@ export class CollectibleService extends AssetService {
    * All one-time captures: no-op once set.
    *
    * @param {import('../assets/collectible.js').Collectible} collectible
-   * @param {{ country?: string, stepUp?: boolean, priceLevel?: number }} [opts]
+   * @param {{ country?: string, stepUp?: boolean, priceLevel?: number, asOfMs?: number }} [opts]
+   *   The move date (asOfMs) is the CGT deemed-acquisition date — the ≥12-month
+   *   discount/indexation clock restarts here (design 62 §4).
    */
-  recordResidencyChange(collectible, { country, stepUp, priceLevel } = {}) {
+  recordResidencyChange(collectible, { country, stepUp, priceLevel, asOfMs } = {}) {
     if (collectible.balanceAtResidencyChange == null) {
       collectible.balanceAtResidencyChange = collectible.value;
     }
@@ -123,6 +125,14 @@ export class CollectibleService extends AssetService {
         collectible.costBaseByCountry = { ...existing, [country]: collectible.value ?? 0 };
         if (priceLevel != null && collectible.acquisitionPriceLevel == null) {
           collectible.acquisitionPriceLevel = priceLevel;
+        }
+        // Deemed-acquisition date (design 62 §4): the holding-period clock restarts
+        // at the move. Stamp per country, mirroring the account holdings step-up.
+        if (asOfMs != null) {
+          const existingDates = collectible.acquisitionDateByCountry ?? {};
+          if (existingDates[country] == null) {
+            collectible.acquisitionDateByCountry = { ...existingDates, [country]: asOfMs };
+          }
         }
       }
     }

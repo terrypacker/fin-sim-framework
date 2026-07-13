@@ -136,5 +136,6 @@ function _collectibleToStatePlain(col) {
     isGold:              col.isGold           ?? false,
     costBaseByCountry:   col.costBaseByCountry ?? null,
     acquisitionPriceLevel: col.acquisitionPriceLevel ?? null,
+    acquisitionDateByCountry: col.acquisitionDateByCountry ?? null,
   };
 }

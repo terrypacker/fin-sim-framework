@@ -406,11 +406,13 @@ export class AccountService extends AssetService {
    * country (TAP — handled by the RealPropertyService override) are not stepped up.
    *
    * @param {import('../account.js').Account} account
-   * @param {{ country?: string, stepUp?: boolean, priceLevel?: number }} [opts]
-   *   destination country, its step-up policy, and the destination country's price
-   *   level at the move (for the AU CGT-reform indexation base, design 57 §6.3).
+   * @param {{ country?: string, stepUp?: boolean, priceLevel?: number, asOfMs?: number }} [opts]
+   *   destination country, its step-up policy, the destination country's price
+   *   level at the move (for the AU CGT-reform indexation base, design 57 §6.3), and
+   *   the move date in epoch ms (the CGT deemed-acquisition date — the ≥12-month
+   *   discount/indexation clock restarts here, design 62 §4).
    */
-  recordResidencyChange(account, { country, stepUp, priceLevel } = {}) {
+  recordResidencyChange(account, { country, stepUp, priceLevel, asOfMs } = {}) {
     if ('balanceAtResidencyChange' in account && account.balanceAtResidencyChange === null) {
       account.balanceAtResidencyChange = account.balance;
     }
@@ -432,6 +434,17 @@ export class AccountService extends AssetService {
         // when a level is supplied and none is already recorded.
         if (priceLevel != null && h.acquisitionPriceLevel == null) {
           next.acquisitionPriceLevel = priceLevel;
+        }
+        // Deemed-acquisition date (design 62 §4): the ≥12-month CGT-discount /
+        // indexation clock for the destination country restarts at the move. Stamp
+        // it per country so a later sale measures the holding period from the move,
+        // not the (unchanged) purchaseDate. Only stamp when a move date is supplied
+        // and none is already recorded for this country.
+        if (asOfMs != null) {
+          const existingDates = h.acquisitionDateByCountry ?? {};
+          if (existingDates[country] == null) {
+            next.acquisitionDateByCountry = { ...existingDates, [country]: asOfMs };
+          }
         }
         return next;
       });
@@ -994,8 +1007,15 @@ export class AccountService extends AssetService {
       // consumes the lots in place; we then overwrite holdings with the FIFO result so
       // the remaining lots reflect FIFO (and their per-country cost bases deplete
       // correctly). `withdraw` is the sale proceeds in the source account's currency.
+      // Pass the AU CGT context only for AU residents, so US-only runs keep the
+      // exact prior FIFO output. The context (sale date + country) lets the FIFO
+      // tally the discountable-gain split (design 62 §4) — the ≥12-month test runs
+      // from each lot's AU deemed-acquisition date. No `level` ⇒ index factor 1.
+      const auCtx = residency === 'AU'
+        ? { asOfMs: date instanceof Date ? date.getTime() : (typeof date === 'number' ? date : null), country: 'AU' }
+        : null;
       const brokerageFifo = account.type === ACCOUNT_TYPE.BROKERAGE
-        ? consumeHoldingsFifo(account.holdings ?? [], withdraw)
+        ? consumeHoldingsFifo(account.holdings ?? [], withdraw, auCtx)
         : null;
 
       this.transaction(targetAccount, +credited, date);
@@ -1020,9 +1040,13 @@ export class AccountService extends AssetService {
         const equityProceeds = +(withdraw - collProceeds).toFixed(2);
         const gain   = Math.max(0, equityProceeds - (realizedBasis   - collBasis));
         const auGain = Math.max(0, equityProceeds - (realizedAuBasis - collBasis));
+        // CGT 50%-discount-eligible slice (design 62 §4): equity gain from lots held
+        // ≥12 months from the AU deemed-acquisition date (excludes the gold sleeve,
+        // which the collectible split handles), capped at auGain.
+        const auDiscountableGain = Math.min(auGain, brokerageFifo.realizedDiscountableGainByCountry?.AU ?? auGain);
         account.holdings = brokerageFifo.newHoldings; // FIFO-consumed lots override transaction()'s pro-rata pass
         pendingTaxActions.push({
-          type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, residency,
+          type: 'STOCK_WITHDRAWAL_TAX', gain, auGain, auDiscountableGain, residency,
           proceeds: equityProceeds, costBasis: +(realizedBasis - collBasis).toFixed(2), description: account.name || key,
         });
         if (collGain > 0) {

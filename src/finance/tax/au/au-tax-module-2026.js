@@ -278,6 +278,10 @@ export class AuTaxModule2026 extends BaseTaxModule {
       ['AU_STOCK_WITHDRAWAL_TAX', (state, action) => {
         const { gain, residency } = action;
         const auGain = action.auGain ?? gain;
+        // CGT 50%-discount-eligible slice (design 62 §4): the portion of auGain from
+        // lots held ≥12 months from the AU deemed-acquisition date. Defaults to the
+        // full auGain when absent (old actions ⇒ current full-discount behavior).
+        const auDiscountableGain = action.auDiscountableGain ?? auGain;
         const isAuResident = residency === 'AU';
         const perPerson = state.people != null && state.auStockAccount != null;
         let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + toUSD(gain, 'AUD', state) };
@@ -285,8 +289,14 @@ export class AuTaxModule2026 extends BaseTaxModule {
           next = {
             ...next,
             ...(perPerson
-              ? { auPersonCapitalGainsYTD: accumulateByOwnership(state.auPersonCapitalGainsYTD ?? {}, state.auStockAccount, auGain, state.people) }
-              : { auCapitalGainsYTD: state.auCapitalGainsYTD + auGain }),
+              ? {
+                  auPersonCapitalGainsYTD:      accumulateByOwnership(state.auPersonCapitalGainsYTD ?? {}, state.auStockAccount, auGain, state.people),
+                  auPersonDiscountableGainsYTD: accumulateByOwnership(state.auPersonDiscountableGainsYTD ?? {}, state.auStockAccount, auDiscountableGain, state.people),
+                }
+              : {
+                  auCapitalGainsYTD:      state.auCapitalGainsYTD + auGain,
+                  auDiscountableGainsYTD: (state.auDiscountableGainsYTD ?? 0) + auDiscountableGain,
+                }),
             foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + toUSD(auGain, 'AUD', state),
           };
         }
@@ -316,6 +326,10 @@ export class AuTaxModule2026 extends BaseTaxModule {
             next = {
               ...next,
               auPersonCapitalGainsYTD: accumulateByOwnership(state.auPersonCapitalGainsYTD ?? {}, asset, gain, state.people),
+              // TAP real property: no per-lot 12-month tracking here, so the whole
+              // gain stays discount-eligible (design 62 §4 — property holding-period
+              // gating is out of Gap 1's scope; the residency gate targets brokerage).
+              auPersonDiscountableGainsYTD: accumulateByOwnership(state.auPersonDiscountableGainsYTD ?? {}, asset, gain, state.people),
             };
           } else {
             next = {
@@ -327,7 +341,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
           next = {
             ...next,
             ...(isAuResident
-              ? { auCapitalGainsYTD: state.auCapitalGainsYTD + gain }
+              ? { auCapitalGainsYTD: state.auCapitalGainsYTD + gain, auDiscountableGainsYTD: (state.auDiscountableGainsYTD ?? 0) + gain }
               : { auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + gain }),
           };
         }

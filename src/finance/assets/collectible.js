@@ -51,6 +51,8 @@ export class Collectible extends Asset {
    *                                                              under the FY2027 reform), not a true collectible (design 57 Part 2, Item C)
    * @param {object|null}   [opts.costBaseByCountry=null]       - Per-country cost-base override (AU s855-45 residency step-up)
    * @param {number|null}   [opts.acquisitionPriceLevel=null]   - AU CPI level at the deemed AU acquisition (residency date) for indexation
+   * @param {Object<string,number>|null} [opts.acquisitionDateByCountry=null] - Per-country CGT deemed-acquisition date (epoch ms);
+   *                                                              the ≥12-month discount/indexation clock restarts here (design 62 §4)
    */
   constructor(initialValue = 0, opts = {}) {
     super(opts.name ?? '', { ...opts, kind: 'collectible' });
@@ -71,5 +73,6 @@ export class Collectible extends Asset {
     this.isGold                   = opts.isGold                   ?? false;
     this.costBaseByCountry        = opts.costBaseByCountry        ?? null;
     this.acquisitionPriceLevel    = opts.acquisitionPriceLevel    ?? null;
+    this.acquisitionDateByCountry = opts.acquisitionDateByCountry ?? null;
   }
 }

@@ -79,12 +79,14 @@ export const AU_TAX = {
       cpiAccumulator:                   { AU: 1.0 },
       auOrdinaryIncomeYTD:              0,
       auCapitalGainsYTD:                0,
+      auDiscountableGainsYTD:           0,   // CGT 50%-discount-eligible slice (design 62 §4)
       auRealCapitalGainsYTD:            0,   // FY2027 reform: post-indexation gain (design 57)
       auNonResidentWithholdingYTD:      0,
       auSuperTaxYTD:                    0,
       auFrankingCreditYTD:              0,
       auPersonOrdinaryIncomeYTD:        {},
       auPersonCapitalGainsYTD:          {},
+      auPersonDiscountableGainsYTD:     {},
       auPersonRealCapitalGainsYTD:      {},
       auPersonNonResidentWithholdingYTD:{},
       auPersonSuperTaxYTD:              {},
@@ -96,6 +98,7 @@ export const AU_TAX = {
     context.people.forEach(p => {
       state.auPersonOrdinaryIncomeYTD[p.id] = 0;
       state.auPersonCapitalGainsYTD[p.id] = 0;
+      state.auPersonDiscountableGainsYTD[p.id] = 0;
       state.auPersonRealCapitalGainsYTD[p.id] = 0;
       state.auPersonNonResidentWithholdingYTD[p.id] = 0;
       state.auPersonSuperTaxYTD[p.id] = 0;

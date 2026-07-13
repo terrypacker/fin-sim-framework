@@ -32,7 +32,7 @@ const YTD_FIELDS = {
   US: ['usOrdinaryIncomeYTD', 'usNegativeIncomeYTD', 'usCapitalGainsYTD', 'usCollectibleGainsYTD', 'usPenaltyYTD',
        'foreignGeneralIncomeYTD', 'foreignPassiveIncomeYTD', 'usSourceOrdinaryUsdYTD', 'usSourceCapGainsUsdYTD',
        'ftcCurrentGeneral', 'ftcCurrentPassive'],
-  AU: ['auOrdinaryIncomeYTD', 'auCapitalGainsYTD', 'auRealCapitalGainsYTD', 'auNonResidentWithholdingYTD', 'auSuperTaxYTD', 'auFrankingCreditYTD',
+  AU: ['auOrdinaryIncomeYTD', 'auCapitalGainsYTD', 'auDiscountableGainsYTD', 'auRealCapitalGainsYTD', 'auNonResidentWithholdingYTD', 'auSuperTaxYTD', 'auFrankingCreditYTD',
        'usSourceOrdinaryAudYTD', 'usSourceCapGainsAudYTD', 'usSourceRealCapGainsAudYTD'],
 };
 
@@ -40,6 +40,7 @@ const YTD_FIELDS = {
 const PER_PERSON_AU_FIELDS = [
   'auPersonOrdinaryIncomeYTD',
   'auPersonCapitalGainsYTD',
+  'auPersonDiscountableGainsYTD',
   'auPersonRealCapitalGainsYTD',
   'auPersonFrankingCreditYTD',
   'auPersonNonResidentWithholdingYTD',

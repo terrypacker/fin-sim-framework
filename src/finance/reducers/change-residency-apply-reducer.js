@@ -62,12 +62,16 @@ export class ChangeResidencyApplyReducer extends Reducer {
     // Item A), matching the sale-side read, so the indexation ratio is consistent.
     // 1.0 when no accumulator is present (sim start).
     const priceLevel = state.cpiAccumulator?.[country] ?? state.inflationAccumulator?.[country] ?? 1;
+    // The move date is the CGT deemed-acquisition date (design 62 §4): the ≥12-month
+    // discount / indexation clock for the destination country restarts here, so the
+    // step-up stamps it per lot as acquisitionDateByCountry[country].
+    const moveMs = date instanceof Date ? date.getTime() : (typeof date === 'number' ? date : null);
 
     // 1. Snapshot balanceAtResidencyChange on all registered accounts (and the
     //    residency cost-base step-up + indexation-base stamp where the destination
     //    country applies one).
     for (const account of this.stateRegistry.getAccounts(state)) {
-      this.accountService.recordResidencyChange(account, { country, stepUp, priceLevel });
+      this.accountService.recordResidencyChange(account, { country, stepUp, priceLevel, asOfMs: moveMs });
     }
 
     // 1b. Gold collectibles get the same step-up (design 57 Part 2, Item C):
@@ -78,7 +82,7 @@ export class ChangeResidencyApplyReducer extends Reducer {
       for (const col of this.collectibleService.getAll()) {
         const cs = col.stateKey ? state[col.stateKey] : null;
         if (cs == null) continue;
-        this.collectibleService.recordResidencyChange(cs, { country, stepUp, priceLevel });
+        this.collectibleService.recordResidencyChange(cs, { country, stepUp, priceLevel, asOfMs: moveMs });
       }
     }
 
@@ -86,8 +90,7 @@ export class ChangeResidencyApplyReducer extends Reducer {
     //    Stamp residencySinceMs (the move date) so the FEIE full-qualifying-year
     //    gate can suppress the exclusion for the partial move-in year (design 52
     //    §4.2). Only stamp when not already resident, so a re-entry doesn't reset
-    //    an existing qualifying period; leave prior stamps intact.
-    const moveMs = date instanceof Date ? date.getTime() : (typeof date === 'number' ? date : null);
+    //    an existing qualifying period; leave prior stamps intact. (moveMs computed above.)
     const updatedPeople = {};
     if (state.people) {
       for (const [personKey, person] of Object.entries(state.people)) {
