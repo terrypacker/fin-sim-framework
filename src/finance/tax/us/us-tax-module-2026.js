@@ -245,12 +245,27 @@ export class UsTaxModule2026 extends BaseTaxModule {
 
   _realPropertyReducerFns() {
     return [
-      // EVT-34: US house sale — US capital gain after $500K exemption. US-source,
-      // US-only under the current model (no AU assessment), so no FITO removal.
-      ['US_HOUSE_SALE_TAX', (state, action) => ({
-        ...state,
-        usCapitalGainsYTD: state.usCapitalGainsYTD + action.gain,
-      })],
+      // EVT-34: US house sale — US capital gain after $500K exemption. US-source.
+      // For an AU resident the foreign house is also AU-assessable (design 62 §5):
+      // the AU gain (from the s855-45 stepped-up basis, net of the AU main-residence
+      // exemption) is added in AUD and recorded in the FITO removal set (US tax on
+      // this US-source gain is relievable). Mirrors STOCK_WITHDRAWAL_TAX; no foreign-
+      // passive basket entry (US-source income is not foreign for the US return).
+      ['US_HOUSE_SALE_TAX', (state, action) => {
+        let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + action.gain };
+        if (action.residency === 'AU' && (action.auGain ?? 0) > 0) {
+          const audGain         = toAUD(action.auGain, 'USD', state);
+          const audDiscountable = toAUD(action.auDiscountableGain ?? action.auGain, 'USD', state);
+          next = {
+            ...next,
+            auCapitalGainsYTD:      (state.auCapitalGainsYTD ?? 0) + audGain,
+            auDiscountableGainsYTD: (state.auDiscountableGainsYTD ?? 0) + audDiscountable,
+            usSourceCapGainsUsdYTD: (state.usSourceCapGainsUsdYTD ?? 0) + action.auGain,
+            usSourceCapGainsAudYTD: (state.usSourceCapGainsAudYTD ?? 0) + audGain,
+          };
+        }
+        return next;
+      }],
     ];
   }
 

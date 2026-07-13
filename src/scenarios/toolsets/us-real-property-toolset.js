@@ -219,5 +219,11 @@ function _propertyToStatePlain(prop) {
     landValueRatio:             prop.landValueRatio             ?? 0.2,
     annualDepreciationOverride: prop.annualDepreciationOverride ?? null,
     accumulatedDepreciation:    prop.accumulatedDepreciation    ?? 0,
+    // Cross-border CGT step-up (design 62 §5): stamped at the AU move by
+    // RealPropertyService.recordResidencyChange (foreign/non-TAP property only),
+    // read by US_HOUSE_SALE_APPLY to measure the AU gain + main-residence exemption.
+    costBaseByCountry:          prop.costBaseByCountry          ?? null,
+    acquisitionPriceLevel:      prop.acquisitionPriceLevel      ?? null,
+    acquisitionDateByCountry:   prop.acquisitionDateByCountry   ?? null,
   };
 }

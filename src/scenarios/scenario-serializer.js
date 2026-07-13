@@ -724,6 +724,10 @@ export class ScenarioSerializer {
       landValueRatio:             p.landValueRatio             ?? 0.2,
       annualDepreciationOverride: p.annualDepreciationOverride ?? null,
       accumulatedDepreciation:    p.accumulatedDepreciation    ?? 0,
+      // Cross-border CGT step-up (design 62 §5)
+      costBaseByCountry:          p.costBaseByCountry          ?? null,
+      acquisitionPriceLevel:      p.acquisitionPriceLevel      ?? null,
+      acquisitionDateByCountry:   p.acquisitionDateByCountry   ?? null,
     };
   }
 
@@ -758,6 +762,10 @@ export class ScenarioSerializer {
       landValueRatio:             d.landValueRatio             ?? 0.2,
       annualDepreciationOverride: d.annualDepreciationOverride ?? null,
       accumulatedDepreciation:    d.accumulatedDepreciation    ?? 0,
+      // Cross-border CGT step-up (design 62 §5)
+      costBaseByCountry:          d.costBaseByCountry          ?? null,
+      acquisitionPriceLevel:      d.acquisitionPriceLevel      ?? null,
+      acquisitionDateByCountry:   d.acquisitionDateByCountry   ?? null,
     });
     if (d.stateKey) prop.stateKey = d.stateKey;
     return prop;

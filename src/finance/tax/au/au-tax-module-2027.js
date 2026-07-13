@@ -92,6 +92,16 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
       return this._recordUsSourceRealGain(this._recordRealGain(state, state, realGainAud, null), realGainAud);
     });
 
+    // US house (foreign real property, design 62 §5): AU-assessable for a resident
+    // from the stepped-up basis net of the main-residence exemption. Indexation is
+    // deferred for property (design 57 §6.4), so the real gain is the un-indexed
+    // auGain — matching the AU_HOUSE_SALE_TAX treatment.
+    fns.set('US_HOUSE_SALE_TAX', (state, action) => {
+      if (action.residency !== 'AU') return state;
+      const realGainAud = toAUD(action.auGain ?? 0, 'USD', state);
+      return this._recordUsSourceRealGain(this._recordRealGain(state, state, realGainAud, null), realGainAud);
+    });
+
     // Collectibles: bullion (isGold) is an ordinary AU CGT asset → indexed like
     // equity; true collectibles are NOT indexed under the reform (design 57 §6.4).
     fns.set('COLLECTIBLE_SALE_TAX', (state, action) => {

@@ -34,7 +34,7 @@ import { FixedIncomeContributionApplyReducer, FixedIncomeWithdrawalApplyReducer,
 import { CollectibleSaleApplyReducer, CollectibleValueChangeApplyReducer, CollectibleSaleHandler, CollectibleValueChangeHandler } from './finance/account-rules/us/us-collectible-classes.js';
 import { getUsEarlyWithdrawalRules } from './finance/account-rules/us/us-early-withdrawal-rules.js';
 import { SsIncomeApplyReducer, WagesIncomeApplyReducer, WagesWithheldApplyReducer, SeIncomeUsApplyReducer, BonusApplyReducer, CompanySaleApplyReducer, SsIncomeHandler, WagesIncomeHandler, WagesWithheldHandler, SeIncomeUsHandler, BonusHandler, CompanySaleHandler } from './finance/account-rules/us/us-income-classes.js';
-import { UsHouseSaleApplyReducer, UsHouseSaleHandler } from './finance/account-rules/us/us-real-property-classes.js';
+import { auMainResidenceExemptFraction, UsHouseSaleApplyReducer, UsHouseSaleHandler } from './finance/account-rules/us/us-real-property-classes.js';
 import { getUniformDistributionPeriod } from './finance/account-rules/us/us-rmd-uniform-table.js';
 import { USD, AUD, ACCOUNT_TYPE, InsufficientFundsError, Account, CheckingAccount, SavingsAccount, LoanAccount, OffsetAccount } from './finance/assets/account.js';
 import { Asset } from './finance/assets/asset.js';
@@ -570,6 +570,7 @@ export const Finance = {
   SeIncomeUsHandler,
   BonusHandler,
   CompanySaleHandler,
+  auMainResidenceExemptFraction,
   UsHouseSaleApplyReducer,
   UsHouseSaleHandler,
   getUniformDistributionPeriod,

@@ -60,6 +60,14 @@ export class RealProperty extends Asset {
    * @param {number}        [opts.landValueRatio=0.2]           - Non-depreciable land fraction of costBasis
    * @param {number|null}   [opts.annualDepreciationOverride=null] - Explicit annual depreciation $; overrides per-country derivation
    * @param {number}        [opts.accumulatedDepreciation=0]    - Running total of depreciation taken; reduces basis at sale (§4.5)
+   *
+   * Cross-border CGT (design 62 §5). Set on foreign (non-TAP) property when the owner
+   * becomes an AU resident — the ITAA97 s855-45 deemed acquisition. Absent for TAP
+   * (domestic) property, which keeps its original basis.
+   * @param {Object<string,number>|null} [opts.costBaseByCountry=null]      - Per-country stepped-up basis (market value at the move)
+   * @param {number|null}   [opts.acquisitionPriceLevel=null]              - CPI level at the deemed AU acquisition (for reform indexation)
+   * @param {Object<string,number>|null} [opts.acquisitionDateByCountry=null] - Per-country deemed-acquisition date (epoch ms); also the
+   *                                                                          main-residence absence-rule start date (design 62 §5.3)
    */
   constructor(initialValue = 0, opts = {}) {
     super(opts.name ?? '', { ...opts, kind: 'real-property' });
@@ -90,5 +98,9 @@ export class RealProperty extends Asset {
     this.landValueRatio             = opts.landValueRatio             ?? 0.2;
     this.annualDepreciationOverride = opts.annualDepreciationOverride ?? null;
     this.accumulatedDepreciation    = opts.accumulatedDepreciation    ?? 0;
+    // Cross-border CGT step-up (design 62 §5) — foreign property only.
+    this.costBaseByCountry          = opts.costBaseByCountry          ?? null;
+    this.acquisitionPriceLevel      = opts.acquisitionPriceLevel      ?? null;
+    this.acquisitionDateByCountry   = opts.acquisitionDateByCountry   ?? null;
   }
 }

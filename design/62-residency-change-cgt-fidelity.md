@@ -1,9 +1,9 @@
 # 62 — Residency-change CGT fidelity (deemed-acquisition holding period + foreign real property)
 
-**Status**: **Gap 1 IMPLEMENTED + green** (3371 unit + 865 viz; `npm run probe:residency-cgt`
-passes as a regression check). Gap 3 PLANNED (§5, not yet built). Gaps 2/4/5 documented only.
-Gaps validated against the ATO guidance and the live codebase via
-`scripts/probe-residency-cgt.mjs`.
+**Status**: **Gaps 1 & 3 IMPLEMENTED + green** (3376 unit + 865 viz). Gap 1 (`npm run
+probe:residency-cgt`) committed on `main`; Gap 3 (`npm run probe:foreign-property-cgt`)
+uncommitted. Gaps 2/4/5 documented only. Gaps validated against the ATO guidance and the live
+codebase via the two probes.
 
 **Scope decision (locked with requester):** *plan* implementations for **Gap 1** (deemed-
 acquisition holding period) and **Gap 3** (foreign real property AU assessment). *Document
@@ -224,14 +224,31 @@ proportional/absence rules). **DECIDED: (b) — model the AU main-residence rule
 stepped-up base removes pre-move gain; the AU main-residence proportional exemption + 6-year
 absence rule then apply to the post-move gain on the dwelling.
 
-### 5.3 Phases
+### 5.3 Phases — ALL DONE (green: 3376 unit + 865 viz; `npm run probe:foreign-property-cgt`)
 
-- **P1** — `RealProperty.costBaseByCountry` + `acquisitionPriceLevel` (constructor / toJSON /
-  fromJSON / state projection / schema); step-up in `RealPropertyService.recordResidencyChange`
-  for foreign property; thread the opts through `ChangeResidencyApplyReducer`.
-- **P2** — `US_HOUSE_SALE_APPLY` computes `auGain`; new AU classifier for `US_HOUSE_SALE_TAX`
-  routes it (2026 → `auCapitalGainsYTD`; 2027 → `auRealCapitalGainsYTD` indexed) + FTC.
-- **P3** — main-residence treatment per §8 Q1; tests + regold.
+- **P1 ✅** — `RealProperty.costBaseByCountry` + `acquisitionPriceLevel` +
+  `acquisitionDateByCountry` (constructor / serializer serialize+make / US state projection).
+  `RealPropertyService.recordResidencyChange` steps up **foreign** property only
+  (`property.country !== country` ⇒ non-TAP); domestic AU property is snapshotted but not
+  stepped up. `ChangeResidencyApplyReducer` gained a copy-on-write real-property loop
+  (threading `country/stepUp/priceLevel/asOfMs`). **Runtime wiring fix:** the compiler
+  `_buildContext` did not expose `realPropertyService` — added (the end-to-end probe caught
+  this; unit tests could not).
+- **P2 ✅** — `US_HOUSE_SALE_APPLY` computes `auGain` from `state[stateKey].costBaseByCountry.AU`
+  and emits `auGain`/`auDiscountableGain`/`residency` on `US_HOUSE_SALE_TAX`. The US module's
+  `US_HOUSE_SALE_TAX` classifier gained an AU-resident branch (→ `auCapitalGainsYTD` +
+  `auDiscountableGainsYTD` + the FITO removal set `usSourceCapGains*`, US-source so no foreign-
+  passive entry). `AuTaxModule2027` routes it into `auRealCapitalGainsYTD` **un-indexed**
+  (property indexation deferred, design 57 §6.4 — same as `AU_HOUSE_SALE_TAX`).
+- **P3 ✅** — `auMainResidenceExemptFraction` models ITAA97 s118-145: investment property ⇒ 0
+  (fully assessable); main residence not income-producing ⇒ 1 (indefinite absence); main
+  residence income-producing ⇒ the **6-year absence rule** applied proportionally
+  (`min(6y, ownership)/ownership` from the move to sale). The non-exempt slice is discount-gated
+  on ≥12 months from the deemed acquisition (Gap 1 §4). Simplification: assumes the foreign
+  dwelling retains the exemption — a competing AU main-residence claim would reduce it (not
+  modeled). Tests: `tests/unit/evt-foreign-property-cgt.test.mjs` (5 cases) + the runtime probe
+  (Run A primary-not-rented ⇒ auGain 0; Run B investment ⇒ auGain $206,659 on a $1.42M sale).
+  Reference golden unchanged (the default US house is never sold).
 
 ---
 
