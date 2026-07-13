@@ -1,0 +1,620 @@
+# 61 — Holding-allocation lever: optimize the Stock/Bond/Cash/Gold mix over time
+
+**Status**: **PROPOSED** (2026-07-13). No code yet. Scope: add a new optimization
+lever — a **portfolio asset-allocation control** — that lets the solver (and the
+MPC cockpit) **buy and sell holdings to hit a target Stock/Bond/Cash/Gold ratio,
+and vary that ratio over time in response to economic conditions**. It is the
+natural sibling of the design 58 drawdown levers: design 58 decides *which account
+to sell to fund spending*; design 61 decides *what asset mix to hold* and lets the
+model rebalance into it — so we can test optimal responses to economic shocks and
+taxes across the whole simulation.
+
+This design leans heavily on machinery that **already exists** (the design 29
+behavioral family + the holdings/CGT stack) rather than building from scratch.
+
+**Build plan:** see the companion `design/61-holding-allocation-lever-implementation.md`
+— per-phase files, signatures, wiring anchors, tests, and gotchas (implementation-ready
+sketch for a future session).
+
+---
+
+## 1. Motivation
+
+The plan's return, its drawdown of tax, and its resilience to shocks are all
+downstream of one decision the model currently makes *statically*: the asset mix.
+Two levers already shape wealth trajectories — the economic **regime/shock** layer
+(design 21/28) moves per-class returns, and the **drawdown** lever (design 58)
+chooses liquidation order — but the model can't yet *change what it holds* in
+anticipation of, or reaction to, those conditions. Real households do: they glide
+equity down with age, tilt to bonds/cash/gold entering a downturn, and weigh
+"rebalance now and pay CGT" against "let it drift."
+
+Making the allocation a **first-class, time-varying, optimizable lever** lets us ask
+the questions that matter:
+
+- Does shifting toward **gold/bonds** ahead of an `ECONOMIC_STRESS` regime beat a
+  static 60/40, *net of the capital-gains tax the rebalance realizes*?
+- What **glidepath** (equity→bond over the plan) maximizes terminal wealth or
+  minimizes lifetime tax?
+- How should the mix differ **by account tax-treatment** (bonds in tax-deferred,
+  equity in Roth, gold in taxable)?
+
+None of these are reachable today because the target mix is a fixed JSON blob, is
+never re-decided over time, and rebalancing is restricted to tax-advantaged
+accounts (so it can't even *see* the tax trade-off).
+
+---
+
+## 2. What exists today (the foundation to build on)
+
+This is the important part: **the buy/sell-holdings primitive and a target-mix
+rebalancer already exist.** Design 61 is mostly *promoting* them to an optimizable,
+time-varying, taxable-aware lever — not inventing the mechanism.
+
+**Holding model.** `Holding` (`holdings/holding.js`) is per-**allocation**
+(`ALLOCATION` = `EQUITY | BOND | CASH | GOLD | OTHER`, `holdings/allocation.js`)
+with `marketValue`, `costBasis`, `costBaseByCountry`, `rateKey`, `duration`,
+`couponRate`, `treasury`. Invariant `account.balance === Σ holdings.marketValue`
+(`holding-reducers.js#_syncBalance`). An account already holds a *mix* of
+allocation sleeves.
+
+**Within-account rebalancer (design 29 §3.5).** `OpportunisticRebalanceReducer`
+(`behavioral/opportunistic-rebalance-reducer.js`) computes each account's actual
+allocation fractions, compares to a `targetAllocation` (default `{EQUITY:0.6,
+BOND:0.4}`), and on drift past `rebalanceDriftBand` **or** on `ECONOMIC_STRESS` /
+`PANIC_SELL_TRIGGER` regime entry emits `OPPORTUNISTIC_REBALANCE_APPLY` with
+per-allocation `{allocation, delta}` legs. `OpportunisticRebalanceApplyReducer`
+executes them: moves value between allocations pro-rata across holdings, conserving
+total, adjusting `costBasis`, re-syncing `balance`.
+
+**Cross-account tax-aware placement (design 29 §3.4).**
+`StrategicAssetLocationReducer` swaps mislocated holdings between tax-advantaged
+accounts per an `assetLocationPolicy` (`{BOND:[ira,k401], EQUITY:[roth]}`) →
+`ASSET_LOCATION_REBALANCE_APPLY`.
+
+**Taxable disposal with CGT.** `StockWithdrawalApplyReducer`
+(`account-rules/us/us-brokerage-classes.js`, `STOCK_WITHDRAWAL_APPLY`) credits the
+cash pool, **FIFO-consumes holdings** (`holdings-fifo.js#consumeHoldingsFifo`), and
+chains `STOCK_WITHDRAWAL_TAX` (US/AU capital gain, AU CGT-reform indexation) plus
+`COLLECTIBLE_SALE_TAX` for GOLD lots (US 28% collectibles rate, design 56/57). This
+is the **correct taxable-sell path** a taxable rebalance must reuse.
+
+**New-sleeve growth.** `resolveRateKey(country, allocation, role)`
+(`holdings/default-allocations.js`) returns the right `state.effectiveGrowthRates`
+key for any allocation — `GOLD → RATE_KEYS.GOLD`, `CASH → SAVINGS_{country}`,
+etc. — so a freshly established sleeve grows correctly.
+
+**Parameterization.** The rebalancer's knobs are behavioral params
+(`behavioral-strategy-registry.js`): `rebalanceTargetAllocation` (**type
+`Object`**), `rebalanceDriftBand`, `assetLocationPolicy`, `panicFraction`. Selected
+via `behavioralStrategies: string[]` (EnumMulti).
+
+---
+
+## 3. The gaps
+
+| Want | Reachable today? | Blocked by |
+|---|---|---|
+| Optimizer **searches** the target mix | ❌ | `rebalanceTargetAllocation` is an `Object` param — `opt:true` is declared but the solver only handles `CONTINUOUS/INTEGER/ENUM` axes, so an Object is never swept |
+| **Time-varying** mix (glidepath / per-regime) | ❌ | one static target for the whole run; the trigger is reactive (drift/regime entry), not a controllable schedule |
+| Rebalance **taxable** accounts (to study the tax trade-off) | ❌ | `OPPORTUNISTIC_REBALANCE_APPLY` is tax-advantaged-only and realizes **no CGT** (it just rewrites `costBasis`) — "taxable rebalancing deferred" per the design 29 §3.5 comment |
+| **Establish a new** allocation sleeve (e.g. buy GOLD where none is held) | ❌ | the apply reducer `continue`s when `matching.length === 0` — it can only scale existing sleeves |
+| **Buy** side with correct basis/rate/tax | partial | the free apply fabricates basis; there's no symmetric taxable buy that stamps `purchaseDate`/`rateKey`/`costBasis` and (for BOND) `duration`/`treasury` |
+| Re-decide the mix **each MPC epoch** from realized state | ❌ | no cockpit control / projection shim / actuate for allocation (the design 58 §11 triad) |
+
+---
+
+## 4. The lever, decomposed (mirrors design 58's orthogonal sub-levers)
+
+Like design 58 split "drawdown" into Where/Order/Within-tier, split "allocation"
+into four orthogonal, composable dimensions. Each is a static scenario param **and**
+a one-shot opt axis **and** (later) an MPC-online control.
+
+### Lever A — Target mix as a continuous, solver-searchable simplex
+
+Replace the `Object` target with per-allocation continuous weights the solver can
+tune directly, exactly like design 58 Lever B's `drawdownWeight::<role>`:
+
+```text
+paramKey: 'allocWeight::EQUITY' | 'allocWeight::BOND' | 'allocWeight::CASH' | 'allocWeight::GOLD'
+type:     CONTINUOUS   min: 0  max: 1
+```
+
+- **Simplex constraint — encode intrinsically, don't just normalize.** The applied
+  target is a distribution summing to 1. A naive `w_i / Σ w_j` over a full `[0,1]^K`
+  box is **scale-invariant** (`w` and `2w` give the same mix) → a flat,
+  non-identifiable ray in the objective, the *same* pathology as the design-58
+  phantom drawdown dims (a direction the solver can't resolve and the surrogate's
+  trust region can't shrink). Fix: search the simplex **intrinsically** —
+  `K−1` free weights with the last allocation as the residual `1 − Σ` (or fix a
+  reference sleeve to 1). The design-46 surrogate additionally carries the simplex as
+  a native `Σw=1` + `w≥0` constraint in its QP. **The algorithm detail lives in
+  `design/46` §6 (new "simplex/allocation levers" pivot seam); this lever is its
+  first consumer.** See OQ1.
+- **`::` separator, not `.`** — same reason as design 58 Lever B
+  ([[optimizer-param-key-dot-collision]]): the MC/Opt/MPC `set()` silently drops
+  dotted keys whose parent object doesn't pre-exist, leaving the axis inert.
+- **Warm-starts.** Named presets (`SIXTY_FORTY`, `ALL_WEATHER`, `EQUITY_TILT`, …)
+  are single points in weight space, seeding the solver — the Lever-B pattern.
+- Small (3–4 dims), smooth → CEM / pattern-search handle it directly.
+
+### Lever B — Time variation (the "over time / in response to conditions" ask)
+
+*How* the target changes across the run — three modes, chosen by an enum
+`allocationSchedule`:
+
+1. **`STATIC`** — one target for the whole plan (default; reproduces today's fixed
+   mix ⇒ back-compat).
+2. **`GLIDEPATH`** — target interpolated over age/time between a few solver-tuned
+   anchor points (e.g. equity 80%→40% from 50→75). Modeled like the spending
+   `EXPLICIT_BANDS` (a small table of `{age, weights}` the optimizer tunes).
+3. **`REGIME_CONDITIONED`** — a distinct target **per regime tag**
+   (`NORMAL` / `ECONOMIC_STRESS` / `HIGH_INFLATION` / …), read from
+   `state.activeRegimes`. This is the flagship "**shift to gold/bonds in a
+   downturn**" capability — the mix is a *function of realized economic
+   conditions*, which is precisely the user's request. It generalizes today's
+   reactive `PanicSell` (EQUITY→CASH on stress) into a full per-regime mix the
+   solver optimizes.
+
+Modes compose (a glidepath *of* per-regime targets is possible later; ship them
+independently first).
+
+### Lever C — Taxable-aware rebalancing (make the tax trade-off real)
+
+Extend rebalancing beyond tax-advantaged accounts, routing each leg through the
+tax-appropriate path:
+
+- **Tax-advantaged legs** → the existing free `OPPORTUNISTIC_REBALANCE_APPLY`
+  (no CGT).
+- **Taxable sell legs** → the **CGT-realizing** disposal path
+  (`STOCK_WITHDRAWAL_APPLY`-style FIFO consume → `STOCK_WITHDRAWAL_TAX` +
+  `COLLECTIBLE_SALE_TAX` for GOLD, AU indexation). This is what lets the optimizer
+  weigh *"rebalance now, pay the gain"* vs *"let it drift"* — the whole point of a
+  tax study.
+- A **tax-aware trigger** knob so taxable accounts aren't churned every period:
+  e.g. a wider `rebalanceDriftBand` for taxable, "only rebalance taxable at
+  year-end," or harvest-coordinated (compose with `TAX_LOSS_HARVEST` /
+  `TAX_GAIN_HARVEST`, which already exist).
+
+### Lever D — Location (which account holds the mix)
+
+The Lever-A target is a **whole-portfolio** ratio; it must be *located* across
+accounts. Reuse/extend `StrategicAssetLocationReducer`: bonds → tax-deferred
+(IRA/401k where interest is sheltered), equity → Roth/taxable. **Gold location is
+residency-dependent, not a fixed "gold → taxable" rule** (OQ4): a US resident pays
+the **28% collectibles rate** on gold in a taxable account (punitive vs LTCG →
+prefer sheltering it in a tax-advantaged account), whereas an AU resident's bullion
+sleeve is an **ordinary, CPI-indexed AU CGT asset** (`isGold:true` routes it through
+the indexed-ordinary path, *not* the US collectible rate — `us-brokerage-classes.js`
+~L266, design 57 §6.4/§7.2), so in AU a taxable-account gold sleeve is no worse than
+equity and super shelters it entirely. So the location policy must be
+**jurisdiction-aware** and compose with residency/move-year:
+- **US retirement accounts cannot hold the GOLD sleeve** (IRA/401k/Roth bullion ban):
+  an eligibility guard excludes US tax-advantaged roles as gold targets — for both the
+  location policy and the establish-new-sleeve buy (§6), so a gold buy never lands in a
+  US IRA. AU **super** *is* gold-eligible (permitted SMSF asset), so the guard is
+  US-tax-advantaged-only.
+- **Post-move relocation is lazy, not move-pinned:** the optimal gold home flips at a
+  US→AU move (US: shelter to dodge 28%; AU: taxable fine, super best), but the policy
+  just re-*targets* the new optimum and lets the normal rebalance cadence (OQ3) walk
+  holdings there over the following periods — avoiding a forced taxable event on the
+  move date that could realize CGT badly or straddle the residency cost-base step-up
+  (design 57).
+
+Location stays a tax-aware role-level policy — see §5 for why this is the right unit
+and lets us avoid per-account ordering.
+
+---
+
+## 5. Per-account vs per-role vs per-portfolio (answering the OQ directly)
+
+> *"We may need a per account order rather than a per account-role order but this is
+> debatable if we optimize holdings across roles rather than accounts."*
+
+**Recommendation: optimize the mix at the _portfolio_ level (one target across all
+accounts), and let a _role-level, tax-aware location policy_ decide placement.** You
+then do **not** need a per-account order.
+
+Three candidate granularities:
+
+| Granularity | Search dim | Pros | Cons |
+|---|---|---|---|
+| **Per-portfolio target + role location** *(recommended)* | 3–4 weights (+ location policy) | Small, smooth, **stable across account edits**; matches how people think ("I want 60/30/10"); tax placement is the natural role-level decision | Can't express "different mix in account X vs Y" beyond what location implies |
+| **Per-role target** | 3–4 × #roles | Finer control per sleeve | Larger; most roles map to one allocation today (§ default-allocations), so mostly redundant with location |
+| **Per-account target** | 3–4 × #accounts | Fully general | Search grows/changes with **every account edit** — the exact instability design 58 OQ2 rejected for drawdown |
+
+This mirrors design 58's resolved OQ2 (search at the **role** level, not per-account,
+for stability + small search space; keep per-account only as a manual escape hatch).
+The buy/sell primitive still operates **per account** (holdings live in accounts) —
+but the *decision variable* is portfolio-level, and Lever D maps it onto accounts.
+A per-account manual override (pin a specific account's mix) can be a later
+power-user add, the allocation twin of drawdown's `CUSTOM`.
+
+**Corollary:** design 61 does **not** require the "per-account drawdown order"
+successor mentioned in the design 58 notes. If per-account allocation is ever wanted,
+that successor becomes relevant — but it is explicitly out of scope here.
+
+---
+
+## 6. Buy & sell holdings primitive ("a way for the solver to buy and sell")
+
+A single rebalance step computes **portfolio-level legs** (Σ target − Σ actual per
+allocation, after Lever D locates them onto accounts), then routes each leg:
+
+- **Sell (taxable):** `consumeHoldingsFifo` + `STOCK_WITHDRAWAL_TAX` /
+  `COLLECTIBLE_SALE_TAX` (reuse `STOCK_WITHDRAWAL_APPLY` wiring). **Sell
+  (tax-advantaged):** free proportional reduce (today's apply path).
+- **Buy:** a symmetric primitive that either (a) **adds** to an existing holding of
+  the target allocation (today's positive-delta branch), or (b) **establishes a new
+  sleeve** when none exists — the gap to fix in `OpportunisticRebalanceApplyReducer`
+  (`matching.length===0` currently `continue`s). A new sleeve stamps
+  `allocation`, `marketValue = amount`, `costBasis = amount`, `purchaseDate = now`,
+  `rateKey = resolveRateKey(country, allocation, role)`, and BOND defaults
+  (`duration`, `treasury=false`, floating `couponRate=null`). This is what makes
+  **"buy GOLD where I hold none"** work.
+- **Value conservation net of tax/fees:** proceeds from sell legs fund buy legs;
+  the CGT owed on taxable sells is a real cash outflow (settles via the existing
+  tax-settle path), so the buy side deploys *after-tax* proceeds. Cross-currency
+  legs (US↔AU) convert through the existing FX (`fxOf`/`feeOf`) — compose with
+  design 58 Lever A's cross-border machinery.
+
+Proposed action: `REBALANCE_TO_TARGET_APPLY` (portfolio legs) that fans out to the
+per-account tax-appropriate applies above, so there's one place the target→trades
+translation lives.
+
+---
+
+## 7. Optimizer / MC / MPC wiring (mirrors design 58 §7 & §11)
+
+**Static + one-shot opt.**
+- Lever A: 3–4 `allocWeight::<ALLOCATION>` CONTINUOUS axes (`enabled:false`), gated
+  `visibleWhen: allocationStrategy = OPTIMIZED` (a new sentinel mode, the
+  `WEIGHTED`-drawdown analog). Warm-start from named presets.
+- Lever B: `allocationSchedule` ENUM axis; GLIDEPATH anchors as
+  band-style generated params; REGIME_CONDITIONED as one weight-set per regime tag.
+- Lever C/D: `rebalanceDriftBand` (taxable vs sheltered), `assetLocationPolicy`
+  already exist — surface as axes.
+
+**MPC online (flagship — the "adjust over time in response to conditions" as a live
+control).** Same triad as design 58 §11.2:
+1. **`COCKPIT_CONTROLS` spec** `ALLOCATION_MIX`: `buildVariables` returns the
+   `allocWeight::*` axes (pruned to allocations actually reachable — the design 61
+   analog of the design 58 build-time role filter); `describe` renders the resulting
+   mix; `appliesTo` gates on the OPTIMIZED mode.
+2. **`_seededSim` projection shim:** after snapshot injection, re-apply the committed
+   target (re-stamp `state.rebalanceTargetAllocation` / re-run the locate→trade so
+   the forward rollout honors it) — the allocation twin of the design 58
+   `FORWARD_DRAWDOWN_STATE_FIELDS` / per-account `drawdownPriority` re-stamp.
+3. **Live `actuate`:** write the target forward-effective on the running sim and
+   persist the param, so Advise/Apply/live agree.
+
+**Hold-band hysteresis (ε) — even more important here.** Rebalancing **realizes
+CGT**, so epoch-to-epoch flip-flop is directly costly. Reuse design 58 §11.4's
+switching-cost idea: only re-trade when the projected gain clears ε, and compare
+*applied mix distance* (e.g. L1 over the simplex) not raw weights, so sub-threshold
+drift is free. A no-trade band around the target (today's `rebalanceDriftBand`) is
+the static analog.
+
+**Harvesting MPC learnings into a re-runnable scenario (OQ7).** Primary use is
+**online (MPC first)**, but the discovered policy must be **bakeable back into a
+saved scenario** — exactly as the SPENDING lever's per-epoch band amounts persist
+into the `spendingExpenseBands` param and re-run deterministically. The mechanism is
+already there: `mpc-controller.js` accumulates each epoch's committed choice into
+`committedParams` (`mergeCandidate`), and each cockpit control's `actuate` persists
+the committed value to a scenario param. For allocation:
+- **GLIDEPATH** is the cleanest harvest target — the committed per-epoch mix becomes
+  a table of `{age, mix}` anchors (the allocation twin of spending bands), which
+  re-runs deterministically with no controller in the loop.
+- **REGIME_CONDITIONED** persists as a per-regime target *map*; it also re-runs
+  deterministically, because regimes are a deterministic function of the scenario's
+  shock configuration — so the saved map reproduces the same conditional behavior.
+- **Fidelity caveat (same as spending bands):** a discretized schedule/anchor set is
+  an *approximation* of the continuous receding-horizon policy — "as best as
+  possible," not bit-exact. The re-run is a faithful, inspectable, shareable
+  scenario; the MPC remains the source of the policy.
+
+---
+
+## 8. Interaction with drawdown (58) and shocks (21/28/29)
+
+- **Order of operations per period:** contributions → **rebalance-to-target** →
+  drawdown-to-fund-spending. Both touch holdings; define precedence explicitly so
+  the year-end `_syncBalance` snap and the multi-holding transaction path
+  ([[multi-holding-transaction-desync]]) stay consistent.
+- **Synergy worth flagging:** the most tax-efficient rebalance is to **fund spending
+  from the over-weight sleeve** — i.e. let the design 58 drawdown *also* correct the
+  mix (sell what you're overweight first). A future unification could make drawdown
+  allocation-aware so a single sale both funds spending and rebalances, avoiding a
+  second CGT event. Out of scope here, but the levers are designed not to preclude it.
+- **Cash is a first-class allocation choice, not just a residual (OQ2).** Holding
+  CASH through a crash is a *deliberate, beneficial* strategy the optimizer must be
+  able to choose — so CASH stays a target sleeve the lever can dial up, **not** the
+  leftover after EQUITY/BOND/GOLD. It reconciles with the design-58 cash band by
+  layering: the drawdown lever's `minimumBalance` is a **hard liquidity floor**
+  (spending must always be fundable); the allocation lever's CASH target is a
+  **desired holding on top**, so effective cash = `max(allocationTargetCash,
+  drawdownFloor)`. When the target cash exceeds the floor the lever *buys* cash (sells
+  EQUITY/BOND into the cash sleeve, realizing CGT on taxable legs — the tax cost of
+  "going to cash" is then real and optimized against the crash protection it buys).
+- **Regime coupling — coexist, and design 61 is independently selectable (OQ5).**
+  Lever B `REGIME_CONDITIONED` **generalizes** the reactive `PanicSell` /
+  `OpportunisticRebalance` regime triggers, but they **coexist**: they're independent
+  entries in `behavioralStrategies` (EnumMulti). **To study the design-61 lever in
+  isolation, simply select it and leave `PANIC_SELL` / `OPPORTUNISTIC_REBALANCE`
+  unselected** — nothing else fires. (This implies design 61 registers as its own
+  selectable strategy/mode, so it composes à la carte like the rest of the design-29
+  family.) Deprecating the overlap with the legacy reactive strategies is a later
+  cleanup, not a prerequisite.
+- **Cross-border composition with design 58 Lever A (OQ6 — a *single* scope drives
+  both).** The allocation target's *scope* reuses `crossBorderDrawdown`
+  (`AUTO`/`LOCAL_FIRST`/`GLOBAL`): a **GLOBAL** target treats the whole US+AU portfolio
+  as one mix, locating each class in its tax-favored country (FX-converted);
+  **LOCAL_FIRST** keeps a per-country mix. The OQ6 prototype shows GLOBAL's edge is a
+  cross-border tax-location arbitrage that **only survives if drawdown is GLOBAL too** —
+  a GLOBAL-allocation / LOCAL_FIRST-drawdown mix has the drawdown re-sell the located
+  assets and undo it. So **one shared scope drives both levers** (allocation mirrors
+  `crossBorderDrawdown`), not two independent switches. See §12 OQ6.
+
+---
+
+## 9. Registration checklist (mirror design 58 §7)
+
+**Lever A (Phase 1):**
+1. `intl-retirement-scenario.js` — `allocationStrategy` enum (`STATIC` default +
+   `OPTIMIZED`) + `buildAllocWeightSchema()` (per-allocation CONTINUOUS params,
+   `::`-keyed, gated on OPTIMIZED), a `presentAllocations(accounts/holdings)`
+   build-time filter (design 58 filter analog), and `allocWeightsFromPreset()`
+   warm-starts. Defaults reproduce today's mix ⇒ byte-identical golden.
+2. `behavioral-strategy-registry.js` — `OPPORTUNISTIC_REBALANCE` reads the synthesized
+   continuous target (normalize-by-sum) instead of the `Object` param when
+   `allocationStrategy=OPTIMIZED`; keep the `Object` path as the manual escape hatch.
+3. `intl-retirement-opt-config.js` — CONTINUOUS axes via `buildAllocWeightSchema`,
+   `enabled:false`, account-filtered like `buildOptVariables(params, accounts)`.
+4. Serializer round-trip test for the new params (live field via `initialState`).
+
+**Lever C (Phase 2):** taxable-aware apply (`REBALANCE_TO_TARGET_APPLY` → CGT path
+for taxable legs) + establish-new-sleeve fix in the apply reducer + buy primitive +
+the **US-tax-advantaged gold eligibility guard** (OQ4a, so a gold buy never lands in a
+US IRA) + **separate `rebalanceDriftBand` for taxable (wide) vs sheltered (tight)**
+per the OQ3 prototype.
+
+**Lever B (Phase 3):** `allocationSchedule` (STATIC/GLIDEPATH/REGIME_CONDITIONED);
+glidepath anchor params; per-regime weight sets; resolver reads `state.activeRegimes`.
+
+**Lever D (Phase 4):** jurisdiction-aware `assetLocationPolicy` (gold home by
+residency; US-IRA gold guard; lazy post-move relocation, OQ4b), wire the portfolio
+target → per-account location.
+
+**MPC (Phase 5):** `ALLOCATION_MIX` cockpit control + `_seededSim` shim + actuate +
+hysteresis ε; headless `scripts/verify-mpc-lever.mjs allocationMix`.
+
+---
+
+## 10. Testing plan
+
+- **Back-compat golden:** `allocationStrategy=STATIC` at the current default mix ⇒
+  `cross-border-relief-scenario.test.mjs` **must not move**.
+- **Lever A:** a synthesized weight vector reproduces a named preset's mix to the
+  dollar; a shifted weight changes the held mix; the `K−1`/residual encoding keeps
+  the applied mix on the simplex (Σ=1) with no scale-degenerate direction; the
+  build-time allocation filter prunes unreachable allocations (design 58 pattern).
+- **Lever C (the tax study):** a taxable rebalance realizes the correct
+  `STOCK_WITHDRAWAL_TAX` (US LTCG + AU indexed) and, for GOLD, the
+  **jurisdiction-correct** `COLLECTIBLE_SALE_TAX` — US 28% collectibles vs AU
+  ordinary CPI-indexed (`isGold:true`); a tax-advantaged rebalance stays free;
+  after-tax proceeds fund the buy legs (value conserved net of tax).
+- **Buy primitive:** establish a GOLD sleeve from zero (correct `rateKey`,
+  `purchaseDate`, `costBasis`); BOND sleeve gets `duration`/`treasury` defaults.
+- **Lever B:** `REGIME_CONDITIONED` shifts the mix on `ECONOMIC_STRESS` entry and
+  reverts on exit; `GLIDEPATH` interpolates between anchors by age.
+- **MPC:** the committed target **bites under a snapshot-seeded rollout** where it's
+  inert without the shim (GAP→PASS, `verify-mpc-lever.mjs`); hysteresis suppresses
+  sub-ε churn.
+- **Cadence (OQ3):** a taxable account under a tight band realizes materially more
+  CGT than under a wide band for marginal tracking gain; a sheltered account is
+  cadence-insensitive on wealth. (Design-informing evidence already produced by
+  `scripts/prototype-rebalance-cadence.mjs`; the in-sim test asserts the *ordering*,
+  not the toy magnitudes.)
+- **Gold guard (OQ4a):** a gold buy is never located into a US IRA/401k/Roth; AU
+  super remains gold-eligible.
+- **Serializer round-trip** for every new param.
+
+---
+
+## 11. Phased rollout (proposed)
+
+1. **Phase 1 — Lever A (searchable static mix).** Continuous `allocWeight::*` axes
+   replace the `Object` target for the optimizer; reuse the existing tax-advantaged
+   apply. Smallest useful increment; golden unchanged. *(No taxable rebalancing yet
+   — so no tax study, but the mechanism and search space land.)*
+2. **Phase 2 — Lever C (taxable-aware) + buy primitive.** Route taxable legs through
+   the CGT path; fix establish-new-sleeve; add the US-IRA gold guard (OQ4a) and the
+   split taxable-wide / sheltered-tight drift bands (OQ3). **Unlocks the tax study.**
+3. **Phase 3 — Lever B (time variation).** GLIDEPATH first, then
+   REGIME_CONDITIONED (the flagship "respond to conditions").
+4. **Phase 4 — Lever D (location).** Portfolio target → tax-aware placement.
+5. **Phase 5 — MPC online.** Per-epoch target with hysteresis (the "build the
+   optimum mix online over time" goal).
+
+### 11.1 Sequencing & dependencies
+
+**Design 46 does NOT block this design.** Design 46 (MPC performance / structured
+online surrogate) is a *rollout-count* optimization that is agnostic to which levers
+exist; design 61 *adds* levers (dimensions). The dependency runs the other way — 61 is
+a **motivator/stress-test** for 46 (more decision dimensions = the pressure 46 exists to
+relieve), not a dependent of it. Concretely:
+
+- **Correctness is never gated by 46.** The simplex scale-degeneracy is solved at the
+  *lever* level (the K−1/residual encoding, §4-A / OQ1), so plain **CEM** searches the
+  allocation axes cleanly with no surrogate. The native-`Σw=1` QP path in `design/46`
+  §6 is an optional refinement *if* the surrogate later drives this lever, not a
+  precondition.
+- **Phases 1–4 have zero dependency on 46** — they ride the existing CEM /
+  pattern-search exactly as the design-58 drawdown levers did.
+- **Precedent:** design 58 Lever B already ships an **8-dim continuous online MPC
+  lever** (`DRAWDOWN_WEIGHTS`) on plain CEM while design 46 remains uncoded — so a
+  multi-dim continuous online control does not need the surrogate to be correct.
+- **The only real coupling is Phase-5 *performance* (soft, not correctness).** Adding
+  3–4 continuous allocation dims (and their interaction with drawdown weights)
+  compounds the per-epoch solve cost 46 targets. That is already partly absorbed by
+  wins shipped *independently* of the surrogate — **parallelism** (design 46 §0.5,
+  ~3.1×, default-on) and **horizon-windowing** (design 41). Phase 5 leans on those; the
+  full surrogate only becomes attractive if *many* levers run online simultaneously.
+
+**Recommendation:** keep them decoupled. Build 61 P1–4 freely; reach for 46 at the
+multi-lever online regime, gated by a *measured* solve-time target (46's own §0 open
+question), not by 61. **Soft-gate P5 on 46 only** in the specific case where allocation
++ drawdown-weights + Roth/withdrawal levers are all driven online together from the
+start (the combined vector may then be too slow on CEM) — and even then it gates only
+Phase 5, never P1–4. Two cross-references to carry, not a block: (a) the
+`leverGeometry`/simplex seam 46 must honor if 61-P5 runs on the surrogate; (b) 61 as a
+dimension-growth entry in 46's cost model.
+
+---
+
+## 12. Open questions (owner review 2026-07-13)
+
+1. ✅ **RESOLVED — encode the simplex intrinsically; algorithm goes in design 46.**
+   Not normalize-by-sum over a full box — that is scale-invariant and leaves a flat,
+   non-identifiable ray (the design-58 phantom-dim pathology). Search `K−1` free
+   weights with a residual/reference sleeve for CEM + the fitted surface; carry
+   `Σw=1` + `w≥0` natively in the surrogate QP. **Added as a new "simplex/allocation
+   levers" pivot seam in `design/46` §6** (the surrogate-solver algorithm doc, where
+   the owner noted the algorithm discussion belongs); this lever is its first
+   consumer. See §4-A.
+
+2. ✅ **RESOLVED — CASH is a first-class target, not a residual.** Holding cash
+   through a crash is a beneficial, optimizable choice, so the lever can dial CASH up
+   deliberately. It layers over the design-58 liquidity floor: effective cash =
+   `max(allocationTargetCash, drawdownFloor)`; going to cash above the floor *buys*
+   cash (CGT-realizing on taxable legs, so the cost is optimized against the crash
+   protection). See §8.
+
+3. ✅ **RESOLVED via prototype — rebalance trigger/frequency.** What is
+   *actually possible* given the architecture, and the trade-offs:
+
+   | Trigger | How it'd wire | Pros | Cons / cost |
+   |---|---|---|---|
+   | **Calendar** (annual / period) | fires on `US_PERIOD_ADVANCE` (today's reducers already do) | simple, predictable, matches real "annual rebalance"; deterministic ⇒ re-runnable | can rebalance into a still-drifting market; a fixed date is arbitrary |
+   | **Drift-band** (today's `rebalanceDriftBand`) | compare actual vs target each period, act only past the band | no-trade zone limits tax churn; self-adjusts to volatility | band choice is a hidden lever; in taxable accounts even a triggered trade realizes CGT |
+   | **MPC-epoch** (online) | the controller re-decides each epoch, gated by the ε hold-band (§7) | *responds to realized conditions* — the whole point; ε makes the switching cost explicit | only "live" during an MPC run; must be **harvested** (OQ7) to persist |
+   | **Regime-edge** (today's PanicSell path) | fire on `ECONOMIC_STRESS` / `PANIC_SELL_TRIGGER` entry | reacts exactly when conditions change | binary; no notion of "how far" to move without a target |
+
+   **What's actually possible now:** the period-advance + drift-band + regime-edge
+   triggers *already exist* in `OpportunisticRebalanceReducer` — Phase 1 can reuse
+   them verbatim. The MPC-epoch trigger is the new capability (Phase 5) and is where
+   "respond to conditions over time" genuinely lives.
+
+   ✅ **RESOLVED via prototype** (`scripts/prototype-rebalance-cadence.mjs`, a
+   standalone CRN Monte-Carlo isolating tracking-error vs realized-CGT across
+   cadences; grounded on the sim's 15%/20% LTCG). On a $1M→~$6M / 40y book:
+
+   | cadence (taxable) | trades | track err | **incremental tax to hold the mix** |
+   |---|---|---|---|
+   | DRIFT_WIDE (±8pp) | ~9 | 3.0% | **$125k (cheapest)** |
+   | ANNUAL | 40 | 2.4% | $185k (+$60k) |
+   | DRIFT_TIGHT (±2pp) | ~88 | 1.2% | $298k (+$173k) |
+
+   *(tax cost isolated as `sheltered.afterTax − taxable.afterTax` per policy under
+   common random numbers, minus the unavoidable buy-&-hold latent; ordering held
+   across no-crash, 20% LTCG, and a 15y horizon.)* **Decisions:**
+   - **Taxable → wide drift-band, NOT annual.** A wide band beats a fixed annual
+     schedule *and* a tight band: annual churns ~40 trades even when barely drifted;
+     tight buys 1.8pp of tracking for **$173k** of extra tax — a bad trade. So taxable
+     rebalancing is drift-gated with a **wide** band (the band itself an opt/MPC knob);
+     annual-only is *not* adopted.
+   - **Sheltered → tight/continuous.** Cadence is ~free, so tight banding buys the
+     best risk control (1.2% tracking) at ~no cost.
+   - **Online (MPC) → ε-gated per-epoch** (§7 hysteresis), which is the drift-band's
+     dynamic twin: only re-trade when the projected gain clears the tax it realizes.
+   ⇒ the lever carries **separate bands for taxable vs sheltered**, defaulting wide/tight
+   respectively.
+
+   **Sub-question — coordinate with TLH/TGH? Resolved: no; the rebalance lever is
+   bracket-aware on its own.** TLH and TGH are **bracket-conditional opposites, not a
+   combinable pair**: TGH fires only in low-income years (`projectedIncome < ceiling`,
+   `tax-gain-harvest-handler.js`), TLH in high-gain/high-income years, so usually only
+   one is even eligible per year. Worse, firing both is self-defeating — TGH's room is
+   `ceiling − income − usCapitalGainsYTD`, so TLH-realized losses *inflate* TGH's room,
+   making the model harvest losses then refill the 0% bracket with gains the same year
+   (a near-wash on basis, pure churn) and **wasting** losses that are worth more saved
+   for high-rate years. So the taxable rebalance does **not** depend on separately
+   selected TLH/TGH; it carries its **own** bracket-aware realization (realize its
+   unavoidable gains up to the 0% ceiling; net its loss-sales against its own gains).
+   Unifying the standalone TLH/TGH behaviors into one bracket-conditional strategy is a
+   design-29 cleanup, out of scope here.
+
+4. ✅ **RESOLVED — jurisdiction-aware gold location; model the IRA bullion ban;
+   re-optimize post-move (lazily).** Gold's tax home is residency-dependent (§4-D):
+   **US** taxable gold = 28% collectibles (punitive); **AU** bullion = ordinary
+   CPI-indexed CGT (no worse than equity; **super shelters it**). Decisions:
+   - **(a) Model the US retirement-account bullion restriction.** US IRA/401k/Roth
+     **cannot hold the GOLD sleeve** — the location policy and the establish-new-sleeve
+     buy primitive (§6) must **exclude US tax-advantaged roles as gold targets**
+     (mirror it as an eligibility guard, the allocation twin of the drawdown-eligible
+     role set). AU **super** *can* hold gold (bullion is a permitted SMSF asset), so the
+     guard is US-tax-advantaged-only, not all-tax-advantaged.
+   - **(b) Gold location re-optimizes *after* a move, not pinned to the move date.**
+     The "right" gold home flips at a US→AU move (US: shelter to dodge 28%; AU: taxable
+     is fine, super best), but the relocation is **lazy** — it rides the normal
+     rebalance cadence (drift-band / MPC-epoch, OQ3) in the periods *following* the
+     move rather than forcing a taxable event exactly on the move date (which could
+     realize CGT at a bad moment / straddle the residency cost-base step-up, design 57).
+     So post-move the location policy simply *targets* the new optimum and the
+     cadence walks holdings there when it's tax-sensible.
+   Full policy spec deferred to Lever D (Phase 4); the eligibility guard lands with the
+   buy primitive (Phase 2) so a gold buy never lands in a US IRA.
+
+5. ✅ **RESOLVED — coexist; design 61 is independently selectable.** It registers as
+   its own `behavioralStrategies` entry, so to study it alone you select it and leave
+   `PANIC_SELL` / `OPPORTUNISTIC_REBALANCE` unselected. Deprecating the legacy overlap
+   is a later cleanup. See §8.
+
+6. ✅ **RESOLVED via prototype — one shared cross-border scope drives both levers.**
+   The allocation scope reuses design-58 Lever A `crossBorderDrawdown`: **GLOBAL** ⇒
+   one portfolio mix across US+AU, each class **located in the tax-favored country**;
+   **LOCAL_FIRST** ⇒ per-country mixes. `scripts/prototype-crossborder-allocation-scope.mjs`
+   (deterministic; illustrative US gold 28% vs AU ~15% CGT) shows the mechanism and
+   settles the param-structure question:
+   - **GLOBAL's value = cross-border asset-location arbitrage** — hold the *same*
+     overall mix but place each class where its gains are taxed least (gold → AU to
+     dodge the US 28%, equity backfills the US side). The edge = `Δtax · grown gains
+     relocated − f · principal moved`; it **compounds with horizon** (tax saving grows
+     on grown gains, FX cost is one-time) and **scales with the tax spread** and the
+     asymmetry of the *large* sleeves (equity via AU franking / 50% CGT discount).
+   - **It's a real but second-order edge** (~0.5–1.2% of terminal wealth in the runs;
+     GLOBAL beats LOCAL for any realistic FX friction — break-even well past 2%). With
+     symmetric tax it's exactly zero, so **LOCAL/AUTO is a safe default** and GLOBAL is
+     worth enabling specifically when a known cross-jurisdiction asymmetry exists.
+   - **The param-structure answer: don't split the scope.** GLOBAL allocation only pays
+     off when paired with **GLOBAL drawdown** — an inconsistent pairing (GLOBAL
+     allocation + LOCAL_FIRST drawdown) has the drawdown re-sell the located assets and
+     **actively undoes** the arbitrage (and eats FX both ways). So a *single*
+     cross-border scope should drive both levers (or allocation defaults to mirror
+     `crossBorderDrawdown` with an inconsistency warning) — **not** two independently
+     settable params. See §8.
+
+7. ✅ **RESOLVED — MPC-first, then harvest to a re-runnable scenario.** Initially
+   OPT/MPC only (likely just MPC); learnings bake back into scenario params exactly
+   like the SPENDING lever's bands (§7 Harvesting): GLIDEPATH → `{age, mix}` anchors,
+   REGIME_CONDITIONED → a per-regime map, both re-runnable deterministically ("as best
+   as possible," discretization-limited). A per-account manual override (the
+   allocation `CUSTOM`) stays a later power-user add if fine-grained control is
+   requested.
+
+---
+
+## 13. Relationship to design 58
+
+Design 58 and 61 are the two halves of "control the holdings over time":
+
+| Aspect | Design 58 (drawdown) | Design 61 (allocation) |
+|---|---|---|
+| **Question** | Which account to *sell* to fund spending | What mix to *hold*, and rebalance into |
+| **Decision unit** | role-level order (weights, sorted) | portfolio-level mix (weights, normalized) + role-level location |
+| **Primitive** | sell (FIFO consume) in priority order | buy **and** sell to a target simplex |
+| **Search encoding** | `drawdownWeight::<role>` continuous | `allocWeight::<ALLOCATION>` continuous |
+| **Online** | re-decide order per epoch (§11) | re-decide mix per epoch (§7), with CGT-aware hysteresis |
+
+They **compose**: a future allocation-aware drawdown (§8 synergy) would let one sale
+both fund spending and correct the mix — the natural unification once both lands.
