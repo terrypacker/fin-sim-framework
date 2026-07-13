@@ -46,7 +46,9 @@ export class OptimizationPresenter {
 
     // Populate panel with the full dynamic variable list (including per-shock rows)
     const baseParams = this._resolveBaseParams();
-    this._configPanel.setVariables(buildOptVariables(baseParams));
+    // Pass the scenario's accounts so the Lever-B drawdown-weight axes are pruned
+    // to roles an account actually backs (design 58 build-time filter).
+    this._configPanel.setVariables(buildOptVariables(baseParams, this._scenario?.accounts));
 
     /** Set by WorkbenchApp: onApplyCandidate(mergedParams) */
     this.onApplyCandidate = null;

@@ -98,11 +98,19 @@ function _roundRecordField(field, val) {
  * from the committed weights using this SAME role→rank synthesis, so advise/apply
  * and the live sim cannot drift.
  */
-export function synthesizeWeightedPriorities(node, parameters = {}) {
+export function synthesizeWeightedPriorities(node, parameters = {}, presentRoles = null) {
   const prefix   = node.weightKeyPrefix ?? 'drawdownWeight';
   const sep      = node.weightKeySep ?? '::';
-  const roles    = Array.isArray(node.weightRoles) ? node.weightRoles : [];
   const defaults = node.weightDefaults ?? {};
+  // Build-time filter (design 58): drop weighted/cash roles that no account backs.
+  // A phantom role's rank is inert (nothing consumes it), so removing it leaves the
+  // *relative* draw order of real accounts identical while keeping the synthesized
+  // map (and any display derived from it) free of roles the scenario can't hold.
+  const allow = presentRoles == null
+    ? null
+    : (presentRoles instanceof Set ? presentRoles : new Set(presentRoles));
+  const keep = (role) => allow == null || allow.has(role);
+  const roles = (Array.isArray(node.weightRoles) ? node.weightRoles : []).filter(keep);
   const weighted = roles.map(role => {
     const raw = Number(parameters?.[`${prefix}${sep}${role}`]);
     const w   = Number.isFinite(raw) ? raw
@@ -111,7 +119,7 @@ export function synthesizeWeightedPriorities(node, parameters = {}) {
   });
   weighted.sort((a, b) => a.w - b.w);   // ascending = draw order; stable tie-break
   const priorities = {};
-  for (const role of (node.cashRoles ?? [])) priorities[role] = 0;   // cash first
+  for (const role of (node.cashRoles ?? [])) if (keep(role)) priorities[role] = 0;   // cash first
   weighted.forEach(({ role }, i) => { priorities[role] = i + 1; });
   return priorities;
 }
@@ -506,7 +514,12 @@ export class ScenarioLoader {
       // rest of this cascade (eligibility set, owner banding) unchanged.
       let priorities;
       if (node.weightMode && val === node.weightMode) {
-        priorities = synthesizeWeightedPriorities(node, cfg.parameters);
+        // Only rank roles an account actually backs (design 58 build-time filter):
+        // phantom roles are inert on consumption but would otherwise litter the
+        // synthesized order and inflate the solver's search space.
+        const presentRoles = new Set(
+          (cfg.accounts ?? []).map(a => a?.role).filter(Boolean));
+        priorities = synthesizeWeightedPriorities(node, cfg.parameters, presentRoles);
       } else {
         priorities = strategies[val];
       }

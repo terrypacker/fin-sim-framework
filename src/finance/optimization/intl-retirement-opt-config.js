@@ -9,7 +9,8 @@
  */
 
 import { OPT_PARAM_TYPES }            from './optimization-objectives.js';
-import { INTL_RETIREMENT_DEFAULTS, DRAWDOWN_STRATEGIES, buildDrawdownWeightSchema, IntlRetirementScenario } from '../../scenarios/intl-retirement-scenario.js';
+import { INTL_RETIREMENT_DEFAULTS, DRAWDOWN_STRATEGIES, buildDrawdownWeightSchema, IntlRetirementScenario,
+         presentDrawdownWeightRoles, drawdownWeightKey, DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP } from '../../scenarios/intl-retirement-scenario.js';
 import { SHOCK_LIBRARY }              from '../economic-shocks/shock-library.js';
 import { indexParamSchema, resolveSweepVariables } from '../param-schema-utils.js';
 
@@ -432,13 +433,13 @@ function buildRothScheduleOptConfigs(params) {
  * shock and one monthly-amount entry per configured expense band.  Shock and
  * band entries only appear when the scenario actually has them.
  */
-export function buildOptVariables(params) {
+export function buildOptVariables(params, accounts = null) {
   // User-authored drawdown strategies (intl-retirement-scenario customDrawdownStrategies)
   // become additional sweep values for the drawdownStrategy ENUM, alongside the
   // built-ins. Non-mutating: clone the one affected config entry.
   const customDrawdownNames = (params?.customDrawdownStrategies ?? [])
     .map(s => s?.name).filter(Boolean);
-  const list = [
+  let list = [
     ...DEFAULT_OPTIMIZATION_CONFIGS.map(cfg =>
       cfg.paramKey === 'drawdownStrategy' && customDrawdownNames.length > 0
         ? { ...cfg, values: [...Object.keys(DRAWDOWN_STRATEGIES), ...customDrawdownNames] }
@@ -447,6 +448,18 @@ export function buildOptVariables(params) {
     ...buildExpenseBandOptConfigs(params),
     ...buildRothScheduleOptConfigs(params),
   ];
+  // Build-time filter (design 58): when the caller supplies the scenario's accounts,
+  // drop the Lever-B weight axes for roles no account backs. Those dimensions are
+  // flat in the objective (nothing consumes their rank), so sweeping them only
+  // wastes CEM budget and reports non-identifiable weights. A null `accounts`
+  // (programmatic callers that can't reach them) keeps the full role set.
+  if (accounts) {
+    const present    = new Set((accounts ?? []).map(a => a?.role).filter(Boolean));
+    const allowedKeys = new Set(presentDrawdownWeightRoles(present).map(drawdownWeightKey));
+    const weightPrefix = `${DRAWDOWN_WEIGHT_PREFIX}${DRAWDOWN_WEIGHT_SEP}`;
+    list = list.filter(cfg =>
+      !String(cfg.paramKey ?? '').startsWith(weightPrefix) || allowedKeys.has(cfg.paramKey));
+  }
   // Inherit identity (label / options / visibleWhen) from the param schema and
   // drop variables hidden by an unsatisfied visibleWhen (e.g. a strategy knob
   // whose strategy isn't selected). Identity is maintained once, in the schema.
