@@ -221,6 +221,34 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
     enabled:  false,
   })),
 
+  // ── Inheritance — SECURE 10-year inherited-RA drawdown (design 63 §6.2) ──────
+  // The tunable levers of the inherited-RA distribution strategy. Gated by the
+  // schema's visibleWhen (inheritedRaStrategy = bracketFill / lump / weights), so
+  // they drop out of the sweep unless that strategy is active. `::` flat keys —
+  // dotted keys are silently dropped by the optimizer set() path. The ceiling is a
+  // REAL base-year USD scalar (the reducer inflates it); do not slide the range.
+  {
+    paramKey: 'inheritedRaFillCeiling',
+    type:     OPT_PARAM_TYPES.CONTINUOUS,
+    min: 40_000, max: 400_000, step: 20_000,
+    group:    'Inheritance',
+    enabled:  false,
+  },
+  {
+    paramKey: 'inheritedRaLumpYear',
+    type:     OPT_PARAM_TYPES.INTEGER,
+    min: 0, max: 9, step: 1,
+    group:    'Inheritance',
+    enabled:  false,
+  },
+  ...Array.from({ length: 10 }, (_, i) => ({
+    paramKey: `inheritedRaWeight::${i}`,
+    type:     OPT_PARAM_TYPES.CONTINUOUS,
+    min: 0, max: 1, step: 0.1,
+    group:    'Inheritance',
+    enabled:  false,
+  })),
+
   // ── Spending Strategies ────────────────────────────────────────────────────
   // Each ENUM value is an array — matches the EnumMulti param type.
   {

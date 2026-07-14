@@ -325,6 +325,7 @@ import { InMemoryStorage } from './storage/in-memory-storage.js';
 import { AccountEditor } from './visualization/accounts/account-editor.js';
 import { AccountsController } from './visualization/accounts/accounts-controller.js';
 import { APP_EVENTS, AppDisplaySettings } from './visualization/app-display-settings.js';
+import { BequestEditor } from './visualization/assets/bequest-editor.js';
 import { CollectibleEditor } from './visualization/assets/collectible-editor.js';
 import { CompanyEquityEditor } from './visualization/assets/company-equity-editor.js';
 import { RealPropertyEditor } from './visualization/assets/real-property-editor.js';
@@ -340,6 +341,7 @@ import { initEChartWhenReady } from './visualization/components/echarts-init.js'
 import { EventEditor } from './visualization/components/event-editor.js';
 import { AccountNodeRenderer } from './visualization/components/graph/rendering/account-node-renderer.js';
 import { ActionNodeRenderer } from './visualization/components/graph/rendering/action-node-renderer.js';
+import { BequestNodeRenderer } from './visualization/components/graph/rendering/bequest-node-renderer.js';
 import { CollectibleNodeRenderer } from './visualization/components/graph/rendering/collectible-node-renderer.js';
 import { CompanyEquityNodeRenderer } from './visualization/components/graph/rendering/company-equity-node-renderer.js';
 import { DefaultNodeRenderer, NodeRenderGroup } from './visualization/components/graph/rendering/default-node-renderer.js';
@@ -1146,6 +1148,7 @@ export const Visualization = {
   AccountsController,
   APP_EVENTS,
   AppDisplaySettings,
+  BequestEditor,
   CollectibleEditor,
   CompanyEquityEditor,
   RealPropertyEditor,
@@ -1161,6 +1164,7 @@ export const Visualization = {
   EventEditor,
   AccountNodeRenderer,
   ActionNodeRenderer,
+  BequestNodeRenderer,
   CollectibleNodeRenderer,
   CompanyEquityNodeRenderer,
   DefaultNodeRenderer,

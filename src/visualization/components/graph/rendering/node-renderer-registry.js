@@ -19,6 +19,7 @@ import {AccountNodeRenderer} from "./account-node-renderer.js";
 import {RealPropertyNodeRenderer} from "./real-property-node-renderer.js";
 import {CollectibleNodeRenderer} from "./collectible-node-renderer.js";
 import {CompanyEquityNodeRenderer} from "./company-equity-node-renderer.js";
+import {BequestNodeRenderer} from "./bequest-node-renderer.js";
 
 export class NodeRendererRegistry {
   constructor() {
@@ -78,6 +79,11 @@ export class NodeRendererRegistry {
     this.register(
         'company',
         new CompanyEquityNodeRenderer(renderKit)
+    );
+
+    this.register(
+        'bequest',
+        new BequestNodeRenderer(renderKit)
     );
 
     this.register(

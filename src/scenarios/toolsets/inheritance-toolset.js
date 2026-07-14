@@ -146,13 +146,15 @@ export const INHERITANCE = {
     const patches = {};
     const svc = context.bequestService;
     if (!svc) return patches;
-    const bequests = context.bequests ?? [];
-    for (const bequest of bequests) {
+    // Only ACTIVE bequests (a set inheritanceYear) seed state. An inert example
+    // bequest (inheritanceYear null) contributes nothing, so the default scenario
+    // stays byte-identical until the user sets a year — the design-63 §9 guard.
+    const active = (context.bequests ?? []).filter(b => b.inheritanceYear != null);
+    for (const bequest of active) {
       Object.assign(patches, svc.expand(bequest).seeds);
     }
-    // Death-tax reporting buckets (design 63 §6.4/§6.5). Only when a bequest exists,
-    // so a bequest-free run stays byte-identical. Reset yearly via YTD_FIELDS.
-    if (bequests.length > 0) {
+    // Death-tax reporting buckets (design 63 §6.4/§6.5). Reset yearly via YTD_FIELDS.
+    if (active.length > 0) {
       patches.neInheritanceTaxYTD = 0;
       patches.auSuperDeathTaxYTD  = 0;
     }

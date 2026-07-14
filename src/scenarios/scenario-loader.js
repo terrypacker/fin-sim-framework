@@ -220,6 +220,16 @@ export class ScenarioLoader {
     for (const e of services.companyEquityService?.getAll() ?? []) {
       if (e.stateKey) reg.registerAsset(e.stateKey, e);
     }
+    // Design 63: funded inherited-asset state keys + the death-tax reporting buckets.
+    for (const b of services.bequestService?.getAll() ?? []) {
+      for (const a of (b.assets ?? [])) {
+        if (!a.stateKey) continue;
+        const code = a.currency?.code ?? (a.country === 'AU' ? 'AUD' : 'USD');
+        reg.registerCurrencyPaths([`${a.stateKey}.balance`, `${a.stateKey}.value`, `${a.stateKey}.costBasis`], code);
+      }
+    }
+    reg.registerCurrencyPaths(['neInheritanceTaxYTD'], 'USD');
+    reg.registerCurrencyPaths(['auSuperDeathTaxYTD'], 'AUD');
     // Per-person income currency (monthlyWage / socialSecurityMonthly).
     for (const person of services.personService?.getAll() ?? []) {
       reg.registerPerson(person);
@@ -489,6 +499,11 @@ export class ScenarioLoader {
     } else if (node.type === 'companyEquity') {
       const rec = (cfg.companyEquities ?? []).find(r => r.stateKey === node.stateKey);
       if (rec) rec[node.field] = _roundRecordField(node.field, val);
+    } else if (node.type === 'bequest') {
+      // Design 63: the inheritanceYear param activates an inert example bequest.
+      // Null keeps it inert (no INHERIT event); a year rounds to a whole number.
+      const rec = (cfg.bequests ?? []).find(r => r.stateKey === node.stateKey);
+      if (rec) rec[node.field] = (val == null ? null : _roundRecordField(node.field, val));
     } else if (node.type === 'accountPriority') {
       // Fan one categorical strategy value out to drawdownPriority across many
       // accounts by role. Per-owner ranking (ownerOrder/ownerStride) keeps each

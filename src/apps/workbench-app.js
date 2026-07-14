@@ -46,9 +46,11 @@ import { AccountEditor }              from '../visualization/accounts/account-ed
 import { RealPropertyEditor }         from '../visualization/assets/real-property-editor.js';
 import { CollectibleEditor }          from '../visualization/assets/collectible-editor.js';
 import { CompanyEquityEditor }        from '../visualization/assets/company-equity-editor.js';
+import { BequestEditor }              from '../visualization/assets/bequest-editor.js';
 import { RealProperty }               from '../finance/assets/real-property.js';
 import { Collectible }                from '../finance/assets/collectible.js';
 import { CompanyEquity }              from '../finance/assets/company-equity.js';
+import { Bequest }                    from '../finance/assets/bequest.js';
 import { USD, AUD }                   from '../finance/assets/account.js';
 import { NodeEditModal }              from '../visualization/components/node-edit-modal.js';
 import { ConfigurationListComponent } from '../visualization/configuration/configuration-list.js';
@@ -303,6 +305,8 @@ export class WorkbenchApp extends BaseComponent {
         this._editModal.open({ kind: 'collectible', id: null, name: 'New Collectible' });
       } else if (kind === 'company') {
         this._editModal.open({ kind: 'company', id: null, name: 'New Company Equity' });
+      } else if (kind === 'bequest') {
+        this._editModal.open({ kind: 'bequest', id: null, name: 'New Inheritance' });
       } else {
         const newNode = this.configPresenter.createNode(kind, null);
         this._editModal.open(newNode);
@@ -473,6 +477,30 @@ export class WorkbenchApp extends BaseComponent {
           },
           onDelete: (id) => {
             registry.companyEquityService.deleteCompanyEquity(id);
+            this._editModal.close();
+          },
+        });
+        editor.render();
+        return editor;
+      }
+
+      if (node?.kind === 'bequest') {
+        const people = registry.graphQueryApi.getByKind('person');
+        const editor = new BequestEditor({
+          container,
+          node,
+          people,
+          onSave: (data) => {
+            if (data.id) {
+              const { id, ...changes } = data;
+              registry.bequestService.updateBequest(id, changes);
+            } else {
+              registry.bequestService.createBequest(new Bequest(data));
+            }
+            this._editModal.close();
+          },
+          onDelete: (id) => {
+            registry.bequestService.deleteBequest(id);
             this._editModal.close();
           },
         });

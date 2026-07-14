@@ -30,6 +30,7 @@ import { Bequest }            from '../../src/finance/assets/bequest.js';
 import { computeNetWorth }    from '../../src/finance/derived-metrics/net-worth.js';
 import { consumeHoldingsFifo } from '../../src/finance/holdings/holdings-fifo.js';
 import { INHERITED_RA_DISTRIBUTION_STRATEGY, INHERITED_RA_WINDOW } from '../../src/finance/account-rules/inherited-ra-distribution-strategy.js';
+import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
 
 beforeEach(() => ServiceRegistry.resetAll());
 
@@ -627,4 +628,32 @@ test('EVT-63: no heir tax for a non-NE decedent situs (SD / HI)', () => {
     assert.strictEqual(sim.journal.getActions('NE_INHERITANCE_TAX').length, 0, `${situs} ⇒ no NE tax`);
     assert.strictEqual(sim.state.neInheritanceTaxYTD ?? 0, 0);
   }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EVT-63: P5 — default-scenario example bequest (inert by default, activatable)
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('EVT-63: default scenario ships an inert example bequest (no state until a year is set)', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({}, new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2041, 0, 1)));
+  assert.ok((cfg.bequests ?? []).length === 1, 'one example bequest is present in the default config');
+  assert.strictEqual(cfg.bequests[0].inheritanceYear ?? null, null, 'inert by default');
+
+  const { sim } = loadToolsetScenario(cfg);
+  assert.ok(sim.state.inheritedBrokerageAccount == null, 'inert ⇒ no inherited state seeded');
+  assert.ok(sim.state.inheritedIraAccount == null);
+});
+
+test('EVT-63: setting inheritanceYear activates the default example bequest', () => {
+  const cfg = IntlRetirementScenario.buildDefaultConfig({ inheritanceYear: 2035 },
+    new Date(Date.UTC(2026, 0, 1)), new Date(Date.UTC(2046, 0, 1)));
+  assert.strictEqual(cfg.bequests[0].inheritanceYear, 2035, 'param baked onto the bequest');
+
+  const { sim } = loadToolsetScenario(cfg);
+  assert.strictEqual(sim.state.inheritedBrokerageAccount.balance, 0, 'seeded at 0 pre-date');
+
+  sim.stepTo(new Date(Date.UTC(2035, 8, 30))); // past 2035-01-15 inheritance, before year-end
+  assert.strictEqual(sim.state.inheritedBrokerageAccount.balance, 400_000, 'funded at the date');
+  assert.strictEqual(sim.state.inheritedHomeProperty.value, 600_000);
+  assert.strictEqual(sim.state.inheritedIraAccount.balance, 300_000);
 });
