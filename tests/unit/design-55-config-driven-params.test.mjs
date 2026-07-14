@@ -168,3 +168,60 @@ test('D55-6: generated property appreciationRate round-trips (not rounded to 0)'
   assert.ok(prop.appreciationRate > 0 && prop.appreciationRate < 1,
     `property appreciationRate survives Rebuild, got ${prop.appreciationRate}`);
 });
+
+// ── Orphan generated params are de-generated on Rebuild (§14) ────────────────────
+
+test('D55-7: an orphaned generated param (no live record) is pruned on Rebuild', () => {
+  const cfg = freshCfg();
+  loadCfg(cfg);
+
+  // Inject a generated-key param whose record does not exist (simulates a param left
+  // behind by a since-deleted account whose stateKey no live record carries).
+  cfg.params.push({
+    name: 'acct.ghostAccount.growthRate', type: 'Number', value: 0.09,
+    group: 'US · Ghost', label: 'Ghost — Growth Rate',
+    node: { type: 'account', stateKey: 'ghostAccount', field: 'growthRate' },
+  });
+  cfg.parameters['acct.ghostAccount.growthRate'] = 0.09;
+
+  loadCfg(cfg); // Rebuild
+
+  assert.strictEqual(paramNamed(cfg, 'acct.ghostAccount.growthRate'), undefined,
+    'orphan generated param dropped from cfg.params');
+  assert.strictEqual(cfg.parameters['acct.ghostAccount.growthRate'], undefined,
+    'orphan generated param dropped from the flat cfg.parameters map');
+  // A live generated param and a static param are untouched.
+  assert.ok(paramNamed(cfg, 'acct.rothAccount.contributionBasis'),
+    'live generated param survives the prune');
+  assert.ok(paramNamed(cfg, 'inflationRate') || cfg.parameters.inflationRate !== undefined,
+    'static/global param survives the prune');
+});
+
+test('D55-8: deleting a default account (tombstoned) prunes its generated params on Rebuild', () => {
+  const cfg = freshCfg();
+  loadCfg(cfg);
+
+  // Precondition: the default fixed-income account generated params. (balance is a
+  // hidden balanceTarget once the compiler bootstraps a holding — §13 — so assert on
+  // the always-generated rate fields.)
+  assert.ok(paramNamed(cfg, 'acct.fixedIncomeAccount.growthRate'),
+    'fixedIncomeAccount growthRate param exists before deletion');
+
+  // Simulate the user deleting the default account: remove the record and tombstone
+  // its stateKey so drift-merge does not re-add it (design 55 §11 lifecycle).
+  cfg.accounts = cfg.accounts.filter(a => a.stateKey !== 'fixedIncomeAccount');
+  cfg.deletedDefaults = {
+    persons: [], accounts: ['fixedIncomeAccount'],
+    realProperties: [], collectibles: [], companyEquities: [],
+  };
+
+  loadCfg(cfg); // Rebuild
+
+  assert.strictEqual((cfg.accounts ?? []).find(a => a.stateKey === 'fixedIncomeAccount'), undefined,
+    'tombstoned account stays deleted');
+  for (const field of ['growthRate', 'dividendRate']) {
+    const key = `acct.fixedIncomeAccount.${field}`;
+    assert.strictEqual(paramNamed(cfg, key), undefined, `${key} pruned from cfg.params`);
+    assert.strictEqual(cfg.parameters[key], undefined, `${key} pruned from cfg.parameters`);
+  }
+});

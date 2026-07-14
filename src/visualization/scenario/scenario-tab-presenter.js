@@ -74,6 +74,20 @@ export class ScenarioTabPresenter {
           ? { name: person.name ?? paramNode.id, kind: 'person', node: person, found: true }
           : { name: paramNode.id, kind: 'person', node: null, found: false };
       }
+      // Asset-backed generated params (design 55 §14.3): resolve realProperty /
+      // collectible / companyEquity nodes to their live record by stateKey so the
+      // panel shows the current name and offers the click-through, matching accounts.
+      const assetService = {
+        realProperty:  registry.realPropertyService,
+        collectible:   registry.collectibleService,
+        companyEquity: registry.companyEquityService,
+      }[paramNode.type];
+      if (assetService) {
+        const asset = assetService.getAll?.().find(a => a.stateKey === paramNode.stateKey);
+        return asset
+          ? { name: asset.name ?? paramNode.stateKey, kind: paramNode.type, node: asset, found: true }
+          : { name: paramNode.stateKey, kind: paramNode.type, node: null, found: false };
+      }
       return null;
     };
 

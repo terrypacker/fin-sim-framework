@@ -696,8 +696,12 @@ export class ScenarioLoader {
       // rothBalance, which kept the old "US Account Balances" group) consistent
       // with freshly-generated siblings under the per-record group.
       if (isGeneratedParamKey(p.name)) {
-        if (s.label) p.label = s.label;
-        if (s.group) p.group = s.group;
+        if (s.label)       p.label       = s.label;
+        if (s.group)       p.group       = s.group;
+        // Description is field-level template metadata (design 55 §4), not user data,
+        // so re-sync it (drives the hover tooltip) rather than only backfilling — this
+        // propagates a template description edit onto already-persisted generated params.
+        if (s.description) p.description = s.description;
       } else {
         if (p.label === undefined && s.label)                p.label       = s.label;
         if (p.group === undefined && s.group)                p.group       = s.group;
@@ -755,6 +759,25 @@ export class ScenarioLoader {
     for (const s of persistableSchema) {
       if (!existing.has(s.key)) cfg.params.push(_toEntry(s));
     }
+
+    // Design 55 §14: de-generate orphaned generated params. `ScenarioParamGenerator.
+    // generate(cfg)` only emits entries for LIVE records, so `schemaByKey` is the
+    // authoritative set of currently valid generated keys. A persisted generated-key
+    // param absent from it belongs to a since-deleted record (tombstoned in
+    // cfg.deletedDefaults) or a field its record's type no longer templates — so drop
+    // it from both cfg.params and the flat cfg.parameters map (plus the Money sibling
+    // `<key>Currency`). Scoped to generated keys only: static/global/toolset params are
+    // never namespaced this way, and the compile-only `balanceTarget` lever stays in
+    // schemaByKey, so neither is ever pruned. Keeps the param surface a function of the
+    // live record set in BOTH directions (delete a record + Rebuild → its params vanish).
+    cfg.params = cfg.params.filter(p => {
+      if (!isGeneratedParamKey(p.name) || schemaByKey.has(p.name)) return true;
+      if (cfg.parameters) {
+        delete cfg.parameters[p.name];
+        delete cfg.parameters[`${p.name}Currency`];
+      }
+      return false;
+    });
   }
 
   /**

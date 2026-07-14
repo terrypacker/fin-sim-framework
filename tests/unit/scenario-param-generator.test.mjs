@@ -75,6 +75,22 @@ test('GEN-3: label and group derive from the record display name + country', () 
   assert.strictEqual(wage.group, 'Primary', 'person group is the record name (no country)');
 });
 
+test('GEN-3b: generated params carry a field-level description (drives the hover tooltip, not the key)', () => {
+  const out = ScenarioParamGenerator.generate(sampleCfg());
+  const byKey = new Map(out.map(e => [e.key, e]));
+
+  for (const key of ['acct.rothAccount.balance', 'acct.rothAccount.contributionBasis',
+                     'person.primary.monthlyWage', 'prop.usHouseProperty.value',
+                     'prop.usHouseProperty.appreciationRate']) {
+    const e = byKey.get(key);
+    assert.ok(e, `${key} generated`);
+    assert.ok(typeof e.description === 'string' && e.description.length > 0,
+      `${key} has a non-empty description (tooltip would otherwise fall back to the stateKey)`);
+    assert.ok(!e.description.includes(e.key),
+      `${key} description is prose, not the generated key`);
+  }
+});
+
 test('GEN-4: falls back to __type / role when `type` is absent (raw buildDefaultConfig record)', () => {
   const cfg = {
     accounts: [

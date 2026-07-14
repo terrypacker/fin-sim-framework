@@ -144,23 +144,34 @@ export class RealPropertyEditor extends BaseComponent {
     this._rootEl = el;
   }
 
-  /** Route param-backed real-property fields through their param (design/32). */
+  /**
+   * Route param-backed real-property fields through their param (design/32, design 55 §14.3).
+   * All three generated real-property fields (value, appreciationRate, plannedSaleYear) are
+   * bound so a direct edit writes the param (the source of truth) rather than only the record —
+   * otherwise the param→record cascade clobbers the edit on the next Rebuild.
+   */
   _bindParamLinks(el) {
     this._linkedFields = new Set();
     const stateKey = this._node?.stateKey;
     if (!stateKey || !this._links) return;
 
-    const param = this._links.getParamFor('realProperty', stateKey, 'plannedSaleYear');
-    if (!param) return;
-    const input   = el.querySelector('[data-id="plannedSaleYear"]');
-    const labelEl = input?.closest('.node-field')?.querySelector('label');
-    bindParamLinkedField({
-      input, labelEl, param,
-      coerce:   (raw) => (raw === '' || raw == null) ? null : Math.round(Number(raw)),
-      onChange: () => this.onParamChange?.(),
-      onOpen:   (p) => this.onOpenParam?.(p),
-    });
-    this._linkedFields.add('plannedSaleYear');
+    const bindField = (field, dataId, coerce) => {
+      const param = this._links.getParamFor('realProperty', stateKey, field);
+      if (!param) return;
+      const input   = el.querySelector(`[data-id="${dataId}"]`);
+      const labelEl = input?.closest('.node-field')?.querySelector('label');
+      bindParamLinkedField({
+        input, labelEl, param, coerce,
+        onChange: () => this.onParamChange?.(),
+        onOpen:   (p) => this.onOpenParam?.(p),
+      });
+      this._linkedFields.add(field);
+    };
+
+    bindField('value',            'value',            (raw) => Number(raw));
+    bindField('appreciationRate', 'appreciationRate', (raw) => Number(raw));
+    bindField('plannedSaleYear',  'plannedSaleYear',
+      (raw) => (raw === '' || raw == null) ? null : Math.round(Number(raw)));
   }
 
   _readForm(el) {
