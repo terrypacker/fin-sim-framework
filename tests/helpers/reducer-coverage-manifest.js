@@ -69,6 +69,10 @@ export const COVERED = [
   'SeIncomeUsApplyReducer', 'BonusApplyReducer', 'CompanySaleApplyReducer',
   // design 63 — INHERIT funding + basis stamping (evt-inheritance.test.mjs P2 cases)
   'InheritApplyReducer',
+  // design 63 §6.2 — SECURE 10-year inherited-RA distribution (evt-inheritance.test.mjs P3 cases)
+  'InheritedRaDistributionApplyReducer',
+  // design 63 §6.5 — NE inheritance tax heir payment (evt-inheritance.test.mjs P4 cases)
+  'InheritanceNeTaxApplyReducer',
   'UsHouseSaleApplyReducer',
 
   // C — AU (reducer-postconditions-au.test.mjs)

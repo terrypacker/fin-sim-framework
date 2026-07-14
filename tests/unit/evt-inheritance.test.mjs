@@ -29,6 +29,7 @@ import { ScenarioSerializer } from '../../src/scenarios/scenario-serializer.js';
 import { Bequest }            from '../../src/finance/assets/bequest.js';
 import { computeNetWorth }    from '../../src/finance/derived-metrics/net-worth.js';
 import { consumeHoldingsFifo } from '../../src/finance/holdings/holdings-fifo.js';
+import { INHERITED_RA_DISTRIBUTION_STRATEGY, INHERITED_RA_WINDOW } from '../../src/finance/account-rules/inherited-ra-distribution-strategy.js';
 
 beforeEach(() => ServiceRegistry.resetAll());
 
@@ -211,7 +212,9 @@ test('EVT-63: no bequests configured ⇒ INHERITANCE toolset contributes no stat
 // EVT-63: P2 — INHERIT funding + basis stamping
 // ══════════════════════════════════════════════════════════════════════════════
 
-const AFTER_INHERIT = new Date(Date.UTC(2030, 11, 31)); // past 2030-06-15
+// Past the 2030-06-15 inheritance but before the first year-end (Dec 31)
+// inherited-RA distribution, so P2 funding assertions see the full funded balance.
+const AFTER_INHERIT = new Date(Date.UTC(2030, 8, 30));
 
 test('EVT-63: INHERIT event funds inherited records at the inheritance date', () => {
   const { sim } = loadToolsetScenario(inheritanceConfig());
@@ -226,7 +229,8 @@ test('EVT-63: INHERIT event funds inherited records at the inheritance date', ()
 });
 
 test('EVT-63: funded inheritance jumps net worth at the date (US step-up basis)', () => {
-  const { sim } = loadToolsetScenario(inheritanceConfig());
+  // SD situs ⇒ no heir-paid inheritance tax, so the jump isolates the funding.
+  const { sim } = loadToolsetScenario(inheritanceConfig({ decedentState: 'SD' }));
   // Step to the day before vs. the day after the 2030-06-15 inheritance so the
   // delta isolates the funding (no month-end expense/interest tick in between).
   sim.stepTo(new Date(Date.UTC(2030, 5, 14)));
@@ -310,4 +314,317 @@ test('EVT-63: cross-border dual basis — US-citizen AU-resident heir gets US st
   const auGain = 400_000 - (r.realizedBasisByCountry.AU ?? 0);  // ~300k (deceased base)
   assert.ok(Math.abs(usGain) < 1, `US gain ~0, got ${usGain}`);
   assert.ok(Math.abs(auGain - 300_000) < 1, `AU gain ~300k, got ${auGain}`);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EVT-63: P3 — SECURE 10-year inherited-RA drawdown strategies (unit)
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Iterate a strategy across the 10-year window, draining `balance` each year.
+function simulateWindow(strategyId, initialBalance, { params = {}, otherIncome = 0 } = {}) {
+  const strat = INHERITED_RA_DISTRIBUTION_STRATEGY[strategyId];
+  let balance = initialBalance;
+  const dist = [];
+  for (let yi = 0; yi < INHERITED_RA_WINDOW; yi++) {
+    const ctx = {
+      otherOrdinaryIncome: otherIncome,
+      fillCeilingReal:     params.fillCeilingReal ?? 0,
+      cpiIndexUS:          1,
+      lumpYear:            params.lumpYear ?? 0,
+      weights:             params.weights ?? [],
+      WINDOW:              INHERITED_RA_WINDOW,
+    };
+    let amt = Math.min(balance, Math.max(0, strat.plan(balance, yi, ctx)));
+    dist.push(amt);
+    balance -= amt;
+  }
+  return { dist, total: dist.reduce((s, x) => s + x, 0), finalBalance: balance };
+}
+
+test('EVT-63: equal strategy — ~equal tenths, fully distributed by year 9', () => {
+  const { dist, total, finalBalance } = simulateWindow('equal', 300_000);
+  assert.ok(dist.every(d => Math.abs(d - 30_000) < 1), `expected ~30k each, got ${dist}`);
+  assert.ok(Math.abs(total - 300_000) < 1);
+  assert.ok(Math.abs(finalBalance) < 1);
+});
+
+test('EVT-63: lump strategy — all in the chosen year', () => {
+  const y0 = simulateWindow('lump', 300_000, { params: { lumpYear: 0 } });
+  assert.strictEqual(y0.dist[0], 300_000);
+  assert.strictEqual(y0.dist.slice(1).reduce((s, x) => s + x, 0), 0);
+
+  const y5 = simulateWindow('lump', 300_000, { params: { lumpYear: 5 } });
+  assert.strictEqual(y5.dist[5], 300_000);
+  assert.ok(Math.abs(y5.total - 300_000) < 1);
+});
+
+test('EVT-63: maxDefer strategy — nothing until year 9, then the full balance', () => {
+  const { dist } = simulateWindow('maxDefer', 300_000);
+  assert.strictEqual(dist.slice(0, 9).reduce((s, x) => s + x, 0), 0);
+  assert.strictEqual(dist[9], 300_000);
+});
+
+test('EVT-63: bracketFill — fills ordinary income to the ceiling, spills to year 9', () => {
+  // $100k ceiling, $60k other income ⇒ ~$40k/yr fill, remainder dumped in year 9.
+  const { dist, total } = simulateWindow('bracketFill', 500_000, {
+    params: { fillCeilingReal: 100_000 }, otherIncome: 60_000,
+  });
+  for (let i = 0; i < 9; i++) assert.ok(Math.abs(dist[i] - 40_000) < 1, `year ${i} should fill 40k, got ${dist[i]}`);
+  assert.ok(dist[9] > 100_000, `year-9 catch-up should dump the remainder, got ${dist[9]}`);
+  assert.ok(Math.abs(total - 500_000) < 1, 'full distribution');
+});
+
+test('EVT-63: bracketFill — already over the ceiling ⇒ defer to the year-9 catch-up', () => {
+  const { dist, total } = simulateWindow('bracketFill', 300_000, {
+    params: { fillCeilingReal: 100_000 }, otherIncome: 120_000,
+  });
+  assert.strictEqual(dist.slice(0, 9).reduce((s, x) => s + x, 0), 0);
+  assert.ok(Math.abs(dist[9] - 300_000) < 1);
+  assert.ok(Math.abs(total - 300_000) < 1);
+});
+
+test('EVT-63: weights strategy — proportional, catch-up-clamped to full distribution', () => {
+  const weights = [0.4, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05];
+  const { dist, total, finalBalance } = simulateWindow('weights', 400_000, { params: { weights } });
+  assert.ok(Math.abs(dist[0] - 160_000) < 1, `year-0 = 40% of 400k, got ${dist[0]}`);
+  assert.ok(Math.abs(total - 400_000) < 1);
+  assert.ok(Math.abs(finalBalance) < 1);
+});
+
+test('EVT-63: every strategy fully distributes by year 9 (terminal catch-up)', () => {
+  for (const id of ['equal', 'lump', 'maxDefer', 'bracketFill', 'weights']) {
+    const { total, finalBalance } = simulateWindow(id, 250_000, {
+      params: { fillCeilingReal: 40_000, lumpYear: 2, weights: Array(10).fill(0.1) },
+      otherIncome: 30_000,
+    });
+    assert.ok(Math.abs(total - 250_000) < 1, `${id}: total ${total} != 250k`);
+    assert.ok(Math.abs(finalBalance) < 1, `${id}: leftover ${finalBalance}`);
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EVT-63: P3 — inherited-RA distribution integration (compiled sim)
+// ══════════════════════════════════════════════════════════════════════════════
+
+function raConfig(assetOverride = {}, params = {}) {
+  return {
+    toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'INHERITANCE'],
+    simStart: '2026-01-01',
+    simEnd:   '2042-01-01',
+    parameters: { inheritedRaStrategy: 'equal', ...params },
+    persons: [
+      { __type: 'Person', id: 'primary', name: 'Primary', birthDate: '1980-04-15',
+        citizen: ['US'], lifeExpectancy: 95, monthlyWage: 0,
+        retirementDate: '2025-01-01', socialSecurityMonthly: 0 },
+    ],
+    accounts: [
+      { __type: 'SavingsAccount', id: 'us-savings', name: 'US Savings', type: 'savings',
+        role: 'us-savings', stateKey: 'usSavingsAccount', initialValue: 5000,
+        ownershipType: 'sole', ownerId: 'primary', minimumBalance: 0,
+        country: 'US', currency: { code: 'USD', symbol: '$' } },
+    ],
+    bequests: [
+      { __type: 'Bequest', id: 'beq1', name: 'Estate', decedentName: 'Parent',
+        relationship: 'immediate', heirId: 'primary',
+        inheritanceYear: 2030, inheritanceMonth: 5, inheritanceDay: 15,
+        assets: [ { __type: 'TraditionalIRAAccount', name: 'Inherited IRA', country: 'US',
+                    inheritedValue: 300_000, stateKey: 'inheritIra', ...assetOverride } ] },
+    ],
+  };
+}
+
+test('EVT-63: inherited traditional IRA drains to 0 over the 10-year window (equal)', () => {
+  const { sim } = loadToolsetScenario(raConfig());
+  sim.stepTo(new Date(Date.UTC(2030, 8, 30)));
+  assert.strictEqual(sim.state.inheritIra.balance, 300_000, 'funded, pre-first-distribution');
+
+  sim.stepTo(new Date(Date.UTC(2031, 0, 31)));
+  assert.ok(Math.abs(sim.state.inheritIra.balance - 270_000) < 1, `year-0 ~30k out, got ${sim.state.inheritIra.balance}`);
+
+  sim.stepTo(new Date(Date.UTC(2040, 0, 31))); // past 2039 year-end = window year 9
+  assert.ok(Math.abs(sim.state.inheritIra.balance) < 1, `drained by year 9, got ${sim.state.inheritIra.balance}`);
+
+  const apply = sim.journal.getActions('INHERITED_RA_DISTRIBUTION_APPLY');
+  const total = apply.reduce((s, e) => s + (e.action.data?.amount ?? 0), 0);
+  assert.ok(Math.abs(total - 300_000) < 1, `total distributed ${total}`);
+});
+
+test('EVT-63: traditional distributions are ordinary income and penalty-exempt', () => {
+  const { sim } = loadToolsetScenario(raConfig()); // heir age 50 at inheritance — under 59½
+  sim.stepTo(new Date(Date.UTC(2033, 0, 31)));
+
+  const tax = sim.journal.getActions('INHERITED_RA_DISTRIBUTION_TAX');
+  assert.ok(tax.length >= 1, 'traditional distributions emit ordinary-income tax actions');
+  assert.ok(tax.every(e => e.action.data?.penaltyAmount == null), 'no penalty on inherited distributions');
+  // No early-withdrawal penalty action ever fires for the inherited stream.
+  assert.strictEqual(sim.journal.getActions('EARLY_WITHDRAWAL').length, 0);
+});
+
+test('EVT-63: inherited Roth distributions are tax-free (no ordinary-income tax action)', () => {
+  const cfg = raConfig({ __type: 'RothAccount', name: 'Inherited Roth', stateKey: 'inheritRoth' });
+  cfg.bequests[0].assets[0].stateKey = 'inheritRoth';
+  const { sim } = loadToolsetScenario(cfg);
+  sim.stepTo(new Date(Date.UTC(2033, 0, 31)));
+
+  assert.ok(sim.journal.getActions('INHERITED_RA_DISTRIBUTION_APPLY').length >= 1, 'Roth still distributes');
+  assert.strictEqual(sim.journal.getActions('INHERITED_RA_DISTRIBUTION_TAX').length, 0, 'Roth is tax-free');
+});
+
+test('EVT-63: bracketFill routes the fill amount and :: weight keys reach the reducer', () => {
+  // weights strategy with a heavy year-0 weight — proves inheritedRaWeight::N is
+  // consumed by the handler (dotted keys would be dropped by the optimizer path).
+  const cfg = raConfig({}, {
+    inheritedRaStrategy: 'weights',
+    'inheritedRaWeight::0': 0.5,
+    'inheritedRaWeight::1': 0.1, 'inheritedRaWeight::2': 0.1, 'inheritedRaWeight::3': 0.1,
+    'inheritedRaWeight::4': 0.02, 'inheritedRaWeight::5': 0.02, 'inheritedRaWeight::6': 0.02,
+    'inheritedRaWeight::7': 0.02, 'inheritedRaWeight::8': 0.05, 'inheritedRaWeight::9': 0.07,
+  });
+  const { sim } = loadToolsetScenario(cfg);
+  sim.stepTo(new Date(Date.UTC(2031, 0, 31))); // through 2030 year-end (window year 0)
+
+  const y0 = sim.journal.getActions('INHERITED_RA_DISTRIBUTION_APPLY')[0];
+  assert.ok(y0, 'a year-0 distribution occurred');
+  // weight[0]=0.5 of the summed weights (1.0) ⇒ ~50% of the 300k funded balance.
+  assert.ok(Math.abs(y0.action.data.amount - 150_000) < 1, `year-0 = 50% weight, got ${y0.action.data.amount}`);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EVT-63: P4 — AU super death benefit (§6.4) + NE inheritance tax (§6.5)
+// ══════════════════════════════════════════════════════════════════════════════
+
+function superConfig(assetOverride = {}, bequestOverride = {}) {
+  return {
+    toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'INHERITANCE'],
+    simStart: '2026-01-01', simEnd: '2041-01-01',
+    parameters: {},
+    persons: [
+      { __type: 'Person', id: 'primary', name: 'Primary', birthDate: '1975-04-15',
+        citizen: ['AU'], lifeExpectancy: 90, monthlyWage: 0,
+        retirementDate: '2025-01-01', socialSecurityMonthly: 0 },
+    ],
+    accounts: [
+      { __type: 'SavingsAccount', id: 'au-savings', name: 'AU Savings', type: 'savings',
+        role: 'au-savings', stateKey: 'auSavingsAccount', initialValue: 20000,
+        ownershipType: 'sole', ownerId: 'primary', minimumBalance: 0,
+        country: 'AU', currency: { code: 'AUD', symbol: 'A$' } },
+      { __type: 'SavingsAccount', id: 'us-savings', name: 'US Savings', type: 'savings',
+        role: 'us-savings', stateKey: 'usSavingsAccount', initialValue: 20000,
+        ownershipType: 'sole', ownerId: 'primary', minimumBalance: 0,
+        country: 'US', currency: { code: 'USD', symbol: '$' } },
+    ],
+    bequests: [
+      { __type: 'Bequest', id: 'beq1', name: 'Estate', decedentName: 'Parent',
+        relationship: 'immediate', decedentState: null, heirId: 'primary',
+        inheritanceYear: 2030, inheritanceMonth: 5, inheritanceDay: 15,
+        assets: [ { __type: 'SuperannuationAccount', name: 'Inherited Super', country: 'AU',
+                    inheritedValue: 500_000, stateKey: 'inheritSuper', ...assetOverride } ],
+        ...bequestOverride },
+    ],
+  };
+}
+
+// Just after 2030-06-15, before the AU fiscal settle (June 30) resets auSuperDeathTaxYTD.
+const AFTER_SUPER = new Date(Date.UTC(2030, 5, 20));
+
+test('EVT-63: AU super to a non-dependant paid direct — taxable × 17%, net to AU cash', () => {
+  const { sim } = loadToolsetScenario(superConfig()); // paidViaEstate=false ⇒ +2% Medicare
+  const before = sim.state.auSavingsAccount.balance;
+  sim.stepTo(new Date(Date.UTC(2030, 5, 14)));
+  const preBal = sim.state.auSavingsAccount.balance;
+  sim.stepTo(AFTER_SUPER);
+
+  // Super is NOT funded as an ongoing account.
+  assert.strictEqual(sim.state.inheritSuper.balance, 0);
+
+  const tax = sim.journal.getActions('SUPER_DEATH_BENEFIT_TAX')[0];
+  assert.ok(tax, 'a super death-benefit tax action fired');
+  assert.ok(Math.abs(tax.action.data.amount - 85_000) < 1, `500k × 17% = 85k, got ${tax.action.data.amount}`);
+
+  // Net lump sum (500k − 85k = 415k) credited to AU cash.
+  const delta = sim.state.auSavingsAccount.balance - preBal;
+  assert.ok(Math.abs(delta - 415_000) < 5, `net 415k to AU cash, got ${delta}`);
+  assert.ok(Math.abs(sim.state.auSuperDeathTaxYTD - 85_000) < 1, `bucket ${sim.state.auSuperDeathTaxYTD}`);
+  void before;
+});
+
+test('EVT-63: AU super paid via estate — taxable × 15% (no Medicare)', () => {
+  const { sim } = loadToolsetScenario(superConfig({}, { paidViaEstate: true }));
+  sim.stepTo(AFTER_SUPER);
+  const tax = sim.journal.getActions('SUPER_DEATH_BENEFIT_TAX')[0];
+  assert.ok(Math.abs(tax.action.data.amount - 75_000) < 1, `500k × 15% = 75k, got ${tax.action.data.amount}`);
+});
+
+test('EVT-63: AU super tax-free component is untaxed', () => {
+  // taxable 300k of 500k ⇒ tax = 300k × 17% = 51k; 200k tax-free passes through.
+  const { sim } = loadToolsetScenario(superConfig({ taxableComponent: 300_000, taxFreeComponent: 200_000 }));
+  sim.stepTo(AFTER_SUPER);
+  const tax = sim.journal.getActions('SUPER_DEATH_BENEFIT_TAX')[0];
+  assert.ok(Math.abs(tax.action.data.amount - 51_000) < 1, `only taxable 300k taxed, got ${tax.action.data.amount}`);
+});
+
+// ─── NE inheritance tax ─────────────────────────────────────────────────────
+
+function neConfig(relationship, decedentState) {
+  return {
+    toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'INHERITANCE'],
+    simStart: '2026-01-01', simEnd: '2041-01-01',
+    parameters: {},
+    persons: [
+      { __type: 'Person', id: 'primary', name: 'Primary', birthDate: '1975-04-15',
+        citizen: ['US'], lifeExpectancy: 90, monthlyWage: 0,
+        retirementDate: '2025-01-01', socialSecurityMonthly: 0 },
+    ],
+    accounts: [
+      { __type: 'SavingsAccount', id: 'us-savings', name: 'US Savings', type: 'savings',
+        role: 'us-savings', stateKey: 'usSavingsAccount', initialValue: 200_000,
+        ownershipType: 'sole', ownerId: 'primary', minimumBalance: 0,
+        country: 'US', currency: { code: 'USD', symbol: '$' } },
+    ],
+    bequests: [
+      { __type: 'Bequest', id: 'beq1', name: 'Estate', decedentName: 'Parent',
+        relationship, decedentState, heirId: 'primary',
+        inheritanceYear: 2030, inheritanceMonth: 5, inheritanceDay: 15,
+        assets: [ { __type: 'BrokerageAccount', name: 'Inherited Brokerage', country: 'US',
+                    inheritedValue: 500_000, stateKey: 'inheritBrokerage' } ] },
+    ],
+  };
+}
+
+// Just after 2030-06-15, before the US calendar settle (Dec 31) resets neInheritanceTaxYTD.
+const AFTER_NE = new Date(Date.UTC(2030, 8, 30));
+
+test('EVT-63: NE inheritance tax — Class 1 (immediate) $100k exempt + 1%', () => {
+  const { sim } = loadToolsetScenario(neConfig('immediate', 'NE'));
+  const preCash = 200_000;
+  sim.stepTo(AFTER_NE);
+  const ne = sim.journal.getActions('NE_INHERITANCE_TAX')[0];
+  assert.ok(ne, 'NE tax fired');
+  assert.ok(Math.abs(ne.action.data.amount - 4_000) < 1, `(500k−100k)×1% = 4000, got ${ne.action.data.amount}`);
+  assert.ok(Math.abs(sim.state.neInheritanceTaxYTD - 4_000) < 1);
+  // Heir pays it from US cash.
+  assert.ok(sim.state.usSavingsAccount.balance <= preCash - 4_000 + 1, 'US cash debited for NE tax');
+});
+
+test('EVT-63: NE inheritance tax — Class 2 (remote) $40k exempt + 11%', () => {
+  const { sim } = loadToolsetScenario(neConfig('remote', 'NE'));
+  sim.stepTo(AFTER_NE);
+  const ne = sim.journal.getActions('NE_INHERITANCE_TAX')[0];
+  assert.ok(Math.abs(ne.action.data.amount - 50_600) < 1, `(500k−40k)×11% = 50600, got ${ne.action.data.amount}`);
+});
+
+test('EVT-63: NE inheritance tax — Class 3 (unrelated) $25k exempt + 15%', () => {
+  const { sim } = loadToolsetScenario(neConfig('unrelated', 'NE'));
+  sim.stepTo(AFTER_NE);
+  const ne = sim.journal.getActions('NE_INHERITANCE_TAX')[0];
+  assert.ok(Math.abs(ne.action.data.amount - 71_250) < 1, `(500k−25k)×15% = 71250, got ${ne.action.data.amount}`);
+});
+
+test('EVT-63: no heir tax for a non-NE decedent situs (SD / HI)', () => {
+  for (const situs of ['SD', 'HI']) {
+    const { sim } = loadToolsetScenario(neConfig('immediate', situs));
+    sim.stepTo(AFTER_NE);
+    assert.strictEqual(sim.journal.getActions('NE_INHERITANCE_TAX').length, 0, `${situs} ⇒ no NE tax`);
+    assert.strictEqual(sim.state.neInheritanceTaxYTD ?? 0, 0);
+  }
 });

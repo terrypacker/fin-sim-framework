@@ -47,7 +47,22 @@ export class AuTaxModule2026 extends BaseTaxModule {
       ...this._rentalReducerFns(),
       ...this._auIncomeReducerFns(),
       ...this._auWagesReducerFns(),
+      ...this._inheritanceReducerFns(),
     ]);
+  }
+
+  _inheritanceReducerFns() {
+    return [
+      // Design 63 §6.4: AU superannuation death benefit paid to a non-dependant —
+      // a FINAL tax (taxable component × 15%, +2% Medicare when paid direct),
+      // already withheld from the net lump sum credited to AU cash by
+      // InheritApplyReducer. Recorded here in auSuperDeathTaxYTD (reporting; not a
+      // marginal-rate addition to auOrdinaryIncomeYTD).
+      ['SUPER_DEATH_BENEFIT_TAX', (state, action) => ({
+        ...state,
+        auSuperDeathTaxYTD: (state.auSuperDeathTaxYTD ?? 0) + (action.amount ?? 0),
+      })],
+    ];
   }
 
   _auWagesReducerFns() {
