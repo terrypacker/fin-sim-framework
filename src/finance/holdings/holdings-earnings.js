@@ -105,6 +105,19 @@ export function computeHoldingsGrowth({
   const holdingActions = [];
   for (const h of holdings) {
     if (!h) continue;
+    // BOND and CASH holdings do NOT earn equity-style appreciation on the growth
+    // path. A BOND's return is the coupon (computeHoldingsCoupons /
+    // INTL_BOND_COUPON, design 59); its price only marks to market on rate moves
+    // (BondPriceAdjustReducer via `duration`). CASH is nominal — it does not
+    // appreciate in price; any yield it earns is interest on the useCoupon
+    // (effectiveInterestRates) path, where its SAVINGS/CASH rateKey resolves.
+    // Both rateKeys are absent from effectiveGrowthRates, so without this guard
+    // they fall through to the account's *equity* growth rate (fbRate) and earn
+    // a phantom equity return (mirrors the design-59 dividend skip below). GOLD
+    // is deliberately NOT skipped: its `GOLD` rateKey resolves to a real
+    // commodity-appreciation rate — that IS gold's return, not a fall-through.
+    // On the interest path (useCoupon) these rateKeys resolve, so nothing is skipped.
+    if (!useCoupon && (h.allocation === 'BOND' || h.allocation === 'CASH')) continue;
     const mv      = h.marketValue ?? 0;
     const baseRate = rateOverride
       ?? (useCoupon ? (h.couponRate ?? undefined) : undefined)
@@ -174,10 +187,13 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
   const holdingActions = [];
   for (const h of holdings) {
     if (!h) continue;
-    // BOND holdings pay coupon interest, not equity dividends — their income is
-    // handled by computeHoldingsCoupons on the INTL_BOND_COUPON path (design 59).
-    // Skipping them here stops a bond earning a spurious account-rate "dividend".
-    if (h.allocation === 'BOND') continue;
+    // Only EQUITY (and OTHER) sleeves pay an equity dividend. BOND, CASH and GOLD
+    // holdings carry no dividendYield, so without this guard each falls back to the
+    // account's equity dividend rate (fallbackYield) and earns a spurious dividend:
+    //   - BOND income is the coupon (computeHoldingsCoupons / INTL_BOND_COUPON, design 59);
+    //   - CASH income (if any) is interest on the effectiveInterestRates path, not a dividend;
+    //   - GOLD is a non-income commodity — it appreciates (computeHoldingsGrowth) but yields nothing.
+    if (h.allocation === 'BOND' || h.allocation === 'CASH' || h.allocation === 'GOLD') continue;
     const mv  = h.marketValue ?? 0;
     const yld = h.dividendYield ?? fallbackYield;
     const rk  = h.rateKey ?? fallbackRateKey;
