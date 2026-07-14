@@ -170,6 +170,7 @@ export class ScenarioCompiler {
       realProperties: services.realPropertyService?.getAll()   ?? [],
       collectibles:   services.collectibleService?.getAll()    ?? [],
       companyEquities: services.companyEquityService?.getAll() ?? [],
+      bequests:       services.bequestService?.getAll()        ?? [],
       parameters,
       paramSchema,
       stateRegistry:  services.stateRegistry,
@@ -178,6 +179,9 @@ export class ScenarioCompiler {
       // AU move (design 57 Part 2, Item C) and foreign real property (design 62 §5).
       collectibleService: services.collectibleService,
       realPropertyService: services.realPropertyService,
+      // BequestService.expand() turns Bequest containers into zero-seed state +
+      // INHERIT schedules (design 63); the INHERITANCE toolset consumes it.
+      bequestService: services.bequestService,
       schedulesById:  {},
       // Shared across toolsets — each tax toolset adds its periods here so
       // US and AU periods end up in one service available for journal reports.

@@ -67,6 +67,8 @@ export const COVERED = [
   // C — US income + real property (reducer-postconditions-us-income.test.mjs)
   'WagesIncomeApplyReducer', 'WagesWithheldApplyReducer', 'SsIncomeApplyReducer',
   'SeIncomeUsApplyReducer', 'BonusApplyReducer', 'CompanySaleApplyReducer',
+  // design 63 — INHERIT funding + basis stamping (evt-inheritance.test.mjs P2 cases)
+  'InheritApplyReducer',
   'UsHouseSaleApplyReducer',
 
   // C — AU (reducer-postconditions-au.test.mjs)

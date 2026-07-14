@@ -33,6 +33,7 @@ import { AU_BROKERAGE }      from './toolsets/au-brokerage-toolset.js';
 import { US_INCOME }         from './toolsets/us-income-toolset.js';
 import { US_COMPANY_SALE }   from './toolsets/us-company-sale-toolset.js';
 import { AU_INCOME }         from './toolsets/au-income-toolset.js';
+import { INHERITANCE }       from './toolsets/inheritance-toolset.js';
 import { ECONOMIC_REGIMES }  from './toolsets/economic-regimes-toolset.js';
 import { normalizeCountryCode } from '../finance/country-codes.js';
 import { deriveEarningsBasis } from '../finance/assets/investment-account.js';
@@ -60,6 +61,7 @@ const BUILT_IN_TOOLSETS = [
   US_REAL_PROPERTY, AU_REAL_PROPERTY,
   US_COLLECTIBLES, US_ROTH_CONVERSION, US_EARLY_WITHDRAWAL,
   US_BROKERAGE, AU_BROKERAGE, US_INCOME, AU_INCOME, US_COMPANY_SALE,
+  INHERITANCE,
   ECONOMIC_REGIMES,
 ];
 
