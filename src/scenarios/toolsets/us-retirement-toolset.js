@@ -17,6 +17,7 @@ import { MonthlyWagesHandler }          from '../../finance/handlers/monthly-wag
 import { MonthlySocialSecurityHandler } from '../../finance/handlers/monthly-social-security-handler.js';
 import { DividendScheduledHandler }     from '../../finance/handlers/dividend-scheduled-handler.js';
 import { BondCouponScheduledHandler }   from '../../finance/handlers/bond-coupon-handler.js';
+import { CashSleeveInterestHandler }     from '../../finance/handlers/cash-sleeve-interest-handler.js';
 import {
   FixedIncomeInterestHandler,
   IntlIraEarningsHandler, IntlRothEarningsHandler, IntlK401EarningsHandler,
@@ -29,6 +30,7 @@ import { ExpenseDebitReducer }          from '../../finance/reducers/expense-deb
 import { ReplenishSavingsReducer }      from '../../finance/reducers/replenish-savings-reducer.js';
 import { StockDividendCashApplyReducer }    from '../../finance/reducers/stock-dividend-cash-apply-reducer.js';
 import { BondCouponCashApplyReducer }       from '../../finance/reducers/bond-coupon-cash-apply-reducer.js';
+import { CashSleeveInterestApplyReducer }    from '../../finance/reducers/cash-sleeve-interest-apply-reducer.js';
 import { SetOutOfFundsDateReducer }     from '../../finance/reducers/set-out-of-funds-date-reducer.js';
 import { AccumulateDeficitReducer }     from '../../finance/reducers/accumulate-deficit-reducer.js';
 import { AccumulateTaxesPaidReducer }   from '../../finance/reducers/accumulate-taxes-paid-reducer.js';
@@ -131,7 +133,7 @@ export const US_RETIREMENT = {
   types: {
     handlers: [
       MonthlyExpensesHandler, MonthlyWagesHandler, MonthlySocialSecurityHandler,
-      DividendScheduledHandler, BondCouponScheduledHandler, FixedIncomeInterestHandler,
+      DividendScheduledHandler, BondCouponScheduledHandler, CashSleeveInterestHandler, FixedIncomeInterestHandler,
       IntlIraEarningsHandler, IntlRothEarningsHandler, IntlK401EarningsHandler, IntlUsStockEarningsHandler,
       OutOfFundsHandler,
       RothContributionHandler, RothWithdrawalContributionsHandler, RothWithdrawalEarningsHandler, RothEarningsHandler,
@@ -143,7 +145,7 @@ export const US_RETIREMENT = {
       K401AnnualRmdHandler, K401ToIraConversionHandler,
     ],
     reducers: [
-      ExpenseDebitReducer, ReplenishSavingsReducer, StockDividendCashApplyReducer, BondCouponCashApplyReducer,
+      ExpenseDebitReducer, ReplenishSavingsReducer, StockDividendCashApplyReducer, BondCouponCashApplyReducer, CashSleeveInterestApplyReducer,
       SetOutOfFundsDateReducer, AccumulateDeficitReducer, OutOfFundsReducer, InflationAdjustReducer,
       RothContributionApplyReducer, RothWithdrawalContribApplyReducer,
       RothWithdrawalEarningsApplyReducer, RothEarningsApplyReducer,
@@ -163,6 +165,7 @@ export const US_RETIREMENT = {
       { type: 'ACCUMULATE_DEFICIT',    fields: { amount: ValueType.number() } },
       { type: 'OUT_OF_FUNDS',          fields: { deficit: ValueType.number(), currency: ValueType.text() } },
       { type: 'STOCK_DIVIDEND_CASH_APPLY',              fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), stateKey: ValueType.text() } },
+      { type: 'CASH_SLEEVE_INTEREST_APPLY',             fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), taxMode: ValueType.text(), residency: ValueType.text() } },
       { type: 'ROTH_CONTRIBUTION_APPLY',                fields: { amount: ValueType.currency('USD') } },
       { type: 'ROTH_WITHDRAWAL_CONTRIB_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
       { type: 'ROTH_WITHDRAWAL_EARNINGS_APPLY', family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
@@ -549,6 +552,23 @@ export const US_RETIREMENT = {
       );
     }
 
+    // Money-market yield on CASH sleeves of equity-served accounts (design 60).
+    // One shared monthly stream; US + AU handlers (wired in this toolset and the AU
+    // toolsets) subscribe to it. Scheduled when any equity-served account exists
+    // (US brokerage/retirement or AU stock/super) since those accounts run off the
+    // equity-growth earnings handler, which credits CASH no return of its own.
+    const EQUITY_SERVED_ROLES = [
+      ACCOUNT_ROLES.US_STOCK, ACCOUNT_ROLES.K401, ACCOUNT_ROLES.IRA, ACCOUNT_ROLES.ROTH,
+      ACCOUNT_ROLES.AU_STOCK, ACCOUNT_ROLES.SUPER,
+    ];
+    if (accounts.some(a => EQUITY_SERVED_ROLES.includes(a.role))) {
+      schedules.push(
+        EventBuilder.eventSeries()
+          .name('Cash Sleeve Interest').type('CASH_SLEEVE_INTEREST')
+          .interval('month-end').enabled(true).color('#009688').build()
+      );
+    }
+
     if (fixedIncomeAccounts.length > 0) {
       schedules.push(
         EventBuilder.eventSeries()
@@ -814,6 +834,31 @@ export const US_RETIREMENT = {
       }
     }
 
+    // Money-market yield on CASH sleeves of equity-served accounts (design 60).
+    // Brokerage (us-stock) cash interest is US ordinary income; retirement
+    // (401k/IRA/Roth) cash interest is tax-deferred/free. Rate reuses the US
+    // savings rate from effectiveInterestRates (regime- and per-account-aware),
+    // compounded monthly by reinvesting into the cash sleeve.
+    const cashInterestEvent = context.schedulesById['CASH_SLEEVE_INTEREST'];
+    if (cashInterestEvent) {
+      const usCashSleeveAccounts = [
+        ...usStockAccounts.map(a => ({ acct: a, role: ACCOUNT_ROLES.US_STOCK, taxMode: 'us' })),
+        ...k401Accounts.map(a  => ({ acct: a, role: ACCOUNT_ROLES.K401,     taxMode: 'deferred' })),
+        ...iraAccounts.map(a   => ({ acct: a, role: ACCOUNT_ROLES.IRA,      taxMode: 'deferred' })),
+        ...rothAccounts.map(a  => ({ acct: a, role: ACCOUNT_ROLES.ROTH,     taxMode: 'deferred' })),
+      ];
+      for (const { acct, role, taxMode } of usCashSleeveAccounts) {
+        const h = new CashSleeveInterestHandler({
+          stateRegistry: sr, role,
+          ownerId: acct.ownerId, stateKey: acct.stateKey,
+          interestRate: acct.interestRate ?? p.usSavingsInterestRate,
+          taxMode,
+        });
+        h.handledEvents.push(cashInterestEvent);
+        handlers.push(h);
+      }
+    }
+
     // Fixed income interest
     const fiEvent = context.schedulesById['INTL_FIXED_INCOME_INTEREST'];
     if (fiEvent) {
@@ -944,6 +989,18 @@ export const US_RETIREMENT = {
         accountService: accountSvc, stateRegistry: sr,
         role: ACCOUNT_ROLES.US_SAVINGS, ownerId: primaryId,
       }));
+    }
+
+    // Cash-sleeve money-market interest (design 60). One reducer serves all
+    // equity-served accounts (US + AU); it branches on the action's taxMode, so it
+    // is registered whenever any such account exists — including AU-only ones whose
+    // handlers are wired in the AU toolsets.
+    const EQUITY_SERVED_ROLES = [
+      ACCOUNT_ROLES.US_STOCK, ACCOUNT_ROLES.K401, ACCOUNT_ROLES.IRA, ACCOUNT_ROLES.ROTH,
+      ACCOUNT_ROLES.AU_STOCK, ACCOUNT_ROLES.SUPER,
+    ];
+    if (accounts.some(a => EQUITY_SERVED_ROLES.includes(a.role))) {
+      reducers.push(new CashSleeveInterestApplyReducer({ accountService: accountSvc, stateRegistry: sr }));
     }
 
     reducers.push(new SetOutOfFundsDateReducer());
