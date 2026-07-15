@@ -90,9 +90,13 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
                          - _applyBrackets(excludedStacked, brackets);
     const taxableOrdinaryAfterFeie = Math.max(0, taxableOrdinary - excludedStacked);
 
-    // Step 3: long-term capital gains tax
+    // Step 3: long-term capital gains tax — stack on top of taxable ordinary
+    // income (IRC §1(h)). Capital gains sit in the brackets above the ordinary
+    // income ceiling, so the tax is the bracket differential, not the bracket
+    // applied to gains alone.
     const cg             = Math.max(0, usCapitalGainsYTD);
-    const capitalGainsTax = _applyBrackets(cg, ltcgBrackets);
+    const capitalGainsTax = _applyBrackets(taxableOrdinaryAfterFeie + cg, ltcgBrackets)
+                          - _applyBrackets(taxableOrdinaryAfterFeie, ltcgBrackets);
 
     // Step 4: collectibles taxed at flat 28% rate (IRS §1(h)(4))
     const collectibles    = Math.max(0, usCollectibleGainsYTD);

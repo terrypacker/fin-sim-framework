@@ -63,8 +63,8 @@ function runDefaultIntlRetirement() {
 // present-zero trap) are fixed. A large downward swing in tax would mean the 50%
 // discount (or a spurious 100% CGT relief) has silently returned. A ±1% band
 // absorbs incidental FX/rounding drift.
-const EXPECTED_LIFETIME_TAX = 1_068_129;
-const EXPECTED_NET_WORTH     = 11_563_957;
+const EXPECTED_LIFETIME_TAX = 1_093_514;
+const EXPECTED_NET_WORTH     = 11_522_944;
 const TOL = 0.01;
 
 test('design 52 lock-in: default US→AU retiree lifetime tax reflects real §904 FTC + FITO', () => {
