@@ -20,14 +20,20 @@ import { INHERITED_RA_WINDOW } from '../../finance/account-rules/inherited-ra-di
 
 const RA_DISTRIBUTION_TYPE = 'INHERITED_RA_DISTRIBUTION';
 
-/** Default inherited-RA distribution strategy + tunable-param seeds (design 63 §6.2). */
+/** Handler-side defaults for the per-account SECURE-drawdown knobs (design 63 §6.2). */
 const DEFAULT_STRATEGY     = 'bracketFill';
 const DEFAULT_FILL_CEILING = 100_000;   // real base-year USD
 const DEFAULT_LUMP_YEAR    = 0;
 const DEFAULT_WEIGHT       = 1 / INHERITED_RA_WINDOW;
 
-/** Collect the inherited pre-tax/Roth RA accounts across all bequests (not super). */
-function _inheritedRaAccounts(context, globalStrategy) {
+/**
+ * Collect the inherited pre-tax/Roth RA accounts across all active bequests (not
+ * super). The SECURE-drawdown knobs (strategy / ceiling / lump-year / weights) are
+ * read PER ACCOUNT from the inherited-asset descriptor (design 63 §12.3 — the
+ * design-55 generated params `raAsset.<stateKey>.<field>` cascade onto it), with
+ * blanks falling back to the defaults.
+ */
+function _inheritedRaAccounts(context) {
   const out = [];
   for (const b of (context.bequests ?? [])) {
     if (b.inheritanceYear == null) continue;
@@ -39,21 +45,16 @@ function _inheritedRaAccounts(context, globalStrategy) {
         isRoth:          meta.isRoth,
         inheritanceYear: b.inheritanceYear,
         heirId:          b.heirId ?? null,
-        strategyId:      a.distributionMode ?? globalStrategy,
+        strategyId:      a.distributionMode ?? DEFAULT_STRATEGY,
+        fillCeilingReal: a.fillCeiling ?? DEFAULT_FILL_CEILING,
+        lumpYear:        a.lumpYear ?? DEFAULT_LUMP_YEAR,
+        weights:         Array.isArray(a.weights) && a.weights.length === INHERITED_RA_WINDOW
+                           ? a.weights
+                           : Array.from({ length: INHERITED_RA_WINDOW }, () => DEFAULT_WEIGHT),
       });
     }
   }
   return out;
-}
-
-/** Assemble the global tunable-param bag from context.parameters. */
-function _raParams(p) {
-  return {
-    fillCeilingReal: p.inheritedRaFillCeiling ?? DEFAULT_FILL_CEILING,
-    lumpYear:        p.inheritedRaLumpYear ?? DEFAULT_LUMP_YEAR,
-    weights:         Array.from({ length: INHERITED_RA_WINDOW },
-                       (_, i) => p[`inheritedRaWeight::${i}`] ?? DEFAULT_WEIGHT),
-  };
 }
 
 /**
@@ -108,38 +109,12 @@ export const INHERITANCE = {
     ],
   },
 
+  // All inheritance params are GENERATED per-record from Bequest records + their
+  // inherited-RA assets (design 63 §12.3 / design 55 template path), so they exist
+  // only when an inheritance does and each carries a node (linked, design 32). See
+  // BEQUEST_PARAM_TEMPLATE / INHERITED_RA_PARAM_TEMPLATE. No static params here.
   paramSchema(context) {
-    const weightParams = Array.from({ length: INHERITED_RA_WINDOW }, (_, i) => ({
-      key: `inheritedRaWeight::${i}`, label: `Inherited RA Weight — Year ${i}`,
-      type: 'Number', group: 'Inheritance', mc: false, opt: true,
-      defaultValue: DEFAULT_WEIGHT,
-      description: `SECURE 10-year window weight for year ${i} (design 63 §6.2, weights strategy). :: flat key — dotted keys are dropped by the optimizer set() path.`,
-      visibleWhen: { param: 'inheritedRaStrategy', includes: 'weights' },
-    }));
-    return [
-      {
-        key: 'inheritedRaStrategy', label: 'Inherited RA Distribution Strategy',
-        type: 'Enum', group: 'Inheritance', mc: false, opt: false,
-        options: ['equal', 'lump', 'maxDefer', 'bracketFill', 'weights'],
-        defaultValue: DEFAULT_STRATEGY,
-        description: 'SECURE 10-year inherited-RA drawdown strategy (design 63 §6.2). bracketFill (recommended) fills ordinary income to inheritedRaFillCeiling then spills to year 9.',
-      },
-      {
-        key: 'inheritedRaFillCeiling', label: 'Inherited RA Fill Ceiling (real USD)',
-        type: 'Number', group: 'Inheritance', mc: false, opt: true,
-        defaultValue: DEFAULT_FILL_CEILING,
-        description: 'bracketFill ordinary-income ceiling in REAL base-year USD (do NOT inflate the search range — the reducer inflates to nominal). The primary optimized scalar.',
-        visibleWhen: { param: 'inheritedRaStrategy', includes: 'bracketFill' },
-      },
-      {
-        key: 'inheritedRaLumpYear', label: 'Inherited RA Lump Year',
-        type: 'Number', group: 'Inheritance', mc: false, opt: true,
-        defaultValue: DEFAULT_LUMP_YEAR,
-        description: 'lump strategy: the window year (0–9) the whole inherited RA is distributed in.',
-        visibleWhen: { param: 'inheritedRaStrategy', includes: 'lump' },
-      },
-      ...weightParams,
-    ];
+    return [];
   },
 
   state(context) {
@@ -189,8 +164,7 @@ export const INHERITANCE = {
     // One shared year-end distribution stream if any inherited RA exists. Order 50:
     // after the year's income / RMDs / design-58 drawdowns / Roth conversions
     // (order 0) so usOrdinaryIncomeYTD is complete, but before the tax settle (100).
-    const strategy = context.parameters?.inheritedRaStrategy ?? DEFAULT_STRATEGY;
-    if (_inheritedRaAccounts(context, strategy).length > 0) {
+    if (_inheritedRaAccounts(context).length > 0) {
       events.push(new EventSeries({
         name:     'Inherited RA Distribution',
         type:     RA_DISTRIBUTION_TYPE,
@@ -210,14 +184,10 @@ export const INHERITANCE = {
       b.inheritanceYear != null && (svc?.expand(b).inherited.length ?? 0) > 0);
     if (hasFunded) handlers.push(new InheritHandler());
 
-    const strategy = context.parameters?.inheritedRaStrategy ?? DEFAULT_STRATEGY;
-    const accounts = _inheritedRaAccounts(context, strategy);
+    const accounts = _inheritedRaAccounts(context);
     const distEvent = context.schedulesById?.[RA_DISTRIBUTION_TYPE];
     if (accounts.length > 0 && distEvent) {
-      const h = new InheritedRaDistributionHandler({
-        accounts,
-        params: _raParams(context.parameters ?? {}),
-      });
+      const h = new InheritedRaDistributionHandler({ accounts });
       h.handledEvents = [distEvent];
       handlers.push(h);
     }
@@ -240,8 +210,7 @@ export const INHERITANCE = {
       }));
     }
 
-    const strategy = context.parameters?.inheritedRaStrategy ?? DEFAULT_STRATEGY;
-    if (_inheritedRaAccounts(context, strategy).length > 0) {
+    if (_inheritedRaAccounts(context).length > 0) {
       reducers.push(new InheritedRaDistributionApplyReducer({
         accountService: context.accountService,
         stateRegistry:  context.stateRegistry,

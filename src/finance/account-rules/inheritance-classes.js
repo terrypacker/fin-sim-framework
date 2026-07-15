@@ -222,10 +222,11 @@ export class InheritedRaDistributionHandler extends HandlerEntry {
   static description  = 'Year-end SECURE 10-year drawdown of inherited IRA/401(k)/Roth accounts per the active distribution strategy; penalty-exempt.';
   static eventType    = 'INHERITED_RA_DISTRIBUTION';
 
-  constructor({ accounts = [], params = {} } = {}) {
+  constructor({ accounts = [] } = {}) {
     super(null, 'Inherited RA Distribution');
-    this.accounts = accounts;   // [{ stateKey, isRoth, inheritanceYear, heirId, strategyId }]
-    this.params   = params;     // { fillCeilingReal, lumpYear, weights }
+    // Each account carries its own SECURE-drawdown knobs (design 63 §12.3):
+    // { stateKey, isRoth, inheritanceYear, heirId, strategyId, fillCeilingReal, lumpYear, weights }
+    this.accounts = accounts;
     this.generatedActionTypes = ['INHERITED_RA_DISTRIBUTION_APPLY'];
   }
 
@@ -243,10 +244,10 @@ export class InheritedRaDistributionHandler extends HandlerEntry {
 
       const ctx = {
         otherOrdinaryIncome: state.usOrdinaryIncomeYTD ?? 0,
-        fillCeilingReal:     this.params.fillCeilingReal ?? 0,
+        fillCeilingReal:     acct.fillCeilingReal ?? 0,
         cpiIndexUS,
-        lumpYear:            this.params.lumpYear ?? 0,
-        weights:             this.params.weights ?? [],
+        lumpYear:            acct.lumpYear ?? 0,
+        weights:             acct.weights ?? [],
         WINDOW:              INHERITED_RA_WINDOW,
       };
       const strat  = inheritedRaStrategy(acct.strategyId);

@@ -500,10 +500,23 @@ export class ScenarioLoader {
       const rec = (cfg.companyEquities ?? []).find(r => r.stateKey === node.stateKey);
       if (rec) rec[node.field] = _roundRecordField(node.field, val);
     } else if (node.type === 'bequest') {
-      // Design 63: the inheritanceYear param activates an inert example bequest.
-      // Null keeps it inert (no INHERIT event); a year rounds to a whole number.
+      // Design 63: the inheritanceYear param activates an inert bequest. Null keeps
+      // it inert (no INHERIT event); a year rounds to a whole number.
       const rec = (cfg.bequests ?? []).find(r => r.stateKey === node.stateKey);
       if (rec) rec[node.field] = (val == null ? null : _roundRecordField(node.field, val));
+    } else if (node.type === 'bequestAsset') {
+      // Design 63 §12.3: per-inherited-RA-asset drawdown knobs cascade onto the
+      // matching asset nested in a bequest. distributionMode is a string enum (no
+      // rounding); fillCeiling / lumpYear are numeric.
+      for (const b of (cfg.bequests ?? [])) {
+        const asset = (b.assets ?? []).find(x => x.stateKey === node.stateKey);
+        if (asset) {
+          asset[node.field] = (val == null || val === '')
+            ? null
+            : (typeof val === 'string' ? val : _roundRecordField(node.field, val));
+          break;
+        }
+      }
     } else if (node.type === 'accountPriority') {
       // Fan one categorical strategy value out to drawdownPriority across many
       // accounts by role. Per-owner ranking (ownerOrder/ownerStride) keeps each
@@ -788,6 +801,14 @@ export class ScenarioLoader {
     // schemaByKey, so neither is ever pruned. Keeps the param surface a function of the
     // live record set in BOTH directions (delete a record + Rebuild → its params vanish).
     cfg.params = cfg.params.filter(p => {
+      // Design 63 §12.3: retire the legacy static `inheritanceYear` param. Its
+      // per-record replacement is the generated `bequest.<sk>.inheritanceYear`, so a
+      // NON-generated param carrying a bequest / bequestAsset node is the superseded
+      // static key — drop it (value already lives on the bequest record).
+      if (!isGeneratedParamKey(p.name) && (p.node?.type === 'bequest' || p.node?.type === 'bequestAsset')) {
+        if (cfg.parameters) delete cfg.parameters[p.name];
+        return false;
+      }
       if (!isGeneratedParamKey(p.name) || schemaByKey.has(p.name)) return true;
       if (cfg.parameters) {
         delete cfg.parameters[p.name];

@@ -221,33 +221,10 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
     enabled:  false,
   })),
 
-  // ── Inheritance — SECURE 10-year inherited-RA drawdown (design 63 §6.2) ──────
-  // The tunable levers of the inherited-RA distribution strategy. Gated by the
-  // schema's visibleWhen (inheritedRaStrategy = bracketFill / lump / weights), so
-  // they drop out of the sweep unless that strategy is active. `::` flat keys —
-  // dotted keys are silently dropped by the optimizer set() path. The ceiling is a
-  // REAL base-year USD scalar (the reducer inflates it); do not slide the range.
-  {
-    paramKey: 'inheritedRaFillCeiling',
-    type:     OPT_PARAM_TYPES.CONTINUOUS,
-    min: 40_000, max: 400_000, step: 20_000,
-    group:    'Inheritance',
-    enabled:  false,
-  },
-  {
-    paramKey: 'inheritedRaLumpYear',
-    type:     OPT_PARAM_TYPES.INTEGER,
-    min: 0, max: 9, step: 1,
-    group:    'Inheritance',
-    enabled:  false,
-  },
-  ...Array.from({ length: 10 }, (_, i) => ({
-    paramKey: `inheritedRaWeight::${i}`,
-    type:     OPT_PARAM_TYPES.CONTINUOUS,
-    min: 0, max: 1, step: 0.1,
-    group:    'Inheritance',
-    enabled:  false,
-  })),
+  // Inheritance — the inherited-RA drawdown knobs (design 63 §6.2) are now GENERATED
+  // per inherited-RA asset (`raAsset.<stateKey>.fillCeiling` opt:true, design 63
+  // §12.3), so they are opt-able via the generated schema rather than hand-listed
+  // here as global keys.
 
   // ── Spending Strategies ────────────────────────────────────────────────────
   // Each ENUM value is an array — matches the EnumMulti param type.
@@ -455,11 +432,50 @@ function buildRothScheduleOptConfigs(params) {
 }
 
 /**
+ * Build one optimization variable per inherited retirement account (design 63
+ * §6.2 / §12.3), sibling of buildRothScheduleOptConfigs. The inherited-RA
+ * distribution knobs are GENERATED per asset (`raAsset.<stateKey>.<field>`), so —
+ * like the drawdown-weight axes — they aren't in DEFAULT_OPTIMIZATION_CONFIGS.
+ * Discover each inherited RA from its always-present `distributionMode` param and
+ * emit a CONTINUOUS `fillCeiling` (the primary bracketFill scalar) + an INTEGER
+ * `lumpYear` axis. `enabled: false` so they surface only when the scenario carries
+ * an inherited retirement account; the ceiling is REAL base-year USD.
+ */
+function buildInheritedRaOptConfigs(params) {
+  const stateKeys = new Set();
+  for (const k of Object.keys(params ?? {})) {
+    const m = /^raAsset\.(.+)\.distributionMode$/.exec(k);
+    if (m) stateKeys.add(m[1]);
+  }
+  return [...stateKeys].flatMap(sk => [
+    {
+      paramKey:     `raAsset.${sk}.fillCeiling`,
+      label:        `Inherited RA (${sk}): bracketFill ceiling (real $)`,
+      type:         OPT_PARAM_TYPES.CONTINUOUS,
+      min: 40_000, max: 400_000, step: 20_000,
+      group:        'Inheritance',
+      enabled:      false,
+      controllable: true,
+    },
+    {
+      paramKey:     `raAsset.${sk}.lumpYear`,
+      label:        `Inherited RA (${sk}): lump year`,
+      type:         OPT_PARAM_TYPES.INTEGER,
+      min: 0, max: 9, step: 1,
+      group:        'Inheritance',
+      enabled:      false,
+      controllable: true,
+    },
+  ]);
+}
+
+/**
  * Build the full optimization variable list for a given param snapshot.
  *
  * Returns DEFAULT_OPTIMIZATION_CONFIGS plus one severity entry per configured
- * shock and one monthly-amount entry per configured expense band.  Shock and
- * band entries only appear when the scenario actually has them.
+ * shock, one monthly-amount entry per configured expense band, and the inherited-RA
+ * drawdown axes per inherited retirement account.  Dynamic entries only appear
+ * when the scenario actually has them.
  */
 export function buildOptVariables(params, accounts = null) {
   // User-authored drawdown strategies (intl-retirement-scenario customDrawdownStrategies)
@@ -475,6 +491,7 @@ export function buildOptVariables(params, accounts = null) {
     ...buildShockOptConfigs(params),
     ...buildExpenseBandOptConfigs(params),
     ...buildRothScheduleOptConfigs(params),
+    ...buildInheritedRaOptConfigs(params),
   ];
   // Build-time filter (design 58): when the caller supplies the scenario's accounts,
   // drop the Lever-B weight axes for roles no account backs. Those dimensions are

@@ -1,9 +1,11 @@
 # 63 — Inheritance (scheduled bequest of external-decedent assets + per-country death tax)
 
-**Status**: **PROPOSED (no code).** Plan for modeling a scheduled inheritance of assets from a
-decedent who is *not* a `Person` in the scenario. Covers the injection mechanism, per-country
-tax handling (US step-up + IRD, AU inherited cost base + super death tax, NE inheritance tax),
-and the cross-border dual-cost-base interaction. Validated against 2026 tax law (sources §3).
+**Status**: **IMPLEMENTED** (all five phases, `wip/inheritance`; 3420 unit + 866 viz green,
+browser-verified). Models a scheduled inheritance of assets from a decedent who is *not* a
+`Person` in the scenario. Covers the injection mechanism, per-country tax handling (US step-up +
+IRD, AU inherited cost base + super death tax, NE inheritance tax), and the cross-border
+dual-cost-base interaction. Validated against 2026 tax law (sources §3). See **§12 Implementation
+notes** for the as-built shape and the deltas from this plan.
 
 **Builds on**:
 - **`design/49` (`CompanyEquity`)** — the template for a config-driven external asset with its
@@ -431,5 +433,71 @@ contributes no state/schedules, and every run is byte-identical to today. The re
 - **Foreign-resident-beneficiary CGT** on an AU deceased estate (non-TAP deemed disposal) — §2.
 - **Pre-CGT (pre-20-Sep-1985) inherited assets** — AU market-value reset; irrelevant to a
   forward-looking sim (parallels design 62 Gap 5).
+
+---
+
+## 12. Implementation notes (as-built)
+
+Shipped across five phases on `wip/inheritance`. Tests: `tests/unit/evt-inheritance.test.mjs`
+(`EVT-63`). Reference golden (`cross-border-relief-scenario`, which *is* the default scenario)
+did **not** move.
+
+### 12.1 Files
+- **Domain**: `src/finance/assets/bequest.js` (`Bequest extends SimGraphNode`, kind `'bequest'`).
+- **Service**: `src/finance/services/bequest-service.js` — CRUD + `expand()` (→ `{ seeds, inherited,
+  inheritanceDateMs }`) + `inheritedAssetMeta()` (the `__type` → seed/tax taxonomy).
+- **Handlers/reducers**: `src/finance/account-rules/inheritance-classes.js` — `InheritHandler`,
+  `InheritApplyReducer`, `InheritanceNeTaxApplyReducer`, `InheritedRaDistributionHandler`,
+  `InheritedRaDistributionApplyReducer`.
+- **Strategy registry**: `src/finance/account-rules/inherited-ra-distribution-strategy.js`
+  (`equal`/`lump`/`maxDefer`/`bracketFill`/`weights`, terminal catch-up).
+- **Toolset**: `src/scenarios/toolsets/inheritance-toolset.js` (`INHERITANCE`, deps
+  `US_TAX`/`AU_TAX`/`US_INCOME`).
+- **Tax classifiers**: `INHERITED_RA_DISTRIBUTION_TAX` + `NE_INHERITANCE_TAX` (US 2026 module);
+  `SUPER_DEATH_BENEFIT_TAX` (AU 2026 module). YTD buckets `neInheritanceTaxYTD` /
+  `auSuperDeathTaxYTD` added to `YTD_FIELDS` reset (`tax-settle-classes.js`).
+- **UI**: `bequest-editor.js` (programmatic DOM: decedent fields + repeatable inherited-asset rows),
+  `bequest-node-renderer.js` (🕊️), config-list `bequest: 'Inheritance'`, `workbench-app.js`
+  add-flow + editor mount, `scenario-loader.js` currency registration.
+- **Scenario**: example `estateBequest` in `buildDefaultConfig` (brokerage / IRA-bracketFill /
+  home); `INHERITANCE` added to `getToolsets()`, `buildFullParamSchema()`, and the
+  `buildAndCompile()` toolset registry (three lists must stay in sync).
+
+### 12.2 Deltas from the plan
+- **Example bequest ships inert** (`inheritanceYear: null`). The toolset `state()` seeds only
+  bequests with a set `inheritanceYear`, so the inert default is byte-identical and the golden is
+  unmoved (§9 guard). Set the year (param or editor) to activate. Required because the golden *is*
+  the default scenario.
+- **NE inheritance tax is an immediate heir payment** at the inheritance date
+  (`InheritanceNeTaxApplyReducer` debits US cash + `neInheritanceTaxYTD` records it) rather than
+  aggregated into the Dec-31 state-tax settle. Amount + incidence are exact; the toolset does not
+  depend on `US_STATE_TAX`. Settle-timing aggregation is a follow-up (§11).
+- **AU super death tax is withheld at source**: `InheritApplyReducer` credits the *net* lump sum to
+  AU cash and records `auSuperDeathTaxYTD` (reporting), rather than adding to the settle (avoids
+  double-charge). "Settled at year end" = the bucket resets yearly.
+
+### 12.3 Parameter model — per-record generation (design 55), *in progress*
+The first cut exposed the inherited-RA distribution knobs as **static, always-on global** params
+(`inheritedRaStrategy`, `inheritedRaFillCeiling`, `inheritedRaLumpYear`, `inheritedRaWeight::0..9`)
+plus a single hand-wired `inheritanceYear` param node-linked to the one example bequest. That is the
+design-55 anti-pattern: the params clutter *every* scenario (even with no inheritance) and the
+tuning knobs are **unlinked** (no `node`, not tied to a record field).
+
+**Corrected to the design-55 template-driven path** (parallels accounts): the params are now
+**generated from the Bequest records themselves**, so they exist only when an inheritance does and
+each carries a `node` (linking, design 32):
+- **Per `Bequest`** (`BEQUEST_PARAM_TEMPLATE`): `inheritanceYear` → `bequest.<stateKey>.inheritanceYear`.
+- **Per inherited retirement asset** (`INHERITED_RA_PARAM_TEMPLATE`): `distributionMode`
+  (strategy), `fillCeiling` (real USD), `lumpYear` → `raAsset.<stateKey>.<field>`. The distribution
+  handler reads these **per-account** (baked from the asset descriptor) instead of from global
+  `context.parameters`; the `weights` vector rides on the asset descriptor (editor/JSON), defaulting
+  to equal. The old global toolset params + `DEFAULT_OPTIMIZATION_CONFIGS` entries are retired.
+- New generator prefixes `bequest.` / `raAsset.` + cascade node types `bequest` / `bequestAsset`.
+- **Optimizer discovery**: generated `opt` params are *not* auto-swept — `buildOptVariables`
+  only reads `DEFAULT_OPTIMIZATION_CONFIGS` + dynamic builders. So a `buildInheritedRaOptConfigs`
+  dynamic builder (sibling of the Roth-schedule / expense-band builders) discovers each inherited
+  RA from its `raAsset.<sk>.distributionMode` param and emits its `fillCeiling` + `lumpYear` axes.
+- **Note**: the RA drawdown knobs are per-inherited-*retirement*-account — a bequest whose only
+  asset is a brokerage / property / collectible generates **no** RA params (correct).
 </content>
 </invoke>

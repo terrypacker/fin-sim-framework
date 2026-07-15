@@ -24,12 +24,18 @@ import {
   REAL_PROPERTY_PARAM_TEMPLATE,
   COLLECTIBLE_PARAM_TEMPLATE,
   COMPANY_EQUITY_PARAM_TEMPLATE,
+  BEQUEST_PARAM_TEMPLATE,
+  INHERITED_RA_PARAM_TEMPLATE,
   BALANCE_TARGET,
 } from './record-param-templates.js';
 
+/** Inherited-asset `__type`s that grow per-account SECURE-drawdown params (design
+ *  63 §6.2). Super is excluded — it is a forced lump-sum, not an ongoing account. */
+const INHERITED_RA_TYPES = new Set(['TraditionalIRAAccount', 'FourOhOneKAccount', 'RothAccount']);
+
 /** Namespaces the generator owns. A param key with one of these prefixes is
  *  generated (§6 harvest exception is scoped by this). */
-export const GENERATED_KEY_PREFIXES = ['acct.', 'person.', 'prop.', 'coll.', 'equity.'];
+export const GENERATED_KEY_PREFIXES = ['acct.', 'person.', 'prop.', 'coll.', 'equity.', 'bequest.', 'raAsset.'];
 
 // Template lookup keys off `account.type` (ACCOUNT_TYPE). Records that never went
 // through the account service — raw buildDefaultConfig output, legacy saves — carry
@@ -58,6 +64,7 @@ export function isGeneratedParamKey(key) {
 const PREFIX_TO_NODE_TYPE = {
   acct: 'account', person: 'person', prop: 'realProperty',
   coll: 'collectible', equity: 'companyEquity',
+  bequest: 'bequest', raAsset: 'bequestAsset',
 };
 
 /**
@@ -115,6 +122,14 @@ export class ScenarioParamGenerator {
       add(this._expand('coll', 'collectible', c, c.stateKey, COLLECTIBLE_PARAM_TEMPLATE));
     for (const e of cfg.companyEquities ?? [])
       add(this._expand('equity', 'companyEquity', e, e.stateKey, COMPANY_EQUITY_PARAM_TEMPLATE));
+    // Design 63: per-Bequest activation year + per-inherited-RA-asset drawdown knobs.
+    for (const b of cfg.bequests ?? []) {
+      add(this._expand('bequest', 'bequest', b, b.stateKey, BEQUEST_PARAM_TEMPLATE));
+      for (const a of (b.assets ?? [])) {
+        if (INHERITED_RA_TYPES.has(a.__type))
+          add(this._expand('raAsset', 'bequestAsset', a, a.stateKey, INHERITED_RA_PARAM_TEMPLATE));
+      }
+    }
     return out;
   }
 

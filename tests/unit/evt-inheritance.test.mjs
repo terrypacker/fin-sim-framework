@@ -31,6 +31,8 @@ import { computeNetWorth }    from '../../src/finance/derived-metrics/net-worth.
 import { consumeHoldingsFifo } from '../../src/finance/holdings/holdings-fifo.js';
 import { INHERITED_RA_DISTRIBUTION_STRATEGY, INHERITED_RA_WINDOW } from '../../src/finance/account-rules/inherited-ra-distribution-strategy.js';
 import { IntlRetirementScenario } from '../../src/scenarios/intl-retirement-scenario.js';
+import { ScenarioParamGenerator } from '../../src/scenarios/params/scenario-param-generator.js';
+import { buildOptVariables }      from '../../src/finance/optimization/intl-retirement-opt-config.js';
 
 beforeEach(() => ServiceRegistry.resetAll());
 
@@ -71,7 +73,7 @@ function inheritanceConfig(bequestOverrides = {}) {
         country: 'AU', currency: { code: 'AUD', symbol: 'A$' } },
     ],
     bequests: [
-      { __type: 'Bequest', id: 'beq1', name: "Mother's Estate", decedentName: 'Jane Doe',
+      { __type: 'Bequest', id: 'beq1', stateKey: 'estateBequest', name: "Mother's Estate", decedentName: 'Jane Doe',
         relationship: 'immediate', decedentState: 'NE', heirId: 'primary',
         inheritanceYear: 2030, inheritanceMonth: 5, inheritanceDay: 15,
         assets: baseBequestAssets(),
@@ -412,7 +414,7 @@ function raConfig(assetOverride = {}, params = {}) {
     toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'INHERITANCE'],
     simStart: '2026-01-01',
     simEnd:   '2042-01-01',
-    parameters: { inheritedRaStrategy: 'equal', ...params },
+    parameters: { ...params },
     persons: [
       { __type: 'Person', id: 'primary', name: 'Primary', birthDate: '1980-04-15',
         citizen: ['US'], lifeExpectancy: 95, monthlyWage: 0,
@@ -425,11 +427,12 @@ function raConfig(assetOverride = {}, params = {}) {
         country: 'US', currency: { code: 'USD', symbol: '$' } },
     ],
     bequests: [
-      { __type: 'Bequest', id: 'beq1', name: 'Estate', decedentName: 'Parent',
+      { __type: 'Bequest', id: 'beq1', stateKey: 'estateBequest', name: 'Estate', decedentName: 'Parent',
         relationship: 'immediate', heirId: 'primary',
         inheritanceYear: 2030, inheritanceMonth: 5, inheritanceDay: 15,
+        // Strategy is now per-asset (distributionMode); default 'equal' for the tests.
         assets: [ { __type: 'TraditionalIRAAccount', name: 'Inherited IRA', country: 'US',
-                    inheritedValue: 300_000, stateKey: 'inheritIra', ...assetOverride } ] },
+                    inheritedValue: 300_000, stateKey: 'inheritIra', distributionMode: 'equal', ...assetOverride } ] },
     ],
   };
 }
@@ -471,15 +474,13 @@ test('EVT-63: inherited Roth distributions are tax-free (no ordinary-income tax 
   assert.strictEqual(sim.journal.getActions('INHERITED_RA_DISTRIBUTION_TAX').length, 0, 'Roth is tax-free');
 });
 
-test('EVT-63: bracketFill routes the fill amount and :: weight keys reach the reducer', () => {
-  // weights strategy with a heavy year-0 weight — proves inheritedRaWeight::N is
-  // consumed by the handler (dotted keys would be dropped by the optimizer path).
-  const cfg = raConfig({}, {
-    inheritedRaStrategy: 'weights',
-    'inheritedRaWeight::0': 0.5,
-    'inheritedRaWeight::1': 0.1, 'inheritedRaWeight::2': 0.1, 'inheritedRaWeight::3': 0.1,
-    'inheritedRaWeight::4': 0.02, 'inheritedRaWeight::5': 0.02, 'inheritedRaWeight::6': 0.02,
-    'inheritedRaWeight::7': 0.02, 'inheritedRaWeight::8': 0.05, 'inheritedRaWeight::9': 0.07,
+test('EVT-63: per-asset weights strategy reaches the reducer (heavy year-0 weight)', () => {
+  // The strategy + weights vector now ride on the inherited-RA asset descriptor
+  // (design 63 §12.3), not global params. A heavy year-0 weight proves the
+  // per-account tuning is consumed by the handler.
+  const cfg = raConfig({
+    distributionMode: 'weights',
+    weights: [0.5, 0.1, 0.1, 0.1, 0.02, 0.02, 0.02, 0.02, 0.05, 0.07],
   });
   const { sim } = loadToolsetScenario(cfg);
   sim.stepTo(new Date(Date.UTC(2031, 0, 31))); // through 2030 year-end (window year 0)
@@ -515,7 +516,7 @@ function superConfig(assetOverride = {}, bequestOverride = {}) {
         country: 'US', currency: { code: 'USD', symbol: '$' } },
     ],
     bequests: [
-      { __type: 'Bequest', id: 'beq1', name: 'Estate', decedentName: 'Parent',
+      { __type: 'Bequest', id: 'beq1', stateKey: 'estateBequest', name: 'Estate', decedentName: 'Parent',
         relationship: 'immediate', decedentState: null, heirId: 'primary',
         inheritanceYear: 2030, inheritanceMonth: 5, inheritanceDay: 15,
         assets: [ { __type: 'SuperannuationAccount', name: 'Inherited Super', country: 'AU',
@@ -583,7 +584,7 @@ function neConfig(relationship, decedentState) {
         country: 'US', currency: { code: 'USD', symbol: '$' } },
     ],
     bequests: [
-      { __type: 'Bequest', id: 'beq1', name: 'Estate', decedentName: 'Parent',
+      { __type: 'Bequest', id: 'beq1', stateKey: 'estateBequest', name: 'Estate', decedentName: 'Parent',
         relationship, decedentState, heirId: 'primary',
         inheritanceYear: 2030, inheritanceMonth: 5, inheritanceDay: 15,
         assets: [ { __type: 'BrokerageAccount', name: 'Inherited Brokerage', country: 'US',
@@ -656,4 +657,79 @@ test('EVT-63: setting inheritanceYear activates the default example bequest', ()
   assert.strictEqual(sim.state.inheritedBrokerageAccount.balance, 400_000, 'funded at the date');
   assert.strictEqual(sim.state.inheritedHomeProperty.value, 600_000);
   assert.strictEqual(sim.state.inheritedIraAccount.balance, 300_000);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EVT-63: §12.3 — inheritance params are DERIVED from Bequest records (design 55)
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('EVT-63: no Bequest record ⇒ no inheritance params are generated', () => {
+  const gen = ScenarioParamGenerator.generate({ accounts: [], persons: [], bequests: [] });
+  assert.ok(!gen.some(e => e.key.startsWith('bequest.') || e.key.startsWith('raAsset.')),
+    'no bequest/raAsset params without a Bequest record');
+});
+
+test('EVT-63: a Bequest generates a per-record inheritanceYear param (linked via node)', () => {
+  const cfg = {
+    bequests: [{
+      __type: 'Bequest', stateKey: 'estateBequest', name: "Parent's Estate",
+      assets: [{ __type: 'BrokerageAccount', stateKey: 'inhBrok', inheritedValue: 100_000 }],
+    }],
+  };
+  const gen = ScenarioParamGenerator.generate(cfg);
+  const yearParam = gen.find(e => e.key === 'bequest.estateBequest.inheritanceYear');
+  assert.ok(yearParam, 'inheritanceYear param generated per Bequest');
+  assert.deepStrictEqual(yearParam.node, { type: 'bequest', stateKey: 'estateBequest', field: 'inheritanceYear' });
+  // A brokerage (non-retirement) asset grows NO drawdown params.
+  assert.ok(!gen.some(e => e.key.startsWith('raAsset.')), 'brokerage asset ⇒ no RA drawdown params');
+});
+
+test('EVT-63: each inherited RA asset generates per-account drawdown knobs (strategy/ceiling/lumpYear)', () => {
+  const cfg = {
+    bequests: [{
+      __type: 'Bequest', stateKey: 'estateBequest',
+      assets: [
+        { __type: 'TraditionalIRAAccount', stateKey: 'inhIra', inheritedValue: 300_000, distributionMode: 'bracketFill' },
+        { __type: 'RothAccount',           stateKey: 'inhRoth', inheritedValue: 200_000 },
+        { __type: 'SuperannuationAccount',  stateKey: 'inhSuper', inheritedValue: 500_000 }, // no drawdown params
+      ],
+    }],
+  };
+  const gen = ScenarioParamGenerator.generate(cfg);
+  const keys = new Set(gen.map(e => e.key));
+  for (const sk of ['inhIra', 'inhRoth']) {
+    assert.ok(keys.has(`raAsset.${sk}.distributionMode`), `${sk} strategy param`);
+    assert.ok(keys.has(`raAsset.${sk}.fillCeiling`),      `${sk} ceiling param`);
+    assert.ok(keys.has(`raAsset.${sk}.lumpYear`),         `${sk} lumpYear param`);
+  }
+  // Super is a forced lump-sum — no ongoing distribution knobs.
+  assert.ok(![...keys].some(k => k.startsWith('raAsset.inhSuper.')), 'super ⇒ no drawdown params');
+  // The IRA strategy param seeds from the record's distributionMode.
+  assert.strictEqual(gen.find(e => e.key === 'raAsset.inhIra.distributionMode').defaultValue, 'bracketFill');
+});
+
+test('EVT-63: inherited-RA fillCeiling/lumpYear become optimizer variables (per asset)', () => {
+  // Full chain: generator emits raAsset.<sk>.distributionMode → params map → the
+  // opt dynamic builder discovers the RA and emits its fillCeiling + lumpYear axes.
+  const cfg = {
+    bequests: [{
+      __type: 'Bequest', stateKey: 'estateBequest',
+      assets: [
+        { __type: 'TraditionalIRAAccount', stateKey: 'inhIra', inheritedValue: 300_000, distributionMode: 'bracketFill' },
+        { __type: 'BrokerageAccount',      stateKey: 'inhBrok', inheritedValue: 100_000 }, // no opt axes
+      ],
+    }],
+  };
+  const params = {};
+  for (const p of ScenarioParamGenerator.generate(cfg)) params[p.key] = p.defaultValue;
+
+  const keys = new Set(buildOptVariables(params).map(v => v.paramKey));
+  assert.ok(keys.has('raAsset.inhIra.fillCeiling'), 'IRA fill-ceiling is an opt variable');
+  assert.ok(keys.has('raAsset.inhIra.lumpYear'),    'IRA lump-year is an opt variable');
+  assert.ok(!keys.has('raAsset.inhBrok.fillCeiling'), 'brokerage grows no RA opt variable');
+});
+
+test('EVT-63: no inherited RA ⇒ no inherited-RA optimizer variables', () => {
+  const keys = new Set(buildOptVariables({}).map(v => v.paramKey));
+  assert.ok(![...keys].some(k => k.startsWith('raAsset.')), 'no raAsset axes without an inherited RA');
 });

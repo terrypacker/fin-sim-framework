@@ -508,15 +508,9 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     node: { type: 'companyEquity', stateKey: 'companyEquityAccount', field: 'plannedSaleYear' },
   },
 
-  // ── Inheritance (design 63) ──────────────────────────────────────────────
-  {
-    key: 'inheritanceYear', label: 'Inheritance Year',
-    type: 'Number', group: 'Inheritance', mc: false, opt: false,
-    defaultValue: INTL_RETIREMENT_DEFAULTS.inheritanceYear,
-    nullable: true,
-    description: 'Calendar year the example bequest is inherited (null = inert; the inherited assets stay invisible until a year is set).',
-    node: { type: 'bequest', stateKey: 'estateBequest', field: 'inheritanceYear' },
-  },
+  // Inheritance (design 63): the inheritanceYear + per-inherited-RA drawdown knobs
+  // are GENERATED per-record from the Bequest records (design 55 template path /
+  // design 63 §12.3), so they are not hand-listed here.
 
   // ── Spending ───────────────────────────────────────────────────────────────
   {

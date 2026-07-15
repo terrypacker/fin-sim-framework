@@ -133,3 +133,32 @@ export const REAL_PROPERTY_PARAM_TEMPLATE = [
 // Template-ready but empty until these assets grow parameters (design 55 §4 / Phase 4).
 export const COLLECTIBLE_PARAM_TEMPLATE    = [];
 export const COMPANY_EQUITY_PARAM_TEMPLATE = [];
+
+// ── Inheritance (design 63 §12.3) ────────────────────────────────────────────
+// Per-record params derived from Bequest records + their inherited retirement
+// assets, so the inheritance param surface exists only when an inheritance does
+// and each knob carries a `node` (linked, design 32) — parallel to accounts.
+
+// Per Bequest: the activation year. Blank ⇒ inert (no INHERIT event, no seed).
+export const BEQUEST_PARAM_TEMPLATE = [
+  { field: 'inheritanceYear', label: 'Inheritance Year', type: 'Number', mc: false, opt: false, nullable: true,
+    description: 'Calendar year this bequest is inherited. Leave blank to keep it inert — the ' +
+      'inherited assets stay invisible (no net-worth, no drawdown) until a year is set.' },
+];
+
+// Per inherited retirement account (IRA / 401(k) / Roth): the SECURE 10-year
+// drawdown strategy + its tuning (design 63 §6.2). Blank fields fall back to the
+// handler defaults (bracketFill / $100k / year 0), mirroring the per-account
+// "blank = use the default" rate convention above.
+export const INHERITED_RA_PARAM_TEMPLATE = [
+  { field: 'distributionMode', label: 'RA Distribution Strategy', type: 'Enum',
+    options: ['equal', 'lump', 'maxDefer', 'bracketFill', 'weights'],
+    mc: false, opt: false, nullable: true,
+    description: 'SECURE 10-year drawdown strategy for this inherited retirement account. ' +
+      'Blank = bracketFill (fill ordinary income to the ceiling, spill the rest to year 9).' },
+  { field: 'fillCeiling', label: 'RA Fill Ceiling (real USD)', type: 'Number', mc: false, opt: true, nullable: true,
+    description: 'bracketFill ordinary-income ceiling in REAL base-year USD (the reducer inflates ' +
+      'it to nominal). Blank = the $100k default. The primary optimized scalar.' },
+  { field: 'lumpYear', label: 'RA Lump Year', type: 'Number', mc: false, opt: true, nullable: true,
+    description: 'lump strategy: the window year (0–9) the whole account is distributed in. Blank = year 0.' },
+];
