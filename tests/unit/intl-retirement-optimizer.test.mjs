@@ -42,6 +42,7 @@ import { AU_INCOME }       from '../../src/scenarios/toolsets/au-income-toolset.
 import { AU_BROKERAGE }    from '../../src/scenarios/toolsets/au-brokerage-toolset.js';
 import { AU_REAL_PROPERTY } from '../../src/scenarios/toolsets/au-real-property-toolset.js';
 import { US_AU_CROSS_BORDER } from '../../src/scenarios/toolsets/us-au-cross-border-toolset.js';
+import { INHERITANCE }      from '../../src/scenarios/toolsets/inheritance-toolset.js';
 import { ECONOMIC_REGIMES }  from '../../src/scenarios/toolsets/economic-regimes-toolset.js';
 
 /**
@@ -54,7 +55,7 @@ function buildCombinedSchema() {
     US_BANKING, US_TAX, US_STATE_TAX, US_RETIREMENT, US_INCOME, US_BROKERAGE,
     US_REAL_PROPERTY, US_COLLECTIBLES, US_ROTH_CONVERSION, US_EARLY_WITHDRAWAL,
     AU_BANKING, AU_TAX, AU_RETIREMENT, AU_INCOME, AU_BROKERAGE,
-    AU_REAL_PROPERTY, US_AU_CROSS_BORDER, US_COMPANY_SALE, ECONOMIC_REGIMES,
+    AU_REAL_PROPERTY, US_AU_CROSS_BORDER, US_COMPANY_SALE, INHERITANCE, ECONOMIC_REGIMES,
   ]) registry.register(t);
 
   const toolsetEntries = IntlRetirementScenario.getToolsets()
@@ -367,7 +368,7 @@ describe('IntlRetirement combined param schema mc/opt flags', () => {
       US_BANKING, US_TAX, US_STATE_TAX, US_RETIREMENT, US_INCOME, US_BROKERAGE,
       US_REAL_PROPERTY, US_COLLECTIBLES, US_ROTH_CONVERSION, US_EARLY_WITHDRAWAL,
       AU_BANKING, AU_TAX, AU_RETIREMENT, AU_INCOME, AU_BROKERAGE,
-      AU_REAL_PROPERTY, US_AU_CROSS_BORDER, US_COMPANY_SALE, ECONOMIC_REGIMES,
+      AU_REAL_PROPERTY, US_AU_CROSS_BORDER, US_COMPANY_SALE, INHERITANCE, ECONOMIC_REGIMES,
     ]) registry.register(t);
 
     const toolsetKeys = new Set(

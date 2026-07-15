@@ -30,6 +30,7 @@ import { AU_BROKERAGE }        from './toolsets/au-brokerage-toolset.js';
 import { US_INCOME }           from './toolsets/us-income-toolset.js';
 import { US_COMPANY_SALE }     from './toolsets/us-company-sale-toolset.js';
 import { AU_INCOME }           from './toolsets/au-income-toolset.js';
+import { INHERITANCE }         from './toolsets/inheritance-toolset.js';
 import { ECONOMIC_REGIMES }    from './toolsets/economic-regimes-toolset.js';
 import { ServiceRegistry }     from '../services/service-registry.js';
 import { USD, AUD }            from '../finance/assets/account.js';
@@ -398,6 +399,9 @@ export const INTL_RETIREMENT_DEFAULTS = {
 
   // Company equity sale year (null = no planned sale)
   companySaleYear: 2033,
+
+  // Inheritance year for the example bequest (null = inert; design 63)
+  inheritanceYear: null,
 };
 
 /**
@@ -503,6 +507,10 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
     description: 'Calendar year the company equity stake is sold (null = no planned sale)',
     node: { type: 'companyEquity', stateKey: 'companyEquityAccount', field: 'plannedSaleYear' },
   },
+
+  // Inheritance (design 63): the inheritanceYear + per-inherited-RA drawdown knobs
+  // are GENERATED per-record from the Bequest records (design 55 template path /
+  // design 63 §12.3), so they are not hand-listed here.
 
   // ── Spending ───────────────────────────────────────────────────────────────
   {
@@ -768,7 +776,7 @@ export class IntlRetirementScenario extends BaseScenario {
       US_BANKING, US_TAX, US_STATE_TAX, US_BROKERAGE, US_INCOME, US_RETIREMENT,
       AU_BANKING, AU_TAX, AU_BROKERAGE, AU_INCOME, AU_RETIREMENT,
       US_AU_CROSS_BORDER, US_REAL_PROPERTY, AU_REAL_PROPERTY,
-      US_COLLECTIBLES, US_ROTH_CONVERSION, US_EARLY_WITHDRAWAL, US_COMPANY_SALE, ECONOMIC_REGIMES,
+      US_COLLECTIBLES, US_ROTH_CONVERSION, US_EARLY_WITHDRAWAL, US_COMPANY_SALE, INHERITANCE, ECONOMIC_REGIMES,
     ];
     const toolsetParams = toolsets
       .flatMap(t => t.paramSchema?.({}) ?? [])
@@ -784,6 +792,7 @@ export class IntlRetirementScenario extends BaseScenario {
       'US_REAL_PROPERTY', 'AU_REAL_PROPERTY',
       'US_COLLECTIBLES', 'US_ROTH_CONVERSION', 'US_EARLY_WITHDRAWAL',
       'US_COMPANY_SALE',
+      'INHERITANCE',
       'ECONOMIC_REGIMES',
     ];
   }
@@ -1060,6 +1069,28 @@ export class IntlRetirementScenario extends BaseScenario {
           ...(p.companySaleYear != null ? { plannedSaleYear: p.companySaleYear } : {}),
         },
       ],
+
+      // ── Inheritance (design 63) ───────────────────────────────────────────────
+      // An example external-decedent bequest. Inert until inheritanceYear is set
+      // (null default ⇒ contributes nothing, so the reference golden is unmoved).
+      // Set the year to fund the inherited assets + arm the SECURE 10-year IRA
+      // drawdown, the AU super lump-sum, and any NE inheritance tax.
+      bequests: [
+        {
+          __type: 'Bequest', name: "Parent's Estate", stateKey: 'estateBequest',
+          decedentName: 'Parent', relationship: 'immediate', decedentState: null,
+          heirId: 'primary', paidViaEstate: false,
+          ...(p.inheritanceYear != null ? { inheritanceYear: p.inheritanceYear } : {}),
+          assets: [
+            { __type: 'BrokerageAccount',      name: 'Inherited Brokerage', country: 'US',
+              stateKey: 'inheritedBrokerageAccount', inheritedValue: 400_000, deceasedCostBase: 150_000 },
+            { __type: 'TraditionalIRAAccount', name: 'Inherited IRA',       country: 'US',
+              stateKey: 'inheritedIraAccount',       inheritedValue: 300_000, distributionMode: 'bracketFill' },
+            { __type: 'RealProperty',          name: 'Inherited Home',      country: 'US',
+              stateKey: 'inheritedHomeProperty',     inheritedValue: 600_000, deceasedCostBase: 200_000 },
+          ],
+        },
+      ],
     };
   }
 
@@ -1116,6 +1147,7 @@ export class IntlRetirementScenario extends BaseScenario {
     toolsetRegistry.register(US_INCOME);
     toolsetRegistry.register(AU_INCOME);
     toolsetRegistry.register(US_COMPANY_SALE);
+    toolsetRegistry.register(INHERITANCE);
     toolsetRegistry.register(ECONOMIC_REGIMES);
     new ScenarioCompiler(toolsetRegistry).compile(cfg, registry);
 

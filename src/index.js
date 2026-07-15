@@ -17,6 +17,8 @@ import { AuSavingsContributionApplyReducer, AuSavingsWithdrawalApplyReducer, AuS
 import { SuperContributionApplyReducer, SuperWithdrawalContribApplyReducer, SuperWithdrawalEarningsApplyReducer, SuperEarningsApplyReducer, SuperContributionHandler, SuperWithdrawalContributionsHandler, SuperWithdrawalEarningsHandler, SuperEarningsDirectHandler } from './finance/account-rules/au/au-super-classes.js';
 import { BaseAccountModule } from './finance/account-rules/base-account-module.js';
 import { resolveCashKey, resolveDestinationCashKey } from './finance/account-rules/cash-routing.js';
+import { InheritHandler, InheritApplyReducer, InheritanceNeTaxApplyReducer, InheritedRaDistributionHandler, InheritedRaDistributionApplyReducer } from './finance/account-rules/inheritance-classes.js';
+import { INHERITED_RA_WINDOW, INHERITED_RA_DISTRIBUTION_STRATEGY, inheritedRaStrategy } from './finance/account-rules/inherited-ra-distribution-strategy.js';
 import { loanKeyForProperty, findLoanForProperty, synthesizeLoanForProperty, offsetBalanceForLoan, effectivePrincipal, resolveLoanRate, LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer } from './finance/account-rules/loan-classes.js';
 import { UsMortgagePaymentHandler, UsMortgagePaymentApplyReducer, AuMortgagePaymentHandler, AuMortgagePaymentApplyReducer } from './finance/account-rules/mortgage-payment-classes.js';
 import { computeRentalMonth, UsRentalIncomeHandler, UsRentalIncomeApplyReducer, AuRentalIncomeHandler, AuRentalIncomeApplyReducer } from './finance/account-rules/rental-income-classes.js';
@@ -38,6 +40,7 @@ import { auMainResidenceExemptFraction, UsHouseSaleApplyReducer, UsHouseSaleHand
 import { getUniformDistributionPeriod } from './finance/account-rules/us/us-rmd-uniform-table.js';
 import { USD, AUD, ACCOUNT_TYPE, InsufficientFundsError, Account, CheckingAccount, SavingsAccount, LoanAccount, OffsetAccount } from './finance/assets/account.js';
 import { Asset } from './finance/assets/asset.js';
+import { Bequest } from './finance/assets/bequest.js';
 import { Collectible } from './finance/assets/collectible.js';
 import { CompanyEquity } from './finance/assets/company-equity.js';
 import { reconcileLedgerToBalance, deriveEarningsBasis, InvestmentAccount, BrokerageAccount, RetirementAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from './finance/assets/investment-account.js';
@@ -95,6 +98,7 @@ import { FxTransferToHandler } from './finance/fx/fx-transfer-handler.js';
 import { UsdAudPair } from './finance/fx/usd-aud-pair.js';
 import { AssetAppreciationHandler, AssetAppreciateReducer } from './finance/handlers/asset-appreciation-handler.js';
 import { BondCouponScheduledHandler } from './finance/handlers/bond-coupon-handler.js';
+import { CashSleeveInterestHandler } from './finance/handlers/cash-sleeve-interest-handler.js';
 import { ChangeResidencyHandler } from './finance/handlers/change-residency-handler.js';
 import { ChangeStateResidencyHandler } from './finance/handlers/change-state-residency-handler.js';
 import { DividendScheduledHandler } from './finance/handlers/dividend-scheduled-handler.js';
@@ -115,7 +119,7 @@ import { HOLDING_ACTIVITY_KIND, snapshotHoldings, totalSnapshot, buildHoldingAct
 import { HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer, HoldingSplitReducer, HoldingRetitleReducer, HOLDING_REDUCER_CLASSES, _syncBalance } from './finance/holdings/holding-reducers.js';
 import { scaleHoldings, rescaleHoldingsToBalance, distributeHoldingsCredit, holdingsOutOfSync } from './finance/holdings/holding-utils.js';
 import { Holding } from './finance/holdings/holding.js';
-import { computeHoldingsGrowth, computeHoldingsDividends, computeHoldingsCoupons } from './finance/holdings/holdings-earnings.js';
+import { computeHoldingsGrowth, computeHoldingsDividends, computeHoldingsCoupons, computeHoldingsCashInterest } from './finance/holdings/holdings-earnings.js';
 import { consumeHoldingsFifo } from './finance/holdings/holdings-fifo.js';
 import { JournalDataSource } from './finance/journal-data-source.js';
 import { JournalQueryApi } from './finance/journal-query-api.js';
@@ -155,6 +159,7 @@ import { AccumulateConsumptionUtilityReducer } from './finance/reducers/accumula
 import { AccumulateDeficitReducer } from './finance/reducers/accumulate-deficit-reducer.js';
 import { AccumulateTaxesPaidReducer } from './finance/reducers/accumulate-taxes-paid-reducer.js';
 import { BondCouponCashApplyReducer } from './finance/reducers/bond-coupon-cash-apply-reducer.js';
+import { CashSleeveInterestApplyReducer } from './finance/reducers/cash-sleeve-interest-apply-reducer.js';
 import { ChangeResidencyApplyReducer } from './finance/reducers/change-residency-apply-reducer.js';
 import { ChangeStateResidencyApplyReducer } from './finance/reducers/change-state-residency-apply-reducer.js';
 import { ExpenseDebitReducer } from './finance/reducers/expense-debit-reducer.js';
@@ -173,6 +178,7 @@ import { ScenarioCompareRunner } from './finance/scenario-compare/scenario-compa
 import { flattenNumericState, computeStateDiff, journalPairKey, mergeEntryFieldRows, pairEntriesWithinDay, firstDivergenceDate, runningNetWorthSeries, buildJournalOverlay } from './finance/scenario-compare/scenario-compare-utils.js';
 import { AccountService } from './finance/services/account-service.js';
 import { AssetService } from './finance/services/asset-service.js';
+import { inheritedAssetMeta, BequestService } from './finance/services/bequest-service.js';
 import { CollectibleService } from './finance/services/collectible-service.js';
 import { CompanyEquityService } from './finance/services/company-equity-service.js';
 import { PersonService } from './finance/services/person-service.js';
@@ -249,7 +255,7 @@ import { QueryApi } from './query/query-api.js';
 import { BaseScenario } from './scenarios/base-scenario.js';
 import { BlankScenario } from './scenarios/blank-scenario.js';
 import { DRAWDOWN_STRATEGIES, DRAWDOWN_ROLES, DRAWDOWN_WEIGHT_MODE, DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP, drawdownWeightKey, DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_CASH_ROLES, DRAWDOWN_ROLE_LABELS, presentDrawdownWeightRoles, drawdownWeightsFromStrategy, DEFAULT_DRAWDOWN_WEIGHTS, buildDrawdownWeightSchema, DEFAULT_DRAWDOWN_WEIGHT_PARAMS, INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, INTL_RETIREMENT_PARAM_ALIASES, resolveBalanceCenters, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
-import { BALANCE_TARGET, ACCOUNT_PARAM_TEMPLATES, PERSON_PARAM_TEMPLATE, REAL_PROPERTY_PARAM_TEMPLATE, COLLECTIBLE_PARAM_TEMPLATE, COMPANY_EQUITY_PARAM_TEMPLATE } from './scenarios/params/record-param-templates.js';
+import { BALANCE_TARGET, ACCOUNT_PARAM_TEMPLATES, PERSON_PARAM_TEMPLATE, REAL_PROPERTY_PARAM_TEMPLATE, COLLECTIBLE_PARAM_TEMPLATE, COMPANY_EQUITY_PARAM_TEMPLATE, BEQUEST_PARAM_TEMPLATE, INHERITED_RA_PARAM_TEMPLATE } from './scenarios/params/record-param-templates.js';
 import { GENERATED_KEY_PREFIXES, isGeneratedParamKey, decodeGeneratedParamKey, ScenarioParamGenerator } from './scenarios/params/scenario-param-generator.js';
 import { synthesizeWeightedPriorities, ScenarioLoader } from './scenarios/scenario-loader.js';
 import { ScenarioRegistry } from './scenarios/scenario-registry.js';
@@ -262,6 +268,7 @@ import { AU_REAL_PROPERTY } from './scenarios/toolsets/au-real-property-toolset.
 import { AU_RETIREMENT } from './scenarios/toolsets/au-retirement-toolset.js';
 import { AU_TAX } from './scenarios/toolsets/au-tax-toolset.js';
 import { resolvePropertyRateKey, ECONOMIC_REGIMES } from './scenarios/toolsets/economic-regimes-toolset.js';
+import { INHERITANCE } from './scenarios/toolsets/inheritance-toolset.js';
 import { ScenarioCompiler } from './scenarios/toolsets/scenario-compiler.js';
 import { ToolsetRegistry } from './scenarios/toolsets/toolset-registry.js';
 import { US_AU_CROSS_BORDER } from './scenarios/toolsets/us-au-cross-border-toolset.js';
@@ -318,6 +325,7 @@ import { InMemoryStorage } from './storage/in-memory-storage.js';
 import { AccountEditor } from './visualization/accounts/account-editor.js';
 import { AccountsController } from './visualization/accounts/accounts-controller.js';
 import { APP_EVENTS, AppDisplaySettings } from './visualization/app-display-settings.js';
+import { BequestEditor } from './visualization/assets/bequest-editor.js';
 import { CollectibleEditor } from './visualization/assets/collectible-editor.js';
 import { CompanyEquityEditor } from './visualization/assets/company-equity-editor.js';
 import { RealPropertyEditor } from './visualization/assets/real-property-editor.js';
@@ -333,6 +341,7 @@ import { initEChartWhenReady } from './visualization/components/echarts-init.js'
 import { EventEditor } from './visualization/components/event-editor.js';
 import { AccountNodeRenderer } from './visualization/components/graph/rendering/account-node-renderer.js';
 import { ActionNodeRenderer } from './visualization/components/graph/rendering/action-node-renderer.js';
+import { BequestNodeRenderer } from './visualization/components/graph/rendering/bequest-node-renderer.js';
 import { CollectibleNodeRenderer } from './visualization/components/graph/rendering/collectible-node-renderer.js';
 import { CompanyEquityNodeRenderer } from './visualization/components/graph/rendering/company-equity-node-renderer.js';
 import { DefaultNodeRenderer, NodeRenderGroup } from './visualization/components/graph/rendering/default-node-renderer.js';
@@ -471,6 +480,14 @@ export const Finance = {
   BaseAccountModule,
   resolveCashKey,
   resolveDestinationCashKey,
+  InheritHandler,
+  InheritApplyReducer,
+  InheritanceNeTaxApplyReducer,
+  InheritedRaDistributionHandler,
+  InheritedRaDistributionApplyReducer,
+  INHERITED_RA_WINDOW,
+  INHERITED_RA_DISTRIBUTION_STRATEGY,
+  inheritedRaStrategy,
   loanKeyForProperty,
   findLoanForProperty,
   synthesizeLoanForProperty,
@@ -584,6 +601,7 @@ export const Finance = {
   LoanAccount,
   OffsetAccount,
   Asset,
+  Bequest,
   Collectible,
   CompanyEquity,
   reconcileLedgerToBalance,
@@ -682,6 +700,7 @@ export const Finance = {
   AssetAppreciationHandler,
   AssetAppreciateReducer,
   BondCouponScheduledHandler,
+  CashSleeveInterestHandler,
   ChangeResidencyHandler,
   ChangeStateResidencyHandler,
   DividendScheduledHandler,
@@ -741,6 +760,7 @@ export const Finance = {
   computeHoldingsGrowth,
   computeHoldingsDividends,
   computeHoldingsCoupons,
+  computeHoldingsCashInterest,
   consumeHoldingsFifo,
   JournalDataSource,
   JournalQueryApi,
@@ -821,6 +841,7 @@ export const Finance = {
   AccumulateDeficitReducer,
   AccumulateTaxesPaidReducer,
   BondCouponCashApplyReducer,
+  CashSleeveInterestApplyReducer,
   ChangeResidencyApplyReducer,
   ChangeStateResidencyApplyReducer,
   ExpenseDebitReducer,
@@ -852,6 +873,8 @@ export const Finance = {
   buildJournalOverlay,
   AccountService,
   AssetService,
+  inheritedAssetMeta,
+  BequestService,
   CollectibleService,
   CompanyEquityService,
   PersonService,
@@ -1070,6 +1093,8 @@ export const Scenarios = {
   REAL_PROPERTY_PARAM_TEMPLATE,
   COLLECTIBLE_PARAM_TEMPLATE,
   COMPANY_EQUITY_PARAM_TEMPLATE,
+  BEQUEST_PARAM_TEMPLATE,
+  INHERITED_RA_PARAM_TEMPLATE,
   GENERATED_KEY_PREFIXES,
   isGeneratedParamKey,
   decodeGeneratedParamKey,
@@ -1087,6 +1112,7 @@ export const Scenarios = {
   AU_TAX,
   resolvePropertyRateKey,
   ECONOMIC_REGIMES,
+  INHERITANCE,
   ScenarioCompiler,
   ToolsetRegistry,
   US_AU_CROSS_BORDER,
@@ -1124,6 +1150,7 @@ export const Visualization = {
   AccountsController,
   APP_EVENTS,
   AppDisplaySettings,
+  BequestEditor,
   CollectibleEditor,
   CompanyEquityEditor,
   RealPropertyEditor,
@@ -1139,6 +1166,7 @@ export const Visualization = {
   EventEditor,
   AccountNodeRenderer,
   ActionNodeRenderer,
+  BequestNodeRenderer,
   CollectibleNodeRenderer,
   CompanyEquityNodeRenderer,
   DefaultNodeRenderer,
