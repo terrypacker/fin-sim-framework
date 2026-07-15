@@ -19,6 +19,7 @@
 
 import { BaseService }       from '../../services/base-service.js';
 import { USD, AUD, ACCOUNT_TYPE } from '../assets/account.js';
+import { ACCOUNT_ROLES }     from '../state/account-roles.js';
 
 /**
  * Per-`__type` metadata for an inherited asset descriptor: how it seeds into
@@ -144,11 +145,95 @@ export class BequestService extends BaseService {
     for (const asset of (bequest.assets ?? [])) {
       const meta = inheritedAssetMeta(asset.__type);
       if (!meta || !asset.stateKey) continue;
+      // INHERITANCE runs last, so this seed is authoritative (net worth always works,
+      // even without the owning toolset). For promoted assets (design 63 §13) the
+      // owning toolset — pulled in via the compiler's context-injection — adds the
+      // growth / dividend / appreciation / sale *handlers* on top of this state.
       seeds[asset.stateKey] = this._seedPlain(asset, meta, bequest);
       inherited.push(this._fundingDescriptor(asset, meta, bequest));
     }
 
     return { seeds, inherited, inheritanceDateMs };
+  }
+
+  /**
+   * Promote a Bequest's inherited brokerage / real-property / collectible assets
+   * into first-class SERVICE-RECORD shapes (design 63 §13) so the compiler can
+   * inject them into `context.accounts` / `context.realProperties` /
+   * `context.collectibles`. Their own toolsets then seed (at 0), grow, draw, and
+   * sell them like any other record — the INHERIT event funds them at the date.
+   *
+   * Only ACTIVE bequests (a set inheritanceYear) contribute, so an inert bequest
+   * injects nothing and the reference golden stays byte-identical. Inherited
+   * retirement accounts are NOT promoted here (they are drained by the SECURE
+   * 10-year stream, §6.2; discretionary drawdown + growth are v2 — §13.4/§13.5);
+   * super is a forced lump-sum (§6.4).
+   *
+   * @param {import('../assets/bequest.js').Bequest} bequest
+   * @returns {{ accounts: object[], realProperties: object[], collectibles: object[] }}
+   */
+  expandContextRecords(bequest) {
+    const out = { accounts: [], realProperties: [], collectibles: [] };
+    if (bequest.inheritanceYear == null) return out;   // inert ⇒ inject nothing
+
+    for (const asset of (bequest.assets ?? [])) {
+      const meta = inheritedAssetMeta(asset.__type);
+      if (!meta || !asset.stateKey) continue;
+      const country  = asset.country ?? 'US';
+      const currency = asset.currency ?? (country === 'AU' ? AUD : USD);
+      const ownerId  = asset.ownerId ?? bequest.heirId ?? null;
+      const marker   = { inherited: true, bequestId: bequest.id };
+
+      if (meta.category === 'account' && !meta.isRetirement) {
+        // Inherited brokerage → heir-owned equity account: liquid, drawdownable,
+        // grows + pays dividends via the country's brokerage machinery.
+        out.accounts.push({
+          __type:                'BrokerageAccount',
+          name:                  asset.name ?? 'Inherited Brokerage',
+          stateKey:              asset.stateKey,
+          type:                  ACCOUNT_TYPE.BROKERAGE,
+          role:                  country === 'AU' ? ACCOUNT_ROLES.AU_STOCK : ACCOUNT_ROLES.US_STOCK,
+          balance:               0,
+          contributionBasis:     0,
+          holdings:              [],
+          ownerId, country, currency,
+          drawdownPriority:      asset.drawdownPriority ?? 2,
+          growthRate:            asset.growthRate   ?? null,
+          dividendRate:          asset.dividendRate ?? null,
+          allowsEarlyWithdrawal: true,
+          ...marker,
+        });
+      } else if (meta.category === 'real-property') {
+        out.realProperties.push({
+          __type:              'RealProperty',
+          name:                asset.name ?? 'Inherited Home',
+          stateKey:            asset.stateKey,
+          value:               0,
+          costBasis:           0,
+          mortgageBalance:     0,
+          appreciationRate:    asset.appreciationRate ?? 0.04,
+          plannedSaleYear:     asset.plannedSaleYear ?? null,
+          ownerId, country, currency,
+          isPrimaryResidence:  false,
+          inheritedFromMainResidence: asset.inheritedFromMainResidence ?? false,
+          ...marker,
+        });
+      } else if (meta.category === 'collectible') {
+        out.collectibles.push({
+          __type:           'Collectible',
+          name:             asset.name ?? 'Inherited Collectible',
+          stateKey:         asset.stateKey,
+          value:            0,
+          costBasis:        0,
+          appreciationRate: asset.appreciationRate ?? 0.035,
+          plannedSaleYear:  asset.plannedSaleYear ?? null,
+          isGold:           asset.isGold ?? false,
+          ownerId, country, currency,
+          ...marker,
+        });
+      }
+    }
+    return out;
   }
 
   // ─── Internal helpers ─────────────────────────────────────────────────────
@@ -236,16 +321,25 @@ export class BequestService extends BaseService {
         ...marker,
       };
     }
-    // account category (brokerage / retirement / super)
+    // account category (brokerage / retirement / super).
+    // Inherited BROKERAGE is promoted (design 63 §13): a heir-owned equity account
+    // with a role + drawdownPriority so it counts toward net liquidity and enters
+    // the discretionary drawdown list (state-driven — works even without the
+    // brokerage toolset; growth/dividends need it). Retirement stays out of
+    // discretionary drawdown in v1 (drained by the SECURE stream; §13.5 v2), and
+    // super is a lump-sum (never funded as an account).
+    const isPromotedBrokerage = meta.category === 'account' && !meta.isRetirement;
     const plain = {
       balance:               0,
       stateKey:              asset.stateKey,
       type:                  meta.accountType,
       country, currency, ownerId,
-      role:                  null,
+      role:                  isPromotedBrokerage
+                               ? (country === 'AU' ? ACCOUNT_ROLES.AU_STOCK : ACCOUNT_ROLES.US_STOCK)
+                               : null,
       minimumBalance:        0,
-      drawdownPriority:      null,
-      allowsEarlyWithdrawal: false,
+      drawdownPriority:      isPromotedBrokerage ? (asset.drawdownPriority ?? 2) : null,
+      allowsEarlyWithdrawal: isPromotedBrokerage,
       holdings:              [],
       ...marker,
     };

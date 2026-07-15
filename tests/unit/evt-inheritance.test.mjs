@@ -215,9 +215,10 @@ test('EVT-63: no bequests configured ⇒ INHERITANCE toolset contributes no stat
 // EVT-63: P2 — INHERIT funding + basis stamping
 // ══════════════════════════════════════════════════════════════════════════════
 
-// Past the 2030-06-15 inheritance but before the first year-end (Dec 31)
-// inherited-RA distribution, so P2 funding assertions see the full funded balance.
-const AFTER_INHERIT = new Date(Date.UTC(2030, 8, 30));
+// Just after the 2030-06-15 inheritance but before the first month-end expense
+// draw — so P2 funding assertions see the full funded balance on the now-live
+// (drawdownable) accounts, before any expense drawdown or year-end distribution.
+const AFTER_INHERIT = new Date(Date.UTC(2030, 5, 20));
 
 test('EVT-63: INHERIT event funds inherited records at the inheritance date', () => {
   const { sim } = loadToolsetScenario(inheritanceConfig());
@@ -732,4 +733,131 @@ test('EVT-63: inherited-RA fillCeiling/lumpYear become optimizer variables (per 
 test('EVT-63: no inherited RA ⇒ no inherited-RA optimizer variables', () => {
   const keys = new Set(buildOptVariables({}).map(v => v.paramKey));
   assert.ok(![...keys].some(k => k.startsWith('raAsset.')), 'no raAsset axes without an inherited RA');
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EVT-63: §13 — post-inheritance asset promotion (usable, not inert)
+// ══════════════════════════════════════════════════════════════════════════════
+
+import { computeNetLiquidity } from '../../src/finance/derived-metrics/net-liquidity.js';
+
+// Full US machinery so promoted assets grow / draw / sell. Big cash buffer so the
+// promoted brokerage isn't spent unless a test intends it.
+function promotionConfig(assets, { usSavings = 2_000_000, monthlyWage = 0 } = {}) {
+  return {
+    toolsets: ['US_RETIREMENT', 'AU_RETIREMENT', 'US_REAL_PROPERTY', 'US_COLLECTIBLES', 'INHERITANCE'],
+    simStart: '2026-01-01', simEnd: '2046-01-01',
+    parameters: {},
+    persons: [
+      { __type: 'Person', id: 'primary', name: 'Primary', birthDate: '1965-04-15',
+        citizen: ['US'], lifeExpectancy: 95, monthlyWage,
+        retirementDate: '2025-01-01', socialSecurityMonthly: 0 },
+    ],
+    accounts: [
+      { __type: 'SavingsAccount', id: 'us-savings', name: 'US Savings', type: 'savings',
+        role: 'us-savings', stateKey: 'usSavingsAccount', initialValue: usSavings,
+        ownershipType: 'sole', ownerId: 'primary', minimumBalance: 0,
+        country: 'US', currency: { code: 'USD', symbol: '$' } },
+    ],
+    bequests: [
+      { __type: 'Bequest', id: 'beq1', stateKey: 'estateBequest', name: 'Estate', decedentName: 'Parent',
+        relationship: 'immediate', heirId: 'primary',
+        inheritanceYear: 2030, inheritanceMonth: 5, inheritanceDay: 15, assets },
+    ],
+  };
+}
+
+test('EVT-63 §13: inherited brokerage counts toward net liquidity once funded', () => {
+  const { sim } = loadToolsetScenario(promotionConfig([
+    { __type: 'BrokerageAccount', name: 'Inherited Brokerage', country: 'US',
+      inheritedValue: 400_000, stateKey: 'inheritBrokerage' },
+  ]));
+  const liq0 = computeNetLiquidity(sim.state, new Date(Date.UTC(2027, 0, 1)), 'USD');
+  sim.stepTo(new Date(Date.UTC(2030, 5, 20)));
+  const liq1 = computeNetLiquidity(sim.state, new Date(Date.UTC(2030, 5, 20)), 'USD');
+  assert.ok(liq1 - liq0 >= 400_000 - 1, `inherited brokerage should add ~400k to net liquidity, got +${liq1 - liq0}`);
+});
+
+test('EVT-63 §13: inherited brokerage is drawn to cover expenses (drawdownable)', () => {
+  // Little cash + a wage-free retiree ⇒ expenses fall through to the inherited brokerage.
+  const { sim } = loadToolsetScenario(promotionConfig([
+    { __type: 'BrokerageAccount', name: 'Inherited Brokerage', country: 'US',
+      inheritedValue: 400_000, stateKey: 'inheritBrokerage' },
+  ], { usSavings: 3_000 }));
+  sim.stepTo(new Date(Date.UTC(2032, 0, 31))); // ~1.5y of expenses past the inheritance
+  assert.ok(sim.state.inheritBrokerage.balance < 400_000,
+    `inherited brokerage should be drawn for expenses, still ${sim.state.inheritBrokerage.balance}`);
+});
+
+test('EVT-63 §13: inherited brokerage grows after inheritance', () => {
+  const { sim } = loadToolsetScenario(promotionConfig([
+    { __type: 'BrokerageAccount', name: 'Inherited Brokerage', country: 'US',
+      inheritedValue: 400_000, stateKey: 'inheritBrokerage' },
+  ]));
+  sim.stepTo(new Date(Date.UTC(2030, 5, 20)));
+  const funded = sim.state.inheritBrokerage.balance;
+  sim.stepTo(new Date(Date.UTC(2033, 0, 31))); // a few year-ends of equity growth
+  assert.ok(sim.state.inheritBrokerage.balance > funded,
+    `inherited brokerage should grow post-inheritance: ${funded} → ${sim.state.inheritBrokerage.balance}`);
+});
+
+test('EVT-63 §13: inherited real property appreciates and is sellable at a set sale year', () => {
+  const { sim } = loadToolsetScenario(promotionConfig([
+    { __type: 'RealProperty', name: 'Inherited Home', country: 'US',
+      inheritedValue: 600_000, deceasedCostBase: 200_000, appreciationRate: 0.04,
+      plannedSaleYear: 2035, stateKey: 'inheritHome' },
+  ]));
+  sim.stepTo(new Date(Date.UTC(2033, 0, 31)));
+  assert.ok(sim.state.inheritHome.value > 600_000, `home should appreciate, got ${sim.state.inheritHome.value}`);
+
+  const cashBefore = sim.state.usSavingsAccount.balance;
+  sim.stepTo(new Date(Date.UTC(2035, 6, 1))); // past the 2035 planned sale
+  assert.ok((sim.state.inheritHome.value ?? 0) < 1, `home should be sold (value→0), got ${sim.state.inheritHome.value}`);
+  assert.ok(sim.state.usSavingsAccount.balance > cashBefore, 'sale proceeds credited to cash');
+});
+
+test('EVT-63 §13: inherited collectible is sellable at a set sale year', () => {
+  const { sim } = loadToolsetScenario(promotionConfig([
+    { __type: 'Collectible', name: 'Inherited Gold', country: 'US', isGold: true,
+      inheritedValue: 100_000, appreciationRate: 0.03, plannedSaleYear: 2034, stateKey: 'inheritGold' },
+  ]));
+  sim.stepTo(new Date(Date.UTC(2033, 0, 31)));
+  assert.ok(sim.state.inheritGold.value >= 100_000, `gold should appreciate, got ${sim.state.inheritGold.value}`);
+  sim.stepTo(new Date(Date.UTC(2034, 6, 1)));
+  assert.ok((sim.state.inheritGold.value ?? 0) < 1, `gold should be sold, got ${sim.state.inheritGold.value}`);
+});
+
+test('EVT-63 §13: inherited property/collectible generate a per-record sale-year param', () => {
+  const cfg = { bequests: [{
+    __type: 'Bequest', stateKey: 'estateBequest',
+    assets: [
+      { __type: 'RealProperty', stateKey: 'inhHome', inheritedValue: 600_000 },
+      { __type: 'Collectible',  stateKey: 'inhArt',  inheritedValue: 80_000 },
+      { __type: 'BrokerageAccount', stateKey: 'inhBrok', inheritedValue: 100_000 }, // no sale param
+    ],
+  }] };
+  const gen  = ScenarioParamGenerator.generate(cfg);
+  const keys = new Set(gen.map(e => e.key));
+  assert.ok(keys.has('saleAsset.inhHome.plannedSaleYear'), 'property sale-year param');
+  assert.ok(keys.has('saleAsset.inhArt.plannedSaleYear'),  'collectible sale-year param');
+  assert.ok(!keys.has('saleAsset.inhBrok.plannedSaleYear'), 'brokerage grows no sale-year param');
+  assert.deepStrictEqual(
+    gen.find(e => e.key === 'saleAsset.inhHome.plannedSaleYear').node,
+    { type: 'bequestAsset', stateKey: 'inhHome', field: 'plannedSaleYear' });
+});
+
+test('EVT-63 §13: the sale-year PARAM cascades onto the asset and liquidates it', () => {
+  const cfg = promotionConfig([
+    { __type: 'RealProperty', name: 'Inherited Home', country: 'US',
+      inheritedValue: 600_000, deceasedCostBase: 200_000, appreciationRate: 0.04, stateKey: 'inheritHome' },
+  ]);
+  // Sale year supplied ONLY via the generated per-record param (no plannedSaleYear
+  // on the asset descriptor) — proves the param → cascade → context-record → sale chain.
+  cfg.parameters = { 'saleAsset.inheritHome.plannedSaleYear': 2035 };
+  const { sim } = loadToolsetScenario(cfg);
+
+  const cashBefore = sim.state.usSavingsAccount.balance;
+  sim.stepTo(new Date(Date.UTC(2035, 6, 1)));
+  assert.ok((sim.state.inheritHome.value ?? 0) < 1, `param-driven sale should liquidate the home, got ${sim.state.inheritHome.value}`);
+  assert.ok(sim.state.usSavingsAccount.balance > cashBefore, 'proceeds credited to cash');
 });

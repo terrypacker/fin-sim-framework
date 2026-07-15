@@ -26,6 +26,7 @@ import {
   COMPANY_EQUITY_PARAM_TEMPLATE,
   BEQUEST_PARAM_TEMPLATE,
   INHERITED_RA_PARAM_TEMPLATE,
+  INHERITED_SALE_PARAM_TEMPLATE,
   BALANCE_TARGET,
 } from './record-param-templates.js';
 
@@ -33,9 +34,12 @@ import {
  *  63 §6.2). Super is excluded — it is a forced lump-sum, not an ongoing account. */
 const INHERITED_RA_TYPES = new Set(['TraditionalIRAAccount', 'FourOhOneKAccount', 'RothAccount']);
 
+/** Inherited-asset `__type`s that grow a per-record sale-year param (design 63 §13). */
+const INHERITED_SALE_TYPES = new Set(['RealProperty', 'Collectible']);
+
 /** Namespaces the generator owns. A param key with one of these prefixes is
  *  generated (§6 harvest exception is scoped by this). */
-export const GENERATED_KEY_PREFIXES = ['acct.', 'person.', 'prop.', 'coll.', 'equity.', 'bequest.', 'raAsset.'];
+export const GENERATED_KEY_PREFIXES = ['acct.', 'person.', 'prop.', 'coll.', 'equity.', 'bequest.', 'raAsset.', 'saleAsset.'];
 
 // Template lookup keys off `account.type` (ACCOUNT_TYPE). Records that never went
 // through the account service — raw buildDefaultConfig output, legacy saves — carry
@@ -64,7 +68,7 @@ export function isGeneratedParamKey(key) {
 const PREFIX_TO_NODE_TYPE = {
   acct: 'account', person: 'person', prop: 'realProperty',
   coll: 'collectible', equity: 'companyEquity',
-  bequest: 'bequest', raAsset: 'bequestAsset',
+  bequest: 'bequest', raAsset: 'bequestAsset', saleAsset: 'bequestAsset',
 };
 
 /**
@@ -128,6 +132,8 @@ export class ScenarioParamGenerator {
       for (const a of (b.assets ?? [])) {
         if (INHERITED_RA_TYPES.has(a.__type))
           add(this._expand('raAsset', 'bequestAsset', a, a.stateKey, INHERITED_RA_PARAM_TEMPLATE));
+        else if (INHERITED_SALE_TYPES.has(a.__type))
+          add(this._expand('saleAsset', 'bequestAsset', a, a.stateKey, INHERITED_SALE_PARAM_TEMPLATE));
       }
     }
     return out;

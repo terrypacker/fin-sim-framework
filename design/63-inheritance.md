@@ -499,5 +499,123 @@ each carries a `node` (linking, design 32):
   RA from its `raAsset.<sk>.distributionMode` param and emits its `fillCeiling` + `lumpYear` axes.
 - **Note**: the RA drawdown knobs are per-inherited-*retirement*-account — a bequest whose only
   asset is a brokerage / property / collectible generates **no** RA params (correct).
+
+---
+
+## 13. Post-inheritance asset promotion
+
+**Status: IMPLEMENTED (P6a + P6b).** Inherited brokerage / real property / collectible are now
+promoted to fully-usable assets; retirement growth + discretionary drawdown remain **v2** (§13.5).
+The v1 injection (§5) funded each inherited record in `state` but did **not** integrate it into the
+systems that *use* an asset over its remaining life — a funded inheritance was visible on the
+balance sheet but otherwise **inert**. This section (now built) closes that gap.
+
+### 13.0 As-built
+`BequestService.expandContextRecords(bequest)` turns each ACTIVE bequest's inherited brokerage /
+real property / collectible into first-class **record shapes** (role + `drawdownPriority` for
+brokerage; `appreciationRate` + `plannedSaleYear` for property/collectible), and the compiler's
+`_buildContext` **injects** them into `context.accounts` / `context.realProperties` /
+`context.collectibles` (transient — never registered with the services, so they never
+double-serialize). The owning toolsets then build the growth / dividend / appreciation / sale
+**handlers** for them from `context`, exactly like any other record.
+
+State seeding stays authoritative in the `INHERITANCE` toolset (it runs last, and
+`_mergeStatePatches` is last-wins), so **net worth always works even without the owning toolset**
+(graceful degradation); the owning toolset only adds the handlers on top. Inherited brokerage gets
+its `role` + `drawdownPriority` in the seed itself, so **liquidity + drawdown are state-driven** and
+work without the brokerage toolset (growth needs it). The `INHERIT` event still funds everything at
+the date (§6); seed-at-0 keeps it invisible until then. Editor: a per-asset **sale-year** field
+liquidates an inherited property/collectible. Tests: `EVT-63 §13` — brokerage counts in net
+liquidity, is drawn for expenses, and grows; property/collectible appreciate + sell at their year.
+
+### 13.1 Current behavior (what a funded inherited asset participates in)
+
+| Capability | Mechanism | Inherited asset today |
+|---|---|---|
+| Net worth | `computeNetWorth` sums any state entry with numeric `balance` or `kind` | ✅ counts |
+| Net liquidity / after-tax liquidity | `isDrawdownAccessible` requires `drawdownPriority != null` | ❌ seeds have `drawdownPriority: null` |
+| Discretionary drawdown (cover expenses) | `AccountService.replenishSavings` iterates `state`, same `drawdownPriority != null` gate | ❌ excluded (brokerage is *stranded*) |
+| Post-inheritance growth / dividends / interest | earnings handlers built at **compile** from the `accountService` record list, keyed by role/stateKey (one handler per account) | ❌ not a service record + `role: null` → never grows |
+| Real-property / collectible sale | one-off sale event scheduled at compile from `realPropertyService` / `collectibleService` records with a `plannedSaleYear` | ❌ not service records + no sale year → never sellable |
+| Role-based systems (design-58 weights, cash-sleeve interest, StateRegistry) | keyed by `role` | ❌ `role: null` → invisible |
+
+The one exception: inherited **retirement** accounts are drained by the SECURE 10-year forced
+stream (§6.2) — the handler holds explicit stateKeys, not roles — so they convert to cash over ten
+years, but they still don't **grow** between distributions.
+
+### 13.2 Root cause
+Inherited assets live **inside the `Bequest` container** and are only **seeded into `state`** (which
+is why net worth — the sole system that iterates raw `state` — works). Every other system operates
+on the **service records** (`accountService` / `realPropertyService` / `collectibleService`) and the
+**role registrations** wired at **compile**. Two distinct integration models:
+- **State-driven** (net worth, net liquidity, drawdown): reachable by giving the seed the right
+  `role` / `drawdownPriority` / age-gate fields — no compile-handler change.
+- **Compile-handler-driven** (growth, dividends, appreciation, sale scheduling): the asset must be
+  in the per-record handler/event construction lists — i.e. a **registered service record**.
+
+### 13.3 Proposed approach — promote to first-class records at compile, seeded at 0
+`BequestService.expand()` (or the compiler) **registers each inherited asset as a proper service
+record**, seeded at value/balance **0**:
+- inherited brokerage / retirement → `accountService` (with `role`, `drawdownPriority`, `ownerId`,
+  `currency`, `minimumAge`/`allowsEarlyWithdrawal`);
+- inherited real property → `realPropertyService`; inherited collectible → `collectibleService`.
+
+Because they are now ordinary records, they flow automatically into **every** system — net worth,
+net liquidity, drawdown, earnings/appreciation handlers, sale scheduling, role lookups, the
+design-58 levers, the after-tax metric — with **no per-system special-casing**. The `INHERIT` event
+still funds them mid-sim (sets balance/value + stamps basis, §6); **seed-at-0 keeps them invisible
+until the inheritance date** (0 net worth, 0 liquidity, 0 drawable) — the §5 invariant is preserved.
+The `Bequest` stays the config/editor container; each expanded record carries a back-reference
+(`bequestId`) + the inheritance metadata the `INHERIT` reducer needs. (Alternative — have the
+`INHERITANCE` toolset replicate the earnings/appreciation/sale wiring for bequest-held assets —
+was rejected: it duplicates four toolsets' worth of wiring and drifts from them.)
+
+### 13.4 Per-asset-type promotion rules
+- **Brokerage** → equity role (`US_STOCK` / `AU_STOCK`), a default `drawdownPriority` (after the
+  heir's own investments), country equity growth + dividend handlers ⇒ grows, liquid, drawdownable.
+  This fixes the *stranded brokerage*.
+- **Traditional IRA / 401(k) / Roth** → heir-owned retirement accounts (roles `IRA`/`K401`/`ROTH`),
+  `allowsEarlyWithdrawal: true` (inherited distributions are penalty-exempt, §6.2) so they are
+  age-accessible ⇒ grow + count toward liquidity; the **SECURE forced stream still drains them**
+  (§6.2). **Decision:** do inherited RAs *also* enter discretionary drawdown (extra draws routed
+  through the ordinary-income withdrawal-tax path), or is the forced stream the sole drain? Recommend
+  **forced-stream-only** in v1 (the SECURE stream already provides the cash + the tax routing);
+  discretionary inherited-RA drawdown is a Phase-2 refinement.
+- **Real property** → `realPropertyService` (appreciation via `AssetAppreciationHandler`); an
+  **optional inherited sale year** schedules the sale ⇒ converts to cash. The design-62 §5.3
+  main-residence 2-year exemption is already wired.
+- **Collectible / Gold** → `collectibleService` (appreciation); optional sale year schedules
+  `COLLECTIBLE_SALE`. Gold indexation (design 57) already handled.
+- **Super** → unchanged: forced taxed lump-sum to cash at inheritance (already liquid, §6.4).
+
+### 13.5 Decisions to resolve
+1. **Role collisions** — an inherited IRA vs. the heir's own IRA share a role+owner. Options: (a)
+   reuse the role (both drain together at the same rates; the framework already supports
+   multi-account-per-role via stateKey-scoped params — simplest); (b) dedicated `inherited-*` roles
+   (isolated ordering/rates). **Recommend (a).**
+2. **Drawdown priority default** for inherited accounts (fixed band vs. a generated per-account
+   param). Recommend a sensible default band + the design-58 lever / the design-55 generated
+   `drawdownPriority` param can reorder.
+3. **Growth rate default** — inherited accounts use the country global rate; the design-55 per-account
+   rate override applies once generated.
+4. **Sale-year exposure** — add `plannedSaleYear` (or an inheritance-relative offset) to inherited
+   real-property / collectible descriptors, generated as a per-record param (§12.3 pattern) + an
+   editor field.
+
+### 13.6 Phasing
+- **P6a — DONE.** Promote inherited **brokerage** ⇒ role + `drawdownPriority` (liquidity + drawdown,
+  state-driven) + growth/dividends (context-injection). Fixes the stranded brokerage. (Retirement
+  promotion — growth + discretionary drawdown — deferred to **v2**: role reuse collides with the
+  RMD/contribution machinery, and the SECURE stream already provides the cash + tax routing.)
+- **P6b — DONE.** Promote inherited **real property + collectible** ⇒ appreciation + sale year
+  (context-injection) + an editor sale-year field.
+- **P6c — DONE.** Per-record *generated* sale-year param (design 55 / §12.3 pattern):
+  `INHERITED_SALE_PARAM_TEMPLATE` → `saleAsset.<stateKey>.plannedSaleYear` for each inherited
+  RealProperty / Collectible (node `bequestAsset`, new `saleAsset.` generator prefix). Cascades onto
+  the asset, which `expandContextRecords` reads to schedule the sale — plus the editor sale-year field.
+
+### 13.7 Regression guard
+Seed-at-0 keeps every metric byte-identical before the inheritance date; a bequest-free scenario
+registers no records. The reference golden stays unmoved.
 </content>
 </invoke>

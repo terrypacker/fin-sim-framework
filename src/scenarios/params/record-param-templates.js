@@ -162,3 +162,12 @@ export const INHERITED_RA_PARAM_TEMPLATE = [
   { field: 'lumpYear', label: 'RA Lump Year', type: 'Number', mc: false, opt: true, nullable: true,
     description: 'lump strategy: the window year (0–9) the whole account is distributed in. Blank = year 0.' },
 ];
+
+// Per inherited real property / collectible: an optional sale year (design 63 §13).
+// A set year liquidates the inherited asset to cash; blank leaves it held (it still
+// appreciates + counts toward net worth).
+export const INHERITED_SALE_PARAM_TEMPLATE = [
+  { field: 'plannedSaleYear', label: 'Sale Year', type: 'Number', mc: false, opt: false, nullable: true,
+    description: 'Calendar year the inherited property / collectible is sold (proceeds → cash). ' +
+      'Leave blank to hold it — it still appreciates and counts toward net worth.' },
+];

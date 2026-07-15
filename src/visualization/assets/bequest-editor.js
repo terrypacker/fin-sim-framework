@@ -102,6 +102,11 @@ export class BequestEditor extends BaseComponent {
       const mode = this._select(row, 'RA strategy', STRATEGIES, a.distributionMode ?? '', true);
       this.listen(mode, 'change', () => { a.distributionMode = mode.value || undefined; });
 
+      // Sale year (design 63 §13): a set year liquidates an inherited real property
+      // / collectible to cash. Ignored for account types.
+      const sale = this._field(row, 'Sale year (property/collectible)', 'number', a.plannedSaleYear ?? '', true);
+      this.listen(sale, 'input', () => { a.plannedSaleYear = sale.value === '' ? null : Math.round(Number(sale.value)); });
+
       const rm = this._el('button', { type: 'button', class: 'btn btn-danger btn-sm', text: '×' });
       this.listen(rm, 'click', () => { this._assets.splice(i, 1); this._renderAssets(); });
       row.appendChild(rm);
