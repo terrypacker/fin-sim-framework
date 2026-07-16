@@ -22,10 +22,11 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { isParamVisible, indexParamSchema, resolveSweepVariables }
+import { isParamVisible, indexParamSchema, resolveSweepVariables, visibleWhenControllers }
   from '../../src/finance/param-schema-utils.js';
 import { IntlRetirementScenario, INTL_RETIREMENT_PARAM_ALIASES,
-         DRAWDOWN_WEIGHT_ROLES, drawdownWeightKey, presentDrawdownWeightRoles }
+         DRAWDOWN_WEIGHT_ROLES, drawdownWeightKey, presentDrawdownWeightRoles,
+         ALLOC_WEIGHT_CLASSES, allocWeightKey, ALLOCATION_OPTIMIZED_MODE }
   from '../../src/scenarios/intl-retirement-scenario.js';
 import { ACCOUNT_ROLES }      from '../../src/finance/state/account-roles.js';
 import { ScenarioParamGenerator } from '../../src/scenarios/params/scenario-param-generator.js';
@@ -83,6 +84,47 @@ test('SWEEP-3: isParamVisible — equals matches scalar', () => {
   const meta = { visibleWhen: { param: 'advanced', equals: true } };
   assert.strictEqual(isParamVisible(meta, () => true), true);
   assert.strictEqual(isParamVisible(meta, () => false), false);
+});
+
+// ── isParamVisible — composable DSL (design 61 usability pass) ──────────────────
+
+test('SWEEP-3a: array of conditions is AND (all must pass)', () => {
+  const vals = { strat: ['TARGET_ALLOCATION'], mode: 'LOCATED' };
+  const meta = { visibleWhen: [
+    { param: 'strat', includes: 'TARGET_ALLOCATION' },
+    { param: 'mode',  equals:   'LOCATED' },
+  ] };
+  assert.strictEqual(isParamVisible(meta, k => vals[k]), true);
+  // Either clause false ⇒ hidden.
+  assert.strictEqual(isParamVisible(meta, k => ({ ...vals, strat: [] })[k]), false);
+  assert.strictEqual(isParamVisible(meta, k => ({ ...vals, mode: 'PER_ACCOUNT' })[k]), false);
+});
+
+test('SWEEP-3b: allOf / anyOf / not compose', () => {
+  const valueOf = k => ({ a: 5, b: 'x', list: ['p'] }[k]);
+  assert.strictEqual(isParamVisible({ visibleWhen: { allOf: [{ param: 'a', gte: 5 }, { param: 'b', equals: 'x' }] } }, valueOf), true);
+  assert.strictEqual(isParamVisible({ visibleWhen: { anyOf: [{ param: 'a', gt: 10 }, { param: 'b', equals: 'x' }] } }, valueOf), true);
+  assert.strictEqual(isParamVisible({ visibleWhen: { not: { param: 'list', includes: 'p' } } }, valueOf), false);
+});
+
+test('SWEEP-3c: extended leaf operators (notEquals/in/exists/lt)', () => {
+  const valueOf = k => ({ v: 3, s: 'b', empty: '' }[k]);
+  assert.strictEqual(isParamVisible({ visibleWhen: { param: 's', notEquals: 'a' } }, valueOf), true);
+  assert.strictEqual(isParamVisible({ visibleWhen: { param: 's', in: ['a', 'b'] } }, valueOf), true);
+  assert.strictEqual(isParamVisible({ visibleWhen: { param: 'v', lt: 5 } }, valueOf), true);
+  assert.strictEqual(isParamVisible({ visibleWhen: { param: 'empty', exists: true } }, valueOf), false);
+  assert.strictEqual(isParamVisible({ visibleWhen: { param: 'v', exists: true } }, valueOf), true);
+});
+
+test('SWEEP-3d: visibleWhenControllers collects every referenced param (recursively)', () => {
+  assert.deepStrictEqual(visibleWhenControllers({ visibleWhen: { param: 'x', equals: 1 } }), ['x']);
+  assert.deepStrictEqual(
+    visibleWhenControllers({ visibleWhen: [{ param: 'a', equals: 1 }, { param: 'b', includes: 'z' }] }).sort(),
+    ['a', 'b']);
+  assert.deepStrictEqual(
+    visibleWhenControllers({ visibleWhen: { anyOf: [{ param: 'c' }, { not: { param: 'd', equals: 2 } }] } }).sort(),
+    ['c', 'd']);
+  assert.deepStrictEqual(visibleWhenControllers({}), []);
 });
 
 // ── resolveSweepVariables ──────────────────────────────────────────────────────
@@ -209,6 +251,46 @@ test('SWEEP-14: synthesizeWeightedPriorities drops phantom roles yet keeps real 
   assert.ok(pri[ACCOUNT_ROLES.ROTH] < pri[ACCOUNT_ROLES.IRA], 'roth ranked before ira');
   assert.strictEqual(pri[ACCOUNT_ROLES.ROTH], 1);
   assert.strictEqual(pri[ACCOUNT_ROLES.IRA], 2);
+});
+
+// ── Opt integration: Lever-A allocation weights (design 61) ─────────────────────
+
+// The allocWeight axes require BOTH the lever selected AND the OPTIMIZED strategy
+// (the compound visibleWhen added with the Phase-4 visibility-leak fix).
+const OPTIMIZED_ALLOC = {
+  allocationStrategy: ALLOCATION_OPTIMIZED_MODE,
+  drawdownStrategy: 'TAXABLE_FIRST', spendingStrategy: ['FIXED'],
+  behavioralStrategies: ['TARGET_ALLOCATION'],
+};
+
+// Every non-residual class has an opt axis; the residual (last) class carries none.
+const ALLOC_AXIS_KEYS = ALLOC_WEIGHT_CLASSES.slice(0, -1).map(allocWeightKey);
+
+test('SWEEP-15: allocWeight axes are present under TARGET_ALLOCATION + OPTIMIZED', () => {
+  const keys = new Set(buildOptVariables(OPTIMIZED_ALLOC).map(v => v.paramKey));
+  for (const k of ALLOC_AXIS_KEYS) assert.ok(keys.has(k), `expected alloc axis ${k}`);
+  // The residual class never gets an axis.
+  assert.ok(!keys.has(allocWeightKey(ALLOC_WEIGHT_CLASSES.at(-1))), 'residual class must have no axis');
+});
+
+test('SWEEP-16: allocWeight axes are hidden when allocationStrategy is STATIC', () => {
+  const keys = new Set(buildOptVariables({ ...OPTIMIZED_ALLOC, allocationStrategy: 'STATIC' })
+    .map(v => v.paramKey));
+  for (const k of ALLOC_AXIS_KEYS) assert.ok(!keys.has(k), `alloc axis ${k} leaked under STATIC`);
+});
+
+test('SWEEP-16b: allocWeight axes hidden when TARGET_ALLOCATION is unselected (leak guard)', () => {
+  // Even with allocationStrategy=OPTIMIZED, the axes must NOT appear when the lever
+  // itself isn't selected — the compound gate's first clause.
+  const keys = new Set(buildOptVariables({ ...OPTIMIZED_ALLOC, behavioralStrategies: [] })
+    .map(v => v.paramKey));
+  for (const k of ALLOC_AXIS_KEYS) assert.ok(!keys.has(k), `alloc axis ${k} leaked without the lever`);
+});
+
+test('SWEEP-17: accounts arg keeps allocWeight axes reachable (all classes present in Phase 1)', () => {
+  const accounts = [{ role: ACCOUNT_ROLES.IRA }, { role: ACCOUNT_ROLES.ROTH }];
+  const keys = new Set(buildOptVariables(OPTIMIZED_ALLOC, accounts).map(v => v.paramKey));
+  for (const k of ALLOC_AXIS_KEYS) assert.ok(keys.has(k), `expected alloc axis ${k} with accounts`);
 });
 
 // ── Validation: the repurposed mc:/opt: flags ──────────────────────────────────

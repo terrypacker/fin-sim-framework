@@ -409,6 +409,10 @@
 .param-money input { flex: 1 1 auto; }
 .param-money select { flex: 0 0 56px; }
 
+/* Object param: a JSON textarea; flag unparseable input without clobbering the value. */
+.param-json { white-space: pre; }
+.param-json-invalid { border-color: var(--danger, #e5534b) !important; }
+
 .param-row input,
 .param-row select,
 .param-row textarea {

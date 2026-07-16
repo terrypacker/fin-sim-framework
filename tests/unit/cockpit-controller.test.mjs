@@ -16,6 +16,10 @@ import { OPTIMIZATION_OBJECTIVES, OPT_PARAM_TYPES } from '../../src/finance/opti
 import { Graph }                   from '../../src/graph/graph.js';
 import { EDGE_TYPES }              from '../../src/graph/edge.js';
 import { ExplicitBandsSpendingReducer } from '../../src/finance/spending/strategies/explicit-bands-spending-reducer.js';
+import { RebalanceToTargetReducer } from '../../src/finance/behavioral/rebalance-to-target-reducer.js';
+import { allocWeightKey, synthesizeTargetAllocation, ALLOC_WEIGHT_CLASSES }
+  from '../../src/scenarios/intl-retirement-scenario.js';
+import { ALLOCATION } from '../../src/finance/holdings/allocation.js';
 
 /*
  * Design 39 Step 5 — cockpit headless brain (CockpitController). Drives the three
@@ -475,7 +479,68 @@ describe('CockpitController — apply + advance', () => {
     });
     assert.equal(ok, false);
   });
+});
 
+// ── ALLOCATION_MIX — design 61 Phase 5 (Lever A online) ─────────────────────────
+
+describe('COCKPIT_CONTROLS.ALLOCATION_MIX — the online allocation lever', () => {
+  const AM = COCKPIT_CONTROLS.ALLOCATION_MIX;
+
+  test('appliesTo gates on TARGET_ALLOCATION selected AND OPTIMIZED', () => {
+    assert.equal(AM.appliesTo({ allocationStrategy: 'OPTIMIZED', behavioralStrategies: ['TARGET_ALLOCATION'] }), true);
+    assert.equal(AM.appliesTo({ allocationStrategy: 'OPTIMIZED', behavioralStrategies: [] }), false);
+    assert.equal(AM.appliesTo({ allocationStrategy: 'STATIC',    behavioralStrategies: ['TARGET_ALLOCATION'] }), false);
+  });
+
+  test('buildVariables yields one CONTINUOUS axis per non-residual class', () => {
+    const vars = AM.buildVariables({ range: { min: 0, max: 1, step: 0.05 } });
+    assert.deepStrictEqual(vars.map(v => v.paramKey),
+      ALLOC_WEIGHT_CLASSES.slice(0, -1).map(allocWeightKey));
+    for (const v of vars) { assert.equal(v.type, OPT_PARAM_TYPES.CONTINUOUS); assert.equal(v.max, 1); }
+  });
+
+  test('describe renders the synthesized target mix (percentages)', () => {
+    const vars = AM.buildVariables({ range: { min: 0, max: 1, step: 0.05 } });
+    const cand = { [allocWeightKey('EQUITY')]: 0.8, [allocWeightKey('BOND')]: 0.6, [allocWeightKey('CASH')]: 0.5 };
+    assert.match(AM.describe(cand, vars), /Target mix:.*Equity 80%/);
+  });
+
+  test('actuate re-wires the live RebalanceToTargetReducer target + persists the weights', () => {
+    const reducer = new RebalanceToTargetReducer({ targetAllocation: { EQUITY: 0.6, BOND: 0.4 } });
+    let updated = null;
+    const reducerService = {
+      getAll: () => [reducer],
+      updateReducer: (r, changes) => { updated = { r, changes }; Object.assign(r, changes); },
+    };
+    const scenario = { params: [
+      { key: allocWeightKey('EQUITY'), value: 0.6 },
+      { key: allocWeightKey('BOND'),   value: 1.0 },
+      { key: allocWeightKey('CASH'),   value: 0 },
+    ] };
+    const vars = AM.buildVariables({ range: { min: 0, max: 1, step: 0.05 } });
+    const cand = { [allocWeightKey('EQUITY')]: 0.9, [allocWeightKey('BOND')]: 1.0, [allocWeightKey('CASH')]: 0 };
+
+    const ok = AM.actuate({ services: { reducerService }, scenario, candidate: cand, vars });
+    assert.equal(ok, true, 'actuation hit the live reducer');
+    // The reducer target is re-synthesized from the committed weights (equity-heavy).
+    const expect = synthesizeTargetAllocation(cand, new Set(vars.map(v => v._class)));
+    assert.deepStrictEqual(updated.changes.targetAllocation, expect);
+    assert.ok(updated.changes.targetAllocation[ALLOCATION.EQUITY] > 0.85, 'target went equity-heavy');
+    // Weights persisted to scenario params for consistency.
+    assert.equal(scenario.params[0].value, 0.9, 'EQUITY weight persisted');
+  });
+
+  test('actuate returns false (graceful) when no live rebalance reducer', () => {
+    const ok = AM.actuate({
+      services: { reducerService: { getAll: () => [] } }, scenario: null,
+      candidate: { [allocWeightKey('EQUITY')]: 0.9 },
+      vars: [{ paramKey: allocWeightKey('EQUITY'), _class: 'EQUITY' }],
+    });
+    assert.equal(ok, false);
+  });
+});
+
+describe('CockpitController — apply + advance (actuation, cont.)', () => {
   test('ROTH is live-actuatable (Step 10)', () => {
     assert.equal(COCKPIT_CONTROLS.ROTH.liveActuatable, true);
     assert.equal(typeof COCKPIT_CONTROLS.ROTH.actuate, 'function');

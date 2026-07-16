@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { isParamVisible } from '../../finance/param-schema-utils.js';
+import { isParamVisible, visibleWhenControllers } from '../../finance/param-schema-utils.js';
 
 export class ScenarioTabView {
   constructor() {
@@ -292,7 +292,7 @@ export class ScenarioTabView {
     // Two dependency kinds: visibleWhen (reveal/hide) and dynamicOptionsFrom (an
     // Enum whose selectable options are extended by a sibling list param).
     this._controllerNames = new Set([
-      ...scenario.params.map(p => p.visibleWhen?.param).filter(Boolean),
+      ...scenario.params.flatMap(p => visibleWhenControllers(p)),
       ...scenario.params.map(p => p.dynamicOptionsFrom).filter(Boolean),
     ]);
 
@@ -596,6 +596,23 @@ export class ScenarioTabView {
 
         valueInput.appendChild(num);
         valueInput.appendChild(cur);
+      } else if (param.type === 'Object') {
+        // Structured params (maps / tables) carry a real object|array value — a plain
+        // text input would store a String and corrupt them. Render a JSON textarea that
+        // parses on input: empty ⇒ null; invalid JSON is flagged and leaves the last
+        // valid value untouched so a mid-edit keystroke never clobbers the model.
+        valueInput = document.createElement('textarea');
+        valueInput.className = 'param-json';
+        valueInput.rows = 3;
+        valueInput.spellcheck = false;
+        valueInput.placeholder = 'JSON — blank = default (see description)';
+        valueInput.value = (param.value == null) ? '' : JSON.stringify(param.value);
+        valueInput.addEventListener('input', () => {
+          const raw = valueInput.value.trim();
+          if (raw === '') { param.value = null; valueInput.classList.remove('param-json-invalid'); return; }
+          try { param.value = JSON.parse(raw); valueInput.classList.remove('param-json-invalid'); }
+          catch { valueInput.classList.add('param-json-invalid'); }   // keep last valid value
+        });
       } else {
         valueInput = document.createElement('input');
         valueInput.placeholder = 'value';

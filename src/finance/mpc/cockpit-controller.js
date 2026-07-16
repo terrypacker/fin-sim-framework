@@ -24,6 +24,8 @@ import {
   DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_CASH_ROLES, DEFAULT_DRAWDOWN_WEIGHTS,
   DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP, DRAWDOWN_WEIGHT_MODE,
   DRAWDOWN_ROLE_LABELS, drawdownWeightKey,
+  ALLOC_WEIGHT_CLASSES, ALLOC_WEIGHT_CLASS_LABELS, allocWeightKey,
+  ALLOCATION_OPTIMIZED_MODE, synthesizeTargetAllocation, presentAllocations,
 } from '../../scenarios/intl-retirement-scenario.js';
 
 /**
@@ -588,6 +590,80 @@ export const COCKPIT_CONTROLS = {
         if (acct.drawdownPriority !== pr) { next[k] = { ...acct, drawdownPriority: pr }; changed = true; }
       }
       if (changed) sim.state = next;
+      return true;
+    },
+  },
+
+  // ── Allocation mix weights (design 61 Phase 5 — Lever A online, the flagship) ──
+  // Each epoch the controller re-solves the target Stock/Bond/Cash/Gold mix from the
+  // realized state, encoded as one continuous weight per class (stick-breaking → the
+  // applied mix). Unlike the drawdown levers, the target is held in the freshly
+  // compiled RebalanceToTargetReducer — NOT a per-account state field — so it survives
+  // snapshot injection and bites under MPC with no `_seededSim` re-stamp (verified by
+  // `scripts/verify-mpc-lever.mjs allocationMix`). Actuation re-wires the live reducer.
+  ALLOCATION_MIX: {
+    key:     'ALLOCATION_MIX',
+    label:   'Allocation Mix (weights)',
+    numeric: true,                       // the [0,1] range applies to every weight
+    defaultRange: { min: 0, max: 1, step: 0.05 },
+    liveActuatable: true,
+    // Meaningful only when the allocation lever is selected AND its strategy is
+    // OPTIMIZED (the weights synthesize the target only then). Gate + surface why.
+    appliesTo: (bp) => bp?.allocationStrategy === ALLOCATION_OPTIMIZED_MODE
+                    && _hasStrategy(bp?.behavioralStrategies, 'TARGET_ALLOCATION'),
+    requirement: 'Select the TARGET_ALLOCATION behavioral strategy and set Allocation Strategy to OPTIMIZED (Scenario panel) to tune the mix online.',
+    // One CONTINUOUS variable per NON-residual class (the last class is the
+    // stick-breaking residual, no param), pruned to the classes reachable in the live
+    // state (the design-58 build-time-filter analog; all four are reachable today).
+    buildVariables: ({ range }) => {
+      // presentAllocations() reports the reachable classes (all four today); the hook
+      // is here so a later per-account prune matches buildAllocWeightSchema.
+      const present = presentAllocations();
+      const classes = ALLOC_WEIGHT_CLASSES.slice(0, -1).filter(c => present.has(c));
+      return classes.map(cls => ({
+        paramKey: allocWeightKey(cls),
+        type:     OPT_PARAM_TYPES.CONTINUOUS,
+        min:      range?.min  ?? 0,
+        max:      range?.max  ?? 1,
+        step:     range?.step ?? 0.05,
+        group:    'Allocation', _class: cls,
+      }));
+    },
+    describe: (candidate, vars) => {
+      // Render the synthesized target mix (percentages), not the raw stick-breaking
+      // weights — the weights aren't directly legible, the mix is.
+      const present = new Set(vars.map(v => v._class).filter(Boolean));
+      const mix = synthesizeTargetAllocation(candidate, present.size ? present : null);
+      const parts = ALLOC_WEIGHT_CLASSES
+        .filter(c => (mix[c] ?? 0) > 0.005)
+        .map(c => `${ALLOC_WEIGHT_CLASS_LABELS[c] ?? c} ${Math.round((mix[c] ?? 0) * 100)}%`);
+      return parts.length ? `Target mix: ${parts.join(' / ')}` : 'Allocation mix unchanged';
+    },
+    /**
+     * Forward-effective live actuation (design 61 §7 leg 3): persist each committed
+     * weight to its scenario param, then re-wire the running RebalanceToTargetReducer's
+     * `targetAllocation` to the freshly synthesized mix so the next rebalance honors it.
+     * No per-account state re-stamp is needed (the target is reducer-resident), so
+     * Advise/Apply/live agree without a projection shim. Realized past untouched.
+     */
+    actuate: ({ services, scenario, candidate, vars }) => {
+      if (!vars?.length) return false;
+
+      // 1) Persist each committed weight to its scenario param.
+      for (const v of vars) {
+        const w = candidate?.[v.paramKey];
+        if (w == null) continue;
+        const p = (scenario?.params ?? []).find(pp => (pp.key ?? pp.name) === v.paramKey);
+        if (p) p.value = w;
+      }
+
+      // 2) Re-wire the live rebalance reducer's target from the committed weights.
+      const rs = services?.reducerService;
+      const reducer = rs?.getAll?.().find(r => r?.constructor?.type === 'RebalanceToTargetReducer');
+      if (!rs || !reducer) return false;
+      const present = new Set(vars.map(v => v._class).filter(Boolean));
+      const target  = synthesizeTargetAllocation(candidate, present.size ? present : null);
+      rs.updateReducer(reducer, { targetAllocation: target });
       return true;
     },
   },
