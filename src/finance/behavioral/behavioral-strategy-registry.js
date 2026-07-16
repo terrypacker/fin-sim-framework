@@ -20,7 +20,13 @@ import { PanicSellReducer }                    from './panic-sell-reducer.js';
 import { BehavioralPanicSellApplyReducer }     from './behavioral-panic-sell-apply-reducer.js';
 import { ContributionSuspensionToggleReducer } from './contribution-suspension-toggle-reducer.js';
 import { CashBucketDrawdownReducer }           from './cash-bucket-drawdown-reducer.js';
+import { RebalanceToTargetReducer, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, ALLOCATION_SCHEDULE, ALLOCATION_LOCATION } from './rebalance-to-target-reducer.js';
+import { RebalanceToTargetApplyReducer }       from './rebalance-to-target-apply-reducer.js';
 import { ACCOUNT_ROLES }                       from '../state/account-roles.js';
+import {
+  ALLOCATION_OPTIMIZED_MODE, synthesizeTargetAllocation, presentAllocations,
+  buildAllocWeightSchema, DEFAULT_ALLOC_WEIGHTS,
+} from '../../scenarios/intl-retirement-scenario.js';
 
 /**
  * Registry of pluggable behavioral strategies (design/29).
@@ -156,6 +162,139 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         description: 'Allocation drift threshold that triggers a rebalance (default 0.05 = 5 percentage points)',
         visibleWhen: { param: 'behavioralStrategies', includes: 'OPPORTUNISTIC_REBALANCE' },
       },
+    ],
+  },
+
+  // Design 61 — holding-allocation lever. A NEW strategy beside OPPORTUNISTIC_REBALANCE
+  // (they coexist, §OQ5): to study the allocation lever alone, select TARGET_ALLOCATION
+  // and leave the legacy reactive strategies unselected. Byte-identical golden when
+  // unselected (no reducer added). When selected with allocationStrategy=OPTIMIZED, the
+  // target mix is synthesized from the continuous `allocWeight::<CLASS>` params
+  // (stick-breaking) the solver searches; STATIC falls back to the Object param.
+  //
+  // Phase 2 (Lever C): the RebalanceToTargetReducer/ApplyReducer pair rebalances BOTH
+  // tax-advantaged (free) AND taxable (CGT-realizing) accounts, establishes new sleeves
+  // (the §6 buy primitive), honors the US-IRA gold guard (§OQ4a), and uses split drift
+  // bands (taxable wide / sheltered tight, §OQ3).
+  TARGET_ALLOCATION: {
+    handlers: (_context) => [],
+    reducers: (context) => {
+      const p = context.parameters;
+      const accounts = (context.accounts ?? [])
+        .filter(a => TAX_ADVANTAGED_ROLES.has(a.role) || TAXABLE_ROLES.has(a.role))
+        .map(a => ({ stateKey: a.stateKey, role: a.role }));
+      const target = (p.allocationStrategy === ALLOCATION_OPTIMIZED_MODE)
+        ? synthesizeTargetAllocation(p, presentAllocations(context.accounts))
+        : (p.rebalanceTargetAllocation ?? DEFAULT_ALLOC_WEIGHTS);
+      return [
+        new RebalanceToTargetReducer({
+          accounts,
+          targetAllocation:   target,
+          driftBandTaxable:   p.rebalanceDriftBandTaxable   ?? 0.10,
+          driftBandSheltered: p.rebalanceDriftBandSheltered ?? 0.02,
+          // Lever B time variation (design 61 §4-B). STATIC default ⇒ target unchanged.
+          scheduleMode:  p.allocationSchedule ?? ALLOCATION_SCHEDULE.STATIC,
+          glidepath:     p.allocationGlidepath ?? null,
+          regimeTargets: p.allocationRegimeTargets ?? null,
+          // Lever D location (design 61 §4-D). LOCATED (default) places each class in
+          // its tax-favored account; PER_ACCOUNT drives every account to the uniform mix.
+          locationMode:   p.allocationLocation ?? ALLOCATION_LOCATION.LOCATED,
+          locationPolicy: p.allocationLocationPolicy ?? null,
+        }),
+        new RebalanceToTargetApplyReducer(),
+      ];
+    },
+    paramSchema: () => [
+      {
+        key: 'allocationStrategy', label: 'Allocation Strategy',
+        type: 'Enum', group: 'Allocation', mc: false, opt: false,
+        options: ['STATIC', ALLOCATION_OPTIMIZED_MODE], defaultValue: 'STATIC',
+        description: 'STATIC uses the fixed Rebalance Target Allocation object; OPTIMIZED synthesizes ' +
+          'the target mix from the continuous Allocation Weight params the solver can search (design 61 §4-A).',
+        visibleWhen: { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
+      },
+      {
+        key: 'rebalanceDriftBandTaxable', label: 'Rebalance Drift Band — Taxable',
+        type: 'Number', group: 'Allocation', mc: false, opt: true,
+        min: 0.02, max: 0.20, step: 0.01, defaultValue: 0.10,
+        description: 'Allocation drift (fraction) that triggers a rebalance in a TAXABLE brokerage ' +
+          'account. Defaults WIDE (0.10) — a wide band beats annual/tight by realizing far less CGT ' +
+          'for marginal tracking gain (design 61 §OQ3).',
+        visibleWhen: { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
+      },
+      {
+        key: 'rebalanceDriftBandSheltered', label: 'Rebalance Drift Band — Sheltered',
+        type: 'Number', group: 'Allocation', mc: false, opt: true,
+        min: 0.01, max: 0.20, step: 0.01, defaultValue: 0.02,
+        description: 'Allocation drift (fraction) that triggers a rebalance in a tax-advantaged ' +
+          '(401k/IRA/Roth/Super) account. Defaults TIGHT (0.02) — rebalancing there is ~free, so ' +
+          'tight banding buys the best risk control at no tax cost (design 61 §OQ3).',
+        visibleWhen: { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
+      },
+      // Lever B — how the target mix varies over time (design 61 §4-B / Phase 3).
+      {
+        key: 'allocationSchedule', label: 'Allocation Schedule',
+        type: 'Enum', group: 'Allocation', mc: false, opt: false,
+        options: [ALLOCATION_SCHEDULE.STATIC, ALLOCATION_SCHEDULE.GLIDEPATH, ALLOCATION_SCHEDULE.REGIME_CONDITIONED],
+        defaultValue: ALLOCATION_SCHEDULE.STATIC,
+        description: 'How the target mix changes over the plan. STATIC = one mix for the whole run ' +
+          '(default). GLIDEPATH = interpolate between {age, weights} anchors by age (e.g. equity ' +
+          '80%→40% from 50→75). REGIME_CONDITIONED = a distinct mix per active economic-regime tag ' +
+          '(the "shift to bonds/gold in a downturn" lever).',
+        visibleWhen: { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
+      },
+      {
+        key: 'allocationGlidepath', label: 'Allocation Glidepath',
+        type: 'Object', group: 'Allocation', mc: false, opt: true,
+        defaultValue: null,
+        description: 'GLIDEPATH anchors: an array of { age, weights } where weights is a mix map, e.g. ' +
+          '[{"age":50,"weights":{"EQUITY":0.8,"BOND":0.2}},{"age":75,"weights":{"EQUITY":0.4,"BOND":0.6}}]. ' +
+          'The target is linearly interpolated by the primary\'s age. Null ⇒ falls back to the static mix.',
+        visibleWhen: [
+          { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
+          { param: 'allocationSchedule',   equals:   ALLOCATION_SCHEDULE.GLIDEPATH },
+        ],
+      },
+      {
+        key: 'allocationRegimeTargets', label: 'Allocation Regime Targets',
+        type: 'Object', group: 'Allocation', mc: false, opt: true,
+        defaultValue: null,
+        description: 'REGIME_CONDITIONED targets: a map of regime tag → mix, e.g. ' +
+          '{"NORMAL":{"EQUITY":0.6,"BOND":0.4},"ECONOMIC_STRESS":{"EQUITY":0.3,"BOND":0.3,"CASH":0.2,"GOLD":0.2}}. ' +
+          'The active regime\'s mix applies (NORMAL when no stress). Null ⇒ falls back to the static mix.',
+        visibleWhen: [
+          { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
+          { param: 'allocationSchedule',   equals:   ALLOCATION_SCHEDULE.REGIME_CONDITIONED },
+        ],
+      },
+      // Lever D — how the portfolio target is placed across accounts (design 61 §4-D).
+      {
+        key: 'allocationLocation', label: 'Allocation Location',
+        type: 'Enum', group: 'Allocation', mc: false, opt: false,
+        options: [ALLOCATION_LOCATION.LOCATED, ALLOCATION_LOCATION.PER_ACCOUNT],
+        defaultValue: ALLOCATION_LOCATION.LOCATED,
+        description: 'How the whole-portfolio target mix is placed across accounts. LOCATED (default) ' +
+          'concentrates each class in its tax-favored account — bonds in tax-deferred (IRA/401k), equity ' +
+          'in Roth/taxable, gold in a shelter (AU super; never a US IRA/401k/Roth) — so the aggregate ' +
+          'book hits the mix while accounts specialize. PER_ACCOUNT drives every account to the same ' +
+          'uniform mix (simpler; a manual escape hatch).',
+        visibleWhen: { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
+      },
+      {
+        key: 'allocationLocationPolicy', label: 'Allocation Location Policy',
+        type: 'Object', group: 'Allocation', mc: false, opt: true,
+        defaultValue: null,
+        description: 'LOCATED placement policy: a map of allocation → preferred account roles (in order), ' +
+          'e.g. {"BOND":["ira","k401"],"EQUITY":["roth-ira","us-stock"]}. Preference is soft (spills when ' +
+          'full); the US-IRA/401k/Roth gold ban is always enforced. Null ⇒ the jurisdiction-aware default.',
+        // Gate on the lever being selected AND LOCATED — without the first clause this
+        // leaked into every scenario because allocationLocation defaults to LOCATED.
+        visibleWhen: [
+          { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
+          { param: 'allocationLocation',   equals:   ALLOCATION_LOCATION.LOCATED },
+        ],
+      },
+      ...buildAllocWeightSchema(),
     ],
   },
 

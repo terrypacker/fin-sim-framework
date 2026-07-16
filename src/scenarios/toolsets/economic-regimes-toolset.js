@@ -371,6 +371,17 @@ export const ECONOMIC_REGIMES = {
         },
       },
       {
+        // Design 61 Lever C — taxable-aware target-allocation rebalance.
+        type: 'REBALANCE_TO_TARGET_APPLY',
+        fields: {
+          stateKey: ValueType.text(),
+          role:     ValueType.text(),
+          taxable:  ValueType.any(),
+          country:  ValueType.text(),
+          legs:     ValueType.any(),
+        },
+      },
+      {
         type: 'ASSET_LOCATION_REBALANCE_APPLY',
         fields: {
           fromStateKey:  ValueType.text(),

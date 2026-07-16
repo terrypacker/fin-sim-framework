@@ -21,24 +21,87 @@
  */
 
 /**
+ * Evaluate a leaf `{ param, <op>: … }` condition against the controller's value.
+ * A bare `{ param }` with no operator imposes no constraint (returns true).
+ */
+function _evalLeaf(cond, valueOf) {
+  if (!cond || !cond.param) return true;
+  const v = valueOf(cond.param);
+  if ('equals'    in cond) return v === cond.equals;
+  if ('notEquals' in cond) return v !== cond.notEquals;
+  if ('includes'  in cond) return Array.isArray(v) && v.includes(cond.includes);
+  if ('excludes'  in cond) return !(Array.isArray(v) && v.includes(cond.excludes));
+  if ('in'        in cond) return Array.isArray(cond.in)    && cond.in.includes(v);
+  if ('notIn'     in cond) return !(Array.isArray(cond.notIn) && cond.notIn.includes(v));
+  if ('exists'    in cond) return (v != null && v !== '') === !!cond.exists;
+  if ('truthy'    in cond) return (!!v) === !!cond.truthy;
+  if ('gt'  in cond) return Number(v) >  Number(cond.gt);
+  if ('gte' in cond) return Number(v) >= Number(cond.gte);
+  if ('lt'  in cond) return Number(v) <  Number(cond.lt);
+  if ('lte' in cond) return Number(v) <= Number(cond.lte);
+  return true;
+}
+
+/** Recursively evaluate a `visibleWhen` node (leaf, array=AND, allOf/anyOf/not). */
+function _evalCond(cond, valueOf) {
+  if (cond == null) return true;
+  if (Array.isArray(cond)) return cond.every(c => _evalCond(c, valueOf));   // array ⇒ AND
+  if ('allOf' in cond) return (cond.allOf ?? []).every(c => _evalCond(c, valueOf));
+  if ('anyOf' in cond) return (cond.anyOf ?? []).some(c => _evalCond(c, valueOf));
+  if ('not'   in cond) return !_evalCond(cond.not, valueOf);
+  return _evalLeaf(cond, valueOf);
+}
+
+/**
  * Evaluate a `visibleWhen` condition. Returns true when there is no condition or
- * the condition is satisfied by the controlling param's current value.
+ * the condition is satisfied by the current param values. A small composable DSL —
+ * the same evaluator drives the scenario panel, the MC list, and the Opt list.
  *
- * Condition shapes (extensible):
- *   { param, includes: <value> } — controller value (an array) contains <value>
- *   { param, equals:   <value> } — controller value strictly equals <value>
+ * **Leaf** `{ param, <op>: value }` reads the controller `param`'s current value and
+ * applies one operator:
+ *   equals | notEquals — strict (in)equality
+ *   includes | excludes — array membership (EnumMulti controllers)
+ *   in | notIn — value is (not) one of an array
+ *   exists — value is (not) set  ·  truthy — value is (not) truthy
+ *   gt | gte | lt | lte — numeric comparison
+ * A bare `{ param }` with no operator imposes no constraint.
+ *
+ * **Composition** nests arbitrarily:
+ *   [c1, c2, …]        — AND (array shorthand)
+ *   { allOf: [ … ] }   — AND      · { anyOf: [ … ] } — OR      · { not: c } — negation
+ *
+ * Back-compat: the original `{ param, equals }` / `{ param, includes }` shapes are
+ * just single leaves and evaluate unchanged.
  *
  * @param {object}   meta     an object that may carry a `visibleWhen` field
  * @param {function} valueOf  (paramName) → current value of that param
  * @returns {boolean}
  */
 export function isParamVisible(meta, valueOf) {
-  const cond = meta?.visibleWhen;
-  if (!cond || !cond.param) return true;
-  const v = valueOf(cond.param);
-  if ('includes' in cond) return Array.isArray(v) && v.includes(cond.includes);
-  if ('equals'   in cond) return v === cond.equals;
-  return true;
+  return _evalCond(meta?.visibleWhen, valueOf);
+}
+
+/**
+ * The set of controller param names a `visibleWhen` depends on — recursively across
+ * arrays / allOf / anyOf / not. The UI uses this to re-render dependents when any
+ * controlling param changes (a single-condition `visibleWhen` yields one name, the
+ * legacy behavior).
+ *
+ * @param {object} meta  an object that may carry a `visibleWhen` field
+ * @returns {string[]} distinct controller param names (empty when unconditional)
+ */
+export function visibleWhenControllers(meta) {
+  const names = new Set();
+  const walk = (cond) => {
+    if (cond == null) return;
+    if (Array.isArray(cond)) { cond.forEach(walk); return; }
+    if (cond.allOf) cond.allOf.forEach(walk);
+    if (cond.anyOf) cond.anyOf.forEach(walk);
+    if (cond.not)   walk(cond.not);
+    if (cond.param) names.add(cond.param);
+  };
+  walk(meta?.visibleWhen);
+  return [...names];
 }
 
 /**

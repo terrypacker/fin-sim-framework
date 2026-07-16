@@ -10,7 +10,9 @@
 
 import { OPT_PARAM_TYPES }            from './optimization-objectives.js';
 import { INTL_RETIREMENT_DEFAULTS, DRAWDOWN_STRATEGIES, buildDrawdownWeightSchema, IntlRetirementScenario,
-         presentDrawdownWeightRoles, drawdownWeightKey, DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP } from '../../scenarios/intl-retirement-scenario.js';
+         presentDrawdownWeightRoles, drawdownWeightKey, DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP,
+         buildAllocWeightSchema, presentAllocations, allocWeightKey,
+         ALLOC_WEIGHT_PREFIX, ALLOC_WEIGHT_SEP } from '../../scenarios/intl-retirement-scenario.js';
 import { SHOCK_LIBRARY }              from '../economic-shocks/shock-library.js';
 import { indexParamSchema, resolveSweepVariables } from '../param-schema-utils.js';
 
@@ -220,6 +222,39 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
     group:    'Spending',
     enabled:  false,
   })),
+
+  // Allocation weights (design 61 Lever A — searchable static mix). One CONTINUOUS
+  // axis per non-residual allocation class; the applied target mix is synthesized
+  // from these via stick-breaking (always on the simplex, no scale-degenerate ray).
+  // Gated by the schema's visibleWhen (allocationStrategy=OPTIMIZED), so they drop
+  // out of the sweep unless OPTIMIZED is selected. Named presets are warm-starts.
+  ...buildAllocWeightSchema().map(s => ({
+    paramKey: s.key,
+    label:    s.label,
+    type:     OPT_PARAM_TYPES.CONTINUOUS,
+    min:      s.min, max: s.max, step: s.step,
+    group:    'Allocation',
+    enabled:  false,
+  })),
+
+  // Split rebalance drift bands (design 61 Lever C — §OQ3). Taxable defaults wide,
+  // sheltered tight; both are opt/MPC knobs, gated on the TARGET_ALLOCATION strategy.
+  {
+    paramKey: 'rebalanceDriftBandTaxable',
+    label:    'Rebalance Drift Band — Taxable',
+    type:     OPT_PARAM_TYPES.CONTINUOUS,
+    min: 0.02, max: 0.20, step: 0.01,
+    group:    'Allocation',
+    enabled:  false,
+  },
+  {
+    paramKey: 'rebalanceDriftBandSheltered',
+    label:    'Rebalance Drift Band — Sheltered',
+    type:     OPT_PARAM_TYPES.CONTINUOUS,
+    min: 0.01, max: 0.20, step: 0.01,
+    group:    'Allocation',
+    enabled:  false,
+  },
 
   // Inheritance — the inherited-RA drawdown knobs (design 63 §6.2) are now GENERATED
   // per inherited-RA asset (`raAsset.<stateKey>.fillCeiling` opt:true, design 63
@@ -504,6 +539,14 @@ export function buildOptVariables(params, accounts = null) {
     const weightPrefix = `${DRAWDOWN_WEIGHT_PREFIX}${DRAWDOWN_WEIGHT_SEP}`;
     list = list.filter(cfg =>
       !String(cfg.paramKey ?? '').startsWith(weightPrefix) || allowedKeys.has(cfg.paramKey));
+
+    // Allocation-weight filter (design 61 §G4): drop `allocWeight::<CLASS>` axes for
+    // classes no account can hold — phantom dims, flat in the objective. Mirrors the
+    // drawdown-weight filter above.
+    const allowedAlloc = new Set([...presentAllocations(accounts)].map(allocWeightKey));
+    const allocPrefix  = `${ALLOC_WEIGHT_PREFIX}${ALLOC_WEIGHT_SEP}`;
+    list = list.filter(cfg =>
+      !String(cfg.paramKey ?? '').startsWith(allocPrefix) || allowedAlloc.has(cfg.paramKey));
   }
   // Inherit identity (label / options / visibleWhen) from the param schema and
   // drop variables hidden by an unsatisfied visibleWhen (e.g. a strategy knob

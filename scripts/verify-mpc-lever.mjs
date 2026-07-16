@@ -45,7 +45,8 @@
 import { OptimizationProblem }     from '../src/finance/optimization/optimization-problem.js';
 import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES } from '../src/finance/optimization/optimization-objectives.js';
 import { makeInitialSnapshot }     from '../src/finance/mpc/mpc-controller.js';
-import { drawdownWeightKey }       from '../src/scenarios/intl-retirement-scenario.js';
+import { drawdownWeightKey, allocWeightKey, ALLOCATION_OPTIMIZED_MODE }
+  from '../src/scenarios/intl-retirement-scenario.js';
 
 const SIM_START = new Date(Date.UTC(2026, 0, 1));
 const SIM_END   = new Date(Date.UTC(2050, 0, 1));
@@ -125,6 +126,19 @@ const ROTH_FIRST_WEIGHTS = {
   [drawdownWeightKey('us-stock')]: 0.95,
 };
 
+// Design 61 Lever A/D online (ALLOCATION_MIX): two mixes that grow the portfolio
+// very differently — equity-heavy vs bond/cash-heavy — so terminal wealth diverges.
+// Unlike the drawdown levers (whose order bakes into per-account `drawdownPriority`,
+// a STATE field the snapshot injection clobbers), the allocation target is held in the
+// freshly-compiled RebalanceToTargetReducer, so it should survive injection ⇒ bite
+// under the snapshot path with NO shim. This case proves (or refutes) that.
+const EQUITY_HEAVY = {
+  [allocWeightKey('EQUITY')]: 0.95, [allocWeightKey('BOND')]: 0.5, [allocWeightKey('CASH')]: 0.5,
+};
+const BOND_HEAVY = {
+  [allocWeightKey('EQUITY')]: 0.05, [allocWeightKey('BOND')]: 0.9, [allocWeightKey('CASH')]: 0.5,
+};
+
 const lever = process.argv[2] ?? 'all';
 function runXborder()  { verify('Lever A — crossBorderDrawdown (LOCAL_FIRST vs GLOBAL)',
   { crossBorderDrawdown: 'LOCAL_FIRST' }, { crossBorderDrawdown: 'GLOBAL' }); }
@@ -132,9 +146,13 @@ function runWithin()   { verify('Lever C — withinTierDraw (SEQUENTIAL vs PROPO
   { withinTierDraw: 'SEQUENTIAL' }, { withinTierDraw: 'PROPORTIONAL' }); }
 function runWeights()  { verify('Lever B — drawdownWeight order (default vs roth-first)',
   {}, ROTH_FIRST_WEIGHTS, { drawdownStrategy: 'WEIGHTED', crossBorderDrawdown: 'GLOBAL', monthlyExpenses: 10_000 }); }
+function runAllocMix()  { verify('Design 61 — allocationMix (equity-heavy vs bond-heavy)',
+  EQUITY_HEAVY, BOND_HEAVY,
+  { behavioralStrategies: ['TARGET_ALLOCATION'], allocationStrategy: ALLOCATION_OPTIMIZED_MODE, monthlyExpenses: 8_000 }); }
 
-if (lever === 'all')                 { runXborder(); runWithin(); runWeights(); }
+if (lever === 'all')                 { runXborder(); runWithin(); runWeights(); runAllocMix(); }
 else if (lever === 'crossBorderDrawdown') runXborder();
 else if (lever === 'withinTierDraw')      runWithin();
 else if (lever === 'drawdownWeights')     runWeights();
-else console.log(`Unknown lever "${lever}". Use: all | crossBorderDrawdown | withinTierDraw | drawdownWeights`);
+else if (lever === 'allocationMix')       runAllocMix();
+else console.log(`Unknown lever "${lever}". Use: all | crossBorderDrawdown | withinTierDraw | drawdownWeights | allocationMix`);

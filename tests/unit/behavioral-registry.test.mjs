@@ -13,7 +13,7 @@
  *
  * Tests for design/29 §4 BEHAVIORAL_STRATEGY_REGISTRY scaffold (Increment 1).
  *
- *   - Registry has all 8 required keys
+ *   - Registry has all 9 required keys
  *   - Each entry exposes handlers, reducers, paramSchema as functions
  *   - Selecting [] registers nothing (no handlers/reducers)
  *   - Selecting a key returns that strategy's arrays
@@ -34,11 +34,12 @@ const EXPECTED_KEYS = [
   'DOWNTURN_ROTH_CONVERSION',
   'CASH_BUCKET_DRAWDOWN',
   'TAX_GAIN_HARVEST',
+  'TARGET_ALLOCATION',
 ];
 
 const context = { parameters: {} };
 
-test('BEH-REG-1: registry exports all 8 required strategy keys', () => {
+test('BEH-REG-1: registry exports all 9 required strategy keys', () => {
   for (const key of EXPECTED_KEYS) {
     assert.ok(key in BEHAVIORAL_STRATEGY_REGISTRY, `missing key: ${key}`);
   }

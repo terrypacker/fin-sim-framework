@@ -1,6 +1,11 @@
 # 61 — Holding-allocation lever: optimize the Stock/Bond/Cash/Gold mix over time
 
-**Status**: **PROPOSED** (2026-07-13). No code yet. Scope: add a new optimization
+**Status**: **COMPLETE — ALL PHASES 1–5 IMPLEMENTED** (2026-07-16) on
+`wip/holding-allocation-lever`. Phase 1 = Lever A (searchable static mix); Phase 2 = Lever C
+(taxable-aware rebalance + buy/establish-sleeve primitive + US-IRA gold guard + split drift
+bands); Phase 3 = Lever B (time variation — STATIC/GLIDEPATH/REGIME_CONDITIONED); Phase 4 =
+Lever D (jurisdiction-aware location — LOCATED default / PER_ACCOUNT); Phase 5 = MPC online
+(`ALLOCATION_MIX` cockpit control). Originally **PROPOSED** (2026-07-13). Scope: add a new optimization
 lever — a **portfolio asset-allocation control** — that lets the solver (and the
 MPC cockpit) **buy and sell holdings to hit a target Stock/Bond/Cash/Gold ratio,
 and vary that ratio over time in response to economic conditions**. It is the
@@ -423,18 +428,131 @@ hysteresis ε; headless `scripts/verify-mpc-lever.mjs allocationMix`.
 
 ## 11. Phased rollout (proposed)
 
-1. **Phase 1 — Lever A (searchable static mix).** Continuous `allocWeight::*` axes
-   replace the `Object` target for the optimizer; reuse the existing tax-advantaged
-   apply. Smallest useful increment; golden unchanged. *(No taxable rebalancing yet
-   — so no tax study, but the mechanism and search space land.)*
-2. **Phase 2 — Lever C (taxable-aware) + buy primitive.** Route taxable legs through
-   the CGT path; fix establish-new-sleeve; add the US-IRA gold guard (OQ4a) and the
-   split taxable-wide / sheltered-tight drift bands (OQ3). **Unlocks the tax study.**
-3. **Phase 3 — Lever B (time variation).** GLIDEPATH first, then
-   REGIME_CONDITIONED (the flagship "respond to conditions").
-4. **Phase 4 — Lever D (location).** Portfolio target → tax-aware placement.
-5. **Phase 5 — MPC online.** Per-epoch target with hysteresis (the "build the
-   optimum mix online over time" goal).
+1. **Phase 1 — Lever A (searchable static mix). ✅ DONE (2026-07-16).** Continuous
+   `allocWeight::*` axes replace the `Object` target for the optimizer; reuse the
+   existing tax-advantaged apply. Smallest useful increment; golden unchanged. *(No
+   taxable rebalancing yet — so no tax study, but the mechanism and search space
+   land.)* Shipped: stick-breaking `synthesizeTargetAllocation` + `allocWeightsFromMix`/
+   `allocWeightsFromPreset`/`buildAllocWeightSchema`/`presentAllocations` in
+   `intl-retirement-scenario.js`; a `TARGET_ALLOCATION` `behavioral-strategy-registry.js`
+   entry (auto-exposed by `economic-regimes-toolset.js`, coexists with
+   `OPPORTUNISTIC_REBALANCE` per OQ5) that feeds the synthesized target to the existing
+   `OpportunisticRebalanceReducer` under `allocationStrategy=OPTIMIZED`; `allocWeight::*`
+   opt axes + build-time class filter in `intl-retirement-opt-config.js`; tests
+   `evt-target-allocation.test.mjs` (ALLOC-1..10) + `param-sweep-schema.test.mjs`
+   SWEEP-15..17. Golden `cross-border-relief` byte-identical (strategy unselected by
+   default). **Known Phase-1 limitation (fixed by Phase 2 §6):** a target class with no
+   existing sleeve can't be established — the reused apply `continue`s on the empty leg,
+   so that leg's value is not deployed (observed as a small value leak when targeting
+   CASH/GOLD where none is held). Targets that map onto existing sleeves rebalance
+   exactly and conserve value.
+2. **Phase 2 — Lever C (taxable-aware) + buy primitive. ✅ DONE (2026-07-16).** Route
+   taxable legs through the CGT path; fix establish-new-sleeve; add the US-IRA gold guard
+   (OQ4a) and the split taxable-wide / sheltered-tight drift bands (OQ3). **Unlocks the
+   tax study.** Shipped as a NEW dedicated reducer pair (leaving the legacy
+   `OpportunisticRebalance*` untouched): `RebalanceToTargetReducer` (both tiers; picks the
+   band by tier; renormalizes a US-tax-advantaged account's target to drop GOLD, §OQ4a)
+   + `RebalanceToTargetApplyReducer` (taxable sells → jurisdiction-correct
+   `STOCK_WITHDRAWAL_TAX` / `AU_STOCK_WITHDRAWAL_TAX` / `COLLECTIBLE_SALE_TAX`, mirroring
+   the brokerage disposal field math via `consumeHoldingsFifo`; sheltered sells free;
+   buys add-to or **establish** a sleeve). The `TARGET_ALLOCATION` registry entry swaps to
+   these; new params `rebalanceDriftBandTaxable` (0.10) / `rebalanceDriftBandSheltered`
+   (0.02), both opt axes. Value model matches `StockHarvestApplyReducer`: sell realizes
+   CGT into the YTD accumulator (settles at year-end), buy redeploys **gross** proceeds
+   within the account, legs sum to zero ⇒ gross value conserved. Tests: taxable
+   `evt-target-allocation-taxable.test.mjs` (RC-1..7 + RC-3b), postconditions
+   (I3/I7), coverage manifest. Golden byte-identical (unselected).
+   - **Critical fix found by end-to-end verification (not caught by unit tests):** an
+     established sleeve MUST carry a **unique, non-null id**. `HoldingTransactReducer`
+     matches per-holding growth/dividend/coupon/cash-interest by `h.id === holdingId`, so
+     `id:null` siblings collide — a sleeve's earnings land on the wrong holding and the
+     account is corrupted (a full-sim run destroyed ~96% of wealth before the fix).
+     `_newSleeve` now stamps a deterministic `reb-<alloc>-<purchaseMs>` id (disambiguated
+     against current holdings). Regression: RC-3b.
+   - **Known limitation (documented) — BOND sleeves earn nothing in every account except
+     `US_STOCK`.** `computeHoldingsGrowth` skips BOND on the equity path (a bond's return is
+     its coupon, not appreciation), and the `INTL_BOND_COUPON` stream (design 59) is
+     instantiated in exactly one place — `us-retirement-toolset.js` scoped to `US_STOCK`
+     accounts. So a BOND sleeve established in `AU_STOCK`, `IRA`, `K401`, `ROTH`, or `SUPER`
+     earns **zero return**. (Dedicated `FIXED_INCOME`/`AU_FIXED_INCOME` accounts are
+     unaffected — they earn via `FixedIncomeInterestHandler`; CASH sleeves are covered by
+     design 60; GOLD grows.) **Correction (2026-07-16):** an earlier note here claimed
+     "taxable brokerage BOND sleeves earn coupons correctly" — that is true only for
+     `US_STOCK`; `AU_STOCK` BOND sleeves are also inert, so the AU side of the tax study is
+     affected too. Net effect: the optimizer sees bonds as zero-return everywhere but a US
+     brokerage and under-weights them there. Fix = wire a bond-coupon/interest stream to
+     BOND holdings in every equity-served account (mirror design 60's `CashSleeveInterestHandler`,
+     or extend `BondCouponScheduledHandler` to the IRA/401k/Roth/super/AU_STOCK loops), per-
+     wrapper tax treatment. Deferred to a follow-up (see the tracked issue).
+3. **Phase 3 — Lever B (time variation). ✅ DONE (2026-07-16).** GLIDEPATH + the
+   flagship REGIME_CONDITIONED ("respond to conditions"). Shipped: an `allocationSchedule`
+   enum (STATIC/GLIDEPATH/REGIME_CONDITIONED, default STATIC ⇒ back-compat) resolved
+   **at reduce-time** in `RebalanceToTargetReducer.resolveScheduledTarget` — GLIDEPATH
+   linearly interpolates `{age, weights}` anchors by the primary's age (`interpolateGlidepath`
+   + `ageAsOf`), REGIME_CONDITIONED picks the per-tag mix from `state.activeRegimes`
+   (`resolveRegimeTarget`, priority ECONOMIC_STRESS > PANIC_SELL_TRIGGER, NORMAL fallback),
+   then the per-account gold-guard renorm + rebalance runs on the resolved target.
+   Params `allocationGlidepath` / `allocationRegimeTargets` are `Object` type (like
+   `rebalanceTargetAllocation`), both fall back to the static mix when unconfigured.
+   Tests: `evt-target-allocation-schedule.test.mjs` (SCHED-1..8). **Verified end-to-end**
+   in full 30y sims: GLIDEPATH glides k401 equity 92%→72% as the primary ages 50→58;
+   REGIME_CONDITIONED shifts a taxable account to the exact stress mix (20/20/30/30 —
+   buying CASH+GOLD sleeves) on `ECONOMIC_STRESS` entry and reverts on exit; no value
+   destruction, golden unchanged. Solver-searchability of anchors (vs today's Object
+   params) is deferred to Phase 5 (MPC harvest, §7).
+4. **Phase 4 — Lever D (location). ✅ DONE (2026-07-16).** Portfolio target → tax-aware
+   placement. Shipped a pure **location planner** (`allocation-location.js`
+   `planLocatedTargets`) that maps the whole-portfolio target onto per-account
+   compositions: bonds → tax-deferred (IRA/401k), equity → Roth/taxable, gold → AU super
+   (the only gold-eligible shelter), CASH the filler. Key property: it fills every account
+   to **exactly its own total**, so locating needs **no inter-account transfer** — each
+   account just rebalances to its assigned composition, preserving the Phase-2 per-account
+   value-conservation + CGT correctness while the AGGREGATE (over the lever's accounts) hits
+   the target. Gold is capped at the gold-eligible capacity and the excess weight
+   redistributed (so a gold target > shelter capacity is honored as far as legal and never
+   lands in a US IRA — §OQ4a). A new `allocationLocation` param (**LOCATED default** /
+   PER_ACCOUNT escape hatch) + optional `allocationLocationPolicy`; the reducer recomputes
+   the plan every period from the current residency, so a US→AU move re-targets **lazily**
+   and the drift cadence walks holdings — no move-date forced trade (§OQ4b). Tests
+   `evt-target-allocation-location.test.mjs` (LOC-1..8). **Verified end-to-end** on the
+   default scenario: IRA→100% bonds, Roth/taxable→100% equity, k401→bond-heavy, **gold
+   sheltered in super, never in a US IRA/401k/Roth**; lever-account aggregate = 50/30/10/10
+   exactly; LOCATED slightly *beats* PER_ACCOUNT on terminal wealth (tax efficiency); no
+   value destruction; golden unchanged.
+   - **Note on the residency branch:** the default gold policy is **super-first for both
+     residencies** because super is the optimal gold home either way (it shelters bullion
+     entirely for AU 60+, and is the only gold-eligible shelter for a US resident). So the
+     "optimal home flips at a move" the design imagined is really "AU-taxable becomes
+     *acceptable*," not "you must relocate" — gold correctly stays in super across a move,
+     giving zero move-date churn for free. The recompute-per-period mechanism supports a
+     residency-varying policy if one is ever configured; the US-28%-vs-AU-indexed tax
+     difference itself is realized in the CGT path (design 57), not the placement.
+5. **Phase 5 — MPC online. ✅ DONE (2026-07-16).** Per-epoch target — the "build the
+   optimum mix online over time" goal. Shipped an `ALLOCATION_MIX` entry in
+   `COCKPIT_CONTROLS` (`cockpit-controller.js`, auto-surfaced in the cockpit lever
+   dropdown): `appliesTo` gates on `allocationStrategy=OPTIMIZED` + `TARGET_ALLOCATION`
+   selected; `buildVariables` returns the `allocWeight::*` CONTINUOUS axes (K−1,
+   present-class pruned); `describe` renders the synthesized target mix as percentages;
+   `actuate` persists the committed weights to scenario params AND re-wires the live
+   `RebalanceToTargetReducer.targetAllocation` (via `reducerService.updateReducer`) so
+   Advise/Apply/live agree. Runs on plain CEM (no design 46 dependency, per §11.1).
+   - **The `_seededSim` shim the plan called for is NOT needed — a design win.** The plan
+     assumed a *state-resident* target (like drawdown's per-account `drawdownPriority`,
+     which snapshot injection clobbers → needs a re-stamp). But this lever's target is
+     held in the **freshly-compiled reducer** (synthesized from the candidate's
+     `allocWeight::*` at compile), which snapshot injection does NOT overwrite — so the
+     committed mix already bites under the MPC snapshot rollout with zero shim. Proven by
+     `scripts/verify-mpc-lever.mjs allocationMix`: **VERDICT PASS** (compile-path AND
+     snapshot-path both bite; equity-heavy vs bond-heavy diverge under both). Tests:
+     `cockpit-controller.test.mjs` (ALLOCATION_MIX block), `mpc-cockpit-plugin.test.mjs`
+     (dropdown), the verifier case.
+   - **Harvest (OQ7):** for OPTIMIZED static weights the harvest is trivial — the committed
+     `allocWeight::*` *are* flat scenario params (`mergeCandidate` → `committedParams`),
+     so a re-run is deterministic with no controller. GLIDEPATH→{age,mix}-anchor /
+     REGIME→per-regime-map harvest (baking a schedule back) is future work.
+   - **Hysteresis ε (§7):** NOT implemented — no switching-cost/hold-band infrastructure
+     exists for any cockpit lever today (the drift band is the implemented static analog).
+     Deferred as cross-cutting MPC infra, not lever-specific.
 
 ### 11.1 Sequencing & dependencies
 

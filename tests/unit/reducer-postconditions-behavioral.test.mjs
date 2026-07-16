@@ -46,6 +46,8 @@ import { DownturnRothConversionReducer } from '../../src/finance/behavioral/down
 import { CashBucketDrawdownReducer } from '../../src/finance/behavioral/cash-bucket-drawdown-reducer.js';
 import { ContributionSuspensionToggleReducer } from '../../src/finance/behavioral/contribution-suspension-toggle-reducer.js';
 import { StockHarvestApplyReducer } from '../../src/finance/behavioral/stock-harvest-apply-reducer.js';
+import { RebalanceToTargetReducer } from '../../src/finance/behavioral/rebalance-to-target-reducer.js';
+import { RebalanceToTargetApplyReducer } from '../../src/finance/behavioral/rebalance-to-target-apply-reducer.js';
 
 const DATE = new Date('2030-06-15');
 
@@ -180,6 +182,81 @@ test('StockHarvestApplyReducer: missing account / source holding is a no-op (I7)
   assertStateUnchanged(prev, missAcct);
   const missSrc = runReducer(r, structuredClone(prev), makeAction('STOCK_HARVEST_APPLY', { stateKey: 'usStockAccount', sellAmount: 800, sourceHoldingId: 'zz', substituteHoldingId: 'h1' }), DATE);
   assertStateUnchanged(prev, missSrc);
+});
+
+// ─── RebalanceToTargetReducer (trigger; I1/I2/I7 — design 61 Lever C) ──────────
+
+test('RebalanceToTargetReducer: emits legs with per-tier band + tax tag (I1)', () => {
+  const r = new RebalanceToTargetReducer({
+    accounts: [{ stateKey: 'usStockAccount', role: ACCOUNT_ROLES.US_STOCK }],
+    targetAllocation: { EQUITY: 0.5, BOND: 0.5 }, driftBandTaxable: 0.10, driftBandSheltered: 0.02,
+  });
+  const state = {
+    activeRegimes: [],
+    usStockAccount: makeAccount({ stateKey: 'usStockAccount', role: ACCOUNT_ROLES.US_STOCK, holdings: [
+      { id: 'e1', allocation: ALLOCATION.EQUITY, marketValue: 800, costBasis: 500 },
+      { id: 'b1', allocation: ALLOCATION.BOND,   marketValue: 200, costBasis: 200 },
+    ] }),
+  };
+  const next  = runReducer(r, state, makeAction('US_PERIOD_ADVANCE'), DATE);
+  const apply = next.next.find(a => a.type === 'REBALANCE_TO_TARGET_APPLY');
+  assert.ok(apply);
+  assert.equal(apply.taxable, true);
+  assert.equal(apply.country, 'US');
+  assert.equal(apply.legs.find(l => l.allocation === ALLOCATION.EQUITY).delta, -300); // 500−800
+  assert.equal(apply.legs.find(l => l.allocation === ALLOCATION.BOND).delta,   300);  // 500−200
+});
+
+test('RebalanceToTargetReducer: within-band is a no-op (I7); deterministic (I2)', () => {
+  const r = new RebalanceToTargetReducer({
+    accounts: [{ stateKey: 'usStockAccount', role: ACCOUNT_ROLES.US_STOCK }],
+    targetAllocation: { EQUITY: 0.5, BOND: 0.5 }, driftBandTaxable: 0.10,
+  });
+  // 55/45 → 5pp drift < wide taxable 10pp band ⇒ no action.
+  const state = {
+    activeRegimes: [],
+    usStockAccount: makeAccount({ stateKey: 'usStockAccount', role: ACCOUNT_ROLES.US_STOCK, holdings: [
+      { id: 'e1', allocation: ALLOCATION.EQUITY, marketValue: 550, costBasis: 550 },
+      { id: 'b1', allocation: ALLOCATION.BOND,   marketValue: 450, costBasis: 450 },
+    ] }),
+  };
+  const next = runReducer(r, state, makeAction('US_PERIOD_ADVANCE'), DATE);
+  assert.equal(next.next.filter(a => a.type === 'REBALANCE_TO_TARGET_APPLY').length, 0);
+  assert.deepEqual(r.reduce(state, makeAction('US_PERIOD_ADVANCE'), DATE),
+                   r.reduce(state, makeAction('US_PERIOD_ADVANCE'), DATE));
+});
+
+// ─── RebalanceToTargetApplyReducer (apply; I3/I4/I7 — design 61 Lever C) ────────
+
+test('RebalanceToTargetApplyReducer: taxable sell realizes CGT, conserves gross value (I3)', () => {
+  const r = new RebalanceToTargetApplyReducer();
+  const state = {
+    people: { p1: { residency: 'US' } },
+    currentPeriods: { US: { startMs: DATE.getTime() }, AU: { startMs: DATE.getTime() } },
+    usStockAccount: makeAccount({ stateKey: 'usStockAccount', role: ACCOUNT_ROLES.US_STOCK, holdings: [
+      { id: 'e1', allocation: ALLOCATION.EQUITY, marketValue: 1000, costBasis: 600, purchaseDate: new Date('2020-01-01') },
+    ] }),
+  };
+  const before = sumHoldings(state.usStockAccount);
+  const next = runReducer(r, state, makeAction('REBALANCE_TO_TARGET_APPLY', {
+    stateKey: 'usStockAccount', role: ACCOUNT_ROLES.US_STOCK, taxable: true, country: 'US',
+    legs: [{ allocation: ALLOCATION.EQUITY, delta: -400 }, { allocation: ALLOCATION.BOND, delta: 400 }],
+  }), DATE, { balance: true, nonNegative: true });
+  // §4.4 balance re-sync + gross conservation.
+  assert.equal(next.usStockAccount.balance, before);
+  assert.equal(+sumHoldings(next.usStockAccount).toFixed(2), before);
+  const tax = next.next.find(a => a.type === 'STOCK_WITHDRAWAL_TAX');
+  assert.equal(tax.gain, 160, 'realized gain = 400 − (600×0.4)');
+});
+
+test('RebalanceToTargetApplyReducer: missing account is a no-op (I7)', () => {
+  const r = new RebalanceToTargetApplyReducer();
+  const prev = { usStockAccount: makeAccount({ stateKey: 'usStockAccount', role: ACCOUNT_ROLES.US_STOCK,
+    holdings: [{ id: 'e1', allocation: ALLOCATION.EQUITY, marketValue: 1000, costBasis: 600 }] }) };
+  const next = runReducer(r, structuredClone(prev), makeAction('REBALANCE_TO_TARGET_APPLY', {
+    stateKey: 'nope', role: ACCOUNT_ROLES.US_STOCK, taxable: true, country: 'US',
+    legs: [{ allocation: ALLOCATION.EQUITY, delta: -100 }] }), DATE);
+  assertStateUnchanged(prev, next);
 });
 
 // ─── PanicSellReducer (trigger; I1/I2/I7/I10) ──────────────────────────────────

@@ -45,6 +45,7 @@ import { Collectible } from './finance/assets/collectible.js';
 import { CompanyEquity } from './finance/assets/company-equity.js';
 import { reconcileLedgerToBalance, deriveEarningsBasis, InvestmentAccount, BrokerageAccount, RetirementAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from './finance/assets/investment-account.js';
 import { RealProperty } from './finance/assets/real-property.js';
+import { DEFAULT_LOCATION_POLICY, planLocatedTargets } from './finance/behavioral/allocation-location.js';
 import { AssetLocationRebalanceApplyReducer } from './finance/behavioral/asset-location-rebalance-apply-reducer.js';
 import { BehavioralPanicSellApplyReducer } from './finance/behavioral/behavioral-panic-sell-apply-reducer.js';
 import { BEHAVIORAL_STRATEGY_REGISTRY } from './finance/behavioral/behavioral-strategy-registry.js';
@@ -54,6 +55,8 @@ import { DownturnRothConversionReducer } from './finance/behavioral/downturn-rot
 import { OpportunisticRebalanceApplyReducer } from './finance/behavioral/opportunistic-rebalance-apply-reducer.js';
 import { OpportunisticRebalanceReducer } from './finance/behavioral/opportunistic-rebalance-reducer.js';
 import { PanicSellReducer } from './finance/behavioral/panic-sell-reducer.js';
+import { RebalanceToTargetApplyReducer } from './finance/behavioral/rebalance-to-target-apply-reducer.js';
+import { ALLOCATION_LOCATION, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, US_TAX_ADVANTAGED_ROLES, countryForRole, roleCanHoldGold, ALLOCATION_SCHEDULE, REGIME_TARGET_PRIORITY, ageAsOf, interpolateGlidepath, resolveRegimeTarget, targetForRole, RebalanceToTargetReducer } from './finance/behavioral/rebalance-to-target-reducer.js';
 import { StockHarvestApplyReducer } from './finance/behavioral/stock-harvest-apply-reducer.js';
 import { StrategicAssetLocationReducer } from './finance/behavioral/strategic-asset-location-reducer.js';
 import { resolveSubstitute } from './finance/behavioral/substitute-holding.js';
@@ -149,7 +152,7 @@ import { SimulatedAnnealingSolver } from './finance/optimization/solvers/simulat
 import { SOLVER_REGISTRY, createSolver } from './finance/optimization/solvers/solver-registry.js';
 import { makeSeededRng, EvalLedger } from './finance/optimization/solvers/solver-support.js';
 import { ownershipFractions, splitByOwnership, accumulateByOwnership } from './finance/ownership-utils.js';
-import { isParamVisible, controllableVariables, indexParamSchema, resolveSweepVariables } from './finance/param-schema-utils.js';
+import { isParamVisible, visibleWhenControllers, controllableVariables, indexParamSchema, resolveSweepVariables } from './finance/param-schema-utils.js';
 import { buildMonthPeriod, buildUsCalendarYear, buildAuFiscalYear, applyTo } from './finance/period/period-builder.js';
 import { Period, PeriodRelationship, PeriodService } from './finance/period/period-service.js';
 import { Person } from './finance/person.js';
@@ -254,8 +257,8 @@ import { SimGraphNode } from './graph/sim-graph-node.js';
 import { QueryApi } from './query/query-api.js';
 import { BaseScenario } from './scenarios/base-scenario.js';
 import { BlankScenario } from './scenarios/blank-scenario.js';
-import { DRAWDOWN_STRATEGIES, DRAWDOWN_ROLES, DRAWDOWN_WEIGHT_MODE, DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP, drawdownWeightKey, DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_CASH_ROLES, DRAWDOWN_ROLE_LABELS, presentDrawdownWeightRoles, drawdownWeightsFromStrategy, DEFAULT_DRAWDOWN_WEIGHTS, buildDrawdownWeightSchema, DEFAULT_DRAWDOWN_WEIGHT_PARAMS, INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, INTL_RETIREMENT_PARAM_ALIASES, resolveBalanceCenters, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
-import { BALANCE_TARGET, ACCOUNT_PARAM_TEMPLATES, PERSON_PARAM_TEMPLATE, REAL_PROPERTY_PARAM_TEMPLATE, COLLECTIBLE_PARAM_TEMPLATE, COMPANY_EQUITY_PARAM_TEMPLATE, BEQUEST_PARAM_TEMPLATE, INHERITED_RA_PARAM_TEMPLATE } from './scenarios/params/record-param-templates.js';
+import { DRAWDOWN_STRATEGIES, DRAWDOWN_ROLES, DRAWDOWN_WEIGHT_MODE, DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP, drawdownWeightKey, DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_CASH_ROLES, DRAWDOWN_ROLE_LABELS, presentDrawdownWeightRoles, drawdownWeightsFromStrategy, DEFAULT_DRAWDOWN_WEIGHTS, buildDrawdownWeightSchema, DEFAULT_DRAWDOWN_WEIGHT_PARAMS, ALLOCATION_OPTIMIZED_MODE, ALLOC_WEIGHT_CLASSES, ALLOC_WEIGHT_PREFIX, ALLOC_WEIGHT_SEP, allocWeightKey, ALLOC_WEIGHT_CLASS_LABELS, ALLOCATION_PRESETS, DEFAULT_ALLOC_WEIGHTS, synthesizeTargetAllocation, allocWeightsFromMix, allocWeightsFromPreset, presentAllocations, buildAllocWeightSchema, DEFAULT_ALLOC_WEIGHT_PARAMS, INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, INTL_RETIREMENT_PARAM_ALIASES, resolveBalanceCenters, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
+import { BALANCE_TARGET, ACCOUNT_PARAM_TEMPLATES, PERSON_PARAM_TEMPLATE, REAL_PROPERTY_PARAM_TEMPLATE, COLLECTIBLE_PARAM_TEMPLATE, COMPANY_EQUITY_PARAM_TEMPLATE, BEQUEST_PARAM_TEMPLATE, INHERITED_RA_PARAM_TEMPLATE, INHERITED_SALE_PARAM_TEMPLATE } from './scenarios/params/record-param-templates.js';
 import { GENERATED_KEY_PREFIXES, isGeneratedParamKey, decodeGeneratedParamKey, ScenarioParamGenerator } from './scenarios/params/scenario-param-generator.js';
 import { synthesizeWeightedPriorities, ScenarioLoader } from './scenarios/scenario-loader.js';
 import { ScenarioRegistry } from './scenarios/scenario-registry.js';
@@ -614,6 +617,8 @@ export const Finance = {
   TraditionalIRAAccount,
   SuperannuationAccount,
   RealProperty,
+  DEFAULT_LOCATION_POLICY,
+  planLocatedTargets,
   AssetLocationRebalanceApplyReducer,
   BehavioralPanicSellApplyReducer,
   BEHAVIORAL_STRATEGY_REGISTRY,
@@ -623,6 +628,20 @@ export const Finance = {
   OpportunisticRebalanceApplyReducer,
   OpportunisticRebalanceReducer,
   PanicSellReducer,
+  RebalanceToTargetApplyReducer,
+  ALLOCATION_LOCATION,
+  TAX_ADVANTAGED_ROLES,
+  TAXABLE_ROLES,
+  US_TAX_ADVANTAGED_ROLES,
+  countryForRole,
+  roleCanHoldGold,
+  ALLOCATION_SCHEDULE,
+  REGIME_TARGET_PRIORITY,
+  ageAsOf,
+  interpolateGlidepath,
+  resolveRegimeTarget,
+  targetForRole,
+  RebalanceToTargetReducer,
   StockHarvestApplyReducer,
   StrategicAssetLocationReducer,
   resolveSubstitute,
@@ -824,6 +843,7 @@ export const Finance = {
   splitByOwnership,
   accumulateByOwnership,
   isParamVisible,
+  visibleWhenControllers,
   controllableVariables,
   indexParamSchema,
   resolveSweepVariables,
@@ -1081,6 +1101,20 @@ export const Scenarios = {
   DEFAULT_DRAWDOWN_WEIGHTS,
   buildDrawdownWeightSchema,
   DEFAULT_DRAWDOWN_WEIGHT_PARAMS,
+  ALLOCATION_OPTIMIZED_MODE,
+  ALLOC_WEIGHT_CLASSES,
+  ALLOC_WEIGHT_PREFIX,
+  ALLOC_WEIGHT_SEP,
+  allocWeightKey,
+  ALLOC_WEIGHT_CLASS_LABELS,
+  ALLOCATION_PRESETS,
+  DEFAULT_ALLOC_WEIGHTS,
+  synthesizeTargetAllocation,
+  allocWeightsFromMix,
+  allocWeightsFromPreset,
+  presentAllocations,
+  buildAllocWeightSchema,
+  DEFAULT_ALLOC_WEIGHT_PARAMS,
   INTL_RETIREMENT_DEFAULTS,
   INTL_RETIREMENT_PARAM_SCHEMA,
   INTL_RETIREMENT_PARAM_ALIASES,
@@ -1095,6 +1129,7 @@ export const Scenarios = {
   COMPANY_EQUITY_PARAM_TEMPLATE,
   BEQUEST_PARAM_TEMPLATE,
   INHERITED_RA_PARAM_TEMPLATE,
+  INHERITED_SALE_PARAM_TEMPLATE,
   GENERATED_KEY_PREFIXES,
   isGeneratedParamKey,
   decodeGeneratedParamKey,

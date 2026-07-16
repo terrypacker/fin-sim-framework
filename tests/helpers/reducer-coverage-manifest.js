@@ -103,6 +103,8 @@ export const COVERED = [
   'OpportunisticRebalanceApplyReducer', 'StrategicAssetLocationReducer', 'AssetLocationRebalanceApplyReducer',
   'DownturnRothConversionReducer', 'CashBucketDrawdownReducer', 'ContributionSuspensionToggleReducer',
   'StockHarvestApplyReducer',
+  // Design 61 Lever C — taxable-aware target-allocation rebalance (reducer-postconditions-behavioral.test.mjs)
+  'RebalanceToTargetReducer', 'RebalanceToTargetApplyReducer',
 
   // F/G — economic regimes + FX (reducer-postconditions-regimes-fx.test.mjs)
   'RemoveRegimeReducer', 'RegimeApplyReducer', 'BondPriceAdjustReducer', 'FxRefreshReducer',
