@@ -469,21 +469,27 @@ hysteresis ε; headless `scripts/verify-mpc-lever.mjs allocationMix`.
      account is corrupted (a full-sim run destroyed ~96% of wealth before the fix).
      `_newSleeve` now stamps a deterministic `reb-<alloc>-<purchaseMs>` id (disambiguated
      against current holdings). Regression: RC-3b.
-   - **Known limitation (documented) — BOND sleeves earn nothing in every account except
-     `US_STOCK`.** `computeHoldingsGrowth` skips BOND on the equity path (a bond's return is
-     its coupon, not appreciation), and the `INTL_BOND_COUPON` stream (design 59) is
-     instantiated in exactly one place — `us-retirement-toolset.js` scoped to `US_STOCK`
+   - **~~Known limitation — BOND sleeves earn nothing in every account except `US_STOCK`.~~
+     ✅ FIXED (2026-07-16).** `computeHoldingsGrowth` skips BOND on the equity path (a bond's
+     return is its coupon, not appreciation), and the `INTL_BOND_COUPON` stream (design 59)
+     was instantiated in exactly one place — `us-retirement-toolset.js` scoped to `US_STOCK`
      accounts. So a BOND sleeve established in `AU_STOCK`, `IRA`, `K401`, `ROTH`, or `SUPER`
-     earns **zero return**. (Dedicated `FIXED_INCOME`/`AU_FIXED_INCOME` accounts are
-     unaffected — they earn via `FixedIncomeInterestHandler`; CASH sleeves are covered by
-     design 60; GOLD grows.) **Correction (2026-07-16):** an earlier note here claimed
-     "taxable brokerage BOND sleeves earn coupons correctly" — that is true only for
-     `US_STOCK`; `AU_STOCK` BOND sleeves are also inert, so the AU side of the tax study is
-     affected too. Net effect: the optimizer sees bonds as zero-return everywhere but a US
-     brokerage and under-weights them there. Fix = wire a bond-coupon/interest stream to
-     BOND holdings in every equity-served account (mirror design 60's `CashSleeveInterestHandler`,
-     or extend `BondCouponScheduledHandler` to the IRA/401k/Roth/super/AU_STOCK loops), per-
-     wrapper tax treatment. Deferred to a follow-up (see the tracked issue).
+     earned **zero return** — the optimizer saw bonds as zero-return everywhere but a US
+     brokerage and under-weighted them there. **Fix (mirrors design 60's `CashSleeveInterestHandler`):**
+     a new **`BondSleeveCouponHandler` + `BondSleeveCouponApplyReducer`** pair on a shared
+     annual `BOND_SLEEVE_COUPON` event (scheduled whenever any equity-served account exists).
+     It reinvests each BOND sleeve's coupon (`marketValue × (couponRate ?? per-account
+     fixed-income fallback)` — design-61 sleeves carry `couponRate=null`) and taxes it by a
+     `taxMode`: **`deferred`** for `IRA`/`K401`/`ROTH`/`SUPER` (grows the wrapper, taxed on
+     withdrawal) and **`au`** for `AU_STOCK` (AU ordinary income via `AU_SAVINGS_EARNINGS_TAX`).
+     `US_STOCK` is deliberately EXCLUDED — its bonds keep the existing `INTL_BOND_COUPON`
+     stream, so there is no double-count (the two mechanisms are layered, not unified, exactly
+     as design 60 layered cash-sleeve interest atop the savings handlers). A `us` taxMode
+     (chaining `BOND_COUPON_TAX` for the Treasury-exempt federal+state+FITO split) exists for
+     completeness but is unwired today. Dedicated `FIXED_INCOME`/`AU_FIXED_INCOME` accounts are
+     unaffected (they earn via `FixedIncomeInterestHandler`); CASH sleeves are design 60; GOLD
+     grows. Tests: `evt-bond-sleeve-coupon.test.mjs` (BOND-SLV-1..7, incl. IRA + super
+     end-to-end growth).
 3. **Phase 3 — Lever B (time variation). ✅ DONE (2026-07-16).** GLIDEPATH + the
    flagship REGIME_CONDITIONED ("respond to conditions"). Shipped: an `allocationSchedule`
    enum (STATIC/GLIDEPATH/REGIME_CONDITIONED, default STATIC ⇒ back-compat) resolved

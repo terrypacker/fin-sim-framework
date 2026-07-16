@@ -102,6 +102,7 @@ import { UsdAudPair } from './finance/fx/usd-aud-pair.js';
 import { AssetAppreciationHandler, AssetAppreciateReducer } from './finance/handlers/asset-appreciation-handler.js';
 import { BondCouponScheduledHandler } from './finance/handlers/bond-coupon-handler.js';
 import { CashSleeveInterestHandler } from './finance/handlers/cash-sleeve-interest-handler.js';
+import { BondSleeveCouponHandler } from './finance/handlers/bond-sleeve-coupon-handler.js';
 import { ChangeResidencyHandler } from './finance/handlers/change-residency-handler.js';
 import { ChangeStateResidencyHandler } from './finance/handlers/change-state-residency-handler.js';
 import { DividendScheduledHandler } from './finance/handlers/dividend-scheduled-handler.js';
@@ -163,6 +164,7 @@ import { AccumulateDeficitReducer } from './finance/reducers/accumulate-deficit-
 import { AccumulateTaxesPaidReducer } from './finance/reducers/accumulate-taxes-paid-reducer.js';
 import { BondCouponCashApplyReducer } from './finance/reducers/bond-coupon-cash-apply-reducer.js';
 import { CashSleeveInterestApplyReducer } from './finance/reducers/cash-sleeve-interest-apply-reducer.js';
+import { BondSleeveCouponApplyReducer } from './finance/reducers/bond-sleeve-coupon-apply-reducer.js';
 import { ChangeResidencyApplyReducer } from './finance/reducers/change-residency-apply-reducer.js';
 import { ChangeStateResidencyApplyReducer } from './finance/reducers/change-state-residency-apply-reducer.js';
 import { ExpenseDebitReducer } from './finance/reducers/expense-debit-reducer.js';
@@ -720,6 +722,7 @@ export const Finance = {
   AssetAppreciateReducer,
   BondCouponScheduledHandler,
   CashSleeveInterestHandler,
+  BondSleeveCouponHandler,
   ChangeResidencyHandler,
   ChangeStateResidencyHandler,
   DividendScheduledHandler,
@@ -862,6 +865,7 @@ export const Finance = {
   AccumulateTaxesPaidReducer,
   BondCouponCashApplyReducer,
   CashSleeveInterestApplyReducer,
+  BondSleeveCouponApplyReducer,
   ChangeResidencyApplyReducer,
   ChangeStateResidencyApplyReducer,
   ExpenseDebitReducer,

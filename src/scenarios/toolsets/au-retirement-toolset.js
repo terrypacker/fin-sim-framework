@@ -14,6 +14,7 @@ import { OneOffEvent }                from '../../simulation-framework/events/on
 import { ACCOUNT_ROLES }              from '../../finance/state/account-roles.js';
 import { RATE_KEYS }                  from '../../finance/economic-regimes/rate-keys.js';
 import { CashSleeveInterestHandler }  from '../../finance/handlers/cash-sleeve-interest-handler.js';
+import { BondSleeveCouponHandler }    from '../../finance/handlers/bond-sleeve-coupon-handler.js';
 import { MonthlyExpensesHandler }     from '../../finance/handlers/monthly-expenses-handler.js';
 import { RetirementDateHandler }      from '../../finance/spending/strategies/retirement-date-handler.js';
 import { HealthcareEventHandler }     from '../../finance/spending/strategies/healthcare-event-handler.js';
@@ -512,6 +513,31 @@ export const AU_RETIREMENT = {
           taxMode,
         });
         h.handledEvents.push(cashInterestEvent);
+        handlers.push(h);
+      }
+    }
+
+    // Coupon interest on BOND sleeves of AU equity-served accounts (super/au-stock).
+    // Shares the annual BOND_SLEEVE_COUPON event scheduled by US_RETIREMENT. These
+    // accounts run off the equity-growth earnings handler (no BOND return), and had
+    // no coupon stream, so a BOND sleeve here (design-61 allocation lever) earned
+    // nothing. super coupon is tax-deferred (super environment); au-stock coupon is
+    // AU ordinary income. Fallback rate is the AU fixed-income rate.
+    const bondCouponEvent = context.schedulesById['BOND_SLEEVE_COUPON'];
+    if (bondCouponEvent) {
+      const auBondSleeveAccounts = [
+        ...auStockAccts.map(a => ({ acct: a, role: ACCOUNT_ROLES.AU_STOCK, taxMode: 'au' })),
+        ...superAccts.map(a   => ({ acct: a, role: ACCOUNT_ROLES.SUPER,    taxMode: 'deferred' })),
+      ];
+      for (const { acct, role, taxMode } of auBondSleeveAccounts) {
+        const h = new BondSleeveCouponHandler({
+          stateRegistry: sr, role,
+          ownerId: acct.ownerId, stateKey: acct.stateKey,
+          couponRate: acct.interestRate ?? p.auFixedIncomeInterestRate,
+          rateKey: RATE_KEYS.FIXED_INCOME_AU,
+          taxMode,
+        });
+        h.handledEvents.push(bondCouponEvent);
         handlers.push(h);
       }
     }
