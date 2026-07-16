@@ -302,7 +302,10 @@ test('EVT-23: super earnings taxed at 15% in accumulation phase (member < 60)', 
     superGrowthRate: 0.07,
     birthDate: '1990-01-01', // age ~37 — accumulation phase
   }));
-  sim.stepTo(new Date(2027, 11, 31));
+  // Sample after exactly one year-end earnings event. Earnings now accrue from
+  // the first sim year-end (2026-12-31, startOffset 0), so step to early 2027 to
+  // capture a single year of 7% growth (the prior startOffset(1) fired at 2027).
+  sim.stepTo(new Date(2027, 0, 15));
 
   // 7000 of earnings accrued and grew the balance...
   assert.strictEqual(sim.state.superAccount.balance, 107000);
@@ -316,7 +319,8 @@ test('EVT-23: super earnings tax-free in pension phase (member ≥ 60)', () => {
     superGrowthRate: 0.07,
     birthDate: '1962-01-01', // age ~65 — pension/retirement phase
   }));
-  sim.stepTo(new Date(2027, 11, 31));
+  // One year-end earnings event (startOffset 0 → first accrual 2026-12-31).
+  sim.stepTo(new Date(2027, 0, 15));
 
   // Earnings still accrue and compound...
   assert.strictEqual(sim.state.superAccount.balance, 107000);

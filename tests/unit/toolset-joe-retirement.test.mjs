@@ -404,11 +404,11 @@ test('joe: $10k/month expenses reduce checking after one month', () => {
 
 test('joe: no wages fire because monthlyWage is 0', () => {
   const { sim } = loadToolsetScenario(JOE_CONFIG);
-  // Run a full year — wages event fires monthly but should produce no actions.
-  sim.stepTo(END_2026);
-  // US ordinary income should only reflect tax-settled amounts, not wages.
-  // Brokerage year-end earnings don't fire until end of 2027 (startOffset=1), so
-  // total brokerage should not exceed initial values before that point.
+  // Run to mid-year — the monthly wages event fires but should produce no actions
+  // (monthlyWage is 0). Sample BEFORE the year-end earnings event so the brokerage
+  // reflects only drawdown; year-end earnings now accrue from 2026-12-31
+  // (startOffset 0), which would otherwise grow the balance and mask the check.
+  sim.stepTo(MAY_END_2026);
   const brokerageTotal = sim.state.brokerageTodAccount.balance + sim.state.brokerageAccount.balance;
   assert.ok(
     brokerageTotal <= 2_200_000,
@@ -421,7 +421,8 @@ test('joe: brokerage accounts grow by year-end earnings', () => {
   const todBefore = sim.state.brokerageTodAccount.balance;
   const broBefore = sim.state.brokerageAccount.balance;
 
-  // startOffset=1 means earnings fire after the first year-end, i.e. end of 2027.
+  // startOffset=0 means earnings fire from the first year-end (end of 2026); by
+  // end of 2027 two years have accrued. Either way the balances have changed.
   const END_2027 = new Date(Date.UTC(2027, 11, 31));
   sim.stepTo(END_2027);
 

@@ -367,5 +367,7 @@ test('AU_RETIREMENT: super earnings event fires (INTL_SUPER_EARNINGS registered 
   const superEvent = events.find(e => e.type === 'INTL_SUPER_EARNINGS');
   assert.ok(superEvent != null, 'INTL_SUPER_EARNINGS must be registered');
   assert.strictEqual(superEvent.interval, 'year-end', 'INTL_SUPER_EARNINGS must use year-end interval');
-  assert.strictEqual(superEvent.startOffset, 1, 'INTL_SUPER_EARNINGS must have startOffset 1');
+  // startOffset 0 → earnings accrue from the first sim year-end (holdings held
+  // from simStart earn in year one; the prior startOffset(1) skipped year one).
+  assert.strictEqual(superEvent.startOffset, 0, 'INTL_SUPER_EARNINGS must have startOffset 0 (year-one accrual)');
 });

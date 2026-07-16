@@ -298,7 +298,7 @@ export const AU_RETIREMENT = {
       schedules.push(
         EventBuilder.eventSeries()
           .name('Super Earnings').type('INTL_SUPER_EARNINGS')
-          .interval('year-end').startOffset(1).enabled(true).color('#9C27B0').build()
+          .interval('year-end').startOffset(0).enabled(true).color('#9C27B0').build()
       );
     }
 
@@ -306,12 +306,12 @@ export const AU_RETIREMENT = {
       schedules.push(
         EventBuilder.eventSeries()
           .name('AU Stock Earnings').type('INTL_AU_STOCK_EARNINGS')
-          .interval('year-end').startOffset(1).enabled(true).color('#66BB6A').build()
+          .interval('year-end').startOffset(0).enabled(true).color('#66BB6A').build()
       );
       schedules.push(
         EventBuilder.eventSeries()
           .name('AU Stock Dividend').type('INTL_AU_STOCK_DIVIDEND')
-          .interval('year-end').startOffset(1).enabled(true).color('#FFA726').build()
+          .interval('year-end').startOffset(0).enabled(true).color('#FFA726').build()
       );
     }
 
