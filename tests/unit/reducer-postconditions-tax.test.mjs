@@ -169,4 +169,50 @@ test('UsTaxPaymentDebitReducer: short balance with no replenish source pays what
   const next = runReducer(r, state, makeAction('US_TAX_PAYMENT_DEBIT', { amount: 320 }), DATE,
     { checkNoMutation: false, balance: true, nonNegative: true });
   assert.equal(next.usSavingsAccount.balance, 0, 'capped to available — never negative (I4)');
+  // The $220 that could not be covered is an unpaid tax bill → OUT_OF_FUNDS,
+  // symmetric with the spending path (I8).
+  const oof = next.next.find(a => a.type === 'OUT_OF_FUNDS');
+  assert.ok(oof, 'a residual tax bill emits OUT_OF_FUNDS');
+  assert.equal(Math.round(oof.deficit), 220);
+  assert.equal(oof.currency, 'USD');
+});
+
+test('UsTaxPaymentDebitReducer: a fully-funded tax bill emits NO OUT_OF_FUNDS (I8)', () => {
+  const services = makeServices();
+  services.stateRegistry.getStateKey = () => 'usSavingsAccount';
+  const r = new UsTaxPaymentDebitReducer(services);
+  const state = {
+    people: makePeople({ residency: 'US' }),
+    usSavingsAccount: makeAccount({ stateKey: 'usSavingsAccount', holdings: [{ id: 's1', marketValue: 10000, costBasis: 10000 }] }),
+  };
+  const next = runReducer(r, state, makeAction('US_TAX_PAYMENT_DEBIT', { amount: 320 }), DATE,
+    { checkNoMutation: false, balance: true, nonNegative: true });
+  assert.equal(next.usSavingsAccount.balance, 9680);
+  assert.equal(next.next.find(a => a.type === 'OUT_OF_FUNDS'), undefined, 'paid in full → no insolvency');
+});
+
+test('UsTaxPaymentDebitReducer: a tax owed with no US cash account is fully OUT_OF_FUNDS (I8)', () => {
+  const services = makeServices();
+  services.stateRegistry.getStateKey = () => 'usSavingsAccount';   // key resolves, but state has no such account
+  const r = new UsTaxPaymentDebitReducer(services);
+  const state = { people: makePeople({ residency: 'US' }) };       // no usSavingsAccount
+  const next = runReducer(r, state, makeAction('US_TAX_PAYMENT_DEBIT', { amount: 500 }), DATE,
+    { checkNoMutation: false });
+  const oof = next.next.find(a => a.type === 'OUT_OF_FUNDS');
+  assert.ok(oof, 'the whole liability is unpaid → OUT_OF_FUNDS (no crash on the missing account)');
+  assert.equal(oof.deficit, 500);
+  assert.equal(oof.currency, 'USD');
+});
+
+test('AuTaxPaymentDebitReducer: an unpayable AU tax reports the deficit in AUD (I8)', () => {
+  const services = makeServices();
+  services.stateRegistry.getStateKey = () => 'auSavingsAccount';
+  const r = new AuTaxPaymentDebitReducer(services);
+  const state = { people: makePeople({ residency: 'AU' }) };       // no auSavingsAccount
+  const next = runReducer(r, state, makeAction('AU_TAX_PAYMENT_DEBIT', { amount: 800 }), DATE,
+    { checkNoMutation: false });
+  const oof = next.next.find(a => a.type === 'OUT_OF_FUNDS');
+  assert.ok(oof);
+  assert.equal(oof.deficit, 800);
+  assert.equal(oof.currency, 'AUD', 'AU settle is denominated in AUD');
 });

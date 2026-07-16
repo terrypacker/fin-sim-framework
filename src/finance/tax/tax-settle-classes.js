@@ -29,7 +29,7 @@ function _sumMap(map) {
 // >10y at the US settle), and usTaxPaidOnUsSourceAud is overwritten each US settle
 // and consumed (excess lost) at the next AU settle.
 const YTD_FIELDS = {
-  US: ['usOrdinaryIncomeYTD', 'usNegativeIncomeYTD', 'usCapitalGainsYTD', 'usCollectibleGainsYTD', 'usPenaltyYTD',
+  US: ['usOrdinaryIncomeYTD', 'usNegativeIncomeYTD', 'usCapitalGainsYTD', 'usCollectibleGainsYTD', 'usNetInvestmentIncomeYTD', 'usPenaltyYTD',
        'foreignGeneralIncomeYTD', 'foreignPassiveIncomeYTD', 'usSourceOrdinaryUsdYTD', 'usSourceCapGainsUsdYTD',
        'ftcCurrentGeneral', 'ftcCurrentPassive',
        // design 63 §6.5 — heir-paid NE inheritance tax (reporting bucket; debited at the inheritance date)
@@ -278,6 +278,18 @@ class TaxPaymentDebitReducerBase extends Reducer {
     const role       = this.constructor.savingsRole;
     const accountKey = this.stateRegistry.getStateKey(role);
     const cashAccount = state[accountKey];
+    const currency    = cashAccount?.currency?.code
+                        ?? (this.constructor.cc === 'AU' ? 'AUD' : 'USD');
+
+    // Absent-account: this country's canonical savings account may not be wired
+    // (e.g. a US person charged a US tax the FTC cannot fully relieve — NIIT — in
+    // a scenario holding no US cash account). There is nowhere to draw from, so
+    // the entire liability is unpaid — treat it as an OUT_OF_FUNDS event rather
+    // than dereferencing an undefined account or silently absorbing the tax.
+    if (!cashAccount) {
+      return this.newState(state, {}, this._outOfFundsActions(action.amount, currency, date));
+    }
+
     const shortfall   = action.amount - Math.max(0, cashAccount.balance);
 
     let crossBorderTransfers = [];
@@ -285,10 +297,13 @@ class TaxPaymentDebitReducerBase extends Reducer {
       try {
         // A cross-currency cash sweep here (e.g. AU cash topping up US savings to
         // pay US tax) is journaled via INTL_TRANSFER_RECORD (design 44 Gap A).
+        // replenishSavings tops the account up as far as the sources allow before
+        // throwing InsufficientFundsError with the uncoverable residual.
         ({ crossBorderTransfers = [] } = this.accountService.replenishSavings(state, accountKey, shortfall, date));
       } catch (e) {
         if (!(e instanceof InsufficientFundsError)) throw e;
-        // Proceed with partial payment — pay what's available.
+        // Proceed with partial payment — pay what's available; the residual is
+        // reported as OUT_OF_FUNDS below.
       }
     }
 
@@ -297,9 +312,30 @@ class TaxPaymentDebitReducerBase extends Reducer {
       this.accountService.transaction(cashAccount, -debit, date);
     }
 
+    // Any liability the available cash + cross-border sweep could not cover is an
+    // unpaid tax bill — a genuine insolvency, symmetric with the spending path
+    // (which emits OUT_OF_FUNDS from ReplenishSavings/IntlTransfer). Emitting it
+    // here routes the residual through the shared OutOfFundsReducer chain
+    // (deficit metric + cumulativeDeficit + first-occurrence date/scenarioFailed).
+    const unpaid = action.amount - debit;
+    const outOfFundsActions = this._outOfFundsActions(unpaid, currency, date);
+
     return this.newState(state, {
       [accountKey]: { ...cashAccount },   // explicit new reference so balance change is visible in state diffs
-    }, crossBorderTransfers);
+    }, [...crossBorderTransfers, ...outOfFundsActions]);
+  }
+
+  /**
+   * Build the OUT_OF_FUNDS action for an unpaid tax residual, or [] when the
+   * residual is within a cent (float/FX dust). The shared OutOfFundsReducer
+   * consumes it (records the deficit metric, accumulates cumulativeDeficit, and
+   * stamps outOfFundsDate/scenarioFailed on first occurrence). The 0.01 epsilon
+   * matches the spending-side IntlTransferApplyReducer so rounding never trips a
+   * spurious insolvency.
+   */
+  _outOfFundsActions(unpaid, currency, _date) {
+    if (!(unpaid > 0.01)) return [];
+    return [{ type: 'OUT_OF_FUNDS', deficit: unpaid, currency }];
   }
 }
 

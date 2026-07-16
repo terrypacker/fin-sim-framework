@@ -221,6 +221,7 @@ export class StateSchemaRegistry {
     this.register('usOrdinaryIncomeYTD',         ParameterValueType.currency('USD'));
     this.register('usNegativeIncomeYTD',         ParameterValueType.currency('USD'));
     this.register('usCapitalGainsYTD',           ParameterValueType.currency('USD'));
+    this.register('usNetInvestmentIncomeYTD',    ParameterValueType.currency('USD'));
     this.register('usCollectibleGainsYTD',       ParameterValueType.currency('USD'));
     this.register('usPenaltyYTD',                ParameterValueType.currency('USD'));
     // Deprecated pre-52 field: retained only as a back-compat read shim so old
