@@ -96,6 +96,7 @@ async function runDef(def, params, entries) {
     groupBy:    def.defaultGroupBy,
     aggregates: def.defaultAggregates,
     sort:       [{ field: 'total', dir: 'desc' }],
+    dedupeBy:   def.dedupeBy,
   });
 }
 
@@ -507,6 +508,30 @@ test('capital-gains-by-disposal: US report sums every disposal incl gain-only ty
   // skipped by the sum, so only the two proceeds-bearing rows count.
   const collectible = groups.find(g => g.key.actionType === 'COLLECTIBLE_SALE_TAX');
   assert.strictEqual(collectible.proceeds, 0, 'gain-only row sums to 0 proceeds, not NaN');
+});
+
+test('capital-gains-by-disposal: dedupes the reducer fan-out so one disposal counts once', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const def = reg.get('capital-gains-by-disposal');
+  assert.strictEqual(def.dedupeBy, 'instanceId', 'CG report must dedupe by instanceId');
+
+  // ONE house sale (gain 350000), journaled 3× — one row per TAX_CALC reducer
+  // (dynamic:US, state:classify, dynamic:AU) — all sharing the action instanceId
+  // and carrying the identical `gain`/`proceeds` payload. Without dedupe the sum
+  // and count triple; with dedupe they reflect the single disposal.
+  const entries = [
+    entry({ actionType: 'US_HOUSE_SALE_TAX', instanceId: 'sale-1', data: { gain: 350000, proceeds: 1200000, description: 'usHouseProperty' } }),
+    entry({ actionType: 'US_HOUSE_SALE_TAX', instanceId: 'sale-1', data: { gain: 350000, proceeds: 1200000, description: 'usHouseProperty' } }),
+    entry({ actionType: 'US_HOUSE_SALE_TAX', instanceId: 'sale-1', data: { gain: 350000, proceeds: 1200000, description: 'usHouseProperty' } }),
+  ];
+
+  const { groups, grandTotal } = await runDef(def, { cc: 'US', period: null }, entries);
+  assert.strictEqual(groups.length, 1);
+  const g = groups[0];
+  assert.strictEqual(g.total, 350000, 'gain summed once, not tripled');
+  assert.strictEqual(g.count, 1, 'one distinct disposal, not three journal rows');
+  assert.strictEqual(g.proceeds, 1200000, 'proceeds summed once');
+  assert.strictEqual(grandTotal, 350000);
 });
 
 // ─── Facet sanity ────────────────────────────────────────────────────────────

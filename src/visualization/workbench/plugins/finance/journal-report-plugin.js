@@ -277,6 +277,7 @@ export class JournalReportPlugin extends WorkbenchComponent {
           query:      ast,
           groupBy:    def.defaultGroupBy,
           aggregates: def.defaultAggregates,
+          dedupeBy:   def.dedupeBy,
         });
 
     this._groups     = def.decorate(result.groups);

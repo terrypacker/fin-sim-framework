@@ -73,6 +73,15 @@ export class ReportDefinition {
   get perPerson() { return false; }
 
   /**
+   * When set to a row field name, the aggregate collapses rows sharing that value
+   * to one representative before folding — undoing the journal action×reducer
+   * fan-out (one action → N rows carrying identical payload). Reports that sum an
+   * action-payload field (e.g. `gain`) across the whole CAPITAL_GAINS family set
+   * this to 'instanceId' so each disposal counts once. Null = no deduping.
+   */
+  get dedupeBy() { return null; }
+
+  /**
    * Build a QueryApi AST from resolved params.
    * @param {object}                                              params - facet values + bound params from drillReport
    * @param {import('../journal-query-api.js').JournalQueryApi}   api
@@ -227,6 +236,12 @@ class CapitalGainsByDisposalDef extends ReportDefinition {
   get id()          { return 'capital-gains-by-disposal'; }
   get title()       { return 'Capital Gains by Disposal'; }
   get description() { return 'Realized capital gains from asset sales during the period.'; }
+
+  // Each disposal action is journaled once per reducer that processes it at
+  // TAX_CALC (dynamic:US, state:classify, dynamic:AU) — all three rows carry the
+  // same `gain` payload. Dedupe by instanceId so summing `gain`/`proceeds` and
+  // the disposal count reflect distinct disposals, not the reducer fan-out.
+  get dedupeBy() { return 'instanceId'; }
 
   get facets() {
     return [
