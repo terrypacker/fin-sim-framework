@@ -271,7 +271,7 @@ class TaxPaymentDebitReducerBase extends Reducer {
     this.accountService = accountService;
     this.stateRegistry  = stateRegistry;
     this.reducedActionTypes = [new.target.actionType];
-    this.generatedActionTypes = ['INTL_TRANSFER_RECORD'];
+    this.generatedActionTypes = ['INTL_TRANSFER_RECORD', 'INTL_TRANSFER_APPLY', new.target.actionType];
   }
 
   reduce(state, action, date) {
@@ -290,10 +290,17 @@ class TaxPaymentDebitReducerBase extends Reducer {
       return this.newState(state, {}, this._outOfFundsActions(action.amount, currency, date));
     }
 
+    // `escalated` marks the residual debit re-issued AFTER an INTL_TRANSFER_APPLY
+    // top-up (below). The cross-border sweep has already run and already reported
+    // any still-uncoverable gap as OUT_OF_FUNDS, so this pass only debits what
+    // landed — it neither replenishes again nor re-reports the residual (which
+    // would double-count and could re-escalate without bound).
+    const escalated = action.escalated === true;
+
     const shortfall   = action.amount - Math.max(0, cashAccount.balance);
 
     let crossBorderTransfers = [];
-    if (shortfall > 0) {
+    if (shortfall > 0 && !escalated) {
       try {
         // A cross-currency cash sweep here (e.g. AU cash topping up US savings to
         // pay US tax) is journaled via INTL_TRANSFER_RECORD (design 44 Gap A).
@@ -302,8 +309,7 @@ class TaxPaymentDebitReducerBase extends Reducer {
         ({ crossBorderTransfers = [] } = this.accountService.replenishSavings(state, accountKey, shortfall, date));
       } catch (e) {
         if (!(e instanceof InsufficientFundsError)) throw e;
-        // Proceed with partial payment — pay what's available; the residual is
-        // reported as OUT_OF_FUNDS below.
+        // Proceed to the cross-border escalation below for the uncoverable part.
       }
     }
 
@@ -312,17 +318,32 @@ class TaxPaymentDebitReducerBase extends Reducer {
       this.accountService.transaction(cashAccount, -debit, date);
     }
 
-    // Any liability the available cash + cross-border sweep could not cover is an
-    // unpaid tax bill — a genuine insolvency, symmetric with the spending path
-    // (which emits OUT_OF_FUNDS from ReplenishSavings/IntlTransfer). Emitting it
-    // here routes the residual through the shared OutOfFundsReducer chain
-    // (deficit metric + cumulativeDeficit + first-occurrence date/scenarioFailed).
     const unpaid = action.amount - debit;
-    const outOfFundsActions = this._outOfFundsActions(unpaid, currency, date);
+
+    // Any liability that same-country cash + the inline cross-border *cash* sweep
+    // could not cover would strand here: under LOCAL_FIRST that sweep reaches only
+    // idle foreign cash, never foreign investments, so an AU tax bill larger than
+    // AU liquidity has nowhere left to go. Mirror the spending path
+    // (ReplenishSavingsReducer): escalate to INTL_TRANSFER_APPLY, which liquidates
+    // the OTHER country's investments and wires the proceeds straight into this tax
+    // account (dstKey), then re-issue the debit (escalated) to pay the tax out of
+    // the topped-up balance. The transfer reports any part even that cannot cover
+    // as OUT_OF_FUNDS, so a genuine insolvency still surfaces — symmetric with
+    // spending — without stranding a solvent household across the currency border.
+    let residualActions = [];
+    if (unpaid > 0.01 && !escalated) {
+      residualActions = [
+        { type: 'INTL_TRANSFER_APPLY',
+          direction:     this.constructor.cc === 'AU' ? 'US_TO_AU' : 'AU_TO_US',
+          targetDeficit: unpaid,
+          dstKey:        accountKey },
+        { type: this.constructor.actionType, amount: unpaid, escalated: true },
+      ];
+    }
 
     return this.newState(state, {
       [accountKey]: { ...cashAccount },   // explicit new reference so balance change is visible in state diffs
-    }, [...crossBorderTransfers, ...outOfFundsActions]);
+    }, [...crossBorderTransfers, ...residualActions]);
   }
 
   /**

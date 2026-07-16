@@ -167,6 +167,41 @@ test('IntlTransferApplyReducer: short source proceeds partial then chains OUT_OF
   assert.ok(oof.deficit > 0);
 });
 
+test('IntlTransferApplyReducer: dstKey credits an explicit account, not the default transaction account', () => {
+  const services = makeServices();
+  const r = new IntlTransferApplyReducer(services);
+  const state = {
+    effectiveExchangeRates: { USD_AUD: 1.55 },
+    effectiveFxFees: { USD_AUD: 15 },
+    usSavingsAccount: makeAccount({ stateKey: 'usSavingsAccount', holdings: [{ id: 'u1', marketValue: 50000, costBasis: 50000 }] }),
+    auSavingsAccount: makeAccount({ stateKey: 'auSavingsAccount', currency: 'AUD', holdings: [{ id: 'a1', marketValue: 0, costBasis: 0 }] }),
+    auTaxAccount:     makeAccount({ stateKey: 'auTaxAccount',     currency: 'AUD', holdings: [{ id: 't1', marketValue: 0, costBasis: 0 }] }),
+  };
+  const next = runReducer(r, state, makeAction('INTL_TRANSFER_APPLY', { direction: 'US_TO_AU', targetDeficit: 10000, dstKey: 'auTaxAccount' }),
+    DATE, { checkNoMutation: false, balance: true, nonNegative: true });
+  // The AUD lands in the explicitly named account; the default AU transaction
+  // account is untouched (the tax path tops up the exact account it debits).
+  assert.equal(next.auTaxAccount.balance, 10000);
+  assert.equal(next.auSavingsAccount.balance, 0, 'default transaction account not credited when dstKey is given');
+  assert.ok(next.usSavingsAccount.balance < 50000, 'US side funded the transfer');
+});
+
+test('IntlTransferApplyReducer: an absent funding counterpart is fully OUT_OF_FUNDS (no crash)', () => {
+  const services = makeServices();
+  const r = new IntlTransferApplyReducer(services);
+  const state = {   // US tax escalation with no AU account to pull from
+    effectiveExchangeRates: { USD_AUD: 1.55 },
+    effectiveFxFees: { USD_AUD: 15 },
+    usSavingsAccount: makeAccount({ stateKey: 'usSavingsAccount', holdings: [{ id: 'u1', marketValue: 0, costBasis: 0 }] }),
+  };
+  const next = runReducer(r, state, makeAction('INTL_TRANSFER_APPLY', { direction: 'AU_TO_US', targetDeficit: 220, dstKey: 'usSavingsAccount' }),
+    DATE, { checkNoMutation: false });
+  const oof = next.next.find(a => a.type === 'OUT_OF_FUNDS');
+  assert.ok(oof, 'the whole targetDeficit is unpaid → OUT_OF_FUNDS');
+  assert.equal(Math.round(oof.deficit), 220);
+  assert.equal(oof.currency, 'USD');
+});
+
 // ─── StockDividendCashApplyReducer (service-backed; cash credit) ───────────────
 
 test('StockDividendCashApplyReducer: credits savings and chains STOCK_DIVIDEND_TAX (I3)', () => {

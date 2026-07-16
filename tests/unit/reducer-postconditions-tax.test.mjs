@@ -158,7 +158,7 @@ for (const [label, Reducer, type, key] of [
   });
 }
 
-test('UsTaxPaymentDebitReducer: short balance with no replenish source pays what is available (I4)', () => {
+test('UsTaxPaymentDebitReducer: short balance escalates the residual cross-border (I4)', () => {
   const services = makeServices();
   services.stateRegistry.getStateKey = () => 'usSavingsAccount';
   const r = new UsTaxPaymentDebitReducer(services);
@@ -169,12 +169,21 @@ test('UsTaxPaymentDebitReducer: short balance with no replenish source pays what
   const next = runReducer(r, state, makeAction('US_TAX_PAYMENT_DEBIT', { amount: 320 }), DATE,
     { checkNoMutation: false, balance: true, nonNegative: true });
   assert.equal(next.usSavingsAccount.balance, 0, 'capped to available — never negative (I4)');
-  // The $220 that could not be covered is an unpaid tax bill → OUT_OF_FUNDS,
-  // symmetric with the spending path (I8).
-  const oof = next.next.find(a => a.type === 'OUT_OF_FUNDS');
-  assert.ok(oof, 'a residual tax bill emits OUT_OF_FUNDS');
-  assert.equal(Math.round(oof.deficit), 220);
-  assert.equal(oof.currency, 'USD');
+  // The $220 that same-country cash could not cover is NOT stranded: the reducer
+  // escalates to INTL_TRANSFER_APPLY (symmetric with the spending path), which
+  // liquidates the other country's investments into this tax account (dstKey) and
+  // itself reports any still-uncoverable part as OUT_OF_FUNDS. A follow-up
+  // escalated debit pays the tax out of the topped-up balance.
+  const xfer = next.next.find(a => a.type === 'INTL_TRANSFER_APPLY');
+  assert.ok(xfer, 'a residual tax bill escalates to a cross-border transfer');
+  assert.equal(xfer.direction, 'AU_TO_US', 'US tax pulls from AU');
+  assert.equal(Math.round(xfer.targetDeficit), 220);
+  assert.equal(xfer.dstKey, 'usSavingsAccount', 'proceeds land in the tax account, not the default transaction account');
+  const redebit = next.next.find(a => a.type === 'US_TAX_PAYMENT_DEBIT' && a.escalated);
+  assert.ok(redebit, 'a follow-up escalated debit pays the topped-up balance');
+  assert.equal(Math.round(redebit.amount), 220);
+  // No direct OUT_OF_FUNDS from the tax reducer itself — the transfer owns that.
+  assert.equal(next.next.find(a => a.type === 'OUT_OF_FUNDS'), undefined, 'residual is escalated, not stranded');
 });
 
 test('UsTaxPaymentDebitReducer: a fully-funded tax bill emits NO OUT_OF_FUNDS (I8)', () => {
