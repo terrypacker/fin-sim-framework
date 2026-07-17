@@ -19,7 +19,7 @@ import { Holding }            from '../../src/finance/holdings/holding.js';
 import { ALLOCATION }         from '../../src/finance/holdings/allocation.js';
 
 function makeStockAccount() {
-  return new BrokerageAccount(20_000, {
+  return new BrokerageAccount(25_000, {   // 12k + 8k equity + 5k bond = Σ marketValue
     name:    'US Stock',
     role:    'us-stock',
     country: 'US',
@@ -37,6 +37,11 @@ function makeStockAccount() {
         id: 'hldB', allocation: ALLOCATION.EQUITY, marketValue: 8_000, costBasis: 7_000,
         purchaseDate: new Date(Date.UTC(2022, 2, 1)),  rateKey: 'EQUITY_US', label: 'VOO',
       }),
+      new Holding({
+        id: 'hldC', allocation: ALLOCATION.BOND, marketValue: 5_000, costBasis: 5_000,
+        rateKey: 'FIXED_INCOME_US', couponRate: 0.03, duration: 6,
+        taxExemption: 'federal', issuingState: 'CA', label: 'CA muni',   // design 66 §G2
+      }),
     ],
   });
 }
@@ -50,12 +55,17 @@ test('Holdings round-trip: serialize → deserialize preserves multi-sleeve hold
   // Serialize
   const serialized = ScenarioSerializer._serializeAccount(original);
   assert.ok(Array.isArray(serialized.holdings), 'serialized account carries holdings array');
-  assert.equal(serialized.holdings.length, 2);
+  assert.equal(serialized.holdings.length, 3);
   assert.equal(serialized.holdings[0].__type, 'Holding');
 
   // Deserialize → fresh account
   const restored = ScenarioSerializer._makeAccount(serialized);
-  assert.equal(restored.holdings.length, 2);
+  assert.equal(restored.holdings.length, 3);
+  // design 66 §G2: the BOND sleeve's tax-treatment fields survive the round-trip.
+  const muni = restored.holdings.find(h => h.id === 'hldC');
+  assert.equal(muni.taxExemption, 'federal', 'muni taxExemption preserved');
+  assert.equal(muni.issuingState, 'CA',      'muni issuingState preserved');
+  assert.equal(muni.couponRate,   0.03,      'couponRate preserved');
   assert.equal(restored.holdings[0].id, 'hldA');
   assert.equal(restored.holdings[0].allocation, 'EQUITY');
   assert.equal(restored.holdings[0].marketValue, 12_000);

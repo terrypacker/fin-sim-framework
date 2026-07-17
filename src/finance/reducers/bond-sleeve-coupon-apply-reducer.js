@@ -45,7 +45,7 @@ export class BondSleeveCouponApplyReducer extends Reducer {
   }
 
   reduce(state, action) {
-    const { amount, stateTaxableAmount, taxMode = 'deferred', residency } = action;
+    const { amount, federalTaxableAmount, stateTaxableAmount, taxMode = 'deferred', residency } = action;
     const key  = action.stateKey;
     const acct = state[key];
     if (!acct || !(amount > 0)) return this.newState(state);
@@ -64,6 +64,6 @@ export class BondSleeveCouponApplyReducer extends Reducer {
 
     // taxMode === 'us' — route through the design-59 bond-coupon tax classification
     // so the Treasury state-exemption split and FITO relief are applied consistently.
-    return this.newState(base, {}, [{ type: 'BOND_COUPON_TAX', amount, stateTaxableAmount, residency }]);
+    return this.newState(base, {}, [{ type: 'BOND_COUPON_TAX', amount, federalTaxableAmount, stateTaxableAmount, residency }]);
   }
 }

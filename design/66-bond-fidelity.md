@@ -1,9 +1,31 @@
 # 66 — Bond fidelity: from a bond-fund proxy to first-class fixed income
 
-**Status**: **PROPOSED** (2026-07-16). Scope: catalog the gaps between how bonds
-behave in the real world and what the simulation models today, and lay out a
-phased plan to make `BOND` holdings a realistic, first-class asset now that the
-design-61 allocation lever routinely establishes them across every account.
+**Status**: **PHASE 1 IMPLEMENTED** (2026-07-16); Phases 2–4 PROPOSED. Scope:
+catalog the gaps between how bonds behave in the real world and what the simulation
+models today, and lay out a phased plan to make `BOND` holdings a realistic,
+first-class asset now that the design-61 allocation lever routinely establishes
+them across every account.
+
+**Phase 1 (G1 yield lock-in + G2 municipal) — DONE.** Shipped behind the existing
+golden (default scenario has no bonds, so no re-baseline). Delivered:
+- `Holding.taxExemption` enum (`'none'|'state'|'federal'|'both'`) + `issuingState`,
+  generalizing the design-59 `treasury` boolean (back-compat: `treasury:true` →
+  `'state'` in `fromJSON` + the account editor).
+- `computeHoldingsCoupons` now returns `federalTaxableAmount` (excludes munis) and a
+  residency-aware `stateTaxableAmount` (excludes Treasuries and *in-state* munis, via
+  `primaryResidencyState`); both threaded through the 2 coupon handlers + 3 apply
+  reducers into `BOND_COUPON_TAX`. Federal + NIIT tax the federal slice; muni interest
+  is NIIT-exempt automatically; an AU resident is assessed on the full coupon with FITO
+  on the US-taxed slice only.
+- G1: `_newSleeve` (design-61 establish) stamps `couponRate` from
+  `effectiveInterestRates[<rateKey>::<stateKey>] ?? [<rateKey>]` at purchase (null ⇒
+  floats, pre-G1 behavior). Bootstrap-time bond declarations are deliberately NOT
+  stamped in Phase 1.
+- UI: the Treasury checkbox became a tax-treatment selector (Taxable / Treasury /
+  Municipal / Muni all-state) + an issuing-state input shown for Municipal.
+- Tests: `evt-bond-coupon` (federal/state split + muni in/out-of-state + legacy
+  back-compat), `evt-target-allocation-taxable` RC-3-G1 (coupon stamp),
+  `holdings-roundtrip` (new fields). 3521 unit + 866 viz green; golden unmoved.
 
 This is a scoping / decision doc in the spirit of designs 53 (holding rate
 twins), 59 (Treasury state exemption), 60 (cash-sleeve yield) and 61 (allocation
@@ -210,18 +232,18 @@ G2 ─┘                                    │
 ## 8. Open questions (for owner review)
 
 1. **Fund vs individual default (§3)** — confirm `maturityDate == null ⇒ fund` as
-   the back-compatible default, with individual bonds opt-in via a maturity date.
+   the back-compatible default, with individual bonds opt-in via a maturity date. Answer: null => fund is ok
 2. **Muni scope (G2)** — model muni as US-federal-exempt only (simplest, correct for
    most), or also the in-state / out-of-state state-exemption nuance? AU residents
-   get no muni benefit — confirm US muni is fully AU-assessable.
+   get no muni benefit — confirm US muni is fully AU-assessable. Answer: also in-state / out-of-state exemption nuance
 3. **Coupon rate source after G1** — stamp from `effectiveInterestRates[rateKey]`
    (regime-aware market yield) at purchase, or add an explicit bond-yield rate key
    distinct from the fixed-income *fund* rate (a real yield curve would separate a
-   new-issue coupon from a fund's blended yield)?
+   new-issue coupon from a fund's blended yield)? Answer: `effectiveInterestRates[rateKey]` is good enough
 4. **Default bonds in the golden (G3)** — which accounts and what Stock/Bond split
-   make the most representative default (drives the baseline everyone reasons about)?
+   make the most representative default (drives the baseline everyone reasons about)? Answer: flexible on this one, some in Retirement, some in Brokerage maybe a 60/40 stock bond split
 5. **Credit/default appetite (G7)** — is corporate/HY default risk in scope for the
-   planner, or do we stay investment-grade and treat "bonds" as rate-risk only?
+   planner, or do we stay investment-grade and treat "bonds" as rate-risk only? Answer: rate-risk only
 
 ## 9. Relationship to other designs
 

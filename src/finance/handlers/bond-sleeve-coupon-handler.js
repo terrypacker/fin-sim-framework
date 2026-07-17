@@ -87,7 +87,7 @@ export class BondSleeveCouponHandler extends HandlerEntry {
 
   call({ state }) {
     const stateKey = this._stateKeyFixed ?? this.stateRegistry.getStateKey(this.role, this.ownerId);
-    const { amount, stateTaxableAmount, holdingActions } = computeHoldingsCoupons({
+    const { amount, federalTaxableAmount, stateTaxableAmount, holdingActions } = computeHoldingsCoupons({
       state, stateKey, fallbackRate: this.couponRate,
     });
     if (amount <= 0) return [new RecordBalanceAction(`${stateKey}.balance`, stateKey)];
@@ -98,7 +98,7 @@ export class BondSleeveCouponHandler extends HandlerEntry {
       : (state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null);
 
     return [
-      { type: 'BOND_SLEEVE_COUPON_APPLY', amount, stateTaxableAmount, stateKey, taxMode: this.taxMode, residency },
+      { type: 'BOND_SLEEVE_COUPON_APPLY', amount, federalTaxableAmount, stateTaxableAmount, stateKey, taxMode: this.taxMode, residency },
       ...holdingActions,
       new RecordMetricAction('bond_coupons', amount),
       new RecordBalanceAction(`${stateKey}.balance`, stateKey),

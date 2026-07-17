@@ -55,9 +55,9 @@ export class BondCouponCashApplyReducer extends Reducer {
   }
 
   reduce(state, action, date) {
-    const { amount, stateTaxableAmount, residency } = action;
+    const { amount, federalTaxableAmount, stateTaxableAmount, residency } = action;
     const key = this.stateRegistry.getStateKey(this.role, this.ownerId);
     this.accountService.transaction(state[key], amount, date);
-    return this.newState(state, {}, [{ type: 'BOND_COUPON_TAX', amount, stateTaxableAmount, residency }]);
+    return this.newState(state, {}, [{ type: 'BOND_COUPON_TAX', amount, federalTaxableAmount, stateTaxableAmount, residency }]);
   }
 }

@@ -69,11 +69,24 @@ export class Holding {
    *                                                  null = fall back to RATE_KEY_META[rateKey].defaultDuration ?? 0
    * @param {string|null} [opts.taxLossPartner=null] - Holding id of the substitute to rebuy after a tax-loss harvest
    *                                                   (design 29 §3.3). Null = fall back to same-rateKey search.
-   * @param {boolean}     [opts.treasury=false]      - BOND holdings only: true = a direct U.S. Treasury obligation
-   *                                                  whose coupon interest is federally taxable but EXEMPT from US
-   *                                                  state income tax (31 U.S.C. § 3124). false = corporate/other
-   *                                                  bond, fully taxable federal + state. Ignored for non-BOND
-   *                                                  allocations (design 59).
+   * @param {'none'|'state'|'federal'|'both'} [opts.taxExemption='none']
+   *                                                - BOND holdings only: how the coupon is exempted from income tax
+   *                                                  (design 66 §G2, generalizing the design-59 `treasury` flag):
+   *                                                    'none'    — fully taxable federal + state (corporate/other bond);
+   *                                                    'state'   — federally taxable but US-state-EXEMPT (a direct U.S.
+   *                                                                Treasury obligation, 31 U.S.C. § 3124);
+   *                                                    'federal' — federally EXEMPT (a municipal bond); ADDITIONALLY
+   *                                                                state-exempt when `issuingState` matches the
+   *                                                                resident's state (in-state muni), else state-taxable;
+   *                                                    'both'    — unconditionally federal- AND state-exempt (a muni
+   *                                                                treated as state-exempt regardless of residence).
+   *                                                  Ignored for non-BOND allocations. Back-compat: a legacy
+   *                                                  `treasury: true` holding loads as 'state'.
+   * @param {string|null} [opts.issuingState=null]  - BOND holdings only: 2-letter US state code of a municipal bond's
+   *                                                  issuer (taxExemption 'federal'). The muni coupon is state-exempt
+   *                                                  only when this matches the resident's state; null ⇒ treated as
+   *                                                  out-of-state (state-taxable). Ignored for other taxExemption
+   *                                                  values / non-BOND allocations (design 66 §G2).
    */
   constructor({
     id                   = null,
@@ -91,7 +104,8 @@ export class Holding {
     appreciationSchedule = null,
     duration             = null,
     taxLossPartner       = null,
-    treasury             = false,
+    taxExemption         = 'none',
+    issuingState         = null,
   } = {}) {
     this.id                   = id;
     this.allocation           = allocation;
@@ -108,7 +122,8 @@ export class Holding {
     this.appreciationSchedule = appreciationSchedule;
     this.duration             = duration;
     this.taxLossPartner       = taxLossPartner;
-    this.treasury             = treasury;
+    this.taxExemption         = taxExemption;
+    this.issuingState         = issuingState;
   }
 
   toJSON() {
@@ -134,7 +149,8 @@ export class Holding {
         : null,
       duration:            this.duration,
       taxLossPartner:      this.taxLossPartner,
-      treasury:            this.treasury,
+      taxExemption:        this.taxExemption,
+      issuingState:        this.issuingState,
     };
   }
 
@@ -157,7 +173,11 @@ export class Holding {
         : null,
       duration:      d.duration ?? null,
       taxLossPartner: d.taxLossPartner ?? null,
-      treasury:      d.treasury ?? false,
+      // design 66 §G2: taxExemption generalizes the design-59 `treasury` boolean.
+      // Back-compat — a state persisted before design 66 carries `treasury: true`
+      // for a direct Treasury obligation, which maps to the state-exempt bucket.
+      taxExemption:  d.taxExemption ?? (d.treasury ? 'state' : 'none'),
+      issuingState:  d.issuingState ?? null,
     });
   }
 }

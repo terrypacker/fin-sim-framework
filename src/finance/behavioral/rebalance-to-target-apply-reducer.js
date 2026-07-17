@@ -92,7 +92,7 @@ export class RebalanceToTargetApplyReducer extends Reducer {
         // Establish a new sleeve. Backstop the gold guard (§OQ4a) — normally the leg
         // reducer already dropped GOLD from a guarded account's target.
         if (allocation === ALLOCATION.GOLD && !roleCanHoldGold(role)) continue;
-        holdings = [...holdings, _newSleeve({ allocation, amount: buyAmt, country, role, purchaseMs, holdings })];
+        holdings = [...holdings, _newSleeve({ allocation, amount: buyAmt, country, role, purchaseMs, holdings, state, stateKey })];
       }
     }
 
@@ -176,7 +176,7 @@ function _addProRata(holdings, allocation, amount) {
 }
 
 /** Establish a fresh sleeve of `allocation` at cost = market (design 61 §6 buy primitive). */
-function _newSleeve({ allocation, amount, country, role, purchaseMs, holdings = [] }) {
+function _newSleeve({ allocation, amount, country, role, purchaseMs, holdings = [], state = null, stateKey = null }) {
   // Resolve by (country, allocation) with NO role: the role's default rate key
   // (e.g. IRA → EQUITY_US) would otherwise override a non-default sleeve — a BOND
   // sleeve in an equity-role account must grow at the bond rate, not the wrapper's
@@ -185,6 +185,17 @@ function _newSleeve({ allocation, amount, country, role, purchaseMs, holdings = 
   const rateKey  = resolveRateKey(country, allocation, null);
   const duration = allocation === ALLOCATION.BOND
     ? (RATE_KEY_META[rateKey]?.defaultDuration ?? null)
+    : null;
+  // G1 (design 66) — yield lock-in: a newly established BOND sleeve fixes its coupon
+  // at the prevailing market yield at purchase, read from state.effectiveInterestRates
+  // for the sleeve's fixed-income rate key (per-account `<rateKey>::<stateKey>` override
+  // → shared `<rateKey>`), mirroring the earnings-handler rate precedence. This makes a
+  // bond bought when yields are high pay that high coupon forever (a fixed contractual
+  // coupon that no longer floats with regime moves). When the map has no entry, leave
+  // couponRate null so the sleeve falls back to the coupon handler's per-account rate —
+  // preserving pre-G1 behavior. Non-BOND sleeves never carry a coupon.
+  const couponRate = allocation === ALLOCATION.BOND
+    ? _stampCouponRate(state, stateKey, rateKey)
     : null;
   return {
     // A UNIQUE, deterministic id is mandatory: the per-sleeve growth / dividend /
@@ -204,12 +215,27 @@ function _newSleeve({ allocation, amount, country, role, purchaseMs, holdings = 
     rateKey,
     label:         '',
     dividendYield: null,
-    couponRate:    null,          // floating: tracks the regime-adjusted rateKey
+    couponRate,                   // G1: locked to the market yield at purchase (null ⇒ floats)
     appreciationSchedule: null,
     duration,
     taxLossPartner: null,
-    treasury:      false,
+    taxExemption:  'none',        // an established sleeve is a generic taxable bond (design 66 §G2)
+    issuingState:  null,
   };
+}
+
+/**
+ * G1 (design 66) — resolve the market yield to stamp on a freshly established BOND
+ * sleeve's `couponRate`, from `state.effectiveInterestRates`: the per-account
+ * `<rateKey>::<stateKey>` override wins over the shared `<rateKey>`. Returns null
+ * when neither is present (or state is unavailable) so the sleeve keeps the
+ * pre-G1 floating behavior (falls back to the coupon handler's per-account rate).
+ */
+function _stampCouponRate(state, stateKey, rateKey) {
+  const rates = state?.effectiveInterestRates;
+  if (!rates || rateKey == null) return null;
+  const perAcct = (stateKey != null) ? rates[`${rateKey}::${stateKey}`] : undefined;
+  return perAcct ?? rates[rateKey] ?? null;
 }
 
 /**

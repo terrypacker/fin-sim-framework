@@ -107,8 +107,17 @@ export class AccountEditor extends BaseComponent {
     const el     = this._getTemplate('tpl-account-editor');
     const isEdit = !!(this._node?.id);
 
-    // Initialise working holdings copy before anything touches the DOM
-    this._holdings = (this._node?.holdings ?? []).map(h => ({ ...h }));
+    // Initialise working holdings copy before anything touches the DOM. Normalize the
+    // legacy design-59 `treasury` boolean to the design-66 taxExemption enum so an
+    // older node still round-trips through the editor (mirrors Holding.fromJSON).
+    this._holdings = (this._node?.holdings ?? []).map(h => {
+      const { treasury, ...rest } = h;
+      return {
+        ...rest,
+        taxExemption: h.taxExemption ?? (treasury ? 'state' : 'none'),
+        issuingState: h.issuingState ?? null,
+      };
+    });
 
     // Populate fields
     el.querySelector('[data-id="name"]').value    = this._node?.name ?? '';
@@ -277,7 +286,8 @@ export class AccountEditor extends BaseComponent {
           couponRate:     null,
           duration:       null,
           taxLossPartner: null,
-          treasury:       false,
+          taxExemption:   'none',
+          issuingState:   null,
           purchaseDate:   null,
         });
         this._refreshHoldingsTbody();
@@ -335,11 +345,24 @@ export class AccountEditor extends BaseComponent {
       const durationCell = showDuration
         ? `<td><input class="h-input h-num" type="number" step="0.1" data-f="duration" value="${h.duration ?? ''}" title="Modified duration (years)" placeholder="Duration"/></td>`
         : '<td class="h-cell-na"></td>';
-      // Treasury flag (design 59): BOND holdings only. Checked ⇒ direct U.S.
-      // Treasury obligation — coupon is federally taxable but exempt from US state
-      // income tax (31 U.S.C. § 3124). N/A for non-bond allocations.
-      const treasuryCell = alloc === 'BOND'
-        ? `<td class="h-cell-check"><input class="h-check" type="checkbox" data-f="treasury"${h.treasury ? ' checked' : ''} title="Direct U.S. Treasury obligation (state-tax exempt)"/></td>`
+      // Tax treatment (design 66 §G2, generalizing the design-59 Treasury flag):
+      // BOND holdings only. Selects how the coupon is exempted —
+      //   Taxable (none) | Treasury (state-exempt, 31 U.S.C. § 3124) |
+      //   Municipal (federal-exempt; state-exempt only when the issuing state
+      //   matches residence) | Muni all-state (unconditionally state-exempt).
+      // The issuing-state input appears only for a (residence-dependent) Municipal.
+      const te = h.taxExemption ?? 'none';
+      const showIssuingState = alloc === 'BOND' && te === 'federal';
+      const issuingStateInput = showIssuingState
+        ? `<input class="h-input h-issuing-state" data-f="issuingState" value="${_escape(h.issuingState ?? '')}" maxlength="2" placeholder="ST" title="Issuing state — coupon is state-exempt only when it matches the resident's state" style="width:3.4em;margin-left:4px"/>`
+        : '';
+      const taxCell = alloc === 'BOND'
+        ? `<td class="h-cell-tax"><select class="h-input" data-f="taxExemption" title="Bond coupon tax treatment">`
+            + `<option value="none"${te === 'none' ? ' selected' : ''}>Taxable</option>`
+            + `<option value="state"${te === 'state' ? ' selected' : ''}>Treasury</option>`
+            + `<option value="federal"${te === 'federal' ? ' selected' : ''}>Municipal</option>`
+            + `<option value="both"${te === 'both' ? ' selected' : ''}>Muni (all-state)</option>`
+            + `</select>${issuingStateInput}</td>`
         : '<td class="h-cell-na"></td>';
       const partnerCell = showPartner
         ? `<td><select class="h-input" data-f="taxLossPartner">${partnerOpts}</select></td>`
@@ -354,7 +377,7 @@ export class AccountEditor extends BaseComponent {
         ${costBasisCell}
         ${incomeCell}
         ${durationCell}
-        ${treasuryCell}
+        ${taxCell}
         ${partnerCell}
         <td class="h-actions"><button class="btn btn-xs btn-warn h-delete" type="button">✕</button></td>
       `;
@@ -372,7 +395,7 @@ export class AccountEditor extends BaseComponent {
 
         input.addEventListener(evtName, () => {
           if (isCheck) {
-            // Boolean per-holding flag (e.g. treasury) — read `.checked`.
+            // Boolean per-holding flag — read `.checked`.
             this._holdings[i][field] = input.checked;
           } else if (field === 'allocation') {
             this._holdings[i].allocation = input.value;
@@ -392,6 +415,15 @@ export class AccountEditor extends BaseComponent {
             this._syncBalance(this._rootEl);
           } else if (field === 'taxLossPartner') {
             this._holdings[i].taxLossPartner = input.value || null;
+          } else if (field === 'taxExemption') {
+            // Switching to/from 'federal' (Municipal) shows/hides the issuing-state
+            // input, so re-render the row (design 66 §G2).
+            this._holdings[i].taxExemption = input.value;
+            this._refreshHoldingsTbody();
+          } else if (field === 'issuingState') {
+            // Store a normalized 2-letter code; empty ⇒ null (out-of-state).
+            const v = input.value.trim().toUpperCase();
+            this._holdings[i].issuingState = v || null;
           } else if (isNum) {
             if (NULLABLE_NUM.has(field)) {
               this._holdings[i][field] = input.value === '' ? null : Number(input.value);

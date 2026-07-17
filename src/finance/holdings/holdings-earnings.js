@@ -10,6 +10,45 @@
 
 import { HoldingTransactAction }    from './holding-actions.js';
 import { resolveScheduledRate }     from './appreciation-schedule-utils.js';
+import { primaryResidencyState }    from '../residency-utils.js';
+
+/**
+ * Whether a BOND holding's coupon is EXEMPT from US FEDERAL income tax
+ * (design 66 §G2). Municipal-bond interest is federally exempt; a `taxExemption`
+ * of 'federal' or 'both' marks a muni. Treasury ('state') and generic ('none')
+ * coupons are federally taxable.
+ *
+ * @param {object} h - Holding
+ * @returns {boolean}
+ */
+export function couponFederalExempt(h) {
+  return h?.taxExemption === 'federal' || h?.taxExemption === 'both';
+}
+
+/**
+ * Whether a BOND holding's coupon is EXEMPT from US STATE income tax
+ * (design 66 §G2):
+ *   - 'state' / 'both'  → always state-exempt (a direct U.S. Treasury obligation,
+ *                          31 U.S.C. § 3124, is state-exempt in every state; 'both'
+ *                          is an unconditionally state-exempt muni);
+ *   - 'federal' (muni)  → state-exempt ONLY when the bond's `issuingState` matches
+ *                          the resident's home state (an in-state muni); an
+ *                          out-of-state muni (or one with no issuingState) is
+ *                          state-taxable;
+ *   - 'none'            → state-taxable.
+ *
+ * @param {object} h              - Holding
+ * @param {string|null} residentState - Resident's 2-letter state code (null = no state configured)
+ * @returns {boolean}
+ */
+export function couponStateExempt(h, residentState) {
+  const te = h?.taxExemption ?? 'none';
+  if (te === 'state' || te === 'both') return true;
+  if (te === 'federal') {
+    return h?.issuingState != null && residentState != null && h.issuingState === residentState;
+  }
+  return false;
+}
 
 /**
  * Walk an account's holdings, compute per-holding growth using
@@ -222,12 +261,19 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
  * no `effectiveDividendAdjustments`/regime scaling here. Only BOND holdings pay a
  * coupon; EQUITY/CASH/GOLD/OTHER sleeves are skipped.
  *
- * Returns the dividend-shaped `{ amount, holdingActions }` plus a
- * `stateTaxableAmount` — the coupon total EXCLUDING `treasury` holdings, since
- * direct U.S. Treasury interest is federally taxable but state-exempt
- * (31 U.S.C. § 3124). `amount` is the full (federal) coupon; the caller stamps
- * both onto the BOND_COUPON_* action so federal tax uses `amount` and state tax
- * uses `stateTaxableAmount`.
+ * Returns the dividend-shaped `{ amount, holdingActions }` plus two taxable
+ * sub-totals that split the coupon by exemption (design 66 §G2, generalizing the
+ * design-59 Treasury split):
+ *   - `amount`               — the FULL coupon (always credited to the balance);
+ *   - `federalTaxableAmount` — the coupon EXCLUDING federally-exempt (municipal)
+ *                              holdings; the federal tax module taxes this slice;
+ *   - `stateTaxableAmount`   — the coupon EXCLUDING state-exempt holdings, i.e.
+ *                              Treasury ('state'/'both') AND in-state munis
+ *                              (`issuingState` == the resident's state). The
+ *                              resident's state is read from `state.people` via
+ *                              primaryResidencyState, so an out-of-state muni is
+ *                              state-taxable while an in-state one is exempt.
+ * The caller stamps all three onto the BOND_COUPON_* action.
  *
  * `holdingActions` reinvest the coupon into each sleeve (costBasisDelta 0),
  * matching computeHoldingsDividends; a cash-payout caller can ignore them and
@@ -237,14 +283,16 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
  * @param {object} opts.state         - Current simulation state
  * @param {string} opts.stateKey      - state[stateKey] is the account
  * @param {number} opts.fallbackRate  - Coupon rate used when a BOND holding has no couponRate
- * @returns {{ amount: number, stateTaxableAmount: number, holdingActions: HoldingTransactAction[] }}
+ * @returns {{ amount: number, federalTaxableAmount: number, stateTaxableAmount: number, holdingActions: HoldingTransactAction[] }}
  */
 export function computeHoldingsCoupons({ state, stateKey, fallbackRate }) {
   const account  = state?.[stateKey];
   const holdings = account?.holdings ?? [];
+  const residentState = primaryResidencyState(state);
 
-  let total       = 0;
-  let stateTaxable = 0;
+  let total          = 0;
+  let federalTaxable = 0;
+  let stateTaxable   = 0;
   const holdingActions = [];
   for (const h of holdings) {
     if (!h || h.allocation !== 'BOND') continue;
@@ -253,7 +301,8 @@ export function computeHoldingsCoupons({ state, stateKey, fallbackRate }) {
     const coupon = +(mv * rate).toFixed(2);
     if (coupon === 0) continue;
     total += coupon;
-    if (!h.treasury) stateTaxable += coupon;   // Treasury coupon is state-exempt
+    if (!couponFederalExempt(h))              federalTaxable += coupon;  // munis are federally exempt
+    if (!couponStateExempt(h, residentState)) stateTaxable   += coupon;  // Treasury / in-state muni are state-exempt
     holdingActions.push(new HoldingTransactAction({
       stateKey,
       holdingId:        h.id,
@@ -262,8 +311,9 @@ export function computeHoldingsCoupons({ state, stateKey, fallbackRate }) {
     }));
   }
   return {
-    amount:            +total.toFixed(2),
-    stateTaxableAmount: +stateTaxable.toFixed(2),
+    amount:               +total.toFixed(2),
+    federalTaxableAmount: +federalTaxable.toFixed(2),
+    stateTaxableAmount:   +stateTaxable.toFixed(2),
     holdingActions,
   };
 }

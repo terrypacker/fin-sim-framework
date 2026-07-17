@@ -205,27 +205,34 @@ export class UsTaxModule2026 extends BaseTaxModule {
         return next;
       }],
 
-      // Bond coupon interest (design 59) — US-source ordinary income; AU ordinary
-      // income if resident, relieved by FITO. The FULL coupon is federally taxable
-      // even for Treasury holdings — the Treasury exemption is state-only
-      // (31 U.S.C. § 3124); the state carve-out lives in state classification.
+      // Bond coupon interest (design 59, 66 §G2) — US-source ordinary income; AU
+      // ordinary income if resident, relieved by FITO. Two carve-outs:
+      //   - Treasury holdings: the FULL coupon is federally taxable — the Treasury
+      //     exemption is state-only (31 U.S.C. § 3124); it lives in state classification.
+      //   - Municipal holdings: the coupon is federally EXEMPT. `federalTaxableAmount`
+      //     is the coupon excluding munis; it (not the full `amount`) drives the federal
+      //     ordinary-income + NIIT base and the FITO relievable slice. Muni interest is
+      //     NIIT-exempt, which follows automatically from taxing federalTaxableAmount.
+      // For an AU resident the FULL coupon (including muni) is AU-assessable foreign
+      // income; only the US-taxed slice is FITO-relievable, so the FITO removal set
+      // records `federalTaxableAmount`, not the full coupon.
       ['BOND_COUPON_TAX', (state, action) => {
         const { amount, residency } = action;
+        const fedAmount = action.federalTaxableAmount ?? amount;   // full coupon when unsplit (legacy)
         const isAuResident = residency === 'AU';
-        // Bond coupon interest is net investment income (IRC §1411(c)(1)(A)(i)) →
-        // NIIT base. The state-only Treasury exemption is orthogonal to NIIT.
         let next = {
           ...state,
-          usOrdinaryIncomeYTD:       state.usOrdinaryIncomeYTD + amount,
-          usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + amount,
+          usOrdinaryIncomeYTD:       state.usOrdinaryIncomeYTD + fedAmount,
+          usNetInvestmentIncomeYTD: (state.usNetInvestmentIncomeYTD ?? 0) + fedAmount,
         };
         if (isAuResident) {
-          const aud = toAUD(amount, 'USD', state);
+          const audFull = toAUD(amount, 'USD', state);
+          const audFed  = toAUD(fedAmount, 'USD', state);
           next = {
             ...next,
-            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + aud,
-            usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + amount,
-            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + aud,
+            auOrdinaryIncomeYTD:    state.auOrdinaryIncomeYTD + audFull,
+            usSourceOrdinaryUsdYTD: (state.usSourceOrdinaryUsdYTD ?? 0) + fedAmount,
+            usSourceOrdinaryAudYTD: (state.usSourceOrdinaryAudYTD ?? 0) + audFed,
           };
         }
         return next;
