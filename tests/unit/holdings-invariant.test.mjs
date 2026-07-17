@@ -93,17 +93,26 @@ test('Holdings bootstrap: every registered account satisfies §4.4 (balance = Σ
   assert.ok(accountCount >= 10, `expected ≥10 production accounts, got ${accountCount}`);
 });
 
-test('Holdings bootstrap: usStockAccount has two pre-seeded holdings (domestic + international)', () => {
+test('Holdings bootstrap: usStockAccount seeds a 60/40 equity/bond book (design 66 §G3)', () => {
   const sim = setupScenario(new Date(Date.UTC(2025, 0, 1)), new Date(Date.UTC(2026, 0, 1)));
   const acct = sim.state.usStockAccount;
   assert.ok(acct, 'usStockAccount must exist');
-  assert.equal(acct.holdings.length, 2, 'usStockAccount should have 2 holdings');
+  // 2 equity (domestic + international) + 3 bond (Treasury / corporate / muni).
+  assert.equal(acct.holdings.length, 5, 'usStockAccount should have 5 holdings');
   const labels = acct.holdings.map(h => h.label);
   assert.ok(labels.some(l => l.includes('Domestic')),      'one holding should be domestic');
   assert.ok(labels.some(l => l.includes('International')), 'one holding should be international');
-  // Domestic holding should be a loss position (basis > marketValue) for TLH testing
+  // Domestic holding should be a loss position (basis > marketValue) for TLH testing.
   const domestic = acct.holdings.find(h => h.label.includes('Domestic'));
   assert.ok(domestic.costBasis > domestic.marketValue, 'domestic holding should start above basis (loss position for TLH)');
+  // Bond leg (design 66 §G3): ~40% of the book, exercising all three tax treatments.
+  const bonds = acct.holdings.filter(h => h.allocation === 'BOND');
+  assert.equal(bonds.length, 3, 'Treasury + corporate + municipal bond sleeves');
+  const exemptions = bonds.map(h => h.taxExemption).sort();
+  assert.deepEqual(exemptions, ['federal', 'none', 'state'], 'one of each tax treatment');
+  const bondMv = bonds.reduce((s, h) => s + h.marketValue, 0);
+  const totMv  = acct.holdings.reduce((s, h) => s + h.marketValue, 0);
+  assert.ok(Math.abs(bondMv / totMv - 0.40) < 0.001, 'bond leg is ~40% of the book');
 });
 
 // ─── Allocation & rateKey resolution per role ────────────────────────────────

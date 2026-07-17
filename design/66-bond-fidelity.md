@@ -1,9 +1,120 @@
 # 66 — Bond fidelity: from a bond-fund proxy to first-class fixed income
 
-**Status**: **PROPOSED** (2026-07-16). Scope: catalog the gaps between how bonds
-behave in the real world and what the simulation models today, and lay out a
-phased plan to make `BOND` holdings a realistic, first-class asset now that the
-design-61 allocation lever routinely establishes them across every account.
+**Status**: **PHASES 1–3 IMPLEMENTED** (2026-07-16); **Phase 4 — G5 (TIPS) + G6
+(zero-coupon/OID) IMPLEMENTED** (2026-07-16); G8/G9/G10 remain proposed, G7 out of
+scope (rate-risk only, open-question #5). Scope:
+catalog the gaps between how bonds behave in the real world and what the simulation
+models today, and lay out a phased plan to make `BOND` holdings a realistic,
+first-class asset now that the design-61 allocation lever routinely establishes
+them across every account.
+
+**Phase 1 (G1 yield lock-in + G2 municipal) — DONE.** Shipped behind the existing
+golden (default scenario has no bonds, so no re-baseline). Delivered:
+- `Holding.taxExemption` enum (`'none'|'state'|'federal'|'both'`) + `issuingState`,
+  generalizing the design-59 `treasury` boolean (back-compat: `treasury:true` →
+  `'state'` in `fromJSON` + the account editor).
+- `computeHoldingsCoupons` now returns `federalTaxableAmount` (excludes munis) and a
+  residency-aware `stateTaxableAmount` (excludes Treasuries and *in-state* munis, via
+  `primaryResidencyState`); both threaded through the 2 coupon handlers + 3 apply
+  reducers into `BOND_COUPON_TAX`. Federal + NIIT tax the federal slice; muni interest
+  is NIIT-exempt automatically; an AU resident is assessed on the full coupon with FITO
+  on the US-taxed slice only.
+- G1: `_newSleeve` (design-61 establish) stamps `couponRate` from
+  `effectiveInterestRates[<rateKey>::<stateKey>] ?? [<rateKey>]` at purchase (null ⇒
+  floats, pre-G1 behavior). Bootstrap-time bond declarations are deliberately NOT
+  stamped in Phase 1.
+- UI: the Treasury checkbox became a tax-treatment selector (Taxable / Treasury /
+  Municipal / Muni all-state) + an issuing-state input shown for Municipal.
+- Tests: `evt-bond-coupon` (federal/state split + muni in/out-of-state + legacy
+  back-compat), `evt-target-allocation-taxable` RC-3-G1 (coupon stamp),
+  `holdings-roundtrip` (new fields). 3521 unit + 866 viz green; golden unmoved.
+
+**Phase 2 (G3 default bonds + the one golden re-baseline) — DONE.** The default
+`IntlRetirementScenario` brokerage + 401(k) were all-equity, so the entire bond path
+(coupons, duration marks, Treasury/muni tax splits) was dead in the golden. Delivered:
+- Brokerage (`usStockAccount`, taxable) → 60% equity / 40% bond; the bond leg is a
+  Treasury (`state`) + corporate (`none`) + CA municipal (`federal`) mix, exercising all
+  three `BOND_COUPON_TAX` treatments. Equity bases rescaled to the smaller book to keep
+  the domestic-loss / intl-gain TLH intent. `_stockHoldings` in `intl-retirement-scenario.js`.
+- 401(k) (`k401Account`, deferred) → 60/40 equity/bond, one deferred sleeve exercising
+  `BOND_SLEEVE_COUPON`. `_k401Holdings`.
+- Fixed contractual `couponRate` 0.04 / duration 5 on the declared sleeves (declared
+  holdings, not the G1 establish path). Also declared `federalTaxableAmount` on the four
+  bond-coupon action field schemas (a Phase-1 loose end).
+- **Golden re-baseline (deliberate, once):** ending net worth −2.7% (11,911,160 →
+  11,584,539, a balanced book compounds slower than all-equity); lifetime tax +0.6%
+  (1,121,674 → 1,128,113, ordinary-income coupons ≈ offset by lower CGT).
+  `cross-border-relief-scenario` EXPECTED_* updated with the before/after; dependent
+  tests re-golded (`holdings-invariant` 2→5 holdings, `accounting-integrity` mixed-book
+  equity-sleeve growth). Verified e2e: brokerage coupon 2400 → fed 1800 / state 1440;
+  401(k) deferred sleeve 4800. 3521 unit + 866 viz green (no viz snapshot churn).
+
+**Phase 3 (G4 maturity & pull-to-par) — DONE.** The §3 fund-vs-individual identity
+decision made concrete: a nullable `maturityDate` promotes a `BOND` sleeve from a
+perpetual *fund* to an *individual bond*. Delivered:
+- `Holding.maturityDate` / `faceValue` / `rollAtMaturity` fields (+ toJSON/fromJSON,
+  string-or-Date tolerant serialization). `maturityDate == null` ⇒ fund (unchanged
+  perpetual behavior).
+- `BondPriceAdjustReducer` extended (both effects individual-only, funds untouched):
+  (1) **duration decay** — effective duration = `min(staticDuration, yearsToMaturity)`,
+  so a near-maturity bond is barely rate-sensitive; (2) **pull-to-par convergence** —
+  independent of rates, the price amortizes toward `faceValue` over remaining life
+  (`frac = Δt/(ttm+Δt)`), so a rate-driven markdown fully recovers by maturity. Reads
+  the as-of date from `state.currentPeriods[cc].startMs`; maintains a new
+  `state.priorMarkMs`.
+- New `BondMaturityReducer` (PRE_PROCESS + 3, after the price mark) scans ALL accounts
+  and, on the first period at/after `maturityDate`: redeems at par to a CASH holding
+  (return of principal — par bonds have basis = face, so no CGT; premium/discount is
+  G9), or, when `rollAtMaturity`, rolls into a fresh same-term par bond re-issued at
+  the current yield (`effectiveInterestRates[rateKey]`, the G1 lock-in). Registered in
+  `economic-regimes-toolset`, `index.js`, the serializer, and the coverage manifest.
+- **Golden re-baseline (small, deliberate):** the default brokerage Treasury sleeve is
+  now an individual bond (matures 2035-01-01, par faceValue), so the maturity path runs
+  in the golden — it redeems to cash mid-sim. Ending net worth −0.03% (11,584,539 →
+  11,581,436), lifetime tax −0.08% (1,128,113 → 1,127,223); both inside the ±1% band
+  but re-pinned. Corporate + muni sleeves stay funds (both identities represented).
+- UI: BOND rows in `account-editor.js` gained a maturity-date + face-value input
+  (setting a maturity defaults faceValue to par); empty ⇒ fund.
+- Tests: `bond-maturity` (decay / pull-to-par / snap / redemption / roll),
+  `holdings-allocation-inputs` §G4 UI, golden re-pin. 3530 unit + 869 viz green.
+
+**Phase 4 (G5 TIPS + G6 zero-coupon/OID — the shared accretion path) — DONE.**
+Both are "phantom income" instruments: they grow a bond's principal each period with
+NO cash changing hands, and that growth is currently-taxable ordinary income. They
+share one mechanism. Delivered:
+- `Holding.zeroCoupon` (G6) + `Holding.inflationLinked` (G5) booleans (+ toJSON/
+  fromJSON; absent ⇒ a plain coupon bond). Two mutually-exclusive flags in the
+  `treasury`/`taxExemption` style.
+- `computeHoldingsAccretion` (new, `holdings-earnings.js`): a zero accretes its
+  *adjusted basis* toward par by the **constant-yield** method
+  (`basis × ((face/basis)^(1/ttm) − 1)`, capped at `face − basis`); a TIPS indexes
+  principal by the period CPI rate (`basis × cpiRate`, reusing `state.cpiAccumulator`
+  / `cpiRates`, deflation-symmetric). Each emits a HoldingTransactAction raising
+  BOTH `marketValue` AND `costBasis` (the basis step-up is what prevents the accreted
+  principal being taxed again as CGT at maturity), and splits the accretion by the
+  SAME `couponFederalExempt`/`couponStateExempt` rules as coupons (so a Treasury
+  STRIPS `taxExemption:'state'` is state-exempt OID, a muni zero `'federal'` is
+  federally-exempt).
+- Shared `BOND_ACCRETION` annual stream mirroring `BOND_SLEEVE_COUPON`:
+  `BondAccretionHandler` (per-account, carries `country` for the CPI source + a
+  `taxMode`) → `BOND_ACCRETION_APPLY` → `BondAccretionApplyReducer`, which routes tax
+  exactly like the coupon reducer (`deferred`→none, `us`→`BOND_COUPON_TAX`
+  federal+NIIT+state+FITO, `au`→`AU_SAVINGS_EARNINGS_TAX`; `amount` may be negative
+  under TIPS deflation). Wired across brokerage + all equity-served + AU accounts in
+  the us/au retirement toolsets; no-ops when an account holds no accreting bond.
+- `BondPriceAdjustReducer`: zero/TIPS are EXCLUDED from the fixed-face pull-to-par
+  (their principal trajectory is owned by the accretion stream) but still take the
+  rate-sensitivity mark. `BondMaturityReducer`: a TIPS redeems at
+  `max(adjustedPrincipal, faceValue)` — the deflation floor — and the accretion flags
+  are cleared on redeem-to-cash / roll.
+- UI: BOND rows in `account-editor.js` gained **Zero** + **TIPS** checkboxes beside
+  the maturity/face inputs.
+- **Golden unmoved** (Phase-4 convention): the default scenario gets no TIPS/zero, so
+  this ships behind the existing golden. Tested by `evt-bond-accretion` (constant-
+  yield OID + par cap, TIPS index + deflation, fed/state split, three tax modes,
+  pull-to-par exclusion, TIPS deflation-floor redemption, + a full-sim e2e where a
+  brokerage zero accretes to par) and the `holdings-roundtrip` / `holdings-allocation-
+  inputs` field+UI additions. 3543 unit + 870 viz green.
 
 This is a scoping / decision doc in the spirit of designs 53 (holding rate
 twins), 59 (Treasury state exemption), 60 (cash-sleeve yield) and 61 (allocation
@@ -115,13 +226,17 @@ premium/discount `amortization`, `accrued` interest, credit/`default`, `municipa
 
 ### Tier 3 — breadth, as demand / realism requires
 
-- **G5 · TIPS / inflation-linked.** Principal indexes to CPI; coupon pays on the
-  adjusted principal; the inflation accretion is (US) currently-taxable "phantom"
-  income. A **CPI series + accumulator already exists** from the AU CGT reform (see
-  [[inflation-wrapper-drops-cgt-reform]]) and can be reused. Medium.
-- **G6 · Zero-coupon / OID.** No cash coupon; accretes to par; the imputed accretion
-  is annual ordinary income (Original Issue Discount) despite no cash received.
-  Medium; shares the accretion machinery with G5's phantom income.
+- **G5 · TIPS / inflation-linked. DONE (Phase 4).** Principal indexes to CPI; coupon
+  pays on the adjusted principal; the inflation accretion is (US) currently-taxable
+  "phantom" income. Reuses the CPI accumulator from the AU CGT reform (see
+  [[inflation-wrapper-drops-cgt-reform]]). Implemented via the shared accretion path
+  (`inflationLinked` flag + `computeHoldingsAccretion` + `BOND_ACCRETION` stream); a
+  TIPS redeems at `max(adjustedPrincipal, faceValue)` — the deflation floor.
+- **G6 · Zero-coupon / OID. DONE (Phase 4).** No cash coupon; accretes to par by the
+  constant-yield method; the imputed accretion is annual ordinary income (Original
+  Issue Discount) despite no cash received, and steps up basis. Shares the accretion
+  machinery with G5 (`zeroCoupon` flag; same `BOND_ACCRETION` handler/reducer). A
+  Treasury STRIPS is state-exempt OID; a muni zero is federally-exempt.
 - **G7 · Credit spread + default risk.** Corporate / high-yield bonds price at a
   **spread over Treasury** and carry stochastic default with a recovery rate. This
   is the natural first consumer of the **seeded-but-unused in-loop `sim.rng`** (see
@@ -210,18 +325,18 @@ G2 ─┘                                    │
 ## 8. Open questions (for owner review)
 
 1. **Fund vs individual default (§3)** — confirm `maturityDate == null ⇒ fund` as
-   the back-compatible default, with individual bonds opt-in via a maturity date.
+   the back-compatible default, with individual bonds opt-in via a maturity date. Answer: null => fund is ok
 2. **Muni scope (G2)** — model muni as US-federal-exempt only (simplest, correct for
    most), or also the in-state / out-of-state state-exemption nuance? AU residents
-   get no muni benefit — confirm US muni is fully AU-assessable.
+   get no muni benefit — confirm US muni is fully AU-assessable. Answer: also in-state / out-of-state exemption nuance
 3. **Coupon rate source after G1** — stamp from `effectiveInterestRates[rateKey]`
    (regime-aware market yield) at purchase, or add an explicit bond-yield rate key
    distinct from the fixed-income *fund* rate (a real yield curve would separate a
-   new-issue coupon from a fund's blended yield)?
+   new-issue coupon from a fund's blended yield)? Answer: `effectiveInterestRates[rateKey]` is good enough
 4. **Default bonds in the golden (G3)** — which accounts and what Stock/Bond split
-   make the most representative default (drives the baseline everyone reasons about)?
+   make the most representative default (drives the baseline everyone reasons about)? Answer: flexible on this one, some in Retirement, some in Brokerage maybe a 60/40 stock bond split
 5. **Credit/default appetite (G7)** — is corporate/HY default risk in scope for the
-   planner, or do we stay investment-grade and treat "bonds" as rate-risk only?
+   planner, or do we stay investment-grade and treat "bonds" as rate-risk only? Answer: rate-risk only
 
 ## 9. Relationship to other designs
 

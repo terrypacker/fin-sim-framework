@@ -10,6 +10,45 @@
 
 import { HoldingTransactAction }    from './holding-actions.js';
 import { resolveScheduledRate }     from './appreciation-schedule-utils.js';
+import { primaryResidencyState }    from '../residency-utils.js';
+
+/**
+ * Whether a BOND holding's coupon is EXEMPT from US FEDERAL income tax
+ * (design 66 §G2). Municipal-bond interest is federally exempt; a `taxExemption`
+ * of 'federal' or 'both' marks a muni. Treasury ('state') and generic ('none')
+ * coupons are federally taxable.
+ *
+ * @param {object} h - Holding
+ * @returns {boolean}
+ */
+export function couponFederalExempt(h) {
+  return h?.taxExemption === 'federal' || h?.taxExemption === 'both';
+}
+
+/**
+ * Whether a BOND holding's coupon is EXEMPT from US STATE income tax
+ * (design 66 §G2):
+ *   - 'state' / 'both'  → always state-exempt (a direct U.S. Treasury obligation,
+ *                          31 U.S.C. § 3124, is state-exempt in every state; 'both'
+ *                          is an unconditionally state-exempt muni);
+ *   - 'federal' (muni)  → state-exempt ONLY when the bond's `issuingState` matches
+ *                          the resident's home state (an in-state muni); an
+ *                          out-of-state muni (or one with no issuingState) is
+ *                          state-taxable;
+ *   - 'none'            → state-taxable.
+ *
+ * @param {object} h              - Holding
+ * @param {string|null} residentState - Resident's 2-letter state code (null = no state configured)
+ * @returns {boolean}
+ */
+export function couponStateExempt(h, residentState) {
+  const te = h?.taxExemption ?? 'none';
+  if (te === 'state' || te === 'both') return true;
+  if (te === 'federal') {
+    return h?.issuingState != null && residentState != null && h.issuingState === residentState;
+  }
+  return false;
+}
 
 /**
  * Walk an account's holdings, compute per-holding growth using
@@ -222,12 +261,19 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
  * no `effectiveDividendAdjustments`/regime scaling here. Only BOND holdings pay a
  * coupon; EQUITY/CASH/GOLD/OTHER sleeves are skipped.
  *
- * Returns the dividend-shaped `{ amount, holdingActions }` plus a
- * `stateTaxableAmount` — the coupon total EXCLUDING `treasury` holdings, since
- * direct U.S. Treasury interest is federally taxable but state-exempt
- * (31 U.S.C. § 3124). `amount` is the full (federal) coupon; the caller stamps
- * both onto the BOND_COUPON_* action so federal tax uses `amount` and state tax
- * uses `stateTaxableAmount`.
+ * Returns the dividend-shaped `{ amount, holdingActions }` plus two taxable
+ * sub-totals that split the coupon by exemption (design 66 §G2, generalizing the
+ * design-59 Treasury split):
+ *   - `amount`               — the FULL coupon (always credited to the balance);
+ *   - `federalTaxableAmount` — the coupon EXCLUDING federally-exempt (municipal)
+ *                              holdings; the federal tax module taxes this slice;
+ *   - `stateTaxableAmount`   — the coupon EXCLUDING state-exempt holdings, i.e.
+ *                              Treasury ('state'/'both') AND in-state munis
+ *                              (`issuingState` == the resident's state). The
+ *                              resident's state is read from `state.people` via
+ *                              primaryResidencyState, so an out-of-state muni is
+ *                              state-taxable while an in-state one is exempt.
+ * The caller stamps all three onto the BOND_COUPON_* action.
  *
  * `holdingActions` reinvest the coupon into each sleeve (costBasisDelta 0),
  * matching computeHoldingsDividends; a cash-payout caller can ignore them and
@@ -237,14 +283,16 @@ export function computeHoldingsDividends({ state, stateKey, fallbackYield, fallb
  * @param {object} opts.state         - Current simulation state
  * @param {string} opts.stateKey      - state[stateKey] is the account
  * @param {number} opts.fallbackRate  - Coupon rate used when a BOND holding has no couponRate
- * @returns {{ amount: number, stateTaxableAmount: number, holdingActions: HoldingTransactAction[] }}
+ * @returns {{ amount: number, federalTaxableAmount: number, stateTaxableAmount: number, holdingActions: HoldingTransactAction[] }}
  */
 export function computeHoldingsCoupons({ state, stateKey, fallbackRate }) {
   const account  = state?.[stateKey];
   const holdings = account?.holdings ?? [];
+  const residentState = primaryResidencyState(state);
 
-  let total       = 0;
-  let stateTaxable = 0;
+  let total          = 0;
+  let federalTaxable = 0;
+  let stateTaxable   = 0;
   const holdingActions = [];
   for (const h of holdings) {
     if (!h || h.allocation !== 'BOND') continue;
@@ -253,7 +301,8 @@ export function computeHoldingsCoupons({ state, stateKey, fallbackRate }) {
     const coupon = +(mv * rate).toFixed(2);
     if (coupon === 0) continue;
     total += coupon;
-    if (!h.treasury) stateTaxable += coupon;   // Treasury coupon is state-exempt
+    if (!couponFederalExempt(h))              federalTaxable += coupon;  // munis are federally exempt
+    if (!couponStateExempt(h, residentState)) stateTaxable   += coupon;  // Treasury / in-state muni are state-exempt
     holdingActions.push(new HoldingTransactAction({
       stateKey,
       holdingId:        h.id,
@@ -262,8 +311,105 @@ export function computeHoldingsCoupons({ state, stateKey, fallbackRate }) {
     }));
   }
   return {
-    amount:            +total.toFixed(2),
-    stateTaxableAmount: +stateTaxable.toFixed(2),
+    amount:               +total.toFixed(2),
+    federalTaxableAmount: +federalTaxable.toFixed(2),
+    stateTaxableAmount:   +stateTaxable.toFixed(2),
+    holdingActions,
+  };
+}
+
+const ACCRETION_YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
+
+/**
+ * Walk an account's BOND holdings and compute per-holding *accretion* — the
+ * imputed, non-cash principal growth of a zero-coupon/OID bond or a TIPS, which is
+ * currently-taxable ordinary income even though no cash changes hands (design 66
+ * §G5 / §G6). Two accreting instruments share this path:
+ *
+ *   - **Zero-coupon / OID (`zeroCoupon`).** Bought at a discount, the bond's price
+ *     accretes to `faceValue` over its life. The annual Original Issue Discount is
+ *     computed by the constant-yield method off the *adjusted basis*:
+ *         y         = (faceValue / basis)^(1 / yearsToMaturity) − 1
+ *         accretion = basis × y                       (capped at faceValue − basis)
+ *     so the discount closes smoothly and exactly by maturity.
+ *
+ *   - **TIPS / inflation-linked (`inflationLinked`).** The principal indexes to CPI:
+ *         accretion = basis × cpiRate                 (cpiRate = the period's CPI rate)
+ *     The cash coupon (computeHoldingsCoupons) is paid on the grown marketValue, so
+ *     indexing the principal here automatically pays the real coupon on the adjusted
+ *     principal. Deflation (cpiRate < 0) reduces the principal/income symmetrically;
+ *     the redemption deflation-floor lives in BondMaturityReducer.
+ *
+ * For BOTH, `basis` is the holding's current `costBasis` (which this accretion steps
+ * up), and each holding action raises `marketValue` AND `costBasis` by the accretion
+ * — the basis step-up is what prevents the accreted principal being taxed a second
+ * time as a capital gain at maturity/sale. Plain coupon bonds and bond funds are
+ * skipped (no accretion).
+ *
+ * Returns the coupon-shaped `{ amount, federalTaxableAmount, stateTaxableAmount,
+ * holdingActions }`, splitting the accretion by exemption exactly like
+ * computeHoldingsCoupons (a Treasury STRIPS `taxExemption:'state'` is federally
+ * taxable but state-exempt; a muni zero `taxExemption:'federal'` is federally
+ * exempt), so it can route through the shared BOND_COUPON_TAX classification.
+ *
+ * @param {object} opts
+ * @param {object} opts.state           - Current simulation state
+ * @param {string} opts.stateKey        - state[stateKey] is the account
+ * @param {number} [opts.cpiRate=0]     - The advancing country's period CPI/inflation rate (TIPS indexation)
+ * @param {Date|number|null} [opts.currentDate=null] - As-of date (epoch ms or Date) for zero-coupon time-to-maturity
+ * @returns {{ amount: number, federalTaxableAmount: number, stateTaxableAmount: number, holdingActions: HoldingTransactAction[] }}
+ */
+export function computeHoldingsAccretion({ state, stateKey, cpiRate = 0, currentDate = null }) {
+  const account  = state?.[stateKey];
+  const holdings = account?.holdings ?? [];
+  const residentState = primaryResidencyState(state);
+  const asOfMs = currentDate == null ? null
+    : (currentDate instanceof Date ? currentDate.getTime() : Number(currentDate));
+
+  let total          = 0;
+  let federalTaxable = 0;
+  let stateTaxable   = 0;
+  const holdingActions = [];
+  for (const h of holdings) {
+    if (!h || h.allocation !== 'BOND') continue;
+    const basis = h.costBasis ?? 0;
+    let accretion = 0;
+
+    if (h.zeroCoupon) {
+      // Constant-yield OID off the adjusted basis; requires a maturity + a par above
+      // the current basis (a discount bond) and a positive time remaining.
+      const face = h.faceValue ?? 0;
+      const matMs = h.maturityDate == null ? null
+        : (h.maturityDate instanceof Date ? h.maturityDate.getTime() : new Date(h.maturityDate).getTime());
+      const ttm = (matMs != null && asOfMs != null && Number.isFinite(matMs))
+        ? Math.max(0, (matMs - asOfMs) / ACCRETION_YEAR_MS) : null;
+      if (basis > 0 && face > basis && ttm != null && ttm > 0) {
+        const y = Math.pow(face / basis, 1 / ttm) - 1;
+        accretion = Math.min(+(basis * y).toFixed(2), +(face - basis).toFixed(2));
+      }
+    } else if (h.inflationLinked) {
+      // Principal indexes to CPI (may be negative under deflation).
+      accretion = +(basis * cpiRate).toFixed(2);
+    } else {
+      continue;  // plain coupon bond / fund — no accretion
+    }
+
+    accretion = +accretion.toFixed(2);
+    if (accretion === 0) continue;
+    total += accretion;
+    if (!couponFederalExempt(h))              federalTaxable += accretion;
+    if (!couponStateExempt(h, residentState)) stateTaxable   += accretion;
+    holdingActions.push(new HoldingTransactAction({
+      stateKey,
+      holdingId:        h.id,
+      marketValueDelta: accretion,
+      costBasisDelta:   accretion,   // basis step-up: no double-tax at redemption
+    }));
+  }
+  return {
+    amount:               +total.toFixed(2),
+    federalTaxableAmount: +federalTaxable.toFixed(2),
+    stateTaxableAmount:   +stateTaxable.toFixed(2),
     holdingActions,
   };
 }
