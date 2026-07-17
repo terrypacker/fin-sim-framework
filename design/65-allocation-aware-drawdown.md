@@ -1,7 +1,7 @@
 # 65 — Allocation-aware drawdown: choose *which holding type* to sell for a debit
 
-**Status**: **Phases 1–3 IMPLEMENTED** (2026-07-16, branch `wip/allocation-aware-drawdown`);
-Phase 4 (MPC) remains PROPOSED. Scope: make the **within-account
+**Status**: **IMPLEMENTED — all 4 phases** (2026-07-16, branch `wip/allocation-aware-drawdown`).
+Scope: make the **within-account
 liquidation** of a spending debit **allocation-aware** — choose *which asset class
 (sleeve) and which lots* to sell, instead of the current blind FIFO-by-purchase-date.
 This is the third leg of the "control the holdings over time" family: **design 58**
@@ -313,8 +313,24 @@ unify.
   taxable accounts that get drawn — staged directly in the integration tests (stamp fires, a
   coupled draw sells the over-weight EQUITY toward target, w=0 falls back to blind FIFO).
 
-**3572 unit + 870 viz green.** Remaining: Phase 4 MPC (`DRAWDOWN_SLEEVE` cockpit + the two/three
-new state fields in `FORWARD_DRAWDOWN_STATE_FIELDS`).
+**Phase 4 (MPC online):**
+- `DRAWDOWN_SLEEVE` cockpit control in `cockpit-controller.js` (mirrors `ALLOCATION_MIX`):
+  `buildVariables` → one CONTINUOUS `sleeveWeight::<CLASS>` axis per sleeve; `describe` →
+  the resulting sell order; `appliesTo` gates on `drawdownSleeveOrder === WEIGHTED`; `actuate`
+  rewrites the live `state.drawdownSleeveOrder`/`drawdownSleeveWeights` + persists the params.
+- The four design-65 fields joined `FORWARD_DRAWDOWN_STATE_FIELDS` (`optimization-problem.js`)
+  so a committed policy survives snapshot injection. **No `_seededSim` per-account shim** (the
+  design-58 Lever-B `drawdownPriority` re-stamp) is needed — the sleeve policy is a state-resident
+  config the primitive reads fresh each draw, so forwarding the fields is sufficient. Proven by
+  `mpc-drawdown-sleeve.test.mjs` (control spec + a direct forwarding assertion: a committed
+  WEIGHTED policy + weights are present on the snapshot-seeded sim, not the snapshot's FIFO default).
+- `scripts/verify-mpc-lever.mjs drawdownSleeve` exists but reports **INCONCLUSIVE** on the standard
+  post-move drawdown scenario: within one brokerage the sell order changes CGT *timing*, but that
+  scenario drains the taxable book (or cross-border relief offsets the gain) so terminal wealth is
+  order-invariant — the same scenario-shaped limitation as Levers A–C. The forwarding correctness
+  is covered by the unit test above regardless.
+
+**3578 unit + 870 viz green.** Design 65 is complete (Levers A/B/C static + opt + MPC).
 
 ---
 

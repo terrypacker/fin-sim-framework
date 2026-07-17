@@ -41,7 +41,7 @@ test('MpcCockpitPlugin.render: root + toolbar selects + action buttons', () => {
 test('MpcCockpitPlugin: lever select lists the built-in controls', () => {
   const el = new MpcCockpitPlugin(fakeRuntime()).render();
   const opts = [...el.querySelectorAll('[data-mpc="control"] option')].map(o => o.value);
-  assert.deepStrictEqual(opts.sort(), ['ALLOCATION_MIX', 'DRAWDOWN_WEIGHTS', 'DRAWDOWN_WITHINTIER', 'DRAWDOWN_XBORDER', 'EARLY_WITHDRAWAL', 'ROTH', 'SPENDING']);
+  assert.deepStrictEqual(opts.sort(), ['ALLOCATION_MIX', 'DRAWDOWN_SLEEVE', 'DRAWDOWN_WEIGHTS', 'DRAWDOWN_WITHINTIER', 'DRAWDOWN_XBORDER', 'EARLY_WITHDRAWAL', 'ROTH', 'SPENDING']);
 });
 
 // ─── multi-lever selection (design 45 §8 / Phase 4) ──────────────────────────

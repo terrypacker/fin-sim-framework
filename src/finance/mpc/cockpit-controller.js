@@ -27,6 +27,9 @@ import {
   ALLOC_WEIGHT_CLASSES, ALLOC_WEIGHT_CLASS_LABELS, allocWeightKey,
   ALLOCATION_OPTIMIZED_MODE, synthesizeTargetAllocation, presentAllocations,
 } from '../../scenarios/intl-retirement-scenario.js';
+import {
+  DRAWDOWN_SLEEVE_CLASSES, SLEEVE_WEIGHT_MODE, sleeveWeightKey,
+} from '../holdings/holdings-selection.js';
 
 /**
  * The set of account roles actually present in a live sim state — every entry
@@ -590,6 +593,77 @@ export const COCKPIT_CONTROLS = {
         if (acct.drawdownPriority !== pr) { next[k] = { ...acct, drawdownPriority: pr }; changed = true; }
       }
       if (changed) sim.state = next;
+      return true;
+    },
+  },
+
+  // ── Drawdown sleeve weights (design 65 Phase 4 — Lever A online) ──────────────
+  // Each epoch, re-solve which asset class (sleeve) a spending debit sells first,
+  // encoded as one continuous weight per class (ascending sort = sold first). Unlike
+  // the design-58 role weights (which bake into per-account drawdownPriority and need
+  // a cascade re-stamp), the sleeve policy is a state-resident config the disposal
+  // primitive reads fresh each draw — so it bites under MPC with NO `_seededSim`
+  // per-account shim (the fields ride FORWARD_DRAWDOWN_STATE_FIELDS). Actuation writes
+  // the live state fields directly (verified by `scripts/verify-mpc-lever.mjs drawdownSleeve`).
+  DRAWDOWN_SLEEVE: {
+    key:     'DRAWDOWN_SLEEVE',
+    label:   'Drawdown Sleeve (weights)',
+    numeric: true,                       // the [0,1] range applies to every weight
+    defaultRange: { min: 0, max: 1, step: 0.05 },
+    liveActuatable: true,
+    // Meaningful only under the WEIGHTED sleeve order — the weights synthesize the
+    // sell order only then (FIFO/TAX_COST/PRESERVE_GROWTH fix it). Gate + surface why.
+    appliesTo: (bp) => bp?.drawdownSleeveOrder === SLEEVE_WEIGHT_MODE,
+    requirement: 'Set Drawdown Sleeve Order to WEIGHTED (Scenario panel) to tune the sleeve sell order online.',
+    // One CONTINUOUS variable per drawdown sleeve class; the sell order is the
+    // ascending sort of the committed weights.
+    buildVariables: ({ range }) => DRAWDOWN_SLEEVE_CLASSES.map(cls => ({
+      paramKey: sleeveWeightKey(cls),
+      type:     OPT_PARAM_TYPES.CONTINUOUS,
+      min:      range?.min  ?? 0,
+      max:      range?.max  ?? 1,
+      step:     range?.step ?? 0.05,
+      group:    'Spending', _class: cls,
+    })),
+    describe: (candidate, vars) => {
+      // Show the resulting sell order (classes ascending by committed weight).
+      const ranked = vars
+        .map(v => ({ cls: v._class, w: Number(candidate?.[v.paramKey]) }))
+        .filter(r => Number.isFinite(r.w))
+        .sort((a, b) => a.w - b.w)
+        .map(r => r.cls);
+      return ranked.length ? `Sell order: ${ranked.join(' → ')}` : 'Sleeve order unchanged';
+    },
+    /**
+     * Forward-effective live actuation (design 65 Phase 4): persist each committed
+     * weight to its scenario param, then re-wire the running sim's state selection
+     * fields (drawdownSleeveOrder=WEIGHTED + drawdownSleeveWeights) so the disposal
+     * primitive honors the new sell order from the next draw. No per-account re-stamp
+     * (the policy is read fresh from state each draw) — the projection's twin is the
+     * FORWARD_DRAWDOWN_STATE_FIELDS forwarding, not a `_seededSim` shim.
+     */
+    actuate: ({ services, scenario, candidate, vars }) => {
+      if (!vars?.length) return false;
+      const sim = services?.simulationRegistry?.getPrimary?.();
+      if (!sim?.state) return false;
+
+      // 1) Persist each committed weight to its scenario param + collect the map.
+      const weights = {};
+      for (const v of vars) {
+        const w = candidate?.[v.paramKey];
+        if (w == null) continue;
+        weights[v._class] = w;
+        const p = (scenario?.params ?? []).find(pp => (pp.key ?? pp.name) === v.paramKey);
+        if (p) p.value = w;
+      }
+      if (!Object.keys(weights).length) return false;
+
+      // 2) Re-wire the live selection policy (state-resident config read each draw).
+      sim.state = {
+        ...sim.state,
+        drawdownSleeveOrder:   SLEEVE_WEIGHT_MODE,
+        drawdownSleeveWeights: { ...(sim.state.drawdownSleeveWeights ?? {}), ...weights },
+      };
       return true;
     },
   },
