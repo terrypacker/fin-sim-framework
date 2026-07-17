@@ -91,7 +91,7 @@ export class StateTaxPaymentDebitReducer extends Reducer {
     this.accountService = accountService;
     this.stateRegistry  = stateRegistry;
     this.reducedActionTypes = ['STATE_TAX_PAYMENT_DEBIT'];
-    this.generatedActionTypes = ['INTL_TRANSFER_RECORD'];
+    this.generatedActionTypes = ['INTL_TRANSFER_RECORD', 'INTL_TRANSFER_APPLY', 'STATE_TAX_PAYMENT_DEBIT', 'OUT_OF_FUNDS'];
   }
 
   static fromJSON(d, services) {
@@ -103,16 +103,29 @@ export class StateTaxPaymentDebitReducer extends Reducer {
   reduce(state, action, date) {
     const accountKey  = this.stateRegistry.getStateKey(ACCOUNT_ROLES.US_SAVINGS);
     const cashAccount = state[accountKey];
+    const currency    = cashAccount?.currency?.code ?? 'USD';
+
+    // Absent-account: no US cash account wired at all — nowhere to draw from, so
+    // the whole state-tax bill is unpaid (mirrors the federal debit reducer).
+    if (!cashAccount) {
+      return this.newState(state, {},
+        action.amount > 0.01 ? [{ type: 'OUT_OF_FUNDS', deficit: action.amount, currency }] : []);
+    }
+
+    // `escalated` marks the residual debit re-issued after an INTL_TRANSFER_APPLY
+    // top-up: the cross-border sweep already ran and already reported any
+    // still-uncoverable gap, so this pass only debits what landed.
+    const escalated   = action.escalated === true;
     const shortfall   = action.amount - Math.max(0, cashAccount.balance);
 
     let crossBorderTransfers = [];
-    if (shortfall > 0) {
+    if (shortfall > 0 && !escalated) {
       try {
         // Journal any cross-currency leg of the top-up (design 44 Gap A).
         ({ crossBorderTransfers = [] } = this.accountService.replenishSavings(state, accountKey, shortfall, date));
       } catch (e) {
         if (!(e instanceof InsufficientFundsError)) throw e;
-        // Partial payment — pay what's available.
+        // Proceed to the cross-border escalation below for the uncoverable part.
       }
     }
 
@@ -121,8 +134,21 @@ export class StateTaxPaymentDebitReducer extends Reducer {
       this.accountService.transaction(cashAccount, -debit, date);
     }
 
+    // Anything same-country cash + the inline cash sweep could not cover escalates
+    // to INTL_TRANSFER_APPLY (liquidating AU investments into this US tax account),
+    // symmetric with the federal debit reducer and the spending path. The transfer
+    // reports any residual it still cannot cover as OUT_OF_FUNDS.
+    const unpaid = action.amount - debit;
+    let residualActions = [];
+    if (unpaid > 0.01 && !escalated) {
+      residualActions = [
+        { type: 'INTL_TRANSFER_APPLY', direction: 'AU_TO_US', targetDeficit: unpaid, dstKey: accountKey },
+        { type: 'STATE_TAX_PAYMENT_DEBIT', amount: unpaid, escalated: true },
+      ];
+    }
+
     return this.newState(state, {
       [accountKey]: { ...cashAccount },   // explicit new reference so the balance change shows in diffs
-    }, crossBorderTransfers);
+    }, [...crossBorderTransfers, ...residualActions]);
   }
 }
