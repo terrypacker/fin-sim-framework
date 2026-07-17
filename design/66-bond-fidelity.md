@@ -1,8 +1,12 @@
 # 66 — Bond fidelity: from a bond-fund proxy to first-class fixed income
 
 **Status**: **PHASES 1–3 IMPLEMENTED** (2026-07-16); **Phase 4 — G5 (TIPS) + G6
-(zero-coupon/OID) IMPLEMENTED** (2026-07-16); G8/G9/G10 remain proposed, G7 out of
-scope (rate-risk only, open-question #5). Scope:
+(zero-coupon/OID) IMPLEMENTED** (2026-07-16); **G8 (bond ladders) Phases A/B/C
+IMPLEMENTED** (2026-07-17) — see §10: Phase A (rollTermYears roll-to-tail + editor
+builder), Phase B ladder-aware drawdown (`drawdownLotStrategy: 'LADDER'`, §10.9), and
+Phase C (ladder-length optimizer + MPC lever via `BondLadderReducer`, §10.6). Only the
+G8 buy-side inflow-aware tail extension (§10.5) + barbells + G9/G10 remain proposed; G7
+out of scope (rate-risk only, open-question #5). Scope:
 catalog the gaps between how bonds behave in the real world and what the simulation
 models today, and lay out a phased plan to make `BOND` holdings a realistic,
 first-class asset now that the design-61 allocation lever routinely establishes
@@ -337,6 +341,302 @@ G2 ─┘                                    │
    make the most representative default (drives the baseline everyone reasons about)? Answer: flexible on this one, some in Retirement, some in Brokerage maybe a 60/40 stock bond split
 5. **Credit/default appetite (G7)** — is corporate/HY default risk in scope for the
    planner, or do we stay investment-grade and treat "bonds" as rate-risk only? Answer: rate-risk only
+
+## 10. G8 — Bond ladders (detailed design)
+
+> Status: **Phases A / B (drawdown) / C IMPLEMENTED** (2026-07-17; §10.4, §10.9,
+> §10.6). Only the buy-side inflow-aware tail extension (§10.5) + barbells remain.
+> Fleshes out the Tier-3 §4 stub into an implementable plan and, in particular, nails
+> down the *user-facing* surface.
+>
+> **Phase A delivered.** `Holding.rollTermYears` (+ toJSON/fromJSON, absent ⇒ roll to
+> own term) → `BondMaturityReducer.redeem()` rolls a rung to the fixed ladder term when
+> set, preserving `rollAtMaturity`/`rollTermYears` so it self-perpetuates. Account-editor
+> **"+ Bond ladder"** builder (`_wireLadderBuilder`) expands (total, rungs, spacing,
+> first term, tax, coupon, roll, zero/TIPS) into N staggered BOND rungs. Roll defaults ON
+> (§10.8 #1). **Golden unmoved** (default scenario gets no ladder — ships behind the
+> existing golden, Phase-4 convention). Tests: `bond-maturity` §G8 (roll-to-tail, coupon
+> re-lock, 5-rung self-perpetuation, non-roll→cash), `holdings-roundtrip` rollTermYears,
+> `holdings-allocation-inputs` builder. 3581 unit + 874 viz green. Phase B (allocation-
+> lever buy routing + ladder-aware drawdown, §10.5/§10.9) and Phase C (optimizer lever,
+> §10.6) remain proposed.
+
+### 10.1 The key realization: ~90% of a ladder already ships
+
+A bond ladder is not a new instrument — it is a **maturity-structuring policy over
+a set of individual bonds we already model**. Everything a rung needs exists after
+Phase 3/4:
+
+- **Individual bonds** — a `BOND` holding with `maturityDate` + `faceValue` (§G4).
+- **Pull-to-par + duration decay** — `BondPriceAdjustReducer` already makes a
+  near-maturity rung barely rate-sensitive and recovers rate markdowns by maturity.
+- **Redeem / roll at maturity** — `BondMaturityReducer` already redeems a matured
+  rung to cash *or*, with `rollAtMaturity`, rolls it into a fresh par bond at the
+  then-current yield (the G1 lock-in). That is literally a **self-sustaining
+  single-rung ladder** today.
+- **Per-rung coupons, tax, drawdown, CGT** — every rung is just a `BOND` holding, so
+  the coupon streams (`BOND_SLEEVE_COUPON`), tax splits (`BOND_COUPON_TAX`),
+  accretion (`BOND_ACCRETION`), and design-65 lot selection all apply per-rung with
+  **zero new wiring**.
+
+So a ladder = **N individual `rollAtMaturity` bonds with staggered `maturityDate`s.**
+There is exactly **one behavioral gap** and **one convenience gap**:
+
+1. **Behavioral gap — "roll to the tail, not to the same term."** `BondMaturityReducer`
+   rolls a matured bond into a bond of *its own original term* (`maturityDate −
+   purchaseDate`). That keeps a single bond at constant maturity, but it is **wrong for
+   a ladder**: when the 1-year rung matures it must roll to the **longest** term (N
+   years) to become the new tail, so the {1,2,…,N} spacing self-perpetuates as the sim
+   clock advances. Fix in §10.3.
+2. **Convenience gap — nobody hand-authors 10 staggered holdings.** We need a builder
+   that expands `(total $, rungs, spacing, term, tax treatment)` into N rungs. §10.4.
+
+This is why G8 is *sized medium, not large*, provided we stop at a **self-maintaining
+hand-built ladder** (Phase A). The "large" framing in §4 is the optimizer-fed,
+allocation-lever-integrated ladder (Phase B/C), which is genuinely bigger and optional.
+
+### 10.2 The representation decision (the meta-choice, cf. §3)
+
+**Decision: a ladder is N separate `Holding` rungs — NOT a new holding type and NOT a
+persistent `account.bondLadder` object (for Phase A).** Rationale:
+
+- The holding array is already the source of truth; every per-holding stream keys off
+  `holding.id`. N rungs reuse all of it. A ladder "descriptor" object would duplicate
+  state that the rungs already carry and force a materialization reducer to keep the
+  two in sync (the classic param→node cascade-drift trap, cf.
+  [[param-node-cascade-drift]]).
+- A ladder is naturally **per-BOND-sleeve within an account**, not per-account: an
+  account can hold equity + a Treasury ladder + a muni ladder simultaneously. N rungs
+  express that for free (they coexist with equity/cash holdings); a single
+  `account.bondLadder` field could not.
+- Phase B (optimizer integration) can *later* add a lightweight per-account
+  **ladder-intent tag** (§10.5) without changing the rung representation.
+
+### 10.3 Phase A runtime change — one field, `rollTermYears`
+
+Add one nullable field to `Holding`:
+
+```
+rollTermYears: number|null   // BOND, rollAtMaturity only. The term (years) of the
+                             // bond a rung rolls INTO at maturity. null ⇒ roll to
+                             // the rung's own original term (today's single-bond
+                             // "constant-maturity" behavior — back-compat).
+```
+
+Then in `BondMaturityReducer.redeem()`, when rolling, prefer `rollTermYears`:
+
+```js
+const termMs = h.rollTermYears != null
+  ? h.rollTermYears * YEAR_MS                      // ladder: roll to the fixed tail term
+  : (purchaseMs != null && matMs > purchaseMs)     // single bond: keep its own term
+      ? (matMs - purchaseMs)
+      : (h.duration ?? 5) * YEAR_MS;
+```
+
+Every rung in a ladder is created with `rollAtMaturity: true` and
+`rollTermYears: N`. Walk-through of a 5-year ladder (rungs maturing +1…+5y, each
+`rollTermYears: 5`):
+
+- **Year 1:** rung A (matures y1) redeems→rolls into a fresh **5-year** bond at the
+  current yield. Holdings now mature at {2,3,4,5, **6**}. As the clock has advanced a
+  year, that is exactly {1,2,3,4,5} relative to *now*. Ladder intact.
+- Duration holds ≈ (N+1)/2 years; the portfolio reinvests one rung/year at prevailing
+  rates (reinvestment smoothing); a rung matures every year (liquidity). ✓
+
+No new reducer, no new stream, no per-account state. `rollTermYears` also round-trips
+in `toJSON`/`fromJSON` (absent ⇒ null) and is inert for funds / non-roll bonds.
+
+**Redeem-vs-roll at the tail.** With every rung set to roll, the ladder is perpetual.
+To model a **winding-down** ladder (retiree spending it down), leave `rollAtMaturity`
+false on the rungs you want to fall to cash as they mature — the builder exposes this
+as a "roll maturing rungs" toggle (§10.4). Mixed is allowed (roll some, redeem some).
+
+### 10.4 Phase A user-facing surface — the ladder builder (account editor)
+
+The ladder is authored where individual bonds already live: the account editor
+holdings table. Add a **"+ Bond ladder"** button beside the existing "+ Add holding".
+It opens a small inline form (or a compact modal) with:
+
+| Field | Default | Notes |
+|---|---|---|
+| Total amount | balance-aware | Split evenly across rungs (faceValue = total ÷ rungs) |
+| Rungs (N) | 5 | 2–30 |
+| Spacing (years) | 1 | Rung k matures at `start + firstRung + (k−1)·spacing` |
+| First rung (years out) | 1 | Nearest maturity |
+| Tax treatment | Taxable | Reuses the existing G2 selector (Taxable / Treasury / Municipal / Muni all-state) + issuing state |
+| Coupon rate | blank | A fixed coupon applied to every rung; blank ⇒ `couponRate: null` (the rung floats / falls back to the coupon handler's per-account rate — the editor has no live `effectiveInterestRates` at author time, so runtime resolves the yield) |
+| Roll maturing rungs | on | Sets `rollAtMaturity` + `rollTermYears = N·spacing` on every rung |
+| Zero / TIPS | off | A **TIPS ladder** or **STRIPS ladder** is just the per-rung flag applied to all rungs |
+
+On submit it **expands into N `Holding` rungs** appended to `this._holdings` — plain
+individual bonds the existing table then renders as ordinary editable rows (the ladder
+is "baked", not a hidden object). Each rung:
+`{ allocation:'BOND', marketValue=costBasis=faceValue=total/N, maturityDate=staggered,
+   duration≈yearsToMaturity, rollAtMaturity, rollTermYears, taxExemption, couponRate }`.
+
+This mirrors the existing "add holding" push at `account-editor.js:277`; the builder is
+pure UI sugar over data the schema already accepts, so **no serializer or runtime
+change beyond §10.3**. A **barbell** (§G8 "barbells") is the same builder with a
+`skipMiddle` option (emit only the shortest + longest rungs) — cheap follow-on.
+
+### 10.5 Phase B (optional, larger) — allocation-lever integration
+
+Phase A ladders are correct and self-maintaining, but the design-61 allocation lever
+does not *know* they are ladders:
+
+- **Buy side.** When 61 rebalances **into** bonds, `RebalanceToTargetApplyReducer`
+  `_addProRata`'s the new $ across existing BOND holdings (grows every rung evenly —
+  acceptable) or `_newSleeve`'s a single **perpetual fund** rung when none exist
+  (breaks the ladder shape). Phase B: if the account carries a **ladder-intent tag**
+  (`account.bondLadderIntent = { rungs, spacing, term, roll, taxExemption }`), route
+  bond buys to *seed/extend the tail rung* instead of a fund sleeve, and bond sells to
+  *shorten from the tail*. This is the one place a small persistent descriptor earns
+  its keep — it is **intent**, not duplicated rung state.
+- **Sell side (design 65 drawdown).** Ladder-aware lot selection
+  (`drawdownLotStrategy: 'ladder'`): matured-cash → nearest-maturity rung → tail. Fully
+  specified in **§10.9**, and deliberately **left OFF for Phase A** — it is the sell-side
+  twin of this buy-side routing and shares the `bondLadderIntent` gate.
+
+Phase B is where G8 touches the 61/65 strategy family and is legitimately "large."
+It should be its own companion (`66-g8-ladder-impl.md`) if pursued.
+
+### 10.6 Phase C — ladder as an optimizer + MPC lever — **IMPLEMENTED (2026-07-17)**
+
+Ladder **length N** is now a searchable / online parameter, exactly like design-58/61's
+drawdown/allocation levers: longer ladder = more duration/yield + rate risk; shorter =
+more liquidity + reinvestment drag. Delivered — the **buy-side foundation (§10.5) and
+the lever together**, since the lever needs a maintained ladder to turn:
+
+- **`BondLadderReducer`** (`bond-ladder-reducer.js`) — a new behavioral-strategy reducer
+  (sibling of design-61's `RebalanceToTargetReducer`). Each period, for a designated
+  account, it reads the account's total BOND value and, when it has not yet been
+  laddered at the current `targetRungs` (a stamped `_bondLadderRungs` marker), REPLACES
+  the account's bonds with `targetRungs` equal, staggered, rolling rungs
+  (`materializeLadder`); otherwise it no-ops and lets the Phase-A roll-to-tail
+  self-maintain the spacing (no per-period churn). Value conserved; par rungs ⇒ no CGT.
+  The rung count lives **on the reducer instance** (not a per-account state field), so
+  the optimizer searches it (compile branch) and the MPC cockpit re-wires it live with
+  **no `_seededSim` re-stamp** — the design-61 Phase-5 architectural win, reused.
+- **`BOND_LADDER` behavioral strategy** (`behavioral-strategy-registry.js`) — opt-in via
+  `behavioralStrategies`; constructs the reducer against the taxable brokerage (default)
+  and contributes the params (`bondLadderRungs` searchable + spacing / roll / tax
+  treatment). Unselected ⇒ no reducer ⇒ **golden byte-identical**.
+- **Optimizer param** `bondLadderRungs` (INTEGER 2–15, `intl-retirement-opt-config`,
+  `enabled:false`) + **MPC cockpit control** `BOND_LADDER` (`cockpit-controller.js`) whose
+  `actuate` re-wires the live reducer's `targetRungs`, re-shaping the ladder next period.
+- Registered: `index.js` barrel + `reducer-coverage-manifest`. Tests: `bond-ladder-reducer`
+  (materialize/re-shape/idempotence/inert + strategy·opt·MPC wiring + a **full-sim e2e**
+  that ladders the real brokerage bonds). 3600 unit + 874 viz green; golden unmoved.
+
+**Still open (Phase B buy-side routing proper):** when the design-61 allocation lever
+pumps NEW money into bonds, route it to *extend the ladder's tail* rather than spawn a
+fund sleeve (§10.5). The current reducer re-ladders the account's whole bond value on a
+rung-count change, which covers the lever; continuous inflow-aware tail extension is the
+remaining refinement. Barbell shape (§G8 "barbells") also remains a follow-on.
+
+### 10.7 Golden & testing
+
+- **Golden unmoved** (Phase-4 convention): the default scenario gets no ladder; Phase A
+  ships behind the existing golden. Phase B *would* re-baseline (bond buys change
+  shape) — do it once, if/when Phase B lands, per §6's discipline.
+- **Unit:** `evt-bond-ladder` — build a 5-rung ladder, advance N years, assert (a) one
+  rung matures/rolls per year, (b) the rolled rung's `maturityDate` lands at the tail
+  (`+N·spacing`, not same-term), (c) `couponRate` re-locks to the current yield,
+  (d) constant ≈(N+1)/2 duration, (e) a non-rolling rung falls to cash. Plus a
+  `rollTermYears` round-trip in `holdings-roundtrip` and a builder test in
+  `holdings-allocation-inputs`.
+- **E2e:** a full-sim probe where a Treasury ladder self-perpetuates across a rate
+  regime shift and the coupons/tax splits track each re-locked rung (mirrors the
+  `EVT-BOND-SLV` / `bond-maturity` patterns).
+- **Coverage:** no new reducer in Phase A (reuses `BondMaturityReducer`), so no
+  `reducer-coverage-manifest` change; Phase B's lever routing would add one.
+
+### 10.8 Resolved decisions (G8)
+
+1. **Perpetual vs winding-down default — RESOLVED: roll ON by default.** The builder
+   defaults "roll maturing rungs" ON, so a freshly built ladder is a perpetual
+   constant-maturity ladder that self-sustains (`rollAtMaturity: true` +
+   `rollTermYears = N·spacing` on every rung). An accumulating planner wants this; a
+   retiree spending the ladder down flips it OFF (per-rung, mixed allowed) so maturing
+   rungs fall to cash. This matches the accumulation-first bias of the default scenario.
+2. **Phase B intent home — RESOLVED: per-account.** Optimizer/lever integration
+   (Phase B, §10.5) hangs a per-account `bondLadderIntent` descriptor
+   (`{ rungs, spacing, term, roll, taxExemption }`). One ladder-intent per account is
+   the modeled constraint: an account may still *hold* two ladders as raw rungs
+   (Phase A), but only one is lever-*maintained*. This keeps the buy/sell routing
+   unambiguous (bond buys seed/extend the single intent's tail; sells shorten from it)
+   and avoids per-sleeve bookkeeping. Not needed for Phase A.
+
+### 10.9 Ladder-aware drawdown (Phase B, sell side) — **IMPLEMENTED (2026-07-17)**
+
+> **Status.** Shipped as a new design-65 Lever-B lot strategy,
+> `drawdownLotStrategy: 'LADDER'` — opt-in (selecting it *is* the gate, so no
+> `bondLadderIntent` dependency; that remains only for the Phase-B *buy*-side routing,
+> §10.5). Default stays `FIFO`, so the golden is byte-identical.
+>
+> **How it works.** `LADDER` adds a single per-element sort key in
+> `holdings-selection.js` (`ladderKey`), so `buildHoldingsComparator` stays a valid
+> total order (transitive, deterministic — the same discipline as HIFO's `basisRatio`):
+> CASH → −∞ (already-liquid, e.g. a redeemed rung — spent first); an individual BOND →
+> its `maturityTs` (nearest-maturity rung next, ≈ par ⇒ least realized mark); everything
+> else → +∞ (perpetual bond funds + EQUITY/GOLD/OTHER last, sparing the growth engine).
+> Infinity-safe (`cmpNum` ⇒ equal-tier ties fall through to the FIFO purchaseDate
+> tie-break). **Composes with Lever A:** when a `drawdownSleeveOrder` is also set, the
+> sleeve rank groups the allocations first, so within the BOND sleeve `LADDER` reduces
+> to purely nearest-maturity-first (funds last) and the ±∞ tiers go inert. Tests:
+> `holdings-selection` §G8 (standalone cash→near→far→growth ordering, partial-drawdown
+> front-absorption, within-sleeve ordering, total-order/NaN guard).
+>
+> **Not yet done (still Phase B):** the *buy*-side allocation-lever routing (§10.5) and
+> the per-account `bondLadderIntent` it needs; the §10.9 point-3 "shorten strictly from
+> the tail" refinement (the shipped rule is nearest-first, point 2 — the dominant
+> effect). Original framing, kept for context:
+
+> **Decision (superseded 2026-07-17): originally deferred OFF for Phase A.**
+> Documented here so the trade-off is captured and we can come back to it.
+
+**The question.** When design-65 drawdown must sell bonds from an account that holds a
+ladder, *which rung* should it consume? Two behaviors:
+
+- **Today (default, what Phase A ships with):** drawdown uses the existing
+  `drawdownLotStrategy` / FIFO lot selection over BOND holdings, blind to the ladder
+  structure. It may sell a **mid-ladder rung** whose price is still marked away from
+  par (a rate-driven markup/markdown that has not yet pulled in), realizing a gain/loss
+  that a real ladder investor would have avoided by simply waiting for the next
+  maturity. It also silently *degrades the ladder shape* (punches a hole in the rung
+  spacing) with no re-materialization.
+- **The enhancement (`drawdownLotStrategy: 'ladder'`):** prefer liquidity that a
+  ladder actually produces, in priority order:
+  1. **Matured-to-cash proceeds first** — a rung that has already redeemed to CASH
+     (non-rolling rungs, §10.3) is free liquidity; spend that before touching a bond.
+  2. **Then the nearest-maturity rung** — its effective duration has decayed toward 0
+     and its price has pulled to ≈ par (`BondPriceAdjustReducer`), so selling it early
+     realizes the *smallest* mark-to-market deviation. This is the rung a real ladder
+     investor lets mature next anyway.
+  3. **Only then** reach into longer rungs (largest price risk) — and, ideally, prefer
+     shortening **from the tail** so the front of the ladder (the liquidity engine)
+     stays intact.
+
+**Why it's a Phase-B item, not Phase-A.**
+- It only bites when a ladder-holding account is *also* a drawdown source under a
+  spend-down that outruns the coupon + maturity cash flow — a narrower scenario than
+  "model a ladder at all."
+- It is the sell-side twin of the Phase-B buy-side routing (§10.5): both need the
+  per-account `bondLadderIntent` (10.8 #2) to know the account is a *maintained* ladder
+  rather than an incidental bag of bonds. Shipping one without the other is half a
+  feature.
+- Phase A is still correct without it — nearest-maturity liquidity mostly *falls out*
+  of FIFO for a ladder built oldest-first, and any mis-selection is a second-order
+  price-timing effect, not a correctness bug (coupons, tax, and redemption values are
+  all still right per rung).
+
+**When we come back to it:** implement `drawdownLotStrategy: 'ladder'` alongside the
+Phase-B lever routing, gated by `bondLadderIntent`, and add a `drawdown-ladder` unit
+test asserting the matured-cash → nearest-rung → tail ordering and that the front of
+the ladder survives a partial drawdown. Until then, ladder rungs are drawn like any
+other BOND lot.
+
+---
 
 ## 9. Relationship to other designs
 

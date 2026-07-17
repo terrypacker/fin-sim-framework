@@ -298,6 +298,85 @@ export class AccountEditor extends BaseComponent {
         this._syncBalance(this._rootEl);
       });
     }
+
+    this._wireLadderBuilder(el);
+  }
+
+  /**
+   * Bond-ladder builder (design 66 §G8). "+ Bond ladder" reveals an inline form;
+   * "Build" expands (total, rungs, spacing, first term, tax, coupon, roll, zero/TIPS)
+   * into N staggered *individual* BOND rungs appended to the holdings table. Each rung
+   * is a plain Holding the existing table then renders/edits — the ladder is "baked",
+   * not a hidden object. With roll ON every rung carries `rollAtMaturity` +
+   * `rollTermYears = rungs·spacing` (the ladder length), so BondMaturityReducer rolls
+   * a maturing near rung to the far end and the {1,…,N} spacing self-perpetuates.
+   */
+  _wireLadderBuilder(el) {
+    const ladderBtn   = el.querySelector('[data-id="ladderBtn"]');
+    const builder     = el.querySelector('[data-id="ladderBuilder"]');
+    const buildBtn    = el.querySelector('[data-id="ladderBuildBtn"]');
+    const cancelBtn   = el.querySelector('[data-id="ladderCancelBtn"]');
+    if (!ladderBtn || !builder) return;
+
+    const lf = (name) => builder.querySelector(`[data-lf="${name}"]`);
+
+    this.listen(ladderBtn, 'click', () => {
+      builder.style.display = builder.style.display === 'none' ? '' : 'none';
+    });
+    if (cancelBtn) this.listen(cancelBtn, 'click', () => { builder.style.display = 'none'; });
+
+    if (buildBtn) {
+      this.listen(buildBtn, 'click', () => {
+        const total   = Number(lf('total')?.value) || 0;
+        const rungs   = Math.max(2, Math.min(30, Math.round(Number(lf('rungs')?.value) || 5)));
+        const spacing = Math.max(0.5, Number(lf('spacing')?.value)   || 1);
+        const first   = Math.max(0,   Number(lf('firstTerm')?.value) || 1);
+        const te      = lf('taxExemption')?.value ?? 'none';
+        const couponRaw = lf('couponRate')?.value;
+        const coupon  = couponRaw === '' || couponRaw == null ? null : Number(couponRaw);
+        const roll    = !!lf('roll')?.checked;
+        const zero    = !!lf('zeroCoupon')?.checked;
+        const tips    = !!lf('inflationLinked')?.checked;
+        if (total <= 0) { lf('total')?.focus(); return; }
+
+        // Even face split across rungs; the ladder length (roll-to-tail term) is the
+        // span from the first rung to the last: first + (rungs−1)·spacing.
+        const face = +(total / rungs).toFixed(2);
+        const ladderTermYears = +(first + (rungs - 1) * spacing).toFixed(4);
+        const now  = new Date();
+        const stamp = Date.now();
+
+        for (let k = 0; k < rungs; k++) {
+          const yearsOut = first + k * spacing;
+          const maturity = new Date(now.getTime() + yearsOut * 365.25 * 24 * 60 * 60 * 1000);
+          this._holdings.push({
+            id:             `ladder-${stamp}-${k}`,
+            label:          `Ladder ${k + 1}/${rungs}`,
+            allocation:     'BOND',
+            rateKey:        '',
+            marketValue:    face,
+            costBasis:      face,
+            dividendYield:  null,
+            couponRate:     coupon,
+            duration:       +yearsOut.toFixed(2),   // ≈ time-to-maturity at issue
+            taxLossPartner: null,
+            taxExemption:   te,
+            issuingState:   null,
+            purchaseDate:   now,
+            maturityDate:   maturity,
+            faceValue:      face,
+            rollAtMaturity: roll,
+            rollTermYears:  roll ? ladderTermYears : null,
+            zeroCoupon:      zero,
+            inflationLinked: tips,
+          });
+        }
+
+        builder.style.display = 'none';
+        this._refreshHoldingsTbody();
+        this._syncBalance(this._rootEl);
+      });
+    }
   }
 
   _refreshHoldingsTbody() {

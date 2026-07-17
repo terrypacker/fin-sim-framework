@@ -20,8 +20,9 @@ import { PanicSellReducer }                    from './panic-sell-reducer.js';
 import { BehavioralPanicSellApplyReducer }     from './behavioral-panic-sell-apply-reducer.js';
 import { ContributionSuspensionToggleReducer } from './contribution-suspension-toggle-reducer.js';
 import { CashBucketDrawdownReducer }           from './cash-bucket-drawdown-reducer.js';
-import { RebalanceToTargetReducer, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, ALLOCATION_SCHEDULE, ALLOCATION_LOCATION } from './rebalance-to-target-reducer.js';
+import { RebalanceToTargetReducer, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, ALLOCATION_SCHEDULE, ALLOCATION_LOCATION, countryForRole } from './rebalance-to-target-reducer.js';
 import { RebalanceToTargetApplyReducer }       from './rebalance-to-target-apply-reducer.js';
+import { BondLadderReducer }                   from './bond-ladder-reducer.js';
 import { ACCOUNT_ROLES }                       from '../state/account-roles.js';
 import {
   ALLOCATION_OPTIMIZED_MODE, synthesizeTargetAllocation, presentAllocations,
@@ -295,6 +296,68 @@ export const BEHAVIORAL_STRATEGY_REGISTRY = {
         ],
       },
       ...buildAllocWeightSchema(),
+    ],
+  },
+
+  // Design 66 §G8 (Phase C) — bond-ladder length lever. A NEW opt-in strategy: when
+  // selected it materializes a self-perpetuating N-rung ladder in a designated account
+  // (default the taxable brokerage) from that account's BOND value, and re-shapes it
+  // when the searchable `bondLadderRungs` changes. The rung count is held on the
+  // reducer instance, so the optimizer searches it (compile branch) and the MPC cockpit
+  // re-wires it live (design 66 §10.6). Byte-identical golden when unselected (no
+  // reducer constructed). Sibling of TARGET_ALLOCATION.
+  BOND_LADDER: {
+    handlers: (_context) => [],
+    reducers: (context) => {
+      const p = context.parameters;
+      const role = p.bondLadderRole ?? ACCOUNT_ROLES.US_STOCK;
+      const acct = (context.accounts ?? []).find(a => a.role === role)
+                ?? (context.accounts ?? []).find(a => a.role === ACCOUNT_ROLES.US_STOCK);
+      if (!acct) return []; // no account to ladder ⇒ inert
+      return [
+        new BondLadderReducer({
+          stateKey:     acct.stateKey,
+          country:      countryForRole(acct.role),
+          targetRungs:  p.bondLadderRungs        ?? 5,
+          spacingYears: p.bondLadderSpacingYears ?? 1,
+          roll:         p.bondLadderRoll         ?? true,
+          taxExemption: p.bondLadderTaxTreatment ?? 'state',
+        }),
+      ];
+    },
+    paramSchema: () => [
+      {
+        key: 'bondLadderRungs', label: 'Bond Ladder Length (rungs)',
+        type: 'Number', group: 'Allocation', mc: false, opt: true,
+        min: 2, max: 15, step: 1, defaultValue: 5,
+        description: 'Number of rungs in the bond ladder the strategy maintains (design 66 §G8). ' +
+          'Longer ladder = more duration/yield + rate risk; shorter = more liquidity + reinvestment drag. ' +
+          'Searchable by the optimizer and tunable online in the MPC cockpit.',
+        visibleWhen: { param: 'behavioralStrategies', includes: 'BOND_LADDER' },
+      },
+      {
+        key: 'bondLadderSpacingYears', label: 'Bond Ladder Spacing (years)',
+        type: 'Number', group: 'Allocation', mc: false, opt: false,
+        min: 0.5, max: 5, step: 0.5, defaultValue: 1,
+        description: 'Years between adjacent rung maturities. Ladder term = rungs × spacing.',
+        visibleWhen: { param: 'behavioralStrategies', includes: 'BOND_LADDER' },
+      },
+      {
+        key: 'bondLadderRoll', label: 'Bond Ladder — Roll Maturing Rungs',
+        type: 'Boolean', group: 'Allocation', mc: false, opt: false,
+        defaultValue: true,
+        description: 'ON (default) = each maturing rung rolls into a fresh rung at the ladder tail, so the ' +
+          'ladder self-perpetuates (accumulation). OFF = maturing rungs fall to cash (spend-down).',
+        visibleWhen: { param: 'behavioralStrategies', includes: 'BOND_LADDER' },
+      },
+      {
+        key: 'bondLadderTaxTreatment', label: 'Bond Ladder — Tax Treatment',
+        type: 'Enum', group: 'Allocation', mc: false, opt: false,
+        options: ['none', 'state', 'federal', 'both'], defaultValue: 'state',
+        description: 'Holding tax treatment for every rung (design 66 §G2): none = fully taxable, ' +
+          'state = US Treasury (state-exempt, default), federal = municipal, both = muni all-state.',
+        visibleWhen: { param: 'behavioralStrategies', includes: 'BOND_LADDER' },
+      },
     ],
   },
 

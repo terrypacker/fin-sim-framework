@@ -298,6 +298,17 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
     group:    'Allocation',
     enabled:  false,
   },
+  // Bond-ladder length (design 66 §G8 Phase C). Integer rung count; the BondLadderReducer
+  // reads it (compile branch) / the MPC cockpit re-wires it live. Gated on the BOND_LADDER
+  // strategy by the schema's visibleWhen. Longer = more duration/yield/rate-risk.
+  {
+    paramKey: 'bondLadderRungs',
+    label:    'Bond Ladder Length (rungs)',
+    type:     OPT_PARAM_TYPES.INTEGER,
+    min: 2, max: 15, step: 1,
+    group:    'Allocation',
+    enabled:  false,
+  },
 
   // Inheritance — the inherited-RA drawdown knobs (design 63 §6.2) are now GENERATED
   // per inherited-RA asset (`raAsset.<stateKey>.fillCeiling` opt:true, design 63

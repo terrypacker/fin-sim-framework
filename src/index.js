@@ -57,6 +57,7 @@ import { OpportunisticRebalanceReducer } from './finance/behavioral/opportunisti
 import { PanicSellReducer } from './finance/behavioral/panic-sell-reducer.js';
 import { RebalanceToTargetApplyReducer } from './finance/behavioral/rebalance-to-target-apply-reducer.js';
 import { ALLOCATION_LOCATION, TAX_ADVANTAGED_ROLES, TAXABLE_ROLES, US_TAX_ADVANTAGED_ROLES, countryForRole, roleCanHoldGold, ALLOCATION_SCHEDULE, REGIME_TARGET_PRIORITY, ageAsOf, interpolateGlidepath, resolveRegimeTarget, targetForRole, RebalanceToTargetReducer } from './finance/behavioral/rebalance-to-target-reducer.js';
+import { BondLadderReducer, materializeLadder } from './finance/behavioral/bond-ladder-reducer.js';
 import { StockHarvestApplyReducer } from './finance/behavioral/stock-harvest-apply-reducer.js';
 import { StrategicAssetLocationReducer } from './finance/behavioral/strategic-asset-location-reducer.js';
 import { resolveSubstitute } from './finance/behavioral/substitute-holding.js';
@@ -75,8 +76,8 @@ import { TAX_CLASS, taxClassForRole, defaultRateProvider, liquidationRateProvide
 import { isDrawdownAccessible, computeNetLiquidity, deriveNetLiquidity } from './finance/derived-metrics/net-liquidity.js';
 import { computeNetWorth, deriveNetWorth } from './finance/derived-metrics/net-worth.js';
 import { AddRegimeReducer } from './finance/economic-regimes/add-regime-reducer.js';
-import { BondPriceAdjustReducer } from './finance/economic-regimes/bond-price-adjust-reducer.js';
 import { BondMaturityReducer } from './finance/economic-regimes/bond-maturity-reducer.js';
+import { BondPriceAdjustReducer } from './finance/economic-regimes/bond-price-adjust-reducer.js';
 import { EconomicRecoveryTickHandler } from './finance/economic-regimes/economic-recovery-tick-handler.js';
 import { EconomicShockHandler } from './finance/economic-regimes/economic-shock-handler.js';
 import { PrimeRelinkReducer } from './finance/economic-regimes/prime-relink-reducer.js';
@@ -101,10 +102,10 @@ import { FxTransferApplyReducer } from './finance/fx/fx-transfer-apply-reducer.j
 import { FxTransferToHandler } from './finance/fx/fx-transfer-handler.js';
 import { UsdAudPair } from './finance/fx/usd-aud-pair.js';
 import { AssetAppreciationHandler, AssetAppreciateReducer } from './finance/handlers/asset-appreciation-handler.js';
-import { BondCouponScheduledHandler } from './finance/handlers/bond-coupon-handler.js';
-import { CashSleeveInterestHandler } from './finance/handlers/cash-sleeve-interest-handler.js';
-import { BondSleeveCouponHandler } from './finance/handlers/bond-sleeve-coupon-handler.js';
 import { BondAccretionHandler } from './finance/handlers/bond-accretion-handler.js';
+import { BondCouponScheduledHandler } from './finance/handlers/bond-coupon-handler.js';
+import { BondSleeveCouponHandler } from './finance/handlers/bond-sleeve-coupon-handler.js';
+import { CashSleeveInterestHandler } from './finance/handlers/cash-sleeve-interest-handler.js';
 import { ChangeResidencyHandler } from './finance/handlers/change-residency-handler.js';
 import { ChangeStateResidencyHandler } from './finance/handlers/change-state-residency-handler.js';
 import { DividendScheduledHandler } from './finance/handlers/dividend-scheduled-handler.js';
@@ -125,8 +126,9 @@ import { HOLDING_ACTIVITY_KIND, snapshotHoldings, totalSnapshot, buildHoldingAct
 import { HoldingTransactReducer, HoldingRevalueReducer, HoldingSetBasisReducer, HoldingSplitReducer, HoldingRetitleReducer, HOLDING_REDUCER_CLASSES, _syncBalance } from './finance/holdings/holding-reducers.js';
 import { scaleHoldings, rescaleHoldingsToBalance, distributeHoldingsCredit, holdingsOutOfSync } from './finance/holdings/holding-utils.js';
 import { Holding } from './finance/holdings/holding.js';
-import { computeHoldingsGrowth, computeHoldingsDividends, computeHoldingsCoupons, computeHoldingsCashInterest } from './finance/holdings/holdings-earnings.js';
-import { consumeHoldingsFifo } from './finance/holdings/holdings-fifo.js';
+import { couponFederalExempt, couponStateExempt, computeHoldingsGrowth, computeHoldingsDividends, computeHoldingsCoupons, computeHoldingsAccretion, computeHoldingsCashInterest } from './finance/holdings/holdings-earnings.js';
+import { consumeHoldings, consumeHoldingsFifo } from './finance/holdings/holdings-fifo.js';
+import { SLEEVE_ORDER, LOT_STRATEGY, purchaseTs, SLEEVE_ORDER_MODES, LOT_STRATEGIES, DRAWDOWN_SLEEVE_CLASSES, SLEEVE_WEIGHT_PREFIX, SLEEVE_WEIGHT_SEP, SLEEVE_WEIGHT_MODE, sleeveWeightKey, sleeveWeightsFromParams, resolveDrawdownSelection, withRebalanceCoupling, buildHoldingsComparator } from './finance/holdings/holdings-selection.js';
 import { JournalDataSource } from './finance/journal-data-source.js';
 import { JournalQueryApi } from './finance/journal-query-api.js';
 import { ReportDefinition, ReportDefinitionRegistry } from './finance/journal-reporting/report-definition-registry.js';
@@ -164,10 +166,10 @@ import { AccumulateConsumptionReducer } from './finance/reducers/accumulate-cons
 import { AccumulateConsumptionUtilityReducer } from './finance/reducers/accumulate-consumption-utility-reducer.js';
 import { AccumulateDeficitReducer } from './finance/reducers/accumulate-deficit-reducer.js';
 import { AccumulateTaxesPaidReducer } from './finance/reducers/accumulate-taxes-paid-reducer.js';
-import { BondCouponCashApplyReducer } from './finance/reducers/bond-coupon-cash-apply-reducer.js';
-import { CashSleeveInterestApplyReducer } from './finance/reducers/cash-sleeve-interest-apply-reducer.js';
-import { BondSleeveCouponApplyReducer } from './finance/reducers/bond-sleeve-coupon-apply-reducer.js';
 import { BondAccretionApplyReducer } from './finance/reducers/bond-accretion-apply-reducer.js';
+import { BondCouponCashApplyReducer } from './finance/reducers/bond-coupon-cash-apply-reducer.js';
+import { BondSleeveCouponApplyReducer } from './finance/reducers/bond-sleeve-coupon-apply-reducer.js';
+import { CashSleeveInterestApplyReducer } from './finance/reducers/cash-sleeve-interest-apply-reducer.js';
 import { ChangeResidencyApplyReducer } from './finance/reducers/change-residency-apply-reducer.js';
 import { ChangeStateResidencyApplyReducer } from './finance/reducers/change-state-residency-apply-reducer.js';
 import { ExpenseDebitReducer } from './finance/reducers/expense-debit-reducer.js';
@@ -262,7 +264,7 @@ import { SimGraphNode } from './graph/sim-graph-node.js';
 import { QueryApi } from './query/query-api.js';
 import { BaseScenario } from './scenarios/base-scenario.js';
 import { BlankScenario } from './scenarios/blank-scenario.js';
-import { DRAWDOWN_STRATEGIES, DRAWDOWN_ROLES, DRAWDOWN_WEIGHT_MODE, DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP, drawdownWeightKey, DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_CASH_ROLES, DRAWDOWN_ROLE_LABELS, presentDrawdownWeightRoles, drawdownWeightsFromStrategy, DEFAULT_DRAWDOWN_WEIGHTS, buildDrawdownWeightSchema, DEFAULT_DRAWDOWN_WEIGHT_PARAMS, ALLOCATION_OPTIMIZED_MODE, ALLOC_WEIGHT_CLASSES, ALLOC_WEIGHT_PREFIX, ALLOC_WEIGHT_SEP, allocWeightKey, ALLOC_WEIGHT_CLASS_LABELS, ALLOCATION_PRESETS, DEFAULT_ALLOC_WEIGHTS, synthesizeTargetAllocation, allocWeightsFromMix, allocWeightsFromPreset, presentAllocations, buildAllocWeightSchema, DEFAULT_ALLOC_WEIGHT_PARAMS, INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, INTL_RETIREMENT_PARAM_ALIASES, resolveBalanceCenters, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
+import { DRAWDOWN_STRATEGIES, DRAWDOWN_ROLES, DRAWDOWN_WEIGHT_MODE, DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP, drawdownWeightKey, DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_CASH_ROLES, DRAWDOWN_ROLE_LABELS, presentDrawdownWeightRoles, drawdownWeightsFromStrategy, DEFAULT_DRAWDOWN_WEIGHTS, buildDrawdownWeightSchema, DEFAULT_DRAWDOWN_WEIGHT_PARAMS, DEFAULT_SLEEVE_WEIGHTS, buildSleeveWeightSchema, DEFAULT_SLEEVE_WEIGHT_PARAMS, ALLOCATION_OPTIMIZED_MODE, ALLOC_WEIGHT_CLASSES, ALLOC_WEIGHT_PREFIX, ALLOC_WEIGHT_SEP, allocWeightKey, ALLOC_WEIGHT_CLASS_LABELS, ALLOCATION_PRESETS, DEFAULT_ALLOC_WEIGHTS, synthesizeTargetAllocation, allocWeightsFromMix, allocWeightsFromPreset, presentAllocations, buildAllocWeightSchema, DEFAULT_ALLOC_WEIGHT_PARAMS, INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, INTL_RETIREMENT_PARAM_ALIASES, resolveBalanceCenters, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
 import { BALANCE_TARGET, ACCOUNT_PARAM_TEMPLATES, PERSON_PARAM_TEMPLATE, REAL_PROPERTY_PARAM_TEMPLATE, COLLECTIBLE_PARAM_TEMPLATE, COMPANY_EQUITY_PARAM_TEMPLATE, BEQUEST_PARAM_TEMPLATE, INHERITED_RA_PARAM_TEMPLATE, INHERITED_SALE_PARAM_TEMPLATE } from './scenarios/params/record-param-templates.js';
 import { GENERATED_KEY_PREFIXES, isGeneratedParamKey, decodeGeneratedParamKey, ScenarioParamGenerator } from './scenarios/params/scenario-param-generator.js';
 import { synthesizeWeightedPriorities, ScenarioLoader } from './scenarios/scenario-loader.js';
@@ -647,6 +649,8 @@ export const Finance = {
   resolveRegimeTarget,
   targetForRole,
   RebalanceToTargetReducer,
+  BondLadderReducer,
+  materializeLadder,
   StockHarvestApplyReducer,
   StrategicAssetLocationReducer,
   resolveSubstitute,
@@ -682,8 +686,8 @@ export const Finance = {
   computeNetWorth,
   deriveNetWorth,
   AddRegimeReducer,
-  BondPriceAdjustReducer,
   BondMaturityReducer,
+  BondPriceAdjustReducer,
   EconomicRecoveryTickHandler,
   EconomicShockHandler,
   PrimeRelinkReducer,
@@ -724,10 +728,10 @@ export const Finance = {
   UsdAudPair,
   AssetAppreciationHandler,
   AssetAppreciateReducer,
-  BondCouponScheduledHandler,
-  CashSleeveInterestHandler,
-  BondSleeveCouponHandler,
   BondAccretionHandler,
+  BondCouponScheduledHandler,
+  BondSleeveCouponHandler,
+  CashSleeveInterestHandler,
   ChangeResidencyHandler,
   ChangeStateResidencyHandler,
   DividendScheduledHandler,
@@ -784,11 +788,29 @@ export const Finance = {
   distributeHoldingsCredit,
   holdingsOutOfSync,
   Holding,
+  couponFederalExempt,
+  couponStateExempt,
   computeHoldingsGrowth,
   computeHoldingsDividends,
   computeHoldingsCoupons,
+  computeHoldingsAccretion,
   computeHoldingsCashInterest,
+  consumeHoldings,
   consumeHoldingsFifo,
+  SLEEVE_ORDER,
+  LOT_STRATEGY,
+  purchaseTs,
+  SLEEVE_ORDER_MODES,
+  LOT_STRATEGIES,
+  DRAWDOWN_SLEEVE_CLASSES,
+  SLEEVE_WEIGHT_PREFIX,
+  SLEEVE_WEIGHT_SEP,
+  SLEEVE_WEIGHT_MODE,
+  sleeveWeightKey,
+  sleeveWeightsFromParams,
+  resolveDrawdownSelection,
+  withRebalanceCoupling,
+  buildHoldingsComparator,
   JournalDataSource,
   JournalQueryApi,
   ReportDefinition,
@@ -868,10 +890,10 @@ export const Finance = {
   AccumulateConsumptionUtilityReducer,
   AccumulateDeficitReducer,
   AccumulateTaxesPaidReducer,
-  BondCouponCashApplyReducer,
-  CashSleeveInterestApplyReducer,
-  BondSleeveCouponApplyReducer,
   BondAccretionApplyReducer,
+  BondCouponCashApplyReducer,
+  BondSleeveCouponApplyReducer,
+  CashSleeveInterestApplyReducer,
   ChangeResidencyApplyReducer,
   ChangeStateResidencyApplyReducer,
   ExpenseDebitReducer,
@@ -1111,6 +1133,9 @@ export const Scenarios = {
   DEFAULT_DRAWDOWN_WEIGHTS,
   buildDrawdownWeightSchema,
   DEFAULT_DRAWDOWN_WEIGHT_PARAMS,
+  DEFAULT_SLEEVE_WEIGHTS,
+  buildSleeveWeightSchema,
+  DEFAULT_SLEEVE_WEIGHT_PARAMS,
   ALLOCATION_OPTIMIZED_MODE,
   ALLOC_WEIGHT_CLASSES,
   ALLOC_WEIGHT_PREFIX,

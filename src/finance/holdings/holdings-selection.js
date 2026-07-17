@@ -57,6 +57,12 @@ export const LOT_STRATEGY = Object.freeze({
   // bracket-aware SPECIFIC needs caller-side rate context. Until then it behaves as
   // MIN_GAIN, the closest gain-minimizing proxy. See design 65 OQ3.
   SPECIFIC:   'SPECIFIC',
+  // LADDER — ladder-aware drawdown (design 66 §G8, sell side / §10.9): raise cash the
+  // way a ladder investor does — spend already-liquid CASH (a redeemed/matured rung)
+  // first, then the NEAREST-maturity individual bond (its price has pulled to ≈ par so
+  // selling it early realizes the least mark-to-market deviation), sparing the growth
+  // sleeves and perpetual bond funds. See `ladderKey`.
+  LADDER:     'LADDER',
 });
 
 /** Milliseconds → the epoch time of a lot's purchase; null/invalid ⇒ 0 (oldest). */
@@ -79,7 +85,7 @@ export function purchaseTs(h) {
 export const SLEEVE_ORDER_MODES = Object.freeze(['FIFO', 'TAX_COST', 'PRESERVE_GROWTH', 'WEIGHTED']);
 
 /** Lever-B lot strategies exposed as the scenario/opt enum for `drawdownLotStrategy`. */
-export const LOT_STRATEGIES = Object.freeze(['FIFO', 'HIFO', 'LOSS_FIRST', 'SPECIFIC']);
+export const LOT_STRATEGIES = Object.freeze(['FIFO', 'HIFO', 'LOSS_FIRST', 'SPECIFIC', 'LADDER']);
 
 /**
  * The ALLOCATION classes carrying a Lever-A `WEIGHTED` search weight. Mirrors the
@@ -220,6 +226,39 @@ function unrealizedGain(h) {
   return (h?.marketValue ?? 0) - (h?.costBasis ?? 0);
 }
 
+/** Milliseconds → a bond's maturity epoch; null when it is not an individual bond. */
+function maturityTs(h) {
+  if (h?.maturityDate == null) return null;
+  const t = h.maturityDate instanceof Date ? h.maturityDate.getTime() : new Date(h.maturityDate).getTime();
+  return Number.isNaN(t) ? null : t;
+}
+
+/**
+ * Lever-B `LADDER` sort key (design 66 §G8 ladder-aware drawdown). A single
+ * per-element key — like `basisRatio` for HIFO — so `(a,b) => key(a) − key(b)` is a
+ * valid TOTAL order (transitive, deterministic, replay-safe). Ascending ⇒ sold first,
+ * encoding "matured-cash → nearest rung → … → far rung, sparing the growth engine":
+ *   - CASH             → −∞          : already-liquid proceeds (a redeemed/matured rung) first;
+ *   - individual BOND  → maturityTs  : nearest-maturity rung first (price ≈ par ⇒ least
+ *                                      realized mark-to-market deviation);
+ *   - everything else  → +∞          : perpetual bond funds (no rung liquidity) + EQUITY/
+ *                                      GOLD/OTHER last, preserving the growth sleeves.
+ * Ties (same tier / equal maturity) fall through to the purchaseDate tie-break. When a
+ * sleeveOrder / weights / score bias is ALSO active the ±∞ tiers are inert — sleeveRank
+ * has already grouped the allocations, so within the BOND sleeve this reduces to purely
+ * nearest-maturity-first with funds last (the intended ladder ordering).
+ */
+function ladderKey(h) {
+  if (h?.allocation === ALLOCATION.CASH) return Number.NEGATIVE_INFINITY;
+  const m = (h?.allocation === ALLOCATION.BOND) ? maturityTs(h) : null;
+  return m == null ? Number.POSITIVE_INFINITY : m;
+}
+
+/** Infinity-safe ascending numeric compare (−∞/+∞ ties ⇒ 0, not NaN). */
+function cmpNum(x, y) {
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+
 /**
  * Build a (holding) → rank function for Lever A. Lower rank ⇒ sold first.
  *  - `sleeveOrder`  : an array of ALLOCATION classes; rank = index (unlisted ⇒ after).
@@ -257,6 +296,9 @@ function buildLotComparator(lotStrategy) {
     case LOT_STRATEGY.LOSS_FIRST:
       // Smallest gain first ⇒ losses (negative gain) are realized before gains.
       return (a, b) => unrealizedGain(a) - unrealizedGain(b);
+    case LOT_STRATEGY.LADDER:
+      // design 66 §G8: cash → nearest-maturity rung → funds/growth. Infinity-safe.
+      return (a, b) => cmpNum(ladderKey(a), ladderKey(b));
     case LOT_STRATEGY.FIFO:
     default:
       return (a, b) => purchaseTs(a) - purchaseTs(b);

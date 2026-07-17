@@ -36,10 +36,16 @@ const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
  *    redeployed by the normal drawdown / rebalance machinery.
  *
  *  - **Roll (opt-in, `rollAtMaturity`).** Instead of redeeming, the bond ROLLS
- *    into a fresh par bond of the same term, re-issued at the then-current market
- *    yield (`effectiveInterestRates[rateKey]`, the G1 lock-in) — a self-sustaining
- *    single-rung ladder. Term is `maturityDate − purchaseDate` (falling back to
- *    the modified `duration`, else 5y, when no purchaseDate is stamped).
+ *    into a fresh par bond, re-issued at the then-current market yield
+ *    (`effectiveInterestRates[rateKey]`, the G1 lock-in). The roll term is:
+ *      - `rollTermYears` when set (design 66 §G8) — every rung of a ladder rolls to
+ *        the SAME fixed term (the ladder length), so a maturing near rung becomes the
+ *        new far rung and the {1,2,…,N} spacing self-perpetuates: a full ladder;
+ *      - else `maturityDate − purchaseDate` (the rung's own term) — a self-sustaining
+ *        single-rung constant-maturity bond (falling back to the modified `duration`,
+ *        else 5y, when no purchaseDate is stamped).
+ *    `rollAtMaturity` + `rollTermYears` are preserved on the rolled bond so it keeps
+ *    rolling every term.
  *
  * costBasis is set to faceValue on redemption/roll (par). `state` accounts are
  * scanned generically, so a matured bond in ANY account (brokerage / 401k / IRA /
@@ -104,9 +110,16 @@ function redeem(h, asOfMs, effectiveRates) {
     const purchaseMs = h.purchaseDate
       ? (h.purchaseDate instanceof Date ? h.purchaseDate.getTime() : new Date(h.purchaseDate).getTime())
       : null;
-    const termMs   = (purchaseMs != null && matMs > purchaseMs)
-      ? (matMs - purchaseMs)
-      : ((h.duration ?? 5) * YEAR_MS);
+    // design 66 §G8 — roll target term. A ladder rung carries `rollTermYears` (the
+    // ladder length): every rung rolls into a bond of that SAME fixed term, so a
+    // maturing near rung becomes the new far rung and the {1,2,…,N} spacing self-
+    // perpetuates. Without it (a lone bond) fall back to the rung's OWN original term
+    // (`maturityDate − purchaseDate`) — the back-compatible constant-maturity roll.
+    const termMs   = (h.rollTermYears != null)
+      ? (h.rollTermYears * YEAR_MS)
+      : (purchaseMs != null && matMs > purchaseMs)
+        ? (matMs - purchaseMs)
+        : ((h.duration ?? 5) * YEAR_MS);
     const newCoupon = (h.rateKey != null ? effectiveRates[h.rateKey] : undefined) ?? h.couponRate ?? null;
     return {
       ...h,
@@ -136,6 +149,7 @@ function redeem(h, asOfMs, effectiveRates) {
     maturityDate:   null,
     faceValue:      null,
     rollAtMaturity: false,
+    rollTermYears:  null,
     taxExemption:   'none',
     issuingState:   null,
     zeroCoupon:      false,

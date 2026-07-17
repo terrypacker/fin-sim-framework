@@ -107,6 +107,15 @@ export class Holding {
    *                                                  (`effectiveInterestRates[rateKey]`, G1 lock-in) — a self-sustaining
    *                                                  single-rung ladder (design 66 §G4; full ladders are §G8). Ignored
    *                                                  when `maturityDate` is null.
+   * @param {number|null} [opts.rollTermYears=null]  - BOND holdings only (design 66 §G8): the term, in years, of the
+   *                                                  fresh bond a rung rolls INTO at maturity (only meaningful with
+   *                                                  `rollAtMaturity`). This is what turns a set of staggered rungs into a
+   *                                                  self-perpetuating *ladder*: every rung rolls to the SAME fixed term
+   *                                                  (the ladder length), so a maturing near rung becomes the new far
+   *                                                  rung and the {1,2,…,N} spacing is preserved as the clock advances.
+   *                                                  null ⇒ roll into a bond of the rung's OWN original term
+   *                                                  (`maturityDate − purchaseDate`) — the back-compatible single-bond
+   *                                                  "constant-maturity" behavior. Ignored without `rollAtMaturity`.
    * @param {boolean}     [opts.zeroCoupon=false]    - BOND holdings only (design 66 §G6): a zero-coupon / OID bond. Pays
    *                                                  NO cash coupon (couponRate is 0/ignored); it is bought at a discount
    *                                                  to `faceValue` and its price *accretes* to par over its life. The
@@ -150,6 +159,7 @@ export class Holding {
     maturityDate         = null,
     faceValue            = null,
     rollAtMaturity       = false,
+    rollTermYears        = null,
     zeroCoupon           = false,
     inflationLinked      = false,
   } = {}) {
@@ -173,6 +183,7 @@ export class Holding {
     this.maturityDate         = maturityDate;
     this.faceValue            = faceValue;
     this.rollAtMaturity       = rollAtMaturity;
+    this.rollTermYears        = rollTermYears;
     this.zeroCoupon           = zeroCoupon;
     this.inflationLinked      = inflationLinked;
   }
@@ -207,6 +218,7 @@ export class Holding {
         : null,
       faceValue:           this.faceValue,
       rollAtMaturity:      this.rollAtMaturity,
+      rollTermYears:       this.rollTermYears,
       zeroCoupon:          this.zeroCoupon,
       inflationLinked:     this.inflationLinked,
     };
@@ -240,6 +252,8 @@ export class Holding {
       maturityDate:  d.maturityDate ? new Date(d.maturityDate) : null,
       faceValue:     d.faceValue ?? null,
       rollAtMaturity: d.rollAtMaturity ?? false,
+      // design 66 §G8: ladder roll-to-tail term. Absent ⇒ roll to own term (single bond).
+      rollTermYears: d.rollTermYears ?? null,
       // design 66 §G5/§G6: TIPS + zero-coupon/OID. Absent ⇒ a plain (coupon) bond.
       zeroCoupon:     d.zeroCoupon ?? false,
       inflationLinked: d.inflationLinked ?? false,

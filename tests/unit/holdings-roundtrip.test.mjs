@@ -43,6 +43,8 @@ function makeStockAccount() {
         taxExemption: 'federal', issuingState: 'CA', label: 'CA muni',   // design 66 §G2
         // design 66 §G5/§G6: an inflation-linked / zero-coupon flag pair round-trips.
         inflationLinked: true, zeroCoupon: false,
+        // design 66 §G8: a ladder rung's roll-to-tail term round-trips.
+        rollAtMaturity: true, rollTermYears: 5,
       }),
     ],
   });
@@ -70,6 +72,8 @@ test('Holdings round-trip: serialize → deserialize preserves multi-sleeve hold
   assert.equal(muni.couponRate,   0.03,      'couponRate preserved');
   assert.equal(muni.inflationLinked, true,   'inflationLinked preserved (design 66 §G5)');
   assert.equal(muni.zeroCoupon,      false,  'zeroCoupon preserved (design 66 §G6)');
+  assert.equal(muni.rollAtMaturity,  true,   'rollAtMaturity preserved (design 66 §G8)');
+  assert.equal(muni.rollTermYears,   5,      'rollTermYears preserved (design 66 §G8)');
   assert.equal(restored.holdings[0].id, 'hldA');
   assert.equal(restored.holdings[0].allocation, 'EQUITY');
   assert.equal(restored.holdings[0].marketValue, 12_000);

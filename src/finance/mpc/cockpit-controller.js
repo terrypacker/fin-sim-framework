@@ -741,6 +741,49 @@ export const COCKPIT_CONTROLS = {
       return true;
     },
   },
+
+  // ── Bond ladder length (design 66 §G8 Phase C — ladder length online) ─────────
+  // Tune how many rungs the maintained bond ladder holds. Like ALLOCATION_MIX the
+  // target (rung count) lives on the freshly compiled BondLadderReducer — NOT a state
+  // field — so it survives snapshot injection and bites under MPC with no `_seededSim`
+  // re-stamp. Actuation re-wires the live reducer; it re-shapes the ladder next period.
+  BOND_LADDER: {
+    key:     'BOND_LADDER',
+    label:   'Bond Ladder Length (rungs)',
+    numeric: true,
+    defaultRange: { min: 2, max: 15, step: 1 },
+    liveActuatable: true,
+    appliesTo: (bp) => _hasStrategy(bp?.behavioralStrategies, 'BOND_LADDER'),
+    requirement: 'Select the BOND_LADDER behavioral strategy (Scenario panel) to tune the ladder length online.',
+    buildVariables: ({ range }) => [{
+      paramKey: 'bondLadderRungs',
+      type:     OPT_PARAM_TYPES.INTEGER,
+      min:      range?.min  ?? 2,
+      max:      range?.max  ?? 15,
+      step:     range?.step ?? 1,
+      group:    'Allocation',
+    }],
+    describe: (candidate) => {
+      const n = Math.round(Number(candidate?.bondLadderRungs));
+      return Number.isFinite(n) ? `Ladder length: ${n} rungs (≈${n}-year)` : 'Ladder length unchanged';
+    },
+    /**
+     * Forward-effective live actuation: persist the committed rung count to its scenario
+     * param, then re-wire the running BondLadderReducer's `targetRungs` so it re-shapes
+     * the ladder on the next period. Reducer-resident target ⇒ no per-account re-stamp.
+     */
+    actuate: ({ services, scenario, candidate }) => {
+      const n = candidate?.bondLadderRungs;
+      if (n == null) return false;
+      const p = (scenario?.params ?? []).find(pp => (pp.key ?? pp.name) === 'bondLadderRungs');
+      if (p) p.value = n;
+      const rs = services?.reducerService;
+      const reducer = rs?.getAll?.().find(r => r?.constructor?.type === 'BondLadderReducer');
+      if (!rs || !reducer) return false;
+      rs.updateReducer(reducer, { targetRungs: Math.round(Number(n)) });
+      return true;
+    },
+  },
 };
 
 /**
