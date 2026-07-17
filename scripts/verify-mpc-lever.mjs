@@ -47,6 +47,7 @@ import { OPT_PARAM_TYPES, OPTIMIZATION_OBJECTIVES } from '../src/finance/optimiz
 import { makeInitialSnapshot }     from '../src/finance/mpc/mpc-controller.js';
 import { drawdownWeightKey, allocWeightKey, ALLOCATION_OPTIMIZED_MODE }
   from '../src/scenarios/intl-retirement-scenario.js';
+import { sleeveWeightKey } from '../src/finance/holdings/holdings-selection.js';
 
 const SIM_START = new Date(Date.UTC(2026, 0, 1));
 const SIM_END   = new Date(Date.UTC(2050, 0, 1));
@@ -139,6 +140,21 @@ const BOND_HEAVY = {
   [allocWeightKey('EQUITY')]: 0.05, [allocWeightKey('BOND')]: 0.9, [allocWeightKey('CASH')]: 0.5,
 };
 
+// Design 65 Lever A online (DRAWDOWN_SLEEVE): two sleeve sell-orders that leave a very
+// different residual book — sell EQUITY first (spend down the growth engine) vs sell it
+// last (spend cash/bond, let equity compound). Unlike the design-58 role weights (which
+// bake into per-account drawdownPriority, a clobbered STATE field), the sleeve policy is
+// a state-resident config forwarded via FORWARD_DRAWDOWN_STATE_FIELDS ⇒ should bite under
+// the snapshot path with NO `_seededSim` per-account shim. This case proves it.
+const SELL_EQUITY_FIRST = {
+  [sleeveWeightKey('EQUITY')]: 0.05, [sleeveWeightKey('GOLD')]: 0.10,
+  [sleeveWeightKey('CASH')]: 0.90,   [sleeveWeightKey('BOND')]: 0.80,
+};
+const SELL_EQUITY_LAST = {
+  [sleeveWeightKey('EQUITY')]: 0.95, [sleeveWeightKey('GOLD')]: 0.90,
+  [sleeveWeightKey('CASH')]: 0.10,   [sleeveWeightKey('BOND')]: 0.20,
+};
+
 const lever = process.argv[2] ?? 'all';
 function runXborder()  { verify('Lever A — crossBorderDrawdown (LOCAL_FIRST vs GLOBAL)',
   { crossBorderDrawdown: 'LOCAL_FIRST' }, { crossBorderDrawdown: 'GLOBAL' }); }
@@ -149,10 +165,14 @@ function runWeights()  { verify('Lever B — drawdownWeight order (default vs ro
 function runAllocMix()  { verify('Design 61 — allocationMix (equity-heavy vs bond-heavy)',
   EQUITY_HEAVY, BOND_HEAVY,
   { behavioralStrategies: ['TARGET_ALLOCATION'], allocationStrategy: ALLOCATION_OPTIMIZED_MODE, monthlyExpenses: 8_000 }); }
+function runSleeve()   { verify('Design 65 — drawdownSleeve (sell equity first vs last)',
+  SELL_EQUITY_FIRST, SELL_EQUITY_LAST,
+  { drawdownSleeveOrder: 'WEIGHTED', crossBorderDrawdown: 'GLOBAL', monthlyExpenses: 12_000 }); }
 
-if (lever === 'all')                 { runXborder(); runWithin(); runWeights(); runAllocMix(); }
+if (lever === 'all')                 { runXborder(); runWithin(); runWeights(); runAllocMix(); runSleeve(); }
 else if (lever === 'crossBorderDrawdown') runXborder();
 else if (lever === 'withinTierDraw')      runWithin();
 else if (lever === 'drawdownWeights')     runWeights();
 else if (lever === 'allocationMix')       runAllocMix();
-else console.log(`Unknown lever "${lever}". Use: all | crossBorderDrawdown | withinTierDraw | drawdownWeights | allocationMix`);
+else if (lever === 'drawdownSleeve')      runSleeve();
+else console.log(`Unknown lever "${lever}". Use: all | crossBorderDrawdown | withinTierDraw | drawdownWeights | allocationMix | drawdownSleeve`);
