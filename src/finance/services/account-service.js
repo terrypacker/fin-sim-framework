@@ -17,7 +17,8 @@ import { Holding } from '../holdings/holding.js';
 import { resolveDefaultAllocation, resolveRateKey } from '../holdings/default-allocations.js';
 import { rescaleHoldingsToBalance } from '../holdings/holding-utils.js';
 import { deriveEarningsBasis } from '../assets/investment-account.js';
-import { consumeHoldingsFifo } from '../holdings/holdings-fifo.js';
+import { consumeHoldings } from '../holdings/holdings-fifo.js';
+import { resolveDrawdownSelection } from '../holdings/holdings-selection.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
 import { fxRate, fxFeeIn } from '../fx/fx-conversion.js';
 
@@ -524,6 +525,14 @@ export class AccountService extends AssetService {
     // fxToTarget. LOCAL_FIRST (default) keeps the historical same-country gating,
     // escalating to INTL_TRANSFER once the local country is exhausted.
     const globalDrawdown = state.crossBorderDrawdown === 'GLOBAL';
+    // Allocation-aware liquidation policy (design 65): which sleeve/lots each
+    // penalty-free brokerage draw sells. Null (the default FIFO/FIFO) makes the
+    // downstream consume byte-identical to the historic blind purchase-date FIFO.
+    const drawSelection = resolveDrawdownSelection({
+      sleeveOrderMode: state.drawdownSleeveOrder,
+      lotStrategy:     state.drawdownLotStrategy,
+      sleeveWeights:   state.drawdownSleeveWeights,
+    });
     const usdAud         = state.effectiveExchangeRates?.USD_AUD ?? 1.55; // 1 USD = usdAud AUD
     const fxFeeUsd       = state.effectiveFxFees?.USD_AUD ?? 15;          // flat per-transfer fee, USD
     const srcCcyOf       = (account) => account.currency?.code ?? account.country;
@@ -634,7 +643,7 @@ export class AccountService extends AssetService {
           if (remaining < 1e-9) break;
           const want = Math.min(target * (s.amt / total), remaining);
           const got  = this._drawPenaltyFree(
-            targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, s.fx, feeOf(s.account)
+            targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, s.fx, feeOf(s.account), drawSelection
           );
           remaining     -= got;
           drawnThisPass += got;
@@ -649,7 +658,7 @@ export class AccountService extends AssetService {
         if (remaining < 1e-9) break;
         if (isDeferredTaxable(account)) continue;   // held back for Phase 3 (design 45 (B))
         remaining -= this._drawPenaltyFree(
-          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account)
+          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account), drawSelection
         );
       }
     } else {
@@ -701,7 +710,7 @@ export class AccountService extends AssetService {
             const weight = equal ? (1 / avail.length) : (s.amt / total);
             const want = Math.min(target * weight, remaining);
             const got  = this._drawPenaltyFree(
-              targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, s.fx, feeOf(s.account)
+              targetAccount, s.account, s.key, want, date, s.eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, s.fx, feeOf(s.account), drawSelection
             );
             remaining     -= got;
             drawnThisPass += got;
@@ -824,7 +833,7 @@ export class AccountService extends AssetService {
         if (remaining < 1e-9) break;
         if (!isDeferredTaxable(account)) continue;
         remaining -= this._drawPenaltyFree(
-          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account)
+          targetAccount, account, key, remaining, date, eligibleOf(account), residency, drawnKeys, pendingTaxActions, pushTransfer, fxOf(account), feeOf(account), drawSelection
         );
       }
     }
@@ -988,7 +997,7 @@ export class AccountService extends AssetService {
    * Source-currency figures (basis, STOCK_WITHDRAWAL_TAX proceeds/gain) are
    * recorded natively so the source country's tax computation stays correct.
    */
-  _drawPenaltyFree(targetAccount, account, key, want, date, eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, fx = 1, fee = 0) {
+  _drawPenaltyFree(targetAccount, account, key, want, date, eligible, residency, drawnKeys, pendingTaxActions, pushTransfer, fx = 1, fee = 0, selection = null) {
     if (want < 1e-9) return 0;
     // Gross up the source-side need by the fee so a full draw nets `want` at the
     // target after the wire cost is paid.
@@ -1014,8 +1023,10 @@ export class AccountService extends AssetService {
       const auCtx = residency === 'AU'
         ? { asOfMs: date instanceof Date ? date.getTime() : (typeof date === 'number' ? date : null), country: 'AU' }
         : null;
+      // Design 65: the allocation-aware selection policy steers *which* sleeve/lots
+      // are sold; when `selection` is null this is byte-identical to the prior FIFO.
       const brokerageFifo = account.type === ACCOUNT_TYPE.BROKERAGE
-        ? consumeHoldingsFifo(account.holdings ?? [], withdraw, auCtx)
+        ? consumeHoldings(account.holdings ?? [], withdraw, { indexation: auCtx, selection })
         : null;
 
       this.transaction(targetAccount, +credited, date);

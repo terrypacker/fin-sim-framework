@@ -1,6 +1,7 @@
 # 65 — Allocation-aware drawdown: choose *which holding type* to sell for a debit
 
-**Status**: **PROPOSED** (2026-07-16). No code yet. Scope: make the **within-account
+**Status**: **Phases 1–2 IMPLEMENTED** (2026-07-16, branch `wip/allocation-aware-drawdown`);
+Phases 3 (Lever C rebalance coupling) & 4 (MPC) remain PROPOSED. Scope: make the **within-account
 liquidation** of a spending debit **allocation-aware** — choose *which asset class
 (sleeve) and which lots* to sell, instead of the current blind FIFO-by-purchase-date.
 This is the third leg of the "control the holdings over time" family: **design 58**
@@ -263,6 +264,35 @@ drawdown, event withdrawals, design-61 rebalance, inheritance) inherits the capa
 Phases 1–2 have **no dependency on design 61** (they help any mixed-sleeve or multi-lot
 account, including the pre-61 fixed-income/brokerage split). Phase 3 is where 65 and 61
 unify.
+
+### Implementation notes (Phases 1–2, 2026-07-16)
+
+- **Phase 1 (seam):** `consumeHoldings(holdings, amount, { indexation, selection })` in
+  `holdings-fifo.js`; `consumeHoldingsFifo` is now a thin FIFO wrapper. The pluggable
+  comparator lives in the new `holdings/holdings-selection.js`
+  (`buildHoldingsComparator`, `SLEEVE_ORDER`, `LOT_STRATEGY`, `resolveDrawdownSelection`).
+  `selection == null` ⇒ purchaseDate-ascending, byte-identical to the old path, so every
+  existing caller and the golden are unaffected.
+- **Phase 2 (Levers A/B):** params `drawdownSleeveOrder` (FIFO/TAX_COST/PRESERVE_GROWTH/
+  WEIGHTED), `drawdownLotStrategy` (FIFO/HIFO/LOSS_FIRST/SPECIFIC), and `sleeveWeight::<CLASS>`
+  in `intl-retirement-scenario.js`, projected onto `state` by `us-retirement-toolset.js`
+  (alongside `withinTierDraw`/`crossBorderDrawdown`). Both disposal paths resolve the same
+  `state` fields via `resolveDrawdownSelection`: the engine path (`_drawPenaltyFree`, threaded
+  through `replenishSavings`) and the event path (`Us/AuStockWithdrawalApplyReducer`). Opt
+  axes added to `intl-retirement-opt-config.js`.
+- **OQ3 decision:** the primitive stays **tax-agnostic** (it tallies; the caller taxes). Lever B
+  ranks lots by basis-ratio/gain (`HIFO`/`MIN_GAIN`/`LOSS_FIRST`), which is jurisdiction-free.
+  `SPECIFIC` is an alias of `MIN_GAIN` today; a genuinely bracket-/after-tax-aware `SPECIFIC`
+  (and AU-discount-aware Lever B) is deferred to a later phase since it needs caller-side rate
+  context — the tests below hold regardless.
+- **Golden unmoved — correctly.** The default IntlRetirement scenario is accumulation-heavy:
+  it never liquidates a mixed-sleeve brokerage for a deficit before simEnd, so the lever is
+  **legitimately inert there** and `cross-border-relief-scenario.test.mjs` does not move. To
+  guard against a silently-inert lever (the design-61 `id:null` lesson), engagement is proven
+  by `evt-allocation-aware-drawdown.test.mjs`: forced-drawdown fixtures exercise **both** the
+  engine (`replenishSavings`/`_drawPenaltyFree`) and event (`STOCK_WITHDRAWAL_APPLY`) paths and
+  assert the sleeve/lot choice (and realized gain) actually changes under TAX_COST/HIFO.
+  Primitive-level policies are covered by `holdings-selection.test.mjs`. **3564 unit + 870 viz green.**
 
 ---
 

@@ -12,7 +12,8 @@ import { OPT_PARAM_TYPES }            from './optimization-objectives.js';
 import { INTL_RETIREMENT_DEFAULTS, DRAWDOWN_STRATEGIES, buildDrawdownWeightSchema, IntlRetirementScenario,
          presentDrawdownWeightRoles, drawdownWeightKey, DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP,
          buildAllocWeightSchema, presentAllocations, allocWeightKey,
-         ALLOC_WEIGHT_PREFIX, ALLOC_WEIGHT_SEP } from '../../scenarios/intl-retirement-scenario.js';
+         ALLOC_WEIGHT_PREFIX, ALLOC_WEIGHT_SEP, buildSleeveWeightSchema } from '../../scenarios/intl-retirement-scenario.js';
+import { SLEEVE_ORDER_MODES, LOT_STRATEGIES } from '../holdings/holdings-selection.js';
 import { SHOCK_LIBRARY }              from '../economic-shocks/shock-library.js';
 import { indexParamSchema, resolveSweepVariables } from '../param-schema-utils.js';
 
@@ -215,6 +216,38 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
   // of the sweep unless WEIGHTED is the selected strategy. The named strategies are
   // warm-starts (drawdownWeightsFromStrategy); each is one setting of these weights.
   ...buildDrawdownWeightSchema().map(s => ({
+    paramKey: s.key,
+    label:    s.label,
+    type:     OPT_PARAM_TYPES.CONTINUOUS,
+    min:      s.min, max: s.max, step: s.step,
+    group:    'Spending',
+    enabled:  false,
+  })),
+
+  // Allocation-aware drawdown (design 65). Lever A: which sleeve to sell first for a
+  // spending debit (FIFO is the byte-identical default). Lever B: which lots within
+  // the sleeve. Both categorical; WEIGHTED unlocks the per-class sleeveWeight axes.
+  {
+    paramKey: 'drawdownSleeveOrder',
+    label:    'Drawdown Sleeve Order',
+    type:     OPT_PARAM_TYPES.ENUM,
+    values:   SLEEVE_ORDER_MODES,
+    group:    'Spending',
+    enabled:  false,
+  },
+  {
+    paramKey: 'drawdownLotStrategy',
+    label:    'Drawdown Lot Strategy',
+    type:     OPT_PARAM_TYPES.ENUM,
+    values:   LOT_STRATEGIES,
+    group:    'Spending',
+    enabled:  false,
+  },
+  // Sleeve weights (design 65 Lever A — optimize-the-sell-order mode). One CONTINUOUS
+  // axis per asset class; the sell order is the ascending sort of the weights. Gated
+  // by the schema's visibleWhen (drawdownSleeveOrder=WEIGHTED), so they drop out of
+  // the sweep unless WEIGHTED is selected.
+  ...buildSleeveWeightSchema().map(s => ({
     paramKey: s.key,
     label:    s.label,
     type:     OPT_PARAM_TYPES.CONTINUOUS,

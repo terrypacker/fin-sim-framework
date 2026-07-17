@@ -25,6 +25,7 @@ import {
   IntlIraEarningsHandler, IntlRothEarningsHandler, IntlK401EarningsHandler,
   IntlUsStockEarningsHandler,
 } from '../../finance/handlers/earnings-handlers.js';
+import { SLEEVE_ORDER_MODES, LOT_STRATEGIES, sleeveWeightsFromParams } from '../../finance/holdings/holdings-selection.js';
 import { OutOfFundsHandler }            from '../../finance/handlers/out-of-funds-handler.js';
 import { RetirementDateHandler }        from '../../finance/spending/strategies/retirement-date-handler.js';
 import { HealthcareEventHandler }       from '../../finance/spending/strategies/healthcare-event-handler.js';
@@ -436,6 +437,16 @@ export const US_RETIREMENT = {
         (p.withinTierDraw === 'EQUAL' || p.withinTierDraw === 'PROPORTIONAL')
           ? p.withinTierDraw
           : 'SEQUENTIAL',
+      // Allocation-aware drawdown (design 65). The disposal primitive
+      // (consumeHoldings) reads these to choose which sleeve/lots to sell for a
+      // spending debit: drawdownSleeveOrder (Lever A) + drawdownLotStrategy (Lever B),
+      // with the WEIGHTED sleeve order sorting classes by drawdownSleeveWeights. An
+      // unknown value falls back to FIFO/FIFO so existing scenarios are byte-identical.
+      drawdownSleeveOrder:
+        SLEEVE_ORDER_MODES.includes(p.drawdownSleeveOrder) ? p.drawdownSleeveOrder : 'FIFO',
+      drawdownLotStrategy:
+        LOT_STRATEGIES.includes(p.drawdownLotStrategy) ? p.drawdownLotStrategy : 'FIFO',
+      drawdownSleeveWeights: sleeveWeightsFromParams(p),
     };
 
     // Account state entries + initial metrics snapshot so the chart shows

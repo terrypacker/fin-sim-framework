@@ -37,6 +37,8 @@ import { USD, AUD }            from '../finance/assets/account.js';
 import { ACCOUNT_ROLES }       from '../finance/state/account-roles.js';
 import { Holding }             from '../finance/holdings/holding.js';
 import { ALLOCATION }          from '../finance/holdings/allocation.js';
+import { SLEEVE_ORDER_MODES, LOT_STRATEGIES, DRAWDOWN_SLEEVE_CLASSES,
+         SLEEVE_WEIGHT_MODE, sleeveWeightKey } from '../finance/holdings/holdings-selection.js';
 import { DEFAULT_AGE_BANDS }   from '../finance/spending/strategies/age-banded-spending-reducer.js';
 import { RATE_KEYS }           from '../finance/economic-regimes/rate-keys.js';
 
@@ -274,6 +276,47 @@ export function buildDrawdownWeightSchema() {
 export const DEFAULT_DRAWDOWN_WEIGHT_PARAMS = Object.fromEntries(
   Object.entries(DEFAULT_DRAWDOWN_WEIGHTS).map(
     ([role, w]) => [drawdownWeightKey(role), w]));
+
+// ─── Design 65 — allocation-aware drawdown (which sleeve/lots to sell) ─────────
+// The Lever-A weight-key helpers (SLEEVE_WEIGHT_PREFIX/SEP/MODE, sleeveWeightKey)
+// live in holdings-selection.js so the toolset projection can import them without a
+// circular scenario↔toolset dependency; the schema/defaults below stay here.
+
+/**
+ * Default per-class sleeve weights — seeded so that the WEIGHTED mode's ascending
+ * sort reproduces the TAX_COST order (CASH→BOND→EQUITY→GOLD). Only consulted when
+ * `drawdownSleeveOrder === 'WEIGHTED'`; the default is FIFO, so existing scenarios
+ * are unaffected (byte-identical).
+ */
+export const DEFAULT_SLEEVE_WEIGHTS = Object.freeze({
+  [ALLOCATION.CASH]:   0.2,
+  [ALLOCATION.BOND]:   0.4,
+  [ALLOCATION.EQUITY]: 0.6,
+  [ALLOCATION.GOLD]:   0.8,
+});
+
+/**
+ * Build the per-class `sleeveWeight::<CLASS>` param-schema entries (design 65 §4-A).
+ * Continuous [0,1] Number params, opt-swept, gated on `drawdownSleeveOrder=WEIGHTED`.
+ */
+export function buildSleeveWeightSchema() {
+  return DRAWDOWN_SLEEVE_CLASSES.map(cls => ({
+    key: sleeveWeightKey(cls),
+    label: `Sleeve Weight — ${cls}`,
+    type: 'Number', group: 'Spending',
+    min: 0, max: 1, step: 0.05,
+    mc: false, opt: true,
+    defaultValue: DEFAULT_SLEEVE_WEIGHTS[cls],
+    visibleWhen: { param: 'drawdownSleeveOrder', equals: SLEEVE_WEIGHT_MODE },
+    description: `Drawdown sleeve weight for the ${cls} allocation ` +
+      `(0–1; lower = sold earlier for a spending debit). Active only when Drawdown ` +
+      `Sleeve Order is WEIGHTED; the sell order is the ascending sort of all sleeve weights.`,
+  }));
+}
+
+/** Flat map of the default `sleeveWeight::<CLASS>` param key → value. */
+export const DEFAULT_SLEEVE_WEIGHT_PARAMS = Object.fromEntries(
+  DRAWDOWN_SLEEVE_CLASSES.map(cls => [sleeveWeightKey(cls), DEFAULT_SLEEVE_WEIGHTS[cls]]));
 
 // ─── Lever A — optimizable holding-allocation mix (design 61 §4-A) ─────────────
 
@@ -558,6 +601,14 @@ export const INTL_RETIREMENT_DEFAULTS = {
   // How accounts sharing one drawdown tier (equal effective priority) split a draw.
   // SEQUENTIAL (default) drains one fully before the next — byte-identical.
   withinTierDraw:        'SEQUENTIAL',
+  // Allocation-aware drawdown (design 65). Which *sleeve* (asset class) and which
+  // *lots* within the chosen account to sell for a spending debit. FIFO/FIFO is the
+  // historic blind purchase-date order, so existing scenarios are byte-identical.
+  drawdownSleeveOrder:   'FIFO',  // FIFO | TAX_COST | PRESERVE_GROWTH | WEIGHTED (Lever A)
+  drawdownLotStrategy:   'FIFO',  // FIFO | HIFO | LOSS_FIRST | SPECIFIC (Lever B)
+  // Per-class sleeve weights (design 65 Lever A). Only consulted when
+  // drawdownSleeveOrder === 'WEIGHTED'. Keys: sleeveWeight::<CLASS>.
+  ...DEFAULT_SLEEVE_WEIGHT_PARAMS,
 
   // Inflation rates (annual, per country)
   usInflationRate: 0.03,
@@ -780,6 +831,35 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
       'PROPORTIONAL splits by each member\'s available balance — e.g. draw two Roths together pro-rata.',
   },
   {
+    // Allocation-aware drawdown — sleeve order (design 65 Lever A). Feeds
+    // state.drawdownSleeveOrder (resolved in the US_RETIREMENT toolset); the disposal
+    // primitive reads it to choose which asset class to sell first for a spending
+    // debit. FIFO preserves the historic blind purchase-date order (byte-identical).
+    key: 'drawdownSleeveOrder', label: 'Drawdown Sleeve Order',
+    type: 'Enum', group: 'Spending',
+    options: SLEEVE_ORDER_MODES,
+    mc: false, opt: true, defaultValue: INTL_RETIREMENT_DEFAULTS.drawdownSleeveOrder,
+    description: 'Which asset class (sleeve) to sell first when raising cash for spending. ' +
+      'FIFO ignores allocation (historic behavior). ' +
+      'TAX_COST sells least-taxed first (CASH→BOND→EQUITY→GOLD). ' +
+      'PRESERVE_GROWTH sells the safe sleeves first and lets equity compound (CASH→BOND→GOLD→EQUITY). ' +
+      'WEIGHTED sorts sleeves by the per-class sleeveWeight params (optimizable).',
+  },
+  {
+    // Allocation-aware drawdown — lot strategy (design 65 Lever B). Feeds
+    // state.drawdownLotStrategy; the disposal primitive reads it to choose which lots
+    // within the selected sleeve to consume. FIFO is the historic oldest-first order.
+    key: 'drawdownLotStrategy', label: 'Drawdown Lot Strategy',
+    type: 'Enum', group: 'Spending',
+    options: LOT_STRATEGIES,
+    mc: false, opt: true, defaultValue: INTL_RETIREMENT_DEFAULTS.drawdownLotStrategy,
+    description: 'Which lots within a sleeve to sell for a spending debit. ' +
+      'FIFO sells oldest first (maximizes AU 12-month CGT-discount eligibility). ' +
+      'HIFO sells highest-cost-basis first (least realized gain per dollar). ' +
+      'LOSS_FIRST realizes losing lots first (banks losses). ' +
+      'SPECIFIC is a gain-minimizing pick (behaves as HIFO until bracket-awareness lands).',
+  },
+  {
     // User-authored drawdown strategies (by role → rank). Each entry is
     // { name, roles: { <role>: <order> } } and becomes selectable as a
     // Drawdown Strategy (Scenario) and a sweep value (Optimize). `options`
@@ -797,6 +877,13 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
   // under every other strategy. Generated from DRAWDOWN_WEIGHT_ROLES so the list
   // stays in sync with the roles the cascade synthesizes.
   ...buildDrawdownWeightSchema(),
+
+  // ── Drawdown sleeve weights (design 65 Lever A — optimizable class-sell order) ─
+  // One continuous [0,1] weight per asset class; the sell order is the ascending
+  // sort of the weights. Read by the disposal primitive (via state.drawdownSleeveWeights)
+  // only when drawdownSleeveOrder === 'WEIGHTED', so they are byte-identical no-ops
+  // under FIFO/TAX_COST/PRESERVE_GROWTH.
+  ...buildSleeveWeightSchema(),
 
   // ── Optimization planning targets (design 38 §5.2, Q5) ──────────────────────
   {

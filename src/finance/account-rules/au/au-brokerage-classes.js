@@ -11,7 +11,8 @@
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-framework/reducers.js';
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
-import { consumeHoldingsFifo } from '../../holdings/holdings-fifo.js';
+import { consumeHoldings } from '../../holdings/holdings-fifo.js';
+import { resolveDrawdownSelection } from '../../holdings/holdings-selection.js';
 import { resolveCashKey } from '../cash-routing.js';
 
 /** Resolve the AU cash pool (legacy tail; prefer resolveCashKey for routing). */
@@ -185,7 +186,14 @@ export class AuStockWithdrawalApplyReducer extends AccountServiceReducer {
     // falling back to inflationAccumulator (and 1) for old saves.
     const auLevel   = state.cpiAccumulator?.AU ?? state.inflationAccumulator?.AU ?? 1;
     const asOfMs    = state.currentPeriods?.AU?.startMs ?? Date.now();
-    const r = consumeHoldingsFifo(sa.holdings ?? [], salePrice, { level: auLevel, asOfMs, country: 'AU' });
+    // Allocation-aware liquidation (design 65): shares the engine draw's selection
+    // policy. Null (default FIFO/FIFO) ⇒ byte-identical to the prior FIFO.
+    const selection = resolveDrawdownSelection({
+      sleeveOrderMode: state.drawdownSleeveOrder,
+      lotStrategy:     state.drawdownLotStrategy,
+      sleeveWeights:   state.drawdownSleeveWeights,
+    });
+    const r = consumeHoldings(sa.holdings ?? [], salePrice, { indexation: { level: auLevel, asOfMs, country: 'AU' }, selection });
     const realizedBasis = action.costBasis != null ? action.costBasis : r.realizedBasis;
     const newHoldings   = r.newHoldings;
     // AU cost-base reset (design 36 §12.2): realized AU basis from each lot's
