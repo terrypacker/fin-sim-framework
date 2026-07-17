@@ -18,7 +18,7 @@ import { resolveDefaultAllocation, resolveRateKey } from '../holdings/default-al
 import { rescaleHoldingsToBalance } from '../holdings/holding-utils.js';
 import { deriveEarningsBasis } from '../assets/investment-account.js';
 import { consumeHoldings } from '../holdings/holdings-fifo.js';
-import { resolveDrawdownSelection } from '../holdings/holdings-selection.js';
+import { resolveDrawdownSelection, withRebalanceCoupling } from '../holdings/holdings-selection.js';
 import { ACCOUNT_ROLES } from '../state/account-roles.js';
 import { fxRate, fxFeeIn } from '../fx/fx-conversion.js';
 
@@ -532,6 +532,7 @@ export class AccountService extends AssetService {
       sleeveOrderMode: state.drawdownSleeveOrder,
       lotStrategy:     state.drawdownLotStrategy,
       sleeveWeights:   state.drawdownSleeveWeights,
+      rebalanceWeight: state.drawdownRebalanceWeight,
     });
     const usdAud         = state.effectiveExchangeRates?.USD_AUD ?? 1.55; // 1 USD = usdAud AUD
     const fxFeeUsd       = state.effectiveFxFees?.USD_AUD ?? 15;          // flat per-transfer fee, USD
@@ -1025,8 +1026,11 @@ export class AccountService extends AssetService {
         : null;
       // Design 65: the allocation-aware selection policy steers *which* sleeve/lots
       // are sold; when `selection` is null this is byte-identical to the prior FIFO.
+      // Lever C (design 65 §4-C): if rebalance coupling is on and this account carries
+      // a stamped design-61 target, bias the sleeve order toward its over-weight class.
+      const acctSelection = withRebalanceCoupling(selection, account);
       const brokerageFifo = account.type === ACCOUNT_TYPE.BROKERAGE
-        ? consumeHoldings(account.holdings ?? [], withdraw, { indexation: auCtx, selection })
+        ? consumeHoldings(account.holdings ?? [], withdraw, { indexation: auCtx, selection: acctSelection })
         : null;
 
       this.transaction(targetAccount, +credited, date);

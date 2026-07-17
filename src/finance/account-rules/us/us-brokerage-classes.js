@@ -12,7 +12,7 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { consumeHoldings } from '../../holdings/holdings-fifo.js';
-import { resolveDrawdownSelection } from '../../holdings/holdings-selection.js';
+import { resolveDrawdownSelection, withRebalanceCoupling } from '../../holdings/holdings-selection.js';
 import { distributeHoldingsCredit } from '../../holdings/holding-utils.js';
 import { resolveCashKey } from '../cash-routing.js';
 
@@ -250,11 +250,12 @@ export class StockWithdrawalApplyReducer extends AccountServiceReducer {
     // Allocation-aware liquidation (design 65): the event path shares the same
     // selection policy as the engine draw, so both realize identical tax for the
     // same account + policy. Null (default FIFO/FIFO) ⇒ byte-identical to the prior FIFO.
-    const selection = resolveDrawdownSelection({
+    const selection = withRebalanceCoupling(resolveDrawdownSelection({
       sleeveOrderMode: state.drawdownSleeveOrder,
       lotStrategy:     state.drawdownLotStrategy,
       sleeveWeights:   state.drawdownSleeveWeights,
-    });
+      rebalanceWeight: state.drawdownRebalanceWeight,
+    }), sa);
     const r = consumeHoldings(sa.holdings ?? [], salePrice, { indexation: { level: auLevel, asOfMs, country: 'AU' }, selection });
     const realizedBasis = action.costBasis != null ? action.costBasis : r.realizedBasis;
     const newHoldings   = r.newHoldings;

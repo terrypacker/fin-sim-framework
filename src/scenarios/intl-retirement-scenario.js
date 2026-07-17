@@ -606,6 +606,10 @@ export const INTL_RETIREMENT_DEFAULTS = {
   // historic blind purchase-date order, so existing scenarios are byte-identical.
   drawdownSleeveOrder:   'FIFO',  // FIFO | TAX_COST | PRESERVE_GROWTH | WEIGHTED (Lever A)
   drawdownLotStrategy:   'FIFO',  // FIFO | HIFO | LOSS_FIRST | SPECIFIC (Lever B)
+  // Lever C (design 65 §4-C) rebalance-coupling weight (w_mix). 0 = off (default);
+  // >0 biases the sleeve sell order toward the design-61 over-weight class so a debit
+  // doubles as a rebalance. Inert unless a TARGET_ALLOCATION strategy stamps targets.
+  drawdownRebalanceWeight: 0,
   // Per-class sleeve weights (design 65 Lever A). Only consulted when
   // drawdownSleeveOrder === 'WEIGHTED'. Keys: sleeveWeight::<CLASS>.
   ...DEFAULT_SLEEVE_WEIGHT_PARAMS,
@@ -858,6 +862,22 @@ export const INTL_RETIREMENT_PARAM_SCHEMA = [
       'HIFO sells highest-cost-basis first (least realized gain per dollar). ' +
       'LOSS_FIRST realizes losing lots first (banks losses). ' +
       'SPECIFIC is a gain-minimizing pick (behaves as HIFO until bracket-awareness lands).',
+  },
+  {
+    // Lever C (design 65 §4-C) — rebalance coupling. Feeds state.drawdownRebalanceWeight;
+    // the disposal primitive biases the sleeve sell order toward the design-61
+    // over-weight class so a spending debit doubles as a rebalance (one CGT event, not
+    // two). 0 = off (byte-identical). Requires a TARGET_ALLOCATION behavioral strategy
+    // to stamp per-account targets; inert otherwise.
+    key: 'drawdownRebalanceWeight', label: 'Drawdown Rebalance Coupling',
+    type: 'Number', group: 'Spending',
+    min: 0, max: 3, step: 0.25,
+    mc: false, opt: true, defaultValue: INTL_RETIREMENT_DEFAULTS.drawdownRebalanceWeight,
+    visibleWhen: { param: 'behavioralStrategies', includes: 'TARGET_ALLOCATION' },
+    description: 'How strongly a spending drawdown is biased toward selling the over-weight ' +
+      'asset class (per the design-61 target) so the sale also rebalances. 0 disables the ' +
+      'coupling; higher values let mix-correction override the tax-cost sleeve order. ' +
+      'Only meaningful with a TARGET_ALLOCATION strategy active.',
   },
   {
     // User-authored drawdown strategies (by role → rank). Each entry is

@@ -255,6 +255,16 @@ export const DEFAULT_OPTIMIZATION_CONFIGS = [
     group:    'Spending',
     enabled:  false,
   })),
+  // Rebalance coupling weight (design 65 Lever C). Continuous w_mix; 0 = off. Search
+  // how aggressively a drawdown doubles as a rebalance (over-weight sleeve sold first).
+  {
+    paramKey: 'drawdownRebalanceWeight',
+    label:    'Drawdown Rebalance Coupling',
+    type:     OPT_PARAM_TYPES.CONTINUOUS,
+    min:      0, max: 3, step: 0.25,
+    group:    'Spending',
+    enabled:  false,
+  },
 
   // Allocation weights (design 61 Lever A — searchable static mix). One CONTINUOUS
   // axis per non-residual allocation class; the applied target mix is synthesized

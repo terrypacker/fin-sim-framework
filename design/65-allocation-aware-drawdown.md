@@ -1,7 +1,7 @@
 # 65 — Allocation-aware drawdown: choose *which holding type* to sell for a debit
 
-**Status**: **Phases 1–2 IMPLEMENTED** (2026-07-16, branch `wip/allocation-aware-drawdown`);
-Phases 3 (Lever C rebalance coupling) & 4 (MPC) remain PROPOSED. Scope: make the **within-account
+**Status**: **Phases 1–3 IMPLEMENTED** (2026-07-16, branch `wip/allocation-aware-drawdown`);
+Phase 4 (MPC) remains PROPOSED. Scope: make the **within-account
 liquidation** of a spending debit **allocation-aware** — choose *which asset class
 (sleeve) and which lots* to sell, instead of the current blind FIFO-by-purchase-date.
 This is the third leg of the "control the holdings over time" family: **design 58**
@@ -292,7 +292,29 @@ unify.
   by `evt-allocation-aware-drawdown.test.mjs`: forced-drawdown fixtures exercise **both** the
   engine (`replenishSavings`/`_drawPenaltyFree`) and event (`STOCK_WITHDRAWAL_APPLY`) paths and
   assert the sleeve/lot choice (and realized gain) actually changes under TAX_COST/HIFO.
-  Primitive-level policies are covered by `holdings-selection.test.mjs`. **3564 unit + 870 viz green.**
+  Primitive-level policies are covered by `holdings-selection.test.mjs`.
+
+**Phase 3 (Lever C — rebalance coupling), OQ1 resolved via option (a):**
+- `RebalanceToTargetReducer` now **stamps `account.targetComposition`** (the per-account target
+  fraction map it already computes) into state **every period** — even when nothing drifts —
+  via copy-on-write, so the drawdown sees a fresh target between rebalances. Confirmed firing in
+  a full run (the taxable brokerage stamps `{EQUITY:1.0}` under LOCATED). The stamp is inert
+  unless coupling is on, and the reducer is absent by default (`behavioralStrategies=[]`), so the
+  golden is untouched.
+- New param `drawdownRebalanceWeight` (w_mix, default 0 = off), projected to `state`, opt axis
+  added, gated on `behavioralStrategies includes TARGET_ALLOCATION`. `resolveDrawdownSelection`
+  carries it; `withRebalanceCoupling(selection, account)` (in `holdings-selection.js`) builds a
+  per-account `sleeveScore = taxRankNorm(class) − w_mix·(actualFrac − targetFrac)` — **note the
+  sign is `−`, not the doc §4-C `+`**: ascending sort sells first, so the over-weight sleeve must
+  score *lower*. Applied at all three consume sites; returns the selection unchanged when coupling
+  is off / no target / empty account ⇒ **design-61-off accounts fall back to Lever A** transparently.
+- **Lever-C benefit is scenario-shaped.** Under LOCATED, a taxable account concentrates to one
+  sleeve, so there's no mix to correct there (w=0≡w=1); the payoff needs genuinely mixed-sleeve
+  taxable accounts that get drawn — staged directly in the integration tests (stamp fires, a
+  coupled draw sells the over-weight EQUITY toward target, w=0 falls back to blind FIFO).
+
+**3572 unit + 870 viz green.** Remaining: Phase 4 MPC (`DRAWDOWN_SLEEVE` cockpit + the two/three
+new state fields in `FORWARD_DRAWDOWN_STATE_FIELDS`).
 
 ---
 

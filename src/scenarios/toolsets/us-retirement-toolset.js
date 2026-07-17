@@ -447,6 +447,8 @@ export const US_RETIREMENT = {
       drawdownLotStrategy:
         LOT_STRATEGIES.includes(p.drawdownLotStrategy) ? p.drawdownLotStrategy : 'FIFO',
       drawdownSleeveWeights: sleeveWeightsFromParams(p),
+      // Lever C (design 65 §4-C) rebalance-coupling weight; 0 = off (byte-identical).
+      drawdownRebalanceWeight: Number.isFinite(p.drawdownRebalanceWeight) ? p.drawdownRebalanceWeight : 0,
     };
 
     // Account state entries + initial metrics snapshot so the chart shows

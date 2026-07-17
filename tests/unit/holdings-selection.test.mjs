@@ -14,7 +14,8 @@ import assert   from 'node:assert/strict';
 import { Holding }    from '../../src/finance/holdings/holding.js';
 import { ALLOCATION } from '../../src/finance/holdings/allocation.js';
 import { consumeHoldings, consumeHoldingsFifo } from '../../src/finance/holdings/holdings-fifo.js';
-import { SLEEVE_ORDER, LOT_STRATEGY, buildHoldingsComparator } from '../../src/finance/holdings/holdings-selection.js';
+import { SLEEVE_ORDER, LOT_STRATEGY, buildHoldingsComparator,
+         resolveDrawdownSelection, withRebalanceCoupling } from '../../src/finance/holdings/holdings-selection.js';
 
 const RATE = 'EQUITY_US';
 const D    = (y, m = 0, d = 1) => new Date(Date.UTC(y, m, d));
@@ -203,4 +204,63 @@ test('buildHoldingsComparator(null) is pure purchaseDate ascending', () => {
   const b = holding({ id: 'b', mv: 1, basis: 1, date: D(2020) });
   assert.ok(cmp(a, b) < 0);
   assert.ok(cmp(b, a) > 0);
+});
+
+// ─── resolveDrawdownSelection — null short-circuit + rebalance flag ────────────
+
+test('resolveDrawdownSelection: FIFO/FIFO with no coupling ⇒ null (byte-identical)', () => {
+  assert.equal(resolveDrawdownSelection({ sleeveOrderMode: 'FIFO', lotStrategy: 'FIFO' }), null);
+  assert.equal(resolveDrawdownSelection({}), null);
+});
+
+test('resolveDrawdownSelection: coupling weight forces a non-null policy even under FIFO', () => {
+  const sel = resolveDrawdownSelection({ sleeveOrderMode: 'FIFO', lotStrategy: 'FIFO', rebalanceWeight: 1 });
+  assert.ok(sel);
+  assert.equal(sel.rebalanceWeight, 1);
+  assert.equal(sel.lotStrategy, 'FIFO');
+});
+
+// ─── Lever C — withRebalanceCoupling ──────────────────────────────────────────
+
+/** An account 70/30 EQUITY/BOND against a 60/40 target ⇒ EQUITY is over-weight. */
+function overweightEquityAccount() {
+  return {
+    targetComposition: { EQUITY: 0.6, BOND: 0.4 },
+    holdings: [
+      holding({ id: 'eq',   mv: 7000, basis: 3000, date: D(2015), alloc: ALLOCATION.EQUITY }),
+      holding({ id: 'bond', mv: 3000, basis: 2900, date: D(2018), alloc: ALLOCATION.BOND }),
+    ],
+  };
+}
+
+test('withRebalanceCoupling: no-op when coupling off / no target / empty', () => {
+  const acct = overweightEquityAccount();
+  const base = resolveDrawdownSelection({ sleeveOrderMode: 'TAX_COST', lotStrategy: 'FIFO' }); // no rebalanceWeight
+  assert.equal(withRebalanceCoupling(base, acct), base);            // coupling off ⇒ unchanged
+  const coupled = resolveDrawdownSelection({ rebalanceWeight: 1 });
+  assert.equal(withRebalanceCoupling(coupled, { holdings: [] }), coupled);          // no target ⇒ unchanged
+  assert.equal(withRebalanceCoupling(coupled, { targetComposition: {}, holdings: [] }), coupled);
+  assert.equal(withRebalanceCoupling(null, acct), null);
+});
+
+test('withRebalanceCoupling: over-weight sleeve is sold first (score lower)', () => {
+  const acct = overweightEquityAccount();
+  const sel  = withRebalanceCoupling(resolveDrawdownSelection({ rebalanceWeight: 1 }), acct);
+  assert.equal(typeof sel.sleeveScore, 'function');
+  // EQUITY over-weight (+0.1) ⇒ lower score; BOND under-weight (−0.1) ⇒ higher.
+  assert.ok(sel.sleeveScore(ALLOCATION.EQUITY) < sel.sleeveScore(ALLOCATION.BOND));
+  // Consume 1000: it drains the over-weight EQUITY sleeve, leaving BOND intact.
+  const r = consumeHoldings(acct.holdings, 1000, { selection: sel });
+  assert.equal(r.newHoldings.find(h => h.id === 'bond').marketValue, 3000);
+  assert.equal(r.newHoldings.find(h => h.id === 'eq').marketValue, 6000);
+});
+
+test('withRebalanceCoupling: selling the over-weight sleeve moves the mix toward target', () => {
+  const acct = overweightEquityAccount(); // 7000/3000 = 70/30
+  const sel  = withRebalanceCoupling(resolveDrawdownSelection({ rebalanceWeight: 1 }), acct);
+  const r = consumeHoldings(acct.holdings, 1000, { selection: sel });
+  const eq   = r.newHoldings.find(h => h.id === 'eq').marketValue;
+  const bond = r.newHoldings.find(h => h.id === 'bond').marketValue;
+  const eqFrac = eq / (eq + bond);
+  assert.ok(eqFrac < 0.70, `equity fraction ${eqFrac} should fall toward the 0.60 target`);
 });

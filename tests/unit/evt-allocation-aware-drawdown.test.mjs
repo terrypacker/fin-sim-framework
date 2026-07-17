@@ -31,6 +31,7 @@ import { EventBus }            from '../../src/simulation-framework/event-bus.js
 import { Graph }               from '../../src/graph/graph.js';
 import { GraphQueryApi }       from '../../src/graph/graph-query-api.js';
 import { StockWithdrawalApplyReducer } from '../../src/finance/account-rules/us/us-brokerage-classes.js';
+import { RebalanceToTargetReducer, ALLOCATION_LOCATION } from '../../src/finance/behavioral/rebalance-to-target-reducer.js';
 import { makeAccount, makeServices }   from '../helpers/reducer-fixtures.js';
 
 const D = (y) => new Date(Date.UTC(y, 0, 1));
@@ -130,4 +131,70 @@ test('EVT-65 event path TAX_COST sells the CASH sleeve first → zero realized g
   assert.equal(tax.gain, 0);
   // Equity lot survives whole.
   assert.equal(next.usStockAccount.holdings.find(h => h.id === 'eq').marketValue, 5000);
+});
+
+// ─── Lever C — rebalance coupling (design 65 §4-C) ────────────────────────────
+
+/** A 70/30 EQUITY/BOND US brokerage against a 60/40 portfolio target. */
+function couplingAccounts() {
+  return [{ stateKey: 'usStockAccount', role: ACCOUNT_ROLES.US_STOCK }];
+}
+function couplingState(extra = {}) {
+  const usStockAccount = makeAccount({
+    stateKey: 'usStockAccount', role: ACCOUNT_ROLES.US_STOCK,
+    holdings: [
+      // BOND is the OLDEST lot (so blind FIFO would sell it first), EQUITY newer — this
+      // makes FIFO (sell BOND) and Lever-C (sell over-weight EQUITY) diverge cleanly.
+      { id: 'bond', allocation: ALLOCATION.BOND,   marketValue: 3000, costBasis: 2900, purchaseDate: new Date('2010-01-01') },
+      { id: 'eq',   allocation: ALLOCATION.EQUITY, marketValue: 7000, costBasis: 3000, purchaseDate: new Date('2015-01-01') },
+    ],
+  });
+  return { usSavingsAccount: makeAccount({ stateKey: 'usSavingsAccount', balance: 0 }), usStockAccount, ...extra };
+}
+
+test('EVT-65 Lever C: RebalanceToTargetReducer stamps account.targetComposition every period (even without drift)', () => {
+  const reducer = new RebalanceToTargetReducer({
+    accounts: couplingAccounts(),
+    targetAllocation: { EQUITY: 0.7, BOND: 0.3 },  // exactly the current 70/30 mix ⇒ no drift
+    locationMode: ALLOCATION_LOCATION.PER_ACCOUNT,
+  });
+  const next = reducer.reduce(couplingState(), { type: 'US_PERIOD_ADVANCE' });
+  // No REBALANCE_TO_TARGET_APPLY (in band), but the target is still stamped.
+  assert.ok(!next.next?.some?.(a => a.type === 'REBALANCE_TO_TARGET_APPLY'));
+  assert.deepEqual(next.usStockAccount.targetComposition, { EQUITY: 0.7, BOND: 0.3 });
+});
+
+test('EVT-65 Lever C: a coupled engine draw sells the over-weight EQUITY sleeve toward target', () => {
+  const svc = new AccountService(new Graph(), new GraphQueryApi(new Graph()), new EventBus());
+  const state = couplingState({ personBirthDate: new Date(1970, 0, 1), drawdownRebalanceWeight: 1 });
+  // Design-61 target stamped on the account (as RebalanceToTargetReducer would).
+  state.usStockAccount.targetComposition = { EQUITY: 0.6, BOND: 0.4 };
+  // Move the brokerage into a savings target so replenishSavings draws it.
+  const savings = new CheckingAccount(0, { country: 'US', currency: USD });
+  const broker  = new BrokerageAccount(10_000, { country: 'US', currency: USD, drawdownPriority: 1 });
+  broker.holdings = state.usStockAccount.holdings;
+  broker.targetComposition = { EQUITY: 0.6, BOND: 0.4 };
+  const s2 = { savingsAccount: savings, brokerAccount: broker,
+    personBirthDate: new Date(1970, 0, 1), drawdownRebalanceWeight: 1 };
+  svc.replenishSavings(s2, 'savingsAccount', 1000, new Date(2026, 0, 1));
+  // Over-weight EQUITY is sold; under-weight BOND is preserved.
+  assert.equal(broker.holdings.find(h => h.id === 'bond').marketValue, 3000);
+  assert.equal(broker.holdings.find(h => h.id === 'eq').marketValue, 6000);
+});
+
+test('EVT-65 Lever C off (weight 0) leaves the draw as blind FIFO — oldest EQUITY lot', () => {
+  const svc = new AccountService(new Graph(), new GraphQueryApi(new Graph()), new EventBus());
+  const savings = new CheckingAccount(0, { country: 'US', currency: USD });
+  const broker  = new BrokerageAccount(10_000, { country: 'US', currency: USD, drawdownPriority: 1 });
+  broker.holdings = [
+    new Holding({ id: 'bond', allocation: ALLOCATION.BOND,   marketValue: 3000, costBasis: 2900, purchaseDate: new Date('2010-01-01'), rateKey: 'BOND_US' }),
+    new Holding({ id: 'eq',   allocation: ALLOCATION.EQUITY, marketValue: 7000, costBasis: 3000, purchaseDate: new Date('2015-01-01'), rateKey: 'EQUITY_US' }),
+  ];
+  broker.targetComposition = { EQUITY: 0.6, BOND: 0.4 };
+  const state = { savingsAccount: savings, brokerAccount: broker, personBirthDate: new Date(1970, 0, 1) }; // no rebalance weight
+  svc.replenishSavings(state, 'savingsAccount', 1000, new Date(2026, 0, 1));
+  // FIFO sells the OLDEST lot (2010 bond) regardless of the stamped target — the
+  // opposite of Lever C, which would sell the over-weight equity.
+  assert.equal(broker.holdings.find(h => h.id === 'bond').marketValue, 2000);
+  assert.equal(broker.holdings.find(h => h.id === 'eq').marketValue, 7000);
 });

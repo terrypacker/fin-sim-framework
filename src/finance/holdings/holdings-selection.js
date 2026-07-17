@@ -132,8 +132,9 @@ export function sleeveWeightsFromParams(p) {
  *           sleeveWeights?: Object<string,number>|null }} [fields={}]
  * @returns {{ sleeveOrder?: string[], sleeveWeights?: Object<string,number>, lotStrategy: string }|null}
  */
-export function resolveDrawdownSelection({ sleeveOrderMode = 'FIFO', lotStrategy = 'FIFO', sleeveWeights = null } = {}) {
-  const lot = LOT_STRATEGIES.includes(lotStrategy) ? lotStrategy : 'FIFO';
+export function resolveDrawdownSelection({ sleeveOrderMode = 'FIFO', lotStrategy = 'FIFO', sleeveWeights = null, rebalanceWeight = 0 } = {}) {
+  const lot  = LOT_STRATEGIES.includes(lotStrategy) ? lotStrategy : 'FIFO';
+  const wMix = Number.isFinite(rebalanceWeight) && rebalanceWeight > 0 ? rebalanceWeight : 0;
   let sleeveOrder = null;
   let weights     = null;
   switch (sleeveOrderMode) {
@@ -143,12 +144,68 @@ export function resolveDrawdownSelection({ sleeveOrderMode = 'FIFO', lotStrategy
     case 'FIFO':
     default:                break;
   }
-  // No sleeve bias and plain FIFO lots ⇒ null (identical to the historic FIFO path).
-  if (!sleeveOrder && !weights && lot === 'FIFO') return null;
+  // No sleeve bias, plain FIFO lots, and no rebalance coupling ⇒ null (identical to
+  // the historic FIFO path). Lever C (wMix > 0) forces a non-null policy so the
+  // per-account coupling can engage in withRebalanceCoupling.
+  if (!sleeveOrder && !weights && lot === 'FIFO' && wMix === 0) return null;
   const selection = { lotStrategy: lot };
-  if (sleeveOrder) selection.sleeveOrder   = sleeveOrder;
-  if (weights)     selection.sleeveWeights = weights;
+  if (sleeveOrder) selection.sleeveOrder     = sleeveOrder;
+  if (weights)     selection.sleeveWeights   = weights;
+  if (wMix > 0)    selection.rebalanceWeight = wMix;
   return selection;
+}
+
+/**
+ * Lever C — rebalance coupling (design 65 §4-C). Bias the sleeve order toward the
+ * **over-weight** class (per the account's design-61 `targetComposition`, stamped
+ * into state each period by RebalanceToTargetReducer) so a spending debit *doubles
+ * as* a rebalance — one CGT event instead of a separate drawdown + rebalance.
+ *
+ * Returns `selection` unchanged when coupling is off (`rebalanceWeight` absent/≤0),
+ * the account has no stamped target, or the account is empty — so a design-61-off
+ * account transparently falls back to the Lever-A order.
+ *
+ * The blended per-class score sorts **ascending** (sold first), so the mix term is
+ * SUBTRACTED — an over-weight sleeve (actualFrac − targetFrac > 0) gets a lower score
+ * and is sold first; an under-weight sleeve is pushed later:
+ *
+ *   score(class) = taxRankNorm(class) − wMix · (actualFrac − targetFrac)
+ *
+ * `taxRankNorm` is the base Lever-A sleeve-order index normalized to [0,1] (0 when no
+ * base order, i.e. a FIFO base coupled purely by mix). A class held but not in the
+ * target (targetFrac 0) reads as fully over-weight ⇒ sold first (drops legacy sleeves).
+ *
+ * @param {object|null} selection - a resolveDrawdownSelection result (may be null)
+ * @param {object}      account   - the account being liquidated (reads holdings + targetComposition)
+ */
+export function withRebalanceCoupling(selection, account) {
+  if (!selection || !(selection.rebalanceWeight > 0)) return selection;
+  const target = account?.targetComposition;
+  if (!target || typeof target !== 'object' || !Object.keys(target).length) return selection;
+  const holdings = account?.holdings ?? [];
+  const total = holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0);
+  if (total <= 0) return selection;
+
+  const actual = {};
+  for (const h of holdings) {
+    const a = h?.allocation;
+    if (a) actual[a] = (actual[a] ?? 0) + (h?.marketValue ?? 0);
+  }
+  const order = selection.sleeveOrder;
+  const n     = order?.length ?? 0;
+  const taxRankNorm = (cls) => {
+    if (!order || n === 0) return 0;
+    const i = order.indexOf(cls);
+    if (i === -1) return 1;            // unlisted classes are the most-taxed ⇒ sold last (before mix bias)
+    return n > 1 ? i / (n - 1) : 0;
+  };
+  const wMix = selection.rebalanceWeight;
+  const sleeveScore = (cls) => {
+    const actualFrac = (actual[cls] ?? 0) / total;
+    const targetFrac = target[cls] ?? 0;
+    return taxRankNorm(cls) - wMix * (actualFrac - targetFrac);
+  };
+  return { ...selection, sleeveScore };
 }
 
 /** A lot's basis-to-value ratio (0 = pure gain, ≥1 = at/under water). Guards mv≤0. */
