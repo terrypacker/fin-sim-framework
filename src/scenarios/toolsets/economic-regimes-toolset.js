@@ -19,6 +19,7 @@ import { AddRegimeReducer }               from '../../finance/economic-regimes/a
 import { RemoveRegimeReducer }            from '../../finance/economic-regimes/remove-regime-reducer.js';
 import { RevalueAssetReducer }            from '../../finance/economic-regimes/revalue-asset-reducer.js';
 import { BondPriceAdjustReducer }         from '../../finance/economic-regimes/bond-price-adjust-reducer.js';
+import { BondMaturityReducer }            from '../../finance/economic-regimes/bond-maturity-reducer.js';
 import { EconomicShockHandler }           from '../../finance/economic-regimes/economic-shock-handler.js';
 import { EconomicRecoveryTickHandler }    from '../../finance/economic-regimes/economic-recovery-tick-handler.js';
 import { SHOCK_LIBRARY, SHOCK_PRESET_OPTIONS } from '../../finance/economic-shocks/shock-library.js';
@@ -330,7 +331,7 @@ export const ECONOMIC_REGIMES = {
 
   types: {
     handlers: [EconomicShockHandler, EconomicRecoveryTickHandler],
-    reducers: [RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, BondPriceAdjustReducer],
+    reducers: [RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, BondPriceAdjustReducer, BondMaturityReducer],
     actions: [
       { type: 'ADD_REGIME_APPLY',    fields: { regime: ValueType.any() } },
       { type: 'REMOVE_REGIME_APPLY', fields: { regimeId: ValueType.text() } },
@@ -527,6 +528,7 @@ export const ECONOMIC_REGIMES = {
       new RemoveRegimeReducer(),
       new RevalueAssetReducer(),
       new BondPriceAdjustReducer(),
+      new BondMaturityReducer(),
       ...behavioralReducers,
     ];
   },

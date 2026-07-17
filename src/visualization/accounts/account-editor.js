@@ -289,6 +289,8 @@ export class AccountEditor extends BaseComponent {
           taxExemption:   'none',
           issuingState:   null,
           purchaseDate:   null,
+          maturityDate:   null,   // design 66 §G4: null ⇒ perpetual bond fund
+          faceValue:      null,
         });
         this._refreshHoldingsTbody();
         this._syncBalance(this._rootEl);
@@ -342,8 +344,19 @@ export class AccountEditor extends BaseComponent {
       const incomeCell = incomeField
         ? `<td><input class="h-input h-num" type="number" step="0.001" data-f="${incomeField}" value="${incomeVal}" title="${incomeTitle}" placeholder="${incomeTitle}"/></td>`
         : '<td class="h-cell-na"></td>';
+      // Duration + (design 66 §G4) individual-bond terms. A `maturityDate` promotes
+      // the sleeve from a perpetual bond *fund* to an *individual bond*: it pulls to
+      // par over its life (duration decays, rate-driven markdowns recover) and is
+      // redeemed at `faceValue` when it matures. Empty maturity ⇒ fund (the default).
+      const maturityVal = h.maturityDate
+        ? (h.maturityDate instanceof Date ? h.maturityDate.toISOString().slice(0, 10) : String(h.maturityDate).slice(0, 10))
+        : '';
       const durationCell = showDuration
-        ? `<td><input class="h-input h-num" type="number" step="0.1" data-f="duration" value="${h.duration ?? ''}" title="Modified duration (years)" placeholder="Duration"/></td>`
+        ? `<td class="h-cell-bondterms">`
+            + `<input class="h-input h-num" type="number" step="0.1" data-f="duration" value="${h.duration ?? ''}" title="Modified duration (years)" placeholder="Duration"/>`
+            + `<input class="h-input h-maturity" type="date" data-f="maturityDate" value="${maturityVal}" title="Maturity date — set to model an individual bond (pulls to par, redeems at maturity); empty ⇒ a perpetual bond fund" style="margin-left:4px"/>`
+            + `<input class="h-input h-num h-facevalue" type="number" data-f="faceValue" value="${h.faceValue ?? ''}" title="Par / face value redeemed at maturity" placeholder="Face" style="width:5em;margin-left:4px"/>`
+            + `</td>`
         : '<td class="h-cell-na"></td>';
       // Tax treatment (design 66 §G2, generalizing the design-59 Treasury flag):
       // BOND holdings only. Selects how the coupon is exempted —
@@ -384,7 +397,7 @@ export class AccountEditor extends BaseComponent {
 
       // Nullable per-holding number fields: an empty input means "unset" (fall back
       // to the account/regime default), not 0.
-      const NULLABLE_NUM = new Set(['dividendYield', 'couponRate', 'duration']);
+      const NULLABLE_NUM = new Set(['dividendYield', 'couponRate', 'duration', 'faceValue']);
 
       // Wire all inputs
       tr.querySelectorAll('[data-f]').forEach(input => {
@@ -424,6 +437,14 @@ export class AccountEditor extends BaseComponent {
             // Store a normalized 2-letter code; empty ⇒ null (out-of-state).
             const v = input.value.trim().toUpperCase();
             this._holdings[i].issuingState = v || null;
+          } else if (field === 'maturityDate') {
+            // design 66 §G4: an empty date ⇒ perpetual fund; a date ⇒ individual bond.
+            this._holdings[i].maturityDate = input.value ? new Date(input.value) : null;
+            // Convenience: default face value to par (market value) when first set.
+            if (input.value && this._holdings[i].faceValue == null) {
+              this._holdings[i].faceValue = Number(this._holdings[i].marketValue) || 0;
+            }
+            this._refreshHoldingsTbody();
           } else if (isNum) {
             if (NULLABLE_NUM.has(field)) {
               this._holdings[i][field] = input.value === '' ? null : Number(input.value);

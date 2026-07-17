@@ -101,6 +101,7 @@ import { AddRegimeReducer }              from '../finance/economic-regimes/add-r
 import { RemoveRegimeReducer }           from '../finance/economic-regimes/remove-regime-reducer.js';
 import { RevalueAssetReducer }           from '../finance/economic-regimes/revalue-asset-reducer.js';
 import { BondPriceAdjustReducer }        from '../finance/economic-regimes/bond-price-adjust-reducer.js';
+import { BondMaturityReducer }           from '../finance/economic-regimes/bond-maturity-reducer.js';
 import { AssetAppreciationHandler, AssetAppreciateReducer } from '../finance/handlers/asset-appreciation-handler.js';
 
 // ─── Tax infrastructure ─────────────────────────────────────────────────────
@@ -305,7 +306,7 @@ const _ALL_CLASSES = [
   // Economic regime handlers and reducers
   EconomicShockHandler, EconomicRecoveryTickHandler,
   RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer,
-  BondPriceAdjustReducer,
+  BondPriceAdjustReducer, BondMaturityReducer,
   // Asset appreciation (design 28)
   AssetAppreciationHandler, AssetAppreciateReducer,
 ];

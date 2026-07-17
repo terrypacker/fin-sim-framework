@@ -1380,6 +1380,8 @@ const STOCK_BOND_FRACTION    = 0.40;
 /** Coupon + duration for the default bond sleeves: matches the fixed-income rate / 5y modified duration. */
 const DEFAULT_BOND_COUPON    = 0.04;
 const DEFAULT_BOND_DURATION  = 5;
+/** Maturity year for the default brokerage's individual Treasury bond (design 66 §G4). */
+const DEFAULT_BOND_MATURITY_YEAR = 2035;
 
 /**
  * Build the seed holdings for usStockAccount (design 66 §G3): a 60/40 equity/bond book.
@@ -1397,6 +1399,13 @@ const DEFAULT_BOND_DURATION  = 5;
  * issuingState 'CA'). Being in a TAXABLE account, all three exercise the design-59/66
  * BOND_COUPON_TAX splits. Bond basis = market value (§5.3.4); a fixed contractual
  * couponRate is stamped (these are declared holdings, not the design-61 establish path).
+ *
+ * The Treasury sleeve is an *individual bond* (design 66 §G4): it carries a
+ * `maturityDate` (mid-sim) + `faceValue` = its par book, so it pulls to par over its
+ * life (its duration decays and any rate-driven markdown recovers) and is redeemed at
+ * par to cash by BondMaturityReducer when it matures — exercising the whole maturity
+ * path in the golden. The corporate + muni sleeves stay perpetual *funds*
+ * (maturityDate null), so both identities are represented.
  */
 function _stockHoldings(p) {
   const ratio   = Math.min(1, Math.max(0, p.stockSplitRatio ?? 0.60));
@@ -1409,11 +1418,11 @@ function _stockHoldings(p) {
   const treasuryMv = +((bond * 0.40).toFixed(2));
   const muniMv     = +((bond * 0.25).toFixed(2));
   const corpMv     = +((bond - treasuryMv - muniMv).toFixed(2));
-  const bondSleeve = (id, label, mv, taxExemption, issuingState = null) => new Holding({
+  const bondSleeve = (id, label, mv, taxExemption, issuingState = null, extra = {}) => new Holding({
     id, label, allocation: ALLOCATION.BOND, rateKey: RATE_KEYS.FIXED_INCOME_US,
     marketValue: mv, costBasis: mv,                    // bond basis = market (§5.3.4)
     couponRate: DEFAULT_BOND_COUPON, duration: DEFAULT_BOND_DURATION,
-    taxExemption, issuingState,
+    taxExemption, issuingState, ...extra,
   });
   return [
     new Holding({
@@ -1432,7 +1441,11 @@ function _stockHoldings(p) {
       marketValue: intlMv,
       costBasis:   p.stockBasisIntl ?? 25_000,
     }),
-    bondSleeve('h-us-treasury', 'US Treasury',   treasuryMv, 'state'),
+    // Individual bond: par faceValue, matures 1 Jan 2035 → redeemed to cash mid-sim.
+    bondSleeve('h-us-treasury', 'US Treasury', treasuryMv, 'state', null, {
+      maturityDate: new Date(Date.UTC(DEFAULT_BOND_MATURITY_YEAR, 0, 1)),
+      faceValue:    treasuryMv,
+    }),
     bondSleeve('h-us-corp-bond', 'Corporate Bond', corpMv,   'none'),
     bondSleeve('h-ca-muni',     'CA Municipal',   muniMv,    'federal', 'CA'),
   ];

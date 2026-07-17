@@ -76,6 +76,7 @@ import { isDrawdownAccessible, computeNetLiquidity, deriveNetLiquidity } from '.
 import { computeNetWorth, deriveNetWorth } from './finance/derived-metrics/net-worth.js';
 import { AddRegimeReducer } from './finance/economic-regimes/add-regime-reducer.js';
 import { BondPriceAdjustReducer } from './finance/economic-regimes/bond-price-adjust-reducer.js';
+import { BondMaturityReducer } from './finance/economic-regimes/bond-maturity-reducer.js';
 import { EconomicRecoveryTickHandler } from './finance/economic-regimes/economic-recovery-tick-handler.js';
 import { EconomicShockHandler } from './finance/economic-regimes/economic-shock-handler.js';
 import { PrimeRelinkReducer } from './finance/economic-regimes/prime-relink-reducer.js';
@@ -680,6 +681,7 @@ export const Finance = {
   deriveNetWorth,
   AddRegimeReducer,
   BondPriceAdjustReducer,
+  BondMaturityReducer,
   EconomicRecoveryTickHandler,
   EconomicShockHandler,
   PrimeRelinkReducer,

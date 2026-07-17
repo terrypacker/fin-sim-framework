@@ -110,6 +110,8 @@ export const COVERED = [
 
   // F/G — economic regimes + FX (reducer-postconditions-regimes-fx.test.mjs)
   'RemoveRegimeReducer', 'RegimeApplyReducer', 'BondPriceAdjustReducer', 'FxRefreshReducer',
+  // Design 66 §G4 — individual-bond maturity/redemption (bond-maturity.test.mjs)
+  'BondMaturityReducer',
   // Time-varying Prime → linked cash (design 56 §5 Phase 2b) — evt-prime-timevarying.test.mjs
   'PrimeRelinkReducer',
   // Time-varying FX (design 47) — evt-fx-process.test.mjs

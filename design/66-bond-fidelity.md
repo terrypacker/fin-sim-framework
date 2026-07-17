@@ -1,6 +1,6 @@
 # 66 — Bond fidelity: from a bond-fund proxy to first-class fixed income
 
-**Status**: **PHASES 1–2 IMPLEMENTED** (2026-07-16); Phases 3–4 PROPOSED. Scope:
+**Status**: **PHASES 1–3 IMPLEMENTED** (2026-07-16); Phase 4 PROPOSED. Scope:
 catalog the gaps between how bonds behave in the real world and what the simulation
 models today, and lay out a phased plan to make `BOND` holdings a realistic,
 first-class asset now that the design-61 allocation lever routinely establishes
@@ -46,6 +46,35 @@ golden (default scenario has no bonds, so no re-baseline). Delivered:
   tests re-golded (`holdings-invariant` 2→5 holdings, `accounting-integrity` mixed-book
   equity-sleeve growth). Verified e2e: brokerage coupon 2400 → fed 1800 / state 1440;
   401(k) deferred sleeve 4800. 3521 unit + 866 viz green (no viz snapshot churn).
+
+**Phase 3 (G4 maturity & pull-to-par) — DONE.** The §3 fund-vs-individual identity
+decision made concrete: a nullable `maturityDate` promotes a `BOND` sleeve from a
+perpetual *fund* to an *individual bond*. Delivered:
+- `Holding.maturityDate` / `faceValue` / `rollAtMaturity` fields (+ toJSON/fromJSON,
+  string-or-Date tolerant serialization). `maturityDate == null` ⇒ fund (unchanged
+  perpetual behavior).
+- `BondPriceAdjustReducer` extended (both effects individual-only, funds untouched):
+  (1) **duration decay** — effective duration = `min(staticDuration, yearsToMaturity)`,
+  so a near-maturity bond is barely rate-sensitive; (2) **pull-to-par convergence** —
+  independent of rates, the price amortizes toward `faceValue` over remaining life
+  (`frac = Δt/(ttm+Δt)`), so a rate-driven markdown fully recovers by maturity. Reads
+  the as-of date from `state.currentPeriods[cc].startMs`; maintains a new
+  `state.priorMarkMs`.
+- New `BondMaturityReducer` (PRE_PROCESS + 3, after the price mark) scans ALL accounts
+  and, on the first period at/after `maturityDate`: redeems at par to a CASH holding
+  (return of principal — par bonds have basis = face, so no CGT; premium/discount is
+  G9), or, when `rollAtMaturity`, rolls into a fresh same-term par bond re-issued at
+  the current yield (`effectiveInterestRates[rateKey]`, the G1 lock-in). Registered in
+  `economic-regimes-toolset`, `index.js`, the serializer, and the coverage manifest.
+- **Golden re-baseline (small, deliberate):** the default brokerage Treasury sleeve is
+  now an individual bond (matures 2035-01-01, par faceValue), so the maturity path runs
+  in the golden — it redeems to cash mid-sim. Ending net worth −0.03% (11,584,539 →
+  11,581,436), lifetime tax −0.08% (1,128,113 → 1,127,223); both inside the ±1% band
+  but re-pinned. Corporate + muni sleeves stay funds (both identities represented).
+- UI: BOND rows in `account-editor.js` gained a maturity-date + face-value input
+  (setting a maturity defaults faceValue to par); empty ⇒ fund.
+- Tests: `bond-maturity` (decay / pull-to-par / snap / redemption / roll),
+  `holdings-allocation-inputs` §G4 UI, golden re-pin. 3530 unit + 869 viz green.
 
 This is a scoping / decision doc in the spirit of designs 53 (holding rate
 twins), 59 (Treasury state exemption), 60 (cash-sleeve yield) and 61 (allocation

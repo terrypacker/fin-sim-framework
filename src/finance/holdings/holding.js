@@ -87,6 +87,26 @@ export class Holding {
    *                                                  only when this matches the resident's state; null ⇒ treated as
    *                                                  out-of-state (state-taxable). Ignored for other taxExemption
    *                                                  values / non-BOND allocations (design 66 §G2).
+   * @param {Date|null}   [opts.maturityDate=null]  - BOND holdings only: the redemption date (design 66 §G4 / §3
+   *                                                  identity decision). null ⇒ the sleeve is a bond *fund* — perpetual,
+   *                                                  static `duration`, never matures (the back-compatible default).
+   *                                                  Non-null ⇒ an *individual bond*: its effective duration decays to
+   *                                                  0 as the date approaches (BondPriceAdjustReducer) and its price
+   *                                                  pulls to `faceValue` (recovering any rate-driven markdown); on the
+   *                                                  first period-advance at/after this date it is redeemed at par to
+   *                                                  cash by BondMaturityReducer. Ignored for non-BOND allocations.
+   * @param {number|null} [opts.faceValue=null]     - BOND holdings only: the par value redeemed at `maturityDate`. For
+   *                                                  a par bond (the Phase-3 scope) this equals the purchase
+   *                                                  marketValue/costBasis, so redemption is a return of principal with
+   *                                                  no realized gain (premium/discount amortization is design 66 §G9,
+   *                                                  out of scope). null on an individual bond ⇒ redeem at the
+   *                                                  then-current marketValue. Ignored when `maturityDate` is null.
+   * @param {boolean}     [opts.rollAtMaturity=false] - BOND holdings only: when true, an individual bond does NOT
+   *                                                  redeem to cash at maturity but ROLLS into a fresh par bond of the
+   *                                                  same term, re-issued at the then-current market yield
+   *                                                  (`effectiveInterestRates[rateKey]`, G1 lock-in) — a self-sustaining
+   *                                                  single-rung ladder (design 66 §G4; full ladders are §G8). Ignored
+   *                                                  when `maturityDate` is null.
    */
   constructor({
     id                   = null,
@@ -106,6 +126,9 @@ export class Holding {
     taxLossPartner       = null,
     taxExemption         = 'none',
     issuingState         = null,
+    maturityDate         = null,
+    faceValue            = null,
+    rollAtMaturity       = false,
   } = {}) {
     this.id                   = id;
     this.allocation           = allocation;
@@ -124,6 +147,9 @@ export class Holding {
     this.taxLossPartner       = taxLossPartner;
     this.taxExemption         = taxExemption;
     this.issuingState         = issuingState;
+    this.maturityDate         = maturityDate;
+    this.faceValue            = faceValue;
+    this.rollAtMaturity       = rollAtMaturity;
   }
 
   toJSON() {
@@ -151,6 +177,11 @@ export class Holding {
       taxLossPartner:      this.taxLossPartner,
       taxExemption:        this.taxExemption,
       issuingState:        this.issuingState,
+      maturityDate:        this.maturityDate
+        ? (this.maturityDate instanceof Date ? this.maturityDate.toISOString() : this.maturityDate)
+        : null,
+      faceValue:           this.faceValue,
+      rollAtMaturity:      this.rollAtMaturity,
     };
   }
 
@@ -178,6 +209,10 @@ export class Holding {
       // for a direct Treasury obligation, which maps to the state-exempt bucket.
       taxExemption:  d.taxExemption ?? (d.treasury ? 'state' : 'none'),
       issuingState:  d.issuingState ?? null,
+      // design 66 §G4: maturity/pull-to-par. Absent ⇒ a perpetual bond fund.
+      maturityDate:  d.maturityDate ? new Date(d.maturityDate) : null,
+      faceValue:     d.faceValue ?? null,
+      rollAtMaturity: d.rollAtMaturity ?? false,
     });
   }
 }

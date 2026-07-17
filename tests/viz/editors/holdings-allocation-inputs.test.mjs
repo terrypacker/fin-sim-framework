@@ -56,6 +56,45 @@ describe('holdings editor — allocation-aware inputs', () => {
     expect(cell(root, 'costBasis')).toBeNull();   // hidden for BOND
     expect(cell(root, 'dividendYield')).toBeNull();
     expect(cell(root, 'taxLossPartner')).toBeNull();
+    // design 66 §G4: BOND rows expose maturityDate + faceValue (individual-bond terms).
+    expect(cell(root, 'maturityDate')).not.toBeNull();
+    expect(cell(root, 'faceValue')).not.toBeNull();
+  });
+
+  test('BOND §G4: an existing maturityDate/faceValue populates the inputs; a fund leaves them empty', () => {
+    const indiv = editorForHolding({
+      allocation: 'BOND', maturityDate: new Date(Date.UTC(2035, 0, 1)), faceValue: 50_000,
+    })._rootEl;
+    expect(cell(indiv, 'maturityDate').value).toBe('2035-01-01');
+    expect(cell(indiv, 'faceValue').value).toBe('50000');
+
+    const fund = editorForHolding({ allocation: 'BOND', couponRate: 0.04 })._rootEl;
+    expect(cell(fund, 'maturityDate').value).toBe('');
+    expect(cell(fund, 'faceValue').value).toBe('');
+  });
+
+  test('BOND §G4: setting a maturity date defaults faceValue to par (market value) and records a Date', () => {
+    const editor = editorForHolding({ allocation: 'BOND', marketValue: 40_000 });
+    const root   = editor._rootEl;
+    const mat    = cell(root, 'maturityDate');
+    mat.value = '2040-06-01';
+    mat.dispatchEvent(new window.Event('input'));
+
+    expect(editor._holdings[0].maturityDate).toBeInstanceOf(Date);
+    expect(editor._holdings[0].maturityDate.getTime()).toBe(Date.UTC(2040, 5, 1));
+    expect(editor._holdings[0].faceValue).toBe(40_000);   // defaulted to par
+    // The re-rendered face-value input reflects the defaulted par.
+    expect(cell(editor._rootEl, 'faceValue').value).toBe('40000');
+  });
+
+  test('BOND §G4: clearing the maturity date reverts the sleeve to a perpetual fund', () => {
+    const editor = editorForHolding({
+      allocation: 'BOND', maturityDate: new Date(Date.UTC(2035, 0, 1)), faceValue: 50_000,
+    });
+    const mat = cell(editor._rootEl, 'maturityDate');
+    mat.value = '';
+    mat.dispatchEvent(new window.Event('input'));
+    expect(editor._holdings[0].maturityDate).toBeNull();
   });
 
   test('CASH row: no Cost Basis / Income Rate / Duration / Loss Partner', () => {

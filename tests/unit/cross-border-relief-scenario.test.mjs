@@ -89,8 +89,19 @@ function runDefaultIntlRetirement() {
 // the bonds' ordinary-income coupons are roughly offset by lower equity growth (hence
 // lower eventual CGT). A large downward tax swing would still signal over-relief; a
 // large net-worth swing would signal the bond seeding or coupon path regressed.
-const EXPECTED_LIFETIME_TAX = 1_128_113;
-const EXPECTED_NET_WORTH     = 11_584_539;
+//
+// Design 66 §G4 (individual-bond maturity & pull-to-par): the default brokerage's
+// Treasury sleeve is now an INDIVIDUAL bond (maturityDate 2035-01-01, par faceValue)
+// rather than a perpetual fund. Over its life its price pulls to par (duration decays,
+// rate-driven markdowns recover), and on the 2035 period-advance BondMaturityReducer
+// redeems it at par to a CASH sleeve — which then earns money-market yield and is
+// redeployed by drawdown/rebalance. The corporate + muni sleeves stay funds. Net
+// effect is small: lifetime tax -0.08% (1,128,113 → 1,127,223) and ending net worth
+// -0.03% (11,584,539 → 11,581,436) — both well inside the ±1% band, but re-pinned so
+// the golden guards the maturity path exactly. A large swing would signal the pull-to-
+// par or redemption path regressed.
+const EXPECTED_LIFETIME_TAX = 1_127_223;
+const EXPECTED_NET_WORTH     = 11_581_436;
 const TOL = 0.01;
 
 test('design 52 lock-in: default US→AU retiree lifetime tax reflects real §904 FTC + FITO', () => {
