@@ -284,6 +284,7 @@ export class AccountEditor extends BaseComponent {
           costBasis:      0,
           dividendYield:  null,
           couponRate:     null,
+          couponFrequency: 2,     // design 66 §G10a: semi-annual default
           duration:       null,
           taxLossPartner: null,
           taxExemption:   'none',
@@ -337,6 +338,7 @@ export class AccountEditor extends BaseComponent {
         const roll    = !!lf('roll')?.checked;
         const zero    = !!lf('zeroCoupon')?.checked;
         const tips    = !!lf('inflationLinked')?.checked;
+        const freq    = Number(lf('couponFrequency')?.value) || 2;  // design 66 §G10a
         if (total <= 0) { lf('total')?.focus(); return; }
 
         // Even face split across rungs; the ladder length (roll-to-tail term) is the
@@ -358,6 +360,7 @@ export class AccountEditor extends BaseComponent {
             costBasis:      face,
             dividendYield:  null,
             couponRate:     coupon,
+            couponFrequency: freq,                   // design 66 §G10a
             duration:       +yearsOut.toFixed(2),   // ≈ time-to-maturity at issue
             taxLossPartner: null,
             taxExemption:   te,
@@ -442,12 +445,22 @@ export class AccountEditor extends BaseComponent {
       const tipsChk = alloc === 'BOND'
         ? `<label class="h-flag" title="TIPS / inflation-linked: principal indexes to CPI; the accretion is imputed ordinary income; coupon pays on the adjusted principal (design 66 §G5)" style="margin-left:4px"><input class="h-input h-check" type="checkbox" data-f="inflationLinked"${h.inflationLinked ? ' checked' : ''}/>TIPS</label>`
         : '';
+      // Coupon frequency (design 66 §G10a): how many times/year the coupon pays.
+      // Each firing pays couponRate / frequency; the firings sum to the annual coupon.
+      const freq = h.couponFrequency ?? 2;
+      const freqSel = alloc === 'BOND'
+        ? `<select class="h-input h-coupon-freq" data-f="couponFrequency" title="Coupon frequency — payments per year (design 66 §G10a)" style="width:6.5em;margin-left:4px">`
+            + `<option value="1"${freq === 1 ? ' selected' : ''}>Annual</option>`
+            + `<option value="2"${freq === 2 ? ' selected' : ''}>Semi-ann.</option>`
+            + `<option value="4"${freq === 4 ? ' selected' : ''}>Quarterly</option>`
+            + `</select>`
+        : '';
       const durationCell = showDuration
         ? `<td class="h-cell-bondterms">`
             + `<input class="h-input h-num" type="number" step="0.1" data-f="duration" value="${h.duration ?? ''}" title="Modified duration (years)" placeholder="Duration"/>`
             + `<input class="h-input h-maturity" type="date" data-f="maturityDate" value="${maturityVal}" title="Maturity date — set to model an individual bond (pulls to par, redeems at maturity); empty ⇒ a perpetual bond fund" style="margin-left:4px"/>`
             + `<input class="h-input h-num h-facevalue" type="number" data-f="faceValue" value="${h.faceValue ?? ''}" title="Par / face value redeemed at maturity" placeholder="Face" style="width:5em;margin-left:4px"/>`
-            + zeroChk + tipsChk
+            + zeroChk + tipsChk + freqSel
             + `</td>`
         : '<td class="h-cell-na"></td>';
       // Tax treatment (design 66 §G2, generalizing the design-59 Treasury flag):
@@ -525,6 +538,9 @@ export class AccountEditor extends BaseComponent {
             // input, so re-render the row (design 66 §G2).
             this._holdings[i].taxExemption = input.value;
             this._refreshHoldingsTbody();
+          } else if (field === 'couponFrequency') {
+            // Numeric select (design 66 §G10a): store as a Number, not the string value.
+            this._holdings[i].couponFrequency = Number(input.value);
           } else if (field === 'issuingState') {
             // Store a normalized 2-letter code; empty ⇒ null (out-of-state).
             const v = input.value.trim().toUpperCase();

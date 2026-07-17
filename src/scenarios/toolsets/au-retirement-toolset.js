@@ -519,7 +519,8 @@ export const AU_RETIREMENT = {
     }
 
     // Coupon interest on BOND sleeves of AU equity-served accounts (super/au-stock).
-    // Shares the annual BOND_SLEEVE_COUPON event scheduled by US_RETIREMENT. These
+    // Shares the semi-annual BOND_SLEEVE_COUPON event scheduled by US_RETIREMENT
+    // (design 66 §G10a — the event carries `firingsPerYear`). These
     // accounts run off the equity-growth earnings handler (no BOND return), and had
     // no coupon stream, so a BOND sleeve here (design-61 allocation lever) earned
     // nothing. super coupon is tax-deferred (super environment); au-stock coupon is

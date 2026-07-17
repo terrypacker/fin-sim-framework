@@ -9,6 +9,7 @@
  */
 
 import { Reducer, PRIORITY } from '../../simulation-framework/reducers.js';
+import { mergeCouponReinvestLots } from '../holdings/holdings-earnings.js';
 
 /**
  * Handles BOND_SLEEVE_COUPON_APPLY actions — coupon interest on the BOND sleeve of
@@ -50,7 +51,24 @@ export class BondSleeveCouponApplyReducer extends Reducer {
     const acct = state[key];
     if (!acct || !(amount > 0)) return this.newState(state);
 
-    const base = { ...state, [key]: { ...acct, balance: acct.balance + amount } };
+    // §G10b reinvestment risk: reinvest the coupon into a new-vintage BOND lot at the
+    // prevailing yield (the handler no longer emits per-source reinvest actions). Sync
+    // the balance to Σ marketValue so §4.4 holds. Absent buckets (direct-reduce unit
+    // tests / pre-G10b callers) ⇒ credit the scalar balance only (holdings synced
+    // elsewhere by the handler's HoldingTransactActions).
+    const buckets = action._reinvestBuckets;
+    let nextAcct;
+    if (Array.isArray(buckets) && buckets.length) {
+      const holdings = mergeCouponReinvestLots(acct.holdings ?? [], {
+        stateKey: key, buckets, prevailingRate: action._prevailingRate,
+        year: action._reinvestYear, purchaseMs: action._reinvestPurchaseMs,
+      });
+      const balance = +holdings.reduce((s, h) => s + (h?.marketValue ?? 0), 0).toFixed(2);
+      nextAcct = { ...acct, holdings, balance };
+    } else {
+      nextAcct = { ...acct, balance: acct.balance + amount };
+    }
+    const base = { ...state, [key]: nextAcct };
 
     if (taxMode === 'deferred') {
       // 401k / IRA / Roth / super — no immediate tax; taxed (or not, for Roth) on withdrawal.

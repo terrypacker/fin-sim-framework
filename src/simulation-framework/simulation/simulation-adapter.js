@@ -25,12 +25,27 @@ export const intervalFns = {
   annually:   d => DateUtils.addYears(d, 1),
   'month-end': d => DateUtils.endOfMonth(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))),
   'year-end':  d => DateUtils.endOfYear(DateUtils.addYears(d, 1)),
+  // Semi-annual, anchored to the two half-year ends (Jun 30 / Dec 31). Computed from
+  // the calendar half rather than day-preserving addMonths (which overflows Jun 31 →
+  // Jul 1) so firings land exactly on the period boundary every step. Design 66 §G10a.
+  'semiannual': d => (d.getUTCMonth() <= 5
+    ? new Date(Date.UTC(d.getUTCFullYear(), 11, 31))       // first half  → Dec 31 this year
+    : new Date(Date.UTC(d.getUTCFullYear() + 1, 5, 30))),  // second half → Jun 30 next year
 };
 
 /** Snap the start date to the end of the period for period-end intervals. */
 export const startSnapFns = {
   'month-end': d => DateUtils.endOfMonth(d),
   'year-end':  d => DateUtils.endOfYear(d),
+  // Snap to the next half-year end (Jun 30 or Dec 31) at/after the start. Design 66 §G10a.
+  'semiannual': d => {
+    const y = d.getUTCFullYear();
+    const jun30 = new Date(Date.UTC(y, 5, 30));
+    const dec31 = new Date(Date.UTC(y, 11, 31));
+    if (d <= jun30) return jun30;
+    if (d <= dec31) return dec31;
+    return new Date(Date.UTC(y + 1, 5, 30));
+  },
 };
 
 /**

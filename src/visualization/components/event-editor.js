@@ -19,6 +19,7 @@ export class EventEditor extends BaseNodeEditor {
     this.EVENT_SERIES_TYPES = [
       'monthly',
       'quarterly',
+      'semiannual',   // design 66 §G10a — half-year ends (Jun 30 / Dec 31)
       'annually',
       'month-end',
       'year-end'

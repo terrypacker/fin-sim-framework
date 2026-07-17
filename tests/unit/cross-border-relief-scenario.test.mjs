@@ -100,8 +100,22 @@ function runDefaultIntlRetirement() {
 // -0.03% (11,584,539 → 11,581,436) — both well inside the ±1% band, but re-pinned so
 // the golden guards the maturity path exactly. A large swing would signal the pull-to-
 // par or redemption path regressed.
-const EXPECTED_LIFETIME_TAX = 1_127_223;
-const EXPECTED_NET_WORTH     = 11_581_436;
+//
+// Design 66 §G10a (semi-annual coupons): the annual bond-coupon streams now fire on
+// both half-year ends (Jun 30 / Dec 31), so half of each coupon is paid mid-year and
+// (when reinvested) compounds for the second half. A small UPWARD move: net worth
+// +0.024% (11,581,436 → 11,584,191) and lifetime tax +0.061% (1,127,223 → 1,127,909).
+// Re-pinned so the golden guards the semi-annual split exactly.
+//
+// Design 66 §G10b (reinvestment risk): reinvested bond coupons now buy a new-vintage
+// BOND lot at the *prevailing* FIXED_INCOME yield rather than growing the source bond
+// at its own coupon (14 such lots are created across the run). This is essentially
+// INERT on the default golden — the prevailing yield ≈ the seeded 0.04 coupon and the
+// only reinvesting sleeve (k401) is tax-deferred — so net worth moves $1 (rounding)
+// and lifetime tax is unchanged. The lever bites only when the prevailing rate diverges
+// from the source coupon (a rate-regime shift), which the default scenario doesn't run.
+const EXPECTED_LIFETIME_TAX = 1_127_909;
+const EXPECTED_NET_WORTH     = 11_584_190;
 const TOL = 0.01;
 
 test('design 52 lock-in: default US→AU retiree lifetime tax reflects real §904 FTC + FITO', () => {

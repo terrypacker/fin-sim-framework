@@ -160,6 +160,7 @@ describe('EventEditor', () => {
     ).toEqual([
       'monthly',
       'quarterly',
+      'semiannual',   // design 66 §G10a
       'annually',
       'month-end',
       'year-end',
