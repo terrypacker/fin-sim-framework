@@ -171,6 +171,73 @@
 .holdings-table .h-num { text-align: right; font-variant-numeric: tabular-nums; }
 .holdings-table td.h-actions { width: 28px; text-align: center; padding: 2px; }
 
+/* Disclosure chevron — reveals a holding's allocation-specific detail sub-row. */
+.holdings-table th.h-expand-col,
+.holdings-table td.h-expand-cell {
+  width: 20px;
+  padding: 2px 0 2px 4px;
+  text-align: center;
+}
+.holdings-table .h-expand {
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 3px;
+  border-radius: 3px;
+  transition: transform 120ms ease, color 120ms ease;
+}
+.holdings-table .h-expand:hover { color: var(--text); }
+.holdings-table .h-expand.is-open {
+  transform: rotate(90deg);
+  color: var(--accent-primary, #7c6ff7);
+}
+.holdings-table .h-expand:focus-visible {
+  outline: 2px solid var(--accent-primary, #7c6ff7);
+  outline-offset: 1px;
+}
+
+/* Allocation-specific detail sub-row: a small labeled form under the holding. */
+.holdings-table td.h-detail-gutter { width: 20px; padding: 0; }
+.holdings-table td.h-detail-cell {
+  padding: 8px 8px 10px;
+  background: color-mix(in srgb, var(--accent-primary, #7c6ff7) 6%, transparent);
+}
+.h-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: flex-end;
+}
+.h-detail .h-df {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+}
+.h-detail .h-df-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, var(--text-dim));
+}
+.h-detail .h-input { width: 8em; box-sizing: border-box; }
+.h-detail .h-num { width: 7em; text-align: right; }
+.h-detail .h-input[type="date"] { width: 9.5em; }
+.h-detail select.h-input { width: auto; min-width: 7em; }
+.h-detail .h-df-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text, #e0e0e0);
+  white-space: nowrap;
+  padding-bottom: 4px;   /* align with the labeled controls' baseline */
+}
+.h-detail .h-df-check .h-check { width: auto; margin: 0; }
+
 .node-field {
   display: flex;
   flex-direction: column;

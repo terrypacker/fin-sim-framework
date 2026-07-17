@@ -119,6 +119,11 @@ export class AccountEditor extends BaseComponent {
       };
     });
 
+    // Which holdings' detail sub-rows are expanded (by holding id). Persisted here so
+    // the disclosure state survives the re-renders that field edits trigger. Existing
+    // holdings load collapsed; newly added ones auto-expand (see the "+ Add" handler).
+    this._expanded = new Set();
+
     // Populate fields
     el.querySelector('[data-id="name"]').value    = this._node?.name ?? '';
     el.querySelector('[data-id="balance"]').value = this._node?.balance ?? 0;
@@ -275,8 +280,9 @@ export class AccountEditor extends BaseComponent {
 
     if (addBtn) {
       this.listen(addBtn, 'click', () => {
+        const newId = `h-${Date.now()}`;
         this._holdings.push({
-          id:             `h-${Date.now()}`,
+          id:             newId,
           label:          '',
           allocation:     'EQUITY',
           rateKey:        '',
@@ -295,6 +301,7 @@ export class AccountEditor extends BaseComponent {
           zeroCoupon:      false,  // design 66 §G6
           inflationLinked: false,  // design 66 §G5
         });
+        this._expanded.add(newId);   // open its detail so the fields are visible
         this._refreshHoldingsTbody();
         this._syncBalance(this._rootEl);
       });
@@ -382,15 +389,192 @@ export class AccountEditor extends BaseComponent {
     }
   }
 
+  /**
+   * The holdings table keeps only the columns every allocation shares — Label,
+   * Allocation, Rate Key, Market Value — on one line. Everything allocation-specific
+   * (cost basis, dividend/coupon rate, TLH partner, and the design-66 bond terms)
+   * moves into a per-row detail sub-row that expands under a disclosure chevron, so
+   * the grid no longer carries a stack of N/A cells or a crammed bond column. CASH has
+   * no per-holding detail, so it shows no chevron. Expanded state is tracked by holding
+   * id in `this._expanded` and survives the re-renders that field edits trigger.
+   */
   _refreshHoldingsTbody() {
     const tbody = this._tbodyEl;
     if (!tbody) return;
     tbody.replaceChildren();
 
-    for (let i = 0; i < this._holdings.length; i++) {
-      const h = this._holdings[i];
+    const COL_COUNT = 6; // expand · label · allocation · rateKey · marketValue · delete
 
-      // Build taxLossPartner options from sibling holdings
+    for (let i = 0; i < this._holdings.length; i++) {
+      const h        = this._holdings[i];
+      const alloc    = h.allocation ?? 'EQUITY';
+      const hasDetail = this._holdingHasDetail(alloc);
+      const expanded  = hasDetail && this._expanded.has(h.id);
+
+      const allocOpts = ALLOCATIONS.map(a =>
+        `<option value="${a}"${h.allocation === a ? ' selected' : ''}>${a}</option>`
+      ).join('');
+
+      const expandCell = hasDetail
+        ? `<td class="h-expand-cell"><button class="h-expand${expanded ? ' is-open' : ''}" type="button" aria-expanded="${expanded}" title="${expanded ? 'Hide' : 'Show'} details">▸</button></td>`
+        : '<td class="h-expand-cell"></td>';
+
+      const tr = document.createElement('tr');
+      tr.className = 'h-row';
+      tr.innerHTML = `
+        ${expandCell}
+        <td><input class="h-input" data-f="label" value="${_escape(h.label ?? '')}" placeholder="Label"/></td>
+        <td><select class="h-input" data-f="allocation">${allocOpts}</select></td>
+        <td><select class="h-input" data-f="rateKey">${_rateKeyOptionsHtml(h.rateKey ?? '')}</select></td>
+        <td><input class="h-input h-num" type="number" data-f="marketValue" value="${h.marketValue ?? 0}"/></td>
+        <td class="h-actions"><button class="btn btn-xs btn-warn h-delete" type="button">✕</button></td>
+      `;
+      tbody.appendChild(tr);
+
+      // Allocation-specific fields live in a full-width detail sub-row.
+      let detailTr = null;
+      if (hasDetail) {
+        detailTr = document.createElement('tr');
+        detailTr.className = 'h-detail-row';
+        detailTr.style.display = expanded ? '' : 'none';
+        detailTr.innerHTML = `
+          <td class="h-detail-gutter"></td>
+          <td class="h-detail-cell" colspan="${COL_COUNT - 1}">
+            <div class="h-detail">${this._holdingDetailHtml(h, i)}</div>
+          </td>
+        `;
+        tbody.appendChild(detailTr);
+      }
+
+      this._wireHoldingRow(tr, detailTr, i);
+
+      // Disclosure toggle — flip persisted state + show/hide without a full re-render.
+      const expandBtn = tr.querySelector('.h-expand');
+      if (expandBtn && detailTr) {
+        expandBtn.addEventListener('click', () => {
+          const open = !this._expanded.has(h.id);
+          if (open) this._expanded.add(h.id); else this._expanded.delete(h.id);
+          detailTr.style.display = open ? '' : 'none';
+          expandBtn.classList.toggle('is-open', open);
+          expandBtn.setAttribute('aria-expanded', String(open));
+          expandBtn.title = open ? 'Hide details' : 'Show details';
+        });
+      }
+
+      tr.querySelector('.h-delete').addEventListener('click', () => {
+        // Null out any taxLossPartner references to this holding
+        const removedId = this._holdings[i].id;
+        this._expanded.delete(removedId);
+        this._holdings.splice(i, 1);
+        for (const h2 of this._holdings) {
+          if (h2.taxLossPartner === removedId) h2.taxLossPartner = null;
+        }
+        this._refreshHoldingsTbody();
+        this._syncBalance(this._rootEl);
+      });
+    }
+  }
+
+  /** Does this allocation carry any per-holding detail fields? (CASH does not.) */
+  _holdingHasDetail(alloc) {
+    return alloc === 'EQUITY' || alloc === 'OTHER' || alloc === 'GOLD' || alloc === 'BOND';
+  }
+
+  /**
+   * Build the labeled detail fields for one holding, gated by allocation (design 53
+   * §5.2). Each field is a `<label class="h-df">` with a caption + control so the
+   * sub-row reads as a small form rather than a run of bare inputs.
+   */
+  _holdingDetailHtml(h, i) {
+    const alloc = h.allocation ?? 'EQUITY';
+    // GOLD (design 56 §7): a commodity sleeve — like equity it carries a cost basis
+    // (for the 28% collectibles CGT on disposal) but pays no dividend/coupon and has
+    // no duration; it grows via its GOLD rate key.
+    const showCostBasis = alloc === 'EQUITY' || alloc === 'OTHER' || alloc === 'GOLD'; // BOND: hidden (=MV); CASH: no CGT
+    const showPartner   = alloc === 'EQUITY' || alloc === 'OTHER';   // TLH is equity-oriented
+    const isBond        = alloc === 'BOND';
+    // Periodic income binds dividendYield (EQUITY) or couponRate (BOND); GOLD/OTHER
+    // earn none.
+    const incomeField   = alloc === 'EQUITY' ? 'dividendYield'
+                        : isBond             ? 'couponRate'
+                        : null;
+
+    // A labeled cell: caption above the control.
+    const field = (label, controlHtml, title = '') =>
+      `<label class="h-df"${title ? ` title="${title}"` : ''}><span class="h-df-label">${label}</span>${controlHtml}</label>`;
+
+    const parts = [];
+
+    if (showCostBasis) {
+      parts.push(field('Cost basis',
+        `<input class="h-input h-num" type="number" data-f="costBasis" value="${h.costBasis ?? 0}"/>`));
+    }
+
+    if (incomeField) {
+      const title = incomeField === 'dividendYield' ? 'Dividend yield' : 'Coupon rate';
+      parts.push(field(title,
+        `<input class="h-input h-num" type="number" step="0.001" data-f="${incomeField}" value="${h[incomeField] ?? ''}"/>`));
+    }
+
+    if (isBond) {
+      // Duration + (design 66 §G4) individual-bond terms. A `maturityDate` promotes the
+      // sleeve from a perpetual bond *fund* to an *individual bond*: it pulls to par over
+      // its life (duration decays, rate-driven markdowns recover) and is redeemed at
+      // `faceValue` when it matures. Empty maturity ⇒ fund (the default).
+      const maturityVal = h.maturityDate
+        ? (h.maturityDate instanceof Date ? h.maturityDate.toISOString().slice(0, 10) : String(h.maturityDate).slice(0, 10))
+        : '';
+      parts.push(field('Duration (yr)',
+        `<input class="h-input h-num" type="number" step="0.1" data-f="duration" value="${h.duration ?? ''}"/>`,
+        'Modified duration (years)'));
+      parts.push(field('Maturity',
+        `<input class="h-input" type="date" data-f="maturityDate" value="${maturityVal}"/>`,
+        'Maturity date — set to model an individual bond (pulls to par, redeems at maturity); empty ⇒ a perpetual bond fund'));
+      parts.push(field('Face value',
+        `<input class="h-input h-num" type="number" data-f="faceValue" value="${h.faceValue ?? ''}"/>`,
+        'Par / face value redeemed at maturity'));
+
+      // Tax treatment (design 66 §G2, generalizing the design-59 Treasury flag):
+      //   Taxable (none) | Treasury (state-exempt, 31 U.S.C. § 3124) |
+      //   Municipal (federal-exempt; state-exempt only when the issuing state matches
+      //   residence) | Muni all-state (unconditionally state-exempt).
+      const te = h.taxExemption ?? 'none';
+      parts.push(field('Tax treatment',
+        `<select class="h-input" data-f="taxExemption">`
+          + `<option value="none"${te === 'none' ? ' selected' : ''}>Taxable</option>`
+          + `<option value="state"${te === 'state' ? ' selected' : ''}>Treasury</option>`
+          + `<option value="federal"${te === 'federal' ? ' selected' : ''}>Municipal</option>`
+          + `<option value="both"${te === 'both' ? ' selected' : ''}>Muni (all-state)</option>`
+          + `</select>`,
+        'Bond coupon tax treatment'));
+      // The issuing-state input appears only for a (residence-dependent) Municipal.
+      if (te === 'federal') {
+        parts.push(field('Issuing state',
+          `<input class="h-input" data-f="issuingState" value="${_escape(h.issuingState ?? '')}" maxlength="2" placeholder="ST"/>`,
+          "Issuing state — coupon is state-exempt only when it matches the resident's state"));
+      }
+
+      // Coupon frequency (design 66 §G10a): payments per year; each firing pays
+      // couponRate / frequency and the firings sum to the annual coupon.
+      const freq = h.couponFrequency ?? 2;
+      parts.push(field('Coupon freq',
+        `<select class="h-input" data-f="couponFrequency">`
+          + `<option value="1"${freq === 1 ? ' selected' : ''}>Annual</option>`
+          + `<option value="2"${freq === 2 ? ' selected' : ''}>Semi-ann.</option>`
+          + `<option value="4"${freq === 4 ? ' selected' : ''}>Quarterly</option>`
+          + `</select>`,
+        'Coupon frequency — payments per year (design 66 §G10a)'));
+
+      // Accreting-bond flags (design 66 §G5/§G6): a Zero-coupon/OID bond pays no cash
+      // coupon and accretes to par (annual OID = imputed ordinary income); a TIPS
+      // indexes its principal to CPI (the inflation accretion is imputed "phantom"
+      // income). Both step up basis and are excluded from the fixed-face pull-to-par.
+      parts.push(`<label class="h-df-check" title="Zero-coupon / OID: no cash coupon; price accretes to par; annual OID is imputed ordinary income (design 66 §G6)"><input class="h-input h-check" type="checkbox" data-f="zeroCoupon"${h.zeroCoupon ? ' checked' : ''}/>Zero-coupon</label>`);
+      parts.push(`<label class="h-df-check" title="TIPS / inflation-linked: principal indexes to CPI; the accretion is imputed ordinary income; coupon pays on the adjusted principal (design 66 §G5)"><input class="h-input h-check" type="checkbox" data-f="inflationLinked"${h.inflationLinked ? ' checked' : ''}/>TIPS</label>`);
+    }
+
+    if (showPartner) {
+      // Build taxLossPartner options from sibling holdings.
       const partnerOpts = ['<option value="">— none —</option>',
         ...this._holdings
           .filter((_, j) => j !== i)
@@ -400,112 +584,27 @@ export class AccountEditor extends BaseComponent {
             return `<option value="${_escape(other.id)}"${sel}>${label}</option>`;
           }),
       ].join('');
+      parts.push(field('Loss partner',
+        `<select class="h-input" data-f="taxLossPartner">${partnerOpts}</select>`,
+        'Tax-loss-harvesting substitute'));
+    }
 
-      const allocOpts = ALLOCATIONS.map(a =>
-        `<option value="${a}"${h.allocation === a ? ' selected' : ''}>${a}</option>`
-      ).join('');
+    return parts.join('');
+  }
 
-      const alloc = h.allocation ?? 'EQUITY';
-      // Per-cell gating by allocation (design 53 §5.2). Fields the allocation
-      // doesn't use render an empty cell rather than a stray input.
-      // GOLD (design 56 §7): a commodity sleeve — like equity it carries a cost basis
-      // (for the 28% collectibles CGT on disposal) but pays no dividend/coupon and has
-      // no duration; it grows via its GOLD rate key.
-      const showCostBasis = alloc === 'EQUITY' || alloc === 'OTHER' || alloc === 'GOLD'; // BOND: hidden (=MV); CASH: no CGT
-      const showPartner   = alloc === 'EQUITY' || alloc === 'OTHER';   // TLH is equity-oriented
-      const showDuration  = alloc === 'BOND';                          // mark-to-market sensitivity
-      // The merged "Income Rate" cell binds dividendYield (EQUITY) or couponRate (BOND);
-      // GOLD/CASH/OTHER earn no periodic income, so the cell is N/A.
-      const incomeField   = alloc === 'EQUITY' ? 'dividendYield'
-                          : alloc === 'BOND'   ? 'couponRate'
-                          : null;
-      const incomeVal     = incomeField ? (h[incomeField] ?? '') : '';
-      const incomeTitle   = alloc === 'EQUITY' ? 'Dividend yield' : 'Coupon rate';
+  /**
+   * Wire every `[data-f]` input across a holding's main row and (optional) detail row
+   * back to `this._holdings[i]`. Extracted so the field handlers are shared by both
+   * rows even though the controls now span two `<tr>`s.
+   */
+  _wireHoldingRow(tr, detailTr, i) {
+    // Nullable per-holding number fields: an empty input means "unset" (fall back
+    // to the account/regime default), not 0.
+    const NULLABLE_NUM = new Set(['dividendYield', 'couponRate', 'duration', 'faceValue']);
+    const rows = detailTr ? [tr, detailTr] : [tr];
 
-      const costBasisCell = showCostBasis
-        ? `<td><input class="h-input h-num" type="number" data-f="costBasis" value="${h.costBasis ?? 0}"/></td>`
-        : '<td class="h-cell-na"></td>';
-      const incomeCell = incomeField
-        ? `<td><input class="h-input h-num" type="number" step="0.001" data-f="${incomeField}" value="${incomeVal}" title="${incomeTitle}" placeholder="${incomeTitle}"/></td>`
-        : '<td class="h-cell-na"></td>';
-      // Duration + (design 66 §G4) individual-bond terms. A `maturityDate` promotes
-      // the sleeve from a perpetual bond *fund* to an *individual bond*: it pulls to
-      // par over its life (duration decays, rate-driven markdowns recover) and is
-      // redeemed at `faceValue` when it matures. Empty maturity ⇒ fund (the default).
-      const maturityVal = h.maturityDate
-        ? (h.maturityDate instanceof Date ? h.maturityDate.toISOString().slice(0, 10) : String(h.maturityDate).slice(0, 10))
-        : '';
-      // Accreting-bond flags (design 66 §G5/§G6): a Zero-coupon/OID bond pays no cash
-      // coupon and accretes to par (annual OID = imputed ordinary income); a TIPS
-      // indexes its principal to CPI (the inflation accretion is imputed "phantom"
-      // income). Both step up basis and are excluded from the fixed-face pull-to-par.
-      const zeroChk = alloc === 'BOND'
-        ? `<label class="h-flag" title="Zero-coupon / OID: no cash coupon; price accretes to par; annual OID is imputed ordinary income (design 66 §G6)" style="margin-left:4px"><input class="h-input h-check" type="checkbox" data-f="zeroCoupon"${h.zeroCoupon ? ' checked' : ''}/>Zero</label>`
-        : '';
-      const tipsChk = alloc === 'BOND'
-        ? `<label class="h-flag" title="TIPS / inflation-linked: principal indexes to CPI; the accretion is imputed ordinary income; coupon pays on the adjusted principal (design 66 §G5)" style="margin-left:4px"><input class="h-input h-check" type="checkbox" data-f="inflationLinked"${h.inflationLinked ? ' checked' : ''}/>TIPS</label>`
-        : '';
-      // Coupon frequency (design 66 §G10a): how many times/year the coupon pays.
-      // Each firing pays couponRate / frequency; the firings sum to the annual coupon.
-      const freq = h.couponFrequency ?? 2;
-      const freqSel = alloc === 'BOND'
-        ? `<select class="h-input h-coupon-freq" data-f="couponFrequency" title="Coupon frequency — payments per year (design 66 §G10a)" style="width:6.5em;margin-left:4px">`
-            + `<option value="1"${freq === 1 ? ' selected' : ''}>Annual</option>`
-            + `<option value="2"${freq === 2 ? ' selected' : ''}>Semi-ann.</option>`
-            + `<option value="4"${freq === 4 ? ' selected' : ''}>Quarterly</option>`
-            + `</select>`
-        : '';
-      const durationCell = showDuration
-        ? `<td class="h-cell-bondterms">`
-            + `<input class="h-input h-num" type="number" step="0.1" data-f="duration" value="${h.duration ?? ''}" title="Modified duration (years)" placeholder="Duration"/>`
-            + `<input class="h-input h-maturity" type="date" data-f="maturityDate" value="${maturityVal}" title="Maturity date — set to model an individual bond (pulls to par, redeems at maturity); empty ⇒ a perpetual bond fund" style="margin-left:4px"/>`
-            + `<input class="h-input h-num h-facevalue" type="number" data-f="faceValue" value="${h.faceValue ?? ''}" title="Par / face value redeemed at maturity" placeholder="Face" style="width:5em;margin-left:4px"/>`
-            + zeroChk + tipsChk + freqSel
-            + `</td>`
-        : '<td class="h-cell-na"></td>';
-      // Tax treatment (design 66 §G2, generalizing the design-59 Treasury flag):
-      // BOND holdings only. Selects how the coupon is exempted —
-      //   Taxable (none) | Treasury (state-exempt, 31 U.S.C. § 3124) |
-      //   Municipal (federal-exempt; state-exempt only when the issuing state
-      //   matches residence) | Muni all-state (unconditionally state-exempt).
-      // The issuing-state input appears only for a (residence-dependent) Municipal.
-      const te = h.taxExemption ?? 'none';
-      const showIssuingState = alloc === 'BOND' && te === 'federal';
-      const issuingStateInput = showIssuingState
-        ? `<input class="h-input h-issuing-state" data-f="issuingState" value="${_escape(h.issuingState ?? '')}" maxlength="2" placeholder="ST" title="Issuing state — coupon is state-exempt only when it matches the resident's state" style="width:3.4em;margin-left:4px"/>`
-        : '';
-      const taxCell = alloc === 'BOND'
-        ? `<td class="h-cell-tax"><select class="h-input" data-f="taxExemption" title="Bond coupon tax treatment">`
-            + `<option value="none"${te === 'none' ? ' selected' : ''}>Taxable</option>`
-            + `<option value="state"${te === 'state' ? ' selected' : ''}>Treasury</option>`
-            + `<option value="federal"${te === 'federal' ? ' selected' : ''}>Municipal</option>`
-            + `<option value="both"${te === 'both' ? ' selected' : ''}>Muni (all-state)</option>`
-            + `</select>${issuingStateInput}</td>`
-        : '<td class="h-cell-na"></td>';
-      const partnerCell = showPartner
-        ? `<td><select class="h-input" data-f="taxLossPartner">${partnerOpts}</select></td>`
-        : '<td class="h-cell-na"></td>';
-
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><input class="h-input" data-f="label" value="${_escape(h.label ?? '')}" placeholder="Label"/></td>
-        <td><select class="h-input" data-f="allocation">${allocOpts}</select></td>
-        <td><select class="h-input" data-f="rateKey">${_rateKeyOptionsHtml(h.rateKey ?? '')}</select></td>
-        <td><input class="h-input h-num" type="number" data-f="marketValue" value="${h.marketValue ?? 0}"/></td>
-        ${costBasisCell}
-        ${incomeCell}
-        ${durationCell}
-        ${taxCell}
-        ${partnerCell}
-        <td class="h-actions"><button class="btn btn-xs btn-warn h-delete" type="button">✕</button></td>
-      `;
-
-      // Nullable per-holding number fields: an empty input means "unset" (fall back
-      // to the account/regime default), not 0.
-      const NULLABLE_NUM = new Set(['dividendYield', 'couponRate', 'duration', 'faceValue']);
-
-      // Wire all inputs
-      tr.querySelectorAll('[data-f]').forEach(input => {
+    for (const row of rows) {
+      row.querySelectorAll('[data-f]').forEach(input => {
         const field   = input.dataset.f;
         const isNum   = input.type === 'number';
         const isCheck = input.type === 'checkbox';
@@ -528,6 +627,9 @@ export class AccountEditor extends BaseComponent {
             if (input.value === 'GOLD') {
               this._holdings[i].rateKey = RATE_KEYS.GOLD;
             }
+            // Reveal the new allocation's detail fields immediately (no-op for CASH,
+            // which has no detail row).
+            if (this._holdingHasDetail(input.value)) this._expanded.add(this._holdings[i].id);
             // Re-render so the row shows exactly this allocation's inputs.
             this._refreshHoldingsTbody();
             this._syncBalance(this._rootEl);
@@ -571,19 +673,6 @@ export class AccountEditor extends BaseComponent {
           }
         });
       });
-
-      tr.querySelector('.h-delete').addEventListener('click', () => {
-        // Null out any taxLossPartner references to this holding
-        const removedId = this._holdings[i].id;
-        this._holdings.splice(i, 1);
-        for (const h2 of this._holdings) {
-          if (h2.taxLossPartner === removedId) h2.taxLossPartner = null;
-        }
-        this._refreshHoldingsTbody();
-        this._syncBalance(this._rootEl);
-      });
-
-      tbody.appendChild(tr);
     }
   }
 
