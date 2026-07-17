@@ -78,8 +78,19 @@ function runDefaultIntlRetirement() {
 // front of the run, lifting ending net worth ~+3.4% to ~11,911,160. Lifetime tax
 // stays within the ±1% band (the extra year's tax is small next to the 44-year
 // total). A large swing beyond these would signal the offset regressed.
-const EXPECTED_LIFETIME_TAX = 1_121_674;
-const EXPECTED_NET_WORTH     = 11_911_160;
+//
+// Design 66 §G3 (bond default re-baseline, the ONE deliberate regold): the default
+// brokerage + 401(k) were all-equity, so the entire bond path (coupon streams,
+// duration mark-to-market, Treasury/muni tax splits) was dead in the golden. Both
+// are now 60% equity / 40% bond — the brokerage bond leg is a Treasury/corporate/muni
+// mix (exercising all three BOND_COUPON_TAX treatments), the 401(k) a deferred sleeve.
+// A balanced book compounds slower than 100% equity, so ending net worth falls -2.7%
+// (11,911,160 → 11,584,539). Lifetime tax barely moves (+0.6%, 1,121,674 → 1,128,113):
+// the bonds' ordinary-income coupons are roughly offset by lower equity growth (hence
+// lower eventual CGT). A large downward tax swing would still signal over-relief; a
+// large net-worth swing would signal the bond seeding or coupon path regressed.
+const EXPECTED_LIFETIME_TAX = 1_128_113;
+const EXPECTED_NET_WORTH     = 11_584_539;
 const TOL = 0.01;
 
 test('design 52 lock-in: default US→AU retiree lifetime tax reflects real §904 FTC + FITO', () => {

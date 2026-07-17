@@ -487,10 +487,10 @@ export const INTL_RETIREMENT_DEFAULTS = {
   rothBalance:   80_000,  rothBasis:   60_000,
   iraBalance:   200_000,  iraBasis:   150_000,
   k401Balance:  300_000,  k401Basis:  200_000,
-  stockBalance:    150_000,
-  stockSplitRatio:    0.60,   // fraction of stockBalance → domestic holding
-  stockBasisUS:   108_000,    // domestic cost basis — above market by default, triggers TLH
-  stockBasisIntl:  42_000,    // international cost basis — below market (gain position)
+  stockBalance:    150_000,   // 60% equity / 40% bond (design 66 §G3)
+  stockSplitRatio:    0.60,   // fraction of the EQUITY book → domestic holding
+  stockBasisUS:    65_000,    // domestic cost basis — above market (loss position, triggers TLH)
+  stockBasisIntl:  25_000,    // international cost basis — below market (gain position)
   stockDividendRate:    0.02,
   stockDividendReinvest: false,
   fixedIncomeBalance:   80_000,
@@ -1125,7 +1125,9 @@ export class IntlRetirementScenario extends BaseScenario {
           __type: 'BrokerageAccount',     stateKey: 'usStockAccount',
           name: 'US Stock',               role: ACCOUNT_ROLES.US_STOCK,
           balance: p.stockBalance,
-          contributionBasis: (p.stockBasisUS ?? 0) + (p.stockBasisIntl ?? 0),
+          // Equity bases + the bond leg (basis = market, §5.3.4) — design 66 §G3.
+          contributionBasis: (p.stockBasisUS ?? 0) + (p.stockBasisIntl ?? 0)
+                           + +((p.stockBalance ?? 0) * STOCK_BOND_FRACTION).toFixed(2),
           ownerId: 'primary',             drawdownPriority: 2,
           country: 'US', currency: USD,
           holdings: _stockHoldings(p),
@@ -1143,6 +1145,7 @@ export class IntlRetirementScenario extends BaseScenario {
           balance: p.k401Balance,    contributionBasis: p.k401Basis,
           ownerId: 'primary',             drawdownPriority: 4,
           country: 'US', currency: USD,
+          holdings: _k401Holdings(p),     // 60/40 equity/bond (design 66 §G3)
         },
         {
           __type: 'RothAccount',          stateKey: 'rothAccount',
@@ -1367,21 +1370,51 @@ export class IntlRetirementScenario extends BaseScenario {
  * @param {object} params - Perturbed parameter map.
  */
 /**
- * Build the two-holding seed for usStockAccount.
+ * The default brokerage book is 60% equity / 40% bond (a representative balanced
+ * split, design 66 §G3). The bond leg makes the golden exercise the whole bond
+ * path — coupon income, duration mark-to-market and the Treasury/muni tax splits —
+ * which was previously dead (an all-equity default). Users can re-weight in the UI.
+ */
+const STOCK_EQUITY_FRACTION = 0.60;
+const STOCK_BOND_FRACTION    = 0.40;
+/** Coupon + duration for the default bond sleeves: matches the fixed-income rate / 5y modified duration. */
+const DEFAULT_BOND_COUPON    = 0.04;
+const DEFAULT_BOND_DURATION  = 5;
+
+/**
+ * Build the seed holdings for usStockAccount (design 66 §G3): a 60/40 equity/bond book.
  *
- * Domestic holding (rateKey EQUITY_US): stockSplitRatio × stockBalance, basis = stockBasisUS.
- * International holding (rateKey EQUITY_US): remainder, basis = stockBasisIntl.
+ * Equity (60% of stockBalance): a Domestic + International EQUITY_US pair split by
+ * stockSplitRatio. Both use EQUITY_US so the TLH substitute-selection algorithm
+ * auto-selects the sibling; by default the domestic sleeve is above basis (loss
+ * position) and the international sleeve is below basis (gain position), so TLH
+ * fires immediately when enabled — the bases scale with the (now-smaller) equity
+ * book so that intent is preserved.
  *
- * Both use EQUITY_US so the TLH substitute-selection algorithm auto-selects the
- * other holding (first sibling with the same rateKey). By default the domestic
- * holding is above basis (loss position) and the international holding is below
- * basis (gain position), so TLH fires immediately when enabled.
+ * Bond (40% of stockBalance): a Treasury sleeve (`taxExemption: 'state'` — coupon
+ * federally taxable, US-state-exempt per 31 U.S.C. § 3124), a corporate sleeve
+ * (`'none'` — fully taxable) and a municipal sleeve (`'federal'` — federally exempt,
+ * issuingState 'CA'). Being in a TAXABLE account, all three exercise the design-59/66
+ * BOND_COUPON_TAX splits. Bond basis = market value (§5.3.4); a fixed contractual
+ * couponRate is stamped (these are declared holdings, not the design-61 establish path).
  */
 function _stockHoldings(p) {
   const ratio   = Math.min(1, Math.max(0, p.stockSplitRatio ?? 0.60));
   const total   = p.stockBalance ?? 0;
-  const usMv    = +((total * ratio).toFixed(2));
-  const intlMv  = +((total - usMv).toFixed(2));
+  const equity  = +((total * STOCK_EQUITY_FRACTION).toFixed(2));
+  const bond    = +((total - equity).toFixed(2));
+  const usMv    = +((equity * ratio).toFixed(2));
+  const intlMv  = +((equity - usMv).toFixed(2));
+  // Split the bond leg across the three tax treatments (Σ = bond total).
+  const treasuryMv = +((bond * 0.40).toFixed(2));
+  const muniMv     = +((bond * 0.25).toFixed(2));
+  const corpMv     = +((bond - treasuryMv - muniMv).toFixed(2));
+  const bondSleeve = (id, label, mv, taxExemption, issuingState = null) => new Holding({
+    id, label, allocation: ALLOCATION.BOND, rateKey: RATE_KEYS.FIXED_INCOME_US,
+    marketValue: mv, costBasis: mv,                    // bond basis = market (§5.3.4)
+    couponRate: DEFAULT_BOND_COUPON, duration: DEFAULT_BOND_DURATION,
+    taxExemption, issuingState,
+  });
   return [
     new Holding({
       id:          'h-us-equity',
@@ -1389,7 +1422,7 @@ function _stockHoldings(p) {
       allocation:  ALLOCATION.EQUITY,
       rateKey:     RATE_KEYS.EQUITY_US,
       marketValue: usMv,
-      costBasis:   p.stockBasisUS   ?? 108_000,
+      costBasis:   p.stockBasisUS   ?? 65_000,
     }),
     new Holding({
       id:          'h-intl-equity',
@@ -1397,7 +1430,35 @@ function _stockHoldings(p) {
       allocation:  ALLOCATION.EQUITY,
       rateKey:     RATE_KEYS.EQUITY_US,
       marketValue: intlMv,
-      costBasis:   p.stockBasisIntl ?? 42_000,
+      costBasis:   p.stockBasisIntl ?? 25_000,
+    }),
+    bondSleeve('h-us-treasury', 'US Treasury',   treasuryMv, 'state'),
+    bondSleeve('h-us-corp-bond', 'Corporate Bond', corpMv,   'none'),
+    bondSleeve('h-ca-muni',     'CA Municipal',   muniMv,    'federal', 'CA'),
+  ];
+}
+
+/**
+ * Build the seed holdings for the 401(k) — a 60/40 equity/bond book (design 66 §G3),
+ * the "some in Retirement" half of the default bond seeding. The bond sleeve is inside
+ * a tax-DEFERRED wrapper, so its coupon (via BOND_SLEEVE_COUPON) grows the balance and
+ * is taxed on withdrawal, not currently — hence `taxExemption: 'none'` is moot here. It
+ * exercises the design-61 BondSleeveCouponHandler path that the all-equity default never
+ * hit. Basis = market (deferred wrappers tax on contributions/earnings, not CGT).
+ */
+function _k401Holdings(p) {
+  const total  = p.k401Balance ?? 0;
+  const equity = +((total * STOCK_EQUITY_FRACTION).toFixed(2));
+  const bond   = +((total - equity).toFixed(2));
+  return [
+    new Holding({
+      id: 'h-401k-equity', label: '401(k) Equity', allocation: ALLOCATION.EQUITY,
+      rateKey: RATE_KEYS.EQUITY_US, marketValue: equity, costBasis: equity,
+    }),
+    new Holding({
+      id: 'h-401k-bond', label: '401(k) Bond', allocation: ALLOCATION.BOND,
+      rateKey: RATE_KEYS.FIXED_INCOME_US, marketValue: bond, costBasis: bond,
+      couponRate: DEFAULT_BOND_COUPON, duration: DEFAULT_BOND_DURATION, taxExemption: 'none',
     }),
   ];
 }

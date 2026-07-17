@@ -168,7 +168,7 @@ export const US_RETIREMENT = {
       { type: 'OUT_OF_FUNDS',          fields: { deficit: ValueType.number(), currency: ValueType.text() } },
       { type: 'STOCK_DIVIDEND_CASH_APPLY',              fields: { amount: ValueType.currency('USD'), residency: ValueType.text(), stateKey: ValueType.text() } },
       { type: 'CASH_SLEEVE_INTEREST_APPLY',             fields: { amount: ValueType.currency('USD'), stateKey: ValueType.text(), taxMode: ValueType.text(), residency: ValueType.text() } },
-      { type: 'BOND_SLEEVE_COUPON_APPLY',               fields: { amount: ValueType.currency('USD'), stateTaxableAmount: ValueType.currency('USD'), stateKey: ValueType.text(), taxMode: ValueType.text(), residency: ValueType.text() } },
+      { type: 'BOND_SLEEVE_COUPON_APPLY',               fields: { amount: ValueType.currency('USD'), federalTaxableAmount: ValueType.currency('USD'), stateTaxableAmount: ValueType.currency('USD'), stateKey: ValueType.text(), taxMode: ValueType.text(), residency: ValueType.text() } },
       { type: 'ROTH_CONTRIBUTION_APPLY',                fields: { amount: ValueType.currency('USD') } },
       { type: 'ROTH_WITHDRAWAL_CONTRIB_APPLY',  family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },
       { type: 'ROTH_WITHDRAWAL_EARNINGS_APPLY', family: 'WITHDRAWAL', cc: 'US', fields: { amount: ValueType.currency('USD') } },

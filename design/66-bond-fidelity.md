@@ -1,6 +1,6 @@
 # 66 — Bond fidelity: from a bond-fund proxy to first-class fixed income
 
-**Status**: **PHASE 1 IMPLEMENTED** (2026-07-16); Phases 2–4 PROPOSED. Scope:
+**Status**: **PHASES 1–2 IMPLEMENTED** (2026-07-16); Phases 3–4 PROPOSED. Scope:
 catalog the gaps between how bonds behave in the real world and what the simulation
 models today, and lay out a phased plan to make `BOND` holdings a realistic,
 first-class asset now that the design-61 allocation lever routinely establishes
@@ -26,6 +26,26 @@ golden (default scenario has no bonds, so no re-baseline). Delivered:
 - Tests: `evt-bond-coupon` (federal/state split + muni in/out-of-state + legacy
   back-compat), `evt-target-allocation-taxable` RC-3-G1 (coupon stamp),
   `holdings-roundtrip` (new fields). 3521 unit + 866 viz green; golden unmoved.
+
+**Phase 2 (G3 default bonds + the one golden re-baseline) — DONE.** The default
+`IntlRetirementScenario` brokerage + 401(k) were all-equity, so the entire bond path
+(coupons, duration marks, Treasury/muni tax splits) was dead in the golden. Delivered:
+- Brokerage (`usStockAccount`, taxable) → 60% equity / 40% bond; the bond leg is a
+  Treasury (`state`) + corporate (`none`) + CA municipal (`federal`) mix, exercising all
+  three `BOND_COUPON_TAX` treatments. Equity bases rescaled to the smaller book to keep
+  the domestic-loss / intl-gain TLH intent. `_stockHoldings` in `intl-retirement-scenario.js`.
+- 401(k) (`k401Account`, deferred) → 60/40 equity/bond, one deferred sleeve exercising
+  `BOND_SLEEVE_COUPON`. `_k401Holdings`.
+- Fixed contractual `couponRate` 0.04 / duration 5 on the declared sleeves (declared
+  holdings, not the G1 establish path). Also declared `federalTaxableAmount` on the four
+  bond-coupon action field schemas (a Phase-1 loose end).
+- **Golden re-baseline (deliberate, once):** ending net worth −2.7% (11,911,160 →
+  11,584,539, a balanced book compounds slower than all-equity); lifetime tax +0.6%
+  (1,121,674 → 1,128,113, ordinary-income coupons ≈ offset by lower CGT).
+  `cross-border-relief-scenario` EXPECTED_* updated with the before/after; dependent
+  tests re-golded (`holdings-invariant` 2→5 holdings, `accounting-integrity` mixed-book
+  equity-sleeve growth). Verified e2e: brokerage coupon 2400 → fed 1800 / state 1440;
+  401(k) deferred sleeve 4800. 3521 unit + 866 viz green (no viz snapshot churn).
 
 This is a scoping / decision doc in the spirit of designs 53 (holding rate
 twins), 59 (Treasury state exemption), 60 (cash-sleeve yield) and 61 (allocation
