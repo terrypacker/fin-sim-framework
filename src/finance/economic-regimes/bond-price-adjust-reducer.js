@@ -116,7 +116,13 @@ export class BondPriceAdjustReducer extends Reducer {
         }
 
         // (2) Pull-to-par convergence (individual bond only, price → faceValue).
-        if (ttm != null && h.faceValue != null && dt > 0) {
+        // Accreting bonds (zero-coupon/OID and TIPS, design 66 §G5/§G6) are EXCLUDED:
+        // their principal trajectory is owned by the accretion stream
+        // (BondAccretionHandler) — a zero accretes to par via constant-yield OID, and
+        // a TIPS indexes to CPI (redeeming at the adjusted principal, not the original
+        // face) — so a fixed-face pull-to-par here would double-count / fight it. The
+        // rate-sensitivity mark (1) above still applies to both.
+        if (ttm != null && h.faceValue != null && dt > 0 && !h.zeroCoupon && !h.inflationLinked) {
           const frac  = ttm > 0 ? dt / (ttm + dt) : 1;   // ttm 0 ⇒ snap to par
           const delta = +((h.faceValue - mv) * frac).toFixed(2);
           if (delta !== 0) { mv = Math.max(0, mv + delta); touched = true; }

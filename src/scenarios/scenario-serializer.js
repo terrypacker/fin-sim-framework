@@ -57,6 +57,7 @@ import { DividendScheduledHandler }       from '../finance/handlers/dividend-sch
 import { BondCouponScheduledHandler }     from '../finance/handlers/bond-coupon-handler.js';
 import { CashSleeveInterestHandler }       from '../finance/handlers/cash-sleeve-interest-handler.js';
 import { BondSleeveCouponHandler }         from '../finance/handlers/bond-sleeve-coupon-handler.js';
+import { BondAccretionHandler }            from '../finance/handlers/bond-accretion-handler.js';
 import { ChangeResidencyHandler }         from '../finance/handlers/change-residency-handler.js';
 import { ChangeStateResidencyHandler }    from '../finance/handlers/change-state-residency-handler.js';
 import { OutOfFundsHandler }              from '../finance/handlers/out-of-funds-handler.js';
@@ -78,6 +79,7 @@ import { StockDividendCashApplyReducer }  from '../finance/reducers/stock-divide
 import { BondCouponCashApplyReducer }     from '../finance/reducers/bond-coupon-cash-apply-reducer.js';
 import { CashSleeveInterestApplyReducer } from '../finance/reducers/cash-sleeve-interest-apply-reducer.js';
 import { BondSleeveCouponApplyReducer } from '../finance/reducers/bond-sleeve-coupon-apply-reducer.js';
+import { BondAccretionApplyReducer }    from '../finance/reducers/bond-accretion-apply-reducer.js';
 import { ChangeResidencyApplyReducer }    from '../finance/reducers/change-residency-apply-reducer.js';
 import { ChangeStateResidencyApplyReducer } from '../finance/reducers/change-state-residency-apply-reducer.js';
 import { PersonDiedApplyReducer }        from '../finance/reducers/person-died-apply-reducer.js';
@@ -230,7 +232,7 @@ const _ALL_CLASSES = [
   FixedIncomeInterestHandler, SuperEarningsHandler,
   IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler,
   IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler,
-  DividendScheduledHandler, BondCouponScheduledHandler, CashSleeveInterestHandler, BondSleeveCouponHandler, ChangeResidencyHandler, ChangeStateResidencyHandler, OutOfFundsHandler, MonthlySocialSecurityHandler,
+  DividendScheduledHandler, BondCouponScheduledHandler, CashSleeveInterestHandler, BondSleeveCouponHandler, BondAccretionHandler, ChangeResidencyHandler, ChangeStateResidencyHandler, OutOfFundsHandler, MonthlySocialSecurityHandler,
   MortalityHandler, LateLifeCareHandler,
   UsMortgagePaymentHandler, AuMortgagePaymentHandler,
   UsPeriodAdvanceHandler, AuPeriodAdvanceHandler,
@@ -263,7 +265,7 @@ const _ALL_CLASSES = [
   UsSavingsInterestCreditReducer, ExpenseDebitReducer, ReplenishSavingsReducer,
   IntlTransferApplyReducer, IntlTransferRecordReducer, FxTransferApplyReducer, FxRefreshReducer,
   FxProcessReducer, FxStepApplyReducer,
-  StockDividendCashApplyReducer, BondCouponCashApplyReducer, CashSleeveInterestApplyReducer, BondSleeveCouponApplyReducer, ChangeResidencyApplyReducer, ChangeStateResidencyApplyReducer,
+  StockDividendCashApplyReducer, BondCouponCashApplyReducer, CashSleeveInterestApplyReducer, BondSleeveCouponApplyReducer, BondAccretionApplyReducer, ChangeResidencyApplyReducer, ChangeStateResidencyApplyReducer,
   PersonDiedApplyReducer, SocialSecuritySurvivorApplyReducer, AccountRetitleApplyReducer, ScenarioCompleteReducer,
   LateLifeCareApplyReducer,
   SetOutOfFundsDateReducer, AccumulateDeficitReducer, AccumulateTaxesPaidReducer, AccumulateConsumptionReducer,

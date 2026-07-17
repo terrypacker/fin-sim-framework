@@ -107,6 +107,27 @@ export class Holding {
    *                                                  (`effectiveInterestRates[rateKey]`, G1 lock-in) — a self-sustaining
    *                                                  single-rung ladder (design 66 §G4; full ladders are §G8). Ignored
    *                                                  when `maturityDate` is null.
+   * @param {boolean}     [opts.zeroCoupon=false]    - BOND holdings only (design 66 §G6): a zero-coupon / OID bond. Pays
+   *                                                  NO cash coupon (couponRate is 0/ignored); it is bought at a discount
+   *                                                  to `faceValue` and its price *accretes* to par over its life. The
+   *                                                  annual accretion (constant-yield Original Issue Discount) is imputed
+   *                                                  ordinary income EVEN THOUGH no cash is received (BondAccretionHandler
+   *                                                  → BOND_ACCRETION_APPLY), and it steps up `costBasis` so redemption at
+   *                                                  par realizes no further gain. A zero is always an *individual bond*
+   *                                                  (requires `maturityDate` + `faceValue`); it is EXCLUDED from the
+   *                                                  BondPriceAdjustReducer pull-to-par mark (the accretion owns the price
+   *                                                  trajectory) but still takes the rate-sensitivity mark. Ignored for
+   *                                                  non-BOND allocations / bond funds (no maturityDate).
+   * @param {boolean}     [opts.inflationLinked=false] - BOND holdings only (design 66 §G5): a TIPS / inflation-linked
+   *                                                  bond. Its principal indexes to CPI each year (via
+   *                                                  `state.cpiAccumulator`), so its cash coupon (marketValue × couponRate)
+   *                                                  is paid on the *inflation-adjusted* principal. The annual inflation
+   *                                                  accretion is imputed ordinary income (US "phantom" income;
+   *                                                  BondAccretionHandler) and steps up `costBasis`. Like a zero it is
+   *                                                  EXCLUDED from pull-to-par (its redemption value is the adjusted
+   *                                                  principal, not the original face) and redeems at
+   *                                                  max(adjustedPrincipal, faceValue) — the deflation floor. Ignored for
+   *                                                  non-BOND allocations.
    */
   constructor({
     id                   = null,
@@ -129,6 +150,8 @@ export class Holding {
     maturityDate         = null,
     faceValue            = null,
     rollAtMaturity       = false,
+    zeroCoupon           = false,
+    inflationLinked      = false,
   } = {}) {
     this.id                   = id;
     this.allocation           = allocation;
@@ -150,6 +173,8 @@ export class Holding {
     this.maturityDate         = maturityDate;
     this.faceValue            = faceValue;
     this.rollAtMaturity       = rollAtMaturity;
+    this.zeroCoupon           = zeroCoupon;
+    this.inflationLinked      = inflationLinked;
   }
 
   toJSON() {
@@ -182,6 +207,8 @@ export class Holding {
         : null,
       faceValue:           this.faceValue,
       rollAtMaturity:      this.rollAtMaturity,
+      zeroCoupon:          this.zeroCoupon,
+      inflationLinked:     this.inflationLinked,
     };
   }
 
@@ -213,6 +240,9 @@ export class Holding {
       maturityDate:  d.maturityDate ? new Date(d.maturityDate) : null,
       faceValue:     d.faceValue ?? null,
       rollAtMaturity: d.rollAtMaturity ?? false,
+      // design 66 §G5/§G6: TIPS + zero-coupon/OID. Absent ⇒ a plain (coupon) bond.
+      zeroCoupon:     d.zeroCoupon ?? false,
+      inflationLinked: d.inflationLinked ?? false,
     });
   }
 }

@@ -291,6 +291,8 @@ export class AccountEditor extends BaseComponent {
           purchaseDate:   null,
           maturityDate:   null,   // design 66 §G4: null ⇒ perpetual bond fund
           faceValue:      null,
+          zeroCoupon:      false,  // design 66 §G6
+          inflationLinked: false,  // design 66 §G5
         });
         this._refreshHoldingsTbody();
         this._syncBalance(this._rootEl);
@@ -351,11 +353,22 @@ export class AccountEditor extends BaseComponent {
       const maturityVal = h.maturityDate
         ? (h.maturityDate instanceof Date ? h.maturityDate.toISOString().slice(0, 10) : String(h.maturityDate).slice(0, 10))
         : '';
+      // Accreting-bond flags (design 66 §G5/§G6): a Zero-coupon/OID bond pays no cash
+      // coupon and accretes to par (annual OID = imputed ordinary income); a TIPS
+      // indexes its principal to CPI (the inflation accretion is imputed "phantom"
+      // income). Both step up basis and are excluded from the fixed-face pull-to-par.
+      const zeroChk = alloc === 'BOND'
+        ? `<label class="h-flag" title="Zero-coupon / OID: no cash coupon; price accretes to par; annual OID is imputed ordinary income (design 66 §G6)" style="margin-left:4px"><input class="h-input h-check" type="checkbox" data-f="zeroCoupon"${h.zeroCoupon ? ' checked' : ''}/>Zero</label>`
+        : '';
+      const tipsChk = alloc === 'BOND'
+        ? `<label class="h-flag" title="TIPS / inflation-linked: principal indexes to CPI; the accretion is imputed ordinary income; coupon pays on the adjusted principal (design 66 §G5)" style="margin-left:4px"><input class="h-input h-check" type="checkbox" data-f="inflationLinked"${h.inflationLinked ? ' checked' : ''}/>TIPS</label>`
+        : '';
       const durationCell = showDuration
         ? `<td class="h-cell-bondterms">`
             + `<input class="h-input h-num" type="number" step="0.1" data-f="duration" value="${h.duration ?? ''}" title="Modified duration (years)" placeholder="Duration"/>`
             + `<input class="h-input h-maturity" type="date" data-f="maturityDate" value="${maturityVal}" title="Maturity date — set to model an individual bond (pulls to par, redeems at maturity); empty ⇒ a perpetual bond fund" style="margin-left:4px"/>`
             + `<input class="h-input h-num h-facevalue" type="number" data-f="faceValue" value="${h.faceValue ?? ''}" title="Par / face value redeemed at maturity" placeholder="Face" style="width:5em;margin-left:4px"/>`
+            + zeroChk + tipsChk
             + `</td>`
         : '<td class="h-cell-na"></td>';
       // Tax treatment (design 66 §G2, generalizing the design-59 Treasury flag):

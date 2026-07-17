@@ -91,7 +91,13 @@ function isMatured(h, asOfMs) {
  * proceeds.
  */
 function redeem(h, asOfMs, effectiveRates) {
-  const par = h.faceValue ?? h.marketValue ?? 0;
+  // A TIPS redeems at the greater of its inflation-adjusted principal (its accreted
+  // marketValue) and the original face — the Treasury deflation floor (design 66
+  // §G5). A zero / plain bond redeems at par (faceValue). Falls back to marketValue
+  // when no faceValue is stamped.
+  const par = h.inflationLinked
+    ? Math.max(h.marketValue ?? 0, h.faceValue ?? 0)
+    : (h.faceValue ?? h.marketValue ?? 0);
 
   if (h.rollAtMaturity) {
     const matMs      = h.maturityDate instanceof Date ? h.maturityDate.getTime() : new Date(h.maturityDate).getTime();
@@ -109,6 +115,10 @@ function redeem(h, asOfMs, effectiveRates) {
       couponRate:   newCoupon,           // lock in the current yield at re-issue (G1)
       purchaseDate: new Date(matMs),     // the roll date is the new acquisition date
       maturityDate: new Date(matMs + termMs),
+      // Roll into a fresh plain (cash-coupon) par bond — an accreting instrument is
+      // not re-issued as one (design 66 §G5/§G6).
+      zeroCoupon:      false,
+      inflationLinked: false,
     };
   }
 
@@ -128,5 +138,7 @@ function redeem(h, asOfMs, effectiveRates) {
     rollAtMaturity: false,
     taxExemption:   'none',
     issuingState:   null,
+    zeroCoupon:      false,
+    inflationLinked: false,
   };
 }

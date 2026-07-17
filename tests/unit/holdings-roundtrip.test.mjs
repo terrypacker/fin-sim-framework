@@ -41,6 +41,8 @@ function makeStockAccount() {
         id: 'hldC', allocation: ALLOCATION.BOND, marketValue: 5_000, costBasis: 5_000,
         rateKey: 'FIXED_INCOME_US', couponRate: 0.03, duration: 6,
         taxExemption: 'federal', issuingState: 'CA', label: 'CA muni',   // design 66 §G2
+        // design 66 §G5/§G6: an inflation-linked / zero-coupon flag pair round-trips.
+        inflationLinked: true, zeroCoupon: false,
       }),
     ],
   });
@@ -66,6 +68,8 @@ test('Holdings round-trip: serialize → deserialize preserves multi-sleeve hold
   assert.equal(muni.taxExemption, 'federal', 'muni taxExemption preserved');
   assert.equal(muni.issuingState, 'CA',      'muni issuingState preserved');
   assert.equal(muni.couponRate,   0.03,      'couponRate preserved');
+  assert.equal(muni.inflationLinked, true,   'inflationLinked preserved (design 66 §G5)');
+  assert.equal(muni.zeroCoupon,      false,  'zeroCoupon preserved (design 66 §G6)');
   assert.equal(restored.holdings[0].id, 'hldA');
   assert.equal(restored.holdings[0].allocation, 'EQUITY');
   assert.equal(restored.holdings[0].marketValue, 12_000);

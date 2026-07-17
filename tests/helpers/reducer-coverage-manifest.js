@@ -61,6 +61,8 @@ export const COVERED = [
   'CashSleeveInterestApplyReducer',
   // Bond-sleeve coupon (equity-served non-US_STOCK accounts) covered by evt-bond-sleeve-coupon.test.mjs.
   'BondSleeveCouponApplyReducer',
+  // Non-cash bond accretion (zero-coupon/OID + TIPS) covered by evt-bond-accretion.test.mjs (design 66 §G5/§G6).
+  'BondAccretionApplyReducer',
   'StockContributionApplyReducer', 'StockEarningsApplyReducer', 'StockDividendApplyReducer',
   'StockWithdrawalApplyReducer', 'FixedIncomeContributionApplyReducer',
   'FixedIncomeEarningsApplyReducer', 'FixedIncomeWithdrawalApplyReducer',

@@ -59,6 +59,28 @@ describe('holdings editor — allocation-aware inputs', () => {
     // design 66 §G4: BOND rows expose maturityDate + faceValue (individual-bond terms).
     expect(cell(root, 'maturityDate')).not.toBeNull();
     expect(cell(root, 'faceValue')).not.toBeNull();
+    // design 66 §G5/§G6: BOND rows expose the zero-coupon + TIPS accretion toggles.
+    expect(cell(root, 'zeroCoupon')).not.toBeNull();
+    expect(cell(root, 'inflationLinked')).not.toBeNull();
+  });
+
+  test('BOND §G5/§G6: the Zero + TIPS checkboxes reflect and edit the accretion flags', () => {
+    const editor = editorForHolding({ allocation: 'BOND', zeroCoupon: true, inflationLinked: false });
+    const root   = editor._rootEl;
+    const zero   = cell(root, 'zeroCoupon');
+    const tips   = cell(root, 'inflationLinked');
+    expect(zero.checked).toBe(true);
+    expect(tips.checked).toBe(false);
+
+    // Toggling TIPS on writes the flag back to the working holding.
+    tips.checked = true;
+    tips.dispatchEvent(new window.Event('change'));
+    expect(editor._holdings[0].inflationLinked).toBe(true);
+
+    // An EQUITY row exposes neither toggle.
+    const eq = editorForHolding({ allocation: 'EQUITY' })._rootEl;
+    expect(cell(eq, 'zeroCoupon')).toBeNull();
+    expect(cell(eq, 'inflationLinked')).toBeNull();
   });
 
   test('BOND §G4: an existing maturityDate/faceValue populates the inputs; a fund leaves them empty', () => {

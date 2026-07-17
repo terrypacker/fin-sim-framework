@@ -1,6 +1,8 @@
 # 66 — Bond fidelity: from a bond-fund proxy to first-class fixed income
 
-**Status**: **PHASES 1–3 IMPLEMENTED** (2026-07-16); Phase 4 PROPOSED. Scope:
+**Status**: **PHASES 1–3 IMPLEMENTED** (2026-07-16); **Phase 4 — G5 (TIPS) + G6
+(zero-coupon/OID) IMPLEMENTED** (2026-07-16); G8/G9/G10 remain proposed, G7 out of
+scope (rate-risk only, open-question #5). Scope:
 catalog the gaps between how bonds behave in the real world and what the simulation
 models today, and lay out a phased plan to make `BOND` holdings a realistic,
 first-class asset now that the design-61 allocation lever routinely establishes
@@ -75,6 +77,44 @@ perpetual *fund* to an *individual bond*. Delivered:
   (setting a maturity defaults faceValue to par); empty ⇒ fund.
 - Tests: `bond-maturity` (decay / pull-to-par / snap / redemption / roll),
   `holdings-allocation-inputs` §G4 UI, golden re-pin. 3530 unit + 869 viz green.
+
+**Phase 4 (G5 TIPS + G6 zero-coupon/OID — the shared accretion path) — DONE.**
+Both are "phantom income" instruments: they grow a bond's principal each period with
+NO cash changing hands, and that growth is currently-taxable ordinary income. They
+share one mechanism. Delivered:
+- `Holding.zeroCoupon` (G6) + `Holding.inflationLinked` (G5) booleans (+ toJSON/
+  fromJSON; absent ⇒ a plain coupon bond). Two mutually-exclusive flags in the
+  `treasury`/`taxExemption` style.
+- `computeHoldingsAccretion` (new, `holdings-earnings.js`): a zero accretes its
+  *adjusted basis* toward par by the **constant-yield** method
+  (`basis × ((face/basis)^(1/ttm) − 1)`, capped at `face − basis`); a TIPS indexes
+  principal by the period CPI rate (`basis × cpiRate`, reusing `state.cpiAccumulator`
+  / `cpiRates`, deflation-symmetric). Each emits a HoldingTransactAction raising
+  BOTH `marketValue` AND `costBasis` (the basis step-up is what prevents the accreted
+  principal being taxed again as CGT at maturity), and splits the accretion by the
+  SAME `couponFederalExempt`/`couponStateExempt` rules as coupons (so a Treasury
+  STRIPS `taxExemption:'state'` is state-exempt OID, a muni zero `'federal'` is
+  federally-exempt).
+- Shared `BOND_ACCRETION` annual stream mirroring `BOND_SLEEVE_COUPON`:
+  `BondAccretionHandler` (per-account, carries `country` for the CPI source + a
+  `taxMode`) → `BOND_ACCRETION_APPLY` → `BondAccretionApplyReducer`, which routes tax
+  exactly like the coupon reducer (`deferred`→none, `us`→`BOND_COUPON_TAX`
+  federal+NIIT+state+FITO, `au`→`AU_SAVINGS_EARNINGS_TAX`; `amount` may be negative
+  under TIPS deflation). Wired across brokerage + all equity-served + AU accounts in
+  the us/au retirement toolsets; no-ops when an account holds no accreting bond.
+- `BondPriceAdjustReducer`: zero/TIPS are EXCLUDED from the fixed-face pull-to-par
+  (their principal trajectory is owned by the accretion stream) but still take the
+  rate-sensitivity mark. `BondMaturityReducer`: a TIPS redeems at
+  `max(adjustedPrincipal, faceValue)` — the deflation floor — and the accretion flags
+  are cleared on redeem-to-cash / roll.
+- UI: BOND rows in `account-editor.js` gained **Zero** + **TIPS** checkboxes beside
+  the maturity/face inputs.
+- **Golden unmoved** (Phase-4 convention): the default scenario gets no TIPS/zero, so
+  this ships behind the existing golden. Tested by `evt-bond-accretion` (constant-
+  yield OID + par cap, TIPS index + deflation, fed/state split, three tax modes,
+  pull-to-par exclusion, TIPS deflation-floor redemption, + a full-sim e2e where a
+  brokerage zero accretes to par) and the `holdings-roundtrip` / `holdings-allocation-
+  inputs` field+UI additions. 3543 unit + 870 viz green.
 
 This is a scoping / decision doc in the spirit of designs 53 (holding rate
 twins), 59 (Treasury state exemption), 60 (cash-sleeve yield) and 61 (allocation
@@ -186,13 +226,17 @@ premium/discount `amortization`, `accrued` interest, credit/`default`, `municipa
 
 ### Tier 3 — breadth, as demand / realism requires
 
-- **G5 · TIPS / inflation-linked.** Principal indexes to CPI; coupon pays on the
-  adjusted principal; the inflation accretion is (US) currently-taxable "phantom"
-  income. A **CPI series + accumulator already exists** from the AU CGT reform (see
-  [[inflation-wrapper-drops-cgt-reform]]) and can be reused. Medium.
-- **G6 · Zero-coupon / OID.** No cash coupon; accretes to par; the imputed accretion
-  is annual ordinary income (Original Issue Discount) despite no cash received.
-  Medium; shares the accretion machinery with G5's phantom income.
+- **G5 · TIPS / inflation-linked. DONE (Phase 4).** Principal indexes to CPI; coupon
+  pays on the adjusted principal; the inflation accretion is (US) currently-taxable
+  "phantom" income. Reuses the CPI accumulator from the AU CGT reform (see
+  [[inflation-wrapper-drops-cgt-reform]]). Implemented via the shared accretion path
+  (`inflationLinked` flag + `computeHoldingsAccretion` + `BOND_ACCRETION` stream); a
+  TIPS redeems at `max(adjustedPrincipal, faceValue)` — the deflation floor.
+- **G6 · Zero-coupon / OID. DONE (Phase 4).** No cash coupon; accretes to par by the
+  constant-yield method; the imputed accretion is annual ordinary income (Original
+  Issue Discount) despite no cash received, and steps up basis. Shares the accretion
+  machinery with G5 (`zeroCoupon` flag; same `BOND_ACCRETION` handler/reducer). A
+  Treasury STRIPS is state-exempt OID; a muni zero is federally-exempt.
 - **G7 · Credit spread + default risk.** Corporate / high-yield bonds price at a
   **spread over Treasury** and carry stochastic default with a recovery rate. This
   is the natural first consumer of the **seeded-but-unused in-loop `sim.rng`** (see
