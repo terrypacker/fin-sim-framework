@@ -10,7 +10,8 @@
 
 import { Reducer, PRIORITY, AccountServiceReducer } from '../../simulation-framework/reducers.js';
 import { HandlerEntry }      from '../../simulation-framework/handlers.js';
-import { resolveCashKey }    from './cash-routing.js';
+import { resolvePresentCash } from './cash-routing.js';
+import { convertExpenseToAccount } from '../fx/expense-fx.js';
 import { inheritedRaStrategy, INHERITED_RA_WINDOW } from './inherited-ra-distribution-strategy.js';
 
 /**
@@ -136,9 +137,12 @@ export class InheritApplyReducer extends Reducer {
       const medicare  = paidViaEstate ? 0 : 0.02;
       const tax       = +(taxable * (0.15 + medicare)).toFixed(2);
       const net       = +(fmv - tax).toFixed(2);
-      const cashKey   = resolveCashKey(this.stateRegistry, 'AU', state);
-      if (cashKey != null && state[cashKey] != null) {
-        this.accountService.transaction(state[cashKey], net, null);
+      // Credit the net lump sum to AU cash — or, when the heir banks only in the US
+      // (§7), cross-border into US cash (currency-converted). resolvePresentCash never
+      // returns an absent key, so this can't strand/crash; null ⇒ no cash anywhere.
+      const cash = resolvePresentCash(this.stateRegistry, 'AU', state);
+      if (cash != null) {
+        this.accountService.transaction(cash.account, convertExpenseToAccount(net, 'AUD', cash.account, state), null);
       }
       return this.newState(state, {}, [{ type: 'SUPER_DEATH_BENEFIT_TAX', amount: tax }]);
     }
@@ -193,9 +197,14 @@ export class InheritanceNeTaxApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const cashKey = resolveCashKey(this.stateRegistry, 'US', state);
-    if (cashKey != null && state[cashKey] != null) {
-      this.accountService.transaction(state[cashKey], -(action.amount ?? 0), null);
+    // Debit US cash for the heir-paid NE tax — or, when the heir banks only in AU,
+    // source it cross-border from AU cash (currency-converted). null ⇒ no cash
+    // account exists anywhere, so the tax simply goes unpaid (unchanged terminal
+    // behavior); neInheritanceTaxYTD still records the liability via the classifier.
+    const cash = resolvePresentCash(this.stateRegistry, 'US', state);
+    if (cash != null) {
+      const debit = convertExpenseToAccount(action.amount ?? 0, 'USD', cash.account, state);
+      this.accountService.transaction(cash.account, -debit, null);
     }
     return this.newState(state, {}, []);
   }
@@ -295,7 +304,14 @@ export class InheritedRaDistributionApplyReducer extends AccountServiceReducer {
     if (acct == null) return this.newState(state, {}, []);
 
     const newBalance = Math.max(0, (acct.balance ?? 0) - amount);
-    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
+    // Credit the distribution to US cash — or, for an AU-resident heir with no US
+    // cash (§7), cross-border into AU cash (currency-converted). resolvePresentCash
+    // guarantees a present account, closing the former `transaction(undefined)` crash
+    // when no US cash pool existed; null ⇒ no cash anywhere, so the proceeds can't land.
+    const cash = resolvePresentCash(this.stateRegistry, 'US', state);
+    if (cash != null) {
+      this.accountService.transaction(cash.account, convertExpenseToAccount(amount, 'USD', cash.account, state), null);
+    }
     const chained = isRoth ? [] : [{ type: 'INHERITED_RA_DISTRIBUTION_TAX', amount, residency }];
     return this.newState(state, { [stateKey]: { ...acct, balance: newBalance } }, chained);
   }

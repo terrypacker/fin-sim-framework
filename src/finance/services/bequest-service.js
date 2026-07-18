@@ -279,7 +279,15 @@ export class BequestService extends BaseService {
   _assignAssetStateKeys(bequest) {
     const base = bequest.stateKey || bequest.id;
     (bequest.assets ?? []).forEach((asset, i) => {
-      if (!asset.stateKey) asset.stateKey = `${base}_a${i}`;
+      if (asset.stateKey) return;
+      // Design 63 §14.6: account-category inherited assets get an `…Account`
+      // suffix so their `<stateKey>.balance` journal rows match the per-account
+      // reports' `contains 'account.balance'` convention (the report `api` can't
+      // see the account set, so the key itself must carry the marker). Property /
+      // collectible keys stay bare — they journal `.value`, not `.balance`, and are
+      // correctly excluded from account-balance reports.
+      const isAccount = inheritedAssetMeta(asset.__type)?.category === 'account';
+      asset.stateKey = `${base}_a${i}${isAccount ? 'Account' : ''}`;
     });
   }
 
@@ -303,6 +311,7 @@ export class BequestService extends BaseService {
     if (meta.category === 'real-property') {
       return {
         kind:           'real-property',
+        name:           asset.name ?? null,
         stateKey:       asset.stateKey,
         value:          0,
         mortgageBalance: 0,
@@ -314,6 +323,7 @@ export class BequestService extends BaseService {
     if (meta.category === 'collectible') {
       return {
         kind:      'collectible',
+        name:      asset.name ?? null,
         stateKey:  asset.stateKey,
         value:     0,
         costBasis: 0,
@@ -331,6 +341,7 @@ export class BequestService extends BaseService {
     const isPromotedBrokerage = meta.category === 'account' && !meta.isRetirement;
     const plain = {
       balance:               0,
+      name:                  asset.name ?? null,
       stateKey:              asset.stateKey,
       type:                  meta.accountType,
       country, currency, ownerId,
