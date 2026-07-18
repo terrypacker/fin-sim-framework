@@ -73,6 +73,7 @@ import { MortalityHandler }                      from '../../finance/handlers/mo
 import { PersonDiedApplyReducer }                from '../../finance/reducers/person-died-apply-reducer.js';
 import { SocialSecuritySurvivorApplyReducer }    from '../../finance/reducers/social-security-survivor-apply-reducer.js';
 import { AccountRetitleApplyReducer }            from '../../finance/reducers/account-retitle-apply-reducer.js';
+import { SuperDeathBenefitApplyReducer }         from '../../finance/reducers/super-death-benefit-apply-reducer.js';
 import { ScenarioCompleteReducer }               from '../../finance/reducers/scenario-complete-reducer.js';
 import { LateLifeCareHandler }                  from '../../finance/spending/strategies/late-life-care-handler.js';
 import { LateLifeCareApplyReducer }             from '../../finance/spending/strategies/late-life-care-apply-reducer.js';
@@ -1173,6 +1174,7 @@ export const US_RETIREMENT = {
       reducers.push(new PersonDiedApplyReducer());
       reducers.push(new SocialSecuritySurvivorApplyReducer());
       reducers.push(new AccountRetitleApplyReducer());
+      reducers.push(new SuperDeathBenefitApplyReducer());
       reducers.push(new ScenarioCompleteReducer());
 
       // Late-life care reducer (design/27 Increment 2).

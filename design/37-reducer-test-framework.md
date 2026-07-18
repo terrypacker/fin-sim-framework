@@ -294,6 +294,7 @@ disposal variants add **I6**. **Swept ✅** — isolated postcondition tests in 
 | `StockDividendCashApplyReducer` | I1 I3 I5 I7 | ✅ `reducer-postconditions-finance` (not I1 — §7.3) |
 | `UsSavingsInterestCreditReducer` | I1 I3 I4 I7 | ✅ `reducer-postconditions-finance` (not I1 — §7.3) |
 | `ScenarioCompleteReducer` | I1 I10 | ✅ `reducer-postconditions-finance` |
+| `SuperDeathBenefitApplyReducer` | I1 I7 | ✅ `mortality-year-of-death-tax` (YOD-6, design/68 Gap 4) |
 
 ### E — Behavioral
 

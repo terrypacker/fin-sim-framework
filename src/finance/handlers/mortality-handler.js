@@ -9,6 +9,7 @@
  */
 
 import { HandlerEntry } from '../../simulation-framework/handlers.js';
+import { ACCOUNT_ROLES } from '../state/account-roles.js';
 
 /**
  * MortalityHandler — handles PERSON_DIED one-off events.
@@ -39,6 +40,7 @@ export class MortalityHandler extends HandlerEntry {
       'PERSON_DIED_APPLY',
       'HOLDING_SET_BASIS',
       'ACCOUNT_RETITLE_APPLY',
+      'SUPER_DEATH_BENEFIT_APPLY',
       'SPENDING_STRATEGY_APPLY',
       'SOCIAL_SECURITY_SURVIVOR_APPLY',
       'SCENARIO_COMPLETE_CHECK',
@@ -122,7 +124,11 @@ export class MortalityHandler extends HandlerEntry {
     }
 
     if (survivorId) {
-      // 3. Retitle solo-owned accounts to survivor
+      // 3. Retitle solo-owned accounts to survivor. A surviving spouse is a
+      //    death-benefit *dependant* (AU super law), so their inherited super is
+      //    tax-free — the ownerId swap is the whole treatment, no SUPER_DEATH_
+      //    BENEFIT here (design/68 Gap 4). The non-dependant case is the
+      //    last-survivor branch below.
       actions.push({ type: 'ACCOUNT_RETITLE_APPLY', deceasedId: personId, survivorId });
 
       // 4. Per-slice survivor expense deltas (design/27 §10 Q2 Option B)
@@ -147,6 +153,32 @@ export class MortalityHandler extends HandlerEntry {
         survivorId,
         deceasedSocialSecurityMonthly: person.socialSecurityMonthly ?? 0,
       });
+    }
+
+    if (!survivorId) {
+      // Last-survivor death (design/68 Gap 4): no surviving dependant, so any AU
+      // superannuation passes to the estate / non-dependant beneficiaries. The
+      // taxable component is a FINAL death-benefit tax (15%, +2% Medicare only
+      // when paid direct — via the estate ⇒ no Medicare). Emit one apply per AU
+      // super account carrying a positive balance; taxable defaults to the whole
+      // balance (design 63 §6.4 — self-funded super tracks no tax-free split).
+      // With a surviving spouse this is skipped: their super is tax-free above.
+      for (const [stateKey, value] of Object.entries(state)) {
+        if (
+          value &&
+          typeof value === 'object' &&
+          !Array.isArray(value) &&
+          value.role === ACCOUNT_ROLES.SUPER &&
+          (value.balance ?? 0) > 0
+        ) {
+          actions.push({
+            type:          'SUPER_DEATH_BENEFIT_APPLY',
+            stateKey,
+            taxable:       value.balance,
+            paidViaEstate: true,
+          });
+        }
+      }
     }
 
     // 6. Always check whether the scenario should terminate

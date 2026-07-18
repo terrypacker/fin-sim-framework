@@ -182,6 +182,7 @@ import { ScenarioCompleteReducer } from './finance/reducers/scenario-complete-re
 import { SetOutOfFundsDateReducer } from './finance/reducers/set-out-of-funds-date-reducer.js';
 import { SocialSecuritySurvivorApplyReducer } from './finance/reducers/social-security-survivor-apply-reducer.js';
 import { StockDividendCashApplyReducer } from './finance/reducers/stock-dividend-cash-apply-reducer.js';
+import { SuperDeathBenefitApplyReducer } from './finance/reducers/super-death-benefit-apply-reducer.js';
 import { UsSavingsInterestCreditReducer } from './finance/reducers/us-savings-interest-credit-reducer.js';
 import { getResidency, isResident, residentsOf, primaryPersonKey, primaryResidencyState, getBirthDate } from './finance/residency-utils.js';
 import { ScenarioCompareRunner } from './finance/scenario-compare/scenario-compare-runner.js';
@@ -912,6 +913,7 @@ export const Finance = {
   SetOutOfFundsDateReducer,
   SocialSecuritySurvivorApplyReducer,
   StockDividendCashApplyReducer,
+  SuperDeathBenefitApplyReducer,
   UsSavingsInterestCreditReducer,
   getResidency,
   isResident,

@@ -1,10 +1,17 @@
 # 68 — Year-of-death tax settlement fidelity
 
-**Status**: **Gap 1 IMPLEMENTED + green** (3625 unit + 875 viz). Gaps 2–5 documented only,
-deferred. Verified end-to-end on `scenarios/fin-sim-scenarios.json`: Terry dies 2068-04-15,
-and the 30 Jun 2068 AU settle now files his final-year return (`primary ≈ $90k`) and debits
-it, where before it was dropped. Golden (default scenario) legitimately unmoved — its death
-falls in US-resident years with no AU income, so the fix is inert there.
+**Status**: **Gaps 1, 2, 4, 5 IMPLEMENTED + green** (3631 unit + 875 viz); Gap 3 intentionally
+not done (annual granularity is sufficient — see below). Verified end-to-end on the
+International Retirement scenario: with both people dying AU-resident (spouse last, mid AU
+FY2033), the terminal flush now fires *both* the 2033-12-31 US and 2034-06-30 AU settles that
+were previously stranded (Gap 2), the estate super is reduced by the 15% via-estate death
+benefit (Gap 4), and the deceased's per-person AU keys are dropped rather than left as `0`
+(Gap 5). Golden (default scenario) legitimately unmoved — its deaths fall outside the sim
+window / in US-resident years, so all four fixes are inert there.
+
+Gap 1 (the original fix) files a mid-year decedent's final AU per-person return: Terry dies
+2068-04-15 and the 30 Jun 2068 AU settle now files his final-year return (`primary ≈ $90k`)
+and debits it, where before it was dropped.
 
 **Problem in one line:** When a person dies partway through a tax year, the tax that
 accrued on their income *during that final partial year* can silently vanish instead of
@@ -129,43 +136,64 @@ record shape.
 
 ---
 
-## 3. Deferred gaps (documented only — no implementation planned yet)
+## 3. Implemented gaps 2, 4, 5 (+ deferred Gap 3)
 
-### Gap 2 — Last-survivor termination strands the entire final year's tax (both countries)
+### Gap 2 — Last-survivor termination strands the entire final year's tax (both countries) — **IMPLEMENTED**
 
 When the last person dies, `ScenarioCompleteReducer` sets `state.scenarioComplete` and the
-run loop **breaks** (`src/simulation-framework/simulation.js:1022`). Any tax settle queued
-later that year — **AU and US both** — never fires. Ending net worth / bequest omits the
-final year's accrued tax liability entirely. This is the same class of defect as Gap 1 but
-hits both countries and lands on the *terminal snapshot* that results are read from.
+run loop **breaks** (`src/simulation-framework/simulation.js`). Any tax settle queued later
+that year — **AU and US both** — never fired, so ending net worth / bequest omitted the final
+year's accrued tax entirely. This was the same class of defect as Gap 1 but hit both countries
+on the *terminal snapshot* that results are read from.
 
-Options: (a) before breaking, flush any pending same-year `TAX_SETTLE_*` events (a "final
-settle" pass); (b) accrue a closing tax liability into net worth at termination; (c) accept
-and document as a known terminal-state simplification. Interacts with `design/63` (the
-bequest is the natural owner of the closing liability).
+**Fix (option a — final-settle pass):** before breaking, `stepTo` calls the new
+`Simulation._flushTerminalTaxSettles()`. Because the settle series reschedules
+one-occurrence-at-a-time, exactly one `TAX_SETTLE_US` and one `TAX_SETTLE_AU` sit in the queue
+at any moment — the settles whose fiscal year contains the death. The flush removes and
+executes them in date order against the live state (`currentPeriods` is still the active
+period, since no `PERIOD_ADVANCE` for that country falls between a mid-year death and its own
+year-end settle). Composes with Gap 1 (the AU settle files the now-deceased's per-person
+return via the resident-of-the-year set) and Gap 4 (super death benefit). Tests: YOD-8
+(flush selection/ordering) + YOD-9 (end-to-end) in `mortality-year-of-death-tax.test.mjs`.
 
-### Gap 3 — No date-of-death (final) return
+### Gap 4 — AU super death-benefit tax on intra-household death — **IMPLEMENTED**
+
+A surviving spouse is a death-benefit **dependant** (AU super law), so their retitled super is
+tax-free — the `MortalityHandler`'s existing `ACCOUNT_RETITLE_APPLY` (ownerId swap) is now the
+*deliberate* treatment for that case. The **non-dependant** case only arises at the
+**last-survivor death**, where the deceased's super passes to the estate: the taxable
+component is a FINAL tax (15%, +2% Medicare only when paid direct — via the estate ⇒ no
+Medicare), which was previously **omitted entirely** (the "correct by luck" note applied only
+to the spouse case).
+
+**Fix:** on a last-survivor death, `MortalityHandler` emits one `SUPER_DEATH_BENEFIT_APPLY`
+per remaining AU `SUPER`-role account with a positive balance (`taxable` defaults to the whole
+balance, `paidViaEstate: true` — design 63 §6.4). The new
+`SuperDeathBenefitApplyReducer` withholds the tax from the account balance (the estate
+inherits the net) and emits `SUPER_DEATH_BENEFIT_TAX`, recorded in `auSuperDeathTaxYTD` by the
+existing AU classifier. Registered alongside the other mortality reducers in both retirement
+toolsets (deduped via `context._auSharedDelegated`). Tests: YOD-6/6b (reducer) + YOD-7
+(handler emit, dependant vs non-dependant).
+
+### Gap 5 — Deceased's per-person accumulator keys are never cleaned up — **IMPLEMENTED**
+
+`PersonDiedApplyReducer` deletes from `state.people` but left the deceased's keys in every
+per-person AU map, lingering as `0` after the death-year settle. Any income later
+mis-attributed to a dead key would then resurrect a spurious return (Gap 1 signal 2 refiles on
+any non-zero per-person balance).
+
+**Fix:** `TaxSettleApplyReducerBase.reduce` (AU branch) now **drops** the keys of anyone in
+`state.deceased` (and absent from `state.people`) rather than resetting them to `0` — Gap 1
+already filed their final return earlier in the same settle, so by reset time the liability is
+banked. Test: YOD-5.
+
+### Gap 3 — No date-of-death (final) return — **NOT DOING (annual granularity is sufficient)**
 
 Neither system files a partial-year return *at the death date*; both wait for year-end. Real
 US and AU practice files a final return covering income to date of death, with the liability
-on the estate. Gap 1 approximates this at year-end for AU; a true date-of-death return is a
-larger change and probably unnecessary given the annual granularity.
-
-### Gap 4 — AU super death-benefit tax not applied on intra-household death
-
-`SUPER_DEATH_BENEFIT_TAX` exists only on the external-decedent path
-(`src/finance/account-rules/inheritance-classes.js:111`, `design/63`). A spouse's super is
-retitled via `AccountRetitleApplyReducer` (ownerId swap) with no death-benefit handling.
-Spouse-to-spouse super is tax-free in AU, so this is *correct by luck*, not by design —
-worth wiring deliberately when `design/63` lands so non-dependent beneficiaries are handled.
-
-### Gap 5 — Deceased's per-person accumulator keys are never cleaned up
-
-`PersonDiedApplyReducer` deletes from `state.people` but leaves the deceased's keys in every
-per-person AU map. They linger until zeroed at the next settle. Cosmetic once Gap 1 is
-fixed (the fix taxes them first), but any post-death income mis-attributed to a deceased key
-is otherwise silently dropped. A tidy-up pass (or folding into the Gap 1 union logic) closes
-it.
+on the estate. Gap 1 approximates this at year-end for AU (and Gap 2 now flushes the terminal
+year); a true date-of-death return is a larger change and unnecessary given the annual
+granularity — **intentionally not implemented**.
 
 ---
 
@@ -174,7 +202,7 @@ it.
 | Gap | Symptom | Scope | Status |
 |---|---|---|---|
 | **1** | AU per-person final return dropped + wiped; survivor split distorted | AU death-year settle | **IMPLEMENTED + green** |
-| **2** | Last-survivor death strands the whole final year's AU+US tax | Terminal snapshot | Deferred |
-| **3** | No date-of-death final return (annual granularity only) | Both | Deferred / likely won't do |
-| **4** | Super death-benefit tax not applied spouse-to-spouse (correct by luck) | AU super | Deferred (with `design/63`) |
-| **5** | Deceased's per-person accumulator keys linger, can drop post-death income | AU maps | Deferred (folds into Gap 1) |
+| **2** | Last-survivor death strands the whole final year's AU+US tax | Terminal snapshot | **IMPLEMENTED + green** (`_flushTerminalTaxSettles`) |
+| **3** | No date-of-death final return (annual granularity only) | Both | **Not doing** (annual granularity sufficient) |
+| **4** | Super death-benefit tax not applied to non-dependant estate | AU super | **IMPLEMENTED + green** (`SuperDeathBenefitApplyReducer`) |
+| **5** | Deceased's per-person accumulator keys linger, can drop post-death income | AU maps | **IMPLEMENTED + green** (dropped at settle) |

@@ -163,9 +163,22 @@ class TaxSettleApplyReducerBase extends Reducer {
       if (field in state) resets[field] = 0;
     }
     if (cc === 'AU') {
+      // design/68 Gap 5: a deceased person's per-person keys must be *dropped*, not
+      // just zeroed. computeAuTaxPerPerson already filed their final-year return
+      // (Gap 1) before this reducer runs, so by settle time their liability is
+      // banked. Leaving a lingering `{deceasedKey: 0}` entry would let any income
+      // later mis-attributed to a dead key resurrect a spurious return for someone
+      // gone from state.people (Gap 1 signal 2 refiles on any non-zero balance).
+      // A person is deceased when they're in state.deceased and no longer living.
+      const people   = state.people ?? {};
+      const deadKeys = new Set(Object.keys(state.deceased ?? {}).filter(k => people[k] == null));
       for (const field of PER_PERSON_AU_FIELDS) {
         if (state[field]) {
-          resets[field] = Object.fromEntries(Object.keys(state[field]).map(k => [k, 0]));
+          resets[field] = Object.fromEntries(
+            Object.keys(state[field])
+              .filter(k => !deadKeys.has(k))
+              .map(k => [k, 0]),
+          );
         }
       }
     }

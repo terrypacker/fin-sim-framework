@@ -85,6 +85,7 @@ import { ChangeStateResidencyApplyReducer } from '../finance/reducers/change-sta
 import { PersonDiedApplyReducer }        from '../finance/reducers/person-died-apply-reducer.js';
 import { SocialSecuritySurvivorApplyReducer } from '../finance/reducers/social-security-survivor-apply-reducer.js';
 import { AccountRetitleApplyReducer }    from '../finance/reducers/account-retitle-apply-reducer.js';
+import { SuperDeathBenefitApplyReducer } from '../finance/reducers/super-death-benefit-apply-reducer.js';
 import { ScenarioCompleteReducer }       from '../finance/reducers/scenario-complete-reducer.js';
 import { SetOutOfFundsDateReducer }       from '../finance/reducers/set-out-of-funds-date-reducer.js';
 import { AccumulateDeficitReducer }       from '../finance/reducers/accumulate-deficit-reducer.js';
@@ -266,7 +267,7 @@ const _ALL_CLASSES = [
   IntlTransferApplyReducer, IntlTransferRecordReducer, FxTransferApplyReducer, FxRefreshReducer,
   FxProcessReducer, FxStepApplyReducer,
   StockDividendCashApplyReducer, BondCouponCashApplyReducer, CashSleeveInterestApplyReducer, BondSleeveCouponApplyReducer, BondAccretionApplyReducer, ChangeResidencyApplyReducer, ChangeStateResidencyApplyReducer,
-  PersonDiedApplyReducer, SocialSecuritySurvivorApplyReducer, AccountRetitleApplyReducer, ScenarioCompleteReducer,
+  PersonDiedApplyReducer, SocialSecuritySurvivorApplyReducer, AccountRetitleApplyReducer, SuperDeathBenefitApplyReducer, ScenarioCompleteReducer,
   LateLifeCareApplyReducer,
   SetOutOfFundsDateReducer, AccumulateDeficitReducer, AccumulateTaxesPaidReducer, AccumulateConsumptionReducer,
   AccumulateConsumptionUtilityReducer,
