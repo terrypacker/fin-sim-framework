@@ -120,6 +120,8 @@ export const COVERED = [
   'BondMaturityReducer',
   // Time-varying Prime → linked cash (design 56 §5 Phase 2b) — evt-prime-timevarying.test.mjs
   'PrimeRelinkReducer',
+  // Yield-curve dynamics (design 67 §6 Phase 3) — yield-curve.test.mjs / evt-yield-curve-dynamics.test.mjs
+  'YieldCurveReducer', 'YieldCurveStepReducer',
   // Time-varying FX (design 47) — evt-fx-process.test.mjs
   'FxProcessReducer', 'FxStepApplyReducer',
 

@@ -1,16 +1,23 @@
 # 67 — Bond yield curve: from a single fixed-income rate to a term structure
 
-**Status**: **IMPLEMENTED — Phases 1 & 2** (2026-07-17; owner answers below). The curve
+**Status**: **IMPLEMENTED — Phases 1, 2 & 3** (2026-07-17; owner answers below). The curve
 primitive (`finance/economic-regimes/yield-curve.js`: `interpolateSpread` /
-`resolveYield` / `countryOfRateKey`), the `state.yieldCurve` / `baseYieldCurve` /
-`priorMarkCurve` seeding in the ECONOMIC_REGIMES toolset, and all five consumer
-reroutes shipped, with a sloped default shape applied to both countries. **Golden did
-NOT move** (11,584,190 / 1,127,909, unchanged): the default book's bonds are all
-perpetual *funds* that resolve at the 5y anchor (spread 0), so the term premium bites
-only on individual-bond / ladder scenarios — no re-baseline was required (the design-65
-"golden legitimately inert" pattern). Tests: 3666 unit (+19 new `yield-curve.test.mjs`)
-/ 875 viz, JOURNAL_STRICT green. **Phase 3 (curve dynamics) deferred** (§6). Closes the
-long-deferred "yield curve"
+`resolveYield` / `countryOfRateKey` / `composeYieldCurve` / `shapeDelta`), the
+`state.yieldCurve` / `baseYieldCurve` / `priorMarkCurve` / `yieldCurveLevelDev` seeding in
+the ECONOMIC_REGIMES toolset, all five consumer reroutes, and the full Phase-3 dynamics
+layer shipped, with a sloped default shape applied to both countries. **Golden did NOT
+move** (11,584,190 / 1,127,909, unchanged): the default book's bonds are all perpetual
+*funds* that resolve at the 5y anchor (spread 0), so the term premium bites only on
+individual-bond / ladder scenarios — no re-baseline was required (the design-65 "golden
+legitimately inert" pattern). Phase 3 (§6) adds a `YieldCurveReducer` (priority 11.5,
+between RegimeApply and the mark) that composes active-regime twists onto `baseYieldCurve`
+and folds a stochastic level deviation onto the effective level; three named curve shocks
+(`CURVE_BEAR_FLATTENER` / `CURVE_BULL_STEEPENER` / `CURVE_INVERSION`); a `yieldCurveSchedule`
+compiler (mirroring `primeSchedule`); and a flag-gated `YieldCurveTickHandler` OU level walk
+off the seeded, snapshot-safe `sim.rng` (the 2nd in-loop RNG consumer after FX). All dynamics
+are inert by default ⇒ byte-identical; stochastic ON is reproducible across identical runs.
+Tests: 3680 unit (+19 `yield-curve.test.mjs`, +14 `yield-curve-dynamics.test.mjs`) / 875 viz,
+JOURNAL_STRICT green. Closes the long-deferred "yield curve"
 follow-up flagged in design 24 (§5.5 / roadmap line 272 — *"per-maturity rate
 structures. Depends on bond duration shipping first (design 28)"*) and design 28
 (§8 / §11 — *"Yield curves (per-maturity rate structures)"*, explicitly **out of
@@ -145,24 +152,37 @@ into the number that everyone reasons about (mirrors design 66 §6, G3). Expecte
 small positive drift on ending net worth (longer bonds yield more), with the individual
 Treasury bond's mark now curve-sensitive.
 
-## 6. Phase 3 — curve dynamics (level shifts + shape twists)
+## 6. Phase 3 — curve dynamics (level shifts + shape twists) — IMPLEMENTED
+
+**Shipped.** A `YieldCurveReducer` (`yield-curve-reducer.js`, priority `PRE_PROCESS + 1.5`
+= 11.5 — strictly after `RegimeApplyReducer` at 11, before `BondPriceAdjustReducer` at 12)
+recomposes `state.yieldCurve[cc] = baseYieldCurve[cc] + Σ active-regime yieldCurveTwist[cc]`
+(each scaled by the regime's `currentFactor`, via `composeYieldCurve` on the union tenor
+grid) and folds the stochastic level deviation onto the effective level. A no-op guard
+(no active twist + zero deviation ⇒ state returned unchanged) keeps a dynamics-free run
+byte-identical to Phase 2. All three sources below feed it:
 
 The level already moves (existing `RegimeApplyReducer` on `FIXED_INCOME_*` — a parallel
-shift). Add **shape** dynamics:
+shift). Added **shape** dynamics:
 
-- **Scheduled twists** — a `yieldCurveSchedule` (mirroring design 56 §Phase-2b
-  `primeSchedule`) that overrides the shape at set dates, plus a `YieldCurveReducer`
-  (priority `PRE_PROCESS + 2`, on the PERIOD_ADVANCE / regime action types, cf.
-  `PrimeRelinkReducer`) that rebuilds `state.yieldCurve` = base shape + the accumulated
-  twist so a schedule/shock **composes** with the level move.
-- **Regime shocks** — named curve moves in the design-21 regime vocabulary:
-  *bear-flattener* (short up, long flat), *bull-steepener*, *inversion*. These are the
-  curve-shape analog of the existing return/rate shocks.
-- **Stochastic evolution (optional)** — this is a natural first consumer of the
-  seeded-but-idle in-loop `sim.rng` ([[sim-rng-unused-in-loop]], also eyed by design
-  66 §G7 credit and design 47 FX): evolve the level (and optionally slope) by a small
-  mean-reverting step each period. Keep it behind a flag so deterministic runs stay
-  byte-identical.
+- **Scheduled twists** ✅ — a `yieldCurveSchedule` param (`[{ year, US:[shape], AU:[…] }]`
+  absolute target shapes) compiled by `scheduleYieldCurveSteps` (mirroring design 56
+  §Phase-2b `primeSchedule`) into L-profile regimes whose `yieldCurveTwist = shapeDelta(abs,
+  base)`, so during each window `yieldCurve = base + (abs − base) = abs`. Composes with the
+  level move through the shared `YieldCurveReducer`.
+- **Regime shocks** ✅ — three named curve moves added to the design-21 shock library:
+  `CURVE_BEAR_FLATTENER` (short up, long flat), `CURVE_BULL_STEEPENER`, `CURVE_INVERSION`
+  (short > long). Each is a pure `yieldCurveTwist` regime (no level/equity effect) flowing
+  through the existing shock→`ADD_REGIME_APPLY`→`activeRegimes` path; `EconomicShockHandler`
+  was extended to carry `yieldCurveTwist` (its regime field list is a whitelist).
+- **Stochastic evolution (flag-gated)** ✅ — `yieldCurveStochastic` schedules an annual
+  `YIELD_CURVE_TICK`; `YieldCurveTickHandler` (the 2nd in-loop consumer of the seeded,
+  snapshot-safe `sim.rng` after FX — [[sim-rng-unused-in-loop]]) walks the LEVEL by a
+  mean-reverting (Ornstein-Uhlenbeck) step (reusing `FX_PROCESS_MODELS.MEAN_REVERTING` +
+  `gaussianFrom`) and emits `YIELD_CURVE_STEP_APPLY`; `YieldCurveStepReducer` (pure) records
+  it into `state.yieldCurveLevelDev`, which `YieldCurveReducer` folds onto the effective
+  level. Off by default ⇒ no RNG draw ⇒ byte-identical; ON is reproducible (same seed ⇒ same
+  path; the snapshot cursor is captured in history, so MPC/optimizer rollouts replay identically).
 
 ## 7. Out of scope / later
 
@@ -212,10 +232,12 @@ shift). Add **shape** dynamics:
    unchanged even under a sloped curve.
 4. **Curve dynamics source** — scheduled twists + named regime shocks only, or also
    stochastic (mean-reverting) evolution via the idle `sim.rng`?
-   Answer: **Deferred — Phase 3 out of scope for this pass.** `baseYieldCurve` /
-   `priorMarkCurve` are already seeded so the twist reducer (schedules + named shocks,
-   and optionally the `sim.rng` stochastic path) can be added later without a state-shape
-   change.
+   Answer: **All three — implemented.** Scheduled twists (`yieldCurveSchedule`) + named
+   regime shocks (`CURVE_BEAR_FLATTENER` / `CURVE_BULL_STEEPENER` / `CURVE_INVERSION`) +
+   flag-gated stochastic OU level evolution via the seeded `sim.rng` (`yieldCurveStochastic`).
+   The stochastic path is reproducible — the RNG cursor is snapshot-safe — so it is
+   deterministic given the seed, not random-per-run; the flag keeps it opt-in so default
+   goldens don't move.
 5. **Interpolation** — linear between anchor points (simplest), or monotone-cubic
    (smoother, avoids kinks at the anchors)?
    Answer: **Linear, clamped to the endpoints.** Matches the accessor spec; can be

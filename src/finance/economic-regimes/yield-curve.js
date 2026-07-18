@@ -114,3 +114,56 @@ export function resolveYield(state, { rateKey, stateKey = null, country = null, 
   const shape     = state?.yieldCurve?.[cc];
   return level + interpolateSpread(shape, tenor);
 }
+
+/**
+ * Compose an effective curve shape from a base shape + a set of additive TWISTS
+ * (design 67 §6, Phase 3). Each twist is `{ points, factor }` — a `{tenor, spread}`
+ * shape whose spreads are added (scaled by `factor`, the regime's recovery factor)
+ * on top of the base. The result is evaluated on the UNION of all tenor grids so a
+ * twist can enrich the curve with a new tenor (e.g. a 2y inversion point):
+ *
+ *     spread(τ) = interpolateSpread(base, τ) + Σ_twist factor·interpolateSpread(points, τ)
+ *
+ * With **no** twists it returns the base shape *by reference* (the caller relies on
+ * this to keep a twist-free period byte-identical to Phase 2). Spreads are rounded
+ * to 1e-6 to keep the composed grid stable across periods.
+ *
+ * @param {Array<{tenor:number,spread:number}>|null} baseShape
+ * @param {Array<{points:Array, factor:number}>|null} twists
+ * @returns {Array<{tenor:number, spread:number}>}
+ */
+export function composeYieldCurve(baseShape, twists) {
+  const active = (twists ?? []).filter(t => Array.isArray(t?.points) && t.points.length > 0 && (t.factor ?? 0) !== 0);
+  if (active.length === 0) return baseShape ?? [];
+
+  const grid = new Set();
+  for (const p of (baseShape ?? [])) if (Number.isFinite(p?.tenor)) grid.add(p.tenor);
+  for (const t of active) for (const p of t.points) if (Number.isFinite(p?.tenor)) grid.add(p.tenor);
+
+  return [...grid].sort((a, b) => a - b).map(tenor => {
+    let spread = interpolateSpread(baseShape, tenor);
+    for (const t of active) spread += (t.factor ?? 1) * interpolateSpread(t.points, tenor);
+    return { tenor, spread: +spread.toFixed(6) };
+  });
+}
+
+/**
+ * The additive TWIST that turns `baseShape` into `absShape`: for each tenor in the
+ * union grid, `absSpread(τ) − baseSpread(τ)` (design 67 §6). Composing this twist at
+ * factor 1 reproduces `absShape` exactly (`base + (abs − base) = abs`), so a scheduled
+ * curve that specifies an *absolute* target shape can flow through the same twist path
+ * as a named shock. Used by the ECONOMIC_REGIMES `yieldCurveSchedule` compiler.
+ *
+ * @param {Array<{tenor:number,spread:number}>|null} absShape
+ * @param {Array<{tenor:number,spread:number}>|null} baseShape
+ * @returns {Array<{tenor:number, spread:number}>}
+ */
+export function shapeDelta(absShape, baseShape) {
+  const grid = new Set();
+  for (const p of (absShape ?? []))  if (Number.isFinite(p?.tenor)) grid.add(p.tenor);
+  for (const p of (baseShape ?? [])) if (Number.isFinite(p?.tenor)) grid.add(p.tenor);
+  return [...grid].sort((a, b) => a - b).map(tenor => ({
+    tenor,
+    spread: +(interpolateSpread(absShape, tenor) - interpolateSpread(baseShape, tenor)).toFixed(6),
+  }));
+}
