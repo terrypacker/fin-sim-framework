@@ -1060,22 +1060,48 @@ export class IntlRetirementScenario extends BaseScenario {
   static getParamAliases() { return INTL_RETIREMENT_PARAM_ALIASES; }
 
   /**
+   * The toolset objects whose paramSchema() contributes configurable params.
+   * Shared by buildFullParamSchema() and _toolsetParamKeys() so the two agree on
+   * exactly which keys count as "toolset-contributed".
+   */
+  static _paramToolsets() {
+    return [
+      US_BANKING, US_TAX, US_STATE_TAX, US_BROKERAGE, US_INCOME, US_RETIREMENT,
+      AU_BANKING, AU_TAX, AU_BROKERAGE, AU_INCOME, AU_RETIREMENT,
+      US_AU_CROSS_BORDER, US_REAL_PROPERTY, AU_REAL_PROPERTY,
+      US_COLLECTIBLES, US_ROTH_CONVERSION, US_EARLY_WITHDRAWAL, US_COMPANY_SALE, INHERITANCE, ECONOMIC_REGIMES,
+    ];
+  }
+
+  /**
    * Full param schema: scenario-level params merged with all toolset paramSchema
    * entries (deduplicating by key). Use this when you need the complete set of
    * configurable params for UI pickers (e.g. Decision Graph, Optimization).
    */
   static buildFullParamSchema() {
     const scenarioKeys = new Set(INTL_RETIREMENT_PARAM_SCHEMA.map(e => e.key));
-    const toolsets = [
-      US_BANKING, US_TAX, US_STATE_TAX, US_BROKERAGE, US_INCOME, US_RETIREMENT,
-      AU_BANKING, AU_TAX, AU_BROKERAGE, AU_INCOME, AU_RETIREMENT,
-      US_AU_CROSS_BORDER, US_REAL_PROPERTY, AU_REAL_PROPERTY,
-      US_COLLECTIBLES, US_ROTH_CONVERSION, US_EARLY_WITHDRAWAL, US_COMPANY_SALE, INHERITANCE, ECONOMIC_REGIMES,
-    ];
-    const toolsetParams = toolsets
+    const toolsetParams = IntlRetirementScenario._paramToolsets()
       .flatMap(t => t.paramSchema?.({}) ?? [])
       .filter(e => e?.key && !scenarioKeys.has(e.key));
     return [...INTL_RETIREMENT_PARAM_SCHEMA, ...toolsetParams];
+  }
+
+  /**
+   * The set of param keys contributed by toolsets (i.e. not named by the
+   * scenario-level schema). buildDefaultConfig() forwards explicit overrides for
+   * these so they aren't silently dropped. Memoized — the toolset schemas are
+   * static (behavioralStrategyKeys etc. don't depend on runtime context).
+   */
+  static _toolsetParamKeys() {
+    if (!IntlRetirementScenario.__toolsetParamKeys) {
+      const scenarioKeys = new Set(INTL_RETIREMENT_PARAM_SCHEMA.map(e => e.key));
+      const keys = new Set();
+      for (const t of IntlRetirementScenario._paramToolsets())
+        for (const e of (t.paramSchema?.({}) ?? []))
+          if (e?.key && !scenarioKeys.has(e.key)) keys.add(e.key);
+      IntlRetirementScenario.__toolsetParamKeys = keys;
+    }
+    return IntlRetirementScenario.__toolsetParamKeys;
   }
 
   static getToolsets() {
@@ -1109,81 +1135,96 @@ export class IntlRetirementScenario extends BaseScenario {
     // ISO and YYYY-MM-DD, so older payloads remain readable.
     const isoDate = d => ScenarioSerializer.toDateStr(d);
 
+    // ── Parameters (toolset-key names) ────────────────────────────────────────
+    const parameters = {
+      // US_STATE_TAX (design 34) — cascades onto the primary person's residencyState
+      residencyState:           p.residencyState || null,
+      // US_STATE_TAX state move (design 34 §9) — Jan-1 move to a destination state
+      stateMoveYear:            p.stateMoveYear ?? undefined,
+      stateMoveDestination:     p.stateMoveDestination || null,
+      // US_BANKING
+      usSavingsInterestRate:    p.usSavingsInterestRate,
+      // ECONOMIC_REGIMES — central-bank Prime rates (design 56)
+      usPrimeRate:              p.usPrimeRate,
+      auPrimeRate:              p.auPrimeRate,
+      // US_RETIREMENT / AU_RETIREMENT share 'inflationRate'; US_AU_CROSS_BORDER uses both
+      inflationRate:            p.usInflationRate,
+      auInflationRate:          p.auInflationRate,
+      // AU_TAX — dedicated ATO CPI indexation rate (design 57 Part 2, Item A).
+      // Only forwarded when set; unset ⇒ tracks AU inflation.
+      ...(p.auCpiRate != null ? { auCpiRate: p.auCpiRate } : {}),
+      iraGrowthRate:            p.iraGrowthRate,
+      rothGrowthRate:           p.rothGrowthRate,
+      k401GrowthRate:           p.k401GrowthRate,
+      brokerageGrowthRate:      p.usStockGrowthRate,
+      goldGrowthRate:           p.goldGrowthRate,
+      brokerageDividendRate:    p.stockDividendRate,
+      dividendReinvest:         p.stockDividendReinvest,
+      fixedIncomeInterestRate:  p.fixedIncomeInterestRate,
+      monthlyExpenses:          p.monthlyExpenses,
+      inflationAdjust:          true,
+      // US_RETIREMENT — cross-border drawdown mode (design 58 Lever A). AUTO
+      // default preserves the legacy TAX_EFFICIENT⇒GLOBAL coupling.
+      crossBorderDrawdown:      p.crossBorderDrawdown ?? 'AUTO',
+      // US_RETIREMENT — within-tier draw policy (design 58 Lever C). SEQUENTIAL
+      // default preserves the legacy per-tier drain.
+      withinTierDraw:           p.withinTierDraw ?? 'SEQUENTIAL',
+      // AU_BANKING
+      auSavingsInterestRate:    p.auSavingsInterestRate,
+      auFixedIncomeInterestRate: p.auFixedIncomeInterestRate,
+      // AU_RETIREMENT
+      superGrowthRate:          p.spouseSuperGrowthRate ?? 0.07,
+      auStockGrowthRate:        p.auStockGrowthRate,
+      auStockDividendRate:      p.auStockDividendRate,
+      // Mortality — per-person lifespan seed for MC actuarial draws (design/27 Step 15).
+      // The 'people' map mirrors context.people but lives in parameters so set()
+      // can overwrite individual lifeExpectancy values per MC iteration.
+      people: {
+        primary: {
+          name: 'Primary', residency: 'US', sex: 'M',
+          residencyState: p.residencyState || null,
+          lifeExpectancy: p.primaryLifeExpectancy ?? 90,
+        },
+        spouse: {
+          name: 'Spouse', residency: 'US', sex: 'F',
+          residencyState: p.residencyState || null,
+          lifeExpectancy: p.spouseLifeExpectancy ?? 90,
+        },
+      },
+      // US_AU_CROSS_BORDER
+      moveYear:                 p.moveYear,
+      exchangeRateUsdToAud:     p.exchangeRateUsdToAud,
+      intlTransferFeeUsd:       p.intlTransferFeeUsd,
+      startingResidency:        'US',
+      // US_ROTH_CONVERSION
+      rothConversionEnabled:    p.rothConversionEnabled,
+      rothConversionStartYear:  p.rothConversionStartYear,
+      rothConversionEndYear:    p.rothConversionEndYear,
+      rothConversionMaxBracket: p.rothConversionMaxBracket,
+      rothConversionOwner:      p.rothConversionOwner,
+      rothConversionMonth:      p.rothConversionMonth,
+      rothConversionDay:        p.rothConversionDay,
+    };
+
+    // Faithfully forward toolset-contributed params that the enumerated block
+    // above does not name (design 29 behavioralStrategies/bondLadderRungs,
+    // economic `shocks`/`primeSchedule`, …). Before this, such keys were silently
+    // dropped, so a headless caller doing
+    // buildDefaultConfig({ behavioralStrategies: ['BOND_LADDER'] }) got a no-op.
+    // Only explicit overrides are forwarded — a toolset param the caller didn't
+    // pass keeps its own schema default, so the reference scenario is unchanged.
+    const toolsetKeys = IntlRetirementScenario._toolsetParamKeys();
+    for (const key of Object.keys(params)) {
+      if (key in parameters) continue;      // enumerated block already owns it
+      if (!toolsetKeys.has(key)) continue;  // not a toolset param → not ours to forward
+      parameters[key] = params[key];
+    }
+
     return {
       toolsets: IntlRetirementScenario.getToolsets(),
       simStart:       ScenarioSerializer.toDateStr(simStart ?? new Date(Date.UTC(2026, 0, 1))),
       simEnd:         ScenarioSerializer.toDateStr(simEnd   ?? new Date(Date.UTC(2041, 0, 1))),
-
-      // ── Parameters (toolset-key names) ──────────────────────────────────────
-      parameters: {
-        // US_STATE_TAX (design 34) — cascades onto the primary person's residencyState
-        residencyState:           p.residencyState || null,
-        // US_STATE_TAX state move (design 34 §9) — Jan-1 move to a destination state
-        stateMoveYear:            p.stateMoveYear ?? undefined,
-        stateMoveDestination:     p.stateMoveDestination || null,
-        // US_BANKING
-        usSavingsInterestRate:    p.usSavingsInterestRate,
-        // ECONOMIC_REGIMES — central-bank Prime rates (design 56)
-        usPrimeRate:              p.usPrimeRate,
-        auPrimeRate:              p.auPrimeRate,
-        // US_RETIREMENT / AU_RETIREMENT share 'inflationRate'; US_AU_CROSS_BORDER uses both
-        inflationRate:            p.usInflationRate,
-        auInflationRate:          p.auInflationRate,
-        // AU_TAX — dedicated ATO CPI indexation rate (design 57 Part 2, Item A).
-        // Only forwarded when set; unset ⇒ tracks AU inflation.
-        ...(p.auCpiRate != null ? { auCpiRate: p.auCpiRate } : {}),
-        iraGrowthRate:            p.iraGrowthRate,
-        rothGrowthRate:           p.rothGrowthRate,
-        k401GrowthRate:           p.k401GrowthRate,
-        brokerageGrowthRate:      p.usStockGrowthRate,
-        goldGrowthRate:           p.goldGrowthRate,
-        brokerageDividendRate:    p.stockDividendRate,
-        dividendReinvest:         p.stockDividendReinvest,
-        fixedIncomeInterestRate:  p.fixedIncomeInterestRate,
-        monthlyExpenses:          p.monthlyExpenses,
-        inflationAdjust:          true,
-        // US_RETIREMENT — cross-border drawdown mode (design 58 Lever A). AUTO
-        // default preserves the legacy TAX_EFFICIENT⇒GLOBAL coupling.
-        crossBorderDrawdown:      p.crossBorderDrawdown ?? 'AUTO',
-        // US_RETIREMENT — within-tier draw policy (design 58 Lever C). SEQUENTIAL
-        // default preserves the legacy per-tier drain.
-        withinTierDraw:           p.withinTierDraw ?? 'SEQUENTIAL',
-        // AU_BANKING
-        auSavingsInterestRate:    p.auSavingsInterestRate,
-        auFixedIncomeInterestRate: p.auFixedIncomeInterestRate,
-        // AU_RETIREMENT
-        superGrowthRate:          p.spouseSuperGrowthRate ?? 0.07,
-        auStockGrowthRate:        p.auStockGrowthRate,
-        auStockDividendRate:      p.auStockDividendRate,
-        // Mortality — per-person lifespan seed for MC actuarial draws (design/27 Step 15).
-        // The 'people' map mirrors context.people but lives in parameters so set()
-        // can overwrite individual lifeExpectancy values per MC iteration.
-        people: {
-          primary: {
-            name: 'Primary', residency: 'US', sex: 'M',
-            residencyState: p.residencyState || null,
-            lifeExpectancy: p.primaryLifeExpectancy ?? 90,
-          },
-          spouse: {
-            name: 'Spouse', residency: 'US', sex: 'F',
-            residencyState: p.residencyState || null,
-            lifeExpectancy: p.spouseLifeExpectancy ?? 90,
-          },
-        },
-        // US_AU_CROSS_BORDER
-        moveYear:                 p.moveYear,
-        exchangeRateUsdToAud:     p.exchangeRateUsdToAud,
-        intlTransferFeeUsd:       p.intlTransferFeeUsd,
-        startingResidency:        'US',
-        // US_ROTH_CONVERSION
-        rothConversionEnabled:    p.rothConversionEnabled,
-        rothConversionStartYear:  p.rothConversionStartYear,
-        rothConversionEndYear:    p.rothConversionEndYear,
-        rothConversionMaxBracket: p.rothConversionMaxBracket,
-        rothConversionOwner:      p.rothConversionOwner,
-        rothConversionMonth:      p.rothConversionMonth,
-        rothConversionDay:        p.rothConversionDay,
-      },
+      parameters,
 
       // ── Persons ─────────────────────────────────────────────────────────────
       persons: [
