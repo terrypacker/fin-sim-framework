@@ -130,8 +130,15 @@ export const REAL_PROPERTY_PARAM_TEMPLATE = [
     description: 'Calendar year this property is sold. Leave blank for no planned sale.' },
 ];
 
-// Template-ready but empty until these assets grow parameters (design 55 §4 / Phase 4).
-export const COLLECTIBLE_PARAM_TEMPLATE    = [];
+// A collectible's optional planned sale year — parallels REAL_PROPERTY_PARAM_TEMPLATE.
+// A set year liquidates the collectible to cash; blank leaves it held (it still
+// appreciates + counts toward net worth). This is also the sale-year knob for an
+// inherited collectible, which is now a first-class collectible record (design 63
+// §14 — the bequest-specific `saleAsset.` template is retired in favor of this).
+export const COLLECTIBLE_PARAM_TEMPLATE    = [
+  { field: 'plannedSaleYear',  label: 'Planned Sale Year', type: 'Number', mc: true, opt: true, nullable: true,
+    description: 'Calendar year this collectible is sold (proceeds → cash). Leave blank for no planned sale.' },
+];
 export const COMPANY_EQUITY_PARAM_TEMPLATE = [];
 
 // ── Inheritance (design 63 §12.3) ────────────────────────────────────────────
@@ -163,11 +170,7 @@ export const INHERITED_RA_PARAM_TEMPLATE = [
     description: 'lump strategy: the window year (0–9) the whole account is distributed in. Blank = year 0.' },
 ];
 
-// Per inherited real property / collectible: an optional sale year (design 63 §13).
-// A set year liquidates the inherited asset to cash; blank leaves it held (it still
-// appreciates + counts toward net worth).
-export const INHERITED_SALE_PARAM_TEMPLATE = [
-  { field: 'plannedSaleYear', label: 'Sale Year', type: 'Number', mc: false, opt: false, nullable: true,
-    description: 'Calendar year the inherited property / collectible is sold (proceeds → cash). ' +
-      'Leave blank to hold it — it still appreciates and counts toward net worth.' },
-];
+// NOTE (design 63 §14): the former INHERITED_SALE_PARAM_TEMPLATE / `saleAsset.`
+// prefix is retired. Inherited real property / collectible are now first-class
+// service records, so their sale-year knob is the standard REAL_PROPERTY /
+// COLLECTIBLE `plannedSaleYear` param above — one source, shared with owned assets.

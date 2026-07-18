@@ -28,6 +28,7 @@ import { RealProperty }  from '../finance/assets/real-property.js';
 import { Collectible }   from '../finance/assets/collectible.js';
 import { CompanyEquity } from '../finance/assets/company-equity.js';
 import { Bequest }       from '../finance/assets/bequest.js';
+import { serializeInheritanceMeta, applyInheritanceMeta } from '../finance/assets/inheritance-meta.js';
 
 // ─── Framework classes ──────────────────────────────────────────────────────
 import { HandlerEntry }   from '../simulation-framework/handlers.js';
@@ -705,11 +706,14 @@ export class ScenarioSerializer {
         h instanceof Holding ? h.toJSON() : new Holding(h).toJSON()
       ));
     }
+    // Inheritance metadata (design 63 §14) — emitted only on promoted inherited
+    // records so owned accounts round-trip byte-for-byte.
+    Object.assign(d, serializeInheritanceMeta(account) ?? {});
     return d;
   }
 
   static _serializeRealProperty(p) {
-    return {
+    const d = {
       __type:               'RealProperty',
       id:                   p.id,
       name:                 p.name                 ?? '',
@@ -750,6 +754,10 @@ export class ScenarioSerializer {
       acquisitionPriceLevel:      p.acquisitionPriceLevel      ?? null,
       acquisitionDateByCountry:   p.acquisitionDateByCountry   ?? null,
     };
+    // Inheritance metadata (design 63 §14) — emitted only on promoted inherited
+    // property so owned properties round-trip byte-for-byte.
+    Object.assign(d, serializeInheritanceMeta(p) ?? {});
+    return d;
   }
 
   static _makeRealProperty(d) {
@@ -789,11 +797,14 @@ export class ScenarioSerializer {
       acquisitionDateByCountry:   d.acquisitionDateByCountry   ?? null,
     });
     if (d.stateKey) prop.stateKey = d.stateKey;
+    // Inheritance metadata (design 63 §14) — restored from the serialized record
+    // (defaults keep owned properties unchanged).
+    applyInheritanceMeta(prop, d);
     return prop;
   }
 
   static _serializeCollectible(c) {
-    return {
+    const d = {
       __type:               'Collectible',
       id:                   c.id,
       name:                 c.name                 ?? '',
@@ -821,6 +832,10 @@ export class ScenarioSerializer {
           }))
         : null,
     };
+    // Inheritance metadata (design 63 §14) — emitted only on promoted inherited
+    // collectibles so owned collectibles round-trip byte-for-byte.
+    Object.assign(d, serializeInheritanceMeta(c) ?? {});
+    return d;
   }
 
   static _makeCollectible(d) {
@@ -847,6 +862,8 @@ export class ScenarioSerializer {
         : null,
     });
     if (d.stateKey) col.stateKey = d.stateKey;
+    // Inheritance metadata (design 63 §14) — restored from the serialized record.
+    applyInheritanceMeta(col, d);
     return col;
   }
 
@@ -1100,6 +1117,8 @@ export class ScenarioSerializer {
     // preserving the earnings fraction, before any consumer (scenario-compare,
     // after-tax metric) reads the ledger. No-op for cash and already-tied ledgers.
     reconcileLedgerToBalance(account);
+    // Inheritance metadata (design 63 §14) — restored from the serialized record.
+    applyInheritanceMeta(account, d);
     return account;
   }
 

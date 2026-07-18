@@ -142,98 +142,140 @@ export class BequestService extends BaseService {
       ? Date.UTC(bequest.inheritanceYear, bequest.inheritanceMonth ?? 0, bequest.inheritanceDay ?? 15)
       : null;
 
+    // Inline assets: retirement / super (never promoted — SECURE stream / lump-sum),
+    // plus brokerage/property/collectible in the fallback case where promotion did
+    // not run (an inert bequest, or a registry-less test context). The INHERITANCE
+    // toolset seeds these at 0 (authoritative — net worth works even without the
+    // owning toolset) and the INHERIT event funds them.
     for (const asset of (bequest.assets ?? [])) {
       const meta = inheritedAssetMeta(asset.__type);
       if (!meta || !asset.stateKey) continue;
-      // INHERITANCE runs last, so this seed is authoritative (net worth always works,
-      // even without the owning toolset). For promoted assets (design 63 §13) the
-      // owning toolset — pulled in via the compiler's context-injection — adds the
-      // growth / dividend / appreciation / sale *handlers* on top of this state.
       seeds[asset.stateKey] = this._seedPlain(asset, meta, bequest);
       inherited.push(this._fundingDescriptor(asset, meta, bequest));
+    }
+
+    // Promoted SERVICE records (design 63 §14): brokerage / property / collectible
+    // that were moved out of `bequest.assets` into their own services. Their owning
+    // toolsets also seed them, but the INHERITANCE toolset runs LAST and seeds them
+    // at 0 too (authoritative — net worth works even without the owning toolset,
+    // exactly like the pre-§14 seed). The INHERIT event funds them + stamps basis
+    // at the date, off the funding descriptor built from the record's metadata.
+    // Promoted records link on the bequest's STATEKEY (its durable identity — the
+    // loader hoist tags them before createBequest (re)assigns the id).
+    for (const { record, category } of this._promotedRecords(bequest.stateKey ?? bequest.id)) {
+      seeds[record.stateKey] = this._seedFromRecord(record, category);
+      inherited.push(this._fundingDescriptorFromRecord(record, category, bequest));
     }
 
     return { seeds, inherited, inheritanceDateMs };
   }
 
+  // ─── Promotion helpers (design 63 §14) ──────────────────────────────────────
+  //
+  // Inherited brokerage / real-property / collectible are promoted OUT of
+  // `bequest.assets` into first-class service records tagged `{ inherited, bequestId }`,
+  // seeded at 0 (the FMV rides in `inheritedValue`; the INHERIT event funds them at
+  // the date). Because they are ordinary records they flow into every system — net
+  // worth, liquidity, drawdown, earnings/appreciation handlers, sale scheduling,
+  // per-record params, the OPT/MC/MPC levers, the holdings/journal UI — with no
+  // per-system special-casing, and they serialize ONCE (in their own service).
+  //
+  // The promotion itself is a CONFIG transform run by the loader BEFORE the param
+  // cascade (`ScenarioLoader._promoteBequestAssets`, design 63 §14.4 load-order
+  // invariant), so the promoted record is an ordinary `cfg.accounts/realProperties/
+  // collectibles` entry when its per-record params cascade. This service keeps only
+  // the runtime helpers below, which read the already-promoted records back by
+  // `bequestId` to seed + fund them.
+
   /**
-   * Promote a Bequest's inherited brokerage / real-property / collectible assets
-   * into first-class SERVICE-RECORD shapes (design 63 §13) so the compiler can
-   * inject them into `context.accounts` / `context.realProperties` /
-   * `context.collectibles`. Their own toolsets then seed (at 0), grow, draw, and
-   * sell them like any other record — the INHERIT event funds them at the date.
-   *
-   * Only ACTIVE bequests (a set inheritanceYear) contribute, so an inert bequest
-   * injects nothing and the reference golden stays byte-identical. Inherited
-   * retirement accounts are NOT promoted here (they are drained by the SECURE
-   * 10-year stream, §6.2; discretionary drawdown + growth are v2 — §13.4/§13.5);
-   * super is a forced lump-sum (§6.4).
-   *
-   * @param {import('../assets/bequest.js').Bequest} bequest
-   * @returns {{ accounts: object[], realProperties: object[], collectibles: object[] }}
+   * Build the zero-valued state seed for a promoted service record — the same
+   * shape _seedPlain produces for an inline asset, so the INHERITANCE toolset's
+   * authoritative net-worth seed is identical whether the asset was promoted or
+   * left inline. Brokerage keeps its role + drawdownPriority so liquidity/drawdown
+   * are state-driven (work even without the brokerage toolset; growth needs it).
+   * @param {object} record   - the promoted account / property / collectible record
+   * @param {string} category - 'account' | 'real-property' | 'collectible'
+   * @returns {object}
    */
-  expandContextRecords(bequest) {
-    const out = { accounts: [], realProperties: [], collectibles: [] };
-    if (bequest.inheritanceYear == null) return out;   // inert ⇒ inject nothing
-
-    for (const asset of (bequest.assets ?? [])) {
-      const meta = inheritedAssetMeta(asset.__type);
-      if (!meta || !asset.stateKey) continue;
-      const country  = asset.country ?? 'US';
-      const currency = asset.currency ?? (country === 'AU' ? AUD : USD);
-      const ownerId  = asset.ownerId ?? bequest.heirId ?? null;
-      const marker   = { inherited: true, bequestId: bequest.id };
-
-      if (meta.category === 'account' && !meta.isRetirement) {
-        // Inherited brokerage → heir-owned equity account: liquid, drawdownable,
-        // grows + pays dividends via the country's brokerage machinery.
-        out.accounts.push({
-          __type:                'BrokerageAccount',
-          name:                  asset.name ?? 'Inherited Brokerage',
-          stateKey:              asset.stateKey,
-          type:                  ACCOUNT_TYPE.BROKERAGE,
-          role:                  country === 'AU' ? ACCOUNT_ROLES.AU_STOCK : ACCOUNT_ROLES.US_STOCK,
-          balance:               0,
-          contributionBasis:     0,
-          holdings:              [],
-          ownerId, country, currency,
-          drawdownPriority:      asset.drawdownPriority ?? 2,
-          growthRate:            asset.growthRate   ?? null,
-          dividendRate:          asset.dividendRate ?? null,
-          allowsEarlyWithdrawal: true,
-          ...marker,
-        });
-      } else if (meta.category === 'real-property') {
-        out.realProperties.push({
-          __type:              'RealProperty',
-          name:                asset.name ?? 'Inherited Home',
-          stateKey:            asset.stateKey,
-          value:               0,
-          costBasis:           0,
-          mortgageBalance:     0,
-          appreciationRate:    asset.appreciationRate ?? 0.04,
-          plannedSaleYear:     asset.plannedSaleYear ?? null,
-          ownerId, country, currency,
-          isPrimaryResidence:  false,
-          inheritedFromMainResidence: asset.inheritedFromMainResidence ?? false,
-          ...marker,
-        });
-      } else if (meta.category === 'collectible') {
-        out.collectibles.push({
-          __type:           'Collectible',
-          name:             asset.name ?? 'Inherited Collectible',
-          stateKey:         asset.stateKey,
-          value:            0,
-          costBasis:        0,
-          appreciationRate: asset.appreciationRate ?? 0.035,
-          plannedSaleYear:  asset.plannedSaleYear ?? null,
-          isGold:           asset.isGold ?? false,
-          ownerId, country, currency,
-          ...marker,
-        });
-      }
+  _seedFromRecord(record, category) {
+    const marker = {
+      name:      record.name ?? null,
+      stateKey:  record.stateKey,
+      country:   record.country  ?? 'US',
+      currency:  record.currency ?? null,
+      ownerId:   record.ownerId  ?? null,
+      inherited: true,
+      bequestId: record.bequestId,
+    };
+    if (category === 'real-property') {
+      return { kind: 'real-property', value: 0, mortgageBalance: 0, costBasis: 0, ...marker };
     }
+    if (category === 'collectible') {
+      return { kind: 'collectible', value: 0, costBasis: 0, ...marker };
+    }
+    // account (inherited brokerage — promoted, so liquid + drawdownable).
+    return {
+      balance:               0,
+      type:                  ACCOUNT_TYPE.BROKERAGE,
+      role:                  record.role ?? null,
+      minimumBalance:        0,
+      drawdownPriority:      record.drawdownPriority ?? null,
+      allowsEarlyWithdrawal: true,
+      holdings:              [],
+      ...marker,
+    };
+  }
+
+  /**
+   * The promoted service records belonging to this bequest, across the account /
+   * real-property / collectible services, tagged with their category.
+   * @param {string} bequestId
+   * @returns {Array<{record: object, category: string}>}
+   */
+  _promotedRecords(bequestId) {
+    const reg = this.bus?.serviceRegistry;
+    if (!reg) return [];
+    const out = [];
+    const scan = (svc, category) => {
+      for (const r of (svc?.getAll?.() ?? [])) {
+        if (r.inherited && r.bequestId === bequestId) out.push({ record: r, category });
+      }
+    };
+    scan(reg.accountService,      'account');
+    scan(reg.realPropertyService, 'real-property');
+    scan(reg.collectibleService,  'collectible');
     return out;
+  }
+
+  /**
+   * Build the flat INHERIT funding descriptor for a promoted service record,
+   * reading the basis anchors off the record's inheritance metadata (design 63
+   * §14 P1). Mirrors _fundingDescriptor (which reads an inline asset), so the
+   * INHERIT reducer funds a promoted record identically to an inline one.
+   * @param {object} record
+   * @param {string} category - 'account' | 'real-property' | 'collectible'
+   * @param {import('../assets/bequest.js').Bequest} bequest
+   * @returns {object}
+   */
+  _fundingDescriptorFromRecord(record, category, bequest) {
+    return {
+      stateKey:                   record.stateKey,
+      name:                       record.name ?? '',
+      category,
+      isRetirement:               false,
+      isSuper:                    false,
+      isRoth:                     false,
+      country:                    record.country ?? 'US',
+      inheritedValue:             record.inheritedValue ?? 0,
+      deceasedCostBase:           record.deceasedCostBase ?? null,
+      deceasedAcquisitionDate:    record.deceasedAcquisitionDate ?? null,
+      inheritedFromMainResidence: record.inheritedFromMainResidence ?? false,
+      taxFreeComponent:           null,
+      taxableComponent:           null,
+      relationship:               bequest.relationship ?? 'immediate',
+      decedentState:              bequest.decedentState ?? null,
+      paidViaEstate:              bequest.paidViaEstate ?? false,
+    };
   }
 
   // ─── Internal helpers ─────────────────────────────────────────────────────

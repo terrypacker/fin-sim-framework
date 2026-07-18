@@ -178,13 +178,18 @@ test('GEN-9: decodeGeneratedParamKey round-trips a generated key back to its nod
 // generator change. These tests pin that wiring: the plumbing (loop, key namespace,
 // node shape, decode) is in place ahead of the fields.
 
-test('GEN-10: collectibles/companyEquities are processed; empty templates emit no params, no crash', () => {
+test('GEN-10: collectibles generate a sale-year param; companyEquities (empty template) emit none', () => {
   const cfg = {
     collectibles:    [{ stateKey: 'artCollectible', name: 'Art', country: 'US', value: 50000 }],
     companyEquities: [{ stateKey: 'companyEquityAccount', name: 'RSUs', country: 'US', value: 120000 }],
   };
   const out = ScenarioParamGenerator.generate(cfg);
-  assert.strictEqual(out.length, 0, 'empty templates ⇒ no params today (wiring present, fields deferred)');
+  // Collectibles now carry a plannedSaleYear param (design 63 §14 folded the inherited
+  // sale-year knob into the standard collectible template); companyEquities stay empty.
+  const keys = new Set(out.map(e => e.key));
+  assert.ok(keys.has('coll.artCollectible.plannedSaleYear'), 'collectible sale-year param');
+  assert.ok(![...keys].some(k => k.startsWith('equity.')), 'companyEquity template still empty');
+  assert.strictEqual(out.length, 1);
 });
 
 test('GEN-11: a populated collectible/equity template field generates the coll./equity. namespace', () => {

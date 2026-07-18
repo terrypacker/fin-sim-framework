@@ -36,6 +36,7 @@ import { AU_INCOME }         from './toolsets/au-income-toolset.js';
 import { INHERITANCE }       from './toolsets/inheritance-toolset.js';
 import { ECONOMIC_REGIMES }  from './toolsets/economic-regimes-toolset.js';
 import { normalizeCountryCode } from '../finance/country-codes.js';
+import { inheritedAssetMeta } from '../finance/services/bequest-service.js';
 import { deriveEarningsBasis } from '../finance/assets/investment-account.js';
 import { rescaleHoldingsToBalance } from '../finance/holdings/holding-utils.js';
 import { ACCOUNT_ROLES } from '../finance/state/account-roles.js';
@@ -178,6 +179,13 @@ export class ScenarioLoader {
 
     if (cfg.toolsets?.length > 0) {
       this._driftMergeDomainRecords(cfg);
+      // Design 63 §14: hoist each ACTIVE bequest's inherited brokerage / property /
+      // collectible OUT of `cfg.bequests[].assets` into `cfg.accounts / realProperties
+      // / collectibles` as tagged records — BEFORE the param cascade, so their
+      // per-record params (drawdownPriority, plannedSaleYear, rate overrides) cascade
+      // onto them like any owned record (the §14.4 load-order invariant). Retirement /
+      // super stay inline. Runs after drift-merge (so drift-added bequests hoist too).
+      this._promoteBequestAssets(cfg);
       this._normalizeParams(cfg);
       this._normalizeRetirementBasis(cfg);
     }
@@ -241,6 +249,85 @@ export class ScenarioLoader {
         reg.registerCurrencyPaths(p.currencyStateKeys, p.currency ?? p.defaultCurrency);
       }
     }
+  }
+
+  /**
+   * Design 63 §14: promote each ACTIVE bequest's inherited brokerage / real-property
+   * / collectible OUT of `cfg.bequests[].assets` into the matching top-level cfg
+   * record list (accounts / realProperties / collectibles), tagged
+   * `{ inherited, bequestId }` + basis metadata and seeded at value/balance 0. Once
+   * hoisted they are ordinary config records — they deserialize into their services,
+   * flow through the per-record param generation + cascade, appear in the UI/opt
+   * lists, and serialize ONCE (never double). Retirement / super stay inline (SECURE
+   * stream / lump-sum). An inert bequest (no inheritanceYear) is left untouched so the
+   * reference golden is byte-identical (§14 regression guard). Idempotent: a record
+   * already present by stateKey (a new-format save) is not re-added.
+   * @private
+   */
+  _promoteBequestAssets(cfg) {
+    const bequests = cfg.bequests ?? [];
+    if (bequests.length === 0) return;
+    cfg.accounts       = cfg.accounts       ?? [];
+    cfg.realProperties = cfg.realProperties ?? [];
+    cfg.collectibles   = cfg.collectibles   ?? [];
+    for (const b of bequests) {
+      if (b.inheritanceYear == null) continue;
+      const remaining = [];
+      for (const asset of (b.assets ?? [])) {
+        const meta = inheritedAssetMeta(asset.__type);
+        // Retirement / super stay inline; non-inherited or keyless descriptors untouched.
+        if (!meta || meta.isRetirement || !asset.stateKey) { remaining.push(asset); continue; }
+        const { list, rec } = this._bequestAssetToRecord(asset, meta, b, cfg);
+        if (!list.some(r => r.stateKey === asset.stateKey)) list.push(rec);
+      }
+      b.assets = remaining;
+    }
+  }
+
+  /**
+   * Build the top-level cfg record (serialized shape) for one inherited brokerage /
+   * real-property / collectible asset, plus the cfg list it belongs in. The `INHERIT`
+   * event funds it at the date; here it seeds at value/balance 0. The record carries
+   * the inheritance metadata the funding reducer reads (design 63 §14 P1).
+   * @private
+   * @returns {{ list: object[], rec: object }}
+   */
+  _bequestAssetToRecord(asset, meta, bequest, cfg) {
+    const country  = asset.country ?? 'US';
+    const currency = asset.currency ?? (country === 'AU'
+      ? { code: 'AUD', symbol: 'A$' } : { code: 'USD', symbol: '$' });
+    const ownerId  = asset.ownerId ?? bequest.heirId ?? null;
+    const inh = {
+      inherited:                  true,
+      // Link on the bequest's STATEKEY, not its id: the id is (re)assigned by
+      // BequestService.createBequest at deserialize (after this hoist), so it isn't
+      // stable here; the stateKey is the bequest's durable identity.
+      bequestId:                  bequest.stateKey ?? bequest.id,
+      inheritedValue:             asset.inheritedValue ?? 0,
+      deceasedCostBase:           asset.deceasedCostBase ?? null,
+      deceasedAcquisitionDate:    asset.deceasedAcquisitionDate ?? null,
+      inheritedFromMainResidence: asset.inheritedFromMainResidence ?? false,
+    };
+    if (meta.category === 'real-property') {
+      return { list: cfg.realProperties, rec: {
+        __type: 'RealProperty', name: asset.name ?? 'Inherited Home', stateKey: asset.stateKey,
+        value: 0, appreciationRate: asset.appreciationRate ?? 0.04,
+        plannedSaleYear: asset.plannedSaleYear ?? null, ownerId, country, currency,
+        isPrimaryResidence: false, ...inh } };
+    }
+    if (meta.category === 'collectible') {
+      return { list: cfg.collectibles, rec: {
+        __type: 'Collectible', name: asset.name ?? 'Inherited Collectible', stateKey: asset.stateKey,
+        value: 0, appreciationRate: asset.appreciationRate ?? 0.035,
+        plannedSaleYear: asset.plannedSaleYear ?? null, isGold: asset.isGold ?? false,
+        ownerId, country, currency, ...inh } };
+    }
+    // account (inherited brokerage — retirement/super excluded by the caller).
+    return { list: cfg.accounts, rec: {
+      __type: 'BrokerageAccount', name: asset.name ?? 'Inherited Brokerage', stateKey: asset.stateKey,
+      type: 'brokerage', role: country === 'AU' ? 'au-stock' : 'us-stock', balance: 0,
+      ownerId, country, currency, drawdownPriority: asset.drawdownPriority ?? 2,
+      growthRate: asset.growthRate ?? null, dividendRate: asset.dividendRate ?? null, ...inh } };
   }
 
   /**
