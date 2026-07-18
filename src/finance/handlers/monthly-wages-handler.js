@@ -39,7 +39,7 @@ export class MonthlyWagesHandler extends HandlerEntry {
   constructor({ stateRegistry } = {}) {
     super(null, 'Monthly Wages');
     this.stateRegistry = stateRegistry;
-    this.generatedActionTypes = ['WAGES_INCOME_APPLY', 'AU_WAGES_INCOME_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
+    this.generatedActionTypes = ['WAGES_INCOME_APPLY', 'AU_WAGES_INCOME_APPLY', 'SE_INCOME_US_APPLY', 'SE_INCOME_AU_APPLY', 'RECORD_FIELD_VALUE', 'RECORD_BALANCE'];
   }
 
   static fromJSON(d, { stateRegistry }) {
@@ -70,11 +70,17 @@ export class MonthlyWagesHandler extends HandlerEntry {
         ?? this.stateRegistry?.getStateKey(role, key)
         ?? this.stateRegistry?.getStateKey(role)
         ?? (isAud ? 'auSavingsAccount' : 'usSavingsAccount');
+      // Design 69: a self-employed person's monthlyWage is self-employment income —
+      // route it through the SE apply path (SECA on the US side) instead of wages.
+      // Currency/target/personKey/residency are identical to the wage path.
+      const isSelfEmployed = !!person.selfEmployed;
+      const applyType = isSelfEmployed
+        ? (isAud ? 'SE_INCOME_AU_APPLY' : 'SE_INCOME_US_APPLY')
+        : (isAud ? 'AU_WAGES_INCOME_APPLY' : 'WAGES_INCOME_APPLY');
+      const label = isSelfEmployed ? 'Self-Employment' : 'Wages';
       actions.push(
-        isAud
-          ? { type: 'AU_WAGES_INCOME_APPLY', amount: wage, residency: person.residency ?? null, personKey: key, targetKey }
-          : { type: 'WAGES_INCOME_APPLY',    amount: wage, residency: person.residency ?? null, personKey: key, targetKey },
-        new FieldValueAction(`wages_${key}`, `${person.name || key} Wages`, wage),
+        { type: applyType, amount: wage, residency: person.residency ?? null, personKey: key, targetKey },
+        new FieldValueAction(`wages_${key}`, `${person.name || key} ${label}`, wage),
       );
       touched.add(targetKey);
     }

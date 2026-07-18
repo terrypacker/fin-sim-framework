@@ -950,6 +950,7 @@ export class ScenarioSerializer {
       lifeExpectancy:        person.lifeExpectancy ?? 90,
       socialSecurityMonthly: person.socialSecurityMonthly ?? 2800,
       monthlyWage:           person.monthlyWage ?? 0,
+      selfEmployed:          person.selfEmployed ?? false,
       retirementDate:        ScenarioSerializer.toDateStr(person.retirementDate)
                                ?? new Date(Date.UTC(2040, 0, 1)).toISOString(),
       wageCurrency:          person.wageCurrency ?? null,
@@ -1107,6 +1108,7 @@ export class ScenarioSerializer {
       lifeExpectancy:        d.lifeExpectancy ?? 90,
       socialSecurityMonthly: d.socialSecurityMonthly ?? 2800,
       monthlyWage:           d.monthlyWage ?? 0,
+      selfEmployed:          d.selfEmployed ?? false,
       retirementDate:        d.retirementDate ? new Date(d.retirementDate) : new Date(Date.UTC(2040, 0, 1)),
       wageCurrency:          d.wageCurrency ?? undefined,
       ssCurrency:            d.ssCurrency   ?? undefined,

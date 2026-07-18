@@ -120,9 +120,11 @@ export class SeIncomeUsApplyReducer extends AccountServiceReducer {
   }
 
   reduce(state, action) {
-    const { amount, residency } = action;
-    this.accountService.transaction(state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
-    return this.newState(state, {}, [{ type: 'SE_INCOME_US_TAX', amount, residency }]);
+    const { amount, residency, personKey, targetKey } = action;
+    // Credit the transaction account the handler resolved (design 69, parity with
+    // wages); fall back to the single US cash pool for legacy actions.
+    this.accountService.transaction(state[targetKey] ?? state[resolveCashKey(this.stateRegistry, 'US', state)], amount, null);
+    return this.newState(state, {}, [{ type: 'SE_INCOME_US_TAX', amount, residency, personKey }]);
   }
 }
 

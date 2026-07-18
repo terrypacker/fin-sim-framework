@@ -31,6 +31,7 @@ export class PeopleController {
       lifeExpectancy:        Number(data.lifeExpectancy),
       socialSecurityMonthly: Number(data.socialSecurityMonthly),
       monthlyWage:           Number(data.monthlyWage ?? 0),
+      selfEmployed:          Boolean(data.selfEmployed),
       retirementDate:        data.retirementDate ? new Date(data.retirementDate) : new Date(Date.UTC(2040, 0, 1)),
       wageCurrency:          data.wageCurrency,
       ssCurrency:            data.ssCurrency,
@@ -47,6 +48,7 @@ export class PeopleController {
     if (normalized.lifeExpectancy        != null) normalized.lifeExpectancy        = Number(normalized.lifeExpectancy);
     if (normalized.socialSecurityMonthly != null) normalized.socialSecurityMonthly = Number(normalized.socialSecurityMonthly);
     if (normalized.monthlyWage           != null) normalized.monthlyWage           = Number(normalized.monthlyWage);
+    if (normalized.selfEmployed          != null) normalized.selfEmployed          = Boolean(normalized.selfEmployed);
     if (normalized.retirementDate)                normalized.retirementDate        = new Date(normalized.retirementDate);
     return this._service.updatePerson(id, normalized);
   }

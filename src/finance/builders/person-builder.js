@@ -34,6 +34,7 @@ class PersonBuilderInstance {
     this._lifeExpectancy        = 90;
     this._socialSecurityMonthly = 2800;
     this._monthlyWage           = 0;
+    this._selfEmployed          = false;
     this._retirementDate        = new Date(Date.UTC(2040, 0, 1));
   }
 
@@ -46,6 +47,8 @@ class PersonBuilderInstance {
   lifeExpectancy(v)        { this._lifeExpectancy = v;        return this; }
   socialSecurityMonthly(v) { this._socialSecurityMonthly = v; return this; }
   monthlyWage(v)           { this._monthlyWage = v;           return this; }
+  /** @param {boolean} v - true = monthlyWage is self-employment income (design 69) */
+  selfEmployed(v)          { this._selfEmployed = v;          return this; }
   retirementDate(v)        { this._retirementDate = v;        return this; }
 
   build() {
@@ -55,6 +58,7 @@ class PersonBuilderInstance {
       lifeExpectancy:        this._lifeExpectancy,
       socialSecurityMonthly: this._socialSecurityMonthly,
       monthlyWage:           this._monthlyWage,
+      selfEmployed:          this._selfEmployed,
       retirementDate:        this._retirementDate,
     });
   }

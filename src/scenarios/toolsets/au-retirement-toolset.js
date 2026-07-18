@@ -221,6 +221,7 @@ export const AU_RETIREMENT = {
         name:                  person.name,
         birthDate:             person.birthDate,
         monthlyWage:           person.monthlyWage           ?? 0,
+        selfEmployed:          person.selfEmployed          ?? false, // design 69
         wageCurrency:          person.wageCurrency          ?? 'AUD',
         retirementDate:        person.retirementDate        ?? null,
         socialSecurityMonthly: person.socialSecurityMonthly ?? 0,
