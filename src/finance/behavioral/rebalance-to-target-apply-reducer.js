@@ -13,6 +13,7 @@ import { ALLOCATION }           from '../holdings/allocation.js';
 import { consumeHoldingsFifo }  from '../holdings/holdings-fifo.js';
 import { resolveRateKey }       from '../holdings/default-allocations.js';
 import { RATE_KEY_META }        from '../economic-regimes/rate-keys.js';
+import { resolveYield }         from '../economic-regimes/yield-curve.js';
 import { roleCanHoldGold }      from './rebalance-to-target-reducer.js';
 
 /**
@@ -232,10 +233,11 @@ function _newSleeve({ allocation, amount, country, role, purchaseMs, holdings = 
  * pre-G1 floating behavior (falls back to the coupon handler's per-account rate).
  */
 function _stampCouponRate(state, stateKey, rateKey) {
-  const rates = state?.effectiveInterestRates;
-  if (!rates || rateKey == null) return null;
-  const perAcct = (stateKey != null) ? rates[`${rateKey}::${stateKey}`] : undefined;
-  return perAcct ?? rates[rateKey] ?? null;
+  // design 67 — a rebalance-established sleeve carries no maturityDate (it is a bond
+  // FUND), so it locks the yield at the fund tenor (the 5y anchor). resolveYield keeps
+  // the per-account `<rateKey>::<stateKey>` → shared `<rateKey>` precedence and returns
+  // null when neither is present, preserving the pre-G1 floating fallback.
+  return resolveYield(state, { rateKey, stateKey, tenorYears: null });
 }
 
 /**

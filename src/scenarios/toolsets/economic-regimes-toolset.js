@@ -20,6 +20,10 @@ import { RemoveRegimeReducer }            from '../../finance/economic-regimes/r
 import { RevalueAssetReducer }            from '../../finance/economic-regimes/revalue-asset-reducer.js';
 import { BondPriceAdjustReducer }         from '../../finance/economic-regimes/bond-price-adjust-reducer.js';
 import { BondMaturityReducer }            from '../../finance/economic-regimes/bond-maturity-reducer.js';
+import { YieldCurveReducer }              from '../../finance/economic-regimes/yield-curve-reducer.js';
+import { YieldCurveStepReducer }          from '../../finance/economic-regimes/yield-curve-step-reducer.js';
+import { YieldCurveTickHandler }          from '../../finance/economic-regimes/yield-curve-tick-handler.js';
+import { shapeDelta }                     from '../../finance/economic-regimes/yield-curve.js';
 import { EconomicShockHandler }           from '../../finance/economic-regimes/economic-shock-handler.js';
 import { EconomicRecoveryTickHandler }    from '../../finance/economic-regimes/economic-recovery-tick-handler.js';
 import { SHOCK_LIBRARY, SHOCK_PRESET_OPTIONS } from '../../finance/economic-shocks/shock-library.js';
@@ -107,6 +111,31 @@ function collectBaseInterestRates(p) {
   if (p.auPrimeRate              != null) rates[RATE_KEYS.PRIME_AU]        = p.auPrimeRate;
   return rates;
 }
+
+/**
+ * Collect the per-country yield-curve SHAPE overlays (design 67 §3, representation C).
+ * Each is an array of `{ tenor, spread }` anchor points added on top of the
+ * `FIXED_INCOME_{country}` level. An absent/empty shape ⇒ a flat curve (every spread
+ * 0 ⇒ every tenor returns the level anchor), byte-identical to the pre-67 single rate.
+ */
+function collectYieldCurves(p) {
+  return {
+    US: Array.isArray(p.usYieldCurveShape) ? p.usYieldCurveShape : DEFAULT_YIELD_CURVE_SHAPE,
+    AU: Array.isArray(p.auYieldCurveShape) ? p.auYieldCurveShape : DEFAULT_YIELD_CURVE_SHAPE,
+  };
+}
+
+/**
+ * Default upward-sloping curve shape (design 67 §5). Anchored at the 5y level point
+ * (spread 0): shorter bonds yield less, longer bonds earn a term premium. Applied to
+ * both countries unless a scenario overrides `usYieldCurveShape` / `auYieldCurveShape`.
+ */
+const DEFAULT_YIELD_CURVE_SHAPE = Object.freeze([
+  { tenor: 1,  spread: -0.010 },
+  { tenor: 5,  spread:  0.000 },
+  { tenor: 10, spread:  0.006 },
+  { tenor: 30, spread:  0.012 },
+]);
 
 /**
  * Seed per-account rate keys `<memberKey>::<stateKey>` (design 55 §8) into the
@@ -311,6 +340,48 @@ function schedulePrimeRateSteps(schedule, p, startDate, endDate, events) {
 }
 
 /**
+ * Compile an optional yield-curve **schedule** (design 67 §6, Phase 3) into scheduled
+ * curve-shape twists. The schedule is an array of `[{ year, US:[{tenor,spread}], AU:[…] }]`
+ * **absolute** target shapes, each taking effect at the start of its `year` and holding
+ * until the next entry (a step / boxcar path, mirroring `schedulePrimeRateSteps`).
+ *
+ * Each entry becomes a permanent (L-profile) regime spanning `[year_i, year_{i+1})` whose
+ * `yieldCurveTwist[cc]` is the **delta** `absShape − baseShape` (`shapeDelta`). Because the
+ * windows don't overlap, exactly one is active at a time and composes at factor 1, so
+ * `yieldCurve[cc] = base + (abs − base) = abs` during its window — the scheduled shape.
+ * An entry names only the countries it moves; the last entry runs through sim end.
+ */
+function scheduleYieldCurveSteps(schedule, p, endDate, events) {
+  if (!Array.isArray(schedule) || schedule.length === 0) return;
+  const base = collectYieldCurves(p);
+  const entries = schedule
+    .filter(e => e && Number.isFinite(e.year))
+    .sort((a, b) => a.year - b.year);
+  const endBoundYear = endDate.getUTCFullYear() + 1;
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry    = entries[i];
+    const nextYear = (i + 1 < entries.length) ? entries[i + 1].year : endBoundYear;
+    const durationMonths = (nextYear - entry.year) * 12;
+    if (durationMonths <= 0) continue;                 // duplicate / out-of-order year
+
+    const yieldCurveTwist = {};
+    for (const cc of ['US', 'AU']) {
+      if (Array.isArray(entry[cc])) yieldCurveTwist[cc] = shapeDelta(entry[cc], base[cc]);
+    }
+    if (Object.keys(yieldCurveTwist).length === 0) continue;
+
+    scheduleShock({
+      shockId:   `YCURVE_SCHED_${entry.year}`,
+      name:      `Yield Curve Schedule ${entry.year}`,
+      startDate: new Date(Date.UTC(entry.year, 0, 1)),
+      regime:    { yieldCurveTwist },
+      recovery:  { profile: 'L', durationMonths },
+    }, events);
+  }
+}
+
+/**
  * ECONOMIC_REGIMES toolset — adds a shock-and-regime layer on top of the
  * existing pipeline.
  *
@@ -330,11 +401,12 @@ export const ECONOMIC_REGIMES = {
   dependencies: [],
 
   types: {
-    handlers: [EconomicShockHandler, EconomicRecoveryTickHandler],
-    reducers: [RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, BondPriceAdjustReducer, BondMaturityReducer],
+    handlers: [EconomicShockHandler, EconomicRecoveryTickHandler, YieldCurveTickHandler],
+    reducers: [RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, YieldCurveReducer, YieldCurveStepReducer, BondPriceAdjustReducer, BondMaturityReducer],
     actions: [
       { type: 'ADD_REGIME_APPLY',    fields: { regime: ValueType.any() } },
       { type: 'REMOVE_REGIME_APPLY', fields: { regimeId: ValueType.text() } },
+      { type: 'YIELD_CURVE_STEP_APPLY', fields: { country: ValueType.text(), deviation: ValueType.number() } },
       {
         type: 'REVALUE_ASSET_APPLY',
         fields: {
@@ -420,6 +492,66 @@ export const ECONOMIC_REGIMES = {
         description:  'Optional per-year central-bank policy path: each row sets the absolute PRIME_US / PRIME_AU rate taking effect that year and holding until the next row. A step compiles into a scheduled Prime move that fans out to every Prime-linked cash account and variable loan (design 56 §5).',
       },
       {
+        key:          'usYieldCurveShape',
+        label:        'US Yield Curve Shape',
+        type:         'Object',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: null,
+        description:  'Optional US term-structure overlay (design 67): an array of { tenor, spread } anchor points added to the FIXED_INCOME_US level, linearly interpolated and clamped to the endpoints. The 5-year point is the level anchor (spread 0). Absent/empty ⇒ a flat curve (every tenor = the level), identical to a single fixed-income rate.',
+      },
+      {
+        key:          'auYieldCurveShape',
+        label:        'AU Yield Curve Shape',
+        type:         'Object',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: null,
+        description:  'Optional AU term-structure overlay (design 67): an array of { tenor, spread } anchor points added to the FIXED_INCOME_AU level, linearly interpolated and clamped to the endpoints. Independent of the US shape. Absent/empty ⇒ a flat curve.',
+      },
+      {
+        key:          'yieldCurveSchedule',
+        label:        'Yield Curve Schedule',
+        type:         'Object',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: null,
+        description:  'Optional per-year yield-curve path (design 67 §6): an array of { year, US:[{tenor,spread}], AU:[…] } ABSOLUTE target shapes, each taking effect that year and holding until the next row (a step path). Each compiles to a scheduled curve twist that composes with the level move. Empty ⇒ the static default shape.',
+      },
+      {
+        key:          'yieldCurveStochastic',
+        label:        'Stochastic Yield Curve',
+        type:         'Boolean',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: false,
+        description:  'When on (design 67 §6), the fixed-income LEVEL evolves as a seeded mean-reverting (Ornstein-Uhlenbeck) walk each year via the in-loop sim.rng, giving bonds realistic year-to-year rate risk. Off by default ⇒ no randomness drawn, runs stay byte-identical. Reproducible: the rng cursor is snapshot-safe.',
+      },
+      {
+        key:          'yieldCurveVol',
+        label:        'Yield Curve Volatility',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 0.01,
+        description:  'Annualized standard deviation (in rate units, e.g. 0.01 = 100 bps) of the stochastic level walk. Only used when Stochastic Yield Curve is on.',
+      },
+      {
+        key:          'yieldCurveReversionSpeed',
+        label:        'Yield Curve Mean-Reversion Speed',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 0.3,
+        description:  'Ornstein-Uhlenbeck pull-back speed per year toward the anchor level. Higher ⇒ the level snaps back faster. Only used when Stochastic Yield Curve is on.',
+      },
+      {
         key:          'behavioralStrategies',
         label:        'Behavioral Strategies',
         type:         'EnumMulti',
@@ -447,6 +579,10 @@ export const ECONOMIC_REGIMES = {
       US: p.usInflationRate ?? p.inflationRate ?? 0.03,
       AU: p.auInflationRate ?? p.inflationRate ?? 0.03,
     };
+    // Yield-curve shape overlay (design 67). `baseYieldCurve` is the base→effective
+    // seed (symmetric with baseInterestRates), ready for the Phase-3 twist reducer;
+    // in Phases 1–2 the shape is static so effective == base.
+    const yieldCurve = collectYieldCurves(p);
     return {
       activeRegimes:               [],
       primeLinks,
@@ -454,12 +590,18 @@ export const ECONOMIC_REGIMES = {
       baseInterestRates,
       baseInflationRates,
       baseAppreciationRates:       {},
+      baseYieldCurve:              { US: [...yieldCurve.US], AU: [...yieldCurve.AU] },
       effectiveGrowthRates:        { ...baseGrowthRates },
       effectiveInterestRates:      { ...baseInterestRates },
       effectiveInflationRates:     { ...baseInflationRates },
       effectiveAppreciationRates:  {},
       effectiveDividendAdjustments:{},
+      yieldCurve,
+      // Stochastic level deviation per country (design 67 §6, Phase 3). Mean-0 OU walk
+      // seeded at 0; stays 0 (and thus a no-op) unless `yieldCurveStochastic` is on.
+      yieldCurveLevelDev:          { US: 0, AU: 0 },
       priorMarkRates:              {},
+      priorMarkCurve:              {},
     };
   },
 
@@ -477,6 +619,23 @@ export const ECONOMIC_REGIMES = {
 
     // Optional Prime rate path (design 56 §5, Phase 2b) → scheduled PRIME_* moves.
     schedulePrimeRateSteps(p.primeSchedule, p, context.startDate, context.endDate, events);
+
+    // Optional yield-curve path (design 67 §6) → scheduled curve twists.
+    scheduleYieldCurveSteps(p.yieldCurveSchedule, p, context.endDate, events);
+
+    // Optional stochastic curve evolution (design 67 §6) — an annual tick series that
+    // drives the seeded-RNG level walk. Scheduled only when on, so default runs draw
+    // no randomness and stay byte-identical.
+    if (p.yieldCurveStochastic) {
+      events.push(new EventSeries({
+        name:     'Yield Curve Tick',
+        type:     'YIELD_CURVE_TICK',
+        interval: 'year-end',
+        startOffset: 1,
+        enabled:  true,
+        color:    '#7E57C2',
+      }));
+    }
 
     if (strats.includes('TAX_LOSS_HARVEST')) {
       events.push(new EventSeries({
@@ -511,9 +670,15 @@ export const ECONOMIC_REGIMES = {
     );
     const behavioralHandlers = (context.parameters.behavioralStrategies ?? [])
       .flatMap(k => BEHAVIORAL_STRATEGY_REGISTRY[k]?.handlers(context) ?? []);
+    const p = context.parameters;
     return [
       new EconomicShockHandler({ rateKeyToStateKeys }),
       new EconomicRecoveryTickHandler(),
+      // Stochastic curve evolution (design 67 §6) — only when on, so the sim.rng is
+      // untouched otherwise and runs stay byte-identical.
+      ...(p.yieldCurveStochastic
+        ? [new YieldCurveTickHandler({ vol: p.yieldCurveVol ?? 0.01, reversionSpeed: p.yieldCurveReversionSpeed ?? 0.3 })]
+        : []),
       ...behavioralHandlers,
     ];
   },
@@ -527,6 +692,8 @@ export const ECONOMIC_REGIMES = {
       new AddRegimeReducer(),
       new RemoveRegimeReducer(),
       new RevalueAssetReducer(),
+      new YieldCurveReducer(),      // design 67 §6 — composes twists + folds stochastic level (11.5, before the mark)
+      new YieldCurveStepReducer(),  // design 67 §6 — stores the stochastic level deviation
       new BondPriceAdjustReducer(),
       new BondMaturityReducer(),
       ...behavioralReducers,

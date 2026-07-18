@@ -61,6 +61,10 @@ export class EconomicShockHandler extends HandlerEntry {
       fxAdjustment:           shock.regime?.fxAdjustment           ?? null,
       fxVolAdjustment:        shock.regime?.fxVolAdjustment        ?? null,
       dividendAdjustment:     shock.regime?.dividendAdjustment     ?? null,
+      // Yield-curve shape twist (design 67 §6): a per-country { US:[{tenor,spread}], AU:… }
+      // additive shape delta the YieldCurveReducer composes onto baseYieldCurve, scaled
+      // by this regime's recovery factor. Null for non-curve shocks (a no-op there).
+      yieldCurveTwist:        shock.regime?.yieldCurveTwist        ?? null,
       tags:                   shock.tags ?? [],
     };
 

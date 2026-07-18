@@ -87,6 +87,10 @@ import { RegimeApplyReducer } from './finance/economic-regimes/regime-apply-redu
 import { REGIME_TAG } from './finance/economic-regimes/regime-tag.js';
 import { RemoveRegimeReducer } from './finance/economic-regimes/remove-regime-reducer.js';
 import { RevalueAssetReducer } from './finance/economic-regimes/revalue-asset-reducer.js';
+import { YieldCurveReducer } from './finance/economic-regimes/yield-curve-reducer.js';
+import { YieldCurveStepReducer } from './finance/economic-regimes/yield-curve-step-reducer.js';
+import { YieldCurveTickHandler } from './finance/economic-regimes/yield-curve-tick-handler.js';
+import { interpolateSpread, resolveYield, composeYieldCurve, shapeDelta, countryOfRateKey } from './finance/economic-regimes/yield-curve.js';
 import { SHOCK_LIBRARY, SHOCK_PRESET_OPTIONS } from './finance/economic-shocks/shock-library.js';
 import { CurrencyConverter } from './finance/fx/currency-converter.js';
 import { convertExpenseToAccount } from './finance/fx/expense-fx.js';
@@ -707,6 +711,14 @@ export const Finance = {
   REGIME_TAG,
   RemoveRegimeReducer,
   RevalueAssetReducer,
+  YieldCurveReducer,
+  YieldCurveStepReducer,
+  YieldCurveTickHandler,
+  interpolateSpread,
+  resolveYield,
+  composeYieldCurve,
+  shapeDelta,
+  countryOfRateKey,
   SHOCK_LIBRARY,
   SHOCK_PRESET_OPTIONS,
   CurrencyConverter,

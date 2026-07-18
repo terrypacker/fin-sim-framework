@@ -136,6 +136,67 @@ export const SHOCK_LIBRARY = Object.freeze({
     recovery: { profile: 'U', durationMonths: 36 },
   },
 
+  /**
+   * Bear flattener (design 67 §6) — a curve-SHAPE shock: short rates rise sharply while
+   * the long end barely moves, so the curve flattens. Priced as an additive twist over
+   * the base shape (positive spread deltas concentrated at the short tenors). V-shaped
+   * recovery over 24 months. No level/equity effect — this is a pure term-structure move
+   * (the analog of the equity/rate shocks, expressed on the yield curve). Applied to both
+   * countries' curves.
+   */
+  CURVE_BEAR_FLATTENER: {
+    shockId:  'CURVE_BEAR_FLATTENER',
+    name:     'Bear Flattener (short rates up)',
+    severity: null,
+    levelEffects: null,
+    regime: {
+      yieldCurveTwist: {
+        US: [{ tenor: 1, spread: 0.015 }, { tenor: 5, spread: 0.008 }, { tenor: 10, spread: 0.003 }, { tenor: 30, spread: 0.000 }],
+        AU: [{ tenor: 1, spread: 0.015 }, { tenor: 5, spread: 0.008 }, { tenor: 10, spread: 0.003 }, { tenor: 30, spread: 0.000 }],
+      },
+    },
+    recovery: { profile: 'V', durationMonths: 24 },
+  },
+
+  /**
+   * Bull steepener (design 67 §6) — the mirror image: short rates fall while the long end
+   * holds, so the curve steepens. Negative spread deltas concentrated at the short tenors.
+   * V-shaped recovery over 24 months. Both countries.
+   */
+  CURVE_BULL_STEEPENER: {
+    shockId:  'CURVE_BULL_STEEPENER',
+    name:     'Bull Steepener (short rates down)',
+    severity: null,
+    levelEffects: null,
+    regime: {
+      yieldCurveTwist: {
+        US: [{ tenor: 1, spread: -0.015 }, { tenor: 5, spread: -0.008 }, { tenor: 10, spread: -0.002 }, { tenor: 30, spread: 0.000 }],
+        AU: [{ tenor: 1, spread: -0.015 }, { tenor: 5, spread: -0.008 }, { tenor: 10, spread: -0.002 }, { tenor: 30, spread: 0.000 }],
+      },
+    },
+    recovery: { profile: 'V', durationMonths: 24 },
+  },
+
+  /**
+   * Yield-curve inversion (design 67 §6) — short rates rise above long rates (a recession
+   * signal): positive spread deltas at the short end, negative at the long end, so the
+   * effective curve slopes downward. L-shaped (persists) for 18 months, then snaps back.
+   * Both countries.
+   */
+  CURVE_INVERSION: {
+    shockId:  'CURVE_INVERSION',
+    name:     'Yield-Curve Inversion (short > long)',
+    severity: null,
+    levelEffects: null,
+    regime: {
+      yieldCurveTwist: {
+        US: [{ tenor: 1, spread: 0.020 }, { tenor: 2, spread: 0.012 }, { tenor: 5, spread: 0.005 }, { tenor: 10, spread: -0.003 }, { tenor: 30, spread: -0.008 }],
+        AU: [{ tenor: 1, spread: 0.020 }, { tenor: 2, spread: 0.012 }, { tenor: 5, spread: 0.005 }, { tenor: 10, spread: -0.003 }, { tenor: 30, spread: -0.008 }],
+      },
+    },
+    recovery: { profile: 'L', durationMonths: 18 },
+  },
+
 });
 
 /**
@@ -149,4 +210,7 @@ export const SHOCK_PRESET_OPTIONS = Object.freeze([
   { value: 'COVID_2020_LITE',        label: 'Pandemic Crash (COVID-style, −30 %)' },
   { value: 'MILD_CORRECTION',        label: 'Mild Correction (−15 % US equity)' },
   { value: 'SF_BAY_HOUSING_CRASH',   label: 'SF Bay Housing Crash (−35 %, regional)' },
+  { value: 'CURVE_BEAR_FLATTENER',   label: 'Bear Flattener (yield curve, short up)' },
+  { value: 'CURVE_BULL_STEEPENER',   label: 'Bull Steepener (yield curve, short down)' },
+  { value: 'CURVE_INVERSION',        label: 'Yield-Curve Inversion (short > long)' },
 ]);

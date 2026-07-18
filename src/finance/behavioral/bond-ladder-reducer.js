@@ -12,6 +12,7 @@ import { Reducer, PRIORITY }  from '../../simulation-framework/reducers.js';
 import { ALLOCATION }         from '../holdings/allocation.js';
 import { _syncBalance }       from '../holdings/holding-reducers.js';
 import { resolveRateKey }     from '../holdings/default-allocations.js';
+import { resolveYield }       from '../economic-regimes/yield-curve.js';
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
 
@@ -93,6 +94,9 @@ export class BondLadderReducer extends Reducer {
       roll: this.roll !== false, taxExemption: this.taxExemption ?? 'state',
       stateKey: this.stateKey, rateKey,
       couponRate: (rateKey != null ? state.effectiveInterestRates?.[rateKey] : null) ?? null,
+      // design 67 — price each rung along the yield curve at ITS OWN tenor, so a
+      // freshly built ladder earns the term premium (flat curve ⇒ every rung == anchor).
+      couponForTenor: (tenorYears) => resolveYield(state, { rateKey, tenorYears }),
     });
 
     const nonBond     = account.holdings.filter(h => h?.allocation !== ALLOCATION.BOND);
@@ -113,7 +117,8 @@ export class BondLadderReducer extends Reducer {
  */
 export function materializeLadder({ bondValue, rungs, spacingYears = 1, asOfMs,
                                     roll = true, taxExemption = 'state',
-                                    stateKey = 'ladder', rateKey = null, couponRate = null }) {
+                                    stateKey = 'ladder', rateKey = null, couponRate = null,
+                                    couponForTenor = null }) {
   const n        = Math.max(1, Math.round(rungs));
   const spacing  = spacingYears > 0 ? spacingYears : 1;
   const ladderTermYears = +(n * spacing).toFixed(4);
@@ -127,6 +132,9 @@ export function materializeLadder({ bondValue, rungs, spacingYears = 1, asOfMs,
     allocated       = +(allocated + face).toFixed(2);
     const yearsOut  = (k + 1) * spacing;
     const maturity  = new Date(asOfMs + yearsOut * YEAR_MS);
+    // design 67 — the rung's own-tenor coupon (curve-priced); falls back to the flat
+    // couponRate when no resolver is supplied (the UI builder path) or the anchor is absent.
+    const rungCoupon = couponForTenor ? (couponForTenor(yearsOut) ?? couponRate) : couponRate;
     out.push({
       id:             `ladder-${stateKey}-${k}`,
       allocation:     ALLOCATION.BOND,
@@ -139,7 +147,7 @@ export function materializeLadder({ bondValue, rungs, spacingYears = 1, asOfMs,
       rateKey,
       label:          `Ladder ${k + 1}/${n}`,
       dividendYield:  null,
-      couponRate,                                   // G1: locked to the market yield at build (null ⇒ floats)
+      couponRate:     rungCoupon,                   // G1: locked to the market yield at build (null ⇒ floats)
       appreciationSchedule: null,
       duration:       +yearsOut.toFixed(2),         // ≈ time-to-maturity at issue
       taxLossPartner: null,

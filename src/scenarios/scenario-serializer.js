@@ -105,6 +105,9 @@ import { RemoveRegimeReducer }           from '../finance/economic-regimes/remov
 import { RevalueAssetReducer }           from '../finance/economic-regimes/revalue-asset-reducer.js';
 import { BondPriceAdjustReducer }        from '../finance/economic-regimes/bond-price-adjust-reducer.js';
 import { BondMaturityReducer }           from '../finance/economic-regimes/bond-maturity-reducer.js';
+import { YieldCurveReducer }             from '../finance/economic-regimes/yield-curve-reducer.js';
+import { YieldCurveStepReducer }         from '../finance/economic-regimes/yield-curve-step-reducer.js';
+import { YieldCurveTickHandler }         from '../finance/economic-regimes/yield-curve-tick-handler.js';
 import { AssetAppreciationHandler, AssetAppreciateReducer } from '../finance/handlers/asset-appreciation-handler.js';
 
 // ─── Tax infrastructure ─────────────────────────────────────────────────────
@@ -307,9 +310,9 @@ const _ALL_CLASSES = [
   // Loan (liability) accounts (design 54)
   LoanPaymentHandler, UsLoanPaymentHandler, AuLoanPaymentHandler, LoanPaymentApplyReducer,
   // Economic regime handlers and reducers
-  EconomicShockHandler, EconomicRecoveryTickHandler,
+  EconomicShockHandler, EconomicRecoveryTickHandler, YieldCurveTickHandler,
   RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer,
-  BondPriceAdjustReducer, BondMaturityReducer,
+  BondPriceAdjustReducer, BondMaturityReducer, YieldCurveReducer, YieldCurveStepReducer,
   // Asset appreciation (design 28)
   AssetAppreciationHandler, AssetAppreciateReducer,
 ];
