@@ -88,6 +88,10 @@ export class MortalityHandler extends HandlerEntry {
       taxJurisdiction,
       // Carry the deceased SS value for use by the survivor reducer (person gone after this)
       deceasedSocialSecurityMonthly: person.socialSecurityMonthly ?? 0,
+      // Carry name + Age Pension flag so the year-of-death AU settle can file the
+      // deceased's final-year return once they're gone from state.people (design/68 Gap 1).
+      personName:             person.name,
+      incomeSupportRecipient: person.incomeSupportRecipient === true,
     });
 
     // 2. US estate basis step-up: overwrite costBasis with marketValue for each
