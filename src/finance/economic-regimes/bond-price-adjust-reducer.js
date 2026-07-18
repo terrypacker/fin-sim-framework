@@ -11,6 +11,7 @@
 import { Reducer, PRIORITY }  from '../../simulation-framework/reducers.js';
 import { ALLOCATION }         from '../holdings/allocation.js';
 import { RATE_KEY_META }      from './rate-keys.js';
+import { interpolateSpread, countryOfRateKey } from './yield-curve.js';
 import { _syncBalance }       from '../holdings/holding-reducers.js';
 
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
@@ -78,6 +79,12 @@ export class BondPriceAdjustReducer extends Reducer {
   reduce(state, action) {
     const effectiveRates = state.effectiveInterestRates ?? {};
     const priorRates     = state.priorMarkRates         ?? {};
+    // Curve SHAPE overlay (design 67): the bond's own-tenor yield is level + spread.
+    // priorMarkCurve is the after-mark shape snapshot (symmetric with priorMarkRates),
+    // so a curve TWIST between periods marks a 2y and a 30y bond differently. Absent
+    // shape ⇒ interpolateSpread returns 0 everywhere ⇒ identical to the flat model.
+    const yieldCurve     = state.yieldCurve             ?? {};
+    const priorCurve     = state.priorMarkCurve         ?? {};
     const cc     = action?.type === 'AU_PERIOD_ADVANCE' ? 'AU' : 'US';
     const asOfMs = state.currentPeriods?.[cc]?.startMs ?? null;
     const priorMs = state.priorMarkMs ?? null;
@@ -107,8 +114,18 @@ export class BondPriceAdjustReducer extends Reducer {
           const staticDuration = h.duration ?? RATE_KEY_META[h.rateKey]?.defaultDuration ?? 0;
           const effDuration = ttm != null ? Math.min(staticDuration, ttm) : staticDuration;
           if (effDuration > 0) {
-            const curRate   = effectiveRates[h.rateKey] ?? 0;
-            const prevRate  = priorRates[h.rateKey]     ?? curRate;
+            // Curve lookup point: the bond's own tenor (ttm), or the fund tenor
+            // (defaultDuration, ≈ the 5y anchor) for a perpetual fund. The curve
+            // COUNTRY comes from the holding's own rateKey (independent US/AU curves),
+            // not the action's period country.
+            const curveCC   = countryOfRateKey(h.rateKey);
+            const fundTenor = RATE_KEY_META[h.rateKey]?.defaultDuration ?? 0;
+            const tenor     = ttm != null ? ttm : fundTenor;
+            const curRate   = (effectiveRates[h.rateKey] ?? 0) + interpolateSpread(yieldCurve[curveCC], tenor);
+            const prevBase  = priorRates[h.rateKey];
+            const prevRate  = prevBase != null
+              ? prevBase + interpolateSpread(priorCurve[curveCC], tenor)
+              : curRate;   // first mark (no prior) ⇒ Δrate 0
             const deltaRate = curRate - prevRate;
             const delta = +(-(effDuration * deltaRate * mv)).toFixed(2);
             if (delta !== 0) { mv = Math.max(0, mv + delta); touched = true; }
@@ -141,6 +158,9 @@ export class BondPriceAdjustReducer extends Reducer {
     return this.newState(state, {
       ...accountUpdates,
       priorMarkRates: { ...effectiveRates },
+      // After-mark shape snapshot for next period's twist delta (design 67). Static
+      // in Phases 1–2, so priorCurve == yieldCurve and (1) reduces to the level delta.
+      priorMarkCurve: { ...yieldCurve },
       // Only advance the mark timestamp when we actually have an as-of date; unit
       // tests that drive the reducer without currentPeriods keep priorMarkMs unset.
       ...(asOfMs != null ? { priorMarkMs: asOfMs } : {}),

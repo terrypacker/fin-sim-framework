@@ -109,6 +109,31 @@ function collectBaseInterestRates(p) {
 }
 
 /**
+ * Collect the per-country yield-curve SHAPE overlays (design 67 §3, representation C).
+ * Each is an array of `{ tenor, spread }` anchor points added on top of the
+ * `FIXED_INCOME_{country}` level. An absent/empty shape ⇒ a flat curve (every spread
+ * 0 ⇒ every tenor returns the level anchor), byte-identical to the pre-67 single rate.
+ */
+function collectYieldCurves(p) {
+  return {
+    US: Array.isArray(p.usYieldCurveShape) ? p.usYieldCurveShape : DEFAULT_YIELD_CURVE_SHAPE,
+    AU: Array.isArray(p.auYieldCurveShape) ? p.auYieldCurveShape : DEFAULT_YIELD_CURVE_SHAPE,
+  };
+}
+
+/**
+ * Default upward-sloping curve shape (design 67 §5). Anchored at the 5y level point
+ * (spread 0): shorter bonds yield less, longer bonds earn a term premium. Applied to
+ * both countries unless a scenario overrides `usYieldCurveShape` / `auYieldCurveShape`.
+ */
+const DEFAULT_YIELD_CURVE_SHAPE = Object.freeze([
+  { tenor: 1,  spread: -0.010 },
+  { tenor: 5,  spread:  0.000 },
+  { tenor: 10, spread:  0.006 },
+  { tenor: 30, spread:  0.012 },
+]);
+
+/**
  * Seed per-account rate keys `<memberKey>::<stateKey>` (design 55 §8) into the
  * already-built base growth/interest maps. Each account's own `growthRate` /
  * `interestRate` (set via its generated per-account param) overrides the shared
@@ -420,6 +445,26 @@ export const ECONOMIC_REGIMES = {
         description:  'Optional per-year central-bank policy path: each row sets the absolute PRIME_US / PRIME_AU rate taking effect that year and holding until the next row. A step compiles into a scheduled Prime move that fans out to every Prime-linked cash account and variable loan (design 56 §5).',
       },
       {
+        key:          'usYieldCurveShape',
+        label:        'US Yield Curve Shape',
+        type:         'Object',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: null,
+        description:  'Optional US term-structure overlay (design 67): an array of { tenor, spread } anchor points added to the FIXED_INCOME_US level, linearly interpolated and clamped to the endpoints. The 5-year point is the level anchor (spread 0). Absent/empty ⇒ a flat curve (every tenor = the level), identical to a single fixed-income rate.',
+      },
+      {
+        key:          'auYieldCurveShape',
+        label:        'AU Yield Curve Shape',
+        type:         'Object',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: null,
+        description:  'Optional AU term-structure overlay (design 67): an array of { tenor, spread } anchor points added to the FIXED_INCOME_AU level, linearly interpolated and clamped to the endpoints. Independent of the US shape. Absent/empty ⇒ a flat curve.',
+      },
+      {
         key:          'behavioralStrategies',
         label:        'Behavioral Strategies',
         type:         'EnumMulti',
@@ -447,6 +492,10 @@ export const ECONOMIC_REGIMES = {
       US: p.usInflationRate ?? p.inflationRate ?? 0.03,
       AU: p.auInflationRate ?? p.inflationRate ?? 0.03,
     };
+    // Yield-curve shape overlay (design 67). `baseYieldCurve` is the base→effective
+    // seed (symmetric with baseInterestRates), ready for the Phase-3 twist reducer;
+    // in Phases 1–2 the shape is static so effective == base.
+    const yieldCurve = collectYieldCurves(p);
     return {
       activeRegimes:               [],
       primeLinks,
@@ -454,12 +503,15 @@ export const ECONOMIC_REGIMES = {
       baseInterestRates,
       baseInflationRates,
       baseAppreciationRates:       {},
+      baseYieldCurve:              { US: [...yieldCurve.US], AU: [...yieldCurve.AU] },
       effectiveGrowthRates:        { ...baseGrowthRates },
       effectiveInterestRates:      { ...baseInterestRates },
       effectiveInflationRates:     { ...baseInflationRates },
       effectiveAppreciationRates:  {},
       effectiveDividendAdjustments:{},
+      yieldCurve,
       priorMarkRates:              {},
+      priorMarkCurve:              {},
     };
   },
 

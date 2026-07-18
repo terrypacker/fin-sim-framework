@@ -1,6 +1,16 @@
 # 67 — Bond yield curve: from a single fixed-income rate to a term structure
 
-**Status**: **PROPOSED** (2026-07-17). Closes the long-deferred "yield curve"
+**Status**: **IMPLEMENTED — Phases 1 & 2** (2026-07-17; owner answers below). The curve
+primitive (`finance/economic-regimes/yield-curve.js`: `interpolateSpread` /
+`resolveYield` / `countryOfRateKey`), the `state.yieldCurve` / `baseYieldCurve` /
+`priorMarkCurve` seeding in the ECONOMIC_REGIMES toolset, and all five consumer
+reroutes shipped, with a sloped default shape applied to both countries. **Golden did
+NOT move** (11,584,190 / 1,127,909, unchanged): the default book's bonds are all
+perpetual *funds* that resolve at the 5y anchor (spread 0), so the term premium bites
+only on individual-bond / ladder scenarios — no re-baseline was required (the design-65
+"golden legitimately inert" pattern). Tests: 3666 unit (+19 new `yield-curve.test.mjs`)
+/ 875 viz, JOURNAL_STRICT green. **Phase 3 (curve dynamics) deferred** (§6). Closes the
+long-deferred "yield curve"
 follow-up flagged in design 24 (§5.5 / roadmap line 272 — *"per-maturity rate
 structures. Depends on bond duration shipping first (design 28)"*) and design 28
 (§8 / §11 — *"Yield curves (per-maturity rate structures)"*, explicitly **out of
@@ -184,24 +194,36 @@ shift). Add **shape** dynamics:
 
 1. **Representation** — anchor + shape overlay (C, recommended), discrete tenor rate
    keys (A), or parametric Nelson–Siegel (B)?
-   Answer:
+   Answer: **C** — anchor + additive shape overlay. Level stays one regime-moved rate key;
+   flat-curve back-compat is a literal identity (empty shape ⇒ spread 0 everywhere).
 2. **Default curve** — ship Phase 1 flat (golden-neutral, curve opt-in) then seed a
    sloped default in Phase 2 with one re-baseline (recommended), or seed the slope
    immediately?
-   Answer:
+   Answer: **Phase 1 + 2.** Implemented flat first (golden-neutral, all tests green),
+   then seeded the sloped default `[{1,-0.010},{5,0},{10,+0.006},{30,+0.012}]` for both
+   countries. The re-baseline turned out to be a *no-op* — the default book holds only
+   bond funds (5y anchor), so the golden is byte-identical; the premium bites ladders /
+   individual bonds only.
 3. **Fund tenor** — resolve a perpetual fund (`maturityDate == null`) at the 5y
    `defaultDuration` point (recommended, keeps flat-curve identity), or at a distinct
    configurable fund tenor?
-   Answer:
+   Answer: **5y `defaultDuration` point.** A `null` tenor resolves at
+   `RATE_KEY_META[rateKey].defaultDuration`; since the 5y anchor has spread 0, a fund is
+   unchanged even under a sloped curve.
 4. **Curve dynamics source** — scheduled twists + named regime shocks only, or also
    stochastic (mean-reverting) evolution via the idle `sim.rng`?
-   Answer:
+   Answer: **Deferred — Phase 3 out of scope for this pass.** `baseYieldCurve` /
+   `priorMarkCurve` are already seeded so the twist reducer (schedules + named shocks,
+   and optionally the `sim.rng` stochastic path) can be added later without a state-shape
+   change.
 5. **Interpolation** — linear between anchor points (simplest), or monotone-cubic
    (smoother, avoids kinks at the anchors)?
-   Answer:
+   Answer: **Linear, clamped to the endpoints.** Matches the accessor spec; can be
+   upgraded to monotone-cubic later without a state-shape change.
 6. **AU curve** — an independent AU shape off the `FIXED_INCOME_AU` anchor (recommended),
    or share the US shape until an AU-specific scenario needs it?
-   Answer:
+   Answer: **Independent AU shape** (`auYieldCurveShape` off the `FIXED_INCOME_AU`
+   anchor), country selected from the holding's own rate key.
 
 ## 10. Relationship to other designs
 

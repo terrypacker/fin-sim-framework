@@ -11,6 +11,7 @@
 import { HoldingTransactAction }    from './holding-actions.js';
 import { resolveScheduledRate }     from './appreciation-schedule-utils.js';
 import { primaryResidencyState }    from '../residency-utils.js';
+import { resolveYield }             from '../economic-regimes/yield-curve.js';
 
 /**
  * Whether a BOND holding's coupon is EXEMPT from US FEDERAL income tax
@@ -405,10 +406,11 @@ export function couponFiringIndex(date, firingsPerYear = 1) {
  * @returns {number|null}
  */
 export function resolvePrevailingCouponRate(state, stateKey, rateKey) {
-  const rates = state?.effectiveInterestRates;
-  if (!rates || rateKey == null) return null;
-  const perAcct = (stateKey != null) ? rates[`${rateKey}::${stateKey}`] : undefined;
-  return perAcct ?? rates[rateKey] ?? null;
+  // design 67 — a coupon-reinvestment lot carries no maturityDate (a bond FUND), so
+  // it prices at the fund tenor (the 5y anchor). resolveYield keeps the per-account
+  // `<rateKey>::<stateKey>` → shared `<rateKey>` precedence and returns null when
+  // neither is present, so the caller falls back to its own per-account coupon rate.
+  return resolveYield(state, { rateKey, stateKey, tenorYears: null });
 }
 
 /**
