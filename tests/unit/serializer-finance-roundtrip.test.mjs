@@ -56,6 +56,8 @@ import {
   RothAccount, TraditionalIRAAccount, FourOhOneKAccount, BrokerageAccount,
   SuperannuationAccount,
 } from '../../src/finance/assets/investment-account.js';
+import { RealProperty } from '../../src/finance/assets/real-property.js';
+import { Collectible }  from '../../src/finance/assets/collectible.js';
 import { ACCOUNT_ROLES } from '../../src/finance/state/account-roles.js';
 
 import { MonthlyExpensesHandler }     from '../../src/finance/handlers/monthly-expenses-handler.js';
@@ -388,4 +390,73 @@ test('finance round-trip: cpiRates + cpiAccumulator survive serialize/restore', 
   const { sim } = restoreFromConfig(config);
   assert.deepStrictEqual(sim.state.cpiRates, { AU: 0.05 });
   assert.deepStrictEqual(sim.state.cpiAccumulator, { AU: 1.2155 });
+});
+
+// ─── Design 63 §14 P1: inheritance metadata round-trip ──────────────────────
+// A promoted inherited record (brokerage / real property / collectible, design
+// 63 §14 "promote-to-real-records") is a normal record tagged with inheritance
+// metadata. It must survive serialize→deserialize; an owned record must emit NONE
+// of these keys (byte-for-byte unchanged).
+
+test('finance round-trip: inherited brokerage carries its inheritance metadata', () => {
+  const acct = new BrokerageAccount(0, {
+    id: 'a1', name: 'Inherited Brokerage', role: ACCOUNT_ROLES.US_STOCK,
+    country: 'US', stateKey: 'inheritedBrokerageAccount',
+    inherited: true, bequestId: 'beq1', inheritedValue: 250_000,
+    deceasedCostBase: 90_000, deceasedAcquisitionDate: Date.UTC(2005, 0, 1),
+  });
+  const d   = ScenarioSerializer._serializeAccount(acct);
+  assert.equal(d.inherited, true);
+  assert.equal(d.bequestId, 'beq1');
+  assert.equal(d.inheritedValue, 250_000);
+  assert.equal(d.deceasedCostBase, 90_000);
+
+  const back = ScenarioSerializer._makeAccount(d);
+  assert.equal(back.inherited, true);
+  assert.equal(back.bequestId, 'beq1');
+  assert.equal(back.inheritedValue, 250_000);
+  assert.equal(back.deceasedCostBase, 90_000);
+  assert.equal(back.deceasedAcquisitionDate, Date.UTC(2005, 0, 1));
+});
+
+test('finance round-trip: owned account emits NO inheritance keys', () => {
+  const acct = new BrokerageAccount(500, { id: 'a2', role: ACCOUNT_ROLES.US_STOCK, country: 'US' });
+  const d = ScenarioSerializer._serializeAccount(acct);
+  assert.ok(!('inherited' in d), 'owned account must not serialize `inherited`');
+  assert.ok(!('bequestId' in d));
+  assert.ok(!('inheritedValue' in d));
+  // And the deserialized owned account defaults inherited=false.
+  assert.equal(ScenarioSerializer._makeAccount(d).inherited, false);
+});
+
+test('finance round-trip: inherited property + collectible carry their metadata', () => {
+  const prop = new RealProperty(0, {
+    id: 'p1', name: 'Inherited Home', country: 'AU', stateKey: 'inheritedHome',
+    inherited: true, bequestId: 'beq1', inheritedValue: 800_000,
+    deceasedCostBase: 300_000, inheritedFromMainResidence: true,
+  });
+  const pd = ScenarioSerializer._serializeRealProperty(prop);
+  assert.equal(pd.inherited, true);
+  assert.equal(pd.inheritedFromMainResidence, true);
+  const pBack = ScenarioSerializer._makeRealProperty(pd);
+  assert.equal(pBack.inherited, true);
+  assert.equal(pBack.bequestId, 'beq1');
+  assert.equal(pBack.inheritedValue, 800_000);
+  assert.equal(pBack.inheritedFromMainResidence, true);
+
+  const coll = new Collectible(0, {
+    id: 'c1', name: 'Inherited Art', country: 'US', stateKey: 'inheritedArt',
+    inherited: true, bequestId: 'beq1', inheritedValue: 50_000, deceasedCostBase: 10_000,
+  });
+  const cd = ScenarioSerializer._serializeCollectible(coll);
+  assert.equal(cd.inherited, true);
+  const cBack = ScenarioSerializer._makeCollectible(cd);
+  assert.equal(cBack.inherited, true);
+  assert.equal(cBack.bequestId, 'beq1');
+  assert.equal(cBack.inheritedValue, 50_000);
+  assert.equal(cBack.deceasedCostBase, 10_000);
+
+  // Owned property emits no inheritance keys.
+  const owned = ScenarioSerializer._serializeRealProperty(new RealProperty(100, { id: 'p2', country: 'US' }));
+  assert.ok(!('inherited' in owned));
 });

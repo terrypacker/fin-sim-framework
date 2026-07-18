@@ -486,10 +486,20 @@ export class WorkbenchApp extends BaseComponent {
 
       if (node?.kind === 'bequest') {
         const people = registry.graphQueryApi.getByKind('person');
+        // Design 63 §14: an active bequest's brokerage / property / collectible are
+        // promoted to real records tagged with the bequest's stateKey. Surface them
+        // (read-only) in the editor so they stay visible in context.
+        const linkId = node?.stateKey ?? node?.id;
+        const promotedAssets = [
+          ...registry.accountService.getAll(),
+          ...registry.realPropertyService.getAll(),
+          ...registry.collectibleService.getAll(),
+        ].filter(r => r.inherited && r.bequestId === linkId);
         const editor = new BequestEditor({
           container,
           node,
           people,
+          promotedAssets,
           onSave: (data) => {
             if (data.id) {
               const { id, ...changes } = data;

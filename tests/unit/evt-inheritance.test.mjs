@@ -108,7 +108,7 @@ test('EVT-63: inherited assets seed onto the balance sheet at value/balance 0', 
   assert.strictEqual(s.inheritBrokerage.balance, 0);
   assert.strictEqual(s.inheritBrokerage.type, 'brokerage');
   assert.strictEqual(s.inheritBrokerage.inherited, true);
-  assert.strictEqual(s.inheritBrokerage.bequestId, 'beq1');
+  assert.strictEqual(s.inheritBrokerage.bequestId, 'estateBequest'); // linked on bequest stateKey (§14)
 
   assert.strictEqual(s.inheritIra.balance, 0);
   assert.strictEqual(s.inheritIra.type, 'ira');
@@ -155,7 +155,8 @@ test('EVT-63: BequestService assigns stable stateKeys to assets that lack one', 
     ],
   }));
   // Design 63 §14.6: account-category auto-keys get an `…Account` suffix so their
-  // `.balance` journal rows match the per-account reports' convention.
+  // `.balance` journal rows match the per-account reports' convention. (Promotion to
+  // real records is a loader cfg-transform, so createBequest keeps the assets inline.)
   assert.strictEqual(bq.assets[0].stateKey, `${bq.id}_a0Account`);
   assert.strictEqual(bq.assets[1].stateKey, 'keepMe');
 
@@ -201,6 +202,54 @@ test('EVT-63: bequests round-trip through the full scenario serializer path', ()
   assert.strictEqual(snap.bequests.length, 1);
   assert.strictEqual(snap.bequests[0].assets.length, 4);
   assert.strictEqual(snap.bequests[0].name, 'Estate');
+});
+
+// Design 63 §14: the promotion to first-class records is a LOADER cfg-transform (so
+// per-record params cascade — §14.4 load-order invariant). Going through the loader,
+// an active bequest's brokerage / home / art become real service records, the bequest
+// keeps only the retirement IRA inline, and each asset serializes in exactly one place
+// (no double-serialize — the invariant the whole design preserves).
+test('EVT-63 §14: loader promotes inherited assets to real records + serializes them once', () => {
+  const { services } = loadToolsetScenario(inheritanceConfig({ decedentState: 'SD' }));
+  const acct = services.accountService.getAll().find(a => a.inherited && a.stateKey === 'inheritBrokerage');
+  assert.ok(acct, 'inherited brokerage is a real account record');
+  assert.strictEqual(acct.bequestId, 'estateBequest', 'linked on the bequest stateKey (durable identity)');
+  assert.strictEqual(acct.inheritedValue, 400_000);
+  assert.ok(services.realPropertyService.getAll().some(p => p.inherited && p.stateKey === 'inheritHome'),
+    'inherited home is a real real-property record');
+  assert.ok(services.collectibleService.getAll().some(c => c.inherited && c.stateKey === 'inheritArt'),
+    'inherited art is a real collectible record');
+  // The bequest keeps only the retirement IRA inline; the promoted assets are gone.
+  const bq = services.bequestService.getAll()[0];
+  assert.deepStrictEqual(bq.assets.map(a => a.__type), ['TraditionalIRAAccount']);
+
+  // No double-serialize: each promoted asset appears in exactly one serialized list.
+  const snap = ScenarioSerializer.snapshotServices(services);
+  assert.strictEqual(snap.bequests[0].assets.length, 1, 'only the IRA stays inline');
+  assert.strictEqual(snap.accounts.filter(a => a.stateKey === 'inheritBrokerage').length, 1);
+  assert.strictEqual(snap.realProperties.filter(p => p.stateKey === 'inheritHome').length, 1);
+});
+
+// Design 63 §14 P3: because the promoted assets are ordinary cfg records, they gain
+// per-record generated params (rate overrides, sale year) that flow into OPT/MC/MPC +
+// behavior/spending — no reroute, no cascade wrinkle. Prove they land in cfg.params
+// through the REAL loader path (which runs the hoist BEFORE param generation, §14.4).
+test('EVT-63 §14: promoted inherited assets gain per-record OPT/MC params through the loader', () => {
+  const services = ServiceRegistry.getInstance();
+  const scenario = new BaseScenario({
+    context: services.simulationContext,
+    simStart: new Date('2026-01-01'), simEnd: new Date('2041-01-01'),
+  });
+  scenario.buildSim();
+  const cfg = inheritanceConfig({ decedentState: 'SD' });
+  new ScenarioLoader().load(cfg, services);   // mutates cfg in place (populates cfg.params)
+  const keys = new Set((cfg.params ?? []).map(p => p.name));
+  assert.ok(keys.has('acct.inheritBrokerage.growthRate'),  'inherited brokerage growth-rate override');
+  assert.ok(keys.has('acct.inheritBrokerage.dividendRate'), 'inherited brokerage dividend-rate override');
+  assert.ok(keys.has('prop.inheritHome.plannedSaleYear'),  'inherited home sale-year param');
+  assert.ok(keys.has('coll.inheritArt.plannedSaleYear'),   'inherited art sale-year param');
+  // The retirement IRA keeps its inline SECURE-drawdown knobs (raAsset.), not acct.*
+  assert.ok(keys.has('raAsset.inheritIra.distributionMode'), 'inherited IRA distribution strategy');
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -831,23 +880,29 @@ test('EVT-63 §13: inherited collectible is sellable at a set sale year', () => 
   assert.ok((sim.state.inheritGold.value ?? 0) < 1, `gold should be sold, got ${sim.state.inheritGold.value}`);
 });
 
-test('EVT-63 §13: inherited property/collectible generate a per-record sale-year param', () => {
-  const cfg = { bequests: [{
-    __type: 'Bequest', stateKey: 'estateBequest',
-    assets: [
-      { __type: 'RealProperty', stateKey: 'inhHome', inheritedValue: 600_000 },
-      { __type: 'Collectible',  stateKey: 'inhArt',  inheritedValue: 80_000 },
-      { __type: 'BrokerageAccount', stateKey: 'inhBrok', inheritedValue: 100_000 }, // no sale param
-    ],
-  }] };
+test('EVT-63 §13: promoted inherited property/collectible generate the standard sale-year param', () => {
+  // Design 63 §14: promoted inherited property/collectible are real records, so they
+  // generate the standard prop./coll. plannedSaleYear param (keyed by the real record,
+  // node type realProperty/collectible) — the bequest-specific saleAsset. is retired.
+  const cfg = {
+    realProperties: [{ __type: 'RealProperty', stateKey: 'inhHome', name: 'Inherited Home',
+      country: 'US', value: 0, inherited: true, bequestId: 'beq1', plannedSaleYear: null }],
+    collectibles:   [{ __type: 'Collectible', stateKey: 'inhArt', name: 'Inherited Art',
+      country: 'US', value: 0, inherited: true, bequestId: 'beq1', plannedSaleYear: null }],
+    accounts:       [{ __type: 'BrokerageAccount', stateKey: 'inhBrokAccount', name: 'Inherited Brokerage',
+      type: 'brokerage', role: 'us-stock', country: 'US', inherited: true, bequestId: 'beq1' }],
+  };
   const gen  = ScenarioParamGenerator.generate(cfg);
   const keys = new Set(gen.map(e => e.key));
-  assert.ok(keys.has('saleAsset.inhHome.plannedSaleYear'), 'property sale-year param');
-  assert.ok(keys.has('saleAsset.inhArt.plannedSaleYear'),  'collectible sale-year param');
-  assert.ok(!keys.has('saleAsset.inhBrok.plannedSaleYear'), 'brokerage grows no sale-year param');
+  assert.ok(keys.has('prop.inhHome.plannedSaleYear'), 'property sale-year param');
+  assert.ok(keys.has('coll.inhArt.plannedSaleYear'),  'collectible sale-year param');
+  // The promoted brokerage is discovered too (its own acct. params), but accounts have
+  // no plannedSaleYear field.
+  assert.ok([...keys].some(k => k.startsWith('acct.inhBrokAccount.')), 'brokerage generates acct. params');
+  assert.ok(![...keys].some(k => k.endsWith('.plannedSaleYear') && k.startsWith('acct.')), 'brokerage grows no sale-year param');
   assert.deepStrictEqual(
-    gen.find(e => e.key === 'saleAsset.inhHome.plannedSaleYear').node,
-    { type: 'bequestAsset', stateKey: 'inhHome', field: 'plannedSaleYear' });
+    gen.find(e => e.key === 'prop.inhHome.plannedSaleYear').node,
+    { type: 'realProperty', stateKey: 'inhHome', field: 'plannedSaleYear' });
 });
 
 test('EVT-63 §13: the sale-year PARAM cascades onto the asset and liquidates it', () => {
@@ -856,8 +911,10 @@ test('EVT-63 §13: the sale-year PARAM cascades onto the asset and liquidates it
       inheritedValue: 600_000, deceasedCostBase: 200_000, appreciationRate: 0.04, stateKey: 'inheritHome' },
   ]);
   // Sale year supplied ONLY via the generated per-record param (no plannedSaleYear
-  // on the asset descriptor) — proves the param → cascade → context-record → sale chain.
-  cfg.parameters = { 'saleAsset.inheritHome.plannedSaleYear': 2035 };
+  // on the asset descriptor) — proves the param → cascade → promoted-record → sale
+  // chain. The promoted home is a real realProperty record, so the standard
+  // prop.<sk>.plannedSaleYear param cascades onto it (design 63 §14).
+  cfg.parameters = { 'prop.inheritHome.plannedSaleYear': 2035 };
   const { sim } = loadToolsetScenario(cfg);
 
   const cashBefore = sim.state.usSavingsAccount.balance;

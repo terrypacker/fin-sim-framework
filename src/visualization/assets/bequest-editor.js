@@ -33,15 +33,21 @@ const STRATEGIES = [['', '— default —'], ['equal', 'Equal'], ['lump', 'Lump'
  * inherited-asset sub-editor. Emits onSave(data) / onDelete(id).
  */
 export class BequestEditor extends BaseComponent {
-  constructor({ parent, container, node, people = [], onSave, onDelete }) {
+  constructor({ parent, container, node, people = [], promotedAssets = [], onSave, onDelete }) {
     super({ parent });
     this._container = container;
     this._node      = node;
     this._people    = people;
     this.onSave     = onSave   ?? null;
     this.onDelete   = onDelete ?? null;
-    // Working copy of the asset rows.
+    // Working copy of the INLINE asset rows (retirement / super, and — while the
+    // bequest is inert — any not-yet-promoted brokerage / property / collectible).
     this._assets = (node?.assets ?? []).map(a => ({ ...a }));
+    // Read-only view of assets already PROMOTED to first-class records (design 63
+    // §14): once the bequest is active, its brokerage / property / collectible are
+    // real accounts / properties / collectibles, edited in the Accounts / Assets
+    // panels. Surfaced here so they stay visible in the bequest's context.
+    this._promotedAssets = promotedAssets ?? [];
   }
 
   render() {
@@ -70,6 +76,24 @@ export class BequestEditor extends BaseComponent {
       this._renderAssets();
     });
     root.appendChild(addBtn);
+
+    // ── Promoted (first-class) inherited assets ─────────────────────────────────
+    // Design 63 §14: an active bequest's brokerage / property / collectible are real
+    // records — edited in the Accounts / Assets panels, tuned by their per-record
+    // params. Show them read-only here so they stay visible in the bequest's context.
+    if (this._promotedAssets.length > 0) {
+      root.appendChild(this._el('h4', { text: 'Promoted assets (edit in Accounts / Assets)' }));
+      const box = this._el('div', { class: 'bequest-promoted' });
+      for (const p of this._promotedAssets) {
+        const v = p.inheritedValue ?? p.value ?? p.balance ?? 0;
+        const kind = p.type ?? p.kind ?? p.__type ?? p.constructor?.name ?? 'asset';
+        box.appendChild(this._el('div', {
+          class: 'bequest-promoted-row',
+          text: `${p.name || p.stateKey} — ${kind} · FMV ${Number(v).toLocaleString()}`,
+        }));
+      }
+      root.appendChild(box);
+    }
 
     // ── Actions ───────────────────────────────────────────────────────────────
     const actions = this._el('div', { class: 'node-editor-actions' });

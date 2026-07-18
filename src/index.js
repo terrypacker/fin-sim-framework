@@ -43,6 +43,7 @@ import { Asset } from './finance/assets/asset.js';
 import { Bequest } from './finance/assets/bequest.js';
 import { Collectible } from './finance/assets/collectible.js';
 import { CompanyEquity } from './finance/assets/company-equity.js';
+import { INHERITANCE_META_FIELDS, applyInheritanceMeta, serializeInheritanceMeta } from './finance/assets/inheritance-meta.js';
 import { reconcileLedgerToBalance, deriveEarningsBasis, InvestmentAccount, BrokerageAccount, RetirementAccount, FourOhOneKAccount, RothAccount, TraditionalIRAAccount, SuperannuationAccount } from './finance/assets/investment-account.js';
 import { RealProperty } from './finance/assets/real-property.js';
 import { DEFAULT_LOCATION_POLICY, planLocatedTargets } from './finance/behavioral/allocation-location.js';
@@ -90,7 +91,7 @@ import { RevalueAssetReducer } from './finance/economic-regimes/revalue-asset-re
 import { YieldCurveReducer } from './finance/economic-regimes/yield-curve-reducer.js';
 import { YieldCurveStepReducer } from './finance/economic-regimes/yield-curve-step-reducer.js';
 import { YieldCurveTickHandler } from './finance/economic-regimes/yield-curve-tick-handler.js';
-import { interpolateSpread, resolveYield, composeYieldCurve, shapeDelta, countryOfRateKey } from './finance/economic-regimes/yield-curve.js';
+import { countryOfRateKey, interpolateSpread, resolveYield, composeYieldCurve, shapeDelta } from './finance/economic-regimes/yield-curve.js';
 import { SHOCK_LIBRARY, SHOCK_PRESET_OPTIONS } from './finance/economic-shocks/shock-library.js';
 import { CurrencyConverter } from './finance/fx/currency-converter.js';
 import { convertExpenseToAccount } from './finance/fx/expense-fx.js';
@@ -270,7 +271,7 @@ import { QueryApi } from './query/query-api.js';
 import { BaseScenario } from './scenarios/base-scenario.js';
 import { BlankScenario } from './scenarios/blank-scenario.js';
 import { DRAWDOWN_STRATEGIES, DRAWDOWN_ROLES, DRAWDOWN_WEIGHT_MODE, DRAWDOWN_WEIGHT_PREFIX, DRAWDOWN_WEIGHT_SEP, drawdownWeightKey, DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_CASH_ROLES, DRAWDOWN_ROLE_LABELS, presentDrawdownWeightRoles, drawdownWeightsFromStrategy, DEFAULT_DRAWDOWN_WEIGHTS, buildDrawdownWeightSchema, DEFAULT_DRAWDOWN_WEIGHT_PARAMS, DEFAULT_SLEEVE_WEIGHTS, buildSleeveWeightSchema, DEFAULT_SLEEVE_WEIGHT_PARAMS, ALLOCATION_OPTIMIZED_MODE, ALLOC_WEIGHT_CLASSES, ALLOC_WEIGHT_PREFIX, ALLOC_WEIGHT_SEP, allocWeightKey, ALLOC_WEIGHT_CLASS_LABELS, ALLOCATION_PRESETS, DEFAULT_ALLOC_WEIGHTS, synthesizeTargetAllocation, allocWeightsFromMix, allocWeightsFromPreset, presentAllocations, buildAllocWeightSchema, DEFAULT_ALLOC_WEIGHT_PARAMS, INTL_RETIREMENT_DEFAULTS, INTL_RETIREMENT_PARAM_SCHEMA, INTL_RETIREMENT_PARAM_ALIASES, resolveBalanceCenters, IntlRetirementScenario, applyRealPropertySaleYearParams } from './scenarios/intl-retirement-scenario.js';
-import { BALANCE_TARGET, ACCOUNT_PARAM_TEMPLATES, PERSON_PARAM_TEMPLATE, REAL_PROPERTY_PARAM_TEMPLATE, COLLECTIBLE_PARAM_TEMPLATE, COMPANY_EQUITY_PARAM_TEMPLATE, BEQUEST_PARAM_TEMPLATE, INHERITED_RA_PARAM_TEMPLATE, INHERITED_SALE_PARAM_TEMPLATE } from './scenarios/params/record-param-templates.js';
+import { BALANCE_TARGET, ACCOUNT_PARAM_TEMPLATES, PERSON_PARAM_TEMPLATE, REAL_PROPERTY_PARAM_TEMPLATE, COLLECTIBLE_PARAM_TEMPLATE, COMPANY_EQUITY_PARAM_TEMPLATE, BEQUEST_PARAM_TEMPLATE, INHERITED_RA_PARAM_TEMPLATE } from './scenarios/params/record-param-templates.js';
 import { GENERATED_KEY_PREFIXES, isGeneratedParamKey, decodeGeneratedParamKey, ScenarioParamGenerator } from './scenarios/params/scenario-param-generator.js';
 import { synthesizeWeightedPriorities, ScenarioLoader } from './scenarios/scenario-loader.js';
 import { ScenarioRegistry } from './scenarios/scenario-registry.js';
@@ -620,6 +621,9 @@ export const Finance = {
   Bequest,
   Collectible,
   CompanyEquity,
+  INHERITANCE_META_FIELDS,
+  applyInheritanceMeta,
+  serializeInheritanceMeta,
   reconcileLedgerToBalance,
   deriveEarningsBasis,
   InvestmentAccount,
@@ -714,11 +718,11 @@ export const Finance = {
   YieldCurveReducer,
   YieldCurveStepReducer,
   YieldCurveTickHandler,
+  countryOfRateKey,
   interpolateSpread,
   resolveYield,
   composeYieldCurve,
   shapeDelta,
-  countryOfRateKey,
   SHOCK_LIBRARY,
   SHOCK_PRESET_OPTIONS,
   CurrencyConverter,
@@ -1183,7 +1187,6 @@ export const Scenarios = {
   COMPANY_EQUITY_PARAM_TEMPLATE,
   BEQUEST_PARAM_TEMPLATE,
   INHERITED_RA_PARAM_TEMPLATE,
-  INHERITED_SALE_PARAM_TEMPLATE,
   GENERATED_KEY_PREFIXES,
   isGeneratedParamKey,
   decodeGeneratedParamKey,

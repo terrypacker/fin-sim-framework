@@ -23,6 +23,7 @@
  */
 
 import { Asset } from './asset.js';
+import { applyInheritanceMeta } from './inheritance-meta.js';
 
 /** US Dollar */
 export const USD = { code: 'USD', symbol: '$' };
@@ -138,6 +139,9 @@ export class Account extends Asset {
     // target resolver falls back to the SAVINGS role, so legacy scenarios are
     // unchanged. Serialized only when true (see ScenarioSerializer._serializeAccount).
     this.isTransactionAccount = opts.isTransactionAccount ?? false;
+    // Inheritance metadata (design 63 §14) — set only on promoted inherited records
+    // (brokerage); defaults keep every owned account byte-for-byte unchanged.
+    applyInheritanceMeta(this, opts);
   }
 }
 
