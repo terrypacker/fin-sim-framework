@@ -9,6 +9,7 @@
  */
 
 import { BaseComponent } from '../components/base-component.js';
+import { bindParamLinkedField } from '../scenario/param-linked-field.js';
 
 const RELATIONSHIPS = [
   ['immediate', 'Immediate (Class 1 — child/parent/sibling)'],
@@ -33,13 +34,18 @@ const STRATEGIES = [['', '— default —'], ['equal', 'Equal'], ['lump', 'Lump'
  * inherited-asset sub-editor. Emits onSave(data) / onDelete(id).
  */
 export class BequestEditor extends BaseComponent {
-  constructor({ parent, container, node, people = [], promotedAssets = [], onSave, onDelete }) {
+  constructor({ parent, container, node, people = [], promotedAssets = [], onSave, onDelete,
+                links = null, onParamChange = null, onOpenParam = null }) {
     super({ parent });
     this._container = container;
     this._node      = node;
     this._people    = people;
     this.onSave     = onSave   ?? null;
     this.onDelete   = onDelete ?? null;
+    this._links        = links;             // ParamFieldLinks (design/32)
+    this.onParamChange = onParamChange ?? null;
+    this.onOpenParam   = onOpenParam   ?? null;
+    this._linkedFields = new Set();
     // Working copy of the INLINE asset rows (retirement / super, and — while the
     // bequest is inert — any not-yet-promoted brokerage / property / collectible).
     this._assets = (node?.assets ?? []).map(a => ({ ...a }));
@@ -107,8 +113,34 @@ export class BequestEditor extends BaseComponent {
     }
     root.appendChild(actions);
 
+    this._bindParamLinks();
+
     this._container.replaceChildren(root);
     this._rootEl = root;
+  }
+
+  /**
+   * Route the param-backed `inheritanceYear` field through its generated
+   * `bequest.<stateKey>.inheritanceYear` param (design/32, design 55 §14.3): a
+   * direct edit writes the param (the source of truth) rather than only the
+   * record, and a 🔗 badge jumps to the param in the Scenario panel. Without
+   * this, the param→record cascade clobbers a form edit on the next Rebuild.
+   */
+  _bindParamLinks() {
+    this._linkedFields = new Set();
+    const stateKey = this._node?.stateKey;
+    if (!stateKey || !this._links) return;
+
+    const param = this._links.getParamFor('bequest', stateKey, 'inheritanceYear');
+    if (!param) return;
+    const labelEl = this._year?.closest('.node-field')?.querySelector('label');
+    bindParamLinkedField({
+      input: this._year, labelEl, param,
+      coerce: (raw) => (raw === '' || raw == null) ? null : Math.round(Number(raw)),
+      onChange: () => this.onParamChange?.(),
+      onOpen:   (p) => this.onOpenParam?.(p),
+    });
+    this._linkedFields.add('inheritanceYear');
   }
 
   _renderAssets() {
@@ -140,7 +172,7 @@ export class BequestEditor extends BaseComponent {
 
   _readForm() {
     const yr = this._year.value;
-    return {
+    const data = {
       id:             this._node?.id ?? null,
       name:           this._name.value.trim(),
       decedentName:   this._decedent.value.trim(),
@@ -151,6 +183,11 @@ export class BequestEditor extends BaseComponent {
       paidViaEstate:  this._paidViaEstate.checked,
       assets:         this._assets.map(a => ({ ...a })),
     };
+    // Param-backed fields are owned by their scenario param (design/32) — the
+    // editor wrote the change onto the param; excluding it here keeps the record
+    // from carrying a divergent value the cascade would then overwrite.
+    for (const f of this._linkedFields) delete data[f];
+    return data;
   }
 
   // ── DOM helpers ─────────────────────────────────────────────────────────────
