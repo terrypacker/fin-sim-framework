@@ -62,6 +62,19 @@ function _personDefaultCurrency(person) {
     ?? 'USD';
 }
 
+/**
+ * The undisambiguated display label for a record (design 70) — the rule lifted
+ * out of journal-report-plugin's private `_accountLabel` so the state panel, the
+ * journal rows, and the facet dropdown all read a record identically:
+ * `${country} ${name}`, e.g. 'US Marge IRA'. Falls back to the stateKey when the
+ * record is nameless, which keeps the label non-empty (and unique).
+ */
+function _baseLabel(rec, stateKey) {
+  const country = rec.country ? `${rec.country} ` : '';
+  const name    = rec.name || stateKey;
+  return `${country}${name}`.trim();
+}
+
 /** Currency symbol for a code, e.g. 'USD' → '$', 'AUD' → 'A$'. */
 function _currencySymbol(code) {
   if (!code) return '$';
@@ -132,6 +145,14 @@ export class StateSchemaRegistry {
     this._currencyConverter  = null; // CurrencyConverter
     this._rateStateProvider  = null; // () => state snapshot carrying effectiveExchangeRates
     this._warnedCodeless     = new Set(); // paths already warned about (dev)
+
+    // Display-name resolution (design 70). Records are captured verbatim as they
+    // register; the human labels are derived lazily (below) because
+    // collision-only disambiguation can only be decided once every record —
+    // including the persons whose names disambiguate them — has registered.
+    this._displayRecords = new Map(); // stateKey → { name, kind, country, ownerId }
+    this._personNames    = new Map(); // person id → name
+    this._labels         = null;      // lazy stateKey → label; null = needs rebuild
 
     // ── Glob patterns ─────────────────────────────────────────────────────────
     this.registerPattern('*.balance',           ParameterValueType.currency());
@@ -343,6 +364,7 @@ export class StateSchemaRegistry {
    * @param {object}  account   - Account instance; reads account.currency?.code
    */
   registerAccount(stateKey, account) {
+    this.registerDisplayRecord(stateKey, account, 'account');
     const code = account?.currency?.code ?? null;
     const vt   = ParameterValueType.currency(code);
     this.register(`${stateKey}.balance`,          vt);
@@ -376,6 +398,7 @@ export class StateSchemaRegistry {
    * @param {object} asset     - RealProperty | Collectible; reads currency?.code or country
    */
   registerAsset(stateKey, asset) {
+    this.registerDisplayRecord(stateKey, asset, 'asset');
     const code = asset?.currency?.code ?? currencyForCountry(asset?.country);
     const vt   = ParameterValueType.currency(code);
     this.register(`${stateKey}.value`,                   vt);
@@ -404,6 +427,10 @@ export class StateSchemaRegistry {
   registerPerson(person) {
     const id = person?.id;
     if (!id) return;
+    // Design 70: persons both *carry* a display name (`people.<id>.*` rows) and
+    // *supply* one (they disambiguate same-named accounts by owner).
+    if (person.name) { this._personNames.set(id, person.name); this._labels = null; }
+    this.registerDisplayRecord(`people.${id}`, person, 'person');
     const fallback = _personDefaultCurrency(person);
     const wage = person.wageCurrency ?? fallback;
     const ss   = person.ssCurrency   ?? fallback;
@@ -423,6 +450,92 @@ export class StateSchemaRegistry {
     if (!code || !Array.isArray(paths)) return;
     const vt = ParameterValueType.currency(code);
     for (const path of paths) this.register(path, vt);
+  }
+
+  // ─── Display names (design 70) ─────────────────────────────────────────────
+
+  /**
+   * Retain a record's human name against its stateKey so the display layer can
+   * show "US Marge IRA" where it renders `beq1IraAccount` today. Called for free
+   * by registerAccount / registerAsset / registerPerson; call it directly only
+   * for records that stamp currency paths without a model instance (design 63
+   * inline bequest assets).
+   *
+   * The stateKey remains the identity everywhere (params, journal rows, state
+   * map); this is a *label* layer only — nothing here is serialized, and the map
+   * is rebuilt from the records on every load, so a rename never re-keys.
+   *
+   * @param {string} stateKey
+   * @param {object} record    - reads name, country, ownerId
+   * @param {'account'|'asset'|'person'} [kind]
+   */
+  registerDisplayRecord(stateKey, record, kind = 'asset') {
+    if (!stateKey || !record) return;
+    this._displayRecords.set(stateKey, {
+      name:    record.name    ?? null,
+      country: record.country ?? null,
+      ownerId: record.ownerId ?? null,
+      kind,
+    });
+    this._labels = null; // a new record can create (or resolve) a collision
+  }
+
+  /**
+   * The display label for a stateKey, or null when the key names no known
+   * record (a bare metric, an intermediate state path). Callers own the
+   * fallback — the contract is `displayNameFor(k) ?? toLabel(k)` — so an
+   * unregistered key renders exactly as it does today.
+   *
+   * @param {string} stateKey  - e.g. 'usSavings2Account'
+   * @returns {string|null}    - e.g. 'US Shared Checking'
+   */
+  displayNameFor(stateKey) {
+    if (!stateKey) return null;
+    if (this._labels === null) this._rebuildLabels();
+    return this._labels.get(stateKey) ?? null;
+  }
+
+  /**
+   * The `<stateKey>.balance` paths of every registered account. Lets the
+   * per-account journal reports scope themselves to the real account set
+   * instead of the `contains 'account.balance'` substring (design 63 §14.6),
+   * which silently drops any key not spelled `…Account`.
+   *
+   * @returns {string[]}
+   */
+  accountBalanceKeys() {
+    const keys = [];
+    for (const [sk, rec] of this._displayRecords) {
+      if (rec.kind === 'account') keys.push(`${sk}.balance`);
+    }
+    return keys;
+  }
+
+  /**
+   * Derive every label at once. Two passes: the base label first, then a
+   * disambiguating suffix on *only* the names that collide — so the common
+   * (unique) case stays clean and the rare case stays distinguishable.
+   * @private
+   */
+  _rebuildLabels() {
+    this._labels = new Map();
+    const byBase = new Map(); // base label → [stateKey]
+    for (const [sk, rec] of this._displayRecords) {
+      const base = _baseLabel(rec, sk);
+      this._labels.set(sk, base);
+      if (!byBase.has(base)) byBase.set(base, []);
+      byBase.get(base).push(sk);
+    }
+    for (const [base, keys] of byBase) {
+      if (keys.length < 2) continue;
+      // Owner first (the human-meaningful tiebreaker); fall back to the stateKey
+      // when the owner does not disambiguate (unowned, or same owner twice).
+      const owners = keys.map(sk => this._personNames.get(this._displayRecords.get(sk).ownerId) ?? null);
+      const ownersDisambiguate = owners.every(o => o) && new Set(owners).size === keys.length;
+      keys.forEach((sk, i) => {
+        this._labels.set(sk, `${base} · ${ownersDisambiguate ? owners[i] : sk}`);
+      });
+    }
   }
 
   /**

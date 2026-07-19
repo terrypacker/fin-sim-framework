@@ -31,11 +31,39 @@ export class JournalQueryApi extends QueryApi {
    * @param {import('../query/query-api.js').DataSource} dataSource
    * @param {import('../simulation-framework/type-registry.js').TypeRegistry} [typeRegistry]
    * @param {import('./period/period-service.js').PeriodService} [periodService]
+   * @param {import('./services/state-schema-registry.js').StateSchemaRegistry} [schemaRegistry]
    */
-  constructor(dataSource, typeRegistry, periodService) {
+  constructor(dataSource, typeRegistry, periodService, schemaRegistry) {
     super(dataSource);
     this._typeRegistry  = typeRegistry  ?? null;
     this._periodService = periodService ?? null;
+    this._schemaRegistry = schemaRegistry ?? null;
+  }
+
+  /**
+   * Display label for an account/asset stateKey, or null when the key names no
+   * record (design 70). Report definitions call this from `decorate()` to label
+   * a group without disturbing its `key` — the stateKey remains the identity
+   * that expand-to-entries and history keying run on.
+   *
+   * @param {string} stateKey
+   * @returns {string|null}
+   */
+  displayNameFor(stateKey) {
+    return this._schemaRegistry?.displayNameFor?.(stateKey) ?? null;
+  }
+
+  /**
+   * The `<stateKey>.balance` paths of every registered account, or null when no
+   * registry is bound. Per-account reports scope themselves to this instead of
+   * the `contains 'account.balance'` substring (design 63 §14.6), which silently
+   * drops any key not spelled `…Account`.
+   *
+   * @returns {string[]|null}
+   */
+  accountBalanceKeys() {
+    const keys = this._schemaRegistry?.accountBalanceKeys?.() ?? null;
+    return (keys && keys.length > 0) ? keys : null;
   }
 
   /**

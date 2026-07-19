@@ -234,6 +234,14 @@ export class ScenarioLoader {
         if (!a.stateKey) continue;
         const code = a.currency?.code ?? (a.country === 'AU' ? 'AUD' : 'USD');
         reg.registerCurrencyPaths([`${a.stateKey}.balance`, `${a.stateKey}.value`, `${a.stateKey}.costBasis`], code);
+        // Inline inherited assets are plain descriptors, not model instances, so
+        // they need the display-name stamp registerAccount/registerAsset give the
+        // promoted ones for free (design 70 §5) — otherwise `beq1IraAccount`
+        // renders as "Beq 1 Ira Account".
+        // `kind` follows the tagged type so a RealProperty/Collectible bequest is
+        // not mistaken for an account by accountBalanceKeys().
+        const kind = (a.__type === 'RealProperty' || a.__type === 'Collectible') ? 'asset' : 'account';
+        reg.registerDisplayRecord(a.stateKey, { ...a, ownerId: a.ownerId ?? b.heirId ?? null }, kind);
       }
     }
     reg.registerCurrencyPaths(['neInheritanceTaxYTD'], 'USD');

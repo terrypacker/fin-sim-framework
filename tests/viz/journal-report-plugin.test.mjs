@@ -632,3 +632,76 @@ test('_fmtMoney: null renders em dash', () => {
   const { plugin } = makePlugin();
   expect(plugin._fmtMoney(null)).toBe('—');
 });
+
+// ─── Display names on group rows (design 70 §6.2) ────────────────────────────
+
+import { ReportDefinitionRegistry } from '../../src/finance/journal-reporting/report-definition-registry.js';
+
+/** Registry stamped with two named accounts, as the loader would. */
+function namedRegistry() {
+  const reg = new StateSchemaRegistry();
+  reg.registerDisplayRecord('usSavings2Account', { name: 'Shared Checking', country: 'US' }, 'account');
+  reg.registerDisplayRecord('beq1_a1',           { name: "Mother's Brokerage", country: 'US' }, 'account');
+  return reg;
+}
+
+/** The Cash-Flow-by-Account groups as the aggregate would produce them. */
+function seedAccountGroups(plugin, api) {
+  const def = new ReportDefinitionRegistry().get('cash-flow-by-account');
+  plugin._activeReportId = def.id;
+  plugin._journal = { journal: [{}] };
+  plugin._groups = def.decorate([
+    { key: { stateKey: 'usSavings2Account.balance' }, count: 2, total: 1000, items: [] },
+    { key: { stateKey: 'beq1_a1.balance'           }, count: 1, total:  250, items: [] },
+    { key: { stateKey: 'usUnknownAccount.balance'  }, count: 1, total:  100, items: [] },
+  ], api);
+  plugin._grandTotal = 1350;
+  plugin._renderResults();
+  return def;
+}
+
+test('Display names: account group rows show the name, not the stateKey path', () => {
+  const { plugin, host } = makePlugin();
+  const reg = namedRegistry();
+  seedAccountGroups(plugin, { displayNameFor: (sk) => reg.displayNameFor(sk) });
+
+  const labels = [...host.querySelectorAll('.jr-group-label')].map(el => el.textContent);
+  expect(labels).toContain('US Shared Checking');
+  expect(labels).toContain("US Mother's Brokerage");
+  // An unregistered key still renders its raw path — nothing regresses.
+  expect(labels).toContain('usUnknownAccount.balance');
+});
+
+test('Display names: the stateKey identity survives on g.key and as the row tooltip', () => {
+  const { plugin, host } = makePlugin();
+  const reg = namedRegistry();
+  seedAccountGroups(plugin, { displayNameFor: (sk) => reg.displayNameFor(sk) });
+
+  // g.key is untouched, so expand-to-entries / history keying still work.
+  expect(plugin._groups[0].key.stateKey).toBe('usSavings2Account.balance');
+
+  const named = [...host.querySelectorAll('.jr-group-label')]
+    .find(el => el.textContent === 'US Shared Checking');
+  expect(named.getAttribute('title')).toBe('usSavings2Account.balance');
+});
+
+test('Display names: rows are unlabeled (raw keys) when no registry is wired', () => {
+  const { plugin, host } = makePlugin();
+  seedAccountGroups(plugin, undefined);
+  const labels = [...host.querySelectorAll('.jr-group-label')].map(el => el.textContent);
+  expect(labels).toEqual(expect.arrayContaining([
+    'usSavings2Account.balance', 'beq1_a1.balance', 'usUnknownAccount.balance',
+  ]));
+});
+
+test('Display names: decorate labels every stateKey-grouped account report', () => {
+  const reg      = namedRegistry();
+  const api      = { displayNameFor: (sk) => reg.displayNameFor(sk) };
+  const registry = new ReportDefinitionRegistry();
+  for (const id of ['cash-flow-by-account', 'withdrawals-by-account', 'credits-to-account', 'debits-from-account']) {
+    const groups = registry.get(id).decorate(
+      [{ key: { stateKey: 'usSavings2Account.balance' }, count: 1, total: 1 }], api);
+    expect(groups[0].labels.stateKey).toBe('US Shared Checking');
+    expect(groups[0].key.stateKey).toBe('usSavings2Account.balance');
+  }
+});
