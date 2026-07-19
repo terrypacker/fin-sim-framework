@@ -92,8 +92,40 @@ export class ReportDefinition {
   /**
    * Optional: post-process aggregate groups (rename keys, attach display labels).
    * Default is identity.
+   *
+   * @param {Array<object>} groups
+   * @param {import('../journal-query-api.js').JournalQueryApi} [api]
    */
-  decorate(groups) { return groups; }
+  decorate(groups, _api) { return groups; }
+}
+
+/**
+ * Strip the trailing state field off a journal `stateKey` path to recover the
+ * bare account key: `usSavings2Account.balance` → `usSavings2Account`.
+ * Returns the input unchanged when it carries no field segment.
+ */
+function _accountKeyOf(stateKeyPath) {
+  const dot = String(stateKeyPath ?? '').indexOf('.');
+  return dot > 0 ? stateKeyPath.slice(0, dot) : stateKeyPath;
+}
+
+/**
+ * Attach the human account name as a group *label* (design 70 §6.2), leaving
+ * `g.key` — the identity that expand-to-entries and history keying run on —
+ * untouched. Shared by every report that groups by account stateKey.
+ *
+ * @param {Array<object>} groups
+ * @param {import('../journal-query-api.js').JournalQueryApi} [api]
+ */
+function _labelAccountGroups(groups, api) {
+  if (!api?.displayNameFor) return groups;
+  for (const g of groups) {
+    const sk = g.key?.stateKey;
+    if (sk == null) continue;
+    const name = api.displayNameFor(_accountKeyOf(sk));
+    if (name) (g.labels ??= {}).stateKey = name;
+  }
+  return groups;
 }
 
 // ─── Shared facet → predicate helpers ────────────────────────────────────────
@@ -131,6 +163,35 @@ function _appendAccountStateKeyFilter(conditions, accountStateKeys) {
       op: 'contains', field: 'stateKey', value: `${sk}.`,
     })),
   });
+}
+
+/**
+ * Scope a per-account report to the account *balance* rows it reports on —
+ * either the accounts the user selected in the facet, or (the default) every
+ * registered account.
+ *
+ * This replaces the `contains 'account.balance'` substring (design 63 §14.6,
+ * retired by design 70 §6.3), which selected rows by the *spelling* of the key
+ * and so silently dropped any account whose stateKey does not end in `…Account`
+ * — the bug that made inherited `beq1_a1` invisible in every account report.
+ * Matching the real account set instead is exact: for existing `…Account` keys
+ * it selects precisely the same rows.
+ *
+ * Falls back to the old substring when no registry is bound to the api (a bare
+ * api in a test harness), so nothing depends on the wiring being present.
+ *
+ * @param {Array<object>} conditions  - mutated in-place
+ * @param {Array<string>|null|undefined} accountStateKeys - facet selection (bare account keys)
+ * @param {import('../journal-query-api.js').JournalQueryApi} api
+ */
+function _appendAccountBalanceScope(conditions, accountStateKeys, api) {
+  const selected = (Array.isArray(accountStateKeys) && accountStateKeys.length > 0)
+    ? accountStateKeys.map(sk => `${sk}.balance`)
+    : null;
+  const keys = selected ?? api?.accountBalanceKeys?.() ?? null;
+  if (keys) { conditions.push({ op: 'in', field: 'stateKey', value: keys }); return; }
+  conditions.push({ op: 'contains', field: 'stateKey', value: 'account.balance' });
+  _appendAccountStateKeyFilter(conditions, accountStateKeys);
 }
 
 // ─── Built-in Phase 1 definitions ────────────────────────────────────────────
@@ -325,11 +386,13 @@ class CashFlowByAccountDef extends ReportDefinition {
     const periodAst  = api.periodOfTaxYear(period);
     const conditions = [
       periodAst,
-      { op: 'contains', field: 'stateKey', value: 'account.balance' },
     ];
-    _appendAccountStateKeyFilter(conditions, accountStateKeys);
+    _appendAccountBalanceScope(conditions, accountStateKeys, api);
     return { op: 'and', conditions };
   }
+
+  /** Show the account NAME on each group row; g.key keeps the stateKey identity (design 70 §6.2). */
+  decorate(groups, api) { return _labelAccountGroups(groups, api); }
 }
 
 // ─── Phase 3 definitions ──────────────────────────────────────────────────────
@@ -366,12 +429,14 @@ class WithdrawalsByAccountDef extends ReportDefinition {
     const conditions = [
       periodAst,
       { op: 'in',       field: 'actionType', value: api.familyTypes('WITHDRAWAL') },
-      { op: 'contains', field: 'stateKey',   value: 'account.balance'             },
       { op: 'lt',       field: 'stateDelta', value: 0                             },
     ];
-    _appendAccountStateKeyFilter(conditions, accountStateKeys);
+    _appendAccountBalanceScope(conditions, accountStateKeys, api);
     return { op: 'and', conditions };
   }
+
+  /** Show the account NAME on each group row; g.key keeps the stateKey identity (design 70 §6.2). */
+  decorate(groups, api) { return _labelAccountGroups(groups, api); }
 }
 
 class CreditsToAccountDef extends ReportDefinition {
@@ -401,12 +466,14 @@ class CreditsToAccountDef extends ReportDefinition {
     const periodAst  = api.periodOfTaxYear(period);
     const conditions = [
       periodAst,
-      { op: 'contains', field: 'stateKey',   value: 'account.balance' },
       { op: 'gt',       field: 'stateDelta', value: 0                 },
     ];
-    _appendAccountStateKeyFilter(conditions, accountStateKeys);
+    _appendAccountBalanceScope(conditions, accountStateKeys, api);
     return { op: 'and', conditions };
   }
+
+  /** Show the account NAME on each group row; g.key keeps the stateKey identity (design 70 §6.2). */
+  decorate(groups, api) { return _labelAccountGroups(groups, api); }
 }
 
 class DebitsFromAccountDef extends ReportDefinition {
@@ -436,12 +503,14 @@ class DebitsFromAccountDef extends ReportDefinition {
     const periodAst  = api.periodOfTaxYear(period);
     const conditions = [
       periodAst,
-      { op: 'contains', field: 'stateKey',   value: 'account.balance' },
       { op: 'lt',       field: 'stateDelta', value: 0                 },
     ];
-    _appendAccountStateKeyFilter(conditions, accountStateKeys);
+    _appendAccountBalanceScope(conditions, accountStateKeys, api);
     return { op: 'and', conditions };
   }
+
+  /** Show the account NAME on each group row; g.key keeps the stateKey identity (design 70 §6.2). */
+  decorate(groups, api) { return _labelAccountGroups(groups, api); }
 }
 
 class TaxPaidByYearDef extends ReportDefinition {
@@ -634,9 +703,8 @@ class RealPropertyCashFlowDef extends ReportDefinition {
     const conditions = [
       periodAst,
       { op: 'in',       field: 'actionType', value: api.familyTypes('REAL_PROPERTY_CASH') },
-      { op: 'contains', field: 'stateKey',   value: 'account.balance'                     },
     ];
-    _appendAccountStateKeyFilter(conditions, accountStateKeys);
+    _appendAccountBalanceScope(conditions, accountStateKeys, api);
     return { op: 'and', conditions };
   }
 }
@@ -723,9 +791,8 @@ class MoneyMovedByActionDef extends ReportDefinition {
     const { period, accountStateKeys } = params;
     const conditions = [
       api.periodOfTaxYear(period),
-      { op: 'contains', field: 'stateKey', value: 'account.balance' },
     ];
-    _appendAccountStateKeyFilter(conditions, accountStateKeys);
+    _appendAccountBalanceScope(conditions, accountStateKeys, api);
     return { op: 'and', conditions };
   }
 }

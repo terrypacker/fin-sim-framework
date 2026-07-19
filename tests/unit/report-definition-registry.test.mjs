@@ -23,6 +23,7 @@ import { JournalDataSource }          from '../../src/finance/journal-data-sourc
 import { JournalQueryApi }            from '../../src/finance/journal-query-api.js';
 import { TypeRegistry }               from '../../src/simulation-framework/type-registry.js';
 import { ReportDefinitionRegistry }   from '../../src/finance/journal-reporting/report-definition-registry.js';
+import { StateSchemaRegistry }        from '../../src/finance/services/state-schema-registry.js';
 
 // All toolsets — registered once so familyTypes() resolves correctly.
 import { US_BANKING }        from '../../src/scenarios/toolsets/us-banking-toolset.js';
@@ -826,5 +827,104 @@ test('empty multiselect arrays act as "no filter"', async () => {
     const r = await runDef(def, { period: null, accountStateKeys: v }, [e]);
     assert.strictEqual(r.groups.length, 1, `accountStateKeys=${JSON.stringify(v)} should not filter`);
     assert.strictEqual(r.groups[0].total, -1000);
+  }
+});
+
+// ─── Design 70 §6.3 — the §14.6 substring retire ─────────────────────────────
+
+/**
+ * Build an api whose schema registry knows the given accounts, so per-account
+ * reports scope to the real account set instead of the `account.balance`
+ * substring. Mirrors what ScenarioLoader._registerDisplayCurrencies stamps.
+ */
+function buildScopedApi(entries, stateKeys, { perDiff = true } = {}) {
+  const j = new Journal({ enabled: true });
+  for (const e of entries) j.addEntry(e);
+  const reg = new StateSchemaRegistry();
+  for (const sk of stateKeys) reg.registerDisplayRecord(sk, { name: sk, country: 'US' }, 'account');
+  return new JournalQueryApi(new JournalDataSource(j, { perDiff }), _typeRegistry, null, reg);
+}
+
+async function runScopedDef(def, params, entries, stateKeys) {
+  const api = buildScopedApi(entries, stateKeys, { perDiff: def.perDiff });
+  return api.aggregate({
+    query:      def.buildQuery(params, api),
+    groupBy:    def.defaultGroupBy,
+    aggregates: def.defaultAggregates,
+    dedupeBy:   def.dedupeBy,
+  });
+}
+
+const _mixedKeyEntries = [
+  entry({
+    actionType: 'TRANSFER_APPLY',
+    data:       { amount: 1000 },
+    stateDiff: [
+      { field: 'usSavingsAccount.balance', before: 5000, after: 4000, delta: -1000 },
+      // An inherited key that does NOT end in `…Account` — invisible to the old
+      // `contains 'account.balance'` selector (design 63 §14.6).
+      { field: 'beq1_a1.balance',          before: 0,    after: 1000, delta:  1000 },
+    ],
+  }),
+];
+
+test('§14.6: a non-…Account inherited key now selects into cash-flow-by-account', async () => {
+  const def = new ReportDefinitionRegistry().get('cash-flow-by-account');
+
+  // Before: the substring selector drops it (no registry bound → fallback path).
+  const legacy = await runDef(def, { period: null }, _mixedKeyEntries);
+  assert.deepStrictEqual(legacy.groups.map(g => g.key.stateKey), ['usSavingsAccount.balance'],
+    'the substring selector is blind to beq1_a1');
+
+  // After: scoping to the real account set picks it up.
+  const scoped = await runScopedDef(def, { period: null }, _mixedKeyEntries,
+    ['usSavingsAccount', 'beq1_a1']);
+  assert.deepStrictEqual(scoped.groups.map(g => g.key.stateKey).sort(),
+    ['beq1_a1.balance', 'usSavingsAccount.balance']);
+});
+
+test('§14.6: existing …Account-keyed selection is unchanged by the retire', async () => {
+  const def = new ReportDefinitionRegistry().get('cash-flow-by-account');
+  const entries = [
+    entry({
+      actionType: 'TRANSFER_APPLY',
+      data:       { amount: 1000 },
+      stateDiff: [
+        { field: 'usSavingsAccount.balance', before: 5000, after: 4000, delta: -1000 },
+        { field: 'checkingAccount.balance',  before: 0,    after: 1000, delta:  1000 },
+        // Non-balance rows on an account must stay out of an account *balance* report.
+        { field: 'usSavingsAccount.holdings.0.marketValue', before: 10, after: 20, delta: 10 },
+      ],
+    }),
+  ];
+  const keys = ['usSavingsAccount', 'checkingAccount'];
+  const legacy = await runDef(def, { period: null }, entries);
+  const scoped = await runScopedDef(def, { period: null }, entries, keys);
+  assert.deepStrictEqual(
+    scoped.groups.map(g => ({ k: g.key.stateKey, t: g.total })).sort((a, b) => a.k.localeCompare(b.k)),
+    legacy.groups.map(g => ({ k: g.key.stateKey, t: g.total })).sort((a, b) => a.k.localeCompare(b.k)),
+    'byte-identical selection for …Account keys');
+});
+
+test('§14.6: the accounts facet still narrows to the selected accounts', async () => {
+  const def = new ReportDefinitionRegistry().get('cash-flow-by-account');
+  const scoped = await runScopedDef(def,
+    { period: null, accountStateKeys: ['beq1_a1'] }, _mixedKeyEntries,
+    ['usSavingsAccount', 'beq1_a1']);
+  assert.deepStrictEqual(scoped.groups.map(g => g.key.stateKey), ['beq1_a1.balance']);
+});
+
+test('§14.6: every per-account report scopes to the account set', async () => {
+  const reg = new ReportDefinitionRegistry();
+  const withdrawal = [
+    entry({
+      actionType: 'K401_WITHDRAWAL_APPLY',
+      data:       { amount: 500 },
+      stateDiff: [{ field: 'beq1_a1.balance', before: 1000, after: 500, delta: -500 }],
+    }),
+  ];
+  for (const id of ['withdrawals-by-account', 'debits-from-account', 'money-moved-by-action']) {
+    const res = await runScopedDef(reg.get(id), { period: null }, withdrawal, ['beq1_a1']);
+    assert.ok(res.groups.length > 0, `${id} should see the inherited key`);
   }
 });

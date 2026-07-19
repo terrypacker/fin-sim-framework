@@ -72,6 +72,35 @@ export class StatePanelView extends BaseComponent {
     this._schemaRegistry = r ?? null;
   }
 
+  /**
+   * The human display name for a state path, or null when it names no
+   * account/asset/person (design 70). Callers own the `?? toLabel(k)` fallback.
+   * @param {string} statePath
+   * @returns {string|null}
+   */
+  _displayName(statePath) {
+    return this._schemaRegistry?.displayNameFor?.(statePath) ?? null;
+  }
+
+  /**
+   * Human label for a *full* state path, resolving the owning record when the
+   * path points at one of its fields: `usSavings2Account.balance` →
+   * "US Shared Checking — Balance". Falls back to today's whole-path
+   * beautification when nothing resolves (design 70 §6.1/§6.4).
+   * @param {string} statePath
+   * @returns {string}
+   */
+  _pathLabel(statePath) {
+    const direct = this._displayName(statePath);
+    if (direct) return direct;
+    const dot = statePath.lastIndexOf('.');
+    if (dot > 0) {
+      const owner = this._displayName(statePath.slice(0, dot));
+      if (owner) return `${owner} — ${this.toLabel(statePath.slice(dot + 1))}`;
+    }
+    return this.toLabel(statePath);
+  }
+
   /** Inject the TypeRegistry, used to resolve action-payload field currencies. */
   set typeRegistry(r) {
     this._typeRegistry = r ?? null;
@@ -265,12 +294,16 @@ export class StatePanelView extends BaseComponent {
       if (typeof v === 'number' && isFinite(v)) {
         if (!this._matchesFilter(path)) continue;
         const hist = this._metricHistory.get(k);
+        // Per-account balance metrics are keyed by stateKey (RecordBalanceAction),
+        // so they resolve to the account's name; true metrics (netWorth, …) do not
+        // and keep their beautified key (design 70 §6.1).
+        const label = this._displayName(k) ?? this.toLabel(k);
         frag.appendChild(this._buildFieldRow({
           path,
           value:   v,
-          label:   this.toLabel(k),
+          label,
           history: hist,
-          onClick: () => this._showFieldHistoryModal(path, this._metricHistory.get(k) ?? [], false, this.toLabel(k)),
+          onClick: () => this._showFieldHistoryModal(path, this._metricHistory.get(k) ?? [], false, label),
         }));
       } else {
         // Non-numeric metric (object/array): render its leaves like state.
@@ -346,24 +379,31 @@ export class StatePanelView extends BaseComponent {
       const isObjArray = Array.isArray(v) && v.length > 0 && v[0] !== null && typeof v[0] === 'object';
       const isObject   = v !== null && typeof v === 'object' && !Array.isArray(v) && !this.isDate(v);
 
+      // Design 70: an account/asset/person path shows its human name ("US Marge
+      // IRA") instead of the beautified stateKey ("Beq 1 Ira Account"). A
+      // non-null resolution IS the "this key names a record" signal — no
+      // account-type enumeration needed — and null falls through to today's
+      // toLabel() so bare metrics and intermediate paths are unchanged.
+      const name = this._displayName(topPath);
+
       if (isObjArray || isObject) {
         const subPaths = this._collectLeafPaths(v, topPath);
         paths.push(...subPaths);
         this._appendCollapsibleSection(container, {
-          label: k, sectionPath: topPath, subPaths,
+          label: name ?? k, alreadyLabel: name != null, sectionPath: topPath, subPaths,
           renderBody: (body) => isObjArray ? this._renderObjectArray(v, topPath, body)
                                            : this.renderState(v, body, topPath),
         });
 
       } else if (typeof v === 'number' && isFinite(v)) {
         if (!this._matchesFilter(topPath)) continue;
-        container.appendChild(this._buildFieldRow({ path: topPath, value: v, label: this.toLabel(k) }));
+        container.appendChild(this._buildFieldRow({ path: topPath, value: v, label: name ?? this.toLabel(k) }));
         paths.push(topPath);
 
       } else {
         if (!this._matchesFilter(topPath)) continue;
-        container.appendChild(this._buildStaticRow(this.toLabel(k),
-          typeof v === 'object' ? this.renderObj(v) : this._fmtChange(topPath, v)));
+        container.appendChild(this._buildStaticRow(name ?? this.toLabel(k),
+          typeof v === 'object' ? this.renderObj(v) : this._fmtChange(topPath, v), topPath));
       }
     }
     return paths;
@@ -481,13 +521,16 @@ export class StatePanelView extends BaseComponent {
   }
 
   /** A non-numeric leaf row (label + value), no chart toggle. */
-  _buildStaticRow(label, valueText) {
+  _buildStaticRow(label, valueText, path = null) {
     const row = document.createElement('div');
     row.className = 'lsp-metric-row lsp-static-row';
     row.appendChild(document.createElement('span')); // checkbox column spacer
     const lbl = document.createElement('span');
     lbl.className = 'lsp-metric-label';
     lbl.textContent = label;
+    // Keep the raw state path reachable on hover — once the label shows a name,
+    // this is the only place the identity is recoverable (design 70 §6.1).
+    if (path) lbl.title = path;
     const spark = document.createElement('span');
     spark.className = 'lsp-metric-spark';
     const val = document.createElement('span');
@@ -719,7 +762,8 @@ export class StatePanelView extends BaseComponent {
     const title = document.createElement('span');
     title.style.cssText = 'font-size:12px;font-weight:600;';
     const backfilledNote = backfilled ? ' · snapshot resolution' : '';
-    title.textContent = `Field History — ${label ?? this.toLabel(path)}${backfilledNote}`;
+    title.textContent = `Field History — ${label ?? this._pathLabel(path)}${backfilledNote}`;
+    title.title = path;
     const closeBtn = document.createElement('button');
     closeBtn.className = 'btn btn-sm';
     closeBtn.textContent = '✕';
@@ -1690,6 +1734,8 @@ export class StatePanelView extends BaseComponent {
     const header = document.createElement('span');
     header.className = 'lsp-section-label';
     header.textContent = alreadyLabel ? label : this.toLabel(label);
+    // With a display name showing, the stateKey is only recoverable on hover.
+    if (sectionPath != null) header.title = sectionPath;
     headerRow.appendChild(header);
 
     if (sectionPath != null) {

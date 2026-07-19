@@ -194,7 +194,7 @@ import { ScenarioCompareRunner } from './finance/scenario-compare/scenario-compa
 import { flattenNumericState, computeStateDiff, journalPairKey, mergeEntryFieldRows, pairEntriesWithinDay, firstDivergenceDate, runningNetWorthSeries, buildJournalOverlay } from './finance/scenario-compare/scenario-compare-utils.js';
 import { AccountService } from './finance/services/account-service.js';
 import { AssetService } from './finance/services/asset-service.js';
-import { inheritedAssetMeta, BequestService } from './finance/services/bequest-service.js';
+import { promotedRetirementMeta, inheritedAssetMeta, BequestService } from './finance/services/bequest-service.js';
 import { CollectibleService } from './finance/services/collectible-service.js';
 import { CompanyEquityService } from './finance/services/company-equity-service.js';
 import { PersonService } from './finance/services/person-service.js';
@@ -216,7 +216,7 @@ import { LateLifeCareApplyReducer } from './finance/spending/strategies/late-lif
 import { LateLifeCareHandler } from './finance/spending/strategies/late-life-care-handler.js';
 import { RegimeAwareSpendingReducer } from './finance/spending/strategies/regime-aware-spending-reducer.js';
 import { RetirementDateHandler } from './finance/spending/strategies/retirement-date-handler.js';
-import { ACCOUNT_ROLES } from './finance/state/account-roles.js';
+import { ACCOUNT_ROLES, INHERITED_RETIREMENT_ROLES } from './finance/state/account-roles.js';
 import { InternationalRetirementFinancialState } from './finance/state/intl-retirement-state.js';
 import { StateTaxService } from './finance/state-tax-service.js';
 import { AuTaxDocument2024 } from './finance/tax/au/au-tax-document-2024.js';
@@ -948,6 +948,7 @@ export const Finance = {
   buildJournalOverlay,
   AccountService,
   AssetService,
+  promotedRetirementMeta,
   inheritedAssetMeta,
   BequestService,
   CollectibleService,
@@ -978,6 +979,7 @@ export const Finance = {
   RegimeAwareSpendingReducer,
   RetirementDateHandler,
   ACCOUNT_ROLES,
+  INHERITED_RETIREMENT_ROLES,
   InternationalRetirementFinancialState,
   StateTaxService,
   AuTaxDocument2024,
