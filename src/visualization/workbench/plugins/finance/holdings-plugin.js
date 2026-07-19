@@ -43,6 +43,7 @@ export class HoldingsPlugin extends WorkbenchComponent {
     this._servicesOverride = null; // tests
     this._unsubSimBus   = null;    // teardown for the per-run sim-bus subscription
     this._renderQueued  = false;   // rAF debounce flag for step-driven re-renders
+    this._pickerSig     = null;    // membership signature of the account <select>
   }
 
   setServices(services) { this._servicesOverride = services ?? null; }
@@ -220,6 +221,7 @@ export class HoldingsPlugin extends WorkbenchComponent {
     const sel = this._q('account');
     if (!sel) return;
     const accounts = this._holdingAccounts();
+    this._pickerSig = accounts.map(a => a.stateKey).join('|');
     if (!this._stateKey && accounts.length) this._stateKey = accounts[0].stateKey;
 
     sel.innerHTML = accounts.length
@@ -230,6 +232,16 @@ export class HoldingsPlugin extends WorkbenchComponent {
 
   _render() {
     if (!this._mounted) return;
+
+    // The holding-account set can change mid-run: an inherited account gains its
+    // holdings when funded at the inheritance date, and a fully drawn-down account
+    // loses its last holding. The picker is otherwise only built at bind/mount, so
+    // rebuild it whenever that membership changes — cheap (a joined-key compare),
+    // and only actually rebuilds the <select> on the rare step where the set moves.
+    // Without this, a mid-sim-funded inherited account never appears in the picker.
+    if (this._holdingAccounts().map(a => a.stateKey).join('|') !== this._pickerSig) {
+      this._renderAccountPicker();
+    }
 
     const asof = this._q('asof');
     if (asof) asof.textContent = this._sim?.currentDate ? `as of ${this._fmtDate(this._sim.currentDate)}` : '—';
