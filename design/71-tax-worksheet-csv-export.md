@@ -735,3 +735,94 @@ income. The limitation arithmetic is internally consistent; what the worksheet r
 gain. That is a classification question about the design-52 income buckets, not a defect in the
 credit calculation, and it is exactly the kind of thing this export exists to surface. Left open
 deliberately — it changes lifetime tax and belongs in its own change.
+
+---
+
+## 14. The §904 finding, run down — AU tax on US-source income was creditable
+
+§13.4 flagged that the 2033 return credited $522 against $393,770 of "foreign tax". Investigating it
+turned up a real over-relief defect. **The §904 numerator was correct; the pool funding was not.**
+
+### 14.1 The company gain is US-source, so the numerator was right
+
+`COMPANY_SALE_TAX` (`us-tax-module-2026.js`) adds the gain to `usCapitalGainsYTD`, to
+`auCapitalGainsYTD` when AU-resident, and to `usSourceCapGainsUsdYTD` / `usSourceCapGainsAudYTD` —
+but deliberately **not** to `foreignGeneralIncomeYTD` / `foreignPassiveIncomeYTD`. That is correct:
+US company equity produces a **US-source** gain, and §904 exists precisely to stop foreign tax on
+US-source income from being credited. The contrast with `AU_STOCK_WITHDRAWAL_TAX` and
+`AU_HOUSE_SALE_TAX`, which *do* feed the passive numerator, is the source rule working as intended.
+
+### 14.2 The leak was on the funding side
+
+`AuTaxSettleApplyReducer._extraStatePatches` staged the whole post-FITO AU liability (less super
+tax) as current-year creditable foreign tax, on this stated assumption:
+
+> "Because FITO has already reduced the AU liability by the US tax on US-source income, the residual
+> is predominantly the AU tax on AU-source income."
+
+That holds only while FITO **fully** relieves — i.e. while the US tax on US-source income is at
+least the AU tax on it. On a large capital gain it is not: AU taxes at ~45% while the US charges
+15–20% LTCG. The FY2033 settle makes it stark:
+
+| | AUD |
+|---|---:|
+| AU tax for the year (`action.tax`) | 616,253 |
+| `fitoLimit` — AU tax attributable to US-source income (both filers) | **644,328** |
+| FITO actually relieved | 36,000 |
+| Super tax | 5,910 |
+| Staged as creditable US foreign tax (old) | **610,343** → 393,770 USD |
+
+Essentially the *entire* AU liability was tax on the US-source gain, and essentially all of it was
+staged as creditable. §904 correctly refused to credit it that year ($522 taken) — but the unused
+$420,605 banked as a 10-year carryforward vintage. From 2040, with `currentTax` at zero because AU
+income had ceased, the pool funded credits of $655–1,503 **every year, entirely from carryover**.
+The over-relief was deferred, not prevented — the exact failure mode design 52 was written to kill.
+
+### 14.3 The fix
+
+`fitoLimit` *is* the AU tax attributable to US-source income: the ATO "step 1 − step 2" calculation
+is by construction the marginal AU tax on the US-source slice. FITO already relieved `fito` of it,
+so `fitoLimit − fito` is what survives inside the AU net liability and must not be treated as
+creditable:
+
+```js
+auCreditable = max(0, tax − superTax − Σ_person max(0, fitoLimit − fito))
+```
+
+No new state, no new computation — the quantity was already on every AU return, just unused. Effect
+on the reference run:
+
+| | before | after |
+|---|---:|---:|
+| 2033 current-year foreign tax staged | 393,770 | **1,300** |
+| §904 passive pool peak | 535,690 | **3,420** |
+| Carryover-funded credits, 2040–2049 | ~9,354 | ~3,139 (pool drained by 2044) |
+| Lifetime tax | 1,127,909 | **1,134,089** (+0.55%) |
+| Ending net worth | 11,584,190 | **11,577,657** (−0.06%) |
+
+Upward tax is the correct direction for removing over-relief. The move is small because the
+limitation already blocked the bulk in-year; what leaked was the decade of carryforward drawdown
+after AU income stopped. Golden re-pinned; guarded by `ftc-us-source-not-creditable.test.mjs`
+(FTC-US-1…FTC-US-9), including an end-to-end assertion that the pool stays bounded.
+
+**Known gap:** under the A$1,000 FITO de-minimis shortcut the ATO limit is deliberately not
+computed, so `fitoLimit` is null and nothing is excluded. The US tax on US-source income is ≤A$1,000
+in those years, so the exposure is negligible — but it is an approximation, not an exact rule.
+
+### 14.4 Retracted: the "`taxYear` freezes at 2041" finding
+
+An earlier revision of this section reported that `taxDetail.taxYear` freezes at 2041 from the 2042
+settle onward, and speculated about consequences for the §904 vintage key and the 10-year expiry.
+**That was wrong, and is retracted.**
+
+`IntlRetirementScenario`'s default `simEnd` is **2041-01-01**. The probe that produced the finding
+called `buildAndCompile({})` and then `stepTo(2050)` — driving the sim nine years beyond its own
+horizon, where recurring events are no longer scheduled. Period advance stops while tax settles keep
+firing, so `currentPeriods` (and the `taxYear` derived from it) stays pinned at the last scheduled
+period. Re-run with an explicit `simEnd` of 2050, `taxYear` advances correctly through 2049 and the
+vintage expiry works as designed — the 2033 vintage duly expires in 2044.
+
+There is no period-engine defect here. The real lesson is a **testing** one, recorded because it
+nearly produced a bogus bug report: *stepping a sim past its `simEnd` yields incoherent state, and
+nothing warns you*. Any probe or test that runs beyond the default horizon must pass `simEnd`
+explicitly — `ftc-us-source-not-creditable.test.mjs` FTC-US-9 now does.

@@ -114,8 +114,20 @@ function runDefaultIntlRetirement() {
 // only reinvesting sleeve (k401) is tax-deferred — so net worth moves $1 (rounding)
 // and lifetime tax is unchanged. The lever bites only when the prevailing rate diverges
 // from the source coupon (a rate-regime shift), which the default scenario doesn't run.
-const EXPECTED_LIFETIME_TAX = 1_127_909;
-const EXPECTED_NET_WORTH     = 11_584_190;
+// Design 71 §14 (§904 US-source leak): AU tax paid on US-SOURCE income was being
+// staged as creditable US foreign tax. The §904 limitation blocked it in-year, but it
+// banked as a 10-year carryforward vintage and was drawn down in later years against
+// genuinely foreign income — over-relief deferred rather than prevented. Excluding the
+// unrelieved US-source slice (`fitoLimit − fito`) collapses the 2033 company-sale
+// staging from ~394,000 to ~1,300 and the pool peak from ~536,000 to ~3,400.
+//
+// This is an UPWARD tax move — exactly the direction that confirms over-relief was
+// removed: lifetime tax +0.55% (1,127,909 → 1,134,089) and ending net worth −0.06%
+// (11,584,190 → 11,577,657). Small because the limitation already blocked most of it;
+// what leaked was the decade of carryforward drawdown after AU income ceased. Re-pinned
+// so the ±1% band stays centred on the corrected figures.
+const EXPECTED_LIFETIME_TAX = 1_134_089;
+const EXPECTED_NET_WORTH     = 11_577_657;
 const TOL = 0.01;
 
 test('design 52 lock-in: default US→AU retiree lifetime tax reflects real §904 FTC + FITO', () => {
