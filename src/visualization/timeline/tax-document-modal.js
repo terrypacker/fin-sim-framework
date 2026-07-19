@@ -9,6 +9,7 @@
  */
 
 import { WB_EVENTS } from '../workbench/workbench-runtime.js';
+import { worksheetRowsFromDocuments, toCsv } from '../../finance/tax/tax-worksheet-export.js';
 
 /**
  * TaxDocumentModal — renders a TaxDocument in a native <dialog> modal.
@@ -62,6 +63,9 @@ export class TaxDocumentModal {
   /** @param {TaxDocument|TaxDocument[]} docOrDocs */
   open(docOrDocs) {
     const docs = Array.isArray(docOrDocs) ? docOrDocs : [docOrDocs];
+    // Retained so the CSV button can export the document it sits under (design 71
+    // §11.1). Indexed by the `data-doc-idx` stamped on each panel's button.
+    this._docs = docs;
 
     this._overlay = document.createElement('div');
     this._overlay.id = 'tax-doc-modal-overlay';
@@ -84,10 +88,10 @@ export class TaxDocumentModal {
         this._dialog.querySelectorAll('.tax-doc-panel').forEach(p =>
           p.classList.toggle('tax-doc-panel--hidden', parseInt(p.dataset.idx, 10) !== idx));
       });
-      this._wireDrillClicks();
+      this._wireDialogClicks();
     } else {
       this._dialog.innerHTML = this._render(docs[0]);
-      this._wireDrillClicks();
+      this._wireDialogClicks();
     }
 
     document.body.appendChild(this._overlay);
@@ -100,12 +104,12 @@ export class TaxDocumentModal {
       `<button class="tax-doc-tab${i === 0 ? ' tax-doc-tab--active' : ''}" data-idx="${i}">${doc.personName || doc.title}</button>`
     ).join('');
     const panels = docs.map((doc, i) =>
-      `<div class="tax-doc-panel${i === 0 ? '' : ' tax-doc-panel--hidden'}" data-idx="${i}">${this._render(doc)}</div>`
+      `<div class="tax-doc-panel${i === 0 ? '' : ' tax-doc-panel--hidden'}" data-idx="${i}">${this._render(doc, i)}</div>`
     ).join('');
     return `<div class="tax-doc-tab-bar">${headers}</div><div class="tax-doc-tab-content">${panels}</div>`;
   }
 
-  _render(doc) {
+  _render(doc, idx = 0) {
     const code = this._docCurrency(doc);
     const body = doc.table
       ? this._renderTable(doc.table, code)
@@ -121,7 +125,36 @@ export class TaxDocumentModal {
         ${body}
       </div>
       <div class="tax-doc-footer">
+        ${this._csvButton(doc, idx)}
       </div>`;
+  }
+
+  /**
+   * CSV export for the document on screen (design 71 §11.1). Emitted only when the
+   * document actually flattens to worksheet rows — table-shaped forms (Form 8949,
+   * the AU CGT Schedule) are disposal registers with no home in the worksheet column
+   * set (§5.4), and offering a button that downloads an empty file would be worse
+   * than offering none.
+   */
+  _csvButton(doc, idx) {
+    if (!worksheetRowsFromDocuments(doc).length) return '';
+    return `<button class="tax-doc-csv-btn" data-doc-idx="${idx}" title="Download this return as CSV">&#11015; CSV</button>`;
+  }
+
+  /** Flatten the clicked panel's document and hand the browser a CSV download. */
+  _downloadCsv(idx) {
+    const doc  = this._docs?.[idx];
+    const rows = worksheetRowsFromDocuments(doc);
+    if (!rows.length) return;
+
+    const csv  = toCsv(rows);
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = _csvFilename(doc);
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   _renderTable({ heading, columns, rows, totals }, code) {
@@ -180,13 +213,25 @@ export class TaxDocumentModal {
       </div>`;
   }
 
-  _wireDrillClicks() {
-    if (!this._runtime || !this._dialog) return;
+  /**
+   * One delegated listener for both in-dialog affordances. CSV export is wired
+   * unconditionally — unlike drill-down, it needs no WorkbenchRuntime, so gating the
+   * whole listener on `_runtime` (as the drill-only version did) would silently
+   * disable the button wherever the modal is opened without one.
+   */
+  _wireDialogClicks() {
+    if (!this._dialog) return;
     this._dialog.addEventListener('click', (e) => {
-      const btn = e.target.closest('.tax-doc-line-drill');
-      if (!btn) return;
-      const reportId = btn.dataset.reportId;
-      const params   = JSON.parse(btn.dataset.params || '{}');
+      const csvBtn = e.target.closest('.tax-doc-csv-btn');
+      if (csvBtn) {
+        this._downloadCsv(parseInt(csvBtn.dataset.docIdx, 10) || 0);
+        return;
+      }
+
+      const drill = e.target.closest('.tax-doc-line-drill');
+      if (!drill || !this._runtime) return;
+      const reportId = drill.dataset.reportId;
+      const params   = JSON.parse(drill.dataset.params || '{}');
       this._runtime.bus.publish({ type: WB_EVENTS.JOURNAL_REPORT_OPEN, reportId, params });
       this._overlay?.remove();
     });
@@ -228,6 +273,20 @@ export class TaxDocumentModal {
 // ─── Module-level helpers ─────────────────────────────────────────────────────
 
 const COUNTRY_TO_CURRENCY = { US: 'USD', AU: 'AUD' };
+
+/**
+ * `"Form 1040 — 2032"` → `"form-1040-2032.csv"`; a per-person AU return gets the
+ * person appended so two tabs saved from the same filing do not collide.
+ */
+function _csvFilename(doc) {
+  const parts = [doc?.title ?? 'tax-document', doc?.personName ?? ''];
+  const slug  = parts.join(' ')
+    .replace(/[^\w\s-]/g, ' ')     // drop em dashes, §, parentheses
+    .trim()
+    .replace(/\s+/g, '-')
+    .toLowerCase();
+  return `${slug || 'tax-document'}.csv`;
+}
 
 function _fmtPct(r) {
   if (!r) return '0.0%';

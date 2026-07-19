@@ -8,6 +8,12 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import {
+  applyBracketsDetailed,
+  marginalBracketRate as _marginalBracketRate,
+  flatRateBand,
+} from '../bracket-schedule.js';
+
 /**
  * BaseStateTaxRatesModule — abstract base for US state + year income-tax rate
  * modules (design 34). The state analog of UsTaxRatesBase.
@@ -72,8 +78,11 @@ export class BaseStateTaxRatesModule {
     const cg             = Math.max(0, stateCapitalGainsYTD);
     const cgInOrdinary   = this._capitalGainsMode === 'alternative' ? 0 : cg;
 
-    const taxableOrdinary = Math.max(0, stateOrdinaryIncomeYTD + pensionTaxable + ssTaxable + cgInOrdinary - stdDeduction);
-    const ordinaryTax     = _applyBrackets(taxableOrdinary, brackets);
+    const taxableOrdinary  = Math.max(0, stateOrdinaryIncomeYTD + pensionTaxable + ssTaxable + cgInOrdinary - stdDeduction);
+    // `.tax` is identical to the scalar applyBrackets; the bands ride along for the
+    // worksheet export (design 71 §11.3).
+    const ordinarySchedule = applyBracketsDetailed(taxableOrdinary, brackets);
+    const ordinaryTax      = ordinarySchedule.tax;
 
     // Hawaii-style alternative capital-gains tax: CG taxed at a flat preferential
     // rate instead of folding into the ordinary base.
@@ -103,6 +112,16 @@ export class BaseStateTaxRatesModule {
       netLiability,
       effectiveRate,
       marginalRate,
+      brackets: {
+        table:    filingStatus === 'Single' ? 'Single' : 'MFJ',
+        ordinary: ordinarySchedule.bands,
+        // Only meaningful in 'alternative' mode (Hawaii-style flat preferential CG
+        // rate); null when capital gains are folded into the ordinary base, where
+        // they are already inside the ordinary bands above.
+        capitalGains: this._capitalGainsMode === 'alternative'
+          ? flatRateBand(this._capitalGainsAltRate, cg, capitalGainsTax)
+          : null,
+      },
       lineItems: [
         { label: 'State Ordinary Income',          amount:  stateOrdinaryIncomeYTD },
         { label: 'Pension/Retirement Income',      amount:  statePensionIncomeYTD },
@@ -119,32 +138,21 @@ export class BaseStateTaxRatesModule {
   }
 }
 
-// ─── Helpers (mirror us-tax-rates-base) ───────────────────────────────────────
-
-function _applyBrackets(income, brackets) {
-  if (income <= 0 || brackets.length === 0) return 0;
-  let tax = 0;
-  for (let i = 0; i < brackets.length; i++) {
-    const [lo, rate] = brackets[i];
-    const hi = i + 1 < brackets.length ? brackets[i + 1][0] : Infinity;
-    if (income <= lo) break;
-    tax += (Math.min(income, hi) - lo) * rate;
-  }
-  return tax;
-}
-
-function _marginalBracketRate(income, brackets) {
-  if (income <= 0 || brackets.length === 0) return 0;
-  let rate = 0;
-  for (const [lo, r] of brackets) if (income > lo) rate = r;
-  return rate;
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+//
+// `_applyBrackets` / `_marginalBracketRate` no longer live here: design 71 §3 moved
+// them (and the byte-identical copies in the US federal and AU rate modules) to the
+// shared `../bracket-schedule.js`, imported at the top under the same local names.
+// The state per-band breakdown is deferred with the state worksheet (design 71 §9).
 
 function _zeroResult(stateCode, filingStatus, inputs) {
   return {
     stateCode, filingStatus, inputs,
     taxableIncome: 0, ordinaryTax: 0, capitalGainsTax: 0,
     netLiability: 0, effectiveRate: 0, marginalRate: 0,
+    // A no-income-tax state has no schedule at all — an empty band list, not a
+    // missing field, so consumers can read `brackets.ordinary` unconditionally.
+    brackets: { table: filingStatus === 'Single' ? 'Single' : 'MFJ', ordinary: [], capitalGains: null },
     lineItems: [{ label: 'Net State Tax Liability', amount: 0 }],
   };
 }

@@ -77,6 +77,7 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
                 : []),
             ],
           },
+          ...this._reliefWorksheet(taxDetail),
         ],
         summary: {
           grossIncome:   inputs.ordinaryIncome + Math.max(0, inputs.capitalGains),
@@ -108,9 +109,14 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
         {
           heading: 'Tax Computation',
           lineItems: [
-            { label: 'Tax on Income (Non-Resident Brackets)', amount: taxDetail.baseTax },
-            { label: 'Non-Resident Withholding Tax (15%)',    amount: taxDetail.nonResidentWithholdingTax },
+            { label: 'Tax on Income (Non-Resident Brackets)', amount: taxDetail.baseTax,                  bands: taxDetail.brackets?.ordinary },
+            { label: 'Non-Resident Withholding Tax (15%)',    amount: taxDetail.nonResidentWithholdingTax, flat: taxDetail.brackets?.nonResidentWithholding ?? undefined },
             { label: 'Super Tax',                             amount: inputs.superTax },
+            // The non-resident section previously stopped short of a total, so its
+            // lines had nothing to foot against (design 71 §11.4). Gross Tax is the
+            // sum the summary already reports; stating it makes the section checkable
+            // by the same rule as every other return.
+            { label: 'Gross Tax',                             amount: taxDetail.grossTax },
           ],
         },
       ],
@@ -154,16 +160,33 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
    */
   _residentTaxComputationSection(taxDetail) {
     const { inputs } = taxDetail;
+    const br = taxDetail.brackets ?? {};
     return {
       heading: 'Tax Computation',
       lineItems: [
-        { label: 'Tax on Income',   amount: taxDetail.baseTax },
+        this._taxOnIncomeLine(taxDetail),
         ...this._taxOnIncomeSubRows(taxDetail),
-        { label: 'Medicare Levy',   amount: taxDetail.medicareLevy },
+        { label: 'Medicare Levy',   amount: taxDetail.medicareLevy, flat: br.medicareLevy ?? undefined },
         { label: 'Super Tax',       amount: inputs.superTax },
         { label: 'Gross Tax',       amount: taxDetail.grossTax },
       ],
     };
+  }
+
+  /**
+   * The "Tax on Income" line, carrying the ordinary bracket schedule **only when
+   * there are no sub-rows** to carry it instead (design 71 §8.4).
+   *
+   * With no assessable gain, `assessableIncome === ordinaryIncome`, so the ordinary
+   * bands explain this line exactly. With a gain, the schedule splits across the two
+   * sub-rows below and attaching it here as well would double-count it in the export.
+   * Without this branch the common AU year — wages, no disposals — would export with
+   * no bracket detail at all.
+   */
+  _taxOnIncomeLine(taxDetail) {
+    const line = { label: 'Tax on Income', amount: taxDetail.baseTax };
+    if (taxDetail.discountedCapitalGains > 0) return line;
+    return { ...line, bands: taxDetail.brackets?.ordinary };
   }
 
   /**
@@ -177,10 +200,49 @@ export class AuTaxDocument2026 extends BaseTaxDocumentModule {
    */
   _taxOnIncomeSubRows(taxDetail) {
     if (!(taxDetail.discountedCapitalGains > 0)) return [];
+    const br = taxDetail.brackets ?? {};
     return [
-      { label: 'Tax on Ordinary Income', amount: taxDetail.ordinaryIncomeTax, sub: true },
-      { label: 'Tax on Capital Gains',   amount: taxDetail.capitalGainsTax,   sub: true },
+      { label: 'Tax on Ordinary Income', amount: taxDetail.ordinaryIncomeTax, sub: true, bands: br.ordinary },
+      { label: 'Tax on Capital Gains',   amount: taxDetail.capitalGainsTax,   sub: true, bands: br.capitalGains },
     ];
+  }
+
+  /**
+   * "Worksheet — Foreign Relief" (design 71 §13): the intermediates behind the
+   * Foreign Income Tax Offset, the AU counterpart of the US §904 worksheet.
+   *
+   * The Credits section states the offset taken but not the ATO "step 1 − step 2"
+   * limit that capped it — and that limit is derived by re-assessing the whole return
+   * with the US-source income disregarded, so it is impossible to reconstruct from
+   * anything else the return shows. Below A$1,000 the limit is skipped entirely by
+   * the de-minimis shortcut, which the worksheet states explicitly rather than
+   * leaving the reader to infer from an absent limit.
+   *
+   * Rows are `WORKSHEET`, never `LINE` — supporting arithmetic, not lines of the
+   * return (§5.2). Returns [] when there is no foreign tax to relieve.
+   */
+  _reliefWorksheet(taxDetail) {
+    const foreignTax = taxDetail.inputs?.foreignIncomeTaxOffset ?? 0;
+    if (!(foreignTax > 0)) return [];
+
+    const money = (label, amount) => ({ label, amount, rowType: 'WORKSHEET' });
+    const lineItems = [money('FITO — foreign (US) tax paid on US-source income', foreignTax)];
+
+    if (taxDetail.fitoDeMinimis) {
+      // The shortcut credits the whole amount; there is no limit to report because
+      // none was computed.
+      lineItems.push(money('FITO — de-minimis shortcut (≤ A$1,000), limit not computed', foreignTax));
+    } else {
+      lineItems.push(money('FITO — §770-75 limit (step 1 − step 2)', taxDetail.fitoLimit ?? 0));
+    }
+    lineItems.push(money('FITO — offset allowed', taxDetail.fito ?? 0));
+    // Unlike the US FTC there is NO carryforward: any excess is simply lost, which is
+    // the deliberate asymmetry design 52 §4.5 models. Stating it makes the loss
+    // visible rather than silent.
+    lineItems.push(money('FITO — excess forfeited (no carryforward)',
+      Math.max(0, foreignTax - (taxDetail.fito ?? 0))));
+
+    return [{ heading: 'Worksheet — Foreign Relief', lineItems }];
   }
 
   _generateCgtSchedule(saleRecords, taxYear) {

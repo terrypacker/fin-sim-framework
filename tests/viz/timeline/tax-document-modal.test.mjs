@@ -74,3 +74,88 @@ test('no schemaRegistry: falls back to plain $ formatting', () => {
   const html = openHtml(m, usDoc());
   assert.ok(html.includes('$100,000.00'));
 });
+
+// ─── CSV export (design 71 §11.1) ────────────────────────────────────────────
+
+/** Capture the anchor the modal creates for the download, without navigating. */
+function captureDownload(fn) {
+  const captured = [];
+  const realCreate = document.createElement.bind(document);
+  const realBlob   = global.Blob;
+  const realURL    = global.URL;
+
+  global.Blob = class { constructor(parts) { this.parts = parts; } };
+  global.URL  = { createObjectURL: () => 'blob:stub', revokeObjectURL: () => {} };
+  document.createElement = (tag) => {
+    const el = realCreate(tag);
+    if (tag === 'a') {
+      el.click = () => captured.push({ download: el.download, href: el.href });
+    }
+    return el;
+  };
+  try { fn(); }
+  finally {
+    document.createElement = realCreate;
+    global.Blob = realBlob;
+    global.URL  = realURL;
+  }
+  return captured;
+}
+
+test('CSV button is rendered for a sections-shaped return', () => {
+  const modal = new TaxDocumentModal();
+  const html  = openHtml(modal, usDoc());
+  assert.ok(html.includes('tax-doc-csv-btn'), 'the footer offers a CSV download');
+  assert.ok(html.includes('data-doc-idx="0"'));
+});
+
+test('CSV button is omitted for a table-shaped form that flattens to nothing', () => {
+  // Form 8949 is a disposal register — no home in the worksheet columns (§5.4), so
+  // a button here would download an empty file.
+  const modal = new TaxDocumentModal();
+  const html  = openHtml(modal, {
+    title: 'Form 8949 — 2030', country: 'US', filingStatus: 'Part II',
+    table: { heading: 'Sales', columns: ['A'], rows: [['x']], totals: ['Totals'] },
+  });
+  assert.ok(!html.includes('tax-doc-csv-btn'));
+});
+
+test('clicking CSV downloads a worksheet named after the document', () => {
+  const modal = new TaxDocumentModal();
+  modal.open(usDoc());
+  const overlay = document.getElementById('tax-doc-modal-overlay');
+
+  const hits = captureDownload(() => {
+    overlay.querySelector('.tax-doc-csv-btn').click();
+  });
+  overlay.remove();
+
+  assert.equal(hits.length, 1, 'exactly one download was triggered');
+  assert.equal(hits[0].download, 'form-1040-2030.csv');
+});
+
+test('CSV export works without a WorkbenchRuntime', () => {
+  // Drill-down needs a runtime; CSV does not. The shared click listener must not be
+  // gated on the runtime, or the button silently dies wherever one is absent.
+  const modal = new TaxDocumentModal();          // no runtime
+  modal.open(usDoc());
+  const overlay = document.getElementById('tax-doc-modal-overlay');
+  const hits = captureDownload(() => overlay.querySelector('.tax-doc-csv-btn').click());
+  overlay.remove();
+  assert.equal(hits.length, 1);
+});
+
+test('each tab of a per-person filing exports its own document', () => {
+  const modal = new TaxDocumentModal();
+  const a = { ...usDoc(), personName: 'Marge' };
+  const b = { ...usDoc(), personName: 'Homer' };
+  modal.open([a, b]);
+  const overlay = document.getElementById('tax-doc-modal-overlay');
+
+  const btns = overlay.querySelectorAll('.tax-doc-csv-btn');
+  assert.equal(btns.length, 2, 'one button per panel');
+
+  const hits = captureDownload(() => btns[1].click());
+  overlay.remove();
+  assert.equal(hits[0].download, 'form-1040-2030-homer.csv', 'the second tab exports Homer');
+});

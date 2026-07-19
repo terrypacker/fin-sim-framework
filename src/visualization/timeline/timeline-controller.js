@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { primaryTaxSettleEntries } from '../../finance/tax/tax-settle-entries.js';
+
 const COUNTRY_TO_CURRENCY = { AU: 'AUD', US: 'USD' };
 
 function fmtNative(n, currency) {
@@ -140,17 +142,30 @@ export class TimelineController {
     return true;
   }
 
-  // Returns Map<dateStr, Map<evType, Array<{entry, idx, sum}>>>
+  /**
+   * The journal entries that should offer a "Tax Doc ↗" link — one per settlement,
+   * never one per reducer. Computed once per render rather than re-derived per row.
+   * See `tax-settle-entries.js` for why the first entry of a fan-out is the one that
+   * carries working drill-down links.
+   */
+  _primaryTaxSettles() {
+    return primaryTaxSettleEntries(this.journal?.journal ?? []);
+  }
+
+  // Returns Map<dateStr, Map<evType, Array<{entry, idx, sum, taxDoc}>>>
   groups(formatDate) {
     const map = new Map();
     if (!this.journal) return map;
+    const taxDocs = this._primaryTaxSettles();
     this.journal.journal.forEach((entry, idx) => {
       if (!this._passesFilter(entry)) return;
       const d = formatDate(entry.date);
       if (!map.has(d)) map.set(d, new Map());
       const byEv = map.get(d);
       if (!byEv.has(entry.event.type)) byEv.set(entry.event.type, []);
-      byEv.get(entry.event.type).push({ entry, idx, sum: this.sum(entry.action) });
+      byEv.get(entry.event.type).push({
+        entry, idx, sum: this.sum(entry.action), taxDoc: taxDocs.has(entry),
+      });
     });
     return map;
   }
@@ -166,10 +181,18 @@ export class TimelineController {
 
     const byId  = new Map(); // instanceId → { entry, children: [] }
     const roots = new Map(); // dateStr → Map<evType, node[]>
+    const taxDocs = this._primaryTaxSettles();
 
     for (const entry of this.journal.journal) {
       if (!this._passesFilter(entry)) continue;
-      byId.set(entry.action.instanceId, { entry, children: [] });
+      // One action journaled by N reducers collapses to ONE tree node. Keep the
+      // FIRST entry rather than letting the last overwrite it: for a tax settle the
+      // second entry ("Accumulate Taxes Paid") carries a degenerate drill-down
+      // period, so the node would offer a Tax Doc link with broken drill-downs.
+      if (byId.has(entry.action.instanceId)) continue;
+      byId.set(entry.action.instanceId, {
+        entry, children: [], taxDoc: taxDocs.has(entry),
+      });
     }
 
     for (const [, node] of byId) {

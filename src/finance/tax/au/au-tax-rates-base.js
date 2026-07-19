@@ -9,6 +9,16 @@
  */
 
 import { BaseTaxRatesModule } from '../base-tax-rates-module.js';
+import {
+  applyBrackets as _applyBrackets,
+  applyBracketsDetailed,
+  marginalBracketRate as _marginalBracketRate,
+  subtractBands,
+  flatRateBand,
+} from '../bracket-schedule.js';
+
+/** Flat withholding rate on non-resident withholding income (ATO). */
+const NR_WITHHOLDING_RATE = 0.15;
 
 /**
  * AuTaxRatesBase — base class for Australian income tax rate computation.
@@ -109,8 +119,12 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       this._cgtRelief(state, auCapitalGainsYTD);
     const discountedIncome = auOrdinaryIncomeYTD + netTaxableGain;
     const assessableIncome = Math.max(0, discountedIncome);
-    const baseTax          = _applyBrackets(assessableIncome, this._brackets);
-    const medicareLevy     = this._computeMedicareLevy(discountedIncome);
+    // `.tax` is identical to the scalar applyBrackets these lines used before; the
+    // bands ride along for the worksheet export (design 71 §8.4).
+    const assessableSchedule = applyBracketsDetailed(assessableIncome, this._brackets);
+    const baseTax          = assessableSchedule.tax;
+    const medicare         = this._medicareLevyDetail(discountedIncome);
+    const medicareLevy     = medicare.tax;
     const frankingOffset   = Math.min(auFrankingCreditYTD, baseTax);
 
     // Div 115C minimum tax (FY2027+): floor the tax *attributable to the net
@@ -118,7 +132,8 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
     // own marginal tax (baseTax with the gain − baseTax without it), not the whole
     // liability, so it only bites when the marginal rate on the gain is below
     // minTaxRate. 0 for FY≤2026.
-    const ordinaryOnlyTax  = _applyBrackets(Math.max(0, auOrdinaryIncomeYTD), this._brackets);
+    const ordinarySchedule = applyBracketsDetailed(Math.max(0, auOrdinaryIncomeYTD), this._brackets);
+    const ordinaryOnlyTax  = ordinarySchedule.tax;
     const taxOnGain        = Math.max(0, baseTax - ordinaryOnlyTax);
     const minTaxTopUp      = minTaxRate > 0
       ? Math.max(0, minTaxRate * netTaxableGain - taxOnGain)
@@ -145,6 +160,20 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       superTax: auSuperTaxYTD,
       marginalRate: _marginalBracketRate(assessableIncome, this._brackets),
       netLiabilityPreFito,
+      brackets: {
+        table:    'Resident',
+        ordinary: ordinarySchedule.bands,
+        // AU has no separate CGT rate schedule: the relieved gain is stacked on
+        // ordinary income and taxed at the resulting marginal brackets, so the gain's
+        // share is the bracket DIFFERENTIAL — the same construction the US uses for
+        // LTCG (§8.4). Clamped to zero bands when `taxOnGain` clamps, so the bands
+        // always sum to the `capitalGainsTax` actually reported (see §11.4 for the
+        // capital-loss case that makes the clamp reachable).
+        capitalGains: baseTax >= ordinaryOnlyTax
+          ? subtractBands(assessableSchedule.bands, ordinarySchedule.bands)
+          : ordinarySchedule.bands.map(b => ({ ...b, income: 0, tax: 0 })),
+        medicareLevy: medicare.band,
+      },
     };
   }
 
@@ -231,6 +260,7 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         netLiability,
         effectiveRate,
         marginalRate:             a.marginalRate,
+        brackets:                 a.brackets,
         lineItems: [
           { label: 'Ordinary Income',               amount:  auOrdinaryIncomeYTD },
           { label: 'Capital Gains (before relief)', amount:  auCapitalGainsYTD },
@@ -255,8 +285,9 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
       // Non-resident: no CGT discount; NR withholding income taxed at flat 15% rate
       const totalIncome              = auOrdinaryIncomeYTD + auCapitalGainsYTD;
       const assessableIncome         = Math.max(0, totalIncome);
-      const baseTax                  = _applyBrackets(assessableIncome, this._nonResidentBrackets);
-      const nonResidentWithholdingTax = auNonResidentWithholdingYTD * 0.15;
+      const nrSchedule               = applyBracketsDetailed(assessableIncome, this._nonResidentBrackets);
+      const baseTax                  = nrSchedule.tax;
+      const nonResidentWithholdingTax = auNonResidentWithholdingYTD * NR_WITHHOLDING_RATE;
       const grossTax                 = Math.max(0, baseTax) + auSuperTaxYTD + nonResidentWithholdingTax;
       const netLiability             = grossTax;
 
@@ -286,6 +317,17 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
         netLiability,
         effectiveRate,
         marginalRate,
+        brackets: {
+          table: 'Non-Resident',
+          // Non-residents get no CGT discount and no separate gains schedule: ordinary
+          // income and gains are taxed together on one bracket run, so a single band
+          // set explains the whole "Tax on Income" line and `capitalGains` is null.
+          ordinary:     nrSchedule.bands,
+          capitalGains: null,
+          medicareLevy: null,          // non-residents pay no Medicare levy
+          nonResidentWithholding: flatRateBand(
+            NR_WITHHOLDING_RATE, auNonResidentWithholdingYTD, nonResidentWithholdingTax),
+        },
         lineItems: [
           { label: 'Ordinary Income',                         amount:  auOrdinaryIncomeYTD },
           { label: 'Capital Gains (no CGT discount)',         amount:  auCapitalGainsYTD },
@@ -310,40 +352,41 @@ export class AuTaxRatesBase extends BaseTaxRatesModule {
    * i.e. lowerThreshold / (1 − rate / phaseInRate).
    */
   _computeMedicareLevy(income) {
+    return this._medicareLevyDetail(income).tax;
+  }
+
+  /**
+   * The Medicare levy plus the worksheet record explaining it (design 71 §8.4).
+   *
+   * The levy is flat-rate but **not a single flat rate**: inside the phase-in band it
+   * is `phaseInRate × (income − lowerThreshold)`, above it `rate × income`. Reporting
+   * the statutory 2% against full income would therefore be wrong for exactly the
+   * low-income years where a reader is most likely to question the number, so the
+   * band records the rate and base *actually applied* — keeping `rate × income = tax`
+   * true on the exported row — and carries the regime parameters alongside.
+   */
+  _medicareLevyDetail(income) {
     const { rate, lowerThreshold, phaseInRate } = this._medicareLevy;
-    if (income <= lowerThreshold) return 0;
+    const params = { lowerThreshold, phaseInRate, statutoryRate: rate };
+
+    if (income <= lowerThreshold) {
+      return { tax: 0, band: { ...flatRateBand(0, 0, 0), ...params, regime: 'exempt' } };
+    }
     const upperThreshold = lowerThreshold / (1 - rate / phaseInRate);
     if (income < upperThreshold) {
-      return (income - lowerThreshold) * phaseInRate;
+      const base = income - lowerThreshold;
+      const tax  = base * phaseInRate;
+      return { tax, band: { ...flatRateBand(phaseInRate, base, tax), ...params, regime: 'phase-in' } };
     }
-    return income * rate;
+    const tax = income * rate;
+    return { tax, band: { ...flatRateBand(rate, income, tax), ...params, regime: 'full' } };
   }
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
-/**
- * Apply marginal brackets to an income amount.
- * brackets: [[threshold, rate], ...] sorted ascending by threshold.
- */
-function _applyBrackets(income, brackets) {
-  if (income <= 0) return 0;
-  let tax = 0;
-  for (let i = 0; i < brackets.length; i++) {
-    const [lo, rate] = brackets[i];
-    const hi = i + 1 < brackets.length ? brackets[i + 1][0] : Infinity;
-    if (income <= lo) break;
-    tax += (Math.min(income, hi) - lo) * rate;
-  }
-  return tax;
-}
-
-/** Return the marginal rate of the highest bracket reached by income. */
-function _marginalBracketRate(income, brackets) {
-  if (income <= 0 || brackets.length === 0) return 0;
-  let rate = 0;
-  for (const [lo, r] of brackets) {
-    if (income > lo) rate = r;
-  }
-  return rate;
-}
+// `_applyBrackets` / `_marginalBracketRate` used to live here as private copies of
+// the identical functions in the US federal and US state rate modules. Design 71 §3
+// moved them to the shared `../bracket-schedule.js`, imported at the top of this file
+// under the same local names. The AU per-band breakdown (design 71 §8.4) lands with
+// the AU worksheet phase.
