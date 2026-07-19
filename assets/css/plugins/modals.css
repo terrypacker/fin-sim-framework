@@ -194,6 +194,23 @@
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
+/* Worksheet CSV export (design 71 §11.1) — matches the journal report's .jr-csv-btn
+   so the two export affordances read as the same control. */
+.tax-doc-csv-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+.tax-doc-csv-btn:hover {
+  border-color: var(--blue-text);
+  color: var(--blue-text);
+}
+
 .tax-doc-close-btn {
   background: var(--bg-panel2);
   border: 1px solid var(--border-hi);

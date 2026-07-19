@@ -10,6 +10,13 @@
 
 import { BaseTaxRatesModule } from '../base-tax-rates-module.js';
 import { toUSD } from '../tax-fx.js';
+import {
+  applyBrackets as _applyBrackets,
+  applyBracketsDetailed,
+  marginalBracketRate as _marginalBracketRate,
+  subtractBands,
+  flatRateBand,
+} from '../bracket-schedule.js';
 
 /**
  * UsTaxRatesBase — base class for US federal tax rate computation.
@@ -26,6 +33,9 @@ import { toUSD } from '../tax-fx.js';
  *   usPenaltyYTD, usFilingSingle, plus the design-52 cross-border-relief fields
  *   (foreign{General,Passive}IncomeYTD, ftcCurrent*, ftcPool*, usFeieElected)
  */
+/** Flat rate on collectible gains (IRC §1(h)(4)); statutory, not inflation-indexed. */
+const COLLECTIBLES_RATE = 0.28;
+
 export class UsTaxRatesBase extends BaseTaxRatesModule {
   get countryCode() { return 'US'; }
 
@@ -134,21 +144,27 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // rule (IRS Foreign Earned Income Tax Worksheet): the non-excluded income is
     // taxed at its true marginal rate, i.e. tax(all) − tax(excluded stacked at the
     // bottom). With feieExcluded = 0 this is exactly tax(taxableOrdinary).
-    const ordinaryTax    = _applyBrackets(taxableOrdinary, brackets)
-                         - _applyBrackets(excludedStacked, brackets);
+    //
+    // The `Detailed` variants carry the per-band breakdown alongside the same
+    // scalar totals (design 71 §3.1–3.2); `.tax` is bit-identical to the scalar
+    // `_applyBrackets` these lines used before.
+    const ordinarySchedule = applyBracketsDetailed(taxableOrdinary, brackets);
+    const feieSchedule     = applyBracketsDetailed(excludedStacked, brackets);
+    const ordinaryTax      = ordinarySchedule.tax - feieSchedule.tax;
     const taxableOrdinaryAfterFeie = Math.max(0, taxableOrdinary - excludedStacked);
 
     // Step 3: long-term capital gains tax — stack on top of taxable ordinary
     // income (IRC §1(h)). Capital gains sit in the brackets above the ordinary
     // income ceiling, so the tax is the bracket differential, not the bracket
     // applied to gains alone.
-    const cg             = Math.max(0, usCapitalGainsYTD);
-    const capitalGainsTax = _applyBrackets(taxableOrdinaryAfterFeie + cg, ltcgBrackets)
-                          - _applyBrackets(taxableOrdinaryAfterFeie, ltcgBrackets);
+    const cg              = Math.max(0, usCapitalGainsYTD);
+    const ltcgStacked     = applyBracketsDetailed(taxableOrdinaryAfterFeie + cg, ltcgBrackets);
+    const ltcgBase        = applyBracketsDetailed(taxableOrdinaryAfterFeie,      ltcgBrackets);
+    const capitalGainsTax = ltcgStacked.tax - ltcgBase.tax;
 
     // Step 4: collectibles taxed at flat 28% rate (IRS §1(h)(4))
     const collectibles    = Math.max(0, usCollectibleGainsYTD);
-    const collectiblesTax = collectibles * 0.28;
+    const collectiblesTax = collectibles * COLLECTIBLES_RATE;
 
     // Step 5: Chapter-1 gross income-tax liability including early-withdrawal
     // penalties (pre-NIIT). This is the base the §904 FTC limitation applies to.
@@ -214,6 +230,11 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       adjustedGrossIncome: agi,
       taxableIncome:       taxableOrdinary,
       feieExcluded,
+      // The exclusion ACTUALLY applied — `feieExcluded` capped at taxable ordinary
+      // income by the stacking rule. The two differ when the qualifying exclusion
+      // exceeds taxable income, and only this one keeps the Income section footing
+      // (design 71 §7.1).
+      feieApplied: excludedStacked,
       taxableIncomeAfterFeie: taxableOrdinaryAfterFeie,
       ordinaryTax,
       capitalGainsTax,
@@ -233,6 +254,14 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       netLiability,
       effectiveRate,
       marginalRate,
+      brackets: this._bracketBreakdown({
+        filingStatus, ordinarySchedule, feieSchedule, excludedStacked,
+        ltcgStacked, ltcgBase, collectibles, collectiblesTax,
+        niitThreshold, netInvestmentIncome, magi, niitBase, niitTax,
+        usSeEarningsYTD, seNet, ssWages, ssBaseLeft, seSsTax, seMedicareTax,
+        selfEmploymentTax, seDeduction,
+        addlMedThreshold, earnedForAddlMed, additionalMedicareTax,
+      }),
       lineItems: [
         { label: 'Gross Ordinary Income',               amount:  usOrdinaryIncomeYTD },
         { label: 'Adjustments (Pre-tax Contributions)', amount: -usNegativeIncomeYTD },
@@ -267,6 +296,75 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
           : [{ label: 'Foreign Tax Credit',              amount: -credits }]),
         { label: 'Net Tax Liability',                   amount:  netLiability },
       ],
+    };
+  }
+
+  /**
+   * Per-band breakdown of every bracketed and flat-rate tax in this return —
+   * design 71 §3.3. Purely derived from figures `computeTax` already computed; it
+   * adds no arithmetic of its own, so it cannot change a liability. Reported on the
+   * TaxComputationResult so the tax worksheet export can show *which* income fell in
+   * *which* bracket, and so `Σ band.tax` can be checked against the line total.
+   *
+   * @returns {object} see design 71 §3.3 for the shape
+   */
+  _bracketBreakdown({
+    filingStatus, ordinarySchedule, feieSchedule, excludedStacked,
+    ltcgStacked, ltcgBase, collectibles, collectiblesTax,
+    niitThreshold, netInvestmentIncome, magi, niitBase, niitTax,
+    usSeEarningsYTD, seNet, ssWages, ssBaseLeft, seSsTax, seMedicareTax,
+    selfEmploymentTax, seDeduction,
+    addlMedThreshold, earnedForAddlMed, additionalMedicareTax,
+  }) {
+    // With no FEIE the subtracted stack is all zeros, so reporting the raw ordinary
+    // schedule keeps `Σ band.tax` exactly equal to `ordinaryTax` (differencing two
+    // schedules can leave sub-ulp residue). When FEIE *is* elected the differenced
+    // bands are the substance of the stacking rule, so they are what we report.
+    const hasFeie = excludedStacked > 0;
+
+    return {
+      table: filingStatus === 'Single' ? 'Single' : 'MFJ',
+      ordinary: hasFeie
+        ? subtractBands(ordinarySchedule.bands, feieSchedule.bands)
+        : ordinarySchedule.bands,
+      feieStacked: hasFeie ? feieSchedule.bands : null,
+      // The LTCG differential IS the computation (IRC §1(h) stacking), so these
+      // bands are always differenced — they show which LTCG band the gain reached
+      // given the ordinary income sitting underneath it.
+      ltcg: subtractBands(ltcgStacked.bands, ltcgBase.bands),
+      collectibles: flatRateBand(COLLECTIBLES_RATE, collectibles, collectiblesTax),
+      niit: {
+        ...flatRateBand(this._niitRate, niitBase, niitTax),
+        threshold: niitThreshold,
+        netInvestmentIncome,
+        magi,
+      },
+      // SECA (design 69) is a Chapter-2 tax with its own multi-step worksheet
+      // rather than a bracket schedule; null when the household has no SE income
+      // and no Additional Medicare exposure.
+      seca: (selfEmploymentTax > 0 || additionalMedicareTax > 0)
+        ? {
+            grossSeIncome:     usSeEarningsYTD,
+            netFactor:         this._seNetFactor,
+            netEarnings:       seNet,
+            ssWageBase:        this._ficaWageBase,
+            ssWagesApplied:    ssWages,      // W-2 wages fill the base before SE earnings
+            ssBaseRemaining:   ssBaseLeft,
+            socialSecurity:    flatRateBand(this._seSsRate, Math.min(seNet, ssBaseLeft), seSsTax),
+            medicare:          flatRateBand(this._seMedicareRate, seNet, seMedicareTax),
+            tax:               selfEmploymentTax,
+            deduction:         seDeduction,  // half, above-the-line (IRC §164(f))
+            additionalMedicare: {
+              ...flatRateBand(
+                this._addlMedicareRate,
+                Math.max(0, earnedForAddlMed - addlMedThreshold),
+                additionalMedicareTax,
+              ),
+              threshold:    addlMedThreshold,
+              earnedIncome: earnedForAddlMed,
+            },
+          }
+        : null,
     };
   }
 
@@ -344,6 +442,12 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       nextPoolGeneral: general.nextPool,
       nextPoolPassive: passive.nextPool,
       hasActivity,
+      // The two denominators of the §904 limitation. Without them a reader can see
+      // `frac` and `limit` but cannot check either, since neither the ratio's
+      // denominator nor the tax it scales appears anywhere else on the return
+      // (design 71 §13).
+      totalTaxable,
+      limitationBase: grossTax,
     };
   }
 }
@@ -396,28 +500,8 @@ export function _drawDownBasket(currentTax, pool, creditUsed, currentCY) {
   return { nextPool, currentYearUsed: fromCurrent, carryoverUsed };
 }
 
-/**
- * Apply marginal brackets to an income amount.
- * brackets: [[threshold, rate], ...] sorted ascending by threshold.
- */
-function _applyBrackets(income, brackets) {
-  if (income <= 0) return 0;
-  let tax = 0;
-  for (let i = 0; i < brackets.length; i++) {
-    const [lo, rate] = brackets[i];
-    const hi = i + 1 < brackets.length ? brackets[i + 1][0] : Infinity;
-    if (income <= lo) break;
-    tax += (Math.min(income, hi) - lo) * rate;
-  }
-  return tax;
-}
-
-/** Return the marginal rate of the highest bracket reached by income. */
-function _marginalBracketRate(income, brackets) {
-  if (income <= 0 || brackets.length === 0) return 0;
-  let rate = 0;
-  for (const [lo, r] of brackets) {
-    if (income > lo) rate = r;
-  }
-  return rate;
-}
+// `_applyBrackets` / `_marginalBracketRate` used to live here as private copies,
+// duplicated byte-for-byte in the AU and US-state rate modules. Design 71 §3 moved
+// them to the shared `../bracket-schedule.js` — imported at the top of this file
+// under the same local names — and added the per-band detail that `computeTax` now
+// reports in its `brackets` field.

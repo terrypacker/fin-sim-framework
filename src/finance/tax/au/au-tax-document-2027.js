@@ -49,12 +49,15 @@ export class AuTaxDocument2027 extends AuTaxDocument2026 {
   _residentTaxComputationSection(taxDetail) {
     const { inputs } = taxDetail;
     const topUp = taxDetail.cgtMinimumTaxTopUp ?? 0;
+    const br    = taxDetail.brackets ?? {};
     return {
       heading: 'Tax Computation',
       lineItems: [
-        { label: 'Tax on Income', amount: taxDetail.baseTax },
+        // Band attachment is inherited from FY2026 (design 71 §8.4); only the
+        // min-tax top-up line below is FY2027-specific.
+        this._taxOnIncomeLine(taxDetail),
         ...this._taxOnIncomeSubRows(taxDetail),
-        { label: 'Medicare Levy', amount: taxDetail.medicareLevy },
+        { label: 'Medicare Levy', amount: taxDetail.medicareLevy, flat: br.medicareLevy ?? undefined },
         ...(topUp > 0
           ? [{ label: 'CGT Minimum Tax Top-up (30%)', amount: topUp }]
           : []),
