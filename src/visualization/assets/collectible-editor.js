@@ -56,6 +56,7 @@ export class CollectibleEditor extends BaseComponent {
   render() {
     const el     = this._getTemplate('tpl-collectible-editor');
     const isEdit = !!(this._node?.id);
+    this._applyInheritedBadge(el, this._node);
 
     el.querySelector('[data-id="name"]').value             = this._node?.name             ?? '';
     el.querySelector('[data-id="value"]').value            = this._node?.value            ?? 0;

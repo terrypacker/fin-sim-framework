@@ -101,6 +101,18 @@
   color: var(--text-dim);
 }
 
+/* Design 63 §14: inherited (bequest-promoted) account/property/collectible badge. */
+.node-inherited-badge {
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--accent, #6c4bd8);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .node-buttons {
   display: flex;
   gap: 4px;
