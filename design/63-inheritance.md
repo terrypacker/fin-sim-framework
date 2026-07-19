@@ -812,12 +812,14 @@ Two fixes, escalating:
 the account label. This is the "we aren't leveraging the name" gap — independently correct, no
 dependency on §14.3.
 
-### 14.8 Retirement promotion (still v2)
+### 14.8 Retirement promotion (still v2 — **now specified in §15**)
 Inherited IRA/401(k)/Roth remain drained by the SECURE 10-year forced stream (§6.2) and are **not**
 promoted to first-class growing/tunable accounts. Doing so collides the reused role
 (`IRA`/`K401`/`ROTH`) with the heir's own RMD/contribution machinery (§13.5 decision 1). The
 effective-records seam (§14.3) is the substrate for it, but the role-collision resolution
-(shared-role vs. dedicated `inherited-*` roles) is deferred with §13.5.
+(shared-role vs. dedicated `inherited-*` roles) is deferred with §13.5. **§15 resolves this** —
+dedicated `inherited-*` roles (§13.5 decision 1b), the stream-discovery reroute, and the A/B growth
+decision.
 
 ### 14.9 Phasing
 - **P7a (task-2, now):** name propagation (§14.7) + category-aware auto-key (§14.6 tactical). Ships
@@ -829,12 +831,193 @@ effective-records seam (§14.3) is the substrate for it, but the role-collision 
   spending. Load-order invariant test (§14.4).
 - **P7d:** robust journal per-account default from the effective set (§14.6 robust); retire the
   `account.balance` substring.
-- **P8 (v2):** retirement promotion (§14.8).
+- **P8 (v2):** retirement promotion — dedicated `inherited-*` roles (§14.8 → **fully specified in §15**).
 
 ### 14.10 Regression guard
 Every reroute reads `getEffective()`, which for an **inert / bequest-free** scenario is identical to
 `getAll()` (no active promotions) — so param generation, the UI lists, and the opt variables are
 byte-identical and the reference golden stays unmoved. Serialize never changes. The name +
 auto-key changes only affect inherited records, which don't exist in the golden.
-</content>
-</invoke>
+
+---
+
+## 15. Retirement promotion — dedicated inherited roles (P8, v2)
+
+**Status: P8a IMPLEMENTED** (visibility + stream preserved; growth still v2 — P8b/P8c open). Closes
+the gap §14.8 deferred: inherited **traditional IRA / 401(k) / Roth**
+are still *inline* bequest assets — invisible to the Holdings panel and the per-account Journal
+reports, and absent from per-record param generation — while inherited brokerage / property /
+collectible were promoted to first-class records in §14. §14.8 parked retirement because promoting
+it with the heir's own `IRA` / `K401` / `ROTH` role collides with the role-keyed RMD / contribution /
+conversion machinery. This section promotes it anyway, using **dedicated `inherited-*` roles**, so
+the inherited RA becomes an ordinary visible/tunable `accountService` record **without disturbing the
+SECURE 10-year forced stream**. It folds in the resolved **A/B growth decision** (§15.4).
+
+### 15.1 Why the shared-role promotion was rejected — the two couplings (verified in code)
+Promotion itself does **not** break the SECURE stream. Two *separate* couplings do, and they must
+both be undone:
+
+- **Coupling 1 — role collision (what §14.8 names).** The US retirement toolset builds **RMD,
+  contributions, earnings, and k401→IRA conversion** by filtering on role:
+  `accounts.filter(a => a.role === ACCOUNT_ROLES.IRA / K401 / ROTH)`
+  (`us-retirement-toolset.js:500-502`, per-account handler loops at `:796` / `:835`, conversion
+  target lookup at `:631`). A promoted inherited RA carrying `role: IRA` lands in every one of those
+  lists and gets **double-machined** — RMD'd and contributed-to *on top of* the SECURE stream.
+- **Coupling 2 — stream discovery (the subtler one).** The SECURE stream's account list is built by
+  scanning the **inline** `bequest.assets` — `_inheritedRaAccounts()` iterates `context.bequests[].assets`
+  for retirement stateKeys (`inheritance-toolset.js:38-44`). Promotion is precisely the act of hoisting
+  an asset **out** of `bequest.assets` into `cfg.accounts` (`scenario-loader.js:_promoteBequestAssets`,
+  which today `continue`s on `meta.isRetirement`). So a promoted RA would **vanish** from the list the
+  stream reads. This — not the role — is the mechanism by which naive promotion severs the drawdown.
+
+What is **not** coupled: the stream's *draining* (`InheritedRaDistributionHandler.call` reads
+`state[acct.stateKey].balance` by explicit stateKey, never by role — `inheritance-classes.js:247-276`),
+and *visibility* (Holdings lists `accountService.getAll()` filtered by state holdings; the per-account
+Journal reports key off the `…Account` stateKey substring, §14.6) — both role-agnostic. So the win is
+real: a dedicated role gives visibility **and** keeps the stream, once both couplings are undone.
+
+### 15.2 Chosen model — dedicated `inherited-*` roles
+Add three roles to `ACCOUNT_ROLES` (`finance/state/account-roles.js`):
+`INHERITED_IRA: 'inherited-ira'`, `INHERITED_K401: 'inherited-k401'`, `INHERITED_ROTH: 'inherited-roth'`.
+Promote each inherited traditional-IRA / 401(k) / Roth out of `bequest.assets` into `cfg.accounts`
+tagged `{ inherited: true, bequestId }` and seeded at balance **0** (the FMV rides in `inheritedValue`;
+the `INHERIT` event funds it at the date — the §5 seed-at-0 invariant is preserved).
+
+**What the dedicated role buys for free** (no code, just non-matching):
+- **No RMD** — the RMD handler loops iterate the role-`IRA`/`K401` lists; `inherited-*` never matches.
+  (Correct: an inherited IRA has *no* lifetime RMD — the SECURE 10-year rule replaces it.)
+- **No contributions** — same role filters; you cannot contribute to an inherited IRA.
+- **No k401→IRA conversion** — `iraAccounts.find(...)` / `k401Accounts` never see it.
+- **Out of discretionary drawdown** — kept via `drawdownPriority: null` (the `isDrawdownAccessible`
+  gate is `drawdownPriority == null → false`, `net-liquidity.js:58`), so it stays **forced-stream-only**
+  (preserving the §13.4 / §13.5 decision). It still counts in **net worth** (raw state entry with a
+  numeric `balance`) exactly as the inline seed does today.
+
+**What still needs explicit wiring** (§15.7): the stream-discovery reroute (Coupling 2), and — for
+growth — an earnings handler keyed on the inherited roles (§15.4), because the earnings loops are
+*also* role-filtered and won't pick up `inherited-*` on their own.
+
+### 15.3 Visibility — what promotion unlocks, unchanged from §14
+Because the promoted RA is now an ordinary `accountService` record it flows into every config-record
+consumer with zero new special-casing (the whole point of §14): the **Holdings dropdown**
+(`accountService.getAll()` — now inheritance-aware after the picker-refresh fix so a mid-sim-funded RA
+appears once funded), the **per-account Journal reports** (needs the §14.6 `…Account` stateKey suffix —
+`_assignAssetStateKeys` already appends it for account-category assets), **per-record param generation**
+(`acct.<sk>.*`), and thus the **OPT / MC / MPC / behavior / spending** layers. Serialize stays single
+(the record lives in `cfg.accounts`, never re-emitted from the bequest).
+
+### 15.4 Resolved decision — A/B growth
+A promoted inherited RA funds as a bare `balance` with **no holdings** today: `InheritApplyReducer`
+gates the stepped-up lot on `!isRetirement` (`inheritance-classes.js:162-173`), because IRD accounts
+carry no CGT cost base — the whole balance is ordinary income on distribution, so there is nothing to
+model per-lot. The question is whether a *promoted* one should stay balance-only or gain a lot.
+
+The pivotal fact: **the earnings path already grows a holdings-less account.** `computeHoldingsGrowth`
+falls back to `balance × growthRate` when `holdings.length === 0` (`holdings-earnings.js:128-133`). So
+growth does **not** require holdings — it requires an **earnings handler**. That reframes the decision:
+it is not "grows vs. doesn't grow"; it is **scalar-balance growth (A)** vs. **allocatable holdings that
+also plug into the design-61/65 levers (B)**.
+
+- **Option A — scalar-balance growth (SHIP THIS).** Keep the `!isRetirement` no-lot funding. Add a
+  small earnings-handler loop keyed on the `inherited-*` roles (reuse `IntlIraEarningsHandler` /
+  `IntlK401EarningsHandler` / `IntlRothEarningsHandler` with the RA's `stateKey` + `growthRate`), which
+  grows `balance × rate` via the fallback. Result: **visible, drained by the stream, tax-correct, and
+  it grows** — a strict improvement over today (inline RAs don't grow at all, §13.1). What it does *not*
+  get: per-holding allocation / sleeve / rebalance levers (design 61/65), because those operate on
+  `holdings`. Traditional grows pre-tax; Roth grows tax-free (matching the handler classes).
+- **Option B — allocatable holdings (FLAGGED FOLLOW-UP).** Additionally drop the `!isRetirement`
+  gate for *promoted* RAs so `InheritApplyReducer` seeds an inherited pre-tax lot (mix from an editor
+  allocation input, defaulting to a single equity lot), preserving IRD semantics (`contributionBasis`
+  stays 0; no CGT basis is *used* — the lot's basis is inert for a pre-tax wrapper, consumed only as
+  ordinary income). Result: everything in A **plus** the RA participates in the design-61/65
+  allocation-aware growth / rebalance / drawdown levers and (if its role is added to
+  `EQUITY_SERVED_ROLES`, `us-retirement-toolset.js:587`) design-60 cash-sleeve interest.
+
+**Decision: A ships in P8; B is a documented follow-up.** A captures the economics faithfully (an
+inherited IRA is a single pre-tax pool drained over ten years — per-holding allocation is a
+refinement, not the model), with far less surface area (no funding-reducer change, no editor
+allocation input, no lever plumbing). B is the natural sequel once someone wants to tune the inbound
+RA's asset mix; the dedicated-role substrate makes it additive.
+
+### 15.5 Per-asset mechanics
+- **Traditional IRA → role `inherited-ira`**, `allowsEarlyWithdrawal: true` (inherited distributions
+  are penalty-exempt regardless of heir age, §6.2), `drawdownPriority: null` (forced-stream-only),
+  `contributionBasis: 0` (whole balance is IRD ordinary income). Earnings handler (A) grows pre-tax.
+- **401(k) → role `inherited-k401`** — identical treatment; the SECURE stream + ordinary-income tax
+  path already handle it by stateKey.
+- **Roth → role `inherited-roth`**, `contributionBasis` semantics moot (distributions tax-free); the
+  stream's `isRoth` flag already suppresses `INHERITED_RA_DISTRIBUTION_TAX` (`inheritance-classes.js:315`).
+  Earnings handler (A) grows **tax-free**.
+- **AU super → unchanged.** Not an ongoing account — forced taxed lump-sum to cash at inheritance
+  (§6.4); nothing to promote.
+
+### 15.6 Params — keep `raAsset.` and `acct.` disjoint (§14.5)
+The RA keeps its SECURE-drawdown knobs on the bequest-scoped prefix
+(`raAsset.<sk>.{distributionMode,fillCeiling,lumpYear,weights}`). Promotion additionally generates
+the standard **`acct.<sk>.{growthRate,dividendRate,drawdownPriority}`** per-record params. These must
+stay **disjoint** — distribution strategy on `raAsset.`, earnings/priority on `acct.` — or the
+`ScenarioParamGenerator` duplicate-key guard throws (`scenario-param-generator.js`, §14.5). `dividendRate`
+is inert for a pre-tax wrapper (no dividend stream on retirement); it generates harmlessly or is
+suppressed for `inherited-*` roles. `drawdownPriority` generates but stays `null` unless a future
+version opts the RA into discretionary drawdown (§13.5 decision — deferred).
+
+### 15.7 Wiring (file-by-file)
+1. **`finance/state/account-roles.js`** — add `INHERITED_IRA` / `INHERITED_K401` / `INHERITED_ROTH`
+   + an `INHERITED_RETIREMENT_ROLES` set consumers recognize a promoted RA by.
+2. **`finance/services/bequest-service.js`** (where `INHERITED_ASSET_META` lives) — give the retirement
+   entries an `inheritedRole`; add `promotedRetirementMeta(role)` → `{ isRetirement, isRoth }` so the
+   seed / funding-descriptor helpers derive the pre-tax (no-lot) funding + Roth-tax-free flags from the
+   promoted record's dedicated role.
+3. **`finance/assets/inheritance-meta.js`** — carry the SECURE-drawdown knobs (`distributionMode`,
+   `fillCeiling`, `lumpYear`, `weights`) on the inheritance-metadata mixin so they travel onto the
+   Account domain object (`context.accounts` is `accountService.getAll()`, not the raw cfg) and
+   round-trip. **This is the subtle load-bearing detail** — without it the knobs are dropped at
+   deserialization and every promoted RA silently falls back to the default strategy.
+4. **`scenario-loader.js` `_promoteBequestAssets` / `_bequestAssetToRecord`** — stop `continue`-ing on
+   `meta.isRetirement` (skip only super); hoist retirement into `cfg.accounts` with the dedicated role,
+   `drawdownPriority: null`, `allowsEarlyWithdrawal: true`, `contributionBasis: 0`, seeded at 0, keeping
+   its RA `__type` + any authored SECURE knobs. Extend the `bequestAsset` param cascade to also target a
+   promoted RA in `cfg.accounts`.
+5. **`scenario-param-generator.js`** — emit `raAsset.*` for promoted inherited RAs in `cfg.accounts`
+   (node `bequestAsset`, by stateKey) so promotion doesn't strand a user's tuned strategy (§14.4).
+6. **`inheritance-toolset.js` `_inheritedRaAccounts`** — reroute discovery: in addition to scanning
+   inline `bequest.assets`, collect promoted inherited RAs from
+   `context.accounts.filter(a => a.inherited && INHERITED_RETIREMENT_ROLES.has(a.role))`, linked to their
+   active bequest by `bequestId === bequest.stateKey`, deduped by stateKey. **The load-bearing reroute**
+   — without it, promotion severs the stream (Coupling 2).
+7. **`us-retirement-toolset.js`** (P8b, not P8a) — add an earnings-handler loop over the inherited RAs
+   (Option A), reusing the `Intl*EarningsHandler` classes. RMD / contribution / conversion loops need
+   **no change** (dedicated roles don't match).
+8. **`bequest-editor.js`** — the RA stays authored inline while the bequest is inert; once active it is
+   promoted and shown read-only for context (mirrors §14.0 for the other asset types).
+
+### 15.8 Phasing
+- **P8a — DONE.** Roles + meta + loader promotion + inheritance-meta knob carry + param
+  generation/cascade reroute + `_inheritedRaAccounts` reroute (visibility + stream preserved,
+  **no growth yet**). Stream parity proven byte-identical to the inline path (`inheritIra` funds to FMV
+  and drains on the same year-by-year schedule; the deferred RA holds exactly its FMV — no growth, no
+  RMD), the RA is now a visible `inherited-ira` service record, and every strategy (equal / lump /
+  maxDefer / bracketFill / weights) still reaches the handler. Tests: `evt-inheritance.test.mjs`
+  EVT-63 §15. 3687 unit + 878 viz green; reference golden unmoved (default bequest is inert).
+- **P8b** — inherited-RA earnings loop (Option A scalar growth) + the `acct.*` growth param going live
+  (it already generates; P8a just doesn't build the handler that consumes it).
+- **P8c (follow-up, Option B)** — relax the `InheritApplyReducer` `!isRetirement` lot gate for promoted
+  RAs + editor allocation input + `EQUITY_SERVED_ROLES` opt-in for cash-sleeve; wire the design-61/65
+  levers. Separately schedulable.
+
+### 15.9 Testing
+- **Stream parity (P8a):** an inherited traditional IRA, inline vs. promoted, drains to the same
+  balances year-by-year over the 10-year window (the reroute is behavior-preserving).
+- **No double-machining:** a promoted inherited IRA emits **no** `IRA_RMD_APPLY` and receives **no**
+  `IRA_CONTRIBUTION_APPLY` (dedicated role excluded) — only `INHERITED_RA_DISTRIBUTION_APPLY`.
+- **Visibility:** the promoted RA appears in `accountService.getAll()`, generates `acct.<sk>.*` params,
+  and its `…Account` balance rows select into the per-account Journal reports.
+- **Growth (P8b):** balance grows `× growthRate` between distributions; Roth growth is untaxed,
+  traditional growth is untaxed until distributed then ordinary income.
+- **Roth tax-free:** an inherited Roth distribution chains no `*_TAX` action.
+
+### 15.10 Regression guard
+Retirement promotion only fires for an **active** bequest holding a retirement asset; the reference
+golden has none, so it stays byte-identical. For an inert/bequest-free scenario the new roles never
+appear, param generation and the UI/opt lists are unchanged, and the stream-discovery reroute returns
+the same set the inline scan did. Serialize stays single-source.

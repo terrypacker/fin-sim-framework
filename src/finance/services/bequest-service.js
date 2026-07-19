@@ -32,17 +32,37 @@ import { ACCOUNT_ROLES }     from '../state/account-roles.js';
  *   isRetirement— pre-tax/Roth/super wrapper (IRD / SECURE / super-death paths)
  *   isSuper     — AU superannuation (forced lump-sum payout, not an ongoing account)
  *   isRoth      — inherited Roth (10-year clock, tax-free distributions)
+ *   inheritedRole—dedicated promotion role (design 63 §15); non-super retirement only.
+ *                 The plain IRA/K401/ROTH roles collide with the heir's own RMD /
+ *                 contribution machinery, so a promoted inherited RA takes a distinct
+ *                 role the SECURE stream still finds by stateKey.
  */
 const INHERITED_ASSET_META = Object.freeze({
-  RealProperty:          { category: 'real-property', accountType: null,                        isRetirement: false, isSuper: false, isRoth: false },
-  Collectible:           { category: 'collectible',   accountType: null,                        isRetirement: false, isSuper: false, isRoth: false },
-  InvestmentAccount:     { category: 'account',       accountType: ACCOUNT_TYPE.BROKERAGE,      isRetirement: false, isSuper: false, isRoth: false },
-  BrokerageAccount:      { category: 'account',       accountType: ACCOUNT_TYPE.BROKERAGE,      isRetirement: false, isSuper: false, isRoth: false },
-  TraditionalIRAAccount: { category: 'account',       accountType: ACCOUNT_TYPE.TRADITIONAL_IRA, isRetirement: true,  isSuper: false, isRoth: false },
-  FourOhOneKAccount:     { category: 'account',       accountType: ACCOUNT_TYPE.FOUR_OH_ONE_K,  isRetirement: true,  isSuper: false, isRoth: false },
-  RothAccount:           { category: 'account',       accountType: ACCOUNT_TYPE.ROTH,           isRetirement: true,  isSuper: false, isRoth: true  },
-  SuperannuationAccount: { category: 'account',       accountType: ACCOUNT_TYPE.SUPER,          isRetirement: true,  isSuper: true,  isRoth: false },
+  RealProperty:          { category: 'real-property', accountType: null,                        isRetirement: false, isSuper: false, isRoth: false, inheritedRole: null },
+  Collectible:           { category: 'collectible',   accountType: null,                        isRetirement: false, isSuper: false, isRoth: false, inheritedRole: null },
+  InvestmentAccount:     { category: 'account',       accountType: ACCOUNT_TYPE.BROKERAGE,      isRetirement: false, isSuper: false, isRoth: false, inheritedRole: null },
+  BrokerageAccount:      { category: 'account',       accountType: ACCOUNT_TYPE.BROKERAGE,      isRetirement: false, isSuper: false, isRoth: false, inheritedRole: null },
+  TraditionalIRAAccount: { category: 'account',       accountType: ACCOUNT_TYPE.TRADITIONAL_IRA, isRetirement: true,  isSuper: false, isRoth: false, inheritedRole: ACCOUNT_ROLES.INHERITED_IRA },
+  FourOhOneKAccount:     { category: 'account',       accountType: ACCOUNT_TYPE.FOUR_OH_ONE_K,  isRetirement: true,  isSuper: false, isRoth: false, inheritedRole: ACCOUNT_ROLES.INHERITED_K401 },
+  RothAccount:           { category: 'account',       accountType: ACCOUNT_TYPE.ROTH,           isRetirement: true,  isSuper: false, isRoth: true,  inheritedRole: ACCOUNT_ROLES.INHERITED_ROTH },
+  SuperannuationAccount: { category: 'account',       accountType: ACCOUNT_TYPE.SUPER,          isRetirement: true,  isSuper: true,  isRoth: false, inheritedRole: null },
 });
+
+/**
+ * Derive the retirement flags for a PROMOTED inherited RA from its dedicated role
+ * (design 63 §15). Promotion moves the RA into `cfg.accounts`, where its
+ * originating `__type` meta is no longer at hand — the role is the durable marker.
+ * Non-retirement roles → both false (brokerage funds a stepped-up lot, not IRD).
+ * @param {string|null} role
+ * @returns {{ isRetirement: boolean, isRoth: boolean }}
+ */
+export function promotedRetirementMeta(role) {
+  if (role === ACCOUNT_ROLES.INHERITED_ROTH) return { isRetirement: true, isRoth: true };
+  if (role === ACCOUNT_ROLES.INHERITED_IRA || role === ACCOUNT_ROLES.INHERITED_K401) {
+    return { isRetirement: true, isRoth: false };
+  }
+  return { isRetirement: false, isRoth: false };
+}
 
 /**
  * Resolve the seed/tax metadata for an inherited-asset `__type`.
@@ -213,10 +233,15 @@ export class BequestService extends BaseService {
     if (category === 'collectible') {
       return { kind: 'collectible', value: 0, costBasis: 0, ...marker };
     }
-    // account (inherited brokerage — promoted, so liquid + drawdownable).
-    return {
+    // account (inherited brokerage OR promoted inherited retirement — design 63 §15).
+    // Brokerage seeds with its equity role + drawdownPriority (liquid, drawdownable);
+    // a promoted RA seeds with its dedicated inherited-* role, `drawdownPriority: null`
+    // (forced-stream-only), and `contributionBasis: 0` (IRD — whole balance is ordinary
+    // income on distribution). Both seed at balance 0; the INHERIT event funds them.
+    const { isRetirement } = promotedRetirementMeta(record.role);
+    const seed = {
       balance:               0,
-      type:                  ACCOUNT_TYPE.BROKERAGE,
+      type:                  record.type ?? ACCOUNT_TYPE.BROKERAGE,
       role:                  record.role ?? null,
       minimumBalance:        0,
       drawdownPriority:      record.drawdownPriority ?? null,
@@ -224,6 +249,8 @@ export class BequestService extends BaseService {
       holdings:              [],
       ...marker,
     };
+    if (isRetirement) { seed.contributionBasis = 0; seed.earningsBasis = 0; }
+    return seed;
   }
 
   /**
@@ -258,13 +285,17 @@ export class BequestService extends BaseService {
    * @returns {object}
    */
   _fundingDescriptorFromRecord(record, category, bequest) {
+    // A promoted RA (design 63 §15) funds pre-tax with NO stepped-up lot — the
+    // INHERIT reducer branches on isRetirement. Derive it from the dedicated role
+    // (super is never promoted, so isSuper stays false here).
+    const { isRetirement, isRoth } = promotedRetirementMeta(record.role);
     return {
       stateKey:                   record.stateKey,
       name:                       record.name ?? '',
       category,
-      isRetirement:               false,
+      isRetirement,
       isSuper:                    false,
-      isRoth:                     false,
+      isRoth,
       country:                    record.country ?? 'US',
       inheritedValue:             record.inheritedValue ?? 0,
       deceasedCostBase:           record.deceasedCostBase ?? null,

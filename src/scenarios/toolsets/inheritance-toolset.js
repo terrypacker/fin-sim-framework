@@ -17,6 +17,7 @@ import {
 } from '../../finance/account-rules/inheritance-classes.js';
 import { inheritedAssetMeta } from '../../finance/services/bequest-service.js';
 import { INHERITED_RA_WINDOW } from '../../finance/account-rules/inherited-ra-distribution-strategy.js';
+import { ACCOUNT_ROLES, INHERITED_RETIREMENT_ROLES } from '../../finance/state/account-roles.js';
 
 const RA_DISTRIBUTION_TYPE = 'INHERITED_RA_DISTRIBUTION';
 
@@ -34,25 +35,50 @@ const DEFAULT_WEIGHT       = 1 / INHERITED_RA_WINDOW;
  * blanks falling back to the defaults.
  */
 function _inheritedRaAccounts(context) {
-  const out = [];
+  const out  = [];
+  const seen = new Set();
+  // Build one stream row from an RA descriptor (`a`) whose SECURE-drawdown knobs have
+  // been cascaded onto it — identical shape whether `a` is an inline bequest asset or
+  // a promoted `cfg.accounts` record. `b` is its (active) owning bequest.
+  const row = (a, isRoth, b) => {
+    if (seen.has(a.stateKey)) return;   // never count an RA twice
+    seen.add(a.stateKey);
+    out.push({
+      stateKey:        a.stateKey,
+      isRoth,
+      inheritanceYear: b.inheritanceYear,
+      heirId:          b.heirId ?? null,
+      strategyId:      a.distributionMode ?? DEFAULT_STRATEGY,
+      fillCeilingReal: a.fillCeiling ?? DEFAULT_FILL_CEILING,
+      lumpYear:        a.lumpYear ?? DEFAULT_LUMP_YEAR,
+      weights:         Array.isArray(a.weights) && a.weights.length === INHERITED_RA_WINDOW
+                         ? a.weights
+                         : Array.from({ length: INHERITED_RA_WINDOW }, () => DEFAULT_WEIGHT),
+    });
+  };
+
+  // Inline retirement assets — inert-bequest fallback, or any RA promotion did not run.
   for (const b of (context.bequests ?? [])) {
     if (b.inheritanceYear == null) continue;
     for (const a of (b.assets ?? [])) {
       const meta = inheritedAssetMeta(a.__type);
       if (!meta?.isRetirement || meta.isSuper || !a.stateKey) continue;
-      out.push({
-        stateKey:        a.stateKey,
-        isRoth:          meta.isRoth,
-        inheritanceYear: b.inheritanceYear,
-        heirId:          b.heirId ?? null,
-        strategyId:      a.distributionMode ?? DEFAULT_STRATEGY,
-        fillCeilingReal: a.fillCeiling ?? DEFAULT_FILL_CEILING,
-        lumpYear:        a.lumpYear ?? DEFAULT_LUMP_YEAR,
-        weights:         Array.isArray(a.weights) && a.weights.length === INHERITED_RA_WINDOW
-                           ? a.weights
-                           : Array.from({ length: INHERITED_RA_WINDOW }, () => DEFAULT_WEIGHT),
-      });
+      row(a, meta.isRoth, b);
     }
+  }
+
+  // PROMOTED inherited RAs (design 63 §15, P8): they live in `context.accounts` under a
+  // dedicated `inherited-*` role, linked to their (active) bequest by `bequestId ===
+  // bequest.stateKey`. Discovering them here is what keeps the SECURE stream intact after
+  // promotion hoists the RA out of `bequest.assets` (§15.1 Coupling 2).
+  const activeByKey = new Map();
+  for (const b of (context.bequests ?? [])) {
+    if (b.inheritanceYear != null) activeByKey.set(b.stateKey ?? b.id, b);
+  }
+  for (const a of (context.accounts ?? [])) {
+    if (!a.inherited || !a.stateKey || !INHERITED_RETIREMENT_ROLES.has(a.role)) continue;
+    const b = activeByKey.get(a.bequestId);
+    if (b) row(a, a.role === ACCOUNT_ROLES.INHERITED_ROTH, b);
   }
   return out;
 }
