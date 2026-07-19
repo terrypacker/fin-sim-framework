@@ -275,8 +275,11 @@ export class ScenarioLoader {
       const remaining = [];
       for (const asset of (b.assets ?? [])) {
         const meta = inheritedAssetMeta(asset.__type);
-        // Retirement / super stay inline; non-inherited or keyless descriptors untouched.
-        if (!meta || meta.isRetirement || !asset.stateKey) { remaining.push(asset); continue; }
+        // AU super stays inline (forced taxed lump-sum, not an ongoing account);
+        // non-inherited or keyless descriptors untouched. Brokerage / property /
+        // collectible AND — since design 63 §15 (P8) — inherited IRA/401(k)/Roth are
+        // promoted to first-class records (RAs take a dedicated `inherited-*` role).
+        if (!meta || meta.isSuper || !asset.stateKey) { remaining.push(asset); continue; }
         const { list, rec } = this._bequestAssetToRecord(asset, meta, b, cfg);
         if (!list.some(r => r.stateKey === asset.stateKey)) list.push(rec);
       }
@@ -322,7 +325,30 @@ export class ScenarioLoader {
         plannedSaleYear: asset.plannedSaleYear ?? null, isGold: asset.isGold ?? false,
         ownerId, country, currency, ...inh } };
     }
-    // account (inherited brokerage — retirement/super excluded by the caller).
+    // Inherited RETIREMENT (design 63 §15, P8): IRA / 401(k) / Roth promote to a
+    // first-class account under a DEDICATED `inherited-*` role, so the heir's own
+    // role-keyed RMD / contribution / conversion machinery never touches it, while
+    // the SECURE 10-year stream (which drains by stateKey) still drains it and
+    // `drawdownPriority: null` keeps it out of discretionary drawdown. It keeps its
+    // RA class (`__type`) + `contributionBasis: 0` (IRD — whole balance is ordinary
+    // income on distribution). Super never reaches here (excluded by the caller).
+    if (meta.isRetirement) {
+      return { list: cfg.accounts, rec: {
+        __type: asset.__type, name: asset.name ?? 'Inherited Retirement', stateKey: asset.stateKey,
+        type: meta.accountType, role: meta.inheritedRole, balance: 0,
+        ownerId, country, currency, drawdownPriority: null, allowsEarlyWithdrawal: true,
+        contributionBasis: 0,
+        // Carry any directly-authored SECURE 10-year drawdown knobs onto the promoted
+        // record so `_inheritedRaAccounts` reads them there (design 63 §15). The
+        // `raAsset.*` params (regenerated from this record) re-cascade over these on
+        // every load, so a param and a directly-authored value converge to one source.
+        distributionMode: asset.distributionMode ?? null,
+        fillCeiling:      asset.fillCeiling ?? null,
+        lumpYear:         asset.lumpYear ?? null,
+        weights:          asset.weights ?? null,
+        ...inh } };
+    }
+    // account (inherited brokerage).
     return { list: cfg.accounts, rec: {
       __type: 'BrokerageAccount', name: asset.name ?? 'Inherited Brokerage', stateKey: asset.stateKey,
       type: 'brokerage', role: country === 'AU' ? 'au-stock' : 'us-stock', balance: 0,
@@ -595,15 +621,20 @@ export class ScenarioLoader {
       // Design 63 §12.3: per-inherited-RA-asset drawdown knobs cascade onto the
       // matching asset nested in a bequest. distributionMode is a string enum (no
       // rounding); fillCeiling / lumpYear are numeric.
+      const cast = (v) => (v == null || v === '')
+        ? null
+        : (typeof v === 'string' ? v : _roundRecordField(node.field, v));
+      let target = null;
       for (const b of (cfg.bequests ?? [])) {
         const asset = (b.assets ?? []).find(x => x.stateKey === node.stateKey);
-        if (asset) {
-          asset[node.field] = (val == null || val === '')
-            ? null
-            : (typeof val === 'string' ? val : _roundRecordField(node.field, val));
-          break;
-        }
+        if (asset) { target = asset; break; }
       }
+      // Design 63 §15 (P8): a PROMOTED inherited RA lives in `cfg.accounts`, not
+      // `bequest.assets` — cascade its SECURE-drawdown knobs onto the promoted record
+      // so `_inheritedRaAccounts` reads them there (the §14.4 de-gen guard also needs
+      // an owning record for the regenerated `raAsset.*` param).
+      if (!target) target = (cfg.accounts ?? []).find(r => r.inherited && r.stateKey === node.stateKey);
+      if (target) target[node.field] = cast(val);
     } else if (node.type === 'accountPriority') {
       // Fan one categorical strategy value out to drawdownPriority across many
       // accounts by role. Per-owner ranking (ownerOrder/ownerStride) keeps each
