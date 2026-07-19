@@ -245,17 +245,36 @@ export class AuTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
   static description     = 'Resets AU YTD tax fields after settlement; funds the US §904 current-year foreign tax per basket; chains AU_TAX_PAYMENT_DEBIT when tax > 0.';
 
   /**
-   * Fund the US §904 pools (design 52 §4.4). Apportion the (post-FITO) AU net
-   * liability — less super tax, which is not a creditable foreign income tax —
-   * to the two baskets by AU-source income share, convert to USD, and stage it
-   * as the current-year foreign tax the next US settle consumes. Because FITO has
-   * already reduced the AU liability by the US tax on US-source income, the
-   * residual is predominantly the AU tax on AU-source income (the anti-double-
-   * relief seam, §8).
+   * Fund the US §904 pools (design 52 §4.4). Apportion the creditable AU liability
+   * to the two baskets by AU-source income share, convert to USD, and stage it as
+   * the current-year foreign tax the next US settle consumes.
+   *
+   * Two amounts are removed before apportioning:
+   *
+   *   1. **Super tax** — not a creditable foreign *income* tax.
+   *   2. **AU tax on US-SOURCE income** (design 71 §14). Foreign tax on US-source
+   *      income is not creditable: §904 exists precisely to stop it, and the US is
+   *      the source country here — AU relieves the double tax from its side, via
+   *      FITO. `fitoLimit` is exactly this quantity, since the ATO "step 1 − step 2"
+   *      calculation is the marginal AU tax on the US-source slice; FITO already
+   *      relieved `fito` of it, so `fitoLimit − fito` is what survives inside the AU
+   *      net liability.
+   *
+   * Removing (2) is the fix for a real over-relief leak. The previous code removed
+   * only super tax, on the stated assumption that "FITO has already reduced the AU
+   * liability by the US tax on US-source income, so the residual is predominantly
+   * AU-source tax". That holds only while FITO fully relieves — i.e. while the US
+   * tax on the US-source income is at least the AU tax on it. When AU's rate is the
+   * higher one (a large capital gain: ~45% AU against 15–20% US LTCG), most of the
+   * AU tax survives FITO and was being staged as creditable foreign tax. The §904
+   * limitation then correctly refused to credit it *that year* — but it banked as a
+   * 10-year carryforward vintage and was drawn down in later years against genuinely
+   * foreign income, so the over-relief was deferred rather than prevented.
    */
   _extraStatePatches(state, action) {
-    const superTax     = (state.auSuperTaxYTD ?? 0) + _sumMap(state.auPersonSuperTaxYTD);
-    const auCreditable = Math.max(0, (action.tax ?? 0) - superTax);
+    const superTax      = (state.auSuperTaxYTD ?? 0) + _sumMap(state.auPersonSuperTaxYTD);
+    const usSourceAuTax = _auTaxOnUsSourceIncome(action);
+    const auCreditable  = Math.max(0, (action.tax ?? 0) - superTax - usSourceAuTax);
     const gen   = state.foreignGeneralIncomeYTD ?? 0;
     const pass  = state.foreignPassiveIncomeYTD ?? 0;
     const denom = gen + pass;
@@ -265,6 +284,28 @@ export class AuTaxSettleApplyReducer extends TaxSettleApplyReducerBase {
       ftcCurrentPassive: toUSD(auCreditable * (1 - generalShare), 'AUD', state),
     };
   }
+}
+
+/**
+ * AU tax attributable to US-source income that FITO did not relieve, in AUD —
+ * the amount the US must not treat as creditable foreign tax (design 71 §14).
+ *
+ * Sums over the per-person returns (or the single household return). `fitoLimit` is
+ * null under the A$1,000 de-minimis shortcut, where the limit is deliberately not
+ * computed; those years contribute 0, leaving the prior behavior untouched for
+ * amounts too small to matter.
+ *
+ * @param {object} action  the AU_TAX_SETTLE_APPLY action
+ * @returns {number} AUD
+ */
+function _auTaxOnUsSourceIncome(action) {
+  const details = action.personTaxDetails?.length > 0
+    ? action.personTaxDetails.map(p => p.taxDetail)
+    : (action.taxDetail ? [action.taxDetail] : []);
+  return details.reduce(
+    (sum, d) => sum + Math.max(0, (d?.fitoLimit ?? 0) - (d?.fito ?? 0)),
+    0,
+  );
 }
 
 // ─── TaxPaymentDebitReducer base + per-country subclasses ────────────────────
