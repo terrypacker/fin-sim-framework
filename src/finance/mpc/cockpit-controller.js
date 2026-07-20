@@ -68,6 +68,12 @@ export const COCKPIT_CONTROLS = {
       // Target the band active at "now" (matching the reducer's bandForAge), or
       // the first/upcoming band — NOT blindly the last band.
       const i = _activeBandIndex(bands, asOf, state);
+      // When the targeted band starts in the FUTURE (age below every startAge —
+      // _activeBandIndex's "soonest upcoming decision" fallback), the amount does
+      // NOT bite at "now": it takes effect the year the person reaches startAge.
+      // Stamp that so describe/describeRecord annotate the right year and say so.
+      const startAge  = bands[i]?.startAge ?? null;
+      const effective = _bandEffectiveYear(bands, i, asOf, state);
       return [{
         paramKey: `spendingExpenseBands[${i}].monthlyAmount`,
         type: OPT_PARAM_TYPES.INTEGER,
@@ -75,6 +81,7 @@ export const COCKPIT_CONTROLS = {
         max:  range?.max  ?? 12000,
         step: range?.step ?? 500,
         group: 'Spending', _bandIndex: i,
+        _startAge: startAge, _effectiveYear: effective.year, _future: effective.future,
       }];
     },
     describe: (candidate, vars, ctx) => {
@@ -82,14 +89,15 @@ export const COCKPIT_CONTROLS = {
       const real = candidate[v.paramKey];
       // The band amount is REAL base-year USD; the reducer compounds it to nominal
       // by inflationAccumulator (explicit-bands-spending-reducer.js). Show both so
-      // a late-life "$8,000" isn't misread as a nominal collapse.
-      return `Set monthly spend to ${fmtUsd(real)}${_nominalSuffix(real, _nowYear(ctx), ctx, '/mo')}`;
+      // a late-life "$8,000" isn't misread as a nominal collapse — and nominalize
+      // at the year the band ACTUALLY starts, not at "now".
+      return `Set monthly spend${_bandWhen(v)} to ${fmtUsd(real)}${_nominalSuffix(real, _effectiveYear(v, ctx), ctx, '/mo')}`;
     },
     // The save-points log is a record of what applied AT that date, so it reads the
     // single nominal amount the plan actually spent then — no real/nominal pairing.
     describeRecord: (candidate, vars, ctx) => {
       const v = vars[0];
-      return `Set monthly spend to ${fmtUsd(_toNominal(candidate[v.paramKey], _nowYear(ctx), ctx))}/mo`;
+      return `Set monthly spend${_bandWhen(v)} to ${fmtUsd(_toNominal(candidate[v.paramKey], _effectiveYear(v, ctx), ctx))}/mo`;
     },
     liveActuatable: true,
     /**
@@ -1317,4 +1325,38 @@ function _activeBandIndex(bands, asOf, state) {
     if (age >= (bands[k].startAge ?? -Infinity)) idx = k; else break;
   }
   return idx >= 0 ? idx : 0;
+}
+
+/**
+ * The calendar year band `i` takes effect, and whether that is still in the future.
+ *
+ * A band already in force bites at "now" (its amount is what the plan spends this
+ * year); a band the person has NOT yet reached bites in the year they turn its
+ * startAge — which is the year its real amount must be nominalized at. Falls back
+ * to the "now" year whenever age/birthDate are unknown (pre-design-39 behaviour).
+ */
+function _bandEffectiveYear(bands, i, asOf, state) {
+  const nowYear = asOf ? new Date(asOf).getUTCFullYear() : null;
+  const startAge = bands?.[i]?.startAge;
+  const age = _personAgeAt(asOf, state);
+  if (age == null || !Number.isFinite(startAge) || age >= startAge) {
+    return { year: nowYear, future: false };
+  }
+  const people = state?.people ?? {};
+  const bd = people[Object.keys(people)[0]]?.birthDate ?? state?.personBirthDate;
+  // The year they turn startAge — exact from the birth year, so a Q4 birthday
+  // doesn't shift it the way (nowYear + age delta) would.
+  const year = bd ? new Date(bd).getUTCFullYear() + startAge
+                  : (nowYear != null ? nowYear + (startAge - age) : null);
+  return { year, future: true };
+}
+
+/** The year a spending variable's amount actually applies (stamped at build time). */
+function _effectiveYear(v, ctx) {
+  return Number.isFinite(v?._effectiveYear) ? v._effectiveYear : _nowYear(ctx);
+}
+
+/** " from age 65" for a band that hasn't started yet; '' for one already in force. */
+function _bandWhen(v) {
+  return v?._future && Number.isFinite(v?._startAge) ? ` from age ${v._startAge}` : '';
 }
