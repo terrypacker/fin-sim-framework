@@ -81,6 +81,30 @@ export function resolveDestinationCashKey(stateRegistry, country, state, destina
 }
 
 /**
+ * Resolve a user-chosen sale destination (`saleDestinationAccount` on a company
+ * equity / real property / collectible) to a state key, falling back to the
+ * caller's default cash pool when it names nothing that exists (design 72 §2).
+ *
+ * The stored value is expected to be a state key; `ScenarioLoader` normalizes the
+ * account-**id** form (which the asset editors persist whenever the chosen account
+ * had no stateKey yet) up front, because runtime account state carries `stateKey`
+ * but not `id` and so cannot resolve one. Anything that still names nothing in
+ * `state` lands on `defaultKey` — silently, which is why the normalization
+ * matters: the sale still "works", the proceeds simply land in cash instead of
+ * the chosen investment account and earn the savings rate for the rest of the
+ * run. That was Gap 2 — a marginal tranche compounding at ~3% instead of ~8%.
+ *
+ * @param {object} state
+ * @param {string|null|undefined} saleDestinationAccount
+ * @param {string} defaultKey - the caller's country cash-pool key
+ * @returns {string}
+ */
+export function resolveSaleDestinationKey(state, saleDestinationAccount, defaultKey) {
+  if (saleDestinationAccount && state[saleDestinationAccount] != null) return saleDestinationAccount;
+  return defaultKey;
+}
+
+/**
  * Resolve a cash account GUARANTEED PRESENT in `state`, preferring `country`'s
  * pool and falling back to the OTHER country's when this country has none.
  *

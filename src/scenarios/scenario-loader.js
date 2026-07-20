@@ -192,6 +192,10 @@ export class ScenarioLoader {
 
     ScenarioSerializer.deserializePersonsAccounts(cfg, services);
 
+    // Design 72 §2: rewrite any `saleDestinationAccount` persisted as an account
+    // *id* into that account's stateKey, before either load path reads it.
+    this._normalizeSaleDestinations(cfg, services);
+
     // Stamp display-format currency codes for every account/asset/person and
     // free-standing money param (design 10 §Phase 3/4/5) here — after
     // persons/accounts are registered but before the compile-vs-deserialize
@@ -203,6 +207,57 @@ export class ScenarioLoader {
       this._compileFromToolsets(cfg, services);
     } else if (ScenarioSerializer.hasSerializedGraph(cfg)) {
       this._restoreFromGraph(cfg, services);
+    }
+  }
+
+  /**
+   * Normalize every `saleDestinationAccount` from an account **id** to that
+   * account's **stateKey** (design 72 §2).
+   *
+   * The asset editors write `a.stateKey ?? a.id` into the field, so a destination
+   * chosen while the account had no stateKey yet — every UI-created account, whose
+   * stateKey is stamped later — persists as a bare id. So does any scenario saved
+   * before that fallback existed. Runtime account state carries `stateKey` but not
+   * `id`, so `resolveSaleDestinationKey` cannot recover from it downstream: the
+   * lookup misses and the proceeds silently fall back to the country cash pool,
+   * where they earn the savings rate instead of the chosen account's returns for
+   * the rest of the run. That mis-routing was Gap 2's ~3%-instead-of-~8% marginal
+   * compounding.
+   *
+   * Both carriers are rewritten, because either can be the live one: the domain
+   * records feed the toolset-compile path, and the persisted `events[].data` feeds
+   * the serialized-graph path.
+   *
+   * @private
+   */
+  _normalizeSaleDestinations(cfg, services) {
+    const byId      = new Map();
+    const stateKeys = new Set();
+    for (const a of services.accountService?.getAll() ?? []) {
+      if (!a.stateKey) continue;
+      stateKeys.add(a.stateKey);
+      if (a.id) byId.set(a.id, a.stateKey);
+    }
+    if (byId.size === 0) return;
+    // A value that already names a live account's stateKey is left alone, so an
+    // id that happens to collide with another account's stateKey cannot hijack it.
+    const remap = (holder) => {
+      const dest = holder?.saleDestinationAccount;
+      if (dest && !stateKeys.has(dest) && byId.has(dest)) holder.saleDestinationAccount = byId.get(dest);
+    };
+    // The deserialized service records are what the toolsets actually read; the
+    // cfg lists are rewritten too so a re-serialization persists the normal form.
+    for (const list of [
+      cfg.companyEquities, cfg.realProperties, cfg.collectibles,
+      services.companyEquityService?.getAll(),
+      services.realPropertyService?.getAll(),
+      services.collectibleService?.getAll(),
+    ]) {
+      for (const rec of (list ?? [])) remap(rec);
+    }
+    for (const ev of (cfg.events ?? [])) remap(ev?.data);
+    for (const b of (cfg.bequests ?? [])) {
+      for (const a of (b?.assets ?? [])) remap(a);
     }
   }
 
