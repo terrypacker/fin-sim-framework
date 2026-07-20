@@ -35,17 +35,18 @@ export class ChangeResidencyApplyReducer extends Reducer {
   static type        = 'ChangeResidencyApplyReducer';
   static actionType  = 'CHANGE_RESIDENCY_APPLY';
 
-  constructor({ accountService, stateRegistry, collectibleService, realPropertyService } = {}) {
+  constructor({ accountService, stateRegistry, collectibleService, realPropertyService, companyEquityService } = {}) {
     super('Change Residency Apply', PRIORITY.PRE_PROCESS);
-    this.accountService      = accountService;
-    this.stateRegistry       = stateRegistry;
-    this.collectibleService  = collectibleService;
-    this.realPropertyService = realPropertyService;
+    this.accountService       = accountService;
+    this.stateRegistry        = stateRegistry;
+    this.collectibleService   = collectibleService;
+    this.realPropertyService  = realPropertyService;
+    this.companyEquityService = companyEquityService;
     this.reducedActionTypes = ['CHANGE_RESIDENCY_APPLY'];
   }
 
-  static fromJSON(d, { accountService, stateRegistry, collectibleService, realPropertyService }) {
-    const r = new this({ accountService, stateRegistry, collectibleService, realPropertyService });
+  static fromJSON(d, { accountService, stateRegistry, collectibleService, realPropertyService, companyEquityService }) {
+    const r = new this({ accountService, stateRegistry, collectibleService, realPropertyService, companyEquityService });
     r.id = d.id;
     return r;
   }
@@ -104,6 +105,23 @@ export class ChangeResidencyApplyReducer extends Reducer {
       }
     }
 
+    // 1d. Company equity gets the same s855-45 deemed-acquisition step-up (design
+    //     72 §3): a vested stake in a foreign private company is not taxable
+    //     Australian property, so its AU cost base resets to market value at the
+    //     move while the US basis is left alone. Copy-on-write into equityUpdates —
+    //     a company state entry already recorded in the journal must never be
+    //     mutated in place.
+    const equityUpdates = {};
+    if (stepUp && this.companyEquityService) {
+      for (const eq of this.companyEquityService.getAll()) {
+        const es = eq.stateKey ? state[eq.stateKey] : null;
+        if (es == null) continue;
+        const clone = { ...es };
+        this.companyEquityService.recordResidencyChange(clone, { country, stepUp, priceLevel, asOfMs: moveMs });
+        equityUpdates[eq.stateKey] = clone;
+      }
+    }
+
     // 2. Flip residency to 'AU' for every person; citizen arrays unchanged.
     //    Stamp residencySinceMs (the move date) so the FEIE full-qualifying-year
     //    gate can suppress the exclusion for the partial move-in year (design 52
@@ -122,6 +140,7 @@ export class ChangeResidencyApplyReducer extends Reducer {
     return this.newState({
       ...state,
       ...propertyUpdates,
+      ...equityUpdates,
       people: Object.keys(updatedPeople).length > 0 ? updatedPeople : state.people,
     });
   }

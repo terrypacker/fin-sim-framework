@@ -435,7 +435,11 @@ export class UsTaxModule2026 extends BaseTaxModule {
         const isAuResident = residency === 'AU';
         let next = { ...state, usCapitalGainsYTD: state.usCapitalGainsYTD + gain };
         if (isAuResident) {
-          const audGain = toAUD(gain, 'USD', state);
+          // AU assesses from the s855-45 stepped-up basis (design 72 §3) — only
+          // post-arrival appreciation — while the US taxes the full gain from the
+          // original basis. Falls back to `gain` when no step-up was stamped.
+          const auGainUsd = action.auGain ?? gain;
+          const audGain = toAUD(auGainUsd, 'USD', state);
           next = {
             ...next,
             auCapitalGainsYTD:      (state.auCapitalGainsYTD ?? 0) + audGain,

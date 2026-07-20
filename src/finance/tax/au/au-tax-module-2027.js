@@ -84,11 +84,15 @@ export class AuTaxModule2027 extends AuTaxModule2026 {
       return this._recordUsSourceRealGain(this._recordRealGain(state, state, realGainAud, null), realGainAud);
     });
 
-    // Company equity: no AU cost-base step-up / indexation — the full US gain is
-    // the real gain (design 57 §6.4 "company → full gain").
+    // Company equity: AU-assessable from the s855-45 stepped-up basis and indexed
+    // from the move-date price level (design 72 §3), matching the equity/gold path.
+    // Supersedes design 57 §6.4's "company → full gain", which pre-dated company
+    // equity receiving a residency step-up at all. Falls back to the full US gain
+    // when no step-up was stamped (pre-move sale, or no move in the scenario).
     fns.set('COMPANY_SALE_TAX', (state, action) => {
       if (action.residency !== 'AU') return state;
-      const realGainAud = toAUD(action.gain ?? 0, 'USD', state);
+      const realGainUsd = action.auIndexedGain ?? action.auGain ?? action.gain ?? 0;
+      const realGainAud = toAUD(realGainUsd, 'USD', state);
       return this._recordUsSourceRealGain(this._recordRealGain(state, state, realGainAud, null), realGainAud);
     });
 
