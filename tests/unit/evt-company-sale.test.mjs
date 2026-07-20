@@ -221,3 +221,56 @@ test('EVT-51: an appreciated company sale sells at the grown value (gain > nomin
   const gainsDiff = taxEntries[0].stateDiff.find(d => d.field === 'usCapitalGainsYTD');
   assert.strictEqual(gainsDiff.delta, salePrice - 50_000);
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Design 72 §2: the chosen sale destination must actually receive the proceeds
+//
+// The asset editors persist `saleDestinationAccount` as `stateKey ?? id`, so a
+// destination chosen before the account had a stateKey — every UI-created
+// account — is stored as a bare account **id**. Runtime state carries stateKey
+// but not id, so an unnormalized id silently missed and the proceeds fell back
+// to the country cash pool, where they earned the savings rate instead of the
+// chosen account's returns for the rest of the run (Gap 2).
+// ══════════════════════════════════════════════════════════════════════════════
+
+function usCompanyConfigWithBrokerage(saleDestinationAccount) {
+  const cfg = usCompanyConfig({ saleDestinationAccount });
+  cfg.toolsets = ['US_RETIREMENT', 'US_BROKERAGE', 'US_COMPANY_SALE'];
+  cfg.accounts.push({
+    __type: 'BrokerageAccount', id: 'ac45', name: 'Shared Brokerage', type: 'brokerage',
+    role: 'us-stock', stateKey: 'sharedBrokerageAccount', initialValue: 100_000, balance: 100_000,
+    ownershipType: 'sole', ownerId: 'primary', minimumBalance: 0, drawdownPriority: 2,
+    country: 'US', currency: { code: 'USD', symbol: '$' },
+  });
+  return cfg;
+}
+
+/** Balance delta the COMPANY_SALE_APPLY entry wrote to `key`. */
+function saleCreditTo(sim, key) {
+  const [entry] = sim.journal.getActions('COMPANY_SALE_APPLY');
+  assert.ok(entry, 'expected a COMPANY_SALE_APPLY journal entry');
+  return entry.stateDiff.find(d => d.field === `${key}.balance`)?.delta ?? 0;
+}
+
+test('D72-2: sale destination given as a stateKey credits that account', () => {
+  const { sim } = loadToolsetScenario(usCompanyConfigWithBrokerage('sharedBrokerageAccount'));
+  assert.doesNotThrow(() => sim.stepTo(Q1_2028));
+
+  assert.strictEqual(saleCreditTo(sim, 'sharedBrokerageAccount'), 500_000);
+  assert.strictEqual(saleCreditTo(sim, 'usSavingsAccount'), 0);
+});
+
+test('D72-2: sale destination given as an account id credits that account, not cash', () => {
+  const { sim } = loadToolsetScenario(usCompanyConfigWithBrokerage('ac45'));
+  assert.doesNotThrow(() => sim.stepTo(Q1_2028));
+
+  assert.strictEqual(saleCreditTo(sim, 'sharedBrokerageAccount'), 500_000);
+  assert.strictEqual(saleCreditTo(sim, 'usSavingsAccount'), 0);
+});
+
+test('D72-2: an unresolvable sale destination still falls back to the cash pool', () => {
+  const { sim } = loadToolsetScenario(usCompanyConfigWithBrokerage('no-such-account'));
+  assert.doesNotThrow(() => sim.stepTo(Q1_2028));
+
+  assert.strictEqual(saleCreditTo(sim, 'usSavingsAccount'), 500_000);
+});

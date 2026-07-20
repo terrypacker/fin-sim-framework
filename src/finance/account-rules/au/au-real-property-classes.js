@@ -12,19 +12,19 @@ import { Reducer, PRIORITY, AccountServiceReducer } from '../../../simulation-fr
 import { HandlerEntry }       from '../../../simulation-framework/handlers.js';
 import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { findLoanForProperty } from '../loan-classes.js';
-import { resolveDestinationCashKey } from '../cash-routing.js';
+import { resolveDestinationCashKey, resolveSaleDestinationKey } from '../cash-routing.js';
 
 /** Default AU cash pool key when no saleDestinationAccount is provided. */
 const defaultAuCashKey = (state) =>
   state.auSavingsAccount != null ? 'auSavingsAccount' : 'checkingAccount';
 
-/** Resolve the destination state key, falling back to the default AU cash pool. */
-const resolveDestinationKey = (state, saleDestinationAccount) => {
-  if (saleDestinationAccount && state[saleDestinationAccount] != null) {
-    return saleDestinationAccount;
-  }
-  return defaultAuCashKey(state);
-};
+/**
+ * Resolve the destination state key, falling back to the default AU cash pool.
+ * Delegates to the shared resolver so a `saleDestinationAccount` persisted as an
+ * account *id* rather than a state key still finds its account (design 72 §2).
+ */
+const resolveDestinationKey = (state, saleDestinationAccount) =>
+  resolveSaleDestinationKey(state, saleDestinationAccount, defaultAuCashKey(state));
 
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 
