@@ -238,14 +238,25 @@ export class RealPropertyEditor extends BaseComponent {
     }
   }
 
-  _populateAccountSelect(el, accounts, selectedId) {
+  /**
+   * Fill the sale-destination select. The option value is always the account's
+   * **stateKey** — the only form the engine can resolve, since runtime account
+   * state carries `stateKey` but not `id`. The former `a.stateKey ?? a.id`
+   * fallback persisted an id whenever the account had none yet, and that value
+   * silently never matched at sale time: the proceeds fell back to the country
+   * cash pool (design 72 §2). An account with no stateKey has no state to credit
+   * at all, so it is not offered. A legacy value stored as a bare id still
+   * selects its account here, so re-saving migrates it.
+   */
+  _populateAccountSelect(el, accounts, selectedKey) {
     const sel = el.querySelector('[data-id="saleDestinationAccount"]');
     sel.innerHTML = '<option value="">— none —</option>';
     for (const a of accounts) {
+      if (!a.stateKey) continue;
       const opt = document.createElement('option');
-      opt.value       = a.stateKey ?? a.id;
-      opt.textContent = a.name || a.id;
-      if ((a.stateKey ?? a.id) === selectedId) opt.selected = true;
+      opt.value       = a.stateKey;
+      opt.textContent = a.name || a.stateKey;
+      if (a.stateKey === selectedKey || a.id === selectedKey) opt.selected = true;
       sel.appendChild(opt);
     }
   }
