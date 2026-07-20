@@ -259,9 +259,11 @@ export class StateSchemaRegistry {
     // (funded at the AU settle §4.4, consumed + banked at the US settle §4.3).
     this.register('ftcCurrentGeneral',           ParameterValueType.currency('USD'));
     this.register('ftcCurrentPassive',           ParameterValueType.currency('USD'));
+    this.register('ftcCurrentResourced',         ParameterValueType.currency('USD'));
     // 10-year carryforward pools, per basket: { [vintageCY]: remainingUSD }.
     this.registerPattern('ftcPoolGeneral.*',     ParameterValueType.currency('USD'));
     this.registerPattern('ftcPoolPassive.*',     ParameterValueType.currency('USD'));
+    this.registerPattern('ftcPoolResourced.*',   ParameterValueType.currency('USD'));
     // US-source income booked while AU-resident — the FITO "without" removal set,
     // captured in both currencies (USD funds §4.6, AUD funds §4.5).
     this.register('usSourceOrdinaryUsdYTD',      ParameterValueType.currency('USD'));

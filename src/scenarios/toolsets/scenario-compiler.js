@@ -186,6 +186,8 @@ export class ScenarioCompiler {
       // AU move (design 57 Part 2, Item C) and foreign real property (design 62 §5).
       collectibleService: services.collectibleService,
       realPropertyService: services.realPropertyService,
+      // ...and company equity at the AU move (design 72 §3).
+      companyEquityService: services.companyEquityService,
       // BequestService.expand() turns Bequest containers into zero-seed state +
       // INHERIT schedules (design 63); the INHERITANCE toolset consumes it.
       bequestService: services.bequestService,

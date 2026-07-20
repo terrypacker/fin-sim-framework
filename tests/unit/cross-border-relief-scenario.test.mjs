@@ -126,8 +126,35 @@ function runDefaultIntlRetirement() {
 // (11,584,190 → 11,577,657). Small because the limitation already blocked most of it;
 // what leaked was the decade of carryforward drawdown after AU income ceased. Re-pinned
 // so the ±1% band stays centred on the corrected figures.
-const EXPECTED_LIFETIME_TAX = 1_134_089;
-const EXPECTED_NET_WORTH     = 11_577_657;
+// Design 72 §1 + §3 (cross-border equity fixes) — a large, intended DOWNWARD tax move,
+// from two independent reliefs the engine was previously missing. Both bite on the same
+// 2033 company sale, which is why the swing is big:
+//
+//   §3 s855-45 step-up: CompanyEquity never received the residency cost-base reset that
+//   accounts/collectibles/property already got, so AU assessed the *entire* gain from
+//   the original basis instead of only post-arrival appreciation.
+//
+//   §1 treaty re-sourcing: AU tax on US-SOURCE income had no §904 basket to sit in, so
+//   it was dropped entirely and the two countries' taxes on the same gain became
+//   additive (~70% combined). Form 1116 category F re-sources it, making the combined
+//   burden max(US, AU) (~47%) as the treaty intends.
+//
+// Design 71 §14 removed *over*-relief; this removes *under*-relief. The pair are
+// complementary, not contradictory: the leak 71 closed was AU tax on US-source income
+// being credited against unrelated foreign income, whereas 72 credits it against the
+// US tax on that same income, which is what the treaty actually allows.
+//
+// Lifetime tax −37.7% (1,134,089 → 706,637) and ending net worth +6.0%
+// (11,577,657 → 12,273,473). A move back UP toward ~1.13m would mean the double
+// taxation has returned; a move sharply DOWN from here would suggest the re-sourced
+// basket has escaped its §904 limitation.
+//
+// De-minimis guard (design 72 §1): the FITO A$1,000 shortcut leaves `fitoLimit` null,
+// which used to make _auTaxOnUsSourceIncome return 0 and declare the whole AU liability
+// AU-source — leaking six figures into the general/passive baskets in a big realisation
+// year. Now apportioned by US-source income share. FTC-US-9 guards the bound.
+const EXPECTED_LIFETIME_TAX = 706_637;
+const EXPECTED_NET_WORTH     = 12_273_473;
 const TOL = 0.01;
 
 test('design 52 lock-in: default US→AU retiree lifetime tax reflects real §904 FTC + FITO', () => {

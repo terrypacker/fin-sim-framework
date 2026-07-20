@@ -123,6 +123,17 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
                 ...(taxDetail.ftc.passive.carryforwardRemaining > 0
                   ? [{ label: '  Passive carryforward remaining', amount: taxDetail.ftc.passive.carryforwardRemaining }]
                   : []),
+                // Design 72 §1 — Form 1116 category F. Omitting this line breaks the
+                // return's footing check: the credit is taken against gross tax, so it
+                // must appear among the credits.
+                ...(taxDetail.ftc.resourced
+                  ? [
+                      { label: 'Foreign Tax Credit — Re-sourced by treaty (§904)', amount: -taxDetail.ftc.resourced.credit },
+                      ...(taxDetail.ftc.resourced.carryforwardRemaining > 0
+                        ? [{ label: '  Re-sourced carryforward remaining', amount: taxDetail.ftc.resourced.carryforwardRemaining }]
+                        : []),
+                    ]
+                  : []),
               ]
             : [
                 { label: 'Foreign Tax Credit', amount: -taxDetail.credits },
@@ -182,7 +193,9 @@ export class UsTaxDocument2026 extends BaseTaxDocumentModule {
         money('§904 limitation base (Chapter-1 gross tax)', ftc.limitationBase),
         money('§904 total taxable income (denominator)',    ftc.totalTaxable),
       );
-      for (const [name, basket] of [['General', ftc.general], ['Passive', ftc.passive]]) {
+      const baskets = [['General', ftc.general], ['Passive', ftc.passive]];
+      if (ftc.resourced) baskets.push(['Re-sourced by treaty', ftc.resourced]);
+      for (const [name, basket] of baskets) {
         lineItems.push(
           money(`${name} — foreign income in basket`,   basket.numerator),
           ratio(`${name} — limitation fraction`,        basket.frac),

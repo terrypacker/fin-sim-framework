@@ -63,5 +63,13 @@ export class CompanyEquity extends Asset {
     this.country                  = opts.country                  ?? 'US';
     this.currency                 = opts.currency                 ?? null;
     this.appreciationSchedule     = opts.appreciationSchedule     ?? null;
+    // Per-country cost base (design 72 §3). A vested stake in a foreign company is
+    // not taxable Australian property, so on commencing AU residency ITAA97 s855-45
+    // deems it re-acquired at market value: the US basis stays put while the AU
+    // basis steps up. A single scalar costBasis cannot express that divergence.
+    // Stamped by CompanyEquityService.recordResidencyChange; null before any move.
+    this.costBaseByCountry        = opts.costBaseByCountry        ?? null;
+    this.acquisitionPriceLevel    = opts.acquisitionPriceLevel    ?? null;
+    this.acquisitionDateByCountry = opts.acquisitionDateByCountry ?? null;
   }
 }

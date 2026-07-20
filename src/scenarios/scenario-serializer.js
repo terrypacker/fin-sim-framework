@@ -884,6 +884,12 @@ export class ScenarioSerializer {
       country:              c.country              ?? 'US',
       currency:             c.currency             ?? null,
       stateKey:             c.stateKey             ?? null,
+      // s855-45 residency step-up stamps (design 72 §3) — must round-trip, or a
+      // scenario saved after the AU move reloads with the AU basis lost and the
+      // full gain re-assessed.
+      costBaseByCountry:        c.costBaseByCountry        ?? null,
+      acquisitionPriceLevel:    c.acquisitionPriceLevel    ?? null,
+      acquisitionDateByCountry: c.acquisitionDateByCountry ?? null,
       appreciationSchedule: c.appreciationSchedule
         ? c.appreciationSchedule.map(e => ({
             date: e.date instanceof Date ? e.date.toISOString() : e.date,
@@ -907,6 +913,9 @@ export class ScenarioSerializer {
       owners:              d.owners              ?? [],
       country:             d.country             ?? 'US',
       currency:            d.currency            ?? null,
+      costBaseByCountry:        d.costBaseByCountry        ?? null,
+      acquisitionPriceLevel:    d.acquisitionPriceLevel    ?? null,
+      acquisitionDateByCountry: d.acquisitionDateByCountry ?? null,
       appreciationSchedule: d.appreciationSchedule
         ? d.appreciationSchedule.map(e => ({ date: new Date(e.date), rate: e.rate }))
         : null,

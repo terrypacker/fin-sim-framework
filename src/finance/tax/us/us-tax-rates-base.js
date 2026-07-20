@@ -202,6 +202,11 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
       totalTaxable: taxableOrdinaryAfterFeie + cg + collectibles,
       generalNumerator: Math.max(0, (state.foreignGeneralIncomeYTD ?? 0) - feieExcluded),
       passiveNumerator: Math.max(0, state.foreignPassiveIncomeYTD ?? 0),
+      // Design 72 §1: US-source income that AU also taxed, re-sourced to foreign
+      // by treaty. These accumulators are populated (in USD) by the US module's
+      // classifiers only on the AU-resident branch, so this is 0 for a pure-US run
+      // and the basket stays inert.
+      resourcedNumerator: Math.max(0, (state.usSourceOrdinaryUsdYTD ?? 0) + (state.usSourceCapGainsUsdYTD ?? 0)),
     });
     const credits      = ftc.credit;
     // Total gross tax includes NIIT; net liability credits the FTC against the
@@ -414,17 +419,28 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
    * Pure: returns the credit breakdown AND the resulting pool state; the settle
    * reducer persists nextPool{General,Passive}.
    */
-  _computeFtc(state, { grossTax, totalTaxable, generalNumerator, passiveNumerator }) {
+  _computeFtc(state, { grossTax, totalTaxable, generalNumerator, passiveNumerator, resourcedNumerator = 0 }) {
     const currentCY = state.currentPeriods?.US?.startMs != null
       ? new Date(state.currentPeriods.US.startMs).getUTCFullYear()
       : 0;
 
+    // Overall §904 headroom. Each basket's limitation is grossTax × its own income
+    // fraction, but because `totalTaxable` is net of deductions while the numerators
+    // are not, the per-basket fractions can sum past 1 — which would credit more than
+    // the US tax actually due and break the return's footing (gross + credits = net).
+    // So baskets draw against a shared remaining-headroom budget, in declaration
+    // order. The re-sourced basket is processed last: the treaty grants an
+    // *additional* credit on top of the ordinary baskets, so it is the one that
+    // should be squeezed when headroom runs out, and its unused foreign tax stays
+    // banked in its own pool rather than vanishing.
+    let headroom = Math.max(0, grossTax);
     const basket = (numerator, currentTax, pool) => {
       const frac  = totalTaxable > 0 ? Math.min(1, Math.max(0, numerator / totalTaxable)) : 0;
-      const limit = Math.max(0, grossTax) * frac;
+      const limit = Math.min(Math.max(0, grossTax) * frac, headroom);
       const poolTotal = Object.values(pool).reduce((s, v) => s + v, 0);
       const avail = currentTax + poolTotal;
       const credit = Math.min(avail, limit);
+      headroom = Math.max(0, headroom - credit);
       const { nextPool, currentYearUsed, carryoverUsed } = _drawDownBasket(currentTax, pool, credit, currentCY);
       const carryforwardRemaining = Object.values(nextPool).reduce((s, v) => s + v, 0);
       return { numerator, frac, limit, currentTax, poolTotal, avail, credit,
@@ -433,14 +449,21 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
 
     const general = basket(generalNumerator, state.ftcCurrentGeneral ?? 0, state.ftcPoolGeneral ?? {});
     const passive = basket(passiveNumerator, state.ftcCurrentPassive ?? 0, state.ftcPoolPassive ?? {});
-    const hasActivity = general.avail > 0 || passive.avail > 0
-      || generalNumerator > 0 || passiveNumerator > 0;
+    // Design 72 §1 — "certain income re-sourced by treaty" (Form 1116 category F).
+    // Its own §904 basket: the numerator is the US-source income the treaty partner
+    // also taxed, re-sourced to foreign for limitation purposes only. Without this
+    // basket, AU tax on US-source income has no limitation room to sit against and
+    // is stranded forever, making the two countries' taxes additive.
+    const resourced = basket(resourcedNumerator, state.ftcCurrentResourced ?? 0, state.ftcPoolResourced ?? {});
+    const hasActivity = general.avail > 0 || passive.avail > 0 || resourced.avail > 0
+      || generalNumerator > 0 || passiveNumerator > 0 || resourcedNumerator > 0;
 
     return {
-      credit: general.credit + passive.credit,
-      general, passive,
-      nextPoolGeneral: general.nextPool,
-      nextPoolPassive: passive.nextPool,
+      credit: general.credit + passive.credit + resourced.credit,
+      general, passive, resourced,
+      nextPoolGeneral:   general.nextPool,
+      nextPoolPassive:   passive.nextPool,
+      nextPoolResourced: resourced.nextPool,
       hasActivity,
       // The two denominators of the §904 limitation. Without them a reader can see
       // `frac` and `limit` but cannot check either, since neither the ratio's
