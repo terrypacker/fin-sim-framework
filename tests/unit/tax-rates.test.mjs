@@ -162,13 +162,13 @@ test('TE-3: AU ordinary income zero below tax-free threshold', () => {
 });
 
 test('TE-3: AU ordinary income uses progressive brackets with Medicare levy', () => {
-  // Income $50,000:
-  //   [18200, 45000] @ 19% = 26800 * 0.19 = 5092
-  //   [45000, 50000] @ 30% = 5000 * 0.30  = 1500  → baseTax = 6592
+  // Income $50,000 (Stage 3 schedule — ATO's published base at $45,000 is $4,288):
+  //   [18200, 45000] @ 16% = 26800 * 0.16 = 4288
+  //   [45000, 50000] @ 30% = 5000 * 0.30  = 1500  → baseTax = 5788
   // Medicare: 50000 > 32500 upper threshold → 50000 * 0.02 = 1000
-  // Total = 7592
+  // Total = 6788
   const { netLiability } = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 50000 }));
-  assert.strictEqual(netLiability, 7592);
+  assert.strictEqual(netLiability, 6788);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -188,10 +188,10 @@ test('TE-4: US LTCG up to $96,700 is taxed at 0%', () => {
 
 test('TE-4: AU capital gains for resident apply 50% CGT discount', () => {
   // $100k CG → discounted income = $50k
-  // [18200, 45000] @ 19% = 5092 | [45000, 50000] @ 30% = 1500 → baseTax = 6592
-  // Medicare: 50000 > 32500 → 50000 * 0.02 = 1000  → total = 7592
+  // [18200, 45000] @ 16% = 4288 | [45000, 50000] @ 30% = 1500 → baseTax = 5788
+  // Medicare: 50000 > 32500 → 50000 * 0.02 = 1000  → total = 6788
   const { netLiability } = auRates.computeTax(auState({ auCapitalGainsYTD: 100000 }));
-  assert.strictEqual(netLiability, 7592);
+  assert.strictEqual(netLiability, 6788);
 });
 
 test('TE-4: AU CGT discount is exactly 50% (half the gain is taxable)', () => {
@@ -300,24 +300,26 @@ test('TE-4b: zero ordinary income stacking matches pre-fix zero-ordinary behavio
 // TE-5: Non-Resident Tax Rates — AU: different brackets, NO 50% CGT discount
 // ══════════════════════════════════════════════════════════════════════════════
 
-test('TE-5: AU NR uses flat 32.5% bracket starting from $0 (no tax-free threshold)', () => {
-  // $50k income: no tax-free threshold → 50000 * 0.325 = 16250
+test('TE-5: AU NR uses the flat first foreign-resident bracket from $0 (no tax-free threshold)', () => {
+  // $50k income: no tax-free threshold → 50000 * 0.30 = 15000.
+  // Stage 3 (1 Jul 2024) cut this rate 32.5% → 30%; the module had kept 32.5%
+  // while already using the widened $135k ceiling.
   const { netLiability } = auRates.computeTax(auState({ people: { primary: { residency: 'US' } }, auOrdinaryIncomeYTD: 50000 }));
-  assert.strictEqual(netLiability, 16250);
+  assert.strictEqual(netLiability, 15000);
 });
 
 test('TE-5: AU NR capital gains are NOT discounted (full gain taxed via NR brackets)', () => {
-  // $100k CG, non-resident: no 50% discount → full 100000 * 0.325 = 32500
+  // $100k CG, non-resident: no 50% discount → full 100000 * 0.30 = 30000
   const taxNR       = auRates.computeTax(auState({ people: { primary: { residency: 'US' } },  auCapitalGainsYTD: 100000 })).netLiability;
   const taxResident = auRates.computeTax(auState({ people: { primary: { residency: 'AU' } }, auCapitalGainsYTD: 100000 })).netLiability;
-  assert.strictEqual(taxNR, 32500);
+  assert.strictEqual(taxNR, 30000);
   assert.ok(taxNR > taxResident, 'NR rate should exceed resident (discounted) rate');
 });
 
 test('TE-5: AU NR brackets differ from resident brackets at same income', () => {
   const taxResident = auRates.computeTax(auState({ people: { primary: { residency: 'AU' } }, auOrdinaryIncomeYTD: 50000 })).netLiability;
   const taxNR       = auRates.computeTax(auState({ people: { primary: { residency: 'US' } },  auOrdinaryIncomeYTD: 50000 })).netLiability;
-  // Resident 7592 (bracket + Medicare) vs NR 16250 (flat 32.5%)
+  // Resident 6788 (bracket + Medicare) vs NR 15000 (flat 30%)
   assert.ok(taxNR > taxResident, 'NR brackets produce higher tax on the same income');
 });
 
@@ -327,16 +329,16 @@ test('TE-5: AU NR brackets differ from resident brackets at same income', () => 
 
 test('TE-6: franking credit offsets AU ordinary income tax', () => {
   // $100k ordinary income:
-  //   [18200, 45000] @ 19% = 5092 | [45000, 100000] @ 30% = 16500 → baseTax = 21592
+  //   [18200, 45000] @ 16% = 4288 | [45000, 100000] @ 30% = 16500 → baseTax = 20788
   //   Medicare: 100000 * 0.02 = 2000
-  //   franking offset: min(10000, 21592) = 10000
-  //   net = (21592 - 10000) + 2000 = 13592
+  //   franking offset: min(10000, 20788) = 10000
+  //   net = (20788 - 10000) + 2000 = 12788
   const { netLiability } = auRates.computeTax(auState({ auOrdinaryIncomeYTD: 100000, auFrankingCreditYTD: 10000 }));
-  assert.strictEqual(netLiability, 13592);
+  assert.strictEqual(netLiability, 12788);
 });
 
 test('TE-6: franking credit is capped at base tax (cannot reduce Medicare levy)', () => {
-  // $30k income: baseTax = [18200, 30000] @ 19% = 2242
+  // $30k income: baseTax = [18200, 30000] @ 16% = 1888
   // Medicare phase-in: (30000 - 26000) * 0.10 = 400
   // Oversized franking credit: min(100000, 2242) = 2242 offsets all base tax
   // Net = (2242 - 2242) + 400 = 400
@@ -381,9 +383,9 @@ test('TE-7: US collectible rate is distinct from LTCG rate (28% vs 15%)', () => 
 
 test('TE-7: AU collectible gains use capital gains treatment (50% CGT discount)', () => {
   // AU treats collectibles as capital gains — auCapitalGainsYTD is the vehicle
-  // $100k AU CG → discounted $50k → same as TE-4 resident test → 7592
+  // $100k AU CG → discounted $50k → same as TE-4 resident test → 6788
   const { netLiability } = auRates.computeTax(auState({ auCapitalGainsYTD: 100000 }));
-  assert.strictEqual(netLiability, 7592);
+  assert.strictEqual(netLiability, 6788);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

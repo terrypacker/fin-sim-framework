@@ -55,7 +55,7 @@ export class AuTaxRates2027 extends AuTaxRatesBase {
 
     // Non-resident rates — unchanged.
     this._nonResidentBrackets = [
-      [        0, 0.325],
+      [        0, 0.30],
       [  135_000, 0.37],
       [  190_000, 0.45],
     ];

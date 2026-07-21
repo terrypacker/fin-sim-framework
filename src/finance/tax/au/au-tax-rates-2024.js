@@ -22,18 +22,23 @@ export class AuTaxRates2024 extends AuTaxRatesBase {
   constructor() {
     super();
 
-    // Resident rates — Stage 3 tax cuts (ATO FY2024-25)
+    // Resident rates — Stage 3 tax cuts (ATO FY2024-25). The whole schedule here
+    // used to be the pre-Stage-3 (FY2023-24) one — 19%/32.5% at $120k/$180k —
+    // despite the comment; Stage 3 applied from 1 Jul 2024.
     this._brackets = [
       [        0, 0.00],
-      [   18_200, 0.19],
-      [   45_000, 0.325],
-      [  120_000, 0.37],
-      [  180_000, 0.45],
+      [   18_200, 0.16],   // 19% → 16%
+      [   45_000, 0.30],   // 32.5% → 30%, ceiling $120k → $135k
+      [  135_000, 0.37],
+      [  190_000, 0.45],
     ];
 
-    // Non-resident rates — no tax-free threshold (ATO FY2024-25)
+    // Non-resident rates — no tax-free threshold (ATO FY2024-25).
+    // Stage 3 (from 1 Jul 2024) cut the first foreign-resident rate 32.5% → 30%
+    // AND widened its ceiling $120k → $135k. Only the threshold half of that
+    // change had been applied here, pairing the old rate with the new band.
     this._nonResidentBrackets = [
-      [        0, 0.325],
+      [        0, 0.30],
       [  135_000, 0.37],
       [  190_000, 0.45],
     ];
