@@ -292,6 +292,8 @@ export class StateSchemaRegistry {
     this.register('auDiscountableGainsYTD',      ParameterValueType.currency('AUD'));
     this.register('auRealCapitalGainsYTD',       ParameterValueType.currency('AUD'));
     this.register('auNonResidentWithholdingYTD', ParameterValueType.currency('AUD'));
+    this.register('auNrWithholdingInterestYTD',          ParameterValueType.currency('AUD'));
+    this.register('auNrWithholdingUnfrankedDividendYTD', ParameterValueType.currency('AUD'));
     this.register('auSuperTaxYTD',               ParameterValueType.currency('AUD'));
     this.register('auFrankingCreditYTD',         ParameterValueType.currency('AUD'));
 
@@ -301,6 +303,9 @@ export class StateSchemaRegistry {
     this.registerPattern('auPersonRealCapitalGainsYTD.*',       ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonFrankingCreditYTD.*',         ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonNonResidentWithholdingYTD.*', ParameterValueType.currency('AUD'));
+    // design 73 Gap 2 — per-type non-resident final withholding
+    this.registerPattern('auPersonNrWithholdingInterestYTD.*',          ParameterValueType.currency('AUD'));
+    this.registerPattern('auPersonNrWithholdingUnfrankedDividendYTD.*', ParameterValueType.currency('AUD'));
     this.registerPattern('auPersonSuperTaxYTD.*',               ParameterValueType.currency('AUD'));
     // FEIE cap accumulator (design 52 §4.2): AU-source *earned* income only
     // (wages/SE), per person — distinct from auPersonOrdinaryIncomeYTD which mixes

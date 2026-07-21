@@ -269,7 +269,7 @@ test('OFFSET (compile path): an offset lowers rental deductible interest, raisin
   const base = loadToolsetScenario(auRentalConfig());
   assert.doesNotThrow(() => base.sim.stepTo(FEB_2026));
   const baseApply = base.sim.journal.getActions('AU_RENTAL_INCOME_TAX')[0];
-  const baseTaxable = findDiff(baseApply, 'auOrdinaryIncomeYTD').delta;
+  const baseTaxable = findDiff(baseApply, 'auPersonOrdinaryIncomeYTD.primary').delta;
 
   ServiceRegistry.resetAll();
 
@@ -278,7 +278,7 @@ test('OFFSET (compile path): an offset lowers rental deductible interest, raisin
   const off = loadToolsetScenario(auRentalConfig({ offsetBalance: 100_000 }));
   assert.doesNotThrow(() => off.sim.stepTo(FEB_2026));
   const offApply = off.sim.journal.getActions('AU_RENTAL_INCOME_TAX')[0];
-  const offTaxable = findDiff(offApply, 'auOrdinaryIncomeYTD').delta;
+  const offTaxable = findDiff(offApply, 'auPersonOrdinaryIncomeYTD.primary').delta;
 
   assert.ok(near(baseTaxable, -1475), `baseline taxable ${baseTaxable}`);
   assert.ok(near(offTaxable,   -975), `offset taxable ${offTaxable}`);
