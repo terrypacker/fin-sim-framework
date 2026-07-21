@@ -23,9 +23,13 @@ import { BondMaturityReducer }            from '../../finance/economic-regimes/b
 import { YieldCurveReducer }              from '../../finance/economic-regimes/yield-curve-reducer.js';
 import { YieldCurveStepReducer }          from '../../finance/economic-regimes/yield-curve-step-reducer.js';
 import { YieldCurveTickHandler }          from '../../finance/economic-regimes/yield-curve-tick-handler.js';
+import { EquityReturnReducer }            from '../../finance/economic-regimes/equity-return-reducer.js';
+import { EquityReturnStepReducer }        from '../../finance/economic-regimes/equity-return-step-reducer.js';
+import { EquityReturnTickHandler }        from '../../finance/economic-regimes/equity-return-tick-handler.js';
 import { shapeDelta }                     from '../../finance/economic-regimes/yield-curve.js';
 import { EconomicShockHandler }           from '../../finance/economic-regimes/economic-shock-handler.js';
 import { EconomicRecoveryTickHandler }    from '../../finance/economic-regimes/economic-recovery-tick-handler.js';
+import { FX_PROCESS_MODEL_IDS }           from '../../finance/fx/fx-process-models.js';
 import { SHOCK_LIBRARY, SHOCK_PRESET_OPTIONS } from '../../finance/economic-shocks/shock-library.js';
 import { BEHAVIORAL_STRATEGY_REGISTRY }       from '../../finance/behavioral/behavioral-strategy-registry.js';
 
@@ -401,12 +405,13 @@ export const ECONOMIC_REGIMES = {
   dependencies: [],
 
   types: {
-    handlers: [EconomicShockHandler, EconomicRecoveryTickHandler, YieldCurveTickHandler],
-    reducers: [RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, YieldCurveReducer, YieldCurveStepReducer, BondPriceAdjustReducer, BondMaturityReducer],
+    handlers: [EconomicShockHandler, EconomicRecoveryTickHandler, YieldCurveTickHandler, EquityReturnTickHandler],
+    reducers: [RegimeApplyReducer, PrimeRelinkReducer, AddRegimeReducer, RemoveRegimeReducer, RevalueAssetReducer, YieldCurveReducer, YieldCurveStepReducer, EquityReturnReducer, EquityReturnStepReducer, BondPriceAdjustReducer, BondMaturityReducer],
     actions: [
       { type: 'ADD_REGIME_APPLY',    fields: { regime: ValueType.any() } },
       { type: 'REMOVE_REGIME_APPLY', fields: { regimeId: ValueType.text() } },
       { type: 'YIELD_CURVE_STEP_APPLY', fields: { country: ValueType.text(), deviation: ValueType.number() } },
+      { type: 'EQUITY_RETURN_STEP_APPLY', fields: { marketDev: ValueType.number(), deviation: ValueType.any() } },
       {
         type: 'REVALUE_ASSET_APPLY',
         fields: {
@@ -552,6 +557,57 @@ export const ECONOMIC_REGIMES = {
         description:  'Ornstein-Uhlenbeck pull-back speed per year toward the anchor level. Higher ⇒ the level snaps back faster. Only used when Stochastic Yield Curve is on.',
       },
       {
+        key:          'equityReturnStochastic',
+        label:        'Stochastic Equity Returns',
+        type:         'Boolean',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: false,
+        description:  'When on (design 74), each year draws its own equity return from a seeded process instead of holding one constant rate for the whole run — so Monte Carlo measures sequence-of-returns risk, not just uncertainty about the long-run average. One shared market factor drives every equity sleeve (via per-sleeve beta), so systematic risk survives portfolio aggregation. Off by default ⇒ no randomness drawn, runs stay byte-identical. Reproducible: the rng cursor is snapshot-safe. NOTE (Phase 1): the anchor is treated as an ARITHMETIC mean, so turning this on lowers the realized geometric return by ≈σ²/2 (volatility drag). Geometric drift compensation is design 74 Phase 3.',
+      },
+      {
+        key:          'equityReturnVol',
+        label:        'Equity Return Volatility',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: 0.18,
+        description:  'Annualized standard deviation (in rate units, e.g. 0.18 = 18%) of the shared equity MARKET factor. Each sleeve scales this by its beta (US large-cap 1.0; AU stock 0.9; super 0.7 by default). Only used when Stochastic Equity Returns is on.',
+      },
+      {
+        key:          'equityReturnModel',
+        label:        'Equity Return Process Model',
+        type:         'Enum',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        options:      FX_PROCESS_MODEL_IDS,
+        defaultValue: 'WHITE_NOISE',
+        description:  'Process for the market factor. WHITE_NOISE (default) draws an independent shock each year — equity returns are close to IID. MEAN_REVERTING (Ornstein-Uhlenbeck) imposes some year-to-year predictability for a valuation-based view; not the default because the evidence does not support it. Only used when Stochastic Equity Returns is on.',
+      },
+      {
+        key:          'equityReturnBeta',
+        label:        'Equity Return Betas',
+        type:         'Object',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: null,
+        description:  'Optional per-sleeve override of each equity sleeve\'s loading on the market factor, keyed by rate key (EQUITY_US_ROTH, EQUITY_AU_SUPER, …). Absent keys fall back to the defaults (US 1.0 / AU stock 0.9 / super 0.7). Only used when Stochastic Equity Returns is on.',
+      },
+      {
+        key:          'equityReturnIdioVol',
+        label:        'Equity Return Idiosyncratic Volatility',
+        type:         'Object',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        defaultValue: null,
+        description:  'Optional per-sleeve idiosyncratic (sleeve-specific) return sd, keyed by rate key. Adds independent noise on top of the shared market factor so sleeves are not perfectly correlated. Absent ⇒ 0 (pure single-factor). Only used when Stochastic Equity Returns is on.',
+      },
+      {
         key:          'behavioralStrategies',
         label:        'Behavioral Strategies',
         type:         'EnumMulti',
@@ -600,6 +656,11 @@ export const ECONOMIC_REGIMES = {
       // Stochastic level deviation per country (design 67 §6, Phase 3). Mean-0 OU walk
       // seeded at 0; stays 0 (and thus a no-op) unless `yieldCurveStochastic` is on.
       yieldCurveLevelDev:          { US: 0, AU: 0 },
+      // Stochastic equity return path (design 74 §5.1). Per-sleeve applied deviation +
+      // the shared market factor, both seeded empty/0 so EquityReturnReducer no-ops and
+      // runs stay byte-identical unless `equityReturnStochastic` is on.
+      equityReturnDev:             {},
+      equityReturnMarketDev:       0,
       priorMarkRates:              {},
       priorMarkCurve:              {},
     };
@@ -634,6 +695,20 @@ export const ECONOMIC_REGIMES = {
         startOffset: 1,
         enabled:  true,
         color:    '#7E57C2',
+      }));
+    }
+
+    // Optional stochastic equity return path (design 74 §5.1) — an annual tick series
+    // that drives the seeded-RNG market-factor draw. Scheduled only when on, so default
+    // runs draw no randomness and stay byte-identical.
+    if (p.equityReturnStochastic) {
+      events.push(new EventSeries({
+        name:     'Equity Return Tick',
+        type:     'EQUITY_RETURN_TICK',
+        interval: 'year-end',
+        startOffset: 1,
+        enabled:  true,
+        color:    '#EF5350',
       }));
     }
 
@@ -679,6 +754,16 @@ export const ECONOMIC_REGIMES = {
       ...(p.yieldCurveStochastic
         ? [new YieldCurveTickHandler({ vol: p.yieldCurveVol ?? 0.01, reversionSpeed: p.yieldCurveReversionSpeed ?? 0.3 })]
         : []),
+      // Stochastic equity return path (design 74 §5.1) — only when on, so the sim.rng is
+      // untouched otherwise and runs stay byte-identical.
+      ...(p.equityReturnStochastic
+        ? [new EquityReturnTickHandler({
+            vol:            p.equityReturnVol   ?? 0.18,
+            model:          p.equityReturnModel ?? 'WHITE_NOISE',
+            beta:           p.equityReturnBeta    ?? {},
+            idioVol:        p.equityReturnIdioVol ?? {},
+          })]
+        : []),
       ...behavioralHandlers,
     ];
   },
@@ -694,6 +779,8 @@ export const ECONOMIC_REGIMES = {
       new RevalueAssetReducer(),
       new YieldCurveReducer(),      // design 67 §6 — composes twists + folds stochastic level (11.5, before the mark)
       new YieldCurveStepReducer(),  // design 67 §6 — stores the stochastic level deviation
+      new EquityReturnReducer(),    // design 74 §5.1 — folds the stochastic equity path onto effective growth (11.5)
+      new EquityReturnStepReducer(),// design 74 §5.1 — stores the per-sleeve equity deviation
       new BondPriceAdjustReducer(),
       new BondMaturityReducer(),
       ...behavioralReducers,
