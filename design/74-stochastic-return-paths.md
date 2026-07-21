@@ -1,8 +1,27 @@
 # 74 — Stochastic return paths: from one constant rate per run to sequence-of-returns risk
 
-**Status**: **PHASE 1 IMPLEMENTED** (2026-07-21). Phase 1 (§5.1) built + green
-(3845 unit / 906 viz, JOURNAL_STRICT on) on `wip/stochastic-return-modeling`. Phases 2–4
-(MC integration, drift compensation, decision re-run) remain PROPOSED.
+**Status**: **PHASES 1–2 IMPLEMENTED** (2026-07-21). Phase 1 (§5.1, committed) + Phase 2
+(§5.2 MC integration) built + green (3857 unit / 906 viz, JOURNAL_STRICT on) on
+`wip/stochastic-return-modeling`. Phases 3–4 (drift compensation, decision re-run) remain
+PROPOSED.
+
+⚠️ **§5.2 correction — the per-iteration seed did NOT already vary.** The design's Phase-2
+premise ("the per-path seed already varies by iteration … no runner change") was **false**:
+`BaseScenario.buildSim()` constructed `new Simulation(…)` with no seed (→ default `seed=1`)
+and the MC runner's `createSimulation: (params) =>` closure **dropped** the `seed` argument
+`ScenarioRunner` passed it. Proven empirically: with the flag ON and all scalar MC variables
+off, all iterations returned the *identical* net worth — every path drew the same return
+sequence, collapsing sequence-of-returns risk to one ordering. **Phase 2 fixes this**:
+`buildSim({ seed })` threads the seed into `Simulation`, and the runner passes the iteration
+index. Single runs (seed defaults to 1) and flag-off MC (no `sim.rng` consumers) are
+unchanged; golden untouched (3857/906 green). This was the load-bearing part of Phase 2.
+
+**Phase 2 surface**: seed threading (`base-scenario.js`, `intl-retirement-mc-runner.js`);
+`equityReturnVol` exposed as an opt-in MC variable (`mc:true` on the schema param, new
+'Return Paths' MC group so the shock-row count tests stay meaningful); `computePathShape()`
+per-run diagnostics (netWorthCagr / worst5yrCagr / maxDrawdown / decadeNetWorthUsd) +
+`summary.pathShape` sequence-risk readout (failure rate split by below-/above-median first
+decade). Tests: `tests/unit/equity-return-mc.test.mjs` (12).
 
 **Decisions locked** (owner, 2026-07-21): representation **Option B** (one market factor +
 per-sleeve beta + optional idio); per-sleeve behaviour shipped via **default non-unity betas**
@@ -214,12 +233,18 @@ runs, and across snapshot/restore (JOURNAL_STRICT green).
 ### 5.2 Phase 2 — MC integration
 
 - Expose `equityReturnVol` as an MC variable (and make sure it is **not** silently centred on
-  a library default — see §6.3).
-- The per-path seed already varies by iteration, so turning the flag on gives every MC path
-  its own return sequence with no runner change.
+  a library default). ✅ Done — the MC config centres on the live scenario value
+  (`mean: defaultValue ?? cfg.mean`), disabled by default; `mc:true` on the schema param.
+- ~~The per-path seed already varies by iteration, so turning the flag on gives every MC path
+  its own return sequence with no runner change.~~ **WRONG — see the status-header correction.**
+  The seed was fixed at 1 for every iteration; `buildSim({ seed })` now threads the
+  iteration index so each path draws its own sequence. This was the real work of Phase 2.
 - Add path-shape diagnostics to the MC result: realized geometric mean, worst 5-year window,
   drawdown depth, and **whether the first decade was below median** — the last is the direct
-  sequence-risk readout and the one worth reporting.
+  sequence-risk readout and the one worth reporting. ✅ `computePathShape()` +
+  `summary.pathShape` (see status header). NOTE: only meaningful once the flag is ON and
+  (Phase 3) drift is decided; on the smooth default accumulation scenario `maxDrawdown` is
+  legitimately ~0 because yearly net worth still rises even through negative equity years.
 
 ### 5.3 Phase 3 — the drift decision ⚠️
 

@@ -571,7 +571,7 @@ export const ECONOMIC_REGIMES = {
         label:        'Equity Return Volatility',
         type:         'Number',
         group:        'Economic Shocks',
-        mc:           false,
+        mc:           true,
         opt:          false,
         defaultValue: 0.18,
         description:  'Annualized standard deviation (in rate units, e.g. 0.18 = 18%) of the shared equity MARKET factor. Each sleeve scales this by its beta (US large-cap 1.0; AU stock 0.9; super 0.7 by default). Only used when Stochastic Equity Returns is on.',
