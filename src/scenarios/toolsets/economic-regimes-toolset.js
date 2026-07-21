@@ -411,7 +411,7 @@ export const ECONOMIC_REGIMES = {
       { type: 'ADD_REGIME_APPLY',    fields: { regime: ValueType.any() } },
       { type: 'REMOVE_REGIME_APPLY', fields: { regimeId: ValueType.text() } },
       { type: 'YIELD_CURVE_STEP_APPLY', fields: { country: ValueType.text(), deviation: ValueType.number() } },
-      { type: 'EQUITY_RETURN_STEP_APPLY', fields: { marketDev: ValueType.number(), deviation: ValueType.any() } },
+      { type: 'EQUITY_RETURN_STEP_APPLY', fields: { marketDev: ValueType.number(), deviation: ValueType.any(), driftComp: ValueType.any() } },
       {
         type: 'REVALUE_ASSET_APPLY',
         fields: {
@@ -608,6 +608,17 @@ export const ECONOMIC_REGIMES = {
         description:  'Optional per-sleeve idiosyncratic (sleeve-specific) return sd, keyed by rate key. Adds independent noise on top of the shared market factor so sleeves are not perfectly correlated. Absent ⇒ 0 (pure single-factor). Only used when Stochastic Equity Returns is on.',
       },
       {
+        key:          'equityReturnDriftComp',
+        label:        'Equity Return Drift Compensation',
+        type:         'Enum',
+        group:        'Economic Shocks',
+        mc:           false,
+        opt:          false,
+        options:      ['GEOMETRIC', 'NONE'],
+        defaultValue: 'GEOMETRIC',
+        description:  'How the growth-rate anchor is interpreted once returns are stochastic (design 74 §5.3). Adding a mean-0 shock to a multiplicatively-applied rate lowers the realized geometric (compounded) return by ≈σ²/2. GEOMETRIC (default) adds σ²/2 back per sleeve so the anchor reads as the CAGR you expect to earn and turning volatility on changes only the SPREAD, not the centre. NONE interprets the anchor as an ARITHMETIC mean and leaves the ≈σ²/2 volatility drag in (at σ=0.18 that is ≈−1.6pp/yr). Only used when Stochastic Equity Returns is on.',
+      },
+      {
         key:          'behavioralStrategies',
         label:        'Behavioral Strategies',
         type:         'EnumMulti',
@@ -656,10 +667,12 @@ export const ECONOMIC_REGIMES = {
       // Stochastic level deviation per country (design 67 §6, Phase 3). Mean-0 OU walk
       // seeded at 0; stays 0 (and thus a no-op) unless `yieldCurveStochastic` is on.
       yieldCurveLevelDev:          { US: 0, AU: 0 },
-      // Stochastic equity return path (design 74 §5.1). Per-sleeve applied deviation +
-      // the shared market factor, both seeded empty/0 so EquityReturnReducer no-ops and
-      // runs stay byte-identical unless `equityReturnStochastic` is on.
+      // Stochastic equity return path (design 74 §5.1/§5.3). Per-sleeve mean-0 deviation,
+      // the deterministic σ²/2 drift compensation, and the shared market factor — all
+      // seeded empty/0 so EquityReturnReducer no-ops and runs stay byte-identical unless
+      // `equityReturnStochastic` is on.
       equityReturnDev:             {},
+      equityReturnDriftComp:       {},
       equityReturnMarketDev:       0,
       priorMarkRates:              {},
       priorMarkCurve:              {},
@@ -760,8 +773,9 @@ export const ECONOMIC_REGIMES = {
         ? [new EquityReturnTickHandler({
             vol:            p.equityReturnVol   ?? 0.18,
             model:          p.equityReturnModel ?? 'WHITE_NOISE',
-            beta:           p.equityReturnBeta    ?? {},
-            idioVol:        p.equityReturnIdioVol ?? {},
+            beta:           p.equityReturnBeta      ?? {},
+            idioVol:        p.equityReturnIdioVol   ?? {},
+            driftComp:      p.equityReturnDriftComp ?? 'GEOMETRIC',
           })]
         : []),
       ...behavioralHandlers,

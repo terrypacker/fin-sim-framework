@@ -29,8 +29,12 @@ import { EQUITY_SLEEVES, DEFAULT_EQUITY_BETA } from './rate-keys.js';
  *
  * One market draw drives every sleeve, so the *systematic* risk survives portfolio
  * aggregation (design 74 §4 rejects independent per-sleeve draws — they diversify away
- * the very risk the exercise measures). It emits EQUITY_RETURN_STEP_APPLY so a pure
- * reducer stores the deviations; EquityReturnReducer then folds them onto
+ * the very risk the exercise measures). It emits EQUITY_RETURN_STEP_APPLY carrying the
+ * mean-0 `deviation` AND a separate deterministic `driftComp` term (design 74 §5.3): under
+ * GEOMETRIC (default) each sleeve gets +σ²/2 added back so the anchor reads as the CAGR
+ * the user intends and the flag changes only the spread, not the centre; under NONE the
+ * anchor is an arithmetic mean and the ≈σ²/2 volatility drag is left in. A pure reducer
+ * stores both; EquityReturnReducer folds `deviation + driftComp` onto
  * `effectiveGrowthRates[<sleeve>]` (and its `<sleeve>::<stateKey>` variants) each period.
  *
  * ⚠️ RNG-cursor ordering (design 74 §4). Idiosyncratic draws consume extra uniforms, so
@@ -48,13 +52,14 @@ export class EquityReturnTickHandler extends HandlerEntry {
   static type        = 'EquityReturnTickHandler';
   static eventType   = 'EQUITY_RETURN_TICK';
 
-  constructor({ vol = 0.18, model = 'WHITE_NOISE', reversionSpeed = 0.3, beta = {}, idioVol = {}, dt = 1 } = {}) {
+  constructor({ vol = 0.18, model = 'WHITE_NOISE', reversionSpeed = 0.3, beta = {}, idioVol = {}, driftComp = 'GEOMETRIC', dt = 1 } = {}) {
     super(null, 'Equity Return Tick');
     this.vol                  = vol;             // annualized market-factor sd (rate units)
     this.model                = model;           // one of FX_PROCESS_MODEL_IDS
     this.reversionSpeed       = reversionSpeed;  // OU pull-back speed (MEAN_REVERTING only)
     this.beta                 = beta ?? {};      // per-sleeve override of DEFAULT_EQUITY_BETA
     this.idioVol              = idioVol ?? {};   // per-sleeve idiosyncratic sd; absent ⇒ 0
+    this.driftComp            = driftComp;       // 'GEOMETRIC' (add σ²/2) or 'NONE' (design 74 §5.3)
     this.dt                   = dt;              // tick interval in years (annual)
     this.generatedActionTypes = ['EQUITY_RETURN_STEP_APPLY'];
   }
@@ -62,7 +67,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
   static fromJSON(d) {
     const h = new this({
       vol: d.vol, model: d.model, reversionSpeed: d.reversionSpeed,
-      beta: d.beta, idioVol: d.idioVol, dt: d.dt,
+      beta: d.beta, idioVol: d.idioVol, driftComp: d.driftComp, dt: d.dt,
     });
     h.id = d.id;
     return h;
@@ -72,7 +77,7 @@ export class EquityReturnTickHandler extends HandlerEntry {
     return {
       ...super.toJSON(),
       vol: this.vol, model: this.model, reversionSpeed: this.reversionSpeed,
-      beta: this.beta, idioVol: this.idioVol, dt: this.dt,
+      beta: this.beta, idioVol: this.idioVol, driftComp: this.driftComp, dt: this.dt,
     };
   }
 
@@ -83,7 +88,9 @@ export class EquityReturnTickHandler extends HandlerEntry {
     const zMarket   = gaussianFrom(sim.rng);
     const marketDev = step(prev, { sigma: this.vol, dt: this.dt, k: this.reversionSpeed, z: zMarket });
 
+    const geometric = this.driftComp === 'GEOMETRIC';
     const deviation = {};
+    const driftComp = {};
     for (const sleeve of EQUITY_SLEEVES) {
       const beta    = this.beta[sleeve]    ?? DEFAULT_EQUITY_BETA[sleeve] ?? 1.0;
       const idioVol = this.idioVol[sleeve] ?? 0;
@@ -95,8 +102,20 @@ export class EquityReturnTickHandler extends HandlerEntry {
         dev += idioVol * Math.sqrt(this.dt) * zIdio;
       }
       deviation[sleeve] = dev;
+      // Volatility-drag compensation (design 74 §5.3). Adding a mean-0 shock to a
+      // multiplicatively-applied rate lowers the realized geometric return by ≈σ²/2,
+      // where σ² is the sleeve's annualized return variance (β·σ_market)² + σ_idio².
+      // GEOMETRIC adds it back so the anchor reads as the CAGR the user intends and the
+      // flag changes only the SPREAD, not the centre; NONE interprets the anchor as an
+      // arithmetic mean and leaves the drag in. This is a deterministic, mean-nonzero
+      // term kept SEPARATE from the stochastic deviation so `equityReturnDev` stays
+      // pure mean-0. (Exact for WHITE_NOISE; for MEAN_REVERTING the stationary variance
+      // is lower, so GEOMETRIC slightly over-compensates — an accepted approximation.)
+      driftComp[sleeve] = geometric
+        ? (Math.pow(beta * this.vol, 2) + idioVol * idioVol) / 2
+        : 0;
     }
 
-    return [{ type: 'EQUITY_RETURN_STEP_APPLY', marketDev, deviation }];
+    return [{ type: 'EQUITY_RETURN_STEP_APPLY', marketDev, deviation, driftComp }];
   }
 }

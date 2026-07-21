@@ -231,6 +231,83 @@ describe('EquityReturnReducer', () => {
   });
 });
 
+// ─── §5.3 / §6 test 6: drift compensation (Phase 3) ──────────────────────────────
+
+describe('drift compensation', () => {
+  const ROTH_BETA = DEFAULT_EQUITY_BETA[ROTH];  // 1.0
+
+  test('GEOMETRIC (default) emits driftComp = ((β·σ)² + σ_idio²)/2 per sleeve', () => {
+    const vol = 0.18;
+    const h = new EquityReturnTickHandler({ vol, idioVol: { [SUPER]: 0.1 } });
+    const { driftComp } = h.call({ sim: { rng: mkRng() }, state: {} })[0];
+    // ROTH: β 1.0, no idio ⇒ (1.0·0.18)²/2 = 0.0162.
+    assert.ok(Math.abs(driftComp[ROTH] - (Math.pow(ROTH_BETA * vol, 2)) / 2) < 1e-12);
+    // SUPER: β 0.7, idio 0.1 ⇒ ((0.7·0.18)² + 0.1²)/2.
+    const expSuper = (Math.pow(DEFAULT_EQUITY_BETA[SUPER] * vol, 2) + 0.1 * 0.1) / 2;
+    assert.ok(Math.abs(driftComp[SUPER] - expSuper) < 1e-12);
+  });
+
+  test('NONE emits zero driftComp for every sleeve', () => {
+    const h = new EquityReturnTickHandler({ vol: 0.18, driftComp: 'NONE' });
+    const { driftComp } = h.call({ sim: { rng: mkRng() }, state: {} })[0];
+    for (const s of EQUITY_SLEEVES) assert.equal(driftComp[s], 0);
+  });
+
+  test('driftComp is deterministic — does NOT consume the RNG (cursor unadvanced)', () => {
+    // Same market draw ⇒ same deviation regardless of driftComp mode; comp is config-only.
+    const g = new EquityReturnTickHandler({ vol: 0.18, driftComp: 'GEOMETRIC' }).call({ sim: { rng: mkRng(9) }, state: {} })[0];
+    const n = new EquityReturnTickHandler({ vol: 0.18, driftComp: 'NONE' }).call({ sim: { rng: mkRng(9) }, state: {} })[0];
+    assert.deepEqual(g.deviation, n.deviation);
+    assert.equal(g.marketDev, n.marketDev);
+  });
+
+  test('the fold applies deviation + driftComp together', () => {
+    const reducer = new EquityReturnReducer();
+    const st = {
+      effectiveGrowthRates: { [ROTH]: 0.10 },
+      equityReturnDev:       { [ROTH]: -0.05 },
+      equityReturnDriftComp: { [ROTH]: 0.0162 },
+    };
+    const next = reducer.reduce(st, { type: 'US_PERIOD_ADVANCE' });
+    // 0.10 + (−0.05 + 0.0162) = 0.0662.
+    assert.ok(Math.abs(next.effectiveGrowthRates[ROTH] - 0.0662) < 1e-12);
+  });
+
+  test('driftComp alone (dev all-zero) still folds — a nonzero comp is not a no-op', () => {
+    const reducer = new EquityReturnReducer();
+    const st = {
+      effectiveGrowthRates: { [ROTH]: 0.10 },
+      equityReturnDev:       { [ROTH]: 0 },
+      equityReturnDriftComp: { [ROTH]: 0.0162 },
+    };
+    const next = reducer.reduce(st, { type: 'US_PERIOD_ADVANCE' });
+    assert.ok(Math.abs(next.effectiveGrowthRates[ROTH] - 0.1162) < 1e-12);
+  });
+
+  // §6 test 6: the realized geometric mean over a long horizon.
+  test('realized geometric mean ≈ anchor under GEOMETRIC, ≈ anchor − σ²/2 under NONE', () => {
+    const anchor = 0.10, vol = 0.18, N = 40000;
+    const realizedGeo = (mode) => {
+      const h = new EquityReturnTickHandler({ vol, driftComp: mode });
+      const rng = mkRng(2026);
+      let sumLog = 0;
+      for (let i = 0; i < N; i++) {
+        const o = h.call({ sim: { rng }, state: {} })[0];               // ROTH: β 1.0, idio 0
+        const r = anchor + o.deviation[ROTH] + o.driftComp[ROTH];
+        sumLog += Math.log(1 + r);
+      }
+      return Math.exp(sumLog / N) - 1;
+    };
+    const geoNone = realizedGeo('NONE');
+    const geoGeom = realizedGeo('GEOMETRIC');
+    // NONE leaves the ≈σ²/2 drag in; GEOMETRIC adds it back.
+    assert.ok(geoNone < anchor - 0.01, `NONE should show drag, got ${geoNone}`);
+    assert.ok(Math.abs(geoNone - (anchor - vol * vol / 2)) < 0.004, `NONE ≈ anchor−σ²/2, got ${geoNone}`);
+    assert.ok(Math.abs(geoGeom - anchor) < 0.004, `GEOMETRIC ≈ anchor, got ${geoGeom}`);
+    assert.ok(Math.abs(geoGeom - anchor) < Math.abs(geoNone - anchor), 'GEOMETRIC must be closer to the anchor than NONE');
+  });
+});
+
 // ─── e2e: inertness + determinism ────────────────────────────────────────────────
 
 describe('stochastic equity — e2e', () => {

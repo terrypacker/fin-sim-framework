@@ -1,9 +1,22 @@
 # 74 — Stochastic return paths: from one constant rate per run to sequence-of-returns risk
 
-**Status**: **PHASES 1–2 IMPLEMENTED** (2026-07-21). Phase 1 (§5.1, committed) + Phase 2
-(§5.2 MC integration) built + green (3857 unit / 906 viz, JOURNAL_STRICT on) on
-`wip/stochastic-return-modeling`. Phases 3–4 (drift compensation, decision re-run) remain
-PROPOSED.
+**Status**: **PHASES 1–3 IMPLEMENTED** (2026-07-21). Phase 1 (§5.1) + Phase 2 (§5.2 MC,
+both committed) + Phase 3 (§5.3 drift compensation) built + green (3863 unit / 906 viz,
+JOURNAL_STRICT on) on `wip/stochastic-return-modeling`. Only Phase 4 (decision re-run)
+remains PROPOSED.
+
+**Phase 3 surface**: new `equityReturnDriftComp` param (`Enum` GEOMETRIC | NONE, default
+**GEOMETRIC** per §8 Q2). The handler emits a per-sleeve deterministic `driftComp` term
+**separate** from the mean-0 `deviation` — under GEOMETRIC `driftComp = ((β·σ)² + σ_idio²)/2`
+(the sleeve's annualized return variance ÷ 2), under NONE it is 0. It is config-only (draws
+no RNG). `EquityReturnStepReducer` stores `state.equityReturnDriftComp`; `EquityReturnReducer`
+folds `deviation + driftComp` together. Keeping comp separate leaves `equityReturnDev` pure
+mean-0 (telemetry + Phase-1 tests unchanged). Validated (§6 test 6): at anchor 10% / σ 18%,
+realized geometric mean is **10.07%** under GEOMETRIC vs **8.43%** under NONE (≈ anchor − σ²/2);
+`driftComp` is exactly σ²/2 = 0.0162. End-to-end MC (24-yr): GEOMETRIC median net worth
+$23.8M vs NONE $20.3M. Exact for WHITE_NOISE; slightly over-compensates for MEAN_REVERTING
+(lower stationary variance) — documented, accepted. Tests: 6 added to
+`equity-return-paths.test.mjs`.
 
 ⚠️ **§5.2 correction — the per-iteration seed did NOT already vary.** The design's Phase-2
 premise ("the per-path seed already varies by iteration … no runner change") was **false**:
@@ -261,6 +274,11 @@ Three options:
 | **NONE** (no compensation) | anchor 10% ⇒ realized geometric ≈ 8.4% | The anchor is interpreted as an **arithmetic** mean. Volatility drag is real and currently missing; this is a *correction*, not a regression. |
 | **GEOMETRIC** | add `σ²/2` to the anchor so realized geometric ≈ 10% | The anchor is interpreted as the **geometric/CAGR** return the user believes they will earn. Turning volatility on then changes only the *spread*, not the centre. |
 | **DOCUMENTED** | no compensation, but surface realized geometric mean in the UI/MC output | Honest, but leaves the user to reconcile the shift. |
+
+**✅ IMPLEMENTED: `GEOMETRIC` default, `NONE` available** (`equityReturnDriftComp` param).
+Realized geometric mean at anchor 10% / σ 18% = 10.07% (GEOMETRIC) vs 8.43% (NONE). The comp
+is emitted per sleeve as a deterministic term separate from the stochastic deviation and folds
+alongside it; it is exact for WHITE_NOISE and slightly over-compensates for MEAN_REVERTING.
 
 **Recommendation: `GEOMETRIC` as the default, `NONE` available.** Rationale: when a user
 types "10%" into a growth-rate field they almost certainly mean "I expect to earn 10% a
