@@ -59,6 +59,17 @@ export class ReportDefinition {
   periodTypeFor(_params) { return null; }
 
   /**
+   * The jurisdiction a year-keyed report's `year` belongs to, for reports whose
+   * cc is implicit rather than faceted. Exports use it to restate an AU year as
+   * the fiscal-year START year the AU return is filed under (`2025` = FY2025-26,
+   * the convention the tax documents and the worksheet CSV use), since the
+   * period rollup keys AU years by their END year.
+   *
+   * Null (the default) = US calendar years, where the two agree.
+   */
+  get yearCc() { return null; }
+
+  /**
    * When true, the plugin routes this report through a per-stateDiff JournalDataSource
    * (one row per stateDiff entry).  State-centric reports like cash-flow-by-account set this.
    */
@@ -225,7 +236,22 @@ class OrdinaryIncomeBySourceDef extends ReportDefinition {
     const incomeField = cc === 'AU' ? 'auOrdinaryIncomeYTD' : 'usOrdinaryIncomeYTD';
     const conditions  = [
       periodAst,
-      { op: 'eq',  field: 'stateKey', value: incomeField },
+      // AU ordinary income accrues into TWO places: the shared household pool and
+      // the per-person `auPersonOrdinaryIncomeYTD` map that migrated income types
+      // (rental, savings) write to directly. computeAuTaxPerPerson assesses
+      // `perPersonMap[key] + shared / numResidents`, so the return's gross line is
+      // the union — drilling the pool alone reported ZERO for every year before the
+      // move, when all AU income was per-person. Union them (design 73 §0.5, the
+      // same fix Gap 2 made for NR withholding). The map diffs per key, so each
+      // person's contribution carries its own numeric delta; the US side has no
+      // per-person map, making the extra predicate inert there.
+      {
+        op: 'or',
+        conditions: [
+          { op: 'eq',       field: 'stateKey', value: incomeField          },
+          { op: 'contains', field: 'stateKey', value: `${cc.toLowerCase()}PersonOrdinaryIncomeYTD.` },
+        ],
+      },
       // Exclude the annual settle, whose diff resets the accumulator to 0 (a large
       // negative delta that would cancel the gross income total).
       { op: 'not', condition: { op: 'eq', field: 'actionType', value: `${cc}_TAX_SETTLE_APPLY` } },
@@ -352,13 +378,27 @@ class NiitBaseByComponentDef extends ReportDefinition {
 class CapitalGainsByDisposalDef extends ReportDefinition {
   get id()          { return 'capital-gains-by-disposal'; }
   get title()       { return 'Capital Gains by Disposal'; }
-  get description() { return 'Realized capital gains from asset sales during the period.'; }
+  get description() {
+    return 'Realized capital gains from asset sales during the period. `total` is each disposal\'s '
+         + 'assessed contribution to the jurisdiction\'s capital-gains accumulator — for an AU '
+         + 'return on a US asset that is the AUD-converted figure, not the USD contract gain. '
+         + '`proceeds` is the disposal\'s native-currency contract amount and is informational only, '
+         + 'so on a cross-border row it is NOT in the same currency as `total`.';
+  }
 
-  // Each disposal action is journaled once per reducer that processes it at
-  // TAX_CALC (dynamic:US, state:classify, dynamic:AU) — all three rows carry the
-  // same `gain` payload. Dedupe by instanceId so summing `gain`/`proceeds` and
-  // the disposal count reflect distinct disposals, not the reducer fan-out.
-  get dedupeBy() { return 'instanceId'; }
+  // design 51/73 §0b.1: sum each disposal's *contribution* to the jurisdiction's
+  // capital-gains accumulator (its stateDelta) rather than the action's native
+  // `gain` payload. A US-asset disposal assessed on an AU return accrues the
+  // AUD-converted gain, while the payload stays in USD — summing the payload
+  // under-reported the AU line by the exchange rate, and by a growing margin as
+  // the rate moved. Same fix ordinary-income-by-source already carries.
+  get perDiff() { return true; }
+
+  // NOT dedupeBy: the accumulator predicate below already selects exactly one
+  // diff row per disposal per jurisdiction (the US accumulator only appears on
+  // the US reducer's entry, the AU one on the AU reducer's), so the reducer
+  // fan-out is gone by construction. Deduping on top of that would DROP the
+  // per-person leg when a disposal writes both the shared and per-person maps.
 
   get facets() {
     return [
@@ -371,41 +411,42 @@ class CapitalGainsByDisposalDef extends ReportDefinition {
   get defaultGroupBy()    { return ['actionType', 'description']; }
   get defaultAggregates() {
     return {
-      // `total` is the headline / sort key — it must be the realized gain so the
-      // report ties out to the tax document's "Capital Gains (before discount)"
-      // line (= us/auCapitalGainsYTD). Proceeds is a secondary, informational
-      // column and is null on gain-only disposal types (company/collectible sales).
-      total:    { fn: 'sum', field: 'gain'     },
-      proceeds: { fn: 'sum', field: 'proceeds' },
-      count:    { fn: 'count'                  },
+      // `total` is the headline / sort key — the assessed gain, so the report
+      // ties out to the tax document's "Capital Gains (before discount)" line
+      // (= us/auCapitalGainsYTD) in the currency that line is stated in.
+      total:    { fn: 'sum', field: 'stateDelta' },
+      proceeds: { fn: 'sum', field: 'proceeds'   },
+      count:    { fn: 'count'                    },
     };
   }
 
   buildQuery(params, api) {
     const { cc, period, personKeys } = params;
-    const periodAst = api.periodOf(period);
-    // Capital gains reach a jurisdiction's YTD total from disposals across BOTH
-    // ccs, not just the action's own cc — a US-asset sale realized while
-    // AU-resident feeds auCapitalGainsYTD as well (see us-tax-module-2026). So
-    // union the whole CAPITAL_GAINS family rather than scoping familyTypes by cc;
-    // the residency predicate below carves out the jurisdiction-specific slice.
-    //
-    // No numeric proceeds/gain filter: membership in the CAPITAL_GAINS family
-    // already restricts to realized-disposal tax actions (each carries a `gain`),
-    // and dropping the filter lets harvest *losses* through so the summed gain
-    // matches the signed YTD accumulator exactly.
-    const actionTypes = api.familyTypes('CAPITAL_GAINS');
-    const conditions  = [
+    const periodAst  = api.periodOf(period);
+    const gainsField = cc === 'AU' ? 'auCapitalGainsYTD' : 'usCapitalGainsYTD';
+    const conditions = [
       periodAst,
-      { op: 'in', field: 'actionType', value: actionTypes },
+      // The accumulator IS the line, so selecting contributions to it is exact
+      // where the old action-family + `residency === 'AU'` approximation was not.
+      // It needs no residency predicate: a non-resident AU disposal routes to NR
+      // withholding and never touches auCapitalGainsYTD, so it drops out on its
+      // own — and a mid-year move, where the residency tag and the assessing
+      // jurisdiction disagree, now lands on whichever side actually assessed it.
+      // Losses come through as negative deltas, matching the signed accumulator.
+      {
+        op: 'or',
+        conditions: [
+          { op: 'eq',       field: 'stateKey', value: gainsField },
+          // Per-person capital-gains maps, assessed alongside the shared pool by
+          // computeAuTaxPerPerson (design 73 §0.5). Inert until an income type
+          // migrates to them; unioned so it cannot silently under-foot when one does.
+          { op: 'contains', field: 'stateKey', value: `${cc.toLowerCase()}PersonCapitalGainsYTD.` },
+        ],
+      },
+      // Exclude the annual settle, whose diff resets the accumulator to 0 (a large
+      // negative delta that would cancel the total).
+      { op: 'not', condition: { op: 'eq', field: 'actionType', value: `${cc}_TAX_SETTLE_APPLY` } },
     ];
-    // The AU capital-gains line is resident-only: non-resident disposals route to
-    // NR withholding (auNonResidentWithholdingYTD), never auCapitalGainsYTD. The
-    // US line, by contrast, accrues every disposal regardless of residency, so it
-    // takes no residency predicate.
-    if (cc === 'AU') {
-      conditions.push({ op: 'eq', field: 'residency', value: 'AU' });
-    }
     _appendInFilter(conditions, 'personKey', personKeys);
     return { op: 'and', conditions };
   }
@@ -658,6 +699,16 @@ class AuTaxByPersonYearDef extends ReportDefinition {
   get title()       { return 'AU Tax by Person & Year'; }
   get description() { return 'AU tax liability per person per year, fanned out from TAX_SETTLE_APPLY.personTaxDetails.'; }
   get perPerson()   { return true; }
+  // Implicitly AU — the report has no cc facet, but its years are AU fiscal ones.
+  get yearCc()      { return 'AU'; }
+
+  // AU_TAX_SETTLE_APPLY is journaled once per reducer that consumes it (the
+  // settle reducer and AccumulateTaxesPaidReducer), and the per-person
+  // projection fans each of those out again per person — so without deduping,
+  // every person's liability is summed once per reducer and each one reads as
+  // the household total. Dedupe is per group, and personName is a group key, so
+  // this collapses the reducer fan-out without merging the people.
+  get dedupeBy()    { return 'instanceId'; }
 
   get facets() {
     return [

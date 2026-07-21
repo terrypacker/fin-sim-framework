@@ -55,16 +55,32 @@
  *   --first            If the file holds several scenarios, only export the first.
  *   -h, --help         Show this help.
  *
+ * Drill reports (the journal-backed reports the workbench panel renders):
+ *   --drill-reports <all|id[,id]>
+ *                      Also export drill reports. The panel scopes a report to one
+ *                      period at a time; this stacks every settled year into one file
+ *                      per report with a leading `taxYear` column.
+ *   --drill-out <dir>  Directory for the per-report files. Default ./drill-reports.
+ *   --drill-detail <groups|entries>
+ *                      Row granularity: one row per group per year (default), or one
+ *                      row per contributing journal entry (what the panel downloads).
+ *   --drill-cc <J[,J]> Countries for cc-faceted reports. Default: --cc minus STATE,
+ *                      falling back to US,AU.
+ *   --list-drill-reports  Print every report id + title and exit.
+ *
  * npm:  npm run export:tax -- <file.json> [options]
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join }                   from 'node:path';
 
 import { ServiceRegistry }        from '../src/services/service-registry.js';
 import { BaseScenario }           from '../src/scenarios/base-scenario.js';
 import { ScenarioLoader }         from '../src/scenarios/scenario-loader.js';
 import { IntlRetirementScenario } from '../src/scenarios/intl-retirement-scenario.js';
 import { StateTaxSettleService }  from '../src/finance/tax/state/state-tax-settle-service.js';
+import { ReportDefinitionRegistry } from '../src/finance/journal-reporting/report-definition-registry.js';
+import { exportDrillReports }       from '../src/finance/journal-reporting/drill-report-export.js';
 import {
   buildTaxWorksheetRows,
   toCsv,
@@ -77,6 +93,8 @@ function parseArgs(argv) {
   const opts = {
     file: null, reference: false, cc: ['US'], years: null, state: null,
     schedules: false, to: null, out: null, check: false, first: false, help: false,
+    drillReports: null, drillOut: 'drill-reports', drillDetail: 'groups',
+    drillCc: null, listDrillReports: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -90,6 +108,11 @@ function parseArgs(argv) {
       case '--out':       opts.out = argv[++i]; break;
       case '--check':     opts.check = true; break;
       case '--first':     opts.first = true; break;
+      case '--drill-reports': opts.drillReports = splitList(argv[++i]); break;
+      case '--drill-out':     opts.drillOut     = argv[++i]; break;
+      case '--drill-detail':  opts.drillDetail  = String(argv[++i] ?? '').toLowerCase(); break;
+      case '--drill-cc':      opts.drillCc      = splitList(argv[++i]).map(s => s.toUpperCase()); break;
+      case '--list-drill-reports': opts.listDrillReports = true; break;
       case '-h': case '--help': opts.help = true; break;
       default:
         if (a.startsWith('-')) { console.error(`Unknown option: ${a}`); process.exit(2); }
@@ -121,7 +144,14 @@ Options:
   --out <path>       Write to a file instead of stdout.
   --check            Verify the design 71 §6 footing invariants; non-zero exit on failure.
   --first            Only export the first scenario if the file holds several.
-  -h, --help         Show this help.`;
+  -h, --help         Show this help.
+
+Drill reports (journal-backed reports, all years stacked into one file each):
+  --drill-reports <all|id[,id]>   Export drill reports alongside the worksheet.
+  --drill-out <dir>               Output directory (default ./drill-reports).
+  --drill-detail <groups|entries> One row per group per year (default) or per entry.
+  --drill-cc <J[,J]>              Countries for cc-faceted reports (default: --cc, US,AU).
+  --list-drill-reports            List every report id + title and exit.`;
 
 // ─── Running ──────────────────────────────────────────────────────────────────
 
@@ -146,7 +176,14 @@ function runReference(endDate, residencyState = null) {
   const restore = silenceConsole();
   try { scenario.sim.stepTo(endDate ?? scenario.simEnd); }
   finally { restore(); }
-  return { journal: scenario.sim.journal.journal, name: 'IntlRetirementScenario (reference)' };
+  return {
+    journal:  scenario.sim.journal.journal,
+    // Drill reports query the Journal object itself (seq/stateDiff live there,
+    // not on the flat entry list the worksheet exporter consumes).
+    journalObj: scenario.sim.journal,
+    services: ServiceRegistry.getInstance(),
+    name:     'IntlRetirementScenario (reference)',
+  };
 }
 
 /** Load + run one exported scenario config; return its journal entries. */
@@ -164,16 +201,96 @@ function runConfig(cfg, endDate) {
   const restore = silenceConsole();
   try { scenario.sim.stepTo(endDate ?? new Date(cfg.simEnd)); }
   finally { restore(); }
-  return { journal: scenario.sim.journal.journal, name: cfg.name ?? '(unnamed)' };
+  return {
+    journal:    scenario.sim.journal.journal,
+    journalObj: scenario.sim.journal,
+    services,
+    name:       cfg.name ?? '(unnamed)',
+  };
+}
+
+// ─── Drill reports ────────────────────────────────────────────────────────────
+
+/**
+ * Export the requested drill reports for every run, one CSV per report plus a
+ * `_manifest.csv` naming what was written. The manifest is the fast way to spot
+ * a report that came back empty — an empty file would otherwise look like a
+ * report with nothing to say rather than one whose facets found no rows.
+ *
+ * With several scenarios in one file each run gets its own subdirectory, since
+ * the report ids collide.
+ */
+async function writeDrillReports(runs, opts) {
+  const registry  = new ReportDefinitionRegistry();
+  const requested = opts.drillReports.includes('all') ? null : opts.drillReports;
+
+  if (requested) {
+    const unknown = requested.filter(id => !registry.get(id));
+    if (unknown.length) {
+      console.error(`Unknown drill report id(s): ${unknown.join(', ')}.`
+        + ' Run --list-drill-reports to see the available ids.');
+      process.exit(2);
+    }
+  }
+
+  // STATE is a US return, not a country the reports are faceted by.
+  const ccs = (opts.drillCc ?? opts.cc.filter(c => c !== 'STATE'));
+  const drillCcs = ccs.length ? ccs : ['US', 'AU'];
+
+  for (let i = 0; i < runs.length; i++) {
+    const run = runs[i];
+    const dir = runs.length > 1 ? join(opts.drillOut, `run-${i + 1}`) : opts.drillOut;
+    mkdirSync(dir, { recursive: true });
+
+    const exported = await exportDrillReports({
+      journal:   run.journalObj,
+      registry,
+      services:  run.services,
+      reportIds: requested,
+      ccs:       drillCcs,
+      detail:    opts.drillDetail,
+    });
+
+    const manifest = [['report', 'title', 'mode', 'cc', 'years', 'rows', 'file'].join(',')];
+    let written = 0;
+    for (const r of exported) {
+      if (!r.rowCount) {
+        console.error(`  (empty) ${r.id} — no rows for ${drillCcs.join(',')}`);
+        manifest.push([r.id, `"${r.title}"`, r.mode, r.cc, '', 0, ''].join(','));
+        continue;
+      }
+      const file = `${r.id}.csv`;
+      writeFileSync(join(dir, file), r.csv + '\n');
+      manifest.push([r.id, `"${r.title}"`, r.mode, r.cc, r.years, r.rowCount, file].join(','));
+      written++;
+    }
+    writeFileSync(join(dir, '_manifest.csv'), manifest.join('\n') + '\n');
+    console.error(`Wrote ${written} drill report(s) (${opts.drillDetail}) to ${dir}/`
+      + ` for ${run.name}`);
+  }
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-function main() {
+async function main() {
   const opts = parseArgs(process.argv.slice(2));
+
+  // Listing needs no scenario — answer it before demanding an input.
+  if (opts.listDrillReports) {
+    for (const def of new ReportDefinitionRegistry().getAll()) {
+      console.log(`${def.id.padEnd(34)} ${def.title}`);
+    }
+    return;
+  }
+
   if (opts.help || (!opts.file && !opts.reference)) {
     console.log(HELP);
     process.exit(opts.help ? 0 : 1);
+  }
+
+  if (!['groups', 'entries'].includes(opts.drillDetail)) {
+    console.error(`--drill-detail must be 'groups' or 'entries' (got '${opts.drillDetail}').`);
+    process.exit(2);
   }
 
   const endDate = opts.to ? new Date(opts.to) : null;
@@ -217,16 +334,22 @@ function main() {
       console.error('For STATE rows the primary person needs a residencyState:'
         + ' pass --state NE|HI|SD with --reference, or set it in the scenario config.');
     }
-    process.exit(1);
+    // Drill reports are computed from the journal independently of the worksheet,
+    // so an empty worksheet is no reason to skip them when they were asked for.
+    if (!opts.drillReports) process.exit(1);
   }
 
-  const csv = toCsv(rows);
-  if (opts.out) {
-    writeFileSync(opts.out, csv + '\n');
-    console.error(`Wrote ${rows.length} rows to ${opts.out}`);
-  } else {
-    process.stdout.write(csv + '\n');
+  if (rows.length) {
+    const csv = toCsv(rows);
+    if (opts.out) {
+      writeFileSync(opts.out, csv + '\n');
+      console.error(`Wrote ${rows.length} rows to ${opts.out}`);
+    } else {
+      process.stdout.write(csv + '\n');
+    }
   }
+
+  if (opts.drillReports) await writeDrillReports(runs, opts);
 
   if (opts.check) {
     const { failures, reconciled, years } = verifyWorksheetRows(rows);
@@ -240,4 +363,4 @@ function main() {
   }
 }
 
-main();
+await main();

@@ -16,9 +16,9 @@
 
 import { WorkbenchComponent }          from '../../component.js';
 import { WB_EVENTS }                   from '../../workbench-runtime.js';
-import { JournalDataSource }           from '../../../../finance/journal-data-source.js';
-import { JournalQueryApi }             from '../../../../finance/journal-query-api.js';
 import { ReportDefinitionRegistry }    from '../../../../finance/journal-reporting/report-definition-registry.js';
+import { createReportApis, runReport } from '../../../../finance/journal-reporting/run-report.js';
+import { generateReportCsv }           from '../../../../finance/journal-reporting/report-csv.js';
 import { ServiceRegistry }             from '../../../../services/service-registry.js';
 
 const _fmt       = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
@@ -223,9 +223,10 @@ export class JournalReportPlugin extends WorkbenchComponent {
     // The schema registry carries the stateKey → display-name map (design 70), so
     // reports can label a group by its account name without touching g.key.
     const schemaRegistry = svc?.schemaRegistry ?? null;
-    this._api       = journal ? new JournalQueryApi(new JournalDataSource(journal),                          typeRegistry, periodService, schemaRegistry) : null;
-    this._diffApi   = journal ? new JournalQueryApi(new JournalDataSource(journal, { perDiff:   true }),     typeRegistry, periodService, schemaRegistry) : null;
-    this._personApi = journal ? new JournalQueryApi(new JournalDataSource(journal, { perPerson: true }),     typeRegistry, periodService, schemaRegistry) : null;
+    this._apis      = createReportApis(journal, { typeRegistry, periodService, schemaRegistry });
+    this._api       = this._apis?.entry  ?? null;
+    this._diffApi   = this._apis?.diff   ?? null;
+    this._personApi = this._apis?.person ?? null;
     this._groups    = [];
     this._grandTotal = null;
     this._expandedKeys.clear();
@@ -265,25 +266,9 @@ export class JournalReportPlugin extends WorkbenchComponent {
     const def = this._registry.get(this._activeReportId);
     if (!def) return;
 
-    const api    = def.perPerson ? this._personApi
-                 : def.perDiff   ? this._diffApi
-                 :                 this._api;
-    const ast        = def.buildQuery(this._facetValues, api);
-    const periodType = def.periodTypeFor?.(this._facetValues) ?? null;
-    const result = periodType && api._periodService
-      ? await api.aggregateByYear({
-          query:      ast,
-          periodType,
-          aggregates: def.defaultAggregates,
-        })
-      : await api.aggregate({
-          query:      ast,
-          groupBy:    def.defaultGroupBy,
-          aggregates: def.defaultAggregates,
-          dedupeBy:   def.dedupeBy,
-        });
+    const result = await runReport(def, this._facetValues, this._apis);
 
-    this._groups     = def.decorate(result.groups, api);
+    this._groups     = result.groups;
     this._grandTotal = result.grandTotal;
 
     if (this._mounted) this._renderResults();
@@ -684,7 +669,7 @@ export class JournalReportPlugin extends WorkbenchComponent {
 
   _downloadCsv() {
     const def = this._activeReportId ? this._registry.get(this._activeReportId) : null;
-    const csv = _generateCsv(this._sortedGroups(), def);
+    const csv = generateReportCsv(this._sortedGroups(), def, { detail: 'entries' });
     if (!csv) return;
 
     const reportTitle = def?.title ?? 'journal-report';
@@ -704,73 +689,6 @@ export class JournalReportPlugin extends WorkbenchComponent {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Flatten groups + their child items into an RFC 4180 CSV string.
- * Each child item becomes one row; group key fields are prepended as columns.
- * When a group has no items, the group summary row is emitted instead.
- */
-function _generateCsv(groups, def) {
-  if (!groups?.length) return '';
-
-  const esc = v => {
-    if (v == null) return '';
-    const s = String(v);
-    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-
-  const groupByFields = def?.defaultGroupBy ?? ['actionType'];
-
-  // Collect rows with dynamic column discovery
-  const rows = [];
-  for (const g of groups) {
-    const keyObj = g.key ?? {};
-
-    if (g.items?.length) {
-      const chronItems = [...g.items].sort((a, b) => {
-        const ta = a.ts ?? (a.date ? new Date(a.date).getTime() : 0);
-        const tb = b.ts ?? (b.date ? new Date(b.date).getTime() : 0);
-        return ta - tb;
-      });
-      for (const item of chronItems) {
-        const row = {};
-        for (const f of groupByFields) row[f] = keyObj[f] ?? null;
-        row.date        = item.date ? new Date(item.date).toISOString().slice(0, 10) : null;
-        row.seq         = item.seq         ?? null;
-        row.executionId = item.executionId ?? null;
-        row.actionType  = item.actionType  ?? null;
-        row.description = item.description ?? null;
-        row.amount      = item.amount      ?? null;
-        row.proceeds    = item.proceeds    ?? null;
-        row.gain        = item.gain        ?? null;
-        row.stateKey    = item.stateKey    ?? null;
-        row.stateDelta  = item.stateDelta  ?? null;
-        rows.push(row);
-      }
-    } else {
-      // Group with no children — emit a summary row.
-      const row = {};
-      for (const f of groupByFields) row[f] = keyObj[f] ?? null;
-      row.count = g.count ?? null;
-      row.total = g.total ?? null;
-      rows.push(row);
-    }
-  }
-
-  if (!rows.length) return '';
-
-  // Dynamic column union
-  const colSet = new Map();
-  for (const row of rows) {
-    for (const k of Object.keys(row)) if (!colSet.has(k)) colSet.set(k, true);
-  }
-  const cols = [...colSet.keys()];
-
-  return [
-    cols.join(','),
-    ...rows.map(row => cols.map(c => esc(row[c])).join(',')),
-  ].join('\n');
-}
 
 function _sortValue(group, field) {
   if (field === 'total') return group.total ?? group.gain ?? 0;

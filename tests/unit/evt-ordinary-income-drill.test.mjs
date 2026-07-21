@@ -170,7 +170,12 @@ test('EVT-DRILL-5: capital-gains-by-disposal report definition exists', () => {
   const def = registry.get('capital-gains-by-disposal');
   assert.ok(def, 'capital-gains-by-disposal should be registered');
   assert.strictEqual(def.id, 'capital-gains-by-disposal');
-  // The headline `total` aggregate sums realized gain so the report ties out to
-  // the tax document's "Capital Gains (before discount)" line (us/auCapitalGainsYTD).
-  assert.strictEqual(def.defaultAggregates.total.field, 'gain', 'headline total should sum the gain field');
+  // The headline `total` sums each disposal's contribution to the jurisdiction's
+  // capital-gains accumulator, so the report ties out to the tax document's
+  // "Capital Gains (before discount)" line (us/auCapitalGainsYTD) in that line's
+  // own currency. Summing the native `gain` payload instead under-reported the AU
+  // line by the exchange rate — design 73 §0b.1.
+  assert.strictEqual(def.defaultAggregates.total.field, 'stateDelta',
+    'headline total should sum the assessed contribution, not the native payload');
+  assert.strictEqual(def.perDiff, true, 'accumulator contributions are per-stateDiff rows');
 });

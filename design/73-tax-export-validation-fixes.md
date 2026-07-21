@@ -69,8 +69,23 @@ path. They need the existing feeders to stop routing assessable income into a wi
 
 ## 0. Fixed in passing  ✅ DONE
 
-Two items were found and fixed during the same validation pass. Recorded here for traceability;
-no further work outstanding.
+Five items were found and fixed during the same validation pass. Recorded here for traceability;
+no further work outstanding on these. Items 3–5 surfaced only once the drill reports could be
+exported across every year at once (design 71 §7.3) and cross-footed against the worksheet lines
+that link to them — none is visible one year at a time. Two further findings from the same pass are
+in §0b, also fixed.
+
+**The cross-foot is the check to re-run.** Every worksheet line carrying a `drillReport` value
+asserts "this report explains this number", which makes it mechanically verifiable: export both
+artifacts, group the drill's `total` by `taxYear`, and compare to the linked line (summing the AU
+per-person rows to the household figure the drill reports). `scripts/crossfoot-drill-reports.mjs`
+(`npm run crossfoot -- <dir> …`) does exactly that against the exported CSVs, without re-running the
+simulation. **All 159 linked US rows and 94 linked AU rows foot.**
+
+The recurring lesson across §0.5, §0b.1 and Gap 2: a drill report must select on the **accumulator
+the return reads**, not on an action's payload or a proxy attribute. The payload is in the
+transaction's native currency and the proxy (residency, action family) only approximates the rule —
+both diverge silently, and neither divergence is visible one year at a time.
 
 1. **The Form 8960 NIIT line had no drill-down.** A reader could see a 3.8% surtax on a base of
    694,183.29 against long-term capital gains of 650,000.00 with no way to account for the
@@ -87,6 +102,106 @@ no further work outstanding.
    first accrual. Fixed via a shared `_numericDelta` helper used by both `MutationTracker.record`
    and `diffStates`; a genuine non-numeric transition still yields `null`. No computed tax figure
    reads `delta`, so nothing moved but the reports.
+
+3. **`au-tax-by-person-year` charged every person the household total.**
+   `AU_TAX_SETTLE_APPLY` is journaled once per reducer that consumes it — the settle reducer and
+   `AccumulateTaxesPaidReducer` — and the `perPerson` projection fans each of those entries out
+   again per person. Summing `personTaxAmount` therefore counted each person's liability once per
+   reducer: with two filers of equal liability, every person read as exactly the household total
+   (Terry 3,306.45 and Jeanne 3,306.45 against a true 1,653.22 each), which looks plausible enough to
+   pass unchallenged. Fixed with `dedupeBy: 'instanceId'` — the same fan-out collapse
+   `capital-gains-by-disposal` already uses; dedupe is per-group and `personName` is a group key,
+   so it undoes the reducer duplication without merging the people. The report now ties to the AU
+   worksheet's per-person Net Tax Liability line. **The panel showed the doubled figure too** —
+   this was never export-only.
+
+4. **The two exports disagreed on what an AU year is.** The worksheet CSV files an AU return under
+   the fiscal-year START year (`2025` = FY2025-26, per `au-tax-document-2026.js`), while the period
+   rollup keys AU years by their END year. Joining a drill file to the worksheet on `taxYear` was
+   therefore off by one for AU — silently, since both artifacts are internally consistent. The
+   drill export now restates AU years to the START year, and a report whose cc is implicit rather
+   than faceted declares its basis via `ReportDefinition.yearCc` (`au-tax-by-person-year` sets
+   `'AU'`). `periodLabel` carries the unambiguous `AU FY 2025–26` alongside it.
+
+5. **`ordinary-income-by-source` explained none of the AU return's gross income before the move.**
+   AU ordinary income accrues into two places: the shared household pool `auOrdinaryIncomeYTD`
+   (dividends, bond coupons, cash-sleeve interest) and the per-person map
+   `auPersonOrdinaryIncomeYTD` that migrated types write straight into (AU rental, AU savings).
+   `computeAuTaxPerPerson` assesses `perPersonMap[key] + shared / numResidents`, so the return's
+   gross line is the **union** — but the drill filtered on the shared pool alone. In the
+   US-resident years all AU income is per-person, so the report was empty against a line of
+   ~12,585 per person; after the move it under-footed by the migrated share (FY2031: 42,423
+   reported against 70,998 assessed). Fixed by unioning `auPersonOrdinaryIncomeYTD.*` into the
+   predicate — the map diffs per key with numeric deltas, so each person's contribution carries
+   its own `stateDelta`, and the US side has no such map, leaving the extra predicate inert.
+   Same defect class as Gap 2, which unioned the household and per-person NR-withholding fields.
+   All 44 years now foot.
+
+---
+
+## 0b. Found by the same cross-foot  ✅ DONE
+
+Both were found by cross-footing every drill report against the worksheet line that links to it
+(the `drillReport` column), across all 44 years at once, and both were **pre-existing and equally
+visible in the workbench panel** — neither is an artifact of the export. Both are now fixed; the
+cross-foot is clean (159 linked US rows, 94 AU).
+
+### 0b.1 `capital-gains-by-disposal` under-reported the AU return by the exchange rate  ✅
+
+The report sums each disposal's native-currency `gain` payload. For a US-asset disposal assessed on
+an AU return, the accumulator the return reads (`auCapitalGainsYTD`) holds the **AUD-normalized**
+figure (design 51), while the payload is USD. The report therefore under-reports the AU
+"Capital Gains (before indexation)" line by the USD→AUD rate — 30 of 44 years disagree, and the
+ratio of assessed to reported converges on the exchange rate itself:
+
+| AU FY | payload `gain` (reported) | accumulator Δ (assessed) | ratio |
+|------|--------------------------|--------------------------|-------|
+| 2031 | 14,683.47 | 9,900.55 | 0.674 |
+| 2032 | 26,751.47 | 30,239.73 | 1.130 |
+| 2033 | 38,694.25 | 50,777.94 | 1.312 |
+| 2034 | 51,675.74 | 72,988.32 | 1.412 |
+| 2035 | 63,200.01 | 92,650.49 | 1.466 |
+| 2036 | 30,474.23 | 45,249.15 | 1.485 |
+
+This was exactly the defect `OrdinaryIncomeBySourceDef` had already fixed for income by summing
+`stateDelta` instead of the native `amount`. **The US report was unaffected and footed in all 44
+years** (native currency is USD there), which is why it went unnoticed.
+
+**Fix — select on the accumulator, which *is* the line.** `CapitalGainsByDisposalDef` becomes
+`perDiff` and sums each disposal's `stateDelta` into `us/auCapitalGainsYTD` (unioned with the
+per-person maps, inert today but assessed by `computeAuTaxPerPerson`), excluding the settle's reset
+leg. Three things fall out of that:
+
+- The **`residency === 'AU'` predicate is gone.** It was approximating "what the AU return
+  assesses"; the accumulator states it exactly. A non-resident disposal routes to NR withholding and
+  never touches `auCapitalGainsYTD`, so it drops out on its own.
+- **FY2031's inverted ratio (0.674) was that approximation failing** in the move year, where the
+  residency tag and the assessing jurisdiction disagree. Selecting on the accumulator resolves it —
+  it was not a separate defect after all.
+- **`dedupeBy` is removed and must stay removed.** It existed to collapse the action×reducer
+  fan-out, which the accumulator predicate now eliminates by construction (the US accumulator only
+  appears on the US reducer's entry, the AU one on the AU reducer's). Keeping it would *drop* the
+  per-person leg whenever a disposal accrues to both the shared pool and a person's map.
+
+`proceeds` stays as the disposal's native-currency contract amount — no normalized counterpart
+exists in state — so on a cross-border row it is deliberately **not** in the same currency as
+`total`. The report's `description` says so; the two columns must not be netted against each other.
+
+### 0b.2 The NIIT drill hung off the tax line, not the base it explains  ✅
+
+`niit-base-by-component` was linked from the "Net Investment Income Tax (Form 8960, 3.8%)" line, but
+what it explains is the §1411 **base**, not the tax: 2026 reported 694,183.29 against a line of
+26,378.97. Both numbers were right (26,378.97 = 3.8% × 694,183.29), but a reader — or an automated
+footing check — saw a drill 26× its line. Later years did not even reconcile at 3.8% (2028: 492.37
+against 25,183.67) because the tax applies to the **lesser** of NII and MAGI over the threshold.
+
+**Fix:** Form 1040 now emits two `sub` rows under the NIIT line — "Net Investment Income (Form 8960
+line 12)" and "MAGI over §1411 threshold" — and the drill hangs off the first. Those two rows are
+also the whole computation, so a MAGI-capped year is now legible: 2028 shows NII 25,183.67 against
+a cap of 12,957.02, and 3.8% × the lesser is the 492.37 on the line. No computed number moved.
+
+The cross-foot was widened to check `SUBLINE` rows as well as `LINE` rows — otherwise moving a link
+onto a sub-row would have retired the check instead of satisfying it.
 
 ---
 
