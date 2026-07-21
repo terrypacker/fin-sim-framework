@@ -57,8 +57,10 @@ export class HiStateTaxRates2024 extends BaseStateTaxRatesModule {
       [ 175_000, 0.10],
       [ 200_000, 0.11],
     ];
-    this._stdDeduction_mfj    = 4_400;
-    this._stdDeduction_single = 2_200;
+    // Act 46 (SLH 2024) doubled the standard deduction effective tax year 2024
+    // itself — $4,400/$2,200 are the PRE-Act-46 amounts and were wrong here.
+    this._stdDeduction_mfj    = 8_800;
+    this._stdDeduction_single = 4_400;
 
     this._taxesSocialSecurity      = false; // SS exempt
     this._pensionExclusionFraction = 1;     // employer pension / retirement distributions excluded
