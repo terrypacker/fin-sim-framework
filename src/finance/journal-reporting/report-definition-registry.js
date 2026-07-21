@@ -293,6 +293,54 @@ class PretaxAdjustmentsBySourceDef extends ReportDefinition {
   }
 }
 
+class NiitBaseByComponentDef extends ReportDefinition {
+  get id()          { return 'niit-base-by-component'; }
+  get title()       { return 'Net Investment Income by Component'; }
+  get description() {
+    return 'Journal entries that contributed to the IRC §1411 net investment income base'
+      + ' — interest, dividends, bond coupons and net rents, plus capital and collectible gains.';
+  }
+
+  get facets() {
+    return [
+      { name: 'personKeys', label: 'People', kind: 'multiselect', optionsSource: 'person' },
+      { name: 'period',     label: 'Period', kind: 'period' },
+    ];
+  }
+
+  // Same stateDelta treatment as ordinary income: NII accrues into three separate
+  // accumulators, and it is each entry's *contribution* to them — not the action's
+  // native `amount` — that the Form 8960 line reports. The AU-resident branches of
+  // the tax reducers convert to AUD for the AU accumulators only, so the US-side
+  // deltas stay in USD.
+  get perDiff()           { return true; }
+  get defaultGroupBy()    { return ['actionType']; }
+  get defaultAggregates() { return { total: { fn: 'sum', field: 'stateDelta' }, count: { fn: 'count' } }; }
+
+  buildQuery(params, api) {
+    const { period, personKeys } = params;
+    const periodAst  = api.periodOf(period);
+    // NII = usNetInvestmentIncomeYTD (interest/dividends/coupons/net rents) + capital
+    // gains + collectible gains — the three buckets computeTax sums in step 5b. The
+    // gains live in their own accumulators and are never folded into the NII one, so
+    // drilling on usNetInvestmentIncomeYTD alone would explain only a fraction of the
+    // line and leave the bulk of the base unaccounted for.
+    const conditions = [
+      periodAst,
+      {
+        op: 'in',
+        field: 'stateKey',
+        value: ['usNetInvestmentIncomeYTD', 'usCapitalGainsYTD', 'usCollectibleGainsYTD'],
+      },
+      // Exclude the annual settle, whose diff resets each accumulator to 0 (a large
+      // negative delta that would cancel the total).
+      { op: 'not', condition: { op: 'eq', field: 'actionType', value: 'US_TAX_SETTLE_APPLY' } },
+    ];
+    _appendInFilter(conditions, 'personKey', personKeys);
+    return { op: 'and', conditions };
+  }
+}
+
 class CapitalGainsByDisposalDef extends ReportDefinition {
   get id()          { return 'capital-gains-by-disposal'; }
   get title()       { return 'Capital Gains by Disposal'; }
@@ -815,6 +863,7 @@ export class ReportDefinitionRegistry {
       new NrWithholdingIncomeBySourceDef(),
       new PretaxAdjustmentsBySourceDef(),
       new CapitalGainsByDisposalDef(),
+      new NiitBaseByComponentDef(),
       new CashFlowByAccountDef(),
       new WithdrawalsByAccountDef(),
       new CreditsToAccountDef(),
