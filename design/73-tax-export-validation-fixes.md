@@ -1,7 +1,30 @@
 # 73 — Cross-border source defects surfaced by tax-export validation
 
-**Status: PROPOSED.** Three gaps, all in the AU tax module, all found by reading the
+**Status: IMPLEMENTED.** All five sequencing steps in §5 are built, tested and committed on
+`wip/design-73-tax-source-fixes`. Three gaps, all in the AU tax module, all found by reading the
 `design/71` CSV exports line-by-line against a real scenario rather than by a failing test.
+
+**What implementation changed about this document.** Three things came out differently from the
+plan, each corrected in place below and flagged here so a reader of the original text is not
+misled:
+
+1. **Gap 2's table has two wrong rows.** It lists "AU stock capital gains (line 360)" and "TAP
+   real-property gains (line 352)" as separate feeders. Both line numbers are in fact the two
+   paths — household and per-person — of `AU_HOUSE_SALE_TAX`. `AU_STOCK_WITHDRAWAL_TAX` has **no
+   non-resident AU branch at all** and never fed the withholding pool. That is also the correct
+   treatment: ITAA 1997 s855-10 restricts a foreign resident's CGT net to Taxable Australian
+   Property, and portfolio shares are not TAP. Only real property needed moving.
+2. **Gap 2 step 3 does not light up line 5 of the reference export.** §5 nominates it as "the one
+   to watch" for that reason, but the reference scenario has no AU property disposal during its
+   non-resident years, so the change is inert there. It is covered by targeted tests instead.
+3. **The golden barely moved, and moved *up*.** See §5.
+
+**Not built, deliberately:** the s115-115 CGT discount day-count (deferred to `design/62`, which
+owns residency-aware cost-base handling — non-resident gains currently take no discount, which is
+exact for a wholly-non-resident post-2012 holding and conservative for a straddling one), the
+Art 27(2) FEIE guard (§4 — unreachable today because the Art 15(2) 183-day test is not modelled;
+a `TODO` sits at the branch it would guard), and wage routing by `workCountry` rather than
+currency (see the KNOWN LIMITATION in Gap 1's fix below).
 
 The instrument is `scripts/export-tax-csv.mjs`; the subject is `scenarios/fin-sim-scenarios.json`
 (gitignored — the figures below are reproduced inline so this document stands alone). Every
@@ -214,6 +237,20 @@ rates. Trading one wrong default for another is not progress.
 4. **Rename the reducer's documentation.** `AuWagesIncomeApplyReducer` is "wages paid in AUD",
    not "AU-source wages". The misleading docstring is what made the defect survive review.
 
+**KNOWN LIMITATION, accepted deliberately.** Routing remains by `wageCurrency`, so a USD-paid wage
+for work performed in Australia emits no AU action and Australia still assesses nothing — wrong,
+but no more wrong than before. Fixing it means emitting the AU tax action off `workCountry` while
+the cash continues to follow `wageCurrency`, which decouples the tax action from the cash-flow
+action for the first time. `workCountry` is stamped on **both** `WAGES_INCOME_APPLY` and
+`AU_WAGES_INCOME_APPLY` so that change is reducer-side when it comes. The limitation is recorded
+on `MonthlyWagesHandler` itself, not only here.
+
+One further refinement made during implementation: the per-person FEIE cap accumulator
+(`auPersonEarnedIncomeYTD`) is fed **only** on the AU-resident branch. `_computeFeie` already
+skips anyone whose residency is not `'AU'`, so this is inert today — but writing "foreign earned
+income of a US person whose tax home is abroad" for a US resident would make that gate the only
+thing preventing a US resident from excluding AU wages, rather than a second line of defence.
+
 ### Scope
 
 The currency-as-source conflation is specific to wages. Interest and dividends infer source from
@@ -241,8 +278,15 @@ are pooled into that one accumulator, at rates that are not the same in law:
 | Bank savings interest | 159-160 | 15% | **10%** |
 | Fixed-income interest | 194-195 | 15% | **10%** |
 | Unfranked dividends | 282-283 | 15% | **15%** ✔ (the one correct case) |
-| AU stock capital gains | 360 | 15% | not withholding — NR marginal rates |
-| TAP real-property gains | 352 | 15% | not withholding — NR marginal rates |
+| TAP real-property gains (per-person path) | 352 | 15% | not withholding — NR marginal rates |
+| TAP real-property gains (household path) | 360 | 15% | not withholding — NR marginal rates |
+
+**Corrected during implementation.** This table originally named line 360 "AU stock capital
+gains". It is not: 352 and 360 are the per-person and household paths of the *same* reducer,
+`AU_HOUSE_SALE_TAX`. `AU_STOCK_WITHDRAWAL_TAX` has no non-resident AU branch and never fed this
+bucket — correctly, since s855-10 confines a foreign resident's CGT net to TAP and portfolio
+shares are not TAP. So five feeders, not six, and only one of them (real property) needed moving
+to the bracket path.
 
 15% is the AU–US treaty rate for **portfolio unfranked dividends**. It looks as though one
 income type's rate was generalised into a constant named for the whole bucket.
@@ -473,6 +517,44 @@ The ordering below is by blast radius, smallest first, so each step can be measu
 4. **Gap 1** — `workCountry`, threaded through the handler and reducer, branching on source.
 5. **Gap 3, steps 2-3** — rental onto the bracket path, with ownership attribution.
 
+### 5.1 Outcome — measured, step by step
+
+One commit per step, each with the golden and the reference export measured before moving on.
+Suite grew 3797 → 3811 unit, 906 viz, green throughout.
+
+| Step | Commit | Lifetime tax | Ending net worth | Reference export |
+|---|---|---|---|---|
+| *(baseline)* | `1e838c8` | 698,419.66 | 12,288,158.95 | — |
+| 1 — passive gate | `cdd18f1` | unmoved | unmoved | unchanged |
+| 2 — per-type rates | `8ed51e9` | **698,429.08** | **12,288,199.80** | NR interest tax 86.68 → 57.79 |
+| 3 — NR capital gains | `2c971b4` | unmoved | unmoved | unchanged |
+| 4 — `workCountry` | `50489a9` | unmoved | unmoved | unchanged |
+| 5 — NR rental | `4133705` | unmoved | unmoved | unchanged |
+
+**Only step 2 moved the golden at all, and it moved it UP by $9.42 (+0.001%)** — against the
+expectation in §6 that AU liability would fall. Both halves are right and they are the same
+observation: cutting the interest rate 15% → 10% *does* reduce AU tax in the non-resident years,
+and because that AU tax was the thing generating the US foreign tax credit, the US liability rises
+alongside it by slightly more. The two sides of double-tax relief collapse together — the same
+coupling §1 predicts for the wage. Ending net worth rose $40.85: the AU saving lands in 2026-2030
+and compounds for twenty years. Well inside the ±1% band, so
+`cross-border-relief-scenario.test.mjs` was **not** re-pinned; there was no deliberate re-pin to
+record, which is itself the finding.
+
+**Steps 3, 4 and 5 are inert on the default scenario**, and each for a specific, checked reason —
+not because the change failed to bite:
+
+- Step 3 (NR capital gains): the reference scenario has no AU property disposal during its
+  non-resident years. This is why line 5 never lights up, contrary to §5's expectation.
+- Step 4 (`workCountry`): the default scenario has no AUD wage at all. The 12,000 AUD divergence
+  that surfaced Gap 1 lives in the gitignored `scenarios/fin-sim-scenarios.json`.
+- Step 5 (NR rental): the reference scenario's rental years are resident years — precisely the
+  observation in Gap 3 that motivated writing it down before someone modelled a US-resident
+  landlord and got a tax-free rent stream.
+
+Each is covered by a targeted test asserting the behaviour directly instead: `EVT-33` and `TE-2b`
+for step 3, `WCR-4..7` for step 4, `EVT-RENT-10..12` for step 5.
+
 ## 6. Test plan
 
 - **Unit, per gap.** A US-resident earner with `wageCurrency: 'AUD'` and `workCountry: 'US'`
@@ -496,6 +578,42 @@ The ordering below is by blast radius, smallest first, so each step can be measu
   non-resident disposal and AU-rental years. The US FTC falls alongside the AU tax that generated
   it. Re-pin `tests/unit/cross-border-relief-scenario.test.mjs` deliberately, with the reasoning
   recorded, the way `design/72` did.
+
+  **Outcome: no re-pin was needed.** Lifetime tax moved +0.001% and in the opposite direction to
+  the one predicted here. The prediction was not wrong so much as scoped to the wrong scenario:
+  the default golden exercises only one of the five changes. See §5.1 for the per-step figures and
+  why each of the other four is inert on it.
+
+### 6.1 Delivered
+
+Every item above is implemented. Where the plan and the code diverge:
+
+- **Mutation-verified the published-base guard, and it exposed a hole in the check itself — a
+  bigger one than first diagnosed.** Re-pooling interest at 0.15 fails as expected. But moving the
+  foreign-resident 45% threshold from $190,000 to $195,000 initially **passed**.
+
+  The first diagnosis was "a base stated *at* a threshold cannot pin where the band above it
+  begins". True, but incomplete. A base at threshold Z is the tax at Z, so it depends only on the
+  rates and thresholds strictly *below* Z — which means **everything at or above the highest
+  transcribed threshold was invisible to the check, including the top marginal rate itself**.
+  Changing AU's 45c or Hawaii's 11c moved no assertion anywhere in the file, because no
+  transcribed threshold sits above where those rates start applying. The top rate of every
+  schedule guarded by this file could have been any value at all.
+
+  Fixed structurally rather than row-by-row: `assertPublishedBases` now takes a **required**
+  `topRate` — the "Yc" of the authority's final published line — and probes one step into the top
+  band, expecting `base + step × topRate`. Still transcription, not derivation: it is the
+  published formula evaluated at a point, not our bracket table asked what it thinks. Being
+  required means a new tax year cannot be added without transcribing that last line.
+
+  Six mutations across the AU resident, AU foreign-resident and HI MFJ and single schedules —
+  three moving a top threshold, two changing a top rate, one omitting `topRate` — **all six passed
+  the pre-fix check and all six fail now.**
+- **A no-tax-free-threshold assertion was added separately.** The cumulative bases all run from
+  $0, so a tax-free band copied across from the resident table would still reproduce every one of
+  them.
+- **The "pro-rated discount for a straddling holding" case is not tested, because it is not
+  built** — see the status note at the top. Non-resident gains take no discount at all today.
 
 ---
 

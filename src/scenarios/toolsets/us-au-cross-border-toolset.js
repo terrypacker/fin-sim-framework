@@ -183,6 +183,10 @@ export const US_AU_CROSS_BORDER = {
         // Native currency of the wage (design 50) — drives MonthlyWagesHandler's
         // US vs AU routing. MUST be projected here or every wage reads as USD.
         wageCurrency:          person.wageCurrency          ?? 'USD',
+        // Where the employment is exercised (design 73 Gap 1) — the attribute that
+        // actually determines the source of employment income. null ⇒ the earner
+        // works where they live, resolved per accrual so it tracks a mid-sim move.
+        workCountry:           person.workCountry           ?? null,
         retirementDate:        person.retirementDate        ?? null,
         socialSecurityMonthly: person.socialSecurityMonthly ?? 0,
         lifeExpectancy:        person.lifeExpectancy        ?? 90,

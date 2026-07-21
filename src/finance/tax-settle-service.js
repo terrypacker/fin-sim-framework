@@ -31,6 +31,8 @@ const AU_PER_PERSON_INCOME_FIELDS = [
   'auPersonDiscountableGainsYTD',
   'auPersonRealCapitalGainsYTD',
   'auPersonNonResidentWithholdingYTD',
+  'auPersonNrWithholdingInterestYTD',
+  'auPersonNrWithholdingUnfrankedDividendYTD',
   'auPersonSuperTaxYTD',
 ];
 
@@ -181,6 +183,8 @@ export class TaxSettleService {
         auDiscountableGainsYTD:      perPersonShare(state.auPersonDiscountableGainsYTD,       state.auDiscountableGainsYTD),
         auRealCapitalGainsYTD:       perPersonShare(state.auPersonRealCapitalGainsYTD,        state.auRealCapitalGainsYTD),
         auNonResidentWithholdingYTD: perPersonShare(state.auPersonNonResidentWithholdingYTD,  state.auNonResidentWithholdingYTD),
+        auNrWithholdingInterestYTD:          perPersonShare(state.auPersonNrWithholdingInterestYTD,          state.auNrWithholdingInterestYTD),
+        auNrWithholdingUnfrankedDividendYTD: perPersonShare(state.auPersonNrWithholdingUnfrankedDividendYTD, state.auNrWithholdingUnfrankedDividendYTD),
         auSuperTaxYTD:               perPersonShare(state.auPersonSuperTaxYTD,                state.auSuperTaxYTD),
         auFrankingCreditYTD:         perPersonShare(state.auPersonFrankingCreditYTD,          state.auFrankingCreditYTD),
         // FITO (design 52 §4.5): the US-source removal set and the US-tax-paid

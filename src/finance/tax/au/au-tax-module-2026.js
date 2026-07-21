@@ -67,43 +67,89 @@ export class AuTaxModule2026 extends BaseTaxModule {
 
   _auWagesReducerFns() {
     return [
-      // Design 50: AU-source wages — always US ordinary income (worldwide).
-      // Earner is AU resident → AU ordinary income + FTC; earner is a non-resident
-      // (e.g. a US-resident spouse paid in AUD) → AU non-resident withholding + FTC.
-      // Attributed to the *earner* via personKey (like AU_SE_INCOME_TAX), not to
-      // the AU account's owner — the wage belongs to the person who earned it.
+      // Design 50: wages paid in AUD — always US ordinary income (worldwide, on a
+      // citizen's return). Attributed to the *earner* via personKey (like
+      // AU_SE_INCOME_TAX), not to the AU account's owner — the wage belongs to the
+      // person who earned it.
+      //
+      // Design 73 Gap 1 — branch on SOURCE first, then residency. Source of
+      // employment income is the place the services are performed, not the payment
+      // currency, the payer's residence, or the account the money lands in. FCT v
+      // French (1957) 98 CLR 398 is this case in mirror image: an Australian
+      // engineer working a few weeks a year in New Zealand, *with his salary paid
+      // into his Australian bank account throughout*, was held to have NZ-source
+      // wages for those weeks. Payment location lost to place of performance.
+      //
+      // Treaty side, Art 15(1): remuneration "may be taxed only in the State of
+      // residence unless the employment is exercised ... in the other State".
+      // Residence-only taxation is the default; the source State's right is the
+      // exception, unlocked by the employment being EXERCISED there. Art 27(1)'s
+      // deeming rule ("income Australia may tax under the Convention is deemed
+      // Australian-source") therefore never fires for work performed in the US —
+      // which is why the §904 general basket must not be fed on that branch either.
+      //
       // Design 52: AU-source earned income → §904 General numerator; the resident
       // earner's slice also feeds the per-person FEIE cap accumulator.
       ['AU_WAGES_INCOME_TAX', (state, action) => {
         const { amount, residency, personKey } = action;
+        // Absent on pre-73 saved actions ⇒ the earner works where they live.
+        const workCountry  = action.workCountry ?? residency ?? null;
+        const isAuSourced  = workCountry === 'AU';
         const isAuResident = residency === 'AU';
         const usd = toUSD(amount, 'AUD', state);
-        let next = {
-          ...state,
-          usOrdinaryIncomeYTD:      state.usOrdinaryIncomeYTD + usd,
-          foreignGeneralIncomeYTD:  (state.foreignGeneralIncomeYTD ?? 0) + usd,
-        };
-        if (isAuResident) {
-          const usePerPerson = personKey != null && state.auPersonOrdinaryIncomeYTD != null;
-          next = {
-            ...next,
-            ...(usePerPerson
-              ? {
-                  auPersonOrdinaryIncomeYTD: { ...state.auPersonOrdinaryIncomeYTD, [personKey]: (state.auPersonOrdinaryIncomeYTD[personKey] ?? 0) + amount },
-                  auPersonEarnedIncomeYTD:   { ...(state.auPersonEarnedIncomeYTD ?? {}), [personKey]: ((state.auPersonEarnedIncomeYTD?.[personKey]) ?? 0) + amount },
-                }
-              : { auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount }),
-          };
-        } else {
-          const usePerPerson = personKey != null && state.auPersonNonResidentWithholdingYTD != null;
-          next = {
-            ...next,
-            ...(usePerPerson
-              ? { auPersonNonResidentWithholdingYTD: { ...state.auPersonNonResidentWithholdingYTD, [personKey]: (state.auPersonNonResidentWithholdingYTD[personKey] ?? 0) + amount } }
-              : { auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + amount }),
-          };
+
+        // Always on the US worldwide return, whatever the source.
+        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + usd };
+
+        if (!isAuSourced) {
+          // Work performed outside Australia. Australia has no claim under Art 15
+          // however the wage is denominated or wherever it is banked, so the AU
+          // return shows nothing — no assessable income, no withholding. And with
+          // no Australian taxing right there is no Australian source for treaty
+          // purposes, so this must NOT enter foreignGeneralIncomeYTD: US-source
+          // income in the §904 general basket numerator would inflate the
+          // limitation and let unrelated foreign taxes be credited against US tax
+          // on US income. The AUD still lands in the AU account — this is a tax
+          // classification, not a cash-flow change.
+          return next;
         }
-        return next;
+
+        // AU-source from here: the employment is exercised in Australia.
+        next = { ...next, foreignGeneralIncomeYTD: (state.foreignGeneralIncomeYTD ?? 0) + usd };
+
+        // AU-source wages are ASSESSABLE income whoever earns them. For a resident
+        // that was already true; for a foreign resident it is the fix — such a wage
+        // is assessed at foreign-resident marginal rates on a lodged return (30%
+        // from the first dollar, no tax-free threshold, no Medicare levy [R3]), NOT
+        // withheld finally at source. Wages were never a withholding category; only
+        // interest, unfranked dividends and royalties are [R1, R5]. Both branches
+        // therefore feed the same accumulator — the one the non-resident bracket
+        // path already reads and that no feeder had ever written while non-resident,
+        // which is why line 5 of the AU return read 0.00 in every non-resident year.
+        //
+        // TODO(design 73 §4): Art 27(2) is an anti-double-exemption rule. Where an
+        // AU-performed wage is exempted at source by the Art 15(2) 183-day test AND
+        // excluded from US tax by the §911 FEIE, Australia may tax it after all —
+        // "the purpose of the exemption at source is to avoid double taxation, not
+        // to provide double exemption". The Art 15(2) test is not modelled, so this
+        // branch always assesses and cannot produce the taxed-by-neither outcome;
+        // guard it if that test is ever added.
+        const usePerPerson = personKey != null && state.auPersonOrdinaryIncomeYTD != null;
+        if (!usePerPerson) {
+          return { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount };
+        }
+        return {
+          ...next,
+          auPersonOrdinaryIncomeYTD: { ...state.auPersonOrdinaryIncomeYTD, [personKey]: (state.auPersonOrdinaryIncomeYTD[personKey] ?? 0) + amount },
+          // The FEIE cap accumulator is *foreign earned income* of a US person whose
+          // tax home is abroad, so only the AU-resident earner's slice belongs in it.
+          // `_computeFeie` independently skips anyone whose residency is not 'AU';
+          // not writing it here means that gate is a second line of defence rather
+          // than the only thing preventing a US resident from excluding AU wages.
+          ...(isAuResident
+            ? { auPersonEarnedIncomeYTD: { ...(state.auPersonEarnedIncomeYTD ?? {}), [personKey]: ((state.auPersonEarnedIncomeYTD?.[personKey]) ?? 0) + amount } }
+            : {}),
+        };
       }],
     ];
   }
@@ -111,21 +157,53 @@ export class AuTaxModule2026 extends BaseTaxModule {
   _rentalReducerFns() {
     return [
       // Design 48: AU rental income — net rental income (may be negative) is
-      // AU-sourced; always US ordinary income (worldwide), and AU ordinary income
-      // with an FTC when the owner is an AU resident. FTC never goes negative.
+      // AU-sourced; always US ordinary income (worldwide) and always AU ordinary
+      // income. FTC never goes negative.
       // Design 52: AU-source → §904 Passive numerator (loss years contribute 0).
+      // Design 73 Gap 3 step 1: the Passive numerator is NOT gated on the owner's
+      // residency. Source follows the situs of the property (treaty Art 6), so
+      // AU-situs rent is foreign-source to the US however the owner is resident;
+      // gating it starved the passive limitation for exactly the taxpayer who
+      // needs it — a US resident paying AU tax on AU rent. The Math.max(0) floor
+      // stays on the basket numerator only: a rental loss contributes zero
+      // limitation room, but must remain signed wherever it is assessed.
+      //
+      // Design 73 Gap 3 step 2: net rent from AU real property is assessable in
+      // Australia whoever owns it. There was no non-resident branch at all — the
+      // income reached usOrdinaryIncomeYTD and stopped, so a US-resident landlord
+      // with an Australian property got a tax-free rent stream. Rental income is
+      // sourced where the property is, always: treaty Art 6 is a sourcing provision
+      // that, unlike the dividend/interest/royalty articles, imposes NO rate cap on
+      // the source state, and the ATO is explicit that a foreign resident earning
+      // Australian rent should lodge annually and declare NET rental income [R12].
+      // It is not withholding income and there is no exemption.
+      //
+      // The amount stays SIGNED. A rental loss reduces assessable income and must
+      // not be floored at the accumulator — the Math.max(0) above is correct for
+      // the basket numerator alone, where a loss contributes zero limitation room.
+      //
+      // Step 3: attributed by ownership rather than written to the household
+      // scalar. perPersonShare splits a household scalar evenly across residents,
+      // so a property owned outright by one spouse was taxed half to each.
       ['AU_RENTAL_INCOME_TAX', (state, action) => {
-        const { amount, residency } = action;
-        const isAuResident = residency === 'AU';
-        let next = { ...state, usOrdinaryIncomeYTD: state.usOrdinaryIncomeYTD + toUSD(amount, 'AUD', state) };
-        if (isAuResident) {
-          next = {
-            ...next,
-            auOrdinaryIncomeYTD:      state.auOrdinaryIncomeYTD + amount,
-            foreignPassiveIncomeYTD:  (state.foreignPassiveIncomeYTD ?? 0) + toUSD(Math.max(0, amount), 'AUD', state),
-          };
-        }
-        return next;
+        const { amount, ownershipType, ownerId, owners } = action;
+        let next = {
+          ...state,
+          usOrdinaryIncomeYTD:     state.usOrdinaryIncomeYTD + toUSD(amount, 'AUD', state),
+          foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + toUSD(Math.max(0, amount), 'AUD', state),
+        };
+        // Resident or not, AU-situs rent is AU assessable income on the marginal
+        // bracket path — the resident schedule for a resident, the foreign-resident
+        // schedule (30% from the first dollar, no Medicare levy) for a non-resident.
+        const perPerson = state.people != null && state.auPersonOrdinaryIncomeYTD != null;
+        // Pre-73 actions carry no ownership; fall back to the household scalar,
+        // which is the old behaviour rather than a silent mis-attribution.
+        const asset = ownershipType != null || ownerId != null || owners != null
+          ? { ownershipType, ownerId, owners }
+          : null;
+        return perPerson && asset
+          ? { ...next, auPersonOrdinaryIncomeYTD: accumulateByOwnership(state.auPersonOrdinaryIncomeYTD ?? {}, asset, amount, state.people) }
+          : { ...next, auOrdinaryIncomeYTD: state.auOrdinaryIncomeYTD + amount };
       }],
     ];
   }
@@ -135,6 +213,8 @@ export class AuTaxModule2026 extends BaseTaxModule {
       // EVT-18/19: AU savings earnings — always US ordinary income;
       //   AU ordinary income for residents, AU NR withholding for non-residents.
       // Design 52: AU-source interest → §904 Passive numerator.
+      // Design 73 Gap 2: interest withholding is final at the Art 11(2) treaty cap
+      // of 10%, not the 15% dividend rate the pooled bucket applied.
       ['AU_SAVINGS_EARNINGS_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
@@ -156,8 +236,8 @@ export class AuTaxModule2026 extends BaseTaxModule {
           next = {
             ...next,
             ...(perPerson
-              ? { auPersonNonResidentWithholdingYTD: accumulateByOwnership(state.auPersonNonResidentWithholdingYTD ?? {}, state.auSavingsAccount, amount, state.people) }
-              : { auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + amount }),
+              ? { auPersonNrWithholdingInterestYTD: accumulateByOwnership(state.auPersonNrWithholdingInterestYTD ?? {}, state.auSavingsAccount, amount, state.people) }
+              : { auNrWithholdingInterestYTD: (state.auNrWithholdingInterestYTD ?? 0) + amount }),
           };
         }
         return next;
@@ -170,6 +250,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
       // AU fixed income interest — always US ordinary income;
       //   AU ordinary income for residents, AU NR withholding for non-residents.
       // Design 52: AU-source interest → §904 Passive numerator.
+      // Design 73 Gap 2: final at the Art 11(2) 10% interest cap, as above.
       ['AU_FIXED_INCOME_EARNINGS_TAX', (state, action) => {
         const { amount, residency } = action;
         const isAuResident = residency === 'AU';
@@ -191,8 +272,8 @@ export class AuTaxModule2026 extends BaseTaxModule {
           next = {
             ...next,
             ...(perPerson
-              ? { auPersonNonResidentWithholdingYTD: accumulateByOwnership(state.auPersonNonResidentWithholdingYTD ?? {}, state.auFixedIncomeAccount, amount, state.people) }
-              : { auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + amount }),
+              ? { auPersonNrWithholdingInterestYTD: accumulateByOwnership(state.auPersonNrWithholdingInterestYTD ?? {}, state.auFixedIncomeAccount, amount, state.people) }
+              : { auNrWithholdingInterestYTD: (state.auNrWithholdingInterestYTD ?? 0) + amount }),
           };
         }
         return next;
@@ -271,6 +352,10 @@ export class AuTaxModule2026 extends BaseTaxModule {
 
       // EVT-29: unfranked dividend (non-resident) — US ordinary income, AU NR withholding, FTC.
       // Design 52: AU-source dividend → §904 Passive numerator.
+      // Design 73 Gap 2: 15% (Art 10(2)) — the one feeder the old pooled constant
+      // actually fitted, and almost certainly where the 0.15 came from. The
+      // Protocol's 5%/0% tiers both require a *corporate* beneficial owner, so an
+      // individual always falls to 15% and there is no tiering to model.
       ['AU_DIVIDEND_UNFRANKED_NONRESIDENT_TAX', (state, action) => {
         const perPerson = state.people != null && state.auStockAccount != null;
         const usd = toUSD(action.amount, 'AUD', state);
@@ -279,8 +364,8 @@ export class AuTaxModule2026 extends BaseTaxModule {
           usOrdinaryIncomeYTD:     state.usOrdinaryIncomeYTD + usd,
           foreignPassiveIncomeYTD: (state.foreignPassiveIncomeYTD ?? 0) + usd,
           ...(perPerson
-            ? { auPersonNonResidentWithholdingYTD: accumulateByOwnership(state.auPersonNonResidentWithholdingYTD ?? {}, state.auStockAccount, action.amount, state.people) }
-            : { auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + action.amount }),
+            ? { auPersonNrWithholdingUnfrankedDividendYTD: accumulateByOwnership(state.auPersonNrWithholdingUnfrankedDividendYTD ?? {}, state.auStockAccount, action.amount, state.people) }
+            : { auNrWithholdingUnfrankedDividendYTD: (state.auNrWithholdingUnfrankedDividendYTD ?? 0) + action.amount }),
         };
       }],
 
@@ -323,8 +408,34 @@ export class AuTaxModule2026 extends BaseTaxModule {
   _realPropertyReducerFns() {
     return [
       // EVT-33: AU house sale — always US capital gain;
-      //   resident: AU capital gain + FTC; non-resident: AU NR withholding + FTC.
+      //   resident: AU capital gain + FTC; non-resident: AU capital gain assessed
+      //   at foreign-resident marginal rates, no discount.
       // Design 52: AU-source capital gain → §904 Passive numerator.
+      //
+      // Design 73 Gap 2 step 3: a foreign resident's gain on Taxable Australian
+      // Property is *assessable* income (ITAA 1997 s855-10 restricts the foreign
+      // resident's CGT net to TAP, and real property is squarely inside it),
+      // reported on an Australian return at foreign-resident marginal rates — 30%
+      // from the first dollar, no tax-free threshold, no Medicare levy [R3, R5].
+      // It is not withholding income. Routing it through the flat 15% final-tax
+      // pool roughly halved it.
+      //
+      // Where the 15% came from: Foreign Resident Capital Gains Withholding is
+      // genuinely 15% (since 1 Jan 2025, with the $750k property threshold
+      // removed), but it is a *collection* mechanism — the vendor claims it as a
+      // credit on assessment and is refunded any excess [R10]. A payment on
+      // account, not a final liability. This models the liability; the prepayment
+      // is a cash-flow timing question, not a tax one.
+      //
+      // No discountable slice is fed. The CGT discount is not flatly denied to
+      // foreign residents — since 8 May 2012 the *percentage* is apportioned by
+      // days of Australian residence over the ownership period (s115-105/110/115),
+      // so a straddling holding keeps a pro-rated discount. Feeding zero is exact
+      // for an asset acquired after 8 May 2012 and held wholly while a foreign
+      // resident, and conservative (over-taxes) for the straddling case.
+      // TODO(design/62): that day-count belongs with the residency-aware cost-base
+      // handling design 62 already owns; do not reach for the resident branch's
+      // unconditional discount wiring as a stand-in.
       ['AU_HOUSE_SALE_TAX', (state, action) => {
         const { gain, residency, ownershipType, ownerId, owners } = action;
         const isAuResident = residency === 'AU';
@@ -349,7 +460,8 @@ export class AuTaxModule2026 extends BaseTaxModule {
           } else {
             next = {
               ...next,
-              auPersonNonResidentWithholdingYTD: accumulateByOwnership(state.auPersonNonResidentWithholdingYTD ?? {}, asset, gain, state.people),
+              // Assessable at NR marginal rates, with no discountable slice.
+              auPersonCapitalGainsYTD: accumulateByOwnership(state.auPersonCapitalGainsYTD ?? {}, asset, gain, state.people),
             };
           }
         } else {
@@ -357,7 +469,7 @@ export class AuTaxModule2026 extends BaseTaxModule {
             ...next,
             ...(isAuResident
               ? { auCapitalGainsYTD: state.auCapitalGainsYTD + gain, auDiscountableGainsYTD: (state.auDiscountableGainsYTD ?? 0) + gain }
-              : { auNonResidentWithholdingYTD: state.auNonResidentWithholdingYTD + gain }),
+              : { auCapitalGainsYTD: state.auCapitalGainsYTD + gain }),
           };
         }
         return next;

@@ -186,6 +186,11 @@ export class InternationalRetirementFinancialState extends SimulationState {
     this.auPersonRealCapitalGainsYTD        = _zeroes();
     this.auPersonFrankingCreditYTD          = _zeroes();
     this.auPersonNonResidentWithholdingYTD  = _zeroes();
+    // Non-resident final withholding, split by income type — each type has its own
+    // treaty rate (design 73 Gap 2): interest 10%, unfranked dividends 15%. The
+    // undifferentiated map above kept its remaining feeders at the pooled 15%.
+    this.auPersonNrWithholdingInterestYTD          = _zeroes();
+    this.auPersonNrWithholdingUnfrankedDividendYTD = _zeroes();
     this.auPersonSuperTaxYTD                = _zeroes();
     // AU-source *earned* income (wages/SE) per person — backs the per-person
     // FEIE cap (design 52 §4.2); disjoint from auPersonOrdinaryIncomeYTD.

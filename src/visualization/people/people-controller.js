@@ -34,6 +34,7 @@ export class PeopleController {
       selfEmployed:          Boolean(data.selfEmployed),
       retirementDate:        data.retirementDate ? new Date(data.retirementDate) : new Date(Date.UTC(2040, 0, 1)),
       wageCurrency:          data.wageCurrency,
+      workCountry:           data.workCountry ?? null,  // design 73 Gap 1
       ssCurrency:            data.ssCurrency,
     });
   }

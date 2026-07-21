@@ -189,8 +189,10 @@ test('EVT-19: AU savings earnings (non-resident) are ALWAYS AU taxable at non-re
   sim.schedule({ date: new Date(2026, 0, 15), type: 'AU_SAVINGS_EARNINGS', data: { amount: 600 } });
   sim.stepTo(new Date(2026, 0, 31));
 
-  // In the toolset path, state.people is non-null → per-person maps are used instead of flat YTD fields
-  assert.strictEqual(sim.state.auPersonNonResidentWithholdingYTD?.['primary'], 600);
+  // In the toolset path, state.people is non-null → per-person maps are used instead of flat YTD fields.
+  // Design 73 Gap 2: interest lands in the typed 10% bucket, not the pooled 15% one.
+  assert.strictEqual(sim.state.auPersonNrWithholdingInterestYTD?.['primary'], 600);
+  assert.strictEqual(sim.state.auPersonNonResidentWithholdingYTD?.['primary'], 0);
   assert.strictEqual(sim.state.auOrdinaryIncomeYTD, 0); // non-resident pays withholding rate
   assert.ok(sim.state.foreignPassiveIncomeYTD > 0, 'FTC should be recorded');
 });

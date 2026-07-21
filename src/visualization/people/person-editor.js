@@ -71,6 +71,12 @@ export class PersonEditor extends BaseComponent {
     el.querySelector('[data-id="ssCurrency"]').value   = this._node?.ssCurrency   ?? defaultCur;
     el.querySelector('[data-id="wageCurrency"]').value = this._node?.wageCurrency ?? defaultCur;
 
+    // Where the work is performed (design 73 Gap 1) — the source attribute, kept
+    // separate from the wage's denomination. Empty string is the "" option, i.e.
+    // follow residency; it must not be coerced to a country here or the default
+    // would silently become a claim about where someone works.
+    el.querySelector('[data-id="workCountry"]').value = this._node?.workCountry ?? '';
+
     const rd = this._node?.retirementDate;
     el.querySelector('[data-id="retirementDate"]').value =
       rd instanceof Date ? rd.toISOString().slice(0, 10)
@@ -132,6 +138,9 @@ export class PersonEditor extends BaseComponent {
       retirementDate:        el.querySelector('[data-id="retirementDate"]').value,
       ssCurrency:            el.querySelector('[data-id="ssCurrency"]').value,
       wageCurrency:          el.querySelector('[data-id="wageCurrency"]').value,
+      // "" ⇒ follow residency. Normalised to null so the stored shape matches
+      // Person's default rather than carrying an empty string through the config.
+      workCountry:           el.querySelector('[data-id="workCountry"]').value || null,
     };
     // Param-backed fields are owned by their scenario param (design/32).
     for (const f of this._linkedFields) delete data[f];

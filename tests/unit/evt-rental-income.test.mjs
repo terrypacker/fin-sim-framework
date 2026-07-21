@@ -165,7 +165,10 @@ test('EVT-RENT-3: AU rental (resident) accrues both AU and US ordinary income + 
   const taxes = sim.journal.getActions('AU_RENTAL_INCOME_TAX');
   assert.ok(taxes.length > 0, 'AU_RENTAL_INCOME_TAX should fire');
   // taxable = 2700 - 675 - 1000 = 1025 (AU dep 12000/12 override)
-  assert.strictEqual(findDiff(taxes[0], 'auOrdinaryIncomeYTD').delta, 1025);
+  // Design 73 Gap 3 step 3: attributed to the property's owner rather than written
+  // to the household scalar, which perPersonShare would have split evenly across
+  // residents — taxing a solely-owned property half to each spouse.
+  assert.strictEqual(findDiff(taxes[0], 'auPersonOrdinaryIncomeYTD.primary').delta, 1025);
   assert.strictEqual(findDiff(taxes[0], 'usOrdinaryIncomeYTD').delta, 1025);
   assert.strictEqual(findDiff(taxes[0], 'foreignPassiveIncomeYTD').delta, 1025);
 });
@@ -262,4 +265,62 @@ test('EVT-RENT-8: accumulated depreciation reduces the tax basis at sale (larger
   // gain = value - (costBasis - accumulatedDepreciation) = 200000 + accumDep
   assert.ok(approx(cgDiff.delta, (1000000 - 800000) + accumDep, 0.5),
     `expected ${(1000000 - 800000) + accumDep}, got ${cgDiff.delta}`);
+});
+
+test('EVT-RENT-10: AU rental owned by a US resident still feeds the §904 passive basket', () => {
+  // Design 73 Gap 3 step 1. Source follows the situs of the property (AU–US
+  // treaty Art 6), not the owner's residency, so AU-situs rent is foreign-source
+  // to the US whether or not the owner is an AU resident. Gating the basket
+  // numerator on residency starved the passive limitation for exactly the
+  // taxpayer who needs it: a US resident paying AU tax on AU rent.
+  const cfg = auConfig();
+  cfg.persons = [{ ...primary, citizen: ['US'], residency: 'US' }];
+  const { sim } = loadToolsetScenario(cfg);
+  assert.doesNotThrow(() => sim.stepTo(FEB_2026));
+
+  const taxes = sim.journal.getActions('AU_RENTAL_INCOME_TAX');
+  assert.ok(taxes.length > 0, 'AU_RENTAL_INCOME_TAX should fire');
+  // Same taxable net as the resident case (EVT-RENT-3): 2700 - 675 - 1000 = 1025.
+  assert.strictEqual(findDiff(taxes[0], 'usOrdinaryIncomeYTD').delta,     1025);
+  assert.strictEqual(findDiff(taxes[0], 'foreignPassiveIncomeYTD').delta, 1025);
+});
+
+test('EVT-RENT-11: a US-resident landlord\'s AU rent IS assessed in Australia', () => {
+  // Design 73 Gap 3 step 2. AU_RENTAL_INCOME_TAX had no non-resident branch at
+  // all: the income reached usOrdinaryIncomeYTD and stopped, so a US resident with
+  // an Australian rental property got a tax-free rent stream. Rental income is
+  // sourced where the property is (treaty Art 6, which caps no rate at all on the
+  // source state), and the ATO is explicit that a foreign resident earning
+  // Australian rent lodges annually and declares NET rental income [R12].
+  const cfg = auConfig();
+  cfg.persons = [{ ...primary, citizen: ['US'], residency: 'US' }];
+  const { sim } = loadToolsetScenario(cfg);
+  assert.doesNotThrow(() => sim.stepTo(FEB_2026));
+
+  const taxes = sim.journal.getActions('AU_RENTAL_INCOME_TAX');
+  // Assessable in Australia at foreign-resident marginal rates, attributed to the
+  // owner. This is the accumulator the NR bracket path reads.
+  assert.strictEqual(findDiff(taxes[0], 'auPersonOrdinaryIncomeYTD.primary').delta, 1025);
+  // ...and NOT treated as final withholding income: rent was never a withholding
+  // category, only interest, unfranked dividends and royalties are.
+  assert.strictEqual(findDiff(taxes[0], 'auPersonNrWithholdingInterestYTD.primary'), undefined);
+  assert.strictEqual(findDiff(taxes[0], 'auPersonNonResidentWithholdingYTD.primary'), undefined);
+});
+
+test('EVT-RENT-12: a rental LOSS stays signed into the AU accumulator', () => {
+  // The Math.max(0, ...) floor is correct for the §904 basket numerator alone —
+  // a loss contributes zero limitation room. It must not reach the assessable
+  // accumulator, where a negative net rent legitimately reduces taxable income.
+  const cfg = auConfig({ mortgageBalance: 500000, mortgageInterestRate: 0.06, monthlyMortgage: 0 });
+  cfg.persons = [{ ...primary, citizen: ['US'], residency: 'US' }];
+  const { sim } = loadToolsetScenario(cfg);
+  assert.doesNotThrow(() => sim.stepTo(FEB_2026));
+
+  const taxes = sim.journal.getActions('AU_RENTAL_INCOME_TAX');
+  // 2700 rent − 675 expenses − 1000 depreciation − 2500 interest = −1475.
+  const auDelta = findDiff(taxes[0], 'auPersonOrdinaryIncomeYTD.primary').delta;
+  assert.ok(auDelta < 0, `a geared property should book a negative net rent, got ${auDelta}`);
+  assert.strictEqual(auDelta, -1475);
+  // The basket numerator, by contrast, is floored at zero — so it records no change.
+  assert.strictEqual(findDiff(taxes[0], 'foreignPassiveIncomeYTD'), undefined);
 });

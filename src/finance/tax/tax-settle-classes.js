@@ -37,6 +37,8 @@ const YTD_FIELDS = {
        // design 63 §6.5 — heir-paid NE inheritance tax (reporting bucket; debited at the inheritance date)
        'neInheritanceTaxYTD'],
   AU: ['auOrdinaryIncomeYTD', 'auCapitalGainsYTD', 'auDiscountableGainsYTD', 'auRealCapitalGainsYTD', 'auNonResidentWithholdingYTD', 'auSuperTaxYTD', 'auFrankingCreditYTD',
+       // design 73 Gap 2 — per-type non-resident final withholding
+       'auNrWithholdingInterestYTD', 'auNrWithholdingUnfrankedDividendYTD',
        'usSourceOrdinaryAudYTD', 'usSourceCapGainsAudYTD', 'usSourceRealCapGainsAudYTD',
        // design 63 §6.4 — AU super death-benefit tax (reporting bucket; withheld from the net lump sum)
        'auSuperDeathTaxYTD'],
@@ -50,6 +52,8 @@ const PER_PERSON_AU_FIELDS = [
   'auPersonRealCapitalGainsYTD',
   'auPersonFrankingCreditYTD',
   'auPersonNonResidentWithholdingYTD',
+  'auPersonNrWithholdingInterestYTD',
+  'auPersonNrWithholdingUnfrankedDividendYTD',
   'auPersonSuperTaxYTD',
   'auPersonEarnedIncomeYTD',
 ];

@@ -257,8 +257,13 @@ export class AuRentalIncomeApplyReducer extends AccountServiceReducer {
         accumulatedDepreciation: (propState.accumulatedDepreciation ?? 0) + (monthlyDepreciation ?? 0),
       };
     }
+    // Design 73 Gap 3 step 3: carry the property's ownership so the tax reducer can
+    // attribute the rent to whoever actually owns it, the way AU_HOUSE_SALE_TAX
+    // already does. Without it the household scalar is split evenly across
+    // residents at settle, taxing a solely-owned property half to each spouse.
+    const { ownershipType, ownerId, owners } = propState ?? {};
     return this.newState(state, updates, [
-      { type: 'AU_RENTAL_INCOME_TAX', amount: taxableRental, residency },
+      { type: 'AU_RENTAL_INCOME_TAX', amount: taxableRental, residency, ownershipType, ownerId, owners },
     ]);
   }
 }
