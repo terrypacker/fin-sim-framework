@@ -24,11 +24,11 @@
 import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
-import { US_ROTH_CONVERSION }          from '../../src/scenarios/toolsets/us-roth-conversion-toolset.js';
+import { US_ROTH_CONVERSION, BRACKET_BASE_YEAR } from '../../src/scenarios/toolsets/us-roth-conversion-toolset.js';
 import { ACCOUNT_ROLES }               from '../../src/finance/state/account-roles.js';
-import { usBracketGrossIncomeCeiling } from '../../src/finance/tax/us/us-tax-rates-2025.js';
+import { usBracketGrossIncomeCeiling } from '../../src/finance/tax-settle-service.js';
 
-const BRACKET_BASE_YEAR = 2025;
+
 
 /** Build a minimal schedules() context with a primary IRA + Roth pair. */
 function makeContext(parameters) {
@@ -70,7 +70,7 @@ test('per-year incomeTarget schedule emits one event per scheduled year, compoun
   assert.deepEqual(events.map(yearOf), [2031, 2033]);
   assert.equal(events.every(e => e.type === 'ROTH_CONVERSION_POLICY_EVALUATE'), true);
 
-  // incomeTarget is REAL base-year (2025) USD, compounded to the year's nominal.
+  // incomeTarget is REAL base-year USD, compounded to the year's nominal.
   const expect2031 = 100_000 * Math.pow(1.03, 2031 - BRACKET_BASE_YEAR);
   const expect2033 = 150_000 * Math.pow(1.03, 2033 - BRACKET_BASE_YEAR);
   assert.ok(Math.abs(targetOf(events[0]) - expect2031) < 1e-6);

@@ -20,12 +20,14 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { retargetRothConversionEvents } from '../../src/scenarios/toolsets/us-roth-conversion-toolset.js';
+import { retargetRothConversionEvents, BRACKET_BASE_YEAR } from '../../src/scenarios/toolsets/us-roth-conversion-toolset.js';
 import { OptimizationProblem }  from '../../src/finance/optimization/optimization-problem.js';
 import { OPT_PARAM_TYPES }      from '../../src/finance/optimization/optimization-objectives.js';
 import { makeInitialSnapshot }  from '../../src/finance/mpc/mpc-controller.js';
 
-const BASE_YEAR = 2025;
+// Tracks the toolset's own base year (newest registered US statutory table)
+// rather than restating it, so adding a tax year can't silently desync the test.
+const BASE_YEAR = BRACKET_BASE_YEAR;
 const ev = (year, target) => ({
   type: 'ROTH_CONVERSION_POLICY_EVALUATE',
   date: new Date(Date.UTC(year, 11, 1)),   // Dec 1

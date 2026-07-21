@@ -18,7 +18,7 @@ import { retargetRothConversionEvents, BRACKET_BASE_YEAR } from '../../scenarios
 import { retargetEarlyWithdrawalEvents } from '../../scenarios/toolsets/us-early-withdrawal-toolset.js';
 import { set }                     from '../monte-carlo/mc-param-paths.js';
 import { DateUtils }               from '../../simulation-framework/date-utils.js';
-import { UsTaxRates2025 }          from '../tax/us/us-tax-rates-2025.js';
+import { usRatesForYear }         from '../tax-settle-service.js';
 import { synthesizeWeightedPriorities } from '../../scenarios/scenario-loader.js';
 import {
   DRAWDOWN_WEIGHT_ROLES, DRAWDOWN_CASH_ROLES, DEFAULT_DRAWDOWN_WEIGHTS,
@@ -1247,12 +1247,14 @@ function _earlyWithdrawalRealCaps(state, baseParams, year) {
 // Marginal MFJ bracket a REAL (base-year) ordinary income lands in, for the
 // recommended-move card. Real target vs base-year brackets is inflation-free:
 // both the target and the statutory edges deflate by the same factor (§12.2).
-const _US_RATES_2025 = new UsTaxRates2025();
+// Base-year table = the newest registered US statutory module (BRACKET_BASE_YEAR),
+// which is exactly where the settle-time inflation accumulator is 1.0.
+const _US_BASE_RATES = usRatesForYear(BRACKET_BASE_YEAR);
 function _bracketLabelForRealIncome(realIncome) {
-  const taxable = realIncome - _US_RATES_2025._stdDeduction_mfj;
+  const taxable = realIncome - _US_BASE_RATES._stdDeduction_mfj;
   if (!(taxable > 0)) return null;
-  let rate = _US_RATES_2025._brackets_mfj[0]?.[1] ?? null;
-  for (const [threshold, r] of _US_RATES_2025._brackets_mfj) {
+  let rate = _US_BASE_RATES._brackets_mfj[0]?.[1] ?? null;
+  for (const [threshold, r] of _US_BASE_RATES._brackets_mfj) {
     if (taxable >= threshold) rate = r; else break;
   }
   return rate == null ? null : `${Math.round(rate * 100)}% bracket`;

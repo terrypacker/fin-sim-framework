@@ -20,6 +20,7 @@ import { RebalanceToTargetReducer } from '../../src/finance/behavioral/rebalance
 import { allocWeightKey, synthesizeTargetAllocation, ALLOC_WEIGHT_CLASSES }
   from '../../src/scenarios/intl-retirement-scenario.js';
 import { ALLOCATION } from '../../src/finance/holdings/allocation.js';
+import { BRACKET_BASE_YEAR } from '../../src/scenarios/toolsets/us-roth-conversion-toolset.js';
 
 /*
  * Design 39 Step 5 — cockpit headless brain (CockpitController). Drives the three
@@ -93,7 +94,7 @@ describe('COCKPIT_CONTROLS.ROTH — cap the fill to the reachable IRA (no unreac
   test('partial IRA ⇒ cap is the real-deflated convertible headroom, below the user max', () => {
     const state = { iraAccount: { balance: 60_000 }, spouseIraAccount: { balance: 40_000 }, usOrdinaryIncomeYTD: 0 };
     const vars = COCKPIT_CONTROLS.ROTH.buildVariables({ baseParams: bp, asOf, state, range: { min: 0, max: 500_000, step: 5_000 } });
-    const factor = Math.pow(1.03, 2032 - 2025);
+    const factor = Math.pow(1.03, 2032 - BRACKET_BASE_YEAR);
     const expected = 100_000 / factor;   // (0 ordYtd + 100k IRA) deflated to real base-year
     assert.ok(Math.abs(vars[0].max - expected) < 1, `cap ≈ ${expected}, got ${vars[0].max}`);
     assert.ok(vars[0].max < 500_000, 'capped below the user max');
@@ -102,7 +103,7 @@ describe('COCKPIT_CONTROLS.ROTH — cap the fill to the reachable IRA (no unreac
   test('owner=primary counts only the primary IRA', () => {
     const state = { iraAccount: { balance: 50_000 }, spouseIraAccount: { balance: 999_999 }, usOrdinaryIncomeYTD: 0 };
     const vars = COCKPIT_CONTROLS.ROTH.buildVariables({ baseParams: { ...bp, rothConversionOwner: 'primary' }, asOf, state, range: { min: 0, max: 500_000, step: 5_000 } });
-    const expected = 50_000 / Math.pow(1.03, 2032 - 2025);
+    const expected = 50_000 / Math.pow(1.03, 2032 - BRACKET_BASE_YEAR);
     assert.ok(Math.abs(vars[0].max - expected) < 1, `primary-only cap ≈ ${expected}, got ${vars[0].max}`);
   });
 });
@@ -137,7 +138,7 @@ describe('COCKPIT_CONTROLS.EARLY_WITHDRAWAL — two per-class variables, capped 
   const asOf = new Date(Date.UTC(2032, 0, 1));               // before Dec 1 → targets 2032
   const young = { p1: { birthDate: new Date(Date.UTC(1985, 0, 1)) } };   // age ~47 in 2032
   const range = { min: 0, max: 500_000, step: 5_000 };
-  const f = Math.pow(1.03, 2032 - 2025);
+  const f = Math.pow(1.03, 2032 - BRACKET_BASE_YEAR);
   const tdOf = (vars) => vars.find(v => v.paramKey.endsWith('.taxDeferredAmount'));
   const rtOf = (vars) => vars.find(v => v.paramKey.endsWith('.rothAmount'));
 
@@ -564,7 +565,7 @@ describe('CockpitController — apply + advance (actuation, cont.)', () => {
     const ok = COCKPIT_CONTROLS.ROTH.actuate({ services, scenario, candidate, vars });
 
     assert.equal(ok, true, 'actuation hit a live conversion event');
-    const expectedNominal = 100_000 * Math.pow(1.03, year - 2025);
+    const expectedNominal = 100_000 * Math.pow(1.03, year - BRACKET_BASE_YEAR);
     assert.ok(Math.abs(futureEvt.data.targetIncome - expectedNominal) < 1e-6, 'future event re-wired to the nominal target');
     assert.equal(otherYear.data.targetIncome, 50_000, 'a different year is left untouched');
     assert.equal(pastEvt.data.targetIncome,   50_000, 'a same-year event already in the past (≤ now) is untouched (forward-effective)');

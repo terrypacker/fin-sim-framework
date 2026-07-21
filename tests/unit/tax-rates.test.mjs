@@ -26,6 +26,7 @@ import { test } from 'node:test';
 import assert   from 'node:assert/strict';
 
 import { UsTaxRates2025 } from '../../src/finance/tax/us/us-tax-rates-2025.js';
+import { UsTaxRates2026 } from '../../src/finance/tax/us/us-tax-rates-2026.js';
 import { AuTaxRates2025 } from '../../src/finance/tax/au/au-tax-rates-2025.js';
 import { AuTaxRates2026 } from '../../src/finance/tax/au/au-tax-rates-2026.js';
 import { AuTaxRates2027 } from '../../src/finance/tax/au/au-tax-rates-2027.js';
@@ -731,4 +732,55 @@ test('AU-2027 rates: indexation reduces the assessed gain and the tax', () => {
   assert.strictEqual(result.netLiability, 22400);
   const unindexed = auRates2027.computeTax(auState({ auCapitalGainsYTD: 100_000 })).netLiability;
   assert.ok(result.netLiability < unindexed, `indexed (${result.netLiability}) < un-indexed (${unindexed})`);
+});
+
+// ─── US 2026 (IRS Rev. Proc. 2025-32 — permanent OBBBA schedule) ──────────────
+//
+// Before this module existed, US years ≥ 2026 fell back to the 2025 module,
+// which the inflation wrapper leaves untouched in the accumulator's base year —
+// so a 2026 return was filed on 2025 brackets and the $30,000 standard
+// deduction. The OBBBA schedule is not a CPI step from 2025, so it has to be
+// stated statutorily rather than derived.
+
+test('US-2026: MFJ brackets, LTCG breakpoints and standard deduction are the statutory 2026 figures', () => {
+  const r = new UsTaxRates2026();
+  assert.strictEqual(r.year, 2026);
+  assert.deepStrictEqual(r._brackets_mfj.map(([t]) => t),
+    [0, 24_800, 100_800, 211_400, 403_550, 512_450, 768_700]);
+  assert.deepStrictEqual(r._ltcg_mfj, [[0, 0.00], [98_900, 0.15], [613_700, 0.20]]);
+  assert.strictEqual(r._stdDeduction_mfj, 32_200);
+  assert.deepStrictEqual(r._brackets_single.map(([t]) => t),
+    [0, 12_400, 50_400, 105_700, 201_775, 256_225, 640_600]);
+  assert.deepStrictEqual(r._ltcg_single, [[0, 0.00], [49_450, 0.15], [545_500, 0.20]]);
+  assert.strictEqual(r._stdDeduction_single, 16_100);
+  assert.strictEqual(r._ficaWageBase, 184_500);
+  assert.strictEqual(r._feieCap, 132_900);
+});
+
+test('US-2026: TaxSettleService selects the 2026 module for a 2026 period', () => {
+  const svc   = new TaxSettleService();
+  const state = usState({
+    usOrdinaryIncomeYTD: 200_000,
+    currentPeriods: { US: { startMs: Date.UTC(2026, 0, 1) } },
+  });
+  const result = svc.computeUsTax(state);
+  assert.strictEqual(result.taxYear, 2026);
+  assert.strictEqual(result.inputs.standardDeduction, 32_200);
+  // 200k gross − 32.2k std = 167,800 taxable; 10/12/22% bands of the 2026 table.
+  assert.strictEqual(result.taxableIncome, 167_800);
+  const expected = 24_800 * 0.10
+    + (100_800 - 24_800) * 0.12
+    + (167_800 - 100_800) * 0.22;
+  assert.ok(Math.abs(result.ordinaryTax - expected) < 0.01,
+    `ordinary tax ${result.ordinaryTax} ≠ ${expected}`);
+});
+
+test('US-2026: LTCG stacks on ordinary income against the 2026 breakpoints', () => {
+  const r = new UsTaxRates2026();
+  // Ordinary taxable 50k; a 60k gain straddles the 98,900 0%→15% breakpoint.
+  const result = r.computeTax(usState({ usOrdinaryIncomeYTD: 82_200, usCapitalGainsYTD: 60_000 }));
+  assert.strictEqual(result.taxableIncome, 50_000);
+  const expected = (98_900 - 50_000) * 0.00 + (110_000 - 98_900) * 0.15;
+  assert.ok(Math.abs(result.capitalGainsTax - expected) < 0.01,
+    `LTCG tax ${result.capitalGainsTax} ≠ ${expected}`);
 });

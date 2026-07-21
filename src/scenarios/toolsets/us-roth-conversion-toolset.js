@@ -10,7 +10,7 @@
 
 import { OneOffEvent }  from '../../simulation-framework/events/one-off-event.js';
 import { ACCOUNT_ROLES } from '../../finance/state/account-roles.js';
-import { usBracketGrossIncomeCeiling } from '../../finance/tax/us/us-tax-rates-2025.js';
+import { usBracketGrossIncomeCeiling, US_BRACKET_BASE_YEAR } from '../../finance/tax-settle-service.js';
 import {
   RothConversionApplyReducer,
   RothConversionHandler, RothConversionPolicyHandler,
@@ -20,7 +20,9 @@ import { ValueType } from '../../simulation-framework/type-registry.js';
 // Base year for the per-year income-target schedule (design 39 §12.3): real
 // targets are quoted in this year's USD and compounded by inflation, matching
 // the base usBracketGrossIncomeCeiling indexes the statutory brackets from.
-export const BRACKET_BASE_YEAR = 2025;
+// Derived from the newest registered US statutory table rather than restated as
+// a literal, so the two cannot drift apart when a new tax year is added.
+export const BRACKET_BASE_YEAR = US_BRACKET_BASE_YEAR;
 
 /**
  * Forward-effective re-target of queued Roth-conversion events from a per-year
