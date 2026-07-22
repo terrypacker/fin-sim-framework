@@ -288,14 +288,6 @@ does not**. `NONE` remains for users who deliberately supply arithmetic inputs.
 
 Whichever is chosen must be **stated in the param description**, because the two differ by a
 factor of ~2 on 44-year terminal wealth and the difference is otherwise invisible.
-
-### 5.4 Phase 4 — re-run the decision analysis
-
-Re-run `scenarios/company-equity-decision.md` §6 with paths on. Expected: failure rates rise
-from 2–4% to something materially higher. **The decision's *ranking* is expected to survive**
-(selling B weakly dominates; spending is the largest lever) — but if it does not, that is the
-finding, and it is exactly why this work comes first.
-
 ---
 
 ## 6. Testing plan
