@@ -127,6 +127,19 @@ export const DEFAULT_MC_VARIABLE_CONFIGS = [
     group: 'AU Account Rates',         enabled: true,
   },
 
+  // ── Equity return-path volatility (design 74 §5.2) ────────────────────────
+  // The annualized sd of the shared equity MARKET factor. Sampling this makes the
+  // *width* of the return path an MC axis; each iteration's own seed already gives it
+  // a different return SEQUENCE (design 74 §5.2, once the per-iteration seed is
+  // threaded). enabled:false so it is opt-in and single runs are unaffected. NOTE:
+  // this only bites when `equityReturnStochastic` is ON in the scenario — with the
+  // flag off no path is drawn and the sampled vol is inert.
+  {
+    paramKey: 'equityReturnVol',       label: 'Equity Return Volatility',
+    type: DISTRIBUTION_TYPES.NORMAL,   mean: 0.18, stdDev: 0.03,
+    group: 'Return Paths',             enabled: false,
+  },
+
   // ── Inflation rates ───────────────────────────────────────────────────────
   {
     paramKey: 'inflationRate',         label: 'US Inflation Rate',

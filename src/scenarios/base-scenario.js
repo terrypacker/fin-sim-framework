@@ -234,7 +234,16 @@ export class BaseScenario extends SimGraphNode {
    * method.  The resolved state (as a plain object) is stored on `this.initialState`
    * so it can be captured for serialization.
    */
-  buildSim() {
+  /**
+   * @param {object} [opts]
+   * @param {number} [opts.seed=1] - Seed for the simulation's snapshot-safe RNG
+   *   (`sim.rng`). Defaults to 1 so single runs stay byte-identical. Monte Carlo
+   *   passes a per-iteration seed so each path draws its OWN in-loop random sequence
+   *   (FX design 47, yield curve design 67, equity return paths design 74); without
+   *   this every MC iteration ran at seed 1 and drew the identical stochastic path,
+   *   silently collapsing sequence-of-returns risk to a single ordering.
+   */
+  buildSim({ seed = 1 } = {}) {
     const isEmpty = !this.initialState || Object.keys(this.initialState).length === 0;
     const resolved = isEmpty ? (this.buildDefaultInitialState(this.params) ?? {}) : this.initialState;
 
@@ -257,6 +266,7 @@ export class BaseScenario extends SimGraphNode {
     const sim = new Simulation(this.simStart, {
       bus: new EventBus(),
       graph,
+      seed,
       initialState: resolved,
       opts: { derivedMetrics },
     });
