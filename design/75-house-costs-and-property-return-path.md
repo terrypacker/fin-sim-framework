@@ -594,11 +594,14 @@ present (see §6.2/6.3) — true for the decision scenario. The three new MC sca
 (`propertyReturnIdioScale` / `repairSeverityScale` / `repairFreqScale`) are `mc:true` but **not
 yet `opt:true`** — they are sweep axes, not optimizer levers, which is the right default (you don't
 *optimize* how volatile your house is). The new per-property cost/repair fields are wired through
-state + serializer + both toolsets but **still NOT in the property-editor UI**
-(`src/visualization/assets/real-property-editor.js`) — deliberately deferred (the decision work
-drives costs/repairs via `mc-arm-house.mjs`/`mutateCfg`, not the UI). This is the one remaining
-Phase-4 follow-up: a real end-user who wants to configure a house's running cost / repair model
-from the app needs those ten fields surfaced in the editor.
+state + serializer + both toolsets **and now the property-editor UI** ✅
+(`src/visualization/assets/real-property-editor.js` + `tpl-real-property-editor` in `index.html`):
+the ten fields (3 running-cost + 7 repair) render under a **"Running Costs & Repairs (design 75)"**
+section, visually separated by a `.node-section-head` rule from the **"Rental Income (design 48)"**
+section above it (the two are economically distinct — rental opex is deductible, owner-occupied
+holding cost is not). New CSS class `.node-section-head` in `config-builder.css` (shares the
+`.holdings-section` divider look). Tests: `tests/viz/editors/house-cost-fields.test.mjs` (4).
+**910 viz green.** No remaining Phase-4 follow-ups on the UI side.
 
 ---
 

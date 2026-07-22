@@ -125,6 +125,20 @@ export class RealPropertyEditor extends BaseComponent {
     el.querySelector('[data-id="annualDepreciationOverride"]').value =
       this._node?.annualDepreciationOverride ?? '';
 
+    // Owner-occupied running cost + stochastic repairs (design 75) — a holding cost distinct
+    // from the rental opex above. Defaults mirror the RealProperty class / serializer (all 0 ⇒
+    // inert, except repairSigma 0.6 and repairModel NONE).
+    el.querySelector('[data-id="annualRunningCost"]').value    = this._node?.annualRunningCost    ?? 0;
+    el.querySelector('[data-id="runningCostValuePct"]').value  = this._node?.runningCostValuePct  ?? 0;
+    el.querySelector('[data-id="runningCostGrowth"]').value    = this._node?.runningCostGrowth    ?? 0;
+    el.querySelector('[data-id="repairModel"]').value          = this._node?.repairModel          ?? 'NONE';
+    el.querySelector('[data-id="repairProb"]').value           = this._node?.repairProb           ?? 0;
+    el.querySelector('[data-id="repairLambda"]').value         = this._node?.repairLambda         ?? 0;
+    el.querySelector('[data-id="repairMedian"]').value         = this._node?.repairMedian         ?? 0;
+    el.querySelector('[data-id="repairValuePct"]').value       = this._node?.repairValuePct       ?? 0;
+    el.querySelector('[data-id="repairSigma"]').value          = this._node?.repairSigma          ?? 0.6;
+    el.querySelector('[data-id="capitalizeRepairs"]').value    = this._node?.capitalizeRepairs    ?? 0;
+
     this._populateOwnerSelect(el, this._people, this._node?.ownerId ?? null);
     this._populateAccountSelect(el, this._accounts, this._node?.saleDestinationAccount ?? null);
 
@@ -203,6 +217,17 @@ export class RealPropertyEditor extends BaseComponent {
         el.querySelector('[data-id="annualDepreciationOverride"]').value === ''
           ? null
           : +el.querySelector('[data-id="annualDepreciationOverride"]').value,
+      // Owner-occupied running cost + stochastic repairs (design 75)
+      annualRunningCost:    +el.querySelector('[data-id="annualRunningCost"]').value,
+      runningCostValuePct:  +el.querySelector('[data-id="runningCostValuePct"]').value,
+      runningCostGrowth:    +el.querySelector('[data-id="runningCostGrowth"]').value,
+      repairModel:          el.querySelector('[data-id="repairModel"]').value,
+      repairProb:           +el.querySelector('[data-id="repairProb"]').value,
+      repairLambda:         +el.querySelector('[data-id="repairLambda"]').value,
+      repairMedian:         +el.querySelector('[data-id="repairMedian"]').value,
+      repairValuePct:       +el.querySelector('[data-id="repairValuePct"]').value,
+      repairSigma:          +el.querySelector('[data-id="repairSigma"]').value,
+      capitalizeRepairs:    +el.querySelector('[data-id="capitalizeRepairs"]').value,
     };
     // Prime-relative mortgage rate (design 56 Phase 3): the input is the ABSOLUTE rate
     // the bank quotes; store it as `mortgagePrimeSpread = absolute − Prime(country)` so a
