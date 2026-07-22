@@ -484,19 +484,60 @@ capitalization is a basis/CGT effect only, not a cash-flow one.
   `capitalizeRepairs > 0` cuts the sale-year CGT (higher ending NW at a fixed seed).
   `tests/unit/house-repair.test.mjs`.
 
-### 6.4 Phase 4 — MC integration & the decision re-run
+### 6.4 Phase 4 — MC integration & the decision re-run  ⏳ NOT STARTED (next session)
 
-- Expose `equityReturnVol` (already an MC variable, design 74 §5.2) as the driver; expose
-  `repairProb` / `repairMedian` and a global `propertyReturnVol` scaler as opt-in MC variables so
-  a run can sweep housing-market and repair severity.
-- Add house-specific path diagnostics to the MC summary: realized house CAGR, worst house
-  drawdown at the actual sale year, and total lifetime repair spend distribution.
-- **Re-run the company-equity decision** (`scenarios/company-equity-decision.md`) with Part A + B
-  on and write a §6.6 there. Design 74 §6.5 found failure rates *fell* once sequence risk was
-  measured honestly; the open empirical question is whether **holding costs + house-sale-timing
-  risk** move the tranche ranking or the house-sale-window conclusion (memory:
-  `house-sale-timing-window`). This is the payoff design 74 §7 promised: *re-measure the binding
-  risk with an instrument that no longer understates it.*
+Phases 1–3 are done and green; Phase 4 is the remaining work. Everything below is a concrete
+starting point derived from wiring Phases 1–3 this session. **Nothing here is built yet.**
+
+**A. Seed threading — already done.** Design 74 Phase 2 fixed `BaseScenario.buildSim({ seed })`
+and the runner passes the iteration index (`intl-retirement-mc-runner.js:195`
+`scenario.buildSim({ seed })`). Both the property-return tick (P1) and the repair tick (P3) draw
+from `sim.rng`, so **each MC iteration already gets its own property path + repair sequence for
+free** — no runner change needed to make them vary. Verify with a quick "flag on, all scalar MC
+vars off ⇒ iterations differ" check (the design-74 §5.2 regression, applied here).
+
+**B. Exposing the new knobs as MC variables — the wrinkle.** MC variables are `{ paramKey, … }`
+where `paramKey` MUST be a key the runner writes to `cfg.parameters[paramKey]`
+(`intl-retirement-mc-config.js:38`, `DEFAULT_MC_VARIABLE_CONFIGS`). The repair knobs
+(`repairProb`, `repairMedian`, …) are **per-property record fields in `cfg.realProperties[i]`, NOT
+`cfg.parameters`**, so they cannot be swept directly (and dotted paramKeys into records are dropped
+on the Opt/MC path — memory `optimizer-param-key-dot-collision`). Two clean routes:
+  - `equityReturnVol` (already `mc:true`, design 74) is the honest driver for *both* equity and
+    housing systematic vol, since property loads on the same market factor. Sweeping it moves the
+    house too — arguably all you need for the correlated-risk question.
+  - For repair severity/frequency, add **global scaler params** to ECONOMIC_REGIMES (or a small
+    house-cost param group) that the handlers multiply in — e.g. `repairSeverityScale` (default
+    1.0, `mc:true`) read by `RealPropertyRepairTickHandler` as a multiplier on `median`, and
+    optionally `repairFreqScale` on `repairProb`/`repairLambda`. These live in `cfg.parameters`, so
+    they *are* MC-able. Thread them through the handler constructor from the toolset like the other
+    params. (Same pattern for a `propertyReturnVol`/`propertyReturnIdioScale` scaler if you want
+    housing vol swept independently of `equityReturnVol`.)
+
+**C. House path diagnostics.** Extend `computePathShape()` (`intl-retirement-mc-runner.js:62`,
+folded into `summary.pathShape` at :285). Add: realized house CAGR (from the property `value`
+series), worst house drawdown at/around the actual sale year, and the lifetime repair-spend
+distribution (sum the `house_repair_expenses` metric or `state.houseRepairSpendingTotal`). The
+repair total is already in state — surface it in the per-run result and take a median/percentiles
+across runs.
+
+**D. Re-run the company-equity decision** (`scenarios/company-equity-decision.md`) with Part A + B
+on and write a **§6.6** there. Turn on `equityReturnStochastic` + `propertyReturnStochastic`, give
+the US house a running cost + a `BERNOULLI` repair model, and re-measure. Design 74 §6.5 found
+failure rates *fell* once sequence risk was measured honestly; the open empirical question is
+whether **holding costs + house-sale-timing risk** move the tranche ranking or the house-sale
+window conclusion (memory `house-sale-timing-window`, `scenario-total-outflow-excludes-mortgage`).
+Headless runners: `scripts/run-scenario.mjs` / the MC runner; det runs ~18s (memory
+`house-sale-timing-window`). This is the payoff design 74 §7 promised: *re-measure the binding risk
+with an instrument that no longer understates it.*
+
+**E. Open items to carry (not blockers):** optimizer/MPC still default `seed = 1` (design 74 §8
+Q6) — if the decision uses the optimizer, candidate rollouts share one path and need common random
+numbers; the property/repair ticks are reducer/`sim.rng`-resident so they *should* reproduce
+without a `_seededSim` shim, but add an explicit CRN regression before trusting optimizer results.
+The house running cost + repairs assume `US_RETIREMENT` is present (see §6.2/6.3) — true for the
+decision scenario. New per-property fields are wired through state + serializer but **not the
+property-editor UI** (`src/visualization/assets/real-property-editor.js`) — add them there if the
+decision work wants to drive costs/repairs from the UI rather than `mutateCfg`/JSON.
 
 ---
 
