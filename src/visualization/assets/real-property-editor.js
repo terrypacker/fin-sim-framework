@@ -161,9 +161,10 @@ export class RealPropertyEditor extends BaseComponent {
 
   /**
    * Route param-backed real-property fields through their param (design/32, design 55 §14.3).
-   * All three generated real-property fields (value, appreciationRate, plannedSaleYear) are
-   * bound so a direct edit writes the param (the source of truth) rather than only the record —
-   * otherwise the param→record cascade clobbers the edit on the next Rebuild.
+   * All generated real-property fields (value, appreciationRate, plannedSaleYear,
+   * isPrimaryResidence) are bound so a direct edit writes the param (the source of truth)
+   * rather than only the record — otherwise the param→record cascade clobbers the edit on
+   * the next Rebuild.
    */
   _bindParamLinks(el) {
     this._linkedFields = new Set();
@@ -187,6 +188,8 @@ export class RealPropertyEditor extends BaseComponent {
     bindField('appreciationRate', 'appreciationRate', (raw) => Number(raw));
     bindField('plannedSaleYear',  'plannedSaleYear',
       (raw) => (raw === '' || raw == null) ? null : Math.round(Number(raw)));
+    // Boolean primary-residence flag — the checkbox passes its `.checked` (design 55 §4).
+    bindField('isPrimaryResidence', 'isPrimaryResidence', (raw) => !!raw);
   }
 
   _readForm(el) {

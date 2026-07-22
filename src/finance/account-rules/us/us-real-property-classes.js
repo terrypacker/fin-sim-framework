@@ -14,7 +14,13 @@ import { RecordBalanceAction } from '../../../simulation-framework/actions.js';
 import { findLoanForProperty } from '../loan-classes.js';
 import { resolveDestinationCashKey, resolveSaleDestinationKey } from '../cash-routing.js';
 
-const US_PRIMARY_HOME_EXEMPTION = 500_000;
+// IRC §121 principal-residence gain exclusion. Available ONLY for a property flagged
+// as the primary residence — a non-primary (investment / second home) sale gets no
+// exclusion — and sized by filing status: $250k Single / $500k Married Filing Jointly.
+// The 2-of-5-year ownership-and-use test is not modeled; the isPrimaryResidence flag
+// stands in for eligibility.
+const US_PRIMARY_HOME_EXCLUSION_MFJ    = 500_000;
+const US_PRIMARY_HOME_EXCLUSION_SINGLE = 250_000;
 
 const YEAR_MS       = 365 * 24 * 60 * 60 * 1000;
 const SIX_YEARS_MS  = 6 * YEAR_MS;
@@ -57,9 +63,9 @@ const resolveDestinationKey = (state, saleDestinationAccount) =>
 
 /**
  * EVT-34: US house sale — credit destination account with sale proceeds net of
- * mortgage payoff, compute taxable capital gain after the $500K primary-home
- * exemption (mortgage payoff does not reduce the taxable gain), and chain
- * US_HOUSE_SALE_TAX.
+ * mortgage payoff, compute taxable capital gain after the IRC §121 principal-residence
+ * exclusion ($250k Single / $500k MFJ, primary residence only; mortgage payoff does not
+ * reduce the taxable gain), and chain US_HOUSE_SALE_TAX.
  */
 export class UsHouseSaleApplyReducer extends AccountServiceReducer {
   static type        = 'UsHouseSaleApplyReducer';
@@ -81,20 +87,26 @@ export class UsHouseSaleApplyReducer extends AccountServiceReducer {
     // Depreciation taken during the hold reduces the tax basis, so the gain is
     // larger (design 48 §4.5). accumulatedDepreciation is 0 for non-rental
     // properties, so this is a no-op there.
-    const accumulatedDep = (stateKey && state[stateKey]?.accumulatedDepreciation) ?? 0;
+    const propState = stateKey ? state[stateKey] : null;
+    const accumulatedDep = propState?.accumulatedDepreciation ?? 0;
     const adjustedBasis  = Math.max(0, costBasis - accumulatedDep);
     const rawGain     = Math.max(0, salePrice - adjustedBasis);
-    const taxableGain = Math.max(0, rawGain - US_PRIMARY_HOME_EXEMPTION);
+    // IRC §121 exclusion applies only to a primary residence, and only up to the
+    // filing-status cap ($250k Single / $500k MFJ). A non-primary property excludes
+    // nothing, so its full gain is taxable.
+    const exclusion   = propState?.isPrimaryResidence === true
+      ? (state.usFilingSingle ? US_PRIMARY_HOME_EXCLUSION_SINGLE : US_PRIMARY_HOME_EXCLUSION_MFJ)
+      : 0;
+    const taxableGain = Math.max(0, rawGain - exclusion);
 
     // AU assessment of the foreign (US) house for an AU resident (design 62 §5):
     // an AU resident is taxable on worldwide capital gains. The AU gain is measured
     // from the s855-45 stepped-up basis (market value at the move, stamped on the
     // property state as costBaseByCountry.AU), reduced by the AU main-residence
-    // exemption. US $500k exclusion stays US-side only. When the property was not
+    // exemption. The US §121 exclusion stays US-side only. When the property was not
     // stepped up (domestic/TAP, or not owned at the move) auBasis is absent ⇒ no AU
     // gain here. Both figures are in the property currency (USD); the AU classifier
     // converts. Indexation is deferred for property (design 57 §6.4), matching AU_HOUSE.
-    const propState = stateKey ? state[stateKey] : null;
     const auBasis   = propState?.costBaseByCountry?.AU;
     let auGain = 0, auDiscountableGain = 0;
     if (auBasis != null && residency === 'AU') {
