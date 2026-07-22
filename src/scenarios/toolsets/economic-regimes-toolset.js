@@ -652,6 +652,45 @@ export const ECONOMIC_REGIMES = {
         description:  'Optional per-sleeve idiosyncratic (property-specific) appreciation sd, keyed by rate key. This is where most of a single home\'s price variance comes from under the near-zero betas. Absent ⇒ the defaults (US 0.09 / AU 0.10, giving a total single-home σ ≈ 9–10%). Only used when Stochastic Property Returns is on.',
       },
       {
+        // Design 75 §6.4 B. A scalar multiplier on EVERY property sleeve's idiosyncratic vol,
+        // exposed so Monte Carlo can sweep the WIDTH of house-price variance. Housing is ~99%
+        // idiosyncratic under the near-zero betas, so equityReturnVol (which only reaches the
+        // house through β≈0.03) barely moves it — this is the honest housing-vol MC axis. A
+        // scalar in cfg.parameters (unlike the per-property idioVol object) is MC-sweepable.
+        key:          'propertyReturnIdioScale',
+        label:        'Property Idiosyncratic Vol Scale',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           true,
+        opt:          false,
+        defaultValue: 1.0,
+        description:  'Monte Carlo multiplier on every property sleeve\'s idiosyncratic appreciation vol (design 75 §6.4). 1.0 = the calibrated defaults (US 0.09 / AU 0.10); sweeping it widens/narrows single-home price variance — the sequence/timing risk on the house at its sale date. Only bites when Stochastic Property Returns is on; inert (1.0) otherwise.',
+      },
+      {
+        // Design 75 §6.4 B. Global multiplier on the repair-event median size. Per-property
+        // repairMedian/repairValuePct live in cfg.realProperties and can't be swept directly,
+        // so this cfg.parameters scalar is the MC seam for repair severity.
+        key:          'repairSeverityScale',
+        label:        'House Repair Severity Scale',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           true,
+        opt:          false,
+        defaultValue: 1.0,
+        description:  'Monte Carlo multiplier on the median size of every stochastic house-repair event (design 75 §5.2/§6.4). 1.0 = each property\'s configured repairMedian/repairValuePct; sweeping it stress-tests how the lumpy repair cost bites liquidity. Only bites when a property has a repair model; inert (1.0) otherwise.',
+      },
+      {
+        // Design 75 §6.4 B. Global multiplier on the repair-event probability/rate.
+        key:          'repairFreqScale',
+        label:        'House Repair Frequency Scale',
+        type:         'Number',
+        group:        'Economic Shocks',
+        mc:           true,
+        opt:          false,
+        defaultValue: 1.0,
+        description:  'Monte Carlo multiplier on the annual probability (Bernoulli) or rate (Poisson) of a stochastic house repair (design 75 §5.2/§6.4). 1.0 = each property\'s configured repairProb/repairLambda; sweeping it varies how OFTEN the lump lands. Only bites when a property has a repair model; inert (1.0) otherwise.',
+      },
+      {
         key:          'behavioralStrategies',
         label:        'Behavioral Strategies',
         type:         'EnumMulti',
@@ -844,6 +883,7 @@ export const ECONOMIC_REGIMES = {
             model:             p.equityReturnModel ?? 'WHITE_NOISE',
             beta:              p.propertyReturnBeta    ?? {},
             idioVol:           p.propertyReturnIdioVol ?? {},
+            idioScale:         p.propertyReturnIdioScale ?? 1,
             driftComp:         p.equityReturnDriftComp ?? 'GEOMETRIC',
             shareMarketFactor: !!p.equityReturnStochastic,
           })]

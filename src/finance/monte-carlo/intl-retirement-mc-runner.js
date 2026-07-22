@@ -25,6 +25,25 @@ export function computeNetWorthUsd(state) {
 }
 
 /**
+ * Gross USD value of all real-property holdings in `state` (design 75 §6.4 C). Unlike
+ * computeNetWorth this sums the *gross* `value` (not equity), FX-converted to USD, because the
+ * house-appreciation PATH we want to characterize is the value series, independent of the
+ * mortgage. Returns 0 when no property exists (or all sold ⇒ value 0).
+ */
+export function computeHouseValueUsd(state, baseCurrency = 'USD') {
+  let total = 0;
+  for (const val of Object.values(state)) {
+    if (val == null || typeof val !== 'object') continue;
+    if (val.kind !== 'real-property' || typeof val.value !== 'number') continue;
+    const currency = val.currency?.code ?? val.currency ?? baseCurrency;
+    if (currency === baseCurrency) { total += val.value; continue; }
+    const rate = state.effectiveExchangeRates?.[`${baseCurrency}_${currency}`] ?? 1;
+    total += val.value / rate;
+  }
+  return total;
+}
+
+/**
  * Extract one net worth data point per year from sim history snapshots.
  * Takes the last snapshot within each calendar year.
  */
@@ -40,6 +59,7 @@ function extractYearlyTimeSeries(sim) {
       date:         new Date(Date.UTC(year, 0, 1)),
       netWorthUsd:  computeNetWorthUsd(snap.state),
       netLiquidity: computeNetLiquidity(snap.state, snap.date),
+      houseValueUsd: computeHouseValueUsd(snap.state),
     }));
 }
 
@@ -61,7 +81,10 @@ function extractYearlyTimeSeries(sim) {
  */
 export function computePathShape(timeSeries) {
   const nw = (timeSeries ?? []).map(p => p.netWorthUsd);
-  const empty = { netWorthCagr: null, worst5yrCagr: null, maxDrawdown: null, decadeNetWorthUsd: null };
+  const empty = {
+    netWorthCagr: null, worst5yrCagr: null, maxDrawdown: null, decadeNetWorthUsd: null,
+    houseCagr: null, houseMaxDrawdown: null,
+  };
   if (nw.length < 2) return empty;
 
   const years = nw.length - 1;
@@ -87,7 +110,31 @@ export function computePathShape(timeSeries) {
   }
 
   const decadeNetWorthUsd = nw[Math.min(10, nw.length - 1)];
-  return { netWorthCagr, worst5yrCagr, maxDrawdown, decadeNetWorthUsd };
+
+  // House-price path (design 75 §6.4 C). Characterize the appreciation PATH over the pre-sale
+  // window only: once the house is sold its value drops to 0, which is a sale event, not a
+  // market drawdown — so we truncate at the first zero that follows a positive value. This
+  // isolates the sequence/timing risk on the binding asset (its realized CAGR and worst
+  // peak-to-trough dip while still held) from the sale artifact.
+  const houseSeries = (timeSeries ?? []).map(p => p.houseValueUsd ?? 0);
+  let hStart = houseSeries.findIndex(v => v > 0);
+  let houseCagr = null, houseMaxDrawdown = null;
+  if (hStart >= 0) {
+    let hEnd = hStart;
+    while (hEnd + 1 < houseSeries.length && houseSeries[hEnd + 1] > 0) hEnd++;
+    if (hEnd > hStart) {
+      const a = houseSeries[hStart], b = houseSeries[hEnd];
+      houseCagr = Math.pow(b / a, 1 / (hEnd - hStart)) - 1;
+      let peak = -Infinity; houseMaxDrawdown = 0;
+      for (let t = hStart; t <= hEnd; t++) {
+        const v = houseSeries[t];
+        if (v > peak) peak = v;
+        if (peak > 0) houseMaxDrawdown = Math.max(houseMaxDrawdown, (peak - v) / peak);
+      }
+    }
+  }
+
+  return { netWorthCagr, worst5yrCagr, maxDrawdown, decadeNetWorthUsd, houseCagr, houseMaxDrawdown };
 }
 
 /** Median of a numeric array (ignoring null/undefined/NaN); null when empty. */
@@ -96,6 +143,16 @@ function median(xs) {
   if (v.length === 0) return null;
   const mid = Math.floor(v.length / 2);
   return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
+}
+
+/** Linear-interpolated percentile p∈[0,1] of a numeric array (ignoring null/NaN); null when empty. */
+function percentile(xs, p) {
+  const v = xs.filter(x => x != null && Number.isFinite(x)).sort((a, b) => a - b);
+  if (v.length === 0) return null;
+  if (v.length === 1) return v[0];
+  const idx = p * (v.length - 1);
+  const lo  = Math.floor(idx), hi = Math.ceil(idx);
+  return lo === hi ? v[lo] : v[lo] + (v[hi] - v[lo]) * (idx - lo);
 }
 
 /**
@@ -219,6 +276,9 @@ export class IntlRetirementMcRunner {
         cumulativeDeficit: sim.state.cumulativeDeficit ?? 0,
         deficitMonths:     sim.state.deficitMonths     ?? 0,
         timeSeries:        extractYearlyTimeSeries(sim),
+        // Lifetime stochastic house-repair spend (design 75 §6.4 C), native property currency
+        // summed across properties. Already accumulated in state by HouseRepairApplyReducer.
+        lifetimeRepairSpend: sim.state.houseRepairSpendingTotal ?? 0,
       }),
     });
 
@@ -263,6 +323,7 @@ export class IntlRetirementMcRunner {
       deficitMonths:     r.result.deficitMonths,
       timeSeries:        r.result.timeSeries,
       pathShape:         computePathShape(r.result.timeSeries),
+      lifetimeRepairSpend: r.result.lifetimeRepairSpend ?? 0,
     }));
 
     // Sequence-of-returns readout (design 74 §5.2). Mark each path against the
@@ -289,6 +350,14 @@ export class IntlRetirementMcRunner {
       medianDecadeNetWorthUsd,
       failureRateBelowMedianDecade: belowN ? belowFail / belowN : null,
       failureRateAboveMedianDecade: aboveN ? aboveFail / aboveN : null,
+      // House-price path + lifetime repair spend across runs (design 75 §6.4 C). The house
+      // CAGR/drawdown medians characterize the appreciation path of the binding asset; the
+      // repair-spend percentiles show the fat right tail of the lumpy holding cost.
+      medianHouseCagr:         median(runs.map(r => r.pathShape.houseCagr)),
+      medianHouseMaxDrawdown:  median(runs.map(r => r.pathShape.houseMaxDrawdown)),
+      medianRepairSpend:       median(runs.map(r => r.lifetimeRepairSpend)),
+      p90RepairSpend:          percentile(runs.map(r => r.lifetimeRepairSpend), 0.90),
+      p10RepairSpend:          percentile(runs.map(r => r.lifetimeRepairSpend), 0.10),
     };
 
     return { runs, summary };

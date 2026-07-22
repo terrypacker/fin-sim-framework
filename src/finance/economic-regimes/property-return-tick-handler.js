@@ -59,13 +59,14 @@ export class PropertyReturnTickHandler extends HandlerEntry {
   static type        = 'PropertyReturnTickHandler';
   static eventType   = 'PROPERTY_RETURN_TICK';
 
-  constructor({ marketVol = 0.18, model = 'WHITE_NOISE', reversionSpeed = 0.3, beta = {}, idioVol = {}, driftComp = 'GEOMETRIC', shareMarketFactor = false, dt = 1 } = {}) {
+  constructor({ marketVol = 0.18, model = 'WHITE_NOISE', reversionSpeed = 0.3, beta = {}, idioVol = {}, idioScale = 1, driftComp = 'GEOMETRIC', shareMarketFactor = false, dt = 1 } = {}) {
     super(null, 'Property Return Tick');
     this.marketVol         = marketVol;         // annualized market-factor sd (matches equityReturnVol so betas mean the same)
     this.model             = model;             // standalone process model (ignored when sharing)
     this.reversionSpeed    = reversionSpeed;    // OU pull-back speed (standalone MEAN_REVERTING only)
     this.beta              = beta ?? {};        // per-sleeve override of DEFAULT_RE_BETA
     this.idioVol           = idioVol ?? {};     // per-sleeve override of DEFAULT_RE_IDIO
+    this.idioScale         = idioScale ?? 1;    // MC multiplier on every sleeve's idio vol (design 75 §6.4 B) — most of a house's variance is idiosyncratic, so this is the housing-vol MC axis
     this.driftComp         = driftComp;         // 'GEOMETRIC' (add σ²/2) or 'NONE' — inherited from the equity decision
     this.shareMarketFactor = shareMarketFactor; // reuse state.equityReturnMarketDev (equity path on) vs draw own
     this.dt                = dt;                // tick interval in years (annual)
@@ -75,7 +76,7 @@ export class PropertyReturnTickHandler extends HandlerEntry {
   static fromJSON(d) {
     const h = new this({
       marketVol: d.marketVol, model: d.model, reversionSpeed: d.reversionSpeed,
-      beta: d.beta, idioVol: d.idioVol, driftComp: d.driftComp,
+      beta: d.beta, idioVol: d.idioVol, idioScale: d.idioScale, driftComp: d.driftComp,
       shareMarketFactor: d.shareMarketFactor, dt: d.dt,
     });
     h.id = d.id;
@@ -86,7 +87,7 @@ export class PropertyReturnTickHandler extends HandlerEntry {
     return {
       ...super.toJSON(),
       marketVol: this.marketVol, model: this.model, reversionSpeed: this.reversionSpeed,
-      beta: this.beta, idioVol: this.idioVol, driftComp: this.driftComp,
+      beta: this.beta, idioVol: this.idioVol, idioScale: this.idioScale, driftComp: this.driftComp,
       shareMarketFactor: this.shareMarketFactor, dt: this.dt,
     };
   }
@@ -109,7 +110,10 @@ export class PropertyReturnTickHandler extends HandlerEntry {
     const driftComp = {};
     for (const sleeve of PROPERTY_SLEEVES) {
       const beta    = this.beta[sleeve]    ?? DEFAULT_RE_BETA[sleeve] ?? 1.0;
-      const idioVol = this.idioVol[sleeve] ?? DEFAULT_RE_IDIO[sleeve] ?? 0;
+      // idioScale (default 1) multiplies every sleeve's idiosyncratic vol so MC can sweep the
+      // WIDTH of house-price variance (design 75 §6.4 B). Housing is ~99% idiosyncratic under
+      // the near-zero betas, so this — not equityReturnVol — is the honest housing-vol axis.
+      const idioVol = (this.idioVol[sleeve] ?? DEFAULT_RE_IDIO[sleeve] ?? 0) * this.idioScale;
       let dev = beta * marketDev;
       // Skip the idio draw entirely when its vol is 0 so the RNG cursor is unadvanced and
       // the market-only path reproduces exactly (design 74 §4 ⚠️).

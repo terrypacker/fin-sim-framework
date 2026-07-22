@@ -1,6 +1,34 @@
 # 75 — House costs and the property return path: appreciation that co-moves with markets, plus the running cost of owning
 
-**Status**: **PHASES 1–3 IMPLEMENTED** (2026-07-21); Phase 4 (MC/decision re-run) PROPOSED.
+**Status**: **PHASES 1–4 (code) IMPLEMENTED** (2026-07-21). Phase 4 A/B/C — MC scalers,
+seed-threading and house-path diagnostics — are built and green. Phase 4 **D** (the
+company-equity decision re-run / §6.6) is **DEFERRED** and tracked in
+`scenarios/company-equity-decision.md` (run instructions in its appendix); the runner
+`scenarios/mc-arm-house.mjs` + reporter `scenarios/mc-report-house.mjs` are ready to drive it.
+
+**Phase 4 surface (§6.4 A/B/C — MC integration & house-path diagnostics)**: the per-property
+return/repair inputs live in `cfg.realProperties` (not `cfg.parameters`), so they can't be swept
+as MC variables directly (dotted record paramKeys are dropped on the Opt/MC path — memory
+`optimizer-param-key-dot-collision`). Three **global scalar params** in ECONOMIC_REGIMES are the
+MC seam, all default `1.0` ⇒ inert, all `mc:true` opt-in: `propertyReturnIdioScale`
+(multiplies every property sleeve's idiosyncratic vol in `PropertyReturnTickHandler` — the honest
+housing-VOL axis, since `equityReturnVol` only reaches the house through β≈0.03 and housing is
+~99% idiosyncratic), `repairSeverityScale` (multiplies the repair median) and `repairFreqScale`
+(multiplies the Bernoulli prob / Poisson λ) in `RealPropertyRepairTickHandler`. The frequency
+scaler rescales the *compared* probability only — never adds/removes a uniform — so RNG-cursor
+discipline (design 74 §4) is preserved and a base-disabled property still draws nothing. Wired
+through both handler constructors + serializers + both toolsets; registered as opt-in MC
+variables (`Return Paths` group) in `intl-retirement-mc-config.js`. **Seed threading (§6.4 A) was
+already done** by design 74 Phase 2 (`buildSim({ seed })`), so each MC iteration already gets its
+own house appreciation path + repair sequence. **House-path diagnostics (§6.4 C)**: new
+`computeHouseValueUsd` (gross FX-converted property value); `extractYearlyTimeSeries` captures a
+`houseValueUsd` series and `evaluate` captures `lifetimeRepairSpend` (`state.houseRepairSpendingTotal`);
+`computePathShape` adds `houseCagr` / `houseMaxDrawdown` measured over the **pre-sale window only**
+(truncated at the first zero, so the sale-to-zero is not read as a market drawdown); `summary.pathShape`
+adds `medianHouseCagr` / `medianHouseMaxDrawdown` + repair-spend `median`/`p10`/`p90`. New
+`percentile()` helper. Tests: `tests/unit/house-cost-mc.test.mjs` (17). **3930 unit / 906 viz
+green; golden byte-identical.** §6.6 decision re-run (§6.4 D) driven by `scenarios/mc-arm-house.mjs`.
+
 Direct successor to design 74 §7 ("Relationship to the house-price design"), which named this
 design the natural extension once the equity return path landed. Depends on
 `wip/stochastic-return-modeling` (design 74 Phases 1–4, all complete). All §8 open questions
@@ -484,10 +512,15 @@ capitalization is a basis/CGT effect only, not a cash-flow one.
   `capitalizeRepairs > 0` cuts the sale-year CGT (higher ending NW at a fixed seed).
   `tests/unit/house-repair.test.mjs`.
 
-### 6.4 Phase 4 — MC integration & the decision re-run  ⏳ NOT STARTED (next session)
+### 6.4 Phase 4 — MC integration & the decision re-run  ✅ A/B/C IMPLEMENTED; D DEFERRED
 
-Phases 1–3 are done and green; Phase 4 is the remaining work. Everything below is a concrete
-starting point derived from wiring Phases 1–3 this session. **Nothing here is built yet.**
+Parts A (seed threading — already done), B (MC scalers) and C (house-path diagnostics) are built
+and green (`tests/unit/house-cost-mc.test.mjs`, 17 tests; **3930 unit / 906 viz**, golden
+byte-identical). Part D (the decision re-run) is **deferred** — the tooling is ready
+(`scenarios/mc-arm-house.mjs` runner + `scenarios/mc-report-house.mjs` reporter) and the run
+instructions live in the appendix of `scenarios/company-equity-decision.md`, where §6.6 will be
+written when the run happens. The original starting notes below are retained; **what shipped vs.
+the sketch** is called out inline.
 
 **A. Seed threading — already done.** Design 74 Phase 2 fixed `BaseScenario.buildSim({ seed })`
 and the runner passes the iteration index (`intl-retirement-mc-runner.js:195`
@@ -513,12 +546,34 @@ on the Opt/MC path — memory `optimizer-param-key-dot-collision`). Two clean ro
     params. (Same pattern for a `propertyReturnVol`/`propertyReturnIdioScale` scaler if you want
     housing vol swept independently of `equityReturnVol`.)
 
+> **✅ SHIPPED (B).** All three scalers were added to ECONOMIC_REGIMES: `repairSeverityScale`,
+> `repairFreqScale` and — the important one — `propertyReturnIdioScale`. `equityReturnVol` alone
+> is **not** enough for the housing question: at the calibrated β≈0.03 the market factor barely
+> moves the house (~99% of a home's variance is idiosyncratic), so sweeping `equityReturnVol`
+> leaves house-sale-price risk almost unchanged. `propertyReturnIdioScale` multiplies the
+> idiosyncratic vol and is therefore the honest MC axis for the sequence/timing risk on the house.
+> `repairFreqScale` rescales only the *compared* probability/λ (never the draw structure), so the
+> cursor discipline holds. All default 1.0, `mc:true`, opt-in (`enabled:false`) — inert on single
+> runs and on the default golden.
+
 **C. House path diagnostics.** Extend `computePathShape()` (`intl-retirement-mc-runner.js:62`,
 folded into `summary.pathShape` at :285). Add: realized house CAGR (from the property `value`
 series), worst house drawdown at/around the actual sale year, and the lifetime repair-spend
 distribution (sum the `house_repair_expenses` metric or `state.houseRepairSpendingTotal`). The
 repair total is already in state — surface it in the per-run result and take a median/percentiles
 across runs.
+
+> **✅ SHIPPED (C).** `computeHouseValueUsd(state)` sums the gross FX-converted property value;
+> `extractYearlyTimeSeries` carries a `houseValueUsd` series and `evaluate` captures
+> `lifetimeRepairSpend` from `state.houseRepairSpendingTotal`. `computePathShape` adds
+> `houseCagr` / `houseMaxDrawdown` **over the pre-sale window only** — truncated at the first zero
+> that follows a positive value, so a house *sold* (value → 0) is not mis-read as a 100% market
+> drawdown. `summary.pathShape` gains `medianHouseCagr`, `medianHouseMaxDrawdown`, and
+> `median`/`p10`/`p90` repair spend (new `percentile()` helper). **Gotcha found wiring D:** the
+> series sums **all** properties, so in an arm where the US house sells early the CAGR/drawdown are
+> the *held* (AU) house; and repairs only accrue while `value > 0`, so a house sold in year 1
+> shows ~$0 lifetime repair — correct, but it means the holding-cost signal lives in the
+> **never-sell** arms, which is exactly where the decision's failure risk concentrates.
 
 **D. Re-run the company-equity decision** (`scenarios/company-equity-decision.md`) with Part A + B
 on and write a **§6.6** there. Turn on `equityReturnStochastic` + `propertyReturnStochastic`, give
@@ -530,14 +585,20 @@ Headless runners: `scripts/run-scenario.mjs` / the MC runner; det runs ~18s (mem
 `house-sale-timing-window`). This is the payoff design 74 §7 promised: *re-measure the binding risk
 with an instrument that no longer understates it.*
 
-**E. Open items to carry (not blockers):** optimizer/MPC still default `seed = 1` (design 74 §8
-Q6) — if the decision uses the optimizer, candidate rollouts share one path and need common random
-numbers; the property/repair ticks are reducer/`sim.rng`-resident so they *should* reproduce
-without a `_seededSim` shim, but add an explicit CRN regression before trusting optimizer results.
-The house running cost + repairs assume `US_RETIREMENT` is present (see §6.2/6.3) — true for the
-decision scenario. New per-property fields are wired through state + serializer but **not the
-property-editor UI** (`src/visualization/assets/real-property-editor.js`) — add them there if the
-decision work wants to drive costs/repairs from the UI rather than `mutateCfg`/JSON.
+**E. Open items to carry (not blockers) — CARRIED FORWARD, still open:** optimizer/MPC still
+default `seed = 1` (design 74 §8 Q6) — if the decision uses the optimizer, candidate rollouts
+share one path and need common random numbers; the property/repair ticks are reducer/`sim.rng`-
+resident so they *should* reproduce without a `_seededSim` shim, but add an explicit CRN regression
+before trusting optimizer results. The house running cost + repairs assume `US_RETIREMENT` is
+present (see §6.2/6.3) — true for the decision scenario. The three new MC scalers
+(`propertyReturnIdioScale` / `repairSeverityScale` / `repairFreqScale`) are `mc:true` but **not
+yet `opt:true`** — they are sweep axes, not optimizer levers, which is the right default (you don't
+*optimize* how volatile your house is). The new per-property cost/repair fields are wired through
+state + serializer + both toolsets but **still NOT in the property-editor UI**
+(`src/visualization/assets/real-property-editor.js`) — deliberately deferred (the decision work
+drives costs/repairs via `mc-arm-house.mjs`/`mutateCfg`, not the UI). This is the one remaining
+Phase-4 follow-up: a real end-user who wants to configure a house's running cost / repair model
+from the app needs those ten fields surfaced in the editor.
 
 ---
 

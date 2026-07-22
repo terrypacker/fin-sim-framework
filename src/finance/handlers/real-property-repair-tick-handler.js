@@ -67,6 +67,8 @@ export class RealPropertyRepairTickHandler extends HandlerEntry {
     usRole, usOwnerId = null,
     auRole, auOwnerId = null,
     primaryPersonKey = null,
+    severityScale = 1,
+    freqScale = 1,
   } = {}) {
     super(null, 'House Repair');
     this.stateRegistry    = stateRegistry;
@@ -77,6 +79,14 @@ export class RealPropertyRepairTickHandler extends HandlerEntry {
     this.auRole           = auRole;
     this.auOwnerId        = auOwnerId;
     this.primaryPersonKey = primaryPersonKey;
+    // MC scalers (design 75 §6.4 B): per-property repair fields live in cfg.realProperties and
+    // cannot be swept directly, so these global multipliers in cfg.parameters are the MC seam.
+    // severityScale multiplies each event's median size; freqScale multiplies the annual
+    // probability/rate. Both default 1 ⇒ inert. Applied WITHOUT changing the RNG-draw structure
+    // (freqScale only rescales the compared probability/λ, never adds/removes a uniform), so
+    // cursor discipline (design 74 §4) is preserved.
+    this.severityScale    = severityScale ?? 1;
+    this.freqScale        = freqScale ?? 1;
     this.generatedActionTypes = ['REPLENISH_SAVINGS', 'EXPENSE_DEBIT', 'HOUSE_REPAIR_APPLY', 'RECORD_METRIC', 'RECORD_BALANCE'];
   }
 
@@ -89,6 +99,8 @@ export class RealPropertyRepairTickHandler extends HandlerEntry {
       auRole:           d.auRole           ?? null,
       auOwnerId:        d.auOwnerId        ?? null,
       primaryPersonKey: d.primaryPersonKey ?? null,
+      severityScale:    d.severityScale    ?? 1,
+      freqScale:        d.freqScale        ?? 1,
     });
     h.id = d.id;
     return h;
@@ -103,6 +115,8 @@ export class RealPropertyRepairTickHandler extends HandlerEntry {
       auRole:           this.auRole,
       auOwnerId:        this.auOwnerId,
       primaryPersonKey: this.primaryPersonKey,
+      severityScale:    this.severityScale,
+      freqScale:        this.freqScale,
     };
   }
 
@@ -112,18 +126,22 @@ export class RealPropertyRepairTickHandler extends HandlerEntry {
     if (model === 'NONE') return 0;
     const sigma    = prop.repairSigma    ?? 0.6;
     const valuePct = prop.repairValuePct ?? 0;
-    const median   = valuePct > 0 ? valuePct * (prop.value ?? 0) : (prop.repairMedian ?? 0);
-    if (median <= 0) return 0;   // no cost possible ⇒ no draw (cursor discipline)
+    const baseMedian = valuePct > 0 ? valuePct * (prop.value ?? 0) : (prop.repairMedian ?? 0);
+    if (baseMedian <= 0) return 0;   // no cost possible ⇒ no draw (cursor discipline)
+    // MC scalers (design 75 §6.4 B). severityScale rescales the lump size; freqScale rescales
+    // the event probability/rate. The GUARD stays on the base config (prob/λ/model), never the
+    // scaled value, so scale=1 is inert and a base-disabled property never draws.
+    const median = baseMedian * this.severityScale;
 
     if (model === 'BERNOULLI') {
       const prob = prop.repairProb ?? 0;
-      if (prob <= 0) return 0;                 // no draw
-      return rng() < prob ? drawSeverity(median, sigma, rng) : 0;
+      if (prob <= 0) return 0;                 // base-disabled ⇒ no draw
+      return rng() < prob * this.freqScale ? drawSeverity(median, sigma, rng) : 0;
     }
     if (model === 'POISSON') {
       const lambda = prop.repairLambda ?? 0;
-      if (lambda <= 0) return 0;               // no draw
-      const k = poissonSample(rng, lambda);
+      if (lambda <= 0) return 0;               // base-disabled ⇒ no draw
+      const k = poissonSample(rng, lambda * this.freqScale);
       let total = 0;
       for (let i = 0; i < k; i++) total += drawSeverity(median, sigma, rng);
       return total;

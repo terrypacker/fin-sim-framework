@@ -840,6 +840,10 @@ export const US_RETIREMENT = {
         propertyKeys:     (context.realProperties ?? []).filter(pr => pr.stateKey).map(pr => pr.stateKey),
         usRole:           ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
         auRole:           ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
+        // MC scalers (design 75 §6.4 B) — global multipliers on repair size/frequency, since the
+        // per-property repair fields in cfg.realProperties can't be swept directly. Default 1 ⇒ inert.
+        severityScale:    p.repairSeverityScale ?? 1,
+        freqScale:        p.repairFreqScale     ?? 1,
       });
       repairHandler.handledEvents.push(houseRepairEvent);
       handlers.push(repairHandler);
