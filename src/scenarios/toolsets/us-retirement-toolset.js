@@ -13,6 +13,7 @@ import { ReducerBuilder }       from '../../simulation-framework/builders/reduce
 import { OneOffEvent }          from '../../simulation-framework/events/one-off-event.js';
 import { ACCOUNT_ROLES }        from '../../finance/state/account-roles.js';
 import { MonthlyExpensesHandler }       from '../../finance/handlers/monthly-expenses-handler.js';
+import { HouseRunningCostHandler }      from '../../finance/handlers/house-running-cost-handler.js';
 import { MonthlyWagesHandler }          from '../../finance/handlers/monthly-wages-handler.js';
 import { MonthlySocialSecurityHandler } from '../../finance/handlers/monthly-social-security-handler.js';
 import { DividendScheduledHandler }     from '../../finance/handlers/dividend-scheduled-handler.js';
@@ -120,6 +121,12 @@ function _accountToStatePlain(account) {
   return plain;
 }
 
+/** True when any property carries a positive regular running cost (design 75 §5.1). */
+function _hasHouseRunningCost(realProperties) {
+  return (realProperties ?? []).some(pr =>
+    (pr.annualRunningCost ?? 0) > 0 || (pr.runningCostValuePct ?? 0) > 0);
+}
+
 /**
  * US_RETIREMENT toolset — declarative shape for ScenarioCompiler.
  *
@@ -138,7 +145,7 @@ export const US_RETIREMENT = {
 
   types: {
     handlers: [
-      MonthlyExpensesHandler, MonthlyWagesHandler, MonthlySocialSecurityHandler,
+      MonthlyExpensesHandler, HouseRunningCostHandler, MonthlyWagesHandler, MonthlySocialSecurityHandler,
       DividendScheduledHandler, BondCouponScheduledHandler, CashSleeveInterestHandler, BondSleeveCouponHandler, BondAccretionHandler, FixedIncomeInterestHandler,
       IntlIraEarningsHandler, IntlRothEarningsHandler, IntlK401EarningsHandler, IntlUsStockEarningsHandler,
       OutOfFundsHandler,
@@ -522,6 +529,16 @@ export const US_RETIREMENT = {
       );
     }
 
+    // Regular house running cost (design 75 §5.1) — a monthly essential debit, scheduled only
+    // when some property carries a positive cost so default scenarios stay byte-identical.
+    if (_hasHouseRunningCost(context.realProperties)) {
+      schedules.push(
+        EventBuilder.eventSeries()
+          .name('House Running Cost').type('HOUSE_RUNNING_COST')
+          .interval('month-end').enabled(true).color('#8D6E63').build()
+      );
+    }
+
     if (iraAccounts.length > 0) {
       schedules.push(
         EventBuilder.eventSeries()
@@ -777,6 +794,23 @@ export const US_RETIREMENT = {
     });
     expensesHandler.handledEvents.push(context.schedulesById['MONTHLY_EXPENSES']);
     handlers.push(expensesHandler);
+
+    // House running cost (design 75 §5.1) — iterates ALL properties (both countries); the
+    // debit is residence-aware and each property's base cost is converted from its own
+    // currency. Only wired when the HOUSE_RUNNING_COST event was scheduled (a property has a
+    // positive cost), so it is inert otherwise.
+    const houseCostEvent = context.schedulesById['HOUSE_RUNNING_COST'];
+    if (houseCostEvent) {
+      const runningCostHandler = new HouseRunningCostHandler({
+        stateRegistry:    sr,
+        propertyKeys:     (context.realProperties ?? []).filter(pr => pr.stateKey).map(pr => pr.stateKey),
+        usRole:           ACCOUNT_ROLES.US_SAVINGS, usOwnerId: primaryId,
+        auRole:           ACCOUNT_ROLES.AU_SAVINGS,  auOwnerId: primaryId,
+        startDate:        context.startDate,
+      });
+      runningCostHandler.handledEvents.push(houseCostEvent);
+      handlers.push(runningCostHandler);
+    }
 
     // Monthly Wages
     const wagesHandler = new MonthlyWagesHandler({ stateRegistry: sr });

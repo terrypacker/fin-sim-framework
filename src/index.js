@@ -122,6 +122,7 @@ import { DividendScheduledHandler } from './finance/handlers/dividend-scheduled-
 import { IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandler, IntlUsStockEarningsHandler, IntlAuStockEarningsHandler, IntlAuStockDividendHandler, AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler, FixedIncomeInterestHandler, SuperEarningsHandler } from './finance/handlers/earnings-handlers.js';
 import { IntlTransferToUsHandler, IntlTransferToAuHandler } from './finance/handlers/intl-transfer-handlers.js';
 import { MonthlyExpensesHandler } from './finance/handlers/monthly-expenses-handler.js';
+import { HouseRunningCostHandler } from './finance/handlers/house-running-cost-handler.js';
 import { MonthlySocialSecurityHandler } from './finance/handlers/monthly-social-security-handler.js';
 import { MonthlyWagesHandler } from './finance/handlers/monthly-wages-handler.js';
 import { MortalityHandler } from './finance/handlers/mortality-handler.js';
@@ -788,6 +789,7 @@ export const Finance = {
   IntlTransferToUsHandler,
   IntlTransferToAuHandler,
   MonthlyExpensesHandler,
+  HouseRunningCostHandler,
   MonthlySocialSecurityHandler,
   MonthlyWagesHandler,
   MortalityHandler,

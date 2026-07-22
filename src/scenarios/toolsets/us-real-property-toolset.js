@@ -202,6 +202,11 @@ function _propertyToStatePlain(prop) {
     mortgageBalance:     0,
     monthlyMortgage:     0,
     appreciationRate:    prop.appreciationRate   ?? 0,
+    // Regular running cost — the deterministic, inflating cost of owning the home beyond
+    // the mortgage (design 75 §5.1). Default 0 ⇒ no cost stream, byte-identical to before.
+    annualRunningCost:   prop.annualRunningCost   ?? 0,
+    runningCostValuePct: prop.runningCostValuePct ?? 0,
+    runningCostGrowth:   prop.runningCostGrowth   ?? 0,
     isPrimaryResidence:  prop.isPrimaryResidence ?? false,
     plannedSaleYear:     prop.plannedSaleYear    ?? null,
     ownershipType:       prop.ownershipType      ?? 'sole',

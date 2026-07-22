@@ -1,9 +1,29 @@
 # 75 — House costs and the property return path: appreciation that co-moves with markets, plus the running cost of owning
 
-**Status**: **PHASE 1 IMPLEMENTED** (2026-07-21); Parts B + later phases PROPOSED. Direct
-successor to design 74 §7 ("Relationship to the house-price design"), which named this design the
-natural extension once the equity return path landed. Depends on `wip/stochastic-return-modeling`
-(design 74 Phases 1–4, all complete). All §8 open questions resolved (owner).
+**Status**: **PHASES 1–2 IMPLEMENTED** (2026-07-21); Phase 3 (stochastic repairs) + Phase 4
+(MC/decision re-run) PROPOSED. Direct successor to design 74 §7 ("Relationship to the house-price
+design"), which named this design the natural extension once the equity return path landed.
+Depends on `wip/stochastic-return-modeling` (design 74 Phases 1–4, all complete). All §8 open
+questions resolved (owner).
+
+**Phase 2 surface (Part B Component 1 — regular running cost)**: new `HouseRunningCostHandler`
+(`src/finance/handlers/`), a residence-aware monthly essential debit that sums each property's
+inflated base cost (`annualRunningCost × inflationAccumulator[cc] × (1+runningCostGrowth)^yrs +
+runningCostValuePct × value`), converts from the property's currency into the residence account
+currency, and joins the existing REPLENISH_SAVINGS → EXPENSE_DEBIT → cross-border escalation path
+(no new action or reducer). New per-property fields `annualRunningCost` / `runningCostValuePct` /
+`runningCostGrowth` on the `RealProperty` class, both real-property toolsets' `_propertyToStatePlain`,
+and the serializer (both directions). **Placement decision**: wired in `us-retirement-toolset`
+alongside `MonthlyExpensesHandler` (the established home for `EXPENSE_DEBIT` household handlers),
+iterating *all* properties (both countries) — not per-country in the real-property toolsets, which
+would duplicate the residence/role/escalation plumbing. A dedicated `HOUSE_RUNNING_COST` monthly
+event is scheduled only when some property carries a positive cost, so it needs no cross-toolset
+coordination and default scenarios stay byte-identical. No master flag (deterministic, like a
+spending band). Stops at sale (guards on `value > 0`). **Limitation**: assumes `US_RETIREMENT` is
+present (true for every cross-border target scenario); an AU-only scenario would not get the
+handler until the same `context.schedulesById` coordination MONTHLY_EXPENSES uses is added.
+Tests: `tests/unit/house-running-cost.test.mjs` (11). **3895 unit / 906 viz green; golden
+byte-identical.**
 
 **Phase 1 surface (Part A — property return path)**: `PropertyReturnTickHandler` +
 `PropertyReturnStepReducer` (`src/finance/economic-regimes/`), the `PROPERTY_RETURN_TICK` series
@@ -414,15 +434,18 @@ capitalization is a basis/CGT effect only, not a cash-flow one.
   green); with `equityReturnStochastic` also on, the house and equities load on the *same*
   `marketDev` (assert correlation, not independence — the §4 anti-diversification regression).
 
-### 6.2 Phase 2 — regular running cost (Part B Component 1)
+### 6.2 Phase 2 — regular running cost (Part B Component 1) ✅ IMPLEMENTED
 
-- Per-property `annualRunningCost` / `runningCostValuePct` / `runningCostGrowth` on
-  `_propertyToStatePlain` in both real-property toolsets.
+- Per-property `annualRunningCost` / `runningCostValuePct` / `runningCostGrowth` on the
+  `RealProperty` class, both real-property toolsets' `_propertyToStatePlain`, and the serializer.
 - New `HouseRunningCostHandler` (monthly) reusing the `MonthlyExpensesHandler`
-  replenish/debit/FX/track shape; `inflationAccumulator[cc]` for the CPI factor.
-- **Exit criteria**: `annualRunningCost = 0` ⇒ byte-identical (no debit emitted). A positive
+  replenish/debit/FX shape and `inflationAccumulator[cc]` for the CPI factor; wired in
+  `us-retirement-toolset` over all properties (see status header for the placement rationale).
+  Emits only existing actions (REPLENISH_SAVINGS / EXPENSE_DEBIT / RECORD_METRIC
+  `house_running_cost` / RECORD_BALANCE) — no new action or reducer.
+- **Exit criteria** ✅: `annualRunningCost = 0` ⇒ byte-identical (no event, no debit). A positive
   value debits the residence-appropriate pool, inflates correctly year over year, converts
-  currency after the move, and stops at sale.
+  currency after the move, and stops at sale (`value > 0` guard). `tests/unit/house-running-cost.test.mjs`.
 
 ### 6.3 Phase 3 — stochastic repairs (Part B Component 2)
 

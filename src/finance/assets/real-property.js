@@ -86,6 +86,11 @@ export class RealProperty extends Asset {
     this.currency                = opts.currency                ?? null;
     this.appreciationSchedule    = opts.appreciationSchedule    ?? null;
     this.market                  = opts.market                  ?? null;
+    // Regular running cost — the deterministic, inflating cost of owning the home beyond
+    // the mortgage (design 75 §5.1). Default 0 ⇒ no cost stream.
+    this.annualRunningCost       = opts.annualRunningCost       ?? 0;
+    this.runningCostValuePct     = opts.runningCostValuePct     ?? 0;
+    this.runningCostGrowth       = opts.runningCostGrowth       ?? 0;
     // Rental income (design 48)
     this.rentalEnabled              = opts.rentalEnabled              ?? false;
     this.monthlyRent                = opts.monthlyRent                ?? 0;

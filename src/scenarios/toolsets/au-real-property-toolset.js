@@ -200,6 +200,10 @@ function _propertyToStatePlain(prop) {
     mortgageBalance:     0,
     monthlyMortgage:     0,
     appreciationRate:    prop.appreciationRate   ?? 0,
+    // Regular running cost (design 75 §5.1). Default 0 ⇒ inert.
+    annualRunningCost:   prop.annualRunningCost   ?? 0,
+    runningCostValuePct: prop.runningCostValuePct ?? 0,
+    runningCostGrowth:   prop.runningCostGrowth   ?? 0,
     isPrimaryResidence:  prop.isPrimaryResidence ?? false,
     plannedSaleYear:     prop.plannedSaleYear    ?? null,
     ownershipType:       prop.ownershipType      ?? 'sole',

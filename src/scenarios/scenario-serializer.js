@@ -43,6 +43,7 @@ import {
 // ─── Finance handler classes ────────────────────────────────────────────────
 import { UsSavingsInterestMonthlyHandler }              from '../finance/handlers/us-savings-interest-handler.js';
 import { MonthlyExpensesHandler }                       from '../finance/handlers/monthly-expenses-handler.js';
+import { HouseRunningCostHandler }                      from '../finance/handlers/house-running-cost-handler.js';
 import { MonthlyWagesHandler }                          from '../finance/handlers/monthly-wages-handler.js';
 // IntlTransferToUsHandler / IntlTransferToAuHandler kept for deserializing saved scenarios.
 import { IntlTransferToUsHandler, IntlTransferToAuHandler } from '../finance/handlers/intl-transfer-handlers.js';
@@ -236,7 +237,7 @@ const _ALL_CLASSES = [
   FieldValueReducer, ArrayReducer, NumericSumReducer, MultiplicativeReducer,
   ScriptedReducer, AccountTransactionReducer, AccountServiceReducer,
   // Finance handlers
-  UsSavingsInterestMonthlyHandler, MonthlyExpensesHandler, MonthlyWagesHandler,
+  UsSavingsInterestMonthlyHandler, MonthlyExpensesHandler, HouseRunningCostHandler, MonthlyWagesHandler,
   IntlTransferToUsHandler, IntlTransferToAuHandler, FxTransferToHandler, FxTickHandler,
   AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler,
   FixedIncomeInterestHandler, SuperEarningsHandler,
@@ -746,6 +747,10 @@ export class ScenarioSerializer {
           }))
         : null,
       market:               p.market               ?? null,
+      // Regular running cost (design 75 §5.1)
+      annualRunningCost:    p.annualRunningCost    ?? 0,
+      runningCostValuePct:  p.runningCostValuePct  ?? 0,
+      runningCostGrowth:    p.runningCostGrowth    ?? 0,
       // Rental income (design 48)
       rentalEnabled:              p.rentalEnabled              ?? false,
       monthlyRent:                p.monthlyRent                ?? 0,
@@ -788,6 +793,10 @@ export class ScenarioSerializer {
         ? d.appreciationSchedule.map(e => ({ date: new Date(e.date), rate: e.rate }))
         : null,
       market:              d.market              ?? null,
+      // Regular running cost (design 75 §5.1)
+      annualRunningCost:   d.annualRunningCost   ?? 0,
+      runningCostValuePct: d.runningCostValuePct ?? 0,
+      runningCostGrowth:   d.runningCostGrowth   ?? 0,
       // Rental income (design 48)
       rentalEnabled:              d.rentalEnabled              ?? false,
       monthlyRent:                d.monthlyRent                ?? 0,
