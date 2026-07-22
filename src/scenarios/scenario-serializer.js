@@ -44,6 +44,8 @@ import {
 import { UsSavingsInterestMonthlyHandler }              from '../finance/handlers/us-savings-interest-handler.js';
 import { MonthlyExpensesHandler }                       from '../finance/handlers/monthly-expenses-handler.js';
 import { HouseRunningCostHandler }                      from '../finance/handlers/house-running-cost-handler.js';
+import { RealPropertyRepairTickHandler }                from '../finance/handlers/real-property-repair-tick-handler.js';
+import { HouseRepairApplyReducer }                      from '../finance/reducers/house-repair-apply-reducer.js';
 import { MonthlyWagesHandler }                          from '../finance/handlers/monthly-wages-handler.js';
 // IntlTransferToUsHandler / IntlTransferToAuHandler kept for deserializing saved scenarios.
 import { IntlTransferToUsHandler, IntlTransferToAuHandler } from '../finance/handlers/intl-transfer-handlers.js';
@@ -237,7 +239,7 @@ const _ALL_CLASSES = [
   FieldValueReducer, ArrayReducer, NumericSumReducer, MultiplicativeReducer,
   ScriptedReducer, AccountTransactionReducer, AccountServiceReducer,
   // Finance handlers
-  UsSavingsInterestMonthlyHandler, MonthlyExpensesHandler, HouseRunningCostHandler, MonthlyWagesHandler,
+  UsSavingsInterestMonthlyHandler, MonthlyExpensesHandler, HouseRunningCostHandler, RealPropertyRepairTickHandler, HouseRepairApplyReducer, MonthlyWagesHandler,
   IntlTransferToUsHandler, IntlTransferToAuHandler, FxTransferToHandler, FxTickHandler,
   AuSavingsInterestHandler, AuFixedIncomeInterestMonthlyHandler,
   FixedIncomeInterestHandler, SuperEarningsHandler,
@@ -751,6 +753,14 @@ export class ScenarioSerializer {
       annualRunningCost:    p.annualRunningCost    ?? 0,
       runningCostValuePct:  p.runningCostValuePct  ?? 0,
       runningCostGrowth:    p.runningCostGrowth    ?? 0,
+      // Stochastic repairs (design 75 §5.2)
+      repairModel:          p.repairModel          ?? 'NONE',
+      repairProb:           p.repairProb           ?? 0,
+      repairLambda:         p.repairLambda         ?? 0,
+      repairMedian:         p.repairMedian         ?? 0,
+      repairSigma:          p.repairSigma          ?? 0.6,
+      repairValuePct:       p.repairValuePct       ?? 0,
+      capitalizeRepairs:    p.capitalizeRepairs    ?? 0,
       // Rental income (design 48)
       rentalEnabled:              p.rentalEnabled              ?? false,
       monthlyRent:                p.monthlyRent                ?? 0,
@@ -797,6 +807,14 @@ export class ScenarioSerializer {
       annualRunningCost:   d.annualRunningCost   ?? 0,
       runningCostValuePct: d.runningCostValuePct ?? 0,
       runningCostGrowth:   d.runningCostGrowth   ?? 0,
+      // Stochastic repairs (design 75 §5.2)
+      repairModel:         d.repairModel         ?? 'NONE',
+      repairProb:          d.repairProb          ?? 0,
+      repairLambda:        d.repairLambda        ?? 0,
+      repairMedian:        d.repairMedian        ?? 0,
+      repairSigma:         d.repairSigma         ?? 0.6,
+      repairValuePct:      d.repairValuePct      ?? 0,
+      capitalizeRepairs:   d.capitalizeRepairs   ?? 0,
       // Rental income (design 48)
       rentalEnabled:              d.rentalEnabled              ?? false,
       monthlyRent:                d.monthlyRent                ?? 0,

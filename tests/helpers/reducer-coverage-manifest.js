@@ -125,6 +125,8 @@ export const COVERED = [
   'EquityReturnReducer', 'EquityReturnStepReducer',
   // Stochastic property return path (design 75 §4) — property-return-paths.test.mjs
   'PropertyReturnStepReducer',
+  // House repairs — tracking + capitalize basis (design 75 §5.2) — house-repair.test.mjs
+  'HouseRepairApplyReducer',
   // Time-varying FX (design 47) — evt-fx-process.test.mjs
   'FxProcessReducer', 'FxStepApplyReducer',
 

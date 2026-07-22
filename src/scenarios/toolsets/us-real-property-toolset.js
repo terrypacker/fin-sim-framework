@@ -207,6 +207,16 @@ function _propertyToStatePlain(prop) {
     annualRunningCost:   prop.annualRunningCost   ?? 0,
     runningCostValuePct: prop.runningCostValuePct ?? 0,
     runningCostGrowth:   prop.runningCostGrowth   ?? 0,
+    // Stochastic repairs (design 75 §5.2). Default NONE ⇒ inert. capitalizedImprovements is a
+    // runtime accumulator (starts 0) that HouseRepairApplyReducer lifts and the sale adds to basis.
+    repairModel:         prop.repairModel         ?? 'NONE',
+    repairProb:          prop.repairProb          ?? 0,
+    repairLambda:        prop.repairLambda        ?? 0,
+    repairMedian:        prop.repairMedian        ?? 0,
+    repairSigma:         prop.repairSigma         ?? 0.6,
+    repairValuePct:      prop.repairValuePct      ?? 0,
+    capitalizeRepairs:   prop.capitalizeRepairs   ?? 0,
+    capitalizedImprovements: prop.capitalizedImprovements ?? 0,
     isPrimaryResidence:  prop.isPrimaryResidence ?? false,
     plannedSaleYear:     prop.plannedSaleYear    ?? null,
     ownershipType:       prop.ownershipType      ?? 'sole',

@@ -1,10 +1,29 @@
 # 75 — House costs and the property return path: appreciation that co-moves with markets, plus the running cost of owning
 
-**Status**: **PHASES 1–2 IMPLEMENTED** (2026-07-21); Phase 3 (stochastic repairs) + Phase 4
-(MC/decision re-run) PROPOSED. Direct successor to design 74 §7 ("Relationship to the house-price
-design"), which named this design the natural extension once the equity return path landed.
-Depends on `wip/stochastic-return-modeling` (design 74 Phases 1–4, all complete). All §8 open
-questions resolved (owner).
+**Status**: **PHASES 1–3 IMPLEMENTED** (2026-07-21); Phase 4 (MC/decision re-run) PROPOSED.
+Direct successor to design 74 §7 ("Relationship to the house-price design"), which named this
+design the natural extension once the equity return path landed. Depends on
+`wip/stochastic-return-modeling` (design 74 Phases 1–4, all complete). All §8 open questions
+resolved (owner).
+
+**Phase 3 surface (Part B Component 2 — stochastic repairs)**: new `RealPropertyRepairTickHandler`
+(`src/finance/handlers/`) — a seeded, snapshot-safe annual `sim.rng` consumer that draws a compound
+repair process per property (BERNOULLI default / POISSON / CONTINUOUS × lognormal severity),
+sums the FX-converted cost, and debits it residence-aware via the same REPLENISH_SAVINGS →
+EXPENSE_DEBIT path. New `HouseRepairApplyReducer` (`src/finance/reducers/`) accumulates
+`houseRepairSpending*` and, when `capitalizeRepairs > 0`, lifts a per-property
+`capitalizedImprovements` accumulator (§8 Q6); the US + AU house-sale handlers add that accumulator
+to the sale cost basis (0 by default ⇒ inert), so capitalized repairs cut the sale-year CGT. New
+`HOUSE_REPAIR_APPLY` action + `house_repair_expenses` metric; new per-property fields `repairModel`
+/ `repairProb` / `repairLambda` / `repairMedian` / `repairSigma` / `repairValuePct` /
+`capitalizeRepairs` on the `RealProperty` class, both toolsets, and the serializer, plus the
+`capitalizedImprovements` state accumulator. Wired in `us-retirement-toolset`; the annual
+`HOUSE_REPAIR` tick is scheduled only when a property has a repair model, `order(2)` so it draws
+**after** the equity/property-return ticks and never perturbs their sequences. Added `.order()` to
+`EventSeriesBuilder`. **RNG-cursor discipline** (design 74 §4): properties iterated in stable
+sorted order; NONE / zero-frequency / zero-median draw nothing; sold (`value 0`) skipped. Tests:
+`tests/unit/house-repair.test.mjs` (18, incl. calibration `mean ≈ prob·median·e^{σ²/2}` and the
+capitalize→CGT chain). **3913 unit / 906 viz green; golden byte-identical.**
 
 **Phase 2 surface (Part B Component 1 — regular running cost)**: new `HouseRunningCostHandler`
 (`src/finance/handlers/`), a residence-aware monthly essential debit that sums each property's
@@ -447,19 +466,23 @@ capitalization is a basis/CGT effect only, not a cash-flow one.
   value debits the residence-appropriate pool, inflates correctly year over year, converts
   currency after the move, and stops at sale (`value > 0` guard). `tests/unit/house-running-cost.test.mjs`.
 
-### 6.3 Phase 3 — stochastic repairs (Part B Component 2)
+### 6.3 Phase 3 — stochastic repairs (Part B Component 2) ✅ IMPLEMENTED
 
-- `RealPropertyRepairTickHandler` (annual, 4th `sim.rng` consumer) + `HouseRepairApplyReducer` +
+- `RealPropertyRepairTickHandler` (annual `sim.rng` consumer) + `HouseRepairApplyReducer` +
   `HOUSE_REPAIR_APPLY` action + `house_repair_expenses` metric.
-- Params/fields per §5.2; **only scheduled when at least one property has `repairModel ≠ NONE`**,
-  so default scenarios draw no randomness.
-- `capitalizeRepairs` (§5.2, §8 Q6): `HouseRepairApplyReducer` lifts `costBasis` by
-  `capitalizeRepairs × repairAmount`, composing with `costBaseByCountry` (design 62).
-- **Exit criteria**: `repairModel: NONE` on every property ⇒ no tick scheduled, RNG cursor
-  unadvanced, golden byte-identical; enabled ⇒ reproducible + snapshot-safe; enabling repairs on
-  house A does not shift house B's draw sequence (the §5.2 cursor regression); statistical
-  calibration (long-horizon mean repair ≈ `repairProb × E[severity]`); with `capitalizeRepairs >
-  0`, basis rises by the capitalized fraction and the sale-year CGT falls correspondingly.
+- Params/fields per §5.2 on the `RealProperty` class + both toolsets + serializer; **only
+  scheduled when at least one property has `repairModel ≠ NONE`**, so default scenarios draw no
+  randomness.
+- `capitalizeRepairs` (§5.2, §8 Q6): repairs accrue a per-property `capitalizedImprovements`
+  accumulator (lifted by `HouseRepairApplyReducer`), which the US + AU sale handlers add to the
+  sale cost basis — inert (0) by default, so it does not disturb the frozen sale-basis or the
+  design-62 residency-reset logic. (Refinement vs. the §5.2 sketch: a dedicated accumulator, not a
+  direct `costBasis` write, because the sale basis is baked into the event at compile time.)
+- **Exit criteria** ✅: `repairModel: NONE` everywhere ⇒ no tick scheduled, RNG cursor unadvanced,
+  golden byte-identical; enabled ⇒ reproducible + snapshot-safe; a NONE property does not shift
+  another's draw sequence; calibration (long-horizon mean ≈ `repairProb × median × e^{σ²/2}`);
+  `capitalizeRepairs > 0` cuts the sale-year CGT (higher ending NW at a fixed seed).
+  `tests/unit/house-repair.test.mjs`.
 
 ### 6.4 Phase 4 — MC integration & the decision re-run
 

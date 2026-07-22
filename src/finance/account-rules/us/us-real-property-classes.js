@@ -165,7 +165,9 @@ export class UsHouseSaleHandler extends HandlerEntry {
       {
         type:            'US_HOUSE_SALE_APPLY',
         salePrice:       data.salePrice ?? propState?.value ?? 0,
-        costBasis:       data.costBasis,
+        // Add any capitalized repairs accrued during the sim (design 75 §8 Q6). The
+        // accumulator is 0 by default ⇒ inert; a positive value lifts basis and cuts CGT.
+        costBasis:       data.costBasis + (propState?.capitalizedImprovements ?? 0),
         mortgageBalance,
         residency:       state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null,
         stateKey:        data.stateKey ?? null,

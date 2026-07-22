@@ -102,7 +102,8 @@ export class AuHouseSaleHandler extends HandlerEntry {
       {
         type:            'AU_HOUSE_SALE_APPLY',
         salePrice:       data.salePrice ?? propState?.value ?? 0,
-        costBasis:       data.costBasis,
+        // Capitalized repairs accrued during the sim (design 75 §8 Q6); 0 by default ⇒ inert.
+        costBasis:       data.costBasis + (propState?.capitalizedImprovements ?? 0),
         mortgageBalance,
         residency:       state.people?.[Object.keys(state.people ?? {})[0]]?.residency ?? null,
         ownershipType:   data.ownershipType,

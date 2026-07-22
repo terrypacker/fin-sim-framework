@@ -123,6 +123,8 @@ import { IntlRothEarningsHandler, IntlIraEarningsHandler, IntlK401EarningsHandle
 import { IntlTransferToUsHandler, IntlTransferToAuHandler } from './finance/handlers/intl-transfer-handlers.js';
 import { MonthlyExpensesHandler } from './finance/handlers/monthly-expenses-handler.js';
 import { HouseRunningCostHandler } from './finance/handlers/house-running-cost-handler.js';
+import { RealPropertyRepairTickHandler } from './finance/handlers/real-property-repair-tick-handler.js';
+import { HouseRepairApplyReducer } from './finance/reducers/house-repair-apply-reducer.js';
 import { MonthlySocialSecurityHandler } from './finance/handlers/monthly-social-security-handler.js';
 import { MonthlyWagesHandler } from './finance/handlers/monthly-wages-handler.js';
 import { MortalityHandler } from './finance/handlers/mortality-handler.js';
@@ -790,6 +792,8 @@ export const Finance = {
   IntlTransferToAuHandler,
   MonthlyExpensesHandler,
   HouseRunningCostHandler,
+  RealPropertyRepairTickHandler,
+  HouseRepairApplyReducer,
   MonthlySocialSecurityHandler,
   MonthlyWagesHandler,
   MortalityHandler,
