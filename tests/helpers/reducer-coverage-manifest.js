@@ -123,6 +123,8 @@ export const COVERED = [
   // Yield-curve dynamics (design 67 §6 Phase 3) — yield-curve.test.mjs / evt-yield-curve-dynamics.test.mjs
   'YieldCurveReducer', 'YieldCurveStepReducer',
   'EquityReturnReducer', 'EquityReturnStepReducer',
+  // Stochastic property return path (design 75 §4) — property-return-paths.test.mjs
+  'PropertyReturnStepReducer',
   // Time-varying FX (design 47) — evt-fx-process.test.mjs
   'FxProcessReducer', 'FxStepApplyReducer',
 

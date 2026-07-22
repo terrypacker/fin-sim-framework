@@ -94,6 +94,8 @@ import { YieldCurveTickHandler } from './finance/economic-regimes/yield-curve-ti
 import { EquityReturnReducer } from './finance/economic-regimes/equity-return-reducer.js';
 import { EquityReturnStepReducer } from './finance/economic-regimes/equity-return-step-reducer.js';
 import { EquityReturnTickHandler } from './finance/economic-regimes/equity-return-tick-handler.js';
+import { PropertyReturnStepReducer } from './finance/economic-regimes/property-return-step-reducer.js';
+import { PropertyReturnTickHandler } from './finance/economic-regimes/property-return-tick-handler.js';
 import { countryOfRateKey, interpolateSpread, resolveYield, composeYieldCurve, shapeDelta } from './finance/economic-regimes/yield-curve.js';
 import { SHOCK_LIBRARY, SHOCK_PRESET_OPTIONS } from './finance/economic-shocks/shock-library.js';
 import { CurrencyConverter } from './finance/fx/currency-converter.js';
@@ -736,6 +738,8 @@ export const Finance = {
   EquityReturnReducer,
   EquityReturnStepReducer,
   EquityReturnTickHandler,
+  PropertyReturnStepReducer,
+  PropertyReturnTickHandler,
   countryOfRateKey,
   interpolateSpread,
   resolveYield,

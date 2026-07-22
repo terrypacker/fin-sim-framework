@@ -163,6 +163,8 @@ export const AU_REAL_PROPERTY = {
           stateKey:            p.stateKey,
           appreciationRate:    p.appreciationRate ?? 0,
           appreciationSchedule: p.appreciationSchedule ?? null,
+          // Real-estate sleeve for the stochastic property return path (design 75 §4.2).
+          reKey:               'REAL_ESTATE_AU',
         })),
       });
       handler.handledEvents = [appreciateEvent];

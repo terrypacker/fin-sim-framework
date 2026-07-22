@@ -129,6 +129,42 @@ export const DEFAULT_EQUITY_BETA = Object.freeze({
 });
 
 /**
+ * Real-property return-path sleeves (design 75 §4). Each real property loads on the shared
+ * market factor through one of these keys, selected by country. Frozen in **stable, sorted**
+ * order for the same RNG-cursor reason as EQUITY_SLEEVES: PropertyReturnTickHandler iterates
+ * this list to draw optional idiosyncratic terms, so the order must never change (design 74
+ * §4 ⚠️). AssetAppreciationHandler reads `state.propertyReturnDev[<sleeve>]` per property.
+ */
+export const PROPERTY_SLEEVES = Object.freeze([
+  RATE_KEYS.REAL_ESTATE_AU,
+  RATE_KEYS.REAL_ESTATE_US,
+]);
+
+/**
+ * Default per-sleeve beta on the shared market factor (design 75 §4.1). Deliberately **near
+ * zero**: the empirical contemporaneous house↔equity correlation is ≈ 0.04, so the standing
+ * linear co-movement is tiny and the plan-breaking joint crash is authored via `shocks[]`
+ * (owner decision, §8 Q7), not this beta. AU loads marginally higher — capital-city housing
+ * is more credit/macro-sensitive. Overridable via the `propertyReturnBeta` param; a sleeve
+ * absent here defaults to 1.0.
+ */
+export const DEFAULT_RE_BETA = Object.freeze({
+  [RATE_KEYS.REAL_ESTATE_US]: 0.03,
+  [RATE_KEYS.REAL_ESTATE_AU]: 0.05,
+});
+
+/**
+ * Default per-sleeve idiosyncratic (property-specific) sd (design 75 §4.1). Housing is ~99%
+ * idiosyncratic under the near-zero betas above — this is where a single home's price
+ * variance actually comes from, giving the sale price real sequence/timing risk at the sale
+ * date even at β = 0. Overridable via `propertyReturnIdioVol`; a sleeve absent here ⇒ 0.
+ */
+export const DEFAULT_RE_IDIO = Object.freeze({
+  [RATE_KEYS.REAL_ESTATE_US]: 0.09,
+  [RATE_KEYS.REAL_ESTATE_AU]: 0.10,
+});
+
+/**
  * Map from ACCOUNT_ROLES values to their corresponding RATE_KEYS entry.
  * Used by the ECONOMIC_REGIMES toolset to build rateKeyToStateKeys maps
  * from the scenario's registered accounts.
