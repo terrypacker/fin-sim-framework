@@ -165,6 +165,8 @@ export const US_REAL_PROPERTY = {
           stateKey:            p.stateKey,
           appreciationRate:    p.appreciationRate ?? 0,
           appreciationSchedule: p.appreciationSchedule ?? null,
+          // Real-estate sleeve for the stochastic property return path (design 75 §4.2).
+          reKey:               'REAL_ESTATE_US',
         })),
       });
       handler.handledEvents = [appreciateEvent];
@@ -200,6 +202,21 @@ function _propertyToStatePlain(prop) {
     mortgageBalance:     0,
     monthlyMortgage:     0,
     appreciationRate:    prop.appreciationRate   ?? 0,
+    // Regular running cost — the deterministic, inflating cost of owning the home beyond
+    // the mortgage (design 75 §5.1). Default 0 ⇒ no cost stream, byte-identical to before.
+    annualRunningCost:   prop.annualRunningCost   ?? 0,
+    runningCostValuePct: prop.runningCostValuePct ?? 0,
+    runningCostGrowth:   prop.runningCostGrowth   ?? 0,
+    // Stochastic repairs (design 75 §5.2). Default NONE ⇒ inert. capitalizedImprovements is a
+    // runtime accumulator (starts 0) that HouseRepairApplyReducer lifts and the sale adds to basis.
+    repairModel:         prop.repairModel         ?? 'NONE',
+    repairProb:          prop.repairProb          ?? 0,
+    repairLambda:        prop.repairLambda        ?? 0,
+    repairMedian:        prop.repairMedian        ?? 0,
+    repairSigma:         prop.repairSigma         ?? 0.6,
+    repairValuePct:      prop.repairValuePct      ?? 0,
+    capitalizeRepairs:   prop.capitalizeRepairs   ?? 0,
+    capitalizedImprovements: prop.capitalizedImprovements ?? 0,
     isPrimaryResidence:  prop.isPrimaryResidence ?? false,
     plannedSaleYear:     prop.plannedSaleYear    ?? null,
     ownershipType:       prop.ownershipType      ?? 'sole',

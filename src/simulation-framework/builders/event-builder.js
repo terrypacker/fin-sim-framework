@@ -20,6 +20,7 @@ class EventSeriesBuilder {
     this._color       = '#888888';
     this._interval    = undefined;
     this._startOffset = 0;
+    this._order       = 0;
     this._data        = {};
     this._meta        = {};
   }
@@ -31,6 +32,7 @@ class EventSeriesBuilder {
   color(v)       { this._color = v;       return this; }
   interval(v)    { this._interval = v;    return this; }
   startOffset(v) { this._startOffset = v; return this; }
+  order(v)       { this._order = v;       return this; }
   data(v)        { this._data = v;        return this; }
   meta(v)        { this._meta = v;        return this; }
 
@@ -43,6 +45,7 @@ class EventSeriesBuilder {
       color:       this._color,
       interval:    this._interval,
       startOffset: this._startOffset,
+      order:       this._order,
       data:        this._data,
       meta:        this._meta,
     });

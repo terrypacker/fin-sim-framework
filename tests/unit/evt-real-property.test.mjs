@@ -24,6 +24,7 @@ import assert   from 'node:assert/strict';
 
 import { ServiceRegistry } from '../../src/services/service-registry.js';
 import { ScenarioLoader }  from '../../src/scenarios/scenario-loader.js';
+import { UsHouseSaleApplyReducer } from '../../src/finance/account-rules/us/us-real-property-classes.js';
 import { BaseScenario }    from '../../src/index.js';
 import { computeNetWorth } from '../../src/finance/derived-metrics/net-worth.js';
 
@@ -390,6 +391,49 @@ test('EVT-34: US house sale applies $500K primary residence exemption to capital
   const cgDiff = findDiff(usTaxJournalEntry[0], 'usCapitalGainsYTD');
   assert.ok(cgDiff, 'usCapitalGainsYTD diff should be recorded');
   assert.strictEqual(cgDiff.delta, (config.realProperties[0].value - config.realProperties[0].costBasis) - 500_000);
+});
+
+test('EVT-34: US sale of a NON-primary residence gets no §121 exclusion (full gain taxable)', () => {
+  const config = structuredClone(US_HOUSE_JSON);
+  // A $700k gain on an investment / second home — the whole gain is assessable.
+  config.realProperties[0].isPrimaryResidence = false;
+  config.realProperties[0].costBasis = config.realProperties[0].value - 700_000;
+  const { sim } = loadToolsetScenario(config);
+  assert.doesNotThrow(() => sim.stepTo(Q1_2028), 'stepTo should not throw');
+
+  const usTaxJournalEntry = sim.journal.getActions('US_HOUSE_SALE_TAX');
+  assert.ok(usTaxJournalEntry?.length > 0);
+  const cgDiff = findDiff(usTaxJournalEntry[0], 'usCapitalGainsYTD');
+  assert.ok(cgDiff, 'usCapitalGainsYTD diff should be recorded');
+  assert.strictEqual(cgDiff.delta, config.realProperties[0].value - config.realProperties[0].costBasis);
+});
+
+// Filing status at sale time is the live runtime flag `usFilingSingle` (a surviving
+// single filer after a death; the household default is MFJ). Exercise the $250k Single
+// branch at the reducer level, where the flag can be pinned without the year-boundary
+// US_PERIOD_ADVANCE reducer overwriting it from survivorship.
+test('EVT-34: US primary-residence sale for a single filer excludes only $250K (reducer)', () => {
+  const reducer = new UsHouseSaleApplyReducer({
+    accountService: { transaction: () => {} },   // no-op: destinationKey exists in state
+    stateRegistry:  {},                           // unused: destinationKey resolves directly
+  });
+  const runSale = (usFilingSingle) => {
+    const state = {
+      usSavingsAccount: { balance: 5_000 },
+      usHouseProperty:  { isPrimaryResidence: true, accumulatedDepreciation: 0 },
+      usFilingSingle,
+    };
+    const result = reducer.reduce(state, {
+      type: 'US_HOUSE_SALE_APPLY',
+      salePrice: 1_000_000, costBasis: 400_000,   // $600k raw gain
+      mortgageBalance: 0, stateKey: 'usHouseProperty',
+      destinationKey: 'usSavingsAccount', residency: 'US',
+    });
+    return result.next.find(a => a.type === 'US_HOUSE_SALE_TAX');
+  };
+  // Single ⇒ $250k excluded → $350k taxable; MFJ ⇒ $500k excluded → $100k taxable.
+  assert.strictEqual(runSale(true).gain,  600_000 - 250_000);
+  assert.strictEqual(runSale(false).gain, 600_000 - 500_000);
 });
 
 test('EVT-34: US house sale with gain under $500K has zero taxable capital gain', () => {

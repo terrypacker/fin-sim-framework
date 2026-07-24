@@ -128,6 +128,15 @@ export const REAL_PROPERTY_PARAM_TEMPLATE = [
     description: 'Annual appreciation rate for this property, as a fraction (0.04 = 4%).' },
   { field: 'plannedSaleYear',  label: 'Planned Sale Year', type: 'Number', mc: true, opt: true, nullable: true,
     description: 'Calendar year this property is sold. Leave blank for no planned sale.' },
+  // Primary-residence flag (design 55 §4). Boolean, never an MC/Opt target. Drives the
+  // capital-gains exclusion at sale — US IRC §121 ($250k Single / $500k MFJ) and, for a
+  // foreign dwelling of an AU resident, the AU main-residence absence rule. Exposing it
+  // as a linked param lets a scenario flip primary status over time (e.g. model moving
+  // residences) via the standard param cascade.
+  { field: 'isPrimaryResidence', label: 'Primary Residence', type: 'Boolean', mc: false, opt: false,
+    description: 'When on, this is the owner\'s primary residence and qualifies for the ' +
+      'capital-gains exclusion at sale (US IRC §121; AU main-residence rules). Turn off for ' +
+      'an investment or second home, whose full gain is taxable.' },
 ];
 
 // A collectible's optional planned sale year — parallels REAL_PROPERTY_PARAM_TEMPLATE.

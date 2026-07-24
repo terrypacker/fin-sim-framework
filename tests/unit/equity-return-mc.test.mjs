@@ -42,7 +42,10 @@ describe('computePathShape', () => {
   const ts = (...vals) => vals.map((v, i) => ({ date: new Date(Date.UTC(2026 + i, 0, 1)), netWorthUsd: v }));
 
   test('degenerate series (< 2 points) ⇒ all-null', () => {
-    assert.deepEqual(computePathShape([]), { netWorthCagr: null, worst5yrCagr: null, maxDrawdown: null, decadeNetWorthUsd: null });
+    assert.deepEqual(computePathShape([]), {
+      netWorthCagr: null, worst5yrCagr: null, maxDrawdown: null, decadeNetWorthUsd: null,
+      houseCagr: null, houseMaxDrawdown: null,
+    });
     assert.deepEqual(computePathShape(ts(100)).netWorthCagr, null);
   });
 
