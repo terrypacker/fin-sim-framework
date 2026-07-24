@@ -176,7 +176,11 @@ export class UsTaxRatesBase extends BaseTaxRatesModule {
     // interest/dividends/coupons/net-rents (usNetInvestmentIncomeYTD) plus net
     // capital gains and collectible gains; distributions from qualified
     // retirement plans, wages and Social Security are excluded by construction
-    // (they never enter usNetInvestmentIncomeYTD). MAGI = AGI + the §911 FEIE
+    // (they never enter usNetInvestmentIncomeYTD). A US person is taxed on
+    // WORLDWIDE net investment income, so AU-source interest, dividends and net
+    // rents feed usNetInvestmentIncomeYTD too (via the AU classifiers) — and since
+    // NIIT is a Chapter-2A tax outside the FTC system, the AU tax already paid on
+    // that income cannot offset the 3.8%. MAGI = AGI + the §911 FEIE
     // add-back (§1411(d)(1)); with no FEIE this is just AGI. NIIT is a Chapter-2A
     // tax OUTSIDE the foreign tax credit system, so it is excluded from the FTC
     // limitation base and added on top of net liability — the FTC can never
