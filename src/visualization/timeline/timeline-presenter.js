@@ -12,6 +12,7 @@ import { MapFilterMultiSelect } from '../components/map-filter-multi-select.js';
 import { QueryApi }             from '../../query/query-api.js';
 import { APP_EVENTS }           from '../app-display-settings.js';
 import { withBom }              from '../../utils/csv.js';
+import { RenderScheduler }      from '../components/render-scheduler.js';
 
 export class TimelinePresenter {
   constructor({ controller, view, onDetail, onTaxDocument, onRewind, onNavigateToNode, displaySettings, appBus }) {
@@ -20,6 +21,18 @@ export class TimelinePresenter {
     this._onRewind   = onRewind ?? null;
     this._formatDate = displaySettings?.formatDate ?? (d => d.toDateString());
     this._unsubscribeSettings = null;
+
+    // Playback render throttling. The timeline is a presenter, not a
+    // BaseComponent, which is the only reason it was left out of the animator's
+    // throttle list while the graph, state panel, chart, accounts and dash cards
+    // were all in it — so during playback it re-rendered on every frame and
+    // became 70% of the wall time (design 78 §6).
+    //
+    // `immediate: 'sync'` because this presenter's contract is that a step has
+    // repainted by the time update() returns; `flushOnRelease` because playback
+    // ends by dropping the throttle to 0, and without a flush the last coalesced
+    // frame is lost with nothing following to correct it.
+    this._scheduler = new RenderScheduler({ immediate: 'sync', flushOnRelease: true });
 
     // Display-currency conversion of action-payload amounts (design 10 §Phase 4).
     this._controller.displaySettings = displaySettings ?? null;
@@ -102,25 +115,40 @@ export class TimelinePresenter {
     this._render();
   }
 
+  /**
+   * Throttle playback-driven renders. `ms > 0` coalesces them onto a timer;
+   * `0` restores immediate rendering AND flushes any pending render, so the
+   * timeline is never left showing a stale frame when playback stops.
+   *
+   * @param {number} ms
+   */
+  setRenderThrottle(ms) {
+    this._scheduler.setThrottle(ms);
+  }
+
+  /** Render now, or coalesce onto the throttle timer when one is set. */
+  _scheduleRender() {
+    this._scheduler.schedule(() => this._render());
+  }
+
   update() {
     if (!this._controller.journal) return;
     const changed = this._controller.update(this._formatDate);
     if (!changed) return;
 
-    // Auto-expand the latest date group when new entries arrive
-    const groups = this._controller.groups(this._formatDate);
-    if (groups.size > 0) {
-      const lastDateKey = [...groups.keys()].at(-1);
-      if (lastDateKey && lastDateKey !== this._controller._lastDate) {
-        if (this._controller._lastDate) {
-          this._controller.expanded.delete(this._controller._lastDate);
-        }
-        this._controller.expanded.add(lastDateKey);
-        this._controller._lastDate = lastDateKey;
+    // Auto-expand the latest date group when new entries arrive. Reads the key
+    // directly rather than grouping the whole journal to look at its last key —
+    // _render() below does the one grouping pass this update needs.
+    const lastDateKey = this._controller.latestDateKey(this._formatDate);
+    if (lastDateKey && lastDateKey !== this._controller._lastDate) {
+      if (this._controller._lastDate) {
+        this._controller.expanded.delete(this._controller._lastDate);
       }
+      this._controller.expanded.add(lastDateKey);
+      this._controller._lastDate = lastDateKey;
     }
 
-    this._render();
+    this._scheduleRender();
   }
 
   _render() {
@@ -207,6 +235,9 @@ export class TimelinePresenter {
 
   destroy() {
     this._unsubscribeSettings?.();
+    // Drop any coalesced render still on the timer, or it fires against a
+    // destroyed view after a scenario Rebuild.
+    this._scheduler.cancel();
     this._view.destroy();
   }
 }

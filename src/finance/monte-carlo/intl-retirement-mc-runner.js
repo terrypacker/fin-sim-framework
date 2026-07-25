@@ -44,22 +44,42 @@ export function computeHouseValueUsd(state, baseCurrency = 'USD') {
 }
 
 /**
- * Extract one net worth data point per year from sim history snapshots.
- * Takes the last snapshot within each calendar year.
+ * Sampler for the per-iteration time series (design 78 §4.5).
+ *
+ * The three metrics an MC path needs are computed here, at sample time, from
+ * live state — instead of deep-cloning the entire state so they can be computed
+ * later. That is 1,803 full-state clones per iteration replaced by ~44 records
+ * of four numbers, and it is the whole of MC's remaining telemetry cost.
+ *
+ * Runs at the history-snapshot cadence and at the same point in the event loop,
+ * so the series is identical to the one the snapshots produced. Must not retain
+ * references into `state` — it returns numbers only.
+ */
+function sampleTimeSeriesPoint(state, date) {
+  return {
+    date:          new Date(date),
+    netWorthUsd:   computeNetWorthUsd(state),
+    netLiquidity:  computeNetLiquidity(state, date),
+    houseValueUsd: computeHouseValueUsd(state),
+  };
+}
+
+/**
+ * Reduce the sampler's records to one data point per year — the last sample
+ * within each calendar year, matching the previous snapshot-based behaviour.
  */
 function extractYearlyTimeSeries(sim) {
   const byYear = new Map();
-  for (const snap of sim.history.snapshots) {
-    const year = snap.date.getUTCFullYear();
-    byYear.set(year, snap);
+  for (const sample of sim.samples) {
+    byYear.set(sample.date.getUTCFullYear(), sample);
   }
   return [...byYear.entries()]
     .sort(([a], [b]) => a - b)
-    .map(([year, snap]) => ({
-      date:         new Date(Date.UTC(year, 0, 1)),
-      netWorthUsd:  computeNetWorthUsd(snap.state),
-      netLiquidity: computeNetLiquidity(snap.state, snap.date),
-      houseValueUsd: computeHouseValueUsd(snap.state),
+    .map(([year, sample]) => ({
+      date:          new Date(Date.UTC(year, 0, 1)),
+      netWorthUsd:   sample.netWorthUsd,
+      netLiquidity:  sample.netLiquidity,
+      houseValueUsd: sample.houseValueUsd,
     }));
 }
 
@@ -249,7 +269,10 @@ export class IntlRetirementMcRunner {
         // a single ordering. The seed is the ScenarioRunner iteration index (i + 1),
         // so a run is reproducible and the scalar-param sampling rng (makeSeededRng,
         // same index) and the in-loop path share the iteration.
-        scenario.buildSim({ seed });
+        // telemetry 'off' + a sampler: MC needs no bus, journal or full-state
+        // history snapshots — only the yearly series, which the sampler collects
+        // directly (design 78 §4.5).
+        scenario.buildSim({ seed, telemetry: 'off', sampler: sampleTimeSeriesPoint });
 
         const cfg = structuredClone(cfgTemplate);
         // Merge perturbed params into cfg.parameters so ScenarioLoader reads them.
@@ -264,8 +287,6 @@ export class IntlRetirementMcRunner {
         }
         new ScenarioLoader().load(cfg, registry);
 
-        scenario.sim.silent = true;           // skip bus, clones, diffs — not needed in MC
-        scenario.sim.journal.enabled = false; // skip journal — not needed in MC (would waste memory)
         return scenario.sim;
       },
       evaluate: (sim) => ({

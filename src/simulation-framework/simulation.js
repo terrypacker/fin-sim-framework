@@ -30,7 +30,7 @@ import {
 import { generateActionId } from "./actions.js";
 import { SimulationHistory } from "./simulation-history.js";
 import { SimulationState } from "./simulation-state.js";
-import { diffStates, MutationTracker } from "./state-utils.js";
+import { diffStates, MutationTracker, deepClone, snapshotForDiff } from "./state-utils.js";
 import { buildExecutionId } from "./execution-utils.js";
 import { ExecutionGraph } from "./execution-graph.js";
 import { GraphRecorder } from "./graph-recorder.js";
@@ -64,6 +64,35 @@ export class BreakpointSignal extends Error {
 }
 
 /**
+ * Telemetry levels (design 78 §4.3).
+ *
+ * A run's *observation* cost is governed by three independent switches — silent,
+ * journal.enabled, history.enableSnapshots — which callers had to set one at a
+ * time at each site, with no name for the combination being asked for and no way
+ * to state one up front. These name the four combinations that are wanted.
+ *
+ * The contract: **telemetry suppresses observation, never computation.** Derived
+ * metrics write real state that downstream code reads, so they run at every
+ * level, including `off`.
+ *
+ *   full     everything — the workbench UI. Default.
+ *   journal  journal only, no bus/clones/diffs — ScenarioCompareRunner, which
+ *            diffs journal entries between two scenarios.
+ *   metrics  history snapshots only — for callers that need to look back at
+ *            whole past states, e.g. the optimizer's MPC rollToSnapshot seam.
+ *   off      nothing — the scripts/ batch tooling, and Monte Carlo, which
+ *            collects its yearly series via a `sampler` instead (§4.5).
+ *
+ * @type {Object<string, {silent: boolean, journal: boolean, snapshots: boolean}>}
+ */
+export const TELEMETRY_LEVELS = {
+  full:    { silent: false, journal: true,  snapshots: true  },
+  journal: { silent: true,  journal: true,  snapshots: false },
+  metrics: { silent: true,  journal: false, snapshots: true  },
+  off:     { silent: true,  journal: false, snapshots: false },
+};
+
+/**
  *
  * // run baseline
  * sim.stepTo(midPoint);
@@ -95,23 +124,40 @@ export class Simulation {
     this.handlers = new HandlerRegistry();   // eventType -> [HandlerEntry]
     this.reducers = new ReducerPipeline();   // actionType -> reducer
 
-    this.state = structuredClone(
+    this.state = deepClone(
       initialState instanceof SimulationState ? initialState.toPlain() : initialState
     );
 
     this.rng = this.createRNG(seed);
 
+    // { clone, from } — the end-of-event state clone carried forward to serve as
+    // the next event's stateBefore. See execute(). Null whenever unusable.
+    this._carryStateSnapshot = null;
+
+    // Telemetry level supplies the defaults for the three observation switches;
+    // an explicit opts.silent / opts.enableSnapshots / opts.enableJournal still
+    // wins, so callers that predate the levels are unaffected.
+    const level = TELEMETRY_LEVELS[opts.telemetry] ?? TELEMETRY_LEVELS.full;
+
     this.history = new SimulationHistory(this);
-    this.history.enableSnapshots = opts.enableSnapshots ?? true;
+    this.history.enableSnapshots = opts.enableSnapshots ?? level.snapshots;
     this.history.snapshotInterval = opts.snapshotInterval ?? 12; // every N events (~1/year)
     this.debug = opts.debug ?? false;
     // Optional registry of derived-metric functions (DerivedMetricsRegistry) or
     // a single function to populate display metrics (e.g. netWorth) into state
     // just before each EXECUTION_END snapshot. Domain-agnostic: the finance
-    // layer wires this via buildSim(). Only runs in non-silent (UI) runs.
+    // layer wires this via buildSim(). Runs at EVERY telemetry level — these
+    // write state that downstream code reads, so they are computation, not
+    // observation (design 78 §4.2).
     this._derivedMetrics = opts.derivedMetrics ?? opts.deriveMetrics ?? null;
-    this.silent = opts.silent ?? false; // when true: skip bus, clones, diffs (MC/batch mode)
-    this.journal = new Journal({enabled: true});
+    this.silent = opts.silent ?? level.silent; // when true: skip bus, clones, diffs
+    this.journal = new Journal({ enabled: opts.enableJournal ?? level.journal });
+
+    // Optional (state, date) => record, called at the history-snapshot cadence.
+    // Lets a batch caller collect a time series without paying for full-state
+    // history snapshots — see design 78 §4.5 and Simulation#samples.
+    this._sampler = opts.sampler ?? null;
+    this._samples = [];
 
     this.nextEventInstanceId = 0;
 
@@ -162,8 +208,14 @@ export class Simulation {
   }
 
   deepClone(obj) {
-    return structuredClone(obj);
+    return deepClone(obj);
   }
+
+  /**
+   * Records produced by the optional `sampler` opt, in run order. Empty when no
+   * sampler was configured. See design 78 §4.5.
+   */
+  get samples() { return this._samples; }
 
   unschedule(type) {
     return this.queue.removeAllByType(type);
@@ -328,7 +380,23 @@ export class Simulation {
     const handlers = this.handlers.get(event.type) || [];
 
     // Capture state-before once (at true event start, not on resume).
-    const stateBefore = this.silent ? null : (savedStateBefore ?? structuredClone(this.state));
+    //
+    // The previous event in this stepTo loop already cloned state at its END,
+    // and stepTo does not touch state between events, so that clone IS this
+    // event's state-before — reuse it instead of paying a second identical deep
+    // clone (~1 of every 4 clones in a long run). The `from` reference guard
+    // makes the reuse conditional on this.state still being the very object
+    // that clone was taken from, so any path that swaps state out (rewind,
+    // restoreSnapshot, an external assignment between stepTo calls) falls back
+    // to a fresh clone. In-place mutation by a bus subscriber would defeat the
+    // guard, but that already violates the journal's immutability invariant and
+    // throws under JOURNAL_STRICT.
+    const carry = this._carryStateSnapshot;
+    const stateBefore = this.silent
+      ? null
+      : (savedStateBefore
+          ?? (carry && carry.from === this.state ? carry.clone : deepClone(this.state)));
+    this._carryStateSnapshot = null;
 
     let eventExecId;
     let eventNodeId;
@@ -451,6 +519,14 @@ export class Simulation {
 
       // snapshot logic
       this.history.eventCounter++;
+      // Sampler runs at the same cadence and the same point as a history
+      // snapshot, so a series built from samples has identical provenance to one
+      // built from snapshots (design 78 §4.5) — but it records a few numbers
+      // instead of deep-cloning the whole state. It receives LIVE state and must
+      // not retain references into it.
+      if (this._sampler && this.history.eventCounter % this.history.snapshotInterval === 0) {
+        this._samples.push(this._sampler(this.state, this.currentDate));
+      }
       if (
         this.history.enableSnapshots &&
         this.history.eventCounter % this.history.snapshotInterval === 0
@@ -459,14 +535,24 @@ export class Simulation {
       }
     }
 
+    // Derived metrics are COMPUTATION, not observation (design 78 §4.2): they
+    // write real state (state.metrics.netWorth, .netLiquidity, …) that callers
+    // read after the run. Gating them on `!silent` used to leave netWorth at
+    // *0* — not absent — in every silent run, a trap every batch caller had to
+    // know to route around. They now run at every telemetry level.
+    if (this._derivedMetrics) {
+      typeof this._derivedMetrics.run === 'function'
+        ? this._derivedMetrics.run(this.state, this.currentDate)
+        : this._derivedMetrics(this.state, this.currentDate);
+    }
+
     // Publish EXECUTION_END(EVENT) with full state snapshot + diff.
     if (!this.silent) {
-      if (this._derivedMetrics) {
-        typeof this._derivedMetrics.run === 'function'
-          ? this._derivedMetrics.run(this.state, this.currentDate)
-          : this._derivedMetrics(this.state, this.currentDate);
-      }
-      const stateSnapshot = structuredClone(this.state);
+      const stateSnapshot = deepClone(this.state);
+      // Hand this clone to the next event in the same stepTo loop as its
+      // `stateBefore` — nothing mutates state between two events, so cloning
+      // again would produce an identical copy. See _carryStateSnapshot.
+      this._carryStateSnapshot = { clone: stateSnapshot, from: this.state };
       const now = new Date(this.currentDate);
       this.bus.publish(new ExecutionBusMessage({
         phase:         EXECUTION_PHASES.END,
@@ -713,14 +799,22 @@ export class Simulation {
       }
       this.control.resuming = false;
 
-      // Use MutationTracker for FieldReducer/AccountTransactionReducer (avoids structuredClone).
-      // Fall back to clone for other reducer types (account-rules, plain fns) that mutate directly.
+      // Use MutationTracker for FieldReducer/AccountTransactionReducer (records
+      // writes as they happen — no snapshot at all). Every other reducer type
+      // (account-rules, plain fns) is diffed against a before-snapshot instead.
+      //
+      // That snapshot is `snapshotForDiff`, a two-level copy, NOT a deep clone:
+      // it exists only to be the left-hand side of the diffStates call below, and
+      // two levels provably captures every in-place write these reducers make
+      // (design 78 §5.5 — see the note on snapshotForDiff, and the guard script
+      // scripts/dev/diff-mutation-tracker.mjs). diffStates remains the producer of
+      // stateDelta, so journal output is unchanged.
       const r = reducerWrapper.reducer;
       const useTracker = !this.silent && (
         r instanceof FieldReducer || r instanceof AccountTransactionReducer
       );
       if (useTracker) MutationTracker.begin();
-      const prevState = (!this.silent && !useTracker) ? structuredClone(this.state) : null;
+      const prevState = (!this.silent && !useTracker) ? snapshotForDiff(this.state) : null;
       const reducerExecId = this._makeExecutionId(reducerWrapper.reducer?.id ?? null, actionExecId);
 
       let reducerNodeId = null;

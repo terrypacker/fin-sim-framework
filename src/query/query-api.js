@@ -599,26 +599,22 @@ export class QueryApi {
     }
   }
 
+  /**
+   * Re-point every index from `prev` to `item`.
+   *
+   * Always evict-then-insert, rather than only touching an index whose key
+   * changed. `Graph.updateNode` (and `addNode` over an existing id) commonly
+   * replaces a node with a *different object* carrying the *same* id/name/kind
+   * — reducer-type edits in the workbench do exactly this. Keying the work off
+   * "did the indexed field change?" left the old object sitting in the index,
+   * so lookups returned a stale node while the Graph itself held the new one.
+   *
+   * Subclasses need only override _addToIndexes/_removeFromIndexes; this
+   * composes them.
+   */
   _updateIndexes(item, prev) {
-    if (prev.id !== item.id) {
-      if (prev.id != null) this._idIndex.delete(String(prev.id));
-      if (item.id != null) this._idIndex.set(String(item.id), item);
-    }
-    if (prev.name !== item.name) {
-      if (prev.name != null) {
-        const key = String(prev.name).toLowerCase();
-        const set = this._nameIndex.get(key);
-        if (set) {
-          set.delete(prev);
-          if (set.size === 0) this._nameIndex.delete(key);
-        }
-      }
-      if (item.name != null) {
-        const key = String(item.name).toLowerCase();
-        if (!this._nameIndex.has(key)) this._nameIndex.set(key, new Set());
-        this._nameIndex.get(key).add(item);
-      }
-    }
+    this._removeFromIndexes(prev);
+    this._addToIndexes(item);
   }
 
   _extractIndexCandidates(node) {

@@ -388,39 +388,9 @@ export class GraphQueryApi extends QueryApi {
     }
   }
 
-  _updateIndexes(item, prev) {
-    super._updateIndexes(item, prev);
-    if (prev.kind !== item.kind) {
-      if (prev.kind != null) {
-        const key = String(prev.kind);
-        const set = this._kindIndex.get(key);
-        if (set) {
-          set.delete(prev);
-          if (set.size === 0) this._kindIndex.delete(key);
-        }
-      }
-      if (item.kind != null) {
-        const key = String(item.kind);
-        if (!this._kindIndex.has(key)) this._kindIndex.set(key, new Set());
-        this._kindIndex.get(key).add(item);
-      }
-    }
-    if (prev.layer !== item.layer) {
-      if (prev.layer != null) {
-        const key = String(prev.layer);
-        const set = this._layerIndex.get(key);
-        if (set) {
-          set.delete(prev);
-          if (set.size === 0) this._layerIndex.delete(key);
-        }
-      }
-      if (item.layer != null) {
-        const key = String(item.layer);
-        if (!this._layerIndex.has(key)) this._layerIndex.set(key, new Set());
-        this._layerIndex.get(key).add(item);
-      }
-    }
-  }
+  // _updateIndexes is inherited: the base evicts `prev` then inserts `item`
+  // through _removeFromIndexes/_addToIndexes, which this class overrides to
+  // cover the kind and layer indexes too.
 
   _validateIndexes() {
     const rebuiltKind  = new Map();

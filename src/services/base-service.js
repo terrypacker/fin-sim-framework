@@ -60,10 +60,21 @@ export class BaseService {
 
   /**
    * Return all items managed by this service.
+   *
+   * Reads the GraphQueryApi's incrementally-maintained kind index rather than
+   * scanning every node in the Graph. This matters because the Graph holds two
+   * layers: `config` (definitions — a few hundred nodes, effectively fixed) and
+   * `execution` (one node per event/handler/action/reducer *execution*, added
+   * throughout a run). A 44-year scenario ends with ~76k execution nodes, so a
+   * full scan made every getAll() call grow linearly with elapsed sim time —
+   * and getAll() is called from per-period hot paths such as
+   * StateRegistry.resolveTransactionAccountKey. That was quadratic in run
+   * length. The kind index keeps this O(nodes-of-this-kind).
+   *
    * @returns {Array}
    */
   getAll() {
-    return [...this._graph.getNodes().filter((n) => this._serviceFilter(n))];
+    return this._query.getByKind(this._kind).filter((n) => n.layer === this._layer);
   }
 
   // ─── Public Modification API ──────────────────────────────────────────────

@@ -42,6 +42,11 @@ export class SimulationAnimator {
     this._displaySettings   = displaySettings ?? null;
     this._appBus            = appBus ?? null;
     this._dashCards         = null;   // created in wireSimBus
+    // The timeline renders off the journal, which grows all run — it is the most
+    // expensive view to repaint and was the only one missing from the throttle
+    // list below (design 78 §6). TimeControls owns it, and drives it via
+    // timelineView.update() on every step.
+    this._timelinePresenter = timeControls?.timelineView ?? null;
 
     this.playing = false;
   }
@@ -89,6 +94,7 @@ export class SimulationAnimator {
     this._chartView?.setRenderThrottle(PLAYBACK_THROTTLE_MS);
     this._accountsPresenter?.setRenderThrottle(PLAYBACK_THROTTLE_MS);
     this._dashCards?.setRenderThrottle(PLAYBACK_THROTTLE_MS);
+    this._timelinePresenter?.setRenderThrottle(PLAYBACK_THROTTLE_MS);
     this.animate();
   }
 
@@ -100,6 +106,9 @@ export class SimulationAnimator {
     this._chartView?.setRenderThrottle(0);
     this._accountsPresenter?.setRenderThrottle(0);
     this._dashCards?.setRenderThrottle(0);
+    // setRenderThrottle(0) also flushes the timeline's pending render, so the
+    // final frame is never left stale when playback stops.
+    this._timelinePresenter?.setRenderThrottle(0);
     if (!this._scenario?.sim?.control?.paused) {
       this.clearBreakpointStatus();
     }

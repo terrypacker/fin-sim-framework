@@ -8,6 +8,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import { RenderScheduler } from './render-scheduler.js';
+
 export class BaseComponent {
   constructor({ parent } = {}) {
     this._children = new Set();
@@ -211,39 +213,37 @@ export class BaseComponent {
   }
 
   // ── Throttled rendering ───────────────────────────────────────────────────
+  //
+  // Delegated to RenderScheduler. The behaviour is unchanged — throttle 0 means
+  // requestAnimationFrame, a positive throttle rate-limits with an elapsed-aware
+  // timer, and a queued render is never replaced by a later one. It lives in its
+  // own class now so that non-component callers (TimelinePresenter) can coalesce
+  // renders without inheriting this base's DOM helpers. See render-scheduler.js.
+
+  /** Lazily created so subclasses need not call super() before scheduling. */
+  get _scheduler() {
+    if (!this.__scheduler) this.__scheduler = new RenderScheduler({ immediate: 'raf' });
+    return this.__scheduler;
+  }
 
   /**
    * Set the minimum ms between renders. 0 (default) uses requestAnimationFrame.
    * Call with a positive value (e.g. 1000) during playback to reduce paint pressure.
    */
   setRenderThrottle(ms) {
-    this._renderThrottleMs = ms ?? 0;
+    this._scheduler.setThrottle(ms);
   }
+
+  /** Current throttle in ms. Retained as a field-shaped read: several component tests assert it. */
+  get _renderThrottleMs() { return this._scheduler.throttleMs; }
+  set _renderThrottleMs(ms) { this._scheduler.setThrottle(ms); }
 
   /**
    * Schedule fn to run at the next render opportunity, coalescing rapid calls
-   * into a single paint. Respects _renderThrottleMs: 0 → RAF, >0 → setTimeout.
+   * into a single paint. Respects the throttle: 0 → RAF, >0 → setTimeout.
    */
   scheduleRender(fn) {
-    this._renderDirty = true;
-    if (this._renderPending) return;
-    this._renderPending = true;
-
-    const fire = () => {
-      this._renderPending = false;
-      if (!this._renderDirty) return;
-      this._renderDirty = false;
-      this._renderLastTime = performance.now();
-      fn();
-    };
-
-    const throttle = this._renderThrottleMs ?? 0;
-    if (throttle > 0) {
-      const elapsed = performance.now() - (this._renderLastTime ?? 0);
-      setTimeout(fire, Math.max(0, throttle - elapsed));
-    } else {
-      requestAnimationFrame(fire);
-    }
+    this._scheduler.schedule(fn);
   }
 
 }
